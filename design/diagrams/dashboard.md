@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **116** (96 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **117** (97 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -24,10 +24,10 @@ Blocks: **116** (96 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | raster | · | · | 5 | · | · | · | · | · | 5 |
 | surface | · | · | 2 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
-| terrain | · | 2 | 18 | · | · | · | · | · | 20 |
+| terrain | · | 2 | 19 | · | · | · | · | · | 21 |
 | texture | 2 | · | 5 | · | · | · | · | · | 7 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 33 | 13 | 54 | 16 | · | · | · | 6 | 116 |
+| **all** | 33 | 13 | 55 | 16 | · | · | · | 6 | 117 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -88,6 +88,8 @@ Blocks: **116** (96 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | MEASURE.GOVERNOR | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/measure/measure_governor_directed.cpp |
 | MEASURE.TOKENS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_measure.hpp |
 | MEASURE.TOKENS | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/measure/measure_tokens_directed.cpp |
+| TERRAIN.CMD | SPECIFIED | 2026-09-07 | `5cd55827` | design/contracts/TERRAIN.CMD.md |
+| TERRAIN.CMD | UNIT_VERIFIED | 2026-09-07 | `5cd55827` | tests/terrain/terrain_cmd_rtl_directed.cpp |
 | TERRAIN.MIPFEED | SPECIFIED | 2026-09-07 | `a96d0878` | design/contracts/TERRAIN.MIPFEED.md |
 | TERRAIN.MIPFEED | UNIT_VERIFIED | 2026-09-07 | `a96d0878` | tests/terrain/world_composed_directed.cpp |
 | TERRAIN.PAGESTREAM | SPECIFIED | 2026-09-07 | `795d4420` | design/contracts/TERRAIN.PAGESTREAM.md |
@@ -230,7 +232,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 | platform | 14% | 16 | 0% |
 | command_debug | 5% | 9 | 0% |
 | field | 6% | 2 | 0% |
-| geometry_mantle | 20% | 40 | 0% |
+| geometry_mantle | 20% | 41 | 0% |
 | tile | 30% | 14 | 0% |
 | myriad_forge | 9% | 10 | 0% |
 | twod_post | 6% | 5 | 0% |

@@ -96,6 +96,12 @@ counter_catalog:
   - compcache_fill_overrun
   - compcache_lat_oob
   - compcache_cs_oob
+  - terraincmd_sets_accepted
+  - terraincmd_sets_refused
+  - terraincmd_records
+  - terraincmd_list_bytes
+  - terraincmd_crc_fails
+  - terraincmd_bridge_errs
   - mipfeed_pages_mipped
   - mipfeed_pages_faulted
   - mipfeed_samples
@@ -439,7 +445,7 @@ blocks:
     inputs: [decoded_records, frame_complete]
     outputs: [dispatch, slot_state, guard_policy, fence]
     upstream: [CMD.DECODER, VIDEO.FRAMECTL]
-    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT, MEM.UPLOAD, MATERIAL.RESOLVE, FORGE.SHADOW, TERRAIN.SEQ]
+    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT, MEM.UPLOAD, MATERIAL.RESOLVE, FORGE.SHADOW, TERRAIN.SEQ, TERRAIN.CMD]
     backpressure: credit
     latency: variable
     target_throughput: 1 slot transition per clock
@@ -658,7 +664,7 @@ blocks:
     inputs: [hps_axi, client_req]
     outputs: [client_rsp, hps_axi]
     upstream: [DEBUG.TRACE, MEM.HPS.ARBITER, TERRAIN.WRITEBACK]
-    downstream: [CMD.DMA, PART.STATE, TERRAIN.PAGELOADER]
+    downstream: [CMD.DMA, PART.STATE, TERRAIN.PAGELOADER, TERRAIN.CMD]
     backpressure: credit
     latency: variable
     target_throughput: 1 burst in flight per client
@@ -1620,6 +1626,93 @@ blocks:
   # TERRAIN — Mantle (fpga/rtl/terrain)
   # ===========================================================================
 
+  - id: TERRAIN.CMD
+    name: Terrain set command executor
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Fetches the sealed patch list a SubmitTerrainSet names, verifies its CRC before acting on any of it, and drives TERRAIN.SEQ's frame ring with the records it contains. DOCKET D4's fourth missing piece -- the command-to-terrain pipeline -- of which the pager, the residency manager and the composed-height cache were already built. Before this block the composed bench played fr_start/fr_epoch/fr_patch_count and a rec_* stream it constructed in C++, and no command a game could issue made any of it happen."
+    contract: design/contracts/TERRAIN.CMD.md
+    phase: 6
+    owner_issue: ZH-126
+    inputs: [terrain_set_commands]
+    outputs: [patch_records]
+    upstream: [CMD.SCHEDULER, MEM.HPS.BRIDGE]
+    downstream: [TERRAIN.SEQ]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: "one sealed list per command; 138 gpu clocks for eight records on an unstalled fabric, 12 bursts and 92 beats against an ideal 8 and 64 -- the difference is pass two abandoning a burst to hold a record the sequencer is not ready for"
+    reference_model: zref::swstream::encode_record
+    tests:
+      directed: tests/terrain/terrain_cmd_rtl_directed.cpp
+      random: tests/terrain/terrain_cmd_rtl_directed.cpp
+    counters: [terraincmd_sets_accepted, terraincmd_sets_refused, terraincmd_records, terraincmd_list_bytes, terraincmd_crc_fails, terraincmd_bridge_errs]
+    counter_ports:
+      terraincmd_sets_accepted: sets_accepted_o
+      terraincmd_sets_refused: sets_refused_o
+      terraincmd_records: records_emitted_o
+      terraincmd_list_bytes: list_bytes_read_o
+      terraincmd_crc_fails: crc_fails_o
+      terraincmd_bridge_errs: bridge_errs_o
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-07"
+        commit: "5cd55827"
+        evidence: design/contracts/TERRAIN.CMD.md
+      - state: UNIT_VERIFIED
+        date: "2026-09-07"
+        commit: "5cd55827"
+        evidence: tests/terrain/terrain_cmd_rtl_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      THE LIST IS CAPTURE DATA, WHICH DECIDES ALMOST EVERYTHING. T5: "the sealed
+      list is capture data -- replay does not rerun the HPS visibility walk." So
+      this block does not sort, merge, deduplicate, filter by view mask or
+      decide what is required. It reads bytes in order. Any of those verbs here
+      would be a second source of truth for the thing the determinism ledger is
+      anchored on.
+
+      TWO PASSES, NOT A BUFFER. A corrupt list must issue no loads, and finding
+      that out at record 200 is not verification. Buffering 256 composed
+      patches is 65,536 bits, about seven M10K held for one command; reading the
+      list twice is 16 KB against T7's 684 KB of pages, 2.4% more, on a block
+      that is not on the frame's critical path. Pass one folds and emits
+      nothing; pass two emits and folds nothing. The suite flips a byte in the
+      LAST record and requires zero records and zero frames.
+
+      A RECORD IS EXACTLY FOUR BEATS and no field straddles one, provided the
+      list starts 8-byte aligned -- checked, because an unaligned list would
+      shear every field in it and still produce plausible terrain. The tail
+      burst is SHORT: 224 bytes is three 64-byte bursts and one of 32, and a
+      block that always asked for 64 would fold 32 bytes that are not in the
+      list and fail its own CRC.
+
+      WHAT THE TEST FOUND THAT THE CONTRACT HAD NOT: `err` on the REQUEST
+      channel was ignored. The bridge's own comment is "malformed burst /
+      bridge error: nothing issued", so err there is a refusal of the request
+      arriving with no grant; watching for it only during the beat stream meant
+      the pulse landed while the block was still waiting, was missed, and the
+      next cycle granted normally. The command completed happily and the suite
+      reported eight records where it wanted none.
+
+      SEQUENCE IS A WIDTH DISAGREEMENT AND IS REFUSED RATHER THAN TRUNCATED.
+      T5's `sequence` is u32; TERRAIN.SEQ's ring carries 16 bits. Truncating
+      would put two different frames on one ring sequence and the determinism
+      ledger would never see it. Which width is wrong is an open ruling.
+
+      IT DOES NOT DECODE THE COMMAND, and that is deliberate: the shell's record
+      framer carries SIXTEEN payload bytes and SubmitTerrainSet's payload is
+      thirty-two, so patch_count -- T5's seal -- does not reach the scheduler.
+      That is a command-path limit, not a terrain one (TerrainField 0x0200 is a
+      112-byte record and is truncated the same way), and solving it here would
+      be the terrain lane working around another lane's defect. See
+      reports/TERRAIN-COMMAND-PIPELINE-20260907.md.
+
   - id: TERRAIN.MIPFEED
     name: Page mip sequencer
     kind: rtl
@@ -2283,7 +2376,7 @@ blocks:
     owner_issue: ZH-127
     inputs: [terrain_patch_set]
     outputs: [page_load_jobs, page_writeback_jobs, terrain_patch_jobs]
-    upstream: [CMD.SCHEDULER]
+    upstream: [CMD.SCHEDULER, TERRAIN.CMD]
     downstream: [TERRAIN.RESIDENCY, TERRAIN.LOADQ, TERRAIN.PAGELOADER, TERRAIN.PATCH, TERRAIN.COMPCACHE, TERRAIN.LOD, TERRAIN.WRITEBACK]
     backpressure: ready_valid
     latency: variable

@@ -6538,6 +6538,45 @@ set_tests_properties(lint_terrain_seq PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # ---------------------------------------------------------------------------
+# TERRAIN.CMD -- SubmitTerrainSet, turned into a frame.
+#
+# THE ORACLE IS `zref::swstream::encode_record`, READ BACKWARDS: encode a
+# sealed patch list, put it in the played HPS arena, and require that the ten
+# fields the block hands TERRAIN.SEQ are field-for-field the records that went
+# in, IN ORDER. A round trip against a real oracle and no new law.
+#
+# Every way this block can be wrong survives a count -- a sheared field is
+# terrain in the wrong place, a reordered stream is a determinism failure that
+# renders correctly on the machine that recorded it, a truncated stream is
+# invisible because `patch_count` is the seal TERRAIN.SEQ stops at anyway, and
+# a list acted on before its CRC was checked has already issued loads. So the
+# whole stream is compared, and the corrupt-list phase requires ZERO records
+# rather than "some records and then a fault".
+add_executable(test_terrain_cmd_rtl_directed terrain/terrain_cmd_rtl_directed.cpp)
+target_link_libraries(test_terrain_cmd_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_cmd_rtl_directed
+  PREFIX Vtb_terrain_cmd
+  TOP_MODULE tb_terrain_cmd
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_cmd.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_cmd.sv)
+add_test(NAME terrain_cmd_rtl_directed COMMAND test_terrain_cmd_rtl_directed)
+set_tests_properties(terrain_cmd_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_terrain_cmd
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_cmd
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_cmd.sv)
+set_tests_properties(lint_terrain_cmd PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
 # TERRAIN.PAGESTREAM -- a resident page slot, as a lattice.
 #
 # EVERY WAY THIS BLOCK CAN BE WRONG PRODUCES 1,089 VERTICES: the wrong slot, the

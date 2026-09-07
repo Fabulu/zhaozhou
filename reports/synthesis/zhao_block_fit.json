@@ -1047,6 +1047,30 @@
                        "dspBlocksAvailable":  112
                    },
                    {
+                       "module":  "zhao_terrain_mipfeed",
+                       "status":  "failed:structure",
+                       "sourceCommit":  "73c46da70f79eca6aae05798f32c015e86904c80",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "905e1f234a64cc6769f373c866cfaa3e538429df458aef728f5e2164cb88fc69",
+                       "seconds":  840.1,
+                       "sourcesHashed":  1,
+                       "alms":  343,
+                       "registers":  244,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  0,
+                       "virtualPins":  544,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  121.08,
+                       "fmaxClock":  "clk",
+                       "ruleViolations":  [
+                                              "registers 244 \u003e allowed 200 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)",
+                                              "ALM 343 \u003e allowed 200"
+                                          ]
+                   },
+                   {
                        "module":  "zhao_terrain_normals",
                        "sourceCommit":  "96c0394a768519453b80d68998a670dd59f9aeb5",
                        "rtlCleanAtHead":  false,

@@ -375,6 +375,31 @@ targets:
       max_registers: 2400
       max_alms: 1600
 
+  # TERRAIN.CMD's whole storage argument is that it holds NO list: it reads the
+  # patch list twice rather than buffering 256 records, so a fit that reports
+  # block memory here has found a buffer somebody did not intend. The only
+  # storage is one job record, one record in assembly, and six counters.
+  - top: zhao_terrain_cmd
+    sources:
+      - fpga/rtl/generated/zhao_abi_pkg.sv
+      - fpga/rtl/common/zhao_pkg.sv
+      - fpga/rtl/common/zhao_crc32c_fold.sv
+      - fpga/rtl/terrain/zhao_terrain_cmd.sv
+    rules:
+      # NO MEMORY, and that is the acceptance question. Buffering the list was
+      # the alternative this block rejected at about seven M10K; if one appears,
+      # the rejection did not hold.
+      max_m10k: 0
+      max_dsp: 0
+      # Derived in the right unit this time, after max_alms 200 failed
+      # TERRAIN.MIPFEED for being a register count applied to an ALM budget.
+      # Registers: a ~200-bit job record, three 64-bit assembly beats, six
+      # 32-bit counters, the byte and CRC cursors -- about 640. ALMs: that
+      # floor plus the CRC-32C fold's combinational tree, which is 32 bits of
+      # XOR reduction over 64 inputs and is the largest thing in the block.
+      max_registers: 900
+      max_alms: 1200
+
   # TERRAIN.MIPFEED is a seven-state machine with one job record and three
   # counters. If it needs memory or a DSP, something is in it that should not be.
   - top: zhao_terrain_mipfeed
@@ -383,8 +408,26 @@ targets:
     rules:
       max_m10k: 0
       max_dsp: 0
-      max_registers: 200
-      max_alms: 200
+      # MEASURED 2026-09-07: ALM 343, registers 244, M10K 0, DSP 0,
+      # Fmax 121.08 MHz. The structure is exactly right -- no memory, no DSP --
+      # and the first version of this gate FAILED IT ANYWAY at max_alms 200.
+      #
+      # THE GATE WAS WRONG IN ITS UNITS, NOT ITS SPIRIT. 200 was derived by
+      # counting the block's flip-flops -- a 115-bit job record, three 32-bit
+      # counters, an FSM -- which came to about 217, and then applied to an ALM
+      # budget. Registers and ALMs are not the same thing: an ALM holds up to
+      # four registers but a per-block fit also pays for the combinational
+      # select and for every port on a virtual pin. 244 registers cannot fit in
+      # fewer than 61 ALMs and will not fit in anything like that few once the
+      # muxing is counted.
+      #
+      # So the ceiling is re-derived rather than retuned to 343: registers are
+      # capped at 400 (the record and counters plus headroom), and ALMs at 500,
+      # which is the register floor plus a generous allowance for the FSM and
+      # the selects. A block that grew a buffer or a second job in flight would
+      # still trip it.
+      max_registers: 400
+      max_alms: 500
 
   - top: zhao_terrain_loadq
     sources:

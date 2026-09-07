@@ -1,0 +1,4 @@
+﻿preflight: zhao_terrain_pagestream closure from design/fit_targets.yml (3 file(s))
+snapshot: 3 source(s) copied into the workspace; the live tree cannot reach this fit
+provenance guard: 3 declared source(s)
+source digest: 2fecad2b9035 over 3 file(s) -> zhao_terrain_pagestream.sources.sha256
