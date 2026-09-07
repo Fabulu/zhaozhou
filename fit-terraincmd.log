@@ -1,0 +1,4 @@
+﻿preflight: zhao_terrain_cmd closure from design/fit_targets.yml (4 file(s))
+snapshot: 4 source(s) copied into the workspace; the live tree cannot reach this fit
+provenance guard: 4 declared source(s)
+source digest: d77670b8f914 over 4 file(s) -> zhao_terrain_cmd.sources.sha256

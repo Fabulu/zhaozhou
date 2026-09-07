@@ -6538,6 +6538,35 @@ set_tests_properties(lint_terrain_seq PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # ---------------------------------------------------------------------------
+# TERRAIN.PAGESTREAM -> TERRAIN.PATCH -- section 3.4 on real page bytes.
+#
+# `tb_terrain_world.sv`'s header called this chain "reachable only from a
+# harness on BOTH ends, which is decoration rather than composition", and named
+# the missing block: nothing turned a resident page slot into TERRAIN.PATCH's
+# lattice intake. That block landed on 2026-09-07, and the two go together with
+# NO GLUE on the height path -- base/scar/bottom/vi/vj cross directly, which is
+# why the streamer emits three planes on one beat instead of one plane per pass.
+#
+# THE FIXTURE HAS TO REACH THE CLAMP OR THE SUITE IS VACUOUS. Section 3.4 is
+# `max(fx(base) + fx(scar), fx(bottom))`, and a page whose bottom is always far
+# below its top would pass against a block that dropped the max entirely. The
+# page reaches a positive add, a negative add, the clamp, the boundary and
+# fx_add's saturation -- and the count the ORACLE actually clamped is asserted,
+# because the fixture's intent is not evidence, its effect is.
+add_executable(test_compose_rtl_directed terrain/compose_rtl_directed.cpp)
+target_link_libraries(test_compose_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_compose_rtl_directed
+  PREFIX Vtb_terrain_compose
+  TOP_MODULE tb_terrain_compose
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pagestream.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_compose.sv)
+add_test(NAME compose_rtl_directed COMMAND test_compose_rtl_directed)
+set_tests_properties(compose_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)
+
+# ---------------------------------------------------------------------------
 # TERRAIN.CMD -- SubmitTerrainSet, turned into a frame.
 #
 # THE ORACLE IS `zref::swstream::encode_record`, READ BACKWARDS: encode a
