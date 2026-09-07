@@ -59,7 +59,15 @@ def hops(text: str, index: int):
     starts = [m.start() for m in re.finditer(r"Data Arrival Path", text)]
     if index >= len(starts):
         return None, 0
-    seg = text[starts[index]:starts[index] + 30000]
+    # BOUND THE SEGMENT AT THE NEXT PATH, not at a fixed byte count. The first
+    # version took a flat 30,000 characters, which is fine for a long path and
+    # silently spans SEVERAL SHORT ONES -- a tree-wide sweep built on it
+    # reported zhao_texture_bilerp_lane with 9.792 ns of DSP inside a 3.741 ns
+    # data path, which cannot happen and is how the bug was caught. A number
+    # larger than its own container is a broken instrument (CLAUDE.md), and the
+    # containment check was cheaper than the debugging would have been.
+    end = starts[index + 1] if index + 1 < len(starts) else len(text)
+    seg = text[starts[index]:end]
     out = []
     prev = None
     for line in seg.splitlines():
@@ -106,6 +114,18 @@ def main(argv: list[str]) -> int:
           % (a.module, a.index + 1, total,
              os.path.relpath(p, REPO).replace(os.sep, "/")))
     print("=" * 92)
+    # A containment check, printed rather than trusted: every hop this tool
+    # attributes to the data path must fit inside the data path it reports.
+    body_all = [r for r in rows if r[2] in ("IC", "CELL", "uTco")]
+    idx = next((k for k, r in enumerate(rows) if r[3].strip() == "data path"), None)
+    if idx is not None and data:
+        after = sum(r[1] for r in rows[idx + 1:] if r[2] in ("IC", "CELL", "uTco"))
+        if after > data[1] + 0.01:
+            print("  *** hops after the data-path marker sum to %.3f ns against a"
+                  % after)
+            print("  *** reported data path of %.3f ns. The segment is spanning more"
+                  % data[1])
+            print("  *** than one path; the result below is not trustworthy.")
     if clock:
         print("  clock path %8.3f ns" % clock[1])
     if data:

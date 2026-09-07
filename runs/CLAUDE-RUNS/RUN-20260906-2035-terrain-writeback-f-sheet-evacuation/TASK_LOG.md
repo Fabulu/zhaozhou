@@ -762,3 +762,21 @@ available in both.
 
 The tool sums and counts sub-threshold hops rather than dropping them: 155 hops
 under 0.30 ns are 2.692 ns.
+
+## 2026-09-07 -- path_anatomy bug found by an impossible number; DSP sweep
+
+Sweep reported bilerp_lane with 9.792 ns of DSP inside a 3.741 ns data path.
+262% cannot happen. Cause: the segment was a flat 30,000 chars, which spans
+SEVERAL short paths. TESS's 28 ns path masked it; bilerp's 3.7 ns did not.
+Bounded at the next path header, plus a containment check that warns when
+attributed hops exceed the reported data path.
+
+Corrected sweep:
+  zhao_geom_project        15.906 ns data,  6.611 DSP  42%
+  zhao_pair_tess_normals   28.080 ns data,  8.599 DSP  31%
+  zhao_texture_bilerp_lane  3.741 ns data,  0.729 DSP  19%
+
+Both blocks that miss the clock spend a third to a half of their worst path in
+a COMBINATIONAL DSP output -- resulta as a CELL delay, not through the DSP's
+own output register. Terrain and geometry converge on one mechanical fix.
+bilerp is comfortable and needs nothing.
