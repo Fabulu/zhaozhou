@@ -2388,3 +2388,28 @@ the fog colour. DOCKET R7 also already knew the old order was unimplementable:
 Not built: the ATTRSTEP factor lane and the post-toon mix. It should land in the
 reference first (the reel defines correct) and it touches the vertex-attribute
 path the rearchitecture brief defers — flagged rather than opened unilaterally.
+
+## P0-C's precondition: the V3 owner has never been composed
+
+`zhao_texture_v3own` is instantiated **nowhere** in `fpga/rtl/`. Every remaining
+mention is a comment. `zhao_texture_island_top.sv:888` instantiates
+`zhao_texture_fragrob`, and the island's source list in `design/fit_targets.yml`
+carries `fragrob.sv` with no `v3own.sv`.
+
+So the island's 13,601 ALM / 23,181 registers / 66.77 MHz contains the OLD
+fragrob (1,676 ALM, 2,631 registers), and today's owner result — 5,709 → 3,348,
+core→core 91.32 → 98.18 — sits entirely outside the composed design. It is real
+and it cannot move the island until the block is instantiated.
+
+**The arithmetic that must not be buried:** v3own at 3,348 is TWICE fragrob's
+1,676, so a naive swap ADDS ~1,672 ALM to a composition already 13,601 against a
+7,500 redline. The brief's answer is that the saving lives in what the swap makes
+deletable, which is unmeasured. That is precisely the "first explanation that
+absolves the design" shape, so it is written down as an open claim rather than an
+assumption. The two blocks are also not like-for-like: v3own implements the whole
+CAPTURE/SNAPSHOT/CLAIM/WRITE/PUBLISH/READY structure §6.2 requires, fragrob fuses
+the checks into the payload write, which is the defect §6.1 names.
+
+Useful consequence: there is no partial integration to finish and no second
+ownership system running in the island. P0-C is a first instantiation plus the
+removals it licenses.
