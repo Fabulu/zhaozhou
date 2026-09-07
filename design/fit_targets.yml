@@ -258,6 +258,62 @@ targets:
   # NO RULES YET, deliberately. The brief gives this block no budget, and a
   # threshold invented beside the first fit that governs it is the exact failure
   # CLAUDE.md records. Measure first, gate second.
+  # GEOM.PROJECT -- and the acceptance question is a CLAIM ITS OWN HEADER MAKES.
+  #
+  # It has never been measured. Sixteen of the twenty-four geometry blocks have
+  # no fit row at all, and this is the one DOCKET D22 names, carrying
+  # UNIT_VERIFIED on simulation evidence alone.
+  #
+  # THE CLAIM: "THE DUPLICATION IS GONE. THIS BLOCK IS NOW A THIN SHELL." The
+  # file used to hold a complete copy of `project_vertex` -- the same helpers,
+  # the same 31-stage restoring recurrence, the same viewport fx_mad -- that
+  # zhao_terrain_project also held, and its own header called that "A COST, NOT
+  # A FEATURE". The shared core is now zhao_project_core, and this block is
+  # meant to be "a ready/valid handshake, the accepted-vertex counter, and
+  # nothing else".
+  #
+  # A fit is the only thing that can check that. The merge was verified on a
+  # DIFFERENTIAL -- 12,300 vertices, three ways, zero mismatches -- which proves
+  # the two compute the same values and says nothing about whether the silicon
+  # is shared or duplicated.
+  #
+  # THE PREDICTION, WRITTEN BEFORE THE FIT AND DERIVED FROM THE STRUCTURE.
+  # zhao_terrain_project instantiates exactly ONE zhao_project_core and measured
+  # 6,068 ALM / 6,685 registers / 33 DSP / 23 M10K / 3,822 memory bits. This
+  # block instantiates exactly one too, and adds no framing. So:
+  #
+  #   * DSP should be ABOUT THE SAME as terrain's, because the core owns every
+  #     multiply. Much LOWER would mean terrain's 33 includes framing
+  #     multiplies; much HIGHER would mean the core is not shared after all,
+  #     which is the claim under test.
+  #   * MEMORY SHOULD BE ZERO. Terrain's 23 M10K are its triangle framing. A
+  #     shell that owns no storage cannot have any, and this is the sharpest
+  #     line in the whole entry.
+  #   * ALM and registers should be BELOW terrain's, since this is the same core
+  #     minus the framing.
+  - top: zhao_geom_project
+    sources:
+      - fpga/rtl/common/zhao_project_core.sv
+      - fpga/rtl/geometry/zhao_geom_project.sv
+    rules:
+      # ZERO, and it is the acceptance question. The shell owns a handshake and
+      # a counter; anything that infers as memory here is storage nobody
+      # declared.
+      max_m10k: 0
+      # Terrain's 33 with headroom. A second core would roughly double it, which
+      # is the failure this catches -- the header's "the duplication is gone"
+      # made checkable.
+      max_dsp: 40
+      # Both BELOW terrain's measured 6,685 / 6,068, because this is the same
+      # core without the triangle framing. Set from that measurement rather than
+      # from a guess, and deliberately not tight: the question here is "one core
+      # or two", not "how many ALMs exactly".
+      max_registers: 7000
+      max_alms: 6500
+      # NO min_fmax_mhz. That rule is opt-in and this is not my block -- a clock
+      # a block was never designed against is a surprise, not a gate. Its owner
+      # adds it when they have a target.
+
   - top: zhao_geom_mem_adapter
     sources:
       - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
