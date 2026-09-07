@@ -260,3 +260,48 @@ that the wrappers under-build so the numbers do not count. The DSP column
 refuses it: 30-62% fewer DSPs, and a virtual pin never consumed a DSP. That is
 logic being folded away, so these are the numbers of a REDUCED circuit and the
 full one will not be faster.
+
+## 2026-09-07 -- island handed to a FABLE architect; a repair held back
+
+Owner asked why I had stopped on the texture island. I had not stopped for a
+blocker -- I deprioritised it, wrongly, given 16,192 ALM against a 7,500
+redline. Directed to take it seriously, then to send a FABLE architect at the
+77.30 MHz core-to-core number and have it research everything.
+
+ARCHITECT LAUNCHED. Brief: independent census from the map report, critical
+path re-read, ranked rearchitecture with derivations and blast radius, the R6
+exact-ordering cost, and a defensible redline for the island AS SPECIFIED NOW.
+Architecture only -- no RTL edits, no Quartus runs (the toolchain is busy).
+Sent it a follow-up naming the two TMU owner-direction files beside the RTL,
+which my first brief missed: the TMU target is SUPERSEDED and awaiting a
+replacement spec, so no proposal may be justified against the retired 850,000.
+
+A SECOND ARCHITECTURE BRIEF FROM THE OWNER IS EXPECTED IN THE REPO TODAY.
+`tools/maintenance/watch_for_owner_brief.sh` now watches for it -- upstream
+commits or a new OWNER-DIRECTION/BRIEF/SPEC file anywhere in the tree -- because
+CLAUDE.md records direction being posted four times and never reaching the
+working agent. It reports NOTHING FOUND rather than going quiet.
+
+HELD BACK DELIBERATELY, so as not to mutate files the architect is measuring:
+a repair to `zhao_texture_material_combine_v2.sv`. `refused_recipe_o` is
+assigned ONLY in reset and never incremented, which is why the island's map
+report carries `Warning (10240) ... inferring latch(es) for variable
+"refused_recipe_o"`. Chased it: the counter is CORRECTLY always zero --
+`bad_recipe_c` is hardwired 1'b0 because `f_recipe_i` is three bits, all eight
+encodings are real recipes, the oracle refuses only `recipe >= kRecipeCount`
+with kRecipeCount == 8, and the command ABI packs the field into three bits
+too. Unrepresentable, not merely unobserved.
+
+The defect is therefore NOT the RTL. It is that
+`tests/texture/texture_combine_diff.cpp:249` compares dut.refused_recipe_o to
+the oracle's refused_unknown_recipe and PASSES ONLY BECAUSE BOTH ARE
+STRUCTURALLY ZERO -- reading exactly like the saturation checks two lines above
+it, which deliberately assert `> 0` first to prove the case was reached. A
+check that cannot fail, wearing the shape of coverage. Patch is written and
+staged in the scratchpad (fix_recipe.py): an explicit hold plus the reason in
+the RTL, and a restated check that asserts unreachability instead of agreement.
+Apply once the architect reports.
+
+Also checked and NOT a bug: `jobs_by_recipe_o += 2`. Deliberate and documented
+-- two lanes fire per product-bearing phase, which is exactly what
+zref::material::product_jobs() says.
