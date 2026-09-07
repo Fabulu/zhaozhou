@@ -81,3 +81,59 @@ would have been a select and a select does not compose:
   as lane 0, instead of falling back to a linear average beside it).
 
 Built `cel` clean, rc 0.
+
+## 0010 - ITEM 1 DELIVERED: the spans are distance-driven
+nodule_aim was throwing the number away. It aims at the target and then
+advances the chain by the BIND arc length, so a ball whose target is further
+off than its span is long simply never arrives -- and nothing downstream
+knew by how much. It now reports that shortfall in per-mille, measured on
+the FORWARD-WALKED POSED chain (no matrix is inverted anywhere, so gotcha
+S15's bind-space trap never opens), and each span spends its own on its own
+lane. kSpanStretchMaxPm = 300, kSpanThinRatioPm = 600.
+kLoopStretchStrength -> 0: the breath drive is retired but kept live as a
+knob, because a breath term underneath a distance drive would stretch spans
+when nothing moved apart.
+
+Ring authorities are GEOMETRY: a ring carries its own span's stretch AND the
+accumulated stretch of every span below it, 255*clamp(s-start,0,L)/s per
+lane. That is why lanes had to SUM -- a ring in span 3 needs k1, k2 and k3
+at once, and a select would have torn the other two.
+
+## 0025 - THE GATE, and the blind spot it closes
+manafold_nodule.cpp reported ball A's vertical reach as -7..+3 mm with the
+stretch fully live, and it was right to: posed_ball() skins a synthetic
+vertex at the BONE's bind origin with no deform metadata, so a bone gate
+cannot see a vertex effect. Same blind spot wave 1 named for the closure
+probe. Left that gate alone (protected, and its independence verdict is
+correct) and wrote manafold_spangate.cpp (mspan), which reads the SKIN
+through decode_pose -> deformation_frame -> deform_skin_vertex_lanes ->
+skin_vertex.
+
+    G1 rest identity   925 deform vertices, 0 moved
+    G2 no fold-back    0.00 mm reversal at the ceiling
+    G3 buried tip      0.00 mm (max 1.00)
+    G4 ball A vertical SKIN reach   37.8 -> 172.3 mm, gain 134.5 (floor 60)
+
+THREE FAILABLE LEGS, each witnessed failing:
+  --fail-nolanes      G4 fails, gain 0.0
+  --fail-steepramp 5  G2 fails, 12.02 mm reversal at station 1720
+  --fail-noramp       G3 fails, tip moves 416.56 mm
+
+TWO THINGS THE LEGS FOUND that no amount of reading would have:
+  * --fail-ceiling 1200 PASSED, and that was the bug. 1200 pm is 78643,
+    which wrapped in the u16 lane sample to 13107 and walked the check at
+    200 pm -- LOWER than the default. So a lane cannot express more than
+    1000 pm, which in turn makes G2 UNFAILABLE BY ANY VALUE: the bound is
+    sum(L_i)=1400 < total-stC=1540 at the structural maximum. G2 guards a
+    GEOMETRY change, not a value, and its leg steepens the taper instead.
+  * --fail-noramp first passed too. The ramp does not reduce authority
+    past hinge C, it zeroes it, so those rings compile role-kNone with a
+    zeroed centre and there was nothing left to scale. The leg has to bring
+    them back to life, and does so explicitly.
+
+## 0035 - protected invariants, verified not asserted
+  zixx-golden before(d820b574) vs after: 46 files, byte-identical --
+    every clip payload and every per-key pose CRC
+  zixx-probe PASS . zixx-meshcheck OK
+  manafold-probe rc 0 (5d gate A 22 mm, gate B 837 pm) .
+  manafold-meshcheck CLEAN . manafold-nodule PASS 0 failures

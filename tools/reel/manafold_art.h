@@ -1254,17 +1254,73 @@ constexpr int32_t kNoduleOffsetMaxMm[3] = {200, 200, 200};  // x, y, z
 //   §13 and blink share one prerequisite, which is worth knowing before either
 //   is scheduled again.
 //
-// WHAT SHIPS instead is the mechanism with an HONEST DRIVE: the spans stretch
-// and thin on the body's own breath sample. The balls do move apart and the
-// band does thin, and the whole creature stretches together rather than the
-// antenna stretching on its own schedule. It is less than the direction asks
-// for and it is not silently less.
+// WHAT SHIPPED IN WAVE 1 instead was the mechanism with an HONEST DRIVE: the
+// spans stretched and thinned on the body's own breath sample.
+//
+// ⚠ WAVE 2a RETIRES THAT DRIVE, and this knob is now 0. It is kept, named and
+// live -- not deleted -- because it is a real effect the owner may want back:
+// non-zero here couples the WHOLE antenna to the body's breath on lane 0,
+// underneath the per-span stretch on lanes 1..3. It is off because SS13 asked
+// for distance-driven and a breath term underneath it would make the spans
+// stretch when nothing moved apart, which is the thing being fixed.
 //
 // Strength is 0..255 of the global sample. At kCompressAmpPm 12500 the spread
 // delta is 12500 * kSpreadRatioPm/1000 = 6875, so a strength of 170 gives
 // 6875*170/255 / 65536 = 7.0% of length -- about 240 mm on the 3450 mm chain,
 // which separates the balls by tens of millimetres. Authored by eye at native.
-constexpr uint8_t kLoopStretchStrength = 170;
+constexpr uint8_t kLoopStretchStrength = 0;
+
+// ==== PASS 12 WAVE 2a -- THE DRIVE SS13.3 ITEM 2 ACTUALLY ASKED FOR =========
+//
+// The block above is the honest limitation wave 1 wrote down, and this is its
+// removal. The prerequisite it named -- the second deform sub-channel -- now
+// exists as DEFORM LANES (`zref_creature.hpp`, `kDeformLaneCount`), so the
+// stretch no longer has to borrow the body's breath.
+//
+//   "Drive it from the INTER-NODULE DISTANCE. When nodules separate, the span
+//    must stretch BY THE AMOUNT THEY SEPARATED -- so the deform scalar is
+//    COMPUTED FROM THE POSED POSITIONS of the two bounding nodules, not
+//    authored per key."                                    -- D9 SS13.3 item 2
+//
+// WHERE THE NUMBER COMES FROM, and it was already being thrown away. The
+// nodule solve aims each station at its target and then advances the chain by
+// the BIND ARC LENGTH, because bones are rigid -- so a ball whose target is
+// further away than its span is long simply does not reach it. `nodule_aim`
+// now reports that shortfall in per-mille of the arc, measured on the
+// FORWARD-WALKED POSED CHAIN in world millimetres, and each span spends its
+// own on its own lane. Three spans, three lanes, three independent amounts --
+// which is what makes SS2's "any kind of configuration" survive: nodule A can
+// stretch its span upward while C's shortens, on the same key.
+//
+// ⚠ THIS IS ALSO THE FIX FOR NODULE A'S VERTICAL TRAVEL. A's span points
+// nearly straight up, so an offset ALONG it moved the ball a few millimetres
+// however large the request -- the pathological case kNoduleOffsetMaxMm's own
+// warning describes ("offsets ALONG the span move it hardly at all, because
+// that would require the span to lengthen"). It lengthens now.
+//
+// THE CEILING. Per-mille of extra length one span may take. 200 mm of request
+// along the SHORTEST span (A->B, 340 mm) is 588 pm, which is a rubber band and
+// not an antenna; the shipped nodule amplitudes (kNoduleAmpMm, 42..78 mm) ask
+// for 120..230 pm on that span, so 300 leaves the schedule its full range and
+// still refuses the pathological corner. AUTHORED BY EYE at native against the
+// Side sheet, then checked -- not derived.
+//
+// ⚠ AND IT IS WHAT KEEPS THE SKIN MONOTONE. Past hinge C every lane's
+// authority ramps to zero over the buried return arm (see make_loop), so the
+// map y(s) has NEGATIVE slope contributions there, and the chain folds back
+// through itself if they beat 1. The bound is
+//     sum_i k_i * L_i  <  total - stC
+// with spans 680/340/380 and (total - stC) = 1540 mm: at 300 pm the worst case
+// is 0.300 * 1400 = 420 < 1540, so dy/ds >= 0.727 > 0. ASSERTED in the
+// committed span gate from these constants, not left as arithmetic in a
+// comment (checklist 19).
+constexpr int32_t kSpanStretchMaxPm = 300;
+
+// The band THINS as it stretches -- an elastic band, not a balloon (SS13.4's
+// "volume" item). Per-mille of the stretch taken back out of the blade's broad
+// in-plane half-width. 1000 would be equal-and-opposite; 600 keeps the antenna
+// reading as a solid form under a large swing rather than a wire.
+constexpr int32_t kSpanThinRatioPm = 600;
 
 // The always-on nodule schedule. THREE INDEPENDENT NODULES MEANS THREE
 // INDEPENDENT CLOCKS -- if they shared one they would be phase-offset copies of

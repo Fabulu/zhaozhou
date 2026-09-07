@@ -131,13 +131,54 @@ struct Rig {
   // ordering every clip already uses -- so not one call site changes, and a
   // clip that never touches them poses exactly as it did before.
   NoduleOffsets nod;
+  /** PASS 12 (Direction 9 SS13.3 item 2) -- THE POSE-DERIVED SPAN STRETCH.
+   *
+   *  Per-mille of extra length each inter-nodule span needs THIS KEY, written
+   *  by the nodule solve and read by nothing else. It is the SHORTFALL the
+   *  solve would otherwise swallow: `nodule_aim` lands the ball along the
+   *  direction of its target at exactly the bind arc length, so a target
+   *  further away than that simply does not get reached. This is how far it
+   *  fell short, and the deform lanes are what pay it.
+   *
+   *  ⚠ IT IS COMPUTED FROM THE POSED CHAIN, NEVER FROM BIND. The solve walks
+   *  the chain forward in world millimetres (09-ENGINE-GOTCHAS SS15: inverting
+   *  a SKINNING matrix returns bind space, which would report the rest pose's
+   *  shortfall -- zero -- on every key). No matrix is inverted anywhere here.
+   */
+  int32_t span_pm[3] = {0, 0, 0};
   void reset() {
     for (int b = 0; b < kBoneCount; ++b) q[b] = zc::quat16_identity();
     nod = NoduleOffsets{};
+    span_pm[0] = span_pm[1] = span_pm[2] = 0;
   }
   void write(zc::Clip& c, int f) const {
     for (int b = 0; b < kBoneCount; ++b)
       c.quats[static_cast<size_t>(f) * kBoneCount + b] = q[b];
+    write_span_lanes(c, f);
+  }
+  /** Emit this key's span stretch onto deform lanes 1..3.
+   *
+   *  It rides `write` -- the ONE place every clip already commits a key -- so
+   *  no clip builder has to remember it and no clip can carry a pose whose
+   *  spans disagree with its quats. A clip whose extra track was never
+   *  allocated writes nothing, which is exact identity. */
+  void write_span_lanes(zc::Clip& c, int f) const {
+    const size_t ex = static_cast<size_t>(zc::kDeformLaneCount) - 1u;
+    if (c.deform_ex.size() != static_cast<size_t>(c.frame_count) * ex) return;
+    for (int i = 0; i < 3; ++i) {
+      int32_t pm = span_pm[i];
+      if (pm < 0) pm = 0;  // see kSpanStretchMaxPm: the sidecar has no sign
+      if (pm > kSpanStretchMaxPm) pm = kSpanStretchMaxPm;
+      // spread EXPANDS the two lanes perpendicular to the named axis -- y (the
+      // arc, so the span lengthens) and z. flatten CONTRACTS the named axis x,
+      // the blade's broad in-plane half-width: the band thins as it stretches.
+      const int32_t spread = static_cast<int32_t>(
+          (static_cast<int64_t>(pm) * 65536) / 1000);
+      const int32_t flat = static_cast<int32_t>(
+          (static_cast<int64_t>(spread) * kSpanThinRatioPm) / 1000);
+      c.deform_ex[static_cast<size_t>(f) * ex + static_cast<size_t>(i)] =
+          zc::DeformSample{static_cast<uint16_t>(flat), static_cast<uint16_t>(spread)};
+    }
   }
 };
 
@@ -209,7 +250,22 @@ struct HingePlay {
  *  the target at exactly `len`. See kNoduleOffsetMaxMm for what that costs. */
 inline void nodule_aim(zc::quat16& local, zc::quat16& Q, int32_t len,
                        int32_t& px, int32_t& py, int32_t& pz,
-                       int32_t tx, int32_t ty, int32_t tz) {
+                       int32_t tx, int32_t ty, int32_t tz,
+                       int32_t* short_pm = nullptr) {
+  // PASS 12 (D9 SS13.3 item 2): HOW FAR SHORT THIS AIM LANDS, in per-mille of
+  // the bind arc. The warning above is the whole point -- the end lands along
+  // the target's direction at exactly `len`, so a target 1.2 arc-lengths away
+  // is missed by 20% and nothing downstream ever knew by how much. It does now,
+  // and the deform lanes spend it as span stretch.
+  //
+  // Measured HERE, on the forward-walked posed chain in world millimetres,
+  // which is the only place it is honest: px/py/pz have already been carried by
+  // every solved station above, so this is the POSED gap, not a bind one.
+  if (short_pm != nullptr) {
+    const int64_t dx = tx - px, dy = ty - py, dz = tz - pz;
+    const int64_t want = isqrt64(dx * dx + dy * dy + dz * dz);
+    *short_pm = len > 0 ? static_cast<int32_t>(((want - len) * 1000) / len) : 0;
+  }
   int32_t vx, vy, vz;
   quat_rot_vec(quat_conj(Q), tx - px, ty - py, tz - pz, vx, vy, vz);
   const int32_t aim_z = angle16_of(vx, vy);
@@ -305,21 +361,24 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
       nodule_aim(g.q[kBNeck], NQ, kLoopArcMm[1], nx, ny, nz,
                  nx + ex + cl(nd.ax, kNoduleOffsetMaxMm[0]),
                  ny + ey + cl(nd.ay, kNoduleOffsetMaxMm[1]),
-                 nz + ez + cl(nd.az, kNoduleOffsetMaxMm[2]));
+                 nz + ez + cl(nd.az, kNoduleOffsetMaxMm[2]),
+                 &g.span_pm[0]);
       // span 2: nodule A -> nodule B
       NQ = quat_mul(NQ, g.q[kBHingeA]);
       quat_rot_vec(NQ, 0, kLoopArcMm[2], 0, ex, ey, ez);
       nodule_aim(g.q[kBHingeA], NQ, kLoopArcMm[2], nx, ny, nz,
                  nx + ex + cl(nd.bx, kNoduleOffsetMaxMm[0]),
                  ny + ey + cl(nd.by, kNoduleOffsetMaxMm[1]),
-                 nz + ez + cl(nd.bz, kNoduleOffsetMaxMm[2]));
+                 nz + ez + cl(nd.bz, kNoduleOffsetMaxMm[2]),
+                 &g.span_pm[1]);
       // span 3: nodule B -> nodule C
       NQ = quat_mul(NQ, g.q[kBHingeB]);
       quat_rot_vec(NQ, 0, kLoopArcMm[3], 0, ex, ey, ez);
       nodule_aim(g.q[kBHingeB], NQ, kLoopArcMm[3], nx, ny, nz,
                  nx + ex + cl(nd.cx, kNoduleOffsetMaxMm[0]),
                  ny + ey + cl(nd.cy, kNoduleOffsetMaxMm[1]),
-                 nz + ez + cl(nd.cz, kNoduleOffsetMaxMm[2]));
+                 nz + ez + cl(nd.cz, kNoduleOffsetMaxMm[2]),
+                 &g.span_pm[2]);
     }
   }
 
@@ -556,6 +615,13 @@ inline zc::Clip clip_shell(uint16_t slot, int keys, int32_t hover_mm) {
   c.root.assign(static_cast<size_t>(keys) * 3, 0);
   c.quats.assign(static_cast<size_t>(keys) * kBoneCount, zc::quat16_identity());
   c.deform.assign(static_cast<size_t>(keys), zc::DeformSample{});
+  // PASS 12: lanes 1..4. Allocated identity for EVERY clip, because the nodule
+  // schedule is always on (D9 SS2) and therefore so is the span stretch --
+  // there is no such thing as a Manafold clip whose spans never move. Identity
+  // samples cost nothing: deform_skin_vertex_lanes skips a zero term before it
+  // rounds anything.
+  c.deform_ex.assign(static_cast<size_t>(keys) * (zc::kDeformLaneCount - 1u),
+                     zc::DeformSample{});
   for (int f = 0; f < keys; ++f) c.root[static_cast<size_t>(f) * 3 + 1] = fxu(hover_mm);
   c.interpolate = true;
   return c;

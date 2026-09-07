@@ -283,16 +283,80 @@ inline zc::RingPart make_loop() {
     //
     // It is also what SS13 actually asked for -- "the antennae parts BETWEEN
     // THE BLOBS", not the buried return.
-    int32_t stretch = kLoopStretchStrength;
+    //
+    // ==== WAVE 2a: THE THREE SPANS GET THEIR OWN LANES ====================
+    //
+    // Wave 1's single strength read the body's breath, so every span stretched
+    // together by the same amount whatever the nodules were doing. Lanes 1..3
+    // carry ONE SPAN EACH, driven by that span's own posed shortfall, so the
+    // three are independent -- SS2's "any kind of configuration" reaching the
+    // skin instead of stopping at the bones.
+    //
+    // THE AUTHORITIES ARE GEOMETRY, and this is the part that has to be right
+    // or the antenna tears. A ring must carry not only ITS OWN span's stretch
+    // but the accumulated stretch of every span BELOW it, or the chain parts
+    // company at each span boundary. Since the deform displaces a vertex by
+    //     disp = (spread/65536) * (strength/255) * (y - y0)
+    // and lane i's sample IS its span's stretch fraction k_i, the authority a
+    // ring at station s needs on lane i is
+    //     strength_i(s) = 255 * clamp(s - start_i, 0, L_i) / s
+    // -- the full span length once the ring is past it, a partial run while
+    // the ring is inside it, zero below. That makes
+    //     disp(s) = sum_i k_i * clamp(s - start_i, 0, L_i)
+    // which is continuous at every boundary and monotone by construction
+    // BELOW hinge C (each term's slope is 0 or 1, so dy/ds >= 1).
+    //
+    // ⚠ Being a SUM is why lanes had to be summed rather than selected. A ring
+    // in span 3 needs k_1, k_2 AND k_3 at once; a per-vertex "which lane do I
+    // read" would have had to pick one and would have torn the other two.
+    //
+    // THE RAMP PAST HINGE C survives verbatim from wave 1, and its reason is
+    // unchanged: at full authority the accumulated growth pushes the buried
+    // arm's END out through the far side of the body -- a tube stub poking
+    // from the ball's lower right, which the committed closure probe cannot
+    // see because it measures BONES and this is a VERTEX effect. Every lane's
+    // authority ramps linearly to zero from stC to the tip, so the arm rides
+    // along and its end does not move at all. This is the ONLY region where
+    // dy/ds can go negative; kSpanStretchMaxPm is bounded so it cannot.
+    //
+    // ⚠ ROLE AND STRENGTH MUST STILL AGREE, now across every lane:
+    // `compile_creature` rejects the whole creature -- rendering NOTHING, not
+    // a creature without the effect -- if any lane has authority and the role
+    // is kNone. So the role is set from whether ANY lane wants this ring.
+    const int32_t span_start[3] = {stNeck, stA, stB};
+    const int32_t span_len[3] = {kLoopArcMm[1], kLoopArcMm[2], kLoopArcMm[3]};
+    int32_t ramp_num = 1, ramp_den = 1;
     if (s > stC) {
-      const int32_t run = total - stC;
-      stretch = run > 0 ? kLoopStretchStrength * (total - s) / run : 0;
-      if (stretch < 0) stretch = 0;
+      ramp_num = total - s;
+      ramp_den = total - stC;
+      if (ramp_num < 0) ramp_num = 0;
+      if (ramp_den <= 0) ramp_den = 1;
     }
-    rs.deform_role =
-        stretch > 0 ? zc::DeformRole::kRadial : zc::DeformRole::kNone;
+    int32_t lane_st[3] = {0, 0, 0};
+    for (int L = 0; L < 3; ++L) {
+      int32_t run = s - span_start[L];
+      if (run < 0) run = 0;
+      if (run > span_len[L]) run = span_len[L];
+      const int32_t st = s > 0 ? static_cast<int32_t>(
+                                     (static_cast<int64_t>(run) * 255 * ramp_num) /
+                                     (static_cast<int64_t>(s) * ramp_den))
+                               : 0;
+      lane_st[L] = st < 0 ? 0 : (st > 255 ? 255 : st);
+    }
+    // lane 0: the wave-1 breath coupling, kept as a live knob and OFF by
+    // default (kLoopStretchStrength). Same ramp, same reason.
+    int32_t stretch = kLoopStretchStrength;
+    if (s > stC)
+      stretch = static_cast<int32_t>(
+          (static_cast<int64_t>(kLoopStretchStrength) * ramp_num) / ramp_den);
+    if (stretch < 0) stretch = 0;
+    const bool any_lane =
+        stretch > 0 || lane_st[0] > 0 || lane_st[1] > 0 || lane_st[2] > 0;
+    rs.deform_role = any_lane ? zc::DeformRole::kRadial : zc::DeformRole::kNone;
     rs.deform_axis = 0;
     rs.deform_strength = static_cast<uint8_t>(stretch);
+    for (int L = 0; L < 3; ++L)
+      rs.deform_strength_ex[L] = static_cast<uint8_t>(any_lane ? lane_st[L] : 0);
     rs.deform_center_x = fxu(kLoopTubeXMm);
     rs.deform_center_y = fxu(y0);
     rs.deform_center_z = 0;
