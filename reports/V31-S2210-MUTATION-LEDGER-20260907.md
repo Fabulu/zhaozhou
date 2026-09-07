@@ -161,14 +161,23 @@ written for — which is the return on writing invariants at all, and the reason
 item 5 escaping still stands out: it violated no invariant because none stated
 WHEN publication may happen relative to the write.
 
+### `fetch_fire_c` no longer gated by the output reservation count, so F advances
+with no guaranteed destination for the packet it launches.
+
+    %Error: zhao_texture_v3own.sv:1983: Assertion failed in
+      TOP.zhao_texture_v3own.a_out_reserved: 'assert' failed.
+
+Fourth consecutive structural catch. Every credit invariant in the block —
+`a_cmb_reserved`, `a_out_reserved`, `a_p22_cbi_implies_crs`,
+`a_reject_partition_t` — has now caught the mutation it was written for.
+
 ## NOT yet demonstrated — stated so the gap is visible
 
 1. slot-only identity for external validation
-11. advance F without a reserved packet slot
 13. reopen the namespace before one external adapter acknowledges
 14. force old broken CLUT4, alpha, nearest, or global-binding behaviour
 
-**Ten of fourteen.**
+**Eleven of fourteen.**
 
 ## Related mutations run today outside §22.10's list
 
