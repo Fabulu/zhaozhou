@@ -359,3 +359,37 @@ FIT QUEUE now, in order, once residency_v2 clears:
   3. zhao_geom_project        -- never measured
   4. zhao_pair_pagestream_patch
   5. zhao_terrain_residency_v2 re-read
+
+## 2026-09-07 -- the owner's v3.1 brief landed, and M0 is answered from disk
+
+The watcher fired on commit 9c4300fe "Agent please read - v3.1 rearchitecture":
+reports/ZHAOZHOU_TEXTURE_V3_1_REARCHITECTURE_2026-09-07.txt, 4,344 lines. It
+supersedes the CONTROL recommendations of the V3 architecture, not the texture
+mathematics, and it explicitly incorporates my delivery through 756f08c --
+citing the top-level census as "direct evidence that a control-only replacement
+cannot be bolted under the old top-level capture/reorder scaffolding".
+
+Its work order is M0-M8. M0: "Recover owner physical attribution and timing
+endpoint classes; read the existing old-island census immediately, WITHOUT
+QUEUING A REDUNDANT MAP." The FABLE architect independently ranked the same
+work R1, first, ahead of everything else.
+
+M0 IS ANSWERED, with no Quartus run -- the map report was already on disk:
+
+  97% of the V3 owner's registers (4,085 of 4,220) and 98% of its ALUTs
+  (6,416 of 6,532) are in zhao_texture_v3own ITSELF. The three ready queues
+  cost 38-40 ALUTs each. The six banks cost ZERO ALUTs and ZERO registers --
+  pure M10K, exactly as designed.
+
+So the 3.15x area breach is the CONTROL PLANE, entirely. Not the banks, not the
+queues. That is the strongest available confirmation of V3.1's thesis and it
+came from evidence already on disk.
+
+reports/V31-M0-OWNER-ATTRIBUTION-20260907.md. Names what it does NOT settle:
+which PART of the control plane (that needs §19's ablations), whether the
+replacement fits, and anything about the old island's 13,459 top registers.
+
+tools/quartus/entity_census.py committed rather than retyped. Its first version
+printed "UNINFERRED RAM (2)" then "0 ... 0" because its reason-regex was
+`[a-z ]+` and stopped at the capital in "inappropriate RAM size". Caught within
+a minute by the exactly-zero rule, from the tool's own docstring.
