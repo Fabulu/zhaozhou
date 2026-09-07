@@ -321,7 +321,7 @@ coupled rather than independent.
 
 | Range | Region | Owner | Access |
 |---|---|---|---|
-| `0x0400_0000` .. `0x054D_FFFF` | `TERRAIN.PAGE_POOL` | `TERRAIN_BUILD` (client 6) | **write-only** |
+| `0x0400_0000` .. `0x054D_FFFF` | `TERRAIN.PAGE_POOL` | `TERRAIN_BUILD` (client 6) | **read + write** |
 
 `zhao_pkg` carries it as `ZHAO_TERRAIN_PAGE_POOL_BASE` / `_SPAN`
 (`0x0400_0000` / `0x014E_0000`); 1,024 × 21,376 = 21,889,024 = `0x014E_0000`,
@@ -330,10 +330,42 @@ the byte. Both are elaboration-time constants — no map input reaches this
 window, so unlike the framebuffer one it is **not frame-scoped**, and
 `BASE + SPAN` cannot wrap 32 bits.
 
-**Write-only, and that is the narrow reading rather than an oversight.**
-TERRAIN.PAGELOADER deposits pages; it never reads local SDRAM. T3 also names
-F-sheet writeback as TERRAIN_BUILD traffic and that will one day need a read of
-this pool — it gets its own arm, with its own proof, in the pass that builds it.
+**Both directions, as TWO ARMS over the SAME constants — and each arrived with
+its block, never ahead of it.**
+
+* `terrain_ok` (**write**) landed with `TERRAIN.PAGELOADER`, which deposits pages
+  and never reads local SDRAM.
+* `terrain_rd_ok` (**read**) landed with `TERRAIN.WRITEBACK` on 2026-09-06.
+  Ruling T4 *requires* layer F to be copied to the HPS journal on dirty eviction,
+  and T2 puts layer F **inside** the 21,376-byte page — so there is no F pool to
+  read and the sheet is reachable only through this window. The read is
+  therefore ruled traffic for this same client, not a widening of convenience.
+
+The arms are separate assigns over identical constants. One comparison would
+synthesise the same thing; they are kept apart because the **proof** states the
+directions separately — `a1_terrain_wr_owner` and `a1_terrain_rd_owner`, each
+with its own non-vacuity cover, so a regression names which direction broke and
+a merged arm cannot satisfy both covers while proving neither.
+
+**A read cannot alter a framebuffer**, the same argument that carried
+`GEOM.ASSET_POOL`, and here it holds twice: a forwarded read carries no write
+data, and these constant bounds are disjoint from both FB slots and from the
+asset pool. The widening is confined to bank 2.
+
+**A narrower read window was looked for and does not exist cheaply.** Layer F
+sits at page byte 10,694, so restricting reads to the F extents needs
+`addr mod 21,376` — not a power of two — on the guard's verdict path: the same
+obstacle recorded below for state-awareness. Client ID 5 was not spent on a
+separate reader, because T3 forbids spending it pre-emptively and a second
+client in one region is not narrower anyway.
+
+**The residual the read creates**, stated like the write one: client 6 may read
+*any* page in the pool, so a faulty writeback could journal another patch's
+scars. MEM.GUARD cannot see that. `TERRAIN.WRITEBACK` answers it by reading the
+evicted page's 64-byte header FIRST and refusing (`kSheetHeaderIdent`) before a
+single journal byte moves if `{island_id, patch_ix, patch_iz}` does not match
+the job — §2.1's "redundancy is a corruption check", spent on exactly the
+failure this arm creates.
 
 **The other five bank-2 regions are still unmapped**, `default: pass_ok = 1'b0`.
 A window is opened WITH the block that writes it, never ahead of it.

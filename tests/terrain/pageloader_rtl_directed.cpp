@@ -311,10 +311,17 @@ ProbeVerdict guard_probe(Bench& b, bool write, uint32_t client, uint32_t addr, u
 }
 
 // The two directions, named, so a failure line says which one broke.
+// THE EXPECTED VALUE IS THE ENCODING, NOT THE LITERAL 1. `ck` prints
+// "expected %lld, got %lld" and the `got` here is ok*100 + fwd*10 + viol. A
+// refused ADMIT is therefore got=1, and passing want=1 made the failure read
+// "expected 1, got 1" -- a line that looks like a broken test rather than a
+// broken guard. Found 2026-09-06 by the fire test for the terrain read arm:
+// withdrawing the arm produced four of these and every one of them was
+// unreadable. The encoding for an admission is 110 (ok=1, fwd=1, viol=0).
 void probe_admits(Bench& b, const char* what, bool write, uint32_t client, uint32_t addr,
                   unsigned len) {
   const ProbeVerdict v = guard_probe(b, write, client, addr, len, full_be(len));
-  ck(v.ok == 1 && v.fwd == 1 && v.viol == 0, what, 1,
+  ck(v.ok == 1 && v.fwd == 1 && v.viol == 0, what, 110,
      static_cast<long long>(v.ok * 100 + v.fwd * 10 + v.viol));
 }
 
@@ -833,7 +840,7 @@ int main(int argc, char** argv) {
   // lines here read "the real MEM.GUARD never passed a terrain write" and "it
   // refused them, loudly", because bank 2 had no window for any client and the
   // block was unintegrable by construction. The guard amendment landed
-  // (ZHAO_CLIENT_TERRAIN_BUILD = 6; TERRAIN.PAGE_POOL, write-only, that client
+  // (ZHAO_CLIENT_TERRAIN_BUILD = 6; TERRAIN.PAGE_POOL, that client
   // alone), so the claim being measured flipped -- and a flipped claim is worth
   // nothing without the other half, which is why the probe below asks the same
   // real block about the requests it must still refuse.
@@ -890,14 +897,42 @@ int main(int argc, char** argv) {
     probe_refuses(b, "probe: TERRAIN.BUILD may not write the writeback journal", true,
                   kTerrainBuildClient, 0x05780000u, 64, full_be(64));
 
-    // --- REFUSED: a READ where a write was granted --------------------------
-    // The window is write-only and that is the narrow reading, not an
+    // --- ADMITTED: the READ arm, which landed 2026-09-06 --------------------
+    // THESE TWO USED TO BE `probe_refuses`, and the comment here used to read
+    // "the window is write-only and that is the narrow reading, not an
     // oversight: T3 names F-sheet writeback as this client's traffic too, and
-    // the block that does it does not exist yet.
-    probe_refuses(b, "probe: TERRAIN.BUILD may not READ the first byte of slot 0", false,
-                  kTerrainBuildClient, kPoolBase, 64, full_be(64));
-    probe_refuses(b, "probe: TERRAIN.BUILD may not READ the last 64 B of the pool", false,
-                  kTerrainBuildClient, kPoolEnd - 64, 64, full_be(64));
+    // the block that does it does not exist yet."
+    //
+    // The block exists -- `fpga/rtl/terrain/zhao_terrain_writeback.sv`, whose
+    // ruling is T4 -- so MEM.GUARD grew `terrain_rd_ok`, a second arm over the
+    // SAME constant window with the opposite direction bit. This loader does
+    // not read local SDRAM and never will; these probes are here because THIS
+    // suite is where the pool's guard behaviour is enumerated at the byte, and
+    // a boundary that is checked in one direction only is half a boundary.
+    //
+    // Kept as an ADMISSION rather than deleted: a deleted check is a check
+    // nobody notices the loss of, and the pair below is what would catch the
+    // arm being withdrawn again by someone who read this loader's write-only
+    // traffic as the whole story.
+    probe_admits(b, "probe: TERRAIN.BUILD MAY read the first byte of slot 0 (writeback's arm)",
+                 false, kTerrainBuildClient, kPoolBase, 64);
+    probe_admits(b, "probe: TERRAIN.BUILD MAY read the last 64 B of the pool", false,
+                 kTerrainBuildClient, kPoolEnd - 64, 64);
+
+    // ...and the read arm is bounded exactly like the write arm. The bounds are
+    // shared constants in the RTL, so this is a check that they STAYED shared.
+    probe_refuses(b, "probe: TERRAIN.BUILD may not read 64 B below the pool base", false,
+                  kTerrainBuildClient, kPoolBase - 64, 64, full_be(64));
+    probe_refuses(b, "probe: TERRAIN.BUILD may not read the 64 B straddling the pool end",
+                  false, kTerrainBuildClient, kPoolEnd - 32, 64, full_be(64));
+    probe_refuses(b, "probe: TERRAIN.BUILD may not read AT the pool end", false,
+                  kTerrainBuildClient, kPoolEnd, 64, full_be(64));
+    // The direction bit still means something everywhere it meant something
+    // before: the read arm is scoped to this REGION, not granted to this client.
+    probe_refuses(b, "probe: TERRAIN.BUILD may not read framebuffer slot 0", false,
+                  kTerrainBuildClient, 0x00000000u, 64, full_be(64));
+    probe_refuses(b, "probe: TERRAIN.BUILD may not read the geometry asset pool", false,
+                  kTerrainBuildClient, 0x06A00000u, 64, full_be(64));
 
     // --- REFUSED: the shape law still applies inside the new window --------
     probe_refuses(b, "probe: a byte-enable hole is refused inside the pool", true,

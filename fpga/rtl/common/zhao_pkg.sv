@@ -292,8 +292,13 @@ package zhao_pkg;
     // F-sheet writeback, prefetch, staging and journal traffic (ruling T3,
     // spec/memory_rules.md 5d). It does NOT join the guaranteed round robin
     // when a page is late; a streaming miss draws a proxy and records
-    // pressure. MEM.GUARD gives it exactly one window: TERRAIN.PAGE_POOL,
-    // WRITE-ONLY (see ZHAO_TERRAIN_PAGE_POOL_BASE below).
+    // pressure. MEM.GUARD gives it exactly one REGION -- TERRAIN.PAGE_POOL,
+    // see ZHAO_TERRAIN_PAGE_POOL_BASE below -- with TWO arms: WRITE for
+    // TERRAIN.PAGELOADER's pages and READ for TERRAIN.WRITEBACK's layer-F
+    // sheets (T4 requires the evacuation; T2 puts layer F inside the page, so
+    // the sheet is reachable only through this window). This line said
+    // WRITE-ONLY until 2026-09-06, which was true of the blocks that existed
+    // rather than of the region.
     ZHAO_CLIENT_TERRAIN_BUILD = 3'd6,
     ZHAO_CLIENT_NONE     = 3'd7
   } zhao_client_e;

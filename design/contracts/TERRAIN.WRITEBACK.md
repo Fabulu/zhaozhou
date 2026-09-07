@@ -117,9 +117,31 @@ If a later measurement shows the bridge's latency wants absorbing, the staging
 region is where that lands, and it is one more state in this machine rather than
 a redesign. Stated so the choice is visible.
 
-### MEM.GUARD MUST CHANGE, AND HERE IS THE NARROWEST FORM
+### MEM.GUARD HAS CHANGED — THE ARM IS ENACTED (2026-09-06)
 
-`zhao_mem_guard.sv` today:
+**This section requested an amendment and the amendment was made**, in the form
+written below, with the proof re-run and both directions covered. `MEM.GUARD.md`
+and `spec/memory_rules.md` §5b carry the enacted wording; what follows is kept
+because it is the ARGUMENT, and an enacted change whose reasoning is deleted is
+a change nobody can re-examine.
+
+What actually landed, verbatim from `zhao_mem_guard.sv`:
+
+    assign terrain_rd_ok = !req.write
+                         && (addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
+                         && (end32  <= ZHAO_TERRAIN_PAGE_POOL_BASE
+                                       + ZHAO_TERRAIN_PAGE_POOL_SPAN);
+    ZHAO_CLIENT_TERRAIN_BUILD: pass_ok = shape_ok && (terrain_ok || terrain_rd_ok);
+
+`mem_guard_no_escape` passes both tasks; `c_forward_terrain_rd` is REACHED, so
+the arm is not proved vacuously, and `c_forward_terrain_wr` is REACHED, so the
+loader's direction did not quietly go dead. `a1_terrain_wo` became
+`a1_terrain_wr_owner` + `a1_terrain_rd_owner` — see `MEM.GUARD.md` for the
+replacement argument and the five fire tests.
+
+---
+
+`zhao_mem_guard.sv` before the amendment:
 
     assign terrain_ok = req.write
                       && (addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
@@ -142,13 +164,14 @@ that is already there — the same constant window, the same single client:
                                        + ZHAO_TERRAIN_PAGE_POOL_SPAN);
     ZHAO_CLIENT_TERRAIN_BUILD: pass_ok = shape_ok && (terrain_ok || terrain_rd_ok);
 
-**It is not made here.** MEM.GUARD is formally proven, its proof was re-run
-today, and this block takes the region base and the client identity as
-parameters/ports exactly as `TERRAIN.PAGELOADER` did in the pass before its
-amendment landed. Until the arm exists, `guard_denied_o` is what this block
-reports and every write of a sheet faults as `kSheetIncomplete` — loudly,
-counted, and with the slot never released. That is the correct behaviour for an
-un-granted client and it is tested.
+**It was not made here.** MEM.GUARD is formally proven and the arm was made in
+MEM.GUARD's own lane, with its own proof re-run; this block takes the region base
+and the client identity as parameters/ports exactly as `TERRAIN.PAGELOADER` does.
+Before the arm existed, `guard_denied_o` was what this block reported and every
+sheet faulted as `kSheetIncomplete` — loudly, counted, and with the slot never
+released. That was the correct behaviour for an un-granted client, and it is
+still the behaviour on a genuine denial; what changed is that a well-formed sheet
+read is no longer one.
 
 **Four narrower forms were considered and each is impossible or forbidden:**
 
@@ -516,8 +539,8 @@ journalled to the wrong entry, or a barrier released without an ACK are all
 
 ## Directed tests
 
-`tests/terrain/writeback_rtl_directed.cpp` — **294 checks**, whole suite
-**1,083,921 gpu clocks**, reported by the test rather than derived here (a
+`tests/terrain/writeback_rtl_directed.cpp` — **316 checks**, whole suite
+**1,084,031 gpu clocks**, reported by the test rather than derived here (a
 derivation quoted as a measurement is how this tree has been wrong before).
 
 * the golden sheet, unstalled: verdict, `ok`, `seq`, `src_id`, and **all 1,024
@@ -545,9 +568,23 @@ derivation quoted as a measurement is how this tree has been wrong before).
 * the table filled to `ACK_SLOTS` and `j_ready` observed low, then drained in
   order;
 * the real `zhao_mem_guard`, watching, and a second real `zhao_mem_guard` asked
-  directly about the read this block needs — **which it refuses today**, and
-  that refusal is this contract's evidence for the amendment above, exactly as
-  `shadow_ok_seen` staying zero was PAGELOADER's before its window landed.
+  directly. **These checks INVERTED when the arm landed** and the inversion is
+  the amendment's acceptance test: the observer now records
+  `shadow_ok = shadow_fwd = 130` and `shadow_viol = 0`, where it recorded
+  `0 / 0 / 130` before — exactly as `shadow_ok_seen` going non-zero was
+  PAGELOADER's evidence when its own window landed.
+
+  **An inversion alone proves nothing**, since any widening — including a guard
+  that stopped checking — inverts it. So the negative half is proved in the same
+  section and at the byte: seven other clients refused in BOTH directions; the
+  ruled client refused one byte either side of both bounds, in both directions;
+  a WRITE still refused where only a READ is granted (the asset pool, the
+  framebuffer), which is what would catch an amendment made by deleting
+  direction checks rather than by adding one arm; the read arm shown to be
+  REGION-scoped and not client-scoped (no framebuffer, no asset pool); the shape
+  law (`len` 1..64, full contiguous mask) shown to still apply inside the new
+  read window; and the five other bank-2 regions still unmapped in both
+  directions.
 
 ## Randomized differential tests
 
@@ -652,9 +689,11 @@ None yet. Two are worth an SBY and both are structural, therefore cheap:
 
 ## Integration capture cases
 
-None. The block is not in the shell; `TERRAIN.SEQ` (step 5) is its job source
-and does not exist yet, and the guard arm above is not enacted. Composition is a
-pass, not a question.
+None. The block is not in the shell; `TERRAIN.SEQ` (step 5) is its job source.
+**The guard arm above IS now enacted**, so the composed lane's own bench
+(`tests/terrain/world_composed_directed.cpp`) observes 130 reads passed and 0
+refused through a real `zhao_mem_guard` in the composed setting. Composition is
+a pass, not a question.
 
 ## Synthesis / resource ceiling
 
@@ -666,8 +705,6 @@ time is **zero DSP**, not Fmax.
 
 ## What is not yet established
 
-* **The guard read arm.** Ruled by T3/T4 in substance, not enacted. The narrowest
-  form is written out above; making it is MEM.GUARD's lane and its proof's.
 * **The journal arena grant** in `MEM.HPS.BRIDGE.md`'s granted-writes list.
 * **Layer F has no CRC**, so a sheet corrupted *in local SDRAM* between the stamp
   and the eviction is journalled as-is. Giving F its own checkword is a

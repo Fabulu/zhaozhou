@@ -13,7 +13,9 @@
 // Phase-3 extensions, each a window opened WITH the block that needed it:
 //   GEOM.ASSET_POOL   : [0x06A0_0000, 0x0800_0000)  22 MiB, ENGINE1, READ-only
 //   TERRAIN.PAGE_POOL : [0x0400_0000, 0x054E_0000)  20.875 MiB,
-//                       TERRAIN.BUILD, WRITE-only (ruling T2 / §5b)
+//                       TERRAIN.BUILD, WRITE (pages in) and READ (F sheets
+//                       out) -- ONE window, TWO arms, TWO theorems
+//                       (rulings T2 / T3 / T4, §5b)
 //
 // Ownership law:
 //   * SCANOUT owns BOTH slots, READ-ONLY (a write is a violation).
@@ -28,10 +30,10 @@
 //     Phase 3; DEBUG still owns nothing, and neither does the unspent
 //     client 5.)
 //     ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
-//   * TERRAIN.BUILD owns TERRAIN.PAGE_POOL, WRITE-ONLY. Spatially the WHOLE
-//     pool, not the LOADING slot T2 eventually wants — the difference is
-//     spelled out at `terrain_ok` below rather than left for a reader to
-//     discover.
+//   * TERRAIN.BUILD owns TERRAIN.PAGE_POOL IN BOTH DIRECTIONS, and no other
+//     client reaches it in either. Spatially the WHOLE pool, not the LOADING
+//     slot T2 eventually wants — the difference is spelled out at
+//     `terrain_ok` below rather than left for a reader to discover.
 //     ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
 //
 // Request law: len 1..64 bytes; byte_enable must be the FULL contiguous mask
@@ -156,25 +158,58 @@ module zhao_mem_guard
                   && (addr32 >= ZHAO_GEOM_ASSET_BASE)
                   && (end32  <= ZHAO_GEOM_ASSET_BASE + ZHAO_GEOM_ASSET_SPAN);
 
-  // terrain page pool: WRITE-ONLY, TERRAIN.BUILD's bank-2 region (ruling T2,
-  // spec/memory_rules.md 5b). This is the FOURTH window, and like the asset
-  // pool it is stated plainly rather than folded into an existing one.
+  // terrain page pool: TERRAIN.BUILD's bank-2 region, WRITE for the loader and
+  // READ for the writeback (rulings T2 / T3 / T4, spec/memory_rules.md 5b).
+  // This is the FOURTH window, and like the asset pool it is stated plainly
+  // rather than folded into an existing one.
   //
-  // IT IS THE NARROWEST READING OF T2 THAT LETS A PAGE BE LOADED AT ALL:
+  // IT IS THE NARROWEST READING OF T2/T4 THAT LETS A PAGE BE LOADED AND ITS
+  // DIRTY SHEET BE SAVED AT ALL:
   //   * ONE region of the six T2 names in bank 2. RESIDENT_MIP_POOL,
   //     COMPOSED_HEIGHT, COMPOSED_VELOCITY, WRITEBACK_STAGING and
-  //     COMPOSED_MIP_POOL stay unmapped until the blocks that write them
-  //     exist. TERRAIN.PAGELOADER writes pages and nothing else.
+  //     COMPOSED_MIP_POOL stay unmapped until the blocks that touch them
+  //     exist. TERRAIN.PAGELOADER writes pages and nothing else;
+  //     TERRAIN.WRITEBACK reads sheets out of those same pages and nothing
+  //     else. In particular WRITEBACK_STAGING/journal at 0x0578_0000 stays
+  //     unmapped: v1's writeback goes straight across MEM.HPS.BRIDGE, so
+  //     opening it would be a hole with a plan attached.
   //   * ONE client. Only ZHAO_CLIENT_TERRAIN_BUILD reaches it (the case arm
   //     below); ENGINE1 does not, DEBUG does not, and the framebuffer writers
   //     do not.
-  //   * WRITE ONLY. `req.write` is REQUIRED, which is the opposite of the
-  //     asset pool's `!req.write` and is the narrow choice in both cases: this
-  //     client's only job today is depositing pages. T3 also names F-sheet
-  //     writeback as TERRAIN.BUILD traffic, and that will one day need to READ
-  //     this pool -- when the block that does it exists, it brings its own arm
-  //     and its own proof. Admitting the read now would admit it for a
-  //     writeback path that has never been written.
+  //   * TWO DIRECTIONS, TWO ARMS, ONE WINDOW. `terrain_ok` REQUIRES
+  //     `req.write`; `terrain_rd_ok` REQUIRES `!req.write`; the bounds are the
+  //     same two constants. The write arm is TERRAIN.PAGELOADER depositing
+  //     pages. The read arm is TERRAIN.WRITEBACK evacuating a dirty layer F,
+  //     which T2 places INSIDE the page ("no separate permanent E/F/H pools"),
+  //     so there IS no F pool to read and the sheet is reachable only here.
+  //     Both are ruled traffic for this one client: T3 names page loads AND
+  //     F-sheet writeback as TERRAIN_BUILD's, and T4 REQUIRES the writeback.
+  //     Client id 5 stays unspent because T3 forbids spending it pre-emptively,
+  //     so a second client id for the reader was neither available nor narrower
+  //     -- it would have put two clients in one region.
+  //
+  //     `terrain_ok || terrain_rd_ok` is the window test with the direction bit
+  //     factored back out, and one comparison would synthesise identically. The
+  //     arms are kept SEPARATE because the PROOF states them separately: two
+  //     theorems name WHICH direction regressed, and a merged arm would satisfy
+  //     both non-vacuity covers while proving neither.
+  //
+  //     THE READ WAS WITHHELD UNTIL ITS BLOCK EXISTED, and this comment is
+  //     where that promise was made: "when the block that does it exists, it
+  //     brings its own arm and its own proof. Admitting the read now would
+  //     admit it for a writeback path that has never been written."
+  //     `fpga/rtl/terrain/zhao_terrain_writeback.sv` now exists, is registered
+  //     in tools/rtl/check_guard_verdict.py's client list, and reads exactly
+  //     the 64-byte page header plus the 129 chunks spanning layer F -- 130
+  //     requests per sheet, asserted as an exact count by its bench.
+  //
+  //     A READ CANNOT ALTER A FRAME BUFFER. That is the GEOM.ASSET_POOL
+  //     argument and it holds twice over here: a forwarded read carries no
+  //     write data at all, and this window's CONSTANT bounds are disjoint from
+  //     both framebuffer slots (0x0000_0000 and 0x0200_0000) and from the asset
+  //     pool. The widening is confined to bank 2, and the no-escape theorem is
+  //     unchanged in meaning -- what changes is one direction bit, for one
+  //     client, over one region it already owned.
   //   * CONSTANT BOUNDS. No map input is consulted, so this window is not
   //     frame-scoped and cannot be moved by a grant; BASE + SPAN is
   //     0x054E_0000 exactly, computed at elaboration, so the wrap the blit
@@ -199,12 +234,29 @@ module zhao_mem_guard
   // (its slot index is one bit wider than the pool so the refusal is reachable
   // rather than truncated). Tightening this to the LOADING slot is a separate,
   // ruled piece of work and it needs the residency-to-guard interface first.
+  //
+  // THE NEW RESIDUAL THE READ ARM CREATES, said out loud like the write one.
+  // Client 6 may now read ANY page in the pool, so a faulty writeback could
+  // journal ANOTHER PATCH'S scars into the HPS journal. MEM.GUARD cannot see
+  // that -- it is the same state-awareness gap as the write side, for the same
+  // reason, and it is NOT closed here. It is answered one block up:
+  // TERRAIN.WRITEBACK reads the evicted page's 64-byte HEADER FIRST and refuses
+  // (`kSheetHeaderIdent`) before a single journal byte moves, if
+  // {island_id, patch_ix, patch_iz} does not match the job. That is
+  // spec/terrain_rules.md 2.1's "redundancy is a corruption check" spent on
+  // exactly the failure this arm creates, and it costs one 64-byte read of 130.
   // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
-  logic terrain_ok;
+  logic terrain_ok, terrain_rd_ok;
   assign terrain_ok = req.write
                     && (addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
                     && (end32  <= ZHAO_TERRAIN_PAGE_POOL_BASE
                                   + ZHAO_TERRAIN_PAGE_POOL_SPAN);
+  // The READ arm. Same two constants, opposite direction bit, deliberately a
+  // SEPARATE assign so the two directions stay two theorems.
+  assign terrain_rd_ok = !req.write
+                       && (addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
+                       && (end32  <= ZHAO_TERRAIN_PAGE_POOL_BASE
+                                     + ZHAO_TERRAIN_PAGE_POOL_SPAN);
 
   // ONE WINDOW, ONE OWNER AT A TIME. Both writers are checked against the same
   // clamped slot span; what separates them is which one the lease names. A
@@ -216,7 +268,7 @@ module zhao_mem_guard
       ZHAO_CLIENT_BLIT_DMA: pass_ok = shape_ok && blit_ok && (fb_writer == 1'b0);
       ZHAO_CLIENT_ENGINE0:  pass_ok = shape_ok && blit_ok && (fb_writer == 1'b1);
       ZHAO_CLIENT_ENGINE1:  pass_ok = shape_ok && asset_ok;
-      ZHAO_CLIENT_TERRAIN_BUILD: pass_ok = shape_ok && terrain_ok;
+      ZHAO_CLIENT_TERRAIN_BUILD: pass_ok = shape_ok && (terrain_ok || terrain_rd_ok);
       default: pass_ok = 1'b0;      // DEBUG still owns nothing, and neither
                                     // does the unspent client 5
     endcase

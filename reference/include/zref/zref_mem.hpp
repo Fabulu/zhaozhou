@@ -679,7 +679,7 @@ constexpr uint32_t kFbSlotSpan = 0x0003C000u;
 // GEOM.ASSET_POOL is ENGINE1's, READ-only (spec/memory_rules.md 5f).
 constexpr uint32_t kGeomAssetBase = 0x06A00000u;
 constexpr uint32_t kGeomAssetSpan = 0x01600000u;  // 22 MiB, ends at 0x0800_0000
-// TERRAIN.PAGE_POOL is TERRAIN.BUILD's, WRITE-only (ruling T2 / 5b).
+// TERRAIN.PAGE_POOL is TERRAIN.BUILD's, BOTH DIRECTIONS (rulings T2/T3/T4).
 // 1,024 x 21,376 B = 0x014E_0000, so the pool ends at 0x054E_0000 -- the
 // ruling's inclusive 0x054D_FFFF, to the byte.
 constexpr uint32_t kTerrainPagePoolBase = 0x04000000u;
@@ -743,14 +743,27 @@ struct MemoryGuard {
         // being added and wrong about the one beside it is not a reference.
         return !r.write && r.addr >= kGeomAssetBase &&
                end <= kGeomAssetBase + kGeomAssetSpan;
-      case TERRAIN_BUILD:
-        // TERRAIN.PAGE_POOL, WRITE-only (ruling T2 / 5b). Constant bounds: no
-        // map input reaches this window, so unlike the framebuffer one it is
-        // not frame-scoped. Spatially the whole pool -- T2's "a loader may
-        // write only a LOADING slot" needs residency state the guard does not
-        // have, and the RTL says so at `terrain_ok`.
-        return r.write && r.addr >= kTerrainPagePoolBase &&
-               end <= kTerrainPagePoolBase + kTerrainPagePoolSpan;
+      case TERRAIN_BUILD: {
+        // TERRAIN.PAGE_POOL, TERRAIN.BUILD's in BOTH DIRECTIONS (rulings T2 /
+        // T3 / T4, spec/memory_rules.md 5b). Constant bounds: no map input
+        // reaches this window, so unlike the framebuffer one it is not
+        // frame-scoped. Spatially the whole pool -- T2's "a loader may write
+        // only a LOADING slot" needs residency state the guard does not have,
+        // and the RTL says so at `terrain_ok`.
+        //
+        // TWO ARMS, kept separate here for the same reason the RTL and the
+        // proof keep them separate: the write arm is TERRAIN.PAGELOADER
+        // depositing pages, the read arm is TERRAIN.WRITEBACK evacuating a
+        // dirty layer F -- which T2 puts INSIDE the page, so there is no F pool
+        // and the sheet is reachable only through this window. Folding them
+        // into a bare range test would be the same verdict and would lose the
+        // record of which ruling admitted which direction.
+        const bool in_pool = r.addr >= kTerrainPagePoolBase &&
+                             end <= kTerrainPagePoolBase + kTerrainPagePoolSpan;
+        const bool wr_ok = r.write && in_pool;   // pages in  (TERRAIN.PAGELOADER)
+        const bool rd_ok = !r.write && in_pool;  // sheets out (TERRAIN.WRITEBACK)
+        return wr_ok || rd_ok;
+      }
       default:
         return false;  // DEBUG owns nothing, and neither does the unspent 5
     }

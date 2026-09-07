@@ -2396,7 +2396,12 @@ set_tests_properties(raster_rcp24_svc_directed PROPERTIES LABELS "fast;nightly" 
 # exposed on its own port and driven over the same (x, w) families
 # tools/rtl/architecture_numeric_checks.py uses.
 add_executable(test_raster_rcp24_v3_directed raster/raster_rcp24_v3_directed.cpp)
-target_link_libraries(test_raster_rcp24_v3_directed PRIVATE zhao_harness)
+# zhao_zref too: this test includes zref/zref_rcp.hpp as its oracle, and
+# without the zref target it never gets reference/include. The omission made
+# a FULL `cmake --build` return rc=1 while every targeted build passed, which
+# is the worst shape of breakage here -- it turns the exit code that guards
+# against stale binaries into noise everybody learns to skip past.
+target_link_libraries(test_raster_rcp24_v3_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_raster_rcp24_v3_directed
   PREFIX Vtb_rcp24_v3_pair
   TOP_MODULE tb_rcp24_v3_pair

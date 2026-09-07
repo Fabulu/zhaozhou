@@ -92,8 +92,9 @@ constexpr uint32_t kWriteBeats = kSheetWords;              // 1,024
 // cannot reach is a watchdog nobody has ever seen fire.
 constexpr uint32_t kAckDeadline = 20000;
 
-// T3's client. MEM.GUARD gives it a WRITE-ONLY window over TERRAIN.PAGE_POOL,
-// and this block READS that pool -- see section 8.
+// T3's client. MEM.GUARD gives it TERRAIN.PAGE_POOL in BOTH directions now:
+// WRITE for TERRAIN.PAGELOADER's pages, READ for this block's layer-F sheets
+// (rulings T2/T3/T4). The arm landed 2026-09-06; see section 8.
 constexpr uint32_t kTerrainBuildClient = 6;
 constexpr uint32_t kOtherClients[] = {0, 1, 2, 3, 4, 5, 7};
 
@@ -476,18 +477,36 @@ ProbeVerdict guard_probe(Bench& b, bool write, uint32_t client, uint32_t addr, u
   return v;
 }
 
+// THE EXPECTED VALUE IS THE ENCODING, NOT THE LITERAL 1. `ck` prints
+// "expected %lld, got %lld" and the `got` here is ok*100 + fwd*10 + viol. A
+// refused ADMIT is therefore got=1, and passing want=1 made the failure read
+// "expected 1, got 1" -- a line that looks like a broken test rather than a
+// broken guard. Found 2026-09-06 by the fire test for the terrain read arm:
+// withdrawing the arm produced four of these and every one of them was
+// unreadable. The encoding for an admission is 110 (ok=1, fwd=1, viol=0).
 void probe_admits(Bench& b, const char* what, bool write, uint32_t client, uint32_t addr,
                   unsigned len) {
   const ProbeVerdict v = guard_probe(b, write, client, addr, len, full_be(len));
-  ck(v.ok == 1 && v.fwd == 1 && v.viol == 0, what, 1,
+  ck(v.ok == 1 && v.fwd == 1 && v.viol == 0, what, 110,
      static_cast<long long>(v.ok * 100 + v.fwd * 10 + v.viol));
 }
 
 void probe_refuses(Bench& b, const char* what, bool write, uint32_t client, uint32_t addr,
-                   unsigned len) {
-  const ProbeVerdict v = guard_probe(b, write, client, addr, len, full_be(len));
+                   unsigned len, uint64_t be) {
+  const ProbeVerdict v = guard_probe(b, write, client, addr, len, be);
   ck(v.ok == 0 && v.fwd == 0 && v.viol == 1, what, 1,
      static_cast<long long>(v.ok * 100 + v.fwd * 10 + v.viol));
+}
+
+// The common case: a well-shaped request that the MAP must refuse. `be` is an
+// overload rather than a default argument because the two questions are
+// different -- "this address/client/direction is out of bounds" and "this
+// request is malformed" -- and the second one became worth asking of a READ the
+// moment `terrain_rd_ok` was ANDed into pass_ok: a new term written outside
+// `shape_ok` would admit a malformed read and nothing else here would see it.
+void probe_refuses(Bench& b, const char* what, bool write, uint32_t client, uint32_t addr,
+                   unsigned len) {
+  probe_refuses(b, what, write, client, addr, len, full_be(len));
 }
 
 // Compare the whole journal entry against the oracle's bytes. ALL 1,024 words,
@@ -644,14 +663,30 @@ int main(int argc, char** argv) {
         "golden: the oracle's own extraction agrees byte for byte");
   }
 
-  // THE REAL GUARD, WATCHING. It has a WRITE-ONLY terrain window and this block
-  // reads, so it must have refused every one of those 130 requests. When the
-  // read arm lands these three checks invert, and that inversion IS the
-  // acceptance test for the amendment.
+  // THE REAL GUARD, WATCHING -- AND THIS IS THE AMENDMENT'S ACCEPTANCE TEST.
+  //
+  // It used to have a WRITE-ONLY terrain window while this block READS, so it
+  // refused all 130 and these lines asserted 0 / 0 / 130. That refusal was the
+  // contract's evidence that the arm was needed, exactly as `shadow_ok_seen`
+  // staying zero was TERRAIN.PAGELOADER's before its own window landed. The arm
+  // is enacted (rulings T2/T3/T4, `terrain_rd_ok` in zhao_mem_guard.sv), so the
+  // counts INVERT, and the inversion is what this suite exists to witness.
+  //
+  // "EXACTLY THESE 130 AND NO OTHERS" IS TWO CLAIMS, AND BOTH ARE HERE.
+  //   * exactly 130 -- these four lines, against a constant spelled from the
+  //     layer table (1 header + 129 chunks), not read out of the RTL. An
+  //     over-eager machine that reissued a chunk would pass a "the sheet is
+  //     correct" test and fail here, which is the 2026-09-05 lesson twice over;
+  //   * and no others -- the requests counted here are the ONLY ones the block
+  //     makes (`greqs_seen` is asserted at 130 above, and every refusal case
+  //     asserts ZERO guard requests), and section 8 asks the real guard
+  //     directly about the neighbouring addresses, directions and clients it
+  //     must still refuse. A pass count alone cannot say "no others"; a pass
+  //     count plus a proved refusal boundary can.
   cke(kGuardReqs, b.d.shadow_req_count, "amendment: the real guard saw all 130 requests");
-  cke(0, b.d.shadow_ok_count, "amendment: the real guard passed NONE of them today");
-  cke(0, b.d.shadow_fwd_count, "amendment: and forwarded none");
-  cke(kGuardReqs, b.d.shadow_viol_count, "amendment: it refused all 130, loudly");
+  cke(kGuardReqs, b.d.shadow_ok_count, "amendment: the real guard PASSED exactly 130");
+  cke(kGuardReqs, b.d.shadow_fwd_count, "amendment: and FORWARDED exactly 130");
+  cke(0, b.d.shadow_viol_count, "amendment: and refused NONE -- not one denial left");
 
   // =========================================================================
   // 2. THE SAME SHEET WITH EVERY STALL ENGAGED
@@ -1156,35 +1191,113 @@ int main(int argc, char** argv) {
   }
 
   // =========================================================================
-  // 8. THE REAL MEM.GUARD, ASKED DIRECTLY
+  // 8. THE REAL MEM.GUARD, ASKED DIRECTLY -- THE AMENDMENT, BOTH DIRECTIONS
   // -------------------------------------------------------------------------
-  // The observer only ever sees the requests this block makes. This asks the
-  // real block about the ones it does not -- and about the one it DOES, which
-  // the guard refuses today. That refusal is the amendment's evidence and this
-  // is where it inverts when the arm lands.
+  // The observer above only ever sees the requests this block makes. This asks
+  // the real block about the ones it does NOT make, which is the only way to
+  // show that admitting the read admitted exactly the read.
+  //
+  // THIS SECTION USED TO PROVE THE ARM'S ABSENCE. The first two probes were
+  // `probe_refuses` and their refusal was design/contracts/TERRAIN.WRITEBACK.md's
+  // evidence for the amendment. They are now `probe_admits`. An inversion is
+  // worth nothing on its own -- ANY widening inverts them, including a guard
+  // that stopped checking -- so the negative half is proved in the same breath
+  // and at the byte:
+  //
+  //   * a DIFFERENT CLIENT reading the pool is still refused (all seven of
+  //     them, including the unspent client 5 that ruling T3 forbids spending);
+  //   * the RULED CLIENT reading OUTSIDE the pool is still refused: below the
+  //     base, STRADDLING the base, straddling the end, and AT the end -- the
+  //     straddles matter because a bound checked only with fully-outside
+  //     addresses is a bound that has never been tested at the byte;
+  //   * a WRITE where only a READ is granted is still refused -- the asset pool
+  //     and the framebuffer, i.e. the arms whose direction bit the amendment
+  //     must NOT have loosened;
+  //   * and the shape law still applies inside the new window, which is a real
+  //     question and not a formality: `terrain_rd_ok` is a new term ANDed into
+  //     `pass_ok`, and a new term written outside `shape_ok` would admit a
+  //     malformed read.
   // =========================================================================
   {
     const uint32_t slot_addr = tp::page_vram_addr(3);
-    probe_refuses(b, "guard: TERRAIN_BUILD READING the page pool is REFUSED today", false,
-                  kTerrainBuildClient, slot_addr + tp::kSheetChunkStart, 64);
-    probe_refuses(b, "guard: ...and so is the page header read", false, kTerrainBuildClient,
-                  slot_addr, 64);
+
+    // --- ADMITTED: the two reads this block actually makes -----------------
+    probe_admits(b, "guard: TERRAIN_BUILD READING the page pool is ADMITTED (the new arm)",
+                 false, kTerrainBuildClient, slot_addr + tp::kSheetChunkStart, 64);
+    probe_admits(b, "guard: ...and so is the page header read", false, kTerrainBuildClient,
+                 slot_addr, 64);
+    // The exact bounds, read side: first legal byte and last legal 64 B.
+    probe_admits(b, "guard: the pool's first legal 64-byte read", false, kTerrainBuildClient,
+                 kPoolBase, 64);
+    probe_admits(b, "guard: the pool's last legal 64-byte read", false, kTerrainBuildClient,
+                 kPoolEnd - 64, 64);
+
+    // --- ADMITTED: the write arm is untouched by the amendment -------------
     probe_admits(b, "guard: TERRAIN_BUILD WRITING the pool still passes (the loader's arm)",
                  true, kTerrainBuildClient, slot_addr, 64);
+    probe_admits(b, "guard: the pool's last legal 64-byte write", true, kTerrainBuildClient,
+                 kPoolEnd - 64, 64);
+
+    // --- REFUSED: a DIFFERENT CLIENT, in either direction ------------------
+    // T2 gives this region to TERRAIN_BUILD and to nobody else. The read arm
+    // widened a DIRECTION, not an ownership, and this is where that is checked
+    // rather than assumed from the spelling of the case statement.
     for (uint32_t c : kOtherClients) {
       char msg[128];
       std::snprintf(msg, sizeof msg, "guard: client %u reading the terrain pool is refused", c);
       probe_refuses(b, msg, false, c, slot_addr, 64);
+      std::snprintf(msg, sizeof msg, "guard: client %u writing the terrain pool is refused", c);
+      probe_refuses(b, msg, true, c, slot_addr, 64);
     }
+
+    // --- REFUSED: the RULED CLIENT, OUTSIDE the pool, both directions ------
+    probe_refuses(b, "guard: TERRAIN_BUILD reading one byte below the pool", false,
+                  kTerrainBuildClient, kPoolBase - 64, 64);
+    probe_refuses(b, "guard: TERRAIN_BUILD reading the 64 B straddling the pool base", false,
+                  kTerrainBuildClient, kPoolBase - 32, 64);
+    probe_refuses(b, "guard: TERRAIN_BUILD reading one byte past the pool end", false,
+                  kTerrainBuildClient, kPoolEnd - 32, 64);
+    probe_refuses(b, "guard: TERRAIN_BUILD reading AT the pool end", false, kTerrainBuildClient,
+                  kPoolEnd, 64);
     probe_refuses(b, "guard: TERRAIN_BUILD writing one byte below the pool", true,
                   kTerrainBuildClient, kPoolBase - 64, 64);
     probe_refuses(b, "guard: TERRAIN_BUILD writing one byte past the pool", true,
                   kTerrainBuildClient, kPoolEnd - 32, 64);
-    probe_admits(b, "guard: the pool's last legal 64-byte write", true, kTerrainBuildClient,
-                 kPoolEnd - 64, 64);
+
+    // --- REFUSED: the read arm is REGION-scoped, not client-scoped ---------
+    // A read arm written as "this client may read" rather than "this client may
+    // read THIS REGION" passes every check above and opens the whole map.
+    probe_refuses(b, "guard: TERRAIN_BUILD may not read framebuffer slot 0", false,
+                  kTerrainBuildClient, 0x00000000u, 64);
+    probe_refuses(b, "guard: TERRAIN_BUILD may not read framebuffer slot 1", false,
+                  kTerrainBuildClient, 0x02000000u, 64);
+    probe_refuses(b, "guard: TERRAIN_BUILD may not read the geometry asset pool", false,
+                  kTerrainBuildClient, 0x06A00000u, 64);
+
+    // --- REFUSED: a WRITE where only a READ is granted ---------------------
+    // The direction bit still matters everywhere it mattered before. If the
+    // amendment had been made by deleting direction checks rather than by
+    // adding one arm, these are the probes that would have caught it.
+    probe_refuses(b, "guard: ENGINE1 may not WRITE the read-only asset pool", true, 3,
+                  0x06A00000u, 64);
+    probe_refuses(b, "guard: SCANOUT may not WRITE the read-only framebuffer", true, 0,
+                  0x00000000u, 64);
+
+    // --- REFUSED: the shape law applies INSIDE the new read window ---------
+    probe_refuses(b, "guard: a byte-enable hole is refused on a pool READ", false,
+                  kTerrainBuildClient, slot_addr, 64, full_be(64) & ~0xFull);
+    probe_refuses(b, "guard: len 0 is refused on a pool READ", false, kTerrainBuildClient,
+                  slot_addr, 0, 0);
+    probe_refuses(b, "guard: len 65 is refused on a pool READ", false, kTerrainBuildClient,
+                  slot_addr, 65, full_be(64));
+
     // The five other bank-2 regions T2 names are still unmapped, in both
-    // directions. A window opened ahead of its writer is a hole with a plan.
+    // directions. A window opened ahead of its writer is a hole with a plan --
+    // and the read arm did not open one: it added a direction to the ONE region
+    // that was already mapped.
     probe_refuses(b, "guard: TERRAIN.RESIDENT_MIP_POOL is still unmapped (write)", true,
+                  kTerrainBuildClient, 0x054E0000u, 64);
+    probe_refuses(b, "guard: TERRAIN.RESIDENT_MIP_POOL is still unmapped (read)", false,
                   kTerrainBuildClient, 0x054E0000u, 64);
     probe_refuses(b, "guard: TERRAIN.WRITEBACK_STAGING is still unmapped (write)", true,
                   kTerrainBuildClient, 0x05780000u, 64);

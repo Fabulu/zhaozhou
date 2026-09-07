@@ -138,8 +138,57 @@ runs:
       c_forward_terrain UNREACHED, which is the cover task doing the one job it
       exists for.
 
+      RE-RUN 2026-09-06/07 (TERRAIN.WRITEBACK's READ arm, rulings T2/T3/T4).
+      The window above gained its SECOND direction. `zhao_terrain_writeback.sv`
+      now exists, and ruling T4 requires layer F to be evacuated on dirty
+      eviction while T2 puts layer F INSIDE the page -- so the sheet is
+      reachable only as a READ of TERRAIN.PAGE_POOL by the same client 6. The
+      RTL gained `terrain_rd_ok`, a separate assign over the SAME two constants
+      with the opposite direction bit, and the case arm became
+      `pass_ok = shape_ok && (terrain_ok || terrain_rd_ok)`.
+
+      THE THEOREM THAT CHANGED, DELIBERATELY. `a1_terrain_wo` ("no forward into
+      the pool is ever a read") was a statement about WHICH BLOCKS EXISTED, not
+      about the region -- T3/T4 named the writeback from the start. It is
+      REPLACED, not deleted, by the axis that survives: ownership stated once
+      per direction, `a1_terrain_wr_owner` and `a1_terrain_rd_owner`, so a
+      regression names WHICH half broke. a1_map, a1_client, a1_asset_ro, a1_region's
+      other arms and the bounds are all untouched; a1_region's terrain arm lost
+      its `arb_req.write` term and keeps its CLIENT term, which is now the
+      load-bearing one.
+
+      ONE COVER STOPPED BEING ENOUGH. With both directions legal,
+      c_forward_terrain can be discharged by either, so it would read green
+      while a whole arm was dead logic -- the broken-instrument failure, in the
+      harness whose header already records shipping a vacuous proof once. Added
+      c_forward_terrain_wr and c_forward_terrain_rd.
+
+      RESULT: baseline bmc PASS + cover PASS (all 8 covers) before the change.
+      After: bmc PASS 0 0, cover PASS 0 0, ALL ELEVEN covers reached --
+      c_forward_terrain_rd at step 4 and c_forward_terrain_wr at step 4, so
+      neither arm is vacuous.
+
+      SHOWN TO FIRE, five perturbations, each applied to a SCRATCHPAD COPY so
+      the working tree was never written:
+        * withdraw the read arm -> bmc still PASS, cover FAIL,
+          "Unreached cover statement at formal_mem_guard: c_forward_terrain_rd"
+          -- and c_forward_terrain still REACHED, which is the direct evidence
+          that the single old cover was insufficient;
+        * ENGINE1 admitted to the pool for READS -> a1_region,
+          a1_terrain_owner and a1_terrain_rd_owner fail at step 4;
+        * ENGINE1 admitted to the pool for WRITES -> a1_region,
+          a1_terrain_owner and a1_terrain_wr_owner fail at step 4;
+        * READ window widened 64 KiB past the write window -> a1_map and
+          a1_region fail at step 4;
+        * write arm forced low -> bmc still PASS, cover FAIL,
+          "Unreached cover statement at formal_mem_guard: c_forward_terrain_wr".
+
+      Note that two of the five leave the BMC green and are caught only by the
+      cover task. A guard that refuses more is still safe; it is simply not the
+      guard anyone asked for, and only non-vacuity can tell the difference.
+
       NOTE ON PROVENANCE: the `commit` fields above are from when this tree was
-      a git checkout. It is not one now, so this re-run carries a date and no
+      a git checkout. It is not one now, so these re-runs carry a date and no
       hash rather than a hash that would be invented.
 
   - property: tests/formal/mem_sdram_refresh_bound.sby

@@ -187,7 +187,13 @@ amendments this contract asked for have landed:
    accepted into a slot that could never be served. TERRAIN_BUILD is arbitrated
    BELOW DEBUG, never promoted for lateness (T3).
 3. `zhao_mem_guard` has `TERRAIN.PAGE_POOL`: `[0x0400_0000, 0x054E_0000)`,
-   **write-only**, **client 6 alone**, constant bounds, no map input consulted.
+   **client 6 alone**, constant bounds, no map input consulted. THIS BLOCK USES
+   THE WRITE ARM (`terrain_ok`) AND ONLY THAT ARM -- it never reads local SDRAM.
+   The window gained a second, READ arm (`terrain_rd_ok`) on 2026-09-06, with
+   `TERRAIN.WRITEBACK`, which evacuates layer F; that direction is that block's
+   and is stated here only so "write-only" is not read off this page as still
+   true of the region. Same client, same constants, separate arm, separate
+   theorem (`a1_terrain_wr_owner` / `a1_terrain_rd_owner`).
 
 **What is NOT enacted, said plainly.** T2 asks for a *state-aware* permission —
 "a loader may write only a `LOADING` slot" — and the window is spatial. The
@@ -279,8 +285,10 @@ drifting; there is one definition here, used from two languages.
 
 ## Directed tests
 
-`tests/terrain/pageloader_rtl_directed.cpp` — **154 checks**, whole suite
-690,868 gpu clocks.
+`tests/terrain/pageloader_rtl_directed.cpp` — **184 checks**, whole suite
+690,868 gpu clocks. (The figure here read **154** until 2026-09-06 while the
+suite measured 179: a contract number left behind by two passes of test growth.
+Corrected to the measured value when the guard read arm added five more.)
 
 * the golden page, unstalled: verdict, `ok`, CRC, slot, generation, epoch and
   source id against the oracle; **all 2,672 words compared**, not sampled; the
