@@ -124,6 +124,29 @@ struct ProjOut {
  *   depth  = fx_div_exact(1, w)              Q16.16 1/z, D7
  */
 /**
+ * The per-frame fog state a draw call needs, resolved from EnvState.
+ *
+ * §8 puts fog_mode/near/far in `SetEnvironment 0x0311` and binds `fog_c` to the
+ * active sky set's horizon colour -- NOT a command field, so that fog and sky
+ * cannot disagree at the seam where they meet. Resolving both into one small
+ * struct keeps draw calls from having to know either rule.
+ *
+ * DEFAULT IS OFF, and that is what makes threading this through existing draw
+ * calls safe: every caller that does not set it renders bit-identically, which
+ * is how the change is known not to have moved a golden.
+ */
+struct FogParams {
+  bool enabled = false;
+  fx16 near_m{0};
+  fx16 far_m{0};
+  fx16 k{0};                          // field_rcp(far - near), ONCE PER FRAME
+  uint8_t r = 0, g = 0, b = 0;        // the sky set's horizon colour
+  bool operator==(const FogParams& o) const {
+    return enabled == o.enabled && near_m.raw == o.near_m.raw && far_m.raw == o.far_m.raw;
+  }
+};
+
+/**
  * Fill a projected vertex's fog factor, owner ruling D-5.
  *
  * THE PRODUCER. Everything else about D-5 -- the lane on ScreenV, the frozen
@@ -394,7 +417,13 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
                       const TerrainPatch& patch, const ZhTransform2fx& xform, const Material& mat,
                       const SurfaceSheet* sheet, const std::vector<FieldApp>& fields,
                       uint32_t frame_tick, std::vector<TerrainVelocitySample>* velocity_out,
-                      SatLedger* L, const Tileset* tileset = nullptr);
+                      SatLedger* L, const Tileset* tileset = nullptr,
+                      // §8's fogged list names terrain first: "Fogged: terrain
+                      // (every layer), creatures, forms, decals and projected
+                      // shadows". Defaulted OFF, so every existing caller
+                      // renders bit-identically -- which is how this change is
+                      // known not to have moved a golden.
+                      const FogParams& fog = FogParams{});
 
 // ---- sprites.cpp ------------------------------------------------------------
 

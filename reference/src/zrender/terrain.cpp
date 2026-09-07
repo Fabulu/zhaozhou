@@ -304,7 +304,7 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
                       const TerrainPatch& patch, const ZhTransform2fx& xform, const Material& mat,
                       const SurfaceSheet* sheet, const std::vector<FieldApp>& fields,
                       uint32_t frame_tick, std::vector<TerrainVelocitySample>* velocity_out,
-                      SatLedger* L, const Tileset* tileset) {
+                      SatLedger* L, const Tileset* tileset, const FogParams& fog) {
   const int w = patch.width;
   const int h = patch.height;
   if (w < 2 || h < 2) return;  // a degenerate patch draws nothing
@@ -338,14 +338,19 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
   for (int j = 0; j < h; ++j) {
     for (int i = 0; i < w; ++i) {
       const size_t idx = static_cast<size_t>(j) * w + i;
-      const ProjOut p = project_vertex(vp, vpp, fx16{wx[i]}, fx16{y[idx]}, fx16{wz[j]}, L);
+      ProjOut p = project_vertex(vp, vpp, fx16{wx[i]}, fx16{y[idx]}, fx16{wz[j]}, L);
       if (!p.in) continue;  // behind the eye: prims touching this vertex drop
+      // D-5: the fog factor is computed ONCE PER VERTEX from the frozen law and
+      // then rides the ordinary interpolation. This is the only projection site
+      // in the terrain path, so it is the only place the lane needs filling.
+      if (fog.enabled) apply_vertex_fog(p, fog.near_m, fog.far_m, fog.k, L);
       sv[idx] = p.s;
       vis[idx] = 1;
       if (dual) {
-        const ProjOut pb =
+        ProjOut pb =
             project_vertex(vp, vpp, fx16{wx[i]}, fx16{lat.bottom[idx]}, fx16{wz[j]}, L);
         if (!pb.in) continue;
+        if (fog.enabled) apply_vertex_fog(pb, fog.near_m, fog.far_m, fog.k, L);
         svb[idx] = pb.s;
         vis[idx] = 2;  // both surfaces of this vertex project
       }
@@ -452,6 +457,13 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
   TriMode mode;
   mode.depth_test = false;
   mode.depth_write = true;
+  // D-5 step 5. Terrain is the first entry on §8's FOGGED list, and the mix
+  // happens at the final source colour inside the rasteriser -- after the toon
+  // ramp and after material combination, never before.
+  mode.fog = fog.enabled;
+  mode.fog_r = fog.r;
+  mode.fog_g = fog.g;
+  mode.fog_b = fog.b;
 
   // flat shading per triangle: the ONE shared law (shade_flat_tri above —
   // hoisted 2026-08-16 for the creature lane; arithmetic verbatim).
