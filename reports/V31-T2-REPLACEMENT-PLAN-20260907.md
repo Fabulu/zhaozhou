@@ -21,6 +21,34 @@ mechanism in the abstract:
 `gen_q` is 64 × 8 = **512 flip-flops** and, per the census, sits in the 98% of
 ALUTs that are in the top itself.
 
+## The window is already three-quarters built, which changes the risk
+
+Before planning a replacement it is worth checking what is actually there. All
+three of §6.1's fields already exist in the RTL — in their **low bits**:
+
+| §6.1 | present today as | note |
+|---|---|---|
+| `alloc_ticket` | `tail_q`, `SLOTW` = 6 bits | advances on `adm_fire_c` |
+| `retire_ticket` | `emit_q`, 6 bits | `if (out_fire_c) emit_q <= emit_q + 1` — **increments only** |
+| `used` | `live_cnt_q`, `CNTW` = 7 bits | `live_cnt_q + adm_fire_c - out_fire_c` — the same update §6.1 specifies |
+
+Two consequences.
+
+**§6.3's invariant already holds by construction.** *"Retirement is strictly
+oldest-first"* is not an assumption to be imposed on this design; `emit_q` is a
+pointer that only increments, and line 1536 already asserts the retiring owner is
+`emit_q` and live. The model test shows the identity **fails** if a hole is
+punched, so this mattered — and it is satisfied.
+
+**So T2 is not "introduce a new representation".** It is: *extend two existing
+6-bit pointers to 14 bits, and delete the 512-flop table that stores per-slot
+what those 16 extra bits hold.* `gen_q[64][8]` plus `live_q[64]` is 576 bits of
+state expressing what 16 bits of pointer already imply — which is precisely the
+576 §6.8 names, arrived at from the other direction.
+
+That reframing matters for risk: the change becomes an **extension** of live,
+tested machinery rather than a parallel mechanism that must be swapped in.
+
 ## The two primitives everything reduces to
 
 From §6.2's encoding (`slot = ticket[5:0]`, `generation = ticket[13:6]`) and
