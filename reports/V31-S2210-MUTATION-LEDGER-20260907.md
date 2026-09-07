@@ -149,15 +149,26 @@ worth noting it damaged THROUGHPUT as well as identity — 58 of 64 emitted, the
 0 — because owners that falsely test live corrupt the retirement accounting too.
 A width choice is a correctness law here, not an optimisation.
 
+### `cmb_pop_c` no longer gated by the reservation count, so a candidate can leave
+the ready queue with nowhere for its packet to go.
+
+    %Error: zhao_texture_v3own.sv:1985: Assertion failed in
+      TOP.zhao_texture_v3own.a_cmb_reserved: 'assert' failed.
+
+Third consecutive structural catch, after items 4 and 7. The three credit and
+partition invariants in this block have now each caught the mutation they were
+written for — which is the return on writing invariants at all, and the reason
+item 5 escaping still stands out: it violated no invariant because none stated
+WHEN publication may happen relative to the write.
+
 ## NOT yet demonstrated — stated so the gap is visible
 
 1. slot-only identity for external validation
-9. pop a candidate without downstream storage credit
 11. advance F without a reserved packet slot
 13. reopen the namespace before one external adapter acknowledges
 14. force old broken CLUT4, alpha, nearest, or global-binding behaviour
 
-**Nine of fourteen.**
+**Ten of fourteen.**
 
 ## Related mutations run today outside §22.10's list
 
