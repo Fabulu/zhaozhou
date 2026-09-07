@@ -1788,3 +1788,44 @@ than the array quietly mattering.
 
 481 checks pass. This is T6's first named item: *"Remove redundant fetched bitmap
 under the F reservation proof."*
+
+## §13.2's partition asserted, and the register accounting for the NEXT v3own fit
+
+**§13.2** warns *"avoid two counters whose overlap is inferred only from
+naming."* This block has exactly the two it describes — `unf_cnt_q` = |[F, A)|
+and `out_res_q` = |[E, F)| — and `live_cnt_q`, maintained independently by
+admission and emission, must equal their sum if the intervals genuinely
+partition the live set. **Now asserted every cycle**, and it holds across the
+full bench. A double-counted owner is a credit that never returns, which presents
+as a hang thousands of cycles later — exactly the kind of accounting that fails
+silently.
+
+### What is synthesised and what is not, checked rather than assumed
+
+* `sh_alloc_gen_q` / `sh_retire_gen_q` — **synthesised** (16 flops). Correct:
+  T2 step 2 made them load-bearing for the ISSUE and READY lanes.
+* `gen_chk_s`, `tkt_chk_q` — **sim-only**, inside `` `ifndef SYNTHESIS ``. They
+  drive nothing but assertions.
+* The 27 assertions outside the guard are the pre-existing pattern; Quartus drops
+  immediate assertions, which is why they have never cost anything.
+
+### Register prediction for the next v3own refit, with its falsifier
+
+Against this fit's **4,863 FIT registers**:
+
+| change | expected |
+|---|---:|
+| window generation counters now synthesised | **+16** |
+| `ftc_q` dead after §13.1 (nothing synthesised reads it) | **−64** |
+| `gen_q` — still alive, four hoisted readers | 0 |
+| **net** | **≈ −48** |
+
+**Falsifier:** if registers do *not* fall by roughly 48, either `ftc_q` was not
+eliminated — meaning something still reads it and §13.1's removal was
+incomplete — or the window counters cost more than the two 8-bit registers they
+appear to be. Either would be worth knowing immediately rather than being
+absorbed into a larger delta.
+
+No ALM or Fmax prediction. Today's score is three confirmed predictions (all
+structural) against four falsified (all about magnitude), and this one is
+deliberately an accounting claim rather than a performance one.
