@@ -780,3 +780,21 @@ Both blocks that miss the clock spend a third to a half of their worst path in
 a COMBINATIONAL DSP output -- resulta as a CELL delay, not through the DSP's
 own output register. Terrain and geometry converge on one mechanical fix.
 bilerp is comfortable and needs nothing.
+
+## 2026-09-07 -- project_core: the product is registered
+
+The cut chosen by measurement, not reading: path_anatomy put 6.611 ns of the
+15.906 ns path at the registered-product boundary, leaving 9.295 ns after.
+Both inside 10 ns, so ONE cut.
+
+Checked BEFORE editing: terrain_project_directed bounds at 3N+64 = 448 and
+measured 422. After: 423. Exactly +1 -- latency, not initiation interval.
+
+Two aliasing traps handled: cx13/cy13 ride along registered (vp_*[s5_view] read
+a cycle later would take the NEXT vertex's viewport), and s6_valid joins busy_o
+(a stage missing from that reduction reports idle while holding a vertex --
+the same defect as the ready queue's omitted pending read).
+
+All nine project lanes pass. Fit queued behind residency_v2 to judge the clock.
+Prediction on record: the second half lands under 10 ns; if not, the split was
+wrong and the chain needs a cut between Add118 and the saturation.

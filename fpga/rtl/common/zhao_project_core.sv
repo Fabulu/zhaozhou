@@ -548,16 +548,70 @@ module zhao_project_core #(
   //   px     = clamp(rescale(screen, 8), ±2048*256)  §8
   // `cx << 16` inside fx_mad's own `(c << 16)` makes the whole addend
   // (x0 + w/2) << 32, which is why the shift below is 32 and not 16.
+  // ==========================================================================
+  // STAGE 5b -- THE PRODUCT IS REGISTERED, AND THE MEASUREMENT CHOSE THE CUT
+  // ==========================================================================
+  // `zhao_project_core` is instantiated by BOTH zhao_geom_project and
+  // zhao_terrain_project and measured 61.09 MHz, worst path core-to-core with
+  // no boundary to blame -- 39% short, on two lanes at once.
+  //
+  // `tools/quartus/path_anatomy.py` walked that path hop by hop:
+  //
+  //     0.000  uTco   s5_ndc_x[18]
+  //     3.762  CELL   u_core|Mult9~430|resulta[16]   <- the DSP, COMBINATIONAL
+  //     ...           the multiply's own carry chain
+  //     0.355  CELL   u_core|Mult9~816|sumout        ---- 6.611 ns cumulative
+  //     0.837  CELL   u_core|Add114~101|cout         a full carry chain
+  //     0.912  CELL   u_core|Add118~21|sumout        a second adder
+  //     0.544  CELL   u_core|scr_fx_x[7]~0|combout   saturation
+  //     0.804  IC     u_core|Add123~33|datac         a third adder
+  //                                                  ---- 15.906 ns total
+  //
+  // Multiply, then add, then add, then saturate, then add, in ONE cycle, with
+  // the DSP's own output register unused -- `resulta` reached as a cell delay
+  // worth 3.762 ns, a quarter of the path. A tree-wide sweep found the same
+  // shape in TERRAIN.TESS's geomorph blend, so this is one mechanical fix and
+  // not two bespoke ones.
+  //
+  // THE SPLIT WAS ARITHMETIC BEFORE IT WAS CODE:
+  //     s5_ndc -> registered product                6.611 ns   ~151 MHz
+  //     product -> Add114 -> Add118 -> sat -> Add123  9.295 ns   ~107 MHz
+  // Both halves inside 10 ns, so ONE cut, not two. Falsifiable: if the refit
+  // leaves the second half over 10 ns the split was in the wrong place and the
+  // remaining chain needs its own cut between Add118 and the saturation.
+  //
+  // LATENCY, NOT INITIATION INTERVAL. This is a pipeline register, so a vertex
+  // still enters every cycle and only the drain grows by one.
+  // `terrain_project_directed` bounds the batch at `3*N + 64` cycles and
+  // measures 422 against 448, so the one extra cycle is inside the slack it
+  // already had -- checked before the edit, not after.
+  //
+  // `cx13`/`cy13` ride along registered rather than being recomputed at stage
+  // 6, because `vp_*[s5_view]` is indexed by the STAGE 5 view and reading it a
+  // cycle later would silently take the next vertex's viewport. That is the
+  // kind of aliasing a pipeline cut introduces when the carried state is not
+  // carried with it.
   logic [12:0] cx13, cy13;
-  logic signed [MAD_W-1:0] mad_x, mad_y;
-  logic signed [31:0] scr_fx_x, scr_fx_y;
+  logic signed [MAD_W-1:0] prod_x_c, prod_y_c;
   always_comb begin
     cx13 = {1'b0, vp_x0[s5_view]} + {2'b0, vp_w[s5_view][11:1]};
     cy13 = {1'b0, vp_y0[s5_view]} + {2'b0, vp_h[s5_view][11:1]};
-    mad_x = ext32m(s5_ndc_x) * $signed({{(MAD_W - 27) {1'b0}}, vp_w[s5_view], 15'b0}) +
-        ($signed({{(MAD_W - 13) {1'b0}}, cx13}) <<< 32);
-    mad_y = ext32m(s5_ndc_y) * $signed({{(MAD_W - 27) {1'b0}}, vp_h[s5_view], 15'b0}) +
-        ($signed({{(MAD_W - 13) {1'b0}}, cy13}) <<< 32);
+    prod_x_c = ext32m(s5_ndc_x) * $signed({{(MAD_W - 27) {1'b0}}, vp_w[s5_view], 15'b0});
+    prod_y_c = ext32m(s5_ndc_y) * $signed({{(MAD_W - 27) {1'b0}}, vp_h[s5_view], 15'b0});
+  end
+
+  logic                        s6_valid, s6_behind, s6_view;
+  logic signed [MAD_W-1:0]     s6_prod_x, s6_prod_y;
+  logic        [12:0]          s6_cx13, s6_cy13;
+  logic signed [31:0]          s6_invw;
+  logic        [30:0]          s6_w;
+  logic        [PAYLOAD_W-1:0] s6_pay;
+
+  logic signed [MAD_W-1:0] mad_x, mad_y;
+  logic signed [31:0] scr_fx_x, scr_fx_y;
+  always_comb begin
+    mad_x = s6_prod_x + ($signed({{(MAD_W - 13) {1'b0}}, s6_cx13}) <<< 32);
+    mad_y = s6_prod_y + ($signed({{(MAD_W - 13) {1'b0}}, s6_cy13}) <<< 32);
     scr_fx_x = rescale16_mad(mad_x);
     scr_fx_y = rescale16_mad(mad_y);
   end
@@ -574,6 +628,10 @@ module zhao_project_core #(
       s5_valid <= 1'b0; s5_ndc_x <= '0; s5_ndc_y <= '0; s5_invw <= '0; s5_w <= '0;
       s5_behind <= 1'b0;
       s5_view <= 1'b0; s5_pay <= '0;
+      s6_valid <= 1'b0; s6_behind <= 1'b0; s6_view <= 1'b0;
+      s6_prod_x <= '0; s6_prod_y <= '0;
+      s6_cx13 <= '0; s6_cy13 <= '0;
+      s6_invw <= '0; s6_w <= '0; s6_pay <= '0;
       out_valid_o <= 1'b0;
       out_x_o <= '0; out_y_o <= '0; out_d_o <= '0; out_behind_o <= 1'b0;
       out_view_o <= 1'b0; out_payload_o <= '0;
@@ -621,17 +679,29 @@ module zhao_project_core #(
       s5_view <= dstep_view[DIV_STEPS];
       s5_pay <= dstep_pay[DIV_STEPS];
 
-      // stage 6 / output — the viewport map, and the behind-the-eye zeros.
-      // `project_vertex` returns a default ProjOut on the near-plane branch and
-      // never writes ScreenV at all, so the vertex carries {0,0,0}.
-      out_valid_o <= s5_valid;
-      out_x_o <= s5_behind ? 21'sd0 : to_screen_xy(scr_fx_x);
-      out_y_o <= s5_behind ? 21'sd0 : to_screen_xy(scr_fx_y);
-      out_d_o <= s5_behind ? 32'sd0 : s5_invw;
-      out_w_o <= s5_behind ? 31'd0 : s5_w;
-      out_behind_o <= s5_behind;
-      out_view_o <= s5_view;
-      out_payload_o <= s5_pay;
+      // stage 5b — the multiply, and everything that must arrive with it.
+      s6_valid  <= s5_valid;
+      s6_prod_x <= prod_x_c;
+      s6_prod_y <= prod_y_c;
+      s6_cx13   <= cx13;
+      s6_cy13   <= cy13;
+      s6_behind <= s5_behind;
+      s6_view   <= s5_view;
+      s6_invw   <= s5_invw;
+      s6_w      <= s5_w;
+      s6_pay    <= s5_pay;
+
+      // stage 6 / output — the viewport add, the rescale and the behind-the-eye
+      // zeros. `project_vertex` returns a default ProjOut on the near-plane
+      // branch and never writes ScreenV at all, so the vertex carries {0,0,0}.
+      out_valid_o <= s6_valid;
+      out_x_o <= s6_behind ? 21'sd0 : to_screen_xy(scr_fx_x);
+      out_y_o <= s6_behind ? 21'sd0 : to_screen_xy(scr_fx_y);
+      out_d_o <= s6_behind ? 32'sd0 : s6_invw;
+      out_w_o <= s6_behind ? 31'd0 : s6_w;
+      out_behind_o <= s6_behind;
+      out_view_o <= s6_view;
+      out_payload_o <= s6_pay;
     end
   end
 
@@ -639,7 +709,11 @@ module zhao_project_core #(
   // `s3_valid` by assignment, so the loop covers stage 3 as well.
   integer bi;
   always_comb begin
-    busy_o = s1_valid || s2_valid || s5_valid || out_valid_o;
+    // s6_valid JOINS THIS LIST. `busy_o` claims "any vertex anywhere, output
+    // register included"; a new pipeline stage that is not in the reduction
+    // makes the block report idle while it still holds a vertex, which is the
+    // same class of defect as a queue occupancy that omits its pending read.
+    busy_o = s1_valid || s2_valid || s5_valid || s6_valid || out_valid_o;
     for (bi = 0; bi <= DIV_STEPS; bi = bi + 1) busy_o = busy_o || dstep_valid[bi];
   end
 
