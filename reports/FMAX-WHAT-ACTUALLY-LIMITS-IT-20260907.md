@@ -159,35 +159,58 @@ today, three weeks late.
 judged.** They now carry one rule, the product clock, because a meaningful
 clock number is the single thing they exist to produce. All four fail:
 
-| wrapper | Fmax | pair ALM / DSP | leaves' sum |
-|---|---:|---:|---:|
-| `zhao_pair_tess_normals` | **31.10** | 1,523 / 9 | 2,100 / 24 |
-| `zhao_pair_tmu_cache` | **37.25** | 2,383 / 6 | 3,068 / 9 |
-| `zhao_pair_fragment_tilestore` | **55.52** | 1,188 / 7 | 1,344 / 10 |
-| `zhao_pair_setup_binner` | **88.79** | 1,405 / 10 | 2,065 / 16 |
+| wrapper | Fmax | pair ALM / DSP |
+|---|---:|---:|
+| `zhao_pair_tess_normals` | **31.10** | 1,523 / 9 |
+| `zhao_pair_tmu_cache` | **37.25** | 2,383 / 6 |
+| `zhao_pair_fragment_tilestore` | **55.52** | 1,188 / 7 |
+| `zhao_pair_setup_binner` | **88.79** | 1,405 / 10 |
 
-### And the comfortable reading of that table is the wrong one
+All four pair rows are **fresh** — no commit has touched their sources since
+they were measured — so these clock numbers stand, and so does the gate.
 
-Every pair is smaller than the sum of its leaves, and the easy conclusion is
-that these wrappers under-build the design — constant `cs_substance_i`, job
-fields sliced from one 32-bit stimulus word, correlated inputs — so their clock
-numbers should not be taken seriously.
+### WITHDRAWN: the leaf-sum argument, which was built on stale rows
 
-**The DSP column refuses that reading.** G1-D measured boundary removal worth
-2.4%; these gaps are 12–38% of ALM and **30–62% of DSP**, and a virtual pin has
-never consumed a DSP block. A multiplier count falling from 24 to 9 is logic
-being *deleted*, not a boundary being removed. The wrappers do fold real work
-away.
+An earlier version of this section carried a fourth column, the sum of each
+pair's leaf rows, and argued from it that the wrappers must be folding real
+logic away: *"these gaps are 12–38% of ALM and 30–62% of DSP, and a virtual pin
+has never consumed a DSP block."*
 
-Which means the error runs **the wrong way for comfort**: these are the Fmax
-numbers of a *reduced* circuit. `zhao_pair_tess_normals` is a partly
-constant-folded TESS+NORMALS that still cannot reach a third of the product
-clock, and the full one will not be faster. The leaf sums are understated too —
-`zhao_raster_blend_prod`, `zhao_raster_blend_fin` and `zhao_raster_fill` have no
-rows at all.
+**Every one of the four sums contained a stale row, and two also contained
+leaves with no row at all, silently counted as zero.** The comparison is void
+and the conclusion is withdrawn.
+
+The case it led with is the clearest. `zhao_terrain_normals`'s row records **18
+DSP** at commit `96c0394a`. Two commits later comes `bfc74710`, *"TERRAIN.NORMALS:
+one shared multiplier instead of six"*. Six 33×33 multipliers became one. The
+pair's 9 DSP is TESS's 6 plus that single shared multiplier's 3 — **an exact
+match, with no folding required at all.** The 24 → 9 "reduction" was a stale row
+wearing the shape of a finding.
+
+This is the third time in one day that CLAUDE.md's *"never compare a current
+file to an old measurement"* has bitten, and the sharpest, because **the
+staleness check that would have caught it was added to
+`check_fit_rules.ps1` the same morning and simply was not run on these rows.**
+A law you have just implemented is not a law you have applied.
+
+So `tools/quartus/compare_rows.py` now exists and it **refuses**. A sum
+containing a stale or missing row is not a number with a caveat; it is not a
+number, so the tool prints which rows are bad and exits 2 rather than offering
+a total with a footnote. It was shown to fire in both directions: refused on
+the exact comparison published above, allowed on `pair_tess_normals` against
+`terrain_tess` alone, where both rows are fresh.
+
+**What is now unknown rather than established:** whether these wrappers
+under-build the design at all. They do tie inputs constant — `cs_substance_i`
+is wired to `2'd0`, job fields are sliced from one 32-bit stimulus word — so
+folding is *plausible*. It is no longer *measured*. Settling it needs fresh
+leaf fits for the six stale blocks, which is a queue of six, not an argument.
 
 **31.10 MHz on the terrain geometry path is the most consequential number in
-this report**, and it is the one that had no gate.
+this report**, and it is the one that had no gate. That number does not depend
+on anything withdrawn above: `zhao_pair_tess_normals`'s own row is fresh, and
+the wrapper is the registered-stimulus/hash-sink shape built precisely so that
+a clock number from it means something.
 
 ## What this changes
 

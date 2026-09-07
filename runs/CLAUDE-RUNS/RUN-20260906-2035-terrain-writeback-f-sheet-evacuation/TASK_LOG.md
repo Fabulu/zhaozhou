@@ -305,3 +305,31 @@ Apply once the architect reports.
 Also checked and NOT a bug: `jobs_by_recipe_o += 2`. Deliberate and documented
 -- two lanes fire per product-bearing phase, which is exactly what
 zref::material::product_jobs() says.
+
+## 2026-09-07 -- withdrew the leaf-sum argument; six blocks need refits
+
+Chasing TESS+NORMALS (31.10 MHz, worst on the terrain path) into the RTL found
+NORMALS already rearchitected to ONE shared 33x33 multiplier sequenced over six
+steps -- which made its 18-DSP row impossible, and it is: the row predates
+bfc74710 by two commits.
+
+That killed the argument I published this morning. All four pair-vs-leaf-sum
+comparisons contained a stale row; two also contained leaves with NO row,
+summed as zero. Withdrawn in the report. compare_rows.py now refuses such a sum
+outright rather than footnoting it, and was shown to fire both ways.
+
+STANDS: the four pair rows are fresh, so 31.10 / 37.25 / 55.52 / 88.79 MHz and
+the gate are unaffected.
+
+REFIT QUEUE (six stale leaves, in the order they matter):
+  zhao_terrain_normals    STALE 2  -- the shared-multiplier rearchitecture is
+                                     unmeasured; expect 18 DSP -> ~3
+  zhao_raster_fragment    STALE 2
+  zhao_geom_binner        STALE 2
+  zhao_texture_tmu        STALE 4  -- architect's territory, do not touch
+  zhao_texture_bilerp     STALE 1  -- architect's territory
+  zhao_raster_tilestore   STALE 1
+NO ROW AT ALL: zhao_raster_blend_prod, zhao_raster_blend_fin, zhao_raster_fill.
+
+NORMALS first when the toolchain frees: its row is both stale and the reason
+the terrain pair looks the way it does.
