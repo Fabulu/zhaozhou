@@ -47,6 +47,28 @@ argument for it existing:
 
 A single-number `fmaxMhz` cannot say any of that.
 
+AND THE FIRST VERSION OF THIS TOOL WAS ITSELF A BROKEN INSTRUMENT
+----------------------------------------------------------------
+It globbed every `*.setup.summary.rpt` in the folder and trusted the filename.
+One of them is called `zhao_texture_material_combine_v1-2974-superseded` -- an
+explicitly RETIRED artefact from an older version of that block -- and the tool
+reported it as the worst-timed block in the tree at 29.74 MHz, in a report,
+under the block's live name. The live row is 36.28 MHz and has no path summary
+on disk at all.
+
+That is CLAUDE.md's "never compare a current file to an old measurement",
+committed by the very tool written to stop it being done by hand.
+
+So the pairing is now CHECKED rather than assumed. Every summary's own worst
+slack implies a reported Fmax; the block's row in `zhao_block_fit.json` states
+one. If the two disagree, THE SUMMARY IS NOT THAT ROW'S and the block is
+reported as unpairable rather than measured. One comparison catches a
+superseded file, a renamed variant and a half-written report alike, which is
+why it is done that way instead of by blacklisting the word "superseded".
+
+Fifteen stems have a `.sta.rpt` and no summary, so they cannot be split at all
+and are listed as such. Silence about them would read as "all fine".
+
 WHAT IT DOES NOT DO
 -------------------
 It reads the SUMMARY reports, which hold the top ~2,000 paths. A block whose
@@ -110,7 +132,22 @@ def read_rows(path: str) -> list[tuple[float, str, str]]:
     return out
 
 
+def row_fmax() -> dict:
+    """Each block's recorded Fmax, so a summary can be PAIRED with its row."""
+    import json
+    p = os.path.join(REPO, "reports", "synthesis", "zhao_block_fit.json")
+    try:
+        d = json.load(io.open(p, encoding="utf-8"))
+    except Exception:
+        return {}
+    rows = d.get("blocks", d) if isinstance(d, dict) else d
+    rows = rows if isinstance(rows, list) else list(rows.values())
+    return {r["module"]: r.get("fmaxMhz")
+            for r in rows if isinstance(r, dict) and r.get("module")}
+
+
 def main(argv: list[str]) -> int:
+    recorded = row_fmax()
     period = 10.0  # the 100 MHz product clock; every block fit is constrained to it
     files = sorted(glob.glob(os.path.join(BLOCKPATHS, "*.setup.summary.rpt")))
     if not files:
@@ -118,11 +155,27 @@ def main(argv: list[str]) -> int:
         return 0
 
     results = []
+    unpairable = []
     for f in files:
         name = os.path.basename(f).replace(".setup.summary.rpt", "")
         rows = read_rows(f)
         if not rows:
             continue
+
+        # THE PAIRING CHECK. A summary whose own worst slack does not imply the
+        # Fmax its block's row records is not that row's summary -- it is a
+        # superseded run, a variant, or a different block wearing a similar
+        # name. Reported as unpairable, never silently split.
+        implied = fmax(min(r[0] for r in rows), period)
+        stated = recorded.get(name)
+        if stated is None:
+            unpairable.append((name, "no row in zhao_block_fit.json under this name"))
+            continue
+        if abs(stated - implied) > 0.05:
+            unpairable.append((name, "row says %.2f MHz, this summary implies %.2f"
+                               % (stated, implied)))
+            continue
+
         data = [r for r in rows if classify(r[1]) == "core" and classify(r[2]) == "core"]
         rst = [r for r in rows if classify(r[1]) == "reset"]
         worst_all = min(r[0] for r in rows)
@@ -159,6 +212,25 @@ def main(argv: list[str]) -> int:
           % (len(short), len(results)))
     for r in short:
         print("   %-36s %6.2f MHz  (reported %6.2f)" % (r["name"][:36], r["data"], r["reported"]))
+    if unpairable:
+        print()
+        print("UNPAIRABLE (%d) -- a summary on disk that is NOT this row's, so NOT split:"
+              % len(unpairable))
+        for name, why in unpairable:
+            print("   %-44s %s" % (name[:44], why))
+
+    have = {os.path.basename(f).replace(".setup.summary.rpt", "") for f in files}
+    sta = {os.path.basename(f).replace(".sta.rpt", "")
+           for f in glob.glob(os.path.join(BLOCKPATHS, "*.sta.rpt"))}
+    missing = sorted(sta - have)
+    if missing:
+        print()
+        print("NO PATH SUMMARY ON DISK (%d) -- timing measured, paths not splittable; "
+              "saying nothing would read as 'all fine':" % len(missing))
+        for m in missing:
+            r = recorded.get(m)
+            print("   %-44s %s" % (m[:44], ("%.2f MHz recorded" % r) if r else "no recorded Fmax"))
+
     print()
     print("NOTE: this REPORTS, it does not gate. `--` in the DATA column means every")
     print("summarised path touched the boundary or reset, so this tool could not answer --")
