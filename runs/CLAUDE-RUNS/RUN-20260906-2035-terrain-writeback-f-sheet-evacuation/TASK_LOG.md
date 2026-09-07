@@ -683,3 +683,23 @@ Its own safety path had a defect Python caught and I did not: a `return` inside
 Verified three ways: ambiguity refusal, dirty-file refusal, and a real sweep
 where both project suites now detect (22/900 and 42/2264) with the file
 restored and verified.
+
+## 2026-09-07 -- the cell_solid mask bought 2.1%; the prediction was wrong
+
+32.42 -> 33.10 MHz, ALM 1,579 -> 1,574 (five). TESS->TESS went 40.11 -> 37.23,
+the wrong direction. NORMALS->NORMALS 72.72 -> 85.50.
+
+Cause of the wrong prediction, nameable: I derived the mask by COUNTING
+OPERATORS IN THE SOURCE rather than measuring where the delay was. Quartus had
+already collapsed the loop -- five ALMs is the proof. The endpoint census names
+which signals meet; it does not name where the time is.
+
+Per-hop data for the worst path: 2.5 ns memory clock-to-out, then Add65/Add66
+carry chains. 28.080 ns total, cell_solid nowhere in it. That is the OTHER
+repair the report already named and ranked bigger -- and I did the smaller one.
+
+Mask kept: bit-identical, cheaper source, coverage hole closed. Not recorded as
+a timing win.
+
+NEXT: register the lattice sample before fx_add_sat. Per-hop numbers on disk to
+size it before writing this time.

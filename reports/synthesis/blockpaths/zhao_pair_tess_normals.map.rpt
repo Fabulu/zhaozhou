@@ -1,5 +1,5 @@
 Analysis & Synthesis report for blockfit
-Mon Sep 07 07:19:55 2026
+Mon Sep 07 08:42:36 2026
 Quartus Prime Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
 
 
@@ -58,7 +58,7 @@ agreement for further details.
 +-------------------------------------------------------------------------------+
 ; Analysis & Synthesis Summary                                                  ;
 +---------------------------------+---------------------------------------------+
-; Analysis & Synthesis Status     ; Successful - Mon Sep 07 07:19:54 2026       ;
+; Analysis & Synthesis Status     ; Successful - Mon Sep 07 08:42:36 2026       ;
 ; Quartus Prime Version           ; 17.0.2 Build 602 07/19/2017 SJ Lite Edition ;
 ; Revision Name                   ; blockfit                                    ;
 ; Top-level Entity Name           ; zhao_pair_tess_normals                      ;
@@ -190,9 +190,9 @@ agreement for further details.
 +----------------------------------+-----------------+------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+---------+
 ; File Name with User-Entered Path ; Used in Netlist ; File Type                    ; File Name with Absolute Path                                                                                                          ; Library ;
 +----------------------------------+-----------------+------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+---------+
-; src/zhao_pair_tess_normals.sv    ; yes             ; User SystemVerilog HDL File  ; C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv ;         ;
-; src/zhao_terrain_tess.sv         ; yes             ; User SystemVerilog HDL File  ; C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_terrain_tess.sv      ;         ;
-; src/zhao_terrain_normals.sv      ; yes             ; User SystemVerilog HDL File  ; C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_terrain_normals.sv   ;         ;
+; src/zhao_pair_tess_normals.sv    ; yes             ; User SystemVerilog HDL File  ; C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv ;         ;
+; src/zhao_terrain_tess.sv         ; yes             ; User SystemVerilog HDL File  ; C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_terrain_tess.sv      ;         ;
+; src/zhao_terrain_normals.sv      ; yes             ; User SystemVerilog HDL File  ; C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_terrain_normals.sv   ;         ;
 ; altsyncram.tdf                   ; yes             ; Megafunction                 ; c:/intelfpga_lite/17.0/quartus/libraries/megafunctions/altsyncram.tdf                                                                 ;         ;
 ; stratix_ram_block.inc            ; yes             ; Megafunction                 ; c:/intelfpga_lite/17.0/quartus/libraries/megafunctions/stratix_ram_block.inc                                                          ;         ;
 ; lpm_mux.inc                      ; yes             ; Megafunction                 ; c:/intelfpga_lite/17.0/quartus/libraries/megafunctions/lpm_mux.inc                                                                    ;         ;
@@ -202,7 +202,7 @@ agreement for further details.
 ; altrom.inc                       ; yes             ; Megafunction                 ; c:/intelfpga_lite/17.0/quartus/libraries/megafunctions/altrom.inc                                                                     ;         ;
 ; altram.inc                       ; yes             ; Megafunction                 ; c:/intelfpga_lite/17.0/quartus/libraries/megafunctions/altram.inc                                                                     ;         ;
 ; altdpram.inc                     ; yes             ; Megafunction                 ; c:/intelfpga_lite/17.0/quartus/libraries/megafunctions/altdpram.inc                                                                   ;         ;
-; db/altsyncram_a3n1.tdf           ; yes             ; Auto-Generated Megafunction  ; C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/db/altsyncram_a3n1.tdf        ;         ;
+; db/altsyncram_a3n1.tdf           ; yes             ; Auto-Generated Megafunction  ; C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/db/altsyncram_a3n1.tdf        ;         ;
 +----------------------------------+-----------------+------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+---------+
 
 
@@ -215,10 +215,10 @@ agreement for further details.
 ;                                             ;       ;
 ; Combinational ALUT usage for logic          ; 2397  ;
 ;     -- 7 input functions                    ; 9     ;
-;     -- 6 input functions                    ; 342   ;
-;     -- 5 input functions                    ; 387   ;
-;     -- 4 input functions                    ; 397   ;
-;     -- <=3 input functions                  ; 1262  ;
+;     -- 6 input functions                    ; 344   ;
+;     -- 5 input functions                    ; 383   ;
+;     -- 4 input functions                    ; 398   ;
+;     -- <=3 input functions                  ; 1263  ;
 ;                                             ;       ;
 ; Dedicated logic registers                   ; 1428  ;
 ;                                             ;       ;
@@ -231,7 +231,7 @@ agreement for further details.
 ;                                             ;       ;
 ; Maximum fan-out node                        ; clk   ;
 ; Maximum fan-out                             ; 1460  ;
-; Total fan-out                               ; 15921 ;
+; Total fan-out                               ; 15920 ;
 ; Average fan-out                             ; 4.05  ;
 +---------------------------------------------+-------+
 
@@ -835,57 +835,57 @@ Encoding Type:  One-Hot
 ; Multiplexer Inputs ; Bus Width ; Baseline Area ; Area if Restructured ; Saving if Restructured ; Registered ; Example Multiplexer Output                                      ;
 +--------------------+-----------+---------------+----------------------+------------------------+------------+-----------------------------------------------------------------+
 ; 3:1                ; 3 bits    ; 6 LEs         ; 3 LEs                ; 3 LEs                  ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|mseq[0]  ;
-; 5:1                ; 67 bits   ; 201 LEs       ; 0 LEs                ; 201 LEs                ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|acc0[23] ;
-; 5:1                ; 67 bits   ; 201 LEs       ; 0 LEs                ; 201 LEs                ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|acc1[28] ;
-; 5:1                ; 67 bits   ; 201 LEs       ; 0 LEs                ; 201 LEs                ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|acc2[50] ;
+; 5:1                ; 67 bits   ; 201 LEs       ; 0 LEs                ; 201 LEs                ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|acc0[20] ;
+; 5:1                ; 67 bits   ; 201 LEs       ; 0 LEs                ; 201 LEs                ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|acc1[29] ;
+; 5:1                ; 67 bits   ; 201 LEs       ; 0 LEs                ; 201 LEs                ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|acc2[49] ;
 ; 5:1                ; 7 bits    ; 21 LEs        ; 7 LEs                ; 14 LEs                 ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|sc_idx[3]      ;
 ; 6:1                ; 3 bits    ; 12 LEs        ; 3 LEs                ; 9 LEs                  ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|eb[3]          ;
 ; 7:1                ; 4 bits    ; 16 LEs        ; 8 LEs                ; 8 LEs                  ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|eg[3]          ;
 ; 7:1                ; 2 bits    ; 8 LEs         ; 4 LEs                ; 4 LEs                  ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|eside[0]       ;
-; 7:1                ; 3 bits    ; 12 LEs        ; 6 LEs                ; 6 LEs                  ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ea[2]          ;
-; 8:1                ; 2 bits    ; 10 LEs        ; 4 LEs                ; 6 LEs                  ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|f_slot[1]      ;
-; 9:1                ; 6 bits    ; 36 LEs        ; 12 LEs               ; 24 LEs                 ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|efan[2]        ;
-; 3:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftLeft2     ;
+; 7:1                ; 3 bits    ; 12 LEs        ; 6 LEs                ; 6 LEs                  ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ea[3]          ;
+; 8:1                ; 2 bits    ; 10 LEs        ; 4 LEs                ; 6 LEs                  ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|f_slot[0]      ;
+; 9:1                ; 6 bits    ; 36 LEs        ; 12 LEs               ; 24 LEs                 ; Yes        ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|efan[4]        ;
+; 3:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftLeft3     ;
 ; 3:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftLeft2     ;
 ; 4:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftLeft2     ;
-; 4:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftLeft3     ;
 ; 4:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftLeft2     ;
-; 4:1                ; 14 bits   ; 28 LEs        ; 28 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftLeft15    ;
-; 4:1                ; 14 bits   ; 28 LEs        ; 28 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftLeft10    ;
-; 4:1                ; 42 bits   ; 84 LEs        ; 84 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftRight1    ;
-; 4:1                ; 6 bits    ; 12 LEs        ; 12 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|Mux29          ;
+; 4:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftLeft2     ;
+; 4:1                ; 14 bits   ; 28 LEs        ; 28 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftLeft5     ;
+; 4:1                ; 14 bits   ; 28 LEs        ; 28 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftLeft5     ;
+; 4:1                ; 42 bits   ; 84 LEs        ; 84 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|ShiftLeft12    ;
+; 4:1                ; 6 bits    ; 12 LEs        ; 12 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|Mux3           ;
 ; 3:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|c              ;
 ; 3:1                ; 4 bits    ; 8 LEs         ; 8 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|c              ;
-; 3:1                ; 6 bits    ; 12 LEs        ; 12 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|fan_t0[5]      ;
-; 4:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|Mux31          ;
+; 3:1                ; 6 bits    ; 12 LEs        ; 12 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|fan_t0[0]      ;
+; 4:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|Mux30          ;
 ; 3:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|c              ;
 ; 3:1                ; 4 bits    ; 8 LEs         ; 8 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|c              ;
-; 3:1                ; 6 bits    ; 12 LEs        ; 12 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|fan_t1[4]      ;
+; 3:1                ; 6 bits    ; 12 LEs        ; 12 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|fan_t1[0]      ;
 ; 4:1                ; 12 bits   ; 24 LEs        ; 24 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|Mux32          ;
-; 3:1                ; 31 bits   ; 62 LEs        ; 62 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|r_nx[17] ;
-; 3:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux9     ;
-; 3:1                ; 31 bits   ; 62 LEs        ; 62 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|r_nz[19] ;
+; 3:1                ; 31 bits   ; 62 LEs        ; 62 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|r_nx[16] ;
+; 3:1                ; 2 bits    ; 4 LEs         ; 4 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux42    ;
+; 3:1                ; 31 bits   ; 62 LEs        ; 62 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|r_nz[20] ;
 ; 3:1                ; 31 bits   ; 62 LEs        ; 62 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|r_ny[20] ;
-; 4:1                ; 32 bits   ; 64 LEs        ; 64 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|Mux70          ;
-; 3:1                ; 32 bits   ; 64 LEs        ; 64 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|m_step[31]     ;
-; 3:1                ; 32 bits   ; 64 LEs        ; 64 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|m_half[0]      ;
+; 4:1                ; 32 bits   ; 64 LEs        ; 64 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|Mux71          ;
+; 3:1                ; 32 bits   ; 64 LEs        ; 64 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|m_step[30]     ;
+; 3:1                ; 32 bits   ; 64 LEs        ; 64 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|m_half[6]      ;
 ; 3:1                ; 32 bits   ; 64 LEs        ; 64 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|m_hc[11]       ;
-; 3:1                ; 6 bits    ; 12 LEs        ; 12 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|fan_steps[5]   ;
-; 4:1                ; 3 bits    ; 6 LEs         ; 6 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_j[0][2]     ;
+; 3:1                ; 6 bits    ; 12 LEs        ; 12 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|fan_steps[0]   ;
+; 4:1                ; 3 bits    ; 6 LEs         ; 6 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_j[0][0]     ;
 ; 4:1                ; 3 bits    ; 6 LEs         ; 6 LEs                ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_i[0][1]     ;
 ; 5:1                ; 6 bits    ; 18 LEs        ; 18 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_j[0][5]     ;
-; 5:1                ; 10 bits   ; 30 LEs        ; 20 LEs               ; 10 LEs                 ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux37    ;
-; 5:1                ; 10 bits   ; 30 LEs        ; 20 LEs               ; 10 LEs                 ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux5     ;
-; 8:1                ; 16 bits   ; 80 LEs        ; 32 LEs               ; 48 LEs                 ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux60    ;
+; 5:1                ; 10 bits   ; 30 LEs        ; 20 LEs               ; 10 LEs                 ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux33    ;
+; 5:1                ; 10 bits   ; 30 LEs        ; 20 LEs               ; 10 LEs                 ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux1     ;
+; 8:1                ; 16 bits   ; 80 LEs        ; 32 LEs               ; 48 LEs                 ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux65    ;
 ; 8:1                ; 16 bits   ; 80 LEs        ; 32 LEs               ; 48 LEs                 ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux29    ;
-; 8:1                ; 7 bits    ; 35 LEs        ; 14 LEs               ; 21 LEs                 ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux13    ;
-; 8:1                ; 7 bits    ; 35 LEs        ; 14 LEs               ; 21 LEs                 ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux49    ;
-; 4:1                ; 32 bits   ; 64 LEs        ; 64 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|last_y[12]     ;
-; 8:1                ; 5 bits    ; 25 LEs        ; 20 LEs               ; 5 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_i[2][1]     ;
-; 9:1                ; 2 bits    ; 12 LEs        ; 12 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_i[1][1]     ;
-; 10:1               ; 3 bits    ; 18 LEs        ; 18 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_i[1][3]     ;
-; 9:1                ; 2 bits    ; 12 LEs        ; 10 LEs               ; 2 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_j[1][2]     ;
-; 10:1               ; 3 bits    ; 18 LEs        ; 18 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_j[1][5]     ;
+; 8:1                ; 7 bits    ; 35 LEs        ; 14 LEs               ; 21 LEs                 ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux10    ;
+; 8:1                ; 7 bits    ; 35 LEs        ; 14 LEs               ; 21 LEs                 ; No         ; |zhao_pair_tess_normals|zhao_terrain_normals:u_normals|Mux45    ;
+; 4:1                ; 32 bits   ; 64 LEs        ; 64 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|last_y[17]     ;
+; 8:1                ; 5 bits    ; 25 LEs        ; 20 LEs               ; 5 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_i[2][4]     ;
+; 9:1                ; 2 bits    ; 12 LEs        ; 12 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_i[1][2]     ;
+; 10:1               ; 3 bits    ; 18 LEs        ; 18 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_i[1][5]     ;
+; 9:1                ; 2 bits    ; 12 LEs        ; 10 LEs               ; 2 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_j[1][1]     ;
+; 10:1               ; 3 bits    ; 18 LEs        ; 18 LEs               ; 0 LEs                  ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_j[1][3]     ;
 ; 11:1               ; 5 bits    ; 35 LEs        ; 25 LEs               ; 10 LEs                 ; No         ; |zhao_pair_tess_normals|zhao_terrain_tess:u_tess|tv_j[2][1]     ;
 +--------------------+-----------+---------------+----------------------+------------------------+------------+-----------------------------------------------------------------+
 
@@ -1026,10 +1026,10 @@ Note: In order to hide this table in the UI and the text report file, please set
 ;     normal            ; 1197                        ;
 ;         1 data inputs ; 5                           ;
 ;         2 data inputs ; 78                          ;
-;         3 data inputs ; 176                         ;
-;         4 data inputs ; 291                         ;
-;         5 data inputs ; 305                         ;
-;         6 data inputs ; 342                         ;
+;         3 data inputs ; 177                         ;
+;         4 data inputs ; 292                         ;
+;         5 data inputs ; 301                         ;
+;         6 data inputs ; 344                         ;
 ;     shared            ; 386                         ;
 ;         0 data inputs ; 9                           ;
 ;         1 data inputs ; 9                           ;
@@ -1041,7 +1041,7 @@ Note: In order to hide this table in the UI and the text report file, please set
 ; stratixv_ram_block    ; 32                          ;
 ;                       ;                             ;
 ; Max LUT depth         ; 22.70                       ;
-; Average LUT depth     ; 8.44                        ;
+; Average LUT depth     ; 8.42                        ;
 +-----------------------+-----------------------------+
 
 
@@ -1050,7 +1050,7 @@ Note: In order to hide this table in the UI and the text report file, please set
 +----------------+--------------+
 ; Partition Name ; Elapsed Time ;
 +----------------+--------------+
-; Top            ; 00:01:30     ;
+; Top            ; 00:00:59     ;
 +----------------+--------------+
 
 
@@ -1074,7 +1074,7 @@ Info: Running Quartus Prime Analysis & Synthesis
     Info: devices manufactured by Intel and sold by Intel or its 
     Info: authorized distributors.  Please refer to the applicable 
     Info: agreement for further details.
-    Info: Processing started: Mon Sep 07 07:17:20 2026
+    Info: Processing started: Mon Sep 07 08:40:40 2026
 Info: Command: quartus_map blockfit
 Info (16303): High Performance Effort optimization mode selected -- timing performance will be prioritized at the potential cost of increased compilation time
 Info (20032): Parallel compilation is enabled and will use up to 4 processors
@@ -1189,20 +1189,20 @@ Info (12021): Found 1 design units, including 1 entities, in source file /progra
 Info (12021): Found 1 design units, including 1 entities, in source file /programmieren/zencrifice/zhaozhou/fpga/rtl/common/zhao_shell_top.sv
     Info (12023): Found entity 1: zhao_shell_top File: C:/programmieren/zencrifice/zhaozhou/fpga/rtl/common/zhao_shell_top.sv Line: 96
 Info (12021): Found 1 design units, including 1 entities, in source file src/zhao_pair_tess_normals.sv
-    Info (12023): Found entity 1: zhao_pair_tess_normals File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 44
+    Info (12023): Found entity 1: zhao_pair_tess_normals File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 44
 Info (12021): Found 1 design units, including 1 entities, in source file src/zhao_terrain_tess.sv
-    Info (12023): Found entity 1: zhao_terrain_tess File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 134
+    Info (12023): Found entity 1: zhao_terrain_tess File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 134
 Info (12021): Found 1 design units, including 1 entities, in source file src/zhao_terrain_normals.sv
-    Info (12023): Found entity 1: zhao_terrain_normals File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_terrain_normals.sv Line: 71
+    Info (12023): Found entity 1: zhao_terrain_normals File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_terrain_normals.sv Line: 71
 Info (12127): Elaborating entity "zhao_pair_tess_normals" for the top level hierarchy
-Info (12128): Elaborating entity "zhao_terrain_tess" for hierarchy "zhao_terrain_tess:u_tess" File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 120
-Warning (10036): Verilog HDL or VHDL warning at zhao_terrain_tess.sv(244): object "j_scmask" assigned a value but never read File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 244
-Warning (10036): Verilog HDL or VHDL warning at zhao_terrain_tess.sv(245): object "j_lvl_ord" assigned a value but never read File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 245
-Warning (10036): Verilog HDL or VHDL warning at zhao_terrain_tess.sv(319): object "x_lo" assigned a value but never read File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 319
-Warning (10036): Verilog HDL or VHDL warning at zhao_terrain_tess.sv(320): object "x_hi" assigned a value but never read File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 320
-Warning (10036): Verilog HDL or VHDL warning at zhao_terrain_tess.sv(321): object "z_lo" assigned a value but never read File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 321
-Warning (10036): Verilog HDL or VHDL warning at zhao_terrain_tess.sv(322): object "z_hi" assigned a value but never read File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 322
-Info (12128): Elaborating entity "zhao_terrain_normals" for hierarchy "zhao_terrain_normals:u_normals" File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 141
+Info (12128): Elaborating entity "zhao_terrain_tess" for hierarchy "zhao_terrain_tess:u_tess" File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 120
+Warning (10036): Verilog HDL or VHDL warning at zhao_terrain_tess.sv(244): object "j_scmask" assigned a value but never read File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 244
+Warning (10036): Verilog HDL or VHDL warning at zhao_terrain_tess.sv(245): object "j_lvl_ord" assigned a value but never read File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 245
+Warning (10036): Verilog HDL or VHDL warning at zhao_terrain_tess.sv(377): object "x_lo" assigned a value but never read File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 377
+Warning (10036): Verilog HDL or VHDL warning at zhao_terrain_tess.sv(378): object "x_hi" assigned a value but never read File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 378
+Warning (10036): Verilog HDL or VHDL warning at zhao_terrain_tess.sv(379): object "z_lo" assigned a value but never read File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 379
+Warning (10036): Verilog HDL or VHDL warning at zhao_terrain_tess.sv(380): object "z_hi" assigned a value but never read File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_terrain_tess.sv Line: 380
+Info (12128): Elaborating entity "zhao_terrain_normals" for hierarchy "zhao_terrain_normals:u_normals" File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 141
 Info (19000): Inferred 1 megafunctions from design logic
     Info (276029): Inferred altsyncram megafunction from the following design logic: "lat_mem_rtl_0" 
         Info (286033): Parameter OPERATION_MODE set to DUAL_PORT
@@ -1238,81 +1238,81 @@ Info (12133): Instantiated megafunction "altsyncram:lat_mem_rtl_0" with the foll
     Info (12134): Parameter "WRCONTROL_ACLR_A" = "NONE"
     Info (12134): Parameter "READ_DURING_WRITE_MODE_MIXED_PORTS" = "OLD_DATA"
 Info (12021): Found 1 design units, including 1 entities, in source file db/altsyncram_a3n1.tdf
-    Info (12023): Found entity 1: altsyncram_a3n1 File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/db/altsyncram_a3n1.tdf Line: 28
+    Info (12023): Found entity 1: altsyncram_a3n1 File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/db/altsyncram_a3n1.tdf Line: 28
 Info (286030): Timing-Driven Synthesis is running
 Info (17049): 89 registers lost all their fanouts during netlist optimizations.
-Info (144001): Generated suppressed messages file C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/output_files/blockfit.map.smsg
+Info (144001): Generated suppressed messages file C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/output_files/blockfit.map.smsg
 Info (16010): Generating hard_block partition "hard_block:auto_generated_inst"
     Info (16011): Adding 0 node(s), including 0 DDIO, 0 PLL, 0 transceiver and 0 LCELL
 Critical Warning (15725): clock port is fed by virtual pin "clk~input"; timing analysis treats input to the clock port as a ripple clock
 Info (15717): Design contains 67 virtual pins; timing numbers associated with paths containing virtual pins are estimates
-    Info (15719): Pin "hash_o[0]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[1]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[2]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[3]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[4]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[5]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[6]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[7]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[8]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[9]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[10]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[11]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[12]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[13]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[14]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[15]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[16]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[17]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[18]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[19]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[20]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[21]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[22]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[23]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[24]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[25]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[26]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[27]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[28]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[29]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[30]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15719): Pin "hash_o[31]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
-    Info (15718): Pin "clk" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 45
-    Info (15718): Pin "rst_n" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 46
-    Info (15718): Pin "stim_i[5]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_valid_i" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 47
-    Info (15718): Pin "stim_i[13]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[12]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[22]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[23]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[21]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[19]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[17]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[15]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[18]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[16]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[20]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[14]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[3]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[4]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[11]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[10]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[9]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[26]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[31]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[30]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[29]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[28]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[27]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[25]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[24]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[0]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[1]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[2]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[6]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[7]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
-    Info (15718): Pin "stim_i[8]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15719): Pin "hash_o[0]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[1]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[2]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[3]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[4]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[5]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[6]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[7]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[8]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[9]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[10]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[11]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[12]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[13]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[14]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[15]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[16]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[17]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[18]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[19]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[20]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[21]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[22]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[23]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[24]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[25]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[26]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[27]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[28]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[29]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[30]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15719): Pin "hash_o[31]" is virtual output pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 50
+    Info (15718): Pin "clk" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 45
+    Info (15718): Pin "rst_n" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 46
+    Info (15718): Pin "stim_i[5]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_valid_i" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 47
+    Info (15718): Pin "stim_i[13]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[12]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[22]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[23]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[21]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[19]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[17]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[15]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[18]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[16]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[20]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[14]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[3]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[4]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[11]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[10]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[9]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[26]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[31]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[30]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[29]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[28]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[27]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[25]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[24]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[0]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[1]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[2]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[6]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[7]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
+    Info (15718): Pin "stim_i[8]" is virtual input pin File: C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/src/zhao_pair_tess_normals.sv Line: 48
 Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "hash_q[0]"
     Warning (15720): Ignored Virtual Pin assignment to node "hash_q[1]"
@@ -1452,13 +1452,15 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add58~21"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|o_valid"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_valid"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mult0~8"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add2~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add2~5"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add2~9"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add2~13"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add2~17"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add2~21"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mult0~8"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add2~25"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add2~29"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add3~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add3~5"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add3~9"
@@ -1469,8 +1471,6 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add3~29"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add3~33"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mult1~8"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add2~25"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add2~29"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add2~33"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|sc_idx[0]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|sc_idx[3]"
@@ -1960,18 +1960,18 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add7~157"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add7~161"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add7~165"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~165"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~169"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~173"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~177"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~181"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~185"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add8~165"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add8~169"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add8~173"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add8~177"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add8~181"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add8~185"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~165"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~169"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~173"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~177"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~181"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~185"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~189"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~193"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add6~197"
@@ -2160,35 +2160,35 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~157"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~161"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~165"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[40]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[41]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[42]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[39]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[41]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[40]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[39]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[38]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[37]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[36]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[34]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[33]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[32]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[35]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~169"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~173"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~177"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~181"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~185"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~189"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[41]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[40]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[39]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[38]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[37]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[36]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[45]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[44]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[43]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[42]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[43]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[46]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[44]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[45]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[44]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[43]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[42]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[41]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[40]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[39]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[38]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[34]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[33]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[35]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc1[32]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~193"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~197"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~201"
@@ -2306,34 +2306,34 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~494"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add10~169"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~498"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[32]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[46]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~502"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[45]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[34]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[32]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[33]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[34]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[35]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add11~157"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~506"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add11~161"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~510"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add11~165"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~514"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add11~169"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~502"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[42]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~506"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[41]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~510"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[40]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~514"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[39]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~518"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[38]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[37]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add10~173"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add10~177"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add10~181"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add10~185"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~522"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add10~189"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add10~193"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[41]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[40]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[39]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[38]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[37]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[36]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add10~197"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~522"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add10~201"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~526"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add10~205"
@@ -2348,10 +2348,10 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add11~197"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add11~201"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add11~205"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[45]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[44]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[43]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[42]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[35]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[36]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc2[14]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add12~213"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Add11~209"
@@ -2919,8 +2919,8 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|efan[0]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|efan[4]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|efan[5]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal3~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal4~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal1~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan37~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_t1[5]~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_t1[4]~1"
@@ -2929,7 +2929,7 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_t1[3]~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_t1[2]~3"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan42~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[2][1]~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[2][4]~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|emode.EmFan"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_tb[5]~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_tb[4]~1"
@@ -2947,7 +2947,7 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_t1[1]~6"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan43~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan42~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[2][1]~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[2][4]~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan47~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan47~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan37~3"
@@ -2955,10 +2955,10 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan42~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan41~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[2][0]~2"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[2][1]~3"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[2][4]~3"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan43~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan41~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[2][1]~4"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[2][4]~4"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[2][2]~5"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_n[1]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[2][2]~6"
@@ -3043,20 +3043,20 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[2]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[1]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[0]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal8~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal9~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[15]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[14]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[13]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[12]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[11]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal8~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal9~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[6]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[9]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[8]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[7]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_morph[5]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal8~2"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal8~3"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal9~2"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal9~3"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan61~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux44~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux44~1"
@@ -3066,9 +3066,9 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[2][1]~39"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|zc~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[2][2]~40"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal11~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal10~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal9~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal9~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal10~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|comb~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|f_kind[0]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|f_slot[1]"
@@ -3077,143 +3077,143 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|iss_last~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|m_busy"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|comb~2"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[2]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan2~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[7]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan4~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan4~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan3~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan2~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~2"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~3"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~2"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~4"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[3]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[4]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~5"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~6"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~3"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[46]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~4"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~7"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~8"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[38]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~5"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[62]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~6"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~7"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~8"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~9"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~9"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[1]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[57]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~10"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~11"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[25]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[33]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~12"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~13"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[29]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[30]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~10"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~14"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[41]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[49]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~15"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~16"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~17"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[0]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~11"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always0~12"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[16]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~18"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~19"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[19]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[20]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~20"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~21"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[32]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[39]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~22"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~23"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[43]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[44]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[60]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~24"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~25"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[31]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[63]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~26"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[27]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[28]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~27"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[8]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~28"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[24]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[56]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~29"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~30"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[5]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[6]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~31"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[11]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[12]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~32"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[9]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[15]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~33"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[13]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[14]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~34"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~35"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[40]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[47]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~36"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[48]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[55]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~37"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[10]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[58]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~38"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[26]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[34]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~39"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[36]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[35]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[59]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~40"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[53]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[37]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[61]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~41"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~42"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~43"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~44"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[51]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[45]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~45"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[52]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[54]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~46"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~47"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan8~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[17]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[23]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~48"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[21]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[22]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~49"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[18]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan18~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan24~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~3"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~4"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~5"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~6"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[19]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[20]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~7"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~8"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[5]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[6]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~9"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~10"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~11"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~12"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~13"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~2"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~14"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[11]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[12]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~3"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~15"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[59]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[35]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[39]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~16"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~17"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~4"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[46]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[53]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~18"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~19"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~20"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~5"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~6"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~7"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[36]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[45]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~8"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~21"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[27]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[31]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[63]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~9"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~10"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[40]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[48]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~22"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~23"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~11"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[9]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[41]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[49]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~12"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~13"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[10]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~24"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|span_mask~25"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[42]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[50]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~50"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~51"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~52"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~53"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_solid~54"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~14"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~15"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~16"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[54]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[51]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[55]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~17"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[37]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[29]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[61]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~18"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~19"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~20"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[38]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[30]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[62]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~21"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[52]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[44]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[43]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[47]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~22"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~23"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[28]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[60]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~24"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~25"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~26"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[8]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[15]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~27"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[13]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[14]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~28"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[0]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[7]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~29"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[3]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[4]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~30"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[1]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[57]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~31"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[25]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[33]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~32"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~33"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[18]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[21]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[22]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~34"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~35"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[2]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[58]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~36"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[26]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[34]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~37"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[16]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[56]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~38"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[24]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[32]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~39"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~40"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~41"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal0~42"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|cell_skip~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|done"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|st.StTri"
@@ -3397,7 +3397,7 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan79~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan79~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan79~2"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|efan[2]~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|efan[4]~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector96~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan58~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan58~2"
@@ -3423,33 +3423,34 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan80~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan80~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|emode~8"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|efan[2]~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|efan[4]~1"
     Warning (15720): Ignored Virtual Pin assignment to node "stim_q[22]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|sc_pend"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always4~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always4~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|j_stitch"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~2"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~3"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~4"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~5"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~6"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~7"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~8"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~9"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~10"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~11"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~12"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~13"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~14"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal23~15"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~2"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~3"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~4"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~5"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~6"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~7"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~8"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~9"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~10"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~11"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~12"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~13"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~14"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal24~15"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always4~3"
     Warning (15720): Ignored Virtual Pin assignment to node "stim_q[23]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|done~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|efan[2]~2"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|efan[2]~3"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always4~4"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|efan[4]~2"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|efan[4]~3"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector97~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector98~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector99~0"
@@ -3500,9 +3501,9 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux30~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftRight1~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftLeft1~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ng[3]~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ng[1]~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ng[2]~2"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ng[2]~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ng[3]~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ng[1]~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftLeft1~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftRight1~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ng[0]~3"
@@ -3514,8 +3515,8 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftRight1~4"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftRight1~5"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftRight1~6"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal2~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal2~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal3~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal3~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add23~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan36~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan36~1"
@@ -3526,7 +3527,7 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan60~6"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|comb~3"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector78~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always4~4"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always4~5"
     Warning (15720): Ignored Virtual Pin assignment to node "stim_q[21]"
     Warning (15720): Ignored Virtual Pin assignment to node "stim_q[19]"
     Warning (15720): Ignored Virtual Pin assignment to node "stim_q[17]"
@@ -3579,12 +3580,11 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftLeft3~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_tb[0]~5"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftLeft4~2"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always4~5"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|done~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|eb~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ea~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add79~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|f_slot[1]~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|f_slot[0]~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftLeft14~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftLeft12~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftLeft6~2"
@@ -3614,8 +3614,8 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|f_kind[1]~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add71~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector102~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal10~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal9~2"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal11~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal10~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux44~4"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux44~5"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[0][5]~43"
@@ -3627,11 +3627,11 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux28~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux29~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftLeft0~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[0][2]~48"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[0][2]~49"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[0][1]~50"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[0][0]~48"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[0][0]~49"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[0][0]~50"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftLeft0~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[0][0]~51"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[0][1]~51"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftLeft0~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[0][2]~52"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan52~0"
@@ -3652,8 +3652,8 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan50~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan50~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux44~6"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal5~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal5~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal6~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal6~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux44~7"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan39~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_ta[5]~0"
@@ -3669,23 +3669,23 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan46~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan44~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|vi~2"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][1]~22"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][2]~22"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan45~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_ta[2]~5"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_ta[2]~6"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_ta[1]~7"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|fan_ta[1]~8"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan44~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][1]~23"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][2]~23"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][5]~24"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][5]~25"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][3]~26"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][5]~26"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][5]~27"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][4]~28"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][4]~29"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][4]~30"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][1]~31"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][1]~32"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][2]~31"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][2]~32"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][2]~33"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][3]~34"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_i[1][3]~35"
@@ -3703,7 +3703,7 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan54~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan55~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][5]~53"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][5]~54"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][3]~54"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][5]~55"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][5]~56"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][4]~57"
@@ -3715,7 +3715,7 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][3]~63"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan57~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][4]~64"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][2]~65"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][1]~65"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][1]~66"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][2]~67"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|tv_j[1][1]~68"
@@ -3731,7 +3731,7 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan56~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux44~8"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|zc~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal7~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal8~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux44~9"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux45~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux45~1"
@@ -3746,7 +3746,7 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always4~7"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|always4~8"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|f_kind[1]~3"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|f_slot[1]~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|f_slot[0]~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|f_slot[1]~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|f_slot[0]~3"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|m_busy~0"
@@ -3763,173 +3763,173 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_valid~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|sc_pend_idx[5]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector66~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector67~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|sc_pend_idx[0]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|sc_pend_idx[1]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|sc_pend_idx[2]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|sc_pend_idx[3]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|sc_pend_idx[4]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector65~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[2]~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector60~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[7]~2"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~2"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector64~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[3]~3"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~3"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector63~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[4]~4"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~4"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector35~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector21~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[46]~5"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~5"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector29~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[38]~6"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~6"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector5~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[62]~7"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~7"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector66~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[1]~8"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~8"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector10~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[57]~9"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector42~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[25]~10"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector34~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[33]~11"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~9"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector38~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[29]~12"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector37~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[30]~13"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~10"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector26~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[41]~14"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~11"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector18~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[49]~15"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~12"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector67~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[0]~16"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~13"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector51~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[16]~17"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~14"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector48~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[19]~18"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~15"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector47~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[20]~19"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector35~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[32]~20"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector28~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[39]~21"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~16"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector24~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[43]~22"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~17"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector23~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[44]~23"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~18"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector7~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[60]~24"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~19"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector36~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[31]~25"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector4~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[63]~26"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~20"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector40~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[27]~27"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector39~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[28]~28"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~21"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector59~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[8]~29"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~22"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector43~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[24]~30"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector11~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[56]~31"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~23"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector62~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[5]~32"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector61~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[6]~33"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector56~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[11]~34"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector55~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[12]~35"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector58~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[9]~36"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~24"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector52~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[15]~37"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~25"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector54~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[13]~38"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector53~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[14]~39"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector27~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[40]~40"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector20~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[47]~41"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector19~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[48]~42"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~26"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector12~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[55]~43"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~27"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector57~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[10]~44"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~28"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector9~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[58]~45"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector41~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[26]~46"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector33~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[34]~47"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector31~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[36]~48"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector32~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[35]~49"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector8~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[59]~50"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~29"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector14~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[53]~51"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector30~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[37]~52"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector6~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[61]~53"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector16~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[51]~54"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector22~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[45]~55"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector15~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[52]~56"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~30"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector13~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[54]~57"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector50~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[17]~58"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[17]~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector44~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[23]~59"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector46~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[21]~60"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector45~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[22]~61"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~31"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector49~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[18]~62"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[23]~2"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~2"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector48~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[19]~3"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~3"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector47~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[20]~4"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~4"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector62~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[5]~5"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~5"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector61~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[6]~6"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~6"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector56~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[11]~7"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~7"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector55~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[12]~8"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~8"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector35~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector8~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[59]~9"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~9"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector32~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[35]~10"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~10"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector28~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[39]~11"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~11"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector21~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[46]~12"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~12"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector14~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[53]~13"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~13"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector31~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[36]~14"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~14"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector22~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[45]~15"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector40~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[27]~16"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~15"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector36~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[31]~17"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector4~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[63]~18"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~16"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector27~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[40]~19"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~17"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector19~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[48]~20"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~18"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector58~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[9]~21"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector26~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[41]~22"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector18~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[49]~23"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~19"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector57~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[10]~24"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector25~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[42]~63"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[42]~25"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~20"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector17~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[50]~64"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[50]~26"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~21"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector13~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[54]~27"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector16~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[51]~28"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector12~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[55]~29"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector30~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[37]~30"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~22"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector38~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[29]~31"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector6~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[61]~32"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector29~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[38]~33"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~23"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector37~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[30]~34"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector5~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[62]~35"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector15~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[52]~36"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector23~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[44]~37"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector24~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[43]~38"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~24"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector20~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[47]~39"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~25"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector39~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[28]~40"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector7~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[60]~41"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector59~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[8]~42"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector52~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[15]~43"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector54~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[13]~44"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector53~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[14]~45"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~26"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector67~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[0]~46"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector60~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[7]~47"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector64~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[3]~48"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector63~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[4]~49"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~27"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector66~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[1]~50"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~28"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector10~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[57]~51"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector42~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[25]~52"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector34~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[33]~53"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector49~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[18]~54"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector46~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[21]~55"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector45~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[22]~56"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~29"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector65~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[2]~57"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~30"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector9~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[58]~58"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector41~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[26]~59"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector33~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[34]~60"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector51~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[16]~61"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Decoder0~31"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector11~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[56]~62"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector43~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[24]~63"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector35~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|solid[32]~64"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|done~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|done~3"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|done~4"
@@ -3969,8 +3969,8 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftRight0~3"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftRight0~4"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ShiftRight0~5"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal1~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal1~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal2~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Equal2~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Add20~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan34~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|LessThan34~1"
@@ -3986,8 +3986,8 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|eb[3]~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector79~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector80~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ea[2]~1"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ea[2]~2"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ea[3]~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ea[3]~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector79~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|ea~3"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Selector81~0"
@@ -4286,33 +4286,33 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~5"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~6"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~7"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[16]~26"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[30]~27"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[29]~28"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[30]~26"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[16]~27"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[17]~28"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[18]~29"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[17]~30"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[19]~30"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~8"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[24]~28"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[25]~29"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[26]~30"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[23]~31"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[18]~28"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[17]~29"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[16]~30"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[19]~31"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~9"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~10"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~11"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~12"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[26]~31"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[25]~32"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[24]~33"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[23]~34"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[22]~35"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[21]~36"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~13"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nx[25]~30"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nx[24]~31"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nx[23]~32"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nx[22]~33"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nx[21]~34"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nx[20]~35"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~13"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[25]~31"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[24]~32"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[23]~33"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[22]~34"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[21]~35"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[20]~36"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~14"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~15"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~16"
@@ -4322,21 +4322,21 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nx[27]~39"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nx[26]~40"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~17"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[27]~32"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[30]~33"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[30]~32"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[29]~33"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[28]~34"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[29]~35"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[22]~36"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[18]~37"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[27]~35"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[26]~36"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[25]~37"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~18"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[17]~38"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[19]~39"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[16]~40"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[28]~37"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[27]~38"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[26]~39"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[24]~38"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[23]~39"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_ny[22]~40"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[29]~37"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[28]~38"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[27]~39"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~19"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[19]~40"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|r_nz[20]~40"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~20"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~21"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s2_degen~22"
@@ -4449,44 +4449,44 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[37]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[36]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n0[32]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[32]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[46]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[45]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[34]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[32]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[33]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[40]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[41]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[42]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[39]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[34]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[35]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[34]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[33]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[32]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[35]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[42]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[41]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[40]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[39]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[38]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[37]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n0[41]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n0[40]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n0[39]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n0[38]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n0[37]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n0[36]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[41]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[40]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[39]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[38]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[37]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[36]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n0[45]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n0[44]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n0[43]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n0[42]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[43]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[46]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[44]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[45]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[44]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[43]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[42]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[41]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[40]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[39]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[38]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[34]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[33]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[35]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n1[32]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[45]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[44]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[43]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[42]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[35]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|s1_n2[36]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|o_src[0]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|acc0[15]~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_ll_pl[0][15]"
@@ -4574,11 +4574,11 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2y[15]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux50~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2z[16]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux49~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux49~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux45~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux45~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2y[16]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2x[16]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux49~2"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux49~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2z[17]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2y[17]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2x[17]"
@@ -4616,8 +4616,8 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1y[15]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux17~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1z[16]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux13~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux13~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux10~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux10~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1y[16]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1x[16]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux16~0"
@@ -4659,18 +4659,18 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_hh_pl[0][0]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~add_lh_hlmac_pl[0][14]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_ll_pl[0][32]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~add_lh_hlmac_pl[0][27]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_hh_pl[0][9]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~add_lh_hlmac_pl[0][22]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_hh_pl[0][4]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~add_lh_hlmac_pl[0][23]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_hh_pl[0][5]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~add_lh_hlmac_pl[0][24]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_hh_pl[0][6]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~add_lh_hlmac_pl[0][23]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_hh_pl[0][5]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~add_lh_hlmac_pl[0][22]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_hh_pl[0][4]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~add_lh_hlmac_pl[0][21]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_hh_pl[0][3]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~add_lh_hlmac_pl[0][20]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_hh_pl[0][2]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~add_lh_hlmac_pl[0][27]"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_hh_pl[0][9]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~add_lh_hlmac_pl[0][26]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~mult_hh_pl[0][8]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mult0~add_lh_hlmac_pl[0][25]"
@@ -4683,7 +4683,7 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1z[19]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1y[19]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1x[19]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux13~2"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux13~0"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1z[20]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1y[20]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1x[20]"
@@ -4695,7 +4695,7 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1z[22]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1y[22]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1x[22]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux10~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux10~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1x[23]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1z[23]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l1y[23]"
@@ -4729,7 +4729,7 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2z[20]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2y[20]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2x[20]"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux45~0"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|Mux45~2"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2z[21]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2y[21]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_normals:u_normals|l2x[21]"
@@ -4976,7 +4976,7 @@ Warning (15752): Ignored 3866 Virtual Pin logic option assignments
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|vh[2][31]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|vh[1][31]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|Mux58~0"
-    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|m_step[31]~1"
+    Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|m_step[30]~1"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|vh[0][0]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|vh[2][0]"
     Warning (15720): Ignored Virtual Pin assignment to node "zhao_terrain_tess:u_tess|vh[1][0]"
@@ -5187,15 +5187,15 @@ Info (21057): Implemented 3420 device resources after synthesis - the final reso
     Info (21064): Implemented 32 RAM segments
     Info (21062): Implemented 9 DSP elements
 Info: Quartus Prime Analysis & Synthesis was successful. 0 errors, 3874 warnings
-    Info: Peak virtual memory: 4861 megabytes
-    Info: Processing ended: Mon Sep 07 07:19:55 2026
-    Info: Elapsed time: 00:02:35
-    Info: Total CPU time (on all processors): 00:12:25
+    Info: Peak virtual memory: 4905 megabytes
+    Info: Processing ended: Mon Sep 07 08:42:36 2026
+    Info: Elapsed time: 00:01:56
+    Info: Total CPU time (on all processors): 00:06:58
 
 
 +------------------------------------------+
 ; Analysis & Synthesis Suppressed Messages ;
 +------------------------------------------+
-The suppressed messages can be found in C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-21912-639243550360754689/zhao_pair_tess_normals/output_files/blockfit.map.smsg.
+The suppressed messages can be found in C:/Users/Fabian Trunz/AppData/Local/Temp/zhao-block-fit-29284-639243600351477311/zhao_pair_tess_normals/output_files/blockfit.map.smsg.
 
 

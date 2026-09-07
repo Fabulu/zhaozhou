@@ -236,3 +236,69 @@ is already correct.
 
 **The 41,731-check suite was the only one with the hole, and it was the largest
 of the four.**
+
+---
+
+## The mask landed, and it did not do what it was for
+
+**32.42 → 33.10 MHz. +2.1%.** ALM 1,579 → 1,574. The prediction above said the
+`TESS → TESS` family would move off 40.11; it went to **37.23 — the wrong
+direction.**
+
+| family | before | after |
+|---|---:|---:|
+| lattice mem → TESS | 32.42 | 33.10 |
+| **TESS → TESS** | **40.11** | **37.23** |
+| NORMALS → NORMALS | 72.72 | 85.50 |
+| TESS → NORMALS *(seam)* | 138.50 | 156.79 |
+
+### Why the prediction was wrong, precisely
+
+I derived the mask from **counting operators in the source** — 256 comparisons
+and 128 multiply sites — and CLAUDE.md's law is that measurement belongs on the
+comparison side, never the generation side. Counting `*` in RTL is not counting
+logic after synthesis, and the ALM figure says so: **five ALMs.** Quartus had
+already collapsed the double loop; there was nothing there to win.
+
+The endpoint census told me *which signals* met in `cell_solid`. It did not tell
+me *where the time was*, and those are different questions. For
+`zhao_project_core` I pulled the per-hop delays before proposing anything. For
+this block I did not, and the per-hop data for the worst path names something
+else entirely:
+
+```
+  2.515  IC    lat_mem_rtl_0|...|ram_block1a0|clk0
+  2.463  CELL  lat_mem_rtl_0|...|ram_block1a0~POR      the memory's clock-to-out
+  1.117  IC    u_tess|Add65~65|datad
+  0.800  CELL  u_tess|Add65~65|cout                     a carry chain
+  0.796  IC    u_tess|Add66~13|datad
+  0.665  CELL  u_tess|Add66~13|cout                     a second carry chain
+  0.513  CELL  u_tess|Add65~9|sumout
+```
+
+**28.080 ns of data path, and `cell_solid` is not in it.** It is a memory read
+followed by adder chains — which is the *other* repair this report already
+named:
+
+> The lattice path is a separate repair: `vy[pend_slot] <= m_y` with
+> `m_y = fx_add_sat(vh[pend_slot], …)` lands a saturating add on the same edge
+> as the memory read that feeds it.
+
+So the ranking in this report was right — the lattice family at 32.42 MHz was
+always the bigger one — and **I implemented the smaller one anyway.**
+
+### What is kept, and why
+
+The mask stays. It is bit-identical, the suites prove it (48,510 checks, and the
+coverage hole it exposed is now closed), the source is smaller, and it costs
+nothing. But it must not be recorded as a timing improvement: **it bought 2.1%
+and it was not aimed at the thing that costs 28 ns.**
+
+### The next repair, now measured rather than reasoned
+
+The memory's clock-to-out is 2.463 ns and cannot be removed — a synchronous
+lattice read is what the console does. What follows it can be: `Add65` and
+`Add66` are the `fx_add_sat` chains landing on the same edge. Registering the
+lattice sample before the add splits the path at the one place with a natural
+boundary, and the per-hop numbers are on disk to size it before it is written
+this time.
