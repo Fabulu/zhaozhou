@@ -728,6 +728,79 @@ int main(int argc, char** argv) {
                 (s.emitted.empty() || s.emitted[0].res == final_of(o)) ? 1 : 0);
   }
 
+  hdr("case 4g (V06): the old token for a REUSED slot must not touch the new owner");
+  // =========================================================================
+  // V06: "Same slot reused with a new generation. Deliver the old full token
+  // before, on, and after relevant capture/claim edges. New owner's payload,
+  // status, required mask and credits must survive."
+  //
+  // This is the case the ruling exists for in its sharpest form: the slot bits
+  // match, the generation does not, and the residual-generation predicate is
+  // what must refuse it. Cycle all 64 slots so slot 0 is genuinely reallocated
+  // with generation+1, then attack the NEW owner with the OLD full token at
+  // three different points.
+  {
+    Ob s(dut);
+    s.reset();
+    // Fill and drain a whole ring so every slot is reused once.
+    std::vector<uint16_t> first;
+    for (int i = 0; i < OWNERS; ++i) {
+      uint16_t o = s.admit(ctx_of(9800 + i), 0x1);
+      first.push_back(o);
+      s.issue_tmu(o, 0);
+      s.ret_tmu(o, 0, mkres(o * 4 + 0));
+    }
+    s.idle(1200);
+    zhao::check(s.emitted.size() == static_cast<size_t>(OWNERS),
+                "V06 the first ring drained", OWNERS, s.emitted.size());
+
+    const size_t emitted_before = s.emitted.size();
+    const uint16_t old_tok = first[0];             // slot 0, generation N
+
+    // The slot is now free; admit its successor -- same slot, generation N+1.
+    uint16_t nw = s.admit(ctx_of(9999), 0x1);
+    zhao::check(slot_of(nw) == slot_of(old_tok),
+                "V06 the successor genuinely reuses slot 0", slot_of(old_tok),
+                slot_of(nw));
+    zhao::check(gen_of(nw) != gen_of(old_tok),
+                "V06 with a different generation", 1,
+                gen_of(nw) != gen_of(old_tok) ? 1 : 0);
+
+    const uint32_t stale_before  = dut->ev_err_stale_o;
+    const uint32_t commit_before = dut->ev_commits_o;
+
+    // (1) BEFORE the new owner's own capture edge.
+    s.ret_tmu(old_tok, 0, mkres(0x0B1));
+    s.idle(3);
+    // (2) ON the same edge as the new owner's legitimate issue.
+    s.issue_tmu(nw, 0);
+    s.ret_tmu(old_tok, 0, mkres(0x0B2));
+    s.idle(3);
+    // (3) AFTER the new owner's own return has been captured.
+    s.ret_tmu(nw, 0, mkres(nw * 4 + 0));
+    s.ret_tmu(old_tok, 0, mkres(0x0B3));
+    s.idle(400);
+
+    zhao::check(dut->ev_err_stale_o >= stale_before + 3,
+                "V06 all three deliveries of the OLD token are refused as "
+                "stale -- slot match is not identity",
+                3, dut->ev_err_stale_o - stale_before);
+    zhao::check(s.emitted.size() == emitted_before + 1,
+                "V06 the new owner completes, exactly once", 1,
+                s.emitted.size() - emitted_before);
+    zhao::check(s.emitted.back().ctx == ctx_of(9999),
+                "V06 with ITS OWN context -- payload survived the attack",
+                ctx_of(9999), s.emitted.back().ctx);
+    zhao::check(!s.combined.empty()
+                    && s.combined.back().s[0] == mkres(nw * 4 + 0),
+                "V06 and its own sample row, not the old token's payload", 1,
+                (!s.combined.empty()
+                 && s.combined.back().s[0] == mkres(nw * 4 + 0)) ? 1 : 0);
+    zhao::check(dut->ev_commits_o == commit_before + 1,
+                "V06 exactly one commit -- the three stale deliveries added "
+                "none", commit_before + 1, dut->ev_commits_o);
+  }
+
   hdr("case 5/6: unsolicited -- required-but-not-issued, and not-required");
   // =========================================================================
   {
