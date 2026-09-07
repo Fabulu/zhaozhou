@@ -80,19 +80,35 @@ in the fix — both times because the instrument watched an adjacent signal that
 looked like the right one. Item 8 passing on the first attempt is much weaker
 evidence than item 5 failing twice.
 
+### `cmt_n_c[i] = cmt_n_c[i] | c4t_mask_q` → `cmt_n_c[i] = c4t_mask_q`. A second
+source committing now erases the first, so a multi-source owner can never
+assemble a complete set.
+
+Caught immediately and totally — case 1 alone fails six ways:
+
+    FAIL: case1 emitted count: expected 0x8, got 0x0
+    FAIL: case1 combine packets: expected 0x8, got 0x0
+    FAIL: case1 ticket counter (exactly one per owner): expected 0x8, got 0x0
+    FAIL: case1 island quiescent at end: expected 0x1, got 0x0
+    FAIL: case1 no live owners at end: expected 0x0, got 0x8
+
+A useful contrast with item 5 on the same bitplane, three lines apart. Breaking
+WHICH BITS are set stops the machine in the first case of the suite; breaking
+WHEN they are set changed nothing any check could see. Severity of the source
+edit is no guide to detectability — only the observable is.
+
 ## NOT yet demonstrated — stated so the gap is visible
 
 1. slot-only identity for external validation
 2. truncate membership subtraction before rejecting upper bits
 4. remove recent-claim forwarding
-6. replace same-row source OR with last-writer assignment
 7. omit combine_reserved on local candidate insertion
 9. pop a candidate without downstream storage credit
 11. advance F without a reserved packet slot
 13. reopen the namespace before one external adapter acknowledges
 14. force old broken CLUT4, alpha, nearest, or global-binding behaviour
 
-**Five of fourteen.**
+**Six of fourteen.**
 
 ## Related mutations run today outside §22.10's list
 
