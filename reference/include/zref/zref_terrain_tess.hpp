@@ -223,6 +223,97 @@ inline int morph_case(const SubpatchJob& job, int vi, int vj) {
   return 3;                // the coarse cell's diagonal midpoint
 }
 
+// ---- the LOD deviation, BOTH readings of it --------------------------------
+//
+// `zref::terrain::LodSubpatch::dev[L]` is "the largest |fine - coarse| height
+// deviation this subpatch would suffer at level L", and until 2026-09-07
+// NOTHING IN THE REPOSITORY COMPUTED IT -- not the RTL (the only driver of
+// `sp_dev1_i` in the tree is an LFSR in `zhao_prod_top.sv`) and not this
+// library (every test wrote the three numbers by hand). The quantity had one
+// sentence and no implementation.
+//
+// THE SENTENCE HAS TWO READINGS AND THIS FUNCTION IMPLEMENTS BOTH, because
+// choosing between them is an owner ruling and inventing it here would be the
+// fault this tree keeps recording. `morph_case` returns 0 on subpatch BOUNDARY
+// vertices -- geomorph applies only strictly inside, chosen for unconditional
+// crack-safety -- so the two differ exactly on the boundary ring:
+//
+//   include_boundary = false   the MORPH deviation: how far the interior moves
+//                              during a transition. Boundary vertices never
+//                              move, so they never deviate.
+//   include_boundary = true    the MESH deviation: how far the coarse MESH
+//                              departs from the fine one. The coarse mesh drops
+//                              those vertices and interpolates across them, so
+//                              they deviate like any other. Always the larger
+//                              number, and the one a projected-error selector
+//                              wants if the question is "will the player see
+//                              it".
+//
+// It is a PARAMETER rather than a default so that both are measurable on a real
+// page before anyone has to choose. See
+// reports/TERRAIN-LOD-DEVIATION-20260907.md.
+//
+// NO NEW ARITHMETIC. The coarse height at a midpoint is `coarse_height` of the
+// relevant pair and which pair it is comes from `morph_case` -- both ratified,
+// both already used by the tessellator, so this is a walk rather than a law.
+inline uint32_t lod_deviation(const ComposedLattice& lat, Surface surf, int ox, int oz,
+                              int level, bool include_boundary, SatLedger* L = nullptr) {
+  if (level <= 0) return 0u;   // dev[0] is zero by definition
+  // `detail::plane_at` is declared further down this file, so the same one-line
+  // access is written here rather than reordering a header around a helper.
+  // It is the same expression: `vj * w + vi`, the tree's lattice addressing.
+  const auto plane = [&](int pi, int pj) -> int32_t {
+    const std::size_t k =
+        static_cast<std::size_t>(pj) * static_cast<std::size_t>(lat.w) +
+        static_cast<std::size_t>(pi);
+    return surf == Surface::kUnderside ? lat.bottom[k] : lat.top[k];
+  };
+  const int s = 1 << level;
+  const int sc = s << 1;
+  uint32_t worst = 0u;
+
+  // The whole subpatch INCLUDING its border ring, so the boundary reading has
+  // something to include; the other reading skips them the way `morph_case`
+  // does.
+  for (int vj = oz; vj <= oz + kSubpatchCells; ++vj) {
+    for (int vi = ox; vi <= ox + kSubpatchCells; ++vi) {
+      if (vi < 0 || vj < 0 || vi >= lat.w || vj >= lat.h) continue;
+      const bool on_border = (vi == ox) || (vi == ox + kSubpatchCells) || (vj == oz) ||
+                             (vj == oz + kSubpatchCells);
+      if (on_border && !include_boundary) continue;
+
+      const bool xc = (vi & (sc - 1)) == 0;
+      const bool zc = (vj & (sc - 1)) == 0;
+      if (xc && zc) continue;   // the coarse level already carries this vertex
+
+      const int32_t h = plane(vi, vj);
+      int32_t hc = h;
+      if (zc) {                 // an x-midpoint
+        if (vi - s < 0 || vi + s >= lat.w) continue;
+        hc = coarse_height(plane(vi - s, vj),
+                           plane(vi + s, vj), L);
+      } else if (xc) {          // a z-midpoint
+        if (vj - s < 0 || vj + s >= lat.h) continue;
+        hc = coarse_height(plane(vi, vj - s),
+                           plane(vi, vj + s), L);
+      } else {                  // the coarse cell's diagonal midpoint
+        if (vi - s < 0 || vi + s >= lat.w || vj - s < 0 || vj + s >= lat.h) continue;
+        hc = coarse_height(plane(vi - s, vj - s),
+                           plane(vi + s, vj + s), L);
+      }
+
+      const int64_t d = static_cast<int64_t>(h) - hc;
+      const uint64_t mag = static_cast<uint64_t>(d < 0 ? -d : d);
+      // The port is 24 bits (`sp_dev1_i`), so a deviation wider than that
+      // SATURATES rather than wrapping -- a wrapped deviation would read as
+      // small and pick a level that is far too coarse.
+      const uint32_t clipped = mag > 0xFFFFFFull ? 0xFFFFFFu : static_cast<uint32_t>(mag);
+      if (clipped > worst) worst = clipped;
+    }
+  }
+  return worst;
+}
+
 // ---- the tessellation ------------------------------------------------------
 
 namespace detail {

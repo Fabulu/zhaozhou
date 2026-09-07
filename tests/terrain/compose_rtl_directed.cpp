@@ -1107,6 +1107,95 @@ int main(int argc, char** argv) {
        "G and the source id survived the normal block too", 0x00A5, long(d.nm_src_id));
   }
 
+
+  // =========================================================================
+  // H -- THE TWO READINGS OF dev[L], MEASURED ON A REAL PAGE
+  // =========================================================================
+  // TERRAIN.LOD arrives with `sp_dev1/2/3` already computed and NOTHING IN THE
+  // REPOSITORY COMPUTES THEM -- the only driver in `fpga/rtl` is an LFSR in
+  // `zhao_prod_top.sv`, and every test writes the three numbers by hand. The
+  // quantity had one sentence and no implementation until
+  // `zref::terrain::lod_deviation`.
+  //
+  // THAT SENTENCE HAS TWO READINGS, and choosing between them is an owner
+  // ruling (reports/TERRAIN-LOD-DEVIATION-20260907.md). `morph_case` returns 0
+  // on subpatch BOUNDARY vertices, so the morph deviation excludes the border
+  // ring and the mesh deviation includes it.
+  //
+  // This phase does not choose. It MEASURES BOTH on the page the rest of the
+  // file has been using, so the ruling can be made against numbers instead of
+  // against an argument -- which is the only honest thing a test can do about a
+  // question that is not its to answer.
+  {
+    std::printf("\n-- H: the two readings of dev[L] --\n");
+
+    tp::ComposedLattice ref;
+    ref.w = kEdge; ref.h = kEdge; ref.dual = true;
+    ref.wx.resize(std::size_t(kEdge));
+    ref.wz.resize(std::size_t(kEdge));
+    for (int i = 0; i < kEdge; ++i) {
+      ref.wx[std::size_t(i)] = kX0 + kStep * i;
+      ref.wz[std::size_t(i)] = kZ0 + kStep * i;
+    }
+    ref.top.resize(std::size_t(kVerts));
+    ref.bottom.resize(std::size_t(kVerts));
+    for (int k = 0; k < kVerts; ++k) {
+      ref.top[std::size_t(k)] = want[std::size_t(k)].live_top;
+      ref.bottom[std::size_t(k)] = want[std::size_t(k)].bottom;
+    }
+
+    uint32_t worst_morph[4] = {0, 0, 0, 0};
+    uint32_t worst_mesh[4] = {0, 0, 0, 0};
+    int differ = 0, subpatches = 0;
+    for (int oz = 0; oz + 8 <= kEdge - 1; oz += 8) {
+      for (int ox = 0; ox + 8 <= kEdge - 1; ox += 8) {
+        ++subpatches;
+        for (int L = 1; L < 4; ++L) {
+          const uint32_t m =
+              tp::lod_deviation(ref, tp::Surface::kTop, ox, oz, L, false);
+          const uint32_t b =
+              tp::lod_deviation(ref, tp::Surface::kTop, ox, oz, L, true);
+          if (m > worst_morph[L]) worst_morph[L] = m;
+          if (b > worst_mesh[L]) worst_mesh[L] = b;
+          if (m != b) ++differ;
+        }
+      }
+    }
+
+    ck(subpatches == 16, "H the 33x33 lattice holds sixteen 8x8-cell subpatches", 16,
+       subpatches);
+    ck(worst_mesh[1] >= worst_morph[1] && worst_mesh[2] >= worst_morph[2] &&
+           worst_mesh[3] >= worst_morph[3],
+       "H the MESH reading is never smaller than the MORPH one -- it measures the same "
+       "vertices plus the border ring, so it cannot be",
+       1,
+       (worst_mesh[1] >= worst_morph[1] && worst_mesh[2] >= worst_morph[2] &&
+        worst_mesh[3] >= worst_morph[3]) ? 1 : 0);
+    ck(worst_mesh[1] <= 0xFFFFFFu && worst_mesh[3] <= 0xFFFFFFu,
+       "H and both fit the 24-bit port TERRAIN.LOD offers", 1,
+       (worst_mesh[1] <= 0xFFFFFFu && worst_mesh[3] <= 0xFFFFFFu) ? 1 : 0);
+
+    std::printf("   level      morph        mesh    ratio\n");
+    for (int L = 1; L < 4; ++L)
+      std::printf("     %d   %10u  %10u   %6.2fx\n", L, worst_morph[L], worst_mesh[L],
+                  worst_morph[L] ? double(worst_mesh[L]) / double(worst_morph[L]) : 0.0);
+    std::printf("   the two readings differ on %d of %d (subpatch, level) pairs\n",
+                differ, subpatches * 3);
+    // AND THE NUMBERS ARE FROM THIS FIXTURE, NOT FROM TERRAIN. The page is
+    // built to reach every arm of section 3.4 -- scars that swing thousands of
+    // units between neighbouring vertices -- which is the opposite of the
+    // smooth ground a deviation is normally measured over. So "the worst value
+    // per level barely moves" is a fact about this page, not a finding about
+    // the ruling, and it is printed rather than asserted for exactly that
+    // reason. What IS a finding is that the two readings disagree on more than
+    // half the (subpatch, level) pairs at all.
+    std::printf("   (this fixture is adversarial, not terrain -- the per-level worst "
+                "barely moves here, but the readings disagree on over half the "
+                "pairs)\n");
+    std::printf("   NEITHER IS CHOSEN HERE -- see "
+                "reports/TERRAIN-LOD-DEVIATION-20260907.md\n");
+  }
+
   std::printf("\n== %d checks, %d failures ==\n", g_checks, g_fail);
   std::fflush(stdout);
 

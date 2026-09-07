@@ -86,7 +86,28 @@ the split — *"the subpatch interior moves while its border does not, so the
 border reads as a shallow crease bounded by the level's own height deviation"* —
 which reads as an argument for the second, but stops short of saying so.
 
-**Not decided here.**
+**Not decided here.** But it is now MEASURABLE:
+`zref::terrain::lod_deviation(lattice, surface, ox, oz, level, include_boundary)`
+implements both, and `compose_rtl_directed` phase H prints them side by side for
+all sixteen subpatches of a real page:
+
+| level | morph | mesh | ratio |
+|---:|---:|---:|---:|
+| 1 | 8,333,952 | 8,333,952 | 1.00x |
+| 2 | 8,336,384 | 8,336,384 | 1.00x |
+| 3 | 8,192,384 | 8,336,256 | 1.02x |
+
+The two disagree on **27 of 48** (subpatch, level) pairs, but the *worst value
+per level* — which is what the ladder actually compares — moves by at most 2%.
+
+**That is a fact about that page, not about the ruling.** The fixture is
+adversarial by construction: it exists to reach every arm of §3.4, with scars
+swinging thousands of units between neighbouring vertices, which is the opposite
+of the smooth ground a deviation is normally taken over. On real terrain the
+border ring is where the *neighbouring* subpatch's slope arrives, and the gap
+could be much wider. The number is printed rather than asserted for exactly that
+reason. What the measurement *does* establish is that the choice is not
+academic: it changes more than half the per-subpatch answers.
 
 ### 2. When is it computed — at load, or per frame?
 
@@ -129,10 +150,11 @@ answer is "per frame", because that is where `live_top` exists. **The two
 answers put the block in two different places in the chain**, which is why it is
 worth ruling before it is written rather than after.
 
-Either way it needs a `zref` model first, because there is nothing to be a
-differential against: `zref::terrain::lod_deviation(lattice, ox, oz)` returning
-the three numbers, written from `coarse_height` and `morph_case` so the law has
-one implementation rather than two.
+The `zref` model now exists — `zref::terrain::lod_deviation`, written from
+`coarse_height` and `morph_case` so the law has one implementation rather than
+two, with the reading as a **parameter** precisely because the ruling is open.
+So whichever way ruling 1 goes, the block has a differential to be written
+against on the day it is ruled, and neither answer has been quietly baked in.
 
 ## What this report does not claim
 

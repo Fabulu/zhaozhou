@@ -1,0 +1,17 @@
+Analysis & Synthesis Status : Successful - Mon Sep 07 04:37:35 2026
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : blockfit
+Top-level Entity Name : zhao_terrain_cmd
+Family : Cyclone V
+Logic utilization (in ALMs) : N/A
+Total registers : 734
+Total pins : 0
+Total virtual pins : 994
+Total block memory bits : 0
+Total DSP Blocks : 0
+Total HSSI RX PCSs : 0
+Total HSSI PMA RX Deserializers : 0
+Total HSSI TX PCSs : 0
+Total HSSI PMA TX Serializers : 0
+Total PLLs : 0
+Total DLLs : 0
