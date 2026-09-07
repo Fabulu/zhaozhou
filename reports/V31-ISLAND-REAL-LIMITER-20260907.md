@@ -93,9 +93,53 @@ composes.**
   real too; what is artefactual is treating a pin-terminated path as the block's
   internal ceiling. A registered characterisation wrapper is how that gets
   measured honestly, and four already exist in `fpga/rtl/synth/` as the pattern.
+* **A fix WAS attempted, and landed** — see below. The paragraph that follows
+  was written before it and is kept as the reasoning that got overturned.
+
 * **No fix is attempted here.** Registering perspuv's outputs changes the
   perspuv→fragrob handoff, which is an island-top protocol change rather than a
   self-contained wrapper — and the fit lane that would measure it is busy. The
   header's own note that *"the round trip goes from five clocks to six against
   NTOK = 16 slots"* shows latency there has been costed before, so this belongs
   to a pass that can measure it.
+
+
+---
+
+# REPAIRED THE SAME DAY (`4ff7d48c`)
+
+The deferral above was overturned for the same reason as §16's: only the
+**timing** confirmation needs Quartus, and the output is a `r_valid_o`/`r_ready_i`
+handshake, which makes a registered stage **self-contained**. The port list does
+not change and the island top is untouched — only latency moves, and this file's
+own header already costs that trade (*"the round trip goes from five clocks to
+six against NTOK = 16 slots"*).
+
+**A skid, not a plain register.** `r_ready_c = !r_valid_q || r_ready_i` is high
+whenever the output register will be free, so one transfer per clock survives.
+Both internal retirement sites — the free-count delta and the head advance —
+moved to the internal ready **together**, because this file records what happened
+when they were separated once: *"a count which grew without bound, `v_ready_o`
+stuck high, and `tail_q` wrapping over live entries: the lane answered 193 of 335
+fragments and then hung."*
+
+## Verified at both levels, with real pre-change runs
+
+| | before | after |
+|---|---:|---:|
+| `raster_perspuv_svc_directed` | 666 products / 335 clocks — **1.99/clk** | **identical**, 1.99/clk |
+| | 8 checks pass | 8 checks pass |
+| `island_composed_directed` | **119 checks pass** | **119 checks pass** |
+
+The throughput gate is R7's *"≥ 1.64 products/clock"* and it is met at 1.99 in
+both — the skid costs **nothing measurable**, not merely "little". The island's
+check count is identical, so nothing was quietly skipped, and its credit phase
+still reports submitted 200 / retired 200 with live peak 64 of 64 while the sink
+is deliberately shut.
+
+## Still to measure
+
+The timing benefit. That was the entire point, and only a refit shows it.
+Compare against the island's **67.57 reported / 77.30 core→core** on matched
+scope — remembering that row is four commits stale, so the refit is needed for
+both halves of the comparison.
