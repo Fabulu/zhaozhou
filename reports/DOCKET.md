@@ -3364,6 +3364,37 @@ M4 says a leaf frequency difference may not even have the right SIGN.
 
 `reports/P0B-RCP-ISSUE-STAGE-FIT-20260907.md`, `reports/G1D-COMPOSED-ISLAND-20260905.md` §4.3f.
 
+## M6 — A LOCAL CHANGE MOVED AN UNRELATED PATH FAMILY BY 2.3 ns, THROUGH PLACEMENT
+
+Measured 2026-09-07 on the two composed island fits, and it is the reason a
+composed delta needs seed replication just as a leaf delta does.
+
+**The comparison is verifiably like-for-like.** `git diff` across the two source
+commits over all fifteen island sources: **one file changed**,
+`zhao_raster_rcp24_svc.sv`. Same 1,487 virtual pins, same 15 sources, same 17
+DSP. Nothing about the scope differs.
+
+**And yet a family with no connection to that file moved out of the report.**
+Before, the island's six worst paths were palette, launched from the input port
+`pal_ld_gen_i[4]`, worst −4.977 ns; sixteen of the worst forty were palette.
+After, palette appears **zero times in 8,680 listed paths** and the worst path is
+−2.690. The reported Fmax rose 66.77 → 78.80 because the GATING FAMILY CHANGED
+IDENTITY, not because the old gating family was repaired by design.
+
+**The mechanism is placement.** A register added inside one block changes global
+placement, and port-launched paths — whose endpoints are virtual pins the fitter
+may put anywhere — are the most sensitive thing to that. The chain
+"change → different placement → unrelated family moves" is real, but it is
+roulette, not engineering, and a reseed can move it back.
+
+**The rule:** in a composed fit, a reported-Fmax delta is only attributable to a
+change if the GATING PATH FAMILY IS THE SAME before and after. When the worst
+family changes identity, the delta measures which family won the placement, and
+the honest report says the movement is real and the cause is unproven.
+
+This does not weaken M4's AREA half — +159 leaf against +14 composed on identical
+RTL is not a placement-roulette result. It does retire M4's timing half.
+
 ## M5 — THE ISLAND'S LIMITER IS NOW ONE FAMILY, AND IT IS THE COMPLETION SCAN
 
 All **forty** worst paths in the post-P0-B island launch at
