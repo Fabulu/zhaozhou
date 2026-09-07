@@ -547,3 +547,37 @@ legacy page. "Does not detect" and "has a hole" are different findings; the
 distinction is recorded so nobody widens a suite that is already right.
 
 The hole was in the LARGEST of the four, and only there.
+
+## 2026-09-07 -- V3.1 FIRST discharged, THIRD implemented
+
+FIRST's second half: four-way endpoint split of zhao_texture_v3own@v3-full.
+
+  core -> core  1,510 paths  -1.225  ->  89.09 MHz
+  core -> port    239 paths  -3.194  ->  75.79 MHz   <-- the reported number
+  port -> core    204 paths  -1.181  ->  89.44 MHz
+  port -> port     47 paths  -1.104  ->  90.06 MHz
+
+The brief's caution names the actual worst path: u_rq_tmu|wp_q[0] ->
+adm_accept_o. Ten paths end at the admission outputs and they are the ten worst
+in the fit. The chain is nameable end to end -- wp_q -> body_occ_c -> occ_o ->
+rq_occ_c==0 -> quiet_c -> adm_ready_o -> adm_accept_o -- and it is exactly the
+"broad quiescence feedback" §0 removes. Three routes found it independently.
+
+AND MY OWN O1 REPAIR SITS ON IT. Adding ld_q to occ_o widened the sum feeding
+the design's worst path. §5.2 warned in advance; recorded honestly rather than
+discovered later.
+
+THIRD implemented, which is the remedy rather than a revert:
+  - CAPACITY parameter separated from DEPTH (§5.3: BDEPTH is physical)
+  - registered lcnt_q = accepted pushes - accepted pops
+  - full_o and the new owned_empty_o both from the LOGICAL count
+  - occ_o becomes lcnt_q, so no future stage can fall out of the accounting the
+    way ld_q did -- the CLASS is removed, not just the instance
+  - no same-cycle full/pop bypass, per §5.3's explicit warning
+  - v3own's quiet_c now uses owned_empty_o (§5.1's distinction), and rq_occ_c
+    is kept as the optional diagnostic with a reasoned lint waiver
+
+NO STALENESS INTRODUCED, and the argument matters because a registered
+occupancy feeding a DRAIN is where a one-cycle lag would be a correctness bug:
+wp_q/rp_q are registers too, so the old body_occ_c at cycle N already reflected
+transfers through N-1. Same visibility, same edges.
