@@ -108,14 +108,33 @@ def parse_ports(header):
         # it are an UNPACKED array of that width. Treating an unpacked
         # dimension as packed produces a port connection of the wrong shape
         # and an elaboration error that looks like a width bug.
-        m2 = re.search(r"[A-Za-z_]\w*", re.sub(r"\[[^\]]*\]", " ", d))
-        if not m2:
+        # Bracketed groups are blanked first, so an identifier inside a packed
+        # or unpacked range ([W-1:0], [NSVC]) can never be taken for the name.
+        #
+        # THE NAME IS THE LAST IDENTIFIER, NOT THE FIRST, and that is the whole
+        # bug. Builtin types are stripped above, but a USER-DEFINED type is not
+        # a keyword and survives, so
+        #
+        #     input var zhao_guard_req_t req_i
+        #
+        # yielded a port called `zhao_guard_req_t` and the generated top then
+        # declared a one-bit wire named after the TYPE. `zhao_prod_top` failed
+        # quartus_map for exactly this, and it presents as a missing signal
+        # rather than as a parser fault -- which is why it survived two
+        # separate port changes before anyone looked here.
+        ids = re.findall(r"[A-Za-z_]\w*", re.sub(r"\[[^\]]*\]", " ", d))
+        if not ids:
             continue
-        name = m2.group(0)
-        at = d.index(name)
+        name = ids[-1]
+        # A user-defined type sits immediately in front of the name. Recorded
+        # so the wire can be declared with THAT type instead of a bare `logic`
+        # of guessed width: a struct port driven by a packed vector is a type
+        # mismatch that stops elaboration, not a warning.
+        user_type = ids[-2] if len(ids) > 1 else ""
+        at = d.rindex(name)
         packed = re.findall(r"\[[^\]]*\]", d[:at])
         unpacked = re.findall(r"\[[^\]]*\]", d[at + len(name):])
-        ports.append((direction, name, packed, unpacked, sgn))
+        ports.append((direction, name, packed, unpacked, sgn, user_type))
     return ports
 
 
@@ -285,7 +304,7 @@ def main():
         conns = []
         folds = []
         off = 0
-        for (d, name, widths, unpacked, sgn) in ports:
+        for (d, name, widths, unpacked, sgn, user_type) in ports:
             try:
                 w = width_expr(widths, params)
             except Exception as exc:
@@ -358,7 +377,14 @@ def main():
                     off += 7
             else:
                 wire = "%s_%s" % (pre, name)
-                lines.append("  logic%s [%s-1:0] %s;" % (sgn, w, wire))
+                if user_type:
+                    # A struct/typedef port gets a wire OF THAT TYPE. The old
+                    # code emitted a bare `logic` of guessed width here, which
+                    # is both the wrong width and the wrong type -- and a
+                    # struct port driven by a packed vector does not elaborate.
+                    lines.append("  %s %s;" % (user_type, wire))
+                else:
+                    lines.append("  logic%s [%s-1:0] %s;" % (sgn, w, wire))
                 conns.append(".%s(%s)" % (name, wire))
                 folds.append("(^%s)" % wire)
 
