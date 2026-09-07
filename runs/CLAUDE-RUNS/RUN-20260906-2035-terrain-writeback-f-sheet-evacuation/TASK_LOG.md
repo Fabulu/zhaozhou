@@ -2434,3 +2434,43 @@ commit `7d55fa84` — ALM **1,230**, registers **1,944**, reported Fmax **90.54*
 `u_doneq|mem_q[..]` or `u_doneq|head_q[..]` any more. **Falsifier:** if they
 still do, the DONE instance was not actually swapped or the fitter flattened the
 wrapper back.
+
+## §16.3 fit landed: area yes, clock no
+
+`@v3-rh` vs `@v3-full`: **ALM 1,230 → 1,023 (−207), registers 1,944 → 1,460
+(−484), M10K 6 → 8, reported Fmax 90.54 → 90.41.**
+
+The structural prediction held exactly — `u_doneq` appears **zero** times in the
+new path report, where it previously owned the worst internal path. The flop
+array became RAM, which is where the −484 registers went.
+
+**And it bought no clock**, which is the brief's own sentence arriving on my own
+change: *"Removing the worst path is not the same as fixing the clock."* §16.2's
+order (DONE queue first, not the multiplier) was right and it worked as an AREA
+change; it simply was not the block's limiter.
+
+**The 129.18 → 114.00 internal line is not a regression and must not be read as
+one.** A path report samples ~200 paths; `internal_paths.py` reports the worst
+internal path *among those sampled*, which is not the worst internal path in the
+design. Removing the doneq family lets a multiplier path that was always there
+become visible. Saying "15 MHz slower" would be exactly the mismatched-comparison
+error. Report: `reports/S163-TICKETQ-RH-FIT-20260907.md`.
+
+## POSITION BEFORE THE P0-B FIT
+
+Launching `zhao_raster_rcp24_svc` — the brief's first-priority scheduler change,
+on the specimen P0-A resolved.
+
+**Before:** ALM **1,041**, registers **1,101**, reported Fmax **68.46**. Gate is
+`max_alms: 650 / max_registers: 600`, already failing, and not relaxed.
+
+**Structural prediction, the only one made:** the S1 register must appear in the
+design — `s1_i_q` / `s1_ph_q` present — and the selection cone must no longer
+reach a context read address in one hop, i.e. no worst path of the shape
+`c_val[..] -> c_m.raddr_a[..]`. **Falsifier:** if that family survives, the
+register did not break the cone and the change bought nothing.
+
+**ALM and Fmax NOT predicted.** Adding a register normally costs area; whether
+the shorter cone pays for it at this block's boundary is the question, and the
+island's −3.243 family is the number that actually matters, which only a
+composed fit can answer.
