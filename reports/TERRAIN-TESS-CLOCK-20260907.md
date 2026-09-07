@@ -136,3 +136,74 @@ and could not have had.
   64-entry stand-in, chosen so the read is a memory read rather than a wire.
   The *shape* of the path is representative; its absolute delay is not
   necessarily.
+
+---
+
+## Step 1, answered: the mask can be registered at NO latency cost
+
+The report above said the registered-mask proposal "requires `ea`/`eb`/`j_s` to
+be stable one cycle before `cell_solid` is consumed, and whether they are is a
+question about the run-cell walk that this report does not answer." Answered:
+
+**They are not stable, and the reason looks fatal at first.** The enumerator's
+advance is *gated by the very signal the mask would feed*
+(`zhao_terrain_tess.sv:800`):
+
+```systemverilog
+if (cell_skip || (do_issue && iss_last)) begin
+  ...
+  if (ea >= cell_hi) begin ea <= cell_lo; ... eb <= eb + 4'd1; end
+  else               begin ea <= ea + 4'd1; end
+end
+```
+
+with `cell_skip = (emode != EmFan) && !cell_solid`. So `ea` at cycle N decides
+`cell_solid` at N, which decides whether `ea` changes at N+1. A mask registered
+from `ea` would lag it by a cycle, and skipping a void run-cell would take two
+cycles instead of one — against a comment that states the current behaviour as
+a goal: *"A void run-cell is SKIPPED here, at one cycle per skipped cell and no
+lattice read at all."*
+
+**That is the wrong way round, and the structure gives it away.** At cycle N−1
+the advance decision is already made — `cell_solid(N−1)` is known, so
+`ea(N)`/`eb(N)` are known, because they are *assigned* at N−1. The mask for
+cycle N is therefore computable at N−1 from the same next-state expression that
+already computes `ea <=` and `eb <=`.
+
+So the shape is ordinary next-state precomputation:
+
+```systemverilog
+// alongside every existing assignment to ea/eb, assign the mask for the
+// run-cell they are moving TO -- the job-start cases at lines 685-686 and
+// 713-714, the EmInner->EmFan transition, and the two advance arms.
+win_mask_q <= window_mask(ea_next, eb_next, j_s_next);
+```
+
+and the consumed test becomes one AND and one compare:
+
+```systemverilog
+cell_solid = ((solid & win_mask_q) == win_mask_q);
+```
+
+**No added latency, no change to the skip rate.** The 64 comparator groups move
+off the consumed path into a next-state cone that has a whole cycle, and the
+one-cycle void skip is preserved.
+
+### What still has to be checked before this is built
+
+* `j_s` is assigned at line 632 (`j_s <= s_new`) on a different edge from the
+  run-cell advance, so the mask's next-state expression must take the *same*
+  `j_s` the consumer will see. Getting that wrong changes which cells are
+  tested, which is a correctness bug, not a timing one.
+* `ea`/`eb` are assigned in **five** places (581-582 reset, 685-686 job start,
+  713-714 job start, and the two advance arms). Every one needs the paired mask
+  assignment or the mask goes stale — and a stale mask is a *wrong solidity
+  answer*, which emits or drops triangles.
+* The prediction stays as written: this addresses the **40.11 MHz** `TESS→TESS`
+  family only. The `32.42 MHz` lattice-memory→`vy` family is a different cone
+  and is untouched by it.
+
+That last point is why this is still not implemented in the same pass that
+found it. Five paired assignments in a state machine that emits geometry, with
+41,731 checks resting on it, is not a change to make between two fits without
+the before-measurement in hand.
