@@ -3384,9 +3384,16 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
             s_mist_cache, c.u02_frame, s_mana_ramps,
             fold_mana_m ? u02::mana_core_ramp(ms.ramp) : ms.ramp, ms.gain_pm, 1000);
         const int32_t mist_r = ms.r_px * u02::kMistFeedOfHaloPm / 1000;
+        // D9 §3: the mist is a TRAIL, so the SPEED GATE goes on the FEED and
+        // not only on the composite gain below. Pass 11 established that the
+        // plane saturates against cell_cap_pm after a few hundred frames, so
+        // at steady state the composite gain decides opacity and the feed
+        // decides EXTENT -- and "the effect covers the screen" was extent.
+        // Gating only the gain would have faded a field that was still being
+        // built at full breadth every frame.
         u02::mist_feed(c.u02_mist_buf.data(), c.u02_mist_depth.data(),
                        s_glow_assets, gfm, pm.s.x >> 8, pm.s.y >> 8, mist_r,
-                       pm.s.d);
+                       pm.s.d, u02::mist_speed_mul_pm(c.u02_speed_mm));
       }
       const int mist_gain_pm =
           u02::g_u02_mist.gain_pm * u02::mist_speed_mul_pm(c.u02_speed_mm) / 1000;

@@ -773,10 +773,32 @@ inline const MistVariant kMistVariants[] = {
 };
 inline constexpr int kMistVariantCount =
     static_cast<int>(sizeof(kMistVariants) / sizeof(kMistVariants[0]));
-// DIRECTION 7 §4 applies here too -- but with a much higher floor, because §8
-// asks for the mist at REST. The smear may thin to 38% standing still; the mist
-// is the resting haze, so it never drops below kMistSpeedBasePm.
-constexpr int kMistSpeedBasePm = 750;
+// ---- DIRECTION 9 §3: THE MIST IS A TRAIL, AND A TRAIL NEEDS MOTION -------
+// "Take that out almost entirely, just leave a tiny bit of green mist to leave
+// a bit of a trail."
+//
+// This SUPERSEDES D7 §8, which is where the 750 floor came from: §8 asked for
+// the mist AT REST, so the floor was set at three quarters and the gate did
+// almost nothing -- 750..1000 is not a speed gate, it is a rounding error with
+// a speed term attached. A stationary clip got 75% of a travelling clip's mist
+// and the plane then integrated it for hundreds of frames into a field.
+//
+// The floor is now a WHISPER, and the gate does the work the owner's sentence
+// describes: standing still leaves nearly nothing, moving lays a trail, and
+// `hasty`/`fall` -- the travelling clips whose trails the owner has praised
+// twice -- sit at the TOP of the gate and are therefore the best case rather
+// than an exemption that has to be carved out. That is the whole reason to cut
+// the mist with speed rather than with a flat reduction: the flat cut would
+// have taken the praised trails down with the rejected field.
+// ⚠ THE GATE COMPOUNDS, and it is said out loud rather than left to be
+// rediscovered: mist_speed_mul_pm is now applied TWICE -- once on the feed
+// (zhao_reel.cpp, new this pass) and once on the composite gain (D7 §4, already
+// there). So a standing clip lands near 0.18 x 0.18, not 0.18. That is the
+// authored result -- rendered on `rest` f120/f300 and on `hasty` mid-traverse
+// and chosen by looking, exactly as the ladder plates were -- but the NUMBER in
+// this constant is not the fraction you see on screen, and anyone reading it as
+// one will move it the wrong distance.
+constexpr int kMistSpeedBasePm = 180;
 inline int mist_speed_mul_pm(int32_t speed_mm) {
   if (speed_mm <= 0) return kMistSpeedBasePm;
   int32_t t = speed_mm * 1000 / kSmearSpeedFullMmPerFrame;
@@ -2178,7 +2200,7 @@ inline void mist_update(uint8_t* buf, int32_t* dbuf, uint32_t frame) {
  *  own lower cell cap so the haze stays thin enough to see through. */
 inline void mist_feed(uint8_t* buf, int32_t* dbuf, const GlowAssets& g,
                       const GlowFrame& f, int32_t cx, int32_t cy, int32_t r,
-                      int32_t splat_d) {
+                      int32_t splat_d, int feed_mul_pm) {
   if (!g.baked) return;
   const int32_t qx = cx / kMistBlock, qy = cy / kMistBlock;
   int32_t qr = r / kMistBlock;
@@ -2197,7 +2219,8 @@ inline void mist_feed(uint8_t* buf, int32_t* dbuf, const GlowAssets& g,
       if (splat_d > cd) cd = splat_d;
       int av[3], am = 0, cm = 0;
       for (int k = 0; k < 3; ++k) {
-        av[k] = f.pal[t][k] * g_u02_mist.feed_pm / 1000;
+        av[k] = f.pal[t][k] * g_u02_mist.feed_pm / 1000 * feed_mul_pm
+                / 1000;
         if (av[k] > am) am = av[k];
         if (c[k] > cm) cm = c[k];
       }
