@@ -268,7 +268,50 @@ module zhao_texture_v3own #(
   // wrap, so the gate is exactly "this allocation may proceed only when the
   // island is quiet". Widening the field would postpone wrap, not abolish it,
   // and the document says so in as many words.
-  assign adm_ready_o  = (live_cnt_q < CNTW'(OWNERS)) && (!wrap_block_c || quiet_c);
+  // ==========================================================================
+  // FOURTH, PART ONE: A REGISTERED OWNER CREDIT
+  // ==========================================================================
+  // The V3.1 recovery brief's FOURTH instruction: "separate normal owner
+  // admission from global quiet. Admission uses a REGISTERED OWNER CREDIT, a
+  // local staging credit, and registered epoch/fence permission."
+  //
+  // WHY: the four-way endpoint split of this block's own fit puts its worst
+  // path at -3.194 ns, ending at `adm_accept_o`, and ten of the ten worst
+  // paths end at these admission outputs. Every term of `adm_ready_o` is on
+  // that path.
+  //
+  // THE CREDIT IS EXACT, NOT STALE, and that distinction is the whole reason
+  // this is safe to register while the fence below is not. `credit_ok_q` is
+  // computed from `live_next_c` -- the value `live_cnt_q` is ABOUT TO TAKE --
+  // so at cycle N it answers "will there be room after this edge", which is
+  // precisely the question admission asks. Registering `live_cnt_q < OWNERS`
+  // itself would have been one cycle late and could have admitted a 65th
+  // owner; taking it from the next-state cannot.
+  logic credit_ok_q;
+
+  // THE FENCE IS NOT REGISTERED HERE, DELIBERATELY, AND THE REASON IS A
+  // ONE-CYCLE HOLE THAT A NAIVE REGISTER OPENS.
+  //
+  // `wrap_block_c` is `gen_q[tail_q] == all ones`, and it becomes true on the
+  // edge that moves `tail_q` onto the wrapping slot. A registered permission
+  // computed from it would still be asserted for the cycle in which it first
+  // becomes true, so ONE admission could pass the fence on a non-quiescent
+  // island -- which is exactly the generation-reuse hazard the fence exists to
+  // prevent, and exactly what case 19 of the adversarial bench checks
+  // ("every wrapping admission happened on a QUIESCENT island"). That check
+  // was fired on purpose before this change: deleting the fence fails it, and
+  // fails "admission was blocked for wrap while the ring was NOT full"
+  // alongside it.
+  //
+  // Closing that hole needs the fence's next state computed from the
+  // NEXT-state generation and tail, plus a phase machine that reopens for
+  // exactly one admission after quiescence -- which is why FOURTH asks for "a
+  // dedicated phase machine and producer acknowledgments" rather than a
+  // register. It is a wrap-protocol change and it is not being made in the
+  // same pass that measured the need for it.
+  //
+  // So the reduction stays on the path for now, and the credit comes off it.
+  assign adm_ready_o  = credit_ok_q && (!wrap_block_c || quiet_c);
   assign adm_fire_c   = adm_valid_i && adm_ready_o;
   assign adm_accept_o = adm_fire_c;
   // Section 5.4: "Never write a payload using next_tail while stamping the
@@ -937,6 +980,7 @@ module zhao_texture_v3own #(
       emit_q     <= '0;
       fetch_q    <= '0;
       live_cnt_q <= '0;
+      credit_ok_q <= 1'b1;   // an empty ring has room
       unf_cnt_q  <= '0;
       peak_q     <= '0;
     end else begin
@@ -960,6 +1004,9 @@ module zhao_texture_v3own #(
       // ONE delta, ONE assignment: simultaneous admission and retirement is a
       // net owner-count change of zero (section 19.7).
       live_cnt_q <= live_next_c;
+      // From the NEXT-state count, so the credit is exact rather than one
+      // cycle behind. See the note beside `adm_ready_o`.
+      credit_ok_q <= (live_next_c < CNTW'(OWNERS));
       unf_cnt_q  <= unf_cnt_q + CNTW'(adm_fire_c) - CNTW'(fetch_fire_c);
 
       // A RETAINED high-water mark. Section 19.7: "A statistic rebuilt fresh

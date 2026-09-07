@@ -581,3 +581,27 @@ NO STALENESS INTRODUCED, and the argument matters because a registered
 occupancy feeding a DRAIN is where a one-cycle lag would be a correctness bug:
 wp_q/rp_q are registers too, so the old body_occ_c at cycle N already reflected
 transfers through N-1. Same visibility, same edges.
+
+## 2026-09-07 -- FOURTH part one; the fence needs a phase machine, not a register
+
+Registered owner credit landed, taken from live_next_c so it is EXACT rather
+than one cycle late. Fire test: taking it from live_cnt_q instead trips
+a_no_live_overwrite immediately -- the 65th-owner hazard, predicted then shown.
+
+The fence is NOT registered, and the reason is in the RTL: wrap_block_c becomes
+true on the edge that moves tail_q onto the wrapping slot, so a registered
+permission would still be asserted for that cycle and ONE admission could pass
+on a non-quiescent island. That is the generation-reuse hazard.
+
+Established the net BEFORE touching the protocol: deleting the fence fails case
+19 twice by name. A phase machine (next-state gen/tail + reopen for exactly one
+admission after quiescence) is what FOURTH actually asks for, and it is not
+being written in the pass that measured the need.
+
+STATE OF THE BRIEF'S TEN INSTRUCTIONS:
+  FIRST   done -- entity attribution + four-way endpoint split
+  SECOND  done -- occ_o repair, consumer audit, omitted-pending mutation fired
+  THIRD   done -- registered logical credit, CAPACITY split from DEPTH
+  FOURTH  part one done (credit); part two (fence phase machine) specified
+  FIFTH.. not started
+  M6's test written early per §0, running as a WILL_FAIL lane
