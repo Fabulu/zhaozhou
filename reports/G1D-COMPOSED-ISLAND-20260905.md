@@ -794,6 +794,24 @@ result. No new fit was needed for anything below.
 | `zhao_texture_bilerp_lane` | 119 | 183 | 0 | 3 |
 | `zhao_texture_mosaic` | 41 | 34 | 0 | 0 |
 
+> **CORRECTED 2026-09-07 by the owner's master recovery handoff (§10.1).**
+> The table above is right; a figure derived from it was not. An earlier
+> version of this section reported "14,132 in named blocks" as
+> `27,973 − 13,459 = 14,514` — a **subtraction presented as a sum**. The
+> children's self figures actually total **14,132**, so
+> `13,459 + 14,132 = 27,591` and **382 registers (and 553 ALUTs) are
+> unaccounted for**: neither the top's own nor any depth-1 child's. Deeper
+> nodes, or rows the parser does not classify.
+>
+> The handoff put it exactly: *"keep the unexplained 382 as a remainder until
+> the full hierarchy accounts for it."*
+>
+> **A subtraction can never show a remainder, because it defines one away.**
+> That is the same shape as the anti-vacuity failures found elsewhere in this
+> session: a number that cannot fail to balance is not a balance, just as a
+> check that cannot fail is not coverage. `tools/quartus/entity_census.py` now
+> prints the remainder on its own line rather than folding it into either side.
+
 **48% of the island's 27,973 registers — 13,459 of them — sit in the top-level
 file itself, along with 34% of its ALUTs.** The top holds **four times more
 registers than the largest actual block.** That file's own header describes it
