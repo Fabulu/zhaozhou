@@ -728,3 +728,21 @@ For ANY EVEN viewport dimension, vp<<15 has >=16 trailing zeros, so mad's low
 16 bits are always zero and the rounding is UNREACHABLE. That suite uses
 256x192 and 320x200 -- all even -- so it is correct, not blind. See
 reports/PROJECT-MAD-ROUNDING-20260907.md.
+
+## 2026-09-07 -- TESS's 28 ns is the geomorph blend, measured per hop
+
+Not cell_solid. The chain is m_dab -> rescale1 -> m_hc -> m_d -> m_prod (a
+17x34 multiply) -> rescale16 -> m_y -> vy: seven arithmetic stages including a
+multiply, all on the same edge as the lattice read. Add65/66/67 plus 113 small
+carry hops.
+
+Needs AT LEAST THREE CUTS (two gives 9.4 ns stages with no margin). Boundaries
+at m_hc, m_prod, m_step. Three cycles of latency; `latency: variable` covers it.
+
+NOT implemented -- the last two attempts on this lane were written from a
+reading and this is the first end-to-end measurement. Next pass has per-hop
+numbers to size each cut and the mutation sweep to prove the suites still see a
+wrong answer afterwards.
+
+Order of learning on this block: NORMALS product register (+1.3), cell_solid
+mask (+0.7, 5 ALMs), then the measurement. Wrong order, and now written down.

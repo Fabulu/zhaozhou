@@ -302,3 +302,82 @@ lattice read is what the console does. What follows it can be: `Add65` and
 lattice sample before the add splits the path at the one place with a natural
 boundary, and the per-hop numbers are on disk to size it before it is written
 this time.
+
+---
+
+## The 28 ns is the GEOMORPH BLEND, named at last
+
+The endpoint census said `solid`, `ea`, `eg`. The per-hop walk says something
+else, and this time the whole chain is legible:
+
+```
+   cum ns   incr  type   element
+    8.187  2.463  CELL   lat_mem|ram_block1a0~PORT_...     the memory's clock-to-out
+    8.340  0.153  CELL   lat_mem|portbdataout[2]
+    9.457  1.117  IC     u_tess|Add65~65|datad
+   11.230  0.513  CELL   u_tess|Add65~9|sumout             adder 1
+   12.026  0.796  IC     u_tess|Add66~13|datad
+   13.483  0.355  CELL   u_tess|Add66~1|sumout             adder 2
+   14.576  1.093  IC     u_tess|Add67~77|datab
+   16.144  0.113  CELL   u_tess|Add67~17|cout              adder 3
+   ...     113 further hops below 0.09 ns each
+   36.267         data path = 28.080 ns
+```
+
+Three chained adders and a long carry tail. In the source that is one
+expression chain, evaluated between a memory read and a register:
+
+```systemverilog
+m_dab  = lat_h_i - v_ha                    // 34-bit subtract, straight off the RAM
+m_half = rescale1(m_dab)                   // shift, round-half-up, saturate
+m_hc   = fx_add_sat(v_ha, m_half)          // 34-bit add + two 34-bit compares
+m_d    = m_hc - vh[pend_slot]              // 34-bit subtract
+m_prod = j_morph * m_d                     // 17 x 34 MULTIPLY
+m_step = rescale16(m_prod)                 // 52-bit add, shift, two compares
+m_y    = fx_add_sat(vh[pend_slot], m_step) // 34-bit add + two compares
+vy[pend_slot] <= m_y
+```
+
+**Seven arithmetic stages including a multiply, all combinational, all on the
+same edge as the lattice read that feeds them.** That is §4.3's geomorph — the
+interpolation of the coarse cell and the blend toward it — and it is the block's
+clock.
+
+## What it would take, sized rather than hoped
+
+28.080 ns against a 10 ns period needs **at least three cuts**, not one. Two
+cuts gives three stages averaging 9.4 ns with no margin for the routing a
+composed design adds; three gives four stages near 7 ns.
+
+The natural boundaries are where the expression already names its own steps:
+
+| cut | after | what it isolates |
+|---|---|---|
+| 1 | `m_hc` | the parent interpolation: RAM read, subtract, rescale1, add-sat |
+| 2 | `m_prod` | the multiply, in its own stage, where a DSP output register is free |
+| 3 | `m_step` | rescale16's 52-bit add and saturate |
+
+**The price is three cycles of latency per vertex**, and TESS emits geometry —
+so `terrain_tess_normals`' 47,221 checks and `terrain_tess_directed`'s 6,751
+are what would have to keep passing, plus the pair's throughput assumptions.
+The block's contract declares `latency: variable`, which is what made the
+NORMALS and PAGESTREAM pipeline changes admissible, and the same sentence
+covers this.
+
+**It is not done here for the reason the last two attempts on this lane were
+wrong:** both were written from a reading, and this is the first time the chain
+has been measured end to end. The next pass has the per-hop numbers to size each
+cut before writing it, and the mutation sweep to prove the suites can still see
+a wrong answer afterwards.
+
+## What has been learned about this block, in order
+
+1. **NORMALS' product register** — measured, +1.3 MHz. The multiply was not the
+   limit, and the comment in the RTL said what a non-move would mean.
+2. **`cell_solid` as a mask** — bit-identical, five ALMs, +0.7 MHz. Derived from
+   counting operators in the source, which is the generation side.
+3. **The geomorph chain** — measured per hop, 28.080 ns of the 30.2 ns period.
+   This is the one.
+
+Two wrong guesses and one measurement, in that order, is the wrong order. The
+census names *which signals*; only the per-hop walk names *where the time is*.
