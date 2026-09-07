@@ -652,7 +652,32 @@ module zhao_texture_v3own #(
                     && (c3f_gen_q == c1f_gen_q);
 
   logic c2t_idok_c, c2t_rng_bad_c, c2t_stale_c, c2t_unsol_c, c2t_dup_c, c2t_acc_c;
-  assign c2t_idok_c    = c1t_live_q && (c1t_tgen_q == c1t_gen_q);
+  // ---- S8.2: BOTH TIME POINTS, per the owner's T2 lifetime ruling ----------
+  // The ruling: an owner's authority ends at its ordered external output
+  // transfer, and "matching a slot's residual generation bits does not extend
+  // the owner's authority after retirement."
+  //
+  // S8.2 requires C2 to check snapshot identity AND "current full-ticket
+  // membership". S8.1 gives the counterexample for each half, and neither is
+  // hypothetical hand-waving -- they are contract counterexamples:
+  //
+  //   FUTURE TOKEN  at snapshot ticket 65 is not yet live (A=65,E=64,U=1);
+  //                 before claim it is admitted (A=66,E=64,U=2). A
+  //                 CURRENT-only check now passes, though the stored row
+  //                 snapshot was never a valid snapshot of that instance.
+  //   RETIRED TOKEN at snapshot ticket 64 is live (E=64,U=1); before claim it
+  //                 retires (E=65,U=0). A SNAPSHOT-only Boolean stays true
+  //                 though authority has ended.
+  //
+  // So the snapshot pair is kept and current membership is added beside it.
+  // The brief is explicit that this is NOT already satisfied by T2 step 2:
+  // "Do not mark that requirement closed merely because ISSUE and READY
+  // eligibility now call win_live()." Those are different events.
+  //
+  // The ticket is built {gen, slot} in internal order -- S6.2's trap -- not by
+  // reusing a public owner word.
+  assign c2t_idok_c = c1t_live_q && (c1t_tgen_q == c1t_gen_q)
+                      && win_live({c1t_gen_q, c1t_slot_q});
   assign c2t_rng_bad_c = c1t_v_q && !c1t_rng_q;
   assign c2t_stale_c   = c1t_v_q && c1t_rng_q && !c2t_idok_c;
   assign c2t_unsol_c   = c1t_v_q && c1t_rng_q && c2t_idok_c
@@ -672,7 +697,8 @@ module zhao_texture_v3own #(
                       && !fwd_t_hit_c;
 
   logic c2a_idok_c, c2a_stale_c, c2a_unsol_c, c2a_dup_c, c2a_acc_c;
-  assign c2a_idok_c  = c1a_live_q && (c1a_tgen_q == c1a_gen_q);
+  assign c2a_idok_c = c1a_live_q && (c1a_tgen_q == c1a_gen_q)
+                      && win_live({c1a_gen_q, c1a_slot_q});
   assign c2a_stale_c = c1a_v_q && !c2a_idok_c;
   assign c2a_unsol_c = c1a_v_q && c2a_idok_c
                     && (((c1a_req_q & SRC_AUX) == 4'd0)
@@ -694,7 +720,8 @@ module zhao_texture_v3own #(
   // publish sequence analogous to sample returns; final_done is not used as a
   // substitute for the earlier claim while a final write is still in flight."
   logic c2f_idok_c, c2f_bad_c, c2f_acc_c;
-  assign c2f_idok_c = c1f_live_q && (c1f_tgen_q == c1f_gen_q);
+  assign c2f_idok_c = c1f_live_q && (c1f_tgen_q == c1f_gen_q)
+                      && win_live({c1f_gen_q, c1f_slot_q});
   assign c2f_acc_c  = c1f_v_q && c2f_idok_c && c1f_cbi_q
                    && !c1f_fcl_q && !c1f_fdn_q && !fwd_f_hit_c;
   assign c2f_bad_c  = c1f_v_q && !c2f_acc_c;
