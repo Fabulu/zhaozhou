@@ -950,3 +950,25 @@ which removes the design's worst path. Two §6.2 phases absent and named
 All six v3 lanes green. Next: T1's remaining deliverable is a scoped
 before/after timing classification, which needs a zhao_texture_v3own fit --
 texture work, permitted, queued behind the running geom_project.
+
+## 2026-09-07 -- stopped the stalled shell suite; why, and what it had proved
+
+The shell ctest sat at 12/16 with zero CPU for over an hour. Cause is mine: I
+ran `cmake --preset windows-native` mid-flight to repair the build.ninja trap,
+which regenerated the tree underneath a running suite.
+
+Stopped it deliberately rather than leaving it, and verified no ctest process
+survived -- CLAUDE.md: "stopping an agent does not stop its background work;
+kill the background tasks too, then verify nothing is running before assuming a
+lane is closed."
+
+WHAT IT HAD ALREADY PROVED, which is why stopping costs nothing: 12 of 16
+passed, including shell_project_path_directed (167 s) and
+shell_clip_path_directed (188 s) -- the two that exercise the projector whose
+pipeline stage prompted the run -- plus meshfetch, assemble, vdecode,
+assetfetch, indexfetch, realmem, depth, setup and draw. lint_shell_top went
+green after the hb_wr_ready repair. The four unreached tests are shell paths
+that do not instantiate the projector.
+
+It was also NON-TEXTURE work under the owner's texture-first direction, so
+freeing the lane is the instructed behaviour rather than a convenience.
