@@ -86,3 +86,26 @@ restructured):
 | 19 | `manafold-lasso`        | D9 §15 - thrown by the antennae, made of mana |
 | 20 | `manafold-blown`        | D9 §11/D5 §7 - "blown high up in the air" |
 | 21 | `manafold-taunt3`       | D9 §11 - the nodule-vocabulary taunt |
+
+## 2B-2 — built, gated, and three things the instruments caught
+
+Five clips in (17..21), all appended. `manafold-probe` extended with the death
+contract: per-strike contact, the airborne crash bound, the eternal rest's
+declared penetration, and the deform-stops check taken off the PRODUCTION
+`deformation_sample` stream. Three failable legs, all witnessed failing; control
+green, rc 0.
+
+**Three faults found, none of which a passing gate would have shown:**
+
+1. The headstand was RED on unmodified main (-87 mm vs -25 declared).
+2. The corpse breathed ONCE, at the loop seam, because the production deform
+   stream interpolates the last key toward key 0. Fixed with an opening hold.
+3. **The first bounce returned higher than the fall** — restitution 2. Every
+   gate passed through this; the TRAJECTORY PLATE is what showed it.
+
+Plus one I introduced and the gate caught inside ten minutes: reducing the blown
+clip's tumble left it nose-down at the catch, 27 mm of antenna in the dirt.
+
+**IN PROGRESS when this line was written:** blown re-rendering; the two deaths
+still need a re-render against the corrected apex tables. Next: contact sheets,
+webms, findings.
