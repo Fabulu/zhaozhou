@@ -239,3 +239,27 @@ Seven readers, and the assertions still cross-check every one of them:
 three source-reading predictions were falsified today, so no number is claimed
 here. The next v3own refit compares against **87.37 reported / 91.32 core→core**
 on matched scope.
+
+
+## Why step 2 STOPS at the ISSUE lanes
+
+The obvious next move is the four in-loop comparisons at 1032–1056
+(`gen_q[i] == c4t_gen_q` and friends). It is not being made, for two reasons.
+
+**They are not the measured limiter.** They feed `cmt_n_c` / `fdn_n_c`, and
+neither appears in the refit's worst families — the named path was the ISSUE
+lane, which is now on the window. Moving them would be a change made from
+reading source, which is the thing that was falsified three times today.
+
+**And the natural hoist is not behaviour-preserving.** Replacing
+`(c4t_slot_q == i) && (gen_q[i] == c4t_gen_q)` with `win_live({c4t_gen_q,
+c4t_slot_q})` silently adds a `live_q[c4t_slot_q]` term the original does not
+have: a stale event arriving after release but before reallocation would match
+the generation and be **accepted** today, **rejected** after. That may well be
+more correct — the site's own comment calls it *"a fault-injection and
+drain-boundary guard"* — but it is a semantic change wearing the costume of a
+refactor, and it needs its own case rather than a ride on a timing fix.
+
+An exactly-equivalent hoist does exist — lift `gen_q[c4t_slot_q] == c4t_gen_q`
+out of the loop, one 64-way select instead of 64 comparisons — and that is the
+right first move **if** the next refit names these paths. Measure, then move.
