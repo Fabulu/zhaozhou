@@ -2708,3 +2708,37 @@ simply always zero — precision at zero being a tell, not a result.
 The lesson is not "be careful". It is that **the check is cheap and the failure
 is silent**: a stale binary reports the old number with total confidence, and
 today that has now happened four separate times.
+
+## §22.9's forbidden-source check, built and self-fire-tested
+
+> "The owner skeleton's fake COMBINE and tokenized fake services must not appear
+> in the feature-live fit closure. List them explicitly in a forbidden-source
+> check for production measurements."
+
+`tools/quartus/check_forbidden_sources.py`. Current state: **36 targets, 30
+production, 6 fixture, clean** — no production closure names a fixture today.
+
+**Why it is a tool and not care.** A fixture in a production closure does not
+fail. It fits, reports ALMs and an Fmax, and every number is wrong in the
+flattering direction: a probe wrapper is smaller than what it probes, a `pair`
+harness ties off ports the real design drives, a tokenized fake service answers
+instantly where the real one stalls. It reads as a healthy measurement of a
+design nobody built. That is the repository's own "a broken instrument lies in
+ONE direction" law applied to the SOURCE LIST rather than to a parser.
+
+**A directory rule, not a name list**, because a name list must be updated by the
+person adding the next probe — the person least likely to remember. The rule
+covers files that do not exist yet.
+
+**And it proves it can FIRE, on every run.** `self_fire_test()` runs a known-bad
+closure through the same `check_text` the real audit uses; if the rule stops
+firing, `main` returns 2 and refuses to print a pass. Verified by disabling the
+rule and watching the tool refuse rather than report OK.
+
+The fire input also proves the rule DISCRIMINATES: it contains a `zhao_probe_*`
+target naming the very same file, which must NOT be flagged, so a lazy "does
+this path appear anywhere" rule fails the self-test instead of passing it.
+
+**The fire test runs on SYNTHETIC text, never on `design/fit_targets.yml`** —
+that file is read LIVE by a running fit at preflight (QUARTUS_GOTCHAS §13), so
+editing it to exercise a tool is a way to corrupt a 90-minute measurement.
