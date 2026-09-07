@@ -373,6 +373,7 @@ targets:
       # the job record. Set from that arithmetic BEFORE the fit, so the number
       # it reports is a measurement and not a target.
       max_registers: 2400
+      min_fmax_mhz: 100
       # MEASURED 2026-09-07 after the gotcha-4b repair, 2,240 s:
       #   ALM 1,629  registers 2,014  M10K 0  memory bits 0  DSP 0
       #   Fmax 97.11 MHz on `clk`
@@ -398,12 +399,12 @@ targets:
       # flight, a lattice-sized accumulator -- while not failing a block for
       # being 29 ALMs different from a guess.
       max_alms: 1800
-      #
-      # AND FMAX 97.11 MHz IS BELOW THE 100 MHz PRODUCT CLOCK. There is no
-      # min_fmax rule in fit_rules.ps1 to express that, so it is recorded here
-      # and in the contract rather than silently passing on the resource gates
-      # alone -- which is the exact false-pass this file's own header warns
-      # about, in the other direction. The suspect is the sample extraction: a
+      # AND THE CLOCK, WHICH THIS BLOCK CURRENTLY MISSES. 97.11 MHz against the
+      # 100 MHz product clock. The rule did not exist when that was measured --
+      # `fit_rules.ps1` gained `min_fmax_mhz` on 2026-09-07 precisely because
+      # this block and zhao_terrain_cmd both came back `ok` while short. It is
+      # set to the product clock rather than to what was measured, so the row
+      # reads FAIL until the block meets it, which is the truth. The suspect is the sample extraction: a
       # 64-to-1 byte-lane mux over a 512-bit register, three of them, feeding
       # the emit path combinationally. Registering the extraction would cost one
       # cycle per vertex and is the obvious first move if a board fit agrees
@@ -433,6 +434,24 @@ targets:
       # XOR reduction over 64 inputs and is the largest thing in the block.
       max_registers: 900
       max_alms: 1200
+      # MEASURED 2026-09-07, 2,551 s: ALM 1,069  registers 869  M10K 0
+      # memory bits 0  DSP 0  Fmax 90.87 MHz.
+      #
+      # THE STORAGE CLAIM HELD: zero memory bits is what "reads the list twice
+      # rather than buffering 256 records" has to look like, and it does.
+      # Registers came in at 869 against an estimate of about 640 -- 36% over,
+      # which is the CRC fold's pipeline and the beat assembler costing more
+      # than the field-by-field count suggested, and is within the ceiling.
+      #
+      # THE CLOCK IS 9% SHORT and this is where the block fails. The suspect is
+      # the CRC-32C fold: 32 bits of XOR reduction over 64 input bits, the
+      # largest combinational thing in the block, sitting directly in the beat
+      # path. Folding four bytes per cycle instead of eight, or registering the
+      # fold's output, are both one-cycle-per-beat trades against a block that
+      # reads 512 bytes per command -- but neither is done on a per-block fit's
+      # number alone, because every port here is on a virtual pin and that
+      # distorts timing in ways a composed fit does not.
+      min_fmax_mhz: 100
 
   # TERRAIN.MIPFEED is a seven-state machine with one job record and three
   # counters. If it needs memory or a DSP, something is in it that should not be.

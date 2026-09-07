@@ -91,6 +91,38 @@ sequencer never waits on a load) and 28 extra beats per frame is nothing beside
 T7's 684 KB of pages. If a measurement ever says otherwise, the skid goes in
 `S_HOLD` and nothing else changes.
 
+## Fitted, and the clock is 9% short
+
+Quartus 17.0.2, 5CSEBA6U23I7, 2,551 s:
+
+| | measured | designed for |
+|---|---:|---|
+| block memory bits | **0** | zero — it reads the list twice rather than buffering |
+| M10K | **0** | zero |
+| registers | 869 | ~640 estimated |
+| ALM | 1,069 | ≤1,200 |
+| DSP | 0 | zero |
+| **Fmax** | **90.87 MHz** | **100 MHz product clock** |
+
+**The storage claim held.** Zero memory bits is what *"reads the list twice
+rather than buffering 256 records"* has to look like, and it does — the ~7 M10K
+the buffered design would have cost are not there.
+
+Registers came in 36% above estimate: the CRC fold's pipeline and the beat
+assembler cost more than a field-by-field count suggested. Inside the ceiling.
+
+**The clock is where it fails**, and as of 2026-09-07 the gate says so:
+`fit_rules.ps1` gained `min_fmax_mhz` because this block and
+`TERRAIN.PAGESTREAM` both came back `ok` while short, and a gate that can only
+fail in one direction is half a gate.
+
+The suspect is the **CRC-32C fold** — 32 bits of XOR reduction over 64 input
+bits, the largest combinational thing here, sitting directly in the beat path.
+Folding four bytes per cycle instead of eight, or registering the fold's output,
+are both one-cycle-per-beat trades against a block that reads 512 bytes per
+command. **Neither is done on a per-block fit's number alone**: every port here
+is on a virtual pin, which distorts timing in ways a composed fit does not.
+
 ## Verdicts, all of them fired by the suite
 
 | code | meaning |

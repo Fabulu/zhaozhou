@@ -44,7 +44,7 @@ function Read-FitRules([string]$Path) {
         if ($line -match '^\s*rules:\s*$')   { $inRules = $true;  continue }
         if ($line -match '^\s*sources:\s*$') { $inRules = $false; continue }
         if ($inRules -and $null -ne $top -and
-            $line -match '^\s*(min_m10k|max_m10k|min_memory_bits|max_registers|max_alms|max_dsp|min_dsp):\s*(\d+)\s*$') {
+            $line -match '^\s*(min_m10k|max_m10k|min_memory_bits|max_registers|max_alms|max_dsp|min_dsp|min_fmax_mhz):\s*(\d+)\s*$') {
             if (-not $map.ContainsKey($top)) { $map[$top] = @{} }
             $map[$top][$Matches[1]] = [int]$Matches[2]
         }
@@ -64,6 +64,7 @@ function Test-FitRules($Row, $Rules) {
     $reg  = Get-FitMetric $Row 'registers'
     $m10k = Get-FitMetric $Row 'ramBlocks'
     $dsp  = Get-FitMetric $Row 'dspBlocks'
+    $fmax = Get-FitMetric $Row 'fmaxMhz'
 
     # The MINIMUM is the important half. A maximum catches a block that grew; a
     # minimum catches a block whose storage quietly stopped being storage,
@@ -118,6 +119,32 @@ function Test-FitRules($Row, $Rules) {
     }
     if ($Rules.ContainsKey('min_dsp') -and $null -ne $dsp -and $dsp -lt $Rules['min_dsp']) {
         $bad.Add(("DSP {0} < required {1}" -f $dsp, $Rules['min_dsp']))
+    }
+
+    # min_fmax_mhz -- ADDED 2026-09-07, AND THE REASON IS TWO BLOCKS IN A ROW.
+    #
+    # This file's own header says "a fit that meets Fmax while violating its
+    # memory/DSP structure is not a pass". The converse had no way to be said at
+    # all: there was no rule for the clock, so a block whose storage was exactly
+    # right and whose ALM count was comfortable PASSED while missing the 100 MHz
+    # product clock. zhao_terrain_pagestream came back at 97.11 MHz and
+    # zhao_terrain_cmd at 90.87, both `ok`, both 3% and 9% short, and both only
+    # noticed because a human read the number next to the row.
+    #
+    # A gate that can only fail in one direction is half a gate. This is the
+    # other half.
+    #
+    # WHOLE MHz, deliberately: `min_fmax_mhz: 100` is the product clock, and a
+    # rule file that could say 99.5 would invite tuning the gate to the
+    # measurement, which is the habit this whole file exists against. A block
+    # that wants headroom asks for more than 100, not for a fraction less.
+    #
+    # It is OPT-IN. Nothing gains this rule by existing; a block gets it when
+    # its owner writes it into design/fit_targets.yml, because a clock a block
+    # was never designed against is not a gate, it is a surprise.
+    if ($Rules.ContainsKey('min_fmax_mhz') -and $null -ne $fmax -and
+        [double]$fmax -lt [double]$Rules['min_fmax_mhz']) {
+        $bad.Add(("Fmax {0} MHz < required {1} MHz -- the resource gates can all pass while the clock does not; see this rule's note" -f $fmax, $Rules['min_fmax_mhz']))
     }
     return $bad
 }
