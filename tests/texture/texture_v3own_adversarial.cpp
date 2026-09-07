@@ -801,6 +801,54 @@ int main(int argc, char** argv) {
                 "none", commit_before + 1, dut->ev_commits_o);
   }
 
+  hdr("case 4h (V03): a FUTURE token -- not live at snapshot, live by the claim");
+  // =========================================================================
+  // V03: "A future token is invalid at snapshot, then becomes live before
+  // claim. It must still be rejected for that captured snapshot."
+  //
+  // S8.1's other counterexample, and it is REACHABLE: a return arrives for an
+  // owner that has not been admitted yet, and the admission lands before that
+  // packet reaches C2. A CURRENT-only predicate would accept it, even though
+  // the row state captured at C1 was never a valid snapshot of that instance.
+  //
+  // With V04 (case 4e) this closes the pair: both halves of the C2 predicate
+  // are load-bearing. The snapshot half refuses THIS packet; the current half
+  // refuses the retired one. That is why the ruling asks for two time points.
+  {
+    Ob s(dut);
+    s.reset();
+    const uint32_t stale_before  = dut->ev_err_stale_o;
+    const uint32_t commit_before = dut->ev_commits_o;
+
+    // After reset the next admission is slot 0, generation 1 -- so this is a
+    // token for an owner that does not exist yet.
+    const uint16_t future = owner_of(0, 1);
+    s.ret_tmu(future, 0, mkres(0x0FF));      // captured while NOT live
+    uint16_t o = s.admit(ctx_of(9400), 0x1); // ... becomes live before the claim
+
+    zhao::check(o == future,
+                "V03 the admitted owner really is the token that was faked", o,
+                future);
+    s.idle(10);
+    zhao::check(dut->ev_err_stale_o > stale_before,
+                "V03 the future token is refused FOR THAT SNAPSHOT, even though "
+                "its owner is live by the time the claim is evaluated",
+                1, dut->ev_err_stale_o > stale_before ? 1 : 0);
+    zhao::check(dut->ev_commits_o == commit_before,
+                "V03 and it commits nothing", commit_before, dut->ev_commits_o);
+
+    // The real owner still works afterwards.
+    s.issue_tmu(o, 0);
+    s.ret_tmu(o, 0, mkres(o * 4 + 0));
+    s.idle(400);
+    zhao::check(s.emitted.size() == 1,
+                "V03 the genuine owner still completes exactly once", 1,
+                s.emitted.size());
+    zhao::check(s.emitted.empty() || s.emitted[0].ctx == ctx_of(9400),
+                "V03 with its own context", 1,
+                (s.emitted.empty() || s.emitted[0].ctx == ctx_of(9400)) ? 1 : 0);
+  }
+
   hdr("case 5/6: unsolicited -- required-but-not-issued, and not-required");
   // =========================================================================
   {

@@ -1783,8 +1783,15 @@ module zhao_texture_v3own #(
       // Either outcome is a result. Silence across the bench is the "explain
       // why it is structurally prevented" branch, and must be reported as such
       // rather than as coverage.
-      a_v03_future_token_schedule : assert (
-          !(c1t_v_q && !c1t_live_q && win_live({c1t_gen_q, c1t_slot_q})));
+      // V03's detector is REMOVED for the same reason V04's was: the schedule
+      // is REACHABLE. A return for an owner that has not been admitted yet,
+      // with the admission landing before the claim, hits it at offset zero --
+      // see case 4h. Keeping the assertion would abort on legitimate traffic.
+      //
+      // So BOTH of S8.1's counterexamples occur in real traffic, and both
+      // halves of the C2 predicate are load-bearing: the snapshot half refuses
+      // the future token, the current half refuses the retired one. That is
+      // precisely why the ruling asks for two time points rather than one.
       // V04's detector is REMOVED, because the schedule turned out to be
       // REACHABLE -- see case 4e in the bench. A duplicate return captured
       // while its owner is live, with retirement landing on its C2, hits it on
