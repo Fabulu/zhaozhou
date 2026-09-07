@@ -204,6 +204,23 @@ module tb_terrain_compose
     output var logic [31:0] ts_cx, ts_cy, ts_cz,
     output var logic        ts_surface,
     output var logic [15:0] ts_src_id,
+    // THE HANDSHAKE ITSELF, because `ts_tri_ready` stopped being it. Once
+    // TERRAIN.NORMALS is in the chain the triangle is taken on
+    // `valid && bench_ready && normals_ready`, and a C++ side watching its OWN
+    // ready counted 889 triangles where 128 were emitted -- every cycle the
+    // normal block was busy read as another handshake. The bench exports the
+    // conjunction rather than leaving each consumer to rebuild it.
+    output var logic        ts_tri_taken,
+
+    // ---- TERRAIN.NORMALS -----------------------------------------------------
+    // TERRAIN.TESS's own comment calls its mesh output "exactly TERRAIN.NORMALS'
+    // input packet", so the two go together with nothing between them and the
+    // triangle stream is consumed by the normal block rather than by the bench.
+    input  var logic        nm_ready,
+    output var logic        nm_valid,
+    output var logic [31:0] nm_x, nm_y, nm_z,
+    output var logic        nm_degenerate,
+    output var logic [15:0] nm_src_id,
 
     // ---- completion and counters -------------------------------------------
     output var logic        ps_done_valid,
@@ -552,7 +569,12 @@ module tb_terrain_compose
       .cs_substance_i(cc_cs_substance),
 
       .tri_valid_o(ts_tri_valid),
-      .tri_ready_i(ts_tri_ready),
+      // THE TRIANGLE STREAM GOES TO TERRAIN.NORMALS, and `ts_tri_ready` is the
+      // bench's only so a phase can stall it independently. Both readies are
+      // ANDed rather than one overriding: a triangle is taken when the normal
+      // block can take it AND the phase is letting it through, which is what a
+      // real consumer chain does.
+      .tri_ready_i(ts_tri_eff_ready),
       .ax_o(ts_ax_s), .ay_o(ts_ay_s), .az_o(ts_az_s),
       .bx_o(ts_bx_s), .by_o(ts_by_s), .bz_o(ts_bz_s),
       .cx_o(ts_cx_s), .cy_o(ts_cy_s), .cz_o(ts_cz_s),
@@ -564,6 +586,43 @@ module tb_terrain_compose
       .lod_clamped_o              (ts_clamped),
       .job_reject_o               (ts_job_reject),
       .idle_o                     (ts_idle)
+  );
+
+  // ----------------------------------------------- TERRAIN.NORMALS --------
+  logic               nm_tri_ready, ts_tri_eff_ready;
+  assign ts_tri_eff_ready = ts_tri_ready && nm_tri_ready;
+  assign ts_tri_taken     = ts_tri_valid && ts_tri_eff_ready;
+  logic signed [31:0] nm_x_s, nm_y_s, nm_z_s;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0]        nm_samples;
+  logic               nm_idle;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  assign nm_x = nm_x_s;
+  assign nm_y = nm_y_s;
+  assign nm_z = nm_z_s;
+
+  zhao_terrain_normals u_nm (
+      .clk  (clk),
+      .rst_n(rst_n),
+
+      .tri_valid_i(ts_tri_valid && ts_tri_ready),
+      .tri_ready_o(nm_tri_ready),
+      .ax_i(ts_ax_s), .ay_i(ts_ay_s), .az_i(ts_az_s),
+      .bx_i(ts_bx_s), .by_i(ts_by_s), .bz_i(ts_bz_s),
+      .cx_i(ts_cx_s), .cy_i(ts_cy_s), .cz_i(ts_cz_s),
+      .src_id_i(ts_src_id),
+
+      .nrm_valid_o (nm_valid),
+      .nrm_ready_i (nm_ready),
+      .nx_o        (nm_x_s),
+      .ny_o        (nm_y_s),
+      .nz_o        (nm_z_s),
+      .degenerate_o(nm_degenerate),
+      .src_id_o    (nm_src_id),
+
+      .terrain_samples_evaluated_o(nm_samples),
+      .idle_o                     (nm_idle)
   );
 
   // ------------------------------------------- the played read engine ------

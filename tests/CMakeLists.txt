@@ -6564,6 +6564,7 @@ verilate(test_compose_rtl_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_compcache_front.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_tess.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_normals.sv
           ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_compose.sv)
 add_test(NAME compose_rtl_directed COMMAND test_compose_rtl_directed)
 set_tests_properties(compose_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)

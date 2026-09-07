@@ -72,6 +72,7 @@
 #include "zref/zref_terrain_patch.hpp"
 #include "zref/zref_sw_stream.hpp"
 #include "zref/zref_terrain_tess.hpp"
+#include "zref/zref_terrain_normals.hpp"
 
 namespace {
 
@@ -244,6 +245,7 @@ struct World {
     d.cfg_tess_i = 0;
     d.ts_job_valid = 0;
     d.ts_tri_ready = 0;
+    d.nm_ready = 0;
     config();
     d.eval();
     for (int i = 0; i < 4; ++i) zhao::tick(d);
@@ -994,10 +996,24 @@ int main(int argc, char** argv) {
     d.eval();
 
     std::vector<tp::MeshTri> got_tris;
+    std::vector<tp::FaceNormal> got_nrm;
+    d.nm_ready = 1;
     int quiet = 0;
     for (int c = 0; c < 200000 && quiet < 500; ++c) {
       d.eval();
-      if (d.ts_tri_valid && d.ts_tri_ready) {
+      if (d.nm_valid && d.nm_ready) {
+        tp::FaceNormal fn;
+        fn.x = int32_t(d.nm_x);
+        fn.y = int32_t(d.nm_y);
+        fn.z = int32_t(d.nm_z);
+        fn.degenerate = d.nm_degenerate != 0;
+        got_nrm.push_back(fn);
+        quiet = 0;
+      }
+      // THE HANDSHAKE, NOT THIS SIDE'S READY. With TERRAIN.NORMALS in the
+      // chain a triangle is taken on valid && bench_ready && normals_ready, and
+      // watching only the bench's ready counted 889 where 128 were emitted.
+      if (d.ts_tri_taken) {
         tp::MeshTri t;
         t.ax = int32_t(d.ts_ax); t.ay = int32_t(d.ts_ay); t.az = int32_t(d.ts_az);
         t.bx = int32_t(d.ts_bx); t.by = int32_t(d.ts_by); t.bz = int32_t(d.ts_bz);
@@ -1010,11 +1026,12 @@ int main(int argc, char** argv) {
       zhao::tick(d);
     }
     d.ts_tri_ready = 0;
+    d.nm_ready = 0;
     d.cfg_tess_i = 0;
     d.eval();
 
-    std::printf("   reference %zu triangles, machine %zu\n", want_tess.tris.size(),
-                got_tris.size());
+    std::printf("   reference %zu triangles, machine %zu; %zu face normals\n",
+                want_tess.tris.size(), got_tris.size(), got_nrm.size());
     ck(got_tris.size() == want_tess.tris.size(),
        "G the machine emitted the reference's triangle count",
        long(want_tess.tris.size()), long(got_tris.size()));
@@ -1046,6 +1063,48 @@ int main(int argc, char** argv) {
     ck(uint16_t(d.ts_src_id) == 0x00A5,
        "G and the job's source id rode through to the mesh", 0x00A5,
        long(d.ts_src_id));
+
+    // ---- AND THE FIFTH BLOCK ------------------------------------------
+    // TERRAIN.TESS's own comment calls its mesh output "exactly
+    // TERRAIN.NORMALS' input packet", so the triangle stream is consumed by the
+    // normal block rather than by this file, with nothing in between. The
+    // reference is `zref::terrain::face_normal`, which is DELIBERATELY
+    // UNNORMALISED -- the ratified quantity is the cross product before any
+    // division, and normalising here would add a rounding the reference does
+    // not have.
+    ck(got_nrm.size() == got_tris.size(),
+       "G one face normal per triangle -- a block that dropped one would leave the "
+       "shading a triangle short and nothing downstream counts triangles twice",
+       long(got_tris.size()), long(got_nrm.size()));
+
+    int bad_n = 0, printed_n = 0, degen = 0;
+    const std::size_t nn = got_nrm.size() < want_tess.tris.size() ? got_nrm.size()
+                                                                 : want_tess.tris.size();
+    for (std::size_t i = 0; i < nn; ++i) {
+      const tp::MeshTri& t = want_tess.tris[i];
+      tp::NormalVertex a{t.ax, t.ay, t.az}, b{t.bx, t.by, t.bz}, c{t.cx, t.cy, t.cz};
+      const tp::FaceNormal e = tp::face_normal(a, b, c);
+      const tp::FaceNormal g = got_nrm[i];
+      if (g.degenerate) ++degen;
+      if (g.x == e.x && g.y == e.y && g.z == e.z && g.degenerate == e.degenerate) continue;
+      ++bad_n;
+      if (printed_n < 3) {
+        ++printed_n;
+        std::printf("   G normal %zu: got (%d,%d,%d) deg=%d, want (%d,%d,%d) deg=%d\n", i,
+                    g.x, g.y, g.z, int(g.degenerate), e.x, e.y, e.z, int(e.degenerate));
+      }
+    }
+    ck(bad_n == 0,
+       "G and every face normal is zref::terrain::face_normal's, lane for lane, on the "
+       "triangles the machine itself produced -- FIVE real blocks from page bytes to "
+       "shaded geometry with no adapter in the chain",
+       0, bad_n);
+    ck(degen == 0,
+       "G with no degenerate face -- this page's ground has area everywhere, so a "
+       "degenerate normal here would be a collapsed triangle rather than flat terrain",
+       0, degen);
+    ck(uint16_t(d.nm_src_id) == 0x00A5,
+       "G and the source id survived the normal block too", 0x00A5, long(d.nm_src_id));
   }
 
   std::printf("\n== %d checks, %d failures ==\n", g_checks, g_fail);
