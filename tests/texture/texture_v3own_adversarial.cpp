@@ -601,6 +601,53 @@ int main(int argc, char** argv) {
                 0, dut->ev_err_stale_o + dut->ev_err_unsol_o + dut->ev_err_dup_o);
   }
 
+  hdr("case 4e (V04): a return that loses authority between snapshot and claim");
+  // =========================================================================
+  // The owner's T2 lifetime ruling, and its required case V04: "A token valid
+  // at snapshot loses authority before claim ... It must not claim/write the
+  // new row."
+  //
+  // S8.1's counterexample, constructed: a duplicate return is CAPTURED while
+  // its owner is still live, and the owner retires before that packet reaches
+  // C2. A snapshot-only predicate stays true across that window; the current
+  // membership check added under S8.2 is what refuses it.
+  //
+  // THE SCHEDULE IS REACHABLE, and it took one correction to find. The first
+  // attempt released out_ready BEFORE injecting the duplicate, so the owner had
+  // already retired by capture -- `c1t_live_q` false at snapshot, which is a
+  // different schedule entirely. Ten offsets passed and I briefly reported the
+  // case as structurally prevented. Injecting FIRST and releasing after hits it
+  // at offset zero.
+  {
+    Ob s(dut);
+    s.reset();
+    s.out_ready = false;                    // hold it: it cannot retire yet
+    uint16_t o = s.admit(ctx_of(9500), 0x1);
+    s.issue_tmu(o, 0);
+    s.ret_tmu(o, 0, mkres(o * 4 + 0));
+    s.idle(40);                             // COMBINE and final complete
+    const uint32_t stale_before  = dut->ev_err_stale_o;
+    const uint32_t commit_before = dut->ev_commits_o;
+
+    s.ret_tmu(o, 0, mkres(0xE0E));          // captured while LIVE ...
+    s.out_ready = true;                     // ... retires on its C2
+    s.idle(60);
+
+    zhao::check(dut->ev_err_stale_o > stale_before,
+                "V04 the return is REFUSED once its owner's authority has "
+                "ended -- residual generation bits do not extend authority",
+                1, dut->ev_err_stale_o > stale_before ? 1 : 0);
+    zhao::check(dut->ev_commits_o == commit_before,
+                "V04 and it commits nothing -- no scoreboard change, no write",
+                commit_before, dut->ev_commits_o);
+    zhao::check(s.emitted.size() == 1,
+                "V04 the owner still emits exactly once, and is not resurrected",
+                1, s.emitted.size());
+    zhao::check(s.emitted.empty() || s.emitted[0].ctx == ctx_of(9500),
+                "V04 with its own context intact", 1,
+                (s.emitted.empty() || s.emitted[0].ctx == ctx_of(9500)) ? 1 : 0);
+  }
+
   hdr("case 5/6: unsolicited -- required-but-not-issued, and not-required");
   // =========================================================================
   {

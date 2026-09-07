@@ -1785,9 +1785,19 @@ module zhao_texture_v3own #(
       // rather than as coverage.
       a_v03_future_token_schedule : assert (
           !(c1t_v_q && !c1t_live_q && win_live({c1t_gen_q, c1t_slot_q})));
-      a_v04_retired_token_schedule : assert (
-          !(c1t_v_q && c1t_live_q && (c1t_tgen_q == c1t_gen_q)
-            && !win_live({c1t_gen_q, c1t_slot_q})));
+      // V04's detector is REMOVED, because the schedule turned out to be
+      // REACHABLE -- see case 4e in the bench. A duplicate return captured
+      // while its owner is live, with retirement landing on its C2, hits it on
+      // the very first attempt. Keeping the assertion would abort on legitimate
+      // traffic; the property is now tested as behaviour instead.
+      //
+      // This corrects what I recorded an hour earlier. The first construction
+      // attempt released `out_ready` BEFORE injecting, so the owner had already
+      // retired by capture and `c1t_live_q` was false at snapshot -- the wrong
+      // schedule entirely. Ten offsets "survived" and I reported the schedule
+      // as unreached. Reversing the order hit it at offset zero.
+      //
+      // So S8.2's current-membership term is LOAD-BEARING, not belt and braces.
 
       // S13.2's THREE POSITIONS, asserted as a partition rather than trusted as
       // a naming convention. The section's warning is specific:
