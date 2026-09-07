@@ -66,6 +66,17 @@ another M10K". `Memory LABs = 0` settles that: they are not.
   padding.
 * **Nothing reads the fields** — no. All six accessors have call sites, and two
   are *comparisons*: `s0_crc != s_crc(s)` and `s_pin(s) != {PINW{1'b1}}`.
+* **The fields never actually change, so synthesis proves them constant** — no,
+  and this was the last one worth checking because it is the only mechanism by
+  which a tool may legitimately drop storage. `EV_PIN` writes
+  `s_pin(s) + PINW'(1)` and `EV_UNPIN` writes `s_pin(s) - PINW'(1)`, so the
+  pin count genuinely varies; `EV_*` also ORs `s0_bd`/`s0_f`/`s0_mips` into
+  the flags. Nothing in the word is a fixed value.
+* **Quartus complained and it was missed** — no. The map report's entire
+  warning set is 4,001 virtual-pin notices, one summary of them, and one about
+  a clock port fed by a virtual pin. **No stuck-at, no undriven net, no
+  truncation, no uninferred-RAM message naming `statram`.** The tool is silent,
+  which is itself the most uncomfortable part of this.
 
 ## What the missing bits are
 
