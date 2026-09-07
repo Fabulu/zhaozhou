@@ -1972,3 +1972,69 @@ and stresses the queues whose capacity contract was fixed today. **495 checks.**
 The recurring shape across all six gaps found today: **the check often existed,
 but in the case that could not exercise it.** That is the same failure as an
 untested detector, wearing better clothes.
+
+---
+
+## THE OWNER ANSWERED THE BLOCKING DECISION, and corrected me twice
+
+`8969dcaf` — `ZHAOZHOU_T2_ARCHITECTURE_DECISION_BRIEF_2026-09-07.txt`, 1,652
+lines. Acknowledged on the hardware branch in
+`fpga/rtl/texture/OWNER-DIRECTION-T2-LIFETIME-2026-09-07.md`.
+
+**The ruling:** an owner has authority from admission until its ordered external
+output transfer; after that, later events are stale, and *"matching a slot's
+residual generation bits does not extend the owner's authority after
+retirement."* Applies separately to TMU/AUX/FINAL at C4 and to the COMBINE
+handshake, which is a different lifecycle event.
+
+**Correction 1, and it was my framing:** *"The earlier claim 'those four guards
+must change semantics before the table can be deleted' was too strong."* Right —
+`win_gen_of_slot()` reconstructs DEAD slots' generations too, so the exact
+predicate can be kept *and* the table deleted. I had welded the policy question
+to the physical representation.
+
+**Correction 2 — my inventory was short by three, because of a SPACE.** The brief
+lists seven functional readers; I found four. The missed three are the C1
+snapshots, written `gen_q [c0t_slot_q]` — my pattern was `gen_q\[`. The brief
+anticipates it and supplies `\bgen_(q|n_c)\s*\[`. A pattern that matches nothing
+reports no problem, and that inventory was used to argue what could be removed.
+
+## T2's exact migration is DONE — `gen_q`'s 512 flip-flops are gone
+
+All seven readers now use `win_gen_of_slot()`, predicate unchanged. C1 captures
+from the same pre-edge allocator state. `fn_gen_q` classified (only consumer was
+an assertion) and moved to verification. `gen_q`/`gen_n_c` deleted from the
+synthesised design; a literal `vgen_q` survives only under `` `ifndef SYNTHESIS ``
+maintained by its **own** old-style recurrence, so the equivalence assertion is
+not circular. **496 checks pass.**
+
+The live-owner authority checks the ruling requires are step 4 and deliberately
+NOT in that commit.
+
+## ISLAND FIT LANDED — G1-D §4.3e
+
+**ALM 16,192 → 13,601 (−16%), registers 28,490 → 23,181 (−18.6%), M10K 32 → 36.**
+Reported 66.77 / core→core 75.51. **Prediction held: zero of the worst forty
+paths launch from `head_q`** — perspuv is off the composed critical path. New
+core→core limiter is internal to `zhao_raster_rcp24_svc`.
+
+Against the roadmap's benchmarks: **2.06× nominal, 1.81× redline, 1.72×
+standalone sum**, down from 2.45/2.16/2.05. Gates untouched.
+
+## POSITION BEFORE THE OWNER REFIT (fifth time today)
+
+Launching `zhao_texture_v3own` — the brief's own next action, *"prepare a matched
+owner fit"*.
+
+**Before (`22442fd0`):** reported **87.37**, core→core **91.32**, ALM **5,709**,
+FIT registers **4,863**, 17 M10K / 20,640 bits, 952 pins.
+
+**Register prediction, revised for the migration:** −512 (`gen_q` deleted) −64
+(`ftc_q` dead per §13.1) +16 (window counters) ≈ **−560**, so roughly **4,300**.
+**Falsifier:** if registers do not fall by ~500, the table did not actually leave
+synthesis and something still reads it.
+
+**ALM: not predicted.** A 64-way select is replaced by one comparison and a mux
+per site, which should also fall — but four magnitude predictions were falsified
+today against three structural ones, so only the structural claim is made:
+`gen_q` should appear in no path.
