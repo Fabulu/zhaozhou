@@ -2346,6 +2346,24 @@ set_tests_properties(lint_texture_v3bank PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# THE READY QUEUE ON ITS OWN. It had a lint lane and no directed test, and the
+# owner's control-fabric recovery architecture (2026-09-07 §5) names a defect
+# in it by hand: occ_o omits ld_q, the outstanding synchronous body read, so it
+# can report zero while it still owns a ticket. §5.2 asks for "the three-edge
+# counterexample" in the queue's directed test; this is that test, and it was
+# written to FAIL on the unrepaired block before the repair landed.
+add_executable(test_texture_v3rq_directed texture/texture_v3rq_directed.cpp)
+target_link_libraries(test_texture_v3rq_directed PRIVATE zhao_harness)
+verilate(test_texture_v3rq_directed
+  PREFIX Vzhao_texture_v3rq
+  TOP_MODULE zhao_texture_v3rq
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_v3rq_directed COMMAND test_texture_v3rq_directed)
+set_tests_properties(texture_v3rq_directed PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME lint_texture_v3rq
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_texture_v3rq

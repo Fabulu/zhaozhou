@@ -81,7 +81,32 @@ module zhao_texture_v3rq #(
   assign data_o  = h_d_q;
   assign pop_c   = pop_i && h_v_q;
   assign full_o  = (body_occ_c == (PW+1)'(DEPTH));
-  assign occ_o   = body_occ_c + (PW+1)'(h_v_q) + (PW+1)'(s_v_q);
+  // `ld_q` IS PART OF OCCUPANCY, and leaving it out was a real defect.
+  //
+  // `rp_q` advances when the read is ISSUED, not when it lands, so an entry
+  // leaves `body_occ_c` one full cycle before it appears in a head register.
+  // For that cycle it was counted in NEITHER term and `occ_o` read zero while
+  // the queue still owned the ticket. The port's own comment above names the
+  // trap exactly -- "a body-only occupancy answers a different question while
+  // looking like the right one" -- and the omission made it one term short of
+  // its own contract.
+  //
+  // THE BLOCK ALREADY KNEW. `reserved_c` below includes `ld_q` for precisely
+  // this reason, so the pending read was understood, counted and used to
+  // throttle launches; it was missing from the ONE expression anybody outside
+  // this file can see.
+  //
+  // Found by the owner's control-fabric recovery architecture (2026-09-07 §5),
+  // by hand, in a block that had a lint lane and no directed test.
+  // `tests/texture/texture_v3rq_directed.cpp` is that test now, and it was run
+  // against the unrepaired block first: 1 of 10 checks failed, on this line.
+  //
+  // CORRECTNESS ONLY, and §5.2 is explicit that it must not be sold as more:
+  // "This first patch is for correctness. It can temporarily make a
+  // combinational count wider. Do not call that the final timing
+  // architecture." §5.3's registered logical credit is the timing answer and
+  // is deliberately not attempted here.
+  assign occ_o   = body_occ_c + (PW+1)'(h_v_q) + (PW+1)'(s_v_q) + (PW+1)'(ld_q);
 
   // Reserved = held in the head registers + one possible in-flight read. The
   // pop that is happening on THIS edge frees an entry, so it is subtracted
