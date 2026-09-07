@@ -2267,3 +2267,49 @@ exactly the predicted −560.
 **The structural prediction on record:** `gen_q` should appear in NO path.
 ALM and Fmax are deliberately NOT predicted — today's score is three structural
 predictions confirmed against four magnitude predictions falsified.
+
+## THE T2 FIT LANDED — and the baseline had to be recovered, not recalled
+
+**ALM 5,709 → 3,348 (−41.4%). Core→core 91.32 → 98.18 (+7.5%). Registers
+4,863 → 3,953. M10K, bits, DSP and pins all unchanged.**
+`reports/V31-T2-OWNER-FIT-20260907.md`.
+
+**The first thing that had to be settled was WHICH baseline**, because the
+ledger holds two `v3own` rows and my written note (ALM 5,709 / 87.37 / 91.32)
+matched neither. The other row, `@v3-full`, is ALM 5,678 / 75.79 MHz at an older
+commit — close enough to my note to be mistaken for it, and wrong in both
+directions: comparing against it would have understated the ALM change and
+overstated the frequency change.
+
+The baseline came from the previous run's own log instead —
+`fit-v3own-t4-fence.log`, same target, same three sources, same script, one
+commit earlier, `RULE zhao_texture_v3own: ALM 5709`. That is a like-for-like
+predecessor and my note was a faithful record of it.
+
+**The structural prediction held exactly.** Every `*gen_q` in the top-200 path
+report is a pipeline register or a shared allocator counter; the bare 64×8
+`gen_q` table appears **zero** times, and `ftc_q` zero times — Quartus
+dead-code-eliminated it exactly as §13.1 said it would. The new worst internal
+path is `req_q[2][1] -> iss_q[18][1]`, the per-owner bitplanes.
+
+**What did not happen:** the ALM gate still fails, 3,348 against `max_alms: 1800`,
+status `failed:structure`. Not relaxed, not moved. Core→core 98.18 is still below
+the 100 MHz product clock. A 41% cut that still misses the budget by 86% is
+progress, not arrival.
+
+## Next fit launched immediately: `zhao_raster_rcp24_v3 -RowLabel v3-rh`
+
+The toolchain was idle for about a minute. This measures the §16.3 registered-head
+DONE queue swap, which I made today and no fit has ever seen — and it de-risks
+the composed island fit that follows, because rcp24 sits inside the island and an
+unmeasured regression there would confound the island number.
+
+**Baseline, `@v3-full` (commit `7d55fa84`): ALM 1,230, registers 1,944, reported
+Fmax 90.54, 6 RAM, 3 DSP.** The block's core→core was 129.18, so the reported
+number is the one the wrapper is meant to move.
+
+**Structural prediction, the only one made:** no worst path should start at
+`u_doneq|mem_q[..]` or `u_doneq|head_q[..]` any more — those were the origin of
+every worst path in the baseline, and replacing them is the entire point of the
+wrapper. **Falsifier:** if they still originate there, the DONE instance did not
+actually get swapped, or the fitter flattened the wrapper back.
