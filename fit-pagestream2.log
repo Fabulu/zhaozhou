@@ -2,3 +2,6 @@
 snapshot: 3 source(s) copied into the workspace; the live tree cannot reach this fit
 provenance guard: 3 declared source(s)
 source digest: 2fecad2b9035 over 3 file(s) -> zhao_terrain_pagestream.sources.sha256
+    RULE  zhao_terrain_pagestream: ALM 1629 > allowed 1600
+zhao_terrain_pagestream            failed:structure    2240s   ALM 1629
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (101 block(s); 1 measured this run)

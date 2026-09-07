@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "73c46da70f79eca6aae05798f32c015e86904c80",
-    "newestRunClean":  true,
+    "newestRunCommit":  "5cd5582763ed69a53ddb59037cfaf91f9d28ce64",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1085,18 +1085,26 @@
                    },
                    {
                        "module":  "zhao_terrain_pagestream",
-                       "status":  "incomplete:failed:quartus_map.exe",
-                       "sourceCommit":  "73c46da70f79eca6aae05798f32c015e86904c80",
-                       "rtlCleanAtHead":  true,
-                       "sourceDigest":  "b877d30798959ebf3bef86060efd21064126782152eeb9ff436a225bd0295b1d",
-                       "seconds":  30.1,
+                       "status":  "failed:structure",
+                       "sourceCommit":  "5cd5582763ed69a53ddb59037cfaf91f9d28ce64",
+                       "rtlCleanAtHead":  false,
+                       "sourceDigest":  "2fecad2b9035848e29b85a7336fdec044454e52fefaf8d101af65b63b4504396",
+                       "seconds":  2240,
                        "sourcesHashed":  3,
-                       "partial":  true,
-                       "partialStage":  "analysis_and_synthesis",
-                       "registers":  null,
-                       "blockMemoryBits":  null,
-                       "dspBlocks":  null,
-                       "virtualPins":  null
+                       "alms":  1629,
+                       "registers":  2014,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  0,
+                       "virtualPins":  724,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  97.11,
+                       "fmaxClock":  "clk",
+                       "ruleViolations":  [
+                                              "ALM 1629 \u003e allowed 1600"
+                                          ]
                    },
                    {
                        "module":  "zhao_terrain_patch",

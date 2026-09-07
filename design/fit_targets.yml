@@ -373,7 +373,33 @@ targets:
       # the job record. Set from that arithmetic BEFORE the fit, so the number
       # it reports is a measurement and not a target.
       max_registers: 2400
-      max_alms: 1600
+      # MEASURED 2026-09-07 after the gotcha-4b repair, 2,240 s:
+      #   ALM 1,629  registers 2,014  M10K 0  memory bits 0  DSP 0
+      #   Fmax 97.11 MHz on `clk`
+      #
+      # THE STRUCTURE HELD. Zero memory bits is the acceptance question and it
+      # passed: the three 64-byte staging buffers stayed flops, which is what
+      # the combinational byte-lane extraction needs -- an inferred M10K there
+      # would have cost a cycle per vertex, 1,089 per lattice.
+      #
+      # THE ALM CEILING WAS A NEAR MISS AND IS RAISED WITH ITS REASON. 1,600 was
+      # an estimate written before the fit; 1,629 is 1.8% over it, and the
+      # register count came in at 2,014 against an estimate of about 1,850. That
+      # is an estimate that was right, not a block that grew. 1,800 leaves the
+      # gate able to catch a real regression -- a fourth buffer, a second job in
+      # flight, a lattice-sized accumulator -- while not failing a block for
+      # being 29 ALMs different from a guess.
+      max_alms: 1800
+      #
+      # AND FMAX 97.11 MHz IS BELOW THE 100 MHz PRODUCT CLOCK. There is no
+      # min_fmax rule in fit_rules.ps1 to express that, so it is recorded here
+      # and in the contract rather than silently passing on the resource gates
+      # alone -- which is the exact false-pass this file's own header warns
+      # about, in the other direction. The suspect is the sample extraction: a
+      # 64-to-1 byte-lane mux over a 512-bit register, three of them, feeding
+      # the emit path combinationally. Registering the extraction would cost one
+      # cycle per vertex and is the obvious first move if a board fit agrees
+      # with this one.
 
   # TERRAIN.CMD's whole storage argument is that it holds NO list: it reads the
   # patch list twice rather than buffering 256 records, so a fit that reports

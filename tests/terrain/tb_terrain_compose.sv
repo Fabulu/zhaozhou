@@ -1,0 +1,357 @@
+// tb_terrain_compose.sv -- TERRAIN.PAGESTREAM feeding TERRAIN.PATCH.
+//
+// ---------------------------------------------------------------------------
+// WHAT THIS CLOSES
+// ---------------------------------------------------------------------------
+// `tests/terrain/tb_terrain_world.sv`'s header has said since it was written:
+//
+//     NOT composed, and the reason is a MISSING BLOCK rather than a choice:
+//     TERRAIN.SEQ's `is_*` patch issue cannot reach TERRAIN.PATCH, because
+//     nothing in the tree turns a resident page slot into TERRAIN.PATCH's
+//     `vtx_*` lattice intake ... the chain PATCH -> COMPCACHE -> LOD -> TESS
+//     -> NORMALS is reachable only from a harness on BOTH ends, which is
+//     decoration rather than composition.
+//
+// The missing block landed on 2026-09-07. `zhao_terrain_pagestream` reads
+// layers A, B and C out of a pool slot and emits exactly the three planes
+// TERRAIN.PATCH's compose lane takes, one vertex at a time, on the same beat.
+// So the two go together with no glue at all on the height path, and this bench
+// is the first place §3.4's composition runs on REAL PAGE BYTES rather than on
+// a lattice a harness invented.
+//
+// ---------------------------------------------------------------------------
+// WHAT IS STILL HARNESS, AND WHY IT IS NOT PRETENDING OTHERWISE
+// ---------------------------------------------------------------------------
+// TWO of TERRAIN.PATCH's inputs do not come from the page and are driven here:
+//
+//   `wx_i` / `wz_i`  the vertex's PLACED world position. It comes from the
+//                    island directory and the patch envelope -- not from
+//                    layers A, B or C -- so the streamer has no business
+//                    producing it and does not. The bench places the lattice on
+//                    a declared grid and the test knows the same law.
+//
+//   `dual_i`         whether the page is dual-surface. It is a flag on the page
+//                    header and on T5's patch record (`kFlagDual`), neither of
+//                    which the streamer reads. A knob here, and the fact that
+//                    nothing in the tree routes that flag from the record to
+//                    the compose lane is a FINDING rather than a convenience.
+//
+// The field list is EMPTY. TERRAIN.PATCH's §3.4 chain is
+// `live_top = max(compose_top + SUM field lanes, fx(bottom))`, and with no
+// accepted programs there are no lanes -- so this bench measures the
+// `compose_top` half exactly, against `zref::terrain::compose_vertex` with the
+// same empty list. The field half needs FIELD.SEQ.EARTH, which is a different
+// lane.
+`default_nettype none
+
+module tb_terrain_compose
+  import zhao_pkg::*;
+(
+    input var logic clk,
+    input var logic rst_n,
+
+    // ---- the page-pool image ----------------------------------------------
+    input  var logic        mw_en,
+    input  var logic [13:0] mw_addr,
+    input  var logic [63:0] mw_data,
+
+    input var logic [31:0] cfg_vram_window_base_i,
+    input var logic [7:0]  cfg_grant_hold_i,
+    input var logic [7:0]  cfg_rd_latency_i,
+    input var logic [7:0]  cfg_rd_gap_i,
+
+    // ---- DUT configuration -------------------------------------------------
+    input var logic [2:0]  cfg_vram_client_i,
+    input var logic [31:0] cfg_epoch_i,
+    input var logic        cfg_dual_i,        // the flag nothing routes yet
+
+    // The lattice's placement, which is the island directory's business and not
+    // the streamer's. `wx = x0 + vj * step`, `wz = z0 + vi * step`, all fx16 --
+    // vj is the COLUMN and vi the ROW, which is the one place this bench has to
+    // know the scan's shape.
+    input var logic signed [31:0] cfg_x0_i,
+    input var logic signed [31:0] cfg_z0_i,
+    input var logic signed [31:0] cfg_step_i,
+
+    // ---- the job -----------------------------------------------------------
+    input  var logic        j_valid,
+    output var logic        j_ready,
+    input  var logic [10:0] j_slot,
+    input  var logic [ 7:0] j_gen,
+    input  var logic [31:0] j_epoch,
+    input  var logic [31:0] j_src_id,
+
+    // ---- the composed vertex out -------------------------------------------
+    output var logic        st_valid,
+    input  var logic        st_ready,
+    output var logic [31:0] st_top,
+    output var logic [31:0] st_bottom,
+    output var logic [31:0] st_compose_top,
+    output var logic        st_dirty,
+    output var logic [15:0] st_src_id,
+    output var logic [15:0] subpatch_dirty,
+
+    // what the STREAMER said about the same vertex, for the comparison
+    output var logic [15:0] v_base,
+    output var logic [15:0] v_scar,
+    output var logic [15:0] v_bottom,
+    output var logic [ 5:0] v_vi,
+    output var logic [ 5:0] v_vj,
+    output var logic        v_last,
+
+    // ---- completion and counters -------------------------------------------
+    output var logic        ps_done_valid,
+    input  var logic        ps_done_ready,
+    output var logic        ps_done_ok,
+    output var logic [ 3:0] ps_done_verdict,
+    output var logic [31:0] ps_lattices,
+    output var logic [31:0] ps_vertices,
+    output var logic [31:0] pt_samples,
+    output var logic [ 4:0] pt_fields_active,
+    output var logic        pt_idle
+);
+
+  localparam int unsigned SLOTW = 11;
+  localparam int unsigned GENW  = 8;
+  localparam int unsigned IMG_WORDS = 4 * 2672;
+  localparam int unsigned VW = $clog2(IMG_WORDS);
+
+  logic [63:0] vram_mem [IMG_WORDS];
+  always_ff @(posedge clk) if (mw_en) vram_mem[mw_addr] <= mw_data;
+
+  // ------------------------------------------------ TERRAIN.PAGESTREAM -----
+  // The played engine reads `valid` and `addr`; client, length and byte mask
+  // are the guard's business and this models the fabric.
+  /* verilator lint_off UNUSEDSIGNAL */
+  zhao_guard_req_t psg_req;
+  /* verilator lint_on UNUSEDSIGNAL */
+  zhao_guard_rsp_t psg_rsp;
+  logic            psg_beat_valid, psg_beat_last;
+  logic [63:0]     psg_beat_data;
+
+  logic               ps_v_valid, ps_v_ready;
+  logic signed [15:0] ps_base, ps_scar, ps_bottom;
+  logic [5:0]         ps_vi, ps_vj;
+  logic               ps_last;
+  // The streamer's identity passthrough and its other counters are checked by
+  // its OWN differential; this bench is about the height path, and reading them
+  // here would be a second place they can disagree.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic               ps_first;
+  logic [SLOTW-1:0]   ps_v_slot, ps_d_slot;
+  logic [GENW-1:0]    ps_v_gen, ps_d_gen;
+  logic [31:0]        ps_v_epoch, ps_d_epoch, ps_d_src;
+  logic [31:0]        ps_refused, ps_bursts, ps_denied, ps_incomplete;
+  logic               ps_idle;
+  // TERRAIN.PATCH's `src_id_i` is SIXTEEN bits and the streamer carries
+  // thirty-two -- the low half is passed and the high half is not, which is a
+  // real narrowing on the seam and is named here rather than left to a
+  // truncation nobody wrote down.
+  logic [31:0]        ps_v_src;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  assign v_base   = ps_base;
+  assign v_scar   = ps_scar;
+  assign v_bottom = ps_bottom;
+  assign v_vi     = ps_vi;
+  assign v_vj     = ps_vj;
+  assign v_last   = ps_last;
+
+  zhao_terrain_pagestream #(
+      .REGION_BASE (27'h400_0000),
+      .REGION_SLOTS(1024),
+      .SLOTW       (SLOTW),
+      .GENW        (GENW)
+  ) u_ps (
+      .clk  (clk),
+      .rst_n(rst_n),
+
+      .cfg_vram_client_i(zhao_client_e'(cfg_vram_client_i)),
+      .cfg_epoch_i      (cfg_epoch_i),
+
+      .j_valid_i (j_valid),
+      .j_ready_o (j_ready),
+      .j_slot_i  (j_slot),
+      .j_gen_i   (j_gen),
+      .j_epoch_i (j_epoch),
+      .j_src_id_i(j_src_id),
+
+      .guard_req_o (psg_req),
+      .guard_rsp_i (psg_rsp),
+      .beat_valid_i(psg_beat_valid),
+      .beat_data_i (psg_beat_data),
+      .beat_last_i (psg_beat_last),
+
+      .v_valid_o (ps_v_valid),
+      .v_ready_i (ps_v_ready),
+      .v_base_o  (ps_base),
+      .v_scar_o  (ps_scar),
+      .v_bottom_o(ps_bottom),
+      .v_vi_o    (ps_vi),
+      .v_vj_o    (ps_vj),
+      .v_first_o (ps_first),
+      .v_last_o  (ps_last),
+      .v_slot_o  (ps_v_slot),
+      .v_gen_o   (ps_v_gen),
+      .v_epoch_o (ps_v_epoch),
+      .v_src_id_o(ps_v_src),
+
+      .done_valid_o  (ps_done_valid),
+      .done_ready_i  (ps_done_ready),
+      .done_slot_o   (ps_d_slot),
+      .done_gen_o    (ps_d_gen),
+      .done_epoch_o  (ps_d_epoch),
+      .done_ok_o     (ps_done_ok),
+      .done_verdict_o(ps_done_verdict),
+      .done_src_id_o (ps_d_src),
+
+      .lattices_streamed_o(ps_lattices),
+      .lattices_refused_o (ps_refused),
+      .vertices_streamed_o(ps_vertices),
+      .bursts_read_o      (ps_bursts),
+      .guard_denied_o     (ps_denied),
+      .incomplete_o       (ps_incomplete),
+      .idle_o             (ps_idle)
+  );
+
+  // ------------------------------------------------- TERRAIN.PATCH ---------
+  // NO GLUE ON THE HEIGHT PATH. base/scar/bottom/vi/vj go straight across --
+  // which is the whole reason the streamer emits three planes on one beat
+  // instead of one plane per pass.
+  logic signed [31:0] wx_c, wz_c;
+  assign wx_c = cfg_x0_i + (cfg_step_i * signed'({26'd0, ps_vj}));
+  assign wz_c = cfg_z0_i + (cfg_step_i * signed'({26'd0, ps_vi}));
+
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic        pt_fld_add_ready, pt_fld_accept, pt_fld_reject, pt_fld_ready;
+  logic        pt_fld_covers;
+  logic [15:0] pt_trace_id, pt_trace_cmd;
+  logic [31:0] pt_trace_hash, pt_rejected;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  logic signed [31:0] pt_top, pt_bottom, pt_compose_top;
+  assign st_top         = pt_top;
+  assign st_bottom      = pt_bottom;
+  assign st_compose_top = pt_compose_top;
+
+  zhao_terrain_patch u_pt (
+      .clk  (clk),
+      .rst_n(rst_n),
+
+      .list_clear_i(1'b0),
+      .patch_id_i  (16'd0),
+
+      .fld_add_valid_i(1'b0),
+      .fld_add_ready_o(pt_fld_add_ready),
+      .fld_add_x0_i   (32'sd0),
+      .fld_add_z0_i   (32'sd0),
+      .fld_add_x1_i   (32'sd0),
+      .fld_add_z1_i   (32'sd0),
+      .fld_add_hash_i (32'd0),
+      .fld_add_cmd_i  (16'd0),
+
+      .fld_add_accept_o(pt_fld_accept),
+      .fld_add_reject_o(pt_fld_reject),
+      .fields_active_o (pt_fields_active),
+
+      .trace_patch_id_o   (pt_trace_id),
+      .trace_hash_o       (pt_trace_hash),
+      .trace_cmd_o        (pt_trace_cmd),
+      .programs_rejected_o(pt_rejected),
+
+      .vtx_valid_i(ps_v_valid),
+      .vtx_ready_o(ps_v_ready),
+      .base_i     (ps_base),
+      .scar_i     (ps_scar),
+      .bottom_i   (ps_bottom),
+      .dual_i     (cfg_dual_i),
+      .wx_i       (wx_c),
+      .wz_i       (wz_c),
+      .vi_i       (ps_vi),
+      .vj_i       (ps_vj),
+      .src_id_i   (ps_v_src[15:0]),
+
+      // THE FIELD LANE, TIED OFF. With no accepted programs there is no lane,
+      // and §3.4's `live_top` collapses to `compose_top` -- which is exactly
+      // the half this bench can measure against a page.
+      .fld_valid_i (1'b0),
+      .fld_ready_o (pt_fld_ready),
+      .fld_height_i(32'sd0),
+
+      .fld_covers_o(pt_fld_covers),
+
+      .st_valid_o     (st_valid),
+      .st_ready_i     (st_ready),
+      .top_o          (pt_top),
+      .bottom_o       (pt_bottom),
+      .compose_top_o  (pt_compose_top),
+      .st_dirty_o     (st_dirty),
+      .st_src_id_o    (st_src_id),
+      .subpatch_dirty_o(subpatch_dirty),
+
+      .terrain_samples_evaluated_o(pt_samples),
+      .idle_o                     (pt_idle)
+  );
+
+  // ------------------------------------------- the played read engine ------
+  logic          rg_fwd;
+  logic [7:0]    rg_hold;
+  logic          rg_ok_q, rg_viol_q;
+  logic          rg_busy;
+  logic [7:0]    rg_wait;
+  logic [2:0]    rg_beat;
+  logic [VW-1:0] rg_word, rg_idx;
+
+  assign psg_rsp.ready     = !rg_fwd;
+  assign psg_rsp.ok        = rg_ok_q;
+  assign psg_rsp.violation = rg_viol_q;
+  assign rg_idx = rg_word + {{(VW-3){1'b0}}, rg_beat};
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      rg_fwd    <= 1'b0;
+      rg_hold   <= 8'd0;
+      rg_ok_q   <= 1'b0;
+      rg_viol_q <= 1'b0;
+      rg_busy   <= 1'b0;
+      rg_wait   <= 8'd0;
+      rg_beat   <= 3'd0;
+      rg_word   <= '0;
+      psg_beat_valid <= 1'b0;
+      psg_beat_data  <= 64'd0;
+      psg_beat_last  <= 1'b0;
+    end else begin
+      rg_ok_q        <= 1'b0;
+      rg_viol_q      <= 1'b0;
+      psg_beat_valid <= 1'b0;
+      psg_beat_last  <= 1'b0;
+
+      if (rg_fwd) begin
+        if (rg_hold != 8'd0) rg_hold <= rg_hold - 8'd1;
+        else                 rg_fwd  <= 1'b0;
+      end else if (psg_req.valid) begin
+        rg_ok_q <= 1'b1;
+        rg_fwd  <= 1'b1;
+        rg_hold <= cfg_grant_hold_i;
+        rg_busy <= 1'b1;
+        rg_wait <= cfg_rd_latency_i;
+        rg_beat <= 3'd0;
+        rg_word <= VW'(({5'd0, psg_req.addr} - cfg_vram_window_base_i) >> 3);
+      end
+
+      if (rg_busy) begin
+        if (rg_wait != 8'd0) begin
+          rg_wait <= rg_wait - 8'd1;
+        end else begin
+          psg_beat_valid <= 1'b1;
+          psg_beat_data  <= vram_mem[rg_idx];
+          psg_beat_last  <= (rg_beat == 3'd7);
+          rg_wait        <= cfg_rd_gap_i;
+          if (rg_beat == 3'd7) rg_busy <= 1'b0;
+          else                 rg_beat <= rg_beat + 3'd1;
+        end
+      end
+    end
+  end
+
+endmodule

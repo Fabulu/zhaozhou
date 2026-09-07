@@ -79,6 +79,39 @@ the fit of the derivation: plane *P* needs one burst per distinct value of
 3,544 clocks per lattice with an unstalled fabric (2-cycle read latency),
 against `TERRAIN.PAGELOADER`'s 6,726 for the page load that precedes it.
 
+## Fitted, and one number is short
+
+Quartus 17.0.2, 5CSEBA6U23I7, 2,240 s:
+
+| | measured | designed for |
+|---|---:|---|
+| block memory bits | **0** | zero — the buffers must stay flops |
+| M10K | **0** | zero |
+| registers | 2,014 | ~1,850 estimated (1,536 buffer bits + cursors + counters) |
+| ALM | 1,629 | ≤1,600 estimated |
+| DSP | 0 | zero |
+| **Fmax** | **97.11 MHz** | **100 MHz product clock** |
+
+**The structure held.** Zero memory bits is the acceptance question and it
+passed: the three staging buffers stayed flops, which is what the combinational
+byte-lane extraction needs — an inferred M10K there would have cost a cycle per
+vertex, 1,089 per lattice.
+
+**Fmax is 2.9% short of the product clock, and that is a real finding rather
+than a rounding.** There is no `min_fmax` rule in `fit_rules.ps1` to express it,
+so the block passes its resource gates while missing timing — the exact
+false-pass `design/fit_targets.yml`'s own header warns about, in the other
+direction, and it is written here so the resource row cannot be read as a clean
+bill.
+
+The suspect is the sample extraction: a 64-to-1 byte-lane mux over a 512-bit
+register, three of them, feeding the emit path combinationally. Registering the
+extraction costs one cycle per vertex — 1,089 per lattice against the loader's
+6,726 per page — and is the obvious first move if a board fit agrees with this
+one. **It is not done pre-emptively**, because a per-block fit puts every port
+on a virtual pin and that distorts timing in ways a composed fit does not; a
+change made on this number alone would be tuning against an artefact.
+
 ## Exclusions
 
 **It does not compose.** `spec/terrain_rules.md` §3.4 —
