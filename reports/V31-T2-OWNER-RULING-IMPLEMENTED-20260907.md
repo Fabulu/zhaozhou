@@ -92,16 +92,18 @@ matches nothing.
 | V02 interval membership | **exhaustive** — 16,384 head residues × 65 occupancies at both boundaries |
 | V03 snapshot validity | **case 4h**, reachable, snapshot half proved necessary |
 | V04 identity at claim | **case 4e**, reachable, current half proved necessary |
-| V05 stale after retirement | TMU / AUX / FINAL separately (4e, 4f) — **partial**: classification and payload, not write-enable pins |
+| V05 stale after retirement | TMU / AUX / FINAL separately (4e, 4f), each checking the **row contents** after refusal — a write would leave 0xE0E / 0xA0A in the COMBINE row and does not. Still short of the write-enable **pins**, which need a probe port |
 | V06 slot reuse | **case 4g** — old token before / on / after both edges |
 
-**520 checks**, from 477 at the start of the day.
+**522 checks**, from 477 at the start of the day.
 
 ## Not done
 
-* **V05's write-enable observation.** It asks for "actual bank write enables, not
-  only lack of output"; these observe classification, commits and payload.
-  Reaching the pins needs a probe port or a hierarchical reference.
+* **V05's write-enable PINS.** The cases now observe the write's *consequence*
+  — the bank row still holds the owner's own result after a refused late
+  return — which is arguably the better evidence, since a harmlessly
+  toggling enable is not the harm. The pins themselves still need a probe
+  port or a hierarchical reference, and that remains undone.
 * **§8.3's claim-to-write lease** at the physical write enables. The brief warns
   it must not become "an uncontrolled late combinational window predicate
   immediately before a bank write-enable", which is a real design constraint and
