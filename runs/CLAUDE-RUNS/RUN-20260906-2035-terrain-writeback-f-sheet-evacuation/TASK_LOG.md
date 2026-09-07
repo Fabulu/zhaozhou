@@ -1585,3 +1585,21 @@ word.
 
 477 checks pass, no assertion fired. Seven readers of `gen_q` remain and the
 assertions still cross-check it, so this stays reversible one site at a time.
+
+## Case 4b — the coverage gap T2 step 2 opened, found and closed
+
+Moving the ISSUE lanes to `win_live` created a guard whose **reject** path
+nothing exercised: the bench drives those lanes only with live owners, so the
+accept path was covered hard (mis-ordering the ticket fails 43 checks) and the
+reject path was never reached. Case 4 covered exactly this on the *return* lane
+and had no issue-lane counterpart.
+
+**The fire test makes the case for itself.** With `win_live` forced to `1'b1` —
+a guard that fails OPEN, which is how this kind of guard actually fails —
+**exactly 2 of 481 fail, and they are the two new checks.** All 477 pre-existing
+checks pass with owner validation on the issue path effectively disabled.
+
+Without case 4b, step 2 could have shipped a permanently-true guard behind a
+green bench.
+
+481 checks pass on the real RTL.
