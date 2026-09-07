@@ -66,6 +66,37 @@ The first measured cut has now established what remains. The scan is the
 remaining cost, and two-level arbitration is the sanctioned next move — not a
 guess, and not something to have built first.
 
+## ANSWERED — the composed fit landed, and it reversed the reading
+
+`zhao_texture_island_top@p0b-island`, 9,364 s, same change, measured in
+composition:
+
+| | island before | island after |
+|---|---|---|
+| reported Fmax | 66.77 | **78.80 (+12.03)** |
+| ALM | 13,601 | **13,615 (+14)** |
+| worst-path slack | −3.243 | −2.690 |
+
+**Both of this report's leaf-fit readings were misleading, in opposite
+directions:**
+
+* The leaf fit showed reported Fmax **−3.57 MHz**, which this report correctly
+  refused to call a regression because it sat inside a 4.70 MHz seed band. In
+  composition the same change is **+12.03 MHz** — six times the ~2 MHz bar
+  pre-registered in G1-D §4.3f and 2.6× the seed band. The caution was right and
+  the leaf number was worthless.
+* The leaf fit showed **+159 ALM**, which this report called "outside the noise
+  and a real cost". In composition the island grew **+14**. That statement was
+  wrong: area is less seed-sensitive than frequency, but it is not less
+  CONTEXT-sensitive, and a leaf fit priced this register at eleven times what it
+  costs among its neighbours.
+
+**The correction worth carrying forward** is not "leaf fits read low on
+frequency". It is that a leaf fit measures a block wired to PADS, and both its
+timing and its area answer a question about that boundary rather than about the
+design. This report's own closing line — *"the next honest measurement is a
+composed island fit"* — was the right call, and it is now discharged.
+
 ## What this does not decide
 
 The island's −3.243 ns family is the number that actually matters, and only a

@@ -3330,6 +3330,51 @@ This is the "mismatched poses" law from CLAUDE.md in a new costume: the two
 numbers were produced by different fitter seeds, and comparing them measures the
 seed. `reports/P0B-RCP-ISSUE-STAGE-FIT-20260907.md`.
 
+## M4 — A LEAF FIT MIS-PRICES BOTH TIMING AND AREA, IN OPPOSITE DIRECTIONS
+
+Measured 2026-09-07 on one change (P0-B's registered issue record in
+`zhao_raster_rcp24_svc`), fitted twice: alone, and inside the composed island.
+
+| | leaf fit | composed island |
+|---|---|---|
+| reported Fmax | **−3.57 MHz** | **+12.03 MHz** |
+| ALM | **+159** | **+14** |
+
+Same RTL. Same digest for the block. The two fits disagree about the sign of the
+timing result and about the size of the area result by a factor of eleven.
+
+**Why, and it is not "leaf fits read low":** a leaf fit measures a block wired to
+PADS. Its reported Fmax is gated by port paths the design will never have, and
+its placement has no neighbours to absorb a register. Both numbers answer a
+question about the boundary rather than about the design.
+
+**The rule:** a leaf fit is evidence about a block's INTERNAL structure — which
+path family launches where, whether a named endpoint is gone — and is not
+evidence about what the change is worth. Worth is a composed measurement.
+Docket M1 (seed noise) says a small leaf frequency difference is not evidence;
+M4 says a leaf frequency difference may not even have the right SIGN.
+
+`reports/P0B-RCP-ISSUE-STAGE-FIT-20260907.md`, `reports/G1D-COMPOSED-ISLAND-20260905.md` §4.3f.
+
+## M5 — THE ISLAND'S LIMITER IS NOW ONE FAMILY, AND IT IS THE COMPLETION SCAN
+
+All **forty** worst paths in the post-P0-B island launch at
+`zhao_raster_rcp24_svc:u_rcp|c_pend[]` and end in
+`zhao_raster_perspuv_svc:u_persp|e_num_u/v[][]`, worst −2.690 ns.
+
+Traced to four lines: the combinational NCTX completion scan
+(`zhao_raster_rcp24_svc.sv:207`), `assign r_valid_o = done_v` (`:261`),
+`.v_valid_i(rcp_r_valid)` (`zhao_texture_island_top.sv:737`), and perspuv's
+write enables. **A combinational scan in one block drives another block's
+register write enables across the block boundary.**
+
+This is P0-B's defect on the COMPLETION side — the issue side was the same shape
+and was worth +12 MHz. The fix is a registered completion boundary, with three
+things to check first: throughput at the island's `NCTX=8`, §5.3's
+free-on-acceptance law, and the area of a register carrying
+`r_o`/`k_o`/`d_zero_o`/`r_tok_o`.
+`reports/P0B2-THE-NEXT-LIMITER-20260907.md`.
+
 ## M2 — COMBINE: A DELETION TRIGGER FIRED AND WAS NEVER EXECUTED
 
 `design/prod_manifest.yml` says of `zhao_texture_combine`, refuted as D19q for
