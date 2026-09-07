@@ -393,3 +393,27 @@ tools/quartus/entity_census.py committed rather than retyped. Its first version
 printed "UNINFERRED RAM (2)" then "0 ... 0" because its reason-regex was
 `[a-z ]+` and stopped at the capital in "inappropriate RAM size". Caught within
 a minute by the exactly-zero rule, from the tool's own docstring.
+
+## 2026-09-07 -- position before the residency_v2 result lands
+
+quartus_sta is up, so the fit is in its last stage. Written BEFORE reading it.
+
+WHERE I AM: V3.1's work order M0 is done and pushed. Next is M1 ("fix
+ready-queue occupancy and separate quiescence from hot admission") and, per §0,
+M6's correctness test WRITTEN AT M0 even though the interface change lands
+later -- "any existing behavior that accepts a final result before COMBINE has
+accepted the corresponding input is not something to preserve for parity".
+
+WHEN THE ROW LANDS: judge `min_memory_bits` against a FRESH row at last. The
+old row FAILED on 150,528 bits < 167,936 required, and the prediction recorded
+before the refit was 150,528/(256x4) = 147 bits per entry = 107 + 40. Its Fmax
+row (61.38, core-to-core also 61.38 -- a set index into an M10K address port)
+is equally stale and needs re-reading, not just the memory line.
+
+ROADMAP NUDGE ITEMS, all three now answered or reassigned:
+  D22 step 4 GEOM.PROJECT -- target written and committed (aea9d9d6); the block
+      had NO target at all and 16 of 24 geometry blocks still have none. Queued.
+  COMBINE.V1 DSP          -- ANSWERED: 2 DSP against a rule of 2, passes. Area
+      (1,475 vs 800) and clock (36.28, no path summary) still open.
+  perspuv per-axis split  -- now inside the V3.1 lane and the FABLE report; do
+      not touch island RTL independently of them.
