@@ -1,12 +1,12 @@
-Analysis & Synthesis Status : Successful - Mon Sep 07 03:58:57 2026
+Analysis & Synthesis Status : Successful - Mon Sep 07 05:21:54 2026
 Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
 Revision Name : blockfit
 Top-level Entity Name : zhao_terrain_pagestream
 Family : Cyclone V
 Logic utilization (in ALMs) : N/A
-Total registers : 1906
+Total registers : 1922
 Total pins : 0
-Total virtual pins : 724
+Total virtual pins : 756
 Total block memory bits : 0
 Total DSP Blocks : 0
 Total HSSI RX PCSs : 0

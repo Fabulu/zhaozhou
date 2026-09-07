@@ -181,3 +181,18 @@ corrupted in local SDRAM between the stamp and the eviction is journalled as-is
 arrives or whose journal NAKs (unruled -- T11's ABORT is the only mechanism
 that exists); `design/blocks.yml` (owned elsewhere -- entry requested in
 LEDGER-ENTRY-REQUEST.md).
+
+## 2026-09-07 -- position before reading the PAGESTREAM refit
+
+Written BEFORE opening the result, per CLAUDE.md: fit results redirect the work
+and the half-finished thing in hand is what gets lost.
+
+WHERE I WAS: GEOM.PROJECT's fit target is committed (aea9d9d6). The next step
+was to launch the queued fits the moment the toolchain freed --
+`zhao_terrain_residency_v2` first (queued longest; its `min_memory_bits` FAIL
+sits on a row two commits stale and cannot be judged), then `zhao_geom_project`
+(never measured, target written today).
+
+STILL OPEN AND UNTOUCHED: COMBINE.V1's DSP measurement; perspuv's per-axis array
+split; nine items awaiting an owner ruling; the LOD deviation calculator, which
+is blocked on two of them.

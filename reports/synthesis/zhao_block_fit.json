@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "0fcd266403684d69e5ae693ff2f1379274f1bd3d",
+    "newestRunCommit":  "f22ba13925e1aa54fc0babdfa808476bbfe01b8b",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1106,24 +1106,24 @@
                    {
                        "module":  "zhao_terrain_pagestream",
                        "status":  "failed:structure",
-                       "sourceCommit":  "5cd5582763ed69a53ddb59037cfaf91f9d28ce64",
-                       "rtlCleanAtHead":  false,
-                       "sourceDigest":  "2fecad2b9035848e29b85a7336fdec044454e52fefaf8d101af65b63b4504396",
-                       "seconds":  2240,
+                       "sourceCommit":  "f22ba13925e1aa54fc0babdfa808476bbfe01b8b",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "50c40cdc660b3c81856217922629fe5c3ba95edf0e3a4e531d48408b47c10382",
+                       "seconds":  2180.8,
                        "sourcesHashed":  3,
-                       "alms":  1629,
-                       "registers":  2014,
+                       "alms":  1649,
+                       "registers":  2043,
                        "blockMemoryBits":  0,
                        "ramBlocks":  0,
                        "dspBlocks":  0,
-                       "virtualPins":  724,
+                       "virtualPins":  756,
                        "almsAvailable":  41910,
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
-                       "fmaxMhz":  97.11,
+                       "fmaxMhz":  93.91,
                        "fmaxClock":  "clk",
                        "ruleViolations":  [
-                                              "ALM 1629 \u003e allowed 1600"
+                                              "Fmax 93.91 MHz \u003c required 100 MHz -- the resource gates can all pass while the clock does not; see this rule\u0027s note"
                                           ]
                    },
                    {
