@@ -2779,3 +2779,34 @@ eight against the oracle. It is a like-for-like replacement.
 Written up as a RECOMMENDATION, not executed: both are deletions of RTL and
 tests, which is outside what this session decides alone.
 `reports/COMBINE-SUPERSESSION-LEDGER-20260907.md`.
+
+## Durable findings moved out of the run folder
+
+CLAUDE.md: *"A run folder is the wrong home for anything durable — every pass
+creates a new one."* Three of today's findings are methodology or state that the
+next pass needs, so they are now docket entries rather than log prose:
+
+* **M1 — a block's reported Fmax carries ~4.7 MHz of fitter-seed noise.**
+  `svcseed2` 68.63 vs `svcseed3` 63.93 on the SAME commit. Sets the rule that a
+  single-seed leaf-block difference under ~5 MHz is not evidence, and names the
+  honest instruments: a composed fit, or several seeds.
+* **M2 — COMBINE's deletion trigger fired and was never executed.**
+* **M3 — the V3 owner is instantiated nowhere**, so today's −41% ALM sits
+  outside the composed design, and a naive swap ADDS ~1,672 ALM.
+
+## Fit targets for the two fog blocks: prepared, not applied
+
+Written to the scratchpad rather than into `design/fit_targets.yml`, because
+that file is read LIVE at preflight (QUARTUS_GOTCHAS §13) and the island fit is
+running. It costs nothing to apply the moment the toolchain frees.
+
+**And my first draft of it was wrong in a way worth recording.** I gave both
+blocks a guessed `max_alms`. This file's own practice is to set a gate "at the
+measurement with a little headroom rather than at an aspiration", and CLAUDE.md's
+sharper form is that a rule written after the fit it governs reports a pass. A
+guessed ceiling either passes and proves nothing or fails and gets edited. The
+revised entries carry only STRUCTURAL rules — `max_dsp: 0` for the fog mix,
+because a unit8 weighting that infers a DSP is written wrong rather than merely
+large, and `max_dsp: 1` for the factor, because more than one multiply means the
+per-frame reciprocal leaked into the per-vertex path, which is exactly what the
+config port exists to prevent.
