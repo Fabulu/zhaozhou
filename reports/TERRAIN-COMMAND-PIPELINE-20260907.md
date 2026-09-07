@@ -236,10 +236,14 @@ that **no record is offered before the pulse**, because TERRAIN.SEQ latches the
 frame's identity on it. Composing this with the world bench so it stops playing
 the ring by hand is the remaining half.
 
-And one thing this stage found that the plan had not: **T5's `sequence` is a u32
-and the ring carries 16 bits.** The block refuses a sequence that does not fit
-rather than truncating it — two frames on one ring sequence is a determinism
-failure nothing downstream can see. Which width is wrong is ruling 6 below. `fr_start` / `fr_epoch` / `fr_patch_count` /
+And one thing this stage *thought* it had found and had not. The block briefly
+refused any `sequence` above 65,535, on the belief that the ring carried sixteen
+bits. **It carries thirty-two** — `zhao_terrain_seq.sv:110` — and the narrowing
+I had seen is `cl_seq_o = seq_q[SEQW-1:0]`, the *claim* sequence, a different
+signal. The check is gone, the suite now asserts the opposite, and the verdict
+code is left unallocated. Kept in this document because a check invented against
+a misread port is cheap to add and expensive to find, and because it was the
+**lint gate** that caught it rather than the directed suite. `fr_start` / `fr_epoch` / `fr_patch_count` /
 `fr_sequence` into `TERRAIN.SEQ`, and the composed suite stops playing the ring
 by hand. This is where phase I's *"eight records offered, five declared"* check
 becomes a statement about the machine rather than about the bench.
@@ -280,8 +284,11 @@ Each stage is fittable on its own. None of them is an island run.
    `TERRAIN.CMD`'s job port at all, because accepting and dropping them would
    look like they had been handled.
 
-6. **`sequence`: 32 bits or 16?** T5 says u32; the frame ring says 16.
-   Currently refused rather than truncated.
+6. **`zhao_hps_arbiter` has TWO client ports** and the terrain island now has
+   three HPS readers: PAGELOADER (c0), WRITEBACK (c1) and TERRAIN.CMD. Rule 5's
+   starvation law is written for two guaranteed clients and `c1_wait_cycles_o`
+   exists to make it visible, so a third port changes the fairness contract. The
+   composed bench gives the command block its own played engine meanwhile.
 
 7. *(carried, from `TERRAIN.MIPFEED`)* **Which plane is surface 0 for load-time
    mips** — layer A, or `compose_top`. Unchanged by anything here, and still the

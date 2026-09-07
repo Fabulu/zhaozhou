@@ -104,7 +104,7 @@ T7's 684 KB of pages. If a measurement ever says otherwise, the skid goes in
 | 6 | `list_crc32c` mismatch |
 | 7 | the bridge reported `err` |
 | 8 | `patch_count` == 0 |
-| 9 | `sequence` does not fit the ring |
+| 9 | **unallocated** — see below |
 
 **Every refusal happens before a byte is read.** A command that is going to be
 refused must not have issued a burst, or `bridge_errs_o` and `list_bytes_read_o`
@@ -115,13 +115,25 @@ measure this block's bookkeeping instead of the fabric — and the suite asserts
 contract states, for the same reason: a refusal that produced silence would
 leave whoever issued the command waiting on a frame that will never start.
 
-### Verdict 9 is a width disagreement, not a malformed command
+### Verdict 9 was a check invented against a misread port
 
-T5's `sequence` is a **u32**; `TERRAIN.SEQ`'s frame ring carries **16 bits**.
-Truncating would put two different frames on the same ring sequence and the
-determinism ledger would never see it, so a sequence that does not fit is
-refused. **Which of the two widths is wrong is not this block's to decide** and
-is listed below as an open ruling.
+It refused any `sequence` above 65,535, on the belief that `TERRAIN.SEQ`'s frame
+ring carried sixteen bits. **It carries thirty-two** —
+`zhao_terrain_seq.sv:110` is `input var logic [31:0] fr_sequence_i` into a
+32-bit `seq_q`. The narrowing that had been seen is at
+`cl_seq_o = seq_q[SEQW-1:0]`: the **claim** sequence handed to the directory,
+which is a different signal counting a different thing, and is that block's own
+documented business.
+
+So the refusal is gone, `fr_sequence_o` is the full 32 bits T5 gives, and the
+suite asserts the opposite — a sequence of `0x12345678` is accepted and reaches
+the ring unaltered. The verdict *number* is left unallocated rather than reused,
+because a code that changes meaning between builds is worse than a gap.
+
+It is recorded rather than quietly deleted because it is cheap to add a check
+against a port you have misread and expensive to find one: the **lint gate**
+caught it, not the directed suite, and only because the width mismatch showed up
+at a pin connection in a different bench.
 
 ## What the test found that the contract had not
 
@@ -154,8 +166,11 @@ that belongs to the command lane.
 1. **The command payload seam** — framer widening versus a re-read from memory.
    See `reports/TERRAIN-COMMAND-PIPELINE-20260907.md`; the framer is already the
    worst setup group on `gpu_clk`.
-2. **`sequence`: 32 bits or 16?** T5 says u32, the ring says 16. Refused rather
-   than truncated, pending.
+2. **`zhao_hps_arbiter` has TWO client ports** and the terrain island now has
+   three HPS readers: PAGELOADER (c0), WRITEBACK (c1) and this block. Rule 5's
+   starvation law is written for two guaranteed clients and `c1_wait_cycles_o`
+   exists to make it visible, so a third port changes the fairness contract.
+   The composed bench gives this block its own played engine meanwhile.
 3. **The set-level `view_mask` and `flags` have no consumer.** T5 gives
    `SubmitTerrainSet` both; `TERRAIN.SEQ`'s ring takes `{epoch, patch_count,
    sequence}` and every *record* carries its own `view_mask`. They are not on
@@ -199,4 +214,15 @@ bridge failing in both of its shapes; and a good set after eight failures,
 because a block that faulted correctly and then never submitted again would pass
 everything else.
 
-**77 checks, 0 failures.**
+**75 checks, 0 failures** in the block's own suite — two fewer than before, and
+the two are the invented `sequence` refusal being removed and replaced by its
+opposite.
+
+And **the composed suite runs the same frame both ways.**
+`world_composed_directed` phase M puts a sealed list in the played HPS arena,
+issues the command, and requires the resulting **action log** to be identical to
+the hand-driven one — kind, order and every payload field, not the counters,
+because a path that issued the same loads in a different order would agree on
+every counter and be a determinism failure. 67 cycles by hand, 147 from the
+command; the difference is the CRC pass reading the list before the frame
+starts. **167 checks, 0 failures.**

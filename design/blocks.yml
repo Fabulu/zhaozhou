@@ -1700,10 +1700,14 @@ blocks:
       next cycle granted normally. The command completed happily and the suite
       reported eight records where it wanted none.
 
-      SEQUENCE IS A WIDTH DISAGREEMENT AND IS REFUSED RATHER THAN TRUNCATED.
-      T5's `sequence` is u32; TERRAIN.SEQ's ring carries 16 bits. Truncating
-      would put two different frames on one ring sequence and the determinism
-      ledger would never see it. Which width is wrong is an open ruling.
+      A CHECK INVENTED AGAINST A MISREAD PORT, AND ITS REMOVAL. The block
+      briefly refused any `sequence` above 65,535, on the belief that
+      TERRAIN.SEQ's frame ring carried sixteen bits. It carries thirty-two
+      (zhao_terrain_seq.sv:110); the narrowing that had been seen is
+      `cl_seq_o = seq_q[SEQW-1:0]`, the CLAIM sequence, a different signal
+      counting a different thing. Verdict 9 is removed and left unallocated,
+      `fr_sequence_o` is the full 32 bits, and the suite asserts the opposite.
+      The LINT GATE caught it, not the directed suite.
 
       IT DOES NOT DECODE THE COMMAND, and that is deliberate: the shell's record
       framer carries SIXTEEN payload bytes and SubmitTerrainSet's payload is
