@@ -2810,3 +2810,32 @@ because a unit8 weighting that infers a DSP is written wrong rather than merely
 large, and `max_dsp: 1` for the factor, because more than one multiply means the
 per-frame reciprocal leaked into the per-vertex path, which is exactly what the
 config port exists to prevent.
+
+## Mutation campaign: 3 → 6 of 14, and the two that matter are next to each other
+
+* **22.10-8** (final authorised by RESERVATION not ACCEPTANCE) — four M6 checks
+  fail. Closes the gap where item 8 had a passing case but no mutation.
+* **22.10-6** (same-row source OR → last-writer assignment) — case 1 fails six
+  ways: nothing emits, nothing combines, no owner retires, the island never
+  quiesces.
+* **22.10-5** (publish before payload write) — **ESCAPED all 538 checks**, and
+  then escaped my first fix as well.
+
+**The contrast is the finding.** Items 5 and 6 mutate the SAME bitplane three
+lines apart. Breaking WHICH bits are set stops the machine in the first case of
+the suite. Breaking WHEN they are set was invisible to every check, because they
+all observe the END of a transaction and one cycle of early publication changes
+no final value. Severity of the source edit is no guide to detectability; only
+the observable is.
+
+**And the first fix for item 5 was instrumented on the wrong signal.** Case 24
+was written against `ev_commits_o` — which increments on `c4t_v_q`, the C4 stage
+valid, not on the commit bitplane the mutation altered — so the new check passed
+against the very mutation it existed to catch. `cmt_q` is now `verilator public`
+and case 24 watches it directly; against the mutation both its assertions fail.
+
+That is the broken-instrument law twice inside fifteen minutes, on work written
+in those fifteen minutes. A mutation campaign is normally described as testing
+the DESIGN; this one tested the TESTS and found two blind spots.
+
+**541 checks**, restored digest `2733389d405f0d9e`.
