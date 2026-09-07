@@ -8,6 +8,32 @@
 # Exit code 1 if any recorded row violates its rules, so this is usable as a
 # gate. A block with rules but no recorded fit is reported and is NOT a failure
 # -- it has not been measured yet, which is a different thing from failing.
+#
+# ---------------------------------------------------------------------------
+# STALENESS, ADDED 2026-09-07, AND THE NUMBER THAT PROMPTED IT
+# ---------------------------------------------------------------------------
+# Every row carries the commit its sources were at. Nothing looked at it. So a
+# row could PASS or FAIL on numbers measured from a DIFFERENT VERSION of the
+# block, and the report would say neither.
+#
+# Counted on the day this was added: 38 OF 87 MEASURED ROWS were stale -- the
+# module's own .sv had commits after the fit that produced the row. Nine for
+# zhao_cmd_dma, eight for zhao_raster_edgewalk, five for zhao_mem_guard.
+#
+# The one that found it was zhao_terrain_residency_v2, reported FAIL on
+# `block memory 150528 bits < required 167936` from a fit taken two commits
+# before HEAD. Whether that failure is real is not knowable from a row that
+# describes an older block -- which is the whole point.
+#
+# THIS IS THE SAME FAULT THE REPO KEEPS RECORDING in another costume: a
+# generated artefact nobody re-generates is a stale artefact with a reassuring
+# provenance line at the top. A PASS on a stale row is worse than no row,
+# because it reads as evidence.
+#
+# A stale row is NOT counted as a failure -- it is not a violation, it is an
+# unanswered question -- but it is marked on its line and totalled at the end,
+# so "6 pass, 10 FAIL" can no longer be read without knowing how much of it
+# describes the machine that exists.
 [CmdletBinding()]
 param(
     [switch]$Quiet
@@ -36,9 +62,34 @@ if (Test-Path -LiteralPath $jsonPath) {
     $rows = if ($json.PSObject.Properties['blocks']) { $json.blocks } else { $json }
 }
 
+# Does the module's own source file have commits after the one its row was
+# measured at? `git log <commit>..HEAD -- <file>` answers it. Returns the count,
+# or -1 when the question cannot be asked (no commit recorded, no file found,
+# git unavailable) -- which is reported as unknown rather than as fresh.
+function Get-RowStaleness($Row, [string]$Name, [string]$Root) {
+    $prop = $Row.PSObject.Properties['sourceCommit']
+    if ($null -eq $prop -or [string]::IsNullOrWhiteSpace($prop.Value)) { return -1 }
+    $commit = $prop.Value
+
+    $file = Get-ChildItem -LiteralPath (Join-Path $Root 'fpga\rtl') -Recurse -Filter ($Name + '.sv') -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+    if ($null -eq $file) { return -1 }
+
+    $rel = $file.FullName.Substring($Root.Length).TrimStart('\', '/')
+    try {
+        $out = & git -C $Root log --oneline ($commit + '..HEAD') -- $rel 2>$null
+    } catch {
+        return -1
+    }
+    if ($LASTEXITCODE -ne 0) { return -1 }
+    if ([string]::IsNullOrWhiteSpace(($out -join ''))) { return 0 }
+    return @($out).Count
+}
+
 $fail = 0
 $pass = 0
 $unmeasured = 0
+$stale = 0
 
 Write-Host ("structural rules: {0} block(s) carry them" -f $rules.Count)
 Write-Host ""
@@ -79,19 +130,35 @@ foreach ($name in ($rules.Keys | Sort-Object)) {
     }
     # @() so an EMPTY result is still countable: PowerShell unrolls a
     # zero-item List to $null and StrictMode then rejects .Count.
+    # STALE IS A SUFFIX, NOT A VERDICT. The row still passes or fails its rules;
+    # what the suffix says is whether the numbers describe the block that is in
+    # the tree right now.
+    $since = Get-RowStaleness $row $name $RepoRoot
+    $suffix = ''
+    if ($since -gt 0) {
+        $suffix = ("   [STALE: {0} commit(s) to the source since this fit]" -f $since)
+        $stale++
+    } elseif ($since -lt 0) {
+        $suffix = '   [provenance unknown]'
+    }
+
     $violations = @(Test-FitRules $row $rules[$name])
     if ($violations.Count -eq 0) {
-        Write-Host ("  PASS  {0}" -f $name) -ForegroundColor Green
+        $colour = if ($since -gt 0) { 'Yellow' } else { 'Green' }
+        Write-Host ("  PASS  {0}{1}" -f $name, $suffix) -ForegroundColor $colour
         $pass++
     } else {
-        Write-Host ("  FAIL  {0}" -f $name) -ForegroundColor Red
+        Write-Host ("  FAIL  {0}{1}" -f $name, $suffix) -ForegroundColor Red
         foreach ($v in $violations) { Write-Host ("          {0}" -f $v) -ForegroundColor Red }
         $fail++
     }
 }
 
 Write-Host ""
-Write-Host ("{0} pass, {1} FAIL, {2} unmeasured" -f $pass, $fail, $unmeasured)
+Write-Host ("{0} pass, {1} FAIL, {2} unmeasured, {3} STALE" -f $pass, $fail, $unmeasured, $stale)
+if ($stale -gt 0) {
+    Write-Host ("  {0} row(s) were measured from a source that has since changed. Their verdicts describe an older block; refit before believing either half." -f $stale) -ForegroundColor Yellow
+}
 if ($fail -gt 0) {
     Write-Host "A fit that meets Fmax while violating its memory/DSP structure is not a pass." -ForegroundColor Red
     exit 1

@@ -553,6 +553,27 @@ targets:
       min_m10k: 16
       # The sound form of the same question, derived from the declared arrays:
       # keyram 107 x 256 x 4 = 109,568 and statram 57 x 256 x 4 = 58,368.
+      #
+      # AND IT FAILS TOO, BY THE SAME MECHANISM AS min_m10k -- read this before
+      # changing anything. The recorded row says 150,528 bits and 16 M10K, and
+      # 150,528 / (256 x 4) = 147 EXACTLY, against 164 bits per entry. The
+      # missing 17 are the top of statram: 107 + 40 = 147, and 40 is the M10K's
+      # maximum port width. So keyram's 107 bits and statram's LOW 40 landed in
+      # block RAM and statram's top 17 did not -- almost certainly MLAB, at
+      # 17/40 utilisation being cheaper than another M10K.
+      #
+      # THEY DID NOT LAND IN FLIP-FLOPS, which is the only thing this gate is
+      # for: the same row reports 1,243 registers, and 17 bits x 1,024 entries
+      # is 17,408. Four orders of magnitude apart. So `max_registers` below is
+      # the sound test and this floor is a proxy that counts one of the device's
+      # two memory kinds -- exactly the error recorded above for min_m10k, made
+      # a second time in a different unit.
+      #
+      # NOT CHANGED YET, because the row is STALE: `check_fit_rules.ps1` now
+      # reports it as measured two commits before HEAD, and a gate must not be
+      # relaxed against numbers that describe an older block. Refit first, then
+      # decide -- the arithmetic above predicts the same 147 and the prediction
+      # is the check.
       min_memory_bits: 167936
       # Control state only: rr_q (512), the four-way read registers (656), the
       # s0 capture and the counters. Generous, and still four ORDERS below the
