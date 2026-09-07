@@ -85,3 +85,78 @@ proven otherwise"* — the tool's own author, by the tool's own docstring. It no
 matches mixed case and prints any unrecognised reason **verbatim** rather than
 dropping it, because a parser that discards what it cannot classify reports
 fewer problems than exist.
+
+---
+
+## §23 FIRST, second half: the four-way endpoint classification
+
+The brief's first instruction has two parts. The entity attribution is above.
+This is the other:
+
+> FIRST: export the existing owner fit's entity/resource breakdown and four-way
+> timing endpoint classification. The reported 5,678 ALMs are not yet
+> attributed. **A path beginning in a queue register and ending at
+> `adm_accept_o` is not proven register-to-register core timing merely because
+> its startpoint is internal.**
+
+All 2,000 summarised paths of `zhao_texture_v3own@v3-full`, classified at both
+ends (`tools/quartus/split_setup_paths.py`):
+
+| class | paths | worst slack | implied |
+|---|---:|---:|---:|
+| core → core | 1,510 | −1.225 | 89.09 MHz |
+| **core → port** | **239** | **−3.194** | **75.79 MHz** |
+| port → core | 204 | −1.181 | 89.44 MHz |
+| port → port | 47 | −1.104 | 90.06 MHz |
+
+**The reported 75.79 MHz is set entirely by the core→port class**, and the
+worst path in it is the exact one the brief names:
+
+```
+-3.194  zhao_texture_v3rq:u_rq_tmu|wp_q[0]  ->  adm_accept_o
+-2.601  Mux1~10_OTERM3229                   ->  adm_ready_o
+-1.587  Mux5~9_OTERM3125_OTERM3329          ->  adm_owner_o[4]
+```
+
+Ten paths end at the admission outputs, and they are the ten worst in the fit.
+
+### Why it is not a pin artefact, and the chain that makes it
+
+`adm_accept_o` is a real output a real neighbour samples, so only the pad
+routing is artificial — the logic between `wp_q` and it is not. And that logic
+is nameable end to end:
+
+```
+u_rq_tmu|wp_q  ->  body_occ_c = wp_q - rp_q        (v3rq.sv:71)
+               ->  occ_o                            (v3rq.sv:84)
+               ->  rq_occ_c[0..2] == 0
+               ->  quiet_c                          (v3own.sv:758-768)
+               ->  adm_ready_o = (live_cnt_q < OWNERS) && (!wrap_block_c || quiet_c)
+                                                    (v3own.sv:271)
+               ->  adm_accept_o = adm_fire_c        (v3own.sv:273)
+```
+
+**That is precisely the "broad quiescence feedback" §0 proposes to remove**, and
+FOURTH states the fix: *"separate normal owner admission from global quiet.
+Admission uses a registered owner credit, a local staging credit, and registered
+epoch/fence permission."* The measurement says that instruction is not a tidiness
+preference — this path is the demonstrator's binding constraint.
+
+Three independent routes reached the same place: the brief named it by
+inspection, the FABLE architect ranked it R3 from its own split, and this
+classification puts it at the top of the list.
+
+### And my own O1 repair sits on this path
+
+`occ_o` gained the `ld_q` term this morning. §5.2 warned in advance — *"It can
+temporarily make a combinational count wider. Do not call that the final timing
+architecture"* — and the classification now says exactly what that costs: **the
+widened sum feeds the single worst path in the design.**
+
+That does not make the repair wrong. A queue that under-reports its occupancy
+into the generation-wrap drain is a correctness defect, and §5.2 orders the
+correctness patch first on purpose. But the honest statement is that O1 very
+likely made 75.79 MHz slightly worse, and the next owner fit is what will say by
+how much. **The remedy is THIRD, not a revert:** a registered
+accepted-minus-popped count removes the whole sum from the path rather than
+trimming a term from it.
