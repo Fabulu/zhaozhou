@@ -1027,6 +1027,27 @@ module zhao_texture_v3own #(
   logic            fdn_n_c  [OWNERS];
   logic            ftc_n_c  [OWNERS];
 
+  // ---- HOISTED GENERATION COMPARISONS -------------------------------------
+  // EXACTLY EQUIVALENT, and that is the whole point. Inside the loop below the
+  // guard already establishes `c4t_slot_q == i`, so `gen_q[i]` IS
+  // `gen_q[c4t_slot_q]`. Lifting the comparison out replaces 64 eight-bit
+  // comparators per lane with one 64-way select and one comparator.
+  //
+  // NOT `win_live` here, deliberately. These guards carry no `live_q` term, so
+  // substituting the interval test would silently reject a stale event that
+  // arrives after its owner is released but before that slot is reallocated --
+  // accepted today. The site calls itself "a fault-injection and drain-boundary
+  // guard"; tightening it may well be right, but that is a correctness decision
+  // about drain semantics, and 11.1's lesson this morning was precisely that
+  // conflating two events in one bit is how a final gets authorised by a
+  // reservation. This hoist buys the logic and changes no behaviour.
+  logic c4t_gen_ok_c, c4a_gen_ok_c, c4f_gen_ok_c, cmb_gen_ok_c;
+  assign c4t_gen_ok_c = (gen_q[c4t_slot_q] == c4t_gen_q);
+  assign c4a_gen_ok_c = (gen_q[c4a_slot_q] == c4a_gen_q);
+  assign c4f_gen_ok_c = (gen_q[c4f_slot_q] == c4f_gen_q);
+  assign cmb_gen_ok_c = (gen_q[cmb_owner_o[OWNERW-1 -: SLOTW]]
+                         == cmb_owner_o[GENW-1:0]);
+
   always_comb begin
     for (int unsigned i = 0; i < OWNERS; i++) begin
       live_n_c[i] = live_q[i];
@@ -1063,11 +1084,11 @@ module zhao_texture_v3own #(
       // C2's claim and C4's publication -- the owner is not final until this
       // very source commits -- so this comparison is a fault-injection and
       // drain-boundary guard, and it costs one 8-bit compare per lane.
-      if (c4t_v_q && (c4t_slot_q == SLOTW'(i)) && (gen_q[i] == c4t_gen_q))
+      if (c4t_v_q && (c4t_slot_q == SLOTW'(i)) && c4t_gen_ok_c)
         cmt_n_c[i] = cmt_n_c[i] | c4t_mask_q;
-      if (c4a_v_q && (c4a_slot_q == SLOTW'(i)) && (gen_q[i] == c4a_gen_q))
+      if (c4a_v_q && (c4a_slot_q == SLOTW'(i)) && c4a_gen_ok_c)
         cmt_n_c[i] = cmt_n_c[i] | SRC_AUX;
-      if (c4f_v_q && (c4f_slot_q == SLOTW'(i)) && (gen_q[i] == c4f_gen_q))
+      if (c4f_v_q && (c4f_slot_q == SLOTW'(i)) && c4f_gen_ok_c)
         fdn_n_c[i] = 1'b1;
 
       // ---- READY TICKET CLAIM, atomic with the reservation ----
@@ -1087,7 +1108,7 @@ module zhao_texture_v3own #(
       // event in this loop checks it: a stale token naming a reused slot must
       // not mark the CURRENT owner issued.
       if (cmb_fire_c && (cmb_owner_o[OWNERW-1 -: SLOTW] == SLOTW'(i))
-          && (gen_q[i] == cmb_owner_o[GENW-1:0]))
+          && cmb_gen_ok_c)
         cbi_n_c[i] = 1'b1;
 
       // ---- FETCH LAUNCH (18.1: an owner can be fetched at most once) ----
