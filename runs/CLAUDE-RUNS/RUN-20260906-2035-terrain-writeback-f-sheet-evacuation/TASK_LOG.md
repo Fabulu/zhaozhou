@@ -3161,3 +3161,53 @@ Note that BOTH outcomes are already survivable, because the attribution was
 retracted this afternoon. The reseed decides how much of the MOVEMENT is stable,
 not whether the CAUSE was ever established — that question is already answered
 (it was not).
+
+## THE RESEED RESOLVED THE RETRACTION — the claim is restored at 10.90 MHz
+
+`@p0b-island-s3`, identical digest `c9283ca728dd`, seed 3.
+
+**Composed island seed spread, measured here for the first time:** reported Fmax
+78.80 vs 77.67 = **1.13 MHz (1.4%)**; ALM 13,615 vs 13,687 = 72 (0.53%). A
+composed fit is **four times more repeatable** than the leaf block M1 measured at
+4.70 MHz. Composition dilutes placement noise, now by a number.
+
+**And seed 3's gating family is PALETTE again**, which supplies exactly the
+comparison M6 demanded and the default seed could not:
+
+    old island       -4.977  pal_ld_gen_i[4] -> palette_res|loading_r
+    @p0b-island-s3   -2.875  pal_ld_gen_i[1] -> palette_res|gen_r
+
+Same family both sides, 2.102 ns better, **66.77 → 77.67 = +10.90 MHz**, against
+a 1.13 MHz seed spread, reproducible across two seeds, one source file changed.
+
+**The retraction was right and is now superseded.** On the default seed the
+family changed identity and the claim was not attributable — correct on the
+evidence then available. The reseed did not overturn M6; it SATISFIED it.
+
+**Mechanism stated as inference, not measurement:** the S1 register cannot touch
+a palette path. It removed the −3.243 family that dominated the fitter's
+attention, and the fitter spent the freed effort on the palette ports. Ordinary
+behaviour, but inference about WHY; the measurement supports only the WHAT.
+
+**10.90 is the defensible number. 12.03 compared different families and should
+not be quoted.**
+
+## POSITION BEFORE STAGE A's FIT
+
+Launching `zhao_texture_island_top -RowLabel '@p0c-stageA'`. Stage A alone — the
+architecture forbids sharing a fit with P0-B2's completion boundary, which
+touches the same seam.
+
+**Before (`@p0b-island`, default seed):** ALM **13,615**, registers **23,295**,
+M10K **37**, bits 41,528, reported **78.80**, gating
+`rcp24_svc|c_pend[7] -> perspuv|e_num_v` at −2.690.
+
+**PREDICTION, from the architecture and registered before the run:**
+`uvw_m` no longer appears under `Info (276007)` in the map report, and fitted
+registers fall by **3,000-4,200** of its 4,096. M10K should rise by ~1.
+**FALSIFIER:** still refused, or a register drop under 3,000, or any of the 119
+island checks changing.
+
+**Fmax NOT predicted.** Stage A sits INSIDE the current gating seam, so a family
+change is likely; per M6 it will be reported with its family named and no causal
+claim unless the family matches.
