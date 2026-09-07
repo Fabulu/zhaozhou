@@ -1950,3 +1950,25 @@ running fit's closure and is correctly gated.
 stalled, released, every owner exactly once and in order. Case 13 stalls the
 OUTPUT; stalling COMBINE is the different point that makes ready rows accumulate
 and stresses the queues whose capacity contract was fixed today. **495 checks.**
+
+## §22 audit continued: §22.5, §22.6, §22.7
+
+* **§22.5** — all 64 ready with **COMBINE** stalled (case 13 stalls the OUTPUT,
+  a different point), released, every owner exactly once and in order. Also
+  exercises §5.3's capacity contract in the composed owner rather than in
+  isolation.
+* **§22.6** — "consumer ready toggling on every edge" and "pointer wrap while
+  head/spare still contain older packets" had no counterpart. Added as one
+  4,000-cycle identity-and-order run. Fire-tested, with an honest note on which
+  detector caught it: breaking §5.4's read reservation trips the module's own
+  `a_rq_no_overflow` first, so the new checks are a second net behind a faster
+  one.
+* **§22.7** — "unchanged 64-bit context" was checked only in case 1, which
+  completes IN ORDER, so the check sat where it could not fail. Added to case
+  16, the out-of-order case where a context can actually be mispaired.
+
+**496 checks** in the owner bench, **28** in the queue bench.
+
+The recurring shape across all six gaps found today: **the check often existed,
+but in the case that could not exercise it.** That is the same failure as an
+untested detector, wearing better clothes.
