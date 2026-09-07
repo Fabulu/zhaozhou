@@ -1,4 +1,13 @@
-// tb_terrain_compose.sv -- TERRAIN.PAGESTREAM feeding TERRAIN.PATCH.
+// tb_terrain_compose.sv -- a page, all the way to triangles.
+//
+//   TERRAIN.PAGESTREAM -> TERRAIN.PATCH -> TERRAIN.COMPCACHE -> TERRAIN.TESS
+//
+// Four real blocks and NO ADAPTER ANYWHERE IN THE CHAIN. Each seam is
+// port-for-port: PATCH's compose lane takes the three planes the streamer emits
+// on one beat; COMPCACHE's fill port is PATCH's `st_*` output; TESS's `lat_*`
+// and `cs_*` ports are COMPCACHE's serve side, one-cycle read latency included.
+// That the four fit together with nothing between them is the claim this bench
+// exists to make, and it is a claim four green differentials cannot make.
 //
 // ---------------------------------------------------------------------------
 // WHAT THIS CLOSES
@@ -157,6 +166,12 @@ module tb_terrain_compose
     output var logic [15:0] cc_serve_src_id,
     output var logic [31:0] cc_patches_served,
 
+    // THE LATTICE PORT IS SHARED between the C++ readback and TERRAIN.TESS.
+    // `cfg_tess_i` decides which drives it -- the readback of phase E has to be
+    // able to ask the cache directly, and TESS has to have it uncontested while
+    // it walks a subpatch. A bench that let both drive would produce answers
+    // neither had asked for.
+    input  var logic        cfg_tess_i,
     input  var logic        cc_lat_req,
     input  var logic [ 5:0] cc_lat_vi,
     input  var logic [ 5:0] cc_lat_vj,
@@ -164,6 +179,31 @@ module tb_terrain_compose
     output var logic [31:0] cc_lat_h,
     output var logic [31:0] cc_lat_wx,
     output var logic [31:0] cc_lat_wz,
+
+    // ---- TERRAIN.TESS --------------------------------------------------------
+    // The job is driven from the bench because it is TERRAIN.LOD's decision,
+    // and LOD is a separate block with its own reference. What is composed here
+    // is the SEAM: TESS reading a cache that a page filled.
+    input  var logic        ts_job_valid,
+    output var logic        ts_job_ready,
+    input  var logic [ 5:0] ts_job_ox,
+    input  var logic [ 5:0] ts_job_oz,
+    input  var logic [ 1:0] ts_job_level,
+    input  var logic [ 1:0] ts_job_lvl_nz,
+    input  var logic [ 1:0] ts_job_lvl_pz,
+    input  var logic [ 1:0] ts_job_lvl_nx,
+    input  var logic [ 1:0] ts_job_lvl_px,
+    input  var logic [16:0] ts_job_morph,
+    input  var logic        ts_job_surface,
+    input  var logic [15:0] ts_job_src_id,
+
+    output var logic        ts_tri_valid,
+    input  var logic        ts_tri_ready,
+    output var logic [31:0] ts_ax, ts_ay, ts_az,
+    output var logic [31:0] ts_bx, ts_by, ts_bz,
+    output var logic [31:0] ts_cx, ts_cy, ts_cz,
+    output var logic        ts_surface,
+    output var logic [15:0] ts_src_id,
 
     // ---- completion and counters -------------------------------------------
     output var logic        ps_done_valid,
@@ -433,17 +473,17 @@ module tb_terrain_compose
       .serve_valid_o  (cc_serve_valid),
       .serve_src_id_o (cc_serve_src_id),
 
-      .lat_req_i    (cc_lat_req),
-      .lat_vi_i     (cc_lat_vi),
-      .lat_vj_i     (cc_lat_vj),
-      .lat_surface_i(cc_lat_surface),
+      .lat_req_i    (cfg_tess_i ? ts_lat_req        : cc_lat_req),
+      .lat_vi_i     (cfg_tess_i ? ts_lat_vi         : cc_lat_vi),
+      .lat_vj_i     (cfg_tess_i ? ts_lat_vj         : cc_lat_vj),
+      .lat_surface_i(cfg_tess_i ? ts_lat_surface_w  : cc_lat_surface),
       .lat_h_o      (cc_lat_h_s),
       .lat_wx_o     (cc_lat_wx_s),
       .lat_wz_o     (cc_lat_wz_s),
 
-      .cs_req_i      (1'b0),
-      .cs_ci_i       (5'd0),
-      .cs_cj_i       (5'd0),
+      .cs_req_i      (cfg_tess_i && ts_cs_req),
+      .cs_ci_i       (ts_cs_ci),
+      .cs_cj_i       (ts_cs_cj),
       .cs_substance_o(cc_cs_substance),
 
       .fill_records_o  (cc_fill_records),
@@ -457,6 +497,74 @@ module tb_terrain_compose
   /* verilator lint_off UNUSEDSIGNAL */
   logic cc_st_ready;
   /* verilator lint_on UNUSEDSIGNAL */
+
+  // ------------------------------------------------- TERRAIN.TESS ----------
+  // Its `lat_*` port is port-for-port TERRAIN.COMPCACHE's serve side and its
+  // `cs_*` port is that block's cell-state read, so both go on with no glue.
+  // The one-cycle read latency is the cache's own contract and TESS was built
+  // to it -- this bench does not adapt anything, which is the claim.
+  logic       ts_lat_req, ts_lat_surface_w;
+  logic [5:0] ts_lat_vi, ts_lat_vj;
+  logic       ts_cs_req;
+  logic [4:0] ts_cs_ci, ts_cs_cj;
+
+  logic signed [31:0] ts_ax_s, ts_ay_s, ts_az_s;
+  logic signed [31:0] ts_bx_s, ts_by_s, ts_bz_s;
+  logic signed [31:0] ts_cx_s, ts_cy_s, ts_cz_s;
+  assign ts_ax = ts_ax_s; assign ts_ay = ts_ay_s; assign ts_az = ts_az_s;
+  assign ts_bx = ts_bx_s; assign ts_by = ts_by_s; assign ts_bz = ts_bz_s;
+  assign ts_cx = ts_cx_s; assign ts_cy = ts_cy_s; assign ts_cz = ts_cz_s;
+
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0] ts_tris, ts_rejected, ts_clamped;
+  logic        ts_idle, ts_job_reject;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_terrain_tess u_ts (
+      .clk  (clk),
+      .rst_n(rst_n),
+
+      .job_valid_i  (ts_job_valid),
+      .job_ready_o  (ts_job_ready),
+      .job_ox_i     (ts_job_ox),
+      .job_oz_i     (ts_job_oz),
+      .job_level_i  (ts_job_level),
+      .job_lvl_nz_i (ts_job_lvl_nz),
+      .job_lvl_pz_i (ts_job_lvl_pz),
+      .job_lvl_nx_i (ts_job_lvl_nx),
+      .job_lvl_px_i (ts_job_lvl_px),
+      .job_morph_i  (ts_job_morph),
+      .job_surface_i(ts_job_surface),
+      .job_dual_i   (ps_v_flags[FLAG_DUAL_BIT]),
+      .job_src_id_i (ts_job_src_id),
+
+      .lat_req_o    (ts_lat_req),
+      .lat_vi_o     (ts_lat_vi),
+      .lat_vj_o     (ts_lat_vj),
+      .lat_surface_o(ts_lat_surface_w),
+      .lat_h_i      (cc_lat_h_s),
+      .lat_wx_i     (cc_lat_wx_s),
+      .lat_wz_i     (cc_lat_wz_s),
+
+      .cs_req_o      (ts_cs_req),
+      .cs_ci_o       (ts_cs_ci),
+      .cs_cj_o       (ts_cs_cj),
+      .cs_substance_i(cc_cs_substance),
+
+      .tri_valid_o(ts_tri_valid),
+      .tri_ready_i(ts_tri_ready),
+      .ax_o(ts_ax_s), .ay_o(ts_ay_s), .az_o(ts_az_s),
+      .bx_o(ts_bx_s), .by_o(ts_by_s), .bz_o(ts_bz_s),
+      .cx_o(ts_cx_s), .cy_o(ts_cy_s), .cz_o(ts_cz_s),
+      .surface_o(ts_surface),
+      .src_id_o (ts_src_id),
+
+      .terrain_triangles_emitted_o(ts_tris),
+      .subpatch_rejected_o        (ts_rejected),
+      .lod_clamped_o              (ts_clamped),
+      .job_reject_o               (ts_job_reject),
+      .idle_o                     (ts_idle)
+  );
 
   // ------------------------------------------- the played read engine ------
   logic          rg_fwd;

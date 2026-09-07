@@ -71,6 +71,7 @@
 #include "zref/zref_terrain_page.hpp"
 #include "zref/zref_terrain_patch.hpp"
 #include "zref/zref_sw_stream.hpp"
+#include "zref/zref_terrain_tess.hpp"
 
 namespace {
 
@@ -240,6 +241,9 @@ struct World {
     d.cc_serve_release = 0;
     d.cc_lat_req = 0;
     d.pt_list_clear = 0;
+    d.cfg_tess_i = 0;
+    d.ts_job_valid = 0;
+    d.ts_tri_ready = 0;
     config();
     d.eval();
     for (int i = 0; i < 4; ++i) zhao::tick(d);
@@ -897,6 +901,151 @@ int main(int argc, char** argv) {
        "would have failed, and the one that did not exist when it was fixed",
        long(want_mask), long(d.subpatch_dirty));
     std::printf("   mask got 0x%04X\n", uint16_t(d.subpatch_dirty));
+  }
+
+
+  // =========================================================================
+  // G -- PAGE BYTES TO TRIANGLES
+  // =========================================================================
+  // `zhao_terrain_tess`'s `lat_*` port is port-for-port TERRAIN.COMPCACHE's
+  // serve side, and its `cs_*` port is that block's cell-state read, so the two
+  // go together with no adapter. THAT IS THE CLAIM: the one-cycle read latency
+  // is the cache's own contract and TESS was built to it, and this bench does
+  // not bridge anything.
+  //
+  // What comes out is compared against `zref::terrain::tessellate` fed a
+  // `ComposedLattice` built from THE SAME PAGE -- so the statement is the whole
+  // path in one line: the triangles the machine emits for a 21,376-byte page
+  // are the triangles the reference emits for that page's composed lattice.
+  //
+  // The JOB is driven from the bench, because choosing it is TERRAIN.LOD's
+  // decision and LOD is a separate block with its own reference. Composing the
+  // selector too would put two claims in one phase and make a failure ambiguous.
+  {
+    std::printf("\n-- G: page bytes to triangles --\n");
+
+    w.reset();
+    d.j_flags = uint16_t(zref::swstream::kFlagRequired | zref::swstream::kFlagDual);
+    d.eval();
+    w.load(pool);
+    w.write_placement();
+
+    d.pt_list_clear = 1; d.eval(); zhao::tick(d); d.pt_list_clear = 0; d.eval();
+    const std::vector<Got> filled = stream(w, 1, 0);
+    for (int i = 0; i < 4; ++i) zhao::tick(d);
+    d.eval();
+    ck(int(filled.size()) == kVerts, "G the cache is filled from the page", kVerts,
+       int(filled.size()));
+
+    // The reference's view of the SAME lattice: placement by the same law, and
+    // heights from the same `compose_vertex` answers phase A checked.
+    tp::ComposedLattice ref;
+    ref.w = kEdge;
+    ref.h = kEdge;
+    ref.dual = true;
+    ref.wx.resize(std::size_t(kEdge));
+    ref.wz.resize(std::size_t(kEdge));
+    for (int i = 0; i < kEdge; ++i) {
+      ref.wx[std::size_t(i)] = kX0 + kStep * i;   // by COLUMN
+      ref.wz[std::size_t(i)] = kZ0 + kStep * i;   // by ROW
+    }
+    ref.top.resize(std::size_t(kVerts));
+    ref.bottom.resize(std::size_t(kVerts));
+    for (int k = 0; k < kVerts; ++k) {
+      ref.top[std::size_t(k)] = want[std::size_t(k)].live_top;
+      ref.bottom[std::size_t(k)] = want[std::size_t(k)].bottom;
+    }
+
+    // ONE SUBPATCH, LEVEL 0, NO STITCHING, NO MORPH. The simplest job there is,
+    // deliberately: TESS's stitching and geomorph laws have their own
+    // differential, and what is new here is only where the lattice CAME FROM.
+    tp::SubpatchJob job;
+    job.ox = 8;
+    job.oz = 16;
+    job.level = 0;
+    job.nlevel[0] = job.nlevel[1] = job.nlevel[2] = job.nlevel[3] = 0;
+    job.morph = 0;
+    job.surface = tp::Surface::kTop;
+    const tp::TessResult want_tess = tp::tessellate(ref, job);
+    ck(!want_tess.tris.empty(),
+       "G the reference emits triangles for this job -- a job that produced none would "
+       "make every check below vacuous",
+       1, want_tess.tris.empty() ? 0 : 1);
+
+    // ---- hand it to the machine ---------------------------------------
+    d.cfg_tess_i = 1;
+    d.ts_job_ox = 8;
+    d.ts_job_oz = 16;
+    d.ts_job_level = 0;
+    d.ts_job_lvl_nz = 0;
+    d.ts_job_lvl_pz = 0;
+    d.ts_job_lvl_nx = 0;
+    d.ts_job_lvl_px = 0;
+    d.ts_job_morph = 0;
+    d.ts_job_surface = 0;
+    d.ts_job_src_id = 0x00A5;
+    d.ts_job_valid = 1;
+    d.ts_tri_ready = 1;
+    d.eval();
+    int g = 0;
+    while (!d.ts_job_ready && g < 2000) { zhao::tick(d); d.eval(); ++g; }
+    zhao::tick(d);
+    d.ts_job_valid = 0;
+    d.eval();
+
+    std::vector<tp::MeshTri> got_tris;
+    int quiet = 0;
+    for (int c = 0; c < 200000 && quiet < 500; ++c) {
+      d.eval();
+      if (d.ts_tri_valid && d.ts_tri_ready) {
+        tp::MeshTri t;
+        t.ax = int32_t(d.ts_ax); t.ay = int32_t(d.ts_ay); t.az = int32_t(d.ts_az);
+        t.bx = int32_t(d.ts_bx); t.by = int32_t(d.ts_by); t.bz = int32_t(d.ts_bz);
+        t.cx = int32_t(d.ts_cx); t.cy = int32_t(d.ts_cy); t.cz = int32_t(d.ts_cz);
+        got_tris.push_back(t);
+        quiet = 0;
+      } else {
+        ++quiet;
+      }
+      zhao::tick(d);
+    }
+    d.ts_tri_ready = 0;
+    d.cfg_tess_i = 0;
+    d.eval();
+
+    std::printf("   reference %zu triangles, machine %zu\n", want_tess.tris.size(),
+                got_tris.size());
+    ck(got_tris.size() == want_tess.tris.size(),
+       "G the machine emitted the reference's triangle count",
+       long(want_tess.tris.size()), long(got_tris.size()));
+
+    int bad = 0, printed = 0;
+    const std::size_t n = got_tris.size() < want_tess.tris.size() ? got_tris.size()
+                                                                 : want_tess.tris.size();
+    for (std::size_t i = 0; i < n; ++i) {
+      const tp::MeshTri& a = got_tris[i];
+      const tp::MeshTri& e = want_tess.tris[i];
+      if (a.ax == e.ax && a.ay == e.ay && a.az == e.az && a.bx == e.bx && a.by == e.by &&
+          a.bz == e.bz && a.cx == e.cx && a.cy == e.cy && a.cz == e.cz)
+        continue;
+      ++bad;
+      if (printed < 3) {
+        ++printed;
+        std::printf("   G triangle %zu:\n", i);
+        std::printf("      got  A(%d,%d,%d) B(%d,%d,%d) C(%d,%d,%d)\n", a.ax, a.ay, a.az,
+                    a.bx, a.by, a.bz, a.cx, a.cy, a.cz);
+        std::printf("      want A(%d,%d,%d) B(%d,%d,%d) C(%d,%d,%d)\n", e.ax, e.ay, e.az,
+                    e.bx, e.by, e.bz, e.cx, e.cy, e.cz);
+      }
+    }
+    ck(bad == 0,
+       "G AND EVERY TRIANGLE IS THE REFERENCE'S, corner for corner and in order -- the "
+       "whole path in one claim: a 21,376-byte page, streamed, composed by section 3.4, "
+       "held in the cache and tessellated, with no adapter anywhere in it",
+       0, bad);
+    ck(uint16_t(d.ts_src_id) == 0x00A5,
+       "G and the job's source id rode through to the mesh", 0x00A5,
+       long(d.ts_src_id));
   }
 
   std::printf("\n== %d checks, %d failures ==\n", g_checks, g_fail);
