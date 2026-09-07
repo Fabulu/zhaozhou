@@ -1931,3 +1931,22 @@ N0–N4 join already specified stage by stage.
 disproportionately — §12's lesson today was that shallow arrays each burn a whole
 block, and `fpsl_m`/`fcls_m` are narrow. The completed fit's RAM summary decides
 that, and it should be read before anyone calls this a clean win.
+
+## Roadmap nudge, worked in order
+
+1. **Fit running** (island) — worked outside its closure throughout.
+2. **G1-D §4.3** — already filled through 4.3c. Added **§4.3d** with the refit's
+   map-stage attribution, following §4.3b's own precedent that Analysis &
+   Synthesis answers attribution on its own. ALM/Fmax explicitly left pending.
+3. **Toolchain not idle** — the island refit is #2 in the order.
+
+**One roadmap item deliberately not done: D22 step 4 / GEOM.PROJECT.** Owner
+direction `49fc32e9` names *projection* as "not the current implementation
+priority", and the nudge's list predates it. COMBINE.V1's DSP measurement is
+already answered in the docket. perspuv's per-axis array split is inside the
+running fit's closure and is correctly gated.
+
+**§22.5's hostile schedule added instead** — all 64 owners ready with COMBINE
+stalled, released, every owner exactly once and in order. Case 13 stalls the
+OUTPUT; stalling COMBINE is the different point that makes ready rows accumulate
+and stresses the queues whose capacity contract was fixed today. **495 checks.**
