@@ -251,7 +251,17 @@ runs:
     status: green
     date: "2026-08-16"
     commit: 9d49806
-    lane: formal_input_snapshot_atomic
+    # `formal_input_snapshot_atomic` until 2026-09-07, and no such test has ever
+    # existed: tests/CMakeLists.txt:431 registers it WITHOUT the prefix, because
+    # it predates the `formal_` naming the later lanes use. Anyone following
+    # this field to find the proof would have found nothing and concluded the
+    # property was not run -- when it is, and it is green.
+    #
+    # Found by tools/design/check_formal_lanes.py, written the same day, because
+    # V16 validates this registry's dates, commits, tasks and covers and does
+    # NOT look at `lane:` -- the one field that says where the proof actually
+    # runs was the one field nothing verified.
+    lane: input_snapshot_atomic
     tasks: [bmc, cover]
     covers: true
     notes: >-
