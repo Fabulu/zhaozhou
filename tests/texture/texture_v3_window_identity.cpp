@@ -376,6 +376,81 @@ int main() {
                 x.live(retire_before) ? 1 : 0);
   }
 
+  // ---- 22.1's EXPLICIT CASE LIST -------------------------------------------
+  // 22.1 does not leave the identity model's coverage to judgement; it names
+  // the cases: "Test zero, one, 63 and 64 live owners, intervals crossing
+  // numeric zero, and same-slot handles from earlier and later generations",
+  // at "every head position and every legal occupancy".
+  //
+  // Zero, 64 and the wrap were already covered above. One, 63, every head
+  // position, and the LATER-generation handle were not -- checked against the
+  // list rather than assumed, the same audit that found the gap in 16.3's list.
+  {
+    int occ_mismatches = 0;
+    int head_positions = 0;
+
+    // EVERY head position, and the occupancies 22.1 names. `retire` is walked
+    // across a full slot ring AND across the generation boundary, so intervals
+    // that cross numeric zero are included rather than hoped for.
+    for (uint32_t base = 0; base < kModulus; base += 251u) {   // 66 positions, coprime stride
+      for (int used : {0, 1, 63, 64}) {
+        Window w;
+        w.retire = static_cast<uint16_t>(base);
+        w.alloc  = static_cast<uint16_t>((base + used) & kMask);
+        w.used   = used;
+        ++head_positions;
+
+        // Membership must be exactly the interval [retire, retire+used).
+        for (int k = -2; k < 66; ++k) {
+          const uint16_t t =
+              static_cast<uint16_t>((base + static_cast<uint32_t>(k)) & kMask);
+          const bool expect = (k >= 0) && (k < used);
+          if (w.live(t) != expect) ++occ_mismatches;
+        }
+      }
+    }
+    zhao::check(head_positions == 264,
+                "every head position x occupancy was actually visited", 264,
+                head_positions);
+    zhao::check(occ_mismatches == 0,
+                "22.1: membership is exactly the interval at 0, 1, 63 and 64 "
+                "live owners, at every head position, including intervals that "
+                "cross numeric zero",
+                0, occ_mismatches);
+  }
+
+  // SAME-SLOT HANDLES FROM EARLIER **AND LATER** GENERATIONS.
+  // The earlier-generation case is the classic stale token. The LATER one is
+  // the case a `>=` instead of a `<`, or a signed compare, would wave through:
+  // a handle from a generation that has not been allocated yet must be just as
+  // dead as one from a generation already retired.
+  {
+    Window w;
+    Literal L;
+    for (int i = 0; i < 40; ++i) { const uint16_t t = w.admit(); L.admit(t); }
+
+    int earlier_alive = 0, later_alive = 0, checked = 0;
+    for (uint16_t t : L.order) {
+      const uint16_t slot = slot_of(t);
+      const uint16_t gen  = gen_of(t);
+      // Same slot, one generation back and one forward.
+      const uint16_t earlier = static_cast<uint16_t>(((gen - 1) & 0xFF) << 6) | slot;
+      const uint16_t later   = static_cast<uint16_t>(((gen + 1) & 0xFF) << 6) | slot;
+      if (w.live(earlier)) ++earlier_alive;
+      if (w.live(later)) ++later_alive;
+      ++checked;
+    }
+    zhao::check(checked == 40, "every live owner was probed on both sides", 40,
+                checked);
+    zhao::check(earlier_alive == 0,
+                "22.1: a same-slot handle from an EARLIER generation is dead",
+                0, earlier_alive);
+    zhao::check(later_alive == 0,
+                "and a same-slot handle from a LATER generation is dead too -- "
+                "the case a >= instead of a < would wave through",
+                0, later_alive);
+  }
+
   const int rc = zhao::report_and_exit("texture_v3_window_identity");
   zhao::exit_hard(rc);
 }
