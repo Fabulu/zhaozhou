@@ -196,6 +196,94 @@ int main() {
                 d->err_o);
   }
 
+  // ---- S16.3: READY DROPPING JUST AFTER A READ LAUNCHES ---------------------
+  // S16.3 lists the tests this seam needs: "distinct U/V, shuffled completions,
+  // zero/nonzero interleaving, slot reuse, and READY DROPPING JUST AFTER A READ
+  // LAUNCHES." The last is the one that stresses the free-on-transfer law
+  // hardest, because it is exactly when a body read is in flight toward a head
+  // that the consumer stops taking.
+  //
+  // The head/spare reservation exists for this: a read may only launch if a
+  // destination is reserved for its return, so a pop that disappears mid-flight
+  // must neither lose the returning token nor let it land twice.
+  //
+  // Driven as an adversarial pop pattern rather than a fixed one, and checked on
+  // the property that matters: every token pushed comes out EXACTLY ONCE and IN
+  // ORDER. A lost token and a duplicated token both fail this; a merely slow
+  // queue does not.
+  {
+    // Start from empty.
+    for (int i = 0; i < 300 && !d->empty_o; ++i) {
+      d->push_i = 0;
+      d->pop_i = 1;
+      d->eval();
+      tick(d);
+      d->eval();
+    }
+    d->pop_i = 0;
+    d->eval();
+
+    uint32_t rng = 0xBEEF01u;
+    int next_push = 0;   // payload counter, so order is checkable
+    int next_pop = 0;    // what we expect out
+    int pushed = 0, popped = 0, order_errors = 0;
+
+    for (int i = 0; i < 4000; ++i) {
+      // Supply: offer most cycles, so reads are frequently in flight.
+      rng = rng * 1664525u + 1013904223u;
+      const bool offer = ((rng >> 17) & 7u) != 0u;
+      // Demand: drop ready in short unpredictable bursts -- the "just after a
+      // read launches" case arrives by construction rather than by timing luck.
+      const bool take = ((rng >> 23) & 3u) != 0u;
+
+      d->push_i = (offer && !d->full_o) ? 1 : 0;
+      d->din_i = static_cast<uint8_t>(next_push & 0xFF);
+      d->pop_i = (take && !d->empty_o) ? 1 : 0;
+      d->eval();
+
+      if (d->pop_i) {
+        if (d->dout_o != static_cast<uint8_t>(next_pop & 0xFF)) ++order_errors;
+        ++next_pop;
+        ++popped;
+      }
+      if (d->push_i) {
+        ++next_push;
+        ++pushed;
+      }
+      tick(d);
+      d->eval();
+    }
+
+    // Drain whatever is still held so the totals can be compared.
+    for (int i = 0; i < 400 && !d->empty_o; ++i) {
+      d->push_i = 0;
+      d->pop_i = 1;
+      d->eval();
+      if (d->dout_o != static_cast<uint8_t>(next_pop & 0xFF)) ++order_errors;
+      ++next_pop;
+      ++popped;
+      tick(d);
+      d->eval();
+    }
+    d->pop_i = 0;
+    d->eval();
+
+    zhao::check(pushed > 1000,
+                "the adversarial pattern actually moved traffic (not vacuous)",
+                1, pushed > 1000 ? 1 : 0);
+    zhao::check(popped == pushed,
+                "every token pushed comes out EXACTLY ONCE under ready dropping "
+                "-- none lost in a launched read, none delivered twice",
+                pushed, popped);
+    zhao::check(order_errors == 0,
+                "and in order: the head/spare pair never reorders a token whose "
+                "read was in flight when ready fell",
+                0, order_errors);
+    zhao::check(d->err_o == 0,
+                "and the queue latched no protocol error throughout", 0,
+                d->err_o);
+  }
+
   const int rc = zhao::report_and_exit("raster_ticketq_rh_directed");
   delete d;
   zhao::exit_hard(rc);
