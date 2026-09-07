@@ -4015,6 +4015,40 @@ reverting one accumulate arm to the unregistered product produced 4,840 of
 should move well above 31.10, *not* to 100, because TESS is the other half and
 is unexamined. If a refit does not move it, the multiply was not the limit.
 
+### THE REFIT DID NOT MOVE IT. The multiply was not the limit.
+
+**31.10 -> 32.42 MHz. A 4.2% move**, for +56 ALM and +185 registers. The
+prediction was wrong, and the comment written into the RTL said exactly what a
+non-move would mean.
+
+The pair now has a path summary it never had. Splitting its 1,803 paths by
+which block each END sits in:
+
+| paths | count | worst slack | implied |
+|---|---:|---:|---:|
+| wrapper lattice memory -> **TESS** | 129 | -20.848 | **32.42 MHz** |
+| **TESS -> TESS** | 625 | -14.931 | **40.11 MHz** |
+| NORMALS -> NORMALS | 693 | -3.752 | 72.72 MHz |
+| TESS -> NORMALS *(the seam)* | 66 | +2.780 | 138.50 MHz |
+| NORMALS -> TESS | 1 | +5.165 | 206.83 MHz |
+
+**TESS is the limiter, twice over**, and NORMALS was never the binding
+constraint. The worst path runs from the lattice memory into
+`u_tess|vy[0][16]` through `u_tess|Add65~*` carry chains: the lattice read
+turned into a vertex Y in one cycle, `vy[pend_slot] <= m_y` with
+`m_y = fx_add_sat(...)`, on the same edge as the read that feeds it.
+
+**The seam is fine** -- 138 and 206 MHz both ways -- which is worth stating
+because it is the opposite of what PAGESTREAM -> PATCH looked like.
+
+Two things this does not say. Not that the NORMALS change was worthless: a
+33x33 multiply feeding a 67-bit adder in one cycle is a real hazard, it is
+gone, and it bought 1.3 MHz because something twice as bad sat in front of it.
+And not that NORMALS is now fine -- **72.72 MHz is still 27% short**, so even a
+perfect TESS leaves this pair failing. Whether 72.72 is an *improvement* is
+**unmeasured**: the pre-change fit had no path summary at all.
+
+
 ### The instruments, which were wrong twice in one day
 
 Both errors are CLAUDE.md's *"never compare a current file to an old

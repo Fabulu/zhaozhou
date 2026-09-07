@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "43b1ba2cd63ffd2145dbd1cf211e8d0f03774c53",
+    "newestRunCommit":  "727a80ceee45a8566e2a929c89c44087b98b053a",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -411,13 +411,14 @@
                    },
                    {
                        "module":  "zhao_pair_tess_normals",
-                       "status":  "ok",
-                       "sourceCommit":  "39a650fcc6240dd10ce88eefba0c9e68f00f9925",
+                       "status":  "failed:structure",
+                       "sourceCommit":  "727a80ceee45a8566e2a929c89c44087b98b053a",
                        "rtlCleanAtHead":  true,
-                       "seconds":  732,
-                       "sourcesHashed":  31,
-                       "alms":  1523,
-                       "registers":  1389,
+                       "sourceDigest":  "f8781830b9080303c7b54da933d552b27250296c18ceddce5c851c65d76d2f32",
+                       "seconds":  1458.1,
+                       "sourcesHashed":  3,
+                       "alms":  1579,
+                       "registers":  1574,
                        "blockMemoryBits":  2048,
                        "ramBlocks":  1,
                        "dspBlocks":  9,
@@ -425,8 +426,11 @@
                        "almsAvailable":  41910,
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
-                       "fmaxMhz":  31.1,
-                       "fmaxClock":  "clk"
+                       "fmaxMhz":  32.42,
+                       "fmaxClock":  "clk",
+                       "ruleViolations":  [
+                                              "Fmax 32.42 MHz \u003c required 100 MHz -- the resource gates can all pass while the clock does not; see this rule\u0027s note"
+                                          ]
                    },
                    {
                        "module":  "zhao_pair_tmu_cache",

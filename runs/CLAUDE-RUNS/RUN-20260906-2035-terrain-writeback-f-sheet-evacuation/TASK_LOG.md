@@ -441,3 +441,35 @@ comment had predicted exactly this failure mode.
 Toolchain refilled immediately: zhao_pair_tess_normals is fitting, to answer
 whether the NORMALS product register moved 31.10 MHz. Prediction on record: it
 moves well above 31.10 but not to 100, because TESS is unexamined.
+
+## 2026-09-07 -- the NORMALS prediction was wrong; TESS is the limiter
+
+zhao_pair_tess_normals refit: 1,579 ALM / 1,574 reg / 9 DSP / 32.42 MHz.
+31.10 -> 32.42, a 4.2% move for +56 ALM and +185 registers. I predicted "well
+above 31.10". Wrong, and the comment I put in the RTL said what that means: the
+multiply was not the limit.
+
+Splitting the pair's 1,803 paths by which block each END sits in:
+
+  wrapper lattice mem -> TESS   129 paths  -20.848  ->  32.42 MHz
+  TESS -> TESS                  625 paths  -14.931  ->  40.11 MHz
+  NORMALS -> NORMALS            693 paths   -3.752  ->  72.72 MHz
+  TESS -> NORMALS (the seam)     66 paths   +2.780  -> 138.50 MHz
+  NORMALS -> TESS                 1 path    +5.165  -> 206.83 MHz
+
+TESS is the limiter twice over. The worst path is the lattice read turned into
+a vertex Y in one cycle -- `vy[pend_slot] <= m_y` with m_y = fx_add_sat(...) --
+through Add65 carry chains. The SEAM is fine at 138/206 MHz, which is the
+opposite of the PAGESTREAM->PATCH seam.
+
+NORMALS at 72.72 is still 27% short, so even a perfect TESS leaves this pair
+failing. Whether 72.72 is an improvement is UNMEASURED: the pre-change fit had
+no path summary at all.
+
+Kept the NORMALS change -- the hazard it removed is real -- but it was aimed at
+the wrong block and I should have split the paths BEFORE editing RTL. The pair
+had no path summary, which is exactly why it was ungated for a fortnight; the
+first move should have been to fit it and look, not to read the RTL and guess.
+
+NEXT: TESS's lattice-read-to-vertex path is the terrain geometry lane's real
+clock problem. Toolchain is idle -- queue geom_project and pair_pagestream_patch.
