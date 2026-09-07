@@ -172,6 +172,34 @@ mattered would be a second place the record's meaning lives.
 Measured: on the compose bench's fixture, **871 of 1,089 vertices read
 differently** as legacy than as dual, so the routing test is not vacuous.
 
+## A 32-BIT SOURCE ID BECOMES 16 AT THE COMPOSE LANE
+
+T5's patch record carries `source_id:u32`, `spec/commands.zidl:404` agrees, and
+`TERRAIN.SEQ` carries all 32 bits out on `rec_src_id_i` → `is_src_id_o`,
+`ld_src_id_o`, `wb_src_id_o`. This block carries 32 too.
+
+**The rendering half of the chain is 16.** `zhao_terrain_patch.sv:150` takes
+`src_id_i[15:0]`, `zhao_terrain_compcache_front.sv` stores and serves a 16-bit
+id, and `zhao_terrain_tess.sv:153/189` is 16 in and 16 out. So the top half of
+every source id is dropped on the way into the compose lane, and two sources
+whose ids differ only above bit 15 become the same patch to everything
+downstream.
+
+That matters *because* the id has a job there. COMPCACHE's own port comment
+says `serve_src_id_o` exists so a consumer can *"compare it against the id it
+asked for BEFORE it tessellates a couple of thousand triangles of the wrong
+terrain"* — a comparison that is lossy by half.
+
+**Not fixed here**, and not a defect this block can decide: widening the
+rendering half is four blocks' ports, and narrowing the ABI is a T5 amendment.
+It is recorded because it is invisible from either end — the producer is 32,
+the consumer is 16, and every test drawn from small ids passes.
+
+`tools/design/check_seam_widths.py` does not see it: the two ports are
+`v_src_id_o` and `src_id_i`, and the `v_` prefix defeats its stem match. Its own
+header warns that *"a missed match is far likelier than an absent signal"*,
+which is exactly what happened.
+
 ## OPEN RULING — which surface does MIPGEN decimate at load time?
 
 Owner ruling **T8** gives the mip law exactly —

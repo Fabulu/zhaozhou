@@ -2464,3 +2464,12 @@ arithmetic at all — 243 subtract-and-compare per subpatch, no DSP.
 6. which plane is surface 0 for load-time mips
 7. a load completing into a slot already in EVICT_PENDING
 8. **when the LOD deviations are computed** — load time or per frame
+9. **a 32-bit `source_id` becomes 16 at the compose lane.** T5, `commands.zidl`
+   and every TERRAIN.SEQ port carry 32; `TERRAIN.PATCH`, `TERRAIN.COMPCACHE`
+   and `TERRAIN.TESS` are all 16. Two sources differing only above bit 15 are
+   the same patch to everything downstream — and COMPCACHE's `serve_src_id_o`
+   exists precisely so a consumer can check it *"before it tessellates a couple
+   of thousand triangles of the wrong terrain"*. Widening the rendering half is
+   four blocks' ports; narrowing the ABI is a T5 amendment.
+   `check_seam_widths.py` cannot see it — `v_src_id_o` against `src_id_i`
+   defeats its stem match, exactly the miss its own header warns about.
