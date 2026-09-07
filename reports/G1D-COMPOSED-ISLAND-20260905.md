@@ -762,3 +762,126 @@ census already contains one impossible figure — 342 DSP against a device with
 112 — because sums were taken of things that were never measured together. G1-D
 exists to replace that with a measurement, and a measurement it did not make is
 not an improvement on it.
+
+---
+
+### 4.7 THE REGISTER CENSUS, FROM THE MAP REPORT THAT WAS ALREADY ON DISK
+
+**2026-09-07.** §4.3a said the census could not be attempted because the fit's
+RAM Summary "was deleted with the workspace, for the second time in this
+project", and noted that the runner now harvests the map report so "the next
+island fit will have one."
+
+**It does. `reports/synthesis/blockpaths/zhao_texture_island_top.map.rpt`,
+2026-09-06 14:24, 2.2 MB, with a full RAM Summary and a full Resource
+Utilization by Entity table.** The harvest fix worked and nobody read the
+result. No new fit was needed for anything below.
+
+#### 4.7a Where the registers actually are — and it is not a block
+
+| entity | ALUT (self) | **registers (self)** | mem bits | DSP |
+|---|---:|---:|---:|---:|
+| **`zhao_texture_island_top` itself** | **5,483** | **13,459** | 3,904 | 0 |
+| `zhao_raster_perspuv_svc` | 1,772 | 3,211 | 96 | 6 |
+| `zhao_texture_cache_pipe` | 1,267 | 3,030 | 8,320 | 0 |
+| `zhao_texture_fragrob` | 2,554 | 2,955 | 5,184 | 0 |
+| `zhao_texture_rsp_dispatch` | 334 | 1,025 | 0 | 0 |
+| `zhao_raster_rcp24_svc` | 903 | 953 | 0 | 6 |
+| `zhao_texture_tmu_plan` | 1,298 | 832 | 0 | 0 |
+| `zhao_texture_material_combine_v2` | 759 | 784 | 1,560 | 2 |
+| `zhao_texture_aux_pipe` | 410 | 723 | 576 | 0 |
+| `zhao_texture_palette_res` | 499 | 402 | 16,384 | 0 |
+| `zhao_texture_bilerp_lane` | 119 | 183 | 0 | 3 |
+| `zhao_texture_mosaic` | 41 | 34 | 0 | 0 |
+
+**48% of the island's 27,973 registers — 13,459 of them — sit in the top-level
+file itself, along with 34% of its ALUTs.** The top holds **four times more
+registers than the largest actual block.** That file's own header describes it
+as wiring: *"Every internal signal below is a real connection between two
+island components. The only tie-offs are at the island's true external
+boundary."*
+
+That is where §4.3a's +15,307 registers went. The ingress-capture attribute
+table and the R6 reorder buffer were added **to the top**, not to any block,
+and only `fsc_m` (2,880 bits) and `rob_tag_m` (1,024) became memory.
+
+#### 4.7b §4.3b's conclusion is refuted, and the map report says so in words
+
+§4.3b concluded this "is a PORT COUNT question, not a 'put it in memory' one".
+**Quartus disagrees, by name, in the report that was already on disk:**
+
+```
+Info (276014): Found 24 instances of uninferred RAM logic
+Info (276007): RAM logic "uvw_m" is uninferred due to ASYNCHRONOUS READ LOGIC
+Info (276007): RAM logic "fctx_m" is uninferred due to asynchronous read logic
+... flod_m, fcls_m, faux_m, fpsl_m, fpgn_m, class_m, and
+    zhao_texture_fragrob|tok_m, zhao_raster_rcp24_svc|c_m,
+    zhao_field_rcp24_rom|Ram0
+```
+
+The 24 split cleanly into two causes and only one of them is a defect:
+
+* **13 × "inappropriate RAM size"** — arrays 3 or 8 entries deep. Those are
+  correctly flip-flops and should stay so. Not a finding.
+* **11 × "asynchronous read logic"** — arrays Quartus would have put in M10K
+  and did not, *solely because the read is combinational.*
+
+A port-count analysis of the top's arrays agrees and cross-checks it: every
+top-level array Quartus names has at most two read sites, i.e. would fit an
+M10K's two ports. **The ports were never the obstacle. The asynchronous read
+is.**
+
+At island top level that is:
+
+```
+  uvw_m    64 bits x 64 = 4,096   a 64-to-1 async mux, 64 bits wide
+  fctx_m   64 bits x 64 = 4,096   a 64-to-1 async mux, 64 bits wide
+  flod_m    8 x 64 =       512    fpgn_m  8 x 64 = 512
+  fcls_m    2 x 64 =       128    fpsl_m  2 x 64 = 128
+  faux_m    1 x 64 =        64    class_m 2 x 16 =  32
+  ----------------------------------------------------------------
+  9,568 bits held in flip-flops, uninferred ONLY because of the read
+```
+
+#### 4.7c And this is the SAME cause as the clock, not a second problem
+
+§4.6 read the critical path rather than guessing it and found it inside
+`zhao_raster_rcp24_svc`, landing in **RCP24's context array** —
+`u_rcp|c_x[7][8]`, 14 logic levels, 17.763 ns of data delay, 63% interconnect.
+
+`zhao_raster_rcp24_svc:u_rcp|c_m` is on the uninferred list, **for asynchronous
+read logic.** An asynchronous read of a deep context array *is* a wide
+multiplexer in LUTs: it is the ALM cost, it is the register cost, and it is the
+critical path, all at once.
+
+So the island's two headline failures — **16,192 ALM against 7,500** and
+**67.57 MHz against 100** — have one named, mechanical cause with one shape of
+fix: register the read. Address in, data out next cycle. That is a pipeline
+change with real consequences for every consumer's timing, which is why it is
+written down here rather than simply done.
+
+`zhao_field_rcp24_rom|Ram0` is on the same list, which means **a ROM is being
+built out of logic.**
+
+#### 4.7d One genuine bug found in passing
+
+```
+Warning (10240): Verilog HDL Always Construct warning at
+zhao_texture_island_top.sv(653): inferring latch(es) for variable
+```
+
+A latch in the island top, among the per-fragment attribute declarations around
+`fpsl_m`/`fpgn_m`/`fsc_m`. Latches are not intended anywhere in this design.
+Not yet diagnosed; recorded so it is not lost.
+
+#### 4.7e What must NOT be concluded
+
+* **Not that moving these to M10K fixes the island.** 9,568 bits is a small
+  share of 27,973 registers; the win is the *multiplexers*, not the bits, and
+  its size is unmeasured until a fit says so.
+* **Not that the block rows are innocent.** PERSPUV at 3,211 registers and
+  CACHE_PIPE at 3,030 are the next two entries and neither has been examined.
+* **Not that 7,500 is still the right redline.** It was set before ingress
+  capture and R6 ordering existed. Comparing a design to a budget that predates
+  two of its organs is not a fair test — that is an owner decision, and it is
+  now the only island question that genuinely needs one.
