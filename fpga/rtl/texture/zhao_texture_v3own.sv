@@ -1526,6 +1526,15 @@ module zhao_texture_v3own #(
     end
   end
 
+  // One slot checked per cycle, rotating, rather than 64 every cycle: the
+  // bench runs long enough to sweep the ring many times over and this keeps
+  // simulation honest about cost.
+  logic [SLOTW-1:0] gen_chk_s;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) gen_chk_s <= '0;
+    else        gen_chk_s <= gen_chk_s + SLOTW'(1);
+  end
+
   wire [OWNERW-1:0] sh_alloc_tkt_c  = {sh_alloc_gen_q,  tail_q};
   wire [OWNERW-1:0] sh_retire_tkt_c = {sh_retire_gen_q, emit_q};
 
@@ -1551,6 +1560,31 @@ module zhao_texture_v3own #(
       // 6.1 again: the live set is one contiguous interval, so the count can
       // never exceed the ring.
       a_win_used_bounded : assert (live_cnt_q <= CNTW'(OWNERS));
+
+      // THE FULL gen_of_slot IDENTITY -- and the FIRST version of this
+      // assertion was WRONG, which is the entire reason it is here.
+      //
+      // I wrote `gen_q[tail_p1_c] == alloc_gen - 1`, reasoning that the slot
+      // ahead of the tail has not been reallocated this pass. The assertion
+      // failed immediately. Allocation is strict round-robin and `alloc_gen`
+      // increments when the tail wraps 63->0, so within a pass:
+      //
+      //     gen_q[s] == alloc_gen      for s already allocated this pass
+      //     gen_q[s] == alloc_gen - 1  for s still ahead
+      //
+      // `tail_p1` is ahead EXCEPT when `tail_q == 63`, where it wraps to slot
+      // 0 -- which was allocated at the START of this pass and therefore holds
+      // `alloc_gen`. So my rule was wrong at exactly `tail_q == 63`: the wrap
+      // boundary, which is the one case the fence exists for.
+      //
+      // Had site 3 been rewritten from that reasoning the fence would have been
+      // wrong precisely where it matters, and a fence is wrong silently until
+      // 16,320 allocations later. This is why T2's order is assert-then-move.
+      //
+      // Stated over ALL slots rather than just tail+1, because Groups B and C
+      // need `gen_of_slot(s)` for arbitrary s, not just the neighbour.
+      a_win_gen_of_slot : assert (gen_q[gen_chk_s] ==
+          ((gen_chk_s < tail_q) ? sh_alloc_gen_q : GENW'(sh_alloc_gen_q - GENW'(1))));
     end
   end
 `endif
