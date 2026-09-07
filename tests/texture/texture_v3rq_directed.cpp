@@ -144,6 +144,117 @@ int main() {
               "sustained push/pop stream",
               0, stream_zero_while_owned);
 
+  // ---- V3.1 5.7: the empty/full transition, and the CAPACITY contract -------
+  // 5.7 asks this suite to check "empty/full transitions" and 5.3 states the
+  // failure mode in the queue's own terms:
+  //
+  //   "For the ready queues, CAPACITY = 64 means 64 logical owner tickets
+  //    INCLUDING all heads and pending reads. A body of 64 plus two heads must
+  //    not silently advertise 66 logical owner credits."
+  //
+  // Nothing tested full_o before this. That is the output the registered
+  // logical credit exists to drive, so an off-by-two there would have shipped
+  // as extra admission credit -- two owners the island does not have -- and
+  // every existing check would still have passed.
+
+  // Drain to a known-empty start; a fill test that begins with residue counts
+  // the residue.
+  for (int i = 0; i < 300 && !d->owned_empty_o; ++i) {
+    d->wr_en_i = 0;
+    d->pop_i = d->valid_o;
+    d->eval();
+    tick(d);
+  }
+  d->pop_i = 0;
+  d->eval();
+  zhao::check(d->owned_empty_o == 1,
+              "the queue drains to owned-empty before the capacity fill", 1,
+              d->owned_empty_o);
+  zhao::check(d->occ_o == 0, "and reports zero occupancy there", 0, d->occ_o);
+
+  // Fill without popping and count what is actually ACCEPTED.
+  const int kCapacity = 64;  // the module's CAPACITY = DEPTH default
+  int accepted = 0;
+  int fill_cycles = 0;
+  for (int i = 0; i < 200; ++i) {
+    d->wr_en_i = 1;
+    d->wr_data_i = static_cast<uint16_t>(0x100 + (i & 0x3F));
+    d->pop_i = 0;
+    d->eval();
+    if (!d->full_o) ++accepted;
+    tick(d);
+    ++fill_cycles;
+    d->eval();
+    if (d->full_o) break;
+  }
+
+  zhao::check(fill_cycles < 200,
+              "full_o actually asserts -- the fill terminated on the flag and "
+              "not on the loop bound (a full_o stuck low would otherwise pass "
+              "every other check here)",
+              1, fill_cycles < 200 ? 1 : 0);
+  zhao::check(accepted == kCapacity,
+              "the queue accepts EXACTLY CAPACITY tickets -- not 65, and not "
+              "the body-plus-two-heads 66 that 5.3 names",
+              kCapacity, accepted);
+  zhao::check(d->occ_o == kCapacity,
+              "and occupancy at full equals capacity", kCapacity, d->occ_o);
+  zhao::check(d->owned_empty_o == 0, "a full queue is not owned-empty", 0,
+              d->owned_empty_o);
+
+  // FULL IS A PRODUCER CONTRACT, NOT A SHOCK ABSORBER, and the first version of
+  // this block got that wrong. It drove wr_en_i high into a full queue to prove
+  // the write was refused, and the module's own assertion stopped the run:
+  //
+  //   a_rq_no_write_when_full : assert (!(wr_en_i && full_o));
+  //
+  // So writing while full is a DESIGN ERROR the queue is entitled to assume
+  // never happens, not a case it silently absorbs -- and the assertion firing
+  // is the RTL stating its interface. (It also demonstrates that assertion
+  // fires, which is the only way to know a detector works.)
+  //
+  // The property worth testing is therefore the one the island depends on: with
+  // the producer correctly gated, full_o STAYS asserted and occupancy holds at
+  // capacity. A full_o that glitched low for one cycle would let the real
+  // admission path push a 65th ticket, and nothing else here would notice.
+  int full_held = 0;
+  int occ_stable = 0;
+  for (int i = 0; i < 8; ++i) {
+    d->wr_en_i = !d->full_o;  // the contract the island's producer obeys
+    d->wr_data_i = static_cast<uint16_t>(0x3FF);
+    d->pop_i = 0;
+    d->eval();
+    if (d->full_o) ++full_held;
+    if (d->occ_o == kCapacity) ++occ_stable;
+    tick(d);
+  }
+  d->wr_en_i = 0;
+  d->eval();
+  zhao::check(full_held == 8,
+              "full_o stays asserted for eight idle cycles at capacity -- it "
+              "never glitches low and re-opens admission", 8, full_held);
+  zhao::check(occ_stable == 8,
+              "and occupancy holds at exactly capacity throughout", 8,
+              occ_stable);
+
+  // And back down: the other half of the transition.
+  int drained = 0;
+  for (int i = 0; i < 300 && !d->owned_empty_o; ++i) {
+    d->wr_en_i = 0;
+    d->pop_i = d->valid_o;
+    d->eval();
+    if (d->valid_o && d->pop_i) ++drained;
+    tick(d);
+  }
+  d->pop_i = 0;
+  d->eval();
+  zhao::check(drained == kCapacity,
+              "exactly as many tickets come back out as went in", kCapacity,
+              drained);
+  zhao::check(d->owned_empty_o == 1, "and the queue returns to owned-empty", 1,
+              d->owned_empty_o);
+  zhao::check(d->full_o == 0, "with full_o released", 0, d->full_o);
+
   const int rc = zhao::report_and_exit("texture_v3rq_directed");
   delete d;
   zhao::exit_hard(rc);
