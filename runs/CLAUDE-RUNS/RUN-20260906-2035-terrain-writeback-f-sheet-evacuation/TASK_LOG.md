@@ -746,3 +746,19 @@ wrong answer afterwards.
 
 Order of learning on this block: NORMALS product register (+1.3), cell_solid
 mask (+0.7, 5 ALMs), then the measurement. Wrong order, and now written down.
+
+## 2026-09-07 -- committed path_anatomy; it corrected me on its first run
+
+The per-hop walk had been hand-rolled four times. Committed as
+tools/quartus/path_anatomy.py.
+
+It immediately showed my hand extraction was PARTIAL: I stopped at Add67 and
+reported "three chained adders". The real path is FIVE adders and a two-stage
+multiply, and Mult4's two DSP hops (3.938 + 2.569 = 6.507 ns) are the two
+biggest in the path -- 23% of the 28.080 ns.
+
+DSP output registers unused here too, same as zhao_project_core. Same free cut
+available in both.
+
+The tool sums and counts sub-threshold hops rather than dropping them: 155 hops
+under 0.30 ns are 2.692 ns.

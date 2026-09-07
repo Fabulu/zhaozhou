@@ -324,8 +324,42 @@ else, and this time the whole chain is legible:
    36.267         data path = 28.080 ns
 ```
 
-Three chained adders and a long carry tail. In the source that is one
-expression chain, evaluated between a memory read and a register:
+### CORRECTED, an hour later, by the tool that walk became
+
+The listing above was hand-extracted and **stopped at `Add67`**. It reported
+"three chained adders and a long carry tail" and missed the largest hops in the
+path entirely. `tools/quartus/path_anatomy.py` — written because this walk had
+been done by hand four times — printed the rest on its first run:
+
+```
+   16.782  0.333  CELL   u_tess|Add67~1|sumout            adder 3
+   17.772  0.990  IC     u_tess|Add68~61|dataa
+   19.793  0.513  CELL   u_tess|Add68~129|sumout          adder 4
+   20.683  0.890  IC     u_tess|Mult4~314|ay[17]
+   24.621  3.938  CELL   u_tess|Mult4~314|resulta[27]     <-- DSP, 3.938 ns
+   25.823  1.202  IC     u_tess|Mult4~mult_hlmac|by[9]
+   28.392  2.569  CELL   u_tess|Mult4~mult_hlmac|resulta  <-- DSP, 2.569 ns
+   29.563  0.849  CELL   u_tess|Add69~45|cout             adder 5
+   155 further hops below 0.30 ns, summing 2.692 ns
+```
+
+**The two biggest hops in the whole path are the multiply's two DSP stages,
+6.507 ns between them** — `Mult4~314` and `Mult4~mult_hlmac`, a cascaded
+high/low multiply because `j_morph * m_d` is 17 × 34 bits. The hand extraction
+called the path "three adders" when it is **five adders and a two-stage
+multiply**, and the multiply is 23% of it.
+
+That is the same defect one level up from the ones this report already records:
+a partial measurement read as a complete one. The tool prints the sub-threshold
+hops summed and counted for exactly this reason.
+
+**And the DSP output registers are unused here too**, precisely as in
+`zhao_project_core` (see `PROJECT-CORE-CLOCK-20260907.md`). The same free cut is
+available: registering the product uses a register that is already inside the
+DSP block.
+
+In the source the chain is one expression, evaluated between a memory read and
+a register:
 
 ```systemverilog
 m_dab  = lat_h_i - v_ha                    // 34-bit subtract, straight off the RAM
