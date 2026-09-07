@@ -495,3 +495,24 @@ reports/TERRAIN-TESS-CLOCK-20260907.md. Names TWO repairs, not one: cell_solid
 (the 40.11 MHz TESS->TESS family) and the lattice-read-to-vy saturating add
 (the 32.42 MHz family). Neither alone reaches 100, and NORMALS at 72.72 is
 still 27% short, so the lane needs work in three places.
+
+## 2026-09-07 -- TESS cell_solid rewritten as a mask; a coverage hole found
+
+Behaviour-identical rewrite: 8x8 double loop with 4 comparisons per cell (256
+comparisons, 128 multiply sites against a REGISTER j_s) becomes two 8-bit span
+masks and an outer product (2 multiply sites, 16 comparisons). No latency
+change, no state added, so the suites must pass unchanged -- 48,510 do.
+
+FIRE TEST FOUND A COVERAGE HOLE: dropping the row term from the outer product
+fails terrain_tess_directed (5 of 6,751) and is INVISIBLE to
+terrain_tess_normals (41,731 all pass). The suite with six times the checks
+cannot see the solidity window at all. Recorded; widening its stimulus to reach
+void run-cells is its own change.
+
+NEXT for this lane, in order:
+  1. Fit zhao_pair_tess_normals again -- does the mask move 40.11?
+     Prediction: TESS->TESS moves; the 32.42 lattice->vy family does NOT.
+  2. If more is needed, register win_mask (no latency cost, five paired
+     assignment sites, stale mask = wrong solidity answer).
+  3. The lattice->vy family is a separate repair: vy[pend_slot] <= m_y lands a
+     saturating add on the same edge as the memory read that feeds it.

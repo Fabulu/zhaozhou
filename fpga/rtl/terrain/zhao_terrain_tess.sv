@@ -302,18 +302,76 @@ module zhao_terrain_tess (
   // =========================================================================
 
   // is every patch cell under run-cell (ea, eb) SOLID?
-  logic cell_solid;
-  always_comb begin
-    cell_solid = 1'b1;
-    for (int cj = 0; cj < int'(SubCells); cj++) begin
-      for (int ci = 0; ci < int'(SubCells); ci++) begin
-        if (ci >= int'(ea) * int'(j_s) && ci < int'(ea) * int'(j_s) + int'(j_s) &&
-            cj >= int'(eb) * int'(j_s) && cj < int'(eb) * int'(j_s) + int'(j_s)) begin
-          if (!solid[cj*8+ci]) cell_solid = 1'b0;
-        end
-      end
+  //
+  // ---------------------------------------------------------------------
+  // WRITTEN AS A MASK BECAUSE THIS EXPRESSION IS THE TERRAIN LANE'S CLOCK
+  // ---------------------------------------------------------------------
+  // `zhao_pair_tess_normals` -- the registered characterisation wrapper --
+  // measures 32.42 MHz against a 100 MHz product clock, and splitting its
+  // 1,803 paths by endpoint puts the TESS -> TESS family at 40.11 MHz. The
+  // census of the worst 200 of those paths names its sources and destinations:
+  //
+  //     sources   solid 49, eg 43, ea, pend_last 85
+  //     dests     vh 69, subpatch_rejected_o 42, f_kind, pend_slot
+  //
+  // Those signals meet in exactly one place -- here -- and the destinations are
+  // the issue path and its reject counter, because this one bit gates
+  // `want_issue` through `cell_skip`.
+  //
+  // WHAT THE OLD FORM COST. Eight-by-eight iterations, each with FOUR
+  // comparisons against `ea * j_s` and `eb * j_s`, reduced to a single bit:
+  // 256 comparisons and 128 multiply sites. `j_s` is a 4-bit REGISTER holding
+  // 1/2/4/8 (declared at the top of this file), NOT a constant, so those are
+  // genuine runtime multiplies and not shifts by a literal. It is the shape
+  // S15.5 warns about in another block -- "do not write six independent `*`
+  // operators and assume they pack" -- at 128.
+  //
+  // THE WINDOW IS A RECTANGLE, so it factors. A cell is inside it exactly when
+  // its column is in the column span AND its row is in the row span, so two
+  // 8-bit span masks and their outer product replace the whole double loop:
+  // TWO multiply sites and SIXTEEN comparisons.
+  //
+  // BIT-IDENTICAL, DELIBERATELY. `(solid & win) == win` is true exactly when
+  // every masked bit of `solid` is set, which is what the old loop computed;
+  // and an EMPTY window (`lo` past the edge, mask all zero) yields true in
+  // both forms, which is the old loop's `cell_solid` never being cleared. No
+  // latency changes, no state is added, and the run-cell walk is untouched --
+  // so the existing suites must pass UNCHANGED, and that is the check.
+  //
+  // NOT YET THE REGISTERED FORM. reports/TERRAIN-TESS-CLOCK-20260907.md
+  // establishes that `win_mask` can be registered at no latency cost, because
+  // at cycle N-1 the advance decision is already made and so `ea(N)`/`eb(N)`
+  // are known. That is a second step with five paired assignment sites and a
+  // real chance of a stale mask -- which is a WRONG SOLIDITY ANSWER, not a
+  // timing bug -- so it is taken separately, after this one is measured.
+
+  // The 8-bit span [idx*s, idx*s + s) within a row or a column. Written with
+  // `int'` throughout to match the arithmetic of the loop it replaces exactly,
+  // including the out-of-range case where the span falls off the edge.
+  function automatic logic [7:0] span_mask(input logic [3:0] idx,
+                                           input logic [3:0] sw);
+    logic [7:0] m;
+    int lo;
+    begin
+      lo = int'(idx) * int'(sw);
+      m  = 8'd0;
+      for (int k = 0; k < int'(SubCells); k++)
+        if (k >= lo && k < lo + int'(sw)) m[k] = 1'b1;
+      span_mask = m;
     end
+  endfunction
+
+  wire [7:0] col_span_c = span_mask(ea, j_s);
+  wire [7:0] row_span_c = span_mask(eb, j_s);
+
+  logic [63:0] win_mask_c;
+  always_comb begin
+    for (int cj = 0; cj < int'(SubCells); cj++)
+      for (int ci = 0; ci < int'(SubCells); ci++)
+        win_mask_c[cj*8+ci] = row_span_c[cj] & col_span_c[ci];
   end
+
+  wire cell_solid = ((solid & win_mask_c) == win_mask_c);
 
   // the inner rectangle
   wire [5:0] x_lo = j_ox + {2'b0, j_s};
