@@ -871,3 +871,20 @@ state and emission on the same edge.
 
 Sizing stands (Add66|Add68|Mult4, 8.599 ns, 116.3 MHz). Left for a pass that
 owns the block, with the hazard documented.
+
+## 2026-09-07 -- OWNER DIRECTION RECEIVED: texture first, terrain deferred
+
+Commit 49fc32e9. Acknowledged with SHA-256 in
+fpga/rtl/texture/OWNER-DIRECTION-TEXTURE-FIRST-2026-09-07.md (beside the RTL,
+not in this run folder -- the handoff and CLAUDE.md agree on that point).
+
+  handoff  B024D625...48EE7DB9
+  audit    E918D9AF...C50A20C8
+
+Compute decision recorded rather than improvised: the running geom_project fit
+finishes (10 min into 50, judges a committed prediction, frees nothing texture
+can use yet since the next milestone is RTL). No further non-texture fit
+queued; the three next in line are cancelled by name. Nothing reverted.
+
+NEXT: FOURTH part two, the acknowledged fence. Hazard already characterised and
+case 19 already fired on purpose.
