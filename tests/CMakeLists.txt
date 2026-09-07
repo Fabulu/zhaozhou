@@ -2441,6 +2441,23 @@ set_tests_properties(raster_rcp24_svc_directed PROPERTIES LABELS "fast;nightly" 
 # therefore pass with the correction deleted, so zhao_raster_rcp24_mul is
 # exposed on its own port and driven over the same (x, w) families
 # tools/rtl/architecture_numeric_checks.py uses.
+# S16.3's registered-head wrapper, tested on its OWN contract rather than only
+# through rcp24's bench. That bench never saturates the DONE queue, so an
+# off-by-two in full_o -- S5.3's "body plus two heads must not advertise D+2" --
+# would not be reached by it; and the justification for a head/spare PAIR rather
+# than a single registered head is a RATE, which no correctness check sees.
+add_executable(test_raster_ticketq_rh_directed raster/raster_ticketq_rh_directed.cpp)
+target_link_libraries(test_raster_ticketq_rh_directed PRIVATE zhao_harness)
+verilate(test_raster_ticketq_rh_directed
+  PREFIX Vzhao_raster_ticketq_rh
+  TOP_MODULE zhao_raster_ticketq_rh
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+  VERILATOR_ARGS --assert -GW=8 -GD=16)
+add_test(NAME raster_ticketq_rh_directed COMMAND test_raster_ticketq_rh_directed)
+set_tests_properties(raster_ticketq_rh_directed PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_raster_rcp24_v3_directed raster/raster_rcp24_v3_directed.cpp)
 # zhao_zref too: this test includes zref/zref_rcp.hpp as its oracle, and
 # without the zref target it never gets reference/include. The omission made
