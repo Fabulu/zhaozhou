@@ -153,6 +153,36 @@ and the identical 119 before and after is a real result rather than a test that
 stopped looking. The mutant was built from a copy outside the repository, so the
 tree never held broken RTL.
 
+## The cost side, stated before the refit reports it
+
+`zhao_raster_perspuv_svc` is already `failed:structure`, and not marginally:
+
+    registers 3157 > allowed 700   (4.5x)
+    ALM       1910 > allowed 900
+
+**The output boundary added here makes that slightly worse** — roughly 83 more
+flip-flops (32 + 32 + TAGW + 3), about **+2.6%** on a block already 4.5× over.
+Saying only "it removes the island's worst path" would be the flattering half.
+
+Two things are worth separating, because §12.4 insists on it:
+
+* **The rule may be mis-set for this block.** It holds a 16-entry table of
+  32-bit U and V plus tag and flags — `16 × (32+32+TAGW+5)` is already well over
+  a thousand bits before any pipeline. A 700-register budget for a structure
+  whose payload alone exceeds it is a budget question, not only an
+  implementation one.
+* **That is not licence to relax it.** §12.4: *"A useful intermediate can fail an
+  allocation and still be worth retaining. Its status must say precisely that.
+  … Do not silently edit max_alms to 5,700 because 5,678 happened to be
+  measured."* So the block stays **retained and failing**, the gate is untouched,
+  and the +83 is declared rather than absorbed.
+
+Note also that the sibling rule message on `zhao_texture_fragrob` — *"state that
+belongs in memories is in flip-flops"*, fired at 2,631 against 2,500 — is the
+exact case CLAUDE.md records as a **right alarm with a wrong diagnosis**: that
+block already holds 13 M10Ks. The message should not be read as an instruction
+about where fragrob's payload lives.
+
 ## Still to measure
 
 The timing benefit. That was the entire point, and only a refit shows it.
