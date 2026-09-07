@@ -132,12 +132,36 @@ So the registered logical credit of §5.3 is **not** attempted here, and this
 patch must not be reported as a timing improvement. It widens a combinational
 sum by one term on a path that already sums three.
 
-**Also noted, not acted on.** §5.3 warns: *"A body of 64 plus two heads must
-not silently advertise 66 logical owner credits."* `full_o` is
-`body_occ_c == DEPTH` with `DEPTH = OWNERS = 64`, so the queue can hold 64 body
-entries plus two heads plus one pending read — **67 logical tickets against a
-64-owner namespace.** Whether any caller can actually push a 65th is a separate
-question about the admission path, and it is not answered here.
+**§5.3's credit warning, now answered.** It warns: *"A body of 64 plus two
+heads must not silently advertise 66 logical owner credits."* The queue's
+capacity is indeed 67 — 64 body, two heads, one pending read — against a
+64-owner namespace.
+
+**No overflow is reachable, and the reason is the finding.** `full_o` gates
+nothing: it is wired only into an assertion (`a_rq_not_full`,
+`zhao_texture_v3own.sv:1347`) and to no write-enable anywhere. The queue has no
+flow control at all. What bounds it is three facts that live entirely
+*outside* it:
+
+1. `OWNERS = 64` (`zhao_texture_v3own.sv:142`);
+2. a ticket is once-per-owner — `tkt_t_c` requires `!rdy_q[slot]` (`:500`), and
+   `a_ticket_once_t`/`a_ticket_once_a` (`:1299-1300`) assert it;
+3. `DEPTH` is instantiated as `OWNERS`, so the body alone already covers the
+   whole namespace.
+
+So the queue cannot overflow because at most 64 tickets can exist, not because
+64 is the number it would refuse at.
+
+**That is a live risk for the rearchitecture, not a curiosity.** §6 proposes
+replacing per-slot generations with "one bounded live-sequence window", which is
+a change to fact (1). If the window's capacity and `DEPTH` ever move
+independently — or if ticket-once is relaxed anywhere in the new completion
+protocol — **the queue will not notice**, because the only thing that would have
+noticed is an assertion, and an assertion that has never fired is a claim rather
+than a guard. §5.3's "CAPACITY = 64 means 64 logical owner tickets INCLUDING all
+heads and pending reads" should be enforced by the queue's own `in_ready`, which
+is exactly what §5.3 asks for and what this repair deliberately does not
+attempt.
 
 ## 5. Evidence
 
