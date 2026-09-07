@@ -1,0 +1,3461 @@
+ZHAOZHOU TEXTURE ISLAND V3.1
+CONTROL-FABRIC RECOVERY ARCHITECTURE
+======================================================================
+Research and implementation handoff | 2026-09-07
+
+Review baseline: Fabulu/zhaozhou, zixxtrixx-v8-closeout
+Pinned source: 756f08c5970608ba13c70944ea892c58ae1ddba2
+
+Purpose
+-------
+Repair the failed V3 owner/completion demonstrator without discarding its
+working synchronous payload banks, without changing texture semantics,
+and without pretending that moving bits into RAM automatically makes the
+control that surrounds them small or fast.
+
+This is a new architecture deliverable, not another fit notification and
+not a renamed copy of the original V3 proposal. It separates observed RTL
+behavior, committed physical evidence, architectural deductions, proposed
+changes, and experiments that must still be run. No new Quartus result is
+claimed. The executable models accompanying this document are algorithmic
+checks, not substitutes for RTL differential testing or timing sign-off.
+
+The non-negotiable starting point
+--------------------------------
+The 64-owner demonstrator physically used 5,678 ALMs, 4,864 registers,
+17 M10Ks, and zero DSPs; its reported Fmax was 75.79 MHz. The owner/control
+allocation was 1,800 ALMs. Both the allocation miss and timing violations
+are real. A 467-check behavioral test result did not establish acceptable
+area, queue accounting, or timing on every relevant boundary.
+
+The payload-bank inference worked. That does not prove the surrounding
+owner/control machinery is economical. The correct response is not another
+blanket instruction to use RAM. It is to change ownership identity,
+completion accounting, queue accounting, and the global admission/quiet
+feedback paths, while measuring which changes actually pay for themselves.
+
+One concrete defect is already visible in the checked RTL:
+zhao_texture_v3rq.occ_o counts body entries plus its two visible head
+registers but omits ld_q, the outstanding synchronous body-read return.
+Consequently it can report zero while it still owns a ticket. This is a
+queue-accounting error, not merely an ALM hypothesis. Its relevance to each
+caller must be established separately; not every false-zero observation
+implies immediate data loss. The new queue contract closes that ambiguity.
+
+
+CONTENTS
+======================================================================
+  1. Decision and scope
+  2. Evidence ledger: what the measurements do and do not establish
+  3. Source-level diagnosis of the present owner/control implementation
+  4. Proposed machine: one ticket window, local control, explicit credits
+  5. Queue architecture and the confirmed false-empty defect
+  6. Contiguous ticket-window ownership and generation reuse
+  7. Physically local scoreboard banks and event application
+  8. Completion, publication, and exactly-once readiness
+  9. Ready scheduling and COMBINE admission
+ 10. Ordered output, prefetch, and owner retirement
+ 11. Reset, abort, configuration epochs, and distributed drain
+ 12. Payload banks, metadata, and memory accounting
+ 13. RCP V3 repair without undoing its arithmetic improvement
+ 14. Perspective, sampler, cache, palette, AUX, and COMBINE integration
+ 15. Timing closure and physical evidence methodology
+ 16. Resource attribution, budgets, and decision thresholds
+ 17. Interfaces and state-transition contracts
+ 18. Verification, adversarial tests, and required counterexamples
+ 19. Executed Python models and their precise limits
+ 20. Implementation sequence and stop conditions
+ 21. Parallel ownership, build isolation, and measurement provenance
+ 22. Full-machine implications and explicit non-goals
+ 23. Agent-ready implementation brief
+ 24. Sources, unresolved questions, and acceptance checklist
+ Appendix A. Executed model results
+ Appendix B. Executable model source
+
+
+1. DECISION AND SCOPE
+======================================================================
+
+The decision is to keep V3's correctly inferred payload planes and its useful
+arithmetic work, but replace the control fabric around the 64-owner window.
+This is V3.1, not a new material engine, not a smaller-feature console, and not
+an invitation to build another independently ordered fragment pipeline.
+
+The first V3 implementation proved one necessary proposition: correctly shaped,
+explicitly ported payload storage can remain in block RAM in an exact-device
+Quartus fit. This was not a board measurement.
+It did not prove that the control used to operate that storage is economical.
+The proposal now addresses that second problem directly.
+
+The implementation changes are ordered by certainty:
+
+A. Fix a confirmed queue-accounting defect. A synchronous read owns its ticket
+   between leaving the body and reaching a visible head. That ticket must count
+   toward occupancy, drain, and capacity. This is a correctness repair even if
+   it saves no ALMs.
+
+B. Remove queue-pointer arithmetic and aggregate quiet detection from the normal
+   admission decision. Admission consumes a registered owner credit. Namespace
+   reuse and configuration changes use a separate drain protocol. They are rare
+   operations and must not determine the depth of every normal admission path.
+
+C. Replace 64 independently stored live/generation records with one contiguous
+   allocation/retirement window, where the current public owner token is a bit
+   permutation of a monotonically advancing internal ticket. This is permitted
+   only because owners are allocated in ring order and released in output order.
+   We are exploiting an invariant, not weakening identity validation.
+
+D. Replace a whole-table next-state expression and repeated dynamic indexing
+   with a small number of physically local control banks. Shared registered
+   event decoding selects rows; each row has an explicit field-ownership and
+   collision rule. This is intended to reduce duplicated selectors and global
+   fanout. The size of that benefit is to be measured, not asserted.
+
+E. Once the preceding changes are correct, replace committed-result masks plus
+   a sticky ready flag with a bounded remaining-result count and a one-shot
+   transition to zero. Keep requested, issued, and claimed distinctions. A
+   reduction in representation must not erase duplicate-response protection.
+
+F. Replace a per-owner fetched bitmap with a contiguous output-fetch frontier,
+   while retaining final-done state for out-of-order completion. Owner capacity
+   returns only on actual downstream output transfer, never on prefetch.
+
+The primary repair is therefore NOT "put the scoreboard into one RAM". The
+scoreboard has multiple simultaneous semantic writers. Putting it into a single
+RAM without a serialized update protocol, bypassing, and measured throughput
+would recreate a different version of the same failure.
+
+The architectural invariant is:
+
+    Admission creates an owner.
+    Services may execute and complete out of order.
+    Each required result is claimed and published at most once.
+    Exactly one COMBINE job is created for that owner.
+    Final output is emitted in admission order.
+    Only final output transfer, or a completed global abort, releases ownership.
+
+The implementation must preserve full 64-owner capacity and the established
+texture semantics. It may add internal latency if the agreed throughput and
+credit bounds remain intact. It may not manufacture a fit by reducing samples,
+removing formats, tying configuration pins to constants, dropping AUX, or making
+Mosaic's useful outputs unobserved.
+
+This document supplies implementable contracts and a staged experiment plan.
+It does not claim that the proposed owner block already meets 1,800 ALMs, that
+115 MHz has been achieved, or that a complete 6,500-ALM island is guaranteed.
+Those were allocations and ambitions; the failed prototype did not earn them.
+
+
+2. EVIDENCE LEDGER: WHAT THE MEASUREMENTS DO AND DO NOT ESTABLISH
+======================================================================
+
+2.1 Keep three scopes separate
+----------------------------------------------------------------------
+
+There are three different physical designs in this discussion:
+
+  Scope                         ALMs   Registers  DSP   M10K   Fmax MHz
+  ----------------------------  -----  ---------  ----  -----  --------
+  Transitional composed island  16193      27097    17     25     63.54
+  COMBINE V2 + W9b composition   16192      28490    17     32     67.57
+  V3 owner/completion demo        5678       4864     0     17     75.79
+
+The last row is NOT the whole V3 texture island. Comparing 5,678 directly with
+16,192 as if the two delivered identical functionality would be wrong. The
+owner demo has deliberately substituted or absent arithmetic/services. Its
+purpose was to test ownership, storage, and completion independently. [R1,R2]
+
+The real V2 composition included COMBINE V2 and the W9b repair that made formerly
+dead nearest/direct-format decode and alpha work observable. Later CLUT4 nibble
+repairs and subsequent composition changes are not automatically included in
+that historical fit. The nominal source commit attached to the old V2 run was
+not sufficient to reconstruct its bytes: rtlCleanAtHead was false. [R1]
+
+The two composed rows remain historical reference points. Neither is a current
+measurement of the replacement proposed here.
+
+2.2 The owner failure, stated without euphemism
+----------------------------------------------------------------------
+
+The owner demonstrator's adopted allocation was 1,800 ALMs. The fit used 5,678:
+3,878 ALMs over allocation, approximately 3.15 times the allocation. That is a
+failed allocation, not a small miss. Its 75.79-MHz reported result and negative
+setup/hold slacks also fail a clean 100-MHz sign-off. [R2]
+
+Committed evidence identifies:
+
+  Fit result commit: f82a758ddec52508796f23939cd99cf635d615d2
+  Source digest prefix: 1627c71acdf4
+  Runtime: approximately 8,979 seconds
+  Reported adversarial test count: 467
+  Mapped registers: 4,220
+  Fitted registers: 4,864
+  Mapped combinational ALUTs: 6,532
+  Fitted ALMs: 5,678
+  Memory bits: 20,640
+  Physical M10Ks: 17
+
+Combinational ALUTs are not interchangeable with fitted ALMs. Registers may be
+packed with logic; placement may duplicate registers; MLAB allocation and
+routing choices can change the relationship. Never divide ALUTs by two and
+publish the result as a fitted ALM count.
+
+The memory result does establish that the intended payload storage did not
+simply collapse into a large bank of flip-flops. It does not establish that all
+control is efficient, that every declared logical store costs exactly one
+M10K, or that memory-port and queue protocols are correct.
+
+The old depth-64 FRAGROB comparison uses 9,431 mapped registers and no M10Ks.
+Compare map with map when quantifying register reduction: 9,431 against 4,220
+is the useful mapped comparison. A mixed comparison with 4,864 fitted registers
+can illustrate scale, but must not be presented as a controlled fit-to-fit
+experiment. [R2]
+
+2.3 Timing interpretation must be corrected
+----------------------------------------------------------------------
+
+The committed report divides paths by whether their STARTPOINT is a pin. It
+lists these important owner paths:
+
+  u_rq_tmu | wp_q[0] -> adm_accept_o
+  u_rq_init| wp_q[0] -> ev_quiet_o
+  u_rq_tmu | wp_q[0] -> Mux2~4_OTERM3179
+
+The first two end at output ports. They begin internally, but that does not
+make them register-to-register core paths. An origin-only classification is
+insufficient to say the core's intrinsic register-to-register limit is 75.79
+MHz. It is also insufficient to dismiss those paths as harmless artifacts.
+The output is real, and its receiver may impose a real integration constraint.
+
+The sign-off analysis must classify BOTH endpoints:
+
+  register -> register;
+  input    -> register;
+  register -> output;
+  input    -> output.
+
+It must then show the actual clocks, input/output delays, uncertainty, and
+exceptions used for each class. A registered production wrapper may change a
+boundary path legitimately; deleting the constraint to obtain a nicer number
+is not a repair.
+
+Reported owner timing includes:
+
+  Slow 100 C: setup -3.194 ns; setup TNS -346.953 ns; hold -0.109 ns.
+  Slow -40 C: setup -3.328 ns; setup TNS -400.392 ns; hold -0.386 ns.
+
+Those negative hold results cannot be repaired merely by lowering frequency.
+They remain independent acceptance failures until the exact constrained design
+is re-run and all relevant hold checks pass. [R2,V3]
+
+2.4 RCP is useful work, but also over its original allocation
+----------------------------------------------------------------------
+
+The isolated reciprocal service changed as follows:
+
+  Scope                         ALMs  Registers  DSP  M10K  Fmax MHz
+  ----------------------------  ----  ---------  ---  ----  --------
+  Old RCP24 service             1041       1101    6     0     68.46
+  RCP24 V3 full fit             1230       1944    3     6     90.54
+
+The actual Fmax delta is 22.08 MHz, about 32.25 percent, not the 23.5-MHz figure
+repeated in some narrative reports. Area increases by 189 ALMs, registers by
+843, and DSP consumption falls by three. [R3]
+
+The measured saturated reciprocal rate is approximately four clocks per result
+at 16 execution contexts. Eight contexts leave the shared arithmetic pipeline
+underutilized; 32 did not improve the measured rate. Preserve the demonstrated
+16-context configuration until a new experiment proves a better one.
+
+The approximately four clocks/result claim is a cycle-throughput claim. It is
+not a statement that the existing tile is timing-clean at 100 MHz. At its
+reported 90.54 MHz, four clocks/result corresponds to approximately 22.635
+million results/second, before system-level stalls.
+
+RCP's original working allocation was 600 ALMs. A useful 1,230-ALM tile is still
+630 over that allocation. Do not hide this because its DSP result is good.
+Together, the measured owner and RCP rows account for 6,908 ALMs before the
+rest of the island. That sum is not a composed prediction, but it immediately
+invalidates any claim that the current pieces already support a 6,500-ALM
+complete island.
+
+2.5 What was actually inspected, and what remains unavailable
+----------------------------------------------------------------------
+
+The owner/control, ready queue, and bank wrapper RTL were read at the review
+pin. Committed result reports, run logs, and the report-directory tree were
+also inspected. The report tree identifies a full-fit map report and a setup
+report, but attempts to retrieve their large contents through the available
+connector failed. Direct network fallback was unavailable. Consequently this
+document does NOT invent an entity-by-entity attribution of the 5,678 ALMs.
+
+In particular, no claim such as "the queues cost 3,000 ALMs" or "the scoreboard
+costs 70 percent" is supported by this review. The attribution procedure in
+section 16 is a required first implementation task, not a measurement already
+performed here.
+
+Source-level mechanisms can nevertheless be identified and repaired. The queue
+accounting error is directly visible. The control-state census is countable.
+The ticket-window equivalence follows from a specified invariant. The actual
+physical benefit of each change is a separate question.
+
+
+3. SOURCE-LEVEL DIAGNOSIS OF THE PRESENT OWNER/CONTROL IMPLEMENTATION
+======================================================================
+
+3.1 Payload storage is not the remaining whole problem
+----------------------------------------------------------------------
+
+The V3 bank wrapper deliberately builds synchronous, independently ported
+payload planes. Its read output is registered before downstream interpretation.
+Payload is not reset element by element. The 40-bit slice organization exposes
+physical width costs rather than pretending arbitrary record widths fit into
+one storage primitive. This is directionally correct and should be retained.
+[R5,V1,V2]
+
+The expensive work now surrounds those planes: identity checks, per-owner
+state reads, accepted-versus-issued-versus-claimed distinctions, multi-event
+updates, ready-ticket generation, prefetch, and drain accounting.
+
+A payload RAM does not remove that work. If every event reads several 64-entry
+control arrays dynamically and every state bit selects among many competing
+updates, the surrounding logic can remain large even though payload flops
+have disappeared. That is an architectural mechanism, not yet a numerical
+attribution of this fit.
+
+3.2 Actual persistent control-state census
+----------------------------------------------------------------------
+
+The inspected owner source declares the following per-owner fields:
+
+  Field group                         Bits per owner   Across 64 owners
+  ----------------------------------  --------------   ----------------
+  live                                1                          64
+  generation                          8                         512
+  requested TMU mask + AUX flag        3 + 1                     256
+  issued TMU mask + AUX flag           3 + 1                     256
+  claimed TMU mask + AUX flag          3 + 1                     256
+  committed TMU mask + AUX flag        3 + 1                     256
+  ready-enqueued                      1                          64
+  COMBINE-issued                      1                          64
+  final-claimed                       1                          64
+  final-done                          1                          64
+  final-fetched                       1                          64
+  ----------------------------------  --------------   ----------------
+  Total                               30                      1,920
+
+These are control bits, not the banked sample/color payload. Pipeline packets,
+queue heads, arithmetic state, and counters are additional. The declared total
+is not a fitted register attribution and does not explain all 4,864 fitted
+registers by itself. [R4]
+
+The original proposal's representative 29-bit estimate was not an exact census
+of this implementation. Thirty is the relevant count for this review.
+
+3.3 The whole-table next-state organization
+----------------------------------------------------------------------
+
+The current control code constructs next-state arrays and, inside a loop over
+all 64 rows, copies each current row and applies event-to-row comparisons for
+admission, issue, claim, publication, ready enqueue, COMBINE acceptance, final
+completion, fetch, and retirement. Eligibility and snapshot logic elsewhere
+also use selected control-array reads. A clocked loop stores the resulting
+fields. The updates are not all literal dynamically indexed writes: the
+inspected next-state loop already expresses many of them as per-row conditions.
+
+This is legal RTL, but it leaves synthesis to discover a distributed,
+field-specific update machine from a broad multi-event next-state expression.
+It also makes the complete result depend on the loop's explicitly chosen
+precedence. The source already merges several masks with OR and puts admission
+last; those are deliberate safeguards, not newly invented by this proposal.
+
+A correct compiler can optimize some of it. The proposed difference is
+physical locality and shared registered decode, not merely writing the same
+per-row conditions again. Retain the existing field-specific safeguards while
+reducing the global event reach and the selected-state reads.
+
+A particularly concrete example is C4 publication: each row tests its slot and
+its stored generation for TMU, AUX, and final publication. The source comment
+calls this one eight-bit compare per lane, but the per-row expression alone
+does not prove the fitted sharing. The ticket-window proposal removes the
+per-row generation representation entirely and performs authority checking once
+per event lane. Count what the tool actually built before pricing that saving.
+
+Do not conclude that a for-loop itself is the problem. The problem is the
+connectivity the loop describes: who reads which rows, which events may write
+each field, and how far those decisions fan out. Replacing a loop with 64 copied
+blocks that preserve identical connectivity does not constitute a redesign.
+
+3.4 The ready queue owns an invisible-in-the-count ticket
+----------------------------------------------------------------------
+
+The queue has a synchronous body, two visible head registers, and a pending
+read indicator ld_q. The current occupancy expression includes body distance
+and visible heads but omits the pending read. The simplest sequence is:
+
+  After reset:        body 0, heads 0, pending 0, reported occupancy 0.
+  After one push:     body 1, heads 0, pending 0, reported occupancy 1.
+  After read issue:   body 0, heads 0, pending 1, reported occupancy 0.
+  After read return:  body 0, heads 1, pending 0, reported occupancy 1.
+
+There is no external pop in this sequence. Ownership never returned to zero.
+A caller using the reported zero to infer quiescence can observe a false zero.
+Whether other caller conditions prevent an actual erroneous reuse must be
+checked in composed RTL. The queue itself is already mis-accounted. [R6]
+
+3.5 A rare operation is coupled to normal admission
+----------------------------------------------------------------------
+
+The current design combines queue occupancy and quiet information with
+admission/generation-reuse decisions. The reported path from a ready-queue
+write pointer to adm_accept_o is consistent with that coupling being physically
+important. The new admission path must not contain a scan of queue emptiness,
+a sum of queue occupancy terms, or an aggregate service-drained decision.
+
+Namespace wrap is rare. Keep its correctness, but move its waiting into an
+explicit fence state. Normal admission then consumes a local registered
+credit and checks a local admission slot, not global quiescence.
+
+3.6 What is NOT diagnosed as broken here
+----------------------------------------------------------------------
+
+This review does not claim that the existing C2 claim rule loses duplicates,
+that every current simultaneous TMU/AUX update is wrong, or that the current
+bank wrapper is corrupt. The source contains deliberate claim, commit, and
+publication stages. Those must be retained and simplified only with proof.
+
+Likewise, the ready queue's two-head architecture is not inherently a mistake.
+It is a reasonable way to hide synchronous read latency. Its accounting and
+its connections to global control are the problems identified here.
+
+
+4. PROPOSED MACHINE: ONE TICKET WINDOW, LOCAL CONTROL, EXPLICIT CREDITS
+======================================================================
+
+4.1 Top-level organization
+----------------------------------------------------------------------
+
+    admission packet
+          |
+          v
+    registered admission gate <------ owner-credit state
+          |                           epoch/fence state
+          v
+    ticket allocator ---------> immutable payload-bank writes
+          |
+          +---------> local control-row initialization
+          |
+          +---------> RCP / sample / AUX work queues
+
+    TMU returns ---> capture ---> validate/claim ---> payload write --+
+    AUX returns ---> capture ---> validate/claim ---> payload write --+--> publish
+                                                                    |
+                                               remaining-result update
+                                                                    |
+                                             exactly-once ready ticket
+                                                                    |
+                                    TMU / AUX / initial ready queues
+                                                                    |
+                                                COMBINE admission
+                                                                    |
+                                            owner-aligned bank reads
+                                                                    |
+                                             retained COMBINE V2
+                                                                    |
+                                  final claim -> final write -> final done
+                                                                    |
+                        ordered fetch frontier + reserved output packet slot
+                                                                    |
+                                                 output ready/valid
+                                                                    |
+                                    accepted output -> retire ticket/credit
+
+The payload record planes remain logically indexed by owner slot. Identity is
+not the slot alone. Every externally delayed transaction carries the full
+owner token, and all publication authority is generation-validated.
+
+4.2 Central state should be small and explicit
+----------------------------------------------------------------------
+
+Central persistent state contains:
+
+  next allocation ticket;
+  next retirement ticket;
+  owner count / credit state;
+  next final-result fetch ticket;
+  fetch/output reservation state;
+  active immutable configuration epoch;
+  admission-fence state;
+  a small set of queue/control status registers.
+
+The per-owner control is local. No global combinational function reads every
+owner to decide whether work exists. Ready queues represent work that became
+ready; the contiguous output frontier represents ordered retirement.
+
+4.3 The target is bounded complexity, not zero state
+----------------------------------------------------------------------
+
+Queues, claims, and output reservations require real state. The objective is to
+make each bit justify its existence and each high-fanout signal justify its
+reach. Some new pipeline registers are a good trade if they replace repeated
+wide muxes or isolate timing boundaries.
+
+A rough reduction in declared per-owner control is possible:
+
+  remove live + generation arrays:             9 bits/owner;
+  replace committed4 + ready1 with remaining3: 2 bits/owner;
+  replace fetched1 with a fetch frontier:      1 bit/owner.
+
+That is 12 bits per owner, or 768 declared bits, before the cost of global
+state, pipeline registers, and decode. It is NOT a claim to save 768 ALMs, and
+it is not enough by itself to explain a 3,878-ALM allocation gap.
+
+The greater potential benefit is in eliminating repeated reads, selects, and
+write-priority structures associated with those bits. That part must be
+measured by synthesis attribution and controlled implementation comparisons.
+
+4.4 Separate correctness changes from representation changes
+----------------------------------------------------------------------
+
+First repair queue accounting in the existing demonstrator. Then change queue
+interfaces/admission coupling. Then change owner identity representation. Then
+localize updates. Then remove redundant committed/ready/fetched state.
+
+Do not combine all five into one unreviewable patch. A staged sequence tells us
+which change fixed an error, which saved area, which hurt throughput, and which
+moved the timing limit. It also gives a correct fallback after every step.
+
+
+5. QUEUE ARCHITECTURE AND THE CONFIRMED FALSE-EMPTY DEFECT
+======================================================================
+
+5.1 Define logical occupancy, not just RAM-body occupancy
+----------------------------------------------------------------------
+
+For every queue:
+
+  logical_owned = accepted pushes - accepted external pops.
+
+For a synchronous-body queue with two heads and one pending return:
+
+  logical_owned = body_owned + head0_valid + head1_valid + read_pending.
+
+If a separate output skid stage holds a dequeued item and queue ownership has
+not explicitly transferred to that stage, it belongs in this equation too.
+The contract must state the transfer point. A ticket must never disappear
+between storage regions merely because a RAM read was issued.
+
+Expose distinct signals:
+
+  out_valid:       a consumable item is in the visible head;
+  out_data:        that item, stable while out_valid && !out_ready;
+  in_ready:        logical capacity for one new accepted item;
+  owned_empty:     no item exists in body, pending return, or heads;
+  logical_count:   optional diagnostic count from accepted transfers;
+  body_count:      internal implementation detail, not a drain signal.
+
+The distinction between !out_valid and owned_empty is fundamental. A queue can
+have no visible head while a synchronous read is in flight.
+
+5.2 First patch: correct the existing count and prove its consequence
+----------------------------------------------------------------------
+
+The immediate legacy patch is to include ld_q in occupancy and add the
+three-edge counterexample to the queue's directed test. Also audit every
+consumer of occ_o and every use of an empty/quiet reduction.
+
+This first patch is for correctness. It can temporarily make a combinational
+count wider. Do not call that the final timing architecture. The subsequent
+patch replaces the aggregate expression on important paths with a registered
+logical count.
+
+A direct assertion should relate transfer history to physical holdings. Use a
+sufficiently wide verification counter, or an inductive bounded invariant, so
+counter wrap does not make the assertion vacuous.
+
+5.3 Registered logical credit
+----------------------------------------------------------------------
+
+Keep a logical count L, with 0 <= L <= CAPACITY. On each active clock edge:
+
+  push_taken = in_valid && in_ready;
+  pop_taken  = out_valid && out_ready;
+  L_next     = L + push_taken - pop_taken.
+
+Store empty/full flags from L_next, or derive simple comparisons from the
+registered L where timing permits. The normal producer sees registered queue
+state, not write_pointer - read_pointer plus several head/pending terms.
+
+Initially use conservative full behavior:
+
+  in_ready = !full_q;
+
+Do not add a same-cycle full/pop bypass unless measured throughput requires it.
+That bypass connects downstream acceptance back to the producer. Removing one
+rare full-boundary bubble is not worth reconstructing the timing loop we are
+trying to remove.
+
+For the ready queues, CAPACITY = 64 means 64 logical owner tickets INCLUDING
+all heads and pending reads. BDEPTH is a physical body parameter. A body of 64
+plus two heads must not silently advertise 66 logical owner credits.
+
+5.4 Reserve the pending-read destination
+----------------------------------------------------------------------
+
+A body read may launch only if there is a head/staging position reserved for
+its return. The reservation survives backpressure. Decide the launch using the
+post-pop/post-old-return head occupancy, then reserve a position for the new
+pending result.
+
+The queue may support a body read and a body write in the same clock, subject
+to the chosen RAM's read-during-write law. Avoid same-address dependence where
+possible. An empty-body push does not become an immediate same-edge read unless
+an explicit bypass, with its own proof, is implemented.
+
+The two-head organization can sustain one external pop per clock after warmup
+with continuous supply. The included model checks that property; it does not
+prove Quartus will infer the intended memory from the eventual RTL.
+
+5.5 A queue status is a contract, not a convenience counter
+----------------------------------------------------------------------
+
+The queue's owned_empty must remain false during:
+
+  a body read in flight;
+  an item held in either head;
+  an accepted push not yet visible at the head;
+  an item in a queue-owned output skid register.
+
+Reset may clear queue ownership only when the system reset contract permits
+all such items to be discarded. A local reset in a live subsystem is not a
+legal way to make a pending external response disappear.
+
+Do not use a saturating occupancy counter: saturation hides over-allocation.
+A counter crossing its legal range is a design error that must fire a detector.
+
+5.6 Physical mapping choices
+----------------------------------------------------------------------
+
+A 64x14 ticket body is small enough that MLAB versus M10K is an actual design
+choice. Keep the body primitive replaceable, preserve its latency contract,
+and compare both mappings under the same workload and constraints. A smaller
+MLAB body is not automatically faster once placement and control routing are
+included. A spare M10K is not automatically cheaper if it adds inconvenient
+routing or poorly utilized width slices.
+
+The fit report must separately name body storage, head registers, pending-read
+registers, pointer/count registers, and duplicated control. Do not label the
+whole queue "RAM" and then stop accounting for the rest.
+
+5.7 Local queue fit gate
+----------------------------------------------------------------------
+
+Before rebuilding the whole owner demo, fit one production-shaped ready queue
+with the actual depth, width, head structure, and status outputs. Use a wrapper
+whose outputs are observable and whose boundary is registered consistently.
+Check empty/full transitions, read-in-flight accounting, sustained pop rate,
+and setup/hold at the intended product constraint.
+
+This experiment is diagnostic. It does not replace the owner-composed fit,
+because the queue-to-admission and queue-to-drain connections are part of the
+problem under investigation.
+
+
+6. CONTIGUOUS TICKET-WINDOW OWNERSHIP AND GENERATION REUSE
+======================================================================
+
+6.1 Why a window can replace 64 live/generation rows
+----------------------------------------------------------------------
+
+The owner ring has a special property: allocation is in order and release is
+in final-output order. Therefore live owners form one contiguous interval in
+allocation sequence space, even though their service execution is out of order.
+
+If that invariant is preserved, a 64-entry table of live bits and generation
+bytes is a redundant representation of a single bounded interval.
+
+Define:
+
+  SLOTS = 64;
+  TICKET_BITS = 14;
+  MODULUS = 16384;
+  alloc_ticket: the next internal ticket to allocate;
+  retire_ticket: the oldest ticket not externally retired;
+  used: number of live owners, from 0 through 64.
+
+The live set is:
+
+  { retire_ticket + i mod MODULUS | 0 <= i < used }.
+
+A supplied internal ticket t is live exactly when:
+
+  distance = unsigned_14(t - retire_ticket);
+  live(t)  = distance < used.
+
+Both empty and full must be represented explicitly by used. Pointer equality
+alone cannot distinguish them.
+
+6.2 Preserve the public owner layout
+----------------------------------------------------------------------
+
+The inspected public owner token is {slot[5:0], generation[7:0]}. Internally use
+a numerical ticket whose low six bits are the slot:
+
+  slot       = ticket[5:0];
+  generation = ticket[13:6];
+  public_owner = { ticket[5:0], ticket[13:6] }.
+
+This is a bit permutation, not a new public token width.
+
+To match first-use generation one for slot zero, initialize alloc_ticket and
+retire_ticket to 64, with used = 0. The first public token is slot zero,
+generation one. Subsequent allocations match a ring that increments each slot's
+generation when that slot is reused. The included model compares these two
+representations through many namespace wraps.
+
+Do not apply a numerical subtraction directly to public_owner. Its slot bits
+are in the high position. Decode it into internal ticket order first.
+
+6.3 The required invariant is stronger than 'mostly ordered'
+----------------------------------------------------------------------
+
+The replacement is legal only if:
+
+  - allocation never leaves a hole in the live interval;
+  - retirement is strictly oldest-first;
+  - an individual failed sample produces a terminal status/result rather than
+    silently freeing its owner out of order;
+  - output prefetch does not retire an owner;
+  - local cancellation does not remove an interior owner from the interval;
+  - reset/abort either drains normally or resets the entire interval under a
+    completed protocol fence.
+
+If per-owner arbitrary cancellation is a required product semantic, keep a
+validity structure or add ordered tombstones. Do not quietly assume away holes.
+For this texture pipeline, ordered error/tombstone output is the preferable
+way to retain the interval invariant.
+
+6.4 Admission and retirement update
+----------------------------------------------------------------------
+
+Use pre-edge state for permission:
+
+  admit_allowed = epoch_open_q && !fence_q && (used_q < 64)
+                  && admission_stage_has_credit_q;
+
+On admission, write the new owner's immutable payload, initialize its local
+control row, issue the token, and advance alloc_ticket. These are one accepted
+transaction, not independent handshakes that may partially succeed.
+
+On accepted final output, advance retire_ticket and return one owner credit.
+Admission and retirement may occur together when pre-edge used is below 64.
+At pre-edge used == 64, initially refuse admission even if an output retires in
+that same cycle. That conservative rule avoids a combinational downstream
+ready bypass and same-slot read/write complications. Measure before adding a
+full-boundary optimization.
+
+6.5 Ticket validation pipeline
+----------------------------------------------------------------------
+
+Do not fan the entire subtraction/comparison network into every row or repeat
+it for every state field. Each incoming event lane performs one ticket decode
+and bounded-window validation, then carries:
+
+  internal ticket;
+  slot;
+  bank/row selection;
+  event kind and narrow payload;
+  validation status.
+
+A delayed snapshot of liveness is not necessarily current at claim time. A
+duplicate for a fully completed owner can be captured before its retirement
+and reach claim after it. Consequently the authorization stage must either
+revalidate against current window state or hold a proven reservation that
+prevents retirement from invalidating that authorization. Use revalidation
+first; it is simpler to prove.
+
+Retirement cannot pass an owner whose required results or final output are
+still genuinely pending. That does not excuse stale duplicate validation.
+
+6.6 Finite tags and the ABA limit
+----------------------------------------------------------------------
+
+Fourteen bits are finite. After 16,384 allocations, the same public token can
+reappear. No comparison on those fourteen bits can distinguish the new token
+from an arbitrarily delayed old token with identical bits.
+
+Therefore the design requires a namespace-reuse fence. This is not optional,
+and it is not solved by the window arithmetic.
+
+When alloc_ticket would wrap from 16383 to zero, block further admission and
+enter a drain phase. Allow outstanding owners to finish. Then require all
+service, response-capture, queue, output, and external-memory obligations from
+the previous namespace to be acknowledged as drained before allocating zero.
+The first partial interval starting at ticket 64 reaches this fence after
+16,320 allocations; later complete intervals span 16,384.
+
+A global fence at namespace wrap can be stronger and cheaper to reason about
+than checking global quiet on every slot whose generation becomes zero. Its
+latency behavior must be recorded as an implementation choice; it does not
+change public token identity or pixel semantics.
+
+6.7 A local empty count is not an external drain acknowledgment
+----------------------------------------------------------------------
+
+An external DMA, cache fill, or service response producer may still owe a
+return after an internal queue goes empty. Each producer must either accept a
+drain request and acknowledge that it can produce no more old returns, or have
+all accepted requests represented by an outstanding counter whose zero has the
+same proven meaning.
+
+A timeout can declare a fault and abort the frame. It cannot prove no late
+response exists. Restart after such a timeout requires an epoch/reset contract
+that invalidates or drains the external producer too.
+
+6.8 Area and timing claim, bounded honestly
+----------------------------------------------------------------------
+
+Removing live64 and generation512 eliminates 576 declared state bits. The
+replacement adds allocation/retirement tickets, a count, fence state, and
+validation pipeline registers. The net register reduction is smaller than 576.
+
+The potentially important logic reduction is that events no longer need a
+64-way generation select and live-bit select in addition to their other
+scoreboard reads. There is one bounded arithmetic identity check per event
+lane instead. The fit must decide the net ALM and timing benefit.
+
+If the window validation itself becomes a critical path, register it or share
+predecoded high/low comparison terms. Do not reintroduce an entire generation
+table without a measured reason.
+
+
+7. PHYSICALLY LOCAL SCOREBOARD BANKS AND EVENT APPLICATION
+======================================================================
+
+7.1 Start with eight banks of eight owners
+----------------------------------------------------------------------
+
+Use bank = slot[5:3], row = slot[2:0] as the initial physical partition. This is
+not a claim that 8x8 is universally optimal. It is a small, concrete shape that
+limits row-selection fanout and keeps local predicates bounded.
+
+Run controlled alternatives at 4x16 and 16x4 after the first correct mapping.
+Keep owner capacity, event throughput, payload geometry, and boundary wrapper
+identical. Choose using actual ALMs, registers, critical-path classes, and
+routing evidence, not by whichever grouping looks visually tidy in RTL.
+
+Payload banks may still have a 64-row address space. Control localization does
+not require splitting every payload plane into eight tiny M10Ks. Control and
+payload have different access and placement requirements.
+
+7.2 Event normalization before row updates
+----------------------------------------------------------------------
+
+Each input lane captures its event and produces a registered bank/row decode.
+Within a bank, compare a narrow local row index or use a registered one-hot row
+mask. Do not distribute a wide packet containing data and a six-bit owner index
+to 64 independently inferred comparators for every state field.
+
+One-hot decoding is not automatically cheaper than binary muxing. The reason to
+make it explicit is to share each decode and control its fanout. The mapped
+netlist must show whether that sharing survived synthesis.
+
+An event record should contain only what that stage needs. The full 64-bit
+opaque caller context stays in its payload bank; it does not travel through
+every control stage just because the original input packet contained it.
+
+7.3 Retained per-owner control after staged reduction
+----------------------------------------------------------------------
+
+The final proposed narrow row has:
+
+  requested TMU mask                 3 bits
+  requested AUX                     1 bit
+  issued TMU mask                    3 bits
+  issued AUX                         1 bit
+  claimed TMU mask                   3 bits
+  claimed AUX                        1 bit
+  remaining required results         3 bits
+  COMBINE-issued                     1 bit
+  final-claimed                      1 bit
+  final-done                         1 bit
+                                    -------
+                                    18 bits
+
+Across 64 owners that is 1,152 declared control bits. This does not include
+pipeline state, row-decode registers, queue heads, counters, or global tickets.
+
+Do not remove the requested/issued/claimed distinctions merely to reduce this
+number. They represent different facts:
+
+  requested: this result belongs to the material/owner contract;
+  issued: a downstream operation was actually accepted;
+  claimed: one terminal return acquired exclusive publication authority.
+
+A return for an unissued but requested sample must not decrement remaining.
+A duplicate after claim but before publication must not write the payload.
+
+7.4 Field-specific writer table
+----------------------------------------------------------------------
+
+Each field has a small, explicit set of writers:
+
+  requested       admission initialization only;
+  issued          admission clear + matching issue-transfer event;
+  claimed         admission clear + matching authorized claim event;
+  remaining       admission initial count + unique C4 publication decrement;
+  COMBINE-issued  admission clear + COMBINE admission transfer;
+  final-claimed   admission clear + authorized final-return claim;
+  final-done      admission clear + final-result publication.
+
+There is no generic whole-row write port. Each field's next value is built only
+from its permitted event set. This prevents a change to final output from
+accidentally adding another mux input to requested/issued fields.
+
+Within a field, express disjoint-set updates as bitwise set operations where
+semantically valid. Express simultaneous result publication as a bounded sum of
+one or two decrements. Do not encode all events as a deep priority chain when
+they are allowed to happen together.
+
+7.5 Same-owner collisions must be designed, not prioritized accidentally
+----------------------------------------------------------------------
+
+Required cases include:
+
+  TMU and AUX issue on the same owner;
+  TMU claim and AUX claim on the same owner;
+  one earlier TMU publication and one AUX publication on the same owner;
+  a duplicate claim arriving while a previous claim is in the pipeline;
+  final publication while output logic examines final-done;
+  admission and retirement on different owners in the same bank;
+  an invalid old-generation event addressed to a newly reused slot.
+
+For each case state whether events commute, merge, are delayed, or are
+impossible by invariant. An assertion is required for an 'impossible' case.
+Procedural ordering in a large always_comb block is not a substitute for that
+contract.
+
+With the conservative no-full-bypass rule, admission must never initialize the
+same live row being retired on that edge. Preserve that simplification until
+physical evidence justifies a more complicated boundary optimization.
+
+7.6 Snapshot reads, claims, and bypass
+----------------------------------------------------------------------
+
+A pipelined control read can observe a row before a preceding event updates it.
+Therefore claim authorization needs a defined bypass path for in-flight claims
+or a stage arrangement that guarantees the relevant claimed state is current.
+
+The first implementation should keep claimed bits in local flops and validate
+against the current local claimed value at the single claim-commit stage. A
+snapshot may supply immutable requested state and earlier predicates, but it
+must not be the sole authority for 'not yet claimed'.
+
+If two successive TMU returns carry the same owner/sample, the first may claim;
+the second must reject even when both read the same earlier snapshot. Test the
+exact one-cycle spacing that exposes this hazard.
+
+7.7 Why not put the entire control row into one block RAM?
+----------------------------------------------------------------------
+
+Multiple events can update different fields of the same owner in one cycle.
+A single RAM row cannot safely accept arbitrary simultaneous read-modify-write
+transactions without arbitration, forwarding, and a bounded pending-update
+structure. That machinery may be worthwhile, but it is a different architecture
+and must pay for itself.
+
+The first V3.1 response is local flop control plus banked payload. If measured
+attribution later shows control flops themselves dominate, evaluate a scheduled
+control-RAM variant as a separate experiment, with explicit event throughput
+and same-owner merge buffers. Do not make it the default solely because the
+word 'RAM' sounds economical.
+
+7.8 Placement is an outcome to inspect
+----------------------------------------------------------------------
+
+Source hierarchy can help express locality, but it does not guarantee a
+particular physical placement. Inspect fanout, duplicated registers, routed
+wire delays, and whether the eight banks actually form useful local groups.
+Do not blanket-preserve hierarchy or apply manual floorplanning before the
+ordinary fit identifies a concrete placement problem.
+
+
+8. COMPLETION, PUBLICATION, AND EXACTLY-ONCE READINESS
+======================================================================
+
+8.1 Keep capture, claim, write, and publication distinct
+----------------------------------------------------------------------
+
+Use the existing useful separation, with explicit names:
+
+  C0: capture terminal response into a reserved input slot;
+  C1: decode identity and read/snapshot required control;
+  C2: validate current authority and atomically claim the result;
+  C3: perform the registered payload-bank write;
+  C4: publish completion into owner control.
+
+These are conceptual obligations, not a demand that every implementation use
+exactly five external cycles. Any retiming must preserve the ordering and the
+claim-to-write exclusivity.
+
+The write enable, write address, and write data seen by each payload bank must
+be captured together. No late dynamic owner lookup may select a different row
+for a previously claimed result.
+
+8.2 Reserve before claiming
+----------------------------------------------------------------------
+
+Once C2 grants a claim, the design must already have enough capacity to carry
+that result through C3 and C4. It must not discover afterward that a completion
+queue or payload write port is unavailable.
+
+One TMU return lane writes at most one selected sample-result bank per clock.
+AUX has its own result bank. Final COMBINE completion has its own final-result
+bank. These physically independent writers permit overlap without inventing a
+multiwrite port on one RAM.
+
+A terminal response that fails validation may be drained and counted as a
+rejection. It does not acquire payload-write authority. A legitimate service
+failure, by contrast, produces one terminal result/status for a required job;
+it must not leave the owner waiting forever.
+
+8.3 Remaining-result counter
+----------------------------------------------------------------------
+
+At admission:
+
+  remaining = popcount(requested_TMU[2:0]) + requested_AUX;
+
+The result is in 0..4, so three bits suffice. It counts required result
+publications, not outstanding arithmetic instructions and not queue entries.
+
+At C4:
+
+  decrement = unique_TMU_publication_for_owner
+              + unique_AUX_publication_for_owner;
+  remaining_next = remaining - decrement.
+
+Only previously authorized, physically written results generate publications.
+The counter may decrement by two when TMU and AUX publish for the same owner.
+It must never underflow. A repeated response cannot decrement twice because
+claim authority is once-only; this is why claimed bits are retained.
+
+8.4 Exactly-once ready generation
+----------------------------------------------------------------------
+
+For a nonzero initial count, emit exactly one ready event on:
+
+  remaining > 0 && remaining_next == 0.
+
+For initial remaining == 0, admission emits the initial ready event instead.
+That event must be capacity-reserved as part of admission.
+
+When TMU and AUX jointly cause the transition to zero for one owner, choose one
+ready-event source deterministically. For example, TMU owns the combined event;
+AUX suppresses its duplicate. If they complete two different owners in the
+same cycle, both owners may become ready and each uses its own source queue.
+
+Removing a sticky ready flag is legal only after proving these properties:
+
+  requirements never change after admission;
+  publications are unique and are never rolled back;
+  remaining is initialized once and monotonically decreases to zero;
+  a ready event has reserved storage and therefore cannot be dropped;
+  zero-work admission and ordinary publication cannot both enqueue for the
+  same owner;
+  no partial cancellation changes the required-result count behind the model.
+
+If any property is not yet established, keep the ready flag temporarily. The
+state reduction is a later optimization, not a reason to compromise correctness.
+
+8.5 Ready-event storage cannot become a new deadlock
+----------------------------------------------------------------------
+
+A completion pipeline must not hold the only resource needed by the consumer
+that would free its ready queue. Reserve ready-event capacity before accepting
+work, or prove a strict capacity bound from unique owner ownership.
+
+With at most 64 live owners and at most one ready ticket per owner across all
+ready locations, each of three independently 64-entry ready queues is
+conservatively sufficient. Heads and pending reads count inside that capacity.
+This is a capacity proof, not permission to ignore ready when an implementation
+violates the unique-ticket invariant.
+
+A tighter shared ready pool could save memory, but its multi-producer allocator
+and merge logic must be counted. Do not replace three simple queues with a
+shared arbitration structure unless the physical result improves.
+
+8.6 Publish only after the memory edge
+----------------------------------------------------------------------
+
+The consumer may use readiness to launch owner-aligned result reads. Therefore
+C4 publication must not precede the C3 payload write becoming architecturally
+visible under the bank's synchronous read contract.
+
+If a result write and a later consumer read can touch the same address on the
+same edge, either prove the primitive's configured behavior gives the required
+value or prevent the collision with a stage boundary. Prefer the latter for
+portable reference equivalence.
+
+A 'done' bit that becomes true one edge early is a semantic bug even if most
+simulators happen to show the newly written value in a convenient order.
+
+8.7 Status is part of the terminal payload
+----------------------------------------------------------------------
+
+A diagnostic color is not a substitute for status. COMBINE may alter that color
+according to a material recipe. Preserve service error/refusal flags through
+sample-result storage, COMBINE tag transport, and final-result publication.
+
+Every required job yields one of: a correct value with success status, or a
+specified terminal failure value with failure status. Unsupported or malformed
+material semantics must follow the existing reference contract. V3.1 changes
+scheduling and ownership, not the meaning of a refused operation.
+
+
+9. READY SCHEDULING AND COMBINE ADMISSION
+======================================================================
+
+9.1 Three independent producers, one bounded consumer
+----------------------------------------------------------------------
+
+Retain three source queues initially:
+
+  READY_TMU: owners made ready by TMU publication, including a simultaneous
+             same-owner TMU+AUX transition;
+  READY_AUX: owners made ready by AUX alone or by AUX while TMU completes a
+             different owner;
+  READY_INITIAL: owners requiring no sample/AUX result at admission.
+
+Each queue holds only an owner token. The consumer selects a visible head using
+registered arbitration state and a bounded fairness rule. A queue's RAM-body
+pointers are not inputs to the normal admission decision. Use out_valid and a
+head packet, not a reconstructed count, to select work.
+
+Round-robin among nonempty visible heads is a reasonable initial policy. State
+whether the round-robin pointer advances on selection or actual acceptance;
+use acceptance. A stalled COMBINE admission must not lose the chosen head or
+change its data under valid.
+
+9.2 Separate 'selected', 'read reserved', and 'COMBINE accepted'
+----------------------------------------------------------------------
+
+A ready owner needs synchronous reads of its material and sample/AUX result
+planes. Therefore a queue pop cannot be treated as immediate COMBINE acceptance.
+Use a small join slot with explicit ownership:
+
+  selected ready token reserves a join slot;
+  queue transfers token ownership to that slot;
+  join slot launches the required bank reads;
+  read-valid bits collect the returned operands;
+  complete packet waits for COMBINE's ready;
+  only the COMBINE transfer sets COMBINE-issued.
+
+The join slot must hold the owner token and all required validity/status bits.
+If it holds copied operand values, those registers belong in the resource
+inventory. Do not count only the RAM planes and omit every read-side packet.
+
+A single join slot may be sufficient if its fill latency is hidden by COMBINE's
+issue rate. Two slots may improve throughput; measure that choice. Do not add
+an eight-entry wide-payload queue preemptively when narrow tickets and a small
+join can serve the same rate.
+
+9.3 Bank access ownership
+----------------------------------------------------------------------
+
+Each result bank has one defined COMBINE-side reader. An ordered output reader
+uses OWNER_CONTEXT and FINAL_RESULT, not the sample-result banks. That separation
+is why the transaction file is split into planes.
+
+A debug reader is not a free second port. Either stop the machine for inspection,
+use the existing read port through arbitration under a specified debug mode,
+or explicitly budget the additional replicated storage. The same applies to
+an independent validation/checksum reader.
+
+9.4 No second global reorder buffer
+----------------------------------------------------------------------
+
+COMBINE may complete younger owners before older ones. Its completion writes
+the reserved FINAL_RESULT row and publishes final-done. It must not feed a
+second 64-entry full-context reorder buffer in addition to the owner window.
+
+The owner window already provides identity and final ordering. A small local
+COMBINE result queue is legitimate if it serves the unit's pipeline or port
+contract, but its capacity and transfer point must be explicit. It is not a
+second fragment lifetime.
+
+9.5 What to keep from COMBINE V2
+----------------------------------------------------------------------
+
+Keep the paired-phase byte-product organization and established recipe
+arithmetic. The available composed result no longer identifies COMBINE as the
+old dominant timing family. There is no evidence-based reason to make another
+COMBINE rewrite the first response to the failed owner demo. [R1]
+
+Preserve exact rounding, saturation placement, sample count, alpha handling,
+and status transport. A cheaper combination that silently changes division by
+256 into division by 255, or clips each source before final accumulation, is a
+semantic change, not a control-fabric optimization.
+
+
+10. ORDERED OUTPUT, PREFETCH, AND OWNER RETIREMENT
+======================================================================
+
+10.1 Use a fetch frontier instead of a per-owner fetched bit
+----------------------------------------------------------------------
+
+Final results may become available out of order. Keep final-done per owner.
+Fetch only the oldest not-yet-fetched ticket. That creates a second contiguous
+frontier:
+
+  retire_ticket <= fetch_ticket <= alloc_ticket
+
+where ordering is interpreted within the bounded live interval, not by ordinary
+unsigned comparison across wrap.
+
+The interval [retire_ticket, fetch_ticket) consists of owners whose final
+packets have been reserved into the output path but not yet externally retired.
+This interval replaces the per-owner final-fetched bitmap when fetch is strictly
+contiguous and never retries without retaining its reservation.
+
+If an implementation supports out-of-order fetch, holes, or cancellation of
+individual prefetched entries, the bitmap cannot be removed by this argument.
+Do not change the fetch policy and retain the simplified state accidentally.
+
+10.2 Reserve the output packet before reading RAM
+----------------------------------------------------------------------
+
+A synchronous read returns after its address is issued. Before advancing
+fetch_ticket or launching OWNER_CONTEXT/FINAL_RESULT reads, reserve an output
+packet location for that ticket.
+
+The reserved location progresses through:
+
+  FREE -> READ_PENDING -> FILLED -> EXTERNALLY_TRANSFERRED -> FREE.
+
+Its capacity includes READ_PENDING locations. A FIFO count that increments only
+when returned data reaches the head recreates the ready queue's invisible
+in-flight ticket defect on the output side.
+
+Keep the output queue small initially, for example four logical packet slots,
+with explicit accounting for its wide records. Its purpose is to hide read
+latency and short stalls, not to create another 64-entry fragment store.
+
+10.3 Owner lifetime extends through downstream stalls
+----------------------------------------------------------------------
+
+An owner remains live while its final packet is held with valid high and ready
+low. Its payload banks and control row must not be reinitialized. Returning its
+credit on final-done, RAM-read issue, queue insertion, or valid assertion is
+incorrect.
+
+The only normal retirement event is:
+
+  output_taken = output_valid && output_ready.
+
+Assert that the transferred packet's ticket equals retire_ticket. Then advance
+retire_ticket and decrement used. The payload contents may remain physically
+unchanged after retirement; their old validity is gone.
+
+10.4 Same-cycle final publication and fetch
+----------------------------------------------------------------------
+
+Initially, let fetch observe registered final-done from the preceding edge.
+A newly published final result becomes fetchable on the following cycle. This
+one-cycle latency avoids depending on read-during-write behavior or adding a
+late final-publication bypass into the ordered fetch path.
+
+If throughput later requires a bypass, explicitly join the publication's data
+and token into a reserved output slot rather than hoping the RAM returns new
+data on a same-address collision. The bypass must preserve output order and
+status and must have a dedicated mutation test.
+
+10.5 Output packet contents
+----------------------------------------------------------------------
+
+A conservative output packet contains:
+
+  opaque caller context: 64 bits;
+  final color/status record: 40 bits;
+  owner token: 14 bits;
+  reserved/padding: 2 bits;
+  total: 120 bits.
+
+Do not truncate opaque context into coordinate bits, or assume callers use only
+small IDs. The complete caller-visible identity travels unchanged.
+
+Three 40-bit width slices may be needed for a RAM-backed 120-bit queue, even
+when only a few rows are used. A register-based four-entry packet queue could
+be a better trade at a given stage. Both choices must count head/pending
+storage and be measured under the same output-stall workload.
+
+10.6 Final-done ownership and slot reuse
+----------------------------------------------------------------------
+
+On admission to a newly allocated slot, clear final-done and initialize its
+other local controls. A stale final return with the old generation must fail
+window validation before it can claim or write the new owner's row.
+
+The oldest owner's final-done may be read directly from a small local control
+bank, then registered into the output-fetch controller. Do not scan all owners
+for an arbitrary completed result: final ordering means only one frontier
+owner is eligible for ordered fetch.
+
+
+11. RESET, ABORT, CONFIGURATION EPOCHS, AND DISTRIBUTED DRAIN
+======================================================================
+
+11.1 Drain is a protocol, not a combinational reduction
+----------------------------------------------------------------------
+
+The previous design's quiet expression collects queue and pipeline state.
+The replacement uses a drain controller with an explicit phase sequence and
+registered acknowledgments. This removes rare global conditions from ordinary
+admission while making namespace reuse more rigorous.
+
+The critical distinction is between stopping new OWNERS and stopping work for
+EXISTING owners. Closing all service inputs immediately would deadlock owners
+that still need to issue work. A drain must let previously admitted owners
+finish their remaining service requests and outputs.
+
+11.2 Recommended phase sequence
+----------------------------------------------------------------------
+
+  OPEN:
+    ordinary admission and service execution.
+
+  STOP_NEW_OWNERS:
+    deassert admission permission; capture the reason and target epoch/fence.
+    Existing owners may continue issuing, completing, combining, and retiring.
+
+  FINISH_OWNERS:
+    wait for the live owner interval and output reservations to empty.
+    Do not use only output_valid == 0 as this test.
+
+  QUIESCE_PRODUCERS:
+    request acknowledgment from external/memory/service producers that they
+    owe no further old-epoch returns. Their accepted-versus-terminal counts
+    and input-stopped condition must justify the acknowledgment.
+
+  DRAIN_RESIDUAL_TRANSPORT:
+    drain invalid/duplicate/stale captures and internal pending reads. A bad
+    response can be unassociated with a live owner yet still occupy transport.
+
+  FENCE_COMPLETE:
+    all required acknowledgments belong to the same held drain request;
+    reset/reseed the permitted namespace/configuration state and reopen.
+
+These phases may overlap where proved safe. Their causal ordering must remain
+clear. A leaf reporting empty before its upstream producer is stopped cannot
+be latched as a permanent drained acknowledgment if that upstream can enqueue
+another item afterward.
+
+11.3 Acknowledgment contract
+----------------------------------------------------------------------
+
+For each service/queue domain, ACK means:
+
+  all accepted old-epoch inputs have produced their required terminal outcomes
+  or have been canceled under an acknowledged cancellation contract;
+  no old-epoch packet remains in body, head, read-pending, output-pending, or
+  external-return state;
+  no upstream producer is permitted to create another old-epoch input;
+  ACK remains valid while the corresponding drain request remains asserted.
+
+If a unit cannot provide this meaning, use an explicit outstanding-obligation
+counter or redesign the boundary. Do not rename idle as drained.
+
+11.4 Configuration immutability
+----------------------------------------------------------------------
+
+An owner resolves its binding/material/envelope information against a stable
+configuration epoch. Changes to a palette, binding descriptor, or envelope may
+not alter the meaning of an already admitted owner.
+
+The simplest initial profile drains before destructive configuration reuse.
+If double-buffered versions are required later, the retained versions and their
+reference lifetimes must be counted. They are not free because the descriptor
+contains an epoch byte.
+
+The epoch identifier also has a finite namespace. Its wrap/reuse law must be
+as explicit as the owner generation law. A wider token reduces wrap frequency;
+it does not eliminate the need for a lifetime bound.
+
+11.5 Reset kinds
+----------------------------------------------------------------------
+
+Differentiate:
+
+  power-on/system reset that resets all relevant producers and consumers;
+  controlled island reset after a completed drain;
+  fault abort while external work may remain;
+  software configuration change with no reset.
+
+The first two may reset local control/pointers without preserving old owner
+outputs, subject to the system contract. The third must not immediately reuse
+identities while external old returns can still arrive. The fourth uses stable
+versions or a drain.
+
+Payload RAM is not cleared by reset. Ownership and validity determine whether
+its contents may be read. Tests should poison old payload and detect invalid
+reads rather than making every unused word coincidentally zero.
+
+11.6 Abort preserves deterministic outcomes
+----------------------------------------------------------------------
+
+A recoverable per-owner service failure should normally produce an ordered
+terminal status. A frame-wide abort may discard all owners only after the
+consumer and every producer agree on the abort boundary. Define what happens
+to a final packet already held valid under backpressure.
+
+Never let a local unit silently release an interior owner and leave the ticket
+window with a hole. Either keep an ordered tombstone or perform the full
+abort protocol. This rule is load-bearing for the window simplification.
+
+11.7 Quiet output timing
+----------------------------------------------------------------------
+
+Export a registered ev_quiet/status signal derived from completed drain state,
+or a separately specified diagnostic idle state. Do not drive an externally
+constrained output directly from several queue pointer differences and a wide
+reduction of pipeline valids.
+
+A one-cycle-later diagnostic idle indication is usually acceptable. A one-cycle
+late admission permission can be acceptable. A one-cycle EARLY drained ACK is
+not acceptable. The protocol must prioritize safety, not merely shorten the
+reported path.
+
+
+12. PAYLOAD BANKS, METADATA, AND MEMORY ACCOUNTING
+======================================================================
+
+12.1 Retain independent physical readers and writers
+----------------------------------------------------------------------
+
+The original V3 payload-plane organization remains the starting point:
+
+  Plane                 Logical geometry  Writer              Reader
+  --------------------  ----------------  ------------------  ----------------
+  OWNER_CONTEXT         64 x 64           admission           ordered output
+  MATERIAL              64 x 48           admission           COMBINE join
+  AUX_GEOMETRY          64 x 80           admission           AUX issue
+  SAMPLE_DESC_0         64 x 80           admission           sample expansion
+  SAMPLE_DESC_1         64 x 80           admission           sample expansion
+  SAMPLE_DESC_2         64 x 80           admission           sample expansion
+  RCP_RESULT            64 x 32           RCP terminal write  sample expansion
+  SAMPLE_RESULT_0       64 x 40           TMU publication     COMBINE join
+  SAMPLE_RESULT_1       64 x 40           TMU publication     COMBINE join
+  SAMPLE_RESULT_2       64 x 40           TMU publication     COMBINE join
+  AUX_RESULT            64 x 40           AUX publication     COMBINE join
+  FINAL_RESULT          64 x 40           COMBINE terminal    ordered output
+  SAMPLE_METADATA       256 x 40          planner             response prepare
+
+The 256-row metadata address can be formed by concatenation of owner slot and
+sample index. Sample index three remains illegal/reserved; it is not a fourth
+sample. Do not compress 256 physical addresses into 192 with arithmetic unless
+that redesign is explicitly measured and its indexing stays exact. [R7]
+
+12.2 What the 17-M10K owner result does not mean
+----------------------------------------------------------------------
+
+The demonstrator's 17 physical M10Ks cover its implemented subset of payload
+and queue storage. They are not the complete island's memory total. They are
+also not one-to-one with logical bank names: record width and independent port
+requirements cause slicing.
+
+The original whole-island proposal accounted for a 56-M10K core profile and up
+to 64 with named elastic buffering. Those figures are allocations, not achieved
+measurements. V3.1 must regenerate the inventory after changing ready queues,
+RCP result queues, and output buffering. It may not inherit 64 as a magical
+ceiling that already includes every replacement stage.
+
+12.3 Memory inventory must include invisible storage
+----------------------------------------------------------------------
+
+Count:
+
+  every independently ported payload plane;
+  every RAM FIFO body;
+  every read-pending register;
+  every head/prefetch cache;
+  every join/output packet register;
+  every descriptor/palette version retained concurrently;
+  generated ROM mapping;
+  MLAB usage as well as M10K usage;
+  fitter-created register duplication where reported.
+
+A reduced block-memory-bit count may mean optimized-away data, MLAB mapping,
+or an inference problem. Do not infer which solely from the total. Inspect the
+actual RAM summary and each entity's storage.
+
+12.4 Keep the first read capture structurally simple
+----------------------------------------------------------------------
+
+Use a vendor-compatible synchronous read template with the array output captured
+before arithmetic, slicing that prevents inference, or variable selection.
+Avoid unsupported payload resets. Verify with the exact Quartus version; later
+vendor documentation provides design guidance, not a guarantee about an older
+compiler's inference decisions. [V1,V2]
+
+The current bank wrapper's simple registered read is worth keeping. The new
+control fabric should surround it, not smuggle a priority mux into its first
+read capture to save a downstream stage.
+
+12.5 Read-during-write behavior
+----------------------------------------------------------------------
+
+Specify collisions per plane. Ideally an owner's row is immutable while a
+consumer reads it, and publication/read staging prevents same-edge dependence.
+If a collision is legal, choose old/new/don't-care behavior deliberately and
+make both the reference wrapper and the FPGA primitive agree.
+
+A no_rw_check attribute tells the tool it need not preserve a particular
+collision behavior; it does not prove the collision is harmless. The designer
+owes that proof. [V2]
+
+12.6 Do not solve timing by duplicating all payload planes
+----------------------------------------------------------------------
+
+Replicating a small control decode may be useful. Replicating all wide owner
+payload to obtain an extra convenient read port can rapidly erase V3's savings.
+Before replication, schedule the read, use a small read-side join, or identify
+whether the two consumers genuinely need simultaneous access.
+
+If replication is necessary, expose it as a separate inventory row and a
+measured design choice. Never let a second source expression silently infer a
+second copy of a large descriptor or sample store.
+
+
+13. RCP V3 REPAIR WITHOUT UNDOING ITS ARITHMETIC IMPROVEMENT
+======================================================================
+
+13.1 Preserve the exact arithmetic tile
+----------------------------------------------------------------------
+
+The existing V3 replacement reduced the wide reciprocal product to exact
+32x32-related work with the required signed-wrap correction. Its measured DSP
+count is three, not the hoped-for two. Keep that proven arithmetic and its
+exhaustive denominator differential. [R3]
+
+Do not recover area by truncating precision, changing rounding, omitting the
+negative correction, or serializing arithmetic so the four-clocks/result rate
+is lost. The direct arbitrary-x,w arithmetic test remains required because the
+negative correction is not exercised by friendly convergent denominator inputs.
+
+13.2 Fix the result-ticket queue path separately
+----------------------------------------------------------------------
+
+The reported limiting path names the done-ticket queue memory read into an
+external token output. Apply the same queue principles as section 5:
+
+  synchronous body;
+  reserved pending return;
+  registered visible head;
+  explicit logical occupancy;
+  stable output under stall;
+  local registered status rather than a broad ready/count expression.
+
+Do not assume the texture v3rq and raster ticketq implementations are identical.
+Inspect the RCP queue's actual source, then adapt the contract. The architectural
+requirement is common; the patch need not be copied blindly.
+
+Classify the path's endpoint correctly. A mem_q-to-r_tok_o path may be an egress
+boundary path rather than a register-to-register arithmetic limit. The actual
+receiver and SDC determine what it must meet.
+
+13.3 Keep sixteen execution contexts initially
+----------------------------------------------------------------------
+
+The measured experiment identified 16 as the useful knee: it kept the four-job
+reciprocal pipeline occupied, whereas eight left bubbles and 32 bought no
+additional rate. Keep sixteen while repairing queue timing and storage. [R3]
+
+If added queue latency changes the feedback-loop requirement, remeasure the
+context sweep. Do not assume the old knee remains exact after changing the
+execution schedule. Add contexts only if the new measured occupancy/launch
+trace shows starvation of the arithmetic pipeline.
+
+13.4 Reconcile temporary standalone storage with the owner interface
+----------------------------------------------------------------------
+
+The isolated tile has local result storage and completion tickets because it
+must operate independently. In the composed island, the final reciprocal result
+belongs in the owner's RCP_RESULT plane. Avoid retaining both a large local
+result table and a global result table unless they serve distinct measured
+purposes.
+
+A local completion skid queue may still be necessary to cross into the global
+single-writer commit stream. Its token/data ownership ends at accepted transfer
+to that stream, not when the arithmetic unit merely raises done.
+
+Do not subtract hypothetical integration savings from the 1,230-ALM measured
+row before the integrated source and map report show the storage actually gone.
+
+13.5 RCP fit experiment matrix
+----------------------------------------------------------------------
+
+Use the existing fitted arithmetic as baseline. Compare:
+
+  R0: current 16-context V3 tile;
+  R1: registered done-head/queue accounting repair only;
+  R2: memory-backed narrow ticket queue variant, same logical capacity;
+  R3: composed-terminal interface eliminating redundant standalone result
+      storage, only after the owner interface is fixed.
+
+For each record ALMs, registers, DSPs, M10Ks, MLABs, memory bits, throughput,
+latency distribution, setup/hold across corners, and endpoint classes. A better
+headline Fmax with a worse sustained result rate is not an unqualified win.
+
+
+14. PERSPECTIVE, SAMPLER, CACHE, PALETTE, AUX, AND COMBINE INTEGRATION
+======================================================================
+
+14.1 V3.1 is not permission to stop at the owner demo
+----------------------------------------------------------------------
+
+A small, fast owner block can still be attached to an incomplete island. The
+next full island must retain all the functionality whose absence invalidated
+earlier optimistic measurements: real binding resolution, nearest/direct
+formats, CLUT4 nibble selection, alpha, AUX geometry, and useful Mosaic output.
+
+Use feature-live tests and an observable fit wrapper. No constant mode inputs,
+unread result outputs, or always-refused legal path may silently remove work
+from the physical measurement.
+
+14.2 Paired perspective execution
+----------------------------------------------------------------------
+
+The intended paired U/V path remains useful. A fragment's U and V share the
+same reciprocal/exponent but have independent signed numerators and saturation
+outcomes. Keep their metadata aligned through stalls.
+
+A deep pipeline can carry a narrow local lease rather than duplicating a wide
+owner/binding/status packet through every arithmetic stage. If the side metadata
+is stored in a 16x40-style queue, its lease remains owned until the final output
+packet has been safely transferred. A RAM read for side metadata requires a
+reserved packet destination.
+
+A zero-depth result must not bypass younger/older paired metadata in a way that
+misaligns owner and coordinates. Either carry it through the same ordered path
+or use an explicitly ordered join. The test must deliberately reuse slots
+around zero-depth cases.
+
+One U/V pair per clock is the intended saturated pipeline target, not a
+measurement newly established here. The current owner failure supplies no
+physical verdict on a complete paired PERSPUV replacement.
+
+14.3 Immutable binding resolution
+----------------------------------------------------------------------
+
+Resolve base address, format, filter mode, palette identity, envelope identity,
+and material state against the admitted owner's epoch. Carry the resolved
+identity to the planner and response metadata. Do not read live global mode
+pins after the owner was admitted.
+
+If a descriptor read is delayed, reserve an owner-associated result slot and
+retain the descriptor epoch. A later configuration write cannot change that
+in-flight interpretation.
+
+The source checks for global binding reads are useful guards, but behavioral
+tests must also interleave two bindings with deliberately different base,
+format, palette, and filter values under stalls.
+
+14.4 Format identity and CLUT4
+----------------------------------------------------------------------
+
+Keep byte select, nibble select, format, effective filter, palette slot,
+palette generation, fractions, and status with the sample identity. CLUT4 uses
+one of two nibbles; treating the packed byte as the index can produce plausible
+but wrong colors.
+
+A CLUT4 test must prove both nibble parities actually occur. A sequence intended
+to alternate parity can accidentally generate only even texels. Assert stimulus
+coverage independently of color correctness.
+
+Use interleaved CLUT8, CLUT4, RGB565, ARGB1555, and ARGB4444 cases. Make RGB and
+alpha values independently distinguishable. Filtered alpha must retain its
+fourth channel phase where that is the current material contract.
+
+14.5 Cache reservations remain load-bearing
+----------------------------------------------------------------------
+
+Preserve the repaired cache's accepted-request/response reservations. A warm
+cache hit is still a response that needs storage; it is not safe merely because
+no external memory miss occurs.
+
+Stress the exact failure family: fill the response queue, keep accepted probes
+in flight, stall the consumer, then release it and require every admitted token
+exactly once. Include fills, replacement, and queued response pops on the same
+edge where supported.
+
+Owner-window simplification must not remove cache-local request identity or
+miss/fill obligations. Global owner lifetime and cache transport lifetime are
+related but not identical.
+
+14.6 Palette returns need real credits
+----------------------------------------------------------------------
+
+A palette lookup can return after the downstream class merge stalls. Reserve
+its terminal-result capacity before issuing the lookup. Include pending
+synchronous reads in occupancy and drain.
+
+Keep the palette's BEGIN/load/END/coverage/CRC/generation rules. A stable owner
+token does not make a palette entry stable if the palette slot is destructively
+reloaded while an older sample still refers to it.
+
+Test lookup during load, same-generation BEGIN, missing entry, cold/stale
+identity, and delayed merge. Keep invalid responses terminal and accounted;
+otherwise a material failure can become an owner leak.
+
+14.7 AUX geometry is not opaque caller context
+----------------------------------------------------------------------
+
+Carry independent geometric coordinates/envelope selectors and the full opaque
+caller context. Do not use context bits as a convenient coordinate source.
+AUX's real accepted geometry and real configuration must be live in the fit.
+
+A constant envelope can let synthesis remove the expensive arithmetic path.
+Such a result is a constrained experiment, not an honest production island
+measurement. Report the capability difference instead of presenting its Fmax
+as general.
+
+AUX offers and terminal returns may have independent timing and ordering. Use
+separate credited queues if both directions need simultaneous storage accesses.
+Their local tokens must retain all six owner-slot bits and eight generation
+bits through every internal side channel.
+
+14.8 Mosaic must affect the consumed binding
+----------------------------------------------------------------------
+
+Keeping a Mosaic module instantiated is not evidence its useful hardware is
+present. Its selected material/binding must actually influence the texture
+sample used by COMBINE, and outputs must be observed in the conformance test.
+
+Use a test in which changing Mosaic selection changes the final color. A
+counter-only observation can preserve the counter while synthesis removes the
+entire useful selection datapath.
+
+14.9 End-to-end conservation at integration
+----------------------------------------------------------------------
+
+For a normal drained frame:
+
+  admitted owners = externally emitted owners;
+  issued required sample jobs = terminally resolved required sample jobs;
+  unique claims = payload writes = publications, by result class;
+  nonzero-work zero transitions + zero-work admissions = ready tickets created;
+  ready tickets transferred to COMBINE = COMBINE jobs accepted;
+  final claims = final writes = final-done publications;
+  output reads reserved = output packets produced = emitted owners,
+  with explicitly counted transient differences while running.
+
+Counters alone do not prove identity or order. Compare complete token/value/
+status sequences against the independent reference and retain these equalities
+as additional conservation checks.
+
+
+15. TIMING CLOSURE AND PHYSICAL EVIDENCE METHODOLOGY
+======================================================================
+
+15.1 A successful fitter exit is not timing closure
+----------------------------------------------------------------------
+
+Quartus completing placement/routing means it produced a placement/routing
+result. It does not mean 100 MHz is legal. Report resource fit, setup, hold,
+recovery/removal where applicable, unconstrained paths, and any exceptions
+separately.
+
+At minimum, every result record includes:
+
+  exact device/part/speed grade;
+  Quartus version;
+  clock definitions and uncertainty;
+  input/output delay assumptions;
+  fitter seed and optimization settings;
+  source digest and immutable snapshot identifier;
+  ALMs, registers, DSPs, M10Ks, MLABs, memory bits;
+  worst slack and TNS by timing class/corner;
+  critical startpoint and endpoint;
+  throughput measured on the same functional configuration.
+
+15.2 Correct the internal-versus-boundary classification
+----------------------------------------------------------------------
+
+For each critical path list its source and destination classes, not just whether
+its source name begins with a pin. The owner demo's ready-pointer-to-output
+paths are especially important here.
+
+Four reports are required under the same clock assumptions:
+
+  R2R: sequential launch to sequential capture;
+  I2R: input to sequential capture;
+  R2O: sequential launch to output;
+  I2O: input to output.
+
+Report clock-domain crossings separately. If a path is intentionally false or
+multicycle, show the functional reason and the exact constrained endpoints.
+A throughput margin does not itself justify a multicycle exception.
+
+15.3 Use two honest wrappers
+----------------------------------------------------------------------
+
+Maintain:
+
+  a leaf characterization wrapper, with explicitly stated boundary delays;
+  a registered conformance wrapper that models the actual intended transaction
+  boundary and keeps every required feature observable.
+
+The difference helps identify boundary sensitivity. It does not grant permission
+to quote only the more flattering result. The real integrated consumer may
+still impose a difficult path through ready/valid or command timing.
+
+Never compare an old unregistered boundary with a new registered boundary and
+attribute the entire Fmax change to internal architecture.
+
+15.4 Break the observed queue-to-admission family deliberately
+----------------------------------------------------------------------
+
+The proposed normal admission equation depends on registered owner credit,
+registered fence/epoch permission, and a local admission-stage credit. It must
+not depend combinationally on:
+
+  ready-queue body write/read pointer distance;
+  global service quiet;
+  aggregate queue occupancy;
+  a downstream COMBINE ready chain;
+  final consumer ready through a full-window bypass.
+
+After the rewrite, inspect the netlist path cone to verify those dependencies
+are absent. A source comment saying 'registered' is not enough if another
+combinational bypass reintroduces the connection.
+
+15.5 Retiming versus protocol changes
+----------------------------------------------------------------------
+
+Adding a register changes latency. It does not automatically preserve protocol
+behavior. A status register can make ready one cycle stale; an uncredited RAM
+return can overflow; a delayed claim can allow a duplicate.
+
+Every timing cut must state the new ownership point and the storage reserved
+for the extra cycle. The testbench must include continuous traffic and burst
+stalls, not only one request followed by a wait for its answer.
+
+15.6 Fanout, decode, and duplication
+----------------------------------------------------------------------
+
+If attribution shows large fanout from a few event enables, duplicate or locally
+register the small decode rather than broadcasting it across all banks. This
+spends some flops to reduce routing and repeated mux control.
+
+Measure the cost. Fitter duplication already increased owner registers from
+4,220 mapped to 4,864 fitted. A source-level localization that reduces forced
+physical duplication may improve both area and timing, but the current data
+alone does not establish how much.
+
+Do not add preserve/keep/dont-merge directives indiscriminately. They can stop
+useful optimization and make the design worse. Use targeted constraints only
+after identifying the actual synthesis transformation that needs controlling.
+
+15.7 Hold timing is a separate gate
+----------------------------------------------------------------------
+
+The owner demo has negative hold at both reported slow corners. A lower clock
+period requirement or a lower operating frequency does not inherently fix
+hold. Inspect minimum-delay paths, clock skew, I/O assumptions, and the exact
+hold constraints. [R2,V3]
+
+Do not manufacture hold success by deleting relevant clocks, marking real data
+paths false, or ignoring the colder corner because another report is green.
+A full sign-off includes all applicable operating corners and the actual board
+clock/interface constraints.
+
+15.8 Timing objectives and reserves
+----------------------------------------------------------------------
+
+The product-domain requirement remains 100 MHz where this island shares that
+clock. Standalone margin above 100 is desirable because composition adds routing
+and control pressure. The earlier 115-120-MHz leaf aspiration remains an
+aspiration; it is not a measured property of V3.1.
+
+For an early structural experiment, distinguish:
+
+  functional correctness passed;
+  intended RAM/port structure passed;
+  allocation passed or failed;
+  100-MHz timing passed or failed;
+  desired integration margin passed or failed.
+
+This prevents a useful but incomplete result from being described either as a
+complete success or as total project failure.
+
+15.9 Seed experiments
+----------------------------------------------------------------------
+
+Use at least a small seed comparison for the accepted candidate and its actual
+baseline when differences are modest. The old RCP seed spread already showed
+that several MHz can be placement variation. [R3]
+
+Do not run many seeds to find one lucky result while hiding the floor. Report
+best, median, worst, and the structural critical-path family. Fixing a real
+control cone should produce a repeatable improvement, not a single selected
+number at an unchanged architecture.
+
+
+16. RESOURCE ATTRIBUTION, BUDGETS, AND DECISION THRESHOLDS
+======================================================================
+
+16.1 Attribute before the next broad rewrite
+----------------------------------------------------------------------
+
+The first physical task is to account for the 5,678 ALMs. Required artifacts:
+
+  fitted resource utilization by entity, including the top-level remainder;
+  mapped combinational ALUTs and registers by entity;
+  RAM/MLAB summary with width/depth/port geometry;
+  register duplication/packing report where available;
+  mux/decoder/high-fanout critical cones;
+  timing paths classified by both endpoints.
+
+The top-level remainder matters. A report that attributes only named child
+modules can make the scoreboard appear free because its logic lives in the
+parent entity.
+
+Do not claim attribution from a source-line count. One indexed assignment can
+infer more logic than hundreds of lines of fixed wiring.
+
+16.2 The report retrieval limitation does not become an invented result
+----------------------------------------------------------------------
+
+The full-fit map report is listed in the repository at:
+
+  reports/synthesis/blockpaths/zhao_texture_v3own@v3-full.map.rpt
+
+The tree reports roughly 1.23 MB for that file. The setup report is roughly
+3.36 MB. Available connector retrieval failed during this review. An
+implementation agent with the checkout should read those local files or export
+compact entity/timing summaries from the exact saved fit database.
+
+If the saved reports lack entity attribution, re-run a small attribution build
+with the same source/constraints and clearly label it as a new experiment.
+Do not retroactively attach the new attribution to an old fit as if identical
+packing were guaranteed.
+
+16.3 Controlled deltas
+----------------------------------------------------------------------
+
+Run one change at a time with the same owner capacity and observable interface:
+
+  O0: current owner demonstrator, reproduced baseline;
+  O1: queue accounting correctness repair;
+  O2: registered logical-credit queue and admission/fence separation;
+  O3: ticket-window identity, retaining old masks for differential checking;
+  O4: localized control banks, retaining old semantic state fields;
+  O5: remaining-count readiness in place of committed mask + sticky ready;
+  O6: contiguous final-fetch frontier in place of fetched bitmap;
+  O7: accepted combined owner design, full functional and physical checks.
+
+Some stages may be merged only after independent evidence exists and the merge
+is reviewed. O1 may increase area slightly; that does not invalidate the fix.
+O3 and O5 may reduce state but add arithmetic. The measured net matters.
+
+16.4 Useful attribution probes, with limitations
+----------------------------------------------------------------------
+
+A queue-only probe identifies queue implementation cost. A bank-only probe
+identifies payload wrapper cost. A control-only probe can expose scoreboard
+connectivity. They do not add arithmetically to the final fitted owner result,
+because packing and placement change under composition.
+
+For a control-only probe, replace payload data with observable registered
+placeholders while retaining real event traffic and control outputs. Label it
+as an attribution probe, not an owner fit. Prevent optimization from deleting
+control simply because the placeholder never exercises a path.
+
+Where practical, compare a parameterized source variant that changes only one
+structure. Archive each variant's source, not merely the command line that
+selected it.
+
+16.5 Do not raise the allocation to conceal the failure
+----------------------------------------------------------------------
+
+Keep the original 1,800-ALM owner allocation visible until the owner explicitly
+adopts a different whole-island budget. A 5,678-ALM result does not become a
+success because a gate is edited to 5,700.
+
+At the same time, an allocation is not a theorem about minimum hardware cost.
+If a correct measured implementation cannot meet it, the honest choices are:
+
+  redesign with a demonstrated mechanism for further reduction;
+  trade another measured subsystem's budget under a revised total;
+  change a product requirement explicitly;
+  or report that the intended total remains unachieved.
+
+The original 1,800 figure was not supported by a finished control-fabric
+implementation. This document does not repeat that mistake by promising a new
+precise owner size before measurement.
+
+16.6 A complete budget must carry the actual RCP result
+----------------------------------------------------------------------
+
+Use 1,230 ALMs and three DSPs for the measured standalone RCP configuration until
+new evidence replaces it. Mark any proposed removal of local standalone result
+storage as unmeasured integration savings.
+
+Likewise, the full-island DSP total cannot be updated by subtracting three from
+17 and declaring closure. That is a useful candidate saving, but new perspective,
+AUX, decode, and interface work may change other resource counts.
+
+Report a reconciled table with columns:
+
+  allocated;
+  currently measured;
+  scope/capability;
+  exact source digest;
+  unmeasured proposed change;
+  next physical gate.
+
+Never enter a negative 'future optimization' row to make the total balance.
+
+16.7 Register targets must include the complete pipeline
+----------------------------------------------------------------------
+
+The proposed 18-bit local control row is 1,152 declared bits. Add real ticket
+state, event pipeline packets, row-selection registers, FIFO heads, pending
+reads, result joins, RCP/PERSP pipeline state, counters, and output packets.
+
+A quoted 'owner register count' that includes only the 1,152-bit table would
+repeat the same undercount that made the original allocation look easier than
+it was. The fitter's count is the final physical measure for that exact scope.
+
+16.8 Decision threshold after the owner experiment
+----------------------------------------------------------------------
+
+After O7, ask in order:
+
+  Are queue and completion invariants correct under adversarial tests?
+  Are payload planes real RAM with intended ports?
+  Are high-fanout/selector costs now attributed?
+  Did ALMs materially improve relative to O0 under comparable conditions?
+  Does the exact constrained owner block pass setup and hold at 100 MHz?
+  Is the result inside the adopted owner allocation?
+  Does it leave a credible reconciled whole-island budget?
+
+A result that improves area but remains above allocation may be worth retaining
+as a proven intermediate. It is not permission to skip budget reconciliation
+and immediately launch the full island.
+
+
+17. INTERFACES AND STATE-TRANSITION CONTRACTS
+======================================================================
+
+17.1 Common handshake rule
+----------------------------------------------------------------------
+
+Every producer/consumer transfer is valid && ready at the clock edge. The
+producer holds token, payload, and status stable while valid && !ready.
+A counter named accepted counts this conjunction, not valid alone and not the
+producer's private interpretation of downstream readiness.
+
+When composing multiple ready conditions, export or share the actual handshake
+signal with the observer. Do not let a testbench count a triangle/response using
+only its own ready when a real downstream unit can also stall.
+
+17.2 Admission interface
+----------------------------------------------------------------------
+
+Admission carries an opaque caller context, material/binding references,
+geometry needed by AUX, sample requirements, and the reciprocal/perspective
+inputs required by the adopted island interface.
+
+Atomic acceptance means all required initial storage and work-queue credits
+are acquired. The input may not be accepted into RCP while owner allocation
+is refused, or accepted into an AUX queue without the corresponding owner row.
+
+Outputs of admission include the public owner token and internal narrow work
+records. Full payload is stored once in the appropriate planes.
+
+17.3 Sample token layout
+----------------------------------------------------------------------
+
+Keep the existing V3 sample identity layout:
+
+  sample_handle[15:10] = owner slot;
+  sample_handle[9:8]   = sample index;
+  sample_handle[7:0]   = owner generation.
+
+Sample index 0, 1, or 2 is legal. Index 3 is rejected before indexing a
+three-bank array. AUX uses its own typed owner-token interface; it is not
+silently reinterpreted as sample index three.
+
+Pack/unpack tests must cover every slot and generation boundaries in both C++
+and RTL. The ticket-window change does not widen or narrow these public fields.
+
+17.4 Issue event
+----------------------------------------------------------------------
+
+An issue event is generated only when the target service accepts the request.
+It sets the corresponding issued bit. A request offered repeatedly under
+backpressure is one operation, not many.
+
+If issue and a very fast terminal return can occur on the same edge, either
+provide an explicit accepted-issue bypass into claim validation or ensure the
+service interface guarantees the return occurs later. State and test the rule.
+Do not assume latency from an old implementation after replacing a service.
+
+17.5 Claim event
+----------------------------------------------------------------------
+
+A terminal return can claim only when:
+
+  its full owner token is live at authorization;
+  its sample/type is legal;
+  the owner requested that result;
+  the service issue was accepted;
+  that result is not already claimed;
+  all required downstream commit/publication resources are reserved.
+
+The resulting claim record carries the exact bank/row, data, status, and owner
+identity needed by the write stage. No later live configuration read determines
+what was claimed.
+
+17.6 Publication event
+----------------------------------------------------------------------
+
+Publication follows the physical payload write. It carries the owner token and
+result kind, not a fresh data-dependent owner lookup. The local control bank
+uses it to update remaining and possibly create readiness.
+
+A stale or invalid publication should be impossible once claim authority and
+lifetime are correct. Keep a detector anyway. If it fires, fail the frame or
+enter the defined fault path; do not quietly decrement another owner's count.
+
+17.7 COMBINE and final event
+----------------------------------------------------------------------
+
+COMBINE acceptance consumes one ready token and its complete joined operands.
+Set COMBINE-issued on that transfer. A final terminal return claims only an owner
+with COMBINE-issued set and final-claimed clear.
+
+Final write and final-done publication follow the same write-before-publish
+ordering as sample results. Status remains attached to the correct owner even
+if the final color is a refusal or transformed diagnostic value.
+
+17.8 Retirement event
+----------------------------------------------------------------------
+
+Retirement requires actual external transfer of the packet at retire_ticket.
+The transfer returns the output reservation and owner credit exactly once.
+Any additional debug/trace observer must not alter this handshake unless it is
+explicitly a backpressuring participant in the product contract.
+
+17.9 Diagnostic counters
+----------------------------------------------------------------------
+
+Provide a compact set that answers actual design questions:
+
+  owners admitted/emitted, peak used;
+  admission stalls by owner-credit, local-stage-credit, and fence reason;
+  required jobs issued, claims accepted, claims rejected by reason;
+  publications by type;
+  simultaneous same-owner TMU+AUX publication count;
+  ready events produced and COMBINE jobs accepted;
+  output reservations, pending reads, and output-stall cycles;
+  namespace/configuration fences begun/completed;
+  queue high-water marks and underflow/overflow detectors.
+
+Do not create wide per-owner historical counters in production just to make the
+report look detailed. Rich traces can live in simulation or bounded debug
+storage whose cost is separately declared.
+
+
+18. VERIFICATION, ADVERSARIAL TESTS, AND REQUIRED COUNTEREXAMPLES
+======================================================================
+
+18.1 Three independent levels of evidence
+----------------------------------------------------------------------
+
+Use:
+
+  an abstract transaction model for owner/sample/status behavior;
+  RTL differential tests for actual cycle-level handshakes and pipeline hazards;
+  physical reports for inferred storage, area, and timing.
+
+A Python model cannot prove the SystemVerilog is wired correctly. A passing
+RTL test cannot prove RAM inference. A successful fitter cannot prove the
+material semantics or liveness. Each level answers a different question.
+
+18.2 Queue test family
+----------------------------------------------------------------------
+
+Required cases:
+
+  empty push followed by synchronous prefetch with no external pop;
+  drain observed while a read is pending;
+  all occupancies from zero through logical capacity;
+  body full while heads contain items;
+  simultaneous push/pop and read-return/head shift;
+  repeated long output stalls;
+  empty-to-nonempty and full-to-not-full transitions;
+  multiple pointer wraps;
+  reset only under the legal system reset contract;
+  one-pop-per-clock sustained stream after warmup.
+
+Check sequence and payload, not only counts. Give each ticket a distinct value
+so dropped, repeated, or reordered words cannot accidentally compare equal.
+
+18.3 Ticket-window family
+----------------------------------------------------------------------
+
+Prove or test:
+
+  public token encoding/decoding is bijective for all 14-bit tickets;
+  membership matches an independent set of live tickets;
+  empty/full distinction;
+  allocation/retirement across physical slot wrap;
+  generation boundary 254 -> 255 -> 0;
+  invalid old token before and after slot reuse;
+  captured duplicate that retires before claim authorization;
+  simultaneous admission and retirement at different slots;
+  namespace fence prevents reuse while any old return can still arrive;
+  no interior owner disappears through a local error path.
+
+A test with only small generations does not exercise the reason generation
+exists. A test with no external delayed producer does not prove drain.
+
+18.4 Completion family
+----------------------------------------------------------------------
+
+Cover every requested TMU-mask/AUX combination, including no results. For each:
+
+  issue in varied orders;
+  return in varied orders;
+  duplicate before first claim, after claim, after write, after publication;
+  invalid/unissued sample return;
+  two adjacent returns for the same owner/sample;
+  simultaneous TMU+AUX for the same owner;
+  simultaneous TMU+AUX for different owners;
+  last-result publication while ready consumer stalls;
+  service refusal with required terminal status;
+  response arriving for a recently retired/reused slot.
+
+Check requested/issued/claimed/publication conservation, remaining against an
+independent committed-mask oracle, and exactly one ready event per owner.
+
+18.5 Output family
+----------------------------------------------------------------------
+
+Make young owners finish before old ones. Prove internal execution exploited
+that freedom, then require final packets to remain admission ordered.
+
+Hold downstream ready low while all output slots, read-pending slots, and owner
+capacity fill. Release it and require exact token/context/color/status output.
+Verify no owner credit returned before transfer.
+
+Use opaque contexts differing in high bits. A test restricted to coordinates or
+small integers will not detect accidental context truncation or reinterpretation.
+
+18.6 Drain/reset family
+----------------------------------------------------------------------
+
+Request a fence while each transport location is occupied, including the
+read-pending interval that currently reports false empty. Delay producer ACKs
+independently. Inject a stale duplicate before the final ACK and prove it is
+drained without changing live output.
+
+Prove no new owner enters after STOP_NEW_OWNERS, while old owners can still
+issue needed work. Then prove no old return is accepted after namespace reuse
+unless its producer violated an explicitly stated interface guarantee.
+
+A malicious producer that emits identical old tokens after an acknowledged
+namespace reset is outside a finite-token protocol's distinguishability. Record
+that limit; do not claim to solve it by another eight-bit field.
+
+18.7 Required RTL mutations
+----------------------------------------------------------------------
+
+At least these deliberately wrong RTL changes must make the intended detector
+fail, followed by verified byte-identical restoration:
+
+  omit read_pending from queue occupancy;
+  use !out_valid as queue-drained;
+  release capacity at RAM-read issue rather than external transfer;
+  validate duplicate claims from a stale snapshot only;
+  publish done before the payload write;
+  decrement remaining twice for a repeated return;
+  emit both ready events on same-owner TMU+AUX final publication;
+  allow sample index three into a three-bank array;
+  free an owner on COMBINE completion;
+  free an owner on output valid while ready is low;
+  skip namespace producer acknowledgment;
+  restore a live global binding read;
+  force CLUT4 to use the whole byte;
+  force alpha opaque;
+  truncate the owner slot to four bits;
+  swap the context and geometry interpretation.
+
+The model witnesses included with this document are NOT these RTL mutation
+runs. They demonstrate the properties to target. The actual implementation must
+run the mutations against rebuilt RTL.
+
+18.8 Formal properties worth prioritizing
+----------------------------------------------------------------------
+
+Useful bounded/inductive properties include:
+
+  queue conservation and no unreserved read return;
+  output stability under stall;
+  used in 0..64 and live-window equivalence;
+  claimed subset of issued subset of requested;
+  publication authority is unique;
+  remaining equals requested minus published in the reference ghost state;
+  ready-event count at most one per owner generation;
+  fetch frontier never passes an unready final row;
+  retirement only at the oldest live ticket;
+  no namespace reuse before drain complete.
+
+Keep ghost/reference state in verification, not production. A formal harness
+must model legal backpressure and delayed returns. Covers should show the
+critical scenarios are reachable, especially simultaneous publication and a
+pending read during drain.
+
+18.9 Feature-live integration tests
+----------------------------------------------------------------------
+
+Before a full island fit, require at least one output-distinguishing case for
+all supported formats, material sample counts, alpha phases, real AUX geometry,
+Mosaic choice, error/status propagation, and configuration-epoch changes.
+
+A test that checks only 'some output arrived' can pass on a design that always
+returns a constant. A fit wrapper that observes only counters can synthesize
+away the useful datapath. Both are unacceptable here.
+
+
+19. EXECUTED PYTHON MODELS AND THEIR PRECISE LIMITS
+======================================================================
+
+19.1 What ran during this review
+----------------------------------------------------------------------
+
+The companion control_fabric_models.py was written and executed in this review
+using Python and the standard library. Its output is included in Appendix A;
+the full runnable source is included in Appendix B. It does not import the RTL,
+run Verilator, invoke Quartus, or communicate with the user's development PC.
+
+The checks establish properties of the proposed algorithms and reproduce a
+source-derived queue-accounting counterexample. They are useful preparation
+for RTL work, not a replacement for it.
+
+19.2 Queue counterexample and replacement model
+----------------------------------------------------------------------
+
+The legacy-shaped queue model reproduces a reported occupancy of zero while
+one ticket is held in the pending synchronous read. There was one push and no
+external pop. This is a direct conservation counterexample.
+
+The registered-logical-capacity replacement was exercised over:
+
+  97 reachable occupancy states across logical capacities 1 through 8;
+  388 exhaustive occupancy transitions;
+  200,000 randomized/bursted cycles at logical capacity 64;
+  111,428 accepted tickets and 111,428 correctly ordered retirements after drain;
+  2,000 consecutive one-pop-per-clock transfers after warmup.
+
+The randomized run visited 1,677 states where the legacy-style visible-only
+count would be zero despite a ticket being owned. This is not a claimed RTL
+failure count. It is the number of such states in this deterministic model run.
+
+The state exploration abstracts data values; the randomized queue oracle checks
+actual unique ticket values and order. Neither exhausts a synthesized memory's
+read-during-write behavior or asynchronous reset behavior.
+
+19.3 Ticket-window checks
+----------------------------------------------------------------------
+
+The model checked all 16,384 encoding/decoding round trips for the public token
+layout. A reduced-width exhaustive circular-window test checked 36,864
+membership cases, including empty/full and wrap.
+
+A 400,000-cycle randomized window simulation checked 1,600,000 membership
+queries while admitting 276,087 owners and retiring 276,034, leaving 53 live at
+the end. It crossed 16 completed namespace fences. Public tokens were compared
+against an independent per-slot generation-array model at each admission.
+
+The model assumes the required external drain acknowledgments arrive after the
+live interval empties. It does NOT prove the actual machine's DMA/cache/service
+boundaries provide those acknowledgments. It separately demonstrates the finite
+tag ABA limitation: a sufficiently old identical token is indistinguishable
+after a complete namespace wrap without the fence guarantee.
+
+19.4 Completion checks
+----------------------------------------------------------------------
+
+All 16 combinations of requested TMU-mask and AUX flag were checked through a
+local state-space model. It explored 625 reachable local states and 5,525
+transitions, including 2,500 duplicate-claim rejections and 75 simultaneous
+TMU/AUX publication transitions.
+
+The model compares a remaining-result counter against an independent published
+mask and requires exactly one ready event when complete. It begins at semantic
+issue/claim/publication events. It does NOT model the actual C0-C4 register
+pipeline, RAM write edge, or every full-machine interleaving. The RTL test must
+supply those missing timing details.
+
+19.5 Mutation witnesses
+----------------------------------------------------------------------
+
+Five model-level counterexamples detect:
+
+  omitted pending read in empty accounting;
+  double-ready emission on simultaneous final publication;
+  repeated decrement on duplicate completion;
+  claim authorization using stale claimed state without bypass;
+  owner release on output-valid rather than output transfer.
+
+These are model witnesses, not a claim that five mutations were run against the
+repository RTL. The distinction is intentional. The actual RTL mutation list
+in section 18 remains work to be performed by the implementation lane.
+
+19.6 Reproducibility
+----------------------------------------------------------------------
+
+Run:
+
+  python control_fabric_models.py --out model_results.json
+
+The script uses fixed random seeds and writes a SHA-256 digest of its own source
+into the result. No third-party packages are required. Assertions must remain
+enabled; do not run Python with -O for these checks.
+
+The model output is deterministic for the supplied source under the stated
+Python behavior. A future modified model should produce a new source digest
+and a new result file rather than inheriting this review's counts.
+
+
+20. IMPLEMENTATION SEQUENCE AND STOP CONDITIONS
+======================================================================
+
+20.1 Stage A: preserve the failed specimen and export attribution
+----------------------------------------------------------------------
+
+Preserve the exact current owner source, its source manifest, constraints,
+result summaries, and the 467-check benchmark configuration. Export compact
+entity and timing-class summaries from the saved fit.
+
+Deliver a table accounting for the top-level logic as well as child modules.
+If some resource categories cannot be attributed from available reports, say
+which and why. Do not let the first step become an indefinite report-writing
+exercise: it should answer where the next code change can plausibly matter.
+
+Stop condition: no reproducible source/constraint baseline. Repair provenance
+before another expensive fit.
+
+20.2 Stage B: queue correctness patch in the existing owner demo
+----------------------------------------------------------------------
+
+Add read_pending to logical occupancy, distinguish visible-valid from owned-
+empty, and add the short false-empty regression. Audit ev_quiet and namespace-
+reuse consumers. Keep the rest of the owner implementation unchanged.
+
+Run the existing owner suite plus the new counterexample, long stalls, and
+queue wrap tests. Fire the omitted-pending mutation. Record the source digest.
+
+Stop condition: any queue can report drained while it owns a pending return,
+or a caller's drain logic remains dependent on !out_valid alone.
+
+20.3 Stage C: registered queue credit and admission/fence separation
+----------------------------------------------------------------------
+
+Build the production-shaped queue with registered logical occupancy and explicit
+read-return reservation. Replace normal admission's aggregate quiet dependency
+with registered owner/local-stage credits. Add the namespace/configuration
+fence controller without changing public identity representation yet.
+
+Fit the queue and then the owner delta. This stage directly attacks the observed
+ready-pointer-to-admission/status path family.
+
+Stop condition: the new ready/valid connections recreate a combinational loop,
+full-boundary behavior loses throughput beyond the accepted budget, or drain
+ACK can precede a late upstream enqueue.
+
+20.4 Stage D: ticket-window identity
+----------------------------------------------------------------------
+
+Implement the internal monotonic ticket and public bit permutation. Retain the
+old live/generation arrays in verification-only ghost logic for differential
+checking; they must not survive in the production synthesis netlist.
+
+Exercise slot wrap, generation wrap, invalid old tokens, delayed duplicate
+validation, and output stalls. Check the public sequence against the old ring's
+legal behavior. Confirm no per-owner cancellation creates holes.
+
+Map and compare the actual register/ALUT change. Do not insist the ALM change
+must equal the declared-bit reduction.
+
+Stop condition: any legal existing product behavior requires a noncontiguous
+live set without an ordered tombstone representation.
+
+20.5 Stage E: local control banks, no semantic-state removal yet
+----------------------------------------------------------------------
+
+Partition the old semantic controls into the proposed local bank geometry. Make
+field writers and simultaneous-update rules explicit. Keep committed masks and
+ready/fetched flags initially, so this stage isolates physical organization
+from state compression.
+
+Compare 8x8 with at least one alternate partition if the first map does not
+show a clear improvement. Inspect repeated muxes, shared decoders, fanout, and
+fitted duplication.
+
+Stop condition: local banking merely duplicates logic or causes unacceptable
+same-bank stalls. Revisit event routing; do not claim success from source
+hierarchy alone.
+
+20.6 Stage F: remaining-count readiness and fetch frontier
+----------------------------------------------------------------------
+
+Replace committed-mask plus ready-enqueued state only after its ghost-mask
+invariant passes. Replace final-fetched state only after the ordered fetch
+frontier and output reservation proof passes.
+
+Keep each reduction a separately testable change. Fire simultaneous-ready,
+duplicate-publication, and early-owner-release mutations on the final source.
+
+Stop condition: a removed bit represented a distinction not captured by the new
+counter/frontier. Restore the bit rather than weakening the test.
+
+20.7 Stage G: full owner fit, not full island yet
+----------------------------------------------------------------------
+
+Run the complete owner semantic/adversarial suite on a verified rebuild. Run
+map-only synthesis, inspect storage and resource attribution, then fit the
+accepted candidate under the exact baseline and conformance wrappers.
+
+Report allocation and setup/hold honestly. Compare against 5,678 ALMs, 4,864
+fitted registers, 17 M10Ks, and the old timing classes. Do not compare only
+against the full 16,192-ALM island.
+
+If the owner remains far outside the adopted allocation, do not immediately
+compose it. The next action depends on attribution, not on the desire to obtain
+a whole-island number.
+
+20.8 Stage H: RCP queue and perspective work in parallel
+----------------------------------------------------------------------
+
+The RCP result-queue repair can proceed independently after common queue/token
+contracts are frozen. Paired perspective tests and implementation may also
+proceed independently. Neither needs to wait for every owner placement run.
+
+Do not let independent lanes change public token packing or queue transfer
+semantics differently. A tiny shared schema is cheaper than discovering that
+two correct standalone units disagree on ownership at integration.
+
+20.9 Stage I: feature-live V3.1 island
+----------------------------------------------------------------------
+
+Integrate owner, sampler, RCP, perspective, AUX/Mosaic, and retained COMBINE V2
+through their reviewed interfaces. Run all formats, sample counts, alpha, status,
+configuration, and output-order tests. Audit every source closure/build list.
+
+Run synthesis first. Reconcile actual RAM/MLAB/flop arrays, DSPs, and the total
+allocation. Explain every tied input and every unused output in the fit wrapper.
+Only then spend the next multi-hour composed fit.
+
+Stop condition: a legally supported feature is unobservable, a source snapshot
+is mutable during fitting, or the map already violates an unacknowledged total
+allocation by a large margin.
+
+20.10 Stage J: renderer and board integration
+----------------------------------------------------------------------
+
+A successful island is not a finished console. Integrate the actual renderer,
+memory arbitration, consumer backpressure, clock/reset constraints, and board
+interfaces. Measure workload throughput and frame deadlines as well as Fmax.
+
+Keep this stage separate from the owner architecture decision. Full-machine
+uncertainty is not a reason to refuse useful local repair, and local success
+is not a reason to declare full-machine capacity proven.
+
+
+21. PARALLEL OWNERSHIP, BUILD ISOLATION, AND MEASUREMENT PROVENANCE
+======================================================================
+
+21.1 Parallel work is encouraged; mutable shared state is not
+----------------------------------------------------------------------
+
+Use independent lanes:
+
+  CONTRACT: token packing, queue capacity/transfer law, drain ACK meanings;
+  QUEUE: ready/result queue implementation and physical microbenchmarks;
+  OWNER: ticket window, local control, completion, output frontier;
+  RCP/PERSP: arithmetic-service boundary repairs and paired execution;
+  SAMPLER: binding, metadata, cache/palette, AUX/Mosaic preservation;
+  EVIDENCE: independent tests, model/RTL mutations, report extraction;
+  INTEGRATION: composed top, shared build lists, feature-live wrapper.
+
+Only one integration owner edits the shared composed top and build manifests at
+a time. Other lanes deliver narrow reviewed commits and isolated tests.
+
+21.2 Immutable fit source closure
+----------------------------------------------------------------------
+
+A fit must compile a frozen copy or worktree of its complete source closure,
+not a directory in which another lane is applying mutations. Capture source
+hashes before launch and after completion; the bytes must match.
+
+A running fit must not block unrelated source work merely because it uses the
+same repository. Isolation is what permits parallelism safely. Do not use
+'isolation' as an excuse to leave every other lane idle.
+
+21.3 Mutation safety
+----------------------------------------------------------------------
+
+Apply destructive mutation tests only in their own disposable checkout/build
+tree. Verify backup existence and nonzero length before modifying a file, but
+prefer not to rely on a single backup at all. Store the original source digest
+and verify restoration after every mutation.
+
+A killed mutation process must not leave deliberately broken production RTL in
+the shared tree. An incomplete build or failed restoration is a failed test
+run, not a survived mutation or a passing detector.
+
+21.4 Fit watchdog ownership
+----------------------------------------------------------------------
+
+A watchdog may stop only the process tree owned by its runner. 'Started after
+this fit began' is not ownership and can kill a different lane's later fit.
+The repository has already documented that exact failure. Preserve the scoped
+process-ownership fix and fire-test it against a foreign runner. [R8]
+
+21.5 Disk and artifact management
+----------------------------------------------------------------------
+
+Keep encoded visual evidence and required source/fit reports. Purge expendable
+raw render intermediates under a defined age/active-run policy. An ignore rule
+prevents commits; it does not prevent disk exhaustion.
+
+Before a long fit or mutation sweep, check available disk space and reserve a
+reasonable working margin based on actual prior runs. Disk failure must be
+reported as infrastructure failure, not 'the architecture does not fit'.
+
+21.6 A commit identifies a repository state, not necessarily a fit's bytes
+----------------------------------------------------------------------
+
+Store:
+
+  source commit, dirty/clean state, sourceDigest;
+  exact parameter values and include/generated-file closure;
+  tool version, seed, device, constraints, and report names;
+  start/end status, exit code, timeout or external termination reason;
+  test binary build provenance for the same configuration.
+
+A stale generated report remains historical evidence. It is not a current fit
+merely because the filename has not changed. Source freshness must include
+relevant dependencies, not only the top module's own file.
+
+21.7 Publication discipline
+----------------------------------------------------------------------
+
+Publish each meaningful completed experiment independently. Do not sit on a
+useful result to bundle it with another lane. Conversely, do not repeatedly
+publish the same result with different adjectives and call it news.
+
+An architecture task and an unsolicited monitoring task are separate work.
+Repeated status notifications must not supersede an explicitly requested
+architecture deliverable. This document is the deliverable, not another
+notification template.
+
+
+22. FULL-MACHINE IMPLICATIONS AND EXPLICIT NON-GOALS
+======================================================================
+
+22.1 What this failure says about the project
+----------------------------------------------------------------------
+
+It says that the current owner implementation and the original owner allocation
+do not agree. It does not establish a lower bound proving no acceptable texture
+island or full console can exist. It also does not justify continuing to promise
+large unused gadget budgets without a current complete-machine fit.
+
+The correct intermediate conclusion is narrower: the payload-RAM mechanism has
+physical evidence, the control implementation remains unacceptable, and some
+specific control representations and feedback paths are available to change.
+
+22.2 Spare ALMs are not a universal performance currency
+----------------------------------------------------------------------
+
+Pipelining, local duplication, and banking can spend area to improve timing,
+but DSP, M10K/MLAB, memory bandwidth, placement, and latency/throughput constraints
+remain separate. An ALM-only budget cannot decide the whole machine.
+
+Likewise, a low-frequency isolated service may still meet a workload deadline
+in its own justified clock domain, but a normal path in a shared 100-MHz domain
+must meet the 10-ns timing requirement. Throughput reserve alone does not waive
+static timing.
+
+This document does not propose a new private texture clock or asynchronous
+boundary as a way to hide the current miss. Such a change would need its own
+throughput, CDC, and integration justification.
+
+22.3 No new gadget scope
+----------------------------------------------------------------------
+
+Do not add new lighting, deformation, temporal effects, particle engines, or
+material recipes while validating this control repair. The objective is to
+make the intended existing feature set smaller, correctly owned, and easier to
+clock. Gadget choices come after the complete baseline and its reserve are
+measured honestly.
+
+22.4 No blanket reduction of owner count
+----------------------------------------------------------------------
+
+Reducing 64 owners to 16 might make the demo smaller, but it changes latency
+hiding and throughput capacity. It is not an equivalent solution to the stated
+problem. Any capacity reduction requires an explicit product/workload trade and
+must be labeled as such.
+
+Likewise, reducing material samples or removing alpha to pass a fit would be a
+feature cut, not V3.1 control recovery.
+
+22.5 No claim that the first new fit will be good
+----------------------------------------------------------------------
+
+The proposal supplies mechanisms and proofs that are more concrete than 'use
+RAM'. The queue accounting repair is certain as a local correctness matter.
+The ticket-window state reduction is justified under explicit invariants.
+The banked control organization is a physical hypothesis whose benefit needs
+measurement. The total owner and island area remain unknown until those
+experiments run.
+
+That distinction is the point. A robust architecture plan should survive a
+mediocre first measurement by saying exactly what to inspect next, not collapse
+because it promised a number it never derived.
+
+
+23. AGENT-READY IMPLEMENTATION BRIEF
+======================================================================
+
+Implement V3.1 control-fabric recovery beside the current V3 demonstrator.
+Do not modify material semantics, reduce the owner window, or replace COMBINE V2.
+
+FIRST: export the existing owner fit's entity/resource breakdown and four-way
+timing endpoint classification. The reported 5,678 ALMs are not yet attributed.
+A path beginning in a queue register and ending at adm_accept_o is not proven
+register-to-register core timing merely because its startpoint is internal.
+
+SECOND: fix zhao_texture_v3rq occupancy. The current count omits ld_q, its
+pending synchronous read. Add the one-push/no-pop false-empty regression and
+fire the omitted-pending mutation. Audit all quiet/empty consumers.
+
+THIRD: make logical queue ownership a registered accepted-minus-popped count;
+include body, heads, and pending returns inside the declared capacity. Keep
+out_valid distinct from owned_empty. Reserve read-return head capacity.
+
+FOURTH: separate normal owner admission from global quiet. Admission uses a
+registered owner credit, a local staging credit, and registered epoch/fence
+permission. Global drain/namespace reuse gets a dedicated phase machine and
+producer acknowledgments. Existing owners must continue making progress while
+new-owner admission is closed.
+
+FIFTH: exploit the actual ring invariant. Use a 14-bit internal ticket, slot in
+bits 5:0 and generation in 13:6, permuted into the existing public token layout.
+Represent liveness by retire_ticket plus used <= 64. Initialize tickets at 64
+to preserve first-use generation one. Validate current identity at claim.
+Keep a namespace wrap fence; finite tags do not solve unbounded late returns.
+
+SIXTH: localize control into an initial 8x8 bank arrangement with explicit
+field-writer rules and shared registered event decode. Keep claimed bits and
+same-owner update merging. Do not put an arbitrary multiwriter scoreboard into
+one block RAM and call it solved.
+
+SEVENTH: only after equivalence, replace committed-mask + sticky-ready with a
+3-bit remaining count, generating readiness once on the transition to zero.
+Handle same-owner TMU+AUX publication as one ready event. Keep zero-work
+admission as a separate, credited source.
+
+EIGHTH: replace final-fetched bitmap with a contiguous fetch frontier. Reserve
+an output packet slot before issuing the synchronous context/final-result reads.
+Release owner credit only on actual ordered output transfer.
+
+NINTH: preserve the exact RCP arithmetic and its measured 16-context knee.
+Repair its done-ticket queue independently. Do not claim its 1,230-ALM row is
+inside the original 600-ALM allocation. Do not subtract unimplemented savings.
+
+TENTH: run staged map/fit comparisons. Preserve the 1,800-ALM owner allocation as
+a visible target rather than retuning it to the result. Report correctness,
+RAM structure, area, setup, hold, and desired margin separately. No new full
+island fit until the owner result and complete feature-live synthesis justify
+it.
+
+Parallel lanes are allowed and encouraged. Shared interface changes and the
+composed top have one owner. Fits use immutable source snapshots; mutations use
+disposable separate checkouts. Publish real results, not repeated summaries of
+old numbers.
+
+Deliverables from the implementation lane:
+
+  - exact source and constraint baseline;
+  - entity-level area and endpoint-class timing attribution;
+  - queue counterexample and corrected queue proof/tests;
+  - ticket-window equivalence and namespace fence tests;
+  - local-control event/collision table;
+  - remaining-count and fetch-frontier differentials;
+  - all required negative/mutation results;
+  - map-only storage census after each structural step;
+  - full owner fit with complete timing sign-off data;
+  - reconciled whole-island allocation before composition;
+  - explicit list of unsupported/unimplemented claims, not hidden constants.
+
+
+24. SOURCES, UNRESOLVED QUESTIONS, AND ACCEPTANCE CHECKLIST
+======================================================================
+
+24.1 Repository provenance
+----------------------------------------------------------------------
+
+Repository: Fabulu/zhaozhou
+Hardware branch reviewed: zixxtrixx-v8-closeout
+Source pin: 756f08c5970608ba13c70944ea892c58ae1ddba2
+
+Paths below are read in that pinned hardware context unless a historical fit
+commit is explicitly named. They must not be interpreted as files on main or
+as proof that every branch's work is merged into one physical design.
+
+[R1] reports/G1D-COMPOSED-ISLAND-20260905.md and the composed-island run log:
+     runs/CLAUDE-RUNS/RUN-20260905-0648-composed-texture-island-g1d/TASK_LOG.md
+     Historical COMBINE V2 fit result commit:
+     182c3663e2bc982eb46bae57f3d62910ae5dbe37.
+     Supports the transitional versus V2/W9b composition distinction,
+     resource numbers, timing-family changes, and provenance caveats.
+
+[R2] reports/V3-DEMONSTRATOR-FIT-20260907.md
+     Historical owner fit result commit:
+     f82a758ddec52508796f23939cd99cf635d615d2.
+     Supporting report paths:
+     reports/synthesis/blockpaths/zhao_texture_v3own@v3-full.fit.summary
+     reports/synthesis/blockpaths/zhao_texture_v3own@v3-full.sta.summary
+     reports/synthesis/blockpaths/zhao_texture_v3own@v3-full.sources.sha256
+     Large map/setup report contents were not successfully retrieved in this
+     review; their existence in the directory tree is not claimed as inspection
+     of their entire contents. Entity attribution remains an implementation task.
+
+[R3] reports/RCP24-V3-TILE-RESULT-20260906.md and:
+     runs/CLAUDE-RUNS/RUN-20260906-1901-rcp24-v3-exact-tile/TASK_LOG.md
+     Historical full-fit result commit:
+     0f5ce601504a2135c598eca84cc755900568bb43.
+     Supports the old/new isolated RCP rows, 16-context throughput experiment,
+     exact arithmetic tests, and result-queue timing family.
+
+[R4] fpga/rtl/texture/zhao_texture_v3own.sv
+     Source blob: 9bc642432f9f0bb14eed29ee3ec911fa8cf6b07b.
+     Inspected declarations, control snapshots, whole-table next-state updates,
+     C2/C3/C4 handling, ready-event merging, final-result/fetch state, and reset.
+     Supports the 30-bit/owner declared control census and the implementation
+     mechanisms discussed here. It does not supply fitted per-entity ALM totals.
+
+[R5] fpga/rtl/texture/zhao_texture_v3bank.sv
+     Inspected synchronous bank wrapper, 40-bit slicing, registered read, and
+     payload-reset separation.
+
+[R6] fpga/rtl/texture/zhao_texture_v3rq.sv
+     Source blob: eefe26b280301ca41a904991c4cc8ba9e767302d.
+     The decisive inspected expression is:
+       occ_o = body_occ_c + (PW+1)'(h_v_q) + (PW+1)'(s_v_q);
+     The read reservation expression, separately, DOES include ld_q:
+       reserved_c = 3'(h_v_q) + 3'(s_v_q) + 3'(ld_q);
+     Thus the code knows the pending read consumes head capacity while its
+     externally reported total occupancy omits that same owned ticket.
+     Inspected synchronous body, two heads, ld_q pending read, body-pointer
+     occupancy expression, and push/pop/read behavior. This is the source of
+     the confirmed false-empty accounting counterexample.
+
+[R7] reports/TEXTURE-ISLAND-V3-ARCHITECTURE-20260906.txt
+     Original V3 architecture, especially owner token layout, bank inventory,
+     completion protocol, resource allocations, and migration/parallel lanes.
+     This V3.1 document supersedes its implied confidence in the owner allocation
+     and makes the control representation more concrete; it retains the exact
+     material and arithmetic obligations.
+
+[R8] Composed-island run log and fit tooling notes covering source snapshots,
+     watchdog ownership, disk exhaustion, CLUT4 coverage, and concurrent lanes.
+     These support process safeguards, not an additional physical performance
+     result.
+
+24.2 Primary vendor guidance researched
+----------------------------------------------------------------------
+
+[V1] Intel/Altera Quartus Prime Design Recommendations:
+     'Use Synchronous Memory Blocks' and the simple-dual-port synchronous RAM
+     coding template. The researched documentation includes the Standard 18.1
+     guidance and later official examples. It supports registered memory
+     interfaces and inference-conscious coding, not a promise about the exact
+     Quartus 17.0.2 mapping of arbitrary RTL.
+
+     Reference location:
+     docs.altera.com, document 683323, Standard Edition Design Recommendations,
+     section 'Use Synchronous Memory Blocks'.
+
+[V2] Intel/Altera Quartus Prime Design Recommendations:
+     'Avoid Unsupported Reset and Control Conditions', 'Check Read-During-Write
+     Behavior', and memory-inference guidance. These support avoiding unsupported
+     payload reset structures and specifying collision behavior explicitly.
+
+     Reference location:
+     docs.altera.com, document 683323, Standard Edition Design Recommendations.
+
+[V3] Intel/Altera Timing Analyzer documentation and official TimeQuest timing
+     guidance. These support clock/constraint-based setup and hold analysis,
+     reporting path endpoints and clock relationships, and not treating Fmax
+     alone as full timing sign-off.
+
+     Reference locations:
+     docs.altera.com, document 683243, Timing Analyzer guide, Fmax/reporting;
+     official Intel TimeQuest timing-analysis training material.
+
+The arithmetic identities and control algorithms in this document are explained
+and tested locally. Vendor guidance is not used as evidence for unmeasured ALM
+savings or a guaranteed attainable clock.
+
+24.3 Questions the implementation must settle from actual evidence
+----------------------------------------------------------------------
+
+  Where do the 5,678 fitted ALMs reside, including top-level control?
+  How much of the reported owner timing limit is R2R versus R2O under real SDC?
+  Which ready/result queue bodies map to MLAB versus M10K, and at what cost?
+  Does 8x8 control locality improve actual mapping compared with 4x16 or 16x4?
+  Does the product require any out-of-order individual owner cancellation?
+  Can every external producer provide the required namespace-drain guarantee?
+  What extra owner/service flags are needed by the complete RCP/sample-expansion
+  path beyond the demonstrator's sample/AUX/final control model?
+  Can RCP's standalone result storage be removed at integration without losing
+  throughput or terminal-return credit?
+  Does paired perspective meet its throughput and register allocation with a
+  narrow side-metadata lease?
+  What is the complete feature-live island's measured resource inventory?
+
+These are specific engineering questions. None is answered by relabeling the
+current demo as a success or by asserting the whole console is impossible.
+
+24.4 Acceptance checklist for a claimed V3.1 owner completion
+----------------------------------------------------------------------
+
+[ ] The legacy pending-read false-empty sequence fails on the old queue and
+    passes on the new one.
+[ ] Logical capacity includes body, heads, and pending returns.
+[ ] All read returns have reserved destinations.
+[ ] Admission has no combinational dependency on aggregate quiet or ready-queue
+    body pointer distance.
+[ ] Ticket-window identity matches the public owner layout.
+[ ] No interior owner release violates the contiguous live interval.
+[ ] Namespace reuse waits for a real producer/transport drain.
+[ ] Local control writers and same-owner event collisions are explicit.
+[ ] Claims remain unique across pipeline snapshots and one-cycle duplicate input.
+[ ] Publication follows payload write.
+[ ] Remaining count agrees with an independent published-mask oracle.
+[ ] Exactly one ready event is created per owner, including simultaneous TMU/AUX.
+[ ] Final fetch reserves output storage and stays contiguous.
+[ ] Owner credit returns only on actual ordered output transfer.
+[ ] All payload banks infer as intended; MLAB/head/pending storage is accounted.
+[ ] Entity-level ALM/register attribution is published.
+[ ] Setup and hold are reported for all applicable corners and endpoint classes.
+[ ] The allocation result is reported against the adopted budget, not a retuned
+    threshold that silently legitimizes the measurement.
+[ ] The full feature-live island has not been claimed from the isolated owner fit.
+
+24.5 Final architectural verdict
+----------------------------------------------------------------------
+
+Keep the RAM planes. Keep the exact arithmetic. Keep COMBINE V2.
+Replace the global, redundant ownership/control representation.
+Correct queue ownership before optimizing queue timing.
+Put rare global drain decisions behind an explicit fence.
+Use the ring's actual invariant to remove per-slot identity storage.
+Localize and share control decoding instead of hoping a whole-table expression
+will become an economical distributed machine.
+Remove committed/ready/fetched state only after proving the replacement counters
+and frontiers carry the same information.
+
+The route back is not a prettier version of the original promise. It is a
+sequence of small, attributable structural changes with a correctness witness,
+a resource census, and a physical gate at each consequential step.
+
+
+IMPLEMENTATION CLARIFICATIONS
+======================================================================
+
+A. The 18-bit row is not a claim that the complete island needs no other state.
+It replaces the inspected demonstrator's 30-bit per-owner sample/AUX/final
+control representation. RCP execution leases, sample-expansion tickets,
+configuration versions, cache fills, and transport credits remain separately
+owned and counted. The complete island's state inventory must include them.
+
+B. The *_n next-state arrays in the old RTL do not by themselves imply a second
+bank of flip-flops. They are combinational descriptions. The concern is their
+inferred selection/priority connectivity, not an erroneous claim that every
+next-state variable is separately stored.
+
+C. A concrete local claim implementation is:
+
+   C0 capture token/data in a credited lane register;
+   C1 decode token and register bank/row/event identity;
+   C2 perform current ticket-window authorization plus the selected bank's
+      local requested/issued/claimed test; atomically set the local claim bit;
+   C3 drive the captured payload-bank write address/data/enable;
+   C4 update remaining/final-done and generate any ready event.
+
+The bank-local predicate can read an eight-row local control group rather than
+returning a whole 64-row selected record to a global controller. Only the grant
+and narrow event outcome need cross the bank boundary. If the design uses an
+older C1 snapshot for immutable fields, the C2 claimed/liveness authority still
+must be current or explicitly bypassed.
+
+D. Central ticket validation is one bounded operation per event lane, not one
+subtractor/comparator per owner row. It may need its own register stage. When
+retimed, the claim stage must still handle retirement occurring after an earlier
+validation snapshot. Add latency with an ownership proof, not with a stale
+permission bit.
+
+E. The full-fit owner budget cannot be inferred from the declared 768-bit state
+reduction. That number excludes replacement state and says nothing by itself
+about ALM packing. It is included to prevent both exaggerated savings claims
+and the opposite error of assuming no redundant state exists.
+
+END OF MAIN ARCHITECTURE
+======================================================================
+
+
+APPENDIX A. EXECUTED MODEL RESULTS
+======================================================================
+
+{
+  "scope": "Algorithmic Python models only. No RTL or Quartus execution.",
+  "review_pin": "756f08c5970608ba13c70944ea892c58ae1ddba2",
+  "fifo_false_empty": {
+    "confirmed_false_empty": true,
+    "trace": [
+      {
+        "edge": 0,
+        "body": 0,
+        "heads": 0,
+        "pending": 0,
+        "legacy_occ": 0,
+        "logical_owned": 0
+      },
+      {
+        "edge": 1,
+        "body": 1,
+        "heads": 0,
+        "pending": 0,
+        "legacy_occ": 1,
+        "logical_owned": 1
+      },
+      {
+        "edge": 2,
+        "body": 0,
+        "heads": 0,
+        "pending": 1,
+        "legacy_occ": 0,
+        "logical_owned": 1
+      },
+      {
+        "edge": 3,
+        "body": 0,
+        "heads": 1,
+        "pending": 0,
+        "legacy_occ": 1,
+        "logical_owned": 1
+      }
+    ],
+    "scope": "queue accounting; caller-level data loss is not asserted"
+  },
+  "fifo_exhaustive": {
+    "reachable_occupancy_states": 97,
+    "transitions": 388,
+    "per_capacity": [
+      {
+        "capacity": 1,
+        "states": 4,
+        "transitions": 16
+      },
+      {
+        "capacity": 2,
+        "states": 8,
+        "transitions": 32
+      },
+      {
+        "capacity": 3,
+        "states": 10,
+        "transitions": 40
+      },
+      {
+        "capacity": 4,
+        "states": 11,
+        "transitions": 44
+      },
+      {
+        "capacity": 5,
+        "states": 13,
+        "transitions": 52
+      },
+      {
+        "capacity": 6,
+        "states": 15,
+        "transitions": 60
+      },
+      {
+        "capacity": 7,
+        "states": 17,
+        "transitions": 68
+      },
+      {
+        "capacity": 8,
+        "states": 19,
+        "transitions": 76
+      }
+    ]
+  },
+  "fifo_random": {
+    "random_cycles": 200000,
+    "accepted": 111428,
+    "retired": 111428,
+    "drain_cycles": 5,
+    "legacy_false_zero_states_seen": 1677,
+    "saturated_one_pop_per_clock_checked": 2000
+  },
+  "ticket_window": {
+    "encoding_roundtrips": 16384,
+    "reduced_exhaustive_membership_cases": 36864,
+    "random_cycles": 400000,
+    "random_membership_cases": 1600000,
+    "admitted": 276087,
+    "retired": 276034,
+    "live_at_end": 53,
+    "completed_namespace_fences": 16,
+    "unbounded_stale_ABA_limitation_demonstrated": true
+  },
+  "completion": {
+    "requirement_masks": 16,
+    "reachable_local_states": 625,
+    "transitions_checked": 5525,
+    "duplicate_claim_rejections": 2500,
+    "simultaneous_TMU_AUX_publications": 75,
+    "scope": "local protocol transitions; not exhaustive full-pipeline interleavings"
+  },
+  "mutation_witnesses": {
+    "detected": 5,
+    "witnesses": {
+      "omit_pending_read_from_empty": true,
+      "double_ready_on_simultaneous_publication": true,
+      "decrement_again_on_duplicate_completion": true,
+      "claim_from_stale_snapshot_without_bypass": true,
+      "release_owner_on_valid_instead_of_transfer": true
+    },
+    "scope": "model counterexamples, NOT repository RTL mutation runs"
+  },
+  "script_sha256": "9c71d7c29db76e174f463a53d5fbf58deb9788aafc087357f8f710025ed2c9fd"
+}
+
+
+APPENDIX B. EXECUTABLE MODEL SOURCE
+======================================================================
+
+Save the following as control_fabric_models.py and run with Python 3.10+.
+Do not use Python -O: assertions are the checks.
+
+#!/usr/bin/env python3
+"""Executable algorithmic checks for Zhaozhou V3.1 control-fabric recovery.
+
+Python 3.10+, standard library only. This is NOT RTL simulation, formal RTL
+verification, a synthesis result, or a timing prediction. The queue model follows
+the inspected v3rq synchronous-body/two-head/read-return organization. Ticket
+and completion models exercise proposed replacement invariants independently of
+SystemVerilog implementation details.
+
+Run: python control_fabric_models.py --out model_results.json
+"""
+from __future__ import annotations
+import argparse
+from collections import deque
+from dataclasses import dataclass, field
+import hashlib
+import itertools
+import json
+from pathlib import Path
+import random
+from typing import Deque
+
+
+@dataclass
+class QueueModel:
+    capacity: int
+    legacy_body_credit: bool = False
+    body: Deque[int] = field(default_factory=deque)
+    heads: Deque[int] = field(default_factory=deque)
+    pending: int | None = None
+    owned: int = 0
+
+    def visible(self) -> dict[str, int]:
+        return {"body": len(self.body), "heads": len(self.heads),
+                "pending": int(self.pending is not None),
+                "legacy_occ": len(self.body) + len(self.heads),
+                "logical_owned": self.owned}
+
+    def edge(self, push: int | None, pop: bool) -> tuple[bool, int | None]:
+        # Credit decisions use pre-edge state; no same-cycle full/pop bypass.
+        room = len(self.body) < self.capacity if self.legacy_body_credit else self.owned < self.capacity
+        put = push is not None and room
+        taken = self.heads.popleft() if pop and self.heads else None
+        if self.pending is not None:
+            assert len(self.heads) < 2, "unreserved RAM read return overwrites a head"
+            self.heads.append(self.pending)
+        # A read sees pre-edge body contents, not a same-edge push into empty RAM.
+        new_pending = self.body.popleft() if self.body and len(self.heads) < 2 else None
+        if put:
+            assert push is not None
+            self.body.append(push)
+        self.pending = new_pending
+        self.owned += int(put) - int(taken is not None)
+        assert self.owned == len(self.body) + len(self.heads) + int(self.pending is not None)
+        assert len(self.heads) <= 2 and len(self.body) <= self.capacity
+        if not self.legacy_body_credit:
+            assert 0 <= self.owned <= self.capacity
+        return put, taken
+
+
+def fifo_false_empty_trace() -> dict:
+    q = QueueModel(4, legacy_body_credit=True)
+    trace = [{"edge": 0, **q.visible()}]
+    q.edge(0x123, False)
+    trace.append({"edge": 1, **q.visible()})
+    q.edge(None, False)
+    trace.append({"edge": 2, **q.visible()})
+    assert trace[-1]["legacy_occ"] == 0 and trace[-1]["logical_owned"] == 1
+    q.edge(None, False)
+    trace.append({"edge": 3, **q.visible()})
+    return {"confirmed_false_empty": True, "trace": trace,
+            "scope": "queue accounting; caller-level data loss is not asserted"}
+
+
+def fifo_exhaustive() -> dict:
+    # Exhaustive occupancy-state reachability, not exhaustive data values or RTL.
+    total_states = total_edges = 0
+    per_capacity = []
+    for cap in range(1, 9):
+        initial = (0, 0, 0, 0)  # body, head count, pending read, logical count
+        seen = {initial}
+        todo = deque([initial])
+        edges = 0
+        while todo:
+            body, heads, pending, count = todo.popleft()
+            for push, pop in itertools.product((0, 1), repeat=2):
+                put = push and count < cap
+                take = pop and heads > 0
+                nh = heads - int(take) + pending
+                assert nh <= 2
+                read = body > 0 and nh < 2
+                ns = (body - int(read) + int(put), nh, int(read), count + int(put) - int(take))
+                assert ns[3] == sum(ns[:3]) and 0 <= ns[3] <= cap
+                edges += 1
+                if ns not in seen:
+                    seen.add(ns); todo.append(ns)
+        per_capacity.append({"capacity": cap, "states": len(seen), "transitions": edges})
+        total_states += len(seen); total_edges += edges
+    return {"reachable_occupancy_states": total_states, "transitions": total_edges,
+            "per_capacity": per_capacity}
+
+
+def fifo_random() -> dict:
+    rng = random.Random(0x5A03_0001)
+    q = QueueModel(64)
+    oracle: Deque[int] = deque()
+    offered = accepted = retired = false_empty_exposures = 0
+    cycles = 200_000
+    for cycle in range(cycles):
+        # Deterministic long producer/consumer bursts, not only random all-ready.
+        phase = (cycle // 257) % 4
+        push = offered if rng.random() < (0.97 if phase != 1 else 0.05) else None
+        pop = rng.random() < (0.02 if phase == 0 else 0.97)
+        if push is not None: offered += 1
+        put, value = q.edge(push, pop)
+        if put:
+            oracle.append(push); accepted += 1
+        if value is not None:
+            assert oracle and value == oracle.popleft(), "FIFO order/data mismatch"
+            retired += 1
+        assert q.owned == len(oracle)
+        assert (q.owned == 0) == (not oracle)
+        false_empty_exposures += int(q.owned != 0 and q.visible()["legacy_occ"] == 0)
+    drain_cycles = 0
+    while q.owned:
+        _, value = q.edge(None, True)
+        drain_cycles += 1
+        if value is not None:
+            assert value == oracle.popleft(); retired += 1
+        assert drain_cycles <= 2 * q.capacity + 10
+    assert not oracle and accepted == retired
+    # Sustained one-pop/clock with supply after a warm-up.
+    p = QueueModel(64)
+    for i in range(40): p.edge(i, False)
+    for i in range(2_000):
+        put, value = p.edge(40 + i, True)
+        assert put and value == i
+    return {"random_cycles": cycles, "accepted": accepted, "retired": retired,
+            "drain_cycles": drain_cycles, "legacy_false_zero_states_seen": false_empty_exposures,
+            "saturated_one_pop_per_clock_checked": 2_000}
+
+
+def public_owner(seq: int) -> int:
+    return ((seq & 63) << 8) | ((seq >> 6) & 255)
+
+
+def internal_ticket(owner: int) -> int:
+    return ((owner & 255) << 6) | ((owner >> 8) & 63)
+
+
+def ticket_checks() -> dict:
+    for seq in range(1 << 14): assert internal_ticket(public_owner(seq)) == seq
+    exhaustive = 0
+    # Reduced-width exhaustive circular-window test includes wrap and full/empty.
+    modulus, cap = 64, 8
+    for base in range(modulus):
+        for used in range(cap + 1):
+            reference = {(base + i) % modulus for i in range(used)}
+            for token in range(modulus):
+                assert (((token - base) % modulus) < used) == (token in reference)
+                exhaustive += 1
+    rng = random.Random(0x5A03_0002)
+    modulus, cap = 1 << 14, 64
+    alloc = retire = 64  # slot zero, generation one, matching the existing layout
+    live: Deque[int] = deque()
+    generations = [0] * cap
+    next_slot = 0
+    fence_pending = False
+    admitted = retired = fences = membership_tests = 0
+    cycles = 400_000
+    for _ in range(cycles):
+        # This model assumes that an empty-window fence also receives all required
+        # external producer/drain ACKs. The document forbids assuming that in RTL.
+        if fence_pending and not live:
+            fences += 1; fence_pending = False
+        if not fence_pending and len(live) < cap and rng.random() < 0.73:
+            generations[next_slot] = (generations[next_slot] + 1) & 255
+            reference_owner = (next_slot << 8) | generations[next_slot]
+            assert public_owner(alloc) == reference_owner
+            next_slot = (next_slot + 1) % cap
+            live.append(alloc); admitted += 1
+            alloc = (alloc + 1) % modulus
+            if alloc == 0: fence_pending = True
+        if live and rng.random() < 0.69:
+            assert live.popleft() == retire
+            retire = (retire + 1) % modulus; retired += 1
+        for tok in (retire, (retire - 1) % modulus, alloc, rng.randrange(modulus)):
+            assert (((tok - retire) % modulus) < len(live)) == (tok in live)
+            membership_tests += 1
+    assert admitted - retired == len(live) and fences > 0
+    # Finite tags cannot distinguish a delayed token after a complete namespace wrap.
+    assert public_owner(64) == public_owner(64 + modulus)
+    return {"encoding_roundtrips": modulus, "reduced_exhaustive_membership_cases": exhaustive,
+            "random_cycles": cycles, "random_membership_cases": membership_tests,
+            "admitted": admitted, "retired": retired, "live_at_end": len(live),
+            "completed_namespace_fences": fences,
+            "unbounded_stale_ABA_limitation_demonstrated": True}
+
+
+def admissible_groups(mask: int) -> list[int]:
+    # One TMU terminal and one AUX terminal can publish together. Three TMUs cannot.
+    choices = [0]
+    for t in (-1, 0, 1, 2):
+        for aux in (0, 1):
+            bits = (0 if t < 0 else 1 << t) | (8 if aux else 0)
+            if bits and bits & ~mask == 0: choices.append(bits)
+    return sorted(set(choices))
+
+
+def completion_checks() -> dict:
+    states_n = transitions = duplicate_rejections = simultaneous = 0
+    for required in range(16):
+        # Independent state records for issued, claimed, published, remaining, ready count.
+        initial = (0, 0, 0, required.bit_count(), int(required == 0))
+        seen = {initial}; todo = deque([initial])
+        while todo:
+            issued, claimed, published, remaining, ready = todo.popleft()
+            assert claimed & ~issued == 0 and published & ~claimed == 0
+            assert remaining == (required & ~published).bit_count()
+            assert ready == int(remaining == 0)
+            candidates = []
+            # An issue is a separate committed protocol event, not an offer.
+            for g in admissible_groups(required & ~issued):
+                if g: candidates.append((issued | g, claimed, published, remaining, ready))
+            # Response validation sees current claimed state, including any needed
+            # bypass in an RTL implementation. Invalid/duplicate returns are ignored.
+            for g in admissible_groups(15):
+                if not g: continue
+                accept = g & required & issued & ~claimed
+                duplicate_rejections += (g & claimed).bit_count()
+                candidates.append((issued, claimed | accept, published, remaining, ready))
+            # Physical payload commit precedes publication; this model begins at the
+            # authorized publication event and does not model the RAM edge itself.
+            for g in admissible_groups(claimed & ~published):
+                if not g: continue
+                new_remaining = remaining - g.bit_count()
+                event = int(remaining > 0 and new_remaining == 0)
+                candidates.append((issued, claimed, published | g, new_remaining, ready + event))
+                simultaneous += int(g.bit_count() == 2)
+            for ns in candidates:
+                transitions += 1
+                assert ns[3] >= 0 and ns[4] <= 1
+                assert ns[3] == (required & ~ns[2]).bit_count()
+                assert ns[4] == int(ns[3] == 0)
+                if ns not in seen: seen.add(ns); todo.append(ns)
+        states_n += len(seen)
+    return {"requirement_masks": 16, "reachable_local_states": states_n,
+            "transitions_checked": transitions, "duplicate_claim_rejections": duplicate_rejections,
+            "simultaneous_TMU_AUX_publications": simultaneous,
+            "scope": "local protocol transitions; not exhaustive full-pipeline interleavings"}
+
+
+def mutation_witnesses() -> dict:
+    witnesses = {}
+    q = QueueModel(4, True); q.edge(7, False); q.edge(None, False)
+    witnesses["omit_pending_read_from_empty"] = q.visible()["legacy_occ"] != q.owned
+    # Same-clock final TMU + AUX: two independent 'became ready' emitters would duplicate.
+    before, t, a = 2, 1, 1
+    correct_events = int(before > 0 and before - t - a == 0)
+    buggy_events = 2 if before - t - a == 0 else 0
+    witnesses["double_ready_on_simultaneous_publication"] = correct_events != buggy_events
+    # Repeated publication cannot be allowed to decrement an already-published obligation.
+    witnesses["decrement_again_on_duplicate_completion"] = (1 - 1 - 1) < 0
+    # Snapshot alone cannot authorize a second claim after the first claim commits.
+    stale_snapshot_claimed = 0; current_claimed = 1
+    witnesses["claim_from_stale_snapshot_without_bypass"] = (not stale_snapshot_claimed) and bool(current_claimed)
+    # Output validity is not output transfer under backpressure.
+    output_valid, output_ready, owned = True, False, 1
+    witnesses["release_owner_on_valid_instead_of_transfer"] = owned - int(output_valid) != owned - int(output_valid and output_ready)
+    assert all(witnesses.values())
+    return {"detected": len(witnesses), "witnesses": witnesses,
+            "scope": "model counterexamples, NOT repository RTL mutation runs"}
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--out', type=Path, default=Path('model_results.json'))
+    args = p.parse_args()
+    result = {
+        'scope': 'Algorithmic Python models only. No RTL or Quartus execution.',
+        'review_pin': '756f08c5970608ba13c70944ea892c58ae1ddba2',
+        'fifo_false_empty': fifo_false_empty_trace(),
+        'fifo_exhaustive': fifo_exhaustive(),
+        'fifo_random': fifo_random(),
+        'ticket_window': ticket_checks(),
+        'completion': completion_checks(),
+        'mutation_witnesses': mutation_witnesses(),
+    }
+    result['script_sha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__': main()
+
+
+END OF FILE
