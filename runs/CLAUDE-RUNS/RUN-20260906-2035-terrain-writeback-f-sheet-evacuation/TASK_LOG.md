@@ -1892,3 +1892,42 @@ checked against the actual benches rather than assumed covered.
 
 **489 checks pass.** §22.5–22.9 concern T5's candidate registers and later
 integration stages that do not exist yet.
+
+---
+
+## THE BIGGEST FINDING OF THE DAY IS SOMEBODY ELSE'S WIN, MEASURED FOR THE FIRST TIME
+
+Read mid-flight from the island refit's map stage while the fitter placed.
+
+**Six of §10 L0's eight arrays now infer as RAM** — `fctx_m`, `flod_m`, `fpgn_m`,
+`fcls_m`, `fpsl_m`, `faux_m`. Only `uvw_m` and `class_m` remain in fabric.
+
+At map: **−4,923 registers (−17.6%), +5,312 block memory bits**, and the entity
+walk puts **the entire register drop inside `zhao_texture_island_top` itself**,
+where those arrays live. Child deltas are trivial by comparison —
+`perspuv_svc` +72 (mine), `fragrob` +2, `tmu_plan` +1.
+
+**It is not today's work.** Six island sources changed across ten commits since
+the Sep 6 fit; four are from earlier sessions (`b55959f0`, `d80f29b4`,
+`3a06a590`, `a1846867`). My perspuv change is positively excluded from the memory
+rise: its own fit measured registers **up** 59 with M10K unchanged at 1.
+
+**And it supersedes my own L0 report from this morning.** L0 read the CURRENT
+source and cited the PREVIOUS fit's uninferred list — CLAUDE.md's *"never compare
+a current file to an old measurement"* wearing a new costume, because the
+comparison was implicit rather than written as one. The tell was available and
+unused: `compare_rows.py` already flagged that island row as four commits stale,
+in a report I wrote the same morning.
+
+L0 is now bannered as superseded rather than left to be read standalone. Its
+access-pattern walk — single-writer, single-reader, one shared write event — is
+still correct, and is precisely what made the conversion possible.
+
+**§10's storage lane is further along than the L-series assumes: not eight
+arrays, but two.** And `uvw_m` is literally §10.2's subject, with its credited
+N0–N4 join already specified stage by stage.
+
+**Still unknown:** ALM, Fmax, and whether the six conversions cost M10K blocks
+disproportionately — §12's lesson today was that shallow arrays each burn a whole
+block, and `fpsl_m`/`fcls_m` are narrow. The completed fit's RAM summary decides
+that, and it should be read before anyone calls this a clean win.
