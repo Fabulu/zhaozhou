@@ -203,3 +203,48 @@ rediscovering per block.
 port-usage question per queue, it interacts with the read-during-write mode the
 table records, and §5.6 asks for both mappings compared *"under the same workload
 and constraints"* rather than argued.
+
+
+---
+
+## Postscript: S01 §15.1 predicted the ten, and prescribed the refusal
+
+Found after the fact, on re-reading the original texture brief rather than the
+consolidated handoff — the two are not identical, and the consolidation says so
+(*"not a literal concatenation of all original code appendices"*).
+
+**§15.1 predicts the block count exactly**, and for the exact reason:
+
+> a simultaneously read/written 64-bit row requires two width slices in this
+> ordinary mapping. The six payload families therefore have a conservative
+> **seven-M10K minimum** and the three ready queues add three, for **ten rather
+> than nine** physical blocks before other storage.
+
+The fitter reports **10** for the nine `v3bank` instances, with `u_ctx` taking
+two. The gate in `design/fit_targets.yml` says `min_m10k: 9`, which is the
+*instance* count and one short of the *physical* one — not wrong as a floor, but
+it is not the number §15.1 derives, and the two have been treated as the same
+thing.
+
+**And it prescribed the discipline this report followed**, before the fact:
+
+> The difference is not automatically evidence of waste. **Nor may it be
+> assigned to a particular queue without the per-instance RAM report.**
+
+That is precisely the refusal made here in the morning — the `cq`/`oq` hypothesis
+was computed, found to be 1,168 against 1,056, and withheld — and lifted only
+when the RAM report arrived and named the arrays.
+
+**One open instruction from §15.1 is NOT yet satisfied:**
+
+> An aggregate minimum-memory-bits gate is useful but not sufficient. One missing
+> payload bank can be hidden by an unrelated new memory with enough bits.
+> **Require per-bank names, logical geometry, physical mode and useful
+> connectivity.**
+
+The gate today is `min_memory_bits: 19584` — an aggregate, and exactly the kind
+§15.1 calls insufficient. The fit now harvests `blockfit.fit.rpt`, and the RAM
+table parsed in this report has the names, geometry and mode, so the data for a
+per-bank gate exists. Recorded as an open item rather than built here: the owner
+put measurement-tool expansion below finishing the island, and this is a gate
+change worth doing deliberately.
