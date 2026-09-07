@@ -1453,3 +1453,37 @@ without bound and hung the lane.
 
 Timing benefit unmeasured until a refit — the lane is busy with the v3own
 T4+fence refit.
+
+## `ticketq_rh` got its own test, and the RTL caught the test
+
+18 checks (`3ad546ff`). rcp24's bench covers the CONSUMER; it never saturates the
+DONE queue, so §5.3's D-versus-D+2 question is never reached by it, and no
+correctness check sees a RATE. Measured directly: accepts **exactly 16, not 18**,
+and **zero bubbles in 300 cycles**.
+
+Fire-tested by disabling the spare slot — 200 bubbles of 300, drain collapses
+from 16 to 1. The spare is load-bearing.
+
+My first version drove `pop_i` high through warmup and the wrapper latched
+`err_o`, correctly: `pop_i && empty_o` is a consumer protocol violation. The test
+was wrong and the detector was right.
+
+## An unrelated repair found while checking my own work did not break it
+
+`zhao_prod_top` is **`failed:quartus_map.exe`** — the top that answers *"what does
+the planned console cost when counted ONCE?"* does not map, so that question has
+no answer today. `reports/PROD-TOP-STRUCT-PORTS-20260907.md`.
+
+Cause confirmed in `gen_prod_top.py:parse_ports`: it takes the **first
+identifier** as the port name, so a struct-typed port
+(`output var zhao_guard_rsp_t guard_rsp_o`) yields a wire named after the TYPE at
+width one — `logic [1-1:0] u23_zhao_guard_rsp_t` — and two ports of the same
+struct type in one instance collide.
+
+**There is no lint target for the generated top.** Every other significant module
+has one. Its only check is a multi-hour Quartus run, so a defect Verilator
+reports in two seconds sat behind the most expensive gate available.
+
+**Recorded, not chased** — the owner's direction names "an interesting new
+bottleneck elsewhere" precisely, and this is one. None of the 16 errors mention
+any block changed today; that was the question that started the check.
