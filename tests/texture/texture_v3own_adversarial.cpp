@@ -1830,6 +1830,125 @@ int main(int argc, char** argv) {
                 s.emitted.size());
   }
 
+  // =========================================================================
+  hdr("case 23 (22.8): reset with work in every stage, then a late old packet");
+  // =========================================================================
+  // §22.8: "Request a barrier with work in each possible pipeline and queue
+  // location. ... Return a late old packet during local drain." and "Do not let
+  // an old registered write enable survive a control reset."
+  //
+  // The owner block has no barrier port yet, so the testable half is the RESET
+  // half, and it is worth testing precisely because a friendly simulator makes
+  // it look fine: everything clears at once, nothing is left, and the run is
+  // green whether or not the design would survive a real partial reset.
+  //
+  // So this drives traffic until work exists at MULTIPLE stages simultaneously
+  // -- admitted owners, issued samples, returns in flight, a COMBINE packet
+  // outstanding -- asserts that state is genuinely there, then resets, then
+  // injects a return for an owner from BEFORE the reset. §6.3's law: "A killed
+  // or reset context must not write back into its successor."
+  {
+    Ob s(dut);
+    s.reset();
+    s.cmb_ready = false;   // hold COMBINE so packets accumulate mid-pipeline
+    s.out_ready = false;   // and hold the output so owners cannot retire
+
+    std::vector<uint16_t> before;
+    for (int i = 0; i < 12; ++i) {
+      s.d->adm_valid_i = 1;
+      s.d->adm_ctx_i = ctx_of(0x9000u + static_cast<uint32_t>(i));
+      s.d->adm_req_i = 0x3;   // two sources, so an owner can be half-complete
+      s.step();
+      if (s.obs_adm_fire) before.push_back(s.obs_adm_owner);
+    }
+    s.d->adm_valid_i = 0;
+
+    // Issue and return ONE of the two sources for half the owners, leaving
+    // them genuinely mid-flight rather than untouched or finished.
+    for (size_t i = 0; i < before.size() / 2; ++i) {
+      s.d->iss_tmu_valid_i = 1;
+      s.d->iss_tmu_handle_i = smp(before[i], 0);
+      s.d->tmu_rvalid_i = 1;
+      s.d->tmu_rhandle_i = smp(before[i], 0);
+      s.d->tmu_rresult_i = mkres(before[i]);
+      s.step();
+    }
+    s.d->iss_tmu_valid_i = 0;
+    s.d->tmu_rvalid_i = 0;
+    s.idle(4);
+
+    // The case is worthless unless the state it is about actually exists.
+    const uint32_t live_before = dut->ev_live_o;
+    zhao::check(live_before > 0,
+                "22.8 setup: owners are genuinely live and mid-pipeline before "
+                "the reset -- a reset test on an idle block proves nothing",
+                1, live_before > 0 ? 1 : 0);
+    zhao::check(dut->ev_quiet_o == 0,
+                "22.8 setup: and the island is NOT quiescent, so the reset lands "
+                "on work rather than on silence",
+                0, dut->ev_quiet_o);
+
+    const uint16_t victim = before.empty() ? 0 : before[0];
+    const uint64_t kGhost = 0x3C3CC3C3C3ULL;
+
+    // ---- the reset -------------------------------------------------------
+    s.reset();
+    s.cmb_ready = true;
+    s.out_ready = true;
+    s.emitted.clear();
+    s.combined.clear();
+
+    zhao::check(dut->ev_live_o == 0,
+                "after reset no owner is live", 0, dut->ev_live_o);
+
+    // ---- the ghost: a return for a PRE-RESET owner -----------------------
+    // Its slot and generation are entirely plausible -- they were legitimate
+    // moments ago. Nothing about the packet distinguishes it except that its
+    // owner no longer exists.
+    for (int rep = 0; rep < 4; ++rep) {
+      s.d->tmu_rvalid_i = 1;
+      s.d->tmu_rhandle_i = smp(victim, 0);
+      s.d->tmu_rresult_i = kGhost;
+      s.step();
+    }
+    s.d->tmu_rvalid_i = 0;
+    s.idle(40);
+
+    zhao::check(s.emitted.empty(),
+                "22.8/§6.3: a return for a PRE-RESET owner produces no output -- "
+                "a reset context does not write back into its successor",
+                0, s.emitted.size());
+    zhao::check(dut->ev_admitted_o == 0,
+                "and the ghost did not admit anything", 0, dut->ev_admitted_o);
+
+    // ---- and the block still WORKS afterwards ----------------------------
+    // A block that refused everything forever would pass every check above.
+    s.d->adm_valid_i = 1;
+    s.d->adm_ctx_i = ctx_of(0x9500u);
+    s.d->adm_req_i = 0x1;
+    s.step();
+    s.d->adm_valid_i = 0;
+    const uint16_t fresh = s.obs_adm_owner;
+    s.d->iss_tmu_valid_i = 1;
+    s.d->iss_tmu_handle_i = smp(fresh, 0);
+    s.d->tmu_rvalid_i = 1;
+    s.d->tmu_rhandle_i = smp(fresh, 0);
+    s.d->tmu_rresult_i = mkres(fresh);
+    s.step();
+    s.d->iss_tmu_valid_i = 0;
+    s.d->tmu_rvalid_i = 0;
+    s.idle(80);
+    zhao::check(s.emitted.size() == 1,
+                "and the block still admits and emits normally after the reset -- "
+                "the checks above are not passing because it is simply dead",
+                1, s.emitted.size());
+    if (s.emitted.size() == 1)
+      zhao::check(s.emitted[0].res != kGhost,
+                  "and what emerged is the FRESH owner's own result, not the "
+                  "ghost payload",
+                  1, s.emitted[0].res != kGhost ? 1 : 0);
+  }
+
   const int rc = zhao::report_and_exit("texture_v3own_adversarial");
   delete dut;
   zhao::exit_hard(rc);
