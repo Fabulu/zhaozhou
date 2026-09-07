@@ -64,5 +64,22 @@ launches."* The last of those is the one that would stress this law hardest, and
 the directed suite does exercise ready-dropping (`ready 1-in-3`, `1-in-7`) but not
 specifically *just after a read launches*.
 
-Recorded as the sharpest remaining test for this block, rather than claimed as
-covered.
+> **WRITTEN THE SAME DAY.** Naming the sharpest missing test and then not
+> writing it would be the same shrug in a smarter costume.
+> `raster_ticketq_rh_directed` now drives supply most cycles and drops demand in
+> short unpredictable bursts over 4,000 cycles, so a read in flight meets a
+> falling ready **by construction rather than by timing luck**.
+>
+> The property is the one that matters: **every token pushed comes out exactly
+> once, and in order.** A lost token and a duplicated token both fail it; a
+> merely slow queue does not — which is what separates this from the throughput
+> check beside it.
+>
+> **Fire-tested against the exact defect §5.4's reservation prevents.** With
+> `b_pop_c` launching reads regardless of whether a destination is reserved, the
+> new check fails by name and the drain count collapses from 16 to 2. 22 checks
+> pass on the real RTL.
+>
+> What is still not covered from §16.3's list: shuffled completions and
+> zero/nonzero interleaving, both of which belong to `rcp24_v3`'s own bench
+> rather than the queue's.
