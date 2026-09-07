@@ -355,8 +355,19 @@ struct LatticeVertex {
   int16_t base = 0;    // layer A
   int16_t scar = 0;    // layer B
   int16_t bottom = 0;  // layer C
-  int vi = 0;          // 0..32, row
-  int vj = 0;          // 0..32, column
+  // vi IS THE COLUMN AND vj IS THE ROW, which is this tree's convention:
+  // `zhao_terrain_patch.sv:148` says "vi_i // lattice column" and
+  // `zhao_terrain_compcache_front.sv:376` addresses `vidx = vj * LAT_W + vi`,
+  // so vi has stride 1 and vj has stride 33 in both consumers.
+  //
+  // THIS HEADER SAID THE OPPOSITE FOR A DAY, and so did the RTL it is the
+  // oracle for. It cost a transposed `subpatch_dirty_o` mask -- the wrong
+  // quarter of a patch requested, terrain in the wrong place in the right
+  // shape -- and it was the composed bench's PLACEMENT readback that found
+  // it, because nothing notices a swapped pair of indices until something
+  // downstream interprets them rather than passing them along.
+  int vi = 0;          // 0..32, COLUMN, stride 1
+  int vj = 0;          // 0..32, ROW,    stride kLatticeEdge
 
   bool operator==(const LatticeVertex& o) const {
     return base == o.base && scar == o.scar && bottom == o.bottom && vi == o.vi && vj == o.vj;
@@ -370,7 +381,10 @@ inline int16_t page_h16(const uint8_t* page, uint32_t off) {
 }
 
 /**
- * `page_lattice` -- the 1,089 vertices of one page, ROW-MAJOR, `vi` outer.
+ * `page_lattice` -- the 1,089 vertices of one page, ROW-MAJOR, the COLUMN
+ * varying fastest, so vertex k is `{vi = k % 33, vj = k / 33}` and
+ * `k == vj * 33 + vi` -- the same expression TERRAIN.COMPCACHE addresses its
+ * lattice with.
  *
  * THE ORDER IS THE ADDRESS. TERRAIN.MIPGEN's fine port carries no coordinate
  * at all and derives everything from scan position, so a consumer that trusted
@@ -388,9 +402,9 @@ inline int16_t page_h16(const uint8_t* page, uint32_t off) {
 inline std::vector<LatticeVertex> page_lattice(const uint8_t* page) {
   std::vector<LatticeVertex> out;
   out.reserve(kLatticeVerts);
-  for (int vi = 0; vi < kLatticeEdge; ++vi) {
-    for (int vj = 0; vj < kLatticeEdge; ++vj) {
-      const uint32_t k = static_cast<uint32_t>(vi * kLatticeEdge + vj);
+  for (int vj = 0; vj < kLatticeEdge; ++vj) {        // ROW, the slow axis
+    for (int vi = 0; vi < kLatticeEdge; ++vi) {      // COLUMN, the fast axis
+      const uint32_t k = static_cast<uint32_t>(vj * kLatticeEdge + vi);
       LatticeVertex v;
       v.base = page_h16(page, kLayerAOff + 2u * k);
       v.scar = page_h16(page, kLayerBOff + 2u * k);

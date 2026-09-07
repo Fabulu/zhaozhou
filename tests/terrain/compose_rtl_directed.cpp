@@ -101,8 +101,9 @@ constexpr int kEdge = tp::kLatticeEdge;      // 33
 constexpr int kVerts = tp::kLatticeVerts;    // 1,089
 
 // The placement law this bench declares and the RTL is told. wx follows the
-// COLUMN and wz the ROW, which is the one thing about the scan's shape that has
-// to be agreed in two places.
+// COLUMN (`vi`) and wz the ROW (`vj`) -- the tree's convention, which
+// TERRAIN.COMPCACHE writes into hardware as `wx_m[rd_vi_c]` and
+// `wz_m[rd_vj_c]`.
 constexpr int32_t kX0 = 0x0010'0000;
 constexpr int32_t kZ0 = -0x0020'0000;
 constexpr int32_t kStep = 0x0002'0000;       // 2.0 in fx16
@@ -196,12 +197,35 @@ struct World {
     d.j_valid = 0;
     d.st_ready = 0;
     d.ps_done_ready = 0;
+    d.pos_we = 0;
+    d.cc_serve_release = 0;
+    d.cc_lat_req = 0;
     config();
     d.eval();
     for (int i = 0; i < 4; ++i) zhao::tick(d);
     d.rst_n = 1;
     d.eval();
     for (int i = 0; i < 2; ++i) zhao::tick(d);
+  }
+
+  // THE PLACEMENT, INTO THE CACHE. It arrives on its own port rather than on
+  // the record stream, because it is the island directory's and not the
+  // composition's -- `zhao_terrain_compcache_front`'s own contract draws that
+  // line. The bench writes the SAME law it tells TERRAIN.PATCH, so a bench that
+  // wrote one and expected another fails rather than agreeing with itself.
+  void write_placement() {
+    for (int axis = 0; axis < 2; ++axis) {
+      for (int i = 0; i < kEdge; ++i) {
+        d.pos_we = 1;
+        d.pos_axis = uint8_t(axis);
+        d.pos_idx = uint8_t(i);
+        d.pos_val = uint32_t(axis ? (kZ0 + kStep * i) : (kX0 + kStep * i));
+        d.eval();
+        zhao::tick(d);
+      }
+    }
+    d.pos_we = 0;
+    d.eval();
   }
 
   void load(const Pool& p) {
@@ -269,8 +293,8 @@ std::vector<Got> stream(World& w, uint32_t slot, int pattern, uint64_t cap = 200
       x.top = int32_t(d.st_top);
       x.bottom = int32_t(d.st_bottom);
       x.dirty = d.st_dirty != 0;
-      x.vi = int(out.size()) / kEdge;
-      x.vj = int(out.size()) % kEdge;
+      x.vi = int(out.size()) % kEdge;   // COLUMN, the fast axis
+      x.vj = int(out.size()) / kEdge;   // ROW
       out.push_back(x);
     }
     if (d.ps_done_valid && d.ps_done_ready) done = true;
@@ -287,6 +311,31 @@ std::vector<Got> stream(World& w, uint32_t slot, int pattern, uint64_t cap = 200
   d.ps_done_ready = 0;
   d.eval();
   return out;
+}
+
+// READ ONE VERTEX BACK OUT OF THE CACHE. The datum is present the cycle AFTER
+// the request -- `design/contracts/TERRAIN.TESS.md`, and this block's own port
+// comment repeats it -- so the request and the capture are one tick apart. A
+// helper that read on the same cycle would return the PREVIOUS request's answer
+// and be wrong by exactly one vertex, everywhere, plausibly.
+struct LatRead {
+  int32_t h = 0, wx = 0, wz = 0;
+};
+
+LatRead lat_read(Vtb_terrain_compose& d, int vi, int vj, int surface) {
+  d.cc_lat_req = 1;
+  d.cc_lat_vi = uint8_t(vi);
+  d.cc_lat_vj = uint8_t(vj);
+  d.cc_lat_surface = uint8_t(surface);
+  d.eval();
+  zhao::tick(d);
+  d.cc_lat_req = 0;
+  d.eval();
+  LatRead r;
+  r.h = int32_t(d.cc_lat_h);
+  r.wx = int32_t(d.cc_lat_wx);
+  r.wz = int32_t(d.cc_lat_wz);
+  return r;
 }
 
 }  // namespace
@@ -350,8 +399,8 @@ int main(int argc, char** argv) {
     in.scar = lat[std::size_t(k)].scar;
     in.bottom = lat[std::size_t(k)].bottom;
     in.dual = true;
-    in.wx = kX0 + kStep * lat[std::size_t(k)].vj;
-    in.wz = kZ0 + kStep * lat[std::size_t(k)].vi;
+    in.wx = kX0 + kStep * lat[std::size_t(k)].vi;   // COLUMN
+    in.wz = kZ0 + kStep * lat[std::size_t(k)].vj;   // ROW
     want[std::size_t(k)] = tp::compose_vertex(in, empty, nullptr);
   }
 
@@ -487,8 +536,8 @@ int main(int argc, char** argv) {
       in.scar = lat2[std::size_t(k)].scar;
       in.bottom = lat2[std::size_t(k)].bottom;
       in.dual = true;
-      in.wx = kX0 + kStep * lat2[std::size_t(k)].vj;
-      in.wz = kZ0 + kStep * lat2[std::size_t(k)].vi;
+      in.wx = kX0 + kStep * lat2[std::size_t(k)].vi;
+      in.wz = kZ0 + kStep * lat2[std::size_t(k)].vj;
       const tp::ComposeOut e = tp::compose_vertex(in, empty, nullptr);
       const Got& g = got[std::size_t(k)];
       if (g.compose_top != e.compose_top || g.top != e.live_top || g.bottom != e.bottom)
@@ -528,8 +577,8 @@ int main(int argc, char** argv) {
       in.scar = lat[std::size_t(k)].scar;
       in.bottom = lat[std::size_t(k)].bottom;
       in.dual = false;
-      in.wx = kX0 + kStep * lat[std::size_t(k)].vj;
-      in.wz = kZ0 + kStep * lat[std::size_t(k)].vi;
+      in.wx = kX0 + kStep * lat[std::size_t(k)].vi;   // COLUMN
+      in.wz = kZ0 + kStep * lat[std::size_t(k)].vj;   // ROW
       want_legacy[std::size_t(k)] = tp::compose_vertex(in, empty, nullptr);
     }
 
@@ -595,6 +644,128 @@ int main(int argc, char** argv) {
     // Put it back, so anything added after this phase gets the dual page.
     d.j_flags = uint16_t(zref::swstream::kFlagRequired | zref::swstream::kFlagDual);
     d.eval();
+  }
+
+
+  // =========================================================================
+  // E -- THE COMPOSED-HEIGHT CACHE, FILLED FROM A PAGE
+  // =========================================================================
+  // PAGESTREAM -> PATCH could be checked as the stream went past. The cache
+  // cannot: it can only be checked by READING IT BACK, which is a different
+  // question -- did the right value land at the right (vi, vj) -- and it is the
+  // one a wrong write cursor, a wrong buffer parity or a wrong row stride would
+  // fail while every counter agreed.
+  //
+  // So this phase fills the cache from the page and then reads every one of the
+  // 1,089 vertices back on BOTH surfaces, against the same
+  // `zref::terrain::compose_vertex` answers phase A used and against the
+  // placement law the bench wrote into the position port.
+  {
+    std::printf("\n-- E: the composed-height cache, filled from a page --\n");
+    w.reset();
+    d.j_flags = uint16_t(zref::swstream::kFlagRequired | zref::swstream::kFlagDual);
+    d.eval();
+    w.load(pool);
+    w.write_placement();
+
+    const std::vector<Got> got = stream(w, 1, 0);
+    ck(int(got.size()) == kVerts, "E the composed stream is complete", kVerts,
+       int(got.size()));
+
+    // THE LAST RECORD IS NOT THE LAST CLOCK. The cache's cursor reaches
+    // LAT_W*LAT_H on the clock AFTER the record that completes the fill, and
+    // the buffer swap happens there -- so `fill_records_o` reads one short and
+    // the serve port still points at the OTHER buffer if either is read on the
+    // cycle the stream ends. The first version of this phase did exactly that
+    // and got 1,088 records, a serve port that was not valid, and vertex (0,0)
+    // reading 1,538,125,837 out of a buffer nothing had written.
+    //
+    // A few ticks, not a settle loop: there is nothing to wait FOR here beyond
+    // one clock, and a loop would hide a swap that never came.
+    for (int i = 0; i < 4; ++i) zhao::tick(d);
+    d.eval();
+
+    ck(d.cc_fill_records == uint32_t(kVerts),
+       "E the cache took every record the composer produced", kVerts,
+       long(d.cc_fill_records));
+    ck(d.cc_fill_overrun == 0,
+       "E and refused none -- an overrun would mean a record was offered past the "
+       "lattice's end, which is the shape of a write cursor that did not reset",
+       0, long(d.cc_fill_overrun));
+    ck(d.cc_patches_filled == 1, "E one patch filled", 1, long(d.cc_patches_filled));
+    ck(d.cc_fill_done != 0 || d.cc_serve_valid != 0,
+       "E and the fill completed", 1,
+       (d.cc_fill_done != 0 || d.cc_serve_valid != 0) ? 1 : 0);
+    ck(d.cc_serve_valid != 0,
+       "E a complete patch is on the serve port -- the swap happened", 1,
+       d.cc_serve_valid ? 1 : 0);
+
+    // THE READBACK. Every vertex, both surfaces, height AND placement.
+    int bad_h = 0, bad_pos = 0, printed = 0;
+    for (int vj = 0; vj < kEdge; ++vj) {        // ROW
+      for (int vi = 0; vi < kEdge; ++vi) {      // COLUMN
+        const int k = vj * kEdge + vi;
+        const tp::ComposeOut& e = want[std::size_t(k)];
+
+        const LatRead top = lat_read(d, vi, vj, 0);
+        const LatRead bot = lat_read(d, vi, vj, 1);
+
+        if (top.h != e.live_top || bot.h != e.bottom) {
+          ++bad_h;
+          if (printed < 4) {
+            ++printed;
+            std::printf("   E (%d,%d) top got %d want %d, bottom got %d want %d\n", vi, vj,
+                        top.h, e.live_top, bot.h, e.bottom);
+          }
+        }
+        // The placement, which the cache stores per COLUMN and per ROW rather
+        // than per vertex -- so a transposed store is exactly the fault this
+        // catches, and it would leave every height correct.
+        const int32_t want_wx = kX0 + kStep * vi;   // COLUMN
+        const int32_t want_wz = kZ0 + kStep * vj;   // ROW
+        if (top.wx != want_wx || top.wz != want_wz) {
+          ++bad_pos;
+          if (printed < 6) {
+            ++printed;
+            std::printf("   E (%d,%d) wx got %d want %d, wz got %d want %d\n", vi, vj,
+                        top.wx, want_wx, top.wz, want_wz);
+          }
+        }
+      }
+    }
+    ck(bad_h == 0,
+       "E every vertex reads back the height section 3.4 gives for the page's own bytes "
+       "-- on BOTH surfaces, at the coordinate it was written to",
+       0, bad_h);
+    ck(bad_pos == 0,
+       "E and at the world position the placement law puts it -- wx follows vi, the "
+       "COLUMN, and wz follows vj, the ROW. A transposed store fails here while every "
+       "height stays right, which is exactly how this bench found the streamer had the "
+       "two the wrong way round",
+       0, bad_pos);
+    ck(d.cc_lat_oob == 0, "E with no request outside the grid", 0, long(d.cc_lat_oob));
+
+    // AND THE SERVED PATCH IS NAMED. `serve_src_id_o` is the only thing on the
+    // serve side that says WHICH patch, which is the whole reason this block
+    // carries it: every other signal is self-consistent under a swap that did
+    // not happen.
+    std::printf("   %u records filled, serve_src_id = 0x%04X, %u served\n",
+                d.cc_fill_records, d.cc_serve_src_id, d.cc_patches_served);
+
+    // RETIRE IT, and the count must move. A release that retired nothing would
+    // leave the next fill with no buffer and the failure would surface a patch
+    // later, somewhere else.
+    const uint32_t served_before = d.cc_patches_served;
+    d.cc_serve_release = 1;
+    d.eval();
+    zhao::tick(d);
+    d.cc_serve_release = 0;
+    d.eval();
+    zhao::tick(d);
+    d.eval();
+    ck(d.cc_patches_served == served_before + 1,
+       "E and releasing it retires exactly one patch", long(served_before + 1),
+       long(d.cc_patches_served));
   }
 
   std::printf("\n== %d checks, %d failures ==\n", g_checks, g_fail);

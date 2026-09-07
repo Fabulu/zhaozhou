@@ -173,17 +173,39 @@ module zhao_terrain_pagestream
     input  var logic            beat_last_i,
 
     // ---- the lattice out ------------------------------------------------------
-    // Row-major, `vi` outer, `vj` inner. THE ORDER IS THE ADDRESS: `vi_o`/`vj_o`
-    // are carried anyway because TERRAIN.PATCH's subpatch mask needs them, but
-    // nothing downstream may derive position from anything except this stream's
-    // order, for the same reason MIPGEN's fine port carries no coordinate.
+    // Row-major, the COLUMN varying fastest. THE ORDER IS THE ADDRESS:
+    // `vi_o`/`vj_o` are carried anyway because TERRAIN.PATCH's subpatch mask
+    // and TERRAIN.COMPCACHE's placement need them, but nothing downstream may
+    // derive position from anything except this stream's order, for the same
+    // reason MIPGEN's fine port carries no coordinate.
     output var logic                v_valid_o,
     input  var logic                v_ready_i,
     output var logic signed [15:0]  v_base_o,     // layer A
     output var logic signed [15:0]  v_scar_o,     // layer B
     output var logic signed [15:0]  v_bottom_o,   // layer C
-    output var logic [5:0]          v_vi_o,       // 0..EDGE-1
-    output var logic [5:0]          v_vj_o,
+    // vi IS THE COLUMN AND vj IS THE ROW, which is the tree's convention and
+    // NOT the one this block shipped with. `zhao_terrain_patch.sv:148` says
+    // "vi_i // lattice column" and `zhao_terrain_compcache_front.sv:376`
+    // addresses `vidx = vj * LAT_W + vi` -- so vi has stride 1 and vj has
+    // stride 33 in both consumers, and this block emitted them the other way
+    // round for a day.
+    //
+    // THE SCAN ORDER DID NOT CHANGE AND MUST NOT: the page is row-major, the
+    // column is the fast axis, and arrival index k is still `vj * EDGE + vi`.
+    // What changed is only which output carries which, so a consumer reading
+    // `v_vi_o` as a column gets a column. The heights were never affected --
+    // COMPCACHE stores by arrival cursor and the order was always right -- but
+    // TERRAIN.PATCH's `subpatch_dirty_o` is a 4x4 mask at bit `row*4 + col`,
+    // and with the two swapped that mask was TRANSPOSED. A transposed dirty
+    // mask requests the wrong quarter of a patch: terrain in the wrong place,
+    // in the right shape, with every counter agreeing.
+    //
+    // FOUND BY THE COMPOSED BENCH, not by reading either contract: the
+    // placement readback came back with wx following the row and wz the
+    // column, which is only visible once something downstream INTERPRETS the
+    // two rather than passing them along.
+    output var logic [5:0]          v_vi_o,       // COLUMN, 0..EDGE-1, stride 1
+    output var logic [5:0]          v_vj_o,       // ROW,    0..EDGE-1, stride EDGE
     output var logic                v_first_o,    // vertex 0 of this lattice
     output var logic                v_last_o,     // vertex EDGE*EDGE-1
     output var logic [SLOTW-1:0]    v_slot_o,
@@ -286,7 +308,8 @@ module zhao_terrain_pagestream
   logic                       covv_q [NPLANE];
 
   logic [VIDXW-1:0] vidx_q;        // 0 .. VERTS-1
-  logic [5:0]       vi_q, vj_q;
+  logic [5:0]       vi_q;           // COLUMN, the fast axis
+  logic [5:0]       vj_q;           // ROW
 
   // What page byte plane p's sample for the current vertex lives at, and the
   // burst that contains it.
@@ -552,11 +575,11 @@ module zhao_terrain_pagestream
               state_q             <= S_DONE;
             end else begin
               vidx_q <= vidx_q + VIDXW'(1);
-              if (vj_q == 6'(EDGE - 1)) begin
-                vj_q <= 6'd0;
-                vi_q <= vi_q + 6'd1;
-              end else begin
+              if (vi_q == 6'(EDGE - 1)) begin
+                vi_q <= 6'd0;
                 vj_q <= vj_q + 6'd1;
+              end else begin
+                vi_q <= vi_q + 6'd1;
               end
               state_q <= S_CHECK;
             end
@@ -590,9 +613,13 @@ module zhao_terrain_pagestream
       assert (vidx_q < VIDXW'(VERTS))
       else $error("pagestream: vertex index %0d out of range", vidx_q);
 
+      // `vidx = vj * EDGE + vi`, exactly as zhao_terrain_compcache_front.sv:376
+      // addresses its lattice. The two have to be the same expression or the
+      // cache's read index and this block's scan order are two different
+      // orderings that happen to agree today.
       a_index_agrees :
       assert (!(state_q == S_EMIT)
-              || ({{(32-VIDXW){1'b0}}, vidx_q} == (32'(vi_q) * 32'(EDGE) + 32'(vj_q))))
+              || ({{(32-VIDXW){1'b0}}, vidx_q} == (32'(vj_q) * 32'(EDGE) + 32'(vi_q))))
       else $error("pagestream: vi/vj disagree with the scan index");
     end
   end

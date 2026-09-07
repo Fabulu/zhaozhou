@@ -40,6 +40,28 @@
 //                    sets the flag in the JOB and the routing is what is under
 //                    test.
 //
+// ---------------------------------------------------------------------------
+// AND THE THIRD BLOCK: TERRAIN.COMPCACHE
+// ---------------------------------------------------------------------------
+// `zhao_terrain_compcache_front`'s fill port is port-for-port TERRAIN.PATCH's
+// `st_*` output, so it goes on the end with no glue either. That makes this
+// bench PAGESTREAM -> PATCH -> COMPCACHE: a page's bytes, composed by §3.4, and
+// held in the double-buffered lattice the tessellator reads.
+//
+// The cache is where the claim gets its second half. PATCH's output stream can
+// be checked as it goes past; the cache can only be checked by READING IT BACK
+// through the serve port afterwards, which is a different question -- did the
+// right value land at the right (vi, vj) -- and it is the one a wrong write
+// cursor, a wrong buffer parity or a wrong row stride would fail while every
+// counter agreed.
+//
+// The placement goes in through `pos_we_i` rather than on the record stream,
+// because it is the ISLAND DIRECTORY's, not the composition's, and this block's
+// own contract makes that split. The bench writes the same 33 column x's and 33
+// row z's it tells TERRAIN.PATCH about, and the readback checks the cache
+// returns them -- so a bench that wrote one law and expected another would fail
+// rather than agree with itself.
+
 // The field list is EMPTY. TERRAIN.PATCH's §3.4 chain is
 // `live_top = max(compose_top + SUM field lanes, fx(bottom))`, and with no
 // accepted programs there are no lanes -- so this bench measures the
@@ -76,9 +98,8 @@ module tb_terrain_compose
     input var logic [15:0] j_flags,
 
     // The lattice's placement, which is the island directory's business and not
-    // the streamer's. `wx = x0 + vj * step`, `wz = z0 + vi * step`, all fx16 --
-    // vj is the COLUMN and vi the ROW, which is the one place this bench has to
-    // know the scan's shape.
+    // the streamer's. `wx = x0 + vi * step`, `wz = z0 + vj * step`, all fx16 --
+    // vi is the COLUMN and vj the ROW, this tree's convention throughout.
     input var logic signed [31:0] cfg_x0_i,
     input var logic signed [31:0] cfg_z0_i,
     input var logic signed [31:0] cfg_step_i,
@@ -108,6 +129,34 @@ module tb_terrain_compose
     output var logic [ 5:0] v_vi,
     output var logic [ 5:0] v_vj,
     output var logic        v_last,
+
+    // ---- TERRAIN.COMPCACHE ---------------------------------------------------
+    // The placement, written by the bench because it is the island directory's.
+    input  var logic               pos_we,
+    input  var logic               pos_axis,      // 0 = wx by column, 1 = wz by row
+    input  var logic        [ 5:0] pos_idx,
+    input  var logic signed [31:0] pos_val,
+
+    output var logic        cc_fill_accept,
+    output var logic        cc_fill_busy,
+    output var logic        cc_fill_done,
+    output var logic [31:0] cc_fill_records,
+    output var logic [31:0] cc_patches_filled,
+    output var logic [31:0] cc_fill_overrun,
+    output var logic [31:0] cc_lat_oob,
+
+    input  var logic        cc_serve_release,
+    output var logic        cc_serve_valid,
+    output var logic [15:0] cc_serve_src_id,
+    output var logic [31:0] cc_patches_served,
+
+    input  var logic        cc_lat_req,
+    input  var logic [ 5:0] cc_lat_vi,
+    input  var logic [ 5:0] cc_lat_vj,
+    input  var logic        cc_lat_surface,   // 0 = top, 1 = bottom
+    output var logic [31:0] cc_lat_h,
+    output var logic [31:0] cc_lat_wx,
+    output var logic [31:0] cc_lat_wz,
 
     // ---- completion and counters -------------------------------------------
     output var logic        ps_done_valid,
@@ -236,9 +285,12 @@ module tb_terrain_compose
   // NO GLUE ON THE HEIGHT PATH. base/scar/bottom/vi/vj go straight across --
   // which is the whole reason the streamer emits three planes on one beat
   // instead of one plane per pass.
+  // wx FOLLOWS vi AND wz FOLLOWS vj, which is what TERRAIN.COMPCACHE writes
+  // into hardware: `wx_m[rd_vi_c]`, `wz_m[rd_vj_c]`. It was the other way round
+  // here for one run and the readback said so -- wx came back tracking the row.
   logic signed [31:0] wx_c, wz_c;
-  assign wx_c = cfg_x0_i + (cfg_step_i * signed'({26'd0, ps_vj}));
-  assign wz_c = cfg_z0_i + (cfg_step_i * signed'({26'd0, ps_vi}));
+  assign wx_c = cfg_x0_i + (cfg_step_i * signed'({26'd0, ps_vi}));
+  assign wz_c = cfg_z0_i + (cfg_step_i * signed'({26'd0, ps_vj}));
 
   /* verilator lint_off UNUSEDSIGNAL */
   logic        pt_fld_add_ready, pt_fld_accept, pt_fld_reject, pt_fld_ready;
@@ -310,6 +362,94 @@ module tb_terrain_compose
       .terrain_samples_evaluated_o(pt_samples),
       .idle_o                     (pt_idle)
   );
+
+  // ------------------------------------------------ TERRAIN.COMPCACHE ------
+  // PORT-FOR-PORT off TERRAIN.PATCH's output, which is what its own contract
+  // says it is. The only thing this bench decides is WHEN the fill starts, and
+  // that is one pulse before the first record.
+  //
+  // `fill_start` is driven from the streamer's `v_first_o` -- the vertex that
+  // IS the first, rather than a cycle the bench counted -- so a lattice that
+  // began somewhere else would start the fill somewhere else too, instead of
+  // quietly filling from the middle.
+  logic cc_fill_start;
+  assign cc_fill_start = ps_v_valid && ps_v_ready && ps_first;
+
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [1:0]  cc_cs_substance;
+  logic [31:0] cc_cs_oob;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  logic signed [31:0] cc_lat_h_s, cc_lat_wx_s, cc_lat_wz_s;
+  assign cc_lat_h  = cc_lat_h_s;
+  assign cc_lat_wx = cc_lat_wx_s;
+  assign cc_lat_wz = cc_lat_wz_s;
+
+  zhao_terrain_compcache_front #(
+      .LAT_W(33),
+      .LAT_H(33)
+  ) u_cc (
+      .clk  (clk),
+      .rst_n(rst_n),
+
+      .fill_start_i (cc_fill_start),
+      .fill_accept_o(cc_fill_accept),
+      .fill_busy_o  (cc_fill_busy),
+
+      // THE CACHE'S READY IS NOT WIRED BACK INTO TERRAIN.PATCH, and that is
+      // deliberate: `st_ready` stays the C++ side's, so a phase can stall the
+      // composed stream independently of whether the cache would have. What is
+      // checked instead is `fill_overrun_o` and `fill_records_o` -- if the
+      // cache ever refused a record this arrangement offered, the counts say
+      // so rather than the record vanishing.
+      .st_valid_i (st_valid && st_ready),
+      .st_ready_o (cc_st_ready),
+      .st_top_i   (pt_top),
+      .st_bottom_i(pt_bottom),
+      .st_src_id_i(st_src_id),
+
+      .pos_we_i  (pos_we),
+      .pos_axis_i(pos_axis),
+      .pos_idx_i (pos_idx),
+      .pos_val_i (pos_val),
+
+      .cs_we_i         (1'b0),
+      .cs_w_ci_i       (5'd0),
+      .cs_w_cj_i       (5'd0),
+      .cs_w_substance_i(2'd0),
+
+      .dual_i(ps_v_flags[FLAG_DUAL_BIT]),
+
+      .fill_done_o(cc_fill_done),
+
+      .serve_release_i(cc_serve_release),
+      .serve_valid_o  (cc_serve_valid),
+      .serve_src_id_o (cc_serve_src_id),
+
+      .lat_req_i    (cc_lat_req),
+      .lat_vi_i     (cc_lat_vi),
+      .lat_vj_i     (cc_lat_vj),
+      .lat_surface_i(cc_lat_surface),
+      .lat_h_o      (cc_lat_h_s),
+      .lat_wx_o     (cc_lat_wx_s),
+      .lat_wz_o     (cc_lat_wz_s),
+
+      .cs_req_i      (1'b0),
+      .cs_ci_i       (5'd0),
+      .cs_cj_i       (5'd0),
+      .cs_substance_o(cc_cs_substance),
+
+      .fill_records_o  (cc_fill_records),
+      .patches_filled_o(cc_patches_filled),
+      .patches_served_o(cc_patches_served),
+      .fill_overrun_o  (cc_fill_overrun),
+      .lat_oob_o       (cc_lat_oob),
+      .cs_oob_o        (cc_cs_oob)
+  );
+
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic cc_st_ready;
+  /* verilator lint_on UNUSEDSIGNAL */
 
   // ------------------------------------------- the played read engine ------
   logic          rg_fwd;

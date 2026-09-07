@@ -126,6 +126,31 @@ It does not decide residency, does not publish, does not verify the page CRC
 place the lattice in the world — `wx`/`wz` come from the island directory and
 the patch envelope, not from these three planes.
 
+## vi is the COLUMN and vj is the ROW, and this block had them the wrong way
+
+`zhao_terrain_patch.sv:148` says *"vi_i // lattice column"* and
+`zhao_terrain_compcache_front.sv:376` addresses `vidx = vj * LAT_W + vi`. So in
+both consumers **`vi` has stride 1 and `vj` has stride 33**. This block shipped
+with the opposite for a day.
+
+**The scan order was never wrong and did not change.** The page is row-major, the
+column is the fast axis, and arrival index *k* is `vj * EDGE + vi` — the same
+expression the cache addresses its lattice with. What was wrong is only which
+output carried which, so a consumer reading `v_vi_o` as a column got a row.
+
+The heights were never affected: `TERRAIN.COMPCACHE` stores by arrival cursor
+and the order was always right. What *was* affected is anything that
+**interprets** the pair — `TERRAIN.PATCH`'s `subpatch_dirty_o` is a 4×4 mask at
+bit `row*4 + col`, so with the two swapped **that mask was transposed**, which
+requests the wrong quarter of a patch: terrain in the wrong place, in the right
+shape, with every counter agreeing.
+
+**Found by the composed bench's placement readback**, not by reading either
+contract. `wx` came back tracking the row. Nothing notices a swapped pair of
+indices until something downstream interprets them rather than passing them
+along — which is the argument for composing blocks rather than trusting that two
+green differentials compose.
+
 ## The record's flags, carried because nothing else did
 
 T5's patch record has `flags:u16 (REQUIRED, PREFETCH, DYNAMIC, DUAL,
@@ -175,7 +200,7 @@ exactly the fault this tree keeps recording.
 | `beat_valid_i` `beat_data_i` `beat_last_i` | 1 / 64 / 1 | eight beats per accepted request |
 | `v_valid_o` / `v_ready_i` | 1 | one vertex per beat |
 | `v_base_o` `v_scar_o` `v_bottom_o` | signed 16 | layers A / B / C, height16, **untouched** |
-| `v_vi_o` `v_vj_o` | 6 | 0..32; carried for the subpatch mask, **not** a second source of truth |
+| `v_vi_o` `v_vj_o` | 6 | **`vi` is the COLUMN (stride 1), `vj` the ROW (stride 33)** — see below |
 | `v_first_o` `v_last_o` | 1 | vertex 0 and vertex 1,088 |
 | `done_*` | — | one job, one completion, always |
 

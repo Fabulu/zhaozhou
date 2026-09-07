@@ -1853,6 +1853,20 @@ blocks:
       first divergence is ground subtly in the wrong place with every counter
       agreeing.
 
+      vi IS THE COLUMN AND vj IS THE ROW, AND THIS BLOCK HAD THEM SWAPPED FOR A
+      DAY. zhao_terrain_patch.sv:148 says "vi_i // lattice column" and
+      zhao_terrain_compcache_front.sv:376 addresses vidx = vj*LAT_W + vi, so vi
+      has stride 1 and vj stride 33 in both consumers. The SCAN ORDER was never
+      wrong and did not change -- arrival index k is still vj*EDGE + vi -- only
+      which output carried which. Heights were unaffected because COMPCACHE
+      stores by arrival cursor; what was affected is anything that INTERPRETS
+      the pair, and TERRAIN.PATCH's subpatch_dirty_o is a 4x4 mask at bit
+      row*4 + col, so that mask was TRANSPOSED: the wrong quarter of a patch
+      requested, terrain in the wrong place in the right shape, every counter
+      agreeing. Found by the composed bench's PLACEMENT readback rather than by
+      reading either contract -- nothing notices a swapped pair of indices until
+      something downstream interprets them instead of passing them along.
+
       THE RECORD'S FLAGS ARE CARRIED BECAUSE NOTHING ELSE DID. T5's record has
       flags:u16 and TERRAIN.SEQ carries them out on is_flags_o, and one of them
       -- kFlagDual -- decides how a composed vertex is READ: TERRAIN.PATCH's
