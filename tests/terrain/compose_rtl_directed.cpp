@@ -70,6 +70,7 @@
 #include "zhao_sim.hpp"
 #include "zref/zref_terrain_page.hpp"
 #include "zref/zref_terrain_patch.hpp"
+#include "zref/zref_sw_stream.hpp"
 
 namespace {
 
@@ -181,7 +182,9 @@ struct World {
     d.cfg_rd_gap_i = 0;
     d.cfg_vram_client_i = 6;
     d.cfg_epoch_i = 0x2Au;
-    d.cfg_dual_i = 1;
+    // The flag as the RECORD carries it, not as a pin on TERRAIN.PATCH. See
+    // phase D for why that distinction is the whole point.
+    d.j_flags = uint16_t(zref::swstream::kFlagRequired | zref::swstream::kFlagDual);
     d.cfg_x0_i = kX0;
     d.cfg_z0_i = kZ0;
     d.cfg_step_i = kStep;
@@ -492,6 +495,106 @@ int main(int argc, char** argv) {
         ++bad;
     }
     ck(bad == 0, "C and slot 2's bytes compose to slot 2's answer", 0, bad);
+  }
+
+
+  // =========================================================================
+  // D -- kFlagDual, AND WHETHER IT ARRIVES AT ALL
+  // =========================================================================
+  // `dual_i` is not decoration: `zhao_terrain_patch.sv` reads it inside BOTH
+  // clamps (`ctop_new`, `ctop_clamped`) and it decides whether `bottom_o` is
+  // `fx(bottom)` or `live_top`. A page composed with the wrong `dual` is a
+  // different island underside, in the right shape, with every counter
+  // agreeing.
+  //
+  // Until today nothing in `fpga/rtl` routed T5's `kFlagDual` from the patch
+  // record to that pin -- this bench tied it to a knob and the gap was a
+  // finding. The streamer now carries the record's whole 16-bit `flags` as
+  // identity, and THIS PHASE TESTS THE ROUTING rather than the clamp: the same
+  // page is composed twice, once with the flag set in the JOB and once clear,
+  // and each run is compared against `compose_vertex` with the matching
+  // `in.dual`.
+  //
+  // AND THE TWO ANSWERS MUST DIFFER. Otherwise the phase would pass against a
+  // block that ignored the flag entirely, which is exactly the failure it
+  // exists to catch -- the page reaches the clamp 218 times, so they do.
+  {
+    std::printf("\n-- D: kFlagDual, carried from the record --\n");
+
+    std::vector<tp::ComposeOut> want_legacy(kVerts);
+    for (int k = 0; k < kVerts; ++k) {
+      tp::ComposeIn in;
+      in.base = lat[std::size_t(k)].base;
+      in.scar = lat[std::size_t(k)].scar;
+      in.bottom = lat[std::size_t(k)].bottom;
+      in.dual = false;
+      in.wx = kX0 + kStep * lat[std::size_t(k)].vj;
+      in.wz = kZ0 + kStep * lat[std::size_t(k)].vi;
+      want_legacy[std::size_t(k)] = tp::compose_vertex(in, empty, nullptr);
+    }
+
+    int differ = 0;
+    for (int k = 0; k < kVerts; ++k)
+      if (want_legacy[std::size_t(k)].compose_top != want[std::size_t(k)].compose_top ||
+          want_legacy[std::size_t(k)].bottom != want[std::size_t(k)].bottom)
+        ++differ;
+    ck(differ > 0,
+       "D the two readings of this page DIFFER -- without that the phase would pass "
+       "against a block that ignored the flag entirely",
+       1, differ > 0 ? 1 : 0);
+    std::printf("   %d of %d vertices read differently as legacy than as dual\n", differ,
+                kVerts);
+
+    // ---- the flag SET -------------------------------------------------
+    w.reset();
+    d.j_flags = uint16_t(zref::swstream::kFlagRequired | zref::swstream::kFlagDual);
+    d.eval();
+    w.load(pool);
+    {
+      const std::vector<Got> got = stream(w, 1, 0);
+      int bad = 0;
+      for (int k = 0; k < int(got.size()); ++k) {
+        const Got& g = got[std::size_t(k)];
+        const tp::ComposeOut& e = want[std::size_t(k)];
+        if (g.compose_top != e.compose_top || g.top != e.live_top || g.bottom != e.bottom)
+          ++bad;
+      }
+      ck(int(got.size()) == kVerts, "D with kFlagDual set, every vertex composed", kVerts,
+         int(got.size()));
+      ck(bad == 0, "D and every one reads as the DUAL page the flag says it is", 0, bad);
+    }
+
+    // ---- the flag CLEAR -----------------------------------------------
+    w.reset();
+    d.j_flags = uint16_t(zref::swstream::kFlagRequired);   // no kFlagDual
+    d.eval();
+    w.load(pool);
+    {
+      const std::vector<Got> got = stream(w, 1, 0);
+      int bad = 0, printed = 0;
+      for (int k = 0; k < int(got.size()); ++k) {
+        const Got& g = got[std::size_t(k)];
+        const tp::ComposeOut& e = want_legacy[std::size_t(k)];
+        if (g.compose_top == e.compose_top && g.top == e.live_top && g.bottom == e.bottom)
+          continue;
+        ++bad;
+        if (printed < 3) {
+          ++printed;
+          std::printf("   D legacy vertex %d: compose_top got %d want %d, bottom got %d "
+                      "want %d\n", k, g.compose_top, e.compose_top, g.bottom, e.bottom);
+        }
+      }
+      ck(int(got.size()) == kVerts, "D with kFlagDual clear, every vertex composed", kVerts,
+         int(got.size()));
+      ck(bad == 0,
+         "D and every one reads as a LEGACY single-surface page -- which is the claim "
+         "that the flag travelled from the record to the compose lane at all",
+         0, bad);
+    }
+
+    // Put it back, so anything added after this phase gets the dual page.
+    d.j_flags = uint16_t(zref::swstream::kFlagRequired | zref::swstream::kFlagDual);
+    d.eval();
   }
 
   std::printf("\n== %d checks, %d failures ==\n", g_checks, g_fail);

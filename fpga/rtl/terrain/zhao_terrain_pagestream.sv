@@ -144,6 +144,26 @@ module zhao_terrain_pagestream
     input  var logic [GENW-1:0]  j_gen_i,
     input  var logic [31:0]      j_epoch_i,
     input  var logic [31:0]      j_src_id_i,
+    // THE PATCH RECORD'S FLAGS, CARRIED BECAUSE NOTHING ELSE DOES.
+    //
+    // T5's record has `flags:u16 (REQUIRED, PREFETCH, DYNAMIC, DUAL,
+    // HAS_SAVED_F)` and TERRAIN.SEQ carries them out on `is_flags_o`. One of
+    // them decides how the composed vertex is READ: `zhao_terrain_patch`'s
+    // `dual_i` picks whether the bottom is `fx(bottom)` or `live_top`, and it
+    // is inside BOTH clamps (`ctop_new`, `ctop_clamped`) as well. A page
+    // composed with the wrong `dual` is a different island underside, in the
+    // right shape, with every counter agreeing.
+    //
+    // Nothing in `fpga/rtl` routed that flag from the record to the compose
+    // lane -- the composed bench tied it to a knob and reported the gap as a
+    // finding. It travels here because this block already carries slot,
+    // generation, epoch and source id for exactly the same reason: it is
+    // IDENTITY, not payload, and identity rides the stream.
+    //
+    // CARRIED WHOLE AND UNINTERPRETED. This block does not test a bit of it and
+    // has no opinion about what any of them mean; a streamer that decided which
+    // flags mattered would be a second place the record's meaning lives.
+    input  var logic [15:0]      j_flags_i,
 
     // ---- MEM.GUARD read client ------------------------------------------------
     output var zhao_guard_req_t guard_req_o,
@@ -170,6 +190,7 @@ module zhao_terrain_pagestream
     output var logic [GENW-1:0]     v_gen_o,
     output var logic [31:0]         v_epoch_o,
     output var logic [31:0]         v_src_id_o,
+    output var logic [15:0]         v_flags_o,
 
     // ---- completion -----------------------------------------------------------
     // ONE JOB, ONE COMPLETION, ALWAYS -- the rule TERRAIN.PAGELOADER's contract
@@ -253,6 +274,7 @@ module zhao_terrain_pagestream
   logic [SLOTW-1:0] job_slot_q;
   logic [GENW-1:0]  job_gen_q;
   logic [31:0]      job_epoch_q, job_src_q;
+  logic [15:0]      job_flags_q;
   logic [31:0]      page_base_q;   // byte address of the slot's page
 
   // ---- the three cursors ---------------------------------------------------
@@ -362,6 +384,7 @@ module zhao_terrain_pagestream
   assign v_gen_o    = job_gen_q;
   assign v_epoch_o  = job_epoch_q;
   assign v_src_id_o = job_src_q;
+  assign v_flags_o  = job_flags_q;
 
   assign done_valid_o   = (state_q == S_DONE);
   assign done_slot_o    = job_slot_q;
@@ -397,6 +420,7 @@ module zhao_terrain_pagestream
       job_gen_q           <= '0;
       job_epoch_q         <= 32'd0;
       job_src_q           <= 32'd0;
+      job_flags_q         <= 16'd0;
       page_base_q         <= 32'd0;
       vidx_q              <= '0;
       vi_q                <= 6'd0;
@@ -425,6 +449,7 @@ module zhao_terrain_pagestream
             job_gen_q   <= j_gen_i;
             job_epoch_q <= j_epoch_i;
             job_src_q   <= j_src_id_i;
+            job_flags_q <= j_flags_i;
             page_base_q <= 32'(REGION_BASE) + slot_scaled(j_slot_i);
             vidx_q      <= '0;
             vi_q        <= 6'd0;

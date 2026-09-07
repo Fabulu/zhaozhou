@@ -1346,6 +1346,7 @@ module tb_terrain_world
   logic [31:0]       ps_v_epoch, ps_v_src, ps_d_epoch, ps_d_src;
   logic [3:0]        ps_d_verdict;
   logic [31:0]       ps_vertices, ps_guard_denied, ps_incomplete;
+  logic [15:0]       ps_v_flags;
   logic              ps_idle, mf_idle, mg_busy;
   logic [SLOTW-1:0]  mg_done_slot;
   logic [GENW-1:0]   mg_done_gen;
@@ -1375,6 +1376,13 @@ module tb_terrain_world
       .j_gen_i   (ps_j_gen),
       .j_epoch_i (ps_j_epoch),
       .j_src_id_i(ps_j_src),
+      // TIED, AND THE REASON IS THE ONE THAT KEEPS PORTS HONEST. The streamer
+      // carries T5's record flags as identity because TERRAIN.PATCH's compose
+      // lane needs `kFlagDual`. MIPGEN decimates heights and has no use for
+      // any of them, and TERRAIN.MIPFEED therefore has no flags port -- adding
+      // a passthrough nobody reads would be worse than this zero, which says
+      // plainly that nothing on this path wants them.
+      .j_flags_i (16'd0),
 
       .guard_req_o (psg_req),
       .guard_rsp_i (psg_rsp),
@@ -1395,6 +1403,7 @@ module tb_terrain_world
       .v_gen_o   (ps_v_gen),
       .v_epoch_o (ps_v_epoch),
       .v_src_id_o(ps_v_src),
+      .v_flags_o (ps_v_flags),
 
       .done_valid_o  (ps_d_valid),
       .done_ready_i  (ps_d_ready),

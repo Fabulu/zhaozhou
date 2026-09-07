@@ -1853,6 +1853,17 @@ blocks:
       first divergence is ground subtly in the wrong place with every counter
       agreeing.
 
+      THE RECORD'S FLAGS ARE CARRIED BECAUSE NOTHING ELSE DID. T5's record has
+      flags:u16 and TERRAIN.SEQ carries them out on is_flags_o, and one of them
+      -- kFlagDual -- decides how a composed vertex is READ: TERRAIN.PATCH's
+      dual_i picks whether bottom_o is fx(bottom) or live_top and sits inside
+      both clamps. Nothing in fpga/rtl routed it from the record to the compose
+      lane; the composed bench tied it to a knob and the gap was a finding. It
+      now rides the stream as IDENTITY, whole and uninterpreted -- a streamer
+      that decided which flags mattered would be a second place the record's
+      meaning lives. 871 of 1,089 vertices read differently as legacy than as
+      dual on the compose bench's fixture, so the routing test is not vacuous.
+
       OPEN RULING -- WHICH SURFACE MIPGEN DECIMATES AT LOAD TIME. Ruling T8
       gives the mip law exactly and says a page becomes RESIDENT only after
       "resident mips complete", but does NOT say which surface fine33 is at load

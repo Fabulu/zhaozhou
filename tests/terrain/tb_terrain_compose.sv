@@ -30,11 +30,15 @@
 //                    producing it and does not. The bench places the lattice on
 //                    a declared grid and the test knows the same law.
 //
-//   `dual_i`         whether the page is dual-surface. It is a flag on the page
-//                    header and on T5's patch record (`kFlagDual`), neither of
-//                    which the streamer reads. A knob here, and the fact that
-//                    nothing in the tree routes that flag from the record to
-//                    the compose lane is a FINDING rather than a convenience.
+//   `dual_i`         NO LONGER HARNESS, as of 2026-09-07. It is a flag on T5's
+//                    patch record (`kFlagDual`), and nothing in the tree routed
+//                    it to the compose lane -- this bench tied it to a knob and
+//                    the gap was reported as a finding. TERRAIN.PAGESTREAM now
+//                    carries the record's whole 16-bit `flags` the same way it
+//                    carries slot, generation, epoch and source id: as IDENTITY
+//                    that rides the stream, whole and uninterpreted. The bench
+//                    sets the flag in the JOB and the routing is what is under
+//                    test.
 //
 // The field list is EMPTY. TERRAIN.PATCH's §3.4 chain is
 // `live_top = max(compose_top + SUM field lanes, fx(bottom))`, and with no
@@ -63,7 +67,13 @@ module tb_terrain_compose
     // ---- DUT configuration -------------------------------------------------
     input var logic [2:0]  cfg_vram_client_i,
     input var logic [31:0] cfg_epoch_i,
-    input var logic        cfg_dual_i,        // the flag nothing routes yet
+    // THE PATCH RECORD'S FLAGS, driven as a JOB FIELD rather than as a pin on
+    // TERRAIN.PATCH. That is the point of the phase that uses it: the bench
+    // sets `kFlagDual` in the record and the ROUTING is what is under test --
+    // streamer captures it at job start, carries it on every vertex, and the
+    // compose lane reads bit 3. A bench that tied `dual_i` directly would test
+    // TERRAIN.PATCH's clamp and nothing about whether the flag ever arrives.
+    input var logic [15:0] j_flags,
 
     // The lattice's placement, which is the island directory's business and not
     // the streamer's. `wx = x0 + vj * step`, `wz = z0 + vi * step`, all fx16 --
@@ -149,6 +159,12 @@ module tb_terrain_compose
   // truncation nobody wrote down.
   logic [31:0]        ps_v_src;
   /* verilator lint_on UNUSEDSIGNAL */
+  logic [15:0]        ps_v_flags;
+
+  // kFlagDual is bit 3 of T5's record flags -- `zref::swstream::kFlagDual`,
+  // `1u << 3`. Named here rather than written as a bare index, because a bare
+  // 3 in a wiring diagram is a constant nobody can grep for.
+  localparam int unsigned FLAG_DUAL_BIT = 3;
 
   assign v_base   = ps_base;
   assign v_scar   = ps_scar;
@@ -175,6 +191,7 @@ module tb_terrain_compose
       .j_gen_i   (j_gen),
       .j_epoch_i (j_epoch),
       .j_src_id_i(j_src_id),
+      .j_flags_i (j_flags),
 
       .guard_req_o (psg_req),
       .guard_rsp_i (psg_rsp),
@@ -195,6 +212,7 @@ module tb_terrain_compose
       .v_gen_o   (ps_v_gen),
       .v_epoch_o (ps_v_epoch),
       .v_src_id_o(ps_v_src),
+      .v_flags_o (ps_v_flags),
 
       .done_valid_o  (ps_done_valid),
       .done_ready_i  (ps_done_ready),
@@ -264,7 +282,7 @@ module tb_terrain_compose
       .base_i     (ps_base),
       .scar_i     (ps_scar),
       .bottom_i   (ps_bottom),
-      .dual_i     (cfg_dual_i),
+      .dual_i     (ps_v_flags[FLAG_DUAL_BIT]),
       .wx_i       (wx_c),
       .wz_i       (wz_c),
       .vi_i       (ps_vi),

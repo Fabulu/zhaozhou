@@ -377,6 +377,14 @@ targets:
       #   ALM 1,629  registers 2,014  M10K 0  memory bits 0  DSP 0
       #   Fmax 97.11 MHz on `clk`
       #
+      # STALE SINCE 2026-09-07 EVENING: the block gained a 16-bit
+      # `j_flags_i` -> `v_flags_o` identity passthrough (T5's record flags, for
+      # TERRAIN.PATCH's `dual_i`, which nothing routed). Sixteen more captured
+      # bits and sixteen more output wires; the numbers above are from before
+      # it and are LEFT AS THEY ARE with this note rather than quietly reused,
+      # because a measurement labelled with the wrong source is worse than no
+      # measurement. Refit queued.
+      #
       # THE STRUCTURE HELD. Zero memory bits is the acceptance question and it
       # passed: the three 64-byte staging buffers stayed flops, which is what
       # the combinational byte-lane extraction needs -- an inferred M10K there

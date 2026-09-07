@@ -126,6 +126,27 @@ It does not decide residency, does not publish, does not verify the page CRC
 place the lattice in the world — `wx`/`wz` come from the island directory and
 the patch envelope, not from these three planes.
 
+## The record's flags, carried because nothing else did
+
+T5's patch record has `flags:u16 (REQUIRED, PREFETCH, DYNAMIC, DUAL,
+HAS_SAVED_F)` and `TERRAIN.SEQ` carries them out on `is_flags_o`. One of them
+decides how a composed vertex is **read**: `zhao_terrain_patch.sv`'s `dual_i`
+picks whether `bottom_o` is `fx(bottom)` or `live_top`, and it sits inside both
+clamps (`ctop_new`, `ctop_clamped`). A page composed with the wrong `dual` is a
+different island underside — in the right shape, with every counter agreeing.
+
+**Nothing in `fpga/rtl` routed that flag from the record to the compose lane.**
+`tb_terrain_compose.sv` tied it to a knob and the gap was reported as a finding.
+It now travels here for the same reason slot, generation, epoch and source id
+do: it is **identity, not payload**, and identity rides the stream.
+
+**Carried whole and uninterpreted.** This block tests no bit of it and has no
+opinion about what any of them mean — a streamer that decided which flags
+mattered would be a second place the record's meaning lives.
+
+Measured: on the compose bench's fixture, **871 of 1,089 vertices read
+differently** as legacy than as dual, so the routing test is not vacuous.
+
 ## OPEN RULING — which surface does MIPGEN decimate at load time?
 
 Owner ruling **T8** gives the mip law exactly —
@@ -149,6 +170,7 @@ exactly the fault this tree keeps recording.
 | `j_valid_i` / `j_ready_o` | 1 | one job = one lattice |
 | `j_slot_i` | `SLOTW` (11) | pool slot; **one bit wider than the pool needs**, so 1,024 arrives as a refusal rather than as slot 0 |
 | `j_gen_i` `j_epoch_i` `j_src_id_i` | 8 / 32 / 32 | identity, returned unaltered |
+| `j_flags_i` → `v_flags_o` | 16 | T5's record flags, **carried whole and uninterpreted** — see below |
 | `guard_req_o` / `guard_rsp_i` | — | MEM.GUARD read client, `len` 64 |
 | `beat_valid_i` `beat_data_i` `beat_last_i` | 1 / 64 / 1 | eight beats per accepted request |
 | `v_valid_o` / `v_ready_i` | 1 | one vertex per beat |
