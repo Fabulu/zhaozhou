@@ -2638,3 +2638,37 @@ died.
 The ghost's rejection rests on the same current-membership term V04 already
 proved necessary by mutation, so the mechanism has been fire-tested even though
 this case was not re-mutated.
+
+## `gen_prod_top.py`'s struct-port bug, fixed
+
+The parser took the FIRST identifier in a port declaration as the port name.
+Builtin types are stripped, but a user-defined type is not a keyword and
+survives, so `input var zhao_guard_req_t req_i` produced a port called
+`zhao_guard_req_t` wired to a one-bit signal. `zhao_prod_top` failed
+`quartus_map` for exactly this, and it presents as a missing signal rather than
+as a parser fault — which is why it survived two separate port changes.
+
+The name is the LAST identifier outside brackets. Verified on four declarations
+covering a struct port, a packed vector, a signed vector and a parameterised
+width, then confirmed by regenerating and diffing the top:
+
+    - logic [1-1:0] u17_zhao_guard_req_t;    - .zhao_guard_req_t(u17_zhao_...)
+    + zhao_guard_req_t u17_guard_req_o;      + .guard_req_o(u17_guard_req_o)
+                                             - .zhao_client_e(u17_src[42 +: 1])
+                                             + .m_client_i(u17_src[42 +: 1])
+
+Three ports named after their types, in one instance. A user-defined type now
+also gives its wire that type instead of a guessed-width `logic`.
+
+**BOUNDED CLAIM.** This fixes the NAMING defect and is demonstrated by the diff.
+It does NOT establish that `zhao_prod_top` now passes `quartus_map`: the struct
+and enum INPUTS are still stimulated from slices of a packed source vector, and
+whether that elaborates is a separate question needing the toolchain, which is
+busy with the island fit. Recorded as untested rather than assumed fixed.
+
+## And the manifest checker caught my own two new blocks
+
+`check_prod_manifest.py` failed immediately with `UNACCOUNTED: zhao_geom_fogfactor`
+and `UNACCOUNTED: zhao_raster_fog` — a good instrument doing its job on the
+person who just added them. Both registered as counted production blocks;
+200 modules, 75 tops, 58 inside, 67 excluded, check OK.
