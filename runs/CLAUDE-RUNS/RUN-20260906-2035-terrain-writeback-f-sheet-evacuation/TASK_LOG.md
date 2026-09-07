@@ -1566,3 +1566,22 @@ DSP 6, Fmax 96.62, `failed:structure` on `registers 3157 > 700` and
 generation table. Now strongly motivated: the measurement says `gen_q` is the
 limiter, and step 1's assertions already prove the identity holds every cycle.
 v3own is outside this fit's closure.
+
+## T2 STEP 2 — the ISSUE lanes leave the table (`2b377444`)
+
+The refit named `gen_q[4][4] -> iss_q[52][0]` as the honest limiter, and that
+path IS lines 459/470's `gen_q[iss_t_slot_c] == iss_t_gen_c`. Both lanes now use
+§6.1's interval — a 14-bit subtract and compare on registers — instead of two
+64-way array selects.
+
+**This is step 1 being cashed in.** `a_win_live_matches_table` and its
+boundary-aimed twin have asserted exactly this equivalence on real traffic every
+cycle since step 1. The equivalence was proved *before* it was relied on, which
+is T2's stated order and the reason step 1 existed at all.
+
+§6.2's trap avoided explicitly: internal ticket is `{gen, slot}`, the public
+token is `{slot, gen}`. Tickets are built by hand rather than by reusing an owner
+word.
+
+477 checks pass, no assertion fired. Seven readers of `gen_q` remain and the
+assertions still cross-check it, so this stays reversible one site at a time.
