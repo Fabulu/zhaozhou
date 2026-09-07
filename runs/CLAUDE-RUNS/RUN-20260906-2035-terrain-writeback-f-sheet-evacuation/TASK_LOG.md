@@ -2058,3 +2058,45 @@ exactly the untested-detector failure this repository documents.
 Not claimed: that the schedules are unreachable. V04 looks plausible for a
 duplicate return arriving as its owner retires. Constructing it — sweeping the
 injection offset against the `out_ready` release edge — is the next step.
+
+## V04 IS REACHABLE — and I had reported the opposite an hour earlier
+
+**Corrected.** I recorded the V04 schedule as unreached and leaned toward
+"structurally prevented". Wrong, and the reason matters: my first construction
+released `out_ready` **before** injecting the duplicate, so the owner had already
+retired by capture and `c1t_live_q` was false at snapshot — a different schedule
+entirely. Ten offsets "survived" and I believed them.
+
+Injecting **first** and releasing after hits it at **offset zero**.
+
+So a duplicate return captured while its owner is live, whose C2 claim lands
+after retirement, is ordinary reachable traffic. A snapshot-only predicate stays
+true across that window.
+
+**The full chain, closed:**
+
+1. the owner ruled that authority ends at the ordered output transfer;
+2. §8.2 implemented — C2 requires snapshot identity **and** current membership;
+3. the schedule **constructed** and shown reachable;
+4. case 4e verifies the ruling's own words — refused, commits nothing, owner not
+   resurrected, still emits once with its own context;
+5. **mutation: remove the §8.2 term and case 4e fails.** The term is
+   load-bearing, not belt and braces.
+
+The V04 *assertion* is removed — the schedule is legitimate traffic, so keeping
+it would abort on valid behaviour. V03's detector stays; that schedule has not
+been constructed and has not fired.
+
+**500 checks pass.**
+
+### Still open from the brief's matrix
+
+* **V05** wants stale-after-retirement tested for **TMU, AUX and FINAL
+  separately**, observing rejection classification *and* actual bank write
+  enables. Case 4e covers TMU only, and observes classification but not write
+  enables.
+* **V06** same slot reused with a new generation, old token delivered before/on/
+  after the capture and claim edges.
+* **§8.3's claim-to-write lease** at the physical write enables — the brief warns
+  it must not become "an uncontrolled late combinational window predicate
+  immediately before a bank write-enable".
