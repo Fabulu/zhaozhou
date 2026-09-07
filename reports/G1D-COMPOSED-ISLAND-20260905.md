@@ -375,6 +375,56 @@ now, for the top four paths alike:
     -2.690  zhao_raster_rcp24_svc:u_rcp|c_pend[7]
               -> zhao_raster_perspuv_svc:u_persp|e_num_v[13][17]
 
+### RESOLVED BY THE RESEED — the claim is RESTORED, on evidence the first fit could not give
+
+`@p0b-island-s3`: same fifteen sources, **identical digest `c9283ca728dd`**,
+fitter seed 3.
+
+**First, the composed island's seed spread, which nothing in this repository had
+ever measured:**
+
+| | default seed | seed 3 | spread |
+|---|---|---|---|
+| reported Fmax | 78.80 | 77.67 | **1.13 MHz (1.4%)** |
+| ALM | 13,615 | 13,687 | 72 (0.53%) |
+| registers | 23,295 | 23,267 | 28 |
+
+A composed fit is **four times more repeatable** than the leaf block docket M1
+measured at 4.70 MHz. Composition does dilute placement noise, and now by a
+number rather than by assertion.
+
+**Second, and this is what the retraction was waiting for: seed 3's gating family
+is PALETTE again.**
+
+    old island        -4.977  pal_ld_gen_i[4] -> palette_res|loading_r
+    @p0b-island-s3    -2.875  pal_ld_gen_i[1] -> palette_res|gen_r
+
+So seed 3 supplies the like-for-like comparison the default seed could not:
+**palette gating on BOTH sides, −4.977 → −2.875, 2.102 ns better, 66.77 → 77.67
+MHz.** That is 10.90 MHz on the SAME family, against a measured seed spread of
+1.13 MHz. It is not placement roulette: it reproduces across two seeds and the
+only source change in the fifteen island files is `rcp24_svc.sv`.
+
+**THE MECHANISM, stated as inference not measurement.** The S1 register did not
+touch a palette path and cannot have. What it removed was the −3.243 ns
+`c_val -> c_m.raddr_a` family that previously dominated the fitter's attention.
+With that family gone the fitter had effort to spend elsewhere, and the palette
+port paths are where it went. That is a real and ordinary fitter behaviour, but
+it is an INFERENCE about why, and the measurement only supports the WHAT.
+
+**So the retraction was right and is now superseded.** On the default seed alone
+the gating family changed identity and the claim was not attributable — that
+reading was correct on the evidence available. The reseed did not overturn the
+rule; it satisfied it. M6 asks for a same-family comparison and seed 3 provided
+one.
+
+**What can now be said:** P0-B's registered issue record is worth **+10.9 MHz
+composed on a same-family comparison**, reproducible across two seeds, with the
+mechanism inferred rather than measured. The earlier "+12.03" figure compared
+different families and should not be quoted; **10.90** is the defensible number.
+
+### The retraction, kept as the record of what changed
+
 ### CORRECTION, same session: the +12 MHz is NOT cleanly attributable to P0-B
 
 Written after checking where the OLD island's worst paths actually were, which I

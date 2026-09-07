@@ -169,6 +169,11 @@
     "slackNs": -2.69,
     "to": "zhao_raster_perspuv_svc:u_persp|e_num_v[13][17]"
   },
+  "zhao_texture_island_top@p0b-island-s3": {
+    "from": "pal_ld_gen_i[1]",
+    "slackNs": -2.875,
+    "to": "zhao_texture_palette_res:u_palette|gen_r[2][1]"
+  },
   "zhao_texture_material_combine_v1": {
     "from": "rec[0].recipe[0]~DUPLICATE",
     "slackNs": -17.561,
