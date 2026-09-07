@@ -627,3 +627,24 @@ instantiated on BOTH the geometry and terrain lanes.
 Toolchain refilled immediately: pair_tess_normals refitting to test the
 cell_solid mask. Prediction on record: TESS->TESS moves off 40.11; the 32.42
 lattice->vy family does not.
+
+## 2026-09-07 -- project_core's clock: a DSP output register nobody used
+
+61.09 MHz, core-to-core, and the block is on BOTH the geometry and terrain
+lanes. Path anatomy from the setup report: multiply -> add -> add -> saturate
+-> add in one cycle, 15.906 ns, with the DSP's combinational output worth
+3.762 ns of it.
+
+Registering the product splits it 6.611 / 9.295 ns -- both inside 10 ns, so one
+cut may suffice. Prediction recorded with its derivation and its falsifier.
+NOT implemented: one cycle of latency on two lanes, and the last two pipeline
+registers put in on a reading bought 4.2%.
+
+Nearly edited rescale16_row instead (68-bit add + two 68-bit compares; there IS
+a bit-exact narrowing since (x + 2^15) >>> 16 == x[67:16] + x[15]). The per-hop
+numbers say it is not on this path. Checked before editing this time.
+
+THIRD coverage asymmetry: terrain_project_directed (2,011 checks) is blind to
+rescale16_row's rounding because its matrices make row products exact;
+geom_project_directed catches it in 22 of 900. Same shape as the tess fixture.
+Recorded, not fixed -- different lane from the one being measured.
