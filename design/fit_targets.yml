@@ -212,6 +212,30 @@ targets:
   # showed 6,532 ALUTs, so max_alms is set at the BUDGET and is expected to
   # fail. That is the point: a gate that reports a real breach is worth more
   # than one set at whatever the design happens to be.
+  # V3.1 §5.7 "Local queue fit gate", which asks for this BEFORE the owner demo
+  # is rebuilt: "fit one production-shaped ready queue with the actual depth,
+  # width, head structure, and status outputs ... and setup/hold at the intended
+  # product constraint."
+  #
+  # A registered wrapper, not the raw leaf, because occ_o/full_o/valid_o/
+  # owned_empty_o ARE the status contract under investigation and a raw fit
+  # would terminate all four at virtual pins -- corrupting exactly the paths
+  # being measured. Same reasoning as the four pair wrappers.
+  #
+  # §5.7 states its own limit and the gate must not outgrow it: "This experiment
+  # is diagnostic. It does not replace the owner-composed fit."
+  - top: zhao_probe_v3rq_queue
+    sources:
+      - fpga/rtl/texture/zhao_texture_v3bank.sv
+      - fpga/rtl/texture/zhao_texture_v3rq.sv
+      - fpga/rtl/synth/zhao_probe_v3rq_queue.sv
+    rules:
+      min_fmax_mhz: 100    # §5.7's "intended product constraint", a stated
+                           # requirement rather than a number invented here
+      min_m10k: 1          # one v3bank body, 14 x 64; from the instance walk
+      max_m10k: 1          # in reports/V31-M10K-ALLOCATION-RECONCILE-20260907.md
+      max_dsp: 0           # a queue that infers a multiplier is a defect
+
   - top: zhao_texture_v3own
     sources:
       - fpga/rtl/texture/zhao_texture_v3bank.sv
