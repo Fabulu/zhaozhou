@@ -3408,6 +3408,35 @@ that a section written to be careful about prediction was careless about
 attribution, which are different things. M6 exists to make the practice explicit
 rather than incidental.
 
+### M6 SWEPT ACROSS EVERY PAIR IN THE INDEX: 0 OF 4 ARE ATTRIBUTABLE
+
+The moment the index existed it could be asked the obvious question — how many
+of the base/variant pairs on disk share a gating family? Answer: **none.**
+
+| pair | slack A | slack B | family |
+|---|---|---|---|
+| `rcp24_svc` / `@p0b-s1` | −4.607 | −5.411 | CHANGED |
+| `island_top` / `@p0b-island` | −4.977 | −2.690 | CHANGED |
+| `v3own` / `@v3-full` | −0.633 | −3.194 | CHANGED |
+| `probe_banked_rf` / `@v3hot` | −0.358 | −0.736 | CHANGED |
+
+**Read this carefully, because it is easy to over-claim.** These four pairs are
+not all controlled before/after experiments — `v3own` vs `@v3-full` are commits
+far apart with much else changed, and one is a synthesis probe. The sweep
+compares whatever two rows share a base name. So this is not "four changes were
+mis-attributed".
+
+**What it does establish** is that a shared gating family between two fits of the
+same module is not the normal case here — it is unobserved in every pair
+currently on disk. Any report that quotes a reported-Fmax delta between two fits
+without naming the path family on both sides is, on this evidence, more likely
+than not comparing two different things.
+
+**The practical consequence:** structural claims carry the weight. ALM on
+identical scope, register counts against a prediction, what the netlist does and
+does not contain — none of those depend on which family won the placement.
+Frequency deltas need the family named, and now can have it.
+
 ### M6's tooling half — the identity is now RECORDED, not reconstructed
 
 Applying M6 needs the OLD fit's worst path, and that is exactly what does not
