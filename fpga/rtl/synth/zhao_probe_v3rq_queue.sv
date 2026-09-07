@@ -77,7 +77,18 @@ module zhao_probe_v3rq_queue (
   logic [OWNERW-1:0] q_wr_data_c;
   logic              q_pop_c;
 
-  assign q_wr_en_c   = stim_valid_q && stim_q[31];
+  // GATED ON full_o, because the DUT requires it and a fixture that violates
+  // the contract is not measuring the design. `zhao_texture_v3rq` asserts
+  //
+  //     a_rq_no_write_when_full : assert (!(wr_en_i && full_o));
+  //
+  // and the first version of this probe drove writes regardless. A directed
+  // sanity run tripped that assertion immediately. It would NOT have shown up
+  // in the fit -- Quartus drops assertions -- so S5.7's gate would have
+  // characterised a queue driven with illegal stimulus and reported a perfectly
+  // clean number. `full_o` comes from a register (`lcnt_q >= CAPACITY`), so
+  // this is a real producer's gate, not a combinational loop.
+  assign q_wr_en_c   = stim_valid_q && stim_q[31] && !q_full;
   // Both halves of the stimulus feed the write data. Leaving stim_q[29:16]
   // unused was the wrapper's only lint warning, and SUPPRESSING it would have
   // been the wrong fix: unused stimulus bits give the fitter freedom to fold

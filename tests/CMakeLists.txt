@@ -2441,6 +2441,25 @@ set_tests_properties(raster_rcp24_svc_directed PROPERTIES LABELS "fast;nightly" 
 # therefore pass with the correction deleted, so zhao_raster_rcp24_mul is
 # exposed on its own port and driven over the same (x, w) families
 # tools/rtl/architecture_numeric_checks.py uses.
+# S5.7's fit fixture, checked for DEGENERACY before it is trusted.
+# A registered-hash-sink wrapper fails silently in one way: if the sink is
+# constant the fitter deletes the DUT and the gate reports a clean number for an
+# empty design. The first version of this probe also drove writes into a full
+# queue -- illegal per a_rq_no_write_when_full, invisible in a fit because
+# Quartus drops assertions, and caught here in seconds.
+add_executable(test_texture_v3rq_probe_sanity texture/texture_v3rq_probe_sanity.cpp)
+target_link_libraries(test_texture_v3rq_probe_sanity PRIVATE zhao_harness)
+verilate(test_texture_v3rq_probe_sanity
+  PREFIX Vzhao_probe_v3rq_queue
+  TOP_MODULE zhao_probe_v3rq_queue
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3rq_queue.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_v3rq_probe_sanity COMMAND test_texture_v3rq_probe_sanity)
+set_tests_properties(texture_v3rq_probe_sanity PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300)
+
 # S16.3's registered-head wrapper, tested on its OWN contract rather than only
 # through rcp24's bench. That bench never saturates the DONE queue, so an
 # off-by-two in full_o -- S5.3's "body plus two heads must not advertise D+2" --
