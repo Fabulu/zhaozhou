@@ -2584,3 +2584,28 @@ already showed the endpoint gone. **Falsifier:** if the island still reports
 island's total grows by that, less, or more is a placement question. The brief
 also warns an independent dispatch→FRAGROB family near −2 ns exists, so removing
 one family need not move the clock at all.
+
+## Fog's last mile, and the exact place it stops
+
+`FogParams` (enabled, near, far, k, and the horizon colour) now threads into
+`draw_heightfield`, defaulted OFF so every existing caller is bit-identical --
+`render_directed` all green confirms it. Terrain is the first entry on §8's
+FOGGED list, and it has exactly ONE projection site, so `apply_vertex_fog` is
+called in exactly one place for the top lattice and one for the dual bottom.
+`TriMode` gets the fog colour and the mix happens in the rasteriser, after the
+ramp.
+
+**Where it stops, precisely:** `render_frame.cpp:510` still calls
+`draw_heightfield` without fog, because **nothing in the renderer consumes
+`EnvState`**. `env_state.cpp` only serialises and deserialises it, and
+`sky_and_beams.md` §4a says so in as many words -- *"the stand-in renderer does
+not yet consume it (wiring it is the weather wave's consumer change)"*.
+
+So the fog pipeline is complete and verified end to end EXCEPT for one
+assignment: resolving `EnvState` + the active sky set's horizon colour into a
+`FogParams` at frame scope. That is the weather wave's consumer change, which
+the spec scopes elsewhere, and it is one call site away.
+
+Stated plainly rather than described as "implemented", because the comment that
+started this whole thread -- `vertex RGB: lit, tinted and ALREADY FOGGED` --
+was itself a description of a stage that did not exist.
