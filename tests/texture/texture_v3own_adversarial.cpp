@@ -436,6 +436,56 @@ int main(int argc, char** argv) {
   }
 
   // =========================================================================
+  hdr("case 4b: a stale token on the ISSUE lane is refused");
+  // =========================================================================
+  // Case 4 covers a stale generation arriving on the RETURN lane. Nothing
+  // covered the ISSUE lane, and on 2026-09-07 that became the gap that
+  // mattered: T2 step 2 replaced
+  //
+  //     live_q[iss_t_slot_c] && (gen_q[iss_t_slot_c] == iss_t_gen_c)
+  //
+  // with 6.1's interval test `win_live({gen, slot})`. The bench drives the
+  // issue lanes only with LIVE owners, so the new test's ACCEPT path was
+  // thoroughly exercised -- getting the ticket order wrong fails 43 checks --
+  // while its REJECT path was never reached at all. An accept-only test cannot
+  // tell a correct guard from one that is permanently true.
+  //
+  // `ev_err_issue_o` counts exactly this: `iss_tmu_valid_i && !iss_t_ok_c`.
+  {
+    Ob s(dut);
+    s.reset();
+    uint16_t o = s.admit(ctx_of(0), 0x1);
+    const uint32_t before = dut->ev_err_issue_o;
+
+    // Right slot, previous generation: the classic stale token.
+    s.issue_tmu(owner_of(slot_of(o), gen_of(o) - 1), 0);
+    s.idle(2);
+    zhao::check(dut->ev_err_issue_o == before + 1,
+                "a stale GENERATION on the issue lane is refused", before + 1,
+                dut->ev_err_issue_o);
+
+    // A slot that is not live at all is the same class of refusal.
+    s.issue_tmu(owner_of(40, 7), 0);
+    s.idle(2);
+    zhao::check(dut->ev_err_issue_o == before + 2,
+                "and an issue for an owner that is not live at all", before + 2,
+                dut->ev_err_issue_o);
+
+    // The refusals must not have consumed the owner's real work: a legitimate
+    // issue and return still complete. Without this the case would pass on a
+    // guard that refused EVERYTHING.
+    s.issue_tmu(o, 0);
+    s.ret_tmu(o, 0, mkres(0x4B));
+    s.idle(4);
+    zhao::check(dut->ev_err_issue_o == before + 2,
+                "the legitimate issue is NOT refused -- the guard is not simply "
+                "always-false",
+                before + 2, dut->ev_err_issue_o);
+    zhao::check(dut->ev_commits_o >= 1,
+                "and the owner's real work still commits", 1,
+                dut->ev_commits_o >= 1 ? 1 : 0);
+  }
+
   hdr("case 5/6: unsolicited -- required-but-not-issued, and not-required");
   // =========================================================================
   {
