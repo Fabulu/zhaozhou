@@ -128,3 +128,39 @@ that was reverted in the same call, verified clean by `git status`.
 
 ### next
 B1, the mist trail. Then the acceptance plate on the SHIPPING subjects.
+
+### 19:55 — WHERE I AM, written down before the bank render returns
+Running: full 15-clip bank render into `scratch/bank` with the B0+B1+B2+B3+B4
+binary. **No rebuilds until it finishes** — it would overwrite the running exe.
+
+Done and pushed: B0 (edge radii), D2 (answered), B2 (lightning restored),
+B1 (mist -> trail), B4 (the shell, built as an actual shell under §7+§14),
+B3 (the light-rate unification + the false-comment correction).
+
+Next after the render: the D3 census sheet from these frames, then B5 (more
+stencil figures), B6 (the antenna's own texture read), the failable shell gate,
+and PASS-12-FINDINGS-B.md.
+
+### 19:56 — D3 ANSWERED (the census, before the sheet)
+The owner's "all videos have different mana lighting configurations" has a
+single structural cause and it is **not a table** — it is a division.
+`path_angle` divided by the CLIP'S OWN LENGTH, so the four moving sources
+completed a fixed 1/2/3/4 turns over whatever duration a clip happened to have:
+`hit` is 140 frames, `hover` is 600, so the same light swept **4.3x faster** on
+one video than another and the creature was lit from a different direction at
+every matching moment. Nobody chose that; it fell out of clip length.
+
+Also found, and it is the more expensive one:
+⚠ **The fifteen named per-clip suns are DORMANT.** `creature_moving_light` is
+set unconditionally in `subject_u02_clip`, and `sun_light` is gated on
+`!creature_moving_light`, so `sample_zixx_clip_sun` is never reached for any
+manafold clip. Forty lines below that assignment sat a comment saying "Every
+clip ships under its own named sun; only manafold-inspect raises the moving
+rig" — false since pass 6, ungated, and **carried into the pass-12 plan's
+PROTECTED list** as "per-clip sun/scene moods are house style and STAY". A
+protected item that is not on screen. Corrected in code; raised as an owner
+question rather than decided.
+
+Not decided by me, per the plan's Q-A5 instruction — both go to the owner:
+* `channel`'s violet planet bloom (the only clip with a backdrop),
+* the smear rung 3-vs-5 motion-class split (D7 §4 speed semantics).
