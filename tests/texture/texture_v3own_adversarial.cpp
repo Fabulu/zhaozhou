@@ -1167,11 +1167,21 @@ int main(int argc, char** argv) {
   // cooperative stub that always responds after input acceptance cannot
   // exercise it", and every other case here returns finals after COMBINE.
   //
-  // GUARDED BY ZHAO_M6 so the default lane stays green while the contract is
-  // recorded and runnable. CMakeLists registers a second ctest entry that sets
-  // it, marked WILL_FAIL: when M6 lands, THAT lane starts failing, which is
-  // the signal to delete the guard and the WILL_FAIL together.
-  if (std::getenv("ZHAO_M6") != nullptr) {
+  // M6 LANDED 2026-09-07 (T4, commit 383e45df) and the guard is gone with it.
+  // `cbi_q` is now set on `cmb_fire_c` -- 11.1's event 3 -- and a separate
+  // `crs_q` carries the reservation, so a final can no longer be authorised by
+  // event 2. This case runs in the DEFAULT bench now.
+  //
+  // FIRE-TESTED BEFORE THE GUARD CAME OFF, because a case that starts passing
+  // the day it is unguarded is indistinguishable from one that stopped testing
+  // anything. The pre-change RTL was rebuilt from git and run against this same
+  // bench: 4 failures, and they are the defect itself -- "a final arriving
+  // before COMBINE acceptance is an ERROR" got 0, "no final payload write is
+  // authorised" got 1, "nothing is published" got 1, "the owner is NOT
+  // released" got 0. Post-change the same lane passes 477. The default lane is
+  // 469 both before and after, which is what "preserving all other finals and
+  // stalls" looks like as evidence.
+  {
     hdr("case 22 (M6): a FINAL must not be authorised by a RESERVATION");
     Ob s(dut);
     s.reset();

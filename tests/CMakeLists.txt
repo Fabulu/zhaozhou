@@ -2337,21 +2337,12 @@ set_tests_properties(texture_v3own_adversarial PROPERTIES
 # accepts a final result before COMBINE has accepted the corresponding input is
 # not something to preserve for parity."
 #
-# Case 22 in the bench asserts §11.3's contract, and today's RTL violates it --
-# cbi (combine_issued) is set on cmb_pop_c, the CREDITED RESERVATION
-# (zhao_texture_v3own.sv:611,840), not on cmb_fire_c, the real acceptance
-# (:720). So the case is guarded by ZHAO_M6 and run here as WILL_FAIL.
-#
-# WHEN M6 LANDS THIS LANE STARTS FAILING, because a WILL_FAIL test that passes
-# is a ctest failure. That is the point: it is the signal to delete the guard,
-# delete this entry, and let case 22 run in the default bench. A test that
-# merely sat disabled would announce nothing.
-add_test(NAME texture_v3own_m6_final_before_accept
-         COMMAND test_texture_v3own_adversarial)
-set_tests_properties(texture_v3own_m6_final_before_accept PROPERTIES
-  LABELS "m6;nightly" TIMEOUT 900
-  ENVIRONMENT "ZHAO_M6=1"
-  WILL_FAIL TRUE)
+# Case 22 (M6) ran here as a ZHAO_M6-guarded WILL_FAIL lane while the contract
+# was recorded but unmet. T4 landed it on 2026-09-07 (383e45df): cbi is now set
+# on cmb_fire_c, the real acceptance, and a separate crs bit carries the
+# reservation. A WILL_FAIL test that passes is itself a ctest failure -- that was
+# the designed signal, it fired, and both the guard and this entry are gone.
+# Case 22 now runs in the default bench.
 
 add_test(NAME lint_texture_v3own
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall

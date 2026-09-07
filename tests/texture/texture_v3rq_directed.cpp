@@ -255,6 +255,53 @@ int main() {
               d->owned_empty_o);
   zhao::check(d->full_o == 0, "with full_o released", 0, d->full_o);
 
+  // ---- V3.1 5.4: one external pop per clock, after warmup --------------------
+  // "The two-head organization can sustain one external pop per clock after
+  //  warmup with continuous supply. The included model checks that property."
+  //
+  // Nothing here checked it. Every other check in this file is a CORRECTNESS
+  // check, and a queue that delivered 0.9 pops per clock would satisfy all of
+  // them -- the two-head-plus-pending-read structure exists precisely to hide
+  // the body read's latency, so its whole justification is a rate.
+  //
+  // Continuous supply AND continuous demand: wr_en_i high whenever not full,
+  // pop_i high always. After a warmup allowance, every cycle that shows no head
+  // is a BUBBLE and the design says there should be none.
+  {
+    // Refill from the drained state the previous block left behind.
+    const int kWarmup = 16;
+    const int kMeasure = 400;
+    int bubbles = 0;
+    int pops = 0;
+    for (int i = 0; i < kWarmup + kMeasure; ++i) {
+      d->wr_en_i = !d->full_o;
+      d->wr_data_i = static_cast<uint16_t>(0x55 + (i & 0x1F));
+      d->pop_i = 1;
+      d->eval();
+      if (i >= kWarmup) {
+        if (d->valid_o) {
+          ++pops;
+        } else {
+          ++bubbles;
+        }
+      }
+      tick(d);
+    }
+    d->wr_en_i = 0;
+    d->pop_i = 0;
+    d->eval();
+
+    zhao::check(pops > 0, "the sustained-rate window actually popped", 1,
+                pops > 0 ? 1 : 0);
+    zhao::check(bubbles == 0,
+                "5.4: with continuous supply and continuous demand the queue "
+                "sustains ONE POP PER CLOCK after warmup -- no bubble in 400 "
+                "cycles",
+                0, bubbles);
+    zhao::check(pops == kMeasure,
+                "and every measured cycle delivered a head", kMeasure, pops);
+  }
+
   const int rc = zhao::report_and_exit("texture_v3rq_directed");
   delete d;
   zhao::exit_hard(rc);
