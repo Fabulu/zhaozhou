@@ -3408,6 +3408,27 @@ that a section written to be careful about prediction was careless about
 attribution, which are different things. M6 exists to make the practice explicit
 rather than incidental.
 
+### M6's tooling half — the identity is now RECORDED, not reconstructed
+
+Applying M6 needs the OLD fit's worst path, and that is exactly what does not
+survive: `blockpaths/<module>.setup.rpt` is overwritten by the next fit of the
+same module. The T2 comparison could only be checked because an unrelated report
+happened to quote its baseline path in prose. Archaeology, not a record.
+
+`tools/quartus/worst_path_index.py` walks every setup report and writes each
+module's gating path — slack, launch node, capture node — into
+`reports/synthesis/worst_path_index.json`, keeping the PREVIOUS identity when a
+report is overwritten. 43 modules indexed on first run, and it immediately puts
+the island comparison side by side:
+
+    zhao_texture_island_top             -4.977  pal_ld_gen_i[4] -> palette_res|loading_r
+    zhao_texture_island_top@p0b-island  -2.690  rcp24_svc|c_pend[7] -> perspuv|e_num_v[13][17]
+
+**It does not judge.** It records names and slack; whether two families are "the
+same" is looked at by a person, because inventing a similarity rule would defeat
+the point of M6. Its self-check refuses to write a reassuring line from a parser
+that matched nothing — verified by breaking the pattern and watching it return 2.
+
 ## M5 — THE ISLAND'S LIMITER IS NOW ONE FAMILY, AND IT IS THE COMPLETION SCAN
 
 All **forty** worst paths in the post-P0-B island launch at
