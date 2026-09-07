@@ -134,3 +134,30 @@ It does not — it returns 2. The 0 was `tail`'s exit code, because the run was
 piped. CLAUDE.md has that trap written down as *"read the build's exit code, not
 the pipeline's"*, and it caught me while I was in the middle of auditing
 somebody else's instrument. Verified unpiped: `RC=2`.
+
+
+---
+
+# The refit ORDER, decided rather than left as a set
+
+*Added after the day's RTL work, because the list is no longer order-neutral:
+two of the blockers are the endpoints of the island's worst path and one of them
+was changed today.*
+
+| # | block | why it goes here |
+|---|---|---|
+| 1 | `zhao_raster_perspuv_svc` | **Changed today** — the registered output boundary that targets the island's worst core→core path. It answers two questions at once: did the boundary move the path, and did `e_q_u`/`e_q_v` infer as memory now that their reads terminate at a flop (the falsifier: registers roughly unchanged and M10K still 1). |
+| 2 | `zhao_texture_island_top` | The composed row, four commits stale. Only this says whether the block-level win survives composition — and its own worst path is the one #1 targets. Running it before #1 would measure the old perspuv. |
+| 3 | `zhao_texture_fragrob` | 5 commits stale, the *receiving* end of that path, and its `registers 2631 > 2500` violation carries the rule message CLAUDE.md records as a right alarm with a wrong diagnosis (it already holds 13 M10Ks). Worth a current row before anyone acts on that message. |
+| 4 | `zhao_raster_rcp24_v3` | Carries `ticketq_rh`, also changed today. Not island-live (`not-yet-adopted`), so it ranks below the composed island, but it is the other half of the §16 seam work. Compare against **90.54 reported / 129.18 core→core**. |
+| 5–8 | `zhao_texture_aux_pipe`, `zhao_texture_cache_pipe`, `zhao_texture_rsp_dispatch`, `zhao_texture_tmu_plan` | Stale rows needed to make `compare_rows.py` accept a sum. **Not** clock work: `aux_pipe`'s alarming 63.63 was shown today to be a leaf-fit pin artefact that never appears in the composed island's worst paths. |
+
+**One block is off the list and stays off.** `zhao_probe_v3rq_queue` (§5.7's local
+queue fit gate) is not a §12.4 blocker — it is a *diagnostic* wrapper, and §5.7
+says so itself: *"This experiment is diagnostic. It does not replace the
+owner-composed fit."* It should be fitted, but it must never be counted in an
+island budget.
+
+**And the sum is still refused until all eight land.** `compare_rows.py` returns
+2, not 0 — checked unpiped, because the first time it was read through `tail` and
+appeared to return success.
