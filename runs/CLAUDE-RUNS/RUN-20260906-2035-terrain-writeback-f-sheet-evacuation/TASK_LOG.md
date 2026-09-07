@@ -2919,3 +2919,28 @@ variant rows are not rule-checked (`v3own@v3-full` is `ok` at 5,678 against
 labelled run writes `zhao_texture_island_top@p0b-island.setup.rpt`, a different
 file. The mtime check caught it. Second time today that comparing timestamps
 before believing a number was the thing that worked.
+
+## AUDITING THE GOOD NEWS: a second seed of the same island source
+
++12 MHz is the best number this session produced, which is exactly why it gets
+the scrutiny a bad number would. Docket M1's 4.70 MHz seed band was measured on a
+LEAF block; **the composed island's own seed spread is unknown**, so "12 exceeds
+4.7" compares against a band from a different design.
+
+Launching `zhao_texture_island_top -Seed 3 -RowLabel '@p0b-island-s3'` — the same
+sources, the same digest, a different fitter seed. It answers two things at once:
+whether the +12 MHz survives a reseed, and what a composed island's seed spread
+actually is, which no measurement in this repository currently records.
+
+**Before:** `@p0b-island` reported **78.80**, ALM **13,615**, registers 23,295,
+M10K 37, DSP 17, worst path `rcp24_svc|c_pend[7] -> perspuv_svc|e_num_v[13][17]`
+at −2.690 ns.
+
+**Prediction:** none on Fmax — that is the quantity under test and predicting it
+would defeat the purpose. **Structural prediction:** the worst path should still
+LAUNCH from `c_pend[..]`, because the eligibility scan is a source-level
+structure and not a placement accident. **Falsifier:** if seed 3 lands near
+66.77, the +12 MHz was seed luck and §4.3f must be rewritten.
+
+Fog blocks also registered in `design/fit_targets.yml` now that the toolchain is
+free — structural DSP rules only, no guessed ALM ceilings.
