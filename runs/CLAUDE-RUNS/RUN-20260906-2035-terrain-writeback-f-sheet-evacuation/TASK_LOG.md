@@ -2525,3 +2525,62 @@ list is honoured by construction rather than by a caller remembering.
 **Not done:** instantiating it in a composed top and wiring the ATTRSTEP factor
 lane. The block, its law and its differential exist; nothing renders through it
 yet.
+
+## P0-B FIT: the Fmax delta is inside the block's own seed noise
+
+`@p0b-s1` vs baseline: **ALM 1,041 → 1,200 (+159)**, registers 1,101 → 1,037,
+reported Fmax 68.46 → 64.89, core→core 80.33 → 72.64.
+
+**And the ledger already contained the reason not to read those Fmax numbers as
+a result.** `svcseed2` and `svcseed3` share source commit `1c0a7f44` and differ
+only in fitter seed: **68.63 vs 63.93 — 4.70 MHz of spread on identical RTL.**
+My 3.57 MHz movement is inside that band, so this fit establishes neither a
+regression nor an improvement. ALM +159 IS outside the noise and is a real cost.
+
+**The structural prediction held.** The `c_m.raddr_a` endpoint is gone from the
+worst path — baseline `m1_i_q[1] -> c_m.raddr_a[0]`, seed2 `c_val[4] ->
+c_m.raddr_a[2]`, mine `c_val[0] -> Add7~21`. The register broke the
+selection-to-RAM-address hop, which is what it was for. What did not change is
+the LAUNCH point: the NCTX priority scan over `c_val && c_pend` still starts the
+worst path, now feeding an adder instead of an address port.
+
+§5.2 anticipated exactly this and sanctions the next move — two-level
+arbitration with registered group heads — while warning not to build it before
+"the first measured cut establishes what remains". It now has.
+Report: `reports/P0B-RCP-ISSUE-STAGE-FIT-20260907.md`.
+
+## Fog's geometry half, and a test that had to be repaired by its own fire test
+
+`zhao_geom_fogfactor` computes §8's per-vertex factor from the guarded `w` that
+`zhao_geom_project` already emits on `out_w_o`. `k` is a per-FRAME config port,
+not computed here — §8 makes the denominator frame-constant, and a per-vertex
+`field_rcp` would pay a divider to recompute a number that cannot have changed.
+Differential against `zref_fog`: **401 vertices, 0 mismatches**, covering clear,
+ramp and fully-fogged.
+
+**The fire test found the test wrong, not the RTL.** Deleting the round-half-up
+from the RTL produced **0 mismatches** — the sweep stepped `w` at exact metre
+boundaries, so the product's low bits were aligned and the rounding term never
+changed an outcome. It was measuring the clamp and calling it the arithmetic.
+With an unaligned sub-metre stride the same mutation produces **138 mismatches**.
+A differential that cannot see a rounding change is not a differential.
+
+## POSITION BEFORE THE COMPOSED ISLAND FIT
+
+Launching `zhao_texture_island_top`. This is the measurement P0-B actually needs:
+the RCP among its real neighbours, where seed noise is diluted across a much
+larger design and the island's own −3.243 ns family is the number that matters.
+
+**Before:** ALM **13,601**, registers **23,181**, reported **66.77**, core→core
+**75.51**, worst internal `rcp24_svc|c_val[5] -> rcp24_svc|c_m.raddr_a[0]` at
+−3.243 ns. Benchmarks: 6,600 nominal / 7,500 redline / 7,913 standalone sum.
+
+**Structural prediction, the only one:** the worst internal path must no longer
+end at `c_m.raddr_a` — the S1 register removes that hop, and the standalone fit
+already showed the endpoint gone. **Falsifier:** if the island still reports
+`c_val -> c_m.raddr_a`, the composed build did not pick up the change.
+
+**ALM and Fmax NOT predicted.** The standalone block grew 159 ALM; whether the
+island's total grows by that, less, or more is a placement question. The brief
+also warns an independent dispatch→FRAGROB family near −2 ns exists, so removing
+one family need not move the clock at all.
