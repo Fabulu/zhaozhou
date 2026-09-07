@@ -1665,6 +1665,29 @@ module zhao_texture_v3own #(
       // never exceed the ring.
       a_win_used_bounded : assert (live_cnt_q <= CNTW'(OWNERS));
 
+      // IS THE T2 DRAIN-GUARD QUESTION EVEN REACHABLE? Turning the open
+      // decision into a measurable property rather than leaving it as a
+      // judgement call.
+      //
+      // The four C4 guards test `gen_q[slot] == gen` with NO `live_q` term, so
+      // substituting 6.1's interval test would tighten them. That only changes
+      // behaviour if a C4 event can arrive for an owner that is DEAD but whose
+      // slot has not yet been reallocated.
+      //
+      // The pipeline argues it cannot: `fdn_q` is set by the FINAL's C4, the
+      // final follows COMBINE, and COMBINE follows every sample commit -- so all
+      // returns must clear C4 before the owner is emittable, and release happens
+      // at emission. These assert that argument instead of trusting it. If they
+      // hold across the bench the substitution is behaviour-preserving in every
+      // reachable state and the "decision" evaporates; if one fires, the case is
+      // real and the decision is genuinely the owner's.
+      a_c4t_never_dead_match : assert (!(c4t_v_q && !live_q[c4t_slot_q]
+                                         && (gen_q[c4t_slot_q] == c4t_gen_q)));
+      a_c4a_never_dead_match : assert (!(c4a_v_q && !live_q[c4a_slot_q]
+                                         && (gen_q[c4a_slot_q] == c4a_gen_q)));
+      a_c4f_never_dead_match : assert (!(c4f_v_q && !live_q[c4f_slot_q]
+                                         && (gen_q[c4f_slot_q] == c4f_gen_q)));
+
       // THE FULL gen_of_slot IDENTITY -- and the FIRST version of this
       // assertion was WRONG, which is the entire reason it is here.
       //
