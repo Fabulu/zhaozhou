@@ -2413,3 +2413,24 @@ the checks into the payload write, which is the defect §6.1 names.
 Useful consequence: there is no partial integration to finish and no second
 ownership system running in the island. P0-C is a first instantiation plus the
 removals it licenses.
+
+## WHERE I WAS, before reading the rcp24 v3-rh fit
+
+**In hand:** D-5's fog stage, reference-first, on the owner's explicit go-ahead
+("Do the rearchitecture. Now's the time. Geom's probably fucked right now
+anyway"). Implemented and building clean; `render_directed` **all green**, which
+is the property that matters — with fog off the whole change must be
+byte-identical, and it is.
+
+**Unfinished:** the per-vertex factor is not yet WIRED to a caller (no projection
+path computes `ScreenV::fogf` from the guarded `w` yet), and no test turns fog on
+to exercise the mix. Both are the next step; the lane, the law and the mix exist.
+
+**Baseline for the fit about to be read:** `zhao_raster_rcp24_v3@v3-full`,
+commit `7d55fa84` — ALM **1,230**, registers **1,944**, reported Fmax **90.54**,
+6 RAM, 3 DSP; block core→core was 129.18.
+
+**Structural prediction on record:** no worst path should start at
+`u_doneq|mem_q[..]` or `u_doneq|head_q[..]` any more. **Falsifier:** if they
+still do, the DONE instance was not actually swapped or the fitter flattened the
+wrapper back.

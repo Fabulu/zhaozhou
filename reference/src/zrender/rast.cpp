@@ -79,6 +79,31 @@ inline int64_t orient(const ScreenV& a, const ScreenV& b, int64_t px, int64_t py
 
 inline uint8_t sat_u8(int32_t v) { return static_cast<uint8_t>(v > 255 ? 255 : (v < 0 ? 0 : v)); }
 
+// ---- FOG, owner ruling D-5 (2026-09-03) ------------------------------------
+// §8's factor law SURVIVES D-5 unchanged and its polarity is the one that
+// binds: f = 0x10000 is CLEAR (d <= fog_near), f = 0 is FULL FOG (d >= far).
+//
+// D-5 REPLACED the mix -- "everything from 'Mix (frozen)' to the end of this
+// subsection" -- so the superseded formula's `f8` weighting is retained in the
+// spec only as the record, and is NOT the law here. Taken literally against the
+// surviving factor it would invert fog: at f8 = 255 ("clear") it returns the
+// fog colour. The weight toward fog_c is therefore the COMPLEMENT of the clear
+// factor, which is the only reading consistent with §8's own polarity comment.
+//
+// Everything else is preserved exactly: the unit8 law (raw/256, NOT /255 --
+// zhao_raster_blend.sv's header argues this at length and notes the ratified
+// fog mix behaves identically at f8 = 255), and ONE rounding per channel.
+inline int32_t fog_f8(int32_t f) {  // fx16 -> unit8, §2 round-half-up
+  const int32_t v = (f + 128) >> 8;
+  return v > 255 ? 255 : (v < 0 ? 0 : v);
+}
+// amt8 is the weight toward fog_c: 0 = clear, 255 = fogged (255/256 by the
+// unit8 law, deliberately not 1.0 -- the same documented consequence the blend
+// module asserts rather than works around).
+inline uint8_t fog_ch(int32_t c, int32_t fogc, int32_t amt8) {
+  return sat_u8(c + static_cast<int32_t>(((fogc - c) * amt8 + 128) >> 8));
+}
+
 inline void apply_toon_ramp(const ToonRamp* ramp, int32_t& r, int32_t& g, int32_t& b) {
   if (ramp == nullptr || ramp->bands == 0) return;
   const int32_t mean =
@@ -184,6 +209,17 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                          static_cast<__int128>(dw2_dx) * C.a,
                      area);
   }
+  // D-5's fog factor rides the SAME lane shape as alpha: one round-half-up
+  // division at setup, exact s32 stepping across the row, full barycentric
+  // re-evaluation at row starts. Sharing the shape is the point -- the factor
+  // is an ordinary interpolant now, which is exactly what D-5 changed.
+  int32_t fogf_grad_x = 0;
+  if (m.fog && !m.fog_exempt) {
+    fogf_grad_x = div_rhu_s128(
+        static_cast<__int128>(dw0_dx) * A.fogf + static_cast<__int128>(dw1_dx) * B.fogf +
+            static_cast<__int128>(dw2_dx) * C.fogf,
+        area);
+  }
   // affine UV gradients (terrain texturing, terrain_rules §6.2): the SAME
   // one-rounding plane setup as depth/alpha; Phase-5 brings the
   // perspective-correct divide (charter §8 build order 7 — affine within a
@@ -244,6 +280,13 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
       a = div_rhu_s128(static_cast<__int128>(w0) * A.a + static_cast<__int128>(w1) * B.a +
                            static_cast<__int128>(w2) * C.a,
                        area);
+    }
+    int32_t fogf = 0x10000;  // CLEAR unless this triangle actually fogs
+    if (m.fog && !m.fog_exempt) {
+      fogf = div_rhu_s128(
+          static_cast<__int128>(w0) * A.fogf + static_cast<__int128>(w1) * B.fogf +
+              static_cast<__int128>(w2) * C.fogf,
+          area);
     }
     int32_t cr = 0, cg = 0, cb = 0;
     if (m.gouraud) {  // row start: full barycentric re-evaluation per lane
@@ -350,18 +393,43 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                 dst[1] = g;
                 dst[2] = b;
               }
+              // D-5 step 5: FOG THE FINAL SOURCE RGB. kOpaque writes the source
+              // straight to the tile, so fogging in place here IS fogging the
+              // final source colour -- after the toon ramp (step 3) and after
+              // material combination (step 4), which is the whole point of the
+              // ruling.
+              if (m.fog && !m.fog_exempt) {
+                const int32_t amt8 = 255 - fog_f8(fogf);
+                dst[0] = fog_ch(dst[0], m.fog_r, amt8);
+                dst[1] = fog_ch(dst[1], m.fog_g, amt8);
+                dst[2] = fog_ch(dst[2], m.fog_b, amt8);
+              }
               break;
             case BlendMode::kAlpha: {
               // sky_cloud_fade (sky_and_beams.md §1.1):
               // out = dst*(1-a) + src*a, a = Q16.16, one rounding
               const int32_t ia = 65536 - a;
-              dst[0] = sat_u8((dst[0] * ia + r * a + 32768) >> 16);
-              dst[1] = sat_u8((dst[1] * ia + g * a + 32768) >> 16);
-              dst[2] = sat_u8((dst[2] * ia + b * a + 32768) >> 16);
+              // D-5: fog is applied to the final source colour BEFORE alpha
+              // blending, so the source is fogged and the destination -- which
+              // was fogged when it was written -- is not fogged twice.
+              int32_t sr = r, sg = g, sb = b;
+              if (m.fog && !m.fog_exempt) {
+                const int32_t amt8 = 255 - fog_f8(fogf);
+                sr = fog_ch(r, m.fog_r, amt8);
+                sg = fog_ch(g, m.fog_g, amt8);
+                sb = fog_ch(b, m.fog_b, amt8);
+              }
+              dst[0] = sat_u8((dst[0] * ia + sr * a + 32768) >> 16);
+              dst[1] = sat_u8((dst[1] * ia + sg * a + 32768) >> 16);
+              dst[2] = sat_u8((dst[2] * ia + sb * a + 32768) >> 16);
               break;
             }
             case BlendMode::kAdditive: {
               // sun_additive (§1.1): dst = sat(dst + src*a)
+              // NO FOG, and not by omission: §8's frozen exempt list puts
+              // additive emissive -- beams, flares, glints, souls -- outside
+              // fog entirely, because fog toward a colour on an additive layer
+              // has no lawful form. This case cannot fog by construction.
               dst[0] = sat_u8(dst[0] + ((r * a + 32768) >> 16));
               dst[1] = sat_u8(dst[1] + ((g * a + 32768) >> 16));
               dst[2] = sat_u8(dst[2] + ((b * a + 32768) >> 16));
@@ -376,6 +444,7 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
       w2 += dw2_dx;
       d += d_grad_x;
       a += a_grad_x;
+      fogf += fogf_grad_x;
       if (tex != nullptr) {
         u += u_grad_x;
         v += v_grad_x;

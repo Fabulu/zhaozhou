@@ -74,6 +74,12 @@ struct ScreenV {
   int32_t x = 0, y = 0;  // S 12.8 canvas pixels (§8)
   int32_t d = 0;         // Q16.16 1/w depth (D7)
   int32_t a = 0;         // Q16.16 interpolated attribute (vertex alpha)
+  // Q16.16 FOG FACTOR, owner ruling D-5 (spec/qformats.md §8 as amended):
+  // "carry unfogged lit RGB and a fog factor", transported through clipping
+  // and GEOM.PARAMBUF and interpolated through ATTRSTEP. Polarity is §8's
+  // surviving factor law: 0x10000 = CLEAR (d <= fog_near), 0 = FULL FOG
+  // (d >= fog_far). Defaults to CLEAR so a vertex nobody fogs is unchanged.
+  int32_t fogf = 0x10000;
   int32_t u = 0, v = 0;  // Q16.16 TILE units (terrain texturing, §6.2);
                          // read only when raster_tri carries a TextureSpan
   // Gouraud lanes. These carry lit, tinted, UNFOGGED colour: owner ruling D-5
@@ -156,6 +162,29 @@ struct TriMode {
   // caller renders bit-identically.
   bool gouraud = false;
   const ToonRamp* toon = nullptr;  // optional per-fragment light comparator/table
+
+  // ---- FOG, owner ruling D-5 (2026-09-03) ----------------------------------
+  // D-5's ordering: lighting -> interpolate lighting AND fog factor -> toon
+  // quantisation -> material combination -> FOG THE FINAL SOURCE RGB ->
+  // framebuffer blend. The mix is deliberately LAST among the source-colour
+  // stages: a toon ramp is a quantiser, and fog handed to it arrives as
+  // "darker", indistinguishable from "less lit", so a smooth gradient snaps to
+  // band edges and the staircase moves with the object. Fogging after the ramp
+  // lets bands describe lighting alone and fog fade smoothly across them.
+  //
+  // `fog` off by default: every existing caller renders bit-identically, and
+  // with it off the mix is not merely a no-op by arithmetic but skipped.
+  bool fog = false;
+  // The §8 frozen binding: fog_c is the active sky set's horizon colour, never
+  // a command field. Supplied by the caller because this struct does not own
+  // sky state.
+  uint8_t fog_r = 0, fog_g = 0, fog_b = 0;
+  // §8's frozen EXEMPT LIST is a per-class property, not a blend mode: the sky
+  // family, the under-plane, sun quad and cloud sheet, additive emissive
+  // (beams, flares, glints, souls) and the HUD/overlay planes. Additive
+  // emissive is exempt because fog toward a colour on an additive layer has no
+  // lawful form, so kAdditive never fogs regardless of this flag.
+  bool fog_exempt = false;
 };
 
 /**
