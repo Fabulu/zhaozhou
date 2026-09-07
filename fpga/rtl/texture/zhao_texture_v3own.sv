@@ -1686,6 +1686,25 @@ module zhao_texture_v3own #(
       // never exceed the ring.
       a_win_used_bounded : assert (live_cnt_q <= CNTW'(OWNERS));
 
+      // S13.2's THREE POSITIONS, asserted as a partition rather than trusted as
+      // a naming convention. The section's warning is specific:
+      //
+      //   E is next externally emitted owner.
+      //   F is next final row not yet reserved for output reading.
+      //   A is next owner to allocate.
+      //     [E, F) : reserved/fetched for output but not yet emitted;
+      //     [F, A) : not yet fetched;
+      //     [E, A) : all live owners.
+      //   "Avoid two counters whose overlap is inferred only from naming."
+      //
+      // Here `unf_cnt_q` is |[F, A)| and `out_res_q` is |[E, F)|, and they are
+      // disjoint by construction because `fetch_fire_c` decrements one and
+      // increments the other on the same edge. If that is true then
+      // `live_cnt_q` -- which admission and emission maintain independently --
+      // must equal their sum. Three counters, one identity, checked every cycle
+      // instead of argued from their names.
+      a_interval_partition : assert (live_cnt_q == CNTW'(unf_cnt_q + out_res_q));
+
       // S13.1: IS THE PER-OWNER FETCHED BIT REDUNDANT? Asserted rather than
       // argued, because the argument is exactly the kind that sounds airtight
       // and costs a day when it is not.
