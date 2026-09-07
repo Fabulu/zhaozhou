@@ -570,7 +570,15 @@ module zhao_texture_v3own #(
   logic [3:0]       c1t_req_q, c1t_iss_q, c1t_clm_q, c1t_cmt_q;
 
   logic             c3t_v_q;
-  logic [2:0]       c3t_we_q;
+  // THE BANK WRITE ENABLES ARE OBSERVABLE IN SIMULATION, AT ZERO COST.
+  // V05 asks for "actual bank write enables, not only lack of output", and the
+  // adversarial test previously had to settle for the CONSEQUENCE (the row
+  // contents) with a note saying "the pins need a probe port". They do not: a
+  // `verilator public` marker is a COMMENT, so Quartus never sees it, no port
+  // is added, and no area is spent -- while the simulation can read the enable
+  // directly and distinguish "the write was never enabled" from "the write was
+  // enabled and happened to be harmless".
+  logic [2:0]       c3t_we_q /* verilator public */;
   logic [SLOTW-1:0] c3t_slot_q;
   logic [GENW-1:0]  c3t_gen_q;
   logic [3:0]       c3t_mask_q;
@@ -598,7 +606,8 @@ module zhao_texture_v3own #(
   logic [GENW-1:0]  c1a_tgen_q;
   logic [3:0]       c1a_req_q, c1a_iss_q, c1a_clm_q, c1a_cmt_q;
 
-  logic             c3a_v_q, c3a_we_q;
+  logic             c3a_v_q;
+  logic             c3a_we_q /* verilator public */;
   logic [SLOTW-1:0] c3a_slot_q;
   logic [GENW-1:0]  c3a_gen_q;
   logic [RESW-1:0]  c3a_data_q;
@@ -620,7 +629,8 @@ module zhao_texture_v3own #(
   logic             c1f_live_q, c1f_cbi_q, c1f_fcl_q, c1f_fdn_q;
   logic [GENW-1:0]  c1f_tgen_q;
 
-  logic             c3f_v_q, c3f_we_q;
+  logic             c3f_v_q;
+  logic             c3f_we_q /* verilator public */;
   logic [SLOTW-1:0] c3f_slot_q;
   logic [GENW-1:0]  c3f_gen_q;
   logic [RESW-1:0]  c3f_data_q;

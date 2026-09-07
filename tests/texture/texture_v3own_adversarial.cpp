@@ -34,6 +34,10 @@
 // own tripwires. A counter that no test reads is decoration, so the rejection
 // counters here are checked by class, exactly, in the cases that provoke them.
 #include "Vzhao_texture_v3own.h"
+// The MODULE-scope header, not the root one: Verilator puts `verilator public`
+// signals on the module class, reached as `dut->zhao_texture_v3own->c3t_we_q`.
+// Case 4i needs the write-enable pin itself, not only its consequence.
+#include "Vzhao_texture_v3own_zhao_texture_v3own.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -647,10 +651,12 @@ int main(int argc, char** argv) {
                 "V04 with its own context intact", 1,
                 (s.emitted.empty() || s.emitted[0].ctx == ctx_of(9500)) ? 1 : 0);
     // V05 asks to observe "actual bank write enables, not only lack of output".
-    // The pins need a probe port; their CONSEQUENCE does not, and is the
-    // stronger evidence -- a write enable that toggles harmlessly is not the
-    // harm, a corrupted row is. If the late return had been written, this row
-    // would carry 0xE0E instead of the owner's own sample.
+    // BOTH are now checked. The CONSEQUENCE is below -- a corrupted row, which
+    // is the harm -- and the ENABLE ITSELF is checked in case 4i, which reads
+    // the pin directly through a `verilator public` marker rather than through
+    // a probe port that would cost real area. The two answer different
+    // questions: the row proves nothing was corrupted, the enable proves
+    // nothing was even attempted.
     zhao::check(!s.combined.empty()
                     && s.combined[0].s[0] == mkres(o * 4 + 0),
                 "V04 and the sample ROW still holds the owner's own result -- "
@@ -1947,6 +1953,99 @@ int main(int argc, char** argv) {
                   "and what emerged is the FRESH owner's own result, not the "
                   "ghost payload",
                   1, s.emitted[0].res != kGhost ? 1 : 0);
+  }
+
+  // =========================================================================
+  hdr("case 4i (V05): the bank WRITE ENABLE itself, read from the pin");
+  // =========================================================================
+  // Every other stale-return case here proves a CONSEQUENCE: no output, or an
+  // uncorrupted row. Those are the right things to care about, but they cannot
+  // separate "the write was never enabled" from "the write was enabled and the
+  // data happened to be identical". V05 asks for the enable, so here it is,
+  // read straight off the flop.
+  //
+  // The window is the one §8.2 exists for: a return whose owner RETIRED between
+  // the C1 snapshot and the C2 claim. Its slot and generation were legitimate
+  // when it was issued.
+  {
+    Ob s(dut);
+    s.reset();
+    s.out_ready = true;
+
+    // One owner, one required source, taken all the way to retirement.
+    s.d->adm_valid_i = 1;
+    s.d->adm_ctx_i = ctx_of(0xB100u);
+    s.d->adm_req_i = 0x1;
+    s.step();
+    s.d->adm_valid_i = 0;
+    const uint16_t o = s.obs_adm_owner;
+    s.d->iss_tmu_valid_i = 1;
+    s.d->iss_tmu_handle_i = smp(o, 0);
+    s.d->tmu_rvalid_i = 1;
+    s.d->tmu_rhandle_i = smp(o, 0);
+    s.d->tmu_rresult_i = mkres(o);
+    s.step();
+    s.d->iss_tmu_valid_i = 0;
+    s.d->tmu_rvalid_i = 0;
+    s.idle(60);
+    zhao::check(s.emitted.size() == 1,
+                "4i setup: the owner completed and RETIRED through the output",
+                1, s.emitted.size());
+
+    // Now the late packet, on a retired owner's exact handle.
+    int we_asserted = 0;
+    for (int i = 0; i < 12; ++i) {
+      s.d->tmu_rvalid_i = 1;
+      s.d->tmu_rhandle_i = smp(o, 0);
+      s.d->tmu_rresult_i = 0xDEADBEE5ULL;
+      s.step();
+      if (dut->zhao_texture_v3own->c3t_we_q != 0) ++we_asserted;
+    }
+    s.d->tmu_rvalid_i = 0;
+    for (int i = 0; i < 8; ++i) {
+      s.step();
+      if (dut->zhao_texture_v3own->c3t_we_q != 0) ++we_asserted;
+    }
+
+    zhao::check(we_asserted == 0,
+                "V05: the SAMPLE-BANK WRITE ENABLE never asserts for a return "
+                "whose owner has retired -- the write is not attempted, not "
+                "merely harmless",
+                0, static_cast<uint64_t>(we_asserted));
+    zhao::check(dut->zhao_texture_v3own->c3a_we_q == 0,
+                "V05: nor the AUX bank enable", 0,
+                dut->zhao_texture_v3own->c3a_we_q);
+    zhao::check(dut->zhao_texture_v3own->c3f_we_q == 0,
+                "V05: nor the FINAL bank enable", 0,
+                dut->zhao_texture_v3own->c3f_we_q);
+
+    // NON-VACUITY: the same pin must be seen HIGH on legitimate traffic, or
+    // this case would pass against a signal that is simply always zero -- the
+    // exact "precision at zero is a tell" failure.
+    int we_seen_high = 0;
+    s.d->adm_valid_i = 1;
+    s.d->adm_ctx_i = ctx_of(0xB200u);
+    s.d->adm_req_i = 0x1;
+    s.step();
+    s.d->adm_valid_i = 0;
+    const uint16_t o2 = s.obs_adm_owner;
+    s.d->iss_tmu_valid_i = 1;
+    s.d->iss_tmu_handle_i = smp(o2, 0);
+    s.d->tmu_rvalid_i = 1;
+    s.d->tmu_rhandle_i = smp(o2, 0);
+    s.d->tmu_rresult_i = mkres(o2);
+    s.step();
+    s.d->iss_tmu_valid_i = 0;
+    s.d->tmu_rvalid_i = 0;
+    for (int i = 0; i < 12; ++i) {
+      s.step();
+      if (dut->zhao_texture_v3own->c3t_we_q != 0) ++we_seen_high;
+    }
+    zhao::check(we_seen_high > 0,
+                "V05 non-vacuity: the same enable IS observed high on a "
+                "legitimate return, so the zeros above are a refusal and not a "
+                "pin that never moves",
+                1, we_seen_high > 0 ? 1 : 0);
   }
 
   const int rc = zhao::report_and_exit("texture_v3own_adversarial");
