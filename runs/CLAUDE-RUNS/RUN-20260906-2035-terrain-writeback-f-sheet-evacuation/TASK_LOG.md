@@ -2944,3 +2944,33 @@ structure and not a placement accident. **Falsifier:** if seed 3 lands near
 
 Fog blocks also registered in `design/fit_targets.yml` now that the toolchain is
 free — structural DSP rules only, no guessed ALM ceilings.
+
+## P0-E measured while the reseed runs: the prize is ONE array, not a restructuring
+
+`island_top` declares twenty per-context side tables totalling **17,040 bits** —
+P0-E's "duplicated state" by name. But the measured top-level pool is ~6,981
+registers, so most of them are already RAM. Taking 17,040 as the target would
+have been wrong by 2.5×.
+
+The map report says which and why. Eighteen uninferred RAMs in the island, in two
+categories that must not be confused: **fourteen are "inappropriate RAM SIZE"**,
+correct refusals for arrays too small for an M10K, nothing to fix. **Four are
+"asynchronous read logic"**, the fixable pattern.
+
+Then checking each of the four SHRANK the prize:
+
+* `uvw_m` — 64b × 64 = **4,096 flip-flops**, the real target;
+* `zhao_field_rcp24_rom|Ram0` — a pure `always_comb` case lookup, §6.2's
+  field_rcp table. Combinational is what it IS, not a defect;
+* `fragrob|tok_m` — 16 entries, small;
+* `class_m` — 32 flops, negligible.
+
+**"Four arrays share a fixable pattern" was the satisfying version and it was
+wrong.** One array is worth fixing, and registering its read moves 4,096 flops
+into an M10K the island has 516 spare of.
+
+**This also refines docket M3.** That entry says the v3own integration's saving
+lives in unmeasured deletions. Part of it is now measured and it is not a
+deletion at all — it is a read-port change on ONE named array, independent of the
+ownership rework and available without it. A much cheaper piece of work than the
+restructuring it was bundled with.
