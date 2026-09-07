@@ -67,7 +67,7 @@ module tb_terrain_cmd
     output var logic        fr_start,
     output var logic [31:0] fr_epoch,
     output var logic [15:0] fr_patch_count,
-    output var logic [15:0] fr_sequence,
+    output var logic [31:0] fr_sequence,
 
     // ---- the record stream ------------------------------------------------
     output var logic        rec_valid,

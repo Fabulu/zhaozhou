@@ -141,6 +141,43 @@ module tb_terrain_world
     // other rather than one being taken on trust.
     input var logic cfg_mipfeed_i,
 
+    // THE COMMAND PATH, MADE A KNOB THE SAME WAY. With this CLEAR the C++ side
+    // plays TERRAIN.SEQ's frame ring and record stream by hand, which is what
+    // every phase before today did. With it SET, `zhao_terrain_cmd` reads a
+    // SEALED PATCH LIST out of the played HPS arena, checks its CRC, and drives
+    // the ring itself -- so the frame comes from a command rather than from the
+    // bench. Both, because a suite that only ever ran the new path could not
+    // say the two AGREE, and agreement is the whole claim.
+    input var logic cfg_cmd_path_i,
+
+    // ---- the SubmitTerrainSet, already unpacked ---------------------------
+    // Unpacked, because the shell's record framer carries sixteen payload bytes
+    // and T5's command is thirty-two -- a command-path limit, not a terrain
+    // one. See reports/TERRAIN-COMMAND-PIPELINE-20260907.md.
+    input  var logic        tc_valid,
+    output var logic        tc_ready,
+    input  var logic [31:0] tc_epoch,
+    input  var logic [31:0] tc_list_off,
+    input  var logic [31:0] tc_list_bytes,
+    input  var logic [31:0] tc_list_crc,
+    input  var logic [15:0] tc_count,
+    input  var logic [31:0] tc_seq,
+    input  var logic [31:0] tc_src_id,
+
+    output var logic        tc_done_valid,
+    input  var logic        tc_done_ready,
+    output var logic        tc_done_ok,
+    output var logic [ 3:0] tc_done_verdict,
+    output var logic [31:0] tc_records,
+    output var logic [31:0] tc_bytes,
+    output var logic [31:0] tc_crc_fails,
+    // THE PULSE THAT ACTUALLY REACHES THE SEQUENCER, whichever side of the mux
+    // it came from. The C++ side cannot watch `fr_start` for this: on the
+    // command path it never drives it, so a bench watching its own input would
+    // wait forever for a frame that had already started -- which is exactly
+    // what happened, 900,000 cycles of it.
+    output var logic        seq_fr_start,
+
     // THE BARRIER THAT IS NOT THERE, MADE A KNOB. T4 says a dirty victim's F
     // sheet reaches the journal BEFORE the page that displaces it is written.
     // TERRAIN.SEQ emits the writeback job before the load job and then stops
@@ -518,6 +555,75 @@ module tb_terrain_world
   assign seq_fault_ix = q_fault_ix;
   assign seq_fault_iz = q_fault_iz;
 
+  // =========================================================================
+  // WHO DRIVES TERRAIN.SEQ'S RING -- the bench, or a command
+  // =========================================================================
+  // One mux, named, rather than two instantiations of the sequencer. Both
+  // sources are real ready/valid streams and the sequencer cannot tell them
+  // apart, which is the point of the phase that runs the same frame twice.
+  logic               sq_fr_start;
+  logic [31:0]        sq_fr_epoch;
+  logic [15:0]        sq_fr_count;
+  logic [31:0]        sq_fr_seq;
+  logic               sq_rec_valid, sq_rec_ready;
+  logic [31:0]        sq_rec_island, sq_rec_crc, sq_rec_src;
+  logic signed [15:0] sq_rec_ix, sq_rec_iz;
+  logic [63:0]        sq_rec_addr;
+  logic [15:0]        sq_rec_flags;
+  logic [7:0]         sq_rec_view, sq_rec_prio;
+
+  // TERRAIN.CMD's side of the mux, driven below.
+  logic               tcm_fr_start;
+  logic [31:0]        tcm_fr_epoch;
+  logic [15:0]        tcm_fr_count;
+  logic [31:0]        tcm_fr_seq;
+  logic               tcm_rec_valid, tcm_rec_ready;
+  logic [31:0]        tcm_rec_island, tcm_rec_crc, tcm_rec_src;
+  logic signed [15:0] tcm_rec_ix, tcm_rec_iz;
+  logic [63:0]        tcm_rec_addr;
+  logic [15:0]        tcm_rec_flags;
+  logic [7:0]         tcm_rec_view, tcm_rec_prio;
+
+  always_comb begin
+    if (cfg_cmd_path_i) begin
+      sq_fr_start   = tcm_fr_start;
+      sq_fr_epoch   = tcm_fr_epoch;
+      sq_fr_count   = tcm_fr_count;
+      sq_fr_seq     = tcm_fr_seq;
+      sq_rec_valid  = tcm_rec_valid;
+      sq_rec_island = tcm_rec_island;
+      sq_rec_ix     = tcm_rec_ix;
+      sq_rec_iz     = tcm_rec_iz;
+      sq_rec_addr   = tcm_rec_addr;
+      sq_rec_crc    = tcm_rec_crc;
+      sq_rec_flags  = tcm_rec_flags;
+      sq_rec_view   = tcm_rec_view;
+      sq_rec_prio   = tcm_rec_prio;
+      sq_rec_src    = tcm_rec_src;
+    end else begin
+      sq_fr_start   = fr_start;
+      sq_fr_epoch   = fr_epoch;
+      sq_fr_count   = fr_patch_count;
+      sq_fr_seq     = fr_sequence;
+      sq_rec_valid  = rec_valid;
+      sq_rec_island = rec_island;
+      sq_rec_ix     = signed'(rec_ix);
+      sq_rec_iz     = signed'(rec_iz);
+      sq_rec_addr   = rec_hps_addr;
+      sq_rec_crc    = rec_crc;
+      sq_rec_flags  = rec_flags;
+      sq_rec_view   = rec_view_mask;
+      sq_rec_prio   = rec_priority;
+      sq_rec_src    = rec_src_id;
+    end
+  end
+
+  // THE READY GOES BACK TO EXACTLY ONE OF THEM. A `rec_ready` handed to both
+  // would let the C++ side believe a record it never offered was taken.
+  assign seq_fr_start  = sq_fr_start;
+  assign rec_ready     = cfg_cmd_path_i ? 1'b0 : sq_rec_ready;
+  assign tcm_rec_ready = cfg_cmd_path_i ? sq_rec_ready : 1'b0;
+
   zhao_terrain_seq #(
       .COMPOSE_SLOTS(CSLOTS),
       .SLOTW(SLOTW),
@@ -527,26 +633,26 @@ module tb_terrain_world
       .clk  (clk),
       .rst_n(rst_n),
 
-      .fr_start_i      (fr_start),
-      .fr_epoch_i      (fr_epoch),
-      .fr_patch_count_i(fr_patch_count),
-      .fr_sequence_i   (fr_sequence),
+      .fr_start_i      (sq_fr_start),
+      .fr_epoch_i      (sq_fr_epoch),
+      .fr_patch_count_i(sq_fr_count),
+      .fr_sequence_i   (sq_fr_seq),
       .fr_busy_o       (fr_busy),
       .fr_done_o       (fr_done),
 
       .cfg_load_budget_i(cfg_load_budget_i),
 
-      .rec_valid_i    (rec_valid),
-      .rec_ready_o    (rec_ready),
-      .rec_island_i   (rec_island),
-      .rec_ix_i       (signed'(rec_ix)),
-      .rec_iz_i       (signed'(rec_iz)),
-      .rec_hps_addr_i (rec_hps_addr),
-      .rec_crc_i      (rec_crc),
-      .rec_flags_i    (rec_flags),
-      .rec_view_mask_i(rec_view_mask),
-      .rec_priority_i (rec_priority),
-      .rec_src_id_i   (rec_src_id),
+      .rec_valid_i    (sq_rec_valid),
+      .rec_ready_o    (sq_rec_ready),
+      .rec_island_i   (sq_rec_island),
+      .rec_ix_i       (sq_rec_ix),
+      .rec_iz_i       (sq_rec_iz),
+      .rec_hps_addr_i (sq_rec_addr),
+      .rec_crc_i      (sq_rec_crc),
+      .rec_flags_i    (sq_rec_flags),
+      .rec_view_mask_i(sq_rec_view),
+      .rec_priority_i (sq_rec_prio),
+      .rec_src_id_i   (sq_rec_src),
 
       .lu_valid_o    (lu_valid),
 
@@ -1702,6 +1808,136 @@ module tb_terrain_world
       .c1_bursts_o     (arb_c1_bursts),
       .c1_wait_cycles_o(arb_c1_wait_cycles)
   );
+
+  // =========================================================================
+  // TERRAIN.CMD -- and a THIRD HPS client, which is a finding
+  // =========================================================================
+  // `zhao_hps_arbiter` has TWO client ports. TERRAIN.PAGELOADER holds c0 and
+  // TERRAIN.WRITEBACK holds c1, and the terrain island now has a THIRD HPS
+  // reader: the command block, fetching the sealed patch list. Widening the
+  // arbiter is not bench work -- rule 5's starvation law is written for two
+  // guaranteed clients and `c1_wait_cycles_o` exists to make it visible, so a
+  // third port changes the fairness contract. It is reported as an owner
+  // ruling in reports/TERRAIN-COMMAND-PIPELINE-20260907.md rather than invented
+  // here, and this bench gives the command block its own played engine on the
+  // same `hps_mem` -- which is what the real fabric would look like once the
+  // arbiter has a port for it.
+  // The played engine reads `valid`, `addr` and `len`; `write` and `client`
+  // are the bridge's business.
+  /* verilator lint_off UNUSEDSIGNAL */
+  zhao_hps_burst_req_t tcm_req;
+  /* verilator lint_on UNUSEDSIGNAL */
+  logic                tcm_grant;
+  zhao_hps_burst_rsp_t tcm_rsp;
+
+  zhao_terrain_cmd u_tcm (
+      .clk  (clk),
+      .rst_n(rst_n),
+
+      .cfg_hps_client_i (ZHAO_CLIENT_TERRAIN_BUILD),
+      .cfg_epoch_i      (cfg_epoch_i),
+      .cfg_arena_base_i (cfg_hps_arena_base_i),
+      .cfg_arena_bytes_i(cfg_hps_arena_bytes_i),
+
+      .j_valid_i      (tc_valid && cfg_cmd_path_i),
+      .j_ready_o      (tc_ready),
+      .j_epoch_i      (tc_epoch),
+      .j_list_off_i   (tc_list_off),
+      .j_list_bytes_i (tc_list_bytes),
+      .j_list_crc_i   (tc_list_crc),
+      .j_patch_count_i(tc_count),
+      .j_sequence_i   (tc_seq),
+      .j_src_id_i     (tc_src_id),
+
+      .hps_req_o      (tcm_req),
+      .hps_req_grant_i(tcm_grant),
+      .hps_rsp_i      (tcm_rsp),
+
+      .fr_start_o      (tcm_fr_start),
+      .fr_epoch_o      (tcm_fr_epoch),
+      .fr_patch_count_o(tcm_fr_count),
+      .fr_sequence_o   (tcm_fr_seq),
+
+      .rec_valid_o    (tcm_rec_valid),
+      .rec_ready_i    (tcm_rec_ready),
+      .rec_island_o   (tcm_rec_island),
+      .rec_ix_o       (tcm_rec_ix),
+      .rec_iz_o       (tcm_rec_iz),
+      .rec_hps_addr_o (tcm_rec_addr),
+      .rec_crc_o      (tcm_rec_crc),
+      .rec_flags_o    (tcm_rec_flags),
+      .rec_view_mask_o(tcm_rec_view),
+      .rec_priority_o (tcm_rec_prio),
+      .rec_src_id_o   (tcm_rec_src),
+
+      .done_valid_o   (tc_done_valid),
+      .done_ready_i   (tc_done_ready),
+      .done_ok_o      (tc_done_ok),
+      .done_verdict_o (tc_done_verdict),
+      .done_src_id_o  (tcm_done_src),
+      .done_crc_seen_o(tcm_done_crc),
+
+      .sets_accepted_o  (tcm_accepted),
+      .sets_refused_o   (tcm_refused),
+      .records_emitted_o(tc_records),
+      .list_bytes_read_o(tc_bytes),
+      .crc_fails_o      (tc_crc_fails),
+      .bridge_errs_o    (tcm_brerrs),
+      .idle_o           (tcm_idle)
+  );
+
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0] tcm_done_src, tcm_done_crc, tcm_accepted, tcm_refused, tcm_brerrs;
+  logic        tcm_idle;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // Its played engine: the same profile as the one the arbiter's bridge uses,
+  // reading the same image, honouring `len` because a patch list is 32-byte
+  // granular and its tail burst is half a burst.
+  logic          tcm_busy;
+  logic [7:0]    tcm_wait;
+  logic [3:0]    tcm_beat, tcm_beats;
+  logic [31:0]   tcm_base;
+  logic [HW-1:0] tcm_word;
+
+  assign tcm_word = HW'(((tcm_base - cfg_hps_arena_base_i) >> 3) + {28'd0, tcm_beat});
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      tcm_busy  <= 1'b0;
+      tcm_wait  <= 8'd0;
+      tcm_beat  <= 4'd0;
+      tcm_beats <= 4'd0;
+      tcm_base  <= 32'd0;
+      tcm_grant <= 1'b0;
+      tcm_rsp   <= '0;
+    end else begin
+      tcm_grant          <= 1'b0;
+      tcm_rsp.beat_valid <= 1'b0;
+      tcm_rsp.last       <= 1'b0;
+      tcm_rsp.err        <= 1'b0;
+
+      if (!tcm_busy) begin
+        if (tcm_req.valid) begin
+          tcm_busy  <= 1'b1;
+          tcm_grant <= 1'b1;
+          tcm_wait  <= cfg_req_latency_i;
+          tcm_beat  <= 4'd0;
+          tcm_beats <= 4'(tcm_req.len[6:3]);
+          tcm_base  <= tcm_req.addr;
+        end
+      end else if (tcm_wait != 8'd0) begin
+        tcm_wait <= tcm_wait - 8'd1;
+      end else begin
+        tcm_rsp.beat_valid <= 1'b1;
+        tcm_rsp.data       <= hps_mem[tcm_word];
+        tcm_rsp.last       <= (tcm_beat + 4'd1 == tcm_beats);
+        tcm_wait           <= cfg_beat_gap_i;
+        if (tcm_beat + 4'd1 == tcm_beats) tcm_busy <= 1'b0;
+        else                              tcm_beat <= tcm_beat + 4'd1;
+      end
+    end
+  end
 
   // =========================================================================
   // THE PLAYED MEM.HPS.BRIDGE -- one port, address routed

@@ -141,7 +141,7 @@ module zhao_terrain_cmd
     output var logic        fr_start_o,
     output var logic [31:0] fr_epoch_o,
     output var logic [15:0] fr_patch_count_o,
-    output var logic [15:0] fr_sequence_o,
+    output var logic [31:0] fr_sequence_o,
 
     // ---- TERRAIN.SEQ's record port -------------------------------------------
     output var logic               rec_valid_o,
@@ -189,12 +189,20 @@ module zhao_terrain_cmd
   localparam logic [3:0] V_CRC       = 4'd6;   // list_crc32c mismatch
   localparam logic [3:0] V_BRIDGE    = 4'd7;   // bridge reported err
   localparam logic [3:0] V_EMPTY     = 4'd8;   // patch_count == 0
-  // T5's `sequence` is a u32 and TERRAIN.SEQ's frame ring carries SIXTEEN
-  // bits. Truncating would put two different frames on the same ring sequence
-  // and the determinism ledger would never see it, so a sequence that does not
-  // fit is REFUSED. Which of the two widths is wrong is not this block's to
-  // decide; it is listed as an open ruling.
-  localparam logic [3:0] V_SEQ       = 4'd9;
+  // VERDICT 9 WAS `V_SEQ` AND IT WAS BASED ON A MISREADING. It refused any
+  // `sequence` whose top sixteen bits were set, on the belief that
+  // TERRAIN.SEQ's frame ring carried only sixteen. It does not:
+  // `zhao_terrain_seq.sv:110` takes `input var logic [31:0] fr_sequence_i` and
+  // holds it in a 32-bit `seq_q`. The narrowing I had seen is at
+  // `cl_seq_o = seq_q[SEQW-1:0]` -- the CLAIM sequence handed to the directory,
+  // which is a different signal counting a different thing, and is that block's
+  // own documented business.
+  //
+  // So the refusal is gone and `fr_sequence_o` is the full 32 bits T5 gives.
+  // The number is left unallocated rather than reused, because a verdict code
+  // that changes meaning between builds is worse than a gap. Recorded here
+  // because a check invented against a misread port is exactly the kind of
+  // confident wrongness that is cheap to add and expensive to find.
 
 `ifndef SYNTHESIS
   initial begin
@@ -210,12 +218,7 @@ module zhao_terrain_cmd
 `endif
 
   // ---- the job, captured at acceptance -------------------------------------
-  logic [31:0] job_off_q, job_bytes_q, job_crc_q, job_src_q;
-  // SIXTEEN BITS, because that is what TERRAIN.SEQ's ring carries, and the
-  // upper half of T5's u32 is refused at S_CHECK rather than stored and
-  // ignored. A 32-bit register here whose top half nothing reads is how a
-  // truncation gets called a field.
-  logic [15:0] job_seq_q;
+  logic [31:0] job_off_q, job_bytes_q, job_crc_q, job_src_q, job_seq_q;
   logic [15:0] job_count_q;
   logic [31:0] job_epoch_q;
 
@@ -258,7 +261,7 @@ module zhao_terrain_cmd
   // order is: a command that is both stale and misaligned must report ONE
   // verdict and always the same one, or a test cannot assert against it.
   logic pre_epoch_bad_c, pre_empty_c, pre_count_bad_c, pre_len_bad_c;
-  logic pre_align_bad_c, pre_unreach_c, pre_seq_bad_c;
+  logic pre_align_bad_c, pre_unreach_c;
   logic [63:0] end_off_c;
 
   assign pre_epoch_bad_c = (j_epoch_i != cfg_epoch_i);
@@ -269,7 +272,6 @@ module zhao_terrain_cmd
   assign pre_align_bad_c = (j_list_off_i[2:0] != 3'd0);
   assign end_off_c       = {32'd0, j_list_off_i} + {32'd0, j_list_bytes_i};
   assign pre_unreach_c   = (end_off_c > {32'd0, cfg_arena_bytes_i});
-  assign pre_seq_bad_c   = (j_sequence_i[31:16] != 16'd0);
 
   // ---- the bridge request --------------------------------------------------
   // The remaining bytes of this pass, capped at one burst. The tail burst is
@@ -343,7 +345,7 @@ module zhao_terrain_cmd
       job_off_q         <= 32'd0;
       job_bytes_q       <= 32'd0;
       job_crc_q         <= 32'd0;
-      job_seq_q         <= 16'd0;
+      job_seq_q         <= 32'd0;
       job_src_q         <= 32'd0;
       job_count_q       <= 16'd0;
       job_epoch_q       <= 32'd0;
@@ -363,7 +365,7 @@ module zhao_terrain_cmd
             job_bytes_q <= j_list_bytes_i;
             job_crc_q   <= j_list_crc_i;
             job_count_q <= j_patch_count_i;
-            job_seq_q   <= j_sequence_i[15:0];
+            job_seq_q   <= j_sequence_i;
             job_src_q   <= j_src_id_i;
             pass_q      <= 1'b0;
             byte_q      <= 32'd0;
@@ -401,10 +403,6 @@ module zhao_terrain_cmd
             state_q        <= S_DONE;
           end else if (pre_unreach_c) begin
             verdict_q      <= V_UNREACH;
-            sets_refused_o <= sets_refused_o + 32'd1;
-            state_q        <= S_DONE;
-          end else if (pre_seq_bad_c) begin
-            verdict_q      <= V_SEQ;
             sets_refused_o <= sets_refused_o + 32'd1;
             state_q        <= S_DONE;
           end else begin

@@ -130,6 +130,7 @@
 #include "Vtb_terrain_world.h"
 
 #include "zhao_sim.hpp"
+#include "zhao_abi.h"
 #include "zref/zref_sw_stream.hpp"
 #include "zref/zref_terrain.hpp"
 #include "zref/zref_terrain_page.hpp"
@@ -366,6 +367,13 @@ struct World {
     d.cfg_loadq_i = 1;
     d.cfg_loadq_drain_i = 0;
     d.cfg_wat_auto_i = 1;     // the witness arms itself on the victim
+    // OFF by default. Every phase but M plays the frame ring by hand, which is
+    // what the suite has always done; M runs the identical set BOTH ways and
+    // requires the two action logs to be equal. A suite that only ever ran the
+    // new path could not say the two AGREE, and agreement is the whole claim.
+    d.cfg_cmd_path_i = 0;
+    d.tc_valid = 0;
+    d.tc_done_ready = 0;
     d.cfg_unpin_delay_i = 6;
     d.cfg_ack_delay_i = 4;
     d.cfg_ack_ok_i = 1;
@@ -493,9 +501,14 @@ Rec mk(uint32_t src, uint32_t island, int16_t ix, int16_t iz, uint16_t flags,
 // that ARE other blocks -- the directory, the loader and the writeback -- back
 // pressure themselves, which is the point: their ready is not a knob here, it
 // is a real block's real answer.
+// `via_cmd` swaps WHO drives the ring. With it clear this function plays
+// `fr_start` and the record stream, exactly as it always has. With it set the
+// bench's `cfg_cmd_path_i` has handed both to `zhao_terrain_cmd`, and this
+// function only issues the command and watches -- everything it OBSERVES is
+// the same, which is what makes the two logs comparable.
 Frame run_frame(World& w, const std::vector<Rec>& cs, uint16_t patch_count, uint16_t budget,
                 int pattern, uint32_t seed, uint64_t cap = 400000ull,
-                int collide_lookup = -1) {
+                int collide_lookup = -1, bool via_cmd = false) {
   Vtb_terrain_world& d = w.d;
   Frame O;
   uint32_t s_rec = seed ^ 0xA5A5u, s_is = seed ^ 0xC0DEu, s_wd = seed ^ 0x77A1u;
@@ -514,23 +527,38 @@ Frame run_frame(World& w, const std::vector<Rec>& cs, uint16_t patch_count, uint
   O.answered.assign(cs.size(), 0u);
 
   d.cfg_load_budget_i = budget;
-  d.fr_epoch = w.epoch;
-  d.fr_patch_count = patch_count;
-  d.fr_sequence = 0x0100u;
-  d.fr_start = 1;
   d.rec_valid = 0;
-  d.eval();
-  zhao::tick(d);
-  d.fr_start = 0;
+  if (!via_cmd) {
+    d.fr_epoch = w.epoch;
+    d.fr_patch_count = patch_count;
+    d.fr_sequence = 0x0100u;
+    d.fr_start = 1;
+    d.eval();
+    zhao::tick(d);
+    d.fr_start = 0;
+  } else {
+    // The command is already sitting on `tc_*`; the caller placed the list and
+    // computed its CRC. All that is left is to offer it.
+    d.fr_start = 0;
+    d.tc_done_ready = 1;
+    d.tc_valid = 1;
+    d.eval();
+    int g = 0;
+    while (!d.tc_ready && g < 1000) { zhao::tick(d); d.eval(); ++g; }
+    zhao::tick(d);
+    d.tc_valid = 0;
+    d.eval();
+  }
 
   std::size_t next_rec = 0;
   std::size_t cur = 0;         // record whose answers are owed
   int collided = 0;
 
+  bool frame_seen = !via_cmd;   // the hand path pulsed it above
   for (uint64_t cyc = 0; cyc < cap; ++cyc) {
-    const bool offer = next_rec < cs.size() && ready_draw(s_rec, pattern);
+    const bool offer = !via_cmd && next_rec < cs.size() && ready_draw(s_rec, pattern);
     d.rec_valid = offer ? 1 : 0;
-    if (next_rec < cs.size()) {
+    if (!via_cmd && next_rec < cs.size()) {
       const ss::PatchRecord& r = cs[next_rec].r;
       d.rec_island = r.island_id;
       d.rec_ix = uint16_t(r.patch_ix);
@@ -566,6 +594,7 @@ Frame run_frame(World& w, const std::vector<Rec>& cs, uint16_t patch_count, uint
     }
 
     if (d.rec_valid && d.rec_ready) ++next_rec;
+    if (d.seq_fr_start) frame_seen = true;
 
     if (d.lu_valid) {
       Act x; x.k = K::kLookup; x.island = d.lu_island;
@@ -604,7 +633,12 @@ Frame run_frame(World& w, const std::vector<Rec>& cs, uint16_t patch_count, uint
     }
 
     // ---- the directory's answers, captured as it gives them ---------------
-    if (next_rec > 0) cur = next_rec - 1;
+    // WHICH RECORD IS BEING ANSWERED. On the hand path that is the last one
+    // this function handed over; on the command path this function hands over
+    // nothing, so it is the last one TERRAIN.CMD did -- `tc_records`. Both
+    // increment on the accepting cycle, so the two are the same clock.
+    const uint32_t taken = via_cmd ? uint32_t(d.tc_records) : uint32_t(next_rec);
+    if (taken > 0) cur = taken - 1;
     if (d.ra_lu_valid && cur < O.answers.size()) {
       sq::ResAnswer& a = O.answers[cur];
       a.hit = d.ra_lu_hit != 0;
@@ -627,7 +661,11 @@ Frame run_frame(World& w, const std::vector<Rec>& cs, uint16_t patch_count, uint
     }
 
     ++O.cycles;
-    const bool fin = d.fr_done;
+    // `fr_done` MUST NOT BE BELIEVED BEFORE THE FRAME HAS STARTED. On the
+    // command path the start is thousands of cycles away -- the CRC pass has to
+    // read the whole list first -- and the previous frame's `fr_done` is still
+    // standing when this loop begins.
+    const bool fin = frame_seen && d.fr_done;
     zhao::tick(d);
     if (fin) { O.done = true; break; }
   }
@@ -654,7 +692,8 @@ Frame run_frame(World& w, const std::vector<Rec>& cs, uint16_t patch_count, uint
   O.c[13] = d.s_frame_faults - before[13];
   O.fault = d.seq_frame_fault != 0;
   O.err_stray = d.seq_err_stray_ans != 0;
-  O.accepted = uint32_t(next_rec);
+  d.tc_done_ready = 0;
+  O.accepted = via_cmd ? uint32_t(d.tc_records) : uint32_t(next_rec);
   return O;
 }
 
@@ -2074,6 +2113,110 @@ int main(int argc, char** argv) {
       w.reset();
       for (int i = 0; i < 8; ++i) w.stage_page(uint32_t(i), pagesA[i]);
     }
+  }
+
+
+  // =========================================================================
+  // M -- THE SAME FRAME, FROM A COMMAND
+  // =========================================================================
+  // Every phase above plays TERRAIN.SEQ's frame ring by hand: `fr_start`,
+  // `fr_epoch`, `fr_patch_count` and a record stream this file constructs. That
+  // is the shape DOCKET D4 calls the missing "command -> terrain pipeline", and
+  // it means nothing above proves a COMMAND can start a frame.
+  //
+  // So this phase runs the identical eight-record set twice on a
+  // freshly-reset directory -- once by hand and once from a SubmitTerrainSet
+  // whose sealed list sits in the played HPS arena -- and requires the two
+  // ACTION LOGS to be identical. Not the counters: the log, kind and order and
+  // every payload field, because a command path that issued the same number of
+  // loads in a different order would agree on every count and be a determinism
+  // failure.
+  //
+  // THE LIST GOES WHERE NO PAGE IS. Pages are staged at indices 0..15; the list
+  // is written at stage index 40, which is 40 x 21,376 = 855,040 bytes -- inside
+  // the arena, 8-byte aligned because the page stride is, and nowhere near
+  // anything the loader will fetch.
+  {
+    std::printf("\n-- M: the same frame, once by hand and once from a command --\n");
+
+    constexpr uint32_t kListStage = 40;
+    const uint32_t list_off = kListStage * kPageBytes;
+    const uint32_t list_bytes = uint32_t(setA.size() * ss::kRecordBytes);
+
+    ck((list_off % 8u) == 0u,
+       "M the list is 8-byte aligned -- an unaligned one would shear every field in it "
+       "and still produce plausible terrain",
+       0, int(list_off % 8u));
+    ck(list_off + list_bytes <= kArenaBytes, "M and lies inside the arena", 1,
+       (list_off + list_bytes <= kArenaBytes) ? 1 : 0);
+
+    // Encode with the SAME function the software console will use. A second
+    // serialiser here would be a second thing to keep in step with T5.
+    std::vector<uint8_t> bytes(list_bytes, 0);
+    for (std::size_t i = 0; i < setA.size(); ++i)
+      ss::encode_record(setA[i].r, &bytes[i * ss::kRecordBytes]);
+    const uint32_t list_crc = zhao_abi::zhao_crc32c(0, bytes.data(), list_bytes);
+
+    // ---- by hand -------------------------------------------------------
+    w.reset();
+    for (int i = 0; i < 8; ++i) w.stage_page(uint32_t(i), pagesA[i]);
+    const Frame H = run_frame(w, setA, 8, 32, 0, 0x4D0u);
+    settle(w);
+
+    // ---- from a command ------------------------------------------------
+    w.reset();
+    for (int i = 0; i < 8; ++i) w.stage_page(uint32_t(i), pagesA[i]);
+    for (uint32_t k = 0; k < list_bytes; k += 8) {
+      uint64_t v = 0;
+      for (int b = 0; b < 8; ++b) v |= uint64_t(bytes[k + uint32_t(b)]) << (8 * b);
+      w.mem_write(0, (list_off + k) / 8, v);
+    }
+    d.cfg_cmd_path_i = 1;
+    d.tc_epoch = w.epoch;
+    d.tc_list_off = list_off;
+    d.tc_list_bytes = list_bytes;
+    d.tc_list_crc = list_crc;
+    d.tc_count = 8;
+    d.tc_seq = 0x0100u;          // the same sequence the hand path uses
+    d.tc_src_id = 0xC0DEu;
+    d.eval();
+
+    const Frame C = run_frame(w, setA, 8, 32, 0, 0x4D1u, 900000ull, -1, /*via_cmd=*/true);
+    d.cfg_cmd_path_i = 0;
+    d.eval();
+
+    ck(d.tc_done_ok != 0 || C.done,
+       "M the command was accepted", 1, (d.tc_done_ok != 0 || C.done) ? 1 : 0);
+    ck(d.tc_crc_fails == 0, "M with no CRC failure", 0, d.tc_crc_fails);
+    ck(int(d.tc_records) == 8,
+       "M and TERRAIN.CMD handed the sequencer all eight records", 8, int(d.tc_records));
+    ck(d.tc_bytes == 2u * list_bytes,
+       "M having read the list twice -- once to verify, once to act", long(2 * list_bytes),
+       long(d.tc_bytes));
+
+    ck(C.done, "M the command-driven frame completed");
+    ck(C.accepted == H.accepted, "M it consumed the same number of records",
+       long(H.accepted), long(C.accepted));
+
+    // THE LOG, NOT THE COUNTERS. Same helper the reference comparison uses, so
+    // "identical" means the same thing here as it does everywhere else in this
+    // file.
+    const int bad = compare("M cmd-vs-hand", C, H);
+    ck(bad == 0,
+       "M THE COMMAND-DRIVEN FRAME IS ACTION-FOR-ACTION THE HAND-DRIVEN ONE -- same kinds, "
+       "same order, same payloads. A path that issued the same loads in a different order "
+       "would agree on every counter and be a determinism failure",
+       0, bad);
+
+    for (int k = 0; k < 14; ++k) {
+      if (C.c[k] == H.c[k]) continue;
+      std::printf("   M counter %d: hand %d, command %d\n", k, H.c[k], C.c[k]);
+    }
+    std::printf("   hand: %llu cycles; command: %llu cycles (the difference is the CRC "
+                "pass, which reads %u bytes before the frame starts)\n",
+                (unsigned long long)H.cycles, (unsigned long long)C.cycles, list_bytes);
+
+    settle(w);
   }
 
   std::printf("\n== %d checks, %d failures, %d composition defects ==\n", g_checks, g_fail,

@@ -77,7 +77,14 @@ constexpr uint32_t kEpoch = 0x00C0'FFEEu;
 // Verdicts, from the RTL's localparams.
 enum : int {
   kVOk = 0, kVEpoch = 1, kVLen = 2, kVCount = 3, kVAlign = 4,
-  kVUnreach = 5, kVCrc = 6, kVBridge = 7, kVEmpty = 8, kVSeq = 9
+  kVUnreach = 5, kVCrc = 6, kVBridge = 7, kVEmpty = 8
+  // 9 WAS `kVSeq` AND IS DELIBERATELY UNALLOCATED. The block refused any
+  // `sequence` above 65,535, on the belief that TERRAIN.SEQ's frame ring
+  // carried sixteen bits. It carries thirty-two -- `zhao_terrain_seq.sv:110`
+  // -- and the narrowing that had been seen is at `cl_seq_o`, the CLAIM
+  // sequence, which is a different signal. The refusal and its case here are
+  // both gone; the code number is left as a gap rather than reused, because a
+  // verdict that changes meaning between builds is worse than a hole.
 };
 
 // EVERY FIELD A DISTINCT FUNCTION OF THE INDEX. See the header.
@@ -482,8 +489,22 @@ int main(int argc, char** argv) {
       {"list_bytes != 32*patch_count", kVLen,     kEpoch,      kListOff, bytes+32,4, 1},
       {"a list that is not 8-aligned", kVAlign,   kEpoch,      kListOff+4, bytes, 4, 1},
       {"a list past the arena",        kVUnreach, kEpoch,      kArenaBytes - 32, bytes, 4, 1},
-      {"a sequence that will not fit", kVSeq,     kEpoch,      kListOff, bytes,   4, 0x1'0000u},
     };
+
+    // AND A SEQUENCE ABOVE 65,535 IS NOT A REFUSAL AT ALL, which is the other
+    // half of the correction: T5's `sequence` is a u32 and the ring takes all
+    // thirty-two bits, so a large one must go straight through.
+    {
+      w.reset();
+      const uint32_t crc = w.place(kListOff, list);
+      const Out o = submit(w, kEpoch, kListOff, bytes, crc, 4, 0x1234'5678u, 0xEEEE0001u,
+                           0, 60000);
+      ck(o.done && o.ok,
+         "E a sequence above 65,535 is accepted -- the frame ring is 32 bits wide", 1,
+         (o.done && o.ok) ? 1 : 0);
+      ck(o.fr_seq == 0x1234'5678u,
+         "E and it reaches the ring unaltered", long(0x1234'5678u), long(o.fr_seq));
+    }
 
     for (const Case& c : cases) {
       w.reset();
