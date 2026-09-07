@@ -337,7 +337,44 @@ module zhao_texture_v3own #(
   logic [SLOTW-1:0] tail_next_c;
   logic             wrap_block_n_c;
   assign tail_next_c    = tail_q + (adm_fire_c ? SLOTW'(1) : SLOTW'(0));
-  assign wrap_block_n_c = (gen_n_c[tail_next_c] == {GENW{1'b1}});
+
+  // ---- MEASURED, THEN REWRITTEN. -----------------------------------------
+  // This was `(gen_n_c[tail_next_c] == {GENW{1'b1}})`, and the fit of
+  // 2026-09-07 made it the WORST PATH IN THE BLOCK: -2.960 ns,
+  // `fence_open_q~0 -> fence_open_q~0`, 12.804 ns of data. The per-hop walk
+  // named where the time went --
+  //
+  //     fence_open_q -> Add1 (tail_next_c) -> Mux9~24 -> Mux9~1 -> Mux9~4
+  //                  -> Mux9~20 -> Equal1~0 -> fence_open_q~0
+  //
+  // and those four Mux levels are the 64-way select, 9.136 ns of the 12.804 --
+  // 71% of the path. Worse, indexing `gen_n_c` put the whole generation
+  // NEXT-STATE cone inside the fence's own permission loop.
+  //
+  // TWO FACTS MAKE THE REWRITE EXACT rather than approximate:
+  //   1. `gen_n_c[i]` defaults to `gen_q[i]` and is overwritten at exactly one
+  //      index, `i == tail_q`, and only when `adm_fire_c`.
+  //   2. `tail_next_c` is `tail_q + adm_fire_c`. So when the overwrite happens
+  //      the read index has moved off it, and when it does not happen the two
+  //      arrays agree everywhere.
+  // Therefore `gen_n_c[tail_next_c] === gen_q[tail_next_c]` in every case.
+  //
+  // Given that, both candidates are computed from REGISTERS ONLY and in
+  // parallel, so the adder and the 64-way select leave the loop and only a 2:1
+  // mux remains downstream of `adm_fire_c`. This is 6.8's advice applied --
+  // "register it or share predecoded high/low comparison terms".
+  //
+  // `wrap_at_tail_c` is literally the existing `wrap_block_c`, reused rather
+  // than duplicated so the two can never drift apart.
+  //
+  // THE TIMING BENEFIT IS UNMEASURED UNTIL A REFIT. Three predictions made
+  // from reading source today were falsified by the fitter; this one is
+  // recorded as a structural argument, not a number.
+  logic [SLOTW-1:0] tail_p1_c;
+  logic             wrap_at_tail_p1_c;
+  assign tail_p1_c         = tail_q + SLOTW'(1);
+  assign wrap_at_tail_p1_c = (gen_q[tail_p1_c] == {GENW{1'b1}});
+  assign wrap_block_n_c    = adm_fire_c ? wrap_at_tail_p1_c : wrap_block_c;
 
   // §6.2's phase sequence, scoped to the LEGACY TRANSITIONAL FENCE that the
   // same section describes: "may authorize exactly one wrapping admission and
