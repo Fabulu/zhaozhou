@@ -2363,3 +2363,78 @@ pin, and tuning on that number alone is tuning against an artefact.
 7. a load completing into a slot already in EVICT_PENDING
 8. **`kFlagDual` is not routed** from the patch record to TERRAIN.PATCH's
    `dual_i` by anything in the tree
+
+---
+
+## 2026-09-07 (late) — five blocks, page bytes to shaded geometry
+
+```
+TERRAIN.PAGESTREAM → TERRAIN.PATCH → TERRAIN.COMPCACHE → TERRAIN.TESS → TERRAIN.NORMALS
+```
+
+**No adapter anywhere in the chain.** Every seam is port-for-port: PATCH's
+compose lane takes the three planes the streamer emits on one beat; COMPCACHE's
+fill port *is* PATCH's `st_*` output; TESS's `lat_*` and `cs_*` ports *are*
+COMPCACHE's serve side, one-cycle read latency included; and TESS's own comment
+calls its mesh output *"exactly TERRAIN.NORMALS' input packet"*, which it is.
+
+A 21,376-byte page produces **128 triangles and 128 face normals**, matching
+`zref::terrain::tessellate` corner-for-corner and `zref::terrain::face_normal`
+lane-for-lane. `compose_rtl_directed`: **50 checks, 0 failures.**
+
+### Three things composing found that five green differentials could not
+
+1. **A transposed lattice.** PATCH and COMPCACHE both mean `vi` = column,
+   `vj` = row (`vidx = vj*LAT_W + vi`); PAGESTREAM had them swapped. Heights
+   survived — the cache stores by arrival cursor — but `subpatch_dirty_o` is a
+   mask at bit `row*4 + col`, so **the mask was transposed**: the wrong quarter
+   of a patch requested. Found by the *placement* readback.
+2. **A missing test for the thing that was broken.** The fix went in with none.
+   The main page can't serve — four vertices in five dirty, mask `0xFFFF`, which
+   passes *transposed* — so phase F uses a one-corner page: mask `0x1100`,
+   transpose `0x000C`, no shared bit, asserted disjoint before use.
+3. **A ready that stopped being the handshake.** With NORMALS in the chain a
+   triangle is taken on `valid && bench_ready && normals_ready`; the C++ side was
+   still watching its own ready and counted **889 triangles where 128 were
+   emitted**, then reported 126 of 128 wrong against a stream that was correct.
+   The bench now exports `ts_tri_taken` — the conjunction itself.
+
+### `kFlagDual` now travels
+
+`dual_i` sits inside both of PATCH's clamps and decides whether `bottom_o` is
+`fx(bottom)` or `live_top`, and nothing in the tree routed T5's `kFlagDual` to
+it. PAGESTREAM carries the record's whole 16-bit `flags` as identity, whole and
+uninterpreted. Verified by composing the same page both ways: **871 of 1,089
+vertices read differently.**
+
+### THE NEXT LINK NEEDS A BLOCK THAT DOES NOT EXIST
+
+`TERRAIN.LOD` does **not** read the lattice. Its subpatch descriptor carries
+**precomputed deviations** — `sp_dev1/2/3`, *"the largest |fine − coarse| height
+deviation this subpatch would suffer at level L"* — and **nothing in `fpga/rtl`
+computes them.** The only driver of `sp_dev1_i` anywhere in the tree is
+`zhao_prod_top.sv:3740`, from `{16{u53_lfsr_q}}` — an LFSR.
+
+So the chain stops here not for want of wiring but for want of a **deviation
+calculator over the composed lattice**: something that, per 8×8-cell subpatch,
+walks the fine lattice against its level-1/2/3 decimations and keeps the maximum
+absolute difference. That is the same shape of hole `TERRAIN.PAGESTREAM` filled
+this morning — a block, not a wire — and it is the last one between a page and a
+LOD-selected mesh.
+
+It is *reported*, not built: whether the deviations are computed at load time
+(once per page, alongside the mips, since base+scar are fixed until a bake) or
+per frame (because live field lanes move `live_top`) is a **ruling**, and the
+two differ by a factor of sixty in cost.
+
+### Open, and needing the owner
+
+1. the command payload seam (framer carries 16 bytes, `SubmitTerrainSet` is 32,
+   `TerrainField 0x0200` is a 112-byte record already truncated the same way)
+2. `zhao_hps_arbiter` has two client ports; terrain now has three HPS readers
+3. the set-level `view_mask`/`flags` on `SubmitTerrainSet` have no consumer
+4. what a bad `list_crc32c` does to the **frame**
+5. `TerrainEpoch` BEGIN/END_FLUSH/ABORT — what "drain" means in gates
+6. which plane is surface 0 for load-time mips
+7. a load completing into a slot already in EVICT_PENDING
+8. **when the LOD deviations are computed** — load time or per frame
