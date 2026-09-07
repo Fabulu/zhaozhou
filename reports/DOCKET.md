@@ -4114,3 +4114,129 @@ output at 85.9 MHz.
   and is an ABI change downstream. That reverses the assumption I raised it
   under.
 * **105 or 100 MHz** as the composed acceptance floor.
+
+### 2026-09-07, afternoon — the clock, measured properly, and four instruments
+
+The morning's entry above ends with `fmaxMhz` read for the first time. The
+afternoon is what happened when the reading was pushed to per-hop resolution,
+and it is mostly a record of **the order in which questions must be asked.**
+
+#### The order that works, learned by getting it wrong twice
+
+| | question | instrument | what it names |
+|---|---|---|---|
+| 1 | is the clock the block's fault or its boundary's? | `split_setup_paths.py` | **which paths** count |
+| 2 | which signals meet on the worst one? | the endpoint census | **which signals** |
+| 3 | where does the time actually go? | `path_anatomy.py` | **where the time is** |
+
+Two edits were made on the answer to (2) before (3) was ever asked:
+
+* **TERRAIN.NORMALS' product register** — a 33×33 multiply feeding a 67-bit
+  adder in one cycle. Real hazard, removed. **+1.3 MHz**, because something
+  twice as bad sat in front of it.
+* **TERRAIN.TESS's `cell_solid` mask** — 256 comparisons and 128 multiply sites
+  in the source became two span masks and an outer product. Bit-identical.
+  **Five ALMs. +0.7 MHz.** Quartus had already collapsed the loop; the count
+  was taken on the *generation* side, which CLAUDE.md names as the error.
+
+Then the per-hop walk found it in one pass: **28.080 ns of TESS's 30.2 ns
+period is the geomorph blend** — `m_dab → rescale1 → m_hc → m_d → m_prod →
+rescale16 → m_y`, seven arithmetic stages including a 17×34 multiply, all on
+the same edge as the lattice read that feeds them.
+
+#### The convergence, which is the useful part
+
+A tree-wide sweep of DSP delay **in the data path** of each worst path:
+
+| block | data ns | DSP ns | share |
+|---|---:|---:|---:|
+| `zhao_geom_project` | 15.906 | 6.611 | **42%** |
+| `zhao_pair_tess_normals` | 28.080 | 8.599 | **31%** |
+| `zhao_texture_bilerp_lane` | 3.741 | 0.729 | 19% |
+
+**Both blocks that miss the product clock spend a third to a half of their
+worst path in a combinational DSP output** — `resulta` reached as a cell delay
+rather than through the DSP's own output register, which is free. Terrain and
+geometry converge on one mechanical fix, not two bespoke ones.
+
+`zhao_project_core`'s cut is **done**: the split was arithmetic before it was
+code (6.611 / 9.295 ns, both inside 10 ns), the throughput bound was checked
+*before* the edit (422 against 448; after, 423 — exactly one cycle, latency not
+initiation interval), and all nine project lanes pass. TESS's needs three cuts
+and is sized but not written.
+
+#### D22 step 4 — GEOM.PROJECT, and a gate that could not pass
+
+Fitted for the first time: 5,977 ALM / 6,570 reg / 27 M10K / 33 DSP /
+**61.09 MHz**. The entity census settles the header's two claims separately —
+**the shell is 41 ALUTs, 0% of the block, so "thin shell" is confirmed**, while
+"the duplication is gone" is unmeasurable by a leaf fit because each block
+instantiates its own core.
+
+`max_m10k: 0` was **unsatisfiable**: the 27 M10K are all inside `u_core`, and I
+had attributed terrain's 23 to "triangle framing". A rule about the shell
+applied to a closure containing the core. **Third unsatisfiable rule in
+`fit_targets.yml`**, after `min_m10k: 17`'s capacity argument that ignored MLAB
+and `min_memory_bits` counting one of the device's two memory kinds.
+
+**And `zhao_project_core` is on BOTH the geometry and terrain lanes**, so its
+39% shortfall is one block's problem sitting on two.
+
+#### Coverage: three asymmetries, and a sharper idea than "coverage"
+
+Found by mutation, not by reading, and each in the *larger* of the suites
+sharing a fixture:
+
+| mutation | caught by | did not notice |
+|---|---|---|
+| tess window loses its row term | `tess_directed` 6,751 | `tess_normals` **41,731** |
+| `rescale16_row` loses its rounding | `geom_project` 900 | `terrain_project` **2,011** |
+| `rescale16_mad` loses its rounding | *(none)* | **both** |
+
+The third is the interesting one. `terrain_project`'s case 7 **correctly**
+asserts it reached the fx_mad half — 534 of 801 vertices — and the mutation
+still went unseen, because `scr_fx` is fx16 and the output is S12.8: a one-LSB
+error is 1/256 of an output LSB. **An anti-vacuity check that verifies a case
+was REACHED is weaker than one verifying its effect was OBSERVABLE**, and the
+two diverge wherever a later stage discards precision.
+
+Closing it needed construction rather than sweeping, because with an integer
+divisor `ndc mod 512` takes only `d` values and no viewport in 1..32 escapes
+the aliasing. `ndc·vp ≡ 255 (mod 512)` is the condition; `m33 = kOne` makes
+`ndc` equal `clip.x` so it can simply be asked for.
+
+**And one "hole" was withdrawn.** `geom_project_directed` is *not* blind: for
+any **even** viewport dimension `vp<<15` has ≥16 trailing zeros, so the mad
+rounding is unreachable, and its viewports are 256×192 and 320×200. That
+raises a design question rather than a test one — a ratified rounding rule that
+never fires in the shipped machine. Owner ruling, recorded in
+`PROJECT-MAD-ROUNDING-20260907.md`.
+
+#### The instruments, and what each caught in itself
+
+* `split_setup_paths.py` — endpoint classification. Caught itself reporting a
+  **superseded** artefact as a live block.
+* `compare_rows.py` — **refuses** a sum containing a stale or missing row.
+  Written after four such sums were published in one report.
+* `mutation_sweep.py` — the fire test, committed. Never writes its own backup
+  (the zero-byte-backup incident); caught a `return` inside `finally` in its
+  own safety path.
+* `path_anatomy.py` — the per-hop walk. **Corrected the report that motivated
+  it** on its first run, then a tree-wide sweep caught its own unbounded
+  segment via a number larger than its container.
+
+Three of the four found a defect in themselves. That is the pattern to expect,
+not a run of bad luck.
+
+#### `lint_shell_top` was red, and it is a repair that never landed
+
+`hb_wr_ready`/`hb_wr_early` are the tail of `98d7030e` — *"the HPS bridge's
+write channel had no READY, so a beat offered a cycle early vanished"*. The
+bridge raises READY, the shell wires it out, **nothing connects it back to the
+producer**. Harmless only because both arbiter client write ports are tied to
+`1'b0`.
+
+**`zhao_hps_arbiter` has no `b_wr_ready_i` at all.** The READY cannot be
+honoured by wiring; it needs an arbiter port and a stall in its write mux.
+Until then the repair is present in the bridge and **inert at the shell** —
+the same shape as an ignore rule that hides waste instead of removing it.
