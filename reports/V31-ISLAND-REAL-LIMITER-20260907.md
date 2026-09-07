@@ -320,3 +320,44 @@ and the block clears the product clock standalone. **Whether the composed island
 follows is not yet known** — that needs the island refit, which is #2 in the
 order and still stale by four commits. A block-level win is not a composed win,
 and this repository has the scar to prove it.
+
+
+---
+
+## Mid-flight from the island refit's map stage — and a delta that must NOT be credited to today
+
+Read while the fitter was still placing. `quartus_map` finished at 14:42.
+
+| | previous fit (Sep 6) | running refit |
+|---|---:|---:|
+| MAP registers | 27,973 | **23,050** — −4,923, −17.6% |
+| block memory bits | 36,024 | **41,336** — +5,312 |
+| virtual pins | 1,484 | 1,487 |
+| DSP | 17 | 17 |
+
+Roughly 4,900 flip-flops' worth of state has become roughly 5,300 memory bits.
+That is a large, real movement — **and it is not today's work.**
+
+**Six of the island's fifteen sources changed across ten commits in that window**,
+and only two are mine. The other four named commits are from earlier sessions:
+
+    b55959f0  CLUT4's nibble now survives the address divide
+    d80f29b4  Three FRAGROB/AUX tripwires reach the boundary
+    3a06a590  SW.STREAM's frame policy, and the ledger goes fully green
+    a1846867  W9b: the nearest station decodes, alpha is real, COMPCACHE differential
+
+**And my change is positively excluded as the source of the memory rise**, not
+merely unlikely: `zhao_raster_perspuv_svc`'s own fit today measured registers
+**up** 59 and M10K **unchanged at 1** — `e_q_u`/`e_q_v` did not infer, which was
+that prediction's recorded falsifier firing. A block whose memory did not move
+cannot be the origin of +5,312 bits in the composition.
+
+§12.5 is the rule being obeyed here: *"Attribute each delta before treating it as
+a mechanism."* This delta spans ten commits and is attributable to none of them
+without intermediate fits, so it is recorded as an **observation with its window
+stated** rather than as a result. A −17.6% register figure is exactly the kind of
+number that acquires a cause it did not earn.
+
+What the completed fit will add is ALM and Fmax, and the one question this report
+actually asked: whether `perspuv_svc|head_q -> fragrob|axg_m` has left the worst
+core→core family.
