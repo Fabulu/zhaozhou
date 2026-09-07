@@ -470,3 +470,64 @@ composed chain.
 And the mutation sweep exists now to prove those suites still see a wrong
 answer afterwards — which matters more here than usual, because a pipeline cut
 in a geometry emitter can produce output that is *plausible* and misaligned.
+
+---
+
+## The cuts are correct and they are NOT a drop-in — checked before writing
+
+Two things were checked before touching the RTL, the same order that worked for
+`zhao_project_core` and that this block's two earlier edits skipped.
+
+### 1. The throughput bound has three cycles of slack
+
+`terrain_tess_directed:676` asserts `cycles <= 3 * triangles + 75`, which is
+**459** for its 128-triangle batch. It measures **456**. Three cuts add three
+cycles of drain, landing exactly on the bound — `<=` would pass with **zero
+margin**, on an assertion whose comment calls 3 reads per triangle "the target
+rate". A change that consumes the entire stated margin needs the rate target
+revisited, not a `<=` that happens to hold.
+
+### 2. `m_y` is consumed in the cycle it is produced — twice
+
+```systemverilog
+if (pend_v) begin
+  ...
+  end else begin
+    vy[pend_slot] <= m_y;            // the geomorph result, combinational
+  end
+  if (pend_last) begin
+    o_valid <= 1'b1;
+    o_ay    <= vy[0];
+    o_by    <= last_y;               // last_y = (pend_kind==0) ? lat_h_i : m_y
+```
+
+`m_y` feeds **both** the capture and, through `last_y`, the emit — on the edge
+the lattice read lands. Registering the chain three deep means `vy[pend_slot]`
+arrives three cycles late **and** `last_y` is three cycles stale at the moment
+`pend_last` fires. The triangle would be emitted with the wrong vertex.
+
+**So the three cuts require restructuring the walk**, not inserting three
+registers: the geomorph result has to arrive *with* its vertex, which means
+tracking in-flight vertices through the pipeline, or stalling the walk three
+cycles per morphed vertex — and the throughput bound above does not survive a
+stall of three cycles times up to three vertices per triangle.
+
+`zhao_project_core`'s cut was mechanical because its stage 6 is a pure
+feed-forward output map: nothing reads the product in the cycle it is made.
+TESS's geomorph is consumed by state *and* by emission on the same edge. **The
+same measurement, the same shape of fix, and a completely different amount of
+work** — which is the thing worth writing down.
+
+### What this leaves
+
+The cut points remain right, and the sizing stands: `Add66 | Add68 | Mult4`,
+worst stage 8.599 ns, **116.3 MHz** against 33.10 today. What is missing is a
+walk that can accept them. That is a design change for a pass that owns this
+block, with the emit path restructured deliberately — and it now has the
+per-hop numbers, the cut points, the throughput constraint and the stale-emit
+hazard all written down in front of it.
+
+**Three times today, checking before editing changed the plan**: `project_core`
+(the throughput bound had room, so the cut went in), `rescale16_row` (the
+per-hop data said it was not on the path, so the edit was abandoned), and this
+one. The two edits made *without* checking first bought 4.2% and 2.1%.

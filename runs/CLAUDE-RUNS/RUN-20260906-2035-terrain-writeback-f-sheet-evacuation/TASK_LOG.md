@@ -855,3 +855,19 @@ were caught after the fact. Experiment queued: declare statram 40 wide, change
 nothing else -- same numbers proves the bits were never there.
 
 Toolchain refilled: geom_project refit running to judge project_core's cut.
+
+## 2026-09-07 -- TESS's cuts are not a drop-in; checked before writing
+
+Two pre-edit checks. (1) terrain_tess_directed:676 bounds cycles <= 3N+75 =
+459 and measures 456 -- three cuts land exactly on it, zero margin, on an
+assertion whose comment calls 3 reads/triangle the target rate. (2) m_y is
+consumed IN THE CYCLE IT IS PRODUCED, twice: vy[pend_slot] <= m_y AND
+o_by <= last_y (= m_y when pend_kind != 0) at pend_last. Registering three deep
+makes the emit read stale vertices.
+
+So the cuts need a WALK RESTRUCTURE, not three registers. project_core's cut
+was mechanical because stage 6 is pure feed-forward; TESS's geomorph feeds
+state and emission on the same edge.
+
+Sizing stands (Add66|Add68|Mult4, 8.599 ns, 116.3 MHz). Left for a pass that
+owns the block, with the hazard documented.
