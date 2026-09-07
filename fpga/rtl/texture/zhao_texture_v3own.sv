@@ -1535,6 +1535,17 @@ module zhao_texture_v3own #(
     else        gen_chk_s <= gen_chk_s + SLOTW'(1);
   end
 
+  // A rotating TICKET, so the whole 14-bit namespace is swept over a long run
+  // rather than only the tokens the bench happens to present.
+  logic [OWNERW-1:0] tkt_chk_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) tkt_chk_q <= '0;
+    else        tkt_chk_q <= tkt_chk_q + OWNERW'(1);
+  end
+
+  // retire + k, k = 0..63: a ticket that straddles the live edge every pass.
+  wire [OWNERW-1:0] bnd_tkt_c = sh_retire_tkt_c + OWNERW'(gen_chk_s);
+
   wire [OWNERW-1:0] sh_alloc_tkt_c  = {sh_alloc_gen_q,  tail_q};
   wire [OWNERW-1:0] sh_retire_tkt_c = {sh_retire_gen_q, emit_q};
 
@@ -1583,6 +1594,35 @@ module zhao_texture_v3own #(
       //
       // Stated over ALL slots rather than just tail+1, because Groups B and C
       // need `gen_of_slot(s)` for arbitrary s, not just the neighbour.
+      // GROUP B'S IDENTITY, which is the one nine of the twelve sites need.
+      // Every one of them asks "is this token still the live occupant of its
+      // slot?", and today that is `live_q[slot] && (gen_q[slot] == gen)`. 6.1
+      // says it is `(ticket - retire) mod 2^14 < used`. Asserting the two agree
+      // for a rotating ticket sweeps the whole namespace over a long run, so
+      // the claim is tested on tokens the bench never presents as well as ones
+      // it does -- a window that reported spurious live for DEAD tokens would
+      // otherwise pass.
+      a_win_live_matches_table : assert (
+          (((tkt_chk_q - sh_retire_tkt_c) & OWNERW'({OWNERW{1'b1}}))
+             < OWNERW'(live_cnt_q))
+          == (live_q[tkt_chk_q[SLOTW-1:0]]
+              && (gen_q[tkt_chk_q[SLOTW-1:0]] == tkt_chk_q[OWNERW-1 -: GENW])));
+
+      // THE SAME IDENTITY, AIMED AT THE BOUNDARY. The check above sweeps the
+      // whole namespace uniformly, which sounds thorough and is weak exactly
+      // where it matters: `used` is at most 64 of 16,384 tickets, so a rotating
+      // ticket lands INSIDE the live window under 0.4% of the time. It is
+      // therefore mostly a test that both representations say "dead", and would
+      // barely exercise them agreeing on LIVE.
+      //
+      // This one walks `retire + k` for k = 0..63, so it straddles the live
+      // edge on every pass -- k < used must be live in both, k >= used dead in
+      // both. That is where an off-by-one in either representation lives.
+      a_win_live_at_boundary : assert (
+          ((OWNERW'(gen_chk_s)) < OWNERW'(live_cnt_q))
+          == (live_q[bnd_tkt_c[SLOTW-1:0]]
+              && (gen_q[bnd_tkt_c[SLOTW-1:0]] == bnd_tkt_c[OWNERW-1 -: GENW])));
+
       a_win_gen_of_slot : assert (gen_q[gen_chk_s] ==
           ((gen_chk_s < tail_q) ? sh_alloc_gen_q : GENW'(sh_alloc_gen_q - GENW'(1))));
     end
