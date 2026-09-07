@@ -2402,13 +2402,16 @@ inline zc::Clip build_death_gutter() {
   // the three sags: down, HAUL BACK UP, down further, haul up less, down and
   // this time it keeps going. Authored as a curve so the two failed recoveries
   // are visible in the table rather than emergent.
-  static const Key kSag[] = {{0, 0},
-                             {kDeathBSagKeys[0], 1000},          // sag 1
-                             {kDeathBSagKeys[0] + 16, 180},      // ...and up
-                             {kDeathBSagKeys[1], 1000},          // sag 2, deeper
-                             {kDeathBSagKeys[1] + 18, 420},      // ...and up, less
-                             {kDeathBSagKeys[2], 1000},          // sag 3
-                             {kDeathBLetGoKey, 1000}};
+  // per-mille of kDeathBSagMaxMm, so the three stations really are three
+  // different depths and the recoveries really are partial
+  static const Key kSag[] = {
+      {0, 0},
+      {kDeathBSagKeys[0], kDeathBSagMm[0] * 1000 / kDeathBSagMaxMm},   // sag 1
+      {kDeathBSagKeys[0] + 16, kDeathBSagMm[0] * 200 / kDeathBSagMaxMm},  // up
+      {kDeathBSagKeys[1], kDeathBSagMm[1] * 1000 / kDeathBSagMaxMm},   // sag 2
+      {kDeathBSagKeys[1] + 18, kDeathBSagMm[1] * 520 / kDeathBSagMaxMm},  // up, less
+      {kDeathBSagKeys[2], kDeathBSagMm[2] * 1000 / kDeathBSagMaxMm},   // sag 3
+      {kDeathBLetGoKey, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
     const bool dead = f >= B.settle;
@@ -2477,7 +2480,7 @@ inline zc::Clip build_death_gutter() {
     if (!falling) {
       // the sag: it is still nominally floating, just failing at it
       y = fxu(kHoverHeightMm) -
-          static_cast<int32_t>((static_cast<int64_t>(fxu(kDeathBSagMm[1])) * sag) / 1000) +
+          static_cast<int32_t>((static_cast<int64_t>(fxu(kDeathBSagMaxMm)) * sag) / 1000) +
           static_cast<int32_t>((static_cast<int64_t>(fxu(kBobAmpBMm)) *
                                 sinp(f, K, 2) * (1000 - sag)) >> 16) / 1000;
     } else {

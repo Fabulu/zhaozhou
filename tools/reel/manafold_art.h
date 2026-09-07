@@ -1665,11 +1665,26 @@ constexpr int32_t kBlinkDepthPm = 870;
 // impact returns LESS HEIGHT and the INTERVAL to the next is SHORTER.
 constexpr int kDeathBounces = 5;
 // apex height in mm above the settle root, per bounce
-constexpr int32_t kDeathApexMm[kDeathBounces] = {1120, 470, 205, 82, 27};
-// keys from this impact to the next (the last entry runs out to the settle)
-constexpr int kDeathIntervalKeys[kDeathBounces] = {32, 22, 15, 10, 7};
+//
+// ⚠ THESE CAME DOWN A LOT AFTER LOOKING AT THE TRAJECTORY PLATE, and the plate
+// is the whole reason the fault was visible. The first table bounced to 1120 mm
+// off a fall of 547 (hover 1250 minus the settle 703) -- a restitution of TWO,
+// a ball returning higher than it was dropped from. Every bounce after it
+// decayed correctly, so the contact-sheet read was fine and every gate passed;
+// what showed it was plotting root height against key and looking at the shape.
+// The decay is the thing the owner asked for and the decay was never wrong. The
+// FIRST return was, and only a picture of the curve says so.
+//
+// 420 of a 547 mm fall is 0.77 -- a lively body, which is what a round bouncy
+// creature should be, and under one.
+constexpr int32_t kDeathApexMm[kDeathBounces] = {420, 205, 96, 42, 16};
+// keys from this impact to the next (the last entry runs out to the settle).
+// Ballistic flight time goes as sqrt(apex), so these track the apexes rather
+// than being chosen freely: 28 * sqrt(205/420) = 20, and so on down. That is
+// what stops the intervals and the heights telling different stories.
+constexpr int kDeathIntervalKeys[kDeathBounces] = {28, 20, 14, 10, 7};
 constexpr int kDeathFailKey = 18;          // the float FAILS here: the death
-constexpr int kDeathDropKeys = 24;         // the first fall, hover -> impact 0
+constexpr int kDeathDropKeys = 20;         // the first fall, hover -> impact 0
 // PROBE-CALIBRATED, NOT GUESSED: slot 7 reports the rest pose's lowest vertex
 // 740 mm below the root, so a corpse showing kDeathSettleDepthMm of declared
 // penetration sits here. The probe re-derives the real number every run and
@@ -1686,7 +1701,7 @@ constexpr int32_t kDeathSettleDepthMm = 25;   // DECLARED penetration at rest
 // A ball that stops at exactly zero reads as hovering (the ground-contact
 // law), so the impacts drive the root BELOW the settle height and ease back.
 // The dip decays with the bounce like everything else does.
-constexpr int32_t kDeathImpactDipMm[kDeathBounces] = {88, 52, 30, 16, 6};
+constexpr int32_t kDeathImpactDipMm[kDeathBounces] = {80, 48, 28, 15, 6};
 constexpr int kDeathImpactDipKeys = 5;     // keys to recover from the dip
 constexpr int kDeathTailKeys = 108;        // THE ETERNAL REST, held
 // "a corpse that keeps breathing is not dead": the deform ramps to EXACTLY
@@ -1720,11 +1735,20 @@ constexpr int32_t kDeathDroopMm[3][3] = {   // [A,B,C][x,y,z]
 // then does it drop -- heavily, with two small bounces. Same rest root, same
 // zero deform, same declared depth. Different performance.
 constexpr int kDeathBBounces = 2;
-constexpr int32_t kDeathBApexMm[kDeathBBounces] = {330, 74};
-constexpr int kDeathBIntervalKeys[kDeathBBounces] = {24, 12};
-constexpr int32_t kDeathBImpactDipMm[kDeathBBounces] = {74, 22};
-constexpr int kDeathBSagKeys[3] = {26, 62, 104};      // the three sag stations
-constexpr int32_t kDeathBSagMm[3] = {180, 430, 250};  // sag depth (2 recover)
+// same correction as death one, and worse here before it: the gutter let go
+// from 430 mm down -- a 117 mm fall -- and bounced 330. The sag is shallower
+// now so there is a real fall left to make, and the returns are under one.
+constexpr int32_t kDeathBApexMm[kDeathBBounces] = {185, 50};
+constexpr int kDeathBIntervalKeys[kDeathBBounces] = {22, 11};
+constexpr int32_t kDeathBImpactDipMm[kDeathBBounces] = {62, 20};
+constexpr int kDeathBSagKeys[3] = {26, 62, 104};    // the three sag stations
+// PER STATION, and increasing: it sags a little, hauls itself back; sags
+// further, hauls back less; sags furthest, and that one is the last. Index [2]
+// is the deepest and therefore the scale everything else is a fraction of --
+// the old array listed three numbers and READ only [1], which is the kind of
+// table that looks like a knob and is not one.
+constexpr int32_t kDeathBSagMm[3] = {80, 170, 240};
+constexpr int32_t kDeathBSagMaxMm = 240;   // == kDeathBSagMm[2], the curve's scale
 constexpr int kDeathBLetGoKey = 132;      // the last recovery fails: the drop
 constexpr int kDeathBDropKeys = 26;
 constexpr int kDeathBTailKeys = 104;
