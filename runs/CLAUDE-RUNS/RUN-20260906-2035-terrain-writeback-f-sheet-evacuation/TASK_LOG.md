@@ -3211,3 +3211,35 @@ island checks changing.
 **Fmax NOT predicted.** Stage A sits INSIDE the current gating seam, so a family
 change is likely; per M6 it will be reported with its family named and no causal
 claim unless the family matches.
+
+## THE MUTATION CAMPAIGN IS DONE AT 12 OF 14, AND THE OTHER TWO ARE OUT OF SCOPE
+
+**22.10-1** (slot-only identity — both generation terms dropped from
+`c2t_idok_c`) → `a_sample_claim` fires. Fifth consecutive structural catch, and
+a STRONGER mutation than item 3 which removed only one half: it fires on the
+claim invariant rather than on V03/V04's stimulus, and it fires earlier.
+
+Restored, **541 checks**, exe 00:27:12 against source 00:26:23.
+
+**The remaining two are out of scope for this block, not skipped:**
+
+* **13** namespace reopen before one external adapter acknowledges — the owner
+  block HAS no adapter-ack port. It is an integration test, and P0-C is what
+  creates the context for it.
+* **14** force old broken CLUT4 / alpha / nearest / global-binding behaviour —
+  those laws live in `palette_res`, `bilerp_lane` and `tmu_plan`. A different
+  block's campaign.
+
+**What the campaign actually produced** is not "the design is correct". It is a
+measured map of WHICH KINDS OF DEFECT THE SUITE CAN AND CANNOT SEE:
+
+* corrupted VALUES → caught by bench checks (items 2, 6, 8, 10);
+* broken ORDERING, PARTITIONS and CREDIT → caught by in-RTL invariants
+  (items 1, 4, 7, 9, 11 — `a_sample_claim`, `a_reject_partition_t`,
+  `a_p22_cbi_implies_crs`, `a_cmb_reserved`, `a_out_reserved`);
+* wrong TIMING with right values → **caught by nothing**, until case 24.
+
+Item 5 escaped all 538 checks because no invariant stated WHEN publication may
+happen relative to the write. That gap is closed, and its first fix escaped too
+by watching `ev_commits_o` — a counter that tracks the C4 stage valid, not the
+commit bitplane. Two blind spots found in one mutation.
