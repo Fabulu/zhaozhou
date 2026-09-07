@@ -2609,3 +2609,32 @@ the spec scopes elsewhere, and it is one call site away.
 Stated plainly rather than described as "implemented", because the comment that
 started this whole thread -- `vertex RGB: lit, tinted and ALREADY FOGGED` --
 was itself a description of a stage that did not exist.
+
+## §22.8, two more states — one already covered, one newly tested
+
+**"Exercise an empty body with a pending queue read, the exact state the old
+occupancy omitted"** — ALREADY COVERED, and I checked before writing anything.
+`texture_v3rq_directed` was built for exactly this: its header carries the
+three-edge counterexample (`rp_q` advances when the read is ISSUED, so the entry
+leaves `body_occ_c` an edge before it reaches a head register) and line 109
+asserts `zero_cycles == 0`, with line 142 the streaming form. Writing a second
+test for it would have been duplicated work dressed as coverage.
+
+**"Reset with work in each pipeline location" + "a killed or reset context must
+not write back into its successor" (§6.3)** — NEW, case 23. Traffic runs with
+COMBINE and output both held shut so owners pile up mid-pipeline, half of them
+with one of two sources returned; the case then asserts that state genuinely
+EXISTS (`ev_live_o > 0`, `ev_quiet_o == 0`) before resetting, because a reset
+test on an idle block proves nothing and passes anyway.
+
+After the reset it injects a return for a PRE-RESET owner — a slot and
+generation that were legitimate moments earlier, distinguished by nothing except
+that their owner no longer exists. No output, no admission. Then it admits and
+completes a fresh owner, so the refusals above cannot be a block that simply
+died.
+
+**533 checks**, up from 526.
+
+The ghost's rejection rests on the same current-membership term V04 already
+proved necessary by mutation, so the mechanism has been fire-tested even though
+this case was not re-mutated.
