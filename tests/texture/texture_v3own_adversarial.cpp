@@ -648,6 +648,86 @@ int main(int argc, char** argv) {
                 (s.emitted.empty() || s.emitted[0].ctx == ctx_of(9500)) ? 1 : 0);
   }
 
+  hdr("case 4f (V05): the same schedule on the AUX and FINAL lanes");
+  // =========================================================================
+  // V05 asks for stale-after-retirement "TMU, AUX and FINAL separately".
+  // Case 4e covers TMU. The ruling names the three publications separately for
+  // a reason -- they have different acceptance predicates and different
+  // rejection counters -- so a lane is not covered by its neighbour passing.
+  //
+  // AUX rejection lands in ev_err_stale_o; FINAL in ev_err_final_o
+  // (c2f_bad_c = c1f_v_q && !c2f_acc_c).
+  {
+    // ---- AUX ----
+    Ob s(dut);
+    s.reset();
+    s.out_ready = false;
+    uint16_t o = s.admit(ctx_of(9600), 0x9);      // sample 0 + AUX
+    s.issue_tmu(o, 0);
+    s.issue_aux(o);
+    s.ret_tmu(o, 0, mkres(o * 4 + 0));
+    s.ret_aux(o, mkres(o * 4 + 3));
+    s.idle(40);
+    const uint32_t stale_before  = dut->ev_err_stale_o;
+    const uint32_t commit_before = dut->ev_commits_o;
+
+    s.ret_aux(o, mkres(0xA0A));                   // captured while LIVE ...
+    s.out_ready = true;                           // ... retires on its C2
+    s.idle(60);
+
+    zhao::check(dut->ev_err_stale_o > stale_before,
+                "V05/AUX a late AUX return is refused once authority has ended",
+                1, dut->ev_err_stale_o > stale_before ? 1 : 0);
+    zhao::check(dut->ev_commits_o == commit_before,
+                "V05/AUX and it commits nothing", commit_before,
+                dut->ev_commits_o);
+    zhao::check(s.emitted.size() == 1,
+                "V05/AUX the owner emits exactly once and is not resurrected",
+                1, s.emitted.size());
+  }
+  {
+    // ---- FINAL ----
+    Ob s(dut);
+    s.reset();
+    s.auto_fin = false;
+    s.fin_manual = true;
+    s.out_ready = false;
+    uint16_t o = s.admit(ctx_of(9700), 0x1);
+    s.issue_tmu(o, 0);
+    s.ret_tmu(o, 0, mkres(o * 4 + 0));
+    s.idle(30);
+    zhao::check(s.combined.size() == 1, "V05/FINAL owner reached COMBINE", 1,
+                s.combined.size());
+
+    // the real final, driven by hand
+    dut->fin_valid_i = 1;
+    dut->fin_owner_i = o;
+    dut->fin_result_i = final_of(o);
+    s.step();
+    dut->fin_valid_i = 0;
+    s.idle(10);
+
+    const uint32_t final_before = dut->ev_err_final_o;
+
+    // a DUPLICATE final captured while the owner is still live ...
+    dut->fin_valid_i = 1;
+    dut->fin_owner_i = o;
+    dut->fin_result_i = mkres(0xF0F);
+    s.step();
+    dut->fin_valid_i = 0;
+    s.out_ready = true;                           // ... retires on its C2
+    s.idle(60);
+
+    zhao::check(dut->ev_err_final_o > final_before,
+                "V05/FINAL a late FINAL return is refused once authority has "
+                "ended", 1, dut->ev_err_final_o > final_before ? 1 : 0);
+    zhao::check(s.emitted.size() == 1,
+                "V05/FINAL the owner emits exactly once", 1, s.emitted.size());
+    zhao::check(s.emitted.empty() || s.emitted[0].res == final_of(o),
+                "V05/FINAL carrying the REAL final result, not the late one", 1,
+                (s.emitted.empty() || s.emitted[0].res == final_of(o)) ? 1 : 0);
+  }
+
   hdr("case 5/6: unsolicited -- required-but-not-issued, and not-required");
   // =========================================================================
   {
