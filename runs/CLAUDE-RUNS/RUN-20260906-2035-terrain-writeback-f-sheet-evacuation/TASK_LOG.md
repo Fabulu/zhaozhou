@@ -2883,3 +2883,39 @@ Fmax deliberately unpredicted, with the reasons recorded — the standalone bloc
 grew 159 ALM, an independent dispatch→FRAGROB family near −2 ns still exists, and
 docket M1's seed noise is diluted by composition but not abolished. What counts
 as a good result is stated in advance so it cannot be rationalised afterwards.
+
+## THE ISLAND FIT LANDED — P0-B is worth +12 MHz in composition
+
+`@p0b-island`, 9,364 s. **Reported Fmax 66.77 → 78.80 (+12.03, +18%).**
+ALM 13,601 → **13,615 (+14)**. Registers +114, M10K 36 → 37, DSP unchanged.
+Worst-path slack −3.243 → −2.690.
+
+**The prediction held**: the worst path no longer ends at `c_m.raddr_a`. All four
+worst paths now run `rcp24_svc|c_pend[7] -> perspuv_svc|e_num_*`.
+
+**+12 MHz clears the bar I set in advance** — §4.3f pre-registered "under ~2 MHz
+is movement, not improvement" — and it is 2.6× docket M1's 4.70 MHz seed band.
+The standalone fit could not have shown this: there, the same change looked like
+−3.57 MHz inside a 4.70 MHz noise band.
+
+**The area result is the genuine surprise.** The standalone block grew +159 ALM
+for the register; the composed island grew **+14**. Placement absorbed almost all
+of it. A leaf fit priced the change at ELEVEN TIMES its cost in situ — the
+opposite of the usual direction, and a concrete argument for the brief's
+insistence on composed measurement.
+
+**What did not change is the launch point.** Every worst path still starts at
+`c_pend[7]`, the round-robin eligibility scan; only the destination moved. §5.2's
+two-level arbitration is now the sanctioned next step on evidence.
+
+**Still failing the budget:** 13,615 ALM is 2.06× nominal, 1.82× redline, 1.72×
+the standalone sum, unmoved because the area did not move. Timing improved, size
+did not. And `status: ok` on a LABELLED row does not mean the gates passed —
+variant rows are not rule-checked (`v3own@v3-full` is `ok` at 5,678 against
+`max_alms: 1800`). Recorded so nobody reads that field as a pass.
+
+**A stale file nearly became a claim.** My first `raddr_a` count read
+`zhao_texture_island_top.setup.rpt` — 16:30, the PREVIOUS island fit. The
+labelled run writes `zhao_texture_island_top@p0b-island.setup.rpt`, a different
+file. The mtime check caught it. Second time today that comparing timestamps
+before believing a number was the thing that worked.
