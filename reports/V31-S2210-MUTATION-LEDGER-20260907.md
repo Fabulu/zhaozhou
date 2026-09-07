@@ -97,18 +97,36 @@ WHICH BITS are set stops the machine in the first case of the suite; breaking
 WHEN they are set changed nothing any check could see. Severity of the source
 edit is no guide to detectability — only the observable is.
 
+### `&& !fwd_t_hit_c` deleted from `c2t_acc_c`. A second return for a source already
+claimed in the shadow of C1's snapshot is no longer refused.
+
+Caught by the RTL's own §19.7 partition assertion:
+
+    %Error: zhao_texture_v3own.sv:2068: Assertion failed in
+      TOP.zhao_texture_v3own.a_reject_partition_t: 'assert' failed.
+
+That assertion requires exactly one of {range, stale, unsol, dup, accept} to
+fire per valid C1 beat. Without forwarding a beat is simultaneously a duplicate
+and an acceptance, so the partition breaks before any output does. A behavioural
+catch, not a compile error — the design elaborated and ran.
+
+Worth noting where the detector lived: this one was caught by an invariant
+inside the RTL rather than by a bench check. Assertions that state a STRUCTURAL
+law catch mutations no output-comparison would reach, because they fire at the
+moment the law breaks rather than at the end of the transaction — which is
+exactly what item 5 escaped through.
+
 ## NOT yet demonstrated — stated so the gap is visible
 
 1. slot-only identity for external validation
 2. truncate membership subtraction before rejecting upper bits
-4. remove recent-claim forwarding
 7. omit combine_reserved on local candidate insertion
 9. pop a candidate without downstream storage credit
 11. advance F without a reserved packet slot
 13. reopen the namespace before one external adapter acknowledges
 14. force old broken CLUT4, alpha, nearest, or global-binding behaviour
 
-**Six of fourteen.**
+**Seven of fourteen.**
 
 ## Related mutations run today outside §22.10's list
 
