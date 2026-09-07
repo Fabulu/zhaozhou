@@ -354,7 +354,74 @@ better at all.
   nearest path started decoding the same day. An honest measurement of what is
   there, not of what is finished.
 
-### 4.3f THE P0-B REFIT — PENDING, and this is the before-picture
+### 4.3f THE P0-B REFIT — LANDED. Reported Fmax 66.77 -> 78.80, ALM +14
+
+`zhao_texture_island_top@p0b-island`, commit `04275f44`, digest `c9283ca728dd`,
+9,364 s. One change in the fifteen island sources: `zhao_raster_rcp24_svc`'s S1
+registered issue record.
+
+| | before (4.3e) | after | change |
+|---|---|---|---|
+| ALM | 13,601 | **13,615** | **+14** |
+| registers | 23,181 | 23,295 | +114 |
+| M10K | 36 | 37 | +1 |
+| DSP | 17 | 17 | — |
+| reported Fmax | 66.77 | **78.80** | **+12.03 (+18%)** |
+| worst path slack | −3.243 | **−2.690** | +0.553 ns |
+
+**THE PREDICTION HELD.** The worst path no longer ends at `c_m.raddr_a`. It is
+now, for the top four paths alike:
+
+    -2.690  zhao_raster_rcp24_svc:u_rcp|c_pend[7]
+              -> zhao_raster_perspuv_svc:u_persp|e_num_v[13][17]
+
+**+12 MHz is a real improvement, and it was pre-registered as such.** §4.3f's
+before-picture set the bar in advance: *"any Fmax movement under ~2 MHz should be
+reported as movement, not as improvement."* 12.03 MHz is six times that bar and
+2.6× docket M1's 4.70 MHz seed-noise band. This is the composed measurement
+doing the job the standalone fit could not.
+
+**THE AREA RESULT IS THE SURPRISE.** The standalone block grew **+159 ALM** for
+its register; the composed island grew **+14**. The register's cost was almost
+entirely absorbed by placement once the block sat among its neighbours. That is
+the opposite of the usual direction and it is exactly why the brief insists on
+composed measurement: a leaf fit priced this change at eleven times what it
+actually costs in situ.
+
+**WHAT DID NOT CHANGE: the launch point.** All four worst paths still START at
+`c_pend[7]` — the round-robin eligibility scan. Only the destination moved, from
+the context RAM's address port to perspuv's numerator registers. §5.2 predicted
+this shape and names the next move:
+
+> If the remaining local eligibility search itself is still too slow, use
+> two-level arbitration: small fixed context groups supply registered heads,
+> then a central round-robin selects among those heads.
+
+That is now the sanctioned next step, on evidence rather than on a guess.
+
+### Against the benchmarks
+
+13,615 ALM is **2.06× nominal (6,600)**, **1.82× redline (7,500)**, **1.72× the
+standalone sum (7,913)** — essentially unmoved from 4.3e, because the area did
+not move. **The island still fails its resource budget by a wide margin**, and
+the +12 MHz does nothing about that. Timing improved; size did not.
+
+**`status: ok` on this row does NOT mean the gates passed.** Labelled variant
+rows are not rule-checked — `zhao_texture_v3own@v3-full` carries `status: ok`
+with 5,678 ALM against a `max_alms: 1800`. The unlabelled `zhao_texture_island_top`
+row is the one that reports `failed:structure`, and nothing here changes that.
+
+### A stale file nearly became a claim
+
+The first `raddr_a` count run against this result read
+`blockpaths/zhao_texture_island_top.setup.rpt` — timestamped **16:30**, from the
+PREVIOUS island fit. The current run writes
+`blockpaths/zhao_texture_island_top@p0b-island.setup.rpt`, a different file,
+because the row is labelled. Checking the mtime is what caught it, and CLAUDE.md
+names the failure exactly: *never compare a current file to an old measurement*.
+Every number above is from the labelled report.
+
+### 4.3f-pre THE BEFORE-PICTURE, as written before the result
 
 Written BEFORE the result, so the comparison cannot be arranged after the fact.
 The fit is `zhao_texture_island_top@p0b-island`, running at the time of writing.
