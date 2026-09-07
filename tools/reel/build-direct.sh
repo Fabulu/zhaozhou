@@ -22,6 +22,8 @@ Targets:
              trajectory dump, decode_pose -> CSV, for Direction 5 §2a)
   mband      manafold-bandprobe.exe (pass 8: the committed antenna band
              cross-section profile, read off the COMPILED MESH, for §2b)
+  mnodule    manafold-nodule.exe (pass 12: the committed PER-NODULE
+             INDEPENDENCE gate, Direction 9 §2, with two failable legs)
   all        all four core executables
 EOF
 }
@@ -44,7 +46,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|all)
       TARGET="$1"
       shift
       ;;
@@ -195,6 +197,12 @@ build_mc2proto() {
   "$CXX" "${FLAGS[@]}" "$T/manafold_c2proto.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-c2proto.exe"
 }
 
+build_mnodule() {
+  printf '%s
+' "LD manafold-nodule"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_nodule.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-nodule.exe"
+}
+
 build_mhinge() {
   printf '%s\n' "LD manafold-hinge-traj"
   "$CXX" "${FLAGS[@]}" "$T/manafold_hinge_traj.cpp" "${LIBOBJS[@]}" \
@@ -209,6 +217,7 @@ case "$TARGET" in
   mprobe) build_mprobe ;;
   mmeshcheck) build_mmeshcheck ;;
   mhinge) build_mhinge ;;
+  mnodule) build_mnodule ;;
   mband) build_mband ;;
   mc2proto) build_mc2proto ;;
   all)

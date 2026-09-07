@@ -109,11 +109,31 @@ inline int32_t sinp(int f, int keys, int cycles, int32_t phase16 = 0) {
   return zref::fx_sin(zref::angle16{a}).raw;
 }
 
+/** PASS 12 (Direction 9 SS2) -- THE PER-NODULE OFFSETS: where each ball GOES.
+ *
+ *  Millimetres, creature-relative, one 3D offset per nodule. All zero is the
+ *  identity and is BIT-IDENTICAL to the pass-11 pose -- the solve inside
+ *  loop_pose early-outs on all-zero, so that guarantee is structural rather
+ *  than a rounding hope. +y is up, +x is forward (the face's side), +z is the
+ *  creature's left.
+ */
+struct NoduleOffsets {
+  int32_t ax = 0, ay = 0, az = 0;  // nodule A -- the lower-front ball
+  int32_t bx = 0, by = 0, bz = 0;  // nodule B -- the peak
+  int32_t cx = 0, cy = 0, cz = 0;  // nodule C -- the upper-rear ball
+};
+
 /** The per-key quat accumulator (mirrors zixx's Rig; bodies differ). */
 struct Rig {
   zc::quat16 q[kBoneCount];
+  // PASS 12: the nodule targets ride the rig rather than loop_pose's argument
+  // list. antenna_knead sets them and loop_pose consumes them, which is the
+  // ordering every clip already uses -- so not one call site changes, and a
+  // clip that never touches them poses exactly as it did before.
+  NoduleOffsets nod;
   void reset() {
     for (int b = 0; b < kBoneCount; ++b) q[b] = zc::quat16_identity();
+    nod = NoduleOffsets{};
   }
   void write(zc::Clip& c, int f) const {
     for (int b = 0; b < kBoneCount; ++b)
@@ -170,6 +190,43 @@ struct HingePlay {
   int32_t tilt_c = 0, yaw_c = 0;
 };
 
+/** Turn the span leaving `local`'s bone so it points at `target` instead of
+ *  where it points now, and advance `p` to the span's new END POINT.
+ *
+ *  THIS IS THE CLOSURE'S OWN AIM PRIMITIVE, reused verbatim at three more
+ *  stations -- which is the whole reason the nodule solve is closed-form and
+ *  the loop still closes by construction. `Q` is the span's WORLD orientation
+ *  before the correction, `p` its start; the span runs `len` along Q's own +y.
+ *  Because Q = Q_parent * local, post-multiplying `local` by the correction
+ *  gives exactly Q' = Q_parent * local * C, so the fix is local to ONE bone and
+ *  every ancestor is untouched.
+ *
+ *  Two stages, exactly as the pass-6 C.4 closure fix: the in-plane swing about
+ *  z, then the out-of-plane lift about x in the frame that swing produced,
+ *  where the target's x component is zero by construction. No iteration, no IK.
+ *
+ *  WARNING -- THE SPAN DOES NOT STRETCH. The end lands along the direction of
+ *  the target at exactly `len`. See kNoduleOffsetMaxMm for what that costs. */
+inline void nodule_aim(zc::quat16& local, zc::quat16& Q, int32_t len,
+                       int32_t& px, int32_t& py, int32_t& pz,
+                       int32_t tx, int32_t ty, int32_t tz) {
+  int32_t vx, vy, vz;
+  quat_rot_vec(quat_conj(Q), tx - px, ty - py, tz - pz, vx, vy, vz);
+  const int32_t aim_z = angle16_of(vx, vy);
+  int32_t wx, wy, wz;
+  quat_rot_vec(quat_conj(quat_z(aim_z)), vx, vy, vz, wx, wy, wz);
+  (void)wx;
+  const int32_t aim_x = angle16_of(-wz, wy);
+  const zc::quat16 corr = quat_mul(quat_z(aim_z), quat_x(aim_x));
+  local = quat_mul(local, corr);
+  Q = quat_mul(Q, corr);
+  int32_t dx, dy, dz;
+  quat_rot_vec(Q, 0, len, 0, dx, dy, dz);
+  px += dx;
+  py += dy;
+  pz += dz;
+}
+
 inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32_t c_pm,
                       int32_t tilt_a16 = 0, int32_t d_play_a16 = 0,
                       int32_t tilt_b_a16 = 0, int32_t tilt_c_a16 = 0,
@@ -210,6 +267,62 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   g.q[kBHingeA] = quat_mul(g.q[kBHingeA], loc_a);
   g.q[kBHingeB] = quat_mul(g.q[kBHingeB], loc_b);
   g.q[kBHingeC] = quat_mul(g.q[kBHingeC], loc_c);
+  // ---- PASS 12: THE NODULE SOLVE (Direction 9 SS2) ------------------------
+  // Runs BEFORE the closure walk, so the closure sees the nodule rotations and
+  // still lands the return arm -- the same ordering rule antenna_knead already
+  // depends on, for the same reason.
+  //
+  // Each nodule's TARGET is its CARRIED position plus its offset: solve A, and
+  // B's position has already moved because A brought its section with it. That
+  // is the owner's sentence made arithmetic -- "all the nodules should be able
+  // to move individually AND BRING THE ANTENNAE PARTS WITH THEM" -- and it is
+  // why this walks down the chain once rather than treating the three as
+  // independent of each other's carry.
+  //
+  // WHICH BONE CARRIES WHICH NODULE, and it is not the obvious one:
+  //   nodule A is moved by kBNeck   -- P_A = P_JF + (Q_JF*Q_neck)*(0,arc1,0)
+  //   nodule B is moved by kBHingeA -- the span A->B leaves A's frame
+  //   nodule C is moved by kBHingeB -- the span B->C leaves B's frame
+  // A station's own rotation never moves its own ball; it moves the NEXT one.
+  // (kLoopArcMm[0] is 0, so kBJunctionF and kBNeck share a pivot and the span
+  // to A is a single 680 mm run in Q_JF*Q_neck's frame.)
+  //
+  // The all-zero early-out is the bit-identity guarantee: a clip that authors
+  // no offsets takes not one extra arithmetic operation, so pass 11's accepted
+  // antenna pose is reproduced exactly rather than approximately.
+  {
+    const NoduleOffsets& nd = g.nod;
+    if ((nd.ax | nd.ay | nd.az | nd.bx | nd.by | nd.bz | nd.cx | nd.cy | nd.cz) !=
+        0) {
+      const auto cl = [](int32_t v, int32_t lim) {
+        return v > lim ? lim : (v < -lim ? -lim : v);
+      };
+      int32_t nx = kLoopTubeXMm, ny = kLoopNeckExitYMm, nz = 0;
+      zc::quat16 NQ = quat_mul(g.q[kBJunctionF], g.q[kBNeck]);
+      int32_t ex, ey, ez;
+      // span 1: junction+neck -> nodule A
+      quat_rot_vec(NQ, 0, kLoopArcMm[1], 0, ex, ey, ez);
+      nodule_aim(g.q[kBNeck], NQ, kLoopArcMm[1], nx, ny, nz,
+                 nx + ex + cl(nd.ax, kNoduleOffsetMaxMm[0]),
+                 ny + ey + cl(nd.ay, kNoduleOffsetMaxMm[1]),
+                 nz + ez + cl(nd.az, kNoduleOffsetMaxMm[2]));
+      // span 2: nodule A -> nodule B
+      NQ = quat_mul(NQ, g.q[kBHingeA]);
+      quat_rot_vec(NQ, 0, kLoopArcMm[2], 0, ex, ey, ez);
+      nodule_aim(g.q[kBHingeA], NQ, kLoopArcMm[2], nx, ny, nz,
+                 nx + ex + cl(nd.bx, kNoduleOffsetMaxMm[0]),
+                 ny + ey + cl(nd.by, kNoduleOffsetMaxMm[1]),
+                 nz + ez + cl(nd.bz, kNoduleOffsetMaxMm[2]));
+      // span 3: nodule B -> nodule C
+      NQ = quat_mul(NQ, g.q[kBHingeB]);
+      quat_rot_vec(NQ, 0, kLoopArcMm[3], 0, ex, ey, ez);
+      nodule_aim(g.q[kBHingeB], NQ, kLoopArcMm[3], nx, ny, nz,
+                 nx + ex + cl(nd.cx, kNoduleOffsetMaxMm[0]),
+                 ny + ey + cl(nd.cy, kNoduleOffsetMaxMm[1]),
+                 nz + ez + cl(nd.cz, kNoduleOffsetMaxMm[2]));
+    }
+  }
+
   // ---- the closure aim, in 3D: quaternion-walk the chain to hinge D
   // exactly as the pose composes it (yaw, tilt AND any knead rotations
   // already sitting on the junction/neck/hinge bones), then choose D's
@@ -500,8 +613,19 @@ inline int32_t hover_at(int f, int keys, int32_t base_mm, int32_t amp_a_mm,
  *  frame in, same pose out. */
 inline void hinge_play(HingePlay& hp, int f, int keys, int cyc) {
   if (cyc < 1) cyc = 1;
-  const int tcyc = cyc * kHingeTiltCycDiv > 0 ? cyc * kHingeTiltCycDiv : 1;
-  const int ycyc = cyc * kHingeYawCycDiv > 0 ? cyc * kHingeYawCycDiv : 1;
+  // PASS 12 (D4): the rates are PERIODS IN KEYS now, not multipliers of the
+  // caller's cycle count. `cyc` is still taken -- it keeps the signature and
+  // every call site unchanged -- but it no longer sets the rate, because
+  // multiplying it by 3 and 5 is what put a 3.9 Hz tilt and a 6.5 Hz yaw on
+  // every station of the idle. See kHingeTiltPerKeys.
+  //
+  // Integer cycle counts across `keys` are what makes the layer loop
+  // seamlessly, so the division is deliberate and the floor of 1 is the
+  // short-clip case (curious at 90 keys gets one yaw cycle, not a fraction
+  // of one, which would step at the loop point).
+  const int tcyc = keys / kHingeTiltPerKeys > 0 ? keys / kHingeTiltPerKeys : 1;
+  const int ycyc = keys / kHingeYawPerKeys > 0 ? keys / kHingeYawPerKeys : 1;
+  (void)cyc;
   int32_t t[4], y[4];
   for (int st = 0; st < 4; ++st) {
     const int32_t ph = -kHingePhaseStepA16 * st;
@@ -832,7 +956,47 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
  *  now: kBLoopBase2's rotation slides the closure's ANCHOR POINT along the
  *  body surface, and the return arm re-aims at it. No geometry is skinned to
  *  the bone; the effect is entirely through the aim. */
+/** PASS 12 (Direction 9 SS2) -- the always-on nodule schedule.
+ *
+ *  NINE INDEPENDENT TRACKS: three nodules, three axes, each on its own period
+ *  from kNodulePerKeys and its own amplitude from kNoduleAmpMm. Because the
+ *  periods are mutually prime, the configuration the owner named -- "the middle
+ *  one might go down while the other two swing up" -- arises on its own, along
+ *  with every other configuration, instead of being one authored pose that
+ *  would read as a loop.
+ *
+ *  This is the difference from every previous pass: those drove one envelope
+ *  through per-station LAGS, which makes three copies of one curve. Nine
+ *  clocks make three independent nodules.
+ *
+ *  Integer cycle counts across `keys` keep the loop seamless; the floor of 1 is
+ *  the short-clip case. */
+inline NoduleOffsets nodule_schedule(uint32_t slot, int keys, int f) {
+  NoduleOffsets n;
+  const int32_t gain =
+      slot < static_cast<uint32_t>(kNoduleClipSlots) ? kNoduleClipPm[slot] : 800;
+  if (gain <= 0) return n;
+  const auto trk = [&](int nod, int axis) {
+    const int per = kNodulePerKeys[nod][axis];
+    const int cyc = keys / per > 0 ? keys / per : 1;
+    const int32_t amp = kNoduleAmpMm[nod][axis] * gain / 1000;
+    return static_cast<int32_t>(
+        (static_cast<int64_t>(amp) *
+         sinp(f, keys, cyc, static_cast<int32_t>(0x1000 * (nod * 3 + axis)))) >>
+        16);
+  };
+  n.ax = trk(0, 0); n.ay = trk(0, 1); n.az = trk(0, 2);
+  n.bx = trk(1, 0); n.by = trk(1, 1); n.bz = trk(1, 2);
+  n.cx = trk(2, 0); n.cy = trk(2, 1); n.cz = trk(2, 2);
+  return n;
+}
+
 inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f) {
+  // PASS 12: the nodule targets for this key. Set here because antenna_knead
+  // already runs before every clip's loop_pose call, which is where they are
+  // consumed. A clip whose kNoduleClipPm entry is 0 gets all-zero offsets and
+  // therefore the exact pass-11 pose.
+  g.nod = nodule_schedule(slot, keys, f);
   // every authored slot reads its own gain (pass 5: the guard was `< 14`,
   // which orphaned index 14 -- the damage clip silently ran at 700, 2.8x
   // its authored 250, and the owner's knob did nothing)
@@ -1661,6 +1825,77 @@ inline zc::Clip build_still() {
   for (int f = 0; f < 2; ++f) {
     g.reset();
     loop_rest(g);
+    face_rest(g);
+    g.write(c, f);
+  }
+  return c;
+}
+
+/** PASS 12 -- THE NODULE-SOLO DIAGNOSTIC CLIP (Direction 9 SS2), slot 16.
+ *
+ *  This clip IS the acceptance evidence for the headline item, and it exists
+ *  because four passes reported antenna motion and the owner said the bones
+ *  were never added. It shows one thing per segment, at the offset ceiling,
+ *  with everything else at exact rest:
+ *
+ *    seg 0  nodule A alone: a vertical arc, then a lateral one
+ *    seg 1  nodule B alone: the same two arcs
+ *    seg 2  nodule C alone: the same two arcs
+ *    seg 3  THE OWNER'S CONFIGURATION -- the middle nodule DOWN while the
+ *           outer two swing UP, which is the sentence this whole mechanism
+ *           was built to be able to express.
+ *
+ *  It deliberately runs NO knead layer and NO wobble: the antenna is at rest
+ *  apart from the nodule under test, so anything that moves is the nodule and
+ *  the section it carries. A diagnostic that also breathes proves nothing.
+ *
+ *  `sinp(local, seg, 1)` runs 0 -> +1 -> 0 -> -1 -> 0 across a segment, so
+ *  every segment boundary is exact rest and the clip loops seamlessly. */
+inline zc::Clip build_nodule_solo() {
+  zc::Clip c = clip_shell(16, kNoduleSoloKeys, kHoverHeightMm);
+  Rig g;
+  const int S = kNoduleSoloSegKeys;
+  for (int f = 0; f < kNoduleSoloKeys; ++f) {
+    g.reset();
+    const int seg = f / S;
+    const int lf = f % S;
+    // first half of a segment is the VERTICAL arc, second half the LATERAL --
+    // "Sideways. Up, down." named separately because they are separate axes
+    // and a single diagonal swing would show neither cleanly.
+    const int32_t vert = lf < S / 2
+        ? static_cast<int32_t>((static_cast<int64_t>(kNoduleSoloAmpMm) *
+                                sinp(lf, S / 2, 1)) >> 16)
+        : 0;
+    const int32_t lat = lf >= S / 2
+        ? static_cast<int32_t>((static_cast<int64_t>(kNoduleSoloAmpMm) *
+                                sinp(lf - S / 2, S / 2, 1)) >> 16)
+        : 0;
+    NoduleOffsets n;
+    if (seg == 0) {
+      n.ay = vert; n.az = lat;
+    } else if (seg == 1) {
+      n.by = vert; n.bz = lat;
+    } else if (seg == 2) {
+      n.cy = vert; n.cz = lat;
+    } else {
+      // "the middle one might go down while the other two swing up".
+      // The mix is NOT 1:1 and kNoduleSoloMidPm explains why: offsets are
+      // relative to the CARRIED position, so a middle that drops carries the
+      // rear down with it by more than it drops itself. The middle therefore
+      // takes the smaller share. Ball A's rise is small and that is geometry,
+      // not a bug -- see kNoduleSoloMidPm's note.
+      const int32_t w = static_cast<int32_t>(
+          (static_cast<int64_t>(kNoduleSoloAmpMm) * sinp(lf, S, 1)) >> 16);
+      n.ay = static_cast<int32_t>((static_cast<int64_t>(w) * kNoduleSoloOutPm) / 1000);
+      n.by = -static_cast<int32_t>((static_cast<int64_t>(w) * kNoduleSoloMidPm) / 1000);
+      n.cy = static_cast<int32_t>((static_cast<int64_t>(w) * kNoduleSoloOutPm) / 1000);
+      // ...and A gets its sideways swing too, because a vertical request moves
+      // it 3 mm and the segment must still show three nodules doing three
+      // different things.
+      n.az = static_cast<int32_t>((static_cast<int64_t>(w) * kNoduleSoloOutPm) / 1000);
+    }
+    g.nod = n;
+    loop_pose(g, 1000, 1000, 1000, 1000);
     face_rest(g);
     g.write(c, f);
   }

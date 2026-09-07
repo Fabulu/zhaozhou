@@ -65,9 +65,40 @@ constexpr int kBodyPoleSegments = 16;  // uniform: the segment-taper zipper cut 
 // PASS 3 (Direction 3 §4: "a bit more tear shape"): the upper taper pulls
 // harder and the crown lean grows — judged beside the side sheet at
 // matched height.
-constexpr int kBodyTaperPm[kBodyRings] = {1000, 1008, 1015, 1012, 1000, 968,
-                                          915,  838,  730,  595,  450};
-constexpr int kBodyLeanXMm[kBodyRings] = {0, 0, 0, 0, 8, 20, 40, 70, 105, 145, 180};
+//
+// ---- PASS 12 -- THE BODY IS ROUND (Direction 9 §5) ------------------------
+// "this is new for you, the body has to be round, not teardrop shaped after
+// all."
+//
+// A new instruction and a shape change to the creature, reversing the teardrop
+// that has stood since pass 1. Both tables go to identity: every ring keeps the
+// sphere's own radius, and no ring leans. What ships is a MATHEMATICALLY ROUND
+// ball; whether it READS round on screen is a separate question answered by
+// kVStretchPm (the viewport is anisotropic, gotcha §1) and checked at native by
+// eye, never by measuring a rendered silhouette.
+//
+// THE TABLES STAY. This is not "the teardrop knobs are retired" -- they are the
+// owner's control over the body's profile and they are how a future direction
+// re-shapes it without a code change (CLAUDE.md rule 6: never remove the
+// owner's control in the name of fidelity). They are simply authored to
+// identity now, which is exactly what make_body's own header already documents
+// as their neutral value: "1000/0 everywhere = the pure sphere (the S4 gate
+// ball)".
+//
+// ⚠ WHAT ELSE MOVED, because a round body moves every surface-anchored value
+// with it (the plan named this as A1's risk, and D4 measured one of them):
+//   * the antenna's rear re-entry -- the crown is now FATTER, so the return arm
+//     crosses the surface further out and the same angular churn sweeps a
+//     longer arc. D4 measured the visible junction's wander growing from 264 mm
+//     to 317 mm under this change alone. That is why A3's drive fix lands in
+//     the same pass and is not deferrable.
+//   * kEyeXMm and the eye standoff -- Wave 2a's, and §12.3 turns the round body
+//     from a cosmetic change into a PREREQUISITE: on a ball the outward surface
+//     normal is trivially the direction from the centre, which is what makes
+//     the eye parts able to turn to face along it.
+constexpr int kBodyTaperPm[kBodyRings] = {1000, 1000, 1000, 1000, 1000, 1000,
+                                          1000, 1000, 1000, 1000, 1000};
+constexpr int kBodyLeanXMm[kBodyRings] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 // ---- the three hinge balls (the drawn nodes the loop articulates around) --
 // PASS 3 (R12): the BALLS are the thickest points on the antenna — raised
@@ -943,13 +974,171 @@ constexpr int32_t kHingeYawAmpA16 = 1100;    // ~6.0 deg of twist, per hinge
 // neck, A, B, C. The peak is the loosest joint and the neck the stiffest, which
 // is what "guided" means here: the further from the head, the more play.
 constexpr int32_t kHingeAxisScalePm[4] = {620, 1000, 1150, 880};
-// The tilt and the yaw run at their own rates, both slower than the fold, so
-// the three axes never line up into a single swing.
-constexpr int kHingeTiltCycDiv = 3;
-constexpr int kHingeYawCycDiv = 5;
+// THE RATES. PASS 12 (D9 SS1, third owner report; Wave-0 discriminator D4).
+//
+// These were MULTIPLIERS on the caller's cycle count -- 3 and 5 -- under a
+// comment claiming both axes ran "slower than the fold". They ran three and
+// five times FASTER, and the comment had shipped that way since pass 9.
+//
+// What that arithmetic actually produced, on the idle: whole_wobble passes
+// cyc = kIdleKeys / kWobblePerAKeys = 300/23 = 13, so the tilt ran 13*3 = 39
+// cycles and the yaw 13*5 = 65 cycles across a 300-key, TEN SECOND loop --
+// a 3.9 Hz tilt and a 6.5 Hz yaw, on every station, in every clip that goes
+// through loop_alive or whole_wobble. That is a buzz, not an articulation,
+// and it is the owner's "spazzes out like crazy".
+//
+// D4 MEASURED IT, and 07-MOTION-STYLE's "ablate before you blame" rule was
+// applied before anything was changed: zeroing the two amplitudes cut the
+// return arm's reversal density from 94.7 to 38.0 per 100 keys and its
+// root-local path from 17.0 m to 7.7 m per loop, while leaving its RANGE
+// essentially untouched (561 mm against 566). The churn is this layer; the
+// silhouette is not.
+//
+// So the amplitudes are KEPT -- Direction 7 SS1 asked for these axes by name
+// and D9 SS9 wants more motion, not less -- and only the RATE changes. They
+// are now expressed as PERIODS IN KEYS, like every other timing constant in
+// this file (kBobPeriodAKeys, kWobblePerAKeys, kCompressPeriodKeys). A
+// multiplier of a multiplier is what hid a 6.5 Hz buzz behind a comment
+// saying "slower"; a period in keys is a number an author can read off the
+// screen and check.
+//
+// The values are 07-MOTION-STYLE SS3's own life-layer band: "two slow
+// incommensurate travelling waves, periods around 46 and 102 frames". Keys
+// are held two sim ticks, so 23 keys IS 46 frames and 51 keys IS 102.
+// They are also kWobblePerAKeys and kWobblePerBKeys exactly -- the life
+// layer and the wobble now breathe on the same two incommensurate clocks
+// instead of the life layer racing five times ahead of it.
+constexpr int kHingeTiltPerKeys = 23;   // 46 frames on screen
+constexpr int kHingeYawPerKeys = 51;    // 102 frames on screen
 // Per-station phase step. 0x2C00 of 0x10000 is about a sixth of a cycle: enough
 // that the wave visibly travels, small enough that the chain stays one object.
 constexpr int32_t kHingePhaseStepA16 = 0x2C00;
+
+// ==== PASS 12 -- EVERY NODULE MOVES INDIVIDUALLY (Direction 9 SS2) =========
+//
+// "the antennae animation still is incredibly awful, almost nonexistent. NONE
+//  OF THE BONES I SPECIFICALLY ASKED FOR WERE ADDED. All the nodules should be
+//  able to move individually and bring the antennae parts with them. The middle
+//  one might go down while the other two swing up. Sideways. Up, down. Any kind
+//  of configuration. With that ability, the creature folds the mana."
+//
+// Asked about six times. Four passes reported antenna motion and the owner says
+// the bones were never added. THIS IS WHY THEY WERE NOT, and the reason is
+// structural rather than a missing constant:
+//
+//   `loop_pose` drives per-station ROTATIONS on a chain, and a chain rotation
+//   drags everything downstream with it. "The middle one goes DOWN while the
+//   other two swing UP" is expressible in rotations only as a fragile
+//   composition of compensating angles -- rotate B down, then rotate C back up
+//   by more than B took away, then fix the closure. Every pass that tuned
+//   oscillator amplitudes was tuning a shape that cannot express the request,
+//   which is why they all read as ONE WOBBLING HOSE however hard they were
+//   pushed. Direction 7 SS1's per-station tilt/yaw axes (pass 6 C.1) made the
+//   hose three-dimensional; they did not make the nodules independent.
+//
+// THE OWNER'S MENTAL MODEL IS POSITION, NOT ROTATION. He is describing where
+// the balls GO. So the authoring quantity here is a 3D POSITION OFFSET per
+// nodule, and the rotations are SOLVED from it. See `nodule_aim` and the
+// nodule solve inside `loop_pose` (manafold_clips.h).
+//
+// WARNING -- THE HONEST LIMIT, stated here because a gate cannot state it and
+// a plate must show it: the bones are RIGID and their bind lengths are fixed,
+// so a nodule lands ALONG the direction of its target at exactly span length,
+// not necessarily AT the target. Offsets perpendicular to the span move the
+// ball nearly the full distance; offsets ALONG the span move it hardly at all,
+// because that would require the span to lengthen. Direction 9 SS13's stretchy
+// spans are the other half of this, which is exactly what SS13.4 says --
+// "stretchy spans are what let the nodules go where they are told". The
+// independence probe measures the POSED BALL, so the gate is honest about the
+// shortfall rather than measuring the request.
+//
+// The ceiling is per axis, in mm. Chosen against the spans they bend: the
+// A->B span is 340 mm and B->C is 380, so 200 mm of offset is a large but
+// bounded swing -- roughly 36 degrees at the shortest span -- which keeps
+// D7 SS1's "it has to look convincingly like they're still on guided hinges".
+// The closure sweep runs the WHOLE envelope, swept and not cornered (gotcha
+// SS17: the eye lab's collision sat mid-ramp while both endpoints looked
+// clean).
+constexpr int32_t kNoduleOffsetMaxMm[3] = {200, 200, 200};  // x, y, z
+
+// The always-on nodule schedule. THREE INDEPENDENT NODULES MEANS THREE
+// INDEPENDENT CLOCKS -- if they shared one they would be phase-offset copies of
+// a single curve, which is the exact thing pass 6 C.2 fixed once at the
+// rotation level and which the owner is still looking at. The periods are
+// mutually prime in keys so no two stations ever line up twice in the same
+// place, and each axis of each nodule reads its own.
+//
+// PERIODS ARE IN KEYS and none is faster than 07-MOTION-STYLE SS3's life-layer
+// band (46 and 102 frames = 23 and 51 keys). D4 found a 6.5 Hz buzz hiding
+// behind a cycle multiplier this pass; this table is where the same mistake
+// would go next, so it is authored in the units that make it checkable.
+constexpr int kNodulePerKeys[3][3] = {  // [nodule A,B,C][axis x,y,z]
+    {29, 43, 37},
+    {53, 31, 47},
+    {41, 59, 23},
+};
+// Amplitudes in mm, per nodule per axis. Authored by eye: the PEAK (nodule B)
+// is the loosest and swings most, the front (A) is held by the neck, the rear
+// (C) is held by the closure -- the same reasoning as kHingeAxisScalePm, on a
+// quantity the owner can read: millimetres of ball travel.
+constexpr int32_t kNoduleAmpMm[3][3] = {
+    { 70,  95,  60},
+    { 95, 130,  85},
+    { 80, 110,  70},
+};
+// Per-clip gain in per-mille of the amplitudes above, indexed by knead slot.
+// Zero switches the whole layer off for a clip without touching a schedule.
+// Ordered to match kKneadClipPm so the two read together. Slot 7 is the
+// 2-key form-diagnostic still and is deliberately 0: a form plate must show
+// the REST shape.
+constexpr int32_t kNoduleClipPm[15] = {800, 700, 1000, 850, 900, 750, 800, 0,
+                                       950, 900, 600,  1000, 1000, 900, 500};
+constexpr int kNoduleClipSlots =
+    static_cast<int>(sizeof(kNoduleClipPm) / sizeof(kNoduleClipPm[0]));
+
+// ---- THE SOLO DIAGNOSTIC (Direction 9 SS2's own acceptance bar) -----------
+// "Do not report this as done again without showing each nodule moving
+//  independently, in a plate the owner can look at."
+//
+// Slot 16, four segments of kNoduleSoloSegKeys: nodule A alone (a vertical arc
+// then a lateral one), then B alone, then C alone, then the owner's own
+// configuration -- THE MIDDLE ONE DOWN WHILE THE OUTER TWO SWING UP. Each
+// segment starts and ends at exact rest, so "alone" is unambiguous and the
+// clip loops seamlessly.
+//
+// The amplitude is the ceiling itself: a diagnostic shows the envelope, not a
+// tasteful fraction of it. The shipped clips use kNoduleAmpMm.
+constexpr int kNoduleSoloSegKeys = 48;
+constexpr int kNoduleSoloKeys = kNoduleSoloSegKeys * 4;
+constexpr int32_t kNoduleSoloAmpMm = 200;
+
+// ---- SEGMENT 3's MIX, and the geometry that forces it --------------------
+// Segment 3 is the owner's own sentence: "the middle one might go down while
+// the other two swing up". Authoring it revealed two facts about a rigid
+// chain that no amount of tuning removes, and both belong here rather than in
+// a findings file nobody reads while editing:
+//
+// 1. OFFSETS ARE RELATIVE TO THE CARRIED POSITION, which is what makes a
+//    nodule bring its section with it. So when the middle (B) is pushed DOWN,
+//    the rear (C) is carried down with it -- by MORE than B moves, because C
+//    hangs 380 mm further out on the span B rotates. Measured on the first
+//    build: B -180 mm, C -213 mm, with C's own offset already at +200. To get
+//    the rear ABOVE rest while the middle goes below it, the middle's push has
+//    to be the smaller of the two. That is not a workaround, it is what a
+//    linked chain does, and it is why this is a named mix and not 1:1.
+//
+// 2. NODULE A CANNOT MOVE VERTICALLY, at all, and never will without SS13's
+//    stretchy spans. Measured rest geometry: the junction sits at (90, 664)
+//    and ball A at (0, 1337, 29), so the span between them is 679 mm long
+//    pointing (-0.13, +0.99, +0.04) -- STRAIGHT UP. Moving A up or down means
+//    lengthening or shortening that span, and bones are rigid. A 200 mm
+//    vertical request moves ball A by 3 mm. The SAME 200 mm sideways moves it
+//    198 mm, because sideways is perpendicular to the span.
+//    ⚠ This is the single clearest argument for Direction 9 SS13, and it is
+//    why SS13.4 says stretchy spans are what let the nodules go where they are
+//    told. It is stated on the acceptance plate, not hidden behind a gate.
+constexpr int32_t kNoduleSoloMidPm = 300;   // the middle's share of the swing
+constexpr int32_t kNoduleSoloOutPm = 1000;  // the outers' share
 // the gaze (the pupil pivots sweep the stars across the lenses)
 // PASS 3 (F4, Direction 3 §2): star containment — the star plus its white
 // ring must never cross the lens ink at any authored gaze extreme. The

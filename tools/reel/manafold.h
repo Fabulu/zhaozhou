@@ -147,6 +147,11 @@ inline const zc::CreatureType& type() {
     bank.clips.push_back(build_trick());       // slot 13 (pass 3: headstand)
     bank.clips.push_back(build_damage());      // slot 14 (pass 4: directional hits)
     bank.clips.push_back(lab::build_manalab());  // slot 15 (LANE-ONLY: Direction 6)
+    // slot 16 (PASS 12): the nodule-solo diagnostic. Direction 9 SS2 makes the
+    // plate built from this clip the acceptance bar for the per-nodule bones,
+    // so it is COMMITTED rather than a scratch subject -- the same rule that
+    // put manafold-still and the fogprobes in the bank permanently.
+    bank.clips.push_back(build_nodule_solo());
 
     zc::CreatureType type;
     type.type_id = 3;  // 1 watchdog, 2 zixxtrixx, 3 manafold
