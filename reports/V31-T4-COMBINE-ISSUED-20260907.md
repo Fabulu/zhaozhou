@@ -131,3 +131,38 @@ single-block run long past preflight.
 **A stale prohibition is not free caution.** It silently removes work from every
 session that obeys it, and it is invisible precisely because obeying it looks
 like diligence.
+
+
+---
+
+## The +64 is confirmed, and so is the claim that the scaffolding is invisible
+
+*Read mid-flight from the refit's own `blockfit.map.rpt`, after `quartus_map`
+finished and while the fitter was still placing. Read-only.*
+
+Two things checked rather than assumed:
+
+**Quartus honours `` `ifndef SYNTHESIS ``.** T2 step 1 added shadow window
+registers and identity assertions to this same file, guarded that way, on the
+stated grounds that they *"must not move the next fit's numbers -- otherwise the
+before/after that decides T2 is contaminated by the scaffolding built to check
+it."* That was a claim about a tool's behaviour, so it was tested: the map report
+contains **zero** occurrences of `sh_alloc_gen_q`, `sh_retire_gen_q`,
+`tkt_chk_q` or `gen_chk_s`, against **64** of `crs_q`. The guard works and the
+comparison is clean.
+
+**T4's register cost is exactly what was declared.** This report predicted
+*"+64 flip-flops. Two per-owner facts now exist where one did."*
+
+| | MAP registers |
+|---|---:|
+| previous fit `19bd8bd2` (fence + credit) | 4,246 |
+| this refit (adds T4 + the fence rewrite) | **4,310** |
+| delta | **+64** |
+
+Exactly `crs_q`, and nothing else — which also says the fence rewrite added no
+registers, as expected of a change that only moves a select out of a loop.
+
+A cost stated in advance and then measured at exactly that value is worth more
+than the 64 flops it describes: it means the next claim about this block's area
+can be believed.
