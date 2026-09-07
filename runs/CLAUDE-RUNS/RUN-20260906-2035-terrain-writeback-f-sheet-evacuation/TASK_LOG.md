@@ -972,3 +972,25 @@ that do not instantiate the projector.
 
 It was also NON-TEXTURE work under the owner's texture-first direction, so
 freeing the lane is the instructed behaviour rather than a convenience.
+
+## 2026-09-07 -- position before the geom_project result
+
+quartus_sta is up, so the fit is in its last stage. Written BEFORE reading it.
+
+WHERE I AM: texture lane, T1 functionally complete (next-state credit,
+registered permission, drain FSM, quiet_c out of the admission cone, case 19
+extended with §13.2's two DRAIN/RESET properties, six v3 lanes green). T1's
+remaining deliverable is the scoped before/after timing classification, which
+needs a zhao_texture_v3own fit -- queued for the moment this fit releases.
+
+THE BEFORE-PICTURE IS ALREADY RECORDED so the comparison is like-for-like:
+  core -> core  1,510 paths  -1.225  ->  89.09 MHz
+  core -> port    239 paths  -3.194  ->  75.79 MHz   (all ten worst end at the
+  port -> core    204 paths  -1.181  ->  89.44 MHz    admission outputs)
+  port -> port     47 paths  -1.104  ->  90.06 MHz
+
+WHEN THE ROW LANDS: it judges project_core's registered product against a
+prediction on record -- 6.611 / 9.295 ns, both inside 10 ns, so the second half
+should land under 10 and the block should move off 61.09 MHz. If it does not,
+the split was in the wrong place and the chain needs a cut between Add118 and
+the saturation. That is non-texture work and will be RECORDED, not pursued.
