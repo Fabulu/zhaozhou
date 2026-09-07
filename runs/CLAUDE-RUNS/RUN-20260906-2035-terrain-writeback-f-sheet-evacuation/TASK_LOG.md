@@ -2672,3 +2672,39 @@ busy with the island fit. Recorded as untested rather than assumed fixed.
 and `UNACCOUNTED: zhao_raster_fog` — a good instrument doing its job on the
 person who just added them. Both registered as counted production blocks;
 200 modules, 75 tops, 58 inside, 67 excluded, check OK.
+
+## V05 fully closed — the write-enable PIN, not just its consequence
+
+My own earlier note said *"the pins need a probe port"*. They did not. A
+`/* verilator public */` marker is a COMMENT: Quartus never sees it, no port is
+added, no area is spent, and simulation can read the flop directly. All three
+bank enables — `c3t_we_q`, `c3a_we_q`, `c3f_we_q` — are now observable.
+
+Case 4i drives an owner to full retirement through the output, then returns a
+late packet on its exact handle and watches the enable across 20 cycles. It
+never asserts. That separates "the write was never enabled" from "the write was
+enabled and the data happened to be identical", which no consequence-based check
+can do.
+
+**With the non-vacuity guard that matters:** the same pin is then observed HIGH
+on a legitimate return. Without it the case would pass against a signal that is
+simply always zero — precision at zero being a tell, not a result.
+
+**538 checks.**
+
+### Three build traps in one small change, all documented ones
+
+1. The `verilator public` marker changed the model's shape and the incremental
+   verilate left a STALE generated file referencing `tail_q`.
+2. Deleting the verilate output directory to fix that removed the `.cmake` file
+   **build.ninja's own regeneration depends on** — so ninja could not rebuild
+   the graph that would have fixed it. Exactly CLAUDE.md's trap, caused by me,
+   and its documented fix worked: regenerate through `cmake --preset`.
+3. Then the exe was stale twice more, and both times the tell was the same:
+   `case 4i` did not print and the count stayed at 533. Comparing exe mtime
+   against source mtime is what settled it — 19:34 exe against a 19:55 source
+   the first time, 20:01 against 19:55 the second.
+
+The lesson is not "be careful". It is that **the check is cheap and the failure
+is silent**: a stale binary reports the old number with total confidence, and
+today that has now happened four separate times.
