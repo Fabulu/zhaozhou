@@ -416,6 +416,15 @@ module zhao_texture_v3own #(
 
   wire [OWNERW-1:0] win_retire_tkt_c = {sh_retire_gen_q, emit_q};
 
+  // GROUP C's primitive: what generation does a slot currently carry?
+  // Straight from the identity `a_win_gen_of_slot` asserts every cycle --
+  // `alloc_gen` for a slot already allocated this pass, `alloc_gen - 1` for one
+  // still ahead. No array read, no 64-way select: one comparison and a mux.
+  function automatic logic [GENW-1:0] win_gen_of_slot(input logic [SLOTW-1:0] sl);
+    win_gen_of_slot = (sl < tail_q) ? sh_alloc_gen_q
+                                    : GENW'(sh_alloc_gen_q - GENW'(1));
+  endfunction
+
   // 6.1: live(t) = unsigned_14(t - retire_ticket) < used.
   function automatic logic win_live(input logic [OWNERW-1:0] tkt);
     win_live = (((tkt - win_retire_tkt_c) & OWNERW'({OWNERW{1'b1}}))
@@ -1442,7 +1451,7 @@ module zhao_texture_v3own #(
   end
   always_ff @(posedge clk) begin
     if (fetch_fire_c) fin_rd_addr_q <= fetch_q;
-    if (fetch_fire_c) g0_owner_q <= {fetch_q, gen_q[fetch_q]};
+    if (fetch_fire_c) g0_owner_q <= {fetch_q, win_gen_of_slot(fetch_q)};
     g1_owner_q <= g0_owner_q;
     g2_owner_q <= g1_owner_q;
     fres_cap_q <= fres_rd_c;
