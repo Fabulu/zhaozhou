@@ -2136,6 +2136,17 @@ verilate(test_raster_fog_directed
 add_test(NAME raster_fog_directed COMMAND test_raster_fog_directed)
 set_tests_properties(raster_fog_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# The geometry half of D-5: the per-vertex fog factor, differential against
+# zref_fog's frozen law rather than against the spec prose.
+add_executable(test_geom_fogfactor_directed geometry/geom_fogfactor_directed.cpp)
+target_link_libraries(test_geom_fogfactor_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_fogfactor_directed
+  PREFIX Vzhao_geom_fogfactor
+  TOP_MODULE zhao_geom_fogfactor
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_fogfactor.sv)
+add_test(NAME geom_fogfactor_directed COMMAND test_geom_fogfactor_directed)
+set_tests_properties(geom_fogfactor_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
 set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
