@@ -38,21 +38,36 @@
 // ---------------------------------------------------------------------------
 // WHAT COMPOSING FOUND -- six things, none of them visible to a unit suite
 // ---------------------------------------------------------------------------
-//  1. A page loaded into this world layer NEVER BECOMES GROUND. A claim sets
-//     `mips_stale`, so the loader's completion parks the entry in ST_MIPGEN,
-//     and only a SECOND completion moves it to RESIDENT_CLEAN -- the only state
-//     a lookup hits on. `zhao_terrain_pageloader.sv` is the only `fin` producer
-//     in the tree, so nothing can send that second completion. The machine as
-//     assembled draws no terrain at all. (phase C)
+//  1. CLOSED 2026-09-07. A page loaded into this world layer never became
+//     GROUND: a claim sets `mips_stale`, so the loader's completion parked the
+//     entry in ST_MIPGEN, and only a SECOND completion moves it to
+//     RESIDENT_CLEAN -- the only state a lookup hits on. Nothing in the tree
+//     could send it, and the machine as assembled drew no terrain at all.
 //
-//     THE CAUSE HAS MOVED ONCE ALREADY, WHICH IS WORTH RECORDING. This finding
-//     first read "zhao_terrain_mipgen has no slot, generation, epoch or
-//     completion port". That was true when written and false within hours --
-//     the ports landed the same day. The hole is now one step further back:
-//     MIPGEN consumes a lattice through `fine_valid_i`, and nothing turns a
-//     resident page slot into that stream. A defect description is a
-//     measurement with a date on it, and this one was re-checked rather than
-//     re-quoted.
+//     THE CAUSE MOVED TWICE BEFORE IT WAS FIXED, which is the part worth
+//     keeping. It first read "zhao_terrain_mipgen has no slot, generation,
+//     epoch or completion port" -- true when written, false within hours,
+//     because those ports landed the same day. It then read "nothing turns a
+//     resident page slot into a lattice", which was true and was the real hole.
+//     A defect description is a measurement with a date on it, and this one was
+//     re-checked twice rather than re-quoted.
+//
+//     `zhao_terrain_pagestream` reads layers A, B and C out of the slot and
+//     emits the 33x33 lattice; `zhao_terrain_mipfeed` runs it twice, one pass
+//     per surface, and hands the samples to `zhao_terrain_mipgen`; MIPGEN's
+//     `done` is the second completion. Phase C now measures eight pages loaded
+//     and EIGHT RESIDENT with the harness playing nothing, and phase C2 takes
+//     the chain out again and watches all eight go back to parked -- because a
+//     fix whose absence was never re-measured is a claim, not evidence.
+//
+//     TWO THINGS THE CHAIN LEARNED FROM THE BENCH RATHER THAN FROM A DOCUMENT.
+//     MIPGEN's `done_o` pulses while MIPFEED is still two states away from
+//     looking at it, so the pulse has to be LATCHED -- the first version hung on
+//     page one with 578 mip writes already done. And TERRAIN.RESIDENCY
+//     validates the CRC on EVERY completion, not only the loader's, so a mip
+//     completion carrying zero is a CRC FAILURE: 16 lattices, 17,424 samples,
+//     4,624 mip writes, eight CRC failures, zero resident. Every block had done
+//     its job and the page still was not ground.
 //
 //  2. ONE DIRECTORY MUTATION ON THE LOOKUP CYCLE DEADLOCKS THE FRAME.
 //     TERRAIN.SEQ offers its lookup for one cycle with no `ready`;
@@ -333,7 +348,14 @@ struct World {
     d.cfg_journal_bytes_i = kJournalBytes;
     d.cfg_load_budget_i = 32;
     d.cfg_dir_gate_i = 1;
-    d.cfg_mipgen_fin_i = 0;   // OFF by default: the machine exactly as assembled
+    // OFF by default: the harness's stand-in is no longer the machine as
+    // assembled, because the machine can now do this itself. Phase C2 turns it
+    // on with the real chain OFF, which is what keeps the old measurement
+    // reproducible instead of merely remembered.
+    d.cfg_mipgen_fin_i = 0;
+    // ON by default: PAGESTREAM -> MIPFEED -> MIPGEN is real RTL that is really
+    // instantiated, so the default is the machine as it now stands.
+    d.cfg_mipfeed_i = 1;
     d.cfg_wb_barrier_i = 0;   // OFF by default: likewise
     // ON by default, and that asymmetry is deliberate. The two knobs above
     // stand in for machinery that DOES NOT EXIST in the tree, so their default
@@ -764,14 +786,22 @@ void settle(World& w, uint64_t cycles = 600000) {
   // watched instead is WORK DONE: burst counts, write-beat counts and retired
   // pages. A machine that is doing something moves one of them.
   uint32_t quiet = 0;
-  uint32_t prev[6] = {0, 0, 0, 0, 0, 0};
+  uint32_t prev[8] = {0, 0, 0, 0, 0, 0, 0, 0};
   for (uint64_t i = 0; i < cycles; ++i) {
     zhao::tick(d);
     d.eval();
-    const uint32_t now[6] = {d.arb_c0_bursts, d.arb_c1_bursts, d.h_pool_writes,
-                             d.h_jnl_writes,  d.pl_pages_loaded, d.wb_sheets_written};
+    // THE MIP CHAIN IS WORK TOO, and it is invisible in the six signals above:
+    // TERRAIN.PAGESTREAM reads through its own played engine, so no arbiter
+    // burst and no pool write moves while it runs. A settle that watched only
+    // the original six returned with two lattice passes still in flight and
+    // every later phase then measured a machine that had not finished -- the
+    // same "nothing is asserted is not nothing is happening" failure this
+    // function was rewritten for once already, reached through new blocks.
+    const uint32_t now[8] = {d.arb_c0_bursts, d.arb_c1_bursts, d.h_pool_writes,
+                             d.h_jnl_writes,  d.pl_pages_loaded, d.wb_sheets_written,
+                             d.ps_bursts,     d.mf_samples};
     bool moved = false;
-    for (int k = 0; k < 6; ++k) { if (now[k] != prev[k]) moved = true; prev[k] = now[k]; }
+    for (int k = 0; k < 8; ++k) { if (now[k] != prev[k]) moved = true; prev[k] = now[k]; }
     // THE QUEUE COUNTS AS BUSY. Without `lq_level` here a settle could return
     // with jobs still queued and no block asserting anything -- the same
     // "nothing is asserted is not nothing is happening" failure this function
@@ -997,23 +1027,48 @@ int main(int argc, char** argv) {
     // same one TERRAIN.PATCH needs, and it is a BLOCK, not a wire.
     // identity -- and `zhao_terrain_pageloader.sv` is the only `fin` producer
     // in `fpga/rtl/` and emits exactly one per page.
-    defect(d.r_resident == 8,
-           "the composed world layer never calls a loaded page RESIDENT, so it can never "
-           "draw any ground at all",
-           "zhao_terrain_residency_v2.sv:530 the claim writes mips_stale = 1; :551-556 the "
-           "loader's fin then lands in ST_MIPGEN and does NOT increment resident_o; :557-562 "
-           "only a SECOND fin clears MIPGEN. THE EVIDENCE LINE HAS MOVED and the older one "
-           "is kept here as a warning: it said zhao_terrain_mipgen had no slot, gen, epoch "
-           "or completion port, which was true when written and false within hours -- those "
-           "ports landed the same day. The block is no longer the missing piece. What is "
-           "missing now is one step further back: MIPGEN consumes a 33x33 lattice through "
-           "fine_valid_i/fine_h_i, and NOTHING in fpga/rtl turns a resident page slot into "
-           "that stream. Layers A, B and C are 2,178 bytes each at page offsets 64, 2242 "
-           "and 4420 -- two of the three not 64-byte aligned -- and something has to read "
-           "them out of the pool and compose them. That streamer is a BLOCK, not a wire, "
-           "and TERRAIN.PATCH needs the same one.");
-    std::printf("   eight pages loaded, %u resident: every entry is parked in ST_MIPGEN\n",
-                d.r_resident);
+    ck(d.r_resident == 8,
+       "C the composed world layer CALLS A LOADED PAGE RESIDENT -- the machine can turn "
+       "eight fetched, CRC-verified pages into ground, which until 2026-09-07 it could not "
+       "do at all",
+       8, d.r_resident);
+
+    // AND IT WAS THE BLOCKS THAT DID IT, NOT THE BENCH. `h_mipgen_fins` is the
+    // harness's stand-in; it must be ZERO here, or "resident" above would be
+    // measuring the knob rather than the machine.
+    ck(d.h_mipgen_fins == 0,
+       "C with no completion played by the harness at all", 0, d.h_mipgen_fins);
+    ck(d.mf_pages_mipped == 8,
+       "C TERRAIN.MIPFEED completed the mips for all eight pages", 8, d.mf_pages_mipped);
+    ck(d.mf_pages_faulted == 0, "C and faulted none", 0, d.mf_pages_faulted);
+    ck(d.h_mipreq_drops == 0,
+       "C and the bench's mip-request glue lost none -- a drop here would reappear as a "
+       "page that never becomes ground, which is the defect this chain removed",
+       0, d.h_mipreq_drops);
+
+    // THE SHAPE OF THE WORK, DERIVED. Two passes per page because MIPGEN takes
+    // one 16-bit surface at a time and PAGESTREAM emits three planes at once;
+    // 1,089 samples per pass; 17x17 and 9x9 selections per surface.
+    ck(d.ps_lattices == 16,
+       "C TERRAIN.PAGESTREAM streamed the page TWICE per page -- once for each surface",
+       16, d.ps_lattices);
+    ck(d.mf_samples == 8u * 2u * 1089u,
+       "C and every one of the 17,424 fine samples reached MIPGEN",
+       8 * 2 * 1089, int(d.mf_samples));
+    ck(d.mg_m17_writes == 8u * 2u * 289u,
+       "C MIPGEN selected 289 mip17 vertices per surface, ruling T8's 17x17",
+       8 * 2 * 289, int(d.mg_m17_writes));
+    ck(d.mg_m9_writes == 8u * 2u * 81u,
+       "C and 81 mip9 vertices, T8's 9x9", 8 * 2 * 81, int(d.mg_m9_writes));
+    ck(d.mg_aborts == 0,
+       "C with no scan restarted mid-flight -- a `start` between the two passes would "
+       "send surface 1's samples into surface 0's mip and count an abort here",
+       0, d.mg_aborts);
+    std::printf("   mip chain: %u lattices, %u bursts, %u samples, m17=%u m9=%u aborts=%u\n",
+                d.ps_lattices, d.ps_bursts, d.mf_samples, d.mg_m17_writes, d.mg_m9_writes,
+                d.mg_aborts);
+
+    std::printf("   eight pages loaded, %u resident\n", d.r_resident);
 
     // THE REAL GUARD, in the composed setting. TERRAIN.PAGE_POOL is write-only
     // to TERRAIN.BUILD, so every loader write passes.
@@ -1042,24 +1097,69 @@ int main(int argc, char** argv) {
   }
 
   // =========================================================================
-  // C2 -- THE MISSING LIMB, PLAYED, so the rest of the chain is reachable
+  // C2 -- THE SAME FRAME WITH THE MIP CHAIN TAKEN OUT
   // =========================================================================
-  // Everything from here needs a machine that can call a page ground. The
-  // directory is reset and the cold frame replayed with the harness sending
-  // the mip completion `zhao_terrain_mipgen` has no port for. It is named,
-  // switchable and counted, and the count is asserted -- a stand-in that
-  // silently did nothing would look exactly like a machine that worked.
+  // Phase C says the machine turns eight loaded pages into ground. On its own
+  // that is not evidence that PAGESTREAM -> MIPFEED -> MIPGEN is what did it:
+  // any of a dozen changes since the defect was first measured could have, and
+  // a fix whose absence was never re-measured is a claim.
+  //
+  // So the identical cold frame is replayed twice more on a fresh directory --
+  // once with the real chain OFF and the harness's stand-in OFF too, which
+  // reproduces the original defect exactly, and once with the stand-in ON,
+  // which is what the suite ran against for the day and a half the chain did
+  // not exist. Three numbers, one measurement each.
   {
-    std::printf("\n-- C2: the missing mip completion, played by the harness --\n");
+    std::printf("\n-- C2: the same frame without the mip chain --\n");
+
+    // ---- neither: the defect, reproduced -------------------------------
     w.reset();
-    d.cfg_mipgen_fin_i = 1;
-    coldB = run_frame(w, setA, 8, 32, 0, 0xB1u);
+    d.cfg_mipfeed_i = 0;
+    d.cfg_mipgen_fin_i = 0;
+    d.eval();
+    run_frame(w, setA, 8, 32, 0, 0xB2u);
     settle(w);
-    ck(d.r_resident >= 8, "C2 with the completion played, the pages become ground", 8,
+    const uint32_t resident_none = d.r_resident;
+    ck(resident_none == 0,
+       "C2 with the mip chain removed, NOT ONE of the eight loaded pages becomes ground -- "
+       "the directory parks every entry in ST_MIPGEN waiting for a second completion "
+       "nothing can send. This is the defect this suite carried from 2026-09-06, "
+       "reproduced on demand rather than remembered",
+       0, resident_none);
+    ck(d.mf_pages_mipped == 0,
+       "C2 and the chain really is out of the path -- it mipped nothing at all", 0,
+       d.mf_pages_mipped);
+
+    // ---- the harness's stand-in: what the suite ran against before -----
+    // BOTH KNOBS SET AFTER THE RESET, not before. `World::reset` calls
+    // `config()`, which puts `cfg_mipfeed_i` back to its default of 1 -- so a
+    // version of this that cleared it first measured the REAL chain and
+    // reported zero played completions beside eight resident pages, which is a
+    // correct machine and a meaningless phase.
+    w.reset();
+    d.cfg_mipfeed_i = 0;
+    d.cfg_mipgen_fin_i = 1;
+    d.eval();
+    run_frame(w, setA, 8, 32, 0, 0xB3u);
+    settle(w);
+    ck(d.r_resident >= 8, "C2 with the completion PLAYED, the pages become ground", 8,
        d.r_resident);
     ck(d.h_mipgen_fins >= 8, "C2 and one completion had to be played per page", 8,
        d.h_mipgen_fins);
-    std::printf("   resident=%u after %u played completions\n", d.r_resident, d.h_mipgen_fins);
+    std::printf("   resident: %u with nothing, %u with the harness playing %u completions\n",
+                resident_none, d.r_resident, d.h_mipgen_fins);
+
+    // ---- and back to the machine as it now stands ----------------------
+    // The rest of the file needs a directory that can call a page ground, and
+    // from here it is the BLOCKS that do it.
+    w.reset();
+    d.cfg_mipgen_fin_i = 0;
+    d.cfg_mipfeed_i = 1;
+    d.eval();
+    coldB = run_frame(w, setA, 8, 32, 0, 0xB1u);
+    settle(w);
+    ck(d.r_resident >= 8,
+       "C2 and with the real chain back in, the machine does it itself", 8, d.r_resident);
   }
 
   // =========================================================================

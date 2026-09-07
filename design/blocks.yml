@@ -96,6 +96,9 @@ counter_catalog:
   - compcache_fill_overrun
   - compcache_lat_oob
   - compcache_cs_oob
+  - mipfeed_pages_mipped
+  - mipfeed_pages_faulted
+  - mipfeed_samples
   - pagestream_lattices
   - pagestream_refused
   - pagestream_vertices
@@ -1617,6 +1620,75 @@ blocks:
   # TERRAIN — Mantle (fpga/rtl/terrain)
   # ===========================================================================
 
+  - id: TERRAIN.MIPFEED
+    name: Page mip sequencer
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Sequences TERRAIN.PAGESTREAM and TERRAIN.MIPGEN so a page whose bytes have landed acquires its mips and produces the SECOND completion TERRAIN.RESIDENCY needs before it will call the page RESIDENT. The directory publishes on two completions, not one: a claim sets mips_stale, the loader's fin parks the entry in ST_MIPGEN, and only a second fin reaches RESIDENT_CLEAN -- the only state a lookup hits on. Until this chain existed the composed world layer fetched eight CRC-verified pages and called none of them ground."
+    contract: design/contracts/TERRAIN.MIPFEED.md
+    phase: 6
+    owner_issue: ZH-126
+    inputs: [page_lattice_jobs]
+    outputs: [loader_completions]
+    upstream: [TERRAIN.RESIDENCY, TERRAIN.PAGESTREAM]
+    downstream: [TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.PAGESTREAM]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: "one page's mips per two lattice passes, about 7,088 gpu clocks, against the 6,726 of the page load that precedes it"
+    reference_model: zref::terrain::mipgen
+    tests:
+      directed: tests/terrain/world_composed_directed.cpp
+      random: tests/terrain/world_composed_directed.cpp
+    counters: [mipfeed_pages_mipped, mipfeed_pages_faulted, mipfeed_samples]
+    counter_ports:
+      mipfeed_pages_mipped: pages_mipped_o
+      mipfeed_pages_faulted: pages_faulted_o
+      mipfeed_samples: samples_sent_o
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-07"
+        commit: "a96d0878"
+        evidence: design/contracts/TERRAIN.MIPFEED.md
+      - state: UNIT_VERIFIED
+        date: "2026-09-07"
+        commit: "a96d0878"
+        evidence: tests/terrain/world_composed_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      TWO PASSES, NOT A BUFFER. MIPGEN takes one 16-bit surface at a time and
+      PAGESTREAM emits three planes at once, so one pass produces both surfaces'
+      data and the port can take one of them. Buffering the other is 17,424 bits
+      -- exactly what PAGESTREAM was arranged to avoid -- so the page is
+      streamed twice at about 3,544 clocks a pass. MIPGEN is started ONCE,
+      before the first pass, because its surface counter runs across both; a
+      start between them would send surface 1's samples into surface 0's mip and
+      count an abort, which is the shape of fault that renders as terrain.
+
+      OPEN RULING -- WHICH PLANE IS SURFACE 0. T8 gives the mip law exactly and
+      says a page becomes RESIDENT only after "resident mips complete", but does
+      not say what "top" is at LOAD time. Layer A is sent, because it needs no
+      arithmetic this block has any business owning; compose_top
+      (max(fx(base)+fx(scar), fx(bottom))) is TERRAIN.PATCH's law, and if the
+      ruling picks it the honest change is to take surface 0's samples from
+      TERRAIN.PATCH's compose lane rather than to compute them here. The planes
+      are named constants so the ruling has somewhere to land.
+
+      TWO THINGS THE BENCH TAUGHT IT. MIPGEN's `done_o` pulses while this block
+      is still two states away from looking at it -- the last fine sample is
+      taken on the same cycle PAGESTREAM raises v_last -- so the pulse is
+      LATCHED. The first version hung on page one with 578 mip writes already
+      done and zero pages mipped. And TERRAIN.RESIDENCY validates the CRC on
+      EVERY completion, not only the loader's, so a mip completion carrying zero
+      is a CRC FAILURE: 16 lattices, 17,424 samples, 4,624 mip writes, eight CRC
+      failures, zero resident, every block having done its job. The page's CRC
+      now travels with the request and back out as a TOKEN rather than a claim.
+
   - id: TERRAIN.PAGESTREAM
     name: Page slot to height lattice
     kind: rtl
@@ -1628,8 +1700,8 @@ blocks:
     owner_issue: ZH-126
     inputs: [page_lattice_jobs]
     outputs: [page_lattice_stream]
-    upstream: [TERRAIN.RESIDENCY, MEM.GUARD]
-    downstream: [TERRAIN.MIPGEN, TERRAIN.PATCH]
+    upstream: [TERRAIN.RESIDENCY, MEM.GUARD, TERRAIN.MIPFEED]
+    downstream: [TERRAIN.MIPGEN, TERRAIN.PATCH, TERRAIN.MIPFEED]
     backpressure: ready_valid
     latency: variable
     target_throughput: "one 33x33 lattice per 3,544 gpu clocks measured on the played fabric at 2-cycle read latency; 105 bursts, derived from the layout rather than observed"
@@ -2346,8 +2418,8 @@ blocks:
     owner_issue: ZH-123
     inputs: [patch_claims, loader_completions, deformation_marks]
     outputs: [residency_answers, eviction_writebacks]
-    upstream: [TERRAIN.PATCH, TERRAIN.PAGELOADER, TERRAIN.SEQ, TERRAIN.WRITEBACK]
-    downstream: [TERRAIN.MIPGEN, TERRAIN.LOD, TERRAIN.ISLAND, TERRAIN.WRITEBACK, TERRAIN.PAGESTREAM]
+    upstream: [TERRAIN.PATCH, TERRAIN.PAGELOADER, TERRAIN.SEQ, TERRAIN.WRITEBACK, TERRAIN.MIPFEED]
+    downstream: [TERRAIN.MIPGEN, TERRAIN.LOD, TERRAIN.ISLAND, TERRAIN.WRITEBACK, TERRAIN.PAGESTREAM, TERRAIN.MIPFEED]
     backpressure: ready_valid
     latency: fixed:2
     target_throughput: one mutation or one query per clock
@@ -2383,7 +2455,7 @@ blocks:
     owner_issue: ZH-122
     inputs: [page_height_lattice]
     outputs: [page_height_mips]
-    upstream: [TERRAIN.PATCH, TERRAIN.RESIDENCY, TERRAIN.PAGELOADER, TERRAIN.PAGESTREAM]
+    upstream: [TERRAIN.PATCH, TERRAIN.RESIDENCY, TERRAIN.PAGELOADER, TERRAIN.PAGESTREAM, TERRAIN.MIPFEED]
     downstream: [TERRAIN.LOD]
     backpressure: ready_valid
     latency: fixed:1

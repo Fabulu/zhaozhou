@@ -132,6 +132,15 @@ module tb_terrain_world
     // exactly as assembled, and phase C proves it draws nothing.
     input var logic cfg_mipgen_fin_i,
 
+    // THE BLOCK THAT MAKES THAT COMPLETION REAL. `zhao_terrain_pagestream`
+    // turns the resident slot into a lattice, `zhao_terrain_mipfeed` runs it
+    // twice and hands the samples to `zhao_terrain_mipgen`, and MIPGEN's `done`
+    // becomes the second `fin` the directory has been waiting for. With this
+    // set the machine does it; with it clear the harness plays it as before
+    // (`cfg_mipgen_fin_i`), which is how the two are measured against each
+    // other rather than one being taken on trust.
+    input var logic cfg_mipfeed_i,
+
     // THE BARRIER THAT IS NOT THERE, MADE A KNOB. T4 says a dirty victim's F
     // sheet reaches the journal BEFORE the page that displaces it is written.
     // TERRAIN.SEQ emits the writeback job before the load job and then stops
@@ -397,6 +406,16 @@ module tb_terrain_world
     output var logic [31:0] h_lu_offers,     // lookups TERRAIN.SEQ presented
     output var logic [31:0] h_lu_dropped,    // ...that the directory did not take
     output var logic [31:0] h_mipgen_fins,   // mip completions the harness had to play
+    output var logic [31:0] mf_pages_mipped, // ...and the ones the REAL blocks produced
+    output var logic [31:0] mf_pages_faulted,
+    output var logic [31:0] mf_samples,      // fine samples that reached MIPGEN
+    output var logic [31:0] ps_lattices,     // lattices TERRAIN.PAGESTREAM streamed
+    output var logic [31:0] ps_refused,
+    output var logic [31:0] ps_bursts,
+    output var logic [31:0] mg_m17_writes,   // MIPGEN's own evidence
+    output var logic [31:0] mg_m9_writes,
+    output var logic [31:0] mg_aborts,
+    output var logic [31:0] h_mipreq_drops,  // mip requests the bench's glue lost
     output var logic [31:0] h_pins,          // pins the played engine took responsibility for
     output var logic [31:0] h_pin_drops,     // ...and pins its mirror could not hold
     output var logic [31:0] h_barrier_stalls, // cycles the load job was held for the barrier
@@ -1139,13 +1158,340 @@ module tb_terrain_world
   logic [GENW-1:0]  mg_gen_q;
   logic [31:0]      mg_epoch_q, mg_crc_q;
 
-  assign g_fin_valid  = (pl_fin_valid || mg_pend_q) && mut_open;
+  // =========================================================================
+  // THE REAL SECOND COMPLETION -- PAGESTREAM -> MIPFEED -> MIPGEN
+  // =========================================================================
+  // This is the chain the harness used to stand in for. The trigger is the
+  // same: the loader's completion, ACCEPTED by the directory, with `ok` set.
+  // What follows is different -- the page is actually read, the lattice is
+  // actually streamed twice, and MIPGEN's `done` is the completion, so the
+  // second `fin` now carries evidence rather than a knob's say-so.
+  logic             mf_j_valid, mf_j_ready;
+  logic [SLOTW-1:0] mf_j_slot_q;
+  logic [GENW-1:0]  mf_j_gen_q;
+  logic [31:0]      mf_j_epoch_q, mf_j_src_q, mf_j_crc_q;
+
+  logic             ps_j_valid, ps_j_ready;
+  logic [SLOTW-1:0] ps_j_slot;
+  logic [GENW-1:0]  ps_j_gen;
+  logic [31:0]      ps_j_epoch, ps_j_src;
+
+  logic               ps_v_valid, ps_v_ready, ps_v_last;
+  logic signed [15:0] ps_v_base, ps_v_scar, ps_v_bottom;
+  logic               ps_d_valid, ps_d_ready, ps_d_ok;
+
+  logic             mg_start, mg_fine_valid, mg_fine_ready, mg_done;
+  logic [15:0]      mg_fine_h;
+  logic [SLOTW-1:0] mg_job_slot;
+  logic [GENW-1:0]  mg_job_gen;
+  logic [31:0]      mg_job_epoch;
+
+  logic             mf_fin_valid, mf_fin_ready, mf_fin_ok;
+  logic [SLOTW-1:0] mf_fin_slot;
+  logic [GENW-1:0]  mf_fin_gen;
+  logic [31:0]      mf_fin_epoch, mf_fin_crc;
+  // The mip completion's source id. The directory's `fin` port does not carry
+  // one -- it matches on {slot, gen, epoch} -- so it is read by nothing here
+  // and is kept because the block emits it and a dropped output is worse than
+  // an unread one.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0]      mf_fin_src;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ---- TERRAIN.PAGESTREAM, with its own read engine ----------------------
+  // A SECOND PLAYED READ ENGINE, not a shared one. TERRAIN.WRITEBACK's engine
+  // below is a model of the fabric for ONE client; teaching it to arbitrate two
+  // would put a scheduler in the bench, and a bench that schedules is a bench
+  // whose timing is its own invention. Two engines read the same `vram_mem`,
+  // which is what the real fabric does.
+  // The played engine reads only `valid` and `addr` off the request: it is a
+  // model of the fabric, not of the guard, and the client, length and byte mask
+  // are the OBSERVER's business below.
+  /* verilator lint_off UNUSEDSIGNAL */
+  zhao_guard_req_t psg_req;
+  /* verilator lint_on UNUSEDSIGNAL */
+  zhao_guard_rsp_t psg_rsp;
+  logic            psg_beat_valid, psg_beat_last;
+  logic [63:0]     psg_beat_data;
+
+  // THE PORTS NOTHING HERE CONSUMES, NAMED ANYWAY. Verilator flags an empty
+  // by-name connection, and rightly: `.v_slot_o()` reads as "there is no such
+  // signal" when it means "this bench does not use it". Each one gets a wire
+  // whose name says which instance it came from, and the block below says they
+  // are deliberately unread.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [5:0]        ps_v_vi, ps_v_vj;
+  logic              ps_v_first;
+  logic [SLOTW-1:0]  ps_v_slot, ps_d_slot;
+  logic [GENW-1:0]   ps_v_gen, ps_d_gen;
+  logic [31:0]       ps_v_epoch, ps_v_src, ps_d_epoch, ps_d_src;
+  logic [3:0]        ps_d_verdict;
+  logic [31:0]       ps_vertices, ps_guard_denied, ps_incomplete;
+  logic              ps_idle, mf_idle, mg_busy;
+  logic [SLOTW-1:0]  mg_done_slot;
+  logic [GENW-1:0]   mg_done_gen;
+  logic [31:0]       mg_done_epoch, mg_samples;
+  logic              mg_m17_valid, mg_m9_valid;
+  logic [8:0]        mg_m17_addr;
+  logic [6:0]        mg_m9_addr;
+  logic              mg_m17_surf, mg_m9_surf;
+  logic [15:0]       mg_m17_h, mg_m9_h;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_terrain_pagestream #(
+      .REGION_BASE (POOL_BASE),
+      .REGION_SLOTS(POOL_SLOTS),
+      .SLOTW       (SLOTW),
+      .GENW        (GENW)
+  ) u_ps (
+      .clk  (clk),
+      .rst_n(rst_n),
+
+      .cfg_vram_client_i(ZHAO_CLIENT_TERRAIN_BUILD),
+      .cfg_epoch_i      (cfg_epoch_i),
+
+      .j_valid_i (ps_j_valid),
+      .j_ready_o (ps_j_ready),
+      .j_slot_i  (ps_j_slot),
+      .j_gen_i   (ps_j_gen),
+      .j_epoch_i (ps_j_epoch),
+      .j_src_id_i(ps_j_src),
+
+      .guard_req_o (psg_req),
+      .guard_rsp_i (psg_rsp),
+      .beat_valid_i(psg_beat_valid),
+      .beat_data_i (psg_beat_data),
+      .beat_last_i (psg_beat_last),
+
+      .v_valid_o (ps_v_valid),
+      .v_ready_i (ps_v_ready),
+      .v_base_o  (ps_v_base),
+      .v_scar_o  (ps_v_scar),
+      .v_bottom_o(ps_v_bottom),
+      .v_vi_o    (ps_v_vi),
+      .v_vj_o    (ps_v_vj),
+      .v_first_o (ps_v_first),
+      .v_last_o  (ps_v_last),
+      .v_slot_o  (ps_v_slot),
+      .v_gen_o   (ps_v_gen),
+      .v_epoch_o (ps_v_epoch),
+      .v_src_id_o(ps_v_src),
+
+      .done_valid_o  (ps_d_valid),
+      .done_ready_i  (ps_d_ready),
+      .done_slot_o   (ps_d_slot),
+      .done_gen_o    (ps_d_gen),
+      .done_epoch_o  (ps_d_epoch),
+      .done_ok_o     (ps_d_ok),
+      .done_verdict_o(ps_d_verdict),
+      .done_src_id_o (ps_d_src),
+
+      .lattices_streamed_o(ps_lattices),
+      .lattices_refused_o (ps_refused),
+      .vertices_streamed_o(ps_vertices),
+      .bursts_read_o      (ps_bursts),
+      .guard_denied_o     (ps_guard_denied),
+      .incomplete_o       (ps_incomplete),
+      .idle_o             (ps_idle)
+  );
+
+  zhao_terrain_mipfeed #(
+      .SLOTW(SLOTW),
+      .GENW (GENW)
+  ) u_mf (
+      .clk  (clk),
+      .rst_n(rst_n),
+
+      .j_valid_i (mf_j_valid),
+      .j_ready_o (mf_j_ready),
+      .j_slot_i  (mf_j_slot_q),
+      .j_gen_i   (mf_j_gen_q),
+      .j_epoch_i (mf_j_epoch_q),
+      .j_src_id_i(mf_j_src_q),
+      .j_crc_i   (mf_j_crc_q),
+
+      .ps_valid_o (ps_j_valid),
+      .ps_ready_i (ps_j_ready),
+      .ps_slot_o  (ps_j_slot),
+      .ps_gen_o   (ps_j_gen),
+      .ps_epoch_o (ps_j_epoch),
+      .ps_src_id_o(ps_j_src),
+
+      .v_valid_i (ps_v_valid),
+      .v_ready_o (ps_v_ready),
+      .v_base_i  (ps_v_base),
+      .v_scar_i  (ps_v_scar),
+      .v_bottom_i(ps_v_bottom),
+      .v_last_i  (ps_v_last),
+
+      .ps_done_valid_i(ps_d_valid),
+      .ps_done_ready_o(ps_d_ready),
+      .ps_done_ok_i   (ps_d_ok),
+
+      .mg_start_o     (mg_start),
+      .mg_job_slot_o  (mg_job_slot),
+      .mg_job_gen_o   (mg_job_gen),
+      .mg_job_epoch_o (mg_job_epoch),
+      .mg_fine_valid_o(mg_fine_valid),
+      .mg_fine_ready_i(mg_fine_ready),
+      .mg_fine_h_o    (mg_fine_h),
+      .mg_done_i      (mg_done),
+
+      .fin_valid_o (mf_fin_valid),
+      .fin_ready_i (mf_fin_ready),
+      .fin_slot_o  (mf_fin_slot),
+      .fin_gen_o   (mf_fin_gen),
+      .fin_epoch_o (mf_fin_epoch),
+      .fin_ok_o    (mf_fin_ok),
+      .fin_crc_o   (mf_fin_crc),
+      .fin_src_id_o(mf_fin_src),
+
+      .pages_mipped_o (mf_pages_mipped),
+      .pages_faulted_o(mf_pages_faulted),
+      .samples_sent_o (mf_samples),
+      .idle_o         (mf_idle)
+  );
+
+  zhao_terrain_mipgen #(
+      .SLOTW(SLOTW),
+      .GENW (GENW)
+  ) u_mg (
+      .clk  (clk),
+      .rst_n(rst_n),
+
+      .start_i(mg_start),
+      .busy_o (mg_busy),
+      .done_o (mg_done),
+
+      .job_slot_i (mg_job_slot),
+      .job_gen_i  (mg_job_gen),
+      .job_epoch_i(mg_job_epoch),
+
+      .done_slot_o (mg_done_slot),
+      .done_gen_o  (mg_done_gen),
+      .done_epoch_o(mg_done_epoch),
+
+      .fine_valid_i(mg_fine_valid),
+      .fine_ready_o(mg_fine_ready),
+      .fine_h_i    (mg_fine_h),
+
+      .m17_valid_o(mg_m17_valid),
+      .m17_addr_o (mg_m17_addr),
+      .m17_surf_o (mg_m17_surf),
+      .m17_h_o    (mg_m17_h),
+
+      .m9_valid_o(mg_m9_valid),
+      .m9_addr_o (mg_m9_addr),
+      .m9_surf_o (mg_m9_surf),
+      .m9_h_o    (mg_m9_h),
+
+      .samples_o   (mg_samples),
+      .m17_writes_o(mg_m17_writes),
+      .m9_writes_o (mg_m9_writes),
+      .aborts_o    (mg_aborts)
+  );
+
+  // ---- THE MIP-REQUEST QUEUE, WHICH IS GLUE AND IS A FINDING -------------
+  // Something has to notice that a page has landed and ask for its mips.
+  // Nothing in `fpga/rtl` does: TERRAIN.RESIDENCY moves the entry to ST_MIPGEN
+  // and has no port to ASK for anything, and the loader only reports. So the
+  // trigger is minted here, off the loader's ACCEPTED completion -- and, like
+  // the journal ticket above, that glue is a finding rather than a convenience:
+  // no contract says who owns the mip request.
+  //
+  // IT IS A QUEUE AND NOT A REGISTER, AND THE ARITHMETIC IS WHY. A page load is
+  // 6,726 clocks; two lattice passes are about 7,088. MIPFEED is SLOWER than
+  // the loader that feeds it, so a one-deep pending register drops a request
+  // every time the eighth page beats the seventh's mips -- and the drop would
+  // show as a page that never becomes ground, which is the exact defect this
+  // whole chain was built to remove, reappearing as a bench artefact.
+  //
+  // Eight deep, which is the composed frame, with the drops COUNTED so that a
+  // ninth page cannot go missing quietly.
+  localparam int unsigned MREQD = 8;
+  logic [SLOTW-1:0] mq_slot [MREQD];
+  logic [GENW-1:0]  mq_gen  [MREQD];
+  logic [31:0]      mq_ep   [MREQD];
+  logic [31:0]      mq_src  [MREQD];
+  logic [31:0]      mq_crc  [MREQD];
+  logic [3:0]       mq_wp, mq_rp, mq_lvl;
+
+  assign mf_j_valid  = (mq_lvl != 4'd0);
+  assign mf_j_slot_q = mq_slot[mq_rp[2:0]];
+  assign mf_j_gen_q  = mq_gen [mq_rp[2:0]];
+  assign mf_j_epoch_q = mq_ep [mq_rp[2:0]];
+  assign mf_j_src_q  = mq_src [mq_rp[2:0]];
+  assign mf_j_crc_q  = mq_crc [mq_rp[2:0]];
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      mq_wp          <= 4'd0;
+      mq_rp          <= 4'd0;
+      mq_lvl         <= 4'd0;
+      h_mipreq_drops <= 32'd0;
+      for (int unsigned i = 0; i < MREQD; i++) begin
+        mq_slot[i] <= {SLOTW{1'b0}};
+        mq_gen[i]  <= {GENW{1'b0}};
+        mq_ep[i]   <= 32'd0;
+        mq_src[i]  <= 32'd0;
+        mq_crc[i]  <= 32'd0;
+      end
+    end else begin
+      if (stat_clear) h_mipreq_drops <= 32'd0;
+
+      unique case ({(pl_fin_valid && pl_fin_ready && pl_fin_ok && cfg_mipfeed_i
+                     && (mq_lvl != 4'(MREQD))),
+                    (mf_j_valid && mf_j_ready)})
+        2'b10:   mq_lvl <= mq_lvl + 4'd1;
+        2'b01:   mq_lvl <= mq_lvl - 4'd1;
+        default: mq_lvl <= mq_lvl;
+      endcase
+
+      if (pl_fin_valid && pl_fin_ready && pl_fin_ok && cfg_mipfeed_i) begin
+        if (mq_lvl != 4'(MREQD)) begin
+          mq_slot[mq_wp[2:0]] <= pl_fin_slot_w[SLOTW-1:0];
+          mq_gen [mq_wp[2:0]] <= pl_fin_gen;
+          mq_ep  [mq_wp[2:0]] <= pl_fin_epoch;
+          mq_src [mq_wp[2:0]] <= pl_fin_src_id;
+          mq_crc [mq_wp[2:0]] <= pl_fin_crc;
+          mq_wp               <= (mq_wp == 4'(MREQD - 1)) ? 4'd0 : mq_wp + 4'd1;
+        end else begin
+          h_mipreq_drops <= (stat_clear ? 32'd0 : h_mipreq_drops) + 32'd1;
+        end
+      end
+
+      if (mf_j_valid && mf_j_ready)
+        mq_rp <= (mq_rp == 4'(MREQD - 1)) ? 4'd0 : mq_rp + 4'd1;
+    end
+  end
+
+  // ---- the completion port, now with THREE claimants ---------------------
+  // Loader first, then the REAL mip completion, then the played one. The played
+  // arm is last on purpose: with `cfg_mipfeed_i` set it should never fire, and
+  // `h_mipgen_fins` staying at zero while `mf_pages_mipped` rises is the
+  // suite's evidence that the machine did it rather than the bench.
+  assign g_fin_valid  = (pl_fin_valid || mf_fin_valid || mg_pend_q) && mut_open;
   assign pl_fin_ready = pl_fin_valid && g_fin_ready && mut_open;
-  assign g_fin_slot   = pl_fin_valid ? pl_fin_slot_w[SLOTW-1:0] : mg_slot_q;
-  assign g_fin_gen    = pl_fin_valid ? pl_fin_gen   : mg_gen_q;
-  assign g_fin_epoch  = pl_fin_valid ? pl_fin_epoch : mg_epoch_q;
-  assign g_fin_ok     = pl_fin_valid ? pl_fin_ok    : 1'b1;
-  assign g_fin_crc    = pl_fin_valid ? pl_fin_crc   : mg_crc_q;
+  assign mf_fin_ready = !pl_fin_valid && mf_fin_valid && g_fin_ready && mut_open;
+
+  assign g_fin_slot   = pl_fin_valid ? pl_fin_slot_w[SLOTW-1:0]
+                      : mf_fin_valid ? mf_fin_slot : mg_slot_q;
+  assign g_fin_gen    = pl_fin_valid ? pl_fin_gen   : mf_fin_valid ? mf_fin_gen   : mg_gen_q;
+  assign g_fin_epoch  = pl_fin_valid ? pl_fin_epoch : mf_fin_valid ? mf_fin_epoch : mg_epoch_q;
+  assign g_fin_ok     = pl_fin_valid ? pl_fin_ok    : mf_fin_valid ? mf_fin_ok    : 1'b1;
+  // THE MIP COMPLETION CARRIES A CRC IT DID NOT COMPUTE, and the first version
+  // of this line sent zero on the grounds that inventing one would be a number
+  // that looks like evidence and is not. TERRAIN.RESIDENCY disagreed, loudly:
+  // it validates the CRC on EVERY completion it accepts, not only the loader's,
+  // so the composed suite came back with 16 lattices streamed, 17,424 samples
+  // delivered, 4,624 mip17 writes -- and EIGHT CRC FAILURES with zero pages
+  // resident. Every block had done its job and the page still was not ground.
+  //
+  // So the page's CRC travels with the mip REQUEST and back out on the
+  // completion, as a token rather than as a claim: TERRAIN.PAGELOADER checked
+  // the body, nothing in the mip chain re-reads it, and the directory wants the
+  // identity it already recorded.
+  assign g_fin_crc    = pl_fin_valid ? pl_fin_crc   : mf_fin_valid ? mf_fin_crc   : mg_crc_q;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -1158,7 +1504,7 @@ module tb_terrain_world
     end else begin
       if (stat_clear) h_mipgen_fins <= 32'd0;
       if (pl_fin_valid && pl_fin_ready) begin
-        mg_pend_q  <= cfg_mipgen_fin_i && pl_fin_ok;
+        mg_pend_q  <= cfg_mipgen_fin_i && !cfg_mipfeed_i && pl_fin_ok;
         mg_slot_q  <= pl_fin_slot_w[SLOTW-1:0];
         mg_gen_q   <= pl_fin_gen;
         mg_epoch_q <= pl_fin_epoch;
@@ -1588,6 +1934,72 @@ module tb_terrain_world
           rg_wait        <= cfg_rd_gap_i;
           if (rg_beat == 3'd7) rg_busy <= 1'b0;
           else                 rg_beat <= rg_beat + 3'd1;
+        end
+      end
+    end
+  end
+
+  // ------------------- the played read engine for TERRAIN.PAGESTREAM -------
+  // A copy of the one above, on its own client. See the note at the streamer's
+  // instantiation for why it is a copy rather than an arbiter.
+  logic       psg_fwd;
+  logic [7:0] psg_hold;
+  logic       psg_ok_q, psg_viol_q;
+  logic       psg_busy;
+  logic [7:0] psg_wait;
+  logic [2:0] psg_beat;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0] psg_word;
+  /* verilator lint_on UNUSEDSIGNAL */
+  logic [VW-1:0] psg_idx;
+
+  assign psg_rsp.ready     = !psg_fwd;
+  assign psg_rsp.ok        = psg_ok_q;
+  assign psg_rsp.violation = psg_viol_q;
+  assign psg_idx = psg_word[VW-1:0] + {{(VW-3){1'b0}}, psg_beat};
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      psg_fwd    <= 1'b0;
+      psg_hold   <= 8'd0;
+      psg_ok_q   <= 1'b0;
+      psg_viol_q <= 1'b0;
+      psg_busy   <= 1'b0;
+      psg_wait   <= 8'd0;
+      psg_beat   <= 3'd0;
+      psg_word   <= 32'd0;
+      psg_beat_valid <= 1'b0;
+      psg_beat_data  <= 64'd0;
+      psg_beat_last  <= 1'b0;
+    end else begin
+      psg_ok_q       <= 1'b0;
+      psg_viol_q     <= 1'b0;
+      psg_beat_valid <= 1'b0;
+      psg_beat_last  <= 1'b0;
+
+      if (psg_fwd) begin
+        if (psg_hold != 8'd0) psg_hold <= psg_hold - 8'd1;
+        else                  psg_fwd  <= 1'b0;
+      end else if (psg_req.valid) begin
+        psg_ok_q  <= 1'b1;
+        psg_fwd   <= 1'b1;
+        psg_hold  <= cfg_grant_hold_i;
+        psg_busy  <= 1'b1;
+        psg_wait  <= cfg_rd_latency_i;
+        psg_beat  <= 3'd0;
+        psg_word  <= ({5'd0, psg_req.addr} - {5'd0, POOL_BASE}) >> 3;
+      end
+
+      if (psg_busy) begin
+        if (psg_wait != 8'd0) begin
+          psg_wait <= psg_wait - 8'd1;
+        end else begin
+          psg_beat_valid <= 1'b1;
+          psg_beat_data  <= vram_mem[psg_idx];
+          psg_beat_last  <= (psg_beat == 3'd7);
+          psg_wait       <= cfg_rd_gap_i;
+          if (psg_beat == 3'd7) psg_busy <= 1'b0;
+          else                  psg_beat <= psg_beat + 3'd1;
         end
       end
     end

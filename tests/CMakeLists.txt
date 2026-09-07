@@ -6566,6 +6566,14 @@ verilate(test_pagestream_rtl_directed
 add_test(NAME pagestream_rtl_directed COMMAND test_pagestream_rtl_directed)
 set_tests_properties(pagestream_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+add_test(NAME lint_terrain_mipfeed
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_mipfeed
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_mipfeed.sv)
+set_tests_properties(lint_terrain_mipfeed PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_test(NAME lint_terrain_pagestream
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_terrain_pagestream
@@ -6653,6 +6661,9 @@ verilate(test_world_composed_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageloader.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_writeback.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loadq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pagestream.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_mipgen.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_mipfeed.sv
           ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_world.sv)
 add_test(NAME world_composed_directed COMMAND test_world_composed_directed)
 set_tests_properties(world_composed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
@@ -6675,6 +6686,9 @@ add_test(NAME lint_terrain_world
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageloader.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_writeback.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loadq.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pagestream.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_mipgen.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_mipfeed.sv
                  ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_world.sv)
 set_tests_properties(lint_terrain_world PROPERTIES
   LABELS "lint;fast"
