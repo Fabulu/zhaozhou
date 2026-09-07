@@ -2048,6 +2048,88 @@ int main(int argc, char** argv) {
                 1, we_seen_high > 0 ? 1 : 0);
   }
 
+  // =========================================================================
+  hdr("case 24 (22.10-5): PUBLISH happens AFTER the payload write, never with it");
+  // =========================================================================
+  // §6.2's event order: "WRITE: apply one aligned registered {enable, bank,
+  // address, data, status}. PUBLISH: make that source committed only after its
+  // write edge."
+  //
+  // WRITTEN BECAUSE A MUTATION ESCAPED. Moving the commit from C4 to the C3
+  // write edge -- publishing a source on the same edge its bank write enable
+  // asserts, rather than after the write has landed -- left all 538 existing
+  // checks passing. Every one of them observes the END of a transaction, and
+  // one cycle of early publication does not change any final value in a bench
+  // where nothing reads the bank in between. The harm is real and downstream:
+  // a consumer that sees "committed" may read the row before the write lands.
+  //
+  // So this checks the ORDER directly. `c3t_we_q` is the actual bank write
+  // enable, readable through the `verilator public` marker; `ev_commits_o` is
+  // the block's own commit counter. The commit for a source must NOT appear on
+  // the same edge as its write enable.
+  {
+    Ob s(dut);
+    s.reset();
+    s.out_ready = true;
+
+    s.d->adm_valid_i = 1;
+    s.d->adm_ctx_i = ctx_of(0xC400u);
+    s.d->adm_req_i = 0x1;
+    s.step();
+    s.d->adm_valid_i = 0;
+    const uint16_t o = s.obs_adm_owner;
+
+    s.d->iss_tmu_valid_i = 1;
+    s.d->iss_tmu_handle_i = smp(o, 0);
+    s.d->tmu_rvalid_i = 1;
+    s.d->tmu_rhandle_i = smp(o, 0);
+    s.d->tmu_rresult_i = mkres(o);
+    s.step();
+    s.d->iss_tmu_valid_i = 0;
+    s.d->tmu_rvalid_i = 0;
+
+    int we_edges = 0;
+    int commit_on_we_edge = 0;
+    int commit_after_we = 0;
+    bool we_seen_last = false;
+    for (int i = 0; i < 24; ++i) {
+      // WATCH cmt_q, NOT ev_commits_o. The first version of this loop used the
+      // counter and passed against the mutation it was written for: that
+      // counter tracks `c4t_v_q`, the C4 stage valid, and is blind to a change
+      // in the commit BITPLANE. Instrumenting the wrong signal is how the
+      // mutation escaped a second time.
+      const bool we_now = dut->zhao_texture_v3own->c3t_we_q != 0;
+      const uint32_t commits_before = dut->zhao_texture_v3own->cmt_q[slot_of(o)];
+      s.step();
+      const bool commit_moved =
+          dut->zhao_texture_v3own->cmt_q[slot_of(o)] != commits_before;
+      if (we_now) {
+        ++we_edges;
+        if (commit_moved) ++commit_on_we_edge;
+      } else if (we_seen_last && commit_moved) {
+        ++commit_after_we;
+      }
+      we_seen_last = we_now;
+    }
+    s.idle(40);
+
+    zhao::check(we_edges > 0,
+                "22.10-5 setup: a bank write enable was actually observed, so "
+                "the ordering check below has an edge to be about",
+                1, we_edges > 0 ? 1 : 0);
+    zhao::check(commit_on_we_edge == 0,
+                "§6.2: the source is NOT published on the same edge its bank "
+                "write enable asserts -- PUBLISH comes after the write edge, "
+                "so a consumer that sees `committed` cannot read the row before "
+                "the payload has landed",
+                0, static_cast<uint64_t>(commit_on_we_edge));
+    zhao::check(commit_after_we > 0,
+                "and the publication DOES happen on a later edge, so the check "
+                "above is an ordering result and not a source that never "
+                "commits at all",
+                1, commit_after_we > 0 ? 1 : 0);
+  }
+
   const int rc = zhao::report_and_exit("texture_v3own_adversarial");
   delete dut;
   zhao::exit_hard(rc);

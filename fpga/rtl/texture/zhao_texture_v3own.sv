@@ -236,7 +236,12 @@ module zhao_texture_v3own #(
   logic [3:0]      req_q  [OWNERS];
   logic [3:0]      iss_q  [OWNERS];
   logic [3:0]      clm_q  [OWNERS];
-  logic [3:0]      cmt_q  [OWNERS];
+  // OBSERVABLE IN SIMULATION, at zero synthesis cost (the marker is a comment).
+  // §6.2's PUBLISH event lives here, and `ev_commits_o` does NOT track it --
+  // that counter counts `c4t_v_q`/`c4a_v_q`, the C4 stage valid, which is a
+  // different thing. A test written against the counter cannot see a change to
+  // this bitplane at all, which is exactly how mutation §22.10-5 escaped twice.
+  logic [3:0]      cmt_q  [OWNERS] /* verilator public */;
   logic            rdy_q  [OWNERS];   // ready_claimed
   logic            cbi_q  [OWNERS];   // combine_issued -- ACTUAL acceptance
   // T4 / 11.1 separates three events the design used to conflate:
