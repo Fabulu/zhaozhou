@@ -116,17 +116,32 @@ law catch mutations no output-comparison would reach, because they fire at the
 moment the law breaks rather than at the end of the transaction — which is
 exactly what item 5 escaped through.
 
+### The credited pop off the ready queue no longer sets `crs_n_c`, so nothing stops
+an owner being made ready and popped a second time.
+
+    %Error: zhao_texture_v3own.sv:1867: Assertion failed in
+      TOP.zhao_texture_v3own.a_p22_cbi_implies_crs: 'assert' failed.
+
+Caught by one of the §22.2 invariants added earlier the same day — an assertion
+written hours before the mutation it caught, which is the point of writing
+invariants rather than only comparing outputs.
+
+Second structural catch in a row, after item 4's partition assertion. The
+pattern across seven mutations is consistent: **bench checks catch corrupted
+VALUES, in-RTL invariants catch broken ORDERING and broken PARTITIONS.** Item 5
+escaped precisely because it corrupted neither a value nor an invariant that
+existed — it changed WHEN a bit was set, and nothing was watching that.
+
 ## NOT yet demonstrated — stated so the gap is visible
 
 1. slot-only identity for external validation
 2. truncate membership subtraction before rejecting upper bits
-7. omit combine_reserved on local candidate insertion
 9. pop a candidate without downstream storage credit
 11. advance F without a reserved packet slot
 13. reopen the namespace before one external adapter acknowledges
 14. force old broken CLUT4, alpha, nearest, or global-binding behaviour
 
-**Seven of fourteen.**
+**Eight of fourteen.**
 
 ## Related mutations run today outside §22.10's list
 
