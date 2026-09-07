@@ -67,6 +67,15 @@ def hops(text: str, index: int):
     # larger than its own container is a broken instrument (CLAUDE.md), and the
     # containment check was cheaper than the debugging would have been.
     end = starts[index + 1] if index + 1 < len(starts) else len(text)
+    # AND STOP AT "Data Required Path" TOO. Bounding only at the next arrival
+    # header still spanned two paths on zhao_geom_project, and the containment
+    # check below caught it: 16.302 ns of hops attributed to a 12.967 ns data
+    # path, with the cumulative column visibly resetting mid-listing. A path
+    # ends at its REQUIRED section, not at the next path's header -- there is
+    # setup/hold material in between that carries its own hop rows.
+    req = text.find("Data Required Path", starts[index])
+    if 0 <= req < end:
+        end = req
     seg = text[starts[index]:end]
     out = []
     prev = None

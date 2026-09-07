@@ -994,3 +994,22 @@ prediction on record -- 6.611 / 9.295 ns, both inside 10 ns, so the second half
 should land under 10 and the block should move off 61.09 MHz. If it does not,
 the split was in the wrong place and the chain needs a cut between Add118 and
 the saturation. That is non-texture work and will be RECORDED, not pursued.
+
+## 2026-09-07 -- project_core 61.09 -> 73.62 MHz (+20.5%); next limit named
+
+Prediction half falsified: said ~107, got 73.62 (13.58 ns vs the 9.295
+predicted). Falsifier was on record and fired. The cut was still right -- the
+error was assuming the remaining chain was next.
+
+New worst path: mat -> row_x -> Mult0~124|resulta (3.938 ns, a DIFFERENT DSP)
+-> Mult0~93. The ROW TRANSFORM, not the viewport mad. Same shape, output
+register unused. Next cut would be row_x/y/w registered before rescale16_row.
+NOT PURSUED -- texture first; recorded for the pass that owns it.
+
+path_anatomy's containment check fired on its own tool again: bounding at the
+next "Data Arrival Path" still spanned into the "Data Required Path" rows.
+Fixed. Second self-caught defect in that tool.
+
+Toolchain refilled with TEXTURE: zhao_texture_v3own fitting, for T1's scoped
+before/after timing classification. Fence checks proven sensitive by
+mutation_sweep (detected, 2/469, restored byte-for-byte).

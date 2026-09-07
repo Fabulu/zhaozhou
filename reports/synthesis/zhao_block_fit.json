@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "6c1d1fa3205a93d0391faef376f63912972fedfa",
+    "newestRunCommit":  "83f050c518fc1855be6c581b98825ad35353dcad",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -231,24 +231,24 @@
                    {
                        "module":  "zhao_geom_project",
                        "status":  "failed:structure",
-                       "sourceCommit":  "5831ed31d0a1f4b5c4a18aa79b8f2adeb7451016",
+                       "sourceCommit":  "83f050c518fc1855be6c581b98825ad35353dcad",
                        "rtlCleanAtHead":  true,
-                       "sourceDigest":  "738ba996f31b129f576c906ffbff7edea596989c5071097e47503d977e42312f",
-                       "seconds":  3085.4,
+                       "sourceDigest":  "87ecad76566ab5d16e2936c99d809f720747a1787440ac233f0fe65028de62e2",
+                       "seconds":  3094.9,
                        "sourcesHashed":  2,
-                       "alms":  5977,
-                       "registers":  6570,
-                       "blockMemoryBits":  3095,
-                       "ramBlocks":  27,
+                       "alms":  6199,
+                       "registers":  7250,
+                       "blockMemoryBits":  3287,
+                       "ramBlocks":  29,
                        "dspBlocks":  33,
                        "virtualPins":  312,
                        "almsAvailable":  41910,
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
-                       "fmaxMhz":  61.09,
+                       "fmaxMhz":  73.62,
                        "fmaxClock":  "clk",
                        "ruleViolations":  [
-                                              "M10K 27 \u003e allowed 0"
+                                              "registers 7250 \u003e allowed 7000 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)"
                                           ]
                    },
                    {

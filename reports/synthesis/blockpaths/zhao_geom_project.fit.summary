@@ -1,16 +1,16 @@
-Fitter Status : Successful - Mon Sep 07 08:38:13 2026
+Fitter Status : Successful - Mon Sep 07 11:15:42 2026
 Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
 Revision Name : blockfit
 Top-level Entity Name : zhao_geom_project
 Family : Cyclone V
 Device : 5CSEBA6U23I7
 Timing Models : Final
-Logic utilization (in ALMs) : 5,977 / 41,910 ( 14 % )
-Total registers : 6570
+Logic utilization (in ALMs) : 6,199 / 41,910 ( 15 % )
+Total registers : 7250
 Total pins : 0 / 314 ( 0 % )
 Total virtual pins : 312
-Total block memory bits : 3,095 / 5,662,720 ( < 1 % )
-Total RAM Blocks : 27 / 553 ( 5 % )
+Total block memory bits : 3,287 / 5,662,720 ( < 1 % )
+Total RAM Blocks : 29 / 553 ( 5 % )
 Total DSP Blocks : 33 / 112 ( 29 % )
 Total HSSI RX PCSs : 0
 Total HSSI PMA RX Deserializers : 0
