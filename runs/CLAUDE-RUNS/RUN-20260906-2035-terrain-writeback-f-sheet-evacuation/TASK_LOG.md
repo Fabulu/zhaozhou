@@ -1181,3 +1181,48 @@ Remove the `ZHAO_M6` env guard around case 22 and delete the `WILL_FAIL` ctest
 entry `texture_v3own_m6_final_before_accept` — a WILL_FAIL test that passes is
 itself a ctest failure, which is the designed signal. Waiting on the pre-change
 fire-test build that is using the current test file.
+
+### T4 finished, with the falsifier run
+
+M6's `ZHAO_M6` guard and the `WILL_FAIL` ctest entry are both gone; case 22 runs
+in the default bench, now **477 checks**.
+
+| lane | before T4 | after T4 |
+|---|---:|---:|
+| default | 469 pass | 469 pass |
+| M6 | **4 FAILED** | 477 pass |
+
+The "before" column is a real run: the pre-change RTL was extracted from git and
+rebuilt against the same bench. Its four failures ARE the defect. 469 before and
+469 after is what "preserving all other finals and stalls" looks like as
+evidence rather than as a claim.
+
+### §5.4's throughput property, measured for the first time
+
+*"The two-head organization can sustain one external pop per clock after warmup
+with continuous supply."* Nothing checked it — every other check in that file is
+a correctness check, and a queue delivering 0.9 pops/clock satisfies all of them.
+Zero bubbles in 400 cycles. Fire-tested by starving supply to one cycle in four:
+300 bubbles, 100 pops of 400.
+
+### A third stale document, found by a gate rather than by reading
+
+`design/prod_manifest.yml` claimed *"V2 is not instantiated by anything yet"* and
+declared it absent because *"counting a block the machine does not contain would
+inflate every budget"*. **The island contains it**, unconditionally, line 1956,
+no generate block in the file. The justification runs backwards — the live
+combiner is UNDERSTATED. With no fit target until today, its cost was invisible
+in both accounting domains at once.
+
+I also corrected my own §12.4 report, which had called that divergence
+"declared". True of `prod_top`, false of the entry as a whole — the comfortable
+reading explained most of the evidence and stopped me reading the rest.
+
+### Ready for the fit landing (nothing left to debug then)
+
+* `split_setup_paths.py` verified working. Compare against **75.79 reported /
+  89.09 core→core**, worst core→core `zhao_texture_v3rq:u_rq_t -> Mux2~4_OTERM3179`.
+* `blockfit.fit.rpt` is confirmed in the harvest list (added today), so this is
+  the first fit of this block to yield a per-RAM table — the instrument that
+  closes the 1,056-bit / 8-block remainder.
+* The fit predates T4; it answers T1's question, not T4's.
