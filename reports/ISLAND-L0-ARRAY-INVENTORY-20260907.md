@@ -1,3 +1,21 @@
+> # SUPERSEDED THE SAME DAY — READ THIS FIRST
+>
+> **Six of the eight arrays below now infer as RAM.** This inventory read the
+> CURRENT source but cited the PREVIOUS fit's "uninferred" list, and the island's
+> row was already known to be four commits stale. The island refit of
+> 2026-09-07 shows `fctx_m`, `flod_m`, `fpgn_m`, `fcls_m`, `fpsl_m` and `faux_m`
+> as block RAM — **−4,923 registers, +5,312 memory bits** at map, all of the
+> register drop inside `zhao_texture_island_top` itself.
+>
+> Only **`uvw_m`** and **`class_m`** remain in fabric, and `uvw_m` is §10.2's own
+> subject.
+>
+> The access-pattern walk below (single-writer, single-reader, one shared write
+> event) is still correct and is what made the conversion possible. What is wrong
+> is the conclusion that all eight sit in fabric.
+>
+> See `V31-L0-SUPERSEDED-SIX-OF-EIGHT-20260907.md`.
+
 # §10 L0 — the island top's array and port inventory
 
 *2026-09-07. The first step of the master recovery handoff's controlled
