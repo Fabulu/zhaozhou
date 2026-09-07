@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "9c787e4a09ea9099982d736549a3e99ced908fb1",
-    "newestRunClean":  true,
+    "newestRunCommit":  "5c21a460f9e881624c1d94a22aba2c49d7bde037",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1386,24 +1386,25 @@
                    {
                        "module":  "zhao_texture_island_top",
                        "status":  "failed:structure",
-                       "sourceCommit":  "064d5fad73646c6b66f325faf29d1f4196c5ac1c",
+                       "sourceCommit":  "5c21a460f9e881624c1d94a22aba2c49d7bde037",
                        "rtlCleanAtHead":  false,
-                       "seconds":  7454.8,
+                       "sourceDigest":  "d9480488cf8edfa590235478aaa3d5761c39b4bb515c3855f342ec24c32d08e0",
+                       "seconds":  6744.4,
                        "sourcesHashed":  15,
-                       "alms":  16192,
-                       "registers":  28490,
-                       "blockMemoryBits":  36024,
-                       "ramBlocks":  32,
+                       "alms":  13601,
+                       "registers":  23181,
+                       "blockMemoryBits":  41336,
+                       "ramBlocks":  36,
                        "dspBlocks":  17,
-                       "virtualPins":  1484,
+                       "virtualPins":  1487,
                        "almsAvailable":  41910,
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
-                       "fmaxMhz":  67.57,
+                       "fmaxMhz":  66.77,
                        "fmaxClock":  "clk",
                        "ruleViolations":  [
-                                              "registers 28490 \u003e allowed 9000 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)",
-                                              "ALM 16192 \u003e allowed 7500",
+                                              "registers 23181 \u003e allowed 9000 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)",
+                                              "ALM 13601 \u003e allowed 7500",
                                               "DSP 17 \u003e allowed 14"
                                           ]
                    },

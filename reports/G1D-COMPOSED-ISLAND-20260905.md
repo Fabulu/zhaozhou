@@ -354,6 +354,69 @@ better at all.
   nearest path started decoding the same day. An honest measurement of what is
   there, not of what is finished.
 
+### 4.3e THE 2026-09-07 REFIT, COMPLETE — ALM 16,192 -> 13,601
+
+*6,744 s. Matched scope: DSP 17 both sides, virtual pins 1,484 -> 1,487.*
+
+| | 4.3c (Sep 6) | **this refit** | rule |
+|---|---:|---:|---:|
+| **ALM** | 16,192 | **13,601** | 7,500 |
+| registers | 28,490 | **23,181** | 9,000 |
+| M10K / memory bits | 32 / 36,024 | **36 / 41,336** | 64 |
+| DSP | 17 | 17 | 14 |
+| fmax reported | 67.57 | 66.77 | 100 |
+| fmax **core→core** | 77.30 | **75.51** | 100 |
+| worst path | −4.800, a virtual pin into PALETTE_RES | −4.977, the same pin | — |
+
+#### Against the redlines the roadmap names
+
+| benchmark | before | **now** |
+|---|---:|---:|
+| 6,600 nominal | 2.45× | **2.06×** |
+| 7,500 redline | 2.16× | **1.81×** |
+| 7,913 standalone sum | 2.05× | **1.72×** |
+
+Still over every one of them. The gate is **not** relaxed — §12.4's rule is
+retain-and-fail, and the row correctly reads `failed:structure` on ALM,
+registers and DSP.
+
+#### What bought it, and what it cost
+
+**Six of L0's eight arrays became RAM** (`fctx_m`, `flod_m`, `fpgn_m`, `fcls_m`,
+`fpsl_m`, `faux_m`); only `uvw_m` and `class_m` remain in fabric. That is the
+−5,309 registers, and the entity walk puts all of it inside the island top
+itself.
+
+**The cost is 4 M10K blocks for 5,312 bits** — 1,328 bits per block, about 13%
+utilisation, which is the same shallow-array waste §12 measured in
+`zhao_texture_v3own` the same day. **It is still a good trade here**, and the
+budgets say why: registers miss their rule by 2.6× while M10K sits at 36 of 64
+with 28 blocks spare. Spending a scarce-resource violation down using a
+plentiful one is the right direction — but it is a trade, not a free win, and
+the 13% utilisation is worth revisiting under §10.4's shared-row consolidation.
+
+**It is not the work of 2026-09-07.** Ten commits across six island sources
+separate this row from 4.3c; four are from earlier sessions. The day's own island
+change was `perspuv_svc`'s registered output boundary, whose standalone fit
+measured registers **up** 59 with M10K unchanged — positively excluding it from
+the memory rise.
+
+#### The clock did not move, and the reason is unchanged
+
+Reported 66.77 against 67.57, core→core 75.51 against 77.30 — both slightly
+**worse**. The reported figure is still set by `pal_ld_gen_i`, the palette **load**
+port, now at −4.977. That seam was identified on 2026-09-07 and deliberately not
+touched: it is the same defect class as the two repaired that day
+(a dynamically indexed array read with no register in front of it), but it is a
+configuration path, and acting on a port-terminated leaf-fit path without
+measurement is what this report's own history warns against.
+
+**What DID move is the honest limiter.** `perspuv_svc|head_q -> fragrob|axg_m`
+at −2.936 was the composed island's worst core→core path; **zero of the worst
+forty paths now launch from `head_q`**. The prediction and its falsifier were
+recorded before the fit. The new core→core limiter is internal to
+`zhao_raster_rcp24_svc` at 75.51 MHz — a different block, and the next target.
+
 ### 4.3d THE 2026-09-07 REFIT, MAP STAGE — six of L0's eight arrays converted
 
 *Read while the fitter was still placing, following §4.3b's own precedent that
