@@ -2330,6 +2330,29 @@ add_test(NAME texture_v3own_adversarial COMMAND test_texture_v3own_adversarial)
 set_tests_properties(texture_v3own_adversarial PROPERTIES
   LABELS "fast;nightly" TIMEOUT 900)
 
+# M6's CORRECTNESS TEST, RUN AS A KNOWN FAILURE UNTIL M6 LANDS.
+#
+# The owner's V3.1 rearchitecture §0: "M6's correctness test must be written at
+# M0, even if the interface change lands later. Any existing behavior that
+# accepts a final result before COMBINE has accepted the corresponding input is
+# not something to preserve for parity."
+#
+# Case 22 in the bench asserts §11.3's contract, and today's RTL violates it --
+# cbi (combine_issued) is set on cmb_pop_c, the CREDITED RESERVATION
+# (zhao_texture_v3own.sv:611,840), not on cmb_fire_c, the real acceptance
+# (:720). So the case is guarded by ZHAO_M6 and run here as WILL_FAIL.
+#
+# WHEN M6 LANDS THIS LANE STARTS FAILING, because a WILL_FAIL test that passes
+# is a ctest failure. That is the point: it is the signal to delete the guard,
+# delete this entry, and let case 22 run in the default bench. A test that
+# merely sat disabled would announce nothing.
+add_test(NAME texture_v3own_m6_final_before_accept
+         COMMAND test_texture_v3own_adversarial)
+set_tests_properties(texture_v3own_m6_final_before_accept PROPERTIES
+  LABELS "m6;nightly" TIMEOUT 900
+  ENVIRONMENT "ZHAO_M6=1"
+  WILL_FAIL TRUE)
+
 add_test(NAME lint_texture_v3own
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_texture_v3own

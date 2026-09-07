@@ -37,6 +37,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <deque>
 #include <string>
 #include <vector>
@@ -1089,6 +1090,106 @@ int main(int argc, char** argv) {
                   s.combined[0].s[0] >> 32);
     }
     zhao::check(s.emitted.size() == 1, "C11 emitted exactly once", 1,
+                s.emitted.size());
+  }
+
+  // =========================================================================
+  // case 22 (M6): a FINAL must not be authorised by a RESERVATION
+  // =========================================================================
+  // THIS CASE IS EXPECTED TO FAIL ON TODAY'S RTL. It is written now because
+  // the owner's V3.1 rearchitecture §0 requires it now:
+  //
+  //   > M6's correctness test must be written at M0, even if the interface
+  //   > change lands later. Any existing behavior that accepts a final result
+  //   > before COMBINE has accepted the corresponding input is not something
+  //   > to preserve for parity.
+  //
+  // §11.1 separates three events that the present design conflates:
+  //
+  //   1  local candidate reservation   -- the owner is claimed for eventual
+  //                                       COMBINE admission
+  //   2  central bank-read reservation -- storage reserved for a packet that
+  //                                       will arrive later
+  //   3  actual COMBINE acceptance     -- the packet transfers on valid&&ready
+  //
+  //   > Only the third sets combine_issued and authorizes a final terminal.
+  //   > The old cbi bit was set at the second event.
+  //
+  // CONFIRMED IN THE SOURCE, with line numbers, before this case was written:
+  //   zhao_texture_v3own.sv:611  cmb_pop_c = sel_v_c && ((cmb_res_q - ...) < CMBQD)
+  //                              -- the CREDITED reservation, event 2
+  //   zhao_texture_v3own.sv:840  if (cmb_pop_c && ...) cbi_n_c[i] = 1'b1;
+  //   zhao_texture_v3own.sv:720  cmb_fire_c = cmb_valid_o && cmb_ready_i;
+  //                              -- the real acceptance, event 3, unused here
+  //   zhao_texture_v3own.sv:475  c2f_acc_c = c1f_v_q && c2f_idok_c && c1f_cbi_q
+  //                              -- so a final is authorised by event 2
+  //
+  // §11.3's construction: hold cmb_ready low so event 3 cannot happen, let the
+  // owner take event 2, then inject a final with the CORRECT owner token. Its
+  // own note explains why the rest of this bench cannot catch it -- "a
+  // cooperative stub that always responds after input acceptance cannot
+  // exercise it", and every other case here returns finals after COMBINE.
+  //
+  // GUARDED BY ZHAO_M6 so the default lane stays green while the contract is
+  // recorded and runnable. CMakeLists registers a second ctest entry that sets
+  // it, marked WILL_FAIL: when M6 lands, THAT lane starts failing, which is
+  // the signal to delete the guard and the WILL_FAIL together.
+  if (std::getenv("ZHAO_M6") != nullptr) {
+    hdr("case 22 (M6): a FINAL must not be authorised by a RESERVATION");
+    Ob s(dut);
+    s.reset();
+    s.auto_fin = false;
+    s.fin_manual = true;
+    s.cmb_ready = false;  // event 3 can never happen
+
+    uint16_t o = s.admit(ctx_of(9100), 0x1);
+    s.issue_tmu(o, 0);
+    s.ret_tmu(o, 0, mkres(o));
+    s.idle(40);
+
+    // Preconditions: the owner is live and COMBINE has NOT accepted anything.
+    zhao::check(s.combined.empty(),
+                "M6 precondition: COMBINE has accepted nothing while stalled", 0,
+                s.combined.size());
+    zhao::check(dut->ev_live_o == 1, "M6 precondition: the owner is live", 1,
+                dut->ev_live_o);
+    const uint32_t err_before = dut->ev_err_final_o;
+    const uint32_t emitted_before = dut->ev_emitted_o;
+
+    // The final arrives with the CORRECT owner token, before acceptance.
+    dut->fin_valid_i = 1;
+    dut->fin_owner_i = o;
+    dut->fin_result_i = final_of(o);
+    s.step();
+    dut->fin_valid_i = 0;
+    s.idle(12);
+
+    // §11.3's four expectations.
+    zhao::check(dut->ev_err_final_o == err_before + 1,
+                "M6 a final arriving before COMBINE acceptance is an ERROR",
+                err_before + 1, dut->ev_err_final_o);
+    zhao::check(dut->ev_emitted_o == emitted_before,
+                "M6 no final payload write is authorised", emitted_before,
+                dut->ev_emitted_o);
+    zhao::check(s.emitted.empty(), "M6 nothing is published", 0,
+                s.emitted.size());
+    zhao::check(dut->ev_live_o == 1, "M6 the owner is NOT released", 1,
+                dut->ev_live_o);
+
+    // After real acceptance, a legitimate final must still succeed -- the
+    // rejection above must not have poisoned the owner.
+    s.cmb_ready = true;
+    s.idle(60);
+    zhao::check(s.combined.size() == 1, "M6 COMBINE accepts once released", 1,
+                s.combined.size());
+    dut->fin_valid_i = 1;
+    dut->fin_owner_i = o;
+    dut->fin_result_i = final_of(o);
+    s.step();
+    dut->fin_valid_i = 0;
+    s.idle(60);
+    zhao::check(s.emitted.size() == 1,
+                "M6 and a legitimate final after acceptance still succeeds", 1,
                 s.emitted.size());
   }
 
