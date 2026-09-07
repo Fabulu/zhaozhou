@@ -112,7 +112,7 @@ Refit these eight, then the reconciliation is arithmetic:
 
 | block | why |
 |---|---|
-| `zhao_texture_material_combine_v2` | never fitted; target added today |
+| ~~`zhao_texture_material_combine_v2`~~ | **DONE the same day** — 870 ALM, 114.04 MHz, 6 M10K, status ok. See `V31-COMBINE-V2-FIRST-FIT-20260907.md`. It clears the product clock; the V1 the production top still carries does not (36.28 MHz). |
 | `zhao_texture_fragrob` | 5 commits stale |
 | `zhao_texture_island_top` | 4 commits stale (the composed row) |
 | `zhao_raster_perspuv_svc` | 2 |

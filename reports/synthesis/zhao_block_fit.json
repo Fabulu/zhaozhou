@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "19bd8bd2500d3121aad91a45ac453707fd52ada7",
-    "newestRunClean":  true,
+    "newestRunCommit":  "80008ad41cee76fa4da2af2a15d892f45daa4997",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1430,6 +1430,26 @@
                                               "registers 893 \u003e allowed 500",
                                               "fmax 36.28 \u003c required 125 (islandrearchitecture5.md 15.5 variant A)"
                                           ]
+                   },
+                   {
+                       "module":  "zhao_texture_material_combine_v2",
+                       "status":  "ok",
+                       "sourceCommit":  "80008ad41cee76fa4da2af2a15d892f45daa4997",
+                       "rtlCleanAtHead":  false,
+                       "sourceDigest":  "071630cd4535b50c8df3dddea380b47babd6977410cde25d6ce40d21ccce8412",
+                       "seconds":  1547,
+                       "sourcesHashed":  1,
+                       "alms":  870,
+                       "registers":  918,
+                       "blockMemoryBits":  1520,
+                       "ramBlocks":  6,
+                       "dspBlocks":  2,
+                       "virtualPins":  628,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  114.04,
+                       "fmaxClock":  "clk"
                    },
                    {
                        "module":  "zhao_texture_mosaic",
