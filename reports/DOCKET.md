@@ -4305,3 +4305,59 @@ Eight refits, all texture-island blocks, named in
 first: it is the island's **live** combiner, has never been fitted, and got its
 target today. Then `zhao_probe_v3rq_queue`, then a v3own refit that includes T4 —
 the fit running now predates it and answers T1's question, not T4's.
+
+## Later the same day — two fits read, one running, and the island's real limiter
+
+**`zhao_texture_v3own` (fence + registered credit) answered T1.** The prediction
+held: the ten worst paths ending at admission outputs are **gone**, and reported
+now coincides with core→core. Memory did not move, as predicted, to the bit.
+**And the fence I added became the worst path** — internal headroom fell 89.09 →
+77.16, with 71% of it in a 64-way select over `gen_n_c[tail_next_c]`. Rewritten
+so both candidates come from registers in parallel; exact, because `gen_n_c`
+differs from `gen_q` at one index and the read index never points at it.
+
+**`zhao_texture_material_combine_v2`, first fit ever:** 870 ALM, **114.04 MHz** —
+above the product clock. The V1 that `zhao_prod_top` still carries is 36.28 MHz
+and 70% larger. §12.3's COMBINE allowance, flagged *"NOT a measurement"*, is now
+measured at **exactly 6**.
+
+**The 1,056-bit remainder is closed** from the first harvested per-RAM table, and
+S01 §15.1 turns out to have predicted the ten physical blocks *and* prescribed
+the refusal this session made in the morning.
+
+### The island's real clock limiter, found and repaired
+
+The block that *looks* worst — `aux_pipe` at 63.63 MHz — **does not appear in the
+composed island's worst paths at all.** The alarming number was the artefact.
+
+The honest limiter was `perspuv_svc|head_q → fragrob|axg_m`: seven arrays indexed
+by `head_q` at NTOK=16 driving the next block's M10K through a combinational
+read, in a file whose own header says *"P0 pop a queue, register the operands"*.
+Repaired with a skid so the handshake absorbs the cycle. Block throughput
+**identical** (1.99/clk), island **119 checks** before and after, and the island
+bench shown to catch a broken skid (31 of 119 fail).
+
+**The same defect class appeared three times in three blocks today** — `ticketq`'s
+`mem_q[head_q]`, perspuv's `e_q_u[head_q]`, the palette load's
+`gen_r[ld_slot_i]` — and a sweep puts `zhao_texture_v3own` at the top with
+**eight**, on the very `cq_*`/`oq_*` arrays that burn 7 of its 17 M10Ks at 0.7%
+utilisation. Memory waste and timing seam converge on one structure, which is
+T6's question with evidence attached.
+
+### Found while checking my own work had not broken something
+
+**`zhao_prod_top` is `failed:quartus_map.exe`** — the top that answers *"what does
+the planned console cost counted ONCE?"* does not map.
+`gen_prod_top.py:parse_ports` takes the **first identifier** as the port name, so
+a struct-typed port becomes a one-bit wire named after its TYPE, and two such
+ports in one instance collide. **There is no lint target for the generated top**,
+so a defect Verilator reports in two seconds sat behind a multi-hour gate.
+Recorded, not chased: the owner's direction names "an interesting new bottleneck
+elsewhere" exactly.
+
+### What is still unmeasured, stated plainly
+
+Four RTL changes are in the tree without a fit: T4, the fence rewrite, perspuv's
+output boundary, and `ticketq_rh`. §12.5 requires attributing each delta before
+calling it a mechanism, which is why the palette load — the same defect, a fourth
+time — was deliberately **not** touched. The running refit measures the first two.
