@@ -486,6 +486,63 @@ int main(int argc, char** argv) {
                 dut->ev_commits_o >= 1 ? 1 : 0);
   }
 
+  hdr("case 4d (S22.4): a repeated issue notification creates nothing and erases nothing");
+  // =========================================================================
+  // S22.4: "Repeat an issue notification and verify it does not create a second
+  // outstanding request or erase a previously claimed result."
+  //
+  // The RTL guards it -- `iss_t_ok_c` requires `(iss_q[slot] & bit) == 0` -- but
+  // nothing exercised the guard. Both halves of the sentence matter and they
+  // fail differently: a second outstanding request shows up as a spurious extra
+  // completion, while erasing a claimed result shows up as an owner that waits
+  // forever for work it already did.
+  //
+  // This also covers the accept side of the guard T2 step 2 rewrote, since
+  // `iss_t_ok_c` is the same expression that now calls `win_live`.
+  {
+    Ob s(dut);
+    s.reset();
+    uint16_t o = s.admit(ctx_of(0), 0xF);
+    const uint32_t err_before = dut->ev_err_issue_o;
+
+    // Issue and complete sample 0 properly.
+    s.issue_tmu(o, 0);
+    s.ret_tmu(o, 0, mkres(o * 4 + 0));
+    s.idle(4);
+
+    // Now repeat the SAME issue notification.
+    s.issue_tmu(o, 0);
+    s.idle(4);
+    zhao::check(dut->ev_err_issue_o == err_before + 1,
+                "S22.4 the repeated issue is refused, not silently absorbed",
+                err_before + 1, dut->ev_err_issue_o);
+
+    // Finish the owner the ordinary way. If the repeat had erased the claimed
+    // result, sample 0 would never commit and this owner would never emit.
+    for (uint32_t k = 1; k < 3; ++k) s.issue_tmu(o, k);
+    s.issue_aux(o);
+    for (uint32_t k = 1; k < 3; ++k) s.ret_tmu(o, k, mkres(o * 4 + k));
+    s.ret_aux(o, mkres(o * 4 + 3));
+    s.idle(400);
+
+    zhao::check(s.emitted.size() == 1,
+                "S22.4 the owner still completes exactly once -- the repeat "
+                "created no second outstanding request",
+                1, s.emitted.size());
+    zhao::check(s.combined.size() == 1, "S22.4 and exactly one COMBINE packet",
+                1, s.combined.size());
+    int row_errors = 0;
+    if (!s.combined.empty()) {
+      for (uint32_t k = 0; k < 3; ++k)
+        if (s.combined[0].s[k] != mkres(o * 4 + k)) ++row_errors;
+      if (s.combined[0].ax != mkres(o * 4 + 3)) ++row_errors;
+    }
+    zhao::check(row_errors == 0,
+                "S22.4 and sample 0's ALREADY CLAIMED result survived the "
+                "repeat -- it was not erased",
+                0, row_errors);
+  }
+
   hdr("case 4c (S22.3): AUX before every sample, then samples in REVERSE order");
   // =========================================================================
   // S22.3 names its cases and two of them had no counterpart here:
