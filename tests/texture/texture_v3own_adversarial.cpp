@@ -646,6 +646,17 @@ int main(int argc, char** argv) {
     zhao::check(s.emitted.empty() || s.emitted[0].ctx == ctx_of(9500),
                 "V04 with its own context intact", 1,
                 (s.emitted.empty() || s.emitted[0].ctx == ctx_of(9500)) ? 1 : 0);
+    // V05 asks to observe "actual bank write enables, not only lack of output".
+    // The pins need a probe port; their CONSEQUENCE does not, and is the
+    // stronger evidence -- a write enable that toggles harmlessly is not the
+    // harm, a corrupted row is. If the late return had been written, this row
+    // would carry 0xE0E instead of the owner's own sample.
+    zhao::check(!s.combined.empty()
+                    && s.combined[0].s[0] == mkres(o * 4 + 0),
+                "V04 and the sample ROW still holds the owner's own result -- "
+                "no bank write was performed for the refused return",
+                1, (!s.combined.empty()
+                    && s.combined[0].s[0] == mkres(o * 4 + 0)) ? 1 : 0);
   }
 
   hdr("case 4f (V05): the same schedule on the AUX and FINAL lanes");
@@ -684,6 +695,12 @@ int main(int argc, char** argv) {
     zhao::check(s.emitted.size() == 1,
                 "V05/AUX the owner emits exactly once and is not resurrected",
                 1, s.emitted.size());
+    zhao::check(!s.combined.empty()
+                    && s.combined[0].ax == mkres(o * 4 + 3),
+                "V05/AUX and the AUX ROW still holds the owner's own result, "
+                "not the refused 0xA0A -- no bank write was performed",
+                1, (!s.combined.empty()
+                    && s.combined[0].ax == mkres(o * 4 + 3)) ? 1 : 0);
   }
   {
     // ---- FINAL ----
