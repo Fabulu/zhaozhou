@@ -1027,3 +1027,26 @@ same shape as the anti-vacuity failures found elsewhere today.
 The COMMITTED tool already summed correctly (14,132). The published error was
 in the throwaway script, which is the rule about committing probes earning
 itself again. entity_census.py now prints the remainder explicitly.
+
+## 2026-09-07 -- §10 L0 inventory; and a backspace in my own regex
+
+L0 done (analysis only, no storage-lane RTL, no worktree -- this session holds
+the control lane). All eight named arrays are SINGLE-writer, SINGLE-reader, so
+§10.1's three-access warning does not bite. Seven share one write event
+(always_ff@708, the ingress capture): eight fields of one record on one event,
+which is what makes §10.4's consolidation available.
+
+Reads are CONTINUOUS assigns -- hence "uninferred due to asynchronous read
+logic". Port schedule clean; the obstacle is read timing, which §10.2/§10.3's
+credited joins absorb.
+
+Recorded what L0 does NOT license, since -10,304 registers has been quoted
+twice today without it: several arrays are 32-512 bits, far below an M10K, so
+individual conversion spends a block on 32 bits. §10.4's shared rows are the
+point.
+
+MY SCRIPT HIT A DOCUMENTED TRAP TWICE: first it tracked block starts but never
+ends (so continuous assigns read as registered); then the fix's regex ended in
+a \b that a heredoc turned into a LITERAL BACKSPACE, so it matched nothing and
+printed the reassuring answer. CLAUDE.md records this verbatim. Found with
+cat -A. Write scripts to a file, not through a heredoc, when they have escapes.
