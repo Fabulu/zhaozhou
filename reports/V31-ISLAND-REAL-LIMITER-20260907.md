@@ -160,9 +160,32 @@ tree never held broken RTL.
     registers 3157 > allowed 700   (4.5x)
     ALM       1910 > allowed 900
 
-**The output boundary added here makes that slightly worse** — roughly 83 more
-flip-flops (32 + 32 + TAGW + 3), about **+2.6%** on a block already 4.5× over.
-Saying only "it removes the island's worst path" would be the flattering half.
+**The output boundary's first version made that slightly worse** — roughly 83
+more flip-flops (32 + 32 + TAGW + 3), about **+2.6%** on a block already 4.5×
+over. Saying only "it removes the island's worst path" would be the flattering
+half.
+
+> **CORRECTED, AND THE CORRECTION MAY REVERSE THE SIGN.** That first version put
+> the depth-zero ternary **between** the array read and the flop — which is
+> exactly what `QUARTUS_GOTCHAS` 14 says blocks M10K absorption, and which this
+> very file's header already invokes for its *input* side:
+>
+> > combinational logic between an array read and the first register blocks
+> > absorption into the M10K's output register, so an array whose read feeds a
+> > MULTIPLIER cannot become memory however few addresses it has.
+>
+> So the fix was written in the one shape that guarantees the arrays stay in
+> fabric. The bypass now sits **after** the register: `u_q <= e_q_u[head_q]` is a
+> pure read, and `u_o = dz_q ? 0 : u_q` is a 2:1 mux on registers.
+>
+> `e_q_u` and `e_q_v` are 16 × 32 apiece — about **1,024 flops** that could stop
+> being flops on a block whose register rule is the one it misses worst.
+>
+> **Prediction with a falsifier**, because three source-reading predictions were
+> falsified by the fitter today: if the refit shows the register count roughly
+> unchanged and M10K still at 1, they did not infer and something else in the
+> read path blocks absorption. Verified functionally either way — 8 block checks
+> at an unchanged 1.99 products/clock, 119 island checks unchanged.
 
 Two things are worth separating, because §12.4 insists on it:
 
