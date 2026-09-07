@@ -1487,3 +1487,34 @@ reports in two seconds sat behind the most expensive gate available.
 **Recorded, not chased** — the owner's direction names "an interesting new
 bottleneck elsewhere" precisely, and this is one. None of the 16 errors mention
 any block changed today; that was the question that started the check.
+
+## Mid-flight reading of the refit's map stage (read-only, before the fitter finishes)
+
+`quartus_map` completed at 13:02; the fitter is still placing. Three things
+checked now rather than assumed later:
+
+**1. `` `ifndef SYNTHESIS `` genuinely works.** T2 step 1's shadow window and
+identity assertions were added on the explicit claim that they *"must not move
+the next fit's numbers"* — a claim about a tool's behaviour, so it was tested.
+The map report has **zero** occurrences of `sh_alloc_gen_q`, `sh_retire_gen_q`,
+`tkt_chk_q`, `gen_chk_s`; and **64** of `crs_q`. The guard holds; the
+before/after that decides T2 is clean.
+
+**2. T4's declared cost is exactly right.**
+
+| | MAP registers | virtual pins | memory bits | DSP |
+|---|---:|---:|---:|---:|
+| previous `19bd8bd2` | 4,246 | 952 | 20,640 | 0 |
+| this refit | **4,310** | 952 | 20,640 | 0 |
+
+**+64 exactly** — `crs_q` and nothing else, which is what T4's report predicted
+in advance. It also says the fence rewrite added **no** registers, as a change
+that only moves a select out of a loop should. Scope matches (952 pins both), so
+T7's matched-scope requirement is satisfied before the numbers arrive.
+
+**3. No new Quartus warnings.** `Warning (10036)` count is **5 before and 5
+now** — same class, same three files, line numbers shifted only by the code added
+above them. They are assertion-only signals (`ovf_c` feeds nothing but
+`a_rq_no_overflow`), which Quartus reports as unused once it drops assertions.
+
+Only ALM and Fmax remain, and those come from the fitter.
