@@ -251,6 +251,7 @@ targets:
     sources:
       - fpga/rtl/field/zhao_field_rcp24_rom.sv
       - fpga/rtl/raster/zhao_raster_ticketq.sv
+      - fpga/rtl/raster/zhao_raster_ticketq_rh.sv
       - fpga/rtl/raster/zhao_raster_rcp24_mul.sv
       - fpga/rtl/raster/zhao_raster_rcp24_v3.sv
     rules:

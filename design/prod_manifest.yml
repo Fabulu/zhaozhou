@@ -345,6 +345,7 @@ excluded:
   - zhao_raster_rcp24_v3: not-yet-adopted  V3 tile per S10; zhao_raster_rcp24_svc stays counted until it is composed
   - zhao_raster_rcp24_mul: not-yet-adopted  the exact 32x32 product, inside zhao_raster_rcp24_v3
   - zhao_raster_ticketq: not-yet-adopted  the queue that replaces the scans, inside zhao_raster_rcp24_v3
+  - zhao_raster_ticketq_rh: not-yet-adopted  S16.3's registered-head wrapper; only the DONE instance uses it
 
   # The V3 texture-island owner/completion experiment (section 26.1). These are the
   # FIRST implementation task and are deliberately not composed: section 26.1 says

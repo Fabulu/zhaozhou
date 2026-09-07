@@ -2456,6 +2456,7 @@ verilate(test_raster_rcp24_v3_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
 add_test(NAME raster_rcp24_v3_directed COMMAND test_raster_rcp24_v3_directed)
 set_tests_properties(raster_rcp24_v3_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
@@ -2474,6 +2475,7 @@ add_test(NAME lint_raster_rcp24_v3
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
 set_tests_properties(lint_raster_rcp24_v3 PROPERTIES
   LABELS "lint;fast"

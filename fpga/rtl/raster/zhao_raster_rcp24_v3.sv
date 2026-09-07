@@ -215,7 +215,15 @@ module zhao_raster_rcp24_v3 #(
   // The completion scan, replaced. A context reaches this queue exactly once.
   logic          done_push, done_pop, done_empty, done_full, done_err;
   logic [CW-1:0] done_din, done_dout;
-  zhao_raster_ticketq #(
+  // REGISTERED HEAD, and only here. S16.2: "Start with the DONE queue/output
+  // seam. Do not rewrite the multiplier first." The fit's worst paths all ran
+  // u_doneq|mem_q[..] / |head_q[..] -> r_tok_o / r_o, which is the
+  // combinational `dout_o = mem_q[head_q]` driving the external result packet.
+  //
+  // S16.4 forbids doing this to all four: "FREE, NEW, CONTINUATION and DONE
+  // have different traffic and initialization." The other three instances above
+  // are untouched.
+  zhao_raster_ticketq_rh #(
       .W(CW),
       .D(NCTX)
   ) u_doneq (
