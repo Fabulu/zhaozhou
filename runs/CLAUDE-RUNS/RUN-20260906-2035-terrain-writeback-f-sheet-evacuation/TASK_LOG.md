@@ -2244,3 +2244,26 @@ carries it forward, and the resulting suite is greener than before. Anchoring on
 the line *above* the target, or asserting the check count went UP by the number
 added, would both have caught it immediately — the count went 522 → 525 for four
 added checks, and I noticed the arithmetic was off by one and did not chase it.
+
+## WHERE I WAS, written before reading the fit
+
+The `zhao_texture_v3own` fit reached `quartus_sta` — its last stage — so the T2
+migration's ALM and Fmax land next. Recorded now, because fit results redirect
+the work and the half-finished thing in hand is what gets lost.
+
+**In hand, and unfinished:** §22.8's remaining named states. The late-old-packet
+one is done. The next is *"an empty body with a pending queue read, the exact
+state the old occupancy omitted"* — that is a `zhao_texture_v3rq` test, not an
+owner-block one, so it does not touch the fit's closure either. After that,
+*"delay one external adapter's acknowledgement; the namespace must not
+reopen"*, which needs an adapter-ack port the owner block does not have yet and
+is therefore integration work, not a test I can write today.
+
+**The before-picture to compare against**, recorded this morning: reported
+87.37, core→core **91.32**, ALM **5,709**, FIT registers **4,863**, 17 M10K /
+20,640 bits, 952 pins. MAP has already confirmed registers 4,310 → **3,750**,
+exactly the predicted −560.
+
+**The structural prediction on record:** `gen_q` should appear in NO path.
+ALM and Fmax are deliberately NOT predicted — today's score is three structural
+predictions confirmed against four magnitude predictions falsified.
