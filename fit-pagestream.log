@@ -1,0 +1,16 @@
+﻿powershell.exe : preflight: source 'zhao_terrain_mipfeed' for top 'zhao_terrain_pagestream' does not exist. This is a missing file, 
+NOT a block that 
+In Zeile:1 Zeichen:328
++ ... ao-env.ps1; & powershell -NoProfile -File tools\quartus\run_block_fit ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (preflight: sour...T a block that :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+does not fit.
+In C:\programmieren\zencrifice\zhaozhou\tools\quartus\run_block_fit.ps1:382 Zeichen:17
++ ...             throw ("preflight: source '" + $src + "' for top '" + $mo ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (preflight: sour...t does not fit.:String) [], RuntimeException
+    + FullyQualifiedErrorId : preflight: source 'zhao_terrain_mipfeed' for top 'zhao_terrain_pagestream' does not exist. This is a  
+   missing file, NOT a block that does not fit.
+ 

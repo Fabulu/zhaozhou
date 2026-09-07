@@ -350,6 +350,42 @@ targets:
   # tell those two apart -- a Verilator run is identical either way -- so the
   # claim is UNVERIFIED until a fitter says so, and it is exactly the sort of
   # plausible argument this file exists to stop being taken on trust.
+  # TERRAIN.PAGESTREAM holds THREE 64-byte staging buffers -- 1,536 bits of
+  # flops, deliberately, because the alternative was 17,424 bits of buffering
+  # for a plane held across two other passes. That is a claim about what the
+  # fitter will do with a 512-bit register indexed by a byte lane, and a
+  # 512-bit register that got turned into a memory would be worse, not better:
+  # the extraction is a combinational part-select on the SAME cycle, so an
+  # inferred M10K there would add a cycle to every vertex.
+  - top: zhao_terrain_pagestream
+    sources:
+      - fpga/rtl/generated/zhao_abi_pkg.sv
+      - fpga/rtl/common/zhao_pkg.sv
+      - fpga/rtl/terrain/zhao_terrain_pagestream.sv
+    rules:
+      # THE BUFFERS MUST STAY FLOPS. max_m10k 0 is the acceptance question: the
+      # three staging buffers are read combinationally by a byte lane on the
+      # cycle the vertex is emitted, so a memory here would cost a cycle per
+      # vertex and 1,089 per lattice.
+      max_m10k: 0
+      max_dsp: 0
+      # 1,536 buffer bits plus three cursors, a vertex index, six counters and
+      # the job record. Set from that arithmetic BEFORE the fit, so the number
+      # it reports is a measurement and not a target.
+      max_registers: 2400
+      max_alms: 1600
+
+  # TERRAIN.MIPFEED is a seven-state machine with one job record and three
+  # counters. If it needs memory or a DSP, something is in it that should not be.
+  - top: zhao_terrain_mipfeed
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_mipfeed.sv
+    rules:
+      max_m10k: 0
+      max_dsp: 0
+      max_registers: 200
+      max_alms: 200
+
   - top: zhao_terrain_loadq
     sources:
       - fpga/rtl/terrain/zhao_terrain_loadq.sv

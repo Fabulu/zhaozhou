@@ -2089,3 +2089,103 @@ streamer.
 
 A fable agent is running a recon-then-architect pass on **GEOM.WARP**, against
 the owner's question of where terrain deformation and effects actually live.
+
+---
+
+## 2026-09-07 (later) — a loaded page becomes GROUND
+
+### The composed suite's worst finding is closed
+
+Since 2026-09-06 the first line of `world_composed_directed`'s findings has been
+that **a page loaded into this world layer never becomes ground**. Eight pages
+fetched, CRC-verified, byte-identical in their slots; `resident_o` **zero**. The
+directory publishes on TWO completions and nothing in the tree could send the
+second.
+
+The cause moved twice before it was fixed, which is the part worth keeping:
+
+1. *"`zhao_terrain_mipgen` has no slot, generation, epoch or completion port."*
+   True when written, false within hours — those ports landed the same day.
+2. *"Nothing turns a resident page slot into a lattice."* True, and the real
+   hole.
+
+Two new blocks:
+
+* **`zhao_terrain_pagestream`** — reads layers A, B and C out of one pool slot
+  and emits the 33×33 lattice, one vertex at a time, all three planes on the
+  same beat. Three cursors in lockstep with a 64-byte staging buffer each
+  (1,536 bits) rather than 17,424 bits of held plane. **51 checks, 0 failures**;
+  105 bursts per lattice, derived from the layout and then measured to agree;
+  3,544 clocks against the loader's 6,726.
+* **`zhao_terrain_mipfeed`** — runs the streamer twice, one pass per surface,
+  into MIPGEN. **Two passes, not a buffer.** MIPGEN started **once**, because
+  its surface counter runs across both.
+
+`world_composed_directed`: **158 checks, 0 failures, 3 → 1 composition defects.**
+
+### Two things the bench taught the chain
+
+**MIPGEN's `done_o` pulses before anyone is looking.** The last fine sample is
+taken on the same cycle the streamer raises `v_last`, so MIPGEN completes while
+MIPFEED is two states away collecting the *streamer's* completion. First version
+hung on page one: 578 mip writes done, **zero** pages mipped. Latched now.
+
+**TERRAIN.RESIDENCY validates the CRC on EVERY completion**, not only the
+loader's. A mip completion carrying zero is a CRC *failure*: 16 lattices, 17,424
+samples, 4,624 mip writes — and eight CRC failures with zero resident. Every
+block had done its job and the page still was not ground. The CRC now travels
+with the request as a **token, not a claim**.
+
+### An open ruling, flagged rather than invented
+
+**Which plane is surface 0 at load time.** T8 gives the mip law exactly and says
+a page becomes RESIDENT only after *"resident mips complete"* — but not what
+"top" *is* at load. Layer A is sent (no arithmetic this block owns);
+`compose_top` is TERRAIN.PATCH's law, and if the ruling picks it the honest
+change is to take surface 0 from PATCH's compose lane, not to compute it here.
+Named constants, so the ruling has somewhere to land.
+
+### TERRAIN.LOADQ fitted — the storage claim is no longer a claim
+
+Nothing in simulation can tell one M10K from 7,776 flip-flops. Quartus 17.0.2,
+5CSEBA6U23I7, 2,018 s:
+
+| | measured |
+|---|---:|
+| block memory bits | **10,240** — 32 × 8 × 40, exactly |
+| M10K | **1** |
+| registers | **692** |
+| ALM | 734 |
+| DSP | 0 |
+| Fmax | **107.33 MHz** against a 100 MHz product clock |
+
+The gates were written *before* the fit ran and are left where they are; a gate
+retuned to the number it just measured is not a gate.
+
+### The bench glue that is a finding
+
+Nothing in `fpga/rtl` notices a page has landed and **asks** for its mips: the
+directory moves the entry to `ST_MIPGEN` and has no port to ask with. The
+trigger is minted in the bench, and it is a **queue** because the arithmetic
+says so — a load is 6,726 clocks, two lattice passes are ~7,088, so MIPFEED is
+*slower* than the loader and a one-deep register drops a request every time the
+eighth page beats the seventh's mips. Drops counted. Like the journal ticket
+allocator: no contract says who owns this.
+
+### GEOM.WARP, answered
+
+A fable agent's recon-then-architect pass is in
+`reports/GEOM-WARP-ARCHITECTURE-20260907.md`. **Terrain deformation does not run
+through GEOM.WARP and never did** — it runs through `terrain_rules.md` §3.4
+composition, `zref::terrain::compose_vertex`, E-profile programs via
+FIELD.SEQ.EARTH, and TERRAIN.BAKE for permanent scars. Zero terrain artifacts
+cite GEOM.WARP. It is the *mesh* effects layer (spell ripples, wind beyond
+bones), currently deferred by ruling 2026-08-31 §6.3, with a phantom reference
+model and non-existent named tests. Six owner rulings listed there, including a
+new one: **no warp verb exists on the command wire at all**.
+
+### Open
+
+* `zhao_terrain_pagestream` and `zhao_terrain_mipfeed` fits running.
+* The last composition defect needs an owner ruling: a load completing into a
+  slot the directory has already put in EVICT_PENDING.
