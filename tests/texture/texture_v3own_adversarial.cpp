@@ -1043,6 +1043,20 @@ int main(int argc, char** argv) {
       zhao::check(s.emitted[i].owner == owners[i],
                   "emission is in ADMISSION order, not readiness order",
                   owners[i], s.emitted[i].owner);
+    // S22.7 asks for the admitted sequence "with unchanged 64-bit context", and
+    // the context was NOT checked here. Case 1 checks it but completes IN
+    // ORDER, so the check existed only where it could not fail. THIS is the
+    // case where a context could be mispaired -- younger work executes first,
+    // and an implementation that carried contexts along the readiness path
+    // rather than the owner path would keep owner order looking right while
+    // pairing each owner with somebody else's payload.
+    int ctx_errors = 0;
+    for (int i = 0; i < N && i < static_cast<int>(s.emitted.size()); ++i)
+      if (s.emitted[i].ctx != ctx_of(5000 + i)) ++ctx_errors;
+    zhao::check(ctx_errors == 0,
+                "S22.7 and each owner carries ITS OWN 64-bit context through "
+                "out-of-order internal execution",
+                0, ctx_errors);
   }
 
   // =========================================================================
