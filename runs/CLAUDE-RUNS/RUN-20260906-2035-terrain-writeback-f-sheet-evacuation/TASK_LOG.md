@@ -3065,3 +3065,30 @@ the first time anyone checked.
 weight — ALM on identical scope, registers against a prediction, what the netlist
 contains. Those survive placement entirely. Frequency deltas need the family
 named on both sides, and now they can have it.
+
+## OWNER DIRECTION: the island restructure is to happen
+
+*"we need the island restructure to happen. Make sure you do whatever
+measurements you need, finish the current one. Then have a fable agent architect
+the restructure."*
+
+**Measurements finished first, as instructed.** Mutation §22.10-11 (F advances
+without a reserved packet slot) → `a_out_reserved` fires. **Eleven of fourteen.**
+Every credit invariant in the block — `a_cmb_reserved`, `a_out_reserved`,
+`a_p22_cbi_implies_crs`, `a_reject_partition_t` — has now caught the mutation it
+was written for. RTL restored, 541 checks.
+
+**FABLE architect launched** for P0-C, briefed with today's measurement base
+rather than left to rediscover it: the 4-of-60 port overlap, the +2,404 ALM /
++6,981 register glue pool, `uvw_m`'s 4,096 async-read flops, the composed island
+numbers and their budgets, and the T2 identity law it must preserve.
+
+**And bound by today's measurement discipline**, which is the part most likely to
+be skipped: M1's seed noise, M6's gating-family rule and the worst-path index,
+M4's leaf-versus-composed mis-pricing. Its plan must make every stage
+independently measurable with a falsifier, because two changes in one fit produce
+one unattributable number — which is exactly the error I made and retracted
+today.
+
+The island reseed continues in parallel; it is unrelated to the restructure and
+settles P0-B's attribution.
