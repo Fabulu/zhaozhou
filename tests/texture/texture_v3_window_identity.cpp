@@ -451,6 +451,47 @@ int main() {
                 0, later_alive);
   }
 
+  // ---- V02 (owner T2 brief): EVERY occupancy, EVERY head residue -----------
+  // The brief's required case V02 asks for "every occupancy 0..64 and every
+  // head residue", not a sample. The block above walks 66 head positions on a
+  // coprime stride at four occupancies, which is a sample -- good enough to
+  // catch a gross error, not good enough to satisfy the case as written.
+  //
+  // Exhaustive at the boundary instead: for every one of the 16,384 head
+  // positions and every occupancy 0..64, probe the tickets immediately inside
+  // and immediately outside the interval. That is where <=, a signed compare,
+  // or a six-bit distance all fail, and it is 65 x 16,384 x 4 checks rather
+  // than the 65 x 16,384 x 16,384 a full membership sweep would cost.
+  {
+    long probes = 0;
+    int  errors = 0;
+    for (uint32_t base = 0; base < kModulus; ++base) {
+      for (int used = 0; used <= kSlots; ++used) {
+        Window w;
+        w.retire = static_cast<uint16_t>(base);
+        w.alloc  = static_cast<uint16_t>((base + used) & kMask);
+        w.used   = used;
+        // one before the interval, first inside, last inside, one past the end
+        const int ks[4] = {-1, 0, used - 1, used};
+        for (int j = 0; j < 4; ++j) {
+          const int k = ks[j];
+          const uint16_t t =
+              static_cast<uint16_t>((base + static_cast<uint32_t>(k)) & kMask);
+          const bool expect = (k >= 0) && (k < used);
+          if (w.live(t) != expect) ++errors;
+          ++probes;
+        }
+      }
+    }
+    zhao::check(probes == 65L * kModulus * 4,
+                "V02 swept every head residue at every occupancy 0..64", 1,
+                probes == 65L * kModulus * 4 ? 1 : 0);
+    zhao::check(errors == 0,
+                "V02 membership is exact at both interval boundaries for all "
+                "16,384 head residues and all 65 occupancies",
+                0, errors);
+  }
+
   const int rc = zhao::report_and_exit("texture_v3_window_identity");
   zhao::exit_hard(rc);
 }
