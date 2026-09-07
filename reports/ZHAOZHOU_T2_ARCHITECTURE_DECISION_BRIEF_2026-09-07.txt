@@ -1,0 +1,1652 @@
+ZHAOZHOU — ARCHITECTURE DECISION BRIEF
+OWNER LIFETIME, LATE EVENTS, AND FINISHING THE T2 IDENTITY MIGRATION
+===============================================================================
+7 September 2026 | Europe/Zurich | Texture island remains the priority
+
+Decision status: RECOMMENDED FOR OWNER ADOPTION AND DELIVERY TO THE ACTIVE AGENT.
+This file is not evidence that the decision has already been implemented, that
+an agent received it, or that the texture island has passed a physical fit.
+
+Primary source inspection:
+  Repository: Fabulu/zhaozhou
+  Hardware branch: zixxtrixx-v8-closeout
+  Baseline: 22a4b0016651fd7249c335fba75a789b7b8685b8
+            2026-09-07 15:40:10 CEST
+  Follow-up inspected: fd39e140c8baf147daf1c294393875f230956493
+                       2026-09-07 15:47:42 CEST
+  Separate main: 1fc4ac8afbb30176db0212509e7e8450766a4f0a
+
+The follow-up adds tests and a run-log update, not a new implementation of the
+owner or a new physical result. Later activity, if examined, is recorded in a
+closing addendum rather than silently substituted into this baseline.
+
+References [Rxx] identify repository sources; [Exx] identify external primary
+sources; [C01] identifies independent checks executed for this brief. Full
+immutable repository URLs and external URLs appear in the reference section.
+
+===============================================================================
+READ FIRST: THE DECISION AND THE NEXT ACTION
+===============================================================================
+
+RECOMMENDED OWNER RULING
+
+An owner instance has authority from its accepted admission until its ordered
+external output transfer. Once that transfer retires the owner, later events
+for that instance are stale. Matching a slot's residual generation bits does
+not extend the owner's authority after retirement.
+
+A stale event must not change that owner's scoreboard, create ready work,
+authorize COMBINE, publish a result, release a credit, or resurrect the owner.
+The receiver may consume and discard a bad transport packet so that transport
+can drain. Consuming a packet is not accepting its claimed ownership.
+
+This ruling applies separately to:
+  (a) TMU publication at C4;
+  (b) AUX publication at C4;
+  (c) FINAL publication at C4;
+  (d) the actual COMBINE input handshake, which sets combine_issued.
+
+The fourth event is NOT a fourth C4 return. It is a different lifecycle event
+and must retain its own acceptance rule and verification property.
+
+Preserve M6: reserving COMBINE storage is not COMBINE accepting an input. Only
+the real input handshake may establish combine_issued. A valid service-error
+completion for a live, issued source still counts as its one terminal result;
+it is not stale merely because its status describes a service failure.
+
+RECOMMENDED IMPLEMENTATION DECISION
+
+Separate representation removal from semantic tightening. First complete an
+exact generation-reconstruction migration, including the three overlooked C1
+snapshot readers. Then apply the explicit live-owner authority checks and
+snapshot/current-identity protections as a separately testable change.
+
+There is an exact way to remove the generation table WITHOUT waiting for a
+policy decision about dead rows:
+
+  historical_generation(slot) =
+      slot < allocation_slot ? allocation_generation
+                             : allocation_generation - 1 modulo 256.
+
+The current RTL already implements this function as win_gen_of_slot(). It
+reconstructs the residual generation of DEAD as well as live slots. Therefore,
+keeping the old generation-only predicate does not require keeping gen_q.
+
+The earlier claim "those four guards must change semantics before the table
+can be deleted" was too strong. The policy question is legitimate; treating it
+as an unavoidable physical-representation blocker is not. [R01, R03, C01]
+
+NEXT ACTION FOR THE RECEIVING AGENT
+
+Acknowledge this file on the actual hardware branch. Preserve the in-progress
+frozen island fit and already completed texture repairs. Correct the gen_q
+read inventory, finish the exact migration with a synthesis-excluded literal
+reference, and prepare a matched owner fit. Do not switch to terrain, restart
+the architecture, relax resource gates, or equate source edits with ALM gains.
+
+No further owner preference is needed about the intended dead-token policy
+once this ruling is adopted. A new blocker must identify a concrete conflict,
+missing interface, counterexample, or failed gate—not simply repeat that a
+semantic decision exists.
+
+===============================================================================
+CONTENTS
+===============================================================================
+  1. Executive assessment: what is actually blocked
+  2. Physical situation and what the next fit can prove
+  3. Corrections to the earlier account
+  4. Exact lifetime and event semantics
+  5. Alternatives considered and selected migration
+  6. The mathematics of table removal
+  7. Complete read-site and state-removal audit
+  8. C1/C2/C3/C4: preventing stale snapshots and late writes
+  9. COMBINE is its own fourth event
+ 10. Reset, generation wrap, and the limits of finite tokens
+ 11. Verification matrix and concrete failure detectors
+ 12. Formal proof boundaries and non-vacuity
+ 13. Implementation sequence and acceptance checkpoints
+ 14. Physical measurement and resource policy
+ 15. Wider texture integration; terrain stays deferred
+ 16. Independent checks executed for this brief
+ 17. Risks, non-goals, and closure conditions
+ 18. Ready-to-paste owner decision
+ 19. Source index and reproducibility
+ 20. Closing source refresh: map-stage evidence and newer tests
+
+===============================================================================
+1. EXECUTIVE ASSESSMENT: WHAT IS ACTUALLY BLOCKED
+===============================================================================
+
+The most useful conclusion is not merely "reject dead tokens." It is:
+
+  The lifetime policy should be explicit, but the current generation table is
+  mathematically redundant under the existing allocator. We can remove that
+  representation safely without conflating removal with a change in policy.
+
+The agent correctly noticed that generation equality and live-token membership
+are different predicates. In a dead-but-not-reused slot, generation equality
+can still be true. Strengthening it to live membership changes the next-state
+function for that condition. It was reasonable to flag the difference. [R03]
+
+However, three separate questions became tangled:
+
+  POLICY: Should a retired transaction retain any authority? Recommendation: no.
+
+  REPRESENTATION: Must its last generation be stored in 64 independent rows?
+  No, not under strict round-robin allocation. It can be reconstructed exactly.
+
+  PROOF: Does the normal pipeline allow publication after retirement? The
+  ordering argument and existing tests are encouraging, but simulation does
+  not establish unbounded reachability or arbitrary-fault safety.
+
+The current implementation can continue on the representation question while
+preserving existing behavior. This eliminates the artificial dependency that
+has been used to defer deletion. The final implementation should also adopt
+the stronger, explicit authority rule. [R01, R03, R04]
+
+This is not an instruction to delete the table after changing only four lines.
+The live source still samples gen_q at C1 on THREE return pipelines. Those
+readers were missing from the published last-four-sites narrative. The proof
+and deletion must include them. There is also a generation-next-state read for
+held fence diagnostic state whose synthesis relevance must be checked. [R01]
+
+The independent arithmetic work for this brief exhaustively checks generation
+reconstruction against a literal table over the initial partial allocation
+pass and more than two namespace cycles. It also checks all allocation residues,
+all legal occupancies, and all slots against a literal live-owner list. These
+checks support the identity, not the correctness of the entire RTL pipeline.
+Their source and results are supplied separately. [C01]
+
+===============================================================================
+2. PHYSICAL SITUATION AND WHAT THE NEXT FIT CAN PROVE
+===============================================================================
+
+Keep implementation scopes separate. The V3 owner experiment is not the current
+composed texture island. A successful owner fit does not measure the sampler,
+all services, or the parent-level attribute storage. Conversely, the running
+legacy-island characterization does not measure the accumulated T2 migration
+inside the unintegrated V3 owner. [R01, R07, R08]
+
+Recorded results available at the inspected baseline:
+
+  Scope / specimen                   ALM     FIT regs  M10K  DSP  MHz reported
+  -------------------------------------------------------------------------
+  Original V3 owner @v3-full          5,678       4,864    17    0       75.79
+  First registered-credit/fence       6,094       4,756    17    0       77.16
+  Repaired fence + M6/T4 owner         5,709       4,863    17    0       87.37
+  PERSPUV after output registration    1,886       3,216     1    6      105.19
+  COMBINE V2 standalone                  870         918     6    2      114.04
+  Historical composed texture island 16,192      28,490    32   17       67.57
+
+Owner core-to-core figures for the first three rows are 89.09, 77.16 and
+91.32 MHz respectively. The three owner specimens have the same recorded
+952 virtual pins and 20,640 memory bits; they are matched-scope comparisons,
+not a sum of independent pieces. The later owner's area allocation still fails:
+5,709 ALMs against 1,800. [R05, R06]
+
+PERSPUV passes the recorded 100 MHz SETUP check. It is not all-corner timing
+closed: Slow -40 C hold slack is -0.263 ns, with -0.361 ns hold TNS. The report's
+sentence claiming every slack is positive is false when read as a statement
+about the complete TimeQuest result. Treat 105.19 as a useful setup benchmark,
+not a clean sign-off. The expected roughly 1,024-register RAM inference did not
+occur; only 256 bits / one M10K remain reported. [R09, R10]
+
+The historical composed island is 77.30 MHz core-to-core. The important raw
+path list contains more than one severe internal failure:
+
+  Historical path family                                      Setup slack
+  -----------------------------------------------------------------------
+  Palette-load input -> palette state                              -4.800 ns
+  PERSPUV head -> FRAGROB RAM write-enable register                 -2.936 ns
+  Parent live_r -> RCP context-memory read address                  -2.834 ns
+  Response dispatch -> FRAGROB sample result                       -2.777 ns
+  RCP service -> PERSPUV input-side storage                        -2.565 ns
+
+The latter families are not removed merely by registering PERSPUV's output.
+For illustration only, an unchanged 10 ns relationship with -2.834 ns slack
+corresponds to about 77.92 MHz by 1000/(10+2.834). Placement changes can improve
+or worsen that. It is not a prediction of the next fit. It demonstrates why a
+jump into the 90s never followed from deleting only the first internal family.
+My earlier conversational emphasis on that possibility was too optimistic.
+[R11]
+
+Likewise, an internal timing split is diagnostic, not permission to discard
+interface paths. When blocks are composed, real logic replaces the virtual
+boundary; that real path still has to close. Setup Fmax does not replace hold,
+recovery, removal, pulse-width, clock-domain, or constraint-coverage checks.
+The tool vendor explicitly recommends slack reports for sign-off. [E02]
+
+At the inspected source, the run log says the composed-island fit was launched.
+That is evidence of a recorded launch, not direct access to the workstation's
+process state. No new composed result was present in the inspected ledger.
+Retain the frozen run and inspect the actual result when it is published. [R05]
+
+===============================================================================
+3. CORRECTIONS TO THE EARLIER ACCOUNT
+===============================================================================
+
+3.1 There are three C4 publication events, not four
+
+c4t, c4a and c4f are TMU, AUX and FINAL publication. The fourth hoisted guard
+is cmb_gen_ok_c, consumed when COMBINE actually accepts an input. It sets
+cbi/actual issue, not committed/final-done. The three newly added C4 assertions
+do not cover that fourth event. Add a separate COMBINE-validity/lease property.
+[R01]
+
+3.2 Four remaining named guards are not all remaining functional readers
+
+The code still contains:
+
+  c1t_tgen_q <= gen_q [c0t_slot_q];
+  c1a_tgen_q <= gen_q [c0a_slot_q];
+  c1f_tgen_q <= gen_q [c0f_slot_q];
+
+The space before '[' matters to a careless text search. Their values feed the
+C2 identity predicates and therefore influence real payload write enables.
+Changing the four guards alone does not make gen_q dead. [R01]
+
+3.3 Table removal does not require win_live at every reader
+
+The allocator-derived win_gen_of_slot() reconstructs the old table for all
+slots, including dead slots. It can replace a generation-only comparison
+without adding a liveness requirement. The representation and the authority
+policy can be changed in separate patches. [R01, C01]
+
+3.4 A source-level comparator hoist is not a measured ALM saving
+
+The source was rewritten from per-row comparisons to one selected comparison
+per event lane. That is an exact Boolean refactoring. Whether Quartus already
+shared, replicated, or optimized any of the original logic is a netlist/fit
+question. "256 comparators became four selects" describes the source expression
+shape; it does not establish that 252 physical comparators disappeared.
+Similarly, a SystemVerilog helper function does not guarantee one shared
+hardware unit across simultaneous callers. [R01, R03]
+
+3.5 Simulation assertions are not an unbounded proof
+
+The three C4 dead-match assertions have not fired in the recorded adversarial
+bench. That establishes something about the executed traces. It does not
+establish that all protocol-legal traces satisfy the property, and it certainly
+does not prove tolerance of unrestricted corruption of internal registers.
+[R03, E03, E04]
+
+The phase invariants added at 902c835a are checked on one rotating row per
+cycle. That is useful sampling, but it is not "every active row at every edge."
+A one-cycle violation in another row can disappear before the rotating checker
+arrives. For acceptance, use all-row assertions, event-target assertions with
+an inductive preservation argument, or an arbitrary constant row in a formal
+proof. Do not relabel sampling as universal coverage. [R01, R12]
+
+3.6 No policy change at C4 can retroactively prevent a C3 payload write
+
+The payload is written before C4 publication. A late guard protects later
+scoreboard changes; it does not undo a write already accepted by RAM. The
+architecture must establish authority before physical mutation and keep it
+valid through that mutation, not rely on a final stale check as a repair.
+[R01, R04]
+
+===============================================================================
+4. EXACT LIFETIME AND EVENT SEMANTICS
+===============================================================================
+
+4.1 Define the owner instance, not only its bit pattern
+
+A logical owner is a particular admitted fragment instance. Its public handle
+is a finite encoding of that instance; it is not an eternally unique identity
+and is not cryptographic authentication.
+
+For the current configuration:
+
+  Public OwnerHandle = {slot[5:0], generation[7:0]}      : 14 bits
+  Public SampleHandle= {slot[5:0], sample[1:0], gen[7:0]}: 16 bits
+  Internal ticket    = {generation[7:0], slot[5:0]}      : 14 bits
+
+TMU samples 0, 1 and 2 are legal. Sample index 3 is malformed, not AUX. The
+AUX and FINAL ports are independently typed. Palette generation, configuration
+epoch, transport identity and owner generation remain different domains.
+[R01, R02, R04]
+
+4.2 Linearization points
+
+Admission happens at the rising edge where adm_valid && adm_ready is true.
+The new token is stamped from the pre-edge allocation cursor, and row state
+and counters advance from that same accepted event.
+
+Normal retirement happens at the rising edge where out_valid && out_ready is
+true for the oldest owner. Final completion, RAM write, output prefetch and
+being presented with valid do not retire the owner. A blocked output still
+owns its row, context and credit. [R01, R04]
+
+Authorization checks use a consistent pre-edge state. Do not let a current
+admission retroactively authorize a packet that was invalid when its snapshot
+was taken. Do not use a next-state live count in one part of a predicate and
+pre-edge token state in another without proving that mixed-time contract.
+
+At full capacity, retain conservative admission: the source cannot assume a
+same-edge retirement provides a bypass credit. The current registered-credit
+scheme was explicitly designed to avoid a 65th-owner overwrite. A fast bypass
+is a different optimization with a separate proof and timing cost.
+
+4.3 Allowed effects by event type
+
+A TMU/AUX publication can update committed bits and potentially create the
+owner's one ready ticket only for the corresponding current live owner.
+
+A FINAL publication can establish final_done only for the current live owner,
+after a legitimate final was claimed and physically written.
+
+An actual COMBINE input transfer can establish combine_issued only for a live
+owner that already held the appropriate reservation and required completion
+state. Reservation alone never authorizes a final.
+
+A stale external return is consumed under the existing return-port transport
+contract and classified as a rejection. It must not claim, write, publish or
+free anything. Other legal traffic in the same clock must continue normally;
+"no side effects from the stale event" is not "freeze the whole scoreboard."
+
+A valid, issued service error still commits its declared fallback/status once.
+Rejecting that error as though it were a stale identity would strand the owner
+and can deadlock a namespace drain. [R01, R02]
+
+4.4 Internal invariant failures need different diagnostics
+
+An invalid external packet is an anticipated rejection class. A C4 record for
+a retired owner is different: C4 is an internally generated publication record
+that should descend from an already accepted C2 claim. It is evidence of a
+broken lease, pipeline corruption, or an incorrectly implemented reset/drain.
+
+Recommended response: suppress that event's scoreboard/ready/credit effects,
+raise a dedicated sticky internal-protocol diagnostic, and route recovery
+through the defined containing-system fault procedure. Do not silently count it
+as successful work. Do not silently turn it into an ordinary external stale
+counter and thereby invalidate the existing C2 rejection-partition accounting.
+
+This decision does not authorize a new automatic cancellation mechanism. If the
+containing system lacks safe recovery, a visible failed/stopped state is more
+honest than fabricating a drain acknowledgment or freeing an arbitrary owner.
+
+4.5 Same-edge retirement does not rewrite history
+
+A predicate evaluated before a retiring edge sees the retiring owner as live.
+After the edge that instance is dead. The stronger lifecycle invariants should
+normally prevent new C4 work or a first COMBINE issue from coinciding with that
+owner's output retirement at all.
+
+Check that ordering explicitly. Do not claim that merely using post-edge
+membership solves the race: post-edge membership can instead let a newly
+allocated instance authorize an older packet if identity was not preserved.
+
+===============================================================================
+5. ALTERNATIVES CONSIDERED AND SELECTED MIGRATION
+===============================================================================
+
+A. Replace every generation-only guard immediately with win_live()
+
+Advantages: states the intended authority rule directly; eliminates selected
+array reads; makes dead rows unable to accept publications.
+
+Risks: changes behavior on dead-but-matching rows; conflates representation and
+semantics; does not fix the omitted C1 reads; does not itself prevent C3 writes;
+can add a subtract/compare cone to a critical event path.
+
+Decision: this is the selected FINAL policy, not a four-line unreviewed patch.
+
+B. Reconstruct historical generation exactly, then tighten authority
+
+Advantages: removes the redundant table without requiring a behavior change;
+uses an already present function; can preserve C1 timing and old predicates;
+allows before/after behavioral equivalence to be tested independently from the
+new dead-event policy. The state identity has an inductive argument and finite
+exhaustive checks. [R01, C01]
+
+Risks: if retained forever without the policy follow-up, old permissive dead-row
+semantics persist; helper calls still have a physical logic cost; care is needed
+for next-state diagnostic reads and reset.
+
+Decision: SELECTED IMPLEMENTATION SEQUENCE. Adopt the authority ruling now,
+execute the migration in attributable steps, and label the exact intermediate
+as an intermediate—not as final lifetime-contract closure.
+
+C. Preserve gen_q until a future owner ruling
+
+Advantages: minimal immediate code change.
+
+Costs: retains 512 declared generation state bits and remaining selection logic;
+blocks the intended T2 area experiment for a reason that an exact representation
+already resolves. It encourages indefinite peripheral test/report work.
+
+Decision: not justified as the default once the exact reconstruction is audited.
+A real counterexample to the reconstruction would change this decision.
+
+D. Remove the guards because C4 ought to be safe
+
+Advantages: potentially cheap.
+
+Risks: relies on an unproven upstream lifetime argument; weakens defensive
+behavior; can turn a future pipeline or drain bug into silent corruption.
+
+Decision: rejected. Keep or strengthen authority checks at deliberate boundaries.
+
+E. Widen all generation tags
+
+Advantages: postpones numeric reuse.
+
+Costs: more tag storage, wires and comparators; no fix for snapshot/current
+confusion; no proof against arbitrarily delayed aliases after wrap or reset.
+
+Decision: not the T2 solution. An outer epoch may be needed for a specific
+transport/reset contract, but adding bits is not a substitute for defining it.
+
+===============================================================================
+6. THE MATHEMATICS OF TABLE REMOVAL
+===============================================================================
+
+6.1 State
+
+Let S=64 be the owner capacity and Q=16384 the ticket namespace. Let:
+
+  A : next allocation ticket, modulo Q;
+  E : next externally retiring ticket, modulo Q;
+  U : live-owner count, 0..64;
+  F : next owner whose final-row read has not yet been reserved.
+
+Initially A=E=64 and U=0. The first internal ticket is 64, while its public
+owner handle is 0x0001: slot zero, generation one. Those are DIFFERENT numeric
+values because the public and internal bit orders differ.
+
+Admission advances A; ordered output transfer advances E. Consequently:
+
+  U_next = U + admission_taken - output_taken
+  U      = (A - E) modulo Q
+
+within the invariant 0<=U<=64. Since 64 is much smaller than Q, A==E means
+empty, not full. The usual ambiguity of a FIFO pointer truncated to the storage
+index does not apply to these full 14-bit tickets. [R04, C01]
+
+6.2 Full-token membership
+
+  is_live(ticket) = unsigned_14(ticket - E) < U.
+
+This is membership in the short modular interval [E,A), not a generic signed
+ordering of arbitrary tickets. Compute the full 14-bit distance before comparing
+against the widened live count. Do not shorten it to six bits merely because
+there are 64 slots. Old generations would alias into the current window.
+
+Finite sequence arithmetic has wrap-specific comparison rules; RFC 1982 is a
+useful primary reference for why ordinary integer ordering cannot simply be
+reused. The formula here is derived for this bounded ownership interval, not
+an adoption of every RFC operation or a proof of transport safety. [E01]
+
+6.3 Historical generation for EVERY physical slot
+
+Write A={G,P}, with G=A[13:6] and P=A[5:0]. Strict allocation order gives:
+
+  H(s) = G                    when s < P
+       = G - 1 modulo 256     when s >= P.
+
+Reason: slots below the current allocation cursor have been allocated in the
+current pass through the ring; slots at or ahead of it retain the previous
+pass's generation. Retirement does not modify gen_q. Therefore H describes
+both live and dead rows. [R01]
+
+Inductive argument:
+
+  Reset: G=1, P=0. Every slot takes G-1=0, exactly the reset table.
+
+  Non-wrapping admission at P<63: only row P is changed from G-1 to G;
+  P advances to P+1. That is exactly the row moving between the two ranges.
+
+  Admission at P=63: row 63 becomes G; P becomes 0 and G increments modulo
+  256. Every row is now in the previous-pass range and evaluates to the old G.
+
+  No admission, including retirement alone: neither G nor P nor gen_q changes.
+
+These cases exhaust the existing table's functional update rule. This argument
+fails if allocation becomes a free list, skips slots, independently changes
+row generations, or resets only part of the identity state. Such changes are
+outside this decision. [R01, C01]
+
+6.4 Historical reconstruction and live reconstruction are NOT interchangeable
+
+For a known-live slot, another useful reconstruction is:
+
+  offset = unsigned_6(slot - E.slot)
+  ticket = E + offset modulo Q, with offset < U.
+
+Without the final condition, this can name a FUTURE owner rather than the last
+owner of a dead slot.
+
+Concrete example: A=65, E=65, U=0 after ticket 64 retired. Slot zero's historical
+generation is one. But E + unsigned_6(0 - E.slot) is 65+63=128, generation two.
+The two reconstructions differ exactly on a case that matters to preserving a
+generation-only dead-row guard.
+
+Use H(s), derived from A, for exact legacy generation replacement. Use full
+membership or a checked live-slot reconstruction for current authority.
+
+6.5 Exact intermediate code shape
+
+Illustrative fixed-shape helpers, not a tested drop-in patch:
+
+  function automatic logic [GENW-1:0] hist_gen(input logic [SLOTW-1:0] s);
+    hist_gen = (s < tail_q) ? sh_alloc_gen_q
+                           : GENW'(sh_alloc_gen_q - GENW'(1));
+  endfunction
+
+  // Existing public handles must be unpacked and repacked into ticket order.
+  wire [OWNERW-1:0] t_ticket = {c4t_gen_q, c4t_slot_q};
+
+  // Exact representation-only replacement:
+  assign c4t_gen_ok_c = (hist_gen(c4t_slot_q) == c4t_gen_q);
+
+  // Final policy, in a separately tested step:
+  assign c4t_owner_ok_c = win_live(t_ticket);
+
+Do not infer that the single helper means all callers share one arithmetic
+resource. Parallel event lanes require parallel decisions; synthesis chooses
+how much common logic to share. Measure the resulting network.
+
+6.6 Slot liveness without a per-slot live table
+
+Given the contiguous live interval and U<=64:
+
+  slot_is_live(s) = unsigned_6(s - E.slot) < U.
+
+This six-bit distance is safe ONLY for whether an internal physical slot is in
+the occupied slot interval. It does not authenticate an external full handle.
+For U=64 all slots are occupied; for U=0 none are. Full returned identities must
+continue to use all generation bits. [C01]
+
+6.7 Counter partition and width
+
+The implementation has unf_cnt_q for not-yet-fetched owners and out_res_q for
+fetched/reserved-but-not-emitted owners. The intended invariant is:
+
+  U = unfetched + output_reserved,
+  [E,A) = [E,F) disjoint-union [F,A).
+
+The current partition assertion casts the sum back to CNTW. Strengthen the
+checker by WIDENING both operands and the comparison, and separately bound each
+counter. A truncated sum can hide an overflow in precisely the corrupted state
+an assertion is meant to detect. This is checker strengthening, not a claim
+that the current valid execution overflows. [R01]
+
+===============================================================================
+7. COMPLETE READ-SITE AND STATE-REMOVAL AUDIT
+===============================================================================
+
+The functional residual generation audit at 22a4b001 is:
+
+  Reader                       Role / proposed treatment
+  -------------------------------------------------------------------------
+  c4t_gen_ok_c                  TMU publication: H(s) first; live authority next
+  c4a_gen_ok_c                  AUX publication: H(s) first; live authority next
+  c4f_gen_ok_c                  FINAL publication: H(s) first; live authority next
+  cmb_gen_ok_c                  Actual COMBINE acceptance: separate lease check
+  c1t_tgen_q <= gen_q [slot]     TMU C1 snapshot: H(s) at the SAME snapshot edge
+  c1a_tgen_q <= gen_q [slot]     AUX C1 snapshot: H(s) at the SAME snapshot edge
+  c1f_tgen_q <= gen_q [slot]     FINAL C1 snapshot: H(s) at the SAME snapshot edge
+
+Also inspect:
+  fn_gen_q <= gen_n_c[tail_next_c]
+  gen_n_c initialization/update and gen_q's sequential assignments
+  all assertions/reference-model uses
+  all live_q/live_n_c consumers and updates.
+
+The fence-generation latch appears to support held-identity assertions rather
+than a datapath output in this snapshot. Do not guess whether it survives
+synthesis; classify its consumers and the generated netlist. Its use of
+NEXT-state data also requires an explicit rewrite, not a mechanical rename.
+[R01]
+
+Search in a way that catches whitespace and both current/next-state arrays:
+
+  rg -n '\bgen_(q|n_c)\s*\[' fpga/rtl/texture/zhao_texture_v3own.sv
+  rg -n '\blive_(q|n_c)\s*\[' fpga/rtl/texture/zhao_texture_v3own.sv
+  rg -n 'tgen|fn_gen|win_gen_of_slot|win_live' \
+      fpga/rtl/texture/zhao_texture_v3own.sv
+
+Separate comments, verification-only references, maintenance writes, and
+synthesized readers. Grep is an inventory aid, not a substitute for elaboration.
+
+For C1's exact migration, initially retain the existing snapshot registers:
+
+  c1t_tgen_q <= hist_gen(c0t_slot_q);
+  c1a_tgen_q <= hist_gen(c0a_slot_q);
+  c1f_tgen_q <= hist_gen(c0f_slot_q);
+
+Capture these from the same pre-edge allocator state as the other row facts.
+Do not calculate them one clock later from a moved cursor and call that an
+unchanged snapshot. Later compact the identity snapshot deliberately.
+
+After all functional generation readers are migrated, keep a literal gen_q
+reference only in a synthesis-excluded verification section. Update it from
+its own old-style per-slot recurrence, not from the new helper it is intended
+to check. Otherwise the apparent equivalence assertion becomes circular.
+
+The same treatment applies to live_q when it is removed. The current fetch,
+return snapshot, and ready-selection logic still depends on slot liveness;
+those consumers need explicit replacements. Removing gen_q does not by itself
+remove live_q or any of the required/issued/claimed/committed planes.
+
+A declaration with no synthesized reader may already be eliminated. The current
+ftc/fetched plane has had its functional check removed and is retained for a
+verification assertion. Count any observed elimination in its own attribution
+column rather than adding it to the promised generation-table saving. [R01]
+
+===============================================================================
+8. C1/C2/C3/C4: PREVENTING STALE SNAPSHOTS AND LATE WRITES
+===============================================================================
+
+The current return path is:
+
+  C0 capture packet
+  C1 capture row-state snapshot and identity information
+  C2 decide whether the return may claim the source
+  C3 registered write enable commits payload to the designated bank
+  C4 publish completion to narrow control state and evaluate readiness.
+
+This separation is valuable and must survive T2. The original architecture
+explicitly requires snapshot-time identity plus current-claim identity, or a
+proved equivalent lease. The inspected C2 predicates presently use the captured
+c1_live/c1_tgen pair. They do not independently recheck the current window in
+the shown acceptance predicates. Do not mark that requirement closed merely
+because ISSUE and READY eligibility now call win_live(). [R01, R04]
+
+8.1 Why two time points matter
+
+Future-token example:
+  At snapshot, ticket 65 is not yet live: A=65, E=64, U=1.
+  Before claim, ticket 65 is admitted: A=66, E=64, U=2.
+  A current-only check now returns true, even though the stored row snapshot
+  was not a valid snapshot of that instance.
+
+Retired-token example:
+  At snapshot, ticket 64 is live: E=64, U=1.
+  Before claim, it retires: E=65, U=0.
+  A snapshot-only Boolean remains true even though authority has ended.
+
+These are contract counterexamples to one-time validation, not claims that the
+entire present pipeline necessarily reaches both schedules under valid traffic.
+That distinction is why the lease argument must be proved rather than assumed.
+[C01]
+
+8.2 Selected final validation shape
+
+At C1, capture:
+  packet's full identity and payload;
+  snapshot_identity_valid;
+  the corresponding required/issued/claimed/committed facts.
+
+At C2, require:
+  packet valid and range legal;
+  snapshot_identity_valid;
+  current full-ticket membership;
+  source required and actually issued;
+  source not already claimed/published;
+  no matching recent accepted claim in the forwarding interval.
+
+Preserve the existing ordering of rejection classifications where observable.
+Do not let multiple rejection classes count the same packet, and do not lose
+one of two concurrent lane errors to sequential assignment precedence.
+
+A valid service-error result takes the accepted-completion path, preserving its
+status and fallback payload; it does not disappear into identity rejection.
+
+8.3 Claim-to-write ownership lease
+
+A successful claim creates an obligation to complete the corresponding
+registered write and publication. The owner must not be released or reused
+while that obligation exists. For normal samples, COMBINE cannot be eligible
+until publication; FINAL follows actual COMBINE acceptance; ordered output
+follows final_done. That is the intended lease argument. [R01]
+
+Express it at the physical boundary:
+
+  sample-bank write enable -> current instance owns this slot and source;
+  AUX-bank write enable    -> current instance owns this slot;
+  FINAL-bank write enable  -> current instance owns this slot and final claim.
+
+Keep actual RAM write enables registered. Do not insert an uncontrolled
+late combinational window predicate immediately before a bank write-enable
+and recreate the input-to-RAM timing problem the design was built to remove.
+If the lease cannot be established, add an explicit registered validation /
+reservation stage and account for its extra latency and storage.
+
+8.4 C4 authority and the meaning of a C4 drop
+
+The final C4 predicate checks the full current identity and the applicable
+accepted publication record. On an invalid record, suppress that event's
+committed/final_done update and its ready-ticket contribution.
+
+This is containment for an internal protocol violation, not a guarantee that
+arbitrary earlier corrupted C3 traffic left memory intact. Detect earlier
+violations before the write boundary. Under an unrestricted upset model,
+protecting every state bit would require a separate fault-tolerance design;
+this brief does not make that claim.
+
+8.5 Counters must match accepted effects
+
+The current d_commit_c increments from raw c4t_v_q/c4a_v_q. If C4 is allowed
+to reject an internally invalid record, the implementation must decide whether
+that counter means "publication record observed" or "accepted sample commit."
+Do not leave it ambiguously claiming successful commits. [R01]
+
+Recommended split: accepted sample-publication count advances only for accepted
+C4 sample effects; internal rejected-publication diagnostics are separate.
+Count simultaneous TMU and AUX accepted publications as two. Preserve the
+existing FINAL accounting convention rather than silently adding finals to a
+counter whose meaning was sample/AUX commits.
+
+If preserving the current public counter ABI is necessary for an intermediate,
+retain its documented raw-record meaning and add the new accepted-effect metric
+under a distinct name. The final acceptance report must state which it uses.
+
+===============================================================================
+9. COMBINE IS ITS OWN FOURTH EVENT
+===============================================================================
+
+Do not turn the fourth guard into a C4-specific proof.
+
+The three relevant moments remain:
+  1. local readiness/candidate reservation;
+  2. central result-bank read/storage reservation;
+  3. actual COMBINE input transfer on cmb_valid && cmb_ready.
+
+Only moment 3 may set combine_issued. The M6 repair already makes that
+separation. Keep it. [R01, R02]
+
+The final contract should assert:
+
+  cmb_valid -> presented token is a current live owner with a valid lease;
+  cmb_fire  -> live owner, existing reservation, required inputs published,
+               and no prior actual issue for that instance;
+  cmb_valid && !cmb_ready -> next offered token and data remain stable;
+  final claim -> actual COMBINE issue occurred for the same instance.
+
+At minimum add a fourth dead-match/live-authority property for cmb_fire.
+The existing a_c4t/a_c4a/a_c4f_never_dead_match triplet does not check it. [R01]
+
+If a supposedly valid COMBINE queue entry is stale, do not merely suppress
+cbi after delivering the bad packet and claim nothing happened: the consumer
+has already accepted an input. A valid design prevents that situation through
+the lease from reservation through transfer. A fault handler must explicitly
+coordinate any cancellation; withdrawing valid while stalled is not a normal
+ready/valid operation. Published AXI protocol-checker assertions illustrate the standard
+stable-valid/stable-payload rule; Zhaozhou's own interface contract remains the
+actual authority here, not a claim that this interface is AXI. [E05]
+
+The ordinary no-cancellation path is simpler: no owner can retire before its
+COMBINE transfer, final claim, final write, final publication and ordered output
+have all occurred. Keep that dependency chain intact while simplifying storage.
+
+===============================================================================
+10. RESET, GENERATION WRAP, AND THE LIMITS OF FINITE TOKENS
+===============================================================================
+
+10.1 A finite tag cannot identify an arbitrarily old identical packet
+
+Once a numeric 14-bit ticket is reused, an old packet with exactly those bits
+is indistinguishable from a packet for the new instance if those bits are all
+the receiver has. win_live() cannot solve that. Neither can the old gen_q table.
+This follows directly from the identical input/state observation, not from a
+particular FPGA or timing result. [C01]
+
+The external producer/transport contract must prevent such an old obligation
+from surviving into numeric reuse, or carry a separately managed epoch whose
+lifetime is long enough and whose reuse is itself controlled.
+
+10.2 The current fence is transitional
+
+The source implements OPEN / STOP / FINISH / REOPEN and authorizes one wrapping
+admission before resuming the legacy per-slot check. It explicitly lacks the
+producer-acknowledgment interfaces for QUIESCE_PRODUCERS and
+DRAIN_RESIDUAL_TRANSPORT. quiet_c describes local state; it is not a promise
+that an external producer can never emit another old response. [R01]
+
+Preserving this transitional fence during the representation-only migration is
+acceptable if its limitation remains visible. Do not call it the complete
+feature-live namespace barrier. Do not accidentally replace it with permission
+that remains open across unrelated reused identities.
+
+10.3 Final integrated fence sequence
+
+The previously selected architecture requires a complete barrier before global
+namespace reuse. Starting at ticket 64, the first approach to zero follows
+16,320 allocations; later full numeric cycles contain 16,384. [R04]
+
+Required causal sequence:
+
+  STOP_NEW_OWNERS: stop new admissions, not service work for existing owners.
+
+  FINISH_LIVE: allow already admitted owners to issue, receive their required
+  normal or error terminals, complete COMBINE, and retire in order.
+
+  QUIESCE_PRODUCERS: obtain acknowledgments tied to this held barrier/epoch,
+  stating that all accepted old work is completed or canceled by an agreed
+  protocol. Do not block a producer before it can finish the work needed to
+  empty the live window.
+
+  DRAIN_RESIDUAL_TRANSPORT: empty old queues, capture stages, pending reads,
+  skids and invalid/duplicate traffic that still consumes transport storage.
+
+  VERIFY_EMPTY_AND_REOPEN: only after every obligation is discharged, advance
+  or authorize reuse of the namespace and reopen registered admission.
+
+The exact handshake implementation belongs to retained-service integration.
+An optional barrier-generation identifier or explicit request/ack phases must
+prevent an old level-high acknowledgment from satisfying a new request.
+A timeout may report failure. It may not assert that old traffic disappeared.
+
+10.4 Reset is a separate alias boundary
+
+Reset currently reinitializes owner identity so the first new public token can
+be the same 0x0001 previously issued. A block-local reset does not magically
+flush a remote service or a transport FIFO. The reset bench clears its pending
+final queue before post-reset operation; it therefore does not demonstrate
+safety against an arbitrarily delayed old final after the same token has been
+reissued and COMBINE accepted again. [R02]
+
+The supported policies must be explicit:
+  coordinated reset of the whole obligation domain; or
+  drain/acknowledge first, then reset the owner; or
+  transport carries a protected outer epoch and rejects old-epoch traffic.
+
+Do not introduce an uncoordinated local-reset guarantee that the available
+identity bits cannot support. Do not clear all payload RAM to compensate for
+an identity problem; invalidation and ownership control should make stale RAM
+contents unobservable.
+
+10.5 Cancellation must not punch holes
+
+The short live window depends on oldest-first retirement. A per-owner error
+should generate an ordered terminal/tombstone under the existing contract,
+not free an arbitrary interior row. Any cancellation design needs explicit
+completion of writes, reads, reservations and transport obligations. The
+present ruling does not authorize ad hoc out-of-order freeing. [R04]
+
+===============================================================================
+11. VERIFICATION MATRIX AND CONCRETE FAILURE DETECTORS
+===============================================================================
+
+Keep the existing bench and add focused cases. At the follow-up snapshot the
+agent reports 489 checks after reverse sample/AUX-first and repeated-issue
+coverage was added. Those runs were reported by the repository, not rerun for
+this brief. Check counts are not a proxy for coverage of the specific change.
+[R02, R13]
+
+Required cases for the decision:
+
+  V01 — Exact historical generation reconstruction
+    All 64 slots, initial partial pass, every allocation residue, wrap, idle,
+    admission-only and retirement-only updates. Compare to a literal old table.
+    Mutation: omit tail==63 handling or remove modulo truncation.
+
+  V02 — Live interval membership
+    Every occupancy 0..64 and every head residue; current, earlier and later
+    same-slot generations; intervals crossing numeric zero. Check external
+    packing independently. Mutation: public-order subtraction, <=, signed
+    comparison, or six-bit distance.
+
+  V03 — C1 snapshot validity retained
+    A future token is invalid at snapshot, then becomes live before claim.
+    It must still be rejected for that captured snapshot. Mutation: use only
+    current membership. Ensure the schedule is actually covered or explain why
+    the unmodified pipeline structurally prevents it.
+
+  V04 — Current identity at claim
+    A token valid at snapshot loses authority before claim under the supported
+    cancellation/reset/reuse model. It must not claim/write the new row.
+    Mutation: use only snapshot_identity_valid. Do not assume away precisely
+    the invalidation case being tested.
+
+  V05 — Stale external return after retirement, before reuse
+    TMU, AUX and FINAL separately. Observe rejection classification and actual
+    bank write enables, not only lack of output. Legitimate unrelated traffic
+    must still finish. Mutation: a permanently true identity predicate.
+
+  V06 — Same slot reused with a new generation
+    Deliver the old full token before, on, and after relevant capture/claim
+    edges. New owner's payload, status, required mask and credits must survive.
+
+  V07 — Internally injected C4 record for a dead owner
+    Inject at the C4 boundary in a test-only wrapper/bind, not by hoping a normal
+    input sequence reaches an architecturally prohibited state. Check no
+    scoreboard or ready effect and an internal-protocol diagnostic. Repeat for
+    each of TMU/AUX/FINAL. This tests the selected abnormal-event policy, not
+    the ordinary reachability theorem.
+
+  V08 — Fourth event: stale/dead COMBINE offer or transfer
+    Verify the candidate/packet lease and that valid traffic cannot outlive the
+    owner. Add separate cmb_valid/cmb_fire properties. A test-only corrupted
+    packet must exercise the explicitly defined fault path, not be silently
+    sent downstream while only cbi is suppressed.
+
+  V09 — M6 retained
+    Reserve COMBINE storage, hold the consumer stalled, send an early final;
+    no final claim or physical FINAL-bank write may happen. Then permit the
+    real transfer and verify a valid final succeeds. The current M6 test's
+    check named "no final payload write is authorised" compares ev_emitted_o;
+    that alone does not observe writes. Add a direct write-enable/claim monitor.
+    This is an observability improvement, not evidence that the current repair
+    is wrong. [R02]
+
+  V10 — Valid error completion
+    Correct identity and issued source, nonzero service-error status: commit
+    exactly once, preserve status/fallback, unblock required work and ordered
+    retirement. Mutation: classify all error statuses as stale.
+
+  V11 — Concurrent events and stable backpressure
+    TMU+AUX same owner, different owners, final in parallel, output stall,
+    ready dropping after a read launches, and no duplicate credits/tickets.
+    Check stable full token/data when valid is held. Mutation: missing read
+    reservation, missing forwarding term, or two nonblocking updates losing
+    one concurrent counter increment.
+
+  V12 — Namespace barrier and reset alias
+    Hold an external old obligation while local live count reaches zero;
+    reopening must remain blocked. Preserve delayed same-bit old tokens in
+    the test transport across reset until the declared epoch/drain policy
+    accounts for them. Mutation: quiet means producer acknowledgment, or timeout
+    means successful drain.
+
+  V13 — Phase and write/publication invariants
+    Every active row at every relevant edge: committed subset claimed subset
+    issued subset required; combine_issued implies reservation; final claim
+    implies actual issue; final_done implies final claim. Observe physical
+    writes and publication exactly once. Mutate one row for one cycle to
+    demonstrate that the chosen checker detects transient violations.
+
+  V14 — Throughput is not merely eventual completion
+    Preload contiguous completed owners and measure a long zero-bubble output
+    interval after warmup. Separately measure COMBINE input supply, issue rate
+    and return acceptance. Existing case 20 allows 64 outputs within 96 cycles
+    and only demands one run of eight back-to-back transfers. That is useful,
+    but weaker than a sustained one-per-clock contract. [R02]
+
+For every new directed case, report its actual trigger/cover count and run at
+least one relevant mutant. A test that checks only successful traffic cannot
+distinguish a correct guard from a fail-open guard. A test that checks only
+rejection cannot distinguish it from reject-everything.
+
+===============================================================================
+12. FORMAL PROOF BOUNDARIES AND NON-VACUITY
+===============================================================================
+
+Use three distinct evidence classes:
+
+  Arithmetic identity proof: the bounded interval and reconstruction formula.
+  RTL safety proof: actual pipeline/state transitions under explicit assumptions.
+  Physical implementation evidence: synthesis mapping and placed timing.
+
+None substitutes for the others.
+
+A focused formal harness should use the real owner control RTL, a literal
+reference owner sequence, and explicit producer assumptions. Treat arbitrary
+external token values as possible where the interface promises to reject them;
+do not assume every incoming token is live to make the identity theorem pass.
+
+For ordinary C4 reachability, prove or inductively establish the chain:
+  accepted claim -> authorized write -> publication -> readiness -> reservation
+  -> actual COMBINE acceptance -> final claim/write/publication -> ordered output.
+
+Prove separately that ownership cannot terminate while a legal pending claim,
+write, publication or reserved COMBINE packet requires it. Do not assume the
+no-late-C4 assertion as an input constraint while claiming to prove it.
+
+Use covers for full occupancy, empty occupancy, concurrent events, wrapped
+identity, accepted error terminals, stalled output and the dangerous boundary
+conditions. A safety assertion with an unreachable trigger can pass vacuously.
+The formal tool's assume/assert/cover distinctions matter here. [E03]
+
+A bounded model check proves only the searched depth. An unbounded proof mode
+and its actual result must be reported as such; UNKNOWN is not PASS. Formal
+parameters and assumptions must be archived. Reduced-owner experiments are
+useful, but the current source assumes a full 64-slot ring in places. Do not
+change OWNERS alone and call the resulting under-specified configuration a
+proof of the production machine. [E04, R01]
+
+A practical all-row invariant method is an arbitrary constant row selected by
+the formal solver, constrained only to a legal index. Proving the invariant
+for every possible choice establishes the universal row claim; a deterministic
+rotating runtime selector does not.
+
+Formal proof infrastructure should remain focused on these obligations. Do not
+turn it into an unrelated framework project that delays the texture fit and
+integration work.
+
+===============================================================================
+13. IMPLEMENTATION SEQUENCE AND ACCEPTANCE CHECKPOINTS
+===============================================================================
+
+Checkpoint A — Freeze and correct the inventory
+
+Record branch, HEAD, dirty state, active jobs and current source digest. Preserve
+the running frozen island specimen. Update the last-four-readers report with
+C1's three functional snapshots and the fence diagnostic use. Separate a source
+rewrite inventory from what the existing synthesis actually eliminated.
+
+Exit: a complete categorized read/write/use inventory, not a regex count.
+
+Checkpoint B — Exact generation representation
+
+Use the existing H(s) reconstruction for the four hoisted equality guards and
+the three C1 generation snapshots. Preserve capture timing. Rewrite or isolate
+the held fence-generation diagnostic dependency. Keep old predicates and the
+transitional fence behavior at this checkpoint.
+
+Move the literal table into verification-only code once no production consumer
+uses it. Preserve independent reference updates and equivalence checks. Check
+at every actual migrated event, not only at an unrelated rotating row.
+
+Exit: identical defined behavior on matched traces; no synthesized gen_q/gen_n
+storage or readers; no assertion scaffold retained in the physical specimen.
+A synthesis map is useful before a lengthy fit, but is not a fitted ALM claim.
+
+Checkpoint C — Explicit live-owner authority
+
+Apply the adopted dead-owner policy to TMU/AUX/FINAL publication and COMBINE's
+separate real-acceptance event. Add snapshot/current identity validation or the
+proved equivalent lease before the physical write boundary. Preserve existing
+forwarding, phase masks, error terminals and conservative admission credits.
+
+Define diagnostic/counter effects explicitly and demonstrate them with the
+internal-fault tests. Do not make C4 the only protection against stale writes.
+
+Exit: all relevant positive/negative cases and mutants; no unauthorized write,
+publication, readiness, issue or credit release under the supported contract.
+
+Checkpoint D — Remove live/fetched redundancy deliberately
+
+Replace physical-slot liveness consumers with the proven slot-window function
+or equivalent checks, while external packets retain full-ticket validation.
+Keep required/issued/claimed/committed and actual/reserved COMBINE facts until
+the next explicitly selected control architecture replaces them.
+
+The already nonfunctional ftc plane should be verified absent from synthesis.
+Do not count a simulation-only reference as an area regression.
+
+Exit: one authoritative identity window; independent verification reference;
+correct ordered fetch/retirement partition; no interior free holes.
+
+Checkpoint E — Fit the coherent identity change
+
+Run a matched owner experiment with the same payload banks, ready scheduler,
+packet depths, parameter widths, clocks, reset treatment and harness scope.
+Record differences in observations/diagnostics if Checkpoint C adds a port.
+Where practical, publish a like-for-like core comparison plus the explicitly
+costed diagnostic delta rather than hiding the latter.
+
+Compare against 22442fd0 / 5,709 ALMs / 4,863 FIT registers / 17 M10Ks /
+20,640 bits / 0 DSP / 87.37 reported / 91.32 core-to-core. This baseline
+predates the T2 consumers being migrated. [R05, R06]
+
+A full fit after every tiny consumer edit is not required. Keep commits small
+and reversible, use functional/mapping checkpoints while the physical tool is
+busy, and fit a coherent attribution boundary. Conversely, do not combine T2,
+new ready scheduling, new packet RAM geometry and new parent storage into one
+uninterpretable result.
+
+Checkpoint F — Continue the selected V3.1 plan
+
+Once T2's actual physical benefit is known, continue localized control,
+ready-candidate organization, credited packet mapping and removal of redundant
+parent-level storage. Integrate the retained services and fit the feature-live
+island. Keep terrain and projection deferred. A favorable owner number is not
+an excuse to stop before the island is real and measured.
+
+No checkpoint is accepted solely because its test count increased or its report
+says "DONE." Its stated artifact and property are the exit criteria.
+
+===============================================================================
+14. PHYSICAL MEASUREMENT AND RESOURCE POLICY
+===============================================================================
+
+14.1 Keep the resource failure visible
+
+At 5,709 ALMs, reaching a 1,800-ALM owner allocation would require roughly a
+68.5% reduction. T2 removes redundant identity state and selection logic; it
+has not demonstrated that entire reduction. Removing 512 declared flops is not
+the same as saving 512 ALMs, and not evidence for a multi-thousand-ALM saving.
+ALMs contain logic and storage whose packing and routing interact. The fit must
+measure the net effect. [R05, R06]
+
+If a coherent optimized owner still misses its allocation, reconcile the
+whole-island architecture and resources. Retain and report a useful failing
+intermediate; do not quietly change max_alms to match whatever was measured.
+A proposed allocation revision is a versioned decision, not retroactive success.
+
+14.2 Do not manufacture an island total
+
+Do not add the old integrated island to a replacement owner, count V1 and V2
+COMBINE together, or sum alternative reciprocal tiles as simultaneous hardware.
+Shared source code also does not imply shared silicon: two instantiated cores
+are two cores unless explicitly scheduled onto one physical instance.
+
+The existing master handoff proposes a 69-M10K feature-live profile. That is a
+proposed revised profile, not an automatic pass of an older 64-block target.
+The seven M10Ks occupied by small owner packet queues need explicit mapping
+experiments, not optimistic subtraction from the ledger. [R04, R06]
+
+14.3 Report the complete physical specimen
+
+For each accepted comparison archive:
+  exact source commit and content digest, dirty-state capture, source list;
+  module parameters, device, tool version, seed and optimization settings;
+  wrapper / virtual-pin / registered-boundary scope;
+  fitted ALMs and registers separately from mapped ALUTs/registers;
+  memory instance names, logical dimensions, physical modes and block totals;
+  DSP count;
+  worst setup/hold/recovery/removal/pulse-width results at required corners;
+  unconstrained-path status and actual interface/clock constraints;
+  top path families and relevant functional/throughput evidence.
+
+A short report naming the changed path family is more useful than repeated
+claims that all current failures are merely boundary artifacts. Interfaces are
+part of the machine and need appropriate constraints or composed measurement.
+
+14.4 One-time setup success is not robust closure
+
+The product requirement remains 100 MHz with the actual selected feature set
+and supported timing conditions. A 90–95 MHz result can be progress; it is not
+acceptance. An isolated 100+ MHz result can be useful; it is not proof that
+integration will preserve it.
+
+Use the specified device/operating corners and appropriate board constraints.
+Do not relax a hold requirement, make a false path, or declare a multicycle
+path without a real architectural justification and corresponding functional
+contract. A same-edge hold violation is generally not cured by lowering the
+clock. Inspect the failing path before prescribing its repair. [E02]
+
+14.5 Memory inference: no new folklore
+
+PERSPUV's reset/control/read-write structure must be inspected as a whole before
+promising RAM recovery. Vendor guidance explicitly warns that resetting RAM
+contents during operation causes logic-cell implementation on these devices.
+Removing one output mux is not sufficient evidence of RAM inference, and blindly
+removing reset is not sufficient evidence of correct behavior. Preserve valid
+state and write-before-read guarantees, then inspect the actual RAM summary.
+[E06, R09]
+
+===============================================================================
+15. WIDER TEXTURE INTEGRATION; TERRAIN STAYS DEFERRED
+===============================================================================
+
+This brief is a focused continuation of V3.1, not a replacement console design.
+The current island still has legacy services/FRAGROB, COMBINE V2, parent-level
+attribute tables and an ordered final-output structure. The standalone V3 owner
+is explicitly an experiment in lifetime/storage and does not sample a texture
+or compute final material color itself. [R01, R07]
+
+Consequently, two physical questions are being pursued:
+
+  What does the existing composed island do after its local PERSPUV repair?
+  What does a corrected and smaller V3 owner do when synthesized/fitted alone?
+
+Both matter. They are not measurements of the same architecture, and neither
+alone demonstrates the final V3.1 feature-live island. The raw old-island paths
+through dispatch/FRAGROB and parent admission/RCP remain evidence for why the
+larger integration/control rearchitecture is still necessary. [R11]
+
+Retain the following contracts from the master handoff:
+  64 global owners and full 64-bit caller context;
+  complete full-token lifetime through final external transfer;
+  independent sample descriptors and legal multi-source materials;
+  actual format/alpha behavior, including the implemented CLUT4 metadata path;
+  valid service-error status and exact fallback semantics;
+  exact rounding/saturation and ordering;
+  separate TMU, AUX and FINAL return capacity;
+  credited bank reads and packet storage;
+  required interface rates and measured workload throughput.
+
+Do not recover area by silently dropping samples, making all alpha opaque,
+changing precision, replacing full context with a short tag, or allowing bounded
+output disorder where exact admission order is required. [R04]
+
+Other unresolved integration seams, such as AUX geometry being derived from
+opaque context in the transitional top, remain part of the retained-services
+work. They should not be lost in the excitement of an owner fit. [R07]
+
+Terrain's tessellation/normal pipeline and the shared projection core have their
+own timing and resource work. Preserve existing results, but they are not the
+active implementation priority. The owner already delivered that priority on
+the actual hardware branch. A difficult T2 proof or an occupied Quartus process
+is not permission to resume unrelated optimization. [R04, R14]
+
+===============================================================================
+16. INDEPENDENT CHECKS EXECUTED FOR THIS BRIEF
+===============================================================================
+
+[C01] identity_decision_checks.cpp was compiled with:
+
+  g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+      identity_decision_checks.cpp -o identity_checks
+
+The resulting executable completed successfully. Results:
+
+  Literal generation-table comparisons across initial pass and wraps:
+      2,101,312
+
+  Every allocation residue x occupancy 0..64 x physical slot:
+     68,157,440 cases
+
+  Same-slot current, earlier and later generation candidates:
+    204,472,320 cases
+
+  Every modular distance x occupancy 0..64 at an origin of zero:
+      1,064,960 cases
+
+The live-owner oracle in the occupancy sweep is a literal list of owner tickets,
+not the window formula. The table oracle is updated one admitted row at a time.
+The distance sweep is exhaustive at E=0; translation invariance of modular
+subtraction explains its relation to other origins. This is not a claim that
+all 16,384 x 65 x 16,384 token triples were directly enumerated.
+
+Deliberately wrong arithmetic variants were detected:
+
+  Wrong variant                         Mismatching tested cases
+  -------------------------------------------------------------
+  Subtract public-order handles                  32,766
+  Truncate identity distance to six bits          98,304
+  Use distance <= used                               65
+  Treat wrapped distance as signed             4,145,152
+  Omit next-tail wrap exception                        4
+
+Mutation counts have different tested domains and must not be compared as a
+ranking of bug severity. Public-order/six-bit/signed variants are exercised at
+occupancies one and two in the slot sweep; <= uses the exhaustive distance
+sweep; the neighbor exception uses the literal allocation sequence.
+
+Additional executable witnesses demonstrate:
+  matching historical generation on a dead row;
+  old identity surviving in a snapshot;
+  a future identity becoming current after its snapshot;
+  identical numeric token after full namespace wrap;
+  identical first token after reset;
+  a transient violation outside a rotating checker's sampled row.
+
+Two issues in the independent harness were corrected before the final run:
+its first reset-token witness mistakenly expected the public numeric value 256
+rather than 1, and an occupancy-one-only mutation check could not distinguish
+a permutation of ticket encodings. Testing occupancy two makes that latter
+error observable. Neither correction involved changing repository RTL.
+
+LIMITS OF THIS WORK
+
+No Quartus fit, Verilator run, or unbounded formal run was executed for this
+brief. Those tools were not available in this execution environment. The
+repository was read through the GitHub connection; direct raw-file retrieval
+from the local execution environment was unavailable. Thus the local C++ work
+is independent arithmetic/contract checking, not a replay of the repository's
+reported hardware bench (489 checks at the first follow-up; later additions
+are identified in section 20).
+
+No repository file, branch, agent instruction, running job, or gate was modified.
+The illustrative RTL snippets still require integration, lint, simulation and
+physical verification before use. The current live implementation must be
+rechecked if its source has changed since the pinned baseline.
+
+===============================================================================
+17. RISKS, NON-GOALS, AND CLOSURE CONDITIONS
+===============================================================================
+
+Principal risks:
+
+  Hidden consumers keep the old table synthesized. Mitigation: complete
+  whitespace-tolerant inventory plus elaborated/mapped confirmation.
+
+  Identity arithmetic becomes the new critical path. Mitigation: preserve
+  register boundaries, evaluate per-lane cost, and pipeline validation with
+  explicit credits/leases where necessary; never assume a helper is free.
+
+  Snapshot and current state disagree across a lifetime boundary. Mitigation:
+  capture full identity and snapshot validity, recheck at claim, preserve leases
+  through physical writes, and exercise both stale and future schedules.
+
+  A local quiet signal is mistaken for global transport completion. Mitigation:
+  explicit producer acknowledgments, residual-drain accounting and reset policy.
+
+  Verification becomes circular or sampled without disclosure. Mitigation:
+  independent literal reference, covers/mutants, actual write observation and
+  universal/event-specific phase properties.
+
+  Partial physical wins are presented as product closure. Mitigation: separate
+  owner, existing island, successor services and final feature-live scopes;
+  publish all timing classes and keep failed allocations visible.
+
+Non-goals:
+  a new game/console architecture;
+  removal of exact texture functionality to make a fit attractive;
+  arbitrary out-of-order cancellation;
+  protection against arbitrary Byzantine producers or unrestricted state upset;
+  wider tags as a substitute for an epoch contract;
+  terrain/projector implementation;
+  predictions of final ALM or MHz savings unsupported by a fit.
+
+T2 identity closure requires all production table readers gone, correct identity
+checks at the necessary pipeline times, a coherent supported lifetime contract,
+passing positive/negative tests and a matched physical result. The old table may
+remain in verification-only code. It may not remain required by synthesis.
+
+Full texture closure additionally requires the selected V3.1 services and
+storage integrated, all required capabilities live, workload/throughput gates
+met, resource allocation reconciled, and timing accepted for the actual
+composition and supported constraints/corners. No arbitrary 90 MHz milestone
+replaces these conditions.
+
+===============================================================================
+18. READY-TO-PASTE OWNER DECISION
+===============================================================================
+
+OWNER DECISION — TEXTURE T2 LIFETIME AND TABLE REMOVAL
+
+Texture remains first. Do not switch to terrain or reset/restart the working
+architecture. Preserve the already running frozen island fit and its evidence.
+
+An owner has authority until its ordered out_valid && out_ready transfer retires
+it. After retirement, its old token has no authority, even if an unreused slot
+still contains matching generation bits. Consume/reject stale transport as
+required for draining, but do not let it change scoreboard state, create ready
+work, authorize COMBINE, publish a result, free a credit, or resurrect an owner.
+Keep valid issued service-error completions and the M6 actual-acceptance rule.
+
+Apply that rule separately to TMU/AUX/FINAL C4 publication and actual COMBINE
+acceptance. The fourth guard is not a fourth C4 event. Internal late-publication
+violations must be visible and have their effects suppressed; a C4 check does
+not retroactively protect an earlier RAM write.
+
+Do not block physical table removal on this semantic discussion. The current
+win_gen_of_slot/historical-generation identity can replace generation-only
+lookups exactly, including on dead slots. First complete that representation
+migration, then apply the stronger authority policy in a separate tested step.
+
+Correct the reader audit: c1t_tgen_q, c1a_tgen_q and c1f_tgen_q still sample
+gen_q, and the held fence state also reads gen_n_c. Include their exact capture
+semantics. Preserve an independent literal table only for verification, excluded
+from synthesis. Add snapshot/current-identity checking or prove the equivalent
+lease before the physical write boundary. Cover COMBINE separately.
+
+Keep the transitional wrap fence during the exact identity comparison. Do not
+pretend local quiet is an external producer acknowledgment. Complete the
+namespace/reset transport contract during retained-service integration before
+claiming feature-live reset/wrap safety.
+
+Retain matched resource gates. Report the coherent owner fit against 5,709 ALMs,
+4,863 FIT registers, 17 M10Ks and 87.37 reported / 91.32 core-to-core MHz. Do not
+claim measured savings from comparator counts or state declarations. Continue
+T3/control, credited packet storage and feature-live island integration after
+this attribution point; T2 is not the end of the texture rearchitecture.
+
+Acknowledge this decision on your actual branch/HEAD and name the next concrete
+patch, test and fit boundary. A new blockage must come with a counterexample,
+missing interface, failed gate or conflicting owner contract.
+
+===============================================================================
+19. SOURCE INDEX AND REPRODUCIBILITY
+===============================================================================
+
+REPOSITORY SOURCES
+
+Unless an alternate commit is specified, all repository URLs below use:
+  22a4b0016651fd7249c335fba75a789b7b8685b8
+
+These are immutable source snapshots, not assertions that they remain HEAD.
+Approximate line ranges identify the inspected regions at that snapshot.
+
+[R01] V3 owner RTL: identity, lifecycle and proof instrumentation
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/fpga/rtl/texture/zhao_texture_v3own.sv
+  Primary implementation evidence. Read the actual declarations, helpers, C2
+  predicates, C4/COMBINE guards, C1 snapshot assignments, physical write
+  enables, counter updates, reset and assertions. Relevant regions include
+  approximately lines 420-780, 965-1435 and 1580-1850. The whitespace-separated
+  gen_q [index] reads are functional.
+  git_blob: 45ec22d23441ddc731442d74cff72c3c1d7c4913
+
+[R02] V3 owner adversarial testbench at the main inspection baseline
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/tests/texture/texture_v3own_adversarial.cpp
+  Handle encoding and driver; full-credit tests; case 15 reset; case 18
+  duplicate finals; case 19 wrap; case 20 throughput; case 21 service-error
+  terminal; case 22/M6. This is inspection, not a new run of this bench.
+  git_blob: 639f118981ce64587c7bfe533de51e9e451c2cb7
+
+[R03] T2 replacement report and the asserted semantic blockage
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/V31-T2-REPLACEMENT-PLAN-20260907.md
+  Documents migration groups, hoisted comparisons, dead-but-matching concern
+  and claim that only four readers remain. The latter claim is corrected by
+  R01. Sections around lines 375 onward describe the disputed remaining
+  decision.
+  git_blob: 1c9590bd15a37fbac266c055ba047058e4ad3210
+
+[R04] Owner-delivered master recovery architecture
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/ZHAOZHOU_MASTER_REARCHITECTURE_RECOVERY_2026-09-07.txt
+  Existing owner direction, especially sections 5.1-5.5 (identity,
+  snapshot/current checks, finite namespace), 6 (fence), 10-13
+  (storage/accounting), and verification/work order. File is in the repository
+  ROOT, not reports/. The local earlier handoff was also read; this is the live
+  pinned copy.
+  git_blob: aa0b1e2f94a4e619e262dd7620b0c85a274b9e86
+
+[R05] Per-block fit ledger and active run log
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/synthesis/zhao_block_fit.json
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/runs/CLAUDE-RUNS/RUN-20260906-2035-terrain-writeback-f-sheet-evacuation/TASK_LOG.md
+  Recorded fitted resource rows and launch/measurement status. The run
+  directory name is historical, not a priority override. A committed launch
+  note is not workstation process telemetry. Respect per-row source digests,
+  dirty capture and variant scope.
+
+[R06] Owner fit progression and physical memory attribution
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/V31-T1-FENCE-FIT-20260907.md
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/V31-M10K-ALLOCATION-RECONCILE-20260907.md
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/synthesis/blockpaths/zhao_texture_v3own.fit.summary
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/synthesis/blockpaths/zhao_texture_v3own.sources.sha256
+  5678 -> 6094 -> 5709 fitted ALMs, core-to-core 89.09 -> 77.16 -> 91.32 MHz.
+  Fixed bank geometry for those owner specimens. Tiny packet queues account for
+  7 of 17 physical M10Ks / 1056 stored bits; do not infer physical mode from
+  bit count alone.
+
+[R07] Actual composed texture-island source and last completed fit summary
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/fpga/rtl/texture/zhao_texture_island_top.sv
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/synthesis/blockpaths/zhao_texture_island_top.fit.summary
+  Existing service/FRAGROB composition, COMBINE V2 NCTX=8, parent storage,
+  output ordering and AUX geometry/context seam. This is not an integrated V3
+  owner. Source contains historical comments; actual assignments and instances
+  take precedence over stale commentary.
+  rtl_git_blob: c9941c2566b3bfcc6b2b191f44a10f089d6b8901
+
+[R08] COMBINE V2 and RCP successor measured scope
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/V31-COMBINE-V2-FIRST-FIT-20260907.md
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/V31-RCP24-DONE-SEAM-20260907.md
+  COMBINE V2 standalone 870 ALMs / 918 registers / 6 M10Ks / 2 DSPs / 114.04
+  MHz. RCP successor registered-DONE work is separately scoped and not evidence
+  that the current island contains that successor.
+
+[R09] PERSPUV repair report, including the failed memory-inference prediction
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/V31-ISLAND-REAL-LIMITER-20260907.md
+  96.62 -> 105.19 MHz setup benchmark; 1910 -> 1886 ALMs; 3157 -> 3216
+  registers; memory unchanged. Its broad all-slacks-positive statement is
+  contradicted by the raw multicorner report R10.
+
+[R10] Raw PERSPUV TimeQuest and fitter summary
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/synthesis/blockpaths/zhao_raster_perspuv_svc.sta.rpt
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/synthesis/blockpaths/zhao_raster_perspuv_svc.fit.summary
+  Setup slack +0.493 ns at the hot slow corner; Slow -40 C hold slack -0.263 ns
+  and hold TNS -0.361 ns. A useful setup result, not full timing sign-off. Read
+  all corners, not only Fmax.
+  sta_git_blob: 34d17197fabe61f34be00ccc79301aca73ff0b43
+
+[R11] Raw old composed-island setup path list
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/synthesis/blockpaths/zhao_texture_island_top.setup.summary.rpt
+  First forty rows directly show palette-input -4.800 ns, PERSPUV-to-FRAGROB
+  -2.936, parent-live-to-RCP -2.834, dispatch-to-FRAGROB -2.777 and RCP-to-
+  PERSPUV -2.565. This is the evidence against inferring a 90+ MHz composition
+  from one output-register fix.
+  git_blob: 506bf712e67682ab53ff578b72bb4454b56449c1
+
+[R12] Recent phase-invariant and identity-model test commits
+  https://github.com/Fabulu/zhaozhou/commit/902c835a9413f5b04368b293558be4318b546e0c
+  https://github.com/Fabulu/zhaozhou/commit/22a4b0016651fd7249c335fba75a789b7b8685b8
+  Phase assertions explicitly sample one rotating row per cycle; this does not
+  equal every row at every edge. Identity-model additions report 33 checks with
+  selected boundary occupancies and 66 head positions. C01 below uses a
+  separately stated wider arithmetic domain.
+
+[R13] First closing refresh: added return ordering and repeated-issue cases
+  https://github.com/Fabulu/zhaozhou/compare/22a4b0016651fd7249c335fba75a789b7b8685b8...fd39e140c8baf147daf1c294393875f230956493
+  https://github.com/Fabulu/zhaozhou/commit/2523a4e164f4509c8b9ce9b110bd35b53bc022fb
+  https://github.com/Fabulu/zhaozhou/commit/b58c1da04f5d87fdbd6d4df1989cf34e8e1051ac
+  Three follow-up commits through 15:47:42 CEST. Reverse samples with AUX first
+  then repeat-issue protection raise the reported owner check count to 489.
+  They do not remove the residual generation readers or produce a new fit.
+
+[R14] Delivered texture-first priority and separately deferred terrain instruction
+  https://github.com/Fabulu/zhaozhou/commit/49fc32e9387ddd29ee97ae2a7c6e54fb2c9f27ed
+  https://github.com/Fabulu/zhaozhou/commit/1fc4ac8afbb30176db0212509e7e8450766a4f0a
+  The master TXT was uploaded onto the hardware branch. The separate terrain
+  brief on main explicitly queues terrain for after texture. This decision
+  continues that priority and is not a terrain assignment.
+
+[R15] Closing refresh: new island map-stage attribution, not a completed fit
+  https://github.com/Fabulu/zhaozhou/commit/8e6471bde74f99ee24691bfaf490e4ec45108f4c
+  https://github.com/Fabulu/zhaozhou/compare/fd39e140c8baf147daf1c294393875f230956493...cb981ce72a04d035b431e1ddc625be95ffeceb24
+  Committed report of 23050 mapped registers / 41336 memory bits / 1487 virtual
+  pins / 17 DSPs while fit pending. Six top-level arrays now infer; this
+  aggregates prior source changes, not T2 and not an isolated PERSPUV gain. See
+  section 20.
+
+[R16] Closing refresh: 64-ready-owner COMBINE-stall test
+  https://github.com/Fabulu/zhaozhou/commit/3ac0767d53e6b7b35e2785897525c6ba764400fc
+  https://github.com/Fabulu/zhaozhou/commit/cb981ce72a04d035b431e1ddc625be95ffeceb24
+  Newest inspected head 15:57:00 CEST. Adds hostile ready backlog under stalled
+  COMBINE; reported owner bench is 495 checks. No new owner functional RTL or
+  completed physical result in the inspected refresh.
+
+[E01] RFC 1982, Serial Number Arithmetic (1996)
+  https://www.rfc-editor.org/rfc/rfc1982.html
+  Primary background on finite sequence spaces and wrap-sensitive comparison.
+  The bounded-window formula in this brief is separately derived; this citation
+  does not claim adoption of every RFC operation.
+
+[E02] Altera Timing Analyzer: Report Fmax Summary
+  https://docs.altera.com/r/docs/683243/25.3/quartus-prime-pro-edition-user-guide-timing-analyzer/report-fmax-summary
+  Primary vendor explanation of Fmax as an intra-clock setup benchmark and use
+  of complete slack analysis for sign-off. This is current guide context, not a
+  claim that 25.3 commands/settings reproduce the repository's 17.0.2
+  toolchain.
+
+[E03] YosysHQ SBY: Formal extensions to Verilog
+  https://yosyshq.readthedocs.io/projects/sby/en/stable/verilog.html
+  Assume, assert, cover, clocked sampling and unconstrained constants. Supports
+  proof discipline and arbitrary-row methodology, not a claim that a Zhaozhou
+  proof was run.
+
+[E04] YosysHQ SBY: Reference for .sby file format
+  https://yosyshq.readthedocs.io/projects/sby/en/stable/reference.html
+  Bounded versus unbounded proof modes and reported outcomes. Proposed harness
+  acceptance must distinguish finite checks, PASS, FAIL and UNKNOWN.
+
+[E05] AMD AXI Verification IP: Protocol Checks and Descriptions
+  https://docs.amd.com/r/en-US/pg267-axi-vip/AXI-Protocol-Checks-and-Descriptions
+  Primary vendor checker requirements for stable VALID and payload while
+  waiting for READY. Used as a protocol-design illustration; the custom
+  Zhaozhou channel is not claimed to implement AXI. An Arm documentation URL
+  was also searched, but direct page retrieval was unavailable; this accessible
+  primary source supports the stated rule.
+
+[E06] Intel Quartus Prime Standard Edition 18.1: Avoid Unsupported Reset and Control Conditions
+  https://docs.altera.com/r/docs/683323/18.1/intel-quartus-prime-standard-edition-user-guide-design-recommendations/avoid-unsupported-reset-and-control-conditions
+  Primary vendor explanation that resetting RAM contents or using unsupported
+  controls can prevent block-memory inference. This is a reason to inspect the
+  entire memory coding pattern, not a diagnosis of which exact remaining
+  PERSPUV construct failed.
+
+[C01] Independent executable arithmetic/contract checks for this brief
+  identity_decision_checks.cpp
+  identity_decision_results.json
+  Original C++ implementation supplied with the support bundle. Exhaustive
+  domains and mutants are defined in section 16 and in the source. No
+  repository HDL simulation, synthesis, placed fit or unbounded formal proof
+  was executed.
+
+All external documents above were consulted on 7 September 2026. The referenced
+vendor/formal-tool pages support general design and verification principles;
+the repository's immutable RTL and actual 17.0.2 reports establish this design's
+measured implementation. Repository reports are evaluated critically, not
+promoted to ground truth when contradicted by source or raw timing output.
+
+REPRODUCING THE INDEPENDENT CHECKS
+
+From the support bundle directory:
+  g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+      identity_decision_checks.cpp -o identity_checks
+  ./identity_checks > identity_decision_results_new.json
+
+A failed assertion throws an error and returns a non-success termination; a
+completed successful run emits JSON with status PASS. Keep the tested domains
+with the result. No credentials, network connection or repository checkout are
+needed for this small mathematical harness. It does not compile the FPGA RTL.
+
+To repeat the repository inspection, fetch the explicitly pinned commits and
+read the paths above. Use the existing project-native tests and fit commands
+from the active working tree; do not invent new source lists from block names.
+This bundle does not include a full repository clone or a fabricated fit log.
+
+===============================================================================
+20. CLOSING SOURCE REFRESH: MAP-STAGE EVIDENCE AND NEWER TESTS
+===============================================================================
+
+The last head inspected while finishing this brief was:
+  cb981ce72a04d035b431e1ddc625be95ffeceb24
+  7 September 2026, 15:57:00 CEST, zixxtrixx-v8-closeout.
+
+The seven commits after fd39e140 contain reports, a test and its log. They do
+not change the owner RTL analyzed above, so the overlooked C1 readers, exact
+historical-generation route and final four-guard policy remain applicable.
+[R15, R16]
+
+IMPORTANT NEW EVIDENCE, WITHOUT CLAIMING A COMPLETED FIT
+
+A committed map-stage report now records:
+  Historical MAP registers:    27,973
+  New MAP registers:           23,050  (-4,923, about -17.6%)
+  Historical memory bits:      36,024
+  New memory bits:             41,336  (+5,312)
+  Virtual pins:                 1,484 -> 1,487
+  DSPs:                           17 -> 17
+  New fitted ALMs / Fmax:      NOT REPORTED in this refresh.
+
+The report attributes six top-level arrays becoming inferred RAM: fctx_m,
+flod_m, fpgn_m, fcls_m, fpsl_m and faux_m. uvw_m and class_m remain in fabric.
+It explicitly says this is the accumulated effect of ten source commits,
+including earlier sessions, not a new gain attributable to today's PERSPUV
+output register and not a gain from the unintegrated T2 owner. [R15]
+
+Treat these figures as committed intermediate synthesis evidence. This brief
+has read the report and its diff, not independently rerun or reproduced the
+new map. The physical RAM-block count, fitted ALMs, fitted registers and timing
+must still come from the completed specimen. Do not compare 23,050 MAP registers
+against 28,490 historical FIT registers and call that the mapped improvement.
+Do not assume the extra memory bits pack efficiently into M10Ks.
+
+The virtual-pin count also moved by three. Consequently the upcoming comparison
+is not literally identical port scope: identify those three observable bits and
+record the source/configuration differences rather than attributing the entire
+delta to one local repair. Update the stale L0 inventory instead of assigning an
+agent to repeat six already inferred conversions. [R15]
+
+A new test fills all 64 owners, makes them ready while COMBINE is stalled, then
+releases the stall and checks complete, ordered retirement. The repository now
+reports 495 owner checks. This is useful coverage of a distinct backpressure
+point; it does not erase the snapshot, internal-fault, reset-alias, transient
+invariant, physical-write-observability or sustained-rate obligations in this
+brief. Some new test labels assert more than a count alone proves; continue to
+check per-owner uniqueness and actual state transitions, not just totals. [R16]
+
+The decision does not change with this update:
+  adopt the dead-owner authority rule;
+  remove redundant generation representation using the exact identity;
+  include all real readers and their capture times;
+  verify authority before writes and through leases;
+  fit coherent, correctly scoped changes;
+  finish the feature-live texture island before returning to terrain.
+
+END OF ARCHITECTURE DECISION BRIEF
