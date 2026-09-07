@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 185df469ccfd0f438e5bc3cc079a3093842dadb82bb5ebfbb8f62a92ac6030b7
-//   zidl_sha256         = d964fbaca5d15e97a9cff835bd84adb74bbade2429e1fc08aac6a1c2e9ba90ef
+//   abi_identity_sha256 = 7640e0ff52ce894b3f547b855ab8ec2fb56752b2f2fe239f1448e9ecad244e7b
+//   zidl_sha256         = 11ceed86d0a24bffd2b4758ea4e72fd0182ed205de9bac3ce870abb6d57bb6b0
 #pragma once
 
 #include <cstdint>
@@ -60,6 +60,8 @@ constexpr uint16_t ZHAO_OP_SET_VIEW = 0x0010; // 96 B, implemented
 constexpr uint16_t ZHAO_OP_SET_PRESENTATION_CONTRACT = 0x0020; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_TERRAIN_FIELD = 0x0200; // 112 B, implemented
 constexpr uint16_t ZHAO_OP_SURFACE_STAMP = 0x0210; // 64 B, implemented
+constexpr uint16_t ZHAO_OP_TERRAIN_EPOCH = 0x0220; // 32 B, reserved
+constexpr uint16_t ZHAO_OP_SUBMIT_TERRAIN_SET = 0x0230; // 48 B, reserved
 constexpr uint16_t ZHAO_OP_DRAW_FORM = 0x0300; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_DRAW_POPULATION = 0x0301; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_DRAW_PROCEDURAL = 0x0302; // 64 B, implemented
@@ -489,6 +491,60 @@ struct ZhRecordSurfaceStamp {
 };
 static_assert(sizeof(ZhRecordSurfaceStamp) == 64, "layout drift: SurfaceStamp record");
 
+// TerrainEpoch 0x0220: 32-byte record (reserved)
+struct ZhCmdTerrainEpoch {
+  uint32_t epoch;
+  uint8_t op;
+  uint8_t flags;
+  uint16_t reserved;
+  uint32_t island_table_handle;
+  uint32_t source_id;
+};
+static_assert(offsetof(ZhCmdTerrainEpoch, epoch) == 0, "layout drift: TerrainEpoch.epoch");
+static_assert(offsetof(ZhCmdTerrainEpoch, op) == 4, "layout drift: TerrainEpoch.op");
+static_assert(offsetof(ZhCmdTerrainEpoch, flags) == 5, "layout drift: TerrainEpoch.flags");
+static_assert(offsetof(ZhCmdTerrainEpoch, reserved) == 6, "layout drift: TerrainEpoch.reserved");
+static_assert(offsetof(ZhCmdTerrainEpoch, island_table_handle) == 8, "layout drift: TerrainEpoch.island_table_handle");
+static_assert(offsetof(ZhCmdTerrainEpoch, source_id) == 12, "layout drift: TerrainEpoch.source_id");
+static_assert(sizeof(ZhCmdTerrainEpoch) == 16, "layout drift: TerrainEpoch payload");
+
+struct ZhRecordTerrainEpoch {
+  ZhCmdHeader hdr;
+  ZhCmdTerrainEpoch payload;
+};
+static_assert(sizeof(ZhRecordTerrainEpoch) == 32, "layout drift: TerrainEpoch record");
+
+// SubmitTerrainSet 0x0230: 48-byte record (reserved)
+struct ZhCmdSubmitTerrainSet {
+  uint32_t resource_epoch;
+  uint32_t list_offset;
+  uint32_t list_bytes;
+  uint32_t list_crc32c;
+  uint16_t patch_count;
+  uint8_t view_mask;
+  uint8_t flags;
+  uint32_t sequence;
+  uint32_t reserved0;
+  uint32_t reserved1;
+};
+static_assert(offsetof(ZhCmdSubmitTerrainSet, resource_epoch) == 0, "layout drift: SubmitTerrainSet.resource_epoch");
+static_assert(offsetof(ZhCmdSubmitTerrainSet, list_offset) == 4, "layout drift: SubmitTerrainSet.list_offset");
+static_assert(offsetof(ZhCmdSubmitTerrainSet, list_bytes) == 8, "layout drift: SubmitTerrainSet.list_bytes");
+static_assert(offsetof(ZhCmdSubmitTerrainSet, list_crc32c) == 12, "layout drift: SubmitTerrainSet.list_crc32c");
+static_assert(offsetof(ZhCmdSubmitTerrainSet, patch_count) == 16, "layout drift: SubmitTerrainSet.patch_count");
+static_assert(offsetof(ZhCmdSubmitTerrainSet, view_mask) == 18, "layout drift: SubmitTerrainSet.view_mask");
+static_assert(offsetof(ZhCmdSubmitTerrainSet, flags) == 19, "layout drift: SubmitTerrainSet.flags");
+static_assert(offsetof(ZhCmdSubmitTerrainSet, sequence) == 20, "layout drift: SubmitTerrainSet.sequence");
+static_assert(offsetof(ZhCmdSubmitTerrainSet, reserved0) == 24, "layout drift: SubmitTerrainSet.reserved0");
+static_assert(offsetof(ZhCmdSubmitTerrainSet, reserved1) == 28, "layout drift: SubmitTerrainSet.reserved1");
+static_assert(sizeof(ZhCmdSubmitTerrainSet) == 32, "layout drift: SubmitTerrainSet payload");
+
+struct ZhRecordSubmitTerrainSet {
+  ZhCmdHeader hdr;
+  ZhCmdSubmitTerrainSet payload;
+};
+static_assert(sizeof(ZhRecordSubmitTerrainSet) == 48, "layout drift: SubmitTerrainSet record");
+
 // DrawForm 0x0300: 32-byte record (implemented)
 struct ZhCmdDrawForm {
   uint32_t form;  // handle32 {index:24, generation:8} kind=form
@@ -911,11 +967,47 @@ inline ZhRecordSurfaceStamp zhao_sample_surface_stamp() {
   return r;
 }
 
+inline ZhRecordTerrainEpoch zhao_sample_terrain_epoch() {
+  ZhRecordTerrainEpoch r{};
+  r.hdr.opcode       = ZHAO_OP_TERRAIN_EPOCH;
+  r.hdr.record_bytes = 32;
+  r.hdr.source_id    = 1342242823u; // kind 5, module 1, index 7
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.epoch = 0u;
+  r.payload.op = 206u;
+  r.payload.flags = 220u;
+  r.payload.reserved = 33122u;
+  r.payload.island_table_handle = 0u;
+  r.payload.source_id = 0u;
+  return r;
+}
+
+inline ZhRecordSubmitTerrainSet zhao_sample_submit_terrain_set() {
+  ZhRecordSubmitTerrainSet r{};
+  r.hdr.opcode       = ZHAO_OP_SUBMIT_TERRAIN_SET;
+  r.hdr.record_bytes = 48;
+  r.hdr.source_id    = 1342242824u; // kind 5, module 1, index 8
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.resource_epoch = 0u;
+  r.payload.list_offset = 0u;
+  r.payload.list_bytes = 0u;
+  r.payload.list_crc32c = 0u;
+  r.payload.patch_count = 60985u;
+  r.payload.view_mask = 24u;
+  r.payload.flags = 158u;
+  r.payload.sequence = 0u;
+  r.payload.reserved0 = 0u;
+  r.payload.reserved1 = 0u;
+  return r;
+}
+
 inline ZhRecordDrawForm zhao_sample_draw_form() {
   ZhRecordDrawForm r{};
   r.hdr.opcode       = ZHAO_OP_DRAW_FORM;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242823u; // kind 5, module 1, index 7
+  r.hdr.source_id    = 1342242825u; // kind 5, module 1, index 9
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.form = 704643073u;
@@ -931,7 +1023,7 @@ inline ZhRecordDrawPopulation zhao_sample_draw_population() {
   ZhRecordDrawPopulation r{};
   r.hdr.opcode       = ZHAO_OP_DRAW_POPULATION;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242824u; // kind 5, module 1, index 8
+  r.hdr.source_id    = 1342242826u; // kind 5, module 1, index 10
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.population = 704643073u;
@@ -945,7 +1037,7 @@ inline ZhRecordDrawProcedural zhao_sample_draw_procedural() {
   ZhRecordDrawProcedural r{};
   r.hdr.opcode       = ZHAO_OP_DRAW_PROCEDURAL;
   r.hdr.record_bytes = 64;
-  r.hdr.source_id    = 1342242825u; // kind 5, module 1, index 9
+  r.hdr.source_id    = 1342242827u; // kind 5, module 1, index 11
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.program = 704643073u;
@@ -960,7 +1052,7 @@ inline ZhRecordDrawSky zhao_sample_draw_sky() {
   ZhRecordDrawSky r{};
   r.hdr.opcode       = ZHAO_OP_DRAW_SKY;
   r.hdr.record_bytes = 176;
-  r.hdr.source_id    = 1342242826u; // kind 5, module 1, index 10
+  r.hdr.source_id    = 1342242828u; // kind 5, module 1, index 12
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.sky_set = 704643073u;
@@ -980,7 +1072,7 @@ inline ZhRecordSetEnvironment zhao_sample_set_environment() {
   ZhRecordSetEnvironment r{};
   r.hdr.opcode       = ZHAO_OP_SET_ENVIRONMENT;
   r.hdr.record_bytes = 48;
-  r.hdr.source_id    = 1342242827u; // kind 5, module 1, index 11
+  r.hdr.source_id    = 1342242829u; // kind 5, module 1, index 13
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.sun_yaw = 22925;
@@ -999,7 +1091,7 @@ inline ZhRecordEmitAudioEvent zhao_sample_emit_audio_event() {
   ZhRecordEmitAudioEvent r{};
   r.hdr.opcode       = ZHAO_OP_EMIT_AUDIO_EVENT;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242828u; // kind 5, module 1, index 12
+  r.hdr.source_id    = 1342242830u; // kind 5, module 1, index 14
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.event_id = 0u;
@@ -1014,7 +1106,7 @@ inline ZhRecordDebugBootstrap zhao_sample_debug_bootstrap() {
   ZhRecordDebugBootstrap r{};
   r.hdr.opcode       = ZHAO_OP_DEBUG_BOOTSTRAP;
   r.hdr.record_bytes = 64;
-  r.hdr.source_id    = 1342242829u; // kind 5, module 1, index 13
+  r.hdr.source_id    = 1342242831u; // kind 5, module 1, index 15
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.data[0] = 113u;
@@ -1072,7 +1164,7 @@ inline ZhRecordDebugFrameBlit zhao_sample_debug_frame_blit() {
   ZhRecordDebugFrameBlit r{};
   r.hdr.opcode       = ZHAO_OP_DEBUG_FRAME_BLIT;
   r.hdr.record_bytes = 48;
-  r.hdr.source_id    = 1342242830u; // kind 5, module 1, index 14
+  r.hdr.source_id    = 1342242832u; // kind 5, module 1, index 16
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.dst_slot = 53u;
@@ -1087,7 +1179,7 @@ inline ZhRecordDebugRumble zhao_sample_debug_rumble() {
   ZhRecordDebugRumble r{};
   r.hdr.opcode       = ZHAO_OP_DEBUG_RUMBLE;
   r.hdr.record_bytes = 32;
-  r.hdr.source_id    = 1342242831u; // kind 5, module 1, index 15
+  r.hdr.source_id    = 1342242833u; // kind 5, module 1, index 17
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
   r.payload.pad_index = 113u;
@@ -1212,6 +1304,34 @@ inline void zhao_pack_surface_stamp(const ZhRecordSurfaceStamp& r, std::vector<u
   w.u32(r.payload.radius);
   w.u32(r.payload.ring_width);
   for (int i = 0; i < 4; ++i) w.u8(r.payload.pad[i]);
+}
+
+inline void zhao_pack_terrain_epoch(const ZhRecordTerrainEpoch& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u32(r.payload.epoch);
+  w.u8(r.payload.op);
+  w.u8(r.payload.flags);
+  w.u16(r.payload.reserved);
+  w.u32(r.payload.island_table_handle);
+  w.u32(r.payload.source_id);
+}
+
+inline void zhao_pack_submit_terrain_set(const ZhRecordSubmitTerrainSet& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u32(r.payload.resource_epoch);
+  w.u32(r.payload.list_offset);
+  w.u32(r.payload.list_bytes);
+  w.u32(r.payload.list_crc32c);
+  w.u16(r.payload.patch_count);
+  w.u8(r.payload.view_mask);
+  w.u8(r.payload.flags);
+  w.u32(r.payload.sequence);
+  w.u32(r.payload.reserved0);
+  w.u32(r.payload.reserved1);
 }
 
 inline void zhao_pack_draw_form(const ZhRecordDrawForm& r, std::vector<uint8_t>& out) {
@@ -1528,6 +1648,38 @@ inline bool zhao_unpack_surface_stamp(ZhReader& r, ZhRecordSurfaceStamp& out) {
   return true;
 }
 
+inline bool zhao_unpack_terrain_epoch(ZhReader& r, ZhRecordTerrainEpoch& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.epoch = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.op = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.flags = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.reserved = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.island_table_handle = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.source_id = t; }
+  return true;
+}
+
+inline bool zhao_unpack_submit_terrain_set(ZhReader& r, ZhRecordSubmitTerrainSet& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.resource_epoch = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.list_offset = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.list_bytes = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.list_crc32c = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.patch_count = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.view_mask = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.flags = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.sequence = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.reserved0 = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.reserved1 = t; }
+  return true;
+}
+
 inline bool zhao_unpack_draw_form(ZhReader& r, ZhRecordDrawForm& out) {
   out = {};
   if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
@@ -1728,6 +1880,8 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"SetPresentationContract", 0x0020, 48, true, ZHAO_PADS_SET_PRESENTATION_CONTRACT, 8},
   {"TerrainField", 0x0200, 112, true, ZHAO_PADS_TERRAIN_FIELD, 4},
   {"SurfaceStamp", 0x0210, 64, true, ZHAO_PADS_SURFACE_STAMP, 4},
+  {"TerrainEpoch", 0x0220, 32, false, nullptr, 0},
+  {"SubmitTerrainSet", 0x0230, 48, false, nullptr, 0},
   {"DrawForm", 0x0300, 32, true, nullptr, 0},
   {"DrawPopulation", 0x0301, 32, true, ZHAO_PADS_DRAW_POPULATION, 8},
   {"DrawProcedural", 0x0302, 64, true, ZHAO_PADS_DRAW_PROCEDURAL, 11},
@@ -1738,7 +1892,7 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"DebugFrameBlit", 0xF002, 48, true, ZHAO_PADS_DEBUG_FRAME_BLIT, 18},
   {"DebugRumble", 0xF004, 32, true, ZHAO_PADS_DEBUG_RUMBLE, 13},
 };
-constexpr size_t ZHAO_COMMAND_COUNT = 16;
+constexpr size_t ZHAO_COMMAND_COUNT = 18;
 constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 176;
 inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {
   for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;
@@ -1773,8 +1927,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x18, 0x5D, 0xF4, 0x69, 0xCC, 0xFD, 0x0F, 0x43, 0x8E, 0x5B, 0xC3, 0xCC, 0x07, 0x9A, 0x30, 0x93, 0x84, 0x2D, 0xAD, 0xB8, 0x2B, 0xB5, 0xEB, 0xFB, 0xB8, 0xF6, 0x2A, 0x92, 0xAC, 0x60, 0x30, 0xB7};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xD9, 0x64, 0xFB, 0xAC, 0xA5, 0xD1, 0x5E, 0x97, 0xA9, 0xCF, 0xF8, 0x35, 0xBD, 0x84, 0xAD, 0xB7, 0x4B, 0xBA, 0xDE, 0x24, 0x29, 0xE1, 0xFC, 0x08, 0xAA, 0xC6, 0xA1, 0xC2, 0xE9, 0xBA, 0x90, 0xEF};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x76, 0x40, 0xE0, 0xFF, 0x52, 0xCE, 0x89, 0x4B, 0x3F, 0x54, 0x7B, 0x85, 0x5A, 0xB8, 0xEC, 0x2F, 0xB5, 0x67, 0x52, 0xB2, 0xF2, 0xFE, 0x23, 0x9F, 0x14, 0x48, 0xE9, 0xEC, 0xAD, 0x24, 0x4E, 0x7B};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x11, 0xCE, 0xED, 0x86, 0xD0, 0xA2, 0x4B, 0xFF, 0xD2, 0xB4, 0x75, 0x8E, 0xA4, 0xE7, 0x2F, 0xD0, 0x18, 0x2E, 0xD2, 0x05, 0xDE, 0x9B, 0xAC, 0x3C, 0xE8, 0x70, 0xAB, 0xB6, 0xD5, 0x7B, 0xB6, 0xB0};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

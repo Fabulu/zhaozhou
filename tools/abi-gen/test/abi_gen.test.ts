@@ -42,7 +42,11 @@ test('parser accepts the real commands.zidl', () => {
   const ir = parseAndLayout(zidlSource());
   assert.equal(ir.abi.version, 3); // ABI v3 (SetEnvironment 0x0311, 2026-08-17)
   assert.equal(ir.abi.commandAlignment, 16);
-  assert.equal(ir.commands.length, 16); // v3: +SetEnvironment 0x0311 (reserved)
+  // v3: +SetEnvironment 0x0311, +TerrainEpoch 0x0220, +SubmitTerrainSet 0x0230
+  // (all reserved). The terrain pair is ruling T5's ABI, confirmed by this
+  // generator as that ruling asks -- the pager behind them is built, the
+  // executor is not, and `reserved` is what says so on the wire.
+  assert.equal(ir.commands.length, 18);
 });
 
 test('parser rejects missing command status keyword', () => {

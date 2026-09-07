@@ -369,6 +369,76 @@ command SurfaceStamp 0x0210 implemented {
   pad[4];
 }
 
+// [v3] THE TERRAIN WORLD ABI, ruling T5 of
+// reports/OWNER-RULINGS-BUILDABILITY-20260902.md, verbatim. That ruling fixes
+// both opcodes and both layouts and says "opcodes confirmed by the ZIDL
+// generator before commit" -- this is that commit. 0x0220 and 0x0230 were
+// unallocated; the range comment at the top of this section already reserves
+// 0x0200-0x02FF for terrain.
+//
+// RESERVED, NOT IMPLEMENTED, and the distinction is the honest one: the ABI is
+// frozen and the pager behind it is built and unit-verified (TERRAIN.SEQ,
+// TERRAIN.LOADQ, TERRAIN.PAGELOADER, TERRAIN.RESIDENCY, TERRAIN.PAGESTREAM,
+// TERRAIN.MIPFEED), but NOTHING TURNS A COMMAND INTO A FRAME yet -- the
+// composed bench plays the frame ring by hand. A game issuing one of these
+// today gets ZH_ABI_UNIMPLEMENTED_COMMAND, which is a clean refusal rather
+// than silence. See reports/TERRAIN-COMMAND-PIPELINE-20260907.md for what the
+// executor has to do and for the four rulings it still needs.
+
+// Epoch control for the terrain resource set. BEGIN publishes a new
+// resource_epoch; END_FLUSH waits for the pager to drain; ABORT drops the
+// current set. WHAT "DRAIN" MEANS IN GATES IS NOT RULED -- which counters must
+// be quiet, and whether a fault during the flush aborts or holds the epoch --
+// and that is listed as an open ruling rather than decided here.
+command TerrainEpoch 0x0220 reserved {
+  u32 epoch;                 // the resource_epoch this command establishes
+  u8  op;                    // 0 = BEGIN, 1 = END_FLUSH, 2 = ABORT
+  u8  flags;                 // reserved-0 in v1
+  u16 reserved;              // must be 0
+  // T5 calls this a HANDLE. There is no `island_table` handle class in this
+  // file and adding one is a generator change plus a ruling about its
+  // generation semantics, so it is a u32 here -- WIRE-IDENTICAL to a
+  // handle32, differing only in what the decoder validates. Named in the
+  // pipeline report as work, not left to look like a considered choice.
+  u32 island_table_handle;
+  u32 source_id;
+}
+
+// The whole visible+prefetch set for one frame, as ONE command. T5: "One
+// SubmitTerrainSet covers the whole required+prefetch set. Do not emit one
+// DrawProcedural per patch and do not overload an existing terrain field
+// command."
+//
+// list_offset/list_bytes name a run of 32-byte patch records in the HPS
+// staging arena -- the record `zref::swstream::encode_record` already
+// serialises and `zref::swstream::canonical_less` already sorted. THE SEALED
+// LIST IS CAPTURE DATA: replay does not rerun the HPS visibility walk, so
+// nothing in hardware may re-sort or re-derive it.
+//
+// list_bytes must be exactly 32 * patch_count. Anything else is a malformed
+// command, not a clamp.
+//
+// PAYLOAD BYTES 16..31 DO NOT REACH THE SCHEDULER TODAY. The shell's record
+// framer captures record bytes 16..31 -- i.e. payload bytes 0..15 -- so
+// resource_epoch, list_offset, list_bytes and list_crc32c arrive and
+// patch_count, view_mask, flags and sequence do not. That is a command-path
+// limit and not a terrain one: TerrainField 0x0200 is a 112-byte record and is
+// truncated the same way. The field ORDER here is T5's and is not rearranged
+// to suit the framer -- moving patch_count into the first sixteen bytes would
+// be designing the ABI around a bug.
+command SubmitTerrainSet 0x0230 reserved {
+  u32 resource_epoch;        // must equal the live epoch or the command is refused
+  u32 list_offset;           // byte offset of the patch list in the HPS staging arena
+  u32 list_bytes;            // exactly 32 * patch_count
+  u32 list_crc32c;           // over the whole list, checked BEFORE any load is issued
+  u16 patch_count;           // T5's SEAL: TERRAIN.SEQ stops here, not at a sentinel
+  u8  view_mask;             // which views this set was unioned for
+  u8  flags;                 // reserved-0 in v1
+  u32 sequence;              // the frame sequence this set belongs to
+  u32 reserved0;             // must be 0
+  u32 reserved1;             // must be 0 (closes the payload at 32 B)
+}
+
 // ---- forms / populations / procedural (implemented in wave 3 — D7)
 
 // [w3] EXECUTED by the software renderer (marker/billboard path — the two

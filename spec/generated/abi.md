@@ -5,13 +5,13 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 185df469ccfd0f438e5bc3cc079a3093842dadb82bb5ebfbb8f62a92ac6030b7
-zidl_sha256         = d964fbaca5d15e97a9cff835bd84adb74bbade2429e1fc08aac6a1c2e9ba90ef
+abi_identity_sha256 = 7640e0ff52ce894b3f547b855ab8ec2fb56752b2f2fe239f1448e9ecad244e7b
+zidl_sha256         = 11ceed86d0a24bffd2b4758ea4e72fd0182ed205de9bac3ce870abb6d57bb6b0
 ```
 
 ABI version **3**, little-endian, command alignment
 **16 B**, opcode width u16,
-16 commands (13 implemented).
+18 commands (13 implemented).
 
 ## Commands
 
@@ -24,6 +24,8 @@ ABI version **3**, little-endian, command alignment
 | `SetPresentationContract` | `0x0020` | 48 | implemented |
 | `TerrainField` | `0x0200` | 112 | implemented |
 | `SurfaceStamp` | `0x0210` | 64 | implemented |
+| `TerrainEpoch` | `0x0220` | 32 | reserved |
+| `SubmitTerrainSet` | `0x0230` | 48 | reserved |
 | `DrawForm` | `0x0300` | 32 | implemented |
 | `DrawPopulation` | `0x0301` | 32 | implemented |
 | `DrawProcedural` | `0x0302` | 64 | implemented |
@@ -206,6 +208,46 @@ Golden sample: `tests/abi/golden/cmd_surface_stamp.bin` (C++ packer
 `zhao_abi::zhao_pack_surface_stamp(zhao_abi::zhao_sample_surface_stamp(), ...)`,
 TS `zhaoPackSurfaceStamp(zhaoSampleSurfaceStamp(), ...)`, SV round-trips it via
 `zhao_unpack_surface_stamp`/`zhao_pack_surface_stamp`).
+
+### TerrainEpoch — 0x0220 (32 B, reserved)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 4 | `epoch` | u32 |
+| 4 | 1 | `op` | u8 |
+| 5 | 1 | `flags` | u8 |
+| 6 | 2 | `reserved` | u16 |
+| 8 | 4 | `island_table_handle` | u32 |
+| 12 | 4 | `source_id` | u32 |
+
+Golden sample: `tests/abi/golden/cmd_terrain_epoch.bin` (C++ packer
+`zhao_abi::zhao_pack_terrain_epoch(zhao_abi::zhao_sample_terrain_epoch(), ...)`,
+TS `zhaoPackTerrainEpoch(zhaoSampleTerrainEpoch(), ...)`, SV round-trips it via
+`zhao_unpack_terrain_epoch`/`zhao_pack_terrain_epoch`).
+
+### SubmitTerrainSet — 0x0230 (48 B, reserved)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 4 | `resource_epoch` | u32 |
+| 4 | 4 | `list_offset` | u32 |
+| 8 | 4 | `list_bytes` | u32 |
+| 12 | 4 | `list_crc32c` | u32 |
+| 16 | 2 | `patch_count` | u16 |
+| 18 | 1 | `view_mask` | u8 |
+| 19 | 1 | `flags` | u8 |
+| 20 | 4 | `sequence` | u32 |
+| 24 | 4 | `reserved0` | u32 |
+| 28 | 4 | `reserved1` | u32 |
+
+Golden sample: `tests/abi/golden/cmd_submit_terrain_set.bin` (C++ packer
+`zhao_abi::zhao_pack_submit_terrain_set(zhao_abi::zhao_sample_submit_terrain_set(), ...)`,
+TS `zhaoPackSubmitTerrainSet(zhaoSampleSubmitTerrainSet(), ...)`, SV round-trips it via
+`zhao_unpack_submit_terrain_set`/`zhao_pack_submit_terrain_set`).
 
 ### DrawForm — 0x0300 (32 B, implemented)
 
@@ -581,6 +623,8 @@ See `spec/capture_format.md` 3. 36-byte sealed header + command stream
 | `tests/abi/golden/cmd_set_presentation_contract.bin` | canonical SetPresentationContract sample record |
 | `tests/abi/golden/cmd_terrain_field.bin` | canonical TerrainField sample record |
 | `tests/abi/golden/cmd_surface_stamp.bin` | canonical SurfaceStamp sample record |
+| `tests/abi/golden/cmd_terrain_epoch.bin` | canonical TerrainEpoch sample record |
+| `tests/abi/golden/cmd_submit_terrain_set.bin` | canonical SubmitTerrainSet sample record |
 | `tests/abi/golden/cmd_draw_form.bin` | canonical DrawForm sample record |
 | `tests/abi/golden/cmd_draw_population.bin` | canonical DrawPopulation sample record |
 | `tests/abi/golden/cmd_draw_procedural.bin` | canonical DrawProcedural sample record |

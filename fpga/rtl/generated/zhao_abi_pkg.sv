@@ -84,6 +84,8 @@ package zhao_abi_pkg;
   localparam logic [15:0] ZHAO_OP_SET_PRESENTATION_CONTRACT = 16'h0020;
   localparam logic [15:0] ZHAO_OP_TERRAIN_FIELD = 16'h0200;
   localparam logic [15:0] ZHAO_OP_SURFACE_STAMP = 16'h0210;
+  localparam logic [15:0] ZHAO_OP_TERRAIN_EPOCH = 16'h0220;
+  localparam logic [15:0] ZHAO_OP_SUBMIT_TERRAIN_SET = 16'h0230;
   localparam logic [15:0] ZHAO_OP_DRAW_FORM = 16'h0300;
   localparam logic [15:0] ZHAO_OP_DRAW_POPULATION = 16'h0301;
   localparam logic [15:0] ZHAO_OP_DRAW_PROCEDURAL = 16'h0302;
@@ -628,6 +630,76 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_SURFACE_STAMP_OFF_RADIUS = 52;
   localparam int unsigned ZHAO_SURFACE_STAMP_OFF_RING_WIDTH = 56;
   localparam int unsigned ZHAO_SURFACE_STAMP_OFF_PAD = 60;
+
+  // TerrainEpoch 0x0220: 32-B record (reserved).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [31:0] source_id;  // u32 @28
+    logic [31:0] island_table_handle;  // u32 @24
+    logic [15:0] reserved;  // u16 @22
+    logic [7:0] flags;  // u8 @21
+    logic [7:0] op;  // u8 @20
+    logic [31:0] epoch;  // u32 @16
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_terrain_epoch_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_TERRAIN_EPOCH_BYTES = 32;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_TERRAIN_EPOCH_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_TERRAIN_EPOCH_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_TERRAIN_EPOCH_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_TERRAIN_EPOCH_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_TERRAIN_EPOCH_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_TERRAIN_EPOCH_OFF_EPOCH = 16;
+  localparam int unsigned ZHAO_TERRAIN_EPOCH_OFF_OP = 20;
+  localparam int unsigned ZHAO_TERRAIN_EPOCH_OFF_FLAGS = 21;
+  localparam int unsigned ZHAO_TERRAIN_EPOCH_OFF_RESERVED = 22;
+  localparam int unsigned ZHAO_TERRAIN_EPOCH_OFF_ISLAND_TABLE_HANDLE = 24;
+  localparam int unsigned ZHAO_TERRAIN_EPOCH_OFF_SOURCE_ID = 28;
+
+  // SubmitTerrainSet 0x0230: 48-B record (reserved).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [31:0] reserved1;  // u32 @44
+    logic [31:0] reserved0;  // u32 @40
+    logic [31:0] sequence_f;  // u32 @36
+    logic [7:0] flags;  // u8 @35
+    logic [7:0] view_mask;  // u8 @34
+    logic [15:0] patch_count;  // u16 @32
+    logic [31:0] list_crc32c;  // u32 @28
+    logic [31:0] list_bytes;  // u32 @24
+    logic [31:0] list_offset;  // u32 @20
+    logic [31:0] resource_epoch;  // u32 @16
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_submit_terrain_set_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_BYTES = 48;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_RESOURCE_EPOCH = 16;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_LIST_OFFSET = 20;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_LIST_BYTES = 24;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_LIST_CRC32C = 28;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_PATCH_COUNT = 32;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_VIEW_MASK = 34;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_FLAGS = 35;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_SEQUENCE = 36;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_RESERVED0 = 40;
+  localparam int unsigned ZHAO_SUBMIT_TERRAIN_SET_OFF_RESERVED1 = 44;
 
   // DrawForm 0x0300: 32-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
@@ -1572,6 +1644,86 @@ package zhao_abi_pkg;
     end
   endfunction
 
+  function automatic logic [255:0] zhao_pack_terrain_epoch(input zhao_rec_terrain_epoch_t c);
+    logic [255:0] v;
+    begin
+      v[ZHAO_TERRAIN_EPOCH_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_TERRAIN_EPOCH_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_TERRAIN_EPOCH_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_TERRAIN_EPOCH_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_TERRAIN_EPOCH_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_TERRAIN_EPOCH_OFF_EPOCH*8 +: 32] = c.epoch;
+      v[ZHAO_TERRAIN_EPOCH_OFF_OP*8 +: 8] = c.op;
+      v[ZHAO_TERRAIN_EPOCH_OFF_FLAGS*8 +: 8] = c.flags;
+      v[ZHAO_TERRAIN_EPOCH_OFF_RESERVED*8 +: 16] = c.reserved;
+      v[ZHAO_TERRAIN_EPOCH_OFF_ISLAND_TABLE_HANDLE*8 +: 32] = c.island_table_handle;
+      v[ZHAO_TERRAIN_EPOCH_OFF_SOURCE_ID*8 +: 32] = c.source_id;
+      zhao_pack_terrain_epoch = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_terrain_epoch_t zhao_unpack_terrain_epoch(input logic [255:0] v);
+    zhao_rec_terrain_epoch_t c;
+    begin
+      c.h_opcode = v[ZHAO_TERRAIN_EPOCH_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_TERRAIN_EPOCH_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_TERRAIN_EPOCH_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_TERRAIN_EPOCH_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_TERRAIN_EPOCH_OFF_H_RESERVED0*8 +: 32];
+      c.epoch = v[ZHAO_TERRAIN_EPOCH_OFF_EPOCH*8 +: 32];
+      c.op = v[ZHAO_TERRAIN_EPOCH_OFF_OP*8 +: 8];
+      c.flags = v[ZHAO_TERRAIN_EPOCH_OFF_FLAGS*8 +: 8];
+      c.reserved = v[ZHAO_TERRAIN_EPOCH_OFF_RESERVED*8 +: 16];
+      c.island_table_handle = v[ZHAO_TERRAIN_EPOCH_OFF_ISLAND_TABLE_HANDLE*8 +: 32];
+      c.source_id = v[ZHAO_TERRAIN_EPOCH_OFF_SOURCE_ID*8 +: 32];
+      zhao_unpack_terrain_epoch = c;
+    end
+  endfunction
+
+  function automatic logic [383:0] zhao_pack_submit_terrain_set(input zhao_rec_submit_terrain_set_t c);
+    logic [383:0] v;
+    begin
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_RESOURCE_EPOCH*8 +: 32] = c.resource_epoch;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_LIST_OFFSET*8 +: 32] = c.list_offset;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_LIST_BYTES*8 +: 32] = c.list_bytes;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_LIST_CRC32C*8 +: 32] = c.list_crc32c;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_PATCH_COUNT*8 +: 16] = c.patch_count;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_VIEW_MASK*8 +: 8] = c.view_mask;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_FLAGS*8 +: 8] = c.flags;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_SEQUENCE*8 +: 32] = c.sequence_f;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_RESERVED0*8 +: 32] = c.reserved0;
+      v[ZHAO_SUBMIT_TERRAIN_SET_OFF_RESERVED1*8 +: 32] = c.reserved1;
+      zhao_pack_submit_terrain_set = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_submit_terrain_set_t zhao_unpack_submit_terrain_set(input logic [383:0] v);
+    zhao_rec_submit_terrain_set_t c;
+    begin
+      c.h_opcode = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_H_RESERVED0*8 +: 32];
+      c.resource_epoch = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_RESOURCE_EPOCH*8 +: 32];
+      c.list_offset = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_LIST_OFFSET*8 +: 32];
+      c.list_bytes = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_LIST_BYTES*8 +: 32];
+      c.list_crc32c = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_LIST_CRC32C*8 +: 32];
+      c.patch_count = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_PATCH_COUNT*8 +: 16];
+      c.view_mask = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_VIEW_MASK*8 +: 8];
+      c.flags = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_FLAGS*8 +: 8];
+      c.sequence_f = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_SEQUENCE*8 +: 32];
+      c.reserved0 = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_RESERVED0*8 +: 32];
+      c.reserved1 = v[ZHAO_SUBMIT_TERRAIN_SET_OFF_RESERVED1*8 +: 32];
+      zhao_unpack_submit_terrain_set = c;
+    end
+  endfunction
+
   function automatic logic [255:0] zhao_pack_draw_form(input zhao_rec_draw_form_t c);
     logic [255:0] v;
     begin
@@ -2003,6 +2155,8 @@ package zhao_abi_pkg;
         ZHAO_OP_SET_PRESENTATION_CONTRACT: zhao_opcode_record_bytes = 48;
         ZHAO_OP_TERRAIN_FIELD: zhao_opcode_record_bytes = 112;
         ZHAO_OP_SURFACE_STAMP: zhao_opcode_record_bytes = 64;
+        ZHAO_OP_TERRAIN_EPOCH: zhao_opcode_record_bytes = 32;
+        ZHAO_OP_SUBMIT_TERRAIN_SET: zhao_opcode_record_bytes = 48;
         ZHAO_OP_DRAW_FORM: zhao_opcode_record_bytes = 32;
         ZHAO_OP_DRAW_POPULATION: zhao_opcode_record_bytes = 32;
         ZHAO_OP_DRAW_PROCEDURAL: zhao_opcode_record_bytes = 64;
@@ -2177,6 +2331,8 @@ package zhao_abi_pkg;
       if ($bits(zhao_rec_set_presentation_contract_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_terrain_field_t) != 8*112) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_surface_stamp_t) != 8*64) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_terrain_epoch_t) != 8*32) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_submit_terrain_set_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_draw_form_t) != 8*32) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_draw_population_t) != 8*32) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_draw_procedural_t) != 8*64) zhao_layout_ok = 1'b0;
