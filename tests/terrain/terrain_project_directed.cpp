@@ -325,6 +325,57 @@ int main(int argc, char** argv) {
   }
 
   // =========================================================================
+  // 7b. a ROW sum that sits on the rescale half
+  // =========================================================================
+  // Case 7 above reaches the fx_mad half and says so in its own words -- "did
+  // this vertex actually sit on the fx_mad half". NOTHING IN THIS FILE REACHED
+  // THE ROW HALF, and a mutation sweep proved it: dropping the rounding term
+  // from `rescale16_row` in the shared `zhao_project_core`, so round-half-up
+  // becomes truncation, left all 2,011 checks here passing while
+  // `geom_project_directed` failed 22 of 900.
+  //
+  // WHY THE SUITE WAS BLIND. Every matrix above uses m00 = kOne, and case 5
+  // states the consequence plainly: "m33 = 1 raw makes clip.w = 1, so ndc =
+  // clip << 16 exactly". An exact row product has nothing below bit 16 for the
+  // rounding to act on, so the term is unreachable however many vertices are
+  // swept.
+  //
+  // This is the same failure `tests/terrain/tess_harness.hpp` documents by
+  // name -- "filling only on the height16 grid makes every parent difference
+  // EVEN, so the geomorph halving never has a remainder and A TRUNCATION IN
+  // PLACE OF ROUND-HALF-UP SURVIVES THE WHOLE SUITE" -- and it is the third
+  // instance found in this tree.
+  //
+  // m00 = 1 RAW, not kOne. The row product is then the world coordinate
+  // itself, so bit 15 of the world word IS the rounding decision and the sweep
+  // can land on it deliberately rather than hoping.
+  {
+    const int32_t mh[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, kOne, 0, 0, 0, 0, kOne};
+    const zref::mat4fx m = mat_of(mh);
+    dev.configure(0, m, kCanvas);
+
+    int row_halves = 0;
+    for (int k = -3; k <= 3; ++k) {
+      // ...8000 is the half exactly; the neighbours bracket it so an
+      // off-by-one in the rounding shows up as well as a missing one.
+      const int32_t base = k * 0x10000;
+      const int32_t xs[3] = {base + 0x7FFF, base + 0x8000, base + 0x8001};
+      for (int i = 0; i < 3; ++i) {
+        const int32_t w = xs[i];
+        const TriIn t = tri(w, w, kOne, w + 1, w, kOne, w, w + 1, kOne, src++);
+        expect(dev, t, m, kCanvas, "a row sum on the rescale half rounds up");
+        // Instrumentation only, exactly as case 7 does it: classify the case,
+        // never produce the expectation.
+        if ((static_cast<uint32_t>(w) & 0xFFFFu) == 0x8000u) ++row_halves;
+      }
+    }
+    check(row_halves > 0,
+          "the row sweep actually reached the rescale16_row half -- without "
+          "this the case is a re-test of the exact path in new clothes",
+          1, static_cast<uint64_t>(row_halves));
+  }
+
+  // =========================================================================
   // 8. a row sum that saturates the fx16 word
   // =========================================================================
   // §2 saturates each row after ONE rescale. A matrix whose row sum leaves the

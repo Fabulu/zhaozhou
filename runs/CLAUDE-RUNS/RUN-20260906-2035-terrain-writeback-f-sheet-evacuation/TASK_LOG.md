@@ -648,3 +648,20 @@ THIRD coverage asymmetry: terrain_project_directed (2,011 checks) is blind to
 rescale16_row's rounding because its matrices make row products exact;
 geom_project_directed catches it in 22 of 900. Same shape as the tess fixture.
 Recorded, not fixed -- different lane from the one being measured.
+
+## 2026-09-07 -- closed the third coverage asymmetry (terrain row rescale)
+
+terrain_project_directed was blind to rescale16_row's rounding because every
+matrix uses m00 = kOne, making row products exact. Case 7 reaches the fx_mad
+half; nothing reached the ROW half.
+
+Case 7b uses m00 = 1 RAW so the row product is the world coordinate itself,
+sweeping ...7FFF / ...8000 / ...8001 across seven multiples of 0x10000, and
+counts the halves it actually hit (instrumentation only, the file's own idiom).
+
+  before  2,011 checks   0 failed on the mutation
+  after   2,264 checks  42 failed
+
+Three coverage asymmetries closed or recorded today, all one shape: a fixture
+too regular to exercise the rounding it protects. tess_harness.hpp names this
+failure mode explicitly and it keeps recurring.
