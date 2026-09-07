@@ -313,13 +313,13 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                 // law), optional per-texel Mosaic pick between the cell's two
                 // candidates, then the modulation with ONE rounding per
                 // channel. Gouraud: the modulation gain is the INTERPOLATED
-                // vertex lane (the §8 "fogged colour rides the ordinary
-                // Gouraud path" model -- SUPERSEDED by owner ruling D-5,
-                // which forbids carrying an already-fogged vertex colour;
-                // the lane is lit and tinted only, and fog belongs at the
-                // final source colour AFTER the toon ramp below — texel x interpolated lit gain);
-                // otherwise the per-primitive mod_* constant, bit-identical
-                // to what it always was.
+                // vertex lane -- texel x interpolated LIT gain. (§8's "fogged
+                // colour rides the ordinary Gouraud path" is superseded by
+                // owner ruling D-5, which forbids carrying an already-fogged
+                // vertex colour: this lane is lit and tinted only, and the fog
+                // mix belongs at the final source colour, after the toon ramp
+                // applied just below.) Otherwise the per-primitive mod_*
+                // constant, bit-identical to what it always was.
                 const int32_t tx = terrain::mirror_texel(u);
                 const int32_t ty = terrain::mirror_texel(v);
                 const uint8_t tile = tex->mosaic
