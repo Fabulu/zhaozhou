@@ -2201,3 +2201,46 @@ regenerate through `cmake --preset windows-native`, never through another
 still cannot find the module means the GRAPH is stale, not the list.** The
 instinct is to go add the file again, which would be a no-op followed by
 confusion.
+
+## The 22.8 patch deleted a detector, and the suite went green
+
+Worth writing down in full, because it is this repository's own law happening to
+me while I was writing a test *for* that law.
+
+The patch's last anchor was the existing line
+
+    zhao::check(dut->ev_err_stale_o == 0, "wrap run: no stale rejections", ...)
+
+and my replacement text did not contain it. So the insertion **removed** the
+assertion. The suite then reported 525 checks passed — and I read that as "the
+late packets are refused silently, with no counter recording them", which is a
+plausible, interesting, and completely wrong finding. It was wrong in the
+comfortable direction: it made the DUT look quiet rather than making my patch
+look broken.
+
+What actually caught it was refusing to accept `ev_err_stale=0` as good news.
+Two steps:
+
+1. **Fire test.** Give the attacker the CORRECT generation and its return
+   becomes legitimate. Result: `ev_err_dup_o` moved 0 → 8. That proved the
+   injection path was live and reaching the DUT — 8 packets in, 8 counted.
+2. **Read the fourth counter.** §19.7's partition assertion proves exactly one
+   of {range, stale, unsol, dup, accept} fires per valid C1 beat, so the eight
+   refusals had to be in *some* bucket. I had checked three. Printing all four
+   gave `stale=8 unsol=0 dup=0 range=0` — the DUT had been counting them
+   correctly the entire time, and the only broken thing was my patch.
+
+The restored line reads `== attacks` instead of `== 0`, which is strictly
+stronger than what was there this morning: every late packet was refused AND
+counted, and nothing else in a 16,320-admission run was refused for any reason.
+The fire test doubles as its fire test — with the correct generation the count
+lands in `dup` instead, so `stale == 8` fails.
+
+526 checks, all passing.
+
+**The lesson is about anchors, not about the DUT.** A patch whose anchor is an
+existing assertion silently deletes that assertion unless the replacement text
+carries it forward, and the resulting suite is greener than before. Anchoring on
+the line *above* the target, or asserting the check count went UP by the number
+added, would both have caught it immediately — the count went 522 → 525 for four
+added checks, and I noticed the arithmetic was off by one and did not chase it.
