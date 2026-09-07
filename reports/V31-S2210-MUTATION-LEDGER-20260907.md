@@ -171,13 +171,23 @@ Fourth consecutive structural catch. Every credit invariant in the block —
 `a_cmb_reserved`, `a_out_reserved`, `a_p22_cbi_implies_crs`,
 `a_reject_partition_t` — has now caught the mutation it was written for.
 
+### 1. use slot-only identity for external validation
+Both generation terms dropped from `c2t_idok_c` — the snapshot compare AND the
+current-window membership — so a return is validated by its slot alone.
+
+    %Error: zhao_texture_v3own.sv:1990: Assertion failed in
+      TOP.zhao_texture_v3own.a_sample_claim: 'assert' failed.
+
+Fifth consecutive structural catch. Note this is a STRONGER mutation than item 3
+(which removed one half of the predicate): removing both halves is caught by the
+claim invariant rather than by the V03/V04 stimulus, and it fires earlier.
+
 ## NOT yet demonstrated — stated so the gap is visible
 
-1. slot-only identity for external validation
 13. reopen the namespace before one external adapter acknowledges
 14. force old broken CLUT4, alpha, nearest, or global-binding behaviour
 
-**Eleven of fourteen.**
+**Twelve of fourteen.**
 
 ## Related mutations run today outside §22.10's list
 
