@@ -1829,3 +1829,39 @@ absorbed into a larger delta.
 No ALM or Fmax prediction. Today's score is three confirmed predictions (all
 structural) against four falsified (all about magnitude), and this one is
 deliberately an accounting claim rather than a performance one.
+
+## §22.2's phase-control invariants — none of them existed
+
+§22.2 says *"assert at every edge for every active row"* and lists them. Checked
+before writing anything: **none of the first four were asserted anywhere in this
+file.** The same audit that found §16.3's one genuine gap, applied to §22.
+
+Added, gated on `live_q` per the section's "ACTIVE row":
+
+* committed ⊆ claimed ⊆ issued ⊆ required (three assertions);
+* **combine_issued implies combine_reserved** — exactly T4's separation: `cbi` is
+  §11.1's event 3, `crs` is event 2, and an issue never reserved would mean the
+  credit was bypassed;
+* **final_claimed implies actual combine_issued** — M6's property, which until
+  today rested on a single directed case and is now a continuous row invariant;
+* final_done implies final_claimed.
+
+One rotating row per cycle via `gen_chk_s`, so the ring is swept many times over
+at a fraction of the cost of 64 comparisons per edge.
+
+**Fire-tested:** committing a source that was never claimed trips
+`a_p22_cmt_sub_clm` immediately, alongside two functional failures.
+
+481 checks pass on the real RTL, none fired.
+
+### Where the brief's checklists now stand
+
+* **§13.1** — fetched bit removed, under an assertion proved first. T6's first item.
+* **§13.2** — three-interval partition asserted.
+* **§14.1** — admission cone verified structurally: two registers, quiet one
+  register away. `reports/V31-S14-ADMISSION-CONE-20260907.md`.
+* **§16.2/.3/.5** — seam repaired, handoff law verified, test list complete, the
+  context-rate knee re-measured at 16.
+* **§22.2** — invariants now exist and are demonstrated to fire.
+* **§14.2** — NOT done: its nine drain conditions span blocks outside this one,
+  several inside the running island fit's closure. Belongs with §10 integration.
