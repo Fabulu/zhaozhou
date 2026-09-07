@@ -2422,10 +2422,36 @@ absolute difference. That is the same shape of hole `TERRAIN.PAGESTREAM` filled
 this morning — a block, not a wire — and it is the last one between a page and a
 LOD-selected mesh.
 
-It is *reported*, not built: whether the deviations are computed at load time
-(once per page, alongside the mips, since base+scar are fixed until a bake) or
-per frame (because live field lanes move `live_top`) is a **ruling**, and the
-two differ by a factor of sixty in cost.
+It is *reported*, not built, and the report is
+`reports/TERRAIN-LOD-DEVIATION-20260907.md`. **Two rulings**, and the second one
+decides where the block goes:
+
+1. **Which quantity `dev[L]` is.** `morph_case` returns 0 on subpatch boundary
+   vertices — geomorph applies only strictly inside, deliberately, for
+   crack-safety — so *"the deviation this subpatch would suffer"* has two
+   readings that differ exactly on the boundary ring: the **morph** deviation
+   (what actually moves during a transition) or the **mesh** deviation (how far
+   the coarse mesh departs from the fine one). The second is always larger and
+   is what a projected-error selector wants.
+2. **When it is computed.** At load, from `compose_top` (~3,900 operations per
+   page against the 6,726 clocks the load already costs — free); or per frame,
+   because live field lanes move `live_top` (~125,000 operations a frame at
+   T7's 32 pages). **Sixty times the cost**, and the cheap answer is *wrong* for
+   a patch with an active deformation field — which is the feature the whole
+   FIELD.SEQ.EARTH lane exists for.
+
+   A third reading is worth considering before it is discovered later: compute
+   at load, and recompute only for subpatches whose `subpatch_dirty_o` bit is
+   set — a signal `TERRAIN.PATCH` already produces, for exactly this class of
+   question.
+
+The two answers to (2) put the block in **two different places in the chain** —
+behind PAGESTREAM if at load, behind PATCH's composed stream if per frame,
+because that is where `live_top` exists. Hence ruling before writing.
+
+THE ARITHMETIC IS NOT THE PROBLEM: `coarse_height` and `morph_case` are both
+ratified and both already used by TESS, so the law is derivable with no new
+arithmetic at all — 243 subtract-and-compare per subpatch, no DSP.
 
 ### Open, and needing the owner
 
