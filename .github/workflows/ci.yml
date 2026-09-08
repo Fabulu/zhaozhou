@@ -292,3 +292,122 @@ jobs:
           cmake --preset windows-ci
           cmake --build build
           ctest --test-dir build -L nightly --output-on-failure
+
+  # ---------------------------------------------------------------------------
+  # CREATURE GATES. Added 2026-09-08 after pass-12 QA found that NOT ONE
+  # Manafold gate runs in CI -- four committed probes, each with deliberate
+  # failable legs, each run only when somebody remembered. That is how the
+  # headstand shipped sinking 87 mm through the floor: the probe was committed,
+  # it exits non-zero, and nobody ran it. Two implementers and a publish went
+  # past it.
+  #
+  # It does NOT go through CMake. `tools/reel/build-direct.sh` compiles these
+  # directly with g++ and never invokes CMake/Ninja/Verilator, which is both
+  # much faster here and the path CLAUDE.md prescribes -- `cmake --build`
+  # intermittently loses a race regenerating build.ninja against Verilator and
+  # then runs the STALE binary while reporting success.
+  #
+  # ⚠ AND EVERY GATE IS RUN TWICE: once expecting PASS, once through a
+  # `--fail-*` leg expecting FAILURE. A gate that cannot fail is worse than no
+  # gate, because it reports success it never measured -- this pass shipped an
+  # eye-travel gate that read the X lane of a pure-Y rotation and could only
+  # ever print 0.00. The green leg catches regressions; the red leg catches the
+  # gate going blind, which is the failure nothing else here can see.
+  creature-gates:
+    name: creature gates (Manafold, direct build)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate a g++ (no CMake, no Verilator on this job)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $gpp = Get-Command g++.exe -ErrorAction SilentlyContinue
+          if (-not $gpp) {
+            foreach ($cand in 'C:\msys64\mingw64\bin', 'C:\mingw64\bin') {
+              if (Test-Path (Join-Path $cand 'g++.exe')) {
+                Add-Content $env:GITHUB_PATH $cand
+                Write-Host "g++ from $cand"
+                return
+              }
+            }
+            throw 'no g++ found on the runner (PATH, C:\msys64\mingw64\bin, C:\mingw64\bin)'
+          }
+          & g++.exe --version | Select-Object -First 1
+
+      - name: Build the four committed Manafold gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          for t in mprobe mnodule mspan mmeshcheck; do
+            echo "::group::build $t"
+            bash tools/reel/build-direct.sh --output out/ci-gates "$t"
+            echo "::endgroup::"
+          done
+          ls -la out/ci-gates/bin
+
+      - name: Run them green, then prove each one can go red
+        shell: bash
+        run: |
+          set -uo pipefail
+          BIN=out/ci-gates/bin
+          rc=0
+
+          # ⚠ THE THREE GATES DISAGREE ABOUT WHAT A FAILABLE LEG SHOULD RETURN,
+          # and that disagreement is itself a finding (2026-09-08). manafold-probe
+          # and manafold-spangate exit NON-ZERO when their leg detects the fault.
+          # manafold-nodule prints "FAIL: 7 failure(s) [FAILABLE LEG ENGAGED]"
+          # and exits ZERO -- defensible on its own terms, since the leg doing its
+          # job is a success for the leg, but it means an exit-code harness sees
+          # its red legs as green and CANNOT TELL a working gate from a blind one.
+          # That is the same blindness this pass found in the eye-travel gate.
+          # So the red expectation is declared per gate rather than assumed, and
+          # the green run must ALSO be checked for "FAIL:" in its text, because a
+          # gate that reports failure while exiting 0 would otherwise ship twice.
+
+          # $1 label  $2 exe  $3 red expectation: "rc" | "text" | "none"  rest: leg args
+          check() {
+            local label="$1" exe="$2" expect="$3"; shift 3
+            echo "::group::$label"
+            local out
+            out=$("$exe" 2>&1); local grc=$?
+            if [ $grc -ne 0 ]; then
+              echo "::error::$label exited $grc on the shipping build"
+              echo "$out" | tail -40; rc=1
+            elif echo "$out" | grep -q "FAIL:"; then
+              echo "::error::$label printed FAIL: while exiting 0 -- read the text, not the code"
+              echo "$out" | tail -40; rc=1
+            else
+              echo "  GREEN ok"
+            fi
+            if [ "$expect" != "none" ]; then
+              out=$("$exe" "$@" 2>&1); local rrc=$?
+              case "$expect" in
+                rc)
+                  if [ $rrc -eq 0 ]; then
+                    echo "::error::$label exited 0 with $* -- the gate has gone blind"
+                    echo "$out" | tail -40; rc=1
+                  else
+                    echo "  RED ok (exit $rrc with: $*)"
+                  fi ;;
+                text)
+                  if echo "$out" | grep -q "FAIL:"; then
+                    echo "  RED ok (detected, reported in text, with: $*)"
+                  else
+                    echo "::error::$label detected NOTHING with $* -- the gate has gone blind"
+                    echo "$out" | tail -40; rc=1
+                  fi ;;
+              esac
+            fi
+            echo "::endgroup::"
+          }
+
+          check manafold-probe     "$BIN/manafold-probe.exe"     rc   --fail-mirror
+          check manafold-spangate  "$BIN/manafold-spangate.exe"  rc   --fail-nolanes
+          check manafold-nodule    "$BIN/manafold-nodule.exe"    text --fail-ignore
+          check manafold-nodule-A  "$BIN/manafold-nodule.exe"    text --fail-mute A
+          check manafold-meshcheck "$BIN/manafold-meshcheck.exe" none
+
+          exit $rc
