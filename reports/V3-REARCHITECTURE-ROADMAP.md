@@ -31,6 +31,63 @@ substitutes for MapOnly's named-structure attribution — run MapOnly first.
 
 ---
 
+## STATUS UPDATE 2026-09-08 (late) — read this before the packet list
+
+### PACKET 1 IS DONE IN SIMULATION. Its fit is still owed.
+
+| profile | `shadow_present_o` | comparators | checks |
+|---|---|---|---|
+| lab (default) | 1 | shadow 1176/0, align 792/0, bil 768/0, near 192/0 | **125** |
+| production `-GMIGRATION_SHADOWS=0` | 0 | not elaborated, counters asserted 0 | **124** |
+| oracle | n/a | untouched | **119** |
+
+Both falsifiers run — `reports/PACKET1-FALSIFIERS-20260908.md`. The one that
+mattered: with the laboratory absent, the reference differential still catches a
+swapped-fraction mutation (3 colour checks, 32/32/29). **The laboratory is
+apparatus, not enforcement**, so §4.3's boundary is drawn in the right place and
+the packet may proceed.
+
+`class_m` and `f_class_in_c` are gone. `palslot_m`/`palgen_m` untouched, as
+specified. The three dead duplicate arrays (`fpsl_m`, `fpgn_m`, `frec_m`) are
+**still to delete** — they were moved into this packet and have not been done.
+
+### FIT GATE 0 IS LOST. Do not wait for it.
+
+The `@d0fixed` island fit and the chained expander refit were both killed at
+~195 and ~174 minutes by an external stop that took the wrappers and their
+Quartus children together. No row was written; the receipt is intact at 119 rows.
+
+**It is not being re-run**, and that is a deliberate call under the owner's fit
+ruling: three hours to attribute a one-line register-enable change is not what a
+fit is for. The D0 repair folds into gate 1's measurement, and the baseline is
+`@pktC-fixed` (15,483 ALM / 62.83 MHz reported, 77.45 internal-only, clean tree,
+`1b81c013`). State the confound when quoting gate 1: its delta covers the D0
+gate plus the shadow gating plus the dead-array deletions.
+
+### The gate plan as it now stands
+
+| gate | what | status |
+|---|---|---|
+| ~~0~~ | `@d0fixed` baseline | **LOST, folded into gate 1** |
+| 4 | RCP pair at matched NCTX=12/TOKW=14 | **RUNNING** — owner approved "halve the DSPs even if it costs" |
+| 1-pre | MapOnly pair, `@g1-lab` vs `@g1-prod` | **QUEUED** behind gate 4 |
+| 1 | island fit, production profile | after 1-pre |
+| 2 | island fit, descriptor + join + palette | after packets 2-3 |
+| 3 | pairpipe + fresh svc leaf pair | candidate ready, 22 checks green |
+| 5 | checkpoint C | last |
+
+### A LIVE CONSTRAINT — do not edit the island right now
+
+`tools/quartus/queue_gate1_maponly.ps1` is waiting for the toolchain and will
+snapshot the live tree the moment gate 4 exits. **Applying Packet 2 before that
+pair has run would silently make it measure Packet 2 instead of Packet 1**, and
+the row would look perfectly normal. Wait for `GATE1MAPONLY DONE`.
+
+This is the live-tree trap in its quiet form: not a fit that fails, a
+measurement that succeeds and describes something else.
+
+---
+
 ## STATE AT TIME OF WRITING (verify before starting — §14.1)
 
 * HEAD `273b1354` ("the post-PERSPUV join (Decrufter 5.3), composed with the
