@@ -1719,3 +1719,48 @@ regenerated. One deliberate pass, with the number stated — the number is state
 * perspuv per-axis array split: **superseded** by the pairpipe (packet 4). Editing
   `perspuv_svc` now would also spoil gate 3, which compares the candidate against
   a FRESH svc row from the same commit.
+
+## Gate 4 row 1, and a sweep for untested detectors of my own
+
+**`zhao_raster_rcp24_v3@g4-nctx12`: 986 ALM, 3 DSP, 8 M10K, 1402 reg, 100.95 MHz,
+clean, ok.** DSP is 3 at the island's token width — the owner's ruling confirmed at
+the profile that matters — and 100.95 clears the 100 MHz product clock.
+
+My pre-registration scored: the MAIN prediction (12 harder to fit than 16) was
+**wrong** — 12 is better on every axis that moved. The M10K sub-prediction was
+**right**: 8 blocks at both depths, so dropping four contexts buys ALM and Fmax and
+nothing on block RAM. And fit wall-clock was not even a signal — 4.3× the
+comparable time for a design that is smaller and faster.
+
+The svc row at the SAME profile is still fitting. Until it lands there is no
+like-for-like comparison and 986/3/8/100.95 must not be set beside the standing
+svc row (NCTX=8/TOKW=8).
+
+### Untested detectors found in my own work and fixed
+
+| detector | was | now |
+|---|---|---|
+| `uv_join.gen_mismatch_o` | asserted zero, never seen to move | fired by stimulus, 0 → 1 |
+| `early_desc` layout `$fatal` | never run | positive control, fires at GENW=9 |
+| `metajoin` layout `$fatal` | never run | lint refuses the break outright |
+| pairpipe depth-zero U/V | excluded from the differential, nothing asserted | asserted exactly zero |
+
+Two assumptions corrected by testing rather than reading:
+
+* `// synthesis translate_off` does NOT make Verilator skip a block. Proven by
+  planting a syntax error inside one and watching lint reject it.
+* `--lint-only` at a broken parameter passes RC=0, because lint does not run
+  `initial` blocks. A clean lint says nothing about elaboration checks.
+
+And the two blocks fail DIFFERENTLY when broken the same way: `early_desc` lints
+clean so its `$fatal` is load-bearing; `metajoin` is refused at elaboration
+("Selection index out of range: 41:33 outside 39:0") so its `$fatal` is a
+Quartus-side backstop. Whether Quartus honours either is untested and unclaimed.
+
+### Packet 6 pre-check
+
+The pairpipe is a near drop-in: all 20 svc ports present, plus additive
+`zero_products_o`, but **`occupancy_o` widens [3:0] → [4:0]** (CAP = NTOK+1 = 17).
+Both islands declare `logic [3:0] pu_occ`, so the swap would truncate 16→0 and
+17→1. Harmless today (nothing reads it) but a latent trap — widen it in the same
+commit as the swap.
