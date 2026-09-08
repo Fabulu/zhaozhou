@@ -2206,6 +2206,19 @@ verilate(test_metajoin_directed
   PREFIX Vzhao_texture_metajoin
   TOP_MODULE zhao_texture_metajoin
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv)
+# Decrufter D0: the RAM/join seam. The dispatcher backpressure test stalls the
+# CLASS lanes, which are downstream; this exercises bank -> join -> dispatcher,
+# which is upstream, and the brief is explicit that one is not a substitute for
+# the other.
+add_executable(test_metajoin_seam_directed texture/metajoin_seam_directed.cpp)
+target_link_libraries(test_metajoin_seam_directed PRIVATE zhao_harness)
+verilate(test_metajoin_seam_directed
+  PREFIX Vzhao_texture_metajoin
+  TOP_MODULE zhao_texture_metajoin
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv)
+add_test(NAME metajoin_seam_directed COMMAND test_metajoin_seam_directed)
+set_tests_properties(metajoin_seam_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME metajoin_directed COMMAND test_metajoin_directed)
 set_tests_properties(metajoin_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
