@@ -2781,13 +2781,82 @@ constexpr int32_t kU02GreenInnerMm = 520, kU02GreenOuterMm = 1600;
 // have been introduced silently.
 constexpr uint32_t kU02MlTurnFrames = 420;
 
-/** Whole turns for one source on one clip: the model rate, rounded so the loop
- *  still closes. Floored at 1 -- a source that completed no turn at all would
- *  read as a static light rather than a sweeping one. */
+/** THE MODEL CYCLE COUNT for one clip: how many times the whole four-source
+ *  configuration repeats over the clip. Whole, so the loop still closes;
+ *  floored at 1, so a clip shorter than the model rate still completes one.
+ *
+ *  ⚠ ONE COUNT FOR THE WHOLE RIG, and that is the entire point. See below. */
+inline uint32_t u02_ml_cycles(uint32_t frames) {
+  const uint32_t n = (frames + kU02MlTurnFrames / 2) / kU02MlTurnFrames;
+  return n < 1u ? 1u : n;
+}
+
+/** Whole turns for one source on one clip.
+ *
+ * ⚠ WHY THIS IS A MULTIPLY AND NOT A ROUND (D9 §4, pass-12 review item 2).
+ *
+ *  It used to round EACH SOURCE INDEPENDENTLY:
+ *      round(frames * base / 420), floored at 1
+ *  which put each lamp as near the model rate as a whole turn allows -- and
+ *  in doing so DESTROYED THE RATIO BETWEEN THEM, which is the thing the eye
+ *  actually reads. The four sources are authored 1:2:3:4. Independent
+ *  rounding gave:
+ *
+ *      channel   420f   1:2:3:4   the model
+ *      hover     600f   1:3:4:6
+ *      curious   180f   1:1:1:2   three lamps in LOCKSTEP
+ *      hit       140f   1:1:1:1   all four collapsed into ONE light
+ *
+ *  Warm/blue/red/green at 1:2:3:4 trace one closed Lissajous path, and a clip
+ *  running whole turns traverses ALL of it -- so its brightness range is the
+ *  path's range. Change the ratio and it is a DIFFERENT closed path with a
+ *  different range. That is why `channel` never got brighter than 78 while
+ *  `curious` never got darker than 105: not two arcs of one turn, but two
+ *  different light rigs. Side by side, two different-coloured creatures --
+ *  which is the complaint in D9 §4's own words, "all videos have different
+ *  mana lighting configurations ... it's all part of the model".
+ *
+ *  The rate fix was necessary and is kept; it was not sufficient, and the
+ *  review says so: "unified in RATE, not in LOOK".
+ *
+ *  Now ONE cycle count is chosen for the clip and every source takes its
+ *  authored multiple of it, so the ratio is EXACT in every clip in the bank
+ *  and every clip walks the same closed path. Whole turns are preserved, so
+ *  no loop pops.
+ *
+ *  ⚠ THE HONEST LIMIT THAT REMAINS, restated rather than quietly dropped. The
+ *  cycle count is a whole number, so the clip's PERIOD is frames/n and still
+ *  varies with clip length (140f on `hit`, 590f on `death-gutter`). Exact rate
+ *  equality and seamless looping still cannot both hold -- the gcd is 4 frames
+ *  and that has not changed. What HAS changed is that speed is now the only
+ *  thing that varies: every clip shows the same configurations, in the same
+ *  order, over the same range. The reviewer measured the RANGE, and the range
+ *  is what this makes one.
+ *
+ *  `channel` (420f) and the 800f mana lab already sat on the exact model ratio
+ *  and are byte-identical across this change -- the house look (D5 §0-BIS, on
+ *  the protected list) is again the thing the bank moves ONTO, not a new rate
+ *  imposed on it. */
+/** THE ABLATION, committed rather than improvised (09-ENGINE-GOTCHAS §18 rule
+ *  2: "ablate the knob to an absurd value and look"). ZHAO_U02_ML=indep
+ *  restores the independent per-source rounding, so the before and the after
+ *  come out of ONE binary and a plate of the two is a real comparison rather
+ *  than a comparison against a differently-built past. Unset ships. */
+inline bool u02_ml_independent() {
+  static const bool v = [] {
+    const char* e = std::getenv("ZHAO_U02_ML");
+    return e != nullptr && std::strcmp(e, "indep") == 0;
+  }();
+  return v;
+}
+
 inline uint32_t u02_ml_turns(uint32_t base_turns, uint32_t frames) {
-  const uint32_t t =
-      (frames * base_turns + kU02MlTurnFrames / 2) / kU02MlTurnFrames;
-  return t < 1u ? 1u : t;
+  if (u02_ml_independent()) {  // the shipped pass-12 behaviour, for the plate
+    const uint32_t t =
+        (frames * base_turns + kU02MlTurnFrames / 2) / kU02MlTurnFrames;
+    return t < 1u ? 1u : t;
+  }
+  return u02_ml_cycles(frames) * base_turns;
 }
 
 void sample_u02_moving_sources(uint32_t frame, uint32_t frames,

@@ -100,3 +100,71 @@ The knob being turned (tail length, open keys, the caption) was never the thing;
 `hold_last` is.
 
 **Fix:** `c.hold_last = true` on both death builders. One line each.
+
+### Item 1 — DONE. Gate Q4 added, leg witnessed failing (509.1 / 411.9 mm).
+Committed b5717584, pushed, landing verified with `git branch -r --contains`.
+
+### Item 2 — the mana lighting: the ratio, not the range
+
+**Mechanism.** `u02_ml_turns` rounded EACH SOURCE INDEPENDENTLY:
+`round(frames*base/420)`, floored at 1. The four lamps are authored 1:2:3:4.
+Independent rounding destroys that ratio on any clip whose length is not near
+a multiple of 420:
+
+    channel 420f  1:2:3:4   the model
+    blown   392f  1:2:3:4   the model
+    hover   600f  1:3:4:6
+    curious 180f  1:1:1:2   three lamps in LOCKSTEP
+    hit     140f  1:1:1:1   all four collapsed into ONE light
+
+Four lamps at 1:2:3:4 trace one closed Lissajous path; a clip running whole
+turns walks ALL of it, so its brightness range is the path's range. A different
+ratio is a DIFFERENT closed path with a different range. That is D9 §4's "all
+videos have different mana lighting configurations" as an arithmetic fact.
+
+**Fix.** One cycle count per clip, every source takes its authored multiple:
+`u02_ml_turns(base, frames) = u02_ml_cycles(frames) * base`. Whole turns
+preserved, so no loop pops. `channel` (420f) and the 800f lab are
+byte-identical — the house look is again what the bank moves ONTO.
+
+**MEASURED, on an EXACT differential mask** (`ZIXX_HIDE_CREATURE`, bodymeter's
+method — every pixel the creature hook changed; no threshold, cannot take the
+terrain). Mask painted green and LOOKED AT: clean creature, no ridge, no sky
+(`mask-green-check.png`). Body Rec.601 luma, mean over the mask, per frame:
+
+    clip       BEFORE lo..hi (swing)     AFTER lo..hi (swing)
+    channel     84.2..110.5  (26.3)      84.2..110.5  (26.3)   byte-identical
+    curious     90.5..115.6  (25.1)      87.7..114.0  (26.3)
+    hit         91.8..114.5  (22.7)      87.2..113.2  (25.9)
+    hover       76.6..111.8  (35.2)      72.6..111.8  (39.2)   <- camera ORBITS
+
+    swing spread, static-camera clips:  3.6  ->  0.4   (9x tighter)
+
+`hover` is the one clip of the four with `orbit = true`; its extra swing is the
+CAMERA, not the light, and it is authored.
+
+⚠ **THE REVIEWER'S NUMBERS DO NOT REPRODUCE, and this matters.** REVIEW §2
+reports `channel` 65–78 and `curious` 105–137 — "channel never gets brighter
+than 78; curious never gets darker than 105", i.e. non-overlapping. On an exact
+mask the shipped build gives channel 84.2–110.5 and curious 90.5–115.6, which
+**overlap over almost their whole extent**. The reviewer flagged that table as
+"indicative of ordering only" and confessed their saturation mask had already
+taken the sunlit ridge twice. `channel` is the one clip with a huge pale planet
+bloom filling half the frame, so a saturation rule selects very different pixels
+there than on `curious`. **The "two different-coloured creatures" figure is most
+likely a mask artefact.** The ratio collapse underneath it is real and is fixed
+on its own merits.
+
+⚠ **THE LIMIT THAT REMAINS, and QA is right about it.** Warm's period is still
+frames/n, and n = 1 for every clip under 630 frames, so hover-vs-hit is still
+4.3x in RATE. This is arithmetically forced, not an oversight: period = frames/n
+with n a positive integer, and a 140-frame clip cannot run a 420-frame period
+AND close its loop. **Rate equality, ratio equality and seamless looping are a
+trilemma; any two are available.** Shipped pass 12 chose rate+loop and lost the
+ratio. This chooses ratio+loop and keeps the rate spread. I chose the ratio
+because the owner's words name CONFIGURATION and the reviewer measured RANGE,
+both of which are the ratio. **Flagged for the coordinator, cheap to reverse:
+one function.**
+
+**Ablation committed** rather than improvised: `ZHAO_U02_ML=indep` restores the
+shipped behaviour, so before and after come from ONE binary.
