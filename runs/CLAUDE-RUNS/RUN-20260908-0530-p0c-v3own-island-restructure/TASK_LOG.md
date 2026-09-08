@@ -603,3 +603,31 @@ question. Same shape as the two false alarms above.
 with `%u`, which formats the array's address — two runs, two addresses, which
 read exactly like a garbage counter. Summed properly it is **0**, correct for
 zero-work fragments. My note calling it "unreset or X-propagating" is withdrawn.
+
+## Two more of §3.2's schedules, both drivable from the boundary
+
+`island_v3_fault_directed` is now **17 checks**, all passing:
+
+* **Phase 5, consumer stalls mid-flight.** Sink shut for a 40-cycle window while
+  fragments are certainly in flight — not at the drain, where a stall proves
+  nothing. 120 submitted, 120 retired, none duplicated, no foreign tag, and
+  **8 accepted while the sink was SHUT**. That last number is the non-vacuity
+  check: without it the phase is just a slower phase 4, and the credit path
+  (reservation versus acceptance, the M6 defect) is never exercised.
+* **Phase 6, reset mid-flight then a fresh namespace.** 40 fragments admitted
+  and deliberately left in the machine with the sink shut, then reset asserted,
+  then 80 fresh fragments with tags disjoint from the abandoned ones.
+  **80 retired, 0 stale** — nothing from before the reset came back, and the
+  island did not return wedged.
+
+Phase 6 is the observable half of the brief's §5 concern. What it does **not**
+cover is the part the brief says is outside the owner's interface: an external
+producer still delivering responses for the old namespace. That needs a
+producer-side acknowledgement phase, which does not exist at this boundary.
+
+The remaining §3.2 cases all need internal fault injection — stale/unsolicited
+returns, duplicate returns at adjacent claim/publication distances,
+range-invalid sample index 3, unauthorized FINAL. None is drivable from the
+top's ports, because the paths that would carry them are internal to the cache
+and the owner. That is a design question (an injection port, or leaf-level
+tests against v3own directly), not something to fake from outside.
