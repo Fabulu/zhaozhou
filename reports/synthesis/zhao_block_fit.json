@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "bcdfadea7117b6814a3472b1d2fcdf8dc186ecbf",
+    "newestRunCommit":  "0859a089576f6c3a46728b608a46c984f2659aaf",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1620,27 +1620,26 @@
                    },
                    {
                        "module":  "zhao_texture_material_combine_v1",
-                       "status":  "ok",
-                       "sourceCommit":  "ba6e7da2",
+                       "status":  "failed:structure",
+                       "sourceCommit":  "0859a089576f6c3a46728b608a46c984f2659aaf",
                        "rtlCleanAtHead":  true,
-                       "seconds":  13627.0,
+                       "sourceDigest":  "db2564ed3c28f035bf18c28d4cdc389dbc286985dd05969cfefa579a12d1ad8c",
+                       "seconds":  4951.4,
                        "sourcesHashed":  1,
-                       "partial":  true,
-                       "partialStage":  "analysis_and_synthesis",
-                       "registers":  893,
+                       "alms":  1663,
+                       "registers":  1269,
                        "blockMemoryBits":  0,
+                       "ramBlocks":  0,
                        "dspBlocks":  2,
                        "virtualPins":  596,
-                       "alms":  1475,
-                       "ramBlocks":  0,
-                       "fmaxMhz":  36.28,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  69.75,
                        "fmaxClock":  "clk",
-                       "optimizationMode":  "BALANCED",
-                       "note":  "Fitter and STA run by hand after the run_block_fit watchdog was killed so the fit could outlive its 3000 s budget. OPTIMIZATION_MODE was BALANCED, which the shell QSF measures at -2.08 MHz against the HIGH PERFORMANCE EFFORT default -- so this row is NOT directly comparable with the 29.74 MHz row it improves on, and reads about 2 MHz low. Hold slack -5.284 ns is unresolved. Setup slack -17.561 ns against a 10.000 ns clock.",
                        "ruleViolations":  [
-                                              "ALM 1475 \u003e allowed 800",
-                                              "registers 893 \u003e allowed 500",
-                                              "fmax 36.28 \u003c required 125 (islandrearchitecture5.md 15.5 variant A)"
+                                              "registers 1269 \u003e allowed 500 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)",
+                                              "ALM 1663 \u003e allowed 800"
                                           ]
                    },
                    {

@@ -119,6 +119,74 @@ def split_row(line):
         return None
 
 
+# A port-origin path starts at a bare identifier: no hierarchy separator, no
+# synthesised-node tilde. In a BLOCK fit those are virtual pins.
+_PORTISH = re.compile(r"^[a-z_][a-z0-9_]*(\[\d+\])?$")
+
+
+def is_port_origin(name):
+    return ("|" not in name) and ("~" not in name) and bool(_PORTISH.match(name))
+
+
+def path_census(path):
+    """Distilled facts the raw report is otherwise the only source of.
+
+    2026-09-08: the V3 island's worst path was a virtual pin at -2.134 ns, and
+    the worst path starting INSIDE the design was -2.093 -- so the whole port
+    boundary was worth 41 picoseconds. That conclusion needed all 200 summarised
+    rows, not the single worst one, and the raw setup report is 2 MB and is
+    overwritten by the next fit of the same module.
+
+    Recording the census here is what makes the raw report redundant rather than
+    merely large. Data delay is included because slack alone misleads: on that
+    same fit the deepest cone (15.4 ns) was FLATTERED by 3.3 ns of favourable
+    clock skew into looking tied with an 11.5 ns one.
+    """
+    try:
+        text = io.open(path, encoding="utf-8", errors="replace").read()
+    except OSError:
+        return None
+    rows = []
+    for line in text.split(chr(10)):
+        line = line.strip()
+        if not (line.startswith(";") and line.endswith(";")):
+            continue
+        f = [c.strip() for c in line[1:-1].split(";")]
+        if len(f) != NCOLS:
+            continue
+        try:
+            slack, skew, delay = float(f[0]), float(f[6]), float(f[7])
+        except ValueError:
+            continue
+        if not f[1] or not f[2]:
+            continue
+        rows.append((slack, f[1], f[2], skew, delay))
+    if not rows:
+        return None
+    ports = [r for r in rows if is_port_origin(r[1])]
+    inside = [r for r in rows if not is_port_origin(r[1])]
+    out = {"summarisedPaths": len(rows),
+           "portOriginPaths": len(ports),
+           "internalPaths": len(inside)}
+    if ports:
+        out["worstPortSlackNs"] = min(r[0] for r in ports)
+    if inside:
+        b = min(inside, key=lambda r: r[0])
+        out["worstInternalSlackNs"] = b[0]
+        out["worstInternalFrom"] = b[1]
+        out["worstInternalTo"] = b[2]
+    if ports and inside:
+        out["boundaryWorthNs"] = round(out["worstInternalSlackNs"] -
+                                       out["worstPortSlackNs"], 4)
+    deepest = max(rows, key=lambda r: r[4])
+    out["deepestDataDelayNs"] = deepest[4]
+    out["deepestFrom"] = deepest[1]
+    out["deepestTo"] = deepest[2]
+    out["deepestSlackNs"] = deepest[0]
+    out["deepestClockSkewNs"] = deepest[3]
+    return out
+
+
 def worst_row(path):
     """(slack, from, to) of the worst summarised path, or None."""
     try:
@@ -188,6 +256,9 @@ def main(argv):
             skipped += 1
             continue
         rec = {"slackNs": row[0], "from": row[1], "to": row[2]}
+        census = path_census(os.path.join(BLOCKPATHS, name))
+        if census:
+            rec.update(census)
         if module not in index:
             index[module] = rec
             added += 1

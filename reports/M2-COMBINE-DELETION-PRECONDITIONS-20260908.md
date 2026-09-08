@@ -137,3 +137,62 @@ is merely unverified.
 
 **Deletion and production-composition changes remain the owner's call.** What is
 established here is that the trigger's precondition was never actually met.
+
+---
+
+# THE RE-FIT LANDED. V1 is worse on area than the record said.
+
+Complete fit, 4,951 s, provenance digest `db2564ed3c28`, `failed:structure`.
+
+| | old row (partial, hand-run STA) | **re-fit (complete)** | |
+|---|---|---|---|
+| ALM | 1,475 | **1,663** | +188 (+12.7%) |
+| registers | 893 | **1,269** | +376 (**+42%**) |
+| DSP | 2 | **2** | unchanged, passes |
+| Fmax | 36.28 | **69.75** | +33.5 MHz |
+| status | `ok` | **`failed:structure`** | |
+
+`check_fit_ledger.py` now reports **no row claims success while listing
+violations** — the contradictory row is gone, replaced by a consistent one.
+
+## The area understatement was one-directional. The frequency was not.
+
+The partial (analysis-and-synthesis) row reported **less area and worse
+frequency** than the truth. So the docket's *"a broken instrument lies in ONE
+direction"* held for area — the flattering direction — and did **not** hold for
+Fmax, which read 33 MHz pessimistic.
+
+Worth saying plainly rather than forcing the law: a partial fit is not
+uniformly optimistic, it is *unplaced*, and unplaced numbers are wrong in
+whichever direction placement happens to move them. The lesson is not "partial
+fits flatter"; it is **"partial fits are not measurements"**.
+
+The old row's `fmax 36.28 < required 125` violation also does not reappear,
+because `design/fit_targets.yml` carries no Fmax rule for this target — only
+`max_alms`, `max_registers` and `max_dsp`. That violation was hand-written into
+the row along with everything else in that manual run.
+
+## What it does to the M2 decision
+
+The correction above stands and strengthens:
+
+* **ALM 1,663 against a bound of 800 — 108% over.**
+* **registers 1,269 against 500 — 154% over.**
+* DSP 2 against 2: the one rule it meets, and the one the refuted
+  `zhao_texture_combine` failed at 8.
+
+So V1 does discharge the *specific* thing `zhao_texture_combine` was refuted
+for — the DSP tripwire — and fails its own area bounds by more than double.
+
+V2 remains the better block on every axis measured: **870 ALM, 114.04 MHz**,
+inside the ALM bound V1 misses by 108%, at 1.6x V1's frequency.
+
+**Recommendation, unchanged in order and firmer in reasoning:**
+
+1. Move `zhao_prod_top` from V1 to V2 — superset interface, verified above.
+2. Then execute M2's trigger: the manifest row, `zhao_texture_combine`'s RTL and
+   `tests/texture/texture_combine_diff.cpp`, together.
+3. V1's own future is a separate question the owner should answer, now that it
+   is measured properly for the first time.
+
+Still the owner's call. What is now established is what the numbers actually are.
