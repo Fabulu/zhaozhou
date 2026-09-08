@@ -158,3 +158,22 @@ Manafold 6.7%. Manafold's best group (its ANTENNA, 18.7%) still loses to
 Zixxtrixx's body. The one half that holds: bob, 8.4% of rest span against 6.6%.
 Both measures' biases are printed inside the tool's own output so the number
 cannot be quoted without them.
+
+## 07:45 — the standing identity gates, committed so they can be re-run
+
+`probes/zixxcrc.sh` beside the creature is hardcoded to the pass-11 lane path
+and that pass's base commit, so it cannot be re-run — the same fault CLAUDE.md
+records about the ground-contact probe that was written once and thrown away.
+Two replacements committed, both taking `LANE` from the environment, both
+naming their base commit, and both rendering **under the shipping env**
+(`ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross`; a CRC taken without it
+matches on both legs while proving nothing about the published render):
+
+* `probes/zixxcrc-p12w3.sh` — the OTHER creature is untouched.
+* `probes/manafoldcrc-p12w3.sh` — the append-only claim. Four protected
+  Manafold subjects must be bit-identical and **`manafold-taunt3` must MOVE**:
+  a run where the taunt matched would mean nodule A's rise never reached the
+  render. That leg is the gate's own failable half.
+
+Baseline binary built from `7c38dfb2` in its own `git worktree` at `base/`,
+into `build-base/`, so it depends on nothing about my working tree.
