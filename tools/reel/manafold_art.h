@@ -1376,8 +1376,13 @@ constexpr int32_t kNoduleAmpMm[3][3] = {
 // Every one of the five is 0 for the same reason: these clips DRIVE the
 // nodules themselves, and a background oscillator added to an authored gesture
 // is how a deliberate motion becomes a spazzy one.
+// PASS 12 / WAVE 2b (T2): slots 11 and 12 come DOWN, 1000 -> 400 and 1000 ->
+// 500. Both taunts now carry an authored nodule GESTURE, and the ambient
+// schedule's job changes from being the motion to keeping the antenna alive
+// under it. Left at 1000 the oscillator competes with the gesture for the read,
+// which is the "one wobbling hose" fault wearing the gesture as a coat.
 constexpr int32_t kNoduleClipPm[22] = {800, 700, 1000, 850, 900, 750, 800, 0,
-                                       950, 900, 600,  1000, 1000, 900, 500,
+                                       950, 900, 600,  400, 500, 900, 500,
                                        800, 800, 0, 0, 0, 0, 0};
 constexpr int kNoduleClipSlots =
     static_cast<int>(sizeof(kNoduleClipPm) / sizeof(kNoduleClipPm[0]));

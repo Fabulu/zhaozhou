@@ -1621,8 +1621,21 @@ inline zc::Clip build_taunt() {
                                {88, -1000}, {139, 0}};
   static const Key kBrowR[] = {{0, 0}, {44, 0}, {62, -120}, {86, -260},
                                {104, 0}, {139, 0}};
-  // and the cross-eyed beat, held inside the frozen hold and released with it
-  static const Key kCross[] = {{0, 0}, {60, 0}, {68, 900}, {86, 900}, {96, 0}};
+  // and the cross-eyed beat, held inside the frozen hold and released with it.
+  //
+  // PASS 12 / WAVE 2b -- THE DISPOSITION T2 ASKED FOR, and it is "fix", not
+  // "remove". Cropped to the lens and stepped through the hold: the beat IS
+  // firing -- both stars converge inward -- but at 900 the near star rotates
+  // far enough to present its EDGE to the camera, so it loses the four points
+  // and the white outline and reads as a small cyan smudge sliding off the
+  // lens. That is not "cross-eyed", and it is the same failure mode pass 11
+  // recorded for the near eye reading as a chrome scratch. It was never that
+  // the beat did nothing.
+  //
+  // 900 -> 450: the stars still converge, by half as much, and stay face-on
+  // enough to keep their shape. A gaze that shifts reads; a star that turns
+  // its edge does not, at 384x240.
+  static const Key kCross[] = {{0, 0}, {60, 0}, {68, 450}, {86, 450}, {96, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
     antenna_knead(g, 11, K, f);  // pass 4: the always-on fold-hold-knead layer
@@ -1631,6 +1644,39 @@ inline zc::Clip build_taunt() {
     const int fw = f < kTauntHoldStartKey ? f
                    : f < kTauntHoldEndKey ? kTauntHoldStartKey
                                           : f - (kTauntHoldEndKey - kTauntHoldStartKey);
+    // PASS 12 / WAVE 2b (D9 §11 T2): THE NODULE GESTURE, added to a clip whose
+    // standing verdict is "an oscillator rather than an animal working at
+    // something". The waggle stays; what is new is that the beats now have a
+    // POSE. The wind-up hauls all three nodules back and down (the gather), and
+    // the FROZEN HOLD -- the 24-key beat this clip's whole joke lives in -- is
+    // the owner's own configuration: THE MIDDLE ONE DOWN WHILE THE OUTER TWO
+    // SWING UP, held motionless while the creature winks. That is the pose §2
+    // was built to be able to express, used as a punchline.
+    //
+    // ADDED, not substituted: kNoduleClipPm[11] drops 1000 -> 400 so the
+    // ambient schedule still keeps the antenna alive underneath without
+    // fighting the gesture for the read.
+    {
+      NoduleOffsets n = g.nod;  // the ambient schedule, at its reduced gain
+      static const Key kGather[] = {{0, 0}, {8, 0}, {kTauntWindupEndKey, 1000},
+                                    {kTauntHoldStartKey, 0}, {139, 0}};
+      static const Key kPose[] = {{0, 0}, {kTauntHoldStartKey - 8, 0},
+                                  {kTauntHoldStartKey, 1000},
+                                  {kTauntHoldEndKey, 1000},
+                                  {kTauntHoldEndKey + 14, 0}, {139, 0}};
+      const int32_t gth = fold_ease(curve(kGather, 5, f));
+      const int32_t pose = fold_ease(curve(kPose, 6, f));
+      // the gather: back and down, together -- one press, no reversals
+      n.ax -= 34 * gth / 1000; n.ay -= 18 * gth / 1000;
+      n.bx -= 48 * gth / 1000; n.by -= 26 * gth / 1000;
+      n.cx -= 40 * gth / 1000; n.cy -= 22 * gth / 1000;
+      // the frozen hold's pose: outers up, middle down. A is given its rise
+      // sideways because a vertical request moves it 3 mm (FINDINGS-A §2.4).
+      n.az += 74 * pose / 1000; n.ay += 18 * pose / 1000;
+      n.by -= 46 * pose / 1000;
+      n.cy += 74 * pose / 1000;
+      g.nod = n;
+    }
     const int32_t ramp = curve(kWagRamp, 8, f);
     const int32_t tremble =
         f >= kTauntHoldStartKey && f < kTauntHoldEndKey ? sinp(f, K, 35) / 8192 : 0;
@@ -1704,6 +1750,23 @@ inline zc::Clip build_taunt2() {
     g.reset();
     antenna_knead(g, 12, K, f);  // pass 4: the always-on fold-hold-knead layer
     const int ramp = curve(kRamp, 6, f);  // the lasso spins up and back down
+    // PASS 12 / WAVE 2b (D9 §11 T2): the three balls LEAD THE SWING, each on
+    // its own lag, so the antenna sweeps round as three things in sequence
+    // rather than as one rigid hoop being waved. One cycle per swing -- the
+    // sweep's own period -- so this adds NO reversals at all: each ball rises
+    // once and falls once per lap, which is what a lap is.
+    {
+      NoduleOffsets n = g.nod;
+      const int32_t amp = 52 * ramp / 1000;
+      const auto lead = [&](int i, int32_t ph) {
+        return static_cast<int32_t>((static_cast<int64_t>(amp) * sinp(f, K, 4, ph)) >> 16);
+      };
+      n.cy += lead(2, 0);          // C leads
+      n.by += lead(1, 0x2000);     // B a quarter behind
+      n.az += lead(0, 0x4000);     // A trails, and sideways (§2.4's geometry)
+      n.bz += lead(1, 0x5000) / 2;
+      g.nod = n;
+    }
     const int32_t tilt = static_cast<int32_t>(
         (static_cast<int64_t>(kTaunt2LassoA16) * ramp / 1000 * sinp(f, K, 4)) >> 16);
     const int32_t pump = static_cast<int32_t>(
@@ -2026,6 +2089,10 @@ inline zc::Clip build_nodule_solo() {
  *    3  a strike DROWNS the creature  -- one impact drives the root far below
  *                                       the settle, which is the crash bound
  *                                       the airborne gate exists to catch
+ *    4  the corpse KEEPS MOVING       -- the nodule droop goes on easing
+ *                                       past the settle, which is the living
+ *                                       oscillator under a dead creature that
+ *                                       D9 SS11.2 names in those words
  *
  *  ⚠ LEG 3 WAS SOMETHING ELSE FIRST, AND IT COULD NOT FAIL. It removed the
  *  impact dips so "the strikes never touch" -- but with the dips gone the
@@ -2275,7 +2342,9 @@ inline zc::Clip build_death_drop() {
                                  {15, -210}, {18, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    const bool dead = f >= B.settle;
+    // FAILABLE LEG 4: the corpse never actually arrives -- `dead` stays false
+    // so the droop keeps easing and the pose keeps changing after the settle.
+    const bool dead = f >= B.settle && g_u02_death_fail != 4;
     const bool falling = f > kDeathFailKey;
     // how far through the dying we are, 0..1000 -- one signal, many users
     const int32_t gone = !falling ? 0
@@ -2414,7 +2483,7 @@ inline zc::Clip build_death_gutter() {
       {kDeathBLetGoKey, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    const bool dead = f >= B.settle;
+    const bool dead = f >= B.settle && g_u02_death_fail != 4;  // leg 4
     const bool falling = f > kDeathBLetGoKey;
     const int32_t gone = !falling ? 0
                        : dead     ? 1000

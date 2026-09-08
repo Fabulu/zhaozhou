@@ -271,6 +271,46 @@ int main() {
             rok ? "OK" : "FAIL");
         if (!rok) rc = 1;
       }
+      // (f) ⚠ THE POSE IS FROZEN TOO, and this gate exists because the
+      //     RENDERED FRAMES SAID OTHERWISE. Hashing the eternal rest's frames
+      //     found 216 of 216 DISTINCT -- the corpse's own pixels changing
+      //     every frame after the deform had been proved bit-zero. The cause
+      //     turned out to be the house MOVING LIGHT RIG sweeping the body
+      //     (silhouette stable to 0.3%, shading not), which is correct: a
+      //     corpse lit by a moving light is still a corpse, and freezing one
+      //     creature's lighting would read as a rendering fault. But "the
+      //     pixels move" and "the creature moves" are different claims and
+      //     only a 3D check can separate them. This is that check: every quat
+      //     of every bone and every root component, at every key from the
+      //     settle to the end, EXACTLY equal to the settle key's.
+      {
+        int moved = 0, first = -1;
+        const size_t bn = T.bank.bone_count;
+        for (uint16_t f = B.settle + 1; f < clip.frame_count; ++f) {
+          bool same = true;
+          for (size_t bi = 0; bi < bn; ++bi) {
+            const zc::quat16& q0 = clip.quats[static_cast<size_t>(B.settle) * bn + bi];
+            const zc::quat16& qf = clip.quats[static_cast<size_t>(f) * bn + bi];
+            for (int k = 0; k < 4; ++k)
+              if (q0.q[k] != qf.q[k]) same = false;
+          }
+          for (int k = 0; k < 3; ++k)
+            if (clip.root[static_cast<size_t>(B.settle) * 3 + k] !=
+                clip.root[static_cast<size_t>(f) * 3 + k])
+              same = false;
+          if (!same) {
+            ++moved;
+            if (first < 0) first = f;
+          }
+        }
+        const bool pok = moved == 0;
+        std::printf(
+            "u02-probe: slot %u DEATH pose FROZEN from key %d: %d of %d rest keys "
+            "differ from the settle pose (first %d) - %s\n",
+            clip.slot_id, B.settle, moved, clip.frame_count - B.settle - 1, first,
+            pok ? "OK" : "FAIL");
+        if (!pok) rc = 1;
+      }
       // (e) THE DECAY IS THE PLOT. The root trajectory is dumped from the
       //     CLIP ITSELF -- decode-free, straight off c.root, the numbers that
       //     ship -- so the plate a reviewer looks at cannot drift from the
