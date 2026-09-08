@@ -2557,11 +2557,20 @@ module zhao_texture_island_v3_top #(
   assign out_rgb_o     = own_out_result[23:0];
   assign out_a_o       = own_out_result[31:24];
   assign out_refused_o = own_out_result[32];
-  // The island's tag port is 16 bits and the owner handle is 14. Zero-extended
-  // rather than widening a BOUNDARY port: the extra two bits carry no meaning,
-  // and narrowing the port would change the composed top's contract for a
-  // reason that is internal to it.
-  assign out_tag_o     = {2'd0, own_out_owner};
+  // THE OUTPUT TAG IS THE CALLER'S, NOT THE OWNER'S. I had this wrong and gate
+  // 2 said so precisely: "every retired tag is one this test SUBMITTED:
+  // expected 0, got 3".
+  //
+  // `out_tag_o` is an island BOUNDARY port -- the caller's own identifier for
+  // the fragment, which the oracle carries as `f_tag_i({fseq_m, ctx[15:0]})`
+  // and returns through the ROB. Emitting v3own's owner handle instead
+  // substitutes an INTERNAL identity for an EXTERNAL contract: the numbers are
+  // the right width and mean something, just not what the caller asked about.
+  //
+  // v3own carries the context untouched to `out_ctx_o` -- which is exactly the
+  // opaque-context law the material-plane ruling turned on -- so the caller's
+  // sixteen bits come back from there.
+  assign out_tag_o     = own_out_ctx[15:0];
   assign own_out_ready_c = out_ready_i;
 
   // OBSERVABILITY, because an ordering boundary that works silently is
