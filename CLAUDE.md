@@ -173,6 +173,64 @@ taught the habit of asserting an exact per-recipe job count. A test that checks
 WHAT came out cannot see HOW MANY TIMES the machine did it, and throughput
 budgets are written against the second number.
 
+## A detector wired to two operands that move together cannot fire
+
+Added 2026-09-08, after a metadata bank shipped a record-swapping defect with a
+live identity counter sitting beside it reading zero.
+
+The bank registered its read UNCONDITIONALLY, so its output tracked whatever
+address was being *offered* while the stage downstream held the previous
+response. A stall therefore produced **response A's data, A's token, and B's
+metadata** — with every accepted/emitted counter balancing perfectly, because no
+counter looks at the field that moved.
+
+The block already contained what looks like exactly the right guard:
+
+```systemverilog
+if (rd_v_q && (rd_q[OGEN_LO +: GENW] != rd_gen_q))
+  rd_gen_mismatch_o <= rd_gen_mismatch_o + 1;
+```
+
+It never fired, and it never could. The captured generation was loaded by the
+**same ungated assignment** as the row, so on the swap both moved to B together —
+and B's stored generation agrees with B's offered one. **The two quantities the
+detector differences were corrupted in lockstep.**
+
+This is the cancelling-errors pattern with a new and worse consequence. Two
+errors that cancel produce a right answer for a wrong reason; two errors that
+cancel *inside a checker* produce a **reassuring** answer, and the checker is
+then cited as evidence that the thing it cannot see is fine. "There is a
+generation-mismatch counter and it reads zero" is what let the packet be called
+complete.
+
+So, for any checker:
+
+1. **Ask what the two sides of the comparison are clocked by.** If one register
+   enable drives both, the comparison is structurally blind to every fault that
+   enable participates in. It can only catch faults in the *values*, never in
+   the *timing* — and timing is what a join gets wrong.
+2. **A detector reading zero is a claim, and it is the claim to check hardest**
+   — the broken-instrument law applied to RTL. Fire it deliberately on a fault
+   it *should* catch before quoting its silence.
+3. **A gate that cannot reach the state is not evidence about the state.** 392
+   byte-identical paired records did not catch this, because that workload never
+   stalls the join, so the offered address never differs from the held one. The
+   records were real and the conclusion drawn from them was not.
+4. **Do not write a test that asserts the bug.** "The counter fires on the swap"
+   passes only while the defect exists; after the repair there is no swap to
+   miss. Assert the *correct* behaviour (the record holds) and keep the
+   detector's positive control separate.
+
+One more from the same day, about receipts rather than RTL. A fit row stamped
+`failed:structure` is **not** a failed measurement — the fit completed and the
+*budget rules* rejected it. On the island the row with a clean tree, a real
+digest and three honestly declared breaches was stamped `failed`, while a row
+fitted from a **dirty tree**, whose digest describes nothing, was stamped `ok`.
+A gate reading `status` alone refuses the trustworthy number and quotes the
+worthless one. Read `rtlCleanAtHead` first, always. And `ruleViolations: []` on
+a **labelled** row is silence, not compliance: labelled rows are never
+rule-checked (0 of 26 carry violations, against 12 of 92 unlabelled).
+
 ## A rule that HIDES waste is not a rule that removes it
 
 Added 2026-09-06, after the machine's C: drive reached **zero bytes free, 952 GB
