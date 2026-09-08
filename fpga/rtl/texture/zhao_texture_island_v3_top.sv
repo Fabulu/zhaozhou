@@ -2423,13 +2423,39 @@ module zhao_texture_island_v3_top #(
   // fragment was already a fault; this makes it a LOUD one. A timeout that
   // released the head would turn a stuck machine back into a silently
   // out-of-order one, which is the thing this block exists to prevent.
-  wire rob_hit = rob_full_m[seq_head_r];
-
-  assign out_valid_o   = rob_hit;
-  assign out_rgb_o     = rob_m[seq_head_r][23:0];
-  assign out_a_o       = rob_m[seq_head_r][31:24];
-  assign out_refused_o = rob_m[seq_head_r][32];
-  assign out_tag_o     = rob_tag_m[seq_head_r];
+  // ==========================================================================
+  // (d1) THE ORDERED OUTPUT: v3own's, NOT A ROB
+  // ==========================================================================
+  // The oracle's output IS a reorder buffer -- `rob_m[64]`, `rob_tag_m[64]`,
+  // `rob_full_m[64]` and a `seq_head_r` cursor, with `rob_hit` gating emission
+  // on the head being present. All of it is deleted here, because v3own's
+  // ordered output is the same guarantee implemented once instead of twice:
+  // its cursor E emits in admission order and its `out_valid_o` is the head
+  // being present. §0's "partial implementations of v3own's lifetime" names
+  // this pool first.
+  //
+  // THE HEAD-OF-LINE PROPERTY SURVIVES, AND MUST. The oracle's comment is worth
+  // carrying because the reasoning is the design, not the implementation:
+  //
+  //   "If a fragment is admitted and never completes the head stops and the
+  //    island stops emitting, rather than quietly skipping it and shipping a
+  //    reordered stream. A lost fragment was already a fault; this makes it a
+  //    LOUD one. A timeout that released the head would turn a stuck machine
+  //    back into a silently out-of-order one."
+  //
+  // v3own behaves the same way by construction -- an owner that never completes
+  // is never retired and the cursor does not advance past it -- so this is a
+  // property PRESERVED by deleting the ROB, not one traded away for area.
+  //
+  // COLOUR AND STATUS COME FROM result40: {status8, alpha8, rgb24}, so refused
+  // is the status byte's low bit, matching what the TMU return lane packs at
+  // (c2). One layout, written once, read once.
+  assign out_valid_o   = own_out_valid;
+  assign out_rgb_o     = own_out_result[23:0];
+  assign out_a_o       = own_out_result[31:24];
+  assign out_refused_o = own_out_result[32];
+  assign out_tag_o     = own_out_owner;
+  assign own_out_ready_c = out_ready_i;
 
   // OBSERVABILITY, because an ordering boundary that works silently is
   // indistinguishable from one that was never needed. `cnt_reorder_held_o`
