@@ -3464,3 +3464,52 @@ Guessing which was which from the outside would have been a coin flip. The AUX
 one is nonetheless the harder change, because it crosses the island BOUNDARY and
 so cannot be defaulted to keep existing instantiations bit-identical — the first
 Stage C change that the paired run's oracle can see.
+
+## THE ARCHITECT RULED (c3), AND ITS FOUR LOAD-BEARING CLAIMS VERIFY
+
+Ruling: **option (ii), the MATERIAL PLANE** — one 45-bit x 64 table
+{base_rgb24, base_a8, weight8, recipe3, sc2}, written at `adm_accept_o`, read at
+`cmb_owner_o[13:8]`. Option (i), packing the fields into v3own's OWNER_CONTEXT,
+rejected twice over.
+
+**Checked against the sources rather than accepted:**
+
+* COMBINE packet carries no context — CONFIRMED, v3own.sv:191-198 is owner plus
+  four result40 lanes, no ctx port;
+* `out_ctx_o` is at ORDERED OUTPUT only — CONFIRMED :211, i.e. AFTER the
+  combiner needed the fields. **This is what makes option (i) structurally
+  impossible rather than merely forbidden**;
+* `cmb_gen_ok_c` re-verifies the generation at combine admission — CONFIRMED
+  :1128. Slot-only keying is safe BECAUSE v3own itself checks the generation
+  when the plane is read; the plane needs no generation of its own;
+* the owner ruling against context repacking — CONFIRMED verbatim at
+  island_top:677-686, quoting recovery architecture v2 §2.3, and recording that
+  an earlier island DID pack recipe bits into the caller's word.
+
+A rejection that holds for two independent reasons is worth more than one that
+holds for either.
+
+**Implemented.** MATW = 45, 64 entries, 2,880 bits. All four written fields are
+real top-level ports (:120-125). The read is REGISTERED — P0-E's entire finding
+was that an asynchronous read of a 64-entry array costs its width in flops, and
+Stage A's −4,092 is what registering one is worth.
+
+**It is four tables becoming one, not a fifth being added:** `fbase_m`, `frec_m`,
+`fwt_m`, `fsc_m` re-keyed from a ROB token to the owner slot and merged. And
+`fseq_m` is DELETED, not re-keyed — v3own's cursor IS the sequence, so COMBINE's
+TAGW drops 22 -> 14.
+
+## The perspuv per-axis item: CLOSED as moot
+
+Checked before working it. The split was ALREADY DONE; what remained queued was
+the follow-on — those arrays still refusing to infer. In `@p0c-stageA`,
+`e_num_u`/`e_num_v`/`e_q_u` appear in NEITHER the uninferred list NOR the
+altsyncram list, and the worst 40 paths contain no `e_num` at all. The only
+perspuv entry is `e_dz`, 16 bits, where refusing an M10K is correct.
+
+The same query confirms Stage A from the MAP side: `uvw_m` now reads
+`altsyncram:uvw_m_rtl_0`. Two independent confirmations of one change — the
+register delta and the inference itself.
+
+**That closes P0-E as a line of work**: its census narrowed four candidates to
+one, the one was fixed, and nothing was left behind it.
