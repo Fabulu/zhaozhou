@@ -68,3 +68,24 @@ wrapseam reproduced; Zixxtrixx 1896-frame leg proven with a positive control.
 Outstanding when `bitident.py` (71 subjects) and the blown/lasso luminance
 render were launched: the flag-off mutant, the luminance measurement, and
 writing `PASS-13-QA.md`.
+
+## Closing state
+
+`PASS-13-QA.md` and `pass13-qa-evidence/` are committed and pushed to
+Upheaval `main` (`ab28862`, `e3aca3d`, `e64769e`, after a rebase onto the
+coordinator's `a2bf474`). This run log is zhaozhou `fd600af0`.
+
+The coordinator's priority item — "the wrap fix is on but the ghost is still
+there" — was adjudicated with a MUTANT binary at the same commit carrying only
+the four opt-in lines commented out. Every figure the coordinator measured
+reproduces to the pixel on my flag-ON build, so the bank has the fix on and the
+metric is sound; the conclusion was drawn one frame late (f351 is the next
+loop's first frame; the fabricated frame is f350, where the ghost falls
+188 → 151 and the frame's own motion falls 7.95x → 0.90x of the clip's interior
+median). All four travelling clips confirmed, each changing exactly two frames.
+
+Left running when this log was written: `bitident.py` over all 71
+`zixxtrixx-*` subjects, BASE `ffae071e` vs HEAD `25d86c03`, shipping env — the
+69/71 / 15,634-frame leg. The 1896-frame leg is already proven independently
+(four subjects, per-frame sha256, with a positive control) and is in the
+report.
