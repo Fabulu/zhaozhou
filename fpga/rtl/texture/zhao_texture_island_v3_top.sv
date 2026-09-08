@@ -2149,8 +2149,62 @@ module zhao_texture_island_v3_top #(
   // the oracle. This does not, and wiring it by analogy would produce a
   // composition that elaborates and is wrong in a way no port check would catch.
   //
-  // Named unresolved, deliberately: `own_cmb_ready_c`, `own_fin_valid_c`,
-  // `own_fin_owner_c`, `own_fin_result_c`, `own_out_ready_c`.
+  // ---- THE MATERIAL PLANE, ruled by the architect as §1.7b -----------------
+  // The per-fragment attributes COMBINE needs -- base colour, weight, recipe,
+  // sample count -- are written ONCE at admission and read ONCE at combine.
+  // One writer, one reader, keyed by the owner SLOT.
+  //
+  // WHY NOT IN v3own's OWNER_CONTEXT, which was the obvious alternative. It
+  // fails twice, and the second reason is the decisive one:
+  //
+  //   * POLICY. `zhao_texture_island_top.sv`:677-686 records that an earlier
+  //     island packed recipe/weight/count into bits [34:16] of the CALLER'S
+  //     context word, and the owner's recovery architecture v2 §2.3 ruled it
+  //     out: "Packing recipe bits into that word is not a valid way to retain
+  //     an independently opaque context ... Do not silently overwrite
+  //     caller-owned bits."
+  //   * STRUCTURE. v3own's COMBINE interface carries NO context at all
+  //     (v3own.sv:191-198 is owner + four result40 lanes), and `out_ctx_o`
+  //     appears only in the ordered-output group (:211) -- which is AFTER the
+  //     combiner needed the fields. Verified by reading both.
+  //
+  // SLOT-ONLY KEYING IS SAFE, and not by assumption: v3own re-verifies the
+  // presented generation at combine admission itself --
+  //     assign cmb_gen_ok_c = (win_gen_of_slot(cmb_owner_o[..slot..])
+  //                            == cmb_owner_o[GENW-1:0]);   v3own.sv:1128
+  // so a stale slot cannot read a live plane entry. The plane does not need to
+  // carry a generation because the thing that reads it already checks one.
+  //
+  // This is P0-E's prescribed one-writer/one-reader bank rather than a
+  // violation of §0's delete-don't-wrap: it is `fbase_m`/`frec_m`/`fwt_m`/
+  // `fsc_m` re-keyed from a ROB token to the owner slot and merged under one
+  // name -- four side tables becoming one, not a fifth being added.
+  localparam int unsigned MATW = 24 + 8 + 8 + 3 + 2;   // = 45
+  logic [MATW-1:0] mat_m [64];
+
+  always_ff @(posedge clk) begin
+    if (own_adm_accept)
+      mat_m[own_adm_owner[13:8]] <= {frag_base_rgb_i, frag_base_a_i,
+                                     frag_weight_i, frag_recipe_i,
+                                     frag_sample_count_i};
+  end
+
+  // Registered read, addressed by the owner slot v3own presents at COMBINE.
+  // REGISTERED because P0-E's whole finding was that an asynchronous read of a
+  // 64-entry array costs its width in flip-flops -- `uvw_m` was 4,096 of them,
+  // and Stage A's -4,092 is what registering one read is worth.
+  logic [MATW-1:0] mat_rd_q;
+  always_ff @(posedge clk) mat_rd_q <= mat_m[own_cmb_owner[13:8]];
+
+  // `fseq_m` IS NOT RE-KEYED, IT IS DELETED. v3own's ordered output IS the
+  // sequence (its cursor E), so a separate sequence number is exactly the
+  // "partial implementation of v3own's lifetime" §0 says to delete rather than
+  // wrap. COMBINE's TAGW therefore drops 22 -> 14: the owner handle alone.
+  //
+  // STILL UNRESOLVED, and named rather than tied: `own_cmb_ready_c`,
+  // `own_fin_valid_c`, `own_fin_owner_c`, `own_fin_result_c`, `own_out_ready_c`
+  // -- the COMBINE handshake and ordered output, which need `u_combine`'s
+  // instantiation rewritten against `mat_rd_q` instead of the five table reads.
 
   // ==========================================================================
   // AUX
