@@ -3412,3 +3412,55 @@ safe to land in steps instead of one unreadable commit.
 **Still owed:** (c2) the return lanes, COMBINE and the ordered output — each
 carries an owner handle today's signals do not have; (d) delete the ROB pool,
 `fseq_m`, `tok_r` and the named side tables.
+
+## §5.7's QUEUE GATE PASSES — 135.37 MHz against 100
+
+`zhao_probe_v3rq_queue`, first ever execution: **ok, no rule violations.** ALM 82,
+registers 159, 1 M10K, **Fmax 135.37** against `min_fmax_mhz: 100`. Clears by 35%.
+
+**So the ready queue is not the island's timing problem**, and that is now a
+number rather than an impression. Every limiter measured this session sat
+elsewhere: the RCP selection cone (−3.243), the RCP completion scan into perspuv
+(−2.690), the palette port family (−4.977 → −2.875), a port path into the RCP
+context store (−1.900). The queue appeared in none of them.
+
+The pass is only worth reporting because the probe was checked first: the
+registered hash sink stops the fitter deleting the DUT, `texture_v3rq_probe_sanity`
+proved the hash non-degenerate, and that sanity test caught the probe driving
+`wr_en_i` into a full queue — which Quartus would have fitted happily, assertions
+being dropped, and reported a clean number for illegal stimulus.
+
+## Stage C hit the first thing that is NOT mechanical
+
+(c1) admission and (c2) the return lanes went in cleanly — the TMU handle falls
+straight out of the token widening (`rsp_tok[15:0]` IS v3own's 16-bit sample
+handle), which is exactly what the SRCW prerequisite was landed for.
+
+**(c3) is different and I stopped rather than wire it by analogy.** The oracle
+presents a fragment to COMBINE by INDEXING five top-level tables with the
+retiring ROB token (`fsc_m[fr_o_tok]`, `frec_m`, `fwt_m`, `fbase_m`,
+`f_tag_i({fseq_m[..], ctx})`). v3own hands over a complete PACKET instead — four
+result40 lanes, already ordered, already carrying identity. **There is no token
+to index a side table with, because the packet IS the fragment.**
+
+So recipe/weight/base must reach COMBINE another way, and that is a design
+choice with a measurable cost, not a port mapping. Wiring it by analogy would
+produce a composition that ELABORATES AND IS WRONG — the worst outcome available,
+because no port check catches it.
+
+Sent to the FABLE architect as a decision request, with the two candidates I can
+see (carry them in OWNER_CONTEXT, or keep a small slot-keyed table), the
+constraint that v3own / island_top / COMBINE's arithmetic are all non-editable,
+and a request to say what its choice does to the deletion ledger's `fctx_m` row.
+
+## Two token widenings, and the contrast is the lesson
+
+* `cache_pipe` SRCW: parameter list present, width still HARD-CODED in four
+  places. Needed a new parameter threaded through all four.
+* `aux_pipe` TOKW: parameterised throughout, including internal queues. Needs
+  **no leaf change at all**.
+
+Guessing which was which from the outside would have been a coin flip. The AUX
+one is nonetheless the harder change, because it crosses the island BOUNDARY and
+so cannot be defaulted to keep existing instantiations bit-identical — the first
+Stage C change that the paired run's oracle can see.
