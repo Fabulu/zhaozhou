@@ -673,3 +673,34 @@ is not flagged.
 This is the "broken instrument lies in ONE direction" law arriving at the single
 place it could do the most damage: a docket entry, a report and a recommendation
 all inherited a wrong `ok`.
+
+## THE RECEIPT CHOOSES §6
+
+The brief deferred the architecture choice to *"the first actual V3
+composition's physical report"*. That report now exists, and it answers:
+
+```
+worst path  slack -2.134 ns
+  from      frag_depth_i[14]
+  to        zhao_raster_rcp24_svc:u_rcp|c_x[0][22]
+```
+
+**Raw fragment depth straight into RCP context state** — §0's first branch,
+almost word for word. Cross-checks to 82.41 MHz, exactly the fit's headline
+Fmax, so the gating path and the reported number are one measurement.
+
+**The brief predicted this from the LEGACY island and explicitly refused to
+reuse it** — *"conditional on fresh V3 attribution; does not blindly reuse
+yesterday's critical-path diagnosis."* It is now confirmed on a different
+composition, its own 4-hour fit, digest-verified specimen. A prediction made on
+one design and confirmed on another is worth more than the same number twice.
+
+§7 is not refuted, only deprioritised: one writer, three async readers, join
+point already present in `rsp_dispatch`. It simply is not what gates the clock.
+Its groundwork stands, still with no saving claimed.
+
+Second-tier families (`cq_rp` -> palette `cold_o`/`stale_o`, and a RAM block)
+recorded, **not** interpreted — M6 as amended says a family is evidence to look
+at, not a conclusion to draw.
+
+Written up in `reports/V3-PATH-CHOOSES-SECTION-6-20260908.md`.
