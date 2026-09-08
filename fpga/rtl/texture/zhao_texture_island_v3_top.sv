@@ -2201,7 +2201,16 @@ module zhao_texture_island_v3_top #(
   // widths, zero-extended, so the file states what it really does rather than
   // pretending the re-key has happened:
   assign own_aux_rvalid_c  = fr_aux_rvalid;
-  assign own_aux_rowner_c  = {{(14-$clog2(DEPTH)-GENW){1'b0}}, fr_aux_rslot, fr_aux_rgen};
+  // THE AUX TOKEN IS THE OWNER HANDLE, WHOLE. It used to be re-assembled from
+  // `fr_aux_rslot`/`fr_aux_rgen`, which slice `aux_out_tok` at the ORACLE's
+  // layout -- `[AUX_TOKW-1 -: $clog2(DEPTH)]` takes four bits where the slot is
+  // now six. Fifth instance tonight of a slice that survived a change in what
+  // the bits mean.
+  //
+  // Nothing needs re-assembling: the expander sent the handle
+  // (`aux_owner_o`), AUX_PIPE echoes its token opaquely, so what comes back IS
+  // the handle.
+  assign own_aux_rowner_c  = aux_out_tok;
   assign own_aux_rresult_c = {8'd0, fr_aux_a, fr_aux_rgb};
   assign fr_aux_rready     = own_aux_rready;
 
