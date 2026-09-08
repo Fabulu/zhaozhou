@@ -1426,3 +1426,28 @@ Restarted. Progress will be read from the log.
 * `check_prod_manifest.py`: **204 modules, all counted or declared**
 * `check_forbidden_sources.py`: no production closure names a fixture
 * dispatcher leaf under randomised backpressure on all four lanes: **5/5**
+
+## Restructure completeness, checked rather than assumed
+
+* **V3 top: 5 mentions of `zhao_texture_fragrob`, every one a comment.** No
+  instantiation, and it is absent from the V3 fit closure.
+* **The oracle still instantiates it** at `island_top.sv:941` — correct, since
+  the oracle is gate 3's reference and must not change.
+* The manifest's `zhao_texture_fragrob: not-yet-adopted` entry is therefore
+  ACCURATE, not stale: fragrob remains production through the oracle alone.
+
+I went looking for a manifest inconsistency to clean up and found the manifest
+was right. Worth recording as a negative result — the entry reads like a
+leftover and is not one.
+
+## Monitoring, fixed after breaking it twice
+
+The `-L fast` suite now tees to `fast-suite.log`. The previous invocations used
+`Select-Object -Last 18`, which buffers everything until ctest exits — so there
+was no interim progress to read, which is why I twice fell back to process
+counts and twice got a false "wedged" verdict.
+
+The stall before this one was also mine: I killed the previous ctest and
+restarted immediately while its wrapper was still finishing, creating the
+overlapping-run condition already documented. The working sequence is stop the
+task, verify zero ctest processes, clear `Testing/Temporary`, then start.
