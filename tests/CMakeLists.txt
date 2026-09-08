@@ -2237,6 +2237,22 @@ verilate(test_uv_join_directed
   SOURCES ${CMAKE_SOURCE_DIR}/tests/texture/tb_uv_join_pair.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv)
+# PACKET 2's acceptance test, run BEFORE packet 2: bank -> join -> the REAL
+# expander. When the island rewire lands, a red composed suite then means the
+# WIRING by elimination, instead of a bisect through a 2,900-line file.
+add_executable(test_desc_join_expand_directed texture/desc_join_expand_directed.cpp)
+target_link_libraries(test_desc_join_expand_directed PRIVATE zhao_harness)
+verilate(test_desc_join_expand_directed
+  PREFIX Vtb_desc_join_expand
+  TOP_MODULE tb_desc_join_expand
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/texture/tb_desc_join_expand.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv)
+add_test(NAME desc_join_expand_directed COMMAND test_desc_join_expand_directed)
+set_tests_properties(desc_join_expand_directed PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME uv_join_directed COMMAND test_uv_join_directed)
 set_tests_properties(uv_join_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
