@@ -1080,6 +1080,7 @@ targets:
     sources:
       - fpga/rtl/texture/zhao_texture_island_v3_top.sv
       - fpga/rtl/texture/zhao_texture_frag_expand.sv
+      - fpga/rtl/texture/zhao_texture_metajoin.sv
       - fpga/rtl/texture/zhao_texture_v3own.sv
       - fpga/rtl/texture/zhao_texture_v3bank.sv
       - fpga/rtl/texture/zhao_texture_v3rq.sv
