@@ -2190,6 +2190,29 @@ verilate(test_island_v3_composed_directed
 add_test(NAME island_v3_composed_directed COMMAND test_island_v3_composed_directed)
 set_tests_properties(island_v3_composed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# P0-C Stage C GATE 3: the paired run. Both tops, identical stimulus, retired
+# streams compared byte for byte on rgb/a/tag/refused AND on ORDER.
+#
+# It runs the two EXECUTABLES rather than instantiating both tops in a third
+# harness, because a third harness is a second driver and a second driver is a
+# copy that drifts. See the docstring in tools/texture/gate3_paired.py.
+# NOT `REQUIRED`, and the test is guarded on the result. A gate that is not
+# in the suite stops being run -- but a hard dependency that fails CONFIGURE
+# breaks every other test on a machine without an interpreter, which is a
+# much worse trade. This can only ever add a test, never fail one.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+  add_test(NAME island_v3_paired
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tools/texture/gate3_paired.py)
+  set_tests_properties(island_v3_paired PROPERTIES LABELS "fast;nightly"
+                       TIMEOUT 900
+                       DEPENDS "island_composed_directed;island_v3_composed_directed")
+else()
+  message(STATUS "ZHAO: no Python3 interpreter -- P0-C gate 3 (island_v3_paired) will NOT run")
+endif()
+set_tests_properties(island_v3_composed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
 set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 

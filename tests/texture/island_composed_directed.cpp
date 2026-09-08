@@ -228,6 +228,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 #include "verilated.h"
@@ -259,6 +260,59 @@ namespace {
 
 int g_checks = 0;
 int g_failed = 0;
+
+// ---------------------------------------------------------------------------
+// P0-C STAGE C, GATE 3: THE RETIRED STREAM, RECORDED FOR THE PAIRED RUN
+// ---------------------------------------------------------------------------
+// Gate 3 asks for the two tops driven with identical stimulus and their retired
+// streams compared "byte for byte on rgb/a/tag/refused and ORDER".
+//
+// It is done by DUMPING from this file rather than by writing a second test
+// that instantiates both tops, and the reason is the argument this file already
+// makes about itself: a second driver is a copy, and a copy drifts. The moment
+// the paired harness and the 119-check harness disagree about stimulus, the
+// comparison is between two different experiments while still producing two
+// numbers that look comparable.
+//
+// So: one source, two tops, each dumping the stream it retired. The comparison
+// is then a byte compare of two files, which cannot drift from anything.
+//
+// The record is (phase, tag, rgb, alpha, refused) in RETIREMENT ORDER. Order is
+// part of the record and not merely the order of the file: v3own's §5.4 emits
+// in strict owner order, and a composition that retired the right colours in
+// the wrong sequence would be a defect this comparison must catch.
+struct Retired {
+  uint32_t phase;
+  uint32_t tag;
+  uint32_t rgb;
+  uint32_t alpha;
+  uint32_t refused;
+};
+
+std::vector<Retired> g_stream;
+uint32_t g_phase_id = 0;
+
+void record_retire(uint32_t tag, uint32_t rgb, uint32_t alpha, uint32_t refused) {
+  Retired r;
+  r.phase = g_phase_id;
+  r.tag = tag;
+  r.rgb = rgb;
+  r.alpha = alpha;
+  r.refused = refused;
+  g_stream.push_back(r);
+}
+
+// C stdio, not ofstream: this toolchain faults on stream writes at -O1 and the
+// codebase has a note about it.
+bool dump_stream(const char* path) {
+  std::FILE* f = std::fopen(path, "wb");
+  if (!f) return false;
+  for (const Retired& r : g_stream)
+    std::fprintf(f, "%u %u %06X %u %u\n", r.phase, r.tag, r.rgb, r.alpha,
+                 r.refused);
+  const bool ok = std::fclose(f) == 0;
+  return ok;
+}
 
 void check(bool ok, const char* what, long long expected, long long got) {
   ++g_checks;
@@ -910,6 +964,8 @@ void run_phase(Dut& d, uint32_t mode, uint32_t base, const std::vector<FragSpec>
       out.rgb.push_back(d.out_rgb_o);
       out.alpha.push_back(d.out_a_o);
       out.refused.push_back(d.out_refused_o ? 1 : 0);
+      record_retire(d.out_tag_o, d.out_rgb_o, d.out_a_o,
+                    d.out_refused_o ? 1u : 0u);
       ++retired;
     }
     tick(d);
@@ -920,6 +976,7 @@ void run_phase(Dut& d, uint32_t mode, uint32_t base, const std::vector<FragSpec>
     if (submitted >= kN && retired >= kN) break;
   }
 
+  ++g_phase_id;
   out.fills = mem.served;
   out.submitted = submitted;
   out.retired = retired;
@@ -1992,6 +2049,8 @@ int main(int argc, char** argv) {
       if (accepted && !sink_open) ++accepted_while_stalled;
       if (d.out_valid_o && d.out_ready_i) {
         p3_tags.push_back(d.out_tag_o);
+        record_retire(d.out_tag_o, d.out_rgb_o, d.out_a_o,
+                      d.out_refused_o ? 1u : 0u);
         ++p3_retired;
       }
       tick(d);
@@ -2143,6 +2202,24 @@ int main(int argc, char** argv) {
     check(d.err_class_mismatch_o == 0,
           "with no class disagreement anywhere in the CLUT4 phase",
           0, static_cast<long>(d.err_class_mismatch_o));
+  }
+
+  // ---- GATE 3's HALF OF THE WORK ------------------------------------------
+  // `--dump <path>` writes the retired stream. Both tops are run with it and
+  // the two files compared byte for byte; see `record_retire` above for why
+  // that comparison deliberately lives outside this binary.
+  for (int i = 1; i + 1 < argc; ++i) {
+    if (std::string(argv[i]) == "--dump") {
+      if (!dump_stream(argv[i + 1])) {
+        std::printf("FAIL: could not write the retired stream to %s\n",
+                    argv[i + 1]);
+        ++g_failed;
+      } else {
+        std::printf("  retired stream: %u records -> %s\n",
+                    static_cast<unsigned>(g_stream.size()), argv[i + 1]);
+      }
+      break;
+    }
   }
 
   if (g_failed) {
