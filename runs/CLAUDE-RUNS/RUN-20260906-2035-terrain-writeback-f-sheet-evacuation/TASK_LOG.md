@@ -3549,3 +3549,43 @@ one-per-live-fragment.
 16s and needed a new parameter; `aux_pipe` was parameterised throughout and
 needed nothing; `rcp24_svc` likewise needed only the number. Each was measured
 rather than guessed, and guessing would have been wrong twice.
+
+## THE V3 ISLAND TOP ELABORATES CLEAN — 0 errors, 0 warnings
+
+`zhao_texture_island_v3_top.sv`, linted against its real closure. It went from
+"referenced by nothing" to a composition that stands up, in steps that were each
+separately reviewable.
+
+**Elaboration found FOUR things, and every one was real** — which is the entire
+argument for reaching this point before writing a test or a fit:
+
+1. **MULTIDRIVEN `pu_ready`.** The oracle drove it from fragrob's `f_ready_o`;
+   the expander drives it now through its own port, and the leftover `assign`
+   made PERSPUV's ready have two combinational drivers.
+2. **`comb_o_tag` still 22 bits** (ROBTAGW) against a 14-bit `TAGW`. The
+   declaration had not followed `fseq_m`'s deletion.
+3. **`out_tag_o` expects 16, handle is 14.** Zero-extended rather than narrowing
+   a BOUNDARY port — the extra bits carry no meaning and narrowing would change
+   the composed top's contract for an internal reason.
+4. **The AUX REQUEST token was still 12 bits.** I widened `AUX_TOKW` to 14 at
+   the parameter and wired the RETURN lane, but the request still sourced
+   `{fr_aux_slot, fr_aux_gen}` = 4+8. **The parameter change alone was not the
+   whole job**, and nothing but elaboration would have said so.
+
+That last one is the useful one: I had recorded the AUX widening as a finding,
+written it into the architecture, taken the leaf measurement, and STILL left half
+of it undone. A width change has two ends.
+
+## The deletions, totalled
+
+`rob_m` 2,112 + `rob_full_m` 64 + `rob_tag_m` 1,024 + `fseq_m` 384 = **3,584
+bits**, plus `seq_head_r`, `seq_alloc_r`, `tok_r` and `comb_seq`. Against the
+material plane's 2,944 bits added. Net storage change is small and NEGATIVE on
+bits — but per §2.3 the ALM sign remains unknown and this session does not
+predict it.
+
+## Next
+
+The three gates, in the architecture's order: the 541-check owner suite on the
+UNMODIFIED v3own file; `island_v3_composed_directed` retargeted; then the paired
+run. Only after those does a fit mean anything.
