@@ -2781,13 +2781,82 @@ constexpr int32_t kU02GreenInnerMm = 520, kU02GreenOuterMm = 1600;
 // have been introduced silently.
 constexpr uint32_t kU02MlTurnFrames = 420;
 
-/** Whole turns for one source on one clip: the model rate, rounded so the loop
- *  still closes. Floored at 1 -- a source that completed no turn at all would
- *  read as a static light rather than a sweeping one. */
+/** THE MODEL CYCLE COUNT for one clip: how many times the whole four-source
+ *  configuration repeats over the clip. Whole, so the loop still closes;
+ *  floored at 1, so a clip shorter than the model rate still completes one.
+ *
+ *  ⚠ ONE COUNT FOR THE WHOLE RIG, and that is the entire point. See below. */
+inline uint32_t u02_ml_cycles(uint32_t frames) {
+  const uint32_t n = (frames + kU02MlTurnFrames / 2) / kU02MlTurnFrames;
+  return n < 1u ? 1u : n;
+}
+
+/** Whole turns for one source on one clip.
+ *
+ * ⚠ WHY THIS IS A MULTIPLY AND NOT A ROUND (D9 §4, pass-12 review item 2).
+ *
+ *  It used to round EACH SOURCE INDEPENDENTLY:
+ *      round(frames * base / 420), floored at 1
+ *  which put each lamp as near the model rate as a whole turn allows -- and
+ *  in doing so DESTROYED THE RATIO BETWEEN THEM, which is the thing the eye
+ *  actually reads. The four sources are authored 1:2:3:4. Independent
+ *  rounding gave:
+ *
+ *      channel   420f   1:2:3:4   the model
+ *      hover     600f   1:3:4:6
+ *      curious   180f   1:1:1:2   three lamps in LOCKSTEP
+ *      hit       140f   1:1:1:1   all four collapsed into ONE light
+ *
+ *  Warm/blue/red/green at 1:2:3:4 trace one closed Lissajous path, and a clip
+ *  running whole turns traverses ALL of it -- so its brightness range is the
+ *  path's range. Change the ratio and it is a DIFFERENT closed path with a
+ *  different range. That is why `channel` never got brighter than 78 while
+ *  `curious` never got darker than 105: not two arcs of one turn, but two
+ *  different light rigs. Side by side, two different-coloured creatures --
+ *  which is the complaint in D9 §4's own words, "all videos have different
+ *  mana lighting configurations ... it's all part of the model".
+ *
+ *  The rate fix was necessary and is kept; it was not sufficient, and the
+ *  review says so: "unified in RATE, not in LOOK".
+ *
+ *  Now ONE cycle count is chosen for the clip and every source takes its
+ *  authored multiple of it, so the ratio is EXACT in every clip in the bank
+ *  and every clip walks the same closed path. Whole turns are preserved, so
+ *  no loop pops.
+ *
+ *  ⚠ THE HONEST LIMIT THAT REMAINS, restated rather than quietly dropped. The
+ *  cycle count is a whole number, so the clip's PERIOD is frames/n and still
+ *  varies with clip length (140f on `hit`, 590f on `death-gutter`). Exact rate
+ *  equality and seamless looping still cannot both hold -- the gcd is 4 frames
+ *  and that has not changed. What HAS changed is that speed is now the only
+ *  thing that varies: every clip shows the same configurations, in the same
+ *  order, over the same range. The reviewer measured the RANGE, and the range
+ *  is what this makes one.
+ *
+ *  `channel` (420f) and the 800f mana lab already sat on the exact model ratio
+ *  and are byte-identical across this change -- the house look (D5 §0-BIS, on
+ *  the protected list) is again the thing the bank moves ONTO, not a new rate
+ *  imposed on it. */
+/** THE ABLATION, committed rather than improvised (09-ENGINE-GOTCHAS §18 rule
+ *  2: "ablate the knob to an absurd value and look"). ZHAO_U02_ML=indep
+ *  restores the independent per-source rounding, so the before and the after
+ *  come out of ONE binary and a plate of the two is a real comparison rather
+ *  than a comparison against a differently-built past. Unset ships. */
+inline bool u02_ml_independent() {
+  static const bool v = [] {
+    const char* e = std::getenv("ZHAO_U02_ML");
+    return e != nullptr && std::strcmp(e, "indep") == 0;
+  }();
+  return v;
+}
+
 inline uint32_t u02_ml_turns(uint32_t base_turns, uint32_t frames) {
-  const uint32_t t =
-      (frames * base_turns + kU02MlTurnFrames / 2) / kU02MlTurnFrames;
-  return t < 1u ? 1u : t;
+  if (u02_ml_independent()) {  // the shipped pass-12 behaviour, for the plate
+    const uint32_t t =
+        (frames * base_turns + kU02MlTurnFrames / 2) / kU02MlTurnFrames;
+    return t < 1u ? 1u : t;
+  }
+  return u02_ml_cycles(frames) * base_turns;
 }
 
 void sample_u02_moving_sources(uint32_t frame, uint32_t frames,
@@ -5544,8 +5613,22 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   s.sun = sun;
   // the skybox bloom serves the showcase clips where the sky is the backdrop
   // (S1 made a creature + planet bloom lawful in one clip)
-  if (slot == 2) {  // fixed-camera subjects only: the bloom is painted in
-    // SCREEN space and must not sit frozen while an orbit spins the world
+  // ZHAO_U02_NOPLANET=1 removes channel's backdrop bloom and changes nothing
+  // else. It exists because Q-B1 -- "keep the bloom, move it, or drop it?" --
+  // is an OWNER question that has been open since FINDINGS-B, and the pass-12
+  // review's item 4 ("the white still wins in `channel`") may well BE the
+  // bloom rather than the lightning: the same lightning reads clearly in
+  // `hover`, which has no bloom. Three families of lightning constant have
+  // already been tuned against this symptom (edge radii, edge gain, strand
+  // overlap), which is 09-ENGINE-GOTCHAS §18's signature for a knob that is
+  // not the thing. An ablation plate lets the owner answer with his eyes
+  // instead of a fourth pass guessing. Unset ships, unchanged.
+  const bool no_planet = [] {
+    const char* e = std::getenv("ZHAO_U02_NOPLANET");
+    return e != nullptr && e[0] == '1';
+  }();
+  if (slot == 2 && !no_planet) {  // fixed-camera subjects only: the bloom is
+    // painted in SCREEN space and must not sit frozen while an orbit spins
     s.planet = 1;  // violet-thick: pure formless bloom, the mana mood
     // the bloom sits OFF to the side: additive effects vanish over its
     // near-white core (the S3 ceiling lesson at scene scale), so the loop
@@ -7627,12 +7710,30 @@ int main(int argc, char** argv) {
   if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
   if (wanted("manafold-hover")) rc |= render_scene(subject_u02_clip(0, "manafold-hover", u02::kIdleKeys, true, &kU02SunHover));
   if (wanted("manafold-inspect")) {
-    // Direction 3 §1: EXACTLY ONE subject carries the four coloured moving
-    // lights — this inspection showcase. Hover keys, orbit camera, the u02
-    // moving rig and source paths from pass 2, and NO marker orbs
-    // (moving_markers is cleared for the whole species).
+    // ⚠ THIS CLIP WAS A PIXEL-PERFECT DUPLICATE OF manafold-hover, and the
+    //  page was showing the owner 36 clips of which 35 were distinct (pass-12
+    //  review item 8: byte-identical at all 600 frames, every frame compared).
+    //
+    //  Its ONLY difference was `creature_moving_light = true` -- and
+    //  subject_u02_clip has set that unconditionally for every clip since
+    //  Direction 5 §8 reversed Direction 3 §1, so the line has been a no-op
+    //  for six passes. Pass 10 QA found the duplication, traced it correctly,
+    //  and disposed of it by DISCLOSING it in the caption; passes 11 and 12
+    //  carried that disclosure forward. The review overturns it: a repeat is
+    //  a repeat whether or not a caption admits it.
+    //
+    //  It cannot differentiate itself by LIGHTING any more -- D9 §4, "they all
+    //  need to be the same, it's all part of the model", closes that door and
+    //  it is the door this clip used to go through. So it differentiates by
+    //  CAMERA, which §4 does not govern: the house framing is 360000 and
+    //  higher k is tighter, so 460000 -- the same framing the nodule
+    //  diagnostic uses to make the joints legible -- turns "inspect" into a
+    //  clip that actually inspects. Orbiting, close, under the one model rig.
+    //  That is OWNER-INVENTORY's "slow inspection orbit" and it is the only
+    //  reading of this clip's own name that survives §4.
     SceneSubject s = subject_u02_clip(0, "manafold-inspect", u02::kIdleKeys, true, nullptr);
     s.creature_moving_light = true;
+    s.cam_k = 460000;
     rc |= render_scene(s);
   }
   if (wanted("manafold-drift")) rc |= render_scene(subject_u02_clip(1, "manafold-drift", u02::kDriftKeys, false, &kU02SunDrift));
