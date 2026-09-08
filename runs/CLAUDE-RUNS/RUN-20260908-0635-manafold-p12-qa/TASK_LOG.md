@@ -78,3 +78,40 @@ clones from `origin/main`. zhaozhou `7c38dfb2`, Upheaval `3b65e98`.
 * subagent: site/media audit (returned).
 * subagent: Zixxtrixx CRC baseline build + compare.
 * subagent: mist silhouette-exclusion A/B from one binary.
+
+### Closed 2026-09-08
+
+**Deliverable:** `Upheaval/creature/Manafold/PASS-12-QA.md` + `pass12-qa-evidence/`,
+both on `origin/main` and verified from outside the lane.
+
+**Every claim decided.** CONFIRMED: the per-nodule table (to the millimetre), the
+hinge_play diagnosis including its 3.9/6.5 Hz arithmetic, the shell's structure
+and the ink surviving it, the mist exclusion (0 of 5,936,681 on all 400 frames,
+control 355,297), the posed-not-bind span derivation, blink_at in 19 clips,
+Zixxtrixx bit-identity (69 of 71, two metrics, two envs, pre-pass baseline), and
+the media/site sweep. REFUTED or split: the eye travel (0 of 23 clips drive it),
+the corpse's deform (bit-zero on 1 lane of 5), and the mana lighting's warm
+source (still 4.3x between hover and hit).
+
+**Gates: three of the new ones fail through PRODUCTION code**, proved by
+neutering `nodule_aim`, `write_span_lanes` and `shell_paint` in the headers and
+watching each gate go red. Gates that cannot fail: the death deform-stop leg
+(4 of 5 lanes invisible), the eye-travel probe leg (drives its own carrier),
+`inkwidth.py`, and `lane-audit.sh` with a relative root (fixed here).
+
+**Instruments of mine that lied before they worked: two.**
+1. The first shell A/B was rendered without `ZIXX_EXP=celmain`, so no coverage
+   mask existed anywhere and the shell changed zero pixels on every subject --
+   which reads as a far bigger fault than the real one. The binary said so in
+   stderr and I had not read it.
+2. Q2's eye-travel reader took `q[1]` as the y term when the codec is
+   `(w, x, y, z)`. It returned 0.00 deg for a carrier driven to the full 45,
+   under a column of zeroes that looked exactly right. The self-check I had
+   insisted on caught it on its first run.
+
+**Committed, not thrown away:** `tools/reel/manafold_qa_p12.cpp` (+ `mqa` target),
+and the `lane-audit.sh` fix.
+
+**LANE CAN BE DELETED.** Both repos pushed and verified. Remove the two worktrees
+first. Four OTHER lanes hold commits that exist nowhere else -- see PASS-12-QA
+6.7 -- and must be preserved before anyone sweeps.
