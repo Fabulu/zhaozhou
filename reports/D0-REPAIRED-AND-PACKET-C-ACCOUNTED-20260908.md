@@ -44,6 +44,25 @@ The three D0/D0c checks are the **mutant catchers**: remove the gate and they go
 red again, which is what "keep the failing mutant" means when the mutant cannot
 live in the tree.
 
+### What the island gates do and do not show
+
+`island_v3_fault_directed` (18), `island_composed_directed` under ISLAND_V3
+(124), the oracle build (119) and `island_v3_paired` (gate 3) all pass after the
+repair. **That is a no-regression result and nothing more.**
+
+It is specifically *not* evidence that the repair matters in situ, because
+whether that workload ever reaches the D0 condition is unverified. The composed
+test does hold `out_ready_i` shut for a credit phase, and that backpressure could
+in principle propagate through the class queues and the raw FIFO until
+`disp_rsp_ready` drops — which is the condition. Whether it actually gets that
+far is unmeasured, and confirming it needs a counter inside
+`zhao_texture_island_v3_top.sv`, which is in the running fit's closure.
+
+Applying the rule from earlier in this same document to my own claim: a gate that
+cannot be shown to reach the state is not evidence about the state. The evidence
+for the repair is the seam test. The island gates are evidence that nothing else
+broke.
+
 ## Why 392 byte-identical paired records did not catch this
 
 They cannot. D0 requires the dispatcher to stall the join, and gate 3's paired
