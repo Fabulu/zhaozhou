@@ -232,3 +232,31 @@ believed it.
 **The parameter must be verified as TAKEN in any row that survives**, per the
 tool's own instruction: at NCTX=8 the context storage must be visibly smaller
 than the NCTX=16 rows.
+
+## Emission verified for the single-parameter case
+
+Read from the live fit's generated QSF in its workspace:
+
+```
+line   7: set_global_assignment -name TOP_LEVEL_ENTITY zhao_raster_rcp24_v3
+line 275: set_parameter -name TOKW 14
+```
+
+One clean directive, on its own line, against the right entity. And the
+PowerShell that writes it is sound: `$qsf = Get-Content ...` yields an **array**,
+so `+=` appends elements and `| Set-Content` writes one per line. There is no
+string-concatenation bug gluing two directives together, which was my first
+suspicion.
+
+The failed two-parameter run's workspace has been cleaned, so its QSF cannot be
+read. **That leaves the question open**, and it narrows rather than settles:
+emission is correct for one parameter; whether it stays correct for two, and
+whether NCTX specifically survives the round trip, is what the `NCTX=8`-alone
+fit decides.
+
+A plausible mechanism worth checking when that runs: `TOKW` is consumed as a
+WIDTH (`[TOKW-1:0]`), while `NCTX` is consumed as an ARRAY BOUND (`[NCTX]`) and
+inside `$clog2(NCTX)`. Those are different evaluation contexts, and a parameter
+delivered as a string could survive one and not the other. **That is a
+hypothesis, not a finding** — it fits the evidence, which today has repeatedly
+not been enough.
