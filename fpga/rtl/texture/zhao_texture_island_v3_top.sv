@@ -57,6 +57,17 @@
 // actually contains, as it comes to contain it.
 
 module zhao_texture_island_v3_top #(
+    // THE MIGRATION LABORATORY, and whether this elaboration carries it.
+    //
+    // Decrufter D1/§4.2: one functional source, two elaborations. The lab
+    // profile keeps every shadow comparator; the production profile must not
+    // elaborate the reference table, the comparison cones or their counters.
+    //
+    // The brief is explicit that this is NOT permission to disable a checker
+    // and call the result healthy, which is why `shadow_present_o` exists: a
+    // test must assert the CAPABILITY before it may believe a shadow counter's
+    // zero. Default 1, so every existing test elaborates unchanged.
+    parameter bit MIGRATION_SHADOWS = 1'b1,
     parameter int unsigned DEPTH   = 16,   // FRAGROB reorder depth
     parameter int unsigned CTXW    = 64,
     parameter int unsigned BINDW   = 8,
@@ -246,6 +257,12 @@ module zhao_texture_island_v3_top #(
     // and those need different fixes.
     output var logic [31:0] cnt_fragrob_id_errors_o,
     // Packet C step 1: the metadata bank's shadow falsifier. Must stay ZERO.
+    // THE CAPABILITY CONTRACT. Constant, not a counter: it says whether the
+    // shadow machinery is present at all. Every zero read from the counters
+    // below is meaningless unless this is 1, and the production build asserts
+    // it is 0 and skips those checks BY THAT EVIDENCE rather than by
+    // assumption. That distinction is the whole of §4.2.
+    output var logic        shadow_present_o,
     output var logic [31:0] meta_shadow_mismatch_o,
     // How many responses the shadow actually compared. A mismatch count of
     // zero over zero comparisons is not evidence.
@@ -1236,15 +1253,18 @@ module zhao_texture_island_v3_top #(
   // owner slot -- the oracle said "when FRAGROB reports where the fragment
   // landed", and v3own's `adm_accept_o` with `adm_owner_o` is that same moment
   // and that same answer.
-  logic [1:0] class_m [64];
   // The palette binding is keyed the same way and for the same reason: a
   // sample response identifies its fragment by SLOT and nothing else.
-  // The input-stage class, sanitised by the SAME rule `f_class_c` applies at
-  // the planner stage. Reaching for the raw pin here instead would quietly
-  // widen what an out-of-range class can reach -- `f_class_bad_c` exists so a
-  // bad class stops travelling, and an input-stage copy that skips the clamp
-  // reopens the path it closes.
-  wire [1:0] f_class_in_c = (frag_class_i == CLS_ERR) ? CLS_NEAR : frag_class_i;
+  // `f_class_in_c` lived here: the input-stage class, sanitised by the same
+  // rule the planner applies. Its ONLY consumer was `class_m`, so deleting that
+  // write orphaned it -- transitively dead, found by grepping for readers after
+  // the deletion rather than by assuming the deletion was self-contained.
+  //
+  // The reasoning it carried is still true and still enforced: an input-stage
+  // copy that skipped the clamp would widen what an out-of-range class can
+  // reach. Nothing takes such a copy now, and `f_class_bad_c` still stops a bad
+  // class travelling at the planner. Recorded rather than silently dropped,
+  // because the comment was the reason and the reason outlived the wire.
 
   logic [$clog2(PAL_SLOTS)-1:0] palslot_m [64];
   logic [GENW-1:0]              palgen_m  [64];
@@ -1265,7 +1285,6 @@ module zhao_texture_island_v3_top #(
       // palette slot for most of its fragments: the misalignment is invisible
       // wherever the old value and the new one happen to be equal. A defect
       // that is mostly masked by uniform stimulus is not a small defect.
-      class_m  [own_adm_owner[13:8]] <= f_class_in_c;
       palslot_m[own_adm_owner[13:8]] <= frag_pal_slot_i;
       palgen_m [own_adm_owner[13:8]] <= frag_pal_gen_i;
     end
@@ -1388,7 +1407,19 @@ module zhao_texture_island_v3_top #(
   // The linter caught these as index-width truncations. It could NOT have
   // caught the slice errors, because those were the right WIDTH at the wrong
   // OFFSET -- which is why they needed traffic to find.
+  // The shadow reference table. DECLARED at module scope, WRITTEN and READ only
+  // inside `MIGRATION_SHADOWS` generate blocks -- so in the production profile
+  // it has no writer and no reader, and synthesis removes it entirely. That is
+  // what the MapOnly gate checks for.
+  //
+  // It stays at module scope rather than inside a generate block because its
+  // readers are a thousand lines away in a different block, which would force
+  // hierarchical `g_shadows.sampmeta_m` references. Quartus 17 is not the tool
+  // to try that on: it rejects a bare module-scope `if` and an implicit
+  // generate, both measured on 2026-09-08.
+  /* verilator lint_off UNUSEDSIGNAL */
   logic [20:0] sampmeta_m [64][3];
+  /* verilator lint_on UNUSEDSIGNAL */
 
   logic        plan_req_ready, plan_acc_valid, plan_acc_ready;
   logic [3:0]  plan_acc_en;
@@ -1397,12 +1428,16 @@ module zhao_texture_island_v3_top #(
 
   // Written on the request handshake, indexed by the identity the response will
   // come back under, so the read below cannot pick up a different sample's bit.
-  always_ff @(posedge clk) begin
-    if (plan_acc_valid && plan_acc_ready)
-      sampmeta_m[plan_acc_src[SRC_SLOT_HI:SRC_SLOT_LO]]
-                [plan_acc_src[SRC_SIDX_LO+1:SRC_SIDX_LO]] <=
-          {plan_acc_nib, plan_acc_fmt, plan_acc_fv, plan_acc_fu, plan_acc_addr[0]};
-  end
+  generate
+    if (MIGRATION_SHADOWS) begin : g_shadow_write
+      always_ff @(posedge clk) begin
+        if (plan_acc_valid && plan_acc_ready)
+          sampmeta_m[plan_acc_src[SRC_SLOT_HI:SRC_SLOT_LO]]
+                    [plan_acc_src[SRC_SIDX_LO+1:SRC_SIDX_LO]] <=
+              {plan_acc_nib, plan_acc_fmt, plan_acc_fv, plan_acc_fu, plan_acc_addr[0]};
+      end
+    end
+  endgenerate
   logic        plan_acc_filter, plan_acc_err;
   logic [7:0]  plan_acc_fu, plan_acc_fv;
   logic [2:0]  plan_acc_fmt;
@@ -2735,104 +2770,141 @@ module zhao_texture_island_v3_top #(
   // this delay the shadow would compare a registered value against a
   // combinational one and disagree for a reason that is not a defect -- which
   // is the stage-misalignment mistake, and it would be the third time.
-  logic [20:0] mj_ref_q;
-  logic [1:0]  mj_ref_pslot_q;
-  logic [7:0]  mj_ref_pgen_q;
-  logic        mj_ref_v_q;
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      mj_ref_v_q               <= 1'b0;
-      meta_shadow_mismatch_o   <= 32'd0;
-    end else begin
-      mj_ref_q       <= sampmeta_m[mj_rd_slot_c][mj_rd_sidx_c];
-      mj_ref_pslot_q <= palslot_m[mj_rd_slot_c];
-      mj_ref_pgen_q  <= palgen_m [mj_rd_slot_c];
-      // Gated exactly like the bank's read, or the shadow compares a
-      // reference taken on a beat the bank never saw.
-      mj_ref_v_q     <= cache_smp_valid && r1_room_c && (mj_rd_sidx_c != 2'd3);
-
-      if (mj_ref_v_q && mj_rd_valid) begin
-        if ({mj_rd_nibble, mj_rd_format, mj_rd_frac_v, mj_rd_frac_u,
-             mj_rd_byte_sel} != mj_ref_q
-            || mj_rd_pal_slot != mj_ref_pslot_q
-            || mj_rd_pal_gen  != mj_ref_pgen_q)
-          meta_shadow_mismatch_o <= meta_shadow_mismatch_o + 32'd1;
-      end
-    end
-  end
-
-
-  // ---- IS THE QUEUED METADATA THE RIGHT RESPONSE'S? -------------------------
-  // `rsp_meta_i` is fed the bank's REGISTERED output, which answers one cycle
-  // after `cache_smp_valid`. The dispatcher enqueues into a class queue via a
-  // RAW fifo, so the enqueue is itself some cycles later, and whether the two
-  // line up is a property of that fifo's occupancy -- not something to assume.
+  // ==========================================================================
+  // THE MIGRATION LABORATORY (D1/§4.2)
+  // ==========================================================================
+  // Everything inside this generate is APPARATUS, not the machine: the
+  // reference table's readers, the three comparators, their counters and the
+  // first-error captures. It exists to prove the metadata bank reproduces what
+  // the live tables held, and it stops being needed once that proof is
+  // accepted.
   //
-  // This checks it where it can be checked: when a CLUT response is presented,
-  // the palette fields in its queued metadata must equal what the live tables
-  // hold for THAT response's own token. If the metadata belongs to a different
-  // response, this counts.
+  // The `else` arm ties the shadow counters to zero -- exactly the move the
+  // brief warns about: "it does not permit disabling a checker, tying its
+  // output to zero, and calling that healthy". `shadow_present_o` is what makes
+  // it legitimate rather than a lie. A zero with the capability HIGH is
+  // evidence; a zero with it LOW is silence, and the two are distinguishable
+  // from outside the module.
   //
-  // It is a falsifier for the wiring, not for the bank -- the bank itself is
-  // already proven by the shadow. Nothing reads `*_meta_o`, so a nonzero count
-  // here breaks nothing; it says the alignment step is still outstanding.
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      meta_align_err_o  <= 32'd0;
-      meta_align_chk_o  <= 32'd0;
-    end else if (disp_clut_valid) begin
-      meta_align_chk_o <= meta_align_chk_o + 32'd1;
-      if (disp_clut_meta[29:22] != palgen_m [disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
-          || disp_clut_meta[31:30] != palslot_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]])
-        meta_align_err_o <= meta_align_err_o + 32'd1;
-    end
-  end
+  // Explicit `generate`/`endgenerate`: Quartus 17 rejects the implicit form,
+  // measured 2026-09-08 at the cost of a fit.
+  assign shadow_present_o = MIGRATION_SHADOWS;
 
+  generate
+    if (MIGRATION_SHADOWS) begin : g_shadows
+    logic [20:0] mj_ref_q;
+    logic [1:0]  mj_ref_pslot_q;
+    logic [7:0]  mj_ref_pgen_q;
+    logic        mj_ref_v_q;
+    always_ff @(posedge clk or negedge rst_n) begin
+      if (!rst_n) begin
+        mj_ref_v_q               <= 1'b0;
+        meta_shadow_mismatch_o   <= 32'd0;
+      end else begin
+        mj_ref_q       <= sampmeta_m[mj_rd_slot_c][mj_rd_sidx_c];
+        mj_ref_pslot_q <= palslot_m[mj_rd_slot_c];
+        mj_ref_pgen_q  <= palgen_m [mj_rd_slot_c];
+        // Gated exactly like the bank's read, or the shadow compares a
+        // reference taken on a beat the bank never saw.
+        mj_ref_v_q     <= cache_smp_valid && r1_room_c && (mj_rd_sidx_c != 2'd3);
 
-  // ---- THE SAME QUESTION, ASKED OF THE OTHER TWO QUEUES ---------------------
-  // The CLUT check above validated ONE class queue, and I moved three readers
-  // on it -- two of which belonged to other queues. Gate 2 caught that in one
-  // run. These are the checks that should have existed first.
-  //
-  // Each compares the queued metadata's sampmeta fields against the live table
-  // at THAT queue's own token, so a pass licenses moving THAT reader and no
-  // other.
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      meta_bil_err_o  <= 32'd0;
-      meta_bil_first_q_o   <= 21'd0;
-      meta_bil_first_t_o   <= 21'd0;
-      meta_bil_first_tok_o <= 18'd0;
-      meta_bil_chk_o  <= 32'd0;
-      meta_near_err_o <= 32'd0;
-      meta_near_chk_o <= 32'd0;
-    end else begin
-      if (disp_bil_valid) begin
-        meta_bil_chk_o <= meta_bil_chk_o + 32'd1;
-        if (meta21(disp_bil_meta) !=
-            sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
-                      [disp_bil_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]]) begin
-          meta_bil_err_o <= meta_bil_err_o + 32'd1;
-          // CAPTURE THE FIRST ONE. A count says how often; it does not say
-          // WHAT differs, and guessing which field from a count is how the last
-          // three wrong diagnoses in this session were reached.
-          if (meta_bil_err_o == 32'd0) begin
-            meta_bil_first_q_o <= meta21(disp_bil_meta);
-            meta_bil_first_t_o <= sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
-                                            [disp_bil_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
-            meta_bil_first_tok_o <= disp_bil_tok;
-          end
+        if (mj_ref_v_q && mj_rd_valid) begin
+          if ({mj_rd_nibble, mj_rd_format, mj_rd_frac_v, mj_rd_frac_u,
+               mj_rd_byte_sel} != mj_ref_q
+              || mj_rd_pal_slot != mj_ref_pslot_q
+              || mj_rd_pal_gen  != mj_ref_pgen_q)
+            meta_shadow_mismatch_o <= meta_shadow_mismatch_o + 32'd1;
         end
       end
-      if (disp_near_valid) begin
-        meta_near_chk_o <= meta_near_chk_o + 32'd1;
-        if (meta21(disp_near_meta) !=
-            sampmeta_m[disp_near_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
-                      [disp_near_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]])
-          meta_near_err_o <= meta_near_err_o + 32'd1;
+    end
+
+
+    // ---- IS THE QUEUED METADATA THE RIGHT RESPONSE'S? -------------------------
+    // `rsp_meta_i` is fed the bank's REGISTERED output, which answers one cycle
+    // after `cache_smp_valid`. The dispatcher enqueues into a class queue via a
+    // RAW fifo, so the enqueue is itself some cycles later, and whether the two
+    // line up is a property of that fifo's occupancy -- not something to assume.
+    //
+    // This checks it where it can be checked: when a CLUT response is presented,
+    // the palette fields in its queued metadata must equal what the live tables
+    // hold for THAT response's own token. If the metadata belongs to a different
+    // response, this counts.
+    //
+    // It is a falsifier for the wiring, not for the bank -- the bank itself is
+    // already proven by the shadow. Nothing reads `*_meta_o`, so a nonzero count
+    // here breaks nothing; it says the alignment step is still outstanding.
+    always_ff @(posedge clk or negedge rst_n) begin
+      if (!rst_n) begin
+        meta_align_err_o  <= 32'd0;
+        meta_align_chk_o  <= 32'd0;
+      end else if (disp_clut_valid) begin
+        meta_align_chk_o <= meta_align_chk_o + 32'd1;
+        if (disp_clut_meta[29:22] != palgen_m [disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+            || disp_clut_meta[31:30] != palslot_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]])
+          meta_align_err_o <= meta_align_err_o + 32'd1;
       end
     end
-  end
+
+
+    // ---- THE SAME QUESTION, ASKED OF THE OTHER TWO QUEUES ---------------------
+    // The CLUT check above validated ONE class queue, and I moved three readers
+    // on it -- two of which belonged to other queues. Gate 2 caught that in one
+    // run. These are the checks that should have existed first.
+    //
+    // Each compares the queued metadata's sampmeta fields against the live table
+    // at THAT queue's own token, so a pass licenses moving THAT reader and no
+    // other.
+    always_ff @(posedge clk or negedge rst_n) begin
+      if (!rst_n) begin
+        meta_bil_err_o  <= 32'd0;
+        meta_bil_first_q_o   <= 21'd0;
+        meta_bil_first_t_o   <= 21'd0;
+        meta_bil_first_tok_o <= 18'd0;
+        meta_bil_chk_o  <= 32'd0;
+        meta_near_err_o <= 32'd0;
+        meta_near_chk_o <= 32'd0;
+      end else begin
+        if (disp_bil_valid) begin
+          meta_bil_chk_o <= meta_bil_chk_o + 32'd1;
+          if (meta21(disp_bil_meta) !=
+              sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+                        [disp_bil_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]]) begin
+            meta_bil_err_o <= meta_bil_err_o + 32'd1;
+            // CAPTURE THE FIRST ONE. A count says how often; it does not say
+            // WHAT differs, and guessing which field from a count is how the last
+            // three wrong diagnoses in this session were reached.
+            if (meta_bil_err_o == 32'd0) begin
+              meta_bil_first_q_o <= meta21(disp_bil_meta);
+              meta_bil_first_t_o <= sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+                                              [disp_bil_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
+              meta_bil_first_tok_o <= disp_bil_tok;
+            end
+          end
+        end
+        if (disp_near_valid) begin
+          meta_near_chk_o <= meta_near_chk_o + 32'd1;
+          if (meta21(disp_near_meta) !=
+              sampmeta_m[disp_near_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+                        [disp_near_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]])
+            meta_near_err_o <= meta_near_err_o + 32'd1;
+        end
+      end
+    end
+    end else begin : g_no_shadows
+      // Not "healthy" -- ABSENT. `shadow_present_o` reads 0 here, and every
+      // test that reads a counter below must consult that first.
+      assign meta_shadow_mismatch_o = 32'd0;
+      assign meta_align_err_o       = 32'd0;
+      assign meta_align_chk_o       = 32'd0;
+      assign meta_bil_err_o         = 32'd0;
+      assign meta_bil_chk_o         = 32'd0;
+      assign meta_near_err_o        = 32'd0;
+      assign meta_near_chk_o        = 32'd0;
+      assign meta_bil_first_q_o     = 21'd0;
+      assign meta_bil_first_t_o     = 21'd0;
+      assign meta_bil_first_tok_o   = 18'd0;
+    end
+  endgenerate
 
   // The sticky tripwire latches. `aux_degenerate` is a 32-bit COUNT rather
   // than a flag, so its tripwire is "the count ever moved" -- taken as
