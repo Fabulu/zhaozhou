@@ -202,3 +202,20 @@ the Stage C island fit.
 rules as `zhao_texture_island_top`, because the question is whether the
 restructure fits the budget the island already had; softer rules would answer a
 different question while producing a number that looks comparable.
+
+## WHERE I WAS, written before reading any fit result
+
+Owner brief `ZHAOZHOU_TEXTURE_ISLAND_NEXT_REARCHITECTURE_2026-09-08.txt` filed
+at repo root (matching the 2026-09-07 master's convention), checks extracted to
+`tools/checks/next-rearchitecture-20260908/` and re-run clean. Plan written to
+`reports/PLAN-AFTER-OWNER-BRIEF-20260908.md`.
+
+**In progress when the fit result lands:** extending
+`tools/quartus/undriven_outputs.py` from *direct driver presence* to
+*transitive live fan-in* — the brief's §3.1 note, and the exact gap that let
+three dead error paths pass a checker I had just proved fires.
+
+**Next after that, in the brief's order:** §3 repairs A/B/C, which all touch
+`zhao_texture_island_v3_top.sv` and are therefore BLOCKED until the fit
+releases its closure. The brief is explicit: *"Do not change the source under
+that run."*
