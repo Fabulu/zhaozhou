@@ -2246,10 +2246,18 @@ constexpr int32_t kLassoLeanA16 = 2100;   // the body leans into the throw
 // of a 6.5 s clip) showed the creature at effectively constant height. There
 // was no blast and no fall -- just a long, even hover with a tumble on it.
 //
-// Re-timed so the beats are the beats: a 40-key BLAST off the ground, a
-// deliberately BRIEF hang at the top, and a 54-key fall that accelerates into
-// the catch. The clip is 158 keys instead of 196 because the time came out of
-// the middle, which is the part that was not doing anything.
+// Re-timed so the beats are the beats: a 38-key BLAST off the ground, an
+// 8-key declared hang at the top, and a 46-key fall that accelerates into the
+// catch. The clip is 146 keys instead of 196 because the time came out of the
+// middle, which is the part that was not doing anything.
+//
+// FALSE-COMMENT CORRECTION, 2026-09-09, found by pass-13 QA. This block said
+// "40-key BLAST ... 54-key fall ... 158 keys" THREE LINES ABOVE
+// kBlownKeys = 146, and the builder gives 38/8/46. The numbers were from an
+// earlier rung of the same pass and were never re-read after thevalue moved.
+// 10-GATE-CHECKLIST item 8: a comment asserting structure is not structure --
+// and this one was written by the pass that ALSO wrote the constant it
+// contradicts, which is how a comment goes stale inside a single sitting.
 constexpr int kBlownKeys = 146;           // was 196
 constexpr int kBlownAnticipKey = 22;      // the gather: it compresses and sinks
 constexpr int kBlownLaunchKey = 30;       // the blast
