@@ -263,7 +263,17 @@ int main(int argc, char** argv) {
   //  The WRAP column stays reported-not-gated: a travelling clip's seam is
   //  authored and correct (PASS-13-FINDINGS-C SS5.1), and its presentation
   //  half is measured by tools/reel/wrapseam.py.
-  constexpr double kRootStepDefaultMm = 120.0;  // about 8 px at the shipping camera
+  //
+  //  THE DEFAULT, AND WHERE ITS HEADROOM COMES FROM. 240 mm read as about
+  //  16 px on the shipping camera (the pop this gate exists for), so ~15 mm
+  //  per pixel: a step over about 9 px in one key is a jump a viewer sees.
+  //  The tightest LEGITIMATE step left in the bank under the default is
+  //  `death-gutter`'s first strike into the dirt at 102.6 mm, and 135 leaves
+  //  that about 30% of room -- 07-MOTION-STYLE SS6 is explicit that a band
+  //  re-recorded to just admit its own measurement will fail on the next
+  //  honest change and look like a regression. It still refuses the 240 mm
+  //  teleport by nearly a factor of two.
+  constexpr double kRootStepDefaultMm = 135.0;  // about 9 px at the shipping camera
   struct RootStepCeiling { uint16_t slot; double mm; const char* why; };
   static const RootStepCeiling kRootStepCeilings[] = {
       {4,  260.0, "startle: the recoil IS the clip"},
