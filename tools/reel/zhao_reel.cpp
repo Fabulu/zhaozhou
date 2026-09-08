@@ -5613,8 +5613,22 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   s.sun = sun;
   // the skybox bloom serves the showcase clips where the sky is the backdrop
   // (S1 made a creature + planet bloom lawful in one clip)
-  if (slot == 2) {  // fixed-camera subjects only: the bloom is painted in
-    // SCREEN space and must not sit frozen while an orbit spins the world
+  // ZHAO_U02_NOPLANET=1 removes channel's backdrop bloom and changes nothing
+  // else. It exists because Q-B1 -- "keep the bloom, move it, or drop it?" --
+  // is an OWNER question that has been open since FINDINGS-B, and the pass-12
+  // review's item 4 ("the white still wins in `channel`") may well BE the
+  // bloom rather than the lightning: the same lightning reads clearly in
+  // `hover`, which has no bloom. Three families of lightning constant have
+  // already been tuned against this symptom (edge radii, edge gain, strand
+  // overlap), which is 09-ENGINE-GOTCHAS §18's signature for a knob that is
+  // not the thing. An ablation plate lets the owner answer with his eyes
+  // instead of a fourth pass guessing. Unset ships, unchanged.
+  const bool no_planet = [] {
+    const char* e = std::getenv("ZHAO_U02_NOPLANET");
+    return e != nullptr && e[0] == '1';
+  }();
+  if (slot == 2 && !no_planet) {  // fixed-camera subjects only: the bloom is
+    // painted in SCREEN space and must not sit frozen while an orbit spins
     s.planet = 1;  // violet-thick: pure formless bloom, the mana mood
     // the bloom sits OFF to the side: additive effects vanish over its
     // near-white core (the S3 ceiling lesson at scene scale), so the loop

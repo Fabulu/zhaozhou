@@ -1870,7 +1870,31 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   int n_motes = kMoteCount * crowd_pm / 1000;
   n_motes = n_motes * kFoldMoteGarnishPm / 1000;
   if (n_motes < 6) n_motes = 6;
-  const int n_wander = kWanderCount;
+  // ⚠ THE WANDERERS SCALE WITH THE GARNISH, AND NOT SCALING THEM IS WHY
+  //  CUTTING THE MOTE COUNT DID NOT REMOVE THE FLOATING ORBS.
+  //
+  //  kWanderCount's own comment says "of kMoteCount" -- it was authored as a
+  //  FRACTION of 38. It was then subtracted as an ABSOLUTE after the garnish
+  //  scaling, so when pass 12 cut the cloud 38 -> 11 the shape motes went
+  //  32 -> 5 and the wanderers stayed at 6:
+  //
+  //      before the cut   38 motes,  6 wander  -> 15% of the cloud
+  //      after  the cut   11 motes,  6 wander  -> 54% of the cloud
+  //
+  //  The cut did not thin the drifters, it PROMOTED them to the majority --
+  //  which is exactly the pass-12 review's item 3, "large soft round aqua
+  //  motes sitting in the sky detached from the creature", still there after
+  //  the count was cut. 09-ENGINE-GOTCHAS §18: the knob moved a population
+  //  that was not the one being judged, so a second cut would have made the
+  //  orbs worse again.
+  //
+  //  Scaled by the same garnish now, so the drifters stay the ~15% seasoning
+  //  they were authored as whatever the cloud size becomes. At least one
+  //  survives: D2's "drift off in weird ways" is still in the look, it is
+  //  simply not the look any more.
+  int n_wander = kWanderCount * crowd_pm / 1000 * kFoldMoteGarnishPm / 1000;
+  if (n_wander < 1) n_wander = 1;
+  if (n_wander > n_motes - 2) n_wander = n_motes - 2 > 1 ? n_motes - 2 : 1;
   const int n_shape = n_motes - n_wander;
   for (int m = 0; m < n_motes; ++m) {
     const uint32_t hm = fx_hash(0xF01Du, static_cast<uint32_t>(m), 0xA7u);

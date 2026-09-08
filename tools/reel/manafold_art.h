@@ -2297,7 +2297,16 @@ constexpr int kDragGainPm = 2600;
 // gentle stream stays under the clamp and keeps its lagging-gap read
 // (protected by both gates). Sized by looking at taunt2/rest vs hasty.
 constexpr int32_t kDragMaxMm = 380;
-constexpr int32_t kWanderEscapeMm = 980;   // the wander motes may leave the pocket
+// ⚠ 980 -> 430. At 980 mm a drifter travels most of a body length off the
+// creature and reads as an isolated orb hanging in the sky -- the exact fault
+// D7 §8 names ("leaving stuff hanging in space just looks like a glitch") and
+// the pass-12 review's item 3. D9 §3 superseded D2's "drift off in weird ways"
+// with "a TRAIL only", and a trail stays attached to the thing making it.
+// 430 mm keeps a drifter inside the creature's near field, so it reads as mana
+// coming off the conduit rather than as debris parked in the sky. Chosen by
+// eye against the render, not derived.
+constexpr int32_t kWanderEscapeMm = 430;   // the wander motes leave the pocket
+                                           // but stay in the creature's field
 // mote micro-orbit (R7 smoother rotation: ONE angular velocity per mote,
 // long periods, no frequency doubling)
 constexpr int kMoteOrbitPeriodMinF = 130, kMoteOrbitPeriodMaxF = 260;
