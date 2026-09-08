@@ -70,3 +70,31 @@ And per §3.2, each gets a **positive** fault test: clean traffic clear → inje
 the condition → that exact observable moves → legitimate traffic resumes. A
 permanently-zero flag passes a healthy-run test, which is how all three survived
 119 green checks.
+
+## The positive fault test exists and FAILS, which is the point
+
+`tests/texture/island_v3_fault_directed.cpp`, run against today's RTL:
+
+```
+[island_v3_fault_directed] 1/5 checks FAILED
+FAIL: AND err_class_invalid_o MOVED ... expected 0x1, got 0x0
+```
+
+The four checks that PASS are what make the failing one mean something:
+
+| check | result | why it matters |
+|---|---|---|
+| clean traffic was actually admitted | pass | a phase that admits nothing makes everything below vacuous |
+| clean traffic leaves the flag clear | pass | the healthy-run half, which is all the suite had |
+| invalid-class fragments were **accepted at ingress** | pass | so "the counter did not move" cannot mean "nothing arrived" |
+| **the observable moved** | **FAIL** | the port is a constant zero |
+| legitimate traffic still admitted afterwards | pass | the island does not wedge on an invalid class |
+
+Without the third of those, the failure would be ambiguous — a counter that
+stays at zero because nothing reached it looks identical to one wired to
+ground. The test admits the bad fragments first and *then* asks.
+
+This is the shape the brief asks for in §3.2, and it is now demonstrated on the
+real defect rather than asserted. When repair A lands, this test flips to 5/5
+and gets its `add_test` line in the same commit — so it is seen to fail and then
+to pass, which is the only ordering that proves it can see the thing it tests.
