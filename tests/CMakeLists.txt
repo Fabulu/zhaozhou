@@ -2672,6 +2672,85 @@ verilate(test_raster_rcp24_v3_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+# THE ISLAND PROFILE, which no fit has ever actually measured.
+#
+# The standing comparison put zhao_raster_rcp24_v3 at NCTX=16/TOKW=14 against
+# zhao_raster_rcp24_svc at NCTX=8/TOKW=8 and read off "smaller, half the DSP,
+# 25 MHz faster". Two parameters differ, both flattering v3 -- it carried TWICE
+# the contexts -- and eight M10Ks against svc's zero never entered the sentence.
+# reports/RCP-V3-SWAP-HAS-NO-LIKE-FOR-LIKE-20260908.md has the full retraction.
+#
+# The fit that WOULD have been like-for-like (@island-profile) died in 38
+# seconds to a -TopParameters quoting defect, not to anything about the block.
+# Before spending another 25-minute fit finding that out, establish the cheap
+# half here: is the tile even FUNCTIONALLY correct at the island's NCTX=8 with
+# a 14-bit token? A tile that miscomputes at eight contexts is not a candidate
+# for the swap whatever it fits at.
+add_executable(test_raster_rcp24_v3_island_profile raster/raster_rcp24_v3_directed.cpp)
+target_link_libraries(test_raster_rcp24_v3_island_profile PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_raster_rcp24_v3_island_profile PRIVATE ZHAO_RCP_NCTX=8)
+verilate(test_raster_rcp24_v3_island_profile
+  PREFIX Vtb_rcp24_v3_pair
+  TOP_MODULE tb_rcp24_v3_pair
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/raster/tb_rcp24_v3_pair.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+  VERILATOR_ARGS -GNCTX=8 -GTOKW=14)
+# THE MECHANISM, TESTED RATHER THAN ASSERTED. The claim is that the tile needs
+# NCTX >= the ten-clock feedback loop depth to launch every clock. That is a
+# prediction, and this repository has scored itself on exactly this distinction:
+# predictions about STRUCTURE held, predictions about MAGNITUDE inferred from
+# reading source were falsified four times in one day. So NCTX=10 is built and
+# run: if it restores the rate the mechanism is measured, and if it does not
+# then the loop-depth story is wrong and the report has to say so.
+add_executable(test_raster_rcp24_v3_nctx10 raster/raster_rcp24_v3_directed.cpp)
+target_link_libraries(test_raster_rcp24_v3_nctx10 PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_raster_rcp24_v3_nctx10 PRIVATE ZHAO_RCP_NCTX=10)
+verilate(test_raster_rcp24_v3_nctx10
+  PREFIX Vtb_rcp24_v3_pair
+  TOP_MODULE tb_rcp24_v3_pair
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/raster/tb_rcp24_v3_pair.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+  VERILATOR_ARGS -GNCTX=10 -GTOKW=14)
+add_test(NAME raster_rcp24_v3_nctx10 COMMAND test_raster_rcp24_v3_nctx10)
+set_tests_properties(raster_rcp24_v3_nctx10 PROPERTIES LABELS "nightly" TIMEOUT 900)
+
+# NCTX=12: the PREDICTED sufficient point. Fitting rate = 4L/NCTX to the two
+# under-provisioned measurements (8 -> 5.78, 10 -> 4.69) gives L = 11.56 and
+# 11.72 clocks. If twelve contexts restore the design rate, the model is a
+# tested prediction; if they do not, it is a curve fitted to two points and the
+# report has to say so.
+add_executable(test_raster_rcp24_v3_nctx12 raster/raster_rcp24_v3_directed.cpp)
+target_link_libraries(test_raster_rcp24_v3_nctx12 PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_raster_rcp24_v3_nctx12 PRIVATE ZHAO_RCP_NCTX=12)
+verilate(test_raster_rcp24_v3_nctx12
+  PREFIX Vtb_rcp24_v3_pair
+  TOP_MODULE tb_rcp24_v3_pair
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/raster/tb_rcp24_v3_pair.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+  VERILATOR_ARGS -GNCTX=12 -GTOKW=14)
+add_test(NAME raster_rcp24_v3_nctx12 COMMAND test_raster_rcp24_v3_nctx12)
+set_tests_properties(raster_rcp24_v3_nctx12 PROPERTIES LABELS "nightly" TIMEOUT 900)
+
+add_test(NAME raster_rcp24_v3_island_profile
+         COMMAND test_raster_rcp24_v3_island_profile)
+set_tests_properties(raster_rcp24_v3_island_profile PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 900)
+
 add_test(NAME raster_rcp24_v3_directed COMMAND test_raster_rcp24_v3_directed)
 set_tests_properties(raster_rcp24_v3_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
