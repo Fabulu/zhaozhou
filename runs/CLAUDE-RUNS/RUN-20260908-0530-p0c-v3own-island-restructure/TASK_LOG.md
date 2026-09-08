@@ -286,3 +286,39 @@ thing that silently becomes "we ran the tests".
 **Fit health, measured not assumed:** `quartus_fit` PID 11768 burned 46 CPU
 seconds over 45 wall seconds — saturating a core, so it is placing, not wedged.
 No `.rpt` writes for 20 minutes is normal mid-placement.
+
+## COMBINE lane, worked while the island fit holds its closure
+
+The roadmap's "COMBINE.V1 DSP measurement" is **already landed**: V1 is `ok` at
+1,475 ALM / 893 reg / 36.28 MHz. What is actually outstanding is M2's deletion
+trigger, whose preconditions I checked rather than assumed.
+
+**Written up in `reports/M2-COMBINE-DELETION-PRECONDITIONS-20260908.md`.** Two
+findings:
+
+* **V1's fit predates the provenance guard**, so there is no `.sources.sha256`
+  and the recorded number cannot be confirmed against the file on disk. A
+  deletion trigger reading *"delete when v1 is measured"* should not fire on a
+  measurement nobody can tie to a file. **Re-fit queued** — it launches
+  automatically when the island fit's process exits, so the toolchain does not
+  sit idle.
+* **`zhao_prod_top` instantiates V1 at 36.28 MHz in a 100 MHz machine**, while
+  the island already uses V2 at 870 ALM / 114.04 MHz. I compared the interfaces:
+  V2 is a **strict superset** — 26 shared ports, no direction disagreements, one
+  extra output. The swap needs no port work, only the manifest plus a
+  `gen_prod_top.py` regeneration. **-605 ALM, +77.76 MHz.**
+
+Deletion and production-composition changes are the owner's call; the analysis
+is done and the recommendation is written.
+
+### A wrong call I made and withdrew, in the same hour
+
+I first reported V1's fit **stale** because the source mtime is newer than the
+fit summary. Wrong test. Git shows **no commit touching that file since
+2026-09-06**, and this tree's CRLF normalisation moves mtimes for reasons that
+have nothing to do with content.
+
+Using mtime as a proxy for "the file changed" is the same class of error as
+measuring a drawing to get a 3D radius: a real number standing in for the thing
+actually meant. The genuine problem turned out to be adjacent and worse — not
+that the measurement is stale, but that **nothing can tell us either way**.
