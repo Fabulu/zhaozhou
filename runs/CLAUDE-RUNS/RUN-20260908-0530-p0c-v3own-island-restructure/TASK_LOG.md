@@ -1684,3 +1684,38 @@ would have been easy to report this as "the DSP number was wrong too".
 
 Not fixed: moving them changes the census total and needs `zhao_prod_top.sv`
 regenerated. One deliberate pass, with the number stated — the number is stated.
+
+## Late pass: queue discipline, and a pre-registration
+
+* **Fixed a queue RACE I created.** `queue_newblock_maponly.ps1` waited only for
+  quartus-idle, which is what `queue_gate1_maponly.ps1` already waits for — two
+  jobs on the same free-resource condition are a race, not a queue. Both would
+  have launched the instant gate 4 exited. Now waits for the PREDECESSOR's
+  marker (`map-g1-0.log`). Nothing would have failed loudly: concurrent fits
+  produce valid rows, just slower.
+* Killing the Bash wrapper did not kill its PowerShell child (CLAUDE.md's law,
+  verbatim). Killed it explicitly. My first verification then reported it still
+  alive because the check matched its OWN command line — filtered the self-match
+  before believing the count.
+* **Pre-registered gate 4's confound** before its row exists: NCTX=12 is
+  functionally valid (ticketq wraps by comparison, not masking — checked, and the
+  nctx12 test's 52 checks agree) but may be HARDER TO FIT than 16, since D=12
+  uses a 4-bit pointer with four unreachable addresses. `@tokw14` at NCTX=16
+  fitted in 1,458 s; this one is at 3.4× that and still 96% CPU. If the row comes
+  back materially worse, the first hypothesis is the depth, not the block — and
+  the test is a third row at NCTX=16 from today's commit. DSP is exempt from that
+  excuse: it follows multiplier sites, so 3 at either depth or the block is wrong.
+* Cross-linked the DSP census to `D22-GEOM-PROJECT-FIT-20260907.md`, which had
+  `zhao_project_core`'s two instances already — as a CLOCK problem (61.09 MHz,
+  39% short, both lanes). New here is the DSP framing. The two findings pull
+  opposite ways: sharing the core saves ~33 DSP and concentrates two lanes onto a
+  block that already misses the clock by 39% on a cone with no boundary to blame.
+  Not a decision to make from a census.
+
+### Nudge item status
+
+* D22 step 4 (GEOM.PROJECT evidence): **already done**, 2026-09-07 report.
+* COMBINE.V1 DSP measurement: needs MapOnly → queued behind gate 1.
+* perspuv per-axis array split: **superseded** by the pairpipe (packet 4). Editing
+  `perspuv_svc` now would also spoil gate 3, which compares the candidate against
+  a FRESH svc row from the same commit.

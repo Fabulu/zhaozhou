@@ -124,6 +124,43 @@ report would settle it and MapOnly is cheap. It is recorded as an inference
 deliberately, because a plausible division of a total is exactly the kind of
 number this repository has been burned believing.
 
+## The same core is ALREADY on record — as a clock problem
+
+`reports/D22-GEOM-PROJECT-FIT-20260907.md` found `zhao_project_core` from the
+other direction and said so plainly:
+
+> `61.09 MHz`, and the worst path is core-to-core **inside `u_core`** — no
+> boundary to blame. … `zhao_project_core` is instantiated by both the geometry
+> and the terrain projection paths, so **one block's clock problem is on both
+> lanes at once**, and the standing goal is terrain hardware.
+
+So this census did not discover the two-instance structure; D22 had it. What is
+new here is the **DSP framing** — that those two instances are 66 of the 154, the
+largest single item in the budget — and the multiplier-site count that explains
+where the 33 goes.
+
+**And the two findings pull in opposite directions, which is the useful part.**
+
+D22 also records that the sharing question is *"unmeasurable by leaf fit and
+needs either a composed fit containing both projectors or a decision to
+time-share one core"*. Lever 1 below is exactly that decision. But:
+
+* time-sharing one core **saves ~33 DSP** and concentrates two lanes onto one
+  block, and
+* that block already **misses the product clock by 39%** on a path with no
+  boundary to blame.
+
+Adding the arbitration and muxing to share it will not make that cone shorter.
+So "share the core" is not a free win with an area upside — it trades the
+largest DSP item against the timing of a block that is already the worst-placed
+of the four recorded as genuinely short. Lever 2 (time-multiplexing the nine
+matrix multiplies *within* a core) has the same character: fewer multipliers,
+more control depth, on a cone that cannot afford depth.
+
+Neither is a decision to make from a census. Both need the composed measurement
+D22 named, and both belong after the island — owner direction `49fc32e9` still
+stands.
+
 ## What could be done, without recommending any of it
 
 Three levers, in descending size. None is a decision I should make:
