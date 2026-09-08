@@ -217,7 +217,28 @@ excluded:
   # synchronous reader. Written as a LEAF first, per the post-fit brief's "use
   # small functional/leaf experiments first" -- deliberately not yet wired into
   # the island.
+  # STALE, 2026-09-08: metajoin IS integrated now -- zhao_texture_island_v3_top
+  # instantiates it (u_metajoin), and that top is itself `excluded` on the
+  # grounds that its blocks are counted individually. So this block is
+  # instantiated and NOT counted, which understates the planned machine. Left
+  # here rather than silently moved because moving it changes the census total
+  # and that should happen in one deliberate pass, with the number stated.
   - zhao_texture_metajoin: unused  post-fit packet C storage; leaf-tested, not yet integrated
+
+  # --- built, tested, not yet instantiated (packet 2 moves these to `top:`) ---
+  # Both are leaf-tested AND chain-tested against the real expander
+  # (desc_join_expand_directed, 15 checks). They are excluded today because
+  # nothing instantiates them yet, and counting them beside the early arrays
+  # they REPLACE would double the state they exist to consolidate.
+  - zhao_texture_early_desc: unused  D2 typed early descriptor, 119b over 3 M10K width slices; wired in by packet 2
+  - zhao_texture_uv_join: unused  D2 post-PERSPUV join; wired in by packet 2
+
+  # --- a CANDIDATE, not a plan ------------------------------------------------
+  # One scheduler, two lanes, bit-identical to perspuv_svc over 352 U/V pairs.
+  # It REPLACES perspuv_svc if FIT GATE 3 accepts it, so counting it now would
+  # double against a block that is already in `top:`. It moves in, and svc moves
+  # out, together or not at all.
+  - zhao_raster_perspuv_pairpipe: unused  D5 paired PERSPUV candidate; swaps with perspuv_svc only on FIT GATE 3
 
   # Simulation-only wrapper exposing zhao_texture_ident_pkg's pack/unpack
   # functions to the C++ harness. Never in the machine.

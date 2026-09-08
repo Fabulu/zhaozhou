@@ -432,6 +432,27 @@ targets:
       max_m10k: 1
       max_dsp: 6
 
+  # THE PAIRED PERSPUV CANDIDATE (roadmap packet 4 / Decrufter D5).
+  #
+  # One scheduler, two arithmetic lanes, one paired record. Registered so FIT
+  # GATE 3 can measure it against a FRESH svc row from the same commit -- the
+  # standing svc row above predates today's tree, and comparing against a stale
+  # measurement is the error this file already documents twice.
+  #
+  # SAME RULES AS svc DELIBERATELY. The candidate exists to be smaller, so
+  # inheriting the budget it is trying to beat is the honest gate; a looser one
+  # would let it pass by being merely different. Note svc itself measured 2,204
+  # ALM against these -- both rows are expected to violate, and the comparison
+  # is between them, not against the budget.
+  - top: zhao_raster_perspuv_pairpipe
+    sources:
+      - fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
+    rules:
+      max_alms: 900
+      max_registers: 700
+      max_m10k: 1
+      max_dsp: 6
+
   - top: zhao_raster_texjoin_v2
     sources:
       - fpga/rtl/raster/zhao_raster_texjoin_v2.sv
