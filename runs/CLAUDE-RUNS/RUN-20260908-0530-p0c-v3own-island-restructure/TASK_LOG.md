@@ -855,3 +855,13 @@ one I had already told myself.
 **The rule that actually holds:** one ctest at a time per build tree, and if one
 is killed, clear `build/Testing/Temporary/` before the next. The first half I
 had; the second half is what cost three restarts.
+
+## POSITION BEFORE READING THE P-CNT PALETTE FIT
+
+In hand: packet D qualified downward (2.1 ns not 3.5); fast suite running clean
+after the temp-file fix. **Next step regardless of this result:** verify P-CNT
+functionally — it has been fitted but never simulated, because the suite has
+held the build tree all afternoon.
+
+Caveat to apply when reading: the 540 ALM / 628 reg / 98.06 MHz baseline has
+**no provenance digest**, so it cannot be tied to the pre-P-CNT file.
