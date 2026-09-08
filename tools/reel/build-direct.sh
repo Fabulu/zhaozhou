@@ -24,6 +24,8 @@ Targets:
              cross-section profile, read off the COMPILED MESH, for §2b)
   mnodule    manafold-nodule.exe (pass 12: the committed PER-NODULE
              INDEPENDENCE gate, Direction 9 §2, with two failable legs)
+  mqa        manafold-qa-p12.exe (pass 12 QA: the corpse across ALL deform
+             lanes, the eye-travel drive census, and root continuity)
   mspan      manafold-spangate.exe (pass 12 wave 2a: the committed STRETCHY
              SPAN gate, Direction 9 §13 -- reads the SKIN, because every
              nodule gate reads bones and cannot see a vertex effect)
@@ -52,7 +54,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mspan|mexpress|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mspan|mexpress|mqa|all)
       TARGET="$1"
       shift
       ;;
@@ -203,6 +205,12 @@ build_mc2proto() {
   "$CXX" "${FLAGS[@]}" "$T/manafold_c2proto.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-c2proto.exe"
 }
 
+build_mqa() {
+  printf '%s
+' "LD manafold-qa-p12"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_qa_p12.cpp" "${LIBOBJS[@]}"       -o "$BIN/manafold-qa-p12.exe"
+}
+
 build_mnodule() {
   printf '%s
 ' "LD manafold-nodule"
@@ -236,6 +244,7 @@ case "$TARGET" in
   mmeshcheck) build_mmeshcheck ;;
   mhinge) build_mhinge ;;
   mnodule) build_mnodule ;;
+  mqa) build_mqa ;;
   mspan) build_mspan ;;
   mexpress) build_mexpress ;;
   mband) build_mband ;;
