@@ -197,6 +197,32 @@ excluded:
   # in front of the fitter"; if a `composition` code is ever added, this is its
   # first member.
   - zhao_texture_island_top: probe  the composed G1-D island; its blocks are counted individually
+  # --- P0-C, 2026-09-08 ------------------------------------------------------
+  # The V3 composition top. Same shape and same reason code as
+  # zhao_texture_island_top directly above: a composition that puts real
+  # inter-block seams in front of the fitter, whose components are each counted
+  # individually. It is the REPLACEMENT for that one, not an addition -- both
+  # exist simultaneously and deliberately, because the old top is gate 3's
+  # oracle and editing an oracle destroys the comparison.
+  - zhao_texture_island_v3_top: probe  the composed V3 island; its blocks are counted individually, and it is gate 3's subject against island_top
+
+  # FRAGROB's replacement half: the expander that turns one fragment into its
+  # sample requests, with no allocation authority of its own. It IS production
+  # RTL and it IS fitted (323 ALM at the time of writing, a figure since made
+  # stale by the f_ctx_i port). Nothing in the RESOURCE top instantiates it yet,
+  # which is exactly what `unused` means.
+  - zhao_texture_frag_expand: unused  P0-C Stage B; production RTL, fitted, not yet reached by zhao_prod_top
+
+  # Packet C's metadata bank, 256 x 40 = one M10K, one writer and one
+  # synchronous reader. Written as a LEAF first, per the post-fit brief's "use
+  # small functional/leaf experiments first" -- deliberately not yet wired into
+  # the island.
+  - zhao_texture_metajoin: unused  post-fit packet C storage; leaf-tested, not yet integrated
+
+  # Simulation-only wrapper exposing zhao_texture_ident_pkg's pack/unpack
+  # functions to the C++ harness. Never in the machine.
+  - zhao_texture_ident_probe: probe  exposes the identity encoding functions for ident_encoding_directed
+
 
   # Same reason code, same shape: a composition top that exists to put a real
   # inter-block seam in front of the fitter. TERRAIN.PAGESTREAM -> TERRAIN.PATCH,

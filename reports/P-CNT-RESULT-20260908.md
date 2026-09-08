@@ -137,3 +137,59 @@ tests, and the reason three of today's confident readings were wrong.
 `island_composed_directed` and `island_v3_composed_directed` both assert palette
 lookup/stale/cold totals. Those are the tests that decide it, and they run when
 the build tree is free.
+
+---
+
+# WITHDRAWN: the +6.02 MHz is inside the seed noise
+
+A second seed on the **same source**:
+
+| | Fmax | ALM | reg |
+|---|---|---|---|
+| baseline (pre-P-CNT) | 98.06 | 540 | 628 |
+| P-CNT, default seed | **104.08** | 542 | 648 |
+| P-CNT, **seed 7** | **90.74** | 543 | 639 |
+
+**13.34 MHz between two placements of identical RTL.** The claimed +6.02 MHz
+gain is less than half that spread, and seed 7 lands **7.32 MHz BELOW the
+baseline** I said the change improved on.
+
+**The Fmax claim is withdrawn.** P-CNT is not shown to make the palette leaf
+faster.
+
+## What survives, and why it is not a consolation prize
+
+The endpoint migration stands, and it was always the stronger evidence:
+
+| | worst path | slack |
+|---|---|---|
+| before | `gen_r[3][0] -> cold_o[4]~reg0` | −0.198 |
+| after | `gen_r[1][6] -> l1_stale_q` | +0.392 |
+
+The counter **stopped being the gating endpoint**. That is a structural fact
+about what the design contains, not a placement outcome, and it is exactly what
+the change was designed to do. The 32-bit increment is off the live
+request-to-verdict cone whether or not any particular seed likes the result.
+
+**But "the endpoint moved" is not "the block got faster."** Those are different
+claims and I merged them. The brief's §4.3 asks for the latency change to be
+declared, not for a frequency win to be asserted.
+
+## The docketed noise figure is also too small
+
+The docket records leaf fitter seed variation at **~4.70 MHz**. This block shows
+**13.34 MHz** across two seeds. That figure came from a different block, and I
+used it as though it bounded this one — the same error as comparing a current
+file to an old measurement, one level up: **a noise floor measured elsewhere is
+not this block's noise floor.**
+
+I flagged +6.02 as "above 4.70 but not enormously" when reporting it. The right
+reading was that the comparison was unfounded, not that it was marginal.
+
+## What this changes downstream
+
+Nothing about the ordering: P-CNT is still worth keeping, because taking a
+32-bit counter off a live cone is right regardless of what one placement
+reports. But **it cannot be quoted as a contribution to island Fmax**, and any
+future statement of the form "P-CNT bought N MHz" is unsupported until measured
+on the composed island with seed variation accounted for.
