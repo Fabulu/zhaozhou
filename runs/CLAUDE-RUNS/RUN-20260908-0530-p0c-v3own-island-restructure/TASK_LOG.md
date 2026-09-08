@@ -946,3 +946,31 @@ test alone.** That took eight seconds when I finally did it.
 This is the third time today the pattern has repeated (zero-work stall, combine
 counter, this). In every case the RTL findings that survived came from
 differential tests; every wrong call came from reasoning about symptoms.
+
+## The packet D answer was already in the ledger
+
+Two rows I had not looked for:
+
+* **`@v3-nctx8`, registers 1,414** against `@v3-full`'s 1,944. NCTX=8 maps and
+  the parameter visibly took. So the block never rejected NCTX=8 — my
+  `NCTX=8,TOKW=14` failure implicates the **two-parameter** path. I was writing
+  up a fit to discover something already recorded.
+* **The complete head-to-head:**
+
+| block | ALM | reg | DSP | Fmax |
+|---|---|---|---|---|
+| `rcp24_svc` — in both islands | 1041 | 1101 | **6** | **68.46** |
+| `rcp24_v3@v3-rh` | **1023** | 1460 | **3** | **90.41** |
+
+**18 ALM smaller, half the DSP, +21.95 MHz.** My caveat that 16 contexts plus
+queues would probably increase area was **wrong** for this variant.
+
+**The DSP figure touches a live rule failure.** The island fits 17 against
+`max_dsp: 14`. RCP 6 -> 3 gives 17 − 3 = **14**, exactly at the rule. Arithmetic
+on leaf numbers, not a measured island result — M7 is precisely about DSP
+inference not being a multiply count — but a falsifiable prediction worth one
+composed fit.
+
+**The lesson for me:** I spent two rounds reasoning about what a swap might cost
+and launched a fit to measure it, while the rows that answered it sat in
+`zhao_block_fit.json`. Reading the ledger is cheaper than adding to it.

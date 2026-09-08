@@ -3435,6 +3435,30 @@ block or the two-parameter override is unresolved; an `NCTX=8`-alone fit
 separates them, and if it is the tool the defect affects every multi-parameter
 experiment.
 
+### The head-to-head, added after finding the complete rows
+
+| block | ALM | reg | DSP | Fmax |
+|---|---|---|---|---|
+| `rcp24_svc` — instantiated by both islands | 1041 | 1101 | **6** | **68.46** |
+| `rcp24_v3@v3-rh` | **1023** | 1460 | **3** | **90.41** |
+
+**18 ALM smaller, half the DSP, +21.95 MHz.** My caveat that 16 contexts plus
+queues would likely increase area was **wrong** for this variant. The one cost
+is +359 registers.
+
+**And the DSP number bears on a live rule failure.** The V3 island fits 17 DSP
+against `max_dsp: 14`. If the RCP goes 6 -> 3, then 17 − 3 = **14**, exactly at
+the rule. That is arithmetic on leaf numbers and **not** a measured island
+result — M7 exists because DSP inference is about width and count, and the
+composed fitter may pack differently — but it is a specific falsifiable
+prediction: swap the RCP and the island's DSP should read 14.
+
+A `@v3-nctx8` row also already existed (registers 1,414 against `@v3-full`'s
+1,944), which settles the NCTX question without a new fit: **NCTX=8 maps, and
+the parameter visibly took.** The failure was the two-parameter case, not the
+block. That row was in `zhao_block_fit.json` the whole time I was writing up a
+fit to discover it.
+
 Full analysis: `reports/D-RCP-V3-ALREADY-EXISTS-20260908.md`.
 
 ---
