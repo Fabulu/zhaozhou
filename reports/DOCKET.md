@@ -3364,6 +3364,36 @@ M4 says a leaf frequency difference may not even have the right SIGN.
 
 `reports/P0B-RCP-ISSUE-STAGE-FIT-20260907.md`, `reports/G1D-COMPOSED-ISLAND-20260905.md` §4.3f.
 
+## M7 — DSP COUNT IS NOT A PROXY FOR MULTIPLY COUNT
+
+Measured 2026-09-08, after writing two `max_dsp` rules from belief and having
+both fail correct blocks.
+
+| block | rule I wrote | measured | why |
+|---|---|---|---|
+| `zhao_raster_fog` | `max_dsp: 0` | **3** | three 8x8 unit8 products; `zhao_raster_blend` does the SAME operation and uses 2 |
+| `zhao_geom_fogfactor` | `max_dsp: 1` | **3** | exactly ONE multiply — but 34x32 signed, and a Cyclone V slice is 18x18 |
+
+The second is the instructive one. The block satisfies the intent exactly: there
+is one multiply site, `prod_c = dist_c * 66'(cfg_k_i)` (:105), and the per-frame
+reciprocal did NOT leak into the per-vertex path. The rule still failed it,
+because **a DSP count measures WIDTH x COUNT**. One wide product needs several
+18x18 slices.
+
+**The rule:** `max_dsp` bounds a RESOURCE. It cannot express "how many multiplies
+exist", and a gate that tries to becomes a false alarm on a correct block — which
+is worse than no gate, because the next person's instinct is to contort the RTL
+until the number moves. If the invariant is "one multiply site", enforce it in
+the source or an assertion.
+
+**And the meta-lesson, which is the same one twice:** both rules were written
+BEFORE any fit, from a belief about how arithmetic ought to map to hardware,
+while I was explicitly arguing that omitting `max_alms` was the disciplined
+choice because a guessed area ceiling proves nothing. The discipline was applied
+to the number I knew I could not guess and skipped for the one I felt sure of.
+`zhao_raster_blend`'s 2 DSP was in the ledger the whole time and would have
+settled it in one query.
+
 ## M6 — A LOCAL CHANGE MOVED AN UNRELATED PATH FAMILY BY 2.3 ns, THROUGH PLACEMENT
 
 Measured 2026-09-07 on the two composed island fits, and it is the reason a

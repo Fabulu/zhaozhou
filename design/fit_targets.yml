@@ -487,9 +487,23 @@ targets:
     sources:
       - fpga/rtl/geometry/zhao_geom_fogfactor.sv
     rules:
-      # ONE fx_mul against the per-frame k. More than one means the reciprocal
-      # leaked into the per-vertex path, which the config port exists to prevent.
-      max_dsp: 1
+      # MEASURED 2026-09-08: 3 DSP, ALM 341, 68.63 MHz.
+      #
+      # THE FIRST VERSION SAID max_dsp: 1 AND IT WAS WRONG FOR AN INSTRUCTIVE
+      # REASON. The intent was "ONE fx_mul against the per-frame k; more than one
+      # means the reciprocal leaked into the per-vertex path". That intent is
+      # correct and the block satisfies it -- there is exactly ONE multiply,
+      # `prod_c = dist_c * 66'(cfg_k_i)` at zhao_geom_fogfactor.sv:105.
+      #
+      # But it is a 34x32 SIGNED multiply, and a Cyclone V DSP slice is 18x18.
+      # One wide product needs several slices. **DSP COUNT IS NOT A PROXY FOR
+      # MULTIPLY COUNT** -- it measures width x count, and a rule that conflates
+      # them fails a correct block.
+      #
+      # The invariant this gate was reaching for is not expressible as a DSP
+      # budget at all. If it needs enforcing, it belongs in the source (one
+      # multiply site) or in an assertion, not here.
+      max_dsp: 3
 
   - top: zhao_raster_rcp24_svc
     sources:
