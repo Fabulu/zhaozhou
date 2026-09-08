@@ -152,8 +152,31 @@ module zhao_texture_metajoin #(
         writes_o <= writes_o + 32'd1;
       end
 
-      rd_q     <= mem_q[rd_addr_c];
-      rd_gen_q <= rd_owner_gen_i;
+      // THE RECORD HOLDS AS A WHOLE, and the gate is the entire point.
+      //
+      // This assignment was unconditional. `rd_q` therefore tracked whatever
+      // address was being OFFERED, every cycle, while the island's join stage
+      // held its data and token across a dispatcher stall -- so a legal
+      // sequence produced response A's data, response A's token and response
+      // B's METADATA, with every accepted/emitted counter balancing perfectly.
+      // Reproduced at the seam in `tests/texture/metajoin_seam_directed.cpp`
+      // and written up in reports/D0-JOIN-SEAM-REPRODUCED-20260908.md.
+      //
+      // `rd_valid_i` is driven by `cache_smp_valid && r1_room_c`, which is the
+      // SAME expression that enables the join's `r1_d_q`/`r1_t_q`. Gating on it
+      // makes the bank and the join load on identical cycles: the metadata now
+      // belongs to the data beside it by construction rather than by timing.
+      //
+      // It also un-blinds the generation check below. `rd_gen_q` moved with the
+      // offered address too, so both operands of that comparison were corrupted
+      // in lockstep and it could never fire on this defect -- a live identity
+      // counter sitting next to the bug, reading zero. Inside the gate the
+      // captured generation belongs to the same read as the row, so a genuine
+      // staleness is visible again.
+      if (rd_valid_i && rd_legal_c) begin
+        rd_q     <= mem_q[rd_addr_c];
+        rd_gen_q <= rd_owner_gen_i;
+      end
       rd_v_q   <= rd_valid_i && rd_legal_c;
 
       if (rd_valid_i && rd_legal_c)  reads_o <= reads_o + 32'd1;
