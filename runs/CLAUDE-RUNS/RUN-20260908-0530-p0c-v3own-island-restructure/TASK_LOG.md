@@ -1155,3 +1155,54 @@ regardless of what this says.
 
 Baseline to compare against: **13,133 ALM / 20,561 reg / 45 M10K / 17 DSP /
 82.41 MHz** (G1D 4.3h), digest `6094a4292eee`.
+
+## The bilinear mystery is solved, and the defect was mine
+
+`rsp_dispatch` takes responses into a **raw FIFO**, then dispatches from it into
+the per-class queues. Data and token are read from the FIFO. My packet C write
+was:
+
+```
+if (dispatch_fire) cq_m[head_cls][cq_wp[head_cls]] <= rsp_meta_i;   // WRONG
+```
+
+`rsp_meta_i` is the **current input**; the response being dispatched entered the
+FIFO earlier. **Data and token travelled the FIFO; metadata did not.**
+
+### It explains every measurement rather than contradicting one
+
+When the raw FIFO is empty the dispatched response IS the one at the input, so
+the metadata is accidentally right. Hence CLUT 792/0, nearest 192/0, gate 2 122,
+gate 3 byte-identical — and bilinear **768/32**, because four-channel sequencing
+is what puts several responses in flight. **4.2% is the fraction of dispatches
+with a non-empty FIFO.**
+
+Not slot recycling (generation check 0), not the bank (shadow 1,176/0), not the
+queue mechanism. The enqueue SOURCE.
+
+### Where the tests were
+
+The composed suite hit this path 1,752 times over three queues and called two of
+them clean, because those two rarely see a busy FIFO. **A leaf test with four
+evenly-loaded lanes found it in one run**, 239 of 240 wrong. That is the case
+for leaf tests, made concretely rather than as a principle.
+
+The leaf test cost two false starts of its own first: a harness ordering bug,
+and `TOKW` left at the default 16 against the island's 18, which truncated
+tokens into 180 mismatches that were mine. Both found by reading the failure
+instead of believing it — the same discipline that killed three hypotheses about
+the bilinear path.
+
+### Not fixed yet, and why
+
+The fix is a `raw_m` array beside `raw_d`/`raw_c`, written at input acceptance
+and read at `raw_rp` on dispatch. **`zhao_texture_rsp_dispatch` is inside the
+running fit's closure**, and editing a file under a running fit is the live-tree
+trap. It goes in when the fit lands.
+
+### What the running fit is therefore measuring
+
+A design whose metadata payload has a misaligned SOURCE. The registers and queue
+entries are identical either way, so ALM/register/M10K and Fmax remain a fair
+reading of packet C's cost. Written down so the receipt is not later quoted as
+having measured a correct design.
