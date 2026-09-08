@@ -322,3 +322,31 @@ Using mtime as a proxy for "the file changed" is the same class of error as
 measuring a drawing to get a 3D radius: a real number standing in for the thing
 actually meant. The genuine problem turned out to be adjacent and worse — not
 that the measurement is stale, but that **nothing can tell us either way**.
+
+## Brief §4.1 landed: the identity encoding freeze
+
+`fpga/rtl/texture/zhao_texture_ident_pkg.sv` — named pack/unpack for the four
+encodings, plus a probe module and `ident_encoding_directed`: **13 checks over
+all 262,144 combinations**, the same space the brief's own bundled model check
+covers, so the two are directly comparable.
+
+Non-vacuity is asserted, not assumed: slot bits 4 and 5 exercised 131,072 times
+each (the two bits the 4-to-6 widening created, and the ones every stale slice
+dropped), generation 0 and 255 1,024 times each, illegal sample index 3 65,536
+times.
+
+**Shown to fire.** The T2 ticket was rebuilt in owner order — the exact
+confusion the package exists to prevent, since `{slot,gen}` and `{gen,slot}` are
+both 14 bits and no width check can separate them. Two checks failed across
+essentially the whole space; the package was restored from a byte backup and
+`git diff` is empty.
+
+**One honest weakness in that test**, noted rather than papered over: the
+"ticket differs from owner" assertion compares the C++ model's ticket against
+the model's owner, so it documents that the two encodings genuinely differ but
+does **not** exercise the RTL. It did not move under the mutation. The two
+checks that did catch it are RTL-vs-model comparisons, which is the right shape.
+
+It is registered in ctest — the package is new, nothing depends on it yet, and
+it passes today. Adopting it inside the island is a follow-on that must change
+no bit; that is what the bit-identical test is for.
