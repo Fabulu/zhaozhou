@@ -2147,6 +2147,19 @@ verilate(test_geom_fogfactor_directed
 add_test(NAME geom_fogfactor_directed COMMAND test_geom_fogfactor_directed)
 set_tests_properties(geom_fogfactor_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# P0-C Stage B: the fragment->sample expander. Its acceptance test checks the
+# request SEQUENCE element for element AND the exact per-fragment issue counts,
+# because the architecture's falsifier says output equality alone has twice
+# hidden a machine doing double work.
+add_executable(test_frag_expand_directed texture/frag_expand_directed.cpp)
+target_link_libraries(test_frag_expand_directed PRIVATE zhao_harness)
+verilate(test_frag_expand_directed
+  PREFIX Vzhao_texture_frag_expand
+  TOP_MODULE zhao_texture_frag_expand
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv)
+add_test(NAME frag_expand_directed COMMAND test_frag_expand_directed)
+set_tests_properties(frag_expand_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
 set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
