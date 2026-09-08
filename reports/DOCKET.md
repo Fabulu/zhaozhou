@@ -3394,6 +3394,73 @@ to the number I knew I could not guess and skipped for the one I felt sure of.
 `zhao_raster_blend`'s 2 DSP was in the ledger the whole time and would have
 settled it in one query.
 
+## M9 — AN OUTPUT WITH A REAL ASSIGNMENT AND A DEAD FAN-IN
+
+**2026-09-08, found by the owner brief, in RTL that had just passed 119/119.**
+
+Three of the V3 island top's fault ports are permanently zero:
+
+```
+err_class_invalid_o        <- fr_alloc_valid && f_class_bad_c
+err_fragrob_wq_overflow_o  <- fr_wq_overflow
+err_fragrob_id_error_o     <- fr_id_error
+```
+
+All three source signals lost their only driver when the FRAGROB instance was
+deleted. Each port still has a real, correct-looking `always_ff` assignment.
+
+**Two detectors passed this file on the same day it was found.**
+
+* `island_composed_directed` asserts `err_class_invalid_o == 0` under healthy
+  traffic. It passes. A flag that works and a flag wired to a constant are
+  indistinguishable to that check.
+* `undriven_outputs.py` — written that morning, and *proved to fire* by
+  deleting a real driver from a real file — reports **"every declared output
+  has a driver"**, which is true. The defect is one level up the cone.
+
+The property that matters is **transitive live fan-in**, not direct driver
+presence, and demonstrating the weaker one and watching it pass is a more
+convincing way to be wrong than simply being wrong.
+
+**The fix is an audit, not a parser.** A generalised fan-in checker was written
+and reverted the same hour: it flagged 23 signals in one file, about four real,
+the rest arrays written as `mat_m[idx] <= ...` and input ports. A `grep` found
+the four in under a minute. The brief forbids the parser project in the same
+paragraph that names the gap, and it is right to.
+
+**And the outside review beat the local heuristic.** The brief named three. A
+quick mechanical audit here said four, adding `err_aux_degenerate_o` — a false
+positive that merely shares an `always_ff` with two real ones. Proximity is not
+fan-in, and the extra finding would have sent someone to repair a working port.
+
+Repairs and their positive fault tests: `reports/V3-EVIDENCE-PORT-FANIN-AUDIT-20260908.md`.
+
+---
+
+## M6 AMENDED 2026-09-08 — MATCHING THE WORST-PATH FAMILY IS NOT THE TEST
+
+M6 below concluded that a Fmax delta is attributable only when the worst path
+FAMILY is the same on both sides. The owner brief rejects that:
+
+> *"matching the worst-path family is neither necessary nor sufficient for
+> attribution: a successful repair often SHOULD change which path is worst."*
+
+Obviously true once stated — a change that removes the gating cone will be
+followed by a different cone gating, so the rule would reject exactly the
+repairs that worked.
+
+`tools/quartus/worst_path_index.py` **keeps its job and loses its inference.**
+Recording which path gated a fit is still worth doing: the next fit of the same
+module overwrites that report and the evidence cannot be recovered. Concluding
+attribution from it is not. Attribution needs separate structural, measured,
+repeatability and causal claims.
+
+Also conceded: the **+10.90 MHz** reseed figure was stated too confidently. Two
+post-change seeds are encouraging; their 1.13 MHz spread is not a bound on seed
+variation.
+
+---
+
 ## M6 — A LOCAL CHANGE MOVED AN UNRELATED PATH FAMILY BY 2.3 ns, THROUGH PLACEMENT
 
 Measured 2026-09-07 on the two composed island fits, and it is the reason a
