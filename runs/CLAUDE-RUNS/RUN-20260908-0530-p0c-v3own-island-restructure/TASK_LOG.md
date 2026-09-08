@@ -1385,3 +1385,18 @@ measurement standing in for the one actually needed —
 * this conservation check (lookups, not responses)
 
 Caught quickly this time only because the ratio was suspiciously near 2:1.
+
+## The dispatcher leaf now stalls its lanes
+
+`rsp_dispatch_meta_directed` tied all four `*_ready_i` high, so a queued record
+was always read out on the cycle it became valid. A metadata word that failed to
+HOLD beside its response through a stall would not have shown.
+
+It matters here specifically: `cq_m` is indexed by the same read pointer as
+`cq_d`/`cq_t`, and if it were ever indexed by anything else, **only a stalled
+lane would reveal it**. With randomised backpressure on all four lanes the test
+still reports 240 dispatched, 60 per lane, every word beside its own response.
+
+Same lesson as gate 2's credit phase and the non-vacuity checks: a test whose
+stimulus never applies pressure measures the easy case and reports it as the
+general one.
