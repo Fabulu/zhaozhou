@@ -192,6 +192,45 @@ that is a small piece — but it is the piece that is authorised, measured and
 about to be fitted, and it clears the *island's* own local breach (17 → 14)
 exactly.
 
+## An UNDERCOUNT in the manifest, measured — and it does not touch DSP
+
+Found while registering the new blocks: `check_prod_manifest.py` enforces that
+every module is counted once or declared absent, and two blocks are declared
+`unused` while being instantiated by `zhao_texture_island_v3_top` — which is
+itself excluded *on the grounds that its blocks are counted individually*. So
+they are instantiated and counted nowhere.
+
+| block | declared | ALM | registers | M10K | DSP |
+|---|---|---|---|---|---|
+| `zhao_texture_frag_expand` | `unused ... not yet reached` | 323 | 451 | 3 | **0** |
+| `zhao_texture_metajoin` | `unused ... not yet integrated` | *no fit row* | — | — | — |
+
+**Undercount: at least +323 ALM, +451 registers, +3 M10K, and +0 DSP.**
+
+The DSP figure is the one that matters here and it is **unchanged**. Neither
+block uses a DSP, so 154-against-112 stands exactly as reported. This is an
+ALM/M10K accounting error, not a DSP one, and saying so is the point — a
+discrepancy found while investigating a budget is not automatically a
+discrepancy *in* that budget.
+
+`metajoin` is worse than mis-declared: it has **no fit row at all**, so its
+contribution is not merely uncounted, it is unmeasured. A leaf fit is cheap and
+it is the only way that number exists.
+
+Two limits of this check, stated so nobody over-reads it:
+
+* it treats only the two composed island tops as pass-through. Other excluded
+  entries carry the `probe` code rather than `unused` and are correctly skipped,
+  but a future composed top declared `unused` would slip past.
+* instantiations are found by pattern, so unusual formatting could hide one.
+  Two of seventy-four excluded blocks were flagged, and both are recent
+  additions — which is consistent with a small, new problem rather than with a
+  parser that is only finding the easy cases, but it is not proof of that.
+
+Not fixed here, deliberately: moving them to `top:` changes the census total and
+requires regenerating `zhao_prod_top.sv`. That belongs in one pass with the
+number stated, which is now done — the number is above.
+
 ## What this changes about the roadmap
 
 Nothing, yet, and deliberately. Owner direction `49fc32e9` is still standing —
