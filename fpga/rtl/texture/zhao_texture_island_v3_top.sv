@@ -2358,21 +2358,40 @@ module zhao_texture_island_v3_top #(
   // the island's OWNER CREDIT (OWNER_DEPTH = FCTXN) is what bounds fragments.
   // Wiring FCTXN in here would conflate the two bounds and silently give the
   // combiner 64 contexts' worth of storage to hold two numbers.
-  zhao_texture_material_combine_v2 #(.NCTX(8), .TAGW(ROBTAGW)) u_combine (
+  // ==========================================================================
+  // COMBINE, DRIVEN BY v3own's PACKET AND THE MATERIAL PLANE
+  // ==========================================================================
+  // TAGW GOES 22 -> 14. The oracle's tag is `{fseq_m[tok], ctx[15:0]}` -- a ROB
+  // sequence number concatenated with sixteen context bits. Under v3own the
+  // ordered output IS the sequence (its cursor E), so `fseq_m` is deleted rather
+  // than re-keyed, and the tag becomes the owner handle alone. That is §0's
+  // "delete, not wrap" applied to the one piece of state most tempting to keep.
+  //
+  // THE FOUR TABLE READS BECOME ONE PLANE READ. The oracle indexes `fsc_m`,
+  // `frec_m`, `fwt_m` and `fbase_m` with `fr_o_tok`; here every one of those
+  // fields arrives in `mat_rd_q`, addressed by the owner slot v3own itself
+  // presents and whose generation v3own itself re-checks (`cmb_gen_ok_c`).
+  //
+  // THE SAMPLE LANES COME FROM THE PACKET. result40 is
+  // {status8, alpha8, rgb24} (v3own Appendix B.1), so rgb is [23:0] and alpha
+  // [31:24] of each lane. No bank read here: v3own already gathered them.
+  zhao_texture_material_combine_v2 #(.NCTX(8), .TAGW(14)) u_combine (
       .clk(clk), .rst_n(rst_n),
-      .f_valid_i(fr_o_valid), .f_ready_o(comb_f_ready),
-      .f_sample_count_i(fsc_m[fr_o_tok]), .f_recipe_i(frec_m[fr_o_tok]),
-      .f_weight_i(fwt_m[fr_o_tok]),
-      .f_s0_rgb_i(fr_o_s_rgb[0]), .f_s0_a_i(fr_o_s_a[0]),
-      .f_s1_rgb_i(fr_o_s_rgb[1]), .f_s1_a_i(fr_o_s_a[1]),
+      .f_valid_i(own_cmb_valid), .f_ready_o(comb_f_ready),
+      .f_sample_count_i(mat_scount_c), .f_recipe_i(mat_recipe_c),
+      .f_weight_i(mat_weight_c),
+      .f_s0_rgb_i(own_cmb_s0[23:0]), .f_s0_a_i(own_cmb_s0[31:24]),
+      .f_s1_rgb_i(own_cmb_s1[23:0]), .f_s1_a_i(own_cmb_s1[31:24]),
       // AUX, when the fragment has it, genuinely IS the third sample -- that
       // is what the aux pipeline computes. Sample bank 2 is the fallback for
-      // fragments that do not.
-      .f_s2_rgb_i(fr_o_has_aux ? fr_o_aux_rgb : fr_o_s_rgb[2]),
-      .f_s2_a_i  (fr_o_has_aux ? fr_o_aux_a   : fr_o_s_a[2]),
-      .f_base_rgb_i(fbase_m[fr_o_tok][31:8]),
-      .f_base_a_i(fbase_m[fr_o_tok][7:0]),
-      .f_tag_i({fseq_m[fr_o_tok], fr_o_ctx[15:0]}),
+      // fragments that do not. `mat_has_aux_c` is the plane's 46th bit, added
+      // because this mux is the one consumer that needs it and v3own's packet
+      // does not carry it.
+      .f_s2_rgb_i(mat_has_aux_c ? own_cmb_aux[23:0]  : own_cmb_s2[23:0]),
+      .f_s2_a_i  (mat_has_aux_c ? own_cmb_aux[31:24] : own_cmb_s2[31:24]),
+      .f_base_rgb_i(mat_base_rgb_c),
+      .f_base_a_i(mat_base_a_c),
+      .f_tag_i(own_cmb_owner),
       .o_valid_o(comb_o_valid), .o_ready_i(comb_o_ready),
       .o_rgb_o(comb_o_rgb), .o_a_o(comb_o_a), .o_tag_o(comb_o_tag),
       .o_refused_o(comb_o_refused),
@@ -2381,6 +2400,12 @@ module zhao_texture_island_v3_top #(
       .saturated_add_o(comb_sat_add), .saturated_mul2x_o(comb_sat_2x),
       .jobs_by_recipe_o(comb_jobs),
       .phases_issued_o(cnt_combine_phases_o));
+
+  // v3own's COMBINE handshake completes here: the packet is taken when the
+  // combiner accepts it. §11.1's event 3 -- actual acceptance, not the
+  // reservation -- which is the distinction mutation §22.10-8 exists to protect
+  // and which four M6 checks catch if it is confused.
+  assign own_cmb_ready_c = comb_f_ready;
 
   // -------- reorder buffer --------------------------------------------------
   logic [32:0] rob_m [FCTXN];      // {refused, a, rgb}
