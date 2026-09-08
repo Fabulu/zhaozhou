@@ -2186,7 +2186,8 @@ verilate(test_island_v3_composed_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v2.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv)
 add_test(NAME island_v3_composed_directed COMMAND test_island_v3_composed_directed)
 set_tests_properties(island_v3_composed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
@@ -2255,7 +2256,8 @@ verilate(test_island_v3_fault_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v2.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv)
 # REGISTERED once it passed. It was written to FAIL first, against the
 # unrepaired RTL, and was seen to fail and then to pass -- the only ordering
 # that proves it can see what it claims to test.

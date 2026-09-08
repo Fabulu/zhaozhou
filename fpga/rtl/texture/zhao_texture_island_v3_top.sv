@@ -245,6 +245,11 @@ module zhao_texture_island_v3_top #(
     // accepts fragments and retires none is either starved or REJECTING,
     // and those need different fixes.
     output var logic [31:0] cnt_fragrob_id_errors_o,
+    // Packet C step 1: the metadata bank's shadow falsifier. Must stay ZERO.
+    output var logic [31:0] meta_shadow_mismatch_o,
+    // How many responses the shadow actually compared. A mismatch count of
+    // zero over zero comparisons is not evidence.
+    output var logic [31:0] meta_shadow_reads_o,
     // COMBINE.V1's per-recipe product-job counts, at the island boundary.
     //
     // §15.4 requires actual product jobs recorded by recipe, and until now they
@@ -2491,6 +2496,109 @@ module zhao_texture_island_v3_top #(
   assign cnt_fragrob_id_errors_o =
       own_ev_err_unsol + own_ev_err_stale + own_ev_err_dup +
       own_ev_err_range + own_ev_err_issue + own_ev_err_final;
+
+
+  // ==========================================================================
+  // PACKET C, STEP 1: THE METADATA BANK RUNS AS A SHADOW
+  // ==========================================================================
+  // Post-fit brief §5 asks for one synchronous join on the common response
+  // stream, carrying sample metadata AND palette identity AND the descriptor's
+  // owner generation -- 40 bits, replacing five asynchronous reads across three
+  // tables.
+  //
+  // THIS IS NOT THAT YET. This instantiates the bank, writes it from the same
+  // event that writes `sampmeta_m`, reads it from the same address on the
+  // common stream, and COMPARES. Nothing downstream consumes it and no existing
+  // read is removed, so the island's behaviour is unchanged by construction.
+  //
+  // Why a shadow rather than the swap: every integration defect this session
+  // produced -- five stale slices, two stage misalignments, four undriven
+  // outputs -- came from wiring a verified, never-composed block into a top and
+  // trusting it. `zhao_texture_metajoin` passes its own 7-check leaf suite. So
+  // did v3own's 541. A leaf suite does not know what address the composed design
+  // will hand it.
+  //
+  // `meta_shadow_mismatch_o` is the falsifier: if the bank ever returns
+  // something the live table would not have, it counts, and the composed tests
+  // assert it stays zero. When it has stayed zero across the full 119-check
+  // suite, the readers can move over one at a time.
+  logic [1:0]  mj_rd_pal_slot;
+  logic [7:0]  mj_rd_pal_gen;
+  logic [2:0]  mj_rd_format;
+  logic [7:0]  mj_rd_frac_u, mj_rd_frac_v;
+  logic        mj_rd_byte_sel, mj_rd_nibble, mj_rd_valid;
+  logic [31:0] mj_writes, mj_illegal, mj_genmis;
+
+  wire [5:0] mj_wr_slot_c = plan_acc_src[SRC_SLOT_HI:SRC_SLOT_LO];
+  wire [1:0] mj_wr_sidx_c = plan_acc_src[SRC_SIDX_LO+1:SRC_SIDX_LO];
+  wire [5:0] mj_rd_slot_c = cache_smp_src[SRC_SLOT_HI:SRC_SLOT_LO];
+  wire [1:0] mj_rd_sidx_c = cache_smp_src[SRC_SIDX_LO+1:SRC_SIDX_LO];
+
+  zhao_texture_metajoin #(
+      .SLOTW(6), .SIDXW(2), .GENW(GENW), .PALSW($clog2(PAL_SLOTS)), .METAW(40)
+  ) u_metajoin (
+      .clk(clk), .rst_n(rst_n),
+      .wr_valid_i    (plan_acc_valid && plan_acc_ready),
+      .wr_slot_i     (mj_wr_slot_c),
+      .wr_sidx_i     (mj_wr_sidx_c),
+      // The owner generation the row is written FOR. The planner's token low
+      // byte IS that generation -- {class, slot, sidx, gen}.
+      .wr_owner_gen_i(plan_acc_src[GENW-1:0]),
+      // The palette binding, read at the OWNER slot exactly as the live path
+      // does. Carrying these is the whole reason the record is 40 bits and not
+      // 21: they are the fields on the measured critical family.
+      .wr_pal_slot_i (palslot_m[mj_wr_slot_c]),
+      .wr_pal_gen_i  (palgen_m [mj_wr_slot_c]),
+      .wr_format_i   (plan_acc_fmt),
+      .wr_frac_u_i   (plan_acc_fu),
+      .wr_frac_v_i   (plan_acc_fv),
+      .wr_byte_sel_i (plan_acc_addr[0]),
+      .wr_nibble_i   (plan_acc_nib),
+      .rd_valid_i    (cache_smp_valid),
+      .rd_slot_i     (mj_rd_slot_c),
+      .rd_sidx_i     (mj_rd_sidx_c),
+      .rd_owner_gen_i(cache_smp_src[GENW-1:0]),
+      .rd_result_valid_o(mj_rd_valid),
+      .rd_pal_slot_o (mj_rd_pal_slot),
+      .rd_pal_gen_o  (mj_rd_pal_gen),
+      .rd_format_o   (mj_rd_format),
+      .rd_frac_u_o   (mj_rd_frac_u),
+      .rd_frac_v_o   (mj_rd_frac_v),
+      .rd_byte_sel_o (mj_rd_byte_sel),
+      .rd_nibble_o   (mj_rd_nibble),
+      .writes_o          (mj_writes),
+      .reads_o           (meta_shadow_reads_o),
+      .rd_illegal_sidx_o (mj_illegal),
+      .rd_gen_mismatch_o (mj_genmis));
+
+  // The live tables, sampled at the SAME address and delayed by one cycle so
+  // the comparison is cycle-aligned with the bank's synchronous read. Without
+  // this delay the shadow would compare a registered value against a
+  // combinational one and disagree for a reason that is not a defect -- which
+  // is the stage-misalignment mistake, and it would be the third time.
+  logic [20:0] mj_ref_q;
+  logic [1:0]  mj_ref_pslot_q;
+  logic [7:0]  mj_ref_pgen_q;
+  logic        mj_ref_v_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      mj_ref_v_q               <= 1'b0;
+      meta_shadow_mismatch_o   <= 32'd0;
+    end else begin
+      mj_ref_q       <= sampmeta_m[mj_rd_slot_c][mj_rd_sidx_c];
+      mj_ref_pslot_q <= palslot_m[mj_rd_slot_c];
+      mj_ref_pgen_q  <= palgen_m [mj_rd_slot_c];
+      mj_ref_v_q     <= cache_smp_valid && (mj_rd_sidx_c != 2'd3);
+
+      if (mj_ref_v_q && mj_rd_valid) begin
+        if ({mj_rd_nibble, mj_rd_format, mj_rd_frac_v, mj_rd_frac_u,
+             mj_rd_byte_sel} != mj_ref_q
+            || mj_rd_pal_slot != mj_ref_pslot_q
+            || mj_rd_pal_gen  != mj_ref_pgen_q)
+          meta_shadow_mismatch_o <= meta_shadow_mismatch_o + 32'd1;
+      end
+    end
+  end
 
   // The sticky tripwire latches. `aux_degenerate` is a 32-bit COUNT rather
   // than a flag, so its tripwire is "the count ever moved" -- taken as

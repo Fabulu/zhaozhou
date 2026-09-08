@@ -399,6 +399,13 @@ int main(int argc, char** argv) {
                 "and every post-reset fragment retired", kPost, retired);
   }
 
+  // The metajoin shadow is asserted in island_v3_composed_directed, NOT here.
+  // This probe drives sample_count = 0 and never serves texture memory, so no
+  // response ever reaches the common stream and the shadow performs ZERO
+  // comparisons. The non-vacuity check caught that on its first run -- without
+  // it, "0 mismatches" would have been reported as agreement when it was zero
+  // over zero.
+
   // ---- The other two ports, stated as obligations --------------------------
   // §3.1 B and C. These are not yet testable by injection because neither port
   // has a defined event to inject: `fr_wq_overflow` and `fr_id_error` have no

@@ -2222,6 +2222,24 @@ int main(int argc, char** argv) {
     }
   }
 
+#ifdef ISLAND_V3
+  // ---- PACKET C STEP 1: the metadata bank shadows the three live tables --
+  // The bank writes from the same event as `sampmeta_m` and reads the same
+  // address on the common response stream. Nothing downstream consumes it.
+  // This phase has real responses -- 96 per phase across seven phases -- so
+  // it is where the comparison is non-vacuous.
+  std::printf("  metajoin shadow: %u comparisons, %u mismatches\n",
+              d.meta_shadow_reads_o, d.meta_shadow_mismatch_o);
+  check(d.meta_shadow_reads_o > 100,
+        "the shadow metadata bank actually compared responses -- zero "
+        "mismatches over zero comparisons is not evidence",
+        1, d.meta_shadow_reads_o > 100 ? 1 : 0);
+  check(d.meta_shadow_mismatch_o == 0,
+        "and returned EXACTLY what sampmeta_m, palslot_m and palgen_m would "
+        "return on every one -- the precondition for moving any reader onto it",
+        0, d.meta_shadow_mismatch_o);
+#endif
+
   if (g_failed) {
     std::printf("[island_composed_directed] %d/%d checks FAILED\n", g_failed, g_checks);
     return 1;
