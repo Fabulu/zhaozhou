@@ -2216,6 +2216,27 @@ verilate(test_metajoin_seam_directed
   PREFIX Vzhao_texture_metajoin
   TOP_MODULE zhao_texture_metajoin
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv)
+# The typed early descriptor bank (Decrufter §5.2/§5.4), built with D0's hold
+# law from the start rather than after a defect, and with the owner generation
+# on an OUTPUT PORT -- the gap that leaves metajoin's island packing 8'd0 where
+# the identity would travel.
+add_executable(test_early_desc_directed texture/early_desc_directed.cpp)
+target_link_libraries(test_early_desc_directed PRIVATE zhao_harness)
+verilate(test_early_desc_directed
+  PREFIX Vzhao_texture_early_desc
+  TOP_MODULE zhao_texture_early_desc
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv)
+add_test(NAME early_desc_directed COMMAND test_early_desc_directed)
+set_tests_properties(early_desc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_texture_early_desc
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_early_desc
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv)
+set_tests_properties(lint_texture_early_desc PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_test(NAME metajoin_seam_directed COMMAND test_metajoin_seam_directed)
 set_tests_properties(metajoin_seam_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
