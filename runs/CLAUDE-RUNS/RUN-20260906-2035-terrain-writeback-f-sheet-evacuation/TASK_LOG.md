@@ -3513,3 +3513,39 @@ register delta and the inference itself.
 
 **That closes P0-E as a line of work**: its census narrowed four candidates to
 one, the one was fixed, and nothing was left behind it.
+
+## Both fog rows now read `ok` — the ledger is honest
+
+`zhao_raster_fog` 247 ALM / 3 DSP / 93.63, `zhao_geom_fogfactor` 341 ALM / 3 DSP
+/ 68.63, both `status: ok` after the M7 rule corrections. The rows no longer
+claim two correct blocks fail gates that no longer exist.
+
+## Stage C: COMBINE, ordered output, the ROB, and the identity carry
+
+* **COMBINE rewritten** against v3own's packet and the material plane. Four table
+  reads become one plane read; the sample lanes come from `cmb_s0/s1/s2/aux`
+  (result40 = {status8, alpha8, rgb24}); **TAGW 22 -> 14** because `fseq_m` is
+  deleted and v3own's cursor IS the sequence.
+* **(d1) ordered output from v3own**, ROB read path deleted. The head-of-line
+  property is PRESERVED by the deletion rather than traded for area — an owner
+  that never completes is never retired, which is the same loud failure the
+  oracle's comment argues for.
+* **(d2) the ROB pool deleted**; COMBINE's answer returns to v3own as FINAL.
+  `own_fin_valid_c = comb_o_valid` is §M6's rule at integration scale: a final
+  authorised by ACTUAL acceptance, never a reservation. `cnt_reorder_held_o` is
+  recounted from v3own's view rather than dropped — a counter that silently
+  becomes zero makes an ordering test pass for the wrong reason.
+* **The identity carry is closed.** v3own admits, RCP carries the handle
+  (`TOKW` 8 -> 14), PERSPUV's 16-bit tag holds it, the expander takes it back.
+  Three blocks, one identity, no lookup table between them.
+
+**A silent-aliasing bug avoided in passing:** `uvw_m` was indexed
+`rcp_tok[FCTXW-1:0]`. Under the re-key those low bits are the GENERATION, not
+the slot — every fragment sharing a generation would have aliased onto one
+entry. It is now `rcp_tok[13:8]`, the slot, which is what v3own allocates
+one-per-live-fragment.
+
+**Third width question, third different answer.** `cache_pipe` had four literal
+16s and needed a new parameter; `aux_pipe` was parameterised throughout and
+needed nothing; `rcp24_svc` likewise needed only the number. Each was measured
+rather than guessed, and guessing would have been wrong twice.
