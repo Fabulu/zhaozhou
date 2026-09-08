@@ -631,3 +631,45 @@ range-invalid sample index 3, unauthorized FINAL. None is drivable from the
 top's ports, because the paths that would carry them are internal to the cache
 and the owner. That is a design question (an injection port, or leaf-level
 tests against v3own directly), not something to fake from outside.
+
+## M2's precondition was never met, and the ledger said otherwise
+
+Reading the JSON row rather than the docket's summary of it:
+
+```
+zhao_texture_material_combine_v1
+  status          ok
+  ruleViolations  ['ALM 1475 > allowed 800',
+                   'registers 893 > allowed 500',
+                   'fmax 36.28 < required 125']
+  partial         True   (analysis_and_synthesis)
+```
+
+**One row in 114** claims success while listing violations, and it is the row
+M2's deletion trigger depends on. Every other row is consistent — the V3 island
+reports `failed:structure` and lists its three.
+
+The row's own note says how: *"Fitter and STA run by hand after the
+run_block_fit watchdog was killed so the fit could outlive its 3000 s budget."*
+Assembled manually, so whatever derives `status` from the rules never ran.
+
+**I had repeated that `ok` in this morning's M2 report**, having read the status
+field. The same note also records **unresolved hold slack −5.284 ns** and setup
+slack −17.561 ns against a 10 ns clock, and warns the row *"reads about 2 MHz
+low"* because it ran in BALANCED mode.
+
+So the correction is not "V1's measurement is unverifiable" — it is that **V1
+fails ALM by 84%, registers by 79% and Fmax by 3.4x against its own §15.5
+variant-A bounds.** It is an undischarged claim, not a demonstrated replacement
+for the refuted `zhao_texture_combine`. V2 is a complete fit at 870 ALM /
+114.04 MHz, inside the bound V1 misses.
+
+`tools/quartus/check_fit_ledger.py` now refuses to let the ledger contradict
+itself. One invariant only: a row may not claim success while listing
+violations. It does not re-derive rules or judge severity. Fire test built from
+the real row, and it discriminates — the honest `failed:structure` row beside it
+is not flagged.
+
+This is the "broken instrument lies in ONE direction" law arriving at the single
+place it could do the most damage: a docket entry, a report and a recommendation
+all inherited a wrong `ok`.
