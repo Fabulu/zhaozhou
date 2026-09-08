@@ -34,6 +34,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <vector>
 
 #include "verilated.h"
 
@@ -157,6 +158,74 @@ int main(int argc, char** argv) {
               "and legitimate traffic is still admitted after the fault -- the "
               "island did not wedge on an invalid class",
               1, after > 0 ? 1 : 0);
+
+  // ---- PHASE 4: THE ZERO-WORK LIFETIME PROBE (brief §5.1) ------------------
+  // The brief classifies this as a SOURCE-PROVEN mismatch between two
+  // completion domains, with reachability explicitly NOT established:
+  //
+  //   "owner may externally retire -> no legitimate front-end reader for it
+  //    remains" ... is not established by the inspected composition.
+  //
+  // v3own makes an owner with `adm_req_i == 0` ready at admission -- correct for
+  // its leaf contract, since it owes no TMU or AUX source. But the composed top
+  // still sends that fragment through RCP, PERSPUV and the expander, which hold
+  // its token and can read owner-keyed sidecars.
+  //
+  // So: drive far more than OWNERS(64) fragments with sample_count 0, forcing
+  // the slot space to WRAP repeatedly while front-end stages are mid-flight. If
+  // an owner can be freed and re-admitted while the expander still references
+  // it, tags come back wrong or duplicated. This does not prove the implication
+  // holds -- absence of a trace is not a proof -- but a FOUND trace would be a
+  // reproduced defect, which is what the brief says nobody has yet.
+  {
+    const int kWrap = 300;              // ~4.7x the 64-slot space
+    int submitted = 0, retired = 0, dup = 0, foreign = 0;
+    std::vector<int> seen(kWrap + 8, 0);
+
+    for (int cyc = 0; cyc < 60000 && retired < kWrap; ++cyc) {
+      d.frag_valid_i = (submitted < kWrap) ? 1 : 0;
+      d.frag_class_i = 0;
+      d.frag_sample_count_i = 0;        // ZERO-WORK: ready at admission
+      d.frag_aux_i = 0;
+      d.frag_ctx_i = static_cast<uint64_t>(submitted);
+      d.out_ready_i = 1;
+      d.eval();
+
+      const bool acc = d.frag_valid_i && d.frag_ready_o;
+      if (d.out_valid_o && d.out_ready_i) {
+        const int tag = static_cast<int>(d.out_tag_o);
+        if (tag < 0 || tag >= kWrap) ++foreign;
+        else if (seen[tag]++) ++dup;
+        ++retired;
+      }
+      tick(d);
+      if (acc) ++submitted;
+    }
+    d.frag_valid_i = 0;
+    d.frag_sample_count_i = 1;
+    d.eval();
+
+    std::printf("  zero-work wrap: submitted %d, retired %d (slot space 64, "
+                "so ~%dx wrap)
+", submitted, retired, submitted / 64);
+
+    zhao::check(submitted >= 200,
+                "the zero-work burst actually wrapped the 64-slot owner space "
+                "several times -- a run that never wrapped could not reach the "
+                "reuse schedule this phase exists to probe",
+                1, submitted >= 200 ? 1 : 0);
+    zhao::check(retired == submitted,
+                "every zero-work fragment retired -- none was lost to a slot "
+                "recycled underneath it",
+                submitted, retired);
+    zhao::check(dup == 0,
+                "and none was retired TWICE, which is what a slot freed while a "
+                "front-end stage still held it would produce",
+                0, dup);
+    zhao::check(foreign == 0,
+                "and every retired tag is one this phase submitted",
+                0, foreign);
+  }
 
   // ---- The other two ports, stated as obligations --------------------------
   // §3.1 B and C. These are not yet testable by injection because neither port
