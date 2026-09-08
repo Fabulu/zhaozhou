@@ -136,3 +136,69 @@ fixed-width table with a pattern at all: it now SPLITS on `;`, requires all
 eight columns, and rejects endpoint-less rows. It carries a fire test built
 from the real debris, and that test was verified to FIRE by mutating the column
 count back to three and watching it refuse.
+
+## All three gates PASS
+
+| gate | what it asks | result |
+|---|---|---|
+| 1 | v3own's 541-check adversarial suite on the **unmodified** file | passes |
+| 2 | `island_v3_composed_directed` -- the oracle's own 119-check source, `-DISLAND_V3` | **119/119** |
+| 3 | `island_v3_paired` -- both tops, identical stimulus, retired streams compared | **392 records byte-identical, order included** |
+
+Plus `frag_expand_directed` 11/11 and the ORACLE still at 119/119, so nothing
+done to shared blocks damaged the thing being compared against.
+
+### The four defects gate 2 found, in the order they surfaced
+
+1. **Undriven ports.** `fr_tmu_valid` on the planner and AUX sides had no
+   driver at all. Later, sweeping all 42 outputs found two more --
+   `cnt_fragments_o` and `cnt_fragrob_id_errors_o`, both fragrob's. An undriven
+   output does not fail elaboration or lint; it reads as a clean zero, and a
+   counter reading zero looks exactly like a stage that is quiet.
+2. **Owners leaking at admission** -- `own_adm_valid_c` did not require
+   `rcp_v_ready`.
+3. **The AUX return token**, re-assembled from a 4-bit slice of a 6-bit slot.
+4. **Two alignment terms on one handshake**, and then **two stage misalignments**
+   -- the AUX world coordinates and the palette tables.
+
+### The two misalignments are the same mistake, and it is not the re-key's
+
+The five stale slices were all the identity change. These two are different and
+worth separating, because the lesson is not the same one:
+
+* the AUX request's world coordinates came from `own_out_ctx` -- the context of
+  whatever the OUTPUT stage was emitting. A different fragment entirely.
+* `palslot_m`/`palgen_m` were written at ADMISSION (an input-stage event) from
+  `f_pal_slot_c`/`f_pal_gen_c` (planner-stage values), while `mat_m` beside them
+  was written from the input ports. The two per-owner tables disagreed about
+  which fragment they described.
+
+**Both are "an attribute read from the wrong stage", and this island's own test
+already had a check for that in prose** -- "travels with its fragment instead of
+being read off the input pin twelve clocks late". The check existed; the defect
+was reintroduced next to it.
+
+The palette one showed as only THREE stale lookups because a phase holds one
+palette slot for most of its fragments, so the misalignment is invisible
+wherever old and new happen to be equal. **A defect mostly masked by uniform
+stimulus is not a small defect** -- it is a large one with a lucky workload.
+
+### STALE MEASUREMENT, stated rather than quoted
+
+The expander's leaf fit -- **323 ALM, 451 reg, 0 DSP, +1.623 ns** -- finished at
+05:21. The `f_ctx_i`/`aux_ctx_o` ports and the 64-bit `ctx` field in the 4-deep
+fragment queue landed at 05:48. **That number therefore describes a block that
+no longer exists**, and it is short by roughly 256 flops of queue plus routing.
+
+It is recorded here as stale rather than repeated as a result, because "never
+compare a current file to an old measurement" is exactly the trap, and a fit
+number carries a reassuring air of having been measured. Re-fit is queued behind
+the Stage C island fit.
+
+### Running now
+
+`zhao_texture_island_v3_top`, registered under the ORACLE'S OWN REDLINE --
+`max_alms: 7500`, `max_registers: 9000`, `max_m10k: 64`, `max_dsp: 14`. Same
+rules as `zhao_texture_island_top`, because the question is whether the
+restructure fits the budget the island already had; softer rules would answer a
+different question while producing a number that looks comparable.
