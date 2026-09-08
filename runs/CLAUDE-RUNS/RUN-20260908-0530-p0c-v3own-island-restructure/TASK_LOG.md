@@ -1451,3 +1451,43 @@ The stall before this one was also mine: I killed the previous ctest and
 restarted immediately while its wrapper was still finishing, creating the
 overlapping-run condition already documented. The working sequence is stop the
 task, verify zero ctest processes, clear `Testing/Temporary`, then start.
+
+## Before the @pktC-fixed fit result is read — where I was
+
+Written deliberately ahead of opening the receipt, per CLAUDE.md: fit results
+redirect the work, and the half-finished thing in hand is what gets lost.
+
+**In progress, blocked only on the live-tree trap:** the one-line D0 repair to
+`zhao_texture_metajoin.sv`. The gate is decided and written out in
+`reports/D0-JOIN-SEAM-REPRODUCED-20260908.md`:
+
+```systemverilog
+if (rd_valid_i && rd_legal_c) begin
+  rd_q     <= mem_q[rd_addr_c];
+  rd_gen_q <= rd_owner_gen_i;
+end
+rd_v_q <= rd_valid_i && rd_legal_c;
+```
+
+**Next step after applying it:** rebuild `test_metajoin_seam_directed` and
+expect its three red checks to go green (held record under stall; illegal-key
+hold). The fourth check, the generation detector, is already green and must
+stay green. Then `island_v3_fault_directed` + `island_composed_directed` to
+confirm the gate did not change the oracle path, then re-fit for an ANCHORED
+packet C receipt — the existing `@pktC` row cannot be quoted (dirty tree, and
+it measured the defective arrangement).
+
+**Do not lose:** metajoin is in exactly ONE fit closure
+(`zhao_texture_island_v3_top`); the chained expander target closes over only
+`zhao_texture_frag_expand.sv`. So the edit is safe as soon as the island run
+finishes writing its receipt — not merely when `quartus_fit` exits, because
+`rtlCleanAtHead` is computed at the end and an edit before that would poison
+the new row exactly the way `@pktC` was poisoned.
+
+**Done while it ran:** D0 reproduced at the seam and committed red; §14.1
+answered (live texture RTL is byte-identical to the audited `30ab0e2b` across
+all 27 files, with the comparison proven able to speak); §14.6's precondition
+discharged by induction rather than sampling (PERSPUV's two schedulers cannot
+diverge — four writers total); the four-part packet account built, which
+refuses `@pktC` and found that `failed:structure` means "fit completed, budget
+rules broke", so the honest row is stamped failed and the dirty one ok.
