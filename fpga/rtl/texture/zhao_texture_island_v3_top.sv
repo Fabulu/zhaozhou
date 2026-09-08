@@ -253,6 +253,17 @@ module zhao_texture_island_v3_top #(
     // Packet C step 2: is the QUEUED metadata the right response's?
     output var logic [31:0] meta_align_err_o,
     output var logic [31:0] meta_align_chk_o,
+    output var logic [31:0] meta_bil_err_o,
+    output var logic [31:0] meta_bil_chk_o,
+    output var logic [31:0] meta_near_err_o,
+    output var logic [31:0] meta_near_chk_o,
+    output var logic [20:0] meta_bil_first_q_o,
+    output var logic [20:0] meta_bil_first_t_o,
+    output var logic [17:0] meta_bil_first_tok_o,
+    // The bank's own alignment check: did a response name a generation the
+    // row was not written for? That is slot recycling, and it decides which
+    // side of a fraction disagreement is the stale one.
+    output var logic [31:0] meta_genmis_o,
     // COMBINE.V1's per-recipe product-job counts, at the island boundary.
     //
     // §15.4 requires actual product jobs recorded by recipe, and until now they
@@ -1654,7 +1665,14 @@ module zhao_texture_island_v3_top #(
   logic [1:0]  bil_occ;
 
   // The metadata belonging to the sample whose texels just arrived.
-  // REVERTED. This read was moved onto the class queue and gate 2 failed:
+  // STAYS ON THE TABLE, and now for a MEASURED reason rather than a
+  // precautionary one. The per-queue falsifier reports
+  // **bil 768 checked, 32 wrong** -- 4.2% of bilinear responses carry
+  // metadata that is not their own. The nearest queue beside it is 192/0 and
+  // its reader HAS moved, so this is specific to the bilinear path, not a
+  // property of the queue mechanism.
+  //
+  // Originally reverted after gate 2 failed:
   // ARGB4444/bilinear alpha wrong on 3 fragments. The alignment falsifier I
   // built validated the CLUT queue only -- 792 responses, zero
   // disagreements -- and I moved the BILINEAR and NEAREST readers on the
@@ -1991,10 +2009,10 @@ module zhao_texture_island_v3_top #(
   // belongs to whatever request the planner is emitting this clock -- through
   // the ONE shared `decode16` the bilinear taps also use. Section 5A.7 item 5:
   // one block, not three.
-  // REVERTED with the bilinear reader above, and for the same reason: the
-  // alignment evidence covered the CLUT queue only.
-  wire [20:0] near_meta = sampmeta_m[disp_near_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
-                                    [disp_near_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
+  // PACKET C: moved onto the queue, now that a falsifier for THIS queue
+  // exists and passes -- `meta_near_*` reports 192 checked, 0 wrong. The
+  // fourth of five asynchronous response-side reads is gone.
+  wire [20:0] near_meta = meta21(disp_near_meta);
   wire [2:0]  near_fmt  = near_meta[19:17];
 
   // ONE TEXEL, LANE 0. A nearest request plans `acc_en_o = 4'b0001` -- the
@@ -2570,7 +2588,7 @@ module zhao_texture_island_v3_top #(
   logic [2:0]  mj_rd_format;
   logic [7:0]  mj_rd_frac_u, mj_rd_frac_v;
   logic        mj_rd_byte_sel, mj_rd_nibble, mj_rd_valid;
-  logic [31:0] mj_writes, mj_illegal, mj_genmis;
+  logic [31:0] mj_writes, mj_illegal;
   logic [39:0] disp_clut_meta, disp_near_meta, disp_bil_meta, disp_err_meta;
   // ---- THE 21-BIT SAMPMETA VIEW OF A 40-BIT RECORD -------------------------
   // The three response-side readers below want exactly the fields `sampmeta_m`
@@ -2634,7 +2652,7 @@ module zhao_texture_island_v3_top #(
       .writes_o          (mj_writes),
       .reads_o           (meta_shadow_reads_o),
       .rd_illegal_sidx_o (mj_illegal),
-      .rd_gen_mismatch_o (mj_genmis));
+      .rd_gen_mismatch_o (meta_genmis_o));
 
   // The live tables, sampled at the SAME address and delayed by one cycle so
   // the comparison is cycle-aligned with the bank's synchronous read. Without
@@ -2689,6 +2707,52 @@ module zhao_texture_island_v3_top #(
       if (disp_clut_meta[29:22] != palgen_m [disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
           || disp_clut_meta[31:30] != palslot_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]])
         meta_align_err_o <= meta_align_err_o + 32'd1;
+    end
+  end
+
+
+  // ---- THE SAME QUESTION, ASKED OF THE OTHER TWO QUEUES ---------------------
+  // The CLUT check above validated ONE class queue, and I moved three readers
+  // on it -- two of which belonged to other queues. Gate 2 caught that in one
+  // run. These are the checks that should have existed first.
+  //
+  // Each compares the queued metadata's sampmeta fields against the live table
+  // at THAT queue's own token, so a pass licenses moving THAT reader and no
+  // other.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      meta_bil_err_o  <= 32'd0;
+      meta_bil_first_q_o   <= 21'd0;
+      meta_bil_first_t_o   <= 21'd0;
+      meta_bil_first_tok_o <= 18'd0;
+      meta_bil_chk_o  <= 32'd0;
+      meta_near_err_o <= 32'd0;
+      meta_near_chk_o <= 32'd0;
+    end else begin
+      if (disp_bil_valid) begin
+        meta_bil_chk_o <= meta_bil_chk_o + 32'd1;
+        if (meta21(disp_bil_meta) !=
+            sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+                      [disp_bil_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]]) begin
+          meta_bil_err_o <= meta_bil_err_o + 32'd1;
+          // CAPTURE THE FIRST ONE. A count says how often; it does not say
+          // WHAT differs, and guessing which field from a count is how the last
+          // three wrong diagnoses in this session were reached.
+          if (meta_bil_err_o == 32'd0) begin
+            meta_bil_first_q_o <= meta21(disp_bil_meta);
+            meta_bil_first_t_o <= sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+                                            [disp_bil_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
+            meta_bil_first_tok_o <= disp_bil_tok;
+          end
+        end
+      end
+      if (disp_near_valid) begin
+        meta_near_chk_o <= meta_near_chk_o + 32'd1;
+        if (meta21(disp_near_meta) !=
+            sampmeta_m[disp_near_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+                      [disp_near_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]])
+          meta_near_err_o <= meta_near_err_o + 32'd1;
+      end
     end
   end
 

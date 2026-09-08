@@ -2243,6 +2243,19 @@ int main(int argc, char** argv) {
   check(d.meta_align_chk_o > 50,
         "the queued-metadata alignment was actually exercised", 1,
         d.meta_align_chk_o > 50 ? 1 : 0);
+  std::printf("  metajoin per-queue: bil %u checked/%u wrong, near %u checked/%u wrong\n",
+              d.meta_bil_chk_o, d.meta_bil_err_o,
+              d.meta_near_chk_o, d.meta_near_err_o);
+  std::printf("    bank gen mismatches (slot recycled under a live response): %u\n",
+              d.meta_genmis_o);
+  if (d.meta_bil_err_o) {
+    const unsigned q = d.meta_bil_first_q_o, t = d.meta_bil_first_t_o;
+    std::printf("    first bil mismatch tok=%05X  queue{nib %u fmt %u fv %02X fu %02X bsel %u}"
+                "  table{nib %u fmt %u fv %02X fu %02X bsel %u}\n",
+                d.meta_bil_first_tok_o,
+                (q>>20)&1, (q>>17)&7, (q>>9)&0xFF, (q>>1)&0xFF, q&1,
+                (t>>20)&1, (t>>17)&7, (t>>9)&0xFF, (t>>1)&0xFF, t&1);
+  }
 #endif
 
   if (g_failed) {
