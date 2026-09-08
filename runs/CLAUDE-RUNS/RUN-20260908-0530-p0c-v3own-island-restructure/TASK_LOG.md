@@ -983,3 +983,45 @@ P-CNT functional verification, still blocked on the build tree.
 
 This fit answers one thing only — whether v3 holds up at the island's actual
 token width, which is the one parameter a swap definitely needs.
+
+## Fast suite discharged: 455 tests, 449 pass, 5 fail, ONE mine
+
+Ownership established from git rather than assumed:
+
+* **`ledger_check`** — 4 V20 errors. **One is mine** (`island_v3_top:2720`, a
+  file I created): an invariant claim with no machine-resolvable enforcer.
+  Fixed by naming `zhao_texture_v3own.sv:a_out_in_order`, which exists at
+  `v3own.sv:2022`. **4 -> 3.** The other three are in `v3own` and `v3rq`, files
+  **no commit of mine touches**; line 1677 last changed `384c3e77` on 09-07.
+* **`format_check`** — clang-format drift in `zref_fragment.hpp` (09-07) and
+  `zref_island.hpp` (09-06). No commit of mine touches `reference/` today.
+* **`zcap_roundtrip` / `golden_abi_info` / `abi_golden`** — goldens last changed
+  `5cd55827`, 09-07.
+
+**The texture work broke nothing.** 449 pass around it.
+
+Two of those messages read **"expected 0x1E7, got 0x1E7"** and **"expected 0x20,
+got 0x20"** — equal values reported as mismatches. Not mine, not chased, but
+flagged: a failure message showing two identical numbers costs someone an
+afternoon later.
+
+Also removed `captures/failures/` from tracking — a failing test's OUTPUT that
+`git add -A` swept into a commit. Same reasoning as `*.rgb`.
+
+### A diagnostic error of mine, corrected
+
+I twice called the suite "stalled" while `cppcheck` was running at 300+ CPU
+seconds. **My process filter matched `test_*` and never matched `cppcheck`** —
+"0 procs" meant "none of the ones I looked for", not "nothing running". The
+suite was fine both times.
+
+## Seed check launched on P-CNT
+
+`-Seed 7 -RowLabel @pcnt-seed7`, same source. P-CNT measured **+6.02 MHz**
+against a docketed leaf seed noise of **~4.70 MHz** — close enough that the
+number alone is weak, which I said when reporting it. A second seed point on the
+SAME design says whether 104.08 is representative or a lucky placement.
+
+The endpoint migration (`cold_o` -> `l1_stale_q`) is structural and does not
+depend on this. But if seed 7 lands near 98, the **Fmax** claim needs
+withdrawing even though the path claim stands.
