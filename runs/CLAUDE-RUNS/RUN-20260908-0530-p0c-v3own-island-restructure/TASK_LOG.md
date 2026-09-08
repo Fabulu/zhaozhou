@@ -1491,3 +1491,53 @@ discharged by induction rather than sampling (PERSPUV's two schedulers cannot
 diverge — four writers total); the four-part packet account built, which
 refuses `@pktC` and found that `failed:structure` means "fit completed, budget
 rules broke", so the honest row is stamped failed and the dirty one ok.
+
+## After the owner ruling on fit cost — the working shape changed
+
+Fabian, mid-session: *"fits are what's going to be the biggest blocker, they
+cost so much time. We should only fit at big architectural subsystem, we can't
+afford fitting after every tiny nodule."* Written into CLAUDE.md rather than
+remembered, and it reframes the rest of the campaign: ask what the question IS
+before reaching for Quartus, build new blocks standalone, wire several in behind
+one fit.
+
+A FABLE architect then produced `reports/V3-REARCHITECTURE-ROADMAP.md` (806
+lines): seven packets, **three new island-scale fits for the whole campaign**
+plus two cheap leaf pairs, each packet carrying a falsifier, its closure hazard
+and a rollback. That document is now the plan of record; DOCKET.md points at it.
+
+### Landed this stretch, all outside both running fits' closures
+
+* **Packet 0** — the `-TopParameters` guard, after settling by experiment that
+  PowerShell parses a `-File` script once at launch (a probe modified during its
+  own `Start-Sleep` printed the ORIGINAL text). Shown firing on four cases.
+* **Packet 4 step 2** — `perspuv_lockstep_directed`: the induction proof's
+  empirical backstop. 799 cycles, 133 depth-zero fragments, queues seen empty and
+  occupied, peak occupancy 15, all four divergence counters 0, with a live-probe
+  control so the zeros mean something.
+* **Packet 4 step 1** — `zhao_raster_perspuv_pairpipe`: one scheduler, two lanes,
+  one paired record. Bit-identical to the frozen service over 352 U/V pairs
+  across every signed extreme and k=0..63; 704 products = 352x2 on both engines;
+  credit ceiling exactly 17; 1.00 clock per pair.
+* **Packet 5 step 1** — `reports/OWNER-DECISION-RCP-V3-20260908.md`, the RCP memo.
+  Recommendation (a): keep svc for now. The swap is neither recommended nor
+  refused; it is unmeasured at the profile that matters.
+
+### Deliberately NOT done, and why
+
+* `design/fit_targets.yml` registration for the pairpipe. Unlike a `.ps1`, that
+  file is DATA a running fit re-reads; two multi-hour measurements are in flight.
+  It goes in with FIT GATE 3.
+* Packets 1-3 (shadow removal, descriptor wiring, palette carriage) all touch
+  `zhao_texture_island_v3_top.sv`, which is inside the `@d0fixed` closure.
+* The 47 pre-existing clang-format offenders in terrain/geometry/reference. Mine
+  are fixed; a sweeping reformat would bury today's diff and owner direction
+  `49fc32e9` says unrelated work is not the priority.
+
+### Where I am, written before the fits land
+
+`@d0fixed` (island, 136 min) and the chained `frag_expand` refit (115 min) are
+both alive and contending. When `@d0fixed` lands: bank the worst-path census
+BEFORE the next fit overwrites it, run `packet_accounting.py` against Stage C,
+then start Packet 1. The census is the perishable half — `blockpaths/*.setup.rpt`
+is destroyed by the next fit of the same module.
