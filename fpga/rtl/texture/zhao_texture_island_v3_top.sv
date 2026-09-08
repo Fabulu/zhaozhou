@@ -78,7 +78,14 @@ module zhao_texture_island_v3_top #(
     parameter int unsigned LANES   = 4,    // CACHE_PIPE lanes
     parameter int unsigned SRCW    = 16,
     parameter int unsigned DATAW   = 64,   // RSP_DISPATCH payload = LANES*16
-    parameter int unsigned TOKW    = 16,
+    // TOKW 16 -> 18 UNDER P0-C. This is the island's ROUTING token
+    // {class[1:0], slot[5:0], sidx[1:0], gen[7:0]}, and every net declared
+    // `[TOKW-1:0]` follows it -- the dispatch's four per-lane outputs, the
+    // response token, the bilerp and palette lanes. The oracle keeps 16.
+    //
+    // §1.1 named three consumers to widen; the parameter is how they stay
+    // consistent instead of four `[17:0]` literals drifting apart.
+    parameter int unsigned TOKW    = 18,
     parameter int unsigned PAL_SLOTS   = 4,
     parameter int unsigned PAL_ENTRIES = 256,
     // AUX_TOKW CARRIES THE WHOLE IDENTITY OR IT CARRIES A BUG.
@@ -1278,7 +1285,7 @@ module zhao_texture_island_v3_top #(
   logic        plan_req_ready, plan_acc_valid, plan_acc_ready;
   logic [3:0]  plan_acc_en;
   logic [127:0] plan_acc_addr;
-  logic [SRCW-1:0] plan_acc_src;
+  logic [17:0] plan_acc_src;   // SRCW 18 under P0-C
 
   // Written on the request handshake, indexed by the identity the response will
   // come back under, so the read below cannot pick up a different sample's bit.
@@ -1302,13 +1309,25 @@ module zhao_texture_island_v3_top #(
 
   assign fr_tmu_ready = plan_req_ready;
 
-  zhao_texture_tmu_plan #(.SRCW(SRCW)) u_plan (
+  // THE PLANNER IS DRIVEN BY THE EXPANDER, not by fragrob's request port.
+  //
+  // THIS CONNECTION WAS MISSING AND GATE 2 FOUND IT. The expander's outputs were
+  // declared and its instantiation was correct, but `u_plan` still named
+  // `fr_tmu_valid` -- fragrob's port, whose only driver was deleted. An UNDRIVEN
+  // signal reads as zero, so the composition ELABORATED CLEAN and then admitted
+  // 24 fragments and jammed: no request ever reached the planner, nothing
+  // retired, credit never returned, and admission stopped.
+  //
+  // Worth stating plainly because it is the argument for gate 2 existing: a lint
+  // that reports zero diagnostics is not evidence that the blocks are connected
+  // to each other. Only traffic is.
+  zhao_texture_tmu_plan #(.SRCW(18)) u_plan (
       .clk(clk), .rst_n(rst_n),
-      .req_valid_i(fr_tmu_valid), .req_ready_o(plan_req_ready),
-      .req_u_i(fr_tmu_u), .req_v_i(fr_tmu_v),
+      .req_valid_i(exp_req_valid), .req_ready_o(exp_req_ready),
+      .req_u_i(exp_req_u), .req_v_i(exp_req_v),
       .req_base_i(bind_base_i), .req_mode_i(bind_mode_i),
-      .req_lod_i(fr_tmu_lod),   // already Q4.4; see LODW above
-      .req_src_id_i(plan_src_id),
+      .req_lod_i(exp_req_lod),   // already Q4.4; see LODW above
+      .req_src_id_i(exp_req_src_id),
       .acc_valid_o(plan_acc_valid), .acc_ready_i(plan_acc_ready),
       .acc_en_o(plan_acc_en), .acc_addr_o(plan_acc_addr),
       .acc_src_id_o(plan_acc_src), .acc_filter_o(plan_acc_filter),
@@ -1417,16 +1436,16 @@ module zhao_texture_island_v3_top #(
 
   logic        cache_smp_valid, cache_smp_ready;
   logic [LANES*16-1:0] cache_smp_data;
-  logic [15:0] cache_smp_src;
+  logic [17:0] cache_smp_src;  // SRCW 18 under P0-C
   logic [31:0] cache_fills, cache_multicast, cache_replays;
 
   zhao_texture_cache_pipe #(
-      .LANES(LANES), .LINES(16), .LINE_BYTES(16), .REQN(4)
+      .LANES(LANES), .LINES(16), .LINE_BYTES(16), .REQN(4), .SRCW(18)
   ) u_cache (
       .clk(clk), .rst_n(rst_n),
       .acc_valid_i(plan_acc_valid), .acc_ready_o(plan_acc_ready),
       .acc_en_i(plan_acc_en), .acc_addr_i(plan_acc_addr),
-      .acc_src_id_i(plan_acc_src[15:0]),
+      .acc_src_id_i(plan_acc_src),
       .smp_valid_o(cache_smp_valid), .smp_ready_i(cache_smp_ready),
       .smp_data_o(cache_smp_data), .smp_src_id_o(cache_smp_src),
       .fill_valid_o(fill_valid_o), .fill_ready_i(fill_ready_i),
@@ -1472,7 +1491,9 @@ module zhao_texture_island_v3_top #(
   assign cache_smp_ready = disp_rsp_ready;
 
   zhao_texture_rsp_dispatch #(
-      .RAWN(4), .CHN(4), .DATAW(DATAW), .TOKW(TOKW)
+      // TOKW 18: the routing token the dispatch routes on is the widened
+      // SRCW, per §1.1's third named consumer.
+      .RAWN(4), .CHN(4), .DATAW(DATAW), .TOKW(18)
   ) u_dispatch (
       .clk(clk), .rst_n(rst_n),
       .rsp_valid_i(cache_smp_valid), .rsp_ready_o(disp_rsp_ready),
@@ -2270,8 +2291,16 @@ module zhao_texture_island_v3_top #(
 
   zhao_texture_aux_pipe #(.TOKW(AUX_TOKW)) u_aux (
       .clk(clk), .rst_n(rst_n),
-      .req_valid_i(fr_aux_valid), .req_ready_o(aux_req_ready),
-      .req_wx_i(fr_aux_ctx[31:0]), .req_wz_i(fr_aux_ctx[63:32]),
+      // AUX IS DRIVEN BY THE EXPANDER TOO -- the same undriven-port defect gate 2
+      // caught on the TMU side, found by sweeping for it rather than by waiting
+      // for a second stall. `fr_aux_valid`'s only driver was fragrob.
+      //
+      // The world coordinates come from the owner's CONTEXT, which is where the
+      // caller put them and which v3own carries untouched -- §1.4's "the AUX
+      // path also derives geometry from the opaque context", kept verbatim at
+      // first integration, limitation and all.
+      .req_valid_i(exp_aux_valid), .req_ready_o(exp_aux_ready),
+      .req_wx_i(own_out_ctx[31:0]), .req_wz_i(own_out_ctx[63:32]),
       .req_env_x0_i(32'sd0), .req_env_x1_i(32'sd65536),
       .req_env_z0_i(32'sd0), .req_env_z1_i(32'sd65536),
       // THE OTHER HALF OF THE AUX WIDENING. `AUX_TOKW` was widened to 14 at
@@ -2285,7 +2314,7 @@ module zhao_texture_island_v3_top #(
       .sheet_u_o(sheet_u_o), .sheet_v_o(sheet_v_o), .sheet_tok_o(sheet_tok_o),
       .sheet_rvalid_i(sheet_rvalid_i), .sheet_tag_i(sheet_tag_i),
       .sheet_str_i(sheet_str_i), .sheet_rtok_i(sheet_rtok_i),
-      .out_valid_o(aux_out_valid), .out_ready_i(fr_aux_rready),
+      .out_valid_o(aux_out_valid), .out_ready_i(own_aux_rready),
       .out_tok_o(aux_out_tok), .out_tag_o(aux_out_tag),
       .out_str_o(aux_out_str), .out_degenerate_o(aux_out_degenerate),
       .accepted_o(cnt_aux_accepted_o), .sheet_reads_o(aux_sheet_reads),

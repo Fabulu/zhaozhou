@@ -103,6 +103,12 @@ module zhao_texture_cache_pipe #(
     // simulate bit-identically. This parameter is the PREREQUISITE landing on
     // its own, before anything asks for 18 bits, so that the widening and the
     // integration are never one unattributable change.
+    // CORRECTION 2026-09-08: the first pass at this parameter found FOUR
+    // hard-coded sites (both ports and both queue arrays) and missed TWO --
+    // the `c1_src`/`c2_src` PIPELINE REGISTERS at :246,:264. A grep for the
+    // port declarations does not find the stages the value passes through.
+    // Found when the width was actually changed and the widths stopped
+    // agreeing, which is the only reliable way to enumerate a datapath.
     parameter int unsigned SRCW       = 16
 ) (
     input var logic clk,
@@ -243,7 +249,7 @@ module zhao_texture_cache_pipe #(
 
   logic              c1_v;
   logic [LANES-1:0]  c1_en;
-  logic [15:0]       c1_src;
+  logic [SRCW-1:0]   c1_src;
   logic [TAG_W-1:0]  c1_tag  [LANES];
   logic [IDX_W-1:0]  c1_idx  [LANES];
 
@@ -261,7 +267,7 @@ module zhao_texture_cache_pipe #(
 
   logic              c2_v;
   logic [LANES-1:0]  c2_en;
-  logic [15:0]       c2_src;
+  logic [SRCW-1:0]   c2_src;
   logic [TAG_W-1:0]  c2_tag  [LANES];   // carried, to compare against
   logic [IDX_W-1:0]  c2_idx  [LANES];
   logic [TAG_W-1:0]  c2_rtag [LANES];   // captured FROM the tag array
