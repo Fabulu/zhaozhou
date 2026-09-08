@@ -260,3 +260,65 @@ inside `$clog2(NCTX)`. Those are different evaluation contexts, and a parameter
 delivered as a string could survive one and not the other. **That is a
 hypothesis, not a finding** — it fits the evidence, which today has repeatedly
 not been enough.
+
+---
+
+# The comparison I was missing was already in the ledger
+
+Two rows I had not looked for change the picture materially.
+
+## `@v3-nctx8` exists, and it settles the NCTX question
+
+```
+zhao_raster_rcp24_v3@v3-nctx8   registers 1414   dsp 3   map_only
+zhao_raster_rcp24_v3@v3-full    registers 1944   dsp 3   ok
+```
+
+**NCTX=8 maps fine**, and the register count drops 1,944 -> 1,414 — visibly
+smaller, which is exactly the verification `run_block_fit.ps1` demands before
+believing a parameter took.
+
+So the block does **not** reject NCTX=8, as I had already reasoned from
+`$clog2` but could not yet show. My `NCTX=8,TOKW=14` failure therefore
+implicates the **two-parameter** path specifically: either the tool's emission
+of two `set_parameter` lines, or Quartus's handling of them. That remains a real
+suspicion worth one confirming run, and it would affect every multi-parameter
+experiment.
+
+**I did not need to run anything to learn this.** The row was sitting in
+`zhao_block_fit.json` while I was writing up a fit to discover it.
+
+## The head-to-head, on complete rows
+
+| block | ALM | reg | **DSP** | **Fmax** |
+|---|---|---|---|---|
+| `rcp24_svc` — **instantiated by both islands** | 1041 | 1101 | **6** | **68.46** |
+| `rcp24_v3@v3-rh` | **1023** | 1460 | **3** | **90.41** |
+| `rcp24_v3@v3-full` | 1230 | 1944 | 3 | 90.54 |
+
+`@v3-rh` against the block actually in the island:
+
+* **ALM 1023 vs 1041 — 18 SMALLER**, not larger. My caveat that "16 contexts plus
+  queues could easily increase area" was wrong for this variant.
+* **DSP 3 vs 6 — halved.**
+* **Fmax +21.95 MHz** (68.46 -> 90.41), a period gain of 3.55 ns, which matches
+  the −4.607 -> −1.045 slack gap exactly.
+* registers +359, the one cost.
+
+## The DSP number is the part to look at hardest
+
+The V3 island fits **17 DSP against a `max_dsp: 14` rule** — one of its three
+rule failures, and the one I recorded as *"inherited, not caused"* because the
+oracle has the same 17.
+
+If the RCP's contribution goes 6 -> 3, the arithmetic is **17 − 3 = 14**:
+exactly at the rule.
+
+**That is arithmetic on leaf numbers, not a measured island result**, and it
+should not be quoted as one. Leaf DSP counts do not always survive composition —
+docket M7 exists because DSP inference is about width and count, not multiply
+sites, and the composed fitter may pack differently. But it is a specific,
+falsifiable prediction: **swap the RCP and the island's DSP should read 14.**
+
+That single number is worth more than another round of reasoning, and it is
+testable by one composed fit whenever the owner wants it.
