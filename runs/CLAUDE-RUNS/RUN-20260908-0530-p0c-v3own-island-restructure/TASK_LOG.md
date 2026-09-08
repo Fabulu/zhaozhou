@@ -269,3 +269,20 @@ is expected for a composed island. All three §3.1 repairs touch
 not to change the source under that run. Nothing else in the §3 work is
 blocked — the audit, the fault test, the docket entry and the plan are all done
 and pushed.
+
+## Background lanes tidied, and one debt created by doing it
+
+Five stale poller tasks stopped. Two kept: the fit itself and a monitor that
+fires when the `quartus_fit` process exits — which covers failure as well as
+success, because either way the process goes away.
+
+**Debt:** one of the stopped tasks was a full `ctest -L fast` sweep whose result
+I never read. The geometry subset passed 66/66 separately, and the three texture
+gates pass, but **the whole fast suite is unverified since the shared-block
+edits** (`cache_pipe`'s SRCW threading, `rcp24_svc`). Re-run it once the fit
+frees the CPU. Written down because a cancelled check is exactly the kind of
+thing that silently becomes "we ran the tests".
+
+**Fit health, measured not assumed:** `quartus_fit` PID 11768 burned 46 CPU
+seconds over 45 wall seconds — saturating a core, so it is placing, not wedged.
+No `.rpt` writes for 20 minutes is normal mid-placement.
