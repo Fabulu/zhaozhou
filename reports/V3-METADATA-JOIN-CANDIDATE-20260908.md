@@ -154,3 +154,41 @@ selection off the head.
 
 That also means the two must be measured in a stated order, or their effects
 will be attributed to whichever landed second.
+
+## The deletion inventory, exact
+
+Every response-side indexed read the 40-bit join subsumes, from source:
+
+| table | writer | response-side readers |
+|---|---|---|
+| `sampmeta_m[64][3]`, 21 b | planner accept `:1383` | bilinear `:1640`, CLUT `:1823`, nearest `:1948` |
+| `palslot_m[64]`, 2 b | admission `:1250` | palette `lu_slot_i` `:1803` |
+| `palgen_m[64]`, 8 b | admission `:1251` | palette `lu_gen_i` `:1804` |
+
+**Five asynchronous response-side reads across three tables**, all indexed by a
+route token, replaced by one synchronous read on the common stream.
+
+Lines 1803-1804 are the *"64-owner palette binding selection"* named in the
+critical cone. **That is the pair my 21-bit version left in place.**
+
+## The 40-bit row is exactly one M10K, and that is not a coincidence
+
+```
+256 rows x 40 bits = 10,240 bits
+one M10K           = 10,240 bits
+```
+
+Address `{owner_slot[5:0], sample_index[1:0]}` gives 256 rows; the record is 40
+bits; the product is the M10K's exact capacity. The brief's dimensions are
+chosen so the joined table is **one block**, not one-and-a-bit.
+
+Current storage for comparison: 4,032 + 128 + 512 = **4,672 bits** spread over
+three tables with five asynchronous read ports. The join uses more raw bits and
+far fewer ports — which is the whole trade, and why *"put the array in RAM"* is
+the wrong framing. An async-read table costs flops and selection cones
+regardless of how few bits it holds; `uvw_m` was 4,096 bits and cost 2,053 ALM.
+
+**No saving is claimed here either.** 4,672 -> 10,240 declared bits is an
+increase; whether it is a win depends on flops and selection logic removed
+versus one M10K and 40 bits of extra queue payload consumed, and only a fit
+settles that. What is established is the port count: **five reads become one.**
