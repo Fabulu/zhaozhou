@@ -2437,6 +2437,30 @@ set_tests_properties(raster_rcp24_directed PROPERTIES LABELS "nightly" TIMEOUT 1
 # --public-flat-rw is needed to see wq_wp/wq_rp/pk_v/pk_i. It is a VERILATE flag,
 # not a source edit, which is why this could be written while the svc file sat
 # inside a running island fit closure.
+# The paired PERSPUV candidate against the frozen service (roadmap packet 4).
+# One scheduler, two lanes, one paired record -- the operand tables, the e_have
+# join and the e_q_u/e_q_v result tables are gone because there is nothing left
+# to rejoin.
+add_executable(test_perspuv_pairpipe_directed raster/perspuv_pairpipe_directed.cpp)
+target_link_libraries(test_perspuv_pairpipe_directed PRIVATE zhao_harness)
+verilate(test_perspuv_pairpipe_directed
+  PREFIX Vtb_perspuv_pairpipe
+  TOP_MODULE tb_perspuv_pairpipe
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/raster/tb_perspuv_pairpipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv)
+add_test(NAME perspuv_pairpipe_directed COMMAND test_perspuv_pairpipe_directed)
+set_tests_properties(perspuv_pairpipe_directed PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 600)
+
+add_test(NAME lint_raster_perspuv_pairpipe
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_raster_perspuv_pairpipe
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv)
+set_tests_properties(lint_raster_perspuv_pairpipe PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_executable(test_perspuv_lockstep_directed raster/perspuv_lockstep_directed.cpp)
 target_link_libraries(test_perspuv_lockstep_directed PRIVATE zhao_harness)
 verilate(test_perspuv_lockstep_directed
