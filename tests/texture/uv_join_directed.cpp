@@ -171,6 +171,13 @@ int main(int argc, char** argv) {
         if (d->f_aux_o != r.aux) ++e;
         if (d->f_count_o != r.count) ++e;
         if (d->f_binding_o != r.bsel) ++e;
+        // PALETTE IDENTITY, carried rather than looked up. Before D3 step 1
+        // the join dropped this pair and the metajoin's write side read
+        // `palslot_m`/`palgen_m` by owner slot -- a sidecar lookup keyed on an
+        // identity that may already have been recycled. Carried with the
+        // request it cannot be stale, and this check is what says so.
+        if (d->f_pal_slot_o != r.pslot) ++e;
+        if (d->f_pal_gen_o != r.pgen) ++e;
         desc_errors += e;
         if (d->f_owner_o != ((s << 8) | r.gen)) ++owner_errors;
         if (d->f_u_o != expect_u[f_seen] || d->f_v_o != expect_v[f_seen]) ++uv_errors;

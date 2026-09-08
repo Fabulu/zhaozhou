@@ -94,6 +94,14 @@ module zhao_texture_uv_join #(
     input  var logic [7:0]         d_mosaic_mat_b_i,
     input  var logic [7:0]         d_mosaic_weight_i,
     input  var logic [GENW-1:0]    d_owner_gen_i,
+    // PALETTE IDENTITY, §6's forward carriage. The bank already stores and
+    // outputs this pair; before this it stopped here, and the metajoin's write
+    // side went on reading `palslot_m`/`palgen_m` by owner slot instead -- a
+    // sidecar lookup by an identity that may already have been recycled, which
+    // is the same class of hazard D0 was. Carried WITH the request, it cannot
+    // be stale by construction.
+    input  var logic [1:0]         d_palette_slot_i,
+    input  var logic [GENW-1:0]    d_palette_gen_i,
 
     // ---- to the fragment expander ------------------------------------------
     output var logic               f_valid_o,
@@ -113,6 +121,8 @@ module zhao_texture_uv_join #(
     // and the choice of whether to act on them belongs to the island.
     output var logic               f_sat_o,
     output var logic               f_depth_zero_o,
+    output var logic [1:0]         f_pal_slot_o,
+    output var logic [GENW-1:0]    f_pal_gen_o,
 
     // ---- to Mosaic ----------------------------------------------------------
     output var logic               m_valid_o,
@@ -231,6 +241,13 @@ module zhao_texture_uv_join #(
 
   assign f_sat_o        = r_sat_q;
   assign f_depth_zero_o = r_dz_q;
+
+  // From the bank's HELD output, exactly like `f_lod_o` and for the same
+  // reason: that output is the captured record for `r_tag_q`, held by the D0
+  // gate, so this pair belongs to this fragment and not to whichever owner the
+  // sidecar table happens to hold now.
+  assign f_pal_slot_o   = d_palette_slot_i;
+  assign f_pal_gen_o    = d_palette_gen_i;
 
   // The depth-zero policy, behind its knob rather than baked in.
   assign f_count_o   = (DZ_FORCES_ZERO_SAMPLES && r_dz_q) ? 2'd0 : d_sample_count_i;

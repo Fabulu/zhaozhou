@@ -57,6 +57,8 @@ module tb_uv_join_pair #(
     output var logic [CTXW-1:0]    f_ctx_o,
     output var logic               f_sat_o,
     output var logic               f_depth_zero_o,
+    output var logic [1:0]         f_pal_slot_o,
+    output var logic [GENW-1:0]    f_pal_gen_o,
 
     // ---- Mosaic side ---------------------------------------------------------
     output var logic       m_valid_o,
@@ -149,12 +151,15 @@ module tb_uv_join_pair #(
       .d_mosaic_mat_b_i (d_mosb_c),
       .d_mosaic_weight_i(d_mosw_c),
       .d_owner_gen_i    (d_ogen_c),
+      .d_palette_slot_i (d_pslot_c),
+      .d_palette_gen_i  (d_pgen_c),
 
       .f_valid_o(f_valid_o), .f_ready_i(f_ready_i),
       .f_owner_o(f_owner_o), .f_u_o(f_u_o), .f_v_o(f_v_o),
       .f_binding_o(f_binding_o), .f_lod_o(f_lod_o), .f_count_o(f_count_o),
       .f_aux_o(f_aux_o), .f_class_o(f_class_o), .f_ctx_o(f_ctx_o),
       .f_sat_o(f_sat_o), .f_depth_zero_o(f_depth_zero_o),
+      .f_pal_slot_o(f_pal_slot_o), .f_pal_gen_o(f_pal_gen_o),
 
       .m_valid_o(m_valid_o), .m_ready_i(m_ready_i),
       .m_mat_a_o(m_mat_a_o), .m_mat_b_o(m_mat_b_o), .m_weight_o(m_weight_o),
@@ -163,9 +168,9 @@ module tb_uv_join_pair #(
       .depth_zero_o(depth_zero_o), .gen_mismatch_o(gen_mismatch_o)
   );
 
-  // The bank's palette outputs are not consumed by the join -- palette carriage
-  // is D3/§6, a separate step -- so they are read here to keep the composition
-  // honest about what is and is not wired yet.
-  wire unused_c = &{1'b0, d_pslot_c, d_pgen_c, d_rvalid_c};
+  // The palette pair is now CARRIED (§6/D3 step 1); only the bank's own read
+  // valid remains unconsumed here, because the join's reserved-destination
+  // handshake is what gates the record, not the bank's flag.
+  wire unused_c = &{1'b0, d_rvalid_c};
 
 endmodule
