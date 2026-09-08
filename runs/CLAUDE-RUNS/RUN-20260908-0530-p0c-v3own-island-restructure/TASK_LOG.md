@@ -796,3 +796,36 @@ trail by one cycle, declared here rather than discovered later.
 frozen at 0, no test process. **Never touch the build tree while ctest is
 running** — twice now. Restarted alone; P-CNT is deliberately unbuilt until it
 finishes.
+
+## Packet D may already be built — `zhao_raster_rcp24_v3` is instantiated nowhere
+
+Chasing the brief's §6 turned up that the preparation split it specifies
+**already exists**, is fitted, is registered in `prod_manifest.yml`, and is
+wired into nothing. Docket M3's pattern repeating for the reciprocal service.
+
+* brief's N0: *"reserve a context at acceptance and capture raw denominator,
+  token, and context index"* -> `rcp24_v3.sv:457-461` does exactly that, from a
+  free-context FIFO rather than a scan.
+* its normalize works from the **registered** `a0_d_q` (:276-278). The
+  instantiated `rcp24_svc` does the same search and shift **combinationally from
+  the input pin** (:118-120) — that is the 15.416 ns cone.
+* it also replaces the three context-wide scans with queues, which is the
+  structure behind the −3.243 ns `c_val` round-robin its own comments record.
+* leaf fits: `svc` −4.607 / 16.44 ns data delay; `v3@v3-full` −1.045 / 13.733.
+
+**Written up with what it does NOT establish**, because "the work is already
+done" is the comfortable reading: the leaf fits are not like-for-like (16 vs 20
+ports, 8 vs 16 contexts), neither predicts the composed island, four ports
+differ, 16 contexts plus queues may INCREASE area on an island already 13,133
+against 7,500, and the block has never been instantiated — which is where every
+defect this session came from.
+
+Narrowed two caveats: it **elaborates at TOKW=14** (0 lint diagnostics — that is
+elaboration only, not behaviour), and **no rcp/perspuv pair fixture exists**, so
+the cheap measurement needs one written.
+
+Recommended as an **owner decision**: reframe packet D as "evaluate integrating
+rcp24_v3", and measure it with a pair fixture before spending a 4-hour composed
+fit. Writing a second preparation pipeline when a fitted one exists would be the
+more expensive error; swapping on two non-comparable leaf numbers would be the
+other one.
