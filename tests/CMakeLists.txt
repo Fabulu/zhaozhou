@@ -2196,6 +2196,40 @@ set_tests_properties(island_v3_composed_directed PROPERTIES LABELS "fast;nightly
 # It runs the two EXECUTABLES rather than instantiating both tops in a third
 # harness, because a third harness is a second driver and a second driver is a
 # copy that drifts. See the docstring in tools/texture/gate3_paired.py.
+# P0-C, owner brief 3.2: POSITIVE fault tests for the V3 top's evidence ports.
+#
+# BUILT BUT NOT REGISTERED WITH add_test, ON PURPOSE. It is written to FAIL
+# against today's RTL -- `err_class_invalid_o` counts on a signal that lost
+# its driver when FRAGROB was deleted, so the port is a constant zero -- and a
+# red suite hides regressions. The add_test line goes in with the 3.1 repair,
+# in the same commit, so the test is seen to fail and then to pass.
+#
+# Run it by hand meanwhile:
+#   build/tests/test_island_v3_fault_directed.exe
+add_executable(test_island_v3_fault_directed texture/island_v3_fault_directed.cpp)
+target_link_libraries(test_island_v3_fault_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_island_v3_fault_directed
+  PREFIX Vzhao_texture_island_v3_top
+  TOP_MODULE zhao_texture_island_v3_top
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v2.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+
 # NOT `REQUIRED`, and the test is guarded on the result. A gate that is not
 # in the suite stops being run -- but a hard dependency that fails CONFIGURE
 # breaks every other test on a machine without an interpreter, which is a
