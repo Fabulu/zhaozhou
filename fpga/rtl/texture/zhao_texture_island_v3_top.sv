@@ -1186,17 +1186,20 @@ module zhao_texture_island_v3_top #(
   // THE CLASS IS KEYED BY SLOT, not read off the input pin. A TMU request
   // carries `fr_tmu_slot` and nothing else that identifies its fragment, and
   // requests are issued long after admission, so the pin holds a later
-  // fragment's class. Written when FRAGROB reports where the fragment landed.
+  // fragment's class. Written when the OWNER is allocated, and keyed by the
+  // owner slot -- the oracle said "when FRAGROB reports where the fragment
+  // landed", and v3own's `adm_accept_o` with `adm_owner_o` is that same moment
+  // and that same answer.
   logic [1:0] class_m [64];
   // The palette binding is keyed the same way and for the same reason: a
-  // sample response identifies its fragment by FRAGROB slot and nothing else.
+  // sample response identifies its fragment by SLOT and nothing else.
   logic [$clog2(PAL_SLOTS)-1:0] palslot_m [64];
   logic [GENW-1:0]              palgen_m  [64];
   always_ff @(posedge clk) begin
-    if (fr_alloc_valid) begin
-      class_m  [fr_alloc_slot] <= f_class_c;
-      palslot_m[fr_alloc_slot] <= f_pal_slot_c;
-      palgen_m [fr_alloc_slot] <= f_pal_gen_c;
+    if (own_adm_accept) begin
+      class_m  [own_adm_owner[13:8]] <= f_class_c;
+      palslot_m[own_adm_owner[13:8]] <= f_pal_slot_c;
+      palgen_m [own_adm_owner[13:8]] <= f_pal_gen_c;
     end
   end
 
@@ -1226,10 +1229,15 @@ module zhao_texture_island_v3_top #(
   localparam int unsigned SRC_SLOT_LO = GENW + 2;
   localparam int unsigned SRC_SLOT_HI = SRC_SLOT_LO + OWN_SLOTW - 1;
 
-  logic [SRCW-1:0] plan_src_id;
-  assign plan_src_id = {class_m[fr_tmu_slot],
-                        {(SRCW-2-$clog2(DEPTH)-2-GENW){1'b0}},
-                        fr_tmu_slot, fr_tmu_sidx, fr_tmu_gen};
+  // `plan_src_id` IS DELETED. The oracle built the routing token here, out of
+  // fragrob's slot/sidx/gen plus a class lookup and a pad. THE EXPANDER BUILDS
+  // IT NOW -- `{cls, owner_slot, sidx, owner_gen}`, at the point the request is
+  // formed, from the identity it already holds.
+  //
+  // Its pad term is the one this restructure kept tripping over:
+  // `SRCW-2-$clog2(DEPTH)-2-GENW` evaluated to EXACTLY ZERO at slot width 4,
+  // which is why a 6-bit slot forced SRCW to 18 and why `cache_pipe` needed a
+  // width parameter at all. The expression is gone with the construction.
 
   // THE CLUT BYTE SELECT, CARRIED PER SAMPLE. AUDIT R5 / docket D23.
   //
