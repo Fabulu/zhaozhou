@@ -3277,7 +3277,20 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     }
     // STAGE A: the body, taken from the same `mask` the ink pass is grown
     // from. The ink ring is added to it below, where that ring is computed.
-    if (c.u02_mist) u02_cover = mask;
+    //
+    // R7 (pass 13, item C3): the SHELL reads this mask too, and until now it
+    // was built only when the MIST was on -- so `manafold-still` (the form
+    // diagnostic) and three of the four fogprobe lattice legs silently had no
+    // shell no matter what `u02_shell` said. 09-ENGINE-GOTCHAS 14 arriving
+    // through the input instead of the knob (PASS-12-QA 6.1).
+    //
+    // WARNING: the coupling was ALSO the only thing keeping the shell off
+    // Zixxtrixx -- `u02_shell` defaults true for every subject, and no
+    // Zixxtrixx subject sets `u02_mist` (PASS-12-QA 5.10). Removing it here
+    // without a species gate would paint the shell onto creature 01 and move
+    // 69 approved CRCs. The species gate is the SAME EDIT, where
+    // `cr_ctx.u02_shell` is filled.
+    if (c.u02_mist || c.u02_shell) u02_cover = mask;
     if (g_exp_boil) {
       // the redrawn-every-frame look: displace the creature's pixels by a
       // chunky 6x6-cell field that re-rolls every 4 frames. Deterministic
@@ -3977,7 +3990,13 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.u02_smear_preset = g_mana_ablate ? 0 : sub.u02_smear;  // pass 3 (R6)
     cr_ctx.u02_smear_only = sub.u02_smear_only;  // pass 8 (the ablation's 3rd leg)
     cr_ctx.u02_mist = g_mana_ablate ? false : sub.u02_mist;  // D7 §8
-    cr_ctx.u02_shell = sub.u02_shell;                       // D9 §7/§14
+    // D9 7/14. R7 (pass 13): SPECIES-GATED. `SceneSubject::u02_shell` defaults
+    // true for every subject in this file, creature 01 included; the shell only
+    // ever stayed off Zixxtrixx because the coverage mask it reads was built
+    // solely under `u02_mist` (PASS-12-QA 5.10). That accident is removed
+    // directly above, so the guard has to be STATED rather than relied upon.
+    // Manafold is the only creature with a shell.
+    cr_ctx.u02_shell = sub.u02_shell && species == Species::kUnnamed02;
     if (species == Species::kUnnamed02 && sub.u02_trio) {
       for (int e = 0; e < 2; ++e) {
         u02_extra_inst[e].type = dog;
@@ -7603,9 +7622,12 @@ int main(int argc, char** argv) {
     u02::g_u02_shell_alpha_pm = v < 0 ? 0 : v;
     std::fprintf(stderr, "U02_SHELL_ALPHA=%d (shell ladder lane)\n",
                  u02::g_u02_shell_alpha_pm);
-    std::fprintf(stderr,
-                 "U02_FOG_THICKNESS=%d pm (M.1 shell ladder; shipping default %d)\n",
-                 v, u02::kFogThicknessPm);
+    // R7 (pass 13): a second fprintf here used to print
+    // "U02_FOG_THICKNESS=<alpha> pm (M.1 shell ladder...)" -- and it set
+    // nothing of the kind. `g_u02_fog_thickness_pm` is untouched by this
+    // block, so anyone reading a ladder plate's log would conclude the smear
+    // gain had moved with the shell, i.e. that the by-eye ladder was
+    // confounded. It was not. PASS-12-QA 5.3: delete the line.
   }
   // PASS 10 STAGE A: U02_MIST_NO_EXCLUDE=1 puts the mist back OVER the
   // creature -- pass-9 behaviour -- so the A/B and the colour gate's
