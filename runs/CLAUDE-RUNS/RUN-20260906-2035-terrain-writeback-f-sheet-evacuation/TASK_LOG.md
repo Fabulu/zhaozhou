@@ -3323,3 +3323,53 @@ done while the expensive half is still on paper.
 Why P0-C needs it at all: today's `SRCW=16` is EXACTLY FULL at slot width 4 —
 `plan_src_id`'s pad term `SRCW-2-$clog2(DEPTH)-2-GENW` evaluates to 0
 (verified by hand) — so v3own's 6-bit slot has no slack to grow into.
+
+## Both fog blocks measured — and BOTH my DSP rules were wrong
+
+| block | rule I wrote | measured |
+|---|---|---|
+| `zhao_raster_fog` | `max_dsp: 0` | ALM 247, reg 166, **DSP 3**, 93.63 MHz |
+| `zhao_geom_fogfactor` | `max_dsp: 1` | ALM 341, reg 246, **DSP 3**, 68.63 MHz |
+
+**Docketed as M7.** The second is the instructive one: the block SATISFIES the
+intent — exactly one multiply site, `prod_c = dist_c * 66'(cfg_k_i)` (:105), the
+per-frame reciprocal did not leak into the per-vertex path — and the rule failed
+it anyway, because a 34x32 signed multiply needs several 18x18 slices.
+**A DSP count measures WIDTH x COUNT, not multiply count.** A gate that conflates
+them is a false alarm on a correct block, which is worse than no gate: the next
+person contorts the RTL until the number moves.
+
+**And the meta-lesson is the same one twice.** Both rules were written BEFORE any
+fit, from belief, WHILE I was arguing that omitting `max_alms` was the
+disciplined choice because a guessed ceiling proves nothing. I applied the
+discipline to the number I knew I could not guess and skipped it for the one I
+felt sure about. `zhao_raster_blend`'s 2 DSP for the identical unit8 weighting was
+in the ledger the whole time.
+
+## Stage B landed, fire-tested
+
+`zhao_texture_frag_expand` + `frag_expand_directed`: **10 checks**, 96 requests
+matching the model element for element, 22 aux, 16 zero-sample fragments
+exercised. Fire-tested with the architecture's OWN falsifier — moving the issue
+pulse from the accepted handshake to the intent trips `a_iss_only_on_fire`.
+
+Operational note worth keeping: the fire-test binary hit `$stop` and left THREE
+hung processes holding the exe, so the next link failed with "Permission denied".
+A Verilator assertion that aborts mid-run does not always exit.
+
+## POSITION BEFORE §5.7's PROBE GATE
+
+Launching `zhao_probe_v3rq_queue` — V3.1 §5.7's local queue fit gate, built
+earlier today and **never run**. Its rule is `min_fmax_mhz: 100`, §5.7's stated
+product constraint.
+
+**What it measures:** the production-shaped ready queue (v3bank + v3rq) behind a
+registered hash sink, so the fitter cannot delete the DUT.
+
+**Prediction: none.** This is a first measurement of a block never fitted; there
+is no baseline to compare against and predicting a number I have no basis for
+would be exactly the aspiration-as-law error M7 just recorded twice.
+
+**What would make it informative either way:** at or above 100 MHz the §5.7 gate
+is satisfied and the queue is not the island's problem; below it, the gap is
+named with a number instead of a suspicion.
