@@ -577,3 +577,29 @@ oracle (119), expander (11), encoding freeze (13), fault probe (9).
 `cnt_combine_jobs_o` reads 2,558,523,520 on a run that issued no combine jobs,
 and a different garbage value on the previous run. Looks unreset or
 X-propagating. Not investigated.
+
+## I wedged the fast suite by running ctest against a busy build tree
+
+The `-L fast` run sat with **ctest CPU frozen at 8 seconds and no test process
+alive**. Not contention — wedged.
+
+Cause: I launched several other `ctest --test-dir build` invocations while it
+was running. They share `build/Testing/Temporary/`, and one of them overwrote
+`LastTest.log` — which is also why the log showed six entries from my six-test
+run instead of the suite's progress. Concurrent ctest on one build tree is not
+safe, and I did it three times.
+
+Killed and re-queued to run **after** the V1 fit, serialised, with nothing else
+touching the build tree.
+
+Worth writing down because the failure mode is quiet: a wedged ctest looks
+exactly like a slow one, and I had already told myself "it is contending with
+the fit" — a ready-made explanation that fit the evidence and stopped the
+question. Same shape as the two false alarms above.
+
+## Second false alarm corrected
+
+`cnt_combine_jobs_o` is an **array of eight** (one per recipe). I printed it
+with `%u`, which formats the array's address — two runs, two addresses, which
+read exactly like a garbage counter. Summed properly it is **0**, correct for
+zero-work fragments. My note calling it "unreset or X-propagating" is withdrawn.
