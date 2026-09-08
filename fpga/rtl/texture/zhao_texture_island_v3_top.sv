@@ -81,15 +81,29 @@ module zhao_texture_island_v3_top #(
     parameter int unsigned TOKW    = 16,
     parameter int unsigned PAL_SLOTS   = 4,
     parameter int unsigned PAL_ENTRIES = 256,
-    // AUX_TOKW IS NOT 8, AND THAT WAS AN INTEGRATION BUG. FRAGROB
-    // validates a sample response against the slot AND generation it
-    // issued, which is $clog2(DEPTH) + GENW = 12 bits. AUX_PIPE's TOKW
-    // defaults to 8, so the identity could not round-trip and every aux
-    // response came back with the slot sitting where the generation
-    // should be. FRAGROB counted them -- 7 ID errors against exactly 7
-    // aux requests -- which is how it was found. The token is a
-    // parameter; it just had to be told how wide the identity is.
-    parameter int unsigned AUX_TOKW = $clog2(DEPTH) + GENW
+    // AUX_TOKW CARRIES THE WHOLE IDENTITY OR IT CARRIES A BUG.
+    //
+    // The oracle learned this the expensive way: AUX_PIPE's `TOKW` defaults to
+    // 8, the identity it had to round-trip was $clog2(DEPTH)+GENW = 12, and
+    // every aux response came back with the slot sitting where the generation
+    // should be. FRAGROB counted exactly 7 ID errors against exactly 7 aux
+    // requests, which is how it was found. The token is a parameter; it just
+    // had to be told how wide the identity IS.
+    //
+    // UNDER P0-C THE IDENTITY IS v3own's OWNER HANDLE, so the same rule gives a
+    // different number: OWNERW = SLOTW + GENW = 6 + 8 = **14**, not 12. Setting
+    // it from the oracle's `$clog2(DEPTH) + GENW` would reproduce the original
+    // defect exactly — a token one field too narrow, and an identity that
+    // cannot round-trip.
+    //
+    // THIS IS AN ISLAND BOUNDARY PORT (`sheet_tok_o`, `sheet_rtok_i`), which
+    // makes it the first P0-C change the paired-run oracle can SEE. The SRCW
+    // widening could default to 16 and leave every existing instantiation
+    // bit-identical; this one cannot, because a boundary width is the composed
+    // top's contract with whatever drives it. Recorded in the architecture as
+    // §1.2b, with the measurement that `zhao_texture_aux_pipe.sv` is
+    // parameterised throughout and needs NO leaf change.
+    parameter int unsigned AUX_TOKW = 6 + GENW
 ) (
     input  var logic        clk,
     input  var logic        rst_n,
