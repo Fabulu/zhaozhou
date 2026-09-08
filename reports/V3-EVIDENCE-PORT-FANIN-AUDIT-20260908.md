@@ -98,3 +98,67 @@ This is the shape the brief asks for in §3.2, and it is now demonstrated on the
 real defect rather than asserted. When repair A lands, this test flips to 5/5
 and gets its `add_test` line in the same commit — so it is seen to fail and then
 to pass, which is the only ordering that proves it can see the thing it tests.
+
+---
+
+# Repair C was wrong, and the post-fit brief caught it
+
+**Policy C-b applied 2026-09-08, replacing my first attempt.**
+
+I wired `err_fragrob_wq_overflow_o` to a new expander event:
+
+```systemverilog
+if (accept_c && fq_full_c) wq_overflow_o <= wq_overflow_o + 1;
+```
+
+and defended it as *"unreachable if `f_ready_o` is correct, which is exactly what
+makes it worth exposing."*
+
+**It is not unreachable. It is identically false.**
+
+```
+accept_c  = f_valid_i && f_ready_o
+f_ready_o = !fq_full_c
+=>          f_valid_i && !fq_full_c && fq_full_c
+```
+
+Acceptance and detection consult the **same predicate in complementary form**,
+so synthesis folds the counter to constant zero. I replaced an undriven port
+with a differently-dead one and reported it as a repair.
+
+The brief's discriminating case is the sharp part: change `>=` to `>` in
+`fq_full_c` so the queue admits a fifth entry — a real bug — and the old monitor
+**still cannot fire**, because the bug moves both sides together. A monitor that
+cannot detect the failure of its own predicate is not a monitor.
+
+## The replacement
+
+```systemverilog
+if (fq_occ_c > (FQW+1)'(FQD)) wq_overflow_o <= wq_overflow_o + 1;
+```
+
+`fq_occ_c` is `fq_wp_q - fq_rp_q` over FQW+1 bits, so it can *represent* more
+than FQD. If it ever does, an entry was written that the queue does not own.
+This is a **state violation**, derived without reference to `f_ready_o`, and it
+is the synthesizable counterpart of the existing simulation assertion
+`a_fq_in_range`. Detection latency: one cycle.
+
+`frag_expand_directed` now carries a check that it stays silent in correct
+operation — **12 checks passing**.
+
+## What is NOT demonstrated, stated plainly
+
+**I have not exhibited a firing trace for the new monitor.** The mutation that
+would produce one (`>=` -> `>`) also lets the write pointer index past a 4-entry
+array, which corrupts the queue and hangs the test rather than producing a clean
+fire signal.
+
+So what is established is the *negative* the brief demanded: the condition does
+not reduce to false by substitution, unlike its predecessor. What is not
+established is a positive trace. A proper demonstration needs a dedicated
+fault-injection input rather than a source mutation, and that is an open
+obligation rather than a completed one.
+
+Saying so matters here specifically, because the thing being fixed is a monitor
+that was reported as working while being constant zero. Claiming a
+demonstration I do not have would repeat the original defect one level up.
