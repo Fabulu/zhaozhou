@@ -463,6 +463,23 @@ targets:
   # gate "at the measurement with a little headroom rather than at an
   # aspiration", and a rule written after the fit it governs reports a pass. The
   # DSP rules below are different: they are laws, not guesses.
+  # P0-C Stage B's FIT step: the expander priced as a leaf. The architecture is
+  # explicit that this price is PROVISIONAL -- docket M4 measured one register
+  # at +159 ALM standalone and +14 composed, an eleven-fold difference on
+  # identical RTL. This number is for STRUCTURE (what the netlist contains) and
+  # a first order of magnitude, not for the deletion ledger's arithmetic.
+  #
+  # NO max_alms: the block has never been fitted and the architecture's own
+  # estimate is a range (200-600). A gate written from that would be an
+  # aspiration, which is exactly the M7 error.
+  - top: zhao_texture_frag_expand
+    sources:
+      - fpga/rtl/texture/zhao_texture_frag_expand.sv
+    rules:
+      # It holds no results, no ordering and no lifetime -- and no arithmetic
+      # beyond a 2-bit counter. A DSP here would mean something is very wrong.
+      max_dsp: 0
+
   - top: zhao_raster_fog
     sources:
       - fpga/rtl/raster/zhao_raster_fog.sv
