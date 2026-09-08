@@ -3394,6 +3394,51 @@ to the number I knew I could not guess and skipped for the one I felt sure of.
 `zhao_raster_blend`'s 2 DSP was in the ledger the whole time and would have
 settled it in one query.
 
+## M10 — A SECOND FITTED BLOCK IS INSTANTIATED NOWHERE
+
+**2026-09-08.** M3 recorded that `zhao_texture_v3own` was instantiated nowhere.
+It has since been composed. The same condition holds for the reciprocal:
+
+**`zhao_raster_rcp24_v3` is fitted, is registered in `design/prod_manifest.yml`,
+and appears in no instantiation anywhere in `fpga/`.** Its only occurrences are
+its own `module` line and two comments in neighbouring files. Both texture
+islands — the oracle and V3 — instantiate `zhao_raster_rcp24_svc`.
+
+It matters because the post-fit brief's packet D asks for a preparation
+pipeline that this block substantially already has: it reserves a context from
+a free FIFO at the accepted beat (`:457-461`) and normalizes from the
+registered `a0_d_q` (`:276-278`), where `svc` does the leading-zero search and
+variable shift **combinationally from the input pin** (`:118-120`). It also
+replaces svc's three context-wide scans with queues.
+
+**The prize is smaller than the slack gap suggests, and this is the part to
+carry forward.** Compared on data delay rather than slack:
+
+| block | deepest cone | data delay |
+|---|---|---|
+| `rcp24_svc` | `d_i[18] -> c_m~23` | 16.44 ns |
+| `rcp24_v3@v3-rh` | `d_i[18] -> always0~5` | 14.336 ns |
+
+**2.104 ns on the chain packet D targets**, against a 3.562 ns worst-slack gap.
+The remainder is the queues-for-scans change, which is a different improvement.
+Attributing the whole gap to the preparation split would be the M6 error.
+
+And `@v3-full`'s deepest path is `rst_n` into a RAM at **+1.223 ns** — reset
+distribution, not a datapath. Its 13.733 ns figure is not a preparation-chain
+measurement and must not be set against svc's 16.44 as though it were.
+
+An island-profile fit (`NCTX=8,TOKW=14`) **failed at map** with
+`array has more than 2**28 bits` — Quartus received an NCTX above eleven
+million. That is NOT the block rejecting NCTX=8: `$clog2(8)` is 3 and every
+plane is a plain `[NCTX]` array. `TOKW=14` alone fits. Whether the fault is the
+block or the two-parameter override is unresolved; an `NCTX=8`-alone fit
+separates them, and if it is the tool the defect affects every multi-parameter
+experiment.
+
+Full analysis: `reports/D-RCP-V3-ALREADY-EXISTS-20260908.md`.
+
+---
+
 ## M9 — AN OUTPUT WITH A REAL ASSIGNMENT AND A DEAD FAN-IN
 
 **2026-09-08, found by the owner brief, in RTL that had just passed 119/119.**
