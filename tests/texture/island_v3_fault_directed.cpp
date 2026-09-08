@@ -178,6 +178,18 @@ int main(int argc, char** argv) {
   // holds -- absence of a trace is not a proof -- but a FOUND trace would be a
   // reproduced defect, which is what the brief says nobody has yet.
   {
+    // RESET FIRST. Phases 1-3 offer sample_count=1 fragments and this harness
+    // deliberately does not model the texture memory (`fill_data_valid_i` is
+    // never raised), so those fragments are admitted and can never complete.
+    // Running the zero-work probe behind them would measure a machine already
+    // clogged by the harness, not the zero-work path -- which is exactly the
+    // confounded reading this phase existed to avoid.
+    d.rst_n = 0;
+    tick(d);
+    tick(d);
+    d.rst_n = 1;
+    tick(d);
+
     const int kWrap = 300;              // ~4.7x the 64-slot space
     int submitted = 0, retired = 0, dup = 0, foreign = 0;
     std::vector<int> seen(kWrap + 8, 0);
@@ -207,6 +219,19 @@ int main(int argc, char** argv) {
 
     std::printf("  zero-work wrap: submitted %d, retired %d (slot space 64, "
                 "so ~%dx wrap)\n", submitted, retired, submitted / 64);
+
+    // WHERE DOES IT STOP? Counters localise a stall that a retired-count
+    // cannot: each of these is a different stage of the same path, so the
+    // first one that reads zero names the boundary.
+    std::printf("    rcp %u | persp %u | plan %u | cache %u | dispatch %u\n",
+                d.cnt_rcp_completed_o, d.cnt_persp_fragments_o,
+                d.cnt_plan_accepted_o,
+                d.cnt_cache_hits_o + d.cnt_cache_misses_o,
+                d.cnt_dispatch_accepted_o);
+    std::printf("    expander frags %u | combine jobs %u | phases %u | refused %u | live peak %u\n",
+                d.cnt_fragments_o, d.cnt_combine_jobs_o,
+                d.cnt_combine_phases_o, d.cnt_combine_refused_o,
+                d.cnt_live_peak_o);
 
     zhao::check(submitted >= 200,
                 "the zero-work burst actually wrapped the 64-slot owner space "

@@ -1,62 +1,65 @@
-# A zero-work fragment does not retire in the composed island
+# RETRACTED: "a zero-work fragment does not retire in the composed island"
 
-**Found 2026-09-08 by the probe the owner brief's §5.1 asked for.**
+**Claimed 2026-09-08. Withdrawn the same day. It was the harness, not the RTL.**
 
-```
-zero-work wrap: submitted 16, retired 0
-```
-
-300 fragments were offered with `sample_count = 0` and `aux = 0`. Sixteen were
-admitted; the pipeline then stopped accepting and **not one retired**.
-
-## Why nothing caught this
-
-`island_composed_directed` — 119 checks, the suite that gates the whole
-restructure — drives exactly three sample counts into the composed island:
+With a clean reset before the phase, the zero-work path is fine:
 
 ```
-:861   frag_sample_count_i = 3
-:903   frag_sample_count_i = 1 + (k & 1)     // 1 or 2
-:2014  frag_sample_count_i = 3
+zero-work wrap: submitted 300, retired 300 (slot space 64, so ~4x wrap)
+rcp 300 | persp 300 | plan 0 | cache 0 | dispatch 0
+expander frags 300 | phases 300 | refused 0 | live peak 10
+[island_v3_fault_directed] 9 checks passed
 ```
 
-**Never zero.** The zero-work case is covered only by the expander LEAF test,
-which exercises 16 zero-sample fragments and confirms they are accepted and
-issue nothing. The brief said precisely why that is not enough:
+300 zero-sample fragments, every one retired, none lost, none duplicated, no
+foreign tag, the 64-slot owner space wrapped about four times.
 
-> *"A zero-sample expander unit test proves that no TMU requests are emitted. It
-> does not establish the above implication for a separately completing owner."*
+## What I actually measured the first time
 
-So this sat behind 119 passing composed checks, 541 owner checks, and a
-392-record byte-identical paired run, because none of them ever presented the
-input.
+`submitted 16, retired 0` — and I read it as a stall on zero-work fragments.
 
-## What is established, and what is not
+The counters said otherwise as soon as I printed them: `plan 9 | cache 1 |
+dispatch 0` across the **whole run**, including phases 1-3. That is almost no
+traffic anywhere, which is not what a zero-work-specific defect looks like.
 
-**Established:** with `sample_count = 0`, the composed island admits a bounded
-number of fragments and then retires none. The same loop, same ports, same
-phase structure retires normally at `sample_count = 1` — phases 1 and 3 of the
-same test do exactly that and pass. So the difference is the zero-work input,
-not the harness.
+The cause is in this test. `quiesce()` never raises `fill_data_valid_i` — the
+harness deliberately does not model texture memory, because phases 1-3 only need
+fragments *admitted*, not completed. So every `sample_count = 1` fragment from
+those phases was admitted and could never complete. By the time phase 4 ran, the
+machine was full of them. **16 was PERSPUV's `NTOK`, reached by the leftovers.**
 
-**Not established:** the mechanism. The plausible reading is the brief's two
-completion domains — v3own makes an owner with `adm_req_i == 0` ready at
-admission, while the material combiner downstream expects samples that never
-arrive — but I have not traced it, and *the first explanation that fits is the
-one to check hardest*. The number 16 smells like a queue depth rather than
-anything semantic, which is consistent with "admitted until something filled,
-then nothing drained".
+## Why I got it wrong, specifically
 
-**Also not established:** that this is the destructive slot-reuse trace §5.1
-hypothesised. It is a simpler failure in the same unproven domain — the
-fragments do not complete at all, so no slot is freed early. The brief's
-reachability question is still open.
+I checked one plausible depth (`FCTXN = 64`), found it did not match, then found
+`NTOK(16)` and stopped — because 16 matched and the story was coherent: *tokens
+not released, so nothing downstream completing, so zero-work fragments must be
+stuck.* Every step was true. The conclusion did not follow, because I never
+asked whether the **earlier phases** had already consumed those tokens.
 
-## Status
+This repository's own law names it: *the first explanation that absolves the
+design is the one to check hardest*. This one did the opposite — it **accused**
+the design — and I gave it exactly the same free pass, because a fresh defect in
+a freshly-restructured block is a satisfying story.
 
-The probe is committed and is **failing**, deliberately, like the fault test
-before it. It is not registered with `add_test`: a red suite hides regressions,
-and this is a known, dated, written-down hole.
+The check that settled it cost one reset and one rebuild.
 
-Two of its nine checks fail. The other seven — including all of repair A's
-positive fault test — pass.
+## What the probe is now worth
+
+It passes, and it is worth keeping:
+
+* it is the first composed test in this tree to drive `sample_count = 0` at all
+  — `island_composed_directed` drives 3, and 1-or-2, **never 0**;
+* it wraps the owner slot space ~4x, which the 392-record paired run does not;
+* its non-vacuity check (`submitted >= 200`) is what makes the pass mean
+  something rather than being a phase that quietly tested nothing.
+
+**It is still not a proof of §5.1's implication.** The brief asks whether an
+owner can retire while a legitimate front-end reader remains. This is one
+schedule, with a free-running consumer. Absence of a trace is not absence of the
+hazard, and the brief's own abstract witness (`Z1`) says the same about itself.
+
+## Unrelated, and still open
+
+`cnt_combine_jobs_o` reads **2,558,523,520** on a run that issued no combine
+jobs, and a different garbage value on the previous run. That counter looks
+unreset or X-propagating. Small, real, and not investigated here.
