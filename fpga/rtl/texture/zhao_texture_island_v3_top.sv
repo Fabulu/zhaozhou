@@ -538,7 +538,19 @@ module zhao_texture_island_v3_top #(
   // fragment a legal zero-work owner (§9.1) rather than a fragment that never
   // completes. It is built from the SAME sample count the expander uses, so the
   // two cannot drift: fragrob's table, one place.
-  assign own_adm_valid_c = frag_valid_i;
+  // ADMISSION MUST FIRE EXACTLY WHEN THE FRAGMENT ENTERS, NOT WHENEVER ONE IS
+  // OFFERED. `frag_ready_o` is `rcp_v_ready && credit_available`, so a fragment
+  // is taken only when the RCP has room AND v3own has an owner. Asserting
+  // `adm_valid_i` on `frag_valid_i` alone allocates an owner every cycle the
+  // caller offers one -- including cycles the RCP refuses -- and those owners
+  // are never issued, never complete and never retire. The ring fills with
+  // fragments that do not exist and admission stops.
+  //
+  // That is what gate 2 was showing: 27 admitted, 3 retired, then nothing. Two
+  // admission decisions that must agree, made from different signals -- the
+  // same defect class as the duplicate credit counter `live_r` was, and the
+  // reason §0 says one identity namespace rather than two.
+  assign own_adm_valid_c = frag_valid_i && rcp_v_ready;
   assign own_adm_ctx_c   = frag_ctx_i;
   always_comb begin
     unique case (frag_sample_count_i)
@@ -2292,8 +2304,33 @@ module zhao_texture_island_v3_top #(
   // REGISTERED because P0-E's whole finding was that an asynchronous read of a
   // 64-entry array costs its width in flip-flops -- `uvw_m` was 4,096 of them,
   // and Stage A's -4,092 is what registering one read is worth.
-  logic [MATW-1:0] mat_rd_q;
-  always_ff @(posedge clk) mat_rd_q <= mat_m[own_cmb_owner[13:8]];
+  // A REGISTERED READ IS A CYCLE LATE, AND THE PACKET MUST WAIT FOR IT.
+  // This is the cost P0-E's finding buys: `uvw_m` cost 4,096 flip-flops for an
+  // asynchronous read and Stage A recovered them by registering it. The same
+  // trade here means `mat_rd_q` holds the PREVIOUS address's fields on the
+  // cycle `own_cmb_valid` first rises -- and a combiner that accepted then
+  // would take a different fragment's recipe, weight and base.
+  //
+  // v3own HOLDS `cmb_valid_o` until `cmb_ready_i`, so the address is stable and
+  // the read settles after one cycle. `mat_rdy_q` says it has: the address
+  // presented last cycle is the address presented now. The combiner is offered
+  // the packet only then.
+  //
+  // The cost is one cycle per COMBINE admission, not per sample, and it is
+  // taken deliberately rather than paid back by reintroducing the async read.
+  logic [MATW-1:0]  mat_rd_q;
+  logic [13:0]      mat_addr_q;
+  logic             mat_rdy_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      mat_addr_q <= 14'd0;
+      mat_rdy_q  <= 1'b0;
+    end else begin
+      mat_rd_q   <= mat_m[own_cmb_owner[13:8]];
+      mat_addr_q <= own_cmb_owner;
+      mat_rdy_q  <= own_cmb_valid && (mat_addr_q == own_cmb_owner);
+    end
+  end
 
   // Field extraction, named once so no consumer re-derives a bit position.
   wire        mat_has_aux_c  = mat_rd_q[0];
@@ -2476,7 +2513,7 @@ module zhao_texture_island_v3_top #(
   // [31:24] of each lane. No bank read here: v3own already gathered them.
   zhao_texture_material_combine_v2 #(.NCTX(8), .TAGW(14)) u_combine (
       .clk(clk), .rst_n(rst_n),
-      .f_valid_i(own_cmb_valid), .f_ready_o(comb_f_ready),
+      .f_valid_i(own_cmb_valid && mat_rdy_q), .f_ready_o(comb_f_ready),
       .f_sample_count_i(mat_scount_c), .f_recipe_i(mat_recipe_c),
       .f_weight_i(mat_weight_c),
       .f_s0_rgb_i(own_cmb_s0[23:0]), .f_s0_a_i(own_cmb_s0[31:24]),
@@ -2504,7 +2541,9 @@ module zhao_texture_island_v3_top #(
   // combiner accepts it. §11.1's event 3 -- actual acceptance, not the
   // reservation -- which is the distinction mutation §22.10-8 exists to protect
   // and which four M6 checks catch if it is confused.
-  assign own_cmb_ready_c = comb_f_ready;
+  // ...and the acceptance must be gated the same way, or v3own would see its
+  // packet taken on a cycle the combiner was not actually offered it.
+  assign own_cmb_ready_c = comb_f_ready && mat_rdy_q;
 
   // -------- reorder buffer --------------------------------------------------
   // (d3) THE ROB STORAGE IS GONE. `rob_m[64]x33`, `rob_full_m[64]`,
