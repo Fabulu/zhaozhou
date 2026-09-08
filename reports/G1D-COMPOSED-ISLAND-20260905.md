@@ -560,6 +560,80 @@ because the row is labelled. Checking the mtime is what caught it, and CLAUDE.md
 names the failure exactly: *never compare a current file to an old measurement*.
 Every number above is from the labelled report.
 
+### 4.3h P0-C STAGE C LANDED — the V3 composition, measured
+
+**2026-09-08, `zhao_texture_island_v3_top`, 14,351.4 s, source digest
+`6094a4292eee` over 18 files.** `failed:structure`.
+
+This is the receipt the whole restructure existed to produce: fragrob replaced
+by `zhao_texture_v3own` plus `zhao_texture_frag_expand`, with all three gates
+passing first (541 owner checks, 119/119 composed, 392 retired records
+byte-identical including order).
+
+#### The like-for-like comparison, digest-verified on both sides
+
+The baseline is **`@p0c-stageA`, not the plain `island_top` row.** Both were
+checked by hash against the file on disk: `@p0c-stageA`'s recorded digest
+MATCHES the current `zhao_texture_island_top.sv`; the plain row's does not. The
+plain 13,601/66.77 figures predate Stage A's `uvw_m` conversion, and the V3 top
+carries that conversion, so comparing against them would credit the restructure
+with a saving somebody else made.
+
+| | oracle `@p0c-stageA` | **V3** | delta | historical rule |
+|---|---|---|---|---|
+| ALM | 11,562 | **13,133** | **+1,571 (+13.6%)** | 7,500 — FAIL |
+| registers | 19,203 | **20,561** | **+1,358 (+7.1%)** | 9,000 — FAIL |
+| M10K | 39 | **45** | +6 | 64 — pass |
+| memory bits | 45,624 | **54,014** | +8,390 | — |
+| DSP | 17 | **17** | **0** | 14 — FAIL |
+| Fmax | 84.03 | **82.41** | **−1.62 MHz** | 100 — FAIL |
+
+#### What this says, and what it does not
+
+**The restructure's own price is +1,571 ALM, +1,358 registers, +6 M10K and
+−1.62 MHz.** That is the number to argue about. It is a real cost for real
+machinery: v3own's lifetime, generation and ordering apparatus replaces
+fragrob's, and it does more.
+
+**The DSP failure is NOT the restructure's.** The oracle has the identical 17,
+and 17 appears as far back as 4.3c. Two of the three rule failures are inherited
+and one — ALM — is partly the restructure's.
+
+**And the rules have never gated this island before.** `@p0c-stageA` reports
+`ok` at 17 DSP against `max_dsp: 14` because its target carried no rules when it
+ran; they were added afterwards. **The V3 fit is the first island fit these
+historical limits have ever been applied to.** A first application of a rule is
+not a regression, and reporting it as one would be the wrong story.
+
+#### Against the reference points
+
+6,600 nominal / 7,500 redline / 7,913 standalone sum — V3 is 13,133, i.e. 66%
+over the standalone sum. But so is the oracle at 11,562. **Those three figures
+describe an earlier and smaller conception of this island**, and the section
+closing this report already said the redline predates two of the design's
+organs.
+
+The owner brief of the same morning is explicit about how to hold this:
+
+> *"A revised 11-12k logic allocation ... must be a stated decision rather than
+> an edit that erases the previous failure."*
+
+So both judgments, kept separate as §2.3 requires:
+
+* **Historical-rule result: FAIL** on ALM, registers and DSP. Recorded, not
+  softened, and the gate stays where it is.
+* **Product-allocation decision: NOT MADE.** It needs count-once whole-console
+  accounting and explicit owner approval. The brief allows that ~11-12k at a
+  genuine 100 MHz could be a good outcome; V3 is 13.1k at 82.41.
+
+**The gap that matters most is not area — it is 82.41 against 100 MHz.**
+
+#### Next, per the brief
+
+§3's contract repairs first (three fault ports are permanently zero), then §6
+(reserved RCP preparation) or §7 (one metadata join before class fan-out) chosen
+**on this receipt's measured path**, not on yesterday's diagnosis.
+
 ### 4.3f-pre THE BEFORE-PICTURE, as written before the result
 
 Written BEFORE the result, so the comparison cannot be arranged after the fact.

@@ -131,3 +131,4 @@ fit-*.log
 # reports/synthesis/worst_path_index.json -- not the node list they were
 # derived from. Same reasoning as *.rgb: the contact sheet, not the frames.
 reports/synthesis/blockpaths/*.map.rpt
+reports/synthesis/blockpaths/*.fit.rpt

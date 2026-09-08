@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "509f1aca418e5d84e496ad54fb95e9da86da5c04",
+    "newestRunCommit":  "bcdfadea7117b6814a3472b1d2fcdf8dc186ecbf",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1592,6 +1592,31 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  84.03,
                        "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_texture_island_v3_top",
+                       "status":  "failed:structure",
+                       "sourceCommit":  "bcdfadea7117b6814a3472b1d2fcdf8dc186ecbf",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "6094a4292eeebe627875e20bae783466f673c254c023975b4454c3c22e414210",
+                       "seconds":  14351.4,
+                       "sourcesHashed":  18,
+                       "alms":  13133,
+                       "registers":  20561,
+                       "blockMemoryBits":  54014,
+                       "ramBlocks":  45,
+                       "dspBlocks":  17,
+                       "virtualPins":  1491,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  82.41,
+                       "fmaxClock":  "clk",
+                       "ruleViolations":  [
+                                              "registers 20561 \u003e allowed 9000 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)",
+                                              "ALM 13133 \u003e allowed 7500",
+                                              "DSP 17 \u003e allowed 14"
+                                          ]
                    },
                    {
                        "module":  "zhao_texture_material_combine_v1",
