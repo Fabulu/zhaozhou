@@ -523,3 +523,57 @@ hypothesised — nothing completes, so no slot frees early. That question is sti
 open.
 
 **V1 re-fit is running**, launched automatically when the island fit exited.
+
+## RETRACTION: the zero-work stall was mine, not the RTL's
+
+I claimed and committed a report saying zero-work fragments never retire in the
+composed island. **Wrong.** With a clean reset before the phase:
+
+```
+zero-work wrap: submitted 300, retired 300 (~4x slot wrap)
+[island_v3_fault_directed] 9 checks passed
+```
+
+`quiesce()` never raises `fill_data_valid_i` — this harness deliberately does
+not model texture memory, because phases 1-3 only need fragments *admitted*. So
+every `sample_count = 1` fragment from those phases was admitted and could never
+complete, and by phase 4 the machine was full of them. **16 was PERSPUV's
+`NTOK`, reached by the leftovers.**
+
+**How I got there:** I checked `FCTXN = 64`, found it did not match, found
+`NTOK(16)`, and stopped — because 16 matched and the story was coherent. Every
+step was true; the conclusion did not follow, because I never asked whether the
+*earlier phases* had consumed those tokens.
+
+The docket's law is *"the first explanation that absolves the design is the one
+to check hardest."* This one **accused** the design and I gave it the same free
+pass — a fresh defect in a freshly-restructured block is a satisfying story. The
+check that settled it cost one reset and one rebuild.
+
+The counters said so immediately once printed: `plan 9 | cache 1 | dispatch 0`
+across the whole run is not what a zero-work-specific defect looks like. I had
+the localisation tool and reached for the narrative first.
+
+### What survives
+
+The probe passes and is now **registered in ctest**, having been seen to fail
+and then to pass. It is worth keeping:
+
+* the first composed test in this tree to drive `sample_count = 0` at all —
+  `island_composed_directed` drives 3, and 1-or-2, never 0;
+* it wraps the owner slot space ~4x, which the 392-record paired run does not;
+* `submitted >= 200` non-vacuity makes the pass mean something.
+
+It is **still not a proof** of §5.1's implication — one schedule, free-running
+consumer. Absence of a trace is not absence of the hazard.
+
+### Current state
+
+**6/6** across the texture gates: gate 2 (119), gate 3 paired (392 records),
+oracle (119), expander (11), encoding freeze (13), fault probe (9).
+
+### Open, small, real
+
+`cnt_combine_jobs_o` reads 2,558,523,520 on a run that issued no combine jobs,
+and a different garbage value on the previous run. Looks unreset or
+X-propagating. Not investigated.
