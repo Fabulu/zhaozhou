@@ -113,3 +113,64 @@ run log was committed and rebased onto main first (45 lines that existed in one
 place). Deleted `manafold-p11-L`, `-p12-pub`, `-p12-qa`, `-p12-review`, `-p12-w3`.
 The review lane's 8 orphaned commits were preserved to
 `origin/archive/p12-review-runlog` before it went.
+
+### 10:05 — LOOKED at the first bank, and it changed the pass
+
+The two deaths: **the corpse holds.** Twelve consecutive frames at the tail of
+`death-drop` are the same slumped pose, and frame 0 beside them is plainly a
+different, upright, brighter animal. The antenna is folded over, the mana is out.
+That is the highest-damage item on the reviewer's list and it is closed.
+
+`curious`: **the eye travel reads, and the stars survive it.** The eyes sweep
+across the ball, the lozenges tilt as they go — §12.3's own-axis rotation — and
+a yellow star sits in each one at every extreme I sampled. Five owner paragraphs
+that were driven by nothing yesterday are on screen.
+
+⚠ **And then `channel` — the clip he named the house mana look — was the worst
+frame in the bank.** A near-white mass filling the left half, the creature a dark
+shape in front of it, the mana barely legible.
+
+### 10:10 — Q-B1 ANSWERED: the backdrop bloom is dropped
+
+The fix pass left this as an owner question and was right to build the plate
+rather than decide from taste. **But the owner has already ruled twice on
+effects at exactly this scale** — D8 §1, the mist that *"covers the screen"* when
+he wanted *"a tiny smidgen"*; D8 §4, the shell *"thickened too much"*. So this is
+his rule applied, not my preference substituted for his answer.
+
+Measured before deciding, on the comparison side where measurement belongs:
+
+    manafold-channel   18.9% of the frame near-white
+    manafold-crackle   18.2%
+    every other clip   under 1%
+
+**The two clips carrying the bloom are the two whose entire job is showing the
+mana.** Dropping it cannot hurt anything else, because it is nowhere else.
+
+**And it unblocks an owner ask open since 2026-09-06** — D8 §2, *"the particle
+effects from the lightning should've made shapes… right now: no shapes, can't
+see them"*. He named both candidate causes himself, occlusion or regression.
+**It was occlusion.** Three passes tuned three families of lightning constant
+against a backdrop problem — §18's signature, and the false comment claiming the
+bloom *"sits OFF to the side"* is what kept pointing them at the lightning. Both
+the constant and that comment are now fixed.
+
+Re-render, because a one-clip re-render is how six mana clips shipped from the
+previous generation last night. `kU02BackdropBloom` flips it back in one line and
+`ZHAO_U02_PLANET=1` shows the old mood with no rebuild.
+
+    binary md5 5ed16946… -> a8a54f24…   (the change reached the exe -- gotcha 19)
+
+**Verified after: the white is gone, and the dotted lightning arcs over the
+crown are legible for the first time.**
+
+### What I looked at and did NOT fix — all named, none silent
+* **`taunt3` is not funny** — twelve sampled frames are one standing pose with a
+  wiggle. No beat, no anticipation, no lean. The reviewer's item 6 stands exactly
+  as written.
+* **The star is not centred in the lozenge** — visible in `curious` and `channel`.
+  Item 9, and `kEyeShiftPivotMm` is half-written, so it is a skeleton fix first.
+* **`flight` has a grey haze that ramps over its last frames** — 44 → 87 → 227 →
+  441 grey pixels over frames 340→351, then snaps to 97 at the loop. It grows
+  smoothly, so it is likely authored and only the WRAP is wrong. New clip, never
+  seen by anyone; recorded rather than chased.
