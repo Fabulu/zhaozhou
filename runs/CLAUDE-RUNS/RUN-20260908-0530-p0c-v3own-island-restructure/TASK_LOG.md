@@ -406,3 +406,27 @@ non-vacuity check (`submitted >= 200`) at least guarantees the wrap actually
 happened rather than the phase quietly testing nothing.
 
 Building behind the fast suite to avoid three-way CPU contention with the fit.
+
+## §7 groundwork, and repair A confirmed implementable
+
+**`reports/V3-METADATA-JOIN-CANDIDATE-20260908.md`** — the read-site inventory
+for the brief's §7. `sampmeta_m[64][3]` is 192 x 21 bits with **one writer and
+three asynchronous readers** (bilinear :1626, CLUT :1809, nearest :1934), each
+indexed by a different token.
+
+The useful discovery is that **the join point already exists**:
+`zhao_texture_rsp_dispatch` is one input stream splitting into four class
+outputs. So §7 is not a new stage — it moves an existing read to where the data
+already flows, and the three async ports collapse to one synchronous read.
+
+**No saving is claimed**, per the brief: the V3 MAP report does not exist yet and
+the P0-E census describes a different machine. The cost side is written down too
+(each class queue's payload grows by the metadata width), because a candidate
+that only lists its benefit is not a candidate.
+
+**Repair A verified implementable** without new plumbing: `own_adm_accept` is
+already a live v3own output used at :1228 and :2338, and `frag_class_i` is an
+input port, so the brief's specified form —
+`own_adm_accept && (frag_class_i == CLS_ERR)` — drops straight in beside the
+`class_m`/`palslot_m` writes that were fixed this morning. Blocked only on the
+fit releasing the closure.
