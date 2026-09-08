@@ -1300,8 +1300,9 @@ module zhao_texture_island_v3_top #(
   // four owners onto every row -- a silent data corruption with no error, the
   // same shape as the `uvw_m` index and the `fc_wp`/`fc_rp` keys.
   //
-  // Verilator caught these as index-width truncations. It could not have caught
-  // the slice errors, because those were the right WIDTH at the wrong OFFSET.
+  // The linter caught these as index-width truncations. It could NOT have
+  // caught the slice errors, because those were the right WIDTH at the wrong
+  // OFFSET -- which is why they needed traffic to find.
   logic [20:0] sampmeta_m [64][3];
 
   logic        plan_req_ready, plan_acc_valid, plan_acc_ready;
