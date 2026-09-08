@@ -974,3 +974,12 @@ composed fit.
 **The lesson for me:** I spent two rounds reasoning about what a swap might cost
 and launched a fit to measure it, while the rows that answered it sat in
 `zhao_block_fit.json`. Reading the ledger is cheaper than adding to it.
+
+## POSITION BEFORE READING THE TOKW=14 FIT
+
+In hand: packet D head-to-head settled from existing rows (v3-rh is 18 ALM
+smaller, half the DSP, +21.95 MHz vs svc). **Next regardless of this result:**
+P-CNT functional verification, still blocked on the build tree.
+
+This fit answers one thing only — whether v3 holds up at the island's actual
+token width, which is the one parameter a swap definitely needs.
