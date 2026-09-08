@@ -1231,3 +1231,19 @@ move and packet C's five-to-one port reduction is complete.
 That is a falsifier written before the fix, failing for the right reason, with a
 predicted post-fix value. The ordering is deliberate: it is the only way to know
 the test can see the thing it is testing.
+
+## POSITION BEFORE READING THE PACKET C MILESTONE FIT
+
+**Next step regardless of the number:** apply the staged raw-FIFO fix (validated
+on a copy, lints clean at META_EN 0 and 1), rebuild, and check three predicted
+values — `rsp_dispatch_meta_directed` 239/240 -> 0, composed bilinear 32/768 ->
+0, gate 3 unchanged at 392.
+
+**How this result must be read:** it is P-CNT and packet C measured TOGETHER,
+per the brief's instruction not to invent individual contributions. And it
+measures a design with a known misaligned metadata SOURCE — same registers and
+queue entries either way, so area and Fmax are fair, but the receipt is not a
+measurement of a correct design.
+
+Baseline: 13,133 ALM / 20,561 reg / 45 M10K / 17 DSP / 82.41 MHz, digest
+`6094a4292eee`. This fit's digest is `b8f0ff0007ce` over 19 files.
