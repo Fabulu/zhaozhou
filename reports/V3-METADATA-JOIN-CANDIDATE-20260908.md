@@ -82,3 +82,75 @@ It is not "put the array in RAM". That framing produces either a replicated
 bank per reader or an arbiter that serialises the decode lanes, and the brief
 rejects both. The change is **where the join happens**, not what the storage is
 made of — the storage shape follows from moving the join.
+
+---
+
+# CORRECTION: 21 bits was the wrong subset
+
+**Post-fit brief §5.1, and it is right.** This report described the join as
+carrying the existing 21-bit `sampmeta_m` row and widening the class queues by
+21 bits. That is not the design; it is a fragment of it.
+
+> *"The earlier owner brief already specified a 40-bit metadata record including
+> palette identity and owner-generation alignment. The new working report
+> reduces its description to the existing 21-bit sampmeta row ... That is
+> incomplete relative to both the earlier decision and the new palette timing
+> evidence."*
+
+## Why the subset defeats the purpose
+
+The 21-bit row is `{nibble, format, fraction_v, fraction_u, byte_select}`. It
+contains **no palette slot and no palette generation** — those live in
+`palslot_m[64]` and `palgen_m[64]`, written at admission and read on the
+response side to feed the CLUT lookup.
+
+And the palette binding read is precisely what sits on the island's worst
+*internal* path:
+
+```
+rsp_dispatch|cq_rp[0][0] -> palette_res|cold_o[26]     -2.093 ns
+  class-queue pointer -> queued route token
+  -> 64-owner palette binding selection      <-- palslot_m / palgen_m
+  -> resident slot/generation -> classification -> counter
+```
+
+**Moving only the 21 bits would have widened three queues, changed a storage
+structure, cost a fit, and left the measured critical family exactly where it
+is.** It would have looked like progress and bought nothing on the path that
+gates the clock. That is a more expensive mistake than doing nothing.
+
+## The full record, 40 bits
+
+| field | bits |
+|---|---|
+| descriptor owner generation | 8 |
+| palette slot | 2 |
+| palette generation | 8 |
+| resolved format | 3 |
+| fraction U | 8 |
+| fraction V | 8 |
+| byte selection | 1 |
+| CLUT4 nibble selection | 1 |
+| reserved | 1 |
+| **total** | **40** |
+
+Address `{owner_slot[5:0], sample_index[1:0]}` — 256 rows, **of which sample
+index 3 is invalid**. The brief's caution is worth keeping verbatim: *"A table
+address fitting in eight bits is not proof that every encoded sample is legal."*
+`zhao_texture_ident_pkg.sample_index_legal()` already names that rejection, so
+the check has somewhere to live.
+
+The descriptor generation is an **alignment check against the returned token**,
+not payload — the same class of check as the `mat_aligned_c` compare that fixed
+COMBINE this morning.
+
+## What this changes about the ordering
+
+Nothing about the sequence — §3's repairs, then §4's palette experiment, then
+this. But it changes what "this" is: **the join subsumes the palette binding
+read**, so it and the P-CNT experiment attack the same cone from two ends.
+P-CNT takes the counter off the tail; the full join takes the binding
+selection off the head.
+
+That also means the two must be measured in a stated order, or their effects
+will be attributed to whichever landed second.
