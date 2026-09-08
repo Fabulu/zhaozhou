@@ -2196,6 +2196,21 @@ set_tests_properties(island_v3_composed_directed PROPERTIES LABELS "fast;nightly
 # It runs the two EXECUTABLES rather than instantiating both tops in a third
 # harness, because a third harness is a second driver and a second driver is a
 # copy that drifts. See the docstring in tools/texture/gate3_paired.py.
+# Owner brief 4.1: the identity encoding freeze, checked bit-for-bit.
+#
+# This one IS registered: the package is new, nothing depends on it yet, and
+# the test passes today. Its job is to make the NEXT width change edit one
+# file instead of being rediscovered in five places.
+add_executable(test_ident_encoding_directed texture/ident_encoding_directed.cpp)
+target_link_libraries(test_ident_encoding_directed PRIVATE zhao_harness)
+verilate(test_ident_encoding_directed
+  PREFIX Vzhao_texture_ident_probe
+  TOP_MODULE zhao_texture_ident_probe
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_ident_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_ident_probe.sv)
+add_test(NAME ident_encoding_directed COMMAND test_ident_encoding_directed)
+set_tests_properties(ident_encoding_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # P0-C, owner brief 3.2: POSITIVE fault tests for the V3 top's evidence ports.
 #
 # BUILT BUT NOT REGISTERED WITH add_test, ON PURPOSE. It is written to FAIL
