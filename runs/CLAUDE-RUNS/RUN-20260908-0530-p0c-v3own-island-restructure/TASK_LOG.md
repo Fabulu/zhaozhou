@@ -1541,3 +1541,41 @@ both alive and contending. When `@d0fixed` lands: bank the worst-path census
 BEFORE the next fit overwrites it, run `packet_accounting.py` against Stage C,
 then start Packet 1. The census is the perishable half — `blockpaths/*.setup.rpt`
 is destroyed by the next fit of the same module.
+
+## Owner rulings and the DSP picture
+
+* **RCP V3: option (b) approved** — *"halve the DSPs even if it costs."* FIT
+  GATE 4 authorised and QUEUED (`tools/quartus/queue_fitgate4.ps1`): both blocks
+  at a matched NCTX=12/TOKW=14, starting when the toolchain goes idle, banking
+  the perishable worst-path census first. My memo had undersold the case — the
+  island is in breach at DSP 17 vs 14 and the swap lands it at exactly 14.
+* **Whole-machine DSP census** (`reports/DSP-BUDGET-CENSUS-20260908.md`): 154
+  measured against 112 available, and it is a FLOOR — 42 of 73 instantiated
+  modules have never been fitted. The double-count hypothesis was CHECKED and is
+  false: the 73 instantiations are flat and non-overlapping. 43% of the total is
+  two blocks at 33 each, and they are the same block —`zhao_geom_project` and
+  `zhao_terrain_project` both instantiate `zhao_project_core`, whose `mul32` is
+  called nine times in one combinational block.
+
+## Two roadmap corrections found by reading source
+
+* **The Mosaic byte slice is VERIFIED correct** as drafted:
+  `fbase_m <= {frag_base_rgb_i, frag_base_a_i}`, so Mosaic's
+  `fbase_rd[31:24]`/`[23:16]` are `rgb[23:16]`/`rgb[15:8]`. The roadmap flagged
+  this as "the five-stale-slices defect reborn" if got wrong; it is right.
+* **The proposed admission-agreement detector CANNOT FIRE and has been struck.**
+  `adm_accept_o` is a bare combinational `assign adm_valid_i && adm_ready_o`
+  inside v3own, and the island builds `frag_ready_o` from that same
+  `adm_ready_o`, so both predicates reduce to
+  `frag_valid_i && rcp_v_ready && own_adm_ready` — one expression, not two
+  cones. Building it would have produced a permanent zero for a later reader to
+  quote as evidence. Replaced with a structural fix: derive all three write
+  enables from one named wire so they cannot diverge.
+
+## Also landed
+
+* `uv_join` now carries palette identity (packet 3 step 1) — the architect's
+  first discovered gap, which broke D3's chain at its first hop.
+* `perspuv_pairpipe` reset-mid-flight coverage; 22 checks.
+* All three pairpipe falsifiers shown to fire (300-vs-17 accepts, 1.99-vs-1.00
+  clk/pair, 84 U/V mismatches at 56 bits).

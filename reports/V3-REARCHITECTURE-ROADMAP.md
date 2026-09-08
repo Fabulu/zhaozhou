@@ -237,22 +237,44 @@ fit running. Both new modules' leaf tests green (`early_desc_directed`,
      `wr_sample_count_i(frag_sample_count_i)`,
      `wr_palette_slot_i(frag_pal_slot_i)`, `wr_palette_gen_i(frag_pal_gen_i)`,
      `wr_mosaic_mat_a_i(frag_base_rgb_i[23:16])`,
-     `wr_mosaic_mat_b_i(frag_base_rgb_i[15:8])` — **CHECK THIS SLICE against
+     `wr_mosaic_mat_b_i(frag_base_rgb_i[15:8])` — **SLICE VERIFIED 2026-09-08, these two are correct.** The check was
      the current `fbase_m` packing before wiring**: today Mosaic reads
      `fbase_rd[31:24]` and `fbase_rd[23:16]` of `{frag_base_rgb_i, frag_base_a_i}`,
      i.e. the TOP two bytes of `frag_base_rgb_i`. Preserve exactly those two
      bytes; a one-byte shift here is the five-stale-slices defect reborn —
      `wr_mosaic_weight_i(frag_weight_i)`, `wr_binding_sel_i(frag_binding_i)`.
-   * **Add the admission-agreement assertion.** Two write events exist today:
-     the early arrays load on `frag_valid_i && frag_ready_o` (line 784) while
-     `palslot_m`/`mat_m` load on `own_adm_accept` (lines 1252, 2492). §5.2:
-     "The ready predicates for owner and frontend must agree on the accepted
-     beat" — and today NOTHING checks that they do. Add a sticky error output
-     (or counter) `err_adm_disagree_o` that sets whenever
-     `own_adm_accept != (frag_valid_i && frag_ready_o)`, and have the composed
-     tests assert it stays zero. This detector's two operands are clocked by
-     different cones (v3own's internal accept vs the island's ready AND), so
-     it CAN fire — state that in the comment, per the lockstep-detector law.
+   * ~~**Add the admission-agreement assertion.**~~ **STRUCK 2026-09-08 — the
+     proposed detector CANNOT FIRE. Do not build it.** Two write events do
+     exist (early arrays on `frag_valid_i && frag_ready_o`, line 784;
+     `palslot_m`/`mat_m` on `own_adm_accept`, lines 1252/2492), and §5.2's
+     concern is real. But the two predicates are algebraically the same
+     expression, resolved from source:
+
+     ```
+     v3own:571  assign adm_accept_o = adm_valid_i && adm_ready_o;   (combinational)
+     island:572 assign own_adm_valid_c = frag_valid_i && rcp_v_ready;
+     island:550 wire   credit_available = own_adm_ready;
+     island:620 assign frag_ready_o = rcp_v_ready && credit_available;
+
+       own_adm_accept            = frag_valid_i && rcp_v_ready && own_adm_ready
+       frag_valid_i && frag_ready_o = frag_valid_i && rcp_v_ready && own_adm_ready
+     ```
+
+     `adm_accept_o` is NOT registered inside v3own — it is a bare `assign` of
+     the same handshake the island's `frag_ready_o` is built from. There is no
+     second cone. This roadmap's own justification ("clocked by different
+     cones … so it CAN fire") is wrong, and building the counter would produce
+     a permanent zero that a later reader would quote as evidence the beats
+     agree. That is precisely the defect D0b taught: **a detector whose two
+     operands are the same signal is not a check, it is a decoration that
+     reads reassuring.**
+
+     **Do this instead**: make the invariant structural rather than watched.
+     Derive both write enables from ONE named wire
+     (`wire adm_beat_c = own_adm_accept;` used at 784, 1252 and 2492), so they
+     cannot diverge by construction. §0's delete-don't-wrap. If a future edit
+     genuinely gives the frontend a term the owner lacks, THAT is the moment a
+     detector becomes meaningful — and it will have two real operands then.
    * Instantiate `zhao_texture_uv_join` (`TAGW=14, SLOTW=6, GENW=8, CTXW=64`,
      `DZ_FORCES_ZERO_SAMPLES=0` — behaviour-preserving default) between
      PERSPUV and the expander:
