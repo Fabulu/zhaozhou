@@ -15,6 +15,8 @@
 #ifndef ZHAO_REEL_MANAFOLD_CLIPS_H
 #define ZHAO_REEL_MANAFOLD_CLIPS_H
 
+#include <cstdlib>
+
 #include "manafold_art.h"
 #include "manafold_rig.h"
 
@@ -1138,7 +1140,31 @@ inline NoduleOffsets nodule_schedule(uint32_t slot, int keys, int f) {
  *  the one layer every performing clip already calls. `eye_pm` at the call
  *  site is untouched, so the deaths' travel fade still works exactly as the
  *  pass-12 fix wave left it. */
+/** PASS 13 R1(b): THE COMMITTED TRAVEL PIN, and it exists because D9 SS12.2
+ *  asks for a PICTURE. "Plates showing the star and its outline surviving 45
+ *  degrees" cannot be made from the bank: the shipping cameras orbit, so every
+ *  frame at a different travel angle is also at a different camera, and a
+ *  ladder built that way measures the camera. `U02_EYE_TRAVEL_PIN=<pm>` holds
+ *  the channel at one angle for a whole render, so the SAME frame index of the
+ *  SAME subject can be rendered at 0 / 333 / 667 / 1000 pm and the four tiles
+ *  differ in nothing but the travel.
+ *
+ *  Unset it and this is identity -- the schedule below runs untouched -- which
+ *  is the same shape as U02_FOLD_FREEZE and kept for the same reason: a
+ *  diagnostic that lives in a run folder is orphaned by the next pass. */
+inline int32_t eye_travel_pin_pm(bool& pinned) {
+  static const int32_t v = [] {
+    const char* e = std::getenv("U02_EYE_TRAVEL_PIN");
+    return e && *e ? std::atoi(e) : 0x7FFFFFFF;
+  }();
+  pinned = v != 0x7FFFFFFF;
+  return pinned ? (v > 1000 ? 1000 : v < -1000 ? -1000 : v) : 0;
+}
+
 inline int32_t eye_travel_life_pm(uint32_t slot, int keys, int f) {
+  bool pinned = false;
+  const int32_t pin = eye_travel_pin_pm(pinned);
+  if (pinned) return pin;
   const int span = keys > 0 ? keys : 1;
   // The ramps have a FLOOR IN KEYS. A fraction of a short clip is a snap, and
   // a snap on this channel is what QA Q2's 8 deg/key step check exists to
