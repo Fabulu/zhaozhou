@@ -1215,13 +1215,35 @@ module zhao_texture_island_v3_top #(
   logic [1:0] class_m [64];
   // The palette binding is keyed the same way and for the same reason: a
   // sample response identifies its fragment by SLOT and nothing else.
+  // The input-stage class, sanitised by the SAME rule `f_class_c` applies at
+  // the planner stage. Reaching for the raw pin here instead would quietly
+  // widen what an out-of-range class can reach -- `f_class_bad_c` exists so a
+  // bad class stops travelling, and an input-stage copy that skips the clamp
+  // reopens the path it closes.
+  wire [1:0] f_class_in_c = (frag_class_i == CLS_ERR) ? CLS_NEAR : frag_class_i;
+
   logic [$clog2(PAL_SLOTS)-1:0] palslot_m [64];
   logic [GENW-1:0]              palgen_m  [64];
   always_ff @(posedge clk) begin
     if (own_adm_accept) begin
-      class_m  [own_adm_owner[13:8]] <= f_class_c;
-      palslot_m[own_adm_owner[13:8]] <= f_pal_slot_c;
-      palgen_m [own_adm_owner[13:8]] <= f_pal_gen_c;
+      // ALL THREE ARE INPUT-STAGE VALUES, because admission is an input-stage
+      // event: `own_adm_valid_c` is `frag_valid_i && rcp_v_ready`, and the
+      // owner being written here is the one allocated for the fragment on the
+      // input pins this cycle.
+      //
+      // `palslot_m`/`palgen_m` were taking `f_pal_slot_c`/`f_pal_gen_c`, which
+      // are `fpsl_m[fc_rp]`/`fpgn_m[fc_rp]` -- the PLANNER stage's values,
+      // belonging to a fragment several cycles older. `mat_m` in the same file
+      // was already written from the input ports, so the two per-owner tables
+      // disagreed about which fragment they were describing.
+      //
+      // It showed as only THREE stale palette lookups because a phase holds one
+      // palette slot for most of its fragments: the misalignment is invisible
+      // wherever the old value and the new one happen to be equal. A defect
+      // that is mostly masked by uniform stimulus is not a small defect.
+      class_m  [own_adm_owner[13:8]] <= f_class_in_c;
+      palslot_m[own_adm_owner[13:8]] <= frag_pal_slot_i;
+      palgen_m [own_adm_owner[13:8]] <= frag_pal_gen_i;
     end
   end
 
@@ -2430,6 +2452,29 @@ module zhao_texture_island_v3_top #(
       .out_str_o(aux_out_str), .out_degenerate_o(aux_out_degenerate),
       .accepted_o(cnt_aux_accepted_o), .sheet_reads_o(aux_sheet_reads),
       .degenerate_o(aux_degenerate));
+
+  // ---- THE TWO PORTS FRAGROB USED TO DRIVE ---------------------------------
+  // Found by SWEEPING the module's 42 outputs for ones with no driver, after
+  // the same defect had already cost gate 2 once on the planner and AUX sides.
+  // An undriven output does not fail elaboration and does not fail lint; it
+  // reads as a clean zero, and a counter that reads zero looks exactly like a
+  // stage that is quiet rather than a wire that was never connected.
+  //
+  // Both ports stay, because gate 3 compares the two tops through the SAME port
+  // contract -- deleting a port here would make the oracle uncomparable.
+  //
+  // `cnt_fragments_o` is a straight re-host: the expander accepts fragments
+  // where fragrob used to.
+  assign cnt_fragments_o = exp_fragments;
+
+  // `cnt_fragrob_id_errors_o` is a RE-INTERPRETATION and not an identity, which
+  // is worth saying rather than hiding behind a matching port name. fragrob
+  // counted responses whose id matched no outstanding fragment. v3own splits
+  // that same family across three named counters -- unsolicited, stale
+  // generation, duplicate -- so the sum is the closest honest reading, and it
+  // must be zero in a healthy run for the same reason the original was.
+  assign cnt_fragrob_id_errors_o =
+      own_ev_err_unsol + own_ev_err_stale + own_ev_err_dup;
 
   // The sticky tripwire latches. `aux_degenerate` is a 32-bit COUNT rather
   // than a flag, so its tripwire is "the count ever moved" -- taken as
