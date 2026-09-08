@@ -19,6 +19,19 @@ When a new owner document lands, add it here in the same pass that reads it.
 
 ---
 
+## ACTIVE PLAN 2026-09-08 — `reports/V3-REARCHITECTURE-ROADMAP.md`
+
+The ordered packet plan for the texture island V3 rearchitecture, written
+against the Decrufter brief and the owner's fits-only-at-subsystem-boundaries
+ruling. **Read it before doing any island work.** Seven packets (0–6), five
+fit gates of which one (`@d0fixed`) was already in flight when it was written;
+packets 1–3 edit the island fit closure, packet 4 (paired PERSPUV candidate)
+is the designated work while any island fit runs. RCP V3 adoption and the
+resource-allocation redlines are OPEN OWNER DECISIONS listed at its end —
+do not decide them in a working pass.
+
+---
+
 ## P0 — the console cannot ship without these
 
 ### D1. The 100 MHz timing surgery — **CLOSED 2026-09-04**
