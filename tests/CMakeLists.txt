@@ -2740,6 +2740,22 @@ verilate(test_texture_rsp_dispatch_directed
   PREFIX Vzhao_texture_rsp_dispatch
   TOP_MODULE zhao_texture_rsp_dispatch
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv)
+# Packet C: the SAME dispatcher with META_EN=1, so the metadata payload is
+# exercised at the leaf where it has exactly one possible home. The default-off
+# case above is what gate 3's oracle relies on and is covered by that target.
+add_executable(test_rsp_dispatch_meta_directed texture/rsp_dispatch_meta_directed.cpp)
+target_link_libraries(test_rsp_dispatch_meta_directed PRIVATE zhao_harness)
+verilate(test_rsp_dispatch_meta_directed
+  PREFIX Vzhao_texture_rsp_dispatch
+  TOP_MODULE zhao_texture_rsp_dispatch
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
+  # TOKW=18 to match the island. The default is 16, and this test builds
+  # 18-bit tokens with the class in [17:16] -- at the default they truncate
+  # and the test reports 180 token mismatches that are its own doing.
+  VERILATOR_ARGS -GMETA_EN=1 -GTOKW=18)
+add_test(NAME rsp_dispatch_meta_directed COMMAND test_rsp_dispatch_meta_directed)
+set_tests_properties(rsp_dispatch_meta_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME texture_rsp_dispatch_directed COMMAND test_texture_rsp_dispatch_directed)
 set_tests_properties(texture_rsp_dispatch_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
