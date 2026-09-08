@@ -1111,33 +1111,86 @@ inline NoduleOffsets nodule_schedule(uint32_t slot, int keys, int f) {
   return n;
 }
 
-/** PASS 12 WAVE 2a -- THE ALWAYS-ON EYE TRAVEL (D9 SS6, "the eyes have to move
- *  more"). Two incommensurate slow waves so the sweep never repeats the same
- *  place twice in a cycle, both far below the life-layer band: this is a
- *  deliberate look-around, not a twitch. Rides antenna_knead for the same
- *  reason the nodule schedule does -- it is the one layer every performing clip
- *  already calls. */
+/** PASS 13 R1(c) -- THE EYE TRAVEL IS A SCHEDULE: DWELL, THEN GLANCE.
+ *
+ *  D9 SS12.1: "They should always be centered unless they DECIDE to move."
+ *  Pass 12 drove this channel from two always-on sines, so the eyes were at an
+ *  arbitrary angle on every key of every clip and never once at centre. The
+ *  main idle then spent most of its loop looking somewhere the camera was not.
+ *
+ *  Now: the eye rests at centre with a small living drift, and takes at most
+ *  kEyeGlanceCount deliberate looks per loop -- eased out, HELD, eased back.
+ *  The first still reaches the full 45 deg the owner asked for; it is an event
+ *  with a decision in front of it, not a resting place.
+ *
+ *  PERIODIC BY CONSTRUCTION. Every window is evaluated modulo `keys`, so the
+ *  loop seam needs no arithmetic luck and no integer cycle count -- which also
+ *  retires the pass-12 defect where two `keys/divisor` counts collapsed to the
+ *  same frequency on any clip under 122 keys.
+ *
+ *  THE SUM CANNOT RIDE THE CLAMP. The dwell drift is scaled down by how far
+ *  out the glance is, so |glance| + |drift| <= 1000 by construction. Pass 12's
+ *  700+300 could reach 1000 and sit there (44% of the idle, a column of
+ *  identical 45.00 readings in the gate); that is now unrepresentable, not
+ *  merely avoided.
+ *
+ *  Rides antenna_knead for the same reason the nodule schedule does -- it is
+ *  the one layer every performing clip already calls. `eye_pm` at the call
+ *  site is untouched, so the deaths' travel fade still works exactly as the
+ *  pass-12 fix wave left it. */
 inline int32_t eye_travel_life_pm(uint32_t slot, int keys, int f) {
-  // ⚠ THE TWO CYCLE COUNTS MUST DIFFER, and a bare floor of 1 does not do it.
-  //  Both were `keys/divisor` floored to 1, so on any clip under 122 keys the
-  //  two waves collapsed to the SAME frequency and the "two incommensurate
-  //  periods" the comment promises stopped existing. Six clips were in that
-  //  band (curious, startle, pirouette, hasty, hit, taunt2) and their peak
-  //  travel was then set by the accidental phase gap between two identical
-  //  sines -- the gate printed 31.55 deg for pirouette and hit, a number no
-  //  one authored and no constant controls.
-  //  B is now at least one cycle faster than A, so the sum never degenerates
-  //  to a single sine and short clips keep the same vocabulary as long ones.
-  const int ca = keys / kEyeTravelPeriodAKeys > 0 ? keys / kEyeTravelPeriodAKeys : 1;
-  int cb = keys / kEyeTravelPeriodBKeys;
-  if (cb <= ca) cb = ca + 1;
-  const int32_t a = static_cast<int32_t>(
-      (static_cast<int64_t>(kEyeTravelLifePm) *
-       sinp(f, keys, ca, static_cast<int32_t>((slot * 9973u) & 0xFFFF))) >> 16);
-  const int32_t b = static_cast<int32_t>(
-      (static_cast<int64_t>(kEyeTravelLifeBPm) *
-       sinp(f, keys, cb, static_cast<int32_t>((slot * 26417u) & 0xFFFF))) >> 16);
-  int32_t pm = a + b;  // 700 + 300: touches the clamp, never rides it
+  const int span = keys > 0 ? keys : 1;
+  // The ramps have a FLOOR IN KEYS. A fraction of a short clip is a snap, and
+  // a snap on this channel is what QA Q2's 8 deg/key step check exists to
+  // catch (it is how a switched-off carrier looks). Held to at most a sixth of
+  // the clip each so the floor can never swallow the loop.
+  const auto win_keys = [&](int32_t pm, int floor_k) {
+    int k = static_cast<int>((static_cast<int64_t>(span) * pm) / 1000);
+    if (k < floor_k) k = floor_k;
+    if (k > span / 6) k = span / 6;
+    if (k < 1) k = 1;
+    return k;
+  };
+  const int rise = win_keys(kEyeGlanceRisePm, kEyeGlanceMinRampKeys);
+  const int hold = win_keys(kEyeGlanceHoldPm, 1);
+  const int fall = win_keys(kEyeGlanceFallPm, kEyeGlanceMinRampKeys);
+  const int win = rise + hold + fall;
+  // Drop glances until the schedule fits with real dwell between them. A short
+  // clip gets ONE good look rather than three crowded ones.
+  int n = kEyeGlanceCount;
+  while (n > 1 && n * (win + kEyeGlanceMinDwellKeys) > span) --n;
+  const int32_t phase = static_cast<int32_t>(
+      (static_cast<int64_t>(span) *
+       (kEyeGlancePhasePm + static_cast<int32_t>(slot) * kEyeGlanceSlotSkewPm)) / 1000);
+  int32_t glance = 0;
+  for (int i = 0; i < n; ++i) {
+    const int32_t skew =
+        static_cast<int32_t>((static_cast<int64_t>(span) * kEyeGlanceSkewPm[i]) / 1000);
+    const int start = i * span / n + phase + skew;
+    int d = (f - start) % span;
+    if (d < 0) d += span;
+    int32_t env = 0;
+    if (d < rise) {
+      env = fold_ease(d * 1000 / rise);
+    } else if (d < rise + hold) {
+      env = 1000;
+    } else if (d < win) {
+      env = 1000 - fold_ease((d - rise - hold) * 1000 / fall);
+    }
+    if (env == 0) continue;
+    glance += static_cast<int32_t>(
+        (static_cast<int64_t>(kEyeGlanceOutPm[i]) * env) / 1000);
+  }
+  if (glance > 1000) glance = 1000;
+  if (glance < -1000) glance = -1000;
+  // THE DWELL IS NOT A FREEZE -- a small drift keeps the centred eye alive,
+  // faded out under a glance so the sum can never reach the clamp.
+  const int32_t room = 1000 - (glance < 0 ? -glance : glance);
+  const int cyc = span / kEyeDwellPeriodKeys > 0 ? span / kEyeDwellPeriodKeys : 1;
+  const int32_t drift = static_cast<int32_t>(
+      (static_cast<int64_t>(kEyeDwellDriftPm) * room / 1000 *
+       sinp(f, span, cyc, static_cast<int32_t>((slot * 9973u) & 0xFFFF))) >> 16);
+  int32_t pm = glance + drift;
   if (pm > 1000) pm = 1000;
   if (pm < -1000) pm = -1000;
   return pm;

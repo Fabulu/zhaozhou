@@ -707,7 +707,45 @@ constexpr int32_t kEyeTiltA16 = 2200;     // the almond's backward lean
 // An art recon concluded from those two views that the sheets show no pop-out.
 // They do. It is protected, and "slightly" is the artist's own qualifier:
 // DO NOT ENLARGE IT EITHER. This is also the pivot radius for the gaze.
-constexpr int32_t kEyeBulgeMm = 88;       // star stands proud of the lens
+//
+// ==== PASS 13 R1(a): THE PARALLAX IS WHY THE STAR READS OFF CENTRE =========
+//
+//   "They're not centered in the eye enough as it is. They should always be
+//    centered unless they decide to move"  -- D9 SS12.1, said twice
+//
+// kStarOffsetYMm has been 0 since pass 8 and kStarCentreYMm has registered the
+// asymmetric drawn mass since pass 12, so the star's ORIGIN and its MASS are
+// both already on the lens centre. Pass 13 looked at `manafold-still` -- true
+// rest, no gaze, no travel -- at 8x, and decomposed the residual along the
+// lens's own axes: about 3.6 native px ALONG the long axis, and about 12 px
+// PERPENDICULAR to it, outward, on both eyes.
+//
+// A perpendicular error is not a registration error. It is PARALLAX. The star
+// floats kEyeBulgeMm + kStarCyanProudMm = 108 mm proud of the lens's centre
+// plane, and at rest the lens is never seen face-on: the eye sits at x400/z215
+// on the ball (28 deg round it) with kEyeYawOutA16 on top, so the shipping
+// camera reads each lens 30-45 deg off its own face. 108 mm of stand-off at
+// 40 deg throws the star ~70 mm sideways -- against a lens HALF-WIDTH of 84.
+// The star was never off centre in the model; it was off centre on the screen,
+// which is the only place the owner looks.
+//
+// CORROBORATED WITHOUT A REBUILD before anything was moved (gotcha SS16): in
+// the shipped `hover` bank the stars ARE centred, and DO read as stars, on
+// exactly the tiles where the lens presents its face (f100, f125, f200), and
+// slide outward and collapse on the oblique tiles. Same constants, different
+// obliquity. Then ABLATED (gotcha SS18.2): kEyeBulgeMm 88 -> 30 centred the
+// star and confirmed the knob -- and swallowed the white, which is what says
+// the LENS DEPTH has to come down with it rather than the star sinking into a
+// dome that stayed deep.
+//
+// SO THE EYE ASSEMBLY IS FLATTENED IN DEPTH, all of it together, by about
+// 0.45. Face-on the silhouette is unchanged -- depth is the only axis that
+// moves -- so this costs nothing the owner has approved, and it is the SHEET's
+// own reading: she draws three nested flat shapes, not a hemisphere with a
+// bead on top. Each value below stays an independent knob; they were moved
+// together, they do not have to stay together.
+constexpr int32_t kEyeBulgeMm = 40;       // star stands proud of the lens
+                                          // PASS 13: 88 -> 40 (see above).
 
 // ---- PASS 6 B.1: THE LENS IS A SYMMETRIC LENS, POINTED AT BOTH ENDS ------
 // Direction 5 §5 makes the FRONT SHEET the authority. Direction 4 recorded a
@@ -727,7 +765,13 @@ constexpr int32_t kEyeBulgeMm = 88;       // star stands proud of the lens
 // near 3:1. Authored at 3.2:1 between them, by eye -- and it is a knob.
 constexpr int32_t kEyeLongMm = 270;       // lens half-length (the long axis)
 constexpr int32_t kEyeWideMm = 84;        // lens half-width  (3.2:1)
-constexpr int32_t kEyeDeepMm = 90;        // bulge depth off the body (the dome)
+// PASS 13 R1(a): 90 -> 40. This was a near-hemisphere -- 90 of depth against
+// 84 of half-width -- and it is the reason the star had to ride 108 mm out to
+// clear it. Flattened WITH kEyeBulgeMm so every occlusion relation is
+// preserved (the star still pokes the same FRACTION of the dome proud of it)
+// while the parallax radius halves. It is also what SS12.2's near-eye bar was
+// really about: a lens presenting 180 mm of depth swamps a star presenting 32.
+constexpr int32_t kEyeDeepMm = 40;        // bulge depth off the body (the dome)
 constexpr int kEyeFacetSegments = 8;      // the facet read at 240p
 // The lens half-width profile, tip to tip, per-mille of kEyeWideMm. Symmetric
 // by construction -- read it backwards and it is the same list. POINTED, not
@@ -960,30 +1004,75 @@ constexpr int32_t kEyeStandoffMm = 22;
 // is deliberately still and the other is a diagnostic that must not be
 // contaminated.)
 //
-// Amplitude is a fraction of kEyeTravelMaxDeg, so the peaks reach the full 45
-// the owner asked for and the gate holds the ceiling. Two incommensurate
-// periods, both far slower than 07-MOTION-STYLE SS3's life band, because D7
-// SS9.2 still governs: MORE TRAVEL PER BEAT, FEWER BEATS. An eye sweeping a
-// quarter-turn of body needs to look like it decided to, not like it twitched.
-// ⚠ THE TWO AMPLITUDES SUM TO EXACTLY 1000, AND THAT IS THE WHOLE POINT.
-// They arrived as 1000 + 300 against a +/-1000 clamp, which does not make the
-// eye travel further -- the channel is already at its ceiling -- it makes the
-// eye RAMP TO THE STOP AND SIT THERE. At slot 0 both phase seeds are slot*k
-// and therefore both zero, so the two waves ran perfectly in phase and the
-// idle -- the most-watched clip in the bank -- was hard against 45 deg for
-// about 44% of its loop. That reads as a servo hitting its limit, which is
-// the exact opposite of D7 SS9.2's "it needs to look deliberate", and the gate
-// showed it as a column of identical 45.00 readings.
+// ==== PASS 13 R1(c): DWELL AND GLANCE, NOT TWO SINES ========================
 //
-// 700 + 300 touches the owner's full 45 deg only where the two waves peak
-// together, and sweeps everywhere else. The peak is still 45; it is now an
-// event instead of a resting place.
-constexpr int32_t kEyeTravelLifePm = 700;
-constexpr int32_t kEyeTravelLifeBPm = 300;  // the second, smaller wave
-// Divisors, not periods: the cycle count is keys/this, so the wave is only
-// exactly this long when it divides the clip. Named as they were authored.
-constexpr int kEyeTravelPeriodAKeys = 97;
-constexpr int kEyeTravelPeriodBKeys = 61;
+// Pass 12 drove this from two always-on sines (700 + 300 pm of a 1000 clamp,
+// periods 97 and 61 keys). Everything about that was defensible except the one
+// thing the owner's own law asks for:
+//
+//   "The star is CENTRED in the eye at rest. It leaves centre only when the eye
+//    DECIDES to move."  -- D9 SS12.1
+//
+// A sum of two sines is NEVER at centre and never decides anything. It is at
+// some arbitrary angle on every key of every clip, which is exactly how the
+// main idle came to spend most of its loop with the eyes somewhere other than
+// where the camera is -- the architect measured `hover` as faceless for about
+// 2.5 s (f384-528), and a full-loop sheet read here puts the unreadable stretch
+// wider still. Some of that is the orbit being behind the ball, which is
+// nobody's fault; the part that IS ours is that the eyes were away on their own
+// schedule while the camera was in front.
+//
+// So the drive is now a SCHEDULE, not a waveform: dwell at centre, then a small
+// number of deliberate eased glances that go out, HOLD, and come back. The
+// peak still reaches the owner's full 45 deg -- it is an event, and now it is
+// an event with a decision in front of it and a return behind it.
+//
+// EVERY WINDOW IS EVALUATED MODULO THE CLIP LENGTH, so the loop seam is
+// periodic by construction rather than by arithmetic luck, and the pass-12 bug
+// where two `keys/divisor` cycle counts collapsed to the same frequency on
+// short clips cannot recur -- there are no divisors left.
+constexpr int kEyeGlanceCount = 3;        // deliberate looks per loop, at most
+// Signed targets as a fraction of kEyeTravelMaxDeg. The first is the full 45
+// the owner asked for; the others are smaller and alternate side, so the loop
+// reads as looking AROUND rather than as a metronome.
+constexpr int32_t kEyeGlanceOutPm[kEyeGlanceCount] = {1000, -820, 640};
+// The shape of one glance, as per-mille of the clip: ease out, hold the look,
+// ease back. The hold is what makes it read as a decision -- D7 SS9.2, more
+// travel per beat and fewer beats.
+constexpr int32_t kEyeGlanceRisePm = 55;
+constexpr int32_t kEyeGlanceHoldPm = 55;
+constexpr int32_t kEyeGlanceFallPm = 75;
+// ...but a ramp expressed as a FRACTION gets shorter as the clip does, and a
+// 45 deg move in four keys is a snap, not a glance (QA Q2 bounds the per-key
+// carrier step at 8 deg). The ramps take this many keys at minimum, so a short
+// clip spends proportionally more of itself glancing instead of snapping.
+constexpr int kEyeGlanceMinRampKeys = 10;
+// ...and if the schedule will not fit with this much still dwell between the
+// glances, the clip drops to two glances, then to one. A short clip gets one
+// good look rather than three crowded ones.
+constexpr int kEyeGlanceMinDwellKeys = 14;
+// Where glance 0 starts, per-mille of the clip, before the even spacing. This
+// is the CAMERA PHASE knob: authored against slot 0 (`hover`, the idle the
+// owner actually watches, 300 keys / 600 frames) so the glances land on the
+// tiles where the orbit has the face toward camera -- peaks near frames 72,
+// 254 and 508 of the 600, all inside the readable window that a full-loop
+// contact sheet of the shipped bank puts at roughly f0-290 and f520-600.
+constexpr int32_t kEyeGlancePhasePm = 65;
+// Per-glance skew off the even spacing, per-mille of the clip. Small, and it
+// exists for two reasons: three evenly spaced looks read as a metronome, and
+// the third one needed nudging later to catch the camera coming back round.
+constexpr int32_t kEyeGlanceSkewPm[kEyeGlanceCount] = {0, -30, 60};
+// THE DWELL IS NOT A FREEZE. A tiny drift keeps the eye alive while it is
+// centred -- 07-MOTION-STYLE's floor -- and it is FADED OUT under a glance in
+// proportion to how far out the glance is, so the sum can never ride the
+// clamp. That is the pass-12 fault (a hard 1000 for 44% of the idle) made
+// unrepresentable rather than merely avoided.
+constexpr int32_t kEyeDwellDriftPm = 70;      // ~3 deg of 45
+constexpr int kEyeDwellPeriodKeys = 150;      // divisor; >= 1 cycle per clip
+// Every clip's glances are offset by this many per-mille per slot, so the bank
+// does not blink in unison. Slot 0 takes no offset, which is what keeps the
+// camera phase above meaningful for the idle.
+constexpr int32_t kEyeGlanceSlotSkewPm = 211;
 
 // ---- OWNER DIRECTION 5 5d: THE EYES ROLL ---------------------------------
 //   "eyes should also be able to rotate and rotate back. Maybe 10-20% at most.
@@ -1105,8 +1194,34 @@ constexpr int32_t kEyeRollRestA16 = 1820;   // 10 deg -- typical amplitude
 // depth of BOTH stars, so the cyan could not thicken without the white
 // thickening with it, and a white slab centred on the pupil swallows the cyan
 // whole (that render is on record). Split, so each says its own thing.
-constexpr int32_t kStarCyanThinMm = 46;   // the cyan is a FORM, not a plate
-constexpr int32_t kStarWhiteThinMm = 12;  // the white is an OUTLINE, not a slab
+// ==== PASS 13 R1(b): THE COMPENSATION IS REVERTED, AS D9 SS12.3 INSTRUCTS ===
+//
+//   "If orientation fixes the read, revert the thickness compensation rather
+//    than carrying both -- a compensation for a removed fault is exactly how a
+//    wrong value becomes permanent."
+//
+// AND LOOKING FOUND THAT THE COMPENSATION WAS THE DEFECT, not merely surplus.
+// `taunt3` f192-f216 at 5x: the white does not VANISH at obliquity, it
+// ESCAPES. A second white blob, roughly a copy of the star, hangs off the far
+// eye down and to the right of the cyan -- the "scribble", and the exact read
+// of SS5a/SS5b's one rigid unit coming apart.
+//
+// That is parallax again, and this pair of constants is what causes it. The
+// compensation put the cyan in a 46 mm slab riding 20 mm proud and left the
+// white as a 12 mm plate behind it: TWO SHAPES AT DIFFERENT DEPTHS, drawn to
+// register face-on. Seen 40 deg off the face they slide past each other by
+// (their depth difference) x sin(theta), and the white -- being the DILATION,
+// so the bigger shape -- shows up as a crescent on one side and nothing on the
+// other. Making the cyan fatter to survive obliquity is precisely what made it
+// tear away from its outline at obliquity.
+//
+// Back to the pre-pass-11 pair, which shipped for five passes: equal depths,
+// 6 mm apart, so the separation under parallax is under a pixel at any angle
+// the bank reaches. The white's ON-SCREEN width -- SS12.2's actual requirement
+// -- is set by kStarWhiteRimMm, an in-plane dilation, which is where a minimum
+// screen width belongs and is untouched by any of this.
+constexpr int32_t kStarCyanThinMm = 16;   // PASS 13: 46 -> 16, SS12.3's revert
+constexpr int32_t kStarWhiteThinMm = 16;  // PASS 13: 12 -> 16, SS12.3's revert
 // The side sheet draws the star sitting HIGH in the lens, not centred.
 //
 // DIRECTION 7 §5.1 OVERRULES THAT READING, and it is a registration bug, not an
@@ -1176,7 +1291,7 @@ constexpr int32_t kStarWhiteRimMm = 16;
 //     white front face = kEyeBulgeMm + kStarWhiteThinMm
 //     cyan  front face = kEyeBulgeMm + kStarCyanProudMm + kStarCyanThinMm
 // and the second must exceed the first, or the white splinter ships again.
-constexpr int32_t kStarCyanProudMm = 20;
+constexpr int32_t kStarCyanProudMm = 6;  // PASS 13: 20 -> 6, SS12.3's revert
 // SIZE vs GAZE (owner question 4): the sheet draws the star flush to the lens,
 // which leaves ZERO travel room -- a flush star is an eye that cannot move.
 // Shipped at ~0.78 of drawn-flush so the eyes can dart. One knob to flip back.
