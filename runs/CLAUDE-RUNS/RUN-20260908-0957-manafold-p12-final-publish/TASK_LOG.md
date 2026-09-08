@@ -309,3 +309,66 @@ regression.
 3. IMPL-B lands → next bank carries taunt3, blown, the gutter root and the 39°
 4. **then reviewer + QA on pass 13** — the owner's mandated sequence, and pass 13
    has had neither
+
+### 22:00 — THE THIRD BANK DISCARDED, and this one is the convergence point
+
+IMPL-B landed: `taunt3` re-timed with a real attack curve, `blown` retimed,
+`death-gutter`'s root step **240.0 → 102.6 mm**, the four wrap opt-ins, and the
+owner's **39°**. Killed the encode at 10 of 28 and rebuilt from `25d86c03`
+(md5 `c5a71542`).
+
+**Three banks rendered today, two destroyed, and this is the last** — not because
+I ran out of patience but because **all three implementer lanes are finished**.
+Nothing more is landing, so this is the first moment the bank stops being a
+moving target.
+
+⚠ **The expected-frame-count check earned itself.** `blown` came back 293/393 and
+looked like a truncated render. It is not: IMPL-B retimed the clip from 196 keys
+to 146, so **293 is the correct new length** (`meta.txt` says `frames=292`).
+Verified against the clip's own metadata before touching anything. A check that
+flags an intended change is working — the failure would have been believing
+either "truncated" or "fine" without looking.
+
+### 23:00 — ⚠ THE WRAP FIX IS ON, MEASURED, AND STILL NOT THE WHOLE FAULT
+
+Both lanes report the loop seam fixed and both are honest: the wrap frame's ROOT
+motion falls to **0.90×** a typical frame's on `flight`, 0.46× on `fall`. I
+verified the flags are genuinely switched on — four `wrap_root_delta = true`, in
+`build_drift`, `build_hasty`, `build_fall`, `build_flight` — and that this bank
+was built after them.
+
+**The grey ghost is untouched.**
+
+    flight  f340 44   f350 151   f351 477   f0 62      (pre-fix: 44 -> 441)
+    drift   f290 188  f299 427   f0 47
+
+And by eye `flight` still jumps between its last two frames. **So the root
+displacement was never what the ghost was made of.** Two real measurements, both
+true, neither of them the picture — which is the same lesson as every other one
+today, arriving through a *correct* fix rather than a wrong one.
+
+Sent to QA to adjudicate, with four questions including **"is my grey metric
+junk?"** — it was written fast and may be counting the mana trail.
+
+**The card's wrap paragraph has now been wrong in BOTH directions in one day**:
+claiming the fix this morning, then "built but not switched on" this afternoon
+(true when written), now corrected to what the frames show. It stays on the page
+rather than being dropped, because a page listing only the fixes that worked is
+not evidence of anything.
+
+### 23:10 — gotcha 20a: a job can OUTLIVE its killed tool call too
+
+A `cp -r` ran for eight minutes after its tool call was torn down. The tell was
+`rm -rf` failing with *"directory not empty"* on a directory just emptied, and a
+file count going **286 → 321** a minute apart. Killed by PID. IMPL-C
+independently found a render holding a core an hour after its shell died.
+
+**A job's lifetime and its tool call's lifetime are unrelated in both
+directions**, and one repeated count sixty seconds apart says which.
+
+### NEXT STEPS — before reading anything else
+1. encode → `checkfresh` + the full decode sweep, **neither skipped**
+2. commit media, assemble, deploy `-Branch main`, verify from production
+3. **launch the REVIEWER** against the published webm (the true artefact) once
+   the media is committed — QA is already running
+4. QA's verdict on the grey ghost decides the card's wrap paragraph
