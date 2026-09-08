@@ -3302,6 +3302,48 @@ the FLAG half of it. And where the initialisation IS needed -- a sticky flag
 like ``e_sat`` -- keep it, keep the array in flops deliberately, and say which
 of the two applies at every such site.
 
+## M1 AMENDED 2026-09-08 — 4.70 MHz IS ONE BLOCK'S NOISE, NOT A CEILING
+
+M1 below measured **4.70 MHz** between two seeds of `zhao_raster_rcp24_svc` and
+that number has since been used as though it bounded seed variation generally.
+It does not.
+
+`zhao_texture_palette_res`, same source, two seeds:
+
+| row | reported Fmax |
+|---|---|
+| `zhao_texture_palette_res` (default seed) | **104.08** |
+| `zhao_texture_palette_res@pcnt-seed7` | **90.74** |
+
+**13.34 MHz on identical RTL** — nearly three times M1's figure.
+
+### What it cost, today
+
+The P-CNT experiment measured **+6.02 MHz** against its pre-change baseline. I
+reported that as "above the docketed 4.70 but not enormously", treating 4.70 as
+the bar to clear. The seed check then put the same design at **7.32 MHz BELOW**
+that baseline, and the Fmax claim was withdrawn.
+
+The right reading was never "+6.02 is marginal". It was **"there is no
+established noise floor for this block, so the comparison has no bar to clear
+at all."**
+
+### The rule, corrected
+
+**A noise floor measured on one block does not transfer to another.** It is the
+same error as comparing a current file to an old measurement — a number from a
+different subject standing in for one that was never taken here.
+
+Before any single-seed Fmax delta is claimed for a block: **measure that
+block's own two-seed spread first.** `run_block_fit.ps1 -Seed N -RowLabel
+'@...'` exists for this and costs one fit.
+
+What survives from P-CNT is the structural evidence, which no seed can move:
+its gating endpoint stopped being `cold_o[4]~reg0` and became `l1_stale_q`, the
+registered verdict the change was designed to terminate on.
+
+---
+
 ## M1 — A BLOCK'S REPORTED FMAX CARRIES ~4.7 MHz OF FITTER-SEED NOISE
 
 Measured 2026-09-07, and it changes how every single-seed block comparison in
