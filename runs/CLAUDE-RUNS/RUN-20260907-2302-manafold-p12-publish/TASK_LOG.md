@@ -352,3 +352,48 @@ are both **0xA7A197B1** and `diff -rq` finds all 600 `.rgb` frames identical
 (only `meta.txt` differs, which carries the subject name) — so the Inspect
 tab's byte-identity claim is TRUE for pass 12 and is not an inherited pass-7
 number.
+
+## ⚠ WAVE 2b LANDED ON main WHILE THIS BANK WAS RENDERING
+
+Caught the same way Direction 9.15 was: a push conflicted. Two commits:
+* `ea66b6bf` — "Run 20260907-2308: lane 2b opened, **and the ground-contact
+  probe is RED on main**". They found the same regression independently.
+* `0e7bd140` — "Pass 12 2B: the theatrical clips — two DEATHS, the mana lasso,
+  the blown fall, the nodule taunt". Five appended slots, 17..21. **And
+  `kTrickPlantRootMm` 1644 → 1706, which is the fix.**
+
+Timeline: I began rendering `d820b574` at 23:09; 2b landed at 23:30; my encode
+was a third done at 23:44.
+
+### The decision, and it is the one thing in this run I most want on the record
+**This page is NOT re-rendered from main.** Three reasons; the third decides it.
+
+1. The brief is Waves 0–1, deliberately partial and mid-plan.
+2. **2b is not a pure append.** Its own commit message says "no existing clip
+   moves by one bit", and that is not quite true: `manafold_fx.h` moves the
+   stencil clear position and the `mana_lightning` call, which reaches the mana
+   on EVERY clip, and `kTrickPlantRootMm`, `kNoduleClipPm` and `kKneadClipPm`
+   are existing constants it edits. I checked rather than trusted the claim.
+3. **The by-eye pass behind this page is a pass on `d820b574`.** Re-rendering
+   from main invalidates every frame I looked at, on a tree that landed twenty
+   minutes ago with no QA document. Publishing what has not been looked at is
+   the single thing this creature's whole record says never to do. I would be
+   trading a KNOWN, NAMED, already-fixed-upstream fault in one clip for an
+   UNKNOWN amount of unlooked-at change across twenty-two.
+
+**And I did not re-render `trick` alone.** That would ship 21 clips from one
+generation beside 1 from another — precisely the silently mixed bank
+`checkfresh.py` was written to catch after pass 11, and which this card's own
+archive note calls *worse than a 0-byte webm*. **One generation, stated.**
+
+### What the page says instead
+* the blurb now ends by naming the exact commit every clip was rendered from;
+* the "no theatrical clips" claim is timestamped — it says there was no death
+  when this bank started rendering, that five clips landed on main while it
+  ran, that they are twenty minutes old and unreviewed, and that they are not
+  what you are looking at;
+* the Trick tab and the blurb both credit the upstream fix (1644 → 1706) while
+  still stating the fault that ships here.
+
+A caption that was true when written and false an hour later is exactly the
+failure this card keeps recording. This one has a clock on it.
