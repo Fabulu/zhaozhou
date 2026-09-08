@@ -52,3 +52,48 @@ Recorded, not investigated.
 `git add -A`. It is a failing test's **output**, not evidence.
 `captures/failures/` is now ignored, for the same reason `*.rgb` is: keep the
 report, not the intermediate that produced it.
+
+---
+
+# CORRECTION: 6 failures, not 5 — and 3 tests never ran at all
+
+The final ctest summary, which I did not have when I wrote the section above:
+
+```
+The following tests FAILED:
+    4 - ledger_check          10 - golden_abi_info    11 - abi_golden
+   12 - zcap_roundtrip        27 - format_check       30 - cppcheck_check
+The following tests did NOT RUN:
+  208 - texture_v3_window_identity
+  212 - texture_v3rq_probe_sanity
+  213 - raster_ticketq_rh_directed
+```
+
+Two things I got wrong by reading the partial log instead of waiting for the
+summary:
+
+**`cppcheck_check` FAILED.** I reported it as merely slow — it was advancing at
+300+ CPU seconds, which was true, and I inferred it would pass, which was not
+established. It ran to completion and failed.
+
+**Three tests did not run**, and **all three are in my area**:
+`texture_v3_window_identity`, `texture_v3rq_probe_sanity` and
+`raster_ticketq_rh_directed` — the v3own window identity, the v3rq probe, and
+the ticket queue.
+
+Their executables **do not exist**. They are registered in `tests/CMakeLists.txt`
+but were never built, because every build today targeted specific executables
+and no full `cmake --build` ever ran. ctest reports a missing executable as
+"Not Run" rather than a failure, which is why the pass/fail tally looked
+complete.
+
+## This weakens the claim I made
+
+I wrote *"the texture work broke nothing — 449 pass around it."* That is still
+true of the 449. But **three v3-related tests were never executed**, so the
+statement covered less than it sounded like it did. A "Not Run" is not a pass,
+and a tally that omits the category flatters itself.
+
+Building and running them now. Until they report, the honest position is that
+the texture work is verified by the 449 that ran and by the six texture gates,
+and is **unverified against those three**.
