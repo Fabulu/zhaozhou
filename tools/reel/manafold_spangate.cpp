@@ -105,6 +105,14 @@ constexpr double kReachGainMinMm = 60.0;
 // G3. The arm tip is buried inside the body; anything above rounding is the
 // stub coming back out through the ball's lower right.
 constexpr double kTipMoveMaxMm = 1.0;
+// G5's floor. G4 proves the stretch on the DIAGNOSTIC, whose amplitudes sit
+// at the ceiling on purpose. The owner never watches the diagnostic.
+// `taunt3` is the shipped clip whose performance IS the per-nodule
+// vocabulary and whose shrug is the owner's own configuration, so ball A's
+// vertical travel THERE is the thing that was actually asked for. 45 mm is
+// about 6 px at native -- the same read threshold kOpposeMinMm uses in the
+// nodule gate, and well clear of the 12 mm band that gate calls dither.
+constexpr double kShippedReachMinMm = 45.0;
 
 int g_fail = 0;
 bool g_no_lanes = false;
@@ -413,6 +421,70 @@ int main(int argc, char** argv) {
         std::printf("%d,%.0f,%.0f,%.0f,%.0f,%.0f,%.0f,%.0f,%.0f,%.0f\n", f, a.x, a.y, a.z, b.x,
                     b.y, b.z, c.x, c.y, c.z);
       }
+    }
+  }
+
+  // ---- G5: AND IT REACHES THE CLIP THE OWNER WATCHES ----------------------
+  //
+  // WHY THIS EXISTS SEPARATELY FROM G4. G4 measures the solo DIAGNOSTIC, which
+  // is authored at the ceiling because a diagnostic should show the ceiling. A
+  // feature can pass G4 and never appear in the bank -- and for one wave it
+  // very nearly did: `build_taunt3` authored nodule A's rise as a SIDEWAYS
+  // swing, with a comment explaining that a vertical request moved it 3 mm.
+  // That comment was true when it was written and FALSE the moment the spans
+  // learned to stretch, and no gate in the tree would have noticed. This is
+  // the check that notices.
+  //
+  // It walks every shipped slot and prints ball A's vertical SKIN reach, so the
+  // table itself says which clips exercise the channel and which do not (many
+  // legitimately do not -- a death is not a shrug). Only `taunt3` is GATED,
+  // because it is the clip that authors the owner's own configuration:
+  // "the middle one might go down while the other two swing up."
+  //
+  // The failable leg is `--fail-nolanes`, the same one G4 uses: it removes the
+  // lane authority from the production struct the renderer reads, and G5 goes
+  // red with it. Witnessed failing before this block was committed.
+  {
+    std::printf("\nG5 ball A VERTICAL SKIN reach, SHIPPED clips "
+                "(root-local, live vs lanes-ablated):\n");
+    const bool saved = g_no_lanes;
+    double gated_live = -1.0, gated_gain = -1.0;
+    for (const zc::Clip& c : T.bank.clips) {
+      // 7 is the 2-key form still, 15 the mana lab, 16 the solo diagnostic --
+      // none of them is a clip the owner watches.
+      if (c.slot_id == 7 || c.slot_id == 15 || c.slot_id == 16) continue;
+      double reach[2] = {0, 0};
+      for (int leg = 0; leg < 2; ++leg) {
+        g_no_lanes = (leg == 1) ? true : saved;
+        double lo = 1e9, hi = -1e9;
+        for (int f = 0; f < c.frame_count; ++f) {
+          const Vec3 p = ball_skin(T, c, static_cast<uint16_t>(f), stA, 90);
+          if (p.y < lo) lo = p.y;
+          if (p.y > hi) hi = p.y;
+        }
+        reach[leg] = hi - lo;
+      }
+      g_no_lanes = saved;
+      const bool gated = (c.slot_id == u02::kTaunt3Slot);
+      std::printf("     slot %2u  live %6.1f mm   ablated %6.1f mm   gain %6.1f%s\n",
+                  c.slot_id, reach[0], reach[1], reach[0] - reach[1],
+                  gated ? "   <-- GATED (taunt3, the shrug)" : "");
+      if (gated) {
+        gated_live = reach[0];
+        gated_gain = reach[0] - reach[1];
+      }
+    }
+    if (gated_live < 0.0) {
+      fail("taunt3 is not in the bank -- G5 has nothing to gate");
+    } else {
+      std::printf("     taunt3 floor %.1f mm on BOTH reach and gain\n",
+                  kShippedReachMinMm);
+      if (gated_live < kShippedReachMinMm)
+        fail("taunt3's nodule A does not travel vertically -- the owner's "
+             "'the other two swing up' is still a sidestep");
+      if (gated_gain < kShippedReachMinMm)
+        fail("taunt3's nodule A vertical travel does not come from the span "
+             "stretch -- present without the mechanism means this gate is blind");
     }
   }
 

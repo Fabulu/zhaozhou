@@ -2833,11 +2833,19 @@ inline zc::Clip build_taunt3() {
       // THE SHRUG: outers up, middle DOWN. Not 1:1 — a middle that drops
       // carries the rear down with it, so it takes the smaller share, the
       // same asymmetry slot 16's segment 3 measured and kNoduleSoloMidPm
-      // records. And nodule A's rise is sideways because a vertical request
-      // moves it 3 mm (FINDINGS-A §2.4's declared gap): the gesture is
-      // authored around the geometry rather than fighting it.
-      n.az = kTaunt3ShrugMm * shrug / 1000;
-      n.ay = kTaunt3ShrugMm * shrug / 4000;
+      // records.
+      //
+      // PASS 12 / WAVE 3: NODULE A RISES. This block used to read "nodule A's
+      // rise is sideways because a vertical request moves it 3 mm" — true when
+      // it was written, FALSE since wave 2a made the spans stretch, and left
+      // standing it is the false-structural-comment fault (gate checklist 8).
+      // A's vertical is now the main term and the sideways swing is a named
+      // third (kTaunt3ShrugLeanPm), so the owner's sentence — "the middle one
+      // might go down while the other two swing UP" — is what the clip does.
+      // `mspan`'s G5 gates it on THIS clip, not on the diagnostic.
+      n.ay = kTaunt3ShrugMm * shrug / 1000;
+      n.az = static_cast<int32_t>(
+          (static_cast<int64_t>(kTaunt3ShrugMm) * shrug * kTaunt3ShrugLeanPm) / 1000000);
       n.by = -kTaunt3ShrugMm * 6 / 10 * shrug / 1000;
       n.cy = kTaunt3ShrugMm * shrug / 1000;
       // THE SHIMMY: one press per ball, in sequence. Each press is 14 keys
@@ -2852,7 +2860,13 @@ inline zc::Clip build_taunt3() {
           const int32_t t = lf * 1000 / 28;
           const int32_t v = static_cast<int32_t>(
               (4LL * kTaunt3ShimmyMm * t * (1000 - t)) / 1000000);
-          if (i == 0) { n.az += v; n.ay += v / 4; }
+          // WAVE 3: A's press is VERTICAL now, like B's and C's. It was
+          // lateral only because the vertical did not move (see the shrug).
+          if (i == 0) {
+            n.ay += v;
+            n.az += static_cast<int32_t>(
+                (static_cast<int64_t>(v) * kTaunt3ShimmyLeanPm) / 1000);
+          }
           else if (i == 1) { n.by += v; n.bz += v / 3; }
           else { n.cy += v; n.cz -= v / 3; }
         }

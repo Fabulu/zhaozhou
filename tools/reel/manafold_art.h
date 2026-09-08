@@ -1965,6 +1965,25 @@ constexpr int kTaunt3LeanKey = 62;        // beat 2: the slow mocking lean-in
 constexpr int kTaunt3ShimmyKey = 104;     // beat 3: the three balls, in turn
 constexpr int kTaunt3FlickKey = 150;      // beat 4: the dismissal
 constexpr int32_t kTaunt3ShrugMm = 88;    // outer rise / middle drop, in mm
+// PASS 12 / WAVE 3 -- NODULE A'S RISE IS A RISE NOW, NOT A SIDESTEP.
+//
+// Wave 2b authored this gesture AROUND the declared gap: nodule A's span points
+// straight up, so a vertical request moved the BONE 3 mm, and the shrug gave A
+// a sideways swing with a quarter-share of vertical instead. The comment in
+// `build_taunt3` said so in as many words. D9 SS13's stretchy spans (wave 2a)
+// removed the gap -- the span LENGTHENS now, and `mspan`'s G4 measures ball A's
+// vertical SKIN reach at 172 mm against 38 with the lanes ablated -- so the
+// workaround is obsolete and the owner's own sentence ("the middle one might go
+// down while THE OTHER TWO SWING UP") can be authored literally.
+//
+// The lean is kept, at a third, and it is not a leftover: A is the station the
+// neck holds, so a purely vertical A next to a freely swinging C reads stiff.
+// Per-mille of the shrug amplitude that stays sideways. Set it to 0 for a pure
+// vertical shrug; that is a one-edit experiment, which is the point of naming it.
+constexpr int32_t kTaunt3ShrugLeanPm = 330;
+// The shimmy press on A was sideways for the same dead reason; it is vertical
+// now, like B's and C's, with this much of the press kept as lateral spice.
+constexpr int32_t kTaunt3ShimmyLeanPm = 250;
 constexpr int32_t kTaunt3ShimmyMm = 64;
 constexpr int32_t kTaunt3LeanA16 = 2400;
 constexpr int32_t kTaunt3FlickMm = 104;
