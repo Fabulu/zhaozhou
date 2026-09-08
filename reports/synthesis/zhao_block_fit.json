@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "69078e67fe05ad2834571ad8e11edf30b80dbbbc",
-    "newestRunClean":  true,
+    "newestRunCommit":  "8ce30e843c0c9b41ce7afa3fd79f7085bdd97dc3",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1659,19 +1659,24 @@
                    },
                    {
                        "module":  "zhao_texture_island_v3_top@pktC",
-                       "status":  "incomplete:failed:quartus_map.exe",
-                       "sourceCommit":  "69078e67fe05ad2834571ad8e11edf30b80dbbbc",
-                       "rtlCleanAtHead":  true,
-                       "sourceDigest":  "5a8ec6f6b59bf128012e7227af7733d46474bfae37600a619b808d7d12430d28",
+                       "status":  "ok",
+                       "sourceCommit":  "8ce30e843c0c9b41ce7afa3fd79f7085bdd97dc3",
+                       "rtlCleanAtHead":  false,
+                       "sourceDigest":  "b8f0ff0007ce944babd1d5f70741a7abe33613aa8de760800356cc8802d669d8",
                        "variantOf":  "zhao_texture_island_v3_top",
-                       "seconds":  33.5,
+                       "seconds":  4416.3,
                        "sourcesHashed":  19,
-                       "partial":  true,
-                       "partialStage":  "analysis_and_synthesis",
-                       "registers":  null,
-                       "blockMemoryBits":  null,
-                       "dspBlocks":  null,
-                       "virtualPins":  null
+                       "alms":  15911,
+                       "registers":  22265,
+                       "blockMemoryBits":  64638,
+                       "ramBlocks":  47,
+                       "dspBlocks":  17,
+                       "virtualPins":  1839,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  73.98,
+                       "fmaxClock":  "clk"
                    },
                    {
                        "module":  "zhao_texture_material_combine_v1",

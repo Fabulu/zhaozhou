@@ -47,6 +47,74 @@ def rows_of(doc):
     return []
 
 
+def rules_by_top(path):
+    """{top: [rule names]} from fit_targets.yml, without a YAML dependency."""
+    import re
+    out, top, inr = {}, None, False
+    try:
+        text = io.open(path, encoding="utf-8").read()
+    except OSError:
+        return out
+    for raw in text.split(chr(10)):
+        st = raw.strip()
+        m = re.match(r"^-?\s*top:\s*(\S+)", st)
+        if m:
+            top, inr = m.group(1), False
+            continue
+        if st.startswith("rules:"):
+            inr = True
+            continue
+        if inr and top:
+            m2 = re.match(r"^(max_\w+|min_\w+):\s*(\d+)", st)
+            if m2:
+                out.setdefault(top, {})[m2.group(1)] = int(m2.group(2))
+            elif st and not st.startswith("#"):
+                inr = False
+    return out
+
+
+# Which measured field each rule constrains.
+_RULE_FIELD = {"max_alms": "alms", "max_registers": "registers",
+               "max_dsp": "dspBlocks", "max_m10k": "ramBlocks"}
+
+
+def unevaluated(rows, rules):
+    """Rows whose MEASURED numbers break a rule while the row reports success.
+
+    THE SECOND HOLE, and the first attempt at it was wrong. I checked whether a
+    row carried a `ruleViolations` field at all -- but **no row in this ledger
+    ever records an empty list**: 106 omit the field, 12 have non-empty ones. So
+    absence means "no violations found" and "never evaluated" identically, and a
+    presence check flags 25 rows of which most are fine.
+
+    This compares the NUMBERS instead. A row reporting `ok` with 15,911 ALMs
+    against a `max_alms: 7500` is a contradiction whatever the field says, and
+    that is checkable without knowing whether the rules ran.
+
+    It exists because `zhao_texture_island_v3_top@pktC` did exactly that: 15,911
+    ALMs, status `ok`, no violations listed. Labelled rows do not get their
+    rules applied -- 26 of them, zero violations between them, against 12 of 92
+    unlabelled rows -- because the lookup keys on the module name and `@label`
+    does not match the target.
+    """
+    out = []
+    for r in rows:
+        mod = str(r.get("module", ""))
+        top = mod.split("@")[0]
+        if top not in rules:
+            continue
+        if r.get("partial") or str(r.get("status", "")).startswith("failed"):
+            continue
+        for rule, limit in rules[top].items():
+            field = _RULE_FIELD.get(rule)
+            if not field:
+                continue
+            val = r.get(field)
+            if isinstance(val, (int, float)) and val > limit:
+                out.append((mod, rule, limit, val))
+    return out
+
+
 def inconsistent(rows):
     """[(module, status, n_violations)] for rows claiming ok while violating."""
     out = []
@@ -96,7 +164,19 @@ def main(argv):
         return 2
 
     bad = inconsistent(rows)
-    print("fit-ledger consistency: %d rows checked" % len(rows))
+    rules = rules_by_top(os.path.join(ROOT, "design", "fit_targets.yml"))
+    unev = unevaluated(rows, rules)
+    print("fit-ledger consistency: %d rows checked, %d tops carry rules"
+          % (len(rows), len(rules)))
+    if unev:
+        print("ROWS REPORTING SUCCESS WHILE OVER A RULE: %d" % len(unev))
+        for mod, rule, limit, val in unev[:12]:
+            print("  - %s: %s is %s, rule allows %s, and the row reports success"
+                  % (mod, rule, val, limit))
+        if len(unev) > 12:
+            print("  ... and %d more" % (len(unev) - 12))
+        print("A row whose rules were never applied reads exactly like one that "
+              "passed them. Do not quote these as 'ok'.")
     if bad:
         print("ROWS CLAIMING SUCCESS WHILE LISTING VIOLATIONS: %d" % len(bad))
         for module, status, n in bad:
@@ -105,7 +185,10 @@ def main(argv):
               "entry and a recommendation. Fix the row or re-run the fit; do not "
               "read past it.")
         return 1
-    print("no row claims success while listing rule violations")
+    if unev:
+        return 1
+    print("no row claims success while listing rule violations, and every row "
+          "whose top has rules was actually evaluated")
     return 0
 
 
