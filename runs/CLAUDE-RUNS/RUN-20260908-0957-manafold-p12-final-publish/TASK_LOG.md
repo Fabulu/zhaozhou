@@ -174,3 +174,66 @@ crown are legible for the first time.**
   441 grey pixels over frames 340→351, then snaps to 97 at the loop. It grows
   smoothly, so it is likely authored and only the WRAP is wrong. New clip, never
   seen by anyone; recorded rather than chased.
+
+### 11:25 — ⚠ THE BLOOM FIX WAS HALF-LANDED, AND MY FRAME READER WAS LYING
+
+Two corrections, both mine, both caught within an hour of each other.
+
+**1. The bloom switch only reached `channel`.** I put `kU02BackdropBloom`
+inside `u02_common()`, which is the slot-2 path. **`crackle` sets
+`s.planet = 1` on its own subject**, outside that path — so channel lost the
+bloom, crackle kept it, and the card text I had already written claimed both.
+09-ENGINE-GOTCHAS §16 exactly: **a partial fix is more dangerous than none,
+because the half that worked is the half you look at.** I found it in the
+rendered bank; the pass-13 architect found it in the source independently.
+Constant and a `u02_planet_on()` helper now live at namespace scope so one
+switch governs every clip. Verified: crackle near-white **18.2% → 0.5%**.
+
+**Killed the encode at 13 of 28 rather than ship a mixed bank.** Re-rendering
+all 28 from `ffae071e`, binary md5 `6d6665c2…`.
+
+**2. Every colour word I wrote this morning was wrong.** `.rgb` reel frames
+carry an **8-byte header**; I read them with a bare `PIL.frombytes`, which
+rotates every pixel's channels. So "blue creature", "green sky", "gold mana" —
+all false. **`tools/reel/rgbframe.py` exists precisely to prevent this** and its
+docstring says *"USE THIS ONE. Do not write another frame reader."*
+
+**And I put the broken recipe in the pass-13 architect's brief**, which cost it
+half a morning believing the bank had changed colour. Written up as
+`10-GATE-CHECKLIST.md` **item 38 — a brief is an instrument, and it can lie like
+one**: it is read first, by an agent with no context to contradict it, which
+makes it the most trusted instrument here and the only one nobody checks.
+
+⚠ **What survived, stated deliberately.** Near-white area and grey-pixel counts
+are **invariant under a channel rotation**, and so is every judgement about
+pose, motion and shape. So the corpse holding, the eye travel reading, the
+bloom covering 18.9%/18.2% against <1% elsewhere — all stand. **Only the colour
+words were void.** Discarding the sound conclusions along with the broken ones
+is its own kind of damage.
+
+### 11:40 — PASS 13 OPENED, two implementers running
+
+The architect's `PASS-13-PLAN.md` is committed. Its own §0 is the instrument
+warning above, made binding for every pass-13 lane. Three findings I did not
+have:
+
+* **Every travelling clip teleports at its wrap**, not just `flight` — grey
+  splash `drift` 295→**729**, `hasty` 95→238, `fall` 93→126, all snapping to
+  ~zero at frame 0. **Same mechanism as the corpse standing up**, applied to a
+  wrapping root. One opt-in flag cures four clips.
+* **The main idle is faceless for ~2.5 s** — the travel channel runs two
+  always-on sines, so the eyes never dwell.
+* **Item 5 downgraded by looking**: the crown visibly arches and reconfigures
+  in `hover` f180–250 now that the motes are cut. No dedicated work item.
+
+Lanes: **IMPL-A "face"** (R1) in `manafold-p13-a`, **IMPL-C "engine+reel"**
+(R2/R6/R7/R8) in `manafold-p13-c`, disjoint files. **IMPL-B "performance"** is
+held: C must land the `Clip` wrap flag before B flips it.
+
+### NEXT STEPS — written down BEFORE the render lands
+1. render finishes → **verify no renderer process is alive** (28 directories
+   existing is NOT 28 clips rendered; that check fired early once today and
+   `mana-stack` had 193 of 601 frames)
+2. encode, **no `-SkipMediaCheck`**, then `checkfresh` + `checkmedia`
+3. assemble, deploy `-Branch main`, verify from production
+4. release IMPL-B when C reports the flag landed
