@@ -461,7 +461,8 @@ module zhao_texture_island_v3_top #(
 
   // The island's own fragment counter, used as the token so a response can be
   // matched to its request. Eight bits is RCP24's TOKW.
-  logic [7:0] tok_r;
+  // `tok_r` DELETED: it stamped an ingress identity v3own now assigns, and the
+  // RCP carries the owner handle itself (`.v_tok_i(own_adm_owner)`).
 
   // ==========================================================================
   // THE END-TO-END OWNER CREDIT (owner recovery brief, prerequisite 1)
@@ -579,8 +580,6 @@ module zhao_texture_island_v3_top #(
   assign frag_ready_o = rcp_v_ready && credit_available;
 
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) tok_r <= 8'd0;
-    else if (frag_valid_i && frag_ready_o) tok_r <= tok_r + 8'd1;
   end
 
   // ==========================================================================
@@ -700,10 +699,15 @@ module zhao_texture_island_v3_top #(
   // so two in flight never differ by FCTXN or more, and the low FCTXW bits
   // ENFORCED-BY: tests/texture/island_composed_directed.cpp
   // therefore distinguish every live fragment. The counter is allowed to wrap.
-  logic [FCTXW-1:0] fseq_m  [FCTXN];
-  logic [FCTXW-1:0] seq_alloc_r;
+  // `fseq_m` DELETED: v3own's cursor IS the sequence. A second one is the
+  // "partial implementation of v3own's lifetime" §0 forbids keeping.
 
-  wire [FCTXW-1:0] fc_wp = tok_r[FCTXW-1:0];
+
+  // THE ATTRIBUTE TABLES ARE KEYED BY THE OWNER SLOT, like everything else.
+  // They were keyed by `tok_r`, the deleted ingress counter. The slot is the
+  // handle's HIGH six bits, and taking the low ones would key on the
+  // GENERATION -- the same silent aliasing `uvw_m`'s index nearly had.
+  wire [FCTXW-1:0] fc_wp = own_adm_owner[13:8];
 
   // THE CALLER'S CONTEXT IS STORED VERBATIM AND NEVER REPACKED.
   //
@@ -731,10 +735,7 @@ module zhao_texture_island_v3_top #(
 
   always_ff @(posedge clk) begin
     if (!rst_n) begin
-      seq_alloc_r <= '0;
     end else if (frag_valid_i && frag_ready_o) begin
-      fseq_m[fc_wp] <= seq_alloc_r;
-      seq_alloc_r   <= seq_alloc_r + 1'b1;
     end
   end
 
@@ -837,7 +838,9 @@ module zhao_texture_island_v3_top #(
 
   // Read point 2: PERSPUV's answer, for everything that consumes a fragment
   // once its texture coordinates exist.
-  wire [FCTXW-1:0]      fc_rp    = pu_tag[FCTXW-1:0];
+  // ...and read by the same slot, arriving in PERSPUV's tag. `pu_tag[FCTXW-1:0]`
+  // would again be the generation; `[13:8]` is the slot.
+  wire [FCTXW-1:0]      fc_rp    = pu_tag[13:8];
   wire [CTXW-1:0]       fctx_rd  = fctx_m[fc_rp];
   wire [31:0]           fbase_rd = fbase_m[fc_rp];
   wire [BINDW-1:0] f_binding_c  = fbind_m[fc_rp];
@@ -2423,13 +2426,17 @@ module zhao_texture_island_v3_top #(
   assign own_cmb_ready_c = comb_f_ready;
 
   // -------- reorder buffer --------------------------------------------------
-  logic [32:0] rob_m [FCTXN];      // {refused, a, rgb}
-  logic        rob_full_m [FCTXN];
-  logic [15:0] rob_tag_m [FCTXN];
-  logic [FCTXW-1:0] seq_head_r;
-
-  wire [FCTXW-1:0] comb_seq = comb_o_tag[ROBTAGW-1:16];
-  assign comb_o_ready = 1'b1;      // cannot back up: one slot per live fragment
+  // (d3) THE ROB STORAGE IS GONE. `rob_m[64]x33`, `rob_full_m[64]`,
+  // `rob_tag_m[64]x16` and the `seq_head_r` cursor -- 3,138 bits plus a cursor
+  // -- deleted because v3own's ordered output implements the same guarantee
+  // once instead of twice. `comb_seq` goes with them: it sliced a sequence
+  // number out of the tag, and TAGW is now 14, the owner handle alone.
+  //
+  // `comb_o_ready` is no longer a constant either. The oracle could assert it
+  // permanently because the ROB had one slot per live fragment and so could
+  // never refuse. Now the combiner's answer must be ACCEPTED BY v3own as a
+  // FINAL, and v3own can legitimately not be ready -- so the handshake is real,
+  // and it is `own_fin_ready` (assigned at (d2) below).
 
   // HEAD-OF-LINE STALL IS DELIBERATE, and it is the honest cost of this
   // boundary. If a fragment is admitted and never completes -- the condition
