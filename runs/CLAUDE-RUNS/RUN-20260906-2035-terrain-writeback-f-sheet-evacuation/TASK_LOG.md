@@ -3289,3 +3289,37 @@ PowerShell call as ONE string. `run_block_fit.ps1`'s preflight refused:
 That guard is exactly right and worth noting: without it the ledger would carry a
 row saying the fog block does not fit, when the truth is that I typed the
 argument wrong. Relaunched per module.
+
+## The architecture's NAMED MEASUREMENT, taken — and it fired
+
+The document flagged one thing it had not verified: whether
+`zhao_texture_cache_pipe`'s source-id port is parameterised. *"If it is a literal
+16, the leaf needs a width parameter — mechanical, but it touches a retained
+service and therefore belongs in its own commit with its own leaf test run."*
+
+**It is a literal 16, in FOUR places**, and the block has a parameter list
+(`LANES`, `LINES`, `LINE_BYTES`, `REQN`) with no width parameter among them:
+
+    102  input  var logic [15:0] acc_src_id_i
+    108  output var logic [15:0] smp_src_id_o
+    206  logic [15:0] rq_src [REQN]
+    305  logic [15:0] rs_src [REQN]
+
+## And the prerequisite is landed, alone
+
+`SRCW` parameter added, **default 16**, threaded through all four sites. Every
+existing instantiation — island_top:1229 and `zhao_prod_top` — keeps its exact
+current width.
+
+* `texture_cache_pipe_directed` **16 checks**, sustained rate 1.02 clocks per
+  answer, warm+stalled ordering intact.
+* `island_composed_directed` **119 checks**, unchanged.
+
+**It lands BEFORE anything asks for 18 bits, deliberately.** The architecture's
+rule and today's own evidence agree: bundling the widening into the integration
+commit produces one fit result attributable to neither. This is the cheap half
+done while the expensive half is still on paper.
+
+Why P0-C needs it at all: today's `SRCW=16` is EXACTLY FULL at slot width 4 —
+`plan_src_id`'s pad term `SRCW-2-$clog2(DEPTH)-2-GENW` evaluates to 0
+(verified by hand) — so v3own's 6-bit slot has no slack to grow into.
