@@ -188,6 +188,7 @@ int main(int argc, char** argv) {
   // ---- the differential ----------------------------------------------------
   int uv_mismatch = 0, tag_mismatch = 0, sat_mismatch = 0, dz_mismatch = 0;
   int compared_uv = 0, saw_sat = 0, saw_dz = 0;
+  int compared_dz = 0, dz_nonzero = 0, dz_sat = 0;
   const size_t n = a_out.size() < b_out.size() ? a_out.size() : b_out.size();
   for (size_t i = 0; i < n; ++i) {
     const Res& a = a_out[i];
@@ -197,11 +198,24 @@ int main(int argc, char** argv) {
     if (a.sat != b.sat) ++sat_mismatch;
     if (a.dz) {
       ++saw_dz;
+      // THE EXCLUSION HAS TO EARN ITSELF. U/V are not compared against the
+      // service here because the service returns whatever the previous user of
+      // that token left in e_q_u/e_q_v -- stale by contract. But the candidate's
+      // side of that claim is "deterministic ZERO", and an excluded comparison
+      // with nothing asserted in its place is just a gap with a comment on it.
+      //
+      // So the claim is checked directly: not "differs from svc", which would be
+      // satisfied by any garbage, but exactly zero.
+      if (b.u != 0 || b.v != 0) ++dz_nonzero;
+      ++compared_dz;
     } else {
       if (a.u != b.u || a.v != b.v) ++uv_mismatch;
       ++compared_uv;
     }
     if (a.sat) ++saw_sat;
+    // And a depth-zero result must not claim saturation: no product was formed,
+    // so there was nothing to saturate.
+    if (b.dz && b.sat) ++dz_sat;
   }
 
   std::printf("  fed %zu (nonzero %d, depth-zero %d) | service emitted %zu, candidate %zu\n", fed,
@@ -231,6 +245,21 @@ int main(int argc, char** argv) {
               1, saw_sat > 0 ? 1 : 0);
   zhao::check(compared_uv > 200, "and a substantial number of U/V pairs", 1,
               compared_uv > 200 ? 1 : 0);
+
+  zhao::check(compared_dz > 0,
+              "depth-zero results were actually observed, so the two checks "
+              "below are about something",
+              1, compared_dz > 0 ? 1 : 0);
+  zhao::check(dz_nonzero == 0,
+              "every depth-zero result carries U = V = 0 EXACTLY. This is the "
+              "candidate's side of the one declared difference from the service, "
+              "and it is asserted rather than left as an excluded comparison -- "
+              "'differs from svc' would be satisfied by any garbage",
+              0, static_cast<uint64_t>(dz_nonzero));
+  zhao::check(dz_sat == 0,
+              "and no depth-zero result claims saturation: no product was formed, "
+              "so there was nothing to saturate",
+              0, static_cast<uint64_t>(dz_sat));
 
   zhao::check(uv_mismatch == 0,
               "the candidate's U and V are BIT-IDENTICAL to the frozen "
