@@ -7710,12 +7710,30 @@ int main(int argc, char** argv) {
   if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
   if (wanted("manafold-hover")) rc |= render_scene(subject_u02_clip(0, "manafold-hover", u02::kIdleKeys, true, &kU02SunHover));
   if (wanted("manafold-inspect")) {
-    // Direction 3 §1: EXACTLY ONE subject carries the four coloured moving
-    // lights — this inspection showcase. Hover keys, orbit camera, the u02
-    // moving rig and source paths from pass 2, and NO marker orbs
-    // (moving_markers is cleared for the whole species).
+    // ⚠ THIS CLIP WAS A PIXEL-PERFECT DUPLICATE OF manafold-hover, and the
+    //  page was showing the owner 36 clips of which 35 were distinct (pass-12
+    //  review item 8: byte-identical at all 600 frames, every frame compared).
+    //
+    //  Its ONLY difference was `creature_moving_light = true` -- and
+    //  subject_u02_clip has set that unconditionally for every clip since
+    //  Direction 5 §8 reversed Direction 3 §1, so the line has been a no-op
+    //  for six passes. Pass 10 QA found the duplication, traced it correctly,
+    //  and disposed of it by DISCLOSING it in the caption; passes 11 and 12
+    //  carried that disclosure forward. The review overturns it: a repeat is
+    //  a repeat whether or not a caption admits it.
+    //
+    //  It cannot differentiate itself by LIGHTING any more -- D9 §4, "they all
+    //  need to be the same, it's all part of the model", closes that door and
+    //  it is the door this clip used to go through. So it differentiates by
+    //  CAMERA, which §4 does not govern: the house framing is 360000 and
+    //  higher k is tighter, so 460000 -- the same framing the nodule
+    //  diagnostic uses to make the joints legible -- turns "inspect" into a
+    //  clip that actually inspects. Orbiting, close, under the one model rig.
+    //  That is OWNER-INVENTORY's "slow inspection orbit" and it is the only
+    //  reading of this clip's own name that survives §4.
     SceneSubject s = subject_u02_clip(0, "manafold-inspect", u02::kIdleKeys, true, nullptr);
     s.creature_moving_light = true;
+    s.cam_k = 460000;
     rc |= render_scene(s);
   }
   if (wanted("manafold-drift")) rc |= render_scene(subject_u02_clip(1, "manafold-drift", u02::kDriftKeys, false, &kU02SunDrift));
