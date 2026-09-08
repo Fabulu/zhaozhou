@@ -3394,6 +3394,59 @@ to the number I knew I could not guess and skipped for the one I felt sure of.
 `zhao_raster_blend`'s 2 DSP was in the ledger the whole time and would have
 settled it in one query.
 
+## M12 — A FALSIFIER THAT COVERS ONE PATH LICENSES ONE MOVE
+
+**2026-09-08, packet C.** The metadata bank was to replace five asynchronous
+response-side reads with one synchronous join. I built an alignment falsifier —
+does the queued metadata belong to the response presenting it? — and it reported
+**792 checked, 0 wrong**.
+
+Then I moved **three** readers on it. Two of them belonged to **different class
+queues**, which that falsifier never examined. Gate 2 failed in one run:
+*ARGB4444/bilinear alpha wrong on 3 fragments.*
+
+Per-queue falsifiers, which is what should have existed first:
+
+| queue | checked | wrong |
+|---|---|---|
+| CLUT | 792 | **0** |
+| nearest | 192 | **0** |
+| **bilinear** | 768 | **32 (4.2%)** |
+
+The nearest reader then moved on its own evidence. The bilinear one is held.
+
+### The general shape
+
+Evidence about one instance of a repeated structure is not evidence about the
+structure. Three class queues, one falsifier, three moves — the arithmetic was
+wrong before the RTL was. It is the same error as reading a `status` field and
+not the `ruleViolations` beside it, and as counting a suite's passes without
+counting its "Not Run" — **all three happened in this session, and all three
+are a summary standing in for the thing it summarises.**
+
+### What the localisation then bought
+
+With a per-queue falsifier and a first-mismatch capture, the bilinear
+disagreement narrowed to **fractions only** (`fv 50/fu 80` queued against
+`fv 10/fu 30` in the table; nibble, format and byte-select agree), and three
+hypotheses died:
+
+* **not slot recycling** — the bank stores each row's owner generation and
+  checks it against the returning response's. **0 mismatches** across the suite.
+* **not the bank** — the shadow shows bank and tables agreeing at the common
+  stream, 1,176/0.
+* **not the queue mechanism** — nearest carries the same payload through the
+  same dispatcher, clean.
+
+What remains is that the table changes between the common stream and the
+bilinear queue's exit for the same slot, sidx and generation — so "which value
+is right for this tap" is **semantic**, and gate 2 already answered it: the
+decode depends on the table's later value.
+
+A count says how often. Only a capture says what.
+
+---
+
 ## M11 — HAND-TYPED FIELD OFFSETS, IN THE FILE WRITTEN TO PREVENT THEM
 
 **2026-09-08.** The v3own re-key cost five stale slices: `uvw_m`'s index,
