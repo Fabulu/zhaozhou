@@ -909,3 +909,40 @@ leaf rows were not comparable — this makes one that is. `run_block_fit.ps1`
 warns that Quartus silently ignores directives, so **verify the parameters took**
 before believing the row: at NCTX=8 the context storage must be visibly smaller
 than the NCTX=16 rows, or the override was dropped.
+
+## The fast-suite wedge was MINE, introduced this morning
+
+Fourth wedge, and this time the temp directory was clean and tests had already
+run. `LastTest.log` ends at **`island_v3_paired`** — the gate 3 test I added to
+ctest a few hours ago.
+
+Run alone it passes in **0.77 s**. The defect is what I attached to it:
+
+```cmake
+DEPENDS "island_composed_directed;island_v3_composed_directed"
+```
+
+**`gate3_paired.py` runs both executables itself** — that is the entire design,
+so the comparison cannot drift from a separate harness. It needs them BUILT,
+which the target dependency already guarantees, not RUN. The DEPENDS was
+redundant, and under `-j2` it wedged the suite at that test every time.
+
+Removed. The suite now runs past it.
+
+### Three wrong diagnoses before the right one
+
+1. *"I built while ctest was running."* True once, and the cause of wedge one.
+2. *"Stale `CTestCheckpoint.txt` and 58 orphan temp files."* Real, and the cause
+   of wedges two and three — but debris from killing wedge one, so still
+   downstream of my own doing.
+3. *"The environment cannot run the full suite."* I was one step from writing
+   that down as a limitation of the machine.
+
+The actual cause was a line I wrote this morning. Each explanation fit the
+evidence I had — no test process, frozen ctest CPU — and each was reached
+without the one cheap check that would have separated them: **run the suspect
+test alone.** That took eight seconds when I finally did it.
+
+This is the third time today the pattern has repeated (zero-work stall, combine
+counter, this). In every case the RTL findings that survived came from
+differential tests; every wrong call came from reasoning about symptoms.
