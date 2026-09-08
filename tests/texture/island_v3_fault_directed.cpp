@@ -258,6 +258,135 @@ int main(int argc, char** argv) {
                 0, foreign);
   }
 
+  // ---- PHASE 5: THE CONSUMER STALLS MID-FLIGHT (brief §3.2) ----------------
+  // "consumer stalls immediately after a read reservation" is on the brief's
+  // list of minimum additional composed cases. A sink that shuts while work is
+  // in flight must not lose a fragment or retire one twice: the reservation is
+  // a credit, and a credit that is spent while the consumer is closed is the
+  // reservation-versus-acceptance defect M6 already cost this repository once.
+  {
+    d.rst_n = 0; tick(d); tick(d); d.rst_n = 1; tick(d);
+
+    const int kN = 120;
+    int submitted = 0, retired = 0, dup = 0, foreign = 0, stalled_accepts = 0;
+    std::vector<int> seen(kN + 8, 0);
+
+    for (int cyc = 0; cyc < 40000 && retired < kN; ++cyc) {
+      // Shut the sink for a 40-cycle window in the middle of the burst, while
+      // fragments are certainly in flight -- not at the drain, where a stall
+      // proves nothing.
+      const bool sink_open = !(cyc >= 400 && cyc < 440);
+      d.out_ready_i = sink_open ? 1 : 0;
+
+      d.frag_valid_i = (submitted < kN) ? 1 : 0;
+      d.frag_class_i = 0;
+      d.frag_sample_count_i = 0;
+      d.frag_aux_i = 0;
+      d.frag_ctx_i = static_cast<uint64_t>(submitted);
+      d.eval();
+
+      const bool acc = d.frag_valid_i && d.frag_ready_o;
+      if (acc && !sink_open) ++stalled_accepts;
+      if (d.out_valid_o && d.out_ready_i) {
+        const int tag = static_cast<int>(d.out_tag_o);
+        if (tag < 0 || tag >= kN) ++foreign; else if (seen[tag]++) ++dup;
+        ++retired;
+      }
+      tick(d);
+      if (acc) ++submitted;
+    }
+    d.frag_valid_i = 0;
+    d.out_ready_i = 1;
+    d.eval();
+
+    std::printf("  consumer stall: submitted %d, retired %d, accepted while SHUT %d\n",
+                submitted, retired, stalled_accepts);
+
+    zhao::check(stalled_accepts > 0,
+                "the island kept ACCEPTING while the sink was shut -- otherwise "
+                "the stall never exercised the credit path and this phase is "
+                "just a slower version of phase 4",
+                1, stalled_accepts > 0 ? 1 : 0);
+    zhao::check(retired == submitted,
+                "every fragment survived the stall", submitted, retired);
+    zhao::check(dup == 0, "and none was retired twice across it", 0, dup);
+    zhao::check(foreign == 0, "and no foreign tag appeared", 0, foreign);
+  }
+
+  // ---- PHASE 6: RESET MID-FLIGHT, THEN A FRESH NAMESPACE (brief §5) --------
+  // "the owner's local quiet cannot certify that external producers have
+  // stopped delivering old responses. The current owner source explicitly
+  // leaves those acknowledgment phases outside its interface."
+  //
+  // This drives the part that IS observable from the boundary: assert reset
+  // while fragments are in flight, then run a fresh batch whose tags cannot
+  // collide with the abandoned ones. Nothing from before the reset may retire
+  // afterwards.
+  {
+    const int kPre = 40, kPost = 80;
+    const int kTagBase = 500;          // disjoint from the pre-reset tags
+
+    d.rst_n = 0; tick(d); tick(d); d.rst_n = 1; tick(d);
+    d.out_ready_i = 1;
+
+    // Offer pre-reset traffic and do NOT drain it.
+    int pre = 0;
+    for (int cyc = 0; cyc < 4000 && pre < kPre; ++cyc) {
+      d.frag_valid_i = 1;
+      d.frag_class_i = 0;
+      d.frag_sample_count_i = 0;
+      d.frag_ctx_i = static_cast<uint64_t>(pre);
+      d.out_ready_i = 0;               // sink shut: keep them in the machine
+      d.eval();
+      if (d.frag_valid_i && d.frag_ready_o) ++pre;
+      tick(d);
+    }
+    d.frag_valid_i = 0;
+    d.eval();
+
+    // RESET while they are in flight.
+    d.rst_n = 0; tick(d); tick(d); d.rst_n = 1; tick(d);
+    d.out_ready_i = 1;
+
+    int post = 0, retired = 0, stale = 0;
+    for (int cyc = 0; cyc < 40000 && retired < kPost; ++cyc) {
+      d.frag_valid_i = (post < kPost) ? 1 : 0;
+      d.frag_class_i = 0;
+      d.frag_sample_count_i = 0;
+      d.frag_ctx_i = static_cast<uint64_t>(kTagBase + post);
+      d.eval();
+      const bool acc = d.frag_valid_i && d.frag_ready_o;
+      if (d.out_valid_o && d.out_ready_i) {
+        const int tag = static_cast<int>(d.out_tag_o);
+        if (tag < kTagBase) ++stale;   // a pre-reset fragment came back
+        ++retired;
+      }
+      tick(d);
+      if (acc) ++post;
+    }
+    d.frag_valid_i = 0;
+    d.eval();
+
+    std::printf("  reset schedule: pre %d (abandoned), post %d, retired %d, stale %d\n",
+                pre, post, retired, stale);
+
+    zhao::check(pre > 0,
+                "pre-reset fragments were actually admitted and left in flight, "
+                "so the reset had something to abandon",
+                1, pre > 0 ? 1 : 0);
+    zhao::check(post >= kPost,
+                "and the island accepts a full fresh batch after reset -- it "
+                "did not come back wedged",
+                kPost, post);
+    zhao::check(stale == 0,
+                "NOTHING from before the reset retired afterwards. A tag below "
+                "the fresh base can only be an abandoned fragment surviving a "
+                "namespace it no longer belongs to",
+                0, stale);
+    zhao::check(retired == kPost,
+                "and every post-reset fragment retired", kPost, retired);
+  }
+
   // ---- The other two ports, stated as obligations --------------------------
   // §3.1 B and C. These are not yet testable by injection because neither port
   // has a defined event to inject: `fr_wq_overflow` and `fr_id_error` have no
