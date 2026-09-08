@@ -1062,6 +1062,7 @@ module zhao_texture_island_v3_top #(
   logic [17:0] exp_req_src_id;
   logic        exp_aux_valid, exp_aux_ready;
   logic [13:0] exp_aux_owner;
+  logic [CTXW-1:0] exp_aux_ctx;
   logic        exp_iss_tmu_valid, exp_iss_aux_valid;
   logic [15:0] exp_iss_tmu_handle;
   logic [13:0] exp_iss_aux_owner;
@@ -1079,11 +1080,20 @@ module zhao_texture_island_v3_top #(
       .f_binding_i(f_binding_c), .f_lod_i(f_lod_c),
       .f_count_i(f_scount_c), .f_aux_i(f_aux_c),
       .f_class_i(f_class_c),
+      // `fr_f_ctx`, NOT `frag_ctx_i`. Every other attribute here -- `pu_u`,
+      // `pu_v`, `f_binding_c`, `f_lod_c` -- has travelled through PERSPUV with
+      // its fragment; taking the context off the raw input pin instead reads
+      // whatever the CALLER is presenting now, which is a later fragment. That
+      // is the exact defect this island's own test names in the check text
+      // "travels with its fragment instead of being read off the input pin
+      // twelve clocks late", and the queue that fixes it (`fctx_m`, indexed by
+      // `fc_wp`/`fc_rp`) was already here and already correct.
+      .f_ctx_i(fr_f_ctx),
       .req_valid_o(exp_req_valid), .req_ready_i(exp_req_ready),
       .req_u_o(exp_req_u), .req_v_o(exp_req_v), .req_lod_o(exp_req_lod),
       .req_src_id_o(exp_req_src_id),
       .aux_valid_o(exp_aux_valid), .aux_ready_i(exp_aux_ready),
-      .aux_owner_o(exp_aux_owner),
+      .aux_owner_o(exp_aux_owner), .aux_ctx_o(exp_aux_ctx),
       .iss_tmu_valid_o(exp_iss_tmu_valid),
       .iss_tmu_handle_o(exp_iss_tmu_handle),
       .iss_aux_valid_o(exp_iss_aux_valid),
@@ -2396,7 +2406,12 @@ module zhao_texture_island_v3_top #(
       // path also derives geometry from the opaque context", kept verbatim at
       // first integration, limitation and all.
       .req_valid_i(exp_aux_valid), .req_ready_o(exp_aux_ready),
-      .req_wx_i(own_out_ctx[31:0]), .req_wz_i(own_out_ctx[63:32]),
+      // THE FRAGMENT'S OWN CONTEXT, carried by the expander -- not
+      // `own_out_ctx`, which belongs to whatever the OUTPUT stage is emitting
+      // this cycle and is a different fragment entirely. See the expander's
+      // `f_ctx_i` comment: this was asking the sheet about fragment M's world
+      // position while issuing fragment N's aux request.
+      .req_wx_i(exp_aux_ctx[31:0]), .req_wz_i(exp_aux_ctx[63:32]),
       .req_env_x0_i(32'sd0), .req_env_x1_i(32'sd65536),
       .req_env_z0_i(32'sd0), .req_env_z1_i(32'sd65536),
       // THE OTHER HALF OF THE AUX WIDENING. `AUX_TOKW` was widened to 14 at

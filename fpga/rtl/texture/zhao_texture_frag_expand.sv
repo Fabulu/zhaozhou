@@ -60,6 +60,7 @@ module zhao_texture_frag_expand #(
     // that instruction, not a measured optimum, and it is a parameter so the
     // measurement can move it.
     parameter int unsigned FQD  = 4,
+    parameter int unsigned CTXW = 64,
     // Routing token width. 18 under P0-C = {class[1:0], sample_handle[15:0]};
     // defaulted to 18 here because this block is new and has no legacy
     // instantiation to keep bit-identical.
@@ -83,6 +84,21 @@ module zhao_texture_frag_expand #(
     input  var logic               f_aux_i,       // this fragment needs AUX
     input  var logic [1:0]         f_class_i,
 
+    // THE AUX REQUEST'S WORLD COORDINATES TRAVEL WITH THE FRAGMENT.
+    //
+    // fragrob had `aux_ctx_o` for exactly this reason and the first integration
+    // dropped it, sourcing the AUX pipe's `req_wx_i`/`req_wz_i` from
+    // `own_out_ctx` -- the context of whatever fragment the OUTPUT stage
+    // happened to be emitting. Those are two unrelated fragments. The aux
+    // request for fragment N was asking the sheet about fragment M's position,
+    // which is why the island's aux coordinate check saw 17 of an expected 22
+    // and why aux-bearing fragments retired the wrong colour.
+    //
+    // An attribute read off a different stage's pin is the same defect as an
+    // attribute read off an input pin twelve clocks late, which this island's
+    // own test already has a check for. It travels with its fragment.
+    input  var logic [CTXW-1:0] f_ctx_i,
+
     // ---- TMU sample requests -------------------------------------------------
     output var logic               req_valid_o,
     input  var logic               req_ready_i,
@@ -95,6 +111,7 @@ module zhao_texture_frag_expand #(
     output var logic        aux_valid_o,
     input  var logic        aux_ready_i,
     output var logic [13:0] aux_owner_o,
+    output var logic [CTXW-1:0] aux_ctx_o,
 
     // ---- ISSUE NOTIFICATIONS toward v3own ------------------------------------
     // Pulsed on the ACCEPTED handshake edge, never on the intent. v3own's §11.1
@@ -127,6 +144,7 @@ module zhao_texture_frag_expand #(
     logic [1:0]         count;
     logic               aux;
     logic [1:0]         cls;
+    logic [CTXW-1:0]    ctx;
   } frag_t;
 
   frag_t          fq_m [FQD];
@@ -180,6 +198,7 @@ module zhao_texture_frag_expand #(
 
   assign aux_valid_o = aux_owed_c;
   assign aux_owner_o = cur_q.owner;
+  assign aux_ctx_o   = cur_q.ctx;
 
   wire tmu_fire_c = req_valid_o && req_ready_i;
   wire aux_fire_c = aux_valid_o && aux_ready_i;
@@ -217,7 +236,8 @@ module zhao_texture_frag_expand #(
                                     lod:     f_lod_i,
                                     count:   f_count_i,
                                     aux:     f_aux_i,
-                                    cls:     f_class_i};
+                                    cls:     f_class_i,
+                                    ctx:     f_ctx_i};
         fq_wp_q     <= fq_wp_q + (FQW+1)'(1);
         fragments_o <= fragments_o + 32'd1;
         // THE ZERO-SAMPLE FRAGMENT, counted where it happens so a test can

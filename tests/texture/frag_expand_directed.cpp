@@ -37,6 +37,8 @@ struct Frag {
   uint8_t count;    // 0..3
   bool aux;
   uint8_t cls;
+  uint64_t ctx;     // the caller's opaque context; the AUX request's world
+                    // coordinates live in its low 64 bits
 };
 
 struct Req {
@@ -85,6 +87,10 @@ int main() {
     f.count = static_cast<uint8_t>(i % 4);   // 0,1,2,3 cycling -- ZERO included
     f.aux = (i % 3) == 0;
     f.cls = static_cast<uint8_t>(i & 3);
+    // Distinct per fragment, so an aux request carrying the WRONG fragment's
+    // context is visible rather than accidentally equal.
+    f.ctx = (static_cast<uint64_t>(0xC0DE0000u + i) << 32) |
+            static_cast<uint64_t>(0x1000u + i * 37);
     work.push_back(f);
     st = st * 1664525u + 1013904223u;
   }
@@ -92,6 +98,7 @@ int main() {
   // The model: fragrob's sequence, ascending sidx within a fragment, FIFO
   // across fragments.
   std::deque<Req> expect;
+  std::deque<uint64_t> expect_aux_ctx;
   int expect_aux = 0, expect_zero = 0;
   for (const Frag& f : work) {
     const int n = expected_requests(f.count);
@@ -107,13 +114,13 @@ int main() {
       r.lod = f.lod;
       expect.push_back(r);
     }
-    if (f.aux) ++expect_aux;
+    if (f.aux) { ++expect_aux; expect_aux_ctx.push_back(f.ctx); }
   }
 
   // ---- drive ---------------------------------------------------------------
   size_t next_in = 0;
   int got_reqs = 0, seq_errors = 0, got_aux = 0;
-  int iss_without_fire = 0, iss_handle_errors = 0;
+  int iss_without_fire = 0, iss_handle_errors = 0, aux_ctx_errors = 0;
   uint32_t rng = 0xBEEFu;
 
   for (int cyc = 0; cyc < 20000 && (!expect.empty() || next_in < work.size()); ++cyc) {
@@ -134,6 +141,7 @@ int main() {
       d->f_count_i = f.count;
       d->f_aux_i = f.aux ? 1 : 0;
       d->f_class_i = f.cls;
+      d->f_ctx_i = f.ctx;
     } else {
       d->f_valid_i = 0;
     }
@@ -164,7 +172,18 @@ int main() {
       // architecture's falsifier names.
       ++iss_without_fire;
     }
-    if (aux_fire) ++got_aux;
+    if (aux_fire) {
+      ++got_aux;
+      // THE CONTEXT MUST BE THIS FRAGMENT'S. Sourcing it from another stage is
+      // the defect that made the island ask the sheet about the wrong
+      // fragment's world position, and it is invisible in a request COUNT.
+      if (expect_aux_ctx.empty()) {
+        ++aux_ctx_errors;
+      } else {
+        if (d->aux_ctx_o != expect_aux_ctx.front()) ++aux_ctx_errors;
+        expect_aux_ctx.pop_front();
+      }
+    }
 
     if (accepted) ++next_in;
     tick(d);
@@ -195,6 +214,11 @@ int main() {
   zhao::check(iss_handle_errors == 0,
               "and every issue handle matches its request's identity", 0,
               static_cast<uint64_t>(iss_handle_errors));
+  zhao::check(aux_ctx_errors == 0,
+              "every AUX request carries ITS OWN fragment's context, in FIFO "
+              "order -- the world coordinates travel with the fragment instead "
+              "of being read off whatever another stage is holding",
+              0, static_cast<uint64_t>(aux_ctx_errors));
   zhao::check(got_aux == expect_aux,
               "exactly as many AUX requests as fragments that asked for one",
               expect_aux, got_aux);

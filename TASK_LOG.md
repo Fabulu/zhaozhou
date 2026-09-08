@@ -2572,3 +2572,34 @@ the ABI is a T5 amendment. **Item 9 on the owner list.**
 * `zhao_terrain_residency_v2` refit queued behind it.
 * ledger green at 117 · manifest OK at 195 modules · abi:check clean ·
   terrain fast lane 50/50.
+
+## P0-C gate 2 -- state at the material-alignment fix
+
+Where this is, so the next step is not reconstructed from memory:
+
+* **Flow control is CLOSED.** Every phase submits 32 and retires 32; the credit
+  phase runs 200/200 at live peak 64 of 64. Two fixes did it, both the same
+  class of defect:
+  * the AUX return token was re-assembled from `[AUX_TOKW-1 -: $clog2(DEPTH)]`,
+    a four-bit slice of a now-six-bit slot. The token IS the owner handle; it
+    needed taking whole, not taking apart. **Fifth stale slice** of the re-key.
+  * the COMBINE handshake had **two different alignment terms** -- `f_valid_i`
+    on a registered `mat_rdy_q`, `cmb_ready_i` on a combinational compare. A
+    valid and a ready that disagree never transfer: 32 retired went to 0. The
+    registered flag is deleted rather than repaired, because the fault was
+    having a second source of truth.
+* **119 checks, 10 failing.** Colour mismatches per phase fell 9/2/5/4/5/1/10
+  -> 2/2/1/1/1/2 across the alignment fix, so what remains is a smaller,
+  different fault -- NOT the same one at lower amplitude. Do not assume it is.
+* **One failure is expected and is the test's, not the design's:** "FRAGROB
+  accepted fragments: expected 1, got 0". fragrob is deleted in v3 by design.
+  That check needs an `ISLAND_V3` arm before it means anything.
+* **Next lead:** aux sheet coordinates are 17 where 22 are expected -- five aux
+  requests lost in the ISLAND's wiring, not the expander's (the expander's own
+  suite passes 22/22 aux under randomised backpressure on both sinks). Start
+  there; it is a counter, and counters localise better than colours do.
+
+Stage B is closed: `frag_expand_directed` 10/10, and the leaf fit is **ok, 323
+ALM, 451 reg, 0 DSP, worst path +1.623 ns** (`cur_q.count[0]` ->
+`iss_tmu_valid_o`). No `max_alms` was written for it -- the architecture's
+estimate is a range, and a gate from a range is the M7 error.
