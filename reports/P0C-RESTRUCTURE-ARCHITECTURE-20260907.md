@@ -500,6 +500,29 @@ today; (c) if Stage C's elaboration finds a combine-side field this section
 did not enumerate, the 45-bit width was wrong and the miss is published, not
 absorbed.
 
+> **IMPLEMENTATION CORRECTION, 2026-09-08: the plane is 46 bits, not 45.**
+>
+> This section enumerates {base_rgb24, base_a8, weight8, recipe3, sc2} = 45.
+> Building it showed one field missing. `u_combine`'s S2 lane is a MUX, not a
+> plain sample — `.f_s2_rgb_i(fr_o_has_aux ? fr_o_aux_rgb : fr_o_s_rgb[2])`,
+> oracle island_top:2341-2342 — so the combiner must know whether this fragment
+> used AUX. v3own's COMBINE packet does not carry it (`cmb_aux_o` is a RESULT
+> lane, not a validity), and the fact is known at admission as `frag_aux_i`.
+>
+> One bit added. It is this ruling's OWN logic — per-fragment attributes written
+> once at admission, read once at combine — applied to a field the enumeration
+> missed, not a departure from it.
+>
+> **MATW = 46, 64 entries, 2,944 bits.** Recorded here rather than absorbed
+> silently: a plane that quietly grew a bit is a plane whose width nobody can
+> check against its specification, and the deletion ledger prices it by width.
+>
+> The six fields are extracted through named wires in the implementation
+> (`mat_has_aux_c`, `mat_scount_c`, `mat_recipe_c`, `mat_weight_c`,
+> `mat_base_a_c`, `mat_base_rgb_c`) so that no consumer re-derives a bit
+> position — the failure mode that made the original AUX_TOKW defect possible.
+
+
 ### 1.8 Ordered output
 
 `out_valid_o/out_owner_o/out_result_o/out_ctx_o` → island `out_*`:
