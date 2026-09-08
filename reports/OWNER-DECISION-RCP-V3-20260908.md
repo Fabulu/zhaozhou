@@ -1,4 +1,4 @@
-# Owner decision needed: the RCP V3 swap
+# Owner decision on the RCP V3 swap — DECIDED
 
 2026-09-08. One page. Roadmap packet 5 step 1. **No new measurement is needed to
 make this decision** — the facts below are already banked.
@@ -90,3 +90,61 @@ the island's `rcp24_svc` instantiation. Both are capacity/allocation trades.
 It is **neither recommended nor refused — it is unmeasured at the profile that
 matters.** Presenting it earlier as a decision awaiting your approval overstated
 what was known.
+
+---
+
+## THE RULING, 2026-09-08
+
+Fabian: *"halve the DSPs even if it costs. I think they'll be more bottleneck
+than we'd like them to be. Registers are a big unknown. I'll take the devil I
+don't know."*
+
+**Option (b). Pursue V3 for the DSP halving, accepting the register and M10K
+cost.** My recommendation of (a) is superseded.
+
+### And the arithmetic says the call is stronger than my memo made it
+
+I framed the DSP halving as "the one claim that survived both mismatches
+intact", which undersold it. The island is **in breach of its DSP budget right
+now**, on the clean anchored row:
+
+```
+zhao_texture_island_v3_top   DSP 17   rule violation: "DSP 17 > allowed 14"
+  zhao_raster_rcp24_svc contributes  6
+  zhao_raster_rcp24_v3  contributes  3
+  island after the swap             14   <- exactly the budget
+```
+
+So the swap does not buy headroom, it **clears a live breach**, and it is the
+only candidate on the table that does. That belonged in the decision and was not
+in it; the memo weighed a throughput advantage the island cannot collect and
+undercounted the resource argument that actually matters.
+
+Two caveats kept honest rather than buried:
+
+* **17 − 6 + 3 = 14 is a sum of standalone leaf counts.** Composed DSP inference
+  can differ; a previous composed island came in 2.4% under the sum of its
+  standalone parts on ALM. DSP is far more discrete and usually additive, but
+  "exactly at the budget" leaves no margin for it not being, and FIT GATE 5 is
+  where that is settled rather than argued.
+* **The 3-DSP figure was measured at NCTX=16.** DSP count follows the number of
+  multiplier sites, not context depth, so it should hold at NCTX=12 — but that
+  is a prediction, today falsified two magnitude predictions in an afternoon,
+  and FIT GATE 4 measures it rather than assuming it.
+
+### What now happens
+
+**FIT GATE 4 is authorised.** Two leaf fits at a matched profile,
+`NCTX=12, TOKW=14` for BOTH `zhao_raster_rcp24_v3` and `zhao_raster_rcp24_svc`,
+reporting ALM, registers, DSP **and M10K** together. Twelve because it is the
+measured cheapest profile at which V3 meets its own throughput criterion.
+
+They are QUEUED behind the two island fits rather than started now: the machine
+is at 100% load with `@d0fixed` and the `frag_expand` refit in placement, and
+four concurrent fits would slow all four. They cost roughly 20–40 minutes each
+and will run while Packet 1 is being written, which is the right pairing.
+
+Still not done without a further ruling: **swapping RCP into the island.** That
+waits on gate 4's numbers, because the register delta is the part nobody has
+measured at this profile and it is the part the ruling explicitly accepts
+sight-unseen. Accepting a cost is not the same as not measuring it.
