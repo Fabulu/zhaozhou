@@ -88,3 +88,40 @@ fixtures for exactly this purpose.
 
 **This is an owner decision**, not a barge-ahead: it changes which block is
 production in a subsystem whose receipt was recorded four hours ago.
+
+## Two of the caveats, narrowed
+
+**Parameter profile.** `zhao_raster_rcp24_v3` **elaborates cleanly at
+`TOKW=14`** — Verilator lint, 0 diagnostics, with `NCTX` at its default 16.
+The island instantiates `rcp24_svc` with `#(.NCTX(8), .TOKW(14))`.
+
+That discharges *elaboration*, and nothing more. The earlier brief's warning is
+exactly about this gap:
+
+> *"Do not claim that changing GENW or owner depth works merely because the file
+> has a parameter declaration."*
+
+A block that elaborates at a width is a block that has not yet been shown to
+*work* at it. `TOKW` here carries the owner handle through a ten-clock feedback
+loop and four queues; every identity defect this session found was width-legal.
+The profile needs a differential run, not a lint.
+
+**No pair fixture exists.** `fpga/rtl/synth/` holds five `zhao_pair_*` fixtures
+— fragment/tilestore, pagestream/patch, setup/binner, tess/normals, tmu/cache —
+and **none covers rcp or perspuv**. So the cheap measurement I recommended needs
+a new fixture written first. That is a fixture, not production RTL:
+`check_forbidden_sources.py` already excludes `fpga/rtl/synth/` from every
+production closure, so it cannot leak into a shipped number.
+
+## Suggested sequence, if the owner takes this route
+
+1. Write `zhao_pair_rcp_perspuv.sv` twice-parameterised, or two fixtures — one
+   binding `rcp24_svc`, one binding `rcp24_v3`, identical otherwise.
+2. Fit both. **Same fixture shape on both sides** is the only way the delta
+   means anything; the leaf rows above are not comparable and should not be
+   quoted as the expected gain.
+3. Only then decide whether the island swap is worth a 4-hour composed fit.
+
+Step 2 is where the M6 amendment applies: a successful change *should* move the
+worst-path family, so compare data delay on the preparation chain, not which
+endpoint the report names.
