@@ -126,7 +126,21 @@ module zhao_texture_frag_expand #(
     output var logic [31:0] fragments_o,
     output var logic [31:0] requests_o,
     output var logic [31:0] zero_sample_fragments_o,
-    output var logic [31:0] aux_requests_o
+    output var logic [31:0] aux_requests_o,
+
+    // A REAL CAPACITY VIOLATION, which is not the same thing as backpressure.
+    //
+    // Owner brief 3.1 C: "Normal valid && !ready is NOT an overflow: it is
+    // permitted backpressure." The island's err_fragrob_wq_overflow_o used to
+    // latch a FRAGROB signal that no longer has a driver, so it was a constant
+    // zero being reported as a preserved tripwire.
+    //
+    // This is the honest event: a fragment ACCEPTED while the queue is already
+    // full. If `f_ready_o` is correct that is unreachable, which is exactly what
+    // makes it worth exposing -- it can only move if the handshake itself is
+    // broken. A tripwire that cannot fire in correct operation is the only kind
+    // whose zero means anything.
+    output var logic [31:0] wq_overflow_o
 );
 
   localparam int unsigned FQW = (FQD <= 1) ? 1 : $clog2(FQD);
@@ -227,7 +241,11 @@ module zhao_texture_frag_expand #(
       requests_o              <= 32'd0;
       zero_sample_fragments_o <= 32'd0;
       aux_requests_o          <= 32'd0;
+      wq_overflow_o           <= 32'd0;
     end else begin
+      // Counted BEFORE the write, because the write is what would corrupt an
+      // occupied entry.
+      if (accept_c && fq_full_c) wq_overflow_o <= wq_overflow_o + 32'd1;
       if (accept_c) begin
         fq_m[fq_wp_q[FQW-1:0]] <= '{owner:   f_owner_i,
                                     u:       f_u_i,

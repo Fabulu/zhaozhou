@@ -199,6 +199,11 @@
     "slackNs": -1.9,
     "to": "zhao_raster_rcp24_svc:u_rcp|c_x[5][3]"
   },
+  "zhao_texture_island_v3_top": {
+    "from": "frag_depth_i[14]",
+    "slackNs": -2.134,
+    "to": "zhao_raster_rcp24_svc:u_rcp|c_x[0][22]"
+  },
   "zhao_texture_material_combine_v1": {
     "from": "rec[0].recipe[0]~DUPLICATE",
     "slackNs": -17.561,

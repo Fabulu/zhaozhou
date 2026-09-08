@@ -206,8 +206,7 @@ int main(int argc, char** argv) {
     d.eval();
 
     std::printf("  zero-work wrap: submitted %d, retired %d (slot space 64, "
-                "so ~%dx wrap)
-", submitted, retired, submitted / 64);
+                "so ~%dx wrap)\n", submitted, retired, submitted / 64);
 
     zhao::check(submitted >= 200,
                 "the zero-work burst actually wrapped the 64-slot owner space "

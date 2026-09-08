@@ -936,7 +936,7 @@ module zhao_texture_island_v3_top #(
 
   logic        fr_o_valid, fr_o_ready;
   logic [$clog2(DEPTH)-1:0] fr_alloc_slot;
-  logic        fr_alloc_valid;
+
   logic [CTXW-1:0] fr_o_ctx;
   logic [FCTXW-1:0] fr_o_tok;
   logic [23:0] fr_o_rgb, fr_o_aux_rgb;
@@ -945,7 +945,10 @@ module zhao_texture_island_v3_top #(
   logic [23:0] fr_o_s_rgb [3];
   logic [7:0]  fr_o_s_a   [3];
   logic [31:0] fr_samples, fr_full_clocks;
-  logic        fr_wq_overflow, fr_id_error, fr_combiner_unfrozen;
+  // `fr_wq_overflow`, `fr_id_error`, `fr_combiner_unfrozen` and
+  // `fr_alloc_valid` are GONE with the FRAGROB instance that drove them. They
+  // survived its deletion as declarations feeding live logic, which is how
+  // three fault ports became constant zero without a single tool complaining.
 
 
   // DELETED: the oracle drove `pu_ready` from fragrob's `f_ready_o`. The
@@ -1067,6 +1070,7 @@ module zhao_texture_island_v3_top #(
   logic [15:0] exp_iss_tmu_handle;
   logic [13:0] exp_iss_aux_owner;
   logic [31:0] exp_fragments, exp_requests, exp_zero_frags, exp_aux_requests;
+  logic [31:0] exp_wq_overflow;
 
   zhao_texture_frag_expand #(
       .FQD (4),      // the architecture's stated starting point, not a measured
@@ -1100,7 +1104,8 @@ module zhao_texture_island_v3_top #(
       .iss_aux_owner_o(exp_iss_aux_owner),
       .fragments_o(exp_fragments), .requests_o(exp_requests),
       .zero_sample_fragments_o(exp_zero_frags),
-      .aux_requests_o(exp_aux_requests));
+      .aux_requests_o(exp_aux_requests),
+      .wq_overflow_o(exp_wq_overflow));
 
   // ==========================================================================
   // (b) THE V3 OWNER -- fragrob's jobs 1, 3, 4, 5 and 6
@@ -1254,7 +1259,16 @@ module zhao_texture_island_v3_top #(
   // stays clean -- see the note at the capture site.
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) err_class_invalid_o <= 32'd0;
-    else if (fr_alloc_valid && f_class_bad_c)
+    // REPAIR A (owner brief 3.1). This counted `fr_alloc_valid && f_class_bad_c`
+    // -- and `fr_alloc_valid` lost its only driver when the FRAGROB instance
+    // was deleted, so the port was a constant zero while a healthy-run check
+    // asserting it stayed clear passed happily.
+    //
+    // The brief's form: the ACTUAL ingress admission and THAT SAME BEAT's raw
+    // class. Not `f_class_bad_c`, which is the planner-stage verdict on a
+    // fragment several cycles older -- pairing an ingress event with a
+    // planner-stage value is the identical mistake that made palslot_m stale.
+    else if (own_adm_accept && (frag_class_i == CLS_ERR))
       err_class_invalid_o <= err_class_invalid_o + 32'd1;
   end
 
@@ -2473,8 +2487,10 @@ module zhao_texture_island_v3_top #(
   // that same family across three named counters -- unsolicited, stale
   // generation, duplicate -- so the sum is the closest honest reading, and it
   // must be zero in a healthy run for the same reason the original was.
+  // All SIX categories, matching the sticky above. This summed three.
   assign cnt_fragrob_id_errors_o =
-      own_ev_err_unsol + own_ev_err_stale + own_ev_err_dup;
+      own_ev_err_unsol + own_ev_err_stale + own_ev_err_dup +
+      own_ev_err_range + own_ev_err_issue + own_ev_err_final;
 
   // The sticky tripwire latches. `aux_degenerate` is a 32-bit COUNT rather
   // than a flag, so its tripwire is "the count ever moved" -- taken as
@@ -2486,8 +2502,31 @@ module zhao_texture_island_v3_top #(
       err_fragrob_id_error_o    <= 1'b0;
       err_aux_degenerate_o      <= 1'b0;
     end else begin
-      if (fr_wq_overflow)          err_fragrob_wq_overflow_o <= 1'b1;
-      if (fr_id_error)             err_fragrob_id_error_o    <= 1'b1;
+      // REPAIR C. `fr_wq_overflow` has no driver. The expander now exposes a
+      // REAL capacity violation -- a fragment accepted while its queue is
+      // full -- which is unreachable if `f_ready_o` is correct and is
+      // therefore a tripwire whose zero means something. Backpressure
+      // (`valid && !ready`) is NOT counted here; the brief is explicit that
+      // conflating the two is how a port gets tied to zero and called
+      // preserved.
+      if (exp_wq_overflow != 32'd0)  err_fragrob_wq_overflow_o <= 1'b1;
+      // REPAIR B. `fr_id_error` has no driver. v3own splits the identity-error
+      // family across SIX named counters, and the brief requires naming which
+      // are covered rather than summing an unstated subset:
+      //
+      //   range      -- a sample index outside the requested set
+      //   stale      -- a return naming a superseded generation
+      //   unsolicited-- a return matching no outstanding request
+      //   duplicate  -- a second return for a source already committed
+      //   issue      -- an illegal issue notification
+      //   final      -- an unauthorized FINAL, before real COMBINE acceptance
+      //
+      // All six. `cnt_fragrob_id_errors_o` below summed only the first four
+      // minus range -- three of six -- which is the omission the brief names.
+      if (own_ev_err_range != 32'd0 || own_ev_err_stale != 32'd0 ||
+          own_ev_err_unsol != 32'd0 || own_ev_err_dup   != 32'd0 ||
+          own_ev_err_issue != 32'd0 || own_ev_err_final != 32'd0)
+        err_fragrob_id_error_o <= 1'b1;
       if (aux_degenerate != 32'd0) err_aux_degenerate_o      <= 1'b1;
     end
   end
