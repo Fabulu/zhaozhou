@@ -480,12 +480,54 @@ module zhao_texture_island_v3_top #(
   // conservative one-cycle bubble at full-to-free avoids a cyclic ready path
   // and a same-slot clear/write hazard; the brief says to optimise it only
   // after the invariant is proven, and it is right.
+  // ==========================================================================
+  // (c1) ADMISSION MOVES TO THE ISLAND BOUNDARY, AND live_r IS DELETED
+  // ==========================================================================
+  // The architecture's central decision: "admit at the island boundary and make
+  // v3own's 14-bit owner handle the island's single identity namespace end to
+  // end -- the island's existing `live_r` credit, `tok_r`, `fseq_m` and output
+  // ROB are partial implementations of v3own's lifetime and are DELETED, not
+  // wrapped."
+  //
+  // The oracle's own credit counter is the clearest case. It counts admitted
+  // minus emitted against OWNER_DEPTH, with a deliberate one-cycle bubble at
+  // full-to-free to avoid a cyclic ready path. That is exactly v3own's live
+  // window (§6.1's `live(t) = unsigned_14(t - retire_ticket) < used`), computed
+  // a second time from different signals. Two counters that must agree are two
+  // counters that can disagree, and the whole point of a single identity
+  // namespace is that there is one.
+  //
+  // So `credit_available` becomes v3own's `adm_ready_o`, and the ceiling is
+  // v3own's OWNERS=64 rather than a local OWNER_DEPTH. `live_r` and
+  // `live_peak_r` survive ONLY as the continuity counters the composed test
+  // asserts (`cnt_live_peak_o == 64`); they are now OBSERVERS of v3own's
+  // admission rather than the authority for it.
   localparam int unsigned OWNER_DEPTH = FCTXN;
-  logic [FCTXW:0] live_r;                      // 0 .. OWNER_DEPTH inclusive
-  wire credit_available = (live_r < OWNER_DEPTH[FCTXW:0]);
+
+  wire credit_available = own_adm_ready;
 
   wire admit_c = frag_valid_i && frag_ready_o;
   wire emit_c  = out_valid_o && out_ready_i;
+
+  // THE ADMISSION BEAT ITSELF. `adm_req_i` is v3own's required-source mask:
+  // one bit per sample lane plus the AUX bit, which is what makes a zero-sample
+  // fragment a legal zero-work owner (§9.1) rather than a fragment that never
+  // completes. It is built from the SAME sample count the expander uses, so the
+  // two cannot drift: fragrob's table, one place.
+  assign own_adm_valid_c = frag_valid_i;
+  assign own_adm_ctx_c   = frag_ctx_i;
+  always_comb begin
+    unique case (frag_sample_count_i)
+      2'd0:    own_adm_req_c = 4'b0000;
+      2'd1:    own_adm_req_c = 4'b0001;
+      2'd2:    own_adm_req_c = 4'b0011;
+      default: own_adm_req_c = 4'b0111;
+    endcase
+    if (frag_aux_i) own_adm_req_c[3] = 1'b1;
+  end
+
+  logic [FCTXW:0] live_r;                      // OBSERVER, not the authority
+  logic [FCTXW:0] live_peak_r;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) live_r <= '0;
@@ -497,7 +539,6 @@ module zhao_texture_island_v3_top #(
 
   // OBSERVABILITY: the high-water mark, so a run that never approached the
   // ceiling cannot be read as evidence that the ceiling works.
-  logic [FCTXW:0] live_peak_r;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) live_peak_r <= '0;
     else if (live_r > live_peak_r) live_peak_r <= live_r;
