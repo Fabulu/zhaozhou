@@ -189,3 +189,63 @@ proceeding. The DSP count is the number the owner ruled on, and DSP follows
 multiplier sites rather than context depth, so it should be **3 at either**
 depth. If DSP comes back higher than 3, that is the block and no depth argument
 rescues it.
+
+---
+
+## GATE 4, FIRST ROW — and the pre-registration scored
+
+`zhao_raster_rcp24_v3@g4-nctx12`, clean tree, status `ok`:
+
+| | v3 `@tokw14` (NCTX=16) | v3 `@g4-nctx12` (NCTX=12) | delta |
+|---|---|---|---|
+| ALM | 1034 | **986** | **−48** |
+| registers | 1478 | **1402** | **−76** |
+| **DSP** | 3 | **3** | **0** |
+| M10K | 8 | **8** | **0** |
+| **Fmax** | 93.67 | **100.95** | **+7.28 MHz** |
+| fit seconds | 1,458 | 6,255 | ×4.3 |
+
+### Scoring what I wrote in advance
+
+**The main prediction was WRONG.** I pre-registered that NCTX=12 might be harder
+to fit than 16 — four unreachable addresses, comparison-based wrap instead of a
+free truncation — and said the first hypothesis on a bad row should be the depth
+rather than the block. Twelve is **better on every axis that moved**: smaller,
+fewer registers, and 7.28 MHz faster. No excuse was needed and the one I prepared
+is void.
+
+**The M10K sub-prediction was RIGHT**, and it is the one that costs something. I
+wrote: *"Quartus may still allocate a 16-deep memory for a 12-entry array, in
+which case the M10K count reflects 16 and the cheapest-profile argument gains
+nothing on memory."* It does: **8 M10K at both depths.** Dropping four contexts
+buys ALM and Fmax and buys **nothing** on block RAM.
+
+**And the wall-clock was not even a signal.** I flagged 3.4× the comparable fit
+time as "a signal, not yet a result". It finished at **4.3×** — for a design that
+is smaller and faster. Fit duration told me nothing about the outcome, and
+treating it as a hint was reading tea leaves. This is the third magnitude
+intuition to fail in two days; the structural claims keep holding and the
+quantitative ones keep not.
+
+### What is now established
+
+* **DSP is 3 at the island's token width.** The owner's ruling — *"halve the DSPs
+  even if it costs"* — is confirmed measurable at the profile that matters, not
+  merely inherited from a mismatched row. This was the one thing no depth
+  argument could have rescued, and it did not need rescuing.
+* **100.95 MHz clears the 100 MHz product clock.** `rcp24_svc` measures 68.46 at
+  its own (easier) profile. Whatever else the swap costs, the reciprocal stops
+  being a candidate limiter.
+
+### What is NOT established, and must not be quoted yet
+
+The svc row at the **same** profile is still fitting. Until it lands there is no
+like-for-like comparison, and putting 986/3/8/100.95 beside the standing
+`svc` row (1041 / 6 DSP / 0 M10K / 68.46 at NCTX=8, TOKW=8) would be **exactly the
+mismatched comparison this whole memo exists to retract.** Two parameters differ
+there and the M10K column differs by eight.
+
+The open question the pending row answers: **does svc also infer M10K at
+TOKW=14?** If it does, v3's eight stop being a differentiator. If it does not,
+eight blocks is the price of the DSP halving and the owner has already accepted
+a cost — but the size of it should be stated, not implied.
