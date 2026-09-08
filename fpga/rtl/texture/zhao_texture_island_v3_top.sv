@@ -2179,14 +2179,30 @@ module zhao_texture_island_v3_top #(
   // violation of §0's delete-don't-wrap: it is `fbase_m`/`frec_m`/`fwt_m`/
   // `fsc_m` re-keyed from a ROB token to the owner slot and merged under one
   // name -- four side tables becoming one, not a fifth being added.
-  localparam int unsigned MATW = 24 + 8 + 8 + 3 + 2;   // = 45
+  // THE RULING SAID 45 BITS; IT IS 46, AND THE EXTRA BIT IS `has_aux`.
+  // Recorded rather than silently absorbed. §1.7b enumerates
+  // {base_rgb24, base_a8, weight8, recipe3, sc2} = 45, but `u_combine`'s S2 lane
+  // is a MUX, not a plain sample (:2341-2342 in the oracle):
+  //
+  //     .f_s2_rgb_i(fr_o_has_aux ? fr_o_aux_rgb : fr_o_s_rgb[2])
+  //
+  // so the combiner needs to know whether this fragment used AUX. In the oracle
+  // that arrives as `fr_o_has_aux` on fragrob's output beat. v3own's COMBINE
+  // packet does not carry it -- `cmb_aux_o` is a result lane, not a validity --
+  // and the fact is known at ADMISSION (`frag_aux_i`), which is exactly the
+  // plane's charter: per-fragment attributes written once at admission and read
+  // once at combine.
+  //
+  // One bit, and it is the ruling's own logic applied to a field the ruling did
+  // not enumerate rather than a departure from it.
+  localparam int unsigned MATW = 24 + 8 + 8 + 3 + 2 + 1;   // = 46
   logic [MATW-1:0] mat_m [64];
 
   always_ff @(posedge clk) begin
     if (own_adm_accept)
       mat_m[own_adm_owner[13:8]] <= {frag_base_rgb_i, frag_base_a_i,
                                      frag_weight_i, frag_recipe_i,
-                                     frag_sample_count_i};
+                                     frag_sample_count_i, frag_aux_i};
   end
 
   // Registered read, addressed by the owner slot v3own presents at COMBINE.
@@ -2195,6 +2211,20 @@ module zhao_texture_island_v3_top #(
   // and Stage A's -4,092 is what registering one read is worth.
   logic [MATW-1:0] mat_rd_q;
   always_ff @(posedge clk) mat_rd_q <= mat_m[own_cmb_owner[13:8]];
+
+  // Field extraction, named once so no consumer re-derives a bit position.
+  wire        mat_has_aux_c  = mat_rd_q[0];
+  wire [1:0]  mat_scount_c   = mat_rd_q[2:1];
+  wire [2:0]  mat_recipe_c   = mat_rd_q[5:3];
+  wire [7:0]  mat_weight_c   = mat_rd_q[13:6];
+  wire [7:0]  mat_base_a_c   = mat_rd_q[21:14];
+  wire [23:0] mat_base_rgb_c = mat_rd_q[45:22];
+
+  // Registered read, addressed by the owner slot v3own presents at COMBINE.
+  // REGISTERED because P0-E's whole finding was that an asynchronous read of a
+  // 64-entry array costs its width in flip-flops -- `uvw_m` was 4,096 of them,
+  // and Stage A's -4,092 is what registering one read is worth.
+
 
   // `fseq_m` IS NOT RE-KEYED, IT IS DELETED. v3own's ordered output IS the
   // sequence (its cursor E), so a separate sequence number is exactly the
