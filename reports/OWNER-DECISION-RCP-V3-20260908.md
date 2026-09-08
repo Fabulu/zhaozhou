@@ -148,3 +148,44 @@ Still not done without a further ruling: **swapping RCP into the island.** That
 waits on gate 4's numbers, because the register delta is the part nobody has
 measured at this profile and it is the part the ruling explicitly accepts
 sight-unseen. Accepting a cost is not the same as not measuring it.
+
+---
+
+## PRE-REGISTERED before gate 4's numbers arrive
+
+Written at 00:20 on 2026-09-09 with the first leaf fit 83 minutes in and no row
+yet. The point of writing it now is that it cannot become a post-hoc excuse.
+
+**NCTX=12 is functionally valid, and I checked rather than assumed it.**
+`zhao_raster_ticketq` wraps its pointers by explicit comparison
+(`tail_q == PW'(D-1) ? 0 : tail_q + 1`), not by masking, so a non-power-of-two
+depth is handled correctly — which is why `raster_rcp24_v3_nctx12` passes all 52
+checks.
+
+**But 12 may be HARDER TO FIT than 16, and that is a confound to watch for.** At
+D=12 the pointer is `$clog2(12) = 4` bits, so four of sixteen addresses are
+unreachable and every wrap is a comparison against 11 rather than a free
+truncation. Two consequences to look for in the row:
+
+* Quartus may still allocate a **16-deep** memory for a 12-entry array, in which
+  case the M10K count reflects 16 and the "cheapest profile" argument gains
+  nothing on memory.
+* comparison-based wrap at an awkward depth is more logic and a worse timing
+  cone than a masked increment.
+
+The comparable standing row, `@tokw14` at NCTX=16, fitted in **1,458 seconds**.
+This one has been running **3.4× that** and is still at 96% CPU. That is a
+signal, not yet a result.
+
+**So, stated in advance:** if `@g4-nctx12` comes back materially worse than
+`@tokw14` on ALM, registers or Fmax, the first hypothesis is **the awkward
+depth, not the block**, and the test is a third row at NCTX=16/TOKW=14 — the
+same profile as `@tokw14` but from today's commit. If that one is fine, 12 was
+the problem and the right profile for the swap is 16, which costs four contexts
+nobody needs but is a shape the tool likes.
+
+What this does NOT license: reading a bad row as "the tool's fault" and
+proceeding. The DSP count is the number the owner ruled on, and DSP follows
+multiplier sites rather than context depth, so it should be **3 at either**
+depth. If DSP comes back higher than 3, that is the block and no depth argument
+rescues it.
