@@ -19,10 +19,17 @@
 #   NOT-ON-ANY-REMOTE  HEAD is on no remote branch -- work exists in one place
 #   UNPUSHED:n         n commits reachable from no remote ref
 #   DIRTY:n            uncommitted tracked changes (ignores .wrangler, stackdumps)
-#   SIZE               how much disk the lane holds
 #
-# SIZE is reported because on 2026-09-06 this project filled a 952 GB disk to
-# ZERO while a render was running. Twenty-four finished agent lanes were still
+# ⚠ SIZE IS NOT REPORTED, though this header claimed for several passes that it
+# was. There is no `du` in this script and there never has been. The paragraph
+# below is kept because its REASON still stands and the column is still worth
+# adding -- but a comment asserting a feature the code does not have is exactly
+# the fault 10-GATE-CHECKLIST item 13 is about, so it now says which it is.
+# Until someone adds it: a cleanly-pushed lane holding 16 GB of gitignored
+# frames is reported "clean" and is invisible to this tool.
+#
+# SIZE would be reported because on 2026-09-06 this project filled a 952 GB
+# disk to ZERO while a render was running. Twenty-four finished agent lanes were still
 # on disk, each a full clone with its own build tree and rendered frames.
 # Reclaiming them freed 217 GB. An audit that finds orphaned commits but says
 # nothing about size lets the same lanes kill the machine instead.
@@ -37,13 +44,24 @@
 # superseded work into main is usually wrong).
 
 set -uo pipefail
-root="${1:-$(pwd)}"
+# ⚠ NORMALISED TO AN ABSOLUTE PATH, and that is not cosmetic. The loop below
+# `cd`s into each lane and never returns, so with a RELATIVE root every $d
+# after the first is resolved from the wrong directory, every cd fails into
+# `continue`, and the script prints "All lanes clean" having audited ONE lane.
+# Found 2026-09-08 by pass-12 QA feeding it a fixture -- a fresh repo with one
+# commit on no remote, at depth 2. `lane-audit.sh .` did not flag it;
+# `lane-audit.sh /c/programmieren/zencrifice` flagged it and five real lanes.
+# The default was already absolute, so only the documented `[root]` form was
+# affected -- which is exactly the form the usage line invites.
+root="$(cd "${1:-$(pwd)}" 2>/dev/null && pwd)" || { echo "lane-audit: cannot enter root" >&2; exit 2; }
 found=0
+scanned=0
 
 for repo in "$root"/*/*/.git; do
   d="$(dirname "$repo")"
   cd "$d" 2>/dev/null || continue
   git rev-parse --git-dir >/dev/null 2>&1 || continue
+  scanned=$((scanned + 1))
 
   unpushed=$(git log --oneline --all --not --remotes 2>/dev/null | wc -l | tr -d ' ')
   onremote=$(git branch -r --contains HEAD 2>/dev/null | wc -l | tr -d ' ')
@@ -63,10 +81,20 @@ for repo in "$root"/*/*/.git; do
   fi
 done
 
+if [ "$scanned" = "0" ]; then
+  # A check that finds ZERO of the thing it counts must say so loudly rather
+  # than return success (10-GATE-CHECKLIST item 11).
+  echo "lane-audit: NO LANES FOUND under $root -- this is not a clean bill of"
+  echo "health, it is the audit failing to find anything to audit. Lanes are"
+  echo "matched at <root>/*/*/.git; pass the directory that HOLDS the lanes."
+  exit 2
+fi
+
 if [ "$found" = "0" ]; then
-  echo "All lanes clean: every HEAD is on a remote branch, nothing unpushed."
+  echo "All $scanned lanes clean: every HEAD is on a remote branch, nothing unpushed."
 else
   echo
+  echo "$scanned lanes scanned."
   echo "A lane flagged NOT-ON-ANY-REMOTE or UNPUSHED holds work that exists in"
   echo "one place. Preserve it (push to archive/<lane-name>) before deleting the"
   echo "lane. Do NOT merge superseded work into main -- rejected approaches are"
