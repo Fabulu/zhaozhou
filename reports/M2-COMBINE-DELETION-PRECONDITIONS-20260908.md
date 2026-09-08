@@ -76,3 +76,64 @@ fit's closure.
 
 None of the three is done here. 1 needs the toolchain; 2 and 3 are deletions and
 production-composition changes, which are the owner's call, not a barge-ahead.
+
+---
+
+# CORRECTION: V1 is not `ok`. It violates three of its own rules.
+
+Added after reading the JSON row instead of the docket's summary of it.
+
+I wrote above that V1 is *"`ok` at 1,475 ALM / 2 DSP / 36.28 MHz"*. That repeats
+the row's `status` field. The **same row** carries:
+
+```
+status          ok
+ruleViolations  ['ALM 1475 > allowed 800',
+                 'registers 893 > allowed 500',
+                 'fmax 36.28 < required 125 (islandrearchitecture5.md 15.5 variant A)']
+partial         True
+partialStage    analysis_and_synthesis
+```
+
+**Exactly one row in 114 has `status: ok` with a non-empty `ruleViolations`**,
+and it is the row the M2 deletion trigger rests on. Every other row in the file
+is consistent — the V3 island, for instance, reports `failed:structure` and
+lists its three violations.
+
+The row's own `note` explains how: *"Fitter and STA run by hand after the
+run_block_fit watchdog was killed so the fit could outlive its 3000 s budget."*
+The row was assembled manually, so the path that derives `status` from the rules
+never ran, and `ok` is what was left there.
+
+That is this repository's law verbatim — *a `status` field holding the last good
+run reports `ok`* — landing on the single row where it does the most damage.
+**Nobody audits good news.**
+
+## What the same note also says, and I had not read
+
+* **Hold slack −5.284 ns is unresolved.**
+* Setup slack **−17.561 ns** against a 10 ns clock.
+* `OPTIMIZATION_MODE` was BALANCED, which the shell QSF measures at −2.08 MHz
+  against the HIGH PERFORMANCE default, so *"this row is NOT directly comparable
+  with the 29.74 MHz row it improves on, and reads about 2 MHz low."*
+
+## What this does to the recommendation
+
+The earlier framing — *"re-fit V1 to close an unverifiable-measurement gap"* —
+was too gentle. The stronger statement:
+
+**V1 fails ALM by 84%, registers by 79%, and Fmax by a factor of 3.4 against its
+own §15.5 variant-A bounds, on a partial hand-assembled fit with unresolved hold
+violations.** It is not a demonstrated replacement for the refuted
+`zhao_texture_combine`; it is an undischarged claim.
+
+V2, by contrast, is a complete fit at **870 ALM / 114.04 MHz** — inside the ALM
+bound V1 misses, and 3x V1's frequency.
+
+So the ordering stands but the reasoning changes: **move `zhao_prod_top` to V2
+first**, on the superset interface already verified above, and let the V1 re-fit
+(running now) decide whether V1 is worth keeping at all rather than whether it
+is merely unverified.
+
+**Deletion and production-composition changes remain the owner's call.** What is
+established here is that the trigger's precondition was never actually met.
