@@ -125,3 +125,53 @@ production closure, so it cannot leak into a shipped number.
 Step 2 is where the M6 amendment applies: a successful change *should* move the
 worst-path family, so compare data delay on the preparation chain, not which
 endpoint the report names.
+
+---
+
+# QUALIFICATION: v3 improves the `d_i` cone by 2.1 ns, not by the slack gap
+
+Checked before recommending anything further, because *"the work is already
+done"* was doing a lot of work in the section above.
+
+| block | deepest cone | data delay | slack | skew |
+|---|---|---|---|---|
+| `rcp24_svc` | `d_i[18] -> c_m~23` | **16.44 ns** | −3.201 | +3.299 |
+| `rcp24_v3@v3-rh` | `d_i[18] -> always0~5_OTERM385` | **14.336 ns** | −1.061 | +3.335 |
+| `rcp24_v3@v3-full` | `rst_n -> altsyncram` | 13.733 ns | **+1.223** | +5.016 |
+
+Three things follow, and two of them cut against the earlier section:
+
+**1. v3 STILL has a `d_i`-origin cone, at 14.336 ns.** Registering `d_i` into
+`a0_d_q` did not remove the deep chain from that pin in the `@v3-rh` specimen.
+So the block is not a completed packet D — it is a partial one.
+
+**2. The gain on the chain packet D targets is 2.104 ns**, not the 3.562 ns the
+worst-slack comparison implies. The slack gap is inflated by structure and skew
+elsewhere in the block — the queues replacing the scans, which is a different
+improvement from the preparation split. **Attributing the whole slack gap to the
+preparation change would be exactly the M6 error the docket already recorded.**
+
+**3. `@v3-full`'s deepest path is `rst_n` into a RAM at +1.223 ns slack** — a
+reset-distribution path, not a datapath, and comfortably positive. Its 13.733 ns
+figure is therefore *not* a preparation-chain measurement and must not be
+compared against svc's 16.44 as if it were. The two specimens differ in what
+their deepest cone even is.
+
+## What this does to the recommendation
+
+It does not reverse it — evaluating `rcp24_v3` is still cheaper than writing a
+second preparation pipeline, and the block genuinely does reserve at acceptance
+and normalize from a register. But the expected prize shrinks:
+
+* **~2.1 ns on the preparation chain**, measured leaf-to-leaf on the one
+  comparison where both specimens actually gate on `d_i`.
+* Whatever the queues-for-scans change is worth, separately, and it is not
+  packet D.
+* The island's own RCP path is −2.134 with +3.342 ns of favourable skew that
+  no leaf fit reproduces, so neither figure converts to island Fmax.
+
+And it strengthens the pair-fixture caution in the other direction: since the
+RCP->PERSPUV seam is **already registered** (`px_r_q`, `px_k_q`, `px_dz_q`) and
+the cone of interest is entirely inside rcp24, a pair fit buys little for this
+question. **A same-shape leaf comparison, read on data delay, is the right
+instrument** — and `@v3-rh` versus `svc` is very nearly that comparison already.
