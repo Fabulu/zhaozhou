@@ -2427,6 +2427,27 @@ verilate(test_raster_rcp24_directed
 add_test(NAME raster_rcp24_directed COMMAND test_raster_rcp24_directed)
 set_tests_properties(raster_rcp24_directed PROPERTIES LABELS "nightly" TIMEOUT 1800)
 
+# The EMPIRICAL backstop for the axis-lockstep proof (roadmap packet 4 step 2).
+# reports/PERSPUV-AXIS-LOCKSTEP-PROOF-20260908.md proves by induction that the
+# two per-axis work queues cannot diverge, which is what licenses the paired
+# rewrite to keep one scheduler. A proof that licenses a deletion is the
+# comfortable kind, so the invariant is asserted every cycle against the real
+# RTL as well.
+#
+# --public-flat-rw is needed to see wq_wp/wq_rp/pk_v/pk_i. It is a VERILATE flag,
+# not a source edit, which is why this could be written while the svc file sat
+# inside a running island fit closure.
+add_executable(test_perspuv_lockstep_directed raster/perspuv_lockstep_directed.cpp)
+target_link_libraries(test_perspuv_lockstep_directed PRIVATE zhao_harness)
+verilate(test_perspuv_lockstep_directed
+  PREFIX Vzhao_raster_perspuv_svc
+  TOP_MODULE zhao_raster_perspuv_svc
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+  VERILATOR_ARGS --public-flat-rw)
+add_test(NAME perspuv_lockstep_directed COMMAND test_perspuv_lockstep_directed)
+set_tests_properties(perspuv_lockstep_directed PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_raster_perspuv_directed raster/raster_perspuv_directed.cpp)
 target_link_libraries(test_raster_perspuv_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_raster_perspuv_directed
