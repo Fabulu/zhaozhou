@@ -244,3 +244,28 @@ that run."*
 `zhao_texture_island_v3_top.sv`, inside the running fit's 18-file closure. The
 brief: *"Do not change the source under that run."* The frozen specimen's digest
 still matches the committed file byte for byte.
+
+## The fault test is written and FAILS, as intended
+
+`build/tests/test_island_v3_fault_directed.exe` -> **1/5 checks FAILED**, and it
+is the right one:
+
+* clean traffic admitted, flag clear — pass
+* invalid-class fragments **accepted at ingress** — pass (this is the check that
+  makes the next one unambiguous: without it, "the counter did not move" could
+  just mean "nothing arrived")
+* **`err_class_invalid_o` moved — FAIL.** Expected 1, got 0. The port is a
+  constant zero.
+* legitimate traffic still admitted afterwards — pass
+
+Not registered with `add_test`. It lands with repair A, in one commit, so it is
+seen to fail and then to pass.
+
+## Still blocked
+
+The Stage C fit is still running — longer than the expander's 26 minutes, which
+is expected for a composed island. All three §3.1 repairs touch
+`zhao_texture_island_v3_top.sv`, inside its 18-file closure, and the brief says
+not to change the source under that run. Nothing else in the §3 work is
+blocked — the audit, the fault test, the docket entry and the plan are all done
+and pushed.
