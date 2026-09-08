@@ -189,6 +189,20 @@ module zhao_texture_rsp_dispatch #(
   logic [DATAW-1:0] raw_d [RAWN];
   logic [TOKW-1:0]  raw_t [RAWN];
   logic [1:0]       raw_c [RAWN];
+  // THE METADATA RIDES THE RAW FIFO, beside the token it belongs to.
+  //
+  // The first version of this change wrote `cq_m[...] <= rsp_meta_i` at
+  // dispatch. But dispatch pops the RAW FIFO -- `raw_d[raw_rp]`,
+  // `raw_t[raw_rp]` -- so the response being enqueued into a class queue
+  // entered this FIFO earlier, while `rsp_meta_i` is whatever is arriving
+  // NOW. Data and token travelled the FIFO; metadata did not.
+  //
+  // It read correct whenever the FIFO was empty, which is most of the time,
+  // so the composed suite called two of three class queues clean and only
+  // bilinear -- the one whose four-channel sequencing fills the FIFO -- showed
+  // it, at 32 of 768. That 4.2% was the fraction of dispatches with a
+  // non-empty FIFO, not a property of the bilinear path.
+  logic [METAW-1:0] raw_m [RAWN];
   logic [RW-1:0]    raw_wp, raw_rp;
   logic [RW:0]      raw_n;
 
@@ -244,7 +258,8 @@ module zhao_texture_rsp_dispatch #(
   generate
   if (META_EN) begin : g_meta
     always_ff @(posedge clk) begin
-      if (dispatch_fire) cq_m[head_cls][cq_wp[head_cls]] <= rsp_meta_i;
+      // From the FIFO entry being dispatched, NOT from the current input.
+      if (dispatch_fire) cq_m[head_cls][cq_wp[head_cls]] <= raw_m[raw_rp];
     end
     assign clut_meta_o = cq_m[0][cq_rp[0]];
     assign near_meta_o = cq_m[1][cq_rp[1]];
@@ -296,6 +311,7 @@ module zhao_texture_rsp_dispatch #(
 
         if (psh) begin
           raw_d[raw_wp] <= rsp_data_i;
+          if (META_EN) raw_m[raw_wp] <= rsp_meta_i;
           raw_t[raw_wp] <= rsp_tok_i;
           raw_c[raw_wp] <= rsp_class_i;
           raw_wp <= (raw_wp == RW'(RAWN - 1)) ? '0 : raw_wp + RW'(1);

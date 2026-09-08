@@ -1596,7 +1596,53 @@ module zhao_texture_island_v3_top #(
   logic [31:0] disp_hol;
   logic [2:0]  disp_occ;
 
-  assign cache_smp_ready = disp_rsp_ready;
+  // ==========================================================================
+  // PACKET C: THE CREDITED READ JOIN
+  // ==========================================================================
+  // The brief's §5 pipeline, and the step that everything else was waiting on:
+  //
+  //   cache response -> RESERVE destination capacity -> synchronous metadata
+  //   read -> capture data + metadata + matching identity -> dispatcher
+  //
+  // WHY IT IS NEEDED, established the hard way. `zhao_texture_metajoin` answers
+  // ONE CYCLE after its read is launched. The dispatcher was previously handed
+  // the live response and the bank's late answer together, so every queued
+  // record paired a response with the PREVIOUS one's metadata.
+  //
+  // That fault was masked. The dispatcher itself also captured metadata from
+  // the wrong point -- the current input rather than the FIFO entry being
+  // dispatched -- and the two errors cancelled whenever the raw FIFO was empty,
+  // which is most of the time. Fixing the dispatcher alone (leaf test: 239/240
+  // wrong -> 5/5 passing) made the composed island WORSE: bilinear 32 -> 256,
+  // nearest 0 -> 4, gate 2 5/122 failing.
+  //
+  // TWO ERRORS WERE CANCELLING, and neither could be repaired alone.
+  //
+  // THE RESERVATION IS THE POINT, not the register. A response is accepted from
+  // the cache only when this stage can hand on what it already holds, so the
+  // bank read is never launched for a response the dispatcher cannot take. The
+  // brief is explicit that reserving late "admits more preparation records than
+  // the context store owns"; here it would drop a response whose metadata had
+  // already left the bank.
+  logic                r1_v_q;
+  logic [LANES*16-1:0] r1_d_q;
+  logic [17:0]         r1_t_q;
+
+  // The credit: room for the item in hand, or the item in hand is leaving.
+  wire r1_room_c = !r1_v_q || disp_rsp_ready;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      r1_v_q <= 1'b0;
+    end else if (r1_room_c) begin
+      r1_v_q <= cache_smp_valid;
+      r1_d_q <= cache_smp_data;
+      r1_t_q <= cache_smp_src;
+    end
+  end
+
+  // The cache is held off unless the join stage has room -- the reservation.
+  assign cache_smp_ready = r1_room_c;
 
   zhao_texture_rsp_dispatch #(
       // TOKW 18: the routing token the dispatch routes on is the widened
@@ -1604,7 +1650,8 @@ module zhao_texture_island_v3_top #(
       .RAWN(4), .CHN(4), .DATAW(DATAW), .TOKW(18)
   , .META_EN(1'b1), .METAW(40)) u_dispatch (
       .clk(clk), .rst_n(rst_n),
-      .rsp_valid_i(cache_smp_valid), .rsp_ready_o(disp_rsp_ready),
+      // The DELAYED response, now co-timed with the bank's answer for it.
+      .rsp_valid_i(r1_v_q), .rsp_ready_o(disp_rsp_ready),
       // PACKET C step 2: the metadata rides the class queues. The bank's read
       // result is still SHADOW-ONLY -- no downstream reader consumes
       // `*_meta_o` yet -- so the island's behaviour is unchanged and gate 3
@@ -1614,7 +1661,7 @@ module zhao_texture_island_v3_top #(
       .rsp_meta_i(mj_meta_packed_c),
       .clut_meta_o(disp_clut_meta), .near_meta_o(disp_near_meta),
       .bil_meta_o(disp_bil_meta),   .err_meta_o(disp_err_meta),
-      .rsp_data_i(cache_smp_data), .rsp_tok_i(cache_smp_src),
+      .rsp_data_i(r1_d_q), .rsp_tok_i(r1_t_q),
       // THE CLASS MOVED WITH THE WIDENING. It is the token's TOP two bits, and
       // the token is now 18 -- so [17:16], not [15:14]. Slicing the old
       // position takes the slot's high bits instead and every response is
@@ -1625,7 +1672,7 @@ module zhao_texture_island_v3_top #(
       // meaning of the bits under it changed -- after `uvw_m`, `fc_wp` and
       // `fc_rp`. Written as `[TOKW-1 -: 2]` so it follows the parameter and
       // cannot go stale again.
-      .rsp_class_i(cache_smp_src[TOKW-1 -: 2]),
+      .rsp_class_i(r1_t_q[TOKW-1 -: 2]),
       .clut_valid_o(disp_clut_valid), .clut_ready_i(disp_clut_ready),
       .clut_data_o(disp_clut_data), .clut_tok_o(disp_clut_tok),
       // DEFECT (a) REPAIRED. This was `.near_ready_i(1'b1)` with `near_data_o`
@@ -1682,8 +1729,7 @@ module zhao_texture_island_v3_top #(
   // as several responses; whether each carries its own correct metadata
   // through that queue is a different question from the CLUT case, and it
   // is now an open one rather than an assumed one.
-  wire [20:0] bil_meta = sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
-                                   [disp_bil_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
+  wire [20:0] bil_meta = meta21(disp_bil_meta);
   // THE FORMAT THIS SAMPLE WAS REQUESTED UNDER, recovered the same way its
   // fractions are. Before defect (d) landed, the four taps below were decoded
   // as RGB565 whatever the binding said, so a bilinear fetch of an ARGB4444
@@ -1863,6 +1909,30 @@ module zhao_texture_island_v3_top #(
       // falsifier compared these fields against the live tables over 792 CLUT
       // responses with zero disagreements BEFORE this swap, and gate 3 must
       // still report 392 byte-identical records after it.
+  // REVERTED to the live table. The dispatcher's raw-FIFO fix is CORRECT
+  // (its leaf test went 239/240 wrong -> 5/5 passing), and applying it
+  // exposed that the ISLAND's feed was wrong in a compensating direction:
+  // `rsp_meta_i` carries the bank's output, which answers ONE CYCLE AFTER
+  // `cache_smp_valid`. Capturing metadata late, at dispatch, partly
+  // cancelled that latency. Capturing it correctly at input acceptance
+  // does not, so the island got worse: bilinear 32 -> 256 wrong, nearest
+  // 0 -> 4, gate 2 5/122 failing.
+  //
+  // TWO ERRORS WERE CANCELLING. Fixing one alone is a regression, which
+  // is why the composed suite must be re-run after every leaf repair and
+  // not only after the last one.
+  //
+  // The remaining work is the brief's credited reservation: reserve
+  // destination capacity, then read the bank, then capture data, metadata
+  // and identity together as ONE record. Until that exists the readers
+  // stay on the tables and the bank stays a shadow.
+      // PACKET C COMPLETE. The credited read join aligned the metadata on
+      // every class queue -- bilinear 768/0, nearest 192/0, CLUT 792/0 --
+      // so all five asynchronous response-side reads move together.
+      //
+      // These two are the '64-owner palette binding selection' on the
+      // island's worst INTERNAL path. They are now registered queue
+      // payload that travelled with this response.
       .lu_slot_i(disp_clut_meta[31:30]),
       .lu_gen_i (disp_clut_meta[29:22]),
       // THE ADDRESSED BYTE, not always the low one -- and for CLUT4 the
@@ -1885,6 +1955,8 @@ module zhao_texture_island_v3_top #(
   // PACKET C: the third and last sampmeta reader moves onto the queue. All
   // FIVE of the asynchronous response-side reads this packet targeted are
   // now gone -- three sampmeta selections and the palette binding pair.
+  // REVERTED with the palette binding above -- same compensating-error
+  // finding.
   wire [20:0] clut_meta_c = meta21(disp_clut_meta);
   wire [7:0]  clut_byte_c = clut_meta_c[0] ? disp_clut_data[15:8]
                                            : disp_clut_data[7:0];
@@ -2012,6 +2084,8 @@ module zhao_texture_island_v3_top #(
   // PACKET C: moved onto the queue, now that a falsifier for THIS queue
   // exists and passes -- `meta_near_*` reports 192 checked, 0 wrong. The
   // fourth of five asynchronous response-side reads is gone.
+  // REVERTED -- same finding. It measured 0/192 before the dispatcher fix
+  // and 4/192 after, which is the compensation disappearing.
   wire [20:0] near_meta = meta21(disp_near_meta);
   wire [2:0]  near_fmt  = near_meta[19:17];
 
@@ -2637,7 +2711,9 @@ module zhao_texture_island_v3_top #(
       .wr_frac_v_i   (plan_acc_fv),
       .wr_byte_sel_i (plan_acc_addr[0]),
       .wr_nibble_i   (plan_acc_nib),
-      .rd_valid_i    (cache_smp_valid),
+      // Launched only on an ACCEPTED beat, so the bank never answers for a
+      // response the join stage did not take.
+      .rd_valid_i    (cache_smp_valid && r1_room_c),
       .rd_slot_i     (mj_rd_slot_c),
       .rd_sidx_i     (mj_rd_sidx_c),
       .rd_owner_gen_i(cache_smp_src[GENW-1:0]),
@@ -2671,7 +2747,9 @@ module zhao_texture_island_v3_top #(
       mj_ref_q       <= sampmeta_m[mj_rd_slot_c][mj_rd_sidx_c];
       mj_ref_pslot_q <= palslot_m[mj_rd_slot_c];
       mj_ref_pgen_q  <= palgen_m [mj_rd_slot_c];
-      mj_ref_v_q     <= cache_smp_valid && (mj_rd_sidx_c != 2'd3);
+      // Gated exactly like the bank's read, or the shadow compares a
+      // reference taken on a beat the bank never saw.
+      mj_ref_v_q     <= cache_smp_valid && r1_room_c && (mj_rd_sidx_c != 2'd3);
 
       if (mj_ref_v_q && mj_rd_valid) begin
         if ({mj_rd_nibble, mj_rd_format, mj_rd_frac_v, mj_rd_frac_u,
