@@ -1,0 +1,256 @@
+{
+  "primary_pin": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+  "reconciled_refresh": "e1622b2b1dada677cbcf3591431413721af49cf9",
+  "repository": "Fabulu/zhaozhou",
+  "hardware_branch": "zixxtrixx-v8-closeout",
+  "scope": "read-only source/report analysis; independent abstract/arithmetic checks; no repository RTL/Quartus execution",
+  "repository_references": [
+    {
+      "id": "R01",
+      "title": "Primary inspection commit",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": null,
+      "url": "https://github.com/Fabulu/zhaozhou/commit/7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "note": "06:02:28 CEST, 8 September 2026. Branch enumeration identified this hardware head separately from main."
+    },
+    {
+      "id": "R02",
+      "title": "Gate-2 delta and remaining source scope",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": null,
+      "url": "https://github.com/Fabulu/zhaozhou/compare/bd443cb0f63b1d303dd69fcdf5d4a410181b1823...7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "note": "Palette capture alignment and two previously undriven numerical outputs. This delta is not a fix of every former-FRAGROB event fan-in."
+    },
+    {
+      "id": "R03",
+      "title": "Actual V3 island integration",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/texture/zhao_texture_island_v3_top.sv",
+      "note": "Inspected multiple bounded ranges: ingress/reservation and sidecars ~450-850; front-end/Mosaic/expander/owner ~780-1250; sample metadata/planner/cache ~1330-1510; completion merger ~1990-2240; material ~2240-2395; error latches/COMBINE/output ~2460-end. Use symbol anchors if line numbers move.",
+      "git_blob": "12238248866b1ef2c6d4a48f7b70124f0460ab00"
+    },
+    {
+      "id": "R04",
+      "title": "Existing V3 owner; preserve its identity and event schedule",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "fpga/rtl/texture/zhao_texture_v3own.sv",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/texture/zhao_texture_v3own.sv",
+      "note": "win_live, win_gen_of_slot, FN_* fence, adm_req_i zero-ready handling, req/iss local state, CQ/OQ, quiet_c and C4/COMBINE guards. Selected later ranges were fetched separately to avoid truncation."
+    },
+    {
+      "id": "R05",
+      "title": "Current expander including context repair",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "fpga/rtl/texture/zhao_texture_frag_expand.sv",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/texture/zhao_texture_frag_expand.sv",
+      "note": "frag_t, fq_m, cur_q, load_c/done_c, issue-on-fire, ctx and aux_ctx_o. The earlier measured 323-ALM variant predates this payload expansion."
+    },
+    {
+      "id": "R06",
+      "title": "Actual island reciprocal service",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "fpga/rtl/raster/zhao_raster_rcp24_svc.sv",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/raster/zhao_raster_rcp24_svc.sv",
+      "note": "Raw normalization/seed path, free-context allocation, registered S1, four multiply phases, completion selector and retirement. This is not the separate rcp24_v3 successor.",
+      "git_blob": "7a9fcf7382b30dfcb9148c36283eeca511a94648"
+    },
+    {
+      "id": "R07",
+      "title": "Legacy composition retained as compatibility oracle",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "fpga/rtl/texture/zhao_texture_island_top.sv",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/texture/zhao_texture_island_top.sv",
+      "note": "Historical topology and Stage-A reference. The current top instantiations were read in the V3 source; this link preserves the corresponding immutable old top."
+    },
+    {
+      "id": "R08",
+      "title": "Common raw response stream and parameterized class dispatcher",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "fpga/rtl/texture/zhao_texture_rsp_dispatch.sv",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv",
+      "note": "RAWN, CHN, DATAW, TOKW; one raw stream before four per-class queues; existing head-of-line limit and error path."
+    },
+    {
+      "id": "R09",
+      "title": "V3 bank coding and port contract",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "fpga/rtl/texture/zhao_texture_v3bank.sv",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/texture/zhao_texture_v3bank.sv",
+      "note": "Synchronous payload read, registered write-enable expectation, simple read/write organization and no payload-array reset."
+    },
+    {
+      "id": "R10",
+      "title": "Composed directed test and stated global-binding limitation",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "tests/texture/island_composed_directed.cpp",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/tests/texture/island_composed_directed.cpp",
+      "note": "Same source compiled for old/V3 tops; independent zref comparisons and drained format phases. Refresh test changes are in R17/R23."
+    },
+    {
+      "id": "R11",
+      "title": "Checked-in physical ledger",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "reports/synthesis/zhao_block_fit.json",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/reports/synthesis/zhao_block_fit.json",
+      "note": "Scope, device capacity, row labels/source digests and measured leaf/legacy-island resource values; a ledger row is not a new independent fit."
+    },
+    {
+      "id": "R12",
+      "title": "Stage-A result and previous timing attribution record",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "reports/G1D-COMPOSED-ISLAND-20260905.md",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/reports/G1D-COMPOSED-ISLAND-20260905.md",
+      "note": "Especially section 4.3g and the P0-B reseed discussion around lines 365-460. Records 11,562 ALM / 19,203 FIT registers / 84.03 reported MHz. The brief distinguishes those measurements from overstrong causal conclusions.",
+      "git_blob": "0997fcf30e111d21eb4301a8b321a00b7d711a96"
+    },
+    {
+      "id": "R13",
+      "title": "Post-T2 owner fit report",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "reports/V31-T2-OWNER-FIT-20260907.md",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/reports/V31-T2-OWNER-FIT-20260907.md",
+      "note": "3,348 ALM / 3,953 FIT registers; 94.05 reported / 98.18 core-to-core; req-to-iss limiting family. Historical results, not the first V3 composed fit."
+    },
+    {
+      "id": "R14",
+      "title": "Ready-queue physical probe",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "reports/V31-S57-QUEUE-GATE-20260908.md",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/reports/V31-S57-QUEUE-GATE-20260908.md",
+      "note": "Local 135.37-MHz probe, 82 ALM / 159 registers / one M10K. Not a guarantee of any other composition or queue."
+    },
+    {
+      "id": "R15",
+      "title": "Old-profile memory-census closure report",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "reports/PERSPUV-PERAXIS-CLOSED-20260908.md",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/reports/PERSPUV-PERAXIS-CLOSED-20260908.md",
+      "note": "Explains which old-profile RAM-refusal findings disappeared; absence of a name is not by itself positive memory inference or a census of the new V3 top."
+    },
+    {
+      "id": "R16",
+      "title": "Reconciled run state after three gates",
+      "commit": "e1622b2b1dada677cbcf3591431413721af49cf9",
+      "path": "runs/CLAUDE-RUNS/RUN-20260908-0530-p0c-v3own-island-restructure/TASK_LOG.md",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/e1622b2b1dada677cbcf3591431413721af49cf9/runs/CLAUDE-RUNS/RUN-20260908-0530-p0c-v3own-island-restructure/TASK_LOG.md",
+      "note": "541 owner checks, 119 composed checks, 392 paired records, 11 expander checks; stale expander fit explicitly acknowledged; new V3 fit reported running.",
+      "git_blob": "2c0de0c3662d6608542ca5299c4e64ab40aeb303"
+    },
+    {
+      "id": "R17",
+      "title": "Five-commit refresh, no V3 datapath change",
+      "commit": "e1622b2b1dada677cbcf3591431413721af49cf9",
+      "path": null,
+      "url": "https://github.com/Fabulu/zhaozhou/compare/7cbeec13ec9efe649087a0f85186ac4e95b2e31b...e1622b2b1dada677cbcf3591431413721af49cf9",
+      "note": "Paired test, fit target, status report, output-driver checker and sources manifest. Does not modify the V3 RTL findings at R03."
+    },
+    {
+      "id": "R18",
+      "title": "Existing P0-C architecture and amendments",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "reports/P0C-RESTRUCTURE-ARCHITECTURE-20260907.md",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/reports/P0C-RESTRUCTURE-ARCHITECTURE-20260907.md",
+      "note": "Prior integration plan continued by this brief; central identity/deletion decisions retained, measurement and next-storage recommendations refined."
+    },
+    {
+      "id": "R19",
+      "title": "Frozen raster fog arithmetic",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "fpga/rtl/raster/zhao_raster_fog.sv",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/raster/zhao_raster_fog.sv",
+      "note": "factor conversion, amount polarity, signed channel mix, /256 rounded delta, tag and elastic output; lines ~75-196 inspected.",
+      "git_blob": "c780852a141d273ea4fa6e2f88046ff9160ae517"
+    },
+    {
+      "id": "R20",
+      "title": "Frozen geometry fog-factor arithmetic",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "fpga/rtl/geometry/zhao_geom_fogfactor.sv",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/geometry/zhao_geom_fogfactor.sv",
+      "note": "Per-frame reciprocal coefficient; signed distance, wide product, rounded rescale and clamp; behind/disabled behavior; lines 55-205 inspected.",
+      "git_blob": "63b281f46cf8f6b8f317b000fb62c07b73133144"
+    },
+    {
+      "id": "R21",
+      "title": "Physical fit runner and provenance options",
+      "commit": "7cbeec13ec9efe649087a0f85186ac4e95b2e31b",
+      "path": "tools/quartus/run_block_fit.ps1",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/tools/quartus/run_block_fit.ps1",
+      "note": "Target/row/seed and source provenance handling. This review did not execute the runner or verify a new complete fitter database."
+    },
+    {
+      "id": "R22",
+      "title": "First V3 fit registration and three-gate report",
+      "commit": "e1622b2b1dada677cbcf3591431413721af49cf9",
+      "path": "reports/P0C-STAGEC-THREE-GATES-CLOSED-20260908.md",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/e1622b2b1dada677cbcf3591431413721af49cf9/reports/P0C-STAGEC-THREE-GATES-CLOSED-20260908.md",
+      "note": "Compatibility gates closed; physical receipt pending at this refresh. Target addition is in R17."
+    },
+    {
+      "id": "R23",
+      "title": "Actual paired-stream comparator",
+      "commit": "e1622b2b1dada677cbcf3591431413721af49cf9",
+      "path": "tools/texture/gate3_paired.py",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/e1622b2b1dada677cbcf3591431413721af49cf9/tools/texture/gate3_paired.py",
+      "note": "Runs old/V3 binaries separately from the same test source, unlinks stale dumps, checks exit codes/non-vacuity, compares ordered records and fire-tests colour/order/length.",
+      "git_blob": "f67099364e260108b997dd90d5bd77f6fe89f34e"
+    },
+    {
+      "id": "R24",
+      "title": "Historical owner RAM allocation reconciliation",
+      "commit": "22a4b0016651fd7249c335fba75a789b7b8685b8",
+      "path": "reports/V31-M10K-ALLOCATION-RECONCILE-20260907.md",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/V31-M10K-ALLOCATION-RECONCILE-20260907.md",
+      "note": "Seven shallow-queue M10Ks / 1,056 fitted bits. Historical specimen referenced in the preceding brief, not the declared 1,168-bit payload arithmetic of current CQ/OQ."
+    },
+    {
+      "id": "R25",
+      "title": "Closing refresh: Gate-3 mutation against real RTL",
+      "commit": "3e666f8348f38469ae05b87e940e8db662155755",
+      "path": null,
+      "url": "https://github.com/Fabulu/zhaozhou/commit/3e666f8348f38469ae05b87e940e8db662155755",
+      "note": "Report-only child of e1622b2b; 7/119 directed mutant failures, 9/392 stream differences, restored passing run, source workspace already snapshotted; no completed V3 physical receipt."
+    }
+  ],
+  "vendor_references": [
+    {
+      "id": "V01",
+      "title": "Cyclone V Device Handbook: M10K mixed-width configurations",
+      "url": "https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/m10k-blocks-mixed-width-configurations",
+      "note": "Tables 7-8: simple-dual-port 256x40 versus true-dual-port width organizations. Device architecture, not a guarantee of HDL inference."
+    },
+    {
+      "id": "V02",
+      "title": "Altera Timing Analyzer: Report Fmax Summary",
+      "url": "https://docs.altera.com/r/docs/683243/25.3/quartus-prime-pro-edition-user-guide-timing-analyzer/report-fmax-summary",
+      "note": "Fmax versus full timing signoff and additional checks. This documentation is newer than the project tool; the brief does not assume identical option support in Quartus 17.0.2."
+    },
+    {
+      "id": "V03",
+      "title": "Quartus Standard 18.1: Unsupported RAM reset/control conditions",
+      "url": "https://docs.altera.com/r/docs/683323/18.1/intel-quartus-prime-standard-edition-user-guide-design-recommendations/avoid-unsupported-reset-and-control-conditions",
+      "note": "Avoid clearing the payload RAM or adding controls the memory architecture cannot implement."
+    },
+    {
+      "id": "V04",
+      "title": "Cyclone V: Supported DSP operational modes",
+      "url": "https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/supported-operational-modes-in-cyclone-v-devices",
+      "note": "Variable-precision physical DSP resources and mode/width dependence; multiplication-site count is not physical block count."
+    },
+    {
+      "id": "V05",
+      "title": "Altera: Fit a design using different fitter seeds",
+      "url": "https://docs.altera.com/r/docs/683432/25.3.1/quartus-prime-pro-edition-user-guide-scripting/fit-a-design-using-different-fitter-seeds",
+      "note": "Seed experiments must preserve configuration and result provenance; changing a seed does not guarantee improvement."
+    },
+    {
+      "id": "V06",
+      "title": "Quartus: Synchronous RAM and new-data read-during-write",
+      "url": "https://www.intel.com/content/www/us/en/docs/programmable/683082/24-3/single-clock-synchronous-ram-with-new.html",
+      "note": "Read-during-write semantics and possible bypass logic. Used as implementation guidance, not permission to change the bank contract."
+    }
+  ],
+  "closing_refresh": "3e666f8348f38469ae05b87e940e8db662155755",
+  "closing_refresh_local_time": "2026-09-08T06:34:32+02:00"
+}

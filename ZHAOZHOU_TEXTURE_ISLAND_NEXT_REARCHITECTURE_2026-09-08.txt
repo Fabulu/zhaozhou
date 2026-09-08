@@ -1,0 +1,1824 @@
+ZHAOZHOU TEXTURE ISLAND
+NEXT REARCHITECTURE AND CLOSURE DECISION BRIEF
+===============================================================================
+8 September 2026 | Europe/Zurich | Recommended work order, not implemented RTL
+
+PRIMARY INSPECTION PIN
+  Repository: Fabulu/zhaozhou
+  Hardware branch: zixxtrixx-v8-closeout
+  Commit: 7cbeec13ec9efe649087a0f85186ac4e95b2e31b
+  Committed: 8 September 2026, 06:02:28 CEST
+
+FIRST RECONCILED REFRESH
+  e1622b2b1dada677cbcf3591431413721af49cf9
+  8 September 2026, 06:15:25 CEST
+  Gate 1 passes; Gate 2 is 119/119; Gate 3 compares 392 retired records exactly.
+  The run log says the first V3 island fit is running. These are repository
+  reports, not tests or Quartus runs independently executed for this brief.
+  The five-commit refresh changes tests, reports, fit registration and checking
+  tools, not the inspected V3 datapath. The closing refresh is 3e666f8348f38469ae05b87e940e8db662155755,
+  8 September 2026, 06:34:32 CEST; see section 18.
+  [R01, R02, R16, R17]
+
+SCOPE
+  Finish the texture island. Do not reopen terrain, projection, a general fit-
+  sheet evacuation campaign, or a replacement ownership architecture. Fog for
+  Manafold is an authorized requirement; its integration must be priced and
+  timed explicitly, not mistaken for unauthorized drift.
+
+  This brief continues P0-C and makes the next storage/control changes specific.
+  It supersedes earlier recommendations only where it names the new evidence.
+  It does not authorize silently lowering functionality, throughput, lifetime
+  safety, or the 100 MHz product clock to obtain an attractive fit.
+
+RESEARCH BOUNDARY
+  Inspected live branch history, actual RTL, directed-test source, fit ledger,
+  selected archived reports, prior architecture briefs and primary vendor
+  documentation. The large raw owner setup report could not be retrieved through
+  the connector; the Stage-A summary and relevant RTL were available. There is
+  no independently inspected complete V3-island fitter database in this review.
+
+  Independent C++ arithmetic and abstract protocol models were compiled and run.
+  No repository RTL simulation, Quartus compilation, board test, or unbounded
+  formal proof was performed. The models' precise scope is in section 16.
+
+READING MAP
+   0. Decision in one page
+   1. What is actually established now
+   2. The goal and resource contract
+   3. Complete the V3 contract, not just its happy-path test
+   4. Typed identity and accepted-beat ownership
+   5. Front-end lifetime, zero-work owners, reset and namespace reuse
+   6. The next timing architecture: reserved RCP preparation
+   7. The next storage architecture: one metadata join before class fan-out
+   8. Material and front-end sidecars: retain only justified copies
+   9. Conditional owner-control localization
+  10. Throughput and small queues: what not to optimize blindly
+  11. Feature-live binding, Mosaic, AUX and Fog
+  12. Measurement rules corrected by the evidence
+  13. Implementation packets, fit sequence and decision forks
+  14. Acceptance matrix and stop conditions
+  15. Ready-to-paste owner direction
+  16. Independent checks and their limitations
+  17. Immutable repository and vendor source index
+  18. Closing refresh
+
+===============================================================================
+0. DECISION IN ONE PAGE
+===============================================================================
+
+KEEP V3. Do not restart the owner, undo T2, or replace the retained arithmetic.
+The next productive architecture is:
+
+  accepted fragment + reserved owner
+      -> explicitly owned front-end preparation
+      -> tagged coordinate/descriptor delivery
+      -> expander with no independent allocation authority
+      -> planner consuming a captured, resolved descriptor
+      -> cache
+      -> ONE synchronous metadata join, with space reserved for reads in flight
+      -> independent class queues carrying the complete response packet
+      -> decode/filter/palette
+      -> existing V3 capture / snapshot / claim / write / publish machinery
+      -> aligned material + sample packet
+      -> COMBINE, with actual acceptance still authorizing FINAL
+      -> required post-material/post-toon Fog in the appropriate render closure
+      -> ordered external retirement, after all owner-scoped obligations end.
+
+The principal area experiment is NOT "put every array into RAM". It is removing
+several independent metadata read sites by moving the join to the common cache-
+response stream BEFORE it splits into CLUT, nearest and bilinear paths. That
+makes a real one-writer/one-reader metadata bank possible without serializing
+several downstream readers or duplicating the bank for each class. [R03, R08]
+
+The principal timing experiment, conditional on the fresh V3 path report, is
+NOT another indiscriminate RCP output register. Stage A already inserted the
+RCP-to-PERSPUV boundary. The newest measured legacy-island gate instead runs
+from raw fragment depth into RCP context state. Split context reservation,
+normalization and seed preparation while preserving the exact reciprocal law
+and four-job scheduler. [R06, R12]
+
+Before either experiment becomes the production baseline, close the remaining
+contract holes. The green V3 source still contains old FRAGROB signals feeding
+fault latches and an invalid-class counter. Zero-required-source owners can
+become COMBINE-ready at admission even though the top sends their front-end work
+through RCP/PERSPUV/expansion. The first is a source-confirmed observability bug;
+the second is an unclosed lifetime obligation, not a claimed reproduced data-
+corruption trace. Address them with focused tests and an explicit completion
+contract, not by treating 119 green checks as universal correctness. [R03, R04]
+
+The first V3 fit is useful even if it misses historical subsystem allocations.
+Let it finish on its frozen specimen. Record its failures honestly. Do not
+change the source under that run, and do not throw away the measurement because
+it characterizes a compatibility profile rather than the eventual full renderer.
+
+After that receipt, choose the next patch by evidence:
+
+  Long raw-depth / normalization / seed path -> section 6.
+  Large expanded metadata / multi-read glue -> section 7.
+  Owner request-to-issue control dominates -> section 9.
+  Material-join or expander bubbles limit workload -> sections 8 and 10.
+  Different measured family -> investigate that family; do not force this list.
+
+An approximately 11,000-ALM texture island at a genuine 100 MHz could be a good
+outcome. This review does NOT establish the whole console's remaining budget,
+so it cannot approve that allocation unconditionally. Conversely, missing the
+old 7,500-ALM or 9,000-register subsystem rule does not prove the FPGA is full.
+Keep the old variance visible and obtain a count-once whole-console allocation
+before deciding how much additional area reduction is actually necessary.
+
+===============================================================================
+1. WHAT IS ACTUALLY ESTABLISHED NOW
+===============================================================================
+
+1.1 Separate the three physical specimens
+----------------------------------------
+
+A. Legacy composed island after Stage A -- measured:
+
+  ALMs                  11,562
+  Fitted registers      19,203
+  M10K blocks               39
+  Memory bits           45,624
+  DSP blocks                17
+  Reported setup Fmax    84.03 MHz
+
+  Row: zhao_texture_island_top@p0c-stageA
+  Source commit: 94c31f6c3e32d5aa2fdd09c9e1f2beeaeed86961
+  Digest: 145cd70deee8dbe9fbc29df5070b031cbb6a1990da28d7560c41371341570f33
+
+The preceding P0-B row was 13,615 ALMs / 23,295 registers / 37 M10Ks. Stage A
+therefore measured -2,053 ALMs, -4,092 registers and +4,096 memory bits. The
+report identifies uvw_m_rtl_0 as the inferred memory. This is a substantial
+composed result, not an extrapolation from a leaf. Its extra M10K cost was TWO,
+not the approximately one originally guessed. [R11, R12]
+
+The 84.03 figure is REPORTED Fmax. Do not relabel it core-to-core, call it
+multicorner timing closure, or assign it to the newer V3 composition. The
+reported gate is frag_depth_i[20] -> u_rcp|c_x[5][3], at -1.900 ns. The review
+has not established the full Stage-A hold result or a new V3 internal Fmax.
+
+B. V3 owner by itself -- measured earlier:
+
+  3,348 ALMs / 3,953 registers / 17 M10Ks / 20,640 bits / 0 DSP
+  94.05 MHz reported; 98.18 MHz core-to-core.
+
+This is the post-T2 owner. Its generation table has already been removed from
+synthesis. Do not subtract its 2,361-ALM historical improvement from the legacy
+island: that island did not instantiate this owner. [R04, R11, R13]
+
+C. New V3 composed island -- functionally exercised, physical result pending
+at the reconciled refresh:
+
+  Owner adversarial test: 541 checks pass on the unchanged owner.
+  Retargeted composed test: 119/119.
+  Paired retired stream: 392 byte-identical records, order included.
+  Expander directed test after context repair: 11/11.
+  First V3 fit: the run log reports it running. [R16, R17]
+
+Those gates establish the tested compatibility workload. They are not a proof
+of every exposed fault port, arbitrary parameter values, all namespace/reset
+schedules, or feature-live material binding/Mosaic/Fog.
+
+1.2 Repairs that are foundations, not new assignments
+----------------------------------------------------
+
+Retain the registered owner credit and fence sequencing; exact T2 identity
+reconstruction; snapshot AND current identity checks at return authorization;
+claim-before-write and publish-after-write ordering; once-only ticket creation;
+actual COMBINE acceptance versus reservation; independent TMU/AUX/final lanes;
+COMBINE V2 arithmetic; PERSPUV's registered output; the Stage-A UVW seam; and the
+already tested CLUT4, direct-colour, alpha and address-specific fixture repairs.
+The current completion path is not an invitation to reconstruct FRAGROB under a
+new name. [R03-R06, R09, R10, R13]
+
+The new top really does instantiate V3 owner and the expander and omit the old
+FRAGROB instance and independent output ROB. However, some old declarations,
+sidecars and comments survive. Count actual readers and inferred hardware,
+not the word DELETED in a comment.
+
+1.3 Two earlier measurements need narrower interpretations
+---------------------------------------------------------
+
+The expander's 323-ALM / 451-register result predates its new 64-bit context
+carriage. The current four-entry queue plus current-fragment register contain
+up to five such fields: 320 additional declared payload bits before synthesis
+trimming or RAM inference. That is not a prediction of 320 fitted registers.
+The refreshed run log correctly marks the old fit stale. [R05, R16]
+
+The ready-queue probe's 135.37 MHz is positive LOCAL evidence. It is not a
+certificate that a queue cannot become critical with different placement,
+fan-out, parameters or surrounding logic. Likewise, the absence of a memory's
+name from a refusal list does not prove that it became RAM: require the positive
+RAM/entity evidence or explain its elimination/renaming. [R14, R15]
+
+===============================================================================
+2. THE GOAL AND RESOURCE CONTRACT
+===============================================================================
+
+2.1 Hard requirements versus an allocation decision
+---------------------------------------------------
+
+Hard functional requirements:
+  exact required arithmetic and output order; no lost or duplicated accepted
+  work; no dead-owner authority; bounded storage and progress under the agreed
+  responder contracts; all required features live in the accepted profile.
+
+Timing requirement:
+  100 MHz under the real clock/interface contract, with required setup, hold,
+  recovery/removal and pulse-width checks passing at required corners. A raw
+  Fmax benchmark is not signoff. [V02]
+
+Historical allocation:
+  texture nominal 6,600 ALMs, redline 7,500; 9,000 registers; 64 M10Ks; 14 DSPs.
+  These are recorded subsystem rules. The latest fit registration keeps them.
+  They are not identical to whole-device capacity or an irrevocable allocation.
+  [R11, R12, R17]
+
+The provisional fit device provides 41,910 ALMs, 553 RAM blocks and 112 DSP
+blocks in the fitter's resource units. The correct whole-console question is:
+
+  texture allowance = admitted whole-device logic budget
+                    - counted-once non-texture logic
+                    - explicitly retained integration/routing reserve.
+
+Neither the historical sum of leaf fits nor the space left after subtracting
+texture alone answers that question. Overlapping cores, alternative versions,
+wrappers, counters and duplicate production-manifest entries must not be added
+as though they were independent simultaneous instances. [R11]
+
+For illustration ONLY: if other admitted logic were 24,000 ALMs and the reserve
+were 4,000, the physical 41,910 ceiling would leave 13,910. If other admitted
+logic were 30,000 with the same reserve, it would leave 7,910. These are not
+estimates of this console. They show why 11,000 cannot be declared either a
+disaster or safely affordable without the other terms.
+
+2.2 Register reduction is a means, not the objective function
+------------------------------------------------------------
+
+A large indexed register store can bring expensive selection logic and routing.
+Eliminating that structure is useful even when total register capacity is not
+close to exhaustion. Conversely, adding a few hundred pipeline registers to
+remove a long cone can be exactly right. Stage A demonstrated a good storage
+trade; it did not establish that every future register reduction saves ALMs.
+
+Track fitted registers beside ALMs, inferred memories, control sharing, fan-out,
+and timing. Do not sacrifice a correct registered interface to make the old
+9,000-register subsystem number green. Do not describe every small register
+FIFO as architectural waste.
+
+2.3 Admission of a revised budget
+--------------------------------
+
+Keep two judgments in the report:
+
+  Historical-rule result: pass/fail against the unchanged old allocation.
+  Product-allocation decision: accepted/not accepted, with the new whole-console
+  accounting and explicit owner approval attached.
+
+A revised 11-12k logic allocation, for example, must be a stated decision rather
+than an edit that erases the previous failure. A correctly measured 11k/100-MHz
+candidate need not be redesigned again merely because it is not 7.5k. Equally,
+this brief does not promise that the fully enabled V3 island will remain 11k.
+
+DSP and M10K headroom must be handled the same way. A logical multiplication
+site is not one physical DSP block. A 64x64 memory is not automatically one
+M10K because it contains fewer than 10,240 bits: port width matters. [V01, V04]
+
+===============================================================================
+3. COMPLETE THE V3 CONTRACT, NOT JUST ITS HAPPY-PATH TEST
+===============================================================================
+
+3.1 Source-confirmed leftover fault fan-in
+-----------------------------------------
+
+At the inspection pin, these source paths remain in the V3 top:
+
+  err_class_invalid_o increments on fr_alloc_valid && f_class_bad_c.
+  err_fragrob_wq_overflow_o latches fr_wq_overflow.
+  err_fragrob_id_error_o latches fr_id_error.
+
+The former FRAGROB instance is gone. Those three former FRAGROB event signals
+have declarations/usages but no corresponding live driver in this top. The
+latest fix drove two numerical outputs, cnt_fragments_o and
+cnt_fragrob_id_errors_o; it did not repair these upstream event sources. An
+output-assignment checker can miss this: the output has a perfectly real
+always_ff assignment, but its event fan-in is dead. [R03: approximately 940-1000,
+1210-1250, 2460-2500; R02, R17]
+
+This is a definite source finding, not a prediction about ALMs. It does not mean
+all 119 functional tests are worthless. It means zero-valued clean-run fault
+checks are insufficient to establish fault observability.
+
+Required bounded repair:
+
+  A. Invalid-class evidence must count the actual ingress admission and that
+     same beat's raw class. Use own_adm_accept and frag_class_i == CLS_ERR, or
+     a consistently captured equivalent. Do not combine an ingress event with
+     the later planner-stage f_class_bad_c value.
+
+  B. The identity-error sticky must observe V3's real rejection events. Initially
+     it can conservatively latch the OR of nonzero relevant owner error counts
+     if avoiding an owner interface edit is important. Prefer local event pulses
+     when that interface is deliberately revised. Name which of range, stale,
+     unsolicited, duplicate, illegal issue and unauthorized final it includes.
+     The current three-counter sum omits some of those categories.
+
+  C. The queue-overflow port needs a real specified meaning. Either expose the
+     expander's actual capacity-violation event and test it by fault injection,
+     or retire the obsolete diagnostic in a versioned interface change. Do not
+     tie it to zero and call it preserved. Normal valid && !ready is NOT an
+     overflow: it is permitted backpressure.
+
+Do not build a repository-wide parser project for this. Audit the fan-in of this
+top's evidence ports, add focused checks, and move on. If a source-only checker
+is retained, distinguish direct driver presence from transitive live fan-in.
+
+3.2 Positive and negative tests for each observable
+--------------------------------------------------
+
+For every retained error port: first show clean traffic leaves it clear; then
+inject the specific condition and show that exact observable changes; finally
+restore legitimate traffic and show continued operation. A reject-all block
+must not pass a stale-token test. A permanently-zero flag must not pass a
+healthy-run test and thereby be declared implemented.
+
+Minimum additional composed cases:
+  invalid ingress class on isolated and adjacent admissions;
+  stale and unsolicited TMU return with a valid successor later succeeding;
+  duplicate return at adjacent claim/publication distances;
+  range-invalid sample index 3;
+  unauthorized FINAL before real COMBINE acceptance;
+  consumer stalls immediately after a read reservation;
+  namespace/reset schedules described in section 5.
+
+Observe bank write enables and publication state as well as eventual colours
+where the property concerns authority or ordering. The owner leaf already has
+useful probes; reuse their principle at the relevant composed boundary. A
+sample with valid identity but invalid format can terminate as a typed error.
+A packet with corrupt identity must not be 'repaired' by writing some live slot
+merely to keep retirement moving. These are different contracts. [R04, R10]
+
+3.3 Interpret the three closed gates correctly
+----------------------------------------------
+
+Keep the 541/119/392 evidence. Do not restart its campaign or make the latest
+successful integration redo yesterday's work. Add the missing schedules as
+incremental acceptance obligations.
+
+The paired run should compare accepted logical workloads and ordered retired
+records, not require internal token bits or cycle timing to be identical. The
+old AUX token width and the new width differ intentionally. Each model must
+advance its own legal handshakes; the workload generator must not advance one
+shared stimulus index whenever only one model accepts. Use a host-side logical
+sequence that is wider than any reused hardware tag to disambiguate the test.
+
+For future mixed-material tests, the old top is no longer the sole oracle: its
+global-binding limitation is precisely what is being removed. Preserve the
+compatibility paired test and add an independent reference expectation for the
+new profile. A feature correction need not reproduce a documented legacy bug.
+
+===============================================================================
+4. TYPED IDENTITY AND ACCEPTED-BEAT OWNERSHIP
+===============================================================================
+
+4.1 Freeze the existing wire encodings; stop rediscovering their slices
+---------------------------------------------------------------------
+
+The P0-C migration has repeatedly broken a field whose width remained legal
+while its meaning changed. The cure is a small shared encoding vocabulary, not
+another namespace or translation RAM. Keep these external encodings:
+
+  public owner:  {slot[5:0], generation[7:0]}                 14 bits
+  sample handle: {slot[5:0], sample_index[1:0], generation}    16 bits
+  route token:   {class[1:0], sample_handle[15:0]}             18 bits
+  T2 ticket:    {generation[7:0], slot[5:0]}                  14 bits
+
+The public owner and the arithmetic ticket are NOT interchangeable integers.
+Use named pack/unpack functions or packed types for owner_slot, owner_generation,
+owner_to_ticket, make_sample_handle, sample_to_owner and route_class. Restrict
+raw slicing to these definitions and the explicit external adapters. [R03-R06]
+
+This must be a bit-identical migration. It must not widen, truncate or reorder
+existing wires, alter array depths, or introduce a 64-entry generation table.
+The independent encoding check in this bundle covers all 262,144 combinations
+of slot, generation, sample code and class code, including code 3 as a losslessly
+represented but invalid TMU sample. The real RTL test must exercise slot bits
+4 and 5, generation 0/255, and every adapter in the actual path.
+
+The current top mixes generic-looking parameters with fixed 14/16/18-bit
+interfaces. State the supported parameter profile explicitly and reject other
+combinations at elaboration until tested. Do not claim that changing GENW or
+owner depth works merely because the file has a parameter declaration.
+
+4.2 Each captured record has one event and one stage
+--------------------------------------------------
+
+Use this review table for every stored field:
+
+  field / width / writer event / writer stage / owner key /
+  reader stage(s) / final legal read / reset or reuse rule.
+
+Examples from the actual integration:
+
+  Input material and palette fields belong to the input admission beat.
+  UVW belongs to the owner returned by RCP, not its generation bits.
+  AUX coordinates belong to the expander's current fragment, not output context.
+  Sample decode metadata belongs to an accepted planned sample.
+  Caller tag belongs to opaque context, not to the internal owner identifier.
+
+The repaired top had mixed these stages while preserving plausible widths. A
+record-level contract prevents the next field, such as fog amount, repeating
+the same error. A stage-valid bit without its matching record is insufficient.
+
+At the ingress fork the existing corrected law is:
+
+  external_fire = frag_valid && owner_ready && rcp_ready
+  owner_fire    = external_fire
+  rcp_fire      = external_fire.
+
+Later front-end changes must preserve ONE acceptance event, even if 'rcp_ready'
+becomes 'preparation reservation available'. Never allocate an owner on the
+caller merely offering valid while the other branch refuses. The independent
+8-case truth check catches that exact phantom-admission mutant. [R03]
+
+4.3 Stability and adapter inventory
+-----------------------------------
+
+At each elastic boundary require the complete offered record to remain stable
+while valid is high and ready is low. If a legacy service intentionally permits
+selection to change before acceptance, state that exception and capture it
+before exposing a stable-valid contract; do not assume a generic interface name
+proves either behavior.
+
+The inventory must include internal cache c1_src/c2_src registers, not only
+ports; the AUX sheet request AND response; RCP token storage; PERSPUV tag;
+expander queue and current record; class queues; material alignment identity;
+COMBINE tag; FINAL; and external caller context. 'Six sites, not four' was the
+actual cache-width lesson. [R03, R05, R16]
+
+A declaration-presence checker is useful, but it cannot establish record
+identity, stage alignment, or meaning. Keep the data-dependent tests.
+
+===============================================================================
+5. FRONT-END LIFETIME, ZERO-WORK OWNERS, RESET AND NAMESPACE REUSE
+===============================================================================
+
+5.1 The unclosed zero-work obligation
+-------------------------------------
+
+The owner intentionally creates initial ready work when adm_req_i == 0. That is
+correct for its leaf contract: it owes no TMU or AUX source. The composed top,
+however, admits the same fragment into RCP and later PERSPUV and the expander.
+Those stages still hold its owner token and can still read owner-keyed sidecars.
+The leaf owner's readiness does not prove that this front-end obligation ended.
+[R03, R04: admission initialization and q0i_v_q; R05, R06]
+
+Therefore this implication is not established by the inspected composition:
+
+  owner may externally retire -> no legitimate front-end reader for it remains.
+
+A zero-sample expander unit test proves that no TMU requests are emitted. It does
+not establish the above implication for a separately completing owner. Nor does
+392-record ordinary parity explore all prolonged stalls and wrap schedules.
+
+Evidence classification: SOURCE-PROVEN mismatch between two completion domains;
+REACHABILITY/IMPACT of a destructive same-slot reuse schedule NOT independently
+proved here. The supplied abstract model demonstrates why the implication must
+be specified, not that the repository already produces that exact trace.
+
+5.2 Selected contract: a real front-end completion lease
+-------------------------------------------------------
+
+Before production cutover, require the following invariant:
+
+  actual COMBINE acceptance for owner H requires both:
+    - the owner's existing sample/AUX readiness;
+    - completion of every front-end operation that may still read H's sidecars.
+
+A compact initial implementation is one FRONT_COMPLETE bit per owner slot,
+cleared on accepted admission and set on a tagged expander-done event. 'Done'
+means all required requests were accepted and no front-end stage still needs
+that fragment's descriptor. For the zero-work case it means the fragment really
+passed through and left the current expansion record, not merely that its
+sample count was zero at admission.
+
+Gate both halves of the actual COMBINE handshake with the same completion term.
+Do not pop the owner COMBINE packet early into an adapter and thereby mark cbi
+before the real combiner takes it. That would repeat the reservation-versus-
+acceptance defect already repaired by M6.
+
+This 64-bit phase plane is NOT another live-owner counter, allocator or
+namespace. It records an obligation the owner leaf currently cannot see. The
+owner window remains the allocation authority. The full handle travels with
+the completion event. Assert, against the owner window in verification, that a
+legitimate completion belongs to a live instance and arrives once. Admission
+clear has defined precedence over any colliding stale event.
+
+The no-reuse proof is inductive: an admitted slot starts incomplete; its owner
+cannot combine/retire until the front-end event; the event is emitted only when
+that stage releases the last sidecar read; therefore a later legitimate front-
+end event cannot belong to an already-reused slot. This proof also requires all
+local front-end valid state to be reset/cancelled under the same reset contract.
+Do not 'prove' the event's identity from a second copied generation table.
+
+A later deliberate owner-interface extension can move FRONT_COMPLETE into the
+owner's narrow phase state if that produces a cleaner implementation. It must
+not encode 'front-end done' as a fake required TMU or AUX sample. Preserve the
+real resource and error meanings of those lanes.
+
+Alternative: bypass unnecessary RCP/PERSPUV work for a zero-source fragment.
+That may be a good throughput optimization, but it changes the accepted work
+and counter contract. It is NOT the initial compatibility fix. It needs its own
+reference, counter and ordering decision, including any live Mosaic/Fog work.
+
+5.3 The tests that decide whether the lease is sufficient
+--------------------------------------------------------
+
+Use zero-source, no-AUX owners interleaved with one-, two- and three-source
+owners; zero-source WITH AUX must remain a distinct case. Give every owner
+distinct material, context and descriptor values. Keep the output ready while
+stalling front-end acceptance, then reverse the stalls. Exercise over 64
+admissions and a full handle-namespace cycle in a bounded stress test.
+
+Instrument:
+  input admission; RCP acceptance and completion; PERSPUV completion;
+  expander acceptance and done; actual COMBINE acceptance; owner retirement;
+  descriptor reads and writes by full logical owner.
+
+Require no final acceptance before FRONT_COMPLETE, no stale sidecar read after
+retirement, no duplicate completion, and no leak after all responders resume.
+Deliberately remove the lease qualifier: the new test must detect the violated
+ordering, even if the final colours still happen to match.
+
+If an alternative structural proof establishes that the existing implementation
+already prevents retirement-before-front-completion for every legal schedule,
+record that proof and keep the detector; do not add redundant phase state just
+to follow this document. The current source and test evidence does not yet
+supply that proof.
+
+5.4 Owner quiet is not island quiescence
+----------------------------------------
+
+The owner's quiet_c covers its own pipeline, queues, live count and reserved
+output space. It does not include RCP, PERSPUV, the expander, cache/fill
+transport, class queues, palette lookup returns or external sheet responders.
+Its own fence comments explicitly leave producer quiesce and residual transport
+acknowledgment unimplemented. This is not fixed by connecting another local
+'idle' signal to the existing reduction. [R04: quiet_c and FN_* states]
+
+The product barrier must be a coordinated phase machine:
+
+  STOP_NEW_ADMISSIONS
+    -> FINISH_ACCEPTED_WORK (allow its requests to issue and complete)
+    -> QUIESCE_PRODUCERS / CLOSE_OLD_EPOCH
+    -> DRAIN_RESIDUAL_TRANSPORT
+    -> VERIFY_ALL_ACKNOWLEDGMENTS_AND_LOCAL_EMPTY
+    -> REOPEN once, with the new namespace permission registered.
+
+Stopping new fragments must not prevent already accepted fragments issuing the
+requests needed to drain. An ACK means the producer can no longer deliver an
+old-epoch response, not that its visible output happened to be idle that cycle.
+Track request ownership where the real transport adapter knows it; do not
+subtract an arbitrary malformed response from an outstanding-work count.
+
+The current transitional owner fence permits individual wrapping admissions.
+When replacing it, use the existing allocation ticket to detect the namespace
+boundary and define one acknowledged epoch barrier, not an accidental drain
+for every slot of the wrapping generation. This is a controlled extension of
+the current fence, not a second independent epoch allocator in the top.
+Measure wrap overhead under sustained traffic once the safety contract exists.
+
+Reset needs the same treatment. Resetting local generations to their initial
+value does not make an old external packet with that same value distinguishable
+from a new owner. Either the reset protocol guarantees transport cancellation/
+drain before re-admission, or a persistent/versioned epoch must cross the real
+external interface. Widening a local counter that the responder never echoes
+cannot solve that ambiguity.
+
+Required falsifier: withhold exactly one external adapter's ACK while all local
+queues are empty. Admission must remain closed. Then deliver late old traffic,
+complete the agreed cancellation/drain, acknowledge, and prove fresh traffic
+works. No timeout may silently authorize reuse; a timeout can raise an explicit
+fatal/recovery condition instead.
+
+===============================================================================
+6. THE NEXT TIMING ARCHITECTURE: RESERVED RCP PREPARATION
+===============================================================================
+
+6.1 Why this is the next candidate, not a new reciprocal algorithm
+----------------------------------------------------------------
+
+Stage A's reported gate is raw depth -> RCP c_x. The actual source takes d_i
+through a 24-position leading-zero search, variable shift, ROM-index formation,
+seed lookup and selected-context write. The four-job Newton engine is separate
+and its issue-selection boundary has already been registered. [R06, R12]
+
+First check the fresh V3 setup report and the real launch/capture context. A
+virtual-input path can include significant boundary/skew effects, so inspect
+data delay as well as slack and the upstream register contract. Do not dismiss
+it because it is a port path, or redesign it solely because it is a port path.
+
+If that preparation family remains significant, implement the following split.
+Keep the original RCP service as the arithmetic oracle; keep the current ROM,
+normalization convention, rounding, overflow and truncation exactly.
+
+6.2 Proposed stage schedule
+---------------------------
+
+  Stage    Action                          Reservation / visibility
+  -------------------------------------------------------------------------
+  N0       Accept raw d, token, context     Context becomes occupied NOW.
+           identity into registers.        No micro-job is eligible yet.
+
+  N1       Compute leading-zero count,     Operands and identity travel as
+           normalized mantissa, exponent,  one record. Still not selectable.
+           and zero classification.
+
+  N2       Read/capture the unchanged      Initialize context operands;
+           seed; publish prepared state.   only now assert micro-job eligibility.
+
+  S1       Existing registered selection.  Eligibility surrendered at selection.
+
+  M1/M2    Existing multiply/update law.   Existing phase/identity forwarding.
+
+  DONE     Existing or separately tested  Completion and egress ownership are
+           registered completion path.     explicitly accounted.
+
+N0 reservation is essential. Reserving only when N2 completes admits more
+preparation records than the context store owns, or lets the same free context
+be chosen repeatedly while older preparation is in flight. Treat occupied-but-
+not-prepared as a real state. In the present organization, c_val=1 with
+c_pend=0 and a non-final phase can represent it, provided every completion and
+reset predicate is audited for that state.
+
+No stage may derive its token, zero flag, phase or selected context from the
+current input after the beat was accepted. The original ingress fork must
+still allocate exactly one global owner and one local reservation on the same
+accepted external beat.
+
+6.3 Normalization implementation and arithmetic limits
+------------------------------------------------------
+
+A bounded group leading-zero encoder is an appropriate implementation candidate:
+classify the three eight-bit groups, select the first nonzero group, then encode
+within that group. The all-zero input retains the old convention and separate
+zero flag. Register the normalized mantissa before the ROM/seed publication.
+Whether N1 needs another cut is a physical result, not a stylistic preference.
+
+The seed index's low eight bits are equivalent to normalized mantissa bits
+[22:15] for this fixed 24-bit expression, including the existing zero convention.
+The independent check exhaustively compared both forms over all 2^24 inputs.
+This licenses a candidate exact expression simplification, not an arbitrary
+change to ROM contents or reciprocal approximation. [R06; check N1]
+
+Preserve, in particular:
+  the two Newton updates and four dependent multiply jobs;
+  uint64-style wrapping of the 2^31 - w expression and product;
+  the specified round-half-up shifts;
+  uint32 iterate truncation;
+  final rescale/clamp and zero result/exponent behavior.
+
+Do not replace exact integer division behavior, use floating point, or reduce
+iterations to buy a clock. Do not replace the current service with the separate
+RCP-V3 successor simply because that successor once had a flattering leaf Fmax.
+A successor decision requires the same workload, arithmetic and composed test.
+
+6.4 Completion side: a separate conditional change
+--------------------------------------------------
+
+The current RCP completion selector searches c_val/c_pend/phase and in-flight
+identities, then dynamically selects result, token and exponent. That structure
+is real, but Stage A now captures the outgoing beat before PERSPUV. The old
+cross-module completion path must not be cited as though Stage A never existed.
+
+If a fresh report or a stall-stability test still implicates completion, use an
+explicit terminal-state bit and a reserved result-holding stage. Capture the
+whole result and identity together, prevent selecting the same completed context
+twice, and keep it stable under backpressure. A conservative first variant keeps
+the context reserved until the held result is accepted. Releasing it earlier is
+allowed only with a separately counted egress reservation and a proof that no
+remaining read accesses the reused context.
+
+Do not stack two almost-identical skids around an unchanged expensive selector
+without deciding which one owns the queued result. Do not add a hierarchical
+arbiter just because an older report recommended it for a path already removed.
+
+6.5 Acceptance and expected physical effects
+--------------------------------------------
+
+Structural prediction: raw depth no longer feeds normalization and ROM logic
+all the way into a context operand register in one combinational stage. A
+normalization or ROM family may become the new local limit; name it.
+
+Resource expectation: additional bounded preparation registers and possibly
+some narrow phase state. DSP arithmetic count is not intentionally increased.
+ALM direction and Fmax gain are NOT predicted.
+
+Functional gates: exhaustive/reference normalization checks; reciprocal RTL
+pairing over boundary and random denominators; eight contexts under stalls;
+identity preservation; reset with every preparation stage occupied; exactly
+four multiply launches per ordinary reciprocal; no premature DONE; unchanged
+retired colours and ordering in the island. Measure sustained launches and
+cycles per result, not only correctness on a drained burst.
+
+If the first fit merely moves delay into one long N1 stage, split the measured
+N1 cone. If input timing was mostly virtual-pin skew and the actual embedded
+core already meets its interface budget, do not spend area gratuitously: choose
+the measured internal family instead.
+
+===============================================================================
+7. THE NEXT STORAGE ARCHITECTURE: ONE METADATA JOIN BEFORE CLASS FAN-OUT
+===============================================================================
+
+7.1 Why the old 'P0-E closed' conclusion does not close this work
+---------------------------------------------------------------
+
+The old-island async-read census correctly found uvw_m as its largest immediate
+convertible target. The new V3 top is a DIFFERENT storage graph: sample metadata
+expanded from 16 to 64 owners; a material plane was added; context acquired a
+new expander consumer; old arrays still have mixed live/dead consumers. An old
+MAP census is not an inventory of this composition. [R03, R05, R12, R15]
+
+Current source contains sampmeta_m[64][3] at 21 bits per sample, or 4,032
+declared bits, written at accepted planner output and read independently by
+CLUT, nearest and bilinear logic. The first V3 MAP/entity report must establish
+its actual mapping and cost before an area claim is made. [R03: 1330 onward]
+
+The wrong repair is three replicated RAMs, or one RAM whose new arbiter silently
+serializes all decoding lanes. The selected candidate relocates the join to the
+one stream those readers all share: accepted cache responses.
+
+7.2 Proposed dataflow
+---------------------
+
+  planner/cache request acceptance
+        | writes immutable SAMPLE_METADATA[address={slot,sample}]
+        v
+  cache response stream -- one accepted response per cycle maximum
+        v
+  R0: reserve joined-response capacity; capture data64 + full route token
+        | initiate synchronous metadata read
+        v
+  R1: capture returned metadata + corresponding token/data/valid
+        | check alignment/range/metadata generation; no owner payload write
+        v
+  joined-response elastic storage
+        v
+  existing raw dispatcher -> existing per-class queues
+        | complete immutable response record travels with each queue entry
+        v
+  CLUT / nearest / bilinear / error consumers
+        v
+  existing terminal completion merger -> V3 owner R0.
+
+This is an architecture of the metadata access, not a replacement of the
+cache, dispatcher, palette or bilerp arithmetic.
+
+The dispatcher already has a DATAW parameter. One candidate is DATAW=104,
+carrying the existing data64 plus metadata40, while TOKW remains the correctly
+encoded 18-bit routing identity. Update every queue/internal signal governed by
+DATAW and verify the payload, not merely the port declaration. Do not put these
+metadata bits into the identity token or opaque caller context. [R08]
+
+7.3 Candidate 40-bit metadata row
+---------------------------------
+
+For the current four-palette-slot profile, a useful row budget is:
+
+  owner generation       8
+  palette slot           2
+  palette generation     8
+  resolved format        3
+  fraction U             8
+  fraction V             8
+  byte selection         1
+  CLUT4 nibble selection  1
+  reserved               1
+                         --
+                         40 bits
+
+Address {owner_slot[5:0], sample_index[1:0]} is eight bits: 256x40. Sample index
+3 is invalid and must be rejected before any returned row is used. The reserved
+bit is not an implicit resettable valid array. Generation here is an immutable
+alignment check for the payload, not a second generation allocator or authority
+table. V3's live window still determines write authority.
+
+If palette-slot count or format payload changes, derive the row width explicitly
+and refit it. Do not silently truncate to preserve the attractive 40-bit shape.
+
+Cyclone V M10K supports the 256x40 simple-dual-port organization; wider or true-
+dual-port arrangements have different limits. This is why that access shape is
+worth targeting. It is not a guarantee of one physical block after extra ports,
+byte enables or control logic are added. [V01]
+
+7.4 Writer and publication contract
+------------------------------------
+
+Write exactly the metadata belonging to the accepted planned sample, at the
+same transaction event that gives that sample to the cache. Capture palette
+binding from the same accepted descriptor, not from a current ingress or another
+pipeline stage. Format/fractions/nibble come from that sample's planner result.
+
+Where the bank contract requires a registered write enable, stage the entire
+{address,data,write_enable} record together. Establish a lower bound between
+request acceptance and earliest response metadata use. If that lower bound is
+not guaranteed, delay request release until metadata publication or implement a
+bounded, explicitly compared forwarding path. Do not depend accidentally on
+read-during-write old/new-data behavior. [R09, V03, V06]
+
+Reset only validity/ownership/reservations; the persistent payload bank does not
+need to be cleared. No combinational decode or arithmetic belongs between its
+read port and the receiving data register. Keep record validation after capture.
+
+7.5 Credits: memory latency is already using space
+-------------------------------------------------
+
+Let Q be joined-response destination capacity, including its defined holding
+registers. Maintain:
+
+  reserved = returned-but-unconsumed records + reads in flight
+  0 <= reserved <= Q.
+
+Reserve before initiating the read. Release only at the defined downstream
+transfer. The downstream may withdraw ready immediately after a read launches;
+that event must never overwrite an existing record. Full-but-popping bypass is
+optional; the conservative no-bypass form is easier to prove and may be enough.
+
+The attached abstract three-cycle join model survived 32 randomized 10,000-cycle
+schedules, including a long initial consumer stall. The mutant that ignored
+in-flight reservations overflowed. That validates the reservation equation,
+not the proposed RTL's implementation. The RTL test must reproduce the same
+adversarial schedules and check exact-once full-record transport.
+
+7.6 Cost and deletion ledger
+----------------------------
+
+Potentially deleted after consumers migrate:
+  sampmeta_m's separate asynchronous class-side selections;
+  per-owner palette slot/generation lookups on the response paths;
+  class-specific copies of decode metadata and duplicated binding reconstruction.
+
+Definitely retained unless separately justified:
+  the cache data path;
+  per-class independence and error terminal path;
+  the palette response's cannot-wait contract or an explicitly credited replacement;
+  V3 return snapshot/claim/write/publication stages;
+  the owner identity carried end to end.
+
+Declared costs, not fit predictions:
+  256x40 bank: 10,240 declared memory bits, versus 4,032 bits in current sample
+  metadata alone, with additional fields replacing other lookups;
+  metadata carried through RAWN=4 plus four CHN=4 queues: up to 20x40=800
+  extra declared queue payload bits at the present dispatcher depths;
+  bounded join stages and credits; possibly wider shallow-queue implementations.
+
+This can increase total stored bits while reducing expensive access logic. It
+can also fail to save area. Accept only after named inference, all functional
+checks, and a composed comparison. If the first V3 MAP already shows inexpensive
+properly banked metadata and this family is neither large nor slow, defer the
+conversion. A better-looking block diagram is not sufficient justification.
+
+7.7 Staged implementation without a false comparison
+-----------------------------------------------------
+
+First establish the joined record in simulation using the existing metadata
+storage, carrying exactly the same values. Then replace the common read with
+the synchronous bank and reservation pipeline. Finally delete the superseded
+class-side reads and stores. Keep commits separable for review; the physical
+candidate must be the completed replacement, not the temporary design carrying
+both implementations.
+
+Test all formats with distinct neighboring texels, nontrivial fractions and
+alternating palette identities. Include warm hits, misses, full queues, delayed
+fills, concurrent class traffic, repeated slots with different generations,
+errors and reset/drain. Retain strict palette priority until a credited holding
+stage makes another arbitration policy safe.
+
+===============================================================================
+8. MATERIAL AND FRONT-END SIDECARS: RETAIN ONLY JUSTIFIED COPIES
+===============================================================================
+
+8.1 The material plane is 46 bits, not the original 45
+------------------------------------------------------
+
+The actual record is {base_rgb24, base_a8, weight8, recipe3, sample_count2,
+has_aux1}: 46x64 = 2,944 declared bits. The extra bit controls whether COMBINE's
+third lane is AUX or sample 2. It cannot be inferred from an arbitrary result
+value. The synchronous read is aligned with a registered full owner handle,
+and the same mat_aligned_c gates COMBINE valid and the owner's ready. Preserve
+that repaired symmetry. [R03: approximately 2240-2395]
+
+Do not promise one M10K for this 46-bit-wide parallel read merely because 2,944
+is small. A simple-dual-port M10K's relevant width is at most 40; a direct
+parallel implementation needs width banking unless another implementation is
+chosen. Forcing a narrower multi-beat read changes bandwidth and scheduling.
+The actual fit must decide the physical cost. [V01]
+
+8.2 The head-only material read has a throughput cost
+----------------------------------------------------
+
+When owner A is accepted by COMBINE and the owner queue offers B, mat_rd_q still
+belongs to A until the next read completes. The current identity comparison
+correctly inserts a bubble. That is better than combining B with A's material.
+It also means this interface cannot be advertised as unconditional one-packet-
+per-cycle COMBINE admission. [R03]
+
+Do not optimize this before showing it limits the workload. RCP currently
+requires four multiplier jobs per ordinary fragment, so a two-cycle material
+admission interface may have adequate sustained capacity while still limiting
+bursts.
+
+If measurement makes it significant, join material alongside the owner's
+reserved gather stage, so the packet and its 46-bit material reach the COMBINE
+holding queue together. This is a controlled packet/interface extension. It
+must keep 'captured for COMBINE' separate from 'accepted by COMBINE'. An outside
+FIFO that acknowledges the owner's cmb_ready merely because it accepted a
+packet would mark actual-COMBINE state too early under the present contract.
+
+8.3 fctx_m cannot currently be deleted by decree
+------------------------------------------------
+
+The new owner stores opaque context for retirement. The top ALSO still stores
+fctx_m, and the expander now consumes that early context for the legacy AUX
+coordinate convention. Those are two different read times. The latest AUX
+repair is why deleting the top copy without replacing its reader is wrong.
+[R03, R05, R16]
+
+Two coherent alternatives exist:
+
+  Compatibility profile: retain an explicitly named front-end AUX payload
+  sidecar, prove its lifetime through expansion, and price its storage. Do not
+  claim that fctx_m has been eliminated in this profile.
+
+  Production profile: expose/capture real AUX geometry as typed fields and stop
+  deriving world coordinates from the caller's opaque context. Carry those
+  fields through the front-end record; let the owner context bank serve only
+  the caller's retirement payload. The new field list and geometry width need
+  their own ABI and reference tests.
+
+Do not repack recipe, fog, binding or position into caller-owned context bits.
+Do not add a second read port to OWNER_CONTEXT casually: it changes the physical
+memory organization and may duplicate RAM or reintroduce a large mux.
+
+8.4 Actual reader census before another storage sweep
+-----------------------------------------------------
+
+The top still declares/writes fbase_m, fbind_m, frec_m, fwt_m, fsc_m and other
+sidecars in addition to mat_m. Some consumers are dead legacy nets; some feed
+Mosaic or expansion. A declaration is not a fitted store, and an intended
+'merge' is not a deletion until the old live consumers are gone. [R03]
+
+Produce a small V3-only reader census from the first MAP/entity report:
+  each field's live consumer; read address count; capture stage; inferred RAM or
+  registers; and whether a proposed replacement changes the port count.
+
+Then make narrow deletions. An independent front descriptor and a late material
+record can be legitimate even when some bits overlap, because they serve
+separate timing/port requirements. Optimize that trade with evidence rather
+than requiring one physical copy of every repeated bit at any cost.
+
+===============================================================================
+9. CONDITIONAL OWNER-CONTROL LOCALIZATION
+===============================================================================
+
+9.1 Target the measured structure, not 'the scoreboard' in general
+-----------------------------------------------------------------
+
+The post-T2 owner report names req_q -> iss_q as its internal limiting family.
+The source computes a selected-row required/issued predicate, then broadcasts
+the accepted event back into a loop over 64 owner rows. That can create the
+undesirable route:
+
+  one row's request bits -> global selected-row predicate -> another row's
+  update gating / wide decoder distribution.
+
+This is a reasonable candidate after the first V3 fit identifies its composed
+importance. It is not permission to replace the entire proven owner. [R04, R13]
+
+9.2 First experiment: exact Boolean localization, no extra event latency
+------------------------------------------------------------------------
+
+Keep the common full-identity/range validation. Decode the event's destination
+once, hierarchically if the physical report justifies it. At each destination
+row, test that row's required/issued bits locally and form its update locally.
+The global rejection/count result may reduce local event outcomes, but it must
+not become a control path back through all row updates.
+
+Conceptually, for row i and source bit b:
+
+  local_issue_i = event_valid && identity_live && source_in_range
+               && destination_is_i && req_i[b] && !issued_i[b]
+
+  issued_next_i = issued_i OR accepted_TMU_mask_i OR accepted_AUX_mask_i.
+
+Admission/reset/release precedence remains exactly the existing one. Do not
+replace that OR merge with two competing nonblocking writes. Do not delay an
+ISSUE event by a new stage without reopening the snapshot/claim forwarding
+proof; the first experiment does NOT add such a delay.
+
+The independent 4,096-case scalar truth check covers source index, required and
+issued masks, liveness and a simultaneous AUX event. It establishes the local
+Boolean equivalence for that expression. It does not prove whole-owner event
+ordering or Quartus placement. The full 541-check RTL suite, mutations and new
+composed tests remain mandatory.
+
+9.3 What is specifically forbidden in this experiment
+-----------------------------------------------------
+
+Do not restore per-slot generation RAM/FF state after T2 removed it. Do not put
+all narrow scoreboard planes into one RAM requiring impossible simultaneous
+reads/writes. Do not serialize independent TMU/AUX/final writes to obtain a
+smaller block without changing and proving the throughput contract. Do not
+remove claimed, committed or combine-reserved distinctions because two bits
+look similar in one successful trace.
+
+A later bank-local control design is possible, but it needs an explicit event
+port schedule and reservations for collisions. It is not the first change.
+
+9.4 Acceptance
+--------------
+
+Physical hypothesis: reduced global selection/update fan-out and elimination
+or shortening of the measured req-to-iss family. Resource direction is unknown
+until fitted: duplicated local decode can cost more than a shared mux. Use the
+same source/parameter/constraint profile and first compare matched seeds.
+
+Keep the variant only if it improves the relevant composed constraint without
+breaking functional throughput or increasing another pressured resource beyond
+the admitted budget. A better owner leaf number alone is insufficient.
+
+===============================================================================
+10. THROUGHPUT AND SMALL QUEUES: WHAT NOT TO OPTIMIZE BLINDLY
+===============================================================================
+
+10.1 One fragment per clock is not the current end-to-end contract
+-----------------------------------------------------------------
+
+The RCP source performs four dependent multiplier jobs per ordinary reciprocal
+with at most one launch per cycle. The arithmetic throughput ceiling is therefore
+one ordinary reciprocal per four clocks before other stalls. At 100 MHz and
+60 frames/s that is about 416,667 reciprocals per frame as an idealized ceiling,
+NOT a guaranteed workload capacity. Raising owner depth cannot exceed that
+arithmetic limit. [R06; calculation]
+
+The owner can retire consecutive ready finals at one per clock; that is a valid
+LOCAL burst capability. It must not be repeated as a sustained full-island
+fragment rate. Similarly, a queue of four complete fragments does not turn a
+single sample expander into a one-fragment-per-clock machine for three-sample
+materials.
+
+Write the workload contract in useful units:
+  accepted fragments/frame; distribution of 0/1/2/3 samples; AUX fraction;
+  nearest/CLUT/bilinear mix; hit/miss pattern; response latency envelope;
+  allowed output stalls; and longest permitted end-to-end completion time.
+
+Measure useful outputs per unit time, not just MHz. A smaller 100-MHz block
+that now spends twice as many cycles per fragment can be a regression.
+
+10.2 The expander has an intentional but measurable refill bubble
+-----------------------------------------------------------------
+
+The inspected expander loads a queued fragment only when cur_v_q is false; its
+sequential branch clears cur_v_q on done and does not simultaneously load the
+next record. Under ready sinks and queued work, an n-sample fragment therefore
+has a refill bubble in addition to its n request cycles. A zero-request fragment
+still consumes control cycles. [R05]
+
+Do not automatically fix this. With a four-job reciprocal upstream, the bubble
+may be hidden. Measure request utilization and head-of-line stalls first.
+
+If it is a real bottleneck, allow a completed current fragment to be replaced
+by the next queued record on the same edge. Preserve the original fragment's
+final request/ISSUE event and the new fragment's initial index independently.
+Include simultaneous final TMU, final AUX, queue push, queue pop, and current-
+record replacement. The current opaque AUX payload must remain paired with its
+owner. No field may be taken from a live input during a stalled current record.
+
+10.3 Shallow owner packet queues are a trade, not a free prize
+-------------------------------------------------------------
+
+The owner CQ declares four records of owner14 plus four result40 lanes: 696
+raw bits. OQ declares four records of owner14 + result40 + context64: 472 raw
+bits. Total declared payload is 1,168 bits. The historical physical attribution
+of seven M10Ks holding 1,056 bits is a DIFFERENT, optimized fitted accounting;
+do not pretend those two counts are identical. [R04, R24]
+
+Concatenating fields into a wide RAM does not automatically reduce blocks:
+width banking and read-port organization still apply. Replacing RAM with a
+small register FIFO can save M10Ks and improve a selected output path while
+increasing ALMs. Since ALMs/timing are the current concerns, do not spend an
+implementation cycle optimizing RAM utilization percentages in isolation.
+
+Only experiment here when a fresh resource/timing attribution justifies it:
+  packed synchronous body plus reserved registered head/spare;
+  or a truly shallow register implementation of the same logical capacity.
+
+Preserve the distinction between physical body storage, head/spare, reads in
+flight and total logical reserved capacity. Keep the same payload/credit
+contract. The 135.37-MHz ready-queue probe does not characterize these wider
+packet queues, and does not remove their need for a composed test. [R14]
+
+10.4 Material prefetch and queue depth are decisions from a measured bottleneck
+-------------------------------------------------------------------------------
+
+Do not expand NCTX, NTOK, owner count or every FIFO depth together. Record why
+one capacity is limiting, sweep that parameter independently, and inspect its
+resource/timing consequences. The global 64-owner window, local RCP contexts,
+PERSPUV tokens, sample transport credits and output reservations are separate
+resources even when their counters happen to coincide in one test.
+
+===============================================================================
+11. FEATURE-LIVE BINDING, MOSAIC, AUX AND FOG
+===============================================================================
+
+11.1 Define two profiles and stop mixing their claims
+----------------------------------------------------
+
+COMPATIBILITY: reproduces the tested legacy island semantics, including fully
+drained global-mode phases. This is the current paired-run baseline and the
+right first price for the ownership restructuring.
+
+FEATURE-LIVE: per-fragment/sample binding actually controls addresses and mode;
+Mosaic selection affects the real selected material/address; required AUX uses
+its declared geometry; fog factor reaches the real final-colour path in the
+correct order. Every enabled feature changes an observable result and survives
+synthesis. It has its own closure, budgets and evidence.
+
+Do not call the first profile the finished production renderer. Do not make the
+second profile reproduce a known missing feature solely to preserve the first
+profile's CRC. [R03, R10]
+
+11.2 Binding: a field that travels but controls nothing is not implemented
+-------------------------------------------------------------------------
+
+The expander stores a binding field, but its exposed sample-request record does
+not carry a binding output to a resolver. The actual planner still consumes the
+global bind_base_i and bind_mode_i pins. Those are read at planner acceptance,
+many clocks after fragment admission. The directed fixture explicitly uses
+fully drained mode phases because of this limitation. [R03, R05, R10]
+
+Selected production contract:
+  capture a binding key/version or a fully resolved descriptor with the accepted
+  fragment/sample; resolve it at one named stage; retain the descriptor or an
+  immutable version through the sample's last use. Base, format/filter, extent,
+  LOD and palette identity must describe the same sample.
+
+A minimal first extension can capture the current global base/mode with the
+fragment at admission, proving late-ingress safety before adding a general
+binding-table resolver. That still does NOT implement distinct per-sample
+bindings by itself. Name that limit rather than pretending the stored binding
+index already selects a texture.
+
+Once the planner resolves format and effective filter, derive the routing class
+from that result. The caller's original class may remain as an assertion/error
+input during migration; it must not remain a second independent routing
+authority indefinitely. Invalid descriptors with preserved valid owner identity
+must produce the specified counted terminal error, not silently disappear.
+
+Required detector: alternate base addresses, direct/palette formats and palette
+versions on adjacent admitted fragments while downstream stages are stalled.
+Changing the global pins after a beat is admitted must not alter that beat's
+future sample. Use distinct textures and verify actual fetched addresses.
+
+11.3 Mosaic must be on the address/material path
+------------------------------------------------
+
+The current Mosaic instance receives work and its counter moves, but the top
+consumes the selection as evidence rather than planner address authority. This
+is explicitly admitted in the RTL. [R03: Mosaic section]
+
+For feature-live acceptance, place selection ahead of binding resolution and
+capture its chosen material/tile as part of the request descriptor. Keep valid,
+ready, source identity and chosen descriptor together. Perturb Mosaic choice in
+a test: a known output/address must change. Perturb a counter-only connection:
+the detector must fail even though 'Mosaic samples' still increments.
+
+Do not manufacture material identifiers from convenient colour bits in a new
+production contract. Use the declared input material identities and frozen
+selection law. Keep this functionality change separate from metadata storage
+replacement so its extra cost is visible.
+
+11.4 Fog: pipeline the existing law; do not redesign the visual effect
+---------------------------------------------------------------------
+
+Both kernels exist and were fitted:
+  raster Fog: 247 ALM / 166 registers / 3 DSP / 93.63 MHz reported;
+  geometry fog factor: 341 ALM / 246 registers / 3 DSP / 68.63 MHz reported.
+These are leaf measurements, not 100-MHz signoff or proof of composed placement.
+They are not included merely because they are listed in the production manifest.
+[R11, R19, R20]
+
+The raster kernel currently computes factor conversion, channel difference,
+multiply, rounded shift, add and clamp ahead of one elastic output register.
+The geometry kernel computes far-distance, a wide product, rescale and clamp
+ahead of its output register. Both have straightforward pipeline candidates.
+
+Raster candidate:
+  F0 capture/interpolate-factor result, enabled/exempt decision and config version;
+  F1 compute clamped unit8 amount and signed channel differences;
+  F2 register channel products;
+  F3 round, shift, add original channels, clamp and present output.
+
+Geometry candidate:
+  G0 capture guarded distance, behind/disabled state, near/far/k and tag;
+  G1 form the signed distance difference;
+  G2 register the existing wide product;
+  G3 apply the existing rounded rescale and clamp.
+
+The exact stage count is adjustable against timing. Any further multiplier
+pipelining must be supported by the actual target/Quartus inference, with its
+latency and stalls verified. Keep the arithmetic widths and signedness until
+an exact proof licenses a change. Never count one source multiplication as one
+physical DSP block. [V04]
+
+Every elastic stage carries alpha, refusal/status, owner or output identity,
+and required original channels alongside its data. A downstream stall must not
+shift sidebands relative to colour. Configuration is sampled/versioned with the
+accepted work; taking the current fog colour several stages later is another
+late-ingress bug.
+
+Retain the order: material/lighting and the applicable toon/ramp operation,
+then fog on the final source colour, then blend. Integrate at the real render
+boundary that owns this order. A texture-only material subgraph is not evidence
+that the full toon -> fog -> blend chain exists. [R19, R20]
+
+Important arithmetic trap: the existing mix divides the weighted channel delta
+by 256 with signed round-half-up semantics. Do not 'correct' it to /255 or use
+C++ truncation toward zero for negative values. Even full fog amount 255 does
+not license replacing the expression with literal fog colour. The independent
+exhaustive channel check detects both proposed wrong substitutions.
+
+Optional area refinement after correct integration: once the interpolated
+Q16.16 factor has reached a fragment, its exact conversion to the 8-bit fog
+amount is independent of RGB. It may be computed once at a captured stage and
+stored as 8 bits instead of carrying a 32-bit factor through every owner queue.
+That requires the same enabled/exempt/config snapshot and exact clamping law;
+it must not quantize vertex factors before interpolation. Introduce an explicit
+amount8 mix interface rather than silently changing the meaning of fogf_i.
+
+Count raster Fog where it is instantiated. Count geometry fog-factor generation
+in the geometry/vertex closure. Do not blindly add both leaf counts to the
+texture island, or omit either from whole-console accounting. A shared source
+file is not proof that there is only one physical instance.
+
+11.5 Palette configuration timing
+---------------------------------
+
+The palette-load family appeared as a reported limiter in earlier composed
+fits and is not permanently solved because one seed moved it below another
+family. If the new composed report makes it relevant again, capture a complete
+palette command beat before its decode/high-fan-out state updates. Preserve
+command order, accepted rate and the point at which a committed palette becomes
+visible to lookups. [R12]
+
+Test adjacent BEGIN/WRITE/COMMIT operations, slot-generation changes, rejected
+loads and a lookup around the publication edge. Do not register only the
+payload while leaving its valid/opcode/generation from a different cycle. Do
+not invent a multicycle exception for configuration merely because uploads are
+usually infrequent; the protocol must actually guarantee the extra cycles.
+
+===============================================================================
+12. MEASUREMENT RULES CORRECTED BY THE EVIDENCE
+===============================================================================
+
+12.1 Same worst-path family is neither necessary nor sufficient for causality
+-----------------------------------------------------------------------------
+
+The repository's M6 correction was valuable in exposing careless attribution,
+but the later absolute rule is too strong. A successful register cut is EXPECTED
+to remove the critical path and make another family become worst. That change
+of identity does not make an improvement unknowable. Conversely, two paths
+both called 'palette' but with different endpoints do not establish a causal
+mechanism merely by sharing a broad label. [R12]
+
+Replace the rule with four separate statements:
+
+  STRUCTURE: what the RTL/netlist transformation definitely removes or adds.
+  OBSERVATION: the measured area, slack and throughput for this exact specimen.
+  REPEATABILITY: what matched runs/seeds establish, with sample count stated.
+  MECHANISM: measured path/cell evidence versus a plausible interpretation.
+
+The two post-P0-B seeds at 78.80 and 77.67 MHz are encouraging evidence that the
+new specimen was not fast only in one run. Their 1.13-MHz difference is NOT an
+upper bound on seed variation, and does not by itself establish the old design's
+seed distribution. The earlier claims 'four times more repeatable' and 'exactly
++10.90 MHz attributable' went further than this small sample supports. The
+interpretation that the fitter redirected its effort is a hypothesis, not an
+observed scheduler trace. This brief does not withdraw the measured numbers.
+
+Where magnitude matters, compare old/new on the same chosen seeds and identical
+constraints/parameters, inspect the old and new path families, and report both
+aggregate timing and per-family movement. A small paired set is better than
+unpaired favorable anecdotes; more seeds improve confidence but cannot replace
+source/constraint fidelity. Do not spend the entire implementation budget
+seeding a plainly broken long combinational cone. [V05]
+
+12.2 Fmax is a benchmark, not the signoff artifact
+-------------------------------------------------
+
+The vendor explicitly distinguishes Fmax from full timing signoff. Capture
+setup and hold summaries at required corners, recovery/removal, pulse width,
+clock assumptions, unconstrained paths and justified exceptions. Same-edge
+hold problems are not generally fixed by lowering the clock frequency. [V02]
+
+For each significant timing family retain:
+  launch/capture names; endpoint class (core/core, input/core, core/output,
+  input/output); clock relationship; data delay; skew; setup/hold corner;
+  fan-out and relevant cells; number/severity of related failing endpoints.
+
+Do not sum MHz gains from different stages. Do not use only the single worst
+path when the next ten independent families are nearly as bad. Do not infer a
+new V3 core clock from the legacy top's reported number.
+
+12.3 Resource comparisons are physical experiments too
+-------------------------------------------------------
+
+ALMs depend on optimization, packing and placement as well as declared bits.
+The old +159 leaf / +14 composed result shows scope dependence, not an exact
+universal price for that register cut. A logical array's absence from a report
+can mean RAM inference, elimination, renaming, flattening or an incorrect source
+closure. Require a positive explanation.
+
+For each proposed deletion retain before/after instance attribution and the
+actual RAM inventory. Distinguish ALUTs from ALMs, MAP registers from FIT
+registers, memory bits from block count, and DSP blocks from multiplier sites.
+These distinctions prevent an impressive but fictitious saving.
+
+12.4 Bounded artifact/provenance contract
+----------------------------------------
+
+A fit must read immutable source bytes: a pinned worktree or copied source
+closure with hashes, not a live editing directory. Record exact top, parameters,
+source hashes, device, Quartus version, QSF/SDC, seed and effort settings. This
+allows continued work elsewhere without contaminating the fit. The closing
+report explicitly confirms that run_block_fit.ps1 already copies this fit's
+18 sources into its workspace. Preserve and verify that mechanism; do not
+assign a duplicate snapshot-tool implementation. [R21, R25]
+
+Retain raw MAP/FIT/STA evidence in an immutable artifact, compressed or outside
+Git if size is a problem. Keep its content hash and retrieval reference beside
+the summarized row. Discarding raw MAP reports as irrelevant node dumps removes
+some of the evidence needed for the next RAM/port audit. A summary is a useful
+index, not a substitute for all underlying proof.
+
+Do not create a broad new tooling program. Apply this to the current V3 and its
+next two experiments. The new paired comparator already deletes old dump files,
+checks executable return codes, rejects near-empty streams, compares order and
+fire-tests wrong colour/order/length. Preserve it. Add frozen binary/source and
+stimulus provenance as the test evolves, not another competing harness. [R23]
+
+Every row should separately expose:
+  build success; functional-profile result; resource-rule result; setup result;
+  hold/other-timing result; provenance completeness; production acceptance.
+
+A labelled variant must not silently escape its base target's rules. A row
+reading 'ok' because its only rule was max_dsp says nothing about 100 MHz or
+whole-console admission. Keep the old rules visible alongside any approved
+revised resource allocation.
+
+===============================================================================
+13. IMPLEMENTATION PACKETS, FIT SEQUENCE AND DECISION FORKS
+===============================================================================
+
+Packet C0 -- finish the current measurement, preserve the baseline
+-----------------------------------------------------------------
+Input: the frozen first V3 composition and its three passed compatibility gates.
+Do not abort or contaminate its running fit to add this brief's changes.
+Publish raw provenance, resources, setup/hold, positive RAM inventory, and the
+actual three largest remaining cost/timing families. Label any unclosed fault,
+zero-work or feature scope honestly. This is a diagnostic baseline, not cutover.
+
+Packet C1 -- close fault fan-in and front-end lifetime
+-----------------------------------------------------
+Change only the source-confirmed diagnostic connections and the selected
+front-end-completion contract, with separate reviewable commits. Add the focused
+positive/negative and zero-work tests. Keep owner arithmetic/representation
+unchanged. Re-run the existing 541/119/paired suites. If no extra lease state is
+needed, document the structural proof and keep its detector.
+
+Falsifiers: a fault still reads as a clean zero; a legitimate record is dropped;
+a dead owner still has an outstanding legitimate descriptor read; reset allows
+an old response to acquire new authority; counters count offered instead of
+accepted work. No physical savings are promised by this packet.
+
+Packet C2 -- encoding cleanup and V3-only storage census
+--------------------------------------------------------
+Introduce named encoding helpers without changing wire layouts. Inventory every
+actual reader/writer/last-use and explain retained fctx/material/metadata copies.
+Static rejection of unsupported parameter combinations is preferable to silent
+aliasing. Do not fit a nomenclature-only change unless synthesis semantics move;
+build/bit-exact checks and source hashes can establish that first.
+
+Packet T1 -- RCP preparation pipeline, IF the fresh report selects it
+--------------------------------------------------------------------
+Implement N0 reservation -> N1 normalization -> N2 seed preparation with exact
+arithmetic and context ownership. Use the existing ROM and S1 scheduler. Keep
+completion changes out of this fit unless logically inseparable and explicitly
+accounted. Re-run reciprocal and island tests plus sustained-rate measurements.
+
+Fit hypothesis: the raw-depth-to-context long cone is cut. No numerical MHz or
+ALM forecast. If the next dominant family lies elsewhere, stop adding RCP stages.
+
+Packet M1 -- one sample metadata join before dispatch, IF cost warrants it
+-------------------------------------------------------------------------
+Keep arithmetic and routing encodings stable. Form a complete joined response,
+then realize the single synchronous metadata read with read-in-flight credits.
+Carry metadata through DATAW, migrate consumers, and delete their old accesses.
+Preserve palette priority and error semantics. Do not combine this with live
+binding/Mosaic behavior changes in the same physical comparison.
+
+Fit hypothesis: positively inferred metadata RAM; removed multi-read selections;
+explicitly priced wider queues. Keep it only when measured constraints improve.
+
+Packet O1 -- local ISSUE control, only if owner cost/timing remains material
+---------------------------------------------------------------------------
+Do the latency-preserving row-local Boolean transformation first. Preserve
+OR-merging, full identity validation and every existing return stage. A failure
+of the forwarding tests is a stop, not a reason to weaken their assumptions.
+Measure the owner in isolation for diagnosis and in the island for acceptance.
+
+Packet F1 -- feature-live descriptor and render chain
+-----------------------------------------------------
+Implement captured binding semantics, authoritative derived class and actual
+Mosaic selection. Introduce independent AUX geometry if that is the production
+contract. Integrate the existing fog law at the real post-toon/pre-blend seam,
+with aligned alpha/status/identity/config and the necessary factor lane.
+
+Retain compatibility tests, but use the reference for functionality the old top
+cannot express. Price this profile separately; do not advertise compatibility-
+only savings as a full renderer budget.
+
+Packet E1 -- external barrier and cutover
+-----------------------------------------
+Complete the acknowledged namespace/reset contract with actual adapters before
+production reuse claims. This can proceed as a bounded interface design while
+fits run, but is not waived because local owner tests pass. Finish required
+multicorner timing and workload gates. Count the selected production instances
+once, obtain any budget revision explicitly, then switch the production target.
+Archive the old oracle and receipts; delete duplicate production machinery only
+after replacement proofs are retained.
+
+Decision forks after the first corrected V3 fit
+-----------------------------------------------
+
+  A. Resources acceptable under whole-console accounting, timing fails:
+     prioritize the measured timing families. Do not chase 7.5k by removing
+     useful pipeline registers.
+
+  B. Timing passes, area fails the admitted whole-console allocation:
+     use M1/O1 or another identified large instance. Do not spend days shrinking
+     16-bit counters or maximizing M10K utilization percentages.
+
+  C. Both fail:
+     favor changes addressing a measured long access structure and its logic
+     cost, but validate them one experiment at a time. M1 is a candidate, not
+     a guaranteed dual win.
+
+  D. Compatibility passes, feature-live fails:
+     retain the diagnostic success and complete the missing feature. Do not
+     change the acceptance profile to the one that happens to pass.
+
+  E. New V3 fit regresses sharply:
+     examine instance counts, duplicated stores, width expansion, live features
+     and queue inference before inventing V4. The source has known temporary
+     costs; explain them by actual attribution rather than leaf subtraction.
+
+===============================================================================
+14. ACCEPTANCE MATRIX AND STOP CONDITIONS
+===============================================================================
+
+The following matrix is the release criterion, not the number of commits or the
+presence of a report saying 'closed'.
+
+  Obligation                    Evidence required
+  ---------------------------------------------------------------------------
+  One admission                 Same accepted beat reserves owner and front end;
+                                deliberately ungated branch is detected.
+  Identity preservation         All adapters preserve full slot/gen/sample;
+                                upper slot bits and wrap are exercised.
+  Front-end lifetime            Zero-work and stalled schedules prove last read
+                                precedes COMBINE/retirement, or equivalent proof.
+  Return authority              Snapshot/current checks, illegal sample, stale,
+                                duplicate and unsolicited cases; real writes seen.
+  Publication order             Commit cannot precede payload write; observer
+                                reads actual state, not a loosely related counter.
+  COMBINE authority             FINAL requires real combiner acceptance, not a
+                                read reservation or intermediate FIFO capture.
+  Sample metadata               Write/read identities match; held responses keep
+                                complete metadata; read credits include in-flight.
+  Output order                  Paired ordered streams and full-capacity stalls;
+                                no silent skipped owner or duplicated retirement.
+  Fault observability           Positive and negative test of each retained
+                                evidence port, including transitive fan-in.
+  Namespace/reset               One withheld adapter ACK prevents reopening;
+                                old transport cannot acquire fresh authority.
+  Feature liveness              Binding/Mosaic/fog changes affect real outputs;
+                                bypassing each mechanism is detected.
+  Resource acceptability        Exact profile, named instances, old-rule variance,
+                                admitted whole-console allocation and reserve.
+  Timing signoff                Required setup/hold/other checks at all corners;
+                                honest endpoint classes and interface constraints.
+  Workload viability            Useful throughput and drain latency under the
+                                declared sample mix, memory and stall envelope.
+
+Stop and publish a finding when a supposed representation change alters output
+values, accepted-work counts or error semantics outside its declared scope;
+when a RAM replacement adds unexpected readers/ports; when a 'safety' counter
+becomes zero because its driver vanished; or when an extra ready condition has
+only been added to one half of a handshake.
+
+Do NOT stop merely because a diagnostic fit misses a historical subsystem gate.
+Do stop production acceptance when the admitted product requirements remain
+unproved. These are different decisions.
+
+===============================================================================
+15. READY-TO-PASTE OWNER DIRECTION
+===============================================================================
+
+Continue the texture V3 architecture. Do not restart the owner, undo T2, rewrite
+COMBINE arithmetic, or divert into terrain/projection. Preserve the current
+compatibility oracle and the 541/119/paired evidence. Finish the first V3 fit on
+its exact frozen source set and publish its actual resource, RAM and timing
+attribution; do not count that diagnostic receipt as production signoff.
+
+Before cutover, repair the remaining former-FRAGROB event fan-in of the error
+ports and prove the zero-work/front-end lifetime contract. Every accepted
+fragment owns its descriptors until the last legitimate front-end use; sample
+readiness alone must not release those obligations. Complete the real external
+namespace/reset acknowledgment contract rather than equating owner quiet with
+island quiescence.
+
+For further timing work, inspect the new V3 path report first. The latest
+legacy-island evidence points at raw depth -> RCP normalization/seed/context.
+The preferred candidate is early local-context reservation, registered
+normalization, then seed publication, with unchanged reciprocal arithmetic and
+measured sustained rate. Stage A already registered the RCP/PERSPUV seam; do
+not repair that same boundary twice blindly.
+
+For further area work, measure the V3 metadata graph, then prototype one
+synchronous sample-metadata join on the cache-response stream before class
+fan-out. Carry the captured metadata with each response, delete superseded
+class-side lookups, and include all reads in flight in destination credits.
+Do not solve multiple readers by silently serializing services or duplicating
+banks without pricing them. The material plane is 46 bits; fctx_m still serves
+an early AUX reader; neither detail may be erased by a deletion claim.
+
+Localize owner ISSUE control only if fresh attribution makes it worthwhile.
+Keep the first transformation Boolean-equivalent and latency-preserving. Small
+queues and expander/material bubbles are conditional optimizations, not a new
+unbounded cleanup campaign.
+
+The production profile must make real bindings, Mosaic selection and required
+Fog affect the actual output. Preserve fog arithmetic and post-toon/pre-blend
+order, pipeline it as needed, and keep alpha/status/config/identity aligned.
+
+Keep the historical 7,500-ALM / 9,000-register variance visible, but do not treat
+those allocations as physical cliffs. Obtain a count-once whole-console budget
+before rejecting a sound approximately 11k-ALM, 100-MHz candidate. Never make a
+row green by silently relaxing its profile or deleting its evidence.
+
+===============================================================================
+16. INDEPENDENT CHECKS AND THEIR LIMITATIONS
+===============================================================================
+
+Files in the accompanying bundle:
+  independent_checks.cpp
+  independent_checks.log
+  run_checks.sh
+  source_manifest.json
+  README.txt
+  this brief.
+
+Executed with g++ -std=c++17 -O2 -Wall -Wextra -Werror in this session:
+
+  N1  16,777,216 denominator values: original leading-zero/index expressions
+      versus grouped normalization and equivalent index extraction. PASS.
+      A deliberately changed zero convention is detected.
+
+  F1  16,777,216 (source, fog colour, amount) channel combinations: frozen
+      signed rounded mix versus staged, width-bounded arithmetic. PASS.
+      Truncation-toward-zero mutant: 8,042,336 mismatches.
+      Divide-by-255 mutant: 2,796,160 mismatches.
+
+  I1  262,144 identity encodings, including illegal sample code 3. PASS.
+      Keeping a four-bit slot slice misdecodes 196,608 combinations.
+
+  L1  4,096 scalar required/issued/source/liveness/AUX combinations for the
+      proposed local ISSUE expression and same-row OR merge. PASS.
+
+  J1  32 schedules of 10,000 cycles each for an abstract three-cycle metadata
+      read join; 133,137 accepted records retired in order; maximum reservation
+      four. PASS. Ignoring reads in flight provokes detected overflow.
+
+  A1  Eight ingress-fork truth cases. PASS. Omitting downstream readiness from
+      one allocation branch creates a detected phantom owner.
+
+  Z1  Abstract zero-work ordering witness: independently ready final work may
+      precede front-end completion; a completion qualifier prevents it. PASS
+      as a model property, NOT an actual repository-RTL reachability proof.
+
+  E1  512 local-empty/eight-ACK truth cases. PASS. This checks the barrier
+      conjunction only; it does not prove that an adapter's ACK is truthful.
+
+These checks support arithmetic and protocol design decisions. They do not
+prove the complete proposed SystemVerilog, hardware timing, resource counts,
+CDC safety, external cancellation behavior or full product correctness. The
+precise new RTL and its generated netlist require the gates above.
+
+===============================================================================
+17. IMMUTABLE REPOSITORY AND VENDOR SOURCE INDEX
+===============================================================================
+
+Repository links are pinned, not moving branch links. Symbol anchors and ranges
+identify the reviewed content. A source report's claim is evidence about the
+recorded run, not a claim that this review executed that run. R24 is explicitly
+historical. Prior delivered architecture briefs were also read locally.
+
+[R01] Primary inspection commit
+  https://github.com/Fabulu/zhaozhou/commit/7cbeec13ec9efe649087a0f85186ac4e95b2e31b
+  06:02:28 CEST, 8 September 2026. Branch enumeration identified this hardware head separately from main.
+
+[R02] Gate-2 delta and remaining source scope
+  https://github.com/Fabulu/zhaozhou/compare/bd443cb0f63b1d303dd69fcdf5d4a410181b1823...7cbeec13ec9efe649087a0f85186ac4e95b2e31b
+  Palette capture alignment and two previously undriven numerical outputs. This delta is not a fix of every former-FRAGROB event fan-in.
+
+[R03] Actual V3 island integration
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/texture/zhao_texture_island_v3_top.sv
+  Inspected multiple bounded ranges: ingress/reservation and sidecars ~450-850; front-end/Mosaic/expander/owner ~780-1250; sample metadata/planner/cache ~1330-1510; completion merger ~1990-2240; material ~2240-2395; error latches/COMBINE/output ~2460-end. Use symbol anchors if line numbers move.
+  Git blob: 12238248866b1ef2c6d4a48f7b70124f0460ab00
+
+[R04] Existing V3 owner; preserve its identity and event schedule
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/texture/zhao_texture_v3own.sv
+  win_live, win_gen_of_slot, FN_* fence, adm_req_i zero-ready handling, req/iss local state, CQ/OQ, quiet_c and C4/COMBINE guards. Selected later ranges were fetched separately to avoid truncation.
+
+[R05] Current expander including context repair
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/texture/zhao_texture_frag_expand.sv
+  frag_t, fq_m, cur_q, load_c/done_c, issue-on-fire, ctx and aux_ctx_o. The earlier measured 323-ALM variant predates this payload expansion.
+
+[R06] Actual island reciprocal service
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+  Raw normalization/seed path, free-context allocation, registered S1, four multiply phases, completion selector and retirement. This is not the separate rcp24_v3 successor.
+  Git blob: 7a9fcf7382b30dfcb9148c36283eeca511a94648
+
+[R07] Legacy composition retained as compatibility oracle
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/texture/zhao_texture_island_top.sv
+  Historical topology and Stage-A reference. The current top instantiations were read in the V3 source; this link preserves the corresponding immutable old top.
+
+[R08] Common raw response stream and parameterized class dispatcher
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
+  RAWN, CHN, DATAW, TOKW; one raw stream before four per-class queues; existing head-of-line limit and error path.
+
+[R09] V3 bank coding and port contract
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/texture/zhao_texture_v3bank.sv
+  Synchronous payload read, registered write-enable expectation, simple read/write organization and no payload-array reset.
+
+[R10] Composed directed test and stated global-binding limitation
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/tests/texture/island_composed_directed.cpp
+  Same source compiled for old/V3 tops; independent zref comparisons and drained format phases. Refresh test changes are in R17/R23.
+
+[R11] Checked-in physical ledger
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/reports/synthesis/zhao_block_fit.json
+  Scope, device capacity, row labels/source digests and measured leaf/legacy-island resource values; a ledger row is not a new independent fit.
+
+[R12] Stage-A result and previous timing attribution record
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/reports/G1D-COMPOSED-ISLAND-20260905.md
+  Especially section 4.3g and the P0-B reseed discussion around lines 365-460. Records 11,562 ALM / 19,203 FIT registers / 84.03 reported MHz. The brief distinguishes those measurements from overstrong causal conclusions.
+  Git blob: 0997fcf30e111d21eb4301a8b321a00b7d711a96
+
+[R13] Post-T2 owner fit report
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/reports/V31-T2-OWNER-FIT-20260907.md
+  3,348 ALM / 3,953 FIT registers; 94.05 reported / 98.18 core-to-core; req-to-iss limiting family. Historical results, not the first V3 composed fit.
+
+[R14] Ready-queue physical probe
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/reports/V31-S57-QUEUE-GATE-20260908.md
+  Local 135.37-MHz probe, 82 ALM / 159 registers / one M10K. Not a guarantee of any other composition or queue.
+
+[R15] Old-profile memory-census closure report
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/reports/PERSPUV-PERAXIS-CLOSED-20260908.md
+  Explains which old-profile RAM-refusal findings disappeared; absence of a name is not by itself positive memory inference or a census of the new V3 top.
+
+[R16] Reconciled run state after three gates
+  https://github.com/Fabulu/zhaozhou/blob/e1622b2b1dada677cbcf3591431413721af49cf9/runs/CLAUDE-RUNS/RUN-20260908-0530-p0c-v3own-island-restructure/TASK_LOG.md
+  541 owner checks, 119 composed checks, 392 paired records, 11 expander checks; stale expander fit explicitly acknowledged; new V3 fit reported running.
+  Git blob: 2c0de0c3662d6608542ca5299c4e64ab40aeb303
+
+[R17] Five-commit refresh, no V3 datapath change
+  https://github.com/Fabulu/zhaozhou/compare/7cbeec13ec9efe649087a0f85186ac4e95b2e31b...e1622b2b1dada677cbcf3591431413721af49cf9
+  Paired test, fit target, status report, output-driver checker and sources manifest. Does not modify the V3 RTL findings at R03.
+
+[R18] Existing P0-C architecture and amendments
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/reports/P0C-RESTRUCTURE-ARCHITECTURE-20260907.md
+  Prior integration plan continued by this brief; central identity/deletion decisions retained, measurement and next-storage recommendations refined.
+
+[R19] Frozen raster fog arithmetic
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/raster/zhao_raster_fog.sv
+  factor conversion, amount polarity, signed channel mix, /256 rounded delta, tag and elastic output; lines ~75-196 inspected.
+  Git blob: c780852a141d273ea4fa6e2f88046ff9160ae517
+
+[R20] Frozen geometry fog-factor arithmetic
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/fpga/rtl/geometry/zhao_geom_fogfactor.sv
+  Per-frame reciprocal coefficient; signed distance, wide product, rounded rescale and clamp; behind/disabled behavior; lines 55-205 inspected.
+  Git blob: 63b281f46cf8f6b8f317b000fb62c07b73133144
+
+[R21] Physical fit runner and provenance options
+  https://github.com/Fabulu/zhaozhou/blob/7cbeec13ec9efe649087a0f85186ac4e95b2e31b/tools/quartus/run_block_fit.ps1
+  Target/row/seed and source provenance handling. This review did not execute the runner or verify a new complete fitter database.
+
+[R22] First V3 fit registration and three-gate report
+  https://github.com/Fabulu/zhaozhou/blob/e1622b2b1dada677cbcf3591431413721af49cf9/reports/P0C-STAGEC-THREE-GATES-CLOSED-20260908.md
+  Compatibility gates closed; physical receipt pending at this refresh. Target addition is in R17.
+
+[R23] Actual paired-stream comparator
+  https://github.com/Fabulu/zhaozhou/blob/e1622b2b1dada677cbcf3591431413721af49cf9/tools/texture/gate3_paired.py
+  Runs old/V3 binaries separately from the same test source, unlinks stale dumps, checks exit codes/non-vacuity, compares ordered records and fire-tests colour/order/length.
+  Git blob: f67099364e260108b997dd90d5bd77f6fe89f34e
+
+[R24] Historical owner RAM allocation reconciliation
+  https://github.com/Fabulu/zhaozhou/blob/22a4b0016651fd7249c335fba75a789b7b8685b8/reports/V31-M10K-ALLOCATION-RECONCILE-20260907.md
+  Seven shallow-queue M10Ks / 1,056 fitted bits. Historical specimen referenced in the preceding brief, not the declared 1,168-bit payload arithmetic of current CQ/OQ.
+
+[R25] Closing refresh: Gate-3 mutation against real RTL
+  https://github.com/Fabulu/zhaozhou/commit/3e666f8348f38469ae05b87e940e8db662155755
+  06:34:32 CEST, 8 September 2026. Report-only child of e1622b2b: hardwired-alpha
+  mutant fails 7/119 directed checks and differs in 9/392 dumped records;
+  restored RTL passes again. Also confirms the fit runner's copied source
+  workspace. No new V3 resource/timing receipt in this commit.
+
+Primary vendor documents, retrieved during this review on 8 September 2026:
+
+[V01] Cyclone V Device Handbook: M10K mixed-width configurations
+  https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/m10k-blocks-mixed-width-configurations
+  Tables 7-8: simple-dual-port 256x40 versus true-dual-port width organizations. Device architecture, not a guarantee of HDL inference.
+
+[V02] Altera Timing Analyzer: Report Fmax Summary
+  https://docs.altera.com/r/docs/683243/25.3/quartus-prime-pro-edition-user-guide-timing-analyzer/report-fmax-summary
+  Fmax versus full timing signoff and additional checks. This documentation is newer than the project tool; the brief does not assume identical option support in Quartus 17.0.2.
+
+[V03] Quartus Standard 18.1: Unsupported RAM reset/control conditions
+  https://docs.altera.com/r/docs/683323/18.1/intel-quartus-prime-standard-edition-user-guide-design-recommendations/avoid-unsupported-reset-and-control-conditions
+  Avoid clearing the payload RAM or adding controls the memory architecture cannot implement.
+
+[V04] Cyclone V: Supported DSP operational modes
+  https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/supported-operational-modes-in-cyclone-v-devices
+  Variable-precision physical DSP resources and mode/width dependence; multiplication-site count is not physical block count.
+
+[V05] Altera: Fit a design using different fitter seeds
+  https://docs.altera.com/r/docs/683432/25.3.1/quartus-prime-pro-edition-user-guide-scripting/fit-a-design-using-different-fitter-seeds
+  Seed experiments must preserve configuration and result provenance; changing a seed does not guarantee improvement.
+
+[V06] Quartus: Synchronous RAM and new-data read-during-write
+  https://www.intel.com/content/www/us/en/docs/programmable/683082/24-3/single-clock-synchronous-ram-with-new.html
+  Read-during-write semantics and possible bypass logic. Used as implementation guidance, not permission to change the bank contract.
+
+
+===============================================================================
+18. CLOSING REFRESH AND HANDOFF STATUS
+===============================================================================
+
+Last reconciled hardware commit:
+  3e666f8348f38469ae05b87e940e8db662155755
+  8 September 2026, 06:34:32 CEST.
+
+This is a report-only child of e1622b2b. The inspected V3 datapath remains the
+same as the 7cbeec13 primary pin. The changes during the review establish and
+exercise the compatibility gates; they do not invalidate the source findings
+in sections 3-11. [R17, R25]
+
+The reported acceptance evidence is now:
+  Existing owner:             541 adversarial checks pass, owner RTL unchanged.
+  V3 composed directed test:  119/119 pass.
+  Legacy composed oracle:    119/119 pass.
+  Current expander:            11/11 pass.
+  Paired retired streams:     392 records agree in RGB, alpha, tag, refusal,
+                             and positional order.
+
+Gate 3 has also been tested against an actual RTL mutation, not only synthetic
+comparator input. Forcing output alpha to 255 makes seven of the V3 directed
+checks fail. The paired tool therefore refuses to compare a failing binary;
+when the generated streams are compared directly, nine of the 392 records
+have alpha 254 versus 255. The report records restoration from a byte backup,
+an unchanged RTL diff against HEAD, and a passing paired run again. These are
+repository-reported executions, not independent RTL runs by this review.
+[R16, R23, R25]
+
+The run log reports the first V3-island fit running. Neither this closing commit
+nor the five-commit preceding refresh supplies a completed V3 ALM/Fmax receipt.
+Therefore the 11,562-ALM / 19,203-register / 84.03-MHz figures in this brief
+remain the LEGACY Stage-A composition's evidence. They must not be relabelled
+as the V3 result. The old expander leaf fit remains stale after context was
+added. [R12, R16, R17, R25]
+
+The closing report also resolves a workflow point: this fit's 18 source files
+are copied into a workspace by run_block_fit.ps1. Editing or mutation-testing
+the live tree after that completed snapshot does not change the running fit.
+Preserve that isolation and verify its manifest; do not impose a blanket ban
+on useful independent work merely because Quartus is running. [R25]
+
+The next implementation action is still C0: finish and archive that diagnostic
+measurement, then apply the bounded C1 safety/observability work and select the
+next timing or storage packet using the NEW V3 attribution. Nothing in this
+brief requires discarding the successful P0-C integration or beginning a third
+owner architecture.
+
+END OF BRIEF
