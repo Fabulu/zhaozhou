@@ -24,10 +24,31 @@
 #
 # Runs LAST in the queue: gate 4 and gate 1's MapOnly pair both matter more, and
 # one Quartus at a time.
+#
+# ---------------------------------------------------------------------------
+# WHY THIS WAITS ON A PREDECESSOR AND NOT JUST ON "IDLE"
+# ---------------------------------------------------------------------------
+# The first version waited only for `Get-Process quartus*` to come back empty --
+# exactly what `queue_gate1_maponly.ps1` is already waiting for. Two queues
+# watching the same free-resource condition do not form a queue: they form a
+# RACE, and both would have launched Quartus the instant gate 4 exited, which is
+# the CPU contention this whole one-at-a-time discipline exists to avoid.
+#
+# It was caught before it fired, and the fix is that a queued job must wait for
+# its PREDECESSOR to finish, not for the resource to look free. `map-g1-0.log` is
+# gate 1's last output, so its existence is the predecessor's completion.
+#
+# Note the shape of the near-miss: nothing would have failed loudly. Two
+# concurrent fits produce valid rows, just slower, and the contention only shows
+# up as wall-clock nobody attributes to it.
 $ErrorActionPreference = 'Stop'
 Set-Location 'C:\programmieren\zencrifice\zhaozhou'
 
-Write-Host 'newblock-maponly: waiting for the toolchain to go idle...'
+# Gate 1 writes map-g1-1.log then map-g1-0.log. The second one existing means it
+# has finished its pair.
+Write-Host 'newblock-maponly: waiting for gate 1 to finish (map-g1-0.log)...'
+while (-not (Test-Path 'map-g1-0.log')) { Start-Sleep -Seconds 60 }
+Write-Host 'newblock-maponly: gate 1 done; waiting for the toolchain to go idle...'
 while (Get-Process quartus* -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 60 }
 Write-Host 'newblock-maponly: toolchain idle.'
 
