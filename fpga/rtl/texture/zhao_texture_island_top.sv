@@ -1282,6 +1282,17 @@ module zhao_texture_island_top #(
   ) u_dispatch (
       .clk(clk), .rst_n(rst_n),
       .rsp_valid_i(cache_smp_valid), .rsp_ready_o(disp_rsp_ready),
+      // PACKET C tie-off. `zhao_texture_rsp_dispatch` gained an optional
+      // metadata payload for the V3 island; META_EN defaults to 0, so nothing
+      // is generated here and this block's LOGIC is unchanged. These four
+      // connections exist only so the instance has no missing pins.
+      //
+      // THIS FILE IS GATE 3's ORACLE, so "unchanged" is not taken on trust:
+      // the paired run is re-executed after this edit and must still report
+      // 392 byte-identical retired records, and this top's own 119 checks must
+      // still pass. If either moves, the tie-off was not neutral.
+      .rsp_meta_i({40{1'b0}}),
+      .clut_meta_o(), .near_meta_o(), .bil_meta_o(), .err_meta_o(),
       .rsp_data_i(cache_smp_data), .rsp_tok_i(cache_smp_src),
       .rsp_class_i(cache_smp_src[15:14]),   // GLUE 3, see the header
       .clut_valid_o(disp_clut_valid), .clut_ready_i(disp_clut_ready),

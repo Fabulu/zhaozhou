@@ -2238,6 +2238,11 @@ int main(int argc, char** argv) {
         "and returned EXACTLY what sampmeta_m, palslot_m and palgen_m would "
         "return on every one -- the precondition for moving any reader onto it",
         0, d.meta_shadow_mismatch_o);
+  std::printf("  metajoin queue alignment: %u checked, %u WRONG-RESPONSE\n",
+              d.meta_align_chk_o, d.meta_align_err_o);
+  check(d.meta_align_chk_o > 50,
+        "the queued-metadata alignment was actually exercised", 1,
+        d.meta_align_chk_o > 50 ? 1 : 0);
 #endif
 
   if (g_failed) {

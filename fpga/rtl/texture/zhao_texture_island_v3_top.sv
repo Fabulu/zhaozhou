@@ -250,6 +250,9 @@ module zhao_texture_island_v3_top #(
     // How many responses the shadow actually compared. A mismatch count of
     // zero over zero comparisons is not evidence.
     output var logic [31:0] meta_shadow_reads_o,
+    // Packet C step 2: is the QUEUED metadata the right response's?
+    output var logic [31:0] meta_align_err_o,
+    output var logic [31:0] meta_align_chk_o,
     // COMBINE.V1's per-recipe product-job counts, at the island boundary.
     //
     // §15.4 requires actual product jobs recorded by recipe, and until now they
@@ -1588,9 +1591,18 @@ module zhao_texture_island_v3_top #(
       // TOKW 18: the routing token the dispatch routes on is the widened
       // SRCW, per §1.1's third named consumer.
       .RAWN(4), .CHN(4), .DATAW(DATAW), .TOKW(18)
-  ) u_dispatch (
+  , .META_EN(1'b1), .METAW(40)) u_dispatch (
       .clk(clk), .rst_n(rst_n),
       .rsp_valid_i(cache_smp_valid), .rsp_ready_o(disp_rsp_ready),
+      // PACKET C step 2: the metadata rides the class queues. The bank's read
+      // result is still SHADOW-ONLY -- no downstream reader consumes
+      // `*_meta_o` yet -- so the island's behaviour is unchanged and gate 3
+      // must still match byte for byte. Moving the readers over is the next
+      // step, and it needs the credited alignment the brief's J1 models,
+      // because the bank answers one cycle after the response arrives.
+      .rsp_meta_i(mj_meta_packed_c),
+      .clut_meta_o(disp_clut_meta), .near_meta_o(disp_near_meta),
+      .bil_meta_o(disp_bil_meta),   .err_meta_o(disp_err_meta),
       .rsp_data_i(cache_smp_data), .rsp_tok_i(cache_smp_src),
       // THE CLASS MOVED WITH THE WIDENING. It is the token's TOP two bits, and
       // the token is now 18 -- so [17:16], not [15:14]. Slicing the old
@@ -1642,6 +1654,16 @@ module zhao_texture_island_v3_top #(
   logic [1:0]  bil_occ;
 
   // The metadata belonging to the sample whose texels just arrived.
+  // REVERTED. This read was moved onto the class queue and gate 2 failed:
+  // ARGB4444/bilinear alpha wrong on 3 fragments. The alignment falsifier I
+  // built validated the CLUT queue only -- 792 responses, zero
+  // disagreements -- and I moved the BILINEAR and NEAREST readers on the
+  // strength of evidence that never covered them.
+  //
+  // The bilinear lane sequences four channels, so a fragment's taps arrive
+  // as several responses; whether each carries its own correct metadata
+  // through that queue is a different question from the CLUT case, and it
+  // is now an open one rather than an assumed one.
   wire [20:0] bil_meta = sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
                                    [disp_bil_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
   // THE FORMAT THIS SAMPLE WAS REQUESTED UNDER, recovered the same way its
@@ -1805,8 +1827,26 @@ module zhao_texture_island_v3_top #(
       // MEASURED before the repair: 96 lookups, 96 STALE, 0 cold. The slot was
       // resident and the generation never matched, so every CLUT fragment
       // retired black while the lookup counter moved and looked healthy.
-      .lu_slot_i(palslot_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]),
-      .lu_gen_i (palgen_m [disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]),
+      // PACKET C STEP 3: THE FIRST READERS MOVE OFF THE TABLES.
+      //
+      // These two were `palslot_m[disp_clut_tok[...]]` and `palgen_m[...]` --
+      // two ASYNCHRONOUS 64-entry selections indexed by the queued token, and
+      // they are the "64-owner palette binding selection" named in the
+      // island's worst INTERNAL path:
+      //
+      //   rsp_dispatch|cq_rp[0][0] -> palette_res|cold_o[26]   -2.093 ns
+      //
+      // They now come from the class queue's REGISTERED metadata payload,
+      // which travelled with this very response. Two of packet C's five
+      // asynchronous response-side reads are gone, and they are the two the
+      // 21-bit subset would have left behind.
+      //
+      // Behaviour-preserving, and measured rather than argued: the alignment
+      // falsifier compared these fields against the live tables over 792 CLUT
+      // responses with zero disagreements BEFORE this swap, and gate 3 must
+      // still report 392 byte-identical records after it.
+      .lu_slot_i(disp_clut_meta[31:30]),
+      .lu_gen_i (disp_clut_meta[29:22]),
       // THE ADDRESSED BYTE, not always the low one -- and for CLUT4 the
       // addressed NIBBLE of that byte. A CLUT4 address is `total >> 1`, so one
       // fetched byte carries TWO texels; taking the whole byte gave every odd
@@ -1824,9 +1864,10 @@ module zhao_texture_island_v3_top #(
   // The palette index, byte-selected then nibble-selected. Written out rather
   // than nested in the port map so the CLUT4 arm is visible to a reader and to
   // a grep, and so the format that decides it is named at the point of use.
-  wire [20:0] clut_meta_c =
-      sampmeta_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
-                [disp_clut_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
+  // PACKET C: the third and last sampmeta reader moves onto the queue. All
+  // FIVE of the asynchronous response-side reads this packet targeted are
+  // now gone -- three sampmeta selections and the palette binding pair.
+  wire [20:0] clut_meta_c = meta21(disp_clut_meta);
   wire [7:0]  clut_byte_c = clut_meta_c[0] ? disp_clut_data[15:8]
                                            : disp_clut_data[7:0];
   wire [7:0]  clut_idx_c  =
@@ -1950,6 +1991,8 @@ module zhao_texture_island_v3_top #(
   // belongs to whatever request the planner is emitting this clock -- through
   // the ONE shared `decode16` the bilinear taps also use. Section 5A.7 item 5:
   // one block, not three.
+  // REVERTED with the bilinear reader above, and for the same reason: the
+  // alignment evidence covered the CLUT queue only.
   wire [20:0] near_meta = sampmeta_m[disp_near_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
                                     [disp_near_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
   wire [2:0]  near_fmt  = near_meta[19:17];
@@ -2528,6 +2571,28 @@ module zhao_texture_island_v3_top #(
   logic [7:0]  mj_rd_frac_u, mj_rd_frac_v;
   logic        mj_rd_byte_sel, mj_rd_nibble, mj_rd_valid;
   logic [31:0] mj_writes, mj_illegal, mj_genmis;
+  logic [39:0] disp_clut_meta, disp_near_meta, disp_bil_meta, disp_err_meta;
+  // ---- THE 21-BIT SAMPMETA VIEW OF A 40-BIT RECORD -------------------------
+  // The three response-side readers below want exactly the fields `sampmeta_m`
+  // held: {nibble, format, frac_v, frac_u, byte_select}. The queued record
+  // carries them plus palette identity and the owner generation.
+  //
+  // This is a FUNCTION, not three hand-written slices, because M11 is one
+  // screen of docket about what happens when field offsets are typed: all five
+  // in `zhao_texture_metajoin` came out off by one, lint-clean, in the file
+  // written to prevent exactly that. Extracting in one place means the three
+  // call sites cannot disagree with each other or with the bank.
+  function automatic logic [20:0] meta21(input logic [39:0] m);
+    // format[21:19], frac_v[18:11], frac_u[10:3], byte_sel[2], nibble[1]
+    return {m[1], m[21:19], m[18:11], m[10:3], m[2]};
+  endfunction
+
+  // The bank's registered result, repacked into the record layout the queue
+  // carries. One cycle late relative to the response it belongs to -- which is
+  // exactly the alignment the next step must close, and why nothing reads it.
+  wire [39:0] mj_meta_packed_c = {8'd0, mj_rd_pal_slot, mj_rd_pal_gen,
+                                  mj_rd_format, mj_rd_frac_v, mj_rd_frac_u,
+                                  mj_rd_byte_sel, mj_rd_nibble, 1'b0};
 
   wire [5:0] mj_wr_slot_c = plan_acc_src[SRC_SLOT_HI:SRC_SLOT_LO];
   wire [1:0] mj_wr_sidx_c = plan_acc_src[SRC_SIDX_LO+1:SRC_SIDX_LO];
@@ -2597,6 +2662,33 @@ module zhao_texture_island_v3_top #(
             || mj_rd_pal_gen  != mj_ref_pgen_q)
           meta_shadow_mismatch_o <= meta_shadow_mismatch_o + 32'd1;
       end
+    end
+  end
+
+
+  // ---- IS THE QUEUED METADATA THE RIGHT RESPONSE'S? -------------------------
+  // `rsp_meta_i` is fed the bank's REGISTERED output, which answers one cycle
+  // after `cache_smp_valid`. The dispatcher enqueues into a class queue via a
+  // RAW fifo, so the enqueue is itself some cycles later, and whether the two
+  // line up is a property of that fifo's occupancy -- not something to assume.
+  //
+  // This checks it where it can be checked: when a CLUT response is presented,
+  // the palette fields in its queued metadata must equal what the live tables
+  // hold for THAT response's own token. If the metadata belongs to a different
+  // response, this counts.
+  //
+  // It is a falsifier for the wiring, not for the bank -- the bank itself is
+  // already proven by the shadow. Nothing reads `*_meta_o`, so a nonzero count
+  // here breaks nothing; it says the alignment step is still outstanding.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      meta_align_err_o  <= 32'd0;
+      meta_align_chk_o  <= 32'd0;
+    end else if (disp_clut_valid) begin
+      meta_align_chk_o <= meta_align_chk_o + 32'd1;
+      if (disp_clut_meta[29:22] != palgen_m [disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+          || disp_clut_meta[31:30] != palslot_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]])
+        meta_align_err_o <= meta_align_err_o + 32'd1;
     end
   end
 

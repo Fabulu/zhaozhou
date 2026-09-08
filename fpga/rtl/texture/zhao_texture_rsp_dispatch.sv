@@ -105,7 +105,17 @@ module zhao_texture_rsp_dispatch #(
     parameter int unsigned RAWN  = 4,   // brief: "at least four entries"
     parameter int unsigned CHN   = 4,   // per-class queue depth
     parameter int unsigned DATAW = 64,
-    parameter int unsigned TOKW  = 16
+    parameter int unsigned TOKW  = 16,
+    // PACKET C. When 0 this block is bit-for-bit what it has always been: the
+    // metadata queue is not generated, the `*_meta_o` outputs are tied off,
+    // and `rsp_meta_i` is unread. `zhao_texture_island_top` -- gate 3's ORACLE
+    // -- leaves it at 0 and therefore elaborates exactly as before, which is
+    // the property that keeps the paired comparison meaningful.
+    //
+    // That claim is CHECKED, not asserted: gate 3 is re-run after this change
+    // and must still report 392 byte-identical retired records.
+    parameter int unsigned METAW = 40,
+    parameter bit          META_EN = 1'b0
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -115,6 +125,7 @@ module zhao_texture_rsp_dispatch #(
     output var logic             rsp_ready_o,
     input  var logic [DATAW-1:0] rsp_data_i,
     input  var logic [TOKW-1:0]  rsp_tok_i,
+    input  var logic [METAW-1:0] rsp_meta_i,
     // The class is decided upstream (it follows from the request's format and
     // filter bits, which T1 already sanitised). Re-deriving it here would put
     // mode decode on the response path for no reason.
@@ -125,18 +136,21 @@ module zhao_texture_rsp_dispatch #(
     input  var logic             clut_ready_i,
     output var logic [DATAW-1:0] clut_data_o,
     output var logic [TOKW-1:0]  clut_tok_o,
+    output var logic [METAW-1:0] clut_meta_o,
 
     // ---- direct nearest path -------------------------------------------------
     output var logic             near_valid_o,
     input  var logic             near_ready_i,
     output var logic [DATAW-1:0] near_data_o,
     output var logic [TOKW-1:0]  near_tok_o,
+    output var logic [METAW-1:0] near_meta_o,
 
     // ---- bilinear footprint FIFO --------------------------------------------
     output var logic             bil_valid_o,
     input  var logic             bil_ready_i,
     output var logic [DATAW-1:0] bil_data_o,
     output var logic [TOKW-1:0]  bil_tok_o,
+    output var logic [METAW-1:0] bil_meta_o,
 
     // ---- unknown class: a TERMINAL ERROR path, not a hole -------------------
     // This carries the response whose class was not one of {CLUT, NEAR, BIL}.
@@ -148,6 +162,7 @@ module zhao_texture_rsp_dispatch #(
     input  var logic             err_ready_i,
     output var logic [DATAW-1:0] err_data_o,
     output var logic [TOKW-1:0]  err_tok_o,
+    output var logic [METAW-1:0] err_meta_o,
 
     // ---- evidence ------------------------------------------------------------
     output var logic [31:0]      accepted_o,
@@ -214,6 +229,30 @@ module zhao_texture_rsp_dispatch #(
 
   logic dispatch_fire;
   assign dispatch_fire = head_v && head_room;
+
+  // ---- PACKET C: the metadata rides the class queue ------------------------
+  // Generated only when META_EN. With it off nothing below exists, the outputs
+  // are constants, and the block is what it was.
+  //
+  // It is a THIRD array beside cq_d and cq_t rather than a widened cq_d,
+  // because the enqueue/dequeue pointers and the occupancy logic are already
+  // correct and shared -- the metadata is another payload on the same
+  // transfer, not another transfer.
+  logic [METAW-1:0] cq_m [NCLS][CHN];
+  if (META_EN) begin : g_meta
+    always_ff @(posedge clk) begin
+      if (dispatch_fire) cq_m[head_cls][cq_wp[head_cls]] <= rsp_meta_i;
+    end
+    assign clut_meta_o = cq_m[0][cq_rp[0]];
+    assign near_meta_o = cq_m[1][cq_rp[1]];
+    assign bil_meta_o  = cq_m[2][cq_rp[2]];
+    assign err_meta_o  = cq_m[3][cq_rp[3]];
+  end else begin : g_no_meta
+    assign clut_meta_o = {METAW{1'b0}};
+    assign near_meta_o = {METAW{1'b0}};
+    assign bil_meta_o  = {METAW{1'b0}};
+    assign err_meta_o  = {METAW{1'b0}};
+  end
 
   assign clut_valid_o = (cq_n[0] != '0);
   assign clut_data_o  = cq_d[0][cq_rp[0]];
