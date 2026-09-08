@@ -2246,6 +2246,43 @@ int main(int argc, char** argv) {
   std::printf("  metajoin per-queue: bil %u checked/%u wrong, near %u checked/%u wrong\n",
               d.meta_bil_chk_o, d.meta_bil_err_o,
               d.meta_near_chk_o, d.meta_near_err_o);
+  // ---- CONSERVATION ACROSS THE CREDITED JOIN -------------------------------
+  // Packet C put a new stage between the cache and the dispatcher: a response
+  // is accepted only when the join stage can hand on what it holds, and the
+  // bank read fires only on an accepted beat.
+  //
+  // Its entire job is to delay without LOSING. The chain-of-life check above
+  // asserts both counters are non-zero, which a stage that dropped one response
+  // in ten would still satisfy. This asserts they are EQUAL.
+  //
+  // A dropped response is not a colour error -- the fragment simply never
+  // completes and the owner never retires -- so it would surface as a hang or a
+  // missing record, far from the cause. Counting it here names it.
+  {
+    // `cnt_cache_hits_o + cnt_cache_misses_o` is NOT this: it counts texel
+    // LOOKUPS, and a bilinear fetch is four of them in one response. The
+    // first version of this check compared 2,144 lookups against 1,176
+    // responses and reported a leak that does not exist -- an asserted
+    // relationship that was never verified.
+    //
+    // The joins input is the bank read, which fires once per ACCEPTED
+    // response, and its output is the dispatcher accept. Those are the two
+    // ends of the stage.
+    const uint32_t into_join = d.meta_shadow_reads_o;
+    std::printf("  credited join: %u cache responses in, %u dispatched\n",
+                into_join, d.cnt_dispatch_accepted_o);
+    check(into_join > 500,
+          "the join carried a substantial number of responses -- equality over "
+          "a handful proves nothing",
+          1, into_join > 500 ? 1 : 0);
+    check(d.cnt_dispatch_accepted_o == into_join,
+          "and EVERY cache response reached the dispatcher. The credited join "
+          "delays a response by one cycle to pair it with its metadata; if the "
+          "reservation is wrong it drops one instead, and a dropped response is "
+          "a fragment that never retires rather than a wrong colour",
+          into_join, d.cnt_dispatch_accepted_o);
+  }
+
   std::printf("    bank gen mismatches (slot recycled under a live response): %u\n",
               d.meta_genmis_o);
   if (d.meta_bil_err_o) {
