@@ -934,8 +934,66 @@ module zhao_texture_island_v3_top #(
   //   c. re-key the identity namespace to the 14-bit owner handle
   //   d. delete the ROB pool, fseq_m, live_r/tok_r and the named side tables
   //
-  // Until (a) and (b) land this file does not elaborate, which is why it is
+  // Until (b) lands this file does not elaborate, which is why it is
   // referenced by no fit target and no test.
+
+  // ==========================================================================
+  // (a) THE FRAGMENT EXPANDER -- fragrob's job 2, and only job 2
+  // ==========================================================================
+  // Contract: reports/P0C-STAGEB-EXPANDER-CONTRACT-20260908.md, traced out of
+  // fragrob rather than remembered. Leaf-verified 2026-09-08: 10 checks, 96
+  // requests matching the model element for element, and fire-tested against
+  // the architecture's own falsifier (an issue pulse on INTENT rather than on
+  // the accepted handshake trips `a_iss_only_on_fire`).
+  //
+  // ITS INPUT IS PERSPUV'S OUTPUT, NOT A NEW ADMISSION PORT. The oracle runs
+  // `pu_valid`/`pu_u`/`pu_v` into fragrob's sample walk; here the same beat
+  // enters the expander, which is why `u`/`v` arrive WITH the fragment and the
+  // expander needs no descriptor RAM of its own (contract §4).
+  //
+  // `exp_owner_c` IS A PLACEHOLDER UNTIL STEP (c). Under the re-key it is
+  // v3own's 14-bit {slot,generation} handle, carried through RCP and PERSPUV in
+  // the existing 16-bit tag -- which has room, 16 >= 14, so no widening is
+  // needed on that path. It is written as an explicit unresolved signal rather
+  // than quietly tied to `pu_tag[13:0]`, because a placeholder that looks like
+  // a real connection is how a wrong number acquires a provenance line.
+  logic [13:0] exp_owner_c;   // STEP (c): from v3own's adm_owner_o via pu_tag
+
+  logic        exp_req_valid, exp_req_ready;
+  logic signed [31:0] exp_req_u, exp_req_v;
+  logic [7:0]  exp_req_lod;
+  logic [17:0] exp_req_src_id;
+  logic        exp_aux_valid, exp_aux_ready;
+  logic [13:0] exp_aux_owner;
+  logic        exp_iss_tmu_valid, exp_iss_aux_valid;
+  logic [15:0] exp_iss_tmu_handle;
+  logic [13:0] exp_iss_aux_owner;
+  logic [31:0] exp_fragments, exp_requests, exp_zero_frags, exp_aux_requests;
+
+  zhao_texture_frag_expand #(
+      .FQD (4),      // the architecture's stated starting point, not a measured
+                     // optimum; the composed test shows starvation if it is low
+      .SRCW(18)      // {class[1:0], sample_handle[15:0]} -- §1.1's widening
+  ) u_expand (
+      .clk(clk), .rst_n(rst_n),
+      .f_valid_i(pu_valid), .f_ready_o(pu_ready),
+      .f_owner_i(exp_owner_c),
+      .f_u_i(pu_u), .f_v_i(pu_v),
+      .f_binding_i(f_binding_c), .f_lod_i(f_lod_c),
+      .f_count_i(f_scount_c), .f_aux_i(f_aux_c),
+      .f_class_i(f_class_c),
+      .req_valid_o(exp_req_valid), .req_ready_i(exp_req_ready),
+      .req_u_o(exp_req_u), .req_v_o(exp_req_v), .req_lod_o(exp_req_lod),
+      .req_src_id_o(exp_req_src_id),
+      .aux_valid_o(exp_aux_valid), .aux_ready_i(exp_aux_ready),
+      .aux_owner_o(exp_aux_owner),
+      .iss_tmu_valid_o(exp_iss_tmu_valid),
+      .iss_tmu_handle_o(exp_iss_tmu_handle),
+      .iss_aux_valid_o(exp_iss_aux_valid),
+      .iss_aux_owner_o(exp_iss_aux_owner),
+      .fragments_o(exp_fragments), .requests_o(exp_requests),
+      .zero_sample_fragments_o(exp_zero_frags),
+      .aux_requests_o(exp_aux_requests));
 
   // ==========================================================================
   // FRAGROB -> TMU_PLAN -> CACHE_PIPE
