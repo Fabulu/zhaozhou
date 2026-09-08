@@ -1025,3 +1025,45 @@ SAME design says whether 104.08 is representative or a lucky placement.
 The endpoint migration (`cold_o` -> `l1_stale_q`) is structural and does not
 depend on this. But if seed 7 lands near 98, the **Fmax** claim needs
 withdrawing even though the path claim stands.
+
+## P-CNT CLOSED, and its Fmax claim withdrawn
+
+**Functionally verified at last:** both composed tops pass **119/119** with P-CNT
+in place, including the palette lookup/stale/cold total assertions
+(`palette +96` in phase 5). **15/15** across the texture gate set.
+
+**And the Fmax claim is withdrawn.** Seed 7 on identical RTL:
+
+| | Fmax |
+|---|---|
+| baseline (pre-P-CNT) | 98.06 |
+| P-CNT, default seed | 104.08 |
+| P-CNT, **seed 7** | **90.74** |
+
+**13.34 MHz between two placements of the same source.** My +6.02 MHz is inside
+that, and seed 7 lands 7.32 MHz BELOW the baseline I claimed an improvement on.
+
+What stands is the endpoint migration — `cold_o` ceased to be the gating
+endpoint, `l1_stale_q` became it. Structural, not placement. But **"the endpoint
+moved" and "the block got faster" are different claims and I merged them.**
+
+The docketed leaf seed noise of ~4.70 MHz is also too small for this block: it
+came from a different block and I used it as though it bounded this one. When I
+reported +6.02 as "above 4.70 but not enormously", the right reading was that
+the comparison was **unfounded**, not marginal.
+
+## Three never-run tests now run, all pass
+
+`texture_v3_window_identity` 35, `texture_v3rq_probe_sanity` 2,
+`raster_ticketq_rh_directed` 22. Plus `metajoin_directed` **7** — packet C's new
+bank survives the falsifier written specifically to catch the off-by-one I made
+in it.
+
+The claim "the texture work broke nothing" is now supported across the three
+that were previously only "Not Run".
+
+## Manifest gate fixed
+
+Four blocks I added were UNACCOUNTED. Declared with reason codes —
+`island_v3_top: probe` (composition, mirroring `island_top`), `frag_expand:
+unused`, `metajoin: unused`, `ident_probe: probe`. **manifest check OK.**
