@@ -2721,6 +2721,20 @@ module zhao_texture_island_v3_top #(
   // is never retired and the cursor does not advance past it -- so this is a
   // property PRESERVED by deleting the ROB, not one traded away for area.
   //
+  // ENFORCED-BY: fpga/rtl/texture/zhao_texture_v3own.sv:a_out_in_order
+  //
+  // That assertion is the machine-resolvable enforcer, not this paragraph.
+  // The mechanism it guards: `emit_q` advances ONLY on `out_fire_c`, so an
+  // owner that never reaches the output queue never advances the cursor and
+  // every later owner waits behind it. The stall is the property.
+  //
+  // It is also exercised rather than merely asserted:
+  // tests/texture/island_v3_fault_directed.cpp phase 5 shuts the consumer
+  // mid-flight and requires every fragment to survive, none duplicated and
+  // no foreign tag -- with a non-vacuity check that the island kept
+  // ACCEPTING while the sink was shut, so the ordering guarantee is put
+  // under real pressure rather than a workload that never disturbs it.
+  //
   // COLOUR AND STATUS COME FROM result40: {status8, alpha8, rgb24}, so refused
   // is the status byte's low bit, matching what the TMU return lane packs at
   // (c2). One layout, written once, read once.
