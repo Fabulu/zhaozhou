@@ -927,7 +927,10 @@ module zhao_texture_island_v3_top #(
   logic        fr_wq_overflow, fr_id_error, fr_combiner_unfrozen;
 
 
-  assign pu_ready = fr_f_ready;
+  // DELETED: the oracle drove `pu_ready` from fragrob's `f_ready_o`. The
+  // expander is that consumer now and drives it through its own `f_ready_o`
+  // port, so this leftover made PERSPUV's ready MULTIDRIVEN -- caught by
+  // elaboration, which is what elaboration is for.
 
   // FRAGROB takes u/v/binding/lod PER SAMPLE -- three of each. The island's
   // boundary supplies one u/v pair (the fragment's) and one binding/lod; the
@@ -2271,7 +2274,13 @@ module zhao_texture_island_v3_top #(
       .req_wx_i(fr_aux_ctx[31:0]), .req_wz_i(fr_aux_ctx[63:32]),
       .req_env_x0_i(32'sd0), .req_env_x1_i(32'sd65536),
       .req_env_z0_i(32'sd0), .req_env_z1_i(32'sd65536),
-      .req_tok_i({fr_aux_slot, fr_aux_gen}),
+      // THE OTHER HALF OF THE AUX WIDENING. `AUX_TOKW` was widened to 14 at
+      // the parameter, but this REQUEST still sourced `{fr_aux_slot,
+      // fr_aux_gen}` = 4+8 = 12 -- the oracle's fragrob-shaped identity. The
+      // token must BE the owner handle, which is what the return lane already
+      // decodes it as. Elaboration caught the mismatch; the parameter change
+      // alone was not the whole job.
+      .req_tok_i(exp_aux_owner),
       .sheet_valid_o(sheet_valid_o), .sheet_ready_i(sheet_ready_i),
       .sheet_u_o(sheet_u_o), .sheet_v_o(sheet_v_o), .sheet_tok_o(sheet_tok_o),
       .sheet_rvalid_i(sheet_rvalid_i), .sheet_tag_i(sheet_tag_i),
@@ -2361,7 +2370,9 @@ module zhao_texture_island_v3_top #(
   logic        comb_o_valid, comb_o_ready;
   logic [23:0] comb_o_rgb;
   logic [7:0]  comb_o_a;
-  logic [ROBTAGW-1:0] comb_o_tag;
+  // 14, not ROBTAGW's 22: the tag is the owner handle alone now that `fseq_m`
+  // is deleted. Declared at the width the instantiation actually produces.
+  logic [13:0] comb_o_tag;
   logic        comb_o_refused;
 
   // COMBINE V2, the paired-phase combiner. V1 put `unit_mul_logic(...)` inside
@@ -2476,7 +2487,11 @@ module zhao_texture_island_v3_top #(
   assign out_rgb_o     = own_out_result[23:0];
   assign out_a_o       = own_out_result[31:24];
   assign out_refused_o = own_out_result[32];
-  assign out_tag_o     = own_out_owner;
+  // The island's tag port is 16 bits and the owner handle is 14. Zero-extended
+  // rather than widening a BOUNDARY port: the extra two bits carry no meaning,
+  // and narrowing the port would change the composed top's contract for a
+  // reason that is internal to it.
+  assign out_tag_o     = {2'd0, own_out_owner};
   assign own_out_ready_c = out_ready_i;
 
   // OBSERVABILITY, because an ordering boundary that works silently is
