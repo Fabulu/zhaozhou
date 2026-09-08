@@ -1206,3 +1206,28 @@ A design whose metadata payload has a misaligned SOURCE. The registers and queue
 entries are identical either way, so ALM/register/M10K and Fmax remain a fair
 reading of packet C's cost. Written down so the receipt is not later quoted as
 having measured a correct design.
+
+## The raw-FIFO fix is written and staged, not applied
+
+Prepared as a patch script (scratchpad `rawfifo_fix.py`), verified against the
+real push site — `raw_d`/`raw_t`/`raw_c` written together under `if (psh)` — so
+it mirrors `raw_t` exactly:
+
+1. `logic [METAW-1:0] raw_m [RAWN];` beside `raw_c`
+2. `if (META_EN) raw_m[raw_wp] <= rsp_meta_i;` with the other three pushes
+3. dispatch reads `raw_m[raw_rp]` instead of `rsp_meta_i`
+
+**Not applied**: `zhao_texture_rsp_dispatch` is in the running island fit's
+closure. Applying it means the fit is measuring one design while the tree holds
+another, which is the live-tree trap the hook exists to prevent.
+
+### The acceptance test already exists and currently FAILS
+
+`rsp_dispatch_meta_directed` reports **239 of 240 metadata words wrong** against
+today's RTL. When the fix lands it should read 0, and the composed bilinear
+falsifier should fall from 32/768 to 0 — at which point the fifth reader can
+move and packet C's five-to-one port reduction is complete.
+
+That is a falsifier written before the fix, failing for the right reason, with a
+predicted post-fix value. The ordering is deliberate: it is the only way to know
+the test can see the thing it is testing.
