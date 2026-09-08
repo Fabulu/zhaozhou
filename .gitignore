@@ -143,6 +143,12 @@ reports/synthesis/blockpaths/*.fit.rpt
 # distribution, for a question nobody has asked yet. If one arises, re-run the
 # fit -- the reports were never durable anyway, since the next fit of the same
 # module overwrites them in place.
+# Test FAILURE artefacts. `captures/failures/` is where a failing test writes
+# what it saw; it is output, not evidence, and it arrives in a commit only
+# because someone ran `git add -A` while a test was red. Same reasoning as
+# *.rgb: keep the report, not the intermediate that produced it.
+captures/failures/
+
 reports/synthesis/blockpaths/*.setup.rpt
 reports/synthesis/blockpaths/*.hold.rpt
 reports/synthesis/blockpaths/*.sta.rpt
