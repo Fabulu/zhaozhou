@@ -20,7 +20,10 @@
 //
 //  Q3 ROOT CONTINUITY.  No gate bounds the per-key root step, so a one-key
 //     teleport passes every clearance and contact check. Reports the largest
-//     single-key root displacement per clip and where it lands.
+//     single-key root displacement per clip and where it lands -- AND the LOOP
+//     SEAM, last key back to key 0, which every interior-only walk misses and
+//     which the site plays on every repeat. The by-eye review found the corpses
+//     standing back up there; this is that fault as a number.
 //
 // Build:
 //   g++ -O2 -std=c++17 -Ireference/include -Iruntime/include -Itests/render \
@@ -154,16 +157,28 @@ int main(int argc, char** argv) {
 
   // ---------------- Q3: root continuity ------------------------------------
   std::printf("\nQ3 ROOT CONTINUITY -- largest single-key root step per clip (no gate bounds this)\n");
+  std::printf("   THE WRAP COLUMN IS THE LOOP SEAM (last key -> key 0). The site loops every\n"
+              "   clip, so the seam is a frame the owner watches; nothing else measures it.\n");
   for (const zc::Clip& c : T.bank.clips) {
+    const auto step = [&](int a, int b) {
+      const double dx = (c.root[(size_t)b * 3 + 0] - c.root[(size_t)a * 3 + 0]) / 65536.0 * 1000.0;
+      const double dy = (c.root[(size_t)b * 3 + 1] - c.root[(size_t)a * 3 + 1]) / 65536.0 * 1000.0;
+      const double dz = (c.root[(size_t)b * 3 + 2] - c.root[(size_t)a * 3 + 2]) / 65536.0 * 1000.0;
+      return std::sqrt(dx * dx + dy * dy + dz * dz);
+    };
     double worst = 0.0; int at = -1;
     for (int f = 0; f + 1 < c.frame_count; ++f) {
-      const double dx = (c.root[(size_t)(f + 1) * 3 + 0] - c.root[(size_t)f * 3 + 0]) / 65536.0 * 1000.0;
-      const double dy = (c.root[(size_t)(f + 1) * 3 + 1] - c.root[(size_t)f * 3 + 1]) / 65536.0 * 1000.0;
-      const double dz = (c.root[(size_t)(f + 1) * 3 + 2] - c.root[(size_t)f * 3 + 2]) / 65536.0 * 1000.0;
-      const double m = std::sqrt(dx * dx + dy * dy + dz * dz);
+      const double m = step(f, f + 1);
       if (m > worst) { worst = m; at = f; }
     }
-    std::printf("   slot %2u  worst step %7.1f mm at key %d -> %d\n", c.slot_id, worst, at, at + 1);
+    const double wrap = c.frame_count > 1 ? step(c.frame_count - 1, 0) : 0.0;
+    // A seam bigger than the clip's own biggest interior step is a POP: the
+    // loop point moves the creature further in one key than anything the
+    // animation does on purpose. Reported, not gated -- a travelling clip
+    // legitimately snaps back, and only the author can say which is which.
+    const char* flag = (wrap > worst && wrap > 60.0) ? "  <-- SEAM POP" : "";
+    std::printf("   slot %2u  worst step %7.1f mm at key %d -> %d   |  WRAP %7.1f mm%s\n",
+                c.slot_id, worst, at, at + 1, wrap, flag);
   }
 
   std::printf("\n%s: %d failure(s)%s\n", fails ? "FAIL" : "PASS", fails,
