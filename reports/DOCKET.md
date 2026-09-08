@@ -3436,6 +3436,61 @@ to the number I knew I could not guess and skipped for the one I felt sure of.
 `zhao_raster_blend`'s 2 DSP was in the ledger the whole time and would have
 settled it in one query.
 
+## M13 — TWO ERRORS CANCELLING, AND FIXING ONE IS A REGRESSION
+
+**2026-09-08, packet C.** The metadata join carried two independent faults that
+agreed with each other most of the time:
+
+1. **`zhao_texture_rsp_dispatch`** wrote the class queue's metadata from
+   `rsp_meta_i` — the CURRENT input — while dispatching a response popped from
+   its raw FIFO. Data and token travelled the FIFO; metadata did not.
+2. **The island** fed `rsp_meta_i` from `zhao_texture_metajoin`, which answers
+   **one cycle after** its read is launched.
+
+A late capture paired with a late answer. Whenever the raw FIFO was empty — the
+common case — the two cancelled exactly.
+
+### What that did to the evidence
+
+| falsifier | before any fix | after fixing the dispatcher ALONE |
+|---|---|---|
+| CLUT queue | 792 / 0 | — |
+| nearest queue | 192 / 0 | 192 / **4** |
+| bilinear queue | 768 / **32** | 768 / **256** |
+| gate 2 | 122 pass | **5 FAIL** |
+
+The composed suite called two of three queues clean. Only bilinear showed
+anything, at 4.2%, because its four-channel sequencing is what puts several
+responses in flight and fills the FIFO. **4.2% was the fraction of dispatches
+with a non-empty FIFO** — not a property of the bilinear path, which is what
+three earlier hypotheses assumed.
+
+And the dispatcher's fault was **239 of 240 wrong at the leaf**, where the FIFO
+is usually busy. The same defect measured 4.2% composed and 99.6% at the leaf.
+
+### The rules
+
+**A leaf test and a composed test can disagree by two orders of magnitude on the
+same defect**, because the composed environment supplies a condition — an empty
+FIFO — that hides it. Neither is the "real" number; they measure different
+occupancy.
+
+**Re-run the composed suite after EVERY leaf repair, not after the last one.**
+Repairing the dispatcher was correct and made the system worse. If the leaf fix
+had been batched with four others, the regression would have been attributed to
+whichever was examined first.
+
+**A fault that reads as a small percentage is not necessarily a small fault.**
+32 of 768 looked like an edge case worth deferring. It was one half of a pair
+that made the whole join wrong.
+
+The repair is the brief's credited read join: reserve destination capacity,
+launch the bank read only on an accepted beat, and deliver the response with the
+answer for THAT response. Both causes go at once, because they were one design
+step missing, not two bugs.
+
+---
+
 ## M12 — A FALSIFIER THAT COVERS ONE PATH LICENSES ONE MOVE
 
 **2026-09-08, packet C.** The metadata bank was to replace five asynchronous
