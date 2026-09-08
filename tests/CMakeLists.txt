@@ -2157,6 +2157,31 @@ verilate(test_frag_expand_directed
   PREFIX Vzhao_texture_frag_expand
   TOP_MODULE zhao_texture_frag_expand
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv)
+# THE POSITIVE CONTROL FOR wq_overflow_o, driving a committed MUTANT.
+#
+# frag_expand_directed asserts wq_overflow_o == 0 under correct operation, and on
+# its own that is a hopeful zero: the counter watches a state violation that is
+# unreachable while the full-guard is right, so NO stimulus can move it. The only
+# way to show it alive is to break the guard.
+#
+# tests/mutants/zhao_texture_frag_expand_mutant.sv is that break, kept as a
+# separate renamed file rather than a temporary edit -- a temporary edit to
+# production RTL is a live-tree hazard and leaves no evidence behind. This is what
+# "keep the failing mutant" means when the mutant cannot live in shipped source.
+#
+# THIS TEST PASSES WHEN THE COUNTER FIRES. Inverse polarity, deliberately: it is
+# evidence about the instrument, not about the design.
+add_executable(test_frag_expand_overflow_control texture/frag_expand_overflow_control.cpp)
+target_link_libraries(test_frag_expand_overflow_control PRIVATE zhao_harness)
+verilate(test_frag_expand_overflow_control
+  PREFIX Vzhao_texture_frag_expand_mutant
+  TOP_MODULE zhao_texture_frag_expand_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_frag_expand_mutant.sv)
+add_test(NAME frag_expand_overflow_control
+         COMMAND test_frag_expand_overflow_control)
+set_tests_properties(frag_expand_overflow_control PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME frag_expand_directed COMMAND test_frag_expand_directed)
 set_tests_properties(frag_expand_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
