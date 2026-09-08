@@ -274,9 +274,42 @@ module zhao_texture_palette_res #(
           automatic logic st = (gen_r[lu_slot_i] != lu_gen_i) || begin_same_slot;
           l1_stale_q <= st;
           l1_res_q   <= res_r[lu_slot_i] && !begin_same_slot;
-          lookups_o  <= lookups_o + 32'd1;
-          if (st)                      stale_o <= stale_o + 32'd1;
-          else if (!res_r[lu_slot_i])  cold_o  <= cold_o  + 32'd1;
+        end
+
+        // EXPERIMENT P-CNT (post-fit brief §4.2). The three diagnostic
+        // counters used to update on THIS edge from the LIVE classification:
+        //
+        //     if (lu_valid_i) begin
+        //       lookups_o <= lookups_o + 1;
+        //       if (st)                     stale_o <= ...
+        //       else if (!res_r[lu_slot_i]) cold_o  <= ...
+        //
+        // which put a 32-bit increment on the end of
+        //
+        //   class-queue pointer -> queued route token -> 64-owner palette
+        //   binding -> resident slot/generation -> classification -> counter
+        //
+        // and that cone is the island's worst INTERNAL path:
+        // `rsp_dispatch|cq_rp[0][0] -> palette_res|cold_o[26]` at -2.093 ns,
+        // 41 ps behind the nominal worst and therefore co-equal with it.
+        //
+        // The verdict is ALREADY REGISTERED one line above. The counters now
+        // consume the registered form, one cycle later, off the live cone.
+        //
+        // THE PARTITION IS THE SAME EVENT, not an approximation. The old cold
+        // condition was `!res_r[lu_slot]` under `!st`; the new one is
+        // `!l1_res_q` under `!l1_stale_q`. An accepted same-slot BEGIN implies
+        // stale, so it can never reach the cold-only branch under either form.
+        // The brief's C3 check covers all four Boolean inputs exhaustively.
+        //
+        // NOTHING ELSE MOVES: the RAM read, `lu_valid_o`, the lookup data and
+        // the accepted-BEGIN forwarding are untouched. Only the statistics are
+        // late, and that latency is declared rather than discovered -- a
+        // counter read in the same cycle as its lookup now trails by one.
+        if (l1_v_q) begin
+          lookups_o <= lookups_o + 32'd1;
+          if (l1_stale_q)     stale_o <= stale_o + 32'd1;
+          else if (!l1_res_q) cold_o  <= cold_o  + 32'd1;
         end
       end
     end
