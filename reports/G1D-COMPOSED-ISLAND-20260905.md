@@ -375,6 +375,55 @@ now, for the top four paths alike:
     -2.690  zhao_raster_rcp24_svc:u_rcp|c_pend[7]
               -> zhao_raster_perspuv_svc:u_persp|e_num_v[13][17]
 
+### 4.3g P0-C STAGE A LANDED — ALM 13,615 -> 11,562, registers −4,092
+
+`zhao_texture_island_top@p0c-stageA`, digest `145cd70deee8`, 6,635 s. One change:
+`uvw_m`'s read registered behind a skid.
+
+| | @p0b-island | @p0c-stageA | change |
+|---|---|---|---|
+| ALM | 13,615 | **11,562** | **−2,053 (−15.1%)** |
+| registers | 23,295 | **19,203** | **−4,092** |
+| M10K | 37 | 39 | +2 |
+| memory bits | 41,528 | 45,624 | **+4,096** |
+| reported Fmax | 78.80 | 84.03 | +5.23 |
+
+**EVERY REGISTERED PREDICTION CONFIRMED.**
+
+* *"`uvw_m` no longer appears under `Info (276007)`"* — **zero occurrences**, and
+  it now appears as `altsyncram:uvw_m_rtl_0`. It is a RAM.
+* *"fitted registers fall by 3,000-4,200 of its 4,096"* — **−4,092**, near the
+  whole array.
+* The memory bits rose by **exactly 4,096** = 64 entries × 64 bits, which is
+  `uvw_m` and nothing else. The array moved from fabric to memory intact.
+* M10K +2 against a predicted ~+1 — the only number outside its band, and in the
+  cheap direction.
+
+**The −2,053 ALM was NOT predicted and is the larger prize.** 4,096 flip-flops do
+not sit in isolation; their write muxing and the 64-way read select go with them.
+This is P0-E's "one array" finding cashed: `reports/P0E-THE-GLUE-POOL-MEASURED`
+identified `uvw_m` as the single target after the census shrank the candidate
+list from four to one, and the measurement now says that array alone was worth
+15% of the composed island's logic.
+
+**Against the benchmarks:** 11,562 ALM is **1.75× nominal (6,600)** and **1.54×
+redline (7,500)**, down from 2.06× and 1.82×. **The island still fails its
+resource gate** — this is a large step, not arrival.
+
+**FMAX: MOVEMENT, CAUSE NOT ESTABLISHED (M6).** The gating family changed again:
+
+    @p0b-island   -2.690  rcp24_svc|c_pend[7] -> perspuv|e_num_v[13][17]
+    @p0c-stageA   -1.900  frag_depth_i[20]    -> rcp24_svc|c_x[5][3]
+
+A port-launched path into the RCP context store now gates. No same-family
+comparison is available for Stage A, so **+5.23 MHz is reported and not claimed**,
+exactly as §4.3f's own correction requires. Stage A was declared in advance to sit
+inside the previous gating seam, so this was the expected outcome rather than a
+surprise.
+
+**Function unchanged:** 119/119 `island_composed_directed` checks, colours
+bit-exact, counters identical — run before the fit on the same RTL.
+
 ### RESOLVED BY THE RESEED — the claim is RESTORED, on evidence the first fit could not give
 
 `@p0b-island-s3`: same fifteen sources, **identical digest `c9283ca728dd`**,
