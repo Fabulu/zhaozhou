@@ -454,7 +454,7 @@ module zhao_texture_island_v3_top #(
   logic [23:0] rcp_r;
   logic [5:0]  rcp_k;
   logic        rcp_dzero;
-  logic [7:0]  rcp_tok;
+  logic [13:0] rcp_tok;   // v3own's {slot[5:0], generation[7:0]}
   logic        rcp_v_ready;
   logic [31:0] rcp_accepted, rcp_mul_busy;
   logic [3:0]  rcp_occ;
@@ -559,10 +559,18 @@ module zhao_texture_island_v3_top #(
   end
   assign cnt_live_peak_o = {{(32-FCTXW-1){1'b0}}, live_peak_r};
 
-  zhao_raster_rcp24_svc #(.NCTX(8), .TOKW(8)) u_rcp (
+  // TOKW 8 -> 14: THE RCP CARRIES THE OWNER HANDLE, NOT AN INGRESS TOKEN.
+  // Third width question of this restructure and the third different answer.
+  // `zhao_raster_rcp24_svc` is parameterised throughout (`TOKW` at :59, every
+  // use `[TOKW-1:0]`, no literals), so like `aux_pipe` and unlike `cache_pipe`
+  // the leaf needs NO change -- only the number here. Measured, not assumed.
+  zhao_raster_rcp24_svc #(.NCTX(8), .TOKW(14)) u_rcp (
       .clk(clk), .rst_n(rst_n),
       .v_valid_i(frag_valid_i && credit_available), .v_ready_o(rcp_v_ready),
-      .d_i(frag_depth_i), .v_tok_i(tok_r),
+      // The token IS v3own's handle now. `tok_r`, the island's own ingress
+      // counter, is one of the "partial implementations of v3own's lifetime"
+      // §0 names -- it stamped an identity the owner already assigns.
+      .d_i(frag_depth_i), .v_tok_i(own_adm_owner),
       .r_valid_o(rcp_r_valid), .r_ready_i(rcp_r_ready),
       .r_o(rcp_r), .k_o(rcp_k), .d_zero_o(rcp_dzero), .r_tok_o(rcp_tok),
       .accepted_o(rcp_accepted), .completed_o(cnt_rcp_completed_o),
@@ -779,7 +787,7 @@ module zhao_texture_island_v3_top #(
   logic [23:0] px_r_q;
   logic [5:0]  px_k_q;
   logic        px_dz_q;
-  logic [7:0]  px_tok_q;
+  logic [13:0] px_tok_q;
 
   logic px_in_ready_c;   // PERSPUV's own ready, one name for the two uses below
 
@@ -794,7 +802,12 @@ module zhao_texture_island_v3_top #(
         px_v_q <= 1'b1;
         // THE REGISTERED READ. Written inside the clocked block against a
         // dynamic index, which is the form Quartus infers as RAM.
-        px_uvw_q <= uvw_m[rcp_tok[FCTXW-1:0]];
+        // INDEXED BY THE OWNER SLOT, not by an ingress token: the handle's
+        // high six bits ARE the slot, and the slot is what v3own allocates
+        // one-per-live-fragment. `rcp_tok[FCTXW-1:0]` would take the low bits
+        // of the handle, which are the GENERATION -- a silent aliasing of
+        // every fragment sharing a generation onto one entry.
+        px_uvw_q <= uvw_m[rcp_tok[13:8]];
         px_r_q   <= rcp_r;
         px_k_q   <= rcp_k;
         px_dz_q  <= rcp_dzero;
@@ -815,7 +828,7 @@ module zhao_texture_island_v3_top #(
       .v_valid_i(px_v_q), .v_ready_o(px_in_ready_c),
       .u_over_w_i(px_uvw_q[63:32]), .v_over_w_i(px_uvw_q[31:0]),
       .r_mant_i(px_r_q), .r_k_i(px_k_q), .depth_zero_i(px_dz_q),
-      .tag_i({8'd0, px_tok_q}),
+      .tag_i({2'd0, px_tok_q}),   // 16-bit tag, 14-bit handle: it fits
       .r_valid_o(pu_valid), .r_ready_i(pu_ready),
       .u_o(pu_u), .v_o(pu_v), .tag_o(pu_tag), .sat_o(pu_sat),
       .depth_zero_o(pu_dzero),
@@ -1012,7 +1025,9 @@ module zhao_texture_island_v3_top #(
   // needed on that path. It is written as an explicit unresolved signal rather
   // than quietly tied to `pu_tag[13:0]`, because a placeholder that looks like
   // a real connection is how a wrong number acquires a provenance line.
-  logic [13:0] exp_owner_c;   // STEP (c): from v3own's adm_owner_o via pu_tag
+  // RESOLVED: the handle admitted by v3own, carried through RCP's token and
+  // PERSPUV's tag, arrives back here. Three blocks, one identity, no lookup.
+  wire [13:0] exp_owner_c = pu_tag[13:0];
 
   logic        exp_req_valid, exp_req_ready;
   logic signed [31:0] exp_req_u, exp_req_v;
