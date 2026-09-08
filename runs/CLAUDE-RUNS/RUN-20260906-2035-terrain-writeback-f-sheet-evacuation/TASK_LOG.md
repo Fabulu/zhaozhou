@@ -3589,3 +3589,47 @@ predict it.
 The three gates, in the architecture's order: the 541-check owner suite on the
 UNMODIFIED v3own file; `island_v3_composed_directed` retargeted; then the paired
 run. Only after those does a fit mean anything.
+
+## GATE 2 IS EARNING ITS PLACE — five integration defects, none visible to a lint
+
+Both tops lint **0 diagnostics**; the oracle holds **119/119**; `cache_pipe`'s
+leaf holds **16/16** after a shared-block edit. And the V3 composition is wrong
+in ways only traffic reveals.
+
+1. **The planner and AUX were never connected.** `u_plan` still named
+   `fr_tmu_valid`, whose only driver I had deleted. An UNDRIVEN signal reads as
+   zero, so the composition linted clean, admitted 24 fragments and jammed. The
+   AUX path had the identical defect, found by sweeping for the pattern rather
+   than waiting for a second stall. **A lint reporting zero is not evidence that
+   blocks are connected to each other. Only traffic is.**
+2. **My `cache_pipe` measurement was wrong: SIX sites, not four.** I reported
+   four hard-coded 16s and sized the prerequisite from that. `c1_src` and
+   `c2_src` -- the pipeline registers the value passes THROUGH -- were missed. A
+   grep for port declarations does not enumerate a datapath; changing the width
+   and watching the widths stop agreeing does.
+3. **The class slice moved with the widening.** `cache_smp_src[15:14]` became
+   `[TOKW-1 -: 2]`. Gate 2 said "48 class disagreements", which is what routing
+   every response to the wrong lane looks like from outside. FOURTH instance
+   tonight of a slice that was right until the meaning of the bits changed.
+4. **`out_tag_o` carried the OWNER handle, not the CALLER's tag.** Right width,
+   real meaning, wrong contract -- an internal identity substituted for an
+   external one. The context was always the source; I reached for the identity
+   nearest to hand.
+5. **Owners were LEAKING at admission.** `adm_valid_i` was `frag_valid_i` alone,
+   so an owner was allocated every cycle the caller offered a fragment --
+   including cycles the RCP refused. Those owners never issue, never complete,
+   never retire. 27 admitted, 3 retired, then nothing. **Two admission decisions
+   made from different signals**, which is the same defect class as the
+   duplicate `live_r` credit counter and precisely what one identity namespace
+   is for.
+
+**The per-slot tables were also sized for the wrong identity** -- `class_m`,
+`palslot_m`, `palgen_m`, `sampmeta_m` at DEPTH=16 rows keyed by a 6-bit owner
+slot, aliasing four owners onto every row. The linter DID catch those, as index
+truncations. It could not catch (3) or (4), because those were the right WIDTH
+at the wrong OFFSET or the wrong MEANING.
+
+**Also fixed, and worth its own line:** the material plane's registered read is a
+cycle late, so the packet now waits for `mat_rdy_q` before the combiner is
+offered it. That is the price of P0-E's finding paid honestly rather than
+refunded by reintroducing an asynchronous read.
