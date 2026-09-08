@@ -167,6 +167,61 @@ the composed test asserts `cnt_live_peak_o == 64` and v3own's `ev_live_peak_o`
 counts the same quantity by the same law (admission to ordered-output
 acceptance), so the assertion carries over unchanged.
 
+### 1.2b THE AUX SHEET TOKEN — A SECOND WIDENING, FOUND DURING STAGE C (2026-09-08)
+
+**§1.1 above is incomplete and this is the correction.** Its widening analysis
+follows the SRCW routing token through `tmu_plan`, `cache_pipe` and
+`rsp_dispatch`, and correctly identifies `cache_pipe` as the hard one. It does
+not mention the AUX path, which carries a SEPARATE token and needs the same
+widening for the same reason.
+
+    AUX_TOKW = $clog2(DEPTH) + GENW = 4 + 8 = 12      (island_top:92)
+    v3own    OWNERW = SLOTW + GENW  = 6 + 8 = 14
+
+**And it is HARDER than the SRCW case, not easier.** `cache_pipe`'s `SRCW` could
+be given a parameter defaulting to 16, so every existing instantiation stayed
+bit-identical and the prerequisite landed alone without touching anything's
+behaviour. `AUX_TOKW` leaves the island on `sheet_tok_o` and returns on
+`sheet_rtok_i` (island_top:149,161) — **it is a top-level port**, so its width is
+the composed top's contract with whatever drives it. There is nothing to default
+it away with.
+
+Consequences for the plan:
+
+* the AUX widening is its own prerequisite, like `cache_pipe`'s, and belongs
+  BEFORE (c3) rather than inside it;
+* it changes an island BOUNDARY, so the oracle's own port list and the composed
+  test's stimulus both see it — unlike every change so far, this one cannot be
+  invisible to the paired run;
+* `zhao_texture_aux_pipe`'s `TOKW` parameter already exists
+  (island_top:1898 instantiates it with `.TOKW(AUX_TOKW)`), so the leaf may be
+  parameterised already.
+
+**MEASUREMENT TAKEN, same session — and it resolves the EASY way**, which is the
+opposite of `cache_pipe`. `zhao_texture_aux_pipe.sv` is parameterised
+throughout: `TOKW` at :127 and every token path declared `[TOKW-1:0]` —
+`req_tok_i` (:141), `sheet_tok_o` (:148), `sheet_rtok_i` (:152), `out_tok_o`
+(:157), and the internal `a0_tok_q` (:240), `sd_tok` (:280), `off_tok` (:358).
+No literal widths anywhere in the token path.
+
+So the AUX widening needs **no change to the aux_pipe leaf at all** — only
+`AUX_TOKW`'s definition in the island and the boundary port it feeds. That is a
+one-line parameter change plus its consequences at the island's edge, against
+`cache_pipe`'s four hard-coded sites.
+
+**The contrast is worth keeping.** Two token widenings, both discovered by
+following the same question; one needed a new parameter threaded through four
+literal declarations, the other needed nothing but a different number. Guessing
+which was which from the outside would have been a coin flip — `cache_pipe` HAS
+a parameter list and still hard-coded the width; `aux_pipe` parameterised even
+its internal queues.
+
+**How it was found is the point.** Stage C's (c2) wiring referenced a signal that
+did not exist (`fr_aux_rslot_c`); correcting it to the real `fr_aux_rslot`
+exposed that the real signal is 4 bits where v3own wants 6. A plausible-looking
+tie would have compiled the intent away and left this to surface as an
+elaboration failure in Stage C's fit.
+
 ### 1.3 Attribute and descriptor tables: re-keyed, not yet re-homed
 
 The remaining per-fragment tables (`uvw_m`, `fbase_m`, `fbind_m`, `flod_m`,
