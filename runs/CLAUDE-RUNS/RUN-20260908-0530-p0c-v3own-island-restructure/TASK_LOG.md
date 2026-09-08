@@ -1599,3 +1599,51 @@ is destroyed by the next fit of the same module.
   the wrong diagnosis for a combiner reading 8 DSP.
 * That block is instantiated only by the resource top; the islands use
   `material_combine_v2`. Whether it is still wanted precedes what it costs.
+
+## The fits were killed; packet 1 landed instead
+
+All four background jobs were stopped externally, which took BOTH island fits
+down with their wrappers -- ~3.25 hours of placement lost, no `@d0fixed` row.
+Receipt verified intact (119 rows, nothing half-written), disk fine, no ctest
+debris. `rtlCleanAtHead` is sampled at script START from `git status -- fpga/rtl`
+across the whole tree, which is why any uncommitted RTL anywhere dirties a row.
+
+**Gate 4 restarted and is running** (43 min into the first RCP leaf fit). Its
+first launch died at preflight in 45 s: `powershell -File` passes arguments as a
+flat command line, so `@('NCTX=12','TOKW=14')` flattened and `TOKW=14` bound to
+the SOURCE LIST. Not the quoted-string defect the earlier guard covers -- that
+guard structurally could not see it. Fixed by dot-calling in-process.
+
+**On the lost `@d0fixed` baseline:** re-running a 3-hour island fit to attribute
+a one-line register-enable change is poor value under the owner's fit ruling. The
+D0 gate folds into packet 1's fit against the anchored `@pktC-fixed` row, with
+MapOnly used to separate components rather than shipping a confounded delta.
+
+### PACKET 1 COMPLETE in simulation
+
+| profile | `shadow_present_o` | comparators | checks |
+|---|---|---|---|
+| lab (default) | 1 | 1176/0, align 792/0, bil 768/0, near 192/0 | **125** |
+| production `-GMIGRATION_SHADOWS=0` | 0 | not elaborated, counters asserted 0 | **124** |
+| oracle | n/a | untouched | **119** |
+
+Both falsifiers run (`reports/PACKET1-FALSIFIERS-20260908.md`). Swapping the
+metajoin's frac_u/frac_v: the lab shadow FIRES (192 mismatches, bil 768/768),
+and in production -- with no laboratory at all -- the reference differential
+still catches it (3 colour checks, 32/32/29). **The laboratory is apparatus, not
+enforcement**, which is the answer §4.3 needed and the reason packet 1 may go to
+its fit.
+
+### Two mistakes, both caught by looking
+
+* `class_m` is a SUBSTRING of `err_class_mismatch_o` and `plan_class_mismatch_c`.
+  A substring-based deletion removed a LIVE error counter and its logic. Caught
+  in the diff, reverted whole-file, redone with `class_m`: 2 lines, not 6.
+* That deletion then orphaned `f_class_in_c` -- found by re-grepping for readers
+  AFTER the change rather than assuming it was self-contained.
+
+### Next
+
+* MapOnly the island in both profiles (minutes) to price the laboratory and
+  confirm `sampmeta_m` leaves the netlist.
+* Then FIT GATE 1, after gate 4 finishes -- one fit at a time.
