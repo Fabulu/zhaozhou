@@ -101,3 +101,39 @@ than accepted from the brief. **It is still not a substitute for running the
 test** — this proves the counting partition is identical, not that the pipeline
 carries the right `l1_v_q` for each lookup, nor that no beat is counted twice
 across a stall. Those need the simulation the build tree has been holding.
+
+## The double-count concern, also settled from source
+
+The equivalence check above proved the counting **partition** is identical. I
+listed a second concern it did not cover: *"nor that no beat is counted twice
+across a stall."*
+
+Settled, without simulation:
+
+* The palette has **no `lu_ready`** — a lookup is not handshaked, it is simply
+  presented.
+* The island ties `disp_clut_ready = 1'b1`, commented *"the palette lookup is
+  unconditional"*.
+* `rsp_dispatch` drives `clut_valid_o = (cq_n[0] != '0)` — high while the CLUT
+  queue is non-empty, popping one entry per cycle since ready is tied high.
+
+So `lu_valid_i` is high for **exactly one cycle per lookup**. `l1_v_q <=
+lu_valid_i` therefore asserts for exactly one cycle per lookup, and the new
+counters fire once each. When the queue holds several entries `lu_valid_i` stays
+high across consecutive cycles — but each of those cycles is a *distinct*
+lookup, and each counts once.
+
+**Both forms count identically**, because the old code also keyed on
+`lu_valid_i`. There is no stall on this path to be counted twice across.
+
+### What is still not verified
+
+The simulation. Source reasoning has now covered the partition (8/8 cases) and
+the one-pulse-per-lookup property, and both are structural arguments about the
+code as written. What they cannot show is that the assembled design behaves as
+the code reads — which is the entire reason this repository prefers differential
+tests, and the reason three of today's confident readings were wrong.
+
+`island_composed_directed` and `island_v3_composed_directed` both assert palette
+lookup/stale/cold totals. Those are the tests that decide it, and they run when
+the build tree is free.
