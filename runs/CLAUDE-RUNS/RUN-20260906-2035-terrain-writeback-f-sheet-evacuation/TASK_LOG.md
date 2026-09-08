@@ -3243,3 +3243,49 @@ Item 5 escaped all 538 checks because no invariant stated WHEN publication may
 happen relative to the write. That gap is closed, and its first fix escaped too
 by watching `ev_commits_o` — a counter that tracks the C4 stage valid, not the
 commit bitplane. Two blind spots found in one mutation.
+
+## P0-C STAGE A LANDED — and every registered prediction was confirmed
+
+`@p0c-stageA`, 6,635 s, one change: `uvw_m`'s read registered behind a skid.
+
+| | @p0b-island | @p0c-stageA |
+|---|---|---|
+| ALM | 13,615 | **11,562 (−2,053, −15.1%)** |
+| registers | 23,295 | **19,203 (−4,092)** |
+| M10K | 37 | 39 |
+| memory bits | 41,528 | **45,624 (+4,096 exactly)** |
+
+* *"`uvw_m` no longer under Info 276007"* — **zero occurrences**, and it is now
+  `altsyncram:uvw_m_rtl_0`.
+* *"registers fall 3,000-4,200 of 4,096"* — **−4,092**.
+* bits rose by **exactly 4,096** = 64 × 64. The array moved to memory intact.
+* M10K +2 vs predicted ~+1 — the only number outside its band, in the cheap
+  direction.
+
+**The −2,053 ALM was NOT predicted and is the larger prize.** 4,096 flops do not
+sit alone; their write muxing and 64-way read select went with them. This is
+P0-E's "the prize is ONE array, not four" finding cashed — and it is worth
+recording that the census SHRANK the candidate list from four to one before this
+was measured. The narrower claim was the correct one and it paid better.
+
+**Budget:** 11,562 is **1.75× nominal / 1.54× redline**, down from 2.06/1.82.
+Still FAILING the gate. A large step, not arrival.
+
+**Fmax: MOVEMENT, CAUSE NOT ESTABLISHED.** Gating family changed again —
+`c_pend -> perspuv|e_num_v` (−2.690) became `frag_depth_i[20] ->
+rcp24_svc|c_x[5][3]` (−1.900). +5.23 MHz reported, not claimed, per M6. Stage A
+was declared in advance to sit inside the previous gating seam, so this is the
+expected outcome rather than a surprise.
+
+## My fog-fit invocation was wrong, and the tool caught it
+
+`-Module zhao_raster_fog,zhao_geom_fogfactor` arrived through the nested
+PowerShell call as ONE string. `run_block_fit.ps1`'s preflight refused:
+
+    preflight: no source names `module zhao_raster_fog,zhao_geom_fogfactor`.
+    ... Running anyway would spend the fitter's time to report
+    'failed:quartus_map', which reads in the report as 'this block does not fit'.
+
+That guard is exactly right and worth noting: without it the ledger would carry a
+row saying the fog block does not fit, when the truth is that I typed the
+argument wrong. Relaunched per module.
