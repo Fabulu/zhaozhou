@@ -1247,3 +1247,47 @@ measurement of a correct design.
 
 Baseline: 13,133 ALM / 20,561 reg / 45 M10K / 17 DSP / 82.41 MHz, digest
 `6094a4292eee`. This fit's digest is `b8f0ff0007ce` over 19 files.
+
+## PACKET C COMPLETE — and it took a defect that could not be fixed alone
+
+All five asynchronous response-side reads are on the class queue. Gate 2 **122**,
+gate 3 **392 byte-identical**, and every falsifier reads zero:
+
+| falsifier | result |
+|---|---|
+| bank vs tables at the common stream | 1,176 / **0** |
+| CLUT queue alignment | 792 / **0** |
+| nearest queue | 192 / **0** |
+| bilinear queue | 768 / **0** (was 32, then 256) |
+| dispatcher leaf | **5/5** (was 239/240 wrong) |
+
+### The sequence, because each step needed the one before it
+
+1. bank built, leaf-tested, shadow-verified in situ
+2. dispatcher widened; a falsifier per class queue
+3. readers moved on CLUT-only evidence -> **gate 2 caught it** -> per-queue
+   falsifiers -> bilinear localised to 32/768
+4. a leaf test on the dispatcher found the raw-FIFO defect: metadata captured
+   from the current input rather than the FIFO entry being dispatched,
+   **239 of 240 wrong**
+5. fixing it made the composed island **WORSE** — 32 -> 256. **Two errors were
+   cancelling**: the dispatcher's late capture partly compensated for the bank
+   answering one cycle after its read was launched
+6. the **credited read join** removed both causes at once
+
+### What the credited join actually is
+
+* a response is accepted from the cache **only when the join stage can hand on
+  what it holds** — that is the reservation, and it is the part the brief warns
+  cannot be deferred
+* the bank read fires **only on an accepted beat**, so it never answers for a
+  response the dispatcher cannot take
+* the delayed response and the bank's answer *for that response* reach the
+  dispatcher together
+
+### The receipt is now stale in the direction that matters
+
+The milestone fit measured **+2,778 ALM / −8.43 MHz** — on a design where the
+metadata was misaligned AND the readers were still on the tables. It priced the
+cost of the join without any of its benefit. **Re-fit launched** as
+`@pktC-fixed`; that number decides whether packet C stays.
