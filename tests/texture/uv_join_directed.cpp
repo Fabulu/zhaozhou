@@ -263,6 +263,46 @@ int main(int argc, char** argv) {
               "the bank's row for that slot",
               0, d->gen_mismatch_o);
 
+  // ---- AND THAT ZERO NEEDS A POSITIVE CONTROL -----------------------------
+  // §5.5's instrument reports the window where an owner slot is recycled while a
+  // frontend transaction can still read its old descriptor. It is asserted zero
+  // above, and a counter asserted zero without ever being seen to move is the
+  // defect this repository keeps finding in its own work -- the metajoin's
+  // generation counter read zero straight through a live record-swapping bug.
+  //
+  // So it is fired deliberately, with stimulus only: present a token whose
+  // generation is NOT the one the bank holds for that slot. No RTL is touched;
+  // the mutation is in the traffic, which is where a recycled owner would put it.
+  {
+    const uint32_t before = d->gen_mismatch_o;
+    const int slot = 5;
+    const Desc r = make_desc(slot);
+    d->f_ready_i = 1;
+    d->m_ready_i = 1;
+    d->p_valid_i = 1;
+    d->p_tag_i = static_cast<uint16_t>((slot << 8) | (r.gen ^ 0xFF));  // STALE gen
+    d->p_u_i = 0x51510000;
+    d->p_v_i = 0x62620000;
+    d->p_sat_i = 0;
+    d->p_dz_i = 0;
+    d->eval();
+    tick(d);
+    d->p_valid_i = 0;
+    d->eval();
+    for (int i = 0; i < 6; ++i) tick(d);
+    d->eval();
+
+    std::printf(
+        "  generation instrument: %u -> %u on a token whose gen is not "
+        "the bank's\n",
+        before, d->gen_mismatch_o);
+    zhao::check(d->gen_mismatch_o > before,
+                "the join's generation instrument FIRES when a record's token "
+                "identity does not match the bank's row -- shown to move, so the "
+                "zero above is evidence rather than silence",
+                1, d->gen_mismatch_o > before ? 1 : 0);
+  }
+
   // =========================================================================
   // ONE JOINED RESULT PER CLOCK, which §5.3 asks to be DEMONSTRATED
   // =========================================================================
