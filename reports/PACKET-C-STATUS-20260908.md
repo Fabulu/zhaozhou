@@ -73,3 +73,58 @@ Step 1 stands on its own and is safe to keep: a verified bank, shadow-agreeing
 1,176 times, consuming nothing. **Step 2 should not start until the dispatcher
 question is answered**, because all three options change what gate 3 means, and
 gate 3 is the only reason the V3 composition can be trusted at all.
+
+---
+
+# SUPERSEDED: step 2 was not blocked, and packet C is now complete
+
+The section above says step 2 needs an owner decision on the shared dispatcher.
+**It did not.** The parameterised option (`META_EN`, default 0) leaves the
+oracle's netlist identical, so gate 3's comparison is preserved rather than
+altered — and that is checkable, not arguable. I escalated a question I could
+answer, and the check took one run: gate 3 still reports 392 byte-identical
+records after the change.
+
+## Final state
+
+**All five asynchronous response-side reads are on the class queue.** Five
+falsifiers, all zero:
+
+| falsifier | result |
+|---|---|
+| bank vs live tables (shadow, common stream) | 1,176 / 0 |
+| CLUT queue alignment | 792 / 0 |
+| nearest queue | 192 / 0 |
+| bilinear queue | 768 / 0 |
+| dispatcher leaf (`META_EN=1`) | 5/5 |
+| conservation across the join | 1,176 in / 1,176 out |
+
+Gate 2 **124 checks**, gate 3 **392 byte-identical**, oracle **119**.
+
+## What it actually took, and the part worth remembering
+
+The join could not be delivered by moving five wires. Two independent errors
+were **cancelling**:
+
+1. the dispatcher captured metadata from the current input rather than the FIFO
+   entry being dispatched — 239 of 240 wrong at the leaf;
+2. the island fed it the bank's answer, which arrives one cycle after the read
+   is launched.
+
+Whenever the raw FIFO was empty — most of the time — they agreed, and the
+composed suite reported two of three class queues clean. **Fixing either alone
+was a regression**: repairing the dispatcher took the composed bilinear count
+from 32 wrong to 256.
+
+The credited read join removes both causes at once by making the response, its
+metadata and its identity one captured record: accept from the cache only when
+the join stage can hand on what it holds, and fire the bank read only on an
+accepted beat. That is precisely what the brief specified and what I twice
+deferred as "plumbing".
+
+## Still open
+
+The `@pktC-fixed` re-fit. The earlier receipt — **+2,778 ALM, −8.43 MHz** —
+priced the join's cost on a design that had the misalignment AND still read the
+tables, so it measured the overhead with none of the benefit. Whether packet C
+earns its place is that fit's answer, not this report's.
