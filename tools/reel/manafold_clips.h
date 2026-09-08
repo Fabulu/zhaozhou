@@ -2069,6 +2069,10 @@ inline zc::Clip build_nodule_solo() {
  *    2  the corpse RESTS AT ZERO     -- the settle root goes to the surface,
  *                                       which is the "reads as hovering" fault
  *                                       the ground-contact law names by name
+ *    4  the corpse WRAPS TO ALIVE  -- hold_last is left off, so the final
+ *                                     key's sub-frame blends toward key 0 and
+ *                                     the corpse stands up for two frames on a
+ *                                     clip that loops (review item 1)
  *    3  a strike DROWNS the creature  -- one impact drives the root far below
  *                                       the settle, which is the crash bound
  *                                       the airborne gate exists to catch
@@ -2442,6 +2446,25 @@ inline zc::Clip build_death_drop() {
           zc::DeformSample{static_cast<uint16_t>(flat), static_cast<uint16_t>(spread)};
     }
   }
+  // ⚠ ETERNAL REST IS A HOLD, NOT A WRAP (D9 §11; pass-12 review item 1).
+  // Without this the presentation interpolator takes its sub-frame partner as
+  // `frame + 1 >= frame_count ? 0 : frame + 1` (creature_core.cpp, four sites)
+  // and the LAST key blends toward key 0 -- the alive hover pose. The corpse
+  // stood up for the final two frames of a clip that loops: an 11 px jump and
+  // ~6,500 changed pixels, at the end of the clip the owner watches twice.
+  //
+  // The tail keys were never the knob. kDeathOpenKeys was added when this same
+  // seam was found in the DEFORM stream and it closed that stream only; root
+  // and quats kept wrapping. 09-ENGINE-GOTCHAS §18: when careful tuning keeps
+  // failing, the knob is not the thing. Zixxtrixx has had the real one since
+  // run 0326 (zixxtrixx.h:4550, "one-shot: the corpse holds; no wrap-to-stance
+  // flash") -- the fix simply never travelled to this creature.
+  //
+  // FAILABLE LEG 4 removes it from THIS builder -- the same one the verdict is
+  // taken on -- rather than from a separate copy of the clip, which is the
+  // trick that lets a seam gate look proven while measuring something it can
+  // never fail on.
+  if (g_u02_death_fail != 4) c.hold_last = true;
   return c;
 }
 
@@ -2587,6 +2610,25 @@ inline zc::Clip build_death_gutter() {
           zc::DeformSample{static_cast<uint16_t>(flat), static_cast<uint16_t>(spread)};
     }
   }
+  // ⚠ ETERNAL REST IS A HOLD, NOT A WRAP (D9 §11; pass-12 review item 1).
+  // Without this the presentation interpolator takes its sub-frame partner as
+  // `frame + 1 >= frame_count ? 0 : frame + 1` (creature_core.cpp, four sites)
+  // and the LAST key blends toward key 0 -- the alive hover pose. The corpse
+  // stood up for the final two frames of a clip that loops: an 11 px jump and
+  // ~6,500 changed pixels, at the end of the clip the owner watches twice.
+  //
+  // The tail keys were never the knob. kDeathOpenKeys was added when this same
+  // seam was found in the DEFORM stream and it closed that stream only; root
+  // and quats kept wrapping. 09-ENGINE-GOTCHAS §18: when careful tuning keeps
+  // failing, the knob is not the thing. Zixxtrixx has had the real one since
+  // run 0326 (zixxtrixx.h:4550, "one-shot: the corpse holds; no wrap-to-stance
+  // flash") -- the fix simply never travelled to this creature.
+  //
+  // FAILABLE LEG 4 removes it from THIS builder -- the same one the verdict is
+  // taken on -- rather than from a separate copy of the clip, which is the
+  // trick that lets a seam gate look proven while measuring something it can
+  // never fail on.
+  if (g_u02_death_fail != 4) c.hold_last = true;
   return c;
 }
 

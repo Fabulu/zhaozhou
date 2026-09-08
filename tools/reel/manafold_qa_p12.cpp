@@ -52,6 +52,10 @@ bool sample_zero(const zc::DeformSample& d) { return d.flatten == 0 && d.spread 
 
 int main(int argc, char** argv) {
   const bool fail_leg = argc > 1 && std::strcmp(argv[1], "--fail-lane") == 0;
+  // Q4's leg must be set BEFORE the first u02::type() call -- the bank is a
+  // function-local static, so a leg is one process, not a toggle.
+  const bool seam_leg = argc > 1 && std::strcmp(argv[1], "--fail-seam") == 0;
+  if (seam_leg) u02::g_u02_death_fail = 4;
   const zc::CreatureType& T = u02::type();
   if (T.mesh.empty()) { std::fprintf(stderr, "qa-p12: compile produced no meshlets\n"); return 1; }
   int fails = 0;
@@ -166,8 +170,83 @@ int main(int argc, char** argv) {
     std::printf("   slot %2u  worst step %7.1f mm at key %d -> %d\n", c.slot_id, worst, at, at + 1);
   }
 
+  // ---------------- Q4: THE LOOP SEAM ---------------------------------------
+  //
+  //  A death must not blend back toward key 0. Q1 proves the DEFORM reaches
+  //  bit-zero; it cannot see this one, because the resurrection is in the POSE
+  //  and the ROOT. decode_pose takes its sub-frame partner as
+  //  `frame + 1 >= frame_count ? (hold_last ? frame : 0) : frame + 1`, so with
+  //  hold_last off the last key's sub 1 is a half-blend into the ALIVE hover
+  //  pose. Measured on POSED VERTICES through decode_pose + skin_vertex -- the
+  //  renderer's own calls -- and NOT on the authored keys, which are already
+  //  correct and which is exactly why this survived a whole pass.
+  int q4_fails = 0;
+  std::printf("\nQ4 THE LOOP SEAM -- does the corpse hold, or blend back toward key 0?\n");
+  std::printf("   (posed vertices, last key sub 0 vs sub 1, through decode_pose)\n");
+  for (const auto& d : kDeaths) {
+    const zc::Clip* clip = nullptr;
+    for (const zc::Clip& c : T.bank.clips) if (c.slot_id == d.slot) clip = &c;
+    if (!clip) { std::printf("   slot %u MISSING\n", d.slot); ++fails; continue; }
+    const uint16_t last = static_cast<uint16_t>(clip->frame_count - 1);
+    std::array<zc::mat3x4fx, zc::kMaxBones> p0, p1;
+    zc::decode_pose(T, *clip, last, p0, nullptr, 0);
+    zc::decode_pose(T, *clip, last, p1, nullptr, 1);
+    const zc::DeformSample s0 = zc::deformation_sample(T, d.slot, last, 0);
+    const zc::DeformSample s1 = zc::deformation_sample(T, d.slot, last, 1);
+    double worst = 0.0;
+    for (const zc::Meshlet& m : T.mesh)
+      for (size_t vi = 0; vi < m.verts.size(); ++vi) {
+        zc::SkinVertex a = m.verts[vi], b = m.verts[vi];
+        if (!m.deform.empty()) {
+          a = zc::deform_skin_vertex(a, m.deform[vi], s0);
+          b = zc::deform_skin_vertex(b, m.deform[vi], s1);
+        }
+        int32_t ax, ay, az, bx, by, bz;
+        zc::skin_vertex(p0.data(), a, ax, ay, az, nullptr);
+        zc::skin_vertex(p1.data(), b, bx, by, bz, nullptr);
+        const double dx = (bx - ax) / 65536.0 * 1000.0;
+        const double dy = (by - ay) / 65536.0 * 1000.0;
+        const double dz = (bz - az) / 65536.0 * 1000.0;
+        const double mm = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if (mm > worst) worst = mm;
+      }
+    // THE BOUND, and why it is not zero. With hold_last the sub-frame partner
+    // is the key ITSELF, so root and deform are bit-identical -- but the pose
+    // still goes through quat16_nlerp(q, q, 1, 2), whose renormalisation
+    // rounds. Measured residual: 0.9 mm on both deaths, on a ~1.3 m creature
+    // (0.07%). That is codec rounding, not motion.
+    //
+    // Held: 0.9 mm.  Wrapping to key 0: 509.1 mm (drop) / 411.9 mm (gutter),
+    // witnessed through --fail-seam. A 5 mm bound sits 5x above the rounding
+    // and 80x below the fault, so it cannot be tripped by rounding drift and
+    // cannot be slipped past by a real wrap. A 1 mm bound would have shipped
+    // a gate passing by 0.1 mm -- true today, and a lie one rounding change
+    // from now.
+    const bool bad = worst > 5.0;
+    if (bad) { ++fails; ++q4_fails; }
+    std::printf("   slot %u %-13s hold_last=%-3s worst posed vertex move %8.1f mm  %s\n",
+                d.slot, d.name, clip->hold_last ? "yes" : "NO", worst,
+                bad ? "<-- THE CORPSE STANDS BACK UP" : "held");
+  }
+
+
   std::printf("\n%s: %d failure(s)%s\n", fails ? "FAIL" : "PASS", fails,
               fail_leg ? "   [FAILABLE LEG: lane 0 answered for every lane]" : "");
+  if (seam_leg) {
+    // Judged on Q4's OWN count. Judging a leg on the total would let an
+    // unrelated failure elsewhere certify a check that never detected anything
+    // -- the shape of a gate that cannot fail.
+    if (q4_fails == 0) {
+      std::printf("qa-p12: the leg removed hold_last from both death builders and Q4 "
+                  "STILL reported the corpse held -- the leg did not take effect, so "
+                  "Q4 is NOT proved failable\n");
+      return 1;
+    }
+    std::printf("qa-p12: FAILABLE LEG OK -- with hold_last off Q4 reports %d death(s) "
+                "standing back up, which is the fault pass 12 shipped\n", q4_fails);
+    return 0;
+  }
+
   if (fail_leg) {
     // The leg is about Q1 ONLY, so it is judged on Q1's own count. Judging it
     // on the total would let Q2's unrelated failure certify a Q1 that never
