@@ -340,6 +340,89 @@ int main(int argc, char** argv) {
   }
 
   // =========================================================================
+  // RESET MID-FLIGHT
+  // =========================================================================
+  // §8.7 lists this and it is easy to skip, because a block that is only ever
+  // reset while idle looks fine forever. The failure it guards against is a
+  // credit counter or a FIFO pointer that survives reset: the block then comes
+  // back believing it owns items that no longer exist, and either refuses work
+  // it could take or -- worse -- emits a stale record with a valid-looking tag.
+  {
+    d->rst_n = 1;
+    d->a_ready_i = 0;
+    d->b_ready_i = 0;  // both outputs shut, so the pipeline is genuinely loaded
+    for (int i = 0; i < 12; ++i) {
+      d->v_valid_i = 1;
+      d->u_over_w_i = 0x0BAD0000 + i;
+      d->v_over_w_i = 0x0BAD1000 + i;
+      d->r_mant_i = 0xC0FFEEu;
+      d->r_k_i = 24;
+      d->depth_zero_i = 0;
+      d->tag_i = static_cast<uint16_t>(0xEE00 + i);
+      d->eval();
+      tick(d);
+    }
+    d->v_valid_i = 0;
+    d->eval();
+    const unsigned loaded = d->b_occupancy_o;
+
+    // Yank it mid-flight.
+    d->rst_n = 0;
+    tick(d);
+    tick(d);
+    d->rst_n = 1;
+    d->eval();
+    tick(d);
+    d->eval();
+
+    std::printf("  reset mid-flight: occupancy %u -> %u, valid %u\n", loaded, d->b_occupancy_o,
+                d->b_valid_o);
+
+    zhao::check(loaded > 0,
+                "the pipeline was genuinely LOADED before the reset -- resetting "
+                "an idle block proves nothing",
+                1, loaded > 0 ? 1 : 0);
+    zhao::check(d->b_occupancy_o == 0,
+                "reset clears the credit count: a surviving count would make the "
+                "block refuse work it could take, or believe it owns items that "
+                "no longer exist",
+                0, d->b_occupancy_o);
+    zhao::check(d->b_valid_o == 0,
+                "and no stale record is presented after reset -- an output valid "
+                "that survives would emit a plausible tag for a fragment nobody "
+                "submitted",
+                0, d->b_valid_o);
+
+    // And it must be usable again: one clean fragment straight through.
+    d->a_ready_i = 1;
+    d->b_ready_i = 1;
+    int post = 0;
+    uint16_t got_tag = 0;
+    for (int i = 0; i < 40 && post == 0; ++i) {
+      d->v_valid_i = (i < 1) ? 1 : 0;
+      d->u_over_w_i = 0x00010000;
+      d->v_over_w_i = 0x00020000;
+      d->r_mant_i = 0x800000u;
+      d->r_k_i = 16;
+      d->depth_zero_i = 0;
+      d->tag_i = 0x1234;
+      d->eval();
+      if (d->b_valid_o && d->b_ready_i) {
+        got_tag = d->b_tag_o;
+        ++post;
+      }
+      tick(d);
+    }
+    d->v_valid_i = 0;
+    d->eval();
+    zhao::check(post == 1 && got_tag == 0x1234,
+                "and the block works again after reset, returning the tag of the "
+                "fragment actually submitted rather than one left over from "
+                "before",
+                0x1234, got_tag);
+  }
+
+  // =========================================================================
   // SUSTAINED RATE, measured and printed rather than predicted
   // =========================================================================
   {
