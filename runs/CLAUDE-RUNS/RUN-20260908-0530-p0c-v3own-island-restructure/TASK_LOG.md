@@ -704,3 +704,38 @@ recorded, **not** interpreted — M6 as amended says a family is evidence to loo
 at, not a conclusion to draw.
 
 Written up in `reports/V3-PATH-CHOOSES-SECTION-6-20260908.md`.
+
+## Correction, immediately: §6 alone buys ~0.2 MHz
+
+I wrote "the receipt chooses §6" and pushed it before doing the check §6.1
+explicitly demands — *"inspect data delay as well as slack"* for a virtual-input
+path. Doing it changes the conclusion.
+
+**Splitting all 200 paths by origin:** 113 start at a virtual pin (worst
+−2.134 ns), **87 start inside the design (worst −2.093 ns)**. The port boundary
+is worth **41 picoseconds**. The docket already learned this once — *"the
+artefact was real and almost irrelevant"* — where it was worth 4 MHz of 36.
+Here it is worth 0.041 ns.
+
+The worst internal path is a different family:
+`rsp_dispatch|cq_rp[0][0] -> palette_res|cold_o[26]`.
+
+**But the data delay rescues the target for a better reason:**
+
+| path | slack | skew | data delay |
+|---|---|---|---|
+| RCP `frag_depth_i` -> `c_x` | −2.134 | **+3.342** | **15.416 ns** |
+| palette `cq_rp` -> `cold_o` | −2.093 | −0.556 | 11.477 ns |
+
+The RCP path carries **3.9 ns more logic** and is being *flattered* by 3.3 ns of
+favourable skew into looking merely tied. On combinational depth — the thing an
+architecture change can actually move — it is 34% worse and is the deepest cone
+in the design.
+
+**Corrected conclusion, both halves required:** §6 is the right work AND it
+will not lift the clock alone. Completing it moves 82.41 -> about 82.6, because
+`cq_rp -> cold_o` becomes the gate 41 ps later. The palette/dispatch family is
+**co-equal, not second tier**, and neither §6 nor §7 as written covers it.
+
+Any plan that reports §6 as the road to 100 MHz is wrong. I had written exactly
+that an hour earlier, on slack alone.
