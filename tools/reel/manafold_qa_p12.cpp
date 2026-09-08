@@ -18,8 +18,9 @@
 //     far the eye-travel carrier bones actually rotate -- measured through
 //     decode_pose, the renderer's own call, on the posed eye vertex.
 //
-//  Q3 ROOT CONTINUITY.  No gate bounds the per-key root step, so a one-key
-//     teleport passes every clearance and contact check. Reports the largest
+//  Q3 ROOT CONTINUITY.  Nothing else bounds the per-key root step, so a
+//     one-key teleport passes every clearance and contact check. PASS 13 gave
+//     it a DECLARED PER-CLIP CEILING and a failable leg (--fail-rootstep). Reports the largest
 //     single-key root displacement per clip and where it lands -- AND the LOOP
 //     SEAM, last key back to key 0, which every interior-only walk misses and
 //     which the site plays on every repeat. The by-eye review found the corpses
@@ -61,6 +62,11 @@ int main(int argc, char** argv) {
   if (seam_leg) u02::g_u02_death_fail = 4;
   const bool snap_leg = argc > 1 && std::strcmp(argv[1], "--fail-eyesnap") == 0;
   if (snap_leg) u02::g_u02_death_fail = 5;
+  // PASS 13 / R5: leg 6 collapses death-gutter's sag carry to a single key,
+  // which is exactly the pre-R5 behaviour -- the 240 mm one-key root teleport.
+  // Witnessed on THE SHIPPED BUILDER, not on a copy of the clip.
+  const bool rootstep_leg = argc > 1 && std::strcmp(argv[1], "--fail-rootstep") == 0;
+  if (rootstep_leg) u02::g_u02_death_fail = 6;
   const zc::CreatureType& T = u02::type();
   if (T.mesh.empty()) { std::fprintf(stderr, "qa-p12: compile produced no meshlets\n"); return 1; }
   int fails = 0;
@@ -232,9 +238,46 @@ int main(int argc, char** argv) {
   }
 
   // ---------------- Q3: root continuity ------------------------------------
-  std::printf("\nQ3 ROOT CONTINUITY -- largest single-key root step per clip (no gate bounds this)\n");
-  std::printf("   THE WRAP COLUMN IS THE LOOP SEAM (last key -> key 0). The site loops every\n"
-              "   clip, so the seam is a frame the owner watches; nothing else measures it.\n");
+  //
+  //  PASS 13 / R5 -- Q3 IS NOW BOUNDED, AND THE BOUND IS DECLARED PER CLIP.
+  //
+  //  Until this pass Q3 printed and did not judge, and a 240 mm one-key root
+  //  teleport in `death-gutter` sat in the shipped bank while every clearance,
+  //  contact and closure gate passed. A number nobody bounds is a number
+  //  nobody reads.
+  //
+  //  WHY THERE IS NO SINGLE BANK-WIDE NUMBER. The bank's honest interior steps
+  //  span 0 to 218 mm, and the large ones are their clips' whole point: a
+  //  startle recoils, a knockback knocks back, a death falls, a blast blasts.
+  //  A bound loose enough for those cannot see a 240 mm teleport, and a bound
+  //  tight enough to see it refuses four authored payoffs. So the shape is the
+  //  one CLAUDE.md already uses for ground penetration: the default is strict,
+  //  and a clip that legitimately exceeds it DECLARES a ceiling and says why.
+  //
+  //  Each ceiling carries real headroom over what its clip measures today and
+  //  names the beat it protects, so a later change that moves one has to say
+  //  which beat got faster rather than nudging a bank-wide constant nobody
+  //  owns (07-MOTION-STYLE SS6: a gate re-recorded to admit its own answer will
+  //  fail on the next legitimate change and look like a regression).
+  //
+  //  The WRAP column stays reported-not-gated: a travelling clip's seam is
+  //  authored and correct (PASS-13-FINDINGS-C SS5.1), and its presentation
+  //  half is measured by tools/reel/wrapseam.py.
+  constexpr double kRootStepDefaultMm = 120.0;  // about 8 px at the shipping camera
+  struct RootStepCeiling { uint16_t slot; double mm; const char* why; };
+  static const RootStepCeiling kRootStepCeilings[] = {
+      {4,  260.0, "startle: the recoil IS the clip"},
+      {14, 210.0, "damage: the knockback impact"},
+      {17, 165.0, "death-drop: the float fails and it falls"},
+      {20, 300.0, "blown: the blast off the ground and the fall into the catch (R4)"},
+  };
+  int q3_fails = 0;
+  std::printf("\nQ3 ROOT CONTINUITY -- largest single-key INTERIOR root step per clip, BOUNDED\n");
+  std::printf("   Default ceiling %.0f mm; four clips declare their own (table in the source).\n",
+              kRootStepDefaultMm);
+  std::printf("   THE WRAP COLUMN IS THE LOOP SEAM (last key -> key 0), reported not gated. The\n"
+              "   site loops every clip, so the seam is a frame the owner watches; a TRAVELLING\n"
+              "   clip's seam is authored, and its presentation half is wrapseam.py.\n");
   for (const zc::Clip& c : T.bank.clips) {
     const auto step = [&](int a, int b) {
       const double dx = (c.root[(size_t)b * 3 + 0] - c.root[(size_t)a * 3 + 0]) / 65536.0 * 1000.0;
@@ -253,9 +296,20 @@ int main(int argc, char** argv) {
     // animation does on purpose. Reported, not gated -- a travelling clip
     // legitimately snaps back, and only the author can say which is which.
     const char* flag = (wrap > worst && wrap > 60.0) ? "  <-- SEAM POP" : "";
-    std::printf("   slot %2u  worst step %7.1f mm at key %d -> %d   |  WRAP %7.1f mm%s\n",
-                c.slot_id, worst, at, at + 1, wrap, flag);
+    double ceiling = kRootStepDefaultMm;
+    const char* why = "";
+    for (const auto& rc : kRootStepCeilings)
+      if (rc.slot == c.slot_id) { ceiling = rc.mm; why = rc.why; }
+    const bool over = worst > ceiling;
+    if (over) ++q3_fails;
+    std::printf("   slot %2u  worst step %7.1f mm at key %d -> %d  (ceiling %5.0f)  |  WRAP %7.1f mm%s%s\n",
+                c.slot_id, worst, at, at + 1, ceiling, wrap, flag,
+                over ? "  <-- OVER ITS DECLARED CEILING" : "");
+    if (over)
+      std::printf("        declared %.0f mm because -- %s\n", ceiling,
+                  *why ? why : "nothing: this clip is expected to stay under the default");
   }
+  fails += q3_fails;
 
   // ---------------- Q4: THE LOOP SEAM ---------------------------------------
   //
@@ -331,6 +385,18 @@ int main(int argc, char** argv) {
     }
     std::printf("qa-p12: FAILABLE LEG OK -- with hold_last off Q4 reports %d death(s) "
                 "standing back up, which is the fault pass 12 shipped\n", q4_fails);
+    return 0;
+  }
+
+  if (rootstep_leg) {
+    if (q3_fails == 0) {
+      std::printf("qa-p12: the leg collapsed death-gutter's sag carry to one key and Q3 "
+                  "STILL reported every clip inside its ceiling -- the leg did not take "
+                  "effect, so Q3's bound is NOT proved failable\n");
+      return 1;
+    }
+    std::printf("qa-p12: FAILABLE LEG OK -- with the sag carry at one key Q3 reports %d clip(s) "
+                "over ceiling, which is the 240 mm teleport pass 12 shipped\n", q3_fails);
     return 0;
   }
 

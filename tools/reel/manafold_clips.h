@@ -862,6 +862,28 @@ inline int32_t fold_ease(int32_t t) {
   return t * t / 1000 * (3000 - 2 * t) / 1000;
 }
 
+/** PASS 13 (R3) -- THE ATTACK EASE. Fast out, decelerating in: 1 - (1-t)^3.
+ *
+ *  `fold_ease` is a smoothstep. It leaves slowly AND arrives slowly, which is
+ *  correct for a breath, a sway or a lean and is exactly wrong for a beat. The
+ *  whole of `build_taunt3` was authored through it, so every gesture drifted
+ *  into place and nothing ever SNAPPED -- which is the entire content of the
+ *  standing "taunt3 is not funny" verdict.
+ *
+ *  This is the other half of the vocabulary. It reaches 27% in the first tenth
+ *  of its span and 70% in the first third, so a three-key attack is a three-key
+ *  attack; and because it arrives on a flat tangent it still settles rather
+ *  than slamming, which keeps 07-MOTION-STYLE's "nothing twitches".
+ *
+ *  Amplitude goes up and reversal density does not: this changes WHEN the
+ *  motion happens, never how many times it turns around. */
+inline int32_t punch_ease(int32_t t) {
+  if (t < 0) t = 0;
+  if (t > 1000) t = 1000;
+  const int32_t u = 1000 - t;
+  return 1000 - static_cast<int32_t>((static_cast<int64_t>(u) * u / 1000) * u / 1000);
+}
+
 /** PASS 11 F.3 -- THE PRESS-RECOVER WAVE, which replaces sinp on the knead wag.
  *
  *  Same contract as sinp: returns -65536..65536, integer cycles per clip so the
@@ -1375,6 +1397,15 @@ inline zc::Clip build_hover_idle() {
 inline zc::Clip build_drift() {
   const int K = kDriftKeys;
   zc::Clip c = clip_shell(1, K, kHoverHeightMm);
+  // ⚠ R2 (pass 13): THIS CLIP TRAVELS, so its wrap partner must carry the
+  // traverse instead of folding back across it. With the flag off the last
+  // key's sub-frame blends toward key 0 and the root wraps the WHOLE journey in
+  // half a key -- an enormous fake velocity that teleports the pose and paints
+  // grey speed-smear ghosts beside it (`drift`: near-grey pixels 295 -> 729 over
+  // its last frames, then 59 at f0). `zc::Clip::wrap_root_delta` is default-OFF
+  // so Zixxtrixx stays bit-identical; these four clips opt in. See
+  // PASS-13-FINDINGS-C SS2 and tools/reel/wrapseam.py.
+  c.wrap_root_delta = true;
   Rig g;
   // the bank: the working lean into the slide, with two over-bank bumps
   // that visibly correct (the "caught by a gust" beats)
@@ -1643,6 +1674,15 @@ inline zc::Clip build_pirouette() {
 inline zc::Clip build_hasty() {
   const int K = kHastyKeys;
   zc::Clip c = clip_shell(8, K, kHoverHeightMm);
+  // ⚠ R2 (pass 13): THIS CLIP TRAVELS, so its wrap partner must carry the
+  // traverse instead of folding back across it. With the flag off the last
+  // key's sub-frame blends toward key 0 and the root wraps the WHOLE journey in
+  // half a key -- an enormous fake velocity that teleports the pose and paints
+  // grey speed-smear ghosts beside it (`drift`: near-grey pixels 295 -> 729 over
+  // its last frames, then 59 at f0). `zc::Clip::wrap_root_delta` is default-OFF
+  // so Zixxtrixx stays bit-identical; these four clips opt in. See
+  // PASS-13-FINDINGS-C SS2 and tools/reel/wrapseam.py.
+  c.wrap_root_delta = true;
   Rig g;
   for (int f = 0; f < K; ++f) {
     g.reset();
@@ -1680,6 +1720,15 @@ inline zc::Clip build_hasty() {
 inline zc::Clip build_fall() {
   const int K = kFallKeys;
   zc::Clip c = clip_shell(9, K, kHoverHeightMm);
+  // ⚠ R2 (pass 13): THIS CLIP TRAVELS, so its wrap partner must carry the
+  // traverse instead of folding back across it. With the flag off the last
+  // key's sub-frame blends toward key 0 and the root wraps the WHOLE journey in
+  // half a key -- an enormous fake velocity that teleports the pose and paints
+  // grey speed-smear ghosts beside it (`drift`: near-grey pixels 295 -> 729 over
+  // its last frames, then 59 at f0). `zc::Clip::wrap_root_delta` is default-OFF
+  // so Zixxtrixx stays bit-identical; these four clips opt in. See
+  // PASS-13-FINDINGS-C SS2 and tools/reel/wrapseam.py.
+  c.wrap_root_delta = true;
   Rig g;
   static const Key kStream[] = {{0, 1000}, {14, 720}, {112, 700}, {130, 1120},
                                 {146, 940}, {158, 1030}, {169, 1000}};
@@ -2692,9 +2741,16 @@ inline zc::Clip build_death_gutter() {
       g.nod = n;
     }
     const int32_t sag = curve(kSag, 7, f);
-    const int32_t slack =
-        1000 + (kDeathSlackPm - 1000) *
-                   (falling ? fold_ease(gone) : fold_ease(sag) * 6 / 10) / 1000;
+    // R5: the two branches now MEET. The sag branch reaches
+    // kDeathSagSlackSharePm of the way to full slack by the let-go; the falling
+    // branch starts from there instead of from zero. It used to restart at
+    // zero, so the body snapped stiff on the same key the root popped -- two
+    // discontinuities dressed as one beat.
+    const int32_t slack_t =
+        falling ? kDeathSagSlackSharePm + (1000 - kDeathSagSlackSharePm) *
+                                              fold_ease(gone) / 1000
+                : fold_ease(sag) * kDeathSagSlackSharePm / 1000;
+    const int32_t slack = 1000 + (kDeathSlackPm - 1000) * slack_t / 1000;
     loop_pose(g, slack, slack, slack, slack, 0);
     g.q[kBRoot] = quat_mul(
         g.q[kBRoot],
@@ -2718,8 +2774,25 @@ inline zc::Clip build_death_gutter() {
           static_cast<int32_t>((static_cast<int64_t>(fxu(kBobAmpBMm)) *
                                 sinp(f, K, 2) * (1000 - sag)) >> 16) / 1000;
     } else {
+      // ⚠ R5 -- THE SAG IS CARRIED INTO THE FALL. `death_root_at` starts from
+      // kHoverHeightMm, which is where the OTHER death is when its float dies.
+      // This one has sagged kDeathBSagMaxMm below that and is still holding the
+      // sag on the previous key, so taking the shared trajectory raw teleported
+      // the root 240 mm UP in one key (QA 6.3; the largest interior root step
+      // in the bank, and a ~16 px pop at the dramatic beat).
+      //
+      // FAILABLE LEG 6 collapses the carry to a single key, which reproduces
+      // the old constant's behaviour exactly -- the witnessed-fail leg for
+      // `mqa`'s Q3 bound, taken from THIS builder rather than from a copy.
+      const int carry_keys =
+          g_u02_death_fail == 6 ? 1
+                                : (kDeathBSagCarryKeys > 0 ? kDeathBSagCarryKeys : 1);
+      const int lf = f - kDeathBLetGoKey;
+      const int32_t carry =
+          lf >= carry_keys ? 0 : 1000 - fold_ease(lf * 1000 / carry_keys);
       y = fxu(death_root_at(B, kDeathBApexMm, kDeathBIntervalKeys, kDeathBBounces,
-                            kDeathBLetGoKey, kDeathBDropKeys, kDeathBImpactDipMm, f));
+                            kDeathBLetGoKey, kDeathBDropKeys, kDeathBImpactDipMm, f)) -
+          static_cast<int32_t>((static_cast<int64_t>(fxu(kDeathBSagMaxMm)) * carry) / 1000);
     }
     c.root[static_cast<size_t>(f) * 3 + 1] = y;
     if (dead && g_u02_death_fail != 1) {  // ⚠ it STOPS (leg 1 removes that)
@@ -2923,19 +2996,32 @@ inline zc::Clip build_blown() {
         return kHoverHeightMm - kBlownSinkMm * fold_ease(t) / 1000;
       }
       if (q < kBlownCatchKey) {
-        // one parabola from the launch through the apex to the catch, with the
-        // 8-key blast easing the takeoff so the first frame is not a teleport
-        const int span_up = kBlownApexKey - kBlownAnticipKey;
-        const int span_dn = kBlownCatchKey - kBlownApexKey;
+        // PASS 13 / R4 -- THREE BEATS, NOT ONE PARABOLA.
+        //
+        // The old shape was a single arc from the gather to the catch: 74 keys
+        // up, 68 down, and because a parabola is flattest at its top it spent
+        // about 2.8 s of a 6.5 s clip at effectively constant height. That is a
+        // float, and this clip is called `blown`.
+        //
+        // Now: a BLAST (fast off the ground, decelerating -- 1-(1-t)^2), a
+        // short declared HANG at the top, and an accelerating FALL (t^2). The
+        // hang is what makes the blast and the fall read as separate events;
+        // without it the apex is just the place two curves meet.
+        const int hang_in = kBlownApexKey;
+        const int hang_out = kBlownApexKey + kBlownHangKeys;
+        const int span_up = hang_in - kBlownAnticipKey;
+        const int span_dn = kBlownCatchKey - hang_out;
         int32_t h;
-        if (q <= kBlownApexKey) {
+        if (q <= hang_in) {
           const int32_t t = (q - kBlownAnticipKey) * 1000 / (span_up > 0 ? span_up : 1);
           // 1-(1-t)^2 : fast off the ground, decelerating into the apex
           const int32_t u = 1000 - t;
           h = static_cast<int32_t>(
               (static_cast<int64_t>(kBlownHeightMm) * (1000000 - u * u)) / 1000000);
+        } else if (q <= hang_out) {
+          h = kBlownHeightMm;  // THE HANG. Brief, and the only still moment.
         } else {
-          const int32_t t = (q - kBlownApexKey) * 1000 / (span_dn > 0 ? span_dn : 1);
+          const int32_t t = (q - hang_out) * 1000 / (span_dn > 0 ? span_dn : 1);
           h = static_cast<int32_t>(
               (static_cast<int64_t>(kBlownHeightMm) * (1000000 - t * t)) / 1000000);
         }
@@ -2977,10 +3063,16 @@ inline zc::Clip build_blown() {
       // is also the better read: the catch IS the float taking hold again, and
       // a floating thing being caught RIGHTS ITSELF. One authored curve
       // replaced a bug and a beat that was missing.
+      // R4: the tumble's plateau follows the height's -- it peaks INTO the hang
+      // and unwinds out of it, so the one still moment in the clip is still in
+      // rotation as well as in height. The unwind to zero by the catch is pass
+      // 12's fix and the reason the catch reads as the float taking hold.
       static const Key kTumble[] = {{0, 0}, {kBlownAnticipKey, 0},
-                                    {kBlownApexKey, 1000}, {kBlownCatchKey, 0},
+                                    {kBlownApexKey, 1000},
+                                    {kBlownApexKey + kBlownHangKeys, 1000},
+                                    {kBlownCatchKey, 0},
                                     {kBlownKeys - 1, 0}};
-      const int32_t e = fold_ease(curve(kTumble, 5, f));
+      const int32_t e = fold_ease(curve(kTumble, 6, f));
       g.q[kBRoot] = quat_mul(
           g.q[kBRoot],
           quat_mul(quat_z(static_cast<int32_t>(
@@ -3007,34 +3099,73 @@ inline zc::Clip build_blown() {
  *  HOLDS — press, arrive, hold — and the ambient nodule schedule is switched
  *  off (kNoduleClipPm[21] = 0) so nothing wobbles under the gesture.
  *
- *   12.. 44  THE SHRUG. The owner's own configuration — "the middle one might
- *            go down while the other two swing up" — used as a GESTURE: an
- *            elaborate, insolent shrug. It arrives over 32 keys.
- *   44.. 62  HELD. The joke is the hold, exactly as slot 11 learned at pass 3.
- *   62..104  THE LEAN. It tips slowly toward the viewer, eyes travelling,
- *            while the shrug decays — one thing at a time.
- *  104..150  THE SHIMMY. Three balls, in turn, one press each: A, then B,
+ *  PASS 13 / R3 RE-TIMED IT. Pass 12's beats were right and its EASING was
+ *  wrong: every one of them was a 26-to-32-key `fold_ease` ramp, so the clip
+ *  read as one slow sway and the standing verdict was "not funny". The beats
+ *  below are the same four gestures; what is new is an anticipation, two real
+ *  attacks, two real holds, and a loop that closes.
+ *
+ *    4.. 14  THE ANTICIPATION. Outers dip, middle lifts, the body sinks and
+ *            squashes — the shrug's exact opposite, so the shrug is a RELEASE.
+ *   14.. 24  THE SHRUG, in ten keys, through `punch_ease`. The owner's own
+ *            configuration — "the middle one might go down while the other two
+ *            swing up" — used as a GESTURE, and now it arrives.
+ *   24.. 52  HELD, 28 keys. The joke is the hold, exactly as slot 11 learned
+ *            at pass 3; a hold nobody can tell you arrived is not one.
+ *   60..100  THE LEAN. Slow on purpose — this beat is the one that should
+ *            drift — tipping toward the viewer while the shrug decays.
+ *  100..146  THE SHIMMY. Three balls, in turn, one press each: A, then B,
  *            then C. A wave with three reversals in 46 keys, not a vibration.
- *  150..184  THE DISMISSAL. The whole antenna flicks away, the body turns a
- *            shoulder, and it holds that until the loop. */
+ *  146..149  THE DISMISSAL, in THREE keys. The whole antenna is thrown away.
+ *  149..173  HELD. The punchline frame is in here, and you can point at it.
+ *  173..183  Released to the rest pose, because the last key must equal the
+ *            first or the loop shows a seam (QA 6.3b: it was 110.7 mm). */
 inline zc::Clip build_taunt3() {
   const int K = kTaunt3Keys;
   zc::Clip c = clip_shell(kTaunt3Slot, K, kHoverHeightMm);
   Rig g;
+  // PASS 13 / R3. The tables ARE the performance; read them beside the beat
+  // list in manafold_art.h. Two things to know before changing one:
+  //
+  //  * WHICH EASE a curve is read through is the beat. `punch_ease` snaps,
+  //    `fold_ease` drifts. The shrug and the dismissal snap; the anticipation
+  //    and the lean drift. That single choice is what pass 12 got wrong on all
+  //    four beats at once.
+  //  * kFlick RETURNS TO ZERO at K-1. It used to end at 820, and since the
+  //    presentation blends the last key toward key 0 that left a 110.7 mm loop
+  //    seam (QA 6.3b) -- visible as a grey smear on the last frame. A held pose
+  //    that is still held at the last key cannot loop; it is held for
+  //    kTaunt3FlickHoldKeys and then released.
+  static const Key kAntic[] = {{0, 0}, {4, 0}, {kTaunt3AnticKey, 1000},
+                               {kTaunt3ShrugKey, 0}, {K - 1, 0}};
   static const Key kShrug[] = {{0, 0}, {kTaunt3ShrugKey, 0},
-                               {kTaunt3ShrugHoldKey, 1000}, {kTaunt3LeanKey, 1000},
-                               {kTaunt3ShimmyKey - 10, 240}, {K - 1, 0}};
-  static const Key kLean[] = {{0, 0}, {kTaunt3LeanKey, 0}, {kTaunt3LeanKey + 26, 1000},
+                               {kTaunt3ShrugKey + kTaunt3ShrugAttackKeys, 1000},
+                               {kTaunt3ShrugHoldKey, 1000},
+                               {kTaunt3LeanKey + 14, 420},
+                               {kTaunt3ShimmyKey - 6, 220}, {K - 1, 0}};
+  static const Key kLean[] = {{0, 0}, {kTaunt3LeanKey, 0},
+                              {kTaunt3LeanKey + kTaunt3LeanAttackKeys, 1000},
                               {kTaunt3ShimmyKey, 1000}, {kTaunt3ShimmyKey + 18, 150},
                               {K - 1, 0}};
-  static const Key kFlick[] = {{0, 0}, {kTaunt3FlickKey, 0}, {kTaunt3FlickKey + 10, 1000},
-                               {K - 1, 820}};
+  static const Key kFlick[] = {{0, 0}, {kTaunt3FlickKey, 0},
+                               {kTaunt3FlickKey + kTaunt3FlickAttackKeys, 1000},
+                               {kTaunt3FlickKey + kTaunt3FlickAttackKeys +
+                                    kTaunt3FlickHoldKeys, 1000},
+                               {K - 1, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
     antenna_knead(g, kTaunt3Slot, K, f);  // gain 0: nothing runs under the gesture
-    const int32_t shrug = fold_ease(curve(kShrug, 6, f));
+    const int32_t antic = fold_ease(curve(kAntic, 5, f));
+    const int32_t shrug = punch_ease(curve(kShrug, 7, f));
     const int32_t lean = fold_ease(curve(kLean, 6, f));
-    const int32_t flick = fold_ease(curve(kFlick, 4, f));
+    const int32_t flick = punch_ease(curve(kFlick, 5, f));
+    // THE BODY FOLLOWS THE ANTENNA, it does not move with it. Same table, read
+    // kTaunt3FlickBodyLagKeys later and through the SOFT ease -- so the crown
+    // is thrown, and then the shoulder and the body come round after it.
+    // Overlapping action; it costs one line and it is most of why a snap reads
+    // as a gesture rather than as a jump cut.
+    const int32_t flick_body =
+        fold_ease(curve(kFlick, 5, f - kTaunt3FlickBodyLagKeys));
     {
       NoduleOffsets n;
       // THE SHRUG: outers up, middle DOWN. Not 1:1 — a middle that drops
@@ -3055,6 +3186,15 @@ inline zc::Clip build_taunt3() {
           (static_cast<int64_t>(kTaunt3ShrugMm) * shrug * kTaunt3ShrugLeanPm) / 1000000);
       n.by = -kTaunt3ShrugMm * 6 / 10 * shrug / 1000;
       n.cy = kTaunt3ShrugMm * shrug / 1000;
+      // PASS 13 / R3 -- THE ANTICIPATION. The outers dip and the middle lifts,
+      // i.e. the exact opposite of the shrug, for ten keys before it. This is
+      // the one thing the clip had none of: a gesture with no wind-up cannot
+      // have a payoff, because there is nothing for the payoff to be a release
+      // FROM. It is small on purpose (kTaunt3AnticMm is a third of the shrug) --
+      // an anticipation the size of its own beat is just a second beat.
+      n.ay -= kTaunt3AnticMm * antic / 1000;
+      n.by += kTaunt3AnticMm * 6 / 10 * antic / 1000;
+      n.cy -= kTaunt3AnticMm * antic / 1000;
       // THE SHIMMY: one press per ball, in sequence. Each press is 14 keys
       // wide and rises and falls exactly once, so three balls moving in turn
       // costs three reversals, not thirty.
@@ -3088,13 +3228,15 @@ inline zc::Clip build_taunt3() {
     }
     loop_pose(g, 1000 + shrug / 14, 1000 + shrug / 10, 1000 - shrug / 12,
               1000 + flick / 10, 0);
-    // the lean-in, and then the shoulder turned on the dismissal
+    // the lean-in, and then the shoulder turned on the dismissal -- the turn
+    // rides flick_body, so the crown snaps away first and the body follows.
     g.q[kBRoot] = quat_mul(
         g.q[kBRoot],
         quat_mul(quat_z(static_cast<int32_t>(
-                     (static_cast<int64_t>(kTaunt3LeanA16) * lean) / 1000)),
+                     (static_cast<int64_t>(kTaunt3LeanA16) * lean) / 1000 -
+                     (static_cast<int64_t>(kTaunt3ShrugRollA16) * shrug) / 1000)),
                  quat_y(static_cast<int32_t>(
-                     (static_cast<int64_t>(-kTaunt3LeanA16 * 2) * flick) / 1000))));
+                     (static_cast<int64_t>(-kTaunt3FlickYawA16) * flick_body) / 1000))));
     face_rest(g);
     // the eyes: a slow travelling look down the lean, a lopsided brow through
     // the shimmy, and both lids at half on the dismissal (bored)
@@ -3112,10 +3254,16 @@ inline zc::Clip build_taunt3() {
     // drops on the dismissal
     c.root[static_cast<size_t>(f) * 3 + 1] =
         hover_at(f, K, kHoverHeightMm, kBobAmpAMm * 3 / 2, kBobAmpBMm, K / 46, K / 92) +
-        static_cast<int32_t>((static_cast<int64_t>(fxu(110)) * shrug) / 1000) -
-        static_cast<int32_t>((static_cast<int64_t>(fxu(90)) * flick) / 1000);
+        static_cast<int32_t>((static_cast<int64_t>(fxu(kTaunt3ShrugLiftMm)) * shrug) / 1000) -
+        static_cast<int32_t>((static_cast<int64_t>(fxu(kTaunt3AnticDipMm)) * antic) / 1000) -
+        static_cast<int32_t>(
+            (static_cast<int64_t>(fxu(kTaunt3FlickDropMm)) * flick_body) / 1000);
+    // ...and it SQUASHES on the anticipation, which is the half of a wind-up a
+    // root height cannot express: the body compresses before it rises.
     c.deform[static_cast<size_t>(f)] =
-        compress_at(f, K, K / 46, kCompressAmpPm + kCompressAmpPm * shrug / 3000);
+        compress_at(f, K, K / 46,
+                    kCompressAmpPm + kCompressAmpPm * shrug / 3000 +
+                        kCompressAmpPm * antic / 1500);
   }
   return c;
 }
@@ -3145,6 +3293,15 @@ inline zc::Clip build_taunt3() {
 inline zc::Clip build_flight() {
   const int K = kFlightKeys;
   zc::Clip c = clip_shell(kFlightSlot, K, kHoverHeightMm);
+  // ⚠ R2 (pass 13): THIS CLIP TRAVELS, so its wrap partner must carry the
+  // traverse instead of folding back across it. With the flag off the last
+  // key's sub-frame blends toward key 0 and the root wraps the WHOLE journey in
+  // half a key -- an enormous fake velocity that teleports the pose and paints
+  // grey speed-smear ghosts beside it (`drift`: near-grey pixels 295 -> 729 over
+  // its last frames, then 59 at f0). `zc::Clip::wrap_root_delta` is default-OFF
+  // so Zixxtrixx stays bit-identical; these four clips opt in. See
+  // PASS-13-FINDINGS-C SS2 and tools/reel/wrapseam.py.
+  c.wrap_root_delta = true;
   Rig g;
   // Integer cycles across the clip: the loop seam is exact by construction,
   // which is the same rule every other layer in this file obeys.

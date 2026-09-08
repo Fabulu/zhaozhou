@@ -1056,10 +1056,33 @@ constexpr int32_t kEyeStandoffMm = 22;
 // where two `keys/divisor` cycle counts collapsed to the same frequency on
 // short clips cannot recur -- there are no divisors left.
 constexpr int kEyeGlanceCount = 3;        // deliberate looks per loop, at most
-// Signed targets as a fraction of kEyeTravelMaxDeg. The first is the full 45
-// the owner asked for; the others are smaller and alternate side, so the loop
-// reads as looking AROUND rather than as a metronome.
-constexpr int32_t kEyeGlanceOutPm[kEyeGlanceCount] = {1000, -820, 640};
+// Signed targets as a fraction of kEyeTravelMaxDeg. The others are smaller and
+// alternate side, so the loop reads as looking AROUND rather than as a
+// metronome.
+//
+// ⚠ OWNER RULING, 2026-09-08: THE BIG GLANCE IS 39 DEGREES, NOT 45.
+//
+// IMPL-A shipped the first element at 1000 -- the full kEyeTravelMaxDeg the
+// owner asked for in D9 SS12 -- and then asked him whether to keep it there,
+// where the star and its white stay one unit but the eye has travelled to the
+// SIDE of the ball and reads as a bright line rather than as a star, or pull it
+// back to about 30 where every look lands on a readable star. He answered
+// "go to 39 degrees": he split it, much closer to his own 45 than to the safe
+// 30, which reads as "the big look stays big, just get it off the limb".
+//
+// 867 per-mille of kEyeTravelMaxDeg (45) is 39.015 degrees.
+//
+// ⚠ ONLY THIS ELEMENT MOVES. kEyeTravelMaxDeg is the hard ceiling AND the
+// clamp; lowering IT to 39 would drag the other two glances off the angles
+// IMPL-A authored by eye (-820 would become -32 deg instead of -37, 640 would
+// become 25 instead of 29). The owner ruled on the big glance and on nothing
+// else.
+//
+// NOTE FOR ANYONE COMPARING PAGES: the bank published on the evening of
+// 2026-09-08 still carries 1000 -- it was 26 of 28 subjects into its render
+// when the answer arrived. This is the first bank to carry 867. Two pages
+// disagreeing here is a sequence, not a regression.
+constexpr int32_t kEyeGlanceOutPm[kEyeGlanceCount] = {867, -820, 640};
 // The shape of one glance, as per-mille of the clip: ease out, hold the look,
 // ease back. The hold is what makes it read as a decision -- D7 SS9.2, more
 // travel per beat and fewer beats.
@@ -2135,6 +2158,32 @@ constexpr int32_t kDeathBSagMaxMm = 240;   // == kDeathBSagMm[2], the curve's sc
 constexpr int kDeathBLetGoKey = 132;      // the last recovery fails: the drop
 constexpr int kDeathBDropKeys = 26;
 constexpr int kDeathBTailKeys = 104;
+//
+// PASS 13 / R5 -- THE ROOT MUST TRAVEL. IT WAS TELEPORTING.
+//
+// `death_root_at` starts its fall from kHoverHeightMm, because that is where
+// the OTHER death is when its float fails. The gutter is not: it has sagged
+// kDeathBSagMaxMm below the hover by the let-go key, and is still holding that
+// sag on the last key before the fall. So the root jumped 240 mm UP in ONE key
+// at key 132 -- a ~16 px pop, at the exact dramatic beat, and the largest
+// interior root step in the whole bank (QA 6.3, Q3 slot 18).
+//
+// The fix is not to make the fall start higher and it is not to slow the beat
+// down. The sag is CARRIED into the fall and released over these keys, so the
+// creature hangs where it actually is and then accelerates away from it. The
+// SUDDENNESS stays where suddenness belongs -- in the pose and the deform,
+// which give way over four keys (kDeathSagSlackSharePm below).
+//
+// 26 == kDeathBDropKeys deliberately: the sag is exactly gone by the time the
+// body reaches the dirt, so the release and gravity are one continuous motion
+// rather than two overlapping ones. Shorten it and the pop comes back in
+// miniature; that is what failable leg 6 does, at 1 key, to witness this.
+constexpr int kDeathBSagCarryKeys = 26;
+// The gutter's body slack ALSO stepped at the let-go: the sag branch reaches
+// `fold_ease(sag) * 6/10` = 600 and the falling branch restarted from 0, so the
+// body snapped stiff on the same key the root popped. Both branches now read
+// this one number and agree by construction.
+constexpr int32_t kDeathSagSlackSharePm = 600;
 // the nodules die in order, one per station -- the limp keys
 constexpr int kDeathBLimpKey[3] = {40, 78, 112};
 
@@ -2188,11 +2237,25 @@ constexpr int32_t kLassoLeanA16 = 2100;   // the body leans into the throw
 // This one is the LAUNCH: it is on screen, at hover, and something blows it
 // upward. Anticipation, the blast, air time with the antenna STREAMING behind
 // (the nodules trail -- the new mechanism's show moment), the drop, the catch.
-constexpr int kBlownKeys = 196;
+//
+// PASS 13 / R4 -- IT WAS FLOATING, NOT BLOWN.
+//
+// The old arc was 22 -> 96 -> 164 out of 196 keys: 74 keys up and 68 down,
+// both parabolic, with no hang between them. A parabola spends most of its
+// time near the top, so ~20 consecutive every-8 tiles (f104-272, about 2.8 s
+// of a 6.5 s clip) showed the creature at effectively constant height. There
+// was no blast and no fall -- just a long, even hover with a tumble on it.
+//
+// Re-timed so the beats are the beats: a 40-key BLAST off the ground, a
+// deliberately BRIEF hang at the top, and a 54-key fall that accelerates into
+// the catch. The clip is 158 keys instead of 196 because the time came out of
+// the middle, which is the part that was not doing anything.
+constexpr int kBlownKeys = 146;           // was 196
 constexpr int kBlownAnticipKey = 22;      // the gather: it compresses and sinks
 constexpr int kBlownLaunchKey = 30;       // the blast
-constexpr int kBlownApexKey = 96;         // the top of the arc
-constexpr int kBlownCatchKey = 164;       // the float grabs again
+constexpr int kBlownApexKey = 60;         // the top of the arc (was 96)
+constexpr int kBlownHangKeys = 8;         // ...and it HANGS there, briefly
+constexpr int kBlownCatchKey = 114;       // the float grabs again (was 164)
 constexpr int32_t kBlownHeightMm = 4200;  // higher than fall's 3600: BLOWN
 constexpr int32_t kBlownSinkMm = 210;     // the anticipation dip
 // AUTHORED DOWN AFTER LOOKING: at 44000 (2/3 of a turn) the creature is fully
@@ -2201,7 +2264,28 @@ constexpr int32_t kBlownSinkMm = 210;     // the anticipation dip
 // nodules streaming by different amounts). 27000 is about 148 degrees: it
 // still reads as something knocked flying, and the antenna stays on screen.
 constexpr int32_t kBlownTumbleA16 = 27000;  // ~148 deg: tumbling, still legible
-constexpr int32_t kBlownYawA16 = 15000;
+// PASS 13 / R4 -- ROLL READS, YAW HIDES, and this was the real cause of the
+// "dark at apex" the plan blamed on the warm lamp.
+//
+// It is NOT the lamp. Measured on the comparison side only: the masked-mean
+// creature luminance across `blown` is flat within one count of 255 from f0 to
+// f384, while `lasso` and `taunt3` -- neither of which tumbles -- both show the
+// moving rig's own mid-clip trough at about four counts. Four counts is not
+// what the contact sheet shows. What the sheet shows is the creature presenting
+// its unlit DORSAL side and its face turned away for the whole hang, and that
+// is this constant: 15000 is about 82 degrees of yaw, enough to put the crown
+// behind the body and the eye off camera through the top of the arc.
+//
+// The ROLL is what makes a tumble read -- it stays in the picture plane, so the
+// silhouette keeps changing and the antenna keeps its length on screen. The YAW
+// only foreshortens. So the roll is left exactly where the owner's eye put it
+// (the comment above is pass 12's and it still stands) and the yaw comes down.
+//
+// Deliberately NOT done: a per-clip warm-lamp phase. The plan offered it as a
+// declared start-phase constant, but 09-ENGINE-GOTCHAS 18 says the knob is
+// probably not the thing when the diagnosis is inherited, and the measurement
+// above says it is not. The mana-ratio unification stays untouched.
+constexpr int32_t kBlownYawA16 = 6000;    // was 15000 (~82 deg)
 constexpr int32_t kBlownStreamMm = 96;    // nodule trail at peak velocity
 constexpr int32_t kBlownCatchSquashPm = 2700;
 
@@ -2210,13 +2294,54 @@ constexpr int32_t kBlownCatchSquashPm = 2700;
 // owner's own configuration used as a GESTURE rather than as a diagnostic.
 // Four beats, each >= 8 keys, one thing at a time (07-MOTION-STYLE SS4), and
 // every beat is a PRESS with a HOLD -- reversal density stays low on purpose.
+//
+// PASS 13 / R3 -- THE BEATS WERE ALL THERE AND NONE OF THEM READ.
+//
+// Pass 12 authored four beats and then eased every one of them over its whole
+// span with `fold_ease`, which is a smoothstep: it leaves slowly, arrives
+// slowly, and never SNAPS. A shrug that takes 32 keys to arrive is not a
+// shrug, it is a drift. Twelve sampled frames of the shipped clip are one
+// standing pose with a wiggle, and the reviewer's verdict ("taunt3 is not
+// funny") is a timing verdict, not a content one.
+//
+// So the STRUCTURE below is pass 12's, unchanged. What changed is the SHAPE of
+// time through it, and it is the shape comedy needs:
+//
+//    0..  4  rest
+//    4.. 14  ANTICIPATION -- it dips and squashes BEFORE the shrug. New.
+//   14.. 24  the shrug ATTACKS (10 keys, `punch_ease`, not 32 of smoothstep)
+//   24.. 52  ...and is HELD for 28 keys. The hold is the joke.
+//   60.. 80  the lean tips in slowly (this beat is SUPPOSED to be slow)
+//   80..100  ...and is held
+//  100..146  the three-ball shimmy, one press each, unchanged in structure
+//  146..149  THE DISMISSAL SNAPS -- 3 keys, was 10
+//  149..173  ...and is HELD, insolently, for 24 keys
+//  173..183  released, arriving at exactly the rest pose so the loop CLOSES
+//            (the old flick ended at 820 of 1000 and left a 110.7 mm seam,
+//             QA 6.3b -- the last key must return to the first pose)
+//
+// 07-MOTION-STYLE's law is obeyed the way it is written: AMPLITUDE UP,
+// REVERSAL DENSITY FLAT. Every amplitude below is larger than pass 12's; the
+// only reversals added are the anticipation's dip and the dismissal's release,
+// which are two over 184 keys and are the beats themselves.
 constexpr int kTaunt3Keys = 184;
-constexpr int kTaunt3ShrugKey = 12;       // beat 1: middle down, outers up
-constexpr int kTaunt3ShrugHoldKey = 44;   // ...and HELD, which is the joke
-constexpr int kTaunt3LeanKey = 62;        // beat 2: the slow mocking lean-in
-constexpr int kTaunt3ShimmyKey = 104;     // beat 3: the three balls, in turn
-constexpr int kTaunt3FlickKey = 150;      // beat 4: the dismissal
-constexpr int32_t kTaunt3ShrugMm = 88;    // outer rise / middle drop, in mm
+constexpr int kTaunt3AnticKey = 10;       // beat 0: the DIP, and the joke's set-up
+constexpr int kTaunt3ShrugKey = 14;       // beat 1: middle down, outers up
+constexpr int kTaunt3ShrugAttackKeys = 10;  // ...and it ARRIVES in ten keys
+constexpr int kTaunt3ShrugHoldKey = 52;   // ...and HELD, which is the joke
+constexpr int kTaunt3LeanKey = 60;        // beat 2: the slow mocking lean-in
+constexpr int kTaunt3LeanAttackKeys = 20; // (was hard-coded 26 in the builder)
+constexpr int kTaunt3ShimmyKey = 100;     // beat 3: the three balls, in turn
+constexpr int kTaunt3FlickKey = 146;      // beat 4: the dismissal
+constexpr int kTaunt3FlickAttackKeys = 3; // ...which SNAPS. Was 10.
+constexpr int kTaunt3FlickHoldKeys = 24;  // ...and then does not move.
+// The body follows the antenna rather than moving with it: overlapping action.
+constexpr int kTaunt3FlickBodyLagKeys = 3;
+constexpr int32_t kTaunt3ShrugMm = 118;   // outer rise / middle drop, in mm (was 88)
+constexpr int32_t kTaunt3AnticMm = 38;    // the pre-dip, against the shrug
+constexpr int32_t kTaunt3AnticDipMm = 76; // ...and the body sinks with it
+constexpr int32_t kTaunt3ShrugLiftMm = 150;  // the body rises INTO the shrug (was 110)
+constexpr int32_t kTaunt3FlickDropMm = 120;  // ...and drops on the dismissal (was 90)
 // PASS 12 / WAVE 3 -- NODULE A'S RISE IS A RISE NOW, NOT A SIDESTEP.
 //
 // Wave 2b authored this gesture AROUND the declared gap: nodule A's span points
@@ -2236,9 +2361,26 @@ constexpr int32_t kTaunt3ShrugLeanPm = 330;
 // The shimmy press on A was sideways for the same dead reason; it is vertical
 // now, like B's and C's, with this much of the press kept as lateral spice.
 constexpr int32_t kTaunt3ShimmyLeanPm = 250;
-constexpr int32_t kTaunt3ShimmyMm = 64;
-constexpr int32_t kTaunt3LeanA16 = 2400;
-constexpr int32_t kTaunt3FlickMm = 104;
+constexpr int32_t kTaunt3ShimmyMm = 78;   // was 64
+constexpr int32_t kTaunt3LeanA16 = 4100;  // was 2400 (13 deg): a MOCKING lean
+// The shoulder turned on the dismissal. It was `-kTaunt3LeanA16 * 2` inside the
+// builder, so raising the lean silently doubled the turn -- one knob governing
+// two features is 09-ENGINE-GOTCHAS 14, and it is split here before it bites.
+constexpr int32_t kTaunt3FlickYawA16 = 7600;
+// PASS 13 / R3, SECOND LOOK -- A SHRUG IS A WHOLE-BODY GESTURE.
+//
+// After the re-time the shrug ARRIVED, and it still did not read on a 46-tile
+// sheet, because at 384x240 the whole gesture lived in three nodules that move
+// about 120 mm against a body 1.6 m across. The dismissal read from the first
+// pass for one reason: it turns the BODY. So the shrug turns the body too, and
+// the opposite way from the lean -- which is what gives the sheet three plainly
+// different held attitudes (hunched left, tipped right, turned away) instead of
+// three variations on standing up straight.
+//
+// Signed against kTaunt3LeanA16 on the same axis on purpose: the two beats are
+// the same joint doing opposite things, so the lean has somewhere to come FROM.
+constexpr int32_t kTaunt3ShrugRollA16 = 3000;
+constexpr int32_t kTaunt3FlickMm = 132;   // was 104
 
 // ============================== STAGE ======================================
 
