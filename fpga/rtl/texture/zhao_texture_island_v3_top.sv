@@ -2096,10 +2096,47 @@ module zhao_texture_island_v3_top #(
   assign own_aux_rresult_c = {8'd0, fr_aux_a, fr_aux_rgb};
   assign fr_aux_rready     = own_aux_rready;
 
-  // STEP (c3), still owed: the COMBINE handshake (v3own's `cmb_*` into
-  // `u_combine`, its result back through `fin_*`) and the ordered output
-  // (`out_*`). Both are named signals declared at the v3own instantiation and
-  // deliberately not tied to anything plausible yet.
+  // ==========================================================================
+  // (c3) THE COMBINE SEAM -- where the oracle's shape and v3own's differ most
+  // ==========================================================================
+  // NOT WIRED YET, AND THE REASON IS A REAL STRUCTURAL DIFFERENCE rather than
+  // remaining effort. Recorded here at the point where the difference is
+  // visible, because it changes what (c3) actually is.
+  //
+  // THE ORACLE presents a fragment to COMBINE by INDEXING TOP-LEVEL TABLES with
+  // the retiring token (:2228-2240):
+  //
+  //     .f_sample_count_i(fsc_m [fr_o_tok])   .f_recipe_i(frec_m[fr_o_tok])
+  //     .f_weight_i      (fwt_m [fr_o_tok])   .f_base_*  (fbase_m[fr_o_tok])
+  //     .f_tag_i({fseq_m[fr_o_tok], fr_o_ctx[15:0]})
+  //
+  // Five of the twenty side tables, read at COMBINE time, keyed by a token the
+  // ROB supplies -- plus `fseq_m`, the sequence number the ROB assigns.
+  //
+  // V3OWN PRESENTS A WHOLE PACKET INSTEAD: `cmb_owner_o` with `cmb_s0_o`,
+  // `cmb_s1_o`, `cmb_s2_o`, `cmb_aux_o` -- four result40 lanes already gathered,
+  // already in retirement order, already carrying identity. There is no token to
+  // index a side table with, because the packet IS the fragment.
+  //
+  // So (c3) is not "connect the ports". It is:
+  //   * the RECIPE/WEIGHT/BASE fields must reach COMBINE some other way. They
+  //     are per-fragment attributes known at ADMISSION, so they belong either in
+  //     v3own's OWNER_CONTEXT (`adm_ctx_i` is CTXW=64 wide and already carried
+  //     to `out_ctx_o`) or in a small table keyed by the OWNER SLOT rather than
+  //     by a ROB token. Which one is a real design choice with a measurable
+  //     cost, and it is the deletion ledger's `fctx_m` row that pays for it.
+  //   * `f_tag_i`'s `fseq_m` half disappears with the ROB -- v3own's ordered
+  //     output IS the sequence, so a separate sequence number is exactly the
+  //     "partial implementation of v3own's lifetime" the architecture says to
+  //     delete rather than wrap.
+  //
+  // THIS IS THE FIRST PLACE STAGE C STOPS BEING MECHANICAL. Everything before it
+  // -- admission, the return lanes, the expander -- had a one-to-one shape in
+  // the oracle. This does not, and wiring it by analogy would produce a
+  // composition that elaborates and is wrong in a way no port check would catch.
+  //
+  // Named unresolved, deliberately: `own_cmb_ready_c`, `own_fin_valid_c`,
+  // `own_fin_owner_c`, `own_fin_result_c`, `own_out_ready_c`.
 
   // ==========================================================================
   // AUX
