@@ -3394,6 +3394,53 @@ to the number I knew I could not guess and skipped for the one I felt sure of.
 `zhao_raster_blend`'s 2 DSP was in the ledger the whole time and would have
 settled it in one query.
 
+## M11 — HAND-TYPED FIELD OFFSETS, IN THE FILE WRITTEN TO PREVENT THEM
+
+**2026-09-08.** The v3own re-key cost five stale slices: `uvw_m`'s index,
+`fc_wp`, `fc_rp`, `rsp_class_i` and the AUX return token. All five were
+width-legal, lint-clean, and wrong. The response was `zhao_texture_ident_pkg` —
+named pack/unpack functions so nobody slices an identity by hand again.
+
+**Four hours later I wrote `zhao_texture_metajoin.sv` and hand-typed its field
+offsets. All five were off by one.**
+
+```
+          I wrote        correct
+format    [20:18]        [21:19]
+frac_v    [17:10]        [18:11]
+frac_u    [ 9: 2]        [10: 3]
+byte_sel  [ 1]           [ 2]
+nibble    [ 0]           [ 1]
+```
+
+The record is 40 bits; those slices occupied 21, stranding bit 21 and leaving no
+room for the reserved bit. **Verilator lint: 0 diagnostics. The undriven-output
+sweep: every output has a driver.** Every field would have read the wrong bits.
+
+### Why this one is worth an entry rather than a shrug
+
+It was not a legacy slice inherited from an older width. It was **new code,
+written by the person who had documented the defect class that morning, in the
+file whose own header explains the defect class.** Knowing about a failure mode
+does not prevent it — the knowledge and the typing happen in different parts of
+the job.
+
+**The fix is structural, not attentional.** Offsets are now DERIVED from the
+widths (`NIB_LO = RSVD_W`, `BSEL_LO = NIB_LO + 1`, and so on up), with an
+elaboration-time `$fatal` if they do not fill `METAW`. Changing any width moves
+every field above it automatically, and a layout that does not fill the record
+stops at elaboration instead of shipping.
+
+### And the defect shaped the test
+
+`metajoin_directed` gives every field a **distinct non-zero value**, chosen so a
+one-bit shift cannot alias into a correct answer, across all 192 legal rows. A
+test that wrote one record and checked that something came back would have
+passed against the broken version. The defect determined the test's shape, which
+is the right order.
+
+---
+
 ## M10 — A SECOND FITTED BLOCK IS INSTANTIATED NOWHERE
 
 **2026-09-08.** M3 recorded that `zhao_texture_v3own` was instantiated nowhere.
