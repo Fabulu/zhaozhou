@@ -33,12 +33,28 @@ fragment, and FIFO across fragments.** Note the pointer advances by
 and the `default:` arm makes count 3 the only multi-mapping, but an expander
 that advanced by the popcount would diverge the moment a count above 3 appeared.
 
-**4. The drain is TWO STAGES because the descriptor is in a RAM** (:374-395):
-`I_IDLE → I_READ → I_HOLD`, with `tmu_valid_o = (i_st_q == I_HOLD)`. The
-request presents `{slot, sidx, gen}` plus `u`, `v`, `binding`, `lod` read from
-the bank. v2 could pick a descriptor combinationally because it lived in flops;
-the banks cost one stage. **An expander that presents combinationally is not
-reproducing this contract** — it is reproducing v2's.
+**4. Fragrob's drain is TWO STAGES because ITS descriptor is in a RAM**
+(:374-395): `I_IDLE → I_READ → I_HOLD`, with
+`tmu_valid_o = (i_st_q == I_HOLD)`. The request presents `{slot, sidx, gen}`
+plus `u`, `v`, `binding`, `lod` read from fragrob's own
+`desc_u_m`/`desc_v_m`/`desc_met_m [3][DEPTH]` copies.
+
+> **CORRECTION to the first version of this document.** I originally wrote that
+> "an expander that presents combinationally is not reproducing this contract".
+> **That is wrong**, and it would have sent the implementer to build fragrob's
+> latency for no reason.
+>
+> The two-stage drain exists because FRAGROB HOLDS ITS OWN DESCRIPTOR COPIES.
+> The architecture's §1.4 is explicit that the expander does not: it takes `u`/`v`
+> from PERSPUV's output directly (`pu_u`/`pu_v`) and its binding/LOD from *"the
+> attribute-table reads that island_top:735-780 already does today"*, keeping
+> `f_binding_c + s` (island_top:869-881) verbatim. **No private descriptor RAM,
+> therefore no bank-read stage.**
+>
+> What must be reproduced bit-identically is the request SEQUENCE — which slot,
+> which sidx, in what order, how many. The LATENCY of producing it is a
+> different property, and fragrob's is an artefact of storage the expander does
+> not have.
 
 ## What the expander must NOT carry
 
