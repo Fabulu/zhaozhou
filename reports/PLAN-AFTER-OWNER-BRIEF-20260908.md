@@ -116,3 +116,54 @@ chase. `undriven_outputs.py` keeps the narrow port check it was proved to do.
 
 Worth recording because the pull was real: I had momentum, the tool existed, and
 extending it felt like the thorough choice. The brief had already said it was not.
+
+---
+
+# SUPERSEDED IN PART: the post-fit brief sets the order now
+
+`reports/ZHAOZHOU_TEXTURE_ISLAND_POSTFIT_ARCHITECTURE_2026-09-08.txt`, written
+after the Stage C receipt and after reading this session's work — including the
+zero-work retraction. **Keep V3. Do not build V4 to explain the first V3 fit.**
+
+Its ordering, and where each stands:
+
+| | packet | status |
+|---|---|---|
+| **A** | verification-contract repairs; replace the dead overflow monitor; keep the corrected zero-work test | **done** — A and B landed, C redone as policy C-b, exact-count check added per §3.1 |
+| **B** | palette experiment: count from the already-registered verdict | **implemented (P-CNT), leaf fit running** |
+| **C** | the FULL 40-bit metadata join, not the 21-bit subset | corrected in the candidate report; not implemented |
+| **D** | RCP preparation pipeline: reserve at acceptance | not started |
+| **E** | joint acceptance predicate | standing |
+
+## Three things it corrected in my work
+
+1. **Repair C was algebraically dead.** `accept_c && fq_full_c` substitutes to
+   `f_valid_i && !fq_full_c && fq_full_c`. Policy C-b applied.
+2. **The metadata join is 40 bits, not 21.** My subset carried no palette slot
+   or generation — exactly the fields on the measured critical family — so it
+   would have cost a fit and left the gating path untouched.
+3. **The headline Fmax is optimistic.** Second slow corner **81.58 MHz**, worst
+   multicorner hold slack **−4.346 ns**. The 82.41 I recorded in G1D 4.3h is the
+   first corner only.
+
+## One thing it confirmed independently
+
+Its §4 is "separate palette verdicts from statistics" — the
+`rsp_dispatch|cq_rp -> palette_res|cold_o` family I had identified from the
+setup report as co-equal with the nominal worst path. Two routes to the same
+conclusion, which is worth more than either alone.
+
+## And a standing correction to how I test
+
+§3.1 splits what I had built into two tests that I had conflated:
+
+* **INGRESS-OBSERVABILITY** — bounded admission, exact accepted-beat counting.
+  This is what the fault probe actually is, and the exact-delta check is now in.
+* **END-TO-END RECOVERY** — real fill responses, palette setup, AUX model, every
+  fragment tracked to an ordered terminal result. **This does not exist yet.**
+
+My harness supplies no texture memory, which is why phases 1-3 could only ever
+establish admission. The brief puts it precisely: *"A safety property can be
+tested with responses withheld... it is not a test that can require eventual
+completion without an explicit cancellation protocol."* That is the general form
+of the mistake behind the zero-work retraction.
