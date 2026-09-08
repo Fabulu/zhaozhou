@@ -168,3 +168,68 @@ one function.**
 
 **Ablation committed** rather than improvised: `ZHAO_U02_ML=indep` restores the
 shipped behaviour, so before and after come from ONE binary.
+
+### NEW ITEM 1 (coordinator) - the eye travel driver, recovered
+
+Driver found: fd393952 "WIP salvage: manafold-p12-2a/zhaozhou at the weekly
+rate limit", 42 insertions, parent 7c38dfb2 - the same base my branch is off,
+so it is a sibling and cherry-picks clean at zero offset.
+
+THE GATE THAT SAID "0 OF 23" COULD NEVER HAVE SAID ANYTHING ELSE.
+After applying the driver, Q2 still printed 0.00 deg for every clip. Not the
+stale binary - a --clean rebuild said the same. Q2 read
+
+    const double y = q.q[1] / 16384.0;   // "identity quat16 is (0,0,0,1<<14)"
+
+and both halves are false. zref_creature.hpp:
+quat16_identity() returns quat16{{kQuatOne, 0, 0, 0}} - w is lane 0, so the
+lanes are (w,x,y,z) and lane 1 is X. The travel is applied with quat_y(),
+which lives in lane 2. The gate read the X lane of a pure-Y rotation and was
+structurally incapable of reporting travel.
+
+QA's headline "0 of 23 clips drive the eye travel" was independently TRUE -
+the grep showing apply_eye_travel called only by its own gate was correct -
+but this instrument did not show it, and would have gone on printing 0.00
+after the driver landed, sending the next pass hunting a channel that already
+worked. Instrument #5 on this creature. Now read as an axis-agnostic
+magnitude, 2*acos(|w|), so re-authoring onto another axis cannot blind it.
+
+With the read fixed the driver works: 20 of 23 clips, bank max 45.00 of 45.
+Slot 7 still, 15 the mana lab and 16 nodule-solo correctly have none.
+
+Three bugs in the salvaged code, all found by looking at the numbers:
+
+A - THE IDLE WAS PINNED AT THE STOP. Amplitudes 1000 + 300 against a +/-1000
+    clamp. Both phase seeds are slot*k, so at slot 0 both are zero and the
+    waves ran perfectly in phase: peak 1300 against a 1000 clamp is hard
+    against 45 deg for ~44% of the loop. The gate showed it as a column of
+    identical 45.00s - a servo on its limit, the opposite of "deliberate".
+    700 + 300 now touches 45 only where the waves peak together. Readings are
+    39-45 and varied.
+
+B - "TWO INCOMMENSURATE PERIODS" WAS FALSE FOR SIX CLIPS. Both cycle counts
+    were keys/divisor floored to 1, so under 122 keys they collapsed to the
+    SAME frequency and peak travel was set by an accidental phase gap -
+    pirouette and hit printed 31.55 deg, a number nobody authored. B is now at
+    least one cycle faster than A by construction.
+
+C - THE EYES SNAPPED DEAD. Both deaths guard if (!dead) antenna_knead, so at
+    the settle key the carrier dropped from up to 45 deg to identity in ONE
+    key, at the instant the corpse goes still. The nodules were protected from
+    exactly this (their droop eases on fold_ease(gone)); the travel arrived
+    with no equivalent. This is the half of the wave-2a edit that never got
+    written. Now faded with 1000 - fold_ease(gone), reaching 0 exactly at the
+    settle - continuous into the identity the dead branch already holds.
+
+    GATE: Q2 now reports the worst PER-KEY STEP, the only thing that can see a
+    switch-off (peak travel says nothing about it). Bound 8 deg/key.
+    Faded: 1.27 / 4.00 deg. --fail-eyesnap leg: 13.35 deg at key 117 and
+    39.55 deg at key 191 - exactly the two settle keys. Witnessed.
+
+D - NO PER-CLIP GAIN EXISTED. kKneadClipPm and kNoduleClipPm both let a clip
+    silence a layer; travel had none. antenna_knead now takes eye_pm = 1000 by
+    default - no existing call site changes - and the deaths are its first user.
+
+NOT VERIFIED BY EYE YET. These are rig numbers. The star-containment rules in
+manafold_probe.cpp have only ever been measured on an untravelled bank, so
+their numbers will move; treat any new failure there as real.

@@ -56,6 +56,8 @@ int main(int argc, char** argv) {
   // function-local static, so a leg is one process, not a toggle.
   const bool seam_leg = argc > 1 && std::strcmp(argv[1], "--fail-seam") == 0;
   if (seam_leg) u02::g_u02_death_fail = 4;
+  const bool snap_leg = argc > 1 && std::strcmp(argv[1], "--fail-eyesnap") == 0;
+  if (snap_leg) u02::g_u02_death_fail = 5;
   const zc::CreatureType& T = u02::type();
   if (T.mesh.empty()) { std::fprintf(stderr, "qa-p12: compile produced no meshlets\n"); return 1; }
   int fails = 0;
@@ -134,19 +136,56 @@ int main(int argc, char** argv) {
   int clips_with_travel = 0;
   double bank_worst = 0.0;
   for (const zc::Clip& c : T.bank.clips) {
-    double worst = 0.0;
+    double worst = 0.0, prev = 0.0, jump = 0.0;
+    int jat = -1;
     for (int f = 0; f < c.frame_count; ++f) {
       const zc::quat16& q = c.quats[static_cast<size_t>(f) * u02::kBoneCount + u02::kBEyeTravelL];
-      // identity quat16 is (0,0,0,1<<14) in this codec; any travel shows as a
-      // non-zero y term. Report the half-angle in degrees.
-      const double y = static_cast<double>(q.q[1]) / 16384.0;
-      const double a = std::asin(y > 1.0 ? 1.0 : (y < -1.0 ? -1.0 : y)) * 2.0 * 180.0 / 3.14159265358979;
-      if (std::fabs(a) > worst) worst = std::fabs(a);
+      // ⚠ THIS READ WAS WRONG AND THE GATE COULD NEVER HAVE FAILED OPEN OR SHUT.
+      //
+      //  It read q.q[1] and its comment said "identity quat16 is (0,0,0,1<<14)".
+      //  Both halves are false. zref_creature.hpp:
+      //      quat16_identity() { return quat16{{kQuatOne, 0, 0, 0}}; }
+      //  -- w is lane 0, so the lanes are (w, x, y, z) and lane 1 is X. The
+      //  travel is applied with quat_y(), a rotation about Y, which lives in
+      //  lane 2. The gate was reading the X lane of a pure-Y rotation, so it
+      //  printed 0.00 deg for every clip NO MATTER WHAT THE CHANNEL DID.
+      //
+      //  That number ("BANK: 0 of 23 clips drive the eye travel") was reported
+      //  as the pass's headline finding. The finding was independently TRUE at
+      //  the time -- a grep showed the driver was never merged -- but this
+      //  instrument did not show it and would have gone on printing 0.00 after
+      //  the driver landed, sending the next pass hunting a channel that was
+      //  already working. Instrument #5 on this creature.
+      //
+      //  Read as an AXIS-AGNOSTIC MAGNITUDE now: 2*acos(|w|) is the rotation
+      //  angle whatever axis it is about, so re-authoring the travel onto a
+      //  different axis cannot silently blind this again.
+      double w = static_cast<double>(q.q[0]) / 16384.0;
+      if (w < 0.0) w = -w;              // hemisphere-canonical: |w|
+      if (w > 1.0) w = 1.0;
+      const double a = 2.0 * std::acos(w) * 180.0 / 3.14159265358979;
+      if (a > worst) worst = a;
+      // THE SNAP CHECK. A channel switched OFF rather than faded out shows
+      // here and nowhere else: the deaths stop calling antenna_knead at the
+      // settle key, so an unfaded carrier drops from up to 45 deg to identity
+      // in ONE key, at the exact instant the corpse goes still. Peak travel
+      // says nothing about that -- only the step does.
+      if (f > 0) {
+        const double d = a - prev;
+        if (std::fabs(d) > jump) { jump = std::fabs(d); jat = f; }
+      }
+      prev = a;
     }
     if (worst > 0.05) ++clips_with_travel;
     if (worst > bank_worst) bank_worst = worst;
-    std::printf("   slot %2u %4u keys   max carrier rotation %6.2f deg%s\n", c.slot_id,
-                c.frame_count, worst, worst <= 0.05 ? "   <-- NO TRAVEL" : "");
+    // 8 deg/key is several times the busiest smooth key in the bank and far
+    // under a 45 deg switch-off, so it separates authored motion from a snap.
+    const bool snap = jump > 8.0;
+    if (snap) ++fails;
+    std::printf("   slot %2u %4u keys   travel %6.2f deg   worst step %5.2f deg at key %4d%s%s\n",
+                c.slot_id, c.frame_count, worst, jump, jat,
+                worst <= 0.05 ? "   <-- NO TRAVEL" : "",
+                snap ? "   <-- SNAPS" : "");
   }
   std::printf("   BANK: %d of %zu clips drive the eye travel; bank max %.2f deg of %d\n",
               clips_with_travel, T.bank.clips.size(), bank_worst,

@@ -1111,7 +1111,50 @@ inline NoduleOffsets nodule_schedule(uint32_t slot, int keys, int f) {
   return n;
 }
 
-inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f) {
+/** PASS 12 WAVE 2a -- THE ALWAYS-ON EYE TRAVEL (D9 SS6, "the eyes have to move
+ *  more"). Two incommensurate slow waves so the sweep never repeats the same
+ *  place twice in a cycle, both far below the life-layer band: this is a
+ *  deliberate look-around, not a twitch. Rides antenna_knead for the same
+ *  reason the nodule schedule does -- it is the one layer every performing clip
+ *  already calls. */
+inline int32_t eye_travel_life_pm(uint32_t slot, int keys, int f) {
+  // ⚠ THE TWO CYCLE COUNTS MUST DIFFER, and a bare floor of 1 does not do it.
+  //  Both were `keys/divisor` floored to 1, so on any clip under 122 keys the
+  //  two waves collapsed to the SAME frequency and the "two incommensurate
+  //  periods" the comment promises stopped existing. Six clips were in that
+  //  band (curious, startle, pirouette, hasty, hit, taunt2) and their peak
+  //  travel was then set by the accidental phase gap between two identical
+  //  sines -- the gate printed 31.55 deg for pirouette and hit, a number no
+  //  one authored and no constant controls.
+  //  B is now at least one cycle faster than A, so the sum never degenerates
+  //  to a single sine and short clips keep the same vocabulary as long ones.
+  const int ca = keys / kEyeTravelPeriodAKeys > 0 ? keys / kEyeTravelPeriodAKeys : 1;
+  int cb = keys / kEyeTravelPeriodBKeys;
+  if (cb <= ca) cb = ca + 1;
+  const int32_t a = static_cast<int32_t>(
+      (static_cast<int64_t>(kEyeTravelLifePm) *
+       sinp(f, keys, ca, static_cast<int32_t>((slot * 9973u) & 0xFFFF))) >> 16);
+  const int32_t b = static_cast<int32_t>(
+      (static_cast<int64_t>(kEyeTravelLifeBPm) *
+       sinp(f, keys, cb, static_cast<int32_t>((slot * 26417u) & 0xFFFF))) >> 16);
+  int32_t pm = a + b;  // 700 + 300: touches the clamp, never rides it
+  if (pm > 1000) pm = 1000;
+  if (pm < -1000) pm = -1000;
+  return pm;
+}
+
+/** `eye_pm` is the per-clip eye-travel gain in per-mille, 1000 by default so
+ *  no existing call site changes. It exists for the same reason kKneadClipPm
+ *  and kNoduleClipPm do -- a clip that needs the eyes to stop must be able to
+ *  say so -- and the two deaths are why it was needed on the first day: see
+ *  the fade at their call sites. */
+inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f,
+                          int32_t eye_pm = 1000) {
+  // The eye travel rides here because this is the one layer every PERFORMING
+  // clip calls (build_still and build_nodule_solo deliberately do not). It
+  // writes the carrier bones, which nothing else in this function touches.
+  apply_eye_travel(g, static_cast<int32_t>(
+      (static_cast<int64_t>(eye_travel_life_pm(slot, keys, f)) * eye_pm) / 1000));
   // PASS 12: the nodule targets for this key. Set here because antenna_knead
   // already runs before every clip's loop_pose call, which is where they are
   // consumed. A clip whose kNoduleClipPm entry is 0 gets all-zero offsets and
@@ -2069,6 +2112,9 @@ inline zc::Clip build_nodule_solo() {
  *    2  the corpse RESTS AT ZERO     -- the settle root goes to the surface,
  *                                       which is the "reads as hovering" fault
  *                                       the ground-contact law names by name
+ *    5  the eyes SNAP DEAD           -- the eye-travel fade is removed, so the
+ *                                     carrier drops from up to 45 deg to
+ *                                     identity in ONE key at the settle
  *    4  the corpse WRAPS TO ALIVE  -- hold_last is left off, so the final
  *                                     key's sub-frame blends toward key 0 and
  *                                     the corpse stands up for two frames on a
@@ -2354,7 +2400,16 @@ inline zc::Clip build_death_drop() {
                        : dead     ? 1000
                                   : 1000 * (f - kDeathFailKey) /
                                         (B.settle - kDeathFailKey);
-    if (!dead) antenna_knead(g, kDeathSlot, K, f);
+    // ⚠ THE EYES STOP LOOKING AROUND AS IT DIES, and they stop CONTINUOUSLY.
+    // antenna_knead is not called once dead, so the travel carrier snaps back
+    // to identity in one key -- up to 45 deg on both eyes, at the exact instant
+    // the corpse is supposed to go still. The nodules were protected from this
+    // (their droop eases in on fold_ease(gone)); the travel arrived with no
+    // equivalent, which is the half of the wave-2a edit that never got written.
+    // The gain reaches 0 exactly at the settle key, so the dead branch's
+    // identity carrier is where the fade was already going.
+    if (!dead) antenna_knead(g, kDeathSlot, K, f,
+                              g_u02_death_fail == 5 ? 1000 : 1000 - fold_ease(gone));
     // THE NODULES HANG. The schedule is off for this slot (kNoduleClipPm[17]
     // is 0), so the only nodule motion is this: one authored droop that
     // arrives across the bounces and then never moves again. A living
@@ -2511,7 +2566,16 @@ inline zc::Clip build_death_gutter() {
                        : dead     ? 1000
                                   : 1000 * (f - kDeathBLetGoKey) /
                                         (B.settle - kDeathBLetGoKey);
-    if (!dead) antenna_knead(g, kDeathBSlot, K, f);
+    // ⚠ THE EYES STOP LOOKING AROUND AS IT DIES, and they stop CONTINUOUSLY.
+    // antenna_knead is not called once dead, so the travel carrier snaps back
+    // to identity in one key -- up to 45 deg on both eyes, at the exact instant
+    // the corpse is supposed to go still. The nodules were protected from this
+    // (their droop eases in on fold_ease(gone)); the travel arrived with no
+    // equivalent, which is the half of the wave-2a edit that never got written.
+    // The gain reaches 0 exactly at the settle key, so the dead branch's
+    // identity carrier is where the fade was already going.
+    if (!dead) antenna_knead(g, kDeathBSlot, K, f,
+                              g_u02_death_fail == 5 ? 1000 : 1000 - fold_ease(gone));
     // THE NODULES DIE IN ORDER. Each one, at its own key, stops whatever it
     // was doing and hangs — and because a nodule CARRIES ITS SECTION (§2),
     // one going limp visibly drops a third of the antenna while the other two

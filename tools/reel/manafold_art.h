@@ -953,6 +953,38 @@ constexpr int32_t kEyeTravelPivotXMm = 0;
 // against "eaten by the breath" and it is meant to be moved.
 constexpr int32_t kEyeStandoffMm = 22;
 
+// THE ALWAYS-ON TRAVEL. D9 SS6 is not a capability request -- "the eyes have to
+// move MORE" is about what the bank shows, so the channel rides every
+// performing clip through antenna_knead, the layer that already runs on all of
+// them. (build_still and build_nodule_solo do not call it, which is right: one
+// is deliberately still and the other is a diagnostic that must not be
+// contaminated.)
+//
+// Amplitude is a fraction of kEyeTravelMaxDeg, so the peaks reach the full 45
+// the owner asked for and the gate holds the ceiling. Two incommensurate
+// periods, both far slower than 07-MOTION-STYLE SS3's life band, because D7
+// SS9.2 still governs: MORE TRAVEL PER BEAT, FEWER BEATS. An eye sweeping a
+// quarter-turn of body needs to look like it decided to, not like it twitched.
+// ⚠ THE TWO AMPLITUDES SUM TO EXACTLY 1000, AND THAT IS THE WHOLE POINT.
+// They arrived as 1000 + 300 against a +/-1000 clamp, which does not make the
+// eye travel further -- the channel is already at its ceiling -- it makes the
+// eye RAMP TO THE STOP AND SIT THERE. At slot 0 both phase seeds are slot*k
+// and therefore both zero, so the two waves ran perfectly in phase and the
+// idle -- the most-watched clip in the bank -- was hard against 45 deg for
+// about 44% of its loop. That reads as a servo hitting its limit, which is
+// the exact opposite of D7 SS9.2's "it needs to look deliberate", and the gate
+// showed it as a column of identical 45.00 readings.
+//
+// 700 + 300 touches the owner's full 45 deg only where the two waves peak
+// together, and sweeps everywhere else. The peak is still 45; it is now an
+// event instead of a resting place.
+constexpr int32_t kEyeTravelLifePm = 700;
+constexpr int32_t kEyeTravelLifeBPm = 300;  // the second, smaller wave
+// Divisors, not periods: the cycle count is keys/this, so the wave is only
+// exactly this long when it divides the clip. Named as they were authored.
+constexpr int kEyeTravelPeriodAKeys = 97;
+constexpr int kEyeTravelPeriodBKeys = 61;
+
 // ---- OWNER DIRECTION 5 5d: THE EYES ROLL ---------------------------------
 //   "eyes should also be able to rotate and rotate back. Maybe 10-20% at most.
 //    Still shouldn't clip anything or touch each other. Just for
