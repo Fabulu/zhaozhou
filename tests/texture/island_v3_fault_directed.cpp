@@ -228,8 +228,15 @@ int main(int argc, char** argv) {
                 d.cnt_plan_accepted_o,
                 d.cnt_cache_hits_o + d.cnt_cache_misses_o,
                 d.cnt_dispatch_accepted_o);
+    // `cnt_combine_jobs_o` is an ARRAY OF EIGHT -- one job count per recipe --
+    // not a scalar. Printing it with %u formats the array's address, which is
+    // how it produced 2,558,523,520 on one run and a different large number on
+    // the next. I recorded that as "looks unreset or X-propagating"; it was
+    // neither. Sum the eight.
+    unsigned combine_jobs_total = 0;
+    for (int r = 0; r < 8; ++r) combine_jobs_total += d.cnt_combine_jobs_o[r];
     std::printf("    expander frags %u | combine jobs %u | phases %u | refused %u | live peak %u\n",
-                d.cnt_fragments_o, d.cnt_combine_jobs_o,
+                d.cnt_fragments_o, combine_jobs_total,
                 d.cnt_combine_phases_o, d.cnt_combine_refused_o,
                 d.cnt_live_peak_o);
 

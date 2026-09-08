@@ -58,8 +58,17 @@ owner can retire while a legitimate front-end reader remains. This is one
 schedule, with a free-running consumer. Absence of a trace is not absence of the
 hazard, and the brief's own abstract witness (`Z1`) says the same about itself.
 
-## Unrelated, and still open
+## The second false alarm, also mine
 
-`cnt_combine_jobs_o` reads **2,558,523,520** on a run that issued no combine
-jobs, and a different garbage value on the previous run. That counter looks
-unreset or X-propagating. Small, real, and not investigated here.
+I recorded `cnt_combine_jobs_o` reading 2,558,523,520 as *"looks unreset or
+X-propagating"*. It is neither. **It is an array of eight** -- one job count
+per recipe -- and I printed it with `%u`, which formats the array's address.
+Two runs, two different addresses, which read exactly like a garbage counter.
+
+Summed properly it reads **0**, which is correct: zero-work fragments issue no
+combine jobs.
+
+Both alarms in this file came from the harness rather than the design, and both
+were reported before being checked. The pattern is the same one the docket
+names -- an explanation that fits is not an explanation that has been tested --
+and it does not care which direction it points.
