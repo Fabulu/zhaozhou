@@ -1,0 +1,267 @@
+########## LEG 1: base vs MINE, ZIXX_EXP=celmain (the shipping env)
+bitident LEG 1 base vs mine, celmain
+  A   C:/programmieren/zencrifice/manafold-p13-c/build-base/bin/zhao-reel-cel.exe
+  B   C:/programmieren/zencrifice/manafold-p13-c/build-c/bin/zhao-reel-cel.exe
+  env {'ZIXX_EXP': 'celmain', 'ZIXX_LIGHT': 'diagonal-cool-cross'}
+  71 subjects
+
+  zixxtrixx-attack                          560 frames    560 identical  IDENTICAL
+  zixxtrixx-balance                         493 frames    493 identical  IDENTICAL
+  zixxtrixx-bow                             144 frames    144 identical  IDENTICAL
+  zixxtrixx-corpse                          128 frames    128 identical  IDENTICAL
+  zixxtrixx-corrected-toplight-1            600 frames    600 identical  IDENTICAL
+  zixxtrixx-damage                          400 frames    400 identical  IDENTICAL
+  zixxtrixx-death                           192 frames    192 identical  IDENTICAL
+  zixxtrixx-death2                          240 frames    240 identical  IDENTICAL
+  zixxtrixx-death2-normviz                  240 frames    240 identical  IDENTICAL
+  zixxtrixx-death2-unlit                    240 frames    240 identical  IDENTICAL
+  zixxtrixx-death2-wire                     241 frames    241 identical  IDENTICAL
+  zixxtrixx-death3                          192 frames    192 identical  IDENTICAL
+  zixxtrixx-fall                            288 frames    288 identical  IDENTICAL
+  zixxtrixx-fall-baked                    ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-fall-side                       288 frames    288 identical  IDENTICAL
+  zixxtrixx-forkwatch                       196 frames    196 identical  IDENTICAL
+  zixxtrixx-front                           576 frames    576 identical  IDENTICAL
+  zixxtrixx-frontfix                        192 frames    192 identical  IDENTICAL
+  zixxtrixx-frontfix-game                   192 frames    192 identical  IDENTICAL
+  zixxtrixx-hit                             300 frames    300 identical  IDENTICAL
+  zixxtrixx-hitfloor                        188 frames    188 identical  IDENTICAL
+  zixxtrixx-idle                            576 frames    576 identical  IDENTICAL
+  zixxtrixx-jump-multi                      241 frames    241 identical  IDENTICAL
+  zixxtrixx-jump-one                        241 frames    241 identical  IDENTICAL
+  zixxtrixx-knockdown                       196 frames    196 identical  IDENTICAL
+  zixxtrixx-knockdown-normviz               196 frames    196 identical  IDENTICAL
+  zixxtrixx-knockdown-triids                197 frames    197 identical  IDENTICAL
+  zixxtrixx-knockdown-unlit                 196 frames    196 identical  IDENTICAL
+  zixxtrixx-knockdown-wire                  197 frames    197 identical  IDENTICAL
+  zixxtrixx-light-choice                     24 frames     24 identical  IDENTICAL
+  zixxtrixx-lodsweep                        192 frames    192 identical  IDENTICAL
+  zixxtrixx-look                            384 frames    384 identical  IDENTICAL
+  zixxtrixx-look-game                       384 frames    384 identical  IDENTICAL
+  zixxtrixx-moving-light                    600 frames    600 identical  IDENTICAL
+  zixxtrixx-normviz                           1 frames      1 identical  IDENTICAL
+  zixxtrixx-notify                          192 frames    192 identical  IDENTICAL
+  zixxtrixx-overhead-orbit                  600 frames    600 identical  IDENTICAL
+  zixxtrixx-pupil-proof                     128 frames    128 identical  IDENTICAL
+  zixxtrixx-pupil-proof-front               128 frames    128 identical  IDENTICAL
+  zixxtrixx-pupil-proof-front-game          128 frames    128 identical  IDENTICAL
+  zixxtrixx-pupil-proof-game                128 frames    128 identical  IDENTICAL
+  zixxtrixx-pupil-proof-other               128 frames    128 identical  IDENTICAL
+  zixxtrixx-pupil-proof-other-game          128 frames    128 identical  IDENTICAL
+  zixxtrixx-run                              96 frames     96 identical  IDENTICAL
+  zixxtrixx-salto-dummy                     295 frames    295 identical  IDENTICAL
+  zixxtrixx-salto-fly                       313 frames    313 identical  IDENTICAL
+  zixxtrixx-salto-nine                      435 frames    435 identical  IDENTICAL
+  zixxtrixx-salto-six                       333 frames    333 identical  IDENTICAL
+  zixxtrixx-side                            192 frames    192 identical  IDENTICAL
+  zixxtrixx-side-game                       192 frames    192 identical  IDENTICAL
+  zixxtrixx-slow-taunt                      239 frames    239 identical  IDENTICAL
+  zixxtrixx-sorrow                          196 frames    196 identical  IDENTICAL
+  zixxtrixx-spring-micro                    139 frames    139 identical  IDENTICAL
+  zixxtrixx-spring-side                     139 frames    139 identical  IDENTICAL
+  zixxtrixx-spring-top                      139 frames    139 identical  IDENTICAL
+  zixxtrixx-stance2                         248 frames    248 identical  IDENTICAL
+  zixxtrixx-still                             1 frames      1 identical  IDENTICAL
+  zixxtrixx-still-front                       1 frames      1 identical  IDENTICAL
+  zixxtrixx-still-game                        1 frames      1 identical  IDENTICAL
+  zixxtrixx-stretch                         196 frames    196 identical  IDENTICAL
+  zixxtrixx-strike                          180 frames    180 identical  IDENTICAL
+  zixxtrixx-sweep                         ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-talk                            196 frames    196 identical  IDENTICAL
+  zixxtrixx-taunt                           224 frames    224 identical  IDENTICAL
+  zixxtrixx-tq                              192 frames    192 identical  IDENTICAL
+  zixxtrixx-tumble                          288 frames    288 identical  IDENTICAL
+  zixxtrixx-unlit                             1 frames      1 identical  IDENTICAL
+  zixxtrixx-unlit-front                       1 frames      1 identical  IDENTICAL
+  zixxtrixx-walk                            160 frames    160 identical  IDENTICAL
+  zixxtrixx-walk-unlit                      160 frames    160 identical  IDENTICAL
+  zixxtrixx-wire                              2 frames      2 identical  IDENTICAL
+
+  IDENTICAL 69   DIFFERS 0   EMPTY 2   of 71
+  frames 15634/15634 identical across the matching subjects
+  distinct CRCs 68 of 69 non-empty subjects  <-- COLLAPSED, the metric is not discriminating
+  EMPTY, named not counted: zixxtrixx-fall-baked
+  EMPTY, named not counted: zixxtrixx-sweep
+LEG1_RC=0
+########## LEG 2: base vs MUTANT (wrap_root_delta defaulted ON) -- MUST GO RED
+bitident LEG 2 base vs MUTANT, celmain -- witnessed-fail control
+  A   C:/programmieren/zencrifice/manafold-p13-c/build-base/bin/zhao-reel-cel.exe
+  B   C:/programmieren/zencrifice/manafold-p13-c/build-mut/bin/zhao-reel-cel.exe
+  env {'ZIXX_EXP': 'celmain', 'ZIXX_LIGHT': 'diagonal-cool-cross'}
+  71 subjects
+
+  zixxtrixx-attack                          560 frames    558 identical  DIFFERS
+  zixxtrixx-balance                         493 frames      0 identical  DIFFERS
+  zixxtrixx-bow                             144 frames    141 identical  DIFFERS
+  zixxtrixx-corpse                          128 frames    128 identical  IDENTICAL
+  zixxtrixx-corrected-toplight-1            600 frames      0 identical  DIFFERS
+  zixxtrixx-damage                          400 frames      0 identical  DIFFERS
+  zixxtrixx-death                           192 frames    192 identical  IDENTICAL
+  zixxtrixx-death2                          240 frames      0 identical  DIFFERS
+  zixxtrixx-death2-normviz                ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-death2-unlit                  ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-death2-wire                   ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-death3                        ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-fall                          ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-fall-baked                    ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-fall-side                     ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-forkwatch                     ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-front                         ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-frontfix                      ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-frontfix-game                 ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-hit                           ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-hitfloor                      ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-idle                          ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-jump-multi                    ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-jump-one                      ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-knockdown                     ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-knockdown-normviz             ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-knockdown-triids              ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-knockdown-unlit               ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-knockdown-wire                ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-light-choice                  ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-lodsweep                      ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-look                          ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-look-game                     ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-moving-light                  ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-normviz                       ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-notify                        ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-overhead-orbit                ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-pupil-proof                   ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-pupil-proof-front             ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-pupil-proof-front-game        ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-pupil-proof-game              ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-pupil-proof-other             ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-pupil-proof-other-game        ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-run                           ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-salto-dummy                   ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-salto-fly                     ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-salto-nine                    ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-salto-six                     ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-side                          ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-side-game                     ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-slow-taunt                    ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-sorrow                        ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-spring-micro                  ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-spring-side                   ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-spring-top                    ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-stance2                       ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-still                         ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-still-front                   ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-still-game                    ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-stretch                       ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-strike                        ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-sweep                         ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-talk                          ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-taunt                         ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-tq                            ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-tumble                        ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-unlit                         ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-unlit-front                   ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-walk                          ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-walk-unlit                    ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-wire                          ---- EMPTY (absent from BOTH binaries; not a pass)
+
+  IDENTICAL 2   DIFFERS 6   EMPTY 63   of 71
+  frames 320/320 identical across the matching subjects
+  distinct CRCs 8 of 8 non-empty subjects
+  EMPTY, named not counted: zixxtrixx-death2-normviz
+  EMPTY, named not counted: zixxtrixx-death2-unlit
+  EMPTY, named not counted: zixxtrixx-death2-wire
+  EMPTY, named not counted: zixxtrixx-death3
+  EMPTY, named not counted: zixxtrixx-fall
+  EMPTY, named not counted: zixxtrixx-fall-baked
+  EMPTY, named not counted: zixxtrixx-fall-side
+  EMPTY, named not counted: zixxtrixx-forkwatch
+  EMPTY, named not counted: zixxtrixx-front
+  EMPTY, named not counted: zixxtrixx-frontfix
+  EMPTY, named not counted: zixxtrixx-frontfix-game
+  EMPTY, named not counted: zixxtrixx-hit
+  EMPTY, named not counted: zixxtrixx-hitfloor
+  EMPTY, named not counted: zixxtrixx-idle
+  EMPTY, named not counted: zixxtrixx-jump-multi
+  EMPTY, named not counted: zixxtrixx-jump-one
+  EMPTY, named not counted: zixxtrixx-knockdown
+  EMPTY, named not counted: zixxtrixx-knockdown-normviz
+  EMPTY, named not counted: zixxtrixx-knockdown-triids
+  EMPTY, named not counted: zixxtrixx-knockdown-unlit
+  EMPTY, named not counted: zixxtrixx-knockdown-wire
+  EMPTY, named not counted: zixxtrixx-light-choice
+  EMPTY, named not counted: zixxtrixx-lodsweep
+  EMPTY, named not counted: zixxtrixx-look
+  EMPTY, named not counted: zixxtrixx-look-game
+  EMPTY, named not counted: zixxtrixx-moving-light
+  EMPTY, named not counted: zixxtrixx-normviz
+  EMPTY, named not counted: zixxtrixx-notify
+  EMPTY, named not counted: zixxtrixx-overhead-orbit
+  EMPTY, named not counted: zixxtrixx-pupil-proof
+  EMPTY, named not counted: zixxtrixx-pupil-proof-front
+  EMPTY, named not counted: zixxtrixx-pupil-proof-front-game
+  EMPTY, named not counted: zixxtrixx-pupil-proof-game
+  EMPTY, named not counted: zixxtrixx-pupil-proof-other
+  EMPTY, named not counted: zixxtrixx-pupil-proof-other-game
+  EMPTY, named not counted: zixxtrixx-run
+  EMPTY, named not counted: zixxtrixx-salto-dummy
+  EMPTY, named not counted: zixxtrixx-salto-fly
+  EMPTY, named not counted: zixxtrixx-salto-nine
+  EMPTY, named not counted: zixxtrixx-salto-six
+  EMPTY, named not counted: zixxtrixx-side
+  EMPTY, named not counted: zixxtrixx-side-game
+  EMPTY, named not counted: zixxtrixx-slow-taunt
+  EMPTY, named not counted: zixxtrixx-sorrow
+  EMPTY, named not counted: zixxtrixx-spring-micro
+  EMPTY, named not counted: zixxtrixx-spring-side
+  EMPTY, named not counted: zixxtrixx-spring-top
+  EMPTY, named not counted: zixxtrixx-stance2
+  EMPTY, named not counted: zixxtrixx-still
+  EMPTY, named not counted: zixxtrixx-still-front
+  EMPTY, named not counted: zixxtrixx-still-game
+  EMPTY, named not counted: zixxtrixx-stretch
+  EMPTY, named not counted: zixxtrixx-strike
+  EMPTY, named not counted: zixxtrixx-sweep
+  EMPTY, named not counted: zixxtrixx-talk
+  EMPTY, named not counted: zixxtrixx-taunt
+  EMPTY, named not counted: zixxtrixx-tq
+  EMPTY, named not counted: zixxtrixx-tumble
+  EMPTY, named not counted: zixxtrixx-unlit
+  EMPTY, named not counted: zixxtrixx-unlit-front
+  EMPTY, named not counted: zixxtrixx-walk
+  EMPTY, named not counted: zixxtrixx-walk-unlit
+  EMPTY, named not counted: zixxtrixx-wire
+  DIFFERS: zixxtrixx-attack                   crc 86A2B30B vs 07E30937  frames 560 vs 560
+  DIFFERS: zixxtrixx-balance                  crc 301EFBA6 vs None  frames 493 vs 0
+  DIFFERS: zixxtrixx-bow                      crc EC2CAD71 vs A4744114  frames 144 vs 144
+  DIFFERS: zixxtrixx-corrected-toplight-1     crc 6ED40CDD vs None  frames 600 vs 0
+  DIFFERS: zixxtrixx-damage                   crc 6C224D56 vs None  frames 400 vs 0
+  DIFFERS: zixxtrixx-death2                   crc 18F0AF79 vs None  frames 240 vs 0
+LEG2_RC=1
+########## LEG 3: base vs MINE, default env
+bitident LEG 3 base vs mine, default env
+  A   C:/programmieren/zencrifice/manafold-p13-c/build-base/bin/zhao-reel-cel.exe
+  B   C:/programmieren/zencrifice/manafold-p13-c/build-c/bin/zhao-reel-cel.exe
+  env (inherited only)
+  71 subjects
+
+  zixxtrixx-attack                          560 frames    560 identical  IDENTICAL
+  zixxtrixx-balance                         493 frames    493 identical  IDENTICAL
+  zixxtrixx-bow                             144 frames    144 identical  IDENTICAL
+  zixxtrixx-corpse                          128 frames    128 identical  IDENTICAL
+  zixxtrixx-corrected-toplight-1            600 frames    600 identical  IDENTICAL
+  zixxtrixx-damage                          400 frames    400 identical  IDENTICAL
+  zixxtrixx-death                           192 frames    192 identical  IDENTICAL
+  zixxtrixx-death2                          240 frames    240 identical  IDENTICAL
+  zixxtrixx-death2-normviz                  240 frames    240 identical  IDENTICAL
+  zixxtrixx-death2-unlit                    240 frames    240 identical  IDENTICAL
+  zixxtrixx-death2-wire                     241 frames    241 identical  IDENTICAL
+  zixxtrixx-death3                          192 frames    192 identical  IDENTICAL
+  zixxtrixx-fall                            288 frames    288 identical  IDENTICAL
+  zixxtrixx-fall-baked                    ---- EMPTY (absent from BOTH binaries; not a pass)
+  zixxtrixx-fall-side                       288 frames    288 identical  IDENTICAL
+  zixxtrixx-forkwatch                       196 frames    196 identical  IDENTICAL
+  zixxtrixx-front                           576 frames    576 identical  IDENTICAL
+  zixxtrixx-frontfix                        192 frames    192 identical  IDENTICAL
+  zixxtrixx-frontfix-game                   192 frames    192 identical  IDENTICAL
+  zixxtrixx-hit                             300 frames    300 identical  IDENTICAL
+  zixxtrixx-hitfloor                        188 frames    188 identical  IDENTICAL
+LEG3_RC=127
+########## ALL LEGS DONE

@@ -176,3 +176,49 @@ shell died; **the process did not**, and was still burning a core at 18:33 with
 1,348 s of CPU, writing into a directory that had been deleted underneath it.
 Killed by PID. "Stopping an agent does not stop its background work" — and the
 tell was that the CRC sweep's throughput did not match its worker count.
+
+### Zixxtrixx re-proof — leg 1 GREEN, leg 2 RED as required
+    LEG 1  base ffae071e vs mine 0f745f1c, ZIXX_EXP=celmain
+           IDENTICAL 69   DIFFERS 0   EMPTY 2   of 71
+           frames 15634/15634 identical   (the 1896 is inside it, exactly:
+           attack 560 + idle 576 + moving-light 600 + walk 160)
+    LEG 2  base vs MUTANT (wrap_root_delta defaulted true), rc 1
+           6 DIFFERS / 2 IDENTICAL of the 8 that completed before the teardown;
+           the 2 IDENTICAL are `corpse` and `death` -- the hold_last clips, so
+           the corpse hold is untouched even with the flag forced on everywhere.
+           63 subjects rendered nothing and the harness NAMED them rather than
+           scoring sha256-of-nothing as a pass.
+    LEG 3  default env, cut at 23/71 rows (all IDENTICAL) to free the machine.
+
+One check of mine fired: `distinct CRCs 68 of 69` under celmain -- two subjects
+share a CRC. Not chased (§6.2 of the findings); it cannot weaken an A/B of the
+same subject and the hash leg agreed on every row.
+
+### R6-bis (coordinator direction, mid-lane)
+`planet_sun_mag` per subject (-1 = the PlanetDef's own, so everything that
+predates it is bit-identical) + `u02_backdrop()`, one function with three
+declared states. `kU02NightSunMagPx = 25` authored BY EYE at 4x on channel
+f0292 -- the frame found by sampling for the most cyan, not by index -- from a
+seven-rung ladder off ONE binary via ZHAO_U02_NIGHT_MAG.
+
+25 beats BOTH shipped options: it keeps the violet night AND the lightning reads
+better than on the day sky, because pale cyan separates further from dark violet
+than from a bright warm ground. crackle, one binary, f100:
+
+    ZHAO_U02_PLANET=1    near-white 15.16%   sky (55,37,95)
+    default (mag 25)     near-white  0.57%   sky (27,17,62)    <-- ships
+    ZHAO_U02_NOPLANET=1  near-white  0.15%   sky (167,97,109)
+
+The rung I judged IS what ships: ladder mag25 (env override, pre-constant
+binary) is byte-identical over all 420 frames to the default render from the
+binary built afterwards. Publish bank NOT re-rendered, per instruction.
+
+### Binary provenance (recorded, not remembered)
+    build-base ae25b624e91d0ec9ffe03444d3c4fc64
+    build-c    e69213a1014cd28faa61b23a2d2e2c8b
+    build-mut  10ff7a8effdeb00c12cf577c0122f616
+    build-r6   0c2002cbd6bf38180ffcab5eb6dab800
+WARNING: build-r6 was rebuilt IN PLACE, so the ladder binary's md5 is lost. The
+ladder is internally consistent by construction (one exe, one invocation) and
+its verdict was re-proved byte-identical against the surviving binary -- but the
+rebuild should have gone to a new directory.
