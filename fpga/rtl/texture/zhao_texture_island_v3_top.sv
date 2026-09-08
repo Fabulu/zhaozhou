@@ -76,7 +76,9 @@ module zhao_texture_island_v3_top #(
     parameter int unsigned LODW    = 8,
     parameter int unsigned GENW    = 8,
     parameter int unsigned LANES   = 4,    // CACHE_PIPE lanes
-    parameter int unsigned SRCW    = 16,
+    // SRCW 16 -> 18: {class[1:0], slot[5:0], sidx[1:0], gen[7:0]}. The oracle
+    // keeps 16, where the slot is 4 bits and the pad term is exactly zero.
+    parameter int unsigned SRCW    = 18,
     parameter int unsigned DATAW   = 64,   // RSP_DISPATCH payload = LANES*16
     // TOKW 16 -> 18 UNDER P0-C. This is the island's ROUTING token
     // {class[1:0], slot[5:0], sidx[1:0], gen[7:0]}, and every net declared
@@ -1185,11 +1187,11 @@ module zhao_texture_island_v3_top #(
   // carries `fr_tmu_slot` and nothing else that identifies its fragment, and
   // requests are issued long after admission, so the pin holds a later
   // fragment's class. Written when FRAGROB reports where the fragment landed.
-  logic [1:0] class_m [DEPTH];
+  logic [1:0] class_m [64];
   // The palette binding is keyed the same way and for the same reason: a
   // sample response identifies its fragment by FRAGROB slot and nothing else.
-  logic [$clog2(PAL_SLOTS)-1:0] palslot_m [DEPTH];
-  logic [GENW-1:0]              palgen_m  [DEPTH];
+  logic [$clog2(PAL_SLOTS)-1:0] palslot_m [64];
+  logic [GENW-1:0]              palgen_m  [64];
   always_ff @(posedge clk) begin
     if (fr_alloc_valid) begin
       class_m  [fr_alloc_slot] <= f_class_c;
@@ -1213,9 +1215,16 @@ module zhao_texture_island_v3_top #(
   // used to slice this word by hand with two overlapping ranges, so nothing
   // caught that they overlapped.
   localparam int unsigned SRC_GEN_LO  = 0;
+  // THE TOKEN LAYOUT, RE-DERIVED FOR THE OWNER HANDLE.
+  // The oracle's slot field is $clog2(DEPTH) = 4 bits wide because its identity
+  // was a FRAGROB slot. The identity is now v3own's, whose slot is SLOTW = 6 --
+  // so SRC_SLOT_HI must follow the OWNER's slot width, not the reorder depth.
+  // Deriving it from DEPTH here would silently take four of the six slot bits
+  // and alias four owners onto every `sampmeta_m` row.
+  localparam int unsigned OWN_SLOTW   = 6;
   localparam int unsigned SRC_SIDX_LO = GENW;
   localparam int unsigned SRC_SLOT_LO = GENW + 2;
-  localparam int unsigned SRC_SLOT_HI = SRC_SLOT_LO + $clog2(DEPTH) - 1;
+  localparam int unsigned SRC_SLOT_HI = SRC_SLOT_LO + OWN_SLOTW - 1;
 
   logic [SRCW-1:0] plan_src_id;
   assign plan_src_id = {class_m[fr_tmu_slot],
@@ -1280,7 +1289,20 @@ module zhao_texture_island_v3_top #(
   // at the top rather than inserted, so every existing bit keeps its index and
   // the readers below did not have to be renumbered -- a renumbering is exactly
   // the kind of edit that silently moves one consumer and not another.
-  logic [20:0] sampmeta_m [DEPTH][3];
+  // 64 ROWS, NOT DEPTH=16. It is keyed by the OWNER SLOT now, and v3own has 64
+  // owners. Sized by DEPTH it would drop the top two slot bits at the index and
+  // three quarters of the fragments would share a row -- the same aliasing the
+  // slot-width correction above prevents at the slice.
+  // THE PER-SLOT TABLES ARE 64 ROWS, NOT DEPTH.
+  // `class_m`, `palslot_m`, `palgen_m` and `sampmeta_m` are all keyed by the
+  // token's SLOT field, and that field is v3own's 6-bit owner slot now. Sized
+  // by the oracle's DEPTH=16 they would drop the top two index bits and alias
+  // four owners onto every row -- a silent data corruption with no error, the
+  // same shape as the `uvw_m` index and the `fc_wp`/`fc_rp` keys.
+  //
+  // Verilator caught these as index-width truncations. It could not have caught
+  // the slice errors, because those were the right WIDTH at the wrong OFFSET.
+  logic [20:0] sampmeta_m [64][3];
 
   logic        plan_req_ready, plan_acc_valid, plan_acc_ready;
   logic [3:0]  plan_acc_en;
@@ -1498,7 +1520,17 @@ module zhao_texture_island_v3_top #(
       .clk(clk), .rst_n(rst_n),
       .rsp_valid_i(cache_smp_valid), .rsp_ready_o(disp_rsp_ready),
       .rsp_data_i(cache_smp_data), .rsp_tok_i(cache_smp_src),
-      .rsp_class_i(cache_smp_src[15:14]),   // GLUE 3, see the header
+      // THE CLASS MOVED WITH THE WIDENING. It is the token's TOP two bits, and
+      // the token is now 18 -- so [17:16], not [15:14]. Slicing the old
+      // position takes the slot's high bits instead and every response is
+      // routed to the wrong lane: gate 2 reported 48 class disagreements,
+      // which is what that looks like from the outside.
+      //
+      // The FOURTH instance tonight of a slice that was correct until the
+      // meaning of the bits under it changed -- after `uvw_m`, `fc_wp` and
+      // `fc_rp`. Written as `[TOKW-1 -: 2]` so it follows the parameter and
+      // cannot go stale again.
+      .rsp_class_i(cache_smp_src[TOKW-1 -: 2]),
       .clut_valid_o(disp_clut_valid), .clut_ready_i(disp_clut_ready),
       .clut_data_o(disp_clut_data), .clut_tok_o(disp_clut_tok),
       // DEFECT (a) REPAIRED. This was `.near_ready_i(1'b1)` with `near_data_o`
