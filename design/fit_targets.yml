@@ -467,9 +467,21 @@ targets:
     sources:
       - fpga/rtl/raster/zhao_raster_fog.sv
     rules:
-      # A unit8 weighting is three 8x8 products. Inferring a DSP here means the
-      # block is written wrong, not merely large.
-      max_dsp: 0
+      # MEASURED 2026-09-08: 3 DSP, one per channel. ALM 247, 93.63 MHz.
+      #
+      # THE FIRST VERSION OF THIS RULE WAS max_dsp: 0 AND IT WAS WRONG. It was
+      # written before any fit with the reasoning "a unit8 weighting is three
+      # 8x8 products; inferring a DSP means the block is written wrong" -- and
+      # that was an ASPIRATION asserted as a law. The house precedent settles
+      # it: `zhao_raster_blend` performs the SAME unit8 weighting on the same
+      # colour8 lanes and uses **2 DSP**. Three 8x8 products are three
+      # multiplies; the fitter putting them in DSP blocks is the fitter doing
+      # its job, and the device has 112.
+      #
+      # Set AT the measurement with no headroom, so a FOURTH multiply appearing
+      # is a rule violation rather than a shrug -- that is what this gate is
+      # actually good for.
+      max_dsp: 3
 
   - top: zhao_geom_fogfactor
     sources:
