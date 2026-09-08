@@ -739,3 +739,12 @@ will not lift the clock alone. Completing it moves 82.41 -> about 82.6, because
 
 Any plan that reports §6 as the road to 100 MHz is wrong. I had written exactly
 that an hour earlier, on slack alone.
+
+## POSITION BEFORE READING THE V1 RE-FIT
+
+In hand: the §6 correction is written and pushed. **Next step regardless of
+this result:** look at `rsp_dispatch|cq_rp -> palette_res|cold_o`, the co-equal
+internal family that neither §6 nor §7 covers.
+
+Expected from this fit: a row with a provenance digest and a `status` derived
+from the rules rather than left at `ok` by a hand-assembled run.
