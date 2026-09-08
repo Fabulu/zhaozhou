@@ -2244,6 +2244,11 @@ verilate(test_island_v3_fault_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+# REGISTERED once it passed. It was written to FAIL first, against the
+# unrepaired RTL, and was seen to fail and then to pass -- the only ordering
+# that proves it can see what it claims to test.
+add_test(NAME island_v3_fault_directed COMMAND test_island_v3_fault_directed)
+set_tests_properties(island_v3_fault_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
 # NOT `REQUIRED`, and the test is guarded on the result. A gate that is not
 # in the suite stops being run -- but a hard dependency that fails CONFIGURE
