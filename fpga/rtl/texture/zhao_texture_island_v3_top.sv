@@ -996,6 +996,102 @@ module zhao_texture_island_v3_top #(
       .aux_requests_o(exp_aux_requests));
 
   // ==========================================================================
+  // (b) THE V3 OWNER -- fragrob's jobs 1, 3, 4, 5 and 6
+  // ==========================================================================
+  // `zhao_texture_v3own.sv` IS NOT EDITED BY THIS INTEGRATION. Its 541-check
+  // adversarial suite reads internal probes through `verilator public` markers,
+  // and that suite passing on the unmodified file is gate 1 of Stage C's three.
+  // Every adapter is here.
+  //
+  // Post-T2 measurement (V31-T2-OWNER-FIT-20260907): 3,348 ALM, 3,953 registers,
+  // 17 M10K, 20,640 bits, 0 DSP, at 952 virtual pins. Against fragrob's 1,676
+  // ALM the swap ADDS ~1,672 on leaf prices -- and per docket M4 a leaf price is
+  // provisional in both directions, so the composed cost is genuinely unknown
+  // until Stage C's fit.
+  //
+  // WHAT IS WIRED HERE, and what is still owed:
+  //   * ISSUE notifications come from the expander, which pulses them on the
+  //     ACCEPTED handshake (§11.1 event 3, not the intent). Those are real
+  //     connections and they are made below.
+  //   * ADMISSION, the RETURN lanes, COMBINE and the OUTPUT are the identity
+  //     re-key's business -- step (c) -- because each carries an owner handle
+  //     that today's signals do not have. They are left as named unresolved
+  //     signals rather than plausible-looking ties, for the same reason
+  //     `exp_owner_c` is.
+  logic              own_adm_valid_c, own_adm_ready;
+  logic [CTXW-1:0]   own_adm_ctx_c;
+  logic [3:0]        own_adm_req_c;
+  logic [13:0]       own_adm_owner;
+  logic              own_adm_accept;
+
+  logic              own_tmu_rvalid_c, own_tmu_rready;
+  logic [15:0]       own_tmu_rhandle_c;
+  logic [39:0]       own_tmu_rresult_c;
+  logic              own_aux_rvalid_c, own_aux_rready;
+  logic [13:0]       own_aux_rowner_c;
+  logic [39:0]       own_aux_rresult_c;
+
+  logic              own_cmb_valid, own_cmb_ready_c;
+  logic [13:0]       own_cmb_owner;
+  logic [39:0]       own_cmb_s0, own_cmb_s1, own_cmb_s2, own_cmb_aux;
+
+  logic              own_fin_valid_c, own_fin_ready;
+  logic [13:0]       own_fin_owner_c;
+  logic [39:0]       own_fin_result_c;
+
+  logic              own_out_valid, own_out_ready_c;
+  logic [13:0]       own_out_owner;
+  logic [39:0]       own_out_result;
+  logic [CTXW-1:0]   own_out_ctx;
+
+  logic [31:0] own_ev_admitted, own_ev_emitted, own_ev_commits, own_ev_tickets;
+  logic [31:0] own_ev_err_range, own_ev_err_stale, own_ev_err_unsol;
+  logic [31:0] own_ev_err_dup, own_ev_err_final, own_ev_err_issue;
+  logic [31:0] own_ev_wrap_drains;
+  logic [6:0]  own_ev_live, own_ev_live_peak;
+  logic        own_ev_quiet;
+
+  zhao_texture_v3own #(
+      .OWNERS(64), .SLOTW(6), .GENW(8), .RESW(40), .CTXW(CTXW),
+      .OUTQD(4), .CMBQD(4)
+  ) u_own (
+      .clk(clk), .rst_n(rst_n),
+      // ---- admission: STEP (c) ----
+      .adm_valid_i(own_adm_valid_c), .adm_ready_o(own_adm_ready),
+      .adm_ctx_i(own_adm_ctx_c), .adm_req_i(own_adm_req_c),
+      .adm_owner_o(own_adm_owner), .adm_accept_o(own_adm_accept),
+      // ---- ISSUE: real, from the expander's accepted handshakes ----
+      .iss_tmu_valid_i(exp_iss_tmu_valid),
+      .iss_tmu_handle_i(exp_iss_tmu_handle),
+      .iss_aux_valid_i(exp_iss_aux_valid),
+      .iss_aux_owner_i(exp_iss_aux_owner),
+      // ---- returns: STEP (c) ----
+      .tmu_rvalid_i(own_tmu_rvalid_c), .tmu_rready_o(own_tmu_rready),
+      .tmu_rhandle_i(own_tmu_rhandle_c), .tmu_rresult_i(own_tmu_rresult_c),
+      .aux_rvalid_i(own_aux_rvalid_c), .aux_rready_o(own_aux_rready),
+      .aux_rowner_i(own_aux_rowner_c), .aux_rresult_i(own_aux_rresult_c),
+      // ---- COMBINE: STEP (c) ----
+      .cmb_valid_o(own_cmb_valid), .cmb_ready_i(own_cmb_ready_c),
+      .cmb_owner_o(own_cmb_owner),
+      .cmb_s0_o(own_cmb_s0), .cmb_s1_o(own_cmb_s1), .cmb_s2_o(own_cmb_s2),
+      .cmb_aux_o(own_cmb_aux),
+      .fin_valid_i(own_fin_valid_c), .fin_ready_o(own_fin_ready),
+      .fin_owner_i(own_fin_owner_c), .fin_result_i(own_fin_result_c),
+      // ---- ordered output: STEP (c) ----
+      .out_valid_o(own_out_valid), .out_ready_i(own_out_ready_c),
+      .out_owner_o(own_out_owner), .out_result_o(own_out_result),
+      .out_ctx_o(own_out_ctx),
+      // ---- evidence ----
+      .ev_admitted_o(own_ev_admitted), .ev_emitted_o(own_ev_emitted),
+      .ev_commits_o(own_ev_commits), .ev_tickets_o(own_ev_tickets),
+      .ev_err_range_o(own_ev_err_range), .ev_err_stale_o(own_ev_err_stale),
+      .ev_err_unsol_o(own_ev_err_unsol), .ev_err_dup_o(own_ev_err_dup),
+      .ev_err_final_o(own_ev_err_final), .ev_err_issue_o(own_ev_err_issue),
+      .ev_wrap_drains_o(own_ev_wrap_drains),
+      .ev_live_o(own_ev_live), .ev_live_peak_o(own_ev_live_peak),
+      .ev_quiet_o(own_ev_quiet));
+
+  // ==========================================================================
   // FRAGROB -> TMU_PLAN -> CACHE_PIPE
   // ==========================================================================
   // GLUE 3: the response CLASS. See the header. The source id carries the
