@@ -81,3 +81,13 @@ sees it, so a patch script containing `\n` writes a REAL NEWLINE into C++
 source instead of the two characters `\n`. It presented as a string-match
 assertion failing on text that was visibly identical in the file. Use `\\n`
 in a heredoc to land a literal `\n`, or write the script to a file first.
+
+### Closing state
+* zhaozhou `1e9aa9a3` + `0ad1fe51`, Upheaval `72065c2` — all on `origin/main`.
+* `PASS-13-FINDINGS-B.md` and ten plates in `Upheaval/creature/Manafold/pass13-plates-b/`.
+* Gates re-run against my own build: `mprobe` PASS, `mspan` PASS,
+  `mqa` FAIL:4 (identical on the base binary — the pre-existing Q1 lane-2/3
+  frozen-stretch finding), `mqa --fail-rootstep` witnessed at 240.0 mm.
+* No background jobs left running; verified in `tasklist`.
+* **The lane can be deleted.** It holds four build trees and ~6,700 `.rgb`
+  frames across five output directories, all disposable.
