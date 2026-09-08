@@ -1075,6 +1075,14 @@ struct SceneSubject {
   // and the six-bit intensity plane replaces the dome entirely.
   int planet = 0;
   int32_t planet_sun_x = 192, planet_sun_y0 = 150, planet_sun_y1 = 150;
+  // R6-bis (pass 13): THE BLOOM AND THE SKY ARE SEPARABLE, and until now they
+  // were not. `planet_sky_hook` takes its splat radius from `PlanetDef::mag` --
+  // 190 px for violet-thick, which is most of a 384x240 frame -- and a subject
+  // could already override sun_x/y and the COMPANION's magnitude but not the
+  // main one. So the only way to lose the near-white mass was `planet = 0`,
+  // which loses the whole violet night sky with it. -1 keeps the PlanetDef's
+  // own value, so every subject that predates this is bit-identical.
+  int32_t planet_sun_mag = -1;
   int32_t planet_sun2_mag = 0;  // >0: a binary system, companion at these px
   int32_t planet_sun2_x = 0, planet_sun2_y = 0;
   // DIAGNOSTIC shade mode for creature subjects (P2): 0 off, 1 unlit
@@ -3891,7 +3899,7 @@ int render_scene(const SceneSubject& sub) {
     planet_ramp(psky.ramp, pd.lo, pd.mid, pd.hi);
     psky.base = pd.base;
     psky.noise_amp = pd.noise;
-    psky.sun_mag = pd.mag;
+    psky.sun_mag = sub.planet_sun_mag >= 0 ? sub.planet_sun_mag : pd.mag;
     psky.sun_core = pd.core;
     psky.seed = static_cast<uint32_t>(sub.planet) * 2654435761u;
     psky.sun_x = sub.planet_sun_x;
@@ -5461,19 +5469,101 @@ SceneSubject s1_chain_subject(int mode) {
 // ZHAO_U02_PLANET=1 restores the old mood with no rebuild.
 static constexpr bool kU02BackdropBloom = false;
 
-/** True when the bloom should be raised at all. ZHAO_U02_NOPLANET=1 forces it
-    off even if the constant is flipped back on; ZHAO_U02_PLANET=1 forces it on
-    without a rebuild, which is how the ablation plate was made. */
-bool u02_planet_on() {
-  static const bool off = [] {
-    const char* e = std::getenv("ZHAO_U02_NOPLANET");
-    return e != nullptr && e[0] == '1';
-  }();
-  static const bool forced = [] {
+// THE NIGHT WITHOUT THE WHITE (pass 13, R6-bis).
+//
+// Dropping `s.planet` answered Q-B1 -- the near-white mass is gone from both
+// showcase clips and the cyan arcs over the crown are legible for the first
+// time -- but it took the DARK VIOLET NIGHT SKY with it, and nobody chose
+// that. `channel` has been a night scene since D5 SS0-BIS and the owner has
+// been looking at it ever since; it is now under the standard salmon day sky
+// as a side effect.
+//
+// They are separable, and the separation is one number. The violet is the
+// PlanetDef ramp ({14,10,46} / {70,44,132} / {255,214,240}); the white is the
+// SUN SPLAT that saturates into that ramp's peak entry, at `PlanetDef::mag`
+// = 190 px on a 384x240 frame. Shrink the splat and the sky stays.
+//
+// AUTHORED BY EYE, at 4x, through rgbframe.py, against what the lightning has
+// to read over -- not picked as a number and not measured off anything. The
+// ladder that chose it came from ONE binary via ZHAO_U02_NIGHT_MAG
+// (10-GATE-CHECKLIST item 21), and that override stays live so the owner can
+// move it without a rebuild.
+// AUTHORED 2026-09-08 BY EYE, at 4x, on `channel` f0292 -- the frame where the
+// crown sits directly in front of the splat, found by sampling for the most
+// cyan rather than by picking an index. Ladder from ONE binary via
+// ZHAO_U02_NIGHT_MAG: 190 (published), 130, 90, 55, 25, 0, and the day sky.
+//
+// At 190 and 130 the near-white reaches behind the crown and the dotted
+// lightning has almost no separation -- pale smudges on pale ground, which is
+// the fault Q-B1 was really about. At 90 and 55 the disc is clear of the
+// creature but its halo still lifts the sky behind the left arm. At 25 the
+// moon is small, far left, and the dots sit against deep violet at full
+// contrast. At 0 the read is the same and the sky is emptier.
+//
+// 25 IS BETTER THAN BOTH SHIPPED OPTIONS. It keeps the violet night `channel`
+// has had since D5 SS0-BIS, and the lightning reads BETTER than on the salmon
+// day sky, because pale cyan has more tonal separation against dark violet
+// than against a bright warm ground -- visible in the last two rows of the 4x
+// crown plate. So this is the default, not an option.
+//
+// Corroborated afterwards, on the comparison side only: sun_x is 58, so a
+// 25 px splat reaches x = 83, and at f0292 the cyan spans x = 117..174. The
+// splat CANNOT touch the lightning at this camera. That is why the value is
+// safe; it is not why it was chosen.
+constexpr int32_t kU02NightSunMagPx = 25;
+static constexpr bool kU02NightBackdrop = true;
+
+// The two env reads, each written ONCE and shared, so the full-bloom path and
+// the night path cannot drift apart on what "off" means.
+bool u02_planet_forced() {
+  static const bool v = [] {
     const char* e = std::getenv("ZHAO_U02_PLANET");
     return e != nullptr && e[0] == '1';
   }();
-  return (kU02BackdropBloom || forced) && !off;
+  return v;
+}
+bool u02_planet_suppressed() {
+  static const bool v = [] {
+    const char* e = std::getenv("ZHAO_U02_NOPLANET");
+    return e != nullptr && e[0] == '1';
+  }();
+  return v;
+}
+
+/** True when the FULL bloom should be raised. ZHAO_U02_NOPLANET=1 forces it
+    off even if the constant is flipped back on; ZHAO_U02_PLANET=1 forces it on
+    without a rebuild, which is how the ablation plate was made. */
+bool u02_planet_on() {
+  return (kU02BackdropBloom || u02_planet_forced()) && !u02_planet_suppressed();
+}
+
+/** Creature 02's backdrop, in ONE place with THREE declared states, so a
+    future clip cannot invent a fourth -- which is exactly how `crackle` ended
+    up setting `s.planet` on itself and keeping a bloom `channel` had lost.
+
+      full bloom : ZHAO_U02_PLANET=1 or kU02BackdropBloom. The PlanetDef's own
+                   190 px splat, i.e. the published mood, byte-for-byte.
+      night      : kU02NightBackdrop. The same violet sky, splat shrunk to
+                   kU02NightSunMagPx. ZHAO_U02_NIGHT_MAG overrides it live.
+      none       : ZHAO_U02_NOPLANET=1, or the constant off. The salmon day
+                   sky, i.e. what the publish bank being encoded today shows.
+
+    Every showcase clip that wants a backdrop calls THIS. */
+void u02_backdrop(SceneSubject& s, int32_t sun_x, int32_t sun_y0, int32_t sun_y1) {
+  if (u02_planet_suppressed()) return;  // planet stays 0: the day sky
+  if (!u02_planet_on() && !kU02NightBackdrop) return;
+  s.planet = 1;  // violet-thick
+  s.planet_sun_x = sun_x;
+  s.planet_sun_y0 = sun_y0;
+  s.planet_sun_y1 = sun_y1;
+  if (!u02_planet_on()) {
+    static const int32_t mag = [] {
+      const char* e = std::getenv("ZHAO_U02_NIGHT_MAG");
+      return e != nullptr ? std::atoi(e) : kU02NightSunMagPx;
+    }();
+    s.planet_sun_mag = mag < 0 ? 0 : mag;
+  }
+  // full-bloom path leaves planet_sun_mag at -1 == the PlanetDef's own 190
 }
 
 void u02_common(SceneSubject& s) {
@@ -5691,9 +5781,11 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // ONE LINE EITHER WAY, both directions live: flip the constant, or set
   // ZHAO_U02_PLANET=1 to see the old mood without a rebuild. It is an authored
   // mood and it stays his to want back.
-  if (slot == 2 && u02_planet_on()) {  // fixed-camera subjects only: the bloom is
-    // painted in SCREEN space and must not sit frozen while an orbit spins
-    s.planet = 1;  // violet-thick: pure formless bloom, the mana mood
+  // R6-bis: ONE call, three states (see u02_backdrop). Fixed-camera subjects
+  // only -- the backdrop is painted in SCREEN space and must not sit frozen
+  // while an orbit spins.
+  if (slot == 2) {
+    u02_backdrop(s, 58, 96, 132);
     // ⚠ FALSE-COMMENT CORRECTION (2026-09-08). This read "the bloom sits OFF
     // to the side ... so the loop window keeps dark violet sky behind it for
     // the bolt to blaze against". Measured on the shipped frames it fills the
@@ -5703,9 +5795,6 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
     // 10-GATE-CHECKLIST item 8: a comment asserting structure, ungated,
     // outliving the structure -- and this one sent three separate passes to
     // tune lightning constants against a backdrop problem.
-    s.planet_sun_x = 58;
-    s.planet_sun_y0 = 96;
-    s.planet_sun_y1 = 132;
   }
   return s;
 }
@@ -8167,12 +8256,9 @@ int main(int argc, char** argv) {
     SceneSubject s = subject_u02_clip(0, "manafold-crackle", u02::kIdleKeys, false, &kU02SunChannel);
     s.u02_mana = 4;  // the crackle IS the lightning candidate
     s.u02_smear = 1;  // pass 3: strikes ghost through the smear plane
-    if (u02_planet_on()) {
-      s.planet = 1;  // fixed camera: the bloom may stage the crackle
-      s.planet_sun_x = 58;
-      s.planet_sun_y0 = 96;
-      s.planet_sun_y1 = 132;
-    }
+    // R6-bis: the same one call `channel` makes, so the pair cannot diverge
+    // again. That divergence is what happened here on 2026-09-08.
+    u02_backdrop(s, 58, 96, 132);
     s.note = "the ADDLIGHTNING variant: the conduit crackles continuously";
     rc |= render_scene(s);
   }
