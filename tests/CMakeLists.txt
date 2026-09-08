@@ -2196,6 +2196,18 @@ set_tests_properties(island_v3_composed_directed PROPERTIES LABELS "fast;nightly
 # It runs the two EXECUTABLES rather than instantiating both tops in a third
 # harness, because a third harness is a second driver and a second driver is a
 # copy that drifts. See the docstring in tools/texture/gate3_paired.py.
+# Packet C's metadata bank: 256 x 40 = exactly one M10K, one writer, one
+# SYNCHRONOUS reader. Not wired into the island -- a leaf the brief asks for
+# before the surgery ("use small functional/leaf experiments first").
+add_executable(test_metajoin_directed texture/metajoin_directed.cpp)
+target_link_libraries(test_metajoin_directed PRIVATE zhao_harness)
+verilate(test_metajoin_directed
+  PREFIX Vzhao_texture_metajoin
+  TOP_MODULE zhao_texture_metajoin
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv)
+add_test(NAME metajoin_directed COMMAND test_metajoin_directed)
+set_tests_properties(metajoin_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # Owner brief 4.1: the identity encoding freeze, checked bit-for-bit.
 #
 # This one IS registered: the package is new, nothing depends on it yet, and
