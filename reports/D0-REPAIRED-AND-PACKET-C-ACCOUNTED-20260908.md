@@ -87,9 +87,46 @@ time. Stage C (`bcdfadea`) → packet C (`1b81c013`):
 
 That is the honest account, and it is not a good one. Packet C removed
 twenty-six lines and added nine hundred and twenty-three; it added seven
-`always_ff` blocks and thirteen net counter bumps; it cost **+2,350 ALM** and
-**−19.58 MHz**; and it shipped a metadata-swap defect that its own gates could
-not reach.
+`always_ff` blocks and thirteen net counter bumps; it cost **+2,350 ALM**; and it
+shipped a metadata-swap defect that its own gates could not reach.
+
+### The −19.58 MHz is mostly a virtual pin, and saying so is not an excuse
+
+`worst_path_index.py` was run before the next fit could overwrite the setup
+reports, and its census changes the timing half of this account:
+
+| | Stage C | @pktC-fixed |
+|---|---|---|
+| worst path | `frag_depth_i[14]` → `rcp24_svc\|c_x[0][22]` | `pal_ld_gen_i[1]` → `palette_res\|res_r[3]` |
+| worst slack | −2.134 ns | −5.915 ns |
+| **worst INTERNAL slack** | −2.093 ns | **−2.912 ns** |
+| boundary worth | 0.041 ns | **3.003 ns** |
+| port-origin / internal paths | 113 / 87 | 21 / 179 |
+
+Packet C's gating path is a **port-origin path** — a virtual pin, an artefact of
+fitting a leaf in isolation. Stage C's boundary was worth 41 picoseconds; this
+one is worth 3.0 nanoseconds.
+
+* reported: 82.41 → 62.83 = **−19.58 MHz**
+* internal-only: 82.69 → 77.45 = **−5.25 MHz**
+
+So roughly three quarters of the headline drop sits on a pin that does not exist
+in the composed design.
+
+**This is exactly the shape of argument this repository has been burned by**, and
+it is recorded as a number rather than a conclusion for that reason. On
+2026-09-05 the claim "every one of the twelve worst paths starts at a virtual
+pin, so the measurement is an artefact" was found *right in kind and wrong in
+magnitude* — the artefact was real and almost irrelevant. The difference here is
+that the boundary is worth 3.0 ns rather than tens of picoseconds, and the path
+count moved the other way (113 port paths down to 21). But "the internal design
+is at 77.45 MHz" is **not** a claim that the composed design will be: only a
+composed fit measures that, and none has been run since this change.
+
+What is safe to say: **−19.58 MHz overstates what packet C did to the logic, and
+−5.25 MHz is the internal-to-internal figure.** Neither is attributed to any
+particular change — the owner brief holds that worst-path family matching is
+neither necessary nor sufficient for attribution, and the family did change here.
 
 The Decrufter's thesis was that this island needs gutting. Packet C was the
 opposite operation, and calling it "PACKET C COMPLETE" measured the wrong thing —

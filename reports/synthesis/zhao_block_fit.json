@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "8ce30e843c0c9b41ce7afa3fd79f7085bdd97dc3",
-    "newestRunClean":  false,
+    "newestRunCommit":  "1b81c013b8b7e064ec6af358b96cdc62b599bbcc",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1676,6 +1676,27 @@
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  73.98,
+                       "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_texture_island_v3_top@pktC-fixed",
+                       "status":  "ok",
+                       "sourceCommit":  "1b81c013b8b7e064ec6af358b96cdc62b599bbcc",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "224069276f888b3d2a4ec4e8af9e371872b4f6ceccb34456d28d1ced78a6d794",
+                       "variantOf":  "zhao_texture_island_v3_top",
+                       "seconds":  9232.6,
+                       "sourcesHashed":  19,
+                       "alms":  15483,
+                       "registers":  22219,
+                       "blockMemoryBits":  64762,
+                       "ramBlocks":  48,
+                       "dspBlocks":  17,
+                       "virtualPins":  1839,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  62.83,
                        "fmaxClock":  "clk"
                    },
                    {

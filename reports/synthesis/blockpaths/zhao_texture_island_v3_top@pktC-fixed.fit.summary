@@ -1,0 +1,22 @@
+Fitter Status : Successful - Tue Sep 08 19:02:23 2026
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : blockfit
+Top-level Entity Name : zhao_texture_island_v3_top
+Family : Cyclone V
+Device : 5CSEBA6U23I7
+Timing Models : Final
+Logic utilization (in ALMs) : 15,483 / 41,910 ( 37 % )
+  * Logic utilization warning : A large number of ALMs contain virtual pins and count towards logic utilization
+  * ALMs containing virtual pins : 920 / 41,910 ( 2 % )
+Total registers : 22219
+Total pins : 0 / 314 ( 0 % )
+Total virtual pins : 1,839
+Total block memory bits : 64,762 / 5,662,720 ( 1 % )
+Total RAM Blocks : 48 / 553 ( 9 % )
+Total DSP Blocks : 17 / 112 ( 15 % )
+Total HSSI RX PCSs : 0
+Total HSSI PMA RX Deserializers : 0
+Total HSSI TX PCSs : 0
+Total HSSI PMA TX Serializers : 0
+Total PLLs : 0 / 6 ( 0 % )
+Total DLLs : 0 / 4 ( 0 % )
