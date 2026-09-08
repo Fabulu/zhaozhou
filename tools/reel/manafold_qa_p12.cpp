@@ -130,6 +130,48 @@ int main(int argc, char** argv) {
   std::printf("   (kEyeTravelMaxDeg = %d, so full travel is %d a16 on kBEyeTravelL/R)\n",
               static_cast<int>(u02::kEyeTravelMaxDeg),
               static_cast<int>(u02::kEyeTravelMaxA16));
+
+  // *** THE SELF-CHECK, ON EVERY RUN ***
+  // This section's whole answer is a column of zeroes, and a reader that is
+  // simply broken produces exactly the same column. 10-GATE-CHECKLIST item 11:
+  // a verification tool that finds ZERO of the thing it counts must prove it
+  // could have found some. So the PRODUCTION function is called on a clean rig
+  // and read by the SAME arithmetic the bank walk uses; if that does not come
+  // back as the full 45 degrees, every zero below is meaningless and this
+  // refuses to report them.
+  // TOTAL rotation angle of the carrier, about ANY axis, from the scalar lane.
+  //
+  // ⚠ THE FIRST VERSION OF THIS READ q[1] AS "the y term" AND WAS WRONG: the
+  // codec is (w, x, y, z) -- zref_creature.hpp's quat16_identity() is
+  // {kQuatOne, 0, 0, 0} -- so q[1] is x. It returned 0.00 for a carrier driven
+  // to the full 45 degrees, which is byte-for-byte the same column of zeroes
+  // this section reports for the bank. The SELF-CHECK below is the only reason
+  // that was caught, which is checklist item 11 landing on its own author.
+  //
+  // Reading the scalar lane instead of a named axis also means a rotation
+  // introduced about ANY axis shows up, so a future driver that turns the
+  // carrier some other way cannot slip past this.
+  const auto carrier_deg = [](const zc::quat16& q) {
+    double w = static_cast<double>(q.q[0]) / 16384.0;
+    if (w > 1.0) w = 1.0;
+    if (w < -1.0) w = -1.0;
+    const double a = 2.0 * std::acos(std::fabs(w)) * 180.0 / 3.14159265358979;
+    return a;
+  };
+  {
+    u02::Rig probe_rig;
+    probe_rig.reset();
+    u02::apply_eye_travel(probe_rig, 1000);  // the production call, full travel
+    const double got = carrier_deg(probe_rig.q[u02::kBEyeTravelL]);
+    const double want = static_cast<double>(u02::kEyeTravelMaxDeg);
+    const bool ok = std::fabs(got - want) <= 1.0;
+    std::printf("   SELF-CHECK: apply_eye_travel(rig, 1000) reads %.2f deg (want %.0f) -- %s\n",
+                got, want, ok ? "the reader CAN see travel" : "READER IS BROKEN");
+    if (!ok) {
+      std::printf("   FAIL Q2's reader cannot see a driven carrier; its zeroes prove nothing\n");
+      ++fails;
+    }
+  }
   int clips_with_travel = 0;
   double bank_worst = 0.0;
   for (const zc::Clip& c : T.bank.clips) {
@@ -137,10 +179,9 @@ int main(int argc, char** argv) {
     for (int f = 0; f < c.frame_count; ++f) {
       const zc::quat16& q = c.quats[static_cast<size_t>(f) * u02::kBoneCount + u02::kBEyeTravelL];
       // identity quat16 is (0,0,0,1<<14) in this codec; any travel shows as a
-      // non-zero y term. Report the half-angle in degrees.
-      const double y = static_cast<double>(q.q[1]) / 16384.0;
-      const double a = std::asin(y > 1.0 ? 1.0 : (y < -1.0 ? -1.0 : y)) * 2.0 * 180.0 / 3.14159265358979;
-      if (std::fabs(a) > worst) worst = std::fabs(a);
+      // non-zero y term. SAME arithmetic as the self-check above, deliberately.
+      const double a = carrier_deg(q);
+      if (a > worst) worst = a;
     }
     if (worst > 0.05) ++clips_with_travel;
     if (worst > bank_worst) bank_worst = worst;
