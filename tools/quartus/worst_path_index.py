@@ -18,6 +18,30 @@ So this walks every setup report present and writes the gating path — slack,
 launch, capture — into a sidecar index keyed by module. Run it after a fit and
 the identity is preserved even though the report is not.
 
+AMENDED 2026-09-08 BY THE OWNER BRIEF -- AND THE AMENDMENT MATTERS
+-----------------------------------------------------------------
+Docket M6 said a Fmax delta is attributable only if the worst path FAMILY is
+the same on both sides. The brief rejects that as a rule, and it is right:
+
+    "matching the worst-path family is neither necessary nor sufficient for
+     attribution: a successful repair often SHOULD change which path is worst."
+
+That is obviously true once stated. A change that removes the gating cone will
+of course be followed by a different cone gating. Requiring the families to
+match would reject exactly the repairs that worked.
+
+So this tool KEEPS ITS JOB and LOSES ITS INFERENCE. Recording which path gated a
+fit is still worth doing -- that evidence is destroyed by the next fit of the
+same module and cannot be recovered afterwards. What must not be done is to
+conclude "same family, therefore attributable" or "different family, therefore
+not". Attribution needs the separate structural, measured, repeatability and
+causal claims the brief sets out; this file supplies one input to that and
+decides nothing.
+
+Related, and also conceded: the +10.90 MHz reseed figure was reported here too
+confidently. Two post-change seeds are encouraging; their 1.13 MHz spread is
+not a bound on seed variation.
+
 WHAT IT DOES NOT DO
 -------------------
 It does not judge. It records launch and capture node names and the slack, and a
