@@ -1,0 +1,51 @@
+{
+  "packet": "D0/D1/D2/D3/D4/D5/D6 \u2014 replace with actual packet",
+  "commit": null,
+  "source_digest": null,
+  "configuration_digest": null,
+  "features": null,
+  "diagnostics_profile": null,
+  "device": null,
+  "tool_version": null,
+  "seed": null,
+  "rtl_test_results": {
+    "passed": null,
+    "failed": null,
+    "not_run": null,
+    "negative_control": null
+  },
+  "deleted_source_structures": [],
+  "deleted_netlist_structures": [],
+  "replacement_structures": [],
+  "ram_inference_by_name": [],
+  "mapped": {
+    "registers": null,
+    "memory_bits": null,
+    "dsp_blocks": null,
+    "combinational_resource_metric_name": null,
+    "combinational_resources": null
+  },
+  "fitted": {
+    "alms": null,
+    "registers": null,
+    "m10ks": null,
+    "memory_bits": null,
+    "dsps": null,
+    "virtual_pins": null
+  },
+  "timing_by_corner": [],
+  "critical_path_families": [],
+  "workloads": [
+    {
+      "name": null,
+      "accepted": null,
+      "emitted": null,
+      "reset_cancelled": null,
+      "cycles": null,
+      "max_pending": null
+    }
+  ],
+  "baseline_snapshot": null,
+  "decision": null,
+  "remaining_obligations": []
+}

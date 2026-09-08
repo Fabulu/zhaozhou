@@ -126,29 +126,46 @@ int main(int argc, char** argv) {
   zhao::check(d->rd_format_o == 2,
               "and A's format, for the same reason", 2, d->rd_format_o);
 
-  // ---- D0b: THE ONE DETECTOR THAT COULD CATCH D0 IS BLINDED BY IT ---------
-  // The bank carries an owner-generation check:
+  // ---- D0b: THE DETECTOR THAT COULD HAVE CAUGHT D0 IS BLINDED BY IT -------
+  // The bank carries what looks like exactly the right guard:
   //
   //     if (rd_v_q && (rd_q[OGEN_LO +: GENW] != rd_gen_q))
   //       rd_gen_mismatch_o <= rd_gen_mismatch_o + 1;
   //
-  // It compares the generation stored in the row against the generation offered
-  // with the read. But `rd_gen_q <= rd_owner_gen_i` is registered by the SAME
-  // ungated assignment as `rd_q`, so when the swap happens both move to B
-  // together -- and B's stored generation of course matches B's offered one.
+  // It cannot fire on D0. `rd_gen_q <= rd_owner_gen_i` is registered by the
+  // SAME ungated assignment as `rd_q`, so on the swap both move to B together
+  // -- and B's stored generation of course agrees with B's offered one. The two
+  // quantities the detector differences are corrupted in LOCKSTEP, which is why
+  // a live identity counter sat beside this defect and stayed at zero. Docket
+  // M13's cancelling-errors pattern, third instance this session.
   //
-  // The two quantities the detector differences are corrupted in LOCKSTEP, so it
-  // is structurally incapable of firing on the defect it looks built for. This is
-  // the cancelling-errors pattern (docket M13) for the third time this session,
-  // and it is why D0 survived a lint-clean block with a live identity counter.
-  std::printf("  gen-mismatch counter after the swap: %u\n",
-              d->rd_gen_mismatch_o);
-  zhao::check(d->rd_gen_mismatch_o > 0,
-              "D0b: the owner-generation mismatch counter FIRED on the swap. "
-              "It does not: both operands it differences ride the same "
-              "ungated register, so the row's own generation always agrees "
-              "with the generation captured beside it",
-              1, d->rd_gen_mismatch_o > 0 ? 1 : 0);
+  // Measured pre-repair: 0. That observation lives in
+  // reports/D0-JOIN-SEAM-REPRODUCED-20260908.md rather than as an assertion,
+  // because after the repair there is no swap for it to miss -- asserting "it
+  // fires on the swap" would be a check that can only pass while the bug does.
+  //
+  // What IS asserted is that the detector works at all, on a genuine staleness:
+  // read row A while offering a generation that is not A's. Post-repair this is
+  // the real thing the counter is for, and it must fire.
+  {
+    const unsigned before = d->rd_gen_mismatch_o;
+    d->rd_valid_i = 1;
+    d->rd_slot_i = 11; d->rd_sidx_i = 0;
+    d->rd_owner_gen_i = 0x99;          // NOT the 0x21 stored in row A
+    d->eval();
+    tick(d);
+    d->rd_valid_i = 0;
+    d->eval();
+    tick(d);                            // the compare is one cycle behind
+    d->eval();
+    std::printf("  gen-mismatch on a genuine stale read: %u -> %u\n",
+                before, d->rd_gen_mismatch_o);
+    zhao::check(d->rd_gen_mismatch_o > before,
+                "the owner-generation detector FIRES on a genuine stale "
+                "read -- shown to fire, so it is a live detector and not a "
+                "counter that has only ever been zero",
+                1, d->rd_gen_mismatch_o > before ? 1 : 0);
+  }
 
   // ---- D0c: THE ILLEGAL-KEY DETECTOR, SHOWN TO FIRE ------------------------
   // `rd_legal_c = (rd_sidx_i != 3)`. sidx 3 is unreachable from the expander

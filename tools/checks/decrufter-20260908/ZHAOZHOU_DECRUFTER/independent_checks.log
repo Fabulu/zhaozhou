@@ -1,0 +1,9 @@
+PASS stalled_join_counterexample
+PASS repaired_join_random
+PASS axis_queue_induction
+PASS arithmetic_domain
+PASS paired_pipeline_credit
+PASS owner_local_boolean
+PASS geometry
+7/7 check groups passed. See independent_results.json for exact scope and traces.
+NOT run: Verilator/RTL simulation, formal RTL proof, Quartus, board tests.

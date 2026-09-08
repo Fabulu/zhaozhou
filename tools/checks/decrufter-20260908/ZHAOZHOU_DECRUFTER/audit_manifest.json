@@ -1,0 +1,289 @@
+{
+  "schema_version": 1,
+  "task": "Texture island decrufting architecture handoff",
+  "repository": "Fabulu/zhaozhou",
+  "hardware_branch": "zixxtrixx-v8-closeout",
+  "audited_commit": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+  "last_confirmed_commit": "cb4322be118b76fae4a9208c20d538a78b753cfa",
+  "last_confirmed_commit_time_utc": "2026-09-08T15:47:00Z",
+  "last_confirmed_commit_time_cest": "2026-09-08T17:47:00+02:00",
+  "commit_time_utc": "2026-09-08T14:52:48Z",
+  "commit_time_cest": "2026-09-08T16:52:48+02:00",
+  "refresh_evidence": "Live branch refreshed repeatedly during this task; a final refresh is recorded in handoff_state.json.",
+  "performed": [
+    "GitHub connector source/report reads",
+    "Primary vendor documentation research",
+    "Local Python finite/protocol models"
+  ],
+  "not_performed": [
+    "Repository writes",
+    "Verilator or other RTL simulations",
+    "Formal RTL proof",
+    "Quartus synthesis or fitting",
+    "Board tests"
+  ],
+  "sources": [
+    {
+      "id": "S01",
+      "repository_path": "reports/synthesis/zhao_block_fit.json",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/reports/synthesis/zhao_block_fit.json",
+      "git_blob_sha": "eb69dce6b097a7da8a681409928f3f77db8ce029",
+      "audit_focus_ranges": [],
+      "note": "Measured receipts; per-row source/configuration caveats. Relevant rows, not a current netlist attribution.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S02",
+      "repository_path": "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/fpga/rtl/texture/zhao_texture_island_v3_top.sv",
+      "git_blob_sha": "1feb3ebda4c96aadda2afb46c27c696a804b6d39",
+      "audit_focus_ranges": [
+        [
+          1,
+          355
+        ],
+        [
+          600,
+          990
+        ],
+        [
+          1000,
+          1400
+        ],
+        [
+          1590,
+          1710
+        ],
+        [
+          2460,
+          2890
+        ]
+      ],
+      "note": "Admission, attribute arrays/readers, AUX/material consumers, live metadata shadows, and response join.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S03",
+      "repository_path": "fpga/rtl/texture/zhao_texture_metajoin.sv",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/fpga/rtl/texture/zhao_texture_metajoin.sv",
+      "git_blob_sha": "58dd09b5ab0f7e7636d2baf8afa180f200da5ef2",
+      "audit_focus_ranges": [
+        [
+          100,
+          200
+        ]
+      ],
+      "note": "Read-output update, generation alignment, record layout and legal-index handling.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S04",
+      "repository_path": "fpga/rtl/raster/zhao_raster_rcp24_v3.sv",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/fpga/rtl/raster/zhao_raster_rcp24_v3.sv",
+      "git_blob_sha": null,
+      "audit_focus_ranges": [
+        [
+          1,
+          340
+        ]
+      ],
+      "note": "Reserved preparation, context default, queues, exact arithmetic and interface.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S05",
+      "repository_path": "fpga/rtl/raster/zhao_raster_rcp24_svc.sv",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/fpga/rtl/raster/zhao_raster_rcp24_svc.sv",
+      "git_blob_sha": "7a9fcf7382b30dfcb9148c36283eeca511a94648",
+      "audit_focus_ranges": [
+        [
+          60,
+          280
+        ]
+      ],
+      "note": "Existing scan-based service, preparation path and arithmetic structure; compare with actual island instantiation.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S06",
+      "repository_path": "fpga/rtl/texture/zhao_texture_v3own.sv",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/fpga/rtl/texture/zhao_texture_v3own.sv",
+      "git_blob_sha": "e2d0e86d1e7eb1d07facb39022ea4a9f38de1f79",
+      "audit_focus_ranges": [
+        [
+          1,
+          640
+        ],
+        [
+          760,
+          1450
+        ]
+      ],
+      "note": "Identity/window reconstruction, control masks, staged claim/write/publication, static payload banks, and local-update candidate.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S07",
+      "repository_path": "fpga/rtl/texture/zhao_texture_frag_expand.sv",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/fpga/rtl/texture/zhao_texture_frag_expand.sv",
+      "git_blob_sha": null,
+      "audit_focus_ranges": [],
+      "note": "Actual expander fields, request outputs, AUX context, issue events, and queue structure.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S08",
+      "repository_path": "fpga/rtl/raster/zhao_raster_perspuv_svc.sv",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/fpga/rtl/raster/zhao_raster_perspuv_svc.sv",
+      "git_blob_sha": "95d7ff17547268a1d272fabc6a8bd6d6cb11f118",
+      "audit_focus_ranges": [
+        [
+          1,
+          645
+        ]
+      ],
+      "note": "Two identical work-queue schedules, operand/result arrays, exact rescale, and registered output capacity.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S09",
+      "repository_path": "fpga/rtl/texture/zhao_texture_cache_pipe.sv",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/fpga/rtl/texture/zhao_texture_cache_pipe.sv",
+      "git_blob_sha": "fdfc944469acd7f8cad121556053482f8e6c3767",
+      "audit_focus_ranges": [
+        [
+          1,
+          550
+        ]
+      ],
+      "note": "Static lane memory design, response credits, miss/replay, and capture boundary.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S10",
+      "repository_path": "tools/quartus/run_block_fit.ps1",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/tools/quartus/run_block_fit.ps1",
+      "git_blob_sha": "9020fcb7e095e9d14ff490c9df9e663ad08e5766",
+      "audit_focus_ranges": [
+        [
+          1,
+          210
+        ],
+        [
+          320,
+          695
+        ]
+      ],
+      "note": "Existing MapOnly, snapshot paths/guard, virtual I/O, parameters and provenance implementation.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S11",
+      "repository_path": "design/fit_targets.yml",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/design/fit_targets.yml",
+      "git_blob_sha": "902e4edb1940f6c304ff1ce5a3d07465a80b700d",
+      "audit_focus_ranges": [
+        [
+          1,
+          90
+        ]
+      ],
+      "note": "Target closures, structural-rule scope and the cache-gate correction.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S12",
+      "repository_path": "reports/synthesis/blockpaths/zhao_texture_island_v3_top@pktC.setup.summary.rpt",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/reports/synthesis/blockpaths/zhao_texture_island_v3_top@pktC.setup.summary.rpt",
+      "git_blob_sha": "de6fb525128c0e7d2fa0e3e8a8788a06efb14278",
+      "audit_focus_ranges": [
+        [
+          1,
+          15
+        ]
+      ],
+      "note": "Intermediate specimen timing endpoints, not corrected-design timing.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S13",
+      "repository_path": "reports/P-CNT-RESULT-20260908.md",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/reports/P-CNT-RESULT-20260908.md",
+      "git_blob_sha": "f43c63467f91cec051ae5b1501f8b87f7190d3c1",
+      "audit_focus_ranges": [
+        [
+          140,
+          200
+        ]
+      ],
+      "note": "Withdrawal of the frequency-gain claim after second-seed result.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S14",
+      "repository_path": "reports/PACKET-C-STATUS-20260908.md",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/reports/PACKET-C-STATUS-20260908.md",
+      "git_blob_sha": null,
+      "audit_focus_ranges": [],
+      "note": "Reported completed cutover; report claims are checked against RTL, not accepted as proof.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    },
+    {
+      "id": "S15",
+      "repository_path": "runs/CLAUDE-RUNS/RUN-20260908-0530-p0c-v3own-island-restructure/TASK_LOG.md",
+      "ref": "30ab0e2b63891a86b3138f3638d0e12560b97732",
+      "url": "https://github.com/Fabulu/zhaozhou/blob/30ab0e2b63891a86b3138f3638d0e12560b97732/runs/CLAUDE-RUNS/RUN-20260908-0530-p0c-v3own-island-restructure/TASK_LOG.md",
+      "git_blob_sha": "45b7f7c564a4ebad95e1243d166acef41a469684",
+      "audit_focus_ranges": [],
+      "note": "Working-agent test/fit status and known correction history, not independent test execution.",
+      "scope": "relevant text inspected through GitHub connector; not a downloaded build closure"
+    }
+  ],
+  "vendor_references": [
+    {
+      "id": "V01",
+      "title": "Altera/Intel Quartus Help 18.0 \u2014 M10K memory block definition",
+      "url": "https://resources.altera.com/quartushelp/18.0/reference/glossary/def_m10k.htm",
+      "scope": "Memory modes, read/clock enables, configurable widths. Device support does not certify any proposed RTL template."
+    },
+    {
+      "id": "V02",
+      "title": "Cyclone V Device Handbook \u2014 M10K mixed-width configurations",
+      "url": "https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/m10k-blocks-mixed-width-configurations",
+      "scope": "Simple-dual-port 256 x 40 geometry and narrower true-dual-port configurations; not interchangeable modes."
+    },
+    {
+      "id": "V03",
+      "title": "Intel Quartus Help 19.1 \u2014 Synthesis Resources Reports",
+      "url": "https://www.intel.la/content/www/xl/es/programmable/quartushelp/19.1/report/rpt/rpt_file_resource_usage_analysis.htm",
+      "scope": "Resource utilization by entity; distinguishes resource classes. Guidance, not a command tested in Quartus 17."
+    },
+    {
+      "id": "V04",
+      "title": "Intel Quartus Prime Standard Edition 18.1 User Guide \u2014 Analysis and Synthesis Resource Utilization by Entity",
+      "url": "https://docs.altera.com/r/docs/683230/18.1/intel-quartus-prime-standard-edition-user-guide/analysis-and-synthesis-resource-utilization-by-entity",
+      "scope": "Entity-level compilation-report attribution. Use the corresponding installed-version panels."
+    }
+  ],
+  "fixture_paths_identified_not_executed": [
+    "tests/raster/raster_perspuv_svc_directed.cpp",
+    "tests/raster/tb_perspuv_pair.sv",
+    "tests/raster/raster_rcp24_v3_directed.cpp",
+    "tests/raster/tb_rcp24_v3_pair.sv"
+  ],
+  "physical_savings_claim": "No new ALM, register, DSP, memory or timing saving has been measured by this task."
+}

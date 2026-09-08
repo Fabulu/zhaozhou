@@ -1,0 +1,33 @@
+{
+  "brief_words": 11515,
+  "brief_utf8_bytes": 86955,
+  "brief_sections": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17
+  ],
+  "source_labels_resolve": true,
+  "utf8_replacement_characters": 0,
+  "models_passed": 7,
+  "models_failed": 0,
+  "model_rerun_in_clean_directory": "identical output and JSON results",
+  "json_artifacts_parse": true,
+  "root_and_packaged_txt_identical": true,
+  "latest_commit_review": "single TASK_LOG-only commit; hardware source unchanged",
+  "scope": "Packaging and independent model QA only. No RTL, Quartus or board signoff."
+}

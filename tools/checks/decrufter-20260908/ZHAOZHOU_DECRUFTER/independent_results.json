@@ -1,0 +1,217 @@
+{
+  "J0_stalled_join_counterexample": {
+    "result": "PASS: current equations produce wrong metadata; accepted/emitted counts still agree",
+    "traces": {
+      "current": [
+        {
+          "edge": 0,
+          "offered": [
+            10,
+            2730
+          ],
+          "downstream_ready": false,
+          "accepted": true,
+          "emitted": null,
+          "post_edge_held": {
+            "valid": true,
+            "token": 10,
+            "data": 2730,
+            "meta": 273
+          }
+        },
+        {
+          "edge": 1,
+          "offered": [
+            20,
+            3003
+          ],
+          "downstream_ready": false,
+          "accepted": false,
+          "emitted": null,
+          "post_edge_held": {
+            "valid": true,
+            "token": 10,
+            "data": 2730,
+            "meta": 546
+          }
+        },
+        {
+          "edge": 2,
+          "offered": [
+            20,
+            3003
+          ],
+          "downstream_ready": true,
+          "accepted": true,
+          "emitted": {
+            "token": 10,
+            "data": 2730,
+            "meta": 546
+          },
+          "post_edge_held": {
+            "valid": true,
+            "token": 20,
+            "data": 3003,
+            "meta": 546
+          }
+        },
+        {
+          "edge": 3,
+          "offered": null,
+          "downstream_ready": true,
+          "accepted": false,
+          "emitted": {
+            "token": 20,
+            "data": 3003,
+            "meta": 546
+          },
+          "post_edge_held": {
+            "valid": false,
+            "token": 20,
+            "data": 3003,
+            "meta": 0
+          }
+        }
+      ],
+      "repaired": [
+        {
+          "edge": 0,
+          "offered": [
+            10,
+            2730
+          ],
+          "downstream_ready": false,
+          "accepted": true,
+          "emitted": null,
+          "post_edge_held": {
+            "valid": true,
+            "token": 10,
+            "data": 2730,
+            "meta": 273
+          }
+        },
+        {
+          "edge": 1,
+          "offered": [
+            20,
+            3003
+          ],
+          "downstream_ready": false,
+          "accepted": false,
+          "emitted": null,
+          "post_edge_held": {
+            "valid": true,
+            "token": 10,
+            "data": 2730,
+            "meta": 273
+          }
+        },
+        {
+          "edge": 2,
+          "offered": [
+            20,
+            3003
+          ],
+          "downstream_ready": true,
+          "accepted": true,
+          "emitted": {
+            "token": 10,
+            "data": 2730,
+            "meta": 273
+          },
+          "post_edge_held": {
+            "valid": true,
+            "token": 20,
+            "data": 3003,
+            "meta": 546
+          }
+        },
+        {
+          "edge": 3,
+          "offered": null,
+          "downstream_ready": true,
+          "accepted": false,
+          "emitted": {
+            "token": 20,
+            "data": 3003,
+            "meta": 546
+          },
+          "post_edge_held": {
+            "valid": false,
+            "token": 20,
+            "data": 3003,
+            "meta": 546
+          }
+        }
+      ]
+    }
+  },
+  "J1_repaired_join_random": {
+    "result": "PASS",
+    "seeds": 32,
+    "cycles_per_seed": 5000,
+    "accepted": 66251,
+    "emitted": 66111,
+    "reset_events": 148,
+    "cancelled_records": 140,
+    "whole_record_hold_checks": 86098
+  },
+  "P0_axis_queue_lockstep": {
+    "result": "PASS",
+    "schedules": 4096,
+    "max_queue_depth": 1,
+    "scope": "control recurrence in current PERSPUV; not an RTL proof"
+  },
+  "P1_narrowing_domain": {
+    "result": "PASS",
+    "legal_domain_comparisons": 101536,
+    "counterexample_k32": {
+      "original64": [
+        -2147483648,
+        true
+      ],
+      "narrowed56": [
+        0,
+        false
+      ]
+    },
+    "decision": "keep 64-bit arithmetic in first architecture variant; narrowing is separately conditional"
+  },
+  "P2_paired_pipeline_credit": {
+    "result": "PASS",
+    "seeds": 24,
+    "cycles_per_seed": 6000,
+    "credit_capacity_including_pipeline": 17,
+    "max_owned": 17,
+    "accepted": 85579,
+    "emitted": 83870,
+    "reset_events": 107,
+    "cancelled_records": 1709,
+    "input_stall_cycles": 54755,
+    "nonzero_product_jobs": 136954,
+    "saturation_pair_interval_clocks": 1,
+    "scope": "packet/credit model, not DSP RTL, FIFO RAM implementation, or timing proof"
+  },
+  "O0_issue_predicate_localization": {
+    "result": "PASS",
+    "cases": 4096,
+    "scope": "Boolean update identity only; no claim about fitted sharing, reject counters, or full-owner equivalence"
+  },
+  "G0_declared_geometry": {
+    "result": "PASS",
+    "original_front_array_declared_bits": 8832,
+    "proposed_front_descriptor_bits_per_row": 119,
+    "old_sample_reference_declared_bits": 4032,
+    "parallel_SDP_M10K_width_lower_bounds": {
+      "40": 1,
+      "46": 2,
+      "64": 2,
+      "80": 2,
+      "82": 3,
+      "111": 3,
+      "119": 3,
+      "138": 4
+    },
+    "warning": "declared bits and geometric lower bounds are not measured flip-flops, ALMs, or inference results"
+  }
+}
