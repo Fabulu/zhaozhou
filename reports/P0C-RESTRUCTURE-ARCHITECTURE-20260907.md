@@ -108,6 +108,24 @@ widening; there is no slack to absorb it. This ripples through THREE files:
   parameter — mechanical, but it touches a retained service and therefore
   belongs in its own commit with its own leaf test run.
 
+> **MEASUREMENT TAKEN, 2026-09-08 — it is a LITERAL 16, in FOUR places.**
+> The conditional above fires. `zhao_texture_cache_pipe.sv` has a parameter list
+> (`LANES`, `LINES`, `LINE_BYTES`, `REQN`) but **no width parameter for the
+> source id**, and the width is hard-coded at:
+>
+> | site | line | declaration |
+> |---|---|---|
+> | input port | 102 | `input  var logic [15:0] acc_src_id_i` |
+> | output port | 108 | `output var logic [15:0] smp_src_id_o` |
+> | request queue | 206 | `logic [15:0] rq_src [REQN]` |
+> | response queue | 305 | `logic [15:0] rs_src [REQN]` |
+>
+> So Stage B's prerequisite is confirmed and sized: add an `SRCW` parameter
+> (default 16, so every existing instantiation is bit-identical) and thread it
+> through those four sites. It touches a RETAINED service, so per this document's
+> own rule it is its own commit with its own leaf test run — and it must land
+> BEFORE anything depends on an 18-bit token, not alongside it.
+
 REJECTED ALTERNATIVE, recorded so nobody re-proposes it: keep the transport
 token at 16 bits by giving the expander a private slot namespace and a
 translation table back to owner handles at the return seam. Rejected because
