@@ -95,11 +95,14 @@ uint32_t b32_of(uint32_t w) { return static_cast<uint32_t>((uint64_t{1} << 31) -
 bool neg_of(uint32_t w) { return w > (1u << 31); }
 
 // The script's boundary list, in its order.
-const std::vector<uint32_t> kBoundary = {
-    0u,          1u,          2u,          63u,         64u,          127u,
-    128u,        65535u,      65536u,      (1u << 29) - 1u,           1u << 29,
-    (1u << 31) - 1u,          1u << 31,    (1u << 31) + 1u,           0xFFFFFFFEu,
-    0xFFFFFFFFu};
+const std::vector<uint32_t> kBoundary = {0u,          1u,
+                                         2u,          63u,
+                                         64u,         127u,
+                                         128u,        65535u,
+                                         65536u,      (1u << 29) - 1u,
+                                         1u << 29,    (1u << 31) - 1u,
+                                         1u << 31,    (1u << 31) + 1u,
+                                         0xFFFFFFFEu, 0xFFFFFFFFu};
 
 // A 64-bit LCG read only from its TOP 32 bits. Seeded with the script's own
 // seed so the provenance of the stimulus is one number, not a habit.
@@ -119,9 +122,9 @@ struct Res {
 
 struct MulCase {
   uint32_t a, b, corr;
-  uint64_t p;        // expected corrected P64
-  uint32_t x_next;   // expected MX iterate
-  uint32_t w_next;   // expected MW extraction
+  uint64_t p;       // expected corrected P64
+  uint32_t x_next;  // expected MX iterate
+  uint32_t w_next;  // expected MW extraction
   uint8_t tag;
 };
 
@@ -269,8 +272,7 @@ int main(int argc, char** argv) {
     std::printf("  B.1 boundary MX: %d checked, %d negative-correction\n", st.checked, negs);
     if (st.have_bad) {
       std::printf("    first mismatch a=0x%08X b=0x%08X got=0x%016llX want=0x%016llX\n",
-                  st.first_bad_a, st.first_bad_b,
-                  static_cast<unsigned long long>(st.first_bad_got),
+                  st.first_bad_a, st.first_bad_b, static_cast<unsigned long long>(st.first_bad_got),
                   static_cast<unsigned long long>(st.first_bad_want));
     }
     zhao::check(st.checked == 256, "every boundary MX case produced a result", 256,
@@ -315,8 +317,7 @@ int main(int argc, char** argv) {
                 random_negs, pct);
     if (st.have_bad) {
       std::printf("    first mismatch a=0x%08X b=0x%08X got=0x%016llX want=0x%016llX\n",
-                  st.first_bad_a, st.first_bad_b,
-                  static_cast<unsigned long long>(st.first_bad_got),
+                  st.first_bad_a, st.first_bad_b, static_cast<unsigned long long>(st.first_bad_got),
                   static_cast<unsigned long long>(st.first_bad_want));
     }
     zhao::check(st.checked == 250000, "every random MX case produced a result", 250000,
@@ -351,8 +352,8 @@ int main(int argc, char** argv) {
       const uint32_t x = rng.u32();
       const uint64_t p = static_cast<uint64_t>(m) * static_cast<uint64_t>(x);
       if (p >= (uint64_t{1} << 56)) ++over56;
-      cases.push_back(MulCase{m, x, 0u, p, 0u, static_cast<uint32_t>(p >> 24),
-                              static_cast<uint8_t>(i & 0xFF)});
+      cases.push_back(
+          MulCase{m, x, 0u, p, 0u, static_cast<uint32_t>(p >> 24), static_cast<uint8_t>(i & 0xFF)});
     }
     zhao::check(over56 == 0, "S10.4: every MW product stayed below 2^56", 0,
                 static_cast<uint64_t>(over56));
@@ -467,12 +468,12 @@ int main(int argc, char** argv) {
         if (it->second != ref[base + i]) ++mism;
       }
     }
-    std::printf("  A.%d ready 1-in-%d: %d answered, %d clocks (%.2f per reciprocal)\n", pass + 1, rp,
-                answered, total_clocks,
+    std::printf("  A.%d ready 1-in-%d: %d answered, %d clocks (%.2f per reciprocal)\n", pass + 1,
+                rp, answered, total_clocks,
                 static_cast<double>(total_clocks) / static_cast<double>(ds.size()));
     zhao::check(answered == static_cast<int>(ds.size()),
-                "the V3 tile answered every request in this pass",
-                static_cast<uint64_t>(ds.size()), static_cast<uint64_t>(answered));
+                "the V3 tile answered every request in this pass", static_cast<uint64_t>(ds.size()),
+                static_cast<uint64_t>(answered));
     zhao::check(mism == 0, "every V3 answer is BIT-IDENTICAL to the serial block's", 0,
                 static_cast<uint64_t>(mism));
     zhao::check(top.b_qerr_o == 0, "no queue overflowed or underflowed", 0,
@@ -557,11 +558,11 @@ int main(int argc, char** argv) {
       zhao::check(per >= 4.0, "and not under four, which would mean a launch was skipped", 40,
                   static_cast<uint64_t>(per * 10.0));
     } else {
-      const double serial_per =
-          static_cast<double>(serial_clocks) / static_cast<double>(ds.size());
-      std::printf("  T   NCTX=%d has fewer contexts than the loop needs: %.2f clk/recip "
-                  "against the serial reference's %.2f\n",
-                  ZHAO_RCP_NCTX, per, serial_per);
+      const double serial_per = static_cast<double>(serial_clocks) / static_cast<double>(ds.size());
+      std::printf(
+          "  T   NCTX=%d has fewer contexts than the loop needs: %.2f clk/recip "
+          "against the serial reference's %.2f\n",
+          ZHAO_RCP_NCTX, per, serial_per);
       zhao::check(per < serial_per,
                   "under-provisioned, the V3 tile is still faster than the serial "
                   "reference it would replace -- the 4.6 gate is NOT applied here, "
@@ -640,7 +641,8 @@ int main(int argc, char** argv) {
                 static_cast<uint64_t>(mism));
     zhao::check(top.b_qerr_o == 0, "no queue faulted across the exhaustive sweep", 0,
                 static_cast<uint64_t>(top.b_qerr_o));
-    zhao::check(top.b_mul_jobs_o == 4u * kN, "four product launches per denominator, all 2^24 of them",
+    zhao::check(top.b_mul_jobs_o == 4u * kN,
+                "four product launches per denominator, all 2^24 of them",
                 4u * static_cast<uint64_t>(kN), top.b_mul_jobs_o);
   }
 

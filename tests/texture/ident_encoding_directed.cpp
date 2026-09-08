@@ -80,20 +80,18 @@ int main(int argc, char** argv) {
     }
   }
 
-  std::printf("  %ld combinations | slot b4 %ld, b5 %ld | gen0 %ld, gen255 %ld"
-              " | sidx=3 %ld\n",
-              compared, saw_slot_b4, saw_slot_b5, saw_gen_0, saw_gen_255,
-              saw_illegal);
+  std::printf(
+      "  %ld combinations | slot b4 %ld, b5 %ld | gen0 %ld, gen255 %ld"
+      " | sidx=3 %ld\n",
+      compared, saw_slot_b4, saw_slot_b5, saw_gen_0, saw_gen_255, saw_illegal);
 
-  zhao::check(compared == 262144, "all 262,144 encodings were exercised",
-              262144, compared);
+  zhao::check(compared == 262144, "all 262,144 encodings were exercised", 262144, compared);
   zhao::check(owner_bad == 0,
               "the OWNER handle is bit-identical to {slot[5:0], gen[7:0]} and "
               "unpacks to the same fields",
               0, owner_bad);
-  zhao::check(sample_bad == 0,
-              "the SAMPLE handle is bit-identical to {slot, sidx, gen}",
-              0, sample_bad);
+  zhao::check(sample_bad == 0, "the SAMPLE handle is bit-identical to {slot, sidx, gen}", 0,
+              sample_bad);
   zhao::check(sowner_bad == 0,
               "and every sample of a fragment maps to the SAME owner -- the "
               "index is dropped, not folded in",
@@ -105,11 +103,9 @@ int main(int argc, char** argv) {
               "was hardcoded [15:14] and stayed legal while the token widened "
               "to 18 bits",
               0, token_bad);
-  zhao::check(ticket_bad == 0,
-              "the T2 TICKET is bit-identical to {gen[7:0], slot[5:0]}",
-              0, ticket_bad);
-  zhao::check(roundtrip_bad == 0,
-              "and ticket -> owner round-trips exactly", 0, roundtrip_bad);
+  zhao::check(ticket_bad == 0, "the T2 TICKET is bit-identical to {gen[7:0], slot[5:0]}", 0,
+              ticket_bad);
+  zhao::check(roundtrip_bad == 0, "and ticket -> owner round-trips exactly", 0, roundtrip_bad);
   zhao::check(legal_bad == 0,
               "sample index 3 is representable and reported ILLEGAL -- a value "
               "to reject, not a value that cannot arrive",
@@ -120,8 +116,7 @@ int main(int argc, char** argv) {
               "slot bits 4 and 5 were exercised -- the two bits the 4-to-6 "
               "widening created, and the ones every stale slice dropped",
               1, (saw_slot_b4 > 0 && saw_slot_b5 > 0) ? 1 : 0);
-  zhao::check(saw_gen_0 > 0 && saw_gen_255 > 0,
-              "generation 0 and 255 were both exercised", 1,
+  zhao::check(saw_gen_0 > 0 && saw_gen_255 > 0, "generation 0 and 255 were both exercised", 1,
               (saw_gen_0 > 0 && saw_gen_255 > 0) ? 1 : 0);
   zhao::check(saw_illegal > 0,
               "and sample index 3 actually occurred, so the legality check is "

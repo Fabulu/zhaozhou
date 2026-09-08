@@ -49,16 +49,19 @@ void tick(Vzhao_texture_metajoin* d) {
   d->eval();
 }
 
-void write_row(Vzhao_texture_metajoin* d, uint8_t slot, uint8_t sidx,
-               uint8_t ogen, uint8_t pslot, uint8_t pgen, uint8_t fmt,
-               uint8_t fu, uint8_t fv, uint8_t bsel, uint8_t nib) {
+void write_row(Vzhao_texture_metajoin* d, uint8_t slot, uint8_t sidx, uint8_t ogen, uint8_t pslot,
+               uint8_t pgen, uint8_t fmt, uint8_t fu, uint8_t fv, uint8_t bsel, uint8_t nib) {
   d->wr_valid_i = 1;
-  d->wr_slot_i = slot;   d->wr_sidx_i = sidx;
+  d->wr_slot_i = slot;
+  d->wr_sidx_i = sidx;
   d->wr_owner_gen_i = ogen;
-  d->wr_pal_slot_i = pslot; d->wr_pal_gen_i = pgen;
+  d->wr_pal_slot_i = pslot;
+  d->wr_pal_gen_i = pgen;
   d->wr_format_i = fmt;
-  d->wr_frac_u_i = fu;   d->wr_frac_v_i = fv;
-  d->wr_byte_sel_i = bsel; d->wr_nibble_i = nib;
+  d->wr_frac_u_i = fu;
+  d->wr_frac_v_i = fv;
+  d->wr_byte_sel_i = bsel;
+  d->wr_nibble_i = nib;
   d->eval();
   tick(d);
   d->wr_valid_i = 0;
@@ -82,34 +85,39 @@ int main(int argc, char** argv) {
 
   // Two rows whose every field differs, so a swap cannot alias.
   //                slot sidx ogen pslot pgen fmt   fu    fv  bsel nib
-  write_row(d, /*A*/  11,  0,  0x21,  1, 0x30,  2, 0x11, 0x22, 0, 0);
-  write_row(d, /*B*/  22,  1,  0x63,  3, 0x7C,  5, 0xEE, 0xDD, 1, 1);
+  write_row(d, /*A*/ 11, 0, 0x21, 1, 0x30, 2, 0x11, 0x22, 0, 0);
+  write_row(d, /*B*/ 22, 1, 0x63, 3, 0x7C, 5, 0xEE, 0xDD, 1, 1);
 
   // ---- launch A's read, then STALL and offer B ------------------------------
   // This is exactly what the island does when `disp_rsp_ready` drops: the join
   // holds A, and the cache presents B at the bank's address port.
   d->rd_valid_i = 1;
-  d->rd_slot_i = 11; d->rd_sidx_i = 0; d->rd_owner_gen_i = 0x21;
+  d->rd_slot_i = 11;
+  d->rd_sidx_i = 0;
+  d->rd_owner_gen_i = 0x21;
   d->eval();
-  tick(d);                       // A's read is now registered
+  tick(d);  // A's read is now registered
 
   // A's metadata must be present here.
   d->eval();
   const unsigned a_pgen_now = d->rd_pal_gen_o;
-  const unsigned a_fmt_now  = d->rd_format_o;
+  const unsigned a_fmt_now = d->rd_format_o;
 
   // Now the stall: NO new read is launched (rd_valid_i low, as the island's
   // `cache_smp_valid && r1_room_c` would be), but the address port shows B
   // because the cache is presenting the next response.
   d->rd_valid_i = 0;
-  d->rd_slot_i = 22; d->rd_sidx_i = 1; d->rd_owner_gen_i = 0x63;
+  d->rd_slot_i = 22;
+  d->rd_sidx_i = 1;
+  d->rd_owner_gen_i = 0x63;
   d->eval();
   tick(d);
   d->eval();
 
-  std::printf("  after stall with B offered: pal_gen %02X (A=%02X, B=%02X), "
-              "format %u (A=%u, B=%u)\n",
-              d->rd_pal_gen_o, 0x30, 0x7C, d->rd_format_o, 2, 5);
+  std::printf(
+      "  after stall with B offered: pal_gen %02X (A=%02X, B=%02X), "
+      "format %u (A=%u, B=%u)\n",
+      d->rd_pal_gen_o, 0x30, 0x7C, d->rd_format_o, 2, 5);
 
   zhao::check(a_pgen_now == 0x30 && a_fmt_now == 2,
               "A's metadata was correctly presented before the stall -- "
@@ -123,8 +131,7 @@ int main(int argc, char** argv) {
               "the dispatcher pairs A's data and token with B's metadata -- "
               "with every accepted/emitted counter balancing",
               0x30, d->rd_pal_gen_o);
-  zhao::check(d->rd_format_o == 2,
-              "and A's format, for the same reason", 2, d->rd_format_o);
+  zhao::check(d->rd_format_o == 2, "and A's format, for the same reason", 2, d->rd_format_o);
 
   // ---- D0b: THE DETECTOR THAT COULD HAVE CAUGHT D0 IS BLINDED BY IT -------
   // The bank carries what looks like exactly the right guard:
@@ -150,16 +157,16 @@ int main(int argc, char** argv) {
   {
     const unsigned before = d->rd_gen_mismatch_o;
     d->rd_valid_i = 1;
-    d->rd_slot_i = 11; d->rd_sidx_i = 0;
-    d->rd_owner_gen_i = 0x99;          // NOT the 0x21 stored in row A
+    d->rd_slot_i = 11;
+    d->rd_sidx_i = 0;
+    d->rd_owner_gen_i = 0x99;  // NOT the 0x21 stored in row A
     d->eval();
     tick(d);
     d->rd_valid_i = 0;
     d->eval();
-    tick(d);                            // the compare is one cycle behind
+    tick(d);  // the compare is one cycle behind
     d->eval();
-    std::printf("  gen-mismatch on a genuine stale read: %u -> %u\n",
-                before, d->rd_gen_mismatch_o);
+    std::printf("  gen-mismatch on a genuine stale read: %u -> %u\n", before, d->rd_gen_mismatch_o);
     zhao::check(d->rd_gen_mismatch_o > before,
                 "the owner-generation detector FIRES on a genuine stale "
                 "read -- shown to fire, so it is a live detector and not a "
@@ -174,7 +181,9 @@ int main(int argc, char** argv) {
   const unsigned illegal_before = d->rd_illegal_sidx_o;
   const unsigned pgen_before = d->rd_pal_gen_o;
   d->rd_valid_i = 1;
-  d->rd_slot_i = 22; d->rd_sidx_i = 3; d->rd_owner_gen_i = 0x63;
+  d->rd_slot_i = 22;
+  d->rd_sidx_i = 3;
+  d->rd_owner_gen_i = 0x63;
   d->eval();
   tick(d);
   d->eval();
@@ -184,8 +193,8 @@ int main(int argc, char** argv) {
               "it is a live detector and not a counter that has only ever "
               "been zero",
               illegal_before + 1, d->rd_illegal_sidx_o);
-  zhao::check(d->rd_result_valid_o == 0,
-              "and the result is marked invalid", 0, d->rd_result_valid_o);
+  zhao::check(d->rd_result_valid_o == 0, "and the result is marked invalid", 0,
+              d->rd_result_valid_o);
 
   // BUT: the data register still moved. `rd_q` is loaded from the illegal
   // address regardless, and the island wires `mj_meta_packed_c` -- derived
@@ -193,8 +202,8 @@ int main(int argc, char** argv) {
   // `rd_result_valid_o`. The only consumer of that valid bit in the island is
   // the migration shadow comparator. So the production treatment of an invalid
   // key is: count it, and use its data anyway.
-  std::printf("  after an ILLEGAL read: pal_gen %02X (was %02X), valid %u\n",
-              d->rd_pal_gen_o, pgen_before, d->rd_result_valid_o);
+  std::printf("  after an ILLEGAL read: pal_gen %02X (was %02X), valid %u\n", d->rd_pal_gen_o,
+              pgen_before, d->rd_result_valid_o);
   zhao::check(d->rd_pal_gen_o == pgen_before,
               "an ILLEGAL read leaves the metadata outputs alone. It does "
               "not: `rd_q` loads from the illegal address anyway, and the "

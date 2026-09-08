@@ -31,14 +31,14 @@
 namespace {
 
 struct Frag {
-  uint16_t owner;   // {slot[5:0], gen[7:0]}
+  uint16_t owner;  // {slot[5:0], gen[7:0]}
   int32_t u, v;
   uint8_t binding, lod;
-  uint8_t count;    // 0..3
+  uint8_t count;  // 0..3
   bool aux;
   uint8_t cls;
-  uint64_t ctx;     // the caller's opaque context; the AUX request's world
-                    // coordinates live in its low 64 bits
+  uint64_t ctx;  // the caller's opaque context; the AUX request's world
+                 // coordinates live in its low 64 bits
 };
 
 struct Req {
@@ -84,13 +84,13 @@ int main() {
     f.v = static_cast<int32_t>(0x20000 - i * 91);
     f.binding = static_cast<uint8_t>(i & 0xFF);
     f.lod = static_cast<uint8_t>((i * 3) & 0xFF);
-    f.count = static_cast<uint8_t>(i % 4);   // 0,1,2,3 cycling -- ZERO included
+    f.count = static_cast<uint8_t>(i % 4);  // 0,1,2,3 cycling -- ZERO included
     f.aux = (i % 3) == 0;
     f.cls = static_cast<uint8_t>(i & 3);
     // Distinct per fragment, so an aux request carrying the WRONG fragment's
     // context is visible rather than accidentally equal.
-    f.ctx = (static_cast<uint64_t>(0xC0DE0000u + i) << 32) |
-            static_cast<uint64_t>(0x1000u + i * 37);
+    f.ctx =
+        (static_cast<uint64_t>(0xC0DE0000u + i) << 32) | static_cast<uint64_t>(0x1000u + i * 37);
     work.push_back(f);
     st = st * 1664525u + 1013904223u;
   }
@@ -107,14 +107,16 @@ int main() {
       Req r;
       r.src_id = (static_cast<uint32_t>(f.cls) << 16) |
                  (static_cast<uint32_t>((f.owner >> 8) & 0x3F) << 10) |
-                 (static_cast<uint32_t>(s) << 8) |
-                 (f.owner & 0xFF);
+                 (static_cast<uint32_t>(s) << 8) | (f.owner & 0xFF);
       r.u = f.u;
       r.v = f.v;
       r.lod = f.lod;
       expect.push_back(r);
     }
-    if (f.aux) { ++expect_aux; expect_aux_ctx.push_back(f.ctx); }
+    if (f.aux) {
+      ++expect_aux;
+      expect_aux_ctx.push_back(f.ctx);
+    }
   }
 
   // ---- drive ---------------------------------------------------------------
@@ -157,8 +159,8 @@ int main() {
         ++seq_errors;
       } else {
         const Req& e = expect.front();
-        if (d->req_src_id_o != e.src_id || d->req_u_o != e.u ||
-            d->req_v_o != e.v || d->req_lod_o != e.lod)
+        if (d->req_src_id_o != e.src_id || d->req_u_o != e.u || d->req_v_o != e.v ||
+            d->req_lod_o != e.lod)
           ++seq_errors;
         expect.pop_front();
       }
@@ -191,12 +193,11 @@ int main() {
   d->f_valid_i = 0;
   d->eval();
 
-  std::printf("  requests %d expected %d | aux %d expected %d | zero-sample %u\n",
-              got_reqs, static_cast<int>(got_reqs + expect.size()), got_aux,
-              expect_aux, d->zero_sample_fragments_o);
+  std::printf("  requests %d expected %d | aux %d expected %d | zero-sample %u\n", got_reqs,
+              static_cast<int>(got_reqs + expect.size()), got_aux, expect_aux,
+              d->zero_sample_fragments_o);
 
-  zhao::check(next_in == work.size(),
-              "every fragment was accepted -- the run is not truncated", 1,
+  zhao::check(next_in == work.size(), "every fragment was accepted -- the run is not truncated", 1,
               next_in == work.size() ? 1 : 0);
   zhao::check(expect.empty(),
               "the expander produced EVERY request the model expected -- none "
@@ -211,16 +212,14 @@ int main() {
               "no ISSUE pulse without an accepted request -- §11.1's "
               "distinction between an intent and a taken request",
               0, static_cast<uint64_t>(iss_without_fire));
-  zhao::check(iss_handle_errors == 0,
-              "and every issue handle matches its request's identity", 0,
+  zhao::check(iss_handle_errors == 0, "and every issue handle matches its request's identity", 0,
               static_cast<uint64_t>(iss_handle_errors));
   zhao::check(aux_ctx_errors == 0,
               "every AUX request carries ITS OWN fragment's context, in FIFO "
               "order -- the world coordinates travel with the fragment instead "
               "of being read off whatever another stage is holding",
               0, static_cast<uint64_t>(aux_ctx_errors));
-  zhao::check(got_aux == expect_aux,
-              "exactly as many AUX requests as fragments that asked for one",
+  zhao::check(got_aux == expect_aux, "exactly as many AUX requests as fragments that asked for one",
               expect_aux, got_aux);
 
   // ---- THE COUNTS, which output equality cannot see ------------------------
@@ -229,9 +228,8 @@ int main() {
               "on the wire -- a machine doing double work would disagree here "
               "while its output still matched",
               static_cast<uint64_t>(got_reqs), d->requests_o);
-  zhao::check(d->fragments_o == work.size(),
-              "and it counted exactly the fragments it accepted", work.size(),
-              d->fragments_o);
+  zhao::check(d->fragments_o == work.size(), "and it counted exactly the fragments it accepted",
+              work.size(), d->fragments_o);
 
   // ---- the zero-sample fragment, exercised and asserted --------------------
   zhao::check(expect_zero > 0,

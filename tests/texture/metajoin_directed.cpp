@@ -77,19 +77,19 @@ int main(int argc, char** argv) {
   // ---- every legal (slot, sidx), every field distinct ----------------------
   int field_errors = 0, latency_errors = 0, compared = 0;
   for (uint32_t slot = 0; slot < 64; ++slot) {
-    for (uint32_t sidx = 0; sidx < 3; ++sidx) {   // 3 is illegal, tested below
+    for (uint32_t sidx = 0; sidx < 3; ++sidx) {  // 3 is illegal, tested below
       Rec r;
       r.slot = static_cast<uint8_t>(slot);
       r.sidx = static_cast<uint8_t>(sidx);
       // Distinct, non-zero, and chosen so a one-bit shift cannot alias.
-      r.ogen  = static_cast<uint8_t>(0x81u + slot);
+      r.ogen = static_cast<uint8_t>(0x81u + slot);
       r.pslot = static_cast<uint8_t>((slot + sidx) & 3u);
-      r.pgen  = static_cast<uint8_t>(0x37u + sidx * 5u + slot);
-      r.fmt   = static_cast<uint8_t>(1u + ((slot + sidx) % 7u));   // never 0
-      r.fu    = static_cast<uint8_t>(0x5Au ^ (slot * 3u));
-      r.fv    = static_cast<uint8_t>(0xA5u ^ (slot * 7u + sidx));
-      r.bsel  = static_cast<uint8_t>((slot ^ sidx) & 1u);
-      r.nib   = static_cast<uint8_t>((slot + 1u) & 1u);
+      r.pgen = static_cast<uint8_t>(0x37u + sidx * 5u + slot);
+      r.fmt = static_cast<uint8_t>(1u + ((slot + sidx) % 7u));  // never 0
+      r.fu = static_cast<uint8_t>(0x5Au ^ (slot * 3u));
+      r.fv = static_cast<uint8_t>(0xA5u ^ (slot * 7u + sidx));
+      r.bsel = static_cast<uint8_t>((slot ^ sidx) & 1u);
+      r.nib = static_cast<uint8_t>((slot + 1u) & 1u);
       write_rec(d, r);
 
       d->rd_valid_i = 1;
@@ -119,12 +119,11 @@ int main(int argc, char** argv) {
     }
   }
 
-  std::printf("  %d records written and read back | writes %u reads %u\n",
-              compared, d->writes_o, d->reads_o);
+  std::printf("  %d records written and read back | writes %u reads %u\n", compared, d->writes_o,
+              d->reads_o);
 
-  zhao::check(compared == 192,
-              "all 192 legal (slot, sample_index) rows were exercised",
-              192, compared);
+  zhao::check(compared == 192, "all 192 legal (slot, sample_index) rows were exercised", 192,
+              compared);
   zhao::check(field_errors == 0,
               "EVERY field reads back exactly what was written -- palette slot, "
               "palette generation, format, both fractions, byte select and "
@@ -158,20 +157,28 @@ int main(int argc, char** argv) {
               "and returns NO result. An unwritten row is not a benign zero; it "
               "is whatever a previous owner left at that address",
               0, d->rd_result_valid_o ? 1 : 0);
-  zhao::check(d->reads_o == reads_before,
-              "and it is not counted as a read", reads_before, d->reads_o);
+  zhao::check(d->reads_o == reads_before, "and it is not counted as a read", reads_before,
+              d->reads_o);
 
   // ---- the generation alignment check --------------------------------------
   Rec g;
-  g.slot = 9; g.sidx = 1; g.ogen = 0x44; g.pslot = 2; g.pgen = 0x11;
-  g.fmt = 5; g.fu = 0x3C; g.fv = 0xC3; g.bsel = 1; g.nib = 0;
+  g.slot = 9;
+  g.sidx = 1;
+  g.ogen = 0x44;
+  g.pslot = 2;
+  g.pgen = 0x11;
+  g.fmt = 5;
+  g.fu = 0x3C;
+  g.fv = 0xC3;
+  g.bsel = 1;
+  g.nib = 0;
   write_rec(d, g);
   const uint32_t mism_before = d->rd_gen_mismatch_o;
 
   d->rd_valid_i = 1;
   d->rd_slot_i = g.slot;
   d->rd_sidx_i = g.sidx;
-  d->rd_owner_gen_i = 0x45;      // NOT the generation the row was written for
+  d->rd_owner_gen_i = 0x45;  // NOT the generation the row was written for
   d->eval();
   tick(d);
   d->rd_valid_i = 0;

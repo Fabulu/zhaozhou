@@ -46,19 +46,19 @@ struct Row {
 
 Row make_row(int i, int pass) {
   Row r;
-  r.ctx   = (0xC0DE0000ull + static_cast<uint64_t>(i) * 0x1111) << 32 |
-            (0xBEEF0000ull + static_cast<uint64_t>(i) * 7 + pass);
-  r.gen   = static_cast<uint8_t>(0x10 + i + pass * 0x40);
-  r.lod   = static_cast<uint8_t>(i * 3 + 1);
-  r.cls   = static_cast<uint8_t>((i + pass) & 3);
-  r.aux   = static_cast<uint8_t>((i >> 1) & 1);
+  r.ctx = (0xC0DE0000ull + static_cast<uint64_t>(i) * 0x1111) << 32 |
+          (0xBEEF0000ull + static_cast<uint64_t>(i) * 7 + pass);
+  r.gen = static_cast<uint8_t>(0x10 + i + pass * 0x40);
+  r.lod = static_cast<uint8_t>(i * 3 + 1);
+  r.cls = static_cast<uint8_t>((i + pass) & 3);
+  r.aux = static_cast<uint8_t>((i >> 1) & 1);
   r.count = static_cast<uint8_t>((i + 1) & 3);
   r.pslot = static_cast<uint8_t>((i + 2) & 3);
-  r.pgen  = static_cast<uint8_t>(0x80 + i);
-  r.mosa  = static_cast<uint8_t>(i * 5 + 3);
-  r.mosb  = static_cast<uint8_t>(i * 11 + 7);
-  r.mosw  = static_cast<uint8_t>(255 - i * 3);
-  r.bsel  = static_cast<uint8_t>(i ^ 0x5A);
+  r.pgen = static_cast<uint8_t>(0x80 + i);
+  r.mosa = static_cast<uint8_t>(i * 5 + 3);
+  r.mosb = static_cast<uint8_t>(i * 11 + 7);
+  r.mosw = static_cast<uint8_t>(255 - i * 3);
+  r.bsel = static_cast<uint8_t>(i ^ 0x5A);
   return r;
 }
 
@@ -101,17 +101,17 @@ void read_row(Vzhao_texture_early_desc* d, int slot, uint8_t claim_gen) {
 // eight fields and reporting eleven.
 int row_diff(const Row& a, const Row& b) {
   int n = 0;
-  if (a.ctx   != b.ctx)   ++n;
-  if (a.lod   != b.lod)   ++n;
-  if (a.cls   != b.cls)   ++n;
-  if (a.aux   != b.aux)   ++n;
+  if (a.ctx != b.ctx) ++n;
+  if (a.lod != b.lod) ++n;
+  if (a.cls != b.cls) ++n;
+  if (a.aux != b.aux) ++n;
   if (a.count != b.count) ++n;
   if (a.pslot != b.pslot) ++n;
-  if (a.pgen  != b.pgen)  ++n;
-  if (a.mosa  != b.mosa)  ++n;
-  if (a.mosb  != b.mosb)  ++n;
-  if (a.mosw  != b.mosw)  ++n;
-  if (a.bsel  != b.bsel)  ++n;
+  if (a.pgen != b.pgen) ++n;
+  if (a.mosa != b.mosa) ++n;
+  if (a.mosb != b.mosb) ++n;
+  if (a.mosw != b.mosw) ++n;
+  if (a.bsel != b.bsel) ++n;
   return n;
 }
 
@@ -165,9 +165,10 @@ int main(int argc, char** argv) {
     }
   }
 
-  std::printf("  128 admissions over 64 slots: %d field errors, %d generation "
-              "errors, %d validity errors\n",
-              field_errors, gen_errors, valid_errors);
+  std::printf(
+      "  128 admissions over 64 slots: %d field errors, %d generation "
+      "errors, %d validity errors\n",
+      field_errors, gen_errors, valid_errors);
 
   zhao::check(field_errors == 0,
               "every one of the eleven descriptor fields reads back exactly, "
@@ -192,16 +193,17 @@ int main(int argc, char** argv) {
     const int before = mismatches(d, a);
 
     d->rd_valid_i = 0;
-    d->rd_slot_i = 40;                  // a different row, offered but not read
+    d->rd_slot_i = 40;  // a different row, offered but not read
     d->rd_owner_gen_i = make_row(40, 1).gen;
     d->eval();
     tick(d);
     tick(d);
     d->eval();
 
-    std::printf("  hold law: after two stalled cycles with slot 40 offered, "
-                "lod %u (slot 9 = %u, slot 40 = %u)\n",
-                d->rd_lod_q4_4_o, a.lod, make_row(40, 1).lod);
+    std::printf(
+        "  hold law: after two stalled cycles with slot 40 offered, "
+        "lod %u (slot 9 = %u, slot 40 = %u)\n",
+        d->rd_lod_q4_4_o, a.lod, make_row(40, 1).lod);
 
     zhao::check(before == 0, "the reference read landed before the stall", 0,
                 static_cast<uint64_t>(before));
@@ -222,7 +224,7 @@ int main(int argc, char** argv) {
   // because the alternative (new-data forwarding) is a different memory mode
   // that costs bypass logic and would silently change what a consumer sees.
   {
-    const Row older = make_row(17, 1);   // already resident from the loop above
+    const Row older = make_row(17, 1);  // already resident from the loop above
     // The contrast row is SEARCHED, not guessed. make_row varies only ctx, gen
     // and raw_class with `pass`, so make_row(17, 0) leaves eight of eleven
     // fields identical -- and the first version of this test used exactly that,
@@ -236,7 +238,11 @@ int main(int argc, char** argv) {
     int contrast = -1;
     for (int c = 0; c < 64; ++c) {
       const Row cand = make_row(c, 0);
-      if (row_diff(older, cand) == 11) { newer = cand; contrast = c; break; }
+      if (row_diff(older, cand) == 11) {
+        newer = cand;
+        contrast = c;
+        break;
+      }
     }
     zhao::check(contrast >= 0,
                 "a contrast row differing in all eleven fields exists and was "
@@ -258,7 +264,7 @@ int main(int argc, char** argv) {
     d->wr_mosaic_mat_b_i = newer.mosb;
     d->wr_mosaic_weight_i = newer.mosw;
     d->wr_binding_sel_i = newer.bsel;
-    d->rd_valid_i = 1;                   // SAME address, SAME edge
+    d->rd_valid_i = 1;  // SAME address, SAME edge
     d->rd_slot_i = 17;
     d->rd_owner_gen_i = older.gen;
     d->eval();
@@ -275,8 +281,8 @@ int main(int argc, char** argv) {
                 "eleven fields, so the same-address answer below actually "
                 "distinguishes old data from new",
                 11, static_cast<uint64_t>(row_diff(older, newer)));
-    std::printf("  same-address write+read: lod %u (old %u, new %u)\n",
-                d->rd_lod_q4_4_o, older.lod, newer.lod);
+    std::printf("  same-address write+read: lod %u (old %u, new %u)\n", d->rd_lod_q4_4_o, older.lod,
+                newer.lod);
     zhao::check(mismatches(d, older) == 0,
                 "a read on the same edge as a write to the same row returns OLD "
                 "data. Stated rather than discovered: this is the M10K's own "
@@ -307,8 +313,10 @@ int main(int argc, char** argv) {
     d->eval();
     const uint32_t after_stale = d->rd_gen_mismatch_o;
 
-    std::printf("  generation instrument: %u -> %u (matching read) -> %u "
-                "(stale read)\n", before, after_match, after_stale);
+    std::printf(
+        "  generation instrument: %u -> %u (matching read) -> %u "
+        "(stale read)\n",
+        before, after_match, after_stale);
 
     zhao::check(after_match == before,
                 "a read whose claimed generation matches the row is silent -- "

@@ -67,11 +67,11 @@ void quiesce(Dut& d) {
   d.frag_aux_i = 0;
   d.frag_base_rgb_i = 0x808080;
   d.frag_base_a_i = 0xFF;
-  d.frag_class_i = 0;          // CLS_CLUT -- legal
+  d.frag_class_i = 0;  // CLS_CLUT -- legal
   d.frag_pal_slot_i = 0;
   d.frag_pal_gen_i = 0;
   d.bind_base_i = 0;
-  d.bind_mode_i = 0x00006600u; // CLUT8 / nearest / 64x64
+  d.bind_mode_i = 0x00006600u;  // CLUT8 / nearest / 64x64
   d.fill_ready_i = 1;
   d.fill_data_valid_i = 0;
   d.fill_data_i = 0;
@@ -129,9 +129,8 @@ int main(int argc, char** argv) {
               "nothing makes every check below vacuous",
               1, clean > 0 ? 1 : 0);
   const uint32_t clean_invalid = d.err_class_invalid_o;
-  zhao::check(clean_invalid == 0,
-              "clean traffic leaves err_class_invalid_o clear",
-              0, clean_invalid);
+  zhao::check(clean_invalid == 0, "clean traffic leaves err_class_invalid_o clear", 0,
+              clean_invalid);
 
   // ---- PHASE 2: INJECT the fault, and require the observable to MOVE -------
   // CLS_ERR (2'd3) is not a legal request class. §3.1 repair A: the counter
@@ -155,8 +154,7 @@ int main(int argc, char** argv) {
   // twice per beat, or once for the whole burst. Those are different circuits
   // and only one of them is the contract. This is the counters-see-what-
   // pictures-cannot law applied to a diagnostic instead of to a job count.
-  zhao::check(d.err_class_invalid_o - clean_invalid ==
-                  static_cast<uint32_t>(bad),
+  zhao::check(d.err_class_invalid_o - clean_invalid == static_cast<uint32_t>(bad),
               "and it moved by EXACTLY the number of accepted illegal beats -- "
               "not once per cycle the pin was 3, not twice per fragment, and "
               "not once for the burst",
@@ -202,14 +200,14 @@ int main(int argc, char** argv) {
     d.rst_n = 1;
     tick(d);
 
-    const int kWrap = 300;              // ~4.7x the 64-slot space
+    const int kWrap = 300;  // ~4.7x the 64-slot space
     int submitted = 0, retired = 0, dup = 0, foreign = 0;
     std::vector<int> seen(kWrap + 8, 0);
 
     for (int cyc = 0; cyc < 60000 && retired < kWrap; ++cyc) {
       d.frag_valid_i = (submitted < kWrap) ? 1 : 0;
       d.frag_class_i = 0;
-      d.frag_sample_count_i = 0;        // ZERO-WORK: ready at admission
+      d.frag_sample_count_i = 0;  // ZERO-WORK: ready at admission
       d.frag_aux_i = 0;
       d.frag_ctx_i = static_cast<uint64_t>(submitted);
       d.out_ready_i = 1;
@@ -218,8 +216,10 @@ int main(int argc, char** argv) {
       const bool acc = d.frag_valid_i && d.frag_ready_o;
       if (d.out_valid_o && d.out_ready_i) {
         const int tag = static_cast<int>(d.out_tag_o);
-        if (tag < 0 || tag >= kWrap) ++foreign;
-        else if (seen[tag]++) ++dup;
+        if (tag < 0 || tag >= kWrap)
+          ++foreign;
+        else if (seen[tag]++)
+          ++dup;
         ++retired;
       }
       tick(d);
@@ -229,17 +229,17 @@ int main(int argc, char** argv) {
     d.frag_sample_count_i = 1;
     d.eval();
 
-    std::printf("  zero-work wrap: submitted %d, retired %d (slot space 64, "
-                "so ~%dx wrap)\n", submitted, retired, submitted / 64);
+    std::printf(
+        "  zero-work wrap: submitted %d, retired %d (slot space 64, "
+        "so ~%dx wrap)\n",
+        submitted, retired, submitted / 64);
 
     // WHERE DOES IT STOP? Counters localise a stall that a retired-count
     // cannot: each of these is a different stage of the same path, so the
     // first one that reads zero names the boundary.
-    std::printf("    rcp %u | persp %u | plan %u | cache %u | dispatch %u\n",
-                d.cnt_rcp_completed_o, d.cnt_persp_fragments_o,
-                d.cnt_plan_accepted_o,
-                d.cnt_cache_hits_o + d.cnt_cache_misses_o,
-                d.cnt_dispatch_accepted_o);
+    std::printf("    rcp %u | persp %u | plan %u | cache %u | dispatch %u\n", d.cnt_rcp_completed_o,
+                d.cnt_persp_fragments_o, d.cnt_plan_accepted_o,
+                d.cnt_cache_hits_o + d.cnt_cache_misses_o, d.cnt_dispatch_accepted_o);
     // `cnt_combine_jobs_o` is an ARRAY OF EIGHT -- one job count per recipe --
     // not a scalar. Printing it with %u formats the array's address, which is
     // how it produced 2,558,523,520 on one run and a different large number on
@@ -248,9 +248,8 @@ int main(int argc, char** argv) {
     unsigned combine_jobs_total = 0;
     for (int r = 0; r < 8; ++r) combine_jobs_total += d.cnt_combine_jobs_o[r];
     std::printf("    expander frags %u | combine jobs %u | phases %u | refused %u | live peak %u\n",
-                d.cnt_fragments_o, combine_jobs_total,
-                d.cnt_combine_phases_o, d.cnt_combine_refused_o,
-                d.cnt_live_peak_o);
+                d.cnt_fragments_o, combine_jobs_total, d.cnt_combine_phases_o,
+                d.cnt_combine_refused_o, d.cnt_live_peak_o);
 
     zhao::check(submitted >= 200,
                 "the zero-work burst actually wrapped the 64-slot owner space "
@@ -265,9 +264,7 @@ int main(int argc, char** argv) {
                 "and none was retired TWICE, which is what a slot freed while a "
                 "front-end stage still held it would produce",
                 0, dup);
-    zhao::check(foreign == 0,
-                "and every retired tag is one this phase submitted",
-                0, foreign);
+    zhao::check(foreign == 0, "and every retired tag is one this phase submitted", 0, foreign);
   }
 
   // ---- PHASE 5: THE CONSUMER STALLS MID-FLIGHT (brief §3.2) ----------------
@@ -277,7 +274,11 @@ int main(int argc, char** argv) {
   // a credit, and a credit that is spent while the consumer is closed is the
   // reservation-versus-acceptance defect M6 already cost this repository once.
   {
-    d.rst_n = 0; tick(d); tick(d); d.rst_n = 1; tick(d);
+    d.rst_n = 0;
+    tick(d);
+    tick(d);
+    d.rst_n = 1;
+    tick(d);
 
     const int kN = 120;
     int submitted = 0, retired = 0, dup = 0, foreign = 0, stalled_accepts = 0;
@@ -301,7 +302,10 @@ int main(int argc, char** argv) {
       if (acc && !sink_open) ++stalled_accepts;
       if (d.out_valid_o && d.out_ready_i) {
         const int tag = static_cast<int>(d.out_tag_o);
-        if (tag < 0 || tag >= kN) ++foreign; else if (seen[tag]++) ++dup;
+        if (tag < 0 || tag >= kN)
+          ++foreign;
+        else if (seen[tag]++)
+          ++dup;
         ++retired;
       }
       tick(d);
@@ -311,16 +315,15 @@ int main(int argc, char** argv) {
     d.out_ready_i = 1;
     d.eval();
 
-    std::printf("  consumer stall: submitted %d, retired %d, accepted while SHUT %d\n",
-                submitted, retired, stalled_accepts);
+    std::printf("  consumer stall: submitted %d, retired %d, accepted while SHUT %d\n", submitted,
+                retired, stalled_accepts);
 
     zhao::check(stalled_accepts > 0,
                 "the island kept ACCEPTING while the sink was shut -- otherwise "
                 "the stall never exercised the credit path and this phase is "
                 "just a slower version of phase 4",
                 1, stalled_accepts > 0 ? 1 : 0);
-    zhao::check(retired == submitted,
-                "every fragment survived the stall", submitted, retired);
+    zhao::check(retired == submitted, "every fragment survived the stall", submitted, retired);
     zhao::check(dup == 0, "and none was retired twice across it", 0, dup);
     zhao::check(foreign == 0, "and no foreign tag appeared", 0, foreign);
   }
@@ -336,9 +339,13 @@ int main(int argc, char** argv) {
   // afterwards.
   {
     const int kPre = 40, kPost = 80;
-    const int kTagBase = 500;          // disjoint from the pre-reset tags
+    const int kTagBase = 500;  // disjoint from the pre-reset tags
 
-    d.rst_n = 0; tick(d); tick(d); d.rst_n = 1; tick(d);
+    d.rst_n = 0;
+    tick(d);
+    tick(d);
+    d.rst_n = 1;
+    tick(d);
     d.out_ready_i = 1;
 
     // Offer pre-reset traffic and do NOT drain it.
@@ -348,7 +355,7 @@ int main(int argc, char** argv) {
       d.frag_class_i = 0;
       d.frag_sample_count_i = 0;
       d.frag_ctx_i = static_cast<uint64_t>(pre);
-      d.out_ready_i = 0;               // sink shut: keep them in the machine
+      d.out_ready_i = 0;  // sink shut: keep them in the machine
       d.eval();
       if (d.frag_valid_i && d.frag_ready_o) ++pre;
       tick(d);
@@ -357,7 +364,11 @@ int main(int argc, char** argv) {
     d.eval();
 
     // RESET while they are in flight.
-    d.rst_n = 0; tick(d); tick(d); d.rst_n = 1; tick(d);
+    d.rst_n = 0;
+    tick(d);
+    tick(d);
+    d.rst_n = 1;
+    tick(d);
     d.out_ready_i = 1;
 
     int post = 0, retired = 0, stale = 0;
@@ -370,7 +381,7 @@ int main(int argc, char** argv) {
       const bool acc = d.frag_valid_i && d.frag_ready_o;
       if (d.out_valid_o && d.out_ready_i) {
         const int tag = static_cast<int>(d.out_tag_o);
-        if (tag < kTagBase) ++stale;   // a pre-reset fragment came back
+        if (tag < kTagBase) ++stale;  // a pre-reset fragment came back
         ++retired;
       }
       tick(d);
@@ -379,8 +390,8 @@ int main(int argc, char** argv) {
     d.frag_valid_i = 0;
     d.eval();
 
-    std::printf("  reset schedule: pre %d (abandoned), post %d, retired %d, stale %d\n",
-                pre, post, retired, stale);
+    std::printf("  reset schedule: pre %d (abandoned), post %d, retired %d, stale %d\n", pre, post,
+                retired, stale);
 
     zhao::check(pre > 0,
                 "pre-reset fragments were actually admitted and left in flight, "
@@ -395,8 +406,7 @@ int main(int argc, char** argv) {
                 "the fresh base can only be an abandoned fragment surviving a "
                 "namespace it no longer belongs to",
                 0, stale);
-    zhao::check(retired == kPost,
-                "and every post-reset fragment retired", kPost, retired);
+    zhao::check(retired == kPost, "and every post-reset fragment retired", kPost, retired);
   }
 
   // The metajoin shadow is asserted in island_v3_composed_directed, NOT here.
@@ -411,11 +421,13 @@ int main(int argc, char** argv) {
   // has a defined event to inject: `fr_wq_overflow` and `fr_id_error` have no
   // drivers at all. Asserting they stay zero would be the very mistake the
   // brief names, so this records the obligation instead of faking coverage.
-  std::printf("  OBLIGATION (brief 3.1 B): err_fragrob_id_error_o must name "
-              "which of range/stale/unsol/dup/issue/final it covers\n");
-  std::printf("  OBLIGATION (brief 3.1 C): err_fragrob_wq_overflow_o needs a "
-              "real capacity-violation event or a versioned retirement; "
-              "valid && !ready is backpressure, not overflow\n");
+  std::printf(
+      "  OBLIGATION (brief 3.1 B): err_fragrob_id_error_o must name "
+      "which of range/stale/unsol/dup/issue/final it covers\n");
+  std::printf(
+      "  OBLIGATION (brief 3.1 C): err_fragrob_wq_overflow_o needs a "
+      "real capacity-violation event or a versioned retirement; "
+      "valid && !ready is backpressure, not overflow\n");
 
   return zhao::report_and_exit("island_v3_fault_directed");
 }

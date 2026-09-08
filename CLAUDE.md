@@ -262,6 +262,41 @@ noticed had been told to look away.
 * When you add an ignore rule, ask what will now delete the thing. If the
   answer is nothing, you have moved the problem rather than fixed it.
 
+## Fit at SUBSYSTEM BOUNDARIES, not after every nodule
+
+Fabian, 2026-09-08: *"fits are what's going to be the biggest blocker, they
+cost so much time. We should only fit at big architectural subsystem, we can't
+afford fitting after every tiny nodule."*
+
+An island fit is 1.5–4 hours. Two of them consumed most of one session while the
+actual engineering — reproducing a defect, repairing it, building two new
+modules and their tests — took minutes each. The fit is the scarce resource and
+must be spent like one.
+
+**The working rule:**
+
+1. **Ask what the question actually is before reaching for Quartus.** Area,
+   Fmax, RAM inference and DSP count need a fit. *Everything else does not.*
+   Correctness, throughput in clocks, handshake behaviour, field routing,
+   atomicity under backpressure, parameter sensitivity — all of that is
+   Verilator, and it answers in seconds. The RCP V3 swap sat behind a fit for
+   days; the question that killed it ("does the tile meet its throughput
+   criterion at the island's NCTX?") was one verilate flag and under a minute.
+2. **Build new blocks standalone, wire several in at once.** A new file is in no
+   running fit's closure, so it can be written and fully tested while a fit
+   runs. Accumulate a subsystem's worth of change, then spend one fit on all of
+   it.
+3. **Name the fit gates in advance.** A plan should say where its few fits are
+   and what question each answers. A fit nobody could state a question for is a
+   fit that should not run.
+4. **A fit that measures a circuit you already know is wrong is wasted.** The
+   `@pktC` receipt measured an arrangement carrying a live metadata-swap defect,
+   and was taken from a dirty tree besides. Repair first, then measure.
+
+This does not license skipping fits. A subsystem that changes area or timing
+and never gets fitted is an unmeasured claim, and the ALM/Fmax budget is real.
+It licenses *batching* them.
+
 ## Instructions are not delivered until they are read
 
 Owner direction was posted four times because it kept not reaching the working

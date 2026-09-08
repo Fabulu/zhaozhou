@@ -49,19 +49,19 @@ struct Desc {
 
 Desc make_desc(int slot) {
   Desc d;
-  d.ctx   = (0xADD00000ull + static_cast<uint64_t>(slot) * 0x2222) << 32 |
-            (0x5EED0000ull + static_cast<uint64_t>(slot) * 13);
-  d.gen   = static_cast<uint8_t>(0x20 + slot);
-  d.lod   = static_cast<uint8_t>(slot * 3 + 5);
-  d.cls   = static_cast<uint8_t>(slot & 3);
-  d.aux   = static_cast<uint8_t>((slot >> 2) & 1);
+  d.ctx = (0xADD00000ull + static_cast<uint64_t>(slot) * 0x2222) << 32 |
+          (0x5EED0000ull + static_cast<uint64_t>(slot) * 13);
+  d.gen = static_cast<uint8_t>(0x20 + slot);
+  d.lod = static_cast<uint8_t>(slot * 3 + 5);
+  d.cls = static_cast<uint8_t>(slot & 3);
+  d.aux = static_cast<uint8_t>((slot >> 2) & 1);
   d.count = static_cast<uint8_t>((slot + 1) & 3);
   d.pslot = static_cast<uint8_t>((slot + 3) & 3);
-  d.pgen  = static_cast<uint8_t>(0x90 + slot);
-  d.mosa  = static_cast<uint8_t>(slot * 7 + 1);
-  d.mosb  = static_cast<uint8_t>(slot * 13 + 9);
-  d.mosw  = static_cast<uint8_t>(200 - slot * 2);
-  d.bsel  = static_cast<uint8_t>(slot ^ 0x3C);
+  d.pgen = static_cast<uint8_t>(0x90 + slot);
+  d.mosa = static_cast<uint8_t>(slot * 7 + 1);
+  d.mosb = static_cast<uint8_t>(slot * 13 + 9);
+  d.mosw = static_cast<uint8_t>(200 - slot * 2);
+  d.bsel = static_cast<uint8_t>(slot ^ 0x3C);
   return d;
 }
 
@@ -173,8 +173,7 @@ int main(int argc, char** argv) {
         if (d->f_binding_o != r.bsel) ++e;
         desc_errors += e;
         if (d->f_owner_o != ((s << 8) | r.gen)) ++owner_errors;
-        if (d->f_u_o != expect_u[f_seen] || d->f_v_o != expect_v[f_seen])
-          ++uv_errors;
+        if (d->f_u_o != expect_u[f_seen] || d->f_v_o != expect_v[f_seen]) ++uv_errors;
         ++f_seen;
       }
       ++f_fires_this_record;
@@ -183,8 +182,7 @@ int main(int argc, char** argv) {
       ++took_m;
       if (m_seen < expect_slot.size()) {
         const Desc r = make_desc(expect_slot[m_seen]);
-        if (d->m_mat_a_o != r.mosa || d->m_mat_b_o != r.mosb ||
-            d->m_weight_o != r.mosw)
+        if (d->m_mat_a_o != r.mosa || d->m_mat_b_o != r.mosb || d->m_weight_o != r.mosw)
           ++desc_errors;
         ++m_seen;
       }
@@ -196,7 +194,10 @@ int main(int argc, char** argv) {
     // producing identical output -- invisible to any result check.
     if (f_fires_this_record > 1) ++double_issue_f;
     if (m_fires_this_record > 1) ++double_issue_m;
-    if (accepted) { f_fires_this_record = 0; m_fires_this_record = 0; }
+    if (accepted) {
+      f_fires_this_record = 0;
+      m_fires_this_record = 0;
+    }
 
     f_open_prev = d->f_ready_i;
     m_open_prev = d->m_ready_i;
@@ -207,18 +208,19 @@ int main(int argc, char** argv) {
   (void)f_open_prev;
   (void)m_open_prev;
 
-  std::printf("  interleaved: fed %d, expander took %d, Mosaic took %d | "
-              "desc errors %d, owner errors %d, u/v errors %d\n",
-              fed, took_f, took_m, desc_errors, owner_errors, uv_errors);
-  std::printf("  joined %u, saturated %u, depth-zero %u, gen mismatches %u | "
-              "descriptor reads %u writes %u\n",
-              d->joined_o, d->saturated_o, d->depth_zero_o, d->gen_mismatch_o,
-              d->desc_reads_o, d->desc_writes_o);
+  std::printf(
+      "  interleaved: fed %d, expander took %d, Mosaic took %d | "
+      "desc errors %d, owner errors %d, u/v errors %d\n",
+      fed, took_f, took_m, desc_errors, owner_errors, uv_errors);
+  std::printf(
+      "  joined %u, saturated %u, depth-zero %u, gen mismatches %u | "
+      "descriptor reads %u writes %u\n",
+      d->joined_o, d->saturated_o, d->depth_zero_o, d->gen_mismatch_o, d->desc_reads_o,
+      d->desc_writes_o);
 
   zhao::check(fed == kFragments, "every fragment was accepted", kFragments, fed);
-  zhao::check(took_f == kFragments,
-              "the expander received exactly one record per fragment", kFragments,
-              took_f);
+  zhao::check(took_f == kFragments, "the expander received exactly one record per fragment",
+              kFragments, took_f);
   zhao::check(took_m == kFragments,
               "and so did Mosaic -- its ready is part of the fork's handshake, "
               "not ignored. A tied-off ready would make an ignored one look "
@@ -280,11 +282,11 @@ int main(int argc, char** argv) {
     }
     d->p_valid_i = 0;
     d->eval();
-    std::printf("  unstalled: %d accepted in %d clocks (%.2f per result), "
-                "joined %u -> %u\n",
-                retired, clocks,
-                static_cast<double>(clocks) / (retired ? retired : 1),
-                before, d->joined_o);
+    std::printf(
+        "  unstalled: %d accepted in %d clocks (%.2f per result), "
+        "joined %u -> %u\n",
+        retired, clocks, static_cast<double>(clocks) / (retired ? retired : 1), before,
+        d->joined_o);
     zhao::check(retired == kBurst, "the burst completed", kBurst, retired);
     zhao::check(clocks <= kBurst + 1,
                 "ONE joined result per clock while the consumers accept -- "

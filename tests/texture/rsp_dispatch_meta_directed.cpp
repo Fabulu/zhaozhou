@@ -102,22 +102,28 @@ int main(int argc, char** argv) {
     rng = rng * 1664525u + 1013904223u;
     d->clut_ready_i = ((rng >> 13) & 3u) != 0u;
     d->near_ready_i = ((rng >> 17) & 3u) != 0u;
-    d->bil_ready_i  = ((rng >> 21) & 3u) != 0u;
-    d->err_ready_i  = ((rng >> 25) & 3u) != 0u;
+    d->bil_ready_i = ((rng >> 21) & 3u) != 0u;
+    d->err_ready_i = ((rng >> 25) & 3u) != 0u;
     d->eval();
 
-    struct Lane { bool v; uint32_t tok; uint64_t meta; };
-    const Lane lanes[4] = {
-        {d->clut_valid_o != 0, d->clut_tok_o, d->clut_meta_o},
-        {d->near_valid_o != 0, d->near_tok_o, d->near_meta_o},
-        {d->bil_valid_o  != 0, d->bil_tok_o,  d->bil_meta_o},
-        {d->err_valid_o  != 0, d->err_tok_o,  d->err_meta_o}};
-    const bool rdy[4] = {d->clut_ready_i != 0, d->near_ready_i != 0,
-                         d->bil_ready_i != 0, d->err_ready_i != 0};
+    struct Lane {
+      bool v;
+      uint32_t tok;
+      uint64_t meta;
+    };
+    const Lane lanes[4] = {{d->clut_valid_o != 0, d->clut_tok_o, d->clut_meta_o},
+                           {d->near_valid_o != 0, d->near_tok_o, d->near_meta_o},
+                           {d->bil_valid_o != 0, d->bil_tok_o, d->bil_meta_o},
+                           {d->err_valid_o != 0, d->err_tok_o, d->err_meta_o}};
+    const bool rdy[4] = {d->clut_ready_i != 0, d->near_ready_i != 0, d->bil_ready_i != 0,
+                         d->err_ready_i != 0};
     for (int c = 0; c < 4; ++c) {
       if (!lanes[c].v || !rdy[c]) continue;
       ++got[c];
-      if (want[c].empty()) { ++foreign; continue; }
+      if (want[c].empty()) {
+        ++foreign;
+        continue;
+      }
       const Expect e = want[c].front();
       want[c].pop_front();
       if (lanes[c].tok != e.tok) ++tok_wrong;
@@ -134,12 +140,12 @@ int main(int argc, char** argv) {
     }
     tick(d);
     if (acc) ++sent;
-    if (sent >= kN && want[0].empty() && want[1].empty()
-        && want[2].empty() && want[3].empty()) break;
+    if (sent >= kN && want[0].empty() && want[1].empty() && want[2].empty() && want[3].empty())
+      break;
   }
 
-  std::printf("  dispatched %d | clut %d near %d bil %d err %d\n",
-              sent, got[0], got[1], got[2], got[3]);
+  std::printf("  dispatched %d | clut %d near %d bil %d err %d\n", sent, got[0], got[1], got[2],
+              got[3]);
 
   zhao::check(sent == kN,
               "every response was accepted despite randomised backpressure on "
@@ -151,8 +157,7 @@ int main(int argc, char** argv) {
               "evidence from a third",
               1, (got[0] && got[1] && got[2] && got[3]) ? 1 : 0);
   zhao::check(foreign == 0, "no lane produced a response nobody sent", 0, foreign);
-  zhao::check(tok_wrong == 0, "every token arrived on its own lane in order",
-              0, tok_wrong);
+  zhao::check(tok_wrong == 0, "every token arrived on its own lane in order", 0, tok_wrong);
   zhao::check(meta_wrong == 0,
               "and EVERY metadata word arrived beside the response it belongs "
               "to. The payload encodes its own token, so a word delivered to "

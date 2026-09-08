@@ -308,8 +308,7 @@ bool dump_stream(const char* path) {
   std::FILE* f = std::fopen(path, "wb");
   if (!f) return false;
   for (const Retired& r : g_stream)
-    std::fprintf(f, "%u %u %06X %u %u\n", r.phase, r.tag, r.rgb, r.alpha,
-                 r.refused);
+    std::fprintf(f, "%u %u %06X %u %u\n", r.phase, r.tag, r.rgb, r.alpha, r.refused);
   const bool ok = std::fclose(f) == 0;
   return ok;
 }
@@ -485,8 +484,7 @@ void build_memory() {
       // one -- which is exactly how the defect survived: every odd texel read
       // its neighbour's index and nothing noticed.
       if ((t & 1u) == 0u)
-        g_mem.bytes[(kBaseClut4 - kImgBase) + (t >> 1)] =
-            static_cast<uint8_t>(t & 15u);
+        g_mem.bytes[(kBaseClut4 - kImgBase) + (t >> 1)] = static_cast<uint8_t>(t & 15u);
       else
         g_mem.bytes[(kBaseClut4 - kImgBase) + (t >> 1)] |=
             static_cast<uint8_t>(((((t >> 4) + 7u) & 15u) << 4));
@@ -964,8 +962,7 @@ void run_phase(Dut& d, uint32_t mode, uint32_t base, const std::vector<FragSpec>
       out.rgb.push_back(d.out_rgb_o);
       out.alpha.push_back(d.out_a_o);
       out.refused.push_back(d.out_refused_o ? 1 : 0);
-      record_retire(d.out_tag_o, d.out_rgb_o, d.out_a_o,
-                    d.out_refused_o ? 1u : 0u);
+      record_retire(d.out_tag_o, d.out_rgb_o, d.out_a_o, d.out_refused_o ? 1u : 0u);
       ++retired;
     }
     tick(d);
@@ -1040,8 +1037,7 @@ int main(int argc, char** argv) {
           "and the filtered plan carries the fractions this fixture asked for, "
           "so the coordinate construction lands where it says it does",
           0x4090, (pb.fu << 8) | pb.fv);
-    check(pc.fu == 0 && pc.fv == 0, "while the nearest plan carries none", 0,
-          (pc.fu << 8) | pc.fv);
+    check(pc.fu == 0 && pc.fv == 0, "while the nearest plan carries none", 0, (pc.fu << 8) | pc.fv);
   }
 
   // ==========================================================================
@@ -1200,11 +1196,9 @@ int main(int argc, char** argv) {
         "until now, so this is the first run in which its silence means "
         "anything",
         0, static_cast<long>(d.err_fragrob_wq_overflow_o));
-  check(d.err_fragrob_id_error_o == 0,
-        "and FRAGROB never raised its identity error", 0,
+  check(d.err_fragrob_id_error_o == 0, "and FRAGROB never raised its identity error", 0,
         static_cast<long>(d.err_fragrob_id_error_o));
-  check(d.err_aux_degenerate_o == 0,
-        "and AUX reported no degenerate envelope", 0,
+  check(d.err_aux_degenerate_o == 0, "and AUX reported no degenerate envelope", 0,
         static_cast<long>(d.err_aux_degenerate_o));
   check(d.err_class_mismatch_o == 0,
         "PHASE 1 DROVE A MODE AND A CLASS THAT AGREE: the planner's derived "
@@ -1251,9 +1245,8 @@ int main(int argc, char** argv) {
       const uint32_t got = o1.rgb[byidx[i]];
       if (got != p1[i].want_rgb) {
         if (mismatched < 4)
-          std::printf(
-              "    P1 frag %d recipe %u texel(%d,%d) aux=%d: got 0x%06X, want 0x%06X\n", i,
-              p1[i].recipe, p1[i].X, p1[i].Y, p1[i].aux ? 1 : 0, got, p1[i].want_rgb);
+          std::printf("    P1 frag %d recipe %u texel(%d,%d) aux=%d: got 0x%06X, want 0x%06X\n", i,
+                      p1[i].recipe, p1[i].X, p1[i].Y, p1[i].aux ? 1 : 0, got, p1[i].want_rgb);
         ++mismatched;
       }
       if (o1.alpha[byidx[i]] != p1[i].want_a) ++alpha_bad;
@@ -1564,10 +1557,8 @@ int main(int argc, char** argv) {
         {"CACHE_PIPE was consulted (hits + misses)", d.cnt_cache_hits_o + d.cnt_cache_misses_o},
         {"RSP_DISPATCH routed responses", d.cnt_dispatch_accepted_o},
         {"MOSAIC saw texture samples", d.cnt_mosaic_samples_o},
-        {"PALETTE_RES was looked up -- the CLUT path is no longer idle",
-         d.cnt_palette_lookups_o},
-        {"BILERP ran filter jobs -- the direct-colour path is no longer idle",
-         d.cnt_bilerp_jobs_o},
+        {"PALETTE_RES was looked up -- the CLUT path is no longer idle", d.cnt_palette_lookups_o},
+        {"BILERP ran filter jobs -- the direct-colour path is no longer idle", d.cnt_bilerp_jobs_o},
         {"AUX_PIPE accepted requests", d.cnt_aux_accepted_o},
     };
     for (const Link& l : chain) check(l.value > 0, l.name, 1, l.value > 0 ? 1 : 0);
@@ -1866,8 +1857,8 @@ int main(int argc, char** argv) {
         const uint8_t got_a = o.alpha[byidx[i]];
         if (got != ph[i].want_rgb) {
           if (mismatched < 4)
-            std::printf("    %s frag %d recipe %u texel(%d,%d): got 0x%06X, want 0x%06X\n",
-                        dp.name, i, ph[i].recipe, ph[i].X, ph[i].Y, got, ph[i].want_rgb);
+            std::printf("    %s frag %d recipe %u texel(%d,%d): got 0x%06X, want 0x%06X\n", dp.name,
+                        i, ph[i].recipe, ph[i].X, ph[i].Y, got, ph[i].want_rgb);
           ++mismatched;
         }
         if (got_a != ph[i].want_a) {
@@ -2049,8 +2040,7 @@ int main(int argc, char** argv) {
       if (accepted && !sink_open) ++accepted_while_stalled;
       if (d.out_valid_o && d.out_ready_i) {
         p3_tags.push_back(d.out_tag_o);
-        record_retire(d.out_tag_o, d.out_rgb_o, d.out_a_o,
-                      d.out_refused_o ? 1u : 0u);
+        record_retire(d.out_tag_o, d.out_rgb_o, d.out_a_o, d.out_refused_o ? 1u : 0u);
         ++p3_retired;
       }
       tick(d);
@@ -2094,7 +2084,6 @@ int main(int argc, char** argv) {
           "the property it names",
           0, static_cast<long>(d.err_class_mismatch_o));
   }
-
 
   // ============ PHASE 5: CLUT4, THE NIBBLE THAT HAD NO COVERAGE ============
   // The nibble select was repaired earlier today and shipped with NO test,
@@ -2150,12 +2139,13 @@ int main(int argc, char** argv) {
     run_phase(d, kModeClut4, kBaseClut4, p5, o5);
     const uint32_t pal = d.cnt_palette_lookups_o - pal_before;
 
-    std::printf("  PHASE 5 (CLUT4/nearest, mode 0x%08X): submitted %d, retired %d, "
-                "odd texels %d, palette +%u\n",
-                kModeClut4, o5.submitted, o5.retired, odd, pal);
+    std::printf(
+        "  PHASE 5 (CLUT4/nearest, mode 0x%08X): submitted %d, retired %d, "
+        "odd texels %d, palette +%u\n",
+        kModeClut4, o5.submitted, o5.retired, odd, pal);
 
-    check(o5.retired == kPhaseN, "phase 5 retired every fragment it submitted",
-          kPhaseN, o5.retired);
+    check(o5.retired == kPhaseN, "phase 5 retired every fragment it submitted", kPhaseN,
+          o5.retired);
     check(pal > 0,
           "and the PALETTE was actually consulted -- a CLUT4 run in which no "
           "lookup happened would prove nothing about the index it used",
@@ -2173,21 +2163,19 @@ int main(int argc, char** argv) {
       const uint32_t got = o5.rgb[byidx[i]];
       if (got != p5[i].want_rgb) {
         if (bad < 4)
-          std::printf("    CLUT4 frag %d recipe %u texel(%d,%d): got 0x%06X, want 0x%06X\n",
-                      i, p5[i].recipe, p5[i].X, p5[i].Y, got, p5[i].want_rgb);
+          std::printf("    CLUT4 frag %d recipe %u texel(%d,%d): got 0x%06X, want 0x%06X\n", i,
+                      p5[i].recipe, p5[i].X, p5[i].Y, got, p5[i].want_rgb);
         ++bad;
       }
       // THE COUNTERFACTUAL: what the island shipped BEFORE the repair, which
       // took the whole byte as the palette index instead of the nibble.
-      const uint32_t total =
-          static_cast<uint32_t>(p5[i].Y) * 64u + static_cast<uint32_t>(p5[i].X);
+      const uint32_t total = static_cast<uint32_t>(p5[i].Y) * 64u + static_cast<uint32_t>(p5[i].X);
       if ((total & 1u) != 0u)
         ++wholebyte_differs;
       else
         ++wholebyte_same;
     }
-    check(checked == kPhaseN, "every CLUT4 fragment came back to be compared",
-          kPhaseN, checked);
+    check(checked == kPhaseN, "every CLUT4 fragment came back to be compared", kPhaseN, checked);
     check(bad == 0,
           "and every CLUT4 fragment retired the colour zref::Tmu::sample gives "
           "for ITS OWN texel -- the check that was impossible before the "
@@ -2199,9 +2187,8 @@ int main(int argc, char** argv) {
           "different palette entry for each of them. Without this the phase "
           "could pass against the broken RTL",
           1, wholebyte_differs > 0 ? 1 : 0);
-    check(d.err_class_mismatch_o == 0,
-          "with no class disagreement anywhere in the CLUT4 phase",
-          0, static_cast<long>(d.err_class_mismatch_o));
+    check(d.err_class_mismatch_o == 0, "with no class disagreement anywhere in the CLUT4 phase", 0,
+          static_cast<long>(d.err_class_mismatch_o));
   }
 
   // ---- GATE 3's HALF OF THE WORK ------------------------------------------
@@ -2211,12 +2198,11 @@ int main(int argc, char** argv) {
   for (int i = 1; i + 1 < argc; ++i) {
     if (std::string(argv[i]) == "--dump") {
       if (!dump_stream(argv[i + 1])) {
-        std::printf("FAIL: could not write the retired stream to %s\n",
-                    argv[i + 1]);
+        std::printf("FAIL: could not write the retired stream to %s\n", argv[i + 1]);
         ++g_failed;
       } else {
-        std::printf("  retired stream: %u records -> %s\n",
-                    static_cast<unsigned>(g_stream.size()), argv[i + 1]);
+        std::printf("  retired stream: %u records -> %s\n", static_cast<unsigned>(g_stream.size()),
+                    argv[i + 1]);
       }
       break;
     }
@@ -2228,8 +2214,8 @@ int main(int argc, char** argv) {
   // address on the common response stream. Nothing downstream consumes it.
   // This phase has real responses -- 96 per phase across seven phases -- so
   // it is where the comparison is non-vacuous.
-  std::printf("  metajoin shadow: %u comparisons, %u mismatches\n",
-              d.meta_shadow_reads_o, d.meta_shadow_mismatch_o);
+  std::printf("  metajoin shadow: %u comparisons, %u mismatches\n", d.meta_shadow_reads_o,
+              d.meta_shadow_mismatch_o);
   check(d.meta_shadow_reads_o > 100,
         "the shadow metadata bank actually compared responses -- zero "
         "mismatches over zero comparisons is not evidence",
@@ -2238,14 +2224,12 @@ int main(int argc, char** argv) {
         "and returned EXACTLY what sampmeta_m, palslot_m and palgen_m would "
         "return on every one -- the precondition for moving any reader onto it",
         0, d.meta_shadow_mismatch_o);
-  std::printf("  metajoin queue alignment: %u checked, %u WRONG-RESPONSE\n",
-              d.meta_align_chk_o, d.meta_align_err_o);
-  check(d.meta_align_chk_o > 50,
-        "the queued-metadata alignment was actually exercised", 1,
+  std::printf("  metajoin queue alignment: %u checked, %u WRONG-RESPONSE\n", d.meta_align_chk_o,
+              d.meta_align_err_o);
+  check(d.meta_align_chk_o > 50, "the queued-metadata alignment was actually exercised", 1,
         d.meta_align_chk_o > 50 ? 1 : 0);
   std::printf("  metajoin per-queue: bil %u checked/%u wrong, near %u checked/%u wrong\n",
-              d.meta_bil_chk_o, d.meta_bil_err_o,
-              d.meta_near_chk_o, d.meta_near_err_o);
+              d.meta_bil_chk_o, d.meta_bil_err_o, d.meta_near_chk_o, d.meta_near_err_o);
   // ---- CONSERVATION ACROSS THE CREDITED JOIN -------------------------------
   // Packet C put a new stage between the cache and the dispatcher: a response
   // is accepted only when the join stage can hand on what it holds, and the
@@ -2269,8 +2253,8 @@ int main(int argc, char** argv) {
     // response, and its output is the dispatcher accept. Those are the two
     // ends of the stage.
     const uint32_t into_join = d.meta_shadow_reads_o;
-    std::printf("  credited join: %u cache responses in, %u dispatched\n",
-                into_join, d.cnt_dispatch_accepted_o);
+    std::printf("  credited join: %u cache responses in, %u dispatched\n", into_join,
+                d.cnt_dispatch_accepted_o);
     check(into_join > 500,
           "the join carried a substantial number of responses -- equality over "
           "a handful proves nothing",
@@ -2287,11 +2271,11 @@ int main(int argc, char** argv) {
               d.meta_genmis_o);
   if (d.meta_bil_err_o) {
     const unsigned q = d.meta_bil_first_q_o, t = d.meta_bil_first_t_o;
-    std::printf("    first bil mismatch tok=%05X  queue{nib %u fmt %u fv %02X fu %02X bsel %u}"
-                "  table{nib %u fmt %u fv %02X fu %02X bsel %u}\n",
-                d.meta_bil_first_tok_o,
-                (q>>20)&1, (q>>17)&7, (q>>9)&0xFF, (q>>1)&0xFF, q&1,
-                (t>>20)&1, (t>>17)&7, (t>>9)&0xFF, (t>>1)&0xFF, t&1);
+    std::printf(
+        "    first bil mismatch tok=%05X  queue{nib %u fmt %u fv %02X fu %02X bsel %u}"
+        "  table{nib %u fmt %u fv %02X fu %02X bsel %u}\n",
+        d.meta_bil_first_tok_o, (q >> 20) & 1, (q >> 17) & 7, (q >> 9) & 0xFF, (q >> 1) & 0xFF,
+        q & 1, (t >> 20) & 1, (t >> 17) & 7, (t >> 9) & 0xFF, (t >> 1) & 0xFF, t & 1);
   }
 #endif
 
