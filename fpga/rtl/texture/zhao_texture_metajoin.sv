@@ -115,8 +115,14 @@ module zhao_texture_metajoin #(
 
   // If the arithmetic and the declared width ever disagree, stop at
   // elaboration rather than shipping a quietly misaligned record.
-  if (OGEN_LO + GENW != METAW)
-    $fatal(1, "zhao_texture_metajoin: field offsets do not fill METAW");
+  // `initial`, not a bare module-scope `if`. Verilator accepts the bare
+  // form; QUARTUS 17.0 REJECTS IT -- "syntax error near text: if; expecting
+  // endmodule". Lint-clean is not the same as synthesizable, and this cost
+  // a 33-second failed fit to discover.
+  initial begin
+    if (OGEN_LO + GENW != METAW)
+      $fatal(1, "zhao_texture_metajoin: field offsets do not fill METAW");
+  end
 
   logic [METAW-1:0] mem_q [ROWS];
 

@@ -239,6 +239,9 @@ module zhao_texture_rsp_dispatch #(
   // correct and shared -- the metadata is another payload on the same
   // transfer, not another transfer.
   logic [METAW-1:0] cq_m [NCLS][CHN];
+  // EXPLICIT `generate`. Verilator accepts the implicit form; Quartus 17.0
+  // does not.
+  generate
   if (META_EN) begin : g_meta
     always_ff @(posedge clk) begin
       if (dispatch_fire) cq_m[head_cls][cq_wp[head_cls]] <= rsp_meta_i;
@@ -253,6 +256,7 @@ module zhao_texture_rsp_dispatch #(
     assign bil_meta_o  = {METAW{1'b0}};
     assign err_meta_o  = {METAW{1'b0}};
   end
+  endgenerate
 
   assign clut_valid_o = (cq_n[0] != '0);
   assign clut_data_o  = cq_d[0][cq_rp[0]];
