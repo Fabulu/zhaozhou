@@ -279,6 +279,36 @@ struct Clip {
    */
   bool hold_last = false;
   /**
+   * WRAP-ROOT-DELTA (pass 13, R2). A LOOPING clip's presentation partner at
+   * the final key is key 0 -- correct for quats and deform, which close by
+   * construction (integer cycles), and catastrophic for the ROOT of a clip
+   * that TRAVELS. There the partner sits a whole traverse behind, so the last
+   * shown sub-frame is a half-way position the animation never occupies: the
+   * pose teleports, and anything that derives speed from the posed root (the
+   * reel's smear/mist planes do) reads a huge fake velocity and paints ghosts.
+   * Measured on Manafold's four travelling clips before this existed --
+   * near-grey pixels in the final frames `drift` 295->729, `hasty` 95->238,
+   * `fall` 93->126, all snapping to ~zero at frame 0.
+   *
+   * With this set, the root sequence is extended PERIODICALLY instead of
+   * cyclically: a partner key that wrapped past the last key is offset by the
+   * clip's net travel `root[frame_count-1] - root[0]`, so key `frame_count`
+   * reads as `root[frame_count-1]` rather than as `root[0]`. The offset is an
+   * authored value by construction -- it can never place the root outside the
+   * range the clip already occupies, so no clearance or ground-contact gate
+   * can be moved by turning this on. Only the ROOT is affected; the quat and
+   * deform partners keep wrapping to key 0, which is what makes the loop seam
+   * smooth.
+   *
+   * `hold_last` wins where both are set (a corpse does not travel).
+   *
+   * Default OFF, so nothing that already exists changes by a single bit --
+   * the `RingPart::cap_base_fix` precedent (09-ENGINE-GOTCHAS section 2):
+   * approved, published art does not change silently. A NEW creature should
+   * opt every travelling clip in; it has no approved bytes to protect.
+   */
+  bool wrap_root_delta = false;
+  /**
    * A1 — THE BAKED 60 Hz PRESENTATION COMPANION (2026-08-28, kind-9
    * unfrozen). When present (bake60 on the bank, baked by
    * compile_creature), the half-tick pose is an EXPLICIT baked midpoint

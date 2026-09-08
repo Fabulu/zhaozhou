@@ -230,14 +230,37 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc,
     if (c.hold_last) return k < 0 ? 0 : (k >= n ? n - 1 : k);
     return (k + n) % n;
   };
+  // R2 (pass 13): the SAME wrap fault the runtime nlerp partner has, reached
+  // through the baked companion instead. Here it corrupts TWO segments -- k2
+  // at k = n-1 and k3 at k = n-2 -- because the cubic reaches two keys ahead.
+  // `wrap_root_delta` extends the root sequence PERIODICALLY, so the curve is
+  // continuous across the seam instead of folding back across the traverse.
+  // Only the root; quats and deform close by construction. Default off leaves
+  // `root_at` returning exactly what the four lines below used to read.
+  const bool root_delta = c.wrap_root_delta && !c.hold_last && n > 1;
+  int64_t net[3] = {0, 0, 0};
+  if (root_delta)
+    for (int i = 0; i < 3; ++i)
+      net[i] = static_cast<int64_t>(c.root[static_cast<size_t>(n - 1) * 3 + i]) -
+               c.root[static_cast<size_t>(i)];
+  const auto root_at = [&](int k, int i) -> int64_t {
+    int64_t v = c.root[static_cast<size_t>(wrap(k)) * 3 + i];
+    if (root_delta) {
+      if (k >= n)
+        v += net[i];
+      else if (k < 0)
+        v -= net[i];
+    }
+    return v;
+  };
   for (int k = 0; k < n; ++k) {
     const int k0 = wrap(k - 1), k1 = k, k2 = wrap(k + 1), k3 = wrap(k + 2);
     // root: Catmull-Rom at t=1/2, clamped into the segment interval
     for (int i = 0; i < 3; ++i) {
-      const int64_t p0 = c.root[static_cast<size_t>(k0) * 3 + i];
-      const int64_t p1 = c.root[static_cast<size_t>(k1) * 3 + i];
-      const int64_t p2 = c.root[static_cast<size_t>(k2) * 3 + i];
-      const int64_t p3 = c.root[static_cast<size_t>(k3) * 3 + i];
+      const int64_t p0 = root_at(k - 1, i);
+      const int64_t p1 = root_at(k, i);
+      const int64_t p2 = root_at(k + 1, i);
+      const int64_t p3 = root_at(k + 2, i);
       int64_t m = (-p0 + 9 * p1 + 9 * p2 - p3) / 16;
       const int64_t lo = p1 < p2 ? p1 : p2, hi = p1 < p2 ? p2 : p1;
       if (m < lo) m = lo;
@@ -343,10 +366,25 @@ void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
       const int32_t* dm = clip.mid_root.data() + static_cast<size_t>(frame) * 3;
       for (int i = 0; i < 3; ++i) disp_i[i] = dm[i];
     } else {
+      const bool wraps = frame + 1 >= clip.frame_count && !clip.hold_last;
       const uint16_t nf = static_cast<uint16_t>(
-          frame + 1 >= clip.frame_count ? (clip.hold_last ? frame : 0) : frame + 1);
+          wraps ? 0 : (frame + 1 >= clip.frame_count ? frame : frame + 1));
       const int32_t* d2 = clip.root.data() + static_cast<size_t>(nf) * 3;
-      for (int i = 0; i < 3; ++i) disp_i[i] = (disp[i] + d2[i]) >> 1;
+      // R2 (pass 13): a TRAVELLING clip's wrap partner is a whole traverse
+      // behind, so this midpoint teleports and the reel's posed-root speed
+      // reads a fake velocity. Opt-in `wrap_root_delta` extends the root
+      // sequence PERIODICALLY: key `frame_count` reads as the last key, not
+      // as key 0. Default off => the partner below is d2 unchanged and the
+      // arithmetic is bit-identical.
+      int32_t p2[3] = {d2[0], d2[1], d2[2]};
+      if (wraps && clip.wrap_root_delta && clip.frame_count > 1) {
+        const int32_t* last =
+            clip.root.data() + (static_cast<size_t>(clip.frame_count) - 1u) * 3;
+        for (int i = 0; i < 3; ++i)
+          p2[i] = static_cast<int32_t>(static_cast<int64_t>(d2[i]) + last[i] -
+                                       clip.root[static_cast<size_t>(i)]);
+      }
+      for (int i = 0; i < 3; ++i) disp_i[i] = (disp[i] + p2[i]) >> 1;
     }
   }
   disp = disp_i;
