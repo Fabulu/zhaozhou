@@ -133,3 +133,28 @@ renderer's staging rule (`slot_id == 1 || slot_id == 8`). Adding slot 22 made
 the probe measure a stage the reel does not build — it printed "slot 22 ...
 bump_ext 6" while `subject_u02_clip` staged it flat at 18. The numbers agreed
 by luck. Rule now lives once, in `u02::flat_staged_slot()`, and both read it.
+
+## 07:25 — the reframed flight, measured again
+
+```
+before:  cx p2p 269.9  cy p2p 60.8  area 1500 -> 4600 (3.07x)  bbox h  60 -> 110
+after :  cx p2p 271.3  cy p2p 66.4  area 4200 -> 8700 (2.07x)  bbox h 113 -> 162
+```
+Same screen traverse, creature roughly twice the size, approach growth cut by a
+third. Four clean bounces in `cy`. The remaining growth is inherent to +x travel
+against a three-quarter camera; the clean fix is a camera YAW and it is declared
+not done rather than half-done.
+
+**Loop seam, inherited not introduced:** the last two frames of 352 are already
+the loop restart, with the screen-space smear leaving a ghost at the old
+position. `hasty` and `drift` have the same linear traverse and the same seam --
+MANAFOLD-INDEX lists "hasty's loop seam" as a known unattempted item. Declared.
+
+## 07:30 — item 3's verdict
+
+`mexpress` built and run over EVERY clip in BOTH banks.
+**The claim is REFUTED.** Body group against body group, Zixxtrixx 27.6% against
+Manafold 6.7%. Manafold's best group (its ANTENNA, 18.7%) still loses to
+Zixxtrixx's body. The one half that holds: bob, 8.4% of rest span against 6.6%.
+Both measures' biases are printed inside the tool's own output so the number
+cannot be quoted without them.
