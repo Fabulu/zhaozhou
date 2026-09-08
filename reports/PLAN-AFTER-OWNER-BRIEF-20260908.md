@@ -91,3 +91,28 @@ means investigating that family rather than forcing the list.
 * Restarting the 541/119/392 campaign. It is kept; the new schedules are
   incremental obligations on top.
 * Terrain. Owner direction 49fc32e9 still governs and the brief does not touch it.
+
+## A generalised fan-in checker was started and reverted
+
+The brief's §3.1 note — *"if a source-only checker is retained, distinguish
+direct driver presence from transitive live fan-in"* — reads like an invitation
+to generalise the sweep. I started to, and stopped.
+
+The extension flagged **23 signals in one file, of which roughly four are real.**
+The rest are arrays written as `mat_m[idx] <= ...` (a driver my pattern did not
+recognise) and input ports (which correctly have no internal driver). A checker
+with that signal-to-noise is not a checker; it is a list somebody has to triage,
+and the triage is where the real findings get lost.
+
+The brief anticipated this in the same paragraph:
+
+> *"Do not build a repository-wide parser project for this. Audit the fan-in of
+> this top's evidence ports, add focused checks, and move on."*
+
+So: reverted. The four dead signals were found in under a minute with `grep`,
+and the fix is four focused repairs plus positive fault tests — which is the
+deliverable, where a parser would have been a detour with its own defects to
+chase. `undriven_outputs.py` keeps the narrow port check it was proved to do.
+
+Worth recording because the pull was real: I had momentum, the tool existed, and
+extending it felt like the thorough choice. The brief had already said it was not.
