@@ -2462,29 +2462,47 @@ module zhao_texture_island_v3_top #(
   // counts cycles in which a completed fragment was waiting behind an earlier
   // one; a run where it stays at zero has not exercised this at all, and a
   // test asserting strict order on such a run proves nothing.
+  // ==========================================================================
+  // (d2) THE ROB POOL IS DELETED. COMBINE's RESULT GOES BACK TO v3own.
+  // ==========================================================================
+  // What stood here was the oracle's reorder write side: `rob_m[comb_seq]`,
+  // `rob_tag_m`, `rob_full_m`, the `seq_head_r` cursor advanced on emission,
+  // and `rob_held_r` counting restorations. Roughly 3,300 bits plus a cursor,
+  // implementing ordering the v3 owner already implements.
+  //
+  // Under v3own the combiner's answer is not filed into a buffer to be
+  // re-ordered later; it is RETURNED TO THE OWNER as the fragment's final
+  // result, and the owner emits in admission order because that is what its
+  // cursor does. FINAL is a lifecycle event with a rule attached: §M6 /
+  // case 22 -- a final may only be authorised by ACTUAL COMBINE ACCEPTANCE,
+  // never by a reservation, and mutation §22.10-8 exists to prove the four M6
+  // checks catch the confusion.
+  assign own_fin_valid_c  = comb_o_valid;
+  assign own_fin_owner_c  = comb_o_tag[13:0];
+  assign own_fin_result_c = {7'd0, comb_o_refused, comb_o_a, comb_o_rgb};
+  assign comb_o_ready     = own_fin_ready;
+
+  // `cnt_reorder_held_o` KEEPS ITS MEANING, and this is not cosmetic. The
+  // oracle counts "how many times did order have to be restored" -- a completed
+  // fragment arriving while an earlier one is still missing. The paired run
+  // compares colour and ORDER byte for byte but explicitly does NOT require
+  // counter identity where semantics legitimately refine, and this counter is
+  // on that documented list. What must not happen is it silently becoming zero:
+  // a run where it stays at zero has not exercised ordering at all, and a test
+  // asserting strict order on such a run proves nothing. So it is counted here
+  // at the same event, from v3own's own view of it.
   logic [31:0] rob_held_r;
   assign cnt_reorder_held_o = rob_held_r;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      seq_head_r <= '0;
       rob_held_r <= 32'd0;
-      for (int i = 0; i < FCTXN; i++) rob_full_m[i] <= 1'b0;
     end else begin
-      if (comb_o_valid) begin
-        rob_m[comb_seq]      <= {comb_o_refused, comb_o_a, comb_o_rgb};
-        rob_tag_m[comb_seq]  <= comb_o_tag[15:0];
-        rob_full_m[comb_seq] <= 1'b1;
-        // A fragment that completed while an EARLIER one is still missing is
-        // exactly the event this boundary exists for. Counted at arrival, not
-        // per stalled cycle, so the number is "how many times did order have
-        // to be restored" rather than "how long was the queue".
-        if (comb_seq != seq_head_r) rob_held_r <= rob_held_r + 32'd1;
-      end
-      if (out_valid_o && out_ready_i) begin
-        rob_full_m[seq_head_r] <= 1'b0;
-        seq_head_r             <= seq_head_r + 1'b1;
-      end
+      // A final arriving for an owner that is NOT the one about to retire is
+      // the same event the oracle counted: order had to be restored.
+      if (own_fin_valid_c && own_fin_ready
+          && (own_fin_owner_c != own_out_owner))
+        rob_held_r <= rob_held_r + 32'd1;
     end
   end
 
