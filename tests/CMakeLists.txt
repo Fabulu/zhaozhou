@@ -2188,6 +2188,51 @@ verilate(test_island_v3_composed_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv)
+
+# THE PRODUCTION PROFILE (D1/§4.2): the same functional source elaborated with
+# MIGRATION_SHADOWS=0, so the reference table, the three comparators, their
+# counters and the first-error captures do not exist.
+#
+# The brief refuses to let a checker be disabled and the result called healthy,
+# so this target does NOT simply skip the shadow assertions. It asserts the DUT
+# reports shadow_present_o == 0 and reaches the skip on THAT evidence, and it
+# asserts every shadow check-counter reads zero -- so a lab build that silently
+# lost its comparators could not pass as production either.
+#
+# ZHAO_SHADOWS and -GMIGRATION_SHADOWS must agree; the test compares the define
+# against the port, which turns a mismatch into a failure rather than a quietly
+# skipped block.
+add_executable(test_island_v3_prod_composed_directed texture/island_composed_directed.cpp)
+target_compile_definitions(test_island_v3_prod_composed_directed PRIVATE ISLAND_V3=1 ZHAO_SHADOWS=0)
+target_link_libraries(test_island_v3_prod_composed_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_island_v3_prod_composed_directed
+  PREFIX Vzhao_texture_island_v3_top
+  TOP_MODULE zhao_texture_island_v3_top
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v2.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv
+  VERILATOR_ARGS -GMIGRATION_SHADOWS=0)
+add_test(NAME island_v3_prod_composed_directed
+         COMMAND test_island_v3_prod_composed_directed)
+set_tests_properties(island_v3_prod_composed_directed PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 1200)
+
 add_test(NAME island_v3_composed_directed COMMAND test_island_v3_composed_directed)
 set_tests_properties(island_v3_composed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 

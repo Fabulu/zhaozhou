@@ -250,6 +250,23 @@
 // The two tops have IDENTICAL PORT LISTS (checked, not assumed), which is what
 // makes this possible at all. If a future change breaks that, this file stops
 // compiling for one of the two targets -- which is the right failure.
+//
+// ONE DELIBERATE EXCEPTION, 2026-09-08: the V3 top gained `shadow_present_o`
+// (D1/§4.2's capability contract) and the oracle did NOT. The oracle is
+// deliberately left alone -- its netlist has to stay identical for gate 3, and
+// adding even a tied-off output pin is the change `META_EN=0` was shaped to
+// avoid. Every use of the new port below is inside `#ifdef ISLAND_V3`, so the
+// oracle target still compiles. The rule above still holds for every port that
+// exists in both.
+//
+// Which shadow capability THIS build elaborated the island with. The verilate
+// flag (-GMIGRATION_SHADOWS) and this define must agree, and the test asserts
+// the DUT reports the same thing -- so a mismatch is a failure rather than a
+// silently skipped assertion.
+#ifndef ZHAO_SHADOWS
+#define ZHAO_SHADOWS 1
+#endif
+
 #ifdef ISLAND_V3
 #include "Vzhao_texture_island_v3_top.h"
 #else
@@ -2214,22 +2231,53 @@ int main(int argc, char** argv) {
   // address on the common response stream. Nothing downstream consumes it.
   // This phase has real responses -- 96 per phase across seven phases -- so
   // it is where the comparison is non-vacuous.
+  // ---- THE CAPABILITY IS CHECKED BEFORE ANY COUNTER IS BELIEVED -----------
+  // D1/§4.2. The production elaboration ties every shadow counter to zero, and
+  // a zero meaning "absent" must not be readable as a zero meaning "agreed".
+  // `shadow_present_o` is the constant that separates them, so it is asserted
+  // FIRST and the shadow assertions are reached only on its evidence.
+  //
+  // This is the M9 failure mode written as control flow: the counters below are
+  // not skipped because the author knows which build this is, they are skipped
+  // because the DUT says the apparatus is not there.
+  std::printf("  shadow capability: shadow_present_o = %u (build expects %u)\n", d.shadow_present_o,
+              ZHAO_SHADOWS);
+  check(d.shadow_present_o == ZHAO_SHADOWS,
+        "the island reports the shadow capability this build was elaborated "
+        "with -- every shadow counter below is meaningless without it",
+        ZHAO_SHADOWS, d.shadow_present_o);
+
+  // `meta_shadow_reads_o` is the BANK's own read counter, not a shadow: the bank
+  // ships in both profiles, so this one is evidence either way.
   std::printf("  metajoin shadow: %u comparisons, %u mismatches\n", d.meta_shadow_reads_o,
               d.meta_shadow_mismatch_o);
   check(d.meta_shadow_reads_o > 100,
-        "the shadow metadata bank actually compared responses -- zero "
-        "mismatches over zero comparisons is not evidence",
+        "the metadata bank actually served responses -- zero mismatches over "
+        "zero comparisons is not evidence",
         1, d.meta_shadow_reads_o > 100 ? 1 : 0);
-  check(d.meta_shadow_mismatch_o == 0,
-        "and returned EXACTLY what sampmeta_m, palslot_m and palgen_m would "
-        "return on every one -- the precondition for moving any reader onto it",
-        0, d.meta_shadow_mismatch_o);
-  std::printf("  metajoin queue alignment: %u checked, %u WRONG-RESPONSE\n", d.meta_align_chk_o,
-              d.meta_align_err_o);
-  check(d.meta_align_chk_o > 50, "the queued-metadata alignment was actually exercised", 1,
-        d.meta_align_chk_o > 50 ? 1 : 0);
-  std::printf("  metajoin per-queue: bil %u checked/%u wrong, near %u checked/%u wrong\n",
-              d.meta_bil_chk_o, d.meta_bil_err_o, d.meta_near_chk_o, d.meta_near_err_o);
+
+  if (d.shadow_present_o) {
+    check(d.meta_shadow_mismatch_o == 0,
+          "and returned EXACTLY what sampmeta_m, palslot_m and palgen_m would "
+          "return on every one -- the precondition for moving any reader onto it",
+          0, d.meta_shadow_mismatch_o);
+    std::printf("  metajoin queue alignment: %u checked, %u WRONG-RESPONSE\n", d.meta_align_chk_o,
+                d.meta_align_err_o);
+    check(d.meta_align_chk_o > 50, "the queued-metadata alignment was actually exercised", 1,
+          d.meta_align_chk_o > 50 ? 1 : 0);
+    std::printf("  metajoin per-queue: bil %u checked/%u wrong, near %u checked/%u wrong\n",
+                d.meta_bil_chk_o, d.meta_bil_err_o, d.meta_near_chk_o, d.meta_near_err_o);
+  } else {
+    // The apparatus is absent, and the test says so with a POSITIVE assertion
+    // rather than by falling silent. A zero here is the only thing consistent
+    // with a laboratory that was never elaborated -- so a lab build that
+    // silently lost its comparators could not pass as production either.
+    std::printf("  production profile: shadow comparators not elaborated\n");
+    check(d.meta_align_chk_o == 0 && d.meta_bil_chk_o == 0 && d.meta_near_chk_o == 0,
+          "the production profile elaborates NO shadow comparators, so every "
+          "check counter reads zero",
+          0, d.meta_align_chk_o + d.meta_bil_chk_o + d.meta_near_chk_o);
+  }
   // ---- CONSERVATION ACROSS THE CREDITED JOIN -------------------------------
   // Packet C put a new stage between the cache and the dispatcher: a response
   // is accepted only when the join stage can hand on what it holds, and the
