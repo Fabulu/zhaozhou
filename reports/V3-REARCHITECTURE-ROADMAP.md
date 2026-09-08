@@ -739,6 +739,36 @@ approval. Otherwise this packet spends zero fits.
 
 ## PACKET 6 — compose the accepted candidates; checkpoint C
 
+### PORT-COMPATIBILITY PRE-CHECK, done 2026-09-09 — the swap is nearly free
+
+Every one of `zhao_raster_perspuv_svc`'s twenty ports exists on
+`zhao_raster_perspuv_pairpipe`, so a swap leaves **nothing unconnected**. Two
+differences, both now known instead of discovered later:
+
+1. **`occupancy_o` widens from `[3:0]` to `[4:0]`, and this one can bite
+   silently.** The pairpipe owns up to `CAP = NTOK + 1 = 17` items, which needs
+   five bits. Both islands declare `logic [3:0] pu_occ;`
+   (`island_v3_top.sv:882`, `island_top.sv:786`) and connect
+   `.occupancy_o(pu_occ)`. Wiring a 5-bit output to a 4-bit signal **truncates**:
+   16 reads as 0, 17 reads as 1. Verilator flags it as a WIDTH warning; Quartus
+   simply accepts it.
+
+   It is **harmless today** — `pu_occ` has exactly two code mentions in each
+   island, its declaration and this connection, so nothing reads it. But
+   "harmless because nobody reads it" is a latent trap, not a design. **Widen
+   `pu_occ` to `[4:0]` in the same commit as the swap.**
+
+2. **`zero_products_o [31:0]` is new** and purely additive — the count of
+   depth-zero fragments that took the ordered path and produced no product. The
+   island may leave it `()` or wire it to a counter output; nothing breaks
+   either way.
+
+Not asserted here: whether svc's own 4-bit `occupancy_o` can already misreport a
+full queue at NTOK=16. It might be 0..15 by construction. That is svc's question,
+not the swap's, and guessing at it is how a real finding gets diluted with a
+speculative one.
+
+
 **Goal.** Swap `u_persp` for the pairpipe (if FIT GATE 3 accepted it), and RCP
 V3 at the owner-approved profile (if FIT GATE 4 happened and the owner said
 yes). Rerun everything. One island fit measures the moved frontier (§12.3
