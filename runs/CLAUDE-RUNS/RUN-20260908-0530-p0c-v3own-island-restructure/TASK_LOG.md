@@ -865,3 +865,47 @@ held the build tree all afternoon.
 
 Caveat to apply when reading: the 540 ALM / 628 reg / 98.06 MHz baseline has
 **no provenance digest**, so it cannot be tied to the pre-P-CNT file.
+
+## P-CNT MEASURED, and the endpoint moved
+
+| | baseline | P-CNT | |
+|---|---|---|---|
+| ALM | 540 | **542** | +2 |
+| registers | 628 | **648** | +20 |
+| Fmax | 98.06 | **104.08** | **+6.02** |
+
+The leaf crosses 100 MHz. But the **path** evidence is what makes it causal:
+
+| | worst path | slack |
+|---|---|---|
+| before | `gen_r[3][0] -> cold_o[4]~reg0` | **−0.198** |
+| after | `gen_r[1][6] -> l1_stale_q` | **+0.392** |
+
+**The old gate ended at `cold_o`** — the counter P-CNT removed from the live
+cone. The new gate ends at `l1_stale_q`, the registered verdict P-CNT made the
+terminus. The endpoint the experiment targeted stopped being the endpoint.
+
+Under the OLD M6 rule this would have been rejected for changing families. The
+brief's amendment is what lets it count, and it is right: a successful repair
+should change which path is worst.
+
+It also settled the missing-digest caveat **structurally**: the previous row's
+gating endpoint is `cold_o`, which the current source no longer has on that
+cone, so that row can only describe the pre-P-CNT design.
+`worst_path_index.py`'s `previous` field — added this morning because the next
+fit overwrites the report — decided it on first use.
+
+Caveats held: leaf fit, and the island cone starts at `rsp_dispatch|cq_rp`
+outside this block, so **+6.02 does not convert to island Fmax**; recorded leaf
+seed noise is ~4.70 MHz, so the Fmax delta alone would be weak; and **P-CNT is
+fitted but not yet simulated** — the counters now trail a cycle and that needs
+functional confirmation. A fit is not a correctness result.
+
+## Next fit launched: rcp24_v3 at the ISLAND'S profile
+
+`-TopParameters NCTX=8,TOKW=14 -RowLabel island-profile`. The existing v3 rows
+are at NCTX=16, which is not the configuration a swap would use, and I said the
+leaf rows were not comparable — this makes one that is. `run_block_fit.ps1`
+warns that Quartus silently ignores directives, so **verify the parameters took**
+before believing the row: at NCTX=8 the context storage must be visibly smaller
+than the NCTX=16 rows, or the override was dropped.
