@@ -35,9 +35,29 @@ Write-Host 'fitgate4: toolchain idle.'
 & python tools/quartus/worst_path_index.py
 Write-Host 'fitgate4: worst-path census banked.'
 
+# INVOKE THE SCRIPT DIRECTLY, not through `powershell -File`.
+#
+# The first version of this loop used `& powershell -NoProfile -File
+# run_block_fit.ps1 ... -TopParameters @('NCTX=12','TOKW=14')` and failed
+# preflight in 45 seconds with
+#
+#     preflight: source 'TOKW=14' for top 'zhao_raster_rcp24_v3' does not exist
+#
+# `-File` passes arguments as a FLAT COMMAND LINE, not as PowerShell objects, so
+# the array was flattened into two bare words: `NCTX=12` bound to
+# -TopParameters and `TOKW=14` fell through to the next positional parameter,
+# which is the source list.
+#
+# Note what this is NOT: it is not the quoted-string defect that killed
+# @island-profile, and the guard added for that could not have caught it,
+# because the malformed thing was the ARGUMENT BINDING one level up rather than
+# a TopParameters value. Two different ways to lose a parameter across a process
+# boundary; the fix for both is to stop crossing one.
+#
+# Dot-calling keeps everything in this process, where an array is an array.
 foreach ($mod in @('zhao_raster_rcp24_v3', 'zhao_raster_rcp24_svc')) {
     Write-Host ("fitgate4: fitting " + $mod + " at NCTX=12 TOKW=14")
-    & powershell -NoProfile -File tools\quartus\run_block_fit.ps1 `
+    & "$PSScriptRoot\run_block_fit.ps1" `
         -Module $mod `
         -RowLabel '@g4-nctx12' `
         -TopParameters @('NCTX=12', 'TOKW=14') 2>&1 |
