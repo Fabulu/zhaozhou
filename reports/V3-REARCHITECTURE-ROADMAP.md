@@ -275,6 +275,37 @@ fit running. Both new modules' leaf tests green (`early_desc_directed`,
      cannot diverge by construction. §0's delete-don't-wrap. If a future edit
      genuinely gives the frontend a term the owner lacks, THAT is the moment a
      detector becomes meaningful — and it will have two real operands then.
+   * **WIRING PRE-VERIFIED 2026-09-08 — every signal below exists at the width
+     the bank and join expect. Do not re-derive; do check anything you change.**
+
+     | island | width | connects to | width |
+     |---|---|---|---|
+     | `frag_ctx_i` | `CTXW=64` | `wr_aux_context_i` | 64 |
+     | `frag_lod_i` | `LODW=8` | `wr_lod_q4_4_i` | 8 |
+     | `frag_binding_i` | `BINDW=8` | `wr_binding_sel_i` | 8 |
+     | `frag_pal_slot_i` | `PSW=$clog2(4)=2` | `wr_palette_slot_i` | 2 |
+     | `frag_pal_gen_i` | `GENW=8` | `wr_palette_gen_i` | 8 |
+     | `f_weight_c` | 8 | `wr_mosaic_weight_i` | 8 |
+     | `pu_u`/`pu_v` | 32 | `p_u_i`/`p_v_i` | signed 32 |
+     | `pu_sat`/`pu_dzero` | 1 | `p_sat_i`/`p_dz_i` | 1 |
+
+     `pu_tag` is 16 bits and `p_tag_i` is 14, and the slice is SAFE: the
+     perspuv instance is driven `tag_i({2'd0, px_tok_q})` (line 872, its own
+     comment: *"16-bit tag, 14-bit handle: it fits"*), so `pu_tag[15:14]` is
+     hard zero and `pu_tag[13:0]` is the whole owner handle. That also makes
+     the Mosaic rewire exact rather than approximate: today Mosaic gets
+     `req_src_id_i(pu_tag)`, and `{2'd0, join.f_owner_o}` reproduces those same
+     sixteen bits bit for bit.
+
+     Inside the join the handle is split `d_rd_slot_o = p_tag_i[13:8]` and
+     `d_rd_owner_gen_o = p_tag_i[7:0]`, matching v3own's `{slot[5:0],
+     gen[7:0]}`. `f_owner_o` returns the full 14 bits to the expander's
+     `f_owner_i[13:0]`.
+
+     One consequence worth seeing: `fc_rp = pu_tag[13:8]` (line 883) is the
+     early arrays' read pointer, derived from the same slot field. When those
+     arrays go, so does that pointer — it has no other use.
+
    * Instantiate `zhao_texture_uv_join` (`TAGW=14, SLOTW=6, GENW=8, CTXW=64`,
      `DZ_FORCES_ZERO_SAMPLES=0` — behaviour-preserving default) between
      PERSPUV and the expander:
