@@ -243,6 +243,21 @@ int main() {
               "§9.1 zero-work owner has to see the same thing",
               static_cast<uint64_t>(expect_zero), d->zero_sample_fragments_o);
 
+  // THE QUEUE-STATE MONITOR MUST BE SILENT IN CORRECT OPERATION, and must be
+  // able to speak. Post-fit brief §2.2 rejected the first version of this
+  // monitor as algebraically false: it tested `accept_c && fq_full_c`, which
+  // substitutes to `f_valid_i && !fq_full_c && fq_full_c`.
+  //
+  // The replacement watches the extended pointer difference exceeding the depth
+  // the queue owns -- a state violation, derived without reference to
+  // `f_ready_o`. The brief's own discriminating mutation is `>=` -> `>` in
+  // `fq_full_c`, which admits a fifth entry: the OLD monitor could not fire on
+  // it, because the bug moved acceptance and detection together. This one can.
+  zhao::check(d->wq_overflow_o == 0,
+              "the queue-state monitor is silent under correct operation -- "
+              "occupancy never exceeded the depth the queue owns",
+              0, d->wq_overflow_o);
+
   const int rc = zhao::report_and_exit("frag_expand_directed");
   delete d;
   zhao::exit_hard(rc);

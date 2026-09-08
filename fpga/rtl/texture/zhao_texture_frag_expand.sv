@@ -135,11 +135,11 @@ module zhao_texture_frag_expand #(
     // latch a FRAGROB signal that no longer has a driver, so it was a constant
     // zero being reported as a preserved tripwire.
     //
-    // This is the honest event: a fragment ACCEPTED while the queue is already
-    // full. If `f_ready_o` is correct that is unreachable, which is exactly what
-    // makes it worth exposing -- it can only move if the handshake itself is
-    // broken. A tripwire that cannot fire in correct operation is the only kind
-    // whose zero means anything.
+    // The honest event is a QUEUE STATE VIOLATION: occupancy, measured by the
+    // extended pointer difference, exceeding the depth the queue owns. That is
+    // derived independently of `f_ready_o`, so a shared-definition error in the
+    // fullness test cannot hide it -- which the first version of this monitor
+    // could not say, because it was algebraically false. See the always_ff.
     output var logic [31:0] wq_overflow_o
 );
 
@@ -245,7 +245,35 @@ module zhao_texture_frag_expand #(
     end else begin
       // Counted BEFORE the write, because the write is what would corrupt an
       // occupied entry.
-      if (accept_c && fq_full_c) wq_overflow_o <= wq_overflow_o + 32'd1;
+      // POLICY C-b (post-fit brief §2.2). The previous form was
+      //
+      //     if (accept_c && fq_full_c)
+      //
+      // and it is IDENTICALLY FALSE, not merely unreachable:
+      //
+      //     accept_c  = f_valid_i && f_ready_o
+      //     f_ready_o = !fq_full_c
+      //  => f_valid_i && !fq_full_c && fq_full_c
+      //
+      // Both acceptance and detection consulted the SAME predicate in
+      // complementary form, so synthesis folds the counter to constant zero.
+      // I had argued it was 'unreachable if f_ready_o is correct, which is
+      // what makes it worth exposing'. That was wrong: it replaced an undriven
+      // port with a differently-dead one, and gained no observable.
+      //
+      // The brief's mutation makes it plain: change `>=` to `>` above and the
+      // queue admits a fifth entry -- a real bug -- and this monitor STILL
+      // cannot fire, because the bug moves both sides together.
+      //
+      // So detect a STATE VIOLATION instead, derived without reference to the
+      // producer-ready expression: the extended pointer difference exceeding
+      // the legal depth. `fq_occ_c` is `fq_wp_q - fq_rp_q` over FQW+1 bits, so
+      // it can represent more than FQD; if it ever does, an entry was written
+      // that the queue does not own. That is true regardless of how `f_ready_o`
+      // is computed, and it is exactly the condition assertion `a_fq_in_range`
+      // checks in simulation -- this is its synthesizable counterpart, with a
+      // one-cycle detection latency and no dependence on the handshake.
+      if (fq_occ_c > (FQW+1)'(FQD)) wq_overflow_o <= wq_overflow_o + 32'd1;
       if (accept_c) begin
         fq_m[fq_wp_q[FQW-1:0]] <= '{owner:   f_owner_i,
                                     u:       f_u_i,
