@@ -60,6 +60,7 @@ int main(int argc, char** argv) {
   d->near_ready_i = 1;
   d->bil_ready_i = 1;
   d->err_ready_i = 1;
+  uint32_t rng = 0xC0FFEEu;
   tick(d);
   tick(d);
   d->rst_n = 1;
@@ -89,14 +90,32 @@ int main(int argc, char** argv) {
     d->eval();
     const bool acc = d->rsp_valid_i && d->rsp_ready_o;
 
+    // BACKPRESSURE ON EVERY CLASS LANE. The first version of this test tied all
+    // four ready lines high, so a queued record was always read out on the
+    // cycle it became valid -- and a metadata word that failed to HOLD beside
+    // its response while the lane stalled would never have been noticed.
+    //
+    // That matters more now than it would have before: the metadata rides the
+    // queue as a third payload, and `cq_m` is indexed by the same read pointer
+    // as `cq_d`/`cq_t`. If it were ever indexed by anything else, only a stalled
+    // lane would show it.
+    rng = rng * 1664525u + 1013904223u;
+    d->clut_ready_i = ((rng >> 13) & 3u) != 0u;
+    d->near_ready_i = ((rng >> 17) & 3u) != 0u;
+    d->bil_ready_i  = ((rng >> 21) & 3u) != 0u;
+    d->err_ready_i  = ((rng >> 25) & 3u) != 0u;
+    d->eval();
+
     struct Lane { bool v; uint32_t tok; uint64_t meta; };
     const Lane lanes[4] = {
         {d->clut_valid_o != 0, d->clut_tok_o, d->clut_meta_o},
         {d->near_valid_o != 0, d->near_tok_o, d->near_meta_o},
         {d->bil_valid_o  != 0, d->bil_tok_o,  d->bil_meta_o},
         {d->err_valid_o  != 0, d->err_tok_o,  d->err_meta_o}};
+    const bool rdy[4] = {d->clut_ready_i != 0, d->near_ready_i != 0,
+                         d->bil_ready_i != 0, d->err_ready_i != 0};
     for (int c = 0; c < 4; ++c) {
-      if (!lanes[c].v) continue;
+      if (!lanes[c].v || !rdy[c]) continue;
       ++got[c];
       if (want[c].empty()) { ++foreign; continue; }
       const Expect e = want[c].front();
@@ -122,7 +141,10 @@ int main(int argc, char** argv) {
   std::printf("  dispatched %d | clut %d near %d bil %d err %d\n",
               sent, got[0], got[1], got[2], got[3]);
 
-  zhao::check(sent == kN, "every response was accepted", kN, sent);
+  zhao::check(sent == kN,
+              "every response was accepted despite randomised backpressure on "
+              "all four class lanes",
+              kN, sent);
   zhao::check(got[0] > 0 && got[1] > 0 && got[2] > 0 && got[3] > 0,
               "ALL FOUR class lanes carried traffic -- a metadata check that "
               "only exercised one lane is what let packet C move two readers on "
