@@ -2309,6 +2309,35 @@ set_tests_properties(lint_texture_uv_join PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# THE LAYOUT GUARD, SHOWN TO FIRE.
+#
+# zhao_texture_early_desc carries an elaboration check -- `if (DESCW != 119)
+# $fatal(...)` -- whose whole purpose is to refuse a field added or resized
+# without updating the reviewed profile. A guard that has never been seen to fire
+# is not a guard, and this one is easy to get wrong twice over:
+#
+#   * it sits inside `// synthesis translate_off`, which reads like "simulators
+#     skip this". They do NOT: Verilator parses and elaborates the block, proven
+#     by planting a syntax error inside it and watching lint reject it. So the
+#     check IS live in every simulation of this module.
+#   * `--lint-only` does not run `initial` blocks, so linting at a broken
+#     parameter passes cleanly and proves nothing.
+#
+# GENW=9 pushes the layout to 120 bits, so the first $fatal must fire at time 0.
+# The test PASSES when the fatal text appears -- it is a positive control, not a
+# functional test, and the C++ never gets far enough for its own checks to matter.
+add_executable(test_early_desc_layout_guard texture/early_desc_directed.cpp)
+target_link_libraries(test_early_desc_layout_guard PRIVATE zhao_harness)
+verilate(test_early_desc_layout_guard
+  PREFIX Vzhao_texture_early_desc
+  TOP_MODULE zhao_texture_early_desc
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
+  VERILATOR_ARGS -GGENW=9)
+add_test(NAME early_desc_layout_guard COMMAND test_early_desc_layout_guard)
+set_tests_properties(early_desc_layout_guard PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300
+  PASS_REGULAR_EXPRESSION "layout is 120 bits, not the reviewed 119")
+
 add_test(NAME early_desc_directed COMMAND test_early_desc_directed)
 set_tests_properties(early_desc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
