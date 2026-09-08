@@ -1067,3 +1067,43 @@ that were previously only "Not Run".
 Four blocks I added were UNACCOUNTED. Declared with reason codes —
 `island_v3_top: probe` (composition, mirroring `island_top`), `frag_expand:
 unused`, `metajoin: unused`, `ident_probe: probe`. **manifest check OK.**
+
+## Packet C: three readers moved, two attempted and reverted
+
+**Moved and verified** — all sourced from `disp_clut_meta`, the one queue the
+alignment falsifier actually validated:
+
+* `lu_slot_i` / `lu_gen_i` — the palette binding pair, the "64-owner palette
+  binding selection" on the island's worst INTERNAL path
+  (`rsp_dispatch|cq_rp -> palette_res|cold_o`, −2.093 ns)
+* `clut_meta_c` — the CLUT sample metadata
+
+Three asynchronous response-side selections replaced by registered queue
+payload. Gate 2 **122 checks**, gate 3 **392 byte-identical**, shadow 1,176/0,
+alignment 792/0.
+
+**Attempted and REVERTED**: the bilinear and nearest `sampmeta_m` readers.
+Gate 2 failed immediately — *ARGB4444/bilinear alpha wrong on 3 fragments*.
+
+### The mistake, stated plainly
+
+**My alignment falsifier validated the CLUT queue only.** It compares
+`disp_clut_meta`'s palette fields against the live tables at `disp_clut_tok`:
+792 responses, zero disagreements. That is evidence about **one class queue**.
+
+I then moved the bilinear and nearest readers as though it covered them. It did
+not. The bilinear lane sequences four channels, so a fragment's taps arrive as
+several responses, and whether each carries its own correct metadata through
+that queue is a different question — now an open one rather than an assumed one.
+
+**Gate 2 caught it in one run**, which is the system working. But the evidence I
+had and the change I made did not match, and I did not notice until the test
+told me. Building a falsifier for one path and then acting on three is the same
+error as reading a `status` field and not its `ruleViolations`.
+
+### What that means for the remaining two readers
+
+They need their own alignment falsifiers — per class queue, not one for CLUT —
+before moving. The brief's credited-reservation design would make the property
+structural instead of per-queue-incidental, which is the better fix and the one
+it actually asks for.
