@@ -237,3 +237,75 @@ held: C must land the `Clip` wrap flag before B flips it.
 2. encode, **no `-SkipMediaCheck`**, then `checkfresh` + `checkmedia`
 3. assemble, deploy `-Branch main`, verify from production
 4. release IMPL-B when C reports the flag landed
+
+### 20:15 — THE SECOND BANK WAS THROWN AWAY TOO, and for a better reason
+
+Killed the encode at 8 of 28. Not a fault this time: **a better answer arrived
+while it was encoding.**
+
+IMPL-C had taken my R6-bis ask — separate the bloom's magnitude from the sky it
+sits in — and landed `kU02NightSunMagPx = 25`, authored **by eye at 4× on the
+frame it found by sampling for the most cyan**. Its three-state plate is not
+close: the shipped bloom swallows the left half; the planet-off day sky reads
+pink-on-pink and the mana goes soft; **the night keeps the violet, drops the
+white to a small low moon, and the cyan crackle reads better than on either.**
+crackle near-white **15.16% → 0.57% with the sky intact.**
+
+Shipping the day sky would have been shipping a mood regression I had already
+been shown a better answer to. Rebuilt from `38cd8861` (md5 `c5a71542`), which
+also carries IMPL-A's face work, and re-rendered all 28.
+
+**Three full banks were rendered today and two were destroyed.** The rule that
+made both calls is the same: **27 clips from one generation beside 1 from
+another is the fault this site has a gate to prevent**, and it has already cost
+a published page once. A partial re-render is never the cheap option.
+
+### 21:20 — ⚠ THE CARD ALMOST CARRIED ITS SECOND FALSE CLAIM OF THE DAY
+
+I had already written the paragraph saying the travelling clips stop teleporting,
+quoting IMPL-C's real measurements — `flight` 7.69× → 0.88× of a typical frame's
+motion, and so on. **Those numbers are true of a build that is not this one.**
+
+`wrap_root_delta` defaults OFF so Zixxtrixx stays bit-identical, and **the lane
+that flips the four opt-in lines had not landed when this bank rendered.**
+`grep -c "wrap_root_delta = true" manafold_clips.h` → **0**.
+
+Caught by looking at the frames instead of quoting the headline:
+
+    flight grey pixels  f340 44 -> f351 438 -> f0 62      (pre-fix: 44 -> 441)
+
+Within noise of the fault. **10-GATE-CHECKLIST item 12 exactly — reproduce the
+headline, do not inherit it** — and the second time today the card would have
+claimed a fix that reached only part of what it named.
+
+**What I DID verify as true of this bank**, on the shipped frames and constants
+rather than the reports:
+
+    kEyeBulgeMm 88 -> 40, kEyeDeepMm 90 -> 40     A's flattening landed
+    kU02NightSunMagPx = 25                        C's night landed
+    channel near-white 18.9% -> 1.06%             the white is gone
+    channel sky (16,12,49)                        the violet night is BACK
+
+### 21:30 — OWNER RULED THE EYE PEAK: 39°
+
+Asked to keep 45° or pull the biggest glance to ~30°, he split it: ***"Go to 39
+degrees."*** Closer to his original than to the safe answer — the big look stays
+big, it just comes off the limb.
+
+`kEyeGlanceOutPm[0]` 1000 → 867 (867‰ of 45° = **39.015°**). Relayed to IMPL-B
+with two constraints: **do not touch `kEyeTravelMaxDeg`** (it is the clamp, and
+lowering it would drag the other two glances off the angles authored by eye),
+and **do not treat 39.015° as delivered until it has been looked at** — he chose
+a number from a description, and the number only carries the intent.
+
+⚠ **This bank ships at 45°**, because it was 26 of 28 subjects into its render
+when he answered. Named on the card so the two pages are not read as a
+regression.
+
+### NEXT STEPS — written down BEFORE the encode lands
+1. encode finishes → `checkfresh` + the ~22 min decode sweep, **neither skipped**
+   (`-SkipMediaCheck` is now a hard error; IMPL-C split it into two switches)
+2. assemble, deploy `-Branch main`, verify from production
+3. IMPL-B lands → next bank carries taunt3, blown, the gutter root and the 39°
+4. **then reviewer + QA on pass 13** — the owner's mandated sequence, and pass 13
+   has had neither
