@@ -1507,9 +1507,13 @@ constexpr int32_t kNoduleAmpMm[3][3] = {
 // Every one of the five is 0 for the same reason: these clips DRIVE the
 // nodules themselves, and a background oscillator added to an authored gesture
 // is how a deliberate motion becomes a spazzy one.
-constexpr int32_t kNoduleClipPm[22] = {800, 700, 1000, 850, 900, 750, 800, 0,
+// PASS 12 / WAVE 3: EXTENDED to 23 for slot 22 (flight). It is 0 for the same
+// reason the five theatrical clips are: `build_flight` authors its own nodule
+// TRAIL off the bob's clock, and an ambient oscillator added to an authored
+// hang-back is how a coherent bounce turns into a wobbling hose.
+constexpr int32_t kNoduleClipPm[23] = {800, 700, 1000, 850, 900, 750, 800, 0,
                                        950, 900, 600,  1000, 1000, 900, 500,
-                                       800, 800, 0, 0, 0, 0, 0};
+                                       800, 800, 0, 0, 0, 0, 0, 0};
 constexpr int kNoduleClipSlots =
     static_cast<int>(sizeof(kNoduleClipPm) / sizeof(kNoduleClipPm[0]));
 
@@ -1677,6 +1681,12 @@ constexpr int32_t kHastySpeedMmPerKey = 70;  // ~8.4 m across the clip
 // because the creature has net screen drift -- and shrinking it would delete
 // the effect the owner called perfect. The camera pulls back instead.
 constexpr int32_t kU02CamKTraverse = 148000;
+// WAVE 3: FLIGHT'S OWN CAMERA. Higher k is TIGHTER (the house is 360000, the
+// two long traverses pull back to 148000). Flight covers 4.4 m rather than
+// 8.3, so it can sit roughly midway and the creature reads at twice the size
+// hasty's framing gave it. Chosen by rendering it and looking, which is the
+// only way any of the camera constants in this file were chosen.
+constexpr int32_t kU02CamKFlight = 250000;
 constexpr int32_t kHastyPitchA16 = 2400;   // body pitched into the travel
 constexpr int32_t kHastyBankA16 = 1900;    // clumsy bank
 // PASS 6 F.1 (Direction 5 0-QUATER, and it is unambiguous): "hasty anim looks
@@ -1693,6 +1703,77 @@ constexpr int32_t kHastyBobAmpMm = 210;    // deeper than the house hover bob
 constexpr int kHastyFishtailCycles = 8;
 // PASS 3 (Direction 3 §7: "make it longer"): keys 100 -> 170, higher
 // start, and an extra tumble axis (a slow yaw under the pitch tumble).
+
+// ---- FLIGHT (slot 22) -- D5 SS7's FIRST LINE, deferred five passes ---------
+//
+//   "while the creature doesn't walk, it does move. So have FLYING MOVEMENT
+//    WITH IT BOBBING UP AND DOWN, have accelerated flight too where it is
+//    visibly being hasty in a bit of a clumsy way."
+//
+// Two clips, and the bank only ever had the second one. `hasty` IS the
+// accelerated half and has been in the bank since pass 2; the plain flight was
+// the plan's designated first cut in passes 7, 8, 9, 10 and 11, and the
+// inventory (B3, item F.2) lists it as "missing -- never authored".
+//
+// ⚠ WHY `hover` DOES NOT ALREADY SATISFY IT, checked before authoring a second
+// bob rather than after. `hover` (slot 0) bobs 132+50 mm and STAYS PUT: it is
+// the idle, and the owner's sentence is about the creature MOVING -- "it
+// doesn't walk, but it does move". `drift` (slot 1) travels but is the
+// wind-blown glide of D3 SS7: banked, passive, corrected twice, a thing blown
+// rather than a thing flying. So flight is neither, and the gap is real.
+//
+// *** THE BOB IS THE ENGINE, NOT A SINE ADDED TO A TRAVEL ***
+// ONE clock at kFlightBobPeriodKeys drives four channels at fixed phase to each
+// other, which is what makes it read as one body bouncing instead of four
+// layers that happen to be running:
+//   * root HEIGHT       sin(t)              the bob itself
+//   * root PITCH        cos(t) = the bob's own derivative -- nose UP while it
+//                       is climbing, nose DOWN while it sinks. This is the
+//                       9.3-degree channel D9/D3 SS4 asked for, phase-locked
+//                       instead of free-running.
+//   * the BREATH        the deform sidecar, most COMPRESSED at the bottom of
+//                       the arc and most stretched at the top: a bouncing
+//                       thing squashes where it turns around.
+//   * the NODULE TRAIL  the three balls hang BACK, each by its own lag, so the
+//                       antenna arrives after the body. This is the first clip
+//                       to spend nodule A's vertical channel for something
+//                       other than a gesture (D9 SS2 + SS13, wave 3).
+constexpr int kFlightKeys = 176;             // 352 frames, ~5.9 s
+// AUTHORED DOWN AFTER LOOKING (the art loop). The first value was 40 mm/key =
+// a 7.0 m traverse on hasty's pulled-back traverse camera, and the rendered
+// clip said two things the number could not: the creature was a thumbnail, and
+// because the travel is +x against a three-quarter camera it flew TOWARD the
+// eye -- its mask area tripled (1500 -> 4600 px) and its bbox height went 60 ->
+// 110 px across the clip. That reads as a zoom-in, not as flight across a
+// shot. Halved, with its own camera (kU02CamKFlight) instead of hasty's.
+constexpr int32_t kFlightSpeedMmPerKey = 25; // ~4.4 m traverse
+constexpr int kFlightBobPeriodKeys = 44;     // 88 frames -- 07-MOTION-STYLE's
+                                             // slow band, four bounces across
+                                             // the clip, an integer count so
+                                             // the loop seam is exact.
+constexpr int32_t kFlightBobAmpMm = 300;     // the DEEPEST bob in the bank, and
+                                             // it should be: this is the clip
+                                             // whose subject is bobbing. hover
+                                             // 132, hasty 210.
+constexpr int32_t kFlightPitchA16 = 1800;    // +-9.9 deg, locked to the bob
+constexpr int32_t kFlightPitchLeanA16 = 500; // a standing nose-down lean into
+                                             // the travel; small, because a
+                                             // flying thing is not diving
+constexpr int32_t kFlightBankA16 = 700;      // a lazy roll, half a bob period
+                                             // out of phase with the pitch so
+                                             // the two never peak together
+constexpr int32_t kFlightBreathGainPm = 1300;  // per-mille of kCompressAmpPm
+constexpr int32_t kFlightBreathPhase16 = 0x8000;  // squash at the BOTTOM
+// The nodule trail, in mm of hang-back per ball, and the lag in bob-phase
+// sixteenths. A is held by the neck and trails least; C is out at the end of
+// the chain and trails most -- the same reasoning as kNoduleAmpMm, on the same
+// readable quantity. A's share is only reachable at all because the spans
+// stretch (D9 SS13): before wave 2a a vertical request at A moved it 3 mm.
+constexpr int32_t kFlightTrailMm[3] = {46, 74, 92};
+constexpr int32_t kFlightTrailLag16[3] = {0x1000, 0x1c00, 0x2800};
+// The antenna's own sway rides the bob's clock too, at the house amplitude.
+constexpr int32_t kFlightSwayPm = 60;
+
 constexpr int kFallKeys = 170;
 constexpr int32_t kFallHeightMm = 3600;    // blown this high above the hover
 constexpr int kFallCatchKey = 130;         // the tumble ends, the catch begins
@@ -2486,9 +2567,12 @@ constexpr int32_t kKneadTremorA16 = 130;   // the hold's small tremor
 //   21 taunt3        0  the taunt's whole performance is the NODULES; a knead
 //                       layer on top is exactly the "one wobbling hose" read
 //                       the owner rejected, and it would blur the gesture
-constexpr int kKneadClipPm[22] = {1000, 850, 950, 900, 700, 800, 850,
+// PASS 12 / WAVE 3: slot 22 (flight) gets 700, the house value -- the
+// fold-hold-knead layer is the antenna's ambient LIFE and a calm travelling
+// clip wants it, unlike the taunt whose gesture it would blur.
+constexpr int kKneadClipPm[23] = {1000, 850, 950, 900, 700, 800, 850,
                                   0,    800, 650, 700, 850, 750, 0,   650,
-                                  700,  700, 650, 600, 900, 700, 0};
+                                  700,  700, 650, 600, 900, 700, 0, 700};
 // PASS 6 (0.2, carried from pass-5 QA): the guard over this array is DERIVED
 // from the array, never hand-written. The literal `< 14` orphaned slot 14 once
 // (damage silently ran at 700 against its authored 250); `< 15` was the same

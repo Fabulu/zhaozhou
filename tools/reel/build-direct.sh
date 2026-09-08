@@ -27,6 +27,9 @@ Targets:
   mspan      manafold-spangate.exe (pass 12 wave 2a: the committed STRETCHY
              SPAN gate, Direction 9 §13 -- reads the SKIN, because every
              nodule gate reads bones and cannot see a vertex effect)
+  mexpress   manafold-express.exe (pass 12 wave 3: THE EXPRESSIVENESS PLATE,
+             Direction 5 SS6 -- Manafold's deform channel measured against
+             Zixxtrixx's, every clip in both banks. A verification, not a gate.)
   all        all four core executables
 EOF
 }
@@ -49,7 +52,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mspan|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mspan|mexpress|all)
       TARGET="$1"
       shift
       ;;
@@ -212,6 +215,12 @@ build_mspan() {
   "$CXX" "${FLAGS[@]}" "$T/manafold_spangate.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-spangate.exe"
 }
 
+build_mexpress() {
+  printf '%s\n' "LD manafold-express"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_express.cpp" "${LIBOBJS[@]}" \
+    -o "$BIN/manafold-express.exe"
+}
+
 build_mhinge() {
   printf '%s\n' "LD manafold-hinge-traj"
   "$CXX" "${FLAGS[@]}" "$T/manafold_hinge_traj.cpp" "${LIBOBJS[@]}" \
@@ -228,6 +237,7 @@ case "$TARGET" in
   mhinge) build_mhinge ;;
   mnodule) build_mnodule ;;
   mspan) build_mspan ;;
+  mexpress) build_mexpress ;;
   mband) build_mband ;;
   mc2proto) build_mc2proto ;;
   all)

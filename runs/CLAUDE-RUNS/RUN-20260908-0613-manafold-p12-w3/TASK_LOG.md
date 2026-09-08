@@ -74,3 +74,62 @@ Reading order done: WAVE3-SCOPE, D9 §2/§13, D5 §6/§7/§0-TER/§0-QUATER,
 OWNER-INVENTORY B3/B6/C4, 07-MOTION-STYLE §1/§2, the nodule + span gates,
 `build_hover_idle`/`build_drift`/`build_hasty`, `hover_at`, `whole_wobble`.
 Next: run `mspan` for the SKIN half of nodule A's vertical reach.
+
+## 06:45 — item 1 landed: nodule A rises
+
+Wave 2a's own comments claimed the vertical was fixed and `mspan`'s G4 measured
+172.3 mm on the SOLO DIAGNOSTIC. It was true there and it had not reached the
+bank. `build_taunt3` — the clip that authors the owner's own configuration —
+still carried:
+
+    // And nodule A's rise is sideways because a vertical request moves it 3 mm
+    n.az = kTaunt3ShrugMm * shrug / 1000;
+    n.ay = kTaunt3ShrugMm * shrug / 4000;
+
+so the owner's "the other two swing UP" shipped as a sidestep, behind a comment
+that had become false. Fixed; the comment replaced, not deleted; two new knobs
+(kTaunt3ShrugLeanPm, kTaunt3ShimmyLeanPm). `mspan` grows **G5**: ball A's
+vertical SKIN reach on EVERY SHIPPED SLOT, taunt3 gated at 45 mm on reach AND
+gain. taunt3 now 61.2 mm live / 5.4 mm ablated / gain 55.8. Leg `--fail-nolanes`
+witnessed red, rc 1. Nodule gate re-run byte-for-byte unchanged.
+Pushed `3951c74c`, verified on origin.
+
+## 06:50 — items 2 and 3 in flight
+
+* **Item 2, flight bob.** Established first that `hover` does NOT satisfy it:
+  hover bobs 132+50 mm and stays put, `drift` travels but is D3 §7's *blown*
+  glide, `hasty` is the same sentence's accelerated half. The plain travelling
+  flight was genuinely absent. `build_flight`, slot 22, appended. ONE clock
+  drives height, pitch (the bob's own derivative), breath (squash at the bottom
+  of the arc) and a per-nodule hang-back trail.
+* **Item 3, the expressiveness plate.** `manafold_express.cpp` written: reads
+  the DEFORM STAGE's own output in bind-space mm for both creatures, every clip
+  in both banks, median and best — deliberately not a cherry-picked pair, and
+  deliberately able to refute.
+
+### Where I am
+Build 2 (cel + gates) running. NEXT: build-direct.sh gets an `mexpress` target,
+then render `manafold-flight` and `manafold-taunt3` and LOOK, then the pair.
+
+## 07:05 — the flight clip, rendered and LOOKED AT, then authored down
+
+First render (7.0 m traverse, hasty's pulled-back camera) was WRONG and the
+plate said so before any number did:
+
+* `trajplot --bg` over all 352 frames: `cy p2p 60.8 px` — the bob is there,
+  four clean bounces, not a flat line. That half worked first time.
+* But `mask px count 1500 -> 4600` and `bbox height 60 -> 110 px`: travel is +x
+  against a three-quarter camera, so the creature flew AT the lens and tripled
+  in size. It read as a zoom-in, and it was a thumbnail throughout.
+
+Halved the traverse to 4.4 m and gave flight its own camera (`kU02CamKFlight`
+250000, between the house 360000 and the traverse 148000). Both are named
+constants with the reason written beside them.
+
+## 07:05 — a stale duplicate found on the way
+
+`manafold_probe.cpp`'s travelling-column probe carried its OWN copy of the
+renderer's staging rule (`slot_id == 1 || slot_id == 8`). Adding slot 22 made
+the probe measure a stage the reel does not build — it printed "slot 22 ...
+bump_ext 6" while `subject_u02_clip` staged it flat at 18. The numbers agreed
+by luck. Rule now lives once, in `u02::flat_staged_slot()`, and both read it.

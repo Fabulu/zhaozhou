@@ -1664,7 +1664,12 @@ int main(int argc, char** argv) {
       const int32_t span_mm = static_cast<int32_t>(
           ((static_cast<int64_t>(max_x - min_x) + (max_z - min_z)) * 1000) >> 16);
       if (span_mm < 500) continue;  // fixed-position clip: centre column rules
-      const bool flat_staged = clip.slot_id == 1 || clip.slot_id == 8;
+      // ⚠ WAS `clip.slot_id == 1 || clip.slot_id == 8` -- a hand-copied
+      // duplicate of the renderer's staging rule, which this probe exists to
+      // check AGAINST. Adding the flight clip (slot 22) made the two disagree
+      // and nothing said so. It now asks the shared predicate, so a new
+      // travelling clip cannot be probed on a stage the reel does not build.
+      const bool flat_staged = u02::flat_staged_slot(clip.slot_id);
       const int bump_ext = flat_staged ? 18 : 6;
       zref::render::TerrainPatch patch = rtest::bump_patch(161, 161, bump_ext, 8);
       const zref::terrain::ComposedLattice lat = zref::render::compose_lattice(

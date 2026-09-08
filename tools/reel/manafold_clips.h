@@ -2090,6 +2090,28 @@ constexpr uint16_t kDeathBSlot = 18;
 constexpr uint16_t kLassoSlot = 19;
 constexpr uint16_t kBlownSlot = 20;
 constexpr uint16_t kTaunt3Slot = 21;
+// PASS 12 / WAVE 3: the plain FLIGHT clip (D5 SS7's first line). Appended,
+// so every existing slot id and every existing clip stays bit-identical.
+constexpr uint16_t kFlightSlot = 22;
+
+/** WHICH CLIPS STAGE ON FLAT GROUND -- ONE definition, TWO consumers.
+ *
+ *  ⚠ THIS EXISTS BECAUSE THE RULE WAS DUPLICATED AND WENT STALE THE MOMENT A
+ *  SLOT WAS ADDED. `subject_u02_clip` in zhao_reel.cpp set `bump_ext = 18` for
+ *  slots 1 and 8, and `manafold_probe.cpp`'s travelling-column probe carried
+ *  its own hand-copied `slot_id == 1 || slot_id == 8`. Adding the flight clip
+ *  made the probe measure a DIFFERENT STAGE from the one the renderer builds --
+ *  it reported "slot 22 ... bump_ext 6" against a renderer staging it flat.
+ *  The numbers happened to agree this time. That is luck, not a check, and it
+ *  is gate checklist item 10 wearing the other creature's clothes.
+ *
+ *  A travelling clip stages FLAT (the Zixxtrixx walk precedent): the reel
+ *  ground-snaps the root with ONE column query at the stage centre, so a mound
+ *  under a moving path is terrain the creature walks into. Everything else
+ *  keeps the mound and barely moves. */
+inline constexpr bool flat_staged_slot(uint16_t slot) {
+  return slot == 1 || slot == 8 || slot == kFlightSlot;
+}
 
 /** Sum of a key-interval table. constexpr so the clip length is a compile-time
  *  constant the reel subject can name, and so retiming a bounce in the table
@@ -2909,6 +2931,103 @@ inline zc::Clip build_taunt3() {
         static_cast<int32_t>((static_cast<int64_t>(fxu(90)) * flick) / 1000);
     c.deform[static_cast<size_t>(f)] =
         compress_at(f, K, K / 46, kCompressAmpPm + kCompressAmpPm * shrug / 3000);
+  }
+  return c;
+}
+
+/** flight, slot 22 — D5 §7's FIRST LINE, deferred in five passes and the last
+ *  un-attempted item of the original clip inventory:
+ *
+ *      "while the creature doesn't walk, it does move. So have flying movement
+ *       with it bobbing up and down"
+ *
+ *  ⚠ WHY THIS IS NOT A DUPLICATE OF `hover`. `hover` (slot 0) carries a
+ *  132+50 mm bob and does not go anywhere — it is the idle, and the owner's
+ *  sentence is about the creature MOVING. `drift` (slot 1) travels but is D3
+ *  §7's wind-blown glide: banked, passive, over-banking and correcting, a thing
+ *  BLOWN rather than a thing flying. `hasty` (slot 8) is the same sentence's
+ *  second half — accelerated and clumsy on purpose. Flight is the unhurried
+ *  first half, and nothing in the bank was it.
+ *
+ *  Mechanically: a straight, calm traverse along +x crossing the shot through
+ *  its centre (the Zixxtrixx walk staging precedent, the same one hasty uses —
+ *  start half the travel back), with ONE clock at kFlightBobPeriodKeys driving
+ *  the height, the pitch, the breath and the antenna's hang-back at fixed phase
+ *  to each other. The pitch is the bob's own DERIVATIVE — nose up while
+ *  climbing, nose down while sinking — which is why this reads as a body
+ *  bouncing rather than as a creature with a sine added to its altitude.
+ */
+inline zc::Clip build_flight() {
+  const int K = kFlightKeys;
+  zc::Clip c = clip_shell(kFlightSlot, K, kHoverHeightMm);
+  Rig g;
+  // Integer cycles across the clip: the loop seam is exact by construction,
+  // which is the same rule every other layer in this file obeys.
+  const int cyc = K / kFlightBobPeriodKeys > 0 ? K / kFlightBobPeriodKeys : 1;
+  const int32_t breath = kCompressAmpPm * kFlightBreathGainPm / 1000;
+  for (int f = 0; f < K; ++f) {
+    g.reset();
+    antenna_knead(g, kFlightSlot, K, f);  // fills g.nod from the schedule
+    // ---- THE ONE CLOCK ---------------------------------------------------
+    const int32_t bob = sinp(f, K, cyc);              // the height
+    const int32_t rise = sinp(f, K, cyc, 0x4000);     // d(height)/dt
+    // PITCH rides the derivative: nose UP on the way up. A standing lean into
+    // the travel sits under it, small — this thing is flying, not diving.
+    g.q[kBRoot] = quat_mul(
+        g.q[kBRoot],
+        quat_z(static_cast<int32_t>(
+                   (static_cast<int64_t>(kFlightPitchA16) * rise) >> 16) -
+               kFlightPitchLeanA16));
+    // a lazy roll, a quarter of the bob out of phase with the pitch so the two
+    // never arrive together and the motion never has a single beat
+    g.q[kBRoot] = quat_mul(
+        g.q[kBRoot],
+        quat_x(static_cast<int32_t>(
+            (static_cast<int64_t>(kFlightBankA16) * sinp(f, K, cyc, 0x2000)) >> 16)));
+    // ---- THE NODULE TRAIL: the antenna arrives AFTER the body -------------
+    // Each ball hangs back on its own lag, so the bounce TRAVELS out along the
+    // antenna instead of the three of them pumping in unison. Additive, so a
+    // clip-level schedule (kNoduleClipPm[22]) could ride underneath if it were
+    // ever turned on. A's vertical share is only worth anything because the
+    // spans stretch — D9 §13; before wave 2a this term moved ball A by 3 mm.
+    {
+      const int32_t ty[3] = {
+          static_cast<int32_t>((static_cast<int64_t>(kFlightTrailMm[0]) *
+                                sinp(f, K, cyc, -kFlightTrailLag16[0])) >> 16),
+          static_cast<int32_t>((static_cast<int64_t>(kFlightTrailMm[1]) *
+                                sinp(f, K, cyc, -kFlightTrailLag16[1])) >> 16),
+          static_cast<int32_t>((static_cast<int64_t>(kFlightTrailMm[2]) *
+                                sinp(f, K, cyc, -kFlightTrailLag16[2])) >> 16)};
+      // NEGATED: when the body is high the balls have not caught up yet.
+      g.nod.ay -= ty[0];
+      g.nod.by -= ty[1];
+      g.nod.cy -= ty[2];
+      // and a little of the same lag sideways, so the trail is a swim rather
+      // than a piston
+      g.nod.az -= ty[0] / 3;
+      g.nod.cz += ty[2] / 3;
+    }
+    loop_alive(g, f, K, cyc, kFlightSwayPm, breath, cyc);
+    face_rest(g);
+    // the eyes look where it is going, and lift with the climb
+    apply_gaze(g, kGazeMaxA16 / 3,
+               static_cast<int32_t>(
+                   (static_cast<int64_t>(kGazeLiftMaxA16 / 2) * rise) >> 16));
+    apply_squint(g, blink_at(f, 53));
+    g.write(c, f);
+    // the traverse: start half the travel back, cross through centre
+    c.root[static_cast<size_t>(f) * 3 + 0] =
+        fxu(static_cast<int32_t>((f - K / 2) * kFlightSpeedMmPerKey));
+    // THE BOB. Written from the same `bob` the pitch differentiated, not from a
+    // second call to hover_at — one clock means one expression.
+    c.root[static_cast<size_t>(f) * 3 + 1] =
+        fxu(kHoverHeightMm) +
+        static_cast<int32_t>((static_cast<int64_t>(fxu(kFlightBobAmpMm)) * bob) >> 16);
+    // THE BREATH, on the same clock and phased to squash at the BOTTOM of the
+    // arc: the bounce and the inhale are one motion, which is D5 §6's
+    // "it's bouncy, its body stretches, inhales, exhales" read as one thing.
+    c.deform[static_cast<size_t>(f)] =
+        compress_at(f, K, cyc, breath, kFlightBreathPhase16);
   }
   return c;
 }

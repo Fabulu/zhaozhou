@@ -161,6 +161,10 @@ inline const zc::CreatureType& type() {
     bank.clips.push_back(build_lasso());         // slot 19
     bank.clips.push_back(build_blown());         // slot 20
     bank.clips.push_back(build_taunt3());        // slot 21
+    // slot 22 (PASS 12 / WAVE 3, D5 SS7): the plain FLIGHT clip -- travelling,
+    // bobbing, unhurried. The last un-attempted item of the original clip
+    // inventory. Appended, so nothing above it moves by one bit.
+    bank.clips.push_back(build_flight());        // slot 22
 
     zc::CreatureType type;
     type.type_id = 3;  // 1 watchdog, 2 zixxtrixx, 3 manafold

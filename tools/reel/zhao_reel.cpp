@@ -5434,13 +5434,20 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // walked into the hillside (drift sank to a nub, twice shipped). Flat
   // ground so one column's snap speaks for the whole path. Drift (1) and
   // hasty (8) travel; everything else keeps the mound.
-  if (slot == 1 || slot == 8) s.bump_ext = 18;
+  // WAVE 3: the rule now lives in ONE place (u02::flat_staged_slot) because
+  // the probe carried its own copy of it and the copy went stale the moment a
+  // travelling slot was added.
+  if (u02::flat_staged_slot(static_cast<uint16_t>(slot))) s.bump_ext = 18;
   // drift's lateral span (~6.9 m) exceeded the house camera's window and
   // the clip ENDED clipped at the frame edge (looked at): the drift camera
   // pulls back so the whole traverse stays on screen.
   // PASS 6 F.1/A.2: the two TRAVELLING clips take their own camera and never
   // inherit the 360k house framing -- see kU02CamKTraverse.
-  if (slot == 1 || slot == 8) s.cam_k = u02::kU02CamKTraverse;
+  if (u02::flat_staged_slot(static_cast<uint16_t>(slot)))
+    s.cam_k = u02::kU02CamKTraverse;
+  // ...except flight, whose traverse is half theirs and which was a thumbnail
+  // at 148000 when it was rendered and looked at.
+  if (slot == u02::kFlightSlot) s.cam_k = u02::kU02CamKFlight;
   // PASS 4 (Stage T -- the reviewer's fault 2b): the fall started ABOVE the
   // frame; 190 of 340 frames showed empty sky. The authored 3.6 m drop
   // stays (Direction 3 asked for it); the CAMERA pulls back and tips up so
@@ -7806,6 +7813,20 @@ int main(int argc, char** argv) {
         "time with the antenna STREAMING (the three nodules trail by different "
         "amounts because they are three independent things), the drop, the "
         "catch.";
+    rc |= render_scene(s);
+  }
+  if (wanted("manafold-flight")) {
+    SceneSubject s = subject_u02_clip(u02::kFlightSlot, "manafold-flight",
+                                      u02::kFlightKeys, false, &kU02SunHover);
+    s.note =
+        "Direction 5 SS7, the FIRST line of the clip inventory and the last "
+        "one still unattempted after five passes: \"have flying movement with "
+        "it bobbing up and down\". Not `hover`, which bobs in place, and not "
+        "`drift`, which is BLOWN. ONE clock drives the height, the pitch, the "
+        "breath and the antenna's hang-back: the pitch is the bob's own "
+        "derivative, so the nose lifts on the climb and drops on the sink, and "
+        "the body squashes at the bottom of every arc. The three nodules trail "
+        "by different amounts, so the bounce travels out along the antenna.";
     rc |= render_scene(s);
   }
   if (wanted("manafold-taunt3")) {
