@@ -70,3 +70,34 @@ First use, and it decided the question.
 Functional verification, then the same question at the composed level: whether
 removing this endpoint moves the island's `cq_rp -> cold_o` family, which is
 41 ps behind the nominal worst path and therefore co-equal with it.
+
+## The partition is equivalent, checked exhaustively by hand
+
+P-CNT is fitted but not yet simulated, so the equivalence claim was still
+resting on the brief's assertion. It is now checked against the actual
+expressions in `zhao_texture_palette_res.sv`, over all eight combinations of the
+three Boolean inputs:
+
+```
+st  = (gen_r[lu_slot] != lu_gen) || begin_same_slot     the live stale verdict
+res = res_r[lu_slot]                                    live residency
+bss = begin_same_slot
+
+OLD: stale on st;          cold on !st && !res
+NEW: stale on l1_stale_q;  cold on !l1_stale_q && !l1_res_q
+     where l1_stale_q <= st,  l1_res_q <= res && !bss
+```
+
+**8 cases checked, 0 divergences.**
+
+The case that could have diverged is `!st && bss` — where the old form counts
+cold and the new one would not, because `l1_res_q` folds `!bss` in. It is
+**unreachable**: `st = genmismatch || bss`, so `bss = 1` forces `st = 1`, and
+`!st && bss` is the empty set. An accepted same-slot BEGIN always classifies as
+stale and therefore never reaches the cold-only branch under either form.
+
+That is the brief's C3 argument, confirmed on this repository's source rather
+than accepted from the brief. **It is still not a substitute for running the
+test** — this proves the counting partition is identical, not that the pipeline
+carries the right `l1_v_q` for each lookup, nor that no beat is counted twice
+across a stall. Those need the simulation the build tree has been holding.
