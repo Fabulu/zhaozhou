@@ -115,3 +115,31 @@ old measurement" is the trap it walks into.
 * `check_prod_manifest.py` reports both new blocks UNACCOUNTED. Correct: the v3
   top is not production until the fit says it can be, and registering it before
   then would put an unmeasured block in the ledger.
+
+## Gate 3 was shown to FIRE, on real RTL
+
+It passed on its first run, which by this repository's own law means it had not
+been tested. `assign out_a_o = own_out_result[31:24]` was replaced with
+`8'hFF` -- the island's actual historical defect, alpha hardwired -- in the live
+tree (safe: `run_block_fit.ps1` snapshots its 18 sources into a workspace, so a
+running fit cannot see the working tree).
+
+Both halves fired, and they fire differently, which is worth separating:
+
+* **The gate refused to compare.** The mutant's own 119-check run failed 7/119,
+  and `gate3_paired.py` returns 1 rather than diffing, because a paired
+  comparison between a passing top and a failing one is not evidence about
+  ordering -- it is evidence about the thing that already failed.
+* **The stream comparison itself caught it**, when run directly against the
+  mutant's dump: **9 of 392 records differed**, each `alpha 254` against
+  `alpha 255`. So the byte compare sees a real single-channel defect in real
+  output, not only in its synthetic fire test.
+
+The file was restored from a byte backup and `git diff` confirms it is identical
+to HEAD; gate 3 passes again at 392/392.
+
+**And the mutation run caught a reporting trap in my own command**: `python3
+gate3_paired.py | tail` printed `exit=0` while the script had returned 1. That
+is CLAUDE.md's *"read the build's exit code, not the pipeline's"* -- the same
+trap, in a new costume, inside the very run that was checking whether a detector
+could fail. The real exit code was confirmed separately.
