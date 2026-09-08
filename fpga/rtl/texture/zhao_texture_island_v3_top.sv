@@ -734,14 +734,26 @@ module zhao_texture_island_v3_top #(
   // door.
 
   localparam int unsigned PSW = $clog2(PAL_SLOTS);
+  // THREE ARRAYS AND THEIR ALIASES LIVED HERE, and they were dead DUPLICATES
+  // rather than merely unread: `fpsl_m`, `fpgn_m` and `frec_m` held the palette
+  // pair and the recipe keyed by FCTXN slot, while the LIVE copies of the same
+  // state sit in `palslot_m`, `palgen_m` and `mat_m` keyed by OWNER slot -- and
+  // only the owner-keyed ones are read. Their `_c` aliases had no consumers at
+  // all, so alias and array went together.
+  //
+  // They are an abandoned earlier attempt at CARRIAGE, left in place when the
+  // sidecar won. §0 calls that a partial implementation of v3own's lifetime, and
+  // Packet 3 is the same idea done properly -- the pair travelling WITH the
+  // request, so no lookup can be keyed on an identity that has been recycled.
+  //
+  // Deleted in Packet 1 rather than Packet 2 deliberately: removing dead state
+  // and adding the descriptor bank in one packet would make FIT GATE 2's delta
+  // uninterpretable, because a shrink could be either.
   logic [BINDW-1:0] fbind_m [FCTXN];
   logic [LODW-1:0]  flod_m  [FCTXN];
   logic [1:0]       fcls_m  [FCTXN];
   logic             faux_m  [FCTXN];
-  logic [PSW-1:0]   fpsl_m  [FCTXN];
-  logic [GENW-1:0]  fpgn_m  [FCTXN];
   logic [1:0]       fsc_m   [FCTXN];
-  logic [2:0]       frec_m  [FCTXN];
   logic [7:0]       fwt_m   [FCTXN];
   // THE SUBMISSION SEQUENCE NUMBER (audit R6). Stamped at admission and
   // carried out through the combiner so the island can restore the caller's
@@ -805,10 +817,7 @@ module zhao_texture_island_v3_top #(
       flod_m [fc_wp] <= frag_lod_i;
       fcls_m [fc_wp] <= frag_class_i;
       faux_m [fc_wp] <= frag_aux_i;
-      fpsl_m [fc_wp] <= frag_pal_slot_i;
-      fpgn_m [fc_wp] <= frag_pal_gen_i;
       fsc_m  [fc_wp] <= frag_sample_count_i;
-      frec_m [fc_wp] <= frag_recipe_i;
       fwt_m  [fc_wp] <= frag_weight_i;
     end
   end
@@ -910,10 +919,7 @@ module zhao_texture_island_v3_top #(
   wire             f_class_bad_c = (f_class_raw_c == CLS_ERR);
   wire [1:0]       f_class_c    = f_class_bad_c ? CLS_NEAR : f_class_raw_c;
   wire             f_aux_c      = faux_m [fc_rp];
-  wire [PSW-1:0]   f_pal_slot_c = fpsl_m [fc_rp];
-  wire [GENW-1:0]  f_pal_gen_c  = fpgn_m [fc_rp];
   wire [1:0]       f_scount_c   = fsc_m  [fc_rp];
-  wire [2:0]       f_recipe_c   = frec_m [fc_rp];
   wire [7:0]       f_weight_c   = fwt_m  [fc_rp];
 
   // ==========================================================================
