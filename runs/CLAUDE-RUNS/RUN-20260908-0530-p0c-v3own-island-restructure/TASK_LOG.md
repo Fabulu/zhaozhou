@@ -1107,3 +1107,51 @@ They need their own alignment falsifiers — per class queue, not one for CLUT �
 before moving. The brief's credited-reservation design would make the property
 structural instead of per-queue-incidental, which is the better fix and the one
 it actually asks for.
+
+## Packet C integrated; the milestone fit is running
+
+**Four of five asynchronous response-side reads are on the class queue**, each
+moved only after a falsifier for ITS OWN queue passed:
+
+| queue | checked | wrong | reader |
+|---|---|---|---|
+| CLUT | 792 | 0 | moved — palette binding pair + `clut_meta_c` |
+| nearest | 192 | 0 | moved |
+| bilinear | 768 | **32** | **held** |
+
+The palette binding pair is the one that matters: it is the "64-owner palette
+binding selection" on the island's worst INTERNAL path
+(`rsp_dispatch|cq_rp -> palette_res|cold_o`, −2.093 ns), and it is now a
+registered queue payload rather than an asynchronous 64-entry selection.
+
+### The bilinear disagreement, characterised rather than guessed
+
+Only the FRACTIONS differ (`fv 50/fu 80` queued vs `fv 10/fu 30` in the table);
+nibble, format and byte-select agree. Three hypotheses eliminated by
+measurement:
+
+* **not slot recycling** — the bank's generation check reports **0** mismatches
+  across the suite. That was my first hypothesis and the counter refutes it.
+* **not the bank** — the shadow shows bank and tables agree at the common
+  stream, 1,176/0.
+* **not the queue mechanism** — nearest carries the same payload through the
+  same dispatcher at 192/0.
+
+What remains: the table changes between the common stream and the bilinear
+queue's exit for the same slot/sidx/generation. Which value is correct for a tap
+is SEMANTIC, and gate 2 answered it empirically — moving the reader broke three
+ARGB4444 alphas, so the decode depends on the table's later value. That is what
+the brief's credited-reservation design exists to settle.
+
+### The milestone fit
+
+Launched on the island with **P-CNT and packet C together**. Per the brief:
+*"Compose independently validated changes at an explicit milestone ... label the
+result as a combined change rather than inventing individual MHz
+contributions."* So whatever it reports is the COMBINED effect of the palette
+counter move and four readers leaving the asynchronous tables — **not
+attributable to either alone**, and the P-CNT Fmax claim stays withdrawn
+regardless of what this says.
+
+Baseline to compare against: **13,133 ALM / 20,561 reg / 45 M10K / 17 DSP /
+82.41 MHz** (G1D 4.3h), digest `6094a4292eee`.
