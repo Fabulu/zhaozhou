@@ -934,6 +934,30 @@ constexpr int kStarScalePm = 950;
 // 370 pm restores a margin comparable to what pass 6 had. If the star ever reads
 // as sliding off, pull this back and re-check rule 2 with it.
 constexpr int kStarOverhangMaxPm = 370;
+// ==== PASS 13 R1(d): RULE 3 IS AIMED AT THE SHIPPING CAMERAS AND ENFORCED ===
+//
+// Rule 3 -- "the star never crosses the BODY OUTLINE" -- has printed
+// REPORTED-NOT-ENFORCED since pass 7, behind an excuse that was true when it
+// was written: it sampled TWO fixed view directions while the shipping
+// cameras orbit. `hover` and `inspect` turn one exact revolution per loop, so
+// the shipping views are the whole yaw ring at the showcase down-pitch, and
+// the fixed-camera clips sit at a point on that ring. The probe now sweeps it.
+//
+// ⚠ AND THE GATE IS THE EXCURSION, NOT THE COUNT. The old comment's other
+// half is still right: from side-on the eye is outside the body outline BY
+// DESIGN -- the pop-out the artist drew a dedicated study of -- so a nonzero
+// count is correct and a zero-count gate would tune the creature to satisfy an
+// instrument (10-GATE-CHECKLIST SS0.1). What tells the drawn pop-out from a
+// detached sticker in the sky is how FAR past the outline the star reaches.
+//
+// In per-mille of a body radius past the outline. Chosen by looking at what
+// the swept sweep reports on a build whose eyes read correctly, then leaving
+// headroom -- a cap set to its own worst measurement is a gate that can only
+// report "the geometry changed" (the pass-7 lesson at kStarOverhangMaxPm).
+constexpr int kStarOutlineMaxPm = 420;
+// Fine enough that a narrow maximum between two yaws cannot hide (gotcha
+// SS17). 72 steps is 5 degrees.
+constexpr int kRule3YawSteps = 72;
 // The purple eyeball itself may shift this fraction of its own width relative
 // to the body. Still exactly TWO transforms per eye (§5b holds) -- the purple
 // is simply no longer welded to the head.

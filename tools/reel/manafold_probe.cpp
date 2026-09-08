@@ -63,10 +63,19 @@ static inline void inv_point(const zc::mat3x4fx& m, int32_t x, int32_t y, int32_
 // bones, so gate A's verdict on that configuration stays witnessable after the
 // mechanism that produced it is gone.
 static bool g_fail_mirror = false;
+// PASS 13 R1(d): the failing leg for rule 3, which had none because the rule
+// was never enforced. `--fail-outline` pushes every star vertex 40% further
+// from the body axis before the outline test -- a detached sticker, the exact
+// fault the rule names -- so the bound below is a WITNESSED bound and not a
+// rumour with an exit code (10-GATE-CHECKLIST item 10).
+static bool g_fail_outline = false;
 
 int main(int argc, char** argv) {
   for (int ai = 1; ai < argc; ++ai)
+  {
     if (std::strcmp(argv[ai], "--fail-mirror") == 0) g_fail_mirror = true;
+    if (std::strcmp(argv[ai], "--fail-outline") == 0) g_fail_outline = true;
+  }
   constexpr int32_t kMinClearanceMm = 40;
   // PASS 3: the headstand (slot 13) DECLARES ground contact — the loop
   // peak plants at kTrickPlantDepthMm inside keys
@@ -937,17 +946,38 @@ int main(int argc, char** argv) {
       rc = 1;
     }
     // The near-eye bar itself: the cyan must present a FORM edge-on, not a
-    // plate. The lens carries kEyeWideMm along the same axis; a star whose
-    // half-depth is a small fraction of it is the "chrome scratch" the owner
-    // saw on 96.1% of taunt's frames. This is the shape change made checkable.
+    // plate. A star whose depth is a small fraction of the lens's depth is the
+    // "chrome scratch" the owner saw on 96.1% of taunt's frames.
+    //
+    // ⚠ PASS 13 -- THIS GATE READ THE WRONG AXIS, and it is checklist item 13
+    // exactly: a comment asserting a structural fact that was not one. It said
+    // "the lens carries kEyeWideMm along the same axis" and divided by it.
+    // kEyeWideMm is the lens's in-plane HALF-WIDTH (make_eye_lens: rs.rz). The
+    // outward axis -- the one the bar is about, the one the star presents its
+    // edge along -- is rs.rx, which is kEyeDeepMm. The two were 84 and 90, so
+    // the wrong denominator gave an answer within 7% of the right one and
+    // nobody looked twice. It only surfaced when pass 13 flattened the dome
+    // and the two constants stopped being nearly equal.
+    //
+    // CORROBORATED BEFORE BEING ACTED ON (gotcha SS16): EYE-LAB-FINDINGS SS12.2
+    // states the mechanism in its own words and its own numbers -- "the lens
+    // carries 180 mm along the outward axis and the star carried 32 mm". 180
+    // is 2 * kEyeDeepMm at the then-shipped 90; it is not 2 * kEyeWideMm. An
+    // independently derived document agrees with the corrected reading.
+    //
+    // The floor is UNCHANGED at 300. What changed is that pass 13 reaches it
+    // from the other side: the eye-lab's pre-compensation ratio was 32/180 =
+    // 178 pm (the bar), the pass-11 compensation bought 92/180 = 511 pm by
+    // fattening the star until its white tore off it, and flattening the dome
+    // instead gives 32/80 = 400 pm with the star back at its authored depth.
     constexpr int32_t kMinStarDepthOfLensPm = 300;
-    // Both as FULL extents along the outward axis, so the ratio means what it
-    // says: kEyeWideMm and kStarCyanThinMm are both half-measures.
+    // Both as FULL extents along the OUTWARD axis, so the ratio means what it
+    // says: kEyeDeepMm and kStarCyanThinMm are both half-measures.
     const int32_t depth_pm =
-        u02::kStarCyanThinMm * 2 * 1000 / (u02::kEyeWideMm * 2);
+        u02::kStarCyanThinMm * 2 * 1000 / (u02::kEyeDeepMm * 2);
     const bool fat = depth_pm >= kMinStarDepthOfLensPm;
-    std::printf("u02-probe: E.2 cyan star depth is %d pm of the lens's full width "
-                "(floor %d) — %s\n",
+    std::printf("u02-probe: E.2 cyan star depth is %d pm of the lens's full DEPTH "
+                "(floor %d) - %s\n",
                 depth_pm, kMinStarDepthOfLensPm, fat ? "OK a form" : "FAIL a plate");
     if (!fat) {
       std::printf("u02-probe: FAIL the near eye will read as a bar again.\n");
@@ -1054,13 +1084,27 @@ int main(int argc, char** argv) {
   //   * ORTHOGRAPHIC. The perspective outline differs slightly; the creature is
   //     small against its camera distance, so the error sits far below the ~1 px
   //     this rule protects.
-  //   * TWO VIEWS, not a full sphere. A full ring would be wrong rather than
-  //     conservative: from side-on the eye is outside the body outline BY
-  //     DESIGN -- that is the pop-out the artist drew a dedicated study of --
-  //     and a star sitting on a lens that is itself legitimately proud is not
-  //     the fault this rule looks for. A star vertex passes if it is on the
-  //     purple (rule 2's own test) OR inside the body outline: over pink
-  //     either way.
+  //   * PASS 13 R1(d) RETIRES THE SECOND CAVEAT, which used to read "TWO
+  //     VIEWS, not a full sphere" and was the excuse this rule carried for
+  //     five passes while printing REPORTED-NOT-ENFORCED. The two directions
+  //     it sampled -- three-quarter and front -- are not where these clips are
+  //     seen: `hover` and `inspect` ORBIT one exact turn per loop (the yaw law
+  //     is theta = f * 65536 / frames in zhao_reel.cpp's renderer), so the
+  //     shipping cameras sweep EVERY yaw on the ring, and the fixed-camera
+  //     clips sit at cam_yaw 0x2000, which is a point ON that ring. The rule
+  //     now sweeps it -- gotcha SS17, two samples of something with a shape
+  //     measure the shape you assumed.
+  //
+  //     THE OLD OBJECTION SURVIVES, AND IS WHY THE COUNT IS NOT THE GATE.
+  //     From side-on the eye is outside the body outline BY DESIGN -- that is
+  //     the pop-out the artist drew a dedicated study of -- so a nonzero count
+  //     is CORRECT, and gating on zero would tune the creature to satisfy an
+  //     instrument. What separates the drawn pop-out from "a detached sticker
+  //     in the sky" is HOW FAR past the outline the star reaches, so that is
+  //     what is bounded, in per-mille of a body radius, against
+  //     kStarOutlineMaxPm. The count and the worst offender are still printed
+  //     because they are what LOCATES it. A star vertex is only tested at all
+  //     if it is off the purple (rule 2's own test); over pink either way.
   {
     const int32_t bx = u02::fxu(u02::kBodyRadiusMm);
     const int32_t by = u02::fxu(u02::vmm(u02::kBodyRadiusMm));
@@ -1072,11 +1116,17 @@ int main(int argc, char** argv) {
     const int32_t overhang_cap_mm =
         static_cast<int32_t>((static_cast<int64_t>(star_half_mm) *
                               u02::kStarOverhangMaxPm) / 1000);
-    // The two shipping views as direction vectors (Q16.16) at the showcase
-    // down-pitch: three-quarter (cam_yaw 0x2000) and front (0x4000).
-    struct View { const char* name; int32_t dx, dy, dz; };
-    const View views[2] = {{"three-quarter", 46341, -17000, 46341},
-                           {"front", 65536, -17000, 0}};
+    // THE SHIPPING CAMERA RING, swept. The pitch is the -17000 the two old
+    // fixed views already carried (the showcase down-pitch); only the yaw is
+    // opened up, from two corners to kRule3YawSteps around.
+    struct View { int32_t dx, dy, dz; };
+    std::vector<View> views;
+    views.reserve(static_cast<size_t>(u02::kRule3YawSteps));
+    for (int vi = 0; vi < u02::kRule3YawSteps; ++vi) {
+      const double th = 2.0 * 3.14159265358979 * vi / u02::kRule3YawSteps;
+      views.push_back(View{static_cast<int32_t>(65536.0 * std::cos(th)), -17000,
+                           static_cast<int32_t>(65536.0 * std::sin(th))});
+    }
     int32_t worst_overhang_mm = 0;
     int32_t worst_on_purple_pm = 1000;
     int outside_body = 0;
@@ -1190,9 +1240,13 @@ int main(int argc, char** argv) {
             // outline from a shipping view, or it is drawn against sky.
             if (over > 0) {
               for (const View& v : views) {
-                const int64_t ux = (static_cast<int64_t>(x - root_x) << 16) / bx;
+                // --fail-outline injects the detached-sticker fault: the
+                // star is pushed 40% further from the body axis and nothing
+                // else in the measurement moves.
+                const int64_t fo = g_fail_outline ? 14 : 10;
+                const int64_t ux = ((static_cast<int64_t>(x - root_x) * fo / 10) << 16) / bx;
                 const int64_t uy = (static_cast<int64_t>(y - root_y) << 16) / by;
-                const int64_t uz = (static_cast<int64_t>(z - root_z) << 16) / bx;
+                const int64_t uz = ((static_cast<int64_t>(z - root_z) * fo / 10) << 16) / bx;
                 const int64_t ex = (static_cast<int64_t>(v.dx) << 16) / bx;
                 const int64_t ey = (static_cast<int64_t>(v.dy) << 16) / by;
                 const int64_t ez = (static_cast<int64_t>(v.dz) << 16) / bx;
@@ -1258,7 +1312,13 @@ int main(int argc, char** argv) {
     // line below names them. Pass 8's first eye item is to either seat the
     // assembly further inboard or aim this rule at each clip's own camera --
     // fix the fault or finish the instrument, not neither.
-    const bool r3 = true;  // outside_body == 0 -- see above
+    // PASS 13 R1(d): ENFORCED at last, on the quantity that separates the
+    // artist's pop-out from a detached sticker rather than on a bare count.
+    // worst_perp is in units of the body radius, Q16.16, 1<<16 == exactly on
+    // the outline; the excess is reported and bounded in per-mille.
+    const int32_t worst_out_pm = worst_perp > (1LL << 16)
+        ? static_cast<int32_t>(((worst_perp - (1LL << 16)) * 1000) >> 16) : 0;
+    const bool r3 = worst_out_pm <= u02::kStarOutlineMaxPm;
     std::printf("u02-probe: 5c LEASH rule 1 (overhang <= %d mm = %d pm of a "
                 "%d mm star half-width): worst %d mm at slot %u key %u - %s\n",
                 overhang_cap_mm, u02::kStarOverhangMaxPm, star_half_mm,
@@ -1266,14 +1326,12 @@ int main(int argc, char** argv) {
     std::printf("u02-probe: 5c LEASH rule 2 (>= 600 pm of the star on the "
                 "purple): worst %d pm - %s\n",
                 worst_on_purple_pm, r2 ? "OK" : "FAIL");
-    std::printf("u02-probe: 5c LEASH rule 3 (no star vertex outside the BODY "
-                "outline; orthographic, 2 FIXED views): %d violations - %s\n",
-                outside_body,
-                outside_body == 0
-                    ? "OK"
-                    : "REPORTED-NOT-ENFORCED (the fault is REAL; the instrument "
-                      "is aimed at 2 fixed views while the shipping cameras "
-                      "orbit -- see the source, and pass 8's first eye item)");
+    std::printf("u02-probe: 5c LEASH rule 3 (star excursion past the BODY "
+                "outline, swept over %d yaw steps of the SHIPPING camera ring "
+                "at the showcase pitch): worst %d pm of a body radius past it, "
+                "cap %d pm; %d vertex-view samples outside - %s\n",
+                u02::kRule3YawSteps, worst_out_pm, u02::kStarOutlineMaxPm,
+                outside_body, r3 ? "OK" : "FAIL");
     if (outside_body) {
       int spread = 0;
       for (int i = 0; i < 32; ++i)
