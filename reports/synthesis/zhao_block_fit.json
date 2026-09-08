@@ -873,6 +873,28 @@
                        "virtualPins":  null
                    },
                    {
+                       "module":  "zhao_raster_rcp24_v3@tokw14",
+                       "status":  "ok",
+                       "sourceCommit":  "f597ac80825a5702df1d4196196bdee3b14e42f1",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "98299502f0beadbf1b63d70cbbeb3d080e31a585b23c1e044e2192c84bafd0d3",
+                       "topParameters":  "TOKW=14",
+                       "variantOf":  "zhao_raster_rcp24_v3",
+                       "seconds":  1458.1,
+                       "sourcesHashed":  5,
+                       "alms":  1034,
+                       "registers":  1478,
+                       "blockMemoryBits":  3286,
+                       "ramBlocks":  8,
+                       "dspBlocks":  3,
+                       "virtualPins":  288,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  93.67,
+                       "fmaxClock":  "clk"
+                   },
+                   {
                        "module":  "zhao_raster_rcp24_v3@v3-after",
                        "status":  "map_only",
                        "sourceCommit":  "5cdc0ad26b380717f95cfa09f8b03727bd8da108",

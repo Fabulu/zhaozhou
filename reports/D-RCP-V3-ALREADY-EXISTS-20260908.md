@@ -322,3 +322,61 @@ falsifiable prediction: **swap the RCP and the island's DSP should read 14.**
 
 That single number is worth more than another round of reasoning, and it is
 testable by one composed fit whenever the owner wants it.
+
+---
+
+# MEASURED AT THE ISLAND'S TOKEN WIDTH
+
+`zhao_raster_rcp24_v3 -TopParameters TOKW=14` — **`ok`**, 1,458 s, no rule
+violations.
+
+| | `rcp24_svc` (instantiated) | **`rcp24_v3@tokw14`** | |
+|---|---|---|---|
+| ALM | 1041 | **1034** | 7 smaller |
+| registers | 1101 | 1478 | +377 |
+| **DSP** | **6** | **3** | **halved** |
+| **Fmax** | **68.46** | **93.67** | **+25.21 MHz** |
+| status | ok | **ok** | |
+
+This is the like-for-like comparison I said was missing: **the same block family
+at the token width the island actually uses**, both complete fits, both `ok`.
+
+It also discharges the elaboration caveat properly. I could previously say only
+that v3 *elaborates* at TOKW=14 — 0 lint diagnostics — and warned that a block
+which elaborates at a width has not been shown to work at it. It now **fits** at
+that width, cleanly, at 93.67 MHz. That is still not a functional result: fitting
+is not simulating, and the differential run against the reciprocal oracle remains
+the thing that would prove the arithmetic survives the token change.
+
+## Where this leaves packet D
+
+The brief asked for a preparation pipeline to be *written*. The measured position
+is that one **exists**, at the island's own token width, and against the block
+currently instantiated it is **smaller in ALM, half the DSP, and 25 MHz faster.**
+
+Every caveat I raised earlier has now been either discharged or narrowed:
+
+| caveat | status |
+|---|---|
+| leaf rows not comparable (NCTX 8 vs 16) | **discharged** — same block, same TOKW, complete rows both sides |
+| "16 contexts plus queues may increase area" | **wrong** — 7 ALM smaller |
+| TOKW=14 unverified | **fitted**, ok, 93.67 MHz |
+| block may reject NCTX=8 | **wrong** — `@v3-nctx8` maps, registers 1,414 |
+| port contract differs on 4 signals | **still open** — `contexts`, `mul_busy_o` need a decision |
+| never instantiated | **still open, and it is the big one** |
+
+The remaining risk is entirely integration, and this session is the evidence for
+how large that risk is: composing `v3own` — a fitted, verified, never-instantiated
+block — cost five stale slices, two stage misalignments and four undriven
+outputs. **None of those were visible in its leaf fit either.**
+
+## The falsifiable prediction, restated with the better number
+
+Island DSP today: **17**, against a `max_dsp: 14` rule it fails. RCP goes 6 -> 3.
+**17 − 3 = 14.** Leaf arithmetic, not a composed measurement, and M7 warns that
+DSP inference does not compose naively — but it is testable by one fit.
+
+If it holds, the swap turns one of the island's three rule failures into a pass
+**and** takes 25 MHz off the RCP's contribution to the critical path, on a block
+that is marginally smaller. That is a better trade than anything else currently
+on the table for this island.
