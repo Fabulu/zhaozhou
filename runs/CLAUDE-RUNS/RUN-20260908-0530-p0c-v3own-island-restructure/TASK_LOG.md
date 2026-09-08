@@ -377,3 +377,32 @@ no bit; that is what the bit-identical test is for.
 Running at `-j1` to avoid starving the fit. This is the debt recorded earlier:
 the full fast label has been unverified since the shared-block edits to
 `cache_pipe` and `rcp24_svc`. Result pending.
+
+## Brief §5.1: the zero-work lifetime probe, written
+
+The brief's second contract hole, and it is careful about its own status:
+
+> *"Evidence classification: SOURCE-PROVEN mismatch between two completion
+> domains; REACHABILITY/IMPACT of a destructive same-slot reuse schedule NOT
+> independently proved here."*
+
+v3own makes an owner with `adm_req_i == 0` ready **at admission** — correct for
+its leaf contract, since it owes no TMU or AUX source. The composed top still
+sends that fragment through RCP, PERSPUV and the expander, which hold its token
+and can read owner-keyed sidecars. Those are two different completion
+conditions, and the implication *"owner may retire -> no front-end reader
+remains"* is not established.
+
+Added as phase 4 of `island_v3_fault_directed`: **300 zero-sample fragments**,
+wrapping the 64-slot owner space about 4.7 times while front-end stages are
+mid-flight, checking that every fragment retires exactly once with its own tag.
+
+**What this can and cannot show, stated up front so the result is not
+over-read:** a FOUND trace is a reproduced defect, which is what the brief says
+nobody has yet. Absence of one is *not* a proof that the implication holds — it
+is one schedule out of many, and the brief itself notes that 392-record ordinary
+parity does not explore prolonged stalls and wrap schedules either. The
+non-vacuity check (`submitted >= 200`) at least guarantees the wrap actually
+happened rather than the phase quietly testing nothing.
+
+Building behind the fast suite to avoid three-way CPU contention with the fit.
