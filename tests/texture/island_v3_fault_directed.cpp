@@ -143,12 +143,24 @@ int main(int argc, char** argv) {
               "mean 'nothing arrived'",
               1, bad > 0 ? 1 : 0);
   zhao::check(d.err_class_invalid_o > clean_invalid,
-              "AND err_class_invalid_o MOVED. It counts on `fr_alloc_valid && "
-              "f_class_bad_c`, and `fr_alloc_valid` lost its only driver when "
-              "FRAGROB was deleted -- so today this port is a constant zero and "
-              "this check FAILS. That is the point: the healthy-run check in "
-              "island_composed_directed passes against exactly this defect",
+              "AND err_class_invalid_o MOVED -- the observable the repair "
+              "exists to produce",
               1, d.err_class_invalid_o > clean_invalid ? 1 : 0);
+
+  // EXACTNESS, not just movement (post-fit brief §3.1). The counter delta must
+  // equal the number of ACCEPTED illegal beats -- no more, no less.
+  //
+  // "It moved" is satisfied by a counter that fires once per illegal fragment,
+  // and equally by one that fires on every cycle the pin happens to be 3, or
+  // twice per beat, or once for the whole burst. Those are different circuits
+  // and only one of them is the contract. This is the counters-see-what-
+  // pictures-cannot law applied to a diagnostic instead of to a job count.
+  zhao::check(d.err_class_invalid_o - clean_invalid ==
+                  static_cast<uint32_t>(bad),
+              "and it moved by EXACTLY the number of accepted illegal beats -- "
+              "not once per cycle the pin was 3, not twice per fragment, and "
+              "not once for the burst",
+              bad, static_cast<long long>(d.err_class_invalid_o - clean_invalid));
 
   // ---- PHASE 3: legitimate traffic still works afterwards ------------------
   // A block that reacts to a fault by wedging is not fault-tolerant, it is just
