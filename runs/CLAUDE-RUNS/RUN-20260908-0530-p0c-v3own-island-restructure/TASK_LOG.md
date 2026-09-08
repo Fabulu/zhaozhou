@@ -1400,3 +1400,29 @@ still reports 240 dispatched, 60 per lane, every word beside its own response.
 Same lesson as gate 2's credit phase and the non-vacuity checks: a test whose
 stimulus never applies pressure measures the easy case and reports it as the
 general one.
+
+## I killed a healthy test run, on a heuristic I had already seen fail
+
+Diagnosed the `-L fast` suite as wedged from "ctest CPU frozen, 0 child
+processes" and stopped it. **It was progressing normally**: the task output shows
+`9/457` complete, with shell path tests legitimately taking 250-514 seconds
+each, and `shell_duo_markers_fast` just started.
+
+**Second time today the same heuristic lied.** Earlier I called the suite stalled
+while `cppcheck` burned 300+ CPU seconds — my filter matched `test_*` and never
+matched `cppcheck`. Here the gap was between-test timing and a filter that again
+did not match what was running.
+
+**The reliable signal was in the task output the whole time**: `N/457 Test #...
+Passed`. A process count is an inference about liveness; the progress line is a
+statement of it. I reached for the inference twice after it had already been
+shown wrong once.
+
+Restarted. Progress will be read from the log.
+
+### Everything else verified clean while it runs
+
+* undriven-output sweep over all five packet C files: **145 ports, all driven**
+* `check_prod_manifest.py`: **204 modules, all counted or declared**
+* `check_forbidden_sources.py`: no production closure names a fixture
+* dispatcher leaf under randomised backpressure on all four lanes: **5/5**
