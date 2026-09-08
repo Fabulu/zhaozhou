@@ -2226,6 +2226,28 @@ verilate(test_early_desc_directed
   PREFIX Vzhao_texture_early_desc
   TOP_MODULE zhao_texture_early_desc
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv)
+# The post-PERSPUV join (Decrufter §5.3), composed with the REAL descriptor
+# bank. A stubbed descriptor source would let the test author decide when the
+# descriptor changes, which is the property under test.
+add_executable(test_uv_join_directed texture/uv_join_directed.cpp)
+target_link_libraries(test_uv_join_directed PRIVATE zhao_harness)
+verilate(test_uv_join_directed
+  PREFIX Vtb_uv_join_pair
+  TOP_MODULE tb_uv_join_pair
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/texture/tb_uv_join_pair.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv)
+add_test(NAME uv_join_directed COMMAND test_uv_join_directed)
+set_tests_properties(uv_join_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_texture_uv_join
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_uv_join
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv)
+set_tests_properties(lint_texture_uv_join PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_test(NAME early_desc_directed COMMAND test_early_desc_directed)
 set_tests_properties(early_desc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
