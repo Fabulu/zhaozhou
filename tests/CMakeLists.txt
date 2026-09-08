@@ -2259,9 +2259,18 @@ if(Python3_Interpreter_FOUND)
   add_test(NAME island_v3_paired
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_SOURCE_DIR}/tools/texture/gate3_paired.py)
+  # NO `DEPENDS`. It was here, naming the two composed tests, and it is both
+  # unnecessary and harmful: `gate3_paired.py` RUNS BOTH EXECUTABLES ITSELF --
+  # that is the whole design, so the comparison cannot drift from a separate
+  # harness. It needs them BUILT, which the target dependency already ensures,
+  # not RUN.
+  #
+  # With `-j2` the redundant DEPENDS wedged the whole `-L fast` suite at this
+  # test, four times. Alone it passes in 0.77 s. I spent three restarts blaming
+  # concurrent ctest invocations and stale checkpoint files -- both of which
+  # were real and neither of which was this.
   set_tests_properties(island_v3_paired PROPERTIES LABELS "fast;nightly"
-                       TIMEOUT 900
-                       DEPENDS "island_composed_directed;island_v3_composed_directed")
+                       TIMEOUT 900)
 else()
   message(STATUS "ZHAO: no Python3 interpreter -- P0-C gate 3 (island_v3_paired) will NOT run")
 endif()
