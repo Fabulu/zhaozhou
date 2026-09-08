@@ -2160,6 +2160,36 @@ verilate(test_frag_expand_directed
 add_test(NAME frag_expand_directed COMMAND test_frag_expand_directed)
 set_tests_properties(frag_expand_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# P0-C Stage C gate 2: the SAME 119-check source compiled against the V3
+# composition. One source, two tops -- see the header of
+# island_composed_directed.cpp for why this is not a copy.
+add_executable(test_island_v3_composed_directed texture/island_composed_directed.cpp)
+target_compile_definitions(test_island_v3_composed_directed PRIVATE ISLAND_V3=1)
+target_link_libraries(test_island_v3_composed_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_island_v3_composed_directed
+  PREFIX Vzhao_texture_island_v3_top
+  TOP_MODULE zhao_texture_island_v3_top
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v2.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME island_v3_composed_directed COMMAND test_island_v3_composed_directed)
+set_tests_properties(island_v3_composed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
 set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 

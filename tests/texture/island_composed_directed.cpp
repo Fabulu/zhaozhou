@@ -232,7 +232,28 @@
 
 #include "verilated.h"
 
+// ---------------------------------------------------------------------------
+// ONE SOURCE, TWO TOPS -- P0-C Stage C's gate 2
+// ---------------------------------------------------------------------------
+// This file is compiled TWICE: once against the oracle
+// (`zhao_texture_island_top`) and once, with -DISLAND_V3, against the V3
+// composition (`zhao_texture_island_v3_top`).
+//
+// It is one source rather than a copy DELIBERATELY. The architecture's gate 2
+// asks for "the 119-check suite retargeted to the new top: same stimulus bytes,
+// same zref oracle, same assertions". A copied file satisfies that on the day
+// it is copied and drifts afterwards -- and a drifted comparison is worse than
+// no comparison, because it still produces two numbers that look comparable.
+// With one source, divergence is impossible by construction.
+//
+// The two tops have IDENTICAL PORT LISTS (checked, not assumed), which is what
+// makes this possible at all. If a future change breaks that, this file stops
+// compiling for one of the two targets -- which is the right failure.
+#ifdef ISLAND_V3
+#include "Vzhao_texture_island_v3_top.h"
+#else
 #include "Vzhao_texture_island_top.h"
+#endif
 
 namespace {
 
@@ -247,7 +268,11 @@ void check(bool ok, const char* what, long long expected, long long got) {
   }
 }
 
+#ifdef ISLAND_V3
+using Dut = Vzhao_texture_island_v3_top;
+#else
 using Dut = Vzhao_texture_island_top;
+#endif
 
 void tick(Dut& d) {
   d.clk = 0;

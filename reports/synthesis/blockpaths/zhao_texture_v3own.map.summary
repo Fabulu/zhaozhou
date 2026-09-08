@@ -1,10 +1,10 @@
-Analysis & Synthesis Status : Successful - Mon Sep 07 13:02:06 2026
+Analysis & Synthesis Status : Successful - Mon Sep 07 16:36:55 2026
 Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
 Revision Name : blockfit
 Top-level Entity Name : zhao_texture_v3own
 Family : Cyclone V
 Logic utilization (in ALMs) : N/A
-Total registers : 4310
+Total registers : 3750
 Total pins : 0
 Total virtual pins : 952
 Total block memory bits : 20,640
