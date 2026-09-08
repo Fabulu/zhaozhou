@@ -2321,27 +2321,36 @@ module zhao_texture_island_v3_top #(
   // would take a different fragment's recipe, weight and base.
   //
   // v3own HOLDS `cmb_valid_o` until `cmb_ready_i`, so the address is stable and
-  // the read settles after one cycle. `mat_rdy_q` says it has: the address
-  // presented last cycle is the address presented now. The combiner is offered
-  // the packet only then.
+  // the read settles after one cycle. `mat_aligned_c` says it has: the address
+  // captured in `mat_addr_q` is the address being presented now, and since
+  // `mat_rd_q` is loaded at the same edge as `mat_addr_q`, that compare is
+  // exactly "the material I am holding belongs to this owner". The combiner is
+  // offered the packet only then, and the SAME term gates its ready.
   //
   // The cost is one cycle per COMBINE admission, not per sample, and it is
   // taken deliberately rather than paid back by reintroducing the async read.
   logic [MATW-1:0]  mat_rd_q;
   logic [13:0]      mat_addr_q;
-  logic             mat_rdy_q;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       mat_addr_q <= 14'd0;
-      mat_rdy_q  <= 1'b0;
     end else begin
       mat_rd_q   <= mat_m[own_cmb_owner[13:8]];
       mat_addr_q <= own_cmb_owner;
-      mat_rdy_q  <= own_cmb_valid && (mat_addr_q == own_cmb_owner);
     end
   end
 
   // Field extraction, named once so no consumer re-derives a bit position.
+  // ONE alignment term, used by BOTH halves of the handshake.
+  //
+  // There were two, and that was the bug: `f_valid_i` carried a registered
+  // `mat_rdy_q` while `cmb_ready_i` carried this compare. A valid and a ready
+  // computed from different notions of "the material is here" cannot agree,
+  // and the transfer simply stopped happening -- 32 retired became 0. The
+  // stale flag is deleted rather than fixed, because the failure was having a
+  // second source of truth at all.
+  wire        mat_aligned_c  = (mat_addr_q == own_cmb_owner);
+
   wire        mat_has_aux_c  = mat_rd_q[0];
   wire [1:0]  mat_scount_c   = mat_rd_q[2:1];
   wire [2:0]  mat_recipe_c   = mat_rd_q[5:3];
@@ -2522,7 +2531,7 @@ module zhao_texture_island_v3_top #(
   // [31:24] of each lane. No bank read here: v3own already gathered them.
   zhao_texture_material_combine_v2 #(.NCTX(8), .TAGW(14)) u_combine (
       .clk(clk), .rst_n(rst_n),
-      .f_valid_i(own_cmb_valid && mat_rdy_q), .f_ready_o(comb_f_ready),
+      .f_valid_i(own_cmb_valid && mat_aligned_c), .f_ready_o(comb_f_ready),
       .f_sample_count_i(mat_scount_c), .f_recipe_i(mat_recipe_c),
       .f_weight_i(mat_weight_c),
       .f_s0_rgb_i(own_cmb_s0[23:0]), .f_s0_a_i(own_cmb_s0[31:24]),
@@ -2552,7 +2561,22 @@ module zhao_texture_island_v3_top #(
   // and which four M6 checks catch if it is confused.
   // ...and the acceptance must be gated the same way, or v3own would see its
   // packet taken on a cycle the combiner was not actually offered it.
-  assign own_cmb_ready_c = comb_f_ready && mat_rdy_q;
+  // THE ALIGNMENT GUARD IS COMBINATIONAL, and `mat_rdy_q` is not it.
+  //
+  // `mat_rd_q` is loaded from `mat_m[own_cmb_owner]` at the same edge that
+  // loads `mat_addr_q <= own_cmb_owner`, so the registered material ALWAYS
+  // corresponds to `mat_addr_q`. That makes the correct question "does the
+  // material I am holding belong to the owner being offered right now", which
+  // is a compare of those two -- not a flag sampled a cycle earlier.
+  //
+  // The registered flag was wrong in one specific place: the cycle after a
+  // fire. `mat_rdy_q` was computed at the previous edge, while the owner was
+  // still A; COMBINE takes A; the next cycle offers B with `mat_rdy_q` still
+  // high and `mat_rd_q` still A's material -- so B combines with A's base
+  // colour, weight and recipe. It only bites when COMBINE accepts back to
+  // back, which is why it corrupted a MINORITY of fragments and left the rest
+  // exact. A stall between every pair would have hidden it completely.
+  assign own_cmb_ready_c = comb_f_ready && mat_aligned_c;
 
   // -------- reorder buffer --------------------------------------------------
   // (d3) THE ROB STORAGE IS GONE. `rob_m[64]x33`, `rob_full_m[64]`,

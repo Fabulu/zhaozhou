@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "c6997ab846f0eccbd9784ed0420a8cb2049044c0",
+    "newestRunCommit":  "509f1aca418e5d84e496ad54fb95e9da86da5c04",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1429,6 +1429,26 @@
                                               "registers 524 \u003e allowed 500 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)",
                                               "DSP 8 \u003e allowed 2"
                                           ]
+                   },
+                   {
+                       "module":  "zhao_texture_frag_expand",
+                       "status":  "ok",
+                       "sourceCommit":  "509f1aca418e5d84e496ad54fb95e9da86da5c04",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "8d93b9ced1767a7025bf67e273dd0b7affdba344ad2a34283490c7b405d818a4",
+                       "seconds":  1562,
+                       "sourcesHashed":  1,
+                       "alms":  323,
+                       "registers":  451,
+                       "blockMemoryBits":  364,
+                       "ramBlocks":  3,
+                       "dspBlocks":  0,
+                       "virtualPins":  371,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  119.37,
+                       "fmaxClock":  "clk"
                    },
                    {
                        "module":  "zhao_texture_fragrob",
