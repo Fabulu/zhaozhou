@@ -449,3 +449,77 @@ the closure is free. A is confirmed implementable
 (`own_adm_accept && frag_class_i == CLS_ERR`); its test already fails 1/5
 against current RTL and flips to 5/5 with the fix, and gets its `add_test` line
 in that same commit.
+
+## STAGE C RECEIPT — and the §3 repairs landed on top of it
+
+**`zhao_texture_island_v3_top`: 13,133 ALM / 20,561 reg / 45 M10K / 17 DSP /
+82.41 MHz, `failed:structure`, 14,351 s.** Written into G1D as **4.3h**.
+
+**The like-for-like baseline is `@p0c-stageA`, and I verified it by hash rather
+than by reading comments.** Its recorded digest MATCHES the current
+`zhao_texture_island_top.sv`; the plain `island_top` row's does not. The plain
+13,601/66.77 numbers predate Stage A's `uvw_m` conversion, which the V3 top
+carries — comparing against them would have credited this restructure with a
+saving somebody else made.
+
+| | oracle `@p0c-stageA` | V3 | delta |
+|---|---|---|---|
+| ALM | 11,562 | 13,133 | **+1,571 (+13.6%)** |
+| registers | 19,203 | 20,561 | +1,358 |
+| M10K | 39 | 45 | +6 |
+| DSP | 17 | **17** | **0** |
+| Fmax | 84.03 | 82.41 | **−1.62 MHz** |
+
+**The DSP failure is inherited, not caused.** Identical 17 on both sides, and 17
+appears as far back as G1D 4.3c. And `@p0c-stageA` reports `ok` at 17 against
+`max_dsp: 14` only because its target carried no rules when it ran — **the V3
+fit is the first island fit these historical limits have ever gated.** A first
+application of a rule is not a regression.
+
+Both judgments kept separate per brief §2.3: **historical-rule result FAIL**
+(recorded, gate unchanged); **product-allocation decision NOT MADE** (needs
+count-once whole-console accounting and owner approval). The gap that matters
+most is 82.41 against 100 MHz, not the area.
+
+### §3.1 repairs A, B, C — applied, and the three gates held
+
+* **A** — `err_class_invalid_o` now counts `own_adm_accept && frag_class_i ==
+  CLS_ERR`: the ingress beat and that beat's own raw class. **Its positive fault
+  test flipped from FAIL to pass.**
+* **B** — the identity sticky covers all **six** named categories (range, stale,
+  unsolicited, duplicate, illegal issue, unauthorized final), and
+  `cnt_fragrob_id_errors_o` now sums six where it summed three.
+* **C** — the expander exposes a **real** capacity violation (`accept && full`),
+  unreachable if `f_ready_o` is correct. Backpressure is deliberately not
+  counted; the brief is explicit that conflating them is how a port gets tied to
+  zero and called preserved.
+* The dead FRAGROB declarations are retired.
+
+Gates after: **gate 2 119/119, expander 11/11, oracle 119/119.** Nothing broke.
+
+### A stale binary nearly reported the repair as a failure
+
+The first post-repair run showed the fault test still failing 1/5 — *identical*
+to before. The build had failed with `missing terminating " character`, the
+heredoc escape trap for the third time today, so I was reading the OLD binary.
+Caught only because I read the build output instead of the test result. This is
+CLAUDE.md's stale-binary trap arriving at the exact moment it would have been
+most convincing.
+
+### The probe found something, and it is not what the brief hypothesised
+
+`reports/V3-ZEROWORK-STALL-20260908.md`: **zero-work fragments never retire in
+the composed island** — 16 admitted, 0 retired, where the same loop at
+`sample_count = 1` retires normally.
+
+**Gate 2 has never driven `sample_count = 0`** — it drives 3, and 1-or-2. The
+case is covered only by the expander leaf, which is exactly the insufficiency
+the brief named. It sat behind 119 composed checks, 541 owner checks and a
+392-record paired run because none of them ever presented the input.
+
+Mechanism NOT traced, and stated as such. 16 smells like a queue depth, not a
+semantic bound. It is also **not** the destructive slot-reuse trace §5.1
+hypothesised — nothing completes, so no slot frees early. That question is still
+open.
+
+**V1 re-fit is running**, launched automatically when the island fit exited.
