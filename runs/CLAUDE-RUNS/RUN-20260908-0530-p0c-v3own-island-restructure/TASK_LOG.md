@@ -829,3 +829,29 @@ rcp24_v3", and measure it with a pair fixture before spending a 4-hour composed
 fit. Writing a second preparation pipeline when a fitted one exists would be the
 more expensive error; swapping on two non-comparable leaf numbers would be the
 other one.
+
+## The fast-suite wedge: root cause, after three occurrences
+
+**`build/Testing/Temporary/` held 58 files** — a `CTestCheckpoint.txt` and
+dozens of orphan `LastTest.log.tmp*` — left behind by ctest runs I killed. The
+next ctest blocked **at startup** on that state: the live process had started at
+11:55:49 and accumulated **0.56 CPU seconds**, which is not a suite running
+slowly, it is a process that never began.
+
+Removing the checkpoint and the orphan temp files fixed it immediately: two test
+processes within seconds.
+
+**The chain of causation is mine and worth stating plainly.** The first wedge
+came from running concurrent `ctest` invocations against one build tree. Killing
+those left the temp state. Every subsequent "clean" restart then inherited it —
+so my fix for the first mistake manufactured the second and third, and I
+diagnosed each as a fresh mystery.
+
+Two of the three wedges I attributed to *"I built while ctest was running"*.
+That was true for one of them at most. The evidence I acted on — no test
+process, frozen CPU — was consistent with both explanations, and I picked the
+one I had already told myself.
+
+**The rule that actually holds:** one ctest at a time per build tree, and if one
+is killed, clear `build/Testing/Temporary/` before the next. The first half I
+had; the second half is what cost three restarts.
