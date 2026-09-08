@@ -3373,3 +3373,42 @@ would be exactly the aspiration-as-law error M7 just recorded twice.
 **What would make it informative either way:** at or above 100 MHz the §5.7 gate
 is satisfied and the queue is not the island's problem; below it, the gap is
 named with a number instead of a suspicion.
+
+## STAGE C UNDER WAY — built in reviewable pieces, referenced by nothing
+
+`zhao_texture_island_v3_top.sv`, seeded from the oracle so the ELEVEN carried
+instantiations are verbatim. **It is in no fit target and no test target**, so a
+half-built top cannot break a build, a fit or a golden — which is what makes it
+safe to land in steps instead of one unreadable commit.
+
+* **seed** — module renamed; the oracle's own ~88-line header deliberately NOT
+  carried, because it describes fragrob's ROB, its DEPTH=16 admission model and
+  the SRCW-16 constraint, none of which will be true here. Copying it would have
+  reproduced today's `ALREADY FOGGED` defect exactly: a confident description of
+  a stage that does not exist. My first draft of the replacement header claimed
+  the oracle's header WAS inherited — false, and corrected.
+* **fragrob deleted**, with the SIX jobs that one instance carried documented at
+  the deletion site. Only ONE of the six (request expansion) needs a new home;
+  the other five are what v3own already is. That asymmetry is why the swap adds
+  area on its own.
+* **(a) expander instantiated** at PERSPUV's output, where fragrob's sample walk
+  used to sit.
+* **(b) v3own instantiated.** ISSUE notifications are REAL connections — the
+  expander pulses them on the accepted handshake, §11.1 event 3. Admission,
+  returns, COMBINE and output are named unresolved signals with `STEP (c)` on
+  each port, NOT tied to something plausible. A tie that compiles and looks
+  finished is how a wrong connection acquires a provenance line.
+* **(c1) admission moved to the island boundary.** `credit_available` is now
+  v3own's `adm_ready_o`; `live_r` is demoted from AUTHORITY to OBSERVER, kept
+  only because the composed test asserts `cnt_live_peak_o == 64`.
+
+  The reason matters: the oracle's `live_r` counts admitted-minus-emitted against
+  a local OWNER_DEPTH, which is v3own's §6.1 live window computed a second time
+  from different signals. **Two counters that must agree are two counters that
+  can disagree**, and a single identity namespace exists precisely so there is
+  one. `adm_req_i` is built from the SAME sample-count table the expander uses,
+  so the two cannot drift.
+
+**Still owed:** (c2) the return lanes, COMBINE and the ordered output — each
+carries an owner handle today's signals do not have; (d) delete the ROB pool,
+`fseq_m`, `tok_r` and the named side tables.
