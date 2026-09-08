@@ -350,3 +350,30 @@ checks that did catch it are RTL-vs-model comparisons, which is the right shape.
 It is registered in ctest — the package is new, nothing depends on it yet, and
 it passes today. Adopting it inside the island is a follow-on that must change
 no bit; that is what the bit-identical test is for.
+
+## Brief §4.2 and §4.3 delivered while the fit holds its closure
+
+* **`reports/V3-RECORD-STAGE-CONTRACT-20260908.md`** — the field/event/stage
+  table §4.2 asks for, derived from source. The finding worth keeping: the
+  island stores fragment data under **two keys** (`fc_wp` front-end queue,
+  owner slot), and **both copies of the base colour are justified** —
+  `fbase_m[fc_rp]` feeds the planner's `req_mat_*`, `mat_m[owner]` feeds COMBINE
+  after arbitrary reordering, by which time the queue entry has been recycled.
+  Deleting either as "duplicate storage" breaks the machine. That is the §8
+  saving that would have been claimed without a read-site check.
+* **`reports/V3-ADAPTER-INVENTORY-20260908.md`** — §4.3. Confirmed the six
+  `SRCW` sites in `cache_pipe`: two ports and **four internal**
+  (`rq_src`, `c1_src`, `c2_src`, `rs_src`). Also recorded that the file's slack
+  is now literally zero (`SRCW-2-$clog2(DEPTH)-2-GENW = 0`), so a 6-bit slot has
+  no room left — read that before widening anything again.
+  **Five of the eleven listed boundaries were defects found during this
+  integration.** That ratio is why the inventory is a file rather than care.
+* Two raw-slice sites in the expander (`:197`, `:208`) are exactly
+  `make_token(make_sample_handle(...))` from the new package. **Not changed** —
+  the expander is inside the fit's closure.
+
+## Fast suite
+
+Running at `-j1` to avoid starving the fit. This is the debt recorded earlier:
+the full fast label has been unverified since the shared-block edits to
+`cache_pipe` and `rcp24_svc`. Result pending.
