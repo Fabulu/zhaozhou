@@ -1360,3 +1360,28 @@ edited that file** — gate 1 depends on it being untouched, and `git log`
 confirms no commit of mine names it. The staleness count therefore tracks
 commits to the fit's CLOSURE, not to the block. That distinction matters before
 anyone reads "6 commits" as "the owner block changed six times".
+
+## Conservation across the credited join: 1,176 in, 1,176 out
+
+Gate 2 is now **124 checks**. The join delays without losing, which is the
+property that matters — a dropped response is not a wrong colour, it is a
+fragment that never retires and an owner that never frees, surfacing as a hang
+far from its cause.
+
+**My first version of the check was wrong.** I compared
+`cnt_cache_hits_o + cnt_cache_misses_o` (2,144) against dispatched (1,176) and
+reported a leak that does not exist. Those count texel LOOKUPS — a bilinear
+fetch is four lookups in one response.
+
+The tell was visible: 1,176 dispatched exactly equals the shadow's comparison
+count, and the shadow counts accepted responses. The join's real endpoints are
+the bank read and the dispatcher accept.
+
+**Third instance today of the same error**: a number from an adjacent
+measurement standing in for the one actually needed —
+
+* the packet D leaf comparison (different NCTX, different port counts)
+* the M1 noise floor (measured on a different block)
+* this conservation check (lookups, not responses)
+
+Caught quickly this time only because the ratio was suspiciously near 2:1.
