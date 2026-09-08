@@ -908,40 +908,34 @@ module zhao_texture_island_v3_top #(
     end
   end
 
-  zhao_texture_fragrob #(
-      .DEPTH(DEPTH), .CTXW(CTXW), .TOKW_F(FCTXW), .BINDW(BINDW),
-      .LODW(LODW), .GENW(GENW)
-  ) u_fragrob (
-      .clk(clk), .rst_n(rst_n),
-      .f_valid_i(pu_valid), .f_ready_o(fr_f_ready),
-      .alloc_slot_o(fr_alloc_slot), .alloc_valid_o(fr_alloc_valid),
-      .f_sample_count_i(f_scount_c),
-      .f_u_i(fr_f_u), .f_v_i(fr_f_v),
-      .f_binding_i(fr_f_binding), .f_lod_i(fr_f_lod),
-      .f_recipe_i(f_recipe_c), .f_ctx_i(fr_f_ctx), .f_tok_i(fc_rp),
-      .f_aux_i(f_aux_c), .f_uv_sat_i(pu_sat),
-      .tmu_valid_o(fr_tmu_valid), .tmu_ready_i(fr_tmu_ready),
-      .tmu_u_o(fr_tmu_u), .tmu_v_o(fr_tmu_v),
-      .tmu_binding_o(fr_tmu_binding), .tmu_lod_o(fr_tmu_lod),
-      .tmu_slot_o(fr_tmu_slot), .tmu_sidx_o(fr_tmu_sidx), .tmu_gen_o(fr_tmu_gen),
-      .tmu_rvalid_i(fr_tmu_rvalid), .tmu_rready_o(fr_tmu_rready),
-      .tmu_rgb_i(fr_tmu_rgb), .tmu_a_i(fr_tmu_a),
-      .tmu_rslot_i(fr_tmu_rslot), .tmu_rsidx_i(fr_tmu_rsidx),
-      .tmu_rgen_i(fr_tmu_rgen),
-      .aux_valid_o(fr_aux_valid), .aux_ready_i(fr_aux_ready),
-      .aux_ctx_o(fr_aux_ctx), .aux_slot_o(fr_aux_slot), .aux_gen_o(fr_aux_gen),
-      .aux_rvalid_i(fr_aux_rvalid), .aux_rready_o(fr_aux_rready),
-      .aux_rgb_i(fr_aux_rgb), .aux_a_i(fr_aux_a),
-      .aux_rslot_i(fr_aux_rslot), .aux_rgen_i(fr_aux_rgen),
-      .o_valid_o(fr_o_valid), .o_ready_i(fr_o_ready),
-      .o_ctx_o(fr_o_ctx), .o_tok_o(fr_o_tok), .o_rgb_o(fr_o_rgb), .o_a_o(fr_o_a),
-      .o_s_rgb_o(fr_o_s_rgb), .o_s_a_o(fr_o_s_a),
-      .o_aux_rgb_o(fr_o_aux_rgb), .o_aux_a_o(fr_o_aux_a),
-      .o_has_aux_o(fr_o_has_aux), .o_uv_sat_o(fr_o_uv_sat),
-      .fragments_o(cnt_fragments_o), .samples_o(fr_samples),
-      .full_clocks_o(fr_full_clocks), .id_errors_o(cnt_fragrob_id_errors_o),
-      .wq_overflow_o(fr_wq_overflow), .id_error_o(fr_id_error),
-      .combiner_unfrozen_o(fr_combiner_unfrozen));
+  // ---------------------------------------------------------------------------
+  // FRAGROB IS DELETED HERE. This is the whole point of Stage C.
+  // ---------------------------------------------------------------------------
+  // The oracle instantiates `zhao_texture_fragrob` at this position (its
+  // island_top.sv:941) with DEPTH/CTXW/TOKW_F/BINDW/LODW/GENW, and that one
+  // instance carries SIX distinct jobs:
+  //
+  //   1. fragment admission and slot allocation      -> zhao_texture_v3own
+  //   2. fragment-to-sample request expansion        -> zhao_texture_frag_expand
+  //   3. per-source issued/claimed/committed masks   -> v3own (its bitplanes)
+  //   4. result banks for the returned samples       -> v3own (zhao_texture_v3bank)
+  //   5. output reorder and retirement ordering      -> v3own (its cursors)
+  //   6. owner context storage                       -> v3own (OWNER_CONTEXT)
+  //
+  // Only (2) needs a new home; the other five are what v3own already IS. That
+  // asymmetry is why the deletion ledger in the architecture expects the swap
+  // to ADD area on its own (v3own 3,348 ALM against fragrob 1,676) and to pay
+  // for itself only through the top-level ordering and result state it makes
+  // deletable -- a claim recorded as UNMEASURED there and still unmeasured here.
+  //
+  // TO DO, in this order, so each is separately reviewable:
+  //   a. instantiate zhao_texture_frag_expand  (job 2)
+  //   b. instantiate zhao_texture_v3own        (jobs 1,3,4,5,6)
+  //   c. re-key the identity namespace to the 14-bit owner handle
+  //   d. delete the ROB pool, fseq_m, live_r/tok_r and the named side tables
+  //
+  // Until (a) and (b) land this file does not elaborate, which is why it is
+  // referenced by no fit target and no test.
 
   // ==========================================================================
   // FRAGROB -> TMU_PLAN -> CACHE_PIPE
