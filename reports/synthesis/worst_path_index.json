@@ -9,10 +9,15 @@
     "slackNs": -6.886,
     "to": "zhao_field_v2_core:u_core|finished[2]"
   },
+  "zhao_geom_fogfactor": {
+    "from": "w_i[2]",
+    "slackNs": -4.571,
+    "to": "fogf_o[16]~reg0_OTERM579"
+  },
   "zhao_geom_mem_adapter": {
-    "from": "0.000",
-    "slackNs": 0.0,
-    "to": ""
+    "from": "a_req_i.len[6]",
+    "slackNs": 1.81,
+    "to": "Equal0~0_OTERM19"
   },
   "zhao_geom_project": {
     "from": "zhao_project_core:u_core|mat[1][0][0]",
@@ -59,10 +64,20 @@
     "slackNs": -1.038,
     "to": "zhao_field_isqrt:g_bank[0].g_lane[0].u_root|res[0]"
   },
+  "zhao_probe_v3rq_queue": {
+    "from": "stim_i[5]",
+    "slackNs": 2.613,
+    "to": "stim_q[5]"
+  },
+  "zhao_raster_fog": {
+    "from": "fogf_i[29]",
+    "slackNs": -0.68,
+    "to": "g_o[3]~reg0"
+  },
   "zhao_raster_perspuv_svc": {
-    "from": "0.000",
-    "slackNs": 0.0,
-    "to": ""
+    "from": "v_valid_i",
+    "slackNs": 0.493,
+    "to": "Add13~13_OTERM563"
   },
   "zhao_raster_rcp24_svc": {
     "from": "m1_i_q[1]",
@@ -110,14 +125,14 @@
     "to": "hps_req_o.len[2]"
   },
   "zhao_terrain_loadq": {
-    "from": "0.000",
-    "slackNs": 0.0,
-    "to": ""
+    "from": "wbusy_q~DUPLICATE",
+    "slackNs": 0.683,
+    "to": "inflight_o[1]"
   },
   "zhao_terrain_mipfeed": {
-    "from": "0.000",
-    "slackNs": 0.0,
-    "to": ""
+    "from": "pass_q~DUPLICATE",
+    "slackNs": 1.741,
+    "to": "mg_fine_h_o[4]"
   },
   "zhao_terrain_pagestream": {
     "from": "vidx_q[0]~DUPLICATE",
@@ -145,19 +160,24 @@
     "to": "out_o[6]"
   },
   "zhao_texture_cache_pipe": {
-    "from": "0.000",
-    "slackNs": 0.0,
-    "to": ""
+    "from": "altsyncram:rs_src_rtl_0|altsyncram_9vj1:auto_generated|ram_block1a0~PORT_B_WRITE_ENABLE_REG",
+    "slackNs": 0.166,
+    "to": "smp_src_id_o[7]"
   },
   "zhao_texture_combine": {
-    "from": "0.000",
-    "slackNs": 0.0,
-    "to": ""
+    "from": "o_rgb_o[17]~reg0_OTERM301_OTERM829",
+    "slackNs": 0.012,
+    "to": "o_rgb_o[22]"
+  },
+  "zhao_texture_frag_expand": {
+    "from": "cur_q.count[0]",
+    "slackNs": 1.623,
+    "to": "iss_tmu_valid_o"
   },
   "zhao_texture_fragrob": {
-    "from": "0.000",
-    "slackNs": 0.0,
-    "to": ""
+    "from": "free_rp_q[3]",
+    "slackNs": 0.301,
+    "to": "gen_q[8][4]"
   },
   "zhao_texture_island_top": {
     "from": "pal_ld_gen_i[4]",
@@ -190,9 +210,9 @@
     "to": "Add46~41_OTERM2248_OTERM2772"
   },
   "zhao_texture_material_combine_v2": {
-    "from": "0.000",
-    "slackNs": 0.0,
-    "to": ""
+    "from": "freeq_wp[3]",
+    "slackNs": 1.231,
+    "to": "f_ready_o"
   },
   "zhao_texture_mosaic": {
     "from": "req_u_i[13]",
@@ -205,9 +225,9 @@
     "to": "cold_o[4]~reg0"
   },
   "zhao_texture_rsp_dispatch": {
-    "from": "0.000",
-    "slackNs": 0.0,
-    "to": ""
+    "from": "cq_rp[0][0]~DUPLICATE",
+    "slackNs": 0.983,
+    "to": "clut_tok_o[1]"
   },
   "zhao_texture_tmu_plan": {
     "from": "req_mode_i[13]",

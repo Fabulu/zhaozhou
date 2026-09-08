@@ -36,8 +36,63 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 BLOCKPATHS = os.path.join(ROOT, "reports", "synthesis", "blockpaths")
 INDEX = os.path.join(ROOT, "reports", "synthesis", "worst_path_index.json")
 
-# A summarised setup row: "; <slack> ; <from> ; <to> ; <launch clk> ; ..."
-ROW = re.compile(r"^;\s*(-?\d+\.\d+)\s*;\s*([^;]+?)\s*;\s*([^;]+?)\s*;")
+# A summarised setup row, which has EIGHT columns:
+#   ; Slack ; From Node ; To Node ; Launch Clock ; Latch Clock ; Relationship ;
+#   Clock Skew ; Data Delay ;
+#
+# Anchoring on the full width matters. The first version matched a three-column
+# prefix, which also matches rows in the PER-PATH DETAIL tables further down the
+# same report -- two-column rows like "; Slack ; 1.623 ;" and interconnect rows
+# whose second and third fields are blank. On this tool's first real use it
+# therefore recorded slack 0.000 with empty node names for a block whose true
+# worst path is +1.623 ns: a number that is both wrong and, being a clean zero,
+# unremarkable enough to be believed. That is this repository's own law -- "a
+# number that is exactly zero is a broken instrument until proven otherwise" --
+# committed by the person who had just written the law down.
+ROW = None  # superseded: see split_row(). Kept out of the module namespace so
+            # nobody reaches for a regex here again.
+
+# EIGHT columns is the summary row's signature:
+#   ; Slack ; From Node ; To Node ; Launch Clock ; Latch Clock ; Relationship ;
+#   Clock Skew ; Data Delay ;
+#
+# This is a SPLIT and not a regular expression, deliberately. The first version
+# matched a three-column prefix, which also matches rows in the PER-PATH DETAIL
+# tables further down the same report -- two-column rows like
+# "; Slack ; 1.623 ;" and interconnect rows whose node fields are blank. On this
+# tool's first real use it recorded slack 0.000 with empty node names for a
+# block whose true worst path is +1.623 ns: a number that is both wrong and,
+# being a clean zero, unremarkable enough to be believed. That is this
+# repository's own law -- "a number that is exactly zero is a broken instrument
+# until proven otherwise" -- committed by the person who had just written the
+# law down.
+#
+# The SECOND attempt at a fix was an eight-group lazy regex, which backtracked
+# catastrophically and hung on a real report. Two wrong parsers in a row is the
+# argument for not parsing a fixed-width table with a pattern at all.
+NCOLS = 8
+
+
+def split_row(line):
+    """(slack, from, to) if `line` is a summary row, else None."""
+    line = line.strip()
+    if not line.startswith(";") or not line.endswith(";"):
+        return None
+    f = [c.strip() for c in line[1:-1].split(";")]
+    if len(f) != NCOLS:
+        return None
+    src, dst = f[1], f[2]
+    # Header rows repeat the column names; a real row has node-shaped ends.
+    if src.lower() in ("from node", "from") or dst.lower() in ("to node", "to"):
+        return None
+    # A path with no endpoints is not a path. This is the guard that would have
+    # caught the 0.000 row.
+    if not src or not dst:
+        return None
+    try:
+        return (float(f[0]), src, dst)
+    except ValueError:
+        return None
 
 
 def worst_row(path):
@@ -47,24 +102,47 @@ def worst_row(path):
     except OSError:
         return None
     best = None
-    for line in text.split("\n"):
-        m = ROW.match(line.strip())
-        if not m:
+    for line in text.split(chr(10)):
+        row = split_row(line)
+        if row is None:
             continue
-        try:
-            slack = float(m.group(1))
-        except ValueError:
-            continue
-        src, dst = m.group(2).strip(), m.group(3).strip()
-        # Header rows repeat the column names; a real row has node-shaped ends.
-        if src.lower() in ("from node", "from") or dst.lower() in ("to node", "to"):
-            continue
-        if best is None or slack < best[0]:
-            best = (slack, src, dst)
+        if best is None or row[0] < best[0]:
+            best = row
     return best
 
 
+# THE KNOWN-BAD REPORT, checked on every run.
+#
+# Two rows the old regex accepted and the new one must reject, plus the real
+# summary row it must find. A detector that has not been shown to FIRE has not
+# been tested, and this one shipped untested against real input.
+_FIRE = """
+; Slack ; From Node ; To Node ; Launch Clock ; Latch Clock ; Relationship ; Clock Skew ; Data Delay ;
+; 1.623 ; cur_q.count[0] ; iss_tmu_valid_o ; clk ; clk ; 10.000 ; -6.286 ; 2.031 ;
+; 2.680 ; cur_q.owner[12] ; req_src_id_o[14] ; clk ; clk ; 10.000 ; -6.301 ; 0.959 ;
+; 0.000 ;  ;  ;
+; Slack              ; 1.623           ;
+"""
+
+
+def self_fire_test():
+    """True if the parser still picks the summary row and rejects the debris."""
+    rows = [r for r in (split_row(l) for l in _FIRE.split(chr(10))) if r]
+    if len(rows) != 2:
+        return False
+    worst = min(rows, key=lambda r: r[0])
+    # The right answer is the 1.623 ns path, NOT the 0.000 row and NOT the
+    # -6.301 clock-skew column that a column miscount would reach for.
+    return abs(worst[0] - 1.623) < 1e-9 and worst[1] == "cur_q.count[0]"
+
+
 def main(argv):
+    if not self_fire_test():
+        print("WORST-PATH PARSER BROKEN: it no longer selects the summary row, "
+              "or has started accepting endpoint-less debris again. Refusing to "
+              "write an index from a parser that cannot be trusted.")
+        return 2
+
     if not os.path.isdir(BLOCKPATHS):
         print("no blockpaths directory: %s" % BLOCKPATHS)
         return 2
