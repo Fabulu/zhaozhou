@@ -89,7 +89,21 @@ module zhao_texture_cache_pipe #(
     // `logic [1:0]` pointers and a `3'(REQN)` compare while calling REQN a
     // parameter -- X7's "REQN is nominal while pointer/count widths are
     // hard-coded for four entries". Every width below is derived.
-    parameter int unsigned REQN       = 4
+    parameter int unsigned REQN       = 4,
+    // ---- SOURCE-ID WIDTH, added for P0-C ------------------------------------
+    // This width used to be a literal 16 in four places: both ports and both
+    // queue arrays. P0-C makes the island's routing token 18 bits -- v3own's
+    // 16-bit sample handle plus a 2-bit class -- because today's SRCW is
+    // EXACTLY FULL at slot width 4 (the pad term in island_top's `plan_src_id`
+    // is `SRCW-2-$clog2(DEPTH)-2-GENW` = 0), so a 6-bit slot has no slack to
+    // grow into.
+    //
+    // DEFAULT 16, DELIBERATELY. Every existing instantiation -- island_top:1229
+    // and zhao_prod_top -- keeps its exact current width and must fit and
+    // simulate bit-identically. This parameter is the PREREQUISITE landing on
+    // its own, before anything asks for 18 bits, so that the widening and the
+    // integration are never one unattributable change.
+    parameter int unsigned SRCW       = 16
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -99,13 +113,13 @@ module zhao_texture_cache_pipe #(
     output var logic                acc_ready_o,
     input  var logic [LANES-1:0]    acc_en_i,
     input  var logic [LANES*32-1:0] acc_addr_i,
-    input  var logic [15:0]         acc_src_id_i,
+    input  var logic [SRCW-1:0]     acc_src_id_i,
 
     // ---- response ------------------------------------------------------------
     output var logic                smp_valid_o,
     input  var logic                smp_ready_i,
     output var logic [LANES*16-1:0] smp_data_o,
-    output var logic [15:0]         smp_src_id_o,
+    output var logic [SRCW-1:0]     smp_src_id_o,
 
     // ---- fill ----------------------------------------------------------------
     output var logic                fill_valid_o,
@@ -203,7 +217,7 @@ module zhao_texture_cache_pipe #(
   // anything about cache state.
   logic [LANES-1:0]    rq_en   [REQN];
   logic [LANES*32-1:0] rq_addr [REQN];
-  logic [15:0]         rq_src  [REQN];
+  logic [SRCW-1:0]     rq_src  [REQN];
   logic [RQW:0]        rq_wp, rq_rp, rq_ip;   // write / retire / ISSUE
 
   logic [RQW:0] rq_n;
@@ -302,7 +316,7 @@ module zhao_texture_cache_pipe #(
   // C4 — response FIFO and miss sequencer
   // ==========================================================================
   logic [LANES*16-1:0] rs_data [REQN];
-  logic [15:0]         rs_src  [REQN];
+  logic [SRCW-1:0]     rs_src  [REQN];
   logic [RQW:0]        rs_wp, rs_rp;
   logic [RQW:0]        rs_n;
   assign rs_n = rs_wp - rs_rp;
