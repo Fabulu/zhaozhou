@@ -1063,6 +1063,45 @@ targets:
       max_m10k: 64
       max_dsp: 14
 
+  # P0-C STAGE C: the V3 composition, priced against the ORACLE's OWN REDLINE.
+  #
+  # Identical rules to `zhao_texture_island_top` deliberately. The whole point
+  # of the restructure is whether replacing fragrob with v3own fits the budget
+  # the island already had, and a target with softer rules would answer a
+  # different question while producing a number that looks comparable.
+  #
+  # All three gates pass before this is worth running:
+  #   1. v3own's 541-check suite on the UNMODIFIED file
+  #   2. island_v3_composed_directed 119/119 (same source as the oracle's)
+  #   3. island_v3_paired -- 392 retired records byte-identical, order included
+  # Fitting a composition that dropped fragments would have produced resource
+  # numbers describing a machine that does not do the work.
+  - top: zhao_texture_island_v3_top
+    sources:
+      - fpga/rtl/texture/zhao_texture_island_v3_top.sv
+      - fpga/rtl/texture/zhao_texture_frag_expand.sv
+      - fpga/rtl/texture/zhao_texture_v3own.sv
+      - fpga/rtl/texture/zhao_texture_v3bank.sv
+      - fpga/rtl/texture/zhao_texture_v3rq.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+      - fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+      - fpga/rtl/texture/zhao_texture_tmu_plan.sv
+      - fpga/rtl/texture/zhao_texture_cache_pipe.sv
+      - fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
+      - fpga/rtl/texture/zhao_texture_palette_res.sv
+      - fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+      - fpga/rtl/texture/zhao_texture_mosaic.sv
+      - fpga/rtl/texture/zhao_texture_aux_pipe.sv
+      - fpga/rtl/texture/zhao_texture_material_combine_v2.sv
+      - fpga/rtl/texture/zhao_texture_aux_div6.sv
+      - fpga/rtl/texture/zhao_texture_mod255.sv
+      - fpga/rtl/field/zhao_field_rcp24_rom.sv
+    rules:
+      max_alms: 7500
+      max_registers: 9000
+      max_m10k: 64
+      max_dsp: 14
+
   - top: zhao_prod_top
     sources:
       - fpga/rtl/prod/zhao_prod_top.sv
