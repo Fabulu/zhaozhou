@@ -1329,3 +1329,34 @@ believing either half."*
 So when I described fits as `ok` today, the authority in this repository already
 disagreed. Its closing line is the standing correction: **"A fit that meets Fmax
 while violating its memory/DSP structure is not a pass."**
+
+## The staleness ledger, and one debt it confirms
+
+`check_fit_rules.ps1` marks **9 rows STALE** — measured from a source that has
+since changed:
+
+| row | commits since |
+|---|---|
+| `zhao_texture_island_v3_top` | 6 (re-fitting now) |
+| `zhao_texture_v3own` | 6 |
+| `zhao_texture_fragrob` | 5 |
+| `zhao_texture_frag_expand` | **3** |
+| `zhao_texture_island_top` | 2 (the oracle, from the tie-off) |
+| plus rcp24_svc, texjoin_v2, tilestore, terrain_loadq | 1 each |
+
+**The expander row is the debt I declared myself this morning** and never
+cleared: its 323 ALM / 451 reg / +1.623 ns figures were measured at 05:21, and
+the `f_ctx_i` port plus the 64-bit ctx queue entry landed at 05:48, with policy
+C-b's monitor after that. I wrote then that the number "describes a block that
+no longer exists". The tool now says the same thing independently, which is a
+useful check on whether that kind of note actually gets acted on. It did not,
+for eight hours.
+
+**Re-fit queued** behind the island, so the toolchain does not idle between
+them.
+
+`zhao_texture_v3own` at 6 commits is worth noting precisely: **I have never
+edited that file** — gate 1 depends on it being untouched, and `git log`
+confirms no commit of mine names it. The staleness count therefore tracks
+commits to the fit's CLOSURE, not to the block. That distinction matters before
+anyone reads "6 commits" as "the owner block changed six times".
