@@ -222,6 +222,25 @@ exposed that the real signal is 4 bits where v3own wants 6. A plausible-looking
 tie would have compiled the intent away and left this to surface as an
 elaboration failure in Stage C's fit.
 
+
+**ARCHITECT REVIEW, 2026-09-08 — §1.2b CONFIRMED, with two additions.** The
+placement as its own prerequisite BEFORE (c3) is correct, and the measurement
+resolving the aux_pipe leaf to no-change stands on its quoted line numbers.
+Two consequences to carry into Stage C's bookkeeping:
+
+1. The boundary width change adds four virtual pins (+2 `sheet_tok_o`, +2
+   `sheet_rtok_i`). Interface growth is exactly the comparability caveat the
+   brief's §1.1 raised for a THREE-bit growth on the fresh island; the Stage C
+   fit report must name the pin delta beside the resource numbers rather than
+   let it pass silently.
+2. "Cannot be invisible to the paired run" is right and BENIGN, and should be
+   said so the harness author does not build a translator. The sheet responder
+   is an ECHO — `sheet_rtok_i` returns whatever `sheet_tok_o` presented,
+   opaquely — so the paired harness echoes 12 bits to the oracle and 14 to the
+   new top with no semantic mapping. A width translator would wire the harness
+   into the identity namespace, which is the pattern this document deletes
+   from the island; do not rebuild it in the testbench.
+
 ### 1.3 Attribute and descriptor tables: re-keyed, not yet re-homed
 
 The remaining per-fragment tables (`uvw_m`, `fbase_m`, `fbind_m`, `flod_m`,
@@ -367,6 +386,119 @@ retires in allocation order); after, it can combine early and wait as a
 published FINAL. `cnt_reorder_held_o` must be re-derived (from an
 emission-held event at v3own's output cursor) and its `> 0` assertion in
 phase 3 still holds — more easily, in fact.
+
+
+> **PARENT VERIFICATION, 2026-09-08.** All four load-bearing claims of the
+> ruling below were checked against the sources, not accepted:
+>
+> * **COMBINE packet carries no context** — CONFIRMED. `zhao_texture_v3own.sv`
+>   :191-198 is `cmb_valid_o`, `cmb_ready_i`, `cmb_owner_o`, `cmb_s0/s1/s2/aux_o`.
+>   There is no context port on that interface.
+> * **`out_ctx_o` is at ORDERED OUTPUT only** — CONFIRMED, :211, inside the
+>   `out_*` group. So it arrives after the combiner needed the fields, which is
+>   what makes option (i) structurally impossible rather than merely forbidden.
+> * **`cmb_gen_ok_c` re-verifies the generation at combine admission** —
+>   CONFIRMED, :1128: `win_gen_of_slot(cmb_owner_o[slot]) == cmb_owner_o[gen]`.
+>   This is the load-bearing one for the ruling: slot-only keying of the material
+>   plane is safe BECAUSE v3own itself checks the generation at the moment the
+>   plane is read.
+> * **The owner ruling forbidding context repacking** — CONFIRMED verbatim at
+>   `zhao_texture_island_top.sv`:677-686, quoting recovery architecture v2 §2.3:
+>   *"Packing recipe bits into that word is not a valid way to retain an
+>   independently opaque context ... Do not silently overwrite caller-owned
+>   bits."* An earlier version of the island did exactly this and it was ruled
+>   out.
+>
+> The ruling stands as written. Its strongest argument is the second point:
+> option (i) fails on structure before it fails on policy, and a rejection that
+> holds for two independent reasons is worth more than one that holds for either.
+
+### 1.7b THE MATERIAL PLANE — ruling on how recipe/weight/base/sample_count reach COMBINE (2026-09-08)
+
+Stage C found what §1.7's one-line table entry glossed: the oracle presents a
+fragment to `u_combine` by indexing top-level tables with the retiring token
+(`fsc_m[fr_o_tok]`, `frec_m[fr_o_tok]`, `fwt_m[fr_o_tok]`,
+`fbase_m[fr_o_tok]`), and v3own hands over a packet with NO token to index
+anything with — `cmb_owner_o` plus four result40 lanes (v3own.sv:191-198),
+nothing else. The material attributes must arrive another way. Two candidates
+were raised; this is the ruling.
+
+**REJECTED: (i) carry the material fields in OWNER_CONTEXT via `adm_ctx_i`.**
+Twice over, and either ground alone suffices:
+
+* **It is forbidden by a standing owner ruling.** The island's own capture
+  comment (island_top:677-686) records that an earlier version wrote the
+  recipe, weight, sample count and token into bits [34:16] of the caller's
+  context word, and quotes the owner recovery architecture v2 §2.3 verdict:
+  "Packing recipe bits into that word is not a valid way to retain an
+  independently opaque context ... Do not silently overwrite caller-owned
+  bits." All 64 context bits are the caller's — the AUX path consumes
+  ctx[63:32]/[31:0] as wx/wz and the tag is ctx[15:0]; there is no free
+  space, and island_top:593 ("ONE NAMED ARRAY PER FIELD, and deliberately not
+  one packed word") is the same law from the other side.
+* **It is structurally impossible without editing v3own, which is off
+  limits.** The COMBINE admission packet carries no context (MEASURED port
+  list, v3own.sv:191-198), and OWNER_CONTEXT has no mid-life read port —
+  `out_ctx_o` is read only at ordered output (v3own.sv:211, 1024), which is
+  AFTER combine. Even the variant of (i) that widens the instantiation's
+  CTXW parameter to ride material bits beside the caller's word fails on
+  this: the widened word still emerges only after the combiner needed it.
+
+**SELECTED: (ii) — but named for what it is: the MATERIAL PLANE, not a new
+side table.** The new top keeps ONE table, keyed by the owner SLOT
+(`cmb_owner_o[13:8]`), holding
+`{base_rgb24, base_a8, weight8, recipe3, sample_count2}` = 45 bits x 64 =
+2,880 bits (ESTIMATED from widths; the brief's own §9.2 arithmetic — "base
+RGBA32 + recipe3 + weight8 + sample_count2 is 45 bits before flags" — lands
+on the same number). Written once at admission on the `adm_accept_o` edge;
+read once at COMBINE admission. Folding `faux` in as a 46th bit is the
+implementer's choice and saves the separate `faux_m` read at the `f_s2` mux.
+
+Why this does not violate §0's delete-not-wrap decision: §0 deletes the
+LIFETIME and ORDERING machinery — the structures that partially implement
+v3own's job. A single-writer, single-reader attribute plane is DATAPATH
+storage, and it is precisely what the brief prescribes for P0-E ("A bank with
+one writer and one synchronous reader is promising", §9.5) and what V3.1
+§15.4 declares as the MATERIAL plane. This is that plane's first form, not
+old machinery wrapped. At Stage C it reads combinationally, matching the
+oracle's own access pattern so behaviour is identical; Stage D moves it into
+a v3bank/M10K with the R0-capture cycle absorbing the synchronous read.
+
+**Why slot-only keying (no generation on the table read) is safe:** the table
+is read only for an owner v3own itself presents as live, and v3own re-verifies
+the presented handle's generation against the slot's own window AT combine
+admission (`cmb_gen_ok_c`, v3own.sv:1128-1129 — MEASURED). Under T2, a slot
+cannot be re-admitted until its owner's ordered output retires, so the entry
+written at that owner's admission is still that owner's when combine reads
+it. The generation check lives where it belongs — inside the owner — and the
+plane stays 6-bit-indexed.
+
+**Ledger effect: NONE — and stating that is the point.** The `fctx_m` row in
+§2.1 stands unchanged (deleted; the caller's context moves into
+OWNER_CONTEXT, already inside v3own's measured 17 M10K). The material fields
+never lived in `fctx_m` — the island stores them in separate named arrays
+BECAUSE of the ruling quoted above — so the MATERIAL plane is the §1.3
+re-key of `fbase_m`/`frec_m`/`fwt_m`/`fsc_m` under one name, 64 entries
+before and after. No §2.2 addition row is created.
+
+**`fseq_m`: the coordinator's reading is CONFIRMED.** v3own's ordered output
+(cursor E, admission sequence) IS the sequence; a separate sequence number
+carried through the combiner tag is exactly the "partial implementation of
+v3own's lifetime" §0 deletes. `f_tag_i` becomes `cmb_owner_o` (TAGW 22→14),
+`fin_owner_i` echoes it back, and `out_tag_o = out_ctx_o[15:0]`. The §2.1
+`fseq_m` deletion row stands.
+
+**FALSIFIERS for this ruling:** (a) if any consumer needs a material field
+BETWEEN admission and combine admission that the plane's one read cannot
+serve, the one-writer/one-reader claim collapses and the plane needs a second
+port — no such consumer exists in the seam as drawn (§1.4's expander reads
+the DESCRIPTOR tables, not MATERIAL); (b) if a successor's material were ever
+read for a stale owner, the per-recipe `cnt_combine_jobs_o` exact counts and
+the paired-run colour identity both diverge — a wrong recipe is a wrong
+job-count distribution, the same detection §1.7's ENFORCED-BY notes rely on
+today; (c) if Stage C's elaboration finds a combine-side field this section
+did not enumerate, the 45-bit width was wrong and the miss is published, not
+absorbed.
 
 ### 1.8 Ordered output
 
