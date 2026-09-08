@@ -1647,3 +1647,40 @@ its fit.
 * MapOnly the island in both profiles (minutes) to price the laboratory and
   confirm `sampmeta_m` leaves the netlist.
 * Then FIT GATE 1, after gate 4 finishes -- one fit at a time.
+
+## Queue state and the accounting pass
+
+**Toolchain queue, in order:** gate 4 (RCP pair @ NCTX=12/TOKW=14, first leaf at
+62 min, 90% CPU / 1.1 GB RSS) → `queue_gate1_maponly.ps1` (`@g1-lab` vs
+`@g1-prod`, prices the laboratory) → `queue_newblock_maponly.ps1` (metajoin,
+early_desc, uv_join). One Quartus at a time.
+
+**THE ISLAND IS FROZEN** until `GATE1MAPONLY DONE`. That queue snapshots the live
+tree when it starts, so applying packet 2 first would silently make it measure
+packet 2 instead of packet 1 — and the row would look normal. Recorded at the top
+of the roadmap too.
+
+### Registered this pass
+
+* `zhao_raster_perspuv_pairpipe` as a fit target (packet 4 step 4), inheriting
+  svc's rules deliberately — the candidate exists to be smaller, so the honest
+  gate is the budget it is trying to beat.
+* Leaf targets for `metajoin`, `early_desc`, `uv_join`. None had one, which is
+  why metajoin has NO FIT ROW while being instantiated by the island. Their rules
+  ENCODE the brief's §D geometry argument (metajoin ≤1 M10K, early_desc ≤3), so a
+  block that infers more comes back `failed:structure` instead of passing quietly.
+* All three declared `unused` in `prod_manifest.yml` — the check caught them as
+  UNACCOUNTED, which is it working. They move to `top:` when packet 2 wires them.
+
+### The undercount, measured
+
+Two of 74 excluded blocks are instantiated by `island_v3_top` while declared
+`unused`: `frag_expand` (323 ALM, 451 reg, 3 M10K, **0 DSP**) and `metajoin` (no
+row). Undercount ≥ +323 ALM / +451 reg / +3 M10K / **+0 DSP**.
+
+**The DSP census is unaffected — 154 against 112 stands.** A discrepancy found
+while investigating a budget is not automatically a discrepancy in it, and it
+would have been easy to report this as "the DSP number was wrong too".
+
+Not fixed: moving them changes the census total and needs `zhao_prod_top.sv`
+regenerated. One deliberate pass, with the number stated — the number is stated.

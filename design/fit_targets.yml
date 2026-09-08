@@ -1097,6 +1097,47 @@ targets:
   #   3. island_v3_paired -- 392 retired records byte-identical, order included
   # Fitting a composition that dropped fragments would have produced resource
   # numbers describing a machine that does not do the work.
+  # ---- the three new texture blocks, as LEAVES ------------------------------
+  # None of these had a target of its own, so `metajoin` has NO FIT ROW AT ALL
+  # while being instantiated by the island -- instantiated, uncounted AND
+  # unmeasured (see reports/DSP-BUDGET-CENSUS-20260908.md).
+  #
+  # These also answer the Decrufter brief's own open question, §D: "The metadata
+  # bank's 256 x 40 shape is compatible with one block; that still needs
+  # confirmation in the actual fit." The rules below ENCODE that claim, so a row
+  # that infers more memory than the geometry argument allows comes back
+  # `failed:structure` and says so, rather than passing quietly.
+  - top: zhao_texture_metajoin
+    sources:
+      - fpga/rtl/texture/zhao_texture_metajoin.sv
+    rules:
+      # 256 x 40 = 10,240 bits = exactly one M10K, IF it infers as memory at all.
+      max_m10k: 1
+      max_dsp: 0
+      max_alms: 200
+
+  - top: zhao_texture_early_desc
+    sources:
+      - fpga/rtl/texture/zhao_texture_early_desc.sv
+    rules:
+      # 64 rows x 119 bits across three 40-bit-wide slices. §D again: capacity is
+      # not the constraint, WIDTH is, and three is the geometric lower bound for a
+      # same-width simple-dual-port realisation. A row reporting four means the
+      # slicing did not survive; a row reporting one means it did something else
+      # entirely and the comment in the source is wrong.
+      max_m10k: 3
+      max_dsp: 0
+      max_alms: 300
+
+  - top: zhao_texture_uv_join
+    sources:
+      - fpga/rtl/texture/zhao_texture_uv_join.sv
+    rules:
+      # Pure control and a held record; no memory, no multiplier.
+      max_m10k: 0
+      max_dsp: 0
+      max_alms: 250
+
   - top: zhao_texture_island_v3_top
     sources:
       - fpga/rtl/texture/zhao_texture_island_v3_top.sv
