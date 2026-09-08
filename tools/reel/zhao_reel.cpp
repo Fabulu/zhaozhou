@@ -5623,16 +5623,47 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // overlap), which is 09-ENGINE-GOTCHAS §18's signature for a knob that is
   // not the thing. An ablation plate lets the owner answer with his eyes
   // instead of a fourth pass guessing. Unset ships, unchanged.
+  //
+  // 2026-09-08, THE PUBLISH PASS: Q-B1 IS ANSWERED AND THE ANSWER IS "DROP IT".
+  // The ablation above is what settled it, and the owner's own standing rule
+  // decided it rather than my taste: he has ruled TWICE on effects at this
+  // exact scale -- Direction 8 SS1 ("I wanted a tiny smidgen of it, now the
+  // effect covers the screen") and Direction 8 SS4 ("we thickened too much and
+  // now the outer layer is completely opaque, I want to revert that"). This
+  // bloom covers 18.9% of `channel` and 18.2% of `crackle` in near-white, and
+  // those are THE TWO CLIPS WHOSE JOB IS TO SHOW THE MANA. Every other clip is
+  // under 1%, so dropping it touches only the two it was hurting.
+  //
+  // It also unblocks a request that has been open since Direction 8 SS2 -- "the
+  // particle effects from the lightning should've made shapes, right now no
+  // shapes, can't see them". He named both candidate causes himself, occlusion
+  // or regression. The shapes are drawn; this was occluding them.
+  //
+  // ONE LINE EITHER WAY, both directions live: flip the constant, or set
+  // ZHAO_U02_PLANET=1 to see the old mood without a rebuild. It is an authored
+  // mood and it stays his to want back.
+  static constexpr bool kU02BackdropBloom = false;
   const bool no_planet = [] {
     const char* e = std::getenv("ZHAO_U02_NOPLANET");
     return e != nullptr && e[0] == '1';
   }();
-  if (slot == 2 && !no_planet) {  // fixed-camera subjects only: the bloom is
+  const bool force_planet = [] {
+    const char* e = std::getenv("ZHAO_U02_PLANET");
+    return e != nullptr && e[0] == '1';
+  }();
+  const bool planet_on = (kU02BackdropBloom || force_planet) && !no_planet;
+  if (slot == 2 && planet_on) {  // fixed-camera subjects only: the bloom is
     // painted in SCREEN space and must not sit frozen while an orbit spins
     s.planet = 1;  // violet-thick: pure formless bloom, the mana mood
-    // the bloom sits OFF to the side: additive effects vanish over its
-    // near-white core (the S3 ceiling lesson at scene scale), so the loop
-    // window keeps dark violet sky behind it for the bolt to blaze against
+    // ⚠ FALSE-COMMENT CORRECTION (2026-09-08). This read "the bloom sits OFF
+    // to the side ... so the loop window keeps dark violet sky behind it for
+    // the bolt to blaze against". Measured on the shipped frames it fills the
+    // ENTIRE LEFT HALF, the crown drifts across its edge, and in three of four
+    // sampled frames the aqua figure competed with near-white sky directly
+    // behind it. The intent below was real; the placement never achieved it.
+    // 10-GATE-CHECKLIST item 8: a comment asserting structure, ungated,
+    // outliving the structure -- and this one sent three separate passes to
+    // tune lightning constants against a backdrop problem.
     s.planet_sun_x = 58;
     s.planet_sun_y0 = 96;
     s.planet_sun_y1 = 132;
