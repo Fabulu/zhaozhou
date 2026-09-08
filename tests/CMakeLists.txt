@@ -2352,6 +2352,36 @@ set_tests_properties(lint_texture_early_desc PROPERTIES
 add_test(NAME metajoin_seam_directed COMMAND test_metajoin_seam_directed)
 set_tests_properties(metajoin_seam_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# metajoin's layout break, shown to be REFUSED -- and by a different mechanism
+# than early_desc's, which is the interesting part.
+#
+# Both blocks derive their field offsets and both carry an elaboration $fatal.
+# Break each with GENW=9 and they fail differently:
+#
+#   early_desc  lint passes CLEAN (RC=0). PADW absorbs the extra bit, no select
+#               goes out of range, and the ONLY thing that catches it is the
+#               $fatal at time 0. That guard is load-bearing --
+#               see early_desc_layout_guard.
+#   metajoin    lint REFUSES it outright: "Selection index out of range: 41:33
+#               outside 39:0", plus a WIDTHTRUNC on the packed write. Verilator
+#               catches this one at elaboration, so here the $fatal is a
+#               BACKSTOP for Quartus rather than the primary detection.
+#
+# So this is a lint test, not an executable: the point is that the broken
+# parameterisation cannot even elaborate. A binary target would fail to BUILD,
+# which ctest cannot distinguish from a broken test.
+#
+# What neither control establishes: whether QUARTUS honours the $fatal. That
+# needs a fit and is not claimed.
+add_test(NAME metajoin_layout_guard
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall -GGENW=9
+                 --top-module zhao_texture_metajoin
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv)
+set_tests_properties(metajoin_layout_guard PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}"
+  PASS_REGULAR_EXPRESSION "Selection index out of range")
+
 add_test(NAME metajoin_directed COMMAND test_metajoin_directed)
 set_tests_properties(metajoin_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
