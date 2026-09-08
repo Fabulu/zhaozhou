@@ -175,3 +175,60 @@ RCP->PERSPUV seam is **already registered** (`px_r_q`, `px_k_q`, `px_dz_q`) and
 the cone of interest is entirely inside rcp24, a pair fit buys little for this
 question. **A same-shape leaf comparison, read on data delay, is the right
 instrument** — and `@v3-rh` versus `svc` is very nearly that comparison already.
+
+---
+
+# The island-profile fit FAILED, and the cause is not yet known
+
+`-TopParameters NCTX=8,TOKW=14` -> **`incomplete:failed:quartus_map.exe`** in
+38.3 s. ALMs and Fmax never produced.
+
+```
+Error (10205): array has more than 2**28 bits
+  zhao_raster_rcp24_v3.sv(146..152)
+```
+
+Lines 146-152 are the context planes, all declared `[NCTX]`. For
+`logic [23:0] p_m_q [NCTX]` to exceed 2^28 bits, **NCTX must have arrived above
+eleven million.**
+
+## What this is NOT
+
+**It is not "the block rejects NCTX=8".** I nearly wrote that. `CW =
+$clog2(NCTX)` is 3 at NCTX=8 and every plane is a plain `[NCTX]` array — the
+declaration is valid at 8. Nothing in the source objects to that value.
+
+So Quartus did not receive 8. It received garbage.
+
+## What is established, and what separates the remaining possibilities
+
+* `TOKW=14` **alone**, at the block's native NCTX=16, cleared synthesis and is
+  still fitting past 15 minutes. So the parameter-override mechanism works for
+  at least one setting.
+* `NCTX=8,TOKW=14` together produced a nonsense NCTX.
+
+Two candidates remain and one cheap run separates them:
+
+  (a) the block genuinely misbehaves at NCTX=8 in a way the source does not show;
+  (b) `run_block_fit.ps1` mis-emits when given **two** `-TopParameters`, or
+      Quartus mishandles two `set_parameter` lines in that QSF.
+
+**Fit `NCTX=8` alone.** If it fails the same way, it is (a). If it succeeds, it
+is (b) — and (b) would be a tool defect affecting every multi-parameter
+experiment anyone runs, which matters well beyond this question.
+
+That run is queued behind the current fit rather than launched alongside it; two
+concurrent Quartus fits on one machine is how the disk filled on 2026-09-06.
+
+## The tool's own warning, which applies in the other direction
+
+`run_block_fit.ps1` warns that Quartus *"accepts directives and silently ignores
+them, and the only symptom is a number that does not move."* Here the failure
+was loud, which is the better outcome — a silently ignored `NCTX=8` would have
+produced a clean row at NCTX=16 labelled `@island-profile`, and that row would
+have been quoted as the island-profile measurement for as long as anyone
+believed it.
+
+**The parameter must be verified as TAKEN in any row that survives**, per the
+tool's own instruction: at NCTX=8 the context storage must be visibly smaller
+than the NCTX=16 rows.

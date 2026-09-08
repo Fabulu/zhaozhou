@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "7d78d2e037e091d845c708a321685ffe33ba2ca6",
+    "newestRunCommit":  "f597ac80825a5702df1d4196196bdee3b14e42f1",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -854,6 +854,23 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  63.93,
                        "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_raster_rcp24_v3@island-profile",
+                       "status":  "incomplete:failed:quartus_map.exe",
+                       "sourceCommit":  "f597ac80825a5702df1d4196196bdee3b14e42f1",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "98299502f0beadbf1b63d70cbbeb3d080e31a585b23c1e044e2192c84bafd0d3",
+                       "topParameters":  "NCTX=8,TOKW=14",
+                       "variantOf":  "zhao_raster_rcp24_v3",
+                       "seconds":  38.3,
+                       "sourcesHashed":  5,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  null,
+                       "blockMemoryBits":  null,
+                       "dspBlocks":  null,
+                       "virtualPins":  null
                    },
                    {
                        "module":  "zhao_raster_rcp24_v3@v3-after",
