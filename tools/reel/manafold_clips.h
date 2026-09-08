@@ -1111,7 +1111,32 @@ inline NoduleOffsets nodule_schedule(uint32_t slot, int keys, int f) {
   return n;
 }
 
+/** PASS 12 WAVE 2a -- THE ALWAYS-ON EYE TRAVEL (D9 SS6, "the eyes have to move
+ *  more"). Two incommensurate slow waves so the sweep never repeats the same
+ *  place twice in a cycle, both far below the life-layer band: this is a
+ *  deliberate look-around, not a twitch. Rides antenna_knead for the same
+ *  reason the nodule schedule does -- it is the one layer every performing clip
+ *  already calls. */
+inline int32_t eye_travel_life_pm(uint32_t slot, int keys, int f) {
+  const int32_t a = static_cast<int32_t>(
+      (static_cast<int64_t>(kEyeTravelLifePm) *
+       sinp(f, keys, keys / kEyeTravelPeriodAKeys > 0 ? keys / kEyeTravelPeriodAKeys : 1,
+            static_cast<int32_t>((slot * 9973u) & 0xFFFF))) >> 16);
+  const int32_t b = static_cast<int32_t>(
+      (static_cast<int64_t>(kEyeTravelLifeBPm) *
+       sinp(f, keys, keys / kEyeTravelPeriodBKeys > 0 ? keys / kEyeTravelPeriodBKeys : 1,
+            static_cast<int32_t>((slot * 26417u) & 0xFFFF))) >> 16);
+  int32_t pm = a + b;
+  if (pm > 1000) pm = 1000;
+  if (pm < -1000) pm = -1000;
+  return pm;
+}
+
 inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f) {
+  // The eye travel rides here because this is the one layer every PERFORMING
+  // clip calls (build_still and build_nodule_solo deliberately do not). It
+  // writes the carrier bones, which nothing else in this function touches.
+  apply_eye_travel(g, eye_travel_life_pm(slot, keys, f));
   // PASS 12: the nodule targets for this key. Set here because antenna_knead
   // already runs before every clip's loop_pose call, which is where they are
   // consumed. A clip whose kNoduleClipPm entry is 0 gets all-zero offsets and

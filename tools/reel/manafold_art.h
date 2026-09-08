@@ -953,6 +953,23 @@ constexpr int32_t kEyeTravelPivotXMm = 0;
 // against "eaten by the breath" and it is meant to be moved.
 constexpr int32_t kEyeStandoffMm = 22;
 
+// THE ALWAYS-ON TRAVEL. D9 SS6 is not a capability request -- "the eyes have to
+// move MORE" is about what the bank shows, so the channel rides every
+// performing clip through antenna_knead, the layer that already runs on all of
+// them. (build_still and build_nodule_solo do not call it, which is right: one
+// is deliberately still and the other is a diagnostic that must not be
+// contaminated.)
+//
+// Amplitude is a fraction of kEyeTravelMaxDeg, so the peaks reach the full 45
+// the owner asked for and the gate holds the ceiling. Two incommensurate
+// periods, both far slower than 07-MOTION-STYLE SS3's life band, because D7
+// SS9.2 still governs: MORE TRAVEL PER BEAT, FEWER BEATS. An eye sweeping a
+// quarter-turn of body needs to look like it decided to, not like it twitched.
+constexpr int32_t kEyeTravelLifePm = 1000;
+constexpr int kEyeTravelPeriodAKeys = 97;
+constexpr int kEyeTravelPeriodBKeys = 61;
+constexpr int32_t kEyeTravelLifeBPm = 300;  // the second, smaller wave
+
 // ---- OWNER DIRECTION 5 5d: THE EYES ROLL ---------------------------------
 //   "eyes should also be able to rotate and rotate back. Maybe 10-20% at most.
 //    Still shouldn't clip anything or touch each other. Just for
