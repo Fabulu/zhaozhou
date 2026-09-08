@@ -748,3 +748,51 @@ internal family that neither §6 nor §7 covers.
 
 Expected from this fit: a row with a provenance digest and a `status` derived
 from the rules rather than left at `ok` by a hand-assembled run.
+
+## A second owner brief arrived, and it caught a real error of mine
+
+`reports/ZHAOZHOU_TEXTURE_ISLAND_POSTFIT_ARCHITECTURE_2026-09-08.txt`, written
+after reading today's results — including my retraction. Rebased onto it cleanly.
+
+**§2.2 rejects my repair C, correctly.** I wired
+`if (accept_c && fq_full_c)` and defended it as *"unreachable if `f_ready_o` is
+correct, which is exactly what makes it worth exposing."*
+
+It is not unreachable. `accept_c = f_valid_i && !fq_full_c`, so the condition is
+`f_valid_i && !fq_full_c && fq_full_c` — **identically false**. I replaced an
+undriven port with a differently-dead one and called it a repair.
+
+The brief's discriminating case: change `>=` to `>` in `fq_full_c` so the queue
+admits a fifth entry — a real bug — and the old monitor **still cannot fire**,
+because the bug moves acceptance and detection together.
+
+**Policy C-b applied**: detect `fq_occ_c > FQD`, a state violation measured by
+the extended pointer difference, derived without reference to `f_ready_o`. It is
+the synthesizable counterpart of assertion `a_fq_in_range`. Expander now 12/12.
+
+**Not demonstrated, and I will not claim it**: a firing trace. The mutation that
+would produce one also indexes past the 4-entry array, corrupting the queue and
+hanging the test. Establishing that the condition does not reduce to false is
+the negative the brief demanded; a positive trace needs a fault-injection input
+and remains open. On a monitor whose original defect was being reported as
+working while constant zero, claiming an unheld demonstration would repeat the
+defect one level up.
+
+**The brief independently reaches my palette finding.** Its §4 is "separate
+palette verdicts from statistics" — the `cq_rp -> cold_o` family I had flagged
+as co-equal. It also reports the headline Fmax is optimistic: second slow corner
+**81.58 MHz**, worst multicorner hold slack **-4.346 ns**.
+
+**Experiment P-CNT implemented** (source only, not yet built): the palette's
+three diagnostic counters now consume `l1_v_q`/`l1_stale_q`/`l1_res_q` — the
+verdict already registered one line above — instead of the live classification,
+taking a 32-bit increment off the end of that cone. The RAM read, `lu_valid_o`,
+lookup data and accepted-BEGIN forwarding are untouched. The statistics now
+trail by one cycle, declared here rather than discovered later.
+
+## And I wedged the fast suite a SECOND time, the same way
+
+`cmake --build` against the build tree while a ctest run was in flight. ctest CPU
+frozen at 0, no test process. **Never touch the build tree while ctest is
+running** — twice now. Restarted alone; P-CNT is deliberately unbuilt until it
+finishes.
