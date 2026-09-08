@@ -2044,6 +2044,64 @@ module zhao_texture_island_v3_top #(
   assign fr_tmu_rgen    = rsp_tok[GENW-1:0];
 
   // ==========================================================================
+  // (c2) THE TMU RETURN LANE INTO v3own
+  // ==========================================================================
+  // The completion merger above is CARRIED OVER WITH ITS PRIORITY LAW INTACT --
+  // palette first because PALETTE_RES has no `lu_ready_i` and its answer lives
+  // exactly one clock, then nearest, unknown-class, bilinear. Every lane
+  // completes; the architecture's §1.5 is explicit that this survives, and the
+  // three missing terms it once had were each "a sample that never arrived and
+  // therefore a fragment that never retired".
+  //
+  // THE HANDLE FALLS OUT OF THE TOKEN WIDENING, which is the whole reason the
+  // SRCW 16 -> 18 prerequisite landed first. Under P0-C the routing token is
+  // {class[1:0], slot[5:0], sidx[1:0], gen[7:0]}, so the low SIXTEEN bits ARE
+  // v3own's sample handle -- SMPW = SLOTW + 2 + GENW = 6 + 2 + 8 = 16. No
+  // re-packing, no adapter, no place for a field to be mis-sliced.
+  assign own_tmu_rvalid_c  = fr_tmu_rvalid;
+  assign own_tmu_rhandle_c = rsp_tok[15:0];
+
+  // result40 = STATUS8 | alpha8 | RGB888 (v3own Appendix B.1). The status byte
+  // carries the merger's OWN error verdict rather than a second opinion:
+  // `smp_err_c` is already the one place that decides a completion shipped the
+  // error colour, and duplicating that decision here would be the "two
+  // arithmetics that agree until they do not" defect on a status field.
+  assign own_tmu_rresult_c = {7'd0, smp_err_c, fr_tmu_a, fr_tmu_rgb};
+  assign fr_tmu_rready     = own_tmu_rready;
+
+  // ---- the AUX return, AND A WIDTH THE ARCHITECTURE DID NOT NAME -----------
+  // AUX is keyed by OWNER, not by sample: v3own's `aux_rowner_i` is the 14-bit
+  // handle, because an AUX result belongs to the fragment rather than to one of
+  // its samples.
+  //
+  // **FINDING, 2026-09-08: `AUX_TOKW` MUST WIDEN 12 -> 14 AND IT IS A TOP-LEVEL
+  // PORT.** Today `AUX_TOKW = $clog2(DEPTH) + GENW` = 4 + 8 = **12**, and it
+  // leaves the island on `sheet_tok_o` / returns on `sheet_rtok_i` (:149,:161).
+  // v3own's OWNERW is SLOTW + GENW = 6 + 8 = **14**. The architecture's §1.1
+  // widening analysis covered the SRCW routing token through plan/cache/dispatch
+  // and named `cache_pipe` as the hard one; it did NOT name the AUX sheet token,
+  // which is a different path and crosses the island BOUNDARY.
+  //
+  // That makes it a bigger change than the SRCW one, not a smaller one: an
+  // island-boundary port width is the composed top's contract with whatever
+  // drives it, so it cannot be defaulted away the way `cache_pipe`'s SRCW was.
+  // It is recorded here at the point of discovery and belongs in the
+  // architecture's §1.1 before (c3) is planned in detail.
+  //
+  // Until then this lane uses the oracle's ACTUAL signals at their ACTUAL
+  // widths, zero-extended, so the file states what it really does rather than
+  // pretending the re-key has happened:
+  assign own_aux_rvalid_c  = fr_aux_rvalid;
+  assign own_aux_rowner_c  = {{(14-$clog2(DEPTH)-GENW){1'b0}}, fr_aux_rslot, fr_aux_rgen};
+  assign own_aux_rresult_c = {8'd0, fr_aux_a, fr_aux_rgb};
+  assign fr_aux_rready     = own_aux_rready;
+
+  // STEP (c3), still owed: the COMBINE handshake (v3own's `cmb_*` into
+  // `u_combine`, its result back through `fin_*`) and the ordered output
+  // (`out_*`). Both are named signals declared at the v3own instantiation and
+  // deliberately not tied to anything plausible yet.
+
+  // ==========================================================================
   // AUX
   // ==========================================================================
   logic        aux_req_ready, aux_out_valid;
