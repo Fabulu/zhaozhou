@@ -233,3 +233,37 @@ D - NO PER-CLIP GAIN EXISTED. kKneadClipPm and kNoduleClipPm both let a clip
 NOT VERIFIED BY EYE YET. These are rig numbers. The star-containment rules in
 manafold_probe.cpp have only ever been measured on an untravelled bank, so
 their numbers will move; treat any new failure there as real.
+
+### Close-out
+
+Merged to main on both repos and verified on the remote:
+  zhaozhou  origin/main 3581001e   (hold_last x2, u02_ml_cycles x2,
+                                    kWanderEscapeMm = 430 all present)
+  Upheaval  origin/main e3bae84    (PASS-12-FIX-FINDINGS.md + 5 plates present)
+
+One conflict on the way in, in manafold_qa_p12.cpp, and it was a good one: main
+had INDEPENDENTLY found the same Q2 reader bug and fixed it with a shared
+carrier_deg() helper plus a SELF-CHECK that drives the carrier through the
+production call and refuses to believe a zero it cannot prove it could have
+seen. That is the better design, so main's helper survived; my per-key SNAP
+check was kept alongside it because it answers a different question.
+
+⚠ A MISTAKE WORTH RECORDING. `git checkout main` failed with
+"fatal: 'main' matched multiple (5) remote tracking branches" -- this clone has
+five lane remotes, all with a main -- and because it was chained with `&&` to a
+`git reset --hard origin/main`, the reset landed on the branch I was still
+standing on and threw away the fix branch's tip. Nothing was lost: the work was
+already pushed, and `git reflog` had it. Restored with
+`git reset --hard 18678e54` and confirmed byte-equal to origin.
+
+The lesson is not "be careful with reset". It is that **a checkout that can fail
+must never be chained to a destructive command with `&&`** -- `&&` only checks
+the exit code of the thing before it, and `git checkout` failing leaves you
+somewhere the next command will happily operate. Adding lane remotes made a
+previously unambiguous branch name ambiguous, which is the kind of change that
+does not announce itself. Used `git checkout -b main refs/remotes/origin/main`
+after, and guarded the second reset with an explicit
+`test "$(git rev-parse --abbrev-ref HEAD)" = "main"`.
+
+Background: no long-running processes left. The base-commit worktree used for
+the Zixxtrixx identity proof is removed.
