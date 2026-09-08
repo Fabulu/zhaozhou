@@ -551,9 +551,45 @@ try {
             $qsf += "# Overridden by run_block_fit.ps1 -Seed (placement sweep)."
             $qsf += "set_global_assignment -name SEED $Seed"
         }
+        # THE GUARD THAT COST TWO WEEKS OF A WRONG BELIEF.
+        #
+        # `-TopParameters` is [string[]], but a caller who QUOTES the whole thing
+        # passes ONE element. `'NCTX=8,TOKW=14' -split '=', 2` then yields
+        # name `NCTX` and value `8,TOKW=14`, and this loop emitted
+        #
+        #     set_parameter -name NCTX 8,TOKW=14
+        #
+        # Quartus took that as a number in the eleven millions, the fit died in
+        # 38 seconds, and TOKW was never set at all. The failure reads exactly
+        # like the BLOCK rejecting NCTX=8, which is how
+        # `zhao_raster_rcp24_v3@island-profile` came to be recorded as leaving
+        # block-versus-tool open. It was the tool.
+        #
+        # The receipt still holds the evidence: it records the parameters joined
+        # with a SPACE, so the stored value `NCTX=8,TOKW=14` -- with a comma --
+        # is the fingerprint of a single quoted string.
+        #
+        # A malformed entry now fails HERE, in milliseconds, naming the actual
+        # mistake, rather than 38 seconds later as an incomprehensible Quartus
+        # error. See reports/RCP-V3-SWAP-HAS-NO-LIKE-FOR-LIKE-20260908.md.
         foreach ($tp in $TopParameters) {
             $kv = $tp -split '=', 2
             if ($kv.Count -ne 2) { throw "TopParameters entry '$tp' is not NAME=VALUE" }
+            if ($kv[1] -match '[,=]') {
+                throw ("-TopParameters entry '" + $tp + "' has a value of '" +
+                       $kv[1] + "', which contains a comma or an equals sign. " +
+                       "That means the whole list arrived as ONE QUOTED STRING " +
+                       "instead of an array, and only the first parameter would " +
+                       "be set -- to garbage. Pass them unquoted or as separate " +
+                       "elements: -TopParameters NCTX=8,TOKW=14  or  " +
+                       "-TopParameters @('NCTX=8','TOKW=14'). This exact mistake " +
+                       "killed zhao_raster_rcp24_v3@island-profile in 38 seconds " +
+                       "and was misread as the block rejecting NCTX=8.")
+            }
+            if ($kv[0] -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
+                throw ("-TopParameters entry '" + $tp + "' has a parameter name " +
+                       "of '" + $kv[0] + "', which is not an identifier.")
+            }
             $qsf += "set_parameter -name $($kv[0]) $($kv[1])"
         }
         $qsf | Set-Content -LiteralPath (Join-Path $dir 'blockfit.qsf') -Encoding ascii
