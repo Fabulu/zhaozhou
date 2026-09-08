@@ -778,6 +778,49 @@ including hold, resource attribution, named RAM inference, workload counts).
 
 ### Findings made for this roadmap (new evidence, checked against source)
 
+**VERIFIED AND EXTENDED 2026-09-08.** Every deletion claim below was re-checked
+against source with comments stripped, and the ledger got bigger.
+
+#### Three arrays are dead DUPLICATES, not merely superseded
+
+`fpsl_m`, `fpgn_m` and `frec_m` each have exactly three non-comment mentions —
+declaration, one write, one read into a `_c` alias — and those aliases
+(`f_pal_slot_c` :896, `f_pal_gen_c` :897, `f_recipe_c` :899) have **no consumers
+at all**. Deleting the alias makes the array write-only, so array and alias go
+together.
+
+The important part is *why* they are dead. The state they hold is kept a SECOND
+time and that copy is the live one:
+
+| dead FCTXN copy | live copy | live copy's reader |
+|---|---|---|
+| `fpsl_m` ← `frag_pal_slot_i` :791 | `palslot_m` :1269 | metajoin `.wr_pal_slot_i` :2707 |
+| `fpgn_m` ← `frag_pal_gen_i` :792 | `palgen_m` :1270 | metajoin `.wr_pal_gen_i` :2708 |
+| `frec_m` ← `frag_recipe_i` :794 | `mat_m` :2494 | the material path |
+
+So the island stores the palette pair and the recipe twice — once keyed by
+FCTXN slot and once keyed by owner slot — and reads only the owner-keyed copy.
+The FCTXN set is an earlier attempt at CARRIAGE that was abandoned when the
+sidecar won, and never removed. That is exactly §0's "partial implementations of
+v3own's lifetime", and Packet 3 is the same idea done properly.
+
+**Measurement consequence, and it matters for FIT GATE 2.** Deleting dead
+duplicates and adding the descriptor bank in one packet makes the fit delta
+uninterpretable — a shrink could be the deletion and a growth could be the bank,
+with no way to tell. Delete the three dead arrays in **Packet 1** (which is
+already a no-functional-change packet ending at a gate) and let Packet 2/3's
+gate measure the bank alone. Same total work, one attributable number instead of
+a confounded one.
+
+#### Confirmed as previously stated
+
+* `class_m` — two mentions, declaration :1239 and write :1268. Write-only.
+* `uvw_m` — LIVE, keep. Real read at :851 (`px_uvw_q <= uvw_m[rcp_tok[13:8]]`),
+  as §5.4 says.
+* The Mosaic byte slice — verified correct, see Packet 2.
+* The admission-agreement detector — struck, cannot fire, see Packet 2.
+
+
 * **`class_m` is write-only.** Declaration `island_v3_top.sv:1239`, write
   :1268, zero readers (all other mentions are comments). Deletable in
   Packet 1 with the grep as the deletion receipt.
