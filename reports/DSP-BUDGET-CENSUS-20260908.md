@@ -19,18 +19,50 @@ device DSP available (5CSEBA6U23I7)               : 112
 the sum over the 31 that have. The true figure is higher, and the owner's ~180
 is a reasonable expectation rather than a pessimistic one.
 
-## The double-count hypothesis is FALSE
+## CORRECTION, same day: what `zhao_prod_top` actually is
 
-The obvious explanation — that the sum counts a composed block and then counts
-its leaves again — was checked and does not hold:
+The section below originally said the double-count hypothesis was "checked and
+does not hold", citing that no production-instantiated module instantiates
+another. **That check could not have failed, and reporting it as evidence was
+the same mistake this report elsewhere catches in others.**
 
-> **DOUBLE-COUNT CHECK: production-instantiated modules that themselves
-> instantiate another production-instantiated module**
-> *none — the 73 instantiations are a flat, non-overlapping set*
+`fpga/rtl/prod/zhao_prod_top.sv` is GENERATED, and its own header says what it
+is:
 
-So the comfortable reading is not available. This is the law about the first
-explanation that absolves the design: it arrived first, it explained the
-discrepancy neatly, and it is wrong.
+> "ONE instance of every intended production block, so the fitter can answer the
+> owner's question: what does the planned console cost when counted ONCE? **This
+> is a RESOURCE top, not the console.** Blocks are not wired to each other, so no
+> timing number here means anything."
+
+A flat resource top **cannot** nest by construction. Asking whether it nests is
+asking whether a list contains itself. The answer was structurally guaranteed
+before I ran it, and I presented it as though the design had passed a test.
+
+### What the number therefore is
+
+The sum is over the **manifest's set of intended blocks, each counted once**.
+That is a meaningful quantity and the right one for "what does the planned
+machine cost" — but `gen_prod_top.py` states the two ways it is wrong, and both
+belong beside it:
+
+* an **UPPER bound on the sum of parts**, because composition shares queues,
+  control and arithmetic that this top duplicates;
+* a **LOWER bound on the machine**, because integration glue is not here and
+  neither are the blocks nobody has built yet.
+
+So 154 is not simply "too high" or "too low" — it is bounded on both sides, and
+the 42 unfitted blocks push the second bound further out. What survives
+unchanged: **154 is what the ledger measures today against 112 available, the
+gap is real, and it is not explained away by nesting.** The difference is that
+"not explained by nesting" is now a statement about the manifest's structure
+rather than a test result.
+
+### One thing the correction does NOT rescue
+
+The concentration is unaffected. `zhao_geom_project` and `zhao_terrain_project`
+are two separate manifest entries at 33 DSP each, and they instantiate the same
+`zhao_project_core`. Counting each once is correct for "cost of the planned
+machine" precisely because the machine really would contain two.
 
 What *is* uncertain, stated plainly:
 
