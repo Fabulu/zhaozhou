@@ -430,3 +430,22 @@ input port, so the brief's specified form —
 `own_adm_accept && (frag_class_i == CLS_ERR)` — drops straight in beside the
 `class_m`/`palslot_m` writes that were fixed this morning. Blocked only on the
 fit releasing the closure.
+
+## POSITION BEFORE READING THE STAGE C FIT RESULT
+
+Written first, because fit results redirect the work and the half-finished thing
+in hand is what gets lost.
+
+**In flight:**
+* zero-work lifetime probe (§5.1) — written and committed, chained to build
+  after the fast suite finishes. Not yet run.
+* full fast-label ctest at `-j1` — running, tests passing so far. This is the
+  debt from the shared-block edits (`cache_pipe` SRCW, `rcp24_svc`).
+* V1 re-fit — queued, launches automatically now that the island fit's process
+  has exited.
+
+**Next step regardless of what the receipt says:** the §3.1 repairs, now that
+the closure is free. A is confirmed implementable
+(`own_adm_accept && frag_class_i == CLS_ERR`); its test already fails 1/5
+against current RTL and flips to 5/5 with the fix, and gets its `add_test` line
+in that same commit.
