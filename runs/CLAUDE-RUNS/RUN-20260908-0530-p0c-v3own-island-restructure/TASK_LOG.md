@@ -1291,3 +1291,41 @@ The milestone fit measured **+2,778 ALM / −8.43 MHz** — on a design where th
 metadata was misaligned AND the readers were still on the tables. It priced the
 cost of the join without any of its benefit. **Re-fit launched** as
 `@pktC-fixed`; that number decides whether packet C stays.
+
+## I rebuilt a tool the repository already had
+
+`tools/quartus/check_fit_rules.ps1` recomputes every fit verdict from the
+recorded numbers against `design/fit_targets.yml`, ignoring the `status` field
+entirely, and marks rows whose source has changed since the fit:
+
+```
+10 pass, 17 FAIL, 3 unmeasured, 9 STALE
+```
+
+That is strictly better than the numeric comparison I added to
+`check_fit_ledger.py` an hour earlier, and **`fit_rules.ps1` names it in its own
+header** — *"check_fit_rules.ps1 applies the identical law to already-recorded
+rows"* — one grep from the file I was editing.
+
+The numeric half is retired. What stays is the one thing the PowerShell tool
+does not do: flag a row that is **self-contradictory on its face** — a non-empty
+`ruleViolations` list beside a `status` of `ok`, which is the signature of a
+hand-assembled row. `zhao_texture_material_combine_v1` was exactly that, one row
+in 114.
+
+**The pattern is the same one as reading the ledger before adding to it.** Twice
+today I generated work to discover something already recorded: the `@v3-nctx8`
+row that answered the NCTX question, and now a rules checker. Both times the
+existing artefact was one search away.
+
+### And the real verdicts, which correct my reporting
+
+`check_fit_rules.ps1` says **17 FAIL**, including the V3 island (registers
+20,561 > 9,000; ALM 13,133 > 7,500; DSP 17 > 14) and `combine_v1` (ALM 1,663 >
+800; registers 1,269 > 500). It also marks **9 rows STALE**, the V3 island and
+v3own among them — *"their verdicts describe an older block; refit before
+believing either half."*
+
+So when I described fits as `ok` today, the authority in this repository already
+disagreed. Its closing line is the standing correction: **"A fit that meets Fmax
+while violating its memory/DSP structure is not a pass."**
