@@ -219,3 +219,28 @@ three dead error paths pass a checker I had just proved fires.
 `zhao_texture_island_v3_top.sv` and are therefore BLOCKED until the fit
 releases its closure. The brief is explicit: *"Do not change the source under
 that run."*
+
+## Brief incorporated; fault test written ahead of the repair
+
+* Brief + checks filed and committed; checks re-run clean, `sha256sum -c` OK,
+  every check carries a mutant it detects.
+* **Evidence-port audit: 30 ports, 3 with dead fan-in** -- exactly the three the
+  brief named. My proximity heuristic said four; `err_aux_degenerate_o` was a
+  false positive (it merely shares an `always_ff`). The outside review was more
+  accurate than the local mechanical check.
+* **A generalised fan-in checker was started and reverted.** It flagged 23
+  signals in one file, ~4 real, the rest arrays written as `mat_m[idx] <= ...`
+  and input ports. The brief forbids the parser project in the same paragraph
+  that names the gap. Reverted to the narrow port check that was proved to fire.
+* **`tests/texture/island_v3_fault_directed.cpp` written**, built as a target,
+  and deliberately **not** registered with `add_test`: it is written to FAIL
+  against today's RTL, and a red suite hides regressions. `add_test` lands in
+  the same commit as the §3.1 repair, so the test is seen to fail and then pass.
+* M6 amended in the tool that embodied it; the +10.90 MHz claim conceded as
+  over-stated; the 7,500 ALM redline retained as the historical-rule judgment
+  only, not as a physical cliff.
+
+**Blocked on the fit:** all three §3.1 repairs touch
+`zhao_texture_island_v3_top.sv`, inside the running fit's 18-file closure. The
+brief: *"Do not change the source under that run."* The frozen specimen's digest
+still matches the committed file byte for byte.
