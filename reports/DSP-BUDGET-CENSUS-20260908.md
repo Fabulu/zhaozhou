@@ -144,6 +144,46 @@ Three levers, in descending size. None is a decision I should make:
 Levers 1 and 2 together are on the order of 45 DSP — roughly the whole overshoot
 over 112, before the 42 unmeasured blocks are counted.
 
+## A fourth lever, texture-side and cheap: `zhao_texture_combine`
+
+Found while checking the standing COMBINE item. Two blocks in this repository
+contain the **same 8x8-plus-round multiply shape**, and they cost very different
+amounts:
+
+| block | the product declaration | DSP |
+|---|---|---|
+| `zhao_texture_material_combine_v1` | `(* multstyle = "logic" *) logic [16:0] p;` | **2** |
+| `zhao_texture_combine` | `logic [16:0] p;` — **no attribute** | **8** |
+
+```systemverilog
+// zhao_texture_combine.sv:109  -- twelve call sites, no multstyle
+function automatic logic [7:0] unit_mul(input logic [7:0] a, input logic [7:0] b);
+  logic [16:0] p;
+  p = ({9'd0, a} * {9'd0, b}) + 17'd128;
+```
+
+`unit_mul` is called seven times directly and five more through `mul2x9`, so the
+block builds twelve 8x8 multipliers. An 8x8 product is small enough to belong in
+logic, and `material_combine_v1`'s own comment says so: *"multstyle = logic is
+the whole point of this block."*
+
+**Hypothesis, not a claim:** adding the attribute moves up to 8 DSP into logic.
+
+**And the reason it is only a hypothesis is written in CLAUDE.md.** The last
+time a combiner read 8 DSP against a rule of 2, the obvious answer was "Quartus
+is ignoring `multstyle`" and that answer was *wrong* — the block really did
+contain about fourteen multipliers inside two seven-arm case statements. This is
+a different situation (the attribute is ABSENT here, not present-and-ignored,
+and the sibling block demonstrates it working in this very tree), but it is the
+same shape of comfortable explanation and it gets the same treatment: **MapOnly
+settles it in minutes and no fit is needed.** Do that before anyone edits
+anything.
+
+Worth noting either way: `zhao_texture_combine` is instantiated ONLY by the
+generated resource top. The islands use `zhao_texture_material_combine_v2`. So
+the question of whether this block is still wanted at all should be asked before
+the question of what it costs.
+
 ## The one already decided
 
 The RCP swap the owner ruled on today (`OWNER-DECISION-RCP-V3-20260908.md`) takes

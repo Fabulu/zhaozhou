@@ -1579,3 +1579,23 @@ is destroyed by the next fit of the same module.
 * `perspuv_pairpipe` reset-mid-flight coverage; 22 checks.
 * All three pairpipe falsifiers shown to fire (300-vs-17 accepts, 1.99-vs-1.00
   clk/pair, 84 U/V mismatches at 56 bits).
+
+## DSP investigation, and a self-correction
+
+* Verified the roadmap's deletion ledger and EXTENDED it: `fpsl_m`, `fpgn_m`,
+  `frec_m` are dead DUPLICATES (the live copies are `palslot_m`, `palgen_m`,
+  `mat_m`). Moved their deletion into Packet 1 so FIT GATE 2 measures the
+  descriptor bank alone instead of a confounded delta.
+* **Corrected my own DSP census.** I reported "the double-count hypothesis is
+  FALSE, checked" — but `zhao_prod_top.sv` is a GENERATED flat RESOURCE top that
+  cannot nest by construction, so the check could not have failed. Same pattern
+  I struck a roadmap detector for hours earlier, in my own analysis. The 154
+  stands as the manifest's intended-blocks-counted-once sum, now with both
+  bounds stated: upper on the sum of parts, lower on the machine.
+* Fourth DSP lever found: `zhao_texture_combine` has twelve 8x8 multiply sites
+  and NO `multstyle = "logic"`, against `material_combine_v1`'s identical shape
+  WITH the attribute at 2 DSP. Recorded as a hypothesis for MapOnly, not a
+  claim — CLAUDE.md records that "Quartus ignores multstyle" was once exactly
+  the wrong diagnosis for a combiner reading 8 DSP.
+* That block is instantiated only by the resource top; the islands use
+  `material_combine_v2`. Whether it is still wanted precedes what it costs.
