@@ -177,3 +177,26 @@ matches on both legs while proving nothing about the published render):
 
 Baseline binary built from `7c38dfb2` in its own `git worktree` at `base/`,
 into `build-base/`, so it depends on nothing about my working tree.
+
+## 08:35 — both identity gates green, and the failable half fired
+
+```
+ZIXXCRC_DONE identical=5 differing=0        (idle, walk, attack, death, stretch)
+MFCRC OK    manafold-hover       0x498E13E2
+MFCRC OK    manafold-channel     0xBFC170B9
+MFCRC OK    manafold-drift       0x4BBA4960
+MFCRC OK    manafold-death-drop  0x3F9E8AF3
+MFCRC MOVED manafold-taunt3      0xC757C3F8 -> 0x221E7CC5   (expected)
+MFCRC_DONE bad=0
+```
+The protected list is byte-identical to `main` and the one clip that was meant
+to move is the one that moved. "Append-only" is now a measurement, not an
+argument about array indices.
+
+## Lane state
+`C:\programmieren\zencrifice\manafold-p12-w3` — everything committed and pushed,
+landing verified on both remotes. **The lane can be deleted**, along with its
+`base/` worktree (`git worktree remove`), `build-w3/`, `build-base/`, `renders/`
+and `plates/`: every plate worth keeping is committed under
+`Upheaval/creature/Manafold/pass12-plates-w3/`, and both CRC probes are
+committed under `probes/` so they can be re-run from any lane via `LANE=`.
