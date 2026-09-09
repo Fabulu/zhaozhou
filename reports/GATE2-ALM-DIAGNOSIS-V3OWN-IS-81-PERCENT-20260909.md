@@ -201,9 +201,9 @@ cannot without moving a protocol.
 | `live_q` | 64 | `_q`, a loop scan, and `bnd_tkt_c[...]` | mixed |
 | `iss_q` | 256 | `iss_t_slot_c`, `iss_a_slot_c` | **BLOCKED** |
 | `req_q` | 256 | `iss_t_slot_c`, `iss_a_slot_c` | **BLOCKED** |
-| `cbi_q` | -- | assertions only | **NOT IN SYNTHESIS** |
-| `clm_q` | -- | assertions only | **NOT IN SYNTHESIS** |
-| `fcl_q` | -- | assertions only | **NOT IN SYNTHESIS** |
+| `cbi_q` | 64 | **THIS ROW IS WRONG** | live synthesis state -- see the fourth correction; my grep missed `cbi_q [i]` with a space |
+| `clm_q` | 256 | **THIS ROW IS WRONG** | live synthesis state -- see the fourth correction; my grep missed `clm_q [i]` with a space |
+| `fcl_q` | 64 | **THIS ROW IS WRONG** | live synthesis state -- see the fourth correction; my grep missed `fcl_q [i]` with a space |
 
 ## Three of the eleven are not there at all
 

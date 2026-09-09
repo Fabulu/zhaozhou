@@ -1,7 +1,7 @@
 # `v3own` is not a memory candidate, and the brief's blueprint does not fit it
 
 2026-09-09. This corrects `GATE2-ALM-DIAGNOSIS-V3OWN-IS-81-PERCENT-20260909.md`
-for the third and final time. **The first two corrections made the remedy sound
+for the third time -- and a FOURTH correction follows it below. **The first two corrections made the remedy sound
 harder; this one says the remedy does not apply.** Anyone planning from the
 earlier sections would have spent real time on a conversion that cannot happen.
 
@@ -77,11 +77,12 @@ of the redline overage. What changes is the **shape of any remedy**:
   reconsider whether 64 simultaneous owners is the right number for the
   workload. Each is a design change with its own contract implications.
 
-## The lesson, since I paid for it three times
+## The lesson, since I paid for it four times
 
 I concluded "the remedy applies", then "the remedy is blocked on the owner", then
-"the remedy does not apply" -- and each step came from reading one layer further
-into the same file. The first two were published with confident framing.
+"the remedy does not apply", then "and three of the arrays I dismissed are live
+after all" -- each step from reading one layer further into the same file. The
+first three were published with confident framing.
 
 **Every one of those reversals came from looking at a part of the code I had not
 read yet**: first the consumer of the read, then the pipeline stage feeding the
