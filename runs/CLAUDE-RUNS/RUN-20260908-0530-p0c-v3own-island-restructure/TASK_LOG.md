@@ -3228,3 +3228,27 @@ Exit code still driven by unlabelled rows only, deliberately -- the inline gate 
 run_block_fit.ps1 is what STAMPS a row, and until its key-mismatch fix lands,
 failing CI on rows no stamp reflects would be blaming the ledger for the runner's
 bug.
+
+## 2026-09-09 -- corrected two nudge lines that would have actively misled
+
+`@gate3-fresh` still running (quartus_fit). Nudge rewritten (job 4fcc286c,
+retiring 3f0e4e30) because two of its lines were now wrong in the dangerous
+direction:
+
+* **"expect `failed:structure`"** -- no. Labelled rows are NEVER stamped, which is
+  the defect proven this hour. The candidate came back `status: ok` while
+  breaching two rules. An instruction telling a future reader to expect a stamp
+  that cannot appear would have them trust the stamp.
+* **"the standing svc row predates today's tree"** -- true of the COMMIT, false of
+  the SOURCE. The blob is identical (95d7ff17), so the comparison was already
+  like-for-like and `@gate3-fresh` is a reproducibility control rather than a
+  correction.
+
+It now also carries the measured first half (794 ALM / 820 regs / 119.25 MHz) and
+the labelled-row gate defect with its one-module-both-stamps demonstration, so the
+largest finding of the day cannot be missed by a future reader.
+
+Third rewrite today, each forced by a material correction rather than polish. The
+pattern is worth naming: **durable guidance goes stale exactly as fast as the work
+moves, and a nudge that tells you to expect the wrong evidence is worse than one
+that says nothing** -- it manufactures the comfortable reading in advance.
