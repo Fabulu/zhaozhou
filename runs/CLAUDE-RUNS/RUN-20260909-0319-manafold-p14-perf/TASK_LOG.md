@@ -175,3 +175,26 @@ after. Not my item; reported.
 ## Where I am
 * R4, R2(b), R2(c), R7 all authored and looked at. mprobe RC=0, all four QA
   legs behave. Next: the findings doc and the honest list of what I left.
+
+## CLOSING STATE
+
+**All four items shipped.** zhaozhou `b37e0910` on `wip/p14-perf` (pushed),
+Upheaval `69245ba` on `main` (pushed). Both trees clean. Deliverable is
+`Upheaval/creature/Manafold/PASS-14-FINDINGS-PERF.md` with 13 plates in
+`pass14-plates-perf/`.
+
+Gates at close: `mprobe` **RC=0** (clearance contract holds; blown 305 mm; both
+deaths' declared eternal-rest penetration still -20 mm against a declared -25).
+`manafold-qa-p12` **RC=1 with the SAME 4 failures as before pass 14** (lanes 2/3
+frozen span stretch on both deaths), proved pre-existing by stashing and
+rebuilding. All four QA failable legs behave. `holdmeter selftest` OK and the
+calibration separates.
+
+⚠ **Two loose ends for whoever picks this up**, both in the findings §8:
+the full expressiveness PAIR PLATE was not re-rendered (only the numeric half),
+and the post-mortem lamp lead -- which §1a shows is real -- is unopened and
+belongs to REEL.
+
+**No process of this lane is running.** Verified by name sweep at close; nothing
+was ever killed by image name (CLAUDE.md's identify-before-you-kill), and the
+`quartus_map` that was alive at open was never touched.
