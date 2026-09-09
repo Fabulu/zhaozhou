@@ -768,7 +768,11 @@ constexpr int kCoreOfHaloPm = 640;
 // R being the deepest interior point of the cover mask this frame, so the fog
 // breathes with the bounce instead of being a fixed pixel count over a body
 // that changes size.
-constexpr int kShellFogDepthPm = 380;
+// PICKED OFF THE PLATE: 380 -> 520 (pass15-fx-plates/B-fog-ladder-hit-f0028-3x
+// .png and -eyezoom-6x.png -- six rungs, ONE binary, on the frame where the eye
+// sinks into the body). See kShellCoreFloorPm: these two moved TOGETHER and
+// that is the finding.
+constexpr int kShellFogDepthPm = 520;
 // A floor, so a small or distant subject still gets a band rather than a
 // rounding error. NOT a substitute for the fraction: the fraction is the thing.
 constexpr int32_t kShellFogDepthMinPx = 5;
@@ -782,7 +786,22 @@ constexpr int32_t kShellOutReachMinPx = 2;
 // that decides whether the body wears gas or the body is WASHED OUT. D8 s4
 // ("we thickened too much... I want to revert that") is what lives at the top
 // of this knob's range.
-constexpr int kShellCoreFloorPm = 340;
+// PICKED OFF THE PLATE: 340 -> 180, AND IT IS THE HALF THAT MATTERS.
+//
+// My own eye called the first build "washed" -- the body read a dusty mauve
+// where the shipped one is hot pink -- and the obvious response was LESS FOG.
+// The ladder says the obvious response was wrong. Depth and floor are two
+// different things that the old band had conflated into one, and pulling them
+// apart gives what the owner actually described:
+//
+//     annulus DEEPER (380 -> 520)   more gas exactly where a thing clips in
+//     floor  LOWER  (340 -> 180)    less veil over the body's clean middle
+//
+// The rung that raised both (THICK 520/620/450) is the one that desaturates the
+// pigment; the rung that raised depth and DROPPED the floor is the one where
+// the lens is most absorbed AND the pink survives. "Too much fog" was never the
+// diagnosis -- "fog in the wrong place" was.
+constexpr int kShellCoreFloorPm = 180;
 // The shape of the inward rise. 1000 linear, 2000 fully quadratic (holds the
 // gas close to the annulus's inner edge and lets the outer skirt stay thin).
 constexpr int kShellRiseGamma = 1600;
@@ -802,7 +821,7 @@ constexpr int32_t kShellInReachPx_legacy_p12 = 6;
 // PASS 15: THAT LADDER WAS RUN ON THE 3/6 PX BAND AND ITS PICK DOES NOT
 // TRANSFER. 440 was "the most you can push a fringe before it glows"; this
 // knob is now the PEAK OF A VOLUME and it is re-laddered from scratch.
-constexpr int kShellAlphaMaxPm = 440;     // the peak, at the annulus inner edge
+constexpr int kShellAlphaMaxPm = 560;     // the peak, at the annulus inner edge
 // v1's shell read as a faint whitish-pink haze over the pink body -- looked at
 // in archive-2026-09-04-u02-hover.webm f60 and -channel.webm f180, as s7
 // ordered ("go look it up" is an instruction to look). This is that colour at
