@@ -102,7 +102,42 @@ gate plus the shadow gating plus the dead-array deletions.
 | 3 | pairpipe + fresh svc leaf pair | candidate ready, 22 checks green |
 | 5 | checkpoint C | last |
 
-### A LIVE CONSTRAINT — do not edit the island right now
+### GATE 1 IS SETTLED BY THE MapOnly PAIR. Its full island fit is FOLDED into gate 2.
+
+Decided 2026-09-09, and it deviates from the gate table above, so it is written
+here rather than left implicit.
+
+Gate 1 asked what the migration laboratory costs. The controlled MapOnly pair
+answered it: **−4,432 registers, −640 memory bits, 0 DSP**, 98.1% attributable to
+named structures, same bytes on both sides by digest. That is the question gate 1
+existed for and it is answered.
+
+What the pair cannot give is ALM and Fmax at production config. Spending a
+three-hour island fit for those two numbers alone is precisely what the owner's
+ruling forbids -- *"only fit at big architectural subsystem"* -- and this session
+has already lost a 195-minute island fit, a 174-minute expander refit and a
+102-minute leaf fit to external stops. A long fit is a bet against the next one.
+
+**So the next island fit is gate 2**, covering packets 1, 2 and 3 together, and
+its delta is read against the anchored `@pktC-fixed` row. The confound is stated
+rather than hidden: that delta contains the D0 gate, the laboratory removal, the
+dead-array deletions, the descriptor bank, the join and palette carriage.
+
+The register component is NOT confounded, because the MapOnly pair already
+isolated it. That is the point of having spent minutes instead of hours.
+
+**The island is therefore UNFROZEN.** The constraint below is discharged.
+
+---
+
+### ~~A LIVE CONSTRAINT — do not edit the island right now~~ (DISCHARGED)
+
+*Kept for the reasoning, which generalises: a queued measurement snapshots the
+live tree when it STARTS, so applying later work first makes it measure the wrong
+thing — and the row looks perfectly normal. That is the live-tree trap in its
+quiet form: not a fit that fails, a measurement that succeeds and describes
+something else.*
+
 
 `tools/quartus/queue_gate1_maponly.ps1` is waiting for the toolchain and will
 snapshot the live tree the moment gate 4 exits. **Applying Packet 2 before that
