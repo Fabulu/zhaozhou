@@ -154,6 +154,71 @@ foreach ($name in ($rules.Keys | Sort-Object)) {
     }
 }
 
+# ---------------------------------------------------------------------------
+# LABELLED ROWS. THIS LOOP EXISTED ONLY FOR UNLABELLED ONES, AND THAT WAS NOT A
+# POLICY -- IT WAS A CONSEQUENCE NOBODY HAD TRACED.
+# ---------------------------------------------------------------------------
+# The loop above walks $rules.Keys and finds the row where `module -eq $name`.
+# The rule table is keyed on the bare `- top:` name, so a row called
+# `zhao_texture_island_v3_top@g2-prod` is never visited AT ALL. Separately,
+# run_block_fit.ps1 looks up $fitRules[$rowModule] with the label concatenated,
+# gets $null, and Test-FitRules returns empty on a null ruleset -- so the row is
+# stamped `ok` and carries no ruleViolations field.
+#
+# TWO TOOLS, TWO UNRELATED MECHANISMS, THE SAME BLIND SPOT. CLAUDE.md and
+# packet_accounting.py both record the symptom correctly -- "labelled rows are
+# never rule-checked" -- and both read as if it were the design. It is not.
+#
+# WHAT IT COST, measured 2026-09-09: 43 labelled rows, 33 with a rule set on
+# their base top, 18 that breach, 11 of those stamped `ok`. Including the
+# SHIPPING PROFILE. The cleanest demonstration is one module wearing both stamps:
+#
+#   zhao_texture_island_v3_top           unlabelled  3 breaches  failed:structure
+#   zhao_texture_island_v3_top@g2-prod   labelled    3 breaches  ok
+#   zhao_texture_island_v3_top@pktC      labelled    3 breaches  ok   (worse: 15,911 ALM)
+#
+# Same module, same rules, same breaches, opposite verdicts. Nothing separates
+# them but the label -- and the labelled one breaching HARDEST reads `ok`.
+#
+# Reported as a SEPARATE section rather than folded into the counts above, so
+# the existing verdicts and exit code are unchanged and a reader can see which
+# findings are new. A labelled row inherits its base top's rules deliberately:
+# fit_targets.yml says so on the pair-pipe target -- "SAME RULES AS svc
+# DELIBERATELY... inheriting the budget it is trying to beat is the honest gate;
+# a looser one would let it pass by being merely different."
+$labFail = 0
+$labPass = 0
+$labelled = @($rows | Where-Object { $_.module -match '@' })
+if ($labelled.Count -gt 0) {
+    Write-Host ""
+    Write-Host "LABELLED ROWS (variants), checked against their BASE top's rules:" -ForegroundColor Cyan
+    foreach ($r in ($labelled | Sort-Object module)) {
+        $base = ($r.module -split '@', 2)[0]
+        if (-not $rules.ContainsKey($base)) { continue }
+        $hasNums = $false
+        foreach ($f in 'registers', 'alms', 'blockMemoryBits', 'ramBlocks') {
+            $prop = $r.PSObject.Properties[$f]
+            if ($null -ne $prop -and $null -ne $prop.Value) { $hasNums = $true; break }
+        }
+        if (-not $hasNums) { continue }
+        $st = if ($r.PSObject.Properties['status']) { $r.status } else { '?' }
+        $v = @(Test-FitRules $r $rules[$base])
+        if ($v.Count -eq 0) {
+            Write-Host ("  pass  {0}   (stamped '{1}')" -f $r.module, $st) -ForegroundColor DarkGreen
+            $labPass++
+        } else {
+            # The stamp is the story: `ok` here means the gate never ran.
+            $note = if ($st -eq 'ok') { "  <- STAMPED 'ok' BUT BREACHES" } else { "  (stamped '$st')" }
+            Write-Host ("  FAIL  {0}{1}" -f $r.module, $note) -ForegroundColor Red
+            foreach ($x in $v) { Write-Host ("          {0}" -f $x) -ForegroundColor Red }
+            $labFail++
+        }
+    }
+    Write-Host ("  labelled: {0} pass, {1} FAIL" -f $labPass, $labFail) -ForegroundColor Cyan
+    Write-Host "  These do NOT change the exit code -- the inline gate in run_block_fit.ps1" -ForegroundColor DarkGray
+    Write-Host "  is what stamps a row, and its key-mismatch fix is tracked separately." -ForegroundColor DarkGray
+}
+
 Write-Host ""
 Write-Host ("{0} pass, {1} FAIL, {2} unmeasured, {3} STALE" -f $pass, $fail, $unmeasured, $stale)
 if ($stale -gt 0) {

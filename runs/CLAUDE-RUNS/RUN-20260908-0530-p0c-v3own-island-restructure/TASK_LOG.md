@@ -3172,3 +3172,33 @@ terrain_residency_v2, texture_combine, texture_fragrob, island_top, island_v3_to
 material_combine_v1, v3own. Together with the 11 labelled rows stamped `ok` that
 would breach, the honest picture is that the structural gate fails widely and has
 been reporting far better than that.
+
+## 2026-09-09 -- fixed the checker that ISN'T running
+
+Owner-direction check: NO NEW DIRECTION (0 incoming; main 309 ahead, other lanes).
+No @g2-prod fit running or pending -- historical row. `@gate3-fresh` svc fit at
+7.8 min in the fitter, one-file snapshot, so the tree is free.
+
+`run_block_fit.ps1` is the script executing that fit, so its one-line fallback
+still waits. But `check_fit_rules.ps1` is NOT running, and fixing it is the bigger
+coverage win: it audits **40 unlabelled targets** while the ledger holds **138
+rows**.
+
+Added a SEPARATE labelled-row section rather than folding variants into the
+existing counts, so every current verdict and the exit code are unchanged and a
+reader can see which findings are new. Inheritance of the base top's rules is the
+intended semantics -- fit_targets.yml says so on the pair-pipe target: "SAME RULES
+AS svc DELIBERATELY... inheriting the budget it is trying to beat is the honest
+gate; a looser one would let it pass by being merely different."
+
+The section flags the stamp explicitly: a breaching row whose status is `ok` prints
+`<- STAMPED 'ok' BUT BREACHES`, because the stamp IS the story -- `ok` there means
+the gate never ran, not that it passed.
+
+Parses clean; running it now.
+
+**Why two fixes rather than one:** the two tools are blind for UNRELATED reasons.
+run_block_fit looks up `$fitRules[$rowModule]` with the label concatenated and gets
+`$null`; check_fit_rules iterates `$rules.Keys` and matches `module -eq $name`, so
+it never visits a labelled row at all. Fixing either alone leaves the other blind,
+which is exactly why the gap survived being written down twice.
