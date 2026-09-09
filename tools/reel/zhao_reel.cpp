@@ -7904,6 +7904,24 @@ int main(int argc, char** argv) {
       u02::g_u02_shell_gamma = std::atoi(e);
       any = true;
     }
+    // The GAS COLOUR. The one axis of the shell that has never been swept, and
+    // the one that decides whether the fog fogs or BLEACHES: a pale rose at
+    // 10% over the creature's deep magenta shadow side lifts it a long way,
+    // whatever the alpha is. "r,g,b", 0..255 each.
+    if (const char* e = std::getenv("U02_SHELL_TINT")) {
+      int c[3] = {u02::g_u02_shell_tint[0], u02::g_u02_shell_tint[1],
+                  u02::g_u02_shell_tint[2]};
+      if (std::sscanf(e, "%d,%d,%d", &c[0], &c[1], &c[2]) == 3) {
+        for (int k = 0; k < 3; ++k) {
+          if (c[k] < 0) c[k] = 0;
+          if (c[k] > 255) c[k] = 255;
+          u02::g_u02_shell_tint[k] = static_cast<uint8_t>(c[k]);
+        }
+        any = true;
+      } else {
+        std::fprintf(stderr, "U02_SHELL_TINT=%s is not r,g,b -- ignored\n", e);
+      }
+    }
     if (any)
       std::fprintf(stderr,
                    "P15 shell rung: alpha=%d reach=%d floor=%d out=%d gamma=%d\n",

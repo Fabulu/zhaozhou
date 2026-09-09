@@ -828,7 +828,25 @@ constexpr int kShellAlphaMaxPm = 560;     // the peak, at the annulus inner edge
 // the presence s7 asks for. The VALUE is chosen by eye in scene and never
 // sampled off the archive: a pale rose that reads pink on one ground reads grey
 // on another (CLAUDE.md, the dorsal-pink lesson).
+//
+// ⚠ AND THIS IS THE AXIS THAT DECIDES FOG-VERSUS-BLEACH, AND IT HAS NEVER BEEN
+// SWEPT. Look at pass15-fx-plates/A-hover-f72-P14-vs-SHIPPED-3x.png and then at
+// `hover` f240, the creature's DARK side: a pale rose at 10% over a deep
+// magenta lifts it a long way, because the tint's distance from the pigment is
+// what the blend actually multiplies. On the bright frames the shift is subtle;
+// on the shadow side it is the whole read. Every previous argument about "too
+// much fog" has been an argument about kShellAlphaMaxPm -- the AMOUNT -- and
+// the amount is only half of it. A gas the colour of the animal fogs; a gas
+// far from the animal's colour bleaches, at any alpha.
+//
+// It stays rose because that is what the v1 shell was and what D9 §7 said to go
+// and look up. But it is a knob with an env override now (U02_SHELL_TINT=r,g,b)
+// so the next person can ask the question in one render instead of concluding
+// "less fog" for a fifth time. 09-ENGINE-GOTCHAS §18: when careful tuning keeps
+// failing, the knob is probably not the thing.
 constexpr uint8_t kShellTint[3] = {255, 214, 232};
+inline uint8_t g_u02_shell_tint[3] = {kShellTint[0], kShellTint[1],
+                                      kShellTint[2]};
 constexpr int kShellOverInkPm = 260;      // the ink must survive being crossed
 // The live values the compositor reads; the constants above are the shipping
 // defaults and stay the named owner knobs. U02_SHELL_* overrides them for the
@@ -1036,7 +1054,7 @@ inline void shell_paint(uint8_t* rgb, uint32_t w, uint32_t h,
     uint8_t* px = rgb + i * 3;
     for (int k = 0; k < 3; ++k)
       px[k] = static_cast<uint8_t>(
-          (px[k] * (1000 - a) + kShellTint[k] * a) / 1000);
+          (px[k] * (1000 - a) + g_u02_shell_tint[k] * a) / 1000);
   }
 }
 

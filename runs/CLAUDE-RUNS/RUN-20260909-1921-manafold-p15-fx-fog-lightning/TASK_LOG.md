@@ -289,3 +289,69 @@ guessed a value on it.** So it ships as a THREE-VARIANT AXIS
 both backdrops" is now a thing that exists rather than a thing to hand-roll.
 
 Baseline binary for `bitident` built from the `12961f9e` worktree, BUILD_RC=0.
+
+## 21:40 — the fog ladder, and the pick that contradicted my own diagnosis
+
+`pass15-fx-plates/B-fog-ladder-hit-f0028-3x.png` + `-eyezoom-6x.png`. Six rungs,
+ONE binary (md5 ec2bd37d), `manafold-hit` f28 -- the frame where the eye sinks
+into the body -- and f100. Provenance beside them.
+
+| rung (reach/alpha/floor) | read |
+|---|---|
+| OFF | hard-edged ball, crisp cel bands, the lens a hard blade with a severed sliver |
+| LIGHT 240/320/200 | a gentle haze; the lens still fairly hard |
+| AS BUILT 380/440/340 | plainly gaseous; the lens absorbed; the body a touch pale |
+| **PICK 520/560/180** | **the most gas at the rim AND the pigment intact** |
+| THICK 520/620/450 | heaviest wash; the pink desaturates |
+| TOO FAR 900/950/850 | a milky drowned animal, pigment gone, ink softened -- the ceiling |
+
+⚠ **The pick contradicts what my own eye had concluded an hour earlier.** I had
+written "the body reads washed, the floor is too high" and the obvious next move
+was LESS FOG. The ladder says the obvious move was wrong: **depth and floor are
+two things the old band had conflated**, and pulling them apart gives exactly
+what the owner described --
+
+    annulus DEEPER (380 -> 520)   more gas where a thing clips in
+    floor   LOWER  (340 -> 180)   less veil over the body's clean middle
+
+The rung that raised BOTH is the one that kills the pigment. **"Too much fog"
+was never the diagnosis; "fog in the wrong place" was.** Shipped 520/560/180.
+
+Remaining: final confirm render on the shipped values, the shimmer-hue plate,
+`bitident` against the `12961f9e` baseline, and the findings doc.
+
+## 22:15 — the hue ladder, and the axis the shell has never had
+
+`pass15-fx-plates/D-shimmer-hue-DAY-hit-f115-4x.png`. Four rungs, ONE binary
+(md5 ec2bd37d), `manafold-hit`, the DAY backdrop.
+
+The first rung is **pass 14's own look reconstructed from this binary** -- black
+surround, shimmer off -- and it shows the complaint exactly: white lines with a
+**hard black outline** round them. Not lightning; rope with ink on it. The
+review's "the shipped halo reads BLACK" is now sitting next to its fix.
+
+* HUE0 cyan-lean (the first authored value): electric, but cyan.
+* **HUE1 true blue (SHIPPED): white core, blue shimmer, navy beyond.** The most
+  "actual lightning bolt" of the four.
+* HUE2 violet-blue: a lilac edge; harmonises with `channel`'s violet night, but
+  on the sunset it drifts toward the body's own magenta.
+
+**And one more axis added, because a frame made me look.** `wash-check.png`
+(`hover` f240, the creature's DARK side, P14 / first build / shipped): the fog
+lifts a deep magenta a long way. On bright frames the shift is subtle; in shadow
+it is the whole read. **Every argument this project has had about "too much fog"
+has been an argument about the AMOUNT** -- `kShellAlphaMaxPm` -- and the amount
+is only half of it. `kShellTint` is a pale rose, its distance from the pigment
+is what the blend multiplies, and **it has never been swept once.** A gas the
+colour of the animal fogs; a gas far from it BLEACHES, at any alpha.
+
+It stays rose (that is the v1 shell D9 §7 said to go and look up) but it is now
+a knob with an env override -- `U02_SHELL_TINT=r,g,b` -- so the next person can
+ask that question in one render instead of concluding "less fog" for a fifth
+time. 09-ENGINE-GOTCHAS §18, pre-empted rather than paid for.
+
+⚠ **The `\n`-through-a-Python-heredoc trap fired for the THIRD time** in this
+session, again splitting a C string literal across two lines. The fix that
+works is a script that writes `chr(92) + 'n'`, committed in the run's scratch as
+`fix_nl.py`. It is 09-ENGINE-GOTCHAS §21's family and it is worth knowing that
+it recurs every single time an agent edits C from a heredoc.
