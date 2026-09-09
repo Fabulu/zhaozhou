@@ -1190,6 +1190,71 @@ targets:
       max_dsp: 14
 
   # ==========================================================================
+  # GEOMETRY: three more blocks with no target, two of them already MEASURED
+  # ==========================================================================
+  # 2026-09-09. These three have no `- top:` entry, and two of them have ledger
+  # rows anyway -- fitted before targets existed, or via -ExtraSources. A block
+  # with a number but no target is worse than one with neither: the number cannot
+  # be reproduced, so it ages silently and nobody can tell when it stopped being
+  # true.
+
+  - top: zhao_geom_lod
+    sources:
+      - fpga/rtl/geometry/zhao_geom_lod.sv
+    rules:
+      # THESE ARE REGRESSION BOUNDS, NOT A VALIDATION, and the difference matters.
+      # CLAUDE.md warns that a rule written after the fit it governs reports a
+      # pass. That is about inventing a rule so the current number squeaks under
+      # and then citing the pass as evidence. This is the other thing: the block
+      # ACHIEVED these numbers and its header records how, so the bound exists to
+      # catch a future increase, and it claims nothing about the present fit.
+      #
+      # zhao_geom_lod.sv:93-98 records the whole progression, and it is the best
+      # worked example of operand narrowing in this repository:
+      #
+      #   first synthesis   1,436 ALM  28 DSP   72-bit operands
+      #   after narrowing   1,303 ALM  18 DSP   64-bit, two products shared
+      #   after SEQUENCING  1,183 ALM   6 DSP   one multiplier, 5 cycles
+      #
+      # "a 72-bit operand asks Quartus for a 72x72 multiplier when the honest need
+      # is 32x32" (:230). Narrowing alone took 28 to 18; sequencing took 18 to 6.
+      max_alms: 1183
+      max_dsp: 6
+
+  - top: zhao_geom_skin
+    sources:
+      - fpga/rtl/geometry/zhao_geom_skin.sv
+    rules:
+      # Regression bounds at the measured default, same reasoning as above.
+      #
+      # AND THIS BLOCK IS A PARAMETERISED DSP LEVER NOBODY HAS LISTED. Three rows
+      # exist and they are one knob apart:
+      #
+      #   MUL_LANES=1   1,530 ALM   3 DSP   56.11 MHz
+      #   default       2,225 ALM   9 DSP   89.65 MHz
+      #   MUL_LANES=6   2,595 ALM  18 DSP   84.61 MHz
+      #
+      # So -6 DSP is available for -33 MHz, already measured, no new work. Whether
+      # 56 MHz is survivable here is a rate question the header says was left open
+      # deliberately: the first implementation issued all eighteen 32x32 products
+      # in one clock and cost 72 DSP -- "64% of the chip for one stage" -- and was
+      # left that way pending a stated vertex rate. The bound below is the
+      # DEFAULT, so a change of default trips it rather than passing quietly.
+      max_alms: 2225
+      max_dsp: 9
+
+  - top: zhao_geom_skin_norm
+    sources:
+      - fpga/rtl/geometry/zhao_geom_skin_norm.sv
+    # NO RULES, deliberately. This block has never been fitted and states no
+    # budget of its own -- its header cites GEOM.SKIN's 9 DSP / 89.65 MHz only to
+    # argue it cannot be a widening of that block ("nothing more may be bolted
+    # onto its output"). Every number I could write here would be one I invented,
+    # which is exactly the rule-that-reports-a-pass. The first fit is exploratory;
+    # bounds go in once there is a measurement to bound a regression against, and
+    # a budget to check it makes sense against.
+
+  # ==========================================================================
   # FIELD V3, three of the 43 blocks that could not be fitted by ANYONE
   # ==========================================================================
   # 2026-09-09. `tools/budget/dsp_census.py` found that 43 of the 45 unmeasured
