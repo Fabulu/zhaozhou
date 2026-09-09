@@ -413,3 +413,31 @@ generation. D11 §1 applied to my own evidence. Writing that table caught a wron
 md5 I had just typed into it (P15D is 9fba1de4, not ec2bd37d) -- the "wrong
 number with a reassuring provenance line" failure, caught by writing the number
 down next to the thing it names.
+
+## 23:55 — the best proof of the lane, and the control error that nearly hid it
+
+**D11 §4 says KEEP the green fold and keep it SEPARATE.** That is now a hash.
+
+`manafold-hit`, 140 frames, baseline (`12961f9e`) vs the shipped binary with
+`ZHAO_U02_STRAND=0 U02_SHELL_ALPHA=0`:
+
+    baseline, shell off                sha256 f99c9722...
+    pass 15, shell off, strand off     sha256 f99c9722...
+
+**Byte for byte identical.** Every pixel this lane changes is behind one of two
+switches; the green fold is not one of them.
+
+⚠ **The first run of this check said NOT IDENTICAL** (c25fa732 vs f99c9722,
+crc 0xCF62ED54 vs 0x7CB31B31) and I nearly went looking for a bug in my own
+code. **The fault was my control**: I had zeroed the shell on the pass-15 side
+and left the BASELINE's own shell running, so I was comparing a creature with fog
+to one without and calling it a fold test. **A comparison that changes two things
+measures neither** -- the mismatched-poses lesson in CLAUDE.md, arriving through
+an environment variable instead of through a camera.
+
+It also handed the check the **known-negative** item 40 asks for, by accident:
+the same method returned DIFFERENT on the unfair comparison and IDENTICAL on the
+fair one, so the instrument demonstrably distinguishes the two states rather than
+being a hash that always agrees.
+
+`bitident` (Zixxtrixx, 71 subjects, both binaries) still running at ~subject 24.
