@@ -179,7 +179,25 @@ module zhao_texture_early_desc #(
   // unused storage words unwritten; validity/lifetime controls protect reads".
   // Initialising them would be a second write address, which is the defect that
   // kept two of perspuv's arrays in flip-flops.
-  logic [SLICEW-1:0] mem_q [NSLICE][ROWS];
+  // NO MULTIDIMENSIONAL ARRAY HERE, and that is the whole point.
+  //
+  // This was `logic [SLICEW-1:0] mem_q [NSLICE][ROWS]` and
+  // tools/quartus/check_ram_inference.py refused it in one second:
+  //
+  //   "MULTIDIMENSIONAL unpacked array [NSLICE][ROWS] -- Quartus cannot regroup
+  //    this into a memory; it muxes across the outer dimension and the whole
+  //    array becomes flip-flops. One flat array per element inside a generate,
+  //    outer index a genvar."
+  //
+  // So the header above would have been exactly wrong: not three M10Ks but 7,616
+  // bits of flip-flops, and the §D geometry argument it argues for would have
+  // been refuted by its own implementation. The declaration now lives INSIDE the
+  // per-slice generate as a flat [ROWS] array, which is the shape the checker
+  // asks for and the shape an M10K actually has.
+  //
+  // Found before the MapOnly that was queued to test the claim -- which would
+  // have reported 0 block memory bits and looked like a puzzle rather than a
+  // diagnosis.
 
   wire [NSLICE*SLICEW-1:0] wr_word_c = {
       {PADW{1'b0}},
@@ -214,15 +232,19 @@ module zhao_texture_early_desc #(
   genvar s;
   generate
     for (s = 0; s < NSLICE; s = s + 1) begin : g_slice
+      // One FLAT array per slice. No reset on this process: an M10K has no reset
+      // port, and a 2026-09-03 rebuild put 9,728 bits into flip-flops for exactly
+      // that reason.
+      logic [SLICEW-1:0] mem_q [ROWS];
       always_ff @(posedge clk) begin
         if (wr_valid_i)
-          mem_q[s][wr_slot_i] <= wr_word_c[s*SLICEW +: SLICEW];
+          mem_q[wr_slot_i] <= wr_word_c[s*SLICEW +: SLICEW];
         // THE HOLD LAW. Gated on an actual read, so the output belongs to the
         // read that fetched it and cannot be overwritten by the next address
         // merely being offered while a consumer stalls. This is D0's repair
         // applied at construction rather than after a defect.
         if (rd_valid_i)
-          rd_q[s*SLICEW +: SLICEW] <= mem_q[s][rd_slot_i];
+          rd_q[s*SLICEW +: SLICEW] <= mem_q[rd_slot_i];
       end
     end
   endgenerate
