@@ -276,6 +276,36 @@ module zhao_terrain_residency_v2 #(
   //   STAT bank: pin(PINW) modified_BD dirty_F mips_stale crc(32) seq(SEQW)
   localparam int unsigned KEYW  = 32 + 16 + 16 + 32 + GENW + 3;
   localparam int unsigned STATW = PINW + 3 + 32 + SEQW;
+  // -------------------------------------------------------------------------
+  // THE STAT BANK IS SPLIT IN TWO ARRAYS, AT THE M10K'S NATIVE 40-BIT PORT
+  // (repair for reports/RESIDENCY-V2-MISSING-BITS-20260907.md, 2026-09-09).
+  //
+  // The fitted design held only 40 of statram's 57 declared bits: Quartus
+  // 17.0 inferred `WIDTH_A=40` for a 57-bit array WITHOUT any warning, and the
+  // missing 17 bits per entry -- pin[6], bd, f, mips, crc[31:24] -- are in no
+  // RAM, no MLAB and no flop of the fitted netlist. Eight bits of the page
+  // CRC, absent, silently, on the block whose job is validating pages.
+  //
+  // The mechanism was never diagnosed (the tool emitted nothing to diagnose
+  // from), so the repair REMOVES THE SHAPE the silent split happened on: each
+  // array is now at most one M10K port wide, so Quartus never needs to split a
+  // word across blocks for either -- statram_lo is exactly the 40-bit slice it
+  // already inferred correctly, and statram_hi is its own named 17-bit
+  // inference target whose absence from the next map's RAM Summary would be a
+  // visible, named hole rather than a width nobody reads.
+  //
+  // Behaviour is BIT-IDENTICAL by construction: the two slices are written by
+  // the same enable at the same address and reassembled by concatenation.
+  // terrain_residency_v2_directed/_random hold it to the contract oracle.
+  //
+  // VERIFIED BY: the next terrain subsystem fit's map report --
+  // `min_memory_bits: 167936` in design/fit_targets.yml finally passing, and
+  // one `g_bank[*].statram_hi` altsyncram row per way in the RAM Summary.
+  // A Verilator run cannot verify inference; the gate is named here so the
+  // fit answers a question stated in advance.
+  // -------------------------------------------------------------------------
+  localparam int unsigned STAT_LO_W = 40;               // the proven inference
+  localparam int unsigned STAT_HI_W = STATW - STAT_LO_W;  // 17: pin,bd,f,mips,crc[31:24]
 
   // ONE FLAT ARRAY PER WAY, INSIDE A GENERATE. These were `[WAYS][SETS]`, and
   // that alone kept all 167,936 bits in flip-flops: Quartus says so in as many
@@ -289,8 +319,9 @@ module zhao_terrain_residency_v2 #(
   genvar gw;
   generate
     for (gw = 0; gw < int'(WAYS); gw++) begin : g_bank
-      logic [KEYW-1:0]  keyram  [SETS];
-      logic [STATW-1:0] statram [SETS];
+      logic [KEYW-1:0]      keyram     [SETS];
+      logic [STAT_LO_W-1:0] statram_lo [SETS];
+      logic [STAT_HI_W-1:0] statram_hi [SETS];
     end
   endgenerate
 
@@ -342,9 +373,12 @@ module zhao_terrain_residency_v2 #(
         // The old code read only inside that same arm, so this is a change in
         // when the registers are WRITTEN and not in what is ever observed.
         key_q[gw]  <= g_bank[gw].keyram [addr_c];
-        stat_q[gw] <= g_bank[gw].statram[addr_c];
+        stat_q[gw] <= {g_bank[gw].statram_hi[addr_c], g_bank[gw].statram_lo[addr_c]};
         if (kwe_c[gw]) g_bank[gw].keyram [wr_set_c] <= kwd_c;
-        if (swe_c[gw]) g_bank[gw].statram[wr_set_c] <= swd_c;
+        if (swe_c[gw]) begin
+          g_bank[gw].statram_lo[wr_set_c] <= swd_c[STAT_LO_W-1:0];
+          g_bank[gw].statram_hi[wr_set_c] <= swd_c[STATW-1:STAT_LO_W];
+        end
       end
     end
   endgenerate

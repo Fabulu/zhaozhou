@@ -21,7 +21,35 @@
 
 #include "verilated.h"
 
+// DUT SELECTION (2026-09-09). This suite is the oracle law for TERRAIN.BAKE,
+// and zhao_terrain_bake_v2 (the shared-multiplier / meets-in-RAM rebuild) is
+// port-identical by contract � so the SAME suite runs against either, chosen
+// at compile time. Built bare, this file is byte-for-byte the v1 test it
+// always was. Built with
+//     -DZHAO_BAKE_DUT_HEADER='"Vzhao_terrain_bake_v2.h"'
+//     -DZHAO_BAKE_DUT_CLASS=Vzhao_terrain_bake_v2
+//     -DZHAO_BAKE_SUITE_NAME='"terrain_bake_v2_directed"'
+//     -DZHAO_BAKE_RATE_COVERED_MAX=25.0 -DZHAO_BAKE_RATE_UNCOVERED_MAX=6.0
+// it is the v2 suite. The rate bounds are the DUT's DECLARED price (v1: 19
+// covered / 2 uncovered; v2: 24 / 5 � the sequenced shared multiplier), so a
+// regression past its own declaration fails loudly while the price itself is
+// visible in the MEASURED line either way.
+#ifdef ZHAO_BAKE_DUT_HEADER
+#include ZHAO_BAKE_DUT_HEADER
+using BakeDut = ZHAO_BAKE_DUT_CLASS;
+#else
 #include "Vzhao_terrain_bake.h"
+using BakeDut = Vzhao_terrain_bake;
+#endif
+#ifndef ZHAO_BAKE_SUITE_NAME
+#define ZHAO_BAKE_SUITE_NAME "terrain_bake_directed"
+#endif
+#ifndef ZHAO_BAKE_RATE_COVERED_MAX
+#define ZHAO_BAKE_RATE_COVERED_MAX 21.0
+#endif
+#ifndef ZHAO_BAKE_RATE_UNCOVERED_MAX
+#define ZHAO_BAKE_RATE_UNCOVERED_MAX 3.0
+#endif
 
 #include "bake_dev.hpp"
 #include "zhao_sim.hpp"
@@ -72,7 +100,7 @@ zref::render::TerrainPatch make_island() {
 }
 
 /** Bit-for-bit comparison of one bake against the reference. */
-void compare(Vzhao_terrain_bake& dut, const zref::render::TerrainPatch& p, const bdev::StampRec& st,
+void compare(BakeDut& dut, const zref::render::TerrainPatch& p, const bdev::StampRec& st,
              const char* what, int stall_mod = 0) {
   std::vector<zt::BreachEvent> ev;
   const zref::render::TerrainPatch ref = bdev::oracle_bake(p, st, &ev);
@@ -114,7 +142,7 @@ void compare(Vzhao_terrain_bake& dut, const zref::render::TerrainPatch& p, const
 // ---------------------------------------------------------------------------
 // 1. the reference cross-check on a real island patch
 // ---------------------------------------------------------------------------
-void test_island(Vzhao_terrain_bake& dut) {
+void test_island(BakeDut& dut) {
   const zref::render::TerrainPatch p = make_island();
   bdev::StampRec st;
   st.patch_id = 0x2C01;
@@ -160,7 +188,7 @@ void test_island(Vzhao_terrain_bake& dut) {
 // ---------------------------------------------------------------------------
 // 2. the stencil edge: d2 == r*r is OUTSIDE, constructed exactly
 // ---------------------------------------------------------------------------
-void test_stencil_edge(Vzhao_terrain_bake& dut) {
+void test_stencil_edge(BakeDut& dut) {
   zref::render::TerrainPatch p = bdev::make_patch(0, 0, kSpan);
   // A flat patch so the only thing that can move a scar word is the stencil.
   bdev::StampRec st;
@@ -240,7 +268,7 @@ void test_stencil_edge(Vzhao_terrain_bake& dut) {
 // ---------------------------------------------------------------------------
 // 3. radius <= 0, and the idle stamp
 // ---------------------------------------------------------------------------
-void test_degenerate(Vzhao_terrain_bake& dut) {
+void test_degenerate(BakeDut& dut) {
   zref::render::TerrainPatch p = make_island();
   bdev::StampRec st;
   st.cx = 32 * kM;
@@ -281,7 +309,7 @@ void test_degenerate(Vzhao_terrain_bake& dut) {
 // ---------------------------------------------------------------------------
 // 4. the §9 incremental-scaling identities, on the real block
 // ---------------------------------------------------------------------------
-void test_incremental(Vzhao_terrain_bake& dut) {
+void test_incremental(BakeDut& dut) {
   // A patch chosen so NOTHING clamps: no no_bake bit, no rail, deep keel.
   zref::render::TerrainPatch p = bdev::make_patch(0, 0, kSpan);
   p.bottom.assign(bdev::kVerts, -30000);
@@ -343,7 +371,7 @@ void test_incremental(Vzhao_terrain_bake& dut) {
 // ---------------------------------------------------------------------------
 // 5. the height16 rails and the no_bake clamp
 // ---------------------------------------------------------------------------
-void test_clamps(Vzhao_terrain_bake& dut) {
+void test_clamps(BakeDut& dut) {
   zref::render::TerrainPatch p = bdev::make_patch(0, 0, kSpan);
   p.bottom.assign(bdev::kVerts, -32768);
   p.cell_state.assign(bdev::kCellCount, zt::kSolid);
@@ -428,7 +456,7 @@ void test_clamps(Vzhao_terrain_bake& dut) {
 // ---------------------------------------------------------------------------
 // 6. the breach law's four arms, each by construction
 // ---------------------------------------------------------------------------
-void test_breach_law(Vzhao_terrain_bake& dut) {
+void test_breach_law(BakeDut& dut) {
   // A patch where NOTHING is dug (radius 0) so layer D is decided purely by
   // the pre-existing base/scar/bottom relation — the cleanest way to place a
   // corner exactly on, and exactly one LSB off, the §3.4 equality.
@@ -539,7 +567,7 @@ void test_breach_law(Vzhao_terrain_bake& dut) {
 // ---------------------------------------------------------------------------
 // 7. the pages that cannot breach
 // ---------------------------------------------------------------------------
-void test_pages(Vzhao_terrain_bake& dut) {
+void test_pages(BakeDut& dut) {
   zref::render::TerrainPatch legacy = bdev::make_patch(0, 0, kSpan);
   for (int k = 0; k < bdev::kVerts; ++k) legacy.heights[static_cast<size_t>(k)] = 500;
   bdev::StampRec st;
@@ -568,7 +596,7 @@ void test_pages(Vzhao_terrain_bake& dut) {
 // ---------------------------------------------------------------------------
 // 8. the truncating envelope divide — CONSTRUCTED to disagree with a shift
 // ---------------------------------------------------------------------------
-void test_inverted_envelope(Vzhao_terrain_bake& dut) {
+void test_inverted_envelope(BakeDut& dut) {
   // env_x1 < env_x0 makes `lattice_lerp`'s span negative, and its `/ 32` then
   // TRUNCATES TOWARD ZERO where an arithmetic shift would floor. At i = 1:
   //   span = -(64 << 16) = -4194304; (span * 1 + 16) = -4194288
@@ -608,7 +636,7 @@ void test_inverted_envelope(Vzhao_terrain_bake& dut) {
 // ---------------------------------------------------------------------------
 // 9. the §9.2 cadence budget
 // ---------------------------------------------------------------------------
-void test_budget(Vzhao_terrain_bake& dut) {
+void test_budget(BakeDut& dut) {
   bdev::reset_dut(dut);
   zref::render::TerrainPatch p = bdev::make_patch(0, 0, kSpan);
   bdev::StampRec st;
@@ -667,7 +695,7 @@ void test_budget(Vzhao_terrain_bake& dut) {
 // ---------------------------------------------------------------------------
 // 10. the measured rate — reported, not derived
 // ---------------------------------------------------------------------------
-void test_throughput(Vzhao_terrain_bake& dut) {
+void test_throughput(BakeDut& dut) {
   zref::render::TerrainPatch p = make_island();
   bdev::StampRec st;
   st.cx = 32 * kM;
@@ -691,17 +719,19 @@ void test_throughput(Vzhao_terrain_bake& dut) {
       per_uncovered, per_covered);
   std::printf("[terrain_bake] MEASURED breach rate: %.2f clocks/cell\n",
               static_cast<double>(dear.cycles_total - dear.cycles_dig) / bdev::kCellCount);
-  check(per_covered < 21.0, "the covered rate is the 17-step divide plus its two handshake cycles",
-        1, per_covered < 21.0 ? 1 : 0);
-  check(per_uncovered < 3.0, "an uncovered vertex costs the handshake only", 1,
-        per_uncovered < 3.0 ? 1 : 0);
+  check(per_covered < ZHAO_BAKE_RATE_COVERED_MAX,
+        "the covered rate is within the DUT's declared price", 1,
+        per_covered < ZHAO_BAKE_RATE_COVERED_MAX ? 1 : 0);
+  check(per_uncovered < ZHAO_BAKE_RATE_UNCOVERED_MAX,
+        "the uncovered rate is within the DUT's declared price", 1,
+        per_uncovered < ZHAO_BAKE_RATE_UNCOVERED_MAX ? 1 : 0);
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
-  Vzhao_terrain_bake dut;
+  BakeDut dut;
   bdev::reset_dut(dut);
 
   check(dut.idle_o != 0, "the block is idle out of reset", 1, dut.idle_o);
@@ -730,6 +760,6 @@ int main(int argc, char** argv) {
   check(g_stat_rails > 0, "the directed suite actually reached a height16 rail", 1,
         g_stat_rails > 0 ? 1 : 0);
 
-  const int rc = zhao::report_and_exit("terrain_bake_directed");
+  const int rc = zhao::report_and_exit(ZHAO_BAKE_SUITE_NAME);
   zhao::exit_hard(rc);
 }

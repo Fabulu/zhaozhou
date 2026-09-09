@@ -18,7 +18,10 @@
 #include <cstdio>
 #include <vector>
 
-#include "Vzhao_terrain_bake.h"
+// The DUT type is a TEMPLATE PARAMETER (2026-09-09): zhao_terrain_bake and
+// zhao_terrain_bake_v2 are port-identical by contract, and this driver is the
+// single place that knows how to run either. The including test provides its
+// own verilated model header; nothing here names a concrete class.
 
 #include "zhao_sim.hpp"
 #include "zref/zref_render.hpp"
@@ -81,7 +84,8 @@ struct BakeOut {
   uint32_t nobake_clamps = 0;
 };
 
-inline void reset_dut(Vzhao_terrain_bake& d) {
+template <class DUT>
+inline void reset_dut(DUT& d) {
   d.rst_n = 0;
   d.frame_start_i = 0;
   d.cmd_valid_i = 0;
@@ -117,7 +121,8 @@ inline bool nobake_shadow(const zref::render::TerrainPatch& p, int i, int j) {
  * handshake is exercised under backpressure; 0 runs flat out (which is what the
  * throughput measurement uses).
  */
-inline BakeOut run_bake(Vzhao_terrain_bake& d, const zref::render::TerrainPatch& p,
+template <class DUT>
+inline BakeOut run_bake(DUT& d, const zref::render::TerrainPatch& p,
                         const StampRec& st, int stall_mod = 0, bool open_window = true) {
   BakeOut o;
   o.scar.assign(kVerts, 0);
