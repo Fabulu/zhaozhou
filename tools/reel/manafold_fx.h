@@ -207,8 +207,30 @@ constexpr uint8_t kManaStormHi[3] = {26, 44, 112};
 // stack a little without whitening, and it is BLUE-dominant rather than cyan:
 // the creature's own mana family is aqua, and the lightning must not read as
 // more of the same fold. Authored by eye on the rung plate, both backdrops.
-constexpr uint8_t kManaShimmerMid[3] = {36, 116, 235};
-constexpr uint8_t kManaShimmerHi[3] = {150, 205, 255};
+//
+// ⚠ AND IT IS A THREE-VARIANT AXIS, NOT ONE COLOUR, BECAUSE THE PLATE SAID SO.
+// The first authored value ({36,116,235}) rendered CYAN, not blue. The reason
+// is arithmetic and it is the same one 08-LIGHTING gives for the whole
+// backdrop problem: additive over the creature's pink body lifts R first and
+// clips it, and a green of 116 lifts G before B can dominate, so the mid-tones
+// land on cyan however blue the constant looks in a text editor. Variant 0 is
+// that first value, kept as the control; 1 cuts the green hard; 2 walks it
+// toward violet, which is where `channel`'s night sky already lives.
+// Direction 11 is an EXPERIMENT on colour ("blue shimmer"), and the owner
+// packet asks for three variants on both backdrops, so the AXIS ships and he
+// picks the point. ZHAO_U02_SHIMMER_HUE selects; the default is the by-eye
+// pick from `pass15-fx-plates/D-shimmer-hue-*`.
+constexpr uint8_t kManaShimmerMid[3][3] = {
+    {36, 116, 235},   // 0 CYAN-LEAN -- the first authored value, the control
+    {22, 74, 245},    // 1 TRUE BLUE -- green cut so B leads at the mid-tones
+    {60, 52, 240},    // 2 VIOLET-BLUE -- toward channel's own night
+};
+constexpr uint8_t kManaShimmerHi[3][3] = {
+    {150, 205, 255},
+    {120, 176, 255},
+    {150, 150, 255},
+};
+constexpr int kShimmerHue = 1;   // the by-eye pick; 0 and 2 are the other rungs
 // The bolt's own OPAQUE heart, for the lightning MOTES (D11: "we want the
 // other particles folded into shapes"). LO == MID, the kRampAquaCore idiom and
 // for the pass-8 reason: a ramp that starts at black gives an opaque disc a
@@ -454,14 +476,31 @@ constexpr int32_t kFoldEdgeStampMm = 14;   // 22 * (2/3), one core again
 // changed DELIBERATELY, by name, on the owner's own instruction, and the
 // identity gate is re-run so the change is declared rather than discovered.
 constexpr bool kFoldStrandOn = true;         // D11: the lightning IS the figure
-constexpr int32_t kFoldStrandCoreRPx = 3;    // the white hot core
+// PASS 15, PICKED OFF THE PLATE (pass15-fx-plates/D-navy-ladder-hit-f115-4x.png,
+// six rungs, one binary, the DAY backdrop where the fault was): 3 -> 2. At 3
+// the figure is a white blob on the sunset and the shimmer is invisible under
+// it; at 2 the white becomes separable FILAMENTS and the blue appears beside
+// them. This is the overlap lever the strand's own comment names -- the white
+// was never gain-driven, it was area-driven -- applied to the one axis nobody
+// had swept.
+constexpr int32_t kFoldStrandCoreRPx = 2;    // the white hot core, a filament
 constexpr int kFoldStrandCoreGainPm = 1000;
 // PASS 15: 12 -> 9. D11's composite is THREE layers, and the navy is now the
 // BACKING for a blue shimmer rather than the only thing wrapping the white. A
 // 12 px opaque-soft disc every few millimetres along an 18-station figure was
 // filling the pocket with bruise; the shimmer needs room between the core and
 // the backing's rim, which is where it lives.
-constexpr int32_t kFoldStrandDarkRPx = 9;    // the navy BACKING, now thin
+// PASS 15: 9 -> 14, PICKED OFF THE SAME PLATE, and it is the rung that turned
+// the day backdrop around. A shimmer is light, and light needs something dark
+// to be bright against: at navy 9 the sunset is still the field the blue is
+// competing with and the blue loses (08-LIGHTING, "measure what an additive
+// effect is drawn AGAINST"). At 14 the figure sits on a visibly darkened
+// ground and the same shimmer reads on BOTH backdrops -- which is the
+// pass-14 review's guess that a better surround collapses the per-backdrop
+// split, confirmed on pixels rather than assumed.
+// ⚠ The deeper rung (dark_gain 600) was NOT better: it made the white pop
+// harder and bought no blue. Depth was the wrong axis; WIDTH was the right one.
+constexpr int32_t kFoldStrandDarkRPx = 14;   // the navy BACKING, wide not deep
 // ⚠ THIS KNOB IS NO LONGER BACKWARDS, AND THE PARAGRAPH THAT SAID IT WAS IS
 // DELETED ON PURPOSE. It used to read "LOWER IS DARKER", which was true only
 // because the ramp was near-black and the gain was scaling it toward nothing.
@@ -2040,6 +2079,7 @@ inline int g_u02_shimmer_gain = -1;
 inline int g_u02_shimmer_flicker = -1;
 inline int g_u02_strand_motes = -1;
 inline int g_u02_aqua_bal = 0;      // 0 = the shipped aqua; 1 = the B>=G rung
+inline int g_u02_shimmer_hue = -1;  // -1 = kShimmerHue; 0/1/2 select a variant
 inline bool u02_strand_on() {
   return g_u02_strand_on < 0 ? kFoldStrandOn : g_u02_strand_on != 0;
 }
@@ -2074,6 +2114,13 @@ inline int u02_shimmer_gain() {
 }
 inline int u02_shimmer_flicker() {
   return g_u02_shimmer_flicker < 0 ? kFoldShimmerFlickerPm : g_u02_shimmer_flicker;
+}
+/** Which of the three authored shimmer hues the ramp is built from. Clamped
+ *  rather than asserted: an out-of-range env should give the owner the default,
+ *  not a read past the end of an array. */
+inline int u02_shimmer_hue() {
+  const int h = g_u02_shimmer_hue < 0 ? kShimmerHue : g_u02_shimmer_hue;
+  return h < 0 ? 0 : (h > 2 ? 2 : h);
 }
 /** The mote garnish. The lightning read carries D11's larger population; the
  *  green/aqua fold keeps the count D9 §3 cut it to. One function so the two
@@ -2855,8 +2902,9 @@ inline void mana_build_ramps(GlowFrame ramps[kRampCount], uint32_t frame) {
   // D11: THE BLUE SHIMMER. Additive, so it starts at black like every other
   // additive family here -- the exterior of a corona sprite must be the
   // additive identity or every blob wears a hard rim (09-ENGINE-GOTCHAS SS11).
-  glow_build_ramp(ramps[kRampShimmer], kBlack, kManaShimmerMid,
-                  kManaShimmerHi, 1000);
+  const int shim_hue = u02_shimmer_hue();
+  glow_build_ramp(ramps[kRampShimmer], kBlack, kManaShimmerMid[shim_hue],
+                  kManaShimmerHi[shim_hue], 1000);
   // D11: the lightning mote's OPAQUE heart. LO == MID, the kRampAquaCore
   // idiom, for the pass-8 reason -- an opaque disc is mostly its ramp's lower
   // half, and a ramp from black gives a hot mote a dark middle.

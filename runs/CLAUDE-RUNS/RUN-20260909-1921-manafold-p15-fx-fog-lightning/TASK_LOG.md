@@ -222,3 +222,70 @@ and it is also the eye-clipping clip. Three questions, one 35-second render.
 clip -- a dusty mauve where P14 is hot pink. `kShellCoreFloorPm` (340) is the
 knob and my own eye says it is too high. Into the ladder, with the owner's pick
 above mine.
+
+## 20:50 — the perSeg ladder, and a hypothesis it killed
+
+`diag/ladder-white/rungs-f0363.png`, six rungs, ONE binary (md5 690a8c91,
+provenance file beside the plate), `channel` f363/f250, shipping env.
+
+| rung | what it draws |
+|---|---|
+| STRAND OFF (the control) | a cloud of aqua blobs, NO shape -- the owner's complaint, reproduced from my own binary |
+| PERSEG6 (as built) | a continuous white spiral, blue shimmer hugging it, navy outside that |
+| PERSEG3 | a readable BEADED filament; more jagged, less blown |
+| PERSEG1 | **the figure is gone** -- unconnected dots |
+| PERSEG1 CORE2 | dots |
+| PERSEG1 CORE2 FEWMOTES | dots |
+
+⚠ **I was wrong, and the ladder is the only reason I know.** I had reasoned from
+pass 14's own comment (sub-segments ~3 mm, i.e. 1-2 px) that perSeg=6 put six
+stamps inside one pixel -- pure additive overlap, no connectedness -- and was
+one edit from cutting it to 1. **perSeg IS the connectedness knob and cutting
+it would have thrown the feature away.** A comment is not evidence
+(09-ENGINE-GOTCHAS §8), and this is the second time this pass that reading has
+disagreed with rendering.
+
+**Native check (item 9), 2x not 5x:** the night reads, the DAY does not -- the
+blue washes out on the pale sunset and the figure is a white loop. Exactly
+08-LIGHTING's backdrop law. So the next axis is the NAVY BACKING: give the
+shimmer something dark to be bright against on the day too.
+
+Running now, both in parallel (one build, one renderer -- the load rule):
+* `ladder-navy` on **`manafold-hit`** (140 frames, DAY backdrop, carries the
+  figure AND the eye clip): core radius x navy depth x navy width x shimmer
+  gain, six rungs with a deliberately-too-far one.
+* the **baseline binary for `bitident.py`**, built from a `git worktree` at
+  zhaozhou `12961f9e` -- the commit before this lane touched anything. The
+  first `--clean` deleted my original baseline exe, which is a small lesson of
+  its own: `--clean` empties `$BIN`, so a binary you want to keep goes in a
+  different `--output` directory, not a different filename.
+
+## 21:10 — the navy ladder, the pick, and the axis it exposed
+
+`diag/ladder-navy/`, six rungs, ONE binary (md5 ce389929), `manafold-hit`
+f15/f115, DAY backdrop, shipping env. Plate:
+`pass15-fx-plates/D-navy-ladder-hit-f115-4x.png`.
+
+| rung | read |
+|---|---|
+| core3 / navy9 (as built) | a white blob; the shimmer is buried under it |
+| **core2** | the white separates into FILAMENTS; blue appears beside them |
+| **core2 / navy14** | **THE PICK.** The figure sits on a visibly darkened ground and the blue reads -- on BOTH backdrops |
+| navy14 / gain600 (deeper) | NOT better: whiter, no more blue. Depth was the wrong axis, WIDTH was the right one |
+| shimmer gain 900 | nearly identical to 620 -- a clamped additive sum, gain is a no-op, for the third recorded time on this creature |
+| TOO FAR (core1 navy22 shim r10 g1300) | a solid white cloud. The ceiling, demonstrated (item 4) |
+
+**Picked and shipped:** `kFoldStrandCoreRPx` 3 -> **2**,
+`kFoldStrandDarkRPx` 9 -> **14**, `kFoldStrandDarkGainPm` stays **1000**,
+`kFoldStrandPerSeg` stays **6**.
+
+**And the plate changed my mind about a colour.** The shimmer renders CYAN, not
+blue: additive over the pink body lifts R to clipping, and a green of 116 lifts
+G before B can lead, so the mid-tones land on cyan however blue the constant
+looks in an editor. **Hue is the one axis pass 14 never swept and I had just
+guessed a value on it.** So it ships as a THREE-VARIANT AXIS
+(`ZHAO_U02_SHIMMER_HUE`: 0 cyan-lean control, 1 true blue, 2 violet-blue) with
+1 as the by-eye default -- the owner packet's "three blue-shimmer variants x
+both backdrops" is now a thing that exists rather than a thing to hand-roll.
+
+Baseline binary for `bitident` built from the `12961f9e` worktree, BUILD_RC=0.

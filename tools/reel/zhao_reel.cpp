@@ -7765,6 +7765,11 @@ int main(int argc, char** argv) {
     u02::g_u02_shimmer_gain = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_SHIMMER_FLICK"))
     u02::g_u02_shimmer_flicker = std::atoi(e);
+  // The COLOUR axis. D11 says "blue shimmer" and pass 14's whole lesson is that
+  // the ladder swept everything except hue, so hue is a rung now: 0 cyan-lean
+  // (the control), 1 true blue, 2 violet-blue.
+  if (const char* e = std::getenv("ZHAO_U02_SHIMMER_HUE"))
+    u02::g_u02_shimmer_hue = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_MOTES"))
     u02::g_u02_strand_motes = std::atoi(e);
   // The green/aqua fold's one rebalance rung (D11 s4: "experiment some and make
