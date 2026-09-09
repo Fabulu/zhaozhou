@@ -2009,6 +2009,32 @@ int main(int argc, char** argv) {
     FillModel mem;
     const int kStallUntil = 4000;
 
+    // THE LIVE-OWNER PEAK UNDER NORMAL TRAFFIC, sampled BEFORE this phase
+    // deliberately fills the ring.
+    //
+    // `cnt_live_peak_o` is a running maximum that only resets with the block,
+    // so its value HERE is the peak over every phase that has run so far --
+    // ordinary CLUT, bilinear, aux and mosaic work with the sink open. Read
+    // after this phase it is 64 by construction, because the phase shuts the
+    // consumer until cycle 4,000 specifically to prove the credit ring fills
+    // and refuses.
+    //
+    // That distinction is why the number was missing. The test already read
+    // this port and already asserted it reaches 64 -- but only at the end,
+    // where 64 is what the stress was built to produce. Nobody had looked at
+    // the value the port carries on the way in.
+    //
+    // `OWNERS = 64` comes from a specification sentence ("the baseline owner
+    // capacity is 64") and `design/budgets/workloads.yml` has no owner entry at
+    // all, so this is the only OBSERVED demand figure that exists for the
+    // parameter which sizes zhao_texture_v3own -- 2,707 ALM, 81% of the
+    // island's redline overage, every term of it scaling with OWNERS.
+    //
+    // It is an observation from one test's traffic, NOT a product demand, and
+    // it is printed rather than asserted for exactly that reason: a bound here
+    // would freeze one workload's incidental peak into a gate.
+    const uint32_t peak_before_stress = d.cnt_live_peak_o;
+
     for (int cyc = 0; cyc < 400000; ++cyc) {
       const bool sink_open = (cyc >= kStallUntil);
       d.out_ready_i = sink_open ? 1 : 0;
@@ -2074,6 +2100,10 @@ int main(int argc, char** argv) {
         "  credit phase: submitted %d, retired %d, accepted while the sink was "
         "SHUT %u, live peak %u of 64\n",
         p3_submitted, p3_retired, accepted_while_stalled, d.cnt_live_peak_o);
+    std::printf(
+        "    live-owner peak BEFORE this stress phase: %u of 64  <- the only "
+        "OBSERVED demand figure that exists for OWNERS\n",
+        peak_before_stress);
 
     check(accepted_while_stalled == 64,
           "with the sink held SHUT, the island admitted exactly 64 fragments "

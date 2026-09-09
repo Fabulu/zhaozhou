@@ -87,3 +87,67 @@ The cheapest next step on the island's ALM problem is not RTL. It is **measuring
 `ev_live_peak_o` under a representative scene**, which turns the fourth lever
 from "reconsider whether 64 is right" into a number — and if the answer is near
 64, closes the lever honestly instead of leaving it open as a hope.
+
+---
+
+# MEASURED, same day: 32 of 64 -- and it CLOSES the lever rather than opening it
+
+The section above said the actionable step was to sample `ev_live_peak_o` under
+real traffic and that *"if it comes back near 64, close the lever honestly
+instead of leaving it open as a hope."*
+
+It was already exposed as the island port `cnt_live_peak_o`, and
+`island_composed_directed` was already reading it -- but only at the END of the
+credit phase, where it asserts `== 64`. That phase shuts the consumer until
+cycle 4,000 precisely to prove the ring fills, so 64 there is what the stress was
+built to produce. **Nobody had looked at the value the port carries on the way
+in**, and the port is a running maximum, so that value is the peak over every
+ordinary phase before it.
+
+One sample point later:
+
+| workload | live-owner peak |
+|---|---|
+| `island_v3_fault_directed`, zero-work wrap traffic | 10 / 64 |
+| **`island_composed_directed`, all phases before the stress** | **32 / 64** |
+| production profile (`MIGRATION_SHADOWS=0`) | **32 / 64** |
+| the oracle island | **31 / 64** |
+| the stress phase, sink deliberately shut | 64 / 64 (by construction) |
+
+## What 32 does to the lever
+
+**It closes it, or very nearly.** Ordinary composed traffic -- CLUT, bilinear,
+aux and mosaic work with the sink open -- already peaks at **half the ring**.
+Halving `OWNERS` to 32 would leave this very workload with **zero headroom**, and
+any burstier scene, deeper miss latency or slower consumer would stall on
+admission. A ring at 32 is not a smaller version of this design; it is a design
+that refuses fragments the current one accepts.
+
+So the fourth lever is not the answer either, and now for a measured reason
+rather than a suspected one. **`OWNERS = 64` is roughly 2x the observed peak of
+the most representative workload available**, which is an ordinary and defensible
+margin for a credit ring -- not the unjustified capability cap the absence of a
+workload entry made it look like.
+
+## What that leaves for the island's 3,336-ALM overage
+
+Every lever this investigation opened is now closed or bounded:
+
+| lever | verdict |
+|---|---|
+| memory-back the per-owner arrays | **impossible** -- read AND written in full every clock; an M10K has two write ports, not 64 |
+| narrow the state via the monotone chains | ~320 bits, on the order of 160 ALM -- **6%** |
+| the queued ROM packets (7.2-7.4) | aimed at 618 ALM of this island; **cannot close 3,336** |
+| reduce `OWNERS` | **32 of 64 already used** by ordinary traffic |
+| swap `rcp24_svc` for `v3` | ALM and DSP yes, but 869.8 ALM is 8% of the island |
+
+**The island does not have a 3,336-ALM lever in it.** That is the honest
+conclusion of the day's texture work, and it is a result rather than a failure:
+four candidate remedies were each priced and each found insufficient, three of
+them by measurement. Whatever closes this redline is either a larger
+architectural change than any packet in the brief describes, or a decision to
+move the redline -- and the second is explicitly the owner's under 0.2.
+
+The measurement is printed, never asserted. A bound at 32 would freeze one
+workload's incidental peak into a gate, which is the mistake this whole document
+is about.
