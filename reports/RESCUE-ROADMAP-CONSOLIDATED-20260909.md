@@ -79,9 +79,52 @@ DSP that do not exist.
 |---|---:|---|---|
 | **projector row time-multiplex** | **~21** | `dsp.md:141`, lever 1 of 4 | **never cashed.** Prerequisite (the composed frame budget) satisfied TODAY. Objection is **Fmax**, not throughput. **Architect running.** |
 | matrix operand → **18** bits | −18 / −22 | `PROJECT-CORE-OPERAND-WIDTH`, core header | needs a **53° FOV floor** ruling that has never been put to the owner |
-| `geom_cull` → ~2 lanes | ~−9 | my derivation from 333,333 ruled evaluations × ~6 products | unfitted; the derivation is mine, not the repo's |
+| `geom_cull` → **2 lanes** | **−9** | derived below from the ruled 333,333 evaluations | **derivation now shown**; unfitted |
 | `terrain_bake` v2 | −11 to −14 | today's build | **structural until fit gate T1** |
 | ~~`FILT_LANES=1` on the TMU~~ | ~~−3~~ | `TEXTURE.TMU.md:524` | **STRUCK — see the correction below.** The block is not in the machine |
+
+### `geom_cull`'s lane count, derived rather than guessed
+
+I put "~−9, my derivation" in the table and then did the derivation properly.
+**It holds, and the reserve is what decides it.**
+
+Products per evaluation, counted from the RTL rather than assumed:
+
+* `zhao_geom_cull.sv:369-370` — the plane dot is **three** `mul_pc` calls
+  (`pl_a·ev_cx + pl_b·ev_cy + pl_c·ev_cz`), and the `pl_d` term is a shift, not
+  a product.
+* `:373` — `mul_slack(ev_r, len_ceil[...])`, **one** more.
+* `:351` — `sq_prod` is the **extraction** path, not the evaluation path: its
+  own header says *"one square per cycle, then the recurrence"* and it operates
+  on the plane coefficients as setup. **It is already sequenced**, so it is not
+  a private engine and must not be counted against the evaluation rate.
+
+So **four products per evaluation**, not the six I guessed.
+
+Against the ruled 333,333 evaluations/frame (`workloads.yml`, `confidence:
+ruled`, from the docket's "one evaluation per five clocks"):
+
+    total products/frame                        1,333,332
+
+    vs the raw frame,      1,666,666 clocks  ->   80.0%   on ONE lane
+    vs the 20% reserve,    1,333,332 clocks  ->  100.0000% on ONE lane
+    2 lanes                                  ->   50.0%
+    3 lanes                                  ->   33.3%
+
+**One lane lands on exactly 100.0000% of the reserved budget** — 1,333,332
+products against 1,333,332 clocks. Not approximately: exactly. That is not a
+feasible design point, it is the definition of no slack, and any control
+overhead at all puts it over. The `reserve: 0.20` in the block's own workload row
+is what makes the difference between "one lane at 80%, comfortable" and "one lane
+with zero margin".
+
+**So two lanes: 5 sites × 3 DSP = 15 today, 2 × 3 = 6, saving 9.** The −9 in the
+table was right, and it now has arithmetic under it instead of a guess.
+
+Worth keeping for whoever builds it: the exactness is a coincidence of
+333,333 × 4 against 1,666,666 × 0.8, and a coincidence is a bad thing to design
+against. If the evaluation rate is ever re-ruled, redo this — the answer flips
+between one and two lanes on a few percent.
 
 ### Correction, same day: `FILT_LANES=1` is not money
 
