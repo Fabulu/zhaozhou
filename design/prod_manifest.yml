@@ -358,7 +358,21 @@ excluded:
   # It REPLACES perspuv_svc if FIT GATE 3 accepts it, so counting it now would
   # double against a block that is already in `top:`. It moves in, and svc moves
   # out, together or not at all.
-  - zhao_raster_perspuv_pairpipe: unused  D5 paired PERSPUV candidate; swaps with perspuv_svc only on FIT GATE 3
+  # THE SWAP HAPPENED, 2026-09-09. Both island tops now instantiate the
+  # pair-pipe, so it is INSIDE (reachable from a counted top) and must not
+  # also be declared absent here -- and perspuv_svc, now unreachable, must be.
+  # Doing one edit without the other leaves the manifest self-contradictory,
+  # which is why this is an atomic pair.
+  #
+  # FIT GATE 3, both leaf halves at the same source, same seed, same tool:
+  #   ALM       svc 1,886 -> pairpipe   794   -1,092 (-58%)
+  #   registers svc 3,216 -> pairpipe   820   -2,396 (-74%)
+  #   Fmax      svc 105.19 -> pairpipe 119.25  +14.06
+  #   DSP       unchanged at 6;  M10K 1 -> 2
+  # Equivalence in composition checked before the swap landed: all five
+  # composed suites at their exact baseline (119/126/132/31/25) and GATE 3
+  # paired 392 records byte-identical in rgb, alpha, tag, refused and ORDER.
+  - zhao_raster_perspuv_svc: superseded  by zhao_raster_perspuv_pairpipe on FIT GATE 3 (-1,092 ALM, -2,396 registers, +14 MHz, same DSP)
 
   # Simulation-only wrapper exposing zhao_texture_ident_pkg's pack/unpack
   # functions to the C++ harness. Never in the machine.

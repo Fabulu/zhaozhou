@@ -3336,3 +3336,178 @@ writer. The commit-message quoting trap in a new costume; the fix is the same on
 CLAUDE.md already gives, which is to stop nesting them.
 
 Report: `reports/GATE3-COMPLETE-THE-PAIRPIPE-WINS-20260909.md`.
+
+## 2026-09-09 -- performing the pair-pipe swap, validating in SIMULATION first
+
+Terrain stays blocked: the terrain brief's own Step 0 requires texture closure and
+texture fails 4 of 5 criteria. Not starting it.
+
+But 7.1 says "complete the existing remedy", and one authorized step needs no fit:
+do the swap and check equivalence in SIMULATION. If the composed suites drift, the
+swap is dead and the island fit is never needed -- that SAVES a fit rather than
+spending one.
+
+**BASELINE FIRST, before touching anything** (ran the prebuilt binaries directly,
+avoiding both ctest contention and the cmake regeneration race; cleared one
+CTestCheckpoint first per the debris rule):
+
+    island_composed_directed            rc=0  119 checks passed
+    island_v3_prod_composed_directed    rc=0  126 checks passed
+    island_v3_composed_directed         rc=0  132 checks passed
+    island_v3_fault_directed            rc=0   31 checks passed
+    perspuv_pairpipe_directed           rc=0   25 checks passed
+
+Exactly the known-good numbers. Without this a post-swap failure would be
+uninterpretable.
+
+**The swap: TWO LINES.** `zhao_raster_perspuv_svc` -> `zhao_raster_perspuv_pairpipe`
+at zhao_texture_island_v3_top.sv:974 and zhao_texture_island_top.sv:788. Named
+port connections, ports a strict superset, parameters identical, so nothing else
+moves. `zero_products_o` is left unconnected -- legal with named connections and
+minimal for a simulation check; production should wire it, and the recipe says so.
+
+**Then the source lists**, which is the MODMISSING trap CLAUDE.md documents: a
+test whose SOURCES does not name the new file fails with the module missing while
+the file sits right there. Added `zhao_raster_perspuv_pairpipe.sv` to the four
+island test lists (975, 2205, 2259, 2479). ADDED rather than replaced -- svc stays
+because it is harmless and something else in that closure may still name it.
+
+Reconfiguring through `cmake --preset` (never a second `cmake --build`, per the
+stale-graph rule) with zhao-env sourced from PowerShell, because the preset is
+gated on the Windows host and resolves wrong from Git Bash.
+
+**Where I am:** the island FIT remains the owner's. This step only establishes
+whether the swap is equivalent in composition -- and gate3_paired's byte-identical
+records are the claim to check, not assume.
+
+## 2026-09-09 -- the swap REFUTED MY OWN RECIPE at step 1
+
+I published "the swap is a MODULE-NAME CHANGE" and "ports are a strict SUPERSET of
+svc (18 shared + zero_products_o)". **The superset claim is true of port NAMES and
+false of port WIDTHS.** My comparison script extracted names and discarded widths,
+so it silently answered "are the names the same" while I reported "are the ports
+the same" -- a measurement answering a slightly different question than the one I
+asked of it.
+
+Three walls, in the order the toolchain hit them:
+
+1. **`occupancy_o` is 5 bits on the pair-pipe, 4 on svc.** WIDTHEXPAND. The extra
+   bit is CORRECT, not a defect: `owned_q` counts everything accepted and not yet
+   emitted -- pipeline stages, terminal FIFO, the item in the output -- so it can
+   exceed NTOK=16. Widened `pu_occ` to [4:0] in both tops. Safe: pu_occ is
+   declared, driven and READ NOWHERE in either island.
+2. **`zero_products_o` cannot be left unconnected** -- Verilator raises PINMISSING
+   as an error, so the one genuinely new port must be wired even to SIMULATE.
+   Landed on a local `pu_zero_products`; production should carry it to a debug
+   counter port, which this recipe's own step 3 already said.
+3. **Four test source lists needed the new file** (tests/CMakeLists.txt 975, 2205,
+   2259, 2479) or the island tests fail MODMISSING with the file sitting in the
+   tree.
+
+So the real change is **eight lines across four files**, not two. Still small,
+still reversible, still a drop-in in the sense that matters -- no logic, protocol
+or connection semantics changed -- but the recipe as published would have failed
+on its first attempt and sent the next person into all three walls.
+
+The port-width table I should have produced first:
+
+    shared ports: 18      WIDTH MISMATCHES: 1
+       occupancy_o     svc [3:0]     pairpipe [4:0]
+    only in pairpipe: ['zero_products_o']
+
+**The lesson is not "compare widths too."** It is that a comparison is only as good
+as the FIELD IT ACTUALLY READ, and mine reported a stronger claim than it tested.
+
+`cmake --preset windows-native` RC=0 after all three fixes. Building the five
+targets now, reading cmake's OWN exit code. Baseline to beat: 119 / 126 / 132 / 31
+/ 25, all rc=0, captured BEFORE any edit. Nothing committed yet -- an unvalidated
+RTL swap should not land, and if gate3_paired drifts the swap is dead and no island
+fit is needed at all.
+
+## 2026-09-09 -- THE SWAP IS EQUIVALENT IN COMPOSITION. Six for six.
+
+BUILD_RC=0 (cmake's own code). Binaries verified NEWER than the RTL edit before
+running -- island_v3_top.sv 14:18:50, all five .exe 14:24:16-32, FRESH -- because
+"a measurement that did not move after a change that must have moved it" is the
+stale-binary tell and I was about to report exactly such a measurement.
+
+    suite                              baseline   post-swap
+    island_composed_directed           119 rc=0   119 rc=0
+    island_v3_prod_composed_directed   126 rc=0   126 rc=0
+    island_v3_composed_directed        132 rc=0   132 rc=0
+    island_v3_fault_directed            31 rc=0    31 rc=0
+    perspuv_pairpipe_directed           25 rc=0    25 rc=0
+
+**And the falsifier I named, which was NOT among those five:** `island_v3_paired`
+runs tools/texture/gate3_paired.py, which executes both binaries itself. RC=0:
+
+    GATE 3: compared 392 retired records (oracle 392, v3 392)
+    GATE 3 PASSES: the V3 composition retires byte-identical rgb, alpha, tag and
+    refused, in the same ORDER, as the unmodified oracle.
+
+I had explicitly written that gate3_paired is "the equivalence claim to check
+rather than assume", then run five suites that did not include it. Checking my own
+falsifier list caught that.
+
+**The manifest edit is REQUIRED, not optional.** `inside` is computed from the
+real instantiation graph, not listed -- so after the swap the pair-pipe is
+reachable while declared `excluded: unused`, and perspuv_svc is unreachable while
+declared nowhere. Either edit alone leaves the manifest self-contradictory; the
+census would have billed svc's 1,886 ALM for an island that now contains 794.
+Done as one change: pairpipe out of excluded, perspuv_svc in as `superseded`.
+
+Running check_prod_manifest to verify, reading its OWN exit code this time.
+
+## 2026-09-09 -- rewrote the nudge to carry POINTERS, not numbers
+
+Fourth rewrite today (job 8172403b, retiring 4fcc286c). The first three were each
+forced by a real correction; the fourth fixes the CAUSE rather than the instance.
+
+It had gone wrong twice over: it said run_block_fit.ps1's fallback was "STILL
+PENDING" when it is applied, and it repeated "the swap is a MODULE-NAME CHANGE"
+after I had proven that false at three separate walls.
+
+**The pattern, now named in the prompt itself:** inlined measurements go stale
+within the hour, and a nudge stating a wrong number is worse than one stating
+none -- it manufactures the comfortable reading in advance, which is the failure
+this repository documents more than any other. The new version carries report
+NAMES and shapes ("registers are the largest breach and are systemic"), not
+digits. Reports are version controlled; a cron prompt is not.
+
+It also now records the pipeline-exit-code trap as FOUR costumes rather than
+three, adding today's three-heredoc compound command that died on quoting and ran
+nothing while looking like it had succeeded.
+
+And it points at the CORRECTION at the end of PAIRPIPE-IS-THE-REGISTER-LEVER
+explicitly, so the next reader hits the three walls in the document rather than in
+the toolchain.
+
+## 2026-09-09 -- a FOURTH wall, and the only one that would have cost a fit
+
+check_prod_manifest.py, RC=1 (its own code, read directly this time):
+
+    'zhao_raster_perspuv_pairpipe' is reachable from the generated production top
+    (instantiated by a submodule, not by the top itself) but is NOT in
+    zhao_prod_top's source list in design/fit_targets.yml -- the fit would die at
+    elaboration
+
+That is CLAUDE.md's rule stated by a tool: **registering a block in the ledger,
+the manifest and the source list are three different acts.** I had done the
+manifest and the test lists and missed the prod_top list. The checker catches it
+only because it walks the TRANSITIVE closure -- the pair-pipe is instantiated by
+the island, not by the top -- which is the widening I made to that checker earlier
+today for a different block (zhao_skid2).
+
+**The first three walls cost minutes; this one would have cost a FIT.** An
+elaboration death is discovered at the far end of a job that takes 39 minutes for
+a leaf and hours for the island.
+
+Fixed by adding the file to zhao_prod_top's sources. perspuv_svc STAYS in that
+list: an unreferenced file in a source list is harmless, and the generated top may
+still name it until regenerated.
+
+So the swap is **nine lines across five files** -- island tops (x2 for the module
+name, x2 for the width, x2 for the new port), tests/CMakeLists.txt (x4 lists),
+prod_manifest.yml (the atomic pair) and fit_targets.yml (prod_top sources). Report
+corrected again. My original "one-line module-name change" was wrong four separate
+ways, and every one of them was caught by a tool rather than by my reading.

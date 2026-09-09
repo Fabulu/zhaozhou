@@ -973,6 +973,7 @@ verilate(test_island_composed_directed
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_fragrob.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
@@ -2203,6 +2204,7 @@ verilate(test_island_v3_composed_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
@@ -2257,6 +2259,7 @@ verilate(test_island_v3_prod_composed_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
@@ -2477,6 +2480,7 @@ verilate(test_island_v3_fault_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv

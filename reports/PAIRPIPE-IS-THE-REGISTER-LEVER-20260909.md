@@ -188,3 +188,62 @@ against a stale measurement is the error this file already documents twice."*
 * **The island fit**: registers could fall while ALM or Fmax worsen. Neither map
   row carries either column, so both are genuinely unknown, and the pair-pipe's
   header only *expects* an ALM saving.
+
+
+---
+
+# CORRECTION: the swap is NOT a module-name change. Three things had to move.
+
+Attempting it on 2026-09-09 refuted my own recipe at step 1. I had written that
+the pair-pipe's ports are "a strict SUPERSET of svc (18 shared + zero_products_o)"
+and that the swap is therefore "a MODULE-NAME CHANGE". **The superset claim is
+true of port NAMES and false of port WIDTHS**, because the script I compared them
+with extracted names and discarded widths — a measurement that answered a slightly
+different question than the one I asked of it, which is the oldest failure in this
+repository's book.
+
+What the toolchain refused, in order:
+
+1. **`occupancy_o` is 5 bits on the pair-pipe and 4 on svc.**
+   `WIDTHEXPAND: connection 'occupancy_o' expects 5 bits ... 'pu_occ' generates 4`.
+   The extra bit is correct, not a defect: `owned_q` counts everything accepted and
+   not yet emitted — the pipeline stages, the terminal FIFO and the item in the
+   output — so it can exceed `NTOK = 16`. Fixed by widening `pu_occ` to `[4:0]` in
+   both tops. Safe: `pu_occ` is declared, driven and **read nowhere** in either
+   island.
+2. **`zero_products_o` cannot be left unconnected.** Verilator raises `PINMISSING`
+   as an error here, so the one genuinely new port must be wired even to simulate.
+   Landed on a local `pu_zero_products` for the simulation check; production should
+   carry it to a debug counter port, exactly as this recipe's step 3 already said.
+3. **Four test source lists needed the new file** (`tests/CMakeLists.txt` at 975,
+   2205, 2259, 2479), or the island tests fail with the module missing while the
+   file sits in the tree — the `MODMISSING` trap `CLAUDE.md` documents.
+
+4. **`zhao_prod_top`'s source list needed it too** — a FOURTH wall, and the one
+   that would have cost a fit rather than a minute.
+   `check_prod_manifest.py`: *"reachable from the generated production top
+   (instantiated by a submodule, not by the top itself) but is NOT in
+   zhao_prod_top's source list in design/fit_targets.yml — **the fit would die at
+   elaboration**"*. That is `CLAUDE.md`'s rule stated by a tool: registering a
+   block in the ledger, the manifest and the source list are three different
+   acts. The checker only catches it because it walks the TRANSITIVE closure —
+   the pair-pipe is instantiated by the island, not by the top.
+
+So the real change is **nine lines across five files**, not two. Still small,
+still reversible, still a drop-in in the sense that matters — no logic, no
+protocol and no connection semantics changed — but the recipe as published would
+have failed on its first attempt, and anyone following it would have hit the same
+three walls.
+
+**The port-width table I should have produced in the first place:**
+
+```
+shared ports: 18      WIDTH MISMATCHES: 1
+   occupancy_o     svc [3:0]     pairpipe [4:0]
+only in pairpipe: ['zero_products_o']
+```
+
+That is the whole delta, and it takes one script to get right. The lesson is not
+"compare widths too" — it is that **a comparison is only as good as the field it
+actually read**, and mine silently answered "are the names the same" while I
+reported "are the ports the same".

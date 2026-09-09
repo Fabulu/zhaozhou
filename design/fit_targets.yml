@@ -1749,6 +1749,7 @@ targets:
       - fpga/rtl/raster/zhao_raster_fog.sv
       - fpga/rtl/raster/zhao_raster_fragment.sv
       - fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+      - fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
       - fpga/rtl/raster/zhao_raster_quant.sv
       - fpga/rtl/raster/zhao_raster_rcp24_svc.sv
       - fpga/rtl/raster/zhao_raster_resolve.sv

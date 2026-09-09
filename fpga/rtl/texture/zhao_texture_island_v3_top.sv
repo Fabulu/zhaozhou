@@ -969,9 +969,29 @@ module zhao_texture_island_v3_top #(
   logic [15:0] pu_tag;
   logic        pu_sat, pu_dzero;
   logic [31:0] pu_products;
-  logic [3:0]  pu_occ;
+  // [4:0], not [3:0]: the pair-pipe's occupancy_o is 5 bits where svc's was 4.
+  // `owned_q` counts everything accepted and not yet emitted -- the pipeline
+  // stages, the terminal FIFO and the item in the output -- so it can exceed
+  // NTOK=16 and needs the extra bit. Found 2026-09-09 by verilate refusing the
+  // swap: WIDTHEXPAND, "expects 5 bits ... generates 4 bits".
+  //
+  // WHICH CORRECTS A CLAIM I MADE: the pair-pipe's ports are a superset by
+  // NAME, not by WIDTH, so the swap is not the pure module-name change I
+  // reported. My comparison script extracted port names and discarded widths.
+  // Nothing reads pu_occ in either island top -- it is declared, driven and
+  // never consumed -- so widening it is safe.
+  logic [4:0]  pu_occ;
+  // The pair-pipe's one NEW port. Verilator refuses an unconnected output
+  // here (PINMISSING as an error), so it must be connected even to be
+  // simulated -- which is the third way the swap is not the "module-name
+  // change" I first reported. It counts depth-zero fragments that produce
+  // no product, and perspuv_pairpipe_directed asserts it against an
+  // independently counted zero_accepts, so it is a TESTED instrument.
+  // Landed on a local here; production should carry it to a debug counter
+  // port rather than drop it on the floor.
+  logic [31:0] pu_zero_products;
 
-  zhao_raster_perspuv_svc #(.NTOK(16), .TAGW(16)) u_persp (
+  zhao_raster_perspuv_pairpipe #(.NTOK(16), .TAGW(16)) u_persp (
       .clk(clk), .rst_n(rst_n),
       .v_valid_i(px_v_q), .v_ready_o(px_in_ready_c),
       .u_over_w_i(px_uvw_q[63:32]), .v_over_w_i(px_uvw_q[31:0]),
@@ -981,7 +1001,7 @@ module zhao_texture_island_v3_top #(
       .u_o(pu_u), .v_o(pu_v), .tag_o(pu_tag), .sat_o(pu_sat),
       .depth_zero_o(pu_dzero),
       .fragments_o(cnt_persp_fragments_o), .products_o(pu_products),
-      .occupancy_o(pu_occ));
+      .occupancy_o(pu_occ), .zero_products_o(pu_zero_products));
 
   // Read point 2: PERSPUV's answer, for everything that consumes a fragment
   // once its texture coordinates exist.
