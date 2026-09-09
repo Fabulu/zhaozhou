@@ -221,6 +221,44 @@ So, for any checker:
    miss. Assert the *correct* behaviour (the record holds) and keep the
    detector's positive control separate.
 
+### A guard you cannot reach with legal stimulus needs a COMMITTED MUTANT
+
+Added 2026-09-09, after sweeping a session's own new work for counters asserted
+zero and never seen to move. Four were found. Three could be fired with stimulus
+alone -- present a token whose generation is not the one the bank holds, offer an
+illegal key, break a layout with a parameter. The fourth could not, and it is the
+interesting one.
+
+`wq_overflow_o` watches for a queue holding more entries than it owns. That state
+is **unreachable while the full-guard is correct**, so no legal input can move the
+counter, and "it can fire" stays an argument forever. The only demonstration is to
+break the guard -- and the break must not be a temporary edit to production RTL,
+because that is a live-tree hazard AND it leaves nothing behind: the next person
+inherits the same argument and no evidence.
+
+So the mutant is a **committed file** under `tests/mutants/`, renamed so a source
+list cannot elaborate it by mistake, with a driver whose polarity is inverted --
+it passes when the counter FIRES. It is evidence about the instrument, not about
+the design. `tests/mutants/zhao_texture_frag_expand_mutant.sv` is the pattern:
+one substantive line, `fq_full_c`'s `>=` becoming `>`, and a header saying what
+was changed and why.
+
+Two tool facts learned the same way, both of which would otherwise have been read
+as reassurance:
+
+* **`--lint-only` does not run `initial` blocks.** Linting a deliberately broken
+  parameterisation returns RC=0 and says nothing whatever about the elaboration
+  `$fatal` guarding it. A clean lint is not evidence about an elaboration check.
+* **`// synthesis translate_off` does not make Verilator skip the block.** Proven
+  by planting a syntax error inside one and watching lint reject it. So a guard in
+  there is live in simulation -- which is the opposite of what the pragma's name
+  suggests to a reader, and worth knowing before deciding a guard is dead weight.
+
+And when a mutant trips a SIMULATION assertion before the synthesizable counter
+can be read, disable the assertion **in the mutant only**, with the reason beside
+it. The assertion firing is independent corroboration; the counter is the thing
+that ships.
+
 One more from the same day, about receipts rather than RTL. A fit row stamped
 `failed:structure` is **not** a failed measurement — the fit completed and the
 *budget rules* rejected it. On the island the row with a clean tree, a real
