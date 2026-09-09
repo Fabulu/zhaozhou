@@ -1381,6 +1381,13 @@ targets:
 
   - top: zhao_prod_top
     sources:
+      # The texture island became a COUNTED TOP on 2026-09-09, so the generated
+      # production top instantiates the island instead of nine of its leaves --
+      # and the island brings its own children with it. Every file below was
+      # added because check_prod_manifest's TRANSITIVE closure check found it
+      # "reachable from the generated production top (instantiated by a
+      # submodule, not by the top itself)". The one-level check this replaced
+      # could not have seen any of them.
       # Added 2026-09-09. Instantiated by zhao_raster_tile_pipe, NOT by the
       # generated top -- which is why check_prod_manifest.py missed it: that
       # checker validates the top-level instantiations only, not the
@@ -1507,6 +1514,10 @@ targets:
       - fpga/rtl/texture/zhao_texture_bilerp.sv
       - fpga/rtl/texture/zhao_texture_bilerp_lane.sv
       - fpga/rtl/texture/zhao_texture_cache_pipe.sv
+      - fpga/rtl/texture/zhao_texture_early_desc.sv
+      - fpga/rtl/texture/zhao_texture_frag_expand.sv
+      - fpga/rtl/texture/zhao_texture_island_v3_top.sv
+      - fpga/rtl/texture/zhao_texture_metajoin.sv
       - fpga/rtl/texture/zhao_texture_mod255.sv
       - fpga/rtl/texture/zhao_texture_mosaic.sv
       - fpga/rtl/texture/zhao_texture_palette_res.sv
@@ -1521,6 +1532,10 @@ targets:
       - fpga/rtl/texture/zhao_texture_combine.sv
       - fpga/rtl/texture/zhao_texture_material_combine_v1.sv
       - fpga/rtl/texture/zhao_texture_material_combine_v2.sv
+      - fpga/rtl/texture/zhao_texture_uv_join.sv
+      - fpga/rtl/texture/zhao_texture_v3bank.sv
+      - fpga/rtl/texture/zhao_texture_v3own.sv
+      - fpga/rtl/texture/zhao_texture_v3rq.sv
       - fpga/rtl/video/zhao_scanout_fetch.sv
       - fpga/rtl/video/zhao_scanout_linebuf.sv
       - fpga/rtl/video/zhao_scanout_serializer.sv

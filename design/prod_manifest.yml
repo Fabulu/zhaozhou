@@ -48,7 +48,6 @@ top:
 
   # --- texture island (the production rebuild) -----------------------------
   - zhao_texture_tmu_pipe        # over zhao_texture_tmu
-  - zhao_texture_tmu_plan
   # TEXTURE.COMBINE. TWO ROWS ON PURPOSE, and only for as long as it takes to
   # measure the second.
   #
@@ -84,18 +83,35 @@ top:
   # is not needed for the budget. It IS safe whenever the owner wants it --
   # material_combine_v2 is proven against `zref::material::combine`, the C++
   # oracle, and NOT against this block, so removing it destroys no proof.
+  # THE TEXTURE ISLAND IS COUNTED ONCE, AS A COMPOSED FIT.
+  #
+  # Owner brief 2.6.C: "Include actual adopted descriptor, owner and join
+  # components or count their containing island once. Do not count both the
+  # island and its leaves."
+  #
+  # Before this edit the bill did NEITHER. It counted NINE island leaves
+  # individually (tmu_plan, cache_pipe, aux_pipe, palette_res, rsp_dispatch,
+  # mosaic, bilerp_lane, perspuv_svc, rcp24_svc) while SIX more that the island
+  # also instantiates sat in `excluded:` as "unused" or "not-yet-adopted" --
+  # frag_expand, metajoin, early_desc, uv_join, v3own, v3bank, v3rq. An
+  # INCOMPLETE COVER, which understates. This file already flagged part of it:
+  # the metajoin entry carried "STALE, 2026-09-08: metajoin IS integrated now".
+  #
+  #   nine leaves counted today   15 DSP    8,667 ALM
+  #   completing the leaf cover   15 DSP   12,338 ALM  (2 still unknown)
+  #   THE ISLAND, ONE FIT         17 DSP   10,837 ALM  49 M10K   <- chosen
+  #
+  # The island is chosen because it is a real COMPOSED measurement at the
+  # declared shipping profile (@g2-prod, MIGRATION_SHADOWS=0), with no unknowns,
+  # and because a sum of leaf fits carries virtual pins the composed design does
+  # not. Verified before moving them: all nine leaves are instantiated ONLY by
+  # the two island tops and by the generated resource top -- none is used
+  # elsewhere in the machine, so nothing is lost by counting them inside.
+  - zhao_texture_island_v3_top
   - zhao_texture_material_combine_v1
-  - zhao_texture_cache_pipe      # over zhao_texture_cache: C0-C4, M10K-backed
-  - zhao_texture_aux_pipe        # over zhao_texture_aux
-  - zhao_texture_palette_res
-  - zhao_texture_rsp_dispatch
-  - zhao_texture_mosaic
-  - zhao_texture_bilerp_lane     # SEE the double-count note in the report
 
   # --- the per-pixel texture path ------------------------------------------
   - zhao_raster_texjoin_v2       # over zhao_raster_texjoin
-  - zhao_raster_perspuv_svc      # over zhao_raster_perspuv
-  - zhao_raster_rcp24_svc        # over zhao_raster_rcp24
   - zhao_raster_attrdiv_svc
   - zhao_raster_attrinterp
   - zhao_raster_attrstep
@@ -199,7 +215,40 @@ top:
   - zhao_field_v3_spline
   - zhao_field_v3_sbank
 
+# ==============================================================================
+# SELECTED PROFILES -- which measurement describes the instance that SHIPS
+# ==============================================================================
+# Added 2026-09-09, owner brief section 2.6.C: "Specify FIELD LANES/BANKS/
+# CONTEXTS and reciprocal NCTX/TOKW instead of relying on unrelated defaults."
+#
+# WHY A HEURISTIC IS NOT ENOUGH. The census first preferred the UNLABELLED row
+# on the reasoning that a label denotes a variant. That is right for
+# zhao_geom_skin, whose unlabelled fit is the default profile and whose
+# @MUL_LANES rows are alternatives -- and WRONG for the texture island, where
+# the unlabelled row is the LABORATORY build (MIGRATION_SHADOWS=1, 13,133 ALM)
+# and the shipping configuration is the labelled @g2-prod (10,837 ALM). A
+# heuristic cannot tell those apart; only a declaration can.
+#
+# `label: null` means the unlabelled row IS the shipping profile. An entry here
+# is a statement about what the console contains, not about which number is
+# smaller -- the island entry below selects the LARGER-DSP, SMALLER-ALM row
+# because that is the one that ships.
+selected_profiles:
+  - zhao_texture_island_v3_top: "@g2-prod"   # MIGRATION_SHADOWS=0, the shipping build
+  - zhao_geom_skin: null                     # unlabelled default; @MUL_LANES=* are alternatives
+
 excluded:
+  # The texture island's own children are NOT listed here any more.
+  #
+  # They used to be, as "unused" or "not-yet-adopted", while the island itself
+  # was excluded as a probe -- so seven components the island demonstrably
+  # instantiates were in the machine and in nobody's bill. check_prod_manifest
+  # caught every one the moment the island became a counted top: "excluded
+  # 'zhao_texture_v3own' (not-yet-adopted) is nevertheless instantiated by
+  # zhao_texture_island_v3_top -- it is in the machine whatever the manifest
+  # says." They are counted inside the island's composed fit now.
+  #
+  # Dropped: zhao_texture_early_desc, zhao_texture_frag_expand, zhao_texture_material_combine_v2, zhao_texture_material_combine_v2, zhao_texture_metajoin, zhao_texture_uv_join, zhao_texture_v3bank, zhao_texture_v3own, zhao_texture_v3rq
   # --- composition tops ------------------------------------------------------
   # zhao_texture_island_top wires the eleven approved texture-island components
   # to each other so the island can be MEASURED and DRAWN THROUGH as one thing.
@@ -226,14 +275,12 @@ excluded:
   # individually. It is the REPLACEMENT for that one, not an addition -- both
   # exist simultaneously and deliberately, because the old top is gate 3's
   # oracle and editing an oracle destroys the comparison.
-  - zhao_texture_island_v3_top: probe  the composed V3 island; its blocks are counted individually, and it is gate 3's subject against island_top
 
   # FRAGROB's replacement half: the expander that turns one fragment into its
   # sample requests, with no allocation authority of its own. It IS production
   # RTL and it IS fitted (323 ALM at the time of writing, a figure since made
   # stale by the f_ctx_i port). Nothing in the RESOURCE top instantiates it yet,
   # which is exactly what `unused` means.
-  - zhao_texture_frag_expand: unused  P0-C Stage B; production RTL, fitted, not yet reached by zhao_prod_top
 
   # Packet C's metadata bank, 256 x 40 = one M10K, one writer and one
   # synchronous reader. Written as a LEAF first, per the post-fit brief's "use
@@ -245,15 +292,12 @@ excluded:
   # instantiated and NOT counted, which understates the planned machine. Left
   # here rather than silently moved because moving it changes the census total
   # and that should happen in one deliberate pass, with the number stated.
-  - zhao_texture_metajoin: unused  post-fit packet C storage; leaf-tested, not yet integrated
 
   # --- built, tested, not yet instantiated (packet 2 moves these to `top:`) ---
   # Both are leaf-tested AND chain-tested against the real expander
   # (desc_join_expand_directed, 15 checks). They are excluded today because
   # nothing instantiates them yet, and counting them beside the early arrays
   # they REPLACE would double the state they exist to consolidate.
-  - zhao_texture_early_desc: unused  D2 typed early descriptor, 119b over 3 M10K width slices; wired in by packet 2
-  - zhao_texture_uv_join: unused  D2 post-PERSPUV join; wired in by packet 2
 
   # --- a CANDIDATE, not a plan ------------------------------------------------
   # One scheduler, two lanes, bit-identical to perspuv_svc over 352 U/V pairs.
@@ -302,7 +346,6 @@ excluded:
   # next production fit measures. This file's own TERRAIN.VISIBLE note gives the
   # rule -- such a change is "a decision to take deliberately rather than as a
   # side effect". Recording the truth is not the same as making that change.
-  - zhao_texture_material_combine_v2: successor  the paired-phase combiner; the ISLAND instantiates V2, the production top still instantiates V1
 
   # TERRAIN.VISIBLE -- the visible-patch builder. It COMPOSES
   # zhao_terrain_island_dir, which is already counted above, and nothing
@@ -429,9 +472,6 @@ excluded:
   # "Do not merge those changes into the composition until the shared record and
   # credit contracts are fixed". zhao_texture_island_top stays counted until they
   # replace it.
-  - zhao_texture_v3bank: not-yet-adopted  the section 6 bank primitive, one instance per declared bank
-  - zhao_texture_v3own: not-yet-adopted  the 64-owner transaction file and completion pipeline
-  - zhao_texture_v3rq: not-yet-adopted  the once-only ready-ticket queue
   - zhao_terrain_residency: superseded  by zhao_terrain_residency_v2 (256x4 ways)
   - zhao_raster_blend: superseded  split into blend_fin + blend_prod, which zhao_raster_fragment instantiates
 

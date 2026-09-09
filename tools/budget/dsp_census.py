@@ -61,6 +61,8 @@ import os
 import subprocess
 import sys
 
+NLC = chr(10)
+
 sys.path.insert(0, os.path.join("tools", "quartus"))
 
 DEVICE = {"alm": 41910, "dsp": 112, "m10k": 553}
@@ -203,7 +205,47 @@ def commit_time(sha):
     return t
 
 
-def select(cands):
+def load_profiles(path=os.path.join("design", "prod_manifest.yml")):
+    """module -> selected label, from the manifest's `selected_profiles:` block.
+
+    Brief 2.6.C. A DECLARATION, not a heuristic. "Prefer the unlabelled row" is
+    right for zhao_geom_skin (unlabelled default, @MUL_LANES alternatives) and
+    WRONG for the texture island, whose unlabelled row is the LABORATORY build
+    and whose shipping configuration is the labelled @g2-prod. Nothing in the
+    ledger distinguishes those two shapes; only the manifest can say which
+    instance the console contains.
+
+    A value of None means "the unlabelled row is the shipping profile".
+    """
+    prof = {}
+    try:
+        txt = io.open(path, encoding="utf-8", errors="replace").read()
+    except OSError:
+        return prof
+    i = txt.find(NLC + "selected_profiles:")
+    if i < 0:
+        return prof
+    # [2:], not [1:]. txt[i:] begins with the newline BEFORE the header, so
+    # element 0 is empty and element 1 is "selected_profiles:" itself -- which
+    # does not start with "- " and tripped the end-of-block `break` on the first
+    # iteration, returning an empty dict silently. A parser that returns nothing
+    # looks exactly like a manifest with nothing declared.
+    for line in txt[i:].split(NLC)[2:]:
+        st = line.strip()
+        if st.startswith("#") or not st:
+            continue
+        if not st.startswith("- "):
+            break                      # next top-level key ends the block
+        body = st[2:].split("#")[0].strip()
+        if ":" not in body:
+            continue
+        name, _, val = body.partition(":")
+        val = val.strip().strip('"').strip("'")
+        prof[name.strip()] = None if val in ("null", "", "~") else val.lstrip("@")
+    return prof
+
+
+def select(cands, declared="__undeclared__"):
     """Apply the brief's selection order. Returns (chosen, why, alternates).
 
     `chosen` may be None -- that is the honest answer when nothing is usable,
@@ -228,6 +270,29 @@ def select(cands):
     # ONLY when there is no unlabelled evidence, and then the profile is flagged
     # unconfirmed rather than quietly adopted -- because an @label can still be
     # the only correct measurement, which is the other half of the same rule.
+    # A DECLARED profile outranks the heuristic entirely.
+    if declared != "__undeclared__":
+        want = declared                      # None means "the unlabelled row"
+        picked = [e for e in usable if (e.label or None) == want]
+        if picked:
+            usable = picked
+            profile_note = (" [profile DECLARED in prod_manifest.yml: %s]"
+                            % ("@" + want if want else "unlabelled"))
+            fits = [e for e in usable if e.stage == FIT and e.dsp is not None]
+            maps = [e for e in usable if e.stage == MAP and e.dsp is not None]
+            if fits:
+                best = max(fits, key=lambda e: commit_time(e.commit) or 0)
+                return best, "fitted result" + profile_note, [e for e in usable if e is not best]
+            if maps:
+                best = max(maps, key=lambda e: commit_time(e.commit) or 0)
+                return (best, "MAP only -- fitted area and timing UNKNOWN" + profile_note,
+                        [e for e in usable if e is not best])
+        else:
+            return (None,
+                    "DECLARED profile %s has NO usable measurement -- cost UNKNOWN,"
+                    " and deliberately not substituted from another profile"
+                    % ("@" + want if want else "unlabelled"), cands)
+
     plain = [e for e in usable if not e.label]
     profile_note = ""
     if plain:
@@ -267,11 +332,12 @@ def select(cands):
 # ---------------------------------------------------------------------------
 # THE BILL
 # ---------------------------------------------------------------------------
-def build_bill(tops, ev, targets_text=""):
+def build_bill(tops, ev, targets_text="", profiles=None):
+    profiles = profiles or {}
     rows = []
     for m in sorted(tops):
         cands = ev.get(m, [])
-        chosen, why, alts = select(cands)
+        chosen, why, alts = select(cands, profiles[m]) if m in profiles else select(cands)
         has_target = ("- top: %s\n" % m) in targets_text
         if chosen is None:
             kind = ("UNPRICED (no fit target -- nobody can measure it)"
@@ -346,6 +412,11 @@ def self_test():
              "status": "ok", "sourceCommit": head, "rtlCleanAtHead": True},
             {"module": "labelledonly@NCTX=12", "dspBlocks": 3, "alms": 986,
              "status": "ok", "sourceCommit": head, "rtlCleanAtHead": True},
+            {"module": "island", "dspBlocks": 17, "alms": 13133, "ramBlocks": 45,
+             "status": "failed:structure", "sourceCommit": old, "rtlCleanAtHead": True},
+            {"module": "island@g2-prod", "dspBlocks": 17, "alms": 10837,
+             "ramBlocks": 49, "status": "ok", "sourceCommit": head,
+             "rtlCleanAtHead": True},
         ]}))
         io.open(mp, "w", encoding="utf-8").write(json.dumps({"blocks": [
             {"module": "normals", "dspBlocks": 3, "estimatedAlms": 700,
@@ -416,7 +487,25 @@ def self_test():
         assert chosen is not None and chosen.dsp == 3,             "a labelled-only module must still be priced, not scored zero"
         assert "PROFILE UNCONFIRMED" in why,             "a labelled-only selection must be flagged, not quietly adopted"
 
-        # 10. MUTATION PROOF (brief 2.7): drop the map ledger and the normals
+        # 10. A DECLARED PROFILE OUTRANKS THE HEURISTIC, and this fixture is why
+        #     the mechanism exists. "Prefer the unlabelled row" is right for
+        #     `skin` and WRONG for the texture island, whose unlabelled row is
+        #     the LABORATORY build and whose shipping configuration is labelled.
+        #     Nothing in a ledger distinguishes those two shapes.
+        heur, _, _ = select(ev["island"])
+        assert heur.alm == 13133, "fixture drift: the heuristic should take the lab row"
+        decl, why, _ = select(ev["island"], "g2-prod")
+        assert decl.alm == 10837 and decl.label == "g2-prod",             "a declared profile did not override the unlabelled-preferring heuristic"
+        assert "DECLARED" in why, "a declared selection must say so in its reason"
+
+        # 11. A DECLARED profile with NO measurement is UNKNOWN. It must never
+        #     silently fall back to another profile's number -- that would be
+        #     attaching one instance's cost to a different instance, which is the
+        #     specific error the brief calls out about NCTX=12 versus NCTX=8.
+        miss, why, _ = select(ev["island"], "does-not-exist")
+        assert miss is None and "NO usable measurement" in why,             "a declared-but-unmeasured profile fell back instead of reporting unknown"
+
+        # 12. MUTATION PROOF (brief 2.7): drop the map ledger and the normals
         #    answer must change. A fixture that passes with the map ledger
         #    ignored is not testing the thing it names.
         ev_nomap = load_evidence(fit, os.path.join(d, "does-not-exist.json"), sh)
@@ -434,7 +523,7 @@ def main():
     self_test()
     args = sys.argv[1:]
     if "--self-test" in args:
-        print("dsp_census self-test: all ten fixtures pass through the real "
+        print("dsp_census self-test: all twelve fixtures pass through the real "
               "loader and selector, including the mutation proof that removing "
               "the map ledger changes the answer.")
         return 0
@@ -454,7 +543,7 @@ def main():
     if "zhao_shell_top" in ev and "zhao_shell_top" not in roots:
         roots.append("zhao_shell_top")
 
-    rows = build_bill(roots, ev, targets_text)
+    rows = build_bill(roots, ev, targets_text, load_profiles())
     t = totals(rows)
 
     if "--json" in args:
