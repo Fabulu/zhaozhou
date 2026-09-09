@@ -3252,3 +3252,41 @@ Third rewrite today, each forced by a material correction rather than polish. Th
 pattern is worth naming: **durable guidance goes stale exactly as fast as the work
 moves, and a nudge that tells you to expect the wrong evidence is worse than one
 that says nothing** -- it manufactures the comfortable reading in advance.
+
+## 2026-09-09 -- Resolve-FitRules + a self-test proven to fire
+
+Owner-direction check: NO NEW DIRECTION (0 incoming). No @g2-prod fit. The
+`@gate3-fresh` svc fit is at 23.3 min; svc is the bigger block (3,216 registers
+against the pair-pipe's 820) so >= the pair-pipe's 39 min is expected.
+
+`run_block_fit.ps1` is still busy, so instead of editing it I put the resolution
+where BOTH callers can use it: a new `Resolve-FitRules` in `fit_rules.ps1`.
+Purely ADDITIVE -- no existing behaviour changes -- so it is safe even though the
+running fit dot-sourced that file at start.
+
+    Resolve-FitRules $rules 'blk'             -> exact hit, unchanged
+    Resolve-FitRules $rules 'blk@some-label'  -> falls back to 'blk'   <- the fix
+    Resolve-FitRules $rules 'other@x'         -> $null, no inheritance for an
+                                                 unregistered base
+
+Exact-name hit is preferred FIRST, so a variant that genuinely warrants different
+limits can still get its own `- top:` entry -- which fit_targets.yml already
+supports and which is the documented escape hatch.
+
+**Self-test at dot-source**, following the convention three Python tools here
+already use, and PROVEN TO FIRE two independent ways:
+
+    fallback removed (the original bug)  -> rc=1 "labelled row did NOT resolve to
+                                            its base top -- the 2026-09-09 defect
+                                            is back"
+    unregistered base wrongly inherits   -> rc=1 "a breaching labelled row produced
+                                            NO violation; unregistered base
+                                            resolved to a ruleset"
+
+Cost is pure string/hashtable work, so it adds nothing measurable to the path that
+runs before every fit -- and it will now throw loudly if anyone reintroduces the
+defect rather than silently stamping rows `ok`.
+
+Remaining on this thread: point `run_block_fit.ps1:1115` at `Resolve-FitRules`
+(now a one-liner with its semantics already tested), and optionally
+`check_fit_rules.ps1` too. Both wait on the toolchain.
