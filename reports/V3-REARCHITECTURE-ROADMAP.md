@@ -102,6 +102,41 @@ gate plus the shadow gating plus the dead-array deletions.
 | 3 | pairpipe + fresh svc leaf pair | candidate ready, 22 checks green |
 | 5 | checkpoint C | last |
 
+### GATE 2 IS SETTLED: packets 1-3 measured, and V3 is the smallest island yet
+
+`zhao_texture_island_v3_top@g2-prod`, `MIGRATION_SHADOWS=0`, clean tree, 148 min.
+
+| | oracle best (`@p0c-stageA`) | **V3 `@g2-prod`** |
+|---|---|---|
+| ALM | 11,562 | **10,837** |
+| registers | 19,203 | **16,285** |
+| Fmax | 84.03 | 82.05 |
+| M10K | 39 | 49 |
+| DSP | 17 | 17 |
+
+**725 ALM and 2,918 registers under the oracle's best, for +10 M10K and -2 MHz.**
+The memory-for-ALM trade works at composition scale, not just at the leaf.
+
+**It still fails the redline: 1.445x of 7,500, 1.64x of 6,600 nominal** -- down
+from the oracle's 1.54x and 1.75x, and 3,337 ALM over. Moving the ratio is the
+most one packet was ever going to do.
+
+Against the pre-packet lab row (`@pktC-fixed`): -4,646 ALM, -5,934 registers,
++19.22 MHz. That delta is **packets 1-3 PLUS the laboratory removal** -- the
+confound declared here before the fit ran. Gate 1 isolated the register half
+(-4,432 for the lab, so ~-1,502 for the packets); the ALM half is NOT isolable
+without another island fit and is deliberately left undivided.
+
+**And the timing landscape changed enough to retire an earlier finding.** The
+boundary is no longer the limit -- worst-overall and worst-internal are now the
+same path, so 82.05 is a number about the design rather than about virtual pins.
+`live_cnt_q[6]` went from 42 of 43 internal paths to 28 of 117, and
+`u_cache|c2_tag[0][14]` is the new leader at 59. A zero-delay reciprocal now buys
+**1.06 MHz**, down from 4.08. Full reading in
+`GATE2-PACKETS-1-2-3-MEASURED-20260909.md`.
+
+---
+
 ### GATE 4 IS SETTLED, AND IT REDIRECTS THE NEXT MOVE (2026-09-09)
 
 `zhao_raster_rcp24_svc@g4-nctx12` landed. At matched `NCTX=12 TOKW=14`, clean

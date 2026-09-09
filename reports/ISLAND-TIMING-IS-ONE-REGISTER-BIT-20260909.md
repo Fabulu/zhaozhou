@@ -1,5 +1,30 @@
 # The island's timing is ONE register bit, and it is not the reciprocal tile
 
+> **SUPERSEDED THE SAME DAY, by `@g2-prod`. Read this box before the report.**
+>
+> Everything below is a true statement about `@pktC-fixed` and a false one about
+> the configuration that ships. The `@g2-prod` island fit landed hours later with
+> `MIGRATION_SHADOWS=0` and the timing landscape is not the same design:
+>
+> | | `@pktC-fixed` | `@g2-prod` |
+> |---|---|---|
+> | internal paths | 43 | **117** |
+> | from `live_cnt_q[6]` | **42 of 43** | 28 of 117 |
+> | top source | `live_cnt_q[6]` | **`u_cache|c2_tag[0][14]`, 59 of 117** |
+> | worst overall | a PIN, -5.915 | **INTERNAL, -2.187** |
+> | reported Fmax | 62.83 | 82.05 |
+> | a zero-delay u_rcp buys | 4.08 MHz | **1.06 MHz** |
+>
+> So the headline claim -- one register bit sources essentially every internal
+> path -- became a third of the problem, and the boundary stopped being the limit
+> at all. The credit-fanout recommendation is still valid work and no longer the
+> whole answer. See `GATE2-PACKETS-1-2-3-MEASURED-20260909.md`.
+>
+> Kept rather than rewritten: the reasoning is what generalises, and a report
+> silently edited to match a later measurement destroys the evidence that the
+> earlier one was correctly reached.
+
+
 2026-09-09. Written immediately after `GATE4-RCP-LIKE-FOR-LIKE`, because that
 memo's leaf numbers invited a conclusion this census kills.
 

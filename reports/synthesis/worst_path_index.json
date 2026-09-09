@@ -291,6 +291,24 @@
     "worstInternalTo": "k_o[5]",
     "worstPortSlackNs": -4.607
   },
+  "zhao_raster_rcp24_svc@g4-nctx12": {
+    "boundaryWorthNs": -3.669,
+    "deepestClockSkewNs": 3.329,
+    "deepestDataDelayNs": 17.376,
+    "deepestFrom": "d_i[13]",
+    "deepestSlackNs": -4.107,
+    "deepestTo": "c_x[4][27]~DUPLICATE",
+    "from": "c_val[1]~DUPLICATE",
+    "internalPaths": 44,
+    "portOriginPaths": 156,
+    "slackNs": -7.781,
+    "summarisedPaths": 200,
+    "to": "r_o[0]",
+    "worstInternalFrom": "c_val[1]~DUPLICATE",
+    "worstInternalSlackNs": -7.781,
+    "worstInternalTo": "r_o[0]",
+    "worstPortSlackNs": -4.112
+  },
   "zhao_raster_rcp24_svc@p0b-s1": {
     "boundaryWorthNs": 3.189,
     "deepestClockSkewNs": 3.29,
@@ -749,6 +767,24 @@
     "worstInternalTo": "zhao_texture_palette_res:u_palette|cold_o[26]",
     "worstPortSlackNs": -2.134
   },
+  "zhao_texture_island_v3_top@g2-prod": {
+    "boundaryWorthNs": -0.249,
+    "deepestClockSkewNs": 3.265,
+    "deepestDataDelayNs": 15.143,
+    "deepestFrom": "frag_depth_i[18]",
+    "deepestSlackNs": -1.938,
+    "deepestTo": "zhao_raster_rcp24_svc:u_rcp|c_x[0][24]",
+    "from": "zhao_raster_rcp24_svc:u_rcp|c_val[4]~DUPLICATE",
+    "internalPaths": 122,
+    "portOriginPaths": 78,
+    "slackNs": -2.187,
+    "summarisedPaths": 200,
+    "to": "zhao_raster_rcp24_svc:u_rcp|Add7~153_OTERM3483_OTERM3769",
+    "worstInternalFrom": "zhao_raster_rcp24_svc:u_rcp|c_val[4]~DUPLICATE",
+    "worstInternalSlackNs": -2.187,
+    "worstInternalTo": "zhao_raster_rcp24_svc:u_rcp|Add7~153_OTERM3483_OTERM3769",
+    "worstPortSlackNs": -1.938
+  },
   "zhao_texture_island_v3_top@pktC": {
     "boundaryWorthNs": -0.756,
     "deepestClockSkewNs": 3.294,
@@ -868,6 +904,24 @@
     "internalPaths": 44,
     "portOriginPaths": 156,
     "previous": [
+      {
+        "boundaryWorthNs": -0.07,
+        "deepestClockSkewNs": 3.471,
+        "deepestDataDelayNs": 12.163,
+        "deepestFrom": "ld_op_i[0]",
+        "deepestSlackNs": 1.248,
+        "deepestTo": "loading_r",
+        "from": "gen_r[1][6]",
+        "internalPaths": 44,
+        "portOriginPaths": 156,
+        "slackNs": 0.392,
+        "summarisedPaths": 200,
+        "to": "l1_stale_q",
+        "worstInternalFrom": "gen_r[1][6]",
+        "worstInternalSlackNs": 0.392,
+        "worstInternalTo": "l1_stale_q",
+        "worstPortSlackNs": 0.462
+      },
       {
         "boundaryWorthNs": -0.07,
         "deepestClockSkewNs": 3.471,
