@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "82a4f317f95777260ef85872d71a0649cd6d80fc",
+    "newestRunCommit":  "fdc28552762eb28a00e73a70c282e2caa09b0c23",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -662,6 +662,16 @@
                        "rtlCleanAtHead":  true,
                        "seconds":  59.9,
                        "sourcesHashed":  128
+                   },
+                   {
+                       "module":  "zhao_prod_top@map-import-fix",
+                       "status":  "failed:quartus_map.exe",
+                       "sourceCommit":  "fdc28552762eb28a00e73a70c282e2caa09b0c23",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "fc45cb353d490832afc6bd24e3e98c673e753f9b722ab0ae18d95464914f0e38",
+                       "variantOf":  "zhao_prod_top",
+                       "seconds":  2629.7,
+                       "sourcesHashed":  139
                    },
                    {
                        "module":  "zhao_raster_blend",
