@@ -3010,3 +3010,39 @@ checker's own RC. The lesson keeps arriving in new costumes: the shell told the
 truth about the wrong thing.
 
 Report: `reports/OWNER-DOCS-DISPOSITIONS-20260909.md`.
+
+## 2026-09-09 -- GATE 3 baseline pinned BEFORE the pair-pipe row lands
+
+Fit still running (quartus_fit, 1.4 GB). Row not written. Recording the standing
+svc rows now so the comparison cannot drift after I see the candidate's numbers.
+
+    zhao_raster_perspuv_svc       FIT  status=failed:structure  clean=True
+                                  1,886 ALM   3,216 regs   105.19 MHz
+                                  commit 9c787e4a
+    zhao_raster_perspuv_svc@map   MAP  3,361 regs, no ALM, no Fmax
+                                  commit 5a500d47
+
+**Both predate today's HEAD**, which is exactly why fit_targets.yml:471 requires a
+FRESH svc row for GATE 3 rather than a comparison against these. The target for
+the second half exists at line 452, so it is one command once the candidate frees
+the toolchain.
+
+**Two numbers worth flagging as already-superseded prose.** fit_targets.yml's own
+comment on this target says the block "reported `ok` while measuring 2,204 ALM and
+3,293 registers -- 145% and 370% over". The standing row says **1,886 ALM and
+3,216 registers**. So the comment describes an EARLIER measurement than the row
+sitting beside it. Not a defect -- the comment is arguing why the rules were added
+and that argument still holds -- but anyone quoting 2,204 from it would be quoting
+a number the ledger no longer contains. Use the row, not the prose.
+
+**And svc fits at 105.19 MHz**, above the 100 MHz product clock and below §8.8's
+125 MHz three-seed target. So Fmax IS comparable between the two halves of GATE 3
+once both are fitted at one commit -- which makes the second half worth more than
+just the register column.
+
+**Where I was:** the pair-pipe register finding, its swap recipe, the census REG
+column, FORGE.PRIM.EVAL, and both owner-document dispositions are all committed
+and pushed. The half-hourly nudge was rewritten (job 3f0e4e30) to carry the
+pair-pipe lever and the six eliminated probe candidates, because the previous
+version still described v4 as pending and did not mention the largest finding of
+the day.
