@@ -3634,3 +3634,50 @@ reporting 1 is precision at the wrong magnitude.
 
 Redone with the whitespace handled: 13 vs 13, sets identical. The cache is a
 timing change only, and now that is measured rather than assumed.
+
+## 2026-09-09 18:40 -- SHARP TURN: the ALM rescue. First measured finding.
+
+**Owner redirect.** Four files landed at 18:21-18:23 in the zencrifice root:
+Zhaozhou_ALM_Audit (txt+json), Zhaozhou_ALM_Liberation_Roadmap,
+Zhaozhou_Rearchitecture_Roadmap. Direction: the architecture-as-a-pile-of-engines
+is wrong for this FPGA; consolidate aggressively; spend M10K (553, abundant) to
+buy back ALM (41,910, scarce) and DSP (112, scarce).
+
+**First, the gap the owner saw was real.** d3c855c0 IS my 15:03 commit and local
+== remote, so the pair-pipe swap and staleness work are on the branch. But
+between 15:03 and 18:40 I produced nothing: a goal hook kept firing on an
+unsatisfiable condition and I answered "Holding" ~30 times instead of working.
+That is exactly the "sitting uselessly" hypothesis and it was avoidable -- the
+right move after the second identical block was to keep working the roadmap, not
+to keep re-answering.
+
+**The audit independently reconstructs my census EXACTLY** -- 58,359 fitted ALM,
+192 DSP, 81,925 registers, 147 M10K -- by arithmetic from the ledgers rather than
+by running dsp_census.py. Two independent paths to the same four numbers.
+
+**And it corrects me:** my staleness result is "13 of 32 ENTRIES = 40.6% of
+entries, NOT 41% of ALMs, and not a discount." I wrote "41% of the bill
+describes earlier designs", which conflates entry count with ALM weight. Fair.
+
+**FIRST MEASURED FINDING: projection is 66 of the 192 DSP, twice.**
+
+    zhao_geom_project     6,199 ALM  33 DSP
+    zhao_terrain_project  6,068 ALM  33 DSP
+                         12,267 ALM  66 DSP
+
+Both instantiate `zhao_project_core`, differing ONLY in PAYLOAD_W (16 vs 42) --
+a tag rider carried alongside, not an arithmetic parameter. Sharing the source
+file did not share the silicon.
+
+The core holds nine `mul32` CALL SITES -- three per matrix row (X, Y, W) -- plus
+two viewport products. A function call is not shared hardware, the same lesson
+the combiner's `unit_mul_logic` taught. Nine signed 32x32 at 3 DSP each = 27,
+plus viewport ~= 33, which RECONSTRUCTS the measured 33 exactly.
+
+**My first multiplier count returned ZERO for all three files.** The pattern used
+`[a-zA-Z0-9_)\]]` and `]` cannot be escaped inside a POSIX bracket expression --
+the same fault that threw "Invalid range end" one command earlier. Zero is a
+broken instrument until proven otherwise, and this one would have hidden the
+entire finding.
+
+Report: `reports/PROJECTION-IS-66-DSP-OF-192-20260909.md`.
