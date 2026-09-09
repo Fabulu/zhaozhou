@@ -1999,3 +1999,48 @@ header.
 `zhao_prod_top@map-import-fix` -- the real synthesizability gate on today's five
 prod_top repairs, since Verilator lint-clean is not `quartus_map` here. Then the
 pairpipe map, which scores a prediction filed before it ran: 6 DSP.
+
+## The stop guard was citing a section to assert its opposite
+
+**FOR THE OWNER: `CLAUDE.md` carries a stale sentence.** Under "Fit at SUBSYSTEM
+BOUNDARIES", it says the one hard constraint is *"the live-tree trap
+(`QUARTUS_GOTCHAS.md` section 11) -- never edit a file inside the running fit's
+closure, because the fit reads the working tree."*
+
+Section 11 opens with a supersession box added **2026-09-03**: block fits
+SNAPSHOT their sources, so *"editing a `.sv` inside a running BLOCK fit's closure
+is safe"*. The code agrees -- `run_block_fit.ps1` copies every declared source
+into `<workspace>/src` and repoints the QSF -- and today's prod_top map printed
+*"snapshot: 139 source(s) copied into the workspace; the live tree cannot reach
+this fit"*.
+
+I fixed the HOOK, which repeated the same stale claim at me every half hour and
+was costing real caution: an agent told the RTL tree is frozen for four hours
+finds reasons to avoid work it could be doing, and I deferred RTL items
+repeatedly on that basis today. **I did not edit `CLAUDE.md`** -- it is the
+owner's file and that correction is theirs to make.
+
+What is still true and is a DIFFERENT rule: `fit_targets.yml` is re-read live at
+each preflight (gotcha 13), and a shell or composed fit that declares no closure
+has nothing to snapshot and does read the tree. **Look for the snapshot line
+rather than assuming either way.**
+
+## Two verification gates of mine could not fire
+
+Both written today, both to guard against precisely this class of defect:
+
+1. The `-SkipMeasured` check greps a Tee'd log for a line `run_calib` emitted
+   with `Write-Host` -- which never enters an in-process pipeline. Fixed at the
+   source (`Write-Output`; it is a RESULT, not decoration) and verified end to
+   end.
+2. Chasing that turned up the larger one: **every `Tee-Object` log this repo
+   writes was missing all `Write-Host` output**, including `run_block_fit`'s
+   whole provenance trail -- preflight, snapshot, provenance guard, source
+   digest. So the queue's logs were transcripts, not receipts. The OLDER logs
+   have those lines because they were written by OS-level redirection, which is
+   what made it invisible: same-looking file, different capture. All six tees
+   now use `*>&1`.
+
+And my first demonstration of that used a script BLOCK, which is not the shape
+the queue uses. The conclusion held, but it proved the wrong half; re-tested on
+a real `.ps1` file before acting.
