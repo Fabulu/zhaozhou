@@ -344,9 +344,24 @@ module zhao_probe_v3_exec #(
   logic mul_denied_c;
   assign mul_denied_c = mul_req_valid_o && !mul_req_ready_i;
 
+  // DECLARED HERE, DRIVEN BELOW THE PIPELINE DECLARATIONS.
+  //
+  // The assign used to sit on the next line and referenced `s1_uop_r.op` --
+  // sixteen lines BEFORE `uop_t s1_uop_r;` is declared. Verilator accepts a
+  // module-scope signal used ahead of its declaration; Quartus 17.0.2 does not
+  // resolve a STRUCT FIELD that way, and fails the whole file:
+  //
+  //   Error (10733): op is not declared under this prefix
+  //
+  // That failed EVERY whole-tree map, because run_block_map.ps1 compiles every
+  // .sv under fpga/rtl. Found 2026-09-09, the second of two such files; the
+  // first was zhao_field_alu_vec.sv. Both were added 2026-08-30 and neither had
+  // ever been through quartus_map -- zero rows in the fit ledger and zero in
+  // the map ledger, which is CLAUDE.md's rule stated as an incident.
+  //
+  // Only the ASSIGN moves. The declaration stays above the always_comb below,
+  // which reads dot_inflight_c.
   logic dot_inflight_c;
-  assign dot_inflight_c = (s1_v_r && is_dot(s1_uop_r.op)) || (s2_v_r && is_dot(s2_op_r)) ||
-                          (s3_v_r && is_dot(s3_op_r))     || (s4_v_r && is_dot(s4_op_r));
 
   always_comb begin
     ready_c = active_r & ~inflight_r;
@@ -400,6 +415,12 @@ module zhao_probe_v3_exec #(
   logic          s4_v_r;
   logic [CW-1:0] s4_ctx_r;
   logic [7:0]    s4_op_r;
+
+  // Driven here rather than at its declaration: `s1_uop_r.op` is a struct field
+  // and Quartus 17.0.2 cannot resolve one before its signal is declared. See
+  // the note beside `logic dot_inflight_c;` above.
+  assign dot_inflight_c = (s1_v_r && is_dot(s1_uop_r.op)) || (s2_v_r && is_dot(s2_op_r)) ||
+                          (s3_v_r && is_dot(s3_op_r))     || (s4_v_r && is_dot(s4_op_r));
   logic [RW-1:0] s4_dst_r;
   logic [31:0]   s4_imm_r;
   logic signed [DW-1:0] s4_a0_r, s4_a1_r, s4_a2_r;
