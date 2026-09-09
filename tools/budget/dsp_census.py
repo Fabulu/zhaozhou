@@ -1,259 +1,519 @@
 #!/usr/bin/env python3
-"""Sum measured DSP (and ALM, M10K) over the manifest's intended production blocks.
+"""The resource bill: select ONE measurement per instance across every ledger.
 
-WHY THIS IS A TOOL
-------------------
-The 154-DSP figure in reports/DSP-BUDGET-CENSUS-20260908.md was computed by hand,
-and it has been re-quoted, adjusted and argued about ever since -- including by me,
-twice in one day, once wrongly. The owner's live question is "we're over by like
-180 to 112"; a number that gets re-derived by hand every time it is asked is a
-number that drifts.
+REWRITTEN 2026-09-09 against the owner's memory-first rescue brief, section 2.
+The previous version's headline -- "152 DSP, and it is a FLOOR" -- is WITHDRAWN.
+It was wrong in both directions at once, which is why "floor" was the worst
+possible word for it:
 
-WHAT IT COUNTS, and the choices are the substance:
+  * it opened only zhao_block_fit.json, so it never saw zhao_block_map.json or
+    the separate shell receipt;
+  * it counted `zhao_terrain_normals` at 18 DSP from an obsolete full fit while
+    a LATER map row says 3 and the current RTL walks six products through one
+    multiplier -- a 15-DSP OVERCOUNT;
+  * it scored `zhao_geom_pose_decode` (18), `zhao_terrain_bake` (17) and
+    `zhao_forge_cliff` (2) as ZERO, because their only evidence is in the map
+    ledger -- 37 DSP of UNDERCOUNT;
+  * it omitted the shell entirely: 16 DSP, 12,707 ALM, 26 M10K.
 
-* `top:` entries only. `inside:` blocks are counted through their parent, and
-  `excluded:` blocks are not part of the planned machine. Counting an `inside:`
-  block as well would double it -- which is the mistake the manifest's own
-  comments repeatedly warn about.
-* LABELLED ledger rows are skipped. `@g4-nctx12`, `@map`, `@v3-before` are
-  alternate MEASUREMENTS of one module, not additional hardware. Summing them
-  would inflate the total by however many times a block has been measured.
-* MapOnly rows count for DSP but NOT for ALM. A map row reports dspBlocks,
-  blockMemoryBits and registers; `alms` and `ramBlocks` are fitter results and
-  are absent. Treating a missing ALM as zero is how a rule silently cannot fire.
-* Unmeasured blocks are REPORTED, not assumed zero. The total is a FLOOR, and the
-  count of unfitted blocks is printed beside it, because the census's whole point
-  is that 42 blocks have never been fitted and the figure can only rise.
+A partial subtotal is not a mathematical lower bound on the optimised console,
+and a sum of isolated fits is not an upper bound either -- composition changes
+mapping, replication, pruning and packing. The honest phrase is PARTIAL MIXED
+EVIDENCE with the missing costs disclosed, and that is what this prints.
 
-Read `rtlCleanAtHead` before quoting any row: a row fitted from a dirty tree has
-a digest that describes nothing. Dirty rows are counted (they are the best number
-available) and listed separately so the uncertainty travels with the total.
+THE VOCABULARY (brief section 2.1), used consistently below:
+
+  INVENTORY              every implementation/probe/version in the tree
+  SELECTED DESIGN        one chosen implementation per function
+  CURRENT MEASUREMENT    bytes/configuration match the selected closure
+  HISTORICAL MEASUREMENT a real measurement of a different/unverified closure
+  PROPOSED ALLOCATION    a ceiling for an unqualified candidate
+  UNPRICED REQUIREMENT   intended functionality with no applicable measurement
+
+SELECTION ORDER for one instance (brief section 2.3):
+
+  1. enumerate applicable measurements INCLUDING labelled variants
+  2-3. match device/closure/parameters; retain a conflict if unclear
+  4. prefer a completed applicable FITTED result for area and timing
+  5. prefer a NEWER applicable MAP result over an obsolete fit for CURRENT DSP
+     structure -- label it mapped, leave fitted area/timing UNRESOLVED
+  6. when nothing matches: historical shown as historical, current cost UNKNOWN.
+     Never substitute zero. Never silently pick the smallest.
+
+PER-METRIC NULLS. A map row knows DSP and does not know ALM. `None` means
+UNKNOWN and is never summed as zero -- the previous version read a missing ALM
+correctly but had no way to say "DSP known, ALM unknown" about the same row.
+
+DIRTINESS IS NOT IDENTITY. The old tool called every dirty-tree digest
+meaningless. Wrong: a digest can identify the exact bytes of a dirty but
+immutable captured specimen, while a clean commit can carry a mismatched
+parameter profile. Provenance is reported on two independent axes.
 
 Usage:
     python tools/budget/dsp_census.py
+    python tools/budget/dsp_census.py --json
+    python tools/budget/dsp_census.py --closure   # nonzero if anything unknown
     python tools/budget/dsp_census.py --self-test
 """
 import io
 import json
 import os
+import subprocess
 import sys
 
-LEDGER = os.path.join("reports", "synthesis", "zhao_block_fit.json")
 sys.path.insert(0, os.path.join("tools", "quartus"))
 
 DEVICE = {"alm": 41910, "dsp": 112, "m10k": 553}
+OWNER_DSP_TARGET = 94          # brief: "fewer than 95", target DSP <= 94
+
+FIT_LEDGER = os.path.join("reports", "synthesis", "zhao_block_fit.json")
+MAP_LEDGER = os.path.join("reports", "synthesis", "zhao_block_map.json")
+SHELL_LEDGER = os.path.join("reports", "synthesis", "zhao_shell_fit.json")
+
+# Evidence stages, most authoritative for AREA first.
+FIT, MAP = "fit", "map"
 
 
-def load_rows():
-    """Unlabelled rows, plus a separate map of modules ONLY ever measured labelled.
+class Evidence(object):
+    """One measurement of one module, from one ledger, at one stage."""
 
-    "Measured only under a label" is not the same as "never measured", and lumping
-    them together understates the floor. `zhao_raster_rcp24_v3` has five rows and
-    every one carries a label, so a filter that drops all labelled rows reports it
-    as unfitted and silently omits its 3 DSP.
+    def __init__(self, module, stage, source, dsp=None, alm=None, m10k=None,
+                 regs=None, membits=None, status=None, commit=None,
+                 clean=None, label=None):
+        self.module = module
+        self.stage = stage          # FIT or MAP
+        self.source = source        # which ledger file
+        self.dsp = dsp
+        self.alm = alm
+        self.m10k = m10k
+        self.regs = regs
+        self.membits = membits
+        self.status = status
+        self.commit = commit
+        self.clean = clean
+        self.label = label          # the @suffix, or None
 
-    Kept out of the total on purpose -- a labelled row is a measurement of a
-    PARAMETERISATION, and which one the machine will ship is a decision, not a
-    reading. But it is reported separately, with its DSP, so the floor's own
-    shortfall is visible instead of being folded into "45 unmeasured".
+    @property
+    def usable(self):
+        """A killed process with partial output is not a completed measurement.
+
+        Brief 2.3: "A failed POLICY check may follow a successful physical fit:
+        its measured counts remain evidence, with the failed gate retained."
+        So `failed:structure` IS usable -- the fit completed and the budget rules
+        rejected it. `timeout`, `incomplete:` and a killed run are not.
+        """
+        s = (self.status or "")
+        if s.startswith("incomplete") or s == "timeout":
+            return False
+        return self.dsp is not None or self.alm is not None
+
+    @property
+    def policy_failed(self):
+        return (self.status or "").startswith("failed:")
+
+    def __repr__(self):
+        return "<%s %s dsp=%s alm=%s>" % (self.module, self.stage, self.dsp, self.alm)
+
+
+# ---------------------------------------------------------------------------
+# LOADING -- all three inputs, brief section 2.3
+# ---------------------------------------------------------------------------
+def _load_json(path):
+    try:
+        return json.load(io.open(path, encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def load_evidence(fit_path=FIT_LEDGER, map_path=MAP_LEDGER,
+                  shell_path=SHELL_LEDGER):
+    """Every measurement from every ledger, keyed by BASE module name.
+
+    Labelled rows are kept, not dropped. Brief 2.3: "An @label is not extra
+    silicon, but it can be the ONLY correct measurement." The old tool discarded
+    them wholesale and therefore could not see, for instance, that the only
+    current RCP evidence is labelled.
     """
-    d = json.load(io.open(LEDGER, encoding="utf-8"))
-    rows, labelled = {}, {}
-    for r in d["blocks"]:
-        name = r["module"]
-        if "@" in name:
-            base = name.split("@")[0]
-            if r.get("dspBlocks") is not None:
-                labelled.setdefault(base, []).append(r)
-            continue
-        rows[name] = r
-    return rows, labelled
+    ev = {}
+
+    def add(e):
+        ev.setdefault(e.module, []).append(e)
+
+    d = _load_json(fit_path)
+    if d:
+        for r in d.get("blocks", []):
+            name = r.get("module", "")
+            base, _, lab = name.partition("@")
+            add(Evidence(base, FIT, fit_path, dsp=r.get("dspBlocks"),
+                         alm=r.get("alms"), m10k=r.get("ramBlocks"),
+                         regs=r.get("registers"), membits=r.get("blockMemoryBits"),
+                         status=r.get("status"), commit=r.get("sourceCommit"),
+                         clean=r.get("rtlCleanAtHead"), label=lab or None))
+
+    d = _load_json(map_path)
+    if d:
+        for r in d.get("blocks", []):
+            name = r.get("module", "")
+            base, _, lab = name.partition("@")
+            # A MAP row has no `alms` and no `ramBlocks` -- `estimatedAlms` is an
+            # ESTIMATE and is deliberately not loaded as `alm`. Recording an
+            # estimate in the same field as a fitted measurement is how a guess
+            # becomes a number nobody questions.
+            add(Evidence(base, MAP, map_path, dsp=r.get("dspBlocks"),
+                         alm=None, m10k=None,
+                         regs=r.get("registers"), membits=r.get("blockMemoryBits"),
+                         status=r.get("status"), commit=r.get("sourceCommit"),
+                         clean=r.get("rtlCleanAtHead"), label=lab or None))
+
+    d = _load_json(shell_path)
+    if d:
+        res = d.get("resources") or {}
+        stages = d.get("stages") or {}
+        ok = stages.get("fitter") == "success"
+        add(Evidence(d.get("design", {}).get("top", "zhao_shell_top"), FIT,
+                     shell_path, dsp=res.get("dspBlocks"),
+                     alm=res.get("logicUtilizationAlms"),
+                     m10k=res.get("ramBlocks"), regs=res.get("registers"),
+                     membits=res.get("blockMemoryBits"),
+                     status="ok" if ok else "incomplete:shell",
+                     commit=d.get("sourceCommit"),
+                     clean=d.get("sourceConeParity")))
+    return ev
 
 
-def census(tops, rows):
-    dsp = alm = m10k = 0
-    unmeasured, dirty, maponly = [], [], []
+# ---------------------------------------------------------------------------
+# RECENCY -- needed for rule 5, "prefer a NEWER applicable map over an obsolete fit"
+# ---------------------------------------------------------------------------
+_DATE_CACHE = {}
+
+
+def commit_time(sha):
+    """Committer timestamp, or None when the commit is unknown to this tree."""
+    if not sha:
+        return None
+    if sha in _DATE_CACHE:
+        return _DATE_CACHE[sha]
+    try:
+        out = subprocess.run(["git", "show", "-s", "--format=%ct", sha],
+                             capture_output=True, text=True)
+        t = int(out.stdout.strip()) if out.returncode == 0 and out.stdout.strip() else None
+    except (OSError, ValueError):
+        t = None
+    _DATE_CACHE[sha] = t
+    return t
+
+
+def select(cands):
+    """Apply the brief's selection order. Returns (chosen, why, alternates).
+
+    `chosen` may be None -- that is the honest answer when nothing is usable,
+    and it is NOT zero.
+    """
+    usable = [e for e in cands if e.usable]
+    if not usable:
+        return None, "no usable measurement", cands
+
+    # A LABEL IS A DIFFERENT PARAMETER PROFILE, not another measurement of the
+    # same one. Brief 2.3: "The actual island uses different reciprocal
+    # parameters from the twelve-context leaf comparison. Do not attach the
+    # twelve-context area or throughput to an eight-context instance."
+    #
+    # Caught by this tool's own first real run. `zhao_geom_skin` has an
+    # UNLABELLED fit at 9 DSP / 2,225 ALM plus @MUL_LANES=1 (3 DSP) and
+    # @MUL_LANES=6 (18 DSP). Selecting across all of them took the 18-DSP
+    # variant as "the fit", let a map supersede it, and reported 9 DSP with ALM
+    # UNKNOWN -- the right DSP by luck, and 2,225 ALM thrown away.
+    #
+    # So: the unlabelled row is the selected profile. Labelled rows are used
+    # ONLY when there is no unlabelled evidence, and then the profile is flagged
+    # unconfirmed rather than quietly adopted -- because an @label can still be
+    # the only correct measurement, which is the other half of the same rule.
+    plain = [e for e in usable if not e.label]
+    profile_note = ""
+    if plain:
+        usable = plain
+    else:
+        profile_note = (" PROFILE UNCONFIRMED: only labelled measurements exist,"
+                        " and the manifest does not declare the selected"
+                        " parameters for this instance")
+
+    fits = [e for e in usable if e.stage == FIT and e.dsp is not None]
+    maps = [e for e in usable if e.stage == MAP and e.dsp is not None]
+
+    # Rule 5: a NEWER map beats an OBSOLETE fit for current DSP structure.
+    if fits and maps:
+        newest_fit = max(fits, key=lambda e: commit_time(e.commit) or 0)
+        newest_map = max(maps, key=lambda e: commit_time(e.commit) or 0)
+        tf, tm = commit_time(newest_fit.commit) or 0, commit_time(newest_map.commit) or 0
+        if tm > tf and newest_map.dsp != newest_fit.dsp:
+            return (newest_map,
+                    ("newer MAP (%s) supersedes an older fit that says %s DSP; "
+                     "fitted area and timing remain UNRESOLVED"
+                     % (newest_map.commit[:8] if newest_map.commit else "?", newest_fit.dsp))
+                    + profile_note,
+                    [e for e in usable if e is not newest_map])
+
+    # Rule 4: prefer a completed fitted result for area and timing.
+    if fits:
+        best = max(fits, key=lambda e: commit_time(e.commit) or 0)
+        return best, "fitted result" + profile_note, [e for e in usable if e is not best]
+    if maps:
+        best = max(maps, key=lambda e: commit_time(e.commit) or 0)
+        return (best, "MAP only -- DSP known, fitted area and timing UNKNOWN" + profile_note,
+                [e for e in usable if e is not best])
+    return None, "no usable measurement", cands
+
+
+# ---------------------------------------------------------------------------
+# THE BILL
+# ---------------------------------------------------------------------------
+def build_bill(tops, ev, targets_text=""):
+    rows = []
     for m in sorted(tops):
-        r = rows.get(m)
-        if r is None:
-            unmeasured.append(m)
+        cands = ev.get(m, [])
+        chosen, why, alts = select(cands)
+        has_target = ("- top: %s\n" % m) in targets_text
+        if chosen is None:
+            kind = ("UNPRICED (no fit target -- nobody can measure it)"
+                    if not has_target else "UNPRICED (target exists, never run)")
+            rows.append({"module": m, "kind": kind, "why": why, "dsp": None,
+                         "alm": None, "m10k": None, "stage": None,
+                         "label": None, "clean": None, "policy_failed": False,
+                         "alternates": len(cands)})
             continue
-        if r.get("dspBlocks") is None:
-            unmeasured.append(m)
-            continue
-        dsp += r["dspBlocks"]
-        if r.get("alms") is not None:
-            alm += r["alms"]
-        else:
-            maponly.append(m)
-        if r.get("ramBlocks") is not None:
-            m10k += r["ramBlocks"]
-        if r.get("rtlCleanAtHead") is False:
-            dirty.append(m)
-    return dsp, alm, m10k, unmeasured, dirty, maponly
+        kind = ("CURRENT (fitted)" if chosen.stage == FIT else "CURRENT (mapped)")
+        rows.append({"module": m, "kind": kind, "why": why,
+                     "dsp": chosen.dsp, "alm": chosen.alm, "m10k": chosen.m10k,
+                     "stage": chosen.stage, "label": chosen.label,
+                     "clean": chosen.clean, "policy_failed": chosen.policy_failed,
+                     "alternates": len(alts)})
+    return rows
 
 
+def totals(rows):
+    t = {"dsp": 0, "alm": 0, "m10k": 0,
+         "dsp_unknown": 0, "alm_unknown": 0, "m10k_unknown": 0}
+    for r in rows:
+        for k in ("dsp", "alm", "m10k"):
+            if r[k] is None:
+                t[k + "_unknown"] += 1
+            else:
+                t[k] += r[k]
+    return t
+
+
+# ---------------------------------------------------------------------------
+# FIXTURES -- brief section 2.7, driven through the REAL loader and selector
+# ---------------------------------------------------------------------------
 def self_test():
-    """The sum must move when a row moves, and must IGNORE labelled variants."""
-    rows = {
-        "a": {"module": "a", "dspBlocks": 6, "alms": 100, "ramBlocks": 1,
-              "rtlCleanAtHead": True},
-        "b": {"module": "b", "dspBlocks": 3, "alms": None, "ramBlocks": None,
-              "rtlCleanAtHead": True},
-        "c": {"module": "c", "dspBlocks": None, "alms": None},
-    }
-    dsp, alm, m10k, un, dirty, mo = census(["a", "b", "c", "d"], rows)
-    assert dsp == 9, "dsp sum %d, expected 9" % dsp
-    assert alm == 100, "a map row with alms=None must not count as 0 ALM: %d" % alm
-    assert mo == ["b"], "map-only row not reported: %s" % mo
-    assert sorted(un) == ["c", "d"], "unmeasured wrong: %s" % un
-    # and a labelled variant must be dropped before it can be summed
-    d = {"blocks": [{"module": "a", "dspBlocks": 6},
-                    {"module": "a@map", "dspBlocks": 6}]}
-    tmp = {}
-    for r in d["blocks"]:
-        if "@" not in r["module"]:
-            tmp[r["module"]] = r
-    assert list(tmp) == ["a"], "labelled variant survived the filter: %s" % list(tmp)
-    return True
+    """Small fixtures whose correct answer is checkable by hand.
+
+    Brief 2.7's final instruction is the important one: "Test the ACTUAL
+    loader/selector path, not a reimplementation of the intended rule inside a
+    self-test that never calls it." The previous version's self-test built its
+    own dicts and called `census()` on them; it could not have caught the
+    missing map ledger, because it never opened a ledger.
+
+    These write real ledger files and call load_evidence()/select().
+    """
+    import tempfile
+    import shutil
+    d = tempfile.mkdtemp()
+    try:
+        fit = os.path.join(d, "fit.json")
+        mp = os.path.join(d, "map.json")
+        sh = os.path.join(d, "shell.json")
+
+        # normals: an OLD fit at 18 and a NEWER map at 3. HEAD is newer than any
+        # ancestor, so HEAD stands in for "newer" without inventing timestamps.
+        head = subprocess.run(["git", "rev-parse", "HEAD"],
+                              capture_output=True, text=True).stdout.strip()
+        old = subprocess.run(["git", "rev-list", "--max-parents=0", "HEAD"],
+                             capture_output=True, text=True).stdout.strip().split("\n")[0]
+
+        io.open(fit, "w", encoding="utf-8").write(json.dumps({"blocks": [
+            {"module": "normals", "dspBlocks": 18, "alms": 900, "ramBlocks": 1,
+             "status": "ok", "sourceCommit": old, "rtlCleanAtHead": True},
+            {"module": "nulldsp", "dspBlocks": None, "alms": None,
+             "status": "ok", "sourceCommit": head},
+            {"module": "policyfail", "dspBlocks": 8, "alms": 494, "ramBlocks": 0,
+             "status": "failed:structure", "sourceCommit": head, "rtlCleanAtHead": True},
+            {"module": "killed", "dspBlocks": None, "alms": None,
+             "status": "incomplete:failed:quartus_map.exe", "sourceCommit": head},
+            {"module": "skin", "dspBlocks": 9, "alms": 2225, "ramBlocks": 2,
+             "status": "ok", "sourceCommit": old, "rtlCleanAtHead": True},
+            {"module": "skin@MUL_LANES=6", "dspBlocks": 18, "alms": 2595,
+             "status": "ok", "sourceCommit": head, "rtlCleanAtHead": True},
+            {"module": "labelledonly@NCTX=12", "dspBlocks": 3, "alms": 986,
+             "status": "ok", "sourceCommit": head, "rtlCleanAtHead": True},
+        ]}))
+        io.open(mp, "w", encoding="utf-8").write(json.dumps({"blocks": [
+            {"module": "normals", "dspBlocks": 3, "estimatedAlms": 700,
+             "status": "ok", "sourceCommit": head},
+            {"module": "maponly", "dspBlocks": 17, "estimatedAlms": 500,
+             "status": "ok", "sourceCommit": head},
+        ]}))
+        io.open(sh, "w", encoding="utf-8").write(json.dumps({
+            "design": {"top": "shell"}, "stages": {"fitter": "success"},
+            "resources": {"dspBlocks": 16, "logicUtilizationAlms": 12707,
+                          "ramBlocks": 26, "registers": 14812},
+            "sourceCommit": head, "sourceConeParity": True}))
+
+        ev = load_evidence(fit, mp, sh)
+
+        # 1. old fit 18 + newer applicable map 3 -> current mapped 3
+        chosen, why, _ = select(ev["normals"])
+        assert chosen is not None and chosen.dsp == 3, \
+            "newer map did not supersede the obsolete fit: %r" % (chosen,)
+        assert chosen.stage == MAP, "supersession did not label the stage as mapped"
+        assert chosen.alm is None, \
+            "a map row must leave fitted ALM UNRESOLVED, not carry estimatedAlms"
+
+        # 2. null DSP -> incomplete, never zero
+        chosen, why, _ = select(ev["nulldsp"])
+        assert chosen is None, "a row with no numbers was selected: %r" % (chosen,)
+
+        # 3. a completed fit with a FAILED POLICY check keeps its counts
+        chosen, _, _ = select(ev["policyfail"])
+        assert chosen is not None and chosen.dsp == 8 and chosen.policy_failed, \
+            "failed:structure must retain its measured counts and its failed gate"
+
+        # 4. a killed run is not a measurement
+        chosen, _, _ = select(ev["killed"])
+        assert chosen is None, "a killed/incomplete run was treated as evidence"
+
+        # 5. map-only module is priced from the map ledger, not scored zero
+        chosen, _, _ = select(ev["maponly"])
+        assert chosen is not None and chosen.dsp == 17 and chosen.stage == MAP, \
+            "a map-only module was not priced from the map ledger"
+
+        # 6. the shell arrives from its own file, as one root
+        chosen, _, _ = select(ev["shell"])
+        assert chosen is not None and chosen.dsp == 16 and chosen.alm == 12707, \
+            "the separate shell receipt was not loaded"
+
+        # 7. unknown is not zero, in the totals
+        rows = build_bill(["normals", "nulldsp", "maponly", "shell"], ev)
+        t = totals(rows)
+        assert t["dsp"] == 3 + 17 + 16, "dsp total wrong: %s" % t
+        assert t["dsp_unknown"] == 1, "an unknown DSP was not counted as unknown"
+        assert t["alm_unknown"] == 3, \
+            "map rows and the null row must all report ALM unknown: %s" % t
+
+        # 8. A LABEL IS A DIFFERENT PROFILE. `skin` has an unlabelled fit at 9
+        #    DSP / 2,225 ALM plus a MUL_LANES=6 variant at 18. The unlabelled row
+        #    must win and must KEEP its ALM. This fixture exists because the
+        #    first real run of this tool got 9 by luck -- via the 18-DSP variant
+        #    being superseded by a map -- and threw the 2,225 ALM away.
+        chosen, why, _ = select(ev["skin"])
+        assert chosen is not None and chosen.dsp == 9,             "the unlabelled profile was not selected: %r" % (chosen,)
+        assert chosen.alm == 2225,             "a labelled variant displaced the unlabelled fit and lost its ALM"
+        assert chosen.label is None, "a labelled row was selected over an unlabelled one"
+
+        # 9. when ONLY labelled rows exist, use one but say the profile is
+        #    unconfirmed -- an @label can be the only correct measurement.
+        chosen, why, _ = select(ev["labelledonly"])
+        assert chosen is not None and chosen.dsp == 3,             "a labelled-only module must still be priced, not scored zero"
+        assert "PROFILE UNCONFIRMED" in why,             "a labelled-only selection must be flagged, not quietly adopted"
+
+        # 10. MUTATION PROOF (brief 2.7): drop the map ledger and the normals
+        #    answer must change. A fixture that passes with the map ledger
+        #    ignored is not testing the thing it names.
+        ev_nomap = load_evidence(fit, os.path.join(d, "does-not-exist.json"), sh)
+        chosen, _, _ = select(ev_nomap["normals"])
+        assert chosen is not None and chosen.dsp == 18, \
+            "with the map ledger removed the answer must revert to the stale 18"
+        assert "maponly" not in ev_nomap, \
+            "a map-only module must vanish entirely without its ledger"
+        return True
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def main():
     self_test()
-    if "--self-test" in sys.argv[1:]:
-        print("dsp_census self-test: sums, skips labelled variants, refuses to "
-              "read a missing ALM as zero, and reports unmeasured blocks.")
+    args = sys.argv[1:]
+    if "--self-test" in args:
+        print("dsp_census self-test: all ten fixtures pass through the real "
+              "loader and selector, including the mutation proof that removing "
+              "the map ledger changes the answer.")
         return 0
 
     from check_prod_manifest import read_manifest
     tops, excluded = read_manifest()
-    rows, labelled = load_rows()
-    dsp, alm, m10k, unmeasured, dirty, maponly = census(tops, rows)
-
-    print("manifest: %d intended production blocks (top:), %d excluded"
-          % (len(tops), len(excluded)))
-    print()
-    print("  %-8s %8s %8s   %s" % ("", "MEASURED", "DEVICE", "note"))
-    for k, got in (("DSP", dsp), ("ALM", alm), ("M10K", m10k)):
-        dev = DEVICE[k.lower()]
-        over = got - dev
-        note = "OVER by %d" % over if over > 0 else "%d spare" % -over
-        print("  %-8s %8d %8d   %s" % (k, got, dev, note))
-    print()
-    # THE TOTAL IS BOUNDED ON BOTH SIDES AND THE CAVEAT MUST TRAVEL WITH IT.
-    #
-    # Printed here rather than left to the reader, because "ALM OVER by 2361" is
-    # exactly the kind of line that gets quoted on its own. gen_prod_top.py's own
-    # header says what this top is: one instance of each intended block, wired to
-    # nothing.
-    print("  BOUNDED ON BOTH SIDES -- neither figure is 'the machine':")
-    print("    UPPER bound on the sum of parts: composition SHARES queues,")
-    print("      control and arithmetic that a per-block sum counts twice, and")
-    print("      leaf rows carry virtual pins the composed design does not.")
-    print("      MEASURED precedent: the composed island came in 2.4% under the")
-    print("      sum of its standalone fits.")
-    print("    LOWER bound on the machine: integration glue is not here, and")
-    print("      neither are the blocks nobody has built yet.")
-    print()
-    # SPLIT "not fitted yet" FROM "cannot be fitted at all".
-    #
-    # A bare list of unmeasured blocks reads as a queue of work waiting its turn.
-    # It is not: a block with no `- top:` entry in design/fit_targets.yml has no
-    # source list, so run_block_fit refuses it at preflight and it can never be
-    # measured by anyone until someone writes the target. D22 recorded sixteen of
-    # twenty-four geometry blocks in exactly that state.
-    #
-    # Those two populations need different work -- one needs toolchain time, the
-    # other needs a target authored with its rules stated BEFORE the fit, because
-    # a rule written afterwards reports a pass. Printing them as one list hides
-    # which is which.
+    ev = load_evidence()
     try:
-        y = io.open(os.path.join("design", "fit_targets.yml"),
-                    encoding="utf-8", errors="replace").read()
+        targets_text = io.open(os.path.join("design", "fit_targets.yml"),
+                               encoding="utf-8", errors="replace").read()
     except OSError:
-        y = ""
-    no_target = [m for m in unmeasured if ("- top: %s\n" % m) not in y]
-    queued = [m for m in unmeasured if m not in no_target]
+        targets_text = ""
 
-    print("  THIS IS A FLOOR. %d of %d intended blocks have no measured DSP "
-          "figure, and they split in two:" % (len(unmeasured), len(tops)))
-    print()
-    print("    %d have a fit target and simply have not been run:" % len(queued))
-    for m in sorted(queued)[:8]:
-        print("       %s" % m)
-    if len(queued) > 8:
-        print("       ... and %d more" % (len(queued) - 8))
-    print()
-    print("    %d have NO `- top:` entry in design/fit_targets.yml, so they "
-          "CANNOT" % len(no_target))
-    print("    be fitted by anyone until a target is authored -- with its rules")
-    print("    stated BEFORE the fit, because a rule written afterwards reports")
-    print("    a pass:")
-    for m in sorted(no_target)[:12]:
-        print("       %s" % m)
-    if len(no_target) > 12:
-        print("       ... and %d more" % (len(no_target) - 12))
-    # CHEAPER LABELLED VARIANTS ARE MEASURED LEVERS NOBODY HAS LISTED.
-    #
-    # zhao_geom_skin has three rows one parameter apart -- MUL_LANES=1 at 3 DSP /
-    # 56.11 MHz, the default at 9 / 89.65, MUL_LANES=6 at 18 / 84.61. That is -6
-    # DSP available for -33 MHz, already measured, needing no new work, and it
-    # appeared on no lever list in this repository. I found it by reading a header
-    # while doing something else.
-    #
-    # A census that sums the default and says nothing about the alternatives beside
-    # it is hiding decisions that have already been paid for. So: report every
-    # top whose labelled rows include a CHEAPER DSP figure, with what it costs in
-    # Fmax, and let the reader decide. Not a recommendation -- a lower DSP row is
-    # frequently slower, and which one ships is an owner call, which is exactly why
-    # it is listed rather than counted.
-    levers = []
-    for m in sorted(tops):
-        base = rows.get(m)
-        if not base or base.get("dspBlocks") is None:
-            continue
-        for r in labelled.get(m, []):
-            if r.get("dspBlocks") is not None and r["dspBlocks"] < base["dspBlocks"]:
-                levers.append((m, r["module"], base["dspBlocks"], r["dspBlocks"],
-                               base.get("fmaxMhz"), r.get("fmaxMhz")))
-    if levers:
-        print()
-        print("  MEASURED ALTERNATIVES that cost FEWER DSP than the counted default.")
-        print("  Already fitted; no new work needed to take them, only a decision:")
-        for m, lab, d0, d1, f0, f1 in levers:
-            fs = ("%.2f -> %.2f MHz" % (f0, f1)) if (f0 and f1) else "Fmax n/a"
-            print("     %-34s %2d -> %2d DSP  (%+d)   %s"
-                  % (lab, d0, d1, d1 - d0, fs))
-        print("     A lower-DSP row is usually a slower row. Which ships is an")
-        print("     owner call -- listed, not counted, and not summed into the")
-        print("     total above.")
+    # The shell is a root of the machine and is NOT in the production manifest's
+    # `top:` list. Brief 1.1: "The separate shell receipt contains 16 DSP."
+    roots = list(tops)
+    if "zhao_shell_top" in ev and "zhao_shell_top" not in roots:
+        roots.append("zhao_shell_top")
 
-    only_lab = [m for m in unmeasured if m in labelled]
-    if only_lab:
+    rows = build_bill(roots, ev, targets_text)
+    t = totals(rows)
+
+    if "--json" in args:
+        print(json.dumps({"rows": rows, "totals": t,
+                          "device": DEVICE, "dspTarget": OWNER_DSP_TARGET},
+                         indent=1))
+        return 0
+
+    print("PARTIAL MIXED EVIDENCE -- not a floor, not a ceiling.")
+    print("Composition changes mapping, replication, pruning and packing, and "
+          "the unpriced rows below are missing entirely.")
+    print()
+    print("  %-6s %9s %9s %9s" % ("", "COUNTED", "DEVICE", "unknown rows"))
+    for k, lab in (("dsp", "DSP"), ("alm", "ALM"), ("m10k", "M10K")):
+        print("  %-6s %9d %9d %9d" % (lab, t[k], DEVICE[k], t[k + "_unknown"]))
+    print()
+    print("  owner target: DSP <= %d. Counted %d, with %d rows unpriced."
+          % (OWNER_DSP_TARGET, t["dsp"], t["dsp_unknown"]))
+    print()
+
+    sup = [r for r in rows if "supersedes" in (r["why"] or "")]
+    if sup:
+        print("  SUPERSEDED FITS -- a newer map result was preferred for current")
+        print("  DSP structure; fitted area and timing are unresolved for these:")
+        for r in sup:
+            print("     %-34s %s DSP   %s" % (r["module"], r["dsp"], r["why"]))
         print()
-        print("  of those, %d HAVE been measured but ONLY under a label, so they "
-              "are excluded from the total above rather than unknown:" % len(only_lab))
-        for m in sorted(only_lab):
-            ds = sorted(set(r["dspBlocks"] for r in labelled[m]))
-            print("     %-38s DSP %s across %d labelled row(s)"
-                  % (m, ds, len(labelled[m])))
-        print("     A labelled row measures a PARAMETERISATION; which one ships is")
-        print("     a decision, not a reading. Counting one would pick it silently.")
-    if maponly:
+
+    mapped = [r for r in rows if r["kind"] == "CURRENT (mapped)" and r not in sup]
+    if mapped:
+        print("  MAPPED-ONLY (%d): DSP known, ALM and M10K UNKNOWN, never zero:"
+              % len(mapped))
+        for r in mapped[:10]:
+            print("     %-34s %s DSP" % (r["module"], r["dsp"]))
         print()
-        print("  %d block(s) contribute DSP from a MapOnly row and therefore "
-              "contribute NO ALM -- the ALM total above is short by their area:"
-              % len(maponly))
-        for m in maponly:
-            print("     %s" % m)
-    if dirty:
-        print()
-        print("  %d row(s) were fitted from a DIRTY TREE, so their digest "
-              "describes nothing. Counted, because they are the best number "
-              "available, and listed so the doubt travels with the total:"
-              % len(dirty))
-        for m in dirty:
-            print("     %s" % m)
+
+    unpriced = [r for r in rows if r["dsp"] is None]
+    print("  UNPRICED REQUIREMENTS (%d) -- current cost UNKNOWN, not zero:"
+          % len(unpriced))
+    notgt = [r for r in unpriced if "no fit target" in r["kind"]]
+    print("     %d have no fit target at all, so nobody can measure them"
+          % len(notgt))
+    print("     %d have a target and have not been run" % (len(unpriced) - len(notgt)))
+    print()
+
+    pf = [r for r in rows if r["policy_failed"]]
+    if pf:
+        print("  COUNTED BUT GATE-FAILED (%d): the fit completed and the budget"
+              % len(pf))
+        print("  rules rejected it. The counts are evidence; the gate stays failed.")
+        for r in pf[:8]:
+            print("     %-34s %s DSP  %s ALM" % (r["module"], r["dsp"], r["alm"]))
+
+    if "--closure" in args:
+        if t["dsp_unknown"] or t["alm_unknown"]:
+            print()
+            print("CLOSURE VERDICT REFUSED: %d DSP and %d ALM costs are unknown."
+                  % (t["dsp_unknown"], t["alm_unknown"]))
+            return 1
     return 0
 
 
