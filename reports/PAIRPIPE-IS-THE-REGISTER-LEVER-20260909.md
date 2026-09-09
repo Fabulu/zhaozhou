@@ -124,3 +124,67 @@ ledger.
 **A report that ends by naming a running job needs something that reads the row
 when it lands.** That is the same gap as the four `.rgb`-purge lesson: the
 half-fix was thorough and the other half was never built.
+
+
+---
+
+# The swap recipe, written out so a "go" is one reviewed step and not an improvisation
+
+**Not performed.** This is what changing it would take, recorded because step 6 is
+a trap this repository has already paid for twice.
+
+`FIT GATE 3` is the repo's own name for the measurement, registered in
+`design/fit_targets.yml` and referenced from `design/prod_manifest.yml:334`. It is
+**two leaf fits**, not one: the candidate, and a **fresh `perspuv_svc` row from the
+same commit**, because the standing svc row predates today's tree and *"comparing
+against a stale measurement is the error this file already documents twice."*
+
+## What actually changes
+
+1. **`fpga/rtl/texture/zhao_texture_island_v3_top.sv:974`** — module name only.
+   `zhao_raster_perspuv_svc` becomes `zhao_raster_perspuv_pairpipe`; the
+   `#(.NTOK(16), .TAGW(16))` list and all eighteen connections are unchanged,
+   because the candidate's ports are a strict superset.
+2. **`fpga/rtl/texture/zhao_texture_island_top.sv:788`** — the same, for the v1
+   island top.
+3. **Connect `zero_products_o`.** It is the one new port, and it is a *working
+   instrument*: it counts depth-zero fragments that produce no product, and
+   `perspuv_pairpipe_directed` asserts it against an independently counted
+   `zero_accepts` with `saw_dz > 0` proving it moves. Leaving it unconnected
+   silently discards tested coverage — which is how a live counter becomes
+   decoration.
+4. **`design/prod_manifest.yml`** — move the candidate out of `unused` into `top:`
+   and `zhao_raster_perspuv_svc` into `excluded: superseded`. Doing exactly one of
+   those two would double-count or under-count the island; the manifest's own
+   comment says counting the candidate now "would double-count", so the pair of
+   edits is one atomic change.
+5. **`design/fit_targets.yml`** — keep BOTH targets. The svc target becomes the
+   historical comparison row and its rules are deliberately identical, so the
+   comparison stays like-for-like.
+6. **Regenerate `zhao_prod_top.sv`** with `tools/quartus/gen_prod_top.py`, then
+   `tools/quartus/check_prod_manifest.py`. `CLAUDE.md`: *"Regenerate
+   zhao_prod_top.sv after ANY port change… a new port that nobody connects is a
+   PINMISSING that only the next fit discovers"* — and it was found stale for two
+   separate port changes made days apart. `zero_products_o` is a new port.
+7. **Re-run the composed suites**, which are the actual acceptance evidence:
+   `perspuv_pairpipe_directed`, `island_composed_directed` (oracle),
+   `island_v3_prod_composed_directed`, `island_v3_composed_directed`,
+   `island_v3_fault_directed`, and `gate3_paired`'s 392 byte-identical records.
+   The swap changes a block inside the island, so byte-identical output is the
+   claim to check, not an assumption.
+8. **Then the island fit** — the only thing that shows the saving in composition,
+   and the one step here that is the owner's call rather than texture-gate
+   diagnosis.
+
+## What would falsify it at each stage
+
+* **GATE 3 leaf pair**: if the fresh svc row and the candidate row are within
+  noise on registers, the 22–32% estimate was wrong and the lever is dead. The
+  map pair says −2,400, so this is the check that could still overturn it.
+* **The composed suites**: any drift in `gate3_paired` means the candidate is not
+  equivalent in composition, whatever the leaf differential said — and the
+  differential's one *declared* exclusion (depth-zero U/V) is exactly where to
+  look first.
+* **The island fit**: registers could fall while ALM or Fmax worsen. Neither map
+  row carries either column, so both are genuinely unknown, and the pair-pipe's
+  header only *expects* an ALM saving.
