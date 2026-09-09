@@ -87,7 +87,13 @@ if ($onMain) {
     # history.
     $mainCount = ($onMain | Measure-Object -Line).Lines
     Write-Section "origin/main is $mainCount commit(s) ahead (not merged here -- other lanes live there too)"
-    $mainFiles = & git diff --name-only "HEAD..origin/main" 2>$null
+    # --diff-filter=AM, not a bare diff. A bare `git diff HEAD..origin/main`
+    # also reports files DELETED relative to HEAD -- which for a file this
+    # branch has and main does not means THIS LANE IS AHEAD, not behind. The
+    # first run flagged all three texture OWNER-DIRECTION files that way, and a
+    # false alarm repeating every 29 minutes for a week is how a reader learns
+    # to skip the section that matters.
+    $mainFiles = & git diff --name-only --diff-filter=AM "HEAD..origin/main" 2>$null
     $mainDir = @($mainFiles | Where-Object {
         $_ -match 'Agent please read|OWNER-DIRECTION|OWNER_DOCKET|please read|DIRECTION-'
     })
