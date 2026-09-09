@@ -469,6 +469,92 @@ int main(int argc, char** argv) {
       "expander's real capacity-violation event, shown to fire in "
       "frag_expand_overflow_control (counter 36, 6 accepted into 4)\n");
 
+  // ---- §3.2: THE BANK'S AND JOIN'S UNCONNECTED INSTRUMENTS -----------------
+  //
+  // `zhao_texture_early_desc` and `zhao_texture_uv_join` each carry counters
+  // that the island deliberately leaves dangling -- `.joined_o(),
+  // .saturated_o(), .depth_zero_o(), .gen_mismatch_o()` at the instance, with a
+  // comment saying wiring them would add island output PORTS and that the
+  // composed test shares one file between this top and the oracle on the
+  // strength of their port lists matching.
+  //
+  // That reasoning still holds, and it is not a reason to leave the counters
+  // unobserved. --public-flat-rw reaches them without adding a port, so the
+  // island's own copies can be read here: no port-list change, no risk to the
+  // shared composed test, no RTL edit.
+  //
+  // THE ORDER BELOW IS THE POINT. `gen_mismatch_o == 0` is worth nothing until
+  // `reads_o > 0` is established -- a detector reading zero because nothing ever
+  // reached it is the reassuring-instrument failure this repository keeps
+  // paying for. So every non-vacuity check comes first, and the zero-claims are
+  // only asserted behind them.
+  {
+    auto& isl = *d.rootp->zhao_texture_island_v3_top;
+
+    quiesce(d);
+    const int instr = offer(d, 24, /*CLS_CLUT=*/0);
+    zhao::check(instr > 0,
+                "clean traffic admitted for the instrument read -- otherwise "
+                "every counter below is zero for the wrong reason",
+                1, instr > 0 ? 1 : 0);
+
+    const uint32_t ed_wr = isl.u_early_desc__DOT__writes_o;
+    const uint32_t ed_rd = isl.u_early_desc__DOT__reads_o;
+    const uint32_t ed_mm = isl.u_early_desc__DOT__rd_gen_mismatch_o;
+    const uint32_t jn_j = isl.u_uv_join__DOT__joined_o;
+    const uint32_t jn_sat = isl.u_uv_join__DOT__saturated_o;
+    const uint32_t jn_dz = isl.u_uv_join__DOT__depth_zero_o;
+    const uint32_t jn_mm = isl.u_uv_join__DOT__gen_mismatch_o;
+
+    std::printf(
+        "  instruments: early_desc writes %u reads %u genmm %u | "
+        "uv_join joined %u sat %u depth0 %u genmm %u\n",
+        ed_wr, ed_rd, ed_mm, jn_j, jn_sat, jn_dz, jn_mm);
+
+    // NON-VACUITY.
+    zhao::check(ed_wr > 0, "the descriptor bank was actually WRITTEN", 1,
+                ed_wr > 0 ? 1 : 0);
+    zhao::check(ed_rd > 0, "and actually READ -- so its mismatch counter is a "
+                           "detector that traffic reached, not one that idled",
+                1, ed_rd > 0 ? 1 : 0);
+    zhao::check(jn_j > 0, "the UV join actually JOINED records", 1,
+                jn_j > 0 ? 1 : 0);
+
+    // ONLY NOW do the zero-claims carry weight.
+    zhao::check(ed_mm == 0,
+                "and no descriptor was read against a generation it was not "
+                "written for", 0, ed_mm);
+    zhao::check(jn_mm == 0,
+                "and the join saw no PERSPUV result whose owner disagreed with "
+                "the record it was joined to", 0, jn_mm);
+
+    // AND THE CROSS-BLOCK EQUALITY, which is what actually tests the WIRING.
+    //
+    // `joined_o` increments inside uv_join's `accept_c` branch, and `accept_c`
+    // IS `d_rd_valid_o` (uv_join.sv:169), which the island routes as
+    // `ed_rd_valid_c` into the bank's `rd_valid_i` (island :1253 -> :879), where
+    // `reads_o` increments. So the two counters are equal every cycle **provided
+    // the island connected them to each other**, and a mismatch means the bank's
+    // read is being launched by something other than the join's accept.
+    //
+    // That is a fault no data comparison can see: a plausible-but-wrong read
+    // enable still produces a record and still produces colours. It is the same
+    // shape as the metajoin swap -- right data, right token, wrong pairing --
+    // and the reason packet 2 made the read enable and the join accept ONE
+    // signal instead of two agreeing ones.
+    //
+    // Not fire-tested: breaking it needs an island RTL edit, and the island is
+    // inside the running @g2-prod fit's closure. What IS evidence that these are
+    // two distinct live quantities rather than one variable read twice:
+    // `writes_o` reads 104 against both of them at 95, so the counters move
+    // independently and the equality is not an alias reporting itself.
+    zhao::check(jn_j == ed_rd,
+                "every descriptor read was launched by a join accept -- the "
+                "bank's read enable and the join's accept are ONE signal, and "
+                "this is the check that the island still wires them that way",
+                ed_rd, jn_j);
+  }
+
   // ---- §3.1 C, SECOND HALF: the island-level hop, by INJECTION -------------
   //
   // The expander's capacity-violation counter cannot be moved by any legal
