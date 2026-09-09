@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "2db3dfd5fa026320a939aa64cdfea757ded45a4a",
-    "newestRunClean":  false,
+    "newestRunCommit":  "6e18913413106c76580533f7887fdcd5f8701c2a",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -2167,6 +2167,42 @@
                        "ramConversionWarnings":  0,
                        "errors":  1,
                        "critical":  0
+                   },
+                   {
+                       "module":  "zhao_probe_ram_infer@wholetree",
+                       "status":  "ok",
+                       "sourceCommit":  "6e18913413106c76580533f7887fdcd5f8701c2a",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "dd38db9af18f44c1",
+                       "sourceFileCount":  213,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "variantOf":  "zhao_probe_ram_infer",
+                       "seconds":  79.9,
+                       "dspBlocks":  0,
+                       "registers":  627,
+                       "blockMemoryBits":  512,
+                       "virtualPins":  169,
+                       "pins":  0,
+                       "estimatedAlms":  527,
+                       "combAluts":  458,
+                       "mlabMemoryBits":  0,
+                       "inferredMemories":  [
+                                                {
+                                                    "name":  "altsyncram:arr_d_rtl_0|altsyncram_mvj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  16,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                }
+                                            ],
+                       "inferredMemoryCount":  1,
+                       "inferredDesignMemoryCount":  1,
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
                    },
                    {
                        "module":  "zhao_project_core",
