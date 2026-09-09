@@ -50,9 +50,9 @@ constexpr int32_t vmm(int32_t mm) {
 
 // ---- the body ball (the big pink teardrop head) ----
 constexpr int32_t kBodyRadiusMm = 450;
-constexpr int kBodyRings = 11;
-constexpr int kBodySegments = 16;      // at the equator
-constexpr int kBodyPoleSegments = 16;  // uniform: the segment-taper zipper cut a
+constexpr int kBodyRings = 21;
+constexpr int kBodySegments = 32;      // at the equator   [R2(a) ABLATION - NOT SHIPPED]
+constexpr int kBodyPoleSegments = 32;  // uniform: the segment-taper zipper cut a
                                        // visible sliver into the face at 240p
 // Teardrop reshaping (per-ring, ring 0 = bottom): radius multiplier in
 // per-mille of the sphere ring, and a per-ring forward lean. 1000/0
