@@ -84,10 +84,36 @@ def parse_ports(header):
     """(direction, name, packed_ranges) for every port."""
     ports = []
     direction = None
+    # THE LAST FULL DECLARATION'S SHAPE, for comma continuations.
+    #
+    # `header.split(",")` is what makes this necessary and it is why 157 port
+    # connections in the generated top were one bit wide against 32-bit pins.
+    #
+    #     input  var logic signed [31:0] a0_0_i, a0_1_i, a0_2_i, a0_3_i,
+    #
+    # splits into four fragments. The first carries the direction, the sign and
+    # the packed range; the other three are BARE IDENTIFIERS. Direction was
+    # already sticky, so they came out as ports -- with no range, hence width 1.
+    #
+    # For a RESOURCE top that is not cosmetic. Thirty-one of thirty-two bits on
+    # every such pin become constant zero, and this file's own header says
+    # "constants would let the fitter fold blocks away". The area it reports
+    # would be UNDERSTATED, on the one measurement the top exists to produce.
+    #
+    # Verilator said so 157 times as WIDTHEXPAND. Nothing was reading it, because
+    # zhao_prod_top could not elaborate far enough for anyone to look.
+    last_packed, last_sgn, last_utype = [], "", ""
     for decl in header.split(","):
         d = decl.strip()
         if not d:
             continue
+        # Decided BEFORE any stripping: a continuation carries no direction, no
+        # var/net kind, no data type, no signedness and no range. `input var
+        # logic x` must NOT be mistaken for one, which is why this tests the raw
+        # fragment rather than what is left after the strips.
+        is_cont = (re.match(r"^[A-Za-z_]\w*(\s*\[[^\]]*\])*$", d) is not None
+                   and re.match(r"^(input|output|inout|var|wire|reg|logic|bit|"
+                                r"byte|integer|signed|unsigned)\b", d) is None)
         m = re.match(r"^(input|output|inout)\b", d)
         if m:
             direction = m.group(1)
@@ -134,6 +160,13 @@ def parse_ports(header):
         at = d.rindex(name)
         packed = re.findall(r"\[[^\]]*\]", d[:at])
         unpacked = re.findall(r"\[[^\]]*\]", d[at + len(name):])
+        if is_cont:
+            # A continuation inherits the declaration's width, sign and type. It
+            # keeps its OWN unpacked dimensions, because `logic [7:0] a [4], b`
+            # gives b no array even though a has one.
+            packed, sgn, user_type = last_packed, last_sgn, last_utype
+        else:
+            last_packed, last_sgn, last_utype = packed, sgn, user_type
         ports.append((direction, name, packed, unpacked, sgn, user_type))
     return ports
 
@@ -273,6 +306,7 @@ def main():
     lines = []
     skipped = []
     used = []
+    needed_types = set()   # user-defined port types the top ends up declaring
 
     for idx, mod in enumerate(sorted(tops)):
         path = decl[mod]
@@ -370,6 +404,27 @@ def main():
                     conns.append(
                         ".%s(%s)" % (name, "rst_n" if name.endswith("_n") else "!rst_n")
                     )
+                elif user_type:
+                    # A STRUCT-TYPED INPUT cannot be sliced by width, because
+                    # `w` is derived from the port's packed range and a typedef
+                    # has none -- it came out as 1. Ten pins were driven by a
+                    # single LFSR bit against 103-bit and 3-bit structs, so 102
+                    # of 103 bits were constant zero and the fitter was free to
+                    # fold the logic behind them away. Same understating fault
+                    # as the comma-continuation bug, different cause.
+                    #
+                    # `$bits(type)` asks the elaborator for the width instead of
+                    # guessing it, and the cast makes the assignment a type match
+                    # rather than a packed-vector-into-struct mismatch.
+                    wire = "%s_%s" % (pre, name)
+                    lines.append("  %s %s;" % (user_type, wire))
+                    lines.append(
+                        "  assign %s = %s'(%s_src[%d +: $bits(%s)]);"
+                        % (wire, user_type, pre, off % (SRCW // 2), user_type)
+                    )
+                    conns.append(".%s(%s)" % (name, wire))
+                    needed_types.add(user_type)
+                    off += 7
                 else:
                     conns.append(
                         ".%s(%s_src[%d +: %s])" % (name, pre, off % (SRCW // 2), w)
@@ -383,6 +438,14 @@ def main():
                     # is both the wrong width and the wrong type -- and a
                     # struct port driven by a packed vector does not elaborate.
                     lines.append("  %s %s;" % (user_type, wire))
+                    # AND THE TYPE HAS TO BE IN SCOPE, which is the half this
+                    # fix originally missed. Declaring `zhao_guard_req_t u24_x;`
+                    # in a module that imports nothing is unresolvable, so the
+                    # generated top still failed quartus_map -- the row read
+                    # `failed:quartus_map.exe` while the generator's comment
+                    # above described the bug as fixed. Two bugs in a row on the
+                    # same line, the second wearing the first's repair note.
+                    needed_types.add(user_type)
                 else:
                     lines.append("  logic%s [%s-1:0] %s;" % (sgn, w, wire))
                 conns.append(".%s(%s)" % (name, wire))
@@ -405,6 +468,47 @@ def main():
             lines.append("  assign %s_fold_q = 1'b0;" % pre)
         lines.append("")
 
+    # ---- RESOLVE EVERY USER-DEFINED PORT TYPE TO ITS PACKAGE ---------------
+    # A generated file that does not compile, carrying a provenance line that
+    # says it was generated, is worse than no file: `zhao_prod_top`'s ledger row
+    # read `failed:quartus_map.exe` while the generator comment above described
+    # the struct-port bug as fixed. So this resolution FAILS LOUDLY rather than
+    # emitting a declaration nothing can elaborate.
+    import_clause = ""
+    if needed_types:
+        pkg_of = {}
+        for root, _dirs, names in os.walk(os.path.join("fpga", "rtl")):
+            for n in names:
+                if not n.endswith(".sv"):
+                    continue
+                p = os.path.join(root, n)
+                try:
+                    t = io.open(p, encoding="utf-8", errors="replace").read()
+                except OSError:
+                    continue
+                pkgs = re.findall(r"^\s*package\s+(\w+)\s*;", t, re.M)
+                if not pkgs:
+                    continue
+                body = strip_comments(t)
+                for ty in needed_types:
+                    # `} zhao_guard_req_t;` for a struct, or `typedef ... ty;`
+                    if re.search(r"(?:\}|typedef[^;]*?)\s*%s\s*;" % re.escape(ty), body):
+                        pkg_of.setdefault(ty, pkgs[0])
+        missing = sorted(t for t in needed_types if t not in pkg_of)
+        if missing:
+            sys.stderr.write(
+                "gen_prod_top: cannot resolve port type(s) to a package: %s\n"
+                "The generated top would declare them with nothing in scope, which "
+                "is how zhao_prod_top sat at failed:quartus_map while its generator "
+                "described the bug as fixed. Refusing to write.\n" % ", ".join(missing))
+            return 2
+        pkgs = sorted(set(pkg_of.values()))
+        # The HEADER import form, `module X import p::*; (...)`. This file's own
+        # port_header() documents it (`module zhao_shell_top import zhao_pkg::*;`)
+        # and zhao_geom_assetfetch.sv uses it, so it is proven in this tree
+        # against Quartus 17 rather than merely legal SystemVerilog.
+        import_clause = " " + " ".join("import %s::*;" % p for p in pkgs)
+
     head = [
         "// zhao_prod_top.sv -- GENERATED by tools/quartus/gen_prod_top.py.",
         "// Do not edit: edit design/prod_manifest.yml and regenerate.",
@@ -419,7 +523,7 @@ def main():
         "// and a shared source would let it merge logic across them.",
         "`default_nettype none",
         "",
-        "module zhao_prod_top (",
+        "module zhao_prod_top" + import_clause + " (",
         "    input  var logic clk,",
         "    input  var logic rst_n,",
         "    input  var logic seed_i,",

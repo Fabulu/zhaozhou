@@ -1191,6 +1191,12 @@ targets:
 
   - top: zhao_prod_top
     sources:
+      # Added 2026-09-09. Instantiated by zhao_raster_tile_pipe, NOT by the
+      # generated top -- which is why check_prod_manifest.py missed it: that
+      # checker validates the top-level instantiations only, not the
+      # transitive closure. Verilator found it.
+      - fpga/rtl/common/zhao_skid2.sv
+      - fpga/rtl/geometry/zhao_geom_fogfactor.sv
       - fpga/rtl/prod/zhao_prod_top.sv
       - fpga/rtl/generated/zhao_abi_pkg.sv
       - fpga/rtl/common/zhao_pkg.sv
@@ -1280,6 +1286,7 @@ targets:
       - fpga/rtl/raster/zhao_raster_edgewalk.sv
       - fpga/rtl/raster/zhao_raster_fbwrite.sv
       - fpga/rtl/raster/zhao_raster_fill.sv
+      - fpga/rtl/raster/zhao_raster_fog.sv
       - fpga/rtl/raster/zhao_raster_fragment.sv
       - fpga/rtl/raster/zhao_raster_perspuv_svc.sv
       - fpga/rtl/raster/zhao_raster_quant.sv
