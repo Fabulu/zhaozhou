@@ -1249,6 +1249,98 @@ targets:
       - fpga/rtl/field/zhao_field_v3_ring.sv
 
   # ==========================================================================
+  # FOURTEEN MORE, and several already have a NUMBER but no way to reproduce it
+  # ==========================================================================
+  # 2026-09-09, owner brief 1.2: "Keep the useful target preparation." Closures
+  # from tools/quartus/propose_fit_target.py.
+  #
+  # SEVERAL OF THESE ARE ALREADY MEASURED AND STILL UNMEASURABLE, which is the
+  # worse of the two states. terrain_normals (map 3 DSP), terrain_bake (map 17),
+  # pose_decode (map 18), geom_cull (15), geom_setup (4), geom_clip (2) and
+  # terrain_project (33) all carry rows -- fitted before targets existed, or via
+  # -ExtraSources -- and NONE could be re-run, so those numbers age with nobody
+  # able to tell when they stopped being true. terrain_normals is the worked
+  # example: its 18-DSP fit was obsolete and a later map said 3, and the census
+  # quoted the 18 for a day.
+  #
+  # THREE ARE NAMED BY THE BRIEF AS UNPRICED OBLIGATIONS (section 1.3):
+  # GEOM.ATTRSETUP "contains repeated edge products and nine attribute-weighted
+  # products with wide intermediates", and RASTER.ATTRINTERP and ATTRSTEP "both
+  # contain wide products to seed a tile. A header saying 'adds only' describes
+  # their pixel walk, not their complete hardware."
+  #
+  # NO RULES. None of these headers states a per-block resource budget, and the
+  # brief is explicit that a header estimate is not a product law. Bounds go in
+  # when there is a measurement to bound a regression against.
+  #
+  # NOTE zhao_terrain_project pulls in zhao_project_core -- the same core
+  # zhao_geom_project instantiates. TWO ENGINES, one source file. Fitting each
+  # separately counts the core twice, which is correct for "what does the
+  # planned machine cost" and wrong for "how much silicon is the core", and the
+  # brief separates those explicitly (2.2).
+
+  - top: zhao_geom_attrsetup
+    sources:
+      - fpga/rtl/geometry/zhao_geom_attrsetup.sv
+
+  - top: zhao_raster_attrinterp
+    sources:
+      - fpga/rtl/raster/zhao_raster_attrinterp.sv
+
+  - top: zhao_raster_attrstep
+    sources:
+      - fpga/rtl/raster/zhao_raster_attrstep.sv
+      - fpga/rtl/raster/zhao_raster_attrdiv.sv
+
+  - top: zhao_geom_pose_decode
+    sources:
+      - fpga/rtl/geometry/zhao_geom_pose_decode.sv
+      - fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+      - fpga/rtl/geometry/zhao_geom_quat2mat.sv
+
+  - top: zhao_geom_pose_cache
+    sources:
+      - fpga/rtl/geometry/zhao_geom_pose_cache.sv
+
+  - top: zhao_geom_cull
+    sources:
+      - fpga/rtl/geometry/zhao_geom_cull.sv
+
+  - top: zhao_geom_clip
+    sources:
+      - fpga/rtl/geometry/zhao_geom_clip.sv
+
+  - top: zhao_geom_setup
+    sources:
+      - fpga/rtl/geometry/zhao_geom_setup.sv
+
+  - top: zhao_geom_depthquant
+    sources:
+      - fpga/rtl/geometry/zhao_geom_depthquant.sv
+
+  - top: zhao_terrain_normals
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_normals.sv
+
+  - top: zhao_terrain_bake
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_bake.sv
+      - fpga/rtl/terrain/zhao_terrain_bake_delta.sv
+
+  - top: zhao_terrain_tess
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_tess.sv
+
+  - top: zhao_terrain_lod
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_lod.sv
+
+  - top: zhao_terrain_project
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_project.sv
+      - fpga/rtl/common/zhao_project_core.sv
+
+  # ==========================================================================
   # GEOMETRY: three more blocks with no target, two of them already MEASURED
   # ==========================================================================
   # 2026-09-09. These three have no `- top:` entry, and two of them have ledger
