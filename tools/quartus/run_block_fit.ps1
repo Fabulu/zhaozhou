@@ -718,7 +718,48 @@ try {
         # from 96c0394 as HEAD. Each row now carries the commit it was
         # actually measured at, and rows without one predate this change.
         $rowModule = if ($RowLabel) { "$mod$RowLabel" } else { $mod }
-        $row = [ordered]@{ module = $rowModule; status = 'unknown'; sourceCommit = $head; rtlCleanAtHead = $rtlClean }
+        # RECORD THE SEED. It was always known and never written down.
+        #
+        # 2026-09-09: `zhao_block_fit.json` had 133 rows and NOT ONE seed field.
+        # The information was never missing -- the shell QSF pins
+        # `set_global_assignment -name SEED 1`, and -Seed overrides it -- so
+        # every Fmax in this repository is a known-seed result whose seed a
+        # reader cannot see.
+        #
+        # That matters because two owner documents make three seeds a GATE:
+        # islandrearchitecture4.md 21.6 ("three seeds") and
+        # TERRAIN_31MHZ_REARCHITECTURE.txt 15 ("Run more than one placement seed
+        # before claiming margin... publish every result, not only the best. A
+        # best-seed 100.01 MHz headline is not robust evidence of an integration
+        # reserve."). Without this field, a single seed-1 row and one point of a
+        # three-seed sweep are indistinguishable in the ledger, so the gate
+        # cannot be evaluated from the evidence at all -- and the comfortable
+        # reading is that it was met.
+        #
+        # `seedSource` says whether the number is this script's override or the
+        # project's own pinned value, because those are different claims.
+        #
+        # READ IT OUT OF THE QSF THE FIT WILL ACTUALLY USE, rather than
+        # hardcoding what this script believes the default to be. $qsf starts as
+        # a copy of fpga/quartus/shell_fit/zhao_shell_fit.qsf, which pins
+        # `SEED 1`, and -Seed appends an override below; taking the LAST SEED
+        # line matches Quartus's last-assignment-wins behaviour and stays correct
+        # if either the pin or the override changes. A hardcoded 1 would have
+        # been an assumption recorded as provenance.
+        $seedLines = @($qsf | Where-Object { $_ -match '^\s*set_global_assignment\s+-name\s+SEED\s+(\d+)' })
+        if ($seedLines.Count -gt 0) {
+            $null = $seedLines[-1] -match '^\s*set_global_assignment\s+-name\s+SEED\s+(\d+)'
+            $effSeed = [int]$Matches[1]
+            $seedSrc = if ($Seed -gt 0) { 'run_block_fit -Seed' } else { 'shell_fit QSF pinned SEED' }
+        } else {
+            # No SEED anywhere: the tool default governs and this script does not
+            # know it. Say so rather than guessing -- an unknown seed is a real
+            # state and it is exactly what the 133 existing rows have.
+            $effSeed = $null
+            $seedSrc = 'UNRECORDED -- no SEED assignment in the project'
+        }
+        $row = [ordered]@{ module = $rowModule; status = 'unknown'; sourceCommit = $head;
+                           rtlCleanAtHead = $rtlClean; fitterSeed = $effSeed; seedSource = $seedSrc }
 
         # THE COMMIT IS NOT THE BYTES, AND THIS ROW ALREADY KNEW IT.
         #

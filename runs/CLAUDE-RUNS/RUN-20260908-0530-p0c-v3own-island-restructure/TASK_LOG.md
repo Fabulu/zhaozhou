@@ -2311,3 +2311,65 @@ with complete path capture and preserve the old receipt -- NOT a rewrite. The
 product-register repair (`m_p_q`, `mp_v_q`, `mp_step_q`) is already in the tree at
 `09b6b721`; the brief says "do not reimplement m_p_q as though it were missing."
 B1 alone may make most of the programme unnecessary.
+
+## 2026-09-09 -- read islandrearchitecture4.md, and ALM is NOT the worst miss
+
+Read `reports/islandrearchitecture4.md` (3,829 lines, `de7e7e7b`, 2026-09-03) --
+the document the 7,500-ALM redline comes from, never read on this lane. Via
+`git show origin/main:<path>`; tree untouched, main not merged.
+
+**Scored @g2-prod against that document's own 21.6 gate. Four of five FAIL:**
+
+| criterion | measured | hard | vs hard |
+|---|---|---|---|
+| ALM | 10,837 | 7,500 | +3,337 (+44%) |
+| registers | 16,285 | 9,000 | **+7,285 (+81%)** |
+| M10K | 49 | 64 | -15 (-23%) **PASS** |
+| DSP | 17 | 14 | +3 (+21%) |
+| Fmax | 82.05 | 115 | -33 (-29%) |
+
+The whole session framed this as "no 3,336-ALM lever exists". True, and the wrong
+headline: **the register breach is nearly twice the ALM breach proportionally**,
+and ALM was the one being quoted because it is the one a lever hunt can act on.
+
+**The memory-first remedy WORKED on its own axis.** Against 0's prototype
+figures: registers 25,123 -> 16,285 (-35%), ALM 15,749 -> 10,837 (-31%), M10K
+11 -> **49**, landing inside the 32-56 expected band with 23% spare. The payload
+really is in memory. It then stalled exactly where v3own's per-owner status
+arrays are -- read AND written in full every clock, so unreachable by that remedy.
+
+**The conflict, and why it is the owner's.** 3.3's per-component budget has
+ELEVEN rows summing to 6,600 ALM and **none is per-owner transaction status**.
+The nearest is "FRAGROB + token fabric -- 900 ALM, 1,200 reg, 14-20 M10K": the
+token fabric was budgeted at 900 ALM BECAUSE its state was assumed
+memory-resident, which is what those M10Ks are for. v3own alone is 2,707 ALM and
+its state provably cannot be. So 7,500/9,000 are derived from a model the
+implementation cannot satisfy for live status. No lever inside the island
+reconciles that. Rescue-brief 0.2: "surface a real unresolved contract conflict
+rather than silently choosing the cheap side."
+
+**No escalation clause exists** in 3,829 lines, and the document's status line is
+"IMPLEMENTATION ARCHITECTURE / PROPOSED OWNER RULING ... becomes binding when the
+owner adopts or commits it."
+
+**Its 3.4 tripwires are already implemented** in `design/fit_targets.yml`, cited
+by section number (`S3.4: require DSP == 0 for the CSD variant`, `S3.4 FRAGROB:
+reject registers > 2,500`), plus min_m10k on 6 targets and min_memory_bits on 4.
+Absorbed by an earlier pass from a copy read elsewhere.
+
+**THE SEED GAP, found and closed for future fits.** `zhao_block_fit.json` has 133
+rows and **not one seed field**, while TWO owner documents make three seeds a
+gate (isl4 21.6; terrain 15 "publish every result, not only the best"). The
+information was never missing -- the shell QSF pins `SEED 1` and -Seed overrides
+it -- so a single seed-1 row and one point of a three-seed sweep are
+indistinguishable, and the comfortable reading is that the gate was met.
+
+`run_block_fit.ps1` now records `fitterSeed` and `seedSource`, READ OUT OF THE
+QSF THE FIT WILL USE rather than hardcoded -- taking the last SEED line, matching
+Quartus last-wins, with an explicit `UNRECORDED` branch when no SEED exists.
+Tested three cases: real QSF/-Seed 0 -> 1 "shell_fit QSF pinned SEED"; +-Seed 7
+-> 7 "run_block_fit -Seed"; SEED lines stripped -> null "UNRECORDED". Script
+parses clean. The 133 existing rows are NOT retro-stamped -- that would be
+inventing provenance; they stay unrecorded and the report says so.
+
+Report: `reports/ISLAND-SCORED-AGAINST-ITS-OWN-BUDGET-20260909.md`.
