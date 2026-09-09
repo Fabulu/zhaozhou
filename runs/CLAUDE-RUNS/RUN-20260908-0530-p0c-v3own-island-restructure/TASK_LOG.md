@@ -2606,3 +2606,56 @@ Probe registered in `design/fit_targets.yml` (now 100 targets) with
 reproduces the one array known to infer, so if no M10K appears the instrument is
 broken and the rule refuses to let that read as a finding. No max_m10k: how many
 of the five infer is the question, and a ceiling would constrain the experiment.
+
+## 2026-09-09 -- probe result, second map-lane blocker cleared, reset hypothesis RULED OUT
+
+Owner-direction check: NO NEW DIRECTION on this branch (0 incoming). Five owner
+docs remain ABSENT HERE on main; two were read today (TERRAIN_31MHZ, the
+OWNER-DOCUMENT index) plus islandrearchitecture4. Still unread: bumomapping.md
+(1 line), ADDLIGHTNING.md (175). No @g2-prod fit is running or pending -- the
+row I have been scoring against was already on disk.
+
+**Probe v1 and v2 both: `arr_d` INFERRED, 16x32 Simple Dual Port, 512 bits, the
+only one of five.** v2 carries `rtlCleanAtHead: True`, 78.4 s, seed 1 recorded.
+
+**But the probe is confounded, and the confound IS a finding.** Written
+identically, arr_b/c/e were "Merged with arr_a" -- 224 registers each -- and the
+survivor carried the UNION of their read sites (two assigns + two always_ff), so
+it could never be dual-port. Only arr_d escaped, and only because having no reset
+made it provably different. This reproduces perspuv's e_mant merge (384
+registers) in fifteen lines: independent corroboration of a finding that had
+rested on one map report.
+
+**Merging is PER BIT.** v2's XOR salts differed only in bits 0-4, so bits 5-31
+stayed provably equal and arr_c still lost 496 rows. With five variants no set of
+constants can differ pairwise in every bit -- pigeonhole. A clean probe needs
+separate write-data PORTS.
+
+**RESET HYPOTHESIS RULED OUT FOR THE ISLAND, by reading the RTL not by another
+map.** perspuv's reset branch clears ONLY e_val and e_have (lines 434-435) --
+which are also the two arrays with multiple write addresses. e_num_u, e_mant_u,
+e_k, e_q_u and e_tag are NOT reset-cleared. So e_num_u already has the property
+that made arr_d infer and still does not infer. check_ram_inference's
+"written from an ASYNC-RESET process" flag is about the PROCESS carrying a reset,
+not the array being cleared in it -- exactly why its header calls the signal weak.
+
+**The e_tag vs e_num_u discriminator stays OPEN.** Both 16 deep, one write at
+tail_q, one read, neither reset-cleared. Remaining visible difference is read
+style (continuous assign @ registered index vs always_ff @ comb index) and the
+probe cannot speak to it because its assign variants merged. Not guessing: this
+reset hypothesis is the THIRD speculation corrected today, after the stale Mosaic
+DSP figure and the overstated seed claim -- and I had put it in the probe as the
+leading candidate.
+
+**Second map-lane blocker CLEARED:** zhao_probe_v3_exec.sv:348 used
+`s1_uop_r.op` sixteen lines before `uop_t s1_uop_r;`. Verilator accepts
+use-before-declaration at module scope; Quartus 17.0.2 cannot resolve a STRUCT
+FIELD that way (Error 10733) and fails the whole file. Only the assign moved. So
+both files that broke every whole-tree map since 2026-08-30 are now fixed;
+validating with a whole-tree map.
+
+Tooling note for scripted edits: fpga/rtl files are CRLF on disk now that
+core.autocrlf is set repo-locally, so an LF-only pattern silently matches
+nothing. My patch script's assertion caught it -- keep the assertion.
+
+Report: `reports/RAM-INFERENCE-PROBE-AND-A-DEAD-MAP-LANE-20260909.md`.
