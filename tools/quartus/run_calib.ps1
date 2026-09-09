@@ -53,7 +53,22 @@ if ($SkipMeasured) {
     }
     $before = $points.Count
     $points = @($points | Where-Object { -not $done.ContainsKey($_.module) })
-    Write-Host ("-SkipMeasured: {0} of {1} already ok; {2} to go" -f ($before - $points.Count), $before, $points.Count)
+    # Write-OUTPUT, not Write-Host, and the difference is the whole point.
+    #
+    # Write-Host writes to the host directly and NEVER enters a pipeline, so
+    # `run_calib.ps1 ... | Tee-Object -FilePath log` records everything except
+    # this line. queue_after_g2.ps1 grew a check that greps that log to confirm
+    # the skip actually happened -- and it could never have found the line. A
+    # verification gate structurally incapable of firing, written the same
+    # afternoon as three separate findings about exactly that failure.
+    #
+    # Demonstrated rather than assumed:
+    #   & { Write-Host 'A'; Write-Output 'B' } | Out-String   ->  "B" only.
+    #
+    # This line is a RESULT, not decoration: it says how much work was skipped
+    # and is the only evidence that -SkipMeasured did anything. Results belong in
+    # the pipeline where a caller can read them.
+    Write-Output ("-SkipMeasured: {0} of {1} already ok; {2} to go" -f ($before - $points.Count), $before, $points.Count)
 }
 
 $head = (& git -C $RepoRoot rev-parse HEAD).Trim()
