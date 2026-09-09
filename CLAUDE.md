@@ -335,6 +335,89 @@ This does not license skipping fits. A subsystem that changes area or timing
 and never gets fitted is an unmeasured claim, and the ALM/Fmax budget is real.
 It licenses *batching* them.
 
+## A thing BUILT is not a thing INSTALLED, and a thing FIXED is not a thing MEASURED
+
+Added 2026-09-09, after an archaeology sweep found a ~33-DSP / ~6,000-ALM saving
+that had been **fully planned two weeks earlier**, whose prerequisite was
+deliberately BUILT, and whose final step was simply never performed. Nobody was
+careless. The sequence was exemplary right up to the end:
+
+1. notice GEOM and TERRAIN both contain a projector — done
+2. extract the identical arithmetic into `zhao_project_core` — done
+3. notice that deduplicated the SOURCE and not the SILICON — done, and written
+   down: *"The duplication is gone from the source. It is NOT gone from the
+   silicon."*
+4. defer sharing, because combined throughput did not fit — correct at the time
+5. **build the prerequisite** (the projected-vertex cache) — done
+6. come back and instantiate ONE core — **never happened**
+
+The plan was right, the analysis was right, the prerequisite got built, and the
+cheque was never cashed. It was not forgotten because anyone forgot; it was
+forgotten because **nothing in the tree was watching for it.**
+
+That is the `.gitignore` lesson one level up. There, an ignore rule made 33 GB
+invisible to git while it went on filling the disk. Here the knowledge was
+written into module headers and commit messages, in detail, by people who knew
+exactly what they were deferring — and no tool ever read them back.
+
+**Both shapes are mechanically detectable, and `tools/budget/uncashed_cheques.py`
+now detects them.** Run it; it is seconds, and it reuses `module_graph.build`
+and `dsp_census.load_evidence` rather than reimplementing either.
+
+* **BUILT, INSTALLED NOWHERE.** A module measured or fit-targeted that nothing
+  instantiates. The refinement that made the check useful: **being NAMED in the
+  manifest is not being SETTLED by it.** A note saying `superseded` or `probe`
+  closes the question; a note saying `unused`, `not-yet-adopted` or `until it is
+  composed` is *a deferral written down* and leaves it open.
+* **FIXED, NEVER RE-MEASURED.** A fit row that is DIRTY (`rtlCleanAtHead: false`,
+  so it never described any committed state exactly) or BEHIND (its
+  `sourceCommit` is older than the last commit to the module's own file).
+  `zhao_terrain_normals` went from six multipliers to one on 2026-08-24 and the
+  database still describes it with a dirty 2026-08-20 row asserting 18 DSP —
+  which reads **high**, the flattering direction for "look what we could save"
+  and the wrong direction for a budget.
+
+### Three corollaries, each of which cost something the same day
+
+**Before commissioning a new block, grep the tree for the thing it replaces.**
+A projected-vertex arena was designed, built, linted, Quartus-gated, directed-
+tested and committed with two fired positive controls — and `zhao_vertex_arena`
+already existed, with 58 formal assertions, a committed SymbiYosys proof, and a
+shell already composed in `zhao_prod_top`. **Not one of those gates can ask
+whether the module needed to exist.** One `ls` would have found it, and its
+header hands over the owner ruling, a three-option analysis and the cost number
+in its first forty lines.
+
+**When a correction lands, do not grep for the PRODUCER — somebody always fixes
+the producer. Grep for every place the corrected value is STORED or FORWARDED.**
+`GEOM.DEPTHQUANT` was corrected on 2026-09-03 to consume `w` rather than `1/w`;
+`zhao_project_core` and `zhao_geom_project` both grew `out_w_o`. `zhao_geom_wcache`
+is dated three days EARLIER and its 75-bit payload was never widened, so the
+replay cache between the fixed producer and the consumer still drops the field.
+Caches, replay buffers and packet layouts are **frozen copies of yesterday's
+agreement** and carry no marker saying so. This is the harder variant to see,
+because the cheque was PARTIALLY cashed: most links were fixed, so it reads as
+done to anyone who checks the producer or the contract.
+
+**A deliberately-failing frontier point is not a saving.** `GEOM.SKIN`'s
+`MUL_LANES=1` row shows 3 DSP against the shipping 9, and was quoted as a −6 DSP
+lever. The disqualifying fact is **two columns to the right in the same table**:
+it delivers 38,965 vertices/frame against the owner-ruled 120,000 — 32%, and the
+contract says it "is kept because it fails", with a committed test asserting so.
+Somebody built a configuration whose entire purpose is to fail; reading its DSP
+column as available money inverts the author's intent. The tell was reading one
+column, finding a number shaped like a lever, and stopping.
+
+### And the same disease in prose
+
+`reports/OWNER-DOCUMENT-INDEX.md` lists 33 owner "Agent please read" documents;
+**20 have no recorded disposition.** Its own sentence is the law: *"Superseded is
+a disposition and should be recorded as one — an unread instruction and a
+satisfied instruction look identical from here."* Its origin story is this
+chapter's own shape: a bump-mapping request sat unread because it landed at the
+repo root where the sweep did not look, and widening the sweep immediately
+surfaced three more owner briefs from the same day, 5,653 lines, none indexed.
+
 ## Instructions are not delivered until they are read
 
 Owner direction was posted four times because it kept not reaching the working
