@@ -1783,3 +1783,39 @@ technique and two tool facts are now in CLAUDE.md.
 
 **Toolchain queue unchanged:** gate 4 svc row (81 min, 76% CPU) → gate 1 MapOnly
 pair → three new-block MapOnlys. Packets 2-3 wait on gate 1.
+
+## Where I am, written BEFORE reading the svc row
+
+**PACKETS 1, 2 AND 3 ARE ALL COMPLETE IN SIMULATION.** The island now runs the
+descriptor bank and the UV join, feeds the expander and Mosaic from one captured
+record, and carries the palette pair instead of looking it up.
+
+| gate | lab | production | oracle |
+|---|---|---|---|
+| composed | 125 | 124 | 119 |
+| fault | 18 | — | — |
+
+Plus `island_v3_paired`, `desc_join_expand` 15, `frag_expand` 12, `metajoin` 7,
+seam 7, `early_desc` 11, `uv_join` 13, `pairpipe` 25, lockstep 9.
+
+**THE NEXT ACTION, whatever the svc row says:** gate 2 — one island fit covering
+packets 1+2+3, read against the anchored `@pktC-fixed` row (15,483 ALM / 62.83
+MHz reported / 77.45 internal-only). Its delta contains the D0 gate, the
+laboratory removal, the dead-array deletions, the descriptor bank, the join and
+palette carriage. The REGISTER component is already isolated by gate 1's MapOnly
+pair (−4,432), which is why that pair was worth minutes.
+
+**Do NOT start gate 2 while anything else is fitting.** And bank the worst-path
+census first — `blockpaths/*.setup.rpt` is destroyed by the next fit of the same
+module.
+
+Still open, in order: the island-level hop from `exp_wq_overflow` to the sticky
+bit (untested, printed as such by the fault probe); the instrument ports on the
+bank and join (deliberately unconnected — wiring them changes the island port
+list, which the shared composed test depends on); `frag_expand`'s dead `binding`
+field (pre-existing, reserved for a resolver contract that does not exist).
+
+Owner decisions pending: delete `zhao_texture_combine` (−8 DSP, −494 ALM, trigger
+met, two documents disagree on who decides); switch `prod_top` to V2 retiring V1
+(−793 ALM, wants its own fit); and the quarter-square ROM design (2 M10K buys the
+island's last 2 combiner DSP, bit-exact).
