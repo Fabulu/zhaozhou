@@ -162,8 +162,27 @@ if ($onMain) {
     # false alarm repeating every 29 minutes for a week is how a reader learns
     # to skip the section that matters.
     $mainFiles = & git diff --name-only --diff-filter=AM "HEAD..origin/main" 2>$null
+    # THE FILENAME FILTER IS THE UNRELIABLE HALF, AND IT MISSED A REAL ONE.
+    #
+    # 2026-09-09: `reports/OWNER-DOCUMENT-INDEX.md` is absent at HEAD and present
+    # on main. It is an owner-document MANIFEST -- the index of all 33 "Agent
+    # please read" files -- and this filter reported "no direction-shaped
+    # filenames differ from HEAD", because it matched OWNER-DIRECTION and the
+    # file says OWNER-DOCUMENT. One noun apart.
+    #
+    # It surfaced only through the SUBJECT scan below, and only by luck: the
+    # commit subject is `Add an owner-document manifest: every "Agent please
+    # read" file, chronologically`, so it matched on a QUOTED occurrence of the
+    # phrase rather than on an actual request. A detector that works by accident
+    # is not working.
+    #
+    # The index's own first standing rule is "owner documents land wherever they
+    # land", and its second is "scan commit subjects -- several were never
+    # announced anywhere else". So the pattern is widened here, and the subject
+    # scan below is completed to NAME THE FILES rather than tell a reader to go
+    # and look them up.
     $mainDir = @($mainFiles | Where-Object {
-        $_ -match 'Agent please read|OWNER-DIRECTION|OWNER_DOCKET|please read|DIRECTION-'
+        $_ -match 'Agent please read|please read|OWNER[-_]|DIRECTION|DOCKET|INSTRUCT|ADVICE|rearchitect'
     })
     if ($mainDir.Count -gt 0) {
         Write-Output "   DIRECTION-SHAPED FILES differing from HEAD:"
@@ -180,8 +199,29 @@ if ($onMain) {
     if ($mainAsk) {
         $n = ($mainAsk | Measure-Object).Count
         Write-Output "   $n commit subject(s) on main addressed to the agent (newest 8):"
-        $mainAsk | Select-Object -First 8 | ForEach-Object { Write-Output "      $_" }
-        Write-Output '   Files:  git show --name-only --format= <sha>'
+        # NAME THE FILES, AND SAY WHICH ARE ABSENT HERE.
+        #
+        # The previous version printed the subjects and then told the reader to
+        # run `git show --name-only` themselves. That is a recipe in a report,
+        # which is the thing CLAUDE.md says a brief must never contain -- and in
+        # practice nobody ran it, which is how OWNER-DOCUMENT-INDEX.md sat
+        # unlisted while its commit was printed every 30 minutes.
+        #
+        # `git cat-file -e` against HEAD separates "already here" from "this lane
+        # has never had it". Both read from .git; the working tree is untouched.
+        foreach ($c in ($mainAsk | Select-Object -First 8)) {
+            Write-Output "      $c"
+            $sha = ($c -split ' ')[0]
+            $files = & git show --name-only --format='' $sha 2>$null |
+                Where-Object { $_ -and $_.Trim() }
+            foreach ($f in $files) {
+                & git cat-file -e "HEAD:$f" 2>$null
+                $here = $?
+                $mark = if ($here) { 'present here' } else { 'ABSENT HERE' }
+                Write-Output ("           {0,-13} {1}" -f $mark, $f)
+            }
+        }
+        Write-Output '   Read one without touching the tree:  git show origin/main:<path>'
     }
 }
 

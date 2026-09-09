@@ -2260,3 +2260,54 @@ Verification: python syntax on 4 files, `bash -n` on the sweep script, control-b
 scan clean on all 7 touched files, and `pull_direction.ps1` run end-to-end under
 PowerShell -- it now names the seven files I really changed instead of 1,200
 phantoms, and resolves `origin/zixxtrixx-v8-closeout` instead of `@u`.
+
+## 2026-09-09 -- a THIRD defect in the same tool, and the newest owner document
+
+Found by running the repaired puller: `reports/OWNER-DOCUMENT-INDEX.md` is absent
+at HEAD and present on origin/main, and the filename filter matched
+`OWNER-DIRECTION` while the file says `OWNER-DOCUMENT`. One noun apart, so the
+tool printed "no direction-shaped filenames differ from HEAD" every 30 minutes.
+It surfaced only through the commit-SUBJECT scan and only by luck -- the subject
+quotes the phrase `"Agent please read"` rather than making the request.
+
+Fixed both halves: widened the pattern, and the subject scan now NAMES each
+commit's files and marks them `present here` / `ABSENT HERE` instead of printing
+a recipe nobody ran. It immediately listed five absent owner documents.
+
+**Read the owner-document index** (33 documents, and its own three standing rules
+about where direction lands). Then read the newest one, never read on this lane:
+`reports/TERRAIN_31MHZ_REARCHITECTURE.txt`, 1,437 lines, `1fc4ac8a`, 2026-09-07.
+Read via `git show origin/main:<path>`; tree untouched, main NOT merged.
+
+**Its first instruction is the one already in force.** Opening lines: "Agent
+should focus on finishing the texture island first. Do not interrupt that work,
+move its acceptance criteria, or consume its active Quartus lane for this task."
+§16 Step 0: "Finish the texture island. No diversion of that closure effort." So
+three independent written sources now sequence texture before terrain -- this
+brief, rescue-brief 0.2, and 49fc32e9.
+
+**Tested its two accounting warnings; both already satisfied.**
+* The obsolete 18-DSP TERRAIN.NORMALS row is NOT summed into the tessellator --
+  the census reports `zhao_terrain_normals 3 DSP, newer MAP (bfc74710) supersedes
+  an older fit that says 18 DSP; fitted area and timing remain UNRESOLVED`, under
+  SUPERSEDED FITS with the caveat on the row.
+* The pair wrapper is NOT double-counted: `zhao_pair_tess_normals` sits in
+  `excluded: probe` with both leaves counted individually in `top:`.
+
+**And a gap it names is already closed.** §1 says the four pair wrappers had no
+fit targets so their poor frequencies were never judged. True at its pinned
+revision; `design/fit_targets.yml` now targets all five wrappers plus both
+terrain leaves, from the 44-to-99 authoring pass -- convergence, not compliance.
+
+**Recorded its post-texture programme and gates** (brief 0.1.C authorises exactly
+this) in `reports/TERRAIN-BRIEF-READ-AND-GATES-20260909.md`: the B0-B5 comparison
+matrix, the three-seed publish-every-result rule, the endpoint/path-ownership
+classification, the no-multicycle-over-live-registers rule, and the stop
+conditions. Terrain is SIX named fits, not one, which is itself a reason not to
+start it casually.
+
+First action when texture closes, from 2 and 16 Step 1: refit the CURRENT pair
+with complete path capture and preserve the old receipt -- NOT a rewrite. The
+product-register repair (`m_p_q`, `mp_v_q`, `mp_step_q`) is already in the tree at
+`09b6b721`; the brief says "do not reimplement m_p_q as though it were missing."
+B1 alone may make most of the programme unnecessary.
