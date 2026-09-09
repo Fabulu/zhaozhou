@@ -553,3 +553,36 @@ segments-vs-normals answer before anything else** — PERF is blocked on it), th
 REEL (**must read `OWNER-DIRECTION-10` first**, it never received it), then PERF
 (**calibrate before touching `taunt3`**). Re-check for new fits before each heavy
 step rather than assuming the coast stays clear.
+
+### 07:55 — the fit finished; 07:56 — a NEW ONE STARTED. The rule needed changing.
+
+The owner's instruction was *"make yourself a job that checks every thirty
+seconds… once these fits finish, you can continue."* The watcher fired correctly
+at **07:55:11**. ⚠ **A new Quartus compile started at 07:56** — `quartus_map`
+plus the IP catalog and its JRE.
+
+**So the literal rule is unsatisfiable: the hardware lane starts a new compile
+within a minute of the last one ending.** Waiting for "no Quartus at all" means
+never running.
+
+**The judgement I made instead, stated so it can be overruled:**
+
+* **Two lanes, not three, and nothing of my own.** FACE (its ablation unblocks the
+  other two) and REEL (Direction 10). PERF held back.
+* **That is materially lighter than what preceded the loss** — which was three
+  lanes **plus** my own 28-subject renders, encodes, and a 641-file decode sweep,
+  concurrently, for hours.
+* **The watcher is re-armed on `quartus_fit` specifically**, not on any Quartus
+  process. `map` is synthesis and comparatively light; `fit` is the placement
+  stage that ran eight hours. A real fit starting now wakes me inside a minute.
+
+**The general lesson, which is not what I first wrote:** a binary "wait for the
+fit" rule does not survive contact with a toolchain that runs continuously.
+**The workable rule is a LOAD CEILING** — how many lanes, plus whether the
+coordinator is also rendering — not a stop/go gate. Memory updated.
+
+### 08:00 — both lanes resumed with their reviews in hand
+FACE knows its ablation was confounded (rings AND segments) and that a
+single-variable leg costs **+352 tris against +992**. REEL has Direction 10,
+which it had never seen, and the confidence corrections on R5: `hasty` and
+`drift` established, **`fall` refuted — my error, caught at 2×.**
