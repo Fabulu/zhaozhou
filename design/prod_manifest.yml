@@ -376,6 +376,15 @@ excluded:
 
   # Simulation-only wrapper exposing zhao_texture_ident_pkg's pack/unpack
   # functions to the C++ harness. Never in the machine.
+  # Registered the same day it was written, because registering a block in the
+  # ledger, the manifest and a source list are three different acts and doing two
+  # of three leaves a file nothing bills and nothing declares absent.
+  #
+  # `unused` for now: nothing instantiates it yet, exactly as nothing yet
+  # instantiates the two wrappers it is meant to replace. When a top adopts it,
+  # this becomes an atomic pair with geom_project/terrain_project moving to
+  # excluded -- doing one edit without the other mis-counts the machine.
+  - zhao_project_service: unused  ONE shared projector; replaces the duplicated core in geom_project + terrain_project (66 DSP -> 33)
   - zhao_texture_ident_probe: probe  exposes the identity encoding functions for ident_encoding_directed
   # Added 2026-09-09, and CAUGHT BY check_prod_manifest.py rather than remembered.
   # I registered this probe in design/fit_targets.yml and in no manifest, and the

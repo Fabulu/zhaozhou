@@ -478,6 +478,32 @@ targets:
   # would let it pass by being merely different. Note svc itself measured 2,204
   # ALM against these -- both rows are expected to violate, and the comparison
   # is between them, not against the budget.
+  # THE SHARED PROJECTOR. One core instead of two.
+  #
+  # zhao_geom_project (6,199 ALM / 33 DSP) and zhao_terrain_project (6,068 / 33)
+  # both instantiate zhao_project_core, differing only in a PAYLOAD rider width.
+  # 66 of the machine's 192 DSP are the same nine mul32 call sites, twice.
+  #
+  # max_dsp: 33 IS THE LOAD-BEARING RULE and the whole point of the block. One
+  # core is 33; if this row returns 66 the sharing did not happen and the result
+  # must not be read as a saving. It is deliberately EQUAL to one core rather
+  # than lower: this change removes a duplicate provider, it does not claim to
+  # make projection arithmetic cheaper.
+  #
+  # max_alms 6,300 is one wrapper's measured 6,199 plus a small arbitration
+  # allowance. The service should be THINNER than either wrapper, since it adds
+  # a round-robin grant and a demux and deletes nothing else.
+  #
+  # No min_fmax_mhz. That rule is opt-in and the clock contract belongs to the
+  # core, which carries its own stage-5b repair after measuring 61.09 MHz.
+  - top: zhao_project_service
+    sources:
+      - fpga/rtl/common/zhao_project_core.sv
+      - fpga/rtl/common/zhao_project_service.sv
+    rules:
+      max_dsp: 33
+      max_alms: 6300
+
   - top: zhao_raster_perspuv_pairpipe
     sources:
       - fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv

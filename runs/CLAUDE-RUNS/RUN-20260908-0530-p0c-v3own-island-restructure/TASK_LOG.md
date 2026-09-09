@@ -3681,3 +3681,58 @@ broken instrument until proven otherwise, and this one would have hidden the
 entire finding.
 
 Report: `reports/PROJECTION-IS-66-DSP-OF-192-20260909.md`.
+
+## 2026-09-09 -- FIRST RESCUE IMPLEMENTATION: the shared projector
+
+Owner-direction check: no new git direction; the four chat-delivered roadmaps are
+the live direction and this is that work.
+
+**The starter-kit ZIP never landed.** Only the four .txt/.json files arrived at
+18:21-18:23. The five zhao_rescue_*.sv candidates, the C++ selector and the
+Python tests are not on disk anywhere. Reported, not blocking -- the roadmaps
+carry the architecture and the contracts, so the implementation proceeds from
+those.
+
+**Wrote `fpga/rtl/common/zhao_project_service.sv`** -- one physical projector
+for both clients. Three things had to be true and each was CHECKED, not assumed:
+
+1. **One core is fast enough.** The core's own header: "fully pipelined at one
+   vertex per clock", and at its stage-5b repair "LATENCY, NOT INITIATION
+   INTERVAL... a vertex still enters every cycle." The roadmap's two-view stress
+   is 903,552 projections against a ~1,333,333-clock window -- fits with ~32%
+   headroom. The saving is a deleted duplicate provider, NOT a slower survivor,
+   which is the roadmap's own condition.
+
+2. **Both clients want the SAME matrix.** The core stores mat[0:1] per VIEW, not
+   per client, which is only sound if they share a camera. The core says they do:
+   "The matrix words are fx16 VIEW-PROJECTION coefficients; the coordinates are
+   fx16 WORLD positions." No per-object model matrix exists in this core. If that
+   ever changes, the bank widens to [client][view] and costs REGISTERS, not DSP
+   -- do not clone the core again.
+
+3. **Nothing has to be rewired.** Neither wrapper is instantiated by any
+   production top; both are billed manifest roots awaiting composition. So this
+   is a clean-slate provider choice, and both wrappers stay as reference oracles.
+
+Design: round-robin with a toggling priority that flips only on a CONTENDED
+grant (alternating on every grant would let a lone client hand its turn to an
+idle one). The core has no input backpressure, so `ready` is exactly "granted
+this cycle" -- a client is never accepted and then delayed, which is how a shared
+provider can still honour a fixed-latency contract measured FROM ACCEPTANCE.
+The client id rides in the payload's top bit and comes back out with its own
+data, so the result demux needs no shadow FIFO and cannot drift.
+
+Also exports a_grants/b_grants/**contended** counters. Contention is the number
+that decides whether one core stays the right choice: if it is a large fraction
+of grants under a real workload, combined demand is near the one-per-clock limit
+-- and that is a measurement rather than an opinion.
+
+Verified: no control bytes; check_quartus17_syntax clean over 214 files;
+verilator --lint-only -Wall RC=0 with the core.
+
+Registered in ALL THREE places the same day -- fit target (max_dsp: 33 is the
+load-bearing rule; 66 back means the sharing did not happen), manifest as
+`unused`, and the target's own source list. Two of three is a file nothing bills
+and nothing declares absent.
+
+Report: `reports/PROJECTION-IS-66-DSP-OF-192-20260909.md`.
