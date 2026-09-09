@@ -236,6 +236,40 @@ targets:
       max_m10k: 1          # in reports/V31-M10K-ALLOCATION-RECONCILE-20260907.md
       max_dsp: 0           # a queue that infers a multiplier is a defect
 
+  # A PROBE THAT ANSWERS "WHY DOES e_tag INFER AND e_num_u NOT?"
+  #
+  # Added 2026-09-09. perspuv_svc is the island's largest register consumer
+  # (3,240, 4.63x its S3.3 budget line) and 85% of that is a 16-entry token
+  # table. Exactly ONE of its arrays became an M10K -- e_tag, 16x14 -- while
+  # e_num_u did not, despite having one write address and one read address after
+  # the 2026-09-06 per-axis split. So read-address count is not the
+  # discriminator, and check_ram_inference.py's async-reset signal fires on
+  # e_tag too, so it cannot discriminate either.
+  #
+  # Five variants at ONE geometry, one factor changed at a time: width, read
+  # style, and whether the array is cleared by the async reset. See the file
+  # header for the pre-registered interpretation of each outcome.
+  #
+  # REGISTERED HERE BECAUSE AN UNTARGETED BLOCK IS AN UNMEASURABLE ONE. The
+  # 44-to-99 target pass took production blocks with no target from 43 to zero;
+  # a new file under fpga/rtl/ with no entry reopens that gap by one.
+  #
+  # min_m10k: 1 IS THE POSITIVE CONTROL, AS A RULE. Variant A reproduces the one
+  # array known to infer, so at least one M10K must appear. If none does, the
+  # probe does not reproduce the island's conditions and none of its other rows
+  # mean anything -- which is a broken instrument, not a finding, and this rule
+  # is what refuses to let it read as the latter.
+  #
+  # No max_m10k: how many of the five infer is the QUESTION. A ceiling here
+  # would be a rule written to constrain its own experiment.
+  # No min_fmax_mhz: this is a diagnostic probe and its clock means nothing.
+  - top: zhao_probe_ram_infer
+    sources:
+      - fpga/rtl/synth/zhao_probe_ram_infer.sv
+    rules:
+      min_m10k: 1          # the positive control must fire; see above
+      max_dsp: 0           # five register files; a multiplier here is a defect
+
   - top: zhao_texture_v3own
     sources:
       - fpga/rtl/texture/zhao_texture_v3bank.sv

@@ -2487,3 +2487,122 @@ control (96 bits, same geometry as e_tag, differing only in read-address count,
 
 No RTL changed, no job launched.
 Report: `reports/PERSPUV-SPLIT-REFUTED-BY-ITS-OWN-FIT-20260909.md`.
+
+## 2026-09-09 -- RAM-inference probe MAPPING (written BEFORE the result)
+
+Per CLAUDE.md: write down where you were before reading the result.
+
+**Running:** `run_block_map.ps1 -Module zhao_probe_ram_infer -RowLabel '@raminfer'`.
+A MAP, not a fit -- RAM inference is a quartus_map result, so this costs minutes
+rather than the 1.5-4 hours a fit does. No Quartus was live when it started
+(verified). This is not one of the twelve queued fits and touches no production
+RTL: the probe is a new standalone file under `fpga/rtl/synth/`, following the
+ten existing `zhao_probe_*` modules, one of which is already a fit target.
+
+**Why:** perspuv_svc is the island's largest register consumer (3,240, 4.63x its
+S3.3 budget) and 85% of that is a 16-entry token table. Exactly one of its arrays
+inferred as M10K (`e_tag`, 16x14). `e_num_u` has one write and one read address
+after the 2026-09-06 split and did NOT infer, so read-address count is not the
+discriminator, and `check_ram_inference.py`'s async-reset signal fires on `e_tag`
+too so it cannot discriminate either. I refused to guess; this measures.
+
+**Five variants, one geometry, one factor at a time.** All 16 deep, single write
+address, single read address:
+
+    A  14 wide  continuous assign @ registered index  array reset   <- e_tag shape
+    B  32 wide  continuous assign @ registered index  array reset   <- A, WIDE
+    C  32 wide  read in always_ff @ comb index        array reset   <- e_num_u shape
+    D  32 wide  read in always_ff @ comb index        NO array reset
+    E  14 wide  read in always_ff @ comb index        array reset
+
+**Interpretation, PRE-REGISTERED so it cannot be fitted to the answer:**
+
+* A infers, B does not          -> WIDTH decides
+* A infers, E does not          -> READ STYLE decides
+* C does not, D does            -> THE ARRAY RESET decides
+* all five infer                -> the probe does not reproduce the blocker; it
+                                   is something perspuv does that this omits,
+                                   and the next step is adding its work queue
+* **A does not infer**          -> THE PROBE IS BROKEN, not the design. A is the
+                                   positive control reproducing the one array
+                                   known to infer. If A fails, no other row means
+                                   anything and nothing may be concluded.
+
+Verilator lint: 0 diagnostics -- which per CLAUDE.md settles one tool's opinion
+and says NOTHING about Quartus synthesizability. The map is the first real test.
+
+**Where I was:** everything else this session is committed and pushed. If this
+lands and redirects the work, the open thread was that the register breach is
+systemic (9 of 11 components) and its largest component is a token table the
+S3.3 budget never priced.
+
+## 2026-09-09 -- the MAP LANE has been broken since 2026-08-30, by never-mapped files
+
+The RAM-inference probe's map FAILED, and not on the probe. Two pre-existing
+files in the tree are unparseable by Quartus 17.0.2, and because
+`run_block_map.ps1` compiles EVERY `.sv` under `fpga/rtl`, either one fails
+Analysis & Synthesis for whatever unrelated module is being mapped.
+
+**Read Quartus's own status, not the wrapper's.** My background command reported
+`wrapper_rc=0` on BOTH failed runs. The map report says `Analysis & Synthesis
+Status ; Failed`. Exactly CLAUDE.md's "read the build's exit code, not the
+pipeline's", and I nearly recorded exit 0 as success.
+
+**Defect 1, FIXED: `fpga/rtl/field/zhao_field_alu_vec.sv:102`**
+
+    for (genvar l = 0; l < LANES; l++) begin : gen_lane
+    -> Error (10170): syntax error near text: "for"; expecting "endmodule"
+    -> Error (10112): Ignored design unit "zhao_field_alu_vec"
+
+Added 2026-08-30. Lint clean and its differential test passing for ten days, with
+**ZERO rows in the fit ledger and ZERO in the map ledger** -- CLAUDE.md's rule as
+an incident: a block that has never been through quartus_map has not been shown
+to be synthesizable, however clean its lint.
+
+Repaired to the established idiom: `genvar gl;` hoisted (renamed from `l` because
+module scope made it shadow the `int l` in the lane-desync loop -- a real
+VARHIDDEN hazard, not a style point), wrapped in explicit generate/endgenerate.
+The substantive diff is ONLY the hoist, the wrapper, and a consistent l -> gl
+inside the block: no connection or expression changed. Verilator lint 0
+diagnostics, and the next map got PAST this file to a different error, which is
+the real proof the 10170 is gone.
+
+**Why it survived: manifest exclusion does not exclude a file from the map's
+source list.** It is `frozen  FIELD v1` -- kept only as the differential
+reference, instantiated by no production path, correctly carrying no fit target.
+Each of those says "cannot affect a measurement" and none is true for the map
+lane. **Frozen means unshipped, not uncompiled.**
+
+**And the lesson had already been learned SEVEN times.** crc32c_fold,
+field_v3_len, field_v3_mulbank, field_v3_normalize, field_v3_ring_svc,
+raster_attrdiv_svc and raster_toon_div all carry a comment warning about this
+exact parser limitation, and all were fixed. This file was written afterwards
+without it -- the third instance today of a lesson applied where it was learned
+and nowhere else (see also core.autocrlf, and the S3.4 tripwires). **A comment in
+seven files is not a check**, so there is now a check.
+
+**New: `tools/quartus/check_quartus17_syntax.py`** -- 3 fire / 6 no-fire
+self-test cases asserted at import, 213 files scanned, RC=0 after the repair. Its
+comment-stripper matters: seven files DESCRIBE the bad form in prose, and
+flagging those would have reported eight findings for one defect. It gates only
+on the form that cost the ten days and deliberately does not guess at the two
+scope-dependent forms.
+
+**Defect 2, FOUND NOT FIXED: `fpga/rtl/synth/zhao_probe_v3_exec.sv:348`**
+
+    Error (10733): op is not declared under this prefix
+    -- `is_dot(s1_uop_r.op)`, a struct member Quartus 17.0 cannot resolve
+
+Added 2026-08-30 as well -- the same day -- also a `probe`, also never mapped and
+never fitted. So the map lane broke on one day and stayed broken. Left unfixed
+because it is a different class (struct support, cf. PROD-TOP-STRUCT-PORTS) and
+not needed for the experiment: `run_block_fit.ps1 -MapOnly` snapshots only the
+DECLARED closure, which for the probe is one file, so it routes around a broken
+tree entirely. That mechanism exists precisely so a block's measurement does not
+depend on the rest of the tree.
+
+Probe registered in `design/fit_targets.yml` (now 100 targets) with
+`min_m10k: 1` AS THE POSITIVE CONTROL EXPRESSED AS A RULE -- variant A
+reproduces the one array known to infer, so if no M10K appears the instrument is
+broken and the rule refuses to let that read as a finding. No max_m10k: how many
+of the five infer is the question, and a ceiling would constrain the experiment.

@@ -99,29 +99,61 @@ module zhao_field_alu_vec #(
   logic [LANES-1:0] l_end, l_writes, l_unsup;
   logic [LANES-1:0] l_sadd, l_smul, l_srescale;
 
-  for (genvar l = 0; l < LANES; l++) begin : gen_lane
+  // The genvar is declared SEPARATELY and the loop is wrapped in explicit
+  // generate/endgenerate. Quartus 17.0.2's Verilog parser rejects
+  // `for (genvar N = ...)` with
+  //   Error (10170): Verilog HDL syntax error near text: "for";
+  //                  expecting "endmodule"
+  // and then Error (10112) ignores the whole design unit, while Verilator
+  // and slang both accept it.
+  //
+  // FOUND 2026-09-09, and the way it was found is the point: this file has
+  // been in the tree since 2026-08-30 with a passing lint and a passing
+  // differential test, and it has NEVER been through quartus_map -- zero
+  // rows in the fit ledger and zero in the map ledger. CLAUDE.md says it
+  // exactly: a block that has never been through quartus_map has not been
+  // shown to be synthesizable, however clean its lint.
+  //
+  // AND IT BROKE EVERY MAP IN THE REPOSITORY, not just its own.
+  // run_block_map.ps1 compiles every .sv under fpga/rtl, so one unparseable
+  // file fails Analysis & Synthesis for whatever module is being mapped.
+  // A probe of an unrelated block died here and that is how this surfaced.
+  //
+  // Seven other files already carry this warning as a comment -- crc32c_fold,
+  // field_v3_len, field_v3_mulbank, field_v3_normalize, field_v3_ring_svc,
+  // raster_attrdiv_svc, raster_toon_div. The lesson was learned and fixed in
+  // all of them, and this file was written afterwards without it. Same
+  // half-fixed shape as the core.autocrlf guard found the same day.
+  // Named `gl`, not `l`: hoisting the genvar out of the for header puts it in
+  // module scope, where it would shadow the `int l` in the lane-desync loop
+  // below. Verilator flags that as VARHIDDEN and it is a real hazard, not a
+  // style complaint -- two different loop variables with one name.
+  genvar gl;
+  generate
+  for (gl = 0; gl < LANES; gl++) begin : gen_lane
     zhao_field_alu u_alu (
         .op_i (op_i),
         .imm_i(imm_i),
-        .a0_i (a0_i[32*l+:32]),
-        .a1_i (a1_i[32*l+:32]),
-        .a2_i (a2_i[32*l+:32]),
-        .b0_i (b0_i[32*l+:32]),
-        .b1_i (b1_i[32*l+:32]),
-        .b2_i (b2_i[32*l+:32]),
-        .c_i  (c_i[32*l+:32]),
-        .prod_ab_i(prod_ab_i[66*l+:66]),
-        .dot2_i   (dot2_i[66*l+:66]),
-        .dot3_i   (dot3_i[66*l+:66]),
-        .result_o (result_o[32*l+:32]),
-        .is_end_o        (l_end[l]),
-        .writes_o        (l_writes[l]),
-        .op_unsupported_o(l_unsup[l]),
-        .sat_add_o    (l_sadd[l]),
-        .sat_mul_o    (l_smul[l]),
-        .sat_rescale_o(l_srescale[l])
+        .a0_i (a0_i[32*gl+:32]),
+        .a1_i (a1_i[32*gl+:32]),
+        .a2_i (a2_i[32*gl+:32]),
+        .b0_i (b0_i[32*gl+:32]),
+        .b1_i (b1_i[32*gl+:32]),
+        .b2_i (b2_i[32*gl+:32]),
+        .c_i  (c_i[32*gl+:32]),
+        .prod_ab_i(prod_ab_i[66*gl+:66]),
+        .dot2_i   (dot2_i[66*gl+:66]),
+        .dot3_i   (dot3_i[66*gl+:66]),
+        .result_o (result_o[32*gl+:32]),
+        .is_end_o        (l_end[gl]),
+        .writes_o        (l_writes[gl]),
+        .op_unsupported_o(l_unsup[gl]),
+        .sat_add_o    (l_sadd[gl]),
+        .sat_mul_o    (l_smul[gl]),
+        .sat_rescale_o(l_srescale[gl])
     );
   end
+  endgenerate
 
   assign is_end_o         = l_end[0];
   assign writes_o         = l_writes[0];
