@@ -96,9 +96,33 @@ constexpr int kBodyPoleSegments = 32;  // uniform: the segment-taper zipper cut 
 //     from a cosmetic change into a PREREQUISITE: on a ball the outward surface
 //     normal is trivially the direction from the centre, which is what makes
 //     the eye parts able to turn to face along it.
-constexpr int kBodyTaperPm[kBodyRings] = {1000, 1000, 1000, 1000, 1000, 1000,
-                                          1000, 1000, 1000, 1000, 1000};
-constexpr int kBodyLeanXMm[kBodyRings] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+// ⚠ THESE TWO LISTS MUST HAVE EXACTLY kBodyRings ENTRIES. C++ aggregate
+// initialisation SILENTLY ZERO-FILLS a short list -- it is not an error and not
+// a warning -- and make_body multiplies each ring's radius by its taper, so a
+// zero-filled tail collapses those rings onto the axis. Pass 14 R2(a) raised
+// kBodyRings 11 -> 21 and left these at 11 entries: the top TEN rings of the
+// ball became a funnel, the face opened into a bowl and the eye floated free,
+// and the build was clean. The static_assert below turns that into a compile
+// error instead of a picture nobody may think to look at.
+constexpr int kBodyTaperPm[kBodyRings] = {
+    1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000,
+    1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000};
+constexpr int kBodyLeanXMm[kBodyRings] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+// A taper of zero is never an authored value -- it is the zero-fill. (kBodyLeanXMm
+// cannot be guarded this way because 0 IS its authored value; extend it by hand.)
+constexpr bool body_taper_fully_authored() {
+  for (int i = 0; i < kBodyRings; ++i) {
+    if (kBodyTaperPm[i] <= 0) return false;
+  }
+  return true;
+}
+static_assert(body_taper_fully_authored(),
+              "kBodyTaperPm has fewer entries than kBodyRings: the tail was "
+              "zero-filled and those rings collapse to the axis. Extend BOTH "
+              "kBodyTaperPm and kBodyLeanXMm to kBodyRings entries.");
 
 // ---- the three hinge balls (the drawn nodes the loop articulates around) --
 // PASS 3 (R12): the BALLS are the thickest points on the antenna — raised

@@ -91,3 +91,39 @@ transpose. **The look decides, not this note.**
 
 Next step: crop plates of `channel` f157/f175/f180/f185 and `hover` f37 at 16 vs
 32, at 4x and at native; report the ablation answer to the coordinator; then R1.
+
+### 2026-09-09 08:00 — lane RESUMED after the machine-load stop
+
+Read `PASS-14-LANES-PAUSED.md` first, as briefed. **The review's "your ablation is
+confounded" instruction was already satisfied by the pre-stop leg**: the
+segments-only rung (11/32) was built, rendered and looked at, and its answer is
+committed as Upheaval `771c13a`. Confirmed it myself at 4x before going on —
+`AB-h37-4x.png` and `AB-ch180-16v32.png`. The chords go; the near-horizontal
+lower band edge is IDENTICAL at 16 and 32, which is the latitude residual.
+
+⚠ **08:03 — `zhao-reel-cel.exe --help` is not a help flag.** `g_out = argv[1]`,
+so it started a full 28-subject render into a directory literally named `--help`.
+Killed both PIDs inside a minute and removed the directory. **The reel's CLI is
+`zhao-reel-cel <outdir> [clip ...]` and it has no help; there is nothing to ask
+it.** Recorded because the machine is shared with a fit and this is exactly the
+load that was not supposed to happen.
+
+### The third rung was BROKEN — and that is the pass's real finding
+
+`render-3221` (rings 21, segments 32) renders a ball with **no crown**: the top
+ten rings collapse onto the axis, the face opens into a bowl, a fan of degenerate
+triangles converges on a point and the eye floats in the hole. `BUILD_RC=0`, no
+warning, no assert.
+
+`kBodyRings` sizes `kBodyTaperPm[]` and `kBodyLeanXMm[]`, both left at eleven
+entries. C++ zero-fills the tail; `make_body` multiplies radius by taper; rings
+11-20 get radius zero. Fixed at the root in `manafold_art.h` with both tables
+extended and a `static_assert` **calibrated on a known-negative** (POS_RC=0 at 21
+entries, NEG_RC=1 at 11). Written up as gate checklist item 42.
+
+### Where I am (written down before results arrive)
+
+`build-face21` — the CORRECTED rings-21/segments-32 leg — is building `--clean`.
+Next: render `manafold-hover` and `manafold-channel` from it, crop f37 / f180 /
+f185 three ways, and decide the shipped `kBodyRings` BY LOOKING (§1.7 of the
+findings). Then R1 (lens width -> star -> converge -> centre last), then R3.
