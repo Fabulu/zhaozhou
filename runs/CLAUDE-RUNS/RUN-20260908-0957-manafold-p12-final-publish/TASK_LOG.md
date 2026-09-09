@@ -615,3 +615,50 @@ established (the kill hazard — witnessed live tonight) and which is merely
 plausible (contention — consistent but unproven), and **do not let the
 well-evidenced one absorb the blame for the other's damage** just because it
 arrived with a good story. That is how a real cause stops being looked for.
+
+### 13:2x — ⚠ THE PERF LANE'S MERGE WOULD HAVE REVERTED THE LIGHTNING
+
+`wip/p14-perf` was cut **before** IMPL-REEL landed Direction 10. Merging it as it
+stood showed:
+
+    manafold_fx.h   -282 lines
+    zhao_reel.cpp   -128 lines
+    rungsweep.py    deleted
+
+**That is Direction 10 being undone by a merge** — the fault class that has cost
+this project real work more than once. **Rebased instead**, and verified rather
+than assumed: the diff against main now contains only PERF's own files, the
+lightning constants are still present (9 references), and `kCompressAmpPm = 16500`
+landed.
+
+**Gates run green AND red on the merged tree before pushing:** all four exit 0
+with no FAIL lines; `probe --fail-mirror` and `spangate --fail-nolanes` exit 1;
+`nodule --fail-ignore` reports its failure in text. Pushed to main as `dd2b8fe1`.
+
+⚠ **A method note, because the first run looked like three gates failing.** It
+reported `rc=127` on three of four — that is **"command not found", not
+"failed"**: `--clean` wipes the output directory per target, so only the last
+binary survived. **Read what the number MEANS, not what it looks like.** One
+`--clean` then three plain builds gave the real answer.
+
+### 13:35 — WAVE 2 RENDERING, to the pre-flight
+
+`quartus_fit` finished at 13:31 and only `quartus_sta` — the light post-fit
+stage — is running, so the heaviest step in the pass is not competing with the
+heaviest step in theirs.
+
+    main            dd2b8fe1
+    BUILD_RC=0      read directly, not through a pipe
+    binary md5      e6924675...   recorded BEFORE the render
+    subjects        28, taken from creatures.json's LIVE declarations
+
+**First bank to carry all three lanes**: the 32-segment ball, `taunt3`'s two real
+holds, bounce 16500, the corpse's held sag, `blown`'s decoupled tumble, `hasty`'s
+camera aim, and the recovered eye work. **The lightning ships OFF** — Direction 10
+§5 says the deliverable is the axis, and the rung is the owner's to pick.
+
+⚠ **The completion check is rebuilt against each clip's OWN `meta.txt`**, not
+against the hand-maintained frame-count table. **Clip lengths changed this pass**
+(`blown`, `taunt3`), so the old table would have called healthy clips truncated
+and truncated ones healthy. A check whose reference drifts is worse than no
+check.
