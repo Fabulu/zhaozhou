@@ -82,3 +82,70 @@ the instantiation graph and the multiplier count. They become real at a fit.
 **Not the whole projection story.** Caching projected vertices and replaying
 triangle references is the separate, larger win; the roadmap sequences it first
 precisely so vertex identity and service timing do not change in one step.
+
+
+---
+
+# CORRECTION, same day: the arena is a PREREQUISITE, not a parallel win
+
+The section above says, under "What this does NOT establish":
+
+> **Not that one core is fast enough.** The roadmap's own workload example
+> reaches 903,552 projections in a two-view stress against a ~1,333,333-clock
+> window, so a shared projector must stay near one vertex per clock.
+
+That caveat was right to exist and **the number in it was the wrong number for
+this machine.** `design/budgets/workloads.yml:298` already carried the
+correction, dated the same day, from owner brief §2.6.E:
+
+> The sentence that stood here — *"120,000 vertices at one per clock is 7.2% of
+> the frame, so a SHARED projector is affordable and two are not justified by
+> rate"* — is **WITHDRAWN as unconditional**. The 7.2% is GEOMETRY'S projections
+> alone. A shared projector would also carry terrain's, and TERRAIN.PROJECT
+> projects triangle **CORNERS**: a 33x33 patch performs 6,144 projections for
+> 1,089 unique lattice vertices… **The real figure is geometry PLUS terrain PLUS
+> cache/replay, and that sum has not been computed.**
+
+## The sum, computed
+
+Against `computeClocksPerFrame = 1,666,666`:
+
+| | projections / frame | % of budget | |
+|---|---:|---:|---|
+| terrain (256 patches x 6,144 corners) | 1,572,864 | | |
+| geometry | 120,000 | | |
+| **total, today's shape** | **1,692,864** | **101.6%** | **DOES NOT FIT** |
+| terrain deduplicated (256 x 1,089 unique) | 278,784 | | |
+| geometry | 120,000 | | |
+| **total, with the arena** | **398,784** | **23.9%** | fits |
+
+**5.64x of terrain's projection demand is redundant**, and one shared core is
+infeasible on today's shape by 1.6% — which is not a rounding error, it is a
+frame that does not close.
+
+## What this changes
+
+**The module is still right; its ORDERING was wrong.** The DSP arithmetic, the
+shared-matrix evidence and the arbitration are untouched. What fails is the
+throughput justification, and with it the adoption order:
+
+> **Do not instantiate `zhao_project_service` in a composed top until the vertex
+> arena exists.**
+
+The rescue roadmap sequences this correctly — *"First, cache exact final vertices
+and replay triangle references. Then replace two physical cores with one."* I
+built the second step first and justified it with a rate argument the repository
+had already withdrawn.
+
+Neither line above includes the replay/cache cost itself. `workloads.yml:305`:
+*"Any cache or replay used to avoid that re-projection is itself a cost, in
+cycles and in memory ports, and none of it is in the 7.2%."* The arena's own
+budget is the architect's problem and is not counted here.
+
+## Why this happened, since the pattern is the point
+
+I found a 33-DSP saving and then accepted the first throughput argument that let
+me keep it. The repository's own budget file had refuted that argument hours
+earlier, in a comment written for exactly this mistake. **A measurement that
+supports the comfortable answer is the one to check hardest** — and the check
+here cost one `grep` of a file I had already been quoting from.

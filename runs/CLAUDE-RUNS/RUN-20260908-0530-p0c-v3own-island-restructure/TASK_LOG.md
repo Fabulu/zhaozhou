@@ -3837,3 +3837,70 @@ that arithmetic before any RTL.
 
 Still unopened: shell_top's 16 DSP, a composed hierarchy rather than a leaf, so
 unlikely to be one primitive.
+
+## 2026-09-09 -- I GOT THE ORDERING WRONG, and the repo had already said so
+
+Terrain recon 4 (contracts/invariants) surfaced the declared workload, and it
+refutes the throughput justification I wrote for the shared projector.
+
+`design/budgets/workloads.yml:298` carries a correction dated TODAY, from owner
+brief 2.6.E, withdrawing exactly the argument I used: the 7.2% figure is
+GEOMETRY'S projections alone; a shared projector also carries terrain's; and
+"the real figure is geometry PLUS terrain PLUS cache/replay, and that sum has not
+been computed."
+
+**Computed now, against computeClocksPerFrame = 1,666,666:**
+
+    terrain 256 patches x 6,144 CORNERS   1,572,864
+    geometry                                120,000
+    total, today's shape                  1,692,864  = 101.6%  DOES NOT FIT
+
+    terrain deduplicated 256 x 1,089        278,784
+    geometry                                120,000
+    total, with the arena                   398,784  =  23.9%  fits
+
+**5.64x of terrain's projection demand is redundant**, and one shared core misses
+the frame by 1.6% on today's shape -- not a rounding error, a frame that does not
+close.
+
+**The module is still right; the ORDERING was wrong.** DSP arithmetic,
+shared-matrix evidence and arbitration are untouched. What fails is the adoption
+order: do NOT instantiate zhao_project_service in a composed top until the vertex
+arena exists. The roadmap sequenced it correctly -- "First, cache exact final
+vertices and replay triangle references. Then replace two physical cores with
+one." I built the second step first.
+
+Corrected in BOTH places that matter: the RTL header (so nobody adopts it blind)
+and the report. Verilator RC=0 after the edit.
+
+**Why it happened, since that is the point:** I found a 33-DSP saving and
+accepted the first throughput argument that let me keep it. The repository's own
+budget file had refuted that argument hours earlier, in a comment written for
+exactly this mistake. The check cost one grep of a file I was already quoting.
+
+## FORGE.CLIFF architect delivered -- and its numbers are honest
+
+- **7,664 ALM attributed by line, and it is NOT where the roadmap implied.** All
+  four payload tables (edge_key/span/prio/run) ALREADY infer as RAM -- exactly
+  the row's 119,808 blockMemoryBits -- so they are not claimable savings. The
+  cost is `solid_r[1155:0]` (1,156 FF + a 1,156-way write decoder + FIVE dynamic
+  ~1156:1 select cones) and `alive_r[2047:0]` (2,048 FF + three indexed write
+  sites + 2048:1 read cones + a per-page bulk clear). **3,204 of 3,875 registers
+  (83%) are the two bitmaps**; everything else sums to 442.
+- **Compaction deletes alive state ENTIRELY -- including the roadmap's own
+  proposed alive RAM.** The span field IS the compaction instruction: a merge
+  writes `take` at the head and the dead interior is exactly the next `take-1`
+  entries, so `rd += span[rd]` walks live entries in scan order. In place on the
+  existing SDP RAMs, so one M10K FEWER than the roadmap's sheet (16, not 17).
+- Owner's awkward cases verified: 20/20-run needing 31 gives spans 20+13; a
+  dropped 13-span counts 13 bodies; `bodies+dropped==enumerated` on all 601 pages.
+- **Honest speedup 2.0-3.3x, NOT the 8x a pass-count ratio would suggest** --
+  load/enum/runs/priority-reads dominate once selection is cheap. An
+  all-pathological 256-page workload is still ~4 frames, so radix alone does not
+  close it.
+- Kept visible: the wall-vertex EMITTER is unpriced; only the planning half lives
+  in the 7,664. And it flagged that the roadmap's cited `models/cliff_radix.hpp`
+  and `tests/test_cliff_cpp.cpp` DO NOT EXIST -- its own model replaces them.
+
+Deliverables: `reports/FORGE-CLIFF-REARCH-ARCHITECTURE-20260909.md`,
+`tests/forge/cliff_rearch_model.py`. Nothing committed by the agent, as briefed.

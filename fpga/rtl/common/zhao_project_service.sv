@@ -27,15 +27,54 @@
 // ---------------------------------------------------------------------------
 // THE THREE THINGS THAT HAD TO BE TRUE, AND THE EVIDENCE FOR EACH
 // ---------------------------------------------------------------------------
-// 1. ONE CORE IS FAST ENOUGH. The core's own header: "One vertex in, one
-//    projected vertex out, 36 clocks later, fully pipelined at one vertex per
-//    clock", and at its stage-5b repair: "LATENCY, NOT INITIATION INTERVAL.
-//    This is a pipeline register, so a vertex still enters every cycle."
-//    The rescue roadmap's two-view stress reaches 903,552 projections against a
-//    ~1,333,333-clock window. 903,552 < 1,333,333, so one core at one vertex per
-//    clock carries both clients with roughly 32% headroom. **The saving comes
-//    from deleting a duplicate provider, never from slowing the survivor** —
-//    which the roadmap states as a condition and this module honours.
+// 1. ONE CORE IS FAST ENOUGH -- BUT ONLY AFTER VERTEX DEDUPLICATION.
+//    CORRECTED 2026-09-09, and the correction is the important part.
+//
+//    The core is fully pipelined at one vertex per clock: its header says so and
+//    its stage-5b note says "LATENCY, NOT INITIATION INTERVAL. This is a
+//    pipeline register, so a vertex still enters every cycle." That much holds.
+//
+//    THE FIRST VERSION OF THIS HEADER THEN CITED the roadmap's 903,552-in-
+//    1,333,333 two-view stress and concluded "roughly 32% headroom". That was
+//    the wrong number for this machine, and `design/budgets/workloads.yml:298`
+//    had ALREADY withdrawn the argument -- that same day, from owner brief
+//    2.6.E:
+//
+//      "The sentence that stood here -- '120,000 vertices at one per clock is
+//       7.2% of the frame, so a SHARED projector is affordable and two are not
+//       justified by rate' -- is WITHDRAWN as unconditional. The 7.2% is
+//       GEOMETRY'S projections alone. A shared projector would also carry
+//       terrain's... The real figure is geometry PLUS terrain PLUS cache/replay,
+//       and that sum has not been computed."
+//
+//    Computed now, from that same file's declared workload:
+//
+//      TERRAIN.PROJECT projects triangle CORNERS: 256 visible patches x 6,144
+//      corners = 1,572,864, for only 1,089 unique lattice vertices per 33x33
+//      patch. Plus geometry's 120,000.
+//
+//        without dedup   1,572,864 + 120,000 = 1,692,864 = 101.6%  DOES NOT FIT
+//        with the arena    278,784 + 120,000 =   398,784 =  23.9%  fits
+//
+//    So ONE SHARED CORE IS INFEASIBLE ON TODAY'S SHAPE and becomes comfortable
+//    only once each unique lattice vertex is projected once and triangles
+//    consume references -- a 5.64x reduction on terrain.
+//
+//    **THE ARENA IS A PREREQUISITE FOR THIS MODULE, NOT AN INDEPENDENT WIN.**
+//    The rescue roadmap sequences it correctly -- "First, cache exact final
+//    vertices and replay triangle references. Then replace two physical cores
+//    with one." This module was written in the opposite order, and the ordering
+//    is what the arithmetic corrects.
+//
+//    Neither line above includes the replay/cache cost itself, which
+//    workloads.yml:305 is explicit about: "Any cache or replay used to avoid
+//    that re-projection is itself a cost, in cycles and in memory ports."
+//
+//    WHAT THIS MEANS FOR ADOPTION: do not instantiate this service in a
+//    composed top until the vertex arena is in place. The DSP saving is real
+//    and the arithmetic is untouched, but the throughput argument that makes
+//    one core safe depends on the arena landing first. `contended_o` is the
+//    port that will say so on real traffic.
 //
 // 2. THE CLIENTS WANT THE SAME MATRIX. The core stores `mat[0:1][0:15]` — one
 //    set per VIEW, not per client. That is only sound if both clients project
