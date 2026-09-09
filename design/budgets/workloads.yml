@@ -36,7 +36,19 @@ frame:
   targetClockHz: 100000000
   frameRateHz: 60
   # 100e6 / 60, rounded down. THE COMPUTE BUDGET.
-  computeClocksPerFrame: 1666667
+  # 1,666,666 -- the conservative FLOOR, not the rounded-up 1,666,667.
+  #
+  # 100,000,000 / 60 = 1,666,666.67, which is not an integer. Rounding UP grants
+  # a clock the hardware does not have, and every headroom figure derived from
+  # this number inherits that. The magnitude is negligible; the DIRECTION is not,
+  # and a budget that rounds in its own favour is the kind of number nobody
+  # re-checks. Owner brief 2.6.E: "use the precise scheduler definition or
+  # conservative floor".
+  #
+  # If the real scheduler is not a free-running 60 Hz divide -- a genlocked or
+  # variable-rate mode would not be -- then the precise definition replaces this
+  # and the floor is a placeholder, not a law.
+  computeClocksPerFrame: 1666666
   # 2 x h_total x v_total for Z60. THE VIDEO DEADLINE. Not a compute budget.
   videoClocksPerFrameZ60: 251520
   note: >-
@@ -136,7 +148,7 @@ blocks:
       filterChannelJobsPerFrame: 180000
       outputSamplesPerFrame: 541640
       hitPathFloorClocks: 541640
-      budgetClocks: 1666667
+      budgetClocks: 1666666        # conservative floor; see computeClocksPerFrame
       reserveTargetClocks: 1333333   # 20% reserve; the gate, not the budget
     measuredII:
       clut8_nearest: 5
@@ -180,6 +192,23 @@ blocks:
       docs/OWNER_DOCKET.md 2026-08-23: 10 deform events/s x 25 vertices is 4.2
       normals/frame; rebuilding the entire 65,536-vertex field once per second
       is 1,092. 2,000 is the ruled demand, generous against both.
+    # CORRECTION 2026-09-09, owner brief 2.6.E: THIS PRICES THE WRONG DEMAND.
+    #
+    # Every figure above -- 4.2 normals/frame from deform events, 1,092 from a
+    # once-per-second field rebuild, and the "generous" 2,000 -- measures how
+    # often the normal FIELD IS UPDATED. That is not automatically how many
+    # normals a frame must PRODUCE. If lighting consumes a normal per visible
+    # triangle, or per shaded fragment, the per-frame demand is set by what is on
+    # screen and has no relation to the deformation rate.
+    #
+    # The brief states it plainly: terrain normals' deformation-update demand is
+    # NOT automatically the visible-triangle normal demand.
+    #
+    # NO REPLACEMENT NUMBER IS WRITTEN HERE. The visible-triangle demand is not
+    # derived anywhere in this repository, and inventing one to fill the gap
+    # would be worse than the gap -- it would look derived. What is recorded is
+    # that 2,000 is an UPDATE rate wearing a PRODUCTION rate's field name, and
+    # that the 119x headroom claimed below rests on it.
     measuredII: 7
     # 833, not 1. The contract asks for "1 normal per vertex per clock", which
     # is a one-clock PLACEHOLDER of the kind that produced a 327-DSP design --
@@ -264,9 +293,23 @@ blocks:
       Same population as zhao_geom_skin -- this is the projector the skinned
       and warped vertices reach the screen through, per its own header. NOT a
       separately derived figure, and it is the number that makes the duplication
-      with zhao_terrain_project expensive: 120,000 vertices at one per clock is
-      7.2% of the frame, so a SHARED projector is affordable and two are not
-      justified by rate.
+      with zhao_terrain_project expensive.
+
+      CORRECTION 2026-09-09, owner brief 2.6.E. The sentence that stood here --
+      "120,000 vertices at one per clock is 7.2% of the frame, so a SHARED
+      projector is affordable and two are not justified by rate" -- is WITHDRAWN
+      as unconditional. The 7.2% is GEOMETRY'S projections alone. A shared
+      projector would also carry terrain's, and TERRAIN.PROJECT projects triangle
+      CORNERS: a 33x33 patch performs 6,144 projections for 1,089 unique lattice
+      vertices, which is where GEOM.WCACHE comes from. Any cache or replay used
+      to avoid that re-projection is itself a cost, in cycles and in memory
+      ports, and none of it is in the 7.2%.
+
+      What survives: the two projectors are the largest single item in the DSP
+      bill and sharing them remains the obvious candidate. What does not survive
+      is the claim that a rate argument alone already settles it. The real
+      figure is geometry PLUS terrain PLUS cache/replay, and that sum has not
+      been computed.
     measuredII: null
     requiredII: 1
     reserve: 0.20

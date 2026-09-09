@@ -1,11 +1,11 @@
 {
  "schemaVersion": 1,
  "generator": "tools/budget/build_manifest.py",
- "headCommit": "9bf9b24b3624370862b24c89634db3b9aee7bf20",
+ "headCommit": "51deecc3e6c2c2973e2d404a39a3615e2434d76e",
  "frameBudget": {
   "targetClockHz": 100000000,
   "frameRateHz": 60,
-  "computeClocksPerFrame": 1666667,
+  "computeClocksPerFrame": 1666666,
   "videoClocksPerFrameZ60": 251520,
   "note": "Cost a block against computeClocksPerFrame. videoClocksPerFrameZ60 is the scanout period and answers a different question."
  },
@@ -17,13 +17,13 @@
   "calibration": "tools/budget/calibration.json"
  },
  "coverage": {
-  "modulesScanned": 91,
+  "modulesScanned": 92,
   "modulesWithMapAtHead": 0,
   "modulesWithFitAtHead": 0,
-  "modulesWithAnyMap": 89,
-  "modulesWithAnyFit": 41,
+  "modulesWithAnyMap": 90,
+  "modulesWithAnyFit": 42,
   "modulesWithWorkload": 7,
-  "calibrationPoints": 106
+  "calibrationPoints": 123
  },
  "blocks": [
   {
@@ -59,7 +59,7 @@
     "muxBeforeMultiplyCandidates": 0,
     "variableShifts": 0,
     "divides": 0,
-    "combinationalLoops": 2,
+    "combinationalLoops": 3,
     "satChains": 0,
     "duplicateExpressions": 0
    },
@@ -67,7 +67,7 @@
     "arrays": 18,
     "totalArrayBits": 9629,
     "arraysExpectingRam": 0,
-    "asyncReadArrays": 13,
+    "asyncReadArrays": 14,
     "addressableArrays": 0,
     "addressableBits": 0,
     "resetTouchedArrays": 6,
@@ -85,11 +85,11 @@
     "inferredMinII": 1,
     "itemsPerFrame": 120000,
     "demandConfidence": "inherited",
-    "workloadSource": "Same population as zhao_geom_skin -- this is the projector the skinned and warped vertices reach the screen through, per its own header. NOT a separately derived figure, and it is the number that makes the duplication with zhao_terrain_project expensive: 120,000 vertices at one per clock is 7.2% of the frame, so a SHARED projector is affordable and two are not justified by rate.",
+    "workloadSource": "Same population as zhao_geom_skin -- this is the projector the skinned and warped vertices reach the screen through, per its own header. NOT a separately derived figure, and it is the number that makes the duplication with zhao_terrain_project expensive. CORRECTION 2026-09-09, owner brief 2.6.E. The sentence that stood here -- \"120,000 vertices at one per clock is 7.2% of the frame, so a SHARED projector is affordable and two are not justified by rate\" -- is WITHDRAWN as unconditional. The 7.2% is GEOMETRY'S projections alone. A shared projector would also carry terrain's, and TERRAIN.PROJECT projects triangle CORNERS: a 33x33 patch performs 6,144 projections for 1,089 unique lattice vertices, which is where GEOM.WCACHE comes from. Any cache or replay used to avoid that re-projection is itself a cost, in cycles and in memory ports, and none of it is in the 7.2%. What survives: the two projectors are the largest single item in the DSP bill and sharing them remains the obvious candidate. What does not survive is the claim that a rate argument alone already settles it. The real figure is geometry PLUS terrain PLUS cache/replay, and that sum has not been computed.",
     "measuredII": null,
     "iiUsed": 1,
     "iiUsedIsMeasured": false,
-    "capacityPerFrame": 1666667,
+    "capacityPerFrame": 1666666,
     "demandRatio": 0.072,
     "overProvisionFactor": 13.9,
     "serialisableToLanes": 1,
@@ -97,13 +97,15 @@
    },
    "criticalPathFamily": [
     "MULTIPLY(11, widest 32-bit)",
-    "COMB_LOOP(2)",
-    "ASYNC_ARRAY_READ(13)"
+    "COMB_LOOP(3)",
+    "ASYNC_ARRAY_READ(14)"
    ],
    "composition": {
     "directIoArithmeticPaths": 0,
     "ports": 21,
-    "submodules": []
+    "submodules": [
+     "zhao_project_core"
+    ]
    },
    "debtFlags": [
     "NO_CURRENT_FIT",
@@ -112,15 +114,101 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "b8aeeeb0",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "0b74b21fc720aa87",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
+   }
+  },
+  {
+   "module": "zhao_project_core",
+   "role": "design",
+   "sourceFile": "fpga/rtl/common/zhao_project_core.sv",
+   "severity": "RED",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "mapDspBlocks": 33,
+    "mapBlockMemoryBits": 2870,
+    "mapEstimatedAlms": 4996,
+    "mapRegisters": 5925,
+    "mapCommit": "b8aeeeb0",
+    "mapDspDecomposition": {
+     "Two Independent 18x18": 22,
+     "Sum of two 18x18": 11,
+     "Total number of DSP blocks": 33,
+     "Fixed Point Signed Multiplier": 9,
+     "Fixed Point Unsigned Multiplier": 13,
+     "Fixed Point Mixed Sign Multiplier": 22
+    },
+    "mapInferredDesignMemories": 0,
+    "almPercentOfDevice": 11.9,
+    "dspPercentOfDevice": 29.5
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 3,
+    "nonconstantMultiplyInstances": 11,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 32,
+    "signedNonconstant": 11,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 3,
+    "satChains": 0,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 18,
+    "totalArrayBits": 9629,
+    "arraysExpectingRam": 0,
+    "asyncReadArrays": 14,
+    "addressableArrays": 0,
+    "addressableBits": 0,
+    "resetTouchedArrays": 6,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 0,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 0,
+    "mapBlockMemoryBits": 2870,
+    "mapInferredDesignMemories": 0
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(11, widest 32-bit)",
+    "COMB_LOOP(3)",
+    "ASYNC_ARRAY_READ(14)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 21,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC",
+    "PARETO_UNPROVEN"
+   ],
+   "provenance": {
+    "scanCommit": "9bf9b24b",
+    "mapCommit": "b8aeeeb0",
+    "fitCommit": null,
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
+    "mapSourceListHash": "0b74b21fc720aa87",
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -168,7 +256,7 @@
     "duplicateExpressions": 0
    },
    "storage": {
-    "arrays": 28,
+    "arrays": 24,
     "totalArrayBits": 10971,
     "arraysExpectingRam": 0,
     "asyncReadArrays": 17,
@@ -193,8 +281,8 @@
     "measuredII": null,
     "iiUsed": 1,
     "iiUsedIsMeasured": false,
-    "capacityPerFrame": 1666667,
-    "demandRatio": 0.943718,
+    "capacityPerFrame": 1666666,
+    "demandRatio": 0.943719,
     "overProvisionFactor": 1.1
    },
    "criticalPathFamily": [
@@ -205,7 +293,9 @@
    "composition": {
     "directIoArithmeticPaths": 0,
     "ports": 41,
-    "submodules": []
+    "submodules": [
+     "zhao_project_core__P2a"
+    ]
    },
    "debtFlags": [
     "NO_CURRENT_FIT",
@@ -216,15 +306,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "b8aeeeb0",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "0b74b21fc720aa87",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -232,7 +322,7 @@
    "role": "design",
    "sourceFile": "fpga/rtl/geometry/zhao_geom_bin_pipe.sv",
    "severity": "RED",
-   "scanSeverity": "RED",
+   "scanSeverity": "ORANGE",
    "resources": {
     "mapDspBlocks": 21,
     "mapBlockMemoryBits": 75712,
@@ -271,7 +361,7 @@
     "asyncReadArrays": 8,
     "addressableArrays": 6,
     "addressableBits": 75712,
-    "resetTouchedArrays": 10,
+    "resetTouchedArrays": 8,
     "constRomTables": 0,
     "constRomBits": 0
    },
@@ -320,15 +410,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -410,15 +500,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -501,15 +591,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -603,15 +693,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": "2a711f0f",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -684,7 +774,7 @@
     "measuredII": null,
     "iiUsed": 1,
     "iiUsedIsMeasured": false,
-    "capacityPerFrame": 1666667,
+    "capacityPerFrame": 1666666,
     "demandRatio": 0.072,
     "overProvisionFactor": 13.9,
     "serialisableToLanes": 1,
@@ -708,115 +798,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": "56ef194b",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
-   }
-  },
-  {
-   "module": "zhao_raster_tile_pipe",
-   "role": "design",
-   "sourceFile": "fpga/rtl/raster/zhao_raster_tile_pipe.sv",
-   "severity": "RED",
-   "scanSeverity": "RED",
-   "resources": {
-    "mapDspBlocks": 9,
-    "mapBlockMemoryBits": 32768,
-    "mapEstimatedAlms": 4465,
-    "mapRegisters": 3028,
-    "mapCommit": "991f13c3",
-    "mapDspDecomposition": {
-     "Independent 27x27": 2,
-     "Total number of DSP blocks": 9,
-     "Fixed Point Signed Multiplier": 2,
-     "Fixed Point Unsigned Multiplier": 4,
-     "Fixed Point Mixed Sign Multiplier": 3
-    },
-    "mapInferredDesignMemories": 2,
-    "almPercentOfDevice": 10.7,
-    "dspPercentOfDevice": 8.0
-   },
-   "arithmetic": {
-    "multiplyOperatorsWritten": 9,
-    "nonconstantMultiplyInstances": 9,
-    "constantMultiplyInstances": 3,
-    "widestNonconstantOperand": 23,
-    "signedNonconstant": 5,
-    "muxBeforeMultiplyCandidates": 0,
-    "variableShifts": 2,
-    "divides": 0,
-    "combinationalLoops": 3,
-    "satChains": 1,
-    "duplicateExpressions": 0
-   },
-   "storage": {
-    "arrays": 4,
-    "totalArrayBits": 33090,
-    "arraysExpectingRam": 2,
-    "asyncReadArrays": 2,
-    "addressableArrays": 2,
-    "addressableBits": 32768,
-    "resetTouchedArrays": 4,
-    "constRomTables": 0,
-    "constRomBits": 0
-   },
-   "expectedVsInferredRam": {
-    "expectedAddressableBits": 32768,
-    "expectedConstRomBits": 0,
-    "expectedTotalBits": 32768,
-    "mapBlockMemoryBits": 32768,
-    "mapInferredDesignMemories": 2
-   },
-   "rate": {
-    "inferredMinII": 4
-   },
-   "criticalPathFamily": [
-    "MULTIPLY(9, widest 23-bit)",
-    "VARSHIFT(2)",
-    "ADD_COMPARE_SATURATE(1)",
-    "COMB_LOOP(3)",
-    "ASYNC_ARRAY_READ(2)"
-   ],
-   "composition": {
-    "directIoArithmeticPaths": 0,
-    "ports": 45,
-    "submodules": [
-     "zhao_raster_blend",
-     "zhao_raster_div255",
-     "zhao_raster_earlyz",
-     "zhao_raster_edgewalk",
-     "zhao_raster_fill",
-     "zhao_raster_fragment",
-     "zhao_raster_quant",
-     "zhao_raster_quant__M3f_Q6",
-     "zhao_raster_resolve",
-     "zhao_raster_tilestore"
-    ]
-   },
-   "debtFlags": [
-    "NO_CURRENT_FIT",
-    "NO_II_TEST",
-    "NO_SUBSYSTEM_FIT",
-    "NO_WORKLOAD",
-    "OLD_SDC",
-    "PARETO_UNPROVEN"
-   ],
-   "provenance": {
-    "scanCommit": "8a3f29f6",
-    "mapCommit": "991f13c3",
-    "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224",
-    "mapRtlMatchesHead": false,
-    "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -899,15 +889,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": "09bbe059",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -993,15 +983,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "7395d793",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -1065,15 +1055,20 @@
    },
    "rate": {
     "inferredMinII": 5,
-    "itemsPerFrame": 850000,
-    "demandConfidence": "derived",
-    "workloadSource": "docs/OWNER_DOCKET.md 2026-08-23, TEXTURE.TMU demand table: Z60 384x240 at overdraw 3.0 is 829,440 samples/frame; 850,000 is the ruled figure with headroom. Terrain is CLUT8, so the CLUT path is the demand-critical one.",
-    "measuredII": 6,
-    "iiUsed": 6,
+    "itemsPerFrame": null,
+    "demandConfidence": null,
+    "workloadSource": null,
+    "measuredII": {
+     "clut8_nearest": 5,
+     "direct_nearest": 5,
+     "direct_bilinear": 5
+    },
+    "iiUsedMode": "clut8_nearest",
+    "iiUsedIsWorstOfModes": true,
+    "iiUsed": 5,
     "iiUsedIsMeasured": true,
-    "capacityPerFrame": 277777,
-    "demandRatio": 3.060009,
-    "overProvisionFactor": 0.3
+    "capacityPerFrame": 333333,
+    "demandRatio": 0.0
    },
    "criticalPathFamily": [
     "MULTIPLY(6, widest 18-bit)",
@@ -1090,19 +1085,18 @@
    },
    "debtFlags": [
     "NO_CURRENT_FIT",
-    "NO_RESERVE",
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "7395d793",
     "fitCommit": "1c98bb83",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -1198,15 +1192,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "7076d8e4",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -1217,10 +1211,10 @@
    "scanSeverity": "RED",
    "resources": {
     "mapDspBlocks": 3,
-    "mapBlockMemoryBits": 0,
-    "mapEstimatedAlms": 7958,
-    "mapRegisters": 5288,
-    "mapCommit": "7395d793",
+    "mapBlockMemoryBits": 8192,
+    "mapEstimatedAlms": 5142,
+    "mapRegisters": 3305,
+    "mapCommit": "b09b0512",
     "mapDspDecomposition": {
      "Two Independent 18x18": 2,
      "Sum of two 18x18": 1,
@@ -1229,15 +1223,15 @@
      "Fixed Point Unsigned Multiplier": 1,
      "Fixed Point Mixed Sign Multiplier": 2
     },
-    "mapInferredDesignMemories": 0,
+    "mapInferredDesignMemories": 4,
     "fitDspBlocks": 3,
-    "fitAlms": 8901,
-    "fitRamBlocks": 0,
-    "fitCommit": "7a3e2a35",
-    "fitFmaxMhz": 8.59,
+    "fitAlms": 4494,
+    "fitRamBlocks": 5,
+    "fitCommit": "2727d851",
+    "fitFmaxMhz": 58.99,
     "fitSetupSlackNs": null,
     "fitHoldSlackNs": null,
-    "almPercentOfDevice": 21.2,
+    "almPercentOfDevice": 10.7,
     "dspPercentOfDevice": 2.7
    },
    "arithmetic": {
@@ -1268,8 +1262,8 @@
     "expectedAddressableBits": 2048,
     "expectedConstRomBits": 20817,
     "expectedTotalBits": 22865,
-    "mapBlockMemoryBits": 0,
-    "mapInferredDesignMemories": 0
+    "mapBlockMemoryBits": 8192,
+    "mapInferredDesignMemories": 4
    },
    "rate": {
     "inferredMinII": 1
@@ -1303,21 +1297,20 @@
     ]
    },
    "debtFlags": [
-    "EXPECTED_RAM_NOT_INFERRED",
     "NO_CURRENT_FIT",
     "NO_WORKLOAD",
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
-    "mapCommit": "7395d793",
-    "fitCommit": "7a3e2a35",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224",
+    "scanCommit": "9bf9b24b",
+    "mapCommit": "b09b0512",
+    "fitCommit": "2727d851",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
+    "mapSourceListHash": "0b74b21fc720aa87",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -1401,15 +1394,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": "9f2928fc",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -1446,13 +1439,13 @@
     "duplicateExpressions": 0
    },
    "storage": {
-    "arrays": 3,
+    "arrays": 4,
     "totalArrayBits": 119808,
-    "arraysExpectingRam": 3,
-    "asyncReadArrays": 3,
-    "addressableArrays": 3,
+    "arraysExpectingRam": 4,
+    "asyncReadArrays": 4,
+    "addressableArrays": 4,
     "addressableBits": 119808,
-    "resetTouchedArrays": 3,
+    "resetTouchedArrays": 0,
     "constRomTables": 0,
     "constRomBits": 0
    },
@@ -1469,7 +1462,7 @@
    "criticalPathFamily": [
     "MULTIPLY(2, widest 16-bit)",
     "VARSHIFT(1)",
-    "ASYNC_ARRAY_READ(3)"
+    "ASYNC_ARRAY_READ(4)"
    ],
    "composition": {
     "directIoArithmeticPaths": 0,
@@ -1484,15 +1477,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "0d25ed04",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -1539,7 +1532,7 @@
     "asyncReadArrays": 1,
     "addressableArrays": 1,
     "addressableBits": 65536,
-    "resetTouchedArrays": 1,
+    "resetTouchedArrays": 0,
     "constRomTables": 0,
     "constRomBits": 0
    },
@@ -1568,15 +1561,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -1623,7 +1616,7 @@
     "asyncReadArrays": 3,
     "addressableArrays": 2,
     "addressableBits": 33280,
-    "resetTouchedArrays": 1,
+    "resetTouchedArrays": 0,
     "constRomTables": 0,
     "constRomBits": 0
    },
@@ -1658,15 +1651,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "f5e067e6",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -1736,15 +1729,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -1813,15 +1806,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "707c14f6",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -1894,15 +1887,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "4fe83108",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -1975,15 +1968,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "f21d401c",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -2052,15 +2045,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -2129,15 +2122,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -2210,15 +2203,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "3d6ee37f",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -2287,98 +2280,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "3d6ee37f",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
-   }
-  },
-  {
-   "module": "zhao_raster_tilestore",
-   "role": "design",
-   "sourceFile": "fpga/rtl/raster/zhao_raster_tilestore.sv",
-   "severity": "RED",
-   "scanSeverity": "RED",
-   "resources": {
-    "mapDspBlocks": 0,
-    "mapBlockMemoryBits": 32768,
-    "mapEstimatedAlms": 1013,
-    "mapRegisters": 890,
-    "mapCommit": "de11ce9b",
-    "mapDspDecomposition": null,
-    "mapInferredDesignMemories": 2,
-    "fitDspBlocks": 0,
-    "fitAlms": 929,
-    "fitRamBlocks": 4,
-    "fitCommit": "96c0394a",
-    "fitFmaxMhz": null,
-    "fitSetupSlackNs": null,
-    "fitHoldSlackNs": null,
-    "almPercentOfDevice": 2.2,
-    "dspPercentOfDevice": 0.0
-   },
-   "arithmetic": {
-    "multiplyOperatorsWritten": 0,
-    "nonconstantMultiplyInstances": 0,
-    "constantMultiplyInstances": 0,
-    "widestNonconstantOperand": 0,
-    "signedNonconstant": 0,
-    "muxBeforeMultiplyCandidates": 0,
-    "variableShifts": 0,
-    "divides": 0,
-    "combinationalLoops": 0,
-    "satChains": 1,
-    "duplicateExpressions": 0
-   },
-   "storage": {
-    "arrays": 2,
-    "totalArrayBits": 32768,
-    "arraysExpectingRam": 2,
-    "asyncReadArrays": 0,
-    "addressableArrays": 2,
-    "addressableBits": 32768,
-    "resetTouchedArrays": 2,
-    "constRomTables": 0,
-    "constRomBits": 0
-   },
-   "expectedVsInferredRam": {
-    "expectedAddressableBits": 32768,
-    "expectedConstRomBits": 0,
-    "expectedTotalBits": 32768,
-    "mapBlockMemoryBits": 32768,
-    "mapInferredDesignMemories": 2
-   },
-   "rate": {
-    "inferredMinII": 1
-   },
-   "criticalPathFamily": [
-    "ADD_COMPARE_SATURATE(1)"
-   ],
-   "composition": {
-    "directIoArithmeticPaths": 0,
-    "ports": 25,
-    "submodules": []
-   },
-   "debtFlags": [
-    "NO_CURRENT_FIT",
-    "NO_WORKLOAD",
-    "OLD_SDC"
-   ],
-   "provenance": {
-    "scanCommit": "8a3f29f6",
-    "mapCommit": "de11ce9b",
-    "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224",
-    "mapRtlMatchesHead": false,
-    "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -2411,7 +2321,7 @@
     "asyncReadArrays": 37,
     "addressableArrays": 6,
     "addressableBits": 118784,
-    "resetTouchedArrays": 26,
+    "resetTouchedArrays": 22,
     "constRomTables": 0,
     "constRomBits": 0
    },
@@ -2469,15 +2379,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": null,
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -2510,7 +2420,7 @@
     "asyncReadArrays": 1,
     "addressableArrays": 1,
     "addressableBits": 8388608,
-    "resetTouchedArrays": 1,
+    "resetTouchedArrays": 0,
     "constRomTables": 0,
     "constRomBits": 0
    },
@@ -2540,15 +2450,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": null,
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -2625,15 +2535,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -2701,15 +2611,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -2786,110 +2696,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "8a3f29f6",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
-   }
-  },
-  {
-   "module": "zhao_geom_binner",
-   "role": "design",
-   "sourceFile": "fpga/rtl/geometry/zhao_geom_binner.sv",
-   "severity": "ORANGE",
-   "scanSeverity": "ORANGE",
-   "resources": {
-    "mapDspBlocks": 12,
-    "mapBlockMemoryBits": 42944,
-    "mapEstimatedAlms": 1392,
-    "mapRegisters": 937,
-    "mapCommit": "de11ce9b",
-    "mapDspDecomposition": {
-     "Two Independent 18x18": 6,
-     "Total number of DSP blocks": 12,
-     "Fixed Point Unsigned Multiplier": 6,
-     "Fixed Point Mixed Sign Multiplier": 6
-    },
-    "mapInferredDesignMemories": 4,
-    "fitDspBlocks": 12,
-    "fitAlms": 1303,
-    "fitRamBlocks": 9,
-    "fitCommit": "96c0394a",
-    "fitFmaxMhz": null,
-    "fitSetupSlackNs": null,
-    "fitHoldSlackNs": null,
-    "almPercentOfDevice": 3.1,
-    "dspPercentOfDevice": 10.7
-   },
-   "arithmetic": {
-    "multiplyOperatorsWritten": 5,
-    "nonconstantMultiplyInstances": 4,
-    "constantMultiplyInstances": 1,
-    "widestNonconstantOperand": 36,
-    "signedNonconstant": 4,
-    "muxBeforeMultiplyCandidates": 0,
-    "variableShifts": 0,
-    "divides": 0,
-    "combinationalLoops": 0,
-    "satChains": 0,
-    "duplicateExpressions": 1
-   },
-   "storage": {
-    "arrays": 11,
-    "totalArrayBits": 43736,
-    "arraysExpectingRam": 4,
-    "asyncReadArrays": 6,
-    "addressableArrays": 4,
-    "addressableBits": 42944,
-    "resetTouchedArrays": 6,
-    "constRomTables": 0,
-    "constRomBits": 0
-   },
-   "expectedVsInferredRam": {
-    "expectedAddressableBits": 42944,
-    "expectedConstRomBits": 0,
-    "expectedTotalBits": 42944,
-    "mapBlockMemoryBits": 42944,
-    "mapInferredDesignMemories": 4
-   },
-   "rate": {
-    "inferredMinII": 12
-   },
-   "criticalPathFamily": [
-    "MULTIPLY(4, widest 36-bit)",
-    "ASYNC_ARRAY_READ(6)"
-   ],
-   "composition": {
-    "directIoArithmeticPaths": 0,
-    "ports": 50,
-    "submodules": [
-     "zhao_geom_arena",
-     "zhao_raster_fill__W24"
-    ]
-   },
-   "debtFlags": [
-    "NO_CURRENT_FIT",
-    "NO_II_TEST",
-    "NO_SUBSYSTEM_FIT",
-    "NO_WORKLOAD",
-    "OLD_SDC",
-    "PARETO_UNPROVEN"
-   ],
-   "provenance": {
-    "scanCommit": "8a3f29f6",
-    "mapCommit": "de11ce9b",
-    "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
-    "mapSourceListHash": "9a53f278725c7224",
-    "mapRtlMatchesHead": false,
-    "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -2966,15 +2781,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -3047,15 +2862,115 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
+   }
+  },
+  {
+   "module": "zhao_raster_tile_pipe",
+   "role": "design",
+   "sourceFile": "fpga/rtl/raster/zhao_raster_tile_pipe.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "mapDspBlocks": 9,
+    "mapBlockMemoryBits": 32768,
+    "mapEstimatedAlms": 4465,
+    "mapRegisters": 3028,
+    "mapCommit": "991f13c3",
+    "mapDspDecomposition": {
+     "Independent 27x27": 2,
+     "Total number of DSP blocks": 9,
+     "Fixed Point Signed Multiplier": 2,
+     "Fixed Point Unsigned Multiplier": 4,
+     "Fixed Point Mixed Sign Multiplier": 3
+    },
+    "mapInferredDesignMemories": 2,
+    "almPercentOfDevice": 10.7,
+    "dspPercentOfDevice": 8.0
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 9,
+    "nonconstantMultiplyInstances": 9,
+    "constantMultiplyInstances": 3,
+    "widestNonconstantOperand": 23,
+    "signedNonconstant": 5,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 2,
+    "divides": 0,
+    "combinationalLoops": 3,
+    "satChains": 1,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 4,
+    "totalArrayBits": 33090,
+    "arraysExpectingRam": 2,
+    "asyncReadArrays": 2,
+    "addressableArrays": 2,
+    "addressableBits": 32768,
+    "resetTouchedArrays": 2,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 32768,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 32768,
+    "mapBlockMemoryBits": 32768,
+    "mapInferredDesignMemories": 2
+   },
+   "rate": {
+    "inferredMinII": 4
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(9, widest 23-bit)",
+    "VARSHIFT(2)",
+    "ADD_COMPARE_SATURATE(1)",
+    "COMB_LOOP(3)",
+    "ASYNC_ARRAY_READ(2)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 45,
+    "submodules": [
+     "zhao_raster_blend",
+     "zhao_raster_div255",
+     "zhao_raster_earlyz",
+     "zhao_raster_edgewalk",
+     "zhao_raster_fill",
+     "zhao_raster_fragment",
+     "zhao_raster_quant",
+     "zhao_raster_quant__M3f_Q6",
+     "zhao_raster_resolve",
+     "zhao_raster_tilestore"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC",
+    "PARETO_UNPROVEN"
+   ],
+   "provenance": {
+    "scanCommit": "9bf9b24b",
+    "mapCommit": "991f13c3",
+    "fitCommit": null,
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -3137,15 +3052,109 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "7395d793",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
+   }
+  },
+  {
+   "module": "zhao_geom_binner",
+   "role": "design",
+   "sourceFile": "fpga/rtl/geometry/zhao_geom_binner.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "mapDspBlocks": 6,
+    "mapBlockMemoryBits": 42944,
+    "mapEstimatedAlms": 1392,
+    "mapRegisters": 937,
+    "mapCommit": "534bbd22",
+    "mapDspDecomposition": {
+     "Independent 27x27": 6,
+     "Total number of DSP blocks": 6,
+     "Fixed Point Mixed Sign Multiplier": 6
+    },
+    "mapInferredDesignMemories": 4,
+    "fitDspBlocks": 12,
+    "fitAlms": 1303,
+    "fitRamBlocks": 9,
+    "fitCommit": "96c0394a",
+    "fitFmaxMhz": null,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null,
+    "almPercentOfDevice": 3.1,
+    "dspPercentOfDevice": 5.4
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 5,
+    "nonconstantMultiplyInstances": 4,
+    "constantMultiplyInstances": 1,
+    "widestNonconstantOperand": 36,
+    "signedNonconstant": 4,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 0,
+    "duplicateExpressions": 1
+   },
+   "storage": {
+    "arrays": 11,
+    "totalArrayBits": 43736,
+    "arraysExpectingRam": 4,
+    "asyncReadArrays": 6,
+    "addressableArrays": 4,
+    "addressableBits": 42944,
+    "resetTouchedArrays": 6,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 42944,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 42944,
+    "mapBlockMemoryBits": 42944,
+    "mapInferredDesignMemories": 4
+   },
+   "rate": {
+    "inferredMinII": 12
+   },
+   "criticalPathFamily": [
+    "MULTIPLY(4, widest 36-bit)",
+    "ASYNC_ARRAY_READ(6)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 50,
+    "submodules": [
+     "zhao_geom_arena",
+     "zhao_raster_fill__W24"
+    ]
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_II_TEST",
+    "NO_SUBSYSTEM_FIT",
+    "NO_WORKLOAD",
+    "OLD_SDC",
+    "PARETO_UNPROVEN"
+   ],
+   "provenance": {
+    "scanCommit": "9bf9b24b",
+    "mapCommit": "534bbd22",
+    "fitCommit": "96c0394a",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
+    "mapSourceListHash": "060a1f26c5aa3dcf",
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -3218,15 +3227,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -3301,15 +3310,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "5511215a",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -3344,11 +3353,11 @@
     "dspPercentOfDevice": 2.7
    },
    "arithmetic": {
-    "multiplyOperatorsWritten": 6,
-    "nonconstantMultiplyInstances": 6,
+    "multiplyOperatorsWritten": 1,
+    "nonconstantMultiplyInstances": 1,
     "constantMultiplyInstances": 0,
     "widestNonconstantOperand": 33,
-    "signedNonconstant": 6,
+    "signedNonconstant": 1,
     "muxBeforeMultiplyCandidates": 0,
     "variableShifts": 0,
     "divides": 0,
@@ -3386,10 +3395,10 @@
     "demandRatio": 0.0084,
     "overProvisionFactor": 119.0,
     "serialisableToLanes": 1,
-    "productsToday": 6
+    "productsToday": 1
    },
    "criticalPathFamily": [
-    "MULTIPLY(6, widest 33-bit)"
+    "MULTIPLY(1, widest 33-bit)"
    ],
    "composition": {
     "directIoArithmeticPaths": 0,
@@ -3401,15 +3410,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "bfc74710",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "0b74b21fc720aa87",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -3495,15 +3504,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -3580,15 +3589,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -3658,15 +3667,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -3745,15 +3754,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -3833,15 +3842,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "7508adc0",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -3908,15 +3917,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "7b776762",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -3983,15 +3992,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "5511215a",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -4060,15 +4069,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "0493648c",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -4138,15 +4147,15 @@
     "PARETO_UNPROVEN"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -4213,15 +4222,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -4288,15 +4297,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "5511215a",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -4363,15 +4372,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "7395d793",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -4447,15 +4456,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -4524,15 +4533,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -4608,15 +4617,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -4691,15 +4700,97 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
+   }
+  },
+  {
+   "module": "zhao_raster_tilestore",
+   "role": "design",
+   "sourceFile": "fpga/rtl/raster/zhao_raster_tilestore.sv",
+   "severity": "ORANGE",
+   "scanSeverity": "ORANGE",
+   "resources": {
+    "mapDspBlocks": 0,
+    "mapBlockMemoryBits": 32768,
+    "mapEstimatedAlms": 1013,
+    "mapRegisters": 890,
+    "mapCommit": "de11ce9b",
+    "mapDspDecomposition": null,
+    "mapInferredDesignMemories": 2,
+    "fitDspBlocks": 0,
+    "fitAlms": 859,
+    "fitRamBlocks": 4,
+    "fitCommit": "18054414",
+    "fitFmaxMhz": 96.12,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null,
+    "almPercentOfDevice": 2.0,
+    "dspPercentOfDevice": 0.0
+   },
+   "arithmetic": {
+    "multiplyOperatorsWritten": 0,
+    "nonconstantMultiplyInstances": 0,
+    "constantMultiplyInstances": 0,
+    "widestNonconstantOperand": 0,
+    "signedNonconstant": 0,
+    "muxBeforeMultiplyCandidates": 0,
+    "variableShifts": 0,
+    "divides": 0,
+    "combinationalLoops": 0,
+    "satChains": 1,
+    "duplicateExpressions": 0
+   },
+   "storage": {
+    "arrays": 2,
+    "totalArrayBits": 32768,
+    "arraysExpectingRam": 2,
+    "asyncReadArrays": 0,
+    "addressableArrays": 2,
+    "addressableBits": 32768,
+    "resetTouchedArrays": 0,
+    "constRomTables": 0,
+    "constRomBits": 0
+   },
+   "expectedVsInferredRam": {
+    "expectedAddressableBits": 32768,
+    "expectedConstRomBits": 0,
+    "expectedTotalBits": 32768,
+    "mapBlockMemoryBits": 32768,
+    "mapInferredDesignMemories": 2
+   },
+   "rate": {
+    "inferredMinII": 1
+   },
+   "criticalPathFamily": [
+    "ADD_COMPARE_SATURATE(1)"
+   ],
+   "composition": {
+    "directIoArithmeticPaths": 0,
+    "ports": 25,
+    "submodules": []
+   },
+   "debtFlags": [
+    "NO_CURRENT_FIT",
+    "NO_WORKLOAD"
+   ],
+   "provenance": {
+    "scanCommit": "9bf9b24b",
+    "mapCommit": "de11ce9b",
+    "fitCommit": "18054414",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
+    "mapSourceListHash": "9a53f278725c7224",
+    "mapRtlMatchesHead": false,
+    "fitRtlMatchesHead": false,
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -4775,15 +4866,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -4817,11 +4908,11 @@
     "duplicateExpressions": 0
    },
    "storage": {
-    "arrays": 2,
+    "arrays": 3,
     "totalArrayBits": 131136,
-    "arraysExpectingRam": 1,
+    "arraysExpectingRam": 2,
     "asyncReadArrays": 1,
-    "addressableArrays": 1,
+    "addressableArrays": 2,
     "addressableBits": 131072,
     "resetTouchedArrays": 1,
     "constRomTables": 0,
@@ -4852,15 +4943,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "2eeef64e",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -4948,15 +5039,15 @@
     "NO_SUBSYSTEM_FIT"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "991f13c3",
     "fitCommit": "753ca931",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5025,15 +5116,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "8a3f29f6",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5109,15 +5200,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5197,15 +5288,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5227,7 +5318,14 @@
      "Fixed Point Unsigned Multiplier": 6
     },
     "mapInferredDesignMemories": 0,
-    "almPercentOfDevice": 0.5,
+    "fitDspBlocks": 0,
+    "fitAlms": 310,
+    "fitRamBlocks": 0,
+    "fitCommit": "3ddc2e64",
+    "fitFmaxMhz": 79.22,
+    "fitSetupSlackNs": null,
+    "fitHoldSlackNs": null,
+    "almPercentOfDevice": 0.7,
     "dspPercentOfDevice": 3.6
    },
    "arithmetic": {
@@ -5274,19 +5372,18 @@
    },
    "debtFlags": [
     "NO_CURRENT_FIT",
-    "NO_WORKLOAD",
-    "OLD_SDC"
+    "NO_WORKLOAD"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "8a3f29f6",
-    "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "fitCommit": "3ddc2e64",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5365,15 +5462,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "8a3f29f6",
     "fitCommit": "1c98bb83",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5452,15 +5549,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5538,15 +5635,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5612,15 +5709,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5686,15 +5783,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5760,15 +5857,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5834,15 +5931,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "7076d8e4",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5915,15 +6012,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -5989,15 +6086,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -6070,15 +6167,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -6154,15 +6251,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -6228,15 +6325,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -6302,15 +6399,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -6376,15 +6473,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "991f13c3",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -6457,15 +6554,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -6531,15 +6628,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -6607,15 +6704,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -6694,15 +6791,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "de11ce9b",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -6775,15 +6872,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -6853,15 +6950,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -6934,15 +7031,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -7017,15 +7114,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "8a3f29f6",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -7093,15 +7190,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "8a3f29f6",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -7169,15 +7266,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -7243,15 +7340,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "8a3f29f6",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -7324,15 +7421,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -7405,15 +7502,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -7486,15 +7583,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": "96c0394a",
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -7567,15 +7664,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   },
   {
@@ -7643,15 +7740,15 @@
     "OLD_SDC"
    ],
    "provenance": {
-    "scanCommit": "8a3f29f6",
+    "scanCommit": "9bf9b24b",
     "mapCommit": "74817119",
     "fitCommit": null,
-    "headCommit": "9bf9b24b",
-    "scanSourceListHash": "40e689de9f34a042",
+    "headCommit": "51deecc3",
+    "scanSourceListHash": "8b789a445d946ec8",
     "mapSourceListHash": "9a53f278725c7224",
     "mapRtlMatchesHead": false,
     "fitRtlMatchesHead": false,
-    "headRtlTree": "87d5cc29e240"
+    "headRtlTree": "44187b081c8d"
    }
   }
  ],

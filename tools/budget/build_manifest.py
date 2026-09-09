@@ -291,8 +291,36 @@ def main():
             rate["itemsPerFrame"] = w.get("itemsPerFrame")
             rate["demandConfidence"] = w.get("confidence")
             rate["workloadSource"] = w.get("source")
-            rate["measuredII"] = w.get("measuredII")
-            eff_ii = w.get("measuredII") or ii
+            rate["measuredII"] = w.get("measuredII")   # mapping kept as-is: the per-mode detail is the evidence
+            # measuredII MAY BE A MAPPING of per-mode values, and this tool
+            # crashed on it -- `max(1, {...})` raises TypeError, so
+            # build_manifest.py has been unable to run at all. Found 2026-09-09
+            # while correcting workloads.yml; confirmed pre-existing by running
+            # the committed file, which fails identically. The generated heatmap
+            # the owner brief 2.6.E refers to could not be regenerated even to
+            # be corrected.
+            #
+            # zhao_texture_tmu declares:
+            #     measuredII: {clut8_nearest: 5, direct_nearest: 5,
+            #                  direct_bilinear: 5}
+            #
+            # The WORST mode is taken, not the mean and not the first, because
+            # the slowest path bounds the throughput and a budget that averages
+            # its modes is a budget that assumes the easy one. `iiUsedMode`
+            # records which, so the choice is visible in the output rather than
+            # buried here.
+            _mii = w.get("measuredII")
+            _mode = None
+            if isinstance(_mii, dict):
+                if _mii:
+                    _mode = max(_mii, key=lambda k: _mii[k])
+                    _mii = _mii[_mode]
+                else:
+                    _mii = None
+            eff_ii = _mii or ii
+            if _mode:
+                rate["iiUsedMode"] = _mode
+                rate["iiUsedIsWorstOfModes"] = True
             rate["iiUsed"] = eff_ii
             rate["iiUsedIsMeasured"] = w.get("measuredII") is not None
             cap = budget // max(1, eff_ii)
