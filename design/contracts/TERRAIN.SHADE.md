@@ -1,7 +1,9 @@
 # Contract — TERRAIN.SHADE (Terrain base light)
 
 > Ledger: `design/blocks.yml` · gpu clock · maturity REFERENCE_COMPLETE
-> RTL: not built
+> RTL: **built 2026-09-09** — `fpga/rtl/terrain/zhao_terrain_shade.sv`,
+> bit-exact against the compiled law (see Amendments A1–A6 at the bottom;
+> A1/A2 correct this contract's own packet formats)
 > Reference: **`zref::render::shade_flat_tri_dir`** — the ratified law.
 > `reference/include/zref/zref_terrain_shade.hpp` is a THIN VIEW onto it,
 > exposing only what that function does not (squared norm, dot product,
@@ -10,7 +12,8 @@
 ## Purpose and exclusions
 
 TERRAIN.SHADE turns a triangle's face normal into a light term: `dot(n, L)/|n|`
-in s1.15, once per triangle, reused by every fragment of it.
+in Q16.16 *(A2; this sentence said s1.15)*, once per triangle, reused by every
+fragment of it.
 
 **Written 2026-09-03.** The reason it exists is a finding, not a feature
 request: **production terrain has no lighting path at all.**
@@ -60,15 +63,17 @@ In, ready/valid, one per triangle:
 |---|---|---|
 | `n_x_i` `n_y_i` `n_z_i` | signed 32 | face normal, Q16.16, **un-normalised** |
 | `degenerate_i` | 1 | `TERRAIN.NORMALS` said the triangle has no normal |
-| `sun_x_i` `sun_y_i` `sun_z_i` | signed 16 | s1.15 unit, **from** the surface **toward** the light |
+| `sun_x_i` `sun_y_i` `sun_z_i` | signed 32 | **Q16.16** unit, **from** the surface **toward** the light *(amended A1 — this row said "signed 16, s1.15", which is the exact format error the oracle's history records: the ratified law's light is Q16.16, 26758/53521/26758)* |
 | `src_id_i` | 16 | rides the packet |
 
 Out:
 
 | field | width | meaning |
 |---|---|---|
-| `base_o` | signed 16 | s1.15, `dot(n,L)/|n|`, **sign preserved** |
+| `base_o` | signed 32 | **Q16.16**, `dot(n,L)/|n|`, **sign preserved**, saturating exactly where the law saturates (INT32 rails) *(amended A2 — was "signed 16, s1.15 saturating ±32767"; the law RETURNS Q16.16 int32 and a full-lit face is 0x10000, which s1.15 cannot hold)* |
 | `base_valid_o` | 1 | |
+| `degenerate_o` | 1 | the law's own `nmag2 == 0` verdict, riding the packet (A4) |
+| `src_id_o` | 16 | rides the packet |
 
 **The sign is kept, not clamped.** A face turned away from the sun produces a
 negative base, and `TERRAIN.NORMALMAP`'s per-fragment term is *added* to it.
@@ -77,8 +82,9 @@ clamp belongs where the shade is packed to unit8.
 
 ## Backpressure rules
 
-Ready/valid. **The throughput point is an open question and is the first thing
-to measure** — see Synthesis below.
+Ready/valid. ~~The throughput point is an open question~~ — **RESOLVED, A3:
+II = 147, zero DSP, one M10K**; the Synthesis section's Pareto question was
+priced for a superseded 10-DSP shape.
 
 ## Memory ownership
 
@@ -87,8 +93,9 @@ None. It reads no memory and writes none.
 ## Q formats and rounding
 
 * face normal in: **Q16.16, un-normalised**, exactly as `TERRAIN.NORMALS` emits
-* sun direction: **s1.15** unit
-* `base_o`: **s1.15**, saturating at ±32767
+* sun direction: **Q16.16** unit *(amended A1; was "s1.15")*
+* `base_o`: **Q16.16 signed 32**, saturating at the law's INT32 rails
+  *(amended A2; was "s1.15 saturating ±32767")*
 
 One rounding per result, **round-half-up** (`spec/qformats.md` §3). A `>>>`
 shift **floors** and therefore disagrees on every negative value, which is
@@ -97,7 +104,8 @@ half of what this block produces. The oracle owns the rounding in
 
 ## Latency (fixed or variable)
 
-`fixed`, and the number depends on the throughput point chosen below.
+`fixed:145` (A6, measured), data-independent — degenerates walk the same
+cycles. Cold table fill after reset: 512 cycles, gated by `table_ready_o`.
 
 ## Overflow and malformed-input behaviour
 
@@ -135,8 +143,9 @@ true quotient is always below 2^15 by Cauchy–Schwarz, so `base` came out **zer
 for every realistic triangle** and the whole island would have shaded to
 ambient — silently, with every gate passing.
 
-**Planned and not written:** an RTL differential against the oracle across the
-legal normal and sun space, once RTL exists.
+**Written 2026-09-09:** the RTL differential —
+`tests/terrain/terrain_shade_rtl_directed.cpp`, 4,142 checks against the
+COMPILED law, `--break-oracle` positive control seen to fail (Amendments).
 
 ## Randomized differential tests
 
@@ -180,3 +189,66 @@ argument for a floor is recorded in the brief rather than enacted.
 
 This block does not exist in `design/prod_manifest.yml` yet. Adding it is what
 finally gives `TERRAIN.NORMALS` a consumer.
+
+## Amendments — 2026-09-09, the RTL build (`fpga/rtl/terrain/zhao_terrain_shade.sv`)
+
+**A1 — the sun is Q16.16 signed 32, not s1.15.** The original packet table
+repeated the format error this contract's own oracle history records
+catching ("a factor of two in the relief"). The ratified law's light is
+Q16.16 — `kShadeLight* = 26758/53521/26758` — and 53521 is odd, so no s1.15
+port can even carry it. Bit-exactness against the law forces the port
+format; the tables above are corrected in place so the wrong number cannot
+propagate again (the frozen-copies corollary).
+
+**A2 — `base_o` is Q16.16 signed 32, saturating at the law's INT32 rails.**
+The law returns int32 Q16.16; a fully lit face is `0x10000`, which the
+original "s1.15 saturating ±32767" cannot represent. The INT32 clamp is the
+law's own (`div_rhu_s128`), reproduced exactly — reachable only far outside
+the unit-sun domain, and tested there.
+
+**A3 — throughput point RESOLVED: II = 147, zero DSP, one M10K.** The
+Synthesis section's "fit II=1 and II=3" Pareto question was priced for a
+10-DSP shape that the rescue supersedes
+(`ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt` §14.1, and F4 of
+`reports/TERRAIN-BUMP-MAPPING-ARCHITECTURE-20260909.md`). The demand is
+2,000 triangles/frame against 1,666,666 clocks (833 clocks/triangle
+available); the built block's measured fixed latency is 145 cycles,
+capacity ~11,300 triangles/frame — 5.7x demand — with ZERO DSP: all six
+32x32 products come from one quarter-square M10K
+(`Q[s]=floor(s^2/4)`, `a*b = Q[a+b]-Q[|a-b|]`, exact), the root is the
+law's own restoring recurrence overlapped under the product walk, and the
+divide is a 64-step restoring floor divide. The ordering rule stands: the
+unused parallelism lives here.
+
+**A4 — the output packet also carries `degenerate_o` and `src_id_o`.**
+`degenerate_o` is the LAW's verdict (`nmag2 == 0`), judged inside this
+block, not an echo of `degenerate_i`. The two are compared and a
+disagreement counts on `degen_mismatch_o` — a seam-integrity detector whose
+operands arrive by independent paths (producer flag vs this block's own
+walk), per the 2026-09-08 checker law.
+
+**A5 — counters.** `triangles_shaded`, `degenerate_count`, `base_sat` (the
+law's INT32 clamp engaged), `degen_mismatch`. All four are reachable with
+port stimulus and all four are asserted with EXACT counts in
+`tests/terrain/terrain_shade_rtl_directed.cpp`; no committed mutant is
+needed because no counter guards an unreachable state.
+
+**A6 — latency `fixed:145`, cold fill 512 cycles.** Data-independent: a
+degenerate triangle walks the same cycles and muxes the law's zero at the
+end. The quarter-square table is rebuilt from the `(s+1)^2 = s^2 + 2s + 1`
+recurrence in 512 cycles after every reset (`table_ready_o` gates
+`tri_ready_o`), so the memory needs no init file and stays M10K-inferable.
+
+**Directed tests, updated:** `tests/terrain/terrain_shade_rtl_directed.cpp`
+is the RTL differential this contract planned — tier 1 drives triangles
+through `face_normal` into the RTL and compares against the COMPILED
+`shade_flat_tri_dir_unclamped` on the vertices; tier 2 drives raw rail /
+LSB / degenerate normals against the law's own back half. 4,142 checks;
+`--break-oracle` is the positive control and is registered in ctest as a
+WILL_FAIL lane. The overhead-sun case (the draft-divider killer) is case 2.
+
+**Still standing, deliberately:** the art-law gate — the owner LOOKS at the
+island under a moving sun at 240p — was NOT performed by the RTL session
+and is not superseded by any number above. And the block is `unused` in
+`design/prod_manifest.yml`: TERRAIN.PROJECT still has no colour port, so
+the machine remains unlit until that seam exists.
