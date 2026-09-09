@@ -27,10 +27,20 @@
 // RTL and to pass after the §3.1 repairs land, which is the only ordering that
 // proves the test can see the thing it claims to test.
 //
-// It is deliberately NOT registered with add_test() yet: a red suite hides
-// regressions, and this is a known, documented, dated hole rather than a
-// surprise. `add_test` goes in with the repair, in the same commit.
+// It WAS deliberately unregistered while it was red -- a red suite hides
+// regressions, and that was a known, documented, dated hole rather than a
+// surprise. The repairs landed, `add_test(NAME island_v3_fault_directed)` went
+// in with them, and this paragraph used to still say "deliberately NOT
+// registered ... yet". Stale by exactly the fault §3.1 below catches in itself:
+// a comment describing an obligation the tree no longer has is as confidently
+// wrong as a current file compared to an old measurement.
 #include "Vzhao_texture_island_v3_top.h"
+// The internal-scope headers, for the §3.1 C injection at the end of main. The
+// expander's output register is reached as
+// `rootp->zhao_texture_island_v3_top->u_expand__DOT__wq_overflow_o`, which
+// exists only because the target is verilated with --public-flat-rw.
+#include "Vzhao_texture_island_v3_top___024root.h"
+#include "Vzhao_texture_island_v3_top_zhao_texture_island_v3_top.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -446,11 +456,11 @@ int main(int argc, char** argv) {
   // change is `fq_full_c`'s `>=` becoming `>`, and watches the counter reach 36
   // with six entries accepted into a four-deep queue.
   //
-  // WHAT IS STILL NOT EXERCISED, stated rather than glossed: the ISLAND-level
-  // propagation from that counter to this sticky bit. It is a one-line
-  // `if (exp_wq_overflow != 0)`, and arguing from its simplicity is exactly the
-  // move that hides defects -- so it is recorded as untested rather than
-  // claimed.
+  // The ISLAND-LEVEL propagation from that counter to this sticky bit used to
+  // be recorded here as "STILL UNTESTED", on the grounds that it is a one-line
+  // `if (exp_wq_overflow != 0)` and that arguing from its simplicity is the
+  // move that hides defects. Correct as far as it went -- but "recorded as
+  // untested" is a note, not a gate, and the hop is now exercised below.
   std::printf(
       "  §3.1 B DISCHARGED: err_fragrob_id_error_o ORs all six named "
       "v3own identity counters (range/stale/unsol/dup/issue/final)\n");
@@ -458,9 +468,60 @@ int main(int argc, char** argv) {
       "  §3.1 C DISCHARGED: err_fragrob_wq_overflow_o reads the "
       "expander's real capacity-violation event, shown to fire in "
       "frag_expand_overflow_control (counter 36, 6 accepted into 4)\n");
-  std::printf(
-      "  STILL UNTESTED: the island-level hop from that counter to this "
-      "sticky bit\n");
+
+  // ---- §3.1 C, SECOND HALF: the island-level hop, by INJECTION -------------
+  //
+  // The expander's capacity-violation counter cannot be moved by any legal
+  // stimulus -- it needs a queue holding more entries than it owns, which the
+  // correct full-guard forbids. That is why the counter itself was demonstrated
+  // with a committed mutant rather than with input. The ISLAND hop needs the
+  // counter nonzero without a mutated island, so it is injected: the expander's
+  // output register is written directly through --public-flat-rw, which is a
+  // verilate flag rather than a source edit (and therefore writable while
+  // zhao_texture_island_v3_top.sv sits in a running fit's closure).
+  //
+  // `wq_overflow_o` is a flip-flop assigned only under its violation condition,
+  // with no else arm, so an injected value HOLDS across ticks instead of being
+  // recomputed away.
+  {
+    auto& expander = *d.rootp->zhao_texture_island_v3_top;
+
+    // NON-VACUITY. If the sticky were already set, every check below would pass
+    // with the injection doing nothing at all -- the exact shape of the
+    // zero-over-zero agreement this file's §3.1 A comparison had to guard.
+    zhao::check(d.err_fragrob_wq_overflow_o == 0,
+                "sticky starts clear, so the injection below is not vacuous", 0,
+                d.err_fragrob_wq_overflow_o);
+
+    // NEGATIVE CONTROL, before the positive one. Injecting ZERO must leave the
+    // bit clear. Without this the test cannot tell "the hop carries a nonzero
+    // count" from "the bit latches on being looked at".
+    expander.u_expand__DOT__wq_overflow_o = 0;
+    tick(d);
+    zhao::check(d.err_fragrob_wq_overflow_o == 0,
+                "a zero counter does NOT set the sticky bit", 0,
+                d.err_fragrob_wq_overflow_o);
+
+    // THE HOP.
+    expander.u_expand__DOT__wq_overflow_o = 1;
+    tick(d);
+    zhao::check(d.err_fragrob_wq_overflow_o == 1,
+                "a nonzero capacity-violation count sets err_fragrob_wq_overflow_o",
+                1, d.err_fragrob_wq_overflow_o);
+
+    // AND IT IS STICKY. Clear the counter; the bit must HOLD. This asserts the
+    // CORRECT behaviour rather than the fault -- "the counter fires" would stop
+    // being assertable the moment anything upstream is repaired, which is the
+    // trap CLAUDE.md names: do not write a test that asserts the bug.
+    expander.u_expand__DOT__wq_overflow_o = 0;
+    for (int i = 0; i < 8; ++i) tick(d);
+    zhao::check(d.err_fragrob_wq_overflow_o == 1,
+                "the sticky bit HOLDS after the counter returns to zero", 1,
+                d.err_fragrob_wq_overflow_o);
+    std::printf(
+        "  §3.1 C SECOND HALF: island hop exercised by injection -- clear, "
+        "zero-is-clear, set, and held\n");
+  }
 
   return zhao::report_and_exit("island_v3_fault_directed");
 }

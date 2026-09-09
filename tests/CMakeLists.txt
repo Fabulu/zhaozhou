@@ -2464,7 +2464,22 @@ verilate(test_island_v3_fault_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv)
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv
+  # --public-flat-rw so the probe can INJECT the expander's capacity-violation
+  # counter and watch the island's sticky bit latch.
+  #
+  # That hop was recorded in this test's own output as "STILL UNTESTED: the
+  # island-level hop from that counter to this sticky bit", because the counter
+  # is unreachable by legal stimulus -- it needs a queue holding more entries
+  # than it owns, which the correct full-guard forbids. The counter ITSELF was
+  # demonstrated with the committed mutant (frag_expand_overflow_control); what
+  # remained was the one-line `if (exp_wq_overflow != 0)` in the island.
+  #
+  # A flag, not a source edit -- which is what makes it writable while
+  # zhao_texture_island_v3_top.sv sits inside a running fit's closure. Same
+  # reasoning as perspuv_lockstep_directed below, and the same live-tree
+  # constraint (QUARTUS_GOTCHAS 11).
+  VERILATOR_ARGS --public-flat-rw)
 # REGISTERED once it passed. It was written to FAIL first, against the
 # unrepaired RTL, and was seen to fail and then to pass -- the only ordering
 # that proves it can see what it claims to test.
