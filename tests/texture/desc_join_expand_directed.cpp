@@ -92,6 +92,11 @@ struct Req {
   uint32_t src_id;
   int32_t u, v;
   uint8_t lod;
+  // PACKET 3 / §6: the palette pair as the EXPANDER should emit it. Modelled
+  // here rather than checked at the join, because the join is only the first of
+  // four hops -- descriptor, join, expander input queue, current-fragment
+  // record -- and a pair that is right at hop one proves nothing about hop four.
+  uint8_t pslot, pgen;
 };
 
 }  // namespace
@@ -157,6 +162,8 @@ int main(int argc, char** argv) {
         q.u = static_cast<int32_t>(d->p_u_i);
         q.v = static_cast<int32_t>(d->p_v_i);
         q.lod = r.lod;
+        q.pslot = r.pslot;
+        q.pgen = r.pgen;
         expect.push_back(q);
         ++expect_reqs;
       }
@@ -174,7 +181,7 @@ int main(int argc, char** argv) {
       } else {
         const Req& e = expect.front();
         if (d->req_src_id_o != e.src_id || d->req_u_o != e.u || d->req_v_o != e.v ||
-            d->req_lod_o != e.lod)
+            d->req_lod_o != e.lod || d->req_pal_slot_o != e.pslot || d->req_pal_gen_o != e.pgen)
           ++seq_errors;
         expect.pop_front();
       }

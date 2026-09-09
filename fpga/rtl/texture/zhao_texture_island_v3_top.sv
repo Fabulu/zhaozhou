@@ -1198,6 +1198,8 @@ module zhao_texture_island_v3_top #(
   logic signed [31:0] exp_req_u, exp_req_v;
   logic [7:0]  exp_req_lod;
   logic [17:0] exp_req_src_id;
+  logic [1:0]  exp_req_pal_slot;
+  logic [7:0]  exp_req_pal_gen;
   logic        exp_aux_valid, exp_aux_ready;
   logic [13:0] exp_aux_owner;
   logic [CTXW-1:0] exp_aux_ctx;
@@ -1296,6 +1298,9 @@ module zhao_texture_island_v3_top #(
       .f_valid_i(jn_f_valid_c), .f_ready_o(jn_f_ready_c),
       .f_owner_i(jn_owner_c),
       .f_u_i(jn_u_c), .f_v_i(jn_v_c),
+      // PACKET 3: the palette pair, carried from the descriptor rather than
+      // looked up from palslot_m/palgen_m by owner slot at the far end.
+      .f_pal_slot_i(jn_pal_slot_c), .f_pal_gen_i(jn_pal_gen_c),
       .f_binding_i(jn_binding_c), .f_lod_i(jn_lod_c),
       .f_count_i(jn_count_c), .f_aux_i(jn_aux_c),
       .f_class_i(jn_class_sane_c),
@@ -1311,6 +1316,7 @@ module zhao_texture_island_v3_top #(
       .req_valid_o(exp_req_valid), .req_ready_i(exp_req_ready),
       .req_u_o(exp_req_u), .req_v_o(exp_req_v), .req_lod_o(exp_req_lod),
       .req_src_id_o(exp_req_src_id),
+      .req_pal_slot_o(exp_req_pal_slot), .req_pal_gen_o(exp_req_pal_gen),
       .aux_valid_o(exp_aux_valid), .aux_ready_i(exp_aux_ready),
       .aux_owner_o(exp_aux_owner), .aux_ctx_o(exp_aux_ctx),
       .iss_tmu_valid_o(exp_iss_tmu_valid),

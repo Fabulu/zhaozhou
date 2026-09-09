@@ -79,6 +79,14 @@ module zhao_texture_frag_expand #(
     input  var logic signed [31:0] f_u_i,
     input  var logic signed [31:0] f_v_i,
     input  var logic [7:0]         f_binding_i,
+    // PACKET 3 / §6: the palette pair travels WITH the request instead of being
+    // looked up later by owner slot. The sidecar lookup it replaces was keyed on
+    // an identity that may already have been recycled -- D0's hazard class in a
+    // different costume. Captured with the SAME enable as `f_binding_i`, which
+    // §6 asks for by name: "Use the same capture enables as the request fields
+    // already in each stage."
+    input  var logic [1:0]         f_pal_slot_i,
+    input  var logic [7:0]         f_pal_gen_i,
     input  var logic [7:0]         f_lod_i,
     input  var logic [1:0]         f_count_i,     // sample count, 0..3
     input  var logic               f_aux_i,       // this fragment needs AUX
@@ -106,6 +114,11 @@ module zhao_texture_frag_expand #(
     output var logic signed [31:0] req_v_o,
     output var logic [7:0]         req_lod_o,
     output var logic [SRCW-1:0]    req_src_id_o,
+    // Beside `req_src_id_o` and NOT packed into it. §6 is explicit that the
+    // 18-bit {class, sample handle} token has no free bits, and widening it to
+    // carry ten more would change every queue the token travels through.
+    output var logic [1:0]         req_pal_slot_o,
+    output var logic [7:0]         req_pal_gen_o,
 
     // ---- AUX request ---------------------------------------------------------
     output var logic        aux_valid_o,
@@ -154,6 +167,8 @@ module zhao_texture_frag_expand #(
     logic signed [31:0] u;
     logic signed [31:0] v;
     logic [7:0]         binding;
+    logic [1:0]         pal_slot;
+    logic [7:0]         pal_gen;
     logic [7:0]         lod;
     logic [1:0]         count;
     logic               aux;
@@ -209,6 +224,11 @@ module zhao_texture_frag_expand #(
   // behaviour change into a structural one.
   assign req_lod_o    = cur_q.lod;
   assign req_src_id_o = {cur_q.cls, cur_q.owner[13:8], sidx_q, cur_q.owner[7:0]};
+  // From the CURRENT fragment record, like every other request field. All three
+  // samples of one fragment carry the same pair -- it is per-fragment state, not
+  // per-sample, which is the declared material rule.
+  assign req_pal_slot_o = cur_q.pal_slot;
+  assign req_pal_gen_o  = cur_q.pal_gen;
 
   assign aux_valid_o = aux_owed_c;
   assign aux_owner_o = cur_q.owner;
@@ -279,6 +299,8 @@ module zhao_texture_frag_expand #(
                                     u:       f_u_i,
                                     v:       f_v_i,
                                     binding: f_binding_i,
+                                    pal_slot: f_pal_slot_i,
+                                    pal_gen:  f_pal_gen_i,
                                     lod:     f_lod_i,
                                     count:   f_count_i,
                                     aux:     f_aux_i,

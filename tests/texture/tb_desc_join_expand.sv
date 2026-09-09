@@ -59,6 +59,11 @@ module tb_desc_join_expand #(
     output var logic signed [31:0] req_v_o,
     output var logic [7:0]         req_lod_o,
     output var logic [17:0]        req_src_id_o,
+    // PACKET 3: the palette pair as the EXPANDER emits it. Checking it here is
+    // what makes the carriage claim end-to-end -- descriptor to join to expander
+    // to request -- rather than a claim about the join alone.
+    output var logic [1:0]         req_pal_slot_o,
+    output var logic [7:0]         req_pal_gen_o,
 
     // ---- AUX out --------------------------------------------------------------
     output var logic            aux_valid_o,
@@ -165,10 +170,12 @@ module tb_desc_join_expand #(
       .f_valid_i(j_f_valid_c), .f_ready_o(j_f_ready_c),
       .f_owner_i(j_owner_c), .f_u_i(j_u_c), .f_v_i(j_v_c),
       .f_binding_i(f_binding_o), .f_lod_i(f_lod_o), .f_count_i(f_count_o),
+      .f_pal_slot_i(f_pal_slot_o), .f_pal_gen_i(f_pal_gen_o),
       .f_aux_i(f_aux_o), .f_class_i(f_class_sane_c), .f_ctx_i(j_ctx_c),
       .req_valid_o(req_valid_o), .req_ready_i(req_ready_i),
       .req_u_o(req_u_o), .req_v_o(req_v_o), .req_lod_o(req_lod_o),
       .req_src_id_o(req_src_id_o),
+      .req_pal_slot_o(req_pal_slot_o), .req_pal_gen_o(req_pal_gen_o),
       .aux_valid_o(aux_valid_o), .aux_ready_i(aux_ready_i),
       .aux_owner_o(aux_owner_o), .aux_ctx_o(aux_ctx_o),
       .iss_tmu_valid_o(), .iss_tmu_handle_o(),
