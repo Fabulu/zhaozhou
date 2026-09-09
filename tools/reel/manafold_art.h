@@ -1452,6 +1452,46 @@ constexpr int kBobPeriodAKeys = 48, kBobPeriodBKeys = 122;
 constexpr int32_t kCompressAmpPm = 16500;
 constexpr int32_t kSpreadRatioPm = 550;    // the positive-volume partner
 constexpr int kCompressPeriodKeys = 30;
+// ==== PASS 14 / R2(c) -- THE IDLE GETS AN ENVELOPE ==========================
+//
+// The expressiveness comparison's idle row: Zixxtrixx's eight tiles are eight
+// genuinely different silhouettes; Manafold's are "the same blob eight times --
+// the antenna reconfigures and the body rotates, but the silhouette ENVELOPE
+// never changes". The strip re-run after R2(b) says exactly the same thing: a
+// deeper breath did not help, and the reason is arithmetic rather than
+// amplitude.
+//
+// The idle's breath runs at kIdleKeys / kWobblePerAKeys = 300/23 = 13 cycles.
+// **Thirteen breaths in a ten-second loop, sampled at eight evenly-spaced
+// tiles, is 1.63 cycles between tiles** -- consecutive tiles land on unrelated
+// phases and the trend averages out to nothing. Raising that amplitude makes
+// the creature pulse faster-looking, not bigger-looking, and it can never make
+// the ENVELOPE read across a strip. The plan asked for the right thing in the
+// right words: "one or two BIG, SLOW inhale/exhale beats".
+//
+// So a second term at TWO cycles per clip rides on top of the thirteen. It uses
+// `press_wave`, not a sine, for the reason press_wave exists: it rises, DWELLS
+// at the extreme, and eases home, so the deep inhale is a held shape a tile can
+// actually catch rather than an instant a sine passes through.
+//
+// 07-MOTION-STYLE's law holds -- amplitude up, reversal density flat. This adds
+// TWO reversals across 300 keys. D7 SS9.2's "careful not to spazz out... it
+// needs to look deliberate" governs the density, and two slow beats is the
+// definition of deliberate.
+// ⚠ AND THE SLOW TERM HAS TO DOMINATE, WHICH THE FIRST TRY GOT WRONG. At 650
+// the swell was the same size as the thirteen-cycle breath it rode on, so the
+// strip still showed one blob: an envelope that changes cannot be read out of a
+// signal where the fast ripple is as tall as the slow swing. The fast breath's
+// share in the idle comes DOWN and the swell's goes UP, which is also the more
+// honest picture of breathing -- a slow deep draw with a small tremor on it,
+// rather than thirteen identical pants.
+//
+// Total amplitude still RISES (6600 + 23100 = 29700 against the old 16500), so
+// this is not R2(b) being walked back; and the reversal density FALLS, which is
+// 07-MOTION-STYLE's law read in the direction it is written.
+constexpr int kIdleSwellCycles = 2;       // big slow breaths per 10 s loop
+constexpr int32_t kIdleSwellPm = 1400;    // x kCompressAmpPm: the SLOW swing
+constexpr int32_t kIdleFastBreathPm = 400;  // ...and the fast ripple on top
 constexpr int32_t kCompressLoopCouplePm = 14;  // sympathetic hinge-root bob
 // PASS 3 — THE WHOLE-CREATURE WOBBLE (Direction 3 §4), mechanically: a
 // slow bend STARTS at the loop peak (hinge B leads), travels down through
@@ -2193,6 +2233,52 @@ constexpr int kDeathOpenKeys = 8;
 // 40425. It is the clamp headroom being kept honest; see the ceiling note
 // beside kCompressAmpPm.
 constexpr int32_t kDeathImpactSquashPm = 2450;  // x kCompressAmpPm at strike 0
+// ==== PASS 14 / R2(c) -- THE CORPSE STOPPED BREATHING BY BECOMING ROUND =====
+//
+// The expressiveness comparison lost the death row decisively: Zixxtrixx
+// travels from a reared S through progressively flatter shapes to A FLAT LINE
+// ON THE GROUND, and Manafold's corpse is "a slightly smaller, slightly lower
+// blob". The eight-tile strip still shows exactly that after R2(b).
+//
+// THE CAUSE IS ONE LINE AND IT IS ALMOST RIGHT. `build_death_drop` sets the
+// dead frames to `zc::DeformSample{}` -- bit zero -- under a comment that says
+// "⚠ THE DEFORM STOPS", which is the correct intent: D9 SS11.2 asks for eternal
+// rest and a corpse that keeps breathing is the named fault. But **zero deform
+// is not stillness, it is ROUNDNESS**: the flatten channel at zero is the
+// undeformed bind ellipsoid, so the corpse is the roundest the creature ever
+// gets. The animal inhales to 16500 while alive and then dies into a perfect
+// ball. Stillness and flatness were conflated because zero delivered both the
+// stopping and, accidentally, a shape.
+//
+// So the corpse holds a CONSTANT, NON-ZERO flatten instead: it is squashed by
+// its own weight, it is flatter than any living inhale, and it does not change
+// by one count from the settle key to the last frame. The spread partner comes
+// with it through kSpreadRatioPm, so the body widens as it sags -- which is the
+// pancake read the comparison says Zixxtrixx gets from its flat line.
+//
+// It fades IN exactly as the living deform fades OUT, on the same `life` ramp,
+// so nothing snaps at the settle: the body sags flat as it dies.
+//
+// ⚠ THIS MOVED A GATE, WHICH IS THE PART TO CHECK. `manafold-qa-p12` scored
+// eternal rest as "lane 0 is bit-zero", and that criterion and this item are
+// contradictory as written -- one demands the round bind pose, the other
+// demands a flatter one. The gate's own printout already distinguishes "HELD
+// non-zero: a frozen stretch, not breathing" from "THE CORPSE IS STILL
+// MOVING", so the contract it means to enforce is stillness; lane 0 is now
+// scored on whether it CHANGES. Lanes 1..3 keep bit-zero untouched, so the
+// --fail-lane leg is exactly as failable as it was.
+//
+// 1350 per-mille of the breath = 22275, about 34% flatten: comfortably past the
+// living maximum (16500, ~25%) so it reads as a different shape at 240p, and
+// far under the 60000 ceiling. Authored to be seen on the eight-tile strip.
+// ⚠ 1350 (34% flatten) WAS TOO TIMID AND THE PICTURE SAID SO. It is visible on
+// a 4x crop and invisible on the eight-tile strip, and the strip is the test
+// the comparison applies -- "a slightly smaller, slightly lower blob" was the
+// verdict being answered, so a difference that needs a magnifier does not
+// answer it. 2400 is 39600, about 60% flatten: a deflated thing on the ground,
+// against Zixxtrixx's flat line. Peak stack during the settle fade is ~56.5k,
+// inside the 60000 ceiling.
+constexpr int32_t kDeathCorpseFlatPm = 2400;  // x kCompressAmpPm, HELD, both deaths
 // THE DEFORM CEILING, made into a compile error instead of a flat frame.
 // Every squash path clamps `flat` at 60000, and the deaths are the stack that
 // gets closest: impact + breath, in one sample, on the strike frame.

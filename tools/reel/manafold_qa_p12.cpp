@@ -121,17 +121,58 @@ int main(int argc, char** argv) {
       }
     std::printf("  slot %u %-13s eternal rest keys %d..%d, both subs:\n", d.slot, d.name,
                 d.settle, clip->frame_count - 1);
+    // ==== PASS 14 / R2(c) -- LANE 0 IS SCORED ON WHETHER IT CHANGES ========
+    //
+    // ⚠ THIS CRITERION MOVED. It read `nz[L] != 0` for every lane: eternal rest
+    // meant bit-zero. That was right when it was written and it is wrong now,
+    // because zero flatten is not stillness, it is the ROUND BIND POSE -- so
+    // the old criterion required the corpse to be the roundest shape in the
+    // clip, and R2(c) requires it to be flatter than the living animal. One of
+    // the two had to give, and it is not the owner's item.
+    //
+    // The contract this gate means to enforce is D9 SS11.2's "eternal rest":
+    // the corpse STOPS. This file already knew the difference -- its own
+    // verdict string distinguishes "HELD non-zero: a frozen stretch, not
+    // breathing" from "THE CORPSE IS STILL MOVING" -- and the change is to
+    // score lane 0 on that distinction instead of printing it as commentary
+    // beside a failure.
+    //
+    // ⚠ LANES 1..3 ARE UNTOUCHED and still require bit-zero. That is deliberate
+    // on two counts: nothing authored has asked those spans to hold a stretch
+    // on a corpse, and the --fail-lane leg (lane 0's answer pretending to speak
+    // for every lane) has to stay exactly as failable as it was. Weakening
+    // every lane to buy one lane's change would have removed the leg's teeth
+    // as a side effect, which is how a gate quietly stops gating.
+    //
+    // Lane 0 is additionally pinned to the ONE authored value, so "held" cannot
+    // be satisfied by holding some other number that happens not to move.
+    const int want0 = static_cast<int>(u02::corpse_sample().flatten);
     for (uint8_t L = 0; L < zc::kDeformLaneCount; ++L) {
-      const bool bad = nz[L] != 0;
+      // ⚠ THE LEG TAKES LANE 0'S CRITERION ALONG WITH LANE 0'S DATA, and it has
+      // to. "lane 0 answered for every lane" means the gate that reads only
+      // lane 0 -- so it applies lane 0's RULE as well. Substituting the data
+      // and keeping each lane's own rule judges lane 0's held sag against
+      // lanes 1..3's bit-zero rule, which fails for a reason the leg is not
+      // about; the leg then reports faults, its self-check correctly says it
+      // "did not take effect", and a real proof of failability quietly becomes
+      // a broken one. Caught by running it, which is why it is run.
+      const bool as_lane0 = fail_leg || L == 0;
+      const bool bad = as_lane0 ? (moves[L] != 0 || (nz[L] != 0 && worst[L] != want0))
+                                : nz[L] != 0;
       if (bad) { ++fails; ++q1_fails; }
       const char* verdict =
-          !bad ? "bit-zero"
-               : (moves[L] == 0 ? "<-- HELD non-zero: a frozen stretch, not breathing"
-                                : "<-- THE CORPSE IS STILL MOVING");
+          moves[L] != 0
+              ? "<-- THE CORPSE IS STILL MOVING"
+              : (nz[L] == 0
+                     ? "bit-zero"
+                     : (as_lane0 && worst[L] == want0
+                            ? "HELD at the authored sag (kDeathCorpseFlatPm) -- still"
+                            : "<-- HELD non-zero: a frozen stretch, not breathing"));
       std::printf("    lane %u: %5d non-zero, worst %5d, spread %6d..%-6d, %4d key-to-key "
                   "changes  %s\n",
                   L, nz[L], worst[L], lo[L], hi[L], moves[L], verdict);
     }
+    std::printf("    lane 0 authored corpse sag: %d (flatten), gate wants it HELD\n", want0);
     std::printf("    deform_ex track present: %s (%zu samples, want %zu)\n",
                 clip->deform_ex.empty() ? "NO (identity)" : "yes", clip->deform_ex.size(),
                 static_cast<size_t>(clip->frame_count) * (zc::kDeformLaneCount - 1u));

@@ -131,3 +131,47 @@ It does **not** gate out the negative — taunt3 is 9.1 and is judged on its run
 ## Where I am
 * Meter trustworthy. Next: read `build_taunt3`, author the beats, `--clean`
   build, render taunt3 + trick + blown, re-measure, contact-sheet every frame.
+
+## [R4 landed] and where I went next
+
+R4 shipped: two holds where there were none (frames 51-80, 320-336), the
+punchline is a squat turned-away pose instead of an edge-on stub. R2(b) and R7
+rode the same build. Pushed as `8e0853c6`.
+
+⚠ **The first push "succeeded" and had been REJECTED.** `git push -q ... | tail;
+echo $?` reported 0 -- that is `echo`'s status, and the rejection hints were
+right there in the output. CLAUDE.md's "read the build's exit code, not the
+pipeline's" is not only about builds. Redone with `--force-with-lease` (the
+branch had been rebased) and a real exit code.
+
+## R2(c) -- and the corpse's fault was one line
+
+`if (dead) c.deform[f] = zc::DeformSample{}` -- **bit zero**. The intent was
+D9 SS11.2's eternal rest and the comment says "⚠ THE DEFORM STOPS", which is
+right. But **zero flatten is not stillness, it is the round BIND POSE**: the
+animal inhaled to 16500 while alive and then died into a perfect ball. The
+comparison's "a slightly smaller, slightly lower blob" was that, exactly.
+
+The corpse holds an authored sag now. Three things that cost time and are worth
+having written down:
+
+1. **The corpse-zero rule lived in TWO places.** Fixing `manafold-qa-p12` left
+   `manafold_probe.cpp` failing on its own copy -- the identical fault CLAUDE.md
+   records against `flat_staged_slot`, in the same file, again. Both now read
+   `u02::corpse_sample()`, so they can disagree only by failing to compile.
+2. **I broke the `--fail-lane` leg and the leg told me.** Substituting lane 0's
+   DATA while keeping each lane's own RULE judged a held sag against a bit-zero
+   rule; the leg reported faults and its self-check said "the leg did not take
+   effect". The leg must take lane 0's criterion too. Found by running it.
+3. **1350 was too timid and only the picture said so.** 34% flatten is visible
+   on a 4x crop and invisible on the eight-tile strip -- and the strip is the
+   test the comparison applies. 2400 (60%) reads.
+
+⚠ **4 QA failures are PRE-EXISTING, not mine.** Verified by stashing the whole
+change, rebuilding and re-running: lanes 2 and 3 hold a frozen span stretch
+(3407 / 8781) on both deaths and the gate has been red on it. Same 4 before and
+after. Not my item; reported.
+
+## Where I am
+* R4, R2(b), R2(c), R7 all authored and looked at. mprobe RC=0, all four QA
+  legs behave. Next: the findings doc and the honest list of what I left.
