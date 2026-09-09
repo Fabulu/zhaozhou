@@ -71,6 +71,27 @@ bone-serial (≤32 bones). Working-set derivation: ≤128 distinct tuples/frame
 1 decoded bone per clock steady-state on miss; 1 palette handle per request
 on hit.
 
+**RELAXED BY OWNER RULING 2026-09-09** (`reports/OWNER-RULINGS-20260909-2300.md`).
+Fabian: *"relax the 1 bone/clock rule. It must have been arbitrary."*
+
+The one-bone-per-clock target forced this block's ~12-product decode to be
+SPATIAL, which is where its **18 DSP** come from -- `zhao_geom_quat2mat` (9) plus
+`zhao_geom_mat3x4_mul` (9). The relaxed target is **one bone per twelve clocks**,
+i.e. a single operand-muxed multiplier lane sequenced across the decode, on the
+pattern `zhao_terrain_normals.sv:203` and `zhao_terrain_lod.sv:273` already use.
+
+The demand figure was already in this contract, two paragraphs down: <=128
+distinct tuples/frame x 32 x 12 ~= 49k multiplies/frame. Against
+`computeClocksPerFrame = 1,666,666` that is **2.9% of a frame on ONE lane**,
+against 18 DSP provisioned -- about **34x over**. So the cost of relaxing is 2.9%
+of a frame and the return is **17 DSP**.
+
+Note what went wrong in the original, because the sentence is still below and
+still reads as reassurance: it called 49k multiplies/frame "noise against the DSP
+budget", using a UTILISATION figure to dismiss an AREA cost. DSP cost is a count
+of `*` sites (`TEXTURE.TMU.md:490`). The utilisation argument is in fact the
+argument that these 18 are the most shareable DSP in the machine.
+
 ## Overflow and malformed-input behaviour
 
 Cache-full: evict LRU tuple not referenced this frame; a tuple referenced

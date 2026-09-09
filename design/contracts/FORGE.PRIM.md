@@ -97,6 +97,21 @@ directed test asserts exactly that.
 
 One rounding per emitted component, round-half away from zero.
 
+> **OWNER RULING 2026-09-09** (`reports/OWNER-RULINGS-20260909-2300.md`):
+> *"Rounding law: qformats wins unless FORGE has strong visible/content-law
+> reason to be exceptional."*
+>
+> `spec/qformats.md` section 4 specifies round-half-UP, and this contract's
+> "round-half away from zero" conflicts with it. **qformats governs.**
+> `zhao_forge_prim_eval.sv` already follows qformats and flagged the conflict
+> rather than resolving it silently, which was the right call.
+>
+> The ruling is not "qformats always". It is qformats **unless FORGE can show a
+> VISIBLE or content-law reason** to be exceptional -- so the burden now sits on
+> whoever wants the exception, and it must be a reason demonstrated BY EYE at
+> final resolution, not a symmetry argument.
+
+
 ## Latency (fixed or variable)
 **Variable in a bounded way**: proportional to `segments × sides`, bounded at
 1,024 triangles by the frozen limits. Bounded is the property that matters —

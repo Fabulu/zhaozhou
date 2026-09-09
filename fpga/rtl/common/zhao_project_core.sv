@@ -171,7 +171,28 @@
 // REGISTERS, not with muxes in the multiplier cone — see the g_rows_seq
 // header below and reports/PROJECT-CORE-ROW-MULTIPLEX-20260909.md.
 //
-// 1. **Width narrowing is where 22 of those 33 are.** At <= 27 bits the same
+// 1. **Width narrowing is where 22 of those 33 are.**
+//
+//    **OWNER RULING 2026-09-09 -- THE BLOCKER IS CLEARED.** Fabian: "minimum fov
+//    you propose is ok." See `reports/OWNER-RULINGS-20260909-2300.md`.
+//    A vertical FOV floor just above 53.13 degrees is ACCEPTED, so the nine
+//    matrix coefficients may be capped at +-2.0 and carried as signed 18-bit
+//    Q16.16. VERTICES ARE UNTOUCHED -- they stay full-width s32 at +-32,768 world
+//    units, and this was never a world-size question.
+//
+//    Two corrections to the sentence below, both measured since it was written:
+//      * 27 bits buys NOTHING. `GEOM.WCACHE.md:81` -- "32x27 costs 3 DSPs,
+//        exactly what 32x32 costs" -- and a later sweep found 32x22 is also 3.
+//        ONLY 18 PAYS.
+//      * -18 is the lever ALONE. It composes MULTIPLICATIVELY with the shared
+//        service and with ROWS_PER_PASS: 66 -> 33 -> 15 -> 5, so its MARGINAL
+//        value after both is about -10. Do not add the three.
+//
+//    Not yet implemented. `MATW` is the named parameter and its default stays 32,
+//    so nothing ships differently until the projection-subsystem fit gate passes.
+//
+//    The original text, kept because its reasoning is still the right shape and
+//    only its premise moved: At <= 27 bits the same
 //    eleven products cost 11. What that needs is a PROOF that 27 bits covers a
 //    world coordinate, which is a question about map size and the fixed-point
 //    format and belongs to the owner, not to this file.
