@@ -135,11 +135,54 @@ to produce a fictitious path to 94.**
 
 # 4. Still uncashed — `uncashed_cheques.py` output, live
 
-    zhao_raster_rcp24_v3   3 DSP, 986 ALM   OWNER-RULED, fit-confirmed, not swapped
+    zhao_raster_rcp24_v3   3 DSP, 986 ALM   owner-ruled on DSP, but BLOCKED -- see below
     zhao_project_service   fit target       66 DSP -> 33
     zhao_terrain_cmd       1,069 ALM        fitted, uncomposed
     zhao_terrain_loadq       734 ALM        fitted, uncomposed
     zhao_terrain_mipfeed     343 ALM        fitted, uncomposed
+
+### Correction: `rcp24_v3` is NOT merely awaiting execution
+
+I listed it as "owner-ruled, fit-confirmed, not swapped", which reads as a swap
+somebody just has to perform. It is not. **Measured by me today, at the island's
+own parameters:**
+
+| NCTX | saturated clk/recip | its own 4.6 threshold | checks |
+|---:|---:|---|---|
+| **8 — what the island instantiates** | **5.78** | **FAILS** | **1/52 failed** |
+| 12 | 4.38 | passes | 52/52 |
+
+`zhao_texture_island_v3_top.sv:625` instantiates
+`zhao_raster_rcp24_svc #(.NCTX(8), .TOKW(14))`. Dropping v3 in at NCTX=8 installs
+a tile that **fails the acceptance threshold it declares for itself.**
+
+The owner's ruling — *"halve the DSPs even if it costs. I think they'll be more
+bottleneck than we'd like them to be"* — was about **area and register cost.** It
+did not address a functional throughput threshold, because nobody had put one in
+front of it. `reports/RCP-V3-THROUGHPUT-IS-NCTX-DEPENDENT-20260908.md` measured
+this the day before and the swap has been carried in every summary since as
+though the ruling settled it.
+
+**What is genuinely settled:** the DSP halving is parameter-invariant — 6 in
+every `svc` row ever produced, 3 in every `v3` row, across NCTX 8/12/16 and TOKW
+8/14. So the −3 DSP is real *if the swap happens*; the question is what it takes
+to make the swap legal.
+
+**The precise question, which is the owner's:**
+
+1. swap **and raise the island to NCTX=12**, paying for four more contexts of
+   per-context state (`svc` holds that state in flops, so this is not free); or
+2. swap at NCTX=8 and **re-rule the 4.6-clock threshold** to something 5.78
+   meets; or
+3. do not swap, and find the 3 DSP elsewhere.
+
+Note that Fmax does not transfer either: the island's reported 62.83 MHz is set
+by a pin path unrelated to the tile.
+
+**This is the sixth claim checked and refused today**, and the most instructive,
+because the refusal is of my own summary rather than an agent's. "The owner
+already ruled it" is exactly the shape of explanation that stops further
+checking.
 
 Plus, from check 2 — **fixed and never re-measured**: `terrain_normals` (still
 described by a dirty row asserting 18 DSP against an actual 3), `terrain_tess`,
@@ -167,9 +210,12 @@ unmeasured area and DSP block in the tree.
 2. **Relax "1 decoded bone per clock"** in `GEOM.POSE`. Costs 2.9% of a frame,
    returns 17 DSP.
 3. **Retire `material_combine_v1`** — both islands use v2. −2 DSP, one word.
-4. **Swap `rcp24_v3`** — you already ruled it ("halve the DSPs even if it
-   costs"), a fit confirmed it, and the ruling **lives only in a commit
-   message**, not in the docket.
+4. **`rcp24_v3`: pick one of three.** Your ruling covered DSP cost, not the
+   throughput threshold the tile declares. At the island's NCTX=8 it measures
+   5.78 clk/recip against its own 4.6 and **fails 1 of 52 checks**; at NCTX=12 it
+   passes 52/52. So: raise the island to NCTX=12 and pay for four more contexts
+   of flop-held state, or re-rule the 4.6 threshold, or drop the swap. (Your
+   ruling also **lives only in a commit message**, not in the docket.)
 5. **The redline**, the twelve queued fits, and 8 km terrain (blocked by its own
    Step 0).
 
