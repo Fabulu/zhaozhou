@@ -372,3 +372,70 @@ directions**, and one repeated count sixty seconds apart says which.
 3. **launch the REVIEWER** against the published webm (the true artefact) once
    the media is committed — QA is already running
 4. QA's verdict on the grey ghost decides the card's wrap paragraph
+
+### 02:14 — PUBLISHED, and the first attempt had already succeeded
+
+`deploy.ps1 -Project upheaval -Branch main`. **All gates green**: noindex,
+`checkfresh` **28 of 28 fresh / 0 stale**, and the full decode sweep of **641**
+declared media files.
+
+⚠ **The first run failed AFTER passing every gate**, on
+`Test-Path : Illegales Zeichen im Pfad` for `C:\...\publicenders`. The `\r` in
+`"public\renders"` was an actual **carriage-return byte**, because the `.ps1` had
+been written from a Python script where `\r` is CHR(13). Two occurrences,
+**invisible in the source, in `git diff` and in review** — found with `cat -A`,
+which shows them as `^M`. Written up as `09-ENGINE-GOTCHAS` §21.
+
+**And it had already uploaded.** The failure was in the deploy-RECORD code, which
+runs after wrangler; the second run reported *"1333 already uploaded"*. So the
+gates and the upload were fine and only the bookkeeping broke — which is exactly
+why no gate could have caught it.
+
+**Verified from production, not from the deploy's own word:**
+
+    taunt3   local 2,423,467 bytes == live 2,423,467   MATCH
+    flight   local 1,472,044 bytes == live 1,472,044   MATCH
+    the card's newest text present, exactly one noindex
+
+### 02:30 — THE REVIEW LANDED AND IT RE-FRAMES THREE PASSES
+
+**"The model is good. The bank is not yet."**
+
+⚠ **THE EYE IS BUILT CORRECTLY AND PROPORTIONED WRONGLY.** Sheet-to-render,
+front to front, ball width normalised:
+
+    lens aspect   ours 4.0-4.9      sheets 2.6-3.2
+    star / lens   ours 0.12-0.23    sheets 0.52-0.60
+    and both eyes sit entirely in the ball's LOWER HALF
+
+So three passes have been re-centring a star about **a third of its drawn size**
+inside a lens **half again too long**. Registration, parallax and depth were each
+correctly diagnosed and correctly fixed — **and all three were answers to a
+question the eye does not raise.** The owner asked twice for the eyes to be
+centred and was told twice that they had been.
+
+**This is the fifth time on this creature that a careful, correct fix was aimed
+at something other than the fault**, and the first time the miss was in the
+*subject* of the measurement rather than its method.
+
+Other findings, in the review's order: **`taunt3` has no HOLD anywhere** across
+368 frames, so there is no beat and no punchline (the attack curve was right and
+insufficient; the funniest thing in the bank is `trick`'s handstand, which nobody
+authored as a joke); **the body goes POLYGONAL when it squashes**, which sits
+across *round* and *bouncier* both; `hasty` loses the creature for ~40 frames;
+`blown`'s apex has nothing happening ON it, so rotation not light; the star still
+vanishes past 30°.
+
+**The review also killed three claims before they cost a pass** — including a
+helper's "the mana composites at quarter resolution", refuted at 0.0% of aligned
+blocks constant (it was VP9 quantisation in the delivered webm) — and **two of
+its own numbers.**
+
+### 02:40 — pass 14 opened; five lanes swept
+Fable architect briefed on the review, and told explicitly to **re-derive the eye
+measurement itself** and to **adjudicate QA against the review** rather than
+inherit either. Items 6 and 7 have survived four passes each: no fifth round of
+constants.
+
+Lane audit clean — **no unpushed commits anywhere**, 14 lanes. QA's two worktrees
+removed properly first, then `manafold-p13-{a,b,c,qa,review}` deleted.
