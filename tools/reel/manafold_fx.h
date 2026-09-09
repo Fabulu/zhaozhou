@@ -146,6 +146,31 @@ constexpr uint8_t kManaWhiteMid[3] = {160, 160, 190};
 constexpr uint8_t kManaWhiteHi[3] = {245, 240, 255};
 constexpr uint8_t kManaDripMid[3] = {40, 62, 150};   // the opaque deep blue
 constexpr uint8_t kManaDripHi[3] = {90, 130, 220};
+
+// ---- OWNER DIRECTION 10 (2026-09-09): THE DEEP DARK BLUE ------------------
+// "...connected by white lightning lines surrounded by a deep dark blue. You
+// know, like actual lightning."
+//
+// ⚠ THIS IS A DARK HALO, NOT A GLOW, AND IT IS THE FIRST OF ITS KIND HERE.
+// Every mana element on this creature is ADDITIVE, and additive can only
+// LIGHTEN -- so every previous lightning attempt was pale-on-pale by
+// construction, no matter what the core gain was. What the owner is
+// describing is a bright core wrapped in something DARKER THAN THE SKY,
+// which is how real lightning reads against a night. The machinery for it
+// already exists and had never been pointed at this: glow_splat's
+// `opaque + soft` mode blends toward the ramp colour by the sprite's own
+// intensity, so a ramp whose entries are darker than the backdrop SUBTRACTS.
+//
+// LO == MID, the kRampAquaCore idiom: a flat dark body, not a fade from
+// black -- a fade from black would go INVISIBLE at the rim, which is exactly
+// where a surround has to be present.
+//
+// The values are a STARTING POINT for the rung plate, not a shipped choice
+// (Direction 10 §5: "it is an experiment ... the deliverable is the AXIS").
+// They are dark enough to sit under `channel`'s violet night ({14,10,46} deep,
+// {70,44,132} mid) and blue enough to read as storm rather than as ink.
+constexpr uint8_t kManaStormMid[3] = {8, 12, 46};
+constexpr uint8_t kManaStormHi[3] = {18, 26, 78};
 enum ManaRamp : uint8_t {
   kRampGlow = 0,   // the shipped centre-glow ramp (kGlowLo/Mid/Hi)
   kRampBlue,
@@ -158,6 +183,8 @@ enum ManaRamp : uint8_t {
   kRampSeaGreen,  // pass 3: the "try greens" ask
   kRampDeepBlue,  // pass 3: the filled deep blue
   kRampAquaCore,  // pass 8: the mote HEART -- opaque, dark, saturated
+  kRampStorm,     // D10: the DEEP DARK BLUE surround. Darker than either sky
+                  // on purpose -- it is the only ramp here that subtracts.
   kRampCount
 };
 /** PASS 8: which ramp an OPAQUE heart should write, given the ramp its
@@ -281,6 +308,70 @@ constexpr int kFoldMoteGarnishPm = 300;   // 38 -> 11, the lab's approved ten
 // keeps kBoltStampMm -- they are two primitives with two core radii and one
 // shared number was always a coincidence rather than a rule.
 constexpr int32_t kFoldEdgeStampMm = 14;   // 22 * (2/3), one core again
+
+// ---- OWNER DIRECTION 10: THE EDGE BECOMES THE LIGHTNING -------------------
+//
+// THE PICTURE THAT SETTLED IT. `channel` f001-f009 at 3x, baseline build
+// 12ca4ca3 (pass14-plates/r6-channel-base-3x.png): the figure's outline IS
+// being drawn -- a faint dark-teal DOTTED arc is plainly visible through the
+// pocket -- and it is drawn at kFoldEdgeCoreRPx = 2 px while the motes that
+// carry no shape at all are drawn at kMoteHaloRPxMin..Max = 7..10 px.
+//
+// **The connection is drawn at a fifth of the size of the things it connects.**
+// That is the whole of "no shapes, can't see them", it is four passes old, and
+// no gain ladder could ever have found it: the edge was never dim, it was
+// SMALL, and it was small in the one dimension nobody had a knob pointed at.
+//
+// Direction 10 and the pass-14 architect's `edge-strands` finding are the same
+// sentence from two directions: the motes were never the picture, they are its
+// VERTICES -- and the shape motes already sit exactly on the stencil stations
+// the outline runs between (`stn = m * kStencilPts / n_shape`, and `place()` is
+// shared by both), so "connect the particles" needs no new placement at all.
+// It needs the line to become the loud thing.
+//
+// THE THREE PARTS, EACH ITS OWN KNOB, because Direction 10 is an EXPERIMENT
+// and the deliverable is the axis rather than a point on it:
+//
+//   1. CONNECTED -- kFoldStrandStampMm sets the spacing; stamps must overlap
+//      or the line is beads again (pass 12 learned this the hard way one
+//      constant above).
+//   2. WHITE -- kRampWhite, additive, depth test OFF (the pulsar-core law:
+//      energy reads over flesh).
+//      ⚠ THIS DELIBERATELY REVERSES A STANDING LAW. manafold_art.h records the
+//      lab's finding that a white outline "put 366 near-white px on screen and
+//      dropped saturation to 108.9" and concludes "a white outline reads as a
+//      glitch; an aqua one reads as folded mana". That measurement was sound
+//      and its conclusion is now OVERRULED BY THE OWNER IN HIS OWN WORDS --
+//      "connected by white lightning lines". Recorded rather than quietly
+//      flipped, because the next pass will find that comment and wonder.
+//      The reason the measurement was not wrong AND the owner is right: the
+//      lab's white outline had no dark surround, so it whitened a pale field.
+//      Part 3 is what makes part 2 survivable.
+//   3. SURROUNDED BY A DEEP DARK BLUE -- kRampStorm, opaque+soft, DEPTH TESTED
+//      (a surround is grounded; it is not energy). Drawn FIRST so the white
+//      core lands on top of it and the dark reads as a wrapping, not a veil.
+//
+// ⚠ AND THE TRAP DIRECTION 10 NAMES ITSELF: a deep dark blue may vanish on
+// the violet night and dominate the sunset the other 25 clips use. So every
+// value below is swept from ONE binary through the env overrides in
+// zhao_reel.cpp, on BOTH backdrops, and the plate is the deliverable.
+constexpr bool kFoldStrandOn = true;         // the D10 read; false = pass 13's
+constexpr int32_t kFoldStrandCoreRPx = 3;    // the white hot core
+constexpr int kFoldStrandCoreGainPm = 1000;
+constexpr int32_t kFoldStrandDarkRPx = 9;    // the deep dark blue surround
+// ⚠ LOWER IS DARKER. The gain scales the ramp's own entries, and the ramp is
+// already near-black, so 1000 is the authored navy and 400 is a deeper, more
+// contrasty one. It is not a brightness in the ordinary direction and it will
+// be read backwards by somebody if this line is not here.
+constexpr int kFoldStrandDarkGainPm = 1000;
+constexpr int32_t kFoldStrandStampMm = 9;    // under one core radius: a LINE
+// The free cross-pocket strand (`mana_lightning`) inside the fold window. It
+// traces nothing -- 09-ENGINE-GOTCHAS §18's "an independent, full-brightness
+// white strand composited over the same pocket with no knowledge of the
+// stencil" -- and once the EDGE is a white strand it is the same primitive
+// drawing a figure instead of a diameter. Off by default under D10; one flip
+// restores it, and the ablation is one env away.
+constexpr bool kFoldFreeStrandOn = false;
 
 // PASS 12 (D9 §3, "bring back the super awesome shapes of lightning"): 2 -> 1.
 // This RESTORES the pass-4 value, which Direction 4 §2 asked for in as many
@@ -1562,6 +1653,29 @@ struct FoldState {
 // pure barycentric shape; U02_FOLD_DEBUG=1 prints the per-frame scalars.
 inline int g_u02_fold_lock = 0;
 inline int g_u02_fold_debug = 0;
+// D10 rung overrides, set from zhao_reel.cpp's env block. -1 == "use the
+// constant". They exist so the owner's plate is a ladder from ONE BINARY
+// (10-GATE-CHECKLIST item 26), and so he can move a value without a rebuild.
+inline int g_u02_strand_on = -1;
+inline int g_u02_strand_core_r = -1;
+inline int g_u02_strand_dark_r = -1;
+inline int g_u02_strand_dark_gain = -1;
+inline int g_u02_free_strand = -1;
+inline bool u02_strand_on() {
+  return g_u02_strand_on < 0 ? kFoldStrandOn : g_u02_strand_on != 0;
+}
+inline int32_t u02_strand_core_r() {
+  return g_u02_strand_core_r < 0 ? kFoldStrandCoreRPx : g_u02_strand_core_r;
+}
+inline int32_t u02_strand_dark_r() {
+  return g_u02_strand_dark_r < 0 ? kFoldStrandDarkRPx : g_u02_strand_dark_r;
+}
+inline int u02_strand_dark_gain() {
+  return g_u02_strand_dark_gain < 0 ? kFoldStrandDarkGainPm : g_u02_strand_dark_gain;
+}
+inline bool u02_free_strand_on() {
+  return g_u02_free_strand < 0 ? kFoldFreeStrandOn : g_u02_free_strand != 0;
+}
 // U02_FOLD_FREEZE=1 (pass 5; replaces the retired U02_ABLATE_KNEAD): the
 // bones keep animating, and ONLY the field's anchor input is frozen at
 // the rest layout. The mana must go static/limp while the antenna keeps
@@ -1832,6 +1946,15 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       place(S[i]);
     }
     const uint32_t ph_e = frame / 3u;  // the outline BUZZES, it does not crawl
+    // OWNER DIRECTION 10: the edge is drawn as LIGHTNING -- a white hot line
+    // wrapped in a deep dark blue -- or, with kFoldStrandOn false, as pass
+    // 13's dim aqua outline. Read once per call so a rung sweep cannot
+    // change identity between two stations of the same figure.
+    const bool strand = u02_strand_on();
+    const int32_t stamp_mm = strand ? kFoldStrandStampMm : kFoldEdgeStampMm;
+    const int32_t core_r = u02_strand_core_r();
+    const int32_t dark_r = u02_strand_dark_r();
+    const int dark_gain = u02_strand_dark_gain();
     int32_t pts[kFoldEdgeSegs + 1][3];
     for (int i = 0; i < kStencilPts; ++i) {
       if (!fold_edge_link(ph.shape_to, i)) continue;
@@ -1844,23 +1967,42 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
         int64_t dz = (pts[sgi + 1][2] - pts[sgi][2]) >> 16;
         const int64_t adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy,
                       adz = dz < 0 ? -dz : dz;
-        int nst = static_cast<int>((adx + ady + adz) / kFoldEdgeStampMm);
+        int nst = static_cast<int>((adx + ady + adz) / stamp_mm);
         if (nst < 1) nst = 1;
-        if (nst > 24) nst = 24;
+        if (nst > 40) nst = 40;
         for (int t = 0; t < nst; ++t) {
           const int32_t x = lerp32(pts[sgi][0], pts[sgi + 1][0], t, nst);
           const int32_t y = lerp32(pts[sgi][1], pts[sgi + 1][1], t, nst);
           const int32_t z = lerp32(pts[sgi][2], pts[sgi + 1][2], t, nst);
-          mana_push(out, x, y, z, kFoldEdgeHaloRPx, ramp,
-                    kFoldEdgeHaloGainPm * lit / 1000, true, false);
-          // The core is pass 8's SOFT body, in the fold's own ramp. The lab
-          // measured that an outline stamped with the lightning primitive's
-          // hard-coded white core put 366 near-white px on screen and dropped
-          // saturation to 108.9 against a 142.1 control. A white outline reads
-          // as a glitch; an aqua one reads as mana that has been folded.
-          mana_push(out, x, y, z, kFoldEdgeCoreRPx, mana_core_ramp(ramp),
-                    kFoldEdgeCoreGainPm, false, false, /*opaque=*/true,
-                    /*soft=*/true);
+          if (strand) {
+            // 3. THE DEEP DARK BLUE, FIRST. opaque+soft, so it BLENDS TOWARD a
+            // colour darker than either sky -- the only subtractive element in
+            // this creature's whole mana path. Depth tested: a surround is
+            // grounded, it is not energy shining through the animal.
+            // It rides `lit` like everything else, so a figure that is not
+            // gripping does not stamp a dark bruise on the sky.
+            mana_push(out, x, y, z, dark_r, kRampStorm,
+                      dark_gain * lit / 1000, true, false,
+                      /*opaque=*/true, /*soft=*/true);
+            // 2. THE WHITE LINE, ON TOP. Additive, depth test OFF (the
+            // pulsar-core law: energy reads over flesh). It lands INSIDE the
+            // dark it was just given, which is the whole difference between
+            // this and the lab's rejected white outline.
+            mana_push(out, x, y, z, core_r, kRampWhite,
+                      kFoldStrandCoreGainPm * lit / 1000, false, false);
+          } else {
+            mana_push(out, x, y, z, kFoldEdgeHaloRPx, ramp,
+                      kFoldEdgeHaloGainPm * lit / 1000, true, false);
+            // The core is pass 8's SOFT body, in the fold's own ramp. The lab
+            // measured that an outline stamped with the lightning primitive's
+            // hard-coded white core put 366 near-white px on screen and
+            // dropped saturation to 108.9 against a 142.1 control -- true, and
+            // superseded by Direction 10 above, which gives the white a dark
+            // surround the lab's version never had.
+            mana_push(out, x, y, z, kFoldEdgeCoreRPx, mana_core_ramp(ramp),
+                      kFoldEdgeCoreGainPm, false, false, /*opaque=*/true,
+                      /*soft=*/true);
+          }
         }
       }
     }
@@ -2107,7 +2249,13 @@ inline void mana_fill(int cand, uint32_t frame, uint32_t slot, int keys,
       // dying conduit loses it FIRST and outright rather than fading it -- a
       // lightning bolt at 12% strength reads as a rendering fault, not as a
       // creature running out. 1000 for every slot but the two deaths.
-      if (fold_life_pm(slot, keys, static_cast<int32_t>(frame) * 8) >=
+      // OWNER DIRECTION 10: the free cross-pocket strand is OFF by default now.
+      // It is a full-brightness white filament composited over the same pocket
+      // with no knowledge of the stencil -- so under D10, where the EDGE is a
+      // white strand, it is the same primitive drawing a diameter on top of a
+      // figure. `kFoldFreeStrandOn` (and ZHAO_U02_FREE_STRAND) restores it.
+      if (u02_free_strand_on() &&
+          fold_life_pm(slot, keys, static_cast<int32_t>(frame) * 8) >=
           kFoldLightningCutPm)
         mana_lightning(frame, A, out);
       if (agit_out) *agit_out = ag;
@@ -2202,6 +2350,10 @@ inline void mana_build_ramps(GlowFrame ramps[kRampCount], uint32_t frame) {
   // LO == MID on purpose: a flat bright body, not a fade from black.
   glow_build_ramp(ramps[kRampAquaCore], kManaAquaCoreMid, kManaAquaCoreMid,
                   kManaAquaCoreHi, 1000);
+  // D10: same LO == MID idiom, and for the same reason -- a surround that
+  // fades to black at its rim is a surround that is not there at its rim.
+  glow_build_ramp(ramps[kRampStorm], kManaStormMid, kManaStormMid,
+                  kManaStormHi, 1000);
 }
 
 

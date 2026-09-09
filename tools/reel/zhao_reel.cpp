@@ -7643,6 +7643,32 @@ int main(int argc, char** argv) {
   }
   if (const char* fd = std::getenv("U02_FOLD_DEBUG"))
     u02::g_u02_fold_debug = std::string(fd) == "1" ? 1 : 0;
+  // ---- OWNER DIRECTION 10 rung sweep (2026-09-09) ------------------------
+  // "connected by white lightning lines surrounded by a deep dark blue."
+  // It is an EXPERIMENT, so the deliverable is a LADDER, and 10-GATE item 26
+  // says a ladder comes from ONE BINARY. These five overrides are how. Unset
+  // (the shipping case) leaves every byte identical to the constants.
+  // ⚠ ZHAO_U02_STRAND_DARK_GAIN is BACKWARDS from the usual sense: the ramp is
+  // already near-black, so LOWER is DARKER.
+  if (const char* e = std::getenv("ZHAO_U02_STRAND"))
+    u02::g_u02_strand_on = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_STRAND_CORE_R"))
+    u02::g_u02_strand_core_r = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_STRAND_DARK_R"))
+    u02::g_u02_strand_dark_r = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_STRAND_DARK_GAIN"))
+    u02::g_u02_strand_dark_gain = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_FREE_STRAND"))
+    u02::g_u02_free_strand = std::atoi(e);
+  if (u02::g_u02_strand_on >= 0 || u02::g_u02_strand_core_r >= 0 ||
+      u02::g_u02_strand_dark_r >= 0 || u02::g_u02_strand_dark_gain >= 0 ||
+      u02::g_u02_free_strand >= 0)
+    std::fprintf(stderr,
+                 "D10 strand rung: on=%d core_r=%d dark_r=%d dark_gain=%d free=%d
+",
+                 u02::g_u02_strand_on, u02::g_u02_strand_core_r,
+                 u02::g_u02_strand_dark_r, u02::g_u02_strand_dark_gain,
+                 u02::g_u02_free_strand);
   // PASS 4 (instrument honesty): ZIXX_HIDE_CREATURE=1 renders every frame
   // with the creature hook skipped -- trajplot.py's creature-free
   // background plate. Unset (the normal case) nothing changes.
