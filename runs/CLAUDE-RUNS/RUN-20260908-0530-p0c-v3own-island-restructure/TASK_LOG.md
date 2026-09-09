@@ -1936,3 +1936,57 @@ module graph per invocation (~90 s), so pass every module in ONE call. Three
 separate calls timed out a 5-minute shell.
 
 Now reading the fit.
+
+## After gate 2: the calibration boundary, and four faults of my own making
+
+### The 32xN boundary is MEASURED, and my pre-registered hope is refuted
+
+| a x b | DSP |  | a x b | DSP |
+|---|---|---|---|---|
+| 32 x 18 | **2** | | 32 x 21 | 3 |
+| 32 x 19 | **4** | | 32 x 22 | 3 |
+| 32 x 20 | 3 | | 32 x 23 | 3 |
+
+I filed "if 32x22 were still 2, coefficients reach +-32.0 and the constraint stops
+mattering". **It is 3.** Only 18 bits pays, which is +-2.0 in Q16.16 and a floor of
+about 53 degrees vertical FOV.
+
+**And 19 bits costs MORE than 32.** The decomposition says why -- four
+`Two Independent 18x18` and no `Sum of two 18x18`, where 20 and up take 2+1. So
+"narrow it to 18 plus a bit of headroom" lands on the worst width in the range,
+worse than not optimising. **18, or do not bother.**
+
+### Four faults, three of them mine, one nine days old
+
+1. **`-SkipMeasured` has never worked.** A heredoc turned `` into a literal
+   0x08 byte, so it looked for `tools<BS>udget/calibration.json` and re-measured
+   all 123 points -- ~2 hours -- every time. It printed `0 of 123 already ok` on
+   its third line and I had not read the first lines of a job I launched.
+2. **The same mechanism bit twice more**: my repair script's own `` collapsed
+   (its assertion caught it), and later a ``. `no_control_bytes.py` is
+   committed; it found a fourth instance in `v3own.sv:1385`, deliberately left
+   alone so `@g2-prod`'s provenance tie survives.
+3. **My import fix broke the prod_top preflight** -- `module X import pkg::*; (`
+   does not match `^\s*module\s+<top>\s*[#(]`. Fixed on both sides: the
+   generator imports as a module item, and the matcher accepts the legal header
+   form anyway.
+4. **One `throw` killed two queue stages**, because `ErrorActionPreference =
+   Continue` does not survive one. Each stage is wrapped now.
+
+### Six fit targets authored
+
+`field_v3_{mulbank,len,rf}` and `geom_{lod,skin,skin_norm}`. Rules quoted from
+each block's own header, or omitted entirely where the block states no budget
+(`skin_norm`) -- inventing one would be the rule-that-reports-a-pass. 50 targets
+now, no duplicates.
+
+**`zhao_geom_skin` turns out to be a measured -6 DSP lever nobody listed** --
+`MUL_LANES=1` is 3 DSP / 56.11 MHz against the counted default's 9 / 89.65. The
+census tool now finds these itself rather than waiting for someone to read a
+header.
+
+### Running
+
+`zhao_prod_top@map-import-fix` -- the real synthesizability gate on today's five
+prod_top repairs, since Verilator lint-clean is not `quartus_map` here. Then the
+pairpipe map, which scores a prediction filed before it ran: 6 DSP.
