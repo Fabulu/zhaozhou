@@ -1819,3 +1819,47 @@ Owner decisions pending: delete `zhao_texture_combine` (−8 DSP, −494 ALM, tr
 met, two documents disagree on who decides); switch `prod_top` to V2 retiring V1
 (−793 ALM, wants its own fit); and the quarter-square ROM design (2 M10K buys the
 island's last 2 combiner DSP, bit-exact).
+
+## Gate 4 landed, and it redirected twice
+
+`zhao_raster_rcp24_svc@g4-nctx12`: 1802 ALM / 6 DSP / 1 M10K / 56.24 MHz against
+v3's 986 / 3 / 8 / 100.95, both clean, both `NCTX=12 TOKW=14`. The owner's
+"halve the DSPs even if it costs" does not cost at this parameterisation.
+
+**Two conclusions I was about to draw and did not:**
+
+1. *"svc is the island's critical path, so the swap buys ~20 MHz."* The path
+   census says the island's reported 62.83 MHz is a PIN path into the palette
+   resolver, and that 42 of the 43 internal paths start at one register bit,
+   `u_own|live_cnt_q[6]`. A zero-delay reciprocal buys **4.08 MHz** and stops.
+   The swap stands on ALM and DSP; its Fmax column does not transfer.
+2. *"nobody has priced narrowing project_core's operands."* `zhao_project_core.sv`
+   lines 160-175 already price it from `calibration.json`, and `GEOM.PROJECT.md`
+   declares the full width a robustness property. Narrowing is a CONTRACT change.
+
+**And two of my own numbers were wrong on the way:** the ad-hoc path census
+over-matched `-detail full_path` rows and reported 442 paths / 399 boundary
+instead of 200 / 157 (it inflated the *comfortable* side); and I read the random
+test's matrix range as 19 bits when it is exactly 18, which is the width the DSP
+cliff sits at. Both corrected in the reports; `tools/quartus/path_census.py` now
+carries a detail row as a negative control it must reject.
+
+## Running now
+
+* `@g2-prod` island fit (packets 1+2+3, `MIGRATION_SHADOWS=0`) -- gate 2.
+* `queue_calib_boundary.ps1`, waiting on it: five points at 32x19..23 to find
+  where the DSP cost actually steps. ~75 s once it starts.
+
+## NEXT, and the order is deliberate
+
+Owner direction `49fc32e9` says *finish the texture island*; terrain, projection
+and measurement-tool expansion are not the implementation priority. The DSP
+census answers a LATER and direct owner question, so measuring it is in scope --
+**implementing `MATW` in `zhao_project_core` is not**, and I have stopped at the
+measurement deliberately rather than carrying on into the projector.
+
+So: back to the island. Everything under `fpga/rtl/texture/` is inside the
+running fit's closure, but TESTS are not -- so the directed test for the
+`live_cnt_q` credit change can be written now and is the thing to do while the
+fit runs. It must assert the CORRECT behaviour (no over-issue on the cycle the
+registered credit changes), never the bug.
