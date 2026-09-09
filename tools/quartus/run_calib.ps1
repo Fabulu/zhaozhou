@@ -46,7 +46,7 @@ if ($Family) { $points = @($points | Where-Object { $_.family -eq $Family }) }
 
 if ($SkipMeasured) {
     $done = @{}
-    $destPath = Join-Path $RepoRoot 'toolsudget\calibration.json'
+    $destPath = Join-Path $RepoRoot 'tools\budget\calibration.json'
     if (Test-Path -LiteralPath $destPath) {
         $prior = [IO.File]::ReadAllText($destPath) | ConvertFrom-Json
         foreach ($r in $prior.points) { if ($r.status -eq 'ok') { $done[$r.module] = $true } }
