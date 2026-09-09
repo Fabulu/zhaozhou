@@ -95,3 +95,64 @@ reads", and I let it frame a problem whose answer was on the write side. That is
 not a fault in the tool -- its header is honest about what it scans. It is a
 fault in taking its output as the shape of the problem rather than as one input
 to it.
+
+---
+
+# A FOURTH CORRECTION, and this one wrongly blamed a tool
+
+The triage in the gate-2 report said:
+
+> `cbi_q`, `clm_q` and `fcl_q` have **exactly two references each, both inside
+> assertions, and ZERO writes** -- and that block is guarded by `` `ifndef
+> SYNTHESIS ``. Quartus defines `SYNTHESIS`, so they are excluded before
+> synthesis sees them and cost nothing.
+>
+> **That is a false-positive class in `check_ram_inference.py`.**
+
+**Both sentences are false.** All three arrays are fully live synthesis state:
+
+```
+cbi_q   246 declared   1139 next-state read   1267 reset   1291 write
+        1473  c1f_cbi_q <= cbi_q [c0f_slot_q]      <- a SYNTHESIS read
+clm_q   238 declared   1136 next-state read   1264 reset   1288 write
+        1395  c1t_clm_q <= clm_q [c0t_slot_q]      <- two SYNTHESIS reads
+        1436  c1a_clm_q <= clm_q [c0a_slot_q]
+fcl_q   261 declared   1141 next-state read   1269 reset   1293 write
+        1474  c1f_fcl_q <= fcl_q [c0f_slot_q]      <- a SYNTHESIS read
+```
+
+Six to eight references each, written at reset and again every clock, and read
+at registered pipeline addresses in ordinary synthesizable code.
+
+## The cause: a whitespace-sensitive grep
+
+I searched for ``cbi_q\[`` -- the name immediately followed by a bracket. This
+file writes ``cbi_q [i] <= ...`` and declares ``cbi_q  [OWNERS]``, **with a space
+before the bracket**. Every next-state read, every write and every declaration
+was invisible to my check. What survived were the assertion lines, which happen
+to be written ``cbi_q[gen_chk_s]`` without the space.
+
+So the pattern returned exactly the two references that made the array look
+simulation-only, and hid the six that prove it is not. **The instrument reported
+the comfortable answer** -- three fewer arrays to account for -- which is the
+direction this repository has been burned in more than any other.
+
+## And `check_ram_inference.py` was RIGHT
+
+I recorded a "false-positive class" against that tool on the strength of the
+broken grep, and said its fix "needs a preprocessor-aware scan". **It needs
+nothing.** It correctly identified all eleven arrays as combinationally read
+through a dynamic index. My verification was broken, not its detection.
+
+That accusation is withdrawn. Blaming a working tool because a hand-check
+disagreed with it is worse than the original error: the tool is now slightly
+less trusted for having been right.
+
+## What changes, and what does not
+
+**The count is eleven, not eight.** All eleven per-owner arrays are live state,
+read and written in full every clock, and none is a memory candidate -- which
+strengthens rather than weakens this document's conclusion.
+
+`v3own` at 2,706.7 ALM, 25% of the island and 81% of the redline overage, is
+unchanged. So is the finding that the memory-first remedy does not apply.
