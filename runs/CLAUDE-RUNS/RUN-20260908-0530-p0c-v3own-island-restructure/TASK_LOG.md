@@ -4129,3 +4129,54 @@ inflate the remaining saving, which is the flattering direction.
 
 **Next:** two doc-triage agents still running (MHZArchitected,
 REARCHITECTUREADVICE verification).
+
+
+## 2026-09-09 -- dsp.md's lever 1 is cashed, and it corrects dsp.md
+
+The four-item list that opened the DSP campaign is closed. ROWS_PER_PASS built,
+proven equivalent, and priced.
+
+Verified by me, rebuilt and rerun:
+  lint RPP=3 and RPP=1                    RC=0 both
+  check_quartus17_syntax.py               clean, 217 files
+  proj_rowmux_directed                    38/38, positive control fired INSIDE
+                                          the same run (skewed m[5] -> 5 of 64)
+  proj_service_rowmux_smoke               413/413 (the service had NO test at all)
+  elaboration guard, ROWS_PER_PASS=2      $fatal at zhao_project_core.sv:387
+  geom_project_directed at DEFAULT        900/900, production path unchanged
+
+**A tooling lesson from my own verification.** My first attempt to fire the guard
+passed the override against the TESTBENCH top and the build exited 1. That looked
+exactly like the guard firing. It was not -- the log said "Parameters from the
+command line were not found in the design". A nonzero exit from the wrong cause
+reads identically to one from the right cause, and I would have recorded a
+positive control that never ran. Read the tool's own status, not the exit code.
+
+**And a second one, same session:** a two-heredoc compound command died with
+"unexpected EOF" and ran NOTHING -- the exact costume CLAUDE.md documents. I
+checked `git log` before assuming, and the tree was untouched.
+
+**The architect corrected the campaign's founding document.** dsp.md:141 claims
+"~33 to ~12, saving ~21". The honest figure is 33 -> 15, saving 18: five sites at
+3 DSP, not four. The text predates the calibration cliff and omits the two
+viewport products.
+
+**The Fmax objection is doubly stale.** The census's "misses 100 MHz by 39%"
+cites the 61.09 MHz D22 fit; the 09-07 stage-5b cut re-measured 73.62 MHz with
+the ROW STAGE as limiter. And "control depth" presumes an operand mux -- the
+build uses a shifting hold bank instead, so the RPP=1 cone is a strict SUBSET of
+today's minus the view mux. Structurally it cannot get longer.
+
+**Composition stops a fictitious path to 94.** The three levers act on the same
+11-site population: savings MULTIPLY, never add. 33+21+22 = 76 of 66 is
+impossible. Lattice 66 -> 33 -> 15 -> 5; marginals -33, -18, -10.
+
+**It corrected MY brief too.** "Only <=18 pays" overstates WCACHE:81 -- 27x27
+with BOTH operands <= 27 costs 1 DSP; what WCACHE proved is that one WIDE operand
+forfeits the band.
+
+Frame: 398,784 x 3 = 1,196,352 of 1,666,666 = 71.8% (86.1% with the 20%
+reserve). Without the arena the terrain lane alone is 283%.
+
+Flagged not edited: both projection contracts' latency lines are one cycle stale
+from the stage-5b cut.

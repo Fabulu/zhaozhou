@@ -4036,6 +4036,43 @@ set_tests_properties(lint_zhao_geom_project PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# ROWS_PER_PASS=1 against ROWS_PER_PASS=3, byte-for-byte, under four stall
+# patterns -- dsp.md lever 1, the time-multiplexed matrix rows
+# (reports/PROJECT-CORE-ROW-MULTIPLEX-20260909.md). The default configuration
+# is pinned to the shipped oracle by geom_project_directed above and by
+# terrain_project_directed; this differential pins the sequenced shape to the
+# default, so the oracle is inherited by transitivity without a second
+# projection implementation existing anywhere. Also asserts the declared
+# fixed-latency delta (+3 en-cycles) and initiation interval (exactly 3), the
+# mid-sequence cfg-write tear case the capture-at-accept law closes, and a
+# POSITIVE CONTROL that skews one DUT matrix word by a raw LSB and requires
+# the comparator to fire -- a checker never seen to fail has not been tested.
+add_executable(test_proj_rowmux_directed geometry/proj_rowmux_directed.cpp)
+verilate(test_proj_rowmux_directed
+  PREFIX Vtb_proj_rowmux
+  TOP_MODULE tb_proj_rowmux
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/geometry/tb_proj_rowmux.sv
+          ${ZHAO_PROJECT_CORE_SV})
+add_test(NAME proj_rowmux_directed COMMAND test_proj_rowmux_directed)
+set_tests_properties(proj_rowmux_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# The shared projector's arbiter under the row sequencer's backpressure. The
+# service previously had NO test at all; this smoke covers the three lines
+# that changed for ROWS_PER_PASS (grants gated on the core's in_ready_o, the
+# round-robin flip and contended_o gated on a grant the core can take):
+# routing, order, payload integrity, exact II=3 aggregate rate, fairness, and
+# contended_o counting contended GRANTS (2N-1 under dual saturation -- the
+# final slot's rival has always drained) while staying zero under solo load.
+add_executable(test_proj_service_rowmux_smoke geometry/proj_service_rowmux_smoke.cpp)
+verilate(test_proj_service_rowmux_smoke
+  PREFIX Vtb_proj_service_rowmux
+  TOP_MODULE tb_proj_service_rowmux
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/geometry/tb_proj_service_rowmux.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_project_service.sv
+          ${ZHAO_PROJECT_CORE_SV})
+add_test(NAME proj_service_rowmux_smoke COMMAND test_proj_service_rowmux_smoke)
+set_tests_properties(proj_service_rowmux_smoke PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # GEOM.POSE's quaternion step: quat16 -> 3x4 rotation, against
 # zref::creature::quat16_to_mat3. The no-renormalization rule (creature_rules
 # 2.2) is a law an "improved" implementation would break, so section 5 drives

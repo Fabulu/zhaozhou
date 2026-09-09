@@ -123,7 +123,16 @@
 module zhao_project_service #(
     // Client A's rider (geometry uses 16), client B's rider (terrain uses 42).
     parameter int unsigned PAYLOAD_A_W = 16,
-    parameter int unsigned PAYLOAD_B_W = 42
+    parameter int unsigned PAYLOAD_B_W = 42,
+    // Passed to the core. 3 = one vertex per clock, nine row multipliers
+    // (33 DSP measured). 1 = one vertex per three clocks, three row
+    // multipliers (15 DSP structural) — dsp.md lever 1. The arbiter below
+    // honours the core's `in_ready_o` either way; at 3 that signal is the
+    // constant 1 and this module behaves exactly as before the parameter.
+    // Whether the composed frame budget affords II=3 is derived in
+    // reports/PROJECT-CORE-ROW-MULTIPLEX-20260909.md: with the arena,
+    // 3 x 398,784 = 1,196,352 of 1,666,666 clocks (71.8%).
+    parameter int unsigned ROWS_PER_PASS = 3
 ) (
     input  wire                       clk,
     input  wire                       rst_n,
@@ -201,10 +210,13 @@ module zhao_project_service #(
   wire  grant_a  = a_valid_i && !(both_c &&  prefer_b_q);
   wire  grant_b  = b_valid_i && !(both_c && !prefer_b_q);
 
-  // The core takes a vertex only while enabled; a grant that the core is not
-  // enabled to consume is not a grant.
-  wire  take_a   = en_i && grant_a;
-  wire  take_b   = en_i && grant_b;
+  // The core takes a vertex only while enabled AND ready; a grant the core is
+  // not in a position to consume is not a grant. `core_ready` is the constant
+  // 1 at ROWS_PER_PASS=3; at 1 it is the row sequencer's capture slot, so the
+  // service's aggregate rate becomes one vertex per three `en_i`-cycles.
+  wire  core_ready;
+  wire  take_a   = en_i && grant_a && core_ready;
+  wire  take_b   = en_i && grant_b && core_ready;
 
   assign a_ready_o = take_a;
   assign b_ready_o = take_b;
@@ -217,8 +229,12 @@ module zhao_project_service #(
       contended_o <= '0;
     end else begin
       // Flip only on a contended grant. Alternating on every grant would let a
-      // lone client hand its turn away to an idle one and gain nothing.
-      if (en_i && both_c) begin
+      // lone client hand its turn away to an idle one and gain nothing. And
+      // only when the core actually takes one: a cycle where both ask while
+      // the row sequencer is mid-vertex is the II limit, not contention, and
+      // counting it here would make `contended_o` unreadable at
+      // ROWS_PER_PASS=1 (it would tick twice per vertex under dual load).
+      if (en_i && both_c && core_ready) begin
         prefer_b_q  <= ~prefer_b_q;
         contended_o <= contended_o + 32'd1;
       end
@@ -246,7 +262,8 @@ module zhao_project_service #(
   wire               o_behind, o_view;
 
   zhao_project_core #(
-      .PAYLOAD_W(PAY_W)
+      .PAYLOAD_W(PAY_W),
+      .ROWS_PER_PASS(ROWS_PER_PASS)
   ) u_core (
       .clk        (clk),
       .rst_n      (rst_n),
@@ -255,6 +272,7 @@ module zhao_project_service #(
       .cfg_addr_i (cfg_addr_i),
       .cfg_data_i (cfg_data_i),
       .en_i       (en_i),
+      .in_ready_o (core_ready),
       .in_valid_i (core_in_valid),
       .vx_i       (core_vx),
       .vy_i       (core_vy),

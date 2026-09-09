@@ -121,6 +121,10 @@ module zhao_geom_project (
   /* verilator lint_off UNUSEDSIGNAL */
   logic core_view;  // GEOM.CLIP's per-vertex packet carries no view tag.
   logic core_busy;  // GEOM.PROJECT's contract has no idle port; TERRAIN's does.
+  logic core_in_ready;  // Constant 1: this block uses the core's default
+                        // ROWS_PER_PASS=3, whose contract is one vertex per
+                        // clock with no input backpressure. A non-default
+                        // setting here would need this wired into `advance`.
   /* verilator lint_on UNUSEDSIGNAL */
 
   zhao_project_core #(
@@ -136,6 +140,7 @@ module zhao_geom_project (
 
       .en_i(advance),
 
+      .in_ready_o(core_in_ready),
       .in_valid_i(accept),
       .vx_i      (vx_i),
       .vy_i      (vy_i),

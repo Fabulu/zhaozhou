@@ -511,6 +511,19 @@ targets:
   #
   # No min_fmax_mhz. That rule is opt-in and the clock contract belongs to the
   # core, which carries its own stage-5b repair after measuring 61.09 MHz.
+  # THE ONE FIT GATE FOR dsp.md LEVER 1 (row multiplexing), named in advance
+  # per the batching law. Question it answers, exactly: "at ROWS_PER_PASS=1,
+  # does DSP land at 15 (5 sites x 3) and does Fmax hold the core's post-cut
+  # 73.62 MHz baseline (i.e. is the shifting hold bank genuinely off the
+  # multiplier cone)?" Correctness, latency (+3), II (=3), stall semantics and
+  # cfg-tear behaviour are already settled in Verilator by
+  # proj_rowmux_directed + proj_service_rowmux_smoke and need no fit. Command:
+  #
+  #   tools/quartus/run_block_fit.ps1 -Module zhao_project_service `
+  #     -Params ROWS_PER_PASS=1 -RowLabel '@ROWS_PER_PASS=1'
+  #
+  # The rules below stay bound to the DEFAULT (spatial, 33 DSP) row; labelled
+  # rows are not rule-checked, so read the @row's numbers directly.
   - top: zhao_project_service
     sources:
       - fpga/rtl/common/zhao_project_core.sv

@@ -253,6 +253,10 @@ module zhao_terrain_project (
   logic             s6_view;
   logic [PAY_W-1:0] s6_pay;
   logic             core_busy;
+  // Constant 1: this block uses the core's default ROWS_PER_PASS=3, whose
+  // contract is one vertex per clock with no input backpressure. A non-default
+  // setting here would need this wired into the vertex sequencer's `advance`.
+  logic             core_in_ready_unused;
 
   zhao_project_core #(
       .PAYLOAD_W(PAY_W)
@@ -267,6 +271,7 @@ module zhao_terrain_project (
 
       .en_i(advance),
 
+      .in_ready_o(core_in_ready_unused),
       .in_valid_i(job_valid),
       .vx_i      (sel_x),
       .vy_i      (sel_y),

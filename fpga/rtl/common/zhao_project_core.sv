@@ -160,6 +160,17 @@
 // `tools/budget/calibration.json` measures a product at 1 DSP from 8 to 27 bits
 // and **3** from 28 to 33. So 11 x 3 = **33 DSPs**, and the map agrees exactly.
 //
+// ROWS_PER_PASS (2026-09-09) is dsp.md's lever 1, now a PARAMETER of this
+// file rather than a deliberate omission. At 3 (the default, and what every
+// existing caller gets) nothing changes: eleven sites, 33 DSP, one vertex per
+// clock. At 1 the three matrix rows share three `mul32` sites sequenced over
+// three cycles: five sites, 5 x 3 = **15 DSP** by the same calibration line,
+// one vertex per THREE clocks, latency +3. dsp.md's "~33 to ~12" predates the
+// calibration cliff and forgot the two viewport products; the honest number
+// at this setting is 15. The sequencer's operand routing is bought with
+// REGISTERS, not with muxes in the multiplier cone — see the g_rows_seq
+// header below and reports/PROJECT-CORE-ROW-MULTIPLEX-20260909.md.
+//
 // 1. **Width narrowing is where 22 of those 33 are.** At <= 27 bits the same
 //    eleven products cost 11. What that needs is a PROOF that 27 bits covers a
 //    world coordinate, which is a question about map size and the fixed-point
@@ -189,7 +200,13 @@
 
 module zhao_project_core #(
     // Opaque per-vertex rider, carried in lockstep and never interpreted.
-    parameter int unsigned PAYLOAD_W = 16
+    parameter int unsigned PAYLOAD_W = 16,
+    // Matrix rows computed per cycle. 3 = all rows spatially (nine mul32
+    // sites, one vertex per clock — the historical shape, and cycle-identical
+    // to the pre-parameter block). 1 = one row per cycle through three shared
+    // sites (one vertex per three clocks, latency +3, `in_ready_o` gates
+    // acceptance). Legal values are 3 and 1 only; elaboration $fatal otherwise.
+    parameter int unsigned ROWS_PER_PASS = 3
 ) (
     input logic clk,
     input logic rst_n,
@@ -209,6 +226,13 @@ module zhao_project_core #(
     input logic en_i,
 
     // ---- one vertex in, sampled on `en_i` -----------------------------------
+    // A vertex is ACCEPTED on a cycle where `en_i && in_valid_i && in_ready_o`.
+    // At ROWS_PER_PASS=3, `in_ready_o` is the constant 1 and this is exactly
+    // the historical contract (every caller predating the port may ignore it).
+    // At ROWS_PER_PASS=1 it is high only in the row sequencer's capture slots
+    // — once per three `en_i`-cycles under saturation — and a caller that
+    // ignores it loses vertices.
+    output logic                    in_ready_o,
     input logic                     in_valid_i,
     input logic signed [31:0]       vx_i,
     input logic signed [31:0]       vy_i,
@@ -352,22 +376,179 @@ module zhao_project_core #(
   end
 
   // ---------------------------------------------------------------------------
-  // stage 1 — §2 mat4_vec4: nine products, three EXACT row sums
+  // stage 1 — §2 mat4_vec4: three EXACT row sums, spatial or sequenced
   // ---------------------------------------------------------------------------
-  logic signed [ROW_W-1:0] row_x, row_y, row_cw;
-  always_comb begin
-    row_x = ext64(mul32(mat[view_i][0], vx_i)) + ext64(mul32(mat[view_i][1], vy_i)) +
-        ext64(mul32(mat[view_i][2], vz_i)) + (ext32r(mat[view_i][3]) <<< 16);
-    row_y = ext64(mul32(mat[view_i][4], vx_i)) + ext64(mul32(mat[view_i][5], vy_i)) +
-        ext64(mul32(mat[view_i][6], vz_i)) + (ext32r(mat[view_i][7]) <<< 16);
-    row_cw = ext64(mul32(mat[view_i][12], vx_i)) + ext64(mul32(mat[view_i][13], vy_i)) +
-        ext64(mul32(mat[view_i][14], vz_i)) + (ext32r(mat[view_i][15]) <<< 16);
+  // ROWS_PER_PASS picks the shape; the ARITHMETIC is one expression either
+  // way, and the two generate branches below are asserted byte-identical by
+  // tests/geometry/proj_rowmux_directed.cpp across every stall pattern,
+  // including a configuration write landing mid-sequence.
+  initial begin
+    if (ROWS_PER_PASS != 3 && ROWS_PER_PASS != 1)
+      $fatal(1, "zhao_project_core: ROWS_PER_PASS (%0d) must be 3 or 1",
+             ROWS_PER_PASS);
   end
 
   logic                        s1_valid;
   logic signed [ROW_W-1:0]     s1_rx, s1_ry, s1_rw;
   logic                        s1_view;
   logic        [PAYLOAD_W-1:0] s1_pay;
+  // A vertex captured by the row sequencer but not yet launched into s1.
+  // Constant 0 at ROWS_PER_PASS=3, where no such holding state exists. Joins
+  // busy_o's reduction: a block that reports idle while its sequencer holds a
+  // vertex is the queue-occupancy defect busy_o's own comment warns about.
+  logic                        seq_holds;
+
+  generate
+    if (ROWS_PER_PASS == 3) begin : g_rows_spatial
+      // ------------------------------------------------------------------------
+      // nine products, three row sums, one cycle — the historical stage 1,
+      // verbatim. `in_ready_o` is constant so a caller predating the port
+      // sees exactly the old behaviour, cycle for cycle.
+      // ------------------------------------------------------------------------
+      logic signed [ROW_W-1:0] row_x, row_y, row_cw;
+      always_comb begin
+        row_x = ext64(mul32(mat[view_i][0], vx_i)) + ext64(mul32(mat[view_i][1], vy_i)) +
+            ext64(mul32(mat[view_i][2], vz_i)) + (ext32r(mat[view_i][3]) <<< 16);
+        row_y = ext64(mul32(mat[view_i][4], vx_i)) + ext64(mul32(mat[view_i][5], vy_i)) +
+            ext64(mul32(mat[view_i][6], vz_i)) + (ext32r(mat[view_i][7]) <<< 16);
+        row_cw = ext64(mul32(mat[view_i][12], vx_i)) + ext64(mul32(mat[view_i][13], vy_i)) +
+            ext64(mul32(mat[view_i][14], vz_i)) + (ext32r(mat[view_i][15]) <<< 16);
+      end
+
+      assign in_ready_o = 1'b1;
+      assign seq_holds  = 1'b0;
+
+      always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+          s1_valid <= 1'b0; s1_rx <= '0; s1_ry <= '0; s1_rw <= '0;
+          s1_view <= 1'b0; s1_pay <= '0;
+        end else if (en_i) begin
+          s1_valid <= in_valid_i;
+          s1_rx    <= row_x;
+          s1_ry    <= row_y;
+          s1_rw    <= row_cw;
+          s1_view  <= view_i;
+          s1_pay   <= payload_i;
+        end
+      end
+    end else begin : g_rows_seq
+      // ------------------------------------------------------------------------
+      // three products, one row sum per cycle — dsp.md lever 1
+      // ------------------------------------------------------------------------
+      // THE MULTIPLIER CONE MUST NOT GROW. This block already misses the
+      // product clock on exactly this cone (73.62 MHz after the stage-5b cut;
+      // reports/PROJECT-CORE-CLOCK-20260907.md names `mat -> view mux -> Mult0
+      // -> row adder -> s1` as the standing worst path), so the sequencer may
+      // not put a phase mux in front of the DSPs — that is the census's
+      // "control depth" objection, and this structure is its answer.
+      //
+      // Operand routing is bought with REGISTERS instead: on the accept edge
+      // the three rows' matrix words are CAPTURED into a shifting hold bank
+      // (the 2:1 view mux happens once, on the capture path, a mat-register to
+      // hold-register hop with no arithmetic behind it), and each cycle the
+      // bank shifts the next row into the multiplier position. The multiplier
+      // cone is `ha -> mul32 -> row adder -> s1` — one view-mux SHORTER than
+      // the spatial branch's, at the price of +3 cycles of latency and an
+      // initiation interval of 3, which is what the composed frame budget has
+      // headroom for (23.9% at II=1; see the row-multiplex report).
+      //
+      // Capture-at-accept also means a configuration write landing between a
+      // vertex's row cycles cannot tear its transform: at either parameter
+      // setting a vertex reads its matrix exactly once, on its accept edge.
+      // The FSM's W cycle both launches the finished vertex into s1 and may
+      // capture the next one, so the initiation interval is 3, not 4.
+      localparam logic [1:0] SeqIdle = 2'd0;  // empty; may capture
+      localparam logic [1:0] SeqMx   = 2'd1;  // multiplier on row X
+      localparam logic [1:0] SeqMy   = 2'd2;  // multiplier on row Y
+      localparam logic [1:0] SeqMw   = 2'd3;  // row W; launch; may capture
+
+      logic        [1:0]           st;
+      logic signed [31:0]          ha[0:3];  // the row under the multiplier NOW
+      logic signed [31:0]          hb[0:3];  // the next row
+      logic signed [31:0]          hc[0:3];  // the row after
+      logic signed [31:0]          hvx, hvy, hvz;
+      logic                        hview;
+      logic        [PAYLOAD_W-1:0] hpay;
+
+      // Identical expression shape to the spatial row_x — same functions, same
+      // term order, same widths — with `mat[view_i][.]` / `v*_i` renamed to
+      // the held copies. That identity is what makes the byte-identity claim
+      // an argument as well as a measurement.
+      logic signed [ROW_W-1:0] row_seq;
+      always_comb begin
+        row_seq = ext64(mul32(ha[0], hvx)) + ext64(mul32(ha[1], hvy)) +
+            ext64(mul32(ha[2], hvz)) + (ext32r(ha[3]) <<< 16);
+      end
+
+      assign in_ready_o = (st == SeqIdle) || (st == SeqMw);
+      assign seq_holds  = (st != SeqIdle);
+
+      integer hi;
+      always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+          st <= SeqIdle;
+          for (hi = 0; hi < 4; hi = hi + 1) begin
+            ha[hi] <= '0;
+            hb[hi] <= '0;
+            hc[hi] <= '0;
+          end
+          hvx <= '0; hvy <= '0; hvz <= '0;
+          hview <= 1'b0; hpay <= '0;
+          s1_valid <= 1'b0; s1_rx <= '0; s1_ry <= '0; s1_rw <= '0;
+          s1_view <= 1'b0; s1_pay <= '0;
+        end else if (en_i) begin
+          case (st)
+            SeqIdle: begin
+              s1_valid <= 1'b0;
+              if (in_valid_i) begin
+                for (hi = 0; hi < 4; hi = hi + 1) begin
+                  ha[hi] <= mat[view_i][hi];
+                  hb[hi] <= mat[view_i][4 + hi];
+                  hc[hi] <= mat[view_i][12 + hi];
+                end
+                hvx <= vx_i; hvy <= vy_i; hvz <= vz_i;
+                hview <= view_i; hpay <= payload_i;
+                st <= SeqMx;
+              end
+            end
+            SeqMx: begin
+              s1_valid <= 1'b0;
+              s1_rx    <= row_seq;
+              for (hi = 0; hi < 4; hi = hi + 1) begin
+                ha[hi] <= hb[hi];
+                hb[hi] <= hc[hi];
+              end
+              st <= SeqMy;
+            end
+            SeqMy: begin
+              s1_valid <= 1'b0;
+              s1_ry    <= row_seq;
+              for (hi = 0; hi < 4; hi = hi + 1) ha[hi] <= hb[hi];
+              st <= SeqMw;
+            end
+            default: begin  // SeqMw: launch, and capture in the same cycle
+              s1_rw    <= row_seq;  // reads the OLD ha — nonblocking, read-old
+              s1_view  <= hview;
+              s1_pay   <= hpay;
+              s1_valid <= 1'b1;
+              if (in_valid_i) begin
+                for (hi = 0; hi < 4; hi = hi + 1) begin
+                  ha[hi] <= mat[view_i][hi];
+                  hb[hi] <= mat[view_i][4 + hi];
+                  hc[hi] <= mat[view_i][12 + hi];
+                end
+                hvx <= vx_i; hvy <= vy_i; hvz <= vz_i;
+                hview <= view_i; hpay <= payload_i;
+                st <= SeqMx;
+              end else begin
+                st <= SeqIdle;
+              end
+            end
+          endcase
+        end
+      end
+    end
+  endgenerate
 
   // ---------------------------------------------------------------------------
   // stage 2 — §2's ONE rescale per row, and the near-plane verdict
@@ -621,7 +802,6 @@ module zhao_project_core #(
   // ---------------------------------------------------------------------------
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      s1_valid <= 1'b0; s1_rx <= '0; s1_ry <= '0; s1_rw <= '0; s1_view <= 1'b0; s1_pay <= '0;
       s2_valid <= 1'b0; s2_cx <= '0; s2_cy <= '0; s2_cw <= '0; s2_view <= 1'b0; s2_pay <= '0;
       s3_valid <= 1'b0; s3_d <= '0; s3_dv[0] <= '0; s3_dv[1] <= '0; s3_dv[2] <= '0;
       s3_neg <= '0; s3_sat <= '0; s3_behind <= 1'b0; s3_view <= 1'b0; s3_pay <= '0;
@@ -636,13 +816,7 @@ module zhao_project_core #(
       out_x_o <= '0; out_y_o <= '0; out_d_o <= '0; out_behind_o <= 1'b0;
       out_view_o <= 1'b0; out_payload_o <= '0;
     end else if (en_i) begin
-      // stage 1
-      s1_valid <= in_valid_i;
-      s1_rx <= row_x;
-      s1_ry <= row_y;
-      s1_rw <= row_cw;
-      s1_view <= view_i;
-      s1_pay <= payload_i;
+      // stage 1 lives in the ROWS_PER_PASS generate above.
 
       // stage 2 — the one rescale per row
       s2_valid <= s1_valid;
@@ -713,7 +887,9 @@ module zhao_project_core #(
     // register included"; a new pipeline stage that is not in the reduction
     // makes the block report idle while it still holds a vertex, which is the
     // same class of defect as a queue occupancy that omits its pending read.
-    busy_o = s1_valid || s2_valid || s5_valid || s6_valid || out_valid_o;
+    // seq_holds covers a vertex the ROWS_PER_PASS=1 sequencer has captured
+    // but not yet launched into s1 (constant 0 at ROWS_PER_PASS=3).
+    busy_o = seq_holds || s1_valid || s2_valid || s5_valid || s6_valid || out_valid_o;
     for (bi = 0; bi <= DIV_STEPS; bi = bi + 1) busy_o = busy_o || dstep_valid[bi];
   end
 
