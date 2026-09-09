@@ -140,3 +140,85 @@ string through a Python heredoc arrived as a REAL NEWLINE and split two string
 literals. 09-ENGINE-GOTCHAS s21's family. `BUILD_RC=1` while the harness
 reported the task "exit code 0" -- the outer subshell's status. Reading the real
 exit code caught it in one look.
+
+## 20:05 — rendered, and LOOKED. Two verdicts, one of them a fault I made.
+
+Binary `690a8c91` (baseline was `dae2fa57` -- the md5 moved, so the header edits
+are in). Rendered `hover`/`hit`/`channel` under `ZIXX_EXP=celmain
+ZIXX_LIGHT=diagonal-cool-cross`. Plates in `diag/plates/`.
+
+**FOG: it works, first time in five directions.** `fog-hover-BA.png` and
+`channel-BA-f250.png`, native 3x crops, P14 beside P15 from two binaries
+(labelled as a BEFORE/AFTER pair, not as a rung -- a ladder comes from one
+binary and this is not one). The P14 ball is a hard-edged solid with a black
+line round it. The P15 ball wears a soft gas layer thicker than any outline,
+with a visible inward gradient, and the ink is still solid black. On the violet
+night the mood survives. **The shell is finally fog rather than anti-aliasing.**
+Open question for the ladder: the interior plateau lifts the body's pigment a
+little. That is the D8 §4 knob (`kShellCoreFloorPm`) and the owner picks it.
+
+**LIGHTNING: the shapes are BEING MADE -- and they are a white rope.**
+`p15a-hover-sheet.png`, every 12th frame of `hover`: a closed figure is traced
+in the antenna window on essentially every frame, and it CHANGES -- a ring at
+f036, a wide loop at f120, a triangle at f384, an arrowhead at f420. That is
+D11's "they need to make the shapes", and it is the first time this creature
+has done it. But the line is a uniform saturated white tube. No blue, no
+filament, no bolt.
+
+⚠ **And I can name the cause without a ladder, which means I must PROVE it with
+one rather than act on it.** `kFoldStrandPerSeg = 6` subdivides each
+sub-segment into 6 stamps -- and pass 14's own note records that a sub-segment
+is about THREE MILLIMETRES, which is one to two pixels. So the six stamps land
+on the same pixel. **perSeg is not a connectedness knob at this scale; it is a
+6x additive overlap knob**, and 09-ENGINE-GOTCHAS' own strand lesson is that
+the white is set by OVERLAP and not by gain. The line was already continuous at
+1. Next: a perSeg ladder on `channel` from one binary, with a mote-count rung,
+so the claim is proved on pixels instead of asserted from a comment.
+
+Also visible on `channel` f250: the navy backing IS reading, as a dark rim
+around the white mass. The layer works; it is being swamped.
+
+## 20:25 — the shell's render cost, removed; and where the lightning stands
+
+**PERF, and it is a real regression I created.** The first `shell_paint` cost
+about **1.8x the reel's whole render throughput** (~200 frames/min -> ~112,
+measured on the wall clock across two renders of the same subjects). Across a
+28-clip bank that is half an hour added to every publish wave. Cause: it
+allocated and zeroed FOUR frame-sized vectors per frame and materialised every
+EXTERIOR pixel as a BFS seed -- ~85,000 of them, each fanning out to eight
+neighbours -- when level 1 is just "a cover pixel touching a non-cover pixel or
+the frame edge", which is one scan. `depth` now also carries the outward skirt
+as NEGATIVE distances, so two of the four buffers stop existing, and it is
+reused across frames.
+
+**The optimised version reproduces the gate's profile DIGIT FOR DIGIT**
+(`13 33 57 88 121 161 205 254 227 227 197 170 141 141 114 85 85 ...`), which is
+the corroboration s16 wants before believing a rewrite.
+
+**LIGHTNING at 5x on the night (`interim2.png`, channel f363):**
+* STRAND OFF (the shipped look): a cloud of aqua blobs. No shape. This is the
+  owner's complaint, reproduced from my own binary as the control.
+* STRAND ON: **a spiral drawn in white filaments with a blue shimmer hugging
+  them and a navy backing outside that.** That is D11's sentence, on screen.
+
+**And at 2x/native (`native-check-2x.png`), the honest test (item 9):**
+* NIGHT reads. The spiral and its blue survive.
+* **DAY does not.** On the pale sunset the blue washes out and the figure is a
+  white loop. That is 08-LIGHTING's backdrop law arriving exactly where it said
+  it would -- an additive effect cannot win against a bright field, and the two
+  clips whose job is the mana are the ones that carry it.
+
+So the next axis is the NAVY: deepen and widen the backing so the shimmer has
+something dark to be bright against on the day too. The pass-14 review's guess
+was that a better surround may collapse the per-backdrop split; that is now a
+testable rung rather than a hope.
+
+**`manafold-hit` is the right ladder subject** and I had been about to use
+`hover`: 140 frames instead of 600, it carries the fold figure (spirals at
+f010-f025, a triangle at f110), it is on the DAY backdrop where the fault is,
+and it is also the eye-clipping clip. Three questions, one 35-second render.
+
+**Fog, by eye on the hit sheet:** the body reads noticeably WASHED across the
+clip -- a dusty mauve where P14 is hot pink. `kShellCoreFloorPm` (340) is the
+knob and my own eye says it is too high. Into the ladder, with the owner's pick
+above mine.

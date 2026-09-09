@@ -830,51 +830,64 @@ inline void shell_paint(uint8_t* rgb, uint32_t w, uint32_t h,
   // The IMAGE BORDER counts as outside: a creature cropped by the frame edge
   // is not thereby infinitely deep, and without this a close-up would inflate
   // R and fog the whole animal. (Named, because it is a decision.)
-  std::vector<int32_t> depth(n, 0);
-  const auto expand = [&](const std::vector<size_t>& src, int32_t d,
-                          std::vector<size_t>& dst) {
-    for (const size_t i : src) {
+  //
+  // ⚠ THE BUFFERS ARE REUSED ACROSS FRAMES ON PURPOSE, AND IT IS NOT A
+  // MICRO-OPTIMISATION. The first version of this allocated and zeroed four
+  // frame-sized vectors per frame and materialised every EXTERIOR pixel as a
+  // BFS seed -- about 85,000 of them at 384x240, each fanning out to eight
+  // neighbours. Measured on the ladder, it cost roughly 1.8x the reel's whole
+  // render throughput (about 200 frames/min down to about 112), which across a
+  // 28-clip bank is half an hour added to every publish wave. Cost is
+  // arithmetic here, not measurement (09-ENGINE-GOTCHAS §5) -- but a throughput
+  // change that large is visible on a wall clock and was.
+  //
+  // The exterior never needed to be enumerated: level 1 is exactly "a cover
+  // pixel touching a non-cover pixel, or the frame edge", which is ONE scan.
+  // And `depth` carries the skirt too, as NEGATIVE distances, so the second
+  // and third frame-sized buffers stop existing.
+  static std::vector<int32_t> depth;
+  depth.assign(n, 0);
+  std::vector<size_t> cur;
+  cur.reserve(n / 16);
+  for (int y = 0; y < ih; ++y) {
+    for (int x = 0; x < iw; ++x) {
+      const size_t i = static_cast<size_t>(y) * w + static_cast<uint32_t>(x);
+      if (!cover[i]) continue;
+      bool edge = (x == 0 || y == 0 || x == iw - 1 || y == ih - 1);
+      if (!edge) {
+        for (int dy = -1; dy <= 1 && !edge; ++dy)
+          for (int dx = -1; dx <= 1; ++dx) {
+            if (dx == 0 && dy == 0) continue;
+            const size_t j = static_cast<size_t>(y + dy) * w +
+                             static_cast<uint32_t>(x + dx);
+            if (!cover[j]) { edge = true; break; }
+          }
+      }
+      if (edge) { depth[i] = 1; cur.push_back(i); }
+    }
+  }
+  int32_t r_px = cur.empty() ? 0 : 1;
+  std::vector<size_t> next;
+  for (int32_t d = 2; !cur.empty(); ++d) {
+    next.clear();
+    next.reserve(cur.size());
+    for (const size_t i : cur) {
       const int x = static_cast<int>(i % w), y = static_cast<int>(i / w);
-      for (int dy = -1; dy <= 1; ++dy)
+      for (int dy = -1; dy <= 1; ++dy) {
+        const int ny = y + dy;
+        if (ny < 0 || ny >= ih) continue;
         for (int dx = -1; dx <= 1; ++dx) {
           if (dx == 0 && dy == 0) continue;
-          const int nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= iw || ny >= ih) continue;
+          const int nx = x + dx;
+          if (nx < 0 || nx >= iw) continue;
           const size_t j =
               static_cast<size_t>(ny) * w + static_cast<uint32_t>(nx);
           if (!cover[j] || depth[j] != 0) continue;
           depth[j] = d;
-          dst.push_back(j);
+          next.push_back(j);
         }
+      }
     }
-  };
-  // level 0: everything OUTSIDE the animal.
-  std::vector<size_t> lvl0;
-  lvl0.reserve(n);
-  for (size_t i = 0; i < n; ++i)
-    if (!cover[i]) lvl0.push_back(i);
-  // level 1: the first interior ring -- one step in from level 0, PLUS any
-  // cover pixel sitting on the image border, which is the "cropped is not
-  // infinitely deep" decision made explicit.
-  std::vector<size_t> cur;
-  cur.reserve(n / 8);
-  expand(lvl0, 1, cur);
-  const auto seed_border = [&](size_t i) {
-    if (cover[i] && depth[i] == 0) { depth[i] = 1; cur.push_back(i); }
-  };
-  for (int x = 0; x < iw; ++x) {
-    seed_border(static_cast<uint32_t>(x));
-    seed_border(static_cast<size_t>(ih - 1) * w + static_cast<uint32_t>(x));
-  }
-  for (int y = 0; y < ih; ++y) {
-    seed_border(static_cast<size_t>(y) * w);
-    seed_border(static_cast<size_t>(y) * w + static_cast<uint32_t>(iw - 1));
-  }
-  int32_t r_px = cur.empty() ? 0 : 1;
-  for (int32_t d = 2; !cur.empty(); ++d) {
-    std::vector<size_t> next;
-    next.reserve(cur.size());
-    expand(cur, d, next);
     if (!next.empty()) r_px = d;
     cur.swap(next);
   }
@@ -918,35 +931,45 @@ inline void shell_paint(uint8_t* rgb, uint32_t w, uint32_t h,
   // the ring just outside the ink is the DENSEST of the skirt and the last one
   // is the thinnest, which is the "denser the closer to the inside" half of
   // D9 s14 read outside the line.
-  std::vector<uint8_t> seen(n, 0);
+  //
+  // It rides in `depth` as NEGATIVE distances -- a skirt pixel is never a cover
+  // pixel, so the two readings cannot collide, and the frame-sized `seen` and
+  // `outring` buffers the first version used stop existing.
   cur.clear();
-  for (size_t i = 0; i < n; ++i)
-    if (cover[i]) { seen[i] = 1; cur.push_back(i); }
-  std::vector<int32_t> outring(n, 0);
-  for (int32_t r = 1; r <= out_px && !cur.empty(); ++r) {
-    std::vector<size_t> next;
-    next.reserve(cur.size());
+  for (int32_t r = 1; r <= out_px; ++r) {
+    next.clear();
+    // Ring 1 grows off the cover itself; later rings grow off the ring before.
+    if (r == 1) {
+      for (size_t i = 0; i < n; ++i)
+        if (cover[i]) cur.push_back(i);
+    }
+    if (cur.empty()) break;
+    const int32_t mark = -(out_px - r + 1);   // dist from the gas's outer edge
     for (const size_t i : cur) {
       const int x = static_cast<int>(i % w), y = static_cast<int>(i / w);
-      for (int dy = -1; dy <= 1; ++dy)
+      for (int dy = -1; dy <= 1; ++dy) {
+        const int ny = y + dy;
+        if (ny < 0 || ny >= ih) continue;
         for (int dx = -1; dx <= 1; ++dx) {
           if (dx == 0 && dy == 0) continue;
-          const int nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= iw || ny >= ih) continue;
+          const int nx = x + dx;
+          if (nx < 0 || nx >= iw) continue;
           const size_t j =
               static_cast<size_t>(ny) * w + static_cast<uint32_t>(nx);
-          if (seen[j]) continue;
-          seen[j] = 1;
-          outring[j] = out_px - r + 1;   // dist from the gas's outer edge
+          if (cover[j] || depth[j] != 0) continue;
+          depth[j] = mark;
           next.push_back(j);
         }
+      }
     }
     cur.swap(next);
   }
 
   // ---- composite ---------------------------------------------------------
   for (size_t i = 0; i < n; ++i) {
-    const int32_t dist = cover[i] ? out_px + depth[i] : outring[i];
+    const int32_t d = depth[i];
+    if (d == 0) continue;
+    const int32_t dist = cover[i] ? out_px + d : -d;
     if (dist <= 0) continue;
     int a = alpha_at(dist);
     if (ink != nullptr && ink[i]) a = a * kShellOverInkPm / 1000;
@@ -2005,6 +2028,7 @@ inline int g_u02_strand_on = -1;
 inline int g_u02_strand_core_r = -1;
 inline int g_u02_strand_dark_r = -1;
 inline int g_u02_strand_dark_gain = -1;
+inline int g_u02_strand_core_gain = -1;
 inline int g_u02_free_strand = -1;
 inline int g_u02_strand_perseg = -1;
 inline int g_u02_strand_cap = -1;
@@ -2027,6 +2051,14 @@ inline int32_t u02_strand_dark_r() {
 }
 inline int u02_strand_dark_gain() {
   return g_u02_strand_dark_gain < 0 ? kFoldStrandDarkGainPm : g_u02_strand_dark_gain;
+}
+/** PASS 15: the white core's gain got no override in pass 14, and that is the
+ *  "sweeping the axis I had a knob on instead of the axis that carries the
+ *  fault" error this file names twice. It is here now whether or not it bites:
+ *  a clamped additive sum makes gain a no-op, and whether THIS sum clamps is a
+ *  question for the plate, not for me. */
+inline int u02_strand_core_gain() {
+  return g_u02_strand_core_gain < 0 ? kFoldStrandCoreGainPm : g_u02_strand_core_gain;
 }
 inline int u02_strand_perseg() {
   return g_u02_strand_perseg < 1 ? kFoldStrandPerSeg : g_u02_strand_perseg;
@@ -2339,6 +2371,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     const int32_t core_r = u02_strand_core_r();
     const int32_t dark_r = u02_strand_dark_r();
     const int dark_gain = u02_strand_dark_gain();
+    const int core_gain = u02_strand_core_gain();
     int32_t pts[kFoldEdgeSegs + 1][3];
     // THE PICTURE THAT FORCED THE TWO-PASS DRAW (pass14-plates/d10-size.png):
     // the first strand build stamped dark-then-white PER BEAD, and raising the
@@ -2431,7 +2464,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               // outline -- and, per the plate above, between a line and a
               // string of pale blobs.
               mana_push(out, x, y, z, core_r, kRampWhite,
-                        kFoldStrandCoreGainPm * lit / 1000, false, false);
+                        core_gain * lit / 1000, false, false);
             }
           } else {
             mana_push(out, x, y, z, kFoldEdgeHaloRPx, ramp,

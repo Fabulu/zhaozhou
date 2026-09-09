@@ -7738,6 +7738,8 @@ int main(int argc, char** argv) {
     u02::g_u02_strand_dark_r = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_STRAND_DARK_GAIN"))
     u02::g_u02_strand_dark_gain = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_STRAND_CORE_GAIN"))
+    u02::g_u02_strand_core_gain = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_FREE_STRAND"))
     u02::g_u02_free_strand = std::atoi(e);
   // The CONNECTEDNESS axis -- Direction 10's first clause, and the one the
