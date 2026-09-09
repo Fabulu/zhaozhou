@@ -324,12 +324,20 @@ So gate 4 is good news about the reciprocal tile and no news about the budget.
 The DSP problem is a `zhao_project_core` problem, and it has been since the census
 was first written. Two of its three levers -- core sharing and time-multiplexing
 the nine matrix multiplies -- add control depth to a cone that misses 100 MHz by
-39%. The third, **width-narrowing**, does not, and it is the one nobody has
-priced: `mul32` sign-extends both 32-bit operands to 64 before multiplying, and
-the census already suspects Quartus prunes that. **Whether the operands genuinely
-need 32 bits is a question about the projection's numeric range, answerable in
-simulation against the reference oracle, costing no fit at all.** That is the
-cheapest unexplored move in the largest item in the budget.
+39%. The third, **width-narrowing**, does not add depth -- but it is not the
+free cleanup this paragraph originally called it. See
+`PROJECT-CORE-OPERAND-WIDTH-20260909.md`: `GEOM.PROJECT.md` declares the full
+width a deliberate robustness property ("cannot wrap for ANY input rather than
+merely for legal ones"), so narrowing is a **contract change and an owner
+decision**, not an engineering tidy-up.
+
+What is true is that the property is claimed more widely than it is tested. The
+random section sweeps vertices across the full s32 and caps matrix entries at
+**19 bits** (+-2.0 in Q16.16), with two of the nine multiplier operands held at
+literal zero. That is a reasoned choice for testing plausible poses and is not
+coverage of the contract's claim. The lever is real, the prize is unmeasured, and
+a `MATW` parameter defaulting to 32 plus one MapOnly prices it without changing
+anything that ships.
 
 ## And one correction to this census's own table
 
