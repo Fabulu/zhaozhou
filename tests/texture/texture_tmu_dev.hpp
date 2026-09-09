@@ -29,6 +29,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -120,9 +121,26 @@ class TmuDev {
    * Feed a batch. `in_seed` != 0 gates the offer, `out_seed` != 0 gates
    * `smp_ready_i`, `cac_stall` != 0 gates the modelled cache's readiness.
    * `cac_lat` is the cycles from an accepted cache access to its response.
+   *
+   * `cac_pipe` selects the PIPELINED cache model: one access accepted per
+   * clock with several outstanding, responses in acceptance order. That is
+   * the shape of the real TEXTURE.CACHE (`acc_ready_o` accepts one access
+   * per clock through a 1-deep response pipeline), where the default model
+   * is single-outstanding and therefore floors any measured interval at the
+   * request/response round trip. The pipelined model is what lets a
+   * throughput claim be about the TMU rather than about this file.
+   *
+   * KNOWN LIMIT, deliberate: `cac_pipe` with a `cac_stall` seed can wedge a
+   * COLD CLUT batch, and the wedge is the DESIGN's, not this model's -- the
+   * single `pf_v` fallback record is overwritten when a second miss response
+   * is consumed while the first fallback has not issued, which needs two
+   * outstanding misses plus an issue-port stall. Recorded in
+   * reports/TMU-PIPE-PALETTE-REARCHITECTURE-20260909.md; until the fallback
+   * queues, drive `cac_pipe` with `cac_stall = 0` or a warm palette.
    */
   TmuRun feed(const std::vector<TmuReq>& reqs, const zref::TextureMemory& mem, uint32_t in_seed,
-              uint32_t out_seed, uint32_t cac_stall, int cac_lat, std::string* err) {
+              uint32_t out_seed, uint32_t cac_stall, int cac_lat, std::string* err,
+              bool cac_pipe = false) {
     TmuRun r;
     r.out.assign(reqs.size(), TmuSample{});
 
@@ -136,6 +154,12 @@ class TmuDev {
     bool cac_busy = false;
     int cac_wait = 0;
     uint16_t cac_hw[4] = {};
+    // pipelined-cache mode: every outstanding access ages concurrently
+    struct CacRsp {
+      int wait;
+      uint16_t hw[4];
+    };
+    std::deque<CacRsp> cac_q;
 
     bool held = false;
     uint64_t held_pack = 0;
@@ -159,13 +183,19 @@ class TmuDev {
 
       // ---- the modelled cache, driven BEFORE eval -----------------------
       const bool crdy = (cac_stall == 0u) || ((next(&rcs) & 3u) != 0u);
-      top_.cac_ready_i = (!cac_busy && crdy) ? 1 : 0;
+      top_.cac_ready_i = (cac_pipe ? crdy : (!cac_busy && crdy)) ? 1 : 0;
       top_.cac_valid_i = 0;
       top_.cac_data_i = 0;
-      if (cac_busy && cac_wait == 0) {
+      const uint16_t* rsp_hw = nullptr;
+      if (cac_pipe) {
+        if (!cac_q.empty() && cac_q.front().wait == 0) rsp_hw = cac_q.front().hw;
+      } else {
+        if (cac_busy && cac_wait == 0) rsp_hw = cac_hw;
+      }
+      if (rsp_hw != nullptr) {
         top_.cac_valid_i = 1;
         uint64_t d = 0;
-        for (int k = 0; k < 4; ++k) d |= static_cast<uint64_t>(cac_hw[k]) << (16 * k);
+        for (int k = 0; k < 4; ++k) d |= static_cast<uint64_t>(rsp_hw[k]) << (16 * k);
         top_.cac_data_i = d;
       }
 
@@ -176,7 +206,7 @@ class TmuDev {
 
       // ---- the cache request --------------------------------------------
       if (top_.cac_valid_o && top_.cac_ready_i) {
-        if (cac_busy) add(err, "a cache access while one was outstanding");
+        if (!cac_pipe && cac_busy) add(err, "a cache access while one was outstanding");
         cac_busy = true;
         cac_wait = cac_lat;
         // A DISABLED LANE DOES NOT RETURN THE TEXEL, and modelling it as if it
@@ -207,6 +237,12 @@ class TmuDev {
         for (int k = 0; k < 4; ++k) {
           const uint16_t hw = mem.halfword(static_cast<uint32_t>(top_.cac_addr_o[k]));
           cac_hw[k] = ((en >> k) & 1u) ? hw : static_cast<uint16_t>(~hw);
+        }
+        if (cac_pipe) {
+          CacRsp r_;
+          r_.wait = cac_lat;
+          for (int k = 0; k < 4; ++k) r_.hw[k] = cac_hw[k];
+          cac_q.push_back(r_);
         }
       }
       const bool cac_taken = (top_.cac_valid_i != 0) && (top_.cac_ready_o != 0);
@@ -254,7 +290,11 @@ class TmuDev {
       edge();
       ++r.cycles;
 
-      if (cac_busy) {
+      if (cac_pipe) {
+        for (CacRsp& e : cac_q)
+          if (e.wait > 0) --e.wait;
+        if (cac_taken) cac_q.pop_front();
+      } else if (cac_busy) {
         if (cac_wait > 0) --cac_wait;
         if (cac_taken) cac_busy = false;
       }

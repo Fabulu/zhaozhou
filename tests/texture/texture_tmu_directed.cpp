@@ -862,6 +862,100 @@ void test_resident_palette_is_invalidated() {
         served_stale);
 }
 
+#ifdef ZHAO_TMU_PIPE
+// -------------------------------------------------------------------- 13 ---
+// THE CYCLE-ABSORPTION PROOF for the palette-page store moving to M10K
+// (2026-09-09; reports/TMU-PIPE-PALETTE-REARCHITECTURE-20260909.md).
+//
+// The M10K costs the resident CLUT path one REGISTERED READ -- the entry
+// cannot be addressed until the responding texel byte exists, so the decode
+// moves to the cycle after the response. The claim that makes this free
+// rather than a trade is: that cycle is LATENCY, absorbed by the ROB, and
+// NOT initiation interval, because nothing feeds back through the palette
+// read and the RAM takes a read every clock.
+//
+// Case 12 above cannot see that claim either way: its single-outstanding
+// cache model floors the interval at the request/response round trip (3
+// clocks at cac_lat = 1), so the palette stage is invisible in its number --
+// before the M10K change it measured 3 and after it it measures 3. This case
+// drives the PIPELINED cache model, the shape of the real TEXTURE.CACHE, so
+// responses arrive back to back and the resident CLUT path has to complete a
+// hit EVERY clock through the registered read. Asserted as an equality
+// against the accept rate: kN samples retire in kN + drain cycles, i.e.
+// II = 1 -- 1,666,667 samples/frame against the demand's 850,000, with the
+// registered palette read in the pipeline.
+//
+// Measured before the M10K change on this same harness: 64 samples in 68
+// cycles (drain 4). After it: 69 (drain 5) -- the one cycle appears in the
+// DRAIN, once per batch, and nowhere per sample; the warm (all-cold) pass is
+// 134 cycles in both versions, because a fill completes from the response
+// itself and never touches the registered read. That pair of numbers is the
+// absorption argument in its entirety.
+void test_resident_clut_ii_on_a_pipelined_cache() {
+  const Mode c8 = mk_mode(Fmt::kClut8, false, Wrap::kRepeat, Wrap::kRepeat, 3, 3);
+  constexpr uint32_t kN = 64;
+  std::vector<TmuReq> batch;
+  for (int32_t j = 0; j < 8; ++j)
+    for (int32_t k = 0; k < 8; ++k) batch.push_back(mk(k << 13, j << 13, kTexIdent, c8));
+
+  std::string err;
+  dev().reset();
+  // Pass 1 pays every index's one cold fallback and fills the residency.
+  const TmuRun warm = dev().feed(batch, pool(), 0, 0, 0, 1, &err, true);
+  // Pass 2 is fully resident: the measured one.
+  const TmuRun r = dev().feed(batch, pool(), 0, 0, 0, 1, &err, true);
+
+  const std::vector<TmuSample> want = tmu_expect(batch, pool());
+  bool ok = err.empty();
+  if (!ok) std::printf("  clut-pipe: protocol violation: %s\n", err.c_str());
+  for (size_t i = 0; i < batch.size(); ++i) {
+    if (!tmu_same(want[i], warm.out[i]) || !tmu_same(want[i], r.out[i])) {
+      if (ok) std::printf("  clut-pipe: %s\n", tmu_describe(i, want[i], r.out[i]).c_str());
+      ok = false;
+    }
+  }
+  check(ok, "clut-pipe: both passes match zref::Tmu on a pipelined cache", 1, ok ? 1 : 0);
+
+  std::printf(
+      "texture_tmu clut-pipe: resident CLUT on a one-access-per-clock cache: %u samples in %u "
+      "cycles (drain %u), warm pass %u cycles\n",
+      kN, r.cycles, r.cycles - kN, warm.cycles);
+
+  // II = 1, asserted as the EXACT cycle count. The drain is the pipeline
+  // depth (accept -> plan -> issue -> response -> palette read -> retire),
+  // paid once per batch; if the palette stage were an interval it would
+  // appear kN times and this equality would miss by ~64, not by 1.
+  constexpr uint32_t kDrain = 5;
+  check(r.cycles == kN + kDrain,
+        "clut-pipe: kN resident CLUT samples take kN + drain cycles (II = 1)", kN + kDrain,
+        r.cycles);
+
+  // And a mixed resident batch: CLUT streaming around bilinear footprints,
+  // so responses are HELD while the filter walks and the registered read's
+  // in-flight completion coexists with held responses. Correctness only --
+  // the interval of a mixed batch is the filter's business, not the
+  // palette's.
+  const Mode d444 = mk_mode(Fmt::kArgb4444, true, Wrap::kRepeat, Wrap::kRepeat, 1, 1);
+  std::vector<TmuReq> mixed;
+  for (int32_t k = 0; k < 24; ++k) {
+    mixed.push_back(mk((k & 7) << 13, (k >> 3) << 13, kTexIdent, c8));
+    if ((k & 3) == 3) mixed.push_back(mk(k << 12, k << 11, kTex4444, d444));
+  }
+  const TmuRun m = dev().feed(mixed, pool(), 0, 0, 0, 1, &err, true);
+  const std::vector<TmuSample> wantm = tmu_expect(mixed, pool());
+  bool okm = err.empty();
+  if (!okm) std::printf("  clut-pipe-mixed: protocol violation: %s\n", err.c_str());
+  for (size_t i = 0; i < mixed.size(); ++i) {
+    if (!tmu_same(wantm[i], m.out[i])) {
+      if (okm) std::printf("  clut-pipe-mixed: %s\n", tmu_describe(i, wantm[i], m.out[i]).c_str());
+      okm = false;
+    }
+  }
+  check(okm, "clut-pipe: a mixed CLUT/bilinear batch is right while responses are held", 1,
+        okm ? 1 : 0);
+}
+#endif
+
 int main() {
   test_formats();
   test_resident_palette_is_invalidated();
@@ -876,5 +970,8 @@ int main() {
   test_non_square();
   test_backpressure_and_latency();
   test_throughput_against_the_derived_demand();
+#ifdef ZHAO_TMU_PIPE
+  test_resident_clut_ii_on_a_pipelined_cache();
+#endif
   return zhao::report_and_exit("texture_tmu_directed");
 }

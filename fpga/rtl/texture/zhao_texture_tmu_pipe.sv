@@ -1,11 +1,17 @@
 // zhao_texture_tmu_pipe.sv — TEXTURE.TMU v2: the production sampler.
 //
 // ============================================================================
-// INCOMPLETE. NOT INSTANTIATED ANYWHERE. DO NOT WIRE THIS IN.
+// NOT COMPOSED INTO ANY FUNCTIONAL PIPELINE. WIRING IT IN IS A LEDGER EDIT.
+// (It IS instantiated: `zhao_prod_top.sv` u63_i, the generated LFSR-fed
+// RESOURCE top, counts it once for the device-cost question -- so this file
+// is inside the production fit's source closure.)
 // ============================================================================
-// This is the front half of the v2 sampler and it is committed in that state
-// deliberately, because the part that exists is the part the respec turns on --
-// and because a block that silently half-works is worse than one that says so.
+// This banner said "INCOMPLETE. NOT INSTANTIATED ANYWHERE." from its first
+// commit until 2026-09-09, and both halves had gone stale over a finished
+// machine: the five "WHAT IS MISSING" items below all landed, the block
+// passes the serial sampler's entire shared suite (`test_texture_tmu_pipe`),
+// and the resource top instantiates it. The shipping sampler wired into the
+// functional path is still `zhao_texture_tmu.sv`.
 //
 // WHAT IS HERE AND IS BELIEVED RIGHT:
 //   * A0 request capture, so no request pin feeds deep arithmetic. This is the
@@ -23,24 +29,12 @@
 //     `src_id` repeats.
 //   * Resident palette storage, PAL_SLOTS=16.
 //
-// WHAT IS MISSING, AND UNTIL IT LANDS NOTHING RETIRES:
-//   1. Response routing. The cache response must be steered by the RECORD's
-//      plan, so the ROB needs the per-record fields (`fmt`, `clut`, `filt`,
-//      `bytesel`, `nib`, `pal_base`, `fu`, `fv`, `err`) written at issue. They
-//      are currently held only in the single `c_*` issue register, which has
-//      moved on by the time the response arrives. THIS IS THE NEXT EDIT.
-//   2. CLUT8: extract the raw index, read the resident palette page, decode
-//      RGB565, alpha 255. Plus the cold fallback for a non-resident page,
-//      which needs a second cache access and is what `pal_fallback_o` counts.
-//   3. Direct nearest: decode the returned halfword straight into the record.
-//   4. Direct bilinear: decode four taps, enqueue a footprint, and run the
-//      F0..F3 channel lane (two 9x9 and one 18x9 product, ONE rounding at F3).
-//   5. `smp_a_o`/`smp_idx_o` semantics per path, and `mode_error_o` proven to
-//      track the accepted request under a full pipeline rather than by
-//      inspection.
-//
-// It lints and it is referenced by no CMake target, so it cannot affect a gate.
-// The shipping sampler is still `zhao_texture_tmu.sv`.
+// WHAT WAS MISSING HAS LANDED (all five: response routing by per-record plan
+// fields, CLUT8 with the resident palette and its cold fallback, direct
+// nearest, direct bilinear through the one channel lane, and the per-path
+// output semantics). `tests/CMakeLists.txt` builds the shared directed suite
+// against this block as `test_texture_tmu_pipe` (ZHAO_TMU_PIPE=1), so every
+// directed and random check the serial block earned runs against this file.
 //
 // ---------------------------------------------------------------------------
 // WHY A SECOND IMPLEMENTATION RATHER THAN AN EDIT
@@ -109,7 +103,10 @@
 
 module zhao_texture_tmu_pipe #(
     // Resident palette pages. 256 RGB565 entries is 4,096 bits a slot, so 16
-    // slots is 64 Kbit. Sixteen rather than the serial block's two because the
+    // slots is 64 Kbit -- the page WORDS live in one flat M10K-shaped RAM
+    // (`pal_dat_r` below); only the tags and per-entry valid planes, the
+    // associative half of the lookup, stay in flops.
+    // Sixteen rather than the serial block's two because the
     // working set is real: four resident terrain tilesets already imply four
     // palettes, the sky needs one, up to two near stars carry live palettes,
     // and creatures swap pages. Two slots prove a mechanism, not a working set.
@@ -384,11 +381,26 @@ module zhao_texture_tmu_pipe #(
   // ==========================================================================
   // the resident palette
   // ==========================================================================
+  // THE SPLIT IS BY ACCESS PATTERN, NOT BY SIZE (the 2026-09-04 report's
+  // design, kept): `pal_tag_r` and `pal_ten_r` are compared on ALL ways in one
+  // cycle and `pal_val_r` is read on all ways and cleared 256-bits-at-once --
+  // a memory can do none of that, so their 4,608 bits are CORRECTLY flops.
+  // Only the page words move to RAM.
   logic [31:0]  pal_tag_r [PAL_SLOTS];
   logic         pal_ten_r [PAL_SLOTS];
   logic [255:0] pal_val_r [PAL_SLOTS];
-  logic [15:0]  pal_dat_r [PAL_SLOTS][256];
   localparam int PW = (PAL_SLOTS <= 1) ? 1 : $clog2(PAL_SLOTS);
+  // One 8-bit CLUT index names one of these. Fixed by FMT_CLUT8's index
+  // width, so it is a named constant rather than a knob.
+  localparam int unsigned PAL_PAGE_ENTRIES = 256;
+  // Depth uses 1 << PW pages rather than PAL_SLOTS so `{way, index}` is a
+  // plain concatenation for every legal PAL_SLOTS; a non-power-of-two slot
+  // count pads unreachable rows instead of aliasing reachable ones. At the
+  // default 16 slots this is 4,096 x 16 = 65,536 bits = 7 M10K of 553 --
+  // the same bits that were 65,536 FLIP-FLOPS until 2026-09-09
+  // (reports/TMU-PIPE-PALETTE-IN-FLOPS-20260904.md).
+  localparam int unsigned PAL_ENTRIES = PAL_PAGE_ENTRIES << PW;
+  (* ramstyle = "M10K" *) logic [15:0] pal_dat_r [PAL_ENTRIES];
   logic [PW-1:0] pal_vic_r;
 
   // ==========================================================================
@@ -517,6 +529,12 @@ module zhao_texture_tmu_pipe #(
   logic                     rsp_is_pal;
   assign rsp_rec    = tagq[tag_rp[RW-1:0]];
   assign rsp_is_pal = tagp[tag_rp[RW-1:0]];
+  // A response is CONSUMED this clock. Written once and used at every site
+  // that must agree (the response block, the palette RAM's write enable, the
+  // registered-read valid), because this file has already shipped the bug
+  // where one condition spelled out twice diverged.
+  logic rsp_take_c;
+  assign rsp_take_c = cac_valid_i && cac_ready_o && tag_ne;
 
   // The CLUT index the returned byte names, and where its palette entry lives.
   logic [7:0]  rsp_byte, rsp_idx;
@@ -544,6 +562,52 @@ module zhao_texture_tmu_pipe #(
       end
   end
 
+  // ---- the palette page RAM, and why its read is REGISTERED ----------------
+  // An M10K captures its read address on a clock edge. This read's address is
+  // `{way, index}` where the INDEX IS THE RESPONDING TEXEL BYTE -- born
+  // combinationally from `cac_data_i` in the response cycle -- so no earlier
+  // edge could have captured it: the read must take the response edge and the
+  // decode moves to the cycle after (`pq_v` below). `pal_way_c` alone is
+  // known earlier, but speculating a read per way cannot help while the
+  // 8-bit index is the late operand.
+  //
+  // The added cycle is LATENCY, not initiation interval. Nothing feeds back
+  // through this read -- hit/miss and the cold fallback use only the flop
+  // planes above -- the RAM accepts a read every clock, and the ROB absorbs
+  // one more cycle of occupancy. Measured in
+  // tests/texture/texture_tmu_directed.cpp: against a one-access-per-clock
+  // cache model, resident CLUT holds II = 1 with this register in place.
+  //
+  // The shape is zhao_texture_v3bank's proven M10K template: one flat array,
+  // one write site, a CLOCK-ONLY process (an array touched by an async-reset
+  // process cannot become an M10K), a synchronous read. Read-during-write
+  // law: OLD DATA, and it is never used -- one response per cycle means a
+  // fill (the only write) and a resident hit (the only meaningful read) are
+  // never the same cycle, so a colliding read's value is dead: `pq_v` is 0
+  // after every fill cycle.
+  logic                pal_we_c;
+  logic [PW+8-1:0]     pal_waddr_c, pal_raddr_c;
+  logic [15:0]         pal_rd_q;
+  always_comb begin
+    pal_raddr_c = {pal_way_c, rsp_idx};
+    pal_we_c    = rsp_take_c && rsp_is_pal;
+    pal_waddr_c = {pal_hit_c ? pal_way_c : pal_vic_r, rb_idx[rsp_rec]};
+  end
+  always_ff @(posedge clk) begin
+    if (pal_we_c) pal_dat_r[pal_waddr_c] <= cac_data_i[15:0];
+    pal_rd_q <= pal_dat_r[pal_raddr_c];
+  end
+
+  // The registered read's companions. All three (`pq_v`, `pq_rec`,
+  // `pal_rd_q`) load UNCONDITIONALLY, and that is safe HERE for a stated
+  // reason: the stage has no backpressure -- its completion writes the ROB
+  // and a ROB write cannot stall -- so the three advance in lockstep every
+  // clock and no held consumer can watch a moving address (the 2026-09-08
+  // metadata-swap trap needs a stall to bite). If a stall is ever added
+  // downstream of this stage, all three loads must share its enable.
+  logic                     pq_v;
+  logic [$clog2(ROB_N)-1:0] pq_rec;
+
   // ---- the decodes, NAMED ---------------------------------------------------
   // Quartus 17.0.2 cannot part-select a FUNCTION CALL RESULT:
   // `decode16(h, fmt)[23:0]` is a syntax error there while Verilator and slang
@@ -551,12 +615,14 @@ module zhao_texture_tmu_pipe #(
   // is the fix and also stops the identical call being written twice for the
   // colour and the alpha of the same texel.
   logic [31:0] dec_pal565_c;      // a palette page word, always RGB565
-  logic [31:0] dec_clut565_c;     // a CLUT entry from the resident page
+  logic [31:0] dec_clut565_c;     // a CLUT entry, ONE CYCLE LATER than its
+                                  // siblings: it decodes the palette RAM's
+                                  // output register, not this cycle's response
   logic [31:0] dec_direct_c;      // direct nearest, in the record's own format
   logic [31:0] dec_tap_c [0:3];   // the four bilinear taps
   always_comb begin
     dec_pal565_c  = decode16(cac_data_i[15:0], FMT_RGB565);
-    dec_clut565_c = decode16(pal_dat_r[pal_way_c][rsp_idx], FMT_RGB565);
+    dec_clut565_c = decode16(pal_rd_q, FMT_RGB565);
     dec_direct_c  = decode16(cac_data_i[15:0], rb_fmt[rsp_rec]);
     for (int unsigned k = 0; k < 4; k++)
       dec_tap_c[k] = decode16(cac_data_i[16*k +: 16], rb_fmt[rsp_rec]);
@@ -575,6 +641,8 @@ module zhao_texture_tmu_pipe #(
       pf_v <= 1'b0;
       fl_v <= 1'b0;
       fl_ch <= 2'd0;
+      pq_v <= 1'b0;
+      pq_rec <= '0;
       mode_error_o <= 1'b0;
       texture_samples_o <= 32'd0;
       rob_full_clocks_o <= 32'd0;
@@ -685,7 +753,7 @@ module zhao_texture_tmu_pipe #(
       // filter held the port closed, the SAME response was popped again and
       // applied to the NEXT record. CLUT never noticed, because CLUT never
       // stalls the port; the bilinear batch hung outright.
-      if (cac_valid_i && cac_ready_o && tag_ne) begin
+      if (rsp_take_c) begin
         tag_rp <= tag_rp + (RW+1)'(1);
 
         if (rsp_is_pal) begin
@@ -694,8 +762,10 @@ module zhao_texture_tmu_pipe #(
           rb_rgb [rsp_rec] <= dec_pal565_c[23:0];
           rb_a   [rsp_rec] <= 8'd255;
           rb_done[rsp_rec] <= 1'b1;
+          // The page WORD itself is written by the palette RAM's own process
+          // (`pal_we_c` fires on exactly this branch); only the tag and valid
+          // planes -- the associative half, correctly flops -- are here.
           if (pal_hit_c) begin
-            pal_dat_r[pal_way_c][rb_idx[rsp_rec]] <= cac_data_i[15:0];
             pal_val_r[pal_way_c][rb_idx[rsp_rec]] <= 1'b1;
           end else begin
             // A slot holds ONE page, so claiming it clears the previous
@@ -705,7 +775,6 @@ module zhao_texture_tmu_pipe #(
             pal_ten_r[pal_vic_r]                     <= 1'b1;
             pal_val_r[pal_vic_r]                     <= 256'd0;
             pal_val_r[pal_vic_r][rb_idx[rsp_rec]]    <= 1'b1;
-            pal_dat_r[pal_vic_r][rb_idx[rsp_rec]]    <= cac_data_i[15:0];
             pal_vic_r <= (PAL_SLOTS == 1) ? '0
                        : ((pal_vic_r == PW'(PAL_SLOTS - 1)) ? '0 : pal_vic_r + PW'(1));
           end
@@ -715,10 +784,10 @@ module zhao_texture_tmu_pipe #(
           // texel's CLUT intensity, so the palette colour alone answers neither.
           rb_idx[rsp_rec] <= rsp_idx;
           rb_a  [rsp_rec] <= 8'd255;
-          if (pal_hit_c && pal_ent_c) begin
-            rb_rgb [rsp_rec] <= dec_clut565_c[23:0];
-            rb_done[rsp_rec] <= 1'b1;
-          end else begin
+          // A RESIDENT HIT DOES NOT COMPLETE HERE. The palette RAM captured
+          // `{pal_way_c, rsp_idx}` on this edge; the word, its decode and
+          // `rb_done` land on the NEXT edge, through `pq_v` below.
+          if (!(pal_hit_c && pal_ent_c)) begin
             pf_v    <= 1'b1;
             pf_addr <= rsp_pal_addr;
             pf_idx  <= rsp_idx;
@@ -745,6 +814,22 @@ module zhao_texture_tmu_pipe #(
           fl_ch   <= 2'd0;
           fl_v    <= 1'b1;
         end
+      end
+
+      // ---- the registered palette read completes its record ---------------
+      // One cycle after a resident CLUT hit was consumed, the RAM's output
+      // register holds the entry and the record finishes. This is the +1
+      // cycle the M10K costs, and it is PIPELINED: a hit completes here every
+      // clock while the next hit's address is being captured, so back-to-back
+      // responses lose nothing. `pq_rec` differs from this cycle's `rsp_rec`
+      // by construction -- a record gets one texel response, and a hit record
+      // never gets a second -- so the two ROB writes cannot collide.
+      pq_v   <= rsp_take_c && !rsp_is_pal && rb_clut[rsp_rec]
+                && pal_hit_c && pal_ent_c;
+      pq_rec <= rsp_rec;
+      if (pq_v) begin
+        rb_rgb [pq_rec] <= dec_clut565_c[23:0];
+        rb_done[pq_rec] <= 1'b1;
       end
 
       // ---- the filter lane, one channel a clock ---------------------------
