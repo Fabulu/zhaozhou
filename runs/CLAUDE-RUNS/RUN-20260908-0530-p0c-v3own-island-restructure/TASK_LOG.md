@@ -2659,3 +2659,37 @@ core.autocrlf is set repo-locally, so an LF-only pattern silently matches
 nothing. My patch script's assertion caught it -- keep the assertion.
 
 Report: `reports/RAM-INFERENCE-PROBE-AND-A-DEAD-MAP-LANE-20260909.md`.
+
+## 2026-09-09 -- TWO owner commits arrived EMPTY, and probe v3 is mapping
+
+`fa87d888` 12:33 "Agent please read - new rearchitecture goals" and `6cfb9704`
+12:39 "Agent please read - New rearchitecture help". Both single-parent, both
+sitting on top of one of my pushes, both with NO files, NO message body, and a
+tree byte-identical to their parent. Ruled out first: not merge commits (parent
+count 1 -- a merge would look exactly like this under --name-status), not a
+message body, not another branch (fa87d888 is the newest commit anywhere; main's
+tip is 51d30033 from 10:20), not .gitignore (nothing there swallows a normally
+named document). So the content genuinely did not arrive.
+
+NOT GUESSED AT. "New rearchitecture goals" could redirect the whole programme.
+Asked for it and carried on with authorised work. Durable record in
+`reports/OWNER-DIRECTION-ARRIVED-EMPTY-20260909.md`, not just here, because a run
+folder is orphaned by the next pass.
+
+**Probe v3 mapping** (`@v3-readstyle`). Where I was before it lands: read style
+is the ONLY remaining visible difference between e_tag (infers) and e_num_u (does
+not) -- read-address count was refuted by the @g2-prod fit, and the array reset by
+reading perspuv's reset branch. v3 gives each array its own write-data PORT
+because v2 proved constant XOR salts cannot stop per-bit merging (pigeonhole:
+five variants, two values per bit). Three arrays, one factor, no reset anywhere:
+
+    P  14w  continuous assign @ registered idx   the e_tag shape, POSITIVE CONTROL
+    Q  32w  continuous assign @ registered idx   P widened
+    R  32w  read in always_ff @ comb idx         the e_num_u shape
+
+Pre-registered: P+Q infer and R does not -> READ STYLE DECIDES, and perspuv's
+token-table reads become a concrete ~3,000-register remedy. P infers, Q does not
+-> width decides. All three infer -> the blocker is something else in perspuv,
+next candidate being that pk_i comes out of ANOTHER array read rather than a
+port. **P does not infer -> the probe is broken and nothing else here is
+evidence; check that first.**
