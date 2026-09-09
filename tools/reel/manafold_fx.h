@@ -332,7 +332,7 @@ constexpr int32_t kFoldEdgeStampMm = 14;   // 22 * (2/3), one core again
 // THE THREE PARTS, EACH ITS OWN KNOB, because Direction 10 is an EXPERIMENT
 // and the deliverable is the axis rather than a point on it:
 //
-//   1. CONNECTED -- kFoldStrandStampMm sets the spacing; stamps must overlap
+//   1. CONNECTED -- kFoldStrandPerSeg sets how many stamps subdivide each
 //      or the line is beads again (pass 12 learned this the hard way one
 //      constant above).
 //   2. WHITE -- kRampWhite, additive, depth test OFF (the pulsar-core law:
@@ -358,13 +358,60 @@ constexpr int32_t kFoldEdgeStampMm = 14;   // 22 * (2/3), one core again
 constexpr bool kFoldStrandOn = true;         // the D10 read; false = pass 13's
 constexpr int32_t kFoldStrandCoreRPx = 3;    // the white hot core
 constexpr int kFoldStrandCoreGainPm = 1000;
-constexpr int32_t kFoldStrandDarkRPx = 9;    // the deep dark blue surround
+constexpr int32_t kFoldStrandDarkRPx = 12;   // the deep dark blue surround
 // ⚠ LOWER IS DARKER. The gain scales the ramp's own entries, and the ramp is
 // already near-black, so 1000 is the authored navy and 400 is a deeper, more
 // contrasty one. It is not a brightness in the ordinary direction and it will
 // be read backwards by somebody if this line is not here.
-constexpr int kFoldStrandDarkGainPm = 1000;
-constexpr int32_t kFoldStrandStampMm = 9;    // under one core radius: a LINE
+// 1000 -> 300 BY EYE, on the plate: at 1000 the surround measured a mean drop
+// of 30 lum out of ~700 -- 4%, present in the arithmetic and absent on screen,
+// the crayon grain exactly. At 300 the ramp's own entries scale to near-black
+// and each core sits in a disc you cannot miss. It is a PROVISIONAL centre for
+// the owner's plate, not a chosen value: Direction 10 is an experiment and he
+// picks the rung.
+constexpr int kFoldStrandDarkGainPm = 300;
+// ⚠ THE CONNECTEDNESS KNOB IS A COUNT, NOT A DISTANCE, AND THAT IS THE WHOLE
+// FINDING. The first strand build set a spacing in MILLIMETRES, like every
+// other stamped primitive here, and it did nothing whatsoever: rungs at 9 mm
+// and at 3 mm rendered BYTE-IDENTICAL (md5 91a66310, sequence_crc32c
+// 0xB60B0DFA both times), and so did raising the per-segment cap from 40 to
+// 300. Three knobs, three no-ops, and the plate LOOKED slightly different to
+// me at 4x -- which is checklist item 41 earning its place: the crop found a
+// candidate and only the md5 could confirm it.
+//
+// The cause: the figure is kStencilPts = 18 stations around a pocket a couple
+// of hundred millimetres across, each link cut into kFoldEdgeSegs = 4, so a
+// sub-segment is about THREE MILLIMETRES long. `nst = manhattan / stamp_mm`
+// then floors to 0 for every stamp value above ~3 and is rescued to 1 by the
+// `nst < 1` guard -- so the strand drew exactly ONE stamp per sub-segment,
+// 18 * 4 = 72 beads, no matter what the constant said. An integer millimetre
+// cannot subdivide a three-millimetre segment, so the unit itself was the bug.
+//
+// Expressed as a COUNT it is monotonic, resolution-independent, and it is
+// precisely the owner's axis: how connected. Spacing follows the figure
+// instead of fighting it.
+constexpr int kFoldStrandPerSeg = 6;         // stamps per sub-segment: the LINE
+// THE PICTURE THAT FORCED THE NEXT TWO CONSTANTS (pass14-plates/d10-*.png,
+// binary f11a8268): with the three above at 3 px / 9 px / 9 mm, `channel` f363
+// draws the figure as a NECKLACE OF ONE-PIXEL WHITE DOTS. Measured through a
+// dot: the core is exactly one pixel of (255,255,255) -- saturated, so gain is
+// not the lever AGAIN -- and the dark surround's mean drop is 30 lum out of
+// ~700, i.e. 4%. That is the crayon grain verbatim: mathematically present and
+// visually invisible.
+// AND THE SPACING WAS THE PART WITH NO KNOB. I gave myself overrides for the
+// core radius, the halo radius and the halo gain -- three axes that were
+// roughly fine -- and none for the one the owner named FIRST ("the particles
+// are actually CONNECTED"). That is the gain-ladder error committed a second
+// time: sweeping the axis I had a knob on instead of the axis that carries
+// the fault.
+// TWO things set the spacing and only one was a constant. `nst` is the stamp
+// count along a sub-segment; it is computed from a MANHATTAN length (adx+ady+adz,
+// up to sqrt(3) longer than the true one) divided by the stamp, and then
+// CLAMPED. Whichever of the two binds is the one choosing the spacing, and
+// nobody has ever established which. So both are knobs now and the ladder
+// decides it by looking. (It did, and the answer was neither: see
+// kFoldStrandPerSeg below -- the UNIT was wrong, so both knobs were no-ops.)
+constexpr int kFoldStrandCapN = 64;          // stamps per sub-segment ceiling
 // The free cross-pocket strand (`mana_lightning`) inside the fold window. It
 // traces nothing -- 09-ENGINE-GOTCHAS §18's "an independent, full-brightness
 // white strand composited over the same pocket with no knowledge of the
@@ -1661,6 +1708,8 @@ inline int g_u02_strand_core_r = -1;
 inline int g_u02_strand_dark_r = -1;
 inline int g_u02_strand_dark_gain = -1;
 inline int g_u02_free_strand = -1;
+inline int g_u02_strand_perseg = -1;
+inline int g_u02_strand_cap = -1;
 inline bool u02_strand_on() {
   return g_u02_strand_on < 0 ? kFoldStrandOn : g_u02_strand_on != 0;
 }
@@ -1672,6 +1721,12 @@ inline int32_t u02_strand_dark_r() {
 }
 inline int u02_strand_dark_gain() {
   return g_u02_strand_dark_gain < 0 ? kFoldStrandDarkGainPm : g_u02_strand_dark_gain;
+}
+inline int u02_strand_perseg() {
+  return g_u02_strand_perseg < 1 ? kFoldStrandPerSeg : g_u02_strand_perseg;
+}
+inline int u02_strand_cap() {
+  return g_u02_strand_cap < 1 ? kFoldStrandCapN : g_u02_strand_cap;
 }
 inline bool u02_free_strand_on() {
   return g_u02_free_strand < 0 ? kFoldFreeStrandOn : g_u02_free_strand != 0;
@@ -1951,11 +2006,29 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     // 13's dim aqua outline. Read once per call so a rung sweep cannot
     // change identity between two stations of the same figure.
     const bool strand = u02_strand_on();
-    const int32_t stamp_mm = strand ? kFoldStrandStampMm : kFoldEdgeStampMm;
+    const int32_t stamp_mm = kFoldEdgeStampMm;   // the pass-13 path only
+    const int per_seg = u02_strand_perseg();
+    const int cap_n = strand ? u02_strand_cap() : 24;
     const int32_t core_r = u02_strand_core_r();
     const int32_t dark_r = u02_strand_dark_r();
     const int dark_gain = u02_strand_dark_gain();
     int32_t pts[kFoldEdgeSegs + 1][3];
+    // THE PICTURE THAT FORCED THE TWO-PASS DRAW (pass14-plates/d10-size.png):
+    // the first strand build stamped dark-then-white PER BEAD, and raising the
+    // radii to core 7 / dark 24 to make the halo legible made the pocket
+    // LIGHTER and mushier instead -- the opposite of the ask. The reason is
+    // ordering, not scale: with the two interleaved, every bead's ADDITIVE
+    // white lands on the PREVIOUS bead's dark and cancels it, so the halo can
+    // never be more than a bruise between beads and the whites just accumulate.
+    //
+    // "Surrounded by a deep dark blue" is a property of the WHOLE LINE, not of
+    // each bead. So the strand is drawn in two passes over the same stations:
+    // pass 0 lays the entire dark surround, pass 1 lays every white core on top
+    // of the finished dark. bolt_path is deterministic in (i, ph_e, seed), so
+    // pass 1 walks exactly the path pass 0 darkened -- no cached point buffer,
+    // and no chance of the two passes disagreeing about where the figure is.
+    const int passes = strand ? 2 : 1;
+    for (int pass = 0; pass < passes; ++pass)
     for (int i = 0; i < kStencilPts; ++i) {
       if (!fold_edge_link(ph.shape_to, i)) continue;
       const int j = (i + 1) % kStencilPts;
@@ -1967,29 +2040,38 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
         int64_t dz = (pts[sgi + 1][2] - pts[sgi][2]) >> 16;
         const int64_t adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy,
                       adz = dz < 0 ? -dz : dz;
-        int nst = static_cast<int>((adx + ady + adz) / stamp_mm);
+        // The strand subdivides by COUNT (see kFoldStrandPerSeg); the
+        // pass-13 outline keeps its millimetre spacing byte for byte, so
+        // ZHAO_U02_STRAND=0 still reproduces the shipped picture exactly.
+        int nst = strand ? per_seg
+                         : static_cast<int>((adx + ady + adz) / stamp_mm);
         if (nst < 1) nst = 1;
-        if (nst > 40) nst = 40;
+        if (nst > cap_n) nst = cap_n;
         for (int t = 0; t < nst; ++t) {
           const int32_t x = lerp32(pts[sgi][0], pts[sgi + 1][0], t, nst);
           const int32_t y = lerp32(pts[sgi][1], pts[sgi + 1][1], t, nst);
           const int32_t z = lerp32(pts[sgi][2], pts[sgi + 1][2], t, nst);
           if (strand) {
-            // 3. THE DEEP DARK BLUE, FIRST. opaque+soft, so it BLENDS TOWARD a
-            // colour darker than either sky -- the only subtractive element in
-            // this creature's whole mana path. Depth tested: a surround is
-            // grounded, it is not energy shining through the animal.
-            // It rides `lit` like everything else, so a figure that is not
-            // gripping does not stamp a dark bruise on the sky.
-            mana_push(out, x, y, z, dark_r, kRampStorm,
-                      dark_gain * lit / 1000, true, false,
-                      /*opaque=*/true, /*soft=*/true);
-            // 2. THE WHITE LINE, ON TOP. Additive, depth test OFF (the
-            // pulsar-core law: energy reads over flesh). It lands INSIDE the
-            // dark it was just given, which is the whole difference between
-            // this and the lab's rejected white outline.
-            mana_push(out, x, y, z, core_r, kRampWhite,
-                      kFoldStrandCoreGainPm * lit / 1000, false, false);
+            if (pass == 0) {
+              // 3. THE DEEP DARK BLUE. opaque+soft, so it BLENDS TOWARD a
+              // colour darker than either sky -- the only subtractive element
+              // in this creature's whole mana path. Depth tested: a surround
+              // is grounded, it is not energy shining through the animal.
+              // It rides `lit` like everything else, so a figure that is not
+              // gripping does not stamp a dark bruise on the sky.
+              mana_push(out, x, y, z, dark_r, kRampStorm,
+                        dark_gain * lit / 1000, true, false,
+                        /*opaque=*/true, /*soft=*/true);
+            } else {
+              // 2. THE WHITE LINE, over the FINISHED dark. Additive, depth
+              // test OFF (the pulsar-core law: energy reads over flesh). It
+              // lands inside a surround the whole figure already has, which
+              // is the difference between this and the lab's rejected white
+              // outline -- and, per the plate above, between a line and a
+              // string of pale blobs.
+              mana_push(out, x, y, z, core_r, kRampWhite,
+                        kFoldStrandCoreGainPm * lit / 1000, false, false);
+            }
           } else {
             mana_push(out, x, y, z, kFoldEdgeHaloRPx, ramp,
                       kFoldEdgeHaloGainPm * lit / 1000, true, false);

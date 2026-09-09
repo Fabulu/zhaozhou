@@ -7660,15 +7660,27 @@ int main(int argc, char** argv) {
     u02::g_u02_strand_dark_gain = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_FREE_STRAND"))
     u02::g_u02_free_strand = std::atoi(e);
+  // The CONNECTEDNESS axis -- Direction 10's first clause, and the one the
+  // first build shipped with no knob at all. PERSEG is how many stamps
+  // subdivide each sub-segment of the figure's outline; CAP is its ceiling.
+  // ⚠ It is a COUNT, not a millimetre spacing. The millimetre version was
+  // tried first and was a NO-OP at every value -- the sub-segments are about
+  // 3 mm long, so integer-mm spacing cannot subdivide them at all. See
+  // kFoldStrandPerSeg in manafold_fx.h for the md5s that proved it.
+  if (const char* e = std::getenv("ZHAO_U02_STRAND_PERSEG"))
+    u02::g_u02_strand_perseg = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_STRAND_CAP"))
+    u02::g_u02_strand_cap = std::atoi(e);
   if (u02::g_u02_strand_on >= 0 || u02::g_u02_strand_core_r >= 0 ||
       u02::g_u02_strand_dark_r >= 0 || u02::g_u02_strand_dark_gain >= 0 ||
-      u02::g_u02_free_strand >= 0)
+      u02::g_u02_free_strand >= 0 || u02::g_u02_strand_perseg >= 0 ||
+      u02::g_u02_strand_cap >= 0)
     std::fprintf(stderr,
-                 "D10 strand rung: on=%d core_r=%d dark_r=%d dark_gain=%d free=%d
-",
+                 "D10 strand rung: on=%d core_r=%d dark_r=%d dark_gain=%d free=%d perseg=%d cap=%d\n",
                  u02::g_u02_strand_on, u02::g_u02_strand_core_r,
                  u02::g_u02_strand_dark_r, u02::g_u02_strand_dark_gain,
-                 u02::g_u02_free_strand);
+                 u02::g_u02_free_strand, u02::g_u02_strand_perseg,
+                 u02::g_u02_strand_cap);
   // PASS 4 (instrument honesty): ZIXX_HIDE_CREATURE=1 renders every frame
   // with the creature hook skipped -- trajplot.py's creature-free
   // background plate. Unset (the normal case) nothing changes.
