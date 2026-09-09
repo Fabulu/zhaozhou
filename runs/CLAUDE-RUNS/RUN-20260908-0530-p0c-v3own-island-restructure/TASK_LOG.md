@@ -1638,7 +1638,7 @@ its fit.
 
 * `class_m` is a SUBSTRING of `err_class_mismatch_o` and `plan_class_mismatch_c`.
   A substring-based deletion removed a LIVE error counter and its logic. Caught
-  in the diff, reverted whole-file, redone with `class_m`: 2 lines, not 6.
+  in the diff, reverted whole-file, redone with `class_m`: 2 lines, not 6.
 * That deletion then orphaned `f_class_in_c` -- found by re-grepping for readers
   AFTER the change rather than assuming it was self-contained.
 
@@ -1958,14 +1958,23 @@ worse than not optimising. **18, or do not bother.**
 
 ### Four faults, three of them mine, one nine days old
 
-1. **`-SkipMeasured` has never worked.** A heredoc turned `` into a literal
-   0x08 byte, so it looked for `tools<BS>udget/calibration.json` and re-measured
-   all 123 points -- ~2 hours -- every time. It printed `0 of 123 already ok` on
-   its third line and I had not read the first lines of a job I launched.
-2. **The same mechanism bit twice more**: my repair script's own `` collapsed
-   (its assertion caught it), and later a ``. `no_control_bytes.py` is
-   committed; it found a fourth instance in `v3own.sv:1385`, deliberately left
-   alone so `@g2-prod`'s provenance tie survives.
+1. **`-SkipMeasured` has never worked.** A heredoc turned a **backslash-b** into
+   a literal 0x08 byte, so it looked for `tools<BS>udget/calibration.json` and
+   re-measured all 123 points -- ~2 hours -- every time. It printed
+   `0 of 123 already ok` on its third line and I had not read the first lines of
+   a job I launched.
+2. **The same mechanism bit twice more**: my repair script's own **backslash-b**
+   collapsed (its assertion caught it), and later a **backslash-r**.
+   `no_control_bytes.py` is committed; it found a fourth instance in
+   `v3own.sv:1385`, deliberately left alone so `@g2-prod`'s provenance tie
+   survives.
+
+   **AND A FIFTH, IN THIS ENTRY.** Writing the four items above put four fresh
+   backspaces into this log -- item 1 rendered as "A heredoc turned `` into a
+   literal", the escape eaten by the shell writing the sentence about escapes
+   being eaten. Caught by `no_control_bytes.py` an hour after committing it, on
+   a file it was not written for. They are spelled out in words now, because a
+   backslash that is never typed cannot be eaten.
 3. **My import fix broke the prod_top preflight** -- `module X import pkg::*; (`
    does not match `^\s*module\s+<top>\s*[#(]`. Fixed on both sides: the
    generator imports as a module item, and the matcher accepts the legal header
