@@ -15,6 +15,19 @@ TERRAIN.SHADE turns a triangle's face normal into a light term: `dot(n, L)/|n|`
 in Q16.16 *(A2; this sentence said s1.15)*, once per triangle, reused by every
 fragment of it.
 
+**THIS BLOCK'S ENGINE IS THE SHARED LIGHTING CORE — see `GEOM.LIGHT.md` and
+Amendment A7.** `GEOM.LIGHT`'s diagram makes terrain ONE OF THREE normal
+producers feeding one lighting block, and `zhao_terrain_shade.sv` is that
+block's light-term engine: its input ports carry a WORLD NORMAL (it contains
+no face-normal stage — `TERRAIN.NORMALS` is the face-normal producer), and
+its arithmetic is the ratified law's normal half,
+`zref::render::shade_from_world_normal_unclamped`. The arithmetic lives
+exactly once, here. `GEOM.LIGHT`'s vertex-RGB half (environment, tint,
+colour fold) INSTANTIATES this engine when it is built — it never copies it.
+Both contracts were written 2026-09-03 from the same audit without naming an
+owner, which is how the near-duplication of 2026-09-09 got authored
+(`reports/SHADE-AND-LIGHT-ARE-ONE-ENGINE-20260909.md`).
+
 **Written 2026-09-03.** The reason it exists is a finding, not a feature
 request: **production terrain has no lighting path at all.**
 `TERRAIN.NORMALS` computes face normals and is UNIT_VERIFIED at 41,731 checks,
@@ -252,3 +265,35 @@ island under a moving sun at 240p — was NOT performed by the RTL session
 and is not superseded by any number above. And the block is `unused` in
 `design/prod_manifest.yml`: TERRAIN.PROJECT still has no colour port, so
 the machine remains unlit until that seam exists.
+
+**A7 — OWNERSHIP (2026-09-09, the consolidation pass): the engine is the
+SHARED lighting core; the arithmetic lives exactly once.**
+`reports/SHADE-AND-LIGHT-ARE-ONE-ENGINE-20260909.md` records that this
+contract and `GEOM.LIGHT.md` were written the same day, from the same audit,
+about the same ratified law, with neither assigning ownership — and that a
+second engine would have been authored for `GEOM.LIGHT`'s other two normal
+producers if the sibling contract had not been read in time. The ruling:
+
+* **The reference core is `zref::render::shade_from_world_normal_unclamped`**
+  (`reference/src/zrender/terrain.cpp`; declared for clients in
+  `reference/include/zref/zref_terrain_shade.hpp`) — the GEOM.LIGHT.md:130
+  D-1-one-level-down split, landed. `shade_flat_tri_dir_unclamped` is now a
+  bit-identical wrapper: face-normal arithmetic in the wrapper, the
+  `ndot / isqrt / div_rhu_s128` half in the core, verbatim. The goldens not
+  moving is the proof (`reel_sequence_crc`, `render_golden`,
+  `render_heightfield` — see `reports/SHADE-LIGHT-CONSOLIDATION-20260909.md`).
+* **The RTL core is `zhao_terrain_shade.sv`, and it needed NO new input
+  mode**: it never contained a face-normal stage. Its `n_x/y/z_i` ports ARE
+  the world-normal entry point — `TERRAIN.NORMALS` happens to be the producer
+  wired first. Tier 2 of `tests/terrain/terrain_shade_rtl_directed.cpp` now
+  checks the RTL against the COMPILED core function directly.
+* **The module keeps its name until the second client exists.** Renaming to a
+  `zhao_light_*` name today would touch the fit ledger, the manifest and the
+  verified test for zero new capability; the rename (or a thin GEOM.LIGHT
+  shell instantiating this module — the 2026-08-24 arena
+  primitive-plus-shell precedent) lands with GEOM.LIGHT's RTL, whose
+  contract now carries the same ruling so it cannot be built as a peer.
+* `degenerate_i`/`degen_mismatch_o` are the TERRAIN.NORMALS seam check; a
+  future non-terrain producer without a degeneracy flag must not tie
+  `degenerate_i` low and call the resulting mismatch count a defect — see
+  GEOM.LIGHT.md for what that integration still needs.

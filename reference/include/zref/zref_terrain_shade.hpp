@@ -94,6 +94,33 @@
 #include "zref/zref_terrain_normals.hpp"
 
 namespace zref {
+namespace render {
+
+// ---------------------------------------------------------------------------
+// THE WORLD-NORMAL ENTRY POINT INTO THE RATIFIED LAW (2026-09-09).
+// ---------------------------------------------------------------------------
+// GEOM.LIGHT.md:118 recorded that the law's only signature took three
+// VERTICES, so a block that is GIVEN a world normal had nothing to call and
+// re-implementing `normal -> ndot -> isqrt -> divide` was the standing
+// temptation — the exact failure that shipped once in September's terrain
+// shade header and was nearly re-authored in RTL on 2026-09-09.
+//
+// This is the D-1 refactor one level down (GEOM.LIGHT.md:124): the core
+// below owns ndot / nmag2 / the ONE div_rhu_s128 rounding / the nmag2 == 0
+// arm, verbatim; `shade_flat_tri_dir_unclamped` is now a bit-identical
+// face-normal wrapper around it, and the golden CRCs not moving is the
+// proof. Defined in reference/src/zrender/terrain.cpp; declared here so
+// clients outside zrender (GEOM.LIGHT's oracle, the RTL differentials) have
+// a real entry point instead of a fresh temptation.
+//
+// The SatLedger matches the law family's signature: the core itself bumps
+// no counter today (div_rhu_s128's INT32 clamp is the law's own silent
+// rail), but the multi-light accumulation GEOM.LIGHT.md specifies saturates
+// and will record here. Pass nullptr when no ledger is kept.
+int32_t shade_from_world_normal_unclamped(int32_t nx, int32_t ny, int32_t nz, int32_t lx,
+                                          int32_t ly, int32_t lz, SatLedger* L);
+
+}  // namespace render
 namespace terrain {
 
 // The renderer's ONE key light, Q16.16, unit (1,2,1)/sqrt(6). Mirrored here

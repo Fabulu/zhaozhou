@@ -1,8 +1,12 @@
 # Contract — GEOM.LIGHT (Vertex lighting, one vocabulary)
 
 > Ledger: `design/blocks.yml` · gpu clock · maturity SPECIFIED
-> RTL: not built
-> Reference: `zref::render::shade_flat_tri_dir` is the ratified law — see below
+> RTL: the light-term CORE is built and SHARED —
+> `fpga/rtl/terrain/zhao_terrain_shade.sv` (ownership ruling below and
+> `TERRAIN.SHADE.md` A7); the vertex-RGB composition around it is not built
+> Reference: `zref::render::shade_flat_tri_dir` is the ratified law — see below;
+> `zref::render::shade_from_world_normal_unclamped` (2026-09-09) is this
+> block's callable entry point into it
 
 ## Purpose and exclusions
 
@@ -141,9 +145,44 @@ pre-refactor code lifted from git.
 it is the first action for `GEOM.LIGHT` — before any RTL, and before the
 multi-light and emission structure above, both of which sit on top of this core.
 
-**Recorded rather than done** because it was found while three fits held the
+~~**Recorded rather than done** because it was found while three fits held the
 build and the working tree, and a refactor whose whole proof is "the golden CRCs
-did not move" must not be attempted without the ability to run them.
+did not move" must not be attempted without the ability to run them.~~
+
+**DONE, 2026-09-09** (`reports/SHADE-LIGHT-CONSOLIDATION-20260909.md`):
+`zref::render::shade_from_world_normal_unclamped` exists in
+`reference/src/zrender/terrain.cpp`, declared for clients in
+`reference/include/zref/zref_terrain_shade.hpp`;
+`shade_flat_tri_dir_unclamped` is its bit-identical face-normal wrapper. The
+goldens did not move (`reel_sequence_crc`, `render_golden`,
+`render_heightfield`, before/after in the report). **This block's oracle now
+has an entry point to call, and re-implementing the arithmetic is no longer
+merely forbidden — it is also unnecessary.**
+
+### OWNERSHIP OF THE ARITHMETIC — recorded so this cannot happen a third time
+
+The near-miss this section predicted HAPPENED on 2026-09-09: TERRAIN.SHADE's
+RTL was built as a standalone engine an hour before this contract was read
+(`reports/SHADE-AND-LIGHT-ARE-ONE-ENGINE-20260909.md`). The engine itself is
+correct — bit-exact, 0 DSP — and, decisively, **it never contained a
+face-normal stage: `zhao_terrain_shade.sv`'s `n_x/y/z_i` ports are already a
+WORLD NORMAL.** It is the hardware of `shade_from_world_normal_unclamped`,
+verified against the compiled core over the full port domain
+(`tests/terrain/terrain_shade_rtl_directed.cpp`, tier 2).
+
+So the ruling, mirrored in `TERRAIN.SHADE.md` A7:
+
+* **The light-term arithmetic lives exactly once**: in C++ in
+  `shade_from_world_normal_unclamped`; in RTL in `zhao_terrain_shade.sv`.
+* **This block does not get a second engine.** GEOM.LIGHT's RTL is the
+  vertex-RGB composition (environment, tint, per-light clamp, colour fold)
+  built AROUND an instance of that engine — the 2026-08-24
+  primitive-plus-shell precedent. If the name `zhao_terrain_shade` is wrong
+  for a shared core, the rename lands together with this block's shell, in
+  one commit, with the fit ledger and manifest rows moving in step.
+* What this block still owes beyond the shared core is scoped in the
+  consolidation report §5 — the colour half has no reference and maturity
+  stays SPECIFIED until it does (the ledger's V6 gate is doing its job).
 
 ## THE ADDITIVE EMISSION TERM — PROVISIONAL, 2026-09-03
 
@@ -373,9 +412,13 @@ capacity note.
 
 ## Scalar reference function
 
-`zref::render::shade_flat_tri_dir` is the law. A thin view exposing the
-unclamped result is **PLANNED AND NOT WRITTEN** and depends on the owner
-decision above.
+`zref::render::shade_flat_tri_dir` is the law.
+**`zref::render::shade_from_world_normal_unclamped` is this block's entry
+point into it** — written 2026-09-09, declared in
+`reference/include/zref/zref_terrain_shade.hpp`, proved by the goldens not
+moving. What remains unwritten is the reference for the vertex-RGB half
+(multi-light accumulation, emission, ambient/spill, saturation order) — the
+composition laws are ruled above but have no executable oracle yet.
 
 ## Directed tests
 

@@ -355,6 +355,17 @@ inline constexpr int32_t kLightZ = 26758;
  * `shade_flat_tri_dir` below is now a bit-identical wrapper around this, and
  * the golden CRCs are what prove it.
  */
+/**
+ * THE WORLD-NORMAL CORE (the D-1 refactor one level down, GEOM.LIGHT.md:124,
+ * landed 2026-09-09). ndot/nmag2/div_rhu_s128(ndot, isqrt_u64(nmag2)),
+ * verbatim from the triangle form, which is now a bit-identical wrapper
+ * around this (face normal in the wrapper). The entry point GEOM.LIGHT's
+ * three normal producers call; also declared for external clients in
+ * reference/include/zref/zref_terrain_shade.hpp. Goldens pin the split.
+ */
+int32_t shade_from_world_normal_unclamped(int32_t nx, int32_t ny, int32_t nz, int32_t lx,
+                                          int32_t ly, int32_t lz, SatLedger* L);
+
 int32_t shade_flat_tri_dir_unclamped(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by,
                                      int32_t bz, int32_t cx, int32_t cy, int32_t cz, int32_t lx,
                                      int32_t ly, int32_t lz, SatLedger* L);

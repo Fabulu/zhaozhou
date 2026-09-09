@@ -17,11 +17,18 @@
 //   the ratified vertex-to-light law end to end, bit for bit.
 //
 //   TIER 2 (full port domain): raw normals with no triangle preimage —
-//   rails, single LSBs, degenerates — against the law's own back half
-//   assembled from the law's own pieces: `shade_nmag2` / `shade_ndot`
-//   (the thin view), `isqrt_u64` (qformats §7.2 header), and the COMPILED
-//   `div_rhu_s128` (rast.cpp). That composition is exactly the statement
-//   sequence of the ratified function body; nothing is re-derived.
+//   rails, single LSBs, degenerates — against the COMPILED
+//   `zref::render::shade_from_world_normal_unclamped`, THE world-normal
+//   core itself since the 2026-09-09 D-1-one-level-down split
+//   (GEOM.LIGHT.md:124; the split's own proof is the goldens not moving).
+//   Passing tier 2 therefore means: this RTL is the hardware of the core
+//   function every GEOM.LIGHT normal producer calls — the world-normal
+//   input mode IS the block's one mode; it never had a face-normal stage.
+//   Beside it, every tier-2 point also asserts that the thin view's pieces
+//   (`shade_nmag2` / `shade_ndot` / `isqrt_u64` / compiled `div_rhu_s128`)
+//   still compose to the compiled core — the drift guard that used to BE
+//   the oracle, kept because the thin view is what the RTL's internal
+//   walk mirrors and it must not silently diverge from the core.
 //
 // THE M10K ARITHMETIC IS SHOWN, NOT ASSERTED: the quarter-square identity
 // floor((a+b)^2/4) - floor((a-b)^2/4) == a*b is checked EXHAUSTIVELY over
@@ -71,12 +78,22 @@ namespace {
 
 constexpr int32_t kOne = 1 << 16;  // 1.0 in Q16.16
 
-// The law's back half, from the law's own pieces (see file header).
+// The COMPILED world-normal core (declared in zref_terrain_shade.hpp,
+// defined in zrender/terrain.cpp — the linked law, not a restatement), plus
+// the thin-view drift guard: the pieces the RTL's internal walk mirrors must
+// still compose to what the core computes, on every driven point.
 int32_t expected_from_normal(const FaceNormal& n, int32_t lx, int32_t ly, int32_t lz) {
+  const int32_t core =
+      zref::render::shade_from_world_normal_unclamped(n.x, n.y, n.z, lx, ly, lz, nullptr);
   const uint64_t nmag2 = zref::terrain::shade_nmag2(n);
-  if (nmag2 == 0) return 0;
-  const __int128 ndot = zref::terrain::shade_ndot(n, lx, ly, lz);
-  return zref::render::div_rhu_s128(ndot, static_cast<__int128>(zref::isqrt_u64(nmag2)));
+  const int32_t pieces =
+      (nmag2 == 0)
+          ? 0
+          : zref::render::div_rhu_s128(zref::terrain::shade_ndot(n, lx, ly, lz),
+                                       static_cast<__int128>(zref::isqrt_u64(nmag2)));
+  check(pieces == core, "thin-view pieces still compose to the compiled core",
+        static_cast<uint32_t>(core), static_cast<uint32_t>(pieces));
+  return core;
 }
 
 template <typename Top>

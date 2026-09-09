@@ -2264,6 +2264,10 @@ blocks:
       TERRAIN.PROJECT grows the colour seam. The moving-sun LOOK gate was
       NOT performed this session and still stands.
       Maturity stays REFERENCE_COMPLETE; promotion is the reviewer's call.
+      OWNERSHIP (2026-09-09, contract A7): this engine IS the shared lighting
+      core -- its n_x/y/z_i ports are a WORLD NORMAL (no face-normal stage),
+      i.e. the hardware of zref::render::shade_from_world_normal_unclamped.
+      GEOM.LIGHT instantiates it, never copies it; see GEOM.LIGHT.md.
   - id: TERRAIN.TESS
     name: Crack-safe tessellator
     kind: rtl
@@ -3606,11 +3610,19 @@ blocks:
       shade_flat_tri_dir is 'The ONE flat-shade law' and the goldens pin it. A
       second implementation was written by accident on 2026-09-03 and its twelve
       checks passed because they compared the duplicate against itself. The light is
-      Q16.16 (26758/53521/26758), NOT s1.15. BLOCKED on the clamp decision: the
-      clamp is inside the ratified function and additive terms must be summed before
-      it. The accumulator does NOT need ten permanent light engines merely because
-      ten light terms are legal -- sequenced accumulation at the skinner's own rate
-      (one weighted vertex per 12 clocks) is the default and the DSP lever.
+      Q16.16 (26758/53521/26758), NOT s1.15. The clamp decision is RESOLVED (owner
+      ruling D-1: unclamped primitive + clamp once per light), and since 2026-09-09
+      the law has a world-normal entry point this block can call:
+      zref::render::shade_from_world_normal_unclamped (the D-1 split one level
+      down, goldens unmoved). OWNERSHIP: the light-term arithmetic lives exactly
+      once -- C++ in that core, RTL in zhao_terrain_shade.sv, which takes a WORLD
+      NORMAL (no face-normal stage; TERRAIN.NORMALS is one of three producers).
+      GEOM.LIGHT's RTL is the vertex-RGB composition AROUND an instance of that
+      engine, never a second engine -- see GEOM.LIGHT.md ownership ruling and
+      TERRAIN.SHADE.md A7. The accumulator does NOT need ten permanent light
+      engines merely because ten light terms are legal -- sequenced accumulation
+      at the skinner's own rate (one weighted vertex per 12 clocks) is the
+      default and the DSP lever.
   - id: GEOM.DEPTHQUANT
     name: Depth profile application
     kind: rtl

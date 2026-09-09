@@ -58,10 +58,44 @@ namespace render {
 // The ONE flat-shade law (hoisted verbatim from the draw_heightfield lambda
 // 2026-08-16 when the creature lane needed the identical arithmetic —
 // charter 29-6; the golden CRCs pin that nothing changed but the address).
-// THE SIGNED UNCLAMPED FORM (owner ruling D-1, 2026-09-03). The body below is
-// the arithmetic that was already here, verbatim; only the final clamp moved
-// out, into the wrapper. `shade_flat_tri_dir` is therefore bit-identical and
-// the golden CRCs are the proof.
+//
+// THE WORLD-NORMAL CORE (the D-1 refactor one level down, GEOM.LIGHT.md:124,
+// landed 2026-09-09). This is the half of the law every normal producer can
+// call — GEOM.LIGHT's three feeds each make a world normal a different way
+// and none of them has a triangle to offer, so the triangle-taking form
+// below could not serve them. The ndot, nmag2, the degeneracy arm and the
+// ONE div_rhu_s128 rounding moved HERE, verbatim; the face-normal
+// derivation stayed in the wrapper. `shade_flat_tri_dir_unclamped` is
+// therefore bit-identical and the golden CRCs are the proof (again).
+// `zhao_terrain_shade.sv` is this function in silicon — its n_x/y/z_i ports
+// are a world normal; it never had a face-normal stage.
+//
+// The SatLedger rides the signature because every entry point of the law
+// family carries one: the wrapper's face-normal rescales record into it,
+// and the multi-light accumulation GEOM.LIGHT.md specifies ("several light
+// terms saturate rather than wrap") will need it at exactly this seam.
+// TODAY the core bumps no counter — div_rhu_s128's INT32 clamp is the law's
+// own silent rail, exactly as before the split. Adding a bump here would
+// CHANGE observable behaviour (ledger totals) and is forbidden by the
+// bit-identical acceptance criterion.
+int32_t shade_from_world_normal_unclamped(int32_t nx, int32_t ny, int32_t nz, int32_t lx,
+                                          int32_t ly, int32_t lz, SatLedger* /*L — see above*/) {
+  const __int128 ndot = static_cast<__int128>(nx) * lx + static_cast<__int128>(ny) * ly +
+                        static_cast<__int128>(nz) * lz;
+  const uint64_t nmag2 = static_cast<uint64_t>(nx) * static_cast<uint64_t>(nx) +
+                         static_cast<uint64_t>(ny) * static_cast<uint64_t>(ny) +
+                         static_cast<uint64_t>(nz) * static_cast<uint64_t>(nz);
+  if (nmag2 == 0) return 0;  // exactly degenerate: no direction to be lit from
+  // scale check: n is Q16.16, so ndot = n.L is Q32.32 raw and nmag2 = |n|^2
+  // is Q32.32 raw, hence isqrt_u64(nmag2) = |n| is Q16.16 raw — ndot/nmag
+  // is exactly (nhat.L) in Q16.16 (§4 one rounding). No extra shift.
+  return div_rhu_s128(ndot, static_cast<__int128>(isqrt_u64(nmag2)));
+}
+
+// THE SIGNED UNCLAMPED FORM (owner ruling D-1, 2026-09-03). Since 2026-09-09
+// a bit-identical WRAPPER: it derives the face normal exactly as it always
+// did (edges, cross product, one rescale(.,16) per lane, ledgered) and hands
+// the rest to the core above.
 int32_t shade_flat_tri_dir_unclamped(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by,
                                      int32_t bz, int32_t cx, int32_t cy, int32_t cz, int32_t lx,
                                      int32_t ly, int32_t lz, SatLedger* L) {
@@ -90,17 +124,7 @@ int32_t shade_flat_tri_dir_unclamped(int32_t ax, int32_t ay, int32_t az, int32_t
   const int32_t fx = rescale_s32(n0, 16, L);  // -> Q16.16 world-units^2
   const int32_t fy = rescale_s32(n1, 16, L);
   const int32_t fz = rescale_s32(n2, 16, L);
-  const __int128 ndot = static_cast<__int128>(fx) * lx + static_cast<__int128>(fy) * ly +
-                        static_cast<__int128>(fz) * lz;
-  const uint64_t nmag2 = static_cast<uint64_t>(fx) * static_cast<uint64_t>(fx) +
-                         static_cast<uint64_t>(fy) * static_cast<uint64_t>(fy) +
-                         static_cast<uint64_t>(fz) * static_cast<uint64_t>(fz);
-  if (nmag2 == 0) return 0;  // exactly degenerate (zero-area) triangle
-  // scale check: n_fx is Q16.16, so ndot = n.L is Q32.32 raw and
-  // nmag2 = |n_fx|^2 is Q32.32 raw, hence isqrt_u64(nmag2) = |n_fx| is
-  // Q16.16 raw — ndot/nmag is exactly (nhat.L) in Q16.16 (§4 one
-  // rounding). No extra shift.
-  return div_rhu_s128(ndot, static_cast<__int128>(isqrt_u64(nmag2)));
+  return shade_from_world_normal_unclamped(fx, fy, fz, lx, ly, lz, L);
 }
 
 // The clamped form, unchanged in behaviour: clamp01 of the signed primitive.

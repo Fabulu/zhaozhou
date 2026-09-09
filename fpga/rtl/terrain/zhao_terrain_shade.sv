@@ -1,5 +1,15 @@
 // zhao_terrain_shade.sv — TERRAIN.SHADE: the terrain base light (ZH-081).
 //
+// *** OWNERSHIP (2026-09-09, TERRAIN.SHADE.md A7 / GEOM.LIGHT.md): THIS IS
+// THE SHARED LIGHTING CORE, NOT A TERRAIN-ONLY ENGINE. Its n_x/y/z_i ports
+// carry a WORLD NORMAL — there is no face-normal stage in here (that is
+// zhao_terrain_normals, one of GEOM.LIGHT's THREE normal producers). It is
+// the hardware of `zref::render::shade_from_world_normal_unclamped`, the
+// D-1-one-level-down core, and tier 2 of the directed test checks it
+// against that COMPILED function over the full port domain. GEOM.LIGHT's
+// vertex-RGB block INSTANTIATES this module; building a second engine for
+// the other normal producers is the mistake both contracts now forbid. ***
+//
 // dot(n, L) / |n|, once per TRIANGLE, sign preserved, bit-exact against
 // `zref::render::shade_flat_tri_dir_unclamped` (reference/src/zrender/
 // terrain.cpp) — THE ratified flat-shade law, which the golden captures pin.
