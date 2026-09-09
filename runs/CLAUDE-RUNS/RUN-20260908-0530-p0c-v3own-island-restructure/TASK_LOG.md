@@ -3511,3 +3511,101 @@ name, x2 for the width, x2 for the new port), tests/CMakeLists.txt (x4 lists),
 prod_manifest.yml (the atomic pair) and fit_targets.yml (prod_top sources). Report
 corrected again. My original "one-line module-name change" was wrong four separate
 ways, and every one of them was caught by a tool rather than by my reading.
+
+## 2026-09-09 -- my own swap made the census quote a dead measurement
+
+Manifest check RC=0 after the fourth wall was fixed; swap committed and pushed
+(8f61e083). Then the consequence I flagged and should not leave open: the island's
+counted row (@g2-prod, 10,837 ALM / 16,285 registers) now describes RTL THAT NO
+LONGER EXISTS, and `dsp_census.py` -- the accounting authority the redline
+decision is read from -- had **no staleness concept at all**.
+
+`check_fit_rules.ps1` does, and it tracked my change correctly:
+`zhao_texture_island_v3_top` moved from [STALE: 12 commits] to [STALE: 13].
+
+**But its notion is weaker than it looks, and I improved on it rather than
+copying it.** Get-RowStaleness counts commits to `<module>.sv` ALONE. That is
+right for a leaf and wrong for a composed top: the texture island's closure is
+**21 files**, so twenty of them could change without the file-only check
+noticing. An island's measurement is invalidated by anything it contains.
+
+Added `closure_staleness()` to the census, using `module_edges()`/`closure()` from
+check_prod_manifest, which the census already imports. Prototype result:
+
+    zhao_texture_island_v3_top@g2-prod   closure 21 files   1 commit since  <- my swap
+    zhao_raster_perspuv_pairpipe@regfit  closure  1 file    0
+    zhao_geom_skin                       closure  1 file    0
+
+**OPT-IN, and the default output now SAYS SO.** The walk measured ~56 s, and a
+census nobody runs because it is slow is worse than one whose limits are stated.
+So the fast path prints:
+
+    STALENESS NOT CHECKED. These are the rows' own numbers at the commits they
+    name; nothing here confirms the RTL still matches.
+    Run with --staleness (slow, walks each closure), or see check_fit_rules.ps1.
+
+That is the repository's own principle applied to my own tool: make the silence
+legible rather than leave it implied. The gap existed before today; my swap is
+what made it bite.
+
+Twelve fixtures still pass. Verifying the --staleness run now.
+
+## 2026-09-09 -- two defects in my own staleness feature, both caught by running it
+
+Owner-direction check: NO NEW DIRECTION (0 incoming). No quartus. Dirty tree was
+my own census work.
+
+**Defect 1: the row dict never carried the commit.** First --staleness run
+reported `0 checked, 32 undetermined` -- every row hit the no-sourceCommit branch,
+because build_bill's row dict has no `commit` key. Same omission I had already
+fixed for `regs` earlier today, in the same function, and I repeated it.
+
+It failed in the SAFE direction, which is the only reason this is a footnote
+rather than an incident: a missing commit read as "cannot tell", never as
+"fresh". A staleness check that defaults to "fresh" would have been worse than
+none at all.
+
+**Defect 2: module_edges() was called once PER MODULE.** It parses every .sv
+under fpga/rtl, so the ~56 s I measured for THREE modules was mostly that one
+call -- and my loop repeated it 32 times, turning a one-minute check into roughly
+ten. Noticed because the run was still going long after it should have finished.
+
+A flag that slow is a flag nobody runs, which is the same failure as not having
+it -- the exact reasoning I used to make it opt-in in the first place, applied
+one level down. Cached at module level.
+
+Both defects were in the instrument, not the design, and both surfaced only by
+RUNNING it rather than reading it. Twelve fixtures pass throughout; they cover
+selection, not this.
+
+## 2026-09-09 -- 13 of 32 counted rows are STALE. 41% of the bill.
+
+`--staleness` now runs in **103 s** (was heading for ~10 minutes before the cache).
+
+    32 checked: 19 fresh, 13 STALE, 0 undetermined
+
+    zhao_shell_top              STALE: 26 commit(s) to its 41-file closure
+    zhao_texture_island_v3_top  STALE:  1 commit  to its 21-file closure   <- my swap
+    zhao_terrain_project        STALE:  5 commits to its  2-file closure
+    zhao_geom_mem_adapter       STALE:  2   zhao_geom_pose_cache  STALE: 2
+    zhao_terrain_normals        STALE:  2
+    zhao_geom_clip, zhao_geom_lod, zhao_part_expand, zhao_raster_texjoin_v2,
+    zhao_surface_stamp, zhao_terrain_bake, zhao_terrain_tess   STALE: 1 each
+
+**`zhao_shell_top` is the one that matters.** 26 commits across a 41-file closure,
+and it contributes 12,707 ALM -- one of the largest single entries in the bill.
+The census has been quoting it, and the DSP/ALM/register totals include it.
+
+**And this is exactly what the file-only notion could not see.** check_fit_rules'
+Get-RowStaleness counts commits to `<module>.sv` alone, so the shell's own file
+could sit untouched while forty other files in its closure moved. The closure walk
+is what surfaces it.
+
+**What this does NOT mean.** A stale row is not a wrong row -- it is a row whose
+numbers describe an EARLIER design, which may be nearly identical or may not. It
+does not invalidate today's pair-pipe conclusion: both GATE 3 halves are 0
+commits stale, fitted at the current source, and that comparison stands.
+
+What it does mean is that the bill's headline totals -- 192 DSP, 58,359 ALM,
+81,925 registers -- carry 13 rows measured against older RTL, and nobody could
+have known that from the census before today.

@@ -343,7 +343,8 @@ def build_bill(tops, ev, targets_text="", profiles=None):
             kind = ("UNPRICED (no fit target -- nobody can measure it)"
                     if not has_target else "UNPRICED (target exists, never run)")
             rows.append({"module": m, "kind": kind, "why": why, "dsp": None,
-                         "alm": None, "m10k": None, "regs": None, "stage": None,
+                         "alm": None, "m10k": None, "regs": None,
+                         "commit": None, "stage": None,
                          "label": None, "clean": None, "policy_failed": False,
                          "alternates": len(cands)})
             continue
@@ -351,6 +352,11 @@ def build_bill(tops, ev, targets_text="", profiles=None):
         rows.append({"module": m, "kind": kind, "why": why,
                      "dsp": chosen.dsp, "alm": chosen.alm, "m10k": chosen.m10k,
                      "regs": chosen.regs,
+                     # Carried so --staleness can tie the row to a file version.
+                     # Its absence made every row report "undetermined" -- which
+                     # was at least the SAFE direction: a missing commit read as
+                     # "cannot tell", never as "fresh".
+                     "commit": chosen.commit,
                      "stage": chosen.stage, "label": chosen.label,
                      "clean": chosen.clean, "policy_failed": chosen.policy_failed,
                      "alternates": len(alts)})
@@ -552,6 +558,49 @@ def self_test():
         shutil.rmtree(d, ignore_errors=True)
 
 
+_EDGES_CACHE = None
+
+
+def closure_staleness(module, commit):
+    """Commits to ANY file in the module's instantiation closure since `commit`.
+
+    WHY THE CLOSURE AND NOT THE FILE. `check_fit_rules.ps1`'s Get-RowStaleness
+    counts commits to `<module>.sv` alone. That is right for a leaf and wrong for
+    a composed top: an island's measurement is invalidated by a change to any
+    block it contains, and a change to a LEAF would leave the island's row
+    looking fresh. Measured 2026-09-09 -- the texture island's closure is 21
+    files, so twenty of them could move without the file-only check noticing.
+
+    Returns (commits, files) or (-1, n) when it cannot be determined, which is a
+    different answer from zero and is reported as such.
+    """
+    # CACHED. module_edges() parses every .sv under fpga/rtl, and calling it once
+    # per module turned a ~1-minute check into a ~10-minute one -- measured when
+    # the first --staleness run was still going after 32 modules. A flag that slow
+    # is a flag nobody runs, which is the same failure as not having it.
+    global _EDGES_CACHE
+    if _EDGES_CACHE is None:
+        try:
+            sys.path.insert(0, os.path.join("tools", "quartus"))
+            from check_prod_manifest import module_edges, closure as _cl
+            _EDGES_CACHE = (module_edges(), _cl)
+        except Exception:
+            _EDGES_CACHE = ((None, None), None)
+    (decl, edges), closure = _EDGES_CACHE
+    if decl is None or closure is None:
+        return -1, 0
+    cl = closure(edges, module) | {module}
+    paths = sorted({decl[m] for m in cl if m in decl})
+    if not paths:
+        return -1, 0
+    r = subprocess.run(["git", "-c", "core.autocrlf=true", "log", "--oneline",
+                        commit + "..HEAD", "--"] + paths,
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return -1, len(paths)
+    return len([l for l in r.stdout.splitlines() if l.strip()]), len(paths)
+
+
 def main():
     self_test()
     args = sys.argv[1:]
@@ -612,6 +661,23 @@ def main():
     print()
     print("  owner target: DSP <= %d. Counted %d, with %d rows unpriced."
           % (OWNER_DSP_TARGET, t["dsp"], t["dsp_unknown"]))
+    print()
+    # SAY THAT STALENESS IS NOT CHECKED, rather than leave it implied.
+    #
+    # Every number above is whatever its row recorded, at the commit that row
+    # names. NOTHING here verifies the RTL still matches. On 2026-09-09 the
+    # texture island was swapped to the pair-pipe, which instantly made the
+    # counted island row describe RTL that no longer exists -- and this bill
+    # would have gone on quoting it.
+    #
+    # The check is OPT-IN because it walks each counted module's instantiation
+    # closure and runs a git log per module, which measured ~56 s. A census
+    # nobody runs because it is slow is worse than one whose limits are stated,
+    # so the default stays fast and says what it did not do.
+    print("  STALENESS NOT CHECKED. These are the rows' own numbers at the")
+    print("  commits they name; nothing here confirms the RTL still matches.")
+    print("  Run with --staleness (slow, walks each closure), or see")
+    print("  tools/quartus/check_fit_rules.ps1, which flags it per file.")
     print()
 
     sup = [r for r in rows if "supersedes" in (r["why"] or "")]
@@ -677,6 +743,39 @@ def main():
         print("  rules rejected it. The counts are evidence; the gate stays failed.")
         for r in pf[:8]:
             print("     %-34s %s DSP  %s ALM" % (r["module"], r["dsp"], r["alm"]))
+
+    if "--staleness" in args:
+        # Only the rows the bill actually COUNTS. An unpriced row has no number
+        # to be stale, and saying "stale" about it would be noise.
+        print()
+        print("STALENESS, by instantiation CLOSURE (not just the module's own file):")
+        checked = fresh = stale = unknown = 0
+        for r in rows:
+            if r.get("dsp") is None and r.get("alm") is None:
+                continue
+            commit = r.get("commit")
+            if not commit:
+                print("     %-34s no sourceCommit -- cannot be tied to a file version"
+                      % r["module"])
+                unknown += 1
+                continue
+            base = r["module"].split("@")[0]
+            n, nf = closure_staleness(base, commit)
+            checked += 1
+            if n < 0:
+                print("     %-34s UNDETERMINED (%d files)" % (r["module"], nf))
+                unknown += 1
+            elif n == 0:
+                fresh += 1
+            else:
+                print("     %-34s STALE: %d commit(s) to its %d-file closure since this row"
+                      % (r["module"], n, nf))
+                stale += 1
+        print("  %d checked: %d fresh, %d STALE, %d undetermined" %
+              (checked, fresh, stale, unknown))
+        if stale:
+            print("  A stale row's numbers describe an EARLIER design. Refit before")
+            print("  quoting them -- especially the composed rows, whose closure is wide.")
 
     if "--closure" in args:
         if t["dsp_unknown"] or t["alm_unknown"]:
