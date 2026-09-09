@@ -127,3 +127,41 @@ entries, NEG_RC=1 at 11). Written up as gate checklist item 42.
 Next: render `manafold-hover` and `manafold-channel` from it, crop f37 / f180 /
 f185 three ways, and decide the shipped `kBodyRings` BY LOOKING (§1.7 of the
 findings). Then R1 (lens width -> star -> converge -> centre last), then R3.
+
+### 08:2x — the ablation is CLOSED, by looking, on three separate crops
+
+Four legs on the table: 11/16 (shipping), 11/32, 21/32 (zero-fill bug), 21/32
+(repaired). Judged on `hover` f37's terminator, `channel` f180's near-horizontal
+band edge at 8x, and `channel` f180's bottom silhouette arc at 8x.
+
+**16 -> 32 segments is a clear, unambiguous gain. 11 -> 21 rings is not.** On the
+bottom arc the repaired rings leg is indistinguishable from 11/32 and arguably a
+shade more angular on the left; on `hover` f37 there is no difference I can point
+at; on the band edge it is modestly better on the DIAGONAL runs only. That is
++640 triangles on top of the segments leg for something I cannot show anyone.
+
+**SHIPPED: rings 11, segments 32, pole segments 32.** The review's hope --
+"if the cheap leg is enough, the expensive one never needs shipping" -- held.
+
+⚠ **And the honest residual:** the truly HORIZONTAL runs in that band edge are
+IDENTICAL across all three legs. That is the tell that they are not a facet-size
+artefact at all -- where the surface is near-tangent to the band the iso-contour
+genuinely is flat, and no density fixes it. The remaining lever there is
+`kSmoothMixNum`'s 20% flat-face term or the ramp, not more triangles.
+
+### R1 groundwork, done from frames already on disk (no new render)
+
+`R1-eye-now-8x.png` -- the shipping eye at 8x on four frames. The review's
+headline is plainly true and I did not need a measurement for it: `hover` f37 is
+a long thin purple BLADE with a white sliver in it, not a star in an almond.
+`hover` f573 is two star-less blades. `hover` f393 has **no eye at all** -- not a
+crescent, nothing -- which is R3's mechanism (fixed +X plate normal at 28.3
+azimuth) showing up in the picture rather than in the source.
+
+### Where I am (written down before the next results arrive)
+
+`build-ship` is the `--clean` rebuild of the FINAL header (rings 11 / segs 32),
+linking. Next: md5 it against `build-face32` (`679e8797be40e79fa4fe808775a352f8`)
+as a positive control that the shipped tree IS the leg that was looked at, then
+commit + push R2(a) to main. Then R1 step (a) only: `kEyeWideMm` 84 -> ~125, one
+build, render, look. Order is mandated: widen -> star -> converge -> centre LAST.

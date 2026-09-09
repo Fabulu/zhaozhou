@@ -50,8 +50,14 @@ constexpr int32_t vmm(int32_t mm) {
 
 // ---- the body ball (the big pink teardrop head) ----
 constexpr int32_t kBodyRadiusMm = 450;
-constexpr int kBodyRings = 21;
-constexpr int kBodySegments = 32;      // at the equator   [R2(a) ABLATION - NOT SHIPPED]
+constexpr int kBodyRings = 11;
+constexpr int kBodySegments = 32;      // at the equator. PASS 14 R2(a): 16 -> 32,
+                                       // chosen by looking. 16 drew the ball's
+                                       // silhouette as a visible chain of straight
+                                       // chords with corners you could point at.
+                                       // kBodyRings stayed at 11: its own leg (21)
+                                       // was built and looked at and added nothing
+                                       // legible for +23% more triangles.
 constexpr int kBodyPoleSegments = 32;  // uniform: the segment-taper zipper cut a
                                        // visible sliver into the face at 240p
 // Teardrop reshaping (per-ring, ring 0 = bottom): radius multiplier in
@@ -104,15 +110,14 @@ constexpr int kBodyPoleSegments = 32;  // uniform: the segment-taper zipper cut 
 // ball became a funnel, the face opened into a bowl and the eye floated free,
 // and the build was clean. The static_assert below turns that into a compile
 // error instead of a picture nobody may think to look at.
-constexpr int kBodyTaperPm[kBodyRings] = {
-    1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000,
-    1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000};
-constexpr int kBodyLeanXMm[kBodyRings] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+constexpr int kBodyTaperPm[kBodyRings] = {1000, 1000, 1000, 1000, 1000, 1000,
+                                          1000, 1000, 1000, 1000, 1000};
+constexpr int kBodyLeanXMm[kBodyRings] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-// A taper of zero is never an authored value -- it is the zero-fill. (kBodyLeanXMm
-// cannot be guarded this way because 0 IS its authored value; extend it by hand.)
+// Only the SHORT list needs guarding: an over-long list is already a hard error
+// ("too many initializers"). A taper of zero is never an authored value, so it is
+// the sentinel the zero-fill trips over. (kBodyLeanXMm cannot be guarded this way
+// because 0 IS its authored value -- extend that one by hand, and by eye.)
 constexpr bool body_taper_fully_authored() {
   for (int i = 0; i < kBodyRings; ++i) {
     if (kBodyTaperPm[i] <= 0) return false;
