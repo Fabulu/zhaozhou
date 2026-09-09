@@ -52,9 +52,36 @@ Write-Host 'newblock-maponly: gate 1 done; waiting for the toolchain to go idle.
 while (Get-Process quartus* -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 60 }
 Write-Host 'newblock-maponly: toolchain idle.'
 
+# The two COMBINE blocks ride along, because the question they answer is a
+# MapOnly question and the batch is already paid for.
+#
+# reports/DSP-BUDGET-CENSUS-20260908.md lever 4: these two contain the same
+# 8x8-plus-round multiply shape and cost very differently --
+#
+#   zhao_texture_material_combine_v1   (* multstyle = "logic" *)   2 DSP
+#   zhao_texture_combine               no attribute               8 DSP
+#
+# `unit_mul` is called seven times directly and five more through `mul2x9`, so
+# twelve 8x8 multipliers. The hypothesis is that the missing attribute is why one
+# costs four times the other, and MapOnly reports DSP, so MapOnly settles it.
+#
+# It is filed as a HYPOTHESIS and not a claim for a specific reason: the last time
+# a combiner read 8 DSP against a rule of 2, "Quartus is ignoring multstyle" was
+# the obvious answer and it was WRONG -- the block really did contain fourteen
+# multipliers inside two seven-arm case statements. This situation differs (the
+# attribute is absent rather than present-and-ignored, and the sibling block
+# demonstrates it working in this very tree) but it is the same shape of
+# comfortable explanation, so it gets measured before anyone edits anything.
+#
+# Note also: prod_manifest.yml line 69 already flags zhao_texture_combine as
+# "REFUTED (D19q); delete when v1 is measured". So the first question may be
+# whether the block is wanted at all -- and v1's row is what that sentence waits
+# for, which this batch also produces.
 foreach ($mod in @('zhao_texture_metajoin',
                    'zhao_texture_early_desc',
-                   'zhao_texture_uv_join')) {
+                   'zhao_texture_uv_join',
+                   'zhao_texture_combine',
+                   'zhao_texture_material_combine_v1')) {
     Write-Host ("newblock-maponly: " + $mod)
     & "$PSScriptRoot\run_block_fit.ps1" -Module $mod -MapOnly 2>&1 |
         Tee-Object -FilePath ("map-newblock-" + $mod + ".log") | Select-Object -Last 4
