@@ -51,7 +51,9 @@ exes_present() {
 
 # a red crater replay may write failure vectors; keep the tree clean per run
 scrub_captures() {
-  git checkout -- captures/golden/field 2>/dev/null
+  # -c core.autocrlf=true so a restore cannot rewrite line endings; see
+  # reports/TWO-GITS-DISAGREE-ABOUT-CLEAN-20260909.md
+  git -c core.autocrlf=true checkout -- captures/golden/field 2>/dev/null
   git clean -fq captures/failures/field 2>/dev/null
 }
 

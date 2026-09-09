@@ -162,7 +162,13 @@ def main(argv):
             "\nWait for the sweep, or stage the other files only.\n")
         return 1
 
-    r = subprocess.run(["git", "add"] + argv[1:], cwd=ROOT)
+    # -c core.autocrlf=true: core.autocrlf lives only in Git-for-Windows' system config, so a bare `git` that resolves to c:/devkitPro/msys2/usr/bin/git.exe sees 1,200 line-ending-only diffs on this clean tree. Measured 2026-09-09; see reports/TWO-GITS-DISAGREE-ABOUT-CLEAN-20260909.md.
+    # Worse here than a wrong report: an unguarded `git add` through the
+    # msys2 git stores the worktree CRLF in the BLOB for every file without
+    # a `text` attribute in .gitattributes, so the commit carries real
+    # line-ending churn rather than a phantom one.
+    r = subprocess.run(["git", "-c", "core.autocrlf=true", "add"] + argv[1:],
+                       cwd=ROOT)
     return r.returncode
 
 

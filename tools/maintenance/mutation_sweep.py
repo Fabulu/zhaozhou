@@ -70,7 +70,16 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 def git(*args: str) -> tuple[int, str]:
     try:
-        r = subprocess.run(['git', '-C', REPO, *args], capture_output=True,
+        # -c core.autocrlf=true. core.autocrlf lives only in Git-for-Windows'
+        # system config, so a bare `git` that resolves to
+        # c:/devkitPro/msys2/usr/bin/git.exe reports 1,200 line-ending-only
+        # diffs on this clean tree. Measured 2026-09-09; see
+        # reports/TWO-GITS-DISAGREE-ABOUT-CLEAN-20260909.md.
+        # This helper serves both `status --porcelain` (the dirty gate) and
+        # `checkout --` (the restore), so guarding it here covers both. An
+        # unguarded restore rewrites line endings on the file it repairs.
+        r = subprocess.run(['git', '-C', REPO, '-c', 'core.autocrlf=true', *args],
+                           capture_output=True,
                            text=True, timeout=120)
     except Exception as e:  # noqa: BLE001
         return 1, str(e)

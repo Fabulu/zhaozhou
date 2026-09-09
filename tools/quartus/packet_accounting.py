@@ -67,7 +67,14 @@ NL = chr(10)
 
 
 def git(*args):
-    return subprocess.check_output(["git"] + list(args), cwd=ROOT).decode(
+    # -c core.autocrlf=true. This helper takes its subcommand at RUNTIME, so it
+    # could be any of them, and it must therefore be guarded unconditionally.
+    # core.autocrlf lives only in Git-for-Windows' system config, so a bare
+    # `git` that resolves to c:/devkitPro/msys2/usr/bin/git.exe reports 1,200
+    # line-ending-only diffs on this clean tree. Measured 2026-09-09; see
+    # reports/TWO-GITS-DISAGREE-ABOUT-CLEAN-20260909.md.
+    return subprocess.check_output(
+        ["git", "-c", "core.autocrlf=true"] + list(args), cwd=ROOT).decode(
         "utf-8", "replace")
 
 

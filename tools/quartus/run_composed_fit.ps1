@@ -202,7 +202,9 @@ Write-Host ("`nexit={0} after {1:N0}s" -f $rc, $sw.Elapsed.TotalSeconds)
 # ---- 5. commit ONLY this run's directory -----------------------------------
 Step '5/6 committing (this directory only)'
 $rel = "reports/composed/$runId"
-& git -C $RepoRoot add -- $rel
+# -c core.autocrlf=true on the ADD as well as the status above: an
+# unguarded add through the msys2 git commits worktree CRLF into the blob.
+& git -C $RepoRoot -c core.autocrlf=true add -- $rel
 $staged = (& git -C $RepoRoot diff --cached --name-only) -join "`n"
 if ([string]::IsNullOrWhiteSpace($staged)) { Fail 'nothing was produced to commit' }
 foreach ($line in ($staged -split "`n")) {

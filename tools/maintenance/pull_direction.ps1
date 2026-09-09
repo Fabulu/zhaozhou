@@ -43,7 +43,33 @@ function Write-Section($t) { Write-Output ''; Write-Output "== $t" }
 
 # ---- 0. state of the local tree -------------------------------------------
 $branch = (& git rev-parse --abbrev-ref HEAD).Trim()
-$dirty  = & git status --porcelain
+
+# -c core.autocrlf=true, OR THIS JOB CAN NEVER MERGE OWNER DIRECTION.
+#
+# MEASURED 2026-09-09. PowerShell resolves a bare `git` to whatever is first on
+# PATH. On this machine that is c:\devkitPro\msys2\usr\bin\git.exe, whose system
+# config carries no core.autocrlf -- the setting lives only in
+# "C:/Program Files/Git/etc/gitconfig", which Git for Windows reads and the msys2
+# build does not. Through the msys2 git this repository reports **1,200 modified
+# files**, every one of them pure line-ending churn (STATUS.md: 6,191 insertions
+# against 6,191 deletions on a 6,191-line file). Git Bash's /mingw64/bin/git
+# reports ZERO on the same tree at the same instant.
+#
+# `$dirty` gates the merge at the MERGE DECISION section below. So under the
+# msys2 git this script prints "NOT MERGED: the local tree has uncommitted
+# changes", lists ten phantom files as evidence, and exits 0 -- forever. It looks
+# exactly like a legitimate conservative refusal, which is why it would not have
+# been questioned.
+#
+# That is precisely the failure this file's own header says it exists to prevent:
+# "instructions are not delivered until they are read". A cron job that reports a
+# plausible reason for not delivering them is the worst form of it.
+#
+# run_block_fit.ps1, run_block_map.ps1, run_composed_fit.ps1 and scan_rtl.py all
+# carry this flag already, each added after the same discovery -- rtlCleanAtHead
+# was false on all 42 block-fit rows and had never once been true. The lesson was
+# learned three times over and never propagated to this file.
+$dirty  = & git -c core.autocrlf=true status --porcelain
 Write-Output "PULL_DIRECTION branch=$branch"
 
 # ---- 1. fetch is always safe: it writes only to .git ----------------------
@@ -53,9 +79,51 @@ if ($LASTEXITCODE -ne 0) {
     exit 0
 }
 
-$upstream = & git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null
+# NEVER USE git's @{upstream} SYNTAX FROM POWERSHELL 5.1. IT STRIPS BRACES.
+#
+# MEASURED 2026-09-09, on the same run that found the core.autocrlf split. The
+# native-argument parser removes { and } from every argument regardless of
+# quoting:
+#
+#   '@{u}'          reaches git as  @u
+#   '@{upstream}'   reaches git as  @upstream
+#   "$b@{upstream}" reaches git as  zixxtrixx-v8-closeout@upstream
+#
+# All three are "ambiguous argument ... unknown revision". And the FIRST of them
+# still prints `@u` on stdout while the fatal goes to stderr, so with `2>$null`
+# this line assigned the literal string "@u" -- non-empty, so the
+# `origin/$branch` fallback below never fired either.
+#
+# Everything downstream then queried `HEAD..@u`, which fails, with stderr
+# suppressed. `$incoming` came back empty, `$behind` was 0, and the script
+# reported "NO NEW DIRECTION. HEAD is level with @u."
+#
+# So THIS TOOL COULD NEVER SEE DIRECTION PUSHED TO ITS OWN BRANCH. It reported
+# only origin/main's activity and looked like it was working. Second instance in
+# one file of the same failure: a silent error producing a reassuring message.
+#
+# `for-each-ref` takes the ref as a plain path with no brace syntax, so it
+# survives the parser. The config pair is the fallback and needs no braces either.
+$upstream = (& git for-each-ref --format='%(upstream:short)' "refs/heads/$branch" |
+             Select-Object -First 1)
+if ([string]::IsNullOrWhiteSpace($upstream)) {
+    $rem = & git config --get "branch.$branch.remote"
+    $mrg = & git config --get "branch.$branch.merge"
+    if ($rem -and $mrg) { $upstream = "$rem/" + ($mrg -replace '^refs/heads/', '') }
+}
 if ([string]::IsNullOrWhiteSpace($upstream)) { $upstream = "origin/$branch" }
 $upstream = $upstream.Trim()
+
+# AND REFUSE A GARBAGE UPSTREAM RATHER THAN REPORTING "0 INCOMING" FROM ONE.
+# This is the check whose absence let "@u" through for the tool's whole life.
+# No braces in the argument, for the reason above.
+& git rev-parse --verify --quiet $upstream > $null 2>&1
+if (-not $?) {
+    Write-Output "ABORTING: '$upstream' is not a resolvable ref, so a count of"
+    Write-Output "incoming commits from it would be a silent zero rather than an"
+    Write-Output "answer. Fix the branch's upstream and re-run."
+    exit 0
+}
 
 # ---- 2. what is incoming? -------------------------------------------------
 $incoming = & git log --oneline "HEAD..$upstream" 2>$null
