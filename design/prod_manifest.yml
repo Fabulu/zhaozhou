@@ -62,11 +62,28 @@ top:
   # queued continuations, all EIGHT ratified recipes including the two
   # three-sample terrain ones the old block refuses as illegal.
   #
-  # The refuted block stays until its replacement has a MEASUREMENT, so the
-  # island is never left with no combiner and no record of why the shape
-  # changed. When that fit lands, delete this row, its RTL, and
-  # tests/texture/texture_combine_diff.cpp together.
-  - zhao_texture_combine       # REFUTED (D19q); delete when v1 is measured
+  # The refuted block stayed until its replacement had a MEASUREMENT, so the
+  # island was never left with no combiner and no record of why the shape
+  # changed. THAT TRIGGER FIRED 2026-09-09: zhao_texture_material_combine_v1
+  # measures 1663 ALM / 2 DSP / 69.75 MHz on a clean tree.
+  #
+  # The row is gone from `top:` and now sits in `excluded:` -- which takes the
+  # 8 DSP off the census without deleting anything, and records why.
+  #
+  # AND THE MODEL ABOVE IS OUT OF DATE, which matters more than the row. It says
+  # v1 is "the replacement". It is not: BOTH islands instantiate
+  # zhao_texture_material_combine_v2 (island_top:2026, island_v3_top:3279), and
+  # line 283 of this file already says so. So v1 is ALSO instantiated by nothing
+  # but the generated resource top, and its 2 DSP are charged to a block the
+  # console will not contain either. Flagged, not decided -- deleting a second
+  # block on my own reading of the tree is the owner's call, not a bookkeeping
+  # correction.
+  #
+  # The instruction also said to delete the RTL and
+  # tests/texture/texture_combine_diff.cpp. Not done: that is destructive and it
+  # is not needed for the budget. It IS safe whenever the owner wants it --
+  # material_combine_v2 is proven against `zref::material::combine`, the C++
+  # oracle, and NOT against this block, so removing it destroys no proof.
   - zhao_texture_material_combine_v1
   - zhao_texture_cache_pipe      # over zhao_texture_cache: C0-C4, M10K-backed
   - zhao_texture_aux_pipe        # over zhao_texture_aux
@@ -196,6 +213,11 @@ excluded:
   # because that is the nearest existing reason code for "exists to put logic
   # in front of the fitter"; if a `composition` code is ever added, this is its
   # first member.
+  # REFUTED and superseded, 2026-09-09. 8 DSP against S3.4's "reject DSP > 2"
+  # (docket D19q). Both islands instantiate material_combine_v2; nothing but the
+  # generated resource top instantiates this. Counting it charged the DSP budget
+  # 8 blocks for hardware the console will never hold. RTL retained.
+  - zhao_texture_combine: superseded  refuted II=1 form; material_combine_v2 is the live combiner in both islands
   - zhao_texture_island_top: probe  the composed G1-D island; its blocks are counted individually
   # --- P0-C, 2026-09-08 ------------------------------------------------------
   # The V3 composition top. Same shape and same reason code as

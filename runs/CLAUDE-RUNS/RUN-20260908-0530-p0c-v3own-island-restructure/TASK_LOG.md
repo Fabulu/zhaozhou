@@ -1863,3 +1863,51 @@ running fit's closure, but TESTS are not -- so the directed test for the
 `live_cnt_q` credit change can be written now and is the thing to do while the
 fit runs. It must assert the CORRECT behaviour (no over-issue on the cycle the
 registered credit changes), never the bug.
+
+## While the @g2-prod fit routes: the production top, and three checkers
+
+The fit has been in ROUTING since ~90 min (prep 11:11, placement prep 20:22,
+placement 13:54 successful). Everything below is outside its closure.
+
+**`zhao_prod_top` had never elaborated.** Its row reads
+`failed:quartus_map.exe`. Regenerating it -- because CLAUDE.md says to after any
+port change and metajoin gained one today -- produced a 2,888/2,789 line diff.
+Five faults: three modules missing from the live source list (one of them only
+reachable through a submodule), no package import for the struct typedefs, 157
+comma-continuation ports at width 1, and ten struct inputs at width 1. The last
+two corrupt the MEASUREMENT rather than the build -- constant-zero bits let the
+fitter fold away the very logic a resource top exists to price. Verilator: 12
+errors -> **0 errors, 0 warnings**. Not synthesizability; the map is queued.
+
+**Three checkers were wrong in the reassuring direction:**
+
+| checker | blind spot | fired after fix? |
+|---|---|---|
+| `check_prod_manifest` | one hierarchy level, not the closure | yes, on `zhao_skid2` |
+| `check_prod_manifest` | never checked the generated top was FRESH | yes, `--check` returns 3 |
+| my own multiplier-site grep | returned 0 for every file | caught by a positive control |
+
+**`zhao_texture_combine` is off the budget, and it was not a trade.** I had
+recorded it as "-8 DSP but +1,169 ALM and -30 MHz", assuming v1 had to replace
+it. Wrong: **both** islands instantiate `material_combine_v2`, and the manifest
+says so at line 283. `combine` and `v1` are instantiated by nothing but the
+generated resource top. So the manifest's standing trigger ("delete when v1 is
+measured" -- v1 now measures 1663/2/69.75 clean) is a free -8 DSP.
+
+Moved to `excluded:` rather than deleted: the census benefit is identical and
+nothing is destroyed. Verified by differencing the census both ways: **-8 DSP,
+-494 ALM**, exactly the block's row. The RTL/test deletion the manifest also
+asks for is left for the owner -- it is safe (v2 is proven against
+`zref::material::combine`, not against this block) but destructive and
+unnecessary for the budget.
+
+**And `material_combine_v1` looks equally dead** -- 2 DSP charged, nothing but
+the resource top instantiates it. Flagged in the manifest, not decided.
+
+`tools/budget/dsp_census.py` now computes the census instead of me. Today the
+hand figure got re-derived three times and once wrongly. It reports DSP 152 /
+ALM 44,271 / M10K 82 against 112 / 41,910 / 553, prints the both-sided bound
+so "ALM over by 2,361" cannot be quoted bare, and lists the 45 unmeasured
+blocks, the map-only rows contributing no ALM, and the 8 dirty-tree rows.
+**Its 152 is not the report's 154** -- different methodology, stated in the
+file rather than reconciled by fudging.
