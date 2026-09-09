@@ -1,0 +1,2575 @@
+ZHAOZHOU — MEMORY-FIRST RESOURCE RESCUE
+Correct the bill. Finish texture. Then shrink the machine.
+Architecture and implementation instructions, 9 September 2026
+================================================================================
+
+Owner objective: fewer than 95 physical variable-precision DSP blocks, while
+relieving ALM pressure, preserving the console's required behaviour, and keeping
+the existing texture-island work on its critical path.
+
+Repository: Fabulu/zhaozhou
+Hardware branch: zixxtrixx-v8-closeout
+Primary RTL inspection: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+Accounting update inspected: 5cb1162b95ae61ba119a04994bb842c6de4e9abb
+Late fit/target update inspected: 7714bcc1bdac8c4c0f0f02e437d27a827d8a4840
+Final observed hardware HEAD: f13c70466b0d8e97fa32f3541c735f6a21750374
+Main inspected for owner-direction context separately; main and the hardware
+branch are NOT treated as one merged product. See the final freshness addendum.
+
+Provisional device used by the repository: 5CSEBA6U23I7.
+Capacity: 112 DSP blocks, 41,910 ALMs, 553 M10Ks. Product clock: 100 MHz.
+These are not a substitute for confirming the final board/framework allocation.
+
+DELIVERABLE STATUS
+This is a researched architecture brief, with executable independent Python
+models. It is NOT implemented RTL, a new Quartus result, a new RTL simulation,
+or proof that the final console already fits. Proposed module names, resource
+allocations and schedules are explicitly proposals. Source references [Sxx] and
+vendor references [Vxx] are resolved near the end. No repository files were
+changed by this review.
+
+The target is DSP <= 94, not 95%, not 95 DSP, and not "the measured subset is
+under 95 while the missing blocks are assumed free". A final accepted design
+must satisfy the DSP cap AND its ALM/memory/timing/throughput obligations.
+
+READING ORDER FOR THE WORKING AGENT
+Read sections 0–5 now. Execute section 2's documentation/accounting correction
+without disturbing a running fit. Return to texture. Sections 6–17 are the
+queued implementation architecture for AFTER texture closure. Section 18 gives
+the work packets; section 20 is the compact operational handoff.
+
+
+0. OWNER'S ORDER: DO NOT TURN THIS INTO A SECOND ACTIVE PROJECT
+================================================================================
+
+0.1 What is authorized NOW
+
+A. Read and acknowledge this brief in durable project documentation.
+B. Correct resource definitions, evidence classification, the misleading census,
+   and the accounting worklist. Record what is already implemented separately
+   from what this brief proposes.
+C. Record this post-texture programme and its acceptance gates.
+D. Continue the texture-island work already in progress.
+
+Do not pause Gate 2 to start a projector, pose or culling rewrite. Do not launch
+an extra Quartus job against a live island fit. Do not spend a full island fit
+on this document's existence. Do not quietly tighten or relax texture's current
+acceptance criteria just because a whole-console plan has arrived.
+
+0.2 What is authorized AFTER texture closure
+
+Implement the accounting-selected, memory-first reduction packets below,
+qualified against the actual workloads and existing arithmetic contracts. The
+owner has asked for a comprehensive redesign programme, not just a report of
+which blocks look bad. Proceed on the specified evidence gates; do not wait for
+another instruction to investigate every next packet.
+
+A change to numerical semantics, legal world/camera range, mandatory visual
+features, frame-rate/deadline obligations, or the product's reserve is DIFFERENT
+from an implementation change. Such a concession is not authorized by a request
+to save resources. First exhaust the bit-exact designs in this brief. Surface a
+real unresolved contract conflict rather than silently choosing the cheap side.
+
+0.3 Protect the measurement specimen, not the entire developer
+
+The protected closure is everything the active run may read: HDL, included
+packages, generated HDL, ROM/MIF/HEX contents, selected parameters, source lists,
+QSF/SDC, device/tool settings, and scripts still used by later stages or receipt
+collection. It is NOT merely all files ending in .sv. A change to
+fit_targets.yml or a ROM initialization file can matter without changing RTL.
+
+Documentation edits can proceed now. Changes to a generated production top,
+manifest or measurement runner may affect another active or queued run even when
+outside the texture RTL cone. Record the desired change now; apply it only to an
+isolated future specimen or after proving no current process will reread it.
+
+Do not equate an open shell with an active fitter. A queue waiter is not a
+second fit. Conversely, an exited shell does not prove its child fitter exited.
+See section 17 for the small, bounded run-discipline correction.
+
+
+1. THE DIAGNOSIS: WRONG ACCOUNTING AND REAL OVER-PROVISIONING COEXIST
+================================================================================
+
+1.1 There is no defensible current "154 is the machine's floor" claim
+
+The old DSP census selected unlabelled entries from one full-fit JSON file.
+That policy is neither a current implementation selector nor a complete evidence
+reader. It mixes old implementations and parameterizations, excludes useful
+MapOnly measurements in a different ledger, misses the separate shell receipt,
+and omits functions not represented by a successfully measured root. [S01–S05]
+
+Two concrete downward corrections were already present before this brief:
+
+* TERRAIN.NORMALS: the obsolete full-fit row says 18 DSP. The later MapOnly
+  row says 3, and the current RTL walks six products through one multiplier.
+  The later TESS+NORMALS pair measures 9 total, consistent with TESS's six and
+  the reduced normals block. The reduction is already implemented. It is NOT
+  another fifteen DSP of future savings to subtract a second time. [S05,S06]
+* The rejected eight-DSP zhao_texture_combine remained in the resource manifest
+  alongside a successor. The live texture island uses material_combine_v2.
+  Excluding the rejected predecessor from the selected production bill is
+  appropriate; subtracting eight from the island's 17-DSP receipt is not,
+  because those eight were not in that island. [S01,S07]
+
+But the downward corrections do not make the machine safe. The separate shell
+receipt contains 16 DSP; two fog blocks have three each; pose decode has an
+18-DSP map; bake and cliff have historical map results of 17 and two. The
+four-wide FIELD multiplier bank and several required but unpriced functions
+also need to be counted correctly. [S03–S05,S08,S09,S20,S30]
+
+The previous review's 154-15-8+16+6=153 and then 153+18+17+2=190 were RECONCILIATION
+EXAMPLES using mixed-vintage evidence, not a freshly measured machine. Do not
+promote 190 to a new authoritative floor. Do not subtract every idea in this
+brief from 190 and label the result "fits" either.
+
+1.2 The agent has started repairing this; retain the useful work
+
+At 5cb1162b the tree contains tools/budget/dsp_census.py and has updated the
+production manifest/generator. The new tool usefully distinguishes missing fit
+targets from merely unrun targets and lists labelled-only measurements. Do not
+rebuild this from scratch. Extend and correct it. [S02,S36]
+
+It still opens only zhao_block_fit.json, excludes labelled measurements from
+selection, calls its subtotal a floor, and calls every dirty-tree digest
+meaningless. Those are still errors. A digest can identify the exact bytes of a
+dirty but immutable captured specimen; a clean commit can have unrelated source
+settings or a mismatched parameter profile. Dirtiness and evidence identity are
+separate dimensions.
+
+A later update at 7714bcc1 adds FIELD mulbank, LEN and RF fit targets. Keep the
+useful target preparation, but do not treat header estimates as product laws.
+The RF's twelve-M10K scalar profile is not the LANES=4 vector profile (section
+15.2), and LEN's "roughly 2,000 ALMs" for eight roots is not an established
+whole-block physical ceiling. Price the SELECTED production parameters and
+separate a characterization hypothesis from a binding resource allocation.
+Missing a current target also does not erase a valid older MapOnly result.
+
+Its current self-test also does not establish real profile selection, dependency
+closure freshness, cross-ledger coverage or hierarchical non-overlap. Those need
+small explicit fixtures, not a new generic SystemVerilog-parser project.
+
+1.3 Additional expensive functions were not in the reassuring arithmetic
+
+SKIN.NORM is now RTL. It contains six selected matrix-by-normal products,
+weighted sums, three wide square expressions, and an EXTERNAL square-root
+interface. Calling the root through a port does not make the provider free.
+The current state machine holds a vertex while waiting for the root; the
+position skin's one-per-twelve-clocks rate is not automatically its rate. [S20]
+
+GEOM.ATTRSETUP contains repeated edge products and nine attribute-weighted
+products with wide intermediates. RASTER.ATTRINTERP and ATTRSTEP both contain
+wide products to seed a tile. A header saying "adds only" describes their pixel
+walk, not their complete hardware. [S25–S27]
+
+GEOM.LIGHT is still a required specified function in the inspected contract;
+normal-map detail and base terrain lighting cannot disappear from the bill just
+because they do not yet have accepted implementations. [S28,S29]
+
+These are why a complete function-and-provider ledger is essential. Counting
+filenames, counting '*' characters, or counting only what has a -top target will
+miss the most important obligations.
+
+1.4 LATE ARRIVING MEASUREMENT: THE FIRST RESCUE ALREADY WORKED ON AREA
+
+During this review Gate 2 was committed. Its native fitter summary reports:
+
+  zhao_texture_island_v3_top@g2-prod, MIGRATION_SHADOWS=0
+  10,837 ALMs; 16,285 registers; 49 M10Ks; 64,802 memory bits; 17 DSPs.
+  The companion timing census reports 82.05 MHz, limited internally.
+
+Against the historical @pktC-fixed specimen, that is 4,646 fewer ALMs and
+5,934 fewer fitted registers, with DSP unchanged. These are the COMBINED packet
+and configuration changes, not an isolated attribution to one replacement.
+Texture is still over its 7,500-ALM redline and below 100 MHz. Its labelled
+status "ok" does not establish that the redline/clock rules were evaluated or
+passed. Keep texture first; this result supports continuing the current surgery,
+not declaring texture done and diverting immediately to projection. [S39]
+
+Two corrections to make in the new measurement narrative as well:
+
+* Do not subtract Gate 1's 4,432 MAPPED-register reduction from Gate 2's 5,934
+  FITTED-register reduction and call the residual an isolated packet saving.
+  They are different stages/populations and the source/configuration also moved.
+  Gate 1 isolates its own map-stage A/B; Gate 2 measures the combined fitted change.
+* The comparison to the old 11,562-ALM oracle remains a historical comparison,
+  not a measurement of today's oracle after five source files changed. There is
+  no need to spend a full fit merely to recover a flattering attribution number.
+
+The hot-path report also changed: the new worst path is RCP-internal, while the
+reported path list contains cache-tag, owner-credit and palette families. Use
+the new measured paths for the next texture decision; do not apply the old
+"credit alone limits everything" diagnosis. Removing one path family from a
+frozen report is only a counterfactual for that placement, not a bound on what
+a rearchitecture and new placement can achieve.
+
+1.5 The rescue is not a clean-sheet console restart
+
+The expensive pattern is replicated arithmetic and long-lived fabric state.
+The useful existing blueprints are:
+
+* Exact arithmetic reuse: normals, terrain LOD and geometry LOD already reduced
+  parallel farms by using cycles that the workload could afford.
+* Memory-backed descriptor/identity transport: the texture Decrufter replaces
+  asynchronous indexed fabric payload with synchronous, atomic records.
+* Direct-indexed projected-vertex arenas: reuse results rather than projecting
+  every triangle corner again.
+* Quarter-square ROM arithmetic: small exact lookup memories replace bounded
+  products without reducing colour precision.
+* Shared FIELD services: a provider is a physical engine; its callers are not
+  independent copies of that engine.
+
+The replacement programme keeps the numerical laws, identifiers, ordered
+retirement, memory protocol, terrain topology, and existing oracles. It replaces
+how much arithmetic exists simultaneously and where intermediate state lives.
+
+
+2. DOCUMENTATION AND ACCOUNTING CORRECTION — EXECUTE THIS FIRST
+================================================================================
+
+2.1 Change the vocabulary before changing totals
+
+Use these six distinct terms everywhere:
+
+INVENTORY: every implementation/probe/version found in the source tree.
+SELECTED DESIGN: one explicitly chosen implementation/profile per function,
+                with explicit physical instance counts and shared providers.
+CURRENT MEASUREMENT: bytes/configuration match the selected instance closure.
+HISTORICAL MEASUREMENT: a real measurement of a different or unverified closure.
+PROPOSED ALLOCATION: a resource ceiling or scenario for an unqualified candidate.
+UNPRICED REQUIREMENT: intended functionality with no applicable measurement.
+
+A partial selected-design subtotal is not a mathematical lower bound on the
+final optimized console. A sum of isolated fits is not a guaranteed upper bound
+either: composition can change mapping, replication, pruning, packing and glue.
+Replace "upper and lower bound at once" with "partial mixed evidence; missing
+costs and composition effects are separately disclosed" unless actual bounds
+have been proved for fixed identified hardware.
+
+2.2 The bill is an instance graph, not a module-name set
+
+Give each physical selected instance a stable path, e.g.:
+
+  console.shell
+  console.texture.rcp
+  console.projection_service
+  console.pose_decode
+  console.field.mulbank
+
+For every root record:
+
+  function_id; instance_path; implementation_module; implementation_ref;
+  parameter_map; physical_instance_count; children; external_provider_edges;
+  feature_profile; selected/replaced/reference/probe/unbuilt status;
+  source_closure_digest; tool; device; relevant settings digest;
+  measured DSP/ALM/registers/M10K/MLAB/logical memory bits;
+  evidence stage; timing/deadline status; evidence confidence;
+  unresolved mandatory obligations; reference to the replacing instance.
+
+Count either a measured parent's inclusive cost OR a disjoint cover of its
+children plus glue, never both. Two projector instances using one source file
+are two engines until a physical shared service replaces them. A loop that
+instantiates four multipliers is four lanes. A call into one external shared
+bank is not a multiplier inside every caller. Follow service edges as well as
+module-instantiation edges.
+
+Do not infer the graph from bare comments. Use the existing module graph and the
+synthesis hierarchy where available. Generate loops and conditional instances
+must be resolved at the selected parameters. Stop on an ambiguous graph rather
+than treating an unrecognized instantiation as absent. The standalone
+verification harness, reference island and probe competitor are never shipped
+unless explicitly selected for an engineering test profile.
+
+2.3 Select evidence, do not add all evidence
+
+Read at least:
+
+  reports/synthesis/zhao_block_fit.json
+  reports/synthesis/zhao_block_map.json
+  reports/synthesis/zhao_shell_fit.json
+  labelled per-run reports and their source digests
+  the production manifest, actual selected top, and effective parameters
+
+Selection order for one instance:
+
+  1. Enumerate applicable measurements, including labelled variants.
+  2. Match device, implementation closure and effective parameters.
+  3. Match consequential tool/settings differences; retain a conflict if unclear.
+  4. Prefer a completed applicable fitted result for physical area and timing.
+  5. Prefer a newer applicable map result over an obsolete fit for CURRENT DSP
+     structure; label it mapped and leave fitted area/timing unresolved.
+  6. When nothing matches, show historical evidence as historical and current
+     cost as unknown. Do not substitute zero. Do not silently pick the smallest.
+
+An @label is not extra silicon, but it can be the ONLY correct measurement.
+The actual island uses different reciprocal parameters from the twelve-context
+leaf comparison. Do not attach the twelve-context area or throughput to an
+eight-context instance. Parameter-invariant observations such as consistent
+three-DSP mapping can support a qualified structural estimate, not fake profile
+identity.
+
+A failed POLICY check may follow a successful physical fit: its measured counts
+remain evidence, with the failed gate retained. A fitter failure may still leave
+a completed map stage; only that stage's evidence is usable. A killed process
+with partial output is not a completed fit. Null ALM/M10K fields are unknown,
+not zero, even when DSP is known.
+
+Record run identity independently of whether git was clean. Hash before and
+after the run, capture the source closure itself or a recoverable commit plus
+patch, and reject mutations. A hash that cannot recover its source is weaker
+than an archived specimen but is not automatically "a digest of nothing".
+
+2.4 DSP units must be explicit
+
+The comparison unit is PHYSICAL VARIABLE-PRECISION DSP BLOCKS on the selected
+Cyclone V device. Logical multiplier instances, 9x9 modes, 18x18/18x19 units,
+and 27x27 products are not interchangeable units. One physical block can
+support different multiplier modes; actual packing depends on widths and
+control/register compatibility. The tool's total DSP-block field is the bill.
+Record its mode decomposition to explain that bill, not to add a second bill.
+[V01,V03]
+
+A source-level product count is an attribution worklist. It does not establish
+how many DSP blocks Quartus used, whether constants became adders, or whether a
+large product was decomposed into several hard blocks.
+
+2.5 M10K and ALM must be reconciled in the same ledger
+
+For memory record logical bits AND physical blocks AND read/write ports,
+replicas, banks, depth padding, initialization state and MLAB spill. An ALM
+reduction that quietly spends additional MLABs is not "free RAM". Counts from a
+map stage and a fitted stage are separate populations; never subtract them as
+though they were a controlled A/B.
+
+Do not use "553 minus texture's 48 equals 505 spare". Other users include the
+shell/video buffers, geometry arenas, FIELD's vector RF, terrain residency,
+patch data, caches and normal detail. Global availability requires their bill.
+A scalar register-file probe does not price the four-lane production file.
+
+2.6 Exact document edits, in order
+
+A. reports/DSP-BUDGET-CENSUS-20260908.md
+   Put a CURRENT CORRECTION above the old headline. Mark old 154-as-floor text
+   historical/withdrawn rather than leaving it as the first authoritative line.
+   Reconcile already-landed normals, rejected combiner, separate shell, fog,
+   pose and external arithmetic providers. Keep each subtraction/addition tied
+   to a selected instance. Update the large-block ranking from current evidence.
+
+B. tools/budget/dsp_census.py
+   Extend the new tool rather than replacing it wholesale. Add explicit profile
+   selection, all three evidence inputs, non-overlap checking, per-metric nulls,
+   and machine-readable output. Distinguish measured-current, mapped-current,
+   historical, labelled-but-unselected, missing-target and unbuilt function.
+   Exit nonzero for a requested closure verdict with unknown mandatory costs.
+   An informational audit may succeed while prominently reporting incomplete.
+
+C. design/prod_manifest.yml and generated production resource top
+   First reconcile the latest edits already landed. Choose V2 rather than V1
+   for the live combiner accounting where applicable. Retain rejected/reference
+   RTL without counting it. Include actual adopted descriptor, owner and join
+   components or count their containing island once. Do not count both the
+   island and its leaves. Specify FIELD LANES/BANKS/CONTEXTS and reciprocal
+   NCTX/TOKW instead of relying on unrelated defaults.
+   Do not modify an active/queued specimen's input files in place.
+
+D. reports/MEMORY-FOR-ALM-AND-DSP-20260909.md
+   Withdraw "154 measured floor", "505 free M10Ks", and the categorical claim
+   that memory cannot help full-width projection. Retain the valid rejection
+   of monolithic gigantic product tables. Add this brief's result-cache and
+   full-width hybrid alternative. Correct terrain PAYLOAD_W=42 versus geometry
+   PAYLOAD_W=16 before pricing rider registers.
+
+E. design/budgets/workloads.yml and generated heatmap
+   Correct the frame-cycle rounding description (100,000,000/60 is not an
+   integer; use the precise scheduler definition or conservative floor).
+   Flag terrain normals' deformation-update demand as NOT automatically the
+   visible-triangle normal demand. Separate cull planes, views and instances.
+   Remove the unconditional claim that geometry's 120,000 projections makes
+   sharing affordable: add terrain and cache/replay costs first.
+   Distinguish a capability cap, a stress profile, an observed demand and a
+   mandatory admission/deadline requirement. Do not regenerate a comforting
+   heatmap from stale applicability flags.
+
+F. reports/V3-REARCHITECTURE-ROADMAP.md and current TASK_LOG
+   Add: "Accounting correction now; this whole-console implementation queue
+   starts after texture acceptance. Texture gate definitions unchanged."
+   Link the existing queued terrain rearchitecture on main; do not bury or
+   replace it. Record any actual new contract decisions separately.
+
+G. Existing source comments/contracts that quote withdrawn costs
+   Create a narrow correction worklist now. Amend comments in HDL after the
+   protected fit has released those bytes or in an isolated future worktree.
+   An old latency, "nothing instantiates this", "two schedulers", or "no fit
+   exists" claim is not law merely because it remains in a source header.
+
+2.7 Tests for the accounting tool
+
+Use small fixtures whose correct result can be checked by hand:
+
+  parent-inclusive plus child -> overlap refused;
+  two genuine instances of one leaf -> cost counted twice;
+  two clients of one external provider -> provider counted once;
+  selected labelled three-DSP RCP -> three, not zero and not sum of five rows;
+  old full-fit normals18 plus applicable map3 -> current mapped3;
+  current shell in separate file -> included without adding shell children;
+  null DSP -> incomplete, not zero;
+  complete fit with failed resource rule -> count retained, gate failed;
+  clean unrelated source hash -> not applicable;
+  dirty immutable captured source hash -> applicable with honest provenance;
+  scalar RF measurement versus selected LANES=4 -> mismatch;
+  missing lighting function -> prevents "whole-console closed";
+  hard DSP-block versus submultiplier unit -> cannot sum without conversion.
+
+Mutate the selector to ignore the map ledger or labelled row and prove the
+fixture fails. Test the ACTUAL loader/selector path, not a reimplementation of
+the intended rule inside a self-test that never calls it.
+
+
+3. WHAT A SUB-95 DESIGN WOULD ACTUALLY CONTAIN
+================================================================================
+
+The following is a DESIGN ALLOCATION, not a forecast dressed as a fit. It is
+built from named replacement engines. It gives the agent a falsifiable target
+rather than an invitation to keep subtracting estimates from an uncertain sum.
+
+Function / selected proposed implementation                         DSP ceiling
+-------------------------------------------------------------------------------
+Shell and existing reduced raster baseline, inclusive                        16
+Texture: paired PERSPUV6 + RCP3 + ROM combine/filter0                           9
+ONE shared full-precision projection service                                   9
+Position skin: two wide product lanes, overlapped records                      6
+World-normal transform + small exact square farm                               1
+Pose decode: one reused full-width product service                             3
+Culling: coefficient-table distributed arithmetic                             0
+Geometry LOD: one qualified wide product service                               3
+Terrain LOD: byte-product ROM engine                                           0
+Terrain TESS: retain six-DSP ceiling until existing terrain packet earns less  6
+Terrain NORMALS: keep the already shared three-DSP engine                      3
+Terrain BAKE: one reused wide product service + separable scratch RAM          3
+GEOM.SETUP: preserve current four-DSP allocation pending shared-edge audit     4
+GEOM.CLIP: preserve current two-DSP allocation pending qualification           2
+Vertex fog factor: config-coefficient table arithmetic                        0
+Pixel fog mix: quarter-square RGB lanes                                       0
+FORGE: provisional allowance from existing evidence                           2
+FIELD: four existing full-width multiplier lanes                              12
+Attribute setup / tile seed: coefficient tables / exact add recurrence         0
+-------------------------------------------------------------------------------
+Named allocation subtotal                                                    79
+Mandatory lighting/detail/remaining-function pool + engineering contingency   15
+-------------------------------------------------------------------------------
+ABSOLUTE programme acceptance maximum                                         94
+
+This table does NOT say the unpriced fifteen can automatically cover everything.
+The missing-function pass must allocate GEOM.LIGHT, point-light selection and
+attenuation, terrain base shade, detail normal maps, extra normal services,
+particles and all remaining nonzero arithmetic from that pool. Existing
+zero-DSP leaves also need mapping evidence; unknown is not zero. An illustrative
+split is ten for qualified shared lighting work, two for other discovered math,
+three contingency. It is not permission to hide an overrun in a reserve row.
+
+The difference from a fabricated "we get to 94" spreadsheet is operational:
+if the complete functional ledger cannot allocate those fifteen, the plan is
+NOT accepted. First use the extra levers in sections 7, 12–16 (especially shell
+colour ROM conversion, setup-product reuse and alternative pose/LOD engines),
+then price a different portfolio. Do not cut fog, creatures, terrain detail or
+Duo silently. Do not postpone counting their required providers until after a
+celebratory fit.
+
+The projection nine-DSP ceiling has TWO concrete implementations below. The
+cheaper ALM profile requires a proven three-clock service schedule; the faster
+full-width hybrid profile preserves one vertex per clock and uses memory plus
+small partial products. Neither requires an 18-bit camera matrix or a smaller
+world. The latter remains an unmeasured candidate, not an established result.
+
+DSP <=94 leaves 18 of the device's112 blocks unallocated. They are not a reason
+to spend105 in the planned design: the owner deliberately requested margin.
+Keep the existing product ALM/clock/reserve rules. Report the full ALM bill as
+well as the DSP bill. Do not trade a DSP pass for a machine that exceeds41,910
+ALMs, exhausts553 M10Ks, or misses100MHz/deadlines.
+
+4. MEMORY FIRST DOES NOT MEAN MEMORY WITHOUT A PORT BUDGET
+================================================================================
+
+4.1 Hardware rules for every proposed store [V01,V02]
+
+Use synchronous addressed reads, explicit enables, and clocked writes. Do not
+asynchronously reset or bulk-clear payload arrays. Reset control and validity;
+initialize payload-independent truth through a bounded scrub or a validated
+fill-before-use protocol. Specify mixed-port read-during-write behaviour and
+prove the design does not depend on undefined collisions. An inferred memory
+that quietly gains a wide bypass mux is not the intended architecture.
+
+M10K geometry is consequential. Examples of supported symmetric widths include
+256x40 in simple-dual-port operation and 512x20 in true-dual-port operation.
+True dual port does not provide 256x40 with two independent wide reads. A
+512x16 table with two reads is a natural quarter-square shape; a 128x38 table
+with one write and one read is a natural coefficient shape. The fitter, not
+logical-bit division alone, decides physical count. [V01]
+
+For each bank, publish this small table before RTL:
+
+  owner; depth; physical stride; payload width; validity method;
+  read port(s), write port(s), clocks and capture enable;
+  collisions forbidden/forwarded/old-data; reply latency;
+  output capacity reservation; copies; M10K mode; expected minimum blocks;
+  refill/boot/wrap cost; bandwidth per accepted semantic transaction.
+
+4.2 Put the right state in RAM
+
+Good candidates: descriptor payloads, matrix/pose rows, immutable coefficients,
+per-context operands/results, projected vertices, triangle planes, bulk
+validity with a deterministic scrub, and long-latency identity-side records.
+
+Keep tiny hot control in registers: valid/ready stage bits, small queue pointers,
+current arithmetic accumulators and a few active operands. Moving an accumulator
+updated every cycle into one RAM port can slow the machine without reducing much
+area. Move the cold context bank, not necessarily the active working register.
+
+Replace an asynchronous context-table selection with a scheduled memory read
+and an atomic captured record. Do not retain the old table as a synthesizable
+reference in the production profile. Evidence shadows belong in simulation or
+an explicitly separate lab build, as the texture work has established.
+
+4.3 Avoid an all-machine arithmetic crossbar
+
+This brief proposes LOCAL service domains: projection, pose, skin/normal,
+terrain maintenance, and FIELD. A single universal multiplier with arbitrary
+clients would create long buses, arbitration, head-of-line blocking and new
+ALM pressure. Share within a bounded domain whose rates and lifetimes can be
+proved. Connect the domains through compact queued records, not a global
+multiported operand file.
+
+4.4 Memory budget is a portfolio decision
+
+Prefer a small working set in M10K over a whole-frame arena. Keep large frame
+records in the existing local-SDRAM geometry arena with burst access and a
+bounded on-chip working set. Do not move every projected vertex of 256 patches
+into BRAM just because one patch fits. Do not send quarter-square arithmetic
+lookups to external SDRAM: their required random-port rate makes that the wrong
+kind of memory.
+
+Do not choose every maximum-throughput ROM replica option simultaneously. The
+culler, attribute engine and vertex replay store have alternatives with different
+port counts. The correct portfolio is the smallest set of replicas that meets
+the measured combined calendar, with ALM and M10K reserve still present.
+
+
+5. THE TRANSACTION LAW FOR EVERY REPLACEMENT
+================================================================================
+
+One accepted job has one immutable identity and one owner. All of the following
+travel as one logical record, even when physically stored in several banks:
+
+  source/client, slot, generation, semantic opcode/axis, epoch, operands,
+  output destination, saturation/degenerate flags and terminal status.
+
+An input is accepted only if its complete future output storage has been
+reserved, including work already in arithmetic pipelines. A RAM read and the
+metadata that identifies its result must use the same accepted enable. When
+stalled, the entire visible reply holds stable. Count accept and retire at their
+actual handshakes, not at offered valid. Zero-work, culled, disabled, saturated
+and rejected jobs have explicit terminal events; they must release every credit
+exactly once.
+
+Generation mismatch is not a strategy for reusing an owner too soon. The owner
+must remain live until all possible children have returned or been cancelled
+under a protocol that makes late returns distinguishable. Epoch wrap and reset
+must be deterministic; a small generation tag does not protect an indefinitely
+late response after enough reuse cycles.
+
+For a shared arithmetic service, scheduling must not depend on an unregistered
+far-away ready signal crossing the whole device and entering a multiply carry
+chain. Use local queue capacity and designed credits. A delayed ready requires
+skid capacity or earlier credit reservation; blindly registering ready can admit
+one job past the limit. Existing texture credit is already registered in the
+inspected owner. Do not rediscover a fix that is present. [S07,S36]
+
+Every packet supplies tests for: full output stall; accept and retire together;
+owner reuse; reset with work in flight; configuration epoch turnover; duplicate
+and stale replies; zero/disabled work; and arbitration under worst burst demand.
+One passing aggregate count cannot detect A-data plus B-metadata.
+
+
+6. A SMALL REUSABLE ARITHMETIC LIBRARY, NOT A NEW FRAMEWORK
+================================================================================
+
+The names below are proposed names. They are not claims that these modules are
+already in the tree. Implement only the primitives used by accepted packets.
+The companion Python checks exercise their integer algebra, not Quartus mapping.
+
+6.1 Exact unsigned-byte product via quarter squares
+
+  Q[n] = floor(n*n/4), n=0..511
+  a*b  = Q[a+b] - Q[abs(a-b)], for unsigned a,b in0..255.
+
+The two square arguments have equal parity, so truncating each quarter-square
+cancels exactly. No approximation and no product-bit loss. Q[511]=65280 fits16
+bits; products are at most65025. Store a fixed512x16 table and read both
+addresses with the same request/identity. One true-dual-port M10K is the first
+mapping candidate for one accepted product each clock. Two single-read replicas
+are a fallback to price, not a hidden extra cost.
+
+The ROM may be initialized by a frozen MIF or by a 512-cycle boot sequencer. If
+boot-filled, ready stays false until every entry is valid. The MIF, generator,
+contents hash and table version are part of the specimen. Never compute n*n in
+a synthesizable per-read path and call it a ROM. A generated case statement is
+not enough evidence of block-memory inference.
+
+For signed d in[-255,255], use sign(d)*QPRODUCT(abs(d),b). Restore the sign at a
+wide exact width BEFORE any rounding bias/arithmetic shift. Negative ties are
+where a superficially correct refactor often fails.
+
+Suggested contract: req_valid/ready, a,b,tag; rsp_valid/ready,p16,tag. Either use
+a globally stallable small pipe or reserve output slots for every accepted
+request. Keep address calculation, ROM outputs, subtraction and tag aligned.
+Pipelining more than the old leaf latency is allowed only through the caller's
+explicit new latency/credit contract.
+
+6.2 Full-width multiplication from byte products: for LOW-RATE work
+
+For unsigned32 a,b with bytes a_i,b_j:
+
+  a*b = SUM(i,j=0..3) QPRODUCT(a_i,b_j) << (8*(i+j)).
+
+Sixteen exact byte products through one ROM multiplier give a full64-bit
+product. For a square, four diagonal products plus six distinct cross products
+are enough; add the cross products with one extra left shift. Signed forms
+must preserve INT_MIN by using a widened unsigned magnitude or a two's-complement
+correction. Do not take abs(INT_MIN) in its original signed width.
+
+This is appropriate for terrain-maintenance/LOD setup if the calendar admits
+it. It is NOT a blanket replacement for per-pixel PERSPUV or FIELD. A 16-cycle
+product is not equivalent throughput to a one-cycle product.
+
+Use a fixed microstep schedule and a narrow active accumulator. Avoid a large
+variable shifter and arbitrary crossbar to select every byte/product position;
+the schedule's small opcode ROM or explicit phases already knows the shifts.
+The ROM engine is meant to remove the large multiplier and its selection fabric,
+not wrap them in a more expensive general processor.
+
+6.3 Full s32 by epoch-constant s32 using ONE native DSP lane
+
+This is the projection fast profile's central candidate. It does NOT narrow
+matrices or world coordinates.
+
+Split two signed32 numbers as:
+
+  a = aL + 2^26*aH       aL unsigned26; aH signed6 = a >>>26
+  b = bL + 2^26*bH       bL unsigned26; bH signed6 = b >>>26
+
+Then exactly:
+
+  a*b = aL*bL + 2^26 * (aL*bH + aH*b).
+
+Use one 27x27 signed hard multiplier on zero-extended aL and bL. Implement the
+26-by-signed6 cross term as an explicit small shift/add tree:
+
+  aL*bH = SUM(j=0..4, bit_j(bH)) aL<<j - bit5(bH)*(aL<<5).
+
+Precompute H[h]=signed6(h)*b for h=0..63 in one 64x38 coefficient RAM. The
+negative extreme (-32)*INT_MIN is2^36, so38 signed bits are deliberately used.
+For two views, 128x38 fits one simple-dual-port 256x40 slice. Two views
+times two update generations occupy all 256 entries and can still fit that
+one-slice geometry. Explicitly select {generation, view, coefficient_index}
+in the address, and prove that reads never mix generations. More contexts,
+status bits or incompatible memory controls change this bill; do not assume
+that every extra epoch is either free or automatically a second memory.
+
+Use a 39-bit signed cross-term sum and a 65-bit reconstruction before proving the
+final result fits the exact64-bit signed product. The small low product is
+unsigned52; sign-extension errors here can pass normal camera tests and fail
+only negative extremes. The companion model sweeps corners and random full
+signed32 operands.
+
+Build coefficient entries with shifts/adds at configuration time, not64 parallel
+multipliers. For h=0..31 start from zero and add b; for h=-32..-1 start at
+-(b<<5) and add b. Configuration build progress, RAM version and enabled jobs
+belong to one epoch. A coefficient cannot change while products from its old
+version are in flight unless separate banks/versioned reads implement that.
+
+Pipeline the small cross-term tree, native product, ROM output and exact final
+adder. This is not permission to put the ROM subtraction and every carry chain
+in one clock. MapOnly must show exactly one hard27x27 per accepted physical lane,
+not accidental DSP inference for the signed6 term. Register reset/enable styles
+must allow the native DSP registers to be used.
+
+This identity is mathematical. Its ALM, timing and M10K mapping are unmeasured.
+Compare it to the existing full-width product in a registered harness before
+composing nine lanes. Reject an implementation that saves DSP by exploding ALM.
+
+6.4 Exact product with a configuration coefficient using byte tables only
+
+For a fixed coefficient k, precompute T[d]=k*d for d=0..255. Reconstruct a signed
+word from its unsigned bytes, then subtract its sign correction at full width.
+Examples:
+
+  s32 x: x*k = SUM(i=0..3) T[byte_i(x)]<<(8*i)
+                 - (x<0 ? k<<32 :0).
+
+  s33 x: use the same four low bytes and subtract k<<32 when bit32 is1.
+
+The table is finite because k is fixed for the configuration epoch, not because
+x has fewer possible values. Four reads per product per clock require four
+single-read copies, two TDP copies if width permits, or a scheduled multi-cycle
+engine. Count width slices as well as read copies. This is useful for viewport
+scale, vertex fog and fixed lighting coefficients, not for arbitrary coefficients
+changing every cycle.
+
+6.5 Distributed arithmetic for fixed-coefficient dot products
+
+For signed W-bit inputs x_j and constant coefficients c_j, store:
+
+  T[mask] = SUM(j whose mask bit is1) c_j.
+
+The exact dot product is the weighted sum of T evaluated on each common bit
+plane, with the top sign bit NEGATIVE. This replaces hard multipliers with tiny
+coefficient tables and add/shift recurrences. Choose one-bit serial, multi-bit
+folded or fully pipelined profiles according to measured demand. Replicas buy
+read ports; they are not free.
+
+Keep the full integer sum until the original operation's rescale/clamp point.
+Reassociating exact additions is allowed at a proven sufficient width;
+reassociating across saturation or rounding is not. Validate coefficient update
+lifetime, negative top-bit contribution, all-zero mask, maximum mask and
+concurrent reads from different records.
+
+6.6 Exact divide-by-nine/eleven without hidden constant multipliers
+
+Geometry LOD uses nonnegative constant divisions. A nibble long-division table
+needs only the finite pair(remainder,nibble):
+
+  qdigit,new_remainder = divmod(16*remainder + nibble, divisor).
+
+For divisors9 and11 together there are(9+11)*16=320 useful entries, with four
+bits each of quotient digit and remainder. One 512x16 table can hold both when
+serially reused. A 35-bit nonnegative numerator uses nine nibble steps; a 40-bit
+container uses ten. Ceil uses the original numerator adjustment, not a different
+rounding convention. Zero and maximum inputs are tested exactly.
+
+This is a targeted way to prevent a supposedly "one multiplier" LOD block from
+hiding additional constant-divider multiplier logic. If the mapper already
+implements those constants efficiently in fabric, count the measured delta and
+keep the better version.
+
+6.7 No universal rounding wrapper
+
+Material unit8 multiplication uses round-half-up divided by256. Terrain bake
+uses TWO round-half-up rescale stages on each absolute endpoint before
+subtracting. Attribute division/stepping implements the source's half-away-from-
+zero behaviour. Projection has its own signed quotient construction and final
+screen quantization. These must remain distinct labelled arithmetic contracts.
+A library that "standardizes" all of them to one pleasant rounding function
+would change the game while claiming bit-exact optimization. [S23,S26,S27]
+
+
+7. TEXTURE REMAINS FIRST; ITS MEMORY EXTENSION IS A LATER ACCEPTED PACKET
+================================================================================
+
+7.1 Finish, do not restart, the current Decrufter
+
+Preserve the existing D0 repair, production shadow split, typed descriptor bank,
+atomic UV join, palette carriage, paired PERSPUV and RCP qualification sequence.
+Do not resurrect deleted storage to make integration easy. Do not claim RCP
+leaf100.95MHz proves the composed island closes100MHz. Keep source-level
+structure, mapped structure, physical result and workload result separate.
+
+The current texture gate remains the immediate task. New ROM arithmetic below
+is queued AFTER its present acceptance, unless the owner explicitly changes the
+ordering. If a texture gate fails, diagnose the failed specimen and complete the
+existing remedy; do not use this brief as an excuse to disappear into projection.
+
+7.2 Material combination: two products become two ROM lanes
+
+material_combine_v2's product stage computes two unsigned-byte products plus128.
+Replace each raw product with section6.1, preserving its recipe schedule,
+continuations, source identity and the location of rounding. First try two TDP
+M10Ks total for the two physical lanes. If Quartus duplicates the table or
+requires an extra register, publish that actual cost. Target DSP2->0. [S10]
+
+Do not touch the lab/oracle combiner's semantics. The output0 case, all eight
+ratified recipes, three-sample terrain cases, simultaneous continuation/return,
+zero work, saturation and backpressure must match. Prove the test fails after
+changing one table entry or a sign/capture enable. A table with 65,536 complete
+8x8 products is unnecessary; the 512-entry quarter-square table is enough.
+
+7.3 Bilinear filtering: FOUR small ROM products, no early rounding
+
+The current filter calculates:
+
+  du0=t10-t00; du1=t11-t01
+  a=256*t00 + du0*fu
+  b=256*t01 + du1*fu
+  dv=b-a
+  out=((a<<8)+dv*fv+32768)>>16.
+
+Both a and b are in[0,65280], so abs(dv)<=65280 fits16 unsigned bits. Use two
+ROM lanes for abs(du0)*fu and abs(du1)*fu, then two more for
+abs(dv)[7:0]*fv and abs(dv)[15:8]*fv. Reconstruct the latter as low+(high<<8),
+restore signs, and round ONLY at the existing final point. [S11]
+
+Target: current3 DSP->0, four TDP M10Ks for one filtered channel job each clock.
+An intermediate profile can keep the final hard product and move only the two
+U-direction byte products to RAM. This is useful if memory/ALM timing makes the
+all-ROM option unattractive; it is not a disguised new rounding law.
+
+Pipeline whole{token,channel,fractions,intermediate,flags} records and reserve
+outputs. The actual filter ready currently propagates through occupied stages;
+its comment that acceptance depends only on B0 is not literally its RTL. Do not
+copy that comment into a stronger claim than the implementation supports.
+
+7.4 Pixel fog and shell colour arithmetic
+
+Pixel fog has three products of signed[-255,255] colour difference by unsigned
+amount8. Three quarter-square lanes give a zero-DSP candidate. Restore sign
+before+128 and arithmetic>>>8. Disabled fog, behind/exempt classes and the
+255/256 full-fog law remain exact. Keep fog AFTER toon/material combination and
+BEFORE framebuffer blending. [S12]
+
+The shell's fragment stage also contains four byte modulation products and
+three blend products. These are the same finite-product family; inspect actual
+hierarchy DSP attribution before assigning a saving. Moving their product stage
+to ROM must not break the tile read/modify/write hazard window, RAW forwarding,
+Early-Z presence lifetime, stencil tests or ordered tile writes. Price the whole
+fragment+tile-store seam, not a standalone multiply. [S33,S34]
+
+The illustrative 79-DSP subtotal leaves the shell at its historical16 rather
+than claiming these extra savings in advance. This is a genuine second-line
+lever if mandatory lighting needs more of the remaining pool.
+
+
+8. PROJECTION: REUSE RESULTS, THEN REPLACE TWO FAT CORES WITH ONE SERVICE
+================================================================================
+
+8.1 Why this is the largest architectural packet
+
+Both geom_project and terrain_project instantiate the common project_core.
+Recorded full-width instances cost33 DSP each. The terrain wrapper submits all
+three corners of every triangle to the core again. At fine terrain LOD, the
+same33x33 lattice has1,089 positions but2,048 triangles*3=6,144 corner references.
+The existing WCACHE/vertex-arena blueprint addresses exactly this redundancy.
+It has not yet replaced the live corner projection path in the inspected source.
+[S13–S18]
+
+Eliminating repeated projection can save arithmetic CAPACITY, not just memory
+traffic. It is the prerequisite for safely choosing a folded arithmetic engine.
+The current two projection instances also replicate exact divider pipelines and
+long metadata transport. Removing a core can therefore relieve ALMs as well as
+DSPs; it is not merely moving the multiplier cost into general logic.
+
+8.2 FIRST repair the reusable arena's non-power-of-two layout defect
+
+The inspected default vertex arena declares:
+
+  mem[0:ARENAS*DEPTH-1]; valid_q[ARENAS*DEPTH-1:0]
+  DEPTH=1089; ARENAS=2; IW=$clog2(DEPTH)=11
+  wr_addr={arena,index}; rd_addr={arena,index}
+  open clears valid_q[arena*DEPTH+i].
+
+The allocated physical range is0..2177, but arena1's addresses start at 2048.
+Arena1/index130 addresses2178, already beyond the array. Arena1/index1088
+addresses3136. Open clearing uses1089-stride while read/write use2048-stride.
+This is a deterministic source-level mismatch, not an ALM prediction. The
+existing directed suite usesDEPTH=16, so that test profile cannot expose it.
+[S17,S18]
+
+Choose ONE physical layout consistently:
+
+  A. linear arena*DEPTH+index, sized for the complete allocation; or
+  B. physically padded arena stride2^IW everywhere, including validity; or
+  C. separate per-arena memories with local indices.
+
+Option A is attractive for co-packing small working sets; option C can simplify
+ping-pong/dual-view port ownership. Do not pad the
+payload silently and quote the old bit count. First write a failing RTL test at
+DEPTH=1089 with both arenas, including indices0,129,130,1088, reopen/clear,
+concurrent independent accesses and boundary refusal. AddDEPTH=17/ARENAS=3 as a
+second non-power-of-two case. Reintroducing concatenated indexing into an
+unpadded implementation must make the test fail.
+
+This review's Python counterexample establishes the address arithmetic. It does
+not substitute for the agent's required RTL reproduction and regression run.
+
+8.3 Store sufficient results and give them a real lifetime
+
+The existing WCACHE payload is75 bits: two 21-bit screen coordinates,32-bit
+legacy invw and behind1. The live depth/fog path also needs guarded clip.w31.
+A minimal backward-compatible cache record is therefore at least106 bits before
+additional status/epoch fields. Do not round this down by dropping the very
+value canonical invw24/fogfactor need. Decide whether to store canonicaldepth
+instead of legacy invw only after proving all consumers and adapters.
+
+Cache identity must freeze: patch/page generation, top/underside surface,
+vertex identity, field/deformation version, final morph state, camera/view,
+viewport and depth-profile epoch. A lattice index alone is not a key if the
+same index can be morphed differently in two jobs. Material/recipe/source
+identity belongs to triangle/fragment records; do not make a vertex cache return
+one triangle's material to all triangles sharing that vertex.
+
+No associative cache is needed where the tessellator already supplies a bounded
+vertex identity. Start with a direct-indexed working arena. Use accepted fills,
+seal/drain, explicit invalidation and epoch retirement. Replace thousands of
+resettable valid flops with a RAM valid/tag scheme only if reset/open/wrap starts
+with a deterministic scrub, or a proved dense-fill/sealed-prefix contract.
+Uninitialized tag RAM matching a generation by chance is unacceptable.
+
+8.4 The read-port cost can be more important than the payload bit count
+
+A cached triangle still needs three result reads. One read each clock leaves
+6,144 lookup cycles per fine patch, even if only 1,089 expensive projections were
+done. At 256 patches that is 1,572,864 read cycles, before geometry and stalls.
+Caching is not a three-port memory for free.
+
+The preferred small-working-set layout is THREE simple-dual-port read copies.
+Broadcast each accepted fill to all three copies; each copy supplies one corner
+lookup. A read and a write can occur together in each copy, so the design can
+sustain three corner reads plus one broadcast fill per clock, provided reads
+address a sealed working group and writes address a different unsealed group.
+This avoids undefined same-address read/write collisions without a wide bypass.
+
+Two true-dual-port copies are another option when fill and replay are separated:
+they provide four total ports, enough for three reads while sealed, but a
+broadcast fill consumes two of those ports. Do not claim three simultaneous
+reads plus unrestricted broadcast writes from that layout. Banked memories
+without replication are also possible, but EVERY stitch/LOD conflict needs an
+explicitly budgeted replay rule, not a regular-grid assumption.
+
+8.5 Whole-patch versus subpatch working sets
+
+Whole-patch minimum-work profile:
+ 1,089 entries/view. A uniform 2Kx5 TDP layout for a 106-bit record uses 22 width
+ slices per replica. That is a CONSERVATIVE LAYOUT, not the minimum: separating
+ the first 1,024 rows (11 x 1Kx10 blocks) from the last 65 (6 x 512x20 blocks)
+ gives a 17-block candidate, or three 512-row banks give an 18-block candidate.
+ The extra address/bank muxes and their timing must be priced. Two replicas and
+ two views therefore cost 68--88 M10Ks before ping-pong at those candidate
+ geometries, before extra identity bits; unrestricted concurrent fill needs a
+ different port allocation. Dividing logical bits by 10,240 alone is inadequate.
+
+Preferred small-working-set profile:
+ A 9x9 subpatch catalogue has 81 entries if the actual final-vertex identity
+ remains within that catalogue. Co-pack two views and two ping-pong groups as
+ 4 x 81 = 324 rows in EACH of three simple-dual-port read copies. A 106-bit
+ projection result plus one 8-bit generation and one valid bit is 115 bits;
+ six 512x20 blocks provide a 120-bit row. Therefore:
+
+   324 rows x 115 useful bits, rounded to 512x120, x 3 read copies
+   = 6 M10Ks/copy x 3 = 18 M10Ks TOTAL in this proposed geometry.
+
+ Address every copy with ((ping*2 + view)*81 + local_index), range-checked and
+ width-proven. Do NOT concatenate the logical fields into an unpadded array.
+ Broadcast accepted payload AND tag/valid updates to all copies. Fill targets
+ the inactive group; replay targets the sealed group. Bank turnover waits for
+ all outstanding reads and their consumers, not merely the last fill.
+
+ This 18-block figure includes the three read ports and two-view ping-pong.
+ It is a layout derivation, not a Quartus measurement. Additional per-vertex
+ status can grow the record beyond 120 bits; then account another width slice
+ per copy. Per-group origins/camera descriptors stay in separate small control
+ storage. Tag validity still requires a deterministic scrub or dense-fill
+ proof; an eight-bit tag does not solve reset or indefinite stale replies.
+
+ A separately banked two-TDP-copy arrangement costs 48 blocks at the earlier
+ straightforward geometry (6 slices x 2 copies x 2 views x 2 groups). Keep it as
+ a locality/port-scheduling fallback, not the preferred memory budget. The
+ co-packed 18-block design is why small working sets deserve deliberate layout
+ design rather than a payload-bit estimate followed by accidental replication.
+
+The 81-entry bound is an OBLIGATION to prove over the tessellator's stitch,
+coarse-parent/morph and surface cases, not permission to ignore a vertex outside
+it. Expand the catalogue or use explicit spill/refusal handling if necessary.
+Existing queued terrain rearchitecture remains authoritative for topology.
+
+At 16 subpatches/patch this profile performs at most1,296 distinct catalogue
+projections/patch/view, versus1,089 for a whole-patch cache and6,144 uncached
+corner projections. A canonical final-position key is essential: two outputs
+with the same local lattice index but different morph results cannot alias.
+
+8.6 Throughput arithmetic BEFORE choosing a projector
+
+Using the existing provisional single-view figures:
+
+  uncached terrain        256*6144 =1,572,864 projections
+  geometry                           120,000
+  combined                         1,692,864 — already above a raw100MHz/60Hz frame.
+
+Whole-patch reuse:
+  256*1089 +120000 =398,784 distinct projections.
+  AtII3:1,196,352 issue cycles. Against a proposed20% time reserve of 1,333,333,
+  about136,981 cycles remain for other overhead. This is a candidate schedule,
+  not a guarantee: view count, underside, cache refill, bursts and stalls matter.
+
+Subpatch reuse:
+  256*1296+120000=451,776. AtII3:1,355,328, already beyond that reserved window.
+  Two views can double demand if both require those vertices. BackendA must NOT
+  be selected from the whole-patch single-view arithmetic while the actual
+  implementation uses subpatch caches and two views.
+
+AtII1, the two-view subpatch example is903,552 projections. Replay of fine
+triangles across two views can be1,048,576 triangles. These two stages may run
+overlapped only with the stated independent ports/buffers; their shared resource
+calendar must be tested, not assumed. Report startup/drain and stall time too.
+
+8.7 BackendA: three full-width DSP products reused over the rows
+
+Use THREE full s32xs32 product lanes, cost target9 DSP total. For each vertex,
+compute rowX, rowY and rowW in three issue clocks. Preserve the full accumulator,
+translation term, one rescale16 and saturation exactly. Pipeline product and
+wide summation; overlap contexts so the initiation interval is genuinely three,
+not three plus a restart bubble for every vertex.
+
+Replace the two cores' six divide lanes with ONE exact quotient pipeline accepting
+one quotient job each clock: X/W, Y/W and1/W for successive phases of a vertex.
+The 31-step recurrence is already in project_core. Carry{owner,axis,sign,flags},
+not a full wide vertex record, through the arithmetic. Write the three results
+into the reserved per-vertex context and retire only when the pair/depth record
+is complete. Use a bounded in-order completion queue, not a global scan/CAM.
+
+Do NOT substitute an approximate reciprocal because it is easier to share.
+Preserve denominator guards, signed quotient construction, saturation detection,
+behind results and final quantization. The core currently emits behind-eye
+records; downstream clipping decides disposal. An earlier lighting document's
+assumption that project_core drops those records is stale. [S14,S29]
+
+BackendA is accepted only if the complete mandatory profile meets its deadlines
+with the actual working-set choice. It is the preferred ALM-minimal profile when
+that condition holds, because it removes most replicated divider state as well
+as57 of the two-core allocation's66 DSP.
+
+8.8 BackendB: full-width one-vertex/clock at the same nine-DSP target
+
+When BackendA cannot meet the combined rate, use NINE instances of section6.3,
+one per matrix product, rather than restoring two 33-DSP cores. Each lane uses
+one native27x27 product, a small26xsigned6 shift/add cross term, and a 64x38
+coefficient table. This keeps the FULL signed32 input/matrix domain.
+
+One set of three exact quotient pipelines then accepts X,Y,W concurrently.
+There are three divider lanes, not the old two-core six, and full descriptors
+remain in synchronous context RAM. View/source/axis identities travel with
+results. The shared input queue must reserve a complete vertex record for every
+accepted client and use fair bounded arbitration consistent with frame deadlines.
+
+At two views and one coefficient epoch, the nine H tables are a nine-M10K
+candidate. Viewport tables add their own port-aware cost. A shadow configuration
+bank may require more memory or use unused depth; map its actual geometry.
+Do not count only logical bits or claim the table updater is free before its
+adder/state implementation has been characterized.
+
+BackendB's central risk is ALM growth in the small cross-term trees and final
+adders. The compensating reductions are one physical core instead of two, fewer
+divider pipelines, no giant context rider forests, and result reuse. Price the
+entire service, not just the nine products. Both DSP<=9 and meaningful global
+ALM improvement are gates. If it fails, keep the exact identity and vary the
+pipeline/partial-product split; do not revert to an unpriced camera restriction.
+
+8.9 Zero-DSP viewport scaling
+
+The viewport extent is unsigned12. Precompute T[d]=extent*d, d=0..255, width20.
+For signed32 NDC, reconstruct the exact product from four byte lookups and the
+negative sign correction as section6.4. Two TDP copies at 512x20 can hold two
+views and supply four reads per axis per clock: two M10Ks/axis, four for X+Y
+before epoch buffering. A folded viewport can use fewer ports if its calendar
+permits.
+
+Then retain the ORIGINAL left shift15, full center term, round/rescale,
+saturation, secondary subpixel rounding and guardband operations. Algebraically
+moving a power-of-two shift before/after an exact product is safe at sufficient
+width; merging two quantizations is not. First price the simpler exact rewrite
+that exposes the unshifted12-bit operand; keep it if it already gives a better
+whole-service trade than the table version.
+
+8.10 Rider records and physical acceptance
+
+Current geometry PAYLOAD_W16 and terrain PAYLOAD_W42 are different.31stages of
+(PAYLOAD_W+8) are744 and1,550 declared payload/control bits respectively, not
+744 twice. This is a source-level size, not a guarantee that all those bits map
+to FFs: inspect the actual map for shift-RAM inference. In the new service, cold
+payload and original guardedW live in a RAM context and only a short identity
+rides the pipeline.
+
+Required proofs/gates: old-versus-new full signed32 arithmetic; all camera/view
+configurations; behind/near/zero denominator; overflow rails and negative ties;
+canonical-depth and fog consumer parity; every emitted tessellation triangle;
+view/epoch turn-over; result cache reset/reopen; whole-frame/Duo deadlines;
+MapOnly DSP/ROM attribution; full service registered fit; then the containing
+geometry/terrain composition. Never qualify a port-heavy isolated leaf as the
+final shared service.
+
+9. POSE DECODE: ONE ARITHMETIC WORKER, RAM MATRICES, EXACT RESULTS
+================================================================================
+
+9.1 What already exists [S19]
+
+The pose decoder shares one matrix engine between parent*local and
+absolute*inverse-rest, but that matrix engine still computes three full32x32
+products per output element. The quaternion converter has nine 16x16 product
+sites. The decoder's18-DSP map is supported by source identity, not merely an
+ancient comment. Do not assume the quaternion's theoretical submultiplier
+packing happened because a source header estimated it.
+
+9.2 Replacement shape, target3 DSP
+
+One pipelined full32x32->64 product service can execute BOTH quaternion terms
+and affine matrix products. Small signed16 operands are sign-extended explicitly
+for quaternion work; there is no need for a separate hard multiplier bank.
+A microstep record names bone, matrix operation, output element, product term,
+operand addresses and accumulator destination. It is a bounded local sequencer,
+not a programmable console-wide ALU.
+
+Store ancestor matrices, inverse-rest rows, current local/absolute matrices and
+result palettes in synchronous RAM. Keep only the current operands and one or
+few active full-width accumulators in registers. One output element sums its
+three products plus the translation term before the existing rescale16/saturate.
+Do not round each product. Keep parent-before-child ordering and the original
+quaternion nine-product formulas/shift11 rounding; quaternion normalization is
+not introduced. Root displacement and rest translation retain their old stage.
+
+One bone may need nine quaternion products plus up to 72 matrix products before
+simple identity/root shortcuts. At one issued product/clock the arithmetic floor
+is81 clocks/bone; read scheduling, pipeline drain and output stalls add overhead.
+A 32-bone palette therefore is not promised in the old~1,600 clocks. Measure actual
+palettes-per-frame CACHE MISSES, not visible creature instances. The existing
+pose-cache design intentionally shares a decoded pose across suitable instances.
+Cold-start and clip transitions are part of the demand, not optional tests.
+
+A recognized identity/translation inverse-rest matrix can use an exact fast
+path, but the generic input port accepts a full matrix. Either check the actual
+matrix shape at runtime with a generic fallback, or prove and enforce the asset
+contract. Do not silently discard non-identity inverse-rest rotations.
+
+9.3 Qualification
+
+Compare complete palette bytes for all bones, maximum bone count, root motion,
+negative half ties, saturation, concurrent cache lookups, parent indices,
+pose-epoch change and mid-decode reset. Schedule cold miss bursts against the
+full-frame skin/lighting workload. Target3 DSP is conditional on that deadline.
+A 6-DSP two-worker fallback is a disclosed additional three-DSP allocation, not
+a reason to hide the overrun; recover it from another priced lever if needed.
+
+
+10. POSITION SKIN AND WORLD NORMALS: JOINT INPUT FETCH, SEPARATE CLEAN ENGINES
+================================================================================
+
+10.1 Do NOT set MUL_LANES=1 and call it solved
+
+Current GEOM.SKIN admits lane counts1,3,6, not2. The measured one-lane alternative
+is not a new two-lane architecture and its latency/throughput is not suitable
+for the current120,000-vertex frame figure. The default three-lane implementation
+uses9 DSP and its full blended case is documented at 12 clocks/vertex.120,000*12
+is1.44Mclocks, already outside a 20%-reserved1.333M window. [S21,S13]
+
+A two-lane target is a NEW schedule with overlapping records, not a parameter
+flip. It should cost6 DSP for two full32x32 products and issue the 18 products of
+a two-bone position transform in nine clocks. Pipeline the accumulation/weight
+finish and overlap the next record so restart/drain bubbles do not turn9 into
+15. The gate is measured initiation interval <=11 on the mandatory workload,
+not a nine-product-issue diagram.
+
+10.2 Put the palette at the front, not in every context
+
+A compact skin job carries vertex, two bone handles, pose epoch, weights, source
+and output reservation. Read the two bones' rows from one palette owner and
+broadcast the same coefficient fetch to position and normal transforms when
+appropriate. Do not copy two 12x32 matrices into every queued vertex in two
+separate blocks. Keep a small row window in registers; keep the palette and
+waiting context payload in RAM.
+
+Budget the read schedule: two product operands per clock may need two coefficient
+reads, while packed normal transformation can consume the same coefficients.
+A row-wide read is not an unlimited multiport memory. Give the row cache/banks
+explicit widths, phases and conflict rules. Repeat a row fetch only when that
+is cheaper than an extra permanently replicated memory port and the calendar
+allows it.
+
+This does not mean bolting world-normal math onto the current position-skin
+critical path. It means an input-side shared fetch followed by distinct pipelined
+workers and a source-tagged completion join. The existing position block stays
+the oracle while the new pair is qualified.
+
+10.3 Expose the world-normal arithmetic's real widths [S20]
+
+For legal weight0 in0..64, each row dot combines three signed32 matrix entries
+with signed8 packed-normal components. Its magnitude is bounded by3*2^38,
+so a signed41-bit row dot is sufficient. The weighted blend of two row dots has
+magnitude <=64*3*2^38, so signed47 bits suffice over that legal domain. Prove the
+bound in the source and test it at extremes; do not merely slice a 64-bit value
+and hope. If the existing accepted domain includes other weight bit patterns,
+retain their defined behaviour with a larger proven width or existing rejection
+protocol. This is a range proof, not authorization to change legal weights.
+
+The current source expresses three squares on64-bit direction registers after
+a separate reduction state. The synthesis tool need not prove that dynamic
+invariant before sizing a product. Once the guard has established every
+abs(direction)<2^30, explicitly capture signed31-bit reduced components and
+square their unsigned30-bit magnitudes. Do not leave the width proof implicit
+in an earlier FSM state and then infer a 64x64 multiplier. The output can be
+sign-extended back to its existing64-bit port without storing64 bits per lane.
+
+10.4 Zero-DSP matrix-by-packed-normal products
+
+A signed32 matrix coefficient times a signed8 normal component can be assembled
+from four unsigned-byte products plus exact sign correction. Two concurrent
+32x8 product lanes use eight quarter-square ROM lanes; they process18 matrix
+terms in nine issue clocks. Target hard-DSP cost of that transform: zero.
+
+For legal complementary weights, compute the exact blend as:
+
+  64*dotB + weight0*(dotA-dotB).
+
+Use explicit small-width shift/add for the seven-bit weight rather than a wide
+implicit64x64 product. Preserve the unrounded direction. Position finishing has
+its own rescale/rounding; normal finishing deliberately does not make a unit
+vector, because the eventual Lambert quotient owns the only normalization
+rounding.
+
+10.5 One small DSP for exact squared magnitude
+
+Split each unsigned30-bit reduced magnitude m into15-bit L,H:
+
+  m*m = L*L + (2*L*H <<15) + (H*H <<30).
+
+One native small product lane reused over three terms per component computes
+three component squares in nine issue clocks. Keep the sum wide enough for
+3*(2^30-1)^2, then feed the exact existing integer-square-root law. Target one
+physical DSP, with all results and sign/degenerate metadata reserved by vertex.
+The map must confirm that the lane was reused instead of replicated by three
+function calls.
+
+10.6 The root latency must be hidden, not hand-waved
+
+A single32-step nonpipelined root cannot serve a new vertex every9–11 clocks.
+Use a separately counted bank of exact roots or a qualified pipelined/folded
+exact root. As an initial schedule, four roots can cover a service interval of
+nine only if measured complete turnaround including handshakes is <=36 clocks.
+If it is longer, add capacity or revise the schedule explicitly. These roots
+consume ALM/context storage even when they consume zeroDSP.
+
+Do not steal FIELD's root capacity because the module name is shared. That
+engine already has a constrained program deadline. Share only through a tested
+provider calendar that includes both workloads, otherwise keep local workers.
+
+10.7 Faster range reduction without changing negative values
+
+The existing normal FSM repeatedly arithmetic-shifts all components together.
+An equivalent candidate uses a leading-magnitude count to choose
+k=max(0,bit_length(maxabs)-30), shifts all lanes byk, and then applies ONE extra
+shift if the maximum absolute shifted value is still >=2^30. That correction
+matters for negative values because arithmetic shift rounds toward minus
+infinity. A simple leading-zero formula without the correction is wrong near
+negative power-of-two boundaries.
+
+Preserve the counter's meaning: the inspected reduced_o increments per reduction
+step, not literally once per vertex despite its description. Decide/document
+semantic counters deliberately. Keep reduced vectors, magnitude and source
+identity paired. The Python model compares the candidate reduction to repeated
+shifting, including the negative-boundary counterexample.
+
+10.8 Acceptance
+
+Complete position and normal results must match the current ratified reference
+on legal extremes, cancellation to zero, negative ties, full weight endpoints,
+zero normals, two-bone mixtures, pose changes, saturation and arbitrary output
+stall. Compare the combined pipe under 120,000-vertex and actual Duo/light
+profiles. Target position6 DSP + normal1 DSP is an allocation, not yet a map.
+Reject a design that saves two DSP but adds an uncontrolled multiported palette
+or roots/context machinery that worsens the whole ALM budget.
+
+
+11. CULLING: MOVE FRAME-CONSTANT PLANE MATH INTO COEFFICIENT RAM
+================================================================================
+
+11.1 Preserve conservative visibility, including exact ceiling roots
+
+Current GEOM.CULL derives five frustum planes from the two stored view matrices,
+computes plane-normal length ceilings on configuration, and tests an instance's
+sphere against active views. Plane components need33 signed bits. The radius
+multiplies an unsigned length ceiling. Rounding a ceiling down can incorrectly
+remove visible geometry. Row2/far-Z semantics must not be invented. [S22]
+
+The old workload row does not reliably distinguish one plane test from one
+instance across views. Do not serialize by ten based on that number. First
+instrument accepted instances, active views, planes tested/early-outs and actual
+configuration traffic. Meanwhile use the throughput-preserving zero-DSP
+candidate below as the architectural reference.
+
+11.2 Exact four-input distributed dot
+
+For a selected plane store16 sums of the four coefficients(px,py,pz,lenceil):
+
+  T[mask] = selected sum of(px,py,pz,lenceil).
+
+Process bit planes of(center_x,center_y,center_z,radius). The result reconstructs
+px*x+py*y+pz*z+radius*lenceil exactly; add the original plane translation term
+at its original scale and apply the original comparison. Keep signed inputs,
+unsigned positive length represented in a sufficiently wide signed table and
+the negative top-bit contribution. A 37-bit table entry is a conservative
+container for the selected sums here; prove final68-bit comparison sufficiency
+against the existing source.
+
+Five planes*two views*16masks=160 entries. A 160x37 one-write/one-read table fits
+a candidate256x40SDP slice. Initialize tables at configuration using additions,
+not a multiplier bank. Coefficient extraction and length calculation happen once
+per view configuration, not per instance.
+
+11.3 Two physical profiles
+
+Folded profile: eight table reads in parallel and four byte steps per32-bit dot.
+Eight read copies give an eight-M10K coefficient budget per epoch. This spends
+four issue phases per plane; use it only if the measured instance deadline allows.
+
+Pipeline profile: four stages, each handling an eight-bit group with eight
+independent coefficient reads.32read copies, hence32 M10K in the first SDP
+mapping. The top group includes the negative sign-bit contribution. With staged
+weighted additions it can accept one plane job/clock, matching the current
+plane cadence without assuming spare rate. Carry one compact instance/plane
+identity through it. More pipeline registers may be needed for 100MHz.
+
+Table replicas buy ports and preserve bandwidth; they do not require separately
+computed coefficient sets. Broadcast configuration writes into all replicas,
+with a double-buffer/dirty epoch rule that prevents a live instance seeing a mix
+of two camera matrices. The wider field/register old matrix forest can move to
+RAM because configuration/preparation is not the per-instance hot path.
+
+11.4 Configuration squares without permanent DSPs
+
+A bit-serial exact square accumulator or the byte-product primitive can compute
+plane-length squares during configuration. Keep the existing exact integer-root
+recurrence and ceiling correction. Configuration work is rare, but still has a
+ready/dirty deadline: publish measured complete setup latency and do not admit
+instances against partially prepared planes.
+
+Target runtime/config hardDSP count: zero. This is NOT a measured replacement
+for the current15. Its table replication and adder trees must beat the selected
+ALM/memory portfolio; a zero-DSP culler that makes the FPGA overflow ALMs fails.
+The unchanged conservative-cull oracle, on-frustum tangency, extreme matrices,
+two-view disagreement and configuration races are mandatory tests.
+
+
+12. ATTRIBUTE PLANES AND SEEDS: THE HIDDEN FARMS MUST NOT BE OMITTED
+================================================================================
+
+12.1 Do not let "adds per pixel" hide setup multipliers [S25–S27]
+
+GEOM.ATTRSETUP calculates three edge constants at the coordinate origin and then
+three coefficient-weighted sums for N0,dNdx,dNdy. Its current implementation
+performs all those products together for each requested attribute. Its readiness
+also has a response bubble; it is not automatically a one-attribute/clock
+throughput implementation just because its expressions are combinational.
+
+RASTER.ATTRINTERP and ATTRSTEP both seed a tile with:
+
+  N0 + dNdx*tile_x + dNdy*tile_y + dNdx/2 + dNdy/2.
+
+Those wide tile-start products are not removed by the later add-only pixel walk.
+Count the selected path, not both the old divider-per-pixel path and its
+replacement, unless they really coexist as selected hardware.
+
+12.2 Compute the geometric coefficients once per triangle
+
+The winding-normalized screen vertices determine w0(0),w1(0),w2(0), and six
+coordinate differences. That work is common to every colour, UV, depth, fog and
+emission attribute. Store a triangle geometry descriptor in RAM and reuse it.
+Where GEOM.SETUP already has equivalent edge coefficients, consume them through
+an exact checked adapter instead of calculating the same six products again.
+Do NOT use top-left coverage bias in attribute weights: raster acceptance bias
+and the mathematical interpolation numerator are different quantities.
+
+The source's wide containers may contain provable sign-extension redundancy,
+but arbitrary truncation is forbidden. Keep current external widths initially;
+use a proved compact internal representation and exact sign extension at seams.
+
+12.3 Coefficient tables calculate all three planes without DSPs
+
+For each triangle build eight entries indexed by a three-bit attribute mask:
+
+  TN0[mask] = sum of selected(w0(0),w1(0),w2(0))
+  TX [mask] = sum of selected(-dyBC,-dyCA,-dyAB)
+  TY [mask] = sum of selected(dxBC,dxCA,dxAB).
+
+For every bit position of(va,vb,vc), the three tables contribute to the three
+plane sums. The sign bit contributes negatively. After reconstruction, shift
+TX/TY results by the existing PIXEL_SHIFT8. No intermediate rounding. The
+original48-or-smaller edge-sum and24-bit gradient-sum containers produce a
+conservative96-bit combined table record; validate the exact bounds with the
+current coordinate contract before changing a width.
+
+A table build uses additions and stored geometric coefficients. It is not
+another hidden multiplier bank. Count the shared GEOM.SETUP coefficient
+provider once, with the extra table-build work in its schedule.
+
+Profiles, all exact and all initially proposed:
+
+  Serial bit-plane: one table read/clock,32 steps/attribute. About three
+   256x40SDP slices for the 96-bit record. For genuinely sparse setup demand.
+  Four-bit folded: four independent table reads/clock,8 steps/attribute.
+   Four read copies*three width slices =12 M10K first candidate.
+  Fully pipelined: eight such bit groups,32 total read copies.96 M10K first
+   candidate, one attribute/clock once the pipe is filled.
+
+The last profile is expensive in memory, not magic. Two triangle-table epochs
+can fit in the shallow logical depth, but writes, live pipeline readers and
+per-triangle fill/drain still require a proved bank/version schedule. An
+unbounded context table would increase physical depth and may double width
+slices; do not quote the two-epoch count for 64live triangle tables.
+
+Use the smallest profile that meets measured(attributes*triangles) demand,
+including fog/emission lanes and thin-triangle bursts. The 1,089-vs6,144 projection
+saving does NOT eliminate per-triangle attribute setup. At the maximum synthetic
+all-fine-patches count, seven attributes per triangle alone can exceed a nominal
+frame issue budget; a workload/capacity conflict must be exposed, not solved by
+pretending all triangles have flat attributes or secretly lowering detail.
+
+12.4 Exact tile seeds without hard multipliers
+
+First reuse plane seeds as the SAME triangle advances through adjacent tiles:
+adding16*dNdx or16*dNdy is a shift/add. This is legal only with a known triangle
+identity and known tile offset; never inherit the previous triangle's seed.
+Keep a per-active-triangle checkpoint in RAM and a compact last-tile key.
+
+For arbitrary tile starts, multiply the two signed12-bit tile coordinates by
+the fixed gradients with an explicit signed-bit recurrence. A single96-bit
+accumulator over 12 bit positions computes both products through table sums of
+{0,dNdx,dNdy,dNdx+dNdy}; the top bit is negative. This costs zeroDSP and replaces
+two wide operators. A four-bit-group version reduces it to three steps by
+replicating the small coefficient table/adder network. Preserve the two half-
+pixel terms exactly; the gradients' multiple-of 256 property must be checked at
+its producer, not assumed from a stale comment.
+
+All cold plane and row-seed records live in RAM. Keep the current active
+96-bit pixel accumulator in registers. Moving an accumulator to a single-port
+RAM without a recurrence schedule would add bubbles rather than cure ALM use.
+
+12.5 Keep the quotient/remainder stepping blueprint
+
+ATTRSTEP already avoids dividing every pixel by seeding rows and stepping the
+Euclidean quotient/remainder pair. Preserve negative-region handling, zero
+crossing reseed, covered-pixel order and the original half-away-from-zero law.
+Do not put a second per-pixel divider next to it as a permanent production
+checker. Its old path is an oracle/fallback configuration, not an extra default
+physical datapath.
+
+Share a bounded seed-divider service across attributes only after testing row
+bursts and sign crossings. Context RAM must store each row's exact sign/step/
+remainder/area identity. More attributes are more work, even when not more
+physical divider lanes. The emitted colour/fog/emission lanes must retain their
+own source ordering.
+
+Acceptance: complete numerator-plane equivalence over full legal vertices and
+attributes, exact pixel-centre sampling, all negative tie cases, degenerate and
+clipped triangles, sign crossings, every semantic attribute and realistic tile
+order. Then measure setup+seed+step together. This packet has a zero-DSP target
+but must not turn the remaining memory/ALM budget into a new crisis.
+
+
+13. TERRAIN MAINTENANCE: SEPARABLE TABLES AND REUSED EXACT ARITHMETIC
+================================================================================
+
+13.1 Normals: credit the existing saving and preserve the existing queued brief
+
+Normals already uses one shared33x33 multiplier. Do not rewrite it back into six
+products or advertise eighteen-to-three as new work. Its current visible-triangle
+throughput must be reconciled with TESS: the 2,000normals/frame workload concerns
+deformation update activity and is not proof that a face-normal stage attached
+to every emitted triangle needs only2,000 evaluations. [S06,S13,S35]
+
+Keep the terrain rearchitecture document already delivered on main as the
+specific topology/timing plan. It covers annulus stitching, all neighbouring-LOD
+combinations, void/underside handling and a normal-product pipeline cut. This
+brief supplies its resource-accounting and memory-first context, not permission
+to replace its topology with a regular-grid shortcut.
+
+If normals must run for every visible triangle, consider caching/reusing
+unchanged face results under a complete deformation/morph/surface key, or a
+faster shared arithmetic schedule. Do not derive a height-gradient normal that
+changes the flat-face cross-product/rounding law just to save multipliers.
+
+13.2 Bake's largest improvement is work elimination, not narrower coordinates
+
+The current bake places a 33x33 lattice, computes dx²+dz² at each vertex and
+applies a stencil followed by an exact two-endpoint delta. Its X coordinate
+only depends on column and its Z coordinate only on row. [S23,S24]
+
+For one immutable stamp/patch command:
+
+  generate33 placed X coordinates and store(dx_i)²;
+  generate33 placed Z coordinates and store(dz_j)²;
+  evaluate d² at vertex(i,j) with X2[i]+Z2[j].
+
+That replaces2*1089 distance-square evaluations with 66 plus RAM reads. Each
+coordinate difference remains exact signed33 after reproducing the original
+placed-coordinate wrap. Each square is unsigned66; their sum is67. Two 33x66
+stores use four 256x40SDP slices in the first mapping. Captured command epoch,
+column/row and stencil state must stay paired with their read results.
+
+Reuse one full-width three-DSP product engine for the 66square preparations,
+radius square and the two absolute endpoint products where its scheduling
+allows. Do not instantiate a separate multiplier inside a table-fill helper.
+Target entire bake hard-arithmetic allocation:3 DSP, not a guaranteed17-to-three
+measured result; the 17 is historical evidence.
+
+13.3 Remove lattice-coordinate multiplies with an exact DDA
+
+The source computes a+trunc(((b-a)*i+16)/32) and wraps the final result to 32 bits.
+For negative spans, arithmetic right shift is not C++ truncation toward zero.
+Use Euclidean division span=32*q+r,0<=r<32. Maintain quotient/remainder of
+N_i=span*i+16, starting atN_0=16. On increment:
+
+  quotient +=q; remainder +=r;
+  if remainder>=32: remainder-=32; quotient++.
+
+Convert floor to truncation by adding one only when N_i<0 and remainder!=0.
+Then add a and perform the original32-bit wrapping narrow. This handles inverted
+extents exactly. A naive floor-shift implementation fails those cases. Generate
+all33 positions once; do not rebuild the multiplier through an unrelated helper.
+
+13.4 Do NOT simplify the bake delta incorrectly
+
+The current law is:
+
+  g(depth)=rescale_s32(rescale_s32(depth*stencil,16),8)
+  delta=g(from)-g(to).
+
+It is NOT rescale((from-to)*stencil,24). The absolute endpoint form telescopes
+across deferred updates; the difference form accumulates different rounding.
+Keep both rounds and each endpoint's defined rail behaviour even when the two
+products share one engine. The companion check demonstrates a counterexample
+to the tempting fused/difference forms. [S23]
+
+Preserve no_bake corner protection, breach/heal state, radius rejection,
+zero-radius behaviour, patch budgets and FIFO deferral. The meets plane is
+1,089 bits of stored results: give it synchronous bit/row RAM with an explicit
+four-corner read schedule rather than defaulting to 1,089resettable flops.
+The breach phase can use two adjacent row reads and a sliding two-bit window;
+it does not need four independently addressed whole-memory read ports.
+
+13.5 Count the actual deadline, especially the divider
+
+A 64-patch admission budget is not proof that64complete bakes fit the same frame.
+The stencil divider still has a per-vertex cost after squares are cached. Measure
+worst command completion and allowed deferral at the required frame boundary.
+Use a bounded interleaved exact divider if the existing serial one limits the
+required service. Do not claim a square optimization fixes a divide bottleneck.
+
+A further zero-DSP bake profile can use byte products or precomputed absolute-
+depth coefficient tables. It is eligible only when the complete schedule wins.
+A tree of large ROM lookup adders that consumes the ALMs saved elsewhere is not
+a success.
+
+13.6 Terrain LOD: zero-DSP byte products are a credible candidate
+
+The current terrain LOD already sequences six distance squares and eight ladder
+products per descriptor through one unsigned32-bit multiplier. It keeps two
+exact roots and combines both cameras by the finer decision. [S31]
+
+Use one quarter-square byte engine: a 32-bit square needs10distinct byte
+partials, a 24x16 ladder product six, a 32x16 relaxed RHS eight. Six squares
+consume60product slots; six left sides36; two right sides16:112byte-product
+slots, plus root32 steps and control/handshake overhead. A simpler generic bound
+of 14 products*16slots+32=256core clocks/descriptor is useful as a conservative
+starting schedule, NOT a measured latency.
+
+At 256 patches*16 subpatches*256 clocks this is1,048,576core clocks. That is within a
+1.333Mreserved window before additional stalls, so this is worth implementing
+and measuring, unlike blind serialization of the already-constrained FIELD
+engine. Preserve all strict/relaxed comparisons, hysteresis, minimum hold,
+non-monotonic deviations, both-view choice and geomorph outputs. Store waiting
+histories and operands in the owner’s existing memory, not a duplicate array.
+
+13.7 Geometry LOD: remove hidden constant arithmetic before widening a farm
+
+The existing six-DSP block already shares its five main products. Keep that
+reuse. Explicitly prove the widths of proj/error/boundary products and price
+one native full-width product engine, target3 DSP. Divisions by9 and11 can use
+section6.6 if they are spending additional DSPs or large combinational logic.
+Do not infer a free saving solely from one multiply statement: its two constant
+dividers and operand widths must be mapped. Preserve e==0 rules and exact
+coarsen/refine inequalities. [S32]
+
+A shared geometry/terrain maintenance worker is optional, not the default.
+Only combine them when the full calendars—including bake bursts—fit one
+provider and local arbitration does not create a new long critical route.
+
+
+14. LIGHTING, FOG AND NORMAL DETAIL: REQUIRED COSTS, NOT OPTIONAL BLANK ROWS
+================================================================================
+
+14.1 Resolve the executable law before RTL [S28,S29]
+
+The GEOM.LIGHT contract identifies an exact existing shade law, but its inspected
+entry point still takes a triangle rather than an already produced normal.
+First do the golden-pinned reference refactor into a shared normal-based
+primitive, with the original triangle function as a wrapper. Do not write a new
+oracle and compare it against an RTL implementation of the same invented law.
+Do not adopt the older normal-map report's approximate rsqrt/NR proposal as
+though it superseded the later exact lighting contract.
+
+Required behaviour includes independent-light clamping, moving lights,
+ambient/spill, the selected additive-emission feature, fog ordering, strongest-
+four selection where ruled, terrain base lighting and detail response. Record
+all selected features in the accounting profile, including their interpolation
+and storage cost. Emission zero is an exact off switch, not implicit permission
+to cut emission from the required product to make the budget look healthy.
+
+14.2 Reuse what is actually light-independent
+
+Compute a skinned world normal and its exact magnitude once per vertex, not once
+per light. Compute fixed light vectors/colours/configuration tables once per
+epoch. Reuse the same Lambert/attenuation response for gain and additive emission;
+only the colour application differs. Keep independent lights' negative terms
+from subtracting other lights' illumination: clamp each light's(raw+detail)
+before accumulating its colour. Saturate the aggregate where the law says,
+not after every contribution.
+
+For epoch-constant sun vectors, use section6.5 coefficient tables to evaluate
+the normal dot product without runtime hard multipliers. Normal magnitude is
+still the exact shared producer result. The subsequent exact signed quotient
+can use a local pipelined or interleaved divide service whose capacity is counted
+across every selected light. A service interface is not a zero-cost divide.
+
+For point lights, distinguish per-frame/per-instance terms from genuine
+per-vertex terms. Full raw-product identities such as
+N·(L-V)=N·L-N·V and |L-V|²=|L|²+|V|²-2L·V can expose reuse, but ONLY if the
+ratified code has no intervening saturation/rounding/normalization that the
+transformation crosses. Treat them as candidate factorizations requiring a
+source-level proof and oracle differential, not as approved substitutions.
+
+14.3 Colour and detail arithmetic belong in bounded tables where possible
+
+Unsigned8-bit colour applications use quarter-square lanes. Wider intensity or
+signed emission needs its own range proof; do not force every gain into8 bits
+if the additive law intentionally exceeds unity. For a fixed per-epoch light
+coefficient, byte tables offer exact products without reducing the coefficient's
+precision. Share tables and response terms only where their epoch/source identity
+is the same.
+
+The chosen normal-detail store is a resident tiling64x64x16 tile. Its physical
+memory ports, both views, mip/UV mapping and update rules must be counted. It
+avoids an extra TMU lookup, but is not free M10K. A signed detail component8
+multiplied by fixed sun direction/strength is an excellent small coefficient-
+table candidate. Preserve the exact per-light detail sign and clamp, and do not
+fold all suns into one coefficient before a nonlinear per-light clamp.
+
+14.4 Vertex fog factor can use four coefficient memories, zero DSP
+
+The current factor uses dist=far-w and epoch-constant k. For signed32far and
+unsigned31w, dist fits signed33. Precompute T[d]=k*d for unsigned8-bit d;
+each table entry fits signed40 bits. Reconstruct the product from the four low
+bytes of dist and subtract(k<<32) when its sign bit32 is1. This is exact for the
+entire port range, not just plausible fog distances. Four one-read256x40SDP
+copies are the initial four-M10K candidate for one factor/clock. [S09]
+
+Keep far<=near/disabled/behind cases CLEAR, use the original+32768 then>>>16,
+and clamp to[0,65536] at the original point. Capture or version the configuration
+with the vertex. The configured reciprocal k is produced once per epoch by an
+existing properly counted provider or a bounded setup routine; do not add a
+per-vertex reciprocal here.
+
+14.5 Lighting must earn its reserved allocation
+
+The 79-DSP design subtotal intentionally has a remaining 15-block pool. Price a
+complete lighting service with representative and worst admitted lights,
+normal inputs, exact roots/divides, selection logic, gain/emission and detail.
+Measure accepted vertices*lights and service demand across all clients. Four
+lights times120,000vertices is480,000 evaluations before terrain or other modes;
+that multiplication belongs in the calendar before choosing a serial core.
+
+If the proposed local lighting service exceeds its pool, do not suppress the
+row. Use the extra priced shell-colour ROM savings, a larger share of BRAM for
+fixed-coefficient arithmetic, or a different tested provider schedule. Unknown
+lighting throughput or area prevents the global 94-DSP acceptance verdict.
+
+15. FIELD AND THE REST OF THE MACHINE: COMPLETE THE COVERAGE, DO NOT BILL GHOSTS
+================================================================================
+
+15.1 FIELD's shared providers stay shared [S30]
+
+FIELD V3's multiplier bank has four physical wide lanes. Long-op LEN, curve,
+rotation/noise/normalize/spline paths may request those lanes through ports;
+follow the actual provider interface before assigning DSP to each caller.
+Conversely, a service containing an additional multiply/divide of its own must
+be counted separately. Provider edges are not necessarily module-instance edges.
+
+Keep the four-lane12-DSP allocation as the default rescue plan. The existing
+FIELD throughput is not generously over-provisioned, so reducing it to one lane
+because a pose decoder can tolerate serialization is not justified. Qualify the
+complete representative FIELD programs, including rival-service refusal,
+writeback conflicts, square-root bank occupancy and admission reserve. A scalar
+microbenchmark of one multiply says nothing about a vector program deadline.
+
+15.2 RF memory needs production parameters, not scalar-probe optimism
+
+The inspected FIELD RF has four register-residue banks and three read copies.
+Its stored width is32*LANES, not always32. AtLANES4 a 128-bit word needs four
+256x40SDP width slices before other constraints; four banks*three copies*four
+slices is a 48-M10K first geometry estimate, not the scalar twelve-block result.
+Actual depth/contexts and map reports decide the final count.
+
+The three copies support real simultaneous operands and residue crossing. Do
+not remove them without a new read-port schedule and throughput proof. Already
+inferred RAM is not a new thousands-of-FF opportunity. Inspect which active
+records still live in logic, move those cold records if beneficial, and retain
+the minimum genuinely necessary multiport storage.
+
+Root/sine/coefficient memories must have explicit external provider ownership,
+initialization and collision rules. A folded root engine can store cold contexts
+in RAM while keeping its current remainder in registers. RAM cannot perform
+several independent recurrence updates through one write port per cycle unless
+the schedule accounts for them.
+
+15.3 Command/memory/video/audio/input
+
+Do not rewrite these to chase DSPs they do not use. Reconcile them through the
+actual shell hierarchy and any separately selected external roots. Address
+ALM-heavy queues with the successful texture discipline: bounded RAM payload,
+small local pointers, synchronous read, whole-record hold, no duplicate
+production shadows. Preserve crossing-domain FIFO primitives and synchronizers.
+Never replace a CDC FIFO with a single-clock SRAM wrapper to reduce its count.
+
+FRAMECTL/scanout/framebuffer residency, SDRAM burst packing, command framing,
+write-data reservation, CRC/counter crossings and arbitration remain functional
+requirements. Moving descriptors into SDRAM may increase traffic on the very
+arbiter whose bandwidth is already reserved. A resource reduction that causes
+scanout starvation is not accepted. Payload depths may only be reduced from
+observed/proved occupancy plus required burst reserve, not from a quiet demo.
+
+15.4 Geometry memory/front-end/clip/setup
+
+GEOM.PARAMBUF is currently a record decoder/validator, not a giant on-chip
+vertex arena. Its projected-vertex, triangle and chunk layouts describe local
+SDRAM records. Do not claim to save megabytes of BRAM by "moving PARAMBUF to
+SDRAM" when the architecture already does that. The actual work is the allocator,
+quota seal, burst frontend, small on-chip working cache and correct record
+extensions for fog/emission. [S24b]
+
+Preserve malformed-coordinate rejection, vertex-count bounds, frame-generation
+checks and null chunk rules. Byte enables and record packing must match the
+physical memory frontend. Dead old source fields are not permission to break an
+external record ABI without its producer/consumer adapter and golden tests.
+
+SETUP's geometric edge terms are the correct provider candidate for section12's
+attribute-coefficient table. CLIP, perspective projection and normal lighting
+must agree about behind-eye terminal records and newly generated vertices. Clip-
+generated attributes need the same selected arithmetic law as original vertices;
+they are not a free exception to the setup/lighting bill.
+
+15.5 Particles, forge, surface, compositing and 2D
+
+Enumerate each selected particle expansion/record/soft-fade, forge primitive/
+cliff, surface sheet/stamp, gather and2D plane/sprite function. Classify products
+as per-frame/per-command/per-vertex/per-pixel, constant coefficient or dynamic,
+and already shared versus private. Most bounded colour/coverage products are
+candidates for section6.1; coordinate squares and nonlinear effects need the
+wide-domain/byte-partial or exact recurrence rules instead.
+
+Keep already optimized SURFACE.STAMP rather than budgeting its historical
+28-DSP predecessor. Do not equate a function's absence from the old full-fit
+ledger with absence of its MapOnly evidence. Do not add the old FIELD reference
+or geometry probe wrappers into this bill to "be conservative"; conservatism
+means explicit unknown current costs, not counting mutually exclusive designs.
+
+Unpriced required functions in these categories must get rows before the final
+allocation is accepted. The 15-DSP remainder is not a claim that all these rows
+sum to two; it is a cap that forces the full functional selection to be made and
+measured before closure.
+
+15.6 Source/function coverage report required from the agent
+
+Output a table covering EVERY selected root and EVERY external arithmetic
+provider, including zero-DSP leaves. Columns:
+
+  physical owner | selected version/parameters | current evidence | call rate |
+  external providers | DSP | ALM | M10K ports/copies | remaining action.
+
+Every omitted mandatory feature is an error. Every deliberately excluded
+reference/probe/version has a reason. A missing fit target is a measurement-
+setup task, not proof the module has never been measured by another runner.
+A proposed product profile is not a claim the runtime now composes those blocks.
+
+This review examined the dominant arithmetic implementations and their
+contracts, the actual texture path, the production accounting structure, the
+separate ledgers, and selected memory/service consumers. It did NOT physically
+synthesize every repository module. The coverage table is a required completion
+artifact precisely because a whole-machine verdict cannot come from another
+shortlist of expensive blocks alone.
+
+
+16. GLOBAL ALM, MEMORY AND BANDWIDTH ACCEPTANCE
+================================================================================
+
+16.1 The objective is a Pareto improvement in the constrained machine
+
+Do not force every local experiment to reduce every metric. A culler can spend
+M10K to removeDSP while the shared projector removes bothALM andDSP. But the
+COMPLETE accepted portfolio must meet all hard resource limits, the owner’s
+reserve and clock/workload targets. Every local increase needs a named global
+budget allocation, not "memory is cheap" or "the fitter will sort it out".
+
+Keep two kinds of ALM evidence:
+
+  structural: named registers/muxes/arrays/comparators removed; inferred RAM;
+  physical: matched map and fitted ALM/MLAB/register/timing measurements.
+
+A declared4,096-bit array is not necessarily4,096fabric registers. An array
+whose last consumer was removed may already have vanished. Conversely, one
+synthesized diagnostic comparator can keep an entire obsolete reference table
+alive. Inspect the mapped entity/logic cone. No source line-count or register-
+bit-to-ALM exchange formula is an adequate replacement.
+
+16.2 Memory planning ledger: examples, NOT a claim that everything fits
+
+Candidate store/operation                     First explicit geometry candidate
+-------------------------------------------------------------------------------
+Quarter-square8x8 lane                        1TDP M10K;2single-read fallback
+Texture combine2 lanes +bilinear4 lanes         6TDP M10Ks, excluding context RAM
+Pixel fog RGB                                3TDP M10Ks
+Vertex fog, one active coefficient set        4SDP M10Ks for 4x40-bit reads
+Fast projection coefficient H,2 views          9SDP M10Ks;64 entries/view/lane
+Viewport X/Y,2 views,4reads/axis                4TDP M10Ks;epoch duplication priced
+Whole-patch106-bit replay,2 views,2replicas     68--88 TDP; layout/ports qualified
+81-entry subpatch replay,2 views,ping-pong       18 SDP; 3 copies of 324x115 rows
+Cull coefficient tables                      8folded or32pipelined SDP M10Ks
+Attribute coefficient tables                 3serial /12folded /96pipelined
+Skin-normal two 32x8 ROM product lanes         8quarter-square M10Ks
+Bake separable square tables                 4SDP M10Ks
+FIELD RF at illustrative LANES4              48SDP M10Ks;qualify actual depth
+-------------------------------------------------------------------------------
+
+These counts depend on the exact ports and selected modes described earlier.
+They exclude many existing RAM users and are not an additive "spare memory"
+claim. Use the native geometry table [V01], not simply ceil(logicalbits/10240).
+
+In particular, choosing whole-patch ping-pong, fully pipelined attribute DA,
+pipelined culling and every replicated vector bank can exhaust553 M10Ks. The
+small subpatch cache and folded attribute profile exist to avoid that. The
+projection fast backend keeps the nine-DSP target when the smaller cache no
+longer permits a three-clock projection schedule.
+
+16.3 Where ALM is expected to fall, and how to test that expectation
+
+A. One projection service replaces two: fewer wide row/output datapaths and
+   fewer exact divider lanes. In BackendA, six old divider lanes become one;
+   in BackendB, six become three. Cold riders/results move to RAM.
+B. Pose uses one product/accumulator worker instead of separate quaternion and
+   three-term matrix farms; matrices/scratch stay in RAM.
+C. Position/normal share coefficient fetch rather than duplicating large bone
+   matrices in every active record. Proven widths remove unnecessarily wide
+   normal products and comparator trees.
+D. Bake removes1,089-per-vertex square work, two lattice multiplies and packed
+   resettable meets state in favour of tiny square/row memories and DDA.
+E. Attribute setup reuses geometric coefficients, then coefficient ROMs replace
+   wide multiplier farms. The selected recurrence keeps active state local.
+F. Production retains no migration shadow datapaths. Debug evidence is provided
+   by simulation/trace reads or a separate lab image, not a permanent second
+   machine.
+
+Each statement is an architectural mechanism, not an ALM magnitude prediction.
+Before integration, record the old hierarchy entities expected to disappear and
+the replacement entities expected to appear. After map, reconcile them. If the
+old large arrays remain, the packet is not decrufted regardless of green tests.
+
+16.4 Keep physical timing honest
+
+Report setup, hold, recovery/removal and relevant I/O/domain constraints, not
+only a selected internal-onlyFmax. Port-heavy characterization can distort
+headlineFmax; deleting inconvenient boundary paths is not timing closure.
+Use registered production-shaped wrappers for new services and then fit their
+real neighbour seams. Preserve the actual board/framework clock obligations.
+
+Inspect whether the dominant path is logic delay, interconnect, fanout or memory
+access before choosing the next change. The old owner-to-RCP family was largely
+wire delay and its credit flag was already registered. Do not add a redundant
+flag or rewrite a correct counter because of a misleading node name.
+
+16.5 Deadline acceptance is per shared physical resource
+
+For each provider define job types, work per job, worst admitted arrival burst,
+queue capacity, arbitration, initiation interval, latency, configured epochs and
+client deadline. Measure wall-clock frame completion with the entire selected
+workload, not the sum of isolated perfect-service rates.
+
+Include view duplication, top/underside terrain, stitch/morph work, cache misses,
+pose cold starts, point-light changes, beam/particle bursts, material sample
+counts, memory refills, tile conflicts and scanout reserve. If capacity caps are
+not intended to occur together, encode the actual admission/governor rule that
+prevents it. An unenforced sentence saying "unlikely to coincide" is not a
+hardware budget.
+
+Do not lower the 100 MHz target to justify slow arithmetic, or remove the 20%
+working reserve from a scheduling calculation merely because it was close.
+Where 20% was a proposed planning reserve rather than a frozen rule, label it as
+such and use the real ratified admission budget for acceptance.
+
+
+17. FIT-SPARSE EXECUTION AND RUN SURVIVAL
+================================================================================
+
+17.1 Spend expensive fits on decisions
+
+Stage0: source/range/protocol checks and simulation.
+Stage1: small exact-tool mapping experiments for inference/ports/DSP structure.
+Stage2: one production-shaped subsystem candidate that passed the cheap gates.
+Stage3: a meaningful integrated milestone and final closure seeds/settings.
+
+Do not full-fit every ROM lane, every arithmetic identity and every documentation
+correction. Do not rerun the lost D0 attribution fit: its correctness is tested,
+and its physical effect belongs in the next legitimate texture checkpoint.
+Do not run forty long leaf fits to build a DSP bill when MapOnly can answer the
+specific resource question and the existing ledger already has relevant data.
+
+A no-target block needs a complete source closure and selected parameters before
+mapping. Generate that from the existing graph/tooling, inspect it, and register
+it in the proper target file. That is necessary measurement preparation, not an
+invitation to author an elaborate new synthesis orchestration framework.
+
+17.2 Minimum mapping experiments worth doing
+
+Q:512x16dual-read quarter-square, including boot/MIF and real output hold.
+H:one full-s32 hybrid coefficient multiply with matched native reference.
+V:viewport/fog table profiles and their actual port replication.
+A:production-depth vertex arena, both views and real read/write schedule.
+C:one cull DA stage with production coefficients, then selected complete profile.
+S:position/normal two-lane front and exact square/root capacity.
+P:one selected attribute-table/seed profile.
+B:bake square tables+shared worker;terrain LOD byte worker.
+
+These are microarchitecture questions. Keep a bad map result with its specimen
+and explain why the candidate was rejected. Do not start a full fit of a design
+whose map still contains the very DSP farm it was supposed to delete.
+
+17.3 Small run-discipline fix; no monitoring project
+
+Use an isolated immutable worktree/staging directory per long specimen. Keep
+logs/results outside a source directory that normal editing/pulling rewrites.
+Record UTC start time, local time, unique run ID, parent wrapperPID, actual
+Quartus stagePIDs, tool/device, selected top/parameters, source/config digests,
+free disk at start, and planned result directory BEFORE launch.
+
+A queue waits for a SPECIFIC predecessor's terminal marker, not just a moment
+when no quartus_fit process happens to exist between compile stages. One shared
+lock covers map,fit,STA and receipt collection. A waiting shell is allowed;
+two contenders releasing from the same generic-idle condition are not a queue.
+Do not stop a valid fit simply to simplify the shell list.
+
+On completion or failure write an atomic terminal status, final byte hashes,
+exit code, final stage, elapsed WALL time and available logs. Preserve any valid
+completed stage separately. A sum of elapsed durations for overlapping jobs is
+not CPU-hours and is not wall-clock time lost. Record the actual reason for a
+termination when known; external stop without attribution remains unknown.
+
+Do not assume a frozen source digest proves no restart occurred: runID/start
+receipt/process identity do. This avoids the earlier habit of inferring a launch
+time or elapsed duration too precisely from commit timestamps.
+
+17.4 Full-fit milestones after current texture work
+
+F1:accepted memory-colour/vertex-fog subsystem checkpoint, with real neighbours.
+F2:projection cache+chosen shared service+canonical-depth/epoch transport.
+F3:pose/position/normal/cull/attribute composition after local maps are accepted.
+F4:terrain maintenance integration under the existing queued terrain plan.
+F5:actual selected console/resource profile, then constrained functional console.
+
+Combine milestones when a larger coherent checkpoint is ready; do not serialize
+development behind every fit. The sequence is a ceiling on redundant experiments,
+not a promise that exactly five fits can settle every unexpected timing failure.
+Additional fits require a named unanswered decision and a falsifiable expected
+structural change. Purely cosmetic edits do not earn another full run.
+
+Do not implement every speculative fallback. Choose between BackendA/B and
+folded/pipelined DA profiles from demand+map evidence, then fit the coherent
+portfolio. Otherwise branch combinatorics can consume more time than Quartus.
+
+
+18. ORDERED POST-TEXTURE WORK PACKETS
+================================================================================
+
+NOW — A 0: resource truth
+  Edit the documents/tool as section2; record the selected instance graph and
+  unpriced function list. Incorporate the agent's new census, don't duplicate it.
+  Gate: all accounting fixtures fire; every required function has a non-silent
+  row; no final-fit claim. Protect current fit closures. Return to texture.
+
+AFTER TEXTURE — R0: freeze the accepted texture reference
+  Archive the final accepted texture sources, parameters, tests and receipts.
+  Name the subsequent memory-colour candidate separately. Do not lose the oracle
+  just because the production configuration is now lean.
+
+R1: exact small-ROM arithmetic and configuration tables
+  Build the quarter-square primitive, full-width hybrid probe and coefficient
+  table primitive. Execute integer/RTL differential tests and MapOnly. No full
+  island fit. Reject failed inference before composing it.
+
+R2: repair and qualify the arena; capture the real work trace
+  Production-depth addressing fix first. Then epoch/lifetime/ports and complete
+  terrain replay identity. Quantify whole-patch/subpatch options and Duo/underside.
+  Gate: exact emitted geometry; correct table addressing; trace-backed cache and
+  service demand. No architectural dependence on an untestedDEPTH=16 proxy.
+
+R3: select and build the projection service
+  Choose BackendA only if its complete schedule fits. Otherwise price BackendB.
+  Keep full signed32 semantics; integrate viewport and guardedW/canonical-depth
+  transport. Gate:9 DSP allocation, ALM/memory budget, exact results, deadlines.
+  Fit the service with real neighbours; this is the largest strategic reduction.
+
+R4: colour/fog memory packet
+  Material combine/filter, pixel fog, vertex fog. Preserve exact rounding and
+  RMW/credit semantics. Gate: predictedDSP changes observed, no hidden old path,
+  acceptable ALM/M10K/throughput. Fold into the next coherent composition fit.
+
+R5: pose and position/normal packet
+  One 3DSPposeworker, two-lane 6-DSPposition lanes, one-DSP square farm plus ROM normal
+  transform, counted roots and RAM palette/context transport. Coldmiss deadlines
+  and full legal-domain equivalence first. No MUL_LANES=2 parameter shortcut.
+
+R6: cull and attribute coefficient memories
+  Select profiles from real demand. Build coefficient tables from once-per-
+  configuration/triangle state. Keep negative sign bits, interpolation law,
+  pixel centres and conservative visibility exact. Zero-DSP target is not enough:
+  memory ports and ALM must fit the full portfolio.
+
+R7: terrain maintenance under the earlier queued terrain brief
+  Normals alreadyshared;TESS topology unchanged. Add separable bake squares,
+  exact DDA, meets-row RAM and shared endpoint arithmetic. Qualify zeroDSPterrainLOD.
+  Respect actual visible-face demand and deferral deadlines.
+
+R8: complete lighting/remaining-function allocation
+  This begins as an accounting/workload task at A 0, NOT after all fifteen spare
+  DSPs have been spent. Implement the accepted shared lighting/detail services,
+  remaining particle/forge/etc math and all provider edges. If the complete
+  profile will exceed94, use a priced alternative BEFORE the final composition.
+
+R9: selected-console physical closure
+  No mutually exclusive versions, uncounted providers or unknown mandatory costs.
+  A complete selected resource-map subtotal <=94 precedes the full functional
+  fit. Complete ALM/M10K/timing/deadline acceptance then earns closure. Archive
+  the manifest, exact source/configuration specimen, all results and test seals.
+
+
+19. ACCEPTANCE, REJECTION AND WHAT MUST NOT BE CLAIMED
+================================================================================
+
+19.1 A packet is complete only when all four accounting questions are answered
+
+  What existing physical structure was removed?
+  What replaced it, including memory ports/control?
+  Which selected functional/protocol behaviour stayed exact?
+  What does the appropriate physical/workload measurement actually show?
+
+A new candidate beside an old active structure is development, not yet a saving.
+A removed source field whose old hardware was already optimized away has no
+extra credited saving. A new table that maps into fabric rather than M10K has
+not met the memory-first objective. A held reply whose tag/epoch can advance
+independently is a correctness failure even when counters conserve traffic.
+
+19.2 Final product gate
+
+  physical DSP blocks <=94;
+  full selected profile, including new mandatory functions and providers;
+  ALMs, registers, MLAB/M10K and external bandwidth within actual product budgets;
+  100MHz/relevant domain timing closed under actual constraints;
+  all mandatory frame/deadline/admission profiles and reserve satisfied;
+  no unknown required cost, unresolved skipped pipeline or unsupported feature;
+  source identity and parameterization reproducible;
+  current functional references and adversarial tests passed.
+
+An informative partial report can be useful without any of these final claims.
+Do not label a row "green machine" when its source list contains probes or its
+consumer is not built. Do not discard dirty historical counts as zeros. Do not
+turn a failing hardware gate into a documentary permission to ship it.
+
+19.3 Explicit non-solutions
+
+* More investors or a larger FPGA are not this brief's rescue mechanism.
+* Global multstyle=logic is not an ALM-aware design.
+* Arbitrarily reducing matrix width, world range, normal precision or colour bits
+  is not a bit-exact implementation optimization.
+* Serializing a saturated shared provider is not a throughput-preserving saving.
+* A monolithic table for arbitrary 32x32 multiplication is not feasible here;
+  the hybrid/coefficient/partial-product designs deliberately avoid that.
+* Running every block's best isolated settings at once does not prove the
+  integrated console can meet those settings.
+* Deleting the oracle during migration does not make a smaller production build
+  more correct. Keep reference sources out of the synthesized shipping closure.
+* Passing a small/different-parameter test does not qualify the selected profile.
+* Printing a detector is not asserting it; asserting zero without proving traffic
+  reached it is not evidence; a self-test that duplicates the implementation's
+  mistake is not an independent control.
+
+19.4 When a proposed architecture fails
+
+Keep the valid arithmetic derivation and the failed physical receipt. Diagnose
+whether the failure is mapping, ports, interconnect, latency, workload or lost
+semantic identity. Choose the listed alternative profile where it addresses
+that cause. Do not respond to every failure with a full-island rewrite or by
+inventing a new subsystem around the existing bloated one.
+
+If the admitted complete workload and minimum verified implementations cannot
+fit94 DSP and the ALM/memory/timing budgets simultaneously, document the exact
+constraint conflict and the alternatives. That conclusion requires real complete
+evidence; it cannot be inferred from today's mixed-vintage subtotal. Conversely,
+a plausible79+15allocation is not proof that such a conflict has been solved.
+
+
+20. COPYABLE HANDOFF TO THE WORKING AGENT
+================================================================================
+
+Owner direction: correct the resource accounting/docs now; keep finishing the
+texture island; execute the global memory-first programme after texture closes.
+
+Do not interrupt an active fit. Read this brief, reconcile its snapshot against
+current HEAD, and acknowledge it durably. Extend the new dsp_census tool to read
+fit+map+shell evidence, select an explicit implementation/parameter profile,
+count physical instances and external providers once, preserve nulls/unknowns,
+and stop calling a mixed subtotal a floor. Mark proposed allocations separately
+from measured savings. Credit already-shared normals; exclude rejected/reference
+combiner hardware from the selected bill; include fog, pose, skin-normal,
+attribute setup, lighting and actual FIELD parameters. Apply only fit-safe docs
+now; target/runner/HDL changes belong in an immutable future specimen.
+
+Then return to the existing texture gates. Do not start projection work now.
+
+After texture acceptance: use small exact-tool maps to qualify quarter-square
+ROMs and full-width coefficient arithmetic. Fix the vertex-arena 1,089-stride
+bug before relying on WCACHE. Reuse projected final vertices in a bounded
+working store; price three-read replay and Duo. Replace the two 33-DSP projectors with
+one 9-DSPservice: folded full-width if the trace permits, otherwise the exact
+26+6 hybrid coefficient version. Reduce divider replication and move cold
+riders/results to RAM. Preserve guarded w, canonical depth and all rounding.
+
+Use a 3-DSPposeworker, a genuinely overlapped 6-DSPpositionworker, ROM normal
+transforms plus one small square DSP and counted root capacity. Move culling and
+attribute plane/seed work to configured coefficient tables with a tested port
+calendar. Apply the existing terrain rearchitecture; add separable bake squares,
+exact negative-span DDA and a byte-product LOD worker. Implement/count required
+lighting andall remaining functions within the complete allocation.
+
+Target DSP <= 94 WITH ALM, memory, timing and throughput closure.79 + 15 is a proposed
+allocation, not a measurement. Do not count a savings twice, hide an unknown,
+relax a legal input domain, or call a new candidate complete before the old
+production structure actually disappears. Expensive fits are integrated decision
+gates, not a reflex after each edit. Each packet reports source deletion,
+synthesized deletion, replacement, functional proof and physical/workload receipt.
+
+
+
+21. SOURCE LEDGER AND PRIMARY VENDOR REFERENCES
+================================================================================
+
+Repository citations are pinned. A path listed at a current commit may contain
+an OLDER measurement; its presence does not re-measure it. Source inspection,
+historical byte equality, arithmetic derivation, mapping and full physical fit
+are separate evidence classes throughout this brief. Canonical links below are
+provided so the agent can inspect each original rather than trusting a paraphrase.
+All proposed new engines/layouts in this brief remain proposals unless a specific
+existing measurement is explicitly identified.
+
+[S01] Production selection and historical duplicate/successor declarations
+  Ref: 5cb1162b95ae61ba119a04994bb842c6de4e9abb
+  design/prod_manifest.yml
+  https://github.com/Fabulu/zhaozhou/blob/5cb1162b95ae61ba119a04994bb842c6de4e9abb/design/prod_manifest.yml
+  Evidence qualification: Read together with actual hierarchy; this manifest was updated during the review.
+
+[S02] New DSP census tool: current selection/coverage limitations
+  Ref: 5cb1162b95ae61ba119a04994bb842c6de4e9abb
+  tools/budget/dsp_census.py
+  https://github.com/Fabulu/zhaozhou/blob/5cb1162b95ae61ba119a04994bb842c6de4e9abb/tools/budget/dsp_census.py
+  Evidence qualification: Full source inspected. It reads the ordinary fit ledger only and does not implement the complete selector described in this brief.
+
+[S03] Separate shell measurement
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  reports/synthesis/zhao_shell_fit.json
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/reports/synthesis/zhao_shell_fit.json
+  Evidence qualification: Historical shell receipt: sourceCommit b3bd69b7f611c8799786a9f39169e64a9b4e84c7; 16 DSP. Do not call it a current full-console fit.
+
+[S04] Per-block fitted and labelled measurement ledger
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  reports/synthesis/zhao_block_fit.json
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/reports/synthesis/zhao_block_fit.json
+  Evidence qualification: Contains multiple vintages and parameterizations. Select evidence by specimen/profile rather than by label syntax.
+
+[S05] Separate MapOnly measurement ledger
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  reports/synthesis/zhao_block_map.json
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/reports/synthesis/zhao_block_map.json
+  Evidence qualification: Existing map evidence includes normals 3 DSP, pose 18, historical bake 17 and cliff 2. Applicability must be checked per closure.
+
+[S06] Terrain normals reuse and its composed characterization
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/terrain/zhao_terrain_normals.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/terrain/zhao_terrain_normals.sv
+  fpga/rtl/synth/zhao_pair_tess_normals.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/synth/zhao_pair_tess_normals.sv
+  Evidence qualification: Current source has one shared wide multiplier. Old leaf 18-DSP cost is not the later implementation. Pair is a characterization wrapper, not an additional console block.
+
+[S07] Texture surgery, metadata atomicity and acceptance roadmap
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/texture/zhao_texture_island_v3_top.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/texture/zhao_texture_island_v3_top.sv
+  fpga/rtl/texture/zhao_texture_metajoin.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/texture/zhao_texture_metajoin.sv
+  reports/V3-REARCHITECTURE-ROADMAP.md
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/reports/V3-REARCHITECTURE-ROADMAP.md
+  Evidence qualification: Primary architectural baseline. Superseded fit status is updated by S39; the new RTL remains the source of identity and credit contracts.
+
+[S08] Historical pose map source identity
+  Ref: 7395d7932f5acf7f3c19851f43b7ff381a97c4d0
+  fpga/rtl/geometry/zhao_geom_pose_decode.sv
+  https://github.com/Fabulu/zhaozhou/blob/7395d7932f5acf7f3c19851f43b7ff381a97c4d0/fpga/rtl/geometry/zhao_geom_pose_decode.sv
+  fpga/rtl/geometry/zhao_geom_quat2mat.sv
+  https://github.com/Fabulu/zhaozhou/blob/7395d7932f5acf7f3c19851f43b7ff381a97c4d0/fpga/rtl/geometry/zhao_geom_quat2mat.sv
+  fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+  https://github.com/Fabulu/zhaozhou/blob/7395d7932f5acf7f3c19851f43b7ff381a97c4d0/fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+  Evidence qualification: Earlier audit compared these three blobs to the then-current hardware snapshot; all matched. Not a new simulation or fit.
+
+[S09] Full signed fog-factor arithmetic
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/geometry/zhao_geom_fogfactor.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_geom_fogfactor.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S10] Existing memory-for-arithmetic blueprint and material combiner
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  reports/MEMORY-FOR-ALM-AND-DSP-20260909.md
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/reports/MEMORY-FOR-ALM-AND-DSP-20260909.md
+  fpga/rtl/texture/zhao_texture_material_combine_v2.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/texture/zhao_texture_material_combine_v2.sv
+  Evidence qualification: Retain the quarter-square direction. The large arbitrary-product table rejection does not rule out the new hybrid or result-cache architecture.
+
+[S11] Bilinear exact intermediate and final rounding law
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S12] Pixel fog sign, exemption, order and single rounding
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/raster/zhao_raster_fog.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/raster/zhao_raster_fog.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S13] Provisional workload definitions and contradictions
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  design/budgets/workloads.yml
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/design/budgets/workloads.yml
+  Evidence qualification: Demand/capability/measurement are distinct. Use the explicit arithmetic bounds, not a claim these profiles have already been jointly scheduled.
+
+[S14] Common projector: full-width products, exact dividers and payload
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/common/zhao_project_core.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/common/zhao_project_core.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S15] Geometry wrapper of the common projector
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/geometry/zhao_geom_project.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_geom_project.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S16] Terrain wrapper and repeated corner submission
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/terrain/zhao_terrain_project.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/terrain/zhao_terrain_project.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S17] Vertex-arena physical-stride defect
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/geometry/zhao_vertex_arena.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_vertex_arena.sv
+  Evidence qualification: Declaration/read/write/open-clear examined at the production depth. Python establishes address arithmetic, not an RTL counterexample run.
+
+[S18] Result-cache blueprint and small-depth directed test
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/geometry/zhao_geom_wcache.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_geom_wcache.sv
+  tests/geometry/geom_wcache_directed.cpp
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/tests/geometry/geom_wcache_directed.cpp
+  Evidence qualification: The directed test uses DEPTH=16, unlike the 1,089-entry production-depth concern.
+
+[S19] Pose decoder and both arithmetic engines
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/geometry/zhao_geom_pose_decode.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_geom_pose_decode.sv
+  fpga/rtl/geometry/zhao_geom_quat2mat.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_geom_quat2mat.sv
+  fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S20] Skinned normal: actual products, range reduction, external root
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/geometry/zhao_geom_skin_norm.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_geom_skin_norm.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S21] Position skin, supported lane profiles and weighted rounding
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/geometry/zhao_geom_skin.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_geom_skin.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S22] Conservative culling and configuration-time exact ceiling roots
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/geometry/zhao_geom_cull.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_geom_cull.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S23] Bake absolute-endpoint two-rounding law
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/terrain/zhao_terrain_bake_delta.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/terrain/zhao_terrain_bake_delta.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S24] Bake separable coordinates, squares, stencil and meets store
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/terrain/zhao_terrain_bake.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/terrain/zhao_terrain_bake.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S24b] Geometry PARAMBUF is a record layer for external storage
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/geometry/zhao_geom_parambuf.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_geom_parambuf.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S25] Attribute-plane geometric and attribute product structure
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/geometry/zhao_geom_attrsetup.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_geom_attrsetup.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S26] Interpolator tile-start products and half-pixel law
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/raster/zhao_raster_attrinterp.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/raster/zhao_raster_attrinterp.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S27] Exact quotient/remainder stepping and seed division
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/raster/zhao_raster_attrstep.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/raster/zhao_raster_attrstep.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S28] Required lighting contract, oracle gap and independent-light law
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  design/contracts/GEOM.LIGHT.md
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/design/contracts/GEOM.LIGHT.md
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S29] Older normal-map architecture and its source-dependent assumptions
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  reports/NORMALMAP-ARCHITECTURE.md
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/reports/NORMALMAP-ARCHITECTURE.md
+  Evidence qualification: Approximate rsqrt and behind-record assumptions are not automatically the later lighting/projector contract. Do not adopt its old total/resource prose uncritically.
+
+[S30] FIELD physical provider, vector RF and root-bank service
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/field/zhao_field_v3_mulbank.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/field/zhao_field_v3_mulbank.sv
+  fpga/rtl/field/zhao_field_v3_rf.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/field/zhao_field_v3_rf.sv
+  fpga/rtl/field/zhao_field_v3_len.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/field/zhao_field_v3_len.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S31] Terrain LOD shared arithmetic and both-view schedule
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/terrain/zhao_terrain_lod.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/terrain/zhao_terrain_lod.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S32] Geometry LOD main multiplier and constant divides
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/geometry/zhao_geom_lod.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/geometry/zhao_geom_lod.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S33] Framebuffer blend product law
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/raster/zhao_raster_blend_prod.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/raster/zhao_raster_blend_prod.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S34] Fragment stage products, RMW staging and whole-packet state
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  fpga/rtl/raster/zhao_raster_fragment.sv
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/fpga/rtl/raster/zhao_raster_fragment.sv
+  Evidence qualification: Source/report reviewed; repository presence is not a fresh physical measurement.
+
+[S35] Already delivered queued terrain rearchitecture
+  Ref: 1fc4ac8afbb30176db0212509e7e8450766a4f0a
+  reports/TERRAIN_31MHZ_REARCHITECTURE.txt
+  https://github.com/Fabulu/zhaozhou/blob/1fc4ac8afbb30176db0212509e7e8450766a4f0a/reports/TERRAIN_31MHZ_REARCHITECTURE.txt
+  Evidence qualification: Owner-direction commit on main, 2026-09-07 07:57:11 CEST. Read from this pin if absent from the active hardware branch; do not merge creature work wholesale.
+
+[S36] Accounting updates checked during the review
+  Ref: 5cb1162b95ae61ba119a04994bb842c6de4e9abb
+  design/prod_manifest.yml
+  https://github.com/Fabulu/zhaozhou/blob/5cb1162b95ae61ba119a04994bb842c6de4e9abb/design/prod_manifest.yml
+  tools/quartus/check_prod_manifest.py
+  https://github.com/Fabulu/zhaozhou/blob/5cb1162b95ae61ba119a04994bb842c6de4e9abb/tools/quartus/check_prod_manifest.py
+  tools/quartus/gen_prod_top.py
+  https://github.com/Fabulu/zhaozhou/blob/5cb1162b95ae61ba119a04994bb842c6de4e9abb/tools/quartus/gen_prod_top.py
+  tools/budget/dsp_census.py
+  https://github.com/Fabulu/zhaozhou/blob/5cb1162b95ae61ba119a04994bb842c6de4e9abb/tools/budget/dsp_census.py
+  reports/V3-REARCHITECTURE-ROADMAP.md
+  https://github.com/Fabulu/zhaozhou/blob/5cb1162b95ae61ba119a04994bb842c6de4e9abb/reports/V3-REARCHITECTURE-ROADMAP.md
+  Evidence qualification: Compact comparison against the primary pin used to identify already-landed work; core arithmetic inspection remains pinned separately.
+
+[S37] Prior texture Decrufter handoff
+  Ref: 792205d000f4d19a750a66e44f6332b8cfcec4ee
+  reports/ZHAOZHOU_THE_DECRUFTER_FPGA_TEXTURE_ISLAND_2026-09-08.txt
+  https://github.com/Fabulu/zhaozhou/blob/792205d000f4d19a750a66e44f6332b8cfcec4ee/reports/ZHAOZHOU_THE_DECRUFTER_FPGA_TEXTURE_ISLAND_2026-09-08.txt
+  Evidence qualification: Existing earlier brief, not a new physical result. Its texture sequencing remains separate from the global implementation queue.
+
+[S38] Misleading historical census wording retained at current accounting update
+  Ref: 5cb1162b95ae61ba119a04994bb842c6de4e9abb
+  reports/DSP-BUDGET-CENSUS-20260908.md
+  https://github.com/Fabulu/zhaozhou/blob/5cb1162b95ae61ba119a04994bb842c6de4e9abb/reports/DSP-BUDGET-CENSUS-20260908.md
+  Evidence qualification: Historical heading still calls 154 a floor. Source/profile/stage corrections must precede new closure claims.
+
+[S39] Gate 2 native fitted area and timing report
+  Ref: 7714bcc1bdac8c4c0f0f02e437d27a827d8a4840
+  reports/GATE2-PACKETS-1-2-3-MEASURED-20260909.md
+  https://github.com/Fabulu/zhaozhou/blob/7714bcc1bdac8c4c0f0f02e437d27a827d8a4840/reports/GATE2-PACKETS-1-2-3-MEASURED-20260909.md
+  reports/synthesis/blockpaths/zhao_texture_island_v3_top@g2-prod.fit.summary
+  https://github.com/Fabulu/zhaozhou/blob/7714bcc1bdac8c4c0f0f02e437d27a827d8a4840/reports/synthesis/blockpaths/zhao_texture_island_v3_top@g2-prod.fit.summary
+  reports/synthesis/blockpaths/zhao_texture_island_v3_top@g2-prod.setup.summary.rpt
+  https://github.com/Fabulu/zhaozhou/blob/7714bcc1bdac8c4c0f0f02e437d27a827d8a4840/reports/synthesis/blockpaths/zhao_texture_island_v3_top@g2-prod.setup.summary.rpt
+  reports/synthesis/zhao_block_fit.json
+  https://github.com/Fabulu/zhaozhou/blob/7714bcc1bdac8c4c0f0f02e437d27a827d8a4840/reports/synthesis/zhao_block_fit.json
+  Evidence qualification: Native fitter summary independently read; report supplies 82.05 MHz internal worst path. Combined change is measured; map-to-fit attribution in prose is not valid.
+
+[S40] New FIELD characterization targets and post-Gate-2 work queue
+  Ref: 7714bcc1bdac8c4c0f0f02e437d27a827d8a4840
+  design/fit_targets.yml
+  https://github.com/Fabulu/zhaozhou/blob/7714bcc1bdac8c4c0f0f02e437d27a827d8a4840/design/fit_targets.yml
+  tools/quartus/queue_after_g2.ps1
+  https://github.com/Fabulu/zhaozhou/blob/7714bcc1bdac8c4c0f0f02e437d27a827d8a4840/tools/quartus/queue_after_g2.ps1
+  reports/V3-REARCHITECTURE-ROADMAP.md
+  https://github.com/Fabulu/zhaozhou/blob/7714bcc1bdac8c4c0f0f02e437d27a827d8a4840/reports/V3-REARCHITECTURE-ROADMAP.md
+  Evidence qualification: Targets added during review. Their scalar/default or quoted-header hypotheses must not be substituted for chosen production parameters.
+
+[S41] Final observed branch change and projection-width calibration report
+  Ref: f13c70466b0d8e97fa32f3541c735f6a21750374
+  reports/PROJECT-CORE-OPERAND-WIDTH-20260909.md
+  https://github.com/Fabulu/zhaozhou/blob/f13c70466b0d8e97fa32f3541c735f6a21750374/reports/PROJECT-CORE-OPERAND-WIDTH-20260909.md
+  https://github.com/Fabulu/zhaozhou/commit/f13c70466b0d8e97fa32f3541c735f6a21750374
+  Evidence qualification: reported calibration delta and compact commit comparison,
+  not a new mapping executed by this review. No narrowed-camera concession adopted.
+
+Official primary hardware documentation was checked for the memory/DSP mode
+claims. These documents do not substitute for the repository's exact Quartus
+17.0.2 toolchain tests, reset/control compatibility or the real board shell.
+
+[V01] Cyclone V Device Handbook: M10K mixed-width configurations
+  https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/m10k-blocks-mixed-width-configurations
+  Use: SDP and TDP port/width/depth tables; physical layouts still require exact Quartus mapping.
+
+[V02] Quartus Prime Standard Design Recommendations 18.1: avoid unsupported reset and control conditions
+  https://docs.altera.com/r/docs/683323/18.1/intel-quartus-prime-standard-edition-user-guide-design-recommendations/avoid-unsupported-reset-and-control-conditions
+  Use: Memory content cannot be cleared through unsupported asynchronous reset; not a claim every 17.0.2 inference matches later tools.
+
+[V03] Cyclone V Device Handbook: multipliers
+  https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/multipliers
+  Use: Physical variable-precision block modes, including one 27x27 or narrower independent modes; do not add decomposition fields to totals.
+
+
+22. COMPANION CHECKS: WHAT WAS EXECUTED AND WHAT WAS NOT
+================================================================================
+
+The ZIP contains standard-library Python checks runnable without network access:
+
+  python checks/check_arithmetic.py --output arithmetic_results.json
+  python checks/check_accounting.py --output accounting_results.json
+
+Run without Python's -O option: assertions are load-bearing. The committed
+agent implementation still needs its own RTL tests, mutant controls and mappings.
+The scripts here are deliberately independent integer/address/acceptance models,
+not a replacement HDL simulator, an inferred netlist or the repository census.
+
+Arithmetic groups cover:
+  exhaustive byte quarter-square identity and a corrupted-table counterexample;
+  exact bilinear intermediates and an early-rounding counterexample;
+  signed fog products and negative rounding;
+  full signed-32-bit hybrid products, corners and deterministic random values;
+  viewport and signed-33-bit fog coefficient-table reconstruction;
+  signed coefficient distributed arithmetic for culling, planes and seeds;
+  normal-vector width/reduction/squaring and a negative-boundary counterexample;
+  negative-span DDA and separable terrain squares;
+  bake endpoint rounding/telescoping and invalid fusion counterexamples;
+  exact constant-nine/eleven nibble division;
+  arena address-stride counterexample and corrected non-power-of-two layouts;
+  workload calendar arithmetic, explicitly NOT observed hardware throughput;
+  co-packed three-read memory geometry and identity/collision address checks.
+
+Accounting fixtures check seventeen small acceptance cases: inclusive parent/
+child overlap, duplicate physical paths, unknown required cost, wrong units,
+wrong parameters/source identity, stale evidence, missing required lighting and
+external providers, two real instances versus two clients of one provider,
+map-versus-fit scope, retained failed policy, the hard <=94 cap, identifiable
+immutable dirty specimens and selected labelled evidence. These fixtures do not
+exercise the current repository loader: port them to its ACTUAL loading/selection
+path and mutation-test that path, as section 2 requires.
+
+The included JSON reports record deterministic counts and counterexamples, the
+executed script hash, and per-group pass status. Runtime seconds are diagnostics,
+not performance benchmarks. Re-running in a clean directory is recorded in the
+package's reproducibility report. The checks do not establish the claimed DSP
+packing, memory inference, ALM costs, output rate or final console closure.
+
+A failed independent arithmetic check is a reason not to implement that formula.
+A passed independent arithmetic check is permission to test an implementation,
+not a claim that one already exists or that Quartus will implement it cheaply.
+
+
+23. FRESHNESS, LIMITS AND FINAL OPERATING DECISION
+================================================================================
+
+The primary math/texture source review is pinned to 792205d0. During the review,
+the agent added accounting/tooling changes through 5cb1162b. A later comparison
+through 7714bcc1 (9 September 2026, 08:17:09 CEST) showed a Gate-2 receipt,
+related reports and new target/tooling work; no further math RTL replacement was
+part of that compared interval. The Gate-2 values in section 1.4 supersede any
+earlier conversational statement that the fit was still pending. See the final
+freshness metadata file in the evidence bundle for the last branch read.
+
+
+Final branch delta checked: f13c7046, 9 September 2026, 08:25:10 CEST.
+The three commits after 7714bcc1 modify the generated resource top/generator,
+queue/runner tooling and the projection-width report, not the inspected math
+implementations. The reported new 32xN calibration points are 18->2 DSP,
+19->4, 20/21/22/23->3. This is another warning against assuming that a narrower
+operand always maps cheaper. It does NOT force an 18-bit camera contract:
+this brief's projection backends preserve full signed-32-bit semantics and
+must qualify their own distinct multiplier/table shapes. The source pin and
+actual tool settings of every calibration still travel with its result.
+
+The final delta [S41] is incorporated as a freshness note, not as a new all-module
+source audit. The main branch's creature work was not merged into the hardware
+analysis, and this review did not push any files or commands into either branch.
+
+Do not equate a current branch head with a measurement of all its sources.
+Do not let the new 10,837-ALM result turn the resource plan into a premature
+victory lap: texture still needs its accepted area/timing/DSP/throughput result.
+Equally, do not keep describing a 15,483-ALM intermediate as the only evidence
+about whether replacement surgery works. The newer result is real area recovery.
+
+This brief does not certify a complete current DSP or ALM bill. Its accounting
+correction is designed to make that bill reproducible and non-silent. Its 79-DSP
+named allocation and 15-DSP remaining pool are a falsifiable implementation
+programme, not a measured total. The required unresolved functions are kept in
+the acceptance gate rather than assumed away. Exact full-width arithmetic,
+memory ports, workload conflicts and ALM/memory trade-offs have explicit designs
+and rejection conditions instead of optimistic deductions from a stale subtotal.
+
+The direction remains:
+
+  CORRECT THE DOCS AND EVIDENCE SELECTOR NOW.
+  FINISH THE TEXTURE ISLAND WITHOUT DERAILING ITS ACTIVE WORK.
+  THEN IMPLEMENT THE QUALIFIED MEMORY-FIRST SUBSYSTEM REPLACEMENTS.
+  ACCEPT ONLY A COMPLETE <=94-DSP MACHINE THAT ALSO MEETS ITS OTHER BUDGETS.
+
+We keep the console's semantics and the accumulated correctness knowledge.
+We replace expensive simultaneous work with cached results, scheduled arithmetic
+and correctly addressed memory. The project does not need a more convincing
+inventory total; it needs that selected implementation, measured honestly.
+
+END OF BRIEF
