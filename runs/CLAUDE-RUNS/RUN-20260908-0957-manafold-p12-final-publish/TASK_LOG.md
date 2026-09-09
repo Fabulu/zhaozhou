@@ -586,3 +586,32 @@ FACE knows its ablation was confounded (rings AND segments) and that a
 single-variable leg costs **+352 tris against +992**. REEL has Direction 10,
 which it had never seen, and the confidence corrections on R5: `hasty` and
 `drift` established, **`fall` refuted — my error, caught at 2×.**
+
+### 08:3x — a REAL kill hazard found, and what it does NOT explain
+
+IMPL-FACE found an orphan `zhao-reel-cel.exe` that looked exactly like its own
+leftover. Its command line put it in **`manafold-p14-reel`, mid-render.**
+`taskkill /IM zhao-reel-cel.exe` would have destroyed a sibling lane's work and
+left that lane seeing only **an output directory that stopped growing**, with no
+way to attribute it. Written into `Upheaval/CLAUDE.md`: every lane runs the same
+executable names, so **a name identifies nothing here** — query
+`Win32_Process ... CommandLine` first, kill by PID, and `taskkill /IM` has no
+legitimate use in this tree.
+
+⚠ **BUT IT DOES NOT EXPLAIN THE OWNER'S EIGHT HOURS, and I should not let it look
+as though it does.** He lost a **Quartus fit**. A kill scoped to
+`zhao-reel-cel.exe` — or to `ffmpeg.exe`, which is the only image-name kill I
+issued all night — **cannot touch `quartus_fit.exe`.** For that hazard to be his
+cause, somebody would have had to kill on a pattern that matched `quartus`, and I
+have no evidence anyone did.
+
+**So his question is still open**, and the leading hypothesis remains the one I
+gave him: **resource contention**, with the fit-age sequence
+(95 → 74 → 56 → … → 1 → 0 min) as the timestamped record of fits dying and
+restarting while I saturated the machine.
+
+**The right way to hold two candidate causes**: name both, say which is
+established (the kill hazard — witnessed live tonight) and which is merely
+plausible (contention — consistent but unproven), and **do not let the
+well-evidenced one absorb the blame for the other's damage** just because it
+arrived with a good story. That is how a real cause stops being looked for.
