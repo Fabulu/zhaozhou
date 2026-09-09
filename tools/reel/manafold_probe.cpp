@@ -924,17 +924,46 @@ int main(int argc, char** argv) {
                                u02::kLoopArcMm[2] + u02::kLoopArcMm[3] +
                                u02::kLoopArcMm[4]};                           // D
     static const char* nm[5] = {"Neck", "A", "B", "C", "D"};
+    // PASS 15 -- THE EXEMPTION IS NOW A PROPERTY, NOT AN INDEX.
+    //
+    // This read `(i == 0)` because exactly one station was coincident with its
+    // predecessor: kBNeck on kBJunctionF, which make_loop resolves by dropping
+    // the LOWER bone out of the ladder and letting it bend the chain as a pure
+    // parent. Direction 11 §3 creates the second such pair -- kBHingeD on ball
+    // C -- resolved the identical way, so the rule is stated as the rule:
+    //
+    //   a gap of EXACTLY ZERO is a shared pivot, which make_loop handles;
+    //   any other gap under 2*blend is two ramps fighting over one ring.
+    //
+    // ⚠ AND THE COUNT IS GATED, so this stays a check rather than a loophole.
+    // Two by-design pairs exist. A third would mean somebody made a station
+    // coincident without touching the ladder, which is the silent-skin fault
+    // this whole report exists to catch, so it FAILS.
+    const int kExpectedCoincident = 2;
+    int coincident = 0;
     bool ok = true;
     for (int i = 0; i < 5; ++i) {
       const int32_t gap = (i == 0) ? st[0] - stJF : st[i] - st[i - 1];
       const int32_t need = 2 * u02::kFoldBlendMm[i];
-      const bool row_ok = (i == 0) || (gap >= need);
+      const bool shared = (gap == 0);
+      if (shared) ++coincident;
+      const bool row_ok = shared || (gap >= need);
       if (!row_ok) ok = false;
       std::printf("u02-probe: fold station %-4s at %4d mm, blend +/-%3d, gap from "
                   "previous %4d mm, needs %4d — %s\n",
                   nm[i], st[i], u02::kFoldBlendMm[i], gap, need,
-                  (i == 0) ? "(coincident with the front junction, by design)"
-                           : (row_ok ? "OK" : "FAIL blends overlap"));
+                  shared ? "(shared pivot, by design: the lower bone is a pure "
+                           "parent and leaves the ladder)"
+                         : (row_ok ? "OK" : "FAIL blends overlap"));
+    }
+    if (coincident != kExpectedCoincident) {
+      ok = false;
+      std::printf("u02-probe: FAIL %d shared-pivot station(s), expected %d. A "
+                  "shared pivot is only safe because make_loop drops the lower "
+                  "bone out of the two-bone ladder; a new one that nobody "
+                  "taught the ladder about makes the skin stop expressing that "
+                  "fold, silently.\n",
+                  coincident, kExpectedCoincident);
     }
     std::printf("u02-probe: F.1 LADDER CONTINUITY — %s\n",
                 ok ? "OK every station pair clears 2*blend" : "FAIL");

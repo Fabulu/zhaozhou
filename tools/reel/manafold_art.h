@@ -296,7 +296,85 @@ constexpr int32_t kLoopBuryMm = 250;        // the near end plunges into the bod
 // The whole window is roughly 1140..1220. Anyone moving kLoopReentryYMm again
 // must re-sweep this number with it: they are one mechanism, and only the gate
 // says so.
-constexpr int32_t kLoopArcMm[6] = {0, 680, 340, 380, 380, 1160};
+//
+// ===========================================================================
+// PASS 15 -- DIRECTION 11 §3: THE ELBOW. arc[4] 380 -> 0, arc[5] 1160 -> 1280.
+// ===========================================================================
+//
+//   "there appears to be like an elbow in the last part that should just be
+//    straight. That seems to be the only hinge in the antennae that works, and
+//    it's not set on a ball, it's set inside an antenna limb. Absolutely wrong."
+//
+// He is right, and it is the same PLACEMENT fault §9.1 fixed at the other four
+// stations, left standing at this one. kBHingeD pivoted at arc 2030: 380 mm
+// past ball C, 630 mm before the re-entry ball at 2660 -- the middle of a limb
+// the drawing runs straight. And it is the joint he can SEE because the closure
+// re-aims it every frame off the bouncing body, so it is the only station in
+// the antenna with large, constant, uncorrelated motion.
+//
+// ⚠ THE OBVIOUS FIX IS THE WRONG ONE, AND IT IS NOW MEASURED RATHER THAN
+// REMEMBERED. Pass 9 moved D onto the re-entry ball (2660) and the loop stopped
+// closing; pass 15's plan proposed re-running that move on the theory that the
+// pass-12 stretchy spans would pay the shortfall. `probes/arcsweep.sh` re-ran
+// it -- control row reproducing the shipped 1090/982 exactly before any new
+// number was believed -- and it fails at EVERY arm length:
+//
+//        arc4  arc5   D@arc   sweep@700   bank    (rim gate 1120)
+//         380  1160    2030        1090    982    CONTROL, shipped
+//        1010   380    2660        2846   2292
+//        1010   530    2660        2563   1989
+//        1010   700    2660        2241   1718    <- the best point. 60% over.
+//        1010   950    2660        1770   2255
+//        1010  1160    2660        1414   2709
+//
+// Two-sided, no feasible value, not close. AND THE STRETCHY SPANS CANNOT PAY
+// FOR IT, for three independent reasons -- worth writing down because the
+// theory is reasonable and will otherwise be proposed a third time:
+//   1. the lanes are mapped to the three NODULE spans only (manafold_model.h,
+//      `span_start = {stNeck, stA, stB}`). The return limb has no lane.
+//   2. it is a VERTEX effect that never moves a bone, and the committed span
+//      gate's G3 leg ASSERTS the buried arm tip moves 0.00 mm at the ceiling --
+//      by design, because moving it would break burial.
+//   3. at the 300 pm ceiling it is about an order of magnitude short of the
+//      ~1100 pm of missing reach anyway.
+//
+// WHAT WORKS IS THE RIG'S OWN EXISTING PRECEDENT. kBJunctionF and kBNeck
+// already share one pivot (arc[0] == 0) so that station carries two
+// independently driven rotations. Do the same at ball C: arc[4] = 0 puts
+// kBHingeD's pivot exactly on ball C, and then
+//
+//   * the solved bend is AT A BALL -- the thing he has asked for three times;
+//   * the ENTIRE return limb, ball C all the way into the body, is ONE rigid
+//     straight run with no interior joint. "Should just be straight" is now
+//     true BY CONSTRUCTION, not by tuning;
+//   * ball C keeps its own knead rotation, which the closure composes with
+//     rather than replaces.
+//
+// And the closure gets BETTER, because the aimed segment is now 1280 mm from a
+// station that swings less, instead of 1160 mm from one that swings more:
+//
+//        arc4  arc5   D@arc   sweep@700   bank    worst leg
+//           0  1240    1650        1007    977         1007
+//           0  1280    1650         955    923          955   <-- keeper
+//           0  1320    1650         902    983          983
+//           0  1380    1650         824   1087         1087
+//           0  1460    1650         720   1227         fails the bank
+//
+// 955 against the shipped 1090, on a 1120 gate: the margin goes 30 -> 165, a
+// 5.5x improvement, on the value that was the tightest thing in the rig.
+//
+// ⚠ TWO CONSEQUENCES, both paid for here rather than discovered later.
+//   * The band's TOTAL is 2930, not 3190. The 260 mm comes off the BURIED tail
+//     only -- the surface crossing, the five knuckle stations (absolute
+//     constants, not derived from these arcs) and every visible millimetre are
+//     unmoved. The closure gate is what proves the shortened tail still buries,
+//     and at 955 pm the rim now sits INSIDE the surface where the shipped 1090
+//     poked 9% out of it.
+//   * The blade taper used to key off these very stations, so this edit would
+//     silently have re-profiled the band (checklist item 24: a derived constant
+//     is invalidated when its input moves). It no longer can -- see
+//     kLoopTaperStationMm, which freezes the SHAPE at its shipped positions.
+constexpr int32_t kLoopArcMm[6] = {0, 680, 340, 380, 0, 1280};
 // ---- PASS 11 F.1: THE SPANS STOP BOWING ----------------------------------
 // The pass-10 review's diagnosis was mechanical and correct: "the corners
 // already read; it is the SPANS BETWEEN THEM that bow. Chain versus hose."
@@ -484,6 +562,48 @@ constexpr int32_t kLoopRestTiltCA16 = 940;    // ~5.2 deg
 // lost by slimming it.
 constexpr int32_t kLoopBladeRxMm[7] = {130, 74, 46, 44, 48, 58, 42};
 constexpr int32_t kLoopBladeRzMm[7] = {140, 72, 30, 24, 20, 29, 26};
+
+// ---- PASS 15: WHERE THOSE SEVEN KEYS SIT, AS A KNOB INSTEAD OF A SIDE EFFECT
+//
+// The taper above is the band's SHAPE. Until this pass its seven stations were
+// read straight off the BONE stations (make_loop built `stKey` from
+// kLoopBuryMm + kLoopArcMm), which meant the shape was a DERIVED quantity of
+// the rig -- so moving a joint silently re-profiled the antenna, in a way no
+// gate measured and no comment mentioned. That is 10-GATE-CHECKLIST item 24
+// exactly: "a DERIVED constant is invalidated when its input moves", and it
+// would have fired on §3's elbow fix the moment arc[4] went to 0 (a zero-width
+// taper span returns the NEXT key, which is a ledge in the skin -- the same
+// hazard pass 9 avoided at stNeck by leaving it out of the key list).
+//
+// So the stations are now authored, FROZEN AT THE VALUES THE ACCEPTED BAND
+// SHIPPED WITH -- {0, kLoopBuryMm, 930, 1270, 1650, 2030, 3190} spelled out --
+// and the two lists are independent. A bone may move without touching the
+// silhouette, and the silhouette may be re-authored without touching a bone.
+//
+// ⚠ THE LAST TWO KEYS NOW SIT PAST THE BAND'S END (total is 2930 after §3), and
+// that is correct rather than sloppy: they still define the SLOPE of the buried
+// return, and the arm simply stops part-way along the final run. Every visible
+// millimetre -- the whole band up to the surface crossing at ~2647 -- reads
+// exactly the values it read before.
+//
+// ⚠ AND IT IS A LENGTH AS WELL AS A TABLE (checklist item 42): all three of
+// these lists are seven entries and must stay so. The static_assert below is
+// the guard, and it is deliberately one that a zero-fill VIOLATES -- a taper
+// station of 0 past the first key is never authored, so a short list is a build
+// error rather than a silent funnel.
+constexpr int32_t kLoopTaperStationMm[7] = {0, kLoopBuryMm, 930, 1270,
+                                            1650, 2030, 3190};
+static_assert(sizeof(kLoopTaperStationMm) / sizeof(kLoopTaperStationMm[0]) ==
+                  sizeof(kLoopBladeRxMm) / sizeof(kLoopBladeRxMm[0]),
+              "taper stations and blade rx must be the same length");
+static_assert(sizeof(kLoopTaperStationMm) / sizeof(kLoopTaperStationMm[0]) ==
+                  sizeof(kLoopBladeRzMm) / sizeof(kLoopBladeRzMm[0]),
+              "taper stations and blade rz must be the same length");
+static_assert(kLoopTaperStationMm[1] > 0 && kLoopTaperStationMm[2] > 0 &&
+                  kLoopTaperStationMm[3] > 0 && kLoopTaperStationMm[4] > 0 &&
+                  kLoopTaperStationMm[5] > 0 && kLoopTaperStationMm[6] > 0,
+              "a taper station past the first is never 0 — a zero here is the "
+              "silent zero-fill of a short list, not an authored value");
 
 // ---- the junction balls (PASS 4, Direction 4 §1: "the ball inside the
 // antenna is completely wrong — remove it. The other is almost right — it

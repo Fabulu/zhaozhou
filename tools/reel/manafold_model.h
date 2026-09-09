@@ -125,7 +125,16 @@ inline zc::RingPart make_loop() {
   // the joints move onto the balls and the junctions), so a key for it would be
   // a zero-width span returning a different value one millimetre later: a ledge
   // in the skin, not a taper. See kLoopBladeRxMm.
-  const int32_t stKey[7] = {0, stJF, stA, stB, stC, stD, total};
+  //
+  // PASS 15: the keys are kLoopTaperStationMm, an AUTHORED table, and no longer
+  // {0, stJF, stA, stB, stC, stD, total} derived from the bone stations. The
+  // derived form made the band's shape a side effect of joint placement -- so
+  // §3's elbow fix (arc[4] -> 0) would have collapsed the stC..stD span to zero
+  // width and stepped the blade 48 -> 58 at ball C, a ledge in the skin that
+  // nothing would have reported. See kLoopTaperStationMm. The values there are
+  // the ones this expression used to compute, written out, so the accepted band
+  // is preserved rather than re-derived.
+  const int32_t* stKey = kLoopTaperStationMm;
   const auto taper = [&](const int32_t* k, int32_t s) {
     for (int j = 0; j + 1 < 7; ++j) {
       if (s <= stKey[j + 1]) {
@@ -211,8 +220,13 @@ inline zc::RingPart make_loop() {
     const int32_t tN = blend_of(stNeck, kFoldBlendMm[0]),
                   tA = blend_of(stA, kFoldBlendMm[1]),
                   tB = blend_of(stB, kFoldBlendMm[2]),
-                  tC = blend_of(stC, kFoldBlendMm[3]),
-                  tD = blend_of(stD, kFoldBlendMm[4]);
+                  tC = blend_of(stC, kFoldBlendMm[3]);
+    // PASS 15: there is no tD any more. kBHingeD shares ball C's pivot, so its
+    // rung and ball C's are the same ramp -- see the final branch below.
+    // kFoldBlendMm[4] is consequently no longer read HERE; the committed probe
+    // still reads it for the F.1 continuity report, where a coincident pair is
+    // an explicit by-design row rather than a silent zero gap.
+    (void)stD;
     if (tA == 0) {  // the buried base -> the front junction
       rs.b0 = kBRoot;
       rs.b1 = kBNeck;
@@ -225,15 +239,31 @@ inline zc::RingPart make_loop() {
       rs.b0 = kBHingeA;
       rs.b1 = kBHingeB;
       rs.w0 = static_cast<uint8_t>(64 - tB);
-    } else if (tD == 0) {  // ball B -> ball C
+    } else {
+      // PASS 15 (Direction 11 §3) -- BALL B -> THE SHARED C/D STATION, and then
+      // ONE RIGID RUN to the buried tip.
+      //
+      // There used to be two rungs here, (B,C) then (C,D), because kBHingeD
+      // pivoted 380 mm further along at arc 2030 -- in the middle of a limb the
+      // drawing runs straight, which is the elbow the owner named. kBHingeD now
+      // shares ball C's pivot (kLoopArcMm[4] == 0), so those two rungs are two
+      // ramps across ONE station and cannot both exist: a ring picks one bone
+      // pair, and with equal blends the (B,C) branch is unreachable, which
+      // would have stepped the skin straight from B's pair to D's.
+      //
+      // So ball C joins kBJunctionF as a PURE PARENT -- the same resolution
+      // pass 9 used for the other coincident pair, for the same reason.
+      // ⚠ AND "PURE PARENT" IS NOT "DEAD" (checklist item 13, which this file
+      // has already shipped three false versions of): no ring names kBHingeC,
+      // but every ring past this station is weighted to kBHingeD, which is
+      // kBHingeC's CHILD -- so ball C's knead rotation carries all of them by
+      // construction, and the closure aim composes on top of it AT THE SAME
+      // POINT. Both bends happen at the ball; nothing bends between it and the
+      // body. That is Direction 11 §3's "should just be straight", structurally
+      // rather than by tuning.
       rs.b0 = kBHingeB;
-      rs.b1 = kBHingeC;
-      rs.w0 = static_cast<uint8_t>(64 - tC);
-    } else {  // ball C -> the RE-ENTRY BALL (the second body junction) and the
-              // buried return arm past it
-      rs.b0 = kBHingeC;
       rs.b1 = kBHingeD;
-      rs.w0 = static_cast<uint8_t>(64 - tD);
+      rs.w0 = static_cast<uint8_t>(64 - tC);
     }
     // chain rings are creature-global: carry the tube x
     rs.cx = fxu(kLoopTubeXMm);
