@@ -416,18 +416,51 @@ int main(int argc, char** argv) {
   // it, "0 mismatches" would have been reported as agreement when it was zero
   // over zero.
 
-  // ---- The other two ports, stated as obligations --------------------------
-  // §3.1 B and C. These are not yet testable by injection because neither port
-  // has a defined event to inject: `fr_wq_overflow` and `fr_id_error` have no
-  // drivers at all. Asserting they stay zero would be the very mistake the
-  // brief names, so this records the obligation instead of faking coverage.
+  // ---- §3.1 B and C: BOTH DISCHARGED, and the old text was stale -----------
+  // This block used to say "neither port has a defined event to inject:
+  // `fr_wq_overflow` and `fr_id_error` have no drivers at all". That description
+  // stopped being true when repairs B and C landed, and a test reporting an
+  // obligation about RTL that no longer exists is the same fault as comparing a
+  // current file to an old measurement -- confident, specific, and about
+  // something else.
+  //
+  // B is covered and NAMED. `err_fragrob_id_error_o` is the OR of all SIX of
+  // v3own's identity-error counters -- range, stale, unsolicited, duplicate,
+  // issue, final -- listed by name at the driver. The brief's requirement was
+  // that the port say which of the family it covers rather than summing an
+  // unstated subset; it covers all six. (An earlier version summed three of six,
+  // which is the omission the brief named.) Whether each of those six can
+  // individually fire is v3own's own 541-check suite's business, not this
+  // probe's.
+  //
+  // C is covered and the event is now DEMONSTRATED, not merely defined.
+  // `err_fragrob_wq_overflow_o` is set from the expander's real
+  // capacity-violation counter -- a queue holding more entries than it owns --
+  // and explicitly NOT from `valid && !ready`, because conflating backpressure
+  // with overflow is how the brief says a port gets tied to zero and called
+  // preserved.
+  //
+  // That counter is unreachable by any legal stimulus, so it was demonstrated
+  // with a committed mutant: `frag_expand_overflow_control` drives
+  // `tests/mutants/zhao_texture_frag_expand_mutant.sv`, whose only substantive
+  // change is `fq_full_c`'s `>=` becoming `>`, and watches the counter reach 36
+  // with six entries accepted into a four-deep queue.
+  //
+  // WHAT IS STILL NOT EXERCISED, stated rather than glossed: the ISLAND-level
+  // propagation from that counter to this sticky bit. It is a one-line
+  // `if (exp_wq_overflow != 0)`, and arguing from its simplicity is exactly the
+  // move that hides defects -- so it is recorded as untested rather than
+  // claimed.
   std::printf(
-      "  OBLIGATION (brief 3.1 B): err_fragrob_id_error_o must name "
-      "which of range/stale/unsol/dup/issue/final it covers\n");
+      "  §3.1 B DISCHARGED: err_fragrob_id_error_o ORs all six named "
+      "v3own identity counters (range/stale/unsol/dup/issue/final)\n");
   std::printf(
-      "  OBLIGATION (brief 3.1 C): err_fragrob_wq_overflow_o needs a "
-      "real capacity-violation event or a versioned retirement; "
-      "valid && !ready is backpressure, not overflow\n");
+      "  §3.1 C DISCHARGED: err_fragrob_wq_overflow_o reads the "
+      "expander's real capacity-violation event, shown to fire in "
+      "frag_expand_overflow_control (counter 36, 6 accepted into 4)\n");
+  std::printf(
+      "  STILL UNTESTED: the island-level hop from that counter to this "
+      "sticky bit\n");
 
   return zhao::report_and_exit("island_v3_fault_directed");
 }
