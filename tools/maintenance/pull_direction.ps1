@@ -120,7 +120,24 @@ if ($dirf.Count -gt 0) {
 
 # ---- 4. is a fit alive, and does the incoming change touch RTL? -----------
 $fit = Get-Process quartus* -ErrorAction SilentlyContinue
-$rtl = @($paths | Where-Object { $_ -like 'fpga/rtl/*' })
+
+# ONLY FILES A FIT CAN ACTUALLY READ COUNT AS A HAZARD.
+#
+# The first version blocked on any path under `fpga/rtl/`, and that is wrong in
+# the expensive direction: `fpga/rtl/texture/` is where the texture OWNER-DIRECTION
+# markdown lives (CLAUDE.md puts durable direction beside the thing it governs,
+# precisely so a run folder cannot orphan it). Blocking on a `.md` would have
+# delayed owner instructions by up to four hours per fit -- which is the
+# "instructions are not delivered until they are read" failure this repo has
+# already paid for four times over, reintroduced by a safety check.
+#
+# `design/fit_targets.yml` lists only HDL sources, so the closure is HDL. A
+# markdown file, a report, or a test cannot change what Quartus compiles.
+$hazardExt = @('.sv', '.svh', '.v', '.vh', '.qsf', '.sdc', '.qip', '.tcl', '.mif', '.hex')
+$rtl = @($paths | Where-Object {
+    $p = $_
+    ($p -like 'fpga/*') -and ($hazardExt | Where-Object { $p.ToLower().EndsWith($_) })
+})
 
 Write-Section 'MERGE DECISION'
 if ($dirty) {
