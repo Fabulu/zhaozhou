@@ -45,6 +45,32 @@ Wait-Idle
 & "$PSScriptRoot\run_calib.ps1" -SkipMeasured 2>&1 |
     Tee-Object -FilePath 'calib-boundary.log' | Select-Object -Last 6
 
+# DID -SkipMeasured ACTUALLY SKIP? Verify, do not assume.
+#
+# Its destination path had a literal 0x08 backspace where `\b` was written, so it
+# looked for a file that cannot exist, skipped nothing, and re-measured all 123
+# points -- roughly two hours -- every time it ran. It ANNOUNCED this on its third
+# line ("0 of 123 already ok") and I launched the job without reading the first
+# lines of its output.
+#
+# So the claim is checked rather than trusted. A run that skips nothing means the
+# flag is broken again, and finding that out from a log line beats finding it out
+# from two hours of wall clock.
+$skipLine = Select-String -Path 'calib-boundary.log' -Pattern 'SkipMeasured: (\d+) of (\d+)' |
+    Select-Object -First 1
+if ($skipLine) {
+    $already = [int]$skipLine.Matches[0].Groups[1].Value
+    $of      = [int]$skipLine.Matches[0].Groups[2].Value
+    Write-Host ("queue_after_g2: -SkipMeasured skipped {0} of {1}." -f $already, $of)
+    if ($already -eq 0 -and $of -gt 10) {
+        Write-Host 'queue_after_g2: WARNING -- it skipped NOTHING. The destination'
+        Write-Host '  path is broken again (check for a stray control byte with'
+        Write-Host '  tools/maintenance/no_control_bytes.py). Later stages continue.'
+    }
+} else {
+    Write-Host 'queue_after_g2: could not find the -SkipMeasured line in the log.'
+}
+
 # ---- 2. zhao_prod_top, which has never elaborated -------------------------
 # Its row reads failed:quartus_map.exe. Five faults were repaired today -- three
 # missing sources, a missing package import, 157 comma-continuation ports at
