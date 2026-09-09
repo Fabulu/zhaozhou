@@ -165,3 +165,44 @@ linking. Next: md5 it against `build-face32` (`679e8797be40e79fa4fe808775a352f8`
 as a positive control that the shipped tree IS the leg that was looked at, then
 commit + push R2(a) to main. Then R1 step (a) only: `kEyeWideMm` 84 -> ~125, one
 build, render, look. Order is mandated: widen -> star -> converge -> centre LAST.
+
+### 08:5x — R2(a) CLOSED and pushed. Lane state.
+
+Positive control run on the PICTURE, not the hash: `build-ship`'s md5 does NOT
+match `build-face32` (an executable's hash moves with the build path), but all
+**421 channel frames are byte-identical**, and the known-negative against the
+11/16 base differs on **421 of 421**. Pushed to `origin main` in both repos as
+one verified commit each; the raw lane history including the broken intermediate
+is preserved on `archive/p14-face-raw` (pushed).
+
+⚠ **A `git reset --soft origin/main` staged DELETIONS of `reports/DOCKET.md` and
+another run's TASK_LOG.** Those were not mine — origin/main had moved ahead and
+my lane was behind, so the reset diffed my older tree against newer content.
+Backed out with `reset --hard` to the archive branch and rebased properly
+instead. **A soft reset against a moved remote will happily stage other people's
+work as deletions**, and the only reason it was caught is that the staged list
+was read before committing.
+
+⚠ **An orphan `zhao-reel-cel.exe` was running and it was NOT MINE** — its command
+line put it in `manafold-p14-reel`, another lane. **It was identified by command
+line before anything was aimed at it, and left alone.** Killing by image name
+here would have destroyed a sibling lane's render: this is the exact mechanism
+the owner spent last night trying to attribute. `taskkill /IM` has no place in a
+multi-lane tree; `Get-CimInstance Win32_Process` first, always.
+
+Also this session: `zhao-reel-cel.exe --help` is not a help flag (`g_out =
+argv[1]`) and started a full 28-subject render into a directory named `--help`.
+Killed inside a minute, directory removed. **The reel's CLI is
+`zhao-reel-cel <outdir> [clip ...]` and there is nothing to ask it.**
+
+**Intermediates:** `render-ship` (provably byte-identical to `render-32`) and
+`render-3221` (the zero-fill bug — its plate is committed) and `build-face3221`
+removed. 3,064 `.rgb` frames remain in `render-base` (the before reference),
+`render-32` (the shipped leg) and `render-21`, ~825 MB, deletable with the lane.
+
+**R1 and R3 were NOT executed.** Two lanes were blocked on the ablation answer,
+so getting it reported won over one more build cycle; and R1 is an ordered
+sequence (widen -> star -> converge -> centre LAST) where each step changes what
+the next is judged against, so it is not a thing to start and abandon. The
+groundwork plate `R1-eye-now-8x.png` is committed and both premises are
+confirmed by eye.
