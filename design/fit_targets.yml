@@ -1107,6 +1107,25 @@ targets:
   # confirmation in the actual fit." The rules below ENCODE that claim, so a row
   # that infers more memory than the geometry argument allows comes back
   # `failed:structure` and says so, rather than passing quietly.
+  #
+  # CORRECTION 2026-09-09, before the first row arrived: THAT IS TRUE OF A FULL
+  # FIT AND NOT OF A -MapOnly RUN, and I had claimed it of both.
+  #
+  # `max_m10k` is checked against `ramBlocks` and `max_alms` against `alms`
+  # (tools/quartus/fit_rules.ps1:65,96). A map_only row carries NEITHER -- it has
+  # `blockMemoryBits`, `registers`, `dspBlocks`, `virtualPins` and, in the map
+  # receipt, `estimatedAlms`/`inferredMemoryCount`. The rule engine guards every
+  # comparison on `$null -ne`, so both rules SILENTLY DO NOT FIRE on a MapOnly
+  # row. Verified against the six existing map_only rows in the ledger.
+  #
+  # So on a MapOnly row only `max_registers` and `max_dsp` can bite. The memory
+  # geometry must be READ, from `inferredMemoryCount` / `inferredMemories` in
+  # reports/synthesis/zhao_block_map.json -- not inferred from a clean `status`.
+  #
+  # A `map_only` row that says nothing about memory is exactly the shape of
+  # evidence this repository keeps mistaking for a pass: the gate could not reach
+  # the state, so its silence is not a verdict. Recorded here rather than
+  # discovered while reading the result and calling it confirmation.
   - top: zhao_texture_metajoin
     sources:
       - fpga/rtl/texture/zhao_texture_metajoin.sv
