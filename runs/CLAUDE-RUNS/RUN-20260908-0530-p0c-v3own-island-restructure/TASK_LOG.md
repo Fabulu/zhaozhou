@@ -2824,3 +2824,57 @@ pushed. Six candidates are eliminated on the RAM-inference route, which the
 pair-pipe now makes the worse of the two options -- it deletes the token table
 rather than converting it. Still the owner's: the twelve queued fits, terrain
 (blocked by the terrain brief's Step 0), and the redline decision.
+
+## 2026-09-09 -- the pair-pipe swap is a ONE-LINE DROP-IN, and its provenance chain
+
+Work done outside the running leaf fit's closure (its closure is one .sv, snapshotted).
+
+**Port compatibility: pairpipe is a strict SUPERSET of perspuv_svc.** All 18 of
+svc's ports exist on pairpipe; pairpipe adds one output, `zero_products_o`.
+Parameters are identical on both (`NTOK = 16`, `TAGW = 16`), and the island
+instantiates svc as `#(.NTOK(16), .TAGW(16))`. So the swap in
+`zhao_texture_island_v3_top.sv:974` (and `zhao_texture_island_top.sv:788`) is a
+MODULE-NAME CHANGE, with the new counter output left unconnected or wired to a
+debug counter. Not a port adaptation and not a consumer change.
+
+**It is not wired in anywhere today** -- nothing instantiates pairpipe, both island
+tops instantiate svc. So this is a swap that has never been composed, which is
+exactly what an island fit would have to measure.
+
+**Provenance chain, two differentials deep, no zref step:**
+
+    zhao_raster_perspuv        the older full block
+        |  tb_perspuv_pair.sv instantiates BOTH as u_ref + svc
+        v
+    zhao_raster_perspuv_svc    the frozen service, in production
+        |  tb_perspuv_pairpipe.sv, 25 checks, differential
+        v
+    zhao_raster_perspuv_pairpipe
+
+`perspuv_pairpipe_directed.cpp` feeds the SAME stimulus to both engines and
+compares results in ACCEPTED ORDER, accepting only when both are ready "so the
+accepted sequence is identical by construction -- comparing two engines that
+admitted different workloads would be the mismatched-comparison mistake in bench
+form." It exercises depth-zero and saturating fragments and asserts >200 compared
+U/V pairs.
+
+**ONE declared intentional difference**, and it is declared rather than
+discovered: for a depth-zero fragment svc returns whatever the previous user of
+that token left in `e_q_u`/`e_q_v` -- stale-by-contract, the caller reads
+`depth_zero_o` first -- while the candidate returns deterministic zero. So U/V are
+compared only on non-depth-zero results, and the depth-zero FLAG and TAG on all of
+them. The test says so: "Excluding a comparison silently is how a differential
+becomes decoration; this one says what it excludes and why."
+
+**The honest gap:** this is equivalence to the block being REPLACED, not to
+`zref`. That is a weaker statement than material_combine_v2's (proven against
+`zref::material::combine`), and it inherits any svc defect. Against it: svc is
+itself differential-tested against `zhao_raster_perspuv`, and the single-scheduler
+deletion is licensed by an induction proof with a per-cycle backstop. Worth
+stating plainly rather than calling the chain equivalent to an oracle check.
+
+Also corrected myself: I claimed reports/DOCKET.md was stale on D19g/D19h. It is
+not -- both are marked FIXED/CLOSED at the head of their sections (lines 1314 and
+1413) and the "OPEN" text I grepped is preserved history inside collapsed
+`<details>` blocks. Same shape as anchoring on a TOC entry instead of the real
+table. Edit discarded, docket untouched.
