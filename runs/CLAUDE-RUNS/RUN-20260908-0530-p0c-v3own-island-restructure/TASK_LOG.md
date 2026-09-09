@@ -4077,3 +4077,55 @@ therefore the ones to check hardest.
 **Pull:** 0 incoming on our branch again; main still 311 ahead, still not merged
 because the terrain architect's work is uncommitted. No Quartus alive, so no
 @g2-prod row to read.
+
+## 2026-09-09 -- three architects landed; I reran every number
+
+**Pull:** 0 incoming; all eight "Agent please read" files now present locally;
+nothing to merge; no Quartus alive, so no @g2-prod row to read.
+
+**TERRAIN BAKE V2** -- 7 multiplier sites to one operand-muxed 34x34, the
+1,089-flop meets plane to one M10K. Reran: v1 267/267 (2.02/19.00/1.00), v2
+267/267 (5.14/24.12/1.01), residency directed 37/37, and the committed MUTANT
+13/267 FAILED exit 1 -- failing exactly and only the breach-law family, which is
+the fault class the new prefetch window introduces.
+
+**TMU_PIPE PALETTE** -- the largest single ALM item in the repo, 72,824
+registers. Flat 4096-entry ramstyle-M10K array, synchronous read, decode16 moved
+a cycle later. **The owner call dissolved**: the 09-04 report's "CLUT already at
+0.65x demand, adding a cycle is an owner call" was measuring the HARNESS's
+single-outstanding cache model, not the block. On a one-access-per-clock cache,
+64 resident CLUT samples take 68 cycles before and 69 after -- II=1 both sides.
+Reran: 82/82; positive control (one-bit read-address corruption, on a SCRATCH
+COPY under a temp dir, never the production file) 18/82 FAILED.
+
+**TERRAIN BUMP MAPPING** -- answers bumomapping.md, unanswered since 09-05.
+0 DSP, ~450 ALM, ~14 M10K of ~406 free, zero added clocks. It was **80%
+architected on 2026-09-03, two days BEFORE the owner asked** -- contract,
+decision record, amended oracles all already there. Third uncashed cheque today
+and the only one written before its request. Reran: lint 0, gate clean, 4,738
+checks 0 failures, and the -GDELTA_SHIFT=23 control 1,830 of 4,738 FAILED,
+proving the contract's rescale constant is off by exactly 2.
+
+**TWO CLAIMS I CHECKED AND DID NOT IMPLEMENT.** Both were the exciting kind.
+
+1. "prod_fit_sources.txt is missing island_v3_top and perspuv_pairpipe while
+   still listing the superseded perspuv_svc, correlated with both prod_top fits
+   dying at quartus_map." Every observation TRUE. **Nothing reads that file** --
+   no script, QSF, tcl or yml names it; the real 148-file closure is in
+   fit_targets.yml under `- top: zhao_prod_top` and contains all three. Marked
+   the orphan with a header recording the wrong conclusion and why, rather than
+   "fixing" a file nothing uses.
+2. "Today's ISLAND-SCORED report quotes the stale Mosaic comment rather than the
+   fit." It does not -- the only Mosaic mention there is in a component list.
+
+**WHAT WAS REAL.** check_prod_manifest.py was FAILING on three blocks I
+committed today; registered, RC=0 again. And the Mosaic gate comment WAS stale:
+"Measured 4 today, so this rule FAILS on purpose until C21 lands" -- C21 landed
+at cce01f31, the RTL is explicit CSD shift-add, and the fit measures DSP 0 / 310
+ALM / clean / ok. That wording reads as 4 DSP still available; it is banked.
+**Same error as geom_skin, pointed the other way** -- there a disqualified
+config read as an available lever, here a cashed one read as uncashed. Both
+inflate the remaining saving, which is the flattering direction.
+
+**Next:** two doc-triage agents still running (MHZArchitected,
+REARCHITECTUREADVICE verification).

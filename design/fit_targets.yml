@@ -438,9 +438,24 @@ targets:
 
   # --- raster leaves the texture island depends on --------------------------
     rules:
-      # S3.4: require DSP == 0 for the CSD variant. Measured 4 today, so
-      # this rule FAILS on purpose until C21 lands -- an inferred multiplier
-      # is on the brief's REWRITE list.
+      # S3.4: require DSP == 0 for the CSD variant.
+      #
+      # UPDATED 2026-09-09. This comment used to read "Measured 4 today, so
+      # this rule FAILS on purpose until C21 lands". C21 LANDED, at commit
+      # cce01f31 ("MOSAIC's two multipliers become CSD shift-add"), and the
+      # rule now PASSES: zhao_texture_mosaic measures DSP 0 / 310 ALM / 200
+      # registers on a CLEAN tree, status ok. The RTL is explicit shift-add
+      # (`mul_cx` at zhao_texture_mosaic.sv:264) with an elaboration $fatal
+      # proving mul_cx(1) == MOSAIC_CX.
+      #
+      # The stale wording mattered: a fails-on-purpose comment beside a rule
+      # that now passes reads as 4 DSP still available to save. It is already
+      # banked. That is the geom_skin error pointed the other way -- there a
+      # disqualified configuration was read as an available lever; here a
+      # cashed one was left looking uncashed. Both inflate the remaining
+      # saving, which is the flattering direction.
+      #
+      # Only Fmax now misses the owner's 14.5 gates: 79.22 against >= 125.
       max_dsp: 0
       # THE OWNER'S NUMBERS, not mine. islandrearchitecture5.md 14.5 gates
       # MOSAIC at "<= 500 ALMs / <= 350 registers / 0 M10K / 0 DSP / II = 1 /
