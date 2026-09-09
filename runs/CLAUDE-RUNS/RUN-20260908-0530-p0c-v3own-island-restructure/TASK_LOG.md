@@ -3089,3 +3089,52 @@ register breach is systemic across 9 of 11 components, and this leaf fit carries
 300 virtual pins while the island instantiates the block among real neighbours.
 
 Report: `reports/PAIRPIPE-FIT-GATE3-FIRST-HALF-20260909.md`.
+
+## 2026-09-09 -- the structural gate has been INERT for every labelled row
+
+Found by asking why my pre-registered `failed:structure` came back as `ok`. Work
+done outside the running svc fit's one-file snapshotted closure.
+
+**It is a key mismatch, not a policy.** `Read-FitRules` keys its table on the bare
+`- top:` name; `run_block_fit.ps1:1115` looks up `$fitRules[$rowModule]` where
+`$rowModule = "$mod$RowLabel"`. Every labelled run therefore asks for a key that
+cannot exist, gets `$null`, and `Test-FitRules` returns an empty list on a null
+ruleset -- so `status` stays `ok` and no `ruleViolations` field is written.
+
+Demonstrated against the real table without touching the running script:
+
+    rule table: 40 keys; keys containing '@': 0
+    "zhao_raster_perspuv_pairpipe@regfit" -> ruleSet False, violations 0
+    "zhao_raster_perspuv_pairpipe"        -> ruleSet True
+         VIOLATION: M10K 2 > allowed 1
+         VIOLATION: registers 820 > allowed 700
+
+Exactly the two I had to hand-check for the pair-pipe write-up.
+
+**43 labelled rows carry 0 ruleViolations against 95 unlabelled carrying 12**, and
+BOTH CLAUDE.md and packet_accounting.py already record that ratio -- correctly, as
+a caveat, and phrased as though it were the design. It is not. Nobody asked WHY
+the silence existed; a caveat that works is easy to leave in place forever.
+
+**Dangerous direction, as always:** the defect makes rows look like PASSES. The
+gate's own comment says "a block that met Fmax while putting its arrays in
+flip-flops used to report `ok`; now it reports the violation" -- and it has been
+inert for every labelled run since labels existed. Self-concealing too: a missing
+`ruleViolations` field is indistinguishable from an empty one, the same shape as
+the rd_gen_mismatch counter that could not fire.
+
+**Fix is one line** -- fall back to `$fitRules[$mod]` when the labelled key misses.
+Inheritance is the INTENDED semantics, not a convenience: fit_targets.yml says on
+this very target "SAME RULES AS svc DELIBERATELY... inheriting the budget it is
+trying to beat is the honest gate; a looser one would let it pass by being merely
+different." A variant needing different limits should get its own `- top:` entry.
+
+**NOT APPLIED YET.** run_block_fit.ps1 is the script executing GATE 3's second half
+right now, and editing the file a 39-minute measurement was launched from is a
+needless risk. Applies once the svc row lands; the logic is already validated in
+isolation.
+
+**No measurement is invalidated** -- only the stamp was missing. The pair-pipe's
+794 ALM / 820 registers / 119.25 MHz stand exactly as recorded.
+
+Report: `reports/LABELLED-ROWS-ARE-UNGATED-BY-A-KEY-MISMATCH-20260909.md`.
