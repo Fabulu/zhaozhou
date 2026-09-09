@@ -170,6 +170,36 @@ Three sizes are being confused and the doc separates them: raster tile 16×16
 patches in ±32 km fx16. `TERRAIN.LOD` already does ~784 clocks/patch ≈ 2,100
 patch decisions a frame against 256 live patches — it was never a one-patch toy.
 
+### D5b. LIGHTNING DRAWN AS LIGHTNING (owner, 2026-09-09) · `Upheaval/creature/Manafold/OWNER-DIRECTION-10-2026-09-09.md`
+
+**Owner, verbatim:** *"An experiment where the lightning particles are actually
+connected by white lightning lines surrounded by a deep dark blue. You know, like
+actual lightning."*
+
+**Three parts, and the third is new:** the motes get **connected** by a line; the
+line is **white**; the line is **surrounded by a deep dark blue**. That halo is a
+**dark** surround, not a glow — every lightning attempt on this creature has been
+additive and pale-on-pale, and a bright core wrapped in something darker than the
+sky is how real lightning reads.
+
+**Status:** in flight. Pass 14's reel lane (`manafold-p14-reel`) owns it as R6 and
+has been relayed the direction. It converges with the pass-14 architect's
+independent finding that the approved `edge-strands` look **drew the figure edges
+with the strand, and shipping took the mote half only** — the owner has described
+the dropped half in his own words.
+
+⚠ **Open question that is his, not ours:** the same deep blue may be **invisible**
+on `channel`'s violet night and **dominant** on the sunset the other 25 clips use.
+It ships as **a plate of rungs on both backdrops**, not a chosen value —
+`00-START-HERE` lesson 7.
+
+**Related history:** asked since Direction 8 §2 (2026-09-06), **survived four
+passes.** Pass 13 removed a backdrop bloom covering 18.9%/15.2% of the two mana
+clips in near-white, which was genuinely occluding it; that helped and was not
+sufficient. Three families of lightning constant have been tuned at this and a
+four-rung core-gain ladder came back visually identical at every rung —
+**gain is not the mechanism** (`09-ENGINE-GOTCHAS` §18).
+
 ### D5. Creature presentation lane  ·  `reports/CREATURESANDLIGHTS`
 > *"read this one to fill holes, clarify, unify, and show you how it should be
 > done"* — this is the unifying document; read it **after** the others.
