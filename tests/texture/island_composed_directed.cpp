@@ -2272,6 +2272,39 @@ int main(int argc, char** argv) {
           d.meta_align_chk_o > 50 ? 1 : 0);
     std::printf("  metajoin per-queue: bil %u checked/%u wrong, near %u checked/%u wrong\n",
                 d.meta_bil_chk_o, d.meta_bil_err_o, d.meta_near_chk_o, d.meta_near_err_o);
+
+    // AND THE WRONG-RESPONSE COUNTS ARE NOW GATED.
+    //
+    // The three `_err_o` counters above were PRINTED and never asserted, so this
+    // phase would have passed with a nonzero wrong-response count in any of them.
+    // The `_chk_o` denominators beside them were the harder half and were already
+    // handled -- `meta_align_chk_o > 50` is asserted just above -- which is what
+    // makes these zeros worth asserting rather than vacuous.
+    //
+    // Found by sweeping this file for ports that appear in a printf and never in
+    // a check(). `meta_genmis_o` came out of the same sweep, and that one's zero
+    // WAS vacuous: the bank had never been read where it was quoted. These three
+    // are the opposite case -- real denominators, unasserted numerators.
+    //
+    // Observed 792 / 768 / 192 checked with 0 wrong in each. The non-vacuity
+    // bounds below are set well under those, because a bound set AT the observed
+    // value encodes this workload rather than the claim.
+    check(d.meta_align_err_o == 0,
+          "and NOT ONE queued response was paired with another response's "
+          "metadata -- the D0 defect's exact signature, asserted rather than "
+          "printed",
+          0, d.meta_align_err_o);
+    check(d.meta_bil_chk_o > 100,
+          "the BILINEAR queue's alignment was exercised in bulk", 1,
+          d.meta_bil_chk_o > 100 ? 1 : 0);
+    check(d.meta_bil_err_o == 0, "and every bilinear response got its own metadata",
+          0, d.meta_bil_err_o);
+    check(d.meta_near_chk_o > 50,
+          "the NEAREST queue's alignment was exercised too -- both queues, not "
+          "just the busy one",
+          1, d.meta_near_chk_o > 50 ? 1 : 0);
+    check(d.meta_near_err_o == 0, "and every nearest response got its own metadata",
+          0, d.meta_near_err_o);
   } else {
     // The apparatus is absent, and the test says so with a POSITIVE assertion
     // rather than by falling silent. A zero here is the only thing consistent
