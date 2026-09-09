@@ -68,10 +68,10 @@ Not one of these is quoted from an agent's report. Each was rebuilt and rerun.
      -2  retire material_combine_v1 owner call, no measurement needed
     ----
     154
-    -17  pose_decode to one lane   STRUCTURAL; needs an owner ruling on
+    -14  pose_decode to one lane   CORRECTED from -17; owner ruled R4 on
                                    "1 decoded bone per clock"
     ----
-    137  against a target of 94  ->  GAP 43
+    140  against a target of 94  ->  GAP 46   (was 137/43 at the wrong -17)
 
 **The gap is 43, not 37.** A plan built on the earlier figure was spending six
 DSP that do not exist.
@@ -276,7 +276,7 @@ unmeasured area and DSP block in the tree.
    narrowing as blocked on bounding the playable world since 2026-08-24; **half
    the prize was never blocked on that.** The question has never been asked.
 2. **Relax "1 decoded bone per clock"** in `GEOM.POSE`. Costs 2.9% of a frame,
-   returns 17 DSP.
+   returns **14** DSP (corrected from 17).
 3. **Retire `material_combine_v1`** — both islands use v2. −2 DSP, one word.
 4. **`rcp24_v3`: pick one of three.** Your ruling covered DSP cost, not the
    throughput threshold the tile declares. At the island's NCTX=8 it measures

@@ -62,9 +62,23 @@ declared there.
 
 ## Latency (fixed or variable)
 
-Variable: hit ≈ palette handle latency; miss = ~12 multiplies/bone decode,
-bone-serial (≤32 bones). Working-set derivation: ≤128 distinct tuples/frame
-× 32 × 12 ≈ 49k multiplies/frame — noise against the DSP budget.
+Variable: hit ≈ palette handle latency; miss = bone-serial decode (≤32 bones).
+
+**Corrected and MEASURED 2026-09-10 (R4 implementation,
+`reports/POSE-DECODE-SEQUENCED-20260909.md`):** the old "~12 multiplies/bone"
+undercounted the chain by 6.75× — the real work is 9 (quat) + 36 (A_parent·LR)
++ 36 (A_b·inv_rest) = **81 products/bone** (45 for bone 0, which skips MUL1) plus
+~34 cycles/bone of non-multiplier walk (13-cycle ancestor read, 12-cycle store,
+handshakes). Measured by `geom_pose_decode_directed` on the 32-bone chain:
+
+| MUL_LANES (quat/mat) | DSP | cycles / 32-bone palette | cycles/bone |
+|---|---|---|---|
+| 1 / 1 (default, R4) | 4 | **3,694** | 115.4 |
+| 9 / 3 (pre-R4)      | 18 | 1,799 | 56.2 |
+
+The old working-set sentence ("≈49k multiplies/frame — noise against the DSP
+budget") is superseded twice over: the multiply count was wrong, and it used a
+utilisation figure to dismiss an area cost (see the R4 note below).
 
 ## Target throughput
 
@@ -83,8 +97,62 @@ pattern `zhao_terrain_normals.sv:203` and `zhao_terrain_lod.sv:273` already use.
 The demand figure was already in this contract, two paragraphs down: <=128
 distinct tuples/frame x 32 x 12 ~= 49k multiplies/frame. Against
 `computeClocksPerFrame = 1,666,666` that is **2.9% of a frame on ONE lane**,
-against 18 DSP provisioned -- about **34x over**. So the cost of relaxing is 2.9%
+against 18 DSP provisioned -- about 34x over. BOTH NUMBERS ARE WRONG; see the
+correction immediately below. So the cost of relaxing is 2.9%
 of a frame and the return is **17 DSP**.
+
+**CORRECTED 2026-09-09, and the correction is arithmetic I got wrong myself.**
+The return is **14 DSP, not 17**, and my own figure was internally inconsistent:
+I wrote "18 -> ~3, return 17", and 18 - 3 is 15. Read from
+`tools/budget/calibration.json` and corroborated by `zhao_project_core.sv:160`
+("1 DSP from 8 to 27 bits and 3 from 28 to 33"): a quat2mat s16 product is
+**1 DSP**, a mat3x4 s32 product is **3**, so one lane per engine is **18 -> 4**,
+a return of **14**.
+
+And the demand figure in this contract undercounts by **6.75x**. It says ~12
+multiplies per bone; the real chain is quat2mat 9 plus TWO mat3x4 multiplies at
+3x4x3 = 36 each, i.e. **81 products per bone**. On one lane that is 19.9% of a
+frame by product count, and **28.4% measured** with the sequencer's non-multiply
+cycles included -- not 2.9%. It still meets the demand, but the headroom is
+**3.5x, not 34x**.
+
+One further correction, from the implementer and worth keeping because it changes
+what the ruling actually did: **`zhao_geom_mat3x4_mul` was ALREADY element-serial
+and shared across both matrix multiplies.** The pre-R4 block measured **56.2
+cycles per bone**, so the 1-bone-per-clock target was never met by any RTL in this
+tree -- it shaped internal widths, not the schedule. The ruling was still right to
+relax it; it simply removed a target nothing was honouring.
+
+
+**IMPLEMENTED 2026-09-10, and the paragraph above needed THREE corrections**
+(`reports/POSE-DECODE-SEQUENCED-20260909.md` carries the derivations):
+
+1. **The demand was 12 multiplies/bone; the chain is 81 products/bone** (9 quat
+   + 2 × 36 matrix). Worst legal frame at the new default, MEASURED: 128 tuples
+   × 3,694 cycles = 472,832 cycles = **28.4% of computeClocksPerFrame**, not
+   2.9% — still meets the clamped worst case with 3.5× headroom, and the ~90%
+   hit economy makes the typical frame roughly a tenth of that. 128 is a
+   CLAMP (a frame demanding more is a content-tier violation), so it is the
+   legal worst case, not a capacity misread as demand.
+2. **The return is 14 DSP (18 → 4), not 17.** One 32x32 lane is **3 DSP** by
+   the measured calibration cliff (28..33-bit operands → 3;
+   `tools/budget/calibration.json`, `zhao_project_core.sv` cost section), and
+   the quat lane's 16x16 is 1 more. −15 needs the quat products folded into
+   the 32x32 lane across the module boundary; −17 needs the 32x32 built from
+   four ≤17-bit partials on ONE 1-DSP lane, ≈2.9× the walk (~81% of a frame
+   at full churn). Both are named options in the report, neither is taken.
+3. **The pre-R4 RTL never met 1 bone/clock anyway** — measured 56.2
+   cycles/bone at the legacy parameters (mat3x4_mul was already
+   element-serial and shared across both multiplies). The target shaped
+   quat2mat's 9 spatial products and mat3x4_mul's 3-per-cycle width, but the
+   block it demanded never existed, which rather supports the owner's
+   "arbitrary".
+
+The knobs are `MUL_LANES_QUAT` (1 default, 9 = spatial) and `MUL_LANES_MAT`
+(1 default, 3 = element-serial) on `zhao_geom_pose_decode`, per-module
+`MUL_LANES` on the submodules. The relaxed target this contract now declares:
+**one decoded bone per ≤120 clocks steady-state on miss** at the defaults;
+1 palette handle per request on hit (unchanged).
 
 Note what went wrong in the original, because the sentence is still below and
 still reads as reassurance: it called 49k multiplies/frame "noise against the DSP
@@ -113,6 +181,17 @@ counted, bad ids → identity bind pose). Landed with the creature reference
 core, commit `bd1c733` (`reference/include/zref/zref_creature.hpp`).
 
 ## Directed tests
+
+`tests/geometry/geom_quat2mat_directed.cpp`, `geom_mat3x4_mul_directed.cpp`,
+`geom_pose_decode_directed.cpp`: bit-identity against `zref::creature` on every
+element, walk-length laws (10-cycle quat walk, 37-cycle matrix walk at the
+defaults; 0/12 at the legacy parameters, held by the `*_spatial`/`*_elem` CMake
+variants), counters seen to fire. The R4 sequencers' checkers are demonstrated
+instruments: `tests/mutants/zhao_geom_quat2mat_mutant.sv` (schedule-slot swap)
+and `zhao_geom_mat3x4_mul_mutant.sv` (element-boundary accumulator) each break
+one line, and the inverted-polarity controls PASS only when the differential
+FAILS — on both mutants every counter still balances, so the differential is
+the only detector for that fault class.
 
 `tests/geometry/creature_core.cpp` (§1–§2, §7): decode golden vectors with
 hand-computed anchors — **identity/180° quats exact; 90° within the
