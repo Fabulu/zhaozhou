@@ -269,8 +269,17 @@ zhao_abi::ZhMat4fx mat_world_translate(int32_t tx, int32_t ty, int32_t tz) {
 // zsign +1: camera at (0,E,−D) looking +Z; zsign −1: camera at (0,E,+D)
 // looking −Z (the sunlit side — the renderer's ONE light is (1,2,1)/√6, so
 // the −Z viewpoint sees the lit slopes instead of the backlit silhouette).
+// R5 (pass 14): `bias_x` is a LATERAL aim shift and it is new. The camera had
+// a vertical bias and no horizontal one at all -- which is why every previous
+// attempt to keep a TRAVELLING creature in frame had to reach for cam_k and
+// push the animal further away, trading the framing fault for the review's
+// other complaint (a 40 px creature carrying none of three passes of face
+// work). Same one-row construction as the vertical bias below: row0 +=
+// bias_x * row_w shifts the aim by bias_x in NDC, still one exact row sum per
+// vertex. bias_x == 0 reproduces the old matrix element for element.
 zhao_abi::ZhMat4fx cam_pitch(int32_t k, int32_t eye_m, int32_t dist_m, int32_t ps, int32_t pc,
-                             int32_t bias, int32_t zsign, int32_t shake_raw) {
+                             int32_t bias, int32_t zsign, int32_t shake_raw,
+                             int32_t bias_x = 0) {
   const auto mul16 = [](int64_t a, int64_t b) { return static_cast<int32_t>((a * b) >> 16); };
   const int32_t E = eye_m << 16, D = dist_m << 16;
   const int32_t kc = mul16(k, pc), ks = mul16(k, ps) * zsign;
@@ -280,9 +289,9 @@ zhao_abi::ZhMat4fx cam_pitch(int32_t k, int32_t eye_m, int32_t dist_m, int32_t p
   // screen-centre bias: y' += bias·w shifts the aim by bias in NDC (adding
   // bias × the w row into the y row — still one exact row sum per vertex)
   const int32_t m[16] = {k,
-                         0,
-                         0,
-                         0,
+                         mul16(bias_x, -ps),
+                         mul16(bias_x, wz),
+                         mul16(bias_x, w_w),
                          0,
                          -kc + mul16(bias, -ps),
                          -ks + mul16(bias, wz),
@@ -1008,6 +1017,16 @@ struct SceneSubject {
   uint32_t cam_pull0 = 0;
   int32_t cam2_eye = 0, cam2_dist = 0, cam2_bias = 0;  // (cam2_k == cam_k)
   int32_t cam_k_end = 0;  // Wave E LOD sweep: lerp cam_k -> cam_k_end over the subject
+  // R5 (pass 14): the LATERAL aim, and its end value, lerped over the subject
+  // exactly as cam_k_end is. This is the FOLLOW CAM for the travelling clips:
+  // the creature holds frame and the terrain scrolls, which is how a
+  // travelling showcase reads. Both default 0 and 0 lerps to 0, so every
+  // subject that does not set them is byte-identical.
+  // ⚠ It follows the traverse LINEARLY. That is honest for `hasty` and
+  // `drift`, whose travel is authored at a constant rate; it is NOT a general
+  // tracker and must not be pointed at a clip whose motion is not linear
+  // without looking at the result first.
+  int32_t cam_bias_x = 0, cam_bias_x_end = 0;
   // debris: spawned at spawn_frame, integer gravity fxm per frame^2
   uint32_t debris_spawn_frame = 0;
   int32_t debris_gravity = 0;      // fx raw per frame^2 (subtracted from vy)
@@ -4540,8 +4559,15 @@ int render_scene(const SceneSubject& sub) {
         k_now = sub.cam_k + static_cast<int32_t>(
             (static_cast<int64_t>(sub.cam_k_end - sub.cam_k) * f) / (sub.frames - 1));
       }
+      int32_t bx_now = sub.cam_bias_x;
+      if (sub.cam_bias_x_end != sub.cam_bias_x && sub.frames > 1) {
+        bx_now = sub.cam_bias_x + static_cast<int32_t>(
+            (static_cast<int64_t>(sub.cam_bias_x_end - sub.cam_bias_x) * f) /
+            (sub.frames - 1));
+      }
       sv.payload.view_projection =
-          cam_pitch(k_now, cam_eye, cam_dist, sub.cam_ps, sub.cam_pc, cam_bias, -1, shake_raw);
+          cam_pitch(k_now, cam_eye, cam_dist, sub.cam_ps, sub.cam_pc, cam_bias, -1, shake_raw,
+                    bx_now);
       if (sub.orbit) {
         // one exact turn per loop: theta = f * 65536 / frames (integer)
         const uint16_t theta = static_cast<uint16_t>((static_cast<uint64_t>(f) * 65536u) /
@@ -5653,6 +5679,60 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // inherit the 360k house framing -- see kU02CamKTraverse.
   if (u02::flat_staged_slot(static_cast<uint16_t>(slot)))
     s.cam_k = u02::kU02CamKTraverse;
+  // ---- R5: THE TRAVELLING CLIPS KEEP THEIR SUBJECT IN FRAME -------------
+  // ROOT CAUSE, and it is arithmetic rather than opinion: `kU02CamKTraverse`
+  // (148000) was authored for DRIFT, whose traverse is
+  // kDriftKeys * kDriftSpeedMmPerKey = 150 * 46 = 6900 mm. `hasty` inherited
+  // that same window and travels 120 * 70 = 8400 mm -- TWENTY-TWO PERCENT
+  // FURTHER. So hasty walks out of the right of a frame sized for a shorter
+  // journey (established: gone by ~f235, and the committed probe reports
+  // 268 mm minimum clearance, so it is not the ground), and drift, which only
+  // just fits, kisses the LEFT edge at f283 and is back by f287.
+  //
+  // Both roots are authored LINEARLY and symmetrically about the clip centre
+  // (`root_x = (f - K/2) * speed`), so a linear lateral lerp tracks them
+  // exactly -- the creature holds frame and the terrain scrolls. That is the
+  // plan's first choice, and it costs no scale: the alternative, pulling
+  // cam_k further back, would have shrunk a creature the review already calls
+  // too small to carry three passes of face work.
+  //
+  // ⚠ THE MAGNITUDES BELOW ARE A STARTING ESTIMATE, NOT A MEASUREMENT.
+  // They come from a small-angle guess (half-traverse / cam_dist, through k)
+  // and MUST be judged by rendering the tail frames and looking. The env
+  // overrides exist so that is a ladder from one binary.
+  // These two live HERE rather than beside kU02CamKTraverse in manafold_art.h
+  // on purpose: that file's clip-constant region is IMPL-PERF's grant this
+  // pass, and camera framing is mine. Same pass, two lanes, one file is how a
+  // merge conflict gets manufactured.
+  // 28000 AND THE SIGN, BOTH AUTHORED BY LOOKING, AND MY FIRST GUESS AT EACH
+  // WAS WRONG. A small-angle estimate said 18800 and I signed it so the aim
+  // ran -bias -> +bias; rendered, that pushed a right-travelling creature
+  // FURTHER right and it left the frame at every rung -- the fix made the
+  // fault worse, monotonically, which is the clearest possible refutation.
+  // The aim must run +bias -> -bias: the camera moves WITH the creature, so
+  // the content slides the other way. 28000 was then picked off a four-rung
+  // ladder (0 / -9000 / -18800 / -28000) at f235, the frame where it used to
+  // be gone: pass14-plates-reel/r5-hasty-AB.png.
+  constexpr int32_t kU02HastyBiasX = 28000;  // hasty traverses 8400 mm
+  // ⚠ DRIFT GETS NONE OF THIS, AND THE PLATE IS WHY. The same follow made
+  // drift WORSE at f283 -- the exact frame the review flagged. The reason is
+  // that drift's fault is not a traverse-window fault at all: these clips set
+  // `wrap_root_delta`, so the root WRAPS THE WHOLE JOURNEY BACK in its last
+  // frames, and at f283 the creature is not still travelling right, it is
+  // snapping back to the LEFT. A linear tracker cannot follow a wrap; it
+  // races away from it. So drift's brief left-edge clip is a WRAP question
+  // for a later pass and is deliberately left open rather than papered over
+  // with a camera constant that measurably harms it.
+  if (slot == 8) {
+    const int32_t bx = kU02HastyBiasX;
+    s.cam_bias_x = bx;       // the aim starts AHEAD of the creature...
+    s.cam_bias_x_end = -bx;  // ...and ends behind it, travelling with it
+    if (const char* e = std::getenv("ZHAO_U02_CAM_BX")) {
+      const int32_t v = std::atoi(e);
+      s.cam_bias_x = -v;      // sign kept as the LADDER was run, so the
+      s.cam_bias_x_end = v;   // plate's rung labels stay meaningful
+    }
+  }
   // ...except flight, whose traverse is half theirs and which was a thumbnail
   // at 148000 when it was rendered and looked at.
   if (slot == u02::kFlightSlot) s.cam_k = u02::kU02CamKFlight;

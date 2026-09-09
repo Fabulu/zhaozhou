@@ -355,7 +355,13 @@ constexpr int32_t kFoldEdgeStampMm = 14;   // 22 * (2/3), one core again
 // the violet night and dominate the sunset the other 25 clips use. So every
 // value below is swept from ONE binary through the env overrides in
 // zhao_reel.cpp, on BOTH backdrops, and the plate is the deliverable.
-constexpr bool kFoldStrandOn = true;         // the D10 read; false = pass 13's
+// ⚠ DEFAULT OFF, AND THAT IS DELIBERATE. Direction 10 SS5 calls this an
+// EXPERIMENT and says the deliverable is "the AXIS, not the best point on it"
+// -- so the bank keeps shipping pass 13 until the owner picks a rung off
+// pass14-plates-reel/. Verified, not assumed: with this false, `channel`
+// renders sequence_crc32c 0xD554CC12, the same value the pre-change binary
+// produced. Flip to true (or ZHAO_U02_STRAND=1) for the D10 read.
+constexpr bool kFoldStrandOn = false;        // the D10 read is opt-in until he picks
 constexpr int32_t kFoldStrandCoreRPx = 3;    // the white hot core
 constexpr int kFoldStrandCoreGainPm = 1000;
 constexpr int32_t kFoldStrandDarkRPx = 12;   // the deep dark blue surround
@@ -418,7 +424,19 @@ constexpr int kFoldStrandCapN = 64;          // stamps per sub-segment ceiling
 // stencil" -- and once the EDGE is a white strand it is the same primitive
 // drawing a figure instead of a diameter. Off by default under D10; one flip
 // restores it, and the ablation is one env away.
-constexpr bool kFoldFreeStrandOn = false;
+// ⚠ TRUE, AND IT WAS false FOR A WHILE, AND A BASELINE BUILD CAUGHT IT.
+// Turning the free strand off UNCONDITIONALLY silently changed `channel` even
+// with the D10 strand off: my tree rendered sequence_crc32c 0x39676A53 where
+// origin/main renders 0x241D7382. `channel`'s lightning is on the PROTECTED
+// list, and I had been about to write "reverts to pass 13 byte for byte" in a
+// comment on the strength of reading the code. Reading said inert; a baseline
+// binary said otherwise. BUILD THE BASELINE -- it cost one build and it was
+// the only thing in this pass that could have caught it.
+// The free strand is redundant only WHEN THE EDGE IS ITSELF A STRAND -- then
+// it is the same primitive drawing a diameter across a figure. So it now
+// FOLLOWS the strand instead of being switched independently, and
+// ZHAO_U02_FREE_STRAND still forces either answer outright.
+constexpr bool kFoldFreeStrandOn = true;
 
 // PASS 12 (D9 §3, "bring back the super awesome shapes of lightning"): 2 -> 1.
 // This RESTORES the pass-4 value, which Direction 4 §2 asked for in as many
@@ -1729,7 +1747,11 @@ inline int u02_strand_cap() {
   return g_u02_strand_cap < 1 ? kFoldStrandCapN : g_u02_strand_cap;
 }
 inline bool u02_free_strand_on() {
-  return g_u02_free_strand < 0 ? kFoldFreeStrandOn : g_u02_free_strand != 0;
+  if (g_u02_free_strand >= 0) return g_u02_free_strand != 0;  // env wins
+  // Default: present exactly when the D10 strand is NOT. Strand off ==
+  // pass 13 byte for byte; strand on == the owner's read, with no stray
+  // diameter drawn across the figure it is trying to draw.
+  return kFoldFreeStrandOn && !u02_strand_on();
 }
 // U02_FOLD_FREEZE=1 (pass 5; replaces the retired U02_ABLATE_KNEAD): the
 // bones keep animating, and ONLY the field's anchor input is frozen at
