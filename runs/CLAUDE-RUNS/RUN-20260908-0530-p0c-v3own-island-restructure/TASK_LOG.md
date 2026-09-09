@@ -2197,3 +2197,66 @@ peak into a gate.
 * Composed profiles green: 132 / 126 / 119, gate3 byte-identical, fault 31.
 * Waiting on the owner: the twelve queued fits, terrain, and now a REDLINE
   DECISION rather than a `v3own` conversion.
+
+## 2026-09-09 -- the direction instrument was broken in two ways
+
+Not texture work and not the reduction programme. This is a repair to the tool
+that delivers owner direction, found while running the scheduled check.
+
+**Where I was before starting this:** everything brief 0.1 authorises was
+complete and pushed; the twelve queued fits, terrain, and the redline decision
+were and remain the owner's call. Nothing was in flight, no Quartus alive.
+
+**Defect 1 -- two git binaries, one config.** `core.autocrlf=true` lives only in
+`C:/Program Files/Git/etc/gitconfig`. PowerShell on this machine resolves `git`
+to `c:/devkitPro/msys2/usr/bin/git.exe`, which reads a different system config
+and therefore called **1,200 files modified on a clean tree** (STATUS.md: 6,191
+insertions against 6,191 deletions on a 6,191-line file). Git Bash's
+`/mingw64/bin/git` reported 0 at the same instant.
+
+`pull_direction.ps1` gated its merge on a bare `git status --porcelain`, so under
+the msys2 git that gate **can never open** -- a plausible refusal with ten
+phantom files as evidence, forever. `run_block_fit.ps1`, `run_block_map.ps1`,
+`run_composed_fit.ps1` and `scan_rtl.py` all carry `-c core.autocrlf=true`
+already; the fifth file, the one carrying owner instructions, never got it.
+
+Proven with a stat-cache-invalidating control on a byte-identical file (sha256
+unchanged): bare ` M STATUS.md` / guarded clean. My FIRST control was
+contaminated by the index stat cache and reported the comfortable 0.
+
+**Defect 2 -- PowerShell 5.1 strips braces from native arguments.** `'@{u}'`
+reaches git as `@u`, `'@{upstream}'` as `@upstream`, regardless of quoting. The
+first still prints `@u` on stdout while the fatal goes to stderr, so with
+`2>$null` the variable was assigned the literal `"@u"` -- non-empty, so the
+`origin/$branch` fallback never fired. Every `HEAD..@u` query failed silently.
+**The tool could never see direction pushed to its own branch**; it printed "NO
+NEW DIRECTION. HEAD is level with @u". Replaced with `for-each-ref`
+(`%(upstream:short)`), a config-pair fallback, and a `rev-parse --verify` that
+REFUSES an unresolvable ref instead of counting zero from it.
+
+Control: `@u` unresolvable/0, `origin/zixxtrixx-v8-closeout` resolvable/0 (a real
+zero), `origin/main` resolvable/**302**.
+
+**Fixed call sites:** pull_direction.ps1 (status), mutation_sweep.py (the `git()`
+helper -- covers its status gate and its `checkout --` restore),
+packet_accounting.py (`git(*args)` helper), git_add_safe.py (`add`),
+run_composed_fit.ps1 (`add`), sweep_field_plan.sh (`checkout --`). The two `add`
+sites were worse in kind: an unguarded add stores worktree CRLF in the BLOB.
+Also set `core.autocrlf=true` in this clone's `.git/config` -- covers unfound
+sites on this machine, but it is not version controlled, so it is belt-and-braces.
+
+**New:** `tools/maintenance/check_git_autocrlf_guard.py`, 7 fire / 22 no-fire
+self-test cases asserted at import, 171 files scanned, RC=0. Writing it cost four
+lessons, all recorded in the report: 10 of its first 14 findings were false
+positives; `\b` became a literal 0x08 again (caught by `no_control_bytes.py`, the
+7th time here) leaving the helper-call exclusion silently dead; it was blind to
+`packet_accounting.py` entirely; and it reported "clean" over
+`tools/githooks/pre-commit`, which has no extension and which it had never
+opened.
+
+Report: `reports/TWO-GITS-DISAGREE-ABOUT-CLEAN-20260909.md`.
+
+Verification: python syntax on 4 files, `bash -n` on the sweep script, control-byte
+scan clean on all 7 touched files, and `pull_direction.ps1` run end-to-end under
+PowerShell -- it now names the seven files I really changed instead of 1,200
+phantoms, and resolves `origin/zixxtrixx-v8-closeout` instead of `@u`.
