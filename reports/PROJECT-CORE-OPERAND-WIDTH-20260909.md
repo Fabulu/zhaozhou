@@ -95,3 +95,87 @@ a budget that is 42 over with 42 blocks still unfitted?
 `zhao_project_core.sv` is outside the running island fit's closure, so this is
 free to build now. It cannot be *measured* until the fit finishes; one Quartus
 process at a time.
+
+---
+
+# ADDENDUM, same day: the file already knew, the calibration is MEASURED, and my width was off by one bit in the direction that mattered
+
+Reading further into `zhao_project_core.sv` (lines 160-175) found the question
+already answered and better answered:
+
+> "`tools/budget/calibration.json` measures a product at 1 DSP from 8 to 27 bits
+> and **3** from 28 to 33. So 11 x 3 = **33 DSPs**, and the map agrees exactly.
+> **Width narrowing is where 22 of those 33 are.** ... What that needs is a PROOF
+> that 27 bits covers a world coordinate ... belongs to the owner, not to this
+> file. `docs/OWNER_DOCKET.md` 2026-08-24 states it as such."
+
+So the census's "~3 DSP per multiply" was not an inference after all -- it is a
+**measured** calibration point, and 11 x 3 = 33 agrees with the fit exactly. Good
+news for that number, and a reminder that "recorded as an inference deliberately"
+is worth re-checking against the tree before repeating it.
+
+## FIRST CORRECTION: 18 bits, not 19
+
+I reported the random test's matrix range as 19 signed bits. It is **exactly 18**:
+`int32_t >> 14` spans `[-131072, 131071]`, and signed 18-bit two's complement is
+`[-2^17, 2^17-1]` -- the same interval. I took `bit_length()+1` of the magnitude
+131072, which is right for a positive bound and wrong at exactly `-2^17`.
+
+One bit, and it is the bit the whole question turns on.
+
+## SECOND CORRECTION: the calibration has ASYMMETRIC points, and they change the plan
+
+`calibration.json` carries a `widthB` field. Twelve points use it, all signed,
+one multiplier, `ioreg`:
+
+| a x b | DSP | est. ALM |
+|---|---|---|
+| 32 x 32 | 3 | 137 |
+| 32 x 27 | **3** | 126 |
+| 32 x 24 | **3** | 119 |
+| **32 x 18** | **2** | 104 |
+| 27 x 27 | **1** | 91 |
+| 27 x 18 | 1 | 76 |
+| 24 x 18 | 1 | 71 |
+
+**Narrowing the matrix operand to 27 or even 24 buys nothing at all.** The cost
+only moves at **18**. That is the opposite of what "narrow it somewhat" intuition
+suggests, and it is why this needed a table rather than a guess.
+
+So the lever is really two levers of very different difficulty:
+
+| move | DSP across two cores | what it costs |
+|---|---|---|
+| matrix operand -> **18 bits** | **-18** (54 -> 36) | bounds view-projection coefficients to +-2.0 in Q16.16. **Does not touch the world-size question.** |
+| coordinate -> **27 bits** as well | a further **-18** (36 -> 18) | +-1024.0 world units at Q16.16 -- the "hard half" the file names, and it collides head-on with the 8 km terrain goal |
+
+Plus roughly 33 ALM per multiply on the first move, about 594 ALM across eighteen.
+
+**The first move is available without answering the world-size question**, which
+is the part the docket has been sitting on since 2026-08-24. That is genuinely
+new: the docket entry frames width narrowing as blocked on bounding the playable
+world, and the asymmetric points show half the prize is not.
+
+## What it is blocked on instead, and the cheap measurement that would unblock it
+
++-2.0 is a real constraint on a view-projection matrix, not a formality. A
+perspective term is `cot(fov/2)/aspect`, which passes 2.0 at about a 53 degree
+vertical field of view and reaches 3.7 at 30 degrees. **An 18-bit matrix operand
+caps how narrow the FOV can be**, so the question is no longer "how big is the
+world" but "how long is the longest lens", which is a far smaller question.
+
+And the calibration **cannot answer where the real boundary is**, because it jumps
+straight from 32x18 to 32x24. Nothing at 19, 20, 21, 22 or 23 has ever been
+measured. If 32x22 were still 2 DSP, coefficients could reach +-32.0 and the
+constraint would stop mattering entirely.
+
+That is one cheap sweep through `tools/budget/gen_calib.py` -- minutes of
+`quartus_map`, not a fit -- and it is the next thing to run when the island fit
+releases the toolchain. **Queued rather than started: one Quartus at a time.**
+
+## And the MATW plan survives, narrowed
+
+The parameter is still the right shape -- default 32, nothing ships differently,
+the width becomes a named owner-editable constant rather than a number inside a
+function signature. What changes is the value worth testing: **18, not 20**, and
+whatever the new calibration points say is the highest width that still costs 2.
