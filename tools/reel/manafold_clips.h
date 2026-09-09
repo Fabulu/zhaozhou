@@ -1574,11 +1574,23 @@ inline zc::Clip build_startle() {
   Rig g;
   // pass 3 ("ain't bad, make it better"): the snap lands two keys sooner
   // and overshoots harder before the recoil catches it
-  static const Key kBack[] = {{0, 0},    {8, 140},   {12, -1300}, {20, -980},
-                              {28, -1080}, {42, -1000}, {52, -960}, {74, -60},
+  //
+  // PASS 14 / R4's cheap rider (B4 has no delivery on record). The snap was
+  // real and there was nothing after it: the curve reached its extreme at key
+  // 12 and immediately started ringing, -980, -1080, -1000, -960, so the
+  // startle read as a wobble that began violently. Same fault as taunt3's, at
+  // a twentieth of the size -- an arrival nobody is given a frame to see.
+  //
+  // The attack is one key sharper (8 -> 11, three keys) and the extreme is now
+  // HELD for ten keys, which is twenty frames on screen and clears
+  // 07-MOTION-STYLE's sixteen. The ring that follows is untouched: it is the
+  // recoil, it is correct, and it now has something to be a recoil FROM.
+  // No new reversals and no new keys -- the same nine entries, re-placed.
+  static const Key kBack[] = {{0, 0},    {8, 140},   {11, -1300}, {21, -1300},
+                              {30, -980}, {42, -1080}, {52, -960}, {74, -60},
                               {79, 0}};
-  static const Key kUp[] = {{0, 0},    {8, -170},  {12, 1300}, {20, 750},
-                            {28, 990}, {42, 720},  {52, 640},  {74, 40},
+  static const Key kUp[] = {{0, 0},    {8, -170},  {11, 1300}, {21, 1300},
+                            {30, 750}, {42, 990},  {52, 640},  {74, 40},
                             {79, 0}};
   static const Key kWhip[] = {{0, 1000},  {8, 1060},  {14, 760},  {22, 1160},
                               {32, 880},  {44, 1080}, {56, 950},  {68, 1020},
