@@ -2914,3 +2914,43 @@ being merely different."
 So the swap needs the second half of GATE 3 and an island fit to see it in
 composition. The leaf halves are authorised as texture-gate diagnosis under
 0.1(D) and 7.1; the ISLAND fit is not, and stays the owner's.
+
+## 2026-09-09 -- the census had no REGISTER column, and the fixture did not model map rows
+
+Work outside the running leaf fit's closure.
+
+**The accounting authority never reported the largest breach.** `dsp_census.py`
+printed DSP / ALM / M10K and had been loading `registers` into `Evidence.regs`
+all along at three call sites -- the number was present and never printed. So when
+the island was scored today and missed its REGISTER budget by +81% against +44%
+for ALM, the biggest breach had no line in the census, which is why every lever
+hunt sorted by ALM and the largest register consumer (perspuv_svc) was never once
+named.
+
+Now reported: **REG 81,925 counted, 34 unknown rows.**
+
+**And the coverage is the point.** REG unknown is 34 -- the same as DSP -- against
+ALM's 45, because `run_block_map` emits `dspBlocks` and `registers` but no placed
+ALM count. **Registers are the best-covered area column we have**, and it was the
+one nobody printed.
+
+No DEVICE ceiling for it, deliberately: Cyclone V packs flip-flops inside ALMs, so
+the ALM row already IS the device constraint and inventing a separate denominator
+would be a derivation dressed as a datasheet number. The gate that matters is
+per-subsystem (the island's is 9,000) and lives in the architecture documents.
+
+**Fixture 7b added with the column, and it immediately caught the FIXTURE being
+wrong.** My assertion was that regs_unknown must equal dsp_unknown, and it failed
+3 vs 1 -- because the fixture's map rows carried `dspBlocks` and `estimatedAlms`
+but NO `registers`, so they did not model a real map row at all. The omission was
+invisible while nothing totalled registers. Fixed the fixture (normals 640,
+maponly 512) rather than weakening the assertion, since the property under test is
+exactly the one that makes the column valuable.
+
+**Proven to fire, two independent ways**, because a new total no fixture checks is
+the unverified number this tool exists to stop:
+
+    row carries regs=None    -> RC=1, fixture 7b fails
+    totals skips the regs key -> RC=1, fixture 7b fails
+
+Twelve fixtures still pass, and the real run is unchanged on DSP/ALM/M10K.

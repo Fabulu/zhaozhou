@@ -343,13 +343,14 @@ def build_bill(tops, ev, targets_text="", profiles=None):
             kind = ("UNPRICED (no fit target -- nobody can measure it)"
                     if not has_target else "UNPRICED (target exists, never run)")
             rows.append({"module": m, "kind": kind, "why": why, "dsp": None,
-                         "alm": None, "m10k": None, "stage": None,
+                         "alm": None, "m10k": None, "regs": None, "stage": None,
                          "label": None, "clean": None, "policy_failed": False,
                          "alternates": len(cands)})
             continue
         kind = ("CURRENT (fitted)" if chosen.stage == FIT else "CURRENT (mapped)")
         rows.append({"module": m, "kind": kind, "why": why,
                      "dsp": chosen.dsp, "alm": chosen.alm, "m10k": chosen.m10k,
+                     "regs": chosen.regs,
                      "stage": chosen.stage, "label": chosen.label,
                      "clean": chosen.clean, "policy_failed": chosen.policy_failed,
                      "alternates": len(alts)})
@@ -357,10 +358,11 @@ def build_bill(tops, ev, targets_text="", profiles=None):
 
 
 def totals(rows):
-    t = {"dsp": 0, "alm": 0, "m10k": 0,
-         "dsp_unknown": 0, "alm_unknown": 0, "m10k_unknown": 0}
+    t = {"dsp": 0, "alm": 0, "m10k": 0, "regs": 0,
+         "dsp_unknown": 0, "alm_unknown": 0, "m10k_unknown": 0,
+         "regs_unknown": 0}
     for r in rows:
-        for k in ("dsp", "alm", "m10k"):
+        for k in ("dsp", "alm", "m10k", "regs"):
             if r[k] is None:
                 t[k + "_unknown"] += 1
             else:
@@ -419,10 +421,22 @@ def self_test():
              "rtlCleanAtHead": True},
         ]}))
         io.open(mp, "w", encoding="utf-8").write(json.dumps({"blocks": [
+            # A REAL MAP ROW CARRIES `registers` AND NOT `alms`, and these
+            # fixtures did not model that until 2026-09-09 -- they had DSP and
+            # estimatedAlms only. The omission was invisible while nothing
+            # totalled registers; the moment the column was added, fixture 7b
+            # failed with regs_unknown=3 against dsp_unknown=1, which is the
+            # fixture being wrong rather than the code.
+            #
+            # It matters because it is exactly the property that makes the
+            # register column worth having: run_block_map emits dspBlocks and
+            # registers but no placed ALM count, so registers are known on rows
+            # where ALMs never will be. Real examples: perspuv_pairpipe@map has
+            # 961 registers and no alms, probe_ram_infer@wholetree has 627.
             {"module": "normals", "dspBlocks": 3, "estimatedAlms": 700,
-             "status": "ok", "sourceCommit": head},
+             "registers": 640, "status": "ok", "sourceCommit": head},
             {"module": "maponly", "dspBlocks": 17, "estimatedAlms": 500,
-             "status": "ok", "sourceCommit": head},
+             "registers": 512, "status": "ok", "sourceCommit": head},
         ]}))
         io.open(sh, "w", encoding="utf-8").write(json.dumps({
             "design": {"top": "shell"}, "stages": {"fitter": "success"},
@@ -470,6 +484,25 @@ def self_test():
         assert t["dsp_unknown"] == 1, "an unknown DSP was not counted as unknown"
         assert t["alm_unknown"] == 3, \
             "map rows and the null row must all report ALM unknown: %s" % t
+
+        # 7b. REGISTERS HAVE BETTER COVERAGE THAN ALMs, which is the whole point
+        #     of carrying the column. A map-only row reports `registers` but not
+        #     `alms`, so `regs_unknown` must track the DSP column (1 here, the
+        #     null row) and NOT the ALM column (3).
+        #
+        #     Added 2026-09-09 together with the column, because a new total that
+        #     no fixture checks is exactly the unverified number this tool exists
+        #     to stop. Proven to fire: stubbing the row's "regs" to None makes
+        #     this assertion fail.
+        assert t["regs_unknown"] == t["dsp_unknown"], \
+            ("registers must be known wherever DSP is -- map rows carry both: "
+             "regs_unknown=%s dsp_unknown=%s"
+             % (t["regs_unknown"], t["dsp_unknown"]))
+        assert t["regs_unknown"] < t["alm_unknown"], \
+            ("registers must be BETTER covered than ALMs, or the column is not "
+             "reading map rows: %s" % t)
+        assert t["regs"] > 0, \
+            "the register total must not be silently zero: %s" % t
 
         # 8. A LABEL IS A DIFFERENT PROFILE. `skin` has an unlabelled fit at 9
         #    DSP / 2,225 ALM plus a MUL_LANES=6 variant at 18. The unlabelled row
@@ -556,9 +589,26 @@ def main():
     print("Composition changes mapping, replication, pruning and packing, and "
           "the unpriced rows below are missing entirely.")
     print()
+    # REGISTERS ARE REPORTED BECAUSE THEY ARE THE LARGEST BREACH.
+    #
+    # This table carried DSP, ALM and M10K for its whole life while the loader
+    # had been reading `registers` into Evidence.regs all along -- the number was
+    # present and never printed. On 2026-09-09 the texture island was scored
+    # against islandrearchitecture4.md 21.6 and missed its REGISTER budget by
+    # +81% against +44% for ALM: the biggest breach in the island had no line in
+    # the accounting authority, so every lever hunt sorted by ALM and the largest
+    # register consumer (zhao_raster_perspuv_svc) was never once named.
+    #
+    # There is no DEVICE ceiling column for registers on purpose. Cyclone V packs
+    # flip-flops INSIDE ALMs, so the ALM row already is the device constraint and
+    # inventing a separate denominator would be a derivation dressed as a
+    # datasheet number. The gate that matters is per-subsystem -- the island's is
+    # 9,000 -- and it lives in the architecture documents, not here.
     print("  %-6s %9s %9s %9s" % ("", "COUNTED", "DEVICE", "unknown rows"))
     for k, lab in (("dsp", "DSP"), ("alm", "ALM"), ("m10k", "M10K")):
         print("  %-6s %9d %9d %9d" % (lab, t[k], DEVICE[k], t[k + "_unknown"]))
+    print("  %-6s %9d %9s %9d   (packed in ALMs; no separate device ceiling)"
+          % ("REG", t["regs"], "--", t["regs_unknown"]))
     print()
     print("  owner target: DSP <= %d. Counted %d, with %d rows unpriced."
           % (OWNER_DSP_TARGET, t["dsp"], t["dsp_unknown"]))
