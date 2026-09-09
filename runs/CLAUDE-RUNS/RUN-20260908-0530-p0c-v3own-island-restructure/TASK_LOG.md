@@ -3609,3 +3609,28 @@ commits stale, fitted at the current source, and that comparison stands.
 What it does mean is that the bill's headline totals -- 192 DSP, 58,359 ALM,
 81,925 registers -- carry 13 rows measured against older RTL, and nobody could
 have known that from the census before today.
+
+## 2026-09-09 -- the cache changed timing only, verified properly the second time
+
+The pre-cache --staleness run finished after I had already superseded it. Kept it
+as a control, because caching is a PERFORMANCE change that must not alter an
+answer -- and the cheapest way to know is to compare two runs that differ only in
+the cache.
+
+    pre-cache  32 checked: 19 fresh, 13 STALE, 0 undetermined   (~10 min)
+    cached     32 checked: 19 fresh, 13 STALE, 0 undetermined   (103 s)
+    STALE module sets: 13 vs 13, IDENTICAL
+
+**My first comparison of those sets was broken and said so in the flattering
+direction.** It printed "IDENTICAL sets (1 modules)" -- it had matched ONE module
+of thirteen, because my grep did not allow for the leading whitespace, and then
+compared two nearly-empty strings and found them equal. Agreement between two
+things that were both almost nothing.
+
+That is the broken-instrument law in miniature, inside a check I wrote to validate
+another check, thirty seconds after writing up two other defects in the same
+feature. The count (1) was the tell -- a set comparison over a 13-item result
+reporting 1 is precision at the wrong magnitude.
+
+Redone with the whitespace handled: 13 vs 13, sets identical. The cache is a
+timing change only, and now that is measured rather than assumed.
