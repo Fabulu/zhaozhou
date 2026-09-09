@@ -9,20 +9,48 @@
 // protection underneath his judgement rather than a substitute for it:
 //
 //   1. the shell reaches OUTSIDE the silhouette                    (§14.1)
-//   2. it reaches ALL THE WAY TO THE BODY'S CENTRE                 (D11 §2.3)
+//   2. the CORE KEEPS ITS OWN PIGMENT                             (D11 §2.3)
 //   3. density RISES INWARD from the gas's outer edge              (D11 §2.3)
 //   4. the ink is painted LESS than it would be without its mask   (§14.1)
 //   5. alpha 0 changes not one pixel                        (the revert path)
 //   6. the annulus SCALES WITH THE BODY, not with a pixel count    (D11 §2.3)
+//   7. the fog is an OUTER LAYER -- its peak is in the outer half   (D11 §2.3)
 //
-// PASS 15 RE-AIMED CHECKS 2, 3 AND 4, AND ADDED 6, BECAUSE THE MECHANISM
-// CHANGED UNDER THEM AND TWO OF THEM WOULD HAVE PASSED TAUTOLOGICALLY.
+// ⚠ PASS 15 LANE-FX-2 INVERTED CHECK 2 AND ADDED 7, BECAUSE THE GATE WAS
+// GREEN ON THE BUILD THE BY-EYE REVIEW REFUSED.
+//
+// This is the sharpest thing in this file and it belongs at the top. Pass 15's
+// check 2 demanded that the fog reach the BODY'S CENTRE. The shipped values
+// did, so it passed -- and reaching the centre WAS THE DEFECT: a near-white
+// plateau over the whole interior bleached the pigment and erased the
+// terminator that made the ball read as round (PASS-15-REVIEW.md §1, plate
+// J01). **Six checks passed and six legs fired on a build that damaged the one
+// quality the owner had named as praised.**
+//
+// It was not a sloppy check. It was a faithful encoding of a reading of D11
+// §2.3 -- "make the eye/body intersection read as fog" -- that had been
+// obsoleted by a SIBLING LANE, in the same pass, without either lane knowing:
+// the eye lane cured the sinking lens by making the lenses ride the deform and
+// stand proud, so the fog was still being asked to hide something that no
+// longer happens. The gate went on enforcing a requirement whose reason had
+// been deleted.
+//
+//   > **A gate encodes a hypothesis about what the owner wants** (10-GATE §0),
+//   > and a hypothesis can be RETIRED by someone else's fix. When a sibling
+//   > lane removes the symptom your check exists to serve, your check does not
+//   > become harmless -- it becomes a rule enforcing a dead requirement, and it
+//   > will hold the line for it.
+//
+// So check 2 now asserts the OPPOSITE (the core keeps its own pigment) and 7 is
+// new (the peak sits in the outer half). Both are the FIRST clause of his
+// sentence -- "the OUTER BODY PART is made of a thick fog" -- which no check
+// had ever owned; 3 owns the second clause and always did. Both fail on the
+// values pass 15 shipped, which is the only known-negative that matters here.
+//
+// PASS 15 ALSO RE-AIMED CHECKS 3 AND 4 AND ADDED 6, because the mechanism
+// changed under them and two of them would have passed TAUTOLOGICALLY.
 // The shell was a 3 px / 6 px band around the silhouette, densest AT the ink;
 // it is now an annulus scaled to the body's own radius, densest INWARD. So:
-//   * old 2 read a pixel 3 in from the line -- which the new mechanism also
-//     paints, so it would have kept passing while saying nothing about the
-//     thing D11 asks for. It now reads the CENTRE of the disc, which the old
-//     band could not reach at any setting and the new one must.
 //   * old 3 asserted density FALLS outward from the line. The owner's sentence
 //     is the opposite ("gets less thick the nearer to the OUTSIDE"), so the
 //     check is inverted to match him rather than to match the old code. It
@@ -143,12 +171,20 @@ std::vector<Result> run(int break_check) {
                    break_check == 5 ? u02::kShellAlphaMaxPm : 0);
 
   const int alpha = u02::kShellAlphaMaxPm;
-  // break 1/2: hand the production function a cover mask that is empty, so it
+  // break 1: hand the production function a cover mask that is empty, so it
   // cannot reach anywhere. break 4: hand it no ink mask, so it cannot spare
   // the line.
+  //
+  // ⚠ break 2 USED TO SHARE THIS EMPTY-COVER LEG and no longer does. The old
+  // check 2 asserted the centre WAS painted, so blanking the cover broke it;
+  // the new one asserts the centre is NOT painted, and an empty cover would
+  // make it pass TRIUMPHANTLY -- a leg that certifies the check instead of
+  // breaking it. It now has its own leg (restore the shipped core plateau),
+  // and this is exactly the shape of the check-5 tautology recorded above:
+  // when a check is inverted, its old failing leg becomes a PASSING one.
   const uint8_t* cover = s.cover.data();
   std::vector<uint8_t> empty(static_cast<size_t>(kW) * kH, 0);
-  if (break_check == 1 || break_check == 2) cover = empty.data();
+  if (break_check == 1) cover = empty.data();
   const uint8_t* ink = (break_check == 4) ? nullptr : s.ink.data();
   u02::shell_paint(s.rgb.data(), kW, kH, cover, ink, alpha);
   // Check 4's control: the SAME scene with no ink mask at all. The ink pixel
@@ -166,19 +202,52 @@ std::vector<Result> run(int break_check) {
                   x, cy, lum_at(s.rgb, x, cy), lum_at(zero.rgb, x, cy));
     r.push_back({"1 reaches OUTSIDE the silhouette (D9 s14.1)", ok, b});
   }
-  // ---- 2. and all the way to the BODY'S CENTRE --------------------------
-  // The owner's remedy needs fog where an EYE intersects the body, which is
-  // tens of pixels interior to the silhouette. The pass-12 band was
-  // identically zero there at every alpha. Reading the centre is the shortest
-  // statement of "this is a volume, not a fringe".
+  // ---- 2. the CORE KEEPS ITS OWN PIGMENT --------------------------------
+  // ⚠ THIS CHECK IS THE EXACT REVERSE OF WHAT IT ASSERTED AN HOUR AGO, AND
+  // THE OLD ONE PASSED ALL THE WAY TO A HELD PUBLISH.
+  //
+  // Pass 15 read D11 s2.3 as "the fog must reach the eye/body intersection,
+  // which is tens of pixels interior", and wrote a check that the disc CENTRE
+  // is painted. The shipped values satisfied it -- and that is precisely the
+  // regression: `kShellCoreFloorPm` held a plateau across the entire interior,
+  // so every pixel of the animal took ~10% of a near-white tint, the
+  // terminator that made a flat-shaded ball read as ROUND was erased, and the
+  // by-eye review held the bank over it (PASS-15-REVIEW.md s1).
+  //
+  // Two things had gone wrong and only one was the number:
+  //   * the remedy that check was serving IS NO LONGER NEEDED. It existed so a
+  //     lens sinking into the bouncing body would read as entering gas. The
+  //     eye lane cured that a different way -- the lenses ride the deform and
+  //     stand proud (N01, `hit` f24-f52) -- so the fog was still paying for a
+  //     fault that no longer appears on screen.
+  //   * and it was never what he asked for anyway. The sentence is "the OUTER
+  //     BODY PART is made of a thick fog". The outer part. A gate that demands
+  //     paint at the centre demands the one thing the sentence excludes.
+  //
+  // So the structural content of his sentence is that THE CORE IS NOT FOG, and
+  // that is what is asserted here. This is a SHAPE claim, not a density one --
+  // it says where the fog is, never how strong it may be, so 10-GATE s0 (no
+  // number may bless a shell density) is respected.
   {
-    const bool ok = lum_at(s.rgb, cx, cy) != lum_at(zero.rgb, cx, cy);
-    char b[200];
+    Scene core = make_scene(radius, 40);
+    Scene bare = make_scene(radius, 40);
+    const int saved_floor = u02::g_u02_shell_floor_pm;
+    // THE FAILING LEG IS THE SHIPPED REGRESSION ITSELF (10-GATE item 43: a
+    // known-negative built by restoring the MECHANISM, not by nulling the
+    // input). 180 pm is what pass 15 actually shipped; it repaints the core
+    // and this check must go red for it.
+    if (break_check == 2) u02::g_u02_shell_floor_pm = 180;
+    u02::shell_paint(core.rgb.data(), kW, kH, core.cover.data(),
+                     core.ink.data(), alpha);
+    u02::g_u02_shell_floor_pm = saved_floor;
+    const bool ok = lum_at(core.rgb, cx, cy) == lum_at(bare.rgb, cx, cy);
+    char b[240];
     std::snprintf(b, sizeof(b),
-                  "the disc CENTRE (%d,%d), %d px inside the line: %d vs %d",
-                  cx, cy, radius, lum_at(s.rgb, cx, cy),
-                  lum_at(zero.rgb, cx, cy));
-    r.push_back({"2 reaches the BODY'S CENTRE (D11 s2.3)", ok, b});
+                  "the disc CENTRE (%d,%d), %d px inside the line: %d vs an "
+                  "unpainted %d (floor=%d pm)",
+                  cx, cy, radius, lum_at(core.rgb, cx, cy),
+                  lum_at(bare.rgb, cx, cy), u02::g_u02_shell_floor_pm);
+    r.push_back({"2 the CORE KEEPS ITS OWN PIGMENT (D11 s2.3)", ok, b});
   }
   // ---- 3. density RISES INWARD across the annulus -----------------------
   // "a thick fog that gets less thick the nearer to the outside it goes."
@@ -257,8 +326,8 @@ std::vector<Result> run(int break_check) {
     char b[240];
     std::snprintf(b, sizeof(b),
                   "ink px x=%d took %d of paint; the SAME px with no ink mask "
-                  "took %d (kShellOverInkPm=%d)",
-                  ink_x, d_ink, d_free, u02::kShellOverInkPm);
+                  "took %d (over_ink=%d pm)",
+                  ink_x, d_ink, d_free, u02::g_u02_shell_over_ink_pm);
     r.push_back({"4 the INK survives being crossed (D9 s14.1)", ok, b});
   }
   // ---- 5. alpha 0 is a true no-op --------------------------------------
@@ -300,6 +369,63 @@ std::vector<Result> run(int break_check) {
                   small, large);
     r.push_back({"6 the annulus SCALES WITH THE BODY (D11 s2.3)", ok, b});
   }
+  // ---- 7. THE FOG IS AN *OUTER* LAYER -----------------------------------
+  // "the OUTER BODY PART is made of a thick fog that gets less thick the
+  // nearer to the outside it goes." Check 3 owns the second clause -- density
+  // rises inward. NOBODY OWNED THE FIRST, and that is the half pass 15 broke:
+  // its annulus ran 520 pm of the radius, so the densest fog sat 0.52 R in,
+  // in the MIDDLE of the ball. A fog whose peak is at the centre satisfies
+  // "rises inward" perfectly and is not an outer layer at all.
+  //
+  // ⚠ THE FIRST VERSION OF THIS CHECK PASSED ON THE REGRESSION, AND RUNNING IT
+  // IS THE ONLY REASON I KNOW THAT. It used the radius-24 fixture and asked for
+  // the peak in the OUTER HALF. But an annulus of 520 pm PUTS the peak at
+  // ~0.5 R by construction, so the threshold and the fault sat on the same
+  // line and integer quantisation decided the verdict -- it reported "9 px,
+  // must be under 12: PASS" on the exact values the by-eye review rejected.
+  //
+  // A threshold that coincides with the value under test is not a loose gate,
+  // it is a COIN TOSS wearing a number, and it is the same family as the three
+  // tautological checks this file already records. Two things fix it, and both
+  // are needed:
+  //   * a BIGGER fixture (radius 40, near `inspect`'s real on-screen body)
+  //     so one pixel of Chebyshev quantisation cannot swing the answer;
+  //   * the OUTER THIRD, not the outer half. "Outer body part" of a ball is
+  //     generously read as a third of the radius; a peak at HALF the radius is
+  //     the middle of the ball by any reading, which is precisely what shipped.
+  //
+  // The margin is printed either way, so the next person can see how close this
+  // ran rather than trusting the verdict (10-GATE item 12).
+  {
+    const int rad7 = 40;
+    Scene t = make_scene(rad7, 40);
+    Scene z = make_scene(rad7, 40);
+    const int saved_depth = u02::g_u02_shell_depth_pm;
+    // The leg restores pass 15's own annulus, which is the regression this
+    // check exists to catch (item 43: ablate the MECHANISM, do not null it).
+    if (break_check == 7) u02::g_u02_shell_depth_pm = 520;
+    u02::shell_paint(t.rgb.data(), kW, kH, t.cover.data(), t.ink.data(),
+                     alpha);
+    u02::g_u02_shell_depth_pm = saved_depth;
+    int peak_inset = 0, peak_paint = -1;
+    for (int k = 0; k <= rad7; ++k) {
+      const int x = cx + rad7 - k;
+      if (x < 0 || x >= static_cast<int>(kW)) continue;
+      if (t.ink[static_cast<size_t>(cy) * kW + x]) continue;
+      int v = lum_at(t.rgb, x, cy) - lum_at(z.rgb, x, cy);
+      if (v < 0) v = -v;
+      if (v > peak_paint) { peak_paint = v; peak_inset = k; }
+    }
+    const int limit = rad7 / 3;
+    const bool ok = peak_paint > 0 && peak_inset < limit;
+    char b[240];
+    std::snprintf(b, sizeof(b),
+                  "densest fog sits %d px inside the line on a radius-%d body; "
+                  "must be under %d (the OUTER THIRD), margin %d; reach=%d pm",
+                  peak_inset, rad7, limit, limit - peak_inset,
+                  u02::g_u02_shell_depth_pm);
+    r.push_back({"7 the fog is an OUTER LAYER (D11 s2.3)", ok, b});
+  }
   return r;
 }
 
@@ -325,7 +451,7 @@ int main(int argc, char** argv) {
   }
   // Every check must be demonstrably breakable through the real code path.
   int unbreakable = 0;
-  for (int k = 1; k <= 6; ++k) {
+  for (int k = 1; k <= 7; ++k) {
     char t[96];
     std::snprintf(t, sizeof(t), "SELFTEST: check %d must FAIL when broken", k);
     const std::vector<Result> rs = run(k);
