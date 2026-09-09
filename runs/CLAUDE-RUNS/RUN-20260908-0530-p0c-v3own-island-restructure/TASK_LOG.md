@@ -3904,3 +3904,108 @@ exactly this mistake. The check cost one grep of a file I was already quoting.
 
 Deliverables: `reports/FORGE-CLIFF-REARCH-ARCHITECTURE-20260909.md`,
 `tests/forge/cliff_rearch_model.py`. Nothing committed by the agent, as briefed.
+
+## 2026-09-09 -- arena verified INDEPENDENTLY, and one live-tree slip of my own
+
+All four terrain recons in and committed. Terrain fable architect dispatched
+with a brief written from them (`reports/terrain-recon/ARCHITECT-BRIEF-*.md`).
+
+**I re-ran the arena's evidence rather than quoting the agent's report:**
+
+    verilator 5.051 --lint-only -Wall      RC=0
+    check_quartus17_syntax.py              clean, 215 files, self-test first
+    proj_arena3_directed build + run       ALL CHECKS PASSED
+    positive control -GSTRIDE=64           %Fatal at :270, exit 1
+    positive control -GDEPTH=80            47 FAILURES, exit 1
+
+Both controls fire, so the green run is evidence. The report says DEPTH=80 gives
+5 failing checks; it gives 47 -- the instrument fires harder than reported, which
+is the safe direction, but it is a discrepancy and it is recorded.
+
+Toolchain note worth keeping: a standalone verilate of a test that normally
+links `zhao_harness` fails at link with `undefined reference to sc_time_stamp()`
+and a pile of collateral libstdc++ symbol errors that look like a compiler
+mismatch and are not. A three-line shim providing `sc_time_stamp` links it
+clean. The collateral errors are the misleading part -- they point at the
+toolchain when the cause is one missing symbol the harness normally supplies.
+Also: verilated.mk hard-fails on any build path containing a space, so the
+session scratchpad under "Fabian Trunz" cannot be used for verilator builds.
+
+**My slip:** I swept `tests/proofs/attrstep_qr_differential.cpp` into a commit
+while the attribute-stepping architect that is writing it is STILL RUNNING. That
+is the live-tree hazard in miniature, committed by the person who has been
+quoting the rule all day. Harmless here -- git will show the file modified when
+the agent finishes and I will commit the final version -- but the habit is the
+problem, not this instance. Add only files whose author has finished.
+
+**Held deliberately:** registering `proj_arena3_directed` in
+`tests/CMakeLists.txt`. It is step 1 of the arena's implementation order and the
+test is not run by CI until it happens, but a terrain architect is live and
+editing the build graph underneath it is exactly the hazard above. It goes in
+when that agent reports.
+
+**Next while the architect runs:** the geometry transform service's LANE COUNT.
+`reports/DSP-PATH-TO-94-20260909.md` says explicitly that the lane count is a
+throughput calculation and not a preference, and that it must be done per client
+before any RTL. Doing that calculation is work that touches no terrain file and
+no build graph.
+
+## 2026-09-09 -- owner direction found on main; my own DSP table refuted
+
+**Pull:** 0 incoming on our branch, but origin/main is 311 commits ahead and
+carries FIVE unread "Agent please read" files. Not merged -- the tree has the
+terrain architect's live work in it -- so read via `git show origin/main:<path>`,
+which does not touch the working tree.
+
+**The one that mattered: `reports/TERRAIN_31MHZ_REARCHITECTURE.txt`** (commit
+`1fc4ac8a`, dated 2026-09-07, 1,437 lines, 20 sections). An owner-authored
+terrain rearchitecture with an implementation order, acceptance criteria and
+stop conditions -- and I had a terrain architect running WITHOUT it. Relayed in
+full. "Instructions are not delivered until they are read", demonstrated again,
+this time by me.
+
+It resolves the 31.10-vs-32.42 discrepancy recon 3 flagged: 31.10 is the ledger
+fit at `39a650fc`, the PRE-repair revision (1,523 ALM / 1,389 reg); the newer
+fit whose sources.sha256 matches the current tree is 1,574 / 1,577 and the tess
+file cites 32.42. Two fits of two designs. **The consequence is that the m_p_q
+repair bought about 1.3 MHz against a 100 MHz target.**
+
+And it independently corroborates recon 3 twice over -- §6.2 names the geomorph
+cone as "the main remaining arithmetic target" and says registering NORMALS'
+product "does nothing to this chain"; §6.3 warns the characterization wrapper
+can itself be the limiter. Recon 3 found the worst path launching from the
+wrapper's lat_mem. Two independent investigations, same conclusion.
+
+Its §16 Step 0 ("finish the texture island first") is SUPERSEDED by the
+2026-09-09 phase change to the ALM/DSP rescue. Said so explicitly in the relay
+so the architect does not stall on it.
+
+**Contract archaeology refuted a number in my own report, and it is right.**
+
+I wrote `geom_skin MUL_LANES=1` as "-6 DSP, costs -33 MHz, an owner call."
+GEOM.SKIN.md:447-462 has the disqualifying fact TWO COLUMNS to the right of the
+one I quoted: that configuration delivers **38,965 vertices/frame against the
+ruled 120,000 -- 32%, FAILS.** It is kept *because* it fails, as the failing end
+of a deliberate frontier, and section 8 of its directed test asserts it is below
+demand. It is also not -6 (the contract says variant rows "must be excluded from
+any DSP total") and the row is stale (pre-pipeline RTL, e7591e8).
+
+Three errors, one cause: I read the Fmax column, found a number shaped like a
+tradeable lever, and stopped. Broken-instrument law with me as the instrument,
+on a table I had already opened. Corrected path is **137 against 94, so the gap
+is 43 DSP not 37** -- a plan on the old figure was spending six that do not
+exist.
+
+**A lever I had missed entirely:** `design/budgets/dsp.md:141-147`, item 1 of
+the four that opened this campaign -- time-multiplex the projector's rows, nine
+mul32 to three, "~33 to ~12, saving ~21", never cashed. Its stated prerequisite
+was "the composed frame budget", which is exactly what got computed today
+(23.9% with the arena, 4.2x headroom). I had written "there are none left" in
+the same report. The objection to answer is Fmax, not throughput -- the census
+dismisses it for adding control depth to a cone already 39% short -- and a
+MapOnly on a ROWS_PER_PASS parameterisation prices both without touching what
+ships.
+
+**Next:** commit the attrstep architect's finished files so the tree is clean
+enough to merge main, then work the remaining archaeology lanes as they report.
+`zhao_terrain_bake_v2.sv` stays untouched -- its author is still running.
