@@ -18,6 +18,23 @@
 # All three are MAP, not FIT. None needs the fitter, and map answers every
 # question asked here: DSP inference, memory inference, and whether the thing
 # elaborates at all.
+# `*>&1`, NOT `2>&1`, ON EVERY TEE BELOW.
+#
+# Write-Host writes to the information stream and never enters an in-process
+# pipeline, so `& script.ps1 2>&1 | Tee-Object -FilePath log` records everything
+# EXCEPT it. run_block_fit emits its whole provenance trail that way -- preflight,
+# snapshot, provenance guard, source digest -- so these logs were silently missing
+# the four lines that make them receipts rather than transcripts.
+#
+# The older logs in the repo root DO carry those lines, which is what made this
+# hard to see: fit-d0fixed.log has all four. Those were written by OS-level
+# redirection of the whole powershell process, where Write-Host lands on the
+# redirected console. Same-looking file, different capture, different contents.
+#
+# Verified on the REAL pattern, because it differs from the obvious test: a
+# script BLOCK and a script FILE behave the same here, but `2>&1` loses
+# HOST-FROM-FILE and `*>&1` keeps it. The first demonstration used a block and
+# proved the wrong half.
 $ErrorActionPreference = 'Continue'
 Set-Location 'C:\programmieren\zencrifice\zhaozhou'
 
@@ -42,7 +59,7 @@ Write-Host 'queue_after_g2: banking the worst-path census before anything else r
 Write-Host 'queue_after_g2: [1] 32x19..23 calibration points.'
 & python tools/budget/gen_calib.py
 Wait-Idle
-& "$PSScriptRoot\run_calib.ps1" -SkipMeasured 2>&1 |
+& "$PSScriptRoot\run_calib.ps1" -SkipMeasured *>&1 |
     Tee-Object -FilePath 'calib-boundary.log' | Select-Object -Last 6
 
 # DID -SkipMeasured ACTUALLY SKIP? Verify, do not assume.
@@ -93,7 +110,7 @@ Wait-Idle
 # terminated this whole script and took stage 3 with it. The header above says
 # every step is independently useful; that was true only until the first throw.
 try {
-    & "$PSScriptRoot\run_block_fit.ps1" -Module 'zhao_prod_top' -MapOnly -RowLabel '@map-import-fix' 2>&1 |
+    & "$PSScriptRoot\run_block_fit.ps1" -Module 'zhao_prod_top' -MapOnly -RowLabel '@map-import-fix' *>&1 |
         Tee-Object -FilePath 'map-prod-top.log' | Select-Object -Last 8
 } catch {
     Write-Host ('queue_after_g2: [2] FAILED -- ' + $_.Exception.Message)
@@ -109,7 +126,7 @@ try {
 Write-Host 'queue_after_g2: [3] zhao_raster_perspuv_pairpipe MapOnly -- scores a filed prediction.'
 Wait-Idle
 try {
-    & "$PSScriptRoot\run_block_fit.ps1" -Module 'zhao_raster_perspuv_pairpipe' -MapOnly -RowLabel '@map' 2>&1 |
+    & "$PSScriptRoot\run_block_fit.ps1" -Module 'zhao_raster_perspuv_pairpipe' -MapOnly -RowLabel '@map' *>&1 |
         Tee-Object -FilePath 'map-pairpipe.log' | Select-Object -Last 8
 } catch {
     Write-Host ('queue_after_g2: [3] FAILED -- ' + $_.Exception.Message)

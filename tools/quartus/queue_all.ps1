@@ -47,7 +47,7 @@ foreach ($cfg in @(@{ label = '@g1-lab'; shadows = '1' },
     Wait-Idle
     & "$PSScriptRoot\run_block_fit.ps1" -Module 'zhao_texture_island_v3_top' `
         -RowLabel $cfg.label -MapOnly `
-        -TopParameters @("MIGRATION_SHADOWS=" + $cfg.shadows) 2>&1 |
+        -TopParameters @("MIGRATION_SHADOWS=" + $cfg.shadows) *>&1 |
         Tee-Object -FilePath ("map-g1-" + $cfg.shadows + ".log") | Select-Object -Last 3
 }
 
@@ -74,7 +74,7 @@ foreach ($mod in @('zhao_texture_metajoin',
     # A map row and a fit row answer different questions and are not substitutes.
     # The ledger already had the convention right (`@v3-before`, `@v3-nctx8`),
     # which is how it should have been obvious.
-    & "$PSScriptRoot\run_block_fit.ps1" -Module $mod -MapOnly -RowLabel '@map' 2>&1 |
+    & "$PSScriptRoot\run_block_fit.ps1" -Module $mod -MapOnly -RowLabel '@map' *>&1 |
         Tee-Object -FilePath ("map-nb-" + $mod + ".log") | Select-Object -Last 3
 }
 
@@ -86,7 +86,7 @@ Write-Host 'queue_all: [3] rcp24_svc @ NCTX=12 TOKW=14 (the long one)'
 Wait-Idle
 & "$PSScriptRoot\run_block_fit.ps1" -Module 'zhao_raster_rcp24_svc' `
     -RowLabel '@g4-nctx12' `
-    -TopParameters @('NCTX=12', 'TOKW=14') 2>&1 |
+    -TopParameters @('NCTX=12', 'TOKW=14') *>&1 |
     Tee-Object -FilePath 'fit-g4-svc.log' | Select-Object -Last 4
 
 Write-Host 'QUEUE_ALL DONE'
