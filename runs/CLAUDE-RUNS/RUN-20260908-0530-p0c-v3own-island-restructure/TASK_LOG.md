@@ -2732,3 +2732,58 @@ for loop with a ternary. My probe's address came straight from a port.
 
 Not claiming the blocker is found. Four hypotheses are dead and the instrument is
 sound, which is what the next iteration needs.
+
+## 2026-09-09 -- probe v4, and THE PAIR-PIPE IS THE REGISTER LEVER
+
+**Probe v4: BOTH inferred.** arr_p (address from a port) and arr_r (address that
+is itself a combinational read of another array) both became 16x32 simple dual
+ports. 1,024 bits, zero merges, 0 errors, 65.9 s, registers down to 66. So the
+read address's PROVENANCE is innocent too. **Six candidates eliminated** for why
+e_tag infers and e_num_u does not: read-address count, the array reset, read
+style, width, merging-as-explanation, and address provenance.
+
+Incidental but useful: the little `wq` array (16x4 = 64 bits) did NOT infer and
+accounts for those 66 registers. Very narrow arrays are below the tool's
+threshold regardless, so perspuv's e_k (96 bits), e_val, e_have, e_sat and e_dz
+can never be memory. The convertible mass is the ~3,072 bits in the wide arrays.
+
+**Then I stopped testing a reimplementation.** Brief 2.7: test the ACTUAL path,
+not a reimplementation of the intended rule. Mapping the real block was cheaper
+and more decisive -- and both rows I needed were ALREADY ON DISK.
+
+**perspuv_svc standalone infers the SAME single 256-bit array as in the composed
+island**, so the blocker is its own RTL, reproducibly, not composition.
+
+**And zhao_raster_perspuv_pairpipe@map: 961 registers, 1,280 memory bits, 6 DSP**
+against **perspuv_svc@map: 3,361 registers, 256 memory bits, 6 DSP**. Both
+MapOnly, both rtlCleanAtHead true. **Like-for-like: -2,400 registers, +1,024
+memory bits, identical DSP.**
+
+**I nearly overclaimed and the earlier report caught me.**
+`PAIRPIPE-IS-NOT-A-DSP-LEVER-20260909.md` had already written "2,255 fewer
+registers is sitting right there and it would be wrong", discounted it to ~1,600
+fitted using a ~1.7x fit/map ratio from two texture_combine pairs, and said the
+like-for-like map "is running now". **It finished and nobody read it against the
+pair-pipe.** So the conservative estimate stood as the working number for a day
+while the evidence to sharpen it sat in the ledger.
+
+**And the discount was too conservative.** perspuv_svc FIT 3,216 vs MAP 3,361 =
+map/fit **1.045** -- fitting does NOT replicate registers here the way it does in
+the combiner pairs (0.59). Bracketing with both ratios the ledger actually holds,
+the pair-pipe is ~920 to ~1,629 fitted, so the saving is **~1,587 to ~2,296
+registers = 22% to 32% of the island's 7,285-register overage.** By a wide margin
+the largest lever found today, from a block already built, already proven by
+induction (PERSPUV-AXIS-LOCKSTEP-PROOF-20260908) and asserted every cycle by
+tests/raster/perspuv_lockstep_directed.cpp with a live-probe control.
+
+**SECOND TIME TODAY a block was dismissed against the criterion it does not
+help** -- rcp24_v3 as an 8%-of-ALM lever while being decisive for DSP, and now the
+pair-pipe as a DSP lever while being the register lever. A lever list organised by
+remedy silently inherits whichever criterion was urgent the day it was written.
+
+NOT claimed: that it closes the register gate (22-32% is not 100%, and the breach
+is systemic across 9 of 11 components), and nothing about ALM or Fmax -- no map
+carries either. Closing it needs ONE FIT of the pair-pipe, which is the owner's
+call, is NOT one of the twelve queued fits, and is a leaf rather than the island.
+
+Report: `reports/PAIRPIPE-IS-THE-REGISTER-LEVER-20260909.md`.
