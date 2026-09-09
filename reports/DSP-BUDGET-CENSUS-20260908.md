@@ -281,3 +281,64 @@ outside the island.
 blocks to confirm the per-multiplier attribution above, and re-fit the five
 dirty-tree rows so 63 of the 154 stops being unanchored. Neither is an island
 fit and neither competes with the roadmap's gates.
+
+---
+
+# ADDENDUM 2026-09-09: what gate 4 moves, and where the gap actually lives
+
+Gate 4 landed the matched `zhao_raster_rcp24_svc` row this census was missing, so
+two of its lines now have measured alternatives. The headline does not improve
+much, and the reason is worth stating plainly.
+
+## The levers, by strength of evidence
+
+| lever | DSP | other cost | evidence | what blocks it |
+|---|---|---|---|---|
+| swap `rcp24_svc` -> `rcp24_v3` in the island | **-3** | +7 M10K | **MEASURED**, and invariant: `svc` reports 6 DSP in every row it has ever produced, `v3` reports 3 in every row | v3's throughput at NCTX=8 is 5.78 clk/recip -- 17% over the serial reference but below its OWN declared 4.6 threshold. An acceptance decision, not a measurement gap. |
+| delete `zhao_texture_combine` | **-8** | -494 ALM (a gain), zero M10K | **MEASURED** (8 DSP / 494 ALM / 100.12 MHz) | owner decision; `prod_manifest.yml:69` instructs deletion and its trigger has fired, the ledger defers to the owner |
+| quarter-square ROM in `material_combine_v2` | **-2** | +2 M10K | ARITHMETIC, bit-exact identity | `material_combine_v2.sv` is inside the running island fit's closure |
+| share `zhao_project_core` between the two projectors | **-33** | arbitration + muxing | INFERENCE from totals; needs a composed fit | the core already misses the product clock by 39% on a path with no boundary to blame (D22) |
+| `perspuv_pairpipe` replacing two `perspuv_svc` lanes | unknown | unknown | **NOTHING -- never fitted.** `zhao_raster_perspuv_svc` is 6 DSP; the pair-pipe shares one scheduler across two lanes | it is registered in `design/fit_targets.yml:447` and has no row. One cheap MapOnly answers it. |
+
+## The arithmetic, and it is not encouraging
+
+```
+measured sum today                                     154
+  swap svc -> v3                                        -3   MEASURED
+  delete zhao_texture_combine                           -8   MEASURED
+  quarter-square in material_combine_v2                 -2   ARITHMETIC
+                                                    -------
+  every lever with evidence behind it                  141
+device available                                        112
+                                                    -------
+  still over by                                         29
+```
+
+**Everything currently supported by evidence closes 13 of a 42-DSP gap, and 42
+blocks in the manifest have still never been fitted, so the starting figure can
+only rise.** The remaining 29 has exactly one place to come from: the **66 DSP in
+two instances of `zhao_project_core`**, which is 43% of the whole budget and was
+already the single largest item before gate 4.
+
+So gate 4 is good news about the reciprocal tile and no news about the budget.
+The DSP problem is a `zhao_project_core` problem, and it has been since the census
+was first written. Two of its three levers -- core sharing and time-multiplexing
+the nine matrix multiplies -- add control depth to a cone that misses 100 MHz by
+39%. The third, **width-narrowing**, does not, and it is the one nobody has
+priced: `mul32` sign-extends both 32-bit operands to 64 before multiplying, and
+the census already suspects Quartus prunes that. **Whether the operands genuinely
+need 32 bits is a question about the projection's numeric range, answerable in
+simulation against the reference oracle, costing no fit at all.** That is the
+cheapest unexplored move in the largest item in the budget.
+
+## And one correction to this census's own table
+
+The row `| 8 | zhao_texture_combine | yes |` was true when written and briefly
+became unquotable: an unlabelled MapOnly overwrote that full-fit row twice, on
+2026-09-08 and again on 2026-09-09, leaving `alms: None` under the module's name.
+Both rows are restored and the map measurements now live at `@map` labels, with
+the rule enforced in `run_block_fit.ps1` rather than in one caller's comment.
+
+The DSP figure itself never moved -- a MapOnly does report `dspBlocks`, which is
+why the census's numbers survived the damage while its ALM column did not. Worth
+knowing which columns a map row can and cannot answer before quoting one.

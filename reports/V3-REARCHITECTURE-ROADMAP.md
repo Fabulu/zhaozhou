@@ -102,6 +102,52 @@ gate plus the shadow gating plus the dead-array deletions.
 | 3 | pairpipe + fresh svc leaf pair | candidate ready, 22 checks green |
 | 5 | checkpoint C | last |
 
+### GATE 4 IS SETTLED, AND IT REDIRECTS THE NEXT MOVE (2026-09-09)
+
+`zhao_raster_rcp24_svc@g4-nctx12` landed. At matched `NCTX=12 TOKW=14`, clean
+trees and real digests on both sides:
+
+| | svc | v3 |
+|---|---|---|
+| ALM | 1,802 | **986** |
+| DSP | 6 | **3** |
+| M10K | 1 | 8 |
+| Fmax | 56.24 | **100.95** |
+
+The owner ruled *"halve the DSPs even if it costs"*. At this parameterisation it
+does not cost. Full reading, including which claims are parameter-invariant and
+which carry a stated bias, in `GATE4-RCP-LIKE-FOR-LIKE-20260909.md`.
+
+**But the Fmax column does NOT transfer to the island, and that kills the
+conclusion this roadmap was about to record.** A path census over the island's 200
+summary paths (`tools/quartus/path_census.py`, committed) shows:
+
+* the island's reported 62.83 MHz comes from a **pin** path into the palette
+  resolver -- nothing to do with the reciprocal;
+* internal-only ceiling is 77.45 MHz, and **42 of the 43 internal paths start at
+  one register bit**, `u_own|live_cnt_q[6]`;
+* a *zero-delay* reciprocal would move that ceiling **4.08 MHz** and then stop,
+  because the next path leaves the same source register for `u_own` itself.
+
+So the swap stands on ALM and DSP. **The cheaper timing target is
+`live_cnt_q[6]`'s combinational fanout** -- maintain the credit comparison as a
+registered flag instead of recomputing it from the counter each cycle. That hits
+43 of 43 internal paths, costs no DSP and essentially no area, and carries a real
+correctness obligation (a registered credit must not permit over-issue on the
+cycle it changes), so it needs its own directed test. It is inside the running
+`@g2-prod` fit's closure and therefore queued, not started.
+
+**And the budget picture is unchanged by any of it.** Every DSP lever with
+evidence behind it -- the swap (-3), deleting `zhao_texture_combine` (-8), the
+quarter-square ROM (-2) -- closes 13 of a 42-DSP gap, with 42 manifest blocks
+still unfitted. The remaining 29 has one home: **66 DSP in two instances of
+`zhao_project_core`**. See the addendum to `DSP-BUDGET-CENSUS-20260908.md`. The
+cheapest unexplored move there needs no fit at all -- whether `mul32`'s operands
+genuinely need 32 bits is a numeric-range question answerable against the
+reference oracle.
+
+---
+
 ### PACKETS 2 AND 3 ARE COMPLETE IN SIMULATION (2026-09-09)
 
 The island runs the descriptor bank and the UV join. The expander and Mosaic are
