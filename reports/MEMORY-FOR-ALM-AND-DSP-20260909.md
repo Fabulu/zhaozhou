@@ -1,4 +1,48 @@
-# Memory for ALM and DSP — can M10K buy back the scarce resources?
+> # CURRENT CORRECTION -- 2026-09-09. THREE CLAIMS BELOW ARE WITHDRAWN.
+>
+> Per the owner brief `ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt`
+> section 2.6.D. Its factual points were tested against the tree before being
+> accepted.
+>
+> **1. "154 measured floor" -- WITHDRAWN.** The census it came from read one
+> ledger of three, counted an obsolete `terrain_normals` fit at 18 where a newer
+> map says 3, and scored three map-only blocks as zero. The corrected bill is
+> **190 DSP counted against 112, with 34 functions carrying no applicable
+> measurement at all** -- and it is PARTIAL MIXED EVIDENCE, not a bound in either
+> direction. Anywhere this report reasons from "154", the premise is gone.
+>
+> **2. "~505 free M10K blocks" -- WITHDRAWN.** That figure is 553 minus texture's
+> 48, and it treats every other consumer as absent. The shell alone holds 26 M10K
+> and 184,256 memory bits; the census counts 108 M10K across measured blocks with
+> **45 rows unknown**. Video and scanout buffers, geometry arenas, FIELD's vector
+> register file, terrain residency and patch data, caches and normal detail are
+> all real users with no line in that subtraction. Global memory availability
+> requires their bill, and a scalar register-file probe does not price the
+> four-lane production file.
+>
+> **3. "Memory cannot help full-width projection" -- WITHDRAWN AS CATEGORICAL.**
+> What the analysis below actually establishes is narrower and still correct: a
+> DIRECT two-operand table for an unconstrained 32x32 product is dead at any sane
+> exchange rate, and a 16-partial quarter-square decomposition trades M10K for a
+> large fabric compressor tree. Neither rules out the brief's result-cache and
+> full-width hybrid approaches, which reuse a computed result rather than
+> tabulating the operator. Those are queued in the brief's sections 6 and 8 and
+> are not evaluated here.
+>
+> **4. A pricing input was wrong.** This report priced rider registers without
+> separating the two projector callers. **Terrain uses `PAY_W = 42`**
+> (`zhao_terrain_project.sv:165` -- corner index, src_id, mat_a, mat_b, weight)
+> while **geometry passes `PAYLOAD_W(16)`** (`zhao_geom_project.sv:127`). Verified
+> in the sources. Any per-vertex rider cost computed at one width is wrong for the
+> other, and a shared projection service must carry the wider one.
+>
+> **WHAT STANDS.** The per-call-site multiplier audit. The quarter-square
+> identity and its bit-exactness. The rejection of monolithic two-operand product
+> tables. The finding that `zhao_project_core`'s operands are unconstrained on
+> both sides. And the measured 32xN boundary added later: **only 18 bits pays,
+> and 19 bits costs MORE than 32.**
+
+# Memory for ALM and DSP — can M10K buy back the scarce resources? -- SEE THE CORRECTION ABOVE
 
 2026-09-09. Owner's question, verbatim: *"Can we not find a design that uses
 memory instead? We need both ALM and DSPs desperately."*
