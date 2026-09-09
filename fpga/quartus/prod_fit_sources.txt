@@ -1,3 +1,28 @@
+# ORPHANED 2026-09-09. NOTHING READS THIS FILE. Do not edit it and do not
+# draw conclusions from it.
+#
+# The production fit's REAL source closure lives in `design/fit_targets.yml`
+# under `- top: zhao_prod_top` (148 files today), and that is what
+# `tools/quartus/check_prod_manifest.py::check_fit_sources` walks and what the
+# fit actually compiles. A repo-wide grep for this filename returns nothing:
+# no script, no QSF, no tcl, no yml. It was written once, in 0e8b1c9d, and
+# never wired up.
+#
+# WHY THE HEADER RATHER THAN A DELETION. On 2026-09-09 a sweep read this file
+# as the production source list, found `zhao_texture_island_v3_top` and
+# `zhao_raster_perspuv_pairpipe` absent from it while `zhao_raster_perspuv_svc`
+# -- superseded -- was still present, and reported a source-list gap
+# "correlated with" both zhao_prod_top fits dying at quartus_map. Every one of
+# those observations about THIS FILE is true. The conclusion does not follow,
+# because this file is not in the fit's path at all, and the real list contains
+# all three. Checked before implementing: the exciting explanation is the one to
+# check hardest, and this one did not survive.
+#
+# A stale artefact that LOOKS authoritative is worse than no artefact. This
+# header is here so the next reader stops at the first line instead of
+# rediscovering the same wrong conclusion. The content below is preserved as
+# the historical record of what the closure looked like in 0e8b1c9d.
+#
 fpga/rtl/generated/zhao_abi_pkg.sv
 fpga/rtl/common/zhao_pkg.sv
 fpga/rtl/field/zhao_field_ops_pkg.sv

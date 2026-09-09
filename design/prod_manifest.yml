@@ -292,6 +292,18 @@ unpriced_requirements:
   - FORGE.PRIM.EVAL: zhao_forge_prim_eval  ribbon/tube vertex POSITIONS from a params block; prim emits indices only; RTL not built; blocks lightning (reports/ADDLIGHTNING.md)
 
 excluded:
+  # --- 2026-09-09, the ALM/DSP rescue's own new blocks -----------------------
+  # All three are BUILT and composed nowhere. That is a deliberate state, not an
+  # oversight, and each carries the reason -- because "unaccounted" is what
+  # check_prod_manifest correctly refused to let them stay.
+  #
+  # tools/budget/uncashed_cheques.py reads these notes: "not-yet-adopted" leaves
+  # a module PENDING in its check 1, which is exactly right for the two that
+  # SHOULD eventually be wired, and the wording is the mechanism, not decoration.
+  - zhao_terrain_bake_v2: not-yet-adopted  seven multiplier sites collapsed to one operand-muxed 34x34 and the 1,089-flop meets plane moved to one M10K; 267/267 against the zref oracle with a committed mutant seen to fail, but DSP 17 -> 3-6 is a STRUCTURAL PREDICTION until fit gate T1 runs, and v1 stays composed until it does
+  - zhao_raster_attrwalk: not-yet-adopted  divider-free exact attribute stepping; differentials pass against the compiled reference and the verilated divider, but adoption needs the owner's ruling on the tie law (the repo's stated law and zref disagree on negative exact halves)
+  - zhao_proj_arena3: superseded  a SECOND copy of a mechanism the 2026-08-24 ruling says must live once -- zhao_vertex_arena already owns it, with 58 formal assertions and a committed .sby proof. Kept as the DESIGN STUDY it is: its dense-fill valid mechanism is a fourth option that arena's own three-way analysis does not list, and belongs in zhao_vertex_arena as a VALID_MODE parameter so the proof extends. See reports/ARENA-I-BUILT-A-SECOND-ONE-20260909.md
+
   # The texture island's own children are NOT listed here any more.
   #
   # They used to be, as "unused" or "not-yet-adopted", while the island itself
@@ -607,4 +619,4 @@ excluded:
   # do nothing. Excluded until the architecture in
   # reports/NORMALMAP-ARCHITECTURE.md is built. It is deliberately NOT in the
   # running fit, so the normal-map cost stays a clean measured delta.
-  - zhao_terrain_normalmap: unused  draft pending TERRAIN.SHADE / TERRAIN.NORMALMAP split
+  - zhao_terrain_normalmap: unused  rebuilt to contract 2026-09-09 (zero-DSP, mip tail), directed-tested standalone; OPEN DEFERRAL until the fragment-seam wiring lands -- reports/TERRAIN-BUMP-MAPPING-ARCHITECTURE-20260909.md
