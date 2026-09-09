@@ -2136,3 +2136,64 @@ than convenient: those belong to the whole-console reduction programme, which
 
 A prohibition list is not a whitelist. Treating four specific "do not"s as though
 they forbade everything unlisted cost an hour of the one lane that is open.
+
+## CLOSING STATE: the texture ALM investigation, and four corrections to myself
+
+### The result
+
+`@g2-prod` fails its ALM redline by **3,336** and `zhao_texture_v3own` is **81%
+of that** at 2,706.7 ALM. Every remedy is now priced:
+
+| lever | verdict |
+|---|---|
+| memory-back the per-owner arrays | **impossible** -- read AND written in full every clock; an M10K has two write ports, not 64 |
+| narrow the state via the monotone chains | ~320 bits, ~160 ALM -- **6%** |
+| the brief's ROM packets (7.2-7.4) | aimed at 618 ALM of this island -- **cannot close 3,336** |
+| reduce `OWNERS` | **32 of 64 already used** by ordinary traffic |
+| swap `rcp24_svc` for `v3` | real, but 869.8 ALM is 8% of the island |
+
+**The island does not contain a 3,336-ALM lever.** Four candidates priced, four
+insufficient, three by measurement. What closes this redline is a larger
+architectural change than any packet in the brief describes, or a decision to
+move the redline -- and 0.2 reserves the second to the owner.
+
+### Four times I was confidently wrong about the same block
+
+Recorded because the pattern matters more than any one error:
+
+| # | I published | corrected by |
+|---|---|---|
+| 1 | "384 bits convert today" | reading the CONSUMER -- a sync read moves the data too |
+| 2 | "protocol change, owner must decide" | reading the PIPELINE -- `c1t->c3t->c4t` already provides the stage |
+| 3 | "the remedy applies at all" | reading the WRITE PATH -- all 64 entries written every clock |
+| 4 | "three arrays are simulation-only, and `check_ram_inference` has a false-positive class" | a grep for `name[` that missed `name [i]` -- **the tool was right and I withdrew the accusation** |
+
+Every reversal came from reading a part of the file I had not read yet, and the
+write path -- which decided it -- was last because the tool that framed the
+investigation reports on READS.
+
+The fourth is the one to remember: **I blamed a working tool for my broken
+hand-check.** That is worse than the original slip, because the tool ends up less
+trusted for having been correct.
+
+### And the measurement that closed the last lever
+
+`cnt_live_peak_o` was already an island port and the composed test already read
+it -- but only at the END of the credit phase, which asserts 64 because that
+phase shuts the consumer to force it. Sampling the same running-max port BEFORE
+the stress gives **32 of 64** under ordinary traffic (oracle 31).
+
+So `OWNERS = 64` is about 2x a real observed peak: an ordinary credit-ring
+margin, not the unjustified cap the missing workload entry made it look like.
+Printed, never asserted -- a bound at 32 would freeze one workload's incidental
+peak into a gate.
+
+### State at close
+
+* 99 fit targets, **0 production blocks unmeasurable** (was 43).
+* Bill: **192 DSP / 58,359 ALM / 147 M10K** against 112 / 41,910 / 553, target
+  DSP <= 94, with 34 unpriced, 10 map-only and 5 unbuilt -- all named.
+* Packet A 0 complete against its own gate.
+* Composed profiles green: 132 / 126 / 119, gate3 byte-identical, fault 31.
+* Waiting on the owner: the twelve queued fits, terrain, and now a REDLINE
+  DECISION rather than a `v3own` conversion.
