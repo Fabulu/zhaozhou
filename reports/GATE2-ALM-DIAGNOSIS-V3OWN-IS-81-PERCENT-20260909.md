@@ -1,3 +1,20 @@
+> # SUPERSEDED IN PART -- read `V3OWN-IS-NOT-A-MEMORY-CANDIDATE-20260909.md` first.
+>
+> **What still stands:** `zhao_texture_v3own` is 2,706.7 ALM, 25% of the island
+> and **81% of the 3,336-ALM redline overage**. The per-entity table below is
+> the fit's own and is unchanged.
+>
+> **What is withdrawn:** every statement in the later sections about the
+> Decrufter/memory remedy applying to this block. It does not. The eleven
+> per-owner arrays are read in full AND WRITTEN IN FULL every clock -- the
+> next-state register-file idiom -- and an M10K has one or two write ports, not
+> sixty-four. The constraint is on the write side, which I did not read until
+> the third pass.
+>
+> The "CONVERTIBLE / BLOCKED" triage and the "protocol change" conclusion are
+> both moot: neither the read timing nor the eligibility coupling decides
+> anything once the write structure is accounted for.
+
 # Texture gate 2 fails its ALM redline, and ONE BLOCK is 81% of the overage
 
 2026-09-09. Owner brief section 7.1: *"The current texture gate remains the
