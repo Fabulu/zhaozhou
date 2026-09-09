@@ -1,95 +1,86 @@
-// zhao_probe_ram_infer -- v3. DOES READ STYLE DECIDE RAM INFERENCE?
+// zhao_probe_ram_infer -- v4. IS THE BLOCKER THE READ ADDRESS'S PROVENANCE?
 //
 // ---------------------------------------------------------------------------
-// THE QUESTION, NARROWED TWICE BY MEASUREMENT
+// FOUR CANDIDATES ARE ALREADY DEAD
 // ---------------------------------------------------------------------------
-// In zhao_texture_island_v3_top@g2-prod, zhao_raster_perspuv_svc holds a
-// 16-entry token table that is 85% of its 3,240 registers -- the island's
-// largest single register consumer, 4.63x its S3.3 register budget. Exactly ONE
-// of its arrays became an M10K:
+// zhao_raster_perspuv_svc is the texture island's largest register consumer:
+// 3,240 registers, 4.63x its S3.3 budget, and 85% of that is a 16-entry token
+// table. Exactly one of its arrays became an M10K (e_tag, 16x14). e_num_u --
+// same depth, one write address at tail_q, one read address, not reset-cleared
+// -- did not. Eliminated so far:
 //
-//     e_tag    16 x 14   INFERRED, Simple Dual Port
-//     e_num_u  16 x 32   NOT inferred
-//     e_mant_u 16 x 24   NOT inferred
+//   1. READ-ADDRESS COUNT   refuted by the @g2-prod fit: after the 2026-09-06
+//                           per-axis split e_num_u has exactly one of each and
+//                           still does not infer.
+//   2. THE ARRAY RESET      refuted by reading perspuv's reset branch: it
+//                           clears ONLY e_val and e_have, which are also the
+//                           two arrays with multiple write addresses. e_num_u
+//                           is not cleared at all.
+//   3. READ STYLE           refuted by v3: a read inside always_ff at a
+//                           combinational index inferred fine (arr_r).
+//   4. WIDTH                refuted by v3: 14 and 32 both inferred.
 //
-// Two candidate explanations have now been eliminated:
+// v3 is the reason 3 and 4 are dead, and it is a validated instrument -- all
+// three of its arrays inferred, its positive control fired, and nothing merged
+// once each array had its own write-data port.
 //
-//   READ-ADDRESS COUNT. The 2026-09-06 per-axis split was built on it. After
-//   that split e_num_u has one write address and one read address, and it still
-//   does not infer. Refuted by the @g2-prod fit.
-//
-//   THE ARRAY RESET. v1/v2 of this probe found that the only variant to infer
-//   was the only one not cleared on reset -- but perspuv's reset branch clears
-//   ONLY e_val and e_have (lines 434-435), and those are the two arrays with
-//   multiple write addresses anyway. e_num_u, e_mant_u, e_k, e_q_u and e_tag are
-//   NOT reset-cleared, so e_num_u already has the property that made v2's arr_d
-//   infer. Refuted by reading the RTL, which cost nothing.
-//
-// What is left, and all this probe now tests, is READ STYLE:
-//
-//     e_tag    assign ob_tag_c = e_tag[head_q];      continuous, registered idx
-//     e_num_u  p0_num_q[ax] <= e_num_u[pk_i[0]];     inside always_ff,
-//                                                     combinational index
-//
-// ---------------------------------------------------------------------------
-// WHAT v1 AND v2 GOT WRONG, AND WHY IT IS FIXED THIS WAY
-// ---------------------------------------------------------------------------
-// v1 wrote all five variants identically. Quartus merged four of them:
-//
-//     arr_b[i][b]  Merged with  arr_a[i][b]     224 registers
-//     arr_c[i][b]  Merged with  arr_a[i][b]     224 registers
-//     arr_e[i][b]  Merged with  arr_a[i][b]     224 registers
-//
-// and the survivor carried the UNION of their read sites -- four addresses --
-// so it could not be dual-port whatever else was true of it. That is the same
-// mechanism that undid perspuv's e_mant split (384 registers merged back
-// because both copies came from one source on one clock), reproduced minimally,
-// and it is why v1's result could not be attributed.
-//
-// v2 tried a per-variant XOR constant. It did not work, and the reason is worth
-// keeping: MERGING IS PER BIT. Salts differing only in bits 0-4 leave bits 5-31
-// provably equal, so arr_c still lost 496 rows. With five variants no set of
-// constants can differ pairwise in every bit -- two values per bit position,
-// pigeonhole.
-//
-// v3 therefore gives each array ITS OWN WRITE-DATA PORT. Two arrays fed by
-// unrelated inputs cannot be proved equal at any bit, so none can be merged.
+// So every SHAPE in perspuv's token table infers in isolation, which means the
+// blocker is something perspuv does that the probe has not yet reproduced. That
+// is an encouraging result rather than a dead end: it makes the table look more
+// convertible, not less, and ~3,000 registers of a 7,285-register overage is
+// worth one more 80-second map.
 //
 // ---------------------------------------------------------------------------
-// THE DESIGN: three arrays, ONE factor
+// THE REMAINING DIFFERENCE: WHERE THE READ ADDRESS COMES FROM
 // ---------------------------------------------------------------------------
-// All 16 deep, one write address, one read address, and NONE cleared on reset --
-// reset is eliminated as a variable because it is already ruled out for the
-// island.
+// In every probe so far the read address arrived on a PORT. In perspuv it does
+// not -- it is itself the output of another array read:
 //
-//   P  14 wide  continuous assign @ registered index   <- the e_tag shape
-//   Q  32 wide  continuous assign @ registered index   <- P, widened
-//   R  32 wide  read in always_ff @ comb index         <- the e_num_u shape
+//     logic [TW-1:0] pk_i [2];
+//     ...
+//     pk_i[ax] = wq[ax][wq_rp[ax][TW-1:0]];      // a combinational array read
+//     ...
+//     p0_num_q[ax] <= (ax == 0) ? e_num_u[pk_i[0]] : e_num_v[pk_i[1]];
+//
+// So the address path into e_num_u runs through a second dynamic-index read of
+// `wq`. A memory's address port has to be a real address; an address that is
+// itself deep combinational logic out of another array may be what stops the
+// inference.
+//
+// ---------------------------------------------------------------------------
+// THE DESIGN: two arrays, one factor, one shared control
+// ---------------------------------------------------------------------------
+//   P  read in always_ff at an address from a PORT           <- v3's arr_r,
+//                                                              KNOWN to infer
+//   R  read in always_ff at an address that is itself a
+//      combinational read of the small array `wq`            <- the perspuv shape
+//
+// Both 16 x 32, one write address, no reset clear, and each with its own
+// write-data port so neither can be merged into the other (v1 and v2 were both
+// ruined by merging; constant salts cannot prevent it because merging is
+// per bit).
 //
 // READING IT:
 //
-//   P and Q infer, R does not  -> READ STYLE DECIDES. Actionable: perspuv's
-//                                 token-table reads move to continuous assigns
-//                                 feeding flops, and ~3,000 registers could
-//                                 become M10K.
-//   P infers, Q does not       -> WIDTH decides and read style is innocent.
-//   all three infer            -> the blocker is something in perspuv this
-//                                 probe still does not reproduce. Next
-//                                 candidate: the read index's provenance --
-//                                 perspuv's pk_i comes out of ANOTHER array
-//                                 read (wq), not from a port.
-//   P does not infer           -> THE PROBE IS BROKEN. P reproduces the one
-//                                 array known to infer; if it fails, nothing
-//                                 else here is evidence. Check this FIRST.
+//   P infers, R does not  -> THE ADDRESS'S PROVENANCE DECIDES. The remedy is
+//                            then concrete and local: register the address one
+//                            cycle before the array read, and perspuv's token
+//                            table can become memory.
+//   both infer            -> address provenance is innocent too, and the
+//                            remaining suspects are the CONDITIONAL and the
+//                            for-loop ternary wrapping perspuv's read, or
+//                            something outside the table entirely.
+//   P does not infer      -> THE PROBE IS BROKEN. v3 proved this exact shape
+//                            infers, so a failure here means the harness
+//                            changed, not the design. Check this FIRST.
 //
-// EVERY READ REACHES A PORT, or the array is deleted before inference runs and
-// "did not infer" would mean nothing.
+// `wq` is deliberately a real array and not a register: making the address come
+// from a flop would be testing the remedy, not the hypothesis.
 
 `default_nettype none
 
 module zhao_probe_ram_infer #(
     parameter int unsigned DEPTH = 16,
-    parameter int unsigned NARROW = 14,
     parameter int unsigned WIDE = 32,
     // Derived, but a parameter and not a localparam because the ports use it.
     parameter int unsigned AW = $clog2(DEPTH)
@@ -99,58 +90,63 @@ module zhao_probe_ram_infer #(
 
     input  wire                wr_en,
     input  wire [AW-1:0]       wr_addr,
-    // ONE WRITE-DATA PORT PER ARRAY. This is what stops register merging; see
-    // the header. Sharing one port is what broke v1 and v2.
-    input  wire [NARROW-1:0]   wr_data_p,
-    input  wire [WIDE-1:0]     wr_data_q,
+    // One write-data port per array; this is what stops register merging.
+    input  wire [WIDE-1:0]     wr_data_p,
     input  wire [WIDE-1:0]     wr_data_r,
 
-    input  wire                rd_adv,
+    // the address-source array, written from its own port
+    input  wire                wq_we,
+    input  wire [AW-1:0]       wq_waddr,
+    input  wire [AW-1:0]       wq_wdata,
+    input  wire [AW-1:0]       wq_raddr,
+
     input  wire [AW-1:0]       rd_addr_c,
     input  wire                rd_en,
 
-    output wire [NARROW-1:0]   p_o,
-    output wire [WIDE-1:0]     q_o,
+    output logic [WIDE-1:0]    p_o,
     output logic [WIDE-1:0]    r_o
 );
 
-  // The registered read pointer, mirroring perspuv's head_q.
-  logic [AW-1:0] rptr_q;
+  logic [WIDE-1:0] arr_p [DEPTH];
+  logic [WIDE-1:0] arr_r [DEPTH];
 
-  logic [NARROW-1:0] arr_p [DEPTH];
-  logic [WIDE-1:0]   arr_q [DEPTH];
-  logic [WIDE-1:0]   arr_r [DEPTH];
+  // The address-source array. perspuv's `wq`, minimally.
+  logic [AW-1:0]   wq [DEPTH];
 
-  // ---- P: the e_tag shape. Continuous assign at a REGISTERED index. --------
-  // POSITIVE CONTROL. If this does not infer, the probe does not reproduce the
-  // island and no other row here is evidence.
-  assign p_o = arr_p[rptr_q];
+  // THE ADDRESS UNDER TEST: itself a combinational dynamic-index array read,
+  // exactly as perspuv's `pk_i[ax] = wq[ax][wq_rp[ax]]` is.
+  logic [AW-1:0]   pk_i_c;
+  assign pk_i_c = wq[wq_raddr];
 
-  // ---- Q: P widened to 32. Isolates width from read style. ----------------
-  assign q_o = arr_q[rptr_q];
-
-  // ---- R: the e_num_u shape. Read inside always_ff at a COMB index. -------
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) r_o <= '0;
-    else if (rd_en) r_o <= arr_r[rd_addr_c];
-  end
-
-  // ---- writes. NO ARRAY IS CLEARED ON RESET. ------------------------------
-  // Deliberate: reset is ruled out as the island's blocker (perspuv clears only
-  // e_val and e_have), so leaving it out removes a variable rather than
-  // reintroducing v1's confound. Only rptr_q is reset, because a pointer must
-  // start somewhere.
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      rptr_q <= '0;
-    end else begin
-      if (rd_adv) rptr_q <= rptr_q + AW'(1);
-      if (wr_en) begin
-        arr_p[wr_addr] <= wr_data_p;
-        arr_q[wr_addr] <= wr_data_q;
-        arr_r[wr_addr] <= wr_data_r;
-      end
+      p_o <= '0;
+      r_o <= '0;
+    end else if (rd_en) begin
+      // P: address straight from a port. v3 proved this infers.
+      p_o <= arr_p[rd_addr_c];
+      // R: address out of another array read. The only difference.
+      r_o <= arr_r[pk_i_c];
     end
+  end
+
+  // ---- writes. NO RESET IN THIS PROCESS AT ALL. ---------------------------
+  // The first draft had `arr_p[0] <= arr_p[0];` as a placeholder to avoid an
+  // empty reset branch. That is a WRITE AT A SECOND ADDRESS -- a constant one --
+  // and a second write address is exactly the property that makes an array
+  // un-inferable (S5.3 forbids it by name, and it is why perspuv's e_val,
+  // e_sat and e_have can never be memory). It would have confounded this
+  // experiment in the direction of "did not infer" and looked like a finding.
+  //
+  // Caught by reading the draft back before spending the map. A reset-free
+  // always_ff is both correct here and closer to perspuv, whose token arrays
+  // are not reset-cleared either.
+  always_ff @(posedge clk) begin
+    if (wr_en) begin
+      arr_p[wr_addr] <= wr_data_p;
+      arr_r[wr_addr] <= wr_data_r;
+    end
+    if (wq_we) wq[wq_waddr] <= wq_wdata;
   end
 
 endmodule
