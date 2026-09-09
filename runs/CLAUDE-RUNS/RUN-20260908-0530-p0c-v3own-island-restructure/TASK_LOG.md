@@ -2878,3 +2878,39 @@ not -- both are marked FIXED/CLOSED at the head of their sections (lines 1314 an
 1413) and the "OPEN" text I grepped is preserved history inside collapsed
 `<details>` blocks. Same shape as anchoring on a TOC entry instead of the real
 table. Edit discarded, docket untouched.
+
+## 2026-09-09 -- FIT GATE 3 is what I am running, and it needs TWO fits not one
+
+The swap is already gated in the repo's own plan. `design/prod_manifest.yml:334`:
+`zhao_raster_perspuv_pairpipe: unused  D5 paired PERSPUV candidate; swaps with
+perspuv_svc only on FIT GATE 3`, with the note that it is "bit-identical to
+perspuv_svc over 352 U/V pairs" and that counting it now would double-count.
+
+**And `design/fit_targets.yml:471` says what GATE 3 actually is** -- the pairpipe
+leaf fit measured "against a FRESH svc row from the same commit -- the standing
+svc row above predates today's tree, and **comparing against a stale measurement
+is the error this file already documents twice.**"
+
+**So I was one step from making exactly that error.** My plan was to compare the
+fresh pairpipe row against the standing svc row (2,204 ALM / 3,293 registers per
+that file's comment). That row predates today's tree. GATE 3 is TWO leaf fits:
+pairpipe (running) and a FRESH svc at the same commit. Queuing the second.
+
+The target file also pre-empts the status confusion: "both rows are expected to
+violate, and the comparison is between them, not against the budget." Same rules
+on both deliberately -- "the candidate exists to be smaller, so inheriting the
+budget it is trying to beat is the honest gate; a looser one would let it pass by
+being merely different."
+
+**Swap readiness, otherwise complete:**
+* ports: pairpipe is a strict superset of svc (18 shared + `zero_products_o`)
+* parameters identical, and identical to how the island instantiates svc
+* `perspuv_pairpipe_directed` is a REAL ctest (labels fast;nightly, timeout 600)
+  whose verilate target compiles BOTH engines, plus a separate lint test
+* all four non-vacuity controls present: saw_dz > 0, saw_sat > 0,
+  compared_uv > 200, compared_dz > 0
+* manifest correctly holds it as `unused` so the census does not double-count
+
+So the swap needs the second half of GATE 3 and an island fit to see it in
+composition. The leaf halves are authorised as texture-gate diagnosis under
+0.1(D) and 7.1; the ISLAND fit is not, and stays the owner's.
