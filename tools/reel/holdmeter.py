@@ -83,6 +83,22 @@ from rgbframe import load
 # the clip's own quietest 5% IS its zero, and a hold is a long run that stays
 # down there while the clip elsewhere has peaks 5-8x higher.
 #
+# ⚠ THERE IS A SECOND FLOOR AND IT CANNOT BE ABLATED: THE MOVING LIGHT RIG.
+# `subject_u02_clip` sets `s.creature_moving_light = true` on every clip in the
+# bank, so the lamp sweeps across the creature whether or not the creature is
+# doing anything. A perfectly frozen pose still changes on screen. This was
+# confirmed by looking, not inferred: taunt3 f312/f326/f340 at 4x, twenty-eight
+# frames apart inside the punchline hold, have an IDENTICAL outline and a
+# highlight band that walks across the antenna
+# (`pass14-plates-perf/R4-hold2-lamp-not-pose-4x.png`).
+#
+# So a real hold does not read as zero here, it reads as the lamp alone, and
+# the lamp's own rate varies over a clip -- which is why taunt3's punchline hold
+# measures ~0.33 while its shrug hold measures ~0.33 but occupies a different
+# fraction of its window. **Do not chase a hold that the picture shows is
+# already still.** Check the outline on a 2x-or-better crop before believing a
+# number that says a parked pose is moving.
+#
 # ⚠ AND THE MANA FOLD MUST BE ABLATED (`MANA_ABLATE=1`) FOR THE MEASUREMENT.
 # The docstring's warning is not a caveat to read past: the fold runs on every
 # shipped clip and never holds, so it adds a moving floor that is a large
