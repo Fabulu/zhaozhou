@@ -179,3 +179,66 @@ The parameter is still the right shape -- default 32, nothing ships differently,
 the width becomes a named owner-editable constant rather than a number inside a
 function signature. What changes is the value worth testing: **18, not 20**, and
 whatever the new calibration points say is the highest width that still costs 2.
+
+---
+
+# THE BOUNDARY IS MEASURED, and it is narrower and stranger than hoped
+
+Five points landed 2026-09-09. The question was where between 18 and 24 the DSP
+cost steps, because the answer decides whether the matrix-narrowing lever costs
+the camera anything.
+
+| a x b | DSP | est. ALM | decomposition |
+|---|---|---|---|
+| 32 x 18 | **2** | 104 | 2 x `Two Independent 18x18` |
+| **32 x 19** | **4** | 117 | **4 x `Two Independent 18x18`** |
+| 32 x 20 | 3 | 111 | 2 x independent + 1 x `Sum of two 18x18` |
+| 32 x 21 | 3 | 113 | same |
+| 32 x 22 | 3 | 115 | same |
+| 32 x 23 | 3 | 117 | same |
+| 32 x 24 | 3 | 119 | same |
+| 32 x 32 | 3 | 137 | same |
+
+## The pre-registered hope is REFUTED
+
+This report filed the question as: *"If 32x22 were still 2 DSP, coefficients
+could reach +-32.0 and the constraint would stop mattering entirely."*
+
+**32x22 is 3.** So the constraint does not stop mattering. Only **18 bits** buys
+the saving, which is **+-2.0 in Q16.16**, and a perspective coefficient
+`cot(fov/2)/aspect` passes 2.0 at roughly a **53 degree vertical field of view**.
+The lever costs a real floor on how long the lens can be, and that is now a
+measured constraint rather than a suspicion.
+
+## AND 19 BITS COSTS MORE THAN 32
+
+The strangest row in the table, and the most useful one. **32x19 needs 4 DSP** --
+two more than 18, and one MORE than the full 32x32.
+
+It is not a mis-measurement; the decomposition says why. At 19 bits Quartus takes
+**four** `Two Independent 18x18` blocks and no `Sum of two 18x18`, where every
+width from 20 upward takes two independent plus one sum. The 19-bit operand just
+clears the 18x18 primitive and lands on a split with no sum form available. The
+existing symmetric points corroborate it: 19x19 also shows 4 in its four-operator
+configuration.
+
+**The practical consequence is a trap.** Anyone narrowing this operand and adding
+"one bit of headroom" over 18 lands on the single worst width in the whole range
+-- doubling the DSP cost against 18 and beating even the un-narrowed design. A
+monotonic intuition (narrower is never worse) is wrong here, and nothing in the
+design would signal it: the fit would simply come back with more DSPs than before
+the optimisation.
+
+So the rule for `MATW`, if it is ever built: **18, or do not bother.** 19 is worse
+than doing nothing.
+
+## What this does to the lever
+
+Unchanged in size -- **-18 DSP across the two projector cores** -- and now with a
+known price: the view-projection matrix coefficients must be bounded at +-2.0,
+which bounds the narrowest usable field of view near 53 degrees vertical.
+
+**That is an owner decision and a small, specific one.** Not "how big is the
+playable world", which is what the docket has had this blocked on since
+2026-08-24, but "is a 53-degree vertical FOV floor acceptable". A camera question,
+answerable without a fit.
