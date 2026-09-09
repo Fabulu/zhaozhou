@@ -4180,3 +4180,69 @@ reserve). Without the arena the terrain lane alone is 283%.
 
 Flagged not edited: both projection contracts' latency lines are one cycle stale
 from the stage-5b cut.
+
+
+## 2026-09-09 -- arena consolidated; two unbuilt REQUIRED blocks dispatched
+
+**Arena.** Dense-seal folded into the SANCTIONED primitive as VALID_MODE rather
+than kept as a second copy, per the 2026-08-24 ruling. **All 8 formal tasks PASS**
+(I ran them): three originals untouched as bit-identity evidence, two at
+non-power-of-two DEPTH, three dense with prove_dense inductive. Plus 394/394
+directed, 149/394 on the committed mutant, 73/73 existing at 2x16, guard $fatal at
+:168.
+
+**The proof paid for itself twice.** Bug 1: same-cycle open+seal left an arena
+sealed but empty -- found by the solver before any test met it. Bug 2, bigger and
+in the sanctioned primitive at the SHIPPED shape: valid_q is 2,178 bits addressed
+by a {arena,index} CONCAT with an 11-bit index field while the open-clear was
+ALREADY LINEAR. Recomputed myself -- arena 1's concat base is 2048 against a
+linear base of 1089, top address 3136 against 2178 entries, so **959 of 1,089 rows
+(88%) out of bounds.** Every prior instrument ran DEPTH=16, where concat == linear
+and it is invisible. So the duplicate I should not have commissioned made TWO
+findings and the second is worth more.
+
+**A failed verification of my own, recorded because the failure mode is the
+lesson:** I tried to expose bug 2 by running geom_wcache_directed at 2x1089
+against HEAD and against the repair. BOTH failed 4/73 IDENTICALLY -- that suite's
+expected counts are written for DEPTH=16, so it is not a valid probe at another
+shape. The identical failure is what told me the probe was wrong rather than the
+claim. Verified by arithmetic and by reading the diff instead.
+
+**My brief was wrong again:** "58 formal assertions" was a keyword-grep artefact;
+the real inventory is 8 labelled assertions plus 6 covers. Sixth agent-found brief
+error today. The argument for extending the proof stood; my count of it did not.
+
+**FOV floor made decidable.** reports/OWNER-QUESTION-FOV-FLOOR-20260909.md. Worth
+-18 DSP alone and never asked -- grep finds "53 degree" in no other document. I
+checked the arithmetic and CORRECTED the source report: it names
+cot(fov/2)/aspect, which at 4:3 passes 2.0 at 41.11 degrees and UNDERSTATES the
+constraint; the binding coefficient is m11 = cot(fov/2), so the floor is 53.13
+and is VIDEO-MODE INDEPENDENT (aspect only reduces m00). One ruling covers all
+three modes.
+
+**geom_cull lane count derived, not guessed.** Four products per evaluation (3x
+mul_pc + 1x mul_slack; sq_prod is the extraction path and ALREADY sequenced), so
+1,333,332 products against a 1,333,332-clock reserved budget -- **one lane is
+EXACTLY 100.0000%**, which is zero slack, not a design point. Two lanes: 15 -> 6,
+saving 9. My -9 was right and now has arithmetic under it.
+
+**Two REQUIRED-but-unbuilt blocks dispatched**, both from the census's "SPECIFIED
+BUT NOT BUILT -- the machine is incomplete by this much before any of it is
+optimised":
+
+1. **TERRAIN.SHADE.** Its contract's own finding: *"production terrain has no
+   lighting path at all... the normals are computed and thrown away."* And the
+   owner brief it quotes: *"TERRAIN.SHADE is necessary whether you use normal maps
+   or not."* So it is not bump-map cost. Briefed for bit-exactness against
+   shade_flat_tri_dir_unclamped, an M10K rsqrt table over DSP iteration, and told
+   NOT to inherit the superseded 10-DSP shape.
+2. **FORGE.PRIM.EVAL**, from reports/ADDLIGHTNING.md, read in full today for the
+   first time. The owner's own conclusion: *"The missing work is chiefly the
+   procedural position evaluator and end-to-end Forge integration, not some huge
+   new lightning ASIC organ."* FORGE.PRIM owns topology only and "literally has no
+   position or params inputs". The jitter recurrence and the bounded shape ("at
+   most 24 segments and at most two bounded branches") are specified by the owner.
+   Scoped explicitly OUT: the commit subject's request for lightning versions of
+   the CREATURE is art in another lane and needs its own run -- noted, not started.
+
+**Pull:** 0 incoming, nothing to merge, no Quartus alive.
