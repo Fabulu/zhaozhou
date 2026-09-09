@@ -1190,6 +1190,65 @@ targets:
       max_dsp: 14
 
   # ==========================================================================
+  # FIELD V3, the rest of the family -- MEASURABLE, and deliberately UNRULED
+  # ==========================================================================
+  # 2026-09-09. Eight more of the blocks nobody could fit. Closures from
+  # tools/quartus/propose_fit_target.py.
+  #
+  # NONE OF THESE CARRIES A RULE, and that is a decision rather than an
+  # omission. Their headers state figures, but none is a per-block resource
+  # budget:
+  #
+  #   noise      "79 DSPs of 112"  -- the whole FIELD synthesis, not this block
+  #   ring_svc   "24.3 clocks per group" -- throughput, not area
+  #   rot        cites the same 79/112 and the device 553 M10K
+  #
+  # Turning any of those into a max_dsp here would be inventing a number and
+  # dressing it as a budget. The point of these targets is to make the blocks
+  # MEASURABLE -- 43 of 45 unmeasured blocks were unmeasurable, which is the
+  # real reason the DSP and ALM totals are floors. Bounds go in when there is a
+  # measurement to bound a regression against AND a budget to check it against.
+
+  - top: zhao_field_v3_noise
+    sources:
+      - fpga/rtl/field/zhao_field_v3_noise.sv
+
+  - top: zhao_field_v3_rot
+    sources:
+      - fpga/rtl/field/zhao_field_v3_rot.sv
+      - fpga/rtl/field/zhao_field_sin.sv
+      - fpga/rtl/field/zhao_field_sin_rom.sv
+
+  - top: zhao_field_v3_trig
+    sources:
+      - fpga/rtl/field/zhao_field_v3_trig.sv
+      - fpga/rtl/field/zhao_field_sin.sv
+      - fpga/rtl/field/zhao_field_sin_rom.sv
+
+  - top: zhao_field_v3_normalize
+    sources:
+      - fpga/rtl/field/zhao_field_v3_normalize.sv
+      - fpga/rtl/field/zhao_field_isqrt.sv
+      - fpga/rtl/field/zhao_field_rcp24_rom.sv
+
+  - top: zhao_field_v3_dispatch
+    sources:
+      - fpga/rtl/field/zhao_field_v3_dispatch.sv
+
+  - top: zhao_field_v3_sbank
+    sources:
+      - fpga/rtl/field/zhao_field_v3_sbank.sv
+
+  - top: zhao_field_v3_spline
+    sources:
+      - fpga/rtl/field/zhao_field_v3_spline.sv
+
+  - top: zhao_field_v3_ring_svc
+    sources:
+      - fpga/rtl/field/zhao_field_v3_ring_svc.sv
+      - fpga/rtl/field/zhao_field_v3_ring.sv
+
+  # ==========================================================================
   # GEOMETRY: three more blocks with no target, two of them already MEASURED
   # ==========================================================================
   # 2026-09-09. These three have no `- top:` entry, and two of them have ledger
