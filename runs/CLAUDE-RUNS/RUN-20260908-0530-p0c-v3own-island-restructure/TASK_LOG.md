@@ -3046,3 +3046,46 @@ and pushed. The half-hourly nudge was rewritten (job 3f0e4e30) to carry the
 pair-pipe lever and the six eliminated probe candidates, because the previous
 version still described v4 as pending and did not mention the largest finding of
 the day.
+
+## 2026-09-09 -- GATE 3 first half LANDED: 794 ALM / 820 regs / 119.25 MHz
+
+`zhao_raster_perspuv_pairpipe@regfit`, commit 20f8f8cc, **rtlCleanAtHead true**
+(read first), seed 1, 2,320 s, Fitter Status Successful.
+
+    ALMs        794   vs rule 900   PASS
+    registers   820   vs rule 700   BREACH
+    RAM blocks    2   vs rule 1     BREACH
+    DSP           6   vs rule 6     PASS
+    Fmax     119.25   vs >=125 across three seeds -- ONE seed, cannot settle
+    membits    1280
+
+**It beat my own pre-registered bracket.** I predicted 920-1,629 fitted registers
+from the ledger's two map/fit ratios; actual **820**, below the range. The
+candidate's map said 961 and its fit says 820 -- a ratio of 1.17 the OTHER way, so
+even perspuv_svc's 1.045 was the wrong analogue. And the two columns I said I could
+not predict both moved favourably: 794 ALM PASSES a budget svc misses by 210%, and
+Fmax is 119.25 against svc's 105.19.
+
+**I PRE-REGISTERED THE WRONG STAMP, for a documented reason.** I predicted
+`failed:structure` because 820 > 700. The row says **`status: ok`** with NO
+`ruleViolations` field. Cause: labelled rows are never rule-checked -- counted in
+the live ledger, **43 labelled rows carry 0 ruleViolations against 95 unlabelled
+carrying 12**. I used `-RowLabel` because `-MapOnly` requires it and carried the
+habit into a full fit. So `ok` means only "the fit completed"; every rule verdict
+above is HAND-CHECKED. Had I quoted `status: ok` as a gate pass, the write-up would
+have claimed a budget the block breaches on two of four rules.
+
+**NOT like-for-like yet, and that is the point of the second half.** svc's standing
+fit is at commit 9c787e4a; this is 20f8f8cc. fit_targets.yml:471 registered the
+candidate precisely to avoid that comparison. Provisional deltas, labelled as such:
+-1,092 ALM (-58%), -2,396 registers (-74%), +14.06 MHz, DSP unchanged, +1 RAM block.
+`zhao_raster_perspuv_svc@gate3-fresh` is RUNNING as the second half.
+
+**If the fresh row confirms it:** against the island's 3,337-ALM and 7,285-register
+overages that is **33% of BOTH at once**, from one module-name change, while
+IMPROVING Fmax rather than trading it. No other candidate moves both failing area
+criteria together. It would still not close either gate -- 33% is not 100%, the
+register breach is systemic across 9 of 11 components, and this leaf fit carries
+300 virtual pins while the island instantiates the block among real neighbours.
+
+Report: `reports/PAIRPIPE-FIT-GATE3-FIRST-HALF-20260909.md`.
