@@ -124,12 +124,34 @@ def dilate(m, n):
 
 
 def lens_mask(a):
-    """The eye lens: BRIGHT, deeply saturated indigo.
+    """The eye lens: bright, deeply saturated indigo.
 
-    `b > 140` is the clause that keeps the violet night sky out (it runs
-    41-99) and it is also the clause that loses the idle's backlit quadrant.
-    That trade is deliberate, and it is why this gate declines orbiting clips
-    rather than quietly reporting a wrong number for them.
+    ⚠ THIS RULE IS CALIBRATED TO A PALETTE, AND THAT IS DECLARED RATHER THAN
+    DENIED. It was authored against the pass-14 bank, where it separates all
+    three legs cleanly on both backdrops. LANE-FX's shell work then washed the
+    creature paler in the same pass -- lens green 49 -> 125, the aqua motes to
+    white -- and on that build the mask stops finding lenses, star pixels
+    outnumber lens pixels seven to one, and THE GATE FAILS AT ITS OWN
+    CALIBRATION LEGS.
+
+    **That failure is the contract, not a defect.** A gate that cannot read the
+    frame must refuse rather than certify, and this one refuses loudly, at the
+    legs, before it ever reaches a verdict about the eyes.
+
+    A difference-based rule was tried as the rescue -- `(b > g+60) & (r > g+30)
+    & (r < b-20)` -- and it reads lenses on both palettes and both backdrops.
+    It was NOT taken, because it also admits enough of the shaded body and the
+    antenna's violet to move the centroid: on `channel` it put the pass-14 peak
+    at u 495-715 against live 458-717, which is to say it could no longer tell
+    the fault from the fix. That would have been the FOURTH mask in one sitting
+    and the third to be confidently wrong, and 10-GATE-CHECKLIST item 40 is
+    explicit about what to do at that point: stop, and let looking answer the
+    question it was answering all along.
+
+    **So the contract is: re-authorise this rule against the palette in front of
+    you, using the two legs below, before believing any verdict it prints.**
+    Its floors are regression protection; the acceptance test is a person
+    looking at a named frame.
     """
     r, g, b = a[..., 0].astype(np.int32), a[..., 1].astype(np.int32), a[..., 2].astype(np.int32)
     return (b > 140) & (g < 90) & (r < b - 60) & (r > g)
@@ -174,18 +196,48 @@ def blobs(m, min_px):
     return sum(1 for s in sizes if s >= min_px), sizes
 
 
+def blobs_kept(m, min_px):
+    """As `blobs`, but also returns the mask of components that made the cut."""
+    ys, xs = np.nonzero(m)
+    pts = set(zip(ys.tolist(), xs.tolist()))
+    keep = np.zeros(m.shape, bool)
+    n_big = 0
+    while pts:
+        seed = pts.pop()
+        comp = [seed]
+        stack = [seed]
+        while stack:
+            cy, cx = stack.pop()
+            for nb in ((cy - 1, cx), (cy + 1, cx), (cy, cx - 1), (cy, cx + 1)):
+                if nb in pts:
+                    pts.discard(nb)
+                    stack.append(nb)
+                    comp.append(nb)
+        if len(comp) >= min_px:
+            n_big += 1
+            for cy, cx in comp:
+                keep[cy, cx] = True
+    return n_big, keep
+
+
 def measure(path):
     a = load(path)
     lens = lens_mask(a)
-    lens_px = int(lens.sum())
-    if lens_px == 0:
+    if not lens.any():
         return 0, 0, 0, -1.0
     star = star_mask(a, lens)
     # ⚠ COUNT ON lens|star, DILATED ONCE. The cyan star sits INSIDE its lens
     # and cuts it into two or three pieces, so a bare lens count reports three
     # and four eyes on a creature that has two.
-    eyes, _ = blobs(dilate(lens | star, 1), kMinBlobPx)
-    ly, lx = np.nonzero(lens)
+    eyes, keep = blobs_kept(dilate(lens | star, 1), kMinBlobPx)
+    # ⚠ AND EVERY NUMBER BELOW READS THE KEPT BLOBS ONLY. The antenna carries a
+    # couple of hundred violet pixels on `channel`, well away from the face, and
+    # a whole-mask centroid quietly averages the eyes with them. An eye is a
+    # blob; a scattering of pixels up in the loop is not.
+    eye_px = keep & lens
+    if not eye_px.any():
+        return 0, 0, eyes, -1.0
+    ly, lx = np.nonzero(eye_px)
     body = body_mask(a)
     rows = body[max(0, int(ly.min()) - 4):int(ly.max()) + 5, :]
     u = -1.0
@@ -194,7 +246,7 @@ def measure(path):
         x0, x1 = int(bx.min()), int(bx.max())
         if x1 > x0:
             u = 1000.0 * (lx.mean() - x0) / (x1 - x0)
-    return lens_px, int(star.sum()), eyes, u
+    return int(eye_px.sum()), int((keep & star).sum()), eyes, u
 
 
 def scan(d):
