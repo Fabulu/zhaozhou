@@ -2373,3 +2373,64 @@ parses clean. The 133 existing rows are NOT retro-stamped -- that would be
 inventing provenance; they stay unrecorded and the report says so.
 
 Report: `reports/ISLAND-SCORED-AGAINST-ITS-OWN-BUDGET-20260909.md`.
+
+## 2026-09-09 -- the register breach is SYSTEMIC, and v3own is not its cause
+
+Diagnosed the +81% register miss found earlier today. No fit: per-entity
+attribution was already on disk in
+`reports/synthesis/blockpaths/zhao_texture_island_v3_top@g2-prod.fit.rpt`.
+Located the REAL table (line 4921), not the TOC entry at line 22 -- the exact
+anchor that has burned this repo twice.
+
+**This corrects the shape of the whole texture investigation.** "v3own is 81% of
+the overage" is true of ALM and FALSE of registers, and registers are the bigger
+breach.
+
+Registers by island child: **perspuv_svc 3,240 (19.9%)**, v3own 3,018 (18.5%),
+cache_pipe 2,945 (18.1%), rsp_dispatch 1,321, aux_pipe 1,226. The single largest
+register consumer is `zhao_raster_perspuv_svc`, **never named once in this
+investigation**, because every pass sorted by ALM and its ALM share is 15.8%. Top
+three are 9,203 registers = 56.5% of the island in near-equal thirds; v3own's ALM
+dominance (26%, 1.6x the next block) has no register analogue. All three are FLAT
+-- own logic, not submodules.
+
+**Against S3.3's eleven-component budget: 9 of 11 over on registers, 7 of 11 over
+on ALM.** Mapped total 15,850 reg vs 6,050 budget = **2.62x**, against 1.44x for
+ALM. Worst: perspective pair pipeline **4.63x** registers, class router 3.30x,
+cache v2 3.27x, FRAGROB+token fabric 3.14x (3.34x ALM), AUX v2 2.45x. So the
+register overrun is the budget's register model or uniform over-pipelining --
+NOT a localised defect, and nothing done to v3own can fix it.
+
+Two components are far UNDER, so the budget was specifically wrong, not
+uniformly optimistic: Mosaic 23 ALM vs 500 (0.05x) and bilerp 81 vs 250 (0.32x).
+
+**Caught myself on a stale comparison.** I inferred from a `fit_targets.yml`
+comment ("S3.4 ... Measured 4 today") that Mosaic still had 4 DSP and that the
+CSD conversion would ADD ALM. Checked the actual fit: Mosaic is **0 DSP** in
+@g2-prod, so S3.4 is satisfied and there is no such coupling. The comment
+describes an older row. Never compare a current fit to an old measurement.
+
+**The DSP breach IS localised, and a rejected lever closes it.** All 17 DSP sit
+in four blocks; the only two over budget are rcp24_svc (6 vs 3-4) and bilerp
+(3 vs 1). The ledger is unanimous across every parameterisation ever run:
+rcp24_svc = **6 DSP in all 6 rows**, rcp24_v3 = **3 DSP in all 8 rows**. The swap
+is -3 DSP, taking the island 17 -> **exactly the 14 hard redline**, plus ~870 ALM.
+Previously set aside as "only 8% of the island" -- right verdict against the ALM
+problem, wrong frame: against the criterion it actually decides it is sufficient,
+not marginal. Still needs one island fit; `@island-profile` is recorded
+`incomplete:failed:quartus_map.exe`.
+
+**CORRECTED my own seed claim from earlier today.** I wrote "no seed field in any
+of 133 rows" (true) and implied no seed data exists (false). Seven rows encode a
+seed in the LABEL, and one block has a genuine three-seed set: rcp24_svc at
+63.93 / 64.89 / 68.63, **spread 4.70 MHz (7.3%)**. That does not rescue the
+island -- 82.05 vs 115 is a 33 MHz gap, far beyond seed noise -- but it does mean
+rcp24_v3's 100.95 MHz single-seed result sits within noise of failing 100 MHz,
+which is a second independent reason it cannot carry the weight rescue-brief 7.1
+already forbids putting on it. Report amended.
+
+**The redline decision is three problems, not one:** ALM +44% concentrated and
+structurally unclosable; registers +81% systemic and a question about the BUDGET;
+DSP +21% localised and closable today by a built, fitted, priced swap.
+
+Report: `reports/REGISTER-BREACH-IS-SYSTEMIC-NOT-V3OWN-20260909.md`.

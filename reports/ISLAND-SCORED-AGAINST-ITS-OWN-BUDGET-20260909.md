@@ -46,12 +46,37 @@ than one placement seed before claiming margin... publish every result, not only
 the best. A best-seed 100.01 MHz headline is not robust evidence."*
 
 **There is no seed field in any of the 133 rows of `zhao_block_fit.json`.** Not
-recorded as one seed, not recorded as three — absent. So every Fmax in this
-repository is a single unrecorded-seed result, and none of them can support a
-margin claim under the rule the owner's own document sets.
+recorded as one seed, not recorded as three — absent as a *field*.
 
-That is a gap in the *evidence schema*, not a fit that needs rerunning today. It
-is cheap to fix and it should be fixed before the next fit, not after.
+**Correction to the first version of this sentence**, which said every Fmax here
+is a single unrecorded-seed result. Seed information does exist for a few rows,
+encoded in the **row label** rather than a field, and one block has a genuine
+three-seed set:
+
+| `zhao_raster_rcp24_svc` | Fmax |
+|---|---:|
+| `@p0b-s1` | 64.89 |
+| `seed2` | 68.63 |
+| `seed3` | 63.93 |
+| | **spread 4.70 MHz (7.3%)** |
+
+So the three-seed rule has been satisfied **once, for one block, out of 133
+rows** — and never for the island.
+
+That 4.70 MHz spread is itself useful, and it cuts both ways:
+
+* It does **not** rescue the island. 82.05 against 115 MHz is a 33 MHz gap, an
+  order of magnitude beyond seed noise, so the Fmax verdict stands regardless of
+  seed.
+* It **does** invalidate any near-threshold single-seed claim. `rcp24_v3` at
+  100.95 MHz is one seed, and a 4.70 MHz spread puts a 100.95 result within
+  noise of failing 100 MHz. Rescue-brief §7.1 already forbids using that number
+  to argue the composed island closes 100 MHz; the seed spread is a second,
+  independent reason the same number cannot carry that weight.
+
+The schema gap is still real and is now fixed going forward — `run_block_fit.ps1`
+records `fitterSeed` and `seedSource` — but a label-encoded seed is not nothing,
+and saying so was wrong.
 
 ## What the memory-first remedy actually achieved
 
