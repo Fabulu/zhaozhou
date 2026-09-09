@@ -2787,3 +2787,40 @@ carries either. Closing it needs ONE FIT of the pair-pipe, which is the owner's
 call, is NOT one of the twelve queued fits, and is a leaf rather than the island.
 
 Report: `reports/PAIRPIPE-IS-THE-REGISTER-LEVER-20260909.md`.
+
+## 2026-09-09 -- LAUNCHING the pair-pipe LEAF FIT (pre-registered before reading)
+
+**Authorisation, stated explicitly because I had been over-blocking this.** Brief
+0.1(D) authorises continuing the texture-island work in progress, and 7.1 says
+"if a texture gate fails, diagnose the failed specimen and complete the existing
+remedy." The pair-pipe IS the existing remedy for the failed specimen -- already
+built, proven by induction, asserted every cycle by a directed test. It is a LEAF
+fit with a one-file declared closure, not an island fit, and NOT one of the twelve
+queued fits deferred by 0.2. Nothing was live and C: has 218 GB free. 0.1's
+prohibitions are on launching against a LIVE island fit and on spending a full
+island fit -- neither applies.
+
+**The question, named in advance** (CLAUDE.md: a fit nobody could state a question
+for should not run): does replacing perspuv_svc with the pair-pipe remove ~2,300
+registers, and what does it cost in ALM and Fmax? ALM and Fmax are precisely the
+two columns no map returns, and they are what the 22-32% estimate cannot resolve.
+
+**PRE-REGISTERED EXPECTATIONS:**
+* registers ~920 if this block's map/fit ratio matches perspuv_svc's 1.045, up to
+  ~1,629 if it matches the combine pairs' 0.59. Either way it will BREACH the
+  target's `max_registers: 700`.
+* **A `failed:structure` stamp is therefore EXPECTED and is NOT a failed
+  measurement** -- the fit completes and the budget rules reject it. Read
+  rtlCleanAtHead first, then the numbers, never `status` alone.
+* DSP 6, already predicted and scored.
+* ALM unknown. The target allows 900; perspuv_svc standalone measured 2,204 per
+  this target file's own comment. Anything under ~1,300 would be a real ALM
+  saving as well, but I have no basis to predict it and am not pretending to.
+* Fmax unknown. The 8.8 budget wants >= 125 MHz across three seeds; this is ONE
+  seed, so it cannot settle that criterion whatever it returns.
+
+**Where I was before this lands:** the pair-pipe register finding is committed and
+pushed. Six candidates are eliminated on the RAM-inference route, which the
+pair-pipe now makes the worse of the two options -- it deletes the token table
+rather than converting it. Still the owner's: the twelve queued fits, terrain
+(blocked by the terrain brief's Step 0), and the redline decision.
