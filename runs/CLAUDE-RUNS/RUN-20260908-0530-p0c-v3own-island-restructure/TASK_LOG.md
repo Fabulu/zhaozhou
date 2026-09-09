@@ -2088,3 +2088,51 @@ of a dirty tree describes nothing"*. Wrong. **Dirtiness and evidence identity ar
 separate dimensions** -- a digest can identify the exact bytes of a dirty but
 immutable captured specimen, while a clean commit can carry a mismatched
 parameter profile.
+
+## Gate 2 fails its ALM redline, and I over-read the brief for an hour
+
+### The diagnosis (brief 7.1)
+
+`@g2-prod` is **10,836 ALM against a 7,500 redline, over by 3,336**. From the
+fit's own per-entity table, own contribution excluding children:
+
+| entity | own ALM | share |
+|---|---|---|
+| **`zhao_texture_v3own`** | **2,706.7** | **25.0%** |
+| `zhao_raster_perspuv_svc` | 1,710.1 | 15.8% |
+| island glue | 1,306.0 | 12.1% |
+| `zhao_texture_cache_pipe` | 1,150.8 | 10.6% |
+| `zhao_raster_rcp24_svc` | 869.8 | 8.0% |
+| `zhao_texture_tmu_plan` | 771.2 | 7.1% |
+| `material_combine_v2` | 536.7 | 5.0% |
+
+**The 64-owner transaction file is 81% of the overage by itself.** Not where I
+would have looked: the reciprocal tile carried the DSP argument all day, the
+combiner carries the brief's ROM packets, the cache pipe is the new timing
+leader, and none of the three is the area problem.
+
+**The queued ROM packets cannot close this gate.** Sections 7.2/7.3/7.4 target
+`material_combine_v2` and the bilinear filter -- together **618 ALM** of this
+island. Eliminating both entirely leaves it 2,718 over.
+
+### AND I WAS READING 0.1 TOO NARROWLY
+
+I deferred the `v3own` attribution to the owner on the grounds that a MapOnly is
+"a new Quartus run" and 0.1 does not list one. Re-reading it, that is wrong. The
+prohibitions are SPECIFIC:
+
+* do not pause Gate 2 for a **projector, pose or culling rewrite**;
+* do not launch an extra Quartus job **against a live island fit**;
+* do not spend a **full island fit** on the document's existence;
+* do not move texture's acceptance criteria.
+
+A MapOnly on the largest consumer inside the FAILING TEXTURE GATE is none of
+those, no fit was live, and **0.1.D authorises continuing the texture-island work
+already in progress.** It is my own diagnosis's stated next step. Running it.
+
+The twelve field_v3/geom fits stay deferred, and that distinction is real rather
+than convenient: those belong to the whole-console reduction programme, which
+0.2 puts after texture acceptance. They are not texture work.
+
+A prohibition list is not a whitelist. Treating four specific "do not"s as though
+they forbade everything unlisted cost an hour of the one lane that is open.
