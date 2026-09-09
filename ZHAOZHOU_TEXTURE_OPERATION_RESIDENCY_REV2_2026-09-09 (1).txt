@@ -1,0 +1,2889 @@
+ZHAOZHOU: OPERATION RESIDENCY
+
+Consolidated texture-island architecture and implementation brief, revision 2
+Repository: Fabulu/zhaozhou
+Implementation branch: zixxtrixx-v8-closeout
+Current reviewed snapshot: 57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135
+Baseline functional audit retained: 24ef92266dea29d4501dfffbe537cb49d681a17c
+Revision date: 9 September 2026
+Final branch observation: 2db3dfd5fa026320a939aa64cdfea757ded45a4a (12:13:26 CEST)
+
+DOCUMENT RELATIONSHIP
+This is the consolidated replacement for the earlier
+ZHAOZHOU_TEXTURE_ISLAND_CLOSURE_ARCHITECTURE_2026-09-09.txt. It is the same
+texture venture, not a second competing work programme. Preserve its useful
+experiments and tests; use this revision for the current decisions and handoff.
+The whole-console MEMORY_FIRST_RESOURCE_RESCUE brief remains the separate
+post-texture programme. Do not start that programme just because this revision
+has arrived.
+
+READING ORDER FOR THE IMPLEMENTER
+Section 22 gives the direct handoff. Sections 0-4 define authority, source truth
+and contracts. Sections 6-7 define the replacement completion complex. Section
+19 gives the bounded work and fit sequence. The remaining sections contain the
+actual arithmetic, timing, resource and verification designs needed to implement
+that sequence without re-deriving it.
+
+STATUS OF THIS DOCUMENT
+This is a proposed, testable next architecture, not a completed implementation
+or a prediction that the proposed resource allocations have already been met.
+The independent checks supplied with it exercise arithmetic and finite models.
+They are not RTL simulation, formal RTL equivalence, or Quartus measurements.
+
+The measured starting point is Gate 2. The destination is a smaller, faster,
+resource-accounted texture island without discarding V3's proven semantics.
+The separate MEMORY_FIRST_RESOURCE_RESCUE brief remains the whole-console plan.
+This document supplies the texture work that must precede that programme.
+
+CONTENTS
+  0. Executive decision and authority to proceed
+  1. What Gate 2 actually established
+  2. Correct the new diagnosis before acting on it
+  3. Architecture: one lifetime, resident payload, local work
+  4. Freeze the contracts and the measurement profile
+  5. Owner membership without a wide subtraction per event
+  6. Compact owner phases and local event updates
+  7. Read-late COMBINE: operate on resident owner data
+  8. Paired PERSPUV and an exact rescale alternative
+  9. Capture admission once; decouple it from RCP scheduling
+ 10. Reciprocal throughput: the missing rate gate
+ 11. Conditional dual-worker reciprocal architecture
+ 12. Cache: keep hits short, sequence miss management
+ 13. Palette: local slot control and hierarchical coverage
+ 14. Response transport: optional resident payload pool
+ 15. Memory arithmetic for material combination and bilinear filtering
+ 16. Binding, sampling, context and capability integrity
+ 17. An honest ALM, register, DSP and memory portfolio
+ 18. Verification: what must fail before it may pass
+ 19. Implementation packets and fit-sparse checkpoints
+ 20. Source, build and fit custody
+ 21. Failure decisions and exit criteria
+ 22. Direct agent handoff
+ 23. Independent check results and their limitations
+ 24. Sources, inspection scope and freshness
+
+===============================================================================
+0. EXECUTIVE DECISION AND AUTHORITY TO PROCEED
+===============================================================================
+
+Do not schedule a clean-sheet V4 rewrite. Do not run another pass whose main
+activity is searching for unused declarations. Build a replacement completion
+and arithmetic path inside V3, preserve the current machine as the behavioural
+reference, and replace the implementations only after each complete boundary
+has passed its tests.
+
+The principal change is not "put every array into RAM." It is:
+
+  Keep wide, persistent data resident in memory. Move small identities through
+  the machine. Make the control that acts on those identities local and bounded.
+  Read a result when an arithmetic phase needs it, rather than repeatedly
+  copying it into another scheduler's private storage.
+
+Four workstreams form one texture campaign:
+
+  A. Owner/completion/COMBINE topology: exact membership factoring, compact
+     monotone source state, and a combiner that reads resident owner planes.
+  B. Arithmetic transport: adopt the existing paired PERSPUV candidate, qualify
+     the actual reciprocal profile, and remove the live-ingress scheduling path.
+  C. Timing locality: split cache miss management from the hit path and shorten
+     the nearly co-critical palette loader and lookup controls.
+  D. Selected memory substitutions: exact small-product ROMs and, only if the
+     resource portfolio permits it, a response-payload pool.
+
+A and B are the primary ALM venture. C addresses independent timing families.
+D helps the scarce DSP budget but is not a substitute for A. The measured
+bilerp entity is far too small to explain the island's area overrun. [R02]
+
+0.1 What this proposal authorizes
+
+The implementing agent may build and test replacement texture submodules,
+change internal pipeline boundaries, retime coupled control/data expressions,
+and change candidate-only internal interfaces. Every such change must preserve
+external transaction semantics, prescribed arithmetic, required throughput and
+frame deadlines. A bounded extra internal cycle is not automatically a frame
+rate reduction. It is an implementation choice whose reservations, forwarding,
+ordering and throughput must be designed and demonstrated.
+
+This is not authority to change a publicly fixed latency without documenting
+that contract, drop samples, shrink owner capacity, narrow numerical domains,
+relax 60 fps, reduce the camera/world feature set, or raise resource ceilings.
+Where a real throughput/resource contradiction exists, state it explicitly and
+price alternatives. Do not silently choose the cheaper side.
+
+In particular, do not stop after another report saying that the owner changes
+"move a protocol." Designing those internal protocols is the task. Preserve
+the contract at the island boundary; specify and verify the new internal one.
+
+0.2 What stays outside this venture
+
+Do not begin the projector, skinning, pose, culling or terrain-bake rescues while
+texture is still open. Do not rerun all newly registered leaf targets. The
+accounting repair already adopted from the memory-first brief is useful and
+must be retained, but target registration is not a reason to launch a broad
+measurement campaign against the texture work. [R20, R21]
+
+Do not erase the current owner, old island, material oracle or their tests.
+Keep the reference available in verification; exclude replacement predecessors
+from the selected shipping hierarchy so history does not cost silicon.
+
+0.3 Execution priority and the current pause
+
+The run log at the primary reviewed pin says no Quartus job is alive and the
+agent is waiting on a redline decision while repairing instruction-delivery
+tooling. The final branch observation adds register analysis, not a new fit.
+That is a recorded state, not live access to the machine. Check it once at
+handoff, then start the authorized texture experiments. [N01]
+
+Do not raise 7,500 ALM merely to unlock work. Do not require proof that a complete
+new architecture will succeed before allowing a cheap component prototype.
+The purpose of the prototype and gates is to obtain that evidence. T0 is a
+short bounded reconciliation, not a repeat of the whole A0 census.
+
+If candidate work already exists when this revision arrives, inspect and adopt
+it where it satisfies these contracts. Do not restart from an earlier commit
+because this document has a newer title. A failed candidate is retained as
+reference evidence, not merged into the shipping path to justify its effort.
+
+0.4 Expected outcome versus promised outcome
+
+This document identifies specific hardware to replace, a mathematically exact
+control simplification, an already measured paired-pipeline storage reduction,
+and independent cache/palette timing interventions. It supplies a 7,500-ALM
+allocation to earn. It does NOT establish that those allocations are achievable
+simultaneously in the fitter. If a candidate misses, its named boundary and
+receipt determine the next action. There is no numerical victory by decree.
+
+===============================================================================
+1. WHAT GATE 2 ACTUALLY ESTABLISHED
+===============================================================================
+
+The completed production specimen is zhao_texture_island_v3_top@g2-prod with
+MIGRATION_SHADOWS=0. The committed native reports and Gate-2 write-up give:
+
+  Resource                      Earlier @pktC-fixed     Gate 2 production
+  ALMs                                  15,483                  10,837
+  Fitted registers                      22,219                  16,285
+  M10Ks                                     48                      49
+  DSP blocks                                17                      17
+  Reported Fmax                          62.83                   82.05 MHz
+
+The Gate-2 run took approximately 148 minutes. Its recorded source digest
+starts 6812f753ff3b. The improvement covers the D0 repair, laboratory removal,
+descriptor/join integration, palette carriage and associated replacements as a
+combined specimen. It is not an isolated measurement of any single one. [R01,
+R03, R04]
+
+The next venture must remove a further 3,337 ALMs against the 7,500 redline,
+reduce the register population, close the current timing violations and meet
+the selected DSP allowance. There is no reason to hide the remaining gap.
+There is also no reason to deny that the previous physical regression was
+substantially reversed.
+
+1.1 The entity attribution is useful, with limits
+
+The agent's committed transcription of the fitter's entity table reports:
+
+  Entity                         Own ALMs       Inclusive ALMs where relevant
+  u_own                           2,706.7                     2,818.2
+  PERSPUV service                 1,710.1                     1,710.1
+  island top's own glue            1,306.0              whole top 10,836.0
+  cache                           1,150.8                     1,150.8
+  reciprocal service                869.8                     1,002.9
+  planner                           771.2                       771.2
+  material COMBINE V2                536.7                       536.7
+  response dispatcher               470.8                       470.8
+  AUX pipe                          293.2                       501.8
+  palette resolver                  274.1                       274.1
+  AUX div6                          208.6                       208.6
+  fragment expander                 146.4                       146.4
+  reciprocal ROM                    133.2                       133.2
+  bilerp lane                        81.0                        81.0
+
+These are attribution evidence from the agent's report, not a fresh independent
+parse of the full .fit.rpt: that full report was not available at the requested
+committed path. The native top summary WAS inspected. Preserve the one-ALM
+reporting difference between the entity sum and the top summary; do not present
+10,836 as a newly improved fit. [R02, R03]
+
+Do not sum an inclusive parent and its children. Do not call an entity's entire
+area removable. In particular, 2,707 is about 81% of the numerical overage, but
+it is not 81% of the island and not 2,707 ALMs of proven waste. The owner is
+required hardware. Its implementation is the object of this venture.
+
+The subsequent owner-only attribution map in that report records 3,750 mapped
+registers, 20,640 memory bits and zero DSPs. Its large payload banks already
+infer memory. That is evidence against a blanket "the owner is a flop RAM"
+diagnosis, not evidence that its indexed control and staging are free. Keep the
+owner-only profile and its mapped register count distinct from the composed
+entity's fitted ALM contribution. [R02]
+
+1.2 Three current timing families require attention
+
+The native timing summary contains, among other paths:
+
+  -2.187 ns: u_rcp c_val[4] -> reciprocal Add7 family.
+  -2.031 ns: u_palette ld_slot_r[0] -> res_r[3].
+  -2.020 ns: u_palette ld_slot_r[0] -> res_r[2].
+  -1.893/-1.889 ns: the same palette family into the other residency bits.
+  -1.326 ns: palette generation state -> captured stale verdict.
+
+The sampled 200-path report contains 117 internal paths. A cache c2_tag bit
+starts 59, the owner live-count family 28, and an RCP context-value family 25.
+Frequency in that sample is not the same as worst slack. RCP and palette are
+near co-critical even though the cache family is more numerous. [R04]
+
+Removing RCP-terminating paths from the frozen sample leaves approximately
+83.12 MHz. That is a diagnostic of the OTHER current paths, not a theorem that
+an actual RCP replacement can improve Fmax by only 1.06 MHz. An implementation
+change also alters placement and routing. Conversely, a 100.95-MHz RCP leaf is
+not evidence that the composed island will run at 100.95 MHz.
+
+1.3 Retire misleading comparisons
+
+The historical Stage-A oracle receipt remains a historical receipt. Its source
+closure later changed. Do not use its 11,562 ALMs as the measured cost of the
+CURRENT oracle. A new oracle fit solely to rehabilitate that comparison is not
+part of this plan.
+
+The controlled Gate-1 laboratory comparison removed 4,432 MAPPED registers.
+The Gate-2 combined specimen removed 5,934 FITTED registers. Subtracting those
+two deltas does not isolate 1,502 registers of architectural improvement.
+Record the two valid measurements separately. [R01]
+
+1.4 The measurement boundary also has a cost
+
+The native Gate-2 summary reports 1,840 virtual pins and 921 ALMs containing
+virtual pins, alongside the warning that they count toward logic utilization.
+Keep that fact in the receipt. Do NOT subtract 921 and announce a 9,916-ALM
+core: "contains a virtual pin" is not an independently measured, wholly
+removable category, and packing can overlap useful logic. [N04]
+
+Make architectural A/B comparisons under the same registered boundary, pin
+preservation and constraints first. Later, the representative neighbouring
+composition can price the actual integration boundary. Do not weaken input
+variation, leave outputs unobserved or tie fields constant to make a candidate
+look small. A resource-only top with correlated/tied operands is not necessarily
+the full supported function. The actual production shape must remain visible.
+
+===============================================================================
+2. CORRECT THE NEW DIAGNOSIS BEFORE ACTING ON IT
+===============================================================================
+
+Do not reopen a correction that the agent has already made. The historical
+triage said clm_q, cbi_q and fcl_q were simulation-only. The latest report now
+explicitly withdraws that claim and correctly names their functional writers
+and readers. Retain that correction. They are necessary claims/actual-issue
+facts, not free deletion opportunities. [R05, N02, N03]
+
+The remaining serious overstatement is different:
+
+  "The loop assigns all 64 rows, so this state needs 64 RAM write ports and
+  cannot use memory."
+
+That does not follow. A row assigned its old value is a HOLD, not a requirement
+for an independent memory write. The functional recurrence is sparse: actual
+events change named rows and admission initializes one row. The current coding
+idiom, asynchronous consumers, reset shape and concurrent changes may prevent
+RAM inference AS WRITTEN. None of that proves that an equivalent implementation
+needs 64 independently changing writes. [N02, N03]
+
+This correction does NOT make an all-RAM owner the recommended design. It
+reopens an implementation question that was incorrectly declared impossible.
+The default remains compact local fabric control, with wide resident payload.
+Only selected fields with a complete, paid-for port schedule may move to RAM.
+
+2.1 Actual field-update inventory, not assignment-line counting
+
+The functional post-reset writer supports these addressed events. This table
+counts an upper bound on DISTINCT row addresses receiving a write per field;
+coincident events at one row must merge, and some combinations may be
+unreachable. It does not count read ports or predict inferred hardware.
+
+  Field   Logical updates in one clock                     Upper bound
+  live    external release; admission                            2
+  req     admission ONLY                                         1
+  iss     TMU issue; AUX issue; admission                         3
+  clm     TMU claim; AUX claim; admission                         3
+  cmt     TMU publication; AUX publication; admission             3
+  rdy     TMU ready claim; AUX ready claim; admission              3
+  crs     COMBINE reservation; admission                          2
+  cbi     actual COMBINE acceptance; admission                     2
+  fcl     final claim; admission                                  2
+  fdn     final publication; admission                            2
+  ftc     historical fetch marker; admission                      2
+
+The ready events use the publication owners, so they are not extra arbitrary
+owner targets in an aggregate address inventory. Required masks are the clearest
+counterexample to the 64-port claim: after admission, their values do not
+change at all. [N03]
+
+The source still maintains ftc for verification, but its ordinary fetch guard
+was already removed in favour of the monotone fetch cursor. Do not charge its
+source-level assignments as a new physical saving. Reconfirm its consumers in
+the selected elaboration before claiming either cost or deletion.
+
+The supplied sparse/dense recurrence check independently encodes the whole-array
+and event-patch forms. They agree over 6,000 randomized 64-row cycles, including
+same-row overlaps and admission precedence. On an idle cycle the sparse form
+performs zero semantic writes. This is a finite update-algebra check, NOT RTL
+equivalence, synthesis, or proof that every generated event is protocol-legal.
+
+2.2 A small possible RAM experiment: the immutable required mask
+
+req_q contains 64 four-bit required masks. It has one admission writer and
+several consumers: the TMU/AUX issue validators, terminal snapshots and readiness
+evaluations. A one-write implementation is possible in principle. A single
+one-read RAM is NOT enough merely because the write side is simple.
+
+First inventory simultaneous consumer addresses and their original snapshot
+edges. Either carry the required bits with the existing accepted records, use
+explicitly priced read replicas, or retime whole validation expressions. Do not
+read the new row one cycle later and call it the old admission snapshot. A late
+admission can otherwise turn a previously invalid future token into an
+apparently valid return.
+
+Default decision: do NOT spend several M10Ks and extra staging to save 256
+logical bits unless a controlled mapping experiment demonstrates a worthwhile
+ALM or timing benefit. This is a bounded optional experiment, not the backbone
+of the rescue. It is included to replace a false impossibility claim with an
+actual port-and-latency decision.
+
+2.3 Read timing is not decided by _q versus _c spelling
+
+A synchronous memory samples whatever valid address is present at its edge,
+including a combinationally formed address. The real questions are which edge
+is available, when the data returns, and which identity/required/progress facts
+must describe the same logical instant. Renaming a signal cannot answer them.
+
+READY binds cmt, req, rdy and crs to one owner and one instant. Retiming just
+one term breaks the expression. Retiming the complete transaction is legitimate
+architecture work, with publication, reservation and forwarding accounted for.
+An internal latency change is not automatically a change to the frame deadline.
+
+2.4 Why phase packing is not a RAM-port trick
+
+Combining issued/claimed/committed into one phase field reduces its logical bit
+count. It can INCREASE the number of independent writes to that combined field:
+issue, claim and publication may name three different owners, plus admission.
+Likewise actual COMBINE issue, final claim and final publication may coexist.
+
+Do not turn the two-bit encoding into an unsupported dual-port RAM merely because
+the encoded row is small. Keep the narrow multi-event state in fabric initially.
+A later banked or event-journal candidate needs its own worst-case service-rate,
+backpressure, forwarding and reset proof. Delaying unbackpressurable issue
+notifications is not made safe by adding an unbounded queue in a drawing.
+
+2.5 Correct the documents once, then implement
+
+Update the false 64-write-port conclusion and the remaining derivative
+"no memory candidate exists" statements. Preserve the already-corrected live
+claim arrays. Label the frozen timing-exclusion result as a diagnostic, remove
+the mixed map/fit delta attribution, and use the native 10,837-ALM headline.
+
+Do not produce a new general RTL parser or another project-wide tooling sweep.
+The writer/consumer evidence is sufficient to define this experiment. Reuse the
+existing source/measurement tools, and move on to the T0-T6 sequence. The absence
+of one 3,337-ALM deletion does not prove that a combined architectural replacement
+cannot close the gap; nor does this plan prove in advance that it will.
+
+===============================================================================
+3. ARCHITECTURE: ONE LIFETIME, RESIDENT PAYLOAD, LOCAL WORK
+===============================================================================
+
+The proposed selected path is:
+
+  external fragment acceptance
+    -> owner allocation + captured admission job + descriptor writes
+    -> qualified reciprocal service
+    -> paired perspective U/V pipeline
+    -> existing atomic U/V + early-descriptor join
+    -> sample expansion and captured binding/planner work
+    -> cache hit pipeline / separate cold-miss sequencer
+    -> whole-response metadata join
+    -> class transport and palette / direct / filter work
+    -> resident sample/AUX result planes
+    -> compact ready ticket
+    -> phase-scheduled COMBINE reads from those resident planes
+    -> resident final-result plane
+    -> credited ordered output
+    -> external acceptance returns the owner credit.
+
+There is ONE owner lifetime and ONE required-source definition. An intermediate
+service may release its own execution context, but it cannot free the owner.
+The owner remains authoritative until the external output handshake.
+
+Wide payload is stored once per necessary lifetime. Small pipeline captures
+are allowed and required: "resident data" does not mean feeding a multiplier
+or a broad decision directly from an uncaptured memory output. The distinction
+is between bounded local stage state and a second persistent, owner-indexed
+copy of the same record.
+
+The new completion complex comprises the owner, its result planes, ready
+queues, the material record, and the combiner scheduler. Treating those as one
+architecture boundary lets it delete the wide transfer queue and the combiner's
+second immutable payload store. Optimizing each file in isolation cannot make
+that topological change.
+
+3.1 Keep the useful V3 work
+
+Keep the identity encoding, 64-owner window, exact return classifications,
+claim/commit distinction, synchronous result banks, D0 join discipline, carried
+palette identity, cache multicast, single blocking cache miss, and ordered
+output. Keep the three independently written ready queues until a replacement
+has an honest multi-event schedule.
+
+Keep the current arithmetic oracles. New storage and scheduling must not quietly
+change rounding or saturation. The proposed PERSP rescale and ROM products have
+explicit identities and their own tests; they are not permission to "clean up"
+arithmetic elsewhere.
+
+3.2 Candidate integration, not permanent dual hardware
+
+Build the new owner/completion complex and any changed-interface combiner behind
+a candidate wrapper. The wrapper exists for differential and subsystem timing
+work. The production selection must instantiate either the existing complex or
+the new one, never both. Test-only comparison state must be absent in the
+production elaboration, with an explicit capability flag where tests depend on
+its existence.
+
+A new internal module name is not a V4 console rewrite. It is a replacement
+organ with a sharply specified interface and an existing behavioural oracle.
+
+===============================================================================
+4. FREEZE THE CONTRACTS AND THE MEASUREMENT PROFILE
+===============================================================================
+
+Before editing, record the selected instance parameters and the actual source
+closure, including wrappers, packages, initialization files and constraints.
+Do not infer a profile from the default arguments of a leaf that the island
+instantiates with overrides. [R06, R07, R08]
+
+The baseline profile includes 64 owners; a 6-bit slot and 8-bit generation;
+14-bit owner handles; 18-bit sample routing tokens including class and sample
+index; the full caller context; three sample planes and one AUX plane; four
+cache lanes, 16 lines and 16-byte lines; four resident palette slots; and a
+production build without migration shadows. Derive field widths through named
+types and reject unsupported parameter combinations at elaboration.
+
+The old island parameter DEPTH=16 is not the width of the V3 owner slot. Do not
+use it to size a 64-owner table or slice an 18-bit routing token. The repository
+has already paid for this error several times. [R06]
+
+Record these boundaries separately:
+
+  - Request accepted by the external island.
+  - Owner allocated and its persistent attributes captured.
+  - Arithmetic job accepted by a local service.
+  - Sample issued and authorized to return.
+  - Return captured; snapshot taken; terminal claimed.
+  - Payload committed; committed state published.
+  - Ready ticket reserved and written.
+  - COMBINE work actually accepted.
+  - Final terminal accepted; final payload committed.
+  - Ordered final read reserved and output captured.
+  - External output accepted; owner credit released.
+
+Each counter and state bit must name one of these events. Two equal totals at
+drain do not make their cycle-by-cycle events interchangeable.
+
+4.1 Acceptance levels: operational rate is not qualification headroom
+
+The inherited hard resource limits remain 7,500 ALMs, 9,000 registers, 64 M10Ks
+and 14 DSPs for this texture scope. The operational frame budget is calculated
+at 100 MHz. That is NOT by itself the texture architecture acceptance clock.
+
+The original reports/islandrearchitecture4.md, sections 20.4-21.7, was directly
+rechecked on the separate main branch for this revision. It distinguishes:
+
+  Runtime compute model:               100 MHz, 60 fps.
+  Full texture-survivor qualification:  115 MHz minimum architecture target,
+                                       120 MHz preferred; three seeds.
+  Reduced renderer + texture:           105 MHz hard, 110 objective, 115 stretch.
+
+Keep all three boundaries explicit. Do not borrow the renderer's 105-MHz floor
+for the standalone texture qualification, or call the texture's 115-MHz clause
+merely a leaf aspiration. Do not grant the workload 15% more clocks because a
+qualification fit meets 115 MHz; the runtime budget remains 100 MHz unless the
+actual clock architecture is explicitly changed. [N16]
+
+The earlier document is labelled a proposed owner ruling and has since been
+followed by other briefs. Record any later adopted text that explicitly
+supersedes a gate for THE SAME boundary. This revision grants no unilateral
+waiver. Until a later governing rule is identified, carry the 115-MHz texture
+qualification and the stated seed policy forward. Internal prototype work does
+not wait on that documentary reconciliation.
+
+Use explicit clock periods and setup/hold reports at the qualifying period,
+not only an extrapolated Fmax from a 10-ns compile. Preserve the appropriate
+boundary wrapper and report wrapper-only versus DUT paths separately. A
+synthesizable representative memory interface belongs in the physical closure;
+a behavioural simulation memory model is a workload fixture, not physical
+hardware to count as the console. [N16]
+
+A result meeting area at 82 MHz is not closed. A 100-MHz result can meet the
+operating clock and still fail the texture qualification. A result meeting
+both clock levels but missing workload, generation safety, required samples or
+output order is also not accepted.
+
+===============================================================================
+5. OWNER MEMBERSHIP WITHOUT A WIDE SUBTRACTION PER EVENT
+===============================================================================
+
+The current owner already eliminated the literal per-slot generation table.
+Do not budget that old 512-bit deletion again. Its current membership function
+uses the modular distance between a full ticket and the retire ticket. [R05]
+
+For the selected 64-owner profile, this function has two exact alternatives
+that expose the small physical problem more directly.
+
+Let:
+
+  E = retire slot, 6 bits.
+  G = retire generation, 8 bits.
+  U = live owner count, in 0..64.
+  S = queried slot, 6 bits.
+  H = queried generation, 8 bits.
+  internal ticket order = {generation, slot}.
+  public owner order   = {slot, generation}.
+
+The reference is:
+
+  live = unsigned14(query_ticket - retire_ticket) < U.
+
+Exact factored form:
+
+  d = unsigned6(S - E);
+  expected_generation = unsigned8(G + (S < E));
+  live = (d < U) && (H == expected_generation).
+
+The small slot distance must be compared to a count that CAN represent 64.
+Narrowing U to six bits would turn a full ring into an empty ring. Generation
+addition wraps modulo 256, exactly as the original 14-bit ticket arithmetic.
+
+Why this is exact: a live interval contains at most 64 tickets. Starting at E,
+it can cross the slot boundary at most once. The slot distance determines the
+position within that interval; the comparison S < E determines whether the
+query belongs to the current retire generation or its immediate successor.
+There is no reason for each event lane to discover that with a general 14-bit
+subtraction if the simpler form maps better.
+
+5.1 Alternative with no per-query subtraction
+
+Compute A = unsigned6(E + U), with U kept wide for the addition. Then:
+
+  U == 0:
+      false
+  A > E:
+      E <= S < A, and H == G
+  otherwise:
+      (S >= E and H == G)
+      OR (S < A and H == unsigned8(G + 1)).
+
+The otherwise arm includes the full U=64 case. It is not an empty interval.
+This form allows shared or locally replicated endpoint registers and narrow
+comparators. The first form may map smaller; the second may route better.
+Both are exact. Compare their mapped logic and timing within the same event
+wrapper, not by aesthetic preference.
+
+5.2 The time point is part of the identity check
+
+Preserve BOTH snapshot validity and current membership at claim. A token that
+was not live at the snapshot cannot become authorized just because admission
+happened before its later validation stage. A token that was live at snapshot
+cannot remain authorized after external retirement. The present owner explicitly
+checks both for this reason. [R05]
+
+Therefore, a retimed lane captures the relevant pre-edge window facts with its
+other snapshot data and checks current membership at the claim edge. Do not
+replace those two checks with one shared delayed Boolean. Generation equality
+alone is also insufficient: residual row contents outlive an owner's authority.
+
+5.3 Implementation and evidence
+
+Implement a profile-guarded helper with named ticket decoding. Use the generic
+reference for unsupported capacities until a separate proof exists. Compare the
+helper with the old expression every cycle in verification and run wrap-heavy
+RTL tests. Do not subtract public {slot, generation} words directly.
+
+The supplied Python model performed 2,229,920 comparisons across slot positions,
+occupancies, adjacent/wrong generations and randomized full tickets. It also
+rejects slot-only, full/empty and public-token-order mutants, and includes the
+two time-point counterexamples. This proves the tested integer identity, not a
+particular SystemVerilog cast or physical resource saving.
+
+===============================================================================
+6. COMPACT OWNER PHASES AND LOCAL EVENT UPDATES
+===============================================================================
+
+The first control replacement keeps the state in fabric where concurrent events
+need it, but reduces redundant Boolean encoding and repeated indexed decisions.
+It does not pretend that one dual-port memory can serve every event at once.
+
+6.1 Four monotone states per required source
+
+The current source masks separately represent issued, claimed and committed.
+In reachable normal operation they advance monotonically until the owner's
+next admission. Represent each source by two bits:
+
+  00  not issued
+  01  issued, not yet claimed
+  10  terminal claimed, payload not yet published committed
+  11  committed
+
+Keep required as a separate bit. Required is an admission contract, not a
+consequence of which returns happened to arrive.
+
+Queries become:
+
+  issued    = phase != 00
+  claimed   = phase[1]
+  committed = phase == 11
+
+Per owner this replaces three 4-bit progress masks with four 2-bit phases:
+12 progress bits become 8. Across 64 owners that is 256 logical bits. It also
+removes some independent read/mux/update expressions, which may be worth more
+than the raw bits. The physical effect is not known until mapping.
+
+Keep the old masks reconstructed from phase in the verification adapter. Compare
+all rejection decisions and event transitions, not merely final colour. The
+encoding is justified over reachable legal old states; it does not claim an
+arbitrary corrupted old bit pattern has a unique representation. Mutation tests
+must target equivalent externally observable violations in the new design.
+
+6.2 Three final-progress flags become one phase
+
+The actual COMBINE issue, final claim and final commit facts are also monotone:
+
+  00  no actual COMBINE job accepted
+  01  actual job accepted, awaiting final return
+  10  final return claimed, awaiting payload publication
+  11  final payload committed
+
+This replaces three bits by two, saving another 64 logical bits. Combined with
+source phases the logical saving is 320 bits. That is NOT a fitted-register
+prediction. Some original logic may already pack or optimize away, and the new
+decoding logic has a cost.
+
+Keep COMBINE reservation separate. Reserving a bank read or a candidate ticket
+is NOT actual COMBINE acceptance. A final result before that acceptance remains
+unsolicited and must be rejected. [R05]
+
+6.3 Event-local, statically selected updates
+
+Decode each event's target row once. Route its narrow event mask to a static
+row implementation, rather than constructing several independent 64-way reads
+and rediscovering equality for every field. Use explicit precedence per row:
+
+  - Existing state is the default.
+  - Valid issue events advance only previously unissued required sources.
+  - Accepted terminal claims advance the selected source to claimed.
+  - Payload publication advances only the matching claimed source to committed.
+  - Ready reservation and actual COMBINE acceptance update their distinct facts.
+  - Final publication and ordered fetch update their own facts.
+  - External output ends the live lifetime.
+  - A valid new admission initializes the entire new owner's state atomically.
+
+Admission must never overwrite a still-owned row. The existing no-same-edge
+full-ring bypass is retained, so the most dangerous release/reuse case is not
+introduced merely to remove one cycle at saturation.
+
+Do not replicate the complete membership, generation and terminal-validation
+expression into all 64 rows. Shared event validation and shared address decode
+should feed small row-local updates. Repeating the entire validator per row is
+another way to build a larger crossbar while calling it local.
+
+Choose structured local arrays or static generate rows based on actual mapping.
+Source formatting alone does not guarantee a smaller decoder. Do not turn a
+single shared decoder into dozens of replicated copies to satisfy a style rule.
+
+A further controlled variant captures only the requested source's progress
+facts in the terminal snapshot, rather than carrying whole masks into a later
+sample-index selection. The request's source is already known at capture. Keep
+the same snapshot edge and full identity; keep complete/coalesced masks where
+READY genuinely needs them. This may reduce stage state and selection cones.
+Do not credit a saving for fields synthesis already pruned, especially on the
+AUX path whose source bit is constant. It is a mapped alternative, not a reason
+to change the observed instant of an issued/claimed fact.
+
+6.4 READY is computed after publication, not after claim
+
+A source being claimed says the design has accepted responsibility for a terminal.
+It does not say the corresponding memory word is already readable. A ready job
+must observe all required source planes after payload publication.
+
+When TMU and AUX publish for the same owner on the same edge, merge those source
+updates before testing completeness. Create exactly one ready ticket. When they
+publish for different owners, both can create tickets. Admission of a zero-work
+owner can create a third ready event independently.
+
+Retain the current three single-writer ready queues initially. A proposed
+single queue needs a real three-event enqueue schedule and bounded buffering;
+it cannot claim a single RAM write port while accepting three records.
+
+6.5 Forwarding follows the new snapshot-to-claim latency
+
+The present return pipeline has an explicitly derived one-cycle recent-claim
+forwarding window. Adding an extra snapshot or validation stage can make it
+longer. Derive the window from the actual read, claim and publication edges;
+forward by FULL owner identity and source, not by slot alone. [R05]
+
+Same-owner back-to-back duplicate returns must be caught even when their RAM or
+fabric snapshots both predate the first claim. A delayed issued mask must not
+retroactively legalize a return whose original snapshot was unsolicited.
+
+A useful design artifact is a cycle table with, for every stage: owner handle,
+snapshot instant, current-window check instant, claim edge, physical RAM-write
+edge and publication edge. The table is a requirement for review, not another
+project in itself.
+
+6.6 What not to do first
+
+Do not RAM-convert cmt and leave req/rdy/crs arriving a cycle earlier. Do not
+serialize all events through one memory just because it removes many flops.
+Do not collapse claimed into committed. Do not move quiet or aggregate queue
+occupancy back into normal admission. Do not call the false simulation-only
+triage a deletion opportunity.
+
+The first owner candidate is latency-neutral where possible: exact membership
+factoring, phase encoding and shared/static event decoding. Coupled read retiming
+is a later candidate only when attribution shows a remaining cone worth moving.
+
+6.7 Concrete row-local implementation experiment
+
+Begin with a candidate beside the frozen owner, not by editing its golden state
+in place. Retain the same public ports for the first membership/phase candidate.
+Keep event validation shared. For each event, derive slot-select, full-identity
+verdict and source mask once; feed statically selected narrow rows.
+
+Two code shapes are worth a controlled comparison, not two permanent designs:
+
+  A. One whole next-state recurrence, with factored validators and compact phases.
+  B. Eight static groups of eight owner rows. Decode group and row separately;
+     a row updates only for its local events. Read-port selection is a two-level
+     captured or combinational tree as the original snapshot boundary permits.
+
+The grouping is a candidate for routing locality and shared decode, not a promise
+that Quartus will place eight groups together or that 8x8 is the optimal shape.
+Do not add a stage only to make the diagram balanced. Preserve current edge
+semantics in the first comparison. A grouped candidate that simply recreates the
+same LUT network or adds replicated control is rejected without an island fit.
+
+Keep the complete reset/priority truth table next to the update function. Fold
+all events for a row before writing it once. Do not implement separate always_ff
+writers for overlapping row state. A single assignment solves lost updates;
+self-assignment in a loop does not by itself dictate 64 physical write ports.
+
+6.8 Reset, bypass and simultaneous events are part of a RAM conversion
+
+For any later RAM-backed control field, the design sheet must answer all four:
+
+  RESET: which valid/generation facts make uninitialized rows unreadable?
+  WRITE CONFLICT: what if admission and an old terminal name the same slot?
+  READ CONFLICT: which value does a simultaneous read need, old or new?
+  FORWARDING: which newly accepted event is newer than a captured snapshot?
+
+The preferred required-mask experiment writes only on admission and keeps owner
+identity control outside the RAM. A valid read must belong to an allocated
+instance. Replicas receive the identical accepted admission record; a dropped
+replica write is an identity/data defect even when masks often happen to match.
+Do not use no_rw_check as a substitute for defining the collision law.
+
+The compact source phase does not erase the one-cycle recent-claim forwarding
+need. If a read is delayed, recompute the forwarding window from its actual
+edges. Forwarding by slot alone is forbidden across generation reuse.
+
+6.9 Preserve predicates at their actual event, including fault behaviour
+
+The current C2 validator checks both its snapshot identity and current live
+membership. Some C4 publication guards historically compare reconstructed
+residual generation rather than re-running every C2 predicate. Do not silently
+strengthen or weaken one when changing the representation. First establish
+which cases are unreachable under the selected external contract, and which
+are intentionally covered by fault injection and drain tests. [R05, N03]
+
+A stage retaining authority granted at an earlier event is not automatically
+wrong. Re-validating against a later state can also be wrong if it rejects a
+previously accepted obligation. The replacement must preserve the specified
+acceptance/claim/write/publication/release law, not a vague rule to "check live
+everywhere". Any intentional correctness repair gets a separate failing test
+and a declared contract interpretation before its area is compared.
+
+===============================================================================
+7. READ-LATE COMBINE: OPERATE ON RESIDENT OWNER DATA
+===============================================================================
+
+This is the main topology replacement. Optimize the owner/result/COMBINE boundary
+as a unit rather than shrinking either module while preserving unnecessary data
+transfers between them.
+
+7.1 The current repeated carriage
+
+The owner already stores sample0, sample1, sample2 and AUX in owner-indexed
+result planes. It then reads those planes into a four-entry wide COMBINE queue.
+The top separately aligns the material record. COMBINE V2 captures another
+immutable payload for each of its eight execution contexts and later reads
+that payload for its scheduled phases. [R05, R06, R09]
+
+At the selected widths, the owner queue carries:
+
+  4 entries x (14 owner bits + 4 x 40 result bits) = 696 logical bits.
+
+COMBINE's immutable context payload is 110 bits x 8 contexts = 880 bits.
+That latter payload is already memory-backed in the current implementation;
+removing it is NOT a claim to remove 880 fabric registers. The avoidable cost
+includes transport, staging, selection and duplication as well as storage.
+
+The current material record comprises the base colour/alpha, recipe, weight,
+sample count and AUX selection information. Freeze its actual typedef and
+padding before changing the interface; do not infer the width from a comment
+about an older 48-bit layout.
+
+7.2 The new boundary
+
+Keep result data resident in the owner's existing planes until that owner has
+fully retired. After all required results are published, enqueue only a compact
+ready identity. The combiner accepts that identity into an execution context,
+then reads the owner planes and material record when a phase needs them.
+
+Proposed internal job handshake:
+
+  cmb_job_valid
+  cmb_job_ready
+  cmb_job_owner[13:0]
+
+The handshake is actual COMBINE acceptance: it reserves a real execution context
+and authorizes the later final return for this owner. A candidate selected for
+this handshake but not yet accepted has only a reservation, not issue authority.
+
+Preserve a separate reservation fact if the owner needs to prevent duplicate
+candidate selection while the job is held. Do not reuse one Boolean for both
+meanings.
+
+7.3 Phase pipeline
+
+A practical candidate phase path is:
+
+  Q: Select NEW or CONTINUATION ticket. Reserve the phase's destinations.
+  R: Issue one synchronous read to each needed resident result/material plane.
+  D: Capture the bank outputs and the FULL phase identity together.
+  O: Select operands and register the two arithmetic jobs.
+  M: Execute the current two-lane arithmetic, or its qualified ROM equivalent.
+  F: Perform the original recipe's rounding/clamp and write scratch or FINAL.
+
+The precise number of physical registers depends on the existing V2 phase
+implementation and arithmetic choice. The invariants do not: every read belongs
+to one owner/phase; every accepted phase has its output capacity; and a phase
+that waits for arithmetic never loses its identity.
+
+Do not insert a giant combinational material/result mux directly at a bank
+output. D is an intentional capture boundary. A memory saving that replaces
+one register bank with a long memory-to-multiply route is not closure.
+
+7.4 Port accounting
+
+The three sample result planes and AUX plane retain their statically separated
+writers. The combiner is their one scheduled reader. The material plane has
+one admission writer and one phase reader. One phase can read the five banks
+in parallel, with each bank serving only one read address that cycle.
+
+A continuation repeats reads of immutable owner data. That uses bandwidth but
+does not require a second read port if the scheduler launches at most one phase
+per cycle. The operation is legal because the data remains resident until the
+owner's external release. If another consumer is proposed later, it must be
+added to this port budget rather than silently sharing a port that is busy.
+
+Reads begin only after publication. Therefore a correct phase does not depend
+on a particular read-during-write result for a just-arriving source. Assert the
+separation. Do not rely on "old data" in simulation while asking the FPGA for a
+different collision mode.
+
+Inactive planes may contain old or uninitialized payload. The captured required
+mask and recipe must gate their consumption, including status/refusal aggregation.
+Do not clear every payload RAM on admission merely to make unused reads look
+pleasant in a waveform. Do not let an unused stale status bit refuse a new
+base-only job. Test this with deliberately poisoned inactive planes.
+
+7.5 What remains in execution-context storage
+
+Keep only state that genuinely changes while the job executes: phase, owner
+identity, continuation scratch and any necessary final-handoff reservation.
+Do not recopy all source colours, alpha, base and recipe into every context.
+The immutable material and results are read from their owner planes.
+
+The initial context count remains eight unless measured schedule/feedback
+latency requires a different count. Reducing or increasing it is a profile
+change, not a free bookkeeping edit. A longer ROM pipeline can increase the
+number of contexts needed to sustain one scheduled phase per cycle.
+
+7.6 Preserve the actual eight-recipe law
+
+Keep the existing V2 arithmetic, phase counts, rounding points, saturation,
+refusal behaviour and final alpha. Preserve the current AUX substitution law:
+where the existing integration substitutes AUX into the sample2 position, that
+is the reference behaviour. Do not silently invent a fourth material sample or
+pretend that a nominal three-sample-plus-AUX interface proves four-way blending.
+
+Zero-work/base-only cases still enter one defined completion path and produce
+one final result. Early fast results may complete ahead of older jobs internally;
+ordered external retirement still controls their visibility.
+
+The final result may free its execution context on a proven credited handoff to
+the final-return path. It may not free the owner. If the final receiver can
+stall, reserve a bounded holding place before launching the terminal phase.
+
+7.7 Migration test boundary
+
+Build a candidate completion complex with the compact job interface. Use a
+verification adapter or reference model to compare semantic events and final
+streams against the frozen old owner-plus-COMBINE composition. Do not force a
+cycle-by-cycle comparison of an intentionally changed internal handshake.
+
+Compare separately: accepted external owners; rejected bad terminals and their
+classes; exactly-once ready/job/final events; per-owner arithmetic outputs; and
+ordered external output under long stalls. The test must expose actual issue
+versus reservation so the new smaller interface cannot hide an early-final bug.
+
+7.8 Smaller fallback if the complete pull design is not favourable
+
+A lower-risk intermediate candidate joins the material read with the owner's
+result read, so one captured record drives the old combiner. It can remove the
+separate material-alignment bubble without eliminating COMBINE's payload copy.
+It is a fallback with a smaller deletion certificate, not equivalent to the
+resident-phase design. Do not keep both as permanent shipping paths.
+
+7.9 Deletion certificate
+
+The candidate must identify which wide CQ arrays, material alignment state,
+immutable context payload planes, adapters and ready expressions disappear.
+Then mapping must show which actually disappeared from hardware. Report new
+phase captures, mutable scratch and memory-port costs beside those deletions.
+The arithmetic 696 and 880 is a topology inventory, not an ALM forecast.
+
+7.10 Define the new completion complex at a real boundary
+
+Create a candidate completion-complex wrapper containing the owner lifetime,
+ready queues, resident result/material banks and read-late combiner. Suggested
+new module names are implementation proposals, not existing repository targets:
+
+  zhao_texture_completion_resident
+  zhao_texture_owner_local
+  zhao_texture_combine_resident
+
+The first wrapper should accept the same external admission, issue, TMU, AUX,
+final-output and diagnostic obligations as the old composed completion path.
+The internal COMBINE job port can change because both endpoints are replaced
+inside that wrapper. Do not change the external island interface to make a leaf
+comparison convenient.
+
+Port schedule for one launched arithmetic phase:
+
+  sample0 bank  terminal writer s0        one COMBINE read of phase owner
+  sample1 bank  terminal writer s1        one COMBINE read of phase owner
+  sample2 bank  terminal writer s2        one COMBINE read of phase owner
+  AUX bank      AUX terminal writer       one COMBINE read of phase owner
+  material      admission writer          one COMBINE read of phase owner
+  scratch       continuation writeback    one selected continuation read
+  final result  validated final writer    ordered-fetch reader
+  context       admission writer          ordered-fetch reader
+
+These are separate stores because their writers/readers can operate concurrently.
+Do not combine them into one memory unless the new ports and arbitration are
+fully accounted for. The three sample banks may share write data, but each has
+its own registered one-hot enable; dynamic lane selection must not recreate the
+old unfused flop-RAM problem.
+
+7.11 Canonical edge schedule for the resident read
+
+The existing v3bank registers mem[rd_addr] directly at its clock edge. It has no
+payload reset. Use that concrete latency, not a comment calling all RAMs two
+cycles or all _q addresses safe. One conservative pipeline is: [N09]
+
+  E0: a Q ticket is selected; latch bank read addresses and full phase identity.
+  E1: banks sample those addresses and update their output registers; delay tag.
+  E2: capture the bank outputs and delayed tag as a complete D record.
+  E3: select/register exactly the operands and recipe controls needed by phase.
+  E4+: execute the selected DSP or ROM arithmetic pipeline.
+  EW: write scratch or present a reserved final result; retire the phase once.
+
+All E labels are rising edges; nonblocking updates become visible after the
+edge. E2 therefore captures the E1 read, not a new E2 address. Another latency
+is legal only when the edge table and all queue/forwarding reservations are
+updated together. Throughput is determined by initiation interval and feedback
+availability, not by the number of boxes in this illustration.
+
+Avoid retaining all 160 source bits in every downstream stage. The D record
+may be wide for a single capture boundary; O and later carry only selected
+operands plus needed alpha/status/identity. If pruning makes an explicit packed
+capture cheaper than bespoke enables, measure it rather than mandating source
+style. Bounded captures remain real cost and belong in the 1,900-ALM complex.
+
+7.12 Immutable lifetime and context-release certificate
+
+For every owner/phase, prove:
+
+  - required source data is published before the phase's first read;
+  - accepted duplicates cannot rewrite those source planes;
+  - material describes the same admitted owner and remains stable;
+  - scratch is initialized by a phase that owns it, not by a second writer;
+  - an execution context is not reused until its final packet is safely held
+    by the final receiver, or by a separately reserved terminal slot;
+  - the owner is not reused until its external ordered output is accepted.
+
+A continuation can reread immutable data only while this lifetime remains open.
+Counting active arithmetic contexts alone does not establish it: a completed
+final may wait behind an older owner or a closed output sink for arbitrarily
+long. That stall must pin the owner without pinning every arithmetic pipeline.
+
+Error and refused cases use the same terminal ownership discipline. Poison
+unused sample banks in the testbench. A base-only fragment must not inherit a
+prior owner's colour/status because a read-late unit happened to fetch an
+inactive plane in parallel with the active ones.
+
+7.13 Replication that buys a real port is not gratuitous duplication
+
+The rule is one justified persistent copy per port/lifetime need, not one
+physical copy at all costs. The early descriptor and ordered output can both
+need caller context at different independent addresses in the same cycle.
+Sharing one RAM between them without another read port can add stalls or a
+larger mux. Price that explicitly before consolidating it.
+
+The read-late COMBINE proposal is attractive because its scheduler replaces an
+existing result-bank reader and it no longer needs its own immutable payload.
+It is not permission to make every consumer share one central transaction RAM.
+Centralizing all reads can be worse for area, locality and throughput than a
+small, justified replica.
+
+===============================================================================
+8. PAIRED PERSPUV AND AN EXACT RESCALE ALTERNATIVE
+===============================================================================
+
+Adopt and qualify the existing paired candidate instead of writing another
+paired scheduler. The matched MapOnly receipts now give 3,361 registers for the
+old service and 961 for pairpipe, both using six DSPs. That is 2,400 fewer mapped
+registers in the measured leaf profiles. The new fitted ALM and composed effect
+are not measured by those receipts. [R07, R08]
+
+Keep two U/V multiplication lanes. The lockstep proof licenses deleting two
+independent schedulers and their rejoin, not serializing independent U and V
+products. The paired candidate's capacity is sixteen terminal FIFO entries plus
+one held output, counted across all in-flight and queued work. Output acceptance,
+not pipeline writeback, returns its credit.
+
+First qualify the candidate at the actual island tag width and selected capacity.
+Keep every tag, saturation and depth-zero flag in the same held record. Retain
+the declared treatment of depth-zero U/V values when comparing with the old
+service, whose flagged output values may be unspecified/stale. Do not claim an
+arithmetic mismatch in a field the old contract says not to consume.
+
+8.1 Remove arithmetic transport cost without changing the result
+
+The generic current service carries a signed 32-bit numerator multiplied by an
+unsigned 24-bit mantissa into a signed 64-bit product. It then adds a variable
+rounding bit, shifts and saturates. The historical 56-bit narrowing shortcut is
+wrong, especially at the shift-wrap case. This proposal is a different, exact
+algorithm, not that shortcut. [R07]
+
+Let p be the exact product and:
+
+  s = (32 - k) modulo 64.
+
+The existing result before 32-bit saturation is:
+
+  signed64(p + (1 << ((s - 1) modulo 64))) arithmetic_shift_right s,
+
+with the addition interpreted in its existing 64-bit wrap domain. For this
+product, -2^55 < p < 2^55.
+
+For 1 <= s <= 55:
+
+  rounded = (p arithmetic_shift_right s) + bit(p, s-1).
+
+Then perform the original signed 32-bit saturation. This identity is exact for
+negative values as well as positive ones because the arithmetic shift floors
+and the selected discarded bit supplies round-half-up.
+
+For 56 <= s <= 63, the rounded value is zero throughout the legal product domain.
+For s == 0, preserve the existing unusual wrapped-rounding behaviour explicitly:
+
+  p >= 0 -> signed minimum 32-bit result, saturation asserted.
+  p <  0 -> signed maximum 32-bit result, saturation asserted.
+
+That branch follows the original signed64 addition of the bit at position 63.
+It is NOT the mathematically preferable interpretation of "round by zero bits."
+It is the existing generic interface's behaviour, retained to avoid an unapproved
+arithmetic change. Natural reciprocal outputs occupy a narrower exponent domain,
+but the candidate need not rely on narrowing the public six-bit input.
+
+Apply the existing depth-zero override separately. The identity above describes
+the numeric arithmetic path, not permission to change its flagged zero-depth
+semantics or make previously unspecified output payload a new requirement.
+
+8.2 Hardware experiment
+
+Keep the full product first. Replace the variable 64-bit rounding-add stage with
+an extracted quotient window, a round bit and exact overflow/sign guards. The
+output may need only the low result window plus sufficient high-bit information
+to determine saturation. Do not discard high bits before proving those guards.
+Rounding can itself carry across a saturation boundary, so test after rounding.
+
+The hypothesis is reduced wide add/shift carriage and fewer live wide registers.
+It might instead trade an adder for a comparable mux structure. Compare within
+one wrapper. No resource number is promised.
+
+The supplied model checks 204,032 cases across every six-bit k, including extreme
+numerators/mantissas and the shift-zero branch. It rejects the naive narrowing
+mutant. RTL tests must still validate signed casts, expression widths and
+stalling through the actual implementation.
+
+8.5 Late branch evidence: remove token tables, not useful pipeline boundaries
+
+The agent's new 12:13 CEST analysis attributes 3,376 declared PERSPUV bits to
+the sixteen-entry token tables and 594 to _q pipeline state. Those are declared
+bit inventories, not fitted register attribution. It reports that Gate 2 inferred
+only the e_tag memory and that the duplicated mantissa registers were merged
+back together. The full underlying native map/fit detail was not independently
+available in this revision; this is the agent's recorded diagnosis. [N17]
+
+That supports the existing paired candidate: eliminate the unnecessary token
+selection/rejoin architecture, not the registers that divide the arithmetic
+into timing-safe stages. The matched native MapOnly summaries already show
+3,361 versus 961 registers and six DSP each. Qualify that candidate, rather than
+spending another long iteration trying to make the old per-axis table split
+infer by cosmetic duplication. [N14]
+
+Do not generalize the mantissa result into "identical memory replicas cannot
+supply extra ports". Register merging undid this PARTICULAR attempted inference
+shape. Explicit independently addressed physical RAM replicas remain a valid
+candidate when inferred/instantiated and verified correctly. Equally, do not
+suppress merging everywhere by default: preserving two unnecessary flop arrays
+would pay twice for the same failed design. Remove the duplicate scheduler first.
+
+The same late investigation identifies PERSPUV, owner and cache as the largest
+fitted register consumers: 3,240, 3,018 and 2,945 respectively, as transcribed
+from Gate 2. Their total is 9,203, 56.5% of the island. This is why the plan is
+multi-block, not an assertion that owner-only work closes 9,000 registers. [N15]
+
+===============================================================================
+9. CAPTURE ADMISSION ONCE; DECOUPLE IT FROM RCP SCHEDULING
+===============================================================================
+
+The current top couples external acceptance to owner credit and the reciprocal
+service's ready signal. Its reciprocal input also consumes live fragment pins.
+Those equations are functionally aligned today, but they place service scheduling
+and input paths close to the owner-credit boundary. [R06]
+
+Introduce a small admission-job queue, initially two entries, holding the entire
+RCP launch identity and denominator: owner14 plus denominator24. Other required
+attributes are written to the existing persistent owner/descriptor planes on
+the SAME external acceptance. Do not make a second full-fragment queue.
+
+External acceptance occurs only when BOTH the owner allocator and this local
+job queue have capacity. That one event allocates the owner, stamps its handle,
+writes numerator/descriptor/material data, and queues the arithmetic job. RCP
+later accepts the captured queue head. It never rereads the current ingress
+pins for that job.
+
+This is a registered boundary, not a ready wire with a flop attached after the
+fact. The queue contains the work that the delayed ready represents. No owner
+may be allocated unless its launch record has a reserved place. No launch may
+occur for a fragment the external interface did not accept.
+
+A two-entry queue is a starting implementation, not a rate solution. It hides
+short backpressure boundaries; it does not increase the reciprocal worker's
+sustained capacity. The throughput gate in section 10 remains mandatory.
+
+9.1 Event and fence obligations
+
+The external admitted counter and RCP's accepted counter can differ while jobs
+are queued. They must reconcile after a complete drain, apart from any explicitly
+implemented and counted bypass. A test that asserts equality on every cycle
+would be enforcing the old topology instead of the contract.
+
+Include this queue in namespace-drain accounting. An empty owner output path
+does not prove no accepted arithmetic job remains queued. On reset, clear its
+valid state; on a generation-wrap fence, do not admit new namespace work until
+all old queued and in-flight producers are accounted for.
+
+Retain conservative no-same-edge full-ring credit bypass. A late output credit
+is not available early merely because its numerical increment is predictable.
+
+===============================================================================
+10. RECIPROCAL THROUGHPUT: THE MISSING RATE GATE
+===============================================================================
+
+A small and fast leaf can still be incapable of the frame workload. The current
+queued reciprocal executes MW0, MX0, MW1 and MX1: four arithmetic launches per
+nonzero reciprocal. One fully pipelined arithmetic worker accepting one launch
+per cycle therefore has an absolute lower bound of four cycles per independent
+nonzero result in sustained operation. More contexts hide feedback latency;
+they do not defeat that arithmetic bound. [R10]
+
+The repository's measured context sweep is consistent with it: approximately
+5.78 clocks per reciprocal at eight contexts, 4.38 at twelve, and 4.07 at
+sixteen. The twelve-context leaf uses three DSPs and eight M10Ks and reaches
+100.95 MHz. Those facts describe that leaf profile, not a completed island.
+Do not subtract the twelve-context old service's 1,802 ALMs from a current
+island entity instantiated with eight contexts and claim an 816-ALM saving.
+
+10.1 Count the correct units
+
+Record, for every workload trace and camera configuration:
+
+  F = fragments actually accepted after the relevant upstream rejection.
+  D = nonzero reciprocal jobs after exact reuse, not sample count.
+  Z = zero-denominator jobs and their explicitly scheduled treatment.
+  P = U/V product-pair jobs, including every independently required coordinate.
+  S = material sample footprints after sample expansion.
+  A = cache accesses and requested lanes; keep these two units separate.
+  C = filtered channel jobs, not filtered footprints.
+  M = unique blocking cache line fills, not missed lanes.
+  K = COMBINE phase launches, not merely completed fragments.
+
+The old 541,640 footprint count and later roughly 1,094,600 multi-sample demand
+cannot simply be substituted into every one of these variables. The current top
+already shares one reciprocal among the sample work derived from a fragment.
+Do not credit that same sharing a second time. [R06, R15]
+
+At 100 MHz and 60 fps there are approximately 1,666,667 gross clocks per frame.
+The workload budgeting convention reserves 20%, leaving approximately 1,333,333
+design clocks. If a trace really requires 541,640 independent uncached nonzero
+reciprocals, four launches each require 2,166,560 cycles. That exceeds even the
+gross frame, before stalls. The example is conditional on that job count; the
+arithmetic is not conditional.
+
+Build this rate worksheet before spending a full fit on an architecture that
+cannot satisfy it. The supplied checks evaluate the lower bound, not a real
+scene trace. A real trace that supplies F, D, P, S and C is still required.
+
+These are per-resource capacity bounds. Do not add all stage-work counts as
+though the pipeline ran every stage serially: independent stages overlap.
+Conversely, cache blocking, finite contexts, response credits and dependency
+feedback can prevent ideal overlap. The actual cycle trace, not a sum of leaf
+latencies or an ideal maximum-rate diagram, resolves that interaction.
+
+10.2 Default three-DSP route: existing V3 service plus proven exact reuse
+
+Use the already developed queued reciprocal at the actual chosen profile. The
+owner's standing six-to-three-DSP direction remains the default. Qualify twelve
+or sixteen contexts for latency hiding, with the true token width and output
+backpressure. Do not keep eight solely because the old service used eight.
+
+An optional small exact memo can reduce arithmetic jobs where repeated depth
+really exists. Begin with four entries, fully compared by the complete 24-bit
+denominator, carrying result mantissa, exponent and zero status. The memo does
+not store owner identity. A hit is retagged with the current owner and must
+reserve response capacity before acceptance.
+
+A four-entry memo is bounded control, not a broad fully associative table. Its
+measured area and hit rate determine whether it remains. It must not compare
+only leading denominator bits, reuse approximate results, or confuse an old
+owner with a repeated numerical input. The reciprocal is a pure function of the
+complete denominator under the fixed arithmetic profile, which licenses exact
+reuse across owners; it does not license approximate interpolation.
+
+Initially allow duplicate simultaneous cold requests to execute independently.
+Coalescing them requires waiter identities, cancellation and response fanout,
+which can cost more than a tiny memo saves. Do not add that machinery without
+measuring a trace that needs it.
+
+Hit replies and worker replies need a bounded merge and reserved destination
+slots. Never let a run of memo hits starve completed misses. Owner output remains
+ordered even if the arithmetic service completes in a different order.
+
+For the illustrative 541,640 jobs and a 4.38-cycle miss cost, an otherwise ideal
+memo route needs a miss fraction no greater than about 0.562 to fit the usable
+frame, before other stalls. That means at least about 43.8% effective reuse.
+This is a necessary-rate illustration, NOT an expectation that real scenes have
+that locality. Measure it; a pretty hit rate on a constant-depth test is not a
+production performance result.
+
+10.3 Zero work and coordinate reuse are semantic opportunities, not freebies
+
+Skipping reciprocal work for a base-only fragment might be safe, but the current
+path sends such fragments through RCP/PERSPUV as well. A bypass needs its own
+atomic route to the descriptor/expander and a defined treatment of AUX context,
+depth-zero flags and evidence counters. Do not take the saving before that route
+has been built and tested.
+
+Likewise, independently required U/V sets need their own products even if they
+share a reciprocal. Reusing a denominator is not evidence that coordinates,
+binding, LOD or palette identity can be reused too.
+
+10.4 Escalation condition
+
+If the measured required D and the stall model exceed the three-DSP service's
+capacity even with justified reuse, stop calling it a closure candidate. Do not
+raise Fmax on paper, reduce scene complexity secretly, or assume downstream
+parallelism compensates for insufficient reciprocal throughput. Section 11 is a
+priced architecture alternative for precisely this condition.
+
+===============================================================================
+11. CONDITIONAL DUAL-WORKER RECIPROCAL ARCHITECTURE
+===============================================================================
+
+This is a conditional alternative, not the default adoption instruction. It
+uses six DSPs instead of the approved three-DSP objective. It must therefore be
+explicitly selected and reflected in the texture AND whole-console allocation.
+It must not be smuggled in as an implementation detail.
+
+The reason to consider it is throughput, not a nicer leaf benchmark. A single
+three-DSP worker is an arithmetic bottleneck if the required trace demands too
+many independent jobs. The alternative preserves full arithmetic and increases
+product-issue capacity while avoiding two complete copies of every queue,
+context store and input/output shell.
+
+11.1 Split by phase, not by owner
+
+Use one context pool, initially 32 contexts, and two pipelined arithmetic workers:
+
+  MW worker: MW0 and MW1 products.
+  MX worker: MX0 and MX1 products.
+
+Each worker accepts at most one phase per cycle. Each nonzero reciprocal consumes
+two MW and two MX launches. The arithmetic lower bound becomes two cycles per
+reciprocal. The context count must cover the real loop latency and queue policy;
+32 is a proposed profile, not proof that all implementations saturate both lanes.
+
+The existing exact arithmetic tile can be reused for each worker first. Do not
+simultaneously invent a new multiply law. Keep the normalize, seed, truncation,
+wrap, correction, rescale and clamp rules identical to the current reciprocal.
+
+11.2 Queue and phase flow
+
+  NEW -> MW0 -> MX0 -> MW1 -> MX1 -> DONE -> output acceptance -> FREE.
+
+Maintain separate NEW and continuation queues where distinct writers can enqueue
+on the same cycle. MW1 continuations should not be indefinitely starved by new
+jobs. MX work likewise needs bounded arbitration against zero phases. Every
+phase ticket carries context and phase; every result is written under the
+context identity that launched it.
+
+Zero input must retain one scheduled terminal writer. One option is to route
+zero jobs into the MX worker's terminal schedule using a ZERO opcode. They do
+not masquerade as four real products, and they do not create an independent
+final-result write that can collide with MX1 on the same edge.
+
+11.3 Make the scratch stores genuinely single-writer
+
+A naive two-worker conversion gives MW0 and MX0 concurrent writes to the same
+scratch X plane, violating the intended memory ports. Avoid that structurally:
+
+  - Keep the seed X0 in immutable admission payload.
+  - MW0 reads X0 directly and writes only W.
+  - MX0 reads X0 from its immutable seed view and writes the updated X.
+  - MW1 reads updated X and writes updated W.
+  - MX1 reads updated X and W and writes the final result.
+
+Only the MX worker writes scratch X. Only the MW worker writes scratch W. If
+scratch X needs two simultaneous reads, one for each worker, mirror its storage
+with the SAME single MX writer, rather than inventing a three-port primitive.
+
+11.4 Example payload-port inventory
+
+For 32 contexts, a candidate layout can use:
+
+  P_MW: m24 + seed32, admission writer / MW reader             2 SDP slices
+  P_SEED_MX: seed32, admission writer / MX reader              1 SDP slice
+  P_OUT: owner14 + k6 + zero1, admission writer / output reader 1 SDP slice
+  S_W: 32 bits, MW writer / MX reader                         1 SDP slice
+  S_X_MW: 32 bits, MX writer / MW reader                      1 SDP slice
+  S_X_MX: 32 bits, same MX writer / MX reader                  1 SDP slice
+  RESULT: final mantissa, MX terminal writer / output reader   1 SDP slice
+
+That is eight PAYLOAD M10K slices in a straightforward implementation. The seed
+ROM, queue memories, preload/reset behaviour, output heads and any extra port
+replicas are additional. Eight is not the total tile count. Price and map them.
+
+The duplication of X is deliberate port replication. Report its physical cost.
+Do not hide it behind one logical table name. Delayed continuation publication
+must make the corresponding scratch write visible before the consumer read.
+Provide bypass only where the selected read-during-write mode and cycle table
+actually require it.
+
+11.5 Illustrative schedule evidence and limits
+
+The independent supplied queue model schedules 12,000 jobs through two workers,
+assuming nine-cycle worker latency and 32 contexts, in 24,024 cycles including
+fill/drain, or 2.002 cycles/job. It counts 24,000 MW and 24,000 MX launches.
+This demonstrates that the abstract dependency graph can approach its two-cycle
+bound under that model. It does not measure RTL queue bubbles, initialization,
+RAM response latency, timing, or service stalls.
+
+Do not quote 2.002 as an implemented performance result. The real dual-worker
+prototype must reproduce its own schedule, under both saturated traffic and
+arbitrary downstream stalls, before this route is eligible.
+
+11.6 Allocation consequences
+
+With six DSPs in paired PERSPUV and zero-DSP ROM versions of COMBINE and bilerp,
+a six-DSP reciprocal alternative gives a twelve-DSP texture arithmetic subtotal.
+That can remain below the local fourteen-DSP ceiling. It is three more than the
+nine-DSP texture route contemplated by the global rescue portfolio.
+
+The additional three must be explicitly allocated in that global <=94 plan;
+unknown remaining functions do not become free because a contingency line
+exists. The RCP ALM and RAM budget must also be revised. Two workers may exceed
+the default 1,000-ALM RCP allocation substantially. A plausible architecture is
+not a paid-for architecture.
+
+No automatic selection is authorized by this document. Present the measured
+three-DSP rate failure, the dual-worker result, and the complete resource delta
+as one bounded decision. There is no need to reopen the console architecture
+or weaken precision to make that decision.
+
+===============================================================================
+12. CACHE: KEEP HITS SHORT, SEQUENCE MISS MANAGEMENT
+===============================================================================
+
+The existing cache's payload/tag memories are already synchronous and statically
+banked per lane. Replacing them with another cache is not the first task. The
+current combinational C3 path does too much at once: compare tags, identify
+needed lanes, choose the first missing line, compare other lanes to that chosen
+identity, form the multicast mask, count it and update miss/fill/valid controls.
+That is a concrete route from a tag bit into broad control. [R11]
+
+12.1 Separate the fast decision from cold work
+
+Keep the all-hit path's response reservation and retirement cadence unchanged.
+On C3, determine hit/need and whether any enabled lane misses. A miss captures
+or locks the complete request identity, enters a busy state, squashes the
+in-flight probes and rewinds the request issue pointer. It need not compute
+and apply the final multicast update on that same edge.
+
+Proposed cold states:
+
+  M_SELECT: select the first needed lane from a captured need mask.
+            Register its complete line identity.
+  M_MASK:   compare captured requested line identities against that registered
+            selected line; form the exact multicast mask and invalidate the
+            affected entries.
+  M_REQUEST: hold the aligned fill address and valid until the fill handshake.
+  M_FILL:   receive the eight halfwords, write the selected lane banks, and
+            publish the tag/valid only at the correct completed-fill edge.
+  REPLAY:   resume the still-resident missing request and younger requests.
+
+The expected price is a few additional cycles per blocking miss, not per hit.
+The potential gain is a shorter tag-compare/priority/multicast/update cone.
+Whether that is acceptable depends on measured fill count and the memory-service
+budget. Do not assume misses are rare in an adversarial or cache-conflict trace.
+
+12.2 Capture enough identity, but do not duplicate the world
+
+The missed request remains in the request queue because it was never retired.
+One implementation locks the queue head and reads its captured line identities
+in the cold states. Another holds the small per-lane line IDs and need mask
+locally. Choose by mapping and port availability. Neither may consult a younger
+request's current addresses after the issue pointer has advanced or rewound.
+
+Disabled lanes that happen to reference the same line must not enter the fill
+mask. Enabled misses to the same line must still multicast one fetch. Keep the
+existing one-blocking-miss policy; introducing MSHRs or speculative parallel
+fills is a different venture.
+
+12.3 The reservation invariant remains load-bearing
+
+For the selected request/response capacity:
+
+  response entries queued + noncancelled probe results in flight <= REQN.
+
+A hit retirement transfers a reservation into the response FIFO; it does not
+free it. Consumer acceptance frees it. A miss refunds exactly the probes being
+squashed, leaving already queued responses untouched. The current cache has
+C1 and C2 probe valids in that refund. [R11]
+
+The cold-only split deliberately avoids adding another all-hit stage. If an
+implementation later does add one, update the refund set, pipeline capacity
+and issue rule together. Never keep an old two-valid refund expression after
+adding a third in-flight result.
+
+The supplied finite queue model exercised 80,000 cycles of stalls and misses,
+then reconciled 39,117 accepted and delivered requests in its tested run. It
+checks the reservation invariant during operation and rejects a missing-refund
+mutant. It is not a cache data/tag RTL simulation.
+
+12.4 RAM and load-order obligations
+
+Read valid, tag and data with the same logical probe snapshot. Do not read an
+old tag and a newly asserted valid bit on different edges. Keep statically
+selected per-lane memory processes with clock-only payload writes; no reset
+loop over data/tag RAM. The small validity plane can remain fabric state.
+
+Do not accept fill data before the request/mask protocol makes its destination
+unambiguous. If the fill interface permits a response on the request-acceptance
+edge, that case needs an explicit bypass or stage arrangement. Assert the exact
+provider contract; do not guess a minimum memory latency.
+
+Keep counters off the hottest live classification path where their event can
+be registered without changing meaning. Register a complete event delta, not
+one flag while its mask still advances independently.
+
+===============================================================================
+13. PALETTE: LOCAL SLOT CONTROL AND HIERARCHICAL COVERAGE
+===============================================================================
+
+The palette loader is nearly co-critical with RCP in Gate 2. Calling it a cold
+path does not exempt it from a shared 100-MHz clock. The resident data is already
+in RAM; the target is control topology, not moving 16,384 data bits that have
+already moved. [R04, R12]
+
+13.1 Preserve the precise load law
+
+BEGIN accepts only a new generation. An accepted BEGIN immediately invalidates
+the selected slot and must make a simultaneous same-slot lookup stale/nonresident.
+A refused same-generation BEGIN must not perform that invalidation. WRITE is
+legal only during an open load. END publishes resident only for the matching
+slot/generation with valid CRC and complete coverage.
+
+The load port currently never refuses. Do not insert a multi-cycle END protocol
+or deassert ready without treating that as a real interface change. This candidate
+keeps the existing load event cadence.
+
+13.2 Eight coverage groups instead of a full reduction at END
+
+Retain the 256 presence bits so duplicate writes cannot impersonate complete
+coverage. Organize them into eight static groups of 32, with one full flag per
+group. A WRITE updates its selected group and computes that group's full flag
+from the post-write word. BEGIN clears the presence and group-full guards.
+END tests the eight group-full flags instead of reducing all 256 bits through
+the residency update cone.
+
+The last WRITE followed immediately by END is correct: the last WRITE's edge
+updates its group's full flag, so END sees the complete flags on the next edge.
+There is no hidden extra completion cycle. CRC and invalid-END precedence remain
+as before. A duplicate leaves its group no fuller than the presence bitmap says.
+
+This uses a few additional small guard bits to shorten a broad control decision.
+It is not a memory-capacity optimization. A one-bit M10K coverage table with
+read-modify-write and duplicate-write bypass would be a disproportionate first
+solution to 256 bits of rare-path state.
+
+13.3 Local slot selection
+
+Capture a one-hot loader slot selection on accepted BEGIN. Each static slot's
+residency register can consume its local select at END rather than repeatedly
+decoding a binary loader index through broad conditions. Keep binary slot
+identity where the external matching check requires it; the two encodings must
+be derived from the same accepted BEGIN.
+
+For lookups, sample generation and residency at lookup acceptance. Carry the
+accepted-BEGIN forwarding verdict with the request and RAM data. Do not recheck
+against the slot's later generation at response time, when a new load may have
+started. The status and data are one response record even on a stale answer.
+
+The palette model checks 200 sequences containing 71,200 writes, including
+repeats and the last-write/END boundary. The actual RTL tests must also exercise
+lookup overlap with accepted and rejected BEGIN, incomplete END, bad CRC,
+stray WRITE, back-to-back loads and reset during a load.
+
+13.4 Placement only after the cones are explicit
+
+If short local logic still routes badly, inspect the actual next specimen's
+clock skew and placement. A small palette region or local register duplication
+may help. Do not use a floorplan as a substitute for removing a 256-bit coverage
+reduction from a slot-update cone, and do not prescribe coordinates from an old
+fit whose placement is no longer the candidate's placement.
+
+===============================================================================
+14. RESPONSE TRANSPORT: OPTIONAL RESIDENT PAYLOAD POOL
+===============================================================================
+
+The dispatcher currently captures complete response data, token and metadata
+through a raw queue and class queues. Its own fitted attribution is about
+471 ALMs. A replacement can save wide fabric carriage, but it is not plausibly
+the source of several thousand ALMs on its own. [R02, R13]
+
+This packet is OPTIONAL and subordinate to the RAM portfolio. The default
+closure route may keep the current dispatcher if the proposed pool costs more
+ports, staging or RAM than its area saving justifies.
+
+14.1 One write, one scheduled read
+
+A candidate stores each accepted complete response in a resident pool and queues
+only its pool index and class. For the current widths, a complete record is
+approximately 64 data + 18 token + 40 metadata + 2 class = 124 bits. Use the
+actual selected typedef; do not hide padding or per-record status.
+
+Twenty slots can cover the current four raw positions and four positions in
+four class domains. A pool writer accepts at most one cache response per cycle.
+One read arbiter supplies class-head buffers. Because ingress supplies at most
+one response per cycle, one scheduled payload read per cycle can sustain the
+aggregate steady-state rate, provided head buffering hides read latency.
+
+This does NOT provide four simultaneous RAM reads. A design claiming four class
+outputs per cycle from this one memory is missing replication or banking. The
+existing class consumers may pop held heads simultaneously; those heads are
+local captures, not four reads from the pool on that edge.
+
+14.2 Read-port geometry must match the claimed RAM cost
+
+The proposed 124-bit simple-dual-port layout uses four 40-bit slices, with depth
+and padding chosen from the installed Cyclone-V templates. Verify the supported
+mode and physical count in the exact-tool experiment. A true-dual-port alternative
+priced as seven 20-bit slices is a different candidate and must be verified
+separately. Do not mix the SDP budget with a TDP port schedule. The source bank
+and newer vendor guidance are not a replacement for that mode check. [N09, N13]
+
+All slices share the same write record, read record, enable, valid and identity.
+The output capture joins them atomically. Use explicit registered reads and
+validate the selected read-during-write mode, even if lifetime assertions make
+same-record collision unreachable.
+
+14.3 There are two distinct ownership domains
+
+Pool ownership protects the RAM record until its complete payload is captured
+in a class-head buffer. Class occupancy protects the pending consumer result
+until that consumer accepts it. These can end on different edges.
+
+Return a pool slot only when its complete read result has been captured safely,
+NOT when the read was merely requested. That gives at most one pool-free event
+per scheduled read, avoiding a four-consumer/four-free-write queue problem.
+The class's occupancy credit remains charged until its consumer handshake.
+
+Count read-in-flight plus held heads within the class reservation capacity. A
+one-cycle RAM response and another capture boundary may require several local
+credits to sustain one read per cycle. Size the exact implementation from its
+cycle table. Do not retain four queued IDs and add four uncounted heads beside
+them while continuing to call the capacity four.
+
+14.4 Arbitration and adverse traffic
+
+Select a class with both a queued identity and reserved head space. A stalled
+class must not block all other ready classes merely because it owns the oldest
+pool record. Use bounded fair arbitration; test a permanently stalled class
+with continuous traffic in each other class. No ready class may starve because
+another class repeatedly returns credit at the most favourable edge.
+
+Preserve the explicit error-class terminal. An invalid class must not disappear
+from a queue or leak an owner. Test metadata/token alignment on all classes,
+not just the most convenient direct-colour path.
+
+14.5 Go/no-go
+
+Reject the pool if its SRAM slices, head registers, free list and arbitration
+erase the mapped register/ALM advantage or violate the 64-M10K texture portfolio.
+The current dispatcher is a valid fallback. Do not spend a full island fit merely
+to discover that an optional four-M10K pool cannot fit the already allocated
+memory budget.
+
+===============================================================================
+15. MEMORY ARITHMETIC FOR MATERIAL COMBINATION AND BILINEAR FILTERING
+===============================================================================
+
+Small exact products are useful DSP-to-memory exchanges. They are not an excuse
+to move arbitrary full-width arithmetic into enormous tables, and they are not
+expected to close the owner-control ALM gap by themselves.
+
+15.1 Exact unsigned byte product
+
+Define Q(x) = floor(x*x/4). For unsigned bytes a and b:
+
+  a*b = Q(a+b) - Q(abs(a-b)).
+
+The two arguments have the same parity, so their quarter-square truncations
+cancel exactly. Arguments fit a 512-entry table; a 16-bit table output covers
+the required values. The proposed implementation is a 512x16 ROM with two independent read addresses,
+intended to supply one such product per clock after its registered-read latency.
+Its one-M10K packing is a required exact-tool inference check, not arithmetic
+proof and not guaranteed by the source declaration. [N09, N13]
+
+The supplied model exhaustively checks all 65,536 byte pairs. The RTL experiment
+must prove that the two reads infer the intended single true-dual-port ROM and
+that the following subtract/round stage meets the selected clock. A constant
+array that becomes fabric LUTs is a failed memory substitution, even when its
+functional outputs are correct.
+
+15.2 Material COMBINE
+
+Replace the two actual product lanes with two independently addressed
+quarter-square ROM lanes, retaining two products per scheduled phase. That is
+a proposed two-M10K exchange for the two current DSPs, not an instruction to
+serialize them or to multiply the ROM count by every recipe call site.
+
+Place recipe scheduling before the shared lanes. Extract magnitude and sign
+for signed differences, compute unsigned products in the ROM path, then apply each original recipe's magnitude rounding, sign restoration,
+add, doubling and clamp in its specified order. Section 15.2A fixes that order.
+Recipe-level lerp/add/modulate identities must be checked against the current
+C++ oracle and V2, including endpoint weights and saturation. [R09]
+
+Integrate this with the resident-data combiner only after its functional phase
+schedule is stable. The additional ROM latency must be represented in phase
+reservations and continuation release. It cannot be hidden by asserting a
+completion valid early.
+
+15.2A Exact material rounding contract, independently checked again
+
+The current C++ material oracle is explicit, and its distinctions survive the
+ROM substitution. Do not unify these into one signed rounding helper. [N12]
+
+  UNIT_MUL(a,b) = min(255, (a*b + 128) >> 8).
+  MODULATE2X   = min(255, 2*UNIT_MUL(a,b)).
+  LERP(a,b,w): d=b-a; m=(abs(d)*w + 128)>>8;
+               clamp(a + (d<0 ? -m : m), 0, 255).
+
+MODULATE2X doubles AFTER the original unit multiply rounds. With a=1,b=64 it
+returns zero; doubling the raw product before rounding returns one and is wrong.
+For LERP, a=128,b=127,w=128 returns 127. Replacing its magnitude rounding with
+((d*w+128)>>8) returns 128. Both errors can pass broad random tests if ties and
+low products are not deliberately present.
+
+DETAIL_LIGHT has two rounded unit-multiply layers per RGB channel and retains
+sample0 alpha. DETAIL_MASK uses the s0/s1 RGB product and s0/s2 alpha product.
+MASK is a binary alpha predicate, not a hidden alpha multiplication. The value
+255 still represents 255/256, not exactly one. [N12]
+
+The new independent checks cover all 65,536 MODULATE2X byte pairs and 327,680
+LERPs at five selected weights. They expose 27,594 wrong results from the
+"double raw product first" mutant and 16,768 wrong negative-rounding cases from
+the signed-half-up mutant in that selected set. These are model comparisons,
+not a new RTL execution. The implementing candidate must repeat the comparison
+against the repository oracle and its actual response/phase pipeline.
+
+15.3 Bilinear interpolation: preserve the single final rounding
+
+The current one-channel lane evaluates:
+
+  A = (t00 << 8) + (t10 - t00)*fu
+  B = (t01 << 8) + (t11 - t01)*fu
+  result = ((A << 8) + (B - A)*fv + 32768) >> 16.
+
+Do not round A or B to a byte. That changes the interpolation law. The current
+implementation deliberately registers exact wide intermediates between the
+horizontal and vertical operations. [R14]
+
+For byte inputs/fractions, A and B are in 0..65,280, and B-A is in
+-65,280..65,280. Two byte-product ROM lanes can compute the horizontal signed
+differences. For the vertical product, split abs(B-A) into high and low bytes:
+
+  abs(B-A)*fv = (high_byte*fv << 8) + low_byte*fv.
+
+Use two more byte-product ROM lanes, restore the sign, add the shifted A and
+round ONCE. This gives a proposed four-M10K, zero-DSP one-channel filter while
+preserving the exact result. The supplied model compares 100,000 random legal
+bilinear cases in addition to the exhaustive byte-product check.
+
+Pipeline Q ROM read, product reconstruction and final rounding with complete
+token/channel identity. Do not return channel results from different pipeline
+stages under a shared current token. Preserve arbitrary downstream stalls using
+either correctly chained elastic stages or explicit terminal reservations.
+
+15.4 Do not confuse channel rate and footprint rate
+
+This is one CHANNEL job per clock, not one four-channel footprint per clock.
+The current design intentionally has one channel lane because the earlier
+workload counted roughly 180,000 filtered channel jobs. That old figure is not
+a licence to make every one of a later million sample footprints four-channel
+filtered work. Measure the selected scene/format/mip mix. [R14, R15]
+
+If filtered-channel demand exceeds the available lane cycles, an additional
+filter lane is a separate RAM/ALM allocation. A second zero-DSP lane still costs
+memory ports, ROM replicas, queueing and output assembly. Never advertise
+zero-DSP arithmetic as zero-cost throughput.
+
+15.5 Texture DSP portfolios
+
+Using the current functional arithmetic split, the straightforward qualified
+three-DSP RCP route gives:
+
+  RCP 3 + paired PERSPUV 6 + material 2 + bilerp 3 = 14 DSP.
+  Replace material products with ROMs:                      12 DSP.
+  Replace bilerp products with ROMs as well:                 9 DSP.
+
+These are planned component counts, to be verified in the actual composition.
+The current composed baseline is seventeen, not fourteen: the RCP swap has not
+been priced into that baseline merely because a leaf exists.
+
+For the conditional six-DSP dual-worker RCP route, both ROM substitutions give
+12 DSP. Keeping the three-DSP bilerp with that route would give 15 and breach
+the current local ceiling. The trade cannot be chosen one block at a time while
+ignoring its neighbours.
+
+===============================================================================
+16. BINDING, SAMPLING, CONTEXT AND CAPABILITY INTEGRITY
+===============================================================================
+
+Resource closure must not be purchased by measuring a narrower machine than
+the project intends. The current top and tests contain several distinctions
+that must be made explicit before calling the next specimen production-complete.
+This section is a capability audit, not authority to implement unrelated features.
+
+16.1 One binding input is not a complete binding service
+
+The current island exposes one fragment binding selector and global bind_base_i /
+bind_mode_i inputs. The sample path and planner consume these through the existing
+composition. A global live configuration input is safe only under a documented
+stability/epoch rule or an atomic capture at the proper request boundary. [R06]
+
+Trace exactly which accepted fragment/sample owns a binding base/mode. Hold a
+sample behind planner/cache backpressure while changing the next fragment's
+binding. If the older sample observes the newer configuration, repair the
+binding transport rather than blessing the current fixture as the contract.
+
+A preferred production extension is a compact binding handle plus generation,
+resolved through a synchronous binding table at a named planner stage. Capturing
+an immutable epoch reference can be smaller than replicating full base/mode data
+through every stage. The binding table's read/write ports and invalidation rules
+must be specified. Do not merely add another late owner sidecar lookup.
+
+Existing tests that deliberately drive a constant binding are still useful for
+that profile. They do not prove arbitrary binding changes while requests are
+in flight. Keep that distinction in the acceptance record.
+
+16.2 Three samples do not automatically prove independent coordinate sets
+
+The current top has one U/V numerator pair and derives sample work from it.
+Some arrays in the integration replicate that pair into multiple sample positions.
+That can be correct for a declared material/coordinate profile. It does not by
+itself implement every independently transformed U/V set implied by a broader
+material specification. [R06]
+
+Record which profiles share a denominator, which share coordinates, and which
+need additional products. The rate worksheet must include the actual P and S
+counts. Preserve full parallel U/V arithmetic for every independent pair that
+the selected contract requires. Do not reinterpret a sampling requirement as
+optional because it is inconvenient for the reciprocal/coordinate budget.
+
+16.3 Mip and palette fields must stay typed
+
+The LOD field is Q4.4 in an eight-bit carrier in the current top. A four-bit
+connection in the wrong nibble previously made nonzero mip levels unreachable.
+Test nonzero integer levels AND fractions. Keep the complete palette slot and
+generation alongside the sample from descriptor to planner to response join.
+Do not reconstruct either from an owner slot that may now mean something else.
+
+Test CLUT/direct/bilinear format classification using combinations that actually
+agree between binding and route class, plus deliberate disagreement/error cases.
+A positive error counter in a deliberately inconsistent fixture is not proof of
+normal production operation; zero on a path never exercised is not proof either.
+
+16.4 The context remains opaque
+
+The owner stores and carries the full caller context, but the public island
+output exposes a narrower tag. That output alone cannot prove the high context
+bits survived. Verify the full context at the owner boundary or through a
+verification wrapper. Do not pack recipe or weight into caller-owned bits.
+Do not increase the shipping output width merely to make a test convenient;
+a simulation-visible probe can establish the internal contract without adding
+unnecessary package-boundary timing paths. [R05, R06]
+
+16.5 Epoch wrap is a system obligation
+
+The local owner fence and generation window are retained, not declared magically
+complete by the smaller encoding. The current source explicitly distinguishes
+local quiet from acknowledgements by retained external producers. Old traffic
+must not survive a namespace reuse and later match a new generation. [R05]
+
+Before full integration acceptance, identify every producer capable of retaining
+an old owner/sample token: arithmetic queues, sample planners, cache replay,
+fill transport, palette/response queues, AUX provider and final return path.
+Define stop/ack/drain semantics for each. An idle diagnostic is not a promise
+that an external source can never emit a previously accepted old response.
+
+Do not widen generation and call the wrap problem solved; that postpones reuse.
+Do not add an expensive global quiet reduction back to normal admission either.
+Normal credits remain local. The exceptional fence owns the global drain.
+
+===============================================================================
+17. AN HONEST ALM, REGISTER, DSP AND MEMORY PORTFOLIO
+===============================================================================
+
+A successful collection of leaves can still exceed the device. Allocate the
+selected whole texture composition before adopting attractive local trades.
+Use mutually exclusive accounting groups so moving a block across an interface
+does not make its cost disappear.
+
+17.1 Proposed ALM allocation -- a design budget, NOT a forecast
+
+  Group                                                     ALM allocation
+  Completion complex: owner, result/ready transport, COMBINE          1,900
+  Paired U/V arithmetic and its local result storage                   800
+  Default qualified reciprocal route                                1,000
+  Planner and captured binding work                                   700
+  Cache hit/miss machinery and payload banks                          950
+  Response transport, palette and one-channel filtering               800
+  AUX machinery, including div6                                      500
+  Remaining glue, admission, descriptors, expansion and Mosaic        850
+                                                               ----------
+  TOTAL                                                             7,500
+
+The grouping is a target partition for the selected implementation. It does not
+claim that the owner alone can hit 1,900 while another 537-ALM combiner remains
+outside that number: COMBINE is INCLUDED in the completion-complex allocation.
+Likewise AUX includes its divider; reciprocal includes its own ROM and queues.
+Top glue must not be charged inclusive of children already in other groups.
+
+The completion target is deliberately demanding. Replacing its topology, not
+just removing 320 logical phase bits, is what could make it plausible. Use mapped register/memory/logic structure to screen out candidates that have
+not removed the intended machinery. Mapping is not a measurement of this fitted
+ALM allocation; do not claim a candidate passes or fails 1,900 fitted ALMs from
+an estimated or absent map ALM column. Characterize the completion boundary when
+its physical result can select the architecture. The budget is not a post-fit rule chosen to flatter the result.
+
+The six-DSP reciprocal alternative may require a larger ALM allocation. It has
+no automatic claim on unused room. Rebalance against measured savings or reject
+that particular implementation. Never change 7,500 to accommodate it quietly.
+
+17.2 Register accounting
+
+Retain the 9,000-register redline. Record mapped and fitted counts separately.
+Wide queues, pipeline replication, output captures and inferred small memories
+must be attributed. Logical calculations such as 320 phase bits, 696 CQ bits or
+880 immutable context bits identify structure; they are not additive fitted
+register savings.
+
+The 2,400-register PERSPUV MapOnly reduction is actual measured leaf evidence,
+but the composed saving still depends on the chosen profile and fitter. Do not
+apply a universal map-to-fit multiplier. The old and new counts are precisely
+why a controlled same-stage comparison is valuable.
+
+17.2A Fitted-register allocation to earn, not a prediction
+
+  Completion complex including resident COMBINE                  2,200
+  Paired U/V plus its terminal holding                           1,150
+  Qualified default RCP inclusive                               1,450
+  Planner and its captured binding work                            700
+  Cache request/hit/miss/response machinery                       1,200
+  Response routing, palette and one filter                          900
+  AUX including div6                                               650
+  Remaining glue, descriptors, admission, expansion and Mosaic      750
+                                                               ------
+  TOTAL                                                          9,000
+
+These groups match the ALM partition and are mutually exclusive. They are
+aggressive design allowances. No line above has been fitted as a new candidate.
+An actual implementation can redistribute registers between groups, but cannot
+silently exceed the whole-island ceiling or omit newly introduced staging.
+
+The late register attribution makes cache and response payload queues worth a
+specific experiment rather than blanket rejection because they are shallow.
+In the selected four-lane, SRCW=18 cache, the raw request record is 4 enable bits
++ 128 address bits + 18 identity bits = 150 bits. Four request records are 600
+logical bits; four 64+18-bit response records add 328. Reset-free synchronous
+queue bodies with reserved/captured heads can move some of these 928 payload
+bits into RAM. Address/valid/credit controls stay explicit. [N07]
+
+This is not a promise of 928 fewer fitted registers. The new heads/prefetch
+records cost registers, and a four-deep RAM is expensive in whole physical
+blocks. Straight 40-bit SDP slicing would provision four plus three M10Ks before
+any shared packing; exact supported mode/inference must be checked. Add that
+seven-block candidate to the RAM bill before adopting it. Do not infer the net
+benefit from a logical bit count or from the old queue's source width alone.
+
+Use at most one such cache/response staging experiment if the post-T1/T3 mapped
+register attribution still makes it necessary. Prefer a single-record, properly
+reserved head over a new multi-record staging queue that recreates the payload
+just moved. Do not make the cache and class dispatcher share one payload RAM
+unless the two write/metadata timing domains have actually been unified and
+the resulting port/lifetime protocol has its own tests.
+
+17.3 Memory is not an unlimited residual pool
+
+Gate 2 already uses 49 M10Ks. A conservative illustrative portfolio that assumes
+a +7 M10K reciprocal replacement, +2 material ROMs and +4 bilerp ROMs reaches:
+
+  49 + 7 + 2 + 4 = 62 M10Ks.
+
+That is conditional arithmetic, not a prediction of the exact current eight-
+context replacement delta. It shows how little room remains. Add the optional
+four-M10K response pool and the same portfolio becomes 66, beyond the local
+64 ceiling. The pool is then rejected unless measured deletions reclaim at least
+the needed capacity without breaking ports or timing.
+
+The resident-data combiner removes a private payload plane and some transport
+state, which might reclaim memory. No reclaimed block is credited until mapping
+shows the selected old instance disappeared and fitting confirms the physical
+packing. A few thousand fewer logical memory bits may release no whole M10K.
+
+The full console also needs video buffers, geometry/terrain stores, FIELD vector
+register files, residency, detail-normal data and other consumers. Subtracting
+texture's RAM count from the FPGA capacity does not give texture ownership of
+all the remainder. The global memory-first portfolio governs that allocation.
+[R16, R20]
+
+17.3A Select a portfolio; do not add every attractive option
+
+The fastest path to the local fourteen-DSP limit does not require both colour
+ROM rewrites: a qualified six-to-three RCP replacement alone would change
+17 to 14, if its composed mapping preserves the measured DSP change. Paired
+PERSPUV changes no DSPs. This makes a useful INTERMEDIATE texture portfolio:
+
+  baseline 49 M10K + illustrative RCP delta 7 = 56 M10K;
+  retain existing material/filter DSPs; resulting DSP target 14.
+
+That leaves eight local RAM blocks for a justified response pool or cache queue
+experiment before any reclaimed blocks are credited. The more ambitious
+nine-DSP colour-ROM portfolio reaches an illustrative 62 M10K BEFORE either
+of those choices. Both portfolios use the same 64-M10K ceiling. They are
+alternatives to price, not additive guaranteed savings.
+
+The global <=94-DSP rescue may eventually require the lower texture DSP choice.
+Record a fourteen-DSP intermediate honestly and reserve the later change in the
+global bill. Do not declare the global nine-DSP allocation achieved because the
+local texture hard limit is met. Conversely, do not throw away useful local
+register reductions to pre-empt a global memory allocation never approved.
+
+One late report says the RCP replacement "also removes roughly 870 ALM".
+The old reciprocal's own attributed logic is about 870 ALM, but the replacement
+is not free: it adds its own arithmetic, queues, control and memory. The matched
+NCTX=12 leaf delta is evidence at that leaf profile, not a license to subtract
+the entire old composed entity. Keep only the composed measured NET delta.
+[N15, R10]
+
+17.4 Every memory row gets a port contract
+
+For each proposed memory list:
+
+  - payload width, logical depth and physical mode;
+  - number of physical replicas and width slices;
+  - named writers, maximum writes per cycle and collision policy;
+  - named readers, maximum reads per cycle and return latency;
+  - reset/initialization strategy and validity guard;
+  - required read-during-write behaviour or proof of noncollision;
+  - output-stage capacity and the event that releases a reservation;
+  - mapped inferred bits and fitted physical block count, separately.
+
+M10K inputs are synchronous, and supported modes have different widths and
+port capabilities. Clock/read enables are supported; an old comment claiming
+conditional reads categorically cannot infer RAM is not a device rule. The
+exact Quartus version and RTL shape still decide inference. Map-only RAM slices
+are not yet a guarantee of final fitted block assignment. Consult the installed
+Quartus 17.0.2 templates and actual native summaries; newer documentation is
+background guidance, not exact-version packing evidence. [N09, N13]
+
+17.5 Diagnostics do not get a blanket exemption or blanket deletion
+
+Keep the required error classes, conservation counters and high-water marks.
+A diagnostic used to prove a property must actually observe that property and
+have an exercised denominator/positive control. Counters that must update by two
+or three on simultaneous events use one combined delta and one assignment.
+
+Move counters off long live combinational cones by capturing event deltas where
+semantically permitted. Mark the counter latency. Do not delete counters to make
+a reported area target pass while removing the only evidence that a protocol
+still works. Conversely, avoid shipping redundant shadow payload solely because
+a verification-only comparison still needs it.
+
+===============================================================================
+18. VERIFICATION: WHAT MUST FAIL BEFORE IT MAY PASS
+===============================================================================
+
+Keep the existing owner, identity, join, arithmetic, palette, dispatcher,
+expander and composed suites. The inspected test inventory contains the named
+leaf and composition tests in tests/texture, including island_composed_directed,
+island_v3_fault_directed, desc_join_expand_directed, ident_encoding_directed,
+material_combine_v2_diff and the earlier implementations' references. Resolve
+actual CMake target names before wiring a new runner; do not invent an executable
+name from a filename. [R18]
+
+The agent's A0 closeout records oracle119, production126, laboratory132, fault31
+and 392 paired byte-identical records. Those are recorded tests, not reruns by
+the author of this brief. Refresh them on the candidate. [R20]
+
+18.1 External semantic comparison
+
+Drive identical accepted-fragment content into the old and candidate machines,
+allowing their ready timing to differ. Maintain a stimulus index per DUT so
+neither silently receives fewer jobs. Compare the complete ordered retired
+stream and all specified failure outcomes. Keep source payload/reference data
+independent of the candidate's internal storage choices.
+
+Cycle-by-cycle equivalence is appropriate only for boundaries whose fixed timing
+contract is intentionally preserved. It is not the right comparison for the new
+compact COMBINE handshake. Throughput and latency are measured separately.
+
+18.2 Owner/control adversarial matrix
+
+At minimum, exercise:
+
+  a. All 64 owners live; external sink blocked; no 65th owner accepted.
+  b. Same-edge output and attempted admission at full capacity.
+  c. TMU and AUX completion for the same owner on one edge: one ticket.
+  d. TMU and AUX completion for different owners: both retained.
+  e. Zero-work admission alongside both completion streams.
+  f. Back-to-back duplicate terminals across every forwarding-window position.
+  g. Unissued and unrequired source returns, including sample-index 3.
+  h. Future identity at snapshot becoming live before claim.
+  i. Live identity at snapshot retiring before claim.
+  j. Same slot, different generation; generation255-to0; repeated full windows.
+  k. Final return after reservation but before actual COMBINE acceptance.
+  l. Duplicate final return while the first is claimed but unpublished.
+  m. Reset in each return/read/arithmetic phase and during a namespace drain.
+  n. Old external producer response retained across the proposed wrap barrier.
+
+Required mutations include removing current membership, removing snapshot
+membership, matching only slot, deleting recent-claim forwarding, asserting
+committed at claim instead of publication, and equating reservation with issue.
+Each must fail an observable contract check, not just change an unused counter.
+
+18.3 Resident COMBINE matrix
+
+Run every recipe across counts0..3, all legal AUX choices, endpoint weights,
+saturation corners and representative randomized values. Stall the arithmetic
+scheduler, final receiver and external output independently. Force an owner to
+wait through several other contexts' continuations, then verify every repeated
+resident read still belongs to that owner.
+
+Assert that no owner-plane read starts before the required payload publication;
+that each accepted compact job owns one context; that a continuation cannot
+reenter NEW; that final output holds stable under stall; and that context release
+does not release the owner's externally visible lifetime.
+
+Mutate the phase's owner tag, free an owner at job acceptance, free a context
+before its final has a destination, or let two queue paths select the same owner.
+The tests must detect all four independently.
+
+18.4 Cache and response matrix
+
+Exercise all-hit sustained traffic with a blocked output, bursts at the exact
+credit ceiling, misses with one and two probes in flight, repeated same-line
+multicast, conflicting lines at the same index, disabled lanes, and fill arrival
+at the earliest legal edge. Stall the fill request and fill data independently.
+
+Assert response identity and DATA, not just conservation counts. The known A-data,
+A-token, B-metadata failure can conserve counts perfectly. Exercise that shape
+through the real metadata join and through every class queue.
+
+For the optional pool, mutate free-on-read-request instead of free-on-capture,
+corrupt one width slice, exhaust one class while others run, and force simultaneous
+consumer pops. Prove the actual free-list write rate matches the implemented
+memory ports.
+
+18.5 Palette and arithmetic matrix
+
+Palette tests include accepted BEGIN versus refused same-generation BEGIN on
+the lookup edge; 255 distinct writes plus duplicates; last WRITE immediately
+followed by END; invalid END identity; CRC failure; and reset/reload while old
+lookups remain in flight.
+
+PERSPUV tests cover the entire generic exponent field and the natural reciprocal
+domain, saturated and nonsaturated products, and holding the paired output.
+The exact rescale alternative must match the OLD wrapped law, including its
+unusual shift-zero branch, not a newly written mathematical reference.
+
+Bilerp tests must contain cases that distinguish single final rounding from
+intermediate horizontal rounding. Material tests must distinguish signed and
+unsigned difference treatment and the precise clamp/doubling order.
+
+18.6 Rate evidence and honest negative results
+
+Run a production-shaped mixed trace with nontrivial cache misses, palette events,
+AUX delays, nonzero mip levels and all required material source counts. Report
+accepted/delivered counts, each unit in section10, cycles, stall reasons, occupancy
+peaks and the actual selected configurations.
+
+A test with constant depth proves functionality of memo hits, not useful real
+reuse. A test with no output stalls proves the easy reservation case. A test
+with zero rejected requests cannot prove the rejection detector works. Keep
+positive and negative controls attached to every zero-error claim.
+
+===============================================================================
+19. IMPLEMENTATION PACKETS AND FIT-SPARSE CHECKPOINTS
+===============================================================================
+
+The campaign allows at most THREE ARCHITECTURAL full-island specimens before
+an explicit review. Use one fixed seed during architectural A/B comparisons.
+This is a planning cap, not an instruction to fit candidates the cheap gates
+already refute, and not a time estimate.
+
+Final qualification is a SEPARATE, explicitly budgeted cost. The inherited seed
+policy calls for seeds 1, 2 and 3 once a selected candidate first passes its
+target, with every result published. If one of the three architecture specimens
+is exactly the final candidate/constraints at seed 1, its result can be reused
+and only two further confirmation runs are needed. Thus the ordinary upper
+planning allowance is three architectural runs PLUS two confirmation runs,
+not a promise of three physical fits total. [N16]
+
+If the minimum is within 2 MHz of the relevant acceptance floor, the earlier
+rule calls for two more seeds on the composed island/full composition. Record
+that conditional cost; do not hide it or silently drop the rule to keep a nice
+fit-count headline. Do not run seeds on every intermediate failed architecture.
+Final renderer-neighbour integration is its own boundary, not magically covered
+by the isolated texture seed set.
+
+19.1 Packet T0 -- repair the evidence and pin the reference
+
+Deliver: the corrections in section2, a selected profile manifest, frozen Gate-2
+reference identity, current test baseline and a demand-unit worksheet. Reuse the
+accounting work already landed. No new global architecture, no mass leaf run.
+
+Gate: functional arrays are not falsely classified absent; old/new counters have
+named events; each required performance quantity has a trace source or explicit
+unknown. A full fit is not needed to complete T0.
+
+19.2 Packet T1 -- paired math and local admission
+
+Integrate the already built pairpipe into a candidate wrapper at the real token
+width. Add the small captured admission-job boundary. Qualify the selected RCP
+profile in the same functional chain. Build the optional exact rescale candidate
+only as a controlled alternative after pairpipe itself is established.
+
+Gate: complete output pair equivalence, depth-zero contract, full-credit stall
+and reset checks, matched MapOnly comparison and actual phase/job rate evidence.
+No standalone full-island fit for the admission queue or rescale experiment.
+
+19.3 Packet T2 -- owner locality
+
+Implement exact membership factoring, phase encoding and local/shared event
+decoding. Keep the externally visible owner contract and the existing publication
+latency first. Use the old owner as reference with reconstructed logical masks in
+the verification adapter.
+
+Gate: adversarial owner matrix, forwarding mutations, full-window/wrap tests,
+per-event classifications and a controlled map showing what state/mux structure
+changed. A smaller source file is not this gate.
+
+19.4 Packet T3 -- resident completion complex
+
+Replace wide COMBINE carriage and immutable context copying with the compact job
+and resident phase-read architecture. Join material ownership to the same phase
+read. Keep mutable scratch and terminal reservations explicit.
+
+Gate: every recipe exact, ready/issue/final events distinct, output ordering under
+long stalls, memory-port plan executable, removed storage visible in synthesis.
+Use one representative completion-complex characterization wrapper for physical
+questions that cannot be answered by mapping. Do not fit every private bank.
+
+CHECKPOINT C-A: T1 + T2 + T3 as one integrated candidate. Before launch, its
+rate route must be feasible and its explicit structural/port inventory must not
+already contradict the resource portfolio. Its actual fitted ALM/register
+compliance is the question the fit answers, not a prerequisite that can be known
+from mapping alone. Preserve all native entity, RAM, DSP and timing reports from
+this checkpoint. The decision is whether the replacement completion/math topology
+has earned continued closure work.
+
+If a co-critical palette/cache path is already a known blocker and their tested
+changes are ready, include them in this checkpoint rather than fitting a
+specimen known to retain the same clock ceiling solely for ritual attribution.
+State the combined delta honestly.
+
+19.5 Packet T4 -- independent timing families
+
+Implement the cache cold-miss split and palette grouped coverage/local slot
+control. Keep the hit cadence, load cadence and response reservation contract.
+Use directed leaf/seam tests and the existing cache/palette bodies as references.
+
+Gate: exact data/metadata/status under all stalls, unchanged hit throughput,
+priced added miss cycles, native path analysis showing the targeted cones are
+actually changed. Do not assume an old source bit still limits the new fit.
+
+19.6 Packet T5 -- selected DSP-to-memory trades
+
+Integrate material ROMs and the exact bilerp ROM path only after validating their
+inference, phase latency and full memory portfolio. Evaluate the optional
+response pool with a controlled map; keep it only if it pays for itself within
+the local/global RAM allocation.
+
+Gate: byte/recipe/filter equivalence, channel throughput, reserved heads, no
+invented ports, fitted/mapped quantities kept separate. The pool is not mandatory
+for declaring the architecture intelligently implemented.
+
+CHECKPOINT C-B: remaining T4/T5 changes together with any justified residual
+owner/top-glue changes from C-A. One combined island fit answers whether the
+selected memory/locality architecture meets area and approaches or reaches timing.
+
+19.7 Packet T6 -- closure and real integration boundary
+
+Use the C-B path/area report to choose one final targeted physical action. A
+bounded local pipeline/placement change, proved storage deletion or a measured
+resource allocation adjustment can justify the final candidate. Random seed
+search is not an architecture plan.
+
+CHECKPOINT C-C: final selected architectural specimen. Then perform the
+required confirmation seeds on that SAME implementation, target period and
+boundary, reusing a valid identical seed-1 receipt. Publish minimum, median and
+maximum. Do not substitute a new RTL revision at seed 2 and call the comparison
+a seed sweep. Keep the separate renderer-neighbour boundary and its 105-MHz
+acceptance distinct from the 115-MHz texture qualification. [N16]
+
+The fit runner has just gained explicit fitterSeed/seedSource recording. Reuse
+that landed change; do not write another seed parser. Older labels already
+contain some seed information, so missing a dedicated JSON field does not prove
+that every older run lacks provenance. The old RCP service has one recorded
+three-seed comparison, but its spread is not a numerical noise bound for a new
+V3 reciprocal or a new island. [N15, N18]
+
+If three expensive checkpoints have not produced a credible route, hold a
+specific architecture review using the measured residual entities and traces.
+Do not silently start a fourth and fifth round of tiny edits. Do not declare a
+whole-console rewrite merely because one owner candidate failed.
+
+19.8 Start/stop matrix: no more accidental permission deadlock
+
+  Situation                             Required next action
+  No fit alive, T0 complete             Build/test T1 and owner-local prototype.
+  An isolated snapshot fit is alive     Work on candidate files outside its input
+                                        snapshot; read incoming owner direction.
+  A memory field has too many reads     Keep it in fabric or price explicit
+                                        replicas/retiming; do not block all work.
+  Pairpipe/control candidate passes     Integrate the candidate boundary; preserve
+  function but lacks area evidence      its rollback and request a targeted map.
+  Mapping shows no structural deletion  Fix or abandon that candidate before a
+                                        full island measurement.
+  Rate model fails uncached RCP route   Price exact reuse or the dual-worker route;
+                                        continue independent owner/cache work.
+  Local ALM allocation is missed        Read actual attribution; choose one
+                                        remedy, do not quietly move the ceiling.
+  External feature/deadline conflict    Produce the precise counterexample and
+                                        priced options; stop only that choice.
+
+The global reduction queue remains deferred. The scope rule does not prohibit
+internal texture architecture changes, leaf tests, or useful texture mapping.
+Do not append another essay declaring implementation unauthorized when the
+proposed change stays within these explicit boundaries.
+
+19.9 A fit earns its place by answering a decision
+
+Before launching, write one sentence: what decision can this result change?
+Examples: keep the resident completion complex; select the response pool; confirm
+the new palette/cache boundaries; accept the final island. "We changed something"
+is not a sufficient reason.
+
+Do not rerun the cancelled D0 baseline. Do not fit the old oracle solely to make
+a graph prettier. Do not fit all 99 registered targets while texture waits.
+Target registration and measurements are different tasks. [R21]
+
+===============================================================================
+20. SOURCE, BUILD AND FIT CUSTODY
+===============================================================================
+
+A full fit should run from a read-only/frozen specimen in an isolated worktree
+or copied source closure. Keep the source selection, parameters, macros,
+initialization files, QSF/QIP and SDC tied to the run. Editing only an HDL comment
+may not alter hardware, but it still changes a byte identity; account for that
+rather than calling a hash mismatch mysterious.
+
+The source digest is necessary but not sufficient: two identical source files
+with different parameters or constraints are different experiments. Preserve
+both the source-content identity and the configuration identity.
+
+20.1 Protect the specimen, not the entire development session
+
+Develop other candidate files outside the fit's closure while it runs. With an
+isolated snapshot, the main working tree need not be frozen merely because
+Quartus is reading another directory. Pull owner direction safely; do not allow
+a pull to rewrite an active live-tree specimen. Documentation can be read without
+merging HDL into a running fit's inputs.
+
+Use one Quartus job at a time on the current constrained development machine.
+A second waiting shell is not necessarily a second fit, but the launcher must
+prove only one actual compiler/fitter is active. Do not rely on a task's age or
+an incomplete process-name filter as the sole liveness signal.
+
+20.2 Reuse the repaired delivery and fit tools
+
+The latest branch repaired the machine's conflicting Git-for-Windows/MSYS2
+line-ending interpretation and the broken upstream-ref resolution in the
+instruction-delivery script. The recorded pre-fix effect was phantom dirty
+files and missed same-branch instructions. Preserve the repair; do not restart
+another broad monitoring/checker project. A0 is already complete. [N01]
+
+The fit runner exposes -MapOnly, -RowLabel, -TopParameters, -Seed and
+-KeepWorkspace. Map-only requires its own label so it cannot overwrite a full
+fit row. Use the actual selected target and a real PowerShell array for separate
+parameter entries; a single malformed comma-bearing string previously poisoned
+a qualification attempt. [N10]
+
+Example shapes, with names verified against the current target registry:
+
+  & tools/quartus/run_block_fit.ps1 -Module '<registered candidate>' `
+      -MapOnly -RowLabel '@residency-map-a' `
+      -TopParameters @('NAME_A=VALUE_A', 'NAME_B=VALUE_B')
+
+  & tools/quartus/run_block_fit.ps1 -Module 'zhao_texture_island_v3_top' `
+      -RowLabel '@residency-ca' -TopParameters @('MIGRATION_SHADOWS=0')
+
+The first is a command SHAPE, not a runnable existing target: register the new
+candidate's real source closure before invoking it. Never leave placeholder
+parameters in a real QSF. Check the generated parameter assignments and source
+snapshot before committing an expensive run. Do not use elapsed shell age as
+proof of a live fitter, and do not kill a healthy compiler on one heuristic.
+
+Keep current snapshots/configuration provenance. New documentation by itself
+should not hold up architecture work or consume a full fit.
+
+20.3 Preserve diagnostic products before reuse
+
+Archive the native fit summary, full resource utilization by entity, RAM summary,
+DSP mode/decomposition summary, timing paths with endpoint classes and detailed
+worst-path nodes. Keep compile failures and killed-run logs with their precise
+stage and reason. A failed structure/budget verdict can still contain a valid
+physical measurement; a killed run with no completed stage cannot supply one.
+
+Do not overwrite @g2-prod native reports with a new specimen under an unlabeled
+path and then use the old label in prose. Use specimen-specific filenames or a
+run directory with immutable manifest.
+
+20.4 Record failures without overdiagnosing them
+
+The earlier production-top MapOnly was deliberately stopped after prolonged
+elaboration with suspicious system behaviour. That is not proof that the design
+can never be synthesized on any machine, and it is not a valid completed whole-
+console resource count. The present campaign uses manageable subsystem boundaries
+and explicit accounting; it does not promise that a future full console fit is
+unnecessary forever. [R20]
+
+A sparse resource census is useful for planning, but no per-leaf sum proves
+integrated timing, routeability or exact DSP packing. Preserve uncertainty until
+the appropriate composition has been measured.
+
+===============================================================================
+21. FAILURE DECISIONS AND EXIT CRITERIA
+===============================================================================
+
+21.1 What earns retention
+
+Retain a replacement when its semantic gates pass, its throughput supports the
+required trace, and its total resource/timing contribution is preferable in the
+selected portfolio. A DSP reduction that explodes ALMs or consumes unavailable
+read ports is not preferable. A register reduction with no ALM gain may still
+help routing, but record the real benefit rather than inventing a cell saving.
+
+21.2 What to do when the owner reduction is smaller than hoped
+
+First compare the actual decoded-event/membership/queue costs. Check whether
+the compiler merged old arrays already, whether the new phase encoding merely
+added decode logic, whether control fanout duplicated local terms, and whether
+the resident combiner truly removed the wide and immutable payload copies.
+
+If phase encoding alone does not pay, it can be rolled back independently while
+keeping exact membership factoring and the resident completion topology. The
+proposal is a set of testable replacements, not a doctrine that every new module
+must ship because it was written.
+
+If the whole completion complex remains too large, examine its actual read-port
+and event schedule. A carefully pipelined banked control candidate may then be
+worth designing. Its read expressions must move atomically, and its multiple
+event writers must be funded. Do not jump from "fabric still large" to "one
+M10K should hold it all."
+
+21.3 What to do when area succeeds but clock does not
+
+Read the new worst paths. Do not reapply the old credit-fanout diagnosis from
+Packet C. Distinguish arithmetic depth, high fanout, memory-to-control capture,
+clock skew and physical distance. Remove or partition the actual cone. Avoid
+false paths or multicycle exceptions unless the real protocol permits them and
+the corresponding hold/capture obligations are proved.
+
+A pipeline stage must carry its complete record and its credit. A delayed ready
+without storage is not a pipeline. A delayed write enable without data/identity
+alignment is the D0 bug in another form.
+
+21.4 What to do when rate fails
+
+The reciprocal and filtered-channel worksheet is binding evidence. A 100-MHz
+clock does not rescue a worker with insufficient launches. Select a priced
+higher-throughput architecture, establish exact reuse in the real workload, or
+surface the unresolved requirement conflict. Do not lower the workload secretly.
+
+A memo with poor hit rate can be removed. A dual-worker prototype with excessive
+ALMs can be rejected. Those results improve the design decision; they do not
+justify pretending either candidate meets a deadline it misses.
+
+21.5 Texture completion means all of the following
+
+  - Correct selected capabilities and arithmetic, including all required sample,
+    format, mip, palette, AUX and error behaviour.
+  - Owner lifetime, rejection, generation/fence and ordered output obligations
+    established at the intended integration scope.
+  - Selected resource limits met without omitted children, shadow duplicates,
+    hidden provider hardware or unpriced port replication.
+  - Operational timing and the applicable qualification headroom met under
+    their actual boundary constraints. Carry the 115-MHz texture qualification,
+    required seeds and later 105-MHz renderer boundary unless a later adopted
+    same-boundary ruling explicitly supersedes them.
+  - Required production-shaped frame workload demonstrated with adequate reserve.
+  - Source/configuration identity and native reports retained.
+
+Only then freeze the accepted texture reference and proceed to the global
+memory-first rescue's post-texture packets. A0 accounting completion is not
+texture completion. Gate-2 area improvement is not texture completion either.
+
+===============================================================================
+22. DIRECT AGENT HANDOFF
+===============================================================================
+
+Implement this as the NEXT TEXTURE venture. Do not start V4 from zero and do not
+resume the global projection/pose programme yet.
+
+FIRST, retain the agent's already-landed correction: clm_q, cbi_q and fcl_q
+are functional state. Correct the remaining false implication that whole-array
+self-hold assignments require 64 independent RAM writes. Use section 2's event
+inventory, not a blanket RAM conversion. Required masks have one writer but
+several readers; compact multi-event phases remain fabric initially. A0 is done;
+do not redo the census or the delivery tooling.
+
+Use this revision as the one texture closure plan, not a second worklist beside
+the previous closure document. No current source change or local timing boundary
+is forbidden merely because it is not named in the old Decrufter packet list.
+The unchanged external contracts and explicit resource/rate gates are the limits.
+
+SECOND, pin Gate2 and the current tests, then measure the workload's actual units.
+Count reciprocal jobs, coordinate pairs, footprints, filtered channels, fills
+and COMBINE phases separately. Four arithmetic launches per uncached nonzero
+reciprocal are a real capacity constraint, not a context-count tuning issue.
+
+THIRD, qualify the existing paired PERSPUV and captured admission boundary.
+The matched MapOnly reduction is already substantial. Do not reimplement its
+proven scheduler. Keep the exact arithmetic and seventeen-record total credit.
+The alternate quotient/round-bit rescaler is an independently gated experiment.
+
+FOURTH, build the compact owner and resident-data completion complex. Replace
+wide/duplicate carriage, not the lifetime law. Exact window factoring and phase
+encoding are the first control candidates. COMBINE accepts a compact owner job
+and reads immutable resident result/material planes per phase. It stores only
+mutable execution state. Reservation is not actual issue; claim is not commit;
+internal completion is not external owner release.
+
+FIFTH, split cache miss management away from the hit path and shorten palette
+load completion using hierarchical coverage and local slot control. These are
+independent near-critical paths and must not be ignored because RCP also changes.
+
+SIXTH, add exact colour ROMs and the optional response pool only when their actual
+port/latency/resource bill fits. A plausible 62-M10K portfolio cannot afford an
+unfunded four-M10K pool. A DSP saving that creates an ALM or RAM failure is not
+closure.
+
+Use the T0-T6 gates and C-A/C-B/C-C checkpoints. Start T1 and the latency-neutral
+owner candidate after the bounded T0 reconciliation; do not wait for a redline
+waiver. There is no assertion that one isolated module must save the full gap.
+Internal pipeline and candidate interface redesign are the authorized work of this proposal, subject to the
+stated tests and unchanged external/deadline requirements. Do not convert every
+such edit into another permission request. A genuinely different DSP allocation,
+public fixed-latency contract or frame-rate requirement still needs an explicit
+priced decision; it is not permission to choose the cheap side silently.
+
+Keep operating clock, texture qualification and renderer integration separate:
+100 MHz runtime; retain the original 115-MHz texture qualification and three-seed
+policy unless an explicitly adopted later same-boundary rule supersedes them;
+105 MHz is the separate reduced-renderer integration floor. The ordinary fit
+allowance is three architecture specimens plus two final confirmation seeds
+when the identical seed-1 result can be reused. Do not promise only three total
+runs by omitting required evidence. Close-margin extra seeds remain conditional.
+
+Before each expensive fit, record the decision it can change. During a fit,
+continue work outside its frozen source closure. Do not run a broad leaf sweep
+or a second competing Quartus process. Bank native reports before moving on.
+
+At each checkpoint report four concrete things:
+
+  1. What old physical structure disappeared?
+  2. What new structure, memory mode and port schedule replaced it?
+  3. Which behavioural/rate obligations were re-proved, and which remain open?
+  4. What did mapping/fitting actually measure for this specimen?
+
+If an allocation misses, identify its measured residual entity. Do not move the
+redline, invent a forecast, or declare the whole console doomed. The aim is a
+fundamentally leaner texture architecture built from the V3 contracts already
+paid for, not another collection of patches around the current topology.
+
+===============================================================================
+23. INDEPENDENT CHECK RESULTS AND THEIR LIMITATIONS
+===============================================================================
+
+The accompanying checks/check_architecture.py is a standalone Python 3.10+
+script using only the standard library. It runs deterministically with seed
+20260909 and writes a JSON receipt. It does not import repository RTL or call
+Quartus/Verilator. Its models are deliberately separate from implementation
+claims so their results cannot be mistaken for a synthesized candidate.
+
+Nine retained base groups passed again in this revision:
+
+  Window membership: 2,229,920 comparisons; three false-identity mutants rejected;
+    snapshot-only/current-only counterexamples included.
+  Owner phase encoding: 22,500 decision cases and 50,000 transition cases;
+    calculated logical state reduction 320 bits, no mapped claim.
+  Palette coverage: 200 sequences, 71,200 writes; duplicate-write and boundary
+    cases exercised.
+  PERSP rescale: 204,032 cases across the full six-bit exponent input;
+    naive narrowing rejected; no measured mapping gain claimed.
+  Quarter-square/filter: all 65,536 unsigned byte pairs plus 100,000 bilinear
+    cases with the original single final rounding.
+  Cache reservation model: 80,000 cycles; 39,117 admitted and 39,117 delivered;
+    invariant checked during stalls/misses; missing refund rejected.
+  Resident combiner model: 64 owners, 127 phase reads; 696 logical wide queue bits
+    and 880 immutable context payload bits identified as avoided structures,
+    not fitted-register deltas.
+  Dual-worker schedule model: 12,000 jobs, 32 contexts, assumed 9-cycle workers;
+    24,024 cycles and 2.002 cycles/job including fill/drain; NOT RTL throughput.
+  Portfolio/audit checks:7,500-ALM allocation sums;62/66-M10K trade trap;
+    2,166,560-cycle uncached example; whitespace false-absence reproduction.
+
+Revision-2 adds five groups in checks/check_revision.py, independently written
+against the field-event inventory and material arithmetic:
+
+  Dense/sparse owner recurrence: 6,000 randomized cycles, 64 rows and 11 fields;
+    at most the listed 1/2/3 distinct updates per field, zero writes for holds;
+    same-row admission precedence and an explicitly detected wrong-order case.
+  Required-mask writer: 65,536 read/write cases; 960 cases distinguish old from
+    new data at a same-address edge; read-port replication remains unproved.
+  Event coalescing: 128 mask combinations; last-writer loss and the three-ready-
+    writer requirement exercised as small finite examples.
+  Material rounding: 327,680 LERPs and 65,536 MODULATE2X pairs; both subtly wrong
+    rounding substitutions produce concrete failures.
+  Acceptance fixture: 15 negative cases refuse missing rate proof, wrong stage,
+    missing identity, failed timing/resource gates, virtual-pin subtraction,
+    insufficient qualification frequency and incomplete/weak seed evidence.
+    This is NOT a test of the repository accounting loader.
+
+Both scripts were executed twice for this revision. Each pair of deterministic
+JSON receipts is byte-identical. There are fourteen passing model groups in
+this package, not fourteen RTL suites. The inherited base-model script is
+preserved so prior useful checks do not vanish when the document is revised.
+
+What remains unproved includes RTL event timing, reset/elaboration behaviour,
+all possible traces, physical RAM/DSP inference, placed area, routing, clock
+closure and a real production workload. The implementing agent must run the
+specified RTL/mutation and physical gates. The Python checks are useful design
+counterexample detectors and arithmetic evidence, not a replacement for them.
+
+Run from the package root:
+
+  python checks/check_architecture.py --output evidence/base_models_local.json
+  python checks/check_revision.py --output evidence/revision_models_local.json
+
+Retain its JSON beside the candidate's later RTL and fitter receipts, with the
+measurement kind kept explicit. Do not rename it "RTL verification passed."
+
+===============================================================================
+24. SOURCES, INSPECTION SCOPE AND FRESHNESS
+===============================================================================
+
+Current reviewed hardware snapshot:
+  57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135
+  commit time: 9 September 2026, 11:50:50 CEST.
+
+Earlier functional inspection retained:
+  24ef92266dea29d4501dfffbe537cb49d681a17c
+
+The comparison between these commits contains eleven commits, including the
+owner-analysis corrections and maintenance work, and no changed fpga/rtl path
+was identified in its changed-file set. The shorter a2140bdd...57bd31e comparison
+contains two instruction-delivery maintenance commits. Current owner/top/cache/
+palette source and native fit/timing summaries were re-read at the current pin.
+The previous detailed functional inspection is retained with its original source
+IDs below rather than falsely described as a second full line-by-line audit.
+[N01, N11]
+
+Branch enumeration also identified main at 51d300339cb1c4b8276c8a8325300f893f2fd141.
+That is the separate creature lane, not the source of the texture hardware
+measurements. This brief is not a new review of all creature/media assets, nor
+a claim that every repository file was read. It reviews the hardware dependency
+path, relevant contracts, tests, measurements and latest changes for this task.
+The original qualification/seed clauses on main were additionally read directly
+at reports/islandrearchitecture4.md sections 20 and 21; no main RTL was merged.
+No repository writes were performed. No local RTL simulator or Quartus run was
+performed. The package contains independent Python model executions only.
+
+Final branch observation:
+  2db3dfd5fa026320a939aa64cdfea757ded45a4a
+  commit time: 9 September 2026, 12:13:26 CEST.
+
+Four intervening commits were reviewed through their compare/commit records.
+They add delivery work, seed recording and budget/register analysis. The new
+PERSPUV table diagnosis, register distribution and qualification clauses are
+incorporated here. That is not a new line-by-line inspection of the entire final
+tree, and it is not evidence of uncommitted local progress. Recheck current
+source/configuration identity at implementation handoff. [N15-N18]
+
+Known current Git blob identities:
+  owner:   e2d0e86d1e7eb1d07facb39022ea4a9f38de1f79
+  top:     65b2daa080bbbee43a6025a684f92e67d10658ab
+  bank:    7df769fedaaa0ef86fda48785b3533b885ecc85e
+  palette: 49c358ff7d641783bc87662bc44455ed2280a5c0
+  oracle:  5686b4cfde889a678297582b65e7bda577a912e3
+
+These are Git blob identities, not fitter SHA256 closure digests. Both source
+content and elaboration configuration must match before a measurement is called
+current. The full native Gate-2 entity .fit.rpt was not available at the committed
+path; entity allocation still relies on the report's transcription. The native
+summary and setup-path summary were directly inspected.
+
+The numbered R sources retain the earlier audit provenance. N sources below
+record the current rechecks and newly inspected evidence. A source ID does not
+turn a source comment, historical estimate or proposed allocation into a measured
+fact. Source comments that still describe old wiring are subordinate to executed
+RTL and the actual selected contract.
+
+[R01] Gate-2 combined fit report
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/reports/GATE2-PACKETS-1-2-3-MEASURED-20260909.md
+  Scope: Read; arithmetic and attribution errors explicitly corrected in this brief.
+
+[R02] Gate-2 entity attribution and owner triage
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/reports/GATE2-ALM-DIAGNOSIS-V3OWN-IS-81-PERCENT-20260909.md
+  Scope: Read including appended conversion triage. Entity figures are the agent's transcription; full native .fit.rpt was not available at the requested committed path. False functional-array exclusion independently refuted.
+
+[R03] Native Gate-2 fitter summary
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/reports/synthesis/blockpaths/zhao_texture_island_v3_top%40g2-prod.fit.summary
+  Scope: Native summary inspected in the continuing audit; top ALM/resources are specimen evidence, not new measurements.
+
+[R04] Native Gate-2 timing summary
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/reports/synthesis/blockpaths/zhao_texture_island_v3_top%40g2-prod.setup.summary.rpt
+  Scope: Read current summary paths; endpoint severity distinguished from frequency and frozen-path exclusion.
+
+[R05] Owner/control/result/retirement implementation
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/fpga/rtl/texture/zhao_texture_v3own.sv
+  Scope: Extensive functional source inspection: window/fence, issue, terminal snapshots and validation, publication, queues, fetch, and functional state writes.
+
+[R06] Selected V3 island integration
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/fpga/rtl/texture/zhao_texture_island_v3_top.sv
+  Scope: Extensive integration inspection including ingress, descriptor/UV join, owner/planner connections, material carriage and final COMBINE/output path.
+
+[R07] Existing paired perspective pipeline
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
+  Scope: Read candidate; capacity, two arithmetic lanes, generic shift/round law and token carriage are reference requirements.
+
+[R08] Paired/old perspective mapped evidence
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/reports/synthesis/blockpaths/zhao_raster_perspuv_svc%40map.map.summary
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/reports/synthesis/blockpaths/zhao_raster_perspuv_pairpipe%40map.map.summary
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/reports/PAIRPIPE-IS-NOT-A-DSP-LEVER-20260909.md
+  Scope: Matched mapping evidence: old 3361 registers and candidate 961, each 6 DSP. Not a fitted ALM delta.
+
+[R09] Current material COMBINE phase architecture
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/fpga/rtl/texture/zhao_texture_material_combine_v2.sv
+  Scope: Read scheduling, immutable context payload and arithmetic structure with the island integration.
+
+[R10] Reciprocal arithmetic phases and qualification
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/reports/GATE4-RCP-LIKE-FOR-LIKE-20260909.md
+  Scope: Read arithmetic phase/port specification and retained measured qualification. Four launches per independent nonzero job; actual profile and frame rate require distinct gates.
+
+[R11] Cache pipeline and reservation implementation
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/fpga/rtl/texture/zhao_texture_cache_pipe.sv
+  Scope: Read bank shape, request/response pointers, C3 classification/miss mask, response reservations, squash and fill sequencing.
+
+[R12] Palette loader and resolver
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/fpga/rtl/texture/zhao_texture_palette_res.sv
+  Scope: Read load protocol, same-edge BEGIN forwarding, presence bitmap, memory ports and captured verdict.
+
+[R13] Response dispatcher
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
+  Scope: Read raw/class data and metadata transport and response-capacity interface.
+
+[R14] Bilinear channel lane
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+  Scope: Read full channel pipeline, exact horizontal intermediates, single rounding and elastic control.
+
+[R15] Workload units and frame budget
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/design/budgets/workloads.yml
+  Scope: Read workload convention. Later multisample requirements also come from the existing texture briefs; neither substitutes for a current trace.
+
+[R16] Whole-console memory-first rescue
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/reports/ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt
+  Scope: Existing delivered brief also available locally; it remains governing post-texture architecture and accounting direction.
+
+[R17] Existing texture roadmap
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/reports/V3-REARCHITECTURE-ROADMAP.md
+  Scope: Read continuing roadmap and checkpoint history; update rather than create a conflicting parallel worklist.
+
+[R18] Existing texture verification inventory
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/tests/texture/island_composed_directed.cpp
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/tests/texture/island_v3_fault_directed.cpp
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/tests/texture/desc_join_expand_directed.cpp
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/tests/texture/ident_encoding_directed.cpp
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/tests/texture/material_combine_v2_diff.cpp
+  Scope: Directory and named test inventory checked; not a claim that every listed test body was reread in full or rerun. Resolve executable target names through current CMake before execution.
+
+[R19] Selected production accounting/profile and fit definitions
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/design/prod_manifest.yml
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/design/fit_targets.yml
+  Scope: Selection and incoming changes reviewed in the continuing audit; a parameterized leaf is not automatically the selected shipping profile.
+
+[R20] Accounting closeout and current gate status
+  https://github.com/Fabulu/zhaozhou/blob/24ef92266dea29d4501dfffbe537cb49d681a17c/reports/PACKET-A0-RESOURCE-TRUTH-COMPLETE-20260909.md
+  Scope: Directly refreshed at the primary pin. Contains recorded tests, partial mixed accounting, no full production map claim, and the internal-protocol permission concern addressed here.
+
+[R21] Latest observed target-registration commit
+  https://github.com/Fabulu/zhaozhou/commit/758ffdf0789d44e0d4eaa98c9e288337848d6e59
+  Scope: Live branch ref and commit message read. Reports 99 targets and no selected production block without a flow; not 99 completed measurements. Do not repeat its historical floor wording as a current bound.
+
+[V01] Historical Quartus 17 help reference; NOT reverified as exact-version evidence
+  https://www.intel.com/content/www/us/en/programmable/quartushelp/17.0/reference/glossary/def_m10k.htm
+  At this revision's online check the old link redirected to the current
+  Altera Quartus help landing page, not the archived 17.0 topic. The earlier
+  wording calling it currently verified exact-version documentation is withdrawn.
+  Use the installed 17.0.2 examples, native mode reports and the retained bank
+  implementation for exact-tool work. Newer official guidance is identified
+  separately in N13 and does not prove this older tool's physical packing.
+
+[N01] Latest run-log and instruction-delivery repair commit
+  https://github.com/Fabulu/zhaozhou/commit/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135
+  Scope: Current recorded pause, no live Quartus in the committed log, delivery fixes; not direct process access.
+
+[N02] Current owner memory-candidate report
+  https://github.com/Fabulu/zhaozhou/blob/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135/reports/V3OWN-IS-NOT-A-MEMORY-CANDIDATE-20260909.md
+  Scope: Read including its fourth correction. Already-corrected live arrays retained; 64-write-port conclusion rejected by event analysis.
+
+[N03] Current owner functional implementation
+  https://github.com/Fabulu/zhaozhou/blob/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135/fpga/rtl/texture/zhao_texture_v3own.sv
+  Scope: Declaration, shared event validation, snapshot/claim/publication, sparse updates and sequential reset/hold inventory.
+
+[N04] Current native Gate-2 fitter summary
+  https://github.com/Fabulu/zhaozhou/blob/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135/reports/synthesis/blockpaths/zhao_texture_island_v3_top%40g2-prod.fit.summary
+  Scope: 10,837 ALM, 16,285 registers, 49 M10K, 17 DSP, 1,840 virtual pins and 921 virtual-pin-containing ALMs.
+
+[N05] Current native Gate-2 setup path summary
+  https://github.com/Fabulu/zhaozhou/blob/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135/reports/synthesis/blockpaths/zhao_texture_island_v3_top%40g2-prod.setup.summary.rpt
+  Scope: Direct path severity recheck: RCP -2.187 ns and palette -2.031 ns, not inferred from path-frequency counts.
+
+[N06] Current island admission integration
+  https://github.com/Fabulu/zhaozhou/blob/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135/fpga/rtl/texture/zhao_texture_island_v3_top.sv
+  Scope: Direct fragment/RCP/owner admission coupling and existing descriptor/transport inspection.
+
+[N07] Current cache cold-miss and reservation path
+  https://github.com/Fabulu/zhaozhou/blob/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135/fpga/rtl/texture/zhao_texture_cache_pipe.sv
+  Scope: Static lane banks, C2/C3 miss selection, request/response reservations and cancellation law.
+
+[N08] Current palette loader and lookup
+  https://github.com/Fabulu/zhaozhou/blob/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135/fpga/rtl/texture/zhao_texture_palette_res.sv
+  Scope: BEGIN invalidation, WRITE coverage, END predicate, lookup forwarding and delayed counters.
+
+[N09] Concrete one-reader/one-writer memory primitive
+  https://github.com/Fabulu/zhaozhou/blob/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135/fpga/rtl/texture/zhao_texture_v3bank.sv
+  Scope: Clock-only single-bank code and registered data read. Source proves its RTL shape, not independent fitting.
+
+[N10] Current block fit runner
+  https://github.com/Fabulu/zhaozhou/blob/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135/tools/quartus/run_block_fit.ps1
+  Scope: Parameter/label interface, mandatory MapOnly labels, provenance and timeout conventions; not executed.
+
+[N11] Current-to-earlier hardware change comparison
+  https://github.com/Fabulu/zhaozhou/compare/24ef92266dea29d4501dfffbe537cb49d681a17c...57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135
+  https://github.com/Fabulu/zhaozhou/compare/a2140bdd91619c6463862fb11645d50c2efd6943...57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135
+  Scope: Changed-file set reviewed to carry the earlier functional audit forward; not proof of uncommitted local work.
+
+[N12] Current material C++ scalar oracle
+  https://github.com/Fabulu/zhaozhou/blob/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135/reference/include/zref/zref_material.hpp
+  Scope: Exact LERP magnitude rounding, MODULATE2X order, two-layer detail and MASK product counts.
+
+[N13] Intel official RAM inference and read-during-write guidance
+  https://www.intel.com/content/www/us/en/docs/programmable/683082/24-3/single-clock-synchronous-ram-with-new.html
+  https://www.intel.com/content/www/us/en/programmable/quartushelp/15.1/msgs/msgs/winfer_ram_functionality_change_altsyncram_dual_clock.htm
+  Scope: Primary vendor background: requested collision semantics can add bypass logic; version/platform differ. Exact Quartus 17 target must be measured.
+
+[N14] Matched perspective MapOnly native summaries
+  https://github.com/Fabulu/zhaozhou/blob/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135/reports/synthesis/blockpaths/zhao_raster_perspuv_pairpipe%40map.map.summary
+  https://github.com/Fabulu/zhaozhou/blob/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135/reports/synthesis/blockpaths/zhao_raster_perspuv_svc%40map.map.summary
+  Scope: Direct recheck: 961 vs 3,361 mapped registers; six DSP each; no fitted area claim.
+
+[N15] Late register distribution and RCP comparison report
+  https://github.com/Fabulu/zhaozhou/commit/10433f589183e58b4e01691a9f61cf7c445787f6
+  Scope: Commit/diff read. Registers are agent transcription of native entity report; whole-old-RCP removal is not a net ALM saving.
+
+[N16] Original boundary, qualification and seed rules
+  https://github.com/Fabulu/zhaozhou/blob/51d300339cb1c4b8276c8a8325300f893f2fd141/reports/islandrearchitecture4.md
+  Scope: Direct sections20.2-21.7 read, including115MHz texture,105MHz reduced renderer,3seed confirmation and close-margin extension.
+
+[N17] Latest perspective token-table diagnosis
+  https://github.com/Fabulu/zhaozhou/commit/2db3dfd5fa026320a939aa64cdfea757ded45a4a
+  Scope: Latest branch commit read:3,376declared token bits/594pipeline bits, reported merge/inference results. Not an independent reparse of uncommitted native reports.
+
+[N18] Late change interval and seed-recording implementation
+  https://github.com/Fabulu/zhaozhou/compare/57bd31e44e62592e5cfeb2bff5abe2b9ac1bb135...2db3dfd5fa026320a939aa64cdfea757ded45a4a
+  https://github.com/Fabulu/zhaozhou/commit/6bf46d8a0428817f6d9503d467c922836d67a3e2
+  Scope: Four intervening commits reviewed. Seed metadata patch retained, with the subsequent correction that some historical row labels carry seeds.
+
+FINAL NOTE
+The strongest evidence behind proceeding is not a promise of easy clock closure.
+It is that the current physical attribution has identifiable concentrated costs,
+the paired pipeline already has a matched measured storage reduction, and the
+proposed new completion boundary can remove structures an isolated leaf cannot.
+The independent checks eliminate several cheap mistakes before RTL. The next
+receipts must establish the physical result. Proceed with replacement, not faith.
