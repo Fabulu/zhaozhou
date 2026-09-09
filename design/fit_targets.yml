@@ -1189,6 +1189,72 @@ targets:
       max_m10k: 64
       max_dsp: 14
 
+  # ==========================================================================
+  # FIELD V3, three of the 43 blocks that could not be fitted by ANYONE
+  # ==========================================================================
+  # 2026-09-09. `tools/budget/dsp_census.py` found that 43 of the 45 unmeasured
+  # production blocks have no `- top:` entry here at all, so run_block_fit refuses
+  # them at preflight. They were not queued behind the toolchain; they had no way
+  # to be measured. That is the real reason the DSP and ALM figures are floors.
+  #
+  # Closures computed by `tools/quartus/propose_fit_target.py`, which walks the
+  # module graph -- the mechanical half, and the half that went wrong three times
+  # today. Checked for package dependencies first: none of these five files
+  # imports anything or names a user-defined type, which is what made
+  # zhao_prod_top unelaboratable until this afternoon.
+  #
+  # EVERY RULE BELOW IS QUOTED FROM THE BLOCK'S OWN HEADER, and none is derived
+  # from a measurement, because a rule written after the fit it governs reports a
+  # pass. These are predictions. The fit is allowed to refute them.
+
+  - top: zhao_field_v3_mulbank
+    sources:
+      - fpga/rtl/field/zhao_field_v3_mulbank.sv
+      - fpga/rtl/field/zhao_field_mul.sv
+    rules:
+      # zhao_field_v3_mulbank.sv:20 -- "Four `zhao_field_mul` lanes, which the
+      # brief prices at 'four 33-bit lanes map to about 12 DSPs'".
+      #
+      # So 12 is the BRIEF'S price and this rule tests it. Note what
+      # calibration.json says about the shape: a 33-bit product costs 3 DSP, and
+      # 4 x 3 = 12 exactly, so the brief and the calibration agree -- which is
+      # either corroboration or the same assumption twice. The fit decides.
+      max_dsp: 12
+      max_m10k: 0        # an arbiter and four lanes; no storage is declared
+
+  - top: zhao_field_v3_len
+    sources:
+      - fpga/rtl/field/zhao_field_v3_len.sv
+      - fpga/rtl/field/zhao_field_isqrt.sv
+    rules:
+      # zhao_field_v3_len.sv:53 -- "EIGHT ROOTS IS ROUGHLY 2,000 ALMs against
+      # ~251 for one. That is a real cost and it is the one the deadline demands."
+      #
+      # Set at the header's own figure rather than padded, so exceeding it is a
+      # finding instead of a shrug. "Roughly" is the author's word, so a small
+      # breach means the estimate was close; a large one means it was wrong.
+      max_alms: 2000
+      max_dsp: 0         # isqrt is shift-and-subtract; a DSP here would be news
+
+  - top: zhao_field_v3_rf
+    sources:
+      - fpga/rtl/field/zhao_field_v3_rf.sv
+    rules:
+      # zhao_field_v3_rf.sv:37 -- "The probe's 372 ALM / 12 M10K / 93.14 MHz is
+      # therefore a LOWER BOUND on this module, not a measurement of it. Re-fit
+      # before quoting a number."
+      #
+      # THERE IS DELIBERATELY NO max_alms. The header states in advance that this
+      # module costs MORE than 372 ALM -- it adds an add-and-shift per bank per
+      # copy that the probe lacks -- so a 372 rule would fail by construction and
+      # a padded one would be a number I invented. How far above 372 it lands is
+      # the question this fit exists to answer.
+      #
+      # The M10K count IS structural (a register file's banks are its banks), so
+      # that one is a real prediction.
+      max_m10k: 12
+      max_dsp: 0         # a register file; a multiplier here would be news
+
   - top: zhao_prod_top
     sources:
       # Added 2026-09-09. Instantiated by zhao_raster_tile_pipe, NOT by the
