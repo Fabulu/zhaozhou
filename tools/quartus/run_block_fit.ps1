@@ -124,6 +124,37 @@ if ($RowLabel -and $RowLabel[0] -notmatch '[@\-_.]') {
            "recognises. Use '@" + $RowLabel + "' or '-" + $RowLabel + "'.")
 }
 
+# A -MapOnly RUN MUST CARRY A LABEL, and this is enforced here rather than
+# trusted to callers because trusting a caller has now failed twice.
+#
+# A map row has no ALMs and no Fmax -- the param block above says so. The merge
+# at write time is keyed on the row NAME, so an unlabelled map run of a module
+# that already has a full-fit row REPLACES it, silently trading a measurement
+# that took hours for one that took two minutes and answers a different
+# question.
+#
+# 2026-09-08: it took zhao_texture_combine's 494 ALM / 100.12 MHz, from a
+# 1,640-second fit. Recovered from git, because reports/synthesis is version
+# controlled -- luck in the design's favour, not foresight.
+#
+# 2026-09-09, THE SAME ROWS AGAIN: the repair was written as a `-RowLabel '@map'`
+# in tools/quartus/queue_all.ps1 with a long comment explaining the rule. That
+# protects exactly one caller, and it was added AFTER the batch had already run,
+# so it never executed once. Both zhao_texture_combine and
+# zhao_texture_material_combine_v1 were found overwritten a second time and
+# restored from history again.
+#
+# A rule that lives in a comment in one caller is not enforcement; it is a note
+# to whoever reads that caller. The guard belongs where the damage happens.
+if ($MapOnly -and -not $RowLabel) {
+    throw ("-MapOnly requires -RowLabel. A map row carries no ALMs and no Fmax, " +
+           "and the report merges on row name, so an unlabelled map run would " +
+           "REPLACE any full-fit row for this module and discard its area and " +
+           "timing. Use -RowLabel '@map' (or another '@'-prefixed label) so both " +
+           "measurements survive -- they answer different questions and are not " +
+           "substitutes.")
+}
+
 # Per-block capacity characterization against a provisional device.
 #
 # WHY THIS EXISTS rather than run_shell_fit.ps1 with a different top: the
