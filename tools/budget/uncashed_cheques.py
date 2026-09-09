@@ -251,6 +251,79 @@ def stale_receipts(decl, ev):
     return rows
 
 
+
+BLOCKS = os.path.join("design", "blocks.yml")
+
+# Wrapper suffixes the repo uses for a BIT-IDENTICAL view onto a ratified law.
+# `_unclamped` is the documented D-1 pattern: `shade_flat_tri_dir` is a
+# bit-identical wrapper around `shade_flat_tri_dir_unclamped`, and the goldens
+# not moving is how that was known to be correct. So two blocks naming those two
+# strings are naming ONE law, and an exact-string comparison cannot see it.
+LAW_WRAPPER_SUFFIXES = ("_unclamped", "_clamped", "_raw")
+
+
+def normalise_law(name):
+    for suf in LAW_WRAPPER_SUFFIXES:
+        if name.endswith(suf):
+            return name[: -len(suf)]
+    return name
+
+
+def declared_laws(path=BLOCKS):
+    """{reference_model: [block ids]} from design/blocks.yml."""
+    out = {}
+    try:
+        text = io.open(os.path.join(ROOT, path), encoding="utf-8",
+                       errors="replace").read()
+    except OSError:
+        return out
+    cur = None
+    for line in text.splitlines():
+        m = re.match(r"^\s*-\s+id:\s*([A-Za-z0-9._]+)\s*$", line)
+        if m:
+            cur = m.group(1)
+            continue
+        r = re.search(r"reference_model:\s*([A-Za-z_][A-Za-z0-9_:]*)", line)
+        if r and cur:
+            out.setdefault(r.group(1), []).append(cur)
+    return out
+
+
+def shared_law_collisions(laws):
+    """Two blocks naming ONE ratified law -- authored duplication, before it ships.
+
+    This is check 3, and it exists because checks 1 and 2 CANNOT see this class.
+    They find modules built-and-uninstantiated and fit rows gone stale; a
+    duplication that is about to be AUTHORED is neither. Written 2026-09-09
+    after building zhao_terrain_shade and then reading GEOM.LIGHT.md:118, which
+    warned against exactly it and named a previous instance of the same mistake.
+
+    Two tiers, because the strings differ even when the law does not:
+      EXACT -- byte-identical reference_model. Finds the projector:
+               zref::render::project_vertex is declared by BOTH GEOM.PROJECT and
+               TERRAIN.PROJECT, which is the 66-DSP duplication that opened the
+               whole DSP campaign. That signal was sitting in blocks.yml the
+               entire time and nothing read it.
+      WRAPPER -- same law after stripping a bit-identical wrapper suffix. Finds
+               TERRAIN.SHADE (`..._unclamped`) against GEOM.LIGHT (the wrapper).
+    """
+    exact, wrapper = [], []
+    for law, blocks in sorted(laws.items()):
+        u = sorted(set(blocks))
+        if len(u) > 1:
+            exact.append((law, u))
+    groups = {}
+    for law, blocks in laws.items():
+        groups.setdefault(normalise_law(law), []).append((law, sorted(set(blocks))))
+    for base, entries in sorted(groups.items()):
+        if len(entries) < 2:
+            continue
+        owners = sorted({b for _, bl in entries for b in bl})
+        if len(owners) > 1:
+            wrapper.append((base, sorted(entries), owners))
+    return exact, wrapper
+
+
 # ---------------------------------------------------------------------------
 # THE INSTRUMENT HAS TO BE SEEN TO FIRE.
 #
@@ -290,6 +363,22 @@ def self_test():
     assert verdict("excluded", "unused  fitted but not composed") == "PENDING"
     assert verdict("excluded", "probe  a leaf-fit pair") == "CLOSED"
     assert verdict(None, "") == "UNDECLARED"
+
+    # CHECK 3 in both polarities. The wrapper tier is the load-bearing half:
+    # TERRAIN.SHADE and GEOM.LIGHT name DIFFERENT STRINGS for ONE law, so an
+    # exact-match check reports zero and looks like it worked.
+    assert normalise_law("zref::render::shade_flat_tri_dir_unclamped") == "zref::render::shade_flat_tri_dir", "wrapper suffix not stripped"
+    ex, wr = shared_law_collisions({
+        "zref::render::project_vertex": ["GEOM.PROJECT", "TERRAIN.PROJECT"],
+        "zref::render::shade_flat_tri_dir_unclamped": ["TERRAIN.SHADE"],
+        "zref::render::shade_flat_tri_dir": ["GEOM.LIGHT"],
+        "zref::CmdDma": ["CMD.DMA"],
+        "zref::solo": ["ONE.BLOCK", "ONE.BLOCK"],
+    })
+    assert [l for l, _ in ex] == ["zref::render::project_vertex"],         "EXACT tier: must fire on the projector and only it, got %r" % (ex,)
+    assert [b for b, _, _ in wr] == ["zref::render::shade_flat_tri_dir"],         "WRAPPER tier: must fire on shade/light, got %r" % (wr,)
+    assert len(declared_laws()) > 50 or not os.path.exists(
+        os.path.join(ROOT, BLOCKS)), "declared_laws went vacuous"
 
     # Check 2 in isolation from git, by driving its two grounds directly.
     def grounds(clean, touched, when):
@@ -372,6 +461,31 @@ def main():
         if r["dsp"] is not None:
             print("       row still asserts %s DSP" % r["dsp"])
     print("  %d row(s) describe a design the file has moved past." % len(srows))
+    print("  A DIRTY row never described any committed state exactly. A BEHIND")
+    print("  row describes an earlier one. Neither is a current measurement.")
+    print("")
+    print("")
+
+    print("== CHECK 3: ONE RATIFIED LAW, TWO BLOCKS "
+          "(duplication about to be AUTHORED, not inherited)")
+    laws = declared_laws()
+    exact, wrapper = shared_law_collisions(laws)
+    for law, blocks in exact:
+        print("  ** EXACT    %-40s %s" % (law, ", ".join(blocks)))
+    for base, entries, owners in wrapper:
+        if any(law == base and blocks == owners for law, blocks in entries):
+            continue
+        print("  ** WRAPPER  %-40s %s" % (base, ", ".join(owners)))
+        for law, blocks in entries:
+            print("                 %-38s %s" % (law, ", ".join(blocks)))
+    print("  %d declared law(s) across %d block declaration(s); "
+          "%d exact, %d wrapper-level."
+          % (len(laws), sum(len(v) for v in laws.values()),
+             len(exact), len(wrapper)))
+    print("  Checks 1 and 2 CANNOT see this class -- neither block is")
+    print("  uninstantiated and neither row is stale. Two blocks naming one law")
+    print("  will each need the same arithmetic; decide which one OWNS it before")
+    print("  the second gets built.")
     print("  A DIRTY row never described any committed state exactly. A BEHIND"
           "\n  row describes an earlier one. Neither is a current measurement.")
     return 0
