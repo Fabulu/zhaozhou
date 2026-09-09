@@ -7751,6 +7751,33 @@ int main(int argc, char** argv) {
     u02::g_u02_strand_perseg = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_STRAND_CAP"))
     u02::g_u02_strand_cap = std::atoi(e);
+  // ---- PASS 15 / OWNER DIRECTION 11 s4: THE BLUE SHIMMER ------------------
+  // "connected by white lines of light with blue shimmer surrounding them."
+  // D10's ladder swept RADIUS and GAIN on a surround that was black by
+  // arithmetic on every rung, so it swept the wrong axis twice. These are the
+  // axes D11 actually names: the shimmer's size, its brightness, how much it
+  // flickers, and how many lightning motes ride the figure.
+  if (const char* e = std::getenv("ZHAO_U02_SHIMMER_R"))
+    u02::g_u02_shimmer_r = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_SHIMMER_GAIN"))
+    u02::g_u02_shimmer_gain = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_SHIMMER_FLICK"))
+    u02::g_u02_shimmer_flicker = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_MOTES"))
+    u02::g_u02_strand_motes = std::atoi(e);
+  // The green/aqua fold's one rebalance rung (D11 s4: "experiment some and make
+  // it look better"). It moves the AQUA family only and touches nothing the
+  // lightning draws -- the two are kept separate on his own instruction.
+  if (const char* e = std::getenv("ZHAO_U02_AQUA_BAL"))
+    u02::g_u02_aqua_bal = std::atoi(e);
+  if (u02::g_u02_shimmer_r >= 0 || u02::g_u02_shimmer_gain >= 0 ||
+      u02::g_u02_shimmer_flicker >= 0 || u02::g_u02_strand_motes >= 0 ||
+      u02::g_u02_aqua_bal != 0)
+    std::fprintf(stderr,
+                 "D11 shimmer rung: r=%d gain=%d flick=%d motes=%d aquabal=%d\n",
+                 u02::g_u02_shimmer_r, u02::g_u02_shimmer_gain,
+                 u02::g_u02_shimmer_flicker, u02::g_u02_strand_motes,
+                 u02::g_u02_aqua_bal);
   if (u02::g_u02_strand_on >= 0 || u02::g_u02_strand_core_r >= 0 ||
       u02::g_u02_strand_dark_r >= 0 || u02::g_u02_strand_dark_gain >= 0 ||
       u02::g_u02_free_strand >= 0 || u02::g_u02_strand_perseg >= 0 ||
@@ -7835,6 +7862,47 @@ int main(int argc, char** argv) {
     // block, so anyone reading a ladder plate's log would conclude the smear
     // gain had moved with the shell, i.e. that the by-eye ladder was
     // confounded. It was not. PASS-12-QA 5.3: delete the line.
+  }
+  // ---- PASS 15 / OWNER DIRECTION 11 s2.3: THE FOG ANNULUS -----------------
+  // The shell stopped being a fringe and became a volume scaled to the
+  // creature's own apparent radius (manafold_fx.h, "THE BAND BECOMES AN
+  // ANNULUS"). Its geometry now has four axes and ALPHA IS NO LONGER THE
+  // INTERESTING ONE -- the pass-12 ladder swept alpha alone and could not have
+  // found this, which is the whole lesson. Every one is an override for the
+  // by-eye ladder, from ONE BINARY (10-GATE item 26); unset renders the
+  // shipping constants byte for byte.
+  //
+  //   U02_SHELL_REACH  annulus depth, per-mille of the body radius R
+  //   U02_SHELL_FLOOR  the plateau the fog holds across the core, pm of peak
+  //   U02_SHELL_OUT    how far past the ink the gas reaches, pm of R
+  //   U02_SHELL_GAMMA  the shape of the inward rise (1000 linear, 2000 quad)
+  {
+    bool any = false;
+    if (const char* e = std::getenv("U02_SHELL_REACH")) {
+      const int v = std::atoi(e);
+      u02::g_u02_shell_depth_pm = v < 0 ? 0 : v;
+      any = true;
+    }
+    if (const char* e = std::getenv("U02_SHELL_FLOOR")) {
+      const int v = std::atoi(e);
+      u02::g_u02_shell_floor_pm = v < 0 ? 0 : (v > 1000 ? 1000 : v);
+      any = true;
+    }
+    if (const char* e = std::getenv("U02_SHELL_OUT")) {
+      const int v = std::atoi(e);
+      u02::g_u02_shell_out_pm = v < 0 ? 0 : v;
+      any = true;
+    }
+    if (const char* e = std::getenv("U02_SHELL_GAMMA")) {
+      u02::g_u02_shell_gamma = std::atoi(e);
+      any = true;
+    }
+    if (any)
+      std::fprintf(stderr,
+                   "P15 shell rung: alpha=%d reach=%d floor=%d out=%d gamma=%d\n",
+                   u02::g_u02_shell_alpha_pm, u02::g_u02_shell_depth_pm,
+                   u02::g_u02_shell_floor_pm, u02::g_u02_shell_out_pm,
+                   u02::g_u02_shell_gamma);
   }
   // PASS 10 STAGE A: U02_MIST_NO_EXCLUDE=1 puts the mist back OVER the
   // creature -- pass-9 behaviour -- so the A/B and the colour gate's

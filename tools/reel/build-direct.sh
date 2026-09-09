@@ -26,6 +26,9 @@ Targets:
              INDEPENDENCE gate, Direction 9 §2, with two failable legs)
   mqa        manafold-qa-p12.exe (pass 12 QA: the corpse across ALL deform
              lanes, the eye-travel drive census, and root continuity)
+  mshell     manafold-shellgate.exe (the committed SHELL/FOG gate, D9 s7+s14
+             and D11 s2.3 -- pass 15 gave it a target; it had none, so it was
+             a promised tool nobody could build. --selftest is required.)
   mspan      manafold-spangate.exe (pass 12 wave 2a: the committed STRETCHY
              SPAN gate, Direction 9 §13 -- reads the SKIN, because every
              nodule gate reads bones and cannot see a vertex effect)
@@ -54,7 +57,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mspan|mexpress|mqa|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mshell|mspan|mexpress|mqa|all)
       TARGET="$1"
       shift
       ;;
@@ -217,6 +220,12 @@ build_mnodule() {
   "$CXX" "${FLAGS[@]}" "$T/manafold_nodule.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-nodule.exe"
 }
 
+build_mshell() {
+  printf '%s
+' "LD manafold-shellgate"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_shellgate.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-shellgate.exe"
+}
+
 build_mspan() {
   printf '%s
 ' "LD manafold-spangate"
@@ -245,6 +254,7 @@ case "$TARGET" in
   mhinge) build_mhinge ;;
   mnodule) build_mnodule ;;
   mqa) build_mqa ;;
+  mshell) build_mshell ;;
   mspan) build_mspan ;;
   mexpress) build_mexpress ;;
   mband) build_mband ;;

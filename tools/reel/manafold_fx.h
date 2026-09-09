@@ -169,8 +169,61 @@ constexpr uint8_t kManaDripHi[3] = {90, 130, 220};
 // (Direction 10 §5: "it is an experiment ... the deliverable is the AXIS").
 // They are dark enough to sit under `channel`'s violet night ({14,10,46} deep,
 // {70,44,132} mid) and blue enough to read as storm rather than as ink.
-constexpr uint8_t kManaStormMid[3] = {8, 12, 46};
-constexpr uint8_t kManaStormHi[3] = {18, 26, 78};
+// ---- PASS 15, OWNER DIRECTION 11 §4: THE SURROUND WAS BLACK BY ARITHMETIC -
+//
+// D11 sharpens D10 from "surrounded by a deep dark blue" to "**connected by
+// white lines of light with BLUE SHIMMER surrounding them**", and pass 14's own
+// by-eye review had already found the shipped halo reads BLACK, not blue.
+//
+// ⚠ AND THE NUMBERS PREDICTED IT EXACTLY, WHICH IS WHY NO RUNG COULD HAVE
+// FIXED IT. {8,12,46} scaled by kFoldStrandDarkGainPm = 300 is (2,4,14).
+// Eight counts of blue is not blue at 240p; two is not a colour at all. The
+// pass-14 ladder swept RADIUS and GAIN and **never swept HUE**, so every rung
+// on it was a different size of black. 10-GATE §0: a gate — or a ladder —
+// cannot report a fault nobody thought to bound.
+//
+// THE FIX IS THE RAMP, NOT THE GAIN, and that is the plan's own instruction.
+// kRampStorm is drawn opaque+soft, so it BLENDS TOWARD its ramp colour: the
+// ramp entry IS the pixel wherever the sprite dominates. Author the navy here,
+// directly, in scene, and leave the gain at unity so the knob nobody can read
+// backwards stops existing. These are a deep storm navy — darker than
+// `channel`'s violet night ({14,10,46} deep, {70,44,132} mid) in red and green
+// and BLUER than it, so it reads as weather rather than as ink, and plainly
+// dark against the pale sunset the other 25 clips carry.
+constexpr uint8_t kManaStormMid[3] = {12, 20, 64};
+constexpr uint8_t kManaStormHi[3] = {26, 44, 112};
+// ---- THE SHIMMER: the layer that has never existed -----------------------
+// "connected by white lines of light with blue shimmer surrounding them. You
+// know, like actual lightning bolts."
+//
+// Every previous attempt built TWO layers — a white core and a dark surround —
+// and the owner has now asked, twice, for a thing that is neither: light that
+// is BLUE. A shimmer is not a dark band, it is not a black outline, and it
+// cannot be made out of a subtractive element no matter how it is tuned. So it
+// is its own layer, ADDITIVE (it is light: 09-ENGINE-GOTCHAS §4), sitting
+// between the white core and the navy backing.
+//
+// The colour sits under the channel ceiling (the S3 colour law) so it can
+// stack a little without whitening, and it is BLUE-dominant rather than cyan:
+// the creature's own mana family is aqua, and the lightning must not read as
+// more of the same fold. Authored by eye on the rung plate, both backdrops.
+constexpr uint8_t kManaShimmerMid[3] = {36, 116, 235};
+constexpr uint8_t kManaShimmerHi[3] = {150, 205, 255};
+// The bolt's own OPAQUE heart, for the lightning MOTES (D11: "we want the
+// other particles folded into shapes"). LO == MID, the kRampAquaCore idiom and
+// for the pass-8 reason: a ramp that starts at black gives an opaque disc a
+// near-black interior, and a lightning mote with a dark middle is a hole.
+constexpr uint8_t kManaBoltCoreMid[3] = {200, 228, 255};
+constexpr uint8_t kManaBoltCoreHi[3] = {255, 255, 255};
+// ---- D11 §4: the green/aqua fold he LIKES, one rebalance rung ------------
+// "Right now you're folding the green ones. It actually looks neat. Experiment
+// some and make it look better." — so this is an experiment row, NOT a
+// replacement, and the shipped aqua stays the default. The known mechanism is
+// an aqua ramp whose G sits above its B (G−B = +18 at mid, +19 at hi), which
+// the additive pile-up then exaggerates into green. This rung swaps them so
+// B ≥ G at both stops and nothing else moves. Off unless ZHAO_U02_AQUA_BAL=1.
+constexpr uint8_t kManaAquaBalMid[3] = {28, 172, 196};
+constexpr uint8_t kManaAquaBalHi[3] = {175, 236, 255};
 enum ManaRamp : uint8_t {
   kRampGlow = 0,   // the shipped centre-glow ramp (kGlowLo/Mid/Hi)
   kRampBlue,
@@ -185,6 +238,9 @@ enum ManaRamp : uint8_t {
   kRampAquaCore,  // pass 8: the mote HEART -- opaque, dark, saturated
   kRampStorm,     // D10: the DEEP DARK BLUE surround. Darker than either sky
                   // on purpose -- it is the only ramp here that subtracts.
+  kRampShimmer,   // D11: the BLUE SHIMMER. Additive, and the whole point of it
+                  // is that it is LIGHT -- the layer two passes did not have.
+  kRampBoltCore,  // D11: the lightning MOTE's opaque heart. LO == MID.
   kRampCount
 };
 /** PASS 8: which ramp an OPAQUE heart should write, given the ramp its
@@ -194,7 +250,13 @@ enum ManaRamp : uint8_t {
  *  the mapping is greppable and so the mote path and any future opaque body
  *  cannot drift apart. */
 inline uint8_t mana_core_ramp(uint8_t halo_ramp) {
-  return halo_ramp == kRampAqua ? static_cast<uint8_t>(kRampAquaCore) : halo_ramp;
+  if (halo_ramp == kRampAqua) return static_cast<uint8_t>(kRampAquaCore);
+  // D11: the lightning mote is the same idiom one family over -- an additive
+  // blue shimmer around a hot opaque heart. Registered HERE rather than at the
+  // call site for the reason the comment above gives: the mapping stays
+  // greppable and the two families cannot drift apart.
+  if (halo_ramp == kRampShimmer) return static_cast<uint8_t>(kRampBoltCore);
+  return halo_ramp;
 }
 
 
@@ -292,6 +354,22 @@ constexpr int32_t kStreakSpanPx = 46;
 // implementers over disjoint file sets and art.h belongs to the other lane.
 // Said out loud so the next pass can move it home rather than wonder.
 constexpr int kFoldMoteGarnishPm = 300;   // 38 -> 11, the lab's approved ten
+// ---- D11 §4: "and we want MORE of them. These are the lightning particles."
+//
+// The garnish above is the number D9 §3 cut the AQUA CLOUD to, and it was the
+// right cut: a fused field of soft green balls was burying the shape. D11 asks
+// for the opposite of that in a different material -- the motes are to BE the
+// lightning, sitting on the figure's stations as its vertices, connected by
+// the white line. A hot 3 px bolt mote is not the 10 px soft aqua ball the cut
+// was about, so the count that was wrong for one is not wrong for the other.
+//
+// ⚠ AND THE PASS-5 CEILING IS BOUNDED, NOT IGNORED: more count needs more AREA
+// (`manalab-breadth-more` recorded the overlap regression). This buys count
+// while the LIGHTNING mote's radii stay the small hot ones, so the pocket
+// gains vertices without gaining fill. Laddered anyway -- ZHAO_U02_MOTES.
+constexpr int kFoldStrandMoteGarnishPm = 720;  // 38 -> 27 when the bolt folds
+// The green/aqua fold he likes keeps its own count untouched: this only
+// applies while kFoldStrandOn, which is the whole "keep them SEPARATE" clause.
 
 // ---- PASS 12: THE STAMP SPACING FOLLOWS THE CORE IT DRAWS WITH -----------
 // A CONSEQUENCE OF THE OWNER-ORDERED K1 RADII THAT NOBODY COSTED. The edge is
@@ -361,21 +439,55 @@ constexpr int32_t kFoldEdgeStampMm = 14;   // 22 * (2/3), one core again
 // pass14-plates-reel/. Verified, not assumed: with this false, `channel`
 // renders sequence_crc32c 0xD554CC12, the same value the pre-change binary
 // produced. Flip to true (or ZHAO_U02_STRAND=1) for the D10 read.
-constexpr bool kFoldStrandOn = false;        // the D10 read is opt-in until he picks
+// ⚠ PASS 15 FLIPS THIS TO TRUE, AND THAT IS AN ORDER, NOT AN EXPERIMENT.
+// Direction 11 §4: "for STANDARD, we want the other particles folded into
+// shapes... THEY NEED TO MAKE THE SHAPES." D10 called the look an experiment
+// and the correct answer then was a ladder; D11 names the STANDARD. The
+// architect flipped the flag on `channel` f363 under the shipping env and it
+// draws an unmistakable connected spiral where the shipped frame shows a mote
+// swarm (pass15-arch-plates/D-strand-vs-shipped-3x.png) -- so the mechanism
+// landed in pass 14 and only the SWITCH never did. 10-GATE item 39: a flag
+// that exists and is off is not a fix, and this one had been off for a pass.
+// What stays an EXPERIMENT is the COLOUR -- the shimmer, the navy, the mote
+// count -- which is what the rung plates are for.
+// ⚠ This changes `channel`, whose lightning is on the protected list. It is
+// changed DELIBERATELY, by name, on the owner's own instruction, and the
+// identity gate is re-run so the change is declared rather than discovered.
+constexpr bool kFoldStrandOn = true;         // D11: the lightning IS the figure
 constexpr int32_t kFoldStrandCoreRPx = 3;    // the white hot core
 constexpr int kFoldStrandCoreGainPm = 1000;
-constexpr int32_t kFoldStrandDarkRPx = 12;   // the deep dark blue surround
-// ⚠ LOWER IS DARKER. The gain scales the ramp's own entries, and the ramp is
-// already near-black, so 1000 is the authored navy and 400 is a deeper, more
-// contrasty one. It is not a brightness in the ordinary direction and it will
-// be read backwards by somebody if this line is not here.
-// 1000 -> 300 BY EYE, on the plate: at 1000 the surround measured a mean drop
-// of 30 lum out of ~700 -- 4%, present in the arithmetic and absent on screen,
-// the crayon grain exactly. At 300 the ramp's own entries scale to near-black
-// and each core sits in a disc you cannot miss. It is a PROVISIONAL centre for
-// the owner's plate, not a chosen value: Direction 10 is an experiment and he
-// picks the rung.
-constexpr int kFoldStrandDarkGainPm = 300;
+// PASS 15: 12 -> 9. D11's composite is THREE layers, and the navy is now the
+// BACKING for a blue shimmer rather than the only thing wrapping the white. A
+// 12 px opaque-soft disc every few millimetres along an 18-station figure was
+// filling the pocket with bruise; the shimmer needs room between the core and
+// the backing's rim, which is where it lives.
+constexpr int32_t kFoldStrandDarkRPx = 9;    // the navy BACKING, now thin
+// ⚠ THIS KNOB IS NO LONGER BACKWARDS, AND THE PARAGRAPH THAT SAID IT WAS IS
+// DELETED ON PURPOSE. It used to read "LOWER IS DARKER", which was true only
+// because the ramp was near-black and the gain was scaling it toward nothing.
+// Pass 15 authored the navy INTO kManaStormMid/Hi where it belongs (see the
+// ramp block: the plan's own instruction, "the ramp entries are the knob, not
+// the gain") and put this back to unity. So the ramp is the colour, this is a
+// plain scale on it, and higher is lighter like everywhere else in this file.
+// A knob nobody can read the direction of is a knob the owner does not have.
+constexpr int kFoldStrandDarkGainPm = 1000;
+// ---- D11: THE BLUE SHIMMER LAYER ---------------------------------------
+// Between the white core (3 px) and the navy backing (9 px), additive, depth
+// test OFF like the core -- it is light coming off the bolt, and light reads
+// over flesh (the pulsar-core law). Radius is deliberately close to the
+// core's: a shimmer HUGS its bolt. Make it wide and it becomes a blue cloud,
+// which is the pass-12 "spazzy cloud" failure wearing a new colour.
+constexpr int32_t kFoldShimmerRPx = 6;
+constexpr int kFoldShimmerGainPm = 620;
+// ...and the thing that makes it SHIMMER rather than sit: a per-stamp,
+// per-frame flicker of ±this many per-mille on the gain. Off the frame clock
+// directly, not off kBoltRehashFrames -- the path RE-HASHES every 7 frames
+// (that is the strike), and a shimmer is the faster thing living on top of it.
+// ⚠ 09-ENGINE-GOTCHAS §9: "clearly visible" in a comment is not evidence, and
+// the crayon grain was clipped to a range narrower than the rig's own and went
+// invisible. 380 pm is ±38% of the gain, which is wider than anything else
+// modulating these pixels; if the plate says otherwise the plate wins.
+constexpr int kFoldShimmerFlickerPm = 380;
 // ⚠ THE CONNECTEDNESS KNOB IS A COUNT, NOT A DISTANCE, AND THAT IS THE WHOLE
 // FINDING. The first strand build set a spacing in MILLIMETRES, like every
 // other stamped primitive here, and it did nothing whatsoever: rungs at 9 mm
@@ -549,8 +661,98 @@ constexpr int kCoreOfHaloPm = 640;
 // §14.3: THIS IS NOT THE MIST. The mist's silhouette exclusion is untouched by
 // everything here and stays at 0 creature pixels. The shell crossing the line
 // does not license the mist to.
-constexpr int32_t kShellOutReachPx = 3;   // "a bit" past the ink: an aura
-constexpr int32_t kShellInReachPx = 6;    // the gassy rim inside the line
+// ---- PASS 15: THE BAND BECOMES AN ANNULUS -------------------------------
+//
+// OWNER DIRECTION 11 s2.3: "Once the outer body part is made of a thick fog
+// (that gets less thick the nearer to the outside it goes), it no longer looks
+// like clipping, just going into fog."
+//
+// > "You need to get to the bottom of why this didn't work before."
+//
+// THE BOTTOM, AND IT IS A MECHANISM, NOT A VALUE. Everything above this line
+// describes a band 3 px OUTSIDE and 6 px INSIDE the silhouette, densest AT the
+// ink. The pass-15 architect rendered its whole ladder under the shipping env
+// (pass15-arch-plates/B-shell-ladder-3x.png, `hover` f72/f300 at alpha 0 / 440
+// / 900) and the result is unambiguous:
+//
+//     440 (shipped)  ~7,000 px changed, and it reads as EDGE ANTI-ALIASING
+//     900 (too far)  it reads as a white outer GLOW, and it greys the ink
+//
+// Neither is fog, and no rung between them can be, because the eye/body
+// intersection the owner is complaining about sits TENS OF PIXELS interior to
+// the silhouette -- where a 6 px inward band is IDENTICALLY ZERO. Four passes
+// argued about a value on a mechanism that could not express the request:
+// 09-ENGINE-GOTCHAS s18 exactly, one level up from the kFogThicknessPm case
+// this file already documents. THE THIRD PASS ON AN ITEM ATTACKS THE
+// MECHANISM.
+//
+// ---- WHAT THE OWNER ACTUALLY DESCRIBED ----------------------------------
+// Not a rim. A BODY WHOSE OUTER LAYER IS GAS: a volume occupying a sizeable
+// fraction of the ball's own radius, denser the deeper in you go, so that
+// anything entering it is PROGRESSIVELY ABSORBED rather than cut. So the
+// reaches stop being pixels and become FRACTIONS OF THE BODY'S OWN APPARENT
+// RADIUS -- which is also the only way one number can be right on a close-up
+// and on a wide shot (09-ENGINE-GOTCHAS s1: this projection is anisotropic and
+// world size is not screen size, so a screen effect must be sized on screen).
+//
+// ---- AND THE PROFILE IS NOT A GUESS: THREE THINGS AGREE ON IT -----------
+// Take the ball as a screen disc of radius R whose outer shell, from R down to
+// R_core, is fog. The fog you SEE at a pixel is the column integral along the
+// ray. Work it out and the column:
+//
+//   * is ZERO at the silhouette and rises steeply inward,
+//   * PEAKS where the ray goes tangent to the clear core -- which is at screen
+//     depth (R - R_core), i.e. exactly the INNER EDGE of the annulus,
+//   * then drops to roughly half the peak and HOLDS FLAT across the whole
+//     interior, because there you are looking through the front layer only.
+//
+// That is the optics. It is also the owner's sentence, verbatim -- thick fog
+// getting "less thick the nearer to the outside it goes". And it is the
+// profile that makes the eye REMEDY work: as the bounce pushes the lens
+// deeper, the depth under it rises, the fog over it thickens, and the lens
+// FADES instead of showing a cut. Three independent readings, one curve; that
+// is the corroboration s16 asks for before acting on anything.
+//
+// THE OUTWARD PART IS THE SAME CURVE, NOT A SECOND FEATURE. D9 s14 asked for
+// the fog to go "outside the lines of the creature a bit". So the fog's own
+// outer edge is kShellOutReachPm past the cover mask, and the profile's zero
+// sits THERE -- one continuous rise from the fog's edge, through the ink line,
+// on into the body. The previous build had a maximum at the ink and a fade in
+// both directions, which is why "outside" and "denser inward" fought each
+// other and neither read.
+//
+// EVERY NUMBER BELOW IS A NAMED OWNER KNOB WITH AN ENV OVERRIDE (the ladder
+// comes from ONE BINARY, 10-GATE item 26), and the ladder MUST carry a
+// deliberately-too-far rung where the animal drowns (item 4).
+
+// The annulus depth, as per-mille of the creature's own apparent radius R --
+// R being the deepest interior point of the cover mask this frame, so the fog
+// breathes with the bounce instead of being a fixed pixel count over a body
+// that changes size.
+constexpr int kShellFogDepthPm = 380;
+// A floor, so a small or distant subject still gets a band rather than a
+// rounding error. NOT a substitute for the fraction: the fraction is the thing.
+constexpr int32_t kShellFogDepthMinPx = 5;
+// How far past the cover mask the gas reaches, per-mille of R (D9 s14's "a
+// bit"), with its own floor. This is where the profile's ZERO now lives.
+constexpr int kShellOutReachPm = 55;
+constexpr int32_t kShellOutReachMinPx = 2;
+// What the fog does DEEPER than the annulus: it falls from the peak to this
+// fraction of it, over one more annulus depth, and then holds. That plateau is
+// the front layer you look through over the clear core -- and it is the knob
+// that decides whether the body wears gas or the body is WASHED OUT. D8 s4
+// ("we thickened too much... I want to revert that") is what lives at the top
+// of this knob's range.
+constexpr int kShellCoreFloorPm = 340;
+// The shape of the inward rise. 1000 linear, 2000 fully quadratic (holds the
+// gas close to the annulus's inner edge and lets the outer skirt stay thin).
+constexpr int kShellRiseGamma = 1600;
+// LEGACY, KEPT AS A DEAD REFERENCE AND NOTHING ELSE. These were the pass-12
+// band's reaches; they are what the paragraph at the top of this block is
+// about. Nothing reads them. They stay named so a future pass grepping for
+// "why was the shell 3 and 6" finds this comment rather than a git blame.
+constexpr int32_t kShellOutReachPx_legacy_p12 = 3;
+constexpr int32_t kShellInReachPx_legacy_p12 = 6;
 // Authored by eye off the ladder in pass12-plates/B4-shell-*.png -- 0 / 200 /
 // 340 / 440 / 520 / 900, ONE binary via U02_SHELL_ALPHA, with 900 as the
 // deliberately-too-far rung (10-GATE-CHECKLIST item 4: ask where the ceiling is
@@ -558,31 +760,32 @@ constexpr int32_t kShellInReachPx = 6;    // the gassy rim inside the line
 // ink greys out, which is the failure s14.1 names. 440 is where the gas is
 // plainly present on both sides of the line, the outward gradient is visible,
 // and the ink is still solid black at 6x.
-constexpr int kShellAlphaMaxPm = 440;     // density AT the line
-// THE FALLOFF PROFILE IS ITS OWN KNOB (§14.2: "the shape of the fade matters as
-// much as its depth"). 1000 = linear ramp; 2000 = fully quadratic, which holds
-// density close to the body and drops it away fast, so the outer edge never
-// reads as a hard-edged halo. Blended between the two, so every value in the
-// range means something rather than only the endpoints.
-constexpr int kShellFalloffGamma = 1750;
+// PASS 15: THAT LADDER WAS RUN ON THE 3/6 PX BAND AND ITS PICK DOES NOT
+// TRANSFER. 440 was "the most you can push a fringe before it glows"; this
+// knob is now the PEAK OF A VOLUME and it is re-laddered from scratch.
+constexpr int kShellAlphaMaxPm = 440;     // the peak, at the annulus inner edge
 // v1's shell read as a faint whitish-pink haze over the pink body -- looked at
-// in archive-2026-09-04-u02-hover.webm f60 and -channel.webm f180, as §7
+// in archive-2026-09-04-u02-hover.webm f60 and -channel.webm f180, as s7
 // ordered ("go look it up" is an instruction to look). This is that colour at
-// the presence §7 asks for. The VALUE is chosen by eye in scene and never
+// the presence s7 asks for. The VALUE is chosen by eye in scene and never
 // sampled off the archive: a pale rose that reads pink on one ground reads grey
 // on another (CLAUDE.md, the dorsal-pink lesson).
 constexpr uint8_t kShellTint[3] = {255, 214, 232};
 constexpr int kShellOverInkPm = 260;      // the ink must survive being crossed
-// The live value the compositor reads; the constant above is the shipping
-// default and stays the named owner knob. U02_SHELL_ALPHA=<pm> overrides it for
-// the by-eye ladder ONLY, so the ladder comes from ONE BINARY
-// (10-GATE-CHECKLIST item 21: a comparison split across two builds measures the
-// builds). Never a shipping setting.
+// The live values the compositor reads; the constants above are the shipping
+// defaults and stay the named owner knobs. U02_SHELL_* overrides them for the
+// by-eye ladder ONLY, so the ladder comes from ONE BINARY (10-GATE-CHECKLIST
+// item 21: a comparison split across two builds measures the builds). Never a
+// shipping setting.
 inline int g_u02_shell_alpha_pm = kShellAlphaMaxPm;
+inline int g_u02_shell_depth_pm = kShellFogDepthPm;
+inline int g_u02_shell_out_pm = kShellOutReachPm;
+inline int g_u02_shell_floor_pm = kShellCoreFloorPm;
+inline int g_u02_shell_gamma = kShellRiseGamma;
 
-/** The falloff profile. `t_pm` is 1000 at the ink line and 0 at the reach, in
- *  either direction. Linear at gamma 1000, quadratic at 2000, blended between
- *  so the knob is continuous. */
+/** The falloff profile. `t_pm` is 1000 at the profile's peak and 0 at the gas's
+ *  outer edge. Linear at gamma 1000, quadratic at 2000, blended between so the
+ *  knob is continuous. */
 inline int shell_profile_pm(int t_pm, int gamma_pm) {
   if (t_pm <= 0) return 0;
   if (t_pm > 1000) t_pm = 1000;
@@ -593,7 +796,7 @@ inline int shell_profile_pm(int t_pm, int gamma_pm) {
   return (t_pm * (1000 - k) + quad * k) / 1000;
 }
 
-/** Paint the translucent shell as a band straddling the creature's silhouette.
+/** Paint the creature's outer layer as a GAS ANNULUS scaled to its own radius.
  *
  *  `cover` is pass 10's per-pixel creature coverage (body + cel ink); `ink` is
  *  the ink ring alone, or nullptr. Both come from the renderer's OWN masks --
@@ -601,77 +804,154 @@ inline int shell_profile_pm(int t_pm, int gamma_pm) {
  *  derivation is how two things that must agree stop agreeing.
  *
  *  Runs AFTER the cel ink pass and BEFORE the mana, so the mana glows over the
- *  shell exactly as it glows over the creature. */
+ *  shell exactly as it glows over the creature.
+ *
+ *  Three steps, and the middle one is the pass-15 change:
+ *    1. an UNCAPPED inward distance transform of the cover mask -- how deep
+ *       into the animal each pixel is, in pixels;
+ *    2. R = the deepest of those, i.e. the body's own apparent radius THIS
+ *       FRAME, which is what every reach is then a fraction of;
+ *    3. one continuous profile from the gas's outer edge inward: rise to a
+ *       peak at the annulus's inner boundary, decay to a plateau, hold.
+ *
+ *  Cost is one BFS pass over the frame with each pixel enqueued once -- about
+ *  740k integer ops at 384x240, which is nothing next to the composite that
+ *  follows. (Arithmetic, not measurement: 09-ENGINE-GOTCHAS s5.)
+ */
 inline void shell_paint(uint8_t* rgb, uint32_t w, uint32_t h,
                         const uint8_t* cover, const uint8_t* ink,
                         int alpha_max_pm) {
   if (cover == nullptr || alpha_max_pm <= 0) return;
   const size_t n = static_cast<size_t>(w) * h;
-  std::vector<int> band(n, 0);       // profile weight in pm; 0 = not in the band
+  const int iw = static_cast<int>(w), ih = static_cast<int>(h);
+
+  // ---- 1. the inward distance transform, UNCAPPED -----------------------
+  // depth[i] = 0 outside the cover, 1 on the first interior ring, and so on.
+  // The IMAGE BORDER counts as outside: a creature cropped by the frame edge
+  // is not thereby infinitely deep, and without this a close-up would inflate
+  // R and fog the whole animal. (Named, because it is a decision.)
+  std::vector<int32_t> depth(n, 0);
+  const auto expand = [&](const std::vector<size_t>& src, int32_t d,
+                          std::vector<size_t>& dst) {
+    for (const size_t i : src) {
+      const int x = static_cast<int>(i % w), y = static_cast<int>(i / w);
+      for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) {
+          if (dx == 0 && dy == 0) continue;
+          const int nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= iw || ny >= ih) continue;
+          const size_t j =
+              static_cast<size_t>(ny) * w + static_cast<uint32_t>(nx);
+          if (!cover[j] || depth[j] != 0) continue;
+          depth[j] = d;
+          dst.push_back(j);
+        }
+    }
+  };
+  // level 0: everything OUTSIDE the animal.
+  std::vector<size_t> lvl0;
+  lvl0.reserve(n);
+  for (size_t i = 0; i < n; ++i)
+    if (!cover[i]) lvl0.push_back(i);
+  // level 1: the first interior ring -- one step in from level 0, PLUS any
+  // cover pixel sitting on the image border, which is the "cropped is not
+  // infinitely deep" decision made explicit.
+  std::vector<size_t> cur;
+  cur.reserve(n / 8);
+  expand(lvl0, 1, cur);
+  const auto seed_border = [&](size_t i) {
+    if (cover[i] && depth[i] == 0) { depth[i] = 1; cur.push_back(i); }
+  };
+  for (int x = 0; x < iw; ++x) {
+    seed_border(static_cast<uint32_t>(x));
+    seed_border(static_cast<size_t>(ih - 1) * w + static_cast<uint32_t>(x));
+  }
+  for (int y = 0; y < ih; ++y) {
+    seed_border(static_cast<size_t>(y) * w);
+    seed_border(static_cast<size_t>(y) * w + static_cast<uint32_t>(iw - 1));
+  }
+  int32_t r_px = cur.empty() ? 0 : 1;
+  for (int32_t d = 2; !cur.empty(); ++d) {
+    std::vector<size_t> next;
+    next.reserve(cur.size());
+    expand(cur, d, next);
+    if (!next.empty()) r_px = d;
+    cur.swap(next);
+  }
+  if (r_px <= 0) return;   // nothing of the creature on screen this frame
+
+  // ---- 2. the reaches, as fractions of THIS FRAME'S radius --------------
+  int32_t out_px = static_cast<int32_t>(
+      static_cast<int64_t>(r_px) * g_u02_shell_out_pm / 1000);
+  if (out_px < kShellOutReachMinPx) out_px = kShellOutReachMinPx;
+  int32_t ann_px = static_cast<int32_t>(
+      static_cast<int64_t>(r_px) * g_u02_shell_depth_pm / 1000);
+  if (ann_px < kShellFogDepthMinPx) ann_px = kShellFogDepthMinPx;
+  // Where the profile peaks, measured from the gas's own outer edge.
+  const int32_t peak_at = out_px + ann_px;
+  int floor_pm = g_u02_shell_floor_pm;
+  if (floor_pm < 0) floor_pm = 0;
+  if (floor_pm > 1000) floor_pm = 1000;
+
+  // ---- 3. one profile, outer edge inward --------------------------------
+  // alpha_at(dist), dist measured from the gas's outer edge:
+  //   dist <= peak_at        rise, gamma-shaped, 0 -> alpha_max
+  //   peak_at .. +ann_px     decay, alpha_max -> alpha_max * floor
+  //   deeper                 hold at the plateau
+  const auto alpha_at = [&](int32_t dist) -> int {
+    if (dist <= 0) return 0;
+    if (dist <= peak_at) {
+      const int t = static_cast<int>(
+          static_cast<int64_t>(dist) * 1000 / (peak_at > 0 ? peak_at : 1));
+      return alpha_max_pm * shell_profile_pm(t, g_u02_shell_gamma) / 1000;
+    }
+    int32_t over = dist - peak_at;
+    if (over > ann_px) over = ann_px;
+    const int fall = static_cast<int>(
+        static_cast<int64_t>(over) * 1000 / (ann_px > 0 ? ann_px : 1));
+    const int scale = 1000 - fall * (1000 - floor_pm) / 1000;
+    return alpha_max_pm * scale / 1000;
+  };
+
+  // The exterior skirt: grow off the cover, out_px rings. Ring r is r steps
+  // out, so it sits at dist = out_px - r + 1 from the gas's own outer edge --
+  // the ring just outside the ink is the DENSEST of the skirt and the last one
+  // is the thinnest, which is the "denser the closer to the inside" half of
+  // D9 s14 read outside the line.
   std::vector<uint8_t> seen(n, 0);
-  std::vector<size_t> frontier;
-  frontier.reserve(n / 4);
-  // --- outward: grow off the cover, one ring per step --------------------
+  cur.clear();
   for (size_t i = 0; i < n; ++i)
-    if (cover[i]) { seen[i] = 1; frontier.push_back(i); }
-  for (int32_t r = 1; r <= kShellOutReachPx && !frontier.empty(); ++r) {
+    if (cover[i]) { seen[i] = 1; cur.push_back(i); }
+  std::vector<int32_t> outring(n, 0);
+  for (int32_t r = 1; r <= out_px && !cur.empty(); ++r) {
     std::vector<size_t> next;
-    next.reserve(frontier.size());
-    const int t_pm = 1000 - (r * 1000) / (kShellOutReachPx + 1);
-    for (const size_t i : frontier) {
+    next.reserve(cur.size());
+    for (const size_t i : cur) {
       const int x = static_cast<int>(i % w), y = static_cast<int>(i / w);
       for (int dy = -1; dy <= 1; ++dy)
         for (int dx = -1; dx <= 1; ++dx) {
           if (dx == 0 && dy == 0) continue;
           const int nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= static_cast<int>(w) ||
-              ny >= static_cast<int>(h))
-            continue;
+          if (nx < 0 || ny < 0 || nx >= iw || ny >= ih) continue;
           const size_t j =
               static_cast<size_t>(ny) * w + static_cast<uint32_t>(nx);
           if (seen[j]) continue;
           seen[j] = 1;
-          band[j] = shell_profile_pm(t_pm, kShellFalloffGamma);
+          outring[j] = out_px - r + 1;   // dist from the gas's outer edge
           next.push_back(j);
         }
     }
-    frontier.swap(next);
+    cur.swap(next);
   }
-  // --- inward: erode into the cover, same profile, its own reach ----------
-  std::fill(seen.begin(), seen.end(), 0);
-  frontier.clear();
-  for (size_t i = 0; i < n; ++i)
-    if (!cover[i]) { seen[i] = 1; frontier.push_back(i); }
-  for (int32_t r = 1; r <= kShellInReachPx && !frontier.empty(); ++r) {
-    std::vector<size_t> next;
-    next.reserve(frontier.size());
-    const int t_pm = 1000 - ((r - 1) * 1000) / kShellInReachPx;
-    for (const size_t i : frontier) {
-      const int x = static_cast<int>(i % w), y = static_cast<int>(i / w);
-      for (int dy = -1; dy <= 1; ++dy)
-        for (int dx = -1; dx <= 1; ++dx) {
-          if (dx == 0 && dy == 0) continue;
-          const int nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= static_cast<int>(w) ||
-              ny >= static_cast<int>(h))
-            continue;
-          const size_t j =
-              static_cast<size_t>(ny) * w + static_cast<uint32_t>(nx);
-          if (seen[j]) continue;
-          seen[j] = 1;
-          band[j] = shell_profile_pm(t_pm, kShellFalloffGamma);
-          next.push_back(j);
-        }
-    }
-    frontier.swap(next);
-  }
-  // --- composite ---------------------------------------------------------
+
+  // ---- composite ---------------------------------------------------------
   for (size_t i = 0; i < n; ++i) {
-    int a = band[i];
-    if (a <= 0) continue;
-    a = a * alpha_max_pm / 1000;
+    const int32_t dist = cover[i] ? out_px + depth[i] : outring[i];
+    if (dist <= 0) continue;
+    int a = alpha_at(dist);
     if (ink != nullptr && ink[i]) a = a * kShellOverInkPm / 1000;
     if (a <= 0) continue;
+    if (a > 1000) a = 1000;
     uint8_t* px = rgb + i * 3;
     for (int k = 0; k < 3; ++k)
       px[k] = static_cast<uint8_t>(
@@ -1728,6 +2008,14 @@ inline int g_u02_strand_dark_gain = -1;
 inline int g_u02_free_strand = -1;
 inline int g_u02_strand_perseg = -1;
 inline int g_u02_strand_cap = -1;
+// PASS 15 / D11 rung overrides: the shimmer's three axes, the mote count, and
+// the aqua rebalance. Same contract -- -1 means "use the constant", so an
+// unset environment renders the shipping bytes.
+inline int g_u02_shimmer_r = -1;
+inline int g_u02_shimmer_gain = -1;
+inline int g_u02_shimmer_flicker = -1;
+inline int g_u02_strand_motes = -1;
+inline int g_u02_aqua_bal = 0;      // 0 = the shipped aqua; 1 = the B>=G rung
 inline bool u02_strand_on() {
   return g_u02_strand_on < 0 ? kFoldStrandOn : g_u02_strand_on != 0;
 }
@@ -1745,6 +2033,23 @@ inline int u02_strand_perseg() {
 }
 inline int u02_strand_cap() {
   return g_u02_strand_cap < 1 ? kFoldStrandCapN : g_u02_strand_cap;
+}
+inline int32_t u02_shimmer_r() {
+  return g_u02_shimmer_r < 0 ? kFoldShimmerRPx : g_u02_shimmer_r;
+}
+inline int u02_shimmer_gain() {
+  return g_u02_shimmer_gain < 0 ? kFoldShimmerGainPm : g_u02_shimmer_gain;
+}
+inline int u02_shimmer_flicker() {
+  return g_u02_shimmer_flicker < 0 ? kFoldShimmerFlickerPm : g_u02_shimmer_flicker;
+}
+/** The mote garnish. The lightning read carries D11's larger population; the
+ *  green/aqua fold keeps the count D9 §3 cut it to. One function so the two
+ *  populations cannot be confused at a call site -- 09-ENGINE-GOTCHAS §14, one
+ *  knob serving two features is a knob the owner has for neither. */
+inline int u02_mote_garnish_pm() {
+  if (!u02_strand_on()) return kFoldMoteGarnishPm;
+  return g_u02_strand_motes < 0 ? kFoldStrandMoteGarnishPm : g_u02_strand_motes;
 }
 inline bool u02_free_strand_on() {
   if (g_u02_free_strand >= 0) return g_u02_free_strand != 0;  // env wins
@@ -2049,7 +2354,16 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     // of the finished dark. bolt_path is deterministic in (i, ph_e, seed), so
     // pass 1 walks exactly the path pass 0 darkened -- no cached point buffer,
     // and no chance of the two passes disagreeing about where the figure is.
-    const int passes = strand ? 2 : 1;
+    // PASS 15: THREE passes, not two, and the new middle one is D11's whole
+    // sentence. The two-pass ordering finding above stands and is the reason
+    // this is a pass rather than a third mana_push beside the others: the
+    // shimmer is a property of the WHOLE LINE too, so it must land on the
+    // finished navy and under the finished white. Order is
+    // navy -> shimmer -> white, outermost first, exactly as the layers stack.
+    const int passes = strand ? 3 : 1;
+    const int32_t shim_r = u02_shimmer_r();
+    const int shim_gain = u02_shimmer_gain();
+    const int shim_flick = u02_shimmer_flicker();
     for (int pass = 0; pass < passes; ++pass)
     for (int i = 0; i < kStencilPts; ++i) {
       if (!fold_edge_link(ph.shape_to, i)) continue;
@@ -2075,7 +2389,8 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
           const int32_t z = lerp32(pts[sgi][2], pts[sgi + 1][2], t, nst);
           if (strand) {
             if (pass == 0) {
-              // 3. THE DEEP DARK BLUE. opaque+soft, so it BLENDS TOWARD a
+              // LAYER 1 (drawn first, sits under): THE NAVY BACKING.
+              // opaque+soft, so it BLENDS TOWARD a
               // colour darker than either sky -- the only subtractive element
               // in this creature's whole mana path. Depth tested: a surround
               // is grounded, it is not energy shining through the animal.
@@ -2084,8 +2399,32 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               mana_push(out, x, y, z, dark_r, kRampStorm,
                         dark_gain * lit / 1000, true, false,
                         /*opaque=*/true, /*soft=*/true);
+            } else if (pass == 1) {
+              // LAYER 2: THE BLUE SHIMMER (D11) -- the layer this creature has
+              // never had. ADDITIVE, because it is light and light adds;
+              // depth test OFF, with the white core, because they are one
+              // object. It sits on the finished navy, so the blue has
+              // something dark to be bright against instead of the pale
+              // sunset it would otherwise wash into (08-LIGHTING: measure
+              // what an additive effect is drawn AGAINST before tuning it).
+              //
+              // The flicker is what makes it a shimmer rather than a blue
+              // tube: a per-stamp, per-FRAME hash on the gain, so the light
+              // crawls along the bolt between strikes instead of holding
+              // still. It is deliberately wider than any other modulation on
+              // these pixels -- the crayon-grain lesson is that a variation
+              // narrower than what is already moving is not there.
+              const uint32_t sh = fx_hash(
+                  kBoltSeed ^ 0x5B1Eu, frame,
+                  static_cast<uint32_t>((i * 97 + sgi * 13 + t) | 1));
+              const int span = shim_flick * 2 + 1;
+              const int mod = 1000 - shim_flick +
+                              static_cast<int>(sh % static_cast<uint32_t>(span));
+              mana_push(out, x, y, z, shim_r, kRampShimmer,
+                        shim_gain * lit / 1000 * mod / 1000, false, false);
             } else {
-              // 2. THE WHITE LINE, over the FINISHED dark. Additive, depth
+              // LAYER 3: THE WHITE LINE, over the finished navy AND its
+              // shimmer -- the hot centre of the bolt. Additive, depth
               // test OFF (the pulsar-core law: energy reads over flesh). It
               // lands inside a surround the whole figure already has, which
               // is the difference between this and the lab's rejected white
@@ -2113,8 +2452,17 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   }
 
   // ---- the motes ---------------------------------------------------------
+  // D11 SS4: "we want the other particles folded into shapes, and we want MORE
+  // of them. These are the lightning particles." So while the bolt is drawing
+  // the figure, the SHAPE motes stop being aqua garnish and become the bolt's
+  // own vertices -- a hot white heart in a blue shimmer, at the count
+  // u02_mote_garnish_pm() carries for that read. The green/aqua fold he likes
+  // is the strand-OFF path and keeps every number it shipped with: "it
+  // actually looks neat" is an instruction to leave it alone, not to unify it.
+  const bool bolt_motes = u02_strand_on();
+  const int garnish_pm = u02_mote_garnish_pm();
   int n_motes = kMoteCount * crowd_pm / 1000;
-  n_motes = n_motes * kFoldMoteGarnishPm / 1000;
+  n_motes = n_motes * garnish_pm / 1000;
   if (n_motes < 6) n_motes = 6;
   // ⚠ THE WANDERERS SCALE WITH THE GARNISH, AND NOT SCALING THEM IS WHY
   //  CUTTING THE MOTE COUNT DID NOT REMOVE THE FLOATING ORBS.
@@ -2138,7 +2486,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   //  they were authored as whatever the cloud size becomes. At least one
   //  survives: D2's "drift off in weird ways" is still in the look, it is
   //  simply not the look any more.
-  int n_wander = kWanderCount * crowd_pm / 1000 * kFoldMoteGarnishPm / 1000;
+  int n_wander = kWanderCount * crowd_pm / 1000 * garnish_pm / 1000;
   if (n_wander < 1) n_wander = 1;
   if (n_wander > n_motes - 2) n_wander = n_motes - 2 > 1 ? n_motes - 2 : 1;
   const int n_shape = n_motes - n_wander;
@@ -2283,9 +2631,17 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     // count, not the radii, not the spread, and NOT kMoteHaloGainPm -- the lab
     // measured that raising any of those buys overlap and loses the hue, which
     // is the fault being fixed here. This is a draw-order change and a radius.
-    mana_push(out, P[0], P[1], P[2], halo, ramp, kMoteHaloGainPm, true, false);
+    // D11: the SHAPE motes join the lightning; the wanderers do not. A
+    // wanderer is the drift garnish that leaves the pocket -- it is not folded
+    // into anything, so it is not one of "the other particles" and it keeps
+    // the fold's own colour. (09-ENGINE-GOTCHAS SS14, the other way round: two
+    // populations that read differently need two decisions, not one knob.)
+    const uint8_t mramp = (bolt_motes && m < n_shape)
+                              ? static_cast<uint8_t>(kRampShimmer)
+                              : ramp;
+    mana_push(out, P[0], P[1], P[2], halo, mramp, kMoteHaloGainPm, true, false);
     mana_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000,
-              mana_core_ramp(ramp), 1000,
+              mana_core_ramp(mramp), 1000,
               true, false, /*opaque=*/true, /*soft=*/true);
   }
   return agit;
@@ -2448,7 +2804,12 @@ inline void mana_build_ramps(GlowFrame ramps[kRampCount], uint32_t frame) {
   glow_build_ramp(ramps[kRampCyan], kBlack, kManaCyanMid, kManaCyanHi, 1000);
   glow_build_ramp(ramps[kRampWhite], kBlack, kManaWhiteMid, kManaWhiteHi, 1000);
   glow_build_ramp(ramps[kRampDrip], kManaDripMid, kManaDripMid, kManaDripHi, 1000);
-  glow_build_ramp(ramps[kRampAqua], kBlack, kManaAquaMid, kManaAquaHi, 1000);
+  // D11 SS4, the one rebalance rung for the fold he likes: B >= G at both
+  // stops. Default OFF -- the shipped aqua is what he called neat, and this is
+  // an experiment row, not a replacement (ZHAO_U02_AQUA_BAL=1).
+  glow_build_ramp(ramps[kRampAqua], kBlack,
+                  g_u02_aqua_bal ? kManaAquaBalMid : kManaAquaMid,
+                  g_u02_aqua_bal ? kManaAquaBalHi : kManaAquaHi, 1000);
   glow_build_ramp(ramps[kRampSeaGreen], kBlack, kManaSeaGreenMid, kManaSeaGreenHi, 1000);
   glow_build_ramp(ramps[kRampDeepBlue], kBlack, kManaDeepBlueMid, kManaDeepBlueHi, 1000);
   // LO == MID on purpose: a flat bright body, not a fade from black.
@@ -2458,6 +2819,16 @@ inline void mana_build_ramps(GlowFrame ramps[kRampCount], uint32_t frame) {
   // fades to black at its rim is a surround that is not there at its rim.
   glow_build_ramp(ramps[kRampStorm], kManaStormMid, kManaStormMid,
                   kManaStormHi, 1000);
+  // D11: THE BLUE SHIMMER. Additive, so it starts at black like every other
+  // additive family here -- the exterior of a corona sprite must be the
+  // additive identity or every blob wears a hard rim (09-ENGINE-GOTCHAS SS11).
+  glow_build_ramp(ramps[kRampShimmer], kBlack, kManaShimmerMid,
+                  kManaShimmerHi, 1000);
+  // D11: the lightning mote's OPAQUE heart. LO == MID, the kRampAquaCore
+  // idiom, for the pass-8 reason -- an opaque disc is mostly its ramp's lower
+  // half, and a ramp from black gives a hot mote a dark middle.
+  glow_build_ramp(ramps[kRampBoltCore], kManaBoltCoreMid, kManaBoltCoreMid,
+                  kManaBoltCoreHi, 1000);
 }
 
 
