@@ -1249,6 +1249,143 @@ targets:
       - fpga/rtl/field/zhao_field_v3_ring.sv
 
   # ==========================================================================
+  # THE REMAINING TWENTY-SEVEN -- every production block is now measurable
+  # ==========================================================================
+  # 2026-09-09. With these, EVERY block in the production manifest has a fit
+  # target except zhao_shell_top, which is excluded on purpose: it has its own
+  # flow (run_shell_fit.ps1) and its own receipt, and a block target would
+  # invite a second, conflicting measurement of the same thing.
+  #
+  # This closes the finding that opened the day. 43 of 45 unpriced blocks could
+  # not be measured BY ANYONE because they had no source list, so run_block_fit
+  # refused them at preflight -- and that, not toolchain time, is why the DSP
+  # and ALM totals were floors. Being measurABLE is not being measured; these
+  # are now merely unrun, which is a queue rather than a wall.
+  #
+  # NO RULES on any of them, for the same reason as the previous two groups:
+  # none of these headers states a per-block resource budget, and the brief is
+  # explicit that a header estimate is not a product law. A rule written after
+  # the fit it governs reports a pass.
+  #
+  # Closures computed, not guessed. Six pull in a dependency the module name
+  # does not suggest -- wcache/vertex_arena, attrdiv_svc/attrdiv,
+  # toon/toon_div, stamp/blend+sq -- and a hand-written list would have missed
+  # them exactly as three were missed from zhao_prod_top this morning.
+
+  - top: zhao_cmd_decoder
+    sources:
+      - fpga/rtl/command/zhao_cmd_decoder.sv
+
+  - top: zhao_field_progcache
+    sources:
+      - fpga/rtl/field/zhao_field_progcache.sv
+
+  - top: zhao_field_v3_wbarb
+    sources:
+      - fpga/rtl/field/zhao_field_v3_wbarb.sv
+
+  - top: zhao_forge_cliff
+    sources:
+      - fpga/rtl/forge/zhao_forge_cliff.sv
+
+  - top: zhao_forge_prim
+    sources:
+      - fpga/rtl/forge/zhao_forge_prim.sv
+
+  - top: zhao_geom_assemble
+    sources:
+      - fpga/rtl/geometry/zhao_geom_assemble.sv
+
+  - top: zhao_geom_assetfetch
+    sources:
+      - fpga/rtl/geometry/zhao_geom_assetfetch.sv
+
+  - top: zhao_geom_meshfetch
+    sources:
+      - fpga/rtl/geometry/zhao_geom_meshfetch.sv
+
+  - top: zhao_geom_parambuf
+    sources:
+      - fpga/rtl/geometry/zhao_geom_parambuf.sv
+
+  - top: zhao_geom_vdecode
+    sources:
+      - fpga/rtl/geometry/zhao_geom_vdecode.sv
+
+  - top: zhao_geom_wcache
+    sources:
+      - fpga/rtl/geometry/zhao_geom_wcache.sv
+      - fpga/rtl/geometry/zhao_vertex_arena.sv
+
+  - top: zhao_measure_governor
+    sources:
+      - fpga/rtl/measure/zhao_measure_governor.sv
+
+  - top: zhao_measure_tokens
+    sources:
+      - fpga/rtl/measure/zhao_measure_tokens.sv
+
+  - top: zhao_part_expand
+    sources:
+      - fpga/rtl/particles/zhao_part_expand.sv
+
+  - top: zhao_part_ladder
+    sources:
+      - fpga/rtl/particles/zhao_part_ladder.sv
+
+  - top: zhao_part_record
+    sources:
+      - fpga/rtl/particles/zhao_part_record.sv
+
+  - top: zhao_part_soft
+    sources:
+      - fpga/rtl/particles/zhao_part_soft.sv
+
+  - top: zhao_post_gather
+    sources:
+      - fpga/rtl/compositor/zhao_post_gather.sv
+
+  - top: zhao_raster_attrdiv_svc
+    sources:
+      - fpga/rtl/raster/zhao_raster_attrdiv_svc.sv
+      - fpga/rtl/raster/zhao_raster_attrdiv.sv
+
+  - top: zhao_raster_toon
+    sources:
+      - fpga/rtl/raster/zhao_raster_toon.sv
+      - fpga/rtl/raster/zhao_raster_toon_div.sv
+
+  - top: zhao_surface_sheet
+    sources:
+      - fpga/rtl/surface/zhao_surface_sheet.sv
+
+  - top: zhao_surface_stamp
+    sources:
+      - fpga/rtl/surface/zhao_surface_stamp.sv
+      - fpga/rtl/surface/zhao_surface_blend.sv
+      - fpga/rtl/surface/zhao_surface_sq.sv
+
+  - top: zhao_terrain_island_dir
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_island_dir.sv
+
+  - top: zhao_terrain_patch
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_patch.sv
+
+  - top: zhao_terrain_velocity
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_velocity.sv
+
+  - top: zhao_twod_plane
+    sources:
+      - fpga/rtl/compositor/zhao_twod_plane.sv
+
+  - top: zhao_twod_sprite
+    sources:
+      - fpga/rtl/compositor/zhao_twod_sprite.sv
+
+  # ==========================================================================
   # FOURTEEN MORE, and several already have a NUMBER but no way to reproduce it
   # ==========================================================================
   # 2026-09-09, owner brief 1.2: "Keep the useful target preparation." Closures
