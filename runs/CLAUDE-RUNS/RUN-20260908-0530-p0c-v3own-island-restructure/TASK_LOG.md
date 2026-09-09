@@ -2434,3 +2434,56 @@ structurally unclosable; registers +81% systemic and a question about the BUDGET
 DSP +21% localised and closable today by a built, fitted, priced swap.
 
 Report: `reports/REGISTER-BREACH-IS-SYSTEMIC-NOT-V3OWN-20260909.md`.
+
+## 2026-09-09 -- perspuv: the register mass is a token table, and the split is REFUTED
+
+Answered the question the register diagnosis left open for the island's worst
+breach (perspuv_svc, 4.63x its register budget): wrong budget, or over-pipelining?
+Neither. No fit run; all evidence was already on disk.
+
+**The registers are a 16-entry token table, not pipeline depth.** Declared: `_q`
+pipeline state **594 bits** (INSIDE its 700-bit budget line), token table **3,376
+bits** = 85% of 3,970 declared; measured 3,240. So the "perspective pair
+pipeline" is not over-pipelined -- it carries per-token state the S3.3 budget
+line never mentioned. Same shape as v3own's finding, different block: the
+budget's model omitted per-token state generally.
+
+**The 2026-09-06 per-axis split is refuted by the fit that followed it**, exactly
+as its own comment invited ("STATIC ANALYSIS... the fit that follows this change
+is what confirms or refutes it"). Provenance checked FIRST: split in `7d71235a`
+2026-09-06, @g2-prod source `82a4f317` 2026-09-09 with the split signals present.
+Island RAM Summary lists exactly ONE array from this block: `e_tag`, Simple Dual
+Port, 16x14, 224 bits. e_num_u/v, e_mant_u/v, e_q_u/v and e_k all stayed in flops.
+
+**And e_mant's split was mechanically UNDONE: 384 registers "Merged with
+e_mant_u".** e_num_v and e_q_v: 0 merged (different sources, legitimately split).
+552 merged in the block total. The comment's own justification caused it -- "both
+copies are written at tail_q from the same r_mant_i on the same clock, so they
+cannot disagree" is precisely the condition register merging fires on. So the
+trade happened in neither direction: the duplication cost nothing and the split
+achieved nothing, because the merged array again has two unrelated read
+addresses. **Duplication-for-port-splitting is self-defeating when the copies are
+written identically** -- the property making it safe is the property making it
+removable.
+
+**What blocks e_num is NOT determined by available evidence, and I am not
+guessing.** e_num_u kept its split, has ONE write and ONE read address, is 512
+bits against e_tag's inferred 224 -- and did not infer, so read-address count is
+not sufficient (the load-bearing assumption of the 09-05 diagnosis).
+`check_ram_inference.py` flags every array "written from an ASYNC-RESET process
+-- WEAK SIGNAL, measured false positives"; e_tag carries the identical flag and
+inferred, so it cannot discriminate. The tool's honest self-labelling stopped a
+third confident wrong answer today. Settled: e_val, e_sat, e_have have 2+ write
+addresses (S5.3 forbids by name) and can never be memory.
+
+**PROCESS FINDING, and it is the most useful part: RAM inference is decided at
+MAP, not fit.** The RAM Summary comes from `quartus_map`, and `run_block_map.ps1`
+runs in the seconds-to-minutes class rather than 1.5-4 hours. So this whole
+register-inference class -- behind the island's largest breach -- is answerable
+WITHOUT spending the scarce resource. Sequence: map to learn whether it infers,
+then a fit only to learn whether it was worth it. e_k is already the designed
+control (96 bits, same geometry as e_tag, differing only in read-address count,
+"left as evidence").
+
+No RTL changed, no job launched.
+Report: `reports/PERSPUV-SPLIT-REFUTED-BY-ITS-OWN-FIT-20260909.md`.
