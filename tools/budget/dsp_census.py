@@ -155,12 +155,44 @@ def main():
     print("    LOWER bound on the machine: integration glue is not here, and")
     print("      neither are the blocks nobody has built yet.")
     print()
+    # SPLIT "not fitted yet" FROM "cannot be fitted at all".
+    #
+    # A bare list of unmeasured blocks reads as a queue of work waiting its turn.
+    # It is not: a block with no `- top:` entry in design/fit_targets.yml has no
+    # source list, so run_block_fit refuses it at preflight and it can never be
+    # measured by anyone until someone writes the target. D22 recorded sixteen of
+    # twenty-four geometry blocks in exactly that state.
+    #
+    # Those two populations need different work -- one needs toolchain time, the
+    # other needs a target authored with its rules stated BEFORE the fit, because
+    # a rule written afterwards reports a pass. Printing them as one list hides
+    # which is which.
+    try:
+        y = io.open(os.path.join("design", "fit_targets.yml"),
+                    encoding="utf-8", errors="replace").read()
+    except OSError:
+        y = ""
+    no_target = [m for m in unmeasured if ("- top: %s\n" % m) not in y]
+    queued = [m for m in unmeasured if m not in no_target]
+
     print("  THIS IS A FLOOR. %d of %d intended blocks have no measured DSP "
-          "figure:" % (len(unmeasured), len(tops)))
-    for m in unmeasured[:12]:
-        print("     %s" % m)
-    if len(unmeasured) > 12:
-        print("     ... and %d more" % (len(unmeasured) - 12))
+          "figure, and they split in two:" % (len(unmeasured), len(tops)))
+    print()
+    print("    %d have a fit target and simply have not been run:" % len(queued))
+    for m in sorted(queued)[:8]:
+        print("       %s" % m)
+    if len(queued) > 8:
+        print("       ... and %d more" % (len(queued) - 8))
+    print()
+    print("    %d have NO `- top:` entry in design/fit_targets.yml, so they "
+          "CANNOT" % len(no_target))
+    print("    be fitted by anyone until a target is authored -- with its rules")
+    print("    stated BEFORE the fit, because a rule written afterwards reports")
+    print("    a pass:")
+    for m in sorted(no_target)[:12]:
+        print("       %s" % m)
+    if len(no_target) > 12:
+        print("       ... and %d more" % (len(no_target) - 12))
     only_lab = [m for m in unmeasured if m in labelled]
     if only_lab:
         print()
