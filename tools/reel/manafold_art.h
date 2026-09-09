@@ -1048,7 +1048,13 @@ constexpr int32_t kEyeTravelPivotXMm = 0;
 // at kCompressAmpPm 12500 swings the surface further than that, so a standoff
 // under ~20 mm is swallowed. It is the knob that trades "floating off the face"
 // against "eaten by the breath" and it is meant to be moved.
-constexpr int32_t kEyeStandoffMm = 22;
+// PASS 14 / R2(b): 22 -> 28, because this value was AUTHORED AT THE BOUNCE
+// EXTREMES against kCompressAmpPm 12500 and the breath is 16500 now. Leaving it
+// would have let the deeper inhale swallow the eyes -- the exact steady-state
+// sink this constant exists to prevent -- and the coupling is written two
+// paragraphs up, so this is a forced consequence of R2(b) rather than a
+// separate opinion about the face. Re-judge it by eye at the new extremes.
+constexpr int32_t kEyeStandoffMm = 28;
 
 // THE ALWAYS-ON TRAVEL. D9 SS6 is not a capability request -- "the eyes have to
 // move MORE" is about what the bank shows, so the channel rides every
@@ -1412,7 +1418,38 @@ constexpr int kBobPeriodAKeys = 48, kBobPeriodBKeys = 122;
 // ⚠ It also drives PASS 12's stretchy spans (Direction 9 SS13) through the same
 // sample -- see kLoopStretchStrength, which is where the honest limitation of
 // that shared channel is written down.
-constexpr int32_t kCompressAmpPm = 12500;
+// ==== PASS 14 / R2(b) -- THE FIFTH ASK, AND THE FIRST ONE THE MESH CAN TAKE ==
+//
+// D9 SS9, "also make body more bouncy it's fun", has now been asked four times
+// and answered once. Pass 13 shipped nothing, and it was RIGHT not to: the
+// by-eye review found the body goes polygonal when it squashes, so raising the
+// amplitude would have made the fault more visible, not the creature bouncier.
+// The expressiveness comparison then found the same thing from the other side
+// -- a sphere's silhouette cannot reconfigure the way a snake's can, so the
+// squash is the ONLY lever that can carry a death or an idle, and it was the
+// one lever that got worse the harder it was used.
+//
+// R2(a) removed that objection: kBodySegments 16 -> 32 halves the chord length
+// around the equator, so the squashed silhouette is a curve rather than a
+// chorded lozenge, and the order the plan forced (mesh, THEN amplitude, THEN
+// the clips) is satisfied. This is the amplitude.
+//
+// ⚠ AND HERE IS THE CEILING, WHICH NOBODY HAD WRITTEN DOWN. `flat` is a
+// uint16 and every squash path clamps it at 60000 (91.5% flatten -- a pancake,
+// and a sane physical limit). The DEATHS stack their impact squash ON TOP of
+// the breath in the same sample:
+//
+//     death peak = kCompressAmpPm * kDeathImpactSquashPm/1000 + kCompressAmpPm
+//
+// At the old 12500/3100 that is 51250, comfortably under. A naive raise to
+// 16000 puts it at 65600 -- **it would have clamped, silently, on the frame the
+// creature hits the ground**, and a clamped squash is a knob that has stopped
+// responding while still looking like a knob. So the impact's own per-mille
+// comes DOWN as the shared amplitude goes up: the death's absolute squash still
+// rises (38750 -> 40425) and the total peak lands at 56925, which leaves R2(c)
+// somewhere to go. The static_assert below is there so the next person to raise
+// this finds a compile error instead of a flat frame.
+constexpr int32_t kCompressAmpPm = 16500;
 constexpr int32_t kSpreadRatioPm = 550;    // the positive-volume partner
 constexpr int kCompressPeriodKeys = 30;
 constexpr int32_t kCompressLoopCouplePm = 14;  // sympathetic hinge-root bob
@@ -2151,7 +2188,19 @@ constexpr int kDeathDeformFadeKeys = 22;
 // in from EXACTLY zero over these keys, which both closes the seam and buys
 // an authored beat: the clip opens on a held breath -- the moment before.
 constexpr int kDeathOpenKeys = 8;
-constexpr int32_t kDeathImpactSquashPm = 3100;  // x kCompressAmpPm at strike 0
+// PASS 14 / R2(b): 3100 -> 2450 as kCompressAmpPm went 12500 -> 16500. This is
+// NOT the death being made tamer -- the absolute squash rises from 38750 to
+// 40425. It is the clamp headroom being kept honest; see the ceiling note
+// beside kCompressAmpPm.
+constexpr int32_t kDeathImpactSquashPm = 2450;  // x kCompressAmpPm at strike 0
+// THE DEFORM CEILING, made into a compile error instead of a flat frame.
+// Every squash path clamps `flat` at 60000, and the deaths are the stack that
+// gets closest: impact + breath, in one sample, on the strike frame.
+static_assert(kCompressAmpPm * kDeathImpactSquashPm / 1000 + kCompressAmpPm < 60000,
+              "the death's impact squash plus the breath would clamp at 60000: "
+              "the strike frame would stop responding to either knob. Lower "
+              "kDeathImpactSquashPm or kCompressAmpPm -- do not raise the clamp "
+              "without checking what 60000 means (it is 91.5% flatten).");
 // the corpse's final attitude: it does not settle upright like a parked car
 constexpr int32_t kDeathRestRollA16 = 2600;   // tipped over, and it stays
 constexpr int32_t kDeathRestPitchA16 = 1500;
@@ -2300,7 +2349,20 @@ constexpr int32_t kBlownSinkMm = 210;     // the anticipation dip
 // the one part of this clip that is supposed to be its show moment (the three
 // nodules streaming by different amounts). 27000 is about 148 degrees: it
 // still reads as something knocked flying, and the antenna stays on screen.
-constexpr int32_t kBlownTumbleA16 = 27000;  // ~148 deg: tumbling, still legible
+//
+// PASS 14 / R7 -- THIS IS A FULL REVOLUTION NOW, AND THE BY-EYE FINDING ABOVE
+// IS NOT BEING OVERRULED. It still governs; what changed is that the creature
+// no longer PARKS at its peak angle. The tumble curve is monotone and reads
+// 390 at the apex, so the apex angle is 0.390 * 360 = 140 degrees -- inside
+// the window the eye approved -- and the creature sweeps through it instead of
+// holding it for fifty-eight frames. 65536 (one turn) is what lands it
+// right-side up at the catch: quat_axis halves it, so e = 1000 is -identity.
+// ⚠ Changing THIS value now changes where the creature is at the catch, which
+// the ground-contact probe gates. Author the apex angle on kTumble's 390, not
+// here.
+constexpr int32_t kBlownTumbleA16 = 65536;  // one full turn; 390 -> ~140 deg
+                                            // at the apex (was 27000 with a
+                                            // plateau on it)
 // PASS 13 / R4 -- ROLL READS, YAW HIDES, and this was the real cause of the
 // "dark at apex" the plan blamed on the warm lamp.
 //
@@ -2403,7 +2465,19 @@ constexpr int32_t kTaunt3LeanA16 = 4100;  // was 2400 (13 deg): a MOCKING lean
 // The shoulder turned on the dismissal. It was `-kTaunt3LeanA16 * 2` inside the
 // builder, so raising the lean silently doubled the turn -- one knob governing
 // two features is 09-ENGINE-GOTCHAS 14, and it is split here before it bites.
-constexpr int32_t kTaunt3FlickYawA16 = 7600;
+// PASS 14 / R4: 7600 (41.7 deg) landed the punchline exactly front-on and then
+// HELD IT THERE for fifty frames -- the balloon zone the review named. The turn
+// the dismissal needs is not lost, it is split with kTaunt3FlickRollA16 onto a
+// second axis.
+//
+// ⚠ SECOND LOOK: CUTTING IT WAS THE WRONG DIRECTION AND THE SHEET SAID SO.
+// The clip arrives at the flick already on a three-quarter, so ANY yaw toward
+// front-on lands nearer the balloon, and 23 degrees still got there. The sign
+// is reversed instead: the dismissal turns the shoulder AWAY, deeper into the
+// three-quarter, which is both further from the worst angle and the better
+// gesture -- you turn away from someone you are dismissing. Bigger than the cut
+// value because it now has somewhere to go.
+constexpr int32_t kTaunt3FlickYawA16 = 6000;
 // PASS 13 / R3, SECOND LOOK -- A SHRUG IS A WHOLE-BODY GESTURE.
 //
 // After the re-time the shrug ARRIVED, and it still did not read on a 46-tile
@@ -2418,6 +2492,106 @@ constexpr int32_t kTaunt3FlickYawA16 = 7600;
 // the same joint doing opposite things, so the lean has somewhere to come FROM.
 constexpr int32_t kTaunt3ShrugRollA16 = 3000;
 constexpr int32_t kTaunt3FlickMm = 132;   // was 104
+
+// ===== PASS 14 / R4 -- THE HOLDS ARE MADE OF STILLNESS, NOT OF SLOWNESS =====
+//
+// Pass 13 put 07-MOTION-STYLE 8a's beat shape into this clip and it was still
+// not funny. The review measured why: across all 368 frames the motion never
+// approaches zero. **The beats were never the fault.** What was wrong is that
+// the beats are the only thing in the clip that ever stopped -- the 198 mm
+// hover bob, the breathing squash, the eye twinkle and the previous beats'
+// decaying tails all ran straight through both holds. A hold with a body
+// drifting 198 mm through it is not a hold, and this is the third attempt, so
+// "make it slower" was never available: a metric reporting SLOWER would have
+// passed the same failure again.
+//
+// THE MECHANISM IS COPIED FROM `trick`, the one clip in the bank that gets a
+// laugh and that nobody authored as a joke. Its handstand holds because the
+// root height is an authored curve that PLATEAUS (kRootY, flat from key 78 to
+// 148) and the flip is parked (kFlip, flat at -1000 across the same span),
+// while the small channels -- the balance wobble, the blinks -- stay alive.
+// **Trick does not freeze. It parks the BIG channels and keeps the small ones**,
+// and the calibrated hold meter finds exactly that window (frames 155-198,
+// 240-286) and finds nothing anywhere in pass-13 taunt3.
+//
+// So the ambient clock is TIME-WARPED rather than faded down. Fading an
+// amplitude MOVES THE BODY: drop a 198 mm bob to a tenth while its sine sits
+// near peak and the creature falls ~178 mm during the four keys of the ramp --
+// an unauthored lurch at the exact frame the hold is supposed to begin.
+// Stopping the CLOCK instead leaves the body wherever the beat put it and
+// costs no motion at all. One clock drives the bob, the breath and the twinkle
+// at fixed phase to each other; `flight` established that pattern ("ONE clock
+// ... driving the height, the pitch, the breath and the antenna's hang-back at
+// fixed phase") and this is its second use.
+//
+// The clock must still arrive at K-1 or the loop seam opens -- QA 6.3b measured
+// 110.7 mm of seam and it was visible as a grey smear on the last frame -- so
+// the 48 parked keys are paid back as a ~1.45x clock through the lean and the
+// shimmy. That is not a cost being tolerated: the float running quick while the
+// creature works and stopping dead while it holds is the read we want.
+constexpr int kTaunt3Hold1Key = 26;      // the stillness starts two keys after
+constexpr int kTaunt3Hold1EndKey = 52;   // the shrug lands, and ends with it
+constexpr int kTaunt3Hold2Key = 152;     // the punchline: after the 3-key flick
+constexpr int kTaunt3Hold2EndKey = 174;  // and its 3-key body lag have landed
+// Clock reading when the punchline parks. The remaining 12 units are spent on
+// the 9-key release, so nothing has to sprint at the seam. Lower this and the
+// lean/shimmy run faster; raise it and the release does.
+constexpr int kTaunt3ClockAtHold2 = 171;
+
+// ===== PASS 14 / R4 -- AND THE HELD POSE HAS TO BE WORTH HOLDING ===========
+//
+// A hold at a pose nobody can read is a stall. The before sheet settles this
+// by eye and it is worse than the review's "front-on balloon": across
+// f304-f354 -- the whole punchline -- **the loop is edge-on**. The creature's
+// one big shape, the thing that makes it Manafold rather than a ball, is a
+// vertical stub two nodules wide, and it collapses over f294-302, which is the
+// three-key flick itself, BEFORE the yaw has done much of anything.
+//
+// The cause is geometric, not a tuning error. The dismissal pushed all three
+// nodules the same way along ONE horizontal axis while the antenna's base
+// stayed put, so the loop's PLANE tipped, and a tipped loop presents as a line.
+// The yaw then compounded it by parking the body front-on for 50 frames.
+//
+// Two fixes, and the first is the one that matters:
+//
+//  * THE THROW IS MOSTLY UPWARD NOW. Up is the one direction that cannot tip
+//    the loop edge-on, whatever the body yaw is doing, and "the whole antenna
+//    flung up and back over the shoulder" is a better dismissal than a sideways
+//    swipe anyway. The lateral component is kept as the remainder so the
+//    gesture still has a direction.
+//  * THE TURN IS SPLIT ACROSS TWO AXES. 8b is right that the dismissal has to
+//    carry a whole-body component, and pass 13 was right to add the yaw -- but
+//    41.7 degrees lands exactly on front-on and then holds there. The yaw is cut
+//    to a three-quarter and the difference is spent as a ROLL, so the body still
+//    turns, on more axes than before, and does not stop where it reads worst.
+constexpr int32_t kTaunt3FlickLiftPm = 900;  // share of the throw that is UP
+constexpr int32_t kTaunt3FlickBackPm = 450;  // ...and back, away from the face
+constexpr int32_t kTaunt3FlickSidePm = 350;  // ...the lateral remainder (was
+                                             // 1000: the whole throw, and the
+                                             // reason the loop went edge-on)
+constexpr int32_t kTaunt3FlickRollA16 = 7000;  // the tip-away, new in pass 14
+// PASS 14 / R4, SECOND LOOK -- THE PUNCHLINE HAS TO BE A DIFFERENT SHAPE, AND
+// THE SQUASH IS THE ONLY LEVER THAT MAKES ONE.
+//
+// The first authored pass fixed the loop (it is an open loop again at the
+// punchline instead of an edge-on stub -- confirmed on a 4x crop, not on the
+// sheet, checklist 41) and the hold reads. What it did NOT fix is that the held
+// pose is still a round ball standing upright, which is the pose in every other
+// frame of every other clip. The expressiveness comparison says exactly why
+// this matters and exactly what to do about it: a snake's whole silhouette can
+// reconfigure and a sphere's cannot, so Manafold has three levers -- antenna,
+// rotation, squash -- and **the squash is the only one that changes the
+// ENVELOPE**. Pass 13 had it available and never spent it on a beat.
+//
+// So the dismissal flattens the body and holds it flat. A wide low lozenge with
+// the loop flung off it is a silhouette nobody can confuse with the standing
+// ball, which is what "a punchline frame you can point at" means.
+//
+// ⚠ It is added as a DIRECT term, not folded into compress_at's amplitude. The
+// breath is read through the parked ambient clock during the hold, so its sine
+// is frozen at whatever phase the clock stopped on -- multiply the punch by
+// that and the punchline's depth becomes an accident of where the hold began.
+constexpr int32_t kTaunt3FlickSquashPm = 1900;  // x kCompressAmpPm, direct
 
 // ============================== STAGE ======================================
 

@@ -3055,30 +3055,66 @@ inline zc::Clip build_blown() {
     const int32_t stream = 1000 + (vel > 0 ? vel / 3 : -vel / 5) - gather / 5;
     loop_pose(g, stream, stream, stream, stream, 0);
     if (f > kBlownAnticipKey && f < kBlownCatchKey) {
-      // ⚠ THE TUMBLE UNWINDS, and the ground-contact probe is why. A one-way
-      // 148-degree tumble left the creature nose-down at the CATCH, and the
-      // antenna went 27 mm into the dirt at key 163 -- an undeclared
-      // penetration, which the law calls a fault however good it looks. The
-      // rotation now peaks at the apex and returns to zero by the catch, which
-      // is also the better read: the catch IS the float taking hold again, and
-      // a floating thing being caught RIGHTS ITSELF. One authored curve
-      // replaced a bug and a beat that was missing.
-      // R4: the tumble's plateau follows the height's -- it peaks INTO the hang
-      // and unwinds out of it, so the one still moment in the clip is still in
-      // rotation as well as in height. The unwind to zero by the catch is pass
-      // 12's fix and the reason the catch reads as the float taking hold.
+      // ===== PASS 14 / R7 -- THE TUMBLE IS DECOUPLED FROM THE HEIGHT ========
+      //
+      // The apex is not DARK. The review measured `blown` at 3.5% brightness
+      // range end to end and the plan's warm-lamp theory died there. The apex
+      // is EMPTY: nothing happens on it. And the reason nothing happens is in
+      // the table this replaces -- the tumble's plateau was authored to follow
+      // the height's, deliberately, so that "the one still moment in the clip
+      // is still in rotation as well as in height". Height held, rotation held,
+      // and the result is fifty-eight frames within 6% of peak height with a
+      // parked pose on them. The intent was a beat; what it produced is the one
+      // stretch of the clip where the creature is doing nothing at all.
+      //
+      // So the rotation runs MONOTONE across the whole flight now, and the
+      // table IS the shape -- `fold_ease` is gone from it, because a smoothstep
+      // exists to ease into and out of a plateau and there is no plateau left.
+      // It spins up out of the blast, holds a steady rate through the apex, and
+      // decelerates into the catch as the float takes hold.
+      //
+      // ⚠ THE CATCH POSE IS BIT-FOR-BIT WHAT IT WAS, AND THAT IS STRUCTURAL,
+      // NOT A COINCIDENCE. Pass 12 fixed a real fault here -- a one-way
+      // 148-degree tumble left the creature nose-down at the catch and drove
+      // the antenna 27 mm into the dirt -- and pass 13 fixed it by returning
+      // the curve to zero. Returning a curve to zero is a beat spent on
+      // bookkeeping. This lands the same pose by going ALL THE WAY ROUND:
+      // kBlownTumbleA16 is a full revolution, and quat_axis takes the half
+      // angle as `(a >> 1) & 0xFFFF`, so e = 1000 is 32768 of half-angle --
+      // exactly -identity, the same rotation as identity. The creature is
+      // right-side up at the catch because it completed a turn, not because it
+      // rewound one.
+      //
+      // 390 at the apex is the by-eye finding kBlownTumbleA16's own note
+      // records, preserved: 148 degrees still reads as something knocked
+      // flying and keeps the antenna off the far side of the body, while 241
+      // hides it. What changes is that the creature PASSES THROUGH that angle
+      // instead of parking on it. (The old comment here cited "key 163" -- a
+      // number from the 196-key version of this clip, left standing three keys
+      // above kBlownKeys = 146. Gate checklist 8, and it is corrected rather
+      // than carried.)
       static const Key kTumble[] = {{0, 0}, {kBlownAnticipKey, 0},
+                                    {kBlownLaunchKey, 40},
+                                    {kBlownApexKey, 390},
+                                    {kBlownCatchKey - 10, 940},
+                                    {kBlownCatchKey, 1000},
+                                    {kBlownKeys - 1, 1000}};
+      // ...and the YAW keeps the old rise-and-return, on its own curve. It is
+      // not part of the revolution: a yaw that ended at 6000 would rotate the
+      // creature at the catch and move the very contact the probe gates.
+      static const Key kYawArc[] = {{0, 0}, {kBlownAnticipKey, 0},
                                     {kBlownApexKey, 1000},
                                     {kBlownApexKey + kBlownHangKeys, 1000},
                                     {kBlownCatchKey, 0},
                                     {kBlownKeys - 1, 0}};
-      const int32_t e = fold_ease(curve(kTumble, 6, f));
+      const int32_t e = curve(kTumble, 7, f);
+      const int32_t ey = fold_ease(curve(kYawArc, 6, f));
       g.q[kBRoot] = quat_mul(
           g.q[kBRoot],
           quat_mul(quat_z(static_cast<int32_t>(
                        (static_cast<int64_t>(kBlownTumbleA16) * e) / 1000)),
                    quat_y(static_cast<int32_t>(
-                       (static_cast<int64_t>(kBlownYawA16) * e) / 1000))));
+                       (static_cast<int64_t>(kBlownYawA16) * ey) / 1000))));
     }
     face_rest(g);
     apply_squint(g, curve(kWide, 7, f) + blink_at(f, 71));
@@ -3138,26 +3174,48 @@ inline zc::Clip build_taunt3() {
   //    kTaunt3FlickHoldKeys and then released.
   static const Key kAntic[] = {{0, 0}, {4, 0}, {kTaunt3AnticKey, 1000},
                                {kTaunt3ShrugKey, 0}, {K - 1, 0}};
+  // PASS 14 / R4: the last leg used to run {94, 220} -> {183, 0}, i.e. the
+  // shrug was still decaying THROUGH the punchline hold. A tail is motion. It
+  // reaches zero at kTaunt3Hold2Key - 12 now and is flat from there, so the
+  // held pose is actually held.
   static const Key kShrug[] = {{0, 0}, {kTaunt3ShrugKey, 0},
                                {kTaunt3ShrugKey + kTaunt3ShrugAttackKeys, 1000},
                                {kTaunt3ShrugHoldKey, 1000},
                                {kTaunt3LeanKey + 14, 420},
-                               {kTaunt3ShimmyKey - 6, 220}, {K - 1, 0}};
+                               {kTaunt3ShimmyKey - 6, 220},
+                               {kTaunt3Hold2Key - 12, 0}, {K - 1, 0}};
+  // PASS 14 / R4: same fault, same fix -- {118, 150} -> {183, 0} was a lean
+  // still unwinding under the punchline.
   static const Key kLean[] = {{0, 0}, {kTaunt3LeanKey, 0},
                               {kTaunt3LeanKey + kTaunt3LeanAttackKeys, 1000},
                               {kTaunt3ShimmyKey, 1000}, {kTaunt3ShimmyKey + 18, 150},
-                              {K - 1, 0}};
+                              {kTaunt3Hold2Key - 10, 0}, {K - 1, 0}};
   static const Key kFlick[] = {{0, 0}, {kTaunt3FlickKey, 0},
                                {kTaunt3FlickKey + kTaunt3FlickAttackKeys, 1000},
                                {kTaunt3FlickKey + kTaunt3FlickAttackKeys +
                                     kTaunt3FlickHoldKeys, 1000},
                                {K - 1, 0}};
+  // PASS 14 / R4 -- THE AMBIENT CLOCK, WHICH STOPS. See the long note beside
+  // kTaunt3Hold1Key in manafold_art.h. This is a TIME WARP, not a fade: it is
+  // monotone, it plateaus across both holds, it runs ~1.45x through the lean
+  // and the shimmy to pay the parked keys back, and it arrives at K-1 so the
+  // loop seam is exactly what it was. Everything ambient reads its time from
+  // here and nothing else does -- the beats keep the real key, because a beat
+  // that slowed down along with the float would be the "slower, not stiller"
+  // failure wearing the fix's clothes.
+  static const Key kClock[] = {{0, 0},
+                               {kTaunt3Hold1Key, kTaunt3Hold1Key},
+                               {kTaunt3Hold1EndKey, kTaunt3Hold1Key},
+                               {kTaunt3Hold2Key, kTaunt3ClockAtHold2},
+                               {kTaunt3Hold2EndKey, kTaunt3ClockAtHold2},
+                               {K - 1, K - 1}};
   for (int f = 0; f < K; ++f) {
     g.reset();
     antenna_knead(g, kTaunt3Slot, K, f);  // gain 0: nothing runs under the gesture
+    const int fc = curve(kClock, 6, f);   // ambient time, which holds still
     const int32_t antic = fold_ease(curve(kAntic, 5, f));
-    const int32_t shrug = punch_ease(curve(kShrug, 7, f));
-    const int32_t lean = fold_ease(curve(kLean, 6, f));
+    const int32_t shrug = punch_ease(curve(kShrug, 8, f));
+    const int32_t lean = fold_ease(curve(kLean, 7, f));
     const int32_t flick = punch_ease(curve(kFlick, 5, f));
     // THE BODY FOLLOWS THE ANTENNA, it does not move with it. Same table, read
     // kTaunt3FlickBodyLagKeys later and through the SOFT ease -- so the crown
@@ -3218,25 +3276,48 @@ inline zc::Clip build_taunt3() {
           else { n.cy += v; n.cz -= v / 3; }
         }
       }
-      // THE DISMISSAL: the whole antenna is thrown away from the viewer, and
-      // all three go together — a gesture, not a ripple.
-      n.az -= kTaunt3FlickMm * flick / 1000;
-      n.bz -= kTaunt3FlickMm * flick / 1000;
-      n.cz -= kTaunt3FlickMm * 8 / 10 * flick / 1000;
-      n.bx -= kTaunt3FlickMm / 2 * flick / 1000;
+      // THE DISMISSAL: the whole antenna is flung UP AND BACK OVER THE
+      // SHOULDER, and all three go together — a gesture, not a ripple.
+      //
+      // PASS 14 / R4. This block used to be three pure -z pushes, and that is
+      // what made the punchline a balloon: pushing every nodule the same way
+      // along ONE horizontal axis while the base stays put tips the LOOP'S
+      // PLANE, and a tipped loop presents as a line. The share that is UP
+      // cannot do that at any body yaw, which is why it is the main term now.
+      // The lateral remainder keeps the gesture pointed somewhere.
+      const int32_t fl_up = static_cast<int32_t>(
+          (static_cast<int64_t>(kTaunt3FlickMm) * kTaunt3FlickLiftPm * flick) / 1000000);
+      const int32_t fl_back = static_cast<int32_t>(
+          (static_cast<int64_t>(kTaunt3FlickMm) * kTaunt3FlickBackPm * flick) / 1000000);
+      const int32_t fl_side = static_cast<int32_t>(
+          (static_cast<int64_t>(kTaunt3FlickMm) * kTaunt3FlickSidePm * flick) / 1000000);
+      n.ay += fl_up;
+      n.by += fl_up;
+      n.cy += fl_up * 8 / 10;
+      n.ax -= fl_back;
+      n.bx -= fl_back;
+      n.cx -= fl_back * 8 / 10;
+      n.az -= fl_side;
+      n.bz -= fl_side;
+      n.cz -= fl_side * 8 / 10;
       g.nod = n;
     }
     loop_pose(g, 1000 + shrug / 14, 1000 + shrug / 10, 1000 - shrug / 12,
               1000 + flick / 10, 0);
     // the lean-in, and then the shoulder turned on the dismissal -- the turn
     // rides flick_body, so the crown snaps away first and the body follows.
+    // PASS 14 / R4: the dismissal's whole-body component is a yaw AND a roll
+    // now. 8b's requirement is that the beat turns the body; it does not
+    // require that the turn END front-on, which is where 41.7 degrees of yaw
+    // on its own parked it for fifty frames.
     g.q[kBRoot] = quat_mul(
         g.q[kBRoot],
         quat_mul(quat_z(static_cast<int32_t>(
                      (static_cast<int64_t>(kTaunt3LeanA16) * lean) / 1000 -
-                     (static_cast<int64_t>(kTaunt3ShrugRollA16) * shrug) / 1000)),
+                     (static_cast<int64_t>(kTaunt3ShrugRollA16) * shrug) / 1000 -
+                     (static_cast<int64_t>(kTaunt3FlickRollA16) * flick_body) / 1000)),
                  quat_y(static_cast<int32_t>(
-                     (static_cast<int64_t>(-kTaunt3FlickYawA16) * flick_body) / 1000))));
+                     (static_cast<int64_t>(kTaunt3FlickYawA16) * flick_body) / 1000))));
     face_rest(g);
     // the eyes: a slow travelling look down the lean, a lopsided brow through
     // the shimmy, and both lids at half on the dismissal (bored)
@@ -3246,24 +3327,41 @@ inline zc::Clip build_taunt3() {
                static_cast<int32_t>((static_cast<int64_t>(kGazeLiftMaxA16 / 2) * (1000 - lean)) / 1000) -
                    static_cast<int32_t>((static_cast<int64_t>(kGazeLiftMaxA16 / 2) * flick) / 1000));
     apply_twinkle(g, static_cast<int32_t>(
-                         (static_cast<int64_t>(kBlazeTwinkleA16) * sinp(f, K, 2)) >> 16));
+                         (static_cast<int64_t>(kBlazeTwinkleA16) * sinp(fc, K, 2)) >> 16));
     apply_squint_lr(g, 620 * flick / 1000 + blink_at(f, 83),
                     420 * flick / 1000 + blink_at(f, 83));
     g.write(c, f);
     // the body rides the gesture: it rises INTO the shrug (insolent) and
     // drops on the dismissal
     c.root[static_cast<size_t>(f) * 3 + 1] =
-        hover_at(f, K, kHoverHeightMm, kBobAmpAMm * 3 / 2, kBobAmpBMm, K / 46, K / 92) +
+        hover_at(fc, K, kHoverHeightMm, kBobAmpAMm * 3 / 2, kBobAmpBMm, K / 46, K / 92) +
         static_cast<int32_t>((static_cast<int64_t>(fxu(kTaunt3ShrugLiftMm)) * shrug) / 1000) -
         static_cast<int32_t>((static_cast<int64_t>(fxu(kTaunt3AnticDipMm)) * antic) / 1000) -
         static_cast<int32_t>(
             (static_cast<int64_t>(fxu(kTaunt3FlickDropMm)) * flick_body) / 1000);
     // ...and it SQUASHES on the anticipation, which is the half of a wind-up a
     // root height cannot express: the body compresses before it rises.
-    c.deform[static_cast<size_t>(f)] =
-        compress_at(f, K, K / 46,
-                    kCompressAmpPm + kCompressAmpPm * shrug / 3000 +
-                        kCompressAmpPm * antic / 1500);
+    // PASS 14 / R4 -- AND THE PUNCHLINE IS A DIFFERENT SHAPE. The breath is
+    // built by hand here rather than through compress_at, for one reason: the
+    // dismissal's flatten must NOT ride the breath's sine. The ambient clock is
+    // parked through the hold, so that sine is frozen at whatever phase the
+    // hold began on, and a punchline whose depth depends on where the clock
+    // stopped is not authored, it is rolled for. Same maths as compress_at
+    // otherwise -- see its body; this is the third caller of that pattern
+    // (the two deaths are the others) and it stays in step with them.
+    {
+      const int32_t breath_amp = kCompressAmpPm + kCompressAmpPm * shrug / 3000 +
+                                 kCompressAmpPm * antic / 1500;
+      const int32_t w = (65536 + sinp(fc, K, K / 46)) / 2;  // 0..65536
+      int32_t flat = static_cast<int32_t>((static_cast<int64_t>(breath_amp) * w) >> 16);
+      flat += static_cast<int32_t>(
+          (static_cast<int64_t>(kCompressAmpPm) * kTaunt3FlickSquashPm * flick) / 1000000);
+      if (flat > 60000) flat = 60000;  // the ceiling; see kCompressAmpPm
+      const int32_t spread =
+          static_cast<int32_t>((static_cast<int64_t>(flat) * kSpreadRatioPm) / 1000);
+      c.deform[static_cast<size_t>(f)] =
+          zc::DeformSample{static_cast<uint16_t>(flat), static_cast<uint16_t>(spread)};
+    }
   }
   return c;
 }
