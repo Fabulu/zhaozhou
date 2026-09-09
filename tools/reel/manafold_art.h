@@ -1056,6 +1056,33 @@ constexpr int32_t kEyeTravelPivotXMm = 0;
 // separate opinion about the face. Re-judge it by eye at the new extremes.
 constexpr int32_t kEyeStandoffMm = 28;
 
+// ---- PASS 15 (D11 SS2.3): THE EYES RIDE THE BOUNCE ------------------------
+//
+//   "when the bouncy body expands, as it should, they clip into it. We said
+//    they should be attached to the bouncy part."
+//
+// The standoff above is the STATIC half of this answer and it has been asked
+// to do the whole job for four passes. It cannot: it is one number against a
+// surface that moves, so every value it can take is either too far out at
+// rest or too far in at the bounce. This is the dynamic half -- the eye's
+// authority on the body's own deform lane, so it is carried by the skin it
+// sits on. See eye_deform_follow() in manafold_model.h for the mechanism and
+// for why the eye FOLLOWS rather than SCALES (an eye that scales inflates).
+//
+// A fraction of the BODY'S own strength at the eye's height, not a strength
+// of its own:
+//   1000  the eye moves exactly as the surface under it does
+//    ~600 it lags the breath, which reads as the eye being a harder thing
+//         set into a softer one
+//      0  OFF, and off is EXACT: no sidecar is emitted for the eye parts at
+//         all and the pass-14 frames come back byte for byte. That is this
+//         change's known-negative and it is arithmetic, not a promise.
+//
+// Authored by looking at `hit` at its squash extremes, which is the only
+// place the value means anything -- at rest every setting looks identical,
+// and that is exactly how a static standoff came to be trusted for so long.
+constexpr int32_t kEyeDeformFollowPm = 1000;
+
 // THE ALWAYS-ON TRAVEL. D9 SS6 is not a capability request -- "the eyes have to
 // move MORE" is about what the bank shows, so the channel rides every
 // performing clip through antenna_knead, the layer that already runs on all of
@@ -1117,7 +1144,24 @@ constexpr int kEyeGlanceCount = 3;        // deliberate looks per loop, at most
 // 2026-09-08 still carries 1000 -- it was 26 of 28 subjects into its render
 // when the answer arrived. This is the first bank to carry 867. Two pages
 // disagreeing here is a sequence, not a regression.
-constexpr int32_t kEyeGlanceOutPm[kEyeGlanceCount] = {867, -820, 640};
+//
+// ⚠ PASS 15 CHANGES WHAT THE SIGN OF THIS TABLE MEANS, AND NOTHING ELSE
+// ABOUT IT. Until this pass the sign was a raw body-space direction, which is
+// a direction NOBODY CAN SEE -- the same 867 is a sweep across the face or a
+// slide off the limb depending only on where the camera is, and on the shipped
+// bank it was the latter, on every clip. A POSITIVE entry now means "toward
+// the side the camera is on"; the per-clip sign is applied by
+// eye_glance_dir() from the camera geometry. See kEyeFaceSeekPm.
+//
+// The MAGNITUDES are the owner's ruling and are untouched in the one that
+// matters: 867 (39.015 deg) is still the biggest single move. The second
+// entry is pulled in from -820 to -400 because it is the one that runs AWAY
+// from the camera, and 37 deg of away lands the far eye behind the ball --
+// which is precisely the picture D11 SS2.1 complains about, kept alive by a
+// sign. 18 deg of away is a real look in the other direction and both eyes
+// stay on the visible face. Authored from the pin ladder
+// (pass15-plates-eye/A-pin-ladder-4x.png), not from arithmetic.
+constexpr int32_t kEyeGlanceOutPm[kEyeGlanceCount] = {867, -400, 640};
 // The shape of one glance, as per-mille of the clip: ease out, hold the look,
 // ease back. The hold is what makes it read as a decision -- D7 SS9.2, more
 // travel per beat and fewer beats.
@@ -1155,6 +1199,137 @@ constexpr int kEyeDwellPeriodKeys = 150;      // divisor; >= 1 cycle per clip
 // does not blink in unison. Slot 0 takes no offset, which is what keeps the
 // camera phase above meaningful for the idle.
 constexpr int32_t kEyeGlanceSlotSkewPm = 211;
+
+// ==== PASS 15 (D11 SS2.1) -- THE TRAVEL IS CAMERA-RELATIVE =================
+//
+//   "they don't move left and right at all... I thought we said they should
+//    move up to 45 degrees. That might've been extreme, but not moving at all
+//    is even more so."
+//
+// ⚠ READ THIS BEFORE CHANGING ANY NUMBER BELOW. The channel was never dead.
+// Pass 13's gate was right, pass 14 shipped the owner's 39 deg, and a pinned-
+// vs-live diff moves ~2,000 px per frame. THE FAULT WAS THE DIRECTION.
+//
+// The eyes sit at azimuth +-28.26 deg either side of the body's +X face axis
+// (kEyeXMm/kEyeZMm), and every shipped camera looks at the creature from
+// 45 deg OFF that axis (subject_u02_clip's cam_yaw 0x2000 three-quarter; the
+// idle orbits through it). So the face is already turned three-quarters away
+// before any travel runs -- and the schedule then drove the eyes FURTHER that
+// way. `manafold-eyecam` puts a number on it: on every fixed-camera clip in
+// the shipped bank, both eyes are readable in 12-17% of frames, and on `hit`
+// and `taunt3` in NONE. The 39 deg peak carries the near eye to 97 deg off
+// the camera -- past edge-on, facing away -- and the far eye behind the ball.
+//
+// The pin ladder is the whole argument in six tiles
+// (pass15-plates-eye/A-pin-ladder-4x.png, `hit` f0 under the shipping env at
+// U02_EYE_TRAVEL_PIN -1000/-667/-333/0/+333/+867):
+//
+//     +867  ONE navy blade at the rim, the other eye gone      <- SHIPPED
+//     +333  both crowded onto the rim, no readable star
+//        0  one thin leaf with a sliver of star, one at the rim <- the dwell
+//     -333  both eyes on the face, both stars readable
+//     -667  both eyes wide open, both cyan stars whole         <- the look
+//    -1000  still good, drifting toward the far terminator
+//
+// ⚠ AND THE SIGN IS THE ONLY THING THAT WAS WRONG. Nothing about the
+// mechanism, the schedule, the ramps or the clamp algebra needed rebuilding.
+// That is why this block adds a BASE and a DIRECTION and touches nothing else:
+// four passes of amplitude argument were about a channel pointing backwards.
+//
+// THE BASE. Rather than a hand table per clip that goes stale the moment a
+// subject's camera moves, the resting travel is DERIVED from the camera
+// azimuth, smoothly and periodically:
+//
+//     base = kEyeFaceSeekMaxDeg * sin(cam_az - 90 deg) * kEyeFaceSeekPm
+//
+// sin() is not a taste choice, it is what makes this safe: it is continuous
+// and periodic, so the ORBITING idle -- where cam_az sweeps a full turn --
+// gets no step at any frame and no wrap seam (QA Q2 bounds the per-key
+// carrier step at 8 deg, and a clamped linear difference would snap 90 deg at
+// the wrap). It is zero when the camera is square on the face, and it peaks
+// where the camera is at the limb. On the fixed-camera clips it evaluates to
+// -31.8 deg, which is where the ladder's own best tile sits. That agreement
+// is a check, not a derivation -- the tile was picked by looking first.
+//
+// ⚠ THIS IS NOT MORE GLANCE, AND kEyeTravelMaxDeg IS UNTOUCHED AT 45. The
+// owner ruled on how far the eyes MOVE; the base is where they REST. Keeping
+// them as two constants is what lets the 39 deg ruling stay literally true
+// while the resting face stops being three-quarters turned away.
+constexpr int32_t kEyeFaceSeekMaxDeg = 45;
+// How much of that centring the creature takes. 0 reproduces the pass-14 bank
+// exactly (the known-negative for every plate below); 1000 is a full camera
+// seek. It is a knob because "the eyes always face you" is a taste question
+// the owner has not been asked -- see the packet plate.
+constexpr int32_t kEyeFaceSeekPm = 1000;
+// The safety rail on base + glance + drift. NOT a ceiling anyone authors
+// against: kEyeTravelMaxDeg still bounds the glance, this only stops the sum
+// running away if both are pushed. 80 is base(45) + the biggest glance(39),
+// rounded down, so today's schedule never touches it.
+constexpr int32_t kEyeTravelTotalMaxDeg = 80;
+// The camera mirror. subject_u02_clip gives every SHIPPED clip but the idle a
+// constant cam_yaw of 0x2000 (45 deg) and the idle one exact orbit per loop.
+// ⚠ THIS IS A MIRROR OF zhao_reel.cpp AND IT CAN GO STALE. It is checked the
+// only way that means anything -- eyesweep.py reads the star's centroid off
+// the SHIPPED frames, so a camera that moved shows up as a gate failure on
+// pixels rather than as a silently wrong constant.
+constexpr int32_t kEyeCamYawDeg = 45;
+constexpr uint16_t kEyeOrbitSlot = 0;   // `hover` / `inspect`: orbit = true
+
+// D11 SS2.2, the second and separate ask: "they can also rotate a bit more
+// for expression too". The eye ROLLS about its own outward axis in
+// proportion to how far out its glance is, so a look arrives with a lean on
+// it. This is ACTING, not surface-following -- the two are different
+// requests in the same sentence and kEyeSurfaceFollowPm is the other one.
+//
+// 1400 a16 is 7.7 deg at the full glance, sitting between apply_eye_roll's
+// measured ceiling (kEyeRollMaxA16, 6.6 deg) and its typical authored
+// amplitude (kEyeRollRestA16, 10 deg) -- the band D5 SS5d called "10-20%".
+// It COMPOSES with those channels rather than replacing them: the brow and
+// the wink still work, and this rides underneath on every performing clip.
+constexpr int32_t kEyeExpressLeanA16 = 1400;
+
+// ---- D11 SS2.2: THE EYE ROTATES WITH THE ANGLE ---------------------------
+//
+//   "they can also rotate a bit more for expression too... They should move
+//    around the body while rotating depending on angle."
+//
+// HALF OF THIS WAS ALREADY TRUE AND THE OTHER HALF IS A TASTE QUESTION.
+//
+// The travel carrier is a bone, and a bone rotation carries its children's
+// FRAMES: the lens and both stars arrive at the new azimuth already turned
+// through the travel angle. So "rotating depending on angle" -- as the eye
+// travels -- has been true since pass 12 and the ladder above shows it
+// working (the star stays whole at -667, which it could not do on a plate
+// that slid without turning).
+//
+// What has never been true is the REST normal. The eye's bind is a pure
+// translation, so its plate points along body +X while the eye SITS 28.26 deg
+// round the ball -- pass 14's "no orientation degree of freedom at all".
+//
+// ⚠ AND MEASURING IT SETTLED THE QUESTION THE BRIEF ASKED: is that the same
+// fault as "the eyes don't move"? NO -- PROVEN SEPARATE. The pin ladder was
+// rendered with the rest normal UNCHANGED and both stars read perfectly at
+// -667. The star was never vanishing because its rest normal was wrong; it
+// was vanishing because the travel drove it off the camera's side of the
+// ball. Four passes of thickening the star were fighting the sign above.
+//
+// ⚠ AND THE SHEET SAYS DO NOT SPLAY THEM. Concept/Front.png draws both lenses
+// FACING THE VIEWER, close together, tips converging into the Lambda -- two
+// decals on the front of the ball, not two facets round its sides. A full
+// surface-true rest normal pulls the plates 56.5 deg apart and walks away
+// from the drawing. So the mechanism ships as a KNOB AT ZERO: built, named,
+// laddered, with the picture in the owner packet, and the sheet's read kept
+// until he picks otherwise. 1000 is fully surface-true (the plate normal is
+// the surface normal); 0 is the drawing.
+constexpr int32_t kEyeSurfaceFollowPm = 0;
+// ⚠ RECORDED, NOT CHANGED: kEyeYawOutA16 is commented "partial outward yaw"
+// and measurably yaws the plates INWARD. manafold-eyecam --rest on `still`
+// f0 reads L plate azimuth 99.05 and R 80.96 while L SITS at the lower
+// position azimuth (61.74 against R's 118.26) -- so each plate is turned
+// toward its neighbour, not away. The name has been wrong since pass 6 and
+// the value is owner-accepted, so this pass fixes the SENTENCE and leaves the
+// FACE alone. kEyeSurfaceFollowPm absorbs this term as it rises, so a future
+// pass that wants surface-true does not have to unpick two rotations.
 
 // ---- OWNER DIRECTION 5 5d: THE EYES ROLL ---------------------------------
 //   "eyes should also be able to rotate and rotate back. Maybe 10-20% at most.

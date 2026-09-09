@@ -423,6 +423,81 @@ inline zc::RingPart make_loop() {
  * construction, so the two ends cannot drift apart the way two separately
  * authored ends did.
  */
+/**
+ * PASS 15 (D11 SS2.3) -- THE EYES RIDE THE BOUNCING SURFACE.
+ *
+ *   "when the bouncy body expands, as it should, they clip into it. We said
+ *    they should be attached to the bouncy part. Well, they're probably
+ *    attached higher up and the lower part is what bounces."
+ *
+ * His diagnosis is the right SHAPE with one refinement, and the refinement is
+ * why four passes of moving the eyes could not fix it: THE EYES ARE ON BONES
+ * AND THE BOUNCE IS A VERTEX DEFORM. `deform_skin_vertex_lanes` scales marked
+ * VERTICES radially about the ball centre (creature_core.cpp); no bone in the
+ * rig ever reads that sample, so no amount of re-parenting or re-placing an
+ * eye could couple it. There is no bone to attach to -- that is the whole
+ * fault. `kEyeStandoffMm` is the static answer that has been standing in for
+ * it, and a static standoff can only trade "floating off the face" against
+ * "eaten by the breath": at kCompressAmpPm 16500 the surface at eye height
+ * travels further than any standoff anyone would accept at rest.
+ *
+ * THE FIX IS THE FOLLOWER ROLE, WHICH ALREADY EXISTED. A follower vertex
+ * inherits the ellipsoidal displacement of its own ring's CARRIER POINT as a
+ * pure TRANSLATION -- so the eye assembly is carried by the surface under it
+ * while staying rigid. It does NOT inflate with the breath, which was the
+ * risk worth naming: the eyes travel with the skin, they do not swell.
+ *
+ * ⚠ AND THE AUTHORITY IS THE BODY'S OWN, AT THE EYE'S OWN HEIGHT. The number
+ * is not chosen, it is read off make_body's equator-peaked ramp at the ring's
+ * height and scaled by ONE knob. An independently authored strength here is a
+ * second copy of the body's breath profile, and a second copy drifts the first
+ * time somebody re-proportions the ball.
+ *
+ * ⚠ IT ALSO HAS ITS OWN KNOWN-NEGATIVE, and it is exact rather than
+ * approximate: kEyeDeformFollowPm = 0 leaves deform_role kNone, no sidecar is
+ * emitted at all, and the eye vertices take the identity early-out in
+ * deform_skin_vertex_lanes. Pass-14's frames come back byte for byte.
+ *
+ * ⚠ WHAT THIS DOES NOT DO. A hard hit still exceeds any arrangement -- the
+ * squash at f28 of `hit` moves the surface further than the eye is proud --
+ * and that residual is DECLARED, in the sense the ground-contact law means:
+ * an authored, stated intersection, whose remaining job is to read as the eye
+ * entering gas rather than as a plate cut by a line. That half is the fog, it
+ * is LANE-FX's, and this comment is the handover.
+ */
+inline bool eye_bone_is_left(uint8_t bone) { return bone == kBEyeL || bone == kBPupilL; }
+
+inline void eye_deform_follow(zc::RingPart& p) {
+  const int32_t bind_y_fx = fxu(vmm(kEyeYMm));
+  if (kEyeDeformFollowPm <= 0) return;
+  const int32_t bx = fxu(eye_bind_x_mm());
+  const int32_t bz = fxu(eye_bind_z_mm());
+  const int32_t R = fxu(kBodyRadiusMm);
+  const int32_t half_h = static_cast<int32_t>(static_cast<int64_t>(R) * kVStretchPm / 1000);
+  for (zc::RingSpec& rs : p.rings) {
+    // make_body's own strength ramp, sampled at THIS ring's bind height.
+    const int32_t wy = bind_y_fx + rs.y;
+    const int64_t a = wy < 0 ? -wy : wy;
+    int32_t s = static_cast<int32_t>(255 - (a * 255) / (half_h > 0 ? half_h : 1));
+    if (s < 0) s = 0;
+    s = static_cast<int32_t>((static_cast<int64_t>(s) * kEyeDeformFollowPm) / 1000);
+    if (s < 1) s = 1;   // the compile rejects role-set-with-zero-strength
+    if (s > 255) s = 255;
+    rs.deform_role = zc::DeformRole::kFollower;
+    rs.deform_axis = 1;  // vertical, the same axis the body breathes on
+    rs.deform_strength = static_cast<uint8_t>(s);
+    // The centre the displacement is measured from is the BALL'S centre, and
+    // the compiler adds this part's bone bind offset to whatever is authored
+    // here -- so the authored value is the NEGATIVE of that offset. Getting
+    // this wrong does not fail a compile; it moves the eye toward a point
+    // that is not the body, which is why it is written out rather than
+    // hidden in a constant.
+    rs.deform_center_x = -bx;
+    rs.deform_center_y = -bind_y_fx;
+    rs.deform_center_z = eye_bone_is_left(p.bone) ? -bz : bz;
+  }
+}
+
 inline zc::RingPart make_eye_lens(uint8_t bone) {
   zc::RingPart p;
   p.bone = bone;
@@ -448,6 +523,7 @@ inline zc::RingPart make_eye_lens(uint8_t bone) {
   p.g = kLensG;
   p.b = kLensB;
   p.page = kPageEyeTile;
+  eye_deform_follow(p);   // D11 SS2.3: ride the bouncing surface
   return p;
 }
 
@@ -549,6 +625,10 @@ inline zc::RingPart make_star(uint8_t bone, bool white) {
     p.b = kStarB;
     p.page = kPageStarTile;
   }
+  // D11 SS2.3: the star rides the same surface as its lens. It MUST take the
+  // same authority as make_eye_lens, or the star slides against the lens it
+  // sits in -- the one property SS5b says these two parts may never lose.
+  eye_deform_follow(p);
   return p;
 }
 

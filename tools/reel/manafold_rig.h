@@ -138,6 +138,39 @@ inline int64_t isqrt_i64(int64_t v) {
   return x;
 }
 
+/** THE EYE'S BIND PLACE, in millimetres from the body centre, as ONE
+ *  derivation used by both the skeleton and the model.
+ *
+ *  It was computed inline inside build_skeleton until pass 15, which was fine
+ *  while nothing else needed it -- and then D11 SS2.3's deform authority did,
+ *  because a FOLLOWER has to name the body centre it orbits and the eye's own
+ *  standoff is part of that answer. A second copy of this arithmetic in
+ *  manafold_model.h would be a copy that goes stale the next time the face is
+ *  re-proportioned, which is the exact failure the antenna's flat_staged_slot
+ *  rule was extracted to stop (zhao_reel.cpp: "the probe carried its own copy
+ *  of it and the copy went stale the moment a travelling slot was added").
+ *
+ *  THE STANDOFF (D9 SS6.1) is pushed along the HORIZONTAL RADIAL direction --
+ *  the (x, z) direction from the body axis -- and never along y, so that a
+ *  rotation about the body axis preserves it exactly all the way round the
+ *  travel. See build_skeleton's note. */
+inline int32_t eye_bind_radius_mm() {
+  const int64_t x = kEyeXMm, z = kEyeZMm;
+  return static_cast<int32_t>(isqrt_i64(x * x + z * z));
+}
+inline int32_t eye_bind_x_mm() {
+  const int32_t r = eye_bind_radius_mm();
+  return r > 0 ? kEyeXMm + static_cast<int32_t>(
+                               (static_cast<int64_t>(kEyeXMm) * kEyeStandoffMm) / r)
+               : kEyeXMm;
+}
+inline int32_t eye_bind_z_mm() {
+  const int32_t r = eye_bind_radius_mm();
+  return r > 0 ? kEyeZMm + static_cast<int32_t>(
+                               (static_cast<int64_t>(kEyeZMm) * kEyeStandoffMm) / r)
+               : kEyeZMm;
+}
+
 inline zc::Skeleton build_skeleton() {
   zc::Skeleton sk;
   sk.bone_count = kBoneCount;
@@ -177,15 +210,10 @@ inline zc::Skeleton build_skeleton() {
   // horizontal radius exactly, so a standoff applied in that direction is
   // CONSTANT all the way round the travel. A standoff along the true ellipsoid
   // normal would be geometrically prettier and would drift as the eye moved.
-  const int32_t ex0 = kEyeXMm, ez0 = kEyeZMm;
-  const int32_t r0 = static_cast<int32_t>(
-      isqrt_i64(static_cast<int64_t>(ex0) * ex0 + static_cast<int64_t>(ez0) * ez0));
-  const int32_t exs = r0 > 0 ? ex0 + static_cast<int32_t>(
-                                        (static_cast<int64_t>(ex0) * kEyeStandoffMm) / r0)
-                             : ex0;
-  const int32_t ezs = r0 > 0 ? ez0 + static_cast<int32_t>(
-                                        (static_cast<int64_t>(ez0) * kEyeStandoffMm) / r0)
-                             : ez0;
+  // PASS 15: the arithmetic moved up to eye_bind_x_mm/eye_bind_z_mm so the
+  // model can read the SAME answer. Identical values, one home.
+  const int32_t exs = eye_bind_x_mm();
+  const int32_t ezs = eye_bind_z_mm();
   sk.bones[kBEyeL] =
       zc::Bone{kBEyeTravelL, fxu(exs - kEyeTravelPivotXMm), fxu(vmm(kEyeYMm)), fxu(ezs)};
   sk.bones[kBEyeR] =

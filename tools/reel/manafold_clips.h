@@ -148,10 +148,27 @@ struct Rig {
    *  shortfall -- zero -- on every key). No matrix is inverted anywhere here.
    */
   int32_t span_pm[3] = {0, 0, 0};
+  /** PASS 15 (D11 SS2.2, the SECOND half) -- THE EXPRESSION LEAN.
+   *
+   *   "they can also rotate a bit more for expression too"
+   *
+   *  How far each eye rolls about its own outward axis THIS KEY, as a
+   *  signed angle16, written by antenna_knead and read by face_rest.
+   *
+   *  ⚠ IT RIDES THE RIG FOR AN ORDERING REASON, not for tidiness. Every
+   *  clip calls antenna_knead FIRST and face_rest second, and face_rest
+   *  ASSIGNS the eye quats -- so a roll composed in antenna_knead is
+   *  overwritten two lines later, silently, on every clip in the bank.
+   *  That is the exact shape of the pass-12 fault where a channel existed,
+   *  measured correctly, and reached no pixel. `nod` solved the same
+   *  ordering problem for the nodules; this is that pattern, reused.
+   */
+  int32_t eye_lean = 0;
   void reset() {
     for (int b = 0; b < kBoneCount; ++b) q[b] = zc::quat16_identity();
     nod = NoduleOffsets{};
     span_pm[0] = span_pm[1] = span_pm[2] = 0;
+    eye_lean = 0;
   }
   void write(zc::Clip& c, int f) const {
     for (int b = 0; b < kBoneCount; ++b)
@@ -454,11 +471,53 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
 inline void loop_rest(Rig& g) { loop_pose(g, 1000, 1000, 1000, 1000); }
 
 /** The face at rest: lenses rolled into their outward V and leaned back. */
+/** PASS 15 (D11 SS2.2) -- THE EYE'S OWN SURFACE NORMAL, as an angle16.
+ *
+ *  The eye sits at (kEyeXMm, +-kEyeZMm) round the body axis, so the outward
+ *  normal of the ball under it is this far off the body's +X face axis.
+ *  DERIVED from the two constants that place the eye, never typed: a hand
+ *  number here would go stale the moment the face is re-proportioned, and a
+ *  stale one would be invisible (10-GATE-CHECKLIST item 42, and CLAUDE.md's
+ *  rule that a measurement belongs on the comparison side).
+ *
+ *  asin16(z, r) is exact enough at this scale: 215/454 -> 5143 a16 = 28.25
+ *  deg, against atan2's 28.26. */
+inline int32_t eye_rest_normal_a16() {
+  const int64_t x = kEyeXMm, z = kEyeZMm;
+  const int32_t r = static_cast<int32_t>(isqrt_i64(x * x + z * z));
+  if (r <= 0) return 0;
+  return asin16(kEyeZMm, r);
+}
+
+/** How far each eye's plate is turned off the body's +X axis at rest, after
+ *  kEyeSurfaceFollowPm has had its say. At 0 this is kEyeYawOutA16 exactly --
+ *  the pass-14 face, bit for bit -- and at 1000 the plate normal IS the
+ *  surface normal and the eye sits ON the ball instead of on a flat sticker.
+ *  Positive turns the plate toward the +z side (the LEFT eye's own side is
+ *  -this; see face_rest). */
+inline int32_t eye_rest_yaw_a16() {
+  const int32_t rn = eye_rest_normal_a16();
+  // Close the gap between the authored plate (kEyeYawOutA16 off +X, and it
+  // leans the WRONG WAY -- see the note at kEyeSurfaceFollowPm) and the
+  // surface normal (-rn for the left eye) by kEyeSurfaceFollowPm.
+  const int32_t gap = kEyeYawOutA16 + rn;
+  return kEyeYawOutA16 -
+         static_cast<int32_t>((static_cast<int64_t>(gap) * kEyeSurfaceFollowPm) / 1000);
+}
+
 inline void face_rest(Rig& g) {
-  g.q[kBEyeL] = quat_mul(quat_y(kEyeYawOutA16),
-                         quat_mul(quat_x(kEyeVAngleA16), quat_z(-kEyeTiltA16)));
-  g.q[kBEyeR] = quat_mul(quat_y(-kEyeYawOutA16),
-                         quat_mul(quat_x(-kEyeVAngleA16), quat_z(-kEyeTiltA16)));
+  const int32_t ry = eye_rest_yaw_a16();
+  // D11 SS2.2's second ask, the ACTING one. The eye leans INTO its look:
+  // the roll rides the glance envelope, so a big look arrives with a brow
+  // on it and the dwell carries none. Mirrored per eye, the same convention
+  // apply_eye_roll uses, so it reads as one brow rather than two spins.
+  // Zero on `still` and the nodule diagnostic, which never run the
+  // schedule that writes it.
+  const int32_t lean = g.eye_lean;
+  g.q[kBEyeL] = quat_mul(quat_y(ry),
+                         quat_mul(quat_x(kEyeVAngleA16 + lean), quat_z(-kEyeTiltA16)));
+  g.q[kBEyeR] = quat_mul(quat_y(-ry),
+                         quat_mul(quat_x(-kEyeVAngleA16 - lean), quat_z(-kEyeTiltA16)));
 }
 
 /** PASS 6 (Direction 5 §5c): "The eye itself can move a bit too."
@@ -550,6 +609,81 @@ inline void apply_eye_travel(Rig& g, int32_t pm) {
   if (a == 0) return;
   g.q[kBEyeTravelL] = quat_mul(g.q[kBEyeTravelL], quat_y(a));
   g.q[kBEyeTravelR] = quat_mul(g.q[kBEyeTravelR], quat_y(a));
+}
+
+/** PASS 15 -- the same carrier write, taking an ANGLE rather than a fraction
+ *  of the glance ceiling. The base (below) is not glance and must not be
+ *  measured in glance's units: keeping kEyeTravelMaxDeg as the GLANCE's own
+ *  scale is what lets the owner's 39 deg ruling stay literally true while the
+ *  eyes come to rest somewhere he can see them. */
+inline void apply_eye_travel_a16(Rig& g, int32_t a) {
+  const int32_t cap = (kEyeTravelTotalMaxDeg * 65536) / 360;
+  if (a > cap) a = cap;
+  if (a < -cap) a = -cap;
+  if (a == 0) return;
+  g.q[kBEyeTravelL] = quat_mul(g.q[kBEyeTravelL], quat_y(a));
+  g.q[kBEyeTravelR] = quat_mul(g.q[kBEyeTravelR], quat_y(a));
+}
+
+/** PASS 15 (D11 SS2.1) -- WHERE THE CAMERA IS, in the creature's own frame.
+ *
+ *  A MIRROR of subject_u02_clip (zhao_reel.cpp): every shipped clip but the
+ *  idle takes a constant cam_yaw of 0x2000, and the idle takes one exact
+ *  world-yaw turn per presentation loop. The creature's instance facing is 0
+ *  and its tilt mode is kNone, so the reel's world axes and the rig's body
+ *  axes ARE the same axes and the two azimuths are directly comparable --
+ *  which is the whole reason this can be a constant instead of a feedback
+ *  path out of the renderer.
+ *
+ *  ⚠ A MIRROR CAN GO STALE. The defence is not care, it is that the acceptance
+ *  gate reads the star's centroid off SHIPPED FRAMES (eyesweep.py): a camera
+ *  that moves without this table shows up as pixels that stopped sweeping,
+ *  which is the only kind of evidence this fault has ever answered to. */
+inline int32_t eye_cam_az_a16(uint32_t slot, int keys, int f) {
+  if (slot == kEyeOrbitSlot) {
+    const int k = keys > 0 ? keys : 1;
+    return static_cast<int32_t>(((static_cast<int64_t>(f) * 65536) / k) & 0xFFFF);
+  }
+  return (kEyeCamYawDeg * 65536) / 360;
+}
+
+/** The RESTING travel: how far round the body the eye pair sits so that it
+ *  faces the CAMERA rather than the +X axis nobody is looking down.
+ *
+ *      base = kEyeFaceSeekMaxDeg * sin(cam_az - 90deg) * kEyeFaceSeekPm
+ *
+ *  ⚠ sin() IS LOAD-BEARING, NOT DECORATIVE. On the orbiting idle the camera
+ *  azimuth sweeps a whole turn, so any clamped-difference formulation snaps by
+ *  twice the clamp at the wrap -- a hard cut on a channel QA Q2 bounds at 8
+ *  deg per key. sin is continuous and periodic THROUGH the wrap by
+ *  construction; it is zero when the camera is square on the face (nothing to
+ *  correct) and peaks with the camera at the limb (everything to correct). The
+ *  idle's eyes now follow the orbit as far as they are allowed and give up
+ *  gracefully when it goes behind, which is a creature watching you walk past.
+ *
+ *  On the fixed-camera clips this evaluates to -31.8 deg. The pin ladder's own
+ *  best tile is -30. That agreement is a CHECK, not a derivation: the tile was
+ *  picked by looking, and then this happened to land on it. */
+inline int32_t eye_face_base_a16(uint32_t slot, int keys, int f) {
+  if (kEyeFaceSeekPm == 0) return 0;
+  const int32_t cam = eye_cam_az_a16(slot, keys, f);
+  const int32_t d = cam - 16384;  // 16384 a16 = 90 deg: the pair's mid-normal
+  const int32_t s = zref::fx_sin(zref::angle16{static_cast<uint16_t>(d & 0xFFFF)}).raw;
+  const int32_t maxa = (kEyeFaceSeekMaxDeg * 65536) / 360;
+  return static_cast<int32_t>(static_cast<int64_t>(maxa) * s / 65536 *
+                              kEyeFaceSeekPm / 1000);
+}
+
+/** Which way a glance must run to stay where it can be SEEN: +1 when the
+ *  camera-facing side is the +travel side, -1 when it is the -travel side.
+ *
+ *  ⚠ EVALUATED ONCE PER GLANCE, AT THAT GLANCE'S OWN WINDOW, never per frame.
+ *  On the orbiting idle the base passes through zero twice a loop, and a
+ *  per-frame sign would flip in the middle of a glance -- a snap inside the
+ *  one beat this whole channel exists to deliver. Held constant across a
+ *  window, the schedule stays exactly as smooth and as periodic as it was. */
+inline int eye_glance_dir(uint32_t slot, int keys, int f) {
+  return eye_face_base_a16(slot, keys, f) >= 0 ? 1 : -1;
 }
 
 /** PASS 6 (Direction 5 5d): each eye ROLLS about its own outward axis and
@@ -1180,7 +1314,13 @@ inline int32_t eye_travel_pin_pm(bool& pinned) {
     return e && *e ? std::atoi(e) : 0x7FFFFFFF;
   }();
   pinned = v != 0x7FFFFFFF;
-  return pinned ? (v > 1000 ? 1000 : v < -1000 ? -1000 : v) : 0;
+  // PASS 15: the clamp widens to +-2000 so the ladder can reach past the
+  // glance ceiling into the camera-relative band the base now uses. The pin's
+  // MEANING is unchanged -- per-mille of kEyeTravelMaxDeg, absolute, base and
+  // glance both bypassed -- so `U02_EYE_TRAVEL_PIN=0` still reproduces the
+  // pass-14 bank exactly and stays the known-negative every plate is read
+  // against (10-GATE-CHECKLIST item 40).
+  return pinned ? (v > 2000 ? 2000 : v < -2000 ? -2000 : v) : 0;
 }
 
 inline int32_t eye_travel_life_pm(uint32_t slot, int keys, int f) {
@@ -1226,8 +1366,16 @@ inline int32_t eye_travel_life_pm(uint32_t slot, int keys, int f) {
       env = 1000 - fold_ease((d - rise - hold) * 1000 / fall);
     }
     if (env == 0) continue;
+    // PASS 15 (D11 SS2.1): THE SIGN COMES FROM THE CAMERA, not from the table.
+    // A positive entry means "toward the side the camera is on"; which body
+    // direction that is depends on the clip, and on the idle it depends on
+    // where in the orbit this glance falls. Read ONCE, at this glance's own
+    // window centre -- see eye_glance_dir for why never per frame.
+    const int dir = eye_glance_dir(slot, span, (start + win / 2) % span >= 0
+                                                   ? (start + win / 2) % span
+                                                   : (start + win / 2) % span + span);
     glance += static_cast<int32_t>(
-        (static_cast<int64_t>(kEyeGlanceOutPm[i]) * env) / 1000);
+        (static_cast<int64_t>(kEyeGlanceOutPm[i]) * env * dir) / 1000);
   }
   if (glance > 1000) glance = 1000;
   if (glance < -1000) glance = -1000;
@@ -1254,8 +1402,33 @@ inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f,
   // The eye travel rides here because this is the one layer every PERFORMING
   // clip calls (build_still and build_nodule_solo deliberately do not). It
   // writes the carrier bones, which nothing else in this function touches.
-  apply_eye_travel(g, static_cast<int32_t>(
-      (static_cast<int64_t>(eye_travel_life_pm(slot, keys, f)) * eye_pm) / 1000));
+  //
+  // PASS 15 (D11 SS2.1): TRAVEL = A CAMERA-RELATIVE BASE + THE GLANCE.
+  //
+  // The pin bypasses BOTH, so `U02_EYE_TRAVEL_PIN=0` still renders the
+  // pass-14 pose exactly and remains this pass's known-negative.
+  //
+  // `eye_pm` gains the GLANCE and the drift and deliberately NOT the base:
+  // the deaths fade this to 0 so the corpse's eyes stop moving, and stopping
+  // is what that fade means. Feeding the base through it too would swing a
+  // corpse's eyes 32 deg back round the body over the fade -- motion added by
+  // a knob whose whole job is to remove motion.
+  {
+    bool pinned = false;
+    const int32_t pin = eye_travel_pin_pm(pinned);
+    if (pinned) {
+      apply_eye_travel_a16(
+          g, static_cast<int32_t>((static_cast<int64_t>(kEyeTravelMaxA16) * pin) / 1000));
+    } else {
+      const int32_t glance_pm = static_cast<int32_t>(
+          (static_cast<int64_t>(eye_travel_life_pm(slot, keys, f)) * eye_pm) / 1000);
+      apply_eye_travel_a16(g, eye_face_base_a16(slot, keys, f) + eye_travel_a16(glance_pm));
+      // D11 SS2.2: the lean rides the glance, so it fades with `eye_pm`
+      // for free and a corpse's eyes neither travel nor emote.
+      g.eye_lean = static_cast<int32_t>(
+          (static_cast<int64_t>(kEyeExpressLeanA16) * glance_pm) / 1000);
+    }
+  }
   // PASS 12: the nodule targets for this key. Set here because antenna_knead
   // already runs before every clip's loop_pose call, which is where they are
   // consumed. A clip whose kNoduleClipPm entry is 0 gets all-zero offsets and
