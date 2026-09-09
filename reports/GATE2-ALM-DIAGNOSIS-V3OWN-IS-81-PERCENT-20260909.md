@@ -85,3 +85,80 @@ minutes, `status: ok`. The declared shipping profile in
 number above, and the first parse of it read the table of CONTENTS instead of the
 table -- which is why the entity list is quoted with its totals reconciling to
 10,836.
+
+---
+
+# THE CAUSE, measured -- and the remedy already exists inside this island
+
+The section above deliberately stopped at "no cause for `v3own`'s 2,707 ALM"
+and named the next step as a MapOnly. That ran: `zhao_texture_v3own@alm-
+attribution`, clean tree, **3,750 registers, 20,640 memory bits, 0 DSP**.
+
+## What the RAM summary shows
+
+| array | type | depth x width |
+|---|---|---|
+| `v3bank:u_ctx`, `u_ares`, `u_fres`, `g_sres[0..2]` | **M10K block** | 64 x 40, 64 x 64 |
+| `v3rq:u_rq_aux`, `u_rq_init`, `u_rq_tmu` | **M10K block** | 64 x 40 |
+| `cq_ax_q`, `cq_s0_q`, `cq_s1_q`, `cq_s2_q`, `oq_res_q` | AUTO | 4 x 40 |
+| `oq_ctx_q` | AUTO | 4 x 64 |
+
+The AUTO ones are **depth 4**. Refusing an M10K for a four-deep array is the
+fitter being right, and all six together are 1,056 bits. **They are not the
+2,707 ALM**, and an analysis that stopped at the RAM summary would have said
+"nothing is wrong here".
+
+## The arrays that never reach a RAM summary at all
+
+A RAM summary lists what INFERRED. State that stayed in flip-flops does not
+appear, so the summary is silent about exactly the thing that costs. The
+question needs `tools/quartus/check_ram_inference.py` -- repaired this morning
+for nested-bracket blindness, which is why it can see these at all -- and it
+names **nineteen** arrays in `v3own`, every one with the same finding:
+
+> read COMBINATIONALLY through dynamic index `...` -- forces a per-bit mux the
+> width of the array
+
+**Eleven of them are `[OWNERS]`, and `OWNERS = 64`:**
+
+```
+cbi_q [64]x1   clm_q [64]x4   cmt_q [64]x4   crs_q [64]x1   fcl_q [64]x1
+fdn_q [64]x1   ftc_q [64]x1   iss_q [64]x4   live_q[64]x1   rdy_q [64]x1
+req_q [64]x4
+```
+
+Eleven separate 64-deep arrays, each read through a dynamic index in
+combinational logic. **Every one forces a 64:1 multiplexer the width of the
+array**, and none can become memory while that read stays asynchronous. About
+1,472 bits of per-owner state, held as flip-flops, behind eleven wide muxes.
+
+That is where a quarter of the island goes.
+
+## The remedy is not a proposal -- it is already running beside it
+
+`zhao_texture_v3bank` is in this same island, instantiated by this same block,
+and its arrays **did** become M10K: 64 x 40 and 64 x 64, six of them. It is
+described in the manifest as "the section 6 bank primitive, one instance per
+declared bank". The owner brief lists the pattern among the existing blueprints:
+
+> *Memory-backed descriptor/identity transport: the texture Decrufter replaces
+> asynchronous indexed fabric payload with synchronous, atomic records.*
+
+So the Decrufter treatment that produced the descriptor bank, the metadata bank
+and the UV join has simply **not been applied to `v3own`'s per-owner state**.
+Same island, same block, same eleven arrays it did not reach.
+
+## What is still not claimed
+
+* **No ALM figure for the remedy.** Eleven 64:1 muxes and 1,472 register bits
+  are a mechanism, not a saving. How much returns depends on how many of the
+  eleven can take a synchronous read without changing the completion protocol --
+  and `v3own` is the block whose D0-class hazards this repository has already
+  paid for once. Predict what moves, not how far.
+* **Not every array can convert.** A read that must answer in the same cycle it
+  is requested cannot become a synchronous memory read without a pipeline stage,
+  and some of these eleven are on the admission path where that stage would
+  change the credit protocol. Which ones is an RTL question, not a report one.
+* **No work started.** Brief 0.1 authorises continuing texture and forbids
+  turning this into a second project. This completes the diagnosis 7.1 asks
+  for and stops there.

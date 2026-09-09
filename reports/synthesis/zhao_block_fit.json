@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "5a500d47d824132f37f463a9e952c0b4dcec09e3",
+    "newestRunCommit":  "b24c930818d13bf893ba6020cf365c25a41bd94f",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -2204,6 +2204,22 @@
                        "ruleViolations":  [
                                               "ALM 3348 \u003e allowed 1800"
                                           ]
+                   },
+                   {
+                       "module":  "zhao_texture_v3own@alm-attribution",
+                       "status":  "map_only",
+                       "sourceCommit":  "b24c930818d13bf893ba6020cf365c25a41bd94f",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "785eb7d02466473f3f8b29b30577cf2eb80a60cf17bbe8e2da580b45302ddb08",
+                       "variantOf":  "zhao_texture_v3own",
+                       "seconds":  426.2,
+                       "sourcesHashed":  3,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  3750,
+                       "blockMemoryBits":  20640,
+                       "dspBlocks":  0,
+                       "virtualPins":  952
                    },
                    {
                        "module":  "zhao_texture_v3own@v3-full",
