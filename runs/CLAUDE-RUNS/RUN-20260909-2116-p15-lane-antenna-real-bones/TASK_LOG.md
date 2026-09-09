@@ -84,3 +84,32 @@ the skinning is not built yet. Four edits owed:
    becomes a pure parent exactly as kBJunctionF is.
 4. probe.cpp: F.1 continuity must accept the SECOND by-design coincident
    pair, and still fail on a third.
+
+## 2026-09-09 — LANE CLOSED
+
+All four owed edits landed, plus the ball work and the re-aimed gate.
+Findings: `Upheaval/creature/Manafold/PASS-15-FINDINGS-ANTENNA.md`.
+
+**Commits, all on origin/main and verified from outside the lane with
+`git branch -r --contains`:**
+* zhaozhou `9a76edf8` the elbow onto ball C + the taper freeze
+* zhaozhou `5fafdeb5` the Swallow + span-gate G6 + nodule-gate demotion
+* Upheaval `9084d71`  findings, 7 plates, 2 committed probes
+
+**Final gate state:** mprobe OK (closure 955/923 against a 1120 gate, was
+1090/982 — the margin went 30 -> 165), mspan PASS including the new G6,
+mnodule PASS. G6's failable leg witnessed: `--fail-nolanes` takes the gated
+clips 83.5 -> 13.3 mm and fails all three.
+
+**The thing worth carrying forward:** I rebuilt the exact fault this lane was
+sent to fix, twice, inside the new gate — first by measuring the inter-ball
+VECTOR (which scored taunt3, the one clip that reads, LOWEST in the bank),
+then by keeping a pair that crosses a hinge. Both were caught by the failable
+leg and by nothing else. And the obvious known-negative — a clip that does not
+move — is the one that certified the broken version, because a still clip
+cannot tell "measures independence" from "measures anything".
+
+**Housekeeping:** no processes left running (checked by command line, not by
+name). Both trees clean. 3,056 `.rgb` frames / ~814 MB of render intermediates
+in this lane; `git clean -fdX` is required as well as `-fd` to reclaim them.
+**The lane can be deleted** — nothing exists only here.
