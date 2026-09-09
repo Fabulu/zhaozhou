@@ -138,6 +138,30 @@ ASYM_PAIRS = [
     (24, 24),
     (24, 18),
     (23, 11),  # GEOM.BINNER's real operand pair
+    # ---- LOCATING THE 32xN BOUNDARY, added 2026-09-09 ----------------------
+    # The grid above jumps 32x18 (2 DSP) straight to 32x24 (3 DSP), so five
+    # widths between them have never been measured. That gap is load-bearing:
+    #
+    #   32x27 = 3, 32x24 = 3, 32x18 = 2
+    #
+    # means narrowing the projector's MATRIX operand to 27 or 24 buys NOTHING,
+    # and only 18 moves the cost -- which is the opposite of what "narrow it a
+    # bit" suggests, and is why the whole lever needs a table instead of a guess.
+    #
+    # 18 bits signed is +-2.0 in Q16.16, and a perspective coefficient
+    # cot(fov/2)/aspect passes 2.0 at roughly a 53 degree vertical field of view.
+    # So an 18-bit matrix operand caps the longest usable lens. If the real
+    # boundary is 22 rather than 18, coefficients reach +-32.0 and the cap stops
+    # mattering -- the difference between a live constraint on the camera and a
+    # formality.
+    #
+    # Descending so the first result is the most valuable: if 23 already costs 3,
+    # the answer is bounded from above immediately.
+    (32, 23),
+    (32, 22),
+    (32, 21),
+    (32, 20),
+    (32, 19),
 ]
 
 
