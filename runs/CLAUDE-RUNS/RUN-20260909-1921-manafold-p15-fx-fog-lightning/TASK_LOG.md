@@ -355,3 +355,61 @@ session, again splitting a C string literal across two lines. The fix that
 works is a script that writes `chr(92) + 'n'`, committed in the run's scratch as
 `fix_nl.py`. It is 09-ENGINE-GOTCHAS §21's family and it is worth knowing that
 it recurs every single time an agent edits C from a heredoc.
+
+## 22:50 — the night hue plate, and two identity proofs
+
+`pass15-fx-plates/D-shimmer-hue-NIGHT-channel-f363-4x.png`. Same four rungs as
+the day plate, one binary (md5 53e5b184), the violet night. **The P14 control is
+even more damning here**: a white spiral outlined in pure BLACK against a violet
+sky -- a cartoon rope. HUE0 reads as electric cyan plasma, HUE1 as blue lightning
+with a white core, HUE2 as a lilac bolt sitting inside the sky's own hue. HUE1
+and HUE2 are both defensible on the night; HUE1 is what his words point at and
+is the shipped default. Both plates exist, so the pick is one constant.
+
+**Identity proof 1 -- the tint knob is inert.** `manafold-hit`, 140 frames,
+rendered by P15D (before the knob) and P15E (after): sha256 over every frame's
+bytes is `f5d610e0…` from BOTH. So the plates made with P15D remain valid
+evidence for the shipped tree, which is the thing a new knob quietly invalidates
+if nobody checks.
+
+**Identity proof 2 -- Zixxtrixx.** `bitident.py` running now, self-built baseline
+from the `12961f9e` worktree against P15E, 71 enumerated subjects, both metrics.
+⚠ **Stated deviation:** `--jobs 2`, not one renderer. 09-ENGINE-GOTCHAS §22
+measured the profile worth gating on -- concurrent COMPILERS and ENCODERS -- and
+a renderer is 1 thread / 17 MB. Two of them is 2 of 8 cores, and no build or
+encode runs alongside. It halves a job that would otherwise outlast the session.
+
+## 23:15 — housekeeping, and the load census before pushing anything
+
+**Purged 3,672 `.rgb` intermediates** from this lane's `diag/`: 1006 MB -> 76 MB
+(and the 76 is bitident's own in-flight frames). Every PNG plate and every
+`RUNG-PROVENANCE.txt` kept. CLAUDE.md's own law -- `.gitignore` made these
+invisible to git and nothing was deleting them; the machine reached zero bytes
+free once already.
+
+**Load census (09-ENGINE-GOTCHAS §22, the two-line version) before deciding
+whether to push bitident harder:**
+
+    quartus fits    NONE
+    ffmpeg          NONE
+    cc1plus         1  (another lane's build, not mine)
+    renderers       2  (mine, bitident)
+    cores 8, free RAM 10.7 GB of 23.8
+
+So the dangerous profile -- concurrent compilers and encoders -- is not present,
+and there is headroom. I left bitident at `--jobs 2` anyway: raising it would
+have meant killing a run that already has ~20 minutes of completed subjects in
+it, next to another lane's compiler, to save my own wall clock. Not a trade I
+get to make with someone else's machine.
+
+⚠ **And the process check itself is the discipline, not a formality.** The one
+renderer visible at that moment was identified by COMMAND LINE first --
+`.../manafold-p15-fx/build-base/bin/zhao-reel-cel.exe ... zixxtrixx-death2-normviz`
+-- which is what says it is mine. Every lane runs this executable name.
+
+**Plate generations labelled.** `pass15-fx-plates/README.md` names the binary and
+md5 behind each plate and flags the two that are deliberately an older
+generation. D11 §1 applied to my own evidence. Writing that table caught a wrong
+md5 I had just typed into it (P15D is 9fba1de4, not ec2bd37d) -- the "wrong
+number with a reassuring provenance line" failure, caught by writing the number
+down next to the thing it names.
