@@ -162,3 +162,69 @@ Same island, same block, same eleven arrays it did not reach.
 * **No work started.** Brief 0.1 authorises continuing texture and forbids
   turning this into a second project. This completes the diagnosis 7.1 asks
   for and stops there.
+
+---
+
+# THE CONVERSION TRIAGE -- which of the eleven can actually take the remedy
+
+The section above said which ones convert *"is an RTL question, not a report
+one"*. It is answered here, by reading every non-assertion index of each array.
+The discriminator is simple and mechanical: **is the read address already
+registered?** A synchronous memory read needs its address a cycle early, so an
+array indexed by a `_q` signal can convert and one indexed by a `_c` signal
+cannot without moving a protocol.
+
+| array | bits | read index | verdict |
+|---|---|---|---|
+| `cmt_q` | 256 | `c4t_slot_q`, `c4a_slot_q` | **CONVERTIBLE** |
+| `fdn_q` | 64 | `fetch_q` | **CONVERTIBLE** |
+| `ftc_q` | 64 | `fetch_q` | **CONVERTIBLE** |
+| `crs_q` | 64 | `_q` plus `sel_data_c[...]` | mixed |
+| `rdy_q` | 64 | `_q` plus `sel_data_c[...]` | mixed |
+| `live_q` | 64 | `_q`, a loop scan, and `bnd_tkt_c[...]` | mixed |
+| `iss_q` | 256 | `iss_t_slot_c`, `iss_a_slot_c` | **BLOCKED** |
+| `req_q` | 256 | `iss_t_slot_c`, `iss_a_slot_c` | **BLOCKED** |
+| `cbi_q` | -- | assertions only | **NOT IN SYNTHESIS** |
+| `clm_q` | -- | assertions only | **NOT IN SYNTHESIS** |
+| `fcl_q` | -- | assertions only | **NOT IN SYNTHESIS** |
+
+## Three of the eleven are not there at all
+
+`cbi_q`, `clm_q` and `fcl_q` have **exactly two references each, both inside
+assertions, and ZERO writes** -- and that block is guarded by `` `ifndef
+SYNTHESIS ``. Quartus defines `SYNTHESIS`, so they are excluded before
+synthesis sees them and cost nothing.
+
+**That is a false-positive class in `check_ram_inference.py`**, which reported
+all three as combinationally-read arrays. The tool scans text and does not
+evaluate `` `ifndef ``. Worth knowing before its output is used to size
+anything: it lists what LOOKS like a fabric array, and three of the eleven it
+named here are simulation scaffolding. Not corrected in the tool today -- the
+fix needs a preprocessor-aware scan, which is a larger change than the finding
+justifies, and the caveat is recorded instead.
+
+## What that leaves
+
+**384 bits across three arrays are convertible today** -- `cmt_q`, `fdn_q`,
+`ftc_q` -- because their read addresses are already registered. Each removes a
+64:1 multiplexer of its width.
+
+**512 bits across `iss_q` and `req_q` are the expensive half and are blocked.**
+Both are read at `iss_t_slot_c` / `iss_a_slot_c` on the ISSUE path, and both are
+4 bits wide, so they carry the two largest muxes. Converting them means giving
+the issue decision a pipeline stage, which is a change to when a request may be
+launched -- exactly the credit/admission protocol this block's D0-class hazards
+came from.
+
+**192 bits are mixed**: `crs_q`, `rdy_q` and `live_q` each have registered reads
+AND a combinational one. A mixed array can still convert if the combinational
+read is the one that moves -- but that is per-read design work, not a
+reclassification.
+
+## Still not claimed
+
+No saving. Three convertible arrays are 384 bits and three muxes; the arithmetic
+from bits to ALMs runs through packing decisions this analysis does not make.
+And the convertible three are the CHEAP ones -- the two that would pay most are
+the two that are blocked, which is the ordinary shape of this kind of result and
+worth stating before anyone budgets from the easy half.
