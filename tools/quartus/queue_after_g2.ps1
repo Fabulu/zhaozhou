@@ -87,8 +87,18 @@ if ($skipLine) {
 # row of the same name.
 Write-Host 'queue_after_g2: [2] zhao_prod_top MapOnly -- the real synthesizability gate.'
 Wait-Idle
-& "$PSScriptRoot\run_block_fit.ps1" -Module 'zhao_prod_top' -MapOnly -RowLabel '@map-import-fix' 2>&1 |
-    Tee-Object -FilePath 'map-prod-top.log' | Select-Object -Last 8
+# try/catch, because $ErrorActionPreference = 'Continue' does NOT survive a
+# `throw`. run_block_fit's preflight throws by design, and on 2026-09-09 one such
+# throw -- the module-declaration matcher rejecting a legal header-import form --
+# terminated this whole script and took stage 3 with it. The header above says
+# every step is independently useful; that was true only until the first throw.
+try {
+    & "$PSScriptRoot\run_block_fit.ps1" -Module 'zhao_prod_top' -MapOnly -RowLabel '@map-import-fix' 2>&1 |
+        Tee-Object -FilePath 'map-prod-top.log' | Select-Object -Last 8
+} catch {
+    Write-Host ('queue_after_g2: [2] FAILED -- ' + $_.Exception.Message)
+    Write-Host 'queue_after_g2: continuing to stage 3 anyway.'
+}
 
 # ---- 3. the pair-pipe, with a filed prediction ----------------------------
 # PRE-REGISTERED in reports/PAIRPIPE-IS-NOT-A-DSP-LEVER-20260909.md: 6 DSP, the
@@ -98,7 +108,11 @@ Wait-Idle
 # and I want to know.
 Write-Host 'queue_after_g2: [3] zhao_raster_perspuv_pairpipe MapOnly -- scores a filed prediction.'
 Wait-Idle
-& "$PSScriptRoot\run_block_fit.ps1" -Module 'zhao_raster_perspuv_pairpipe' -MapOnly -RowLabel '@map' 2>&1 |
-    Tee-Object -FilePath 'map-pairpipe.log' | Select-Object -Last 8
+try {
+    & "$PSScriptRoot\run_block_fit.ps1" -Module 'zhao_raster_perspuv_pairpipe' -MapOnly -RowLabel '@map' 2>&1 |
+        Tee-Object -FilePath 'map-pairpipe.log' | Select-Object -Last 8
+} catch {
+    Write-Host ('queue_after_g2: [3] FAILED -- ' + $_.Exception.Message)
+}
 
 Write-Host 'QUEUE_AFTER_G2 DONE'
