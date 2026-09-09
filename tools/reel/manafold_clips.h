@@ -1380,9 +1380,28 @@ inline zc::Clip build_hover_idle() {
     g.write(c, f);
     c.root[static_cast<size_t>(f) * 3 + 1] = hover_at(
         f, K, kHoverHeightMm, kBobAmpAMm, kBobAmpBMm, K / kBobPeriodAKeys, K / kBobPeriodBKeys);
-    c.deform[static_cast<size_t>(f)] = compress_at(
-        f, K, K / kWobblePerAKeys,  kCompressAmpPm,
-        -static_cast<int32_t>((65536LL * 3 * kWobbleLagKeys * (K / kWobblePerAKeys)) / K));
+    // PASS 14 / R2(c) -- THE THIRTEEN-CYCLE BREATH, PLUS TWO BIG SLOW ONES.
+    // The fast breath is untouched (it is the life layer and it lags the
+    // wobble by a station clock, which is why the phase term is what it is);
+    // what is new is a swell underneath it at kIdleSwellCycles, so the body's
+    // ENVELOPE changes across the clip instead of only its surface. See the
+    // note beside kIdleSwellPm for why raising the fast breath could not do
+    // this: thirteen cycles sampled eight times is 1.63 cycles per tile.
+    {
+      const int cyc = K / kWobblePerAKeys;
+      const zc::DeformSample fast = compress_at(
+          f, K, cyc, kCompressAmpPm * kIdleFastBreathPm / 1000,
+          -static_cast<int32_t>((65536LL * 3 * kWobbleLagKeys * cyc) / K));
+      const int32_t sw = (65536 + press_wave(f, K, kIdleSwellCycles)) / 2;  // 0..65536
+      int32_t flat = static_cast<int32_t>(fast.flatten) +
+                     static_cast<int32_t>(
+                         (static_cast<int64_t>(kCompressAmpPm) * kIdleSwellPm / 1000 * sw) >> 16);
+      if (flat > 60000) flat = 60000;  // the ceiling; see kCompressAmpPm
+      const int32_t spread =
+          static_cast<int32_t>((static_cast<int64_t>(flat) * kSpreadRatioPm) / 1000);
+      c.deform[static_cast<size_t>(f)] =
+          zc::DeformSample{static_cast<uint16_t>(flat), static_cast<uint16_t>(spread)};
+    }
   }
   return c;
 }
@@ -2263,6 +2282,19 @@ inline zc::Clip build_nodule_solo() {
  *  static, so a leg is one process, not a toggle. Default 0 ships. */
 inline int g_u02_death_fail = 0;
 
+/** PASS 14 / R2(c) -- THE CORPSE'S HELD SAG, shared by both deaths.
+ *
+ *  One function so the two death performances cannot drift to different
+ *  corpses, and so the QA gate has exactly one value to compare against. It
+ *  takes no frame argument ON PURPOSE: a corpse that could depend on `f` is a
+ *  corpse that could breathe, and the type is the guard. */
+inline constexpr int32_t kCorpseFlatMax = kCompressAmpPm * kDeathCorpseFlatPm / 1000;
+inline zc::DeformSample corpse_sample() {
+  return zc::DeformSample{
+      static_cast<uint16_t>(kCorpseFlatMax),
+      static_cast<uint16_t>(static_cast<int64_t>(kCorpseFlatMax) * kSpreadRatioPm / 1000)};
+}
+
 constexpr uint16_t kDeathSlot = 17;
 constexpr uint16_t kDeathBSlot = 18;
 constexpr uint16_t kLassoSlot = 19;
@@ -2596,7 +2628,11 @@ inline zc::Clip build_death_drop() {
     // FAILABLE LEG 1: the tail's deform is left running -- the corpse keeps
     // breathing, which is the fault D9 §11.2 names in those words.
     if (dead && g_u02_death_fail != 1) {
-      c.deform[static_cast<size_t>(f)] = zc::DeformSample{};
+      // ⚠ NOT BIT-ZERO ANY MORE, AND THAT IS THE POINT. Zero flatten is the
+      // round bind ellipsoid, so the old corpse was the ROUNDEST shape in the
+      // clip. This is a HELD, non-zero sag: still to the count, and flatter
+      // than any living inhale. See kDeathCorpseFlatPm.
+      c.deform[static_cast<size_t>(f)] = corpse_sample();
     } else {
       int32_t flat = 0;
       // each strike squashes, decaying with the bounce; between strikes the
@@ -2618,7 +2654,10 @@ inline zc::Clip build_death_drop() {
       const int32_t breath = static_cast<int32_t>(
           (static_cast<int64_t>(kCompressAmpPm) * life / 1000 *
            ((65536 + sinp(f, K, K / 40 > 0 ? K / 40 : 1)) / 2)) >> 16);
-      flat = flat * life / 1000 + breath;
+      // PASS 14 / R2(c): the sag fades IN on the same ramp the life fades OUT
+      // on, so the corpse's flatten is already at its held value by the settle
+      // key and nothing snaps. The body goes flat as it dies.
+      flat = flat * life / 1000 + breath + kCorpseFlatMax * (1000 - life) / 1000;
       // THE OPENING HOLD: exactly zero at key 0, so the loop seam cannot
       // interpolate a breath back onto the corpse. See kDeathOpenKeys.
       if (f < kDeathOpenKeys) flat = flat * fold_ease(f * 1000 / kDeathOpenKeys) / 1000;
@@ -2796,7 +2835,10 @@ inline zc::Clip build_death_gutter() {
     }
     c.root[static_cast<size_t>(f) * 3 + 1] = y;
     if (dead && g_u02_death_fail != 1) {  // ⚠ it STOPS (leg 1 removes that)
-      c.deform[static_cast<size_t>(f)] = zc::DeformSample{};
+      // ...at a HELD sag, not at bit-zero: see kDeathCorpseFlatPm. Both deaths
+      // settle into the same flattened corpse; what stays distinct between
+      // them is how they get there, which is the protected part.
+      c.deform[static_cast<size_t>(f)] = corpse_sample();
     } else {
       int32_t flat = 0;
       for (int i = 0; i < kDeathBBounces; ++i) {
@@ -2817,7 +2859,8 @@ inline zc::Clip build_death_gutter() {
       const int32_t breath = static_cast<int32_t>(
           (static_cast<int64_t>(kCompressAmpPm) * (1000 - sag * 7 / 10) / 1000 *
            life / 1000 * ((65536 + sinp(f, K, K / 52 > 0 ? K / 52 : 1)) / 2)) >> 16);
-      flat = flat * life / 1000 + breath;
+      // PASS 14 / R2(c): as above -- the sag arrives as the life leaves.
+      flat = flat * life / 1000 + breath + kCorpseFlatMax * (1000 - life) / 1000;
       if (f < kDeathOpenKeys) flat = flat * fold_ease(f * 1000 / kDeathOpenKeys) / 1000;
       if (flat > 60000) flat = 60000;
       const int32_t spread =

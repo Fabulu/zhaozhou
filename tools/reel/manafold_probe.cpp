@@ -315,23 +315,50 @@ int main(int argc, char** argv) {
       //     deformation_sample(), the same call the renderer makes, at both
       //     presentation subs -- not off the clip's authored array, because
       //     the authored array is not what ships.
+      //
+      //     PASS 14 / R2(c): IT DOES NOT BREATHE, BUT IT IS NOT ZERO. This
+      //     check read `flatten != 0 || spread != 0`, which is the same
+      //     criterion manafold-qa-p12 used and it is wrong for the same
+      //     reason: zero flatten is the round BIND POSE, so demanding it made
+      //     the corpse the roundest shape in the clip. The corpse now holds an
+      //     authored sag (kDeathCorpseFlatPm) and the contract being enforced
+      //     is that it DOES NOT CHANGE.
+      //
+      //     ⚠ AND THIS FILE HAD ITS OWN COPY OF THE RULE, which is why the
+      //     first fix -- made in manafold-qa-p12 alone -- left this one failing.
+      //     That is the exact fault CLAUDE.md records against `flat_staged_slot`
+      //     ("the probe carried its own copy of it and the copy went stale the
+      //     moment a travelling slot was added"), in the same file, again. So
+      //     the value is not re-derived here: it comes from `u02::corpse_sample()`,
+      //     the single definition both deaths are built from. Two gates can now
+      //     disagree with the clip only by failing to compile.
       {
-        int nonzero = 0, first_bad = -1;
+        const zc::DeformSample want = u02::corpse_sample();
+        int changed = 0, wrong = 0, first_bad = -1;
+        bool have_prev = false;
+        zc::DeformSample prev{};
         for (uint16_t f = B.settle; f < clip.frame_count; ++f)
           for (uint8_t sub = 0; sub < 2; ++sub) {
             const zc::DeformSample d = zc::deformation_sample(T, clip.slot_id, f, sub);
-            if (d.flatten != 0 || d.spread != 0) {
-              ++nonzero;
+            if (have_prev && (d.flatten != prev.flatten || d.spread != prev.spread)) {
+              ++changed;
               if (first_bad < 0) first_bad = f;
             }
+            if (d.flatten != want.flatten || d.spread != want.spread) {
+              ++wrong;
+              if (first_bad < 0) first_bad = f;
+            }
+            prev = d;
+            have_prev = true;
           }
-        const bool dok = nonzero == 0;
+        const bool dok = changed == 0 && wrong == 0;
         std::printf(
-            "u02-probe: slot %u DEATH deform STOPS at key %d: %d non-zero "
-            "samples in the eternal rest%s - %s\n",
-            clip.slot_id, B.settle, nonzero,
-            first_bad >= 0 ? " (first at key " : "", dok ? "OK" : "FAIL");
-        if (first_bad >= 0) std::printf("            first non-zero key %d)\n", first_bad);
+            "u02-probe: slot %u DEATH deform HOLDS from key %d: %d key-to-key changes, "
+            "%d samples off the authored sag (flatten %u, spread %u) - %s\n",
+            clip.slot_id, B.settle, changed, wrong,
+            static_cast<unsigned>(want.flatten), static_cast<unsigned>(want.spread),
+            dok ? "OK" : "FAIL");
+        if (first_bad >= 0) std::printf("            first bad key %d\n", first_bad);
         if (!dok) rc = 1;
       }
     }
