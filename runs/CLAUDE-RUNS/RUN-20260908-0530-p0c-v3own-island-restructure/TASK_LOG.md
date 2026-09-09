@@ -4246,3 +4246,61 @@ optimised":
    the CREATURE is art in another lane and needs its own run -- noted, not started.
 
 **Pull:** 0 incoming, nothing to merge, no Quartus alive.
+
+
+## 2026-09-09 -- FOUR OWNER RULINGS, and the eighth refused claim
+
+**Owner ruled four open questions**, verbatim: *"minimum fov you propose is ok.
+Rounding law: qformats wins unless FORGE has strong visible/content-law reason to
+be exceptional. Use V3 with NCTX=12, but note this down as possible to reverse if
+we ever find ourselves wit enough DSPs to flex. Pose question: relax the 1
+bone/clock rule. It must have been arbitrary."*
+
+Recorded in FIVE places, not one, because this morning I found the PREVIOUS
+rcp24 ruling ("halve the DSPs even if it costs") lives only in a commit message
+and not in the docket. R1 -> zhao_project_core.sv beside the lever; R2 ->
+FORGE.PRIM.md at the conflicting line; R3 -> prod_manifest.yml on the block's own
+line with the reversal condition; R4 -> GEOM.POSE.md at the target line. Plus
+reports/OWNER-RULINGS-20260909-2300.md as the index.
+
+**THE EIGHTH REFUSED CLAIM, and it was in a report I had quoted.** I went to
+perform the rcp24 swap and checked the ports first. svc has 16, v3 has 20:
+mul_busy_o exists only in svc; mul_jobs_o, zero_jobs_o, phase_jobs_o,
+negcorr_jobs_o and qerr_o only in v3; and occupancy_o is [3:0] in svc against
+[5:0] in v3. The archaeology report says "the v3 file also deliberately keeps the
+old ports so it is drop-in". It does not.
+
+The occupancy width is the sharp part: **NCTX=12 is exactly what makes occupancy
+above 15 reachable**, so the ruling itself would have caused a silent truncation
+through the island's 4-bit path. And qerr_o is an ERROR output -- leaving it open
+is the unfired-detector law and check_counters.py would flag it. rcp_mul_busy
+turns out to be declared at :504, connected at :635 and read NOWHERE, a dead-end
+capture, so dropping it loses nothing.
+
+So a "one-line parameter edit" is four changes inside a 10,837-ALM block,
+possibly needing a new island port and a prod_top regeneration. Dispatched rather
+than hand-edited, with the island's own composed suite to be run BEFORE and
+AFTER, because elaboration alone cannot catch a composition break.
+
+**The pattern across all eight is now unmistakable:** "it is drop-in", "the owner
+already ruled it", "the measurement says -6", "s1.15", "58 formal assertions" --
+**the confident one-line summary is where the error lives.** Two of the eight were
+my own briefs.
+
+**Check 3 added to uncashed_cheques.py** and it FINDS THE PROJECTOR:
+zref::render::project_vertex is declared by both GEOM.PROJECT and TERRAIN.PROJECT
+in blocks.yml. The 66-DSP duplication that opened this campaign was declared in
+the data the whole time and nothing read it. Two tiers, because TERRAIN.SHADE
+declares `shade_flat_tri_dir_unclamped` while GEOM.LIGHT declares
+`shade_flat_tri_dir` -- different strings, one law, so exact matching reports zero
+and looks like it worked. It also found a THIRD collision I had missed
+(TERRAIN.MIPFEED/MIPGEN) which is probably NOT a duplication -- mipfeed drives
+mipgen -- and that limitation is stated in the source.
+
+The tool caught itself first again: my first collision scan used a block-id regex
+matching nothing and printed "0 collisions". The real format is `- id: NAME`.
+
+**Three architects live:** shade/light consolidation (in reference/, running the
+golden suites -- "the goldens must not move" is the acceptance criterion), the
+rcp24 island swap, and the sequenced pose decoder (R4, -17 DSP, the largest
+remaining lever).
