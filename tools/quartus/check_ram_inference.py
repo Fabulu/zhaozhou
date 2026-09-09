@@ -190,6 +190,91 @@ def array_bits(decl_widths, decl_depths, vals):
     return bits
 
 
+def bracket_groups(text, pos):
+    """Consume balanced `[...]` groups starting at `pos`. Returns (end, groups).
+
+    WHY THIS IS NOT A REGEX, measured 2026-09-09
+    --------------------------------------------
+    The write scan used `(?:\\[[^\\]]*\\]\\s*)+`, which cannot match a NESTED
+    bracket -- and a nested bracket is the normal case here, because an index is
+    usually a slice of something:
+
+        sampmeta_m[plan_acc_src[SRC_SLOT_HI:SRC_SLOT_LO]]
+                  [plan_acc_src[SRC_SIDX_LO+1:SRC_SIDX_LO]] <=
+
+    `[^\\]]*` stops at the INNER `]`, so the group closes early, the leftover `]`
+    matches nothing, and the write site is missed entirely. `writes` then comes
+    back empty and `if not writes: continue` skips that array from EVERY rule in
+    this file -- not merely the write rules.
+
+    **63 arrays across fpga/rtl were invisible to this checker**, including
+    `sampmeta_m` (4,032 bits, which FIT GATE 1 independently measured sitting in
+    flip-flops), `mat_m`, `palslot_m`, `palgen_m`, every one of v3own's eight
+    queues, cache_pipe's five, fragrob's five, and this session's own
+    perspuv_pairpipe FIFO arrays.
+
+    The tool printed "1009 structural findings" and read as thorough while
+    silently skipping the largest arrays in the design. That is the
+    broken-instrument law exactly: the defect made the answer look SMALLER, and
+    nobody audits good news. It is also the third parser in this repository to be
+    defeated by a bracket -- see worst_path_index.py, which gave up on regex
+    entirely and splits columns instead.
+    """
+    groups = []
+    i = pos
+    n = len(text)
+    while i < n and text[i] == "[":
+        depth = 0
+        j = i
+        while j < n:
+            if text[j] == "[":
+                depth += 1
+            elif text[j] == "]":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        if j >= n:
+            return (i, groups)          # unbalanced: refuse to guess
+        groups.append(text[i:j + 1])
+        i = j + 1
+        while i < n and text[i] in " \t\r\n":
+            i += 1
+    return (i, groups)
+
+
+def write_sites(text, name):
+    """(start, joined-index) for every `name[...] <=` site, nesting allowed."""
+    out = []
+    for m in re.finditer(r"\b" + re.escape(name) + r"\s*(?=\[)", text):
+        end, groups = bracket_groups(text, m.end())
+        if groups and text[end:end + 2] == "<=":
+            out.append((m.start(), "".join(groups)))
+    return out
+
+
+# A KNOWN-BAD INPUT, checked on every run.
+#
+# The old regex passes the flat case and fails the nested one, so a self-check
+# built only from flat writes would have gone on reporting a pass forever. Both
+# shapes are here, and the nested one is the one that mattered.
+_NEST_FIRE = (
+    "  logic [20:0] sampmeta_m [64][3];\n"
+    "  always_ff @(posedge clk) begin\n"
+    "    sampmeta_m[src[HI:LO]]\n"
+    "              [src[LO+1:LO]] <= v;\n"
+    "    flat_m[i][j] <= w;\n"
+    "  end\n"
+)
+
+
+def self_fire_test():
+    """True if the write scan still sees BOTH a nested and a flat write."""
+    nested = write_sites(_NEST_FIRE, "sampmeta_m")
+    flat = write_sites(_NEST_FIRE, "flat_m")
+    return len(nested) == 1 and len(flat) == 1 and "[src[HI:LO]]" in nested[0][1]
+
+
 def check_file(path, sizes=None):
     raw = io.open(path, encoding="utf-8", errors="replace").read()
     text = strip_comments(raw)
@@ -217,21 +302,20 @@ def check_file(path, sizes=None):
         # Writes: `name [i] <=` or `name [i][j] <=`, whitespace tolerated,
         # because a spaced index is the same construct and missing it would
         # make this check quietly useless.
-        wpat = re.compile(r"\b" + name + r"\s*(?:\[[^\]]*\]\s*)+<=")
-        writes = [mm.start() for mm in wpat.finditer(text)]
+        # Nesting-aware: see bracket_groups' header for the 63 arrays the old
+        # regex silently skipped.
+        sites = write_sites(text, name)
+        writes = [p for p, _ in sites]
         if not writes:
             continue
 
         async_writes = 0
         write_addrs = set()
-        for w in writes:
+        for w, addr in sites:
             o = owner(procs, w)
             if o and o[1] == "ff" and o[2]:
                 async_writes += 1
-            frag = text[w:w + 200]
-            idx = re.match(r"\b" + name + r"\s*((?:\[[^\]]*\]\s*)+)<=", frag)
-            if idx:
-                write_addrs.add(idx.group(1).strip())
+            write_addrs.add(addr.strip())
 
         if async_writes:
             findings.append(
@@ -247,9 +331,13 @@ def check_file(path, sizes=None):
                 continue  # the declaration, not a read
             o = owner(procs, mm.start())
             after = text[mm.start():mm.start() + 300]
-            is_write = re.match(r"\b" + name + r"\s*(?:\[[^\]]*\]\s*)+<=", after)
-            if is_write:
+            # The read scan had the SAME nesting blindness, and it fails the
+            # other way: a nested-index WRITE was not recognised as a write, so it
+            # was reported as a combinational READ. Use the write sites already
+            # computed above rather than re-deriving with a pattern.
+            if mm.start() in set(writes):
                 continue
+            del after
             if o and o[1] == "comb":
                 findings.append(
                     (name, "read COMBINATIONALLY through dynamic index `%s` -- "
@@ -325,6 +413,18 @@ def effort(whys):
 
 
 def main():
+    # The write scan is this file's foundation: an array whose write it cannot see
+    # is skipped from every rule, silently. It was defeated by a nested bracket for
+    # its whole life, so it now proves it can see both shapes before it is allowed
+    # to report anything.
+    if not self_fire_test():
+        print("RAM-INFERENCE CHECKER BROKEN: the write scan no longer sees a "
+              "nested-index write, or no longer sees a flat one. Refusing to "
+              "report findings from a scan that cannot find writes -- an array "
+              "whose write is missed is dropped from every rule below without a "
+              "word.")
+        return 2
+
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     rank = "--rank" in sys.argv
 
