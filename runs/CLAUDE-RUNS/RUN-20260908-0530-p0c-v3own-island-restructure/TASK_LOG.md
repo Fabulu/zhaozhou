@@ -3202,3 +3202,29 @@ run_block_fit looks up `$fitRules[$rowModule]` with the label concatenated and g
 `$null`; check_fit_rules iterates `$rules.Keys` and matches `module -eq $name`, so
 it never visits a labelled row at all. Fixing either alone leaves the other blind,
 which is exactly why the gap survived being written down twice.
+
+## 2026-09-09 -- the extended checker: 19 previously invisible gate failures
+
+    unlabelled  15 pass, 17 FAIL, 8 unmeasured, 11 STALE   (UNCHANGED, exit code preserved)
+    labelled    13 pass, 19 FAIL                            (NEW -- was not examined at all)
+    of the 19:  11 are stamped `ok` while breaching
+
+Visible gate failures go from 17 to 36.
+
+**The real checker found one MORE than my Python estimate of 18, and the extra one
+matters:** `zhao_raster_rcp24_v3@v3-nctx8` -- "block memory 1366 bits < required
+1800 -- **the storage did not infer as memory**". My analysis only modelled `max_*`
+rules; the checker also applies MINIMUMS, which is the half fit_rules.ps1 calls out
+as the important one: "a maximum catches a block that grew; a minimum catches a
+block whose storage quietly stopped being storage, which is the failure that looks
+like success." Two such violations exist in total -- terrain_residency_v2
+(unlabelled, already known) and this one (labelled, previously invisible).
+
+So a hand-rolled reimplementation of a gate found 18 and missed the one failure
+class the gate was specifically built to catch. Brief 2.7's instruction, arriving
+from the other direction: test the ACTUAL path, not a reimplementation of the rule.
+
+Exit code still driven by unlabelled rows only, deliberately -- the inline gate in
+run_block_fit.ps1 is what STAMPS a row, and until its key-mismatch fix lands,
+failing CI on rows no stamp reflects would be blaming the ledger for the runner's
+bug.
