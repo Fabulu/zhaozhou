@@ -405,3 +405,61 @@ the rule enforced in `run_block_fit.ps1` rather than in one caller's comment.
 The DSP figure itself never moved -- a MapOnly does report `dspBlocks`, which is
 why the census's numbers survived the damage while its ALM column did not. Worth
 knowing which columns a map row can and cannot answer before quoting one.
+
+---
+
+# ADDENDUM 2026-09-09 (later): a measured lever nobody listed, and a worked precedent
+
+## `zhao_geom_skin` is -6 DSP away from where it sits, already fitted
+
+Three rows, one parameter apart, all in the ledger the whole time:
+
+| | ALM | DSP | Fmax |
+|---|---|---|---|
+| `@MUL_LANES=1` | 1,530 | **3** | 56.11 |
+| default (counted) | 2,225 | 9 | 89.65 |
+| `@MUL_LANES=6` | 2,595 | 18 | 84.61 |
+
+**-6 DSP and -695 ALM for -33.5 MHz, needing no new work at all** -- the fit
+already exists. It appeared on no lever list here, and I found it by reading a
+header while doing something else.
+
+Whether 56 MHz survives is a RATE question, and the block's own header says that
+was left open on purpose: the first implementation issued all eighteen 32x32
+products in one clock and measured **72 DSP -- "64% of the chip for one stage"**
+-- left that way pending a stated vertex rate that `REMAINING_BLOCKERS.md` could
+not supply.
+
+`tools/budget/dsp_census.py` now reports these automatically: any `top:` whose
+labelled rows include a cheaper DSP figure, with the Fmax it costs. Listed, never
+summed -- a lower-DSP row is usually a slower row and which one ships is an owner
+call. A census that totals the default and stays silent about the alternatives
+beside it is hiding decisions that have already been paid for. It finds exactly
+one such lever today, which is the honest answer rather than the hoped-for one.
+
+## And `zhao_geom_lod` is the worked precedent for the projection lever
+
+Its header records the whole progression, measured on this device:
+
+```
+first synthesis   1,436 ALM  28 DSP   72-bit operands
+after narrowing   1,303 ALM  18 DSP   64-bit, two products shared
+after SEQUENCING  1,183 ALM   6 DSP   one multiplier, 5 cycles
+```
+
+> *"a 72-bit operand asks Quartus for a 72x72 multiplier when the honest need is
+> 32x32"* -- `zhao_geom_lod.sv:230`
+
+**Narrowing alone took 28 DSP to 18. Sequencing took 18 to 6.** Both levers
+proposed for `zhao_project_core` have already worked, on this device, in this
+repository, on a block that documented each step.
+
+That is corroboration and it is not proof for the projector, for a stated reason:
+`geom_lod` narrowed from 72-bit operands that were *"deliberate slack"* down to
+the honest 32x32 need. `project_core` is already AT 32x32, so its remaining
+narrowing means going BELOW the declared input width -- a contract change, not
+the removal of slack. Different move, same direction.
+
+And the sequencing half carries the warning D22 attached: `zhao_project_core`
+misses the product clock by 39% on a cone with no boundary to blame, so adding
+five cycles of control depth there is not the free win it was for `geom_lod`.
