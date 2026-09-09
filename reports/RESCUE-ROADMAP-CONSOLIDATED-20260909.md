@@ -38,6 +38,9 @@ Not one of these is quoted from an agent's report. Each was rebuilt and rerun.
 | **terrain bump mapping** — answers `bumomapping.md` | 4,738 checks 0 failures; **`-GDELTA_SHIFT=23` control 1,830/4,738 FAILED** | **costs** 0 DSP, ~450 ALM, ~14 M10K |
 | **shared projector** `zhao_project_service` | lint clean; adoption gated on the arena | −33 DSP *(structural)* |
 | **pair-pipe swap** | six checks incl. 392 byte-identical records | −1,092 ALM, −2,396 regs, +14 MHz *(measured)* |
+| **ROWS_PER_PASS** — nine `mul32` become three, one matrix row per cycle | 38/38 equivalence across 4 stall patterns + control fired; **413/413** service smoke; guard `$fatal`; **900/900** production path unchanged | DSP 33 → **15** *(structural)* |
+| **vertex_arena dense-seal** — a MODE on the sanctioned primitive, not a second copy | **all 8 formal tasks PASS**; 394/394; mutant 149/394; 73/73 existing | −295 registers at 4×81 *(structural)*; **two real bugs found**, one by the solver |
+| **TERRAIN.SHADE** — terrain had NO lighting path at all | **4,142/4,142 bit-exact** vs the compiled law; latency 145 fixed; `--break-oracle` 1/4142 | **costs** 0 DSP, 1 M10K, ~700 ALM |
 | **`uncashed_cheques.py`** | self-test 4 fire / 4 no-fire + anti-vacuity gates, **fired deliberately** | finds this class permanently |
 
 ## The corrections, which matter as much as the savings
@@ -72,6 +75,21 @@ Not one of these is quoted from an agent's report. Each was rebuilt and rerun.
 
 **The gap is 43, not 37.** A plan built on the earlier figure was spending six
 DSP that do not exist.
+
+### The composition is now MEASURED, and it is a lattice, not a sum
+
+`ROWS_PER_PASS` landed today, so the projection levers can be stated exactly.
+All three act on the **same eleven products**, so they **multiply and never add**:
+
+    66  two private cores today
+    33  one shared service                    marginal -33
+    15  shared service + ROWS_PER_PASS=1      marginal -18
+     5  + matrix operand at 18 bits           marginal -10
+
+**33 + 21 + 22 = 76 out of 66 is impossible**, and any roadmap that adds these is
+manufacturing a path to 94 that does not exist. Note also that `dsp.md`'s own
+lever text says "~33 to ~12, saving ~21"; the honest figure is **18**, because it
+predates the calibration cliff and omits the two viewport products.
 
 ## Where 43 could come from — every candidate, with its status
 
@@ -235,8 +253,15 @@ described by a dirty row asserting 18 DSP against an actual 3), `terrain_tess`,
 
 # 5. Not built at all, and therefore not in any total
 
-`GEOM.LIGHT`, `TERRAIN.SHADE`, `MATERIAL.RESOLVE`, `FORGE.SHADOW`, `MEM.UPLOAD`,
-`FORGE.PRIM.EVAL`. **The machine is incomplete by this much before any of it is
+`GEOM.LIGHT`, ~~`TERRAIN.SHADE`~~, `MATERIAL.RESOLVE`, `FORGE.SHADOW`,
+`MEM.UPLOAD`, `FORGE.PRIM.EVAL`.
+
+**`TERRAIN.SHADE` is now BUILT** (0 DSP, 1 M10K, ~700 ALM, 4,142/4,142 bit-exact).
+But building it does **not** light the terrain, and the report says so: still owed
+are the art-law LOOK gate (ordered BEFORE the RTL and not retired by it),
+`TERRAIN.PROJECT`'s colour port, the HPS sun ABI word, and terrain entering the
+composed shell. **`FORGE.PRIM.EVAL` is in progress** — the blocker
+`reports/ADDLIGHTNING.md` names for lightning. **The machine is incomplete by this much before any of it is
 optimised**, and `TERRAIN.SHADE` is the one the bump-mapping work depends on.
 
 Also: **Field v3 has never been fitted at all.** Twelve leaves have targets;
