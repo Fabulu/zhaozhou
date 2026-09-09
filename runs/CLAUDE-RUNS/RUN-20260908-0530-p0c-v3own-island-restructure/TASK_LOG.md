@@ -4009,3 +4009,71 @@ ships.
 **Next:** commit the attrstep architect's finished files so the tree is clean
 enough to merge main, then work the remaining archaeology lanes as they report.
 `zhao_terrain_bake_v2.sv` stays untouched -- its author is still running.
+
+## 2026-09-09 -- the archaeology got a DETECTOR, and 20 owner docs have no disposition
+
+**In progress before this entry** (per the fit-results law, written down first):
+terrain architect live in bake/tess/residency; tmu_pipe palette architect live.
+
+**Built `tools/budget/uncashed_cheques.py`.** Three archaeology lanes reported and
+lane 2's closing line is why: *"A thing built is not a thing installed, and a
+thing fixed is not a thing measured"* -- and BOTH shapes are mechanically
+detectable from data already in the repo, and neither check existed. Same shape
+as the .gitignore lesson: the knowledge was written down thoroughly, in headers
+and commit messages, by people who knew exactly what they were deferring, and
+nothing ever read it back.
+
+Check 1 (built, installed nowhere) on the current tree: 27 rootless
+measured/targeted modules, 22 closed by the manifest, **5 STILL OPEN** --
+rcp24_v3 (3 DSP, owner-ruled, fit-confirmed), project_service, terrain_cmd
+(1,069 ALM), terrain_loadq (734), terrain_mipfeed (343).
+
+The refinement that made it useful: **being NAMED in the manifest is not being
+SETTLED by it.** My first version treated any manifest entry as intent, which
+silenced rcp24_v3, whose note reads "not-yet-adopted ... until it is composed" --
+a deferral written down, not an explanation. So the discriminator is the note's
+LANGUAGE: superseded/probe/harness CLOSE; unused/not-yet-adopted/until/blocked
+leave PENDING.
+
+**The instrument caught itself first.** `load_fit_targets` assumed `  name:`
+keys where the file has `  - top: name`, returned an EMPTY SET, and silently
+emptied check 1 of every module with a target but no fit row -- exactly the two
+it was written to catch. It printed "0 fit targets" and looked fine. That is this
+repo's own law committed by the tool written to enforce it. Both checks now
+assert in both polarities plus anti-vacuity gates, and I fired the anti-vacuity
+gate deliberately to watch it refuse to import.
+
+Also kept in the source: `git log -1 -- <path>` per module is 216 processes and
+does NOT finish in two minutes (measured). One --name-only walk does it.
+
+**Owner-document index landed and it is its own finding.**
+`reports/OWNER-DOCUMENT-INDEX.md` was on main and ABSENT here. 33 owner "Agent
+please read" documents; **20 have no recorded disposition.** Its own sentence is
+the point: *"Superseded is a disposition and should be recorded as one -- an
+unread instruction and a satisfied instruction look identical from here."* That
+is the uncashed-cheque pattern again, in prose rather than RTL.
+
+Landed without merging (copy via `git show origin/main:<path> >`, no fpga/rtl
+touched, so no live-tree hazard while the terrain architect works):
+OWNER-DOCUMENT-INDEX.md, TERRAIN_31MHZ_REARCHITECTURE.txt, ADDLIGHTNING.md,
+islandrearchitecture4.md, Islandrearchitect.md, bumomapping.md.
+
+**`bumomapping.md` is ONE SENTENCE and it has been unanswered since 2026-09-05:**
+*"we need detail bump mapping for terrain. please architect it and set it up for
+production. I hope it is not too expensive but terrain is the star of the show
+and we neglected giving it first class treatment."* Dispatched a fable architect,
+scoped to NORMALMAP/SHADE/the bump path and explicitly OUT of the files the
+terrain architect holds. Briefed that "I hope it is not too expensive" is a
+constraint in this phase, not a hope -- and that if first-class bump cannot be
+afforded, saying so with numbers is the required answer.
+
+Also dispatched a triage agent on the six unindexed HARDWARE-lane owner docs
+(islandrearchitecture4 3,829 lines "most up to date instructions", Islandrearchitect
+1,173, Islandrearchitect2 1,025, REARCHITECTUREADVICE 1,022 "reach 100-115 MHz",
+Addendum, MHZArchitected) -- to produce DONE / SUPERSEDED / OUTSTANDING with
+cited evidence, warned that DONE and SUPERSEDED are the comfortable verdicts and
+therefore the ones to check hardest.
+
+**Pull:** 0 incoming on our branch again; main still 311 ahead, still not merged
+because the terrain architect's work is uncommitted. No Quartus alive, so no
+@g2-prod row to read.

@@ -1,0 +1,1437 @@
+Agent should focus on finishing the texture island first.
+
+Do not interrupt that work, move its acceptance criteria, or consume its active
+Quartus lane for this task. This is the queued TERRAIN rearchitecture to execute
+after the texture island is finished. It is not another texture specification.
+
+===============================================================================
+ZHAOZHOU: THE 31.10 MHz TERRAIN PAIR
+Evidence review and implementable rearchitecture
+Prepared 2026-09-07
+===============================================================================
+
+Repository: Fabulu/zhaozhou
+Hardware branch inspected: zixxtrixx-v8-closeout
+Pinned review revision: 09b6b721a52e034793112cffe542e51a4b6b7dce
+Measured pair revision: 39a650fcc6240dd10ce88eefba0c9e68f00f9925
+Target: zhao_pair_tess_normals
+Production functions involved: TERRAIN.TESS and TERRAIN.NORMALS
+Deliverable status: architecture and independently executed Python models.
+NOT a committed RTL change, RTL simulation result, or new Quartus measurement.
+
+Source references [S01] through [S12] are resolved in section 19. All unqualified
+source descriptions below refer to the pinned review revision. Proposed module
+names, stages, budgets and acceptance criteria are proposals, not claims that
+those components already exist.
+
+
+1. THE ACTUAL RESULT -- FOUND, IDENTIFIED, AND PUT IN CONTEXT
+===============================================================================
+
+The offending row is zhao_pair_tess_normals, not a texture block, not the terrain
+pager, and not a claim that the entire console currently runs at 31 MHz.
+
+The saved characterization ledger records: [S01]
+
+    module                 zhao_pair_tess_normals
+    status                 ok
+    sourceCommit           39a650fcc6240dd10ce88eefba0c9e68f00f9925
+    rtlCleanAtHead         true, as recorded with that characterization
+    sourcesHashed          31
+    elapsed build seconds  732
+    ALMs                   1,523
+    registers              1,389
+    block-memory bits      2,048
+    RAM blocks             1
+    DSP blocks             9
+    virtual pins           67
+    fmaxMhz                31.10
+    clock                  clk
+
+The ledger header describes these as provisional per-block fits. Its tool header
+is Quartus Prime Lite 17.0.2, device 5CSEBA6U23I7. Do not replace those recorded
+values with the version installed on today's workstation. [S01]
+
+31.10 MHz corresponds to an approximately 32.154 ns period; the intended 100 MHz
+clock corresponds to 10 ns. This is not a small seed-tuning problem. However,
+32.154 ns is the reciprocal of the reported frequency, NOT a recovered timing
+path's data-arrival time or a measured combinational delay. This review did not
+recover a trustworthy raw path report establishing the exact winning endpoints.
+
+The September 7 timing review explicitly identifies this pair at 31.10 MHz and
+says it could not be split into internal/boundary/reset path classes because the
+necessary path summary was absent. It also explains that the four pair wrappers
+previously had no fit targets, so their poor frequency results were not being
+judged. A successful fit status therefore did not imply the product clock had
+been met. [S02]
+
+That is the answer to the original identification question. The remainder of
+this document addresses the real blocks behind that row.
+
+
+2. IMPORTANT PROVENANCE: A REPAIR IS ALREADY PRESENT, BUT NOT A NEW RECEIPT
+===============================================================================
+
+There are two distinct versions of the normal generator to keep separate.
+
+A. At the measured pair revision, 39a650fc..., the normal generator selects one
+   of six operand pairs, performs a signed 33x33 multiplication, then immediately
+   subtracts its result into a 67-bit accumulator. The last product also feeds
+   the expression used to publish the final normal lane. There is no product
+   register between multiplication and accumulation. [S05]
+
+B. At the review revision, 09b6b721..., m_p_q, mp_v_q and mp_step_q have been
+   introduced. Multiplication and accumulation now occur on different cycles.
+   The source itself says that the resulting pair frequency has not yet been
+   measured. Its normal-generator blob differs from the measured version:
+
+       measured-version blob: 8d3b993d0e25cdb1e27be9c524def5dc48a63ca2
+       inspected-version blob: 4975a0bf9bd9d71cf239bc76803552ab2c110f30
+
+   This is a real implementation change, not a proposed fix that still needs
+   inventing. Keep it. [S04, S05]
+
+The 31.10 row remains in the inspected ledger. It is a valid historical result
+for the measured design, not a fresh measurement of the changed normal block.
+The report's assertion that the pair sources were fresh when its analysis was
+written cannot substitute for comparing the two source revisions now.
+
+Likewise, the ledger's standalone TERRAIN.NORMALS row is older still: it records
+18 DSP blocks at 96c0394a..., explicitly marked not clean against the later tree.
+It has no fmaxMhz value in that row. Do not invent a current standalone-normal
+frequency, and do not add that obsolete 18-DSP row to the tessellator to claim
+that the pair mysteriously optimized most of its multipliers away. [S01, S02]
+
+First action after texture completion: refit the CURRENT pair with complete path
+capture before changing more logic. Preserve the old receipt beside it. If the
+existing product-register change already closes 100 MHz, the emergency is
+smaller than the old ledger number suggests. The remaining architectural work
+must then earn its cost rather than proceed from a stale alarm.
+
+
+3. WHAT THIS PAIR ACTUALLY IS -- AND WHAT IT IS NOT
+===============================================================================
+
+zhao_pair_tess_normals is a synthesis characterization wrapper. Its header
+explicitly says it is not instantiated by the console. It exists to put a real
+TESS-to-NORMALS seam inside a placed design instead of measuring two leaves with
+unplaced virtual-pin interfaces. [S03]
+
+The actual connection is:
+
+    registered job stimulus
+             |
+             v
+    TERRAIN.TESS <--- registered synthetic lattice and cell-state responses
+             |
+             | full triangle: ax/ay/az, bx/by/bz, cx/cy/cz; source id
+             v
+    TERRAIN.NORMALS
+             |
+             v
+    registered hash sink
+
+The normal consumer is permanently ready in this wrapper. The tessellator is
+NOT a four-height square-cell interpolator. It accepts a subpatch job, scans
+solidity for dual-surface pages, enumerates plain or stitched triangles, reads
+lattice vertices and sometimes their coarse parents, performs geomorph, and
+emits triangles. A stitched annulus produces triangles that are not all the two
+halves of a regular square. [S03, S06]
+
+A replacement which assumes that every job is exactly two square-cell triangles
+would delete crack-safe stitching, void behavior and job traversal. It is not a
+rearchitecture of this block. Do not apply a five-products-per-square-cell
+normal shortcut to the whole stream.
+
+This work is also separate from the command-to-terrain pipeline, page loading,
+residency and composed-height cache. The command-pipeline report discusses those
+other integration obligations; repairing this pair does not complete them. [S10]
+
+
+4. THE CURRENT TESSELLATOR: CONTRACT THAT MUST SURVIVE THE REWRITE
+===============================================================================
+
+4.1 Job, geometry and surface ownership
+
+One job identifies one 8x8-cell subpatch of one surface. Job origins are multiples
+of eight in 0..24 inside a 32x32-cell patch. Coordinates on its lattice are six
+bits. Own and neighboring LOD levels are two bits, with strides 1, 2, 4 or 8.
+The morph factor is 17-bit Q16, clamped above 65536. Source identifiers on this
+mesh interface are 16 bits, not the 32-bit source field in some command ABIs.
+The surface bit distinguishes top from underside. [S06, S07]
+
+Plain-cell emission uses the fixed i00-i11 diagonal:
+
+    top triangle 0: (i00, i11, i10)
+    top triangle 1: (i00, i01, i11)
+
+The underside swaps b and c. Preserve the exact triangle order, not merely the
+same undirected triangle set. Normal orientation and deterministic traces depend
+on it. World x and z arrive with the lattice response; do not silently replace
+those placed coordinates with an unrelated origin-plus-step calculation.
+
+4.2 Stitching is topology, not cosmetic vertex snapping
+
+Each edge uses max(own level, neighbor level), hence the coarser shared stride.
+With no coarser neighbor, the enumerator walks ordinary run-cells. Otherwise it
+emits the inner rectangle followed by an annulus whose outer segments fan onto
+the inner ring. At own level 2 beside level 3, the inner rectangle collapses to
+its center. Own level 3 cannot have a still-coarser neighbor. [S06, S08]
+
+Do not replace the annulus with independently patched side strips or snapped
+boundary vertices. Those alternatives change corner cases and shared vertex
+sets. In particular, all 1,024 combinations of own level and four neighbor
+levels must continue to agree with the oracle.
+
+4.3 Solidity and empty work
+
+Dual pages read the 64 subpatch cell states through the fixed one-cycle response
+port. An ordinary run-cell emits only if every covered base cell is SOLID.
+A stitched job containing any non-SOLID cell is rejected before triangle
+emission. Precisely, the implementation's reject condition is j_stitch together
+with a non-all-solid mask; it is not simply own_level != 0. [S06]
+
+A legacy page has no cell-state scan and is treated as solid. It can still be
+stitched. A legacy underside job emits nothing. Preserve clamp counters and
+empty-job behavior as well as the emitted geometry.
+
+4.4 Geomorph
+
+Only vertices strictly inside the subpatch morph. Boundary vertices stay at the
+lattice height even when the adjoining subpatch has a different morph factor.
+A coarse vertex requires one lattice read. A vertex requiring geomorph adds two
+coarse-parent reads. Therefore a triangle requires three to nine lattice reads.
+Unmodified lattice heights are passed through verbatim. [S06, S07]
+
+The current contract reports 456 cycles for a dual, unmorphed level-0 subpatch
+with 128 triangles and 936 cycles at half morph. These are recorded existing
+contract measurements, not timings re-run in this review and not guarantees for
+the proposed pipeline. The rewrite must publish new end-to-end cycle counts,
+including scans, setup, stalls and drain. [S07]
+
+
+5. THE CURRENT NORMAL GENERATOR: EXACT ARITHMETIC AND REAL SCHEDULING
+===============================================================================
+
+For a triangle (a,b,c), compute e1=b-a and e2=c-a with signed 33-bit differences.
+The six signed products are 66 bits; the three differences are carried in
+signed 67 bits:
+
+    Nx = e1y*e2z - e1z*e2y
+    Ny = e1z*e2x - e1x*e2z
+    Nz = e1x*e2y - e1y*e2x
+
+Each output lane is:
+
+    sat32((N + 32768) arithmetic_shift_right 16)
+
+The bias is positive for BOTH signs. It is not sign-dependent round-away-from-
+zero and it is not truncation. The normal is an unnormalized Q16.16 face normal,
+not a unit vector and not an averaged per-vertex normal. Degeneracy is decided
+AFTER rounding and saturation: all three emitted lanes must be zero. [S04]
+
+The inspected implementation already shares one multiplier across the six
+products, and already registers its product before the subtractors. Source
+comments describing an old two-cycle pipeline or equating its latency and
+initiation interval are not a reliable cycle specification.
+
+A source-level edge schedule of the inspected implementation is:
+
+    edge 0: accept triangle, latch six edges
+    edge 1: capture product 0
+    edge 2: consume product 0; capture product 1
+    edge 3: consume product 1; capture product 2
+    edge 4: consume product 2; capture product 3
+    edge 5: consume product 3; capture product 4
+    edge 6: consume product 4; capture product 5; finish issuing
+    edge 7: consume product 5; publish full-width normal into s1
+    edge 8: move s1 through rescale into output s2
+    edge 9: earliest next input acceptance; earliest output transfer
+
+The reason for the acceptance gap is tri_ready_o = !m_busy && !s1_valid.
+At edge 8, pre-edge s1_valid is still true, so a replacement input cannot be
+accepted on the same edge that s1 drains. The independently executed sequential
+Python model reproduced accept edges 0,9,18,27,36,45. Thus the no-stall source-
+level initiation interval is nine cycles, not the comment's eight. The output
+becomes valid after edge 8; distinguishing that from a transfer at edge 9 avoids
+an off-by-one argument about latency. [S04; Appendix A]
+
+This observation is not a Verilator measurement. Add an RTL assertion/test that
+records the same edge events before changing the schedule.
+
+
+6. DIAGNOSIS: THREE PLAUSIBLE TIMING LIMITS, ONLY TWO ARE GEOMETRY
+===============================================================================
+
+6.1 The measured-version normal multiply/accumulate cone
+
+At the measured revision the path shape in RTL was:
+
+    latched edge -> six-way operand select -> 33x33 multiplication
+        -> sign extension -> 67-bit subtraction -> accumulator/result register
+
+That is an obvious pipeline-boundary problem. The current m_p_q change attacks
+it directly. It must not be offered as a newly discovered unimplemented fix.
+Nevertheless, the source comment diagnosing this as the exact cause of 31.10 is
+a hypothesis without the matching raw path report, as the comment itself
+acknowledges. It is not evidence that the other half of the pair was fast.
+
+6.2 The still-present tessellation geomorph cone
+
+This one is visible in the inspected source. On the parent-B response, the
+combinational chain is: [S06]
+
+    lat_h_i (parent B) minus v_ha (parent A), 34-bit difference
+      -> rounded divide by two and saturation, m_half
+      -> saturating add of parent A, m_hc
+      -> subtract original vertex height, m_d
+      -> multiply by job morph factor, m_prod (52-bit destination)
+      -> rounded shift by sixteen and saturation, m_step
+      -> saturating add of original height, m_y
+      -> vertex register OR directly the final emitted triangle register
+
+The last-slot bypass sends m_y directly into the output packet on pend_last.
+There is no pipeline register separating these arithmetic operations. Registering
+NORMALS' product does nothing to this chain. This is the main remaining
+arithmetic target of the rearchitecture.
+
+The correct claim is that this is a concretely observed long arithmetic cone,
+not that this review has proven it is exactly the saved 31.10 critical path.
+
+6.3 The characterization wrapper can also be the limiter
+
+The hash sink has a feedback expression combining a XOR, a shift, several
+additions, metadata and all three normal lanes. That can itself create a slow
+register-to-register path. A core-to-core classifier alone would call it
+internal, even though it is not geometry. [S03]
+
+In addition, the synthetic lattice is written from raw stim_valid_i and stim_i,
+not exclusively from the registered stimulus. Consequently the statement that
+all input behavior is behind registered stimulus is incomplete. A path launched
+from such a port must be classified correctly rather than assumed impossible.
+
+Required diagnosis after refit: distinguish DUT-internal, DUT-to-DUT seam,
+wrapper-only, boundary, reset recovery/removal, and clocking restrictions.
+Finding a harness-limited path is not license to ignore an equally bad DUT path
+immediately below it. Capture enough paths in each class.
+
+
+7. THE PROPOSED ARCHITECTURE
+===============================================================================
+
+Keep the existing public TESS and NORMALS ports and arithmetic law. Rebuild the
+interior around completed, explicitly owned triangles and registered arithmetic.
+
+    Job registers and one-job lifecycle
+              |
+    Solidity scan -> registered 64/16/4/1 solidity hierarchy
+              |
+    Plain / inner / annulus enumerator
+              |
+    Registered triangle descriptor and registered segment setup
+              |
+    One-cycle lattice request/response front end
+              |
+    Two reserved triangle-assembly banks
+          |                 ^
+          | parent tuple    | completed morphed vertex
+          v                 |
+    One registered geomorph pipeline
+              |
+    Oldest completed bank -> registered triangle seam
+              |
+    Shared-product normal engine
+      registered operand selection / existing registered product
+      full-width accumulation / registered rescale boundary
+              |
+    Ready/valid normal output
+
+This is one lane, not three separate morph multipliers and not six parallel
+normal multipliers. It does not introduce a world cache, a giant reorder buffer,
+another clock domain, an approximate reciprocal or a new rendering law.
+
+The two assembly banks are the specific mechanism allowing additional arithmetic
+latency without letting late responses overwrite the next triangle. An ordinary
+FIFO pasted after the old pend_last logic would not solve that problem.
+
+Implement in isolated steps and fit between them. The target shape is specified
+here; the order of changes in section 16 determines which parts are justified by
+the actual timing and cost results.
+
+
+8. REBUILD THE GEOMORPH UNIT AS A TAGGED, REGISTERED PIPELINE
+===============================================================================
+
+8.1 Exact stages
+
+Use the current helper semantics unchanged in the first implementation:
+
+    M0  Capture {h, ha, hb, morph, bank, slot} at parent-B response handling.
+        All later stages use this tuple, never live v_ha, pend_slot or j_morph
+        unless their lifetime is explicitly proven to cover the whole token.
+
+    M1  Compute and register d_ab = sign_extend(hb) - sign_extend(ha).
+        Retain the existing signed 34-bit representation initially.
+
+    M2  Compute and register half = sat32((d_ab + 1) >>> 1).
+
+    M3  Compute and register hc = sat32(ha + half), with a wide signed sum.
+
+    M4  Compute and register d = sign_extend(hc) - sign_extend(h).
+
+    M5  Compute and register product = signed_nonnegative(morph) * d.
+        Keep the existing 52-bit product representation for the first pass.
+        The register follows the multiply, not its final saturating sum.
+
+    M6  Compute and register step = sat32((product + 32768) >>> 16).
+
+    M7  Compute and register y = sat32(h + step), then commit {bank,slot,y}.
+
+Each stage has an accompanying valid bit and the bank/slot tag. Carry only the
+fields still needed. Parent A dies after M3, the factor after M5, the original
+height after M7. Do not carry nine coordinates through every arithmetic stage.
+
+If M6 remains the measured critical path, split quotient rounding from saturation.
+Do the same for normal rescale only when needed. These are legitimate additional
+cycles; do not instead install a false path around the arithmetic.
+
+The initial pipeline can be nonstalling internally: banks are reserved before
+requests, and each completion has an assigned register destination. Admission
+stops at the bank allocator. This avoids a chain of combinational ready signals
+running backward through eight stages. It requires the completion-port contract
+in section 9; it must not assume a single-write RAM can absorb two writes.
+
+8.2 Remove the final-vertex combinational bypass
+
+Delete the architectural dependence on:
+
+    parent B arriving now -> m_y now -> final triangle output now
+
+The final read being issued or returned does not mean the final vertex is ready
+any more. All three completed vertex values must exist in the assembly bank
+before the output seam is filled. Wait an additional cycle after the last write
+rather than recreating a long bypass to save that cycle.
+
+8.3 Do not simplify away observable intermediate saturations
+
+The existing reference and RTL use saturation at the half-difference, coarse
+height, rounded morph delta and final height. Those boundaries are observable
+on the documented whole-word height domain. [S06, S07, S08]
+
+Concrete counterexample, checked in Appendix A:
+
+    ha = -2147483648; hb = 2147483647
+    rounded half-difference = 2147483648 before saturation
+    saturated half-difference = 2147483647
+    current coarse_height = -1
+    a single rounded (ha+hb)/2 would instead produce 0
+
+Thus replacing the two-step coarse-height expression with a single averaged sum
+changes behavior. Preserve it unless an explicit arithmetic-law change is
+approved and propagated to every reference, test and content assumption.
+
+There is a second documentation discrepancy that must be recorded:
+
+    h = -2147483648; hc = 2147483647; morph = 65536
+    the current reference/RTL rounded delta saturates to 2147483647
+    final height = -1, NOT hc
+
+Therefore the blanket endpoint statement 'full morph always gives hc' is not
+true over the entire height word admitted by the contract. This is not merely
+an alternative rounding preference: the existing reference itself performs the
+intermediate narrow. The timing rewrite must preserve reference behavior while
+opening a separate contract-correction issue. Do not silently fix the oracle
+and call the changed geometry an optimization. [S07, S08; Appendix A]
+
+8.4 Permissible later arithmetic reductions
+
+A difference of two signed-32 heights needs 33 bits, not 34. Narrowing it may be
+possible after proving every intermediate's range, but first establish a passing
+staged implementation. Treat the morph factor as nonnegative; 65536 must never
+be reinterpreted as negative by a signed 17-bit cast. An 18-bit signed operand
+with an explicit zero sign bit preserves the current representation.
+
+For positive rounding bias, the exact integer identity is:
+
+    (x + 2^(k-1)) >>> k = (x >>> k) + x[k-1]
+
+This can move the rounding increment onto the retained quotient instead of a
+full-width product word. Preserve signed extension, a carry guard, saturation
+thresholds and the legal input range. A Python identity check is not permission
+to rely on implicit SystemVerilog expression widths.
+
+Do not merge the coarse interpolation rounding with the morph rounding. They
+are two separate operations in the existing reference, not redundant work.
+
+
+9. TRIANGLE OWNERSHIP, BACKPRESSURE AND MEMORY RESPONSES
+===============================================================================
+
+9.1 Reserve before requesting
+
+Allocate one of two triangle banks before issuing that triangle's first lattice
+request. A bank contains three vertices, a three-bit final-ready mask, source and
+surface metadata, and enough issue/completion state to know it is still owned.
+Keep only one triangle's address-fetch sequence active at a time initially;
+completions for the previous bank may still be in the arithmetic pipeline.
+
+A new bank is not allocated when both are occupied. This is the primary
+backpressure point. Once a lattice request is issued, its fixed-latency response
+is accepted regardless of a later consumer stall. The reservation guarantees a
+home. No cancellation or variable-latency reinterpretation of the public memory
+port is introduced.
+
+The two banks need 2 * 3 * 3 * 32 = 576 coordinate/height payload bits, before
+metadata and valid state. That is a logical storage count, not a prediction of
+ALMs or a demand to build a wide, deeply buffered FIFO.
+
+9.2 Tag every response by what was requested
+
+The delayed request metadata must include bank, slot and read kind. A response
+must not use the CURRENT enumerator slot or newly advanced descriptor.
+
+    own vertex, no morph:
+        store x/y/z and set that slot's final-ready bit.
+
+    own vertex, morph required:
+        store x/z and original h; do not mark final-ready.
+
+    parent A:
+        retain its height for the corresponding parent-B tuple.
+
+    parent B:
+        capture an independent M0 tuple, including original h and parent A.
+        Mark final-ready only when the tagged M7 result commits.
+
+The existing single parent-A temporary can be reused only if M0 captures its
+value before it is overwritten. A bank/slot-indexed parent store is another
+option, but it is not an excuse for a large context machine. State the lifetime
+proof in the implementation and test it under adjacent morphed vertices.
+
+9.3 Two completion events can occur in one cycle
+
+A nonmorphed own-vertex response and an older morph completion may arrive on the
+same cycle. Both must be committed. For register banks, use independent per-slot
+writes and merge ready bits explicitly:
+
+    ready_next[bank] = ready_old[bank]
+                    OR direct_completion_mask[bank]
+                    OR morph_completion_mask[bank]
+
+Do not assign the same ready vector twice with nonblocking assignments and lose
+one update. Assert that two writers never target the same bank/slot in one cycle.
+There is one final result per vertex, so such a collision indicates bad ownership
+or tagging, not a condition to resolve by priority.
+
+A later RAM-backed implementation must supply the required write ports or an
+explicit completion queue. The two-bank register implementation is preferred for
+this first rearchitecture because the storage is small and the write behavior is
+transparent.
+
+9.4 Publish oldest-complete, not whichever finishes first
+
+A later nonmorphed triangle can become complete before an older heavily morphed
+one. Keep a two-entry allocation order, or equivalent head/tail state. Only the
+oldest bank may publish, and only after its three final-ready bits are set.
+
+The registered seam holds 288 coordinate bits plus 16 source bits and one surface
+bit: 305 payload bits and valid state. Fill it only when it is empty or its
+previous triangle is accepted. Release the bank only after ownership transfers
+to this register. The seam's payload and valid must remain stable while stalled.
+
+No bank-generation field is necessary for this first design if a bank is never
+released with pending responses or morph tokens. Prove that invariant. Do not
+add generation machinery to hide a lifecycle violation.
+
+9.5 Reset and drain
+
+Reset clears all valid/owned/ready state, delayed request tags and morph valids.
+An old memory value appearing after reset is ignored because it has no valid
+request tag. Payload reset is not itself a correctness requirement when valid
+state proves the data cannot be observed; preserve the public zero-counter reset
+semantics and check simulation X behavior.
+
+Tessellation idle requires no active job, no pending memory response, no allocated
+bank, no morph token and no seam packet. NORMALS adds its own busy and result
+stages. 'The last request was issued' is not an idle condition.
+
+Keep existing counter events explicit. The present tessellation counter increments
+when it publishes a triangle into its output register, not on downstream
+acceptance. Preserve that publication event at the new seam unless the contract
+is deliberately revised. Do not count bank completion as a second emission.
+The normal counter likewise counts publication into its rounded output stage.
+
+
+10. NORMAL ENGINE: KEEP THE EXISTING REPAIR, COMPLETE ITS PIPELINING IF NEEDED
+===============================================================================
+
+10.1 Default implementation
+
+Retain one shared 33x33 multiplier and the existing m_p_q product register. The
+first refit decides whether the remaining operand mux plus multiplication is
+actually a failing cone. If so, add explicit signed operand registers AFTER
+selection and BEFORE the multiplication:
+
+    captured edges
+       -> registered {operand_a, operand_b, term_tag, valid}
+       -> existing registered {product, term_tag, valid}
+       -> 67-bit lane accumulation
+       -> registered rounding/saturation stages
+       -> normal output
+
+Selecting six products does not mean instantiating six multiplication expressions
+inside six case arms. There is still one multiply operator. Keep the data path
+free of unnecessary busy gating; valid tags determine which products count.
+
+Use the actual term tag on return, not the live issue counter. Keep the engine
+busy until the final product is CONSUMED, not merely issued. Preserve the existing
+last-lane behavior: publish acc2 minus the returning final product, not acc2's
+pre-edge value. A shared explicitly named acc2_next expression can clarify this
+without claiming the fitter currently duplicates its subtraction hardware.
+
+If the normal rescale is critical, register a widened rounded quotient before
+saturating to 32 bits. The degeneracy flag reads those exact saturated output
+lanes. It must not trigger on the unrounded cross product or on an earlier copy
+of the rounding expression.
+
+10.2 Do not over-optimize admission first
+
+The conservative one-triangle arithmetic engine has simple ownership and ample
+room to add a clock of latency. Retain that discipline initially. Do not admit a
+replacement triangle just because the final operand was issued; existing tags
+and accumulators still belong to the old triangle.
+
+If a later throughput requirement justifies accepting on the same cycle the
+full-width result stage drains, design and test that as a separate change. The
+present nine-cycle initiation interval is a starting measurement from the model,
+not a target that justifies weakening result ownership.
+
+With an added operand stage and otherwise the same conservative structure, the
+natural no-stall issue interval gains a cycle. Record the actual new sequence
+rather than copying old latency comments. The point is to trade a small number
+of cycles for a shorter physical clock period, not to advertise one triangle per
+clock from a six-operation shared multiplier.
+
+10.3 Full precision and underside rounding
+
+Do not narrow 33-bit edges to 32 or 27 to fit a convenient multiplier mode. Do not
+replace 67-bit cross-product lanes with 64-bit intermediates. The existing
+arithmetic deliberately preserves extreme signed-coordinate differences.
+
+Do not derive an underside normal by negating an ALREADY ROUNDED top normal.
+Positive-bias rounding is asymmetric at ties:
+
+    rescale16(+32768) = 1
+    rescale16(-32768) = 0
+    -rescale16(+32768) = -1
+
+Winding inversion must precede the cross product, as today, or an equivalent
+negation must occur on the full-width raw lane before rounding. [S04; Appendix A]
+
+The Cyclone V DSP documentation supports different multiplier modes according
+to operand width; it does not guarantee that declaring a register in RTL places
+it in the desired hard register. Inspect the mapped DSP modes and register use.
+A source comment promising free fabric cost is not a fit report. [S11]
+
+
+11. REMOVE THE TESSELLATOR'S CONTROL-PATH DEPTH WITHOUT CHANGING TOPOLOGY
+===============================================================================
+
+11.1 Replace repeated 64-cell range tests with a solidity hierarchy
+
+The current cell_solid combinational loop tests all 64 base cells against bounds
+derived from ea, eb and stride. Its int casts and general arithmetic leave a
+large expression for synthesis to simplify. No claim is made here that Quartus
+necessarily implements every source multiplication literally. [S06]
+
+Build these registered masks after the scan:
+
+    L0: 64 bits, one per base cell
+    L1: 16 bits, each AND of an aligned 2x2 group in L0
+    L2:  4 bits, each AND of an aligned 2x2 group in L1
+    L3:  1 bit, AND of the four L2 bits
+
+Total 85 logical bits, only 21 beyond the existing 64-cell mask. A run-cell's
+solid flag becomes the selected bit at its own level and local ea/eb index.
+The same selection works for the inner cells of the stitched enumerator.
+For a legacy page initialize the masks to all-solid without a scan.
+
+Constructing one registered reduction level per clock adds three bounded setup
+cycles, not a variable per-triangle scan. j_stitch rejection still occurs before
+emission and still examines whether the entire underlying subpatch is solid.
+
+Appendix A compared this hierarchy against direct rectangular coverage for
+4,098 masks and 348,330 run-cell queries. That checks the proposed algorithm,
+not the eventual RTL decoder or cycle timing.
+
+11.2 Register segment preparation and triangle descriptors
+
+The current annulus path combines outer_v, proj_t, fan-range arithmetic, inner_v,
+slot selection, morph-case selection and parent-address adjustment. These are
+small-width operations, but their combinational composition can still be deep.
+The fixed-latency lattice boundary does not make the address-generation cone
+free. [S06]
+
+Prepare a segment's two outer endpoints, projected inner-ring endpoints and fan
+step count once per segment, in registered setup state. Hold them through that
+segment's fan. Register the selected triangle's three (i,j) lattice coordinates
+before the per-vertex fetch sequencer uses them. A descriptor needs only 36
+coordinate bits, three morph-case fields and small metadata; it is not another
+full world-coordinate packet.
+
+Compute and register parent addresses from that stable descriptor when needed.
+Do not add this stage blindly into the external response-latency definition:
+lat_req still marks the actual request, and the datum still arrives one cycle
+later. Additional cycles happen BEFORE issuing or AFTER capturing, internally.
+
+Retain the current annulus enumeration as the oracle for these staged operations.
+Avoid a large lookup ROM over all 1,024 level combinations. The calculations are
+bounded and can be prepared incrementally. A small lookup for a specifically
+measured residual cone is optional, not the initial architecture.
+
+11.3 Retain issue order while separating issue from completion
+
+The old enumerator advances on last-read ISSUE, not capture, to avoid a bubble.
+The new descriptor allocator may similarly advance when all of a triangle's
+requests are issued, provided the bank and every pending token retain the old
+triangle's identity. It may not overwrite a descriptor still needed to issue
+parent reads. Completion order is handled by bank readiness and allocation order,
+not by stalling the entire arithmetic pipeline until the enumerator catches up.
+
+
+12. FIX THE MEASUREMENT HARNESS WITHOUT HIDING THE DESIGN
+===============================================================================
+
+Preserve the historical wrapper unchanged as a baseline artifact. Add a separate
+characterization variant with a stated, inspectable stimulus and sink contract.
+Compare implementation changes under the same harness; compare harness changes
+with the same DUT. Otherwise two unrelated improvements get credited to one fix.
+
+The current wrapper's limitations are concrete: [S03]
+
+    - A 64-entry synthetic height memory is addressed only by lat_vi, not vj.
+      It is not an independent two-dimensional terrain field.
+    - lat_surface does not select a second independent height plane.
+    - Cell-state responses are permanently SOLID; void/reject logic may fold.
+    - Job fields overlap within one 32-bit stimulus word.
+    - job_morph is driven with a forced zero top bit, so 65536 and clamp-above-
+      65536 cannot be independently stimulated through that connection.
+    - The origin mask allows encodings outside the contract's 0..24 domain.
+    - Output ready is permanently high.
+    - The feedback hash has arithmetic depth unrelated to the geometry result.
+    - Synthetic memory writes use raw stimulus inputs.
+
+These limitations make optimization-away plausible; they do not quantify any
+missing ALMs or DSPs. Do not resurrect the report's withdrawn stale-leaf-sum
+argument as evidence of folding. [S02]
+
+For the replacement physical harness:
+
+A. Register every request-driving and memory-write-driving input. Provide
+   independently programmable job fields, legal origins, full morph domain and
+   both surface modes. Deliberately include separate malformed-domain tests in
+   functional simulation; do not use accidental invalid inputs as the normal
+   physical characterization workload.
+
+B. Either use a representative initialized/programmed dual-plane lattice and
+   cell-state memory, or a clearly labeled registered-response characterization
+   source whose independent dynamic inputs preserve the full arithmetic and
+   control logic. A synthetic source is not a functional terrain-memory test.
+
+C. Make downstream ready dynamically exercisable behind a register. Functional
+   tests must include both saturation and sustained backpressure; a free-running
+   fit alone does not demonstrate handshake correctness.
+
+D. Replace the long hash-add chain with shallow registered observation. For
+   example, use separate local registered rotate/XOR accumulators and a later
+   registered fold, rather than one expression with several serial additions.
+   Include all lanes, source, surface and diagnostics. Check mapped observability;
+   a hash is not automatically proof that no lane can be optimized away.
+
+E. Keep synthetic memory and sink resource use separate by hierarchy. A full
+   33x33 dual-height array has a very different storage cost from the old 64-word
+   probe. Do not attribute that extra RAM to the new tessellator.
+
+F. In functional simulation compare full triangle and normal packets against
+   the oracle, not just hashes. Matching hashes are not equality proofs.
+
+Report full clock constraints and setup/hold/recovery/removal results. A higher
+Fmax summary alone is not sign-off. The vendor documentation explicitly treats
+that summary as a benchmarking report and directs sign-off toward constraints
+and slack reports. [S12]
+
+
+13. WHAT THIS SHOULD COST, AND WHAT IS NOT YET KNOWN
+===============================================================================
+
+Known historical total: 1,523 ALMs, 1,389 registers, 9 DSP blocks and one 2,048-bit
+synthetic RAM. That is the old pair including its harness, not a fresh estimate
+for the proposed design. [S01]
+
+The new architecture intentionally spends registers to shorten logic cones.
+The biggest explicit storage additions are the extra assembly bank, carried
+morph operands/tags and, if needed, selected normal operands and a rounding
+boundary. Counteracting that cost are the removal of last-slot bypass logic,
+shared segment setup and the simpler solidity selector. Whether these save
+ALMs after placement must be measured; the source cannot settle the balance.
+
+Proposed working guardrails, to be ratified against the project's actual budget:
+
+    Clock: 100 MHz must pass real setup/hold and relevant reset constraints.
+    DSP:   pipelining alone should not add multiplication operators. Any increase
+           over a matched baseline requires per-entity attribution and approval.
+    ALM:   initially flag a matched-wrapper increase above 600 ALMs for review.
+    FF:    initially flag a matched-wrapper increase above 1,200 registers.
+    RAM:   no full vertex cache or new world-memory subsystem in this task.
+    Rate:  publish actual accepted and retired triangles/cycle, not stage count.
+
+Those ALM/FF flags are engineering review thresholds, NOT existing owner rules,
+measured costs or a promise to fit within them. The live budget remains
+controlling. Compare against a current-source refit under the SAME wrapper,
+not against an old leaf row and not across different synthetic memories.
+
+A normal engine needing roughly ten clocks per triangle at 100 MHz would have
+an arithmetic capacity around ten million triangles per second before memory,
+tessellation, job setup and stalls. That is a dimensional illustration, not a
+prediction of game throughput. The current tessellator's three-to-nine reads per
+triangle, subpatch scans and production arbitration must be measured together.
+
+Do not spend six parallel normal multipliers to recover one clock of initiation
+interval unless a measured workload needs it. Equally, do not serialize geomorph
+so aggressively that it destroys the stream rate merely to save a few registers.
+The chosen single pipelined morph lane is compatible with one lattice read per
+cycle and at least three reads for each newly morphed vertex.
+
+
+14. VERIFICATION PLAN: EXISTING TESTS, NEW FAILURE MODES, AND MUTATIONS
+===============================================================================
+
+14.1 Preserve the existing terrain corpus
+
+Use the repository's existing build/test definitions rather than inventing test
+commands. The relevant named tests and reference symbols are: [S04, S07, S08]
+
+    tests/terrain/terrain_tess_directed.cpp
+    tests/terrain/terrain_tess_random.cpp
+    tests/terrain/terrain_tess_normals.cpp
+    zref::terrain::tessellate
+    zref::terrain::coarse_height
+    zref::terrain::morph_height
+    shade_flat_tri and the normal arithmetic contract
+
+The tessellation contract records 6,751 directed checks and 2,277 randomized
+checks over 800 jobs/23,171 triangles. Treat those as the contract's historical
+suite description, not this review's executed result. Preserve the scope even
+if current test counts have since changed.
+
+Minimum differential coverage includes every own/neighbor level combination,
+plain/inner/fan transitions, both windings, all patch corners, all-void and mixed
+solidity, legacy stitched top, legacy underside, morph 0/half/full/out-of-range,
+and exact ordered emitted packets. Test shared boundary vertex sets from actual
+outputs, not only the level arithmetic that is supposed to guarantee them.
+
+14.2 New arithmetic tests
+
+Pin positive and negative half ties at both shifts. Pin intermediate saturation
+separately from final saturation. Include the two full-word height counterexamples
+in section 8. Test post-rescale degeneracy where the raw cross product is nonzero
+but every output lane rounds to zero. Check full 33/66/67-bit normal behavior at
+coordinate extremes and both orientations.
+
+Prove any narrowed operand with a range argument and an executable differential
+check. Reject an implementation that introduces a second rounding, changes a
+signed cast, wraps a difference or uses sign-dependent rounding bias.
+
+14.3 New ownership and stall tests
+
+Exercise a morphed triangle followed by an unmorphed one, alternation at every
+vertex, parent-B returns during output stalls, both banks occupied, a ready drop
+immediately after a last request, final job drain with arithmetic still in flight,
+and reset with each pipeline stage occupied.
+
+Include simultaneous direct and morph completions, completions to different
+slots in the same bank, back-to-back publication and acceptance, and an older
+triangle finishing after a younger one. Verify output order and stable payload
+under stalls, including one ready cycle in every 32.
+
+Assertions should establish:
+
+    accepted job -> exactly the oracle's ordered result or defined empty/reject
+    issued lattice request -> one correctly tagged response handling event
+    allocated bank -> remains owned until all work and publication are finished
+    vertex -> exactly one final completion
+    committed triangle -> exactly one normal input acceptance
+    accepted normal input -> exactly one normal output after eventual readiness
+    stalled output -> stable valid, payload and tags
+    idle -> no remaining owned work or output
+
+Liveness assertions require eventual downstream readiness. Do not assert eventual
+retirement against a consumer which is allowed to hold ready low forever.
+
+14.4 Mutations that must be detected
+
+Invert one response tag bit; advance a bank on last ISSUE instead of final
+completion; overwrite a ready-mask update with the other completion's update;
+mark an original morphed height final; use live pend_slot in M7; drop the final
+normal product; publish stale acc2; round negative ties differently; negate an
+already rounded underside normal; change the shared-edge stride to min; omit
+legacy-page stitching; permit a stitched void job to emit; remove morph-stage
+valid bits from idle.
+
+Each mutation should fail a named test or assertion. Merely running many random
+jobs is not a substitute for demonstrating that the new failure modes are
+observable.
+
+
+15. TIMING AND FIT ACCEPTANCE: THE EVIDENCE REQUIRED FOR 'FIXED'
+===============================================================================
+
+For every build archive the exact source revision and dirty state, source-list
+hashes, QSF, SDC, target device, tool version, fitter seed and optimization mode.
+Archive compilation messages and per-entity ALM/register/DSP/RAM attribution.
+Capture full setup and hold paths, plus recovery/removal and minimum-pulse-width
+summaries. The historical fmaxMhz field does not supply this information.
+
+At 100 MHz classify both endpoints and the complete path ownership:
+
+    real DUT register -> real DUT register
+    TESS register -> NORMALS register across the actual seam
+    synthetic source/sink register -> DUT, or DUT -> synthetic sink
+    wrapper-only data paths
+    input/output boundary paths
+    reset and clock-control paths
+
+Do not simply delete every boundary path. A declared external timing contract
+still has to pass. Conversely, do not call an artificial pin delay the geometry
+core's clock limit. The actual composed integration must time its real producer
+and consumer registers, not inherit an optimistic leaf-boundary exclusion.
+
+Required comparison matrix:
+
+    B0  historical measured sources + historical wrapper, retained as receipt
+    B1  current reviewed sources + historical wrapper, fresh fit
+    B2  same current DUT + improved characterization wrapper, fresh fit
+    B3  staged morph and ownership rewrite + improved wrapper
+    B4  normal operand/rescale and control-path changes, individually attributed
+    B5  production-representative composition with real memory/consumer seams
+
+B0 need not be rebuilt if its complete trustworthy artifacts already exist.
+Missing artifacts must be labeled missing rather than reconstructed as facts.
+B1 and B2 separate a DUT repair from a harness repair. B3 and B4 establish which
+changes actually moved the path instead of giving one enormous patch all credit.
+
+Run more than one placement seed before claiming margin. Use at least three
+preselected seeds as a proposed screening gate; publish every result, not only
+the best seed. The actual project sign-off requirements remain controlling.
+A best-seed 100.01 MHz headline is not robust evidence of an integration reserve.
+
+Do not introduce a multicycle exception over registers that still change every
+clock. A deliberately multicycle arithmetic engine can be valid, but it needs a
+matching enable/hold protocol and correctly paired setup/hold constraints. The
+architecture here uses ordinary registered stages instead.
+
+Completion means:
+
+    exact functional equivalence, except separately approved contract corrections;
+    reset, backpressure, conservation and drain tests pass;
+    all relevant timing checks pass at the product clock;
+    resource changes fit the approved budget;
+    measured job/triangle throughput is adequate for the workload;
+    the saved receipt matches the implementation being claimed.
+
+Nothing in this review measures a new Fmax or guarantees that the completed
+console meets 100 MHz. That is what these acceptance gates must establish.
+
+
+16. IMPLEMENTATION ORDER FOR THE AGENT
+===============================================================================
+
+Step 0 -- Finish the texture island. No diversion of that closure effort.
+
+Step 1 -- Freeze and reproduce the terrain evidence. Read the live branch again,
+compare its sources with this pinned revision, preserve the 31.10 receipt, and
+refit the already product-registered normal implementation inside the old pair.
+Get the real path reports. Do not reimplement m_p_q as though it were missing.
+
+Step 2 -- Correct the characterization harness in a separate change. Establish
+B1/B2 and per-entity attribution. If the old hash or raw-stimulus write dominates,
+report it explicitly; still inspect the next DUT paths.
+
+Step 3 -- Add the independent morph arithmetic unit and tests first. Keep every
+saturation/rounding boundary. Verify tuples against coarse_height/morph_height
+before integrating it with memory responses. Prove signed widths.
+
+Step 4 -- Introduce tagged response handling, two assembly banks and the completed-
+triangle seam. Retire pend_last as the emission trigger. Test conservation,
+simultaneous completions, backpressure and drain before running long fits.
+
+Step 5 -- Integrate the staged morph unit. Fit the composed pair and determine
+whether the normal operand cone, rescale or enumerator has become the limiter.
+Do not infer success from the standalone morph unit.
+
+Step 6 -- Add selected-normal-operand registers and rescale cuts where needed.
+Keep one normal multiplier. Correct the documented latency/II with measured edge
+traces. Add the registered solidity hierarchy and annulus descriptor/segment
+boundaries in separate commits so their costs and timing contributions remain
+visible. Avoid gratuitous stages in already noncritical paths.
+
+Step 7 -- Run the full differential/mutation/stall suite, multiple seeds and the
+representative integrated geometry path. Publish the receipts, throughput and
+resource deltas. Then update fit gates, contracts and status documents so the
+same stale 31.10 row cannot be mistaken for the new design.
+
+Stop conditions: do not silently waive arithmetic equivalence, approve your own
+resource overrun, roof over voids, change stitch topology, or manufacture a clean
+clock result by excluding the real failing paths.
+
+
+17. SUGGESTED FILE CHANGES AND REVIEW BOUNDARIES
+===============================================================================
+
+Existing implementation files to modify, only after the initial refit:
+
+    fpga/rtl/terrain/zhao_terrain_tess.sv
+        retain job/geometry law; replace response-to-emit bypass with owned banks;
+        stage morph and descriptor/control logic.
+
+    fpga/rtl/terrain/zhao_terrain_normals.sv
+        keep m_p_q; add operand/rescale cuts only as required; correct timing
+        comments; preserve exact six-term and source/degeneracy behavior.
+
+    fpga/rtl/synth/zhao_pair_tess_normals.sv
+        preserve a named historical variant; separate harness-only changes from
+        DUT changes and make the full stimulus/sink contract inspectable.
+
+Proposed helper files, not claimed to exist:
+
+    fpga/rtl/terrain/zhao_terrain_morph_pipe.sv
+    fpga/rtl/terrain/zhao_terrain_tri_assembly.sv
+    tests/terrain/terrain_morph_pipeline_directed.cpp
+    tests/terrain/terrain_geometry_pipeline_stalls.cpp
+
+The helper split is organizational; do not create new public console blocks or
+ABI commands for it. Update the existing source lists and synthesis/test targets
+using the repository's normal mechanisms. Keep source-list parity checks intact.
+
+Documentation needing synchronization:
+
+    design/contracts/TERRAIN.TESS.md
+    design/contracts/TERRAIN.NORMALS.md
+    relevant fit targets and synthesis ledgers
+    the timing review / remaining-blocker documents
+
+Record the full-morph endpoint discrepancy separately from timing closure. The
+reference helper must not change unnoticed inside this rearchitecture.
+
+
+18. WHAT WAS ACTUALLY CHECKED FOR THIS DOCUMENT
+===============================================================================
+
+Repository inspection included the saved fit row and tool/device header; the
+pair wrapper; the current tessellator; current and measured-version normal RTL;
+the tessellation contract and reference arithmetic; the timing-analysis report;
+and the command-pipeline report for scope separation.
+
+The independent Python program appended below was executed successfully. It
+checks arithmetic stage decomposition, a compact rounding identity, the proposed
+solidity hierarchy and a source-level sequential model of the CURRENT normal
+engine. It is intentionally not described as RTL execution or formal proof.
+
+Executed results:
+
+    130,375 morph arithmetic equivalence cases
+    200,000 rounding-identity cases
+      4,098 solidity masks
+    348,330 direct-vs-hierarchy solidity queries
+      9,000 normals accepted and 9,000 retired by the sequential control model
+    150,004 modeled cycles across always-ready, random and 1-in-32 readiness
+
+The model reproduced the current no-stall nine-cycle acceptance interval and
+provided the exact arithmetic counterexamples in sections 8 and 10.
+
+NOT performed here:
+
+    No repository RTL compilation or Verilator/Icarus simulation.
+    No Quartus synthesis, place-and-route, or timing analysis.
+    No RTL proof of the proposed banked pipeline.
+    No claim that the modified pair has already reached 100 MHz.
+    No claim of a measured ALM/DSP saving for any proposed change.
+
+The full raw critical path behind the historical 31.10 row was not established
+by this review. The source-level cone diagnoses are therefore marked as such,
+and first-run path capture is part of implementation rather than invented
+retroactively. This limitation does not prevent specifying the actual pipeline,
+precise arithmetic and ownership changes needed to test and repair it.
+
+
+19. SOURCE CATALOG
+===============================================================================
+
+[S01] reports/synthesis/zhao_block_fit.json
+      Revision 09b6b721a52e034793112cffe542e51a4b6b7dce.
+      Header lines 1-11; pair row around 409-430; older normal/tess rows around
+      1097-1210. Blob b017496f8b0801dd6b1acf78c3b72d389c53b614.
+      Historical measurements, not a current refit of all named blocks.
+
+[S02] reports/FMAX-WHAT-ACTUALLY-LIMITS-IT-20260907.md
+      Same review revision.
+      Blob d2c2f6a0c5a20ce9905061113bcd5b86eb85a19f.
+      Especially unsplittable pair results, four characterization wrappers and
+      the withdrawn stale-leaf-sum comparison.
+
+[S03] fpga/rtl/synth/zhao_pair_tess_normals.sv
+      Same review revision.
+      Blob a1b029eaf239a11433d7d9ed97ab551e7e073953.
+      Registered job source, synthetic memory, direct seam and hash sink.
+
+[S04] fpga/rtl/terrain/zhao_terrain_normals.sv
+      Same review revision.
+      Blob 4975a0bf9bd9d71cf239bc76803552ab2c110f30.
+      Exact widths, positive-bias rescale, shared multiplier, new product
+      register, valid/ready schedule and idle/counter behavior.
+
+[S05] fpga/rtl/terrain/zhao_terrain_normals.sv
+      Historical measured-pair revision
+      39a650fcc6240dd10ce88eefba0c9e68f00f9925.
+      Blob 8d3b993d0e25cdb1e27be9c524def5dc48a63ca2.
+      Direct multiply-to-accumulator implementation before m_p_q.
+
+[S06] fpga/rtl/terrain/zhao_terrain_tess.sv
+      Review revision 09b6b721a52e034793112cffe542e51a4b6b7dce.
+      Blob 071833bfb069f3e320b16291f796bcc85f745252.
+      Public job/lattice interface, annulus enumeration, cell_solid, morph
+      arithmetic around lines 535-564, request/capture and output publication.
+
+[S07] design/contracts/TERRAIN.TESS.md
+      Same review revision.
+      Blob 6073eb92cfc26947623731134c6d1532e8c7e9f2.
+      Domain, winding, stitching, historical suite counts and throughput claims.
+
+[S08] reference/include/zref/zref_terrain_tess.hpp
+      Same review revision.
+      Blob ce032c193cd0b51a10a307ffcf66d8335b8d5069.
+      coarse_height and morph_height near lines 169-189; oracle topology/laws.
+
+[S09] Existing test paths named in the TESS contract and RTL:
+      tests/terrain/terrain_tess_directed.cpp
+      tests/terrain/terrain_tess_random.cpp
+      tests/terrain/terrain_tess_normals.cpp
+      Named here as required implementation tests, not individually executed
+      or fully source-audited during this review.
+
+[S10] reports/TERRAIN-COMMAND-PIPELINE-20260907.md
+      Same review revision; opening scope and D4 discussion.
+      Blob 5a25c7383412b6c920c7090f47cc2036dc30b41c.
+      Used to separate command/pager integration from the TESS/NORMALS pair;
+      not treated as a current verification of every claim elsewhere in it.
+
+[S11] Altera/Intel, Cyclone V Device Handbook Volume 1, document 683375,
+      section 3.5.4, Multipliers (current official documentation accessed for
+      this review). Supports mode/width distinctions, not a measured mapping
+      or Fmax for Zhaozhou's particular RTL.
+
+[S12] Intel Quartus Timing Analyzer, Report Fmax Summary Command; and current
+      Altera Timing Analyzer User Guide, document 683243, section 3.5.1.
+      Supports the distinction between Fmax benchmarking and timing sign-off,
+      including restricted Fmax and separate setup/hold/reset checks.
+
+
+20. FINAL ENGINEERING VERDICT
+===============================================================================
+
+The 31.10 MHz terrain result is real and specifically identified. It belongs to
+the TESS+NORMALS characterization pair at the recorded historical source revision.
+The current tree already contains the first normal-product pipeline repair, so
+neither 'nothing has been done' nor '31.10 still measures today's changed RTL'
+is justified by the saved row.
+
+The remaining tessellator has a concrete, unusually long morph arithmetic chain
+ending in a last-vertex output bypass. The correct rearchitecture is to turn
+that operation into a tagged registered pipeline, give each triangle explicit
+storage ownership until all its vertices are complete, preserve annulus/void/
+rounding laws, and measure the real seam with a nonmisleading harness.
+
+Finish texture first. Then establish the current timing baseline, execute the
+terrain stages above, and close the pair with matching functional and physical
+receipts. Do not substitute another texture-control document for this task.
+
+
+APPENDIX A -- EXECUTABLE INDEPENDENT MODELS
+===============================================================================
+
+Save the Python between BEGIN PYTHON and END PYTHON as check_models.py and run:
+
+    python3 check_models.py
+
+Standard library only. These models are intentionally independent of Quartus and
+are not a substitute for the repository's RTL tests. The arithmetic uses Python
+integers; hardware-width obligations remain explicit in the architecture.
+
+BEGIN PYTHON
+#!/usr/bin/env python3
+"""Independent arithmetic/control models for the terrain rearchitecture.
+Not RTL simulation, synthesis, a formal proof, or a Quartus timing run.
+Python 3 standard library only. Reproducible seed: 0x31_10_2026.
+"""
+from collections import deque
+import json
+import random
+
+LO, HI = -(1 << 31), (1 << 31) - 1
+RNG = random.Random(0x31_10_2026)
+
+def sat32(x):
+    return min(HI, max(LO, x))
+
+def rescale(x, k):
+    return sat32((x + (1 << (k - 1))) >> k)
+
+def morph_reference(h, ha, hb, m):
+    m = min(m, 65536)
+    hc = sat32(ha + rescale(hb - ha, 1))
+    return sat32(h + rescale(m * (hc - h), 16))
+
+def morph_stages(h, ha, hb, m):
+    # Model the specified registered arithmetic boundaries, not clock timing.
+    d_ab_q = hb - ha
+    half_q = rescale(d_ab_q, 1)
+    coarse_q = sat32(ha + half_q)
+    delta_q = coarse_q - h
+    product_q = min(m, 65536) * delta_q
+    step_q = rescale(product_q, 16)
+    final_q = sat32(h + step_q)
+    return final_q
+
+def normal(tri):
+    a, b, c = tri
+    u = [b[i] - a[i] for i in range(3)]
+    v = [c[i] - a[i] for i in range(3)]
+    raw = (u[1]*v[2] - u[2]*v[1],
+           u[2]*v[0] - u[0]*v[2],
+           u[0]*v[1] - u[1]*v[0])
+    n = tuple(rescale(x, 16) for x in raw)
+    return n, not any(n)
+
+def edge_pairs(tri):
+    a, b, c = tri
+    u = [b[i]-a[i] for i in range(3)]
+    v = [c[i]-a[i] for i in range(3)]
+    return ((u[1],v[2]), (u[2],v[1]),
+            (u[2],v[0]), (u[0],v[2]),
+            (u[0],v[1]), (u[1],v[0]))
+
+class CurrentNormals:
+    """Source-level sequential model of the inspected m_p_q implementation.
+    State is read before each edge, matching nonblocking assignments.
+    """
+    def __init__(self):
+        self.busy = self.issue = self.pv = self.s1v = self.s2v = False
+        self.seq = self.pstep = self.p = self.src = 0
+        self.pairs = [(0, 0)] * 6
+        self.acc = [0, 0, 0]
+        self.s1 = self.s2 = None
+        self.count = 0
+    def tick(self, packet, ready):
+        b, issue, pv, s1v, s2v = self.busy,self.issue,self.pv,self.s1v,self.s2v
+        seq, pstep, p = self.seq,self.pstep,self.p
+        acc, pairs, src, s1, s2 = self.acc[:],self.pairs[:],self.src,self.s1,self.s2
+        accept = packet is not None and not b and not s1v
+        retired = s2 if s2v and ready else None
+        free2 = not s2v or ready
+        if not b and not s1v:
+            if packet is not None:
+                self.pairs = edge_pairs(packet[1])
+                self.src = packet[0]
+                self.seq = 0
+                self.busy = self.issue = True
+        elif b:
+            if issue:
+                if seq == 5: self.issue = False
+                else: self.seq = seq + 1
+            if pv:
+                lane = pstep // 2
+                self.acc[lane] = p if pstep % 2 == 0 else acc[lane] - p
+                if pstep == 5:
+                    self.busy = False
+                    self.s1v = True
+                    self.s1 = (src, (acc[0], acc[1], acc[2]-p))
+        self.p = pairs[seq][0]*pairs[seq][1] if seq < 6 else 0
+        self.pstep, self.pv = seq, b and issue
+        if s1v and free2: self.s1v = False
+        if free2:
+            self.s2v = s1v
+            if s1v:
+                n = tuple(rescale(x, 16) for x in s1[1])
+                self.s2 = (s1[0], n, not any(n))
+                self.count += 1
+        return accept, retired
+    def idle(self):
+        return not self.busy and not self.s1v and not self.s2v
+
+def run():
+    results = {}
+    cases = [LO,LO+1,-65537,-65536,-32769,-32768,-1,0,1,
+             32767,32768,65535,65536,HI-1,HI]
+    factors = [0,1,32767,32768,32769,65535,65536,65537,131071]
+    n_morph = 0
+    for h in cases:
+        for ha in cases:
+            for hb in cases:
+                for m in factors:
+                    assert morph_reference(h,ha,hb,m) == morph_stages(h,ha,hb,m)
+                    n_morph += 1
+    for _ in range(100000):
+        vals = [RNG.randint(LO, HI) for _ in range(3)]
+        m = RNG.randrange(1 << 17)
+        assert morph_reference(*vals, m) == morph_stages(*vals, m)
+        n_morph += 1
+    results['morph_equivalence_cases'] = n_morph
+    results['counterexamples'] = {
+        'midpoint_preserve_intermediate_saturation': {
+            'ha': LO, 'hb': HI,
+            'current_coarse_height': sat32(LO+rescale(HI-LO,1)),
+            'single_sum_midpoint': (LO+HI+1)//2},
+        'full_morph_is_not_always_coarse_height': {
+            'h': LO, 'hc': HI, 'm':65536,
+            'current_morph_height':sat32(LO+rescale(65536*(HI-LO),16)),
+            'coarse_height':HI},
+        'do_not_negate_rounded_normal': {
+            'raw_lane':32768, 'round_positive':rescale(32768,16),
+            'round_negative':rescale(-32768,16),
+            'negate_rounded_positive':-rescale(32768,16)}}
+
+    # Exact quotient/round-bit identity with arbitrary-precision intermediates.
+    # Hardware implementations still need the documented width/range proof.
+    n_round = 0
+    bound = 2*((1 << 32)-1)**2
+    for _ in range(100000):
+        x = RNG.randint(-bound, bound)
+        for k in (1,16):
+            assert (x+(1 << (k-1))) >> k == (x >> k)+((x >> (k-1)) & 1)
+            n_round += 1
+    results['rounding_identity_cases'] = n_round
+
+    # Build the 64+16+4+1 solidity pyramid, independently query rectangle bits.
+    queries = 0
+    for mask in [0,(1 << 64)-1] + [RNG.getrandbits(64) for _ in range(4096)]:
+        levels = [[(mask >> i) & 1 for i in range(64)]]
+        width = 8
+        for _ in range(3):
+            prev = levels[-1]
+            levels.append([all(prev[(2*y+dy)*width+2*x+dx]
+                               for dy in (0,1) for dx in (0,1))
+                           for y in range(width//2) for x in range(width//2)])
+            width //= 2
+        for level in range(4):
+            stride, n = 1 << level, 8 >> level
+            for eb in range(n):
+                for ea in range(n):
+                    expected = all((mask >> (j*8+i)) & 1
+                                   for j in range(eb*stride,(eb+1)*stride)
+                                   for i in range(ea*stride,(ea+1)*stride))
+                    assert levels[level][eb*n+ea] == expected
+                    queries += 1
+    results['solidity_masks'] = 4098
+    results['solidity_queries'] = queries
+
+    tri = ((0,0,0),(65536,0,65536),(65536,0,0))
+    model = CurrentNormals()
+    accepts, outputs = [], []
+    serial = 0
+    for cycle in range(50):
+        accepted, out = model.tick((serial,tri), True)
+        if accepted: accepts.append(cycle); serial += 1
+        if out is not None: outputs.append(cycle)
+    assert accepts[:5] == [0,9,18,27,36]
+    results['current_normals_accept_edges_no_stall'] = accepts
+    results['current_normals_output_transfer_edges_no_stall'] = outputs
+
+    total_in = total_out = cycles = 0
+    for schedule in ('always', 'random', 'one_in_32'):
+        model = CurrentNormals()
+        expected, pending = deque(), None
+        sent = retired = 0
+        cycle = 0
+        target = 3000
+        while sent < target or expected or not model.idle():
+            assert cycle < 200000
+            if pending is None and sent < target:
+                t = tuple(tuple(RNG.randint(LO, HI) for _ in range(3)) for _ in range(3))
+                pending = (sent,t)
+            ready = (schedule == 'always' or
+                     schedule == 'random' and RNG.random() < 0.6 or
+                     schedule == 'one_in_32' and cycle % 32 == 0)
+            accepted, out = model.tick(pending, ready)
+            if accepted:
+                n, deg = normal(pending[1])
+                expected.append((pending[0], n, deg))
+                sent += 1
+                pending = None
+            if out is not None:
+                assert expected and out == expected.popleft()
+                retired += 1
+            cycle += 1
+        assert retired == target == model.count
+        total_in += sent; total_out += retired; cycles += cycle
+    results['normal_control_model_accepted'] = total_in
+    results['normal_control_model_retired'] = total_out
+    results['normal_control_model_cycles'] = cycles
+    results['status'] = 'PASS -- Python models only; no repository RTL or Quartus run'
+    return results
+
+if __name__ == '__main__':
+    print(json.dumps(run(), indent=2, sort_keys=True))
+
+END PYTHON
+
+APPENDIX B -- RESULTS OF THE EXECUTED MODEL RUN
+===============================================================================
+
+{
+  "counterexamples": {
+    "do_not_negate_rounded_normal": {
+      "negate_rounded_positive": -1,
+      "raw_lane": 32768,
+      "round_negative": 0,
+      "round_positive": 1
+    },
+    "full_morph_is_not_always_coarse_height": {
+      "coarse_height": 2147483647,
+      "current_morph_height": -1,
+      "h": -2147483648,
+      "hc": 2147483647,
+      "m": 65536
+    },
+    "midpoint_preserve_intermediate_saturation": {
+      "current_coarse_height": -1,
+      "ha": -2147483648,
+      "hb": 2147483647,
+      "single_sum_midpoint": 0
+    }
+  },
+  "current_normals_accept_edges_no_stall": [
+    0,
+    9,
+    18,
+    27,
+    36,
+    45
+  ],
+  "current_normals_output_transfer_edges_no_stall": [
+    9,
+    18,
+    27,
+    36,
+    45
+  ],
+  "morph_equivalence_cases": 130375,
+  "normal_control_model_accepted": 9000,
+  "normal_control_model_cycles": 150004,
+  "normal_control_model_retired": 9000,
+  "rounding_identity_cases": 200000,
+  "solidity_masks": 4098,
+  "solidity_queries": 348330,
+  "status": "PASS -- Python models only; no repository RTL or Quartus run"
+}
+
+END OF DOCUMENT

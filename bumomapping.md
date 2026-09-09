@@ -1,0 +1,1 @@
+we need detail bump mapping for terrain. please architect it and set it up for production. I hope it is not too expensive but terrain is the star of the show and we neglected giving it first class treatment.
