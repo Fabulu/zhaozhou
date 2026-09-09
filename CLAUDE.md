@@ -158,3 +158,42 @@ numbers**. A measurement that did not move after a change that must have moved
 it is the tell. Compile the reel directly instead, and after any struct-layout
 change **recompile every `.cpp` that uses it** — a stale object with an old
 layout looks exactly like a rendering bug.
+
+## Read the real exit code — of the thing, not of the pipeline
+
+**`cmd | tail` reports `tail`'s status, and `tail` always succeeds.** CLAUDE.md
+has said this about builds since a build failed on step 18 of 554 and printed
+`BUILD_RC=0`. **2026-09-09: it took an encode too** — `python tovideo.py . |
+tail -30` stopped at **12 clips of 28** and reported success, and the bank would
+have shipped half one generation and half another if a freshness gate had not
+existed. **The rule is not about builds. It is about every long command whose
+output you pipe.** Redirect to a file and read `$?`, or run it bare.
+
+**And a long job's lifetime is unrelated to its shell's, in both directions.**
+A `nohup … &` render died silently when its tool call was torn down — the log
+simply stopped, and because stdout was buffered it could be **zero bytes** for a
+job that ran twenty minutes. The same night a `cp -r` **outlived** its killed
+call by eight minutes, so an `rm -rf` failed on a directory that had just been
+emptied. Neither "no such process is running" nor "the output directory exists"
+can tell you which: another lane runs the same executable, and a directory is
+created before it is filled. **Compare the artefact against an expected-size
+table, and take a second count a minute later** — still rising means alive, not
+moved means dead.
+
+## Looking is not the fallback. It is usually the cheapest reliable instrument.
+
+The art law says measurement never trumps looking. **2026-09-09 showed the
+practical corollary.** One small question — *is the creature in frame?* — took
+four instruments: a silhouette box that masked in terrain and sky (66% of the
+frame), an ink mask that reported a full-width bounding box on **every** frame
+including ones with no creature, a colour rule that scored a known-**absent**
+frame at **76%** of a known-present one, and a native-scale contact sheet that was
+right once and wrong once. **A 2× crop of the named frame was right every time,
+and it was the last thing tried.**
+
+* **Before trusting any presence or coverage metric, run it on a frame where the
+  answer is NO.** A known-positive proves nothing; every broken mask above scored
+  high on frames containing the creature.
+* **A contact sheet finds a candidate; a zoomed crop confirms one.**
+* **Distrust "X is missing" above all other findings.** A subject that moved,
+  shrank or went dark reads as absent at thumbnail scale.
