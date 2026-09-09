@@ -822,6 +822,87 @@ module zhao_texture_island_v3_top #(
     end
   end
 
+  // ==========================================================================
+  // PACKET 2 / D2: THE TYPED EARLY DESCRIPTOR BANK
+  // ==========================================================================
+  // Written ONCE, on the owner's admission handshake, from the input pins of
+  // that same beat. Read back synchronously when PERSPUV presents that owner's
+  // result, through `zhao_texture_uv_join` below.
+  //
+  // §5.2 is specific about the write event: "Write the row once on the EXACT
+  // owner admission handshake, using that owner's slot. Do not use a local
+  // rolling pointer that can drift from owner admission." `own_adm_accept` IS
+  // that handshake -- v3own's `adm_accept_o` -- and the slot comes from the owner
+  // it allocated on this beat, not from `fc_wp`.
+  //
+  // The `fc_wp`-indexed arrays above are the thing this replaces. They are
+  // written on `frag_valid_i && frag_ready_o`, which is algebraically the SAME
+  // beat (both reduce to `frag_valid_i && rcp_v_ready && own_adm_ready`, proven
+  // in the roadmap) -- so the two write events agree today. The difference is
+  // that the descriptor is keyed by the identity the response comes back under,
+  // and the FCTXN arrays are keyed by a pointer that has to be carried
+  // separately and read at the right moment by whoever needs it.
+  //
+  // THE MOSAIC BYTE SLICE, verified rather than assumed: `fbase_m` stores
+  // `{frag_base_rgb_i, frag_base_a_i}` and Mosaic reads `fbase_rd[31:24]` and
+  // `[23:16]`, which are `frag_base_rgb_i[23:16]` and `[15:8]`. Those exact two
+  // bytes are what the descriptor carries. A one-byte shift here is the
+  // five-stale-slices defect reborn.
+  logic [63:0] ed_ctx_c;
+  logic [7:0]  ed_lod_c, ed_mosa_c, ed_mosb_c, ed_mosw_c, ed_bsel_c;
+  logic [1:0]  ed_class_c, ed_count_c, ed_pslot_c;
+  logic        ed_aux_c, ed_rvalid_c;
+  logic [GENW-1:0] ed_pgen_c, ed_ogen_c;
+  logic        ed_rd_valid_c;
+  logic [5:0]  ed_rd_slot_c;
+  logic [GENW-1:0] ed_rd_gen_c;
+
+  zhao_texture_early_desc #(
+      .SLOTW(6), .GENW(GENW), .SLICEW(40)
+  ) u_early_desc (
+      .clk(clk), .rst_n(rst_n),
+      .wr_valid_i        (own_adm_accept),
+      .wr_slot_i         (own_adm_owner[13:8]),
+      .wr_owner_gen_i    (own_adm_owner[7:0]),
+      .wr_aux_context_i  (frag_ctx_i),
+      .wr_lod_q4_4_i     (frag_lod_i),
+      .wr_raw_class_i    (frag_class_i),
+      .wr_needs_aux_i    (frag_aux_i),
+      .wr_sample_count_i (frag_sample_count_i),
+      .wr_palette_slot_i (frag_pal_slot_i),
+      .wr_palette_gen_i  (frag_pal_gen_i),
+      .wr_mosaic_mat_a_i (frag_base_rgb_i[23:16]),
+      .wr_mosaic_mat_b_i (frag_base_rgb_i[15:8]),
+      .wr_mosaic_weight_i(frag_weight_i),
+      .wr_binding_sel_i  (frag_binding_i),
+
+      .rd_valid_i        (ed_rd_valid_c),
+      .rd_slot_i         (ed_rd_slot_c),
+      .rd_owner_gen_i    (ed_rd_gen_c),
+
+      .rd_result_valid_o (ed_rvalid_c),
+      .rd_owner_gen_o    (ed_ogen_c),
+      .rd_aux_context_o  (ed_ctx_c),
+      .rd_lod_q4_4_o     (ed_lod_c),
+      .rd_raw_class_o    (ed_class_c),
+      .rd_needs_aux_o    (ed_aux_c),
+      .rd_sample_count_o (ed_count_c),
+      .rd_palette_slot_o (ed_pslot_c),
+      .rd_palette_gen_o  (ed_pgen_c),
+      .rd_mosaic_mat_a_o (ed_mosa_c),
+      .rd_mosaic_mat_b_o (ed_mosb_c),
+      .rd_mosaic_weight_o(ed_mosw_c),
+      .rd_binding_sel_o  (ed_bsel_c),
+
+      // Instruments deliberately unconnected in this packet. Wiring them would
+      // add island output PORTS, and the composed test shares one file between
+      // this top and the oracle on the strength of their port lists matching.
+      // That is a separate, guarded step; it is not worth coupling to the rewire.
+      .writes_o          (),
+      .reads_o           (),
+      .rd_gen_mismatch_o ()
+  );
+
   // Read point 1: RCP24's answer, for PERSPUV's numerators.
   //
   // ---------------------------------------------------------------------------
@@ -938,11 +1019,23 @@ module zhao_texture_island_v3_top #(
 
   zhao_texture_mosaic u_mosaic (
       .clk(clk), .rst_n(rst_n),
-      .req_valid_i(pu_valid && pu_ready), .req_ready_o(mos_req_ready),
-      .req_u_i(pu_u), .req_v_i(pu_v),
-      .req_mat_a_i(fbase_rd[31:24]), .req_mat_b_i(fbase_rd[23:16]),
-      .req_weight_i(f_weight_c), .req_mosaic_i(1'b1),
-      .req_src_id_i(pu_tag),
+      // PACKET 2: Mosaic now takes the JOIN's branch, and its ready is part of
+      // the fork's handshake instead of being ignored. The old form was
+      // `req_valid_i(pu_valid && pu_ready)` with `mos_req_ready` going nowhere --
+      // exactly what §5.3 warns about: "a future functional Mosaic branch cannot
+      // drop requests merely because its ready was ignored".
+      //
+      // u/v/src come from the join's F-branch outputs and that is CORRECT rather
+      // than cross-branch borrowing: `f_u_o`, `f_v_o` and `f_owner_o` are the same
+      // held record (`r_u_q`/`r_v_val_q`/`r_tag_q`) the m_* fields come from -- one
+      // enable loaded them all. `{2'd0, f_owner_o}` reproduces the old
+      // `req_src_id_i(pu_tag)` bit for bit, because pu_tag is driven
+      // `{2'd0, px_tok_q}`.
+      .req_valid_i(jn_m_valid_c), .req_ready_o(mos_req_ready),
+      .req_u_i(jn_u_c), .req_v_i(jn_v_c),
+      .req_mat_a_i(jn_m_mata_c), .req_mat_b_i(jn_m_matb_c),
+      .req_weight_i(jn_m_wt_c), .req_mosaic_i(1'b1),
+      .req_src_id_i({2'd0, jn_owner_c}),
       .pick_valid_o(mos_pick_valid), .pick_ready_i(1'b1),
       .pick_tile_o(mos_tile), .pick_tx_o(mos_tx), .pick_ty_o(mos_ty),
       .pick_src_id_o(mos_src), .idle_o(mos_idle),
@@ -1114,18 +1207,98 @@ module zhao_texture_island_v3_top #(
   logic [31:0] exp_fragments, exp_requests, exp_zero_frags, exp_aux_requests;
   logic [31:0] exp_wq_overflow;
 
+  // ==========================================================================
+  // PACKET 2 / D2: THE POST-PERSPUV JOIN
+  // ==========================================================================
+  // §5.3: one bounded, stall-safe join between PERSPUV and the expander,
+  // capturing {owner identity, computed U/V, flags, synchronous early
+  // descriptor} and advancing all of it together.
+  //
+  // The alignment is STRUCTURAL, not a timing argument. The join drives the
+  // bank's `rd_valid_i` with the same enable that registers its own PERSPUV
+  // fields, and the bank's output register is gated on an actual read (the D0
+  // hold law). So the descriptor and the U/V it travels with move on the same
+  // clocks and cannot come from different transactions.
+  //
+  // This is what replaces the `fc_rp`-indexed reads below. Those took each
+  // attribute out of a separate array at whatever moment the consumer happened
+  // to look; the join hands over one record.
+  logic               jn_f_valid_c, jn_f_ready_c;
+  logic [13:0]        jn_owner_c;
+  logic signed [31:0] jn_u_c, jn_v_c;
+  logic [7:0]         jn_binding_c, jn_lod_c;
+  logic [1:0]         jn_count_c, jn_class_c;
+  logic               jn_aux_c, jn_sat_c, jn_dz_c;
+  logic [CTXW-1:0]    jn_ctx_c;
+  logic [1:0]         jn_pal_slot_c;
+  logic [GENW-1:0]    jn_pal_gen_c;
+  logic               jn_m_valid_c;
+  logic [7:0]         jn_m_mata_c, jn_m_matb_c, jn_m_wt_c;
+
+  zhao_texture_uv_join #(
+      .TAGW(14), .SLOTW(6), .GENW(GENW), .CTXW(CTXW),
+      // Behaviour-preserving default: the descriptor's own sample count is used
+      // and the depth-zero flag is reported rather than acted on. Making a
+      // depth-zero fragment issue no samples is a POLICY and belongs to the
+      // island, not to a default.
+      .DZ_FORCES_ZERO_SAMPLES(1'b0)
+  ) u_uv_join (
+      .clk(clk), .rst_n(rst_n),
+      .p_valid_i(pu_valid), .p_ready_o(pu_ready),
+      .p_u_i(pu_u), .p_v_i(pu_v), .p_tag_i(pu_tag[13:0]),
+      .p_sat_i(pu_sat), .p_dz_i(pu_dzero),
+
+      .d_rd_valid_o(ed_rd_valid_c),
+      .d_rd_slot_o(ed_rd_slot_c),
+      .d_rd_owner_gen_o(ed_rd_gen_c),
+
+      .d_aux_context_i(ed_ctx_c),
+      .d_lod_i(ed_lod_c),
+      .d_raw_class_i(ed_class_c),
+      .d_needs_aux_i(ed_aux_c),
+      .d_sample_count_i(ed_count_c),
+      .d_binding_sel_i(ed_bsel_c),
+      .d_mosaic_mat_a_i(ed_mosa_c),
+      .d_mosaic_mat_b_i(ed_mosb_c),
+      .d_mosaic_weight_i(ed_mosw_c),
+      .d_owner_gen_i(ed_ogen_c),
+      .d_palette_slot_i(ed_pslot_c),
+      .d_palette_gen_i(ed_pgen_c),
+
+      .f_valid_o(jn_f_valid_c), .f_ready_i(jn_f_ready_c),
+      .f_owner_o(jn_owner_c), .f_u_o(jn_u_c), .f_v_o(jn_v_c),
+      .f_binding_o(jn_binding_c), .f_lod_o(jn_lod_c),
+      .f_count_o(jn_count_c), .f_aux_o(jn_aux_c),
+      .f_class_o(jn_class_c), .f_ctx_o(jn_ctx_c),
+      .f_sat_o(jn_sat_c), .f_depth_zero_o(jn_dz_c),
+      .f_pal_slot_o(jn_pal_slot_c), .f_pal_gen_o(jn_pal_gen_c),
+
+      .m_valid_o(jn_m_valid_c), .m_ready_i(mos_req_ready),
+      .m_mat_a_o(jn_m_mata_c), .m_mat_b_o(jn_m_matb_c),
+      .m_weight_o(jn_m_wt_c),
+
+      // As with the bank: instruments unconnected in this packet rather than
+      // coupling the rewire to an island port-list change.
+      .joined_o(), .saturated_o(), .depth_zero_o(), .gen_mismatch_o()
+  );
+
+  // The class SANITISATION lives here, at the read point, applied to the
+  // CAPTURED class. The join passes raw class through by design -- its header
+  // says the rule belongs in one place, and this is that place.
+  wire [1:0] jn_class_sane_c = (jn_class_c == CLS_ERR) ? CLS_NEAR : jn_class_c;
+
   zhao_texture_frag_expand #(
       .FQD (4),      // the architecture's stated starting point, not a measured
                      // optimum; the composed test shows starvation if it is low
       .SRCW(18)      // {class[1:0], sample_handle[15:0]} -- §1.1's widening
   ) u_expand (
       .clk(clk), .rst_n(rst_n),
-      .f_valid_i(pu_valid), .f_ready_o(pu_ready),
-      .f_owner_i(exp_owner_c),
-      .f_u_i(pu_u), .f_v_i(pu_v),
-      .f_binding_i(f_binding_c), .f_lod_i(f_lod_c),
-      .f_count_i(f_scount_c), .f_aux_i(f_aux_c),
-      .f_class_i(f_class_c),
+      .f_valid_i(jn_f_valid_c), .f_ready_o(jn_f_ready_c),
+      .f_owner_i(jn_owner_c),
+      .f_u_i(jn_u_c), .f_v_i(jn_v_c),
+      .f_binding_i(jn_binding_c), .f_lod_i(jn_lod_c),
+      .f_count_i(jn_count_c), .f_aux_i(jn_aux_c),
+      .f_class_i(jn_class_sane_c),
       // `fr_f_ctx`, NOT `frag_ctx_i`. Every other attribute here -- `pu_u`,
       // `pu_v`, `f_binding_c`, `f_lod_c` -- has travelled through PERSPUV with
       // its fragment; taking the context off the raw input pin instead reads
@@ -1134,7 +1307,7 @@ module zhao_texture_island_v3_top #(
       // "travels with its fragment instead of being read off the input pin
       // twelve clocks late", and the queue that fixes it (`fctx_m`, indexed by
       // `fc_wp`/`fc_rp`) was already here and already correct.
-      .f_ctx_i(fr_f_ctx),
+      .f_ctx_i(jn_ctx_c),
       .req_valid_o(exp_req_valid), .req_ready_i(exp_req_ready),
       .req_u_o(exp_req_u), .req_v_o(exp_req_v), .req_lod_o(exp_req_lod),
       .req_src_id_o(exp_req_src_id),

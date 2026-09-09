@@ -2195,6 +2195,8 @@ verilate(test_island_v3_composed_directed
   PREFIX Vzhao_texture_island_v3_top
   TOP_MODULE zhao_texture_island_v3_top
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
@@ -2234,6 +2236,8 @@ verilate(test_island_v3_prod_composed_directed
   PREFIX Vzhao_texture_island_v3_top
   TOP_MODULE zhao_texture_island_v3_top
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
@@ -2441,6 +2445,8 @@ verilate(test_island_v3_fault_directed
   PREFIX Vzhao_texture_island_v3_top
   TOP_MODULE zhao_texture_island_v3_top
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv

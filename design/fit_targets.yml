@@ -1162,6 +1162,11 @@ targets:
       - fpga/rtl/texture/zhao_texture_island_v3_top.sv
       - fpga/rtl/texture/zhao_texture_frag_expand.sv
       - fpga/rtl/texture/zhao_texture_metajoin.sv
+      # PACKET 2: the island now instantiates both of these. Registering a block
+      # in the ledger, the manifest and THIS list are three different acts --
+      # Verilator said MODMISSING twice before these two lines existed.
+      - fpga/rtl/texture/zhao_texture_early_desc.sv
+      - fpga/rtl/texture/zhao_texture_uv_join.sv
       - fpga/rtl/texture/zhao_texture_v3own.sv
       - fpga/rtl/texture/zhao_texture_v3bank.sv
       - fpga/rtl/texture/zhao_texture_v3rq.sv
