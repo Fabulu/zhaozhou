@@ -3290,3 +3290,49 @@ defect rather than silently stamping rows `ok`.
 Remaining on this thread: point `run_block_fit.ps1:1115` at `Resolve-FitRules`
 (now a one-liner with its semantics already tested), and optionally
 `check_fit_rules.ps1` too. Both wait on the toolchain.
+
+## 2026-09-09 -- GATE 3 COMPLETE, and the gate fix is in
+
+Where I was before reading the row: waiting on the fit with two queued items --
+the run_block_fit.ps1 one-liner and this row as a determinism control. Both done.
+
+**Determinism control: EVERY METRIC IDENTICAL.** Fresh svc at commit e5cc1f81
+reproduced the standing fit at 9c787e4a to the digit -- 1,886 ALM / 3,216 regs /
+1 M10K / 6 DSP / 105.19 MHz. Different commit, different day, different
+invocation; same source blob, same pinned seed. That supports every same-source
+comparison in the ledger and means a future differing row is signal, not noise.
+It does NOT make single-seed Fmax claims safe: determinism at one seed says
+nothing about spread across seeds, and the only 3-seed set here spans 4.70 MHz.
+
+**GATE 3, both halves, same source:**
+
+    ALM       svc 1,886  ->  pairpipe   794   -1,092 (-58%)
+    registers svc 3,216  ->  pairpipe   820   -2,396 (-74%)
+    Fmax      svc 105.19 ->  pairpipe 119.25  +14.06
+    DSP       svc     6  ->  pairpipe     6    0
+    M10K      svc     1  ->  pairpipe     2   +1
+
+= 32.7% of the island's ALM overage and 32.9% of its register overage AT ONCE. My
+pre-registered bracket was 22-32%; the answer is the top of it. Nothing else found
+this session moves both failing area criteria together, and nothing else improves
+Fmax while doing it.
+
+Both halves BREACH section 8.8 -- svc on ALM and registers, the pair-pipe on
+registers and M10K -- exactly as the target file predicted ("both rows are
+expected to violate, and the comparison is between them, not against the budget").
+The candidate breaches fewer rules, by far less, and PASSES ALM which svc fails.
+
+**The gate fix is applied.** run_block_fit.ps1:1115 now calls Resolve-FitRules.
+Replayed over already-written rows without re-running anything: all three labelled
+rows stamped `ok` would now be `failed:structure` with violations recorded --
+pairpipe@regfit, svc@gate3-fresh, and island_v3_top@g2-prod. Existing rows keep
+their stamp (rewriting history is not this fix's business); check_fit_rules.ps1
+reports their true verdict in its labelled section and every future run is stamped
+correctly.
+
+**Tooling note:** a three-heredoc compound command died on quoting and ran NOTHING
+-- clean failure, no partial state. Rewrote it as separate steps with the file
+writer. The commit-message quoting trap in a new costume; the fix is the same one
+CLAUDE.md already gives, which is to stop nesting them.
+
+Report: `reports/GATE3-COMPLETE-THE-PAIRPIPE-WINS-20260909.md`.

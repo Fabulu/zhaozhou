@@ -1112,7 +1112,21 @@ try {
         # in flip-flops used to report `ok`; now it reports the violation and
         # the row is not a pass.
         if ($row.status -eq 'ok') {
-            $ruleSet = $fitRules[$rowModule]
+            # Resolve-FitRules, NOT a bare lookup. $rowModule is "$mod$RowLabel";
+            # the rule table is keyed on the bare `- top:` name, so for EVERY
+            # labelled run this lookup returned $null, Test-FitRules returned
+            # empty on it, and the row was stamped `ok` carrying no
+            # ruleViolations. Measured 2026-09-09: 43 labelled rows, 19
+            # breaching, 11 of them stamped `ok` -- including the shipping
+            # profile. One module wore both stamps at once, the unlabelled row
+            # `failed:structure` and @g2-prod/@pktC `ok` on the same three
+            # breaches. See reports/LABELLED-ROWS-ARE-UNGATED-BY-A-KEY-MISMATCH.
+            #
+            # Resolve-FitRules tries the exact name first, so a variant with its
+            # own `- top:` entry keeps working, then falls back to the base top.
+            # Its semantics are asserted at dot-source in fit_rules.ps1 and the
+            # self-test fires if the fallback is removed.
+            $ruleSet = Resolve-FitRules $fitRules $rowModule
             $violations = @(Test-FitRules $row $ruleSet)
             if ($violations.Count -gt 0) {
                 $row.status = 'failed:structure'
