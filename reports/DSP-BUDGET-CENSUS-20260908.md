@@ -1,4 +1,62 @@
-# The DSP budget: 154 measured against 112, and it is a FLOOR
+> # CURRENT CORRECTION -- 2026-09-09. THE HEADLINE BELOW IS WITHDRAWN.
+>
+> **Everything under the old title is HISTORICAL.** It is kept for the reasoning,
+> not for its numbers. Corrected by the owner brief
+> `ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt` section 1.1, whose four
+> factual claims were tested against the tree before being accepted, and all four
+> hold.
+>
+> **"154 measured against 112, and it is a FLOOR" was wrong in BOTH directions at
+> once**, which is why "floor" was the worst available word for it:
+>
+> | fault | effect |
+> |---|---|
+> | read only `zhao_block_fit.json` | never saw `zhao_block_map.json` or the separate shell receipt |
+> | `zhao_terrain_normals` counted at 18 from an obsolete fit; a LATER map says **3** | **15 DSP OVERCOUNT** |
+> | `pose_decode` 18, `terrain_bake` 17, `forge_cliff` 2 scored as **zero** -- map-ledger only | **37 DSP UNDERCOUNT** |
+> | the shell omitted entirely | **16 DSP, 12,707 ALM, 26 M10K missing** |
+>
+> ## The corrected bill
+>
+> | | counted | device | rows with cost UNKNOWN |
+> |---|---|---|---|
+> | **DSP** | **190** | 112 | 34 |
+> | **ALM** | **56,189** | 41,910 | 45 |
+> | M10K | 108 | 553 | 45 |
+>
+> **Owner objective: fewer than 95 physical DSP blocks (target <= 94).** Counted
+> 190, with 34 functions carrying no applicable measurement at all.
+>
+> This is **PARTIAL MIXED EVIDENCE**, not a bound in either direction. A partial
+> subtotal is not a mathematical lower bound on an optimised console, and a sum
+> of isolated fits is not an upper bound either -- composition changes mapping,
+> replication, pruning and packing. The old document claimed both bounds at once;
+> that framing is withdrawn with the number.
+>
+> ## What survives from below, and what does not
+>
+> **SURVIVES.** The concentration finding -- `zhao_project_core` instantiated
+> twice is still the single largest item. The multiplier-site audit of
+> `zhao_texture_combine`. The `geom_lod` narrowing precedent (28 -> 18 -> 6 DSP).
+> The `zhao_geom_skin` `MUL_LANES` lever. The measured 32xN boundary: **only 18
+> bits pays, and 19 bits costs more than 32**.
+>
+> **WITHDRAWN.** Every total. "154". The word "floor". The lever arithmetic that
+> descended from it (`154 -> 141 -> 123 -> 129`). And the claim that a
+> dirty-tree digest "describes nothing" -- dirtiness and evidence identity are
+> separate dimensions, and a digest can identify the exact bytes of a dirty but
+> immutable specimen.
+>
+> **CONFIRMED BY THE BRIEF, not withdrawn:** removing the rejected
+> `zhao_texture_combine` from the bill was correct. What would be wrong is also
+> subtracting its 8 DSP from the island's 17-DSP receipt -- those eight were
+> never in that island. That double subtraction was not made.
+>
+> Regenerate with `python tools/budget/dsp_census.py`, which now reads all three
+> ledgers, selects one profile per instance, and reports unknown as unknown
+> rather than as zero.
+
+# The DSP budget: 154 measured against 112, and it is a FLOOR -- HISTORICAL, SEE THE CORRECTION ABOVE
 
 2026-09-08. Prompted by the owner's observation that the DSP overshoot is "like
 180 to 112 … lots of that is bad accounting". The accounting turns out to be
