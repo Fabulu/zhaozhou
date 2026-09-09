@@ -64,9 +64,22 @@ def closure(edges, root):
 
 
 
-def check_fit_sources(decl):
-    """Every module the GENERATED production top instantiates must appear in
-    zhao_prod_top's source list in design/fit_targets.yml."""
+def check_fit_sources(decl, edges=None):
+    """Every module in the GENERATED production top's INSTANTIATION CLOSURE must
+    appear in zhao_prod_top's source list in design/fit_targets.yml.
+
+    CLOSURE, not direct instances -- and that word is the 2026-09-09 repair.
+
+    This function used to scan only what `zhao_prod_top.sv` instantiates by name.
+    It therefore could not see `zhao_skid2`, which is instantiated by
+    `zhao_raster_tile_pipe`, one level down. The production source list was
+    missing it, the fit would have died at elaboration, and this checker reported
+    OK. Verilator found it instead, which is the wrong tool discovering the thing
+    this one exists for.
+
+    A gate that inspects one level of a hierarchy is not a gate on the
+    hierarchy -- and it reads exactly like one, which is the expensive part.
+    """
     import os
     import re
 
@@ -88,7 +101,16 @@ def check_fit_sources(decl):
     listed = set(re.findall(r"-\s+(fpga/rtl/\S+\.sv)", seg))
 
     top = io.open(top_path, encoding="utf-8", errors="replace").read()
-    inst = set(re.findall(r"^\s{2}(zhao_\w+)\s+u\d+_i\s*\(", top, re.M))
+    direct = set(re.findall(r"^\s{2}(zhao_\w+)\s+u\d+_i\s*\(", top, re.M))
+
+    # Expand to the full closure. Every module reachable from anything the top
+    # instantiates has to be compiled too, or elaboration stops -- and Quartus
+    # reports that as a missing module, which reads like a typo rather than a
+    # source-list gap.
+    inst = set(direct)
+    if edges:
+        for m in direct:
+            inst |= closure(edges, m)
 
     for m in sorted(inst):
         src = decl.get(m)
@@ -97,11 +119,50 @@ def check_fit_sources(decl):
                 "the generated production top instantiates '%s' and no such "
                 "module file exists" % m)
         elif src not in listed:
+            # Say WHERE it is instantiated. "instantiated by the generated
+            # production top" was the old message, and for a transitively-reached
+            # module it is simply false -- zhao_skid2 is instantiated by
+            # zhao_raster_tile_pipe. A gate that misreports the location sends
+            # the reader to the wrong file.
+            how = ("instantiated directly by the generated production top"
+                   if m in direct else
+                   "reachable from the generated production top (instantiated by "
+                   "a submodule, not by the top itself)")
             out.append(
-                "'%s' (%s) is instantiated by the generated production top but "
-                "is NOT in zhao_prod_top's source list in design/fit_targets.yml "
-                "-- the fit would die at elaboration" % (m, src))
+                "'%s' (%s) is %s but is NOT in zhao_prod_top's source list in "
+                "design/fit_targets.yml -- the fit would die at elaboration"
+                % (m, src, how))
     return out
+
+
+def check_top_fresh():
+    """zhao_prod_top.sv must match what its generator produces RIGHT NOW.
+
+    The other half of the 2026-09-09 repair. Every check in this file reads the
+    generated top, so all of them silently describe whatever design the top was
+    generated from -- and on 2026-09-09 that was 2,888 lines out of date, with one
+    instance pointing at a different module. This checker reported OK the whole
+    time.
+
+    `gen_prod_top.py --check` compares without writing, so running the gate can
+    never itself modify the tree -- a checker with a side effect is a checker
+    people stop trusting.
+    """
+    import subprocess
+    import sys as _sys
+    gen = os.path.join("tools", "quartus", "gen_prod_top.py")
+    if not os.path.exists(gen):
+        return []
+    try:
+        r = subprocess.run([_sys.executable, gen, "--check"],
+                           capture_output=True, text=True)
+    except OSError as exc:
+        return ["could not run %s --check (%s)" % (gen, exc)]
+    if r.returncode == 3:
+        return ["fpga/rtl/prod/zhao_prod_top.sv is STALE -- it does not match "
+                "tools/quartus/gen_prod_top.py's output, so every check in this "
+                "file is describing an older design. Run: python %s" % gen]
+    return []
 
 
 def main():
@@ -152,7 +213,8 @@ def main():
     # The manifest gate and the fit source list were one step apart and only
     # the first of them was mechanical. This closes the gap: whatever the
     # generated top instantiates must be compilable.
-    errors.extend(check_fit_sources(decl))
+    errors.extend(check_fit_sources(decl, edges))
+    errors.extend(check_top_fresh())
 
     accounted = set(tops) | set(inside) | set(excluded)
     for m in sorted(set(decl) - accounted):

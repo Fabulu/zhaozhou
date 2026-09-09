@@ -543,10 +543,32 @@ def main():
         "`default_nettype wire",
     ]
 
+    text = "\n".join(head + lines + tail) + "\n"
+
+    # --check: COMPARE, DO NOT WRITE.
+    #
+    # Added 2026-09-09 because "regenerate after any port change" is a rule that
+    # depends on someone remembering, and it was found unremembered twice by
+    # CLAUDE.md's own account and a third time today -- 2,888 insertions out of
+    # date, with instance u22 pointing at a different module entirely. Worse, the
+    # manifest checker had been PASSING all along, because it was validating the
+    # manifest against the stale top. A gate reading a generated file it never
+    # checks the freshness of is a gate on last month's design.
+    if "--check" in sys.argv[1:]:
+        try:
+            have = io.open(OUT, encoding="utf-8").read()
+        except OSError:
+            print("STALE: %s does not exist" % OUT)
+            return 3
+        if have.replace("\r\n", "\n") != text:
+            print("STALE: %s does not match the generator's output. "
+                  "Run: python tools/quartus/gen_prod_top.py" % OUT)
+            return 3
+        print("fresh: %s matches the generator (%d instances)" % (OUT, len(used)))
+        return 1 if skipped else 0
+
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    io.open(OUT, "w", encoding="utf-8", newline="\n").write(
-        "\n".join(head + lines + tail) + "\n"
-    )
+    io.open(OUT, "w", encoding="utf-8", newline="\n").write(text)
     print("wrote %s: %d instances" % (OUT, len(used)))
     for m, why in skipped:
         print("  SKIPPED %-34s %s" % (m, why))
