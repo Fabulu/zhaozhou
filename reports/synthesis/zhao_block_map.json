@@ -1,14 +1,14 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "a754050db855eb3fcdb3f2815f6dcd0acbbb7349",
+    "newestRunCommit":  "2db3dfd5fa026320a939aa64cdfea757ded45a4a",
     "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
              },
     "device":  "5CSEBA6U23I7",
-    "sourceListHash":  "fea56b7fa6c893bb",
+    "sourceListHash":  "dd38db9af18f44c1",
     "blocks":  [
                    {
                        "module":  "zhao_audio_fifo",
@@ -2138,6 +2138,35 @@
                        "ramConversionWarnings":  0,
                        "errors":  0,
                        "critical":  1
+                   },
+                   {
+                       "module":  "zhao_probe_ram_infer@raminfer",
+                       "status":  "ok",
+                       "sourceCommit":  "2db3dfd5fa026320a939aa64cdfea757ded45a4a",
+                       "rtlCleanAtHead":  false,
+                       "sourceListHash":  "dd38db9af18f44c1",
+                       "sourceFileCount":  213,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "variantOf":  "zhao_probe_ram_infer",
+                       "seconds":  65,
+                       "dspBlocks":  null,
+                       "registers":  null,
+                       "blockMemoryBits":  null,
+                       "virtualPins":  null,
+                       "pins":  null,
+                       "estimatedAlms":  null,
+                       "combAluts":  null,
+                       "mlabMemoryBits":  null,
+                       "inferredMemories":  [
+
+                                            ],
+                       "inferredMemoryCount":  0,
+                       "inferredDesignMemoryCount":  0,
+                       "ramConversionWarnings":  0,
+                       "errors":  1,
+                       "critical":  0
                    },
                    {
                        "module":  "zhao_project_core",

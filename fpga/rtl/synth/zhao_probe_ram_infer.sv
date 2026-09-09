@@ -134,6 +134,38 @@ module zhao_probe_ram_infer #(
     end
   end
 
+  // ---- THE WRITES MUST DIFFER, OR THE VARIANTS MERGE INTO ONE ARRAY -------
+  //
+  // MEASURED BY v1 OF THIS PROBE, 2026-09-09. Written identically, four of the
+  // five arrays were collapsed:
+  //
+  //     arr_b[i][b]  Merged with  arr_a[i][b]     224 registers
+  //     arr_c[i][b]  Merged with  arr_a[i][b]     224 registers
+  //     arr_e[i][b]  Merged with  arr_a[i][b]     224 registers
+  //     arr_d                     not merged        0
+  //
+  // The merged array then carried the UNION of their read sites -- two
+  // continuous assigns plus two always_ff reads, four read addresses -- so it
+  // could not be a dual-port memory whatever its width, read style or reset.
+  // Only arr_d stayed separate, and only because having no reset made it
+  // provably different from the others. So v1 confounded "no reset" with "not
+  // merged" and could not attribute its own result.
+  //
+  // THAT IS THE SAME MECHANISM AS perspuv's e_mant, reproduced minimally: 384
+  // registers of a deliberate per-axis split were merged back because both
+  // copies were written from one source on one clock. v1's flaw is independent
+  // corroboration of that finding, which is why it is recorded here rather than
+  // quietly fixed.
+  //
+  // The repair is to make each variant's stored value provably distinct. A
+  // per-variant XOR constant is the cheapest thing that cannot be proved equal,
+  // costs no ports, and leaves depth, width and addressing untouched.
+  localparam logic [WIDE-1:0] SALT_A = 32'h0000_0001;
+  localparam logic [WIDE-1:0] SALT_B = 32'h0000_0002;
+  localparam logic [WIDE-1:0] SALT_C = 32'h0000_0004;
+  localparam logic [WIDE-1:0] SALT_D = 32'h0000_0008;
+  localparam logic [WIDE-1:0] SALT_E = 32'h0000_0010;
+
   // ---- the write side ----------------------------------------------------
   // A, B, C and E have their arrays CLEARED by the async reset, exactly as
   // perspuv's do. D deliberately does not -- that is the whole point of D, and
@@ -151,11 +183,11 @@ module zhao_probe_ram_infer #(
     end else begin
       if (rd_adv) rptr_q <= rptr_q + AW'(1);
       if (wr_en) begin
-        arr_a[wr_addr] <= wr_data[NARROW-1:0];
-        arr_b[wr_addr] <= wr_data;
-        arr_c[wr_addr] <= wr_data;
-        arr_d[wr_addr] <= wr_data;
-        arr_e[wr_addr] <= wr_data[NARROW-1:0];
+        arr_a[wr_addr] <= wr_data[NARROW-1:0] ^ SALT_A[NARROW-1:0];
+        arr_b[wr_addr] <=  wr_data ^ SALT_B;
+        arr_c[wr_addr] <=  wr_data ^ SALT_C;
+        arr_d[wr_addr] <=  wr_data ^ SALT_D;
+        arr_e[wr_addr] <= wr_data[NARROW-1:0] ^ SALT_E[NARROW-1:0];
       end
     end
   end

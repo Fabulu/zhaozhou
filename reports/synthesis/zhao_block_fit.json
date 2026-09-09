@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "b24c930818d13bf893ba6020cf365c25a41bd94f",
-    "newestRunClean":  true,
+    "newestRunCommit":  "2db3dfd5fa026320a939aa64cdfea757ded45a4a",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -634,6 +634,24 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  90.6,
                        "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_probe_ram_infer@raminfer",
+                       "status":  "map_only",
+                       "sourceCommit":  "2db3dfd5fa026320a939aa64cdfea757ded45a4a",
+                       "rtlCleanAtHead":  false,
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "9d2b1c5530dcf899cd167694563142d2a5db839314809a8625cbfc5ada2f0084",
+                       "variantOf":  "zhao_probe_ram_infer",
+                       "seconds":  82.1,
+                       "sourcesHashed":  1,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  563,
+                       "blockMemoryBits":  512,
+                       "dspBlocks":  0,
+                       "virtualPins":  169
                    },
                    {
                        "module":  "zhao_probe_v3rq_queue",
