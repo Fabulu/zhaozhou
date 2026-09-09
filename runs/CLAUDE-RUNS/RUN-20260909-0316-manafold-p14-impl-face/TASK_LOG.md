@@ -91,3 +91,77 @@ transpose. **The look decides, not this note.**
 
 Next step: crop plates of `channel` f157/f175/f180/f185 and `hover` f37 at 16 vs
 32, at 4x and at native; report the ablation answer to the coordinator; then R1.
+
+### 2026-09-09 08:00 — lane RESUMED after the machine-load stop
+
+Read `PASS-14-LANES-PAUSED.md` first, as briefed. **The review's "your ablation is
+confounded" instruction was already satisfied by the pre-stop leg**: the
+segments-only rung (11/32) was built, rendered and looked at, and its answer is
+committed as Upheaval `771c13a`. Confirmed it myself at 4x before going on —
+`AB-h37-4x.png` and `AB-ch180-16v32.png`. The chords go; the near-horizontal
+lower band edge is IDENTICAL at 16 and 32, which is the latitude residual.
+
+⚠ **08:03 — `zhao-reel-cel.exe --help` is not a help flag.** `g_out = argv[1]`,
+so it started a full 28-subject render into a directory literally named `--help`.
+Killed both PIDs inside a minute and removed the directory. **The reel's CLI is
+`zhao-reel-cel <outdir> [clip ...]` and it has no help; there is nothing to ask
+it.** Recorded because the machine is shared with a fit and this is exactly the
+load that was not supposed to happen.
+
+### The third rung was BROKEN — and that is the pass's real finding
+
+`render-3221` (rings 21, segments 32) renders a ball with **no crown**: the top
+ten rings collapse onto the axis, the face opens into a bowl, a fan of degenerate
+triangles converges on a point and the eye floats in the hole. `BUILD_RC=0`, no
+warning, no assert.
+
+`kBodyRings` sizes `kBodyTaperPm[]` and `kBodyLeanXMm[]`, both left at eleven
+entries. C++ zero-fills the tail; `make_body` multiplies radius by taper; rings
+11-20 get radius zero. Fixed at the root in `manafold_art.h` with both tables
+extended and a `static_assert` **calibrated on a known-negative** (POS_RC=0 at 21
+entries, NEG_RC=1 at 11). Written up as gate checklist item 42.
+
+### Where I am (written down before results arrive)
+
+`build-face21` — the CORRECTED rings-21/segments-32 leg — is building `--clean`.
+Next: render `manafold-hover` and `manafold-channel` from it, crop f37 / f180 /
+f185 three ways, and decide the shipped `kBodyRings` BY LOOKING (§1.7 of the
+findings). Then R1 (lens width -> star -> converge -> centre last), then R3.
+
+### 08:2x — the ablation is CLOSED, by looking, on three separate crops
+
+Four legs on the table: 11/16 (shipping), 11/32, 21/32 (zero-fill bug), 21/32
+(repaired). Judged on `hover` f37's terminator, `channel` f180's near-horizontal
+band edge at 8x, and `channel` f180's bottom silhouette arc at 8x.
+
+**16 -> 32 segments is a clear, unambiguous gain. 11 -> 21 rings is not.** On the
+bottom arc the repaired rings leg is indistinguishable from 11/32 and arguably a
+shade more angular on the left; on `hover` f37 there is no difference I can point
+at; on the band edge it is modestly better on the DIAGONAL runs only. That is
++640 triangles on top of the segments leg for something I cannot show anyone.
+
+**SHIPPED: rings 11, segments 32, pole segments 32.** The review's hope --
+"if the cheap leg is enough, the expensive one never needs shipping" -- held.
+
+⚠ **And the honest residual:** the truly HORIZONTAL runs in that band edge are
+IDENTICAL across all three legs. That is the tell that they are not a facet-size
+artefact at all -- where the surface is near-tangent to the band the iso-contour
+genuinely is flat, and no density fixes it. The remaining lever there is
+`kSmoothMixNum`'s 20% flat-face term or the ramp, not more triangles.
+
+### R1 groundwork, done from frames already on disk (no new render)
+
+`R1-eye-now-8x.png` -- the shipping eye at 8x on four frames. The review's
+headline is plainly true and I did not need a measurement for it: `hover` f37 is
+a long thin purple BLADE with a white sliver in it, not a star in an almond.
+`hover` f573 is two star-less blades. `hover` f393 has **no eye at all** -- not a
+crescent, nothing -- which is R3's mechanism (fixed +X plate normal at 28.3
+azimuth) showing up in the picture rather than in the source.
+
+### Where I am (written down before the next results arrive)
+
+`build-ship` is the `--clean` rebuild of the FINAL header (rings 11 / segs 32),
+linking. Next: md5 it against `build-face32` (`679e8797be40e79fa4fe808775a352f8`)
+as a positive control that the shipped tree IS the leg that was looked at, then
+commit + push R2(a) to main. Then R1 step (a) only: `kEyeWideMm` 84 -> ~125, one
+build, render, look. Order is mandated: widen -> star -> converge -> centre LAST.

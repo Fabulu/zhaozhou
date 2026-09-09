@@ -51,8 +51,14 @@ constexpr int32_t vmm(int32_t mm) {
 // ---- the body ball (the big pink teardrop head) ----
 constexpr int32_t kBodyRadiusMm = 450;
 constexpr int kBodyRings = 11;
-constexpr int kBodySegments = 16;      // at the equator
-constexpr int kBodyPoleSegments = 16;  // uniform: the segment-taper zipper cut a
+constexpr int kBodySegments = 32;      // at the equator. PASS 14 R2(a): 16 -> 32,
+                                       // chosen by looking. 16 drew the ball's
+                                       // silhouette as a visible chain of straight
+                                       // chords with corners you could point at.
+                                       // kBodyRings stayed at 11: its own leg (21)
+                                       // was built and looked at and added nothing
+                                       // legible for +23% more triangles.
+constexpr int kBodyPoleSegments = 32;  // uniform: the segment-taper zipper cut a
                                        // visible sliver into the face at 240p
 // Teardrop reshaping (per-ring, ring 0 = bottom): radius multiplier in
 // per-mille of the sphere ring, and a per-ring forward lean. 1000/0
@@ -96,9 +102,32 @@ constexpr int kBodyPoleSegments = 16;  // uniform: the segment-taper zipper cut 
 //     from a cosmetic change into a PREREQUISITE: on a ball the outward surface
 //     normal is trivially the direction from the centre, which is what makes
 //     the eye parts able to turn to face along it.
+// ⚠ THESE TWO LISTS MUST HAVE EXACTLY kBodyRings ENTRIES. C++ aggregate
+// initialisation SILENTLY ZERO-FILLS a short list -- it is not an error and not
+// a warning -- and make_body multiplies each ring's radius by its taper, so a
+// zero-filled tail collapses those rings onto the axis. Pass 14 R2(a) raised
+// kBodyRings 11 -> 21 and left these at 11 entries: the top TEN rings of the
+// ball became a funnel, the face opened into a bowl and the eye floated free,
+// and the build was clean. The static_assert below turns that into a compile
+// error instead of a picture nobody may think to look at.
 constexpr int kBodyTaperPm[kBodyRings] = {1000, 1000, 1000, 1000, 1000, 1000,
                                           1000, 1000, 1000, 1000, 1000};
 constexpr int kBodyLeanXMm[kBodyRings] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+// Only the SHORT list needs guarding: an over-long list is already a hard error
+// ("too many initializers"). A taper of zero is never an authored value, so it is
+// the sentinel the zero-fill trips over. (kBodyLeanXMm cannot be guarded this way
+// because 0 IS its authored value -- extend that one by hand, and by eye.)
+constexpr bool body_taper_fully_authored() {
+  for (int i = 0; i < kBodyRings; ++i) {
+    if (kBodyTaperPm[i] <= 0) return false;
+  }
+  return true;
+}
+static_assert(body_taper_fully_authored(),
+              "kBodyTaperPm has fewer entries than kBodyRings: the tail was "
+              "zero-filled and those rings collapse to the axis. Extend BOTH "
+              "kBodyTaperPm and kBodyLeanXMm to kBodyRings entries.");
 
 // ---- the three hinge balls (the drawn nodes the loop articulates around) --
 // PASS 3 (R12): the BALLS are the thickest points on the antenna — raised
