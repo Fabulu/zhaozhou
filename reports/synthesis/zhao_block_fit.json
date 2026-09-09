@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "2711763f6e7c2e32e38a454e8cddad0d999fe5d3",
+    "newestRunCommit":  "5a500d47d824132f37f463a9e952c0b4dcec09e3",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -784,6 +784,22 @@
                                               "registers 3216 \u003e allowed 700 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)",
                                               "ALM 1886 \u003e allowed 900"
                                           ]
+                   },
+                   {
+                       "module":  "zhao_raster_perspuv_svc@map",
+                       "status":  "map_only",
+                       "sourceCommit":  "5a500d47d824132f37f463a9e952c0b4dcec09e3",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "425ba288ef73d0889a3fd067b20b133ee2139b89431ef737d8168f86d8d730c8",
+                       "variantOf":  "zhao_raster_perspuv_svc",
+                       "seconds":  150.2,
+                       "sourcesHashed":  1,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  3361,
+                       "blockMemoryBits":  256,
+                       "dspBlocks":  6,
+                       "virtualPins":  267
                    },
                    {
                        "module":  "zhao_raster_rcp24_svc",

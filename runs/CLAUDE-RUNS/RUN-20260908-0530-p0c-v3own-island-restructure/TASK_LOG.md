@@ -2044,3 +2044,47 @@ Both written today, both to guard against precisely this class of defect:
 And my first demonstration of that used a script BLOCK, which is not the shape
 the queue uses. The conclusion held, but it proved the wrong half; re-tested on
 a real `.ps1` file before acting.
+
+## OWNER BRIEF: MEMORY-FIRST RESOURCE RESCUE (received 09:15, merged)
+
+`reports/ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt`, 2,575 lines,
+plus an evidence zip. Arrived on this branch while the perspuv map was running;
+the push rejection is what surfaced it.
+
+**Objective: fewer than 95 physical DSP blocks (target <= 94).**
+
+**Authorised now (0.1):** acknowledge in durable docs; correct the resource
+definitions, evidence classification and census; record the post-texture
+programme and gates; continue texture. **Not authorised now:** any projector,
+pose or culling rewrite; a second Quartus job against a live fit; a full island
+fit for this document; changing texture acceptance criteria.
+
+### It corrects my work, and I tested every factual claim before accepting it
+
+| claim | verdict |
+|---|---|
+| a second ledger `zhao_block_map.json` exists that the census never opens | **TRUE** |
+| `terrain_normals` full-fit says 18 DSP, a later map says **3** | **TRUE** -- my census overcounts by 15 |
+| `pose_decode` has an 18-DSP map row | **TRUE** -- my census scored it 0 |
+| `terrain_bake` 17, `forge_cliff` 2, both map-only | **TRUE** -- both scored 0 |
+
+So "152 is a floor" is **not defensible in either direction** -- it mixes an
+obsolete overcount with several undercounts. Withdrawn.
+
+### And one error I had the evidence to catch myself
+
+The gate-2 report subtracted **Gate 1's 4,432 MAPPED registers** from **Gate 2's
+5,934 FITTED registers** and called the residual the packets' saving. Different
+stages, different populations. I demonstrated exactly that an hour later --
+`combine` maps at 304 registers and fits at 524 -- and did not connect it.
+
+The brief also confirms two things I got right: excluding the rejected combiner
+from the bill is appropriate (but do NOT also subtract 8 from the island's 17,
+which I did not), and the 11,562-ALM oracle comparison is historical, which I
+had already corrected myself.
+
+And it corrects a claim in my census tool that I was confident about: *"a digest
+of a dirty tree describes nothing"*. Wrong. **Dirtiness and evidence identity are
+separate dimensions** -- a digest can identify the exact bytes of a dirty but
+immutable captured specimen, while a clean commit can carry a mismatched
+parameter profile.

@@ -1,5 +1,25 @@
 # V3 REARCHITECTURE ROADMAP — the texture island, decrufted at fit-gate granularity
 
+> **OWNER BRIEF RECEIVED 2026-09-09 09:15 --
+> `reports/ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt`.**
+>
+> **Accounting correction now; this whole-console implementation queue starts
+> after texture acceptance. Texture gate definitions unchanged.**
+>
+> Owner objective: **fewer than 95 physical variable-precision DSP blocks**
+> (target DSP <= 94), while relieving ALM pressure and keeping texture on its
+> critical path. Section 0.1 authorises exactly four things now: acknowledge the
+> brief, correct the resource definitions and census, record the post-texture
+> programme and its gates, and CONTINUE THE TEXTURE WORK ALREADY IN PROGRESS.
+>
+> Explicitly NOT authorised now: starting a projector, pose or culling rewrite;
+> launching an extra Quartus job against a live island fit; spending a full
+> island fit on this document; or altering texture acceptance criteria because a
+> whole-console plan arrived.
+>
+> The queued terrain rearchitecture on `main` stands and is not replaced by this.
+
+
 2026-09-08. Architect's ordered work plan, written so a weaker agent can follow
 it step by step without re-deriving anything. Authority chain, strongest first:
 
