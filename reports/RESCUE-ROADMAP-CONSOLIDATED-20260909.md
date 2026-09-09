@@ -81,7 +81,37 @@ DSP that do not exist.
 | matrix operand → **18** bits | −18 / −22 | `PROJECT-CORE-OPERAND-WIDTH`, core header | needs a **53° FOV floor** ruling that has never been put to the owner |
 | `geom_cull` → ~2 lanes | ~−9 | my derivation from 333,333 ruled evaluations × ~6 products | unfitted; the derivation is mine, not the repo's |
 | `terrain_bake` v2 | −11 to −14 | today's build | **structural until fit gate T1** |
-| `FILT_LANES=1` on the TMU | −3 | `TEXTURE.TMU.md:524`, measured | the declining condition it names ("if the census ever needs those three") is now met |
+| ~~`FILT_LANES=1` on the TMU~~ | ~~−3~~ | `TEXTURE.TMU.md:524` | **STRUCK — see the correction below.** The block is not in the machine |
+
+### Correction, same day: `FILT_LANES=1` is not money
+
+I listed it above and then checked it. The measurement is real and the lever is
+not, for the same reason twice over:
+
+* **Neither island instantiates a TMU at all.** `zhao_texture_island_v3_top` and
+  `zhao_texture_island_top` mention `zhao_texture_tmu` only in comments — they
+  transcribe `decode16` inline. So the frontier's DSP are not inside the
+  island's 17.
+* **`zhao_texture_tmu` is instantiated by exactly one file**, and it is
+  `fpga/rtl/synth/zhao_pair_tmu_cache.sv` — a bench characterization probe. The
+  console does not contain this block. Its manifest entry says so:
+  `superseded by zhao_texture_tmu_pipe`.
+
+So `FILT_LANES=1` would save 3 DSP on hardware that is not in the machine, which
+is the same error as the `material_combine_v1` charge and the `geom_skin`
+frontier: **a real measurement of a block the console will not contain.**
+
+**And the check turned up something worth more than the lever.** The SHIPPING
+TMU, `zhao_texture_tmu_pipe` — instantiated at `zhao_prod_top.sv:4578` — has
+**no measured numbers of any kind**: its row is `failed:quartus_fit.exe`, DSP
+null, ALM null. It carries exactly ONE non-comment multiply operator against
+`zhao_texture_tmu`'s eleven, so its DSP is probably small; but *probably* is not
+a measurement, and **it is not in the 192.** The 192 is an undercount by however
+much the shipping TMU costs.
+
+One thing genuinely banked and worth recording: `zhao_texture_tmu@pre-rearch`
+measures **28 DSP** against today's 6. That rearchitecture already took 22 out,
+and the frontier rows are what remains of the evidence for it.
 
 **These three levers all sit on the same nine products** — sharing, row
 multiplexing, and width. Whether they add, multiply or overlap is the question
