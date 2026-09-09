@@ -105,6 +105,16 @@ if ($onMain) {
     } else {
         Write-Output '   no direction-shaped filenames differ from HEAD'
     }
+    # Same subject-line scan on main. Capped, because main carries every lane and
+    # 293 commits of creature work is what buried the signal on the first run.
+    $mainAsk = & git log --format='%h %s' 'HEAD..origin/main' 2>$null |
+        Where-Object { $_ -imatch 'agent,? please read|please read' }
+    if ($mainAsk) {
+        $n = ($mainAsk | Measure-Object).Count
+        Write-Output "   $n commit subject(s) on main addressed to the agent (newest 8):"
+        $mainAsk | Select-Object -First 8 | ForEach-Object { Write-Output "      $_" }
+        Write-Output '   Files:  git show --name-only --format= <sha>'
+    }
 }
 
 $changed = @()
@@ -122,6 +132,27 @@ $dirf = @($paths | Where-Object { $_ -match 'OWNER-DIRECTION|DIRECTION|INSTRUCT'
 if ($dirf.Count -gt 0) {
     Write-Section 'DIRECTION-SHAPED FILENAMES'
     $dirf | ForEach-Object { Write-Output "   $_" }
+}
+
+# THE OWNER SIGNALS IN THE COMMIT SUBJECT, NOT ALWAYS IN THE FILENAME.
+#
+# Found by the positive control on the --diff-filter=AM change: `bumomapping.md`
+# is owner direction for terrain bump mapping, and its filename says nothing --
+# the signal is the commit subject, "Agent please read - terrain bump mapping".
+# There are at least nine such commits in this repo's history and their files are
+# named things like `bumomapping.md`, so a filename-only detector misses the
+# owner's actual convention. Checking the subject line is the reliable half.
+$askCommits = & git log --format='%h %s' "HEAD..$upstream" 2>$null |
+    Where-Object { $_ -imatch 'agent,? please read|please read|owner direction|owner ask' }
+if ($askCommits) {
+    Write-Section 'COMMIT SUBJECTS THAT SAY THIS IS FOR THE AGENT'
+    foreach ($c in $askCommits) {
+        Write-Output "   $c"
+        $sha = ($c -split ' ')[0]
+        & git show --name-only --format='' $sha 2>$null |
+            Where-Object { $_ -and $_.Trim() } |
+            ForEach-Object { Write-Output "        $_" }
+    }
 }
 
 # ---- 4. is a fit alive, and does the incoming change touch RTL? -----------
