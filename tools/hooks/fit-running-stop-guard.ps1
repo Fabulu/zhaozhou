@@ -73,9 +73,23 @@ is not a reason to wait -- find work that does not touch its sources and do it.
 
 To know what is safe: a per-block fit compiles ONLY its own closure, and
 design/fit_targets.yml names exactly which files. Everything outside that list
-is free. The one hard constraint is the live-tree trap (QUARTUS_GOTCHAS.md 11)
--- never edit a file inside the running fit's closure, because the fit reads
-the working tree.
+is free.
+
+AND SO IS THE CLOSURE ITSELF, for a BLOCK fit. run_block_fit.ps1 SNAPSHOTS every
+declared source into <workspace>/src and points the QSF at the copy -- it prints
+"snapshot: N source(s) copied into the workspace; the live tree cannot reach this
+fit" when it does. QUARTUS_GOTCHAS 11 carries a supersession box saying exactly
+this, added 2026-09-03. This message asserted the opposite until 2026-09-09 and
+was costing real caution every half hour: an agent that believes the whole RTL
+tree is frozen for four hours will invent reasons to avoid the work it should be
+doing.
+
+What is still true, and is a DIFFERENT rule: design/fit_targets.yml is re-read
+LIVE at each block's preflight (GOTCHAS 13), so a truncating rewrite of the
+config mid-campaign can still kill it. And a SHELL or composed fit that declares
+no closure has nothing to snapshot, so it does read the tree. Sources and config
+now have different rules, which is exactly the split that gets misremembered as
+one -- check for the snapshot line before assuming either way.
 
 Pick the next item off reports/DOCKET.md or the run's TASK_LOG.md and continue.
 If the honest answer is that every remaining task genuinely requires this
