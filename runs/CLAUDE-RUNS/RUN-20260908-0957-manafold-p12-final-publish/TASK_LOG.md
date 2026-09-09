@@ -439,3 +439,52 @@ constants.
 
 Lane audit clean — **no unpushed commits anywhere**, 14 lanes. QA's two worktrees
 removed properly first, then `manafold-p13-{a,b,c,qa,review}` deleted.
+
+### 04:00 — PASS 14 EXECUTING. Wave 0 (mine) is done.
+
+The architect's plan solved **two four-pass mysteries by finding missing degrees
+of freedom rather than mistuned knobs**:
+
+* **The eye**: the star's plate normal is fixed body-space **+X** while the eye
+  sits at **28.3° azimuth**, and **no orientation DOF exists — that bone is
+  translation-only.** Four passes of thickening were fighting a rotation the rig
+  cannot express.
+* **The lightning**: the look the owner approved, `edge-strands`, drew the figure
+  **edges** with the strand. **Shipping took the mote half and not the edge
+  half.** Four passes of particle constants never had a chance.
+
+It also **corrected me and the review**: it re-derived the eye measurement itself
+and found **~half the "eyes sit too low" reading is the 15° camera pitch**, which
+nobody had separated out, and that **convergence is as much of the fault as
+height** (the sheet's lens tops nearly touch; ours sit ~0.6 R apart).
+
+Lanes: **FACE** (opens with the build-at-32 ablation — two streams blocked on its
+answer), **REEL** (opens on the lightning mechanism, never a gain tweak), **PERF**
+(taunt3 and blown's tumble; R2(b,c) blocked until FACE reports).
+
+**Wave 0, all done:** R10.1 and R10.2 were already closed tonight (the wrap card,
+the `blown` comment, FINDINGS-A's stale 45°). Owner packet built with **Q1's
+picture** — and the 4× crop shows something nobody had asked about: **the mana
+goes out when it dies but THE EYES STAY LIT.** Flagged, not answered.
+
+### 04:20 — I RAISED A FAULT AND THEN REFUTED IT MYSELF
+
+Of the two clips I had marked SUSPECTED:
+
+* **`drift` — ESTABLISHED.** Clipped by the **left** frame edge at f283, back by
+  f287. A brief edge clip, milder and different from `hasty`'s exit.
+* **`fall` — REFUTED. I was wrong.** At f339 the creature **is** in frame, sitting
+  **80 px higher** than I was looking, with its trail below it. I raised it off a
+  native-scale contact sheet and it survived one round of my own review until a
+  2× crop killed it.
+
+**Four instruments on one small question tonight** — *"is the creature in
+frame?"* — three pixel masks outright wrong, the contact sheet wrong once and
+right once, and **a 2× crop of the named frame right every time.** Written up as
+checklist **40** (calibrate a presence metric on a known-negative) and **41** (a
+contact sheet finds a candidate; it cannot confirm one — and *absence* is the
+claim to distrust, because it is the easiest thing to see when you are looking
+for it).
+
+**The cheapest reliable instrument was the last one I tried**, which is the art
+law arriving from the measurement side.
