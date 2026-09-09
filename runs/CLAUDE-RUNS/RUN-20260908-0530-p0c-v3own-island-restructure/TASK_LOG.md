@@ -1911,3 +1911,28 @@ so "ALM over by 2,361" cannot be quoted bare, and lists the 45 unmeasured
 blocks, the map-only rows contributing no ALM, and the 8 dirty-tree rows.
 **Its 152 is not the report's 154** -- different methodology, stated in the
 file rather than reconciled by fudging.
+
+## WHERE I WAS when the @g2-prod fit landed (written before reading its row)
+
+Authoring `design/fit_targets.yml` targets for three `zhao_field_v3_*` blocks --
+part of the 43 that cannot be fitted by anyone because no target exists. Closures
+computed by `tools/quartus/propose_fit_target.py`; rules taken from each block's
+OWN header so the fit tests a stated claim instead of rubber-stamping whatever it
+measures:
+
+| block | sources | rule, and where it comes from |
+|---|---|---|
+| `zhao_field_v3_mulbank` | `+ zhao_field_mul.sv` | `max_dsp: 12` -- header: *"the brief prices at 'four 33-bit lanes map to about 12 DSPs'"* |
+| `zhao_field_v3_len` | `+ zhao_field_isqrt.sv` | `max_alms: 2000` -- header: *"EIGHT ROOTS IS ROUGHLY 2,000 ALMs against ~251 for one"* |
+| `zhao_field_v3_rf` | itself only | `max_m10k: 12` and deliberately **no** `max_alms` -- header: *"the probe's 372 ALM / 12 M10K / 93.14 MHz is a LOWER BOUND on this module, not a measurement of it"* |
+
+**THE NEXT STEP was to paste those three targets in and commit them**, then
+continue down the missing list. Nothing is half-edited: `fit_targets.yml` is
+committed and clean, and the three target texts are reproducible by re-running
+the proposer.
+
+Also noted for whoever picks this up: `propose_fit_target.py` rebuilds the whole
+module graph per invocation (~90 s), so pass every module in ONE call. Three
+separate calls timed out a 5-minute shell.
+
+Now reading the fit.
