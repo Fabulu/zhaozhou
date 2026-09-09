@@ -3788,3 +3788,52 @@ I have not opened.
 the 98 needed, and three of them need a word rather than an architecture.
 
 Report: `reports/DSP-PATH-TO-94-20260909.md`.
+
+## 2026-09-09 -- TERRAIN recons dispatched; and geometry's 90 DSP is ONE primitive
+
+Owner: "If it all depends on terrain, have a fable agent architect terrain stuff
+AFTER you send out recons to send him the relevant info, and then build it. And
+architect it so it saves on the stuff we need to save and uses memory instead
+whenever possible."
+
+**Four terrain recons dispatched** (sonnet, read-only, fact-finding, told to
+report file:line and NOT to propose or edit):
+  1. terrain_bake (17 DSP, ~2,324 est ALM) + bake_delta -- multiplier attribution
+  2. the streaming/residency path -- residency_v2, pagestream, patch, cmd,
+     velocity -- with a MEMORY CLASSIFICATION per array: already-memory /
+     candidate (1 write addr, 1 read addr, wide) / impossible (read+written in
+     full every clock, or 2+ write addresses)
+  3. tess + normals + lod, the 31.10 MHz pair, and whether the m_p_q product
+     register repair is actually PRESENT (a direct claim to verify)
+  4. CONTRACTS and invariants -- the most important one: what must not change,
+     quoting binding lines, plus the B0-B5 gates and the workload numbers
+
+Each was warned about the function-call-multiplier trap and given the Cyclone V
+DSP cost table so their counts can be RECONCILED against measured DSP rather
+than asserted.
+
+**Meanwhile I closed one of the two gaps I had admitted in my own DSP analysis.**
+
+`zhao_geom_cull` = 15 DSP = FIVE multiply sites x 3:
+    193 function mul_pc    (33 x 32 signed)
+    209 function mul_slack (32 x 34 signed)
+    351 sq_prod = sq_operand * sq_operand
+    369 dot   = mul_pc(pl_a,cx) + mul_pc(pl_b,cy) + mul_pc(pl_c,cz)
+    373 slack = mul_slack(ev_r, len_ceil[...])
+
+**And that dot product is structurally the SAME primitive as project_core's
+matrix row.** project_core: mat[0]*vx + mat[1]*vy + mat[2]*vz, three rows, nine
+sites. geom_cull: one plane dot, three sites. pose_decode: quat2mat + mat3x4_mul,
+eighteen. A three-term signed dot product, provisioned PRIVATELY in every block
+that wants one.
+
+So geometry's 90 DSP against a ~24 allocation is the projector finding at larger
+scale: **the duplication is not of a BLOCK, it is of a PRIMITIVE.**
+
+What does NOT follow: that the lanes collapse to one. The lane count is a
+THROUGHPUT calculation per client, not a preference -- the shared projector was
+only defensible because 903,552 projections fit a ~1,333,333-clock window. Do
+that arithmetic before any RTL.
+
+Still unopened: shell_top's 16 DSP, a composed hierarchy rather than a leaf, so
+unlikely to be one primitive.
