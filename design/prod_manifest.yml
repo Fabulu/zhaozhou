@@ -237,6 +237,33 @@ selected_profiles:
   - zhao_texture_island_v3_top: "@g2-prod"   # MIGRATION_SHADOWS=0, the shipping build
   - zhao_geom_skin: null                     # unlabelled default; @MUL_LANES=* are alternatives
 
+# ==============================================================================
+# UNPRICED REQUIREMENTS -- specified functions with NO implementation to measure
+# ==============================================================================
+# Added 2026-09-09. Owner brief 2.1 defines the term: "intended functionality
+# with no applicable measurement", and 1.3 names the consequence: "GEOM.LIGHT is
+# still a required specified function in the inspected contract; normal-map
+# detail and base terrain lighting cannot disappear from the bill just because
+# they do not yet have accepted implementations."
+#
+# These five have a ratified contract, NO RTL file, and -- until this entry --
+# no line anywhere in the bill. They were not among the census's 34 "unpriced"
+# rows either, because that count walks manifest entries and these had none.
+# Invisible rather than unknown, which is the worse of the two.
+#
+# They are NOT in `top:`: there is nothing to fit, and a zero row would be the
+# substituted zero the brief forbids. They are listed so the bill can say the
+# machine is incomplete by name, and so packet A0's gate -- "every required
+# function has a non-silent row" -- can actually be met.
+#
+# Each is a real DSP/ALM cost the 192-DSP figure does not contain.
+unpriced_requirements:
+  - GEOM.LIGHT: zhao_geom_light  vertex lighting; one law, three normal producers; RTL not built
+  - TERRAIN.SHADE: zhao_terrain_shade  terrain shading; contract maturity REFERENCE_COMPLETE, RTL not built
+  - MATERIAL.RESOLVE: zhao_material_resolve  material resolve; RTL not built
+  - FORGE.SHADOW: zhao_forge_shadow  forge shadow; RTL not built
+  - MEM.UPLOAD: zhao_mem_upload  upload path; RTL not built
+
 excluded:
   # The texture island's own children are NOT listed here any more.
   #

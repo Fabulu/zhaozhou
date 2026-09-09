@@ -589,6 +589,37 @@ def main():
     print("     %d have a target and have not been run" % (len(unpriced) - len(notgt)))
     print()
 
+    # SPECIFIED FUNCTIONS WITH NO IMPLEMENTATION AT ALL.
+    #
+    # These are not in `top:` -- there is nothing to fit -- so they are not among
+    # the "unpriced" rows above either. They were INVISIBLE to every version of
+    # this tool until 2026-09-09. Brief 1.3: they "cannot disappear from the bill
+    # just because they do not yet have accepted implementations."
+    try:
+        man = io.open(os.path.join("design", "prod_manifest.yml"),
+                      encoding="utf-8", errors="replace").read()
+    except OSError:
+        man = ""
+    j = man.find(NLC + "unpriced_requirements:")
+    unbuilt = []
+    if j >= 0:
+        for line in man[j:].split(NLC)[2:]:
+            st = line.strip()
+            if st.startswith("#") or not st:
+                continue
+            if not st.startswith("- "):
+                break
+            unbuilt.append(st[2:])
+    if unbuilt:
+        print()
+        print("  SPECIFIED BUT NOT BUILT (%d) -- no RTL, nothing to measure, and"
+              % len(unbuilt))
+        print("  therefore NOT in the %d DSP above. The machine is incomplete by"
+              % t["dsp"])
+        print("  this much before any of it is optimised:")
+        for u in unbuilt:
+            print("     %s" % u)
+
     pf = [r for r in rows if r["policy_failed"]]
     if pf:
         print("  COUNTED BUT GATE-FAILED (%d): the fit completed and the budget"
