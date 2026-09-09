@@ -70,6 +70,16 @@ module zhao_texture_metajoin #(
     output var logic [7:0]           rd_frac_v_o,
     output var logic                 rd_byte_sel_o,
     output var logic                 rd_nibble_o,
+    // D0d, CLOSED. The row has always STORED the owner generation and the block
+    // has always differenced it internally into `rd_gen_mismatch_o` -- but there
+    // was no way out, so the island packed a literal `8'd0` where the identity
+    // would travel and no downstream stage could notice a stale join.
+    //
+    // The port is only meaningful BECAUSE of the D0 repair: `rd_gen_q` is now
+    // captured inside the same gate as the row, so what leaves here belongs to
+    // the same read as the data beside it. Before that gate it tracked whatever
+    // address was being offered, and exporting it would have exported a lie.
+    output var logic [GENW-1:0]      rd_owner_gen_o,
 
     // ---- evidence -----------------------------------------------------------
     // rd_gen_mismatch_o is the alignment check the descriptor generation exists
@@ -195,5 +205,11 @@ module zhao_texture_metajoin #(
   assign rd_frac_u_o       = rd_q[FRACU_LO +: 8];
   assign rd_byte_sel_o     = rd_q[BSEL_LO];
   assign rd_nibble_o       = rd_q[NIB_LO];
+
+  // The STORED generation, not the offered one. `rd_gen_q` is what the row
+  // carried when it was read; a consumer comparing it against the generation in
+  // its own token can see a stale join without trusting this block to have
+  // noticed. That is the difference between an instrument and a contract.
+  assign rd_owner_gen_o    = rd_gen_q;
 
 endmodule

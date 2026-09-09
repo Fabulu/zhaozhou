@@ -2877,6 +2877,7 @@ module zhao_texture_island_v3_top #(
   logic [7:0]  mj_rd_frac_u, mj_rd_frac_v;
   logic        mj_rd_byte_sel, mj_rd_nibble, mj_rd_valid;
   logic [31:0] mj_writes, mj_illegal;
+  logic [GENW-1:0] mj_rd_owner_gen;
   logic [39:0] disp_clut_meta, disp_near_meta, disp_bil_meta, disp_err_meta;
   // ---- THE 21-BIT SAMPMETA VIEW OF A 40-BIT RECORD -------------------------
   // The three response-side readers below want exactly the fields `sampmeta_m`
@@ -2896,7 +2897,15 @@ module zhao_texture_island_v3_top #(
   // The bank's registered result, repacked into the record layout the queue
   // carries. One cycle late relative to the response it belongs to -- which is
   // exactly the alignment the next step must close, and why nothing reads it.
-  wire [39:0] mj_meta_packed_c = {8'd0, mj_rd_pal_slot, mj_rd_pal_gen,
+  // PACKET 3 / D0d: the top eight bits were a literal `8'd0`. They now carry the
+  // generation the BANK holds for the row it just returned, so the queued 40-bit
+  // record's story is honest end to end -- the identity the bank validated
+  // travels with the data it validated.
+  //
+  // It is only sound because of the D0 repair. Before the read register was gated,
+  // `rd_gen_q` followed whatever address was being offered, and this field would
+  // have carried a generation belonging to a different response.
+  wire [39:0] mj_meta_packed_c = {mj_rd_owner_gen, mj_rd_pal_slot, mj_rd_pal_gen,
                                   mj_rd_format, mj_rd_frac_v, mj_rd_frac_u,
                                   mj_rd_byte_sel, mj_rd_nibble, 1'b0};
 
@@ -2939,6 +2948,7 @@ module zhao_texture_island_v3_top #(
       .rd_frac_v_o   (mj_rd_frac_v),
       .rd_byte_sel_o (mj_rd_byte_sel),
       .rd_nibble_o   (mj_rd_nibble),
+      .rd_owner_gen_o(mj_rd_owner_gen),
       .writes_o          (mj_writes),
       .reads_o           (meta_shadow_reads_o),
       .rd_illegal_sidx_o (mj_illegal),
