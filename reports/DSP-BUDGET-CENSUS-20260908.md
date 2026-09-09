@@ -304,21 +304,36 @@ much, and the reason is worth stating plainly.
 
 ```
 measured sum today                                     154
-  swap svc -> v3                                        -3   MEASURED
+  swap svc -> v3                                        -3   MEASURED, invariant
   delete zhao_texture_combine                           -8   MEASURED
-  quarter-square in material_combine_v2                 -2   ARITHMETIC
+  quarter-square in material_combine_v2                 -2   ARITHMETIC, bit-exact
+  project_core matrix operand -> 18 bits                -18  MEASURED calibration
                                                     -------
-  every lever with evidence behind it                  141
+  every lever with evidence behind it                  123
 device available                                        112
                                                     -------
-  still over by                                         29
+  still over by                                         11
 ```
 
-**Everything currently supported by evidence closes 13 of a 42-DSP gap, and 42
-blocks in the manifest have still never been fitted, so the starting figure can
-only rise.** The remaining 29 has exactly one place to come from: the **66 DSP in
-two instances of `zhao_project_core`**, which is 43% of the whole budget and was
-already the single largest item before gate 4.
+**Updated later the same day.** This block first stopped at 141 and "over by 29",
+before `calibration.json`'s asymmetric points were read. **`32x18` costs 2 DSP
+where `32x32` costs 3**, across nine matrix products in each of two cores, so the
+matrix operand alone is **-18** -- and that half does NOT depend on bounding the
+playable world, which is what `docs/OWNER_DOCKET.md` has had this blocked on since
+2026-08-24.
+
+The caveat travels with the number: 18 bits is +-2.0 in Q16.16, which caps the
+longest usable lens near a 53 degree vertical field of view, and **nothing between
+18 and 24 has ever been measured**. Five points are queued to find where the cost
+really steps. See `PROJECT-CORE-OPERAND-WIDTH-20260909.md`.
+
+**So the levers with evidence close 31 of a 42-DSP gap, not 13** -- and 42 manifest
+blocks have still never been fitted, so the starting figure can only rise. The
+last 11, plus whatever those blocks add, comes from one place: the **66 DSP in two
+instances of `zhao_project_core`**, 43% of the budget and the single largest item
+before gate 4. Narrowing the COORDINATE to 27 bits as well takes those nine
+products from 2 DSP to 1 -- another **-18**, total **105**, under budget. That is
+the half that needs the world-size proof, and it is the owner's call.
 
 So gate 4 is good news about the reciprocal tile and no news about the budget.
 The DSP problem is a `zhao_project_core` problem, and it has been since the census

@@ -155,3 +155,4 @@ reports/synthesis/blockpaths/*.sta.rpt
 
 # Transient ctest tee output; the evidence is the ctest summary, not the log.
 fast-suite.log
+build-*.log
