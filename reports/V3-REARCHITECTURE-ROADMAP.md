@@ -129,13 +129,20 @@ summary paths (`tools/quartus/path_census.py`, committed) shows:
 * a *zero-delay* reciprocal would move that ceiling **4.08 MHz** and then stop,
   because the next path leaves the same source register for `u_own` itself.
 
-So the swap stands on ALM and DSP. **The cheaper timing target is
-`live_cnt_q[6]`'s combinational fanout** -- maintain the credit comparison as a
-registered flag instead of recomputing it from the counter each cycle. That hits
-43 of 43 internal paths, costs no DSP and essentially no area, and carries a real
-correctness obligation (a registered credit must not permit over-issue on the
-cycle it changes), so it needs its own directed test. It is inside the running
-`@g2-prod` fit's closure and therefore queued, not started.
+So the swap stands on ALM and DSP. **The timing target is NOT what I first
+wrote here.** I proposed registering the credit comparison; `v3own.sv:1306`
+already does that, from `live_next_c` rather than `live_cnt_q` so it is exact
+rather than a cycle late, and the file explains why. `OWNERS=64` with `CNTW=7`
+makes `credit_ok_q` a function of bit 6, which is why Quartus launches the path
+from a replica named `live_cnt_q[6]~DUPLICATE`.
+
+The path detail says it is **72% interconnect** -- 8.94 ns of routing over 20
+hops against 3.53 ns of cell delay over 7 levels -- launching at `FF_X21_Y15` and
+landing in a carry chain at `MLABCELL_X34_Y65`, about fifty rows away. A distance
+problem, not a depth problem. The options are a relay flop on the island's credit
+route (a designed handshake change: a delayed ready must not admit a 65th owner)
+or floorplanning `u_own` beside `u_rcp`. Both are bounded by the same 4.08 MHz
+ceiling, so this stays low priority.
 
 **And the budget picture is unchanged by any of it.** Every DSP lever with
 evidence behind it -- the swap (-3), deleting `zhao_texture_combine` (-8), the

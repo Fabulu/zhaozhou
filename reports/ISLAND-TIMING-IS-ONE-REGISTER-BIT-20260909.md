@@ -70,27 +70,75 @@ the leaf rows imply does not transfer, and neither does any part of the +44.71.
 advantage is large and directional. Gate 4's Fmax column is a true statement about
 two leaf fits and a false lead about the island.
 
-## What to do instead, and it is cheaper
+## What to do instead -- CORRECTED, after reading the block and the path detail
 
-`live_cnt_q[6]` is the source of **43 of 43** internal paths. Nothing else in the
-island's top 200 is internally critical at all. The target is that node's
-combinational fanout, not the block it happens to reach:
+**My first answer here was wrong, and it was wrong in the laziest available way:
+I proposed a fix without reading the module.** It said to "maintain the credit
+comparison as a registered flag rather than recomputing it from the counter each
+cycle". `zhao_texture_v3own.sv:1306` already does exactly that:
 
-* the credit comparison should be maintained **incrementally as a registered
-  flag** rather than recomputed from the counter each cycle -- an
-  increment/decrement already happens, so the flag can move with it;
-* `fence_open_q`'s dependence on the same bit is the second path and wants the
-  same treatment.
+```systemverilog
+credit_ok_q <= (live_next_c < CNTW'(OWNERS));
+```
 
-That is a small, local change inside `zhao_texture_v3own`, it targets every
-internal path at once, and it costs no DSP and essentially no area. It has a real
-correctness obligation -- a registered credit must not permit over-issue on the
-cycle it changes -- so it is a designed change with its own directed test, not a
-retiming tweak.
+and lines 314-321 explain why it is taken from `live_next_c` -- the value
+`live_cnt_q` is *about to* take -- rather than from `live_cnt_q` itself:
 
-**Not done in this pass:** the `@g2-prod` island fit is running and
-`zhao_texture_v3own.sv` is inside its closure. Live-tree trap, `QUARTUS_GOTCHAS`
-section 11.
+> "THE CREDIT IS EXACT, NOT STALE ... Registering `live_cnt_q < OWNERS` itself
+> would have been one cycle late and could have admitted a 65th owner; taking it
+> from the next-state cannot."
+
+So the block had already made the move, for a better reason than I had, and
+`adm_ready_o = credit_ok_q && fence_open_q` is two registered bits and an AND.
+
+### Why the launch node is still named `live_cnt_q[6]`
+
+`OWNERS = 64` and `CNTW = SLOTW + 1 = 7`, so `live_next_c < 64` **is** `!live_next_c[6]`.
+`credit_ok_q` is therefore a one-bit function of bit 6 of the next live count, and
+`live_cnt_q[6]` is bit 6 of the current one. They are near-duplicate registers,
+Quartus keeps a replica to drive the far consumer, and the replica carries the
+name `live_cnt_q[6]~DUPLICATE`. The timing report is not pointing at a different
+signal than the credit -- it is pointing at the credit under the counter's name.
+
+### And the path is not deep, it is LONG
+
+From the `-detail full_path` walk of path #7:
+
+| | value | share |
+|---|---|---|
+| cell delay, 7 logic levels | 3.530 ns | 28% |
+| **interconnect, 20 hops** | **8.940 ns** | **72%** |
+
+with the three worst hops carrying 7.097 ns between them:
+
+```
+FF_X21_Y15   (live_cnt_q[6]~DUPLICATE)
+   -> 2.337 ns -> MLABCELL_X34_Y52
+   -> 2.904 ns -> LABCELL_X36_Y66
+   -> 1.856 ns -> LABCELL_X33_Y68
+   ...          -> MLABCELL_X34_Y65  (the Add7 carry chain, ~0.049 ns per stage)
+```
+
+**The launch register is at Y15 and the consumer is at Y52-Y68.** Roughly fifty
+rows of die. This is a placement and distance problem wearing the costume of a
+logic problem, and no amount of shortening the RTL cone addresses three long
+wires.
+
+### So the real options, and neither is a one-line tweak
+
+1. **A relay flop on the island's `credit_available` route into `u_rcp`.** That
+   is where the distance is actually paid. It is a *designed* change, not a
+   retime: delaying a ready by a cycle without also holding admission would
+   permit exactly the 65th owner the block's own comment says cannot be allowed,
+   so it needs a matching credit adjustment and its own directed test.
+2. **Floorplan `u_own` next to `u_rcp`.** No RTL change and no correctness risk,
+   but LogicLock regions on this design are unexplored territory.
+
+Either way the ceiling above still applies: **4.08 MHz, then the next path out of
+the same register stops it.** That bound is what makes this a low priority
+finding despite being the island's worst internal path -- and it is why the
+correction matters more than the original claim did. I would have spent the
+change on a block that was already correct.
 
 ## The correction this also forces
 
