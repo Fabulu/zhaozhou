@@ -63,9 +63,57 @@ import numpy as np
 
 from rgbframe import load
 
-HOLD_RATIO_MIN = 0.45  # floor/median below this = there is a real trough
-HOLD_FRAC = 0.5        # "held" = under half the clip's own median motion
-HOLD_MIN_RUN = 12      # ...for at least this many consecutive frames
+# --- THE THRESHOLD, AND THE CALIBRATION THAT CHOSE IT (2026-09-09) ---------
+#
+# The FIRST rule written here -- "held" = under half the clip's own MEDIAN --
+# FAILED its own calibration, and that failure is the useful part of this file.
+# It reported ZERO holds in BOTH clips:
+#
+#     trick  (known positive)  median 1.686  floor 0.800  -> 0 runs
+#     taunt3 (known negative)  median 2.160  floor 0.966  -> 0 runs
+#
+# It failed because a median-relative rule asks "is this SLOWER THAN TYPICAL",
+# and the docstring above says in as many words that the wrong question is the
+# one about slower. trick's handstand sits at 0.86-1.15 against a 0.843
+# threshold -- a real, eye-visible, 120-frame hold missed by four hundredths.
+#
+# THE RIGHT QUESTION IS "IS THIS NEAR THE CLIP'S OWN ZERO". So the threshold is
+# a multiple of the FLOOR (p5), not a fraction of the median. Nothing on this
+# creature ever reaches literal zero -- the bob and the breath never stop -- so
+# the clip's own quietest 5% IS its zero, and a hold is a long run that stays
+# down there while the clip elsewhere has peaks 5-8x higher.
+#
+# ⚠ AND THE MANA FOLD MUST BE ABLATED (`MANA_ABLATE=1`) FOR THE MEASUREMENT.
+# The docstring's warning is not a caveat to read past: the fold runs on every
+# shipped clip and never holds, so it adds a moving floor that is a large
+# fraction of the signal. Removing it AT THE SOURCE -- an ablation, not a mask
+# (four masks on this creature have been confidently wrong) -- is what turns a
+# knife-edge separation into a wide one:
+#
+#     multiple      1.2   1.3   1.4   1.5   1.6   1.7   1.8   2.0
+#     mana ON   trick   -     -     H     H     H     H     H     H
+#               taunt3  -     -     -     -     X     X     X     X     <- narrow
+#     mana OFF  trick   H     H     H     H     H     H     H     H
+#               taunt3  -     -     -     -     -     -     -     X     <- wide
+#         (H = hold found in the known positive; X = spurious hold in the
+#          known negative; - = nothing.  Full sweep in PASS-14-FINDINGS-PERF.)
+#
+# 1.5 is the MIDDLE of the robust band (1.2-1.8), not an edge of it. That is
+# the whole defence against having tuned the instrument to the answer: the
+# verdict does not change anywhere across a 1.5x-wide range of the constant.
+# A hold is only a meaningful question in a clip that also has an ATTACK
+# (07-MOTION-STYLE 8a: fast arrival INTO a held extreme). peak/floor is that,
+# measured. It separates enormously -- both real clips sit at 9.1, while every
+# degenerate signal a floor-relative rule would otherwise mis-call sits at 2.2
+# or below (a slow half-amplitude oscillation 2.2, a merely-slower stretch 1.4,
+# constant motion 1.0). 4.0 is the middle of a 4x-wide gap, not an edge of it.
+# ⚠ It does NOT gate out the known negative -- taunt3 is 9.1 and is judged on
+# its runs like anything else. A guard that excluded the negative would be
+# cheating, which is the failure mode item 40 exists to catch.
+HOLD_RANGE_MIN = 4.0   # peak/floor below this = no attack, so no beat to hold
+HOLD_FLOOR_MULT = 1.5  # "held" = within this multiple of the clip's own floor
+HOLD_MIN_RUN = 16      # ...for at least this many consecutive frames.
+                       # 07-MOTION-STYLE: 16 frames is where a beat registers.
 
 
 def series(frame_dir, box=None):
@@ -96,18 +144,24 @@ def summarise(d):
         "floor": float(np.percentile(d, 5)),
         "peak": float(d.max()),
         "ratio": float(np.percentile(d, 5) / max(np.median(d), 1e-9)),
+        "range": float(d.max() / max(np.percentile(d, 5), 1e-9)),
     }
 
 
-def troughs(d, frac=HOLD_FRAC, min_run=HOLD_MIN_RUN):
-    """Runs of >= min_run frames whose motion is under frac * median.
+def troughs(d, mult=HOLD_FLOOR_MULT, min_run=HOLD_MIN_RUN):
+    """Runs of >= min_run frames whose motion stays within mult * the FLOOR.
 
-    A HOLD is a RUN, not a low frame. 07-MOTION-STYLE: 16+ frames for a beat to
-    register, so the default run length is deliberately a little under that --
-    the tool reports what is there and the reader judges whether it is long
-    enough to be a beat.
+    A HOLD is a RUN, not a low frame, and it is measured against the clip's own
+    zero (p5), never against its median -- see the long note on the constants.
+    The tool reports what is there and the reader judges whether it is long
+    enough, and in the right place, to be a beat.
     """
-    thr = float(np.median(d)) * frac
+    flr = float(np.percentile(d, 5))
+    thr = flr * mult
+    if float(d.max()) / max(flr, 1e-9) < HOLD_RANGE_MIN:
+        # No attack anywhere: the clip moves at one rate, so "near its floor"
+        # describes most of it and would report a hold that nobody can see.
+        return thr, []
     runs, start = [], None
     for i, v in enumerate(d):
         if v < thr and start is None:
@@ -127,8 +181,11 @@ def report(label, d):
     print("%s: %d frame pairs" % (label, s["n"]))
     print("    median %.3f   floor(p5) %.3f   peak %.3f   floor/median %.3f"
           % (s["median"], s["floor"], s["peak"], s["ratio"]))
-    print("    holds (runs >= %d frames under %.3f = %.2f x median): %d"
-          % (HOLD_MIN_RUN, thr, HOLD_FRAC, len(runs)))
+    print("    peak/floor %.2f%s"
+          % (s["range"], "" if s["range"] >= HOLD_RANGE_MIN
+             else "   <- NO ATTACK: holds not reported (see HOLD_RANGE_MIN)"))
+    print("    holds (runs >= %d frames under %.3f = %.2f x floor): %d"
+          % (HOLD_MIN_RUN, thr, HOLD_FLOOR_MULT, len(runs)))
     for a, b, m in runs:
         print("        frames %4d-%4d  (%3d frames)  mean %.3f"
               % (a, b, b - a + 1, m))
@@ -143,8 +200,10 @@ def plot(path, label, d, runs):
     ax.plot(np.arange(d.size), d, lw=0.8, color="#1f4f8f")
     med = float(np.median(d))
     ax.axhline(med, color="#888888", lw=0.7, ls="--", label="median %.2f" % med)
-    ax.axhline(med * HOLD_FRAC, color="#c04040", lw=0.7, ls=":",
-               label="%.2f x median" % HOLD_FRAC)
+    flr = float(np.percentile(d, 5))
+    ax.axhline(flr * HOLD_FLOOR_MULT, color="#c04040", lw=0.7, ls=":",
+               label="hold line %.2f (= %.2f x floor)"
+                     % (flr * HOLD_FLOOR_MULT, HOLD_FLOOR_MULT))
     for a, b, _ in runs:
         ax.axvspan(a, b, color="#ffd24d", alpha=0.45)
     ax.set_xlabel("frame")
@@ -180,30 +239,42 @@ def selftest():
     moved = np.abs(np.roll(a, 3, axis=1) - a).mean()
     assert moved > 40, "a shifted frame must differ a lot, got %r" % moved
     # A synthetic clip shaped like the one we are authoring: mostly moving,
-    # with two genuine holds in it. The threshold is RELATIVE to the clip's own
-    # median, so a fixture that is mostly hold has the hold as its median and
-    # reports nothing -- which is correct behaviour and was worth finding here
-    # rather than on a render.
+    # with two genuine holds in it.
     d = np.concatenate([np.full(100, 3.0), np.full(40, 0.2),
                         np.full(100, 3.0), np.full(40, 0.2),
                         np.full(60, 3.0)])
     _, runs = troughs(d)
     assert len(runs) == 2, "expected two held runs, got %r" % (runs,)
-    assert summarise(d)["ratio"] < HOLD_RATIO_MIN
-    # ...and the FAILABLE LEG: continuous motion must yield NO held run at all.
-    # This is the leg that matters -- a detector that never returns "no hold"
-    # is not a detector (gate checklist 40).
-    d2 = 2.4 + 0.9 * np.sin(np.arange(368) / 9.0)
+    assert summarise(d)["range"] >= HOLD_RANGE_MIN
+    # ...and the FAILABLE LEGS. A detector that never returns "no hold" is not
+    # a detector (gate checklist 40), so there are three of them, and each one
+    # fails for a DIFFERENT reason -- two through the attack guard, and one
+    # through the run length, so neither mechanism can be doing all the work.
+    #
+    # (1) Continuous motion at one rate. Under a floor-relative rule this is
+    #     the dangerous case -- the floor IS the median -- and the attack guard
+    #     is what stops it.
+    d2 = np.full(368, 2.4)
     _, runs2 = troughs(d2)
-    assert not runs2, "a clip that never stops must report no hold, got %r" % (runs2,)
-    # ...and "merely slower" must ALSO not register, which is the whole finding:
-    # a 30%-slower stretch is not a hold.
+    assert not runs2, "constant motion must report no hold, got %r" % (runs2,)
+    # (2) "Merely slower" must ALSO not register, which is the whole finding.
     d3 = np.full(368, 2.4)
     d3[100:160] = 1.7
     _, runs3 = troughs(d3)
     assert not runs3, "'slower' must not read as a hold, got %r" % (runs3,)
+    # (3) THE LEG THE GUARD CANNOT ANSWER: a clip with a huge attack (so it is
+    #     judged on its runs, not gated) whose quiet moments are all BRIEF. A
+    #     hold is a RUN. Five-frame dips are not a beat and must not read as one.
+    d4 = np.full(368, 2.0)
+    d4[10::40] = 9.0
+    for a in range(25, 368, 40):
+        d4[a:a + 5] = 0.6
+    assert summarise(d4)["range"] >= HOLD_RANGE_MIN, "leg 3 must not be gated"
+    _, runs4 = troughs(d4)
+    assert not runs4, "brief dips must not read as a hold, got %r" % (runs4,)
     print("holdmeter selftest OK (zero on identical frames; catches a held run; "
-          "reports NO hold on continuous motion AND on merely-slower motion)")
+          "reports NO hold on constant motion, on merely-slower motion, and on "
+          "an ungated clip whose quiet moments are all too brief)")
     return 0
 
 

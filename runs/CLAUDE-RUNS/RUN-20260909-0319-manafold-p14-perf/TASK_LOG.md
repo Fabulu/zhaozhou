@@ -94,3 +94,40 @@ question I will calibrate against a frame whose answer is already known and
 independent of me: **`trick` f172–f286 must show a plateau** (the review found
 the handstand hold by eye) **and taunt3-before must show none** (the review
 found no hold by eye). A metric that cannot reproduce both is not used.
+
+---
+
+## [RESUMED 2026-09-09] Rebased onto origin/main (32-segment mesh landed)
+
+`wip/p14-perf` rebased onto `d4d907ce`. Upheaval fast-forwarded to `e2fded0`.
+**Unblocked:** R2(a) answered SEGMENTS, not normals — so R2(b)/(c) are open and
+bouncing harder is safe.
+
+## ⚠ THE CALIBRATION FAILED FIRST, AND THAT IS THE FINDING
+
+Ran `holdmeter.py calibrate` before touching the clip (checklist 40). **It could
+not separate the two clips**: zero holds in BOTH `trick` (known positive) and
+`taunt3` (known negative). Had I skipped the calibration and simply run the
+meter on taunt3, it would have said "no hold" — the true answer — **for the
+wrong reason, and would then have said "no hold" about my fix as well.**
+
+Two causes, both named in the tool's own docstring and neither acted on:
+
+1. **The threshold asked the wrong question.** `0.5 x median` is "is this
+   SLOWER THAN TYPICAL". trick's real 120-frame handstand sits at 0.86–1.15
+   against a 0.843 line — missed by four hundredths. Fixed: the line is now a
+   multiple of the **FLOOR (p5)**, the clip's own zero.
+2. **The mana fold's floor.** `MANA_ABLATE=1` removes it AT THE SOURCE — an
+   ablation, not a mask. With mana on, the separation survives only x1.4–x1.5;
+   with it off, x1.2–x1.8. **1.5 is the middle of the robust band.**
+
+Added `HOLD_RANGE_MIN` (peak/floor >= 4): a hold is only meaningful in a clip
+that has an ATTACK. Both real clips are 9.1; every degenerate signal is <= 2.2.
+It does **not** gate out the negative — taunt3 is 9.1 and is judged on its runs.
+
+**Calibrated result:** trick holds at frames **155–198, 240–257, 265–286**
+(the review's by-eye window is f172–286); taunt3 **0 holds in 367 pairs**.
+
+## Where I am
+* Meter trustworthy. Next: read `build_taunt3`, author the beats, `--clean`
+  build, render taunt3 + trick + blown, re-measure, contact-sheet every frame.
