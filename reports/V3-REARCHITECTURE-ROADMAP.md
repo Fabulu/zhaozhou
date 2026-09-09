@@ -102,6 +102,47 @@ gate plus the shadow gating plus the dead-array deletions.
 | 3 | pairpipe + fresh svc leaf pair | candidate ready, 22 checks green |
 | 5 | checkpoint C | last |
 
+### PACKETS 2 AND 3 ARE COMPLETE IN SIMULATION (2026-09-09)
+
+The island runs the descriptor bank and the UV join. The expander and Mosaic are
+fed from one captured record; the palette pair is CARRIED rather than looked up;
+the metajoin exports the owner generation and the queued record carries it
+instead of a literal `8'd0` (D0d closed).
+
+| | lab | production | oracle |
+|---|---|---|---|
+| composed | **125** | **124** | **119** |
+| fault | 18 | — | — |
+
+Plus `island_v3_paired`, `desc_join_expand` 15 (palette checked on the EMITTED
+REQUEST, falsifier 380/384), `frag_expand` 12, `metajoin` 7, seam 7, `early_desc`
+11, `uv_join` 13, `pairpipe` 25, `perspuv_lockstep` 9.
+
+#### Three departures from this plan, all recorded where they were made
+
+1. **`tmu_plan`'s carriage is behind `PAL_CARRY`, default OFF.** The plan did not
+   note that `zhao_texture_island_top` — THE ORACLE — instantiates that block.
+   Unconditional carriage adds fifty flip-flops to the block gate 3's 392-record
+   comparison rests on. Gated at the source so `PAL_CARRY=0` folds to nothing.
+2. **`palslot_m`/`palgen_m` are NOT deleted**, they moved inside
+   `MIGRATION_SHADOWS`. Their remaining readers are the shadow and the CLUT
+   alignment check, so keeping them makes the shadow into D3's migration proof:
+   it now demonstrates on live traffic that the CARRIED pair equals what the
+   sidecar would have said. 1,176 comparisons, 0 mismatches.
+3. **Instrument ports on the bank and join are unconnected.** Wiring them adds
+   island OUTPUT PORTS, and `island_composed_directed` is one file shared between
+   this top and the oracle on the strength of their port lists matching. A
+   separate guarded step; not worth coupling to the rewire.
+
+#### What packet 3 still owes
+
+Nothing structural. The remaining items are small and listed in the run log: the
+untested island-level hop from `exp_wq_overflow` to its sticky bit, and
+`frag_expand`'s pre-existing dead `binding` field (reserved for a resolver
+contract that does not exist — §6 says so of `binding_selector` too).
+
+---
+
 ### GATE 1 IS SETTLED BY THE MapOnly PAIR. Its full island fit is FOLDED into gate 2.
 
 Decided 2026-09-09, and it deviates from the gate table above, so it is written
