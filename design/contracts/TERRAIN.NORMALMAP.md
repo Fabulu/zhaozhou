@@ -4,10 +4,13 @@
 > the ledger entry so the architecture has somewhere to be, the same order
 > GEOM.PARAMBUF was registered in. Proposed: subsystem terrain, gpu clock,
 > phase 6, maturity SPECIFIED.
-> RTL: `fpga/rtl/terrain/zhao_terrain_normalmap.sv` — **the file on disk is a
-> DRAFT that does not implement this contract and carries two confirmed
-> defects** (see `reports/NORMALMAP-ARCHITECTURE.md`); it must be rewritten to
-> these ports before any maturity claim.
+> RTL: `fpga/rtl/terrain/zhao_terrain_normalmap.sv` — **REBUILT TO THIS
+> CONTRACT 2026-09-09** (the known-wrong draft this line used to warn about is
+> superseded; its history is in `reports/NORMALMAP-ARCHITECTURE.md`). The
+> rebuild implements the dated amendment at the end of this file: rescale 22,
+> zero DSP via epoch coefficient tables, the mip tail, fixed latency 6.
+> Directed suite: `tests/texture/terrain_normalmap_directed.cpp` (4,738
+> checks; checker and shift-law positive controls both seen to fail).
 > Owner ruling 2026-09-03: build the real per-pixel path, measure it, cut it
 > if the number is bad — "we make it and see how bad it is … Normal maps would
 > be a huge gain though."
@@ -335,3 +338,110 @@ zref renderer with the same tile — the first moment the delta is seen applied.
    identity ask without an ABI home yet. The datapath accumulates per-sun
    products before the single rounding so SUNS=2 is a parameter change plus
    one config word, not a redesign.
+
+---
+
+## AMENDMENT 2026-09-09 — the rebuild's four corrections and one extension
+
+Made with the RTL rebuild answering the owner's `bumomapping.md` ("we need
+detail bump mapping for terrain ... set it up for production"). Full
+argument: `reports/TERRAIN-BUMP-MAPPING-ARCHITECTURE-20260909.md`. Where this
+section disagrees with the body above, THIS SECTION IS THE LAW.
+
+### A1. The rescale is 22, not 23 — the factor-of-two, closed
+
+The body's own format sentence proves it: strength has 8 fraction bits, d has
+7, an s1.15 sun has 15 — 30 in, 8 out, so the ONE rounding is
+
+    delta = sat_s9( rescale_s( strength * SUM_suns(dx*sun_x + dz*sun_z), 22 ) )
+
+The 23 above is the s1.15-vs-Q16.16 slip the oracle header already documents
+("getting that wrong is a factor of two in the relief") — the oracle side was
+fixed 2026-09-03 and this contract never was. Consequences that change:
+
+* full-scale one-sun delta is ~253 (essentially full colour scale), not ~126;
+* **one sun CAN rail s9** at the legal-but-ugly register corners
+  (`sun_x = sun_z = -32768` with `d = (-128,-128)` gives +510 → +255,
+  counted in `railed_o`); the "two suns can reach 510" sentence now describes
+  one sun's corner too.
+
+`zref::terrain::normalmap_delta_s9` (added to the oracle header the same day)
+is the executable form; the directed suite pins the tie-rounding on negative
+products with literal vectors, and a `-GDELTA_SHIFT=23` build of the real RTL
+fails 1,830 checks — the law is instrumented, not asserted. The sun config
+words stay s1.15, derived per frame from the ratified Q16.16 light by
+`sun15 = clamp(rshift_round(L16, 1), -32768, 32767)` on the HPS.
+
+### A2. Zero DSP: the per-fragment MAC is two epoch coefficient tables
+
+Per the rescue ruling (`ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt`
+§14.3, "for a fixed per-epoch light coefficient, byte tables offer exact
+products"): the block holds
+
+    tblx[dx] = dx * Kx,   Kx = strength * SUM_suns(sun_x)   (exact, s33)
+    tblz[dz] = dz * Kz,   Kz = strength * SUM_suns(sun_z)
+
+in two 256x33 M10Ks, filled by an internal sequencer with NO multiplier
+(K by 8-step shift-add over strength's bits, the tables by pure accumulation
+from -128*K). Every product is exact and the sum-over-suns folds into K by
+distributivity BEFORE the single rounding, so the result is bit-identical to
+the body's per-sun-accumulate law at any SUNS.
+
+Observable semantics this adds — the COLD window: from reset, and from any
+cfg write to addrs 0–2 until the ~267-cycle refill completes, `table_ready_o`
+is low and every `f_detail_i=1` fragment emits delta 0, counted in the new
+`cold_o` counter (fragments already in flight at the write are forced cold
+too — they must not read a table being rewritten under them). This is what
+lets "reset = bit-exact off" hold without resetting a RAM, which an M10K
+cannot do. Mixed-port read-during-write on the K tables is declared
+don't-care: it is reachable only inside the cold window, where the read
+result is never used.
+
+### A3. The mip tail (the 2026-09-05 addendum, adopted)
+
+Detail that never coarsens aliases into shimmer, so the tile grows the
+seven-level pyramid: 64..1 square levels, 5,461 words, level bases
+0/4096/5120/5376/5440/5456/5460, addressed
+
+    addr = base[L] + ((v6 >> L) << (6 - L)) + (u6 >> L),  u6 = u_raw[uv_shift+5:uv_shift]
+
+(`zref::terrain::normalmap_pyramid_addr` is the single definition; the
+offline packer averages SIGNED dx/dz and never re-normalises). Port and
+config changes:
+
+* `tw_addr_i` widens 12 → 13 (flat pyramid word address; writes ≥ 5,461 are
+  ignored as upload-tool faults);
+* new fragment input `f_lod_i` (unsigned INTEGER mip level, LODW=4 — the
+  addendum's preferred integer contract, NOT the TMU's Q4.4 high-nibble);
+* new cfg word 4: `{lod_bias[8:4] (s5), max_level[2:0]}`. Sampled level =
+  `clamp(f_lod_i + lod_bias, 0, min(max_level, LEVELS-1))`. **Reset state
+  max_level = 0 reproduces the un-mipped body behaviour bit-exactly.**
+* `LEVELS` is a build parameter (1..7); LEVELS=1 is the body's bare 4,096-word
+  tile.
+
+### A4. Latency and ceilings
+
+* Fixed latency is **6** (in-regs, level/wrap, address, tile read, K-table
+  reads, round/clamp out-regs), II=1, in order — the body's "fixed 3"
+  described the multiplier shape A2 removed. The alignment-FIFO sizing
+  argument in Backpressure is unchanged (it depends on order and boundedness,
+  not the constant).
+* Ceilings: ALM **500** (unchanged), DSP **3 → 0** (a DSP appearing in this
+  block's fit is now a defect by definition), M10K **9 → 15** (pyramid tile
+  predicted 12 + two K tables + margin; the s4-packed cut and LEVELS knob
+  both shrink it).
+
+### A5. Status corrections to the body
+
+* Directed tests: **WRITTEN**, `tests/texture/terrain_normalmap_directed.cpp`
+  (placed there because `tests/terrain/` was a live rearchitecture lane on
+  the rebuild day). Every planned bullet in the body's list is covered, plus
+  cold, epoch-refill, mip and II cases. Counters seen to fire: all four.
+* Randomized differential: **WRITTEN**, same file, with the required coverage
+  asserts (negative, positive, railed, zeroed, nonzero-level all sampled or
+  the run fails).
+* `normalmap_apply`: **WRITTEN** in the oracle header (plain u8 form; the
+  seam may adopt the lit-range clamp variant — see the architecture report's
+  seam section).
+* Evidence outputs now: `fragments_o`, `zeroed_o`, `railed_o`, `cold_o`,
+  `table_ready_o`, `idle_o`.

@@ -2617,12 +2617,12 @@ blocks:
     upstream: [TERRAIN.SHADE]
     downstream: [TERRAIN.PROJECT]
     backpressure: ready_valid
-    latency: fixed:0
+    latency: fixed:6
     target_throughput: one fragment per clock
-    reference_model: zref::terrain::normalmap_decode
+    reference_model: zref::terrain::normalmap_delta_s9
     tests:
-      directed: tests/terrain/terrain_shade_oracle.cpp
-      random: tests/terrain/terrain_shade_oracle.cpp
+      directed: tests/texture/terrain_normalmap_directed.cpp
+      random: tests/texture/terrain_normalmap_directed.cpp
     counters: [terrain_samples_evaluated]
     source_ids: true
     budget_group: geometry_mantle
@@ -2649,10 +2649,13 @@ blocks:
       The detail normal has NO Y component by construction, so under a sun at
       the zenith the relief fades out. Declared, not discovered, and the reason
       the look-gate is a MOVING sun at 240p rather than a still frame.
-      A DRAFT RTL EXISTS AND IS KNOWN WRONG: fpga/rtl/terrain/
-      zhao_terrain_normalmap.sv is quarantined out of prod_manifest.yml -- its
-      divide returns zero for every realistic triangle. It is not this entry's
-      implementation.
+      RTL REBUILT TO CONTRACT 2026-09-09 (fpga/rtl/terrain/
+      zhao_terrain_normalmap.sv): zero DSP via epoch coefficient tables, mip
+      tail, rescale-22 correction; directed suite
+      tests/texture/terrain_normalmap_directed.cpp, 4,738 checks, positive
+      controls fired. Still `unused` in prod_manifest.yml until the fragment
+      seam is wired -- an OPEN deferral, deliberately visible to
+      tools/budget/uncashed_cheques.py.
   - id: TERRAIN.NORMALS
     name: Deformed normals
     kind: rtl
