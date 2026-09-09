@@ -469,3 +469,62 @@ LINE, stop it by PID) if a fit needs the machine.
 **Everything else has exited** and this lane's 3,672 `.rgb` intermediates are
 purged. The lane is deletable once the publish wave re-renders the bank --
 `git worktree remove` for `base-tree`, not an `rm`.
+
+## 00:45 — bitident is GREEN, and it flagged its own metric
+
+    IDENTICAL 69   DIFFERS 0   EMPTY 2   of 71
+    frames 15634/15634 identical across the matching subjects
+    BITIDENT_RC=0
+
+**Zixxtrixx is untouched**, self-built baseline (`12961f9e` worktree) vs the
+shipped binary, both metrics, under the shipping env. (`fall-baked` and `sweep`
+are behind `#ifdef`s absent from both binaries; the harness names them and
+refuses to count silence as a pass, which is the right behaviour.)
+
+⚠ **But the harness printed a warning and exited 0 anyway, and it must not be
+skipped over:**
+
+    distinct CRCs 68 of 69 non-empty subjects  <-- COLLAPSED, the metric is not discriminating
+
+**Two subjects render the same CRC.** `bitident`'s own docstring explains why it
+checks: if the CRC ever collapsed to a constant every row would agree and the
+harness would report a perfect pass it had not earned. This is a partial
+collapse, not a total one -- but a green with a flagged metric is exactly the
+shape of the thing this project keeps getting caught by, so I am chasing it.
+
+**Two things are true and both belong in the report:**
+
+1. **It does not weaken the verdict for MY question.** The two metrics fail
+   differently and the second one is unaffected: 15,634 of 15,634 frames match
+   on the per-frame **sha256** leg, which cannot collapse this way.
+2. **It is a property of the reel's SUBJECT LIBRARY, not of my diff** -- the same
+   two subjects collide in binary A and in binary B. My change cannot have caused
+   it. But it means one diagnostic pair is redundant and the CRC leg is very
+   slightly weaker for every future pass, so whoever owns Zixxtrixx should know.
+
+Hunting the pair by rendering equal-frame-count groups and reading the reel's own
+`sequence_crc32c`. Ruled out so far: the five 1-frame stills (`still`,
+`still-front`, `still-game`, `unlit`, `unlit-front`) and the three springs
+(`spring-side` 0x3637C4B8, `spring-top` 0x513E3C8C, `spring-micro` 0xF6B2125A --
+all distinct, so the micro-mesh diagnostic IS exercising the micro mesh). Now on
+the six `pupil-proof` variants.
+
+**The pupil-proof group is clean too** -- all six distinct (`0x1F29C199`,
+`0x2A851F38`, `0x4AF6E6EA`, `0x82DBC399`, `0xF44E1AED`, `0xF72F1D0C`). That also
+weakens the obvious hypothesis: **every `-game` variant differs from its base**,
+so a `-game` preset is not a no-op and the collision is not a `-game` pair.
+
+**14 of 69 ruled out; I stopped there.** The remaining candidates are the
+equal-frame-count groups (192, 196, 197, 240, 241, 288, 384, 600) -- about 6,400
+frames and half an hour. My acceptance question was answered by the sha256 leg
+before the hunt started, and the collapse is a property of somebody else's
+diagnostic library that my change provably cannot have caused. Narrowing it,
+writing down the method, and handing it over is the proportionate end; rendering
+another 6,400 frames to name a redundant Zixxtrixx diagnostic is not this lane's
+budget to spend.
+
+## 01:05 — LANE-FX closed for real
+
+All work committed and pushed to both `origin/main`. Nothing of mine is running.
+`diag/` purged of frames again. The lane is deletable after the publish wave
+(`git worktree remove` for `base-tree`).
