@@ -377,6 +377,59 @@ and `dsp_census.load_evidence` rather than reimplementing either.
   which reads **high**, the flattering direction for "look what we could save"
   and the wrong direction for a budget.
 
+### And a fourth, added 2026-09-09 evening: read the SIBLING contract
+
+The three above are about a thing that already exists. This one is about a thing
+about to be built twice, and it is a different failure with a different detector.
+
+`TERRAIN.SHADE` was built — 0 DSP, bit-exact, verified. Then `GEOM.LIGHT`'s
+contract was opened, and line 118 said:
+
+> "Writing the oracle as `normal -> ndot -> isqrt -> divide` would be a second
+> implementation of the ratified arithmetic — **the exact failure this contract
+> was written to prevent, and the one that shipped in September's terrain shade
+> header.**"
+
+`normal -> ndot -> root -> divide` is what had just been built. The contract of
+the very next block warned against it and named a previous instance of the same
+mistake. Both contracts were written the same day, from the same audit, and
+**neither said which one owned the arithmetic** — which is exactly how the
+projector's two cores came to exist.
+
+**`tools/budget/uncashed_cheques.py` check 3 now catches this class**, and it
+catches the projector: `zref::render::project_vertex` is declared as the
+`reference_model` of BOTH `GEOM.PROJECT` and `TERRAIN.PROJECT` in
+`design/blocks.yml`. **That signal was in the data the whole time and nothing read
+it.** The check has two tiers because the strings differ even when the law does
+not — `TERRAIN.SHADE` declares `shade_flat_tri_dir_unclamped` while `GEOM.LIGHT`
+declares `shade_flat_tri_dir`, its D-1 wrapper, so exact matching reports zero and
+looks like it worked.
+
+Note what the tool cannot do, because the boundary matters: checks 1 and 2 find
+duplication that is **inherited** — a module built and uninstantiated, a fit row
+gone stale. Check 3 finds it **declared**. None of them finds duplication that
+nobody wrote down. For that there is only the habit, and the habit is cheaper than
+all three: **before building a block, read the contract of every block that
+consumes or produces the same quantity.**
+
+### A correction that removes work is the most valuable kind
+
+Same evening, two hours later. The consolidation brief said `zhao_terrain_shade`
+"needs a mode so the `face_normal` stage can be bypassed". **There is no
+`face_normal` stage.** Its inputs are `n_x_i/n_y_i/n_z_i` — a world normal — with
+the face normal computed upstream in `zhao_terrain_normals`. The RTL was already
+the shared core, port for port.
+
+So the RTL change was **zero**, and building the proposed bypass would have been a
+mode for a stage that does not exist — an authored uncashed cheque inside the
+commit meant to remove authored duplication.
+
+Nine claims were checked and refused on 2026-09-09; **three were the author's
+own**. The tell is identical every time and it is worth memorising: *"it is
+drop-in", "the owner already ruled it", "the measurement says −6", "s1.15", "58
+formal assertions"*. **The confident one-line summary is where the error lives**,
+and the check is almost always one grep of a file already open.
+
 ### Three corollaries, each of which cost something the same day
 
 **Before commissioning a new block, grep the tree for the thing it replaces.**
