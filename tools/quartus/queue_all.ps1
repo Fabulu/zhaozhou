@@ -63,7 +63,18 @@ foreach ($mod in @('zhao_texture_metajoin',
                    'zhao_texture_material_combine_v1')) {
     Write-Host ("queue_all: [2] MapOnly " + $mod)
     Wait-Idle
-    & "$PSScriptRoot\run_block_fit.ps1" -Module $mod -MapOnly 2>&1 |
+    # -RowLabel IS MANDATORY ON A MapOnly, learned the expensive way in this very
+    # batch. Without a label the map row REPLACES the full-fit row of the same
+    # module name and discards its ALM and Fmax. It happened to
+    # zhao_texture_combine: a 1,640-second fit's ALM 494 / 100.12 MHz was
+    # overwritten by a 116-second map row, recoverable only because
+    # reports/synthesis/ is version controlled -- luck in the design's favour,
+    # not foresight in mine.
+    #
+    # A map row and a fit row answer different questions and are not substitutes.
+    # The ledger already had the convention right (`@v3-before`, `@v3-nctx8`),
+    # which is how it should have been obvious.
+    & "$PSScriptRoot\run_block_fit.ps1" -Module $mod -MapOnly -RowLabel '@map' 2>&1 |
         Tee-Object -FilePath ("map-nb-" + $mod + ".log") | Select-Object -Last 3
 }
 
