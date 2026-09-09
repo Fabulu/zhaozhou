@@ -3334,6 +3334,50 @@ verilate(test_forge_prim_directed
 add_test(NAME forge_prim_directed COMMAND test_forge_prim_directed)
 set_tests_properties(forge_prim_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# FORGE.PRIM.EVAL -- the lightning position evaluator (reports/ADDLIGHTNING.md:
+# "the missing work is chiefly the procedural position evaluator"). prim owns
+# topology; this block owns positions, bit-exact against zref::forge::eval_job.
+# The directed test holds determinism under four stall patterns, the caps
+# refused-not-clamped, degenerate anchors legal, saturation counted, and the
+# comparator SEEN TO FAIL on a planted one-bit lie.
+add_executable(test_forge_prim_eval_directed forge/forge_prim_eval_directed.cpp)
+target_link_libraries(test_forge_prim_eval_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_forge_prim_eval_directed
+  PREFIX Vzhao_forge_prim_eval
+  TOP_MODULE zhao_forge_prim_eval
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_prim_eval.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_jitter_rom.sv)
+add_test(NAME forge_prim_eval_directed COMMAND test_forge_prim_eval_directed)
+set_tests_properties(forge_prim_eval_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# JITTER_Q16 -- every generated table entry against the generated oracle copy,
+# both read ports, the SIN_Q16 discipline: a generated file goes stale as
+# easily as a copied one, because the generator is not run by the build.
+add_executable(test_forge_jitter_rom_directed forge/forge_jitter_rom_directed.cpp)
+target_link_libraries(test_forge_jitter_rom_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_forge_jitter_rom_directed
+  PREFIX Vzhao_forge_jitter_rom
+  TOP_MODULE zhao_forge_jitter_rom
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_jitter_rom.sv)
+add_test(NAME forge_jitter_rom_directed COMMAND test_forge_jitter_rom_directed)
+set_tests_properties(forge_jitter_rom_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# THE POSITIVE CONTROL FOR walk_overrun_o, driving a committed MUTANT.
+# forge_prim_eval_directed asserts walk_overrun_o == 0, and on its own that is
+# a hopeful zero: the counter watches a state violation unreachable while the
+# S_E1 advance compare is right, so no stimulus can move it. The mutant breaks
+# that compare; THIS TEST PASSES WHEN THE COUNTER FIRES -- inverse polarity,
+# evidence about the instrument, not about the design.
+add_executable(test_forge_prim_eval_overrun_control forge/forge_prim_eval_overrun_control.cpp)
+target_link_libraries(test_forge_prim_eval_overrun_control PRIVATE zhao_harness)
+verilate(test_forge_prim_eval_overrun_control
+  PREFIX Vzhao_forge_prim_eval_mutant
+  TOP_MODULE zhao_forge_prim_eval_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_forge_prim_eval_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_jitter_rom.sv)
+add_test(NAME forge_prim_eval_overrun_control COMMAND test_forge_prim_eval_overrun_control)
+set_tests_properties(forge_prim_eval_overrun_control PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # GEOM.PARAMBUF -- the external geometry arena's record layer (ruling R7). The
 # interesting field is frame_generation: a chunk from LAST frame is valid in
 # every other respect -- sane count, in-range next pointer, real triangle ids --
@@ -5427,6 +5471,39 @@ add_test(NAME lint_terrain_normals
                  --top-module zhao_terrain_normals
                  ${ZHAO_TERRAIN_NORMALS_SV})
 set_tests_properties(lint_terrain_normals PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# TERRAIN.SHADE (phase 6, ZH-081)
+#
+# The oracle is the COMPILED ratified law itself — zhao_zref's
+# `shade_flat_tri_dir_unclamped` on the vertices (tier 1) and the law's own
+# pieces (shade_nmag2/shade_ndot/isqrt_u64 + the compiled div_rhu_s128) on
+# raw normals (tier 2). Sun and output are Q16.16, NOT s1.15 — the format
+# error the oracle's own history records catching. The suite's positive
+# control is `--break-oracle` (must FAIL); every DUT counter is asserted
+# with an exact count, so no counter can be a hopeful zero.
+set(ZHAO_TERRAIN_SHADE_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_shade.sv)
+
+add_executable(test_terrain_shade_rtl_directed terrain/terrain_shade_rtl_directed.cpp)
+target_link_libraries(test_terrain_shade_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_shade_rtl_directed
+  PREFIX Vzhao_terrain_shade
+  TOP_MODULE zhao_terrain_shade
+  SOURCES ${ZHAO_TERRAIN_SHADE_SV})
+add_test(NAME terrain_shade_rtl_directed COMMAND test_terrain_shade_rtl_directed)
+set_tests_properties(terrain_shade_rtl_directed PROPERTIES LABELS "fast;nightly")
+add_test(NAME terrain_shade_break_oracle
+         COMMAND test_terrain_shade_rtl_directed --break-oracle)
+set_tests_properties(terrain_shade_break_oracle PROPERTIES
+  LABELS "fast;nightly" WILL_FAIL TRUE)
+
+add_test(NAME lint_terrain_shade
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_shade
+                 ${ZHAO_TERRAIN_SHADE_SV})
+set_tests_properties(lint_terrain_shade PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 

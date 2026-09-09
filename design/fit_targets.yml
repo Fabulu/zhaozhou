@@ -1380,6 +1380,20 @@ targets:
     sources:
       - fpga/rtl/forge/zhao_forge_prim.sv
 
+  # FORGE.PRIM.EVAL -- the lightning position evaluator. THE ONE FIT GATE for
+  # this block (batched with the next forge-subsystem fit per the 2026-09-08
+  # batching law) answers exactly: does the shared 33x33 multiplier land in
+  # <=4 DSP with its output register used, does the 256x18 jitter table INFER
+  # one M10K rather than melting into ALMs, and is the whole block inside the
+  # FORGE.PRIM contract ceiling's headroom (prim+eval <= 2,800 ALM / 10 DSP /
+  # 2 M10K)? Correctness, determinism, caps and throughput are already
+  # answered by Verilator (tests/forge/forge_prim_eval_directed.cpp) and do
+  # not need Quartus.
+  - top: zhao_forge_prim_eval
+    sources:
+      - fpga/rtl/forge/zhao_forge_prim_eval.sv
+      - fpga/rtl/forge/zhao_forge_jitter_rom.sv
+
   - top: zhao_geom_assemble
     sources:
       - fpga/rtl/geometry/zhao_geom_assemble.sv
@@ -1546,6 +1560,16 @@ targets:
   - top: zhao_terrain_normals
     sources:
       - fpga/rtl/terrain/zhao_terrain_normals.sv
+
+  # TERRAIN.SHADE — the fit's ONE question, stated in advance per the
+  # batching rule: "does the exact-law shade hold ~0 DSP / <=800 ALM, does
+  # the 512x16 quarter-square table infer ONE M10K (true dual port, port A
+  # read-during-fill-write), and do the 64-bit sqrt/divide carry chains
+  # close >=100 MHz?" Run it BATCHED with the terrain-lighting subsystem
+  # (G-BUMP1's batch), not alone.
+  - top: zhao_terrain_shade
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_shade.sv
 
   - top: zhao_terrain_bake
     sources:
