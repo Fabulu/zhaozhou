@@ -488,3 +488,68 @@ for it).
 
 **The cheapest reliable instrument was the last one I tried**, which is the art
 law arriving from the measurement side.
+
+### 04:35 — THE OWNER LOST EIGHT HOURS OF FIT WORK. I STOOD THE LANES DOWN.
+
+He asked whether I had stopped any Quartus job. **I had not** — my four kills all
+night were `taskkill /IM ffmpeg.exe` (returned "not found"), two specific PIDs I
+had identified first, and two of my own harness tasks. No wildcards, nothing
+aimed at `quartus_*`, and `C:/programmieren/zencrifice/zhaozhou` was never
+touched.
+
+**But I disclosed two things rather than let him rule them out.** Three Opus
+subagents ran and at least two killed orphaned renders — both claim they
+identified the process first, and I have only their word. **And the far more
+likely mechanism is mine: I was saturating the machine** — three lanes building
+and rendering, plus 28-subject renders, plus encodes, plus a 641-file decode
+sweep, for hours, on the box his fit runs on.
+
+⚠ **The early warning was in front of me all night and I misread it.** The fit
+guard prints the running fit's age each time it fires:
+
+    95 -> 74 -> 56 -> 48 -> 28 -> 20 -> 19 -> 16 -> 11 -> 9 -> 8 -> 6 -> 5 -> 4 -> 2 -> 1 -> 0 min
+
+**Every reset is a fit that died and restarted.** I read each line as "a fit is
+running" and never looked at the sequence. Recorded to memory as
+`machine-is-shared-with-fits`.
+
+**I stopped all three lanes and killed their compilers before he answered**,
+because leaving them running while saying "I have started nothing new" would have
+been incoherent. `quartus_fit` verified alive before, between and after every
+kill; only `g++`, `cc1plus`, `zhao-reel-cel` and `ffmpeg` were killed, by PID.
+
+### 04:45 — PRESERVED, THEN REVIEWED BY READING (no CPU)
+
+All three lanes' in-flight work pushed to `origin/wip/p14-{face,perf,reel}` —
+**on branches, not main, because nobody has looked at any of it.**
+
+Then I reviewed all three by reading, which costs nothing and caught one real
+fault:
+
+* **REEL — sound, and it found the four-pass answer.** It rendered `channel` at
+  3× and looked: **the outline IS drawn, at `kFoldEdgeCoreRPx = 2 px`, while the
+  motes that carry no shape are drawn at 7–10 px.** *The connection is a fifth
+  the size of the things it connects.* **No gain ladder could have found that —
+  the edge was never dim, it was SMALL.** Also: every mana element is additive
+  and additive can only lighten, so four passes were pale-on-pale by
+  construction; `kRampStorm` verified genuinely wired, draw order correct.
+* **PERF — the instrument is right.** `holdmeter.py` ships a **known-negative
+  calibration** unprompted, refuses to segment, declares its own floor, imports
+  `rgbframe`. Unrun.
+* ⚠ **FACE — the ablation is CONFOUNDED.** It moves rings 11→21 *and* segments
+  16→32. That answers "is it geometry at all" but not which axis, while the
+  lane's own prediction is about segments alone — and it costs **+992 tris where
+  a single axis costs +352 or +320.** A single-variable leg is now required
+  before it runs.
+
+### 05:0x — WATCHER ARMED, ON THE OWNER'S INSTRUCTION
+
+*"Make yourself a job that checks every thirty seconds… Once these fits finish,
+you can continue."* Background poll every 30 s; it exits when the last `quartus`
+process is gone and the harness wakes me. One fit alive, PID 68032.
+
+**Resume order when it fires:** FACE first (fix the ablation, build, **report the
+segments-vs-normals answer before anything else** — PERF is blocked on it), then
+REEL (**must read `OWNER-DIRECTION-10` first**, it never received it), then PERF
+(**calibrate before touching `taunt3`**). Re-check for new fits before each heavy
+step rather than assuming the coast stays clear.
