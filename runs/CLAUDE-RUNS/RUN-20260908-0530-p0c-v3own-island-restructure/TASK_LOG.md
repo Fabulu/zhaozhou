@@ -3138,3 +3138,37 @@ isolation.
 794 ALM / 820 registers / 119.25 MHz stand exactly as recorded.
 
 Report: `reports/LABELLED-ROWS-ARE-UNGATED-BY-A-KEY-MISMATCH-20260909.md`.
+
+## 2026-09-09 -- the svc row was never stale, and the offline checker's honest tally
+
+Ran `check_fit_rules.ps1` (exit 1 is its VERDICT, not an error). Over the 40
+unlabelled targets: **15 pass, 17 FAIL, 8 unmeasured, 11 STALE.** It flags
+staleness in commits TO THE SOURCE -- zhao_texture_island_v3_top is 12 commits
+stale, and its warning is right: "their verdicts describe an older block; refit
+before believing either half."
+
+**And that notion of staleness settles GATE 3's premise.**
+`fpga/rtl/raster/zhao_raster_perspuv_svc.sv` blob at the standing fit's commit
+9c787e4a and at HEAD are the SAME object, 95d7ff17..., with zero commits touching
+it. So the standing svc row (1,886 ALM / 3,216 regs / 105.19 MHz) measures TODAY'S
+SOURCE. fit_targets.yml:471 worried it "predates today's tree" -- true of the
+commit, false of the source, and the source is what decides.
+
+Conflating those two produces opposite errors: trusting a genuinely stale row, or
+refusing a perfectly good one. This was the second. check_fit_rules.ps1 already had
+it right (Get-RowStaleness counts commits to the FILE), which is why it tagged the
+island 12-stale and left perspuv_svc untagged.
+
+**So the pair-pipe deltas are already like-for-like in the sense that decides it --
+the same RTL** -- and the running `@gate3-fresh` fit is now best read as a
+REPRODUCIBILITY CONTROL: same source, same tool version, same pinned seed,
+different invocation and different day. Reproducing 1,886 / 3,216 / 105.19 confirms
+the comparison and shows the tool deterministic across invocations; NOT reproducing
+it is a finding about the tool, and a more valuable one than the gate itself.
+
+**Offline checker FAIL list (unlabelled rows, 17):** geom_project, the four pair
+wrappers, perspuv_svc, rcp24_svc, texjoin_v2, terrain_cmd, terrain_pagestream,
+terrain_residency_v2, texture_combine, texture_fragrob, island_top, island_v3_top,
+material_combine_v1, v3own. Together with the 11 labelled rows stamped `ok` that
+would breach, the honest picture is that the structural gate fails widely and has
+been reporting far better than that.

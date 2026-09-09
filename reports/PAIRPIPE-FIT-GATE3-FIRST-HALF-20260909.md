@@ -68,8 +68,37 @@ So the deltas below are **provisional** and are labelled as such:
 * DSP unchanged at 6, as predicted and already scored
 * RAM blocks +1
 
-`zhao_raster_perspuv_svc@gate3-fresh` is running now. Until it lands, nothing here
-should be quoted as the measured saving.
+`zhao_raster_perspuv_svc@gate3-fresh` is running now.
+
+### UPDATE, before it landed: the standing svc row is NOT stale in the sense that matters
+
+The target's comment worried that the standing row "predates today's tree". What
+actually matters is whether the **source** moved, not whether the commit did:
+
+```
+fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+  blob at fit commit 9c787e4a : 95d7ff17547268a1d272fabc6a8bd6d6cb11f118
+  blob at HEAD               : 95d7ff17547268a1d272fabc6a8bd6d6cb11f118
+  commits touching it since   : 0
+```
+
+**Identical.** The standing row measures today's source exactly.
+
+`tools/quartus/check_fit_rules.ps1` already implements the right notion —
+`Get-RowStaleness` counts commits **to the source file**, which is why its run
+tagged `zhao_texture_island_v3_top` as `[STALE: 12 commits]` and left
+`zhao_raster_perspuv_svc` untagged. The distinction between *the commit moved* and
+*the source moved* is easy to conflate, and conflating it produces two opposite
+errors: trusting a genuinely stale row, or refusing a perfectly good one. Here it
+was the second.
+
+So the deltas above are **like-for-like in the only sense that decides it — the
+same RTL** — and the running fit is best understood not as a correction but as a
+**reproducibility control**: same source, same tool version, same pinned seed, a
+different day and a different invocation. If it returns 1,886 / 3,216 / 105.19 the
+comparison is confirmed and the tool is shown deterministic across invocations. If
+it does not, that is a finding about the tool rather than about either block, and
+a more valuable one.
 
 ## If the fresh row confirms it
 
