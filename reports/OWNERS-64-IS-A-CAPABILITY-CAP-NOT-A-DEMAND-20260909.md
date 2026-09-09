@@ -1,4 +1,13 @@
-# `OWNERS = 64` dominates the island's largest ALM consumer and has no demand behind it
+# `OWNERS = 64` sizes the island's largest ALM consumer -- and the measured peak is 32
+
+> **The title of this document changed once, and the change is the finding.** It
+> opened as *"...and has no demand behind it"*, which was true of the evidence
+> that existed when it was written. Measuring `cnt_live_peak_o` before the stress
+> phase produced **32 of 64** under ordinary composed traffic, so 64 is about 2x a
+> real observed peak -- an ordinary credit-ring margin rather than an
+> unjustified cap. **The lever is closed.** The final section carries the
+> measurement; the sections before it are the reasoning that led to taking it,
+> kept because the reasoning is what generalises.
 
 2026-09-09. Follows `V3OWN-IS-NOT-A-MEMORY-CANDIDATE-20260909.md`, which ruled
 out the memory remedy and left four vague levers. This prices the fourth one and
