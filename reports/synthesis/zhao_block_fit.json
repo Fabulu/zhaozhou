@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "fdc28552762eb28a00e73a70c282e2caa09b0c23",
+    "newestRunCommit":  "2711763f6e7c2e32e38a454e8cddad0d999fe5d3",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -744,6 +744,22 @@
                        "ramBlocks":  0,
                        "dspBlocks":  10,
                        "virtualPins":  403
+                   },
+                   {
+                       "module":  "zhao_raster_perspuv_pairpipe@map",
+                       "status":  "map_only",
+                       "sourceCommit":  "2711763f6e7c2e32e38a454e8cddad0d999fe5d3",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "add05ddbb3ee6110970ed5797627db10bc29c3c2269c535f63f4c852705d9c63",
+                       "variantOf":  "zhao_raster_perspuv_pairpipe",
+                       "seconds":  223.7,
+                       "sourcesHashed":  1,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  961,
+                       "blockMemoryBits":  1280,
+                       "dspBlocks":  6,
+                       "virtualPins":  300
                    },
                    {
                        "module":  "zhao_raster_perspuv_svc",

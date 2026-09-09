@@ -70,3 +70,59 @@ than writing the pattern did. **A hand-checkable file does not need an
 instrument**, and CLAUDE.md's rule 3 says to check the heuristic against a case
 you can verify by hand before believing the total -- here the hand check WAS the
 measurement.
+
+---
+
+# THE PREDICTION SCORES: 6 DSP, exactly as filed
+
+`zhao_raster_perspuv_pairpipe@map` landed. Clean tree, real digest.
+
+| | DSP |
+|---|---|
+| `zhao_raster_perspuv_svc` | 6 |
+| `zhao_raster_perspuv_pairpipe` | **6** |
+
+**Filed before the measurement:** *"`zhao_raster_perspuv_pairpipe` will map to 6
+DSP, the same as `perspuv_svc`. If it comes back lower, my reading of 'two
+statements, two multipliers' is wrong and I want to know."*
+
+It came back 6. The structural reading holds -- a loop body is not shared
+hardware, `svc`'s single multiply inside `for (ax = 0; ax < 2)` is two
+multipliers, and the pair-pipe's two multiply statements are also two. **The
+pair-pipe stays off the DSP lever list**, confirmed by measurement rather than by
+argument.
+
+## AND THE OTHER COLUMNS INVITE A MISMATCHED COMPARISON, so I am not making one
+
+The two rows are not the same kind of measurement:
+
+| | kind | DSP | registers | memory bits |
+|---|---|---|---|---|
+| `perspuv_svc` | **full fit** | 6 | 3,216 | 256 |
+| `perspuv_pairpipe` | **MapOnly** | 6 | 961 | 1,280 |
+
+"2,255 fewer registers" is sitting right there and it would be wrong. Fitting
+REPLICATES registers, and the two map/fit pairs this ledger holds show how much:
+
+```
+zhao_texture_combine              FIT 524 regs   MAP 304 regs
+zhao_texture_material_combine_v1  FIT 1269 regs  MAP 744 regs
+```
+
+About 1.7x in both. So the pair-pipe's 961 map registers are perhaps ~1,600
+fitted, against `svc`'s 3,216 -- still a large saving, and **still not a number I
+have measured.**
+
+**DSP is the one column that IS safe across the two kinds**, and that was checked
+rather than assumed: both pairs above report identical DSP in map and fit (8/8
+and 2/2). Which is precisely why the prediction was filed about DSP and is
+scorable now.
+
+The memory-bits column (1,280 against 256) points the way the pair-pipe's design
+intends -- one scheduler and one mantissa register instead of two -- but the only
+map/fit pairs available to validate that column are both zero, so it corroborates
+nothing yet.
+
+**`zhao_raster_perspuv_svc@map` is running now** to make the register and memory
+comparison like-for-like. Minutes, not hours, and it is the difference between a
+claim and a measurement.
