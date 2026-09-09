@@ -2246,7 +2246,7 @@ module zhao_prod_top (
   logic [1-1:0] u34_rep_valid_o;
   logic [1-1:0] u34_rep_hit_o;
   logic [1-1:0] u34_rep_refuse_o;
-  logic [75-1:0] u34_rep_payload_o;
+  logic [106-1:0] u34_rep_payload_o;
   logic signed [32-1:0] u34_rep_org_x_o;
   logic signed [32-1:0] u34_rep_org_y_o;
   logic signed [32-1:0] u34_rep_org_z_o;
@@ -2269,7 +2269,7 @@ module zhao_prod_top (
       .fill_ready_o(u34_fill_ready_o),
       .fill_arena_i(u34_src[56 +: 2]),
       .fill_index_i(u34_src[63 +: 12]),
-      .fill_payload_i(u34_src[70 +: 75]),
+      .fill_payload_i(u34_src[70 +: 106]),
       .seal_i(u34_src[77 +: 1]),
       .seal_arena_i(u34_src[84 +: 2]),
       .look_valid_i(u34_src[91 +: 1]),

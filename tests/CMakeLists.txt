@@ -5302,6 +5302,46 @@ verilate(test_geom_wcache_random
 add_test(NAME geom_wcache_random COMMAND test_geom_wcache_random)
 set_tests_properties(geom_wcache_random PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# VALID_MODE=1 (DENSE_SEAL), the 2026-09-09 consolidation of the
+# zhao_proj_arena3 design study into the sanctioned primitive. Differential
+# against the same oracle in dense mode, at TERRAIN'S shape -- 4x81, and 81 is
+# deliberately not a power of two, so this suite also holds the linear
+# addressing repair at a depth the old concat addressing corrupted.
+add_executable(test_vertex_arena_dense_directed geometry/vertex_arena_dense_directed.cpp)
+target_link_libraries(test_vertex_arena_dense_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_vertex_arena_dense_directed
+  PREFIX Vzhao_vertex_arena
+  TOP_MODULE zhao_vertex_arena
+  VERILATOR_ARGS -GARENAS=4 -GDEPTH=81 -GPAYLOAD_W=64 -GGEN_W=8 -GVALID_MODE=1
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_vertex_arena.sv)
+add_test(NAME vertex_arena_dense_directed COMMAND test_vertex_arena_dense_directed)
+set_tests_properties(vertex_arena_dense_directed PROPERTIES LABELS "fast;nightly")
+
+# THE POSITIVE CONTROL FOR arena_misses_o IN DENSE MODE, driving a committed
+# MUTANT. In VALID_MODE=1 a legal lookup structurally cannot miss (proved:
+# a_dense_no_miss, prove_dense task), so the miss counter is unreachable by
+# any stimulus while the seal guard is right -- a hopeful zero. The mutant
+# breaks the guard (seal_gate_c `==` -> `<=`, accepting a short seal) in a
+# separate renamed file, never a temporary edit to production RTL.
+#
+# THIS TEST PASSES WHEN THE COUNTER FIRES. Inverse polarity, deliberately: it
+# is evidence about the instrument, not about the design. (The directed suite
+# above, compiled unchanged against the same mutant, FAILS 149 of 394 checks
+# -- the checker's own positive control; run standalone, not registered,
+# because a committed test must pass.)
+add_executable(test_vertex_arena_dense_seal_control
+               geometry/vertex_arena_dense_seal_control.cpp)
+target_link_libraries(test_vertex_arena_dense_seal_control PRIVATE zhao_harness)
+verilate(test_vertex_arena_dense_seal_control
+  PREFIX Vzhao_vertex_arena_dense_mutant
+  TOP_MODULE zhao_vertex_arena_dense_mutant
+  VERILATOR_ARGS -GARENAS=4 -GDEPTH=81 -GPAYLOAD_W=64 -GGEN_W=8 -GVALID_MODE=1
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_vertex_arena_dense_mutant.sv)
+add_test(NAME vertex_arena_dense_seal_control
+         COMMAND test_vertex_arena_dense_seal_control)
+set_tests_properties(vertex_arena_dense_seal_control PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300)
+
 # formal: the arena bounds law -- a lookup must never wrap into another vertex.
 # REGISTERED 2026-08-27, and it was deliberately unregistered before that: the
 # proof failed for three days and the notes in design/formal_runs.yml said so

@@ -218,3 +218,32 @@ one arena arbitrating unrelated traffic.
 Banking (single vs ping-pong) is **derived** from the one-lookup-per-clock target
 and the measured workload, and is recorded here when measured — not chosen ahead
 of the evidence.
+
+## Corrections, 2026-09-09 (the VALID_MODE consolidation)
+
+Three changes landed together; each is a repair or a widening, none moves a
+law above:
+
+1. **`PAYLOAD_W` is 106, not 75.** The 2026-09-03 DEPTHQUANT correction ("THE
+   INPUT IS `w`, NOT `1/w`") made the consumer take the guarded clip `w` and
+   perform its own reciprocal; the producer and wrapper grew `out_w_o [30:0]`
+   the same day, and this cache -- written three days earlier -- was never
+   widened, so it forwarded a packet the consumer could not use without
+   re-rounding a rounded value (`reports/WCACHE-DROPS-W-20260909.md`). The
+   payload is now the projector's full packet: x[20:0], y[41:21],
+   invw[73:42], **w[104:74]**, behind[105]. The shell's header carries the
+   field map; the primitive still stores `PAYLOAD_W` opaque bits.
+2. **The primitive's addressing is linear (`arena*DEPTH + index`).** It was a
+   `{arena, index}` concatenation into an unpadded `ARENAS*DEPTH` array,
+   which is out of bounds for arena >= 1 at any non-power-of-two `DEPTH` --
+   including the shell's own 2x1089 shape, where arena 1 lost rows 130..1088.
+   Every prior instrument ran power-of-two depths and could not see it. The
+   `prove_np2`/`cover_np2` formal tasks now hold the bounds law at a
+   non-power-of-two depth permanently.
+3. **The primitive has a second valid mechanism**, `VALID_MODE = 1`
+   (DENSE_SEAL): in-order dense fill, seal refused unless complete, sticky
+   `arena_seal_short_o`. This shell keeps `VALID_MODE = 0` -- its producer
+   fills on lookup misses, which is sparse -- so nothing above changes for
+   GEOM.WCACHE; the dense mode exists for the terrain shell the 2026-08-24
+   ruling anticipated. `tests/formal/geom_wcache_arena_bounds.sby` proves
+   both modes; `reports/VERTEX-ARENA-DENSE-SEAL-20260909.md` is the record.

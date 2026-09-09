@@ -34,20 +34,35 @@
 // ---------------------------------------------------------------------------
 // Exactly GEOM.PROJECT's output packet, packed LSB-first:
 //
-//     [20:0]   screen x, S 12.8, guard-band clamped   (out_x_o)
-//     [41:21]  screen y, S 12.8                       (out_y_o)
-//     [73:42]  invw, Q16.16                           (out_d_o)
-//     [74]     behind: clip.w <= 0                    (out_behind_o)
+//     [20:0]    screen x, S 12.8, guard-band clamped   (out_x_o)
+//     [41:21]   screen y, S 12.8                       (out_y_o)
+//     [73:42]   invw, Q16.16                           (out_d_o)
+//     [104:74]  w, guarded clip w, fx16 raw            (out_w_o)
+//     [105]     behind: clip.w <= 0                    (out_behind_o)
 //
-// 75 bits. Carried as a parameter rather than a literal so the terrain lane can
-// instantiate the same primitive with its own width, which is the other half of
-// the ruling.
+// 106 bits. WIDENED 75 -> 106 ON 2026-09-09, and the widening is a REPAIR,
+// not a feature: GEOM.DEPTHQUANT's correction of 2026-09-03 ("THE INPUT IS
+// `w`, NOT `1/w`") made the consumer take `w` and perform its own reciprocal,
+// because recovering `w` from the ROUNDED Q16.16 `1/w` compounds a rounding
+// that already happened. `zhao_project_core` and `zhao_geom_project` grew
+// `out_w_o [30:0]` the same day -- and this cache, written three days BEFORE
+// the correction, kept forwarding a packet with no `w` in it. A payload width
+// is a frozen copy of yesterday's agreement
+// (reports/WCACHE-DROPS-W-20260909.md). The 31-bit width is the core's own:
+// DEPTHQUANT's 40-bit `v_w_i` is input headroom its first-act clamp
+// immediately bounds to <= 2^30 (WORLD_LONG wmax), so a zero-extend of the
+// guarded 31-bit w is lossless. The `behind` bit moves from 74 to 105;
+// x/y/invw stay where they were.
 //
 // The ATTRIBUTES do not live here. A projected vertex's u/v and lit colour are
 // per-vertex too, but the attribute-bearing packet is still a spec question
 // (reports/OPEN-SPEC-DEPTH-QUANTISATION.md), and widening this payload before
 // that is settled would bake a guess into a memory. When it is settled, this
-// parameter moves and nothing else does.
+// parameter moves and nothing else does. (Tested by THIS widening: the
+// parameter moved, plus exactly two mechanical regenerations -- the generated
+// zhao_prod_top's harness wires, via gen_prod_top.py, and this header's own
+// field map. The primitive, the oracle, the directed suites and the formal
+// proof all carry PAYLOAD_W symbolically and did not move.)
 //
 // ---------------------------------------------------------------------------
 // WHY TWO ARENAS, AND WHY THAT IS NOT A CACHE OF TWO WAYS
@@ -76,8 +91,8 @@ module zhao_geom_wcache #(
     // 33x33 vertices, the terrain lattice; a meshlet's vertex count fits under
     // the same bound (charter 15 caps a meshlet at 96-126 triangles).
     parameter int unsigned DEPTH     = 1089,
-    // GEOM.PROJECT's packet: 21 + 21 + 32 + 1. See THE PAYLOAD above.
-    parameter int unsigned PAYLOAD_W = 75,
+    // GEOM.PROJECT's packet: 21 + 21 + 32 + 31 + 1. See THE PAYLOAD above.
+    parameter int unsigned PAYLOAD_W = 106,
     parameter int unsigned GEN_W     = 8,
     // ONE BIT WIDER THAN THE ADDRESS, deliberately: an out-of-range index must
     // be REFUSED deterministically, and a caller can only present one if the
@@ -131,11 +146,21 @@ module zhao_geom_wcache #(
     output var logic        arena_overflow_o
 );
 
+  // The primitive's dense-seal refusal bit is meaningless in bitmap mode
+  // (constant 0) and is tied off here rather than surfaced -- surfacing a
+  // wire that structurally cannot move would be a counter nobody can fire.
+  logic arena_seal_short_unused;
+
   zhao_vertex_arena #(
       .ARENAS   (ARENAS),
       .DEPTH    (DEPTH),
       .PAYLOAD_W(PAYLOAD_W),
       .GEN_W    (GEN_W),
+      // 0 = VALID_BITMAP, the per-slot valid flops. This shell's producer
+      // fills on lookup misses, in triangle order -- sparse, so the dense
+      // mechanism's in-order restriction does not apply here. The terrain
+      // shell is the dense customer (VALID_MODE = 1).
+      .VALID_MODE(0),
       .INDEX_W  (INDEX_W),
       .ARENA_W  (ARENA_W)
   ) u_arena (
@@ -171,7 +196,8 @@ module zhao_geom_wcache #(
       .arena_hits_o    (arena_hits_o),
       .arena_misses_o  (arena_misses_o),
       .arena_refusals_o(arena_refusals_o),
-      .arena_overflow_o(arena_overflow_o)
+      .arena_overflow_o(arena_overflow_o),
+      .arena_seal_short_o(arena_seal_short_unused)
   );
 
 endmodule : zhao_geom_wcache

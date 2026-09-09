@@ -66,15 +66,24 @@ struct LookupResult {
 };
 
 // A fill is accepted or dropped; a drop is a producer error and is sticky.
-enum class FillStatus : uint8_t { kAccepted = 0, kDropIndex, kDropSealed, kDropArena };
+// kDropOrder exists only in DENSE mode: the fill's index was not the arena's
+// fill count, i.e. the producer broke the in-order restriction.
+enum class FillStatus : uint8_t { kAccepted = 0, kDropIndex, kDropSealed, kDropArena, kDropOrder };
 
 class VertexArena {
  public:
-  VertexArena(std::size_t arenas, std::size_t depth)
+  // `dense` mirrors the RTL's VALID_MODE: false = the valid bitmap (default,
+  // any fill order), true = VALID_DENSE_SEAL -- an accepted fill's index must
+  // equal the arena's fill count, and seal() refuses (sticky on seal_short())
+  // unless the count is exactly depth. Consolidated 2026-09-09 from the
+  // zhao_proj_arena3 design study; see the RTL header's four-way analysis.
+  VertexArena(std::size_t arenas, std::size_t depth, bool dense = false)
       : arenas_(arenas),
         depth_(depth),
+        dense_(dense),
         payload_(arenas * depth, 0),
         valid_(arenas * depth, 0),
+        count_(arenas, 0),
         origin_(arenas),
         generation_(arenas, 0),
         sealed_(arenas, 0) {}
@@ -96,6 +105,7 @@ class VertexArena {
     if (arena >= arenas_) return 0;
     generation_[arena] = static_cast<uint32_t>(generation_[arena] + 1u);
     sealed_[arena] = 0;
+    count_[arena] = 0;
     for (std::size_t i = 0; i < depth_; ++i) valid_[arena * depth_ + i] = 0;
     return generation_[arena];
   }
@@ -131,13 +141,29 @@ class VertexArena {
       overflow_ = true;
       return FillStatus::kDropSealed;
     }
+    if (dense_ && index != count_[arena]) {
+      // The dense restriction: the index IS the count, or the fill is a
+      // producer bug -- dropped and sticky, same class as a fill past a seal.
+      overflow_ = true;
+      return FillStatus::kDropOrder;
+    }
     payload_[arena * depth_ + index] = payload;
     valid_[arena * depth_ + index] = 1;
+    if (dense_) ++count_[arena];
     return FillStatus::kAccepted;
   }
 
-  void seal(std::size_t arena) {
-    if (arena < arenas_) sealed_[arena] = 1;
+  // Returns whether the arena is sealed after the call. In dense mode a seal
+  // below a full count is REFUSED -- the arena stays open and fillable -- and
+  // the refusal is sticky on seal_short(), mirroring arena_seal_short_o.
+  bool seal(std::size_t arena) {
+    if (arena >= arenas_) return false;
+    if (dense_ && count_[arena] != depth_) {
+      seal_short_ = true;
+      return false;
+    }
+    sealed_[arena] = 1;
+    return true;
   }
 
   // ---- consumer side ------------------------------------------------------
@@ -168,7 +194,9 @@ class VertexArena {
       ++refusals_;
       return r;
     }
-    if (!valid_[arena * depth_ + index]) {
+    const bool written =
+        dense_ ? (index < count_[arena]) : (valid_[arena * depth_ + index] != 0);
+    if (!written) {
       r.status = LookupStatus::kMiss;
       ++misses_;
       return r;
@@ -184,12 +212,18 @@ class VertexArena {
   uint32_t misses() const { return misses_; }
   uint32_t refusals() const { return refusals_; }
   bool overflow() const { return overflow_; }
+  bool seal_short() const { return seal_short_; }
+  std::size_t count(std::size_t arena) const {
+    return arena < arenas_ ? count_[arena] : 0u;
+  }
 
  private:
   std::size_t arenas_;
   std::size_t depth_;
+  bool dense_ = false;
   std::vector<uint64_t> payload_;
   std::vector<uint8_t> valid_;
+  std::vector<std::size_t> count_;
   std::vector<ArenaOrigin> origin_;
   std::vector<uint32_t> generation_;
   std::vector<uint8_t> sealed_;
@@ -197,7 +231,8 @@ class VertexArena {
   uint32_t hits_ = 0;
   uint32_t misses_ = 0;
   uint32_t refusals_ = 0;
-  bool overflow_ = false;  // sticky, like the RTL bit
+  bool overflow_ = false;    // sticky, like the RTL bit
+  bool seal_short_ = false;  // sticky, like arena_seal_short_o (dense only)
 };
 
 }  // namespace geom

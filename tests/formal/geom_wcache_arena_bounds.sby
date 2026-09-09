@@ -85,29 +85,84 @@
 # about aliasing between slots, and two arenas of four aliases in exactly the
 # same ways as two arenas of 1,089 while fitting in a solver.
 
+# EIGHT TASKS SINCE 2026-09-09, three configurations of ONE module -- the
+# VALID_MODE consolidation (reports/VERTEX-ARENA-DENSE-SEAL-20260909.md):
+#
+#   bmc / cover / prove             VALID_MODE=0 (bitmap), DEPTH=4. UNCHANGED
+#       from before the consolidation -- these three passing is the evidence
+#       that the default mode did not move.
+#   prove_np2 / cover_np2           VALID_MODE=0, DEPTH=6. Depth is
+#       NON-POWER-OF-TWO on purpose: the concat/linear addressing repair
+#       (see wr_addr in the RTL) only differs from the old behaviour at a
+#       depth where {arena, index} and arena*DEPTH+index disagree, and every
+#       pre-existing shape (formal 4, directed 16) was a power of two -- the
+#       defect lived precisely where no instrument looked. prove at DEPTH=6
+#       is the watched-slot aliasing law holding across the repaired
+#       addressing, at every bounded depth, for a shape the old addressing
+#       CORRUPTS (arena 1's rows 6..7 alias into nothing).
+#   bmc_dense / cover_dense / prove_dense   VALID_MODE=1 (dense seal),
+#       DEPTH=4. The dense mode has invariants the bitmap mode does not --
+#       fill is in-order (a_dense_fill_in_order), seal implies complete
+#       (the per-arena loop asserts in g_dense), read implies sealed implies
+#       written (a_dense_no_miss) -- plus its own induction helper
+#       p_cnt_implies_shadow, the count-analogue of p_array_implies_shadow.
+#       The shared laws (watched-slot value/written, refusal discipline,
+#       sticky overflow, probe binding) are the SAME assertions, unguarded,
+#       proven again under the dense elaboration.
+#
+# c_miss and p_array_implies_shadow live inside the bitmap generate block, so
+# the dense tasks neither fail an unreachable cover (dense PROVES a miss
+# cannot happen) nor reference a bitmap that does not exist.
+
 [tasks]
 bmc
 cover
 prove
+prove_np2
+cover_np2
+bmc_dense
+cover_dense
+prove_dense
 
 [options]
-bmc:   mode bmc
-bmc:   depth 16
-cover: mode cover
-cover: depth 24
-prove: mode prove
+bmc:         mode bmc
+bmc:         depth 16
+cover:       mode cover
+cover:       depth 24
+prove:       mode prove
+prove_np2:   mode prove
+cover_np2:   mode cover
+cover_np2:   depth 24
+bmc_dense:   mode bmc
+bmc_dense:   depth 14
+cover_dense: mode cover
+cover_dense: depth 24
+prove_dense: mode prove
 expect pass
 
 [engines]
-bmc:   btor btormc
-cover: btor btormc
-prove: abc pdr
+bmc:         btor btormc
+cover:       btor btormc
+prove:       abc pdr
+prove_np2:   abc pdr
+cover_np2:   btor btormc
+bmc_dense:   btor btormc
+cover_dense: btor btormc
+prove_dense: abc pdr
 
 [script]
 # Parameters go to read_slang, not to chparam: slang ELABORATES here, so by the
 # time chparam runs the module is no longer parametric and yosys says so --
-# "used with parameters but is not parametric".
-read_slang --top zhao_vertex_arena -DFORMAL -GARENAS=2 -GDEPTH=4 -GPAYLOAD_W=8 -GGEN_W=3 zhao_vertex_arena.sv
+# "used with parameters but is not parametric". One tagged line per task
+# because each elaborates its own configuration.
+bmc:         read_slang --top zhao_vertex_arena -DFORMAL -GARENAS=2 -GDEPTH=4 -GPAYLOAD_W=8 -GGEN_W=3 -GVALID_MODE=0 zhao_vertex_arena.sv
+cover:       read_slang --top zhao_vertex_arena -DFORMAL -GARENAS=2 -GDEPTH=4 -GPAYLOAD_W=8 -GGEN_W=3 -GVALID_MODE=0 zhao_vertex_arena.sv
+prove:       read_slang --top zhao_vertex_arena -DFORMAL -GARENAS=2 -GDEPTH=4 -GPAYLOAD_W=8 -GGEN_W=3 -GVALID_MODE=0 zhao_vertex_arena.sv
+prove_np2:   read_slang --top zhao_vertex_arena -DFORMAL -GARENAS=2 -GDEPTH=6 -GPAYLOAD_W=8 -GGEN_W=3 -GVALID_MODE=0 zhao_vertex_arena.sv
+cover_np2:   read_slang --top zhao_vertex_arena -DFORMAL -GARENAS=2 -GDEPTH=6 -GPAYLOAD_W=8 -GGEN_W=3 -GVALID_MODE=0 zhao_vertex_arena.sv
+bmc_dense:   read_slang --top zhao_vertex_arena -DFORMAL -GARENAS=2 -GDEPTH=4 -GPAYLOAD_W=8 -GGEN_W=3 -GVALID_MODE=1 zhao_vertex_arena.sv
+cover_dense: read_slang --top zhao_vertex_arena -DFORMAL -GARENAS=2 -GDEPTH=4 -GPAYLOAD_W=8 -GGEN_W=3 -GVALID_MODE=1 zhao_vertex_arena.sv
+prove_dense: read_slang --top zhao_vertex_arena -DFORMAL -GARENAS=2 -GDEPTH=4 -GPAYLOAD_W=8 -GGEN_W=3 -GVALID_MODE=1 zhao_vertex_arena.sv
 prep -top zhao_vertex_arena
 
 [files]

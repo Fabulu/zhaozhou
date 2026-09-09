@@ -1,3 +1,44 @@
+// zhao_vertex_arena_dense_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
+//
+// This exists to make `arena_misses_o` a detector in DENSE_SEAL mode instead
+// of a hopeful zero.
+//
+// In VALID_MODE=1 the primitive PROVES a legal lookup can never miss
+// (a_dense_no_miss, prove_dense): refusal already requires sealed, seal is
+// refused below a full count, and the index bound is checked -- so the miss
+// counter is unreachable by construction in a working block, and no stimulus
+// can move it. "It can fire" would stay an argument forever. The only
+// demonstration is to break the guard that makes it unreachable, which is
+// what this copy does --
+//
+//     seal_gate_c: (32'(cnt_q[...]) == DEPTH)   ->   (32'(cnt_q[...]) <= DEPTH)
+//
+// admitting a seal of an INCOMPLETE arena. A lookup of an unwritten row of
+// that wrongly-sealed arena then travels the whole legal path -- sealed,
+// current generation, in-range index -- and lands on `slot_written_c` low,
+// which is a MISS, and the counter moves. That is exactly the fault class
+// the dense mechanism exists to make impossible, and the counter is the
+// silicon-side witness that it stayed impossible.
+//
+// TWO DRIVERS, two polarities, deliberately:
+//   * vertex_arena_dense_seal_control.cpp PASSES when arena_misses_o FIRES
+//     (inverse polarity: evidence about the instrument, not the design);
+//   * vertex_arena_dense_directed.cpp, compiled UNCHANGED against this
+//     module, FAILS loudly -- the checker seen to fail on a deliberate
+//     break, per the differential law.
+//
+// It is a separate FILE rather than a temporary edit for two reasons. A
+// temporary edit to production RTL is a fit-corrupting live-tree hazard, and
+// it leaves nothing behind: the next person has the same argument and no
+// evidence. The module is RENAMED so it can never be elaborated in place of
+// the real one by a source-list mistake, and it lives under tests/ where
+// check_forbidden_sources.py will not find it in a production closure.
+//
+// REGENERATE IT if zhao_vertex_arena.sv changes shape: this is a copy, and a
+// copy of an old version is a positive control for a block that no longer
+// exists. (Copied from the 2026-09-09 VALID_MODE consolidation state.)
+
+
 // zhao_vertex_arena.sv — the reusable direct-indexed vertex arena primitive.
 //
 // Owner ruling 2026-08-24: "Build a reusable parameterized arena primitive and a
@@ -57,7 +98,7 @@
 // keys from a PREVIOUS use of a reopened arena. Every one of those keys is
 // individually plausible; only the generation says they are stale.
 
-module zhao_vertex_arena #(
+module zhao_vertex_arena_dense_mutant #(
     parameter int unsigned ARENAS    = 2,
     parameter int unsigned DEPTH     = 1089,   // 33x33 terrain lattice
     parameter int unsigned PAYLOAD_W = 64,
@@ -769,7 +810,9 @@ module zhao_vertex_arena #(
 
       assign fill_gate_c = (32'(fill_index_i[IW-1:0]) ==
                             32'(cnt_q[fill_arena_i[AW-1:0]])) && !fill_open_race;
-      assign seal_gate_c = (32'(cnt_q[seal_arena_i[AW-1:0]]) == DEPTH) &&
+      // MUTANT: `==` weakened to `<=` -- a seal of an incomplete arena is
+      // accepted, which is the one substantive change in this file.
+      assign seal_gate_c = (32'(cnt_q[seal_arena_i[AW-1:0]]) <= DEPTH) &&
                            !seal_open_race;
       assign seal_short_now_c = seal_i && !seal_bad_arena && !seal_gate_c;
       assign slot_written_c = (32'(look_index_i[IW-1:0]) <
