@@ -263,6 +263,33 @@ unpriced_requirements:
   - MATERIAL.RESOLVE: zhao_material_resolve  material resolve; RTL not built
   - FORGE.SHADOW: zhao_forge_shadow  forge shadow; RTL not built
   - MEM.UPLOAD: zhao_mem_upload  upload path; RTL not built
+  # THE FORGE.PRIM EVALUATOR -- the block that turns a params block into vertex
+  # POSITIONS. Added 2026-09-09 after reading the owner's reports/ADDLIGHTNING.md
+  # (2026-09-04, never read on this lane) and TESTING its central claim.
+  #
+  # The claim: "FORGE.PRIM is not fully usable yet... it currently owns topology
+  # only... the module literally has no position or params inputs. Its own header
+  # says that positions are supposed to come from a separate evaluator."
+  #
+  # IT HOLDS. zhao_forge_prim.sv takes a job descriptor (family, segments, sides,
+  # material, view_mask, src_id) and emits triangle INDICES (t_i0_o/t_i1_o/t_i2_o)
+  # plus counters. No positions, no params port. Its header line 39 says so
+  # outright: "positions come from `params` through the evaluator, and a topology
+  # that depended on a position would stop being bounded." Only two forge modules
+  # exist -- prim and cliff -- so the evaluator is not merely unfinished, it is
+  # absent.
+  #
+  # WHY IT IS LISTED HERE RATHER THAN LEFT IMPLIED: this was the third class of
+  # silence from the A0 accounting work -- not "counted wrong" and not "unknown",
+  # but having no line at all, so it never appeared even in the unpriced count.
+  # Lightning is the owner's stated want and its blocker was invisible, sitting in
+  # an unread document rather than in the bill.
+  #
+  # Scope, from the same document, so this is a bounded ask and not a blank
+  # cheque: "Draw one deterministic ribbon with at most 24 segments and at most
+  # two bounded branches" -- explicitly NOT "any number of branching antialiased
+  # electrical lines with arbitrary widths".
+  - FORGE.PRIM.EVAL: zhao_forge_prim_eval  ribbon/tube vertex POSITIONS from a params block; prim emits indices only; RTL not built; blocks lightning (reports/ADDLIGHTNING.md)
 
 excluded:
   # The texture island's own children are NOT listed here any more.
@@ -336,6 +363,16 @@ excluded:
   # Simulation-only wrapper exposing zhao_texture_ident_pkg's pack/unpack
   # functions to the C++ harness. Never in the machine.
   - zhao_texture_ident_probe: probe  exposes the identity encoding functions for ident_encoding_directed
+  # Added 2026-09-09, and CAUGHT BY check_prod_manifest.py rather than remembered.
+  # I registered this probe in design/fit_targets.yml and in no manifest, and the
+  # checker said UNACCOUNTED. CLAUDE.md states the rule I broke: "registering a
+  # block in the ledger, the manifest and that list are three different acts."
+  # Two of three is a file nothing bills and nothing declares absent.
+  #
+  # It exists to answer why perspuv_svc's e_tag array infers as an M10K while
+  # e_num_u does not; six candidate explanations have been eliminated with it.
+  # Never in the machine, so it is a probe, not a top.
+  - zhao_probe_ram_infer: probe  RAM-inference discriminator probe; five/three array variants at one geometry
 
 
   # Same reason code, same shape: a composition top that exists to put a real

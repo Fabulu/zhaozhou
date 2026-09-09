@@ -2954,3 +2954,59 @@ the unverified number this tool exists to stop:
     totals skips the regs key -> RC=1, fixture 7b fails
 
 Twelve fixtures still pass, and the real run is unchanged on DSP/ALM/M10K.
+
+## 2026-09-09 -- the last two unread owner documents, and a manifest gap I made
+
+Owner-direction check: NO NEW DIRECTION on this branch (0 incoming; main is 308
+ahead, other lanes). No @g2-prod fit is running or pending -- that row is
+historical and on disk, which is what I have been scoring against all day. The
+pair-pipe leaf fit is still running (quartus_fit, 14+ min); work below is outside
+its one-file snapshotted closure.
+
+**Read the last two absent owner documents.** Both via `git show
+origin/main:<path>`; tree untouched, main not merged.
+
+**`bumomapping.md`** (1 line, 2026-09-05): detail bump mapping for terrain,
+"terrain is the star of the show and we neglected giving it first class
+treatment." Disposition: OPEN and UNARCHITECTED. It is NOT covered by
+TERRAIN_31MHZ_REARCHITECTURE (that is the tess/normals timing pair) and NOT by
+the terrain mipmapping architecture (filtering, not normal perturbation). So it is
+a distinct request with no document answering it -- the state that looks identical
+to a satisfied one from a filename. Deferred by the terrain brief's Step 0. Flagged
+for the owner: "I hope it is not too expensive" is a cost question, and the honest
+sequence is B0-B5 first, then price bump mapping against whatever the pair becomes
+rather than against today's numbers.
+
+**`reports/ADDLIGHTNING.md`** (175 lines, 2026-09-04): lightning as a composition
+of existing blocks -- FORGE.PRIM ribbon -> RASTER.FRAGMENT additive -> POST.GATHER
+glow -> POST.COMPOSITE bloom, plus PART.*, with a deliberately bounded contract
+("one deterministic ribbon, at most 24 segments, at most two bounded branches",
+explicitly not arbitrary branching lines).
+
+**TESTED its central claim and it HOLDS.** `zhao_forge_prim.sv` takes a job
+descriptor (family/segments/sides/material/view_mask/src_id) and emits triangle
+INDICES plus counters -- **no position port, no params port** -- and its header
+line 39 says "positions come from `params` through the evaluator, and a topology
+that depended on a position would stop being bounded." Only two forge modules
+exist, prim and cliff, so the evaluator is ABSENT rather than unfinished.
+
+So **FORGE.PRIM.EVAL is now in `unpriced_requirements`** (census: 5 unbuilt rows
+-> 6). It was the third class of silence from the A0 work -- not counted wrong,
+not unknown, but having NO LINE AT ALL, so it never appeared even in the unpriced
+count. Lightning is the owner's stated want and its blocker was sitting in an
+unread document instead of in the bill.
+
+**And check_prod_manifest.py caught a gap I made this morning:**
+`UNACCOUNTED: zhao_probe_ram_infer is neither counted nor declared absent`. I
+registered the probe in `design/fit_targets.yml` and in no manifest. CLAUDE.md
+states exactly the rule I broke -- "registering a block in the ledger, the
+manifest and that list are three different acts" -- and two of three is a file
+nothing bills and nothing declares absent. Added as `excluded: probe`.
+
+**Third pipeline-exit-code trap of the day:** I ran the checker as
+`... | tail -4` inside an `&&` chain, so the wrapper reported exit 0 while the
+checker itself printed "MANIFEST CHECK FAILED -- 1 error(s)". Re-run capturing the
+checker's own RC. The lesson keeps arriving in new costumes: the shell told the
+truth about the wrong thing.
+
+Report: `reports/OWNER-DOCS-DISPOSITIONS-20260909.md`.
