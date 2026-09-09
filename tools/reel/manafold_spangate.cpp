@@ -114,6 +114,50 @@ constexpr double kTipMoveMaxMm = 1.0;
 // nodule gate, and well clear of the 12 mm band that gate calls dither.
 constexpr double kShippedReachMinMm = 45.0;
 
+// ---- G6's constants (PASS 15, Direction 11 §3) ----------------------------
+//
+// THE SUBJECT SCALE, and it is INHERITED rather than measured here. The nodule
+// gate documents 12 mm as "~1.7 px at native" and 40 mm as "about 6 px"; both
+// give 7 mm per native pixel, from two constants authored independently, so
+// the figure is corroborated rather than asserted (09-ENGINE-GOTCHAS §16: do
+// not act on a number until something else reproduces it).
+// ⚠ It is a BANK-SCALE figure. A close-up subject reads larger and this
+// conversion does not apply to it; the gate walks the shipped bank only.
+constexpr int kMmPerNativePx = 7;
+
+// THE MEASURED NOISE FLOOR. A "ball" here is the CENTROID of the skin in a
+// window around its bind station, and a centroid inside a bending section is
+// pulled toward the inside of the curve -- so even with perfectly rigid spans
+// and the stretch fully ablated, the measured distance wanders a little. On the
+// known-negative leg that residual is 13.3 mm, about 1.9 native pixels. It is
+// geometry, not leakage, and it is recorded here rather than hidden because the
+// gate's whole credibility is the gap between this number and the beat floor.
+constexpr double kDiffNoiseFloorMm = 13.3;
+// The known-negative's ceiling, set ABOVE the measured floor with room, and far
+// below the beat floor. It is not fitted to its answer: it exists to catch the
+// metric drifting back toward reading the carrier, which is exactly what the
+// first two versions of this gate did (155 mm and 973 mm on this same leg).
+constexpr double kDiffNegMaxMm = 20.0;
+
+// The floor for a clip that carries an AUTHORED ball beat. The target was
+// "at least 10 px for a gesture clip" -- 70 mm at the scale above -- and the
+// three gated clips measure 83.5, 79.1 and 89.0 mm (11.9, 11.3, 12.7 px).
+// ⚠ SET BELOW WHAT WAS MEASURED, ON PURPOSE. 07-MOTION-STYLE §6: two gates have
+// already shipped here with 6 mm and 1 mm of headroom because the band was
+// re-recorded to admit the measurement, which is a gate fitted to its own answer
+// and fails on the next legitimate re-timing. 65 mm keeps 14-24 mm of room and
+// still sits 5x above the noise floor, so "present" and "absent" are not close.
+constexpr double kDiffBeatMinMm = 65.0;
+
+// The clips that carry an authored ball beat and are therefore GATED. This list
+// is the switch as well as the gate (10-GATE-CHECKLIST item 39: an opt-in fix
+// has TWO landings, and the second is the one that gets forgotten) -- adding a
+// beat to a clip without adding it here leaves the beat ungated, and removing
+// a beat without removing it here fails loudly, which is the correct direction
+// for that mistake to break in.
+constexpr uint16_t kBeatSlots[] = {0, 2, u02::kTaunt3Slot};
+constexpr int kBeatSlotCount = static_cast<int>(sizeof(kBeatSlots) / sizeof(kBeatSlots[0]));
+
 int g_fail = 0;
 bool g_no_lanes = false;
 bool g_no_ramp = false;
@@ -485,6 +529,151 @@ int main(int argc, char** argv) {
       if (gated_gain < kShippedReachMinMm)
         fail("taunt3's nodule A vertical travel does not come from the span "
              "stretch -- present without the mechanism means this gate is blind");
+    }
+  }
+
+  // ---- G6: DO THE BALLS MOVE AGAINST EACH OTHER, ON THE CLIPS THAT SHIP? ---
+  //
+  //   "the balls still don't move, and not independently."   -- Direction 11 §3
+  //
+  // ⚠ THIS GATE EXISTS BECAUSE THE OLD ONE COULD NOT ASK THE OWNER'S QUESTION.
+  // The pass-12 per-nodule table is honest and reproduces to the millimetre --
+  // and it measures the SOLO DIAGNOSTIC, which drives one nodule 200 mm and
+  // which the shipping bank never runs. Four passes reported this item done on
+  // that number. 10-GATE-CHECKLIST items 12 and 39 are exactly this shape: a
+  // measurement of the mechanism is not evidence about the picture, and the
+  // check has to be against the artefact that ships.
+  //
+  // WHAT IS MEASURED, and why this quantity and not another. For each pair of
+  // balls, the VECTOR BETWEEN THEM, over every key of the clip; the score is
+  // the diagonal of that vector's bounding box. It is the right quantity for
+  // the owner's sentence for one specific reason: a whole-antenna knead swings
+  // all three balls together, and a rigid swing leaves the vector between two
+  // of them almost unchanged. So the carrier CANCELS, and what is left is the
+  // part a viewer reads as one ball moving against its neighbours -- which is
+  // the complaint, stated as arithmetic.
+  //
+  // It reads the SKIN through `ball_skin`, the same production path G4/G5 use,
+  // because ball A's independent travel is a VERTEX effect: at bone level its
+  // span points along the request and it moves ~3 mm however hard it is driven
+  // (see the nodule gate's own declared gap).
+  {
+    std::printf("\nG6 DIFFERENTIAL BALL MOTION on the SHIPPED clips "
+                "-- the RANGE of the DISTANCE between ADJACENT balls\n");
+    std::printf("   (%d mm per native pixel at bank scale. A rigid span keeps "
+                "its length under any amount of knead,\n    so the carrier "
+                "cancels and what is left is ball-against-neighbour. Measured "
+                "noise floor %.1f mm.)\n",
+                kMmPerNativePx, kDiffNoiseFloorMm);
+    const int32_t st[3] = {u02::kKnuckleAtAMm, u02::kKnuckleAtBMm, u02::kKnuckleAtCMm};
+    // ⚠ ADJACENT PAIRS ONLY, and this is the second thing this gate got wrong.
+    // The rigid-span invariance holds for A-B and B-C, which are ONE bind span
+    // each (kLoopArcMm[2] and [3]). A-C crosses hinge B, so folding the loop
+    // changes that chord by hundreds of millimetres with perfectly rigid bones
+    // -- pure carrier. Including it made A-C the maximum on almost every clip
+    // and put 155 mm into the ablated leg, which is what the failable leg then
+    // reported. Two balls only tell you about each other if nothing hinges
+    // between them.
+    const char* pn[2] = {"A-B", "B-C"};
+    const int pi[2][2] = {{0, 1}, {1, 2}};
+    constexpr int kPairs = 2;
+
+    // ⚠ THE QUANTITY IS THE DISTANCE BETWEEN TWO BALLS, NOT THE VECTOR BETWEEN
+    // THEM, AND THE FIRST VERSION OF THIS GATE GOT THAT WRONG. Measuring the
+    // vector's bounding box scored EVERY clip in the bank at 60-140 px --
+    // including ones where nothing independent happens -- and scored taunt3,
+    // the single clip whose ball gesture demonstrably reads, LOWEST of all. The
+    // reason is that a rigid rotation of the whole antenna sweeps the vector
+    // through a huge arc while changing its LENGTH not at all: the carrier does
+    // not cancel, it dominates. That is the same gate this pass was sent to
+    // replace, rebuilt by accident in one afternoon.
+    //
+    // The DISTANCE is the invariant that works. Bones are rigid and `nodule_aim`
+    // lands each ball at exactly its bind arc length, so under any amount of
+    // knead, fold or body swing the ball-to-ball distance is CONSTANT. It moves
+    // only when a span actually stretches -- which is precisely the mechanism
+    // that carries one ball away from its neighbours, and precisely what a
+    // viewer reads as a ball moving on its own.
+    const auto score = [&](const zc::Clip& c, double per_pair[kPairs]) {
+      double lo[kPairs], hi[kPairs];
+      for (int q = 0; q < kPairs; ++q) { lo[q] = 1e30; hi[q] = -1e30; }
+      for (uint16_t f = 0; f < c.frame_count; ++f) {
+        Vec3 p[3];
+        for (int b = 0; b < 3; ++b) p[b] = ball_skin(T, c, f, st[b], 90);
+        for (int q = 0; q < kPairs; ++q) {
+          const Vec3& u = p[pi[q][0]];
+          const Vec3& v = p[pi[q][1]];
+          const double dx = u.x - v.x, dy = u.y - v.y, dz = u.z - v.z;
+          const double d = std::sqrt(dx * dx + dy * dy + dz * dz);
+          if (d < lo[q]) lo[q] = d;
+          if (d > hi[q]) hi[q] = d;
+        }
+      }
+      double best = 0.0;
+      for (int q = 0; q < kPairs; ++q) {
+        per_pair[q] = (c.frame_count > 0) ? hi[q] - lo[q] : 0.0;
+        if (per_pair[q] > best) best = per_pair[q];
+      }
+      return best;
+    };
+
+    // ---- THE KNOWN-NEGATIVE FIRST (10-GATE-CHECKLIST item 40) --------------
+    //
+    // "Before trusting any presence metric, run it on a frame where you know
+    //  the answer is NO. A known-positive proves nothing."
+    //
+    // ⚠ AND THE OBVIOUS NEGATIVE IS THE WRONG ONE, which this gate learned the
+    // hard way. The first version used slot 7, the two-key form still: it
+    // scored 0.0, the gate looked calibrated, and the metric underneath it was
+    // measuring the whole-antenna carrier. A clip with NO MOTION AT ALL cannot
+    // tell "measures independent ball motion" apart from "measures any motion",
+    // so it certifies nothing.
+    //
+    // The negative that works is THE SAME BEAT CLIP WITH THE MECHANISM SWITCHED
+    // OFF: slot 0, full carrier -- knead, fold, bob, body rock, all of it --
+    // with the span-stretch lanes ablated, which is the deform that actually
+    // carries a ball away from its neighbours. Same clip, same motion, feature
+    // removed. That is the failable leg items 10 and 11 require, and its
+    // failure has now been WITNESSED rather than assumed: with the vector
+    // metric this leg read 973 mm, identical to the live number, which is what
+    // exposed the fault.
+    const zc::Clip* beat0 = nullptr;
+    for (const zc::Clip& c : T.bank.clips)
+      if (c.slot_id == 0) beat0 = &c;
+    if (beat0 == nullptr) {
+      fail("G6 has no known-negative: slot 0 is not in the bank");
+    } else {
+      const bool saved = g_no_lanes;
+      g_no_lanes = true;
+      double pp[kPairs];
+      const double neg = score(*beat0, pp);
+      g_no_lanes = saved;
+      std::printf("   KNOWN-NEGATIVE slot 0 with the span-stretch ABLATED "
+                  "(same clip, same carrier, mechanism off): %.1f mm = %.1f px"
+                  "  -- ceiling %.1f mm\n",
+                  neg, neg / kMmPerNativePx, kDiffNegMaxMm);
+      if (neg > kDiffNegMaxMm)
+        fail("G6's known-negative MOVES. With the span stretch ablated the balls "
+             "cannot travel against each other, so a large number here means the "
+             "metric is reading the CARRIER -- nothing else it prints is "
+             "evidence. Fix the instrument before reading the table");
+    }
+
+    // ---- and then the bank, with the beat clips gated ----------------------
+    for (const zc::Clip& c : T.bank.clips) {
+      if (c.slot_id == u02::kNoduleSoloSlot) continue;  // the diagnostic is not the bank
+      double pp[kPairs];
+      const double s = score(c, pp);
+      bool gated = false;
+      for (int i = 0; i < kBeatSlotCount; ++i)
+        if (c.slot_id == kBeatSlots[i]) gated = true;
+      std::printf("   slot %2u  %6.1f mm = %5.1f px   (%s %5.1f  %s %5.1f)%s\n",
+                  c.slot_id, s, s / kMmPerNativePx, pn[0], pp[0], pn[1], pp[1],
+                  gated ? "  <-- GATED (authored ball beat)" : "");
+      if (gated && s < kDiffBeatMinMm)
+        fail("a clip that carries an AUTHORED ball beat does not show the balls "
+             "moving against each other. That is the owner's sentence, on the "
+             "clip he is looking at -- not on the solo diagnostic");
     }
   }
 

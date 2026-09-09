@@ -2156,6 +2156,72 @@ constexpr int32_t kNoduleSoloAmpMm = 200;
 constexpr int32_t kNoduleSoloMidPm = 300;   // the middle's share of the swing
 constexpr int32_t kNoduleSoloOutPm = 1000;  // the outers' share
 
+// ---- PASS 15 (Direction 11 §3) -- THE SWALLOW: A BALL-LED BEAT IN THE IDLE --
+//
+//   "the balls still don't move, and not independently."
+//
+// THE GATE AND THE OWNER ARE BOTH RIGHT, and understanding why is the whole
+// item. The pass-12 per-nodule table is honest: it drives ONE nodule 200 mm on
+// the SOLO diagnostic and reproduces to the millimetre. But the shipping bank
+// never runs anything like that. The ambient schedule above is 42..78 mm times
+// a per-clip gain, on slow mutually-prime sines -- and the committed span gate's
+// own G5 table measures what actually reaches the skin on the shipped clips:
+// a 14..48 mm gain over lanes-ablated, on a creature where 12 mm is documented
+// as ~1.7 native pixels. That is TWO TO SEVEN PIXELS, underneath a whole-antenna
+// knead that moves the loop tens of pixels. "The balls don't move" is the
+// correct reading of 3 px under a 30 px carrier, and no amount of raising the
+// oscillator fixes a texture layer being a texture layer.
+//
+// ⚠ AND ONE CLIP IN THE BANK ALREADY PROVES THE FIX. taunt3's shimmy presses the
+// three balls IN TURN and measures 98 mm of gain -- five times any other clip,
+// the only one that reads. It is choreography, not an oscillator. So this is
+// that mechanism brought to the clip the owner actually spends time looking at:
+// slot 0, the ten-second idle, which had NO authored nodule beat at all.
+//
+// SAY THE MOTION MECHANICALLY (07-MOTION-STYLE §8): a bulge travels up the
+// antenna, one ball at a time -- the front ball lifts and settles, then the
+// peak, then the rear -- and the body rocks away from whichever ball is raised.
+// Not "the balls move independently", which is a shape instruction and does
+// zero work; something is being swallowed, and you can check in any frame which
+// ball is up.
+//
+// ⚠ THE BODY TERM IS NOT DECORATION (§8b). "Three nodules travelling 120 mm
+// against a body 1.6 m across, at 384x240 -- a few pixels. A few pixels is not
+// a performance." The roll is what makes this a beat instead of a wiggle, and
+// removing it is how this item comes back a sixth time.
+constexpr int  kIdleSwallowKey     = 60;   // one per 300-key loop: an idle does
+                                           // ONE thing at a time (§1)
+constexpr int  kIdleSwallowStagger = 26;   // keys between one ball and the next
+constexpr int  kIdleSwallowWidth   = 52;   // keys per press: 104 frames, far
+                                           // above §2's "16 frames to register"
+constexpr int32_t kIdleSwallowMm   = 96;   // press height. taunt3's shimmy is
+                                           // 78 and reads; this is the showcase
+                                           // idle, so it is authored higher and
+                                           // then LOOKED AT, not derived.
+constexpr int32_t kIdleSwallowLeanPm = 340;  // the lateral share of each press
+// The whole-body rock, driven by (front ball up) minus (rear ball up), so the
+// body leans away from the bulge and returns. Family: kTaunt3ShrugRollA16 is
+// 3000 for a comic shrug; an idle gets well under half of it.
+constexpr int32_t kIdleSwallowRollA16 = 1150;
+
+// The same beat on CHANNEL (slot 2), placed on its blaze. Its own knobs rather
+// than the idle's, because the two clips want different things from it: the
+// idle wants a slow swallow you notice once in ten seconds, and channel wants
+// the charge visibly climbing the antenna while it works. Keys 60..140 is the
+// blaze window, so the beat rides the clip's existing peak instead of fighting
+// it (07-MOTION-STYLE §1: one thing at a time).
+//
+// ⚠ THIS IS THE CLIP `manafold-antenna-fixed` RENDERS -- the committed judging
+// view for every antenna direction, effects off, camera and body root held
+// still. A ball beat the owner is meant to SEE belongs where he looks at balls.
+constexpr int  kChannelSwallowKey     = 60;
+constexpr int  kChannelSwallowStagger = 20;
+constexpr int  kChannelSwallowWidth   = 40;
+constexpr int32_t kChannelSwallowMm   = 104;  // the showcase gets the bigger
+                                              // press; authored, then looked at
+constexpr int32_t kChannelSwallowLeanPm = 300;
+constexpr int32_t kChannelSwallowRollA16 = 900;
+
 // ---- THE STARTLE SPLAY (Direction 3 SS7, "ain't bad, make it better") -----
 // The third of the three motion debts, and the one that had no mechanism until
 // this pass: the startle keeps its recoil and now gains a NODULE SPLAY from

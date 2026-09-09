@@ -223,6 +223,24 @@ int main(int argc, char** argv) {
   double rx[3], ry[3], rz[3];
   for (int i = 0; i < 3; ++i) posed_ball(T, c, 0, kBalls[i].bone, rx[i], ry[i], rz[i]);
 
+  // ---- PASS 15 (Direction 11 §3): WHAT THIS TABLE IS, AND WHAT IT IS NOT ----
+  //
+  //   "This has been reported DONE by four separate passes ... The owner is
+  //    looking at the shipped clips and says the balls do not move. BOTH CAN BE
+  //    TRUE, and that is the whole problem."
+  //
+  // Everything below is honest and reproduces to the millimetre. It is also
+  // measured on the SOLO DIAGNOSTIC, slot 16, which drives one nodule 200 mm --
+  // and the shipping bank never runs anything remotely like that. So this table
+  // is evidence that THE RIG CAN, not evidence that ANY CLIP DOES, and four
+  // passes closed an owner item by quoting it for the second thing.
+  // 10-GATE-CHECKLIST items 12 and 39: reproduce the claim on the artefact that
+  // ships, or treat it as unproven.
+  std::printf("\n⚠ THE TABLE BELOW IS A MECHANISM CHECK ON THE SOLO DIAGNOSTIC "
+              "(slot 16), NOT evidence\n  about the shipped bank. For what the "
+              "owner actually looks at, see the span gate's G6\n  (differential "
+              "ball motion, adjacent pairs, on every shipped clip, with a "
+              "known-negative).\n");
   std::printf("\nPER-NODULE INDEPENDENCE, posed ball travel from rest (mm), "
               "through decode_pose + skin_vertex\n");
   std::printf("  segment          ball A    ball B    ball C   verdict\n");

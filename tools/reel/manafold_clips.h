@@ -1018,6 +1018,95 @@ inline int32_t punch_ease(int32_t t) {
   return 1000 - static_cast<int32_t>((static_cast<int64_t>(u) * u / 1000) * u / 1000);
 }
 
+/** PASS 15 (Direction 11 §3) -- THE SWALLOW: A BALL-LED BEAT, AS A VOCABULARY.
+ *
+ *   "the balls still don't move, and not independently."
+ *
+ *  THE MECHANISM, said mechanically (07-MOTION-STYLE §8, because "the balls
+ *  move independently" is a SHAPE instruction and does zero work): a bulge
+ *  travels up the antenna one ball at a time -- the front ball lifts and
+ *  settles, then the peak, then the rear -- and the body rocks away from
+ *  whichever ball is currently raised. In any frame you can check which ball
+ *  is up, which is what makes it authorable and gateable.
+ *
+ *  ⚠ WHY THIS EXISTS RATHER THAN A BIGGER OSCILLATOR. The always-on nodule
+ *  schedule (kNoduleAmpMm) is 42..78 mm on slow mutually-prime sines, and the
+ *  committed span gate's G5 table measures what actually reaches the SKIN on
+ *  the shipped clips: 14..48 mm, on a creature where 12 mm is documented as
+ *  ~1.7 native pixels. Two to seven pixels, under a whole-antenna knead that
+ *  moves the loop tens of pixels. The owner's sentence is the correct reading
+ *  of that, and raising the oscillator only makes the texture louder -- the one
+ *  clip in the bank that DOES read (taunt3, 98 mm) reads because it is
+ *  CHOREOGRAPHY: three presses in sequence with a body turn under them.
+ *  09-ENGINE-GOTCHAS §18: when careful tuning keeps failing, the knob is not
+ *  the thing.
+ *
+ *  Three helpers rather than one, because the body half has to compose AFTER
+ *  whatever the clip does to kBRoot, while the nodule half has to be written
+ *  BEFORE the clip's loop_pose call consumes it. Merging them would silently
+ *  put one of the two on the wrong side of a call in the next clip that used
+ *  it -- which is exactly the ordering fault `nod` and `eye_lean` both exist
+ *  to prevent (see struct Rig). */
+inline void swallow_press(int f, int start, int stagger, int width, int32_t amp_mm,
+                          int32_t out[3]) {
+  for (int i = 0; i < 3; ++i) {
+    out[i] = 0;
+    const int lf = f - (start + i * stagger);
+    if (lf < 0 || lf >= width || width <= 0) continue;
+    const int32_t t = lf * 1000 / width;
+    // press, hold, release -- §8a's two curves used for their two jobs. The
+    // ATTACK is punch_ease, so the ball ARRIVES instead of drifting; the hold
+    // is flat, which is what makes it a beat rather than a bump; the release
+    // is a smoothstep, so the creature SETTLES instead of snapping back. One
+    // rise and one fall: a single direction reversal per ball, inside §2's
+    // "0 reversals per station per primary move" band.
+    int32_t u;
+    if (t < 300) u = punch_ease(t * 1000 / 300);
+    else if (t < 500) u = 1000;
+    else u = 1000 - fold_ease((t - 500) * 1000 / 500);
+    out[i] = static_cast<int32_t>((static_cast<int64_t>(amp_mm) * u) / 1000);
+  }
+}
+
+/** ADD the swallow to whatever the ambient schedule already asked for.
+ *  Additive on purpose: the ambient layer is texture and §3's never-off floor
+ *  wants it kept; what was missing was a beat ON TOP of it.
+ *  ⚠ Call BEFORE the clip's loop_pose (or whole_wobble), which consumes g.nod. */
+inline void swallow_nodules(Rig& g, const int32_t swal[3], int32_t lean_pm) {
+  if ((swal[0] | swal[1] | swal[2]) == 0) return;
+  const auto side = [&](int32_t v) {
+    return static_cast<int32_t>((static_cast<int64_t>(v) * lean_pm) / 1000);
+  };
+  // The lateral shares alternate in sign so the three presses SPLAY rather
+  // than lean as one piece -- the same reason kStartleSplayMm opposes its
+  // signs. A common-mode lateral push tips the loop's plane, and a tipped
+  // loop presents as a line (pass 14 R4 learned that on taunt3's dismissal).
+  g.nod.ay += swal[0];
+  g.nod.az += side(swal[0]);
+  g.nod.by += swal[1];
+  g.nod.bz -= side(swal[1]);
+  g.nod.cy += swal[2];
+  g.nod.cz += side(swal[2]);
+}
+
+/** THE WHOLE-BODY HALF (07-MOTION-STYLE §8b), and it is the half that makes the
+ *  beat visible at all: "three nodules travelling 120 mm, against a body 1.6 m
+ *  across, at 384x240 -- a few pixels. A few pixels is not a performance."
+ *
+ *  The rock is driven by the DIFFERENCE between the front ball's press and the
+ *  rear's, so the body leans away from the bulge as it travels and is back at
+ *  exactly neutral the moment the ripple ends -- no held offset, and nothing
+ *  to unwind at the loop seam.
+ *  ⚠ Call AFTER whatever else the clip composes onto kBRoot. */
+inline void swallow_body(Rig& g, const int32_t swal[3], int32_t amp_mm,
+                         int32_t roll_a16) {
+  if ((swal[0] | swal[2]) == 0 || amp_mm <= 0) return;
+  g.q[kBRoot] = quat_mul(
+      g.q[kBRoot],
+      quat_z(static_cast<int32_t>(
+          (static_cast<int64_t>(roll_a16) * (swal[0] - swal[2])) / amp_mm)));
+}
+
 /** PASS 11 F.3 -- THE PRESS-RECOVER WAVE, which replaces sinp on the knead wag.
  *
  *  Same contract as sinp: returns -65536..65536, integer cycles per clip so the
@@ -1540,9 +1629,18 @@ inline zc::Clip build_hover_idle() {
   for (int f = 0; f < K; ++f) {
     g.reset();
     antenna_knead(g, 0, K, f);  // pass 4: the always-on fold-hold-knead layer
+    // ---- PASS 15 (Direction 11 §3): THE SWALLOW ----------------------------
+    // See swallow_press() and kIdleSwallowKey. The ambient oscillator above is
+    // 2-7 native pixels on the shipped clips; this is the beat on top of it
+    // that the eye can actually follow.
+    int32_t swal[3];
+    swallow_press(f, kIdleSwallowKey, kIdleSwallowStagger, kIdleSwallowWidth,
+                  kIdleSwallowMm, swal);
+    swallow_nodules(g, swal, kIdleSwallowLeanPm);
     // pass 3: the whole creature carries the travelling bend (peak leads,
     // body follows); the squash below lags by the same station clock.
     whole_wobble(g, f, K, kWobbleAmpPm);
+    swallow_body(g, swal, kIdleSwallowMm, kIdleSwallowRollA16);
     face_rest(g);
     apply_gaze(g,
                static_cast<int32_t>((static_cast<int64_t>(kGazeMaxA16) *
@@ -1649,10 +1747,30 @@ inline zc::Clip build_channel() {
   for (int f = 0; f < K; ++f) {
     g.reset();
     antenna_knead(g, 2, K, f);  // pass 4: the always-on fold-hold-knead layer
-    const int open = curve(kLoopOpen, 8, f);
-    loop_pose(g, 1000, open, open, open,
-              static_cast<int32_t>((static_cast<int64_t>(kAntennaTiltA16) *
-                                    sinp(f, K, 3, 0x5000)) >> 16));
+    // ---- PASS 15 (Direction 11 §3): THE SWALLOW, ON THE BLAZE ---------------
+    // The same ball-led beat as the idle's (see swallow_press), placed on THIS
+    // clip's own subject: channel is the conduit at work, and the charge
+    // travelling up the antenna one ball at a time is what the clip is about.
+    // Keys 60..140 is the blaze window exactly, so the beat lands on the
+    // clip's existing peak rather than competing with it -- 07-MOTION-STYLE §1,
+    // one thing happens at a time.
+    //
+    // ⚠ AND THIS IS THE CLIP THE ANTENNA VERDICT IS TAKEN ON. `manafold-
+    // antenna-fixed` renders slot 2 with the effects off and the camera and
+    // body root both held still, which is the committed judging view for every
+    // antenna direction so far. A ball beat the owner is meant to see belongs
+    // where he looks at balls.
+    {
+      int32_t swal[3];
+      swallow_press(f, kChannelSwallowKey, kChannelSwallowStagger,
+                    kChannelSwallowWidth, kChannelSwallowMm, swal);
+      swallow_nodules(g, swal, kChannelSwallowLeanPm);
+      const int open = curve(kLoopOpen, 8, f);
+      loop_pose(g, 1000, open, open, open,
+                static_cast<int32_t>((static_cast<int64_t>(kAntennaTiltA16) *
+                                      sinp(f, K, 3, 0x5000)) >> 16));
+      swallow_body(g, swal, kChannelSwallowMm, kChannelSwallowRollA16);
+    }
     face_rest(g);
     apply_gaze(g, 0,
                static_cast<int32_t>((static_cast<int64_t>(kGazeLiftMaxA16) *
@@ -2485,6 +2603,11 @@ constexpr uint16_t kDeathBSlot = 18;
 constexpr uint16_t kLassoSlot = 19;
 constexpr uint16_t kBlownSlot = 20;
 constexpr uint16_t kTaunt3Slot = 21;
+// PASS 15: the solo nodule diagnostic's slot, named because two gates now have
+// to EXCLUDE it. It is the clip that drives one nodule 200 mm to show the
+// envelope, and quoting it as evidence about the shipping bank is the exact
+// mistake Direction 11 §3 is complaining about (10-GATE-CHECKLIST items 12/39).
+constexpr uint16_t kNoduleSoloSlot = 16;
 // PASS 12 / WAVE 3: the plain FLIGHT clip (D5 SS7's first line). Appended,
 // so every existing slot id and every existing clip stays bit-identical.
 constexpr uint16_t kFlightSlot = 22;
