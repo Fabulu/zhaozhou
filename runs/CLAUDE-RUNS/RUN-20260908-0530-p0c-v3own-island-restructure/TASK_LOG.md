@@ -3736,3 +3736,55 @@ load-bearing rule; 66 back means the sharing did not happen), manifest as
 and nothing declares absent.
 
 Report: `reports/PROJECTION-IS-66-DSP-OF-192-20260909.md`.
+
+## 2026-09-09 -- the DSP path to 94, and pose_decode is two matrix engines
+
+New goal from the owner: finish the briefs/roadmaps, architect optimizations
+until the ceiling cracks, USE FABLE ARCHITECTS for big rearchitectures, and do
+NOT run Quartus fits unless truly needed.
+
+**Four fable architects dispatched** on independent domains: the projected-vertex
+arena and replay; FORGE.CLIFF RAMification; exact attribute stepping; texture
+owner residency / read-late COMBINE. Each briefed with this repo's laws (test
+claims, a zero-reading check is broken, exactness and owner control are
+invariants, no fits) and told to write to reports/ and NOT commit. Nudge rewritten
+(job 3da06256) to the rescue phase -- the old one still said "everything needs the
+owner", which stopped being true when the redirect landed.
+
+**My own lane, chosen to avoid the architects' domains: the DSP cap.**
+
+Used the census's OWN selector (build_bill) rather than re-deriving it -- my
+first attempt scanned both ledgers raw and got 430, which is every probe, pair and
+superseded row, not the bill. Same lesson as brief 2.7 and as the two checks I
+broke earlier today.
+
+**192 DSP sits in EIGHTEEN of the 66 roots. Forty-eight carry none.**
+Top two are 66 (34%); top six are 134 (70%). By domain: geometry 90 (47%),
+terrain 62 (32%), everything else 40. **Geometry + terrain = 79%.**
+
+Measured/structural reductions available today:
+    shared projector          -33   (written and pushed today)
+    rcp24_v3 inside island     -3   (svc 6 DSP in all 6 rows, v3 3 in all 8)
+    retire material_combine_v1 -2   (both islands use v2; audit + manifest agree)
+    geom_skin MUL_LANES=1      -6   (already fitted; costs -33 MHz, owner's call)
+    -------------------------------
+    192 -> 148, leaving 54 to the target.
+
+**And pose_decode's 18 is two matrix engines**, checked not assumed:
+`zhao_geom_pose_decode.sv:155 zhao_geom_quat2mat (9 DSP)` +
+`:190 zhao_geom_mat3x4_mul (9 DSP)` = the measured 18. So geometry runs project,
+pose_decode, skin, setup, cull and clip as separate arithmetic kingdoms each
+provisioned for its own peak -- the SAME pattern the projector just proved, with
+more clients. 90 DSP of geometry against a roadmap allocation of ~24 is where the
+target becomes reachable.
+
+Not established: that 94 is reachable. 148 is measured-or-structural; the last 54
+needs a geometry transform service that does not exist, plus whatever
+terrain_bake (17), shell_top (16) and geom_cull (15) are made of -- two of those
+I have not opened.
+
+**Consequence for the owner:** three of the four standing calls are now DSP moves
+(combine_v1 -2, MUL_LANES=1 -6, rcp24_v3 -3). With the projector they are 44 of
+the 98 needed, and three of them need a word rather than an architecture.
+
+Report: `reports/DSP-PATH-TO-94-20260909.md`.
