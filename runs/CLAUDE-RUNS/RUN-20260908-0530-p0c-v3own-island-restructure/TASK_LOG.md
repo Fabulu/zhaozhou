@@ -1764,3 +1764,22 @@ The pairpipe is a near drop-in: all 20 svc ports present, plus additive
 Both islands declare `logic [3:0] pu_occ`, so the swap would truncate 16→0 and
 17→1. Harmless today (nothing reads it) but a latent trap — widen it in the same
 commit as the swap.
+
+## Packet 1 COMPLETE; detector sweep closed
+
+Deleted the three dead duplicate arrays and their aliases — nine code lines,
+word-boundary matched. Re-verified: **22/22** texture tests including
+`island_v3_paired`, all **96** lint targets, and 18 / 125 / 124 / 119 unchanged.
+
+Finishing packet 1 during the "freeze" was correct: the freeze is against packet
+2, and these deletions belong to packet 1 by my own earlier decision, so they had
+to land before gate 1's MapOnly. Nearly left the packet half-done by over-reading
+my own note.
+
+`wq_overflow_o` closed the detector sweep the hard way — unreachable by legal
+stimulus, so it needed a committed mutant (`tests/mutants/`, renamed module,
+inverted polarity). Fired at 36 with 6 entries accepted into a 4-deep queue. The
+technique and two tool facts are now in CLAUDE.md.
+
+**Toolchain queue unchanged:** gate 4 svc row (81 min, 76% CPU) → gate 1 MapOnly
+pair → three new-block MapOnlys. Packets 2-3 wait on gate 1.

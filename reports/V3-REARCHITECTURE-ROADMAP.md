@@ -33,7 +33,7 @@ substitutes for MapOnly's named-structure attribution — run MapOnly first.
 
 ## STATUS UPDATE 2026-09-08 (late) — read this before the packet list
 
-### PACKET 1 IS DONE IN SIMULATION. Its fit is still owed.
+### PACKET 1 IS COMPLETE IN SIMULATION. Only its fit is owed.
 
 | profile | `shadow_present_o` | comparators | checks |
 |---|---|---|---|
@@ -47,9 +47,35 @@ swapped-fraction mutation (3 colour checks, 32/32/29). **The laboratory is
 apparatus, not enforcement**, so §4.3's boundary is drawn in the right place and
 the packet may proceed.
 
-`class_m` and `f_class_in_c` are gone. `palslot_m`/`palgen_m` untouched, as
-specified. The three dead duplicate arrays (`fpsl_m`, `fpgn_m`, `frec_m`) are
-**still to delete** — they were moved into this packet and have not been done.
+**All of packet 1's deletions are done.** `class_m`, `f_class_in_c`, and the
+three dead duplicate arrays `fpsl_m`/`fpgn_m`/`frec_m` with their aliases
+`f_pal_slot_c`/`f_pal_gen_c`/`f_recipe_c` — nine code lines, word-boundary
+matched. `palslot_m`/`palgen_m` untouched as specified (packet 3 owns them).
+
+Re-verified after the deletions: **22/22** across the texture families including
+`island_v3_paired` (gate 3's 392 byte-identical records), all 96 lint targets,
+and 18 / 125 / 124 / 119 on the four composed gates — every count identical to
+before.
+
+A note for whoever reads the freeze below: **finishing packet 1 was correct even
+while the island was "frozen".** The freeze is against applying PACKET 2 early,
+because gate 1 would then measure the wrong packet. These deletions were
+deliberately moved INTO packet 1 so gate 2 measures the descriptor bank alone, so
+they had to land BEFORE gate 1's MapOnly. I nearly read my own constraint too
+broadly and left the packet half-done.
+
+### Detector sweep — no hopeful zeros left in this session's work
+
+| detector | how it was made to fire |
+|---|---|
+| `uv_join.gen_mismatch_o` | stimulus: a token whose gen is not the bank's row |
+| `early_desc` layout `$fatal` | `-GGENW=9`; lint alone passes RC=0, so the fatal is load-bearing |
+| `metajoin` layout `$fatal` | `-GGENW=9`; lint refuses it outright, so the fatal is a Quartus backstop |
+| pairpipe depth-zero U/V | asserted exactly zero instead of merely excluded |
+| `frag_expand.wq_overflow_o` | **committed mutant** — unreachable by any legal stimulus |
+
+The last one is the pattern worth reusing: `tests/mutants/`, renamed module,
+inverted polarity (passes when the counter fires). See CLAUDE.md.
 
 ### FIT GATE 0 IS LOST. Do not wait for it.
 
