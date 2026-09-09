@@ -144,3 +144,42 @@ line's white. Then the stamp ladder, then the sunset backdrop.
 Stamp/cap ladder; both backdrops (`ZHAO_U02_PLANET=1` night / `ZHAO_U02_NOPLANET=1`
 sunset -- one binary, both skies, verified working); R5 hasty/drift; R8; R7; R9;
 R10.3-4.
+
+
+---
+
+# CLOSING STATE 2026-09-09
+
+**Pushed to origin main:** zhaozhou `8a8cb71e`, Upheaval `356fe1e`.
+Deliverable: `Upheaval/creature/Manafold/PASS-14-FINDINGS-REEL.md` +
+`pass14-plates-reel/` (7 plates, both backdrops, provenance beside each).
+
+## Shipped
+* **D10 strand**, default **OFF** (`kFoldStrandOn`), one env away, plate delivered.
+* **R5 hasty follow-cam**, default on, value picked off the ladder by eye.
+* **`rungsweep.py`** -- one binary, N env rungs, a plate, and it PURGES.
+* **`cam_pitch` gains a lateral bias**, 0 == the old matrix element for element.
+
+## Verified, not asserted
+    channel 0x241D7382   crackle 0x16B89597   hover 0x30AADDA2   (== baseline)
+    drift   0xBAA55FD8   (== baseline)        hasty 0x9B5E323B -> 0xBF69669B
+    reel --check: all sequence CRCs match
+    hasty f235 md5 c5b3522e == the -28000 rung picked off the plate
+
+## Five times measurement beat reading, and twice it beat my eye
+1. Two rungs I described as "slightly different" were BYTE-IDENTICAL.
+2. A pixel census said the sunset favours the white core 2.4:1; the plate says
+   the dark surround is the loudest thing in frame. The census measures AREA;
+   the owner's sentence is about CONTRAST.
+3. "Reverts to pass 13 byte for byte" was false, and only a baseline build
+   could say so.
+4. The R5 follow-cam sign was backwards; every rung made the fault worse.
+5. The same follow REFUTED itself on drift, whose fault is the root WRAP.
+And the eye was right twice where numbers were quiet: "bigger" looked wrong
+before the darkpx count confirmed it, and PERSEG 4 looked like lightning.
+
+## NOT done
+R7, R8 (unstarted new rim law -- do not half-author it), R9, R10.3-4.
+Drift's wrap-frame clip is open and deliberately not papered over.
+
+## Do NOT delete this lane.
