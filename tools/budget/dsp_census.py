@@ -193,6 +193,41 @@ def main():
         print("       %s" % m)
     if len(no_target) > 12:
         print("       ... and %d more" % (len(no_target) - 12))
+    # CHEAPER LABELLED VARIANTS ARE MEASURED LEVERS NOBODY HAS LISTED.
+    #
+    # zhao_geom_skin has three rows one parameter apart -- MUL_LANES=1 at 3 DSP /
+    # 56.11 MHz, the default at 9 / 89.65, MUL_LANES=6 at 18 / 84.61. That is -6
+    # DSP available for -33 MHz, already measured, needing no new work, and it
+    # appeared on no lever list in this repository. I found it by reading a header
+    # while doing something else.
+    #
+    # A census that sums the default and says nothing about the alternatives beside
+    # it is hiding decisions that have already been paid for. So: report every
+    # top whose labelled rows include a CHEAPER DSP figure, with what it costs in
+    # Fmax, and let the reader decide. Not a recommendation -- a lower DSP row is
+    # frequently slower, and which one ships is an owner call, which is exactly why
+    # it is listed rather than counted.
+    levers = []
+    for m in sorted(tops):
+        base = rows.get(m)
+        if not base or base.get("dspBlocks") is None:
+            continue
+        for r in labelled.get(m, []):
+            if r.get("dspBlocks") is not None and r["dspBlocks"] < base["dspBlocks"]:
+                levers.append((m, r["module"], base["dspBlocks"], r["dspBlocks"],
+                               base.get("fmaxMhz"), r.get("fmaxMhz")))
+    if levers:
+        print()
+        print("  MEASURED ALTERNATIVES that cost FEWER DSP than the counted default.")
+        print("  Already fitted; no new work needed to take them, only a decision:")
+        for m, lab, d0, d1, f0, f1 in levers:
+            fs = ("%.2f -> %.2f MHz" % (f0, f1)) if (f0 and f1) else "Fmax n/a"
+            print("     %-34s %2d -> %2d DSP  (%+d)   %s"
+                  % (lab, d0, d1, d1 - d0, fs))
+        print("     A lower-DSP row is usually a slower row. Which ships is an")
+        print("     owner call -- listed, not counted, and not summed into the")
+        print("     total above.")
+
     only_lab = [m for m in unmeasured if m in labelled]
     if only_lab:
         print()
