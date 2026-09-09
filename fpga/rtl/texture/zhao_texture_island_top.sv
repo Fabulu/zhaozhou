@@ -1114,6 +1114,12 @@ module zhao_texture_island_top #(
       .req_u_i(fr_tmu_u), .req_v_i(fr_tmu_v),
       .req_base_i(bind_base_i), .req_mode_i(bind_mode_i),
       .req_lod_i(fr_tmu_lod),   // already Q4.4; see LODW above
+      // PAL_CARRY defaults to 0 here, so these tie-offs feed a chain that is a
+      // constant and folds away. The ports exist because the V3 island needs the
+      // palette carriage; this instance does not, and its netlist must not change
+      // -- gate 3 compares 392 retired records against it.
+      .req_pal_slot_i(2'd0), .req_pal_gen_i(8'd0),
+      .acc_pal_slot_o(), .acc_pal_gen_o(),
       .req_src_id_i(plan_src_id),
       .acc_valid_o(plan_acc_valid), .acc_ready_i(plan_acc_ready),
       .acc_en_o(plan_acc_en), .acc_addr_o(plan_acc_addr),

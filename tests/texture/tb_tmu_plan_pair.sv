@@ -131,6 +131,12 @@ module tb_tmu_plan_pair (
       .req_base_i  (b_base_i),
       .req_mode_i  (b_mode_i),
       .req_lod_i   (b_lod_i),
+      // PAL_CARRY defaults to 0 here, so these tie-offs feed a chain that is a
+      // constant and folds away. The ports exist because the V3 island needs the
+      // palette carriage; this instance does not, and its netlist must not change
+      // -- gate 3 compares 392 retired records against it.
+      .req_pal_slot_i(2'd0), .req_pal_gen_i(8'd0),
+      .acc_pal_slot_o(), .acc_pal_gen_o(),
       .req_src_id_i(b_src_i),
       .acc_valid_o (b_acc_valid_o),
       .acc_ready_i (b_acc_ready_i),

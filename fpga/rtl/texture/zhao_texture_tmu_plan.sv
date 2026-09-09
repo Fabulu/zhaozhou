@@ -52,6 +52,18 @@
 `default_nettype none
 
 module zhao_texture_tmu_plan #(
+    // PACKET 3 / §6: carry the palette pair alongside the source token.
+    //
+    // DEFAULT OFF, and that is not timidity -- `zhao_texture_island_top`, the
+    // ORACLE, instantiates this block too, and gate 3 compares 392 retired
+    // records against it on the strength of its netlist being unchanged.
+    // Unconditional carriage would add ten bits through five stages: fifty
+    // flip-flops the oracle never had, in the block whose invariance the whole
+    // comparison rests on.
+    //
+    // With PAL_CARRY=0 the stage registers do not elaborate and the outputs are
+    // constant zero, so an existing instantiation is bit-identical to before.
+    parameter bit PAL_CARRY = 1'b0,
     parameter int unsigned SRCW = 16,
     // ------------------------------------------------------------------------
     // THE LARGEST TEXTURE DIMENSION THIS PLANNER ADDRESSES, as log2.
@@ -92,6 +104,12 @@ module zhao_texture_tmu_plan #(
     input  var logic [31:0]     req_mode_i,
     input  var logic [ 7:0]     req_lod_i,
     input  var logic [SRCW-1:0] req_src_id_i,
+    // PACKET 3 / §6: the palette pair, carried through every accepted stage with
+    // the SAME enables as `req_src_id`. Carried as one 10-bit bundle rather than
+    // two signals so a stage that forgets it is greppable: every `*_src <=` line
+    // below has exactly one `*_pal <=` beside it.
+    input  var logic [1:0]      req_pal_slot_i,
+    input  var logic [7:0]      req_pal_gen_i,
 
     // ---- the registered cache-access packet ---------------------------------
     output var logic             acc_valid_o,
@@ -99,6 +117,8 @@ module zhao_texture_tmu_plan #(
     output var logic [  3:0]     acc_en_o,
     output var logic [127:0]     acc_addr_o,
     output var logic [SRCW-1:0]  acc_src_id_o,
+    output var logic [1:0]       acc_pal_slot_o,
+    output var logic [7:0]       acc_pal_gen_o,
     output var logic             acc_filter_o,
     output var logic             acc_err_o,
     // CLUT4'S NIBBLE, one bit per lane. It exists because the address below
@@ -227,6 +247,8 @@ module zhao_texture_tmu_plan #(
   logic [7:0]      t0_lod;
   /* verilator lint_on UNUSEDSIGNAL */
   logic [SRCW-1:0] t0_src;
+  logic [9:0] t0_pal;
+
 
   // ---- T1: mode sanitise, level clamp -------------------------------------
   logic [2:0]  m_fmt;
@@ -266,6 +288,8 @@ module zhao_texture_tmu_plan #(
   // further would be dead state that looks like a dependency.
   logic [31:0]     t1_u, t1_vc, t1_base;
   logic [SRCW-1:0] t1_src;
+  logic [9:0] t1_pal;
+
   logic [2:0]      t1_fmt;
   logic [1:0]      t1_wu, t1_wv;
   logic [3:0]      t1_log2w, t1_log2h, t1_level;
@@ -328,6 +352,8 @@ module zhao_texture_tmu_plan #(
   logic               t2_filt, t2_err, t2_clut4, t2_16bpp;
   logic [3:0]         nib_c;
   logic [SRCW-1:0]    t2_src;
+  logic [9:0] t2_pal;
+
 
   // ---- T3: wrap and row bases ---------------------------------------------
   logic [CW-1:0] uw0_c, uw1_c, vw0_c, vw1_c;
@@ -348,6 +374,8 @@ module zhao_texture_tmu_plan #(
   logic [2:0]      t3_fmt;
   logic            t3_filt, t3_err, t3_clut4, t3_16bpp;
   logic [SRCW-1:0] t3_src;
+  logic [9:0] t3_pal;
+
 
   // ---- T4: the four addresses ---------------------------------------------
   // The texel index adds are TW wide, not 32. Only the final base add -- which
@@ -390,6 +418,12 @@ module zhao_texture_tmu_plan #(
           t0_mode <= req_mode_i;
           t0_lod  <= req_lod_i;
           t0_src  <= req_src_id_i;
+          // Gated at the SOURCE, not per stage: with PAL_CARRY=0 the whole
+          // chain is a constant and folds away, so the oracle's netlist is
+          // untouched. Guarding each stage instead would need the registers
+          // inside a generate and hierarchical references out of it, which is
+          // not a thing to try on Quartus 17.
+          t0_pal  <= PAL_CARRY ? {req_pal_slot_i, req_pal_gen_i} : 10'd0;
           accepted_o <= accepted_o + 32'd1;
         end
       end
@@ -402,6 +436,7 @@ module zhao_texture_tmu_plan #(
           t1_vc    <= t0_vc;
           t1_base  <= t0_base;
           t1_src   <= t0_src;
+          t1_pal   <= t0_pal;
           t1_fmt   <= m_fmt;
           t1_wu    <= m_wrap_u;
           t1_wv    <= m_wrap_v;
@@ -446,6 +481,7 @@ module zhao_texture_tmu_plan #(
           t2_clut4   <= t1_clut4;
           t2_16bpp   <= t1_16bpp;
           t2_src     <= t1_src;
+          t2_pal     <= t1_pal;
         end
       end
 
@@ -467,6 +503,7 @@ module zhao_texture_tmu_plan #(
           t3_clut4  <= t2_clut4;
           t3_16bpp  <= t2_16bpp;
           t3_src    <= t2_src;
+          t3_pal    <= t2_pal;
         end
       end
 
@@ -478,6 +515,7 @@ module zhao_texture_tmu_plan #(
           // A non-filtered request reads one texel; a filtered one reads four.
           acc_en_o     <= t3_filt ? 4'b1111 : 4'b0001;
           acc_src_id_o <= t3_src;
+          {acc_pal_slot_o, acc_pal_gen_o} <= t3_pal;
           acc_filter_o <= t3_filt;
           acc_err_o    <= t3_err;
           acc_nib_o    <= nib_c;
