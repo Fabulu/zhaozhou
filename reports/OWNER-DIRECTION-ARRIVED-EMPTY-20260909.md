@@ -40,13 +40,33 @@ programme, and acting on an assumption about unknown goals is the one case where
 proceeding would make the work useless if the assumption were wrong. The session
 continued on already-authorised work instead.
 
-## What is needed
+## RESOLVED at 12:40:52 — and the content is a RE-SEND, not new direction
 
-The goals as a file (or in the commit body). A likely cause worth checking on the
-sending side: `git commit -a` stages modifications to **tracked** files only and
-silently skips a brand-new untracked file, so a freshly written document plus
-`commit -am` stages nothing — and an empty commit then requires `--allow-empty`
-or a wrapper that passes it.
+`0840bed9` *"Agent please read - New rearchitecture info"* arrived on the third
+attempt carrying two files, at the **repository root** rather than `reports/`:
+
+```
+ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt      2,575 lines
+ZHAOZHOU_MEMORY_FIRST_RESCUE_EVIDENCE_AND_CHECKS_2026-09-09.zip   79,690 bytes
+```
+
+**The .txt is byte-identical to the copy already in `reports/`** — same 2,575
+lines, same sha256 `ac3753e2ca7bc88d0f92`. So the three commits titled "new
+rearchitecture goals / help / info" deliver the memory-first resource rescue
+brief that has governed this session all along: §0.1's authorised list, §0.2's
+deferral of the reduction programme, §7.1's "the current texture gate remains the
+immediate task."
+
+**There is no new instruction to implement.** What failed was delivery, three
+times, and the third attempt re-delivered what was already here. That is
+`CLAUDE.md`'s recorded failure — *"posted four times because it kept not reaching
+the working agent"* — recurring, and the reason to check identity rather than
+assume a re-send is an update: acting on "new goals" that are in fact the
+standing brief would have produced motion without change.
+
+A likely cause on the sending side, worth knowing: `git commit -a` stages
+modifications to **tracked** files only and silently skips a brand-new untracked
+file, so a freshly written document plus `commit -am` stages nothing.
 
 ## What was NOT blocked by this
 

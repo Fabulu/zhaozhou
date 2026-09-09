@@ -2693,3 +2693,42 @@ token-table reads become a concrete ~3,000-register remedy. P infers, Q does not
 next candidate being that pk_i comes out of ANOTHER array read rather than a
 port. **P does not infer -> the probe is broken and nothing else here is
 evidence; check that first.**
+
+## 2026-09-09 -- direction RESOLVED (a re-send), and probe v3 ELIMINATES read style
+
+**Direction.** `0840bed9` 12:40 delivered two files at the REPO ROOT:
+`ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt` (2,575 lines) and its
+evidence zip (79,690 bytes). The .txt is **byte-identical** to the copy already in
+`reports/` -- same sha256 ac3753e2ca7bc88d0f92. So all three "new rearchitecture"
+commits deliver the SAME brief that has governed this session: 0.1's authorised
+list, 0.2's deferral, 7.1's texture-first. **Nothing new to implement.** Checked
+identity rather than assuming a re-send was an update -- acting on "new goals"
+that are the standing brief would have produced motion without change.
+
+**Probe v3: ALL THREE INFERRED.** rtlCleanAtHead true, 0 errors, 79.7 s, zero
+merges (the separate write ports worked), blockMemoryBits 1248 = 224+512+512,
+registers down to 117.
+
+    arr_p  16x14  continuous assign @ registered idx   INFERRED  <- control fires
+    arr_q  16x32  continuous assign @ registered idx   INFERRED
+    arr_r  16x32  read in always_ff @ comb idx         INFERRED
+
+So **READ STYLE IS NOT THE DISCRIMINATOR**, and neither is width. The probe is now
+a validated instrument: its positive control fires and nothing merges.
+
+**Four candidates eliminated for e_num_u:**
+  1. read-address count -- refuted by the @g2-prod fit (one read, one write, no
+     inference)
+  2. the array reset -- refuted by reading perspuv (only e_val/e_have are cleared)
+  3. read style -- refuted here (always_ff @ comb index infers fine)
+  4. width -- refuted here (14 and 32 both infer)
+
+**This makes the token table look MORE convertible, not less**: every shape in it
+infers in isolation, so something specific to perspuv blocks it, and specific
+things can be fixed. The pre-registered next candidate stands: perspuv's read
+index is `pk_i[ax] = wq[ax][wq_rp[ax][TW-1:0]]` -- the address is itself the
+output of another array read, and the read sits inside `if (pk_v[ax])` within a
+for loop with a ternary. My probe's address came straight from a port.
+
+Not claiming the blocker is found. Four hypotheses are dead and the instrument is
+sound, which is what the next iteration needs.
