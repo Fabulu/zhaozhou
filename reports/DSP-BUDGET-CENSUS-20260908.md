@@ -303,37 +303,77 @@ much, and the reason is worth stating plainly.
 ## The arithmetic, and it is not encouraging
 
 ```
-measured sum today                                     154
+measured sum today                                     152   <- tools/budget/dsp_census.py
   swap svc -> v3                                        -3   MEASURED, invariant
-  delete zhao_texture_combine                           -8   MEASURED
   quarter-square in material_combine_v2                 -2   ARITHMETIC, bit-exact
   project_core matrix operand -> 18 bits                -18  MEASURED calibration
                                                     -------
-  every lever with evidence behind it                  123
+  every lever with evidence behind it                  129
 device available                                        112
                                                     -------
-  still over by                                         11
+  still over by                                         17
 ```
 
-**Updated later the same day.** This block first stopped at 141 and "over by 29",
-before `calibration.json`'s asymmetric points were read. **`32x18` costs 2 DSP
-where `32x32` costs 3**, across nine matrix products in each of two cores, so the
-matrix operand alone is **-18** -- and that half does NOT depend on bounding the
-playable world, which is what `docs/OWNER_DOCKET.md` has had this blocked on since
-2026-08-24.
+## THE NUMBER IS NOW COMPUTED, NOT COUNTED BY HAND
 
-The caveat travels with the number: 18 bits is +-2.0 in Q16.16, which caps the
-longest usable lens near a 53 degree vertical field of view, and **nothing between
-18 and 24 has ever been measured**. Five points are queued to find where the cost
-really steps. See `PROJECT-CORE-OPERAND-WIDTH-20260909.md`.
+`tools/budget/dsp_census.py`, committed 2026-09-09. The 154 above was derived by
+hand and was re-derived three times that day, **once wrongly by me**. A figure
+the owner asks about repeatedly should not drift between askings.
 
-**So the levers with evidence close 31 of a 42-DSP gap, not 13** -- and 42 manifest
-blocks have still never been fitted, so the starting figure can only rise. The
-last 11, plus whatever those blocks add, comes from one place: the **66 DSP in two
-instances of `zhao_project_core`**, 43% of the budget and the single largest item
-before gate 4. Narrowing the COORDINATE to 27 bits as well takes those nine
-products from 2 DSP to 1 -- another **-18**, total **105**, under budget. That is
-the half that needs the world-size proof, and it is the owner's call.
+**Its 152 is not the 154 this report opened with, and the difference is
+methodology rather than a change in the design.** The tool states its choices
+because they are the substance: `top:` entries only (an `inside:` block is counted
+through its parent, and counting both is the double-count the manifest keeps
+warning about); labelled ledger rows skipped (`@g4-nctx12`, `@map` are alternate
+MEASUREMENTS of one module, not extra hardware); a MapOnly row contributes DSP but
+never a zero for its absent ALM; unmeasured blocks reported rather than assumed
+zero. **45 of 74 intended blocks still have no measured DSP figure**, so 152 is a
+floor and can only rise.
+
+The two figures are left disagreeing rather than one being fudged to match the
+other. Quote the tool.
+
+## AND `zhao_texture_combine` IS ALREADY BANKED -- it was never a trade
+
+It is gone from the arithmetic above because it is gone from the manifest, not
+because it is a pending lever.
+
+This report and its first addendum both priced it as a decision with a cost:
+"-8 DSP and -494 ALM, but +1,169 ALM and -30 MHz", on the assumption that
+`material_combine_v1` had to take its place. **That assumption was wrong and this
+file already contained the refutation** -- line 283: *"the ISLAND instantiates V2,
+the production top still instantiates V1"*.
+
+`zhao_texture_material_combine_v2` is the live combiner and BOTH islands
+instantiate it (`island_top:2026`, `island_v3_top:3279`). `zhao_texture_combine`
+is instantiated by **nothing but the generated resource top**. There was no
+replacement to pay for; v2 replaced it inside the island long ago, and the census
+was charging 8 DSP for hardware the console will never contain.
+
+Differenced both ways rather than asserted: **-8 DSP, -494 ALM**, exactly the
+block's measured row. Moved to `excluded:` rather than deleted -- identical
+census benefit, nothing destroyed.
+
+**`zhao_texture_material_combine_v1` looks equally dead**: 2 DSP charged, and
+nothing but the resource top instantiates it either. Flagged in the manifest,
+not decided -- retiring a second block on my reading of the tree is the owner's
+call rather than a bookkeeping correction.
+
+## What is left, and where it has to come from
+
+**The levers with evidence close 23 of a 40-DSP gap.** The last 17, plus whatever
+the 45 unfitted blocks add, comes from one place: the **66 DSP in two instances of
+`zhao_project_core`**, still the single largest item. Narrowing the COORDINATE to
+27 bits as well takes those nine products from 2 DSP to 1 -- another **-18**,
+which would land at 111 against 112. That is the half needing the world-size
+proof, and it is the owner's call.
+
+**And the ALM budget is breached too**, which this report never said: the census
+sums **44,271 ALM against 41,910**. That figure is an UPPER bound on the sum of
+parts -- composition shares what a per-block sum counts twice, and the composed
+island measured 2.4% under its standalone sum -- and simultaneously a LOWER bound
+on the machine. The tool prints both bounds beside the total so the breach cannot
+be quoted bare.
 
 So gate 4 is good news about the reciprocal tile and no news about the budget.
 The DSP problem is a `zhao_project_core` problem, and it has been since the census
