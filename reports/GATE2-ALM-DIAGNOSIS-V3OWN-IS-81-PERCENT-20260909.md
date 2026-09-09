@@ -228,3 +228,68 @@ from bits to ALMs runs through packing decisions this analysis does not make.
 And the convertible three are the CHEAP ones -- the two that would pay most are
 the two that are blocked, which is the ordinary shape of this kind of result and
 worth stating before anyone budgets from the easy half.
+
+---
+
+# CORRECTION TO THE TRIAGE: "convertible" was too strong, and the arrays are COUPLED
+
+The table above labels `cmt_q`, `fdn_q` and `ftc_q` CONVERTIBLE because their
+read addresses are already registered. **A registered address is necessary and
+not sufficient**, and checking the consumer before handing the triage on shows
+why.
+
+## A synchronous read moves the DATA too
+
+`cmt_q[c4t_slot_q]` feeds `t_cmt_next_c` (:756), which feeds `t_elig_c` (:768):
+
+```systemverilog
+assign t_cmt_next_c = cmt_q[c4t_slot_q] | c4t_mask_q | (same_owner_c ? SRC_AUX : 0);
+assign t_elig_c = c4t_v_q && win_live({c4t_gen_q, c4t_slot_q})
+               && ((t_cmt_next_c & req_q[c4t_slot_q]) == req_q[c4t_slot_q])
+               && !rdy_q[c4t_slot_q] && !crs_q[c4t_slot_q];
+```
+
+`t_elig_c` is the READY-TICKET eligibility, decided combinationally in the same
+cycle the C4T stage presents its slot. Converting `cmt_q` to a synchronous read
+delays `t_cmt_next_c` by a cycle and therefore delays a decision that gates
+ticket emission. The address being registered means the ADDRESS is ready early;
+the CONSUMER still expects the DATA now.
+
+## And they cannot be converted one at a time
+
+That single expression reads **four** of the eleven arrays at the same index:
+
+```
+cmt_q[c4t_slot_q]   req_q[c4t_slot_q]   rdy_q[c4t_slot_q]   crs_q[c4t_slot_q]
+```
+
+Converting one and leaving three as flip-flops gives an expression whose terms
+arrive in different cycles -- which is the metadata-swap shape this island
+already paid for once, at the join, where data and metadata came from different
+reads. **The eligibility path is a unit.**
+
+And `req_q` is one of the two BLOCKED arrays: it is also read at
+`iss_t_slot_c` on the issue path. So the convertible set and the blocked set are
+not separable populations -- they meet inside `t_elig_c`.
+
+## What the triage actually establishes
+
+Not "three arrays convert today". Rather:
+
+* **Address registration is a necessary FILTER, not a verdict.** It rules
+  `iss_q` and `req_q` out on the issue path, which stands.
+* **The unit of conversion is a READ EXPRESSION, not an array.** `t_elig_c` and
+  `a_elig_c` each bind four arrays to one slot index and one cycle.
+* **Doing this properly means moving the eligibility decision a cycle**, with
+  the credit and ticket protocol following it -- which is the same protocol the
+  D0 repair, the fence phase machine and the 541-check owner suite defend.
+
+That is a real piece of design work with a real hazard budget, and it is the
+honest size of the remedy. It is not the "384 bits, three muxes" the previous
+section implied, and I would rather correct that here than have someone plan
+from it.
+
+**Unchanged:** `v3own` is still 81% of the ALM overage, the mechanism is still
+eleven 64:1 muxes over asynchronously-read per-owner state, and the Decrufter
+pattern is still the remedy the island already contains. Only the estimate of
+how cheaply it can be taken was wrong.
