@@ -105,7 +105,16 @@ fit; the fit now says it wins.
 
 The swap itself. `RCP-V3-SWAP-HAS-NO-LIKE-FOR-LIKE` and
 `RCP-V3-THROUGHPUT-IS-NCTX-DEPENDENT` still stand: v3's throughput criterion is
-NCTX-dependent and the island runs NCTX=8, which is the *low* end. Area and Fmax
-now favour v3 decisively; **throughput at NCTX=8 is a Verilator question, costs
-under a minute, and has not been re-asked since the parameters settled.** That is
-the next thing to do on this block, and it needs no Quartus at all.
+NCTX-dependent and the island runs NCTX=8, which is the *low* end. Area and DSP
+now favour v3 decisively. **Fmax does not transfer to the island** -- see
+`ISLAND-TIMING-IS-ONE-REGISTER-BIT-20260909.md`, which shows the island's reported
+62.83 MHz is set by a pin path unrelated to the tile, and that a zero-delay
+reciprocal would move the internal-only ceiling by 4.08 MHz before hitting the
+next path out of the same source register.
+
+Throughput at NCTX=8 was already measured on 2026-09-08 and is **5.78 clk/recip,
+17% faster than the 6.96 serial reference**, below the tile's own 4.6 threshold,
+all arithmetic checks passing. What gate 4 changes is that memo's economics, not
+its throughput number: it priced the 17% against "8 M10Ks and +377 registers"
+taken from the mismatched pair. Matched, v3 spends **112 fewer** registers. The
++7 M10K is real.
