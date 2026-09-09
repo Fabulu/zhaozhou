@@ -11,12 +11,15 @@
 // and a shared source would let it merge logic across them.
 `default_nettype none
 
-module zhao_prod_top import zhao_pkg::*; (
+module zhao_prod_top (
     input  var logic clk,
     input  var logic rst_n,
     input  var logic seed_i,
     output var logic fold_o
 );
+
+  // Package types reach the wire declarations below.
+  import zhao_pkg::*;
 
   // ---- zhao_cmd_decoder ----
   logic [63:0] u00_lfsr_q;

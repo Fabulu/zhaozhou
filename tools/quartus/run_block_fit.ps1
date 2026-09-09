@@ -369,11 +369,28 @@ function Read-FitTargets([string]$Path) {
 
 # Does `module <name>` appear in a file the fit will actually compile? The
 # shell cone counts, and so does every extra source.
+# THE MATCHER TOLERATES THE HEADER IMPORT FORM.
+#
+# `module foo import pkg::*; #(...) (...)` is legal SystemVerilog. This preflight
+# used to require `#`, `(`, CR or LF immediately after the module name, so the
+# space-then-`import` failed and the fit refused to start with
+#
+#   preflight: no source names `module zhao_prod_top`
+#
+# -- a preflight complaining that the file does not declare the module the file
+# plainly declares. Found 2026-09-09 when gen_prod_top.py started emitting that
+# form to bring package typedefs into scope.
+#
+# The generator was changed to import as a module ITEM instead, which is the
+# better form there (every port is plain `logic`, so only the body needs the
+# types). The matcher is fixed as well, because the form is legal and the next
+# block to use it should not hit the same wall. Both call sites below, the
+# -ExtraSources list and the QSF scan, carry the same pattern.
 function Test-TopDeclared([string]$Top, [string[]]$Extras, [string]$Root, [string]$ShellQsf) {
     foreach ($f in $Extras) {
         $abs = Join-Path $Root $f
         if ((Test-Path -LiteralPath $abs) -and
-            ((Get-Content -LiteralPath $abs -Raw) -match ("(?m)^\s*module\s+" + [regex]::Escape($Top) + "\s*[#(\r\n]"))) {
+            ((Get-Content -LiteralPath $abs -Raw) -match ("(?m)^\s*module\s+" + [regex]::Escape($Top) + "\s*(import\s[^;]*;\s*)*[#(\r\n]"))) {
             return $true
         }
     }
@@ -382,7 +399,7 @@ function Test-TopDeclared([string]$Top, [string[]]$Extras, [string]$Root, [strin
             $rel = $Matches[1] -replace '^\.\./\.\./rtl/', 'fpga/rtl/'
             $abs = Join-Path $Root $rel
             if ((Test-Path -LiteralPath $abs) -and
-                ((Get-Content -LiteralPath $abs -Raw) -match ("(?m)^\s*module\s+" + [regex]::Escape($Top) + "\s*[#(\r\n]"))) {
+                ((Get-Content -LiteralPath $abs -Raw) -match ("(?m)^\s*module\s+" + [regex]::Escape($Top) + "\s*(import\s[^;]*;\s*)*[#(\r\n]"))) {
                 return $true
             }
         }
