@@ -53,6 +53,54 @@ island. The oracle's best clean row is `@p0c-stageA`:
 2,918 registers under the oracle's best -- for +10 M10K and 2 MHz. That is the
 memory-for-ALM trade working at composition scale, not just at the leaf.
 
+### CORRECTION, added within the hour: that baseline has DRIFTED
+
+Section 4.3h of `G1D-COMPOSED-ISLAND-20260905.md` justified using `@p0c-stageA`
+on the grounds that *"`@p0c-stageA`'s recorded digest MATCHES the current
+`zhao_texture_island_top.sv`"*. **That was true on 2026-09-08 and is not true
+now**, and I inherited the claim instead of re-running it -- which is precisely
+this repo's law about never comparing a current file to an old measurement,
+committed by the person quoting the law.
+
+Checked against the row's own `.sources.sha256`: **5 of its 15 sources have
+changed**, carrying 69 non-comment lines between them.
+
+| source | non-comment lines changed |
+|---|---|
+| `zhao_texture_rsp_dispatch.sv` | 28 |
+| `zhao_texture_cache_pipe.sv` | 15 |
+| `zhao_texture_tmu_plan.sv` | 14 |
+| `zhao_texture_palette_res.sv` | 8 |
+| `zhao_texture_island_top.sv` | 4 |
+
+One of those is mine and is inert here: `tmu_plan`'s `PAL_CARRY` defaults to `0`,
+so it folds away in the oracle. The other four are not accounted for.
+
+**So the -725 ALM is DIRECTIONAL, not exact, and its sign is not even guaranteed**
+-- if the oracle has grown since, V3's advantage is smaller than stated; if it has
+shrunk, larger. A true like-for-like needs a fresh oracle fit, which is 2-4 hours
+and is not obviously worth them. What survives without any baseline at all: V3
+production is **10,837 ALM on a clean tree with a real digest**, and that number
+needs no comparison to be quoted.
+
+#### And the instrument I checked it with was wrong twice
+
+First pass reported **6** changed sources, including `zhao_field_rcp24_rom.sv`,
+which `git diff` shows as identical across the two commits. Two faults, and the
+second is the interesting one:
+
+* I resolved recorded BASENAMES against the wrong directory, so all 15 came back
+  "MISSING" -- caught immediately because 15 of 15 failing is not a result.
+* The `.sources.sha256` file carries a **UTF-8 BOM**, so the first line's hash
+  string began with `U+FEFF` and could never match. `zhao_field_rcp24_rom.sv` is
+  simply the first line. Fixed by reading with `utf-8-sig`.
+
+Note the DIRECTION, because it is the unusual one: the BOM produced a **false
+alarm** -- a file reported changed that had not changed. Nearly every broken
+instrument in this repository's history has erred the other way, toward
+reassurance. That is why the count is 5 rather than 6, and why 5 is the number to
+act on.
+
 ### And it still fails the redline
 
 ```
