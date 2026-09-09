@@ -20,6 +20,25 @@ Every rung is `LABEL:K=V,K=V`. `--env` adds a variable to EVERY rung (that is
 where the backdrop and ZIXX_EXP=celmain go), so the sweep cannot accidentally
 change two things at once.
 
+⚠ `--sep` EXISTS BECAUSE THIS TOOL SILENTLY COULD NOT ASK ONE QUESTION.
+Rung settings split on `,`, and `U02_SHELL_TINT`'s value is itself `r,g,b`. So
+`U02_SHELL_TINT=255,214,232` was shredded into a variable named `214` and a
+variable named `232`, the reel's sscanf rejected the remaining "255", and the
+rung rendered **at the default tint while claiming to be a tint rung** -- a
+ladder whose rungs are all secretly identical, which is the most expensive shape
+of wrong evidence there is.
+
+Pass 15 shipped a fog shell whose findings called the tint "the axis that
+decides fog vs bleach" and "never swept in any pass", and the by-eye review then
+held the publish because the shell BLEACHED. **The axis nobody swept was the
+axis this driver could not express**, and no `PROVENANCE.txt` in
+`pass15-fx-plates/` carries a TINT rung. A missing tool feature and a missing
+finding were the same fact (10-GATE item 42, one level down: a question your
+instrument cannot phrase is a question nobody asks).
+
+`--sep ";"` then gives `LABEL:U02_SHELL_TINT=235,70,170;U02_SHELL_ALPHA=520`.
+The default stays "," so every ladder already recorded still replays exactly.
+
 It never deletes anything it did not create: the frame directory it purges is
 one it made itself under --out/.frames, and it refuses to run if that path
 exists already.
@@ -44,6 +63,9 @@ def main():
     ap.add_argument("--cols", type=int, default=0)
     ap.add_argument("--env", action="append", default=[], help="K=V for ALL rungs")
     ap.add_argument("--rung", action="append", required=True, help="LABEL:K=V,K=V")
+    ap.add_argument("--sep", default=",",
+                    help="separator BETWEEN rung settings (default ','). Use ';' "
+                         "when a VALUE contains a comma, e.g. U02_SHELL_TINT=r,g,b")
     ap.add_argument("--keep", action="store_true", help="do NOT purge frames")
     a = ap.parse_args()
 
@@ -67,8 +89,14 @@ def main():
         label, _, kvs = spec.partition(":")
         env = dict(os.environ)
         env.update(base)
-        for kv in [x for x in kvs.split(",") if x.strip()]:
+        for kv in [x for x in kvs.split(a.sep) if x.strip()]:
             k, _, v = kv.partition("=")
+            # A setting with no "=" is almost always a value that got split off
+            # its own key by the wrong separator -- the exact fault --sep exists
+            # for. Refuse it loudly instead of exporting a variable named "214".
+            if not k or "=" not in kv:
+                sys.exit("rung %r: %r is not K=V -- if a VALUE contains a comma, "
+                         "pass --sep ';'" % (label, kv))
             env[k] = v
         labels.append(label)
         os.makedirs(scratch, exist_ok=True)
@@ -96,6 +124,7 @@ def main():
         fh.write("md5:    " + stamp + os.linesep)
         fh.write("subject:" + a.subject + os.linesep)
         fh.write("common: " + repr(base) + os.linesep)
+        fh.write("sep:    " + repr(a.sep) + os.linesep)
         for spec in a.rung:
             fh.write("rung:   " + spec + os.linesep)
 
