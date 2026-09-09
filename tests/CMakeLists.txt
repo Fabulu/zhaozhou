@@ -2214,7 +2214,20 @@ verilate(test_island_v3_composed_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv)
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv
+  # --public-flat-rw so the metadata bank's `reads_o` can be read, which is what
+  # makes `meta_genmis_o == 0` assertable rather than merely printable.
+  #
+  # That port has been PRINTED here since this test was written and never once
+  # asserted. island_v3_fault_directed tried to assert it and its non-vacuity
+  # check failed immediately: writes 4, READS 0, because the fault probe models
+  # no texture memory so no response ever reaches the bank. The zero was real and
+  # meant nothing.
+  #
+  # This test does drive `fill_data_valid_i` and `sheet_rvalid_i`, so the read
+  # side is reachable here and the claim can be gated on it. A flag, not a source
+  # edit -- writable while the island sits in a running fit's closure.
+  VERILATOR_ARGS --public-flat-rw)
 
 # THE PRODUCTION PROFILE (D1/§4.2): the same functional source elaborated with
 # MIGRATION_SHADOWS=0, so the reference table, the three comparators, their
@@ -2256,7 +2269,18 @@ verilate(test_island_v3_prod_composed_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv
-  VERILATOR_ARGS -GMIGRATION_SHADOWS=0)
+  # --public-flat-rw for the same reason as the lab profile above: the packet-C
+  # phase reads the metadata bank's `reads_o` so that `meta_genmis_o == 0` is a
+  # gated claim rather than a printed number.
+  #
+  # THIS TARGET IS WHY THAT ACCESS COULD NOT JUST BE `#ifdef ISLAND_V3`. It
+  # defines ISLAND_V3 too, so it compiles the same code, and without the flag the
+  # symbols are private -- `'class Vzhao_texture_island_v3_top_...' has no member
+  # named 'u_metajoin__DOT__reads_o'`. Caught by the BUILD, and worth noting how
+  # it presented: the build failed while the previous prod binary still sat on
+  # disk and ran green at 124 checks. Reading BUILD_RC before the test output is
+  # the only reason that did not read as a pass.
+  VERILATOR_ARGS -GMIGRATION_SHADOWS=0 --public-flat-rw)
 add_test(NAME island_v3_prod_composed_directed
          COMMAND test_island_v3_prod_composed_directed)
 set_tests_properties(island_v3_prod_composed_directed PROPERTIES

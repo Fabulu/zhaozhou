@@ -269,6 +269,11 @@
 
 #ifdef ISLAND_V3
 #include "Vzhao_texture_island_v3_top.h"
+// Internal-scope headers, for the metadata bank's `reads_o` at the packet-C
+// phase. V3 only: this target carries --public-flat-rw and the oracle target
+// does not, and the oracle top has no metajoin to read.
+#include "Vzhao_texture_island_v3_top___024root.h"
+#include "Vzhao_texture_island_v3_top_zhao_texture_island_v3_top.h"
 #else
 #include "Vzhao_texture_island_top.h"
 #endif
@@ -2317,6 +2322,41 @@ int main(int argc, char** argv) {
 
   std::printf("    bank gen mismatches (slot recycled under a live response): %u\n",
               d.meta_genmis_o);
+
+  // AND NOW IT IS A GATE, not a printed number.
+  //
+  // `meta_genmis_o` has been printed on this line since the phase was written
+  // and never asserted. That is not obviously wrong -- a print cannot falsely
+  // reassure the way a green check can -- but it does mean nothing failed when
+  // the D0 defect was live, and D0 was precisely a metadata swap this counter
+  // was built to catch and structurally could not.
+  //
+  // The counter's silence is only evidence if the bank was READ. island_v3_fault
+  // _directed tried to assert this and its non-vacuity check failed at once:
+  // writes 4, reads 0, because that probe models no texture memory. Here the
+  // phase drives real responses -- 96 per phase across seven phases, per the
+  // comment at the top of this block -- so the read side is reachable and the
+  // claim can be gated on it.
+  //
+  // `reads_o` is reached through --public-flat-rw rather than by adding an island
+  // port, because this file is shared with the ORACLE top on the strength of
+  // their port lists matching. Hence also the `#ifdef ISLAND_V3` this sits in:
+  // only the V3 target carries the flag, and only the V3 top has a metajoin.
+  {
+    const uint32_t mj_rd = d.rootp->zhao_texture_island_v3_top->u_metajoin__DOT__reads_o;
+    const uint32_t mj_wr = d.rootp->zhao_texture_island_v3_top->u_metajoin__DOT__writes_o;
+    std::printf("    bank writes %u reads %u\n", mj_wr, mj_rd);
+    check(mj_rd > 0,
+                "the metadata bank was actually READ on the response stream -- "
+                "without this the mismatch zero below is a detector nothing "
+                "reached, which is how the D0 swap was called accounted for",
+                1, mj_rd > 0 ? 1 : 0);
+    check(d.meta_genmis_o == 0,
+                "and no metadata row came back against a generation it was not "
+                "written for -- the D0 claim, asserted rather than printed, on a "
+                "detector the repair made capable of firing",
+                0, d.meta_genmis_o);
+  }
   if (d.meta_bil_err_o) {
     const unsigned q = d.meta_bil_first_q_o, t = d.meta_bil_first_t_o;
     std::printf(

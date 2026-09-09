@@ -553,6 +553,61 @@ int main(int argc, char** argv) {
                 "bank's read enable and the join's accept are ONE signal, and "
                 "this is the check that the island still wires them that way",
                 ed_rd, jn_j);
+
+    // ---- and the METAJOIN, which is the one that matters most --------------
+    //
+    // `rd_gen_mismatch_o` is the counter CLAUDE.md records as having "never
+    // fired, and never could": before the D0 repair the bank registered its read
+    // UNCONDITIONALLY, so the stored generation and the row moved together on a
+    // swap and the comparison was blind to every timing fault the read enable
+    // participates in. A live identity counter beside the bug, reading zero.
+    //
+    // The island exposes it as `meta_genmis_o` -- and until now that port was
+    // only ever PRINTED (island_composed_directed.cpp:2318), never asserted. A
+    // printed number is at least honest about not being a gate; asserting it
+    // WITHOUT non-vacuity would have been the reassuring version. So: reads
+    // first, then the zero.
+    const uint32_t mj_wr = isl.u_metajoin__DOT__writes_o;
+    const uint32_t mj_rd = isl.u_metajoin__DOT__reads_o;
+    const uint32_t mj_mm = isl.u_metajoin__DOT__rd_gen_mismatch_o;
+    const uint32_t mj_bad = isl.u_metajoin__DOT__rd_illegal_sidx_o;
+
+    std::printf("  instruments: metajoin writes %u reads %u illegal-sidx %u genmm %u\n",
+                mj_wr, mj_rd, mj_bad, mj_mm);
+
+    zhao::check(mj_wr > 0, "the metadata bank was actually WRITTEN", 1,
+                mj_wr > 0 ? 1 : 0);
+
+    // AND THE READ SIDE IS UNREACHABLE FROM THIS PROBE, BY ITS OWN DESIGN.
+    //
+    // Measured on first run: writes 4, **reads 0**. The bank's read is
+    // `cache_smp_valid && r1_room_c` (island :2984), which needs the texture
+    // cache to return a sample -- and this file deliberately does not model
+    // texture memory (`fill_data_valid_i` and `sheet_rvalid_i` are held at 0,
+    // stated at the §4 comment above). No response, no read.
+    //
+    // So `rd_gen_mismatch_o == 0` HERE is precisely the vacuous zero this whole
+    // section exists to refuse, and asserting it would be the reassuring version
+    // of the D0 mistake rather than a check. It is declared unreachable instead,
+    // and the assertion lives in island_composed_directed, which does drive the
+    // fill and sheet ports.
+    //
+    // This was found by the non-vacuity check FAILING on its first run, which is
+    // the check doing its job: `meta_genmis_o` has been printed by the composed
+    // test since it was written (island_composed_directed.cpp:2318) and never
+    // once asserted or guarded.
+    zhao::check(mj_rd == 0,
+                "and its READ side is unreached from this probe, which models no "
+                "texture memory -- asserted as zero so that a future change "
+                "which starts feeding the cache FAILS here and forces the "
+                "mismatch check below to be moved rather than silently becoming "
+                "a real but unguarded claim",
+                0, mj_rd);
+    std::printf(
+        "  metajoin read side NOT exercised here (no texture memory modelled); "
+        "genmm %u and illegal-sidx %u are therefore NOT evidence -- see "
+        "island_composed_directed\n",
+        mj_mm, mj_bad);
   }
 
   // ---- §3.1 C, SECOND HALF: the island-level hop, by INJECTION -------------
