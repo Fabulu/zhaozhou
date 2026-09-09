@@ -441,3 +441,31 @@ fair one, so the instrument demonstrably distinguishes the two states rather tha
 being a hash that always agrees.
 
 `bitident` (Zixxtrixx, 71 subjects, both binaries) still running at ~subject 24.
+
+## 00:20 — lane closed
+
+Both repos in sync with `origin/main`, working trees clean, 23 plates shipped.
+
+**Wave-1 disjointness held exactly.** LANE-EYE landed
+`manafold_art.h`, `manafold_clips.h`, `manafold_model.h`, `manafold_rig.h`,
+`manafold_eyecam.cpp`, `eyesweep.py`; I landed `manafold_fx.h`,
+`zhao_reel.cpp`, `manafold_shellgate.cpp`, `build-direct.sh`. **Intersection:
+empty.** One Upheaval push needed a rebase onto their findings; it was clean.
+
+⚠ **One heads-up for the reviewer, not a complaint:** LANE-EYE's
+`manafold_eyecam.cpp` does not appear to have a `build-direct.sh` target either
+-- which is the item-42 fault I just fixed for `manafold_shellgate.cpp` (a
+committed gate nobody could build, so nobody had run it). Their call, but the
+two edits to that file will want merging together, and mine is additive: one
+function, one case label, one usage line.
+
+**Still running, deliberately, and it is the only thing:** `bitident.py`
+(Zixxtrixx identity, 71 subjects x 2 binaries), at subject ~35. One python
+driver plus one short-lived renderer per side, ~50 MB across three processes.
+The findings carry the log path, the exit-code meaning, the re-run command, what
+the answer should be and why, and the kill recipe (find the driver by COMMAND
+LINE, stop it by PID) if a fit needs the machine.
+
+**Everything else has exited** and this lane's 3,672 `.rgb` intermediates are
+purged. The lane is deletable once the publish wave re-renders the bank --
+`git worktree remove` for `base-tree`, not an `rm`.
