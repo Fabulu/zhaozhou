@@ -298,7 +298,7 @@ much, and the reason is worth stating plainly.
 | delete `zhao_texture_combine` | **-8** | -494 ALM (a gain), zero M10K | **MEASURED** (8 DSP / 494 ALM / 100.12 MHz) | owner decision; `prod_manifest.yml:69` instructs deletion and its trigger has fired, the ledger defers to the owner |
 | quarter-square ROM in `material_combine_v2` | **-2** | +2 M10K | ARITHMETIC, bit-exact identity | `material_combine_v2.sv` is inside the running island fit's closure |
 | share `zhao_project_core` between the two projectors | **-33** | arbitration + muxing | INFERENCE from totals; needs a composed fit | the core already misses the product clock by 39% on a path with no boundary to blame (D22) |
-| `perspuv_pairpipe` replacing two `perspuv_svc` lanes | unknown | unknown | **NOTHING -- never fitted.** `zhao_raster_perspuv_svc` is 6 DSP; the pair-pipe shares one scheduler across two lanes | it is registered in `design/fit_targets.yml:447` and has no row. One cheap MapOnly answers it. |
+| ~~`perspuv_pairpipe` replacing two `perspuv_svc` lanes~~ | **0** | -- | STRUCTURE, and it settles it without a fit: `perspuv_svc` has one multiply statement inside a `for (ax = 0; ax < 2)` loop = two multipliers = the 6 DSP it measures; the pair-pipe has **two** multiply statements, so also two | **Off the list.** It is an ALM and register lever -- one scheduler, one mantissa register, no operand tables -- not a DSP one. See `PAIRPIPE-IS-NOT-A-DSP-LEVER-20260909.md`, which pre-registers 6 DSP for it. |
 
 ## The arithmetic, and it is not encouraging
 
