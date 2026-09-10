@@ -93,7 +93,14 @@
 //
 // Conservative SystemVerilog subset only (charter §2); no package deps.
 
-module zhao_terrain_project (
+module zhao_terrain_project #(
+    // Passed straight to the core. 32 = the full-width matrix operand this
+    // block has always had (default; nothing ships differently). 18 = owner
+    // ruling R1's +-2.0 coefficient cap -- see the core's MATW header section
+    // and reports/OWNER-RULINGS-20260909-2300.md R1. The core's refusal law
+    // comes with it and surfaces here as `mat_refused_o`.
+    parameter int unsigned MATW = 32
+) (
     input logic clk,
     input logic rst_n,
 
@@ -155,7 +162,11 @@ module zhao_terrain_project (
     output logic        [ 7:0] out_weight_o,
 
     output logic [31:0] terrain_triangles_emitted_o,
-    output logic        idle_o
+    output logic        idle_o,
+    // Configuration writes the core REFUSED because a matrix product word did
+    // not fit signed MATW. Structurally zero at MATW=32; the core's counter,
+    // exposed rather than dropped.
+    output logic [31:0] mat_refused_o
 );
 
   // The riders, carried through the core as one opaque word. The core never
@@ -259,7 +270,8 @@ module zhao_terrain_project (
   logic             core_in_ready_unused;
 
   zhao_project_core #(
-      .PAYLOAD_W(PAY_W)
+      .PAYLOAD_W(PAY_W),
+      .MATW(MATW)
   ) u_core (
       .clk  (clk),
       .rst_n(rst_n),
@@ -298,7 +310,8 @@ module zhao_terrain_project (
       .out_view_o   (s6_view),
       .out_payload_o(s6_pay),
 
-      .busy_o(core_busy)
+      .busy_o(core_busy),
+      .mat_refused_o(mat_refused_o)
   );
 
   wire [ 1:0] s6_k      = s6_pay[41:40];

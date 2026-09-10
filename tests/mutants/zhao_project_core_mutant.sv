@@ -1,3 +1,40 @@
+// zhao_project_core_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
+//
+// This exists to make the MATW refusal law's two instruments -- the
+// `mat_refused_o` counter and the MATW=18-vs-32 differential -- DEMONSTRATED
+// rather than argued, by showing what the alternative looks like. The
+// alternative is the naive narrowing: store the low MATW bits of whatever
+// arrives and never say so. Its characteristic fault is not a wrong product
+// but a PLAUSIBLE one: +2.0 (0x0002_0000) has the same low 18 bits as -2.0,
+// so a `cot(fov/2)` one LSB over the ruled cap projects a mirrored, in-range
+// picture with every handshake completing, every other counter balancing, and
+// the fits-counter -- the instrument that ships -- reading zero because the
+// check it reports on is gone.
+//
+// The one substantive change, in g_fits_chk:
+//
+//     assign cfg_fits = (cfg_data_i[31:MATW-1] == {(33 - MATW) {cfg_data_i[31]}});
+//  -> assign cfg_fits = 1'b1;
+//
+// so no write is ever refused. On LEGAL content (every product word inside
+// +-1.99998) this mutant is INDISTINGUISHABLE from the real core -- which is
+// the weak-vector half of the demonstration: a differential that only ever
+// drove in-range matrices would wave the broken guard through.
+//
+// INVERTED POLARITY: driven by tests/geometry/proj_matw_mutant_control.cpp
+// against the REAL core at MATW=32; the control PASSES when (a) the streams
+// agree on legal content, (b) a write of +2.0 leaves this mutant's counter at
+// ZERO, and (c) the differential FAILS on the same content afterwards.
+// Evidence about the instruments, not about the design.
+//
+// The module is RENAMED so a source-list mistake can never elaborate it in
+// place of the real one, and it lives under tests/ where
+// check_forbidden_sources.py will not find it in a production closure.
+//
+// REGENERATE IT if zhao_project_core.sv changes shape: this is a copy, and a
+// copy of an old version is a positive control for a block that no longer
+// exists. Generator: the one-line diff above applied to the shipped file.
+
 // zhao_project_core.sv — the projection law, once.
 //
 // Contract: design/contracts/GEOM.PROJECT.md (Notes, "Follow-up"), and
@@ -258,7 +295,7 @@
 //
 // Conservative SystemVerilog subset only (charter §2); no package deps.
 
-module zhao_project_core #(
+module zhao_project_core_mutant #(
     // Opaque per-vertex rider, carried in lockstep and never interpreted.
     parameter int unsigned PAYLOAD_W = 16,
     // Matrix rows computed per cycle. 3 = all rows spatially (nine mul32
@@ -470,7 +507,13 @@ module zhao_project_core #(
       // Fits signed MATW iff bits [31:MATW-1] are all the sign bit. This is
       // the exact test, not a magnitude compare: -2^(MATW-1) fits, +2^(MATW-1)
       // does not, and both land on the boundary this reads.
-      assign cfg_fits = (cfg_data_i[31:MATW-1] == {(33 - MATW) {cfg_data_i[31]}});
+      // MUTANT: the fits-check is REMOVED (the one substantive change). The
+      // real line is
+      //   assign cfg_fits = (cfg_data_i[31:MATW-1] == {(33 - MATW) {cfg_data_i[31]}});
+      // With it gone, every write is accepted, the counter can never move,
+      // and the multiplier reads the low MATW bits of whatever arrived:
+      // +2.0 (0x0002_0000) becomes -2.0 in silence.
+      assign cfg_fits = 1'b1;
     end
   endgenerate
 
@@ -522,12 +565,12 @@ module zhao_project_core #(
   // including a configuration write landing mid-sequence.
   initial begin
     if (ROWS_PER_PASS != 3 && ROWS_PER_PASS != 1)
-      $fatal(1, "zhao_project_core: ROWS_PER_PASS (%0d) must be 3 or 1",
+      $fatal(1, "zhao_project_core_mutant: ROWS_PER_PASS (%0d) must be 3 or 1",
              ROWS_PER_PASS);
     // 19..27 buy nothing and 19 costs MORE than 32 (calibration.json,
     // asymmetric rows). Only the two measured-to-pay widths are legal.
     if (MATW != 32 && MATW != 18)
-      $fatal(1, "zhao_project_core: MATW (%0d) must be 32 or 18", MATW);
+      $fatal(1, "zhao_project_core_mutant: MATW (%0d) must be 32 or 18", MATW);
   end
 
   logic                        s1_valid;
@@ -1035,4 +1078,4 @@ module zhao_project_core #(
     for (bi = 0; bi <= DIV_STEPS; bi = bi + 1) busy_o = busy_o || dstep_valid[bi];
   end
 
-endmodule : zhao_project_core
+endmodule : zhao_project_core_mutant

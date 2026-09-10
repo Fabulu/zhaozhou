@@ -62,7 +62,14 @@
 //   ENFORCED-BY: tests/geometry/geom_project_directed.cpp:main
 //
 // Conservative SystemVerilog subset only (charter §2); no package deps.
-module zhao_geom_project (
+module zhao_geom_project #(
+    // Passed straight to the core. 32 = the full-width matrix operand this
+    // block has always had (default; nothing ships differently). 18 = owner
+    // ruling R1's +-2.0 coefficient cap -- see the core's MATW header section
+    // and reports/OWNER-RULINGS-20260909-2300.md R1. The core's refusal law
+    // comes with it and surfaces here as `mat_refused_o`.
+    parameter int unsigned MATW = 32
+) (
     input logic clk,
     input logic rst_n,
 
@@ -98,7 +105,12 @@ module zhao_geom_project (
     output logic               out_behind_o, // clip.w <= 0: the vertex is zero
     output logic        [15:0] out_src_id_o,
 
-    output logic [31:0] vertices_transformed_o
+    output logic [31:0] vertices_transformed_o,
+    // Configuration writes the core REFUSED because a matrix product word did
+    // not fit signed MATW. Structurally zero at MATW=32; the core's counter,
+    // exposed rather than dropped -- an error output left open is the
+    // unfired-detector law.
+    output logic [31:0] mat_refused_o
 );
 
   // ---------------------------------------------------------------------------
@@ -128,7 +140,8 @@ module zhao_geom_project (
   /* verilator lint_on UNUSEDSIGNAL */
 
   zhao_project_core #(
-      .PAYLOAD_W(16)
+      .PAYLOAD_W(16),
+      .MATW(MATW)
   ) u_core (
       .clk  (clk),
       .rst_n(rst_n),
@@ -157,7 +170,8 @@ module zhao_geom_project (
       .out_view_o   (core_view),
       .out_payload_o(out_src_id_o),
 
-      .busy_o(core_busy)
+      .busy_o(core_busy),
+      .mat_refused_o(mat_refused_o)
   );
 
   // ---------------------------------------------------------------------------

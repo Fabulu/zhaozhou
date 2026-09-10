@@ -43,6 +43,7 @@ module tb_proj_rowmux (
     output wire        r_out_view_o,
     output wire [15:0] r_out_payload_o,
     output wire        r_busy_o,
+    output wire [31:0] r_mat_refused_o,
 
     // ---- device under test: ROWS_PER_PASS = 1 ------------------------------
     input  wire        d_cfg_we_i,
@@ -65,7 +66,8 @@ module tb_proj_rowmux (
     output wire        d_out_behind_o,
     output wire        d_out_view_o,
     output wire [15:0] d_out_payload_o,
-    output wire        d_busy_o
+    output wire        d_busy_o,
+    output wire [31:0] d_mat_refused_o
 );
 
   zhao_project_core #(
@@ -94,7 +96,8 @@ module tb_proj_rowmux (
       .out_behind_o (r_out_behind_o),
       .out_view_o   (r_out_view_o),
       .out_payload_o(r_out_payload_o),
-      .busy_o       (r_busy_o)
+      .busy_o       (r_busy_o),
+      .mat_refused_o(r_mat_refused_o)
   );
 
   zhao_project_core #(
@@ -123,7 +126,8 @@ module tb_proj_rowmux (
       .out_behind_o (d_out_behind_o),
       .out_view_o   (d_out_view_o),
       .out_payload_o(d_out_payload_o),
-      .busy_o       (d_busy_o)
+      .busy_o       (d_busy_o),
+      .mat_refused_o(d_mat_refused_o)
   );
 
 endmodule : tb_proj_rowmux

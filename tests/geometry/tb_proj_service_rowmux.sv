@@ -56,7 +56,8 @@ module tb_proj_service_rowmux (
     output wire        busy_o,
     output wire [31:0] a_grants_o,
     output wire [31:0] b_grants_o,
-    output wire [31:0] contended_o
+    output wire [31:0] contended_o,
+    output wire [31:0] mat_refused_o
 );
 
   zhao_project_service #(
@@ -104,7 +105,8 @@ module tb_proj_service_rowmux (
       .busy_o     (busy_o),
       .a_grants_o (a_grants_o),
       .b_grants_o (b_grants_o),
-      .contended_o(contended_o)
+      .contended_o(contended_o),
+      .mat_refused_o(mat_refused_o)
   );
 
 endmodule : tb_proj_service_rowmux

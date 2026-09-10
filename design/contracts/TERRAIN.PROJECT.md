@@ -44,6 +44,14 @@ writes a register, rather than appearing as a kilobit-wide boundary. Address map
 | 17 | viewport extent — `h = data[27:16]`, `w = data[11:0]` |
 | 18..31 | ignored |
 
+**`MATW` (2026-09-10, owner ruling R1).** The nine PRODUCT words (columns 0..2
+of rows 0, 1, 3) enter the shared core's multiplier at `MATW` bits, a parameter
+passed through this block; default **32**, the whole word, table unchanged. At
+**18** a product word must fit signed Q16.16 in 18 bits (`[-2.0, +1.99998]`); a
+write that does not is **REFUSED** -- the register keeps its previous value and
+`mat_refused_o` counts it. Words 3, 7, 15 (the shifted translation column) and
+row 2 are never checked. See GEOM.PROJECT.md, which shares the core and the law.
+
 Configuration is sampled by a packet as it enters stage 1 (the matrix) and at
 stage 6 (the viewport). Rewriting either while packets are in flight is
 therefore not frame-coherent; the caller writes both views' registers before the
@@ -241,6 +249,13 @@ enough for the whole word (see Widths above) and the divider's pre-rail compare
 covers every quotient the word can produce. That is deliberate: the reference's
 own `mat4_vec4` uses `__int128` and does not wrap either, so agreeing with it
 everywhere is achievable and is therefore required.
+
+*At `MATW=18` (2026-09-10) that sentence holds for every coordinate and for the
+translation column, and for the nine product words it holds over their
+**declared** domain `[-131072, +131071]`; a product word outside it is not
+computed wrongly -- it is refused at the configuration write and counted on
+`mat_refused_o`, so the previous matrix stays in force. Nothing wraps at either
+setting.*
 
 - **`clip.w <= 0` is a rejection, not a clamp.** The vertex's bit of
   `out_behind_o` rises and it carries `{0, 0, 0}` — the same zeros

@@ -132,7 +132,12 @@ module zhao_project_service #(
     // Whether the composed frame budget affords II=3 is derived in
     // reports/PROJECT-CORE-ROW-MULTIPLEX-20260909.md: with the arena,
     // 3 x 398,784 = 1,196,352 of 1,666,666 clocks (71.8%).
-    parameter int unsigned ROWS_PER_PASS = 3
+    parameter int unsigned ROWS_PER_PASS = 3,
+    // Passed to the core. 32 = full-width matrix operand (default). 18 = owner
+    // ruling R1's +-2.0 coefficient cap (reports/OWNER-RULINGS-20260909-2300.md
+    // R1), the only other width the calibration says pays. The core's refusal
+    // law and `mat_refused_o` come with it; the service adds nothing.
+    parameter int unsigned MATW = 32
 ) (
     input  wire                       clk,
     input  wire                       rst_n,
@@ -194,7 +199,12 @@ module zhao_project_service #(
     // limit and that is a measurement, not an opinion.
     output logic [31:0]               a_grants_o,
     output logic [31:0]               b_grants_o,
-    output logic [31:0]               contended_o
+    output logic [31:0]               contended_o,
+    // Configuration writes the core REFUSED because a product word did not
+    // fit signed MATW (the core's refusal law). ONE bank, so one counter for
+    // both clients -- the cfg bus is shared, and so is the fault. Structurally
+    // zero at MATW=32.
+    output wire  [31:0]               mat_refused_o
 );
 
   // The rider carries the client id in its top bit. 42 + 1 for terrain, and
@@ -263,7 +273,8 @@ module zhao_project_service #(
 
   zhao_project_core #(
       .PAYLOAD_W(PAY_W),
-      .ROWS_PER_PASS(ROWS_PER_PASS)
+      .ROWS_PER_PASS(ROWS_PER_PASS),
+      .MATW(MATW)
   ) u_core (
       .clk        (clk),
       .rst_n      (rst_n),
@@ -287,7 +298,8 @@ module zhao_project_service #(
       .out_behind_o(o_behind),
       .out_view_o (o_view),
       .out_payload_o(o_payload),
-      .busy_o     (busy_o)
+      .busy_o     (busy_o),
+      .mat_refused_o(mat_refused_o)
   );
 
   // ---- result demux -------------------------------------------------------

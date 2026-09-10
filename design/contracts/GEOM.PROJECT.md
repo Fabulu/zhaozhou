@@ -25,6 +25,18 @@ counter. No clock-domain crossing lives in this block.
 Two complete sets, selected by `cfg_view_i`. Matrix words 8..11 (row 2) are
 writable and inert -- see Q formats.
 
+**`MATW` (2026-09-10, owner ruling R1).** The nine PRODUCT words -- columns
+0..2 of rows 0, 1 and 3 -- enter the multiplier at `MATW` bits, a parameter of
+the shared core passed through this block. At the default **32** the operand is
+the whole fx16 word and this table is unchanged. At **18** (the only other legal
+value; `reports/OWNER-RULINGS-20260909-2300.md` R1 accepts a vertical FOV floor
+just above 53.13 degrees, which caps `cot(fov/2)` at +-2.0) a product word must
+fit signed Q16.16 in 18 bits, `[-131072, +131071]` raw = `[-2.0, +1.99998]`. A
+write that does not fit is **REFUSED**: the register keeps its previous value
+and `mat_refused_o` counts it. The translation column (words 3, 7, 15) never
+enters a multiplier and stays full-width at every `MATW`; row 2 stays inert and
+unchecked. Vertices are untouched -- full s32.
+
 **Vertices in**, ready/valid, one per beat: `vx_i` / `vy_i` / `vz_i` (s32 fx16
 world position), `view_i` (which register set), `src_id_i` (u16, opaque).
 
@@ -128,6 +140,15 @@ frame. The pipelined divider costs 3 lanes x 31 stages x 63 bits of register and
 Saturation everywhere, never wraparound: the row rescale saturates to the fx16
 word, the quotients saturate exactly as `fx_div_exact` does, and `to_screen_xy`
 clamps to the guard band.
+
+**A matrix product word that does not fit `MATW` is refused, counted on
+`mat_refused_o`, and the previous word stays in force** -- deterministic refusal,
+never a silent clamp and never a wrap. At `MATW=32` every word fits and the
+counter is structurally zero. Evidence: `tests/geometry/proj_matw_directed.cpp`
+(the counter seen to fire, the register seen to hold, MATW=18 byte-identical to
+MATW=32 over the whole legal domain) and the committed mutant
+`tests/mutants/zhao_project_core_mutant.sv` (the check removed: +2.0 wraps to
+-2.0 in silence, and only the differential sees it).
 
 **A behind-the-eye vertex (`clip.w <= 0`) carries ZERO and is not dropped.**
 `project_vertex` returns a default-constructed `ProjOut`, whose screen vertex is
@@ -290,9 +311,15 @@ rate would halve. It is costed on the 2026-08-24 docket entry, together with the
 reason it should wait for the projected-vertex cache.
 
 **Follow-up, in order:** the projected-vertex cache (`GEOM.WCACHE`), then one
-shared core instance, then the 27-bit width narrowing. They compose, only the
-first two are order-dependent, and all three now land in one file instead of
-two.
+shared core instance, then the width narrowing. They compose, only the first two
+are order-dependent, and all three now land in one file instead of two.
+*Corrected 2026-09-10:* the narrowing is **18 bits on the matrix operand**
+(`MATW`, built, default 32), not 27 -- `32x27` measures the same 3 DSP as
+`32x32` and only `32x18` (2 DSP) pays. Because the levers act on the same
+multiplier sites they compose multiplicatively: 66 -> 33 (shared) -> 15
+(`ROWS_PER_PASS=1`) -> **12** (`MATW=18`), so the width lever is worth -3 after
+the other two, -18 taken alone on two spatial cores. STRUCTURAL until the
+projection-subsystem fit gate; see `reports/PROJECT-CORE-MATW18-20260910.md`.
 
 ## DEFECT — `out_w_o` HAS NO ORACLE (found 2026-09-04, by cppcheck)
 

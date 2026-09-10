@@ -938,6 +938,9 @@ module tb_zhao_shell (
   logic signed [31:0] pj_out_d;
   logic [15:0]        pj_out_src;
   logic [31:0]        pj_transformed;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0] pj_mat_refused;  // core refusal counter, see u_project
+  /* verilator lint_on UNUSEDSIGNAL */
   /* verilator lint_on UNUSEDSIGNAL */
 
   // The collector. THREE vertices in, one triangle out.
@@ -1260,7 +1263,11 @@ module tb_zhao_shell (
       .out_x_o(pj_out_x), .out_y_o(pj_out_y), .out_d_o(pj_out_d),
       .out_w_o(pj_out_w), .out_behind_o(pj_out_behind),
       .out_src_id_o(pj_out_src),
-      .vertices_transformed_o(pj_transformed));
+      .vertices_transformed_o(pj_transformed),
+      // The core's refusal counter (MATW). This bench runs the default
+      // MATW=32, where it is structurally zero; connected so the pin list is
+      // complete, unread because the shell packet has no field for it.
+      .mat_refused_o(pj_mat_refused));
 
   // ---- D22 step 3: GEOM.CLIP ------------------------------------------------
   localparam int unsigned CLIP_ATTRS = 7;

@@ -1901,6 +1901,7 @@ module zhao_prod_top (
   logic [1-1:0] u29_out_behind_o;
   logic [16-1:0] u29_out_src_id_o;
   logic [32-1:0] u29_vertices_transformed_o;
+  logic [32-1:0] u29_mat_refused_o;
   zhao_geom_project u29_i (
       .clk(clk),
       .rst_n(rst_n),
@@ -1923,12 +1924,13 @@ module zhao_prod_top (
       .out_w_o(u29_out_w_o),
       .out_behind_o(u29_out_behind_o),
       .out_src_id_o(u29_out_src_id_o),
-      .vertices_transformed_o(u29_vertices_transformed_o)
+      .vertices_transformed_o(u29_vertices_transformed_o),
+      .mat_refused_o(u29_mat_refused_o)
   );
   logic u29_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u29_fold_q <= 1'b0;
-    else u29_fold_q <= u29_fold_q ^ (^u29_v_ready_o) ^ (^u29_out_valid_o) ^ (^u29_out_x_o) ^ (^u29_out_y_o) ^ (^u29_out_d_o) ^ (^u29_out_w_o) ^ (^u29_out_behind_o) ^ (^u29_out_src_id_o) ^ (^u29_vertices_transformed_o);
+    else u29_fold_q <= u29_fold_q ^ (^u29_v_ready_o) ^ (^u29_out_valid_o) ^ (^u29_out_x_o) ^ (^u29_out_y_o) ^ (^u29_out_d_o) ^ (^u29_out_w_o) ^ (^u29_out_behind_o) ^ (^u29_out_src_id_o) ^ (^u29_vertices_transformed_o) ^ (^u29_mat_refused_o);
 
   // ---- zhao_geom_setup ----
   logic [63:0] u30_lfsr_q;
@@ -3997,6 +3999,7 @@ module zhao_prod_top (
   logic [8-1:0] u57_out_weight_o;
   logic [32-1:0] u57_terrain_triangles_emitted_o;
   logic [1-1:0] u57_idle_o;
+  logic [32-1:0] u57_mat_refused_o;
   zhao_terrain_project u57_i (
       .clk(clk),
       .rst_n(rst_n),
@@ -4038,12 +4041,13 @@ module zhao_prod_top (
       .out_mat_b_o(u57_out_mat_b_o),
       .out_weight_o(u57_out_weight_o),
       .terrain_triangles_emitted_o(u57_terrain_triangles_emitted_o),
-      .idle_o(u57_idle_o)
+      .idle_o(u57_idle_o),
+      .mat_refused_o(u57_mat_refused_o)
   );
   logic u57_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u57_fold_q <= 1'b0;
-    else u57_fold_q <= u57_fold_q ^ (^u57_tri_ready_o) ^ (^u57_out_valid_o) ^ (^u57_out_ax_o) ^ (^u57_out_ay_o) ^ (^u57_out_bx_o) ^ (^u57_out_by_o) ^ (^u57_out_cx_o) ^ (^u57_out_cy_o) ^ (^u57_out_behind_o) ^ (^u57_out_src_id_o) ^ (^u57_out_ad_o) ^ (^u57_out_bd_o) ^ (^u57_out_cd_o) ^ (^u57_out_view_o) ^ (^u57_out_mat_a_o) ^ (^u57_out_mat_b_o) ^ (^u57_out_weight_o) ^ (^u57_terrain_triangles_emitted_o) ^ (^u57_idle_o);
+    else u57_fold_q <= u57_fold_q ^ (^u57_tri_ready_o) ^ (^u57_out_valid_o) ^ (^u57_out_ax_o) ^ (^u57_out_ay_o) ^ (^u57_out_bx_o) ^ (^u57_out_by_o) ^ (^u57_out_cx_o) ^ (^u57_out_cy_o) ^ (^u57_out_behind_o) ^ (^u57_out_src_id_o) ^ (^u57_out_ad_o) ^ (^u57_out_bd_o) ^ (^u57_out_cd_o) ^ (^u57_out_view_o) ^ (^u57_out_mat_a_o) ^ (^u57_out_mat_b_o) ^ (^u57_out_weight_o) ^ (^u57_terrain_triangles_emitted_o) ^ (^u57_idle_o) ^ (^u57_mat_refused_o);
 
   // ---- zhao_terrain_residency_v2 ----
   logic [63:0] u58_lfsr_q;

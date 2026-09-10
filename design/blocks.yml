@@ -195,6 +195,14 @@ counter_catalog:
   - prefetch_stall_cycles
   - vertices_decoded
   - vertices_transformed
+  # GEOM.PROJECT / TERRAIN.PROJECT (2026-09-10, owner ruling R1): configuration
+  # writes the shared projection core REFUSED because a matrix product word did
+  # not fit the signed MATW-bit multiplier operand (+-1.99998 at MATW=18).
+  # Refused and counted, never clamped -- a clamped cot(fov/2) is a plausible
+  # wrong picture with nothing to say so. Structurally zero at the default
+  # MATW=32; seen to fire at MATW=18 by tests/geometry/proj_matw_directed.cpp,
+  # and its ABSENCE shown by tests/mutants/zhao_project_core_mutant.sv.
+  - mat_refused
   - triangles_submitted
   - triangles_clipped
   - triangles_culled
@@ -2893,7 +2901,7 @@ blocks:
     tests:
       directed: tests/terrain/terrain_project_directed.cpp
       random: tests/terrain/terrain_project_random.cpp
-    counters: [terrain_triangles_emitted]
+    counters: [terrain_triangles_emitted, mat_refused]
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -3428,7 +3436,7 @@ blocks:
     tests:
       directed: tests/geometry/geom_project_directed.cpp
       random: tests/geometry/geom_project_directed.cpp
-    counters: [vertices_transformed]
+    counters: [vertices_transformed, mat_refused]
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
