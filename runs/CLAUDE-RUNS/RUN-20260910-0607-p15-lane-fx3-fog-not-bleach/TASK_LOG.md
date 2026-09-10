@@ -192,3 +192,162 @@ live-tree hazard. It is the committed-mutant idea applied to a gate.
       [FAIL] 7 the fog is an OUTER LAYER -- peak 17 px in, must be under 13
 
 That is checklist 43's question answered on the record instead of in prose.
+
+### 07:20 — REBASED MID-FLIGHT, AND THE PUSH THAT SAID IT SUCCEEDED HAD FAILED
+
+`git push ... | tail -3` printed **`PUSH_RC=0`** while the push was **rejected**
+non-fast-forward. That is `tail`'s status, and CLAUDE.md's own entry — *"read the
+real exit code, of the thing, not of the pipeline"* — caught in the wild, in the
+one command where believing it would have meant reporting work as landed that was
+still sitting in my lane. Re-run bare: `REAL_PUSH_RC=0`, and then verified from
+outside by `git fetch` + `git log origin/main`.
+
+**LANE-EYE-2 had landed `c269b448` while I worked**, and it touches
+`zhao_reel.cpp` — a file my brief calls mine. **Rebased, never merged blind.**
+Clean, both lanes' work present afterwards, verified by grepping for my seven
+constants and their `U02_SHELL_INK` knob on one side and the eye lane's commit on
+the other.
+
+### 07:30 — I RE-RENDERED ON THE MERGED TREE, BECAUSE THAT IS THE FAULT THIS PASS WAS CRITICISED FOR
+
+The review's own words: *"Every plate in `pass15-plates-eye/` predates the FX
+merge… nobody has judged the merged result."* My ladders came from a **pre-merge**
+binary, so shipping them unremarked would have been the same fault in reverse.
+
+Rebuilt (`eee6bd5c`), re-rendered the three key rungs, and looked again: **the
+shell holds.** Core deep plum, terminator present, gas at the rim.
+
+And the cheap check that made it airtight — the merged frames are **byte-identical
+to the pre-merge ones**:
+
+    OFF_ABLATED-0300      IDENTICAL pre/post merge
+    P15_REGRESSION-0300   IDENTICAL pre/post merge
+    SHIP_g1050-0300       IDENTICAL pre/post merge
+
+So LANE-EYE-2's change is **inert on `manafold-inspect` f0300**, and my judgement
+frame is the same pixels either way. ⚠ **That is a statement about ONE subject and
+must not be generalised** — the QA lane's own commit title says the eye fix
+regressed seven live subjects. It says my ladder is valid on the merged tree; it
+says nothing about theirs.
+
+I had also *thought* the lens looked different between the two plates. It did not
+— the two plates used different column counts and therefore different display
+scaling. **A crop confirms; an impression does not** (item 41), and I checked
+instead of writing it down.
+
+### 07:35 — LOAD: a sibling renderer identified, and NOT killed
+
+Census by command line found `zhao-reel-cel.exe` running out of
+**`manafold-p15-eye/build-before`** and later `build-eye` — a sibling lane
+mid-render, in a directory I am forbidden to touch. Nothing killed; **no
+`taskkill /IM` anywhere in this run**. I held my own concurrency to one renderer
+at a time and waited for the sibling to finish before starting the long
+bit-identity job. This is the night the owner lost eight hours, avoided by ten
+seconds of `Get-CimInstance`.
+
+### 08:10 — ZIXXTRIXX BIT-IDENTITY: 69 IDENTICAL, 0 DIFFERS, 15634/15634 FRAMES
+
+`zhao_reel.cpp` is on the protected list, so its bytes must be re-proved.
+**Self-built baseline**, not an inherited one: a detached `git worktree` at
+`c269b448` — the exact commit my work sits on — built `--clean` to
+`0f236fb9`, against my merged tree's `eee6bd5c`. That isolates **my** delta
+rather than the merge's.
+
+    IDENTICAL 69   DIFFERS 0   EMPTY 2   of 71
+    frames 15634/15634 identical
+    BITIDENT_RC=0
+
+⚠ **The tool flagged its own weakness and I am repeating it rather than burying
+it:** `distinct CRCs 68 of 69 non-empty subjects <-- COLLAPSED, the metric is not
+discriminating`. Two subjects share a CRC, so the CRC leg has a collision. This
+is **pre-existing** — the previous lane's `bitident.log` in this same lane
+carries the identical line — and it is exactly why the tool runs **two**
+independent metrics: the per-frame sha256 leg is unaffected and is what carries
+the weight here. Worth someone's attention; not mine to chase, and not a reason
+to doubt this result.
+
+### 08:15 — THE POSITIVE CONTROL, because a green that has never gone red is not evidence
+
+`bitident.py`'s own header: *"Run it BOTH WAYS ROUND. Green against a
+default-off change proves the change is inert; it does not prove the harness can
+see anything. Build a deliberately mutated binary and this must go red, or the
+green meant nothing."*
+
+The mutant is **one substantive line** in the shared engine — the angular U
+mapping in `creature_core.cpp`, which every creature renders through:
+
+    out[k].u = static_cast<uint8_t>(ang >> 8);        ->  ... + 1);
+
+⚠ **It lives ONLY in the disposable detached worktree and is never committed to
+a production tree**, so there is no live-tree hazard and nothing can elaborate it
+by accident — the committed-mutant rule's intent, met by isolation rather than by
+a renamed file, because this is a throwaway build rather than a durable artefact.
+It carries a header saying what was changed and why.
+
+Scoped to **4 subjects, declared**: the control's job is to show the instrument
+can see a change, not to survey the bank a second time.
+
+### 08:35 — THE POSITIVE CONTROL WENT RED ON EVERY SUBJECT
+
+    zixxtrixx-attack   560 frames   0 identical   DIFFERS
+    zixxtrixx-idle     576 frames   0 identical   DIFFERS
+    zixxtrixx-walk     160 frames   0 identical   DIFFERS
+    zixxtrixx-death    192 frames   0 identical   DIFFERS
+    IDENTICAL 0   DIFFERS 4   of 4      MUTANT_BITIDENT_RC=1
+
+**Both metrics moved** — the CRCs differ as well as the per-frame hashes — so the
+harness demonstrably sees a one-line change in shared engine code, and the 69/69
+green above is evidence rather than silence. Mutant reverted from the worktree
+immediately after; `git status` clean, and the marker comment greps to 0.
+
+### 08:40 — CLOSING THE BLIND SPOT I HAD JUST DECLARED
+
+Writing §8 I had to add a caveat: the `MinPx 5 -> 2` byte-identity proves
+inertness **at `channel` f0180's body size only**, and the edit is *deliberately*
+NOT inert on small, distant bodies — that is its whole purpose. But **no plate in
+this pass, mine included, looks at that size range**, and `flight` and `hasty`
+live there.
+
+Having written the words "structurally blind", the honest move was to stop
+writing and go and look. Rendering `manafold-flight` f0100 — ablated, shipped and
+the regression — rather than shipping a declared gap I had the machine free to
+close. A declared limitation is better than a hidden one; **a closed one is
+better than either.**
+
+### 08:55 — THE SMALL-BODY LEG LANDS, AND IT CLOSES THE GAP
+
+`manafold-flight` f0100 (R ~ 20 against `inspect`'s ~55), same binary, same three
+rungs:
+
+    SHIP g1050        4523 px painted   peak 83    CENTRE delta 0
+    P15 REGRESSION    6451 px painted   peak 107   CENTRE delta 52
+
+**The core is untouched on a small body too**, and the regression paints straight
+through it. Confirmed by eye at 6x: the dark plum shading on the right of the
+ball survives under SHIP and is lifted to a pale mauve under the regression.
+`MinPx 5 -> 2` does what gate check 6 demanded, on a real travelling subject
+rather than a synthetic disc.
+
+### 09:00 — CLOSE-OUT
+
+**Pushed and verified from outside the lane**, never from a push's own output —
+which lied once already today:
+
+    zhaozhou  b2464c60  the shell
+    zhaozhou  5ba28806  the gate + --regression
+    Upheaval  e2179e4   the probe, the plates, and LANE-FX-2's findings
+    Upheaval  dc74cdc   PASS-15-FINDINGS-FX3 + pass15-fx3-plates
+
+**Background jobs: none of mine alive.** `Get-CimInstance` shows only
+`manafold-p15-eye`'s renderer and another lane's two `quartus` manifest checks —
+identified by command line, **left alone, nothing killed, no `taskkill /IM` in
+this run at any point.**
+
+**Housekeeping:** my `base-tree-fx3` worktree removed with `git worktree remove`;
+the mutant reverted and greps to 0; 272 MB of the previous session's stale
+`fx2-work/final` frames purged, evidence frames kept. C: at 206 GB free.
+
+**I did not publish.** The standing bestiary authorisation is for *a finished
+creature pass*; this one has sibling lanes in flight and a QA lane reporting
+seven regressed subjects. **The fog no longer holds the publish — something else
+still might, and that is a coordinator's call, not mine.**
