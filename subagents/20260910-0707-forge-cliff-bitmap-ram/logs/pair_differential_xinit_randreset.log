@@ -1,0 +1,38 @@
+[1] golden suite fixtures
+  4x4 solid block                                      edges=   16 merged=   0 dropped=   0 | clocks golden    1256 cand    1260 (+4)
+  4x4 with a centre bite                               edges=   24 merged=   0 dropped=   0 | clocks golden    1272 cand    1276 (+4)
+  8x8 checkerboard                                     edges=  128 merged=   0 dropped=   0 | clocks golden    1672 cand    1676 (+4)
+  all-void 4x4                                         edges=    0 merged=   0 dropped=   0 | clocks golden    1224 cand    1228 (+4)
+  single cell                                          edges=    4 merged=   0 dropped=   0 | clocks golden    1172 cand    1176 (+4)
+  32x32 checkerboard, null vdist                       edges=  512 merged=   0 dropped=1536 | clocks golden   11946 cand   10414 (-1532)
+  32x32 checkerboard, one nearest spike                edges=  512 merged=   0 dropped=1536 | clocks golden   85740 cand   84208 (-1532)
+  32x32 checkerboard, graded vdist                     edges=  512 merged=   0 dropped=1536 | clocks golden   85740 cand   84208 (-1532)
+  32x32 checkerboard, negative vdist                   edges=  512 merged=   0 dropped=1536 | clocks golden   85740 cand   84208 (-1532)
+  32x32 checkerboard, INT32 rails                      edges=  512 merged=   0 dropped=1536 | clocks golden   85740 cand   84208 (-1532)
+  32x32 checkerboard, output stall aaaaaaaa            edges=  512 merged=   0 dropped=1536 | clocks golden   11947 cand   10415 (-1532)
+  96x96 merge fixture (20 + 13 prefix)                 edges=  903 merged=  31 dropped=   0 | clocks golden   49757 cand   49731 (-26)
+  96x96 unpressured bite (no merge)                    edges=  426 merged=   0 dropped=   0 | clocks golden   48156 cand   48192 (+36)
+[2] row-window timing edges
+  1 wide x 70 tall (cw = 1)                            edges=  138 merged=   0 dropped=   0 | clocks golden    4036 cand    4048 (+12)
+  70 wide x 1 tall (ch = 1)                            edges=  140 merged=   0 dropped=   0 | clocks golden    4040 cand    4052 (+12)
+  5x2 checker (two rows)                               edges=   20 merged=   0 dropped=   0 | clocks golden    1240 cand    1244 (+4)
+  5x3 checker (three rows)                             edges=   32 merged=   0 dropped=   0 | clocks golden    1284 cand    1288 (+4)
+  2x2 solid                                            edges=    8 merged=   0 dropped=   0 | clocks golden    1192 cand    1196 (+4)
+  33x33 random (partial both axes)                     edges=  596 merged=  44 dropped= 439 | clocks golden   13814 cand   13274 (-540)
+  40x72 random (2x3 pages)                             edges= 1707 merged=  89 dropped= 690 | clocks golden   28792 cand   27895 (-897)
+  32x32 checkerboard, load stall aaaaaaaa              edges=  512 merged=   0 dropped=1536 | clocks golden   13102 cand   11570 (-1532)
+  32x32 checkerboard, load stall fffffffe              edges=  512 merged=   0 dropped=1536 | clocks golden   47782 cand   46250 (-1532)
+  32x32 checkerboard, load stall 0f0f0f0f              edges=  512 merged=   0 dropped=1536 | clocks golden   13101 cand   11569 (-1532)
+  96x96 merge fixture, load AND output stalls          edges=  903 merged=  31 dropped=   0 | clocks golden   61941 cand   61931 (-10)
+[3] compaction edges
+  32x32 ten full-width bites (many merges)             edges=  512 merged= 236 dropped=   0 | clocks golden    7565 cand    7097 (-468)
+  32x32 ten bites, full-range vdist                    edges=  512 merged= 236 dropped=   0 | clocks golden    7565 cand    7097 (-468)
+  32x32 bites + checker, bites farthest (merged spans drop) edges=  512 merged=  29 dropped=1258 | clocks golden   74959 cand   72603 (-2356)
+  prefix-merge page 0 (merge alone suffices)           edges=  502 merged=   0 dropped=   0 | clocks golden    6260 cand    6264 (+4)
+[4] random lanes: G 150, L 60
+  lane G mismatching lattices: 0 / 150; lane L: 0 / 60
+coverage: lattices=246 pages=752 merged=128 dropped=122 both=103 merge_only=25
+          dropped_span>1=92 spans>1=123 span13=3 partial=182 cw1=2 ch1=2
+          ld_stalled=37 out_stalled=70 vdist=66
+clocks:   golden total 5540759, candidate total 5383571 (-2.84%); worst page golden 85740, candidate 84208; candidate slower on 99 / 246 lattices
+forge_cliff_ram_differential: all green

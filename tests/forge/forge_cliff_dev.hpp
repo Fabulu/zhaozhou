@@ -1,5 +1,13 @@
 // forge_cliff_dev.hpp — the shared driver for FORGE.CLIFF.
 //
+// 2026-09-10: the driver is a TEMPLATE on the DUT class so the bitmap-RAM
+// candidate (`zhao_forge_cliff_ram`, verilated as Vzhao_forge_cliff_ram) and
+// the golden can be driven side by side in one process by
+// tests/forge/forge_cliff_ram_differential.cpp. The golden suites are unchanged
+// callers: `Vzhao_forge_cliff` deduces. `ld_stall_mask` (default 0 = the old
+// behaviour) lets a lane pause the SOLID load stream, which the candidate's
+// row-assembly/RAM-write handshake has to survive and the golden never noticed.
+//
 // One place that knows the block's four ports — the page command, the SOLID
 // window load, the vdist read master and the rim-edge stream — so the directed
 // lane and both random lanes drive it identically. If the port list changes,
@@ -44,8 +52,9 @@ struct Plan {
  * is 0, so a stable sort keeps scan order and the block is told so through
  * `cmd_vdist_en_i` rather than being handed a table of zeros.
  */
-inline long run_page(Vzhao_forge_cliff& dut, const zref::terrain::ComposedLattice& lat, int pi,
-                     int pj, const int32_t* vdist, uint32_t stall_mask, Plan* out) {
+template <class Dut>
+inline long run_page(Dut& dut, const zref::terrain::ComposedLattice& lat, int pi, int pj,
+                     const int32_t* vdist, uint32_t stall_mask, Plan* out, uint32_t ld_stall_mask = 0) {
   const int cw_all = lat.w - 1, ch_all = lat.h - 1;
   const int cw = (pi + 32 <= cw_all) ? 32 : (cw_all - pi);
   const int ch = (pj + 32 <= ch_all) ? 32 : (ch_all - pj);
@@ -85,7 +94,11 @@ inline long run_page(Vzhao_forge_cliff& dut, const zref::terrain::ComposedLattic
   while (!done && clocks < limit) {
     const bool ready = (stall_mask == 0) || (((stall_mask >> (clocks & 31)) & 1u) == 0);
     dut.edge_ready_i = ready ? 1 : 0;
-    if (cmd_taken && loaded < 34 * 34) {
+    // the load master may pause (ld_stall_mask bit set = no bit offered this
+    // cycle); the block's ld_ready_o must simply wait. Default: never pauses.
+    const bool ld_go =
+        (ld_stall_mask == 0) || (((ld_stall_mask >> (clocks & 31)) & 1u) == 0);
+    if (cmd_taken && loaded < 34 * 34 && ld_go) {
       dut.ld_valid_i = 1;
       dut.ld_solid_i = win[loaded];
     } else {
@@ -137,8 +150,10 @@ inline long run_page(Vzhao_forge_cliff& dut, const zref::terrain::ComposedLattic
 }
 
 /** Reset, then run every page of `lat` in the reference's own page order. */
-inline Plan plan_lattice(Vzhao_forge_cliff& dut, const zref::terrain::ComposedLattice& lat,
-                         const int32_t* vdist = nullptr, uint32_t stall_mask = 0) {
+template <class Dut>
+inline Plan plan_lattice(Dut& dut, const zref::terrain::ComposedLattice& lat,
+                         const int32_t* vdist = nullptr, uint32_t stall_mask = 0,
+                         uint32_t ld_stall_mask = 0) {
   dut.rst_n = 0;
   dut.cmd_valid_i = 0;
   dut.ld_valid_i = 0;
@@ -155,7 +170,7 @@ inline Plan plan_lattice(Vzhao_forge_cliff& dut, const zref::terrain::ComposedLa
   const int cw = lat.w - 1, ch = lat.h - 1;
   for (int pj = 0; pj < ch; pj += 32) {
     for (int pi = 0; pi < cw; pi += 32) {
-      const long c = run_page(dut, lat, pi, pj, vdist, stall_mask, &p);
+      const long c = run_page(dut, lat, pi, pj, vdist, stall_mask, &p, ld_stall_mask);
       p.clocks += c;
       if (c > p.worst_page) p.worst_page = c;
       if (p.timed_out) return p;

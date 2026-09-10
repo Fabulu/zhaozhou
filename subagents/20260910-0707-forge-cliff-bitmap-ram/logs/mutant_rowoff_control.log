@@ -1,0 +1,4 @@
+  rowoff mutant, 8x1 (one row): plan MATCHES the oracle
+  rowoff mutant, 8x8 checkerboard: RTL 120 edges vs oracle 128; plan differs from the oracle
+  rowoff mutant: walk_fault_o = 0
+forge_cliff_ram_rowoff_control: the differential FAILED on the break (as it must)

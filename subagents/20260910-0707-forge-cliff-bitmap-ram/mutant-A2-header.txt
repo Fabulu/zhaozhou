@@ -1,0 +1,24 @@
+// zhao_forge_cliff_ram_over_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
+//
+// The second positive control for `walk_fault_o`: its OVERSHOOT trigger.
+// zhao_forge_cliff_ram_mutant.sv fires the zero-span trigger; this copy fires
+// the other one, "the walk landed past cnt_r", which is unreachable while
+// every merge writes exactly the number of entries it consumed. The one
+// substantive change, in the MERGE's span write (StMwrite):
+//
+//     es_wd_c = mtake_r;   ->   es_wd_c = mtake_r + 6'd1;
+//
+// so every merged head claims one entry more than it killed. NOTE WHAT THIS
+// DOES AND DOES NOT DO: when unit entries follow the run, the walk merely
+// skips one LIVE entry and lands back on the table grid, ending exactly at
+// cnt_r -- the plan is wrong but the counter is silent (the first version of
+// the control used such a page and read zero). The overshoot the counter
+// watches happens only when the inflated span STRADDLES the table's end, so
+// the driver (tests/forge/forge_cliff_ram_mutant_control.cpp, shared with the
+// zero-span mutant) builds a page whose merged run is the LAST thing in its
+// table. It PASSES WHEN THE COUNTER FIRES. Inverse polarity, deliberately.
+//
+// a_span_nonzero and a_walk_exact are DISABLED IN THIS COPY ONLY (reason
+// beside them). RENAMED so it cannot be elaborated by mistake. REGENERATE IT
+// (subagents/.../regen-mutants.sh) if zhao_forge_cliff_ram.sv changes shape.
+

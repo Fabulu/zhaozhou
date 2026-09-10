@@ -1,0 +1,26 @@
+// zhao_forge_cliff_ram_rowoff_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
+//
+// This exists to show the storage differential FAILING on the class of fault
+// the bitmap-RAM rewrite can introduce and the golden could not: a ROW-BUFFER
+// MISALIGNMENT. The candidate replaces a 1,156-bit window with three live row
+// registers and a prefetched fourth; if the prefetch fetches the wrong row,
+// every handshake still completes, every counter still balances, and only
+// the south-neighbour bit of every cell from page row 1 onward is wrong. The
+// one substantive change:
+//
+//     pf_row_c = WinAW'(sc_cj_r) + WinAW'(3);   ->   ... + WinAW'(2);
+//
+// so the row rotated in at each row end is the CURRENT row again, not the
+// next one. A one-row page (ch == 1) is untouched by this -- which is why the
+// control also runs one, to show the break passing a weak fixture.
+//
+// INVERTED POLARITY: driven by tests/forge/forge_cliff_ram_rowoff_control.cpp
+// against the same zref oracle the suites use; the control PASSES when the
+// differential comparison FAILS on a multi-row page, and it also asserts that
+// walk_fault_o stays SILENT -- that instrument is not this fault's, and a
+// counter that fired here would be a counter that fires on everything.
+//
+// The module is RENAMED so a source-list mistake cannot elaborate it in
+// place of the real one. REGENERATE IT if zhao_forge_cliff_ram.sv changes
+// shape.
+

@@ -129,20 +129,35 @@ ruled`, from the docket's "one evaluation per five clocks"):
     2 lanes                                  ->   50.0%
     3 lanes                                  ->   33.3%
 
-**One lane lands on exactly 100.0000% of the reserved budget** — 1,333,332
-products against 1,333,332 clocks. Not approximately: exactly. That is not a
-feasible design point, it is the definition of no slack, and any control
-overhead at all puts it over. The `reserve: 0.20` in the block's own workload row
-is what makes the difference between "one lane at 80%, comfortable" and "one lane
-with zero margin".
+**CORRECTED 2026-09-10 — THE DERIVATION ABOVE IS WRONG BY 10x, AND THE
+COINCIDENCE WAS THE TELL.**
 
-**So two lanes: 5 sites × 3 DSP = 15 today, 2 × 3 = 6, saving 9.** The −9 in the
-table was right, and it now has arithmetic under it instead of a guess.
+"Four products per evaluation" counts **one S_EVAL cycle**. `S_EVAL` walks
+`ev_plane` 0..4 for `ev_view` 0, then again for view 1 — **ten cycles per
+evaluation** — so an evaluation is **40 products, not 4**.
 
-Worth keeping for whoever builds it: the exactness is a coincidence of
-333,333 × 4 against 1,666,666 × 0.8, and a coincidence is a bad thing to design
-against. If the evaluation rate is ever re-ruled, redo this — the answer flips
-between one and two lanes on a few percent.
+So "exactly 100.0000% on one lane" is actually **1000%**. The coincidence does
+not exist.
+
+I wrote, in this very section, that *"the exactness is a coincidence of
+333,333 x 4 against 1,666,666 x 0.8, and a coincidence is a bad thing to design
+against."* That was the right instinct and I did the wrong thing with it: I
+recorded a caveat and moved on instead of recounting. The implementer's closing
+line is the rule worth keeping — **a percentage that lands on exactly 100.0000%
+is not a design point, it is a request to recount.**
+
+**And the demand row itself is misfiled.** `workloads.yml`'s 333,333/frame for
+`zhao_geom_cull` is the **LOD ladder's** five-clock rate (docket `:2880`), with
+`measuredII: null`. Against that figure **nothing fits at all** — the *fitted*
+block at II 11 is 275% of the reserved frame. A demand nothing can meet,
+including the shipped circuit, is a demand attributed to the wrong block.
+
+**The conclusion survives; the reasoning does not.** Against the contract's own
+demand of ~6,100 decisions/frame, two lanes are **10% of the reserved frame**,
+9.9x headroom — 5x at the contract's vertex census of >= 47 meshlets per
+creature. Two lanes remain right. **-9 DSP still holds** (15 measured, 6 at the
+default), and that figure was never derived from the broken rate.
+
 
 ### Correction, same day: `FILT_LANES=1` is not money
 

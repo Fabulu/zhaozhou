@@ -1,0 +1,6 @@
+  random rims: 300 trials (det_bad=0 budget_bad=0 count_bad=0 acct_bad=0)
+  lane G (gameplay): trials=150  no_degrade=87 merge_only=1 drop_only=0 both=62
+           spans>1=63 vdist=30 partial_page=150 empty=0 max_edges=1935
+  lane L (domain limit): trials=60  no_degrade=0 merge_only=16 drop_only=7 both=37
+           spans>1=49 vdist=30 partial_page=20 empty=0 max_edges=1088
+forge_cliff_random: all green

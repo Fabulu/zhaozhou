@@ -1,0 +1,5 @@
+  fixture B centre page: 537 edges pre-merge (need >= 535 for a whole 24-run merge); oracle merged=23
+  fixture A (96x96, two mid-table heads): oracle merged=31 dropped=0 edges=903 | mutant plan differs from the oracle, completed | walk_fault_o +0
+  fixture B (run is the table's last entry): oracle merged=23 dropped=25 edges=1021 | mutant plan differs from the oracle, completed | walk_fault_o +1
+  walk_fault_o total = 1 (A 0, B 1)
+forge_cliff_ram_mutant_control: walk_fault_o FIRED (as it must)

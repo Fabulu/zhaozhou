@@ -1,0 +1,40 @@
+// zhao_forge_cliff_ram_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
+//
+// This exists to make `walk_fault_o` a detector instead of a hopeful zero.
+//
+// The counter watches two STATE VIOLATIONS of the span walk -- reading a span
+// of ZERO (which an unguarded walk would spin on forever), or landing past
+// `cnt_r`. While every enumerated entry is written with span 1 and every
+// merge writes take >= 2, both states are unreachable, so NO legal stimulus
+// can move the counter and "it can fire" stays an argument. The only
+// demonstration is to break the invariant, which this copy does in the
+// MERGE's span write (StMwrite):
+//
+//     es_wd_c = mtake_r;   ->   es_wd_c = 6'd0;
+//
+// so every merged head carries a zero span, and the first walk over a merged
+// page reads it, counts a fault and advances by one instead of hanging. The
+// driver (tests/forge/forge_cliff_ram_mutant_control.cpp) PASSES WHEN THE
+// COUNTER FIRES -- inverse polarity, deliberately: it is evidence about the
+// instrument, not about the design.
+//
+// The first version of this mutant broke the ENUMERATION span instead
+// (6'd1 -> 6'd0) and the counter stayed at zero: with every span 0 no run
+// can form, nothing merges, and no span walk is ever entered. A positive
+// control that never reaches the detector is not a control. Recorded so the
+// next person does not repeat it.
+//
+// The two simulation-only assertions that watch the same invariant
+// (a_span_nonzero, a_walk_exact) are DISABLED IN THIS COPY ONLY, with the
+// reason beside them: they would $stop the simulation before the
+// synthesizable counter can be read, and the counter is the thing that ships.
+//
+// It is a separate FILE rather than a temporary edit for the two standing
+// reasons: a temporary edit to production RTL is a fit-corrupting live-tree
+// hazard, and it leaves nothing behind. The module is RENAMED so a
+// source-list mistake cannot elaborate it in place of the real one.
+//
+// REGENERATE IT (subagents/.../regen-mutants.sh) if zhao_forge_cliff_ram.sv
+// changes shape: this is a copy, and a copy of an old version is a positive
+// control for a block that no longer exists.
+
