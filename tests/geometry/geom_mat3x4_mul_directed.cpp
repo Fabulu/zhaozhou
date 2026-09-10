@@ -23,6 +23,14 @@
 #include <cstring>
 #include <string>
 
+// Owner ruling R4 (2026-09-09): the block's default is ONE shared multiplier
+// (MUL_LANES=1) — 36 issue cycles plus one trailing commit, valid 37 ticks
+// after the accept tick. The legacy arm (MUL_LANES=3, one element per cycle)
+// takes 12; the -GMUL_LANES=3 build variant overrides this accordingly.
+#ifndef ZHAO_MAT3X4_WALK
+#define ZHAO_MAT3X4_WALK 37
+#endif
+
 namespace {
 
 using zhao::check;
@@ -240,7 +248,8 @@ int main(int argc, char** argv) {
   {
     zc::mat3x4fx got{};
     const int cycles = run(dut, I, I, 0xA5, got);
-    check(cycles == 12, "one element per cycle: twelve cycles from accept to valid", 12,
+    check(cycles == ZHAO_MAT3X4_WALK,
+          "the declared walk: out_valid rises exactly WALK ticks after accept", ZHAO_MAT3X4_WALK,
           static_cast<uint64_t>(cycles));
     check(dut.out_tag_o == 0xA5, "the tag rides through with its product", 0xA5, dut.out_tag_o);
 

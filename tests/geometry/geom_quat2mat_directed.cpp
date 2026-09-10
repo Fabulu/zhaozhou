@@ -32,6 +32,14 @@
 #include <cstring>
 #include <string>
 
+// Owner ruling R4 (2026-09-09): the block's default is ONE shared multiplier
+// (MUL_LANES=1), which raises m_valid this many ticks AFTER the accept tick.
+// The legacy spatial arm (MUL_LANES=9) raises it on the accept tick itself;
+// the -GMUL_LANES=9 build variant overrides this to 0.
+#ifndef ZHAO_QUAT2MAT_WALK
+#define ZHAO_QUAT2MAT_WALK 10
+#endif
+
 namespace {
 
 using zhao::check;
@@ -59,7 +67,17 @@ void diff(Vzhao_geom_quat2mat& dut, int16_t w, int16_t x, int16_t y, int16_t z, 
   dut.q_valid_i = 0;
   dut.eval();
 
+  // Latency-tolerant: the sequenced arm (ruling R4) walks its nine products
+  // before raising valid. Bounded, so a hang is a failure rather than a spin.
+  int waited = 0;
+  while (!dut.m_valid_o && waited < 64) {
+    zhao::tick(dut);
+    dut.eval();
+    ++waited;
+  }
+
   const std::string t(what);
+  check(dut.m_valid_o == 1, (t + ": m_valid rises").c_str(), 1, dut.m_valid_o);
   for (int i = 0; i < 12; ++i) {
     const int32_t got = static_cast<int32_t>(dut.m_o[i]);
     char lbl[160];
@@ -227,6 +245,17 @@ int main(int argc, char** argv) {
     zhao::tick(dut);
     dut.q_valid_i = 0;
     dut.eval();
+    // The walk itself: valid must rise EXACTLY the declared number of ticks
+    // after the accept tick — not merely eventually. This is the analogue of
+    // the mat3x4 test's walk-length section.
+    int lat = 0;
+    while (!dut.m_valid_o && lat < 64) {
+      zhao::tick(dut);
+      dut.eval();
+      ++lat;
+    }
+    check(lat == ZHAO_QUAT2MAT_WALK, "the declared walk: m_valid rises exactly WALK ticks after accept",
+          ZHAO_QUAT2MAT_WALK, static_cast<uint64_t>(lat));
     check(dut.m_bone_o == 0x2B, "the bone tag rides through with its matrix", 0x2B, dut.m_bone_o);
     check(dut.m_valid_o == 1, "an accepted bone raises m_valid", 1, dut.m_valid_o);
     check(dut.bones_decoded_o == before + 1, "an accepted bone advances the counter by one",

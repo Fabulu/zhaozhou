@@ -1,3 +1,39 @@
+// zhao_geom_quat2mat_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
+//
+// This exists to make the R4 sequencer's NEW machinery -- the operand-mux
+// schedule feeding the shared multiplier's product bank -- a demonstrated
+// instrument rather than an argument. The sequencer's characteristic fault is
+// not a wrong product but a RIGHT product in the WRONG bank slot: every
+// handshake completes, every counter balances, the walk length is exactly the
+// declared 10 cycles, and only the matrix elements that read the swapped
+// slots move. Exactly the class of corruption the pre-R4 spatial tests could
+// never see, because the spatial arm has no schedule to break.
+//
+// The one substantive change, in g_seq's operand mux:
+//
+//     4'd7: begin m_a = w_q; m_b = y_q; end      // wy -> p_q[7]
+//     4'd8: begin m_a = w_q; m_b = z_q; end      // wz -> p_q[8]
+//  -> 4'd7: begin m_a = w_q; m_b = z_q; end      // wz lands in p_q[7]
+//  -> 4'd8: begin m_a = w_q; m_b = y_q; end      // wy lands in p_q[8]
+//
+// so m1/m2/m4/m8 (the elements mixing wy and wz) are wrong whenever
+// wy != wz -- and EXACTLY right for any quaternion where they coincide,
+// which is why the control also drives an identity quat to show the break
+// passing a weak vector.
+//
+// INVERTED POLARITY: driven by tests/geometry/geom_quat2mat_mutant_control.cpp
+// against the same zref oracle the directed suite uses; the control PASSES
+// when the differential comparison FAILS on the schedule-sensitive vector.
+// Evidence about the instrument, not about the design.
+//
+// The module is RENAMED so a source-list mistake can never elaborate it in
+// place of the real one, and it lives under tests/ where
+// check_forbidden_sources.py will not find it in a production closure.
+//
+// REGENERATE IT if zhao_geom_quat2mat.sv changes shape: this is a copy, and a
+// copy of an old version is a positive control for a block that no longer
+// exists.
+
 // zhao_geom_quat2mat.sv — quantized quaternion to 3x4 rotation matrix.
 //
 // A submodule of GEOM.POSE (design/contracts/GEOM.POSE.md), not a ledger block
@@ -79,7 +115,7 @@
 // DSP COST at MUL_LANES=1: one 16x16 product — 1 DSP by the measured
 // calibration (tools/budget/calibration.json: 1 DSP from 8 to 27 bits).
 // At MUL_LANES=9: nine, which is what this block measured before R4.
-module zhao_geom_quat2mat #(
+module zhao_geom_quat2mat_mutant #(
     // 1 = one shared multiplier lane (default, ruling R4); 9 = spatial.
     parameter int MUL_LANES = 1
 ) (
@@ -109,7 +145,7 @@ module zhao_geom_quat2mat #(
   // `--lint-only` does not run this block — only elaboration does.
   initial begin
     if (MUL_LANES != 1 && MUL_LANES != 9) begin
-      $fatal(1, "zhao_geom_quat2mat: MUL_LANES must be 1 or 9, got %0d", MUL_LANES);
+      $fatal(1, "zhao_geom_quat2mat_mutant: MUL_LANES must be 1 or 9, got %0d", MUL_LANES);
     end
   end
 
@@ -207,8 +243,10 @@ module zhao_geom_quat2mat #(
           4'd4: begin m_a = x_q; m_b = z_q; end
           4'd5: begin m_a = y_q; m_b = z_q; end
           4'd6: begin m_a = w_q; m_b = x_q; end
-          4'd7: begin m_a = w_q; m_b = y_q; end
-          4'd8: begin m_a = w_q; m_b = z_q; end
+          // MUTANT: the two case bodies below are SWAPPED (the one
+          // substantive change) -- wz lands in the wy slot and vice versa.
+          4'd7: begin m_a = w_q; m_b = z_q; end
+          4'd8: begin m_a = w_q; m_b = y_q; end
           default: begin m_a = 16'sd0; m_b = 16'sd0; end
         endcase
       end
@@ -275,4 +313,4 @@ module zhao_geom_quat2mat #(
     end
   endgenerate
 
-endmodule : zhao_geom_quat2mat
+endmodule : zhao_geom_quat2mat_mutant

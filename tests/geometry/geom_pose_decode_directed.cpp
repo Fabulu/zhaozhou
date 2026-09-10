@@ -127,7 +127,7 @@ void run_rtl(Vzhao_geom_pose_decode& dut, const Fixture& f,
   }
 }
 
-void diff(Vzhao_geom_pose_decode& dut, const Fixture& f, const char* what) {
+int diff(Vzhao_geom_pose_decode& dut, const Fixture& f, const char* what) {
   zc::CreatureType type;
   type.skeleton = f.sk;
   type.baked = f.bake;
@@ -136,6 +136,7 @@ void diff(Vzhao_geom_pose_decode& dut, const Fixture& f, const char* what) {
   std::array<zc::mat3x4fx, zc::kMaxBones> want{};
   zc::decode_pose(type, f.clip, f.frame, want, nullptr);
 
+  const uint32_t palettes_before = dut.palettes_decoded_o;
   std::array<zc::mat3x4fx, zc::kMaxBones> got{};
   int beats = 0, cycles = 0;
   run_rtl(dut, f, got, beats, cycles);
@@ -143,6 +144,11 @@ void diff(Vzhao_geom_pose_decode& dut, const Fixture& f, const char* what) {
   const std::string t(what);
   check(beats == f.sk.bone_count, (t + ": one beat per bone").c_str(), f.sk.bone_count,
         static_cast<uint64_t>(beats));
+  // The counter must be SEEN to fire: it was asserted nowhere before, which
+  // is a hopeful zero (CLAUDE.md, the unfired-detector law).
+  check(dut.palettes_decoded_o == palettes_before + 1,
+        (t + ": palettes_decoded advances by one").c_str(), palettes_before + 1,
+        dut.palettes_decoded_o);
 
   for (int bi = 0; bi < f.sk.bone_count; ++bi) {
     for (int i = 0; i < 12; ++i) {
@@ -153,6 +159,7 @@ void diff(Vzhao_geom_pose_decode& dut, const Fixture& f, const char* what) {
             static_cast<uint32_t>(got[bi].m[i]));
     }
   }
+  return cycles;
 }
 
 zc::quat16 q_of(int16_t w, int16_t x, int16_t y, int16_t z) {
@@ -273,7 +280,11 @@ int main(int argc, char** argv) {
                       static_cast<int16_t>(-23 * i), static_cast<int16_t>(11 * i));
     }
     Fixture f = make_fixture(parents, quats, 5 * ONE, -2 * ONE, ONE);
-    diff(dut, f, "32-bone straight chain (the deepest the format allows)");
+    const int chain_cycles = diff(dut, f, "32-bone straight chain (the deepest the format allows)");
+    // Informational, not a gate: the measured whole-palette decode cost at the
+    // build's MUL_LANES parameters, for the GEOM.POSE throughput derivation.
+    std::printf("[info] 32-bone chain palette decode: %d cycles (%.1f cycles/bone)\n",
+                chain_cycles, chain_cycles / 32.0);
   }
 
   // ---- 5. a wide fan: every bone a child of the root ----------------------

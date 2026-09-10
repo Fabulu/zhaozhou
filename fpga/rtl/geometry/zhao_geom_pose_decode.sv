@@ -32,13 +32,21 @@
 // WHY IT LOOKS EXPENSIVE AND IS NOT
 // ---------------------------------------------------------------------------
 // One quaternion engine and ONE multiply engine, time-shared across both
-// multiplies of every bone. The multiply engine is itself sequential (twelve
-// elements, three products each), so the whole block carries three 32x32
-// multipliers rather than the seventy-two a fully parallel chain would need.
+// multiplies of every bone — and since owner ruling R4 (2026-09-09, "relax
+// the 1 bone/clock rule"), each engine is itself a SINGLE multiplier lane:
+// one 16x16 (1 DSP) in quat2mat and one 32x32 (3 DSP by the measured
+// calibration cliff) in mat3x4_mul. Four DSP for the whole chain, against the
+// 18 the pre-R4 arrangement measured and the seventy-two-plus a fully
+// parallel chain would need.
 //
-// That matters because the project is already over its DSP budget (171 against
-// 112). The cost is paid in cycles: roughly 1 + 13 + 12 + 12 + 12 per bone, so
-// about 1,600 cycles for a full 32-bone palette.
+// The cost is paid in cycles, and it is MEASURED, not estimated
+// (geom_pose_decode_directed, 32-bone chain): 3,694 cycles per full 32-bone
+// palette at the MUL_LANES defaults — 115.4 cycles/bone — against 1,799
+// (56.2/bone) at the legacy parameters. Worst legal frame (128 decoded
+// tuples, the contract's own clamp) is 128 x 3,694 = 472,832 cycles = 28.4%
+// of computeClocksPerFrame; the ~90% pose-cache hit economy makes the typical
+// frame an order of magnitude cheaper. Derivation:
+// reports/POSE-DECODE-SEQUENCED-20260909.md.
 //
 // This is affordable for the same reason the sequential multiply was:
 // `spec/creature_rules.md` §2.2 rejected baking every pose at load (x6 memory),
@@ -60,7 +68,12 @@
 // Quartus into logic cells and the block stops fitting — a failure this project
 // has already paid for once in TEXTURE.CACHE.
 module zhao_geom_pose_decode #(
-    parameter int MAX_BONES = 32
+    parameter int MAX_BONES = 32,
+    // Owner ruling R4 (2026-09-09): one shared multiplier lane per engine.
+    // 1 = sequenced (default); MUL_LANES_QUAT=9 / MUL_LANES_MAT=3 restore the
+    // pre-R4 spatial arrangements. See the submodule headers.
+    parameter int MUL_LANES_QUAT = 1,
+    parameter int MUL_LANES_MAT = 1
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -152,7 +165,7 @@ module zhao_geom_pose_decode #(
   logic [7:0] qm_bone_unused;
   logic [31:0] q_count_unused;
 
-  zhao_geom_quat2mat u_quat (
+  zhao_geom_quat2mat #(.MUL_LANES(MUL_LANES_QUAT)) u_quat (
       .clk(clk),
       .rst_n(rst_n),
       .q_valid_i(q_valid),
@@ -187,7 +200,7 @@ module zhao_geom_pose_decode #(
     end
   end
 
-  zhao_geom_mat3x4_mul u_mul (
+  zhao_geom_mat3x4_mul #(.MUL_LANES(MUL_LANES_MAT)) u_mul (
       .clk(clk),
       .rst_n(rst_n),
       .in_valid_i(mul_in_valid),

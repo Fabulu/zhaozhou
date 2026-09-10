@@ -1,3 +1,34 @@
+// zhao_geom_mat3x4_mul_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
+//
+// This exists to make the R4 single-lane walk's NEW machinery -- the
+// issue/commit accumulator that assembles each element from three registered
+// products -- a demonstrated instrument rather than an argument. The
+// accumulator's characteristic fault is an element BOUNDARY error: every
+// product is individually correct, every handshake completes, the counter
+// advances exactly once per matrix, the walk is exactly the declared 37
+// cycles -- and every element after the first silently carries its
+// predecessors' sum. Exactly the class of corruption the pre-R4 per-element
+// arm could never exhibit, because it never held state between elements.
+//
+// The one substantive change, in g_seq's commit arm:
+//
+//     if (pn_q == 2'd0) begin
+//       acc <= 67'(m_p_q);          // a fresh element starts a fresh sum
+//  ->   acc <= acc + 67'(m_p_q);    // MUTANT: the sum is never cleared
+//
+// INVERTED POLARITY: driven by tests/geometry/geom_mat3x4_mul_mutant_control.cpp
+// against the same zref oracle the directed suite uses; the control PASSES
+// when the differential comparison FAILS from element 1 onward. Evidence
+// about the instrument, not about the design.
+//
+// The module is RENAMED so a source-list mistake can never elaborate it in
+// place of the real one, and it lives under tests/ where
+// check_forbidden_sources.py will not find it in a production closure.
+//
+// REGENERATE IT if zhao_geom_mat3x4_mul.sv changes shape: this is a copy, and
+// a copy of an old version is a positive control for a block that no longer
+// exists.
+
 // zhao_geom_mat3x4_mul.sv — 3x4 affine matrix product, sequenced.
 //
 // A submodule of GEOM.POSE (design/contracts/GEOM.POSE.md), not a ledger block
@@ -75,7 +106,7 @@
 // rotation genuinely exceeds s32. The reference saturates too (rescale_s32),
 // so the two agree — but this is a real rail, not a formality, and the directed
 // test drives it.
-module zhao_geom_mat3x4_mul #(
+module zhao_geom_mat3x4_mul_mutant #(
     // 1 = one shared multiplier lane (default, ruling R4); 3 = one element
     // per cycle, the previous arrangement.
     parameter int MUL_LANES = 1
@@ -104,7 +135,7 @@ module zhao_geom_mat3x4_mul #(
   // `--lint-only` does not run this block — only elaboration does.
   initial begin
     if (MUL_LANES != 1 && MUL_LANES != 3) begin
-      $fatal(1, "zhao_geom_mat3x4_mul: MUL_LANES must be 1 or 3, got %0d", MUL_LANES);
+      $fatal(1, "zhao_geom_mat3x4_mul_mutant: MUL_LANES must be 1 or 3, got %0d", MUL_LANES);
     end
   end
 
@@ -299,7 +330,9 @@ module zhao_geom_mat3x4_mul #(
             // ---- commit: accumulate, or finish an element -----------------
             if (pv_q) begin
               if (pn_q == 2'd0) begin
-                acc <= 67'(m_p_q);
+                // MUTANT: the one substantive change -- the accumulator is
+                // never cleared at an element boundary.
+                acc <= acc + 67'(m_p_q);
               end else if (pn_q == 2'd1) begin
                 acc <= acc + 67'(m_p_q);
               end else begin
@@ -321,4 +354,4 @@ module zhao_geom_mat3x4_mul #(
     end
   endgenerate
 
-endmodule : zhao_geom_mat3x4_mul
+endmodule : zhao_geom_mat3x4_mul_mutant
