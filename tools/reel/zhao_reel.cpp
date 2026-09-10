@@ -5646,7 +5646,36 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   s.frames = keys * 2;  // one full loop at presentation rate
   s.orbit = orbit;
   u02_common(s);
-  if (!orbit) s.cam_yaw = 0x2000;  // three-quarter: the face and the loop both read
+  // ⚠ THE JOIN THAT BROKE IN PASS 15, NOW A HARD STOP.
+  //
+  // The resting eye base is CAMERA-RELATIVE and the pose is BAKED PER SLOT
+  // (manafold.h compiles one clip per slot; this subject plays it by
+  // slot_id). So a subject whose camera disagrees with the camera its slot
+  // was baked for renders an eye pose authored for a different shot. That is
+  // exactly what shipped: `crackle` and six `mana-*` tiles asked for
+  // orbit=false on slot 0, whose bake orbits, and the eye pair swept its
+  // whole +-45 deg of base against a camera nailed at 45 deg -- two open
+  // lenses, an edge-on rim blade, then a blank pink ball with no eyes.
+  //
+  // The two operands here are clocked SEPARATELY -- `orbit` is hand-written
+  // at each call site, clip_cam_orbits is a property of the bank -- so this
+  // check is not blind to the fault it names (CLAUDE.md: a detector wired to
+  // two operands that move together cannot fire). Fire it by putting the old
+  // `0` back at any of the seven call sites below; it aborts.
+  //
+  // The fixed-camera idle is u02::kIdleFixedSlot.
+  if (orbit != u02::clip_cam_orbits(static_cast<uint16_t>(slot))) {
+    std::fprintf(stderr,
+                 "u02: subject '%s' asks orbit=%d on clip slot %d, which is "
+                 "BAKED for orbit=%d. The eye base is camera-relative and "
+                 "baked into the clip: use u02::kIdleFixedSlot for a "
+                 "fixed-camera idle.\n",
+                 name, static_cast<int>(orbit), slot,
+                 static_cast<int>(u02::clip_cam_orbits(static_cast<uint16_t>(slot))));
+    std::abort();
+  }
+  // ONE constant, two consumers: written here, read by eye_face_base_a16.
+  if (!orbit) s.cam_yaw = u02::kU02FixedCamYawA16;  // three-quarter: the face and the loop both read
   // PASS 6 STAGE A.1 (Direction 5 §8: "the experimental lighting from Zixxtrix
   // ... it's our standard now"). EVERY clip subject now raises the many-colour
   // moving rig; until this pass only manafold-inspect did.
@@ -8464,7 +8493,8 @@ int main(int argc, char** argv) {
     u02::g_u02_mist = u02::MistCfg{};  // never leak a variant into the next subject
   }
   if (wanted("manafold-crackle")) {
-    SceneSubject s = subject_u02_clip(0, "manafold-crackle", u02::kIdleKeys, false, &kU02SunChannel);
+    SceneSubject s = subject_u02_clip(u02::kIdleFixedSlot, "manafold-crackle",
+                                     u02::kIdleKeys, false, &kU02SunChannel);
     s.u02_mana = 4;  // the crackle IS the lightning candidate
     s.u02_smear = 1;  // pass 3: strikes ghost through the smear plane
     // R6-bis: the same one call `channel` makes, so the pair cannot diverge
@@ -8489,7 +8519,8 @@ int main(int argc, char** argv) {
     };
     for (const auto& m : kManaMenu) {
       if (!wanted(m.name)) continue;
-      SceneSubject s = subject_u02_clip(0, m.name, u02::kIdleKeys, false, &kU02SunHover);
+      SceneSubject s = subject_u02_clip(u02::kIdleFixedSlot, m.name,
+                                       u02::kIdleKeys, false, &kU02SunHover);
       s.u02_mana = m.cand;
       s.u02_smear = m.smear;
       s.note = "mana-menu candidate: the owner picks with his eyes";

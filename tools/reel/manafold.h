@@ -131,7 +131,7 @@ inline const zc::CreatureType& type() {
 
     zc::ClipBank bank;
     bank.bone_count = kBoneCount;
-    bank.clips.push_back(build_hover_idle());  // slot 0
+    bank.clips.push_back(build_hover_idle(kIdleOrbitSlot));  // slot 0
     bank.clips.push_back(build_drift());       // slot 1
     bank.clips.push_back(build_channel());     // slot 2
     bank.clips.push_back(build_curious());     // slot 3
@@ -165,6 +165,20 @@ inline const zc::CreatureType& type() {
     // bobbing, unhurried. The last un-attempted item of the original clip
     // inventory. Appended, so nothing above it moves by one bit.
     bank.clips.push_back(build_flight());        // slot 22
+    // slot 23 (PASS 15 LANE-EYE-2): THE IDLE, BAKED FOR A FIXED CAMERA.
+    //
+    // ⚠ NOT A NEW CLIP. It is build_hover_idle again with the other camera,
+    // and it exists because the resting eye base is CAMERA-RELATIVE while the
+    // pose is BAKED PER SLOT. `crackle` and the six `mana-*` tiles play the
+    // idle from a camera nailed at 45 deg; until this slot existed they had
+    // to play slot 0, whose base is authored for a camera that orbits, and
+    // the eye pair swept its whole +-45 deg round the back of the ball. Two
+    // of them were on the page with no readable star in 20% and 45% of their
+    // frames. See kIdleFixedSlot in manafold_art.h.
+    //
+    // Appended, so slot 0 -- and therefore `hover` and `inspect`, which are
+    // correct and which the owner has approved -- is bit-identical.
+    bank.clips.push_back(build_hover_idle(kIdleFixedSlot));  // slot 23
 
     zc::CreatureType type;
     type.type_id = 3;  // 1 watchdog, 2 zixxtrixx, 3 manafold

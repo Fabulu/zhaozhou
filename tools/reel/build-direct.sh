@@ -32,6 +32,12 @@ Targets:
   mspan      manafold-spangate.exe (pass 12 wave 2a: the committed STRETCHY
              SPAN gate, Direction 9 §13 -- reads the SKIN, because every
              nodule gate reads bones and cannot see a vertex effect)
+  meyecam    manafold-eyecam.exe (pass 15: THE EYE-VS-CAMERA PROBE -- where
+             each eye plate points RELATIVE TO THE CAMERA, per clip and per
+             presentation frame. It shipped in pass 15 with NO TARGET AT ALL,
+             so the table it was the sole source of could not be re-derived
+             by anyone; this is the same fault LANE-FX had just fixed for
+             mshell in the same pass. Checklist item 42.)
   mexpress   manafold-express.exe (pass 12 wave 3: THE EXPRESSIVENESS PLATE,
              Direction 5 SS6 -- Manafold's deform channel measured against
              Zixxtrixx's, every clip in both banks. A verification, not a gate.)
@@ -57,7 +63,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mshell|mspan|mexpress|mqa|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mshell|mspan|mexpress|meyecam|mqa|all)
       TARGET="$1"
       shift
       ;;
@@ -226,6 +232,12 @@ build_mshell() {
   "$CXX" "${FLAGS[@]}" "$T/manafold_shellgate.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-shellgate.exe"
 }
 
+build_meyecam() {
+  printf '%s
+' "LD manafold-eyecam"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_eyecam.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-eyecam.exe"
+}
+
 build_mspan() {
   printf '%s
 ' "LD manafold-spangate"
@@ -256,6 +268,7 @@ case "$TARGET" in
   mqa) build_mqa ;;
   mshell) build_mshell ;;
   mspan) build_mspan ;;
+  meyecam) build_meyecam ;;
   mexpress) build_mexpress ;;
   mband) build_mband ;;
   mc2proto) build_mc2proto ;;

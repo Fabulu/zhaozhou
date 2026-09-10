@@ -78,26 +78,30 @@ double wrap180(double a) {
   return a;
 }
 
-// The camera mirror. Returns the camera's world azimuth in degrees for a
-// presentation frame `p` of a clip whose presentation length is `frames`.
-struct CamSpec {
-  bool orbit;
-  int32_t yaw_a16;
-};
-
-CamSpec cam_for_slot(uint16_t slot) {
-  // subject_u02_clip: only `manafold-hover` (slot 0) passes orbit=true among
-  // the SHIPPED clips; every other subject takes `cam_yaw = 0x2000`.
-  if (slot == 0) return CamSpec{true, 0};
-  return CamSpec{false, 0x2000};
-}
-
-double cam_az_deg(const CamSpec& c, uint32_t p, uint32_t frames) {
-  if (c.orbit) {
+// ⚠ THIS PROBE USED TO KEEP ITS OWN COPY OF THE CAMERA TABLE, AND THE COPY
+// CARRIED THE SAME DEFECT AS THE POSE LAYER:
+//
+//     CamSpec cam_for_slot(uint16_t slot) {
+//       if (slot == 0) return CamSpec{true, 0};      // "only hover orbits"
+//       return CamSpec{false, 0x2000};
+//     }
+//
+// Seven live subjects play the idle from a FIXED camera, so the probe's
+// per-clip table had no row for any of them and could not see the regression
+// it was built to prevent. Three statements of one fact -- subject_u02_clip,
+// the pose layer, and here -- and the two mirrors agreed with each other
+// while both disagreed with the truth.
+//
+// It is now u02::clip_cam_orbits, the SAME function the bank builder and
+// antenna_knead read, with subject_u02_clip asserting each subject's own
+// orbit flag against it. A probe that re-implements the thing it measures is
+// measuring itself (10-GATE-CHECKLIST item 10).
+double cam_az_deg(uint16_t slot, uint32_t p, uint32_t frames) {
+  if (u02::clip_cam_orbits(slot)) {
     const double th = static_cast<double>(p) * 65536.0 / (frames > 0 ? frames : 1);
     return wrap180(th * 360.0 / 65536.0);
   }
-  return wrap180(static_cast<double>(c.yaw_a16) * 360.0 / 65536.0);
+  return wrap180(static_cast<double>(u02::kU02FixedCamYawA16) * 360.0 / 65536.0);
 }
 
 // The plate normal of a posed bone: local +X carried through the 3x3.
@@ -132,6 +136,10 @@ const char* slot_name(uint16_t s) {
     case 20: return "blown";
     case 21: return "taunt3";
     case 22: return "flight";
+    // PASS 15 LANE-EYE-2: the idle baked for the FIXED camera --
+    // `crackle` and the six mana tiles. Same choreography as slot 0,
+    // different resting base, because the base is camera-relative.
+    case 23: return "idle-fixed";
     default: return "?";
   }
 }
@@ -224,7 +232,6 @@ int main(int argc, char** argv) {
   if (csv_slot >= 0) {
     for (const zc::Clip& clip : T.bank.clips) {
       if (clip.slot_id != static_cast<uint16_t>(csv_slot)) continue;
-      const CamSpec cs = cam_for_slot(clip.slot_id);
       const uint32_t frames = static_cast<uint32_t>(clip.frame_count) * 2u;
       std::printf("p,cam_az,l_pos_az,l_nrm_az,l_off,r_pos_az,r_nrm_az,r_off\n");
       for (uint16_t f = 0; f < clip.frame_count; ++f) {
@@ -232,7 +239,7 @@ int main(int argc, char** argv) {
           std::array<zc::mat3x4fx, zc::kMaxBones> p{};
           zc::decode_pose(T, clip, f, p, nullptr, sub);
           const uint32_t pi = static_cast<uint32_t>(f) * 2u + sub;
-          const double ca = cam_az_deg(cs, pi, frames);
+          const double ca = cam_az_deg(clip.slot_id, pi, frames);
           double nx, ny, nz;
           plate_normal(p[u02::kBEyeL], nx, ny, nz);
           const double nl = azdeg(nx, nz);
@@ -263,7 +270,6 @@ int main(int argc, char** argv) {
               "read%", "both%", "sweep");
   for (const zc::Clip& clip : T.bank.clips) {
     if (!shipped(clip.slot_id)) continue;
-    const CamSpec cs = cam_for_slot(clip.slot_id);
     const uint32_t frames = static_cast<uint32_t>(clip.frame_count) * 2u;
     double lmin = 1e9, lmax = -1e9, rmin = 1e9, rmax = -1e9;
     double best_l = 1e9;  // closest approach of the near eye, for the sweep
@@ -274,7 +280,7 @@ int main(int argc, char** argv) {
         std::array<zc::mat3x4fx, zc::kMaxBones> p{};
         zc::decode_pose(T, clip, f, p, nullptr, sub);
         const uint32_t pi = static_cast<uint32_t>(f) * 2u + sub;
-        const double ca = cam_az_deg(cs, pi, frames);
+        const double ca = cam_az_deg(clip.slot_id, pi, frames);
         double nx, ny, nz;
         plate_normal(p[u02::kBEyeL], nx, ny, nz);
         const double ol = wrap180(azdeg(nx, nz) - ca);

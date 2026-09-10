@@ -1386,14 +1386,60 @@ constexpr int32_t kEyeFaceSeekPm = 1000;
 // running away if both are pushed. 80 is base(45) + the biggest glance(39),
 // rounded down, so today's schedule never touches it.
 constexpr int32_t kEyeTravelTotalMaxDeg = 80;
-// The camera mirror. subject_u02_clip gives every SHIPPED clip but the idle a
-// constant cam_yaw of 0x2000 (45 deg) and the idle one exact orbit per loop.
-// ⚠ THIS IS A MIRROR OF zhao_reel.cpp AND IT CAN GO STALE. It is checked the
-// only way that means anything -- eyesweep.py reads the star's centroid off
-// the SHIPPED frames, so a camera that moved shows up as a gate failure on
-// pixels rather than as a silently wrong constant.
-constexpr int32_t kEyeCamYawDeg = 45;
-constexpr uint16_t kEyeOrbitSlot = 0;   // `hover` / `inspect`: orbit = true
+// ---- WHERE THE CAMERA IS: ONE DEFINITION, AND A JOIN THAT IS CHECKED ------
+//
+// ⚠ PASS 15 LANE-EYE-2 REWROTE THIS BLOCK BECAUSE ITS FIRST VERSION SHIPPED A
+// REGRESSION IN SEVEN LIVE SUBJECTS. It read
+//
+//     constexpr uint16_t kEyeOrbitSlot = 0;   // `hover` / `inspect`
+//
+// -- the camera keyed on the CLIP SLOT. But orbiting is a property of the
+// SUBJECT, and zhao_reel.cpp calls subject_u02_clip(0, ...) NINE times, not
+// two: `crackle` and the six `mana-*` tiles are slot 0 shot from a camera
+// NAILED at 45 deg. All seven took an orbiting base against a static camera,
+// so the eye pair swept its whole +-45 deg of resting travel across the loop
+// and went round the back of the ball -- two open lenses, then one edge-on
+// rim blade, then a blank pink ball with no eyes at all. QA measured no
+// readable star in 20% of `crackle`'s frames and 45% of `mana-green`'s,
+// against 0% for every correctly-mirrored clip. That is Direction 11 SS2.1's
+// own complaint -- "they don't move left and right at all" -- manufactured by
+// the fix written to answer it.
+//
+// `slot == 0` CANNOT EXPRESS IT, and the reason is structural: manafold.h
+// compiles ONE CLIP PER SLOT and the reel plays it by slot_id, so the eye
+// base is BAKED INTO THE CLIP. A subject cannot be handed a different base at
+// render time -- it is playing the same bytes `hover` plays. **The camera has
+// to be baked WITH the pose**, which means the idle exists TWICE.
+//
+// kIdleOrbitSlot is the orbiting bake (`hover`, `inspect`). kIdleFixedSlot is
+// the same choreography baked for the fixed three-quarter camera, and it runs
+// slot 0's SCHEDULES -- the glance phase, the knead gain, the nodule table --
+// because the schedule identity is the slot and only the camera differs. See
+// build_hover_idle(), which takes the slot and passes kIdleOrbitSlot to every
+// scheduled layer regardless.
+constexpr uint16_t kIdleOrbitSlot = 0;
+constexpr uint16_t kIdleFixedSlot = 23;
+
+// THE ONE PLACE the fixed three-quarter camera is written down.
+// subject_u02_clip WRITES this into s.cam_yaw; eye_face_base_a16 READS it.
+// One constant with two consumers is not a mirror -- the previous pair
+// (`s.cam_yaw = 0x2000` there, `kEyeCamYawDeg = 45` here) was.
+constexpr int32_t kU02FixedCamYawA16 = 0x2000;  // 45 deg, three-quarter
+
+// THE SINGLE DEFINITION of which baked slots carry an orbiting camera.
+// Three things read it and nothing else decides it:
+//   * manafold.h        -- builds the bank, one clip per slot
+//   * antenna_knead     -- picks the resting base for that bake
+//   * manafold_eyecam   -- reports against the right camera (it used to keep
+//                          its own copy, `cam_for_slot`, carrying the same
+//                          slot-keyed error, which is why the probe's table
+//                          had no row for any of the seven)
+// and subject_u02_clip ASSERTS the subject's own `orbit` argument against it.
+// ⚠ THAT ASSERT IS THE POINT. The two operands it differences are clocked
+// SEPARATELY -- a hand-written argument at a call site against a property of
+// the bank -- so it is not blind to the fault it names. CLAUDE.md's
+// two-operands-that-move-together law, applied to a C++ join.
+constexpr bool clip_cam_orbits(uint16_t slot) { return slot == kIdleOrbitSlot; }
 
 // D11 SS2.2, the second and separate ask: "they can also rotate a bit more
 // for expression too". The eye ROLLS about its own outward axis in

@@ -627,24 +627,34 @@ inline void apply_eye_travel_a16(Rig& g, int32_t a) {
 
 /** PASS 15 (D11 SS2.1) -- WHERE THE CAMERA IS, in the creature's own frame.
  *
- *  A MIRROR of subject_u02_clip (zhao_reel.cpp): every shipped clip but the
- *  idle takes a constant cam_yaw of 0x2000, and the idle takes one exact
- *  world-yaw turn per presentation loop. The creature's instance facing is 0
- *  and its tilt mode is kNone, so the reel's world axes and the rig's body
- *  axes ARE the same axes and the two azimuths are directly comparable --
- *  which is the whole reason this can be a constant instead of a feedback
- *  path out of the renderer.
+ *  ⚠ PASS 15 LANE-EYE-2: THIS TOOK THE SLOT AND IT WAS WRONG. `slot ==
+ *  kEyeOrbitSlot` assumed clip slot 0 is always shot orbiting; seven live
+ *  subjects render slot 0 from a FIXED camera and got an orbiting base
+ *  against a static three-quarter view. See kIdleFixedSlot in manafold_art.h
+ *  for the whole account. It now takes the CAMERA THIS BAKE IS FOR, chosen
+ *  by the clip builder, so the question "does this subject orbit?" is
+ *  answered once, in u02::clip_cam_orbits, and asserted at the reel.
  *
- *  ⚠ A MIRROR CAN GO STALE. The defence is not care, it is that the acceptance
- *  gate reads the star's centroid off SHIPPED FRAMES (eyesweep.py): a camera
- *  that moves without this table shows up as pixels that stopped sweeping,
- *  which is the only kind of evidence this fault has ever answered to. */
-inline int32_t eye_cam_az_a16(uint32_t slot, int keys, int f) {
-  if (slot == kEyeOrbitSlot) {
+ *  The formulas themselves still restate the reel:
+ *
+ *    orbit  -> one exact world-yaw turn per presentation loop
+ *              (zhao_reel.cpp: theta = f * 65536 / frames, frames = keys * 2,
+ *              so f/keys and f_pres/frames are the same ratio)
+ *    fixed  -> kU02FixedCamYawA16, which subject_u02_clip WRITES into
+ *              s.cam_yaw -- one constant, two consumers, not a mirror.
+ *
+ *  The creature's instance facing is 0 and its tilt mode is kNone, so the
+ *  reel's world axes and the rig's body axes ARE the same axes and the two
+ *  azimuths are directly comparable -- which is the whole reason this can be
+ *  a constant instead of a feedback path out of the renderer. */
+enum class EyeCam : uint8_t { kFixed = 0, kOrbit = 1 };
+
+inline int32_t eye_cam_az_a16(EyeCam cam, int keys, int f) {
+  if (cam == EyeCam::kOrbit) {
     const int k = keys > 0 ? keys : 1;
     return static_cast<int32_t>(((static_cast<int64_t>(f) * 65536) / k) & 0xFFFF);
   }
-  return (kEyeCamYawDeg * 65536) / 360;
+  return kU02FixedCamYawA16;
 }
 
 /** The RESTING travel: how far round the body the eye pair sits so that it
@@ -664,9 +674,9 @@ inline int32_t eye_cam_az_a16(uint32_t slot, int keys, int f) {
  *  On the fixed-camera clips this evaluates to -31.8 deg. The pin ladder's own
  *  best tile is -30. That agreement is a CHECK, not a derivation: the tile was
  *  picked by looking, and then this happened to land on it. */
-inline int32_t eye_face_base_a16(uint32_t slot, int keys, int f) {
+inline int32_t eye_face_base_a16(EyeCam cam_kind, int keys, int f) {
   if (kEyeFaceSeekPm == 0) return 0;
-  const int32_t cam = eye_cam_az_a16(slot, keys, f);
+  const int32_t cam = eye_cam_az_a16(cam_kind, keys, f);
   const int32_t d = cam - 16384;  // 16384 a16 = 90 deg: the pair's mid-normal
   const int32_t s = zref::fx_sin(zref::angle16{static_cast<uint16_t>(d & 0xFFFF)}).raw;
   const int32_t maxa = (kEyeFaceSeekMaxDeg * 65536) / 360;
@@ -682,8 +692,8 @@ inline int32_t eye_face_base_a16(uint32_t slot, int keys, int f) {
  *  per-frame sign would flip in the middle of a glance -- a snap inside the
  *  one beat this whole channel exists to deliver. Held constant across a
  *  window, the schedule stays exactly as smooth and as periodic as it was. */
-inline int eye_glance_dir(uint32_t slot, int keys, int f) {
-  return eye_face_base_a16(slot, keys, f) >= 0 ? 1 : -1;
+inline int eye_glance_dir(EyeCam cam, int keys, int f) {
+  return eye_face_base_a16(cam, keys, f) >= 0 ? 1 : -1;
 }
 
 /** PASS 6 (Direction 5 5d): each eye ROLLS about its own outward axis and
@@ -1412,7 +1422,7 @@ inline int32_t eye_travel_pin_pm(bool& pinned) {
   return pinned ? (v > 2000 ? 2000 : v < -2000 ? -2000 : v) : 0;
 }
 
-inline int32_t eye_travel_life_pm(uint32_t slot, int keys, int f) {
+inline int32_t eye_travel_life_pm(uint32_t slot, EyeCam cam, int keys, int f) {
   bool pinned = false;
   const int32_t pin = eye_travel_pin_pm(pinned);
   if (pinned) return pin;
@@ -1460,9 +1470,9 @@ inline int32_t eye_travel_life_pm(uint32_t slot, int keys, int f) {
     // direction that is depends on the clip, and on the idle it depends on
     // where in the orbit this glance falls. Read ONCE, at this glance's own
     // window centre -- see eye_glance_dir for why never per frame.
-    const int dir = eye_glance_dir(slot, span, (start + win / 2) % span >= 0
-                                                   ? (start + win / 2) % span
-                                                   : (start + win / 2) % span + span);
+    const int dir = eye_glance_dir(cam, span, (start + win / 2) % span >= 0
+                                                  ? (start + win / 2) % span
+                                                  : (start + win / 2) % span + span);
     glance += static_cast<int32_t>(
         (static_cast<int64_t>(kEyeGlanceOutPm[i]) * env * dir) / 1000);
   }
@@ -1486,7 +1496,13 @@ inline int32_t eye_travel_life_pm(uint32_t slot, int keys, int f) {
  *  and kNoduleClipPm do -- a clip that needs the eyes to stop must be able to
  *  say so -- and the two deaths are why it was needed on the first day: see
  *  the fade at their call sites. */
-inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f,
+/** ⚠ `cam` IS REQUIRED AND IT IS NOT `slot`. The resting eye base is
+ *  camera-relative, and the camera belongs to the SUBJECT, not to the clip
+ *  slot -- pass 15's first eye lane keyed it on the slot and put an orbiting
+ *  base on seven fixed-camera subjects (manafold_art.h, kIdleFixedSlot). It
+ *  is a separate parameter so a new clip has to SAY which camera it is baked
+ *  for, and u02::clip_cam_orbits is the one place that answers. */
+inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
                           int32_t eye_pm = 1000) {
   // The eye travel rides here because this is the one layer every PERFORMING
   // clip calls (build_still and build_nodule_solo deliberately do not). It
@@ -1510,8 +1526,8 @@ inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f,
           g, static_cast<int32_t>((static_cast<int64_t>(kEyeTravelMaxA16) * pin) / 1000));
     } else {
       const int32_t glance_pm = static_cast<int32_t>(
-          (static_cast<int64_t>(eye_travel_life_pm(slot, keys, f)) * eye_pm) / 1000);
-      apply_eye_travel_a16(g, eye_face_base_a16(slot, keys, f) + eye_travel_a16(glance_pm));
+          (static_cast<int64_t>(eye_travel_life_pm(slot, cam, keys, f)) * eye_pm) / 1000);
+      apply_eye_travel_a16(g, eye_face_base_a16(cam, keys, f) + eye_travel_a16(glance_pm));
       // D11 SS2.2: the lean rides the glance, so it fades with `eye_pm`
       // for free and a corpse's eyes neither travel nor emote.
       g.eye_lean = static_cast<int32_t>(
@@ -1614,10 +1630,28 @@ inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f,
 
 // ---------------------------------------------------------------- clips ----
 
-/** hover-idle, slot 0: the baseline. The hover IS the idle. */
-inline zc::Clip build_hover_idle() {
+/** hover-idle: the baseline. The hover IS the idle.
+ *
+ *  ⚠ IT IS BAKED TWICE, ONCE PER CAMERA, AND PASS 15 LEARNED THAT THE HARD
+ *  WAY. `slot` selects which bake: kIdleOrbitSlot (0) is the orbiting one
+ *  `hover` and `inspect` play; kIdleFixedSlot (23) is the identical
+ *  choreography for the seven subjects that play this idle from the FIXED
+ *  three-quarter camera -- `crackle` and the six mana tiles. The resting eye
+ *  base is camera-relative, and the pose is baked, so a subject cannot be
+ *  handed a different base at render time: the camera must be baked with it.
+ *  See kIdleFixedSlot in manafold_art.h for the regression this repairs.
+ *
+ *  ⚠ EVERY SCHEDULED LAYER STILL TAKES kIdleOrbitSlot. The slot is the
+ *  SCHEDULE identity -- the glance phase skew, the dwell-drift seed, the
+ *  knead gain (kKneadClipPm) and the nodule table (kNoduleClipPm) are all
+ *  indexed by it -- and only the CAMERA differs between the two bakes. Pass
+ *  slot 23 to those and the knead gain silently falls off the end of its
+ *  table onto the 700 default, which is the exact shape of the pass-5 fault
+ *  where index 14 was orphaned and a knob did nothing. */
+inline zc::Clip build_hover_idle(uint16_t slot) {
+  const EyeCam cam = clip_cam_orbits(slot) ? EyeCam::kOrbit : EyeCam::kFixed;
   const int K = kIdleKeys;
-  zc::Clip c = clip_shell(0, K, kHoverHeightMm);
+  zc::Clip c = clip_shell(slot, K, kHoverHeightMm);
   Rig g;
   // the idle glance schedule (thousandths of the gaze clamps)
   static const Key kSide[] = {{0, 0},    {70, 0},   {90, 900},  {150, 900},
@@ -1628,7 +1662,8 @@ inline zc::Clip build_hover_idle() {
                               {299, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 0, K, f);  // pass 4: the always-on fold-hold-knead layer
+    // slot 0 = the SCHEDULE; `cam` = which of the two bakes this is.
+    antenna_knead(g, kIdleOrbitSlot, cam, K, f);  // pass 4: the always-on fold-hold-knead layer
     // ---- PASS 15 (Direction 11 §3): THE SWALLOW ----------------------------
     // See swallow_press() and kIdleSwallowKey. The ambient oscillator above is
     // 2-7 native pixels on the shipped clips; this is the beat on top of it
@@ -1704,7 +1739,7 @@ inline zc::Clip build_drift() {
                               {132, 1040}, {149, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 1, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, 1, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     // banked INTO the travel (+z): a roll about the forward axis
     const int32_t bank = static_cast<int32_t>(
         (static_cast<int64_t>(kDriftBankA16) * curve(kBank, 10, f)) / 1000);
@@ -1746,7 +1781,7 @@ inline zc::Clip build_channel() {
                                {170, 300}, {200, 0}, {209, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 2, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, 2, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     // ---- PASS 15 (Direction 11 §3): THE SWALLOW, ON THE BLAZE ---------------
     // The same ball-led beat as the idle's (see swallow_press), placed on THIS
     // clip's own subject: channel is the conduit at work, and the charge
@@ -1813,7 +1848,7 @@ inline zc::Clip build_curious() {
                               {78, 0},   {89, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 3, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, 3, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     const int perk = curve(kPerk, 6, f);
     loop_pose(g, 1000, perk, perk, perk, 0);
     // PASS 2: the yaw is NEGATED — the gaze sweeps the stars toward +z
@@ -1892,7 +1927,7 @@ inline zc::Clip build_startle() {
                                 {36, 1500}, {52, 1900}, {68, 1100}, {79, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 4, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, 4, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     // PASS 12 A6 (Direction 3 SS7's third debt): THE SPLAY. antenna_knead has
     // already filled g.nod with the always-on schedule; this ADDS to it rather
     // than replacing it, so the startle still breathes and simply flings its
@@ -1937,7 +1972,7 @@ inline zc::Clip build_rest() {
   Rig g;
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 5, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, 5, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     whole_wobble(g, f, K, kWobbleAmpPm / 2);  // pass 3: slower, whole-body
     face_rest(g);
     apply_squint(g, kRestSquintPm + blink_at(f, 77));
@@ -1963,7 +1998,7 @@ inline zc::Clip build_pirouette() {
   Rig g;
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 6, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, 6, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     const uint16_t ph = static_cast<uint16_t>((static_cast<int64_t>(f) * 65536) / K);
     g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_y(static_cast<int32_t>(ph)));
     const int32_t flare = 1000 + static_cast<int32_t>(
@@ -2008,7 +2043,7 @@ inline zc::Clip build_hasty() {
   Rig g;
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 8, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, 8, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     // pitched into the travel, banked, fishtailing — travel is +x, the
     // rest facing, so no yaw circuit at all
     g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_z(-kHastyPitchA16));
@@ -2059,7 +2094,7 @@ inline zc::Clip build_fall() {
                                 {158, 1050}, {169, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 9, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, 9, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     // one full pitch tumble over the drop; 65536 wraps to 0 at the catch
     if (f < kFallCatchKey) {
       const int64_t t = (static_cast<int64_t>(f) << 16) / kFallCatchKey;
@@ -2114,7 +2149,7 @@ inline zc::Clip build_hit() {
                                 {40, 1600}, {56, 1150}, {69, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 10, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, 10, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     const int rec = curve(kRecoil, 8, f);
     loop_pose(g, 1000, rec, rec, rec, 0);
     face_rest(g);
@@ -2164,7 +2199,7 @@ inline zc::Clip build_taunt() {
   static const Key kCross[] = {{0, 0}, {60, 0}, {68, 900}, {86, 900}, {96, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 11, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, 11, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     // the waggle phase FREEZES during the hold (the frozen extreme is the
     // joke); a 3 pm tremble keeps the life clock honest
     const int fw = f < kTauntHoldStartKey ? f
@@ -2241,7 +2276,7 @@ inline zc::Clip build_taunt2() {
                               {106, 0}, {119, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 12, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, 12, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     const int ramp = curve(kRamp, 6, f);  // the lasso spins up and back down
     const int32_t tilt = static_cast<int32_t>(
         (static_cast<int64_t>(kTaunt2LassoA16) * ramp / 1000 * sinp(f, K, 4)) >> 16);
@@ -2314,7 +2349,7 @@ inline zc::Clip build_trick() {
                                 {182, 1150}, {199, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 13, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, 13, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     const int32_t flip = static_cast<int32_t>(
         (static_cast<int64_t>(32768) * curve(kFlip, 11, f)) / 1000);
     g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_z(flip));
@@ -2383,7 +2418,7 @@ inline zc::Clip build_damage() {
   static const int32_t kBlowDir[4][2] = {{1000, 0}, {0, 1000}, {-1000, 0}, {300, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 14, K, f);  // the always-on layer (low gain)
+    antenna_knead(g, 14, EyeCam::kFixed, K, f);  // the always-on layer (low gain)
     int32_t dx = 0, dz = 0;      // root displacement this key
     int32_t whip = 0;            // signed fold-scale whip (pm)
     int32_t wince = 0;
@@ -2876,7 +2911,7 @@ inline zc::Clip build_death_drop() {
     // equivalent, which is the half of the wave-2a edit that never got written.
     // The gain reaches 0 exactly at the settle key, so the dead branch's
     // identity carrier is where the fade was already going.
-    if (!dead) antenna_knead(g, kDeathSlot, K, f,
+    if (!dead) antenna_knead(g, kDeathSlot, EyeCam::kFixed, K, f,
                               g_u02_death_fail == 5 ? 1000 : 1000 - fold_ease(gone));
     // THE NODULES HANG. The schedule is off for this slot (kNoduleClipPm[17]
     // is 0), so the only nodule motion is this: one authored droop that
@@ -3049,7 +3084,7 @@ inline zc::Clip build_death_gutter() {
     // equivalent, which is the half of the wave-2a edit that never got written.
     // The gain reaches 0 exactly at the settle key, so the dead branch's
     // identity carrier is where the fade was already going.
-    if (!dead) antenna_knead(g, kDeathBSlot, K, f,
+    if (!dead) antenna_knead(g, kDeathBSlot, EyeCam::kFixed, K, f,
                               g_u02_death_fail == 5 ? 1000 : 1000 - fold_ease(gone));
     // THE NODULES DIE IN ORDER. Each one, at its own key, stops whatever it
     // was doing and hangs — and because a nodule CARRIES ITS SECTION (§2),
@@ -3245,7 +3280,7 @@ inline zc::Clip build_lasso() {
                               {kLassoCatchKey + 8, -700}, {kLassoHomeKey, 0}, {K - 1, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, kLassoSlot, K, f);
+    antenna_knead(g, kLassoSlot, EyeCam::kFixed, K, f);
     const int32_t th = curve(kThrow, 9, f);
     {
       NoduleOffsets n;
@@ -3338,7 +3373,7 @@ inline zc::Clip build_blown() {
                               {kBlownCatchKey + 10, 700}, {K - 1, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, kBlownSlot, K, f);
+    antenna_knead(g, kBlownSlot, EyeCam::kFixed, K, f);
     // the height, and its own derivative -- the stream is driven by SPEED, so
     // it is computed from the trajectory rather than guessed at with a curve
     const auto height_mm = [&](int q) -> int32_t {
@@ -3562,7 +3597,7 @@ inline zc::Clip build_taunt3() {
                                {K - 1, K - 1}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, kTaunt3Slot, K, f);  // gain 0: nothing runs under the gesture
+    antenna_knead(g, kTaunt3Slot, EyeCam::kFixed, K, f);  // gain 0: nothing runs under the gesture
     const int fc = curve(kClock, 6, f);   // ambient time, which holds still
     const int32_t antic = fold_ease(curve(kAntic, 5, f));
     const int32_t shrug = punch_ease(curve(kShrug, 8, f));
@@ -3758,7 +3793,7 @@ inline zc::Clip build_flight() {
   const int32_t breath = kCompressAmpPm * kFlightBreathGainPm / 1000;
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, kFlightSlot, K, f);  // fills g.nod from the schedule
+    antenna_knead(g, kFlightSlot, EyeCam::kFixed, K, f);  // fills g.nod from the schedule
     // ---- THE ONE CLOCK ---------------------------------------------------
     const int32_t bob = sinp(f, K, cyc);              // the height
     const int32_t rise = sinp(f, K, cyc, 0x4000);     // d(height)/dt
