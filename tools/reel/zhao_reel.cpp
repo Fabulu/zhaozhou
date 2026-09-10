@@ -5664,13 +5664,24 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // `0` back at any of the seven call sites below; it aborts.
   //
   // The fixed-camera idle is u02::kIdleFixedSlot.
-  if (orbit != u02::clip_cam_orbits(static_cast<uint16_t>(slot))) {
+  //
+  // POSITIVE CONTROL, because a detector reading zero is a claim and this one
+  // cannot be reached by ANY legal input -- it is a source-level join, so
+  // there is no stimulus that fires it and "it can fire" would stay an
+  // argument forever (CLAUDE.md). U02_EYE_CAMJOIN_FIREDRILL=1 presents the
+  // WRONG operand, exactly as the seven mis-joined call sites did, and this
+  // must then abort on the first manafold subject. It feeds ONLY the checker
+  // -- s.orbit above is untouched -- and it always mismatches, so it can never
+  // put a wrong picture on screen. Run it before quoting the guard's silence.
+  const bool claimed_orbit =
+      std::getenv("U02_EYE_CAMJOIN_FIREDRILL") != nullptr ? !orbit : orbit;
+  if (claimed_orbit != u02::clip_cam_orbits(static_cast<uint16_t>(slot))) {
     std::fprintf(stderr,
                  "u02: subject '%s' asks orbit=%d on clip slot %d, which is "
                  "BAKED for orbit=%d. The eye base is camera-relative and "
                  "baked into the clip: use u02::kIdleFixedSlot for a "
                  "fixed-camera idle.\n",
-                 name, static_cast<int>(orbit), slot,
+                 name, static_cast<int>(claimed_orbit), slot,
                  static_cast<int>(u02::clip_cam_orbits(static_cast<uint16_t>(slot))));
     std::abort();
   }
