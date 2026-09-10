@@ -60,7 +60,13 @@
 // The LRU stamp is 48 bits. 32 would wrap in under a day of continuous play at
 // a realistic acquire rate and silently invert the eviction order.
 module zhao_field_progcache #(
-    parameter int ENTRIES = 16
+    parameter int ENTRIES = 16,
+    // 2026-09-10: was `localparam int LRUW = 48` in the body. Lifted to a
+    // parameter with the SAME default so tests/field/tb_field_progdir_diff.sv
+    // can elaborate this block, as the RETAINED ORACLE, at a small LRUW beside
+    // the scanned candidate and reach stamp WRAP and LRU TIES with legal
+    // stimulus. Default elaboration is unchanged; nothing else in the file is.
+    parameter int LRUW    = 48
 ) (
     input logic clk,
     input logic rst_n,
@@ -96,7 +102,6 @@ module zhao_field_progcache #(
 );
 
   localparam int IDXW = $clog2(ENTRIES);
-  localparam int LRUW = 48;
 
   logic [ENTRIES-1:0]  ent_valid;
   logic [31:0]         ent_hash[0:ENTRIES-1];

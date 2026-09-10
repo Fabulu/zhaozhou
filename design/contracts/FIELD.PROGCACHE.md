@@ -45,6 +45,74 @@ a mutation-sweep target, not a tolerated state.
   malformed, version skew) is rejected, never cached, and counted in
   `programs_rejected`.
 
+## AMENDED 2026-09-10 -- the directory becomes a SCANNED MEMORY; latency and the caller's lifetime law change
+
+Zhaozhou_ALM_Liberation_Roadmap_2026-09-09 section 5. Quartus 17.0.2 Analysis &
+Synthesis put the register-and-compare-in-parallel directory this contract
+describes at **2,237 estimated ALMs / 1,490 registers** (map-only,
+`reports/synthesis/zhao_block_map.json`, source byte-identical today). The
+"Synthesis / resource ceiling" section below argued a scan "would cost sixteen
+cycles to save almost nothing"; the map row is what that saving turned out to
+be, and the claim is withdrawn.
+
+**The candidate.** `fpga/rtl/field/zhao_field_progdir_scan.sv` keeps the
+ENTRIES x {hash, stamp} rows in ONE synchronous memory (16 x 80 at the defaults),
+walks them one row per clock with ONE hash comparator and ONE stamp comparator,
+and keeps only the valid bits, the LRU counter and the counters in flops.
+`fpga/rtl/field/zhao_field_progdir.sv` is the adapter that presents it behind
+this contract's two-interface port list, port for port. `zhao_field_progcache`
+is RETAINED as the transaction oracle and stays composed until fit gate
+**F-PROGDIR1** (`design/fit_targets.yml`) has priced the memory and comparators.
+See `reports/FIELD-PROGDIR-20260910.md`.
+
+**What does not change.** Every law in this contract about WHAT a transaction
+does: hit restamps and counts, miss counts nothing, a valid commit takes the
+first free slot else the oldest with the lowest index on a tie, a rejected
+commit mutates nothing and saturates `programs_rejected`, wrapping 32-bit
+counters, the 48-bit stamp and its wrap, `cm_ready_o` low on a lookup's cycle,
+nothing dropped, nothing answered twice. Enforced by
+`tests/field/field_progdir_differential.cpp` -- both blocks in one wrapper,
+compared transaction by transaction at ENTRIES=16/48, 2/2 (where ties and wrap
+are reachable) and 3/6 -- and by the unchanged real-program suite re-pointed at
+the candidate (`test_field_progdir_realprog`).
+
+**What changes: the "Latency" and "Target throughput" sections below are
+superseded.** They promise a fixed one cycle per phase and "a resident program
+costs a single cycle to find". The scanned directory MEASURES, at ENTRIES=16:
+
+| transaction | oracle | candidate |
+| --- | --- | --- |
+| lookup (hit or miss) -- accept to response takeable | 1 clock | 20 clocks |
+| valid commit -- accept to response takeable | 1 | 20 |
+| rejected commit (no scan) | 1 | 3 |
+| accept-to-accept, no stall, either port | 1 | 20 (3 for rejected commits) |
+
+Both request ports are not-ready while a transaction is in flight. It is
+**not a fixed-latency drop-in**, and no consumer may be written assuming the
+one-cycle figure.
+
+**The caller's lifetime law, which this contract never stated and now must.**
+The "Overflow" section below says a program "is re-acquired on the cycle it is
+needed rather than held across a frame" -- a sentence that only made sense at
+one cycle per acquire. At 20 clocks it would make the directory the execution
+loop's bottleneck: one Earth patch is 1,089 lattice vertices, and re-acquiring
+per point would cost ~21,800 clocks against `FIELD.SEQ.EARTH`'s 10,416-clock
+allowance, before any point executes. So: **a program is acquired ONCE per
+program per association (FIELD.SEQ.EARTH already loads uniforms "ONCE per
+association from the field descriptor"), the slot is held for the association,
+and no consumer acquires per point.** No RTL consumer of this block exists yet
+(nothing under `fpga/rtl/` drives `lu_valid_i` except the generated
+`zhao_prod_top`'s LFSR pins), so this is a law for the first consumer, not a
+repair of an existing one -- and it means the production acquire demand is
+UNKNOWN until a consumer exists to trace; the roadmap's "128 lookups" is an
+illustration, not a measurement.
+
+**Memory sheet** (roadmap section 3.1): in the scanner's header. Payload is never
+reset; valid bits are; an invalid row is never consulted as contents; every
+write is a whole row; no same-address read/write can occur (asserted in
+simulation); expected 2 x M10K at 16 x 80 (an M10K port is at most 40 wide) --
+a STRUCTURAL PREDICTION until F-PROGDIR1 runs.
+
 ## Clock and reset semantics
 
 Single clock `clk`, asynchronous active-low `rst_n`, `gpu` domain per the ledger.

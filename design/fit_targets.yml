@@ -1382,6 +1382,34 @@ targets:
     sources:
       - fpga/rtl/field/zhao_field_progcache.sv
 
+  # F-PROGDIR1 -- THE ONE GATE for the scanned FIELD program directory
+  # (Zhaozhou_ALM_Liberation_Roadmap_2026-09-09 s5; reports/FIELD-PROGDIR-
+  # 20260910.md). Its question, in the roadmap's words: "map the scanner plus
+  # adapter: price the memory and comparator, not only the unwrapped leaf."
+  # Concretely: did the 16 x 80 directory become block memory (2 M10K predicted
+  # -- an M10K port is at most 40 wide, so 80 bits is two blocks at 16/256
+  # rows each; an MLAB layout is the one-attribute alternative), and what do
+  # ONE hash comparator + ONE stamp comparator + the scan control cost against
+  # the retained zhao_field_progcache's map-only 2,237 ALM / 1,490 registers?
+  # Correctness, order, held responses, ties, wrap and the 20-clock interval
+  # are already answered by Verilator and do not need Quartus.
+  #
+  # The target is the ADAPTER, so the price includes the response channels and
+  # arbitration the old ports need -- the "not only the unwrapped leaf" half.
+  - top: zhao_field_progdir
+    sources:
+      - fpga/rtl/field/zhao_field_progdir_scan.sv
+      - fpga/rtl/field/zhao_field_progdir.sv
+    rules:
+      # The MINIMUM is the point: a directory whose rows came back as flops is
+      # the old block with a slower interface, and Fmax would call it a pass.
+      min_m10k: 2
+      # ~400 flops by construction (16 valid + 48 counter + 4x32 counters + 5
+      # occupancy + ~130 scan/response state) -- an 80-bit rd_q absorbed into
+      # the M10K output register or not. 700 leaves room for the latter; 1,490
+      # (the old block) must fail.
+      max_registers: 700
+
   - top: zhao_field_v3_wbarb
     sources:
       - fpga/rtl/field/zhao_field_v3_wbarb.sv
@@ -1389,6 +1417,28 @@ targets:
   - top: zhao_forge_cliff
     sources:
       - fpga/rtl/forge/zhao_forge_cliff.sv
+
+  # FORGE.CLIFF bitmap-RAM candidate -- fit gate F-CLIFF1 (ALM-Liberation Roadmap
+  # s6 / s14 Commit6; reports/FORGE-CLIFF-BITMAP-RAM-20260910.md). Batched with
+  # the next forge-subsystem map per the 2026-09-08 batching law; it is a
+  # quartus_map, not a full fit. Its ONE question: with the 34x34 SOLID window
+  # as a 34-word RAM behind three row registers and the alive bitmap deleted,
+  # (a) does `inferredMemories` list FIVE memories -- win_mem 34x34 (M10K or
+  # MLAB, either is fine; flip-flops is the failure) plus the golden's four
+  # payload tables still SDP at 2048x12 / 2048x6 / 2048x32 / 1024x17, with
+  # ramConversionWarnings 0 -- and (b) what are the estimated ALM, comb ALUT
+  # and register counts against the golden's map-only 7,664 / 8,149 / 3,875?
+  # The golden's row is an ESTIMATE, so the delta this gate produces is an
+  # estimate-to-estimate comparison (same tool, same stage, same device) and
+  # settles the STRUCTURE (did 3,204 bitmap flops and their cones leave, did
+  # the tables stay RAM, did the extra write sites break the async-read
+  # rescue), not a fitted ALM number. Declared register bits 3,646 -> 630 is
+  # arithmetic from the source and needs no Quartus. Correctness, cycle counts,
+  # handshakes and the compaction's same-address suppression are Verilator's
+  # (tests/forge/forge_cliff_ram_differential.cpp) and do not need this gate.
+  - top: zhao_forge_cliff_ram
+    sources:
+      - fpga/rtl/forge/zhao_forge_cliff_ram.sv
 
   - top: zhao_forge_prim
     sources:

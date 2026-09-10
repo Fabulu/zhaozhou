@@ -810,6 +810,97 @@ set_tests_properties(forge_cliff_random PROPERTIES LABELS "fast;nightly" TIMEOUT
 add_test(NAME forge_cliff_random_nightly COMMAND test_forge_cliff_random --nightly)
 set_tests_properties(forge_cliff_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# ---- FORGE.CLIFF bitmap-RAM CANDIDATE (Roadmap s14 Commit6) ------------------
+# zhao_forge_cliff_ram beside the golden: the 34x34 SOLID window in one RAM
+# behind three row registers, the alive bitmap deleted by span-walk
+# compaction, the algorithm untouched. Three kinds of evidence, each a target:
+#   1. the golden suites UNMODIFIED against the candidate -- the candidate is
+#      verilated under the golden's PREFIX so the suites compile untouched;
+#   2. the three-way differential (oracle / golden / candidate in ONE process,
+#      752 pages, cycle counts printed) -- two verilate() calls on one target;
+#   3. the committed mutants with inverted-polarity controls: two fire the
+#      candidate's walk_fault_o (zero span / overshoot), one shows the
+#      differential FAILING on a prefetch one row off.
+set(ZHAO_FORGE_CLIFF_RAM_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_cliff_ram.sv)
+
+add_test(NAME lint_forge_cliff_ram
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_forge_cliff_ram
+                 ${ZHAO_FORGE_CLIFF_RAM_SV})
+set_tests_properties(lint_forge_cliff_ram PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_executable(test_forge_cliff_ram_directed forge/forge_cliff_directed.cpp)
+target_link_libraries(test_forge_cliff_ram_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_forge_cliff_ram_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/forge)
+verilate(test_forge_cliff_ram_directed
+  PREFIX Vzhao_forge_cliff
+  TOP_MODULE zhao_forge_cliff_ram
+  SOURCES ${ZHAO_FORGE_CLIFF_RAM_SV})
+add_test(NAME forge_cliff_ram_directed COMMAND test_forge_cliff_ram_directed)
+set_tests_properties(forge_cliff_ram_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_executable(test_forge_cliff_ram_random forge/forge_cliff_random.cpp)
+target_link_libraries(test_forge_cliff_ram_random PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_forge_cliff_ram_random PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/forge)
+verilate(test_forge_cliff_ram_random
+  PREFIX Vzhao_forge_cliff
+  TOP_MODULE zhao_forge_cliff_ram
+  SOURCES ${ZHAO_FORGE_CLIFF_RAM_SV})
+add_test(NAME forge_cliff_ram_random COMMAND test_forge_cliff_ram_random)
+set_tests_properties(forge_cliff_ram_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_executable(test_forge_cliff_ram_differential forge/forge_cliff_ram_differential.cpp)
+target_link_libraries(test_forge_cliff_ram_differential PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_forge_cliff_ram_differential PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/forge)
+verilate(test_forge_cliff_ram_differential
+  PREFIX Vzhao_forge_cliff
+  TOP_MODULE zhao_forge_cliff
+  VERILATOR_ARGS --assert
+  SOURCES ${ZHAO_FORGE_CLIFF_SV})
+verilate(test_forge_cliff_ram_differential
+  PREFIX Vzhao_forge_cliff_ram
+  TOP_MODULE zhao_forge_cliff_ram
+  VERILATOR_ARGS --assert
+  SOURCES ${ZHAO_FORGE_CLIFF_RAM_SV})
+add_test(NAME forge_cliff_ram_differential COMMAND test_forge_cliff_ram_differential)
+set_tests_properties(forge_cliff_ram_differential PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME forge_cliff_ram_differential_nightly COMMAND test_forge_cliff_ram_differential --nightly)
+set_tests_properties(forge_cliff_ram_differential_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+# the mutants: each verilated under the golden's PREFIX so the shared driver
+# header compiles; each control PASSES when the instrument FIRES.
+foreach(mut IN ITEMS mutant over_mutant)
+  add_executable(test_forge_cliff_ram_${mut}_control forge/forge_cliff_ram_mutant_control.cpp)
+  target_link_libraries(test_forge_cliff_ram_${mut}_control PRIVATE zhao_harness zhao_zref)
+  target_include_directories(test_forge_cliff_ram_${mut}_control PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/forge)
+  verilate(test_forge_cliff_ram_${mut}_control
+    PREFIX Vzhao_forge_cliff
+    TOP_MODULE zhao_forge_cliff_ram_${mut}
+    VERILATOR_ARGS --assert
+    SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_forge_cliff_ram_${mut}.sv)
+  add_test(NAME forge_cliff_ram_${mut}_control COMMAND test_forge_cliff_ram_${mut}_control)
+  set_tests_properties(forge_cliff_ram_${mut}_control PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+endforeach()
+
+add_executable(test_forge_cliff_ram_rowoff_control forge/forge_cliff_ram_rowoff_control.cpp)
+target_link_libraries(test_forge_cliff_ram_rowoff_control PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_forge_cliff_ram_rowoff_control PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/forge)
+verilate(test_forge_cliff_ram_rowoff_control
+  PREFIX Vzhao_forge_cliff
+  TOP_MODULE zhao_forge_cliff_ram_rowoff_mutant
+  VERILATOR_ARGS --assert
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_forge_cliff_ram_rowoff_mutant.sv)
+add_test(NAME forge_cliff_ram_rowoff_control COMMAND test_forge_cliff_ram_rowoff_control)
+set_tests_properties(forge_cliff_ram_rowoff_control PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # ---- deep-keel wave: TEXTURE.MOSAIC (terrain_rules.md 6.2) ------------------
 # The oracle lanes (the mirrored-repeat fold at wrap boundaries, the frozen
 # pick constants, the rendered dither + exact modulation through the
@@ -4127,6 +4218,109 @@ add_test(NAME lint_zhao_field_progcache
 set_tests_properties(lint_zhao_field_progcache PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# FIELD program directory as a SCANNED MEMORY (roadmap 2026-09-09 s5): the
+# candidate zhao_field_progdir (scanner + old-interface adapter) against the
+# RETAINED oracle zhao_field_progcache, both elaborated in one wrapper
+# (tests/field/tb_field_progdir_diff.sv) and compared transaction by
+# transaction. -DTB_ENTRIES/-DTB_LRUW must match -GENTRIES/-GLRUW; the test's
+# case 0 checks they do. Three elaborations, each for a law the others cannot
+# reach: the shipping shape (and the timing probe the report quotes), a
+# two-row / two-bit-stamp directory where the counter wraps every four stamps
+# so LRU TIES are constructible, and a non-power-of-two directory under wrap.
+# ---------------------------------------------------------------------------
+set(ZHAO_PROGDIR_DIFF_SV
+    ${CMAKE_SOURCE_DIR}/tests/field/tb_field_progdir_diff.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progcache.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progdir.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progdir_scan.sv)
+
+add_executable(test_field_progdir_diff16 field/field_progdir_differential.cpp)
+target_link_libraries(test_field_progdir_diff16 PRIVATE zhao_harness)
+target_compile_definitions(test_field_progdir_diff16 PRIVATE TB_ENTRIES=16 TB_LRUW=48)
+verilate(test_field_progdir_diff16
+  PREFIX Vtb_field_progdir_diff
+  TOP_MODULE tb_field_progdir_diff
+  SOURCES ${ZHAO_PROGDIR_DIFF_SV}
+  VERILATOR_ARGS -GENTRIES=16 -GLRUW=48)
+add_test(NAME field_progdir_diff16_directed COMMAND test_field_progdir_diff16)
+set_tests_properties(field_progdir_diff16_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_progdir_diff16_random COMMAND test_field_progdir_diff16 --random 60)
+set_tests_properties(field_progdir_diff16_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_progdir_diff16_random_nightly COMMAND test_field_progdir_diff16 --random 800)
+set_tests_properties(field_progdir_diff16_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_executable(test_field_progdir_diff2 field/field_progdir_differential.cpp)
+target_link_libraries(test_field_progdir_diff2 PRIVATE zhao_harness)
+target_compile_definitions(test_field_progdir_diff2 PRIVATE TB_ENTRIES=2 TB_LRUW=2)
+verilate(test_field_progdir_diff2
+  PREFIX Vtb_field_progdir_diff
+  TOP_MODULE tb_field_progdir_diff
+  SOURCES ${ZHAO_PROGDIR_DIFF_SV}
+  VERILATOR_ARGS -GENTRIES=2 -GLRUW=2)
+add_test(NAME field_progdir_diff2_ties COMMAND test_field_progdir_diff2 --no-probe)
+set_tests_properties(field_progdir_diff2_ties PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_progdir_diff2_random COMMAND test_field_progdir_diff2 --random 100)
+set_tests_properties(field_progdir_diff2_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_field_progdir_diff3 field/field_progdir_differential.cpp)
+target_link_libraries(test_field_progdir_diff3 PRIVATE zhao_harness)
+target_compile_definitions(test_field_progdir_diff3 PRIVATE TB_ENTRIES=3 TB_LRUW=6)
+verilate(test_field_progdir_diff3
+  PREFIX Vtb_field_progdir_diff
+  TOP_MODULE tb_field_progdir_diff
+  SOURCES ${ZHAO_PROGDIR_DIFF_SV}
+  VERILATOR_ARGS -GENTRIES=3 -GLRUW=6)
+add_test(NAME field_progdir_diff3_random COMMAND test_field_progdir_diff3 --random 100 --no-probe)
+set_tests_properties(field_progdir_diff3_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# THE POSITIVE CONTROL: the committed tie mutant on the candidate side,
+# inverted polarity -- passes when the differential FAILS on the tie and
+# AGREES on every non-tie op. Evidence about the instrument, not the design.
+add_executable(test_field_progdir_mutant_control field/field_progdir_mutant_control.cpp)
+target_link_libraries(test_field_progdir_mutant_control PRIVATE zhao_harness)
+target_compile_definitions(test_field_progdir_mutant_control PRIVATE TB_ENTRIES=2 TB_LRUW=2)
+verilate(test_field_progdir_mutant_control
+  PREFIX Vtb_field_progdir_diff
+  TOP_MODULE tb_field_progdir_diff
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/field/tb_field_progdir_diff.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progcache.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_field_progdir_scan_mutant.sv
+  VERILATOR_ARGS -GENTRIES=2 -GLRUW=2 -DPROGDIR_MUTANT)
+add_test(NAME field_progdir_mutant_control COMMAND test_field_progdir_mutant_control)
+set_tests_properties(field_progdir_mutant_control PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# The REAL-PROGRAM suite, unchanged, re-pointed at the candidate through the
+# one-line compat shim tests/field/progdir_compat/Vzhao_field_progcache.h: the
+# same 123 checks and random lane against zref::field::ProgCache that the
+# oracle passes, now on the scanned directory. Same source, two tops.
+add_executable(test_field_progdir_realprog field/field_progcache_directed.cpp)
+target_link_libraries(test_field_progdir_realprog PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_field_progdir_realprog BEFORE PRIVATE
+  ${CMAKE_SOURCE_DIR}/tests/field/progdir_compat
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
+verilate(test_field_progdir_realprog
+  PREFIX Vzhao_field_progdir
+  TOP_MODULE zhao_field_progdir
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progdir.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progdir_scan.sv
+  VERILATOR_ARGS -GENTRIES=2)
+add_test(NAME field_progdir_realprog_directed COMMAND test_field_progdir_realprog)
+set_tests_properties(field_progdir_realprog_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_progdir_realprog_random COMMAND test_field_progdir_realprog --random 60)
+set_tests_properties(field_progdir_realprog_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+foreach(m zhao_field_progdir_scan zhao_field_progdir)
+  add_test(NAME lint_${m}
+           COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                   --top-module ${m}
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progdir_scan.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progdir.sv)
+  set_tests_properties(lint_${m} PROPERTIES
+    LABELS "lint;fast"
+    ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+endforeach()
 
 # GEOM.PROJECT against zref::render::project_vertex -- the real law, replacing
 # the phantom zref::GeomProject the ledger declared. White-box include of
