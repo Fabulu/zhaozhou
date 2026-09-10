@@ -1222,6 +1222,16 @@ int main(int argc, char** argv) {
         static_cast<long>(d.err_fragrob_id_error_o));
   check(d.err_aux_degenerate_o == 0, "and AUX reported no degenerate envelope", 0,
         static_cast<long>(d.err_aux_degenerate_o));
+#ifdef ISLAND_V3
+  // R3 swap (2026-09-09): rcp24_v3's four ticket queues, sticky-latched at the
+  // source and ORed to the boundary. V3-only port, hence the guard -- the
+  // oracle island still carries rcp24_svc, which has no queues to err.
+  check(d.err_rcp_q_o == 0,
+        "RCP24_V3 never pushed a full ticket queue or popped an empty one -- "
+        "asserted on its first run at the island boundary rather than left "
+        "dangling",
+        0, static_cast<long>(d.err_rcp_q_o));
+#endif
   check(d.err_class_mismatch_o == 0,
         "PHASE 1 DROVE A MODE AND A CLASS THAT AGREE: the planner's derived "
         "class equals the one carried in the source id on every transaction. "

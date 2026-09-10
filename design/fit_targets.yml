@@ -1258,8 +1258,22 @@ targets:
       - fpga/rtl/texture/zhao_texture_v3own.sv
       - fpga/rtl/texture/zhao_texture_v3bank.sv
       - fpga/rtl/texture/zhao_texture_v3rq.sv
-      - fpga/rtl/raster/zhao_raster_rcp24_svc.sv
-      - fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+      # R3 swap 2026-09-09 (reports/OWNER-RULINGS-20260909-2300.md): rcp24_svc
+      # -> rcp24_v3 at NCTX=12; the tile brings mul + both ticket queues.
+      - fpga/rtl/raster/zhao_raster_rcp24_v3.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+      - fpga/rtl/raster/zhao_raster_ticketq.sv
+      - fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+      # REPAIRED 2026-09-10. This closure listed zhao_raster_perspuv_svc.sv --
+      # the SUPERSEDED block -- while the island instantiates
+      # zhao_raster_perspuv_pairpipe at zhao_texture_island_v3_top.sv:1031.
+      # Left over from the pair-pipe swap: the instantiation changed and this
+      # list did not. Found by linting the island standalone from this very
+      # closure, which returned MODMISSING on the pairpipe -- so the island fit
+      # owed for BOTH the pair-pipe swap and the rcp24 swap would have died at
+      # elaboration. pairpipe is a LEAF (instantiates nothing), and the only
+      # remaining mentions of svc in the island and in pairpipe are comments.
+      - fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
       - fpga/rtl/texture/zhao_texture_tmu_plan.sv
       - fpga/rtl/texture/zhao_texture_cache_pipe.sv
       - fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
@@ -1829,9 +1843,15 @@ targets:
       - fpga/rtl/raster/zhao_raster_perspuv_svc.sv
       - fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
       - fpga/rtl/raster/zhao_raster_quant.sv
-      - fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+      # R3 swap 2026-09-09: the island now instantiates rcp24_v3 (NCTX=12), so
+      # svc leaves this closure -- nothing in the production graph carries it
+      # any more -- and the tile's leaves come in with it.
+      - fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_v3.sv
       - fpga/rtl/raster/zhao_raster_resolve.sv
       - fpga/rtl/raster/zhao_raster_texjoin_v2.sv
+      - fpga/rtl/raster/zhao_raster_ticketq.sv
+      - fpga/rtl/raster/zhao_raster_ticketq_rh.sv
       - fpga/rtl/raster/zhao_raster_tile_pipe.sv
       - fpga/rtl/raster/zhao_raster_tilestore.sv
       - fpga/rtl/raster/zhao_raster_toon.sv

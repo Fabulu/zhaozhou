@@ -568,33 +568,26 @@ excluded:
   - zhao_raster_perspuv: superseded  by zhao_raster_perspuv_svc (two lanes)
   - zhao_raster_rcp24: superseded  by zhao_raster_rcp24_svc (scheduled)
 
-  # --- V3 RCP arithmetic tile: built beside the shipped block, not adopted ----
-  # TEXTURE-ISLAND-V3-ARCHITECTURE-20260906.txt S26.1: "the RCP arithmetic tile
-  # can establish its own exact-tool packing. Do not merge those changes into the
-  # composition until the shared record and credit contracts are fixed."
+  # --- V3 RCP arithmetic tile: ADOPTED 2026-09-09, R3 ------------------------
+  # OWNER RULING 2026-09-09 (reports/OWNER-RULINGS-20260909-2300.md R3): "Use V3
+  # with NCTX=12, but note this down as possible to reverse if we ever find
+  # ourselves wit enough DSPs to flex."
   #
-  # zhao_raster_rcp24_svc stays the counted implementation. The V3 tile measures
-  # 3 DSP against its 6 and is bit-exact over all 16,777,215 denominators, but
-  # adopting it would claim a composition that S26.1 explicitly defers -- and the
-  # same one-implementation rule that keeps FRAGROB out keeps this out.
+  # The swap WAS PERFORMED the same day: zhao_texture_island_v3_top instantiates
+  # zhao_raster_rcp24_v3 #(.NCTX(12), .TOKW(14)) where it held rcp24_svc, so
+  # the tile and its leaves (rcp24_mul, ticketq, ticketq_rh) are counted INSIDE
+  # the island's composed fit now and carry no excluded rows -- the same move
+  # the island's other children made when it became a counted top. S26.1's "do
+  # not merge until the shared record and credit contracts are fixed" was
+  # discharged by P0-C: v3own owns the record and credit contracts the tile
+  # rides on.
   #
-  # zhao_raster_rcp24_mul and zhao_raster_ticketq are leaves of the tile and are
-  # declared beside it rather than left to inherit its status, because a module
-  # accounted for only by being inside an excluded top is accounted for by
-  # accident.
-  - zhao_raster_rcp24_v3: not-yet-adopted  V3 tile per S10; zhao_raster_rcp24_svc stays counted until it is composed
-  #
-  # OWNER RULING 2026-09-09 (reports/OWNER-RULINGS-20260909-2300.md): "Use V3 with
-  # NCTX=12, but note this down as possible to reverse if we ever find ourselves
-  # wit enough DSPs to flex."
-  #
-  # The swap is APPROVED, and it requires raising the island from NCTX=8 to
-  # NCTX=12. Measured at the island's own parameters: NCTX=8 gives 5.78
-  # clk/recip against the tile's OWN 4.6 acceptance threshold and fails 1 of 52
-  # checks; NCTX=12 gives 4.38 and passes 52/52. So NCTX=12 is not a preference,
-  # it is what makes the swap legal. Buys -3 DSP, clearing a live max_dsp: 14
-  # breach, at the price of four more contexts of per-context state (svc holds
-  # that state in FLOPS, so it is not free) and +7 M10K.
+  # NCTX=12 was the CONDITION, not a preference. Measured at the island's own
+  # parameters: NCTX=8 gives 5.78 clk/recip against the tile's OWN 4.6
+  # acceptance threshold and fails 1 of 52 checks; NCTX=12 gives 4.38 and
+  # passes 52/52. Buys -3 DSP, clearing a live max_dsp: 14 breach, at the price
+  # of four more contexts of per-context state (svc held that state in FLOPS,
+  # so it was not free) and +7 M10K.
   #
   # REVERSAL CONDITION, recorded because the owner asked for it explicitly: if
   # the DSP budget ever has slack, revert to zhao_raster_rcp24_svc at NCTX=8 and
@@ -602,9 +595,12 @@ excluded:
   # Anyone reversing this must also know that GATE4's -816 ALM was measured at
   # NCTX=12 and is very likely an overstatement elsewhere; the
   # parameter-invariant halves are the DSP halving and the +7 M10K.
-  - zhao_raster_rcp24_mul: not-yet-adopted  the exact 32x32 product, inside zhao_raster_rcp24_v3
-  - zhao_raster_ticketq: not-yet-adopted  the queue that replaces the scans, inside zhao_raster_rcp24_v3
-  - zhao_raster_ticketq_rh: not-yet-adopted  S16.3's registered-head wrapper; only the DONE instance uses it
+  #
+  # zhao_raster_rcp24_svc is what the reversal would restore. It is still
+  # instantiated by the zhao_texture_island_top ORACLE (excluded: probe) and by
+  # the shell test bench's DEPTHQUANT service, so the file and its differential
+  # test stay; it is simply no longer in the machine.
+  - zhao_raster_rcp24_svc: superseded  by zhao_raster_rcp24_v3 at NCTX=12 (R3, 2026-09-09); reversal condition above -- revert on DSP headroom
 
   # The V3 texture-island owner/completion experiment (section 26.1). These are the
   # FIRST implementation task and are deliberately not composed: section 26.1 says

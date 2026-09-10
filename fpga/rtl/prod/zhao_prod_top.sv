@@ -4335,6 +4335,7 @@ module zhao_prod_top (
   logic [1-1:0] u61_err_fragrob_wq_overflow_o;
   logic [1-1:0] u61_err_fragrob_id_error_o;
   logic [1-1:0] u61_err_aux_degenerate_o;
+  logic [1-1:0] u61_err_rcp_q_o;
   logic [32-1:0] u61_cnt_reorder_held_o;
   logic [32-1:0] u61_cnt_live_peak_o;
   logic [32-1:0] u61_cnt_fragments_o;
@@ -4439,6 +4440,7 @@ module zhao_prod_top (
       .err_fragrob_wq_overflow_o(u61_err_fragrob_wq_overflow_o),
       .err_fragrob_id_error_o(u61_err_fragrob_id_error_o),
       .err_aux_degenerate_o(u61_err_aux_degenerate_o),
+      .err_rcp_q_o(u61_err_rcp_q_o),
       .cnt_reorder_held_o(u61_cnt_reorder_held_o),
       .cnt_live_peak_o(u61_cnt_live_peak_o),
       .cnt_fragments_o(u61_cnt_fragments_o),
@@ -4483,7 +4485,7 @@ module zhao_prod_top (
   logic u61_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u61_fold_q <= 1'b0;
-    else u61_fold_q <= u61_fold_q ^ (^u61_frag_ready_o) ^ (^u61_fill_valid_o) ^ (^u61_fill_addr_o) ^ (^u61_sheet_valid_o) ^ (^u61_sheet_u_o) ^ (^u61_sheet_v_o) ^ (^u61_sheet_tok_o) ^ (^u61_out_valid_o) ^ (^u61_out_rgb_o) ^ (^u61_out_a_o) ^ (^u61_out_tag_o) ^ (^u61_out_refused_o) ^ (^u61_err_fragrob_wq_overflow_o) ^ (^u61_err_fragrob_id_error_o) ^ (^u61_err_aux_degenerate_o) ^ (^u61_cnt_reorder_held_o) ^ (^u61_cnt_live_peak_o) ^ (^u61_cnt_fragments_o) ^ (^u61_cnt_cache_hits_o) ^ (^u61_cnt_cache_misses_o) ^ (^u61_cnt_palette_lookups_o) ^ (^u61_cnt_bilerp_jobs_o) ^ (^u61_cnt_mosaic_samples_o) ^ (^u61_cnt_aux_accepted_o) ^ (^u61_cnt_combine_refused_o) ^ (^u61_cnt_combine_phases_o) ^ (^u61_cnt_rcp_completed_o) ^ (^u61_cnt_persp_fragments_o) ^ (^u61_cnt_dispatch_accepted_o) ^ (^u61_cnt_plan_accepted_o) ^ (^u61_cnt_fragrob_id_errors_o) ^ (^u61_shadow_present_o) ^ (^u61_meta_shadow_mismatch_o) ^ (^u61_meta_shadow_reads_o) ^ (^u61_meta_align_err_o) ^ (^u61_meta_align_chk_o) ^ (^u61_meta_bil_err_o) ^ (^u61_meta_bil_chk_o) ^ (^u61_meta_near_err_o) ^ (^u61_meta_near_chk_o) ^ (^u61_meta_bil_first_q_o) ^ (^u61_meta_bil_first_t_o) ^ (^u61_meta_bil_first_tok_o) ^ (^u61_meta_genmis_o) ^ (u61_cnt_combine_jobs_o_fold) ^ (^u61_cnt_palette_stale_o) ^ (^u61_cnt_palette_cold_o) ^ (^u61_err_rsp_dropped_o) ^ (^u61_err_bil_chan_o) ^ (^u61_cnt_near_refused_o) ^ (^u61_err_unknown_class_o) ^ (^u61_err_class_invalid_o) ^ (^u61_err_palette_unusable_o) ^ (^u61_err_class_mismatch_o) ^ (^u61_err_plan_mode_o);
+    else u61_fold_q <= u61_fold_q ^ (^u61_frag_ready_o) ^ (^u61_fill_valid_o) ^ (^u61_fill_addr_o) ^ (^u61_sheet_valid_o) ^ (^u61_sheet_u_o) ^ (^u61_sheet_v_o) ^ (^u61_sheet_tok_o) ^ (^u61_out_valid_o) ^ (^u61_out_rgb_o) ^ (^u61_out_a_o) ^ (^u61_out_tag_o) ^ (^u61_out_refused_o) ^ (^u61_err_fragrob_wq_overflow_o) ^ (^u61_err_fragrob_id_error_o) ^ (^u61_err_aux_degenerate_o) ^ (^u61_err_rcp_q_o) ^ (^u61_cnt_reorder_held_o) ^ (^u61_cnt_live_peak_o) ^ (^u61_cnt_fragments_o) ^ (^u61_cnt_cache_hits_o) ^ (^u61_cnt_cache_misses_o) ^ (^u61_cnt_palette_lookups_o) ^ (^u61_cnt_bilerp_jobs_o) ^ (^u61_cnt_mosaic_samples_o) ^ (^u61_cnt_aux_accepted_o) ^ (^u61_cnt_combine_refused_o) ^ (^u61_cnt_combine_phases_o) ^ (^u61_cnt_rcp_completed_o) ^ (^u61_cnt_persp_fragments_o) ^ (^u61_cnt_dispatch_accepted_o) ^ (^u61_cnt_plan_accepted_o) ^ (^u61_cnt_fragrob_id_errors_o) ^ (^u61_shadow_present_o) ^ (^u61_meta_shadow_mismatch_o) ^ (^u61_meta_shadow_reads_o) ^ (^u61_meta_align_err_o) ^ (^u61_meta_align_chk_o) ^ (^u61_meta_bil_err_o) ^ (^u61_meta_bil_chk_o) ^ (^u61_meta_near_err_o) ^ (^u61_meta_near_chk_o) ^ (^u61_meta_bil_first_q_o) ^ (^u61_meta_bil_first_t_o) ^ (^u61_meta_bil_first_tok_o) ^ (^u61_meta_genmis_o) ^ (u61_cnt_combine_jobs_o_fold) ^ (^u61_cnt_palette_stale_o) ^ (^u61_cnt_palette_cold_o) ^ (^u61_err_rsp_dropped_o) ^ (^u61_err_bil_chan_o) ^ (^u61_cnt_near_refused_o) ^ (^u61_err_unknown_class_o) ^ (^u61_err_class_invalid_o) ^ (^u61_err_palette_unusable_o) ^ (^u61_err_class_mismatch_o) ^ (^u61_err_plan_mode_o);
 
   // ---- zhao_texture_material_combine_v1 ----
   logic [63:0] u62_lfsr_q;

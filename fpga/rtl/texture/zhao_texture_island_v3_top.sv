@@ -37,7 +37,9 @@
 // DONE:  seeded from the oracle so the ELEVEN carried instantiations are
 //        verbatim (rcp24_svc, perspuv_svc, mosaic, tmu_plan, cache_pipe,
 //        rsp_dispatch, bilerp_lane, palette_res, aux_pipe, combine_v2);
-//        module renamed.
+//        module renamed. SINCE SUPERSEDED IN PLACE: perspuv_svc -> the
+//        pairpipe, and rcp24_svc -> rcp24_v3 at NCTX=12 (owner ruling R3,
+//        2026-09-09) -- the seeding note above is history, not the contents.
 // TO DO: delete the fragrob instance and its glue; instantiate
 //        zhao_texture_frag_expand and zhao_texture_v3own; re-key identity to
 //        v3own's 14-bit handle; widen SRCW 16 -> 18 through plan/cache/dispatch;
@@ -223,6 +225,13 @@ module zhao_texture_island_v3_top #(
     output var logic err_fragrob_wq_overflow_o,
     output var logic err_fragrob_id_error_o,
     output var logic err_aux_degenerate_o,
+    // RCP24_V3's sticky queue fault (R3 swap, 2026-09-09): any of the tile's
+    // four ticket queues pushed while full or popped while empty. Must stay
+    // low. Sticky AT THE SOURCE -- each zhao_raster_ticketq latches err_o and
+    // qerr_o ORs the four latches -- so a pass-through here keeps the law
+    // above without a second latch. Left dangling it would be exactly the
+    // decoration the tripwire note above describes.
+    output var logic err_rcp_q_o,
     output var logic [31:0] cnt_reorder_held_o,
     // High-water mark of live owner credits. A run whose peak never approached
     // OWNER_DEPTH has not tested the ceiling, whatever else it proved.
@@ -501,8 +510,19 @@ module zhao_texture_island_v3_top #(
   logic        rcp_dzero;
   logic [13:0] rcp_tok;   // v3own's {slot[5:0], generation[7:0]}
   logic        rcp_v_ready;
-  logic [31:0] rcp_accepted, rcp_mul_busy;
-  logic [3:0]  rcp_occ;
+  logic [31:0] rcp_accepted;
+  // [5:0], not [3:0]: v3's occupancy_o is 6 bits where svc's was 4 -- the same
+  // width lesson pu_occ taught (see there). NCTX=12 is exactly what makes an
+  // occupancy above 15 reachable, so keeping [3:0] would truncate the very
+  // states the ruling adds. Nothing reads rcp_occ in this top -- declared,
+  // driven, never consumed, like pu_occ -- so widening it is safe.
+  logic [5:0]  rcp_occ;
+  // v3's four job counters (R3 swap). The tile's standalone test divides them
+  // to prove the saturated launch rate; at island level the "one summary
+  // counter per block" law holds (cnt_rcp_completed_o is RCP's pin), so like
+  // pu_zero_products they land on locals rather than pins. qerr_o does NOT:
+  // an error output dropped on the floor is the unfired-detector law, so it
+  // goes to the boundary as err_rcp_q_o alongside the other tripwires.
 
   // The island's own fragment counter, used as the token so a response can be
   // matched to its request. Eight bits is RCP24's TOKW.
@@ -619,10 +639,24 @@ module zhao_texture_island_v3_top #(
 
   // TOKW 8 -> 14: THE RCP CARRIES THE OWNER HANDLE, NOT AN INGRESS TOKEN.
   // Third width question of this restructure and the third different answer.
-  // `zhao_raster_rcp24_svc` is parameterised throughout (`TOKW` at :59, every
-  // use `[TOKW-1:0]`, no literals), so like `aux_pipe` and unlike `cache_pipe`
+  // Both reciprocals are parameterised throughout (`TOKW`, every use
+  // `[TOKW-1:0]`, no literals), so like `aux_pipe` and unlike `cache_pipe`
   // the leaf needs NO change -- only the number here. Measured, not assumed.
-  zhao_raster_rcp24_svc #(.NCTX(8), .TOKW(14)) u_rcp (
+  //
+  // RCP24_SVC -> RCP24_V3 AT NCTX=12, OWNER RULING R3 (2026-09-09):
+  // reports/OWNER-RULINGS-20260909-2300.md -- "Use V3 with NCTX=12, but note
+  // this down as possible to reverse if we ever find ourselves wit enough DSPs
+  // to flex." NCTX=12 is the CONDITION, not a preference: at the island's own
+  // parameters svc-equivalent NCTX=8 gives 5.78 clk/recip against the tile's
+  // own 4.6 threshold (fails, 1/52), NCTX=12 gives 4.38 (passes, 52/52).
+  // Buys -3 DSP, clearing the live max_dsp:14 breach, for four more contexts
+  // of per-context state and +7 M10K. Reversal trigger is DSP HEADROOM.
+  //
+  // NOT drop-in (R3 correction): mul_busy_o is gone (its capture was a
+  // dead-end -- declared and connected, read nowhere), occupancy_o widened
+  // 4 -> 6 bits, four job counters land on locals above, and the sticky
+  // qerr_o goes to the island boundary as err_rcp_q_o.
+  zhao_raster_rcp24_v3 #(.NCTX(12), .TOKW(14)) u_rcp (
       .clk(clk), .rst_n(rst_n),
       .v_valid_i(frag_valid_i && credit_available), .v_ready_o(rcp_v_ready),
       // The token IS v3own's handle now. `tok_r`, the island's own ingress
@@ -632,7 +666,22 @@ module zhao_texture_island_v3_top #(
       .r_valid_o(rcp_r_valid), .r_ready_i(rcp_r_ready),
       .r_o(rcp_r), .k_o(rcp_k), .d_zero_o(rcp_dzero), .r_tok_o(rcp_tok),
       .accepted_o(rcp_accepted), .completed_o(cnt_rcp_completed_o),
-      .mul_busy_o(rcp_mul_busy), .occupancy_o(rcp_occ));
+      // V3's four job counters are THROUGHPUT EVIDENCE, not fault detectors,
+      // and the island rations counter pins to one per block (that is
+      // `cnt_rcp_completed_o`) so the I/O register count does not inflate the
+      // ALM number the fits measure. The standalone tile test divides them to
+      // prove the saturated launch rate; nothing in the island needs them.
+      //
+      // LEFT EXPLICITLY EMPTY rather than captured into locals. Capturing them
+      // would recreate exactly what this swap DELETED one line below --
+      // `rcp_mul_busy`, a signal declared, driven and read nowhere. Four
+      // dead-end captures in place of one is not a repair. The empty-connection
+      // form is this file's own convention for a deliberately unobserved pin
+      // (see u_v3bank at :938), and it says so to a reader instead of leaving
+      // a name that looks like it means something.
+      .mul_jobs_o(), .zero_jobs_o(),
+      .phase_jobs_o(), .negcorr_jobs_o(),
+      .occupancy_o(rcp_occ), .qerr_o(err_rcp_q_o));
 
   assign frag_ready_o = rcp_v_ready && credit_available;
 

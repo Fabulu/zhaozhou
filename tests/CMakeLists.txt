@@ -1206,10 +1206,13 @@ set_tests_properties(lint_zhao_geom_pose_decode PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
-# GEOM.POSE's chain multiply: sequential, one element per cycle, three 32x32
-# products instead of thirty-six. The twelve-cycle walk is asserted as its own
-# law (section 7) -- correct arithmetic delivered in the wrong number of cycles,
-# or offered while still walking, would pass every differential case.
+# GEOM.POSE's chain multiply: sequential. Since owner ruling R4 (2026-09-09)
+# the default is MUL_LANES=1 -- ONE 32x32 product per cycle, a 37-cycle walk,
+# 3 DSP -- with the previous one-element-per-cycle arrangement kept as
+# MUL_LANES=3 (12-cycle walk, 9 DSP; the *_elem variant below holds it to the
+# same oracle). The walk length is asserted as its own law (section 7) --
+# correct arithmetic delivered in the wrong number of cycles, or offered while
+# still walking, would pass every differential case.
 add_executable(test_geom_mat3x4_mul_directed geometry/geom_mat3x4_mul_directed.cpp)
 target_link_libraries(test_geom_mat3x4_mul_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_geom_mat3x4_mul_directed
@@ -1230,6 +1233,73 @@ add_test(NAME lint_zhao_geom_mat3x4_mul
 set_tests_properties(lint_zhao_geom_mat3x4_mul PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- Ruling R4 reversibility: the legacy spatial/elem arms, same oracle ----
+# MUL_LANES is a named, editable knob (CLAUDE.md: every timing value stays a
+# knob), so the pre-R4 arrangements stay buildable and stay HELD TO THE SAME
+# ORACLE -- a knob whose alternative position is never exercised is a knob
+# that has silently stopped turning. The walk-length macro moves with the
+# parameter; every bit-exactness check is byte-identical between variants.
+add_executable(test_geom_quat2mat_spatial geometry/geom_quat2mat_directed.cpp)
+target_compile_definitions(test_geom_quat2mat_spatial PRIVATE ZHAO_QUAT2MAT_WALK=0)
+target_link_libraries(test_geom_quat2mat_spatial PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_quat2mat_spatial
+  PREFIX Vzhao_geom_quat2mat
+  TOP_MODULE zhao_geom_quat2mat
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_quat2mat.sv
+  VERILATOR_ARGS -GMUL_LANES=9)
+add_test(NAME geom_quat2mat_spatial COMMAND test_geom_quat2mat_spatial)
+set_tests_properties(geom_quat2mat_spatial PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_geom_mat3x4_mul_elem geometry/geom_mat3x4_mul_directed.cpp)
+target_compile_definitions(test_geom_mat3x4_mul_elem PRIVATE ZHAO_MAT3X4_WALK=12)
+target_link_libraries(test_geom_mat3x4_mul_elem PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_mat3x4_mul_elem
+  PREFIX Vzhao_geom_mat3x4_mul
+  TOP_MODULE zhao_geom_mat3x4_mul
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+  VERILATOR_ARGS -GMUL_LANES=3)
+add_test(NAME geom_mat3x4_mul_elem COMMAND test_geom_mat3x4_mul_elem)
+set_tests_properties(geom_mat3x4_mul_elem PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_geom_pose_decode_spatial geometry/geom_pose_decode_directed.cpp)
+target_link_libraries(test_geom_pose_decode_spatial PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_pose_decode_spatial
+  PREFIX Vzhao_geom_pose_decode
+  TOP_MODULE zhao_geom_pose_decode
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_pose_decode.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_quat2mat.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+  VERILATOR_ARGS -GMUL_LANES_QUAT=9 -GMUL_LANES_MAT=3)
+add_test(NAME geom_pose_decode_spatial COMMAND test_geom_pose_decode_spatial)
+set_tests_properties(geom_pose_decode_spatial PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ---- THE POSITIVE CONTROLS for the R4 sequencers, driving committed MUTANTS.
+# The directed suites assert bit-identity, and on the sequenced arms that
+# claim leans on machinery the spatial arms never had: the operand-mux
+# SCHEDULE (quat2mat) and the element-boundary ACCUMULATOR CLEAR (mat3x4).
+# No pre-R4 run of either suite ever demonstrated its checker can see those
+# faults. Each mutant breaks exactly one line; THESE TESTS PASS WHEN THE
+# DIFFERENTIAL FAILS -- inverse polarity, evidence about the instrument, not
+# about the design. Every counter still balances on both mutants, which is
+# the point: the differential is the ONLY detector for this class.
+add_executable(test_geom_quat2mat_mutant_control geometry/geom_quat2mat_mutant_control.cpp)
+target_link_libraries(test_geom_quat2mat_mutant_control PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_quat2mat_mutant_control
+  PREFIX Vzhao_geom_quat2mat_mutant
+  TOP_MODULE zhao_geom_quat2mat_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_quat2mat_mutant.sv)
+add_test(NAME geom_quat2mat_mutant_control COMMAND test_geom_quat2mat_mutant_control)
+set_tests_properties(geom_quat2mat_mutant_control PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_executable(test_geom_mat3x4_mul_mutant_control geometry/geom_mat3x4_mul_mutant_control.cpp)
+target_link_libraries(test_geom_mat3x4_mul_mutant_control PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_mat3x4_mul_mutant_control
+  PREFIX Vzhao_geom_mat3x4_mul_mutant
+  TOP_MODULE zhao_geom_mat3x4_mul_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_mat3x4_mul_mutant.sv)
+add_test(NAME geom_mat3x4_mul_mutant_control COMMAND test_geom_mat3x4_mul_mutant_control)
+set_tests_properties(geom_mat3x4_mul_mutant_control PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 # OP_NORMALIZE2 and OP_NORMALIZE3. The SECOND reciprocal table now lives in this
 # engine -- RCP24_T0 seeds a 24-bit reciprocal with TWO correction steps, while
@@ -2202,7 +2272,12 @@ verilate(test_island_v3_composed_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+          # R3 swap 2026-09-09: rcp24_svc -> rcp24_v3 at NCTX=12, which brings
+          # the tile's own leaves (mul, ticketq, ticketq_rh) into the closure.
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
@@ -2257,7 +2332,12 @@ verilate(test_island_v3_prod_composed_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+          # R3 swap 2026-09-09: rcp24_svc -> rcp24_v3 at NCTX=12, which brings
+          # the tile's own leaves (mul, ticketq, ticketq_rh) into the closure.
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
@@ -2478,7 +2558,12 @@ verilate(test_island_v3_fault_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+          # R3 swap 2026-09-09: rcp24_svc -> rcp24_v3 at NCTX=12, which brings
+          # the tile's own leaves (mul, ticketq, ticketq_rh) into the closure.
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
