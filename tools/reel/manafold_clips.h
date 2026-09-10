@@ -495,6 +495,35 @@ inline int32_t eye_rest_normal_a16() {
  *  surface normal and the eye sits ON the ball instead of on a flat sticker.
  *  Positive turns the plate toward the +z side (the LEFT eye's own side is
  *  -this; see face_rest). */
+/** PASS 15 LANE-EYE-2: THE LADDER KNOB FOR THE OWNER'S PACKET QUESTION.
+ *
+ *  kEyeSurfaceFollowPm ships at 0 and its own comment promises "laddered,
+ *  with the picture in the owner packet". The knob was constexpr, so there
+ *  was no way to make that picture from one binary and the packet was never
+ *  built -- while the consequence of 0 sits in the bank as the review's K01,
+ *  a hard white needle lying diagonally across the body on `inspect` f0300.
+ *
+ *  `U02_EYE_SURFACE_FOLLOW=<pm>` overrides it for a whole render, so the same
+ *  frame of the same subject can be rendered at 0 / 500 / 1000 and the tiles
+ *  differ in nothing else. Unset, this is the constant exactly -- identity,
+ *  the same contract U02_EYE_TRAVEL_PIN keeps, and for the same reason: a
+ *  diagnostic that lives in a run folder is orphaned by the next pass.
+ *
+ *  ⚠ IT IS A QUESTION, NOT A FIX. 0 is the sheet (Concept/Front.png draws
+ *  both lenses facing the viewer, tips converging into the Lambda); 1000 is
+ *  the plate normal ON the ball, which is D11 SS2.2's "sit ON it, not slide
+ *  across it like a decal" and pulls the plates 56.5 deg apart. Sticker or
+ *  cartoon is the owner's call and nobody in this lane may make it. */
+inline int32_t eye_surface_follow_pm() {
+  static const int32_t v = [] {
+    const char* e = std::getenv("U02_EYE_SURFACE_FOLLOW");
+    if (!e || !*e) return kEyeSurfaceFollowPm;
+    const int32_t x = std::atoi(e);
+    return x < 0 ? 0 : (x > 1000 ? 1000 : x);
+  }();
+  return v;
+}
+
 inline int32_t eye_rest_yaw_a16() {
   const int32_t rn = eye_rest_normal_a16();
   // Close the gap between the authored plate (kEyeYawOutA16 off +X, and it
@@ -502,7 +531,7 @@ inline int32_t eye_rest_yaw_a16() {
   // surface normal (-rn for the left eye) by kEyeSurfaceFollowPm.
   const int32_t gap = kEyeYawOutA16 + rn;
   return kEyeYawOutA16 -
-         static_cast<int32_t>((static_cast<int64_t>(gap) * kEyeSurfaceFollowPm) / 1000);
+         static_cast<int32_t>((static_cast<int64_t>(gap) * eye_surface_follow_pm()) / 1000);
 }
 
 inline void face_rest(Rig& g) {
