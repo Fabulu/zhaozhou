@@ -249,6 +249,53 @@ def measure(path):
     return int(eye_px.sum()), int((keep & star).sum()), eyes, u
 
 
+# ---- THE INSTRUMENT'S OWN READINESS CHECK (pass 15, LANE-EYE-2) ----------
+#
+# ⚠ THIS TOOL PRINTED A CONFIDENT, WRONG TABLE FOR FOUR LIVE SUBJECTS, AND THE
+# TABLE WAS QUOTED. `lens_mask` closes with a contract -- "re-authorise this
+# rule against the palette in front of you, using the two legs, before
+# believing any verdict it prints" -- and `gate` enforces it. But `scan` does
+# not take legs, prints a table anyway, and `scan` is what got run.
+#
+# On the shipped bank `scan` reported `crackle` at sweep 1087.7 / 2-eye 64.8%
+# and `mana-green` at 41.3%, and those numbers were read as the size of a real
+# regression. The regression WAS real -- the contact sheets prove it -- but
+# these numbers are not its size. **The rule finds ZERO lens pixels on frames
+# that plainly show two whole lenses and two whole stars**
+# (`crackle` f0128 and f0512, pass15-plates-eye2/D-eyesweep-blindspot-6x.png,
+# 6x: four eyes on screen, `lens_px = 0` on both).
+#
+# MEASURED, on the lens's own pixels in `crackle` f0128 (287 px sampled in a
+# window on the left lens):
+#
+#     lens now reads   r 189   g 113   b 214
+#     rule requires    b > 140   PASSES 257/287
+#                      g <  90   fails, the lens green is 113
+#                      r < b-60  FAILS 287 of 287 -- r and b are 25 apart
+#
+# That is LANE-FX's shell/fog wash, which `lens_mask` predicted in its own
+# docstring ("lens green 49 -> 125") one lane before it happened. The rule was
+# never re-authorised and the verdicts were printed anyway.
+#
+# So the instrument now says so out loud. `lens_px == 0` is the one
+# unambiguous statement this tool makes -- "I found no eye at all in this
+# frame" -- and a clip full of them is either catastrophically broken or
+# unreadable by this rule; either way its medians must not be quoted.
+#
+# ⚠ THE FLOOR IS DERIVED FROM THE CLIPS WHERE THE RULE DEMONSTRABLY READS, NOT
+# from the ones where it fails -- it is not fitted to the answer it is about to
+# refuse. Measured on the shipping build, every frame, this pass:
+#
+#     hit 0.0%   channel 0.0%   curious 0.0%   hover 0.3%     <- it reads
+#     mana-stack 1.7%   mana-aqua 4.7%   crackle 17.2%   mana-green 33.0%
+#
+# 3% is an order of magnitude above the demonstrated-good population and an
+# order of magnitude below the failing one. It is a REPORTING threshold: it
+# bounds when this tool may speak, and nothing in the creature is generated
+# from it.
+kBlindFramePct = 3.0
+
+
 def scan(d):
     files = sorted(glob.glob(os.path.join(d, "*.rgb")))
     if not files:
@@ -269,14 +316,31 @@ def scan(d):
         "two_eye_pct": 100.0 * sum(1 for e in ey if e >= 2) / len(ey),
         "lens_px_med": float(np.median(lp)),
         "star_px_med": float(np.median(sp)),
+        "blind_pct": 100.0 * sum(1 for v in lp if v == 0) / len(lp),
     }
+
+
+def blind(s):
+    """True when the lens rule found NOTHING too often to be believed."""
+    return s["blind_pct"] > kBlindFramePct
 
 
 def show(name, s):
     print("%-22s frames %4d  sweep %6.1f  u %6.1f..%6.1f  2-eye %5.1f%%  "
-          "lens px med %6.1f  star px med %5.1f"
+          "lens px med %6.1f  star px med %5.1f  blind %4.1f%%"
           % (name, s["frames"], s["sweep"], s["u_min"], s["u_max"],
-             s["two_eye_pct"], s["lens_px_med"], s["star_px_med"]))
+             s["two_eye_pct"], s["lens_px_med"], s["star_px_med"],
+             s["blind_pct"]))
+    if blind(s):
+        print("  " + "!" * 68)
+        print("  !! REFUSED -- the lens rule found NO lens at all in %.1f%% of frames"
+              % s["blind_pct"])
+        print("  !! (floor %.1f%%, from the clips where it demonstrably reads)."
+              % kBlindFramePct)
+        print("  !! EVERY NUMBER ON THE LINE ABOVE IS UNUSABLE, in both directions:")
+        print("  !! this rule reads zero on frames showing two whole lenses. Look at")
+        print("  !! the frames. Re-authorise lens_mask against this palette first.")
+        print("  " + "!" * 68)
 
 
 # ---- the gate ------------------------------------------------------------
@@ -300,6 +364,16 @@ def gate(live, pin0, pin867):
     show("LIVE", L)
     show("KNOWN-NEG pin 0", Z)
     show("KNOWN-NEG pin +867", P)
+    # The readiness check comes BEFORE any verdict: a gate that cannot read the
+    # frame must refuse rather than certify, and until pass 15 this one only
+    # refused when a leg was missing, never when the rule had gone blind.
+    for nm, sc in (("LIVE", L), ("pin 0", Z), ("pin +867", P)):
+        if blind(sc):
+            print("eyesweep: REFUSED -- the lens rule is blind on the %s leg "
+                  "(%.1f%% of frames find no lens)." % (nm, sc["blind_pct"]))
+            print("  No verdict is printed from an instrument that cannot read "
+                  "its own input.")
+            return 2
     ok = True
     if Z["sweep"] >= L["sweep"]:
         print("FAIL calibration: pinning travel OFF did not reduce the sweep.")
