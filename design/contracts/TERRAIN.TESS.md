@@ -40,6 +40,25 @@ register and zeroed counters. No clock-domain crossing lives in this block.
 | `job_surface_i` | 1 | 0 = top, 1 = underside |
 | `job_dual_i` | 1 | 0 = the legacy single-surface page |
 | `job_src_id_i` | 16 | rides the mesh |
+| `job_mode_i` | 2 | **2026-09-10:** 0 = triangles (below), 1 = the 81 window VERTICES, 2 = index TRIPLES; 3 is counted in `mode_invalid_o` and runs as 0 |
+
+**Mode 1 (`vtx_*`, ready/valid):** the 9x9 window's vertices in index order
+k = 0..80, `vtx_index_o` = (vj − oz)·9 + (vi − ox), `vtx_x_o`/`vtx_z_o` the
+placed lattice coordinates verbatim, `vtx_y_o` = `zref::terrain::detail::
+vertex_at` — the block's OWN lattice read, parent reads and blend — on every
+vertex of the job's own stride grid (`vtx_stride_o` = 1), and the PLAIN lattice
+height on the other window vertices (`vtx_stride_o` = 0; Notes law 6). This is
+the dense fill of the projected-vertex arena (`zhao_terrain_wcache`, DENSE_SEAL
+at DEPTH = 81; `reports/PROJECTION-ADOPTION-20260910.md` §7 item 1). Surface
+and src_id ride every vertex. No vertex is skipped for a void cell.
+
+**Mode 2 (`ref_*`, ready/valid):** one triangle per clock as three window
+indices `ref_ia_o`/`ref_ib_o`/`ref_ic_o`, in exactly mode 0's emitted order and
+winding — the same walk (run-cells, inner block, annulus fans, void skips) and
+the same single b/c swap on the underside — with NO lattice read. Stitched and
+coarse jobs are covered; `zhao_terrain_topo` covered level-0 unstitched only
+(§7 item 2). Index width is the `IDX_W` parameter (default 7; an elaboration
+`$fatal` refuses a width that cannot hold 80).
 
 Lattice read port, **registered — the datum is present the cycle AFTER the
 request**: `lat_req_o`, `lat_vi_o`/`lat_vj_o` (6), `lat_surface_o` (which height
@@ -54,7 +73,11 @@ two blocks are wired port-for-port in `tests/terrain/terrain_tess_normals.cpp`
 with no adapter; if that stops being true, that file stops compiling.
 
 Plus `terrain_triangles_emitted_o`, `subpatch_rejected_o`, `lod_clamped_o`
-(32 each), `job_reject_o` (1-cycle pulse) and `idle_o`.
+(32 each), `job_reject_o` (1-cycle pulse) and `idle_o`; and since 2026-09-10
+`terrain_vertices_emitted_o` (mode 1 vertices landed), `terrain_refs_emitted_o`
+(mode 2 triples) and `mode_invalid_o`, all 32-bit and SATURATING
+(spec/counters.md §4 — the three older counters wrap and were left as they
+are). `terrain_triangles_emitted_o` counts mode-0 triangles only.
 
 ## Backpressure rules
 
@@ -120,6 +143,24 @@ level 0: **936 cycles for 128 triangles = 7.31 cycles/triangle.** Morph = 0 is
 the steady state (a subpatch is only mid-morph during a transition), but a frame
 in which many subpatches are transitioning at once costs this and no contract
 should pretend otherwise.
+
+**Modes 1 and 2, MEASURED 2026-09-10 (`terrain_tess_modes_directed` §4):**
+mode 1, level 0, unstitched, no morph: **87 cycles for 81 vertices** (0.93
+vertices/clock; the cell-state scan is skipped because nothing in that mode
+consumes solidity — Notes law 7); morph 0.5: **167 cycles** (40 morphing
+vertices × 3 reads + 41 × 1 = 161 reads, one per clock); level 1: 87 cycles
+(the 56 fillers cost one read each). A STITCHED mode-1 job on a dual page
+carries the 65-cycle scan for the reject decision (153 cycles). Mode 2, level
+0: **199 cycles for 128 triples** = 65-cycle scan + one triple per clock +
+drain. Mode 0 on the same job: 456 cycles, unchanged.
+
+**What dense fill costs per level, carried forward from the adoption report §3
+and now measured on the hardware producer, consumer always ready, mean over
+the probe's case space including stitched jobs (which carry the scan):** level
+0: 201.4 cycles/job, level 1: 144.3, level 2: 118.1, level 3: 87.0 — always 81
+vertices, 81 to 161 lattice reads, because the arena wants 81 in order. The
+stride-only variant (25/9/4 fills at levels 1/2/3) is a CONSUMER choice
+`vtx_stride_o` makes possible under VALID_MODE = 0, not a tessellator change.
 
 ## Overflow and malformed-input behaviour
 
@@ -196,6 +237,22 @@ and the interior-only morph are defined there and are marked as chosen.
 4. **Crack-safety read off the RTL's own emitted geometry:** for all 16 level
    pairs, the two subpatches sharing an edge use the IDENTICAL vertex set on it,
    and that set is exactly the coarser side's stride.
+
+`tests/terrain/terrain_tess_modes_directed.cpp` (2026-09-10) — **33 checks**
+over the identity probe's whole case space: 3 lattices (dual, dual with void
+cells, legacy) × 3 origins × 4 own levels × 4⁴ neighbour levels × 6 morph
+factors × 2 surfaces = **110,592 jobs**, each run in mode 1 AND mode 2 (every
+eighth also in mode 0), backpressure schedules rotating through the sweep.
+Per job: the 81 vertices equal `vertex_at` on the stride grid and the plain
+lattice vertex elsewhere, with `vtx_stride_o` separating them (6,162,480
+vertices); the triples equal `tessellate`'s corners inverted to window indices
+(2,509,920 triples); and **the triples applied to the vertices rebuild
+`tessellate`'s triangles bit for bit** — the arena's replay done in software
+on the two hardware streams. The reject verdict agrees across modes; counters
+equal the sweep's own tallies; the vertex, triple and rebuild comparators are
+each shown to FIRE on a one-LSB / one-index fault (positive controls);
+`mode_invalid_o` and `lod_clamped_o` (in mode 1) are seen to fire; the
+`IDX_W` guard is fired with `-GIDX_W=6`.
 
 ## Randomized differential tests
 
@@ -337,6 +394,22 @@ oracle.
    per-edge morph factor. **That is an amendment to this contract's own
    `lod_target` layout, and it is left open for whoever ratifies it, not decided
    here.**
+6. **AN OFF-GRID VERTEX IN MODE 1 IS THE PLAIN LATTICE VERTEX** (2026-09-10).
+   At level L only the (8 >> L + 1)² vertices on the job's own stride grid can
+   be a corner of any of its triangles (the identity probe measured this; a
+   stitched ring's outer vertices are coarser, never finer). The other window
+   vertices are emitted only because DENSE_SEAL wants 81 in order; they carry
+   the unmorphed height, one read each, and `vtx_stride_o = 0`. **Rejected
+   alternative:** `vertex_at` semantics for them — undefined on legal input:
+   ox = 0, vi = 1, s = 2 asks for parent −1, outside the lattice. The
+   adoption brief's "vertex_at over all 81 at every level" is therefore
+   restated, not implemented literally.
+7. **A JOB REJECTED IN ONE MODE IS REJECTED IN EVERY MODE.** Mode 1 runs the
+   cell-state scan when stitched so the sequencer presenting a job twice
+   (fill, then references) learns of the reject at the first presentation;
+   `subpatch_rejected_o` counts presentations. An unstitched mode-1 job skips
+   the scan: nothing in that mode consumes solidity, and the 65 cycles are
+   45% of an 81-vertex fill.
 
 **MUTATION-CHECKED.** Seven defects were injected one at a time, each proved to
 have relinked by hashing the test binaries before and after, and each confirmed

@@ -21,7 +21,30 @@ namespace tess_test {
 
 namespace zt = zref::terrain;
 
-/** Drives one subpatch job through the DUT and collects the emitted mesh. */
+/** One ModeVtx vertex as the DUT emitted it (2026-09-10, the vertex mode). */
+struct EmitVert {
+  int32_t x = 0, y = 0, z = 0;
+  uint8_t index = 0;   // (vj - oz) * 9 + (vi - ox)
+  bool stride = false;  // on the job's own stride grid
+  bool surface = false;
+  uint16_t src = 0;
+};
+
+/** One ModeRef triple as the DUT emitted it. */
+struct EmitRef {
+  uint8_t ia = 0, ib = 0, ic = 0;
+  bool surface = false;
+  uint16_t src = 0;
+};
+
+/**
+ * Drives one subpatch job through the DUT and collects the emitted mesh.
+ *
+ * `set_mode()` selects `job_mode_i` for the next `run()`: 0 (the default, the
+ * only mode the pre-2026-09-10 suites know) collects `terrain_mesh` triangles
+ * as before; 1 collects the 81 window vertices into `verts`; 2 collects index
+ * triples into `refs`. The same stall schedule gates all three ready inputs.
+ */
 class Driver {
  public:
   explicit Driver(Vzhao_terrain_tess& dut) : dut_(dut) {}
@@ -29,7 +52,10 @@ class Driver {
   void reset() {
     dut_.rst_n = 0;
     dut_.job_valid_i = 0;
+    dut_.job_mode_i = 0;
     dut_.tri_ready_i = 0;
+    dut_.vtx_ready_i = 0;
+    dut_.ref_ready_i = 0;
     dut_.lat_h_i = 0;
     dut_.lat_wx_i = 0;
     dut_.lat_wz_i = 0;
@@ -43,6 +69,11 @@ class Driver {
     cs_pend_ = false;
   }
 
+  void set_mode(int mode) { mode_ = mode; }
+  int mode() const { return mode_; }
+  std::vector<EmitVert> verts;  // ModeVtx output of the last run()
+  std::vector<EmitRef> refs;    // ModeRef output of the last run()
+
   /**
    * Run one job to completion. `stall_mask` gates `tri_ready_i` on a repeating
    * schedule (0 = never stall) so backpressure rides every lane rather than
@@ -52,8 +83,11 @@ class Driver {
                                bool* rejected, uint32_t stall_mask = 0, int max_cycles = 20000) {
     std::vector<zt::MeshTri> out;
     *rejected = false;
+    verts.clear();
+    refs.clear();
 
     dut_.job_valid_i = 1;
+    dut_.job_mode_i = static_cast<uint8_t>(mode_);
     dut_.job_ox_i = static_cast<uint8_t>(job.ox);
     dut_.job_oz_i = static_cast<uint8_t>(job.oz);
     dut_.job_level_i = static_cast<uint8_t>(job.level);
@@ -94,6 +128,8 @@ class Driver {
         dut_.cs_substance_i = 3;  // "reserved", never SOLID
       }
       dut_.tri_ready_i = stall_mask == 0 ? 1 : (((stall_mask >> (cycle & 31)) & 1u) ^ 1u);
+      dut_.vtx_ready_i = dut_.tri_ready_i;
+      dut_.ref_ready_i = dut_.tri_ready_i;
       dut_.eval();
 
       // ---- observe ---------------------------------------------------------
@@ -117,6 +153,28 @@ class Driver {
         out.push_back(t);
         last_surface_ = dut_.surface_o != 0;
         last_src_ = dut_.src_id_o;
+        ++transfers_;
+      }
+      if (dut_.vtx_valid_o && dut_.vtx_ready_i) {
+        EmitVert v;
+        v.x = static_cast<int32_t>(dut_.vtx_x_o);
+        v.y = static_cast<int32_t>(dut_.vtx_y_o);
+        v.z = static_cast<int32_t>(dut_.vtx_z_o);
+        v.index = dut_.vtx_index_o;
+        v.stride = dut_.vtx_stride_o != 0;
+        v.surface = dut_.vtx_surface_o != 0;
+        v.src = dut_.vtx_src_id_o;
+        verts.push_back(v);
+        ++transfers_;
+      }
+      if (dut_.ref_valid_o && dut_.ref_ready_i) {
+        EmitRef r;
+        r.ia = dut_.ref_ia_o;
+        r.ib = dut_.ref_ib_o;
+        r.ic = dut_.ref_ic_o;
+        r.surface = dut_.ref_surface_o != 0;
+        r.src = dut_.ref_src_id_o;
+        refs.push_back(r);
         ++transfers_;
       }
       if (dut_.job_reject_o) *rejected = true;
@@ -160,6 +218,7 @@ class Driver {
   uint8_t cs_ci_ = 0, cs_cj_ = 0;
   uint16_t src_id_ = 0x1234;
   uint16_t last_src_ = 0;
+  int mode_ = 0;
   bool last_surface_ = false;
   uint64_t cycles_ = 0;
   uint64_t transfers_ = 0;

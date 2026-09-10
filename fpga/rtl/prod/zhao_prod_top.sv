@@ -4201,7 +4201,24 @@ module zhao_prod_top (
   logic signed [32-1:0] u59_cz_o;
   logic [1-1:0] u59_surface_o;
   logic [16-1:0] u59_src_id_o;
+  logic [1-1:0] u59_vtx_valid_o;
+  logic signed [32-1:0] u59_vtx_x_o;
+  logic signed [32-1:0] u59_vtx_y_o;
+  logic signed [32-1:0] u59_vtx_z_o;
+  logic [7-1:0] u59_vtx_index_o;
+  logic [1-1:0] u59_vtx_stride_o;
+  logic [1-1:0] u59_vtx_surface_o;
+  logic [16-1:0] u59_vtx_src_id_o;
+  logic [1-1:0] u59_ref_valid_o;
+  logic [7-1:0] u59_ref_ia_o;
+  logic [7-1:0] u59_ref_ib_o;
+  logic [7-1:0] u59_ref_ic_o;
+  logic [1-1:0] u59_ref_surface_o;
+  logic [16-1:0] u59_ref_src_id_o;
   logic [32-1:0] u59_terrain_triangles_emitted_o;
+  logic [32-1:0] u59_terrain_vertices_emitted_o;
+  logic [32-1:0] u59_terrain_refs_emitted_o;
+  logic [32-1:0] u59_mode_invalid_o;
   logic [32-1:0] u59_subpatch_rejected_o;
   logic [32-1:0] u59_lod_clamped_o;
   logic [1-1:0] u59_job_reject_o;
@@ -4211,30 +4228,31 @@ module zhao_prod_top (
       .rst_n(rst_n),
       .job_valid_i(u59_src[0 +: 1]),
       .job_ready_o(u59_job_ready_o),
-      .job_ox_i(u59_src[7 +: 6]),
-      .job_oz_i(u59_src[14 +: 6]),
-      .job_level_i(u59_src[21 +: 2]),
-      .job_lvl_nz_i(u59_src[28 +: 2]),
-      .job_lvl_pz_i(u59_src[35 +: 2]),
-      .job_lvl_nx_i(u59_src[42 +: 2]),
-      .job_lvl_px_i(u59_src[49 +: 2]),
-      .job_morph_i(u59_src[56 +: 17]),
-      .job_surface_i(u59_src[63 +: 1]),
-      .job_dual_i(u59_src[70 +: 1]),
-      .job_src_id_i(u59_src[77 +: 16]),
+      .job_mode_i(u59_src[7 +: 2]),
+      .job_ox_i(u59_src[14 +: 6]),
+      .job_oz_i(u59_src[21 +: 6]),
+      .job_level_i(u59_src[28 +: 2]),
+      .job_lvl_nz_i(u59_src[35 +: 2]),
+      .job_lvl_pz_i(u59_src[42 +: 2]),
+      .job_lvl_nx_i(u59_src[49 +: 2]),
+      .job_lvl_px_i(u59_src[56 +: 2]),
+      .job_morph_i(u59_src[63 +: 17]),
+      .job_surface_i(u59_src[70 +: 1]),
+      .job_dual_i(u59_src[77 +: 1]),
+      .job_src_id_i(u59_src[84 +: 16]),
       .lat_req_o(u59_lat_req_o),
       .lat_vi_o(u59_lat_vi_o),
       .lat_vj_o(u59_lat_vj_o),
       .lat_surface_o(u59_lat_surface_o),
-      .lat_h_i(u59_src[84 +: 32]),
-      .lat_wx_i(u59_src[91 +: 32]),
-      .lat_wz_i(u59_src[98 +: 32]),
+      .lat_h_i(u59_src[91 +: 32]),
+      .lat_wx_i(u59_src[98 +: 32]),
+      .lat_wz_i(u59_src[105 +: 32]),
       .cs_req_o(u59_cs_req_o),
       .cs_ci_o(u59_cs_ci_o),
       .cs_cj_o(u59_cs_cj_o),
-      .cs_substance_i(u59_src[105 +: 2]),
+      .cs_substance_i(u59_src[112 +: 2]),
       .tri_valid_o(u59_tri_valid_o),
-      .tri_ready_i(u59_src[112 +: 1]),
+      .tri_ready_i(u59_src[119 +: 1]),
       .ax_o(u59_ax_o),
       .ay_o(u59_ay_o),
       .az_o(u59_az_o),
@@ -4246,7 +4264,26 @@ module zhao_prod_top (
       .cz_o(u59_cz_o),
       .surface_o(u59_surface_o),
       .src_id_o(u59_src_id_o),
+      .vtx_valid_o(u59_vtx_valid_o),
+      .vtx_ready_i(u59_src[126 +: 1]),
+      .vtx_x_o(u59_vtx_x_o),
+      .vtx_y_o(u59_vtx_y_o),
+      .vtx_z_o(u59_vtx_z_o),
+      .vtx_index_o(u59_vtx_index_o),
+      .vtx_stride_o(u59_vtx_stride_o),
+      .vtx_surface_o(u59_vtx_surface_o),
+      .vtx_src_id_o(u59_vtx_src_id_o),
+      .ref_valid_o(u59_ref_valid_o),
+      .ref_ready_i(u59_src[133 +: 1]),
+      .ref_ia_o(u59_ref_ia_o),
+      .ref_ib_o(u59_ref_ib_o),
+      .ref_ic_o(u59_ref_ic_o),
+      .ref_surface_o(u59_ref_surface_o),
+      .ref_src_id_o(u59_ref_src_id_o),
       .terrain_triangles_emitted_o(u59_terrain_triangles_emitted_o),
+      .terrain_vertices_emitted_o(u59_terrain_vertices_emitted_o),
+      .terrain_refs_emitted_o(u59_terrain_refs_emitted_o),
+      .mode_invalid_o(u59_mode_invalid_o),
       .subpatch_rejected_o(u59_subpatch_rejected_o),
       .lod_clamped_o(u59_lod_clamped_o),
       .job_reject_o(u59_job_reject_o),
@@ -4255,7 +4292,7 @@ module zhao_prod_top (
   logic u59_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u59_fold_q <= 1'b0;
-    else u59_fold_q <= u59_fold_q ^ (^u59_job_ready_o) ^ (^u59_lat_req_o) ^ (^u59_lat_vi_o) ^ (^u59_lat_vj_o) ^ (^u59_lat_surface_o) ^ (^u59_cs_req_o) ^ (^u59_cs_ci_o) ^ (^u59_cs_cj_o) ^ (^u59_tri_valid_o) ^ (^u59_ax_o) ^ (^u59_ay_o) ^ (^u59_az_o) ^ (^u59_bx_o) ^ (^u59_by_o) ^ (^u59_bz_o) ^ (^u59_cx_o) ^ (^u59_cy_o) ^ (^u59_cz_o) ^ (^u59_surface_o) ^ (^u59_src_id_o) ^ (^u59_terrain_triangles_emitted_o) ^ (^u59_subpatch_rejected_o) ^ (^u59_lod_clamped_o) ^ (^u59_job_reject_o) ^ (^u59_idle_o);
+    else u59_fold_q <= u59_fold_q ^ (^u59_job_ready_o) ^ (^u59_lat_req_o) ^ (^u59_lat_vi_o) ^ (^u59_lat_vj_o) ^ (^u59_lat_surface_o) ^ (^u59_cs_req_o) ^ (^u59_cs_ci_o) ^ (^u59_cs_cj_o) ^ (^u59_tri_valid_o) ^ (^u59_ax_o) ^ (^u59_ay_o) ^ (^u59_az_o) ^ (^u59_bx_o) ^ (^u59_by_o) ^ (^u59_bz_o) ^ (^u59_cx_o) ^ (^u59_cy_o) ^ (^u59_cz_o) ^ (^u59_surface_o) ^ (^u59_src_id_o) ^ (^u59_vtx_valid_o) ^ (^u59_vtx_x_o) ^ (^u59_vtx_y_o) ^ (^u59_vtx_z_o) ^ (^u59_vtx_index_o) ^ (^u59_vtx_stride_o) ^ (^u59_vtx_surface_o) ^ (^u59_vtx_src_id_o) ^ (^u59_ref_valid_o) ^ (^u59_ref_ia_o) ^ (^u59_ref_ib_o) ^ (^u59_ref_ic_o) ^ (^u59_ref_surface_o) ^ (^u59_ref_src_id_o) ^ (^u59_terrain_triangles_emitted_o) ^ (^u59_terrain_vertices_emitted_o) ^ (^u59_terrain_refs_emitted_o) ^ (^u59_mode_invalid_o) ^ (^u59_subpatch_rejected_o) ^ (^u59_lod_clamped_o) ^ (^u59_job_reject_o) ^ (^u59_idle_o);
 
   // ---- zhao_terrain_velocity ----
   logic [63:0] u60_lfsr_q;

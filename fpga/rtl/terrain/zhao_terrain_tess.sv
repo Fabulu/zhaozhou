@@ -87,6 +87,49 @@
 // n == 1 (level 3) can never be stitched, because 8 is the coarsest stride.
 //
 // ---------------------------------------------------------------------------
+// THE THREE MODES (2026-09-10, reports/PROJECTION-ADOPTION-20260910.md §7)
+// ---------------------------------------------------------------------------
+// `job_mode_i` selects, PER JOB, what the enumerator's walk is expanded into:
+//
+//   ModeTri (0)  today's block, bit- and cycle-identical: world-coordinate
+//                triangles on `tri_*`.
+//   ModeVtx (1)  the 81 lattice vertices of the 9x9 window in index order
+//                k = 0..80, vi = ox + k % 9, vj = oz + k / 9, each with the
+//                geomorph applied, on `vtx_*` — `zref::terrain::detail::
+//                vertex_at` in hardware, using THIS block's lattice read, its
+//                parent reads and its blend (`m_y`). This is the dense fill the
+//                projected-vertex arena (`zhao_terrain_wcache`, DENSE_SEAL at
+//                DEPTH = 81) needs per job. No lattice read is skipped for a
+//                void cell: a vertex exists whether or not the cells around it
+//                are solid, and the arena wants all 81 in order.
+//   ModeRef (2)  the SAME triangle walk as ModeTri — run-cells, inner block,
+//                annulus fans, void skips, the underside's b/c swap — but each
+//                triangle leaves as three window INDICES (ia, ib, ic) on
+//                `ref_*`, one triangle per clock, with NO lattice read at all.
+//                This is what `zhao_terrain_topo` did for level 0 unstitched
+//                and could not do for anything else; the topology is
+//                job-dependent and lives here, so the references come from
+//                here. The b/c swap stays the ONE place the winding lives.
+//
+// A separate fill block reimplementing `mcase_f` + the parent reads + the
+// blend would have been the second-copy pattern this repository forbids
+// (CLAUDE.md, "read the SIBLING contract"); it was named before it was written
+// and is not written. Mode 3 is not a mode: it is counted in `mode_invalid_o`
+// and the job runs as ModeTri, never silently.
+//
+// HOW MODE 0 IS KEPT IDENTICAL. Every place the new modes touch the existing
+// machine is an AND/mux term on a REGISTERED job bit (`j_vtx`, `j_ref`) in a
+// CONTROL path — the enumerator advance, the issue gate, the output-register
+// enable — or a job register whose mode-0 value equals what the wire held
+// before (`j_vshift` = level, `j_plain_hi` = n - 1). The geomorph blend
+// `m_dab -> m_half -> m_hc -> m_d -> m_prod -> m_step -> m_y` is UNTOUCHED:
+// ModeVtx lands `m_y` into the vertex skid register through the very same
+// `last_y` wire ModeTri lands it into `o_cy`, so the cone is neither
+// lengthened nor shortened (reports/TERRAIN_31MHZ_REARCHITECTURE.txt §6.2 —
+// it is still the live arithmetic cone, and registering it is that
+// document's Step 3, not this change).
+//
+// ---------------------------------------------------------------------------
 // LAWS CHOSEN, NOT FOUND (each also argued in the contract and the oracle)
 // ---------------------------------------------------------------------------
 // 1. THE ANNULUS ITSELF and the level encoding, above.
@@ -121,6 +164,27 @@
 //    `ha + rescale(hb - ha, 1)` at u = v = 1/2. The derivation is written out in
 //    the oracle and PROVED by `terrain_tess_directed`, which evaluates
 //    `zref::terrain::column_query` on the coarse cell and requires agreement.
+// 6. AN OFF-GRID VERTEX IN ModeVtx IS THE PLAIN LATTICE VERTEX. At level L
+//    only the (8 >> L + 1)^2 vertices on the job's own stride grid can be a
+//    corner of any triangle of the job (the identity probe: a stitched ring's
+//    outer vertices are coarser, never finer). The other window vertices are
+//    emitted only because DENSE_SEAL wants 81 in order, and they are emitted
+//    with morph case 0 — one lattice read, height verbatim — and flagged
+//    `vtx_stride_o = 0`. REJECTED ALTERNATIVE: `vertex_at` semantics for them
+//    too (morph toward parents at vi ± s). That is well defined for every
+//    ON-grid interior vertex, whose parents stay inside the window, and NOT
+//    for an off-grid one at the patch edge: ox = 0, vi = 1, s = 2 asks for
+//    parent -1, outside the lattice. A law that is undefined on legal input
+//    is not a law. The flag lets a bitmap-mode consumer (VALID_MODE = 0) drop
+//    the fillers and fill only the stride set — the §3 remedy — without a
+//    primitive change.
+// 7. A JOB REJECTED IN ONE MODE IS REJECTED IN EVERY MODE. The stitched+void
+//    reject (law 3) runs its cell-state scan in ModeVtx too, so the sequencer
+//    that presents a job twice (fill, then references) learns of the reject
+//    at the FIRST presentation and skips the second; `subpatch_rejected_o`
+//    counts presentations. An UNSTITCHED ModeVtx job skips the 65-cycle scan
+//    entirely — nothing in that mode consumes solidity — which is the one
+//    place a mode differs in timing from ModeTri on purpose.
 //
 // NOT IN THIS BLOCK, deliberately: rim walls (FORGE.CLIFF), normals
 // (TERRAIN.NORMALS), LOD decisions (TERRAIN.LOD decides, this block obeys), and
@@ -131,7 +195,13 @@
 //
 // Conservative SystemVerilog subset only (charter §2).
 
-module zhao_terrain_tess (
+module zhao_terrain_tess #(
+    // Width of a window index on `vtx_index_o` / `ref_i*_o`: 81 vertices need
+    // 7 bits. A consumer that carries a refusal bit beside the index
+    // (zhao_terrain_wcache, INDEX_W = 8) zero-extends; the guard below refuses
+    // a width that cannot hold index 80.
+    parameter int unsigned IDX_W = 7
+) (
     input logic clk,
     input logic rst_n,
 
@@ -140,6 +210,7 @@ module zhao_terrain_tess (
     // -----------------------------------------------------------------------
     input  logic        job_valid_i,
     output logic        job_ready_o,
+    input  logic [ 1:0] job_mode_i,      // 0 = triangles, 1 = vertices, 2 = references
     input  logic [ 5:0] job_ox_i,        // subpatch cell origin x, multiple of 8
     input  logic [ 5:0] job_oz_i,        // subpatch cell origin z, multiple of 8
     input  logic [ 1:0] job_level_i,     // own level; stride = 1 << level
@@ -188,7 +259,36 @@ module zhao_terrain_tess (
     output logic               surface_o,
     output logic        [15:0] src_id_o,
 
+    // -----------------------------------------------------------------------
+    // ModeVtx out — the 81 window vertices, index order, geomorph applied.
+    // Placed x/z verbatim from the lattice, y = `vertex_at`'s height.
+    // -----------------------------------------------------------------------
+    output logic               vtx_valid_o,
+    input  logic               vtx_ready_i,
+    output logic signed [31:0] vtx_x_o,
+    output logic signed [31:0] vtx_y_o,
+    output logic signed [31:0] vtx_z_o,
+    output logic [IDX_W-1:0]   vtx_index_o,    // (vj - oz) * 9 + (vi - ox)
+    output logic               vtx_stride_o,   // 1 = on the job's own stride grid (law 6)
+    output logic               vtx_surface_o,
+    output logic        [15:0] vtx_src_id_o,
+
+    // -----------------------------------------------------------------------
+    // ModeRef out — one triangle per clock as three window indices, in the
+    // emitted order and winding of ModeTri (b/c swapped on the underside).
+    // -----------------------------------------------------------------------
+    output logic               ref_valid_o,
+    input  logic               ref_ready_i,
+    output logic [IDX_W-1:0]   ref_ia_o,
+    output logic [IDX_W-1:0]   ref_ib_o,
+    output logic [IDX_W-1:0]   ref_ic_o,
+    output logic               ref_surface_o,
+    output logic        [15:0] ref_src_id_o,
+
     output logic [31:0] terrain_triangles_emitted_o,
+    output logic [31:0] terrain_vertices_emitted_o,  // ModeVtx vertices landed (saturating)
+    output logic [31:0] terrain_refs_emitted_o,      // ModeRef triples loaded (saturating)
+    output logic [31:0] mode_invalid_o,              // job_mode_i == 3 presented (saturating)
     output logic [31:0] subpatch_rejected_o,
     output logic [31:0] lod_clamped_o,
     output logic        job_reject_o,  // 1-cycle pulse with subpatch_rejected_o
@@ -196,10 +296,24 @@ module zhao_terrain_tess (
 );
 
   localparam int unsigned SubCells = 8;  // charter §11.1
+  localparam int unsigned Side = SubCells + 1;  // 9 lattice vertices per window side
+  localparam int unsigned Depth = Side * Side;  // 81, the arena's identity space
+
+  // Quartus 17 wants an elaboration check inside `initial begin ... end`
+  // (CLAUDE.md build note). `--lint-only` does not run it; the modes test
+  // fires it with -GIDX_W=6.
+  initial begin
+    if (IDX_W < $clog2(Depth))
+      $fatal(1, "zhao_terrain_tess: IDX_W (%0d) cannot carry window index %0d", IDX_W, Depth - 1);
+  end
 
   localparam logic [1:0] StIdle = 2'd0;
   localparam logic [1:0] StScan = 2'd1;
   localparam logic [1:0] StTri = 2'd2;
+
+  localparam logic [1:0] ModeTri = 2'd0;
+  localparam logic [1:0] ModeVtx = 2'd1;
+  localparam logic [1:0] ModeRef = 2'd2;
 
   // ---- §3/§4 arithmetic ----------------------------------------------------
 
@@ -250,6 +364,14 @@ module zhao_terrain_tess (
   logic [15:0] j_src;
   logic [ 3:0] j_u;  // n - 2 (0 when n <= 2)
   logic [ 5:0] j_P;  // inner-ring perimeter, 4u (1 when u == 0)
+  // the mode, decoded once at accept
+  logic        j_vtx;  // ModeVtx
+  logic        j_ref;  // ModeRef
+  // ModeVtx walks the window at stride 1 whatever the level; ModeTri/ModeRef
+  // walk run-cells at the level's stride. In mode 0 these two registers hold
+  // exactly the values the wires they replace used to compute (level, n - 1).
+  logic [ 1:0] j_vshift;    // shift applied to (ea, eb): level, or 0 in ModeVtx
+  logic [ 3:0] j_plain_hi;  // last (ea, eb) of the plain walk: n - 1, or 8 in ModeVtx
 
   logic [ 1:0] st;
   logic [63:0] solid;  // the subpatch's 8x8 solidity, read once
@@ -285,6 +407,10 @@ module zhao_terrain_tess (
   logic pend_v;
   logic [1:0] pend_slot, pend_kind;
   logic pend_last;
+  // ModeVtx: the enumerator has ADVANCED by the time the vertex's last read
+  // lands, so its identity rides the pend registers.
+  logic [IDX_W-1:0] pend_idx;
+  logic             pend_stride;
 
   logic signed [31:0] vx[3], vz[3], vh[3], vy[3];
   logic signed [31:0] v_ha;  // parent A of the slot being fetched
@@ -296,6 +422,24 @@ module zhao_terrain_tess (
   logic o_surf;
 
   wire out_busy = o_valid && !tri_ready_i;
+
+  // ---- ModeVtx output: a credit-gated TWO-deep skid -----------------------
+  // A vertex needs as few as ONE lattice read, so unlike a triangle (>= 3
+  // reads) the next vertex's last read can be issued the very cycle the
+  // previous one lands. With a single output register that is a lost vertex
+  // under a stall, and gating on "the register is free NOW" halves the rate to
+  // one vertex per two clocks. Two slots and the arena shell's own credit rule
+  // (`zhao_terrain_wcache`: issue only when cnt + land - pop <= 1) hold one
+  // vertex per clock with the consumer always ready and lose nothing under
+  // backpressure. `vo_*` is the head the consumer sees; `vs_*` the second slot.
+  logic vo_valid, vs_valid;
+  logic signed [31:0] vo_x, vo_y, vo_z, vs_x, vs_y, vs_z;
+  logic [IDX_W-1:0] vo_idx, vs_idx;
+  logic vo_stride, vs_stride;
+
+  // ---- ModeRef output: one registered triple ------------------------------
+  logic r_valid;
+  logic [IDX_W-1:0] r_ia, r_ib, r_ic;
 
   // =========================================================================
   // combinational geometry
@@ -485,8 +629,9 @@ module zhao_terrain_tess (
     w1 = 12'd0;
     wa = 12'd0;
     wb = 12'd0;
-    i0 = j_ox + 6'(({2'b0, ea}) << j_level);
-    j0 = j_oz + 6'(({2'b0, eb}) << j_level);
+    // `j_vshift` IS `j_level` in ModeTri/ModeRef; ModeVtx walks at stride 1.
+    i0 = j_ox + 6'(({2'b0, ea}) << j_vshift);
+    j0 = j_oz + 6'(({2'b0, eb}) << j_vshift);
     if (emode == EmFan) begin
       w1 = inner_v(fan_t1);
       wa = inner_v(fan_ta);
@@ -543,9 +688,18 @@ module zhao_terrain_tess (
     end
   endfunction
 
+  // ModeVtx, law 6: is the vertex at (ea, eb) on the job's own stride grid?
+  // (ea & (s - 1)) == 0 — ox is a multiple of 8 and s divides 8, so the
+  // relative test equals the absolute one. Only slot 0 is ever fetched in
+  // ModeVtx, so only mc[0] carries the override; it is an AND on a registered
+  // bit at the output of `mcase_f`, transparent in mode 0.
+  wire [3:0] on_grid_mask = j_s - 4'd1;
+  wire       on_grid_c = ((ea & on_grid_mask) == 4'd0) && ((eb & on_grid_mask) == 4'd0);
+
   logic [1:0] mc[3];
   always_comb begin
     for (int p = 0; p < 3; p++) mc[p] = mcase_f(tv_i[p], tv_j[p]);
+    if (j_vtx && !on_grid_c) mc[0] = 2'd0;
   end
 
   // the address of the read being issued
@@ -570,16 +724,56 @@ module zhao_terrain_tess (
     end
   end
 
-  // is the read being issued the LAST of this triangle?
-  wire iss_last = (f_slot == 2'd2) && ((f_kind == 2'd0 && mc[2] == 2'd0) || (f_kind == 2'd2));
-  // Skipping a void run-cell costs one cycle and issues nothing.
-  wire cell_skip = (emode != EmFan) && !cell_solid;
+  // is the read being issued the LAST of this triangle (ModeTri: slot 2) or of
+  // this vertex (ModeVtx: slot 0)? `mc[f_slot]` is the same mux `rd_vi` already
+  // selects through; at f_slot == 2 it is mc[2], so mode 0 is unchanged.
+  wire [1:0] last_slot = j_vtx ? 2'd0 : 2'd2;
+  wire iss_last = (f_slot == last_slot) &&
+      ((f_kind == 2'd0 && mc[f_slot] == 2'd0) || (f_kind == 2'd2));
+  // Skipping a void run-cell costs one cycle and issues nothing. ModeVtx never
+  // skips: a vertex exists whether or not the cells around it are solid.
+  wire cell_skip = (emode != EmFan) && !cell_solid && !j_vtx;
   // the run-cell index bounds of the current mode: the whole subpatch on the
-  // unstitched path, the annulus's inner block on the stitched one
+  // unstitched path (`j_plain_hi` = n - 1, or 8 in ModeVtx), the annulus's
+  // inner block on the stitched one
   wire [3:0] cell_lo = (emode == EmInner) ? 4'd1 : 4'd0;
-  wire [3:0] cell_hi = (emode == EmInner) ? (j_n - 4'd2) : (j_n - 4'd1);
-  wire want_issue = (st == StTri) && !done && !cell_skip;
-  wire do_issue = want_issue && !(iss_last && out_busy);
+  wire [3:0] cell_hi = (emode == EmInner) ? (j_n - 4'd2) : j_plain_hi;
+
+  // ---- ModeVtx credit: may a vertex's LAST read be issued now? ------------
+  // It lands next cycle; the skid must then have a slot for certain.
+  //     room = (occupancy + landing_now - popping_now) <= 1
+  wire vland = pend_v && pend_last && j_vtx;  // a vertex lands this cycle
+  wire vpop = vo_valid && vtx_ready_i;  // the consumer drains one this cycle
+  wire [1:0] vcnt = {1'b0, vo_valid} + {1'b0, vs_valid};
+  wire [2:0] vnxt = {1'b0, vcnt} + {2'b0, vland} - {2'b0, vpop};
+  wire vtx_room = (vnxt <= 3'd1);
+  // the gate on the last read: the output register in ModeTri, the credit in
+  // ModeVtx (j_vtx is a register; in mode 0 this IS `out_busy`)
+  wire last_blocked = j_vtx ? !vtx_room : out_busy;
+
+  wire want_issue = (st == StTri) && !done && !cell_skip && !j_ref;
+  wire do_issue = want_issue && !(iss_last && last_blocked);
+
+  // ---- ModeRef: load the triple register when it is free or draining ------
+  wire ref_can_load = !r_valid || ref_ready_i;
+  wire ref_emit = (st == StTri) && !done && !cell_skip && j_ref && ref_can_load;
+
+  // ---- window indices: (vj - oz) * 9 + (vi - ox), a constant multiply -----
+  function automatic logic [IDX_W-1:0] win_idx(input logic [5:0] vi, input logic [5:0] vj);
+    logic [3:0] li, lj;
+    begin
+      li = 4'(vi - j_ox);
+      lj = 4'(vj - j_oz);
+      win_idx = IDX_W'({lj, 3'b0}) + IDX_W'(lj) + IDX_W'(li);
+    end
+  endfunction
+
+  // ModeVtx: the vertex being fetched is slot 0 = (ea, eb) at stride 1
+  wire [IDX_W-1:0] v_idx = IDX_W'({eb, 3'b0}) + IDX_W'(eb) + IDX_W'(ea);
+  // ModeRef: the three corners of the current triangle, TOP order
+  wire [IDX_W-1:0] t_idx0 = win_idx(tv_i[0], tv_j[0]);
+  wire [IDX_W-1:0] t_idx1 = win_idx(tv_i[1], tv_j[1]);
+  wire [IDX_W-1:0] t_idx2 = win_idx(tv_i[2], tv_j[2]);
 
   assign lat_req_o = do_issue;
   assign lat_vi_o = rd_vi;
@@ -601,10 +795,13 @@ module zhao_terrain_tess (
   wire signed [31:0] m_y = fx_add_sat({vh[pend_slot][31], vh[pend_slot]},
                                       {m_step[31], m_step});
 
-  // the slot-2 values at the emit cycle: registers unless slot 2's last read is
-  // landing right now (it always is — that is what `pend_last` means)
-  wire signed [31:0] last_x = (pend_kind == 2'd0) ? lat_wx_i : vx[2];
-  wire signed [31:0] last_z = (pend_kind == 2'd0) ? lat_wz_i : vz[2];
+  // the last slot's values at the emit cycle: registers unless its last read
+  // is landing right now (it always is — that is what `pend_last` means). The
+  // last slot is 2 in ModeTri and 0 in ModeVtx; the mux sits on the x/z
+  // register inputs, not in the blend cone (`m_y` already indexes by
+  // `pend_slot`).
+  wire signed [31:0] last_x = (pend_kind == 2'd0) ? lat_wx_i : (j_vtx ? vx[0] : vx[2]);
+  wire signed [31:0] last_z = (pend_kind == 2'd0) ? lat_wz_i : (j_vtx ? vz[0] : vz[2]);
   wire signed [31:0] last_y = (pend_kind == 2'd0) ? lat_h_i : m_y;
 
   // =========================================================================
@@ -627,6 +824,10 @@ module zhao_terrain_tess (
       j_src <= '0;
       j_u <= '0;
       j_P <= 6'd1;
+      j_vtx <= 1'b0;
+      j_ref <= 1'b0;
+      j_vshift <= '0;
+      j_plain_hi <= 4'd7;
       for (int k = 0; k < 4; k++) begin
         j_lvl_ord[k] <= '0;
         j_m_ord[k]   <= 4'd8;
@@ -649,7 +850,28 @@ module zhao_terrain_tess (
       pend_slot <= '0;
       pend_kind <= '0;
       pend_last <= 1'b0;
+      pend_idx <= '0;
+      pend_stride <= 1'b0;
       v_ha <= '0;
+      vo_valid <= 1'b0;
+      vs_valid <= 1'b0;
+      vo_x <= '0;
+      vo_y <= '0;
+      vo_z <= '0;
+      vs_x <= '0;
+      vs_y <= '0;
+      vs_z <= '0;
+      vo_idx <= '0;
+      vs_idx <= '0;
+      vo_stride <= 1'b0;
+      vs_stride <= 1'b0;
+      r_valid <= 1'b0;
+      r_ia <= '0;
+      r_ib <= '0;
+      r_ic <= '0;
+      terrain_vertices_emitted_o <= '0;
+      terrain_refs_emitted_o <= '0;
+      mode_invalid_o <= '0;
       for (int p = 0; p < 3; p++) begin
         vx[p] <= '0;
         vz[p] <= '0;
@@ -676,12 +898,88 @@ module zhao_terrain_tess (
       job_reject_o <= 1'b0;
       if (o_valid && tri_ready_i) o_valid <= 1'b0;
 
+      // ---- ModeVtx skid: land and pop, jointly ------------------------------
+      // The credit (`vtx_room`) guarantees a landing never finds both slots
+      // full without a pop, so the "else" of the land-only branch is the
+      // second slot and never an overwrite.
+      if (vland && vpop) begin
+        if (vs_valid) begin
+          vo_x <= vs_x;
+          vo_y <= vs_y;
+          vo_z <= vs_z;
+          vo_idx <= vs_idx;
+          vo_stride <= vs_stride;
+          vs_x <= last_x;
+          vs_y <= last_y;
+          vs_z <= last_z;
+          vs_idx <= pend_idx;
+          vs_stride <= pend_stride;
+        end else begin
+          vo_x <= last_x;
+          vo_y <= last_y;
+          vo_z <= last_z;
+          vo_idx <= pend_idx;
+          vo_stride <= pend_stride;
+        end
+      end else if (vland) begin
+        if (!vo_valid) begin
+          vo_valid <= 1'b1;
+          vo_x <= last_x;
+          vo_y <= last_y;
+          vo_z <= last_z;
+          vo_idx <= pend_idx;
+          vo_stride <= pend_stride;
+        end else begin
+          vs_valid <= 1'b1;
+          vs_x <= last_x;
+          vs_y <= last_y;
+          vs_z <= last_z;
+          vs_idx <= pend_idx;
+          vs_stride <= pend_stride;
+        end
+      end else if (vpop) begin
+        if (vs_valid) begin
+          vs_valid <= 1'b0;
+          vo_x <= vs_x;
+          vo_y <= vs_y;
+          vo_z <= vs_z;
+          vo_idx <= vs_idx;
+          vo_stride <= vs_stride;
+        end else begin
+          vo_valid <= 1'b0;
+        end
+      end
+      if (vland && terrain_vertices_emitted_o != 32'hFFFF_FFFF)
+        terrain_vertices_emitted_o <= terrain_vertices_emitted_o + 32'd1;
+
+      // ---- ModeRef triple register --------------------------------------------
+      if (r_valid && ref_ready_i) r_valid <= 1'b0;
+      if (ref_emit) begin
+        // The underside is the top's pair with b and c swapped — the same ONE
+        // mux as the world-coordinate path below, on indices.
+        r_valid <= 1'b1;
+        r_ia <= t_idx0;
+        r_ib <= j_surface ? t_idx2 : t_idx1;
+        r_ic <= j_surface ? t_idx1 : t_idx2;
+        if (terrain_refs_emitted_o != 32'hFFFF_FFFF)
+          terrain_refs_emitted_o <= terrain_refs_emitted_o + 32'd1;
+      end
+
       case (st)
         StIdle: begin
           if (job_valid_i) begin
             automatic logic [1:0] lv_nx, lv_pz, lv_px, lv_nz;
             automatic logic [3:0] s_new, n_new;
             automatic logic stitch_new;
+            automatic logic vtx_new, ref_new;
+            // the mode: anything that is not one of the three is counted and
+            // runs as ModeTri, never silently
+            vtx_new = (job_mode_i == ModeVtx);
+            ref_new = (job_mode_i == ModeRef);
+            j_vtx <= vtx_new;
+            j_ref <= ref_new;
+            if (job_mode_i != ModeTri && !vtx_new && !ref_new && mode_invalid_o != 32'hFFFF_FFFF)
+              mode_invalid_o <= mode_invalid_o + 32'd1;
             j_ox <= job_ox_i;
             j_oz <= job_oz_i;
             j_level <= job_level_i;
@@ -689,6 +987,8 @@ module zhao_terrain_tess (
             n_new = 4'(4'd8 >> job_level_i);
             j_s <= s_new;
             j_n <= n_new;
+            j_vshift <= vtx_new ? 2'd0 : job_level_i;
+            j_plain_hi <= vtx_new ? 4'(Side - 1) : (n_new - 4'd1);
             j_scmask <= 6'({2'b0, s_new} << 1) - 6'd1;
             j_u <= (n_new >= 4'd2) ? (n_new - 4'd2) : 4'd0;
             j_P <= (n_new >= 4'd3) ? 6'({2'b0, n_new - 4'd2} << 2) : 6'd1;
@@ -724,7 +1024,10 @@ module zhao_terrain_tess (
             if (job_surface_i && !job_dual_i) begin
               done <= 1'b1;
               st   <= StIdle;
-            end else if (job_dual_i) begin
+            end else if (job_dual_i && !(vtx_new && !stitch_new)) begin
+              // The scan serves the void skips (ModeTri/ModeRef) and the
+              // stitched+void reject (every mode, law 7). An UNSTITCHED
+              // ModeVtx job consumes neither and skips it (law 7).
               solid  <= '0;
               sc_idx <= '0;
               sc_pend <= 1'b0;
@@ -738,10 +1041,12 @@ module zhao_terrain_tess (
               // built the annulus — and it survived every directed case because
               // the directed lattices are all dual. The randomized lane B
               // found it, which is what a second lane is for.
+              // (Also the unstitched ModeVtx path on a dual page, see above;
+              // ModeVtx always walks the plain 9x9 window at stride 1.)
               solid <= {64{1'b1}};
-              emode <= !stitch_new ? EmPlain : ((n_new < 4'd3) ? EmFan : EmInner);
-              ea <= (stitch_new && n_new >= 4'd3) ? 4'd1 : 4'd0;
-              eb <= (stitch_new && n_new >= 4'd3) ? 4'd1 : 4'd0;
+              emode <= (!stitch_new || vtx_new) ? EmPlain : ((n_new < 4'd3) ? EmFan : EmInner);
+              ea <= (stitch_new && n_new >= 4'd3 && !vtx_new) ? 4'd1 : 4'd0;
+              eb <= (stitch_new && n_new >= 4'd3 && !vtx_new) ? 4'd1 : 4'd0;
               etri <= 1'b0;
               eside <= '0;
               eg <= '0;
@@ -767,9 +1072,11 @@ module zhao_terrain_tess (
               job_reject_o <= 1'b1;
               st <= StIdle;
             end else begin
-              emode <= j_stitch ? EmInner : EmPlain;
-              ea <= j_stitch ? 4'd1 : 4'd0;
-              eb <= j_stitch ? 4'd1 : 4'd0;
+              // ModeVtx reaches here only when stitched (for the reject above)
+              // and still walks the plain window.
+              emode <= (j_stitch && !j_vtx) ? EmInner : EmPlain;
+              ea <= (j_stitch && !j_vtx) ? 4'd1 : 4'd0;
+              eb <= (j_stitch && !j_vtx) ? 4'd1 : 4'd0;
               etri <= 1'b0;
               eside <= '0;
               eg <= '0;
@@ -777,7 +1084,7 @@ module zhao_terrain_tess (
               f_slot <= '0;
               f_kind <= '0;
               // n <= 3 leaves the annulus with no inner block at all
-              if (j_stitch && j_n < 4'd3) emode <= EmFan;
+              if (j_stitch && j_n < 4'd3 && !j_vtx) emode <= EmFan;
               done <= 1'b0;
               st <= StTri;
             end
@@ -799,6 +1106,8 @@ module zhao_terrain_tess (
             pend_slot <= f_slot;
             pend_kind <= f_kind;
             pend_last <= iss_last;
+            pend_idx <= v_idx;
+            pend_stride <= on_grid_c;
             if (f_kind == 2'd0 && mc[f_slot] != 2'd0) f_kind <= 2'd1;
             else if (f_kind == 2'd1) f_kind <= 2'd2;
             else begin
@@ -824,7 +1133,8 @@ module zhao_terrain_tess (
               vy[pend_slot] <= m_y;
             end
 
-            if (pend_last) begin
+            // ModeTri only: a ModeVtx landing goes to the skid above.
+            if (pend_last && !j_vtx) begin
               // The underside is the top's pair with b and c swapped — the ONE
               // place the inverted winding lives.
               o_valid <= 1'b1;
@@ -855,8 +1165,10 @@ module zhao_terrain_tess (
           // ---- advance the enumerator ------------------------------------
           // A void run-cell is SKIPPED here, at one cycle per skipped cell and
           // no lattice read at all.
-          if (cell_skip || (do_issue && iss_last)) begin
-            if (!cell_skip && !etri && emode != EmFan) begin
+          // ModeRef advances when a triple is loaded (no read to issue);
+          // ModeVtx has no second triangle per cell.
+          if (cell_skip || (do_issue && iss_last) || ref_emit) begin
+            if (!cell_skip && !etri && emode != EmFan && !j_vtx) begin
               etri <= 1'b1;
             end else if (emode == EmFan) begin
               if (efan >= fan_steps) begin
@@ -894,7 +1206,7 @@ module zhao_terrain_tess (
             end
           end
 
-          if (done && !pend_v && !o_valid) st <= StIdle;
+          if (done && !pend_v && !o_valid && !vo_valid && !vs_valid && !r_valid) st <= StIdle;
         end
 
         default: st <= StIdle;
@@ -903,6 +1215,22 @@ module zhao_terrain_tess (
   end
 
   assign tri_valid_o = o_valid;
+
+  assign vtx_valid_o = vo_valid;
+  assign vtx_x_o = vo_x;
+  assign vtx_y_o = vo_y;
+  assign vtx_z_o = vo_z;
+  assign vtx_index_o = vo_idx;
+  assign vtx_stride_o = vo_stride;
+  assign vtx_surface_o = j_surface;
+  assign vtx_src_id_o = j_src;
+
+  assign ref_valid_o = r_valid;
+  assign ref_ia_o = r_ia;
+  assign ref_ib_o = r_ib;
+  assign ref_ic_o = r_ic;
+  assign ref_surface_o = j_surface;
+  assign ref_src_id_o = j_src;
   assign ax_o = o_ax;
   assign ay_o = o_ay;
   assign az_o = o_az;
@@ -914,6 +1242,6 @@ module zhao_terrain_tess (
   assign cz_o = o_cz;
   assign surface_o = o_surf;
   assign src_id_o = o_src;
-  assign idle_o = (st == StIdle) && !o_valid;
+  assign idle_o = (st == StIdle) && !o_valid && !vo_valid && !vs_valid && !r_valid;
 
 endmodule : zhao_terrain_tess

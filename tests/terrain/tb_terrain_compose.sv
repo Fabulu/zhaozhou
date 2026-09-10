@@ -535,6 +535,16 @@ module tb_terrain_compose
   /* verilator lint_off UNUSEDSIGNAL */
   logic [31:0] ts_tris, ts_rejected, ts_clamped;
   logic        ts_idle, ts_job_reject;
+  // 2026-09-10: the tessellator's vertex/reference modes (job_mode_i = 1/2)
+  // are not part of this composition -- it is the TRIANGLE chain into
+  // TERRAIN.NORMALS -- so the mode is pinned to 0 and the two new streams are
+  // declared and unread (reports/TERRAIN-TESS-VERTEX-MODE-20260910.md).
+  logic               ts_vtx_valid, ts_vtx_stride, ts_vtx_surface;
+  logic signed [31:0] ts_vtx_x, ts_vtx_y, ts_vtx_z;
+  logic [6:0]         ts_vtx_index, ts_ref_ia, ts_ref_ib, ts_ref_ic;
+  logic [15:0]        ts_vtx_src, ts_ref_src;
+  logic               ts_ref_valid, ts_ref_surface;
+  logic [31:0]        ts_vertices, ts_refs, ts_mode_invalid;
   /* verilator lint_on UNUSEDSIGNAL */
 
   zhao_terrain_tess u_ts (
@@ -543,6 +553,7 @@ module tb_terrain_compose
 
       .job_valid_i  (ts_job_valid),
       .job_ready_o  (ts_job_ready),
+      .job_mode_i   (2'd0),
       .job_ox_i     (ts_job_ox),
       .job_oz_i     (ts_job_oz),
       .job_level_i  (ts_job_level),
@@ -581,7 +592,18 @@ module tb_terrain_compose
       .surface_o(ts_surface),
       .src_id_o (ts_src_id),
 
+      .vtx_valid_o(ts_vtx_valid), .vtx_ready_i(1'b1),
+      .vtx_x_o(ts_vtx_x), .vtx_y_o(ts_vtx_y), .vtx_z_o(ts_vtx_z),
+      .vtx_index_o(ts_vtx_index), .vtx_stride_o(ts_vtx_stride),
+      .vtx_surface_o(ts_vtx_surface), .vtx_src_id_o(ts_vtx_src),
+      .ref_valid_o(ts_ref_valid), .ref_ready_i(1'b1),
+      .ref_ia_o(ts_ref_ia), .ref_ib_o(ts_ref_ib), .ref_ic_o(ts_ref_ic),
+      .ref_surface_o(ts_ref_surface), .ref_src_id_o(ts_ref_src),
+
       .terrain_triangles_emitted_o(ts_tris),
+      .terrain_vertices_emitted_o (ts_vertices),
+      .terrain_refs_emitted_o     (ts_refs),
+      .mode_invalid_o             (ts_mode_invalid),
       .subpatch_rejected_o        (ts_rejected),
       .lod_clamped_o              (ts_clamped),
       .job_reject_o               (ts_job_reject),

@@ -6129,6 +6129,27 @@ set_tests_properties(lint_terrain_tess PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# TERRAIN.TESS vertex mode + reference mode (2026-09-10, RUN-20260910-0934).
+# The tessellator's `job_mode_i` = 1 emits the 81 window vertices per job with
+# the geomorph applied (the arena's dense fill, `vertex_at` in hardware); = 2
+# emits index triples for every triangle of the SAME walk (stitched and coarse
+# included). The differential runs the identity probe's whole case space
+# (110,592 jobs) and holds three things per job: vertices == vertex_at,
+# triples == tessellate's corners as window indices, and triples applied to
+# the vertices REBUILD tessellate's triangles. Mode 0 is the unchanged block;
+# terrain_tess_directed/_random/_normals above run against the same source.
+# See reports/TERRAIN-TESS-VERTEX-MODE-20260910.md.
+add_executable(test_terrain_tess_modes_directed terrain/terrain_tess_modes_directed.cpp)
+target_link_libraries(test_terrain_tess_modes_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_tess_modes_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_tess_modes_directed
+  PREFIX Vzhao_terrain_tess
+  TOP_MODULE zhao_terrain_tess
+  SOURCES ${ZHAO_TERRAIN_TESS_SV})
+add_test(NAME terrain_tess_modes_directed COMMAND test_terrain_tess_modes_directed)
+set_tests_properties(terrain_tess_modes_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
 # ---------------------------------------------------------------------------
 # TERRAIN.TESS -> TERRAIN.NORMALS composition (phase 6)
 #

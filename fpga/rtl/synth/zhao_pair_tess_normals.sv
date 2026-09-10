@@ -93,9 +93,24 @@ module zhao_pair_tess_normals (
   logic [31:0] tess_emitted, tess_rejected, tess_clamped;
   logic        tess_reject, tess_idle;
 
+  // 2026-09-10: the tessellator gained a per-job MODE (vertex fill / index
+  // triples, reports/TERRAIN-TESS-VERTEX-MODE-20260910.md). This wrapper is
+  // the NAMED HISTORICAL VARIANT the owner document asks to preserve
+  // (TERRAIN_31MHZ_REARCHITECTURE.txt §17): it pins mode 0 so the pair it
+  // measures is the triangle path, and the two new streams are consumed by
+  // nothing here on purpose -- folding them into the hash would change the
+  // harness cone that §6.3 says must be changed SEPARATELY from the DUT.
+  logic               vtx_valid_unused, ref_valid_unused, vtx_stride_unused;
+  logic signed [31:0] vtx_x_unused, vtx_y_unused, vtx_z_unused;
+  logic [6:0]         vtx_index_unused, ref_ia_unused, ref_ib_unused, ref_ic_unused;
+  logic               vtx_surface_unused, ref_surface_unused;
+  logic [15:0]        vtx_src_unused, ref_src_unused;
+  logic [31:0]        tess_vertices_unused, tess_refs_unused, tess_mode_invalid_unused;
+
   zhao_terrain_tess u_tess (
       .clk(clk), .rst_n(rst_n),
       .job_valid_i(job_valid_q), .job_ready_o(job_ready),
+      .job_mode_i(2'd0),
       .job_ox_i(stim_q[5:0] & 6'h38), .job_oz_i(stim_q[11:6] & 6'h38),
       .job_level_i(stim_q[13:12]), .job_lvl_nz_i(stim_q[15:14]),
       .job_lvl_pz_i(stim_q[17:16]), .job_lvl_nx_i(stim_q[19:18]),
@@ -113,7 +128,17 @@ module zhao_pair_tess_normals (
       .bx_o(bx), .by_o(by), .bz_o(bz),
       .cx_o(cx), .cy_o(cy), .cz_o(cz),
       .surface_o(surface_w), .src_id_o(src_id_w),
+      .vtx_valid_o(vtx_valid_unused), .vtx_ready_i(1'b1),
+      .vtx_x_o(vtx_x_unused), .vtx_y_o(vtx_y_unused), .vtx_z_o(vtx_z_unused),
+      .vtx_index_o(vtx_index_unused), .vtx_stride_o(vtx_stride_unused),
+      .vtx_surface_o(vtx_surface_unused), .vtx_src_id_o(vtx_src_unused),
+      .ref_valid_o(ref_valid_unused), .ref_ready_i(1'b1),
+      .ref_ia_o(ref_ia_unused), .ref_ib_o(ref_ib_unused), .ref_ic_o(ref_ic_unused),
+      .ref_surface_o(ref_surface_unused), .ref_src_id_o(ref_src_unused),
       .terrain_triangles_emitted_o(tess_emitted),
+      .terrain_vertices_emitted_o(tess_vertices_unused),
+      .terrain_refs_emitted_o(tess_refs_unused),
+      .mode_invalid_o(tess_mode_invalid_unused),
       .subpatch_rejected_o(tess_rejected),
       .lod_clamped_o(tess_clamped),
       .job_reject_o(tess_reject), .idle_o(tess_idle)
