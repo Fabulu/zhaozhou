@@ -4304,3 +4304,76 @@ matching nothing and printed "0 collisions". The real format is `- id: NAME`.
 golden suites -- "the goldens must not move" is the acceptance criterion), the
 rcp24 island swap, and the sequenced pose decoder (R4, -17 DSP, the largest
 remaining lever).
+
+
+## 2026-09-10 -- resumed after the reboot; the ceiling is NOT cracked, honestly
+
+**Nothing was lost.** HEAD was pushed, both lanes' uncommitted work survived.
+
+**R3 and R4 landed**, verified by me after their lanes died mid-verification:
+rcp24_v3 at NCTX=12 (island suite 132/132 at HEAD -> 133/133 after, the +1 being
+the new err_rcp_q_o tripwire) and the sequenced pose decoder (352/176/694, legacy
+arm 352, both mutants firing).
+
+**Verifying R3 found an inherited defect that would have killed the fit:** the
+island's OWN fit closure listed the superseded perspuv_svc.sv while the island
+instantiates perspuv_pairpipe at :1031 -- left over from the pair-pipe swap.
+MODMISSING on a standalone lint from that closure. Repaired.
+
+**And a consistency repair to R3 itself:** the swap deleted ONE dead-end capture
+(rcp_mul_busy, "declared, driven and read nowhere") and created FOUR. Changed to
+the file's own empty-connection convention. Final delta vs a HEAD baseline: +4
+PINCONNECTEMPTY, -1 UNUSEDSIGNAL.
+
+**THE OWNER ASKED ME TO GO BACK TO THE BRIEF, AND I HAD BEEN SCORING THE WRONG
+NUMBERS.** The Liberation Roadmap section 2 is an eight-domain allocation table:
+
+  * **DSP allocation totals 88, NOT the owner cap of 94.** The table says so --
+    "DSP remaining under owner cap: 6". A day was spent steering at 94.
+  * **M10K envelope is 464, not 553**, and they are REPLACEMENT allocations:
+    "Do not add these 464 M10Ks to the historical 147."
+  * **ALM objective is 36,000** against ~70k covered / ~80k planning guess.
+  * **There is no separate register target because registers ARE the ALM
+    problem**: 81,925 registers at this tree's measured ~1.9/ALM is ~43,118 ALM,
+    MORE THAN THE ENTIRE DEVICE.
+
+Built `tools/budget/domain_scoreboard.py` to make the table executable. It
+RECONCILES with dsp_census (58,359 / 192 / 147) and prints that reconciliation
+every run. Six of eight domains are over on ALM before the 34 unpriced blocks
+count; Complete FIELD reads 0 fitted ALM against a 4,500 allocation.
+
+**I made the campaign's own classic error writing it** -- summed the raw ledgers
+instead of build_bill, got 113,478 ALM, roughly double the authority. Second time
+in this campaign. The comment stays in the source.
+
+**TWO MORE OF MY NUMBERS WERE WRONG, both found by the lanes implementing them:**
+
+  * **geom_cull: off by 10x.** "Four products per evaluation" counted ONE S_EVAL
+    cycle; the walk is 5 planes x 2 views = TEN. So 40 products, and my "exactly
+    100.0000% on one lane" is 1000%. I had WRITTEN DOWN that the exactness was a
+    suspicious coincidence and then recorded a caveat instead of recounting.
+    A percentage that lands on exactly 100.0000% is a request to recount.
+  * **MATW: the marginal is -3, not -10.** Verified in calibration.json myself:
+    32x18 is 2 DSP, not 1; 32x19 is FOUR, worse than 32x32. "15 -> 5" would need
+    both operands <= 27, i.e. narrowing the vertices, which R1 forbids.
+
+**THE HONEST PATH: 99, not 92.** 140 -18 (ROWS_PER_PASS) -3 (MATW) -9 (cull)
+-11 (bake) = 99, against the cap of 94 and the roadmap's allocation of 88.
+Yesterday's 92 rested on two wrong figures of mine.
+
+**The last unexamined DSP holder is opened and is NOT a lever.** zhao_shell_top's
+41-module closure has five DSP-bearing children summing to 54 leaf DSP against a
+composed row of 16. A composed number already 3x smaller than its parts is not
+where a sharing lever hides. I did NOT claim to know which mechanism closes the
+gap -- virtual-pin inflation, pruning and partial parameterisation are three
+explanations and this evidence separates none of them.
+
+One real finding fell out: zhao_geom_binner has a stale dirty 12-DSP row AND a
+CLEAN 6-DSP row at 534bbd22. The repo states two disagreeing post-fix numbers
+(12->4 in the block header, 12->6 in the pair wrapper); the ledger settles it at
+6, and the header's "12 -> 4" is wrong in the flattering direction.
+
+**Twelve claims refused in this campaign; SIX were mine.**
+
+Live: FORGE.CLIFF bitmap RAM and the FIELD program directory, both ALM levers
+from the roadmap's own six-commit list.
