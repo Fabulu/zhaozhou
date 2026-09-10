@@ -280,7 +280,15 @@ def measure(path):
 # So the instrument now says so out loud. `lens_px == 0` is the one
 # unambiguous statement this tool makes -- "I found no eye at all in this
 # frame" -- and a clip full of them is either catastrophically broken or
-# unreadable by this rule; either way its medians must not be quoted.
+# unreadable by this rule.
+#
+# ⚠ AND IT CANNOT TELL THOSE TWO APART, which is stated rather than hidden.
+# The refusal means "these medians grade nothing, go and look", not "the mask
+# is broken". Both causes were then witnessed in one pass: on the bleached
+# palette `crackle` read 17.2% blind while showing four whole eyes (the mask),
+# and on LANE-FX-3's repaired palette the ABLATED `mana-green` leg read 6.2%
+# because the creature genuinely has no eye on those frames (the picture).
+# The repaired, fixed leg reads 0.0% and grades normally.
 #
 # ⚠ THE FLOOR IS DERIVED FROM THE CLIPS WHERE THE RULE DEMONSTRABLY READS, NOT
 # from the ones where it fails -- it is not fitted to the answer it is about to
@@ -337,9 +345,12 @@ def show(name, s):
               % s["blind_pct"])
         print("  !! (floor %.1f%%, from the clips where it demonstrably reads)."
               % kBlindFramePct)
-        print("  !! EVERY NUMBER ON THE LINE ABOVE IS UNUSABLE, in both directions:")
-        print("  !! this rule reads zero on frames showing two whole lenses. Look at")
-        print("  !! the frames. Re-authorise lens_mask against this palette first.")
+        print("  !! EVERY NUMBER ON THE LINE ABOVE IS UNUSABLE, in both directions.")
+        print("  !! TWO CAUSES LOOK IDENTICAL FROM IN HERE and this tool cannot")
+        print("  !! separate them: the RULE has gone blind (it reads zero on frames")
+        print("  !! showing two whole lenses -- witnessed on the bleached pass-15")
+        print("  !! palette), or the CREATURE really has no eye on those frames.")
+        print("  !! Either way the medians grade nothing. Go and look at the frames.")
         print("  " + "!" * 68)
 
 
