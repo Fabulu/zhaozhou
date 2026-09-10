@@ -1,3 +1,35 @@
+// zhao_geom_cull_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
+//
+// This exists to make the MUL_LANES sequencer's NEW machinery -- the
+// issue/commit accumulator that assembles each plane's `dot + slack` from
+// registered lane products -- a demonstrated instrument rather than an
+// argument. The accumulator's characteristic fault is a PLANE-BOUNDARY error:
+// every product is individually exact, every handshake completes, the walk is
+// exactly the declared 21 ticks, ready_o and valid_o behave -- and every plane
+// after the first silently carries its predecessor's partial sum into its own
+// verdict. The spatial arm (MUL_LANES=4) could never exhibit this, because it
+// never held state between planes, so no earlier run of the directed suite has
+// ever shown the checker can see it.
+//
+// The one substantive change, in g_seq's commit-side finishing sum:
+//
+//     assign psum[0] = first_q ? kterm_q : acc;          // a fresh plane starts a fresh sum
+//  -> assign psum[0] = first_q ? (acc + kterm_q) : acc;  // MUTANT: the old sum is never cleared
+//
+// INVERTED POLARITY: driven by tests/differential/geom_cull_mutant_control.cpp
+// against the same zref::cull oracle the directed suite uses; the control
+// PASSES when the differential comparison FAILS. It also asserts that the exact
+// walk law still holds on the mutant -- the timing pin is blind to this fault,
+// which is the reason the differential exists beside it. Evidence about the
+// instrument, not about the design.
+//
+// The module is RENAMED so a source-list mistake can never elaborate it in
+// place of the real one, and it lives under tests/ where
+// check_forbidden_sources.py will not find it in a production closure.
+//
+// REGENERATE IT if zhao_geom_cull.sv changes shape: this is a copy, and a copy
+// of an old version is a positive control for a block that no longer exists.
+
 // zhao_geom_cull.sv — GEOM.MESHFETCH's conservative per-camera frustum
 // rejection of an instance bounding sphere (phase 8, ZH-037).
 //
@@ -153,7 +185,7 @@
 
 `default_nettype none
 
-module zhao_geom_cull #(
+module zhao_geom_cull_mutant #(
     // 2 (default): two shared 33x33 lanes, products registered; 1: one lane;
     // 4: the original spatial arm (four combinational multipliers plus its own
     // extraction square). See "HOW MANY MULTIPLIERS" above.
@@ -657,7 +689,7 @@ module zhao_geom_cull #(
       // prefix chain over the lanes, so the sum is one adder per lane and no
       // combinational read-modify-write.
       logic signed [DOT_W-1:0] psum [0:MUL_LANES];
-      assign psum[0] = first_q ? kterm_q : acc;
+      assign psum[0] = first_q ? (acc + kterm_q) : acc;  // MUTANT: the previous plane's sum is never cleared
       genvar c;
       for (c = 0; c < MUL_LANES; c = c + 1) begin : g_sum
         assign psum[c+1] = psum[c] + ext_p(p_q[c]);

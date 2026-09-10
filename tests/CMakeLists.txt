@@ -4202,6 +4202,46 @@ verilate(test_proj_service_rowmux_smoke
 add_test(NAME proj_service_rowmux_smoke COMMAND test_proj_service_rowmux_smoke)
 set_tests_properties(proj_service_rowmux_smoke PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# MATW=18 against MATW=32, byte-for-byte, over the whole legal coefficient
+# domain -- owner ruling R1 (reports/OWNER-RULINGS-20260909-2300.md): the
+# view-projection matrix's perspective coefficients capped at +-2.0, so the
+# nine PRODUCT words narrow to signed 18-bit Q16.16 (32x18 = 2 DSP against 3,
+# measured; 32x19 = 4, worse than 32). The default MATW=32 is pinned to the
+# shipped oracle by geom_project_directed and the terrain suites (the terrain
+# random suite sweeping matrix words over the full s32); this differential pins
+# MATW=18 to MATW=32 as an output STREAM at ROWS_PER_PASS=3 AND 1, so the
+# narrowed core inherits the oracle by transitivity. It also asserts THE
+# REFUSAL LAW -- an out-of-range product word is refused, counted on
+# `mat_refused_o`, and the register KEEPS its value (never a clamp); the
+# translation column and row 2 accept anything without counting -- the fixed
+# latencies, and a POSITIVE CONTROL that skews one narrowed word by a raw LSB.
+add_executable(test_proj_matw_directed geometry/proj_matw_directed.cpp)
+verilate(test_proj_matw_directed
+  PREFIX Vtb_proj_matw
+  TOP_MODULE tb_proj_matw
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/geometry/tb_proj_matw.sv
+          ${ZHAO_PROJECT_CORE_SV})
+add_test(NAME proj_matw_directed COMMAND test_proj_matw_directed)
+set_tests_properties(proj_matw_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# The refusal law's COMMITTED MUTANT. tests/mutants/zhao_project_core_mutant.sv
+# removes the fits-check (one line): every write is accepted and the
+# multiplier reads the low 18 bits of whatever arrived, so +2.0 wraps to -2.0
+# while `mat_refused_o` stays at zero. THIS TEST PASSES WHEN THE DIFFERENTIAL
+# FAILS -- inverse polarity, evidence about the instruments (the counter AND
+# the comparison), not about the design. On legal content the mutant is
+# indistinguishable from the real core, which is why the directed test's
+# refusal section exists at all.
+add_executable(test_proj_matw_mutant_control geometry/proj_matw_mutant_control.cpp)
+verilate(test_proj_matw_mutant_control
+  PREFIX Vtb_proj_matw_mutant
+  TOP_MODULE tb_proj_matw_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/geometry/tb_proj_matw_mutant.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_project_core_mutant.sv
+          ${ZHAO_PROJECT_CORE_SV})
+add_test(NAME proj_matw_mutant_control COMMAND test_proj_matw_mutant_control)
+set_tests_properties(proj_matw_mutant_control PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # GEOM.POSE's quaternion step: quat16 -> 3x4 rotation, against
 # zref::creature::quat16_to_mat3. The no-renormalization rule (creature_rules
 # 2.2) is a law an "improved" implementation would break, so section 5 drives
@@ -5665,6 +5705,64 @@ add_test(NAME lint_zhao_geom_cull
 set_tests_properties(lint_zhao_geom_cull PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# The cull's other MUL_LANES arms, on the SAME source and the SAME oracle
+# (2026-09-10). The default target above is MUL_LANES=2 (two shared 33x33
+# lanes, walk 21, extraction 191). MUL_LANES=4 is the ORIGINAL spatial arm --
+# the fitted 15-DSP circuit, kept under generate -- with its own walk laws
+# (10 / 186); MUL_LANES=1 is the one-lane arm (41 / 191). Same checks, same
+# 17,212-check suite; only the pinned walk lengths differ, which is the point:
+# sequencing moves cycles, never bits.
+add_executable(test_geom_cull_spatial differential/geom_cull_directed.cpp)
+target_compile_definitions(test_geom_cull_spatial PRIVATE
+  ZHAO_CULL_WALK=10 ZHAO_CULL_EXTRACT=186)
+target_link_libraries(test_geom_cull_spatial PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_geom_cull_spatial PRIVATE
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+verilate(test_geom_cull_spatial
+  PREFIX Vzhao_geom_cull
+  TOP_MODULE zhao_geom_cull
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_cull.sv
+  VERILATOR_ARGS -GMUL_LANES=4)
+add_test(NAME geom_cull_spatial COMMAND test_geom_cull_spatial)
+set_tests_properties(geom_cull_spatial PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_geom_cull_lane1 differential/geom_cull_directed.cpp)
+target_compile_definitions(test_geom_cull_lane1 PRIVATE
+  ZHAO_CULL_WALK=41 ZHAO_CULL_EXTRACT=191)
+target_link_libraries(test_geom_cull_lane1 PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_geom_cull_lane1 PRIVATE
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp
+verilate(test_geom_cull_lane1
+  PREFIX Vzhao_geom_cull
+  TOP_MODULE zhao_geom_cull
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_cull.sv
+  VERILATOR_ARGS -GMUL_LANES=1)
+add_test(NAME geom_cull_lane1 COMMAND test_geom_cull_lane1)
+set_tests_properties(geom_cull_lane1 PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_zhao_geom_cull_spatial
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_cull -GMUL_LANES=4
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_cull.sv)
+set_tests_properties(lint_zhao_geom_cull_spatial PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# THE POSITIVE CONTROL for the cull differential's checker. The lane arms'
+# issue/commit accumulator must start a fresh sum at every plane boundary;
+# tests/mutants/zhao_geom_cull_mutant.sv is a committed copy with that clear
+# removed. THIS TEST PASSES WHEN THE DIFFERENTIAL FIRES -- inverse polarity,
+# evidence about the instrument, not the design. It also asserts the exact walk
+# law still holds on the mutant: the timing pin is blind to this fault.
+add_executable(test_geom_cull_mutant_control differential/geom_cull_mutant_control.cpp)
+target_link_libraries(test_geom_cull_mutant_control PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_cull_mutant_control
+  PREFIX Vzhao_geom_cull_mutant
+  TOP_MODULE zhao_geom_cull_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_cull_mutant.sv)
+add_test(NAME geom_cull_mutant_control COMMAND test_geom_cull_mutant_control)
+set_tests_properties(geom_cull_mutant_control PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 set(ZHAO_TERRAIN_PATCH_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch.sv)

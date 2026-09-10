@@ -74,6 +74,37 @@ namespace zc = zref::cull;
 
 constexpr int32_t ONE = 1 << 16;
 
+// ---------------------------------------------------------------------------
+// THE WALK LAWS — exact, and pinned per MUL_LANES (added 2026-09-10)
+// ---------------------------------------------------------------------------
+// The block's multipliers are shared lanes (`MUL_LANES`, default 2), so an
+// evaluation is a WALK of a known length and the extraction is another. Both
+// are asserted exactly rather than waited out, because a latency that changes
+// silently is a contract break even when the verdict is still right — and
+// because a machine doing its work twice in the same number of cycles cannot
+// exist, so the exact count is also the cheapest "did it do the work once"
+// check available at the ports.
+//
+//   ZHAO_CULL_WALK     ticks from the accepting tick until valid_o is seen:
+//                      10 * (4 / MUL_LANES) issue cycles + 1 trailing commit
+//                      -> 21 at MUL_LANES=2, 41 at 1; the spatial arm
+//                      (MUL_LANES=4, no product register) takes 10.
+//   ZHAO_CULL_EXTRACT  ticks from one dirtying matrix write until ready_o
+//                      returns: 1 (the S_IDLE cycle that starts the
+//                      extraction) + 5 planes * (squares + 33 recurrence steps
+//                      + 1 store). The lane arms register the square, so the
+//                      three squares take 4 cycles: 1 + 5 * 38 = 191; the
+//                      spatial arm takes 1 + 5 * 37 = 186.
+//
+// The CMake targets for the other arms override these; the defaults describe
+// the shipped parameterisation.
+#ifndef ZHAO_CULL_WALK
+#define ZHAO_CULL_WALK 21
+#endif
+#ifndef ZHAO_CULL_EXTRACT
+#define ZHAO_CULL_EXTRACT 191
+#endif
+
 int g_cases = 0;
 
 struct Prng {
@@ -202,6 +233,13 @@ zc::Verdict dut_cull(Vzhao_geom_cull& dut, uint8_t active, vec3fx c, fx16 r) {
   v.visible_mask = static_cast<uint8_t>(dut.vis_o);
   v.reject = dut.reject_o != 0;
   if (!dut.valid_o) check(false, "verdict never asserted valid_o", 1, 0);
+  // The walk is an exact law, not a bound (see ZHAO_CULL_WALK above), and the
+  // block is ready for the next instance in the same cycle it delivers this
+  // one's verdict — so the initiation interval is ZHAO_CULL_WALK + 1.
+  check(n == ZHAO_CULL_WALK, "walk: valid_o exactly ZHAO_CULL_WALK ticks after accept",
+        ZHAO_CULL_WALK, static_cast<uint64_t>(n));
+  check(dut.ready_o == 1, "walk: ready_o high in the verdict cycle (II = walk + 1)", 1,
+        dut.ready_o);
   return v;
 }
 
@@ -658,6 +696,67 @@ int main(int argc, char** argv) {
       one(dut, rig, "11.random", static_cast<uint8_t>(rng.below(4)), c, r);
     }
     std::printf("geom_cull random: %d instances\n", random_iters);
+  }
+
+  // ---- 12. THE EXTRACTION WALK IS AN EXACT LAW TOO --------------------------
+  // One dirtying write to an otherwise clean block starts exactly one view's
+  // extraction: the S_IDLE cycle that launches it, then five planes of
+  // (squares + 33 recurrence steps + 1 store). Counted from the write tick to
+  // the first cycle ready_o is back. Pinned so that a changed square path — a
+  // register added or removed — is a test failure rather than a surprise in
+  // the contract's latency table. Both views are pinned, because the walk must
+  // not depend on which one was written.
+  {
+    const mat4fx a = make_vp(60.0, 4.0 / 3.0, 40.0);
+    load(dut, a, a);
+    for (int v = 0; v < 2; ++v) {
+      dut.cfg_we_i = 1;
+      dut.cfg_view_i = static_cast<uint8_t>(v);
+      dut.cfg_addr_i = 5;
+      dut.cfg_data_i = static_cast<uint32_t>(a.m[1][1].raw);  // same word: a rewrite, still dirty
+      zhao::tick(dut);
+      dut.cfg_we_i = 0;
+      dut.cfg_addr_i = 0;
+      dut.eval();
+      const int n = wait_ready(dut, "12.block never re-readied after one write");
+      check(n == ZHAO_CULL_EXTRACT, "12.extraction: ready exactly ZHAO_CULL_EXTRACT ticks after one write",
+            ZHAO_CULL_EXTRACT, static_cast<uint64_t>(n));
+    }
+    // and the verdict after a rewrite of the same matrix is the verdict before it
+    const Rig rig = load(dut, a, a);
+    one(dut, rig, "12.after-rewrite", 0x3, vec3fx{fx16{3 * ONE}, fx16{-2 * ONE}, fx16{ONE}}, fx16{ONE});
+    std::printf("geom_cull 12: walk %d ticks/instance (II %d), extraction %d ticks/view\n",
+                ZHAO_CULL_WALK, ZHAO_CULL_WALK + 1, ZHAO_CULL_EXTRACT);
+  }
+
+  // ---- 13. THE DOMAIN-VIOLATING NEGATIVE RADIUS, BIT FOR BIT ---------------
+  // The header of this file keeps to r >= 0 on purpose, and the RTL asserts
+  // that domain under FORMAL (not compiled here). This section steps outside
+  // it deliberately and for one reason: the lane arms (MUL_LANES = 1, 2) form
+  // the slack as r*len[31:0] + (r*len[33:32]) << 32 with a signed r, and the
+  // reference forms it as one __int128 product. Those must agree on EVERY
+  // representable r, including the ones no caller should send — a negative
+  // radius makes rejection easier, and the two sides must be wrong in exactly
+  // the same way. The rails camera puts bit 32 of the length bound in play, so
+  // the high-part shift-and-add sees a negative multiplicand too.
+  {
+    const int32_t rails[16] = {INT32_MAX, INT32_MIN, INT32_MAX, INT32_MIN, INT32_MIN, INT32_MAX,
+                               INT32_MIN, INT32_MAX, 0,         0,         ONE,       0,
+                               INT32_MAX, INT32_MAX, INT32_MIN, INT32_MAX};
+    const Rig rig_rails = load(dut, raw_vp(rails), cam[3]);
+    for (int32_t r : {-1, -2, -ONE, -1000 * ONE, INT32_MIN, INT32_MIN + 1}) {
+      for (int32_t v : {0, 1, -1, ONE, -ONE, 1000 * ONE, INT32_MAX, INT32_MIN + 1}) {
+        one(dut, rig_rails, "13.neg-r rails", 0x3, vec3fx{fx16{v}, fx16{v}, fx16{v}}, fx16{r});
+        one(dut, rig_rails, "13.neg-r rails", 0x3, vec3fx{fx16{v}, fx16{0}, fx16{-v}}, fx16{r});
+      }
+    }
+    const Rig rig_cam = load(dut, cam[0], cam[5]);
+    for (int i = 0; i < 300; ++i) {
+      const vec3fx c{fx16{rng.range(-60 * ONE, 60 * ONE)}, fx16{rng.range(-60 * ONE, 60 * ONE)},
+                     fx16{rng.range(-60 * ONE, 60 * ONE)}};
+      const fx16 r{rng.range(-8 * ONE, -1)};
+      one(dut, rig_cam, "13.neg-r", static_cast<uint8_t>(rng.below(4)), c, r);
+    }
   }
 
   std::printf("geom_cull: %d instance verdicts compared\n", g_cases);

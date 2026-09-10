@@ -90,16 +90,25 @@ transcription:
   decode work. The differential measures that it can see the difference: 1,015
   of 1,775 boundary probes answer differently under a floor.
 * **The bound arrives as PORTS**, not from a descriptor. The five planes and
-  their five square roots are extracted once per camera per frame (185 cycles on
-  a matrix write); the per-instance path is 10 cycles and four multipliers.
+  their five square roots are extracted once per camera per frame (191 ticks on
+  a matrix write at the default `MUL_LANES=2`); the per-instance path walks
+  forty products through two shared 33x33 lanes, 21 ticks.
 
 Both blocks are SIMULATION ONLY. `zhao_geom_lod` has a Quartus block fit
 **(1,183 ALMs / 6 DSPs / 271 registers, at `09bbe05`)**, down from 1,303 ALMs
 and 18 DSPs before the products were sequenced -- both numbers measured on this
 machine, at a clean worktree, on the commit each row names.
-`zhao_geom_cull` has been fitted since (1,102 ALMs / 15 DSPs) and is the obvious
-next candidate for the same lever: four multipliers on a path that already takes
-10 cycles for a per-instance rate.
+`zhao_geom_cull` was fitted at 1,102 ALMs / 15 DSPs (`2a711f0`) — five
+multiplier sites at 3 DSP each — and was named here as the obvious next
+candidate for the same lever. **The lever was pulled on 2026-09-10**:
+`MUL_LANES` (default **2**) sequences the FORTY products of an evaluation (ten
+plane tests of four products; the earlier "four multipliers" was the count per
+plane-cycle, not per instance) through two shared 33x33 lanes with registered
+products, the extraction's square sharing lane 0. Predicted **6 DSP** from the
+calibration's measured s33 point; the `MUL_LANES=4` arm is the fitted circuit,
+kept under `generate`. **Not yet fitted** — the leaf fit is the gate. All three
+arms pass the same 39,402-check differential; see
+`reports/GEOM-CULL-TWO-LANES-20260910.md`.
 
 The **descriptor-fetch third is built** in
 `fpga/rtl/geometry/zhao_geom_meshfetch.sv`. It captures ingress at job
@@ -291,7 +300,7 @@ also waits on shared memory and downstream result backpressure.
 | third | latency | measured by |
 | --- | --- | --- |
 | LOD ladder (`zhao_geom_lod`) | **fixed, 5 clocks** from the accepting edge to the `valid_o` pulse; one evaluation in flight at a time (`ready_o` low meanwhile) | asserted on every evaluation in `tests/differential/geom_lod_directed.cpp` |
-| cull (`zhao_geom_cull`) | 185 cycles per camera on a matrix write; **10 cycles** on the per-instance path | `tests/differential/geom_cull_directed.cpp` |
+| cull (`zhao_geom_cull`) | fixed per `MUL_LANES`. **Default `MUL_LANES=2`: 191 ticks** per camera from a dirtying matrix write to `ready_o`; `valid_o` **21 ticks** after the accepting edge, one instance in flight, **II 22**. `MUL_LANES=1`: 191 / 41 / II 42. Legacy spatial arm `MUL_LANES=4`: 186 / 10 / II 11 (was documented as "185 / 10"; the II was always 11 — the accept cycle is not overlapped) | asserted EXACTLY per arm in `tests/differential/geom_cull_directed.cpp` (`ZHAO_CULL_WALK`, `ZHAO_CULL_EXTRACT`), 2026-09-10 |
 | descriptor fetch (`zhao_geom_meshfetch`) | variable MEM.GUARD wait + exactly eight accepted data beats; once the final beat lands, ten sequenced bound-transform clocks precede the cull request | `tests/geometry/geom_meshfetch_rtl_directed.cpp` |
 
 The LOD ladder's five is a DESIGN CHOICE, not a limit: it sequences five
@@ -313,6 +322,27 @@ actually needs checking against bandwidth, not the clock count.
 If that ratio turns out wrong, the lever is the LOD ladder's five clocks — it
 sequences five products through one multiplier and cost 12 of 18 DSPs to do so.
 Un-sequencing it buys throughput for area, and the trade is already measured.
+
+**2026-09-10 — the cull's rate, stated so two sentences in this file stop
+disagreeing silently.** The synthesis section below says *"initiation rate …
+may not regress"*; the section above names the cull as the candidate for the
+sequencing lever. Both cannot hold literally, and the resolution taken is the
+DEMAND figure in this section (~6,100 decisions/frame), not the 5-clock
+capacity figure: `zhao_geom_cull` at its default `MUL_LANES=2` accepts one
+instance per **22 clocks** (the fitted arm took 11), so 6,100 decisions cost
+~134,200 clocks, about **10% of the reserved 1,333,333-clock frame** (5% before).
+Two consequences the reader should not have to infer:
+
+* the composed block's decision rate is now set by the cull, not by the LOD
+  ladder's five clocks — and the cull never met "one decision per 5 clocks" in
+  any arm, including the fitted one (II 11);
+* `design/budgets/workloads.yml`'s `zhao_geom_cull` row (333,333 evaluations
+  per frame, `requiredII: 5`, `confidence: ruled`) is the LOD ladder's rate
+  filed as cull demand: 333,333 x 11 clocks is 275% of the reserved frame for
+  the FITTED arm. No arm of this block has ever met that row. It needs
+  re-ruling against the demand figure, and that is an owner call, not made
+  here. If a 5-clock cull IS wanted, `MUL_LANES=4` is one parameter away at
+  +9 DSP — and still delivers II 11, not 5.
 
 ## Overflow and malformed-input behaviour
 **Refuse, never guess.** Every one of these raises a refusal with the offending
@@ -421,7 +451,7 @@ Measured, per third, on this machine at a clean worktree:
 | third | ALMs | DSPs | note |
 |---|---|---|---|
 | `zhao_geom_lod` | 1,183 | 6 | at `09bbe05`, after sequencing five products through one multiplier (was 1,303 / 18) |
-| `zhao_geom_cull` | 1,102 | 15 | the obvious next candidate for the same lever — four multipliers on a path that already takes 10 cycles |
+| `zhao_geom_cull` | 1,102 | 15 | measured at `2a711f0` = today's `MUL_LANES=4` arm. The default `MUL_LANES=2` **predicts 6 DSP** (structural: two 33x33 lanes at the calibration's measured 3 each; ALMs unknown); **unfitted as of 2026-09-10** |
 | descriptor fetch (`zhao_geom_meshfetch`) | — | — | RTL and leaf proof exist; no independent source-matched block fit is claimed here |
 
 **Ceiling for the composed block: 3,000 ALMs and 24 DSPs.** That is the two
