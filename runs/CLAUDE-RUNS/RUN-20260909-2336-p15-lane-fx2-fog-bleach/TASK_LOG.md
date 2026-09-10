@@ -321,3 +321,207 @@ two-axis fault.
 **Ladder 2** therefore sweeps the tint as a **single-variable** ladder at the
 picked profile, on `channel`'s violet night — plus one gamma rung, because the
 rim's hardness is the other thing the eye is objecting to.
+
+### 00:31 — THE GATE WAS GREEN ON THE BUILD THE REVIEW REFUSED
+
+Re-aimed `manafold_shellgate.cpp` and this is the finding, not the housekeeping:
+
+**Pass 15's check 2 demanded that the fog reach the BODY'S CENTRE. The shipped
+values did. So it passed — and reaching the centre WAS the defect.** Six checks
+passed and six legs fired on a build that damaged the quality the owner named as
+praised.
+
+It was not a lazy check. It was a faithful encoding of a reading of D11 §2.3
+(*make the sinking lens read as fog*) that **a sibling lane obsoleted in the same
+pass**: LANE-EYE cured the sinking a different way, so the fog was still being
+required to hide something that no longer happens — and the gate went on
+enforcing it.
+
+> **A gate encodes a hypothesis about what the owner wants, and a hypothesis can
+> be RETIRED by someone else's fix.** When a sibling lane removes the symptom
+> your check serves, the check does not go harmless — it becomes a rule
+> defending a dead requirement, and it will hold the line for it.
+
+**Check 2 is inverted** — *the CORE KEEPS ITS OWN PIGMENT* — and **check 7 is
+new** — *the fog is an OUTER LAYER*. Both are the FIRST clause of his sentence,
+*"the **outer body part** is made of a thick fog"*, which no check had ever
+owned; check 3 owns the second clause and always did. Both are **shape** claims,
+never densities, so `10-GATE` §0 holds.
+
+⚠ **And check 7's first version PASSED ON THE REGRESSION.** On the radius-24
+fixture it asked for the peak in the outer HALF — but a 520 pm annulus puts the
+peak at ~0.5·R *by construction*, so the threshold and the fault sat on the same
+line and integer quantisation returned the verdict: *"9 px, must be under 12:
+PASS"* on the exact build J01 condemns. **A threshold that coincides with the
+value under test is a coin toss wearing a number.** Fixed with a bigger fixture
+(radius 40, near `inspect`'s real body) and the outer THIRD, and the margin is
+now printed so the next reader can see how close it ran.
+
+**Against the still-shipped constants the gate now reads:**
+
+    [FAIL] 2 the CORE KEEPS ITS OWN PIGMENT -- centre 177 vs unpainted 120 (floor=180)
+    [FAIL] 7 the fog is an OUTER LAYER -- peak 17 px in, must be under 13, margin -4
+
+**That is the known-negative that matters** (item 43): not a synthetic input, but
+*the mechanism as pass 15 actually shipped it*, and the gate goes red on it.
+
+### 00:34 — ladder 2, first rungs: the tint axis is real and it is large
+
+3x on the body, `channel` f0180, the violet night. `RIM white` and `RIM rose`
+are the **same profile and the same alpha — only the tint differs**:
+
+| rung | the read |
+|---|---|
+| OFF ablated | rich crimson, dark lower band, deep violet lenses |
+| P15 SHIPPED | milky; the dark band replaced by a chalky wash and its tidemark |
+| RIM white `255,214,232` | **core restored** — and the rim reads as pale FROST, a dirty edge |
+| RIM rose `255,150,205` | **core restored AND the rim is luminous pink gas** that belongs to the animal |
+
+**One variable, and it decides whether the gas reads as the creature's own mana
+or as dust on the lens.** The previous lane's undeclared axis was the right axis;
+it simply could not sweep it, because its own driver could not express a comma.
+
+### 00:44 — the pick must be a RUNG, not an interpolation
+
+Deciding the verification plan now, before the pick, so the pick is constrained
+by it rather than the other way round:
+
+**I will ship exactly one of the rungs I actually rendered — never a value
+between two of them.** Interpolating is how a pass ships a picture nobody has
+looked at, wearing the authority of a ladder that never contained it.
+
+It also buys the proof for free. If the shipped constants equal a rendered
+rung's env values, then:
+
+    build-fx2b (new constants, NO env)  ==  build-fx2a (old constants + that env rung)
+
+must be **byte-identical on that frame**. That single comparison proves three
+things at once — the constant edit landed, `--clean` actually rebuilt the
+header, and the thing I shipped is the thing I judged. It is the answer to
+`09-ENGINE-GOTCHAS` §19's *"check the binary's mtime before you believe any
+number"*, in a form that cannot be fooled by a stale object.
+
+**Remaining sequence:** edit constants -> `--clean` build to a NEW dir (keeping
+`build-fx2a` as the bit-identity baseline) -> byte-identity against the judged
+rung -> `mshell` + `--selftest` -> Zixxtrixx `bitident` -> final plates on both
+backdrops -> findings -> push.
+
+### 00:52 — ladder 2 read, and the headline is that ALPHA DOES NOT MOVE
+
+4x on the lower body, `channel` f0180. The tint rungs share one profile and one
+alpha; only the colour differs.
+
+| rung | tint | the read |
+|---|---|---|
+| OFF ablated | — | dark maroon lower band, crisp |
+| RIM white | 255,214,232 | core back, rim reads as **frost / dust on the lens** |
+| RIM rose | 255,150,205 | pretty, but pale and candyish; the dark band is lifted |
+| **RIM mana** | **240,90,180** | **rim is plainly gas, and the dark band survives** |
+| RIM deep | 220,55,160 | band survives best — but the gas is **starting to vanish** into the pigment |
+
+**A proper bracket, failing in opposite directions**: `rose` drifts back toward
+bleach, `deep` drifts toward invisible. `mana` is the balance, and invisibility
+is not a neutral failure here — *"I still don't see it"* is what he has said for
+four passes, so a shell that disappears into the body is the same defeat wearing
+a nicer colour.
+
+⚠ **THE HEADLINE: `kShellAlphaMaxPm` DOES NOT MOVE. It stays at 560.**
+
+Every previous argument about this shell has been an argument about the AMOUNT —
+D8 §4 *"we thickened too much… I want to revert that"*, four passes of alpha,
+the review's own *"take `kShellAlphaMaxPm` down hard"*. **The fog is at full
+strength in the rung I am picking.** What moved is **where it is** and **what
+colour it is**:
+
+    kShellFogDepthPm   520 -> 180    an outer layer instead of most of the ball
+    kShellCoreFloorPm  180 ->   0    the core keeps its own pigment
+    kShellOutReachPm    55 -> 140    the gas actually lives OUTSIDE the ink line
+    kShellTint     255,214,232 -> 240,90,180   the creature's mana, not near-white
+    kShellAlphaMaxPm   560 -> 560    UNCHANGED
+
+That is `09-ENGINE-GOTCHAS` §18 landing exactly where it predicted: *when careful
+tuning keeps failing, the knob is probably not the thing.* Four passes moved the
+one knob that was never the fault, and each got "careful, measured, and exactly
+as wrong as last time."
+
+### 01:05 — the pick, authored, and then the machine filled up
+
+**SHIPPED (every value a rendered rung, none interpolated):**
+
+    kShellFogDepthPm   520 -> 180        an outer layer, not most of the ball
+    kShellCoreFloorPm  180 ->   0        the core keeps its own pigment
+    kShellOutReachPm    55 -> 140        the gas lives OUTSIDE the ink line
+    kShellRiseGamma   1600 -> 1050       a rim, not a concentric ring
+    kShellTint  {255,214,232} -> {240,90,180}   the creature's mana
+    kShellAlphaMaxPm   560 -> 560        UNCHANGED
+
+Gamma picked off the g1600/g1050 pair at 4x: 1050 carries more of the gas past
+the ink line, which is D9 §14's "outside the lines a bit" — the half asked for
+since Direction 5 and never delivered.
+
+**Every comment on every changed constant was rewritten.** They still said
+*"PICKED OFF THE PLATE: 380 -> 520"* and *"340 -> 180, AND IT IS THE HALF THAT
+MATTERS"* — statements about a picture that no longer exists. Leaving them would
+have been `10-GATE` item 13 committed by the very edit that disproved them.
+
+### 01:07 — LOAD: STOOD DOWN, and identified before assuming
+
+Census before rebuilding found **18 concurrent `g++`/`cc1plus` plus two QA
+renderers**. Resolved the compilers by command line, as CLAUDE.md requires:
+
+    lane `zhaozhou`  x18   <-- the MAIN repo, C:\programmieren\zencrifice\zhaozhou
+
+**Not a manafold lane, not mine, and a directory I am forbidden to touch.**
+Nothing killed; no `taskkill /IM` anywhere in this run. Concurrent COMPILERS are
+the exact profile `09-ENGINE-GOTCHAS` §22 says to gate on — *"one render
+alongside a fit is fine; fifteen ffmpeg alongside a fit is a different
+machine"* — so my `--clean` build waits on a bounded waiter rather than stacking
+19 compilers on a shared box. This is the night the owner lost eight hours,
+avoided by ten seconds of census.
+
+### 01:20 — deliverable plates cut, provenance beside each
+
+`Upheaval/creature/Manafold/pass15-fx2-plates/`:
+
+* `A01-ablation-inspect-f0300-3x.png` — the leg the review said was unrun
+* `A02-profile-ladder-inspect-f0300-3x.png` + `-PROVENANCE.txt` — 6 rungs, day
+* `A03-tint-ladder-channel-f0180-4x.png` + `-PROVENANCE.txt` — 8 rungs, night
+
+Both ladders came from the **same binary** (`a5f028ff…`), so "both backdrops from
+one binary" is satisfied by construction rather than by assertion. The only
+cross-binary tile in the set is the P14 published control, and it is **labelled
+`xbin` in the plate itself** — item 26 is about not letting a two-binary pair
+masquerade as a ladder, not about never showing one.
+
+### 01:28 — THE RE-AIMED GATE FAILED MY OWN CHANGE, on a leg written before it
+
+Ran `mshell` against the authored constants expecting green. **Check 6 went red:**
+
+    [FAIL] 6 the annulus SCALES WITH THE BODY
+           fog reaches 10 px into a radius-10 body and 10 px into a radius-34 one
+
+`kShellFogDepthMinPx = 5` is a **derived** constant — `10-GATE` item 24 — and its
+derivation lived only in a comment, so nothing recomputed it when
+`kShellFogDepthPm` went 520 → 180:
+
+| body | at 520 pm | at 180 pm, floor 5 | at 180 pm, floor 2 |
+|---|---|---|---|
+| R=10 | ann 5 (floor never binds) | **ann 5 — fog reaches 10 px into a 10 px body** | ann 2, reaches 4 |
+| R=34 | ann 17 | ann 6, reaches 12 | ann 6, reaches 12 |
+| R=55 | ann 28 | ann 9, reaches 18 | ann 9, reaches 18 |
+
+**So on small and distant subjects the shell stopped scaling and became a FIXED
+PIXEL BAND** — exactly the pass-12 mechanism the pass-15 rewrite exists to
+replace — and on a radius-10 body it **swallowed the animal whole**, which is the
+bleach again, surviving only on the clips where he is far away. `flight`,
+`hasty` and every travelling clip live in that size range, and **not one plate in
+this pass looks at it.**
+
+**This is the single best thing that happened tonight.** The re-aim is not
+theatre: it failed *my* change, on a leg someone else wrote, in the one regime my
+own by-eye ladders are structurally blind to. It is also the exact complement of
+the art law — looking catches wrongness, and a gate catches the case you did not
+think to look at.
+
+Floor → 2. Inert at shipping body sizes (R=34 and R=55 unchanged above), and
+**that inertness will be proven by byte-identity rather than asserted.**

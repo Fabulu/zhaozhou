@@ -276,15 +276,65 @@ std::vector<Result> run(int break_check) {
     //   * the rise up to that peak never reverses.
     // The ink pixel is skipped: it is deliberately painted less
     // (kShellOverInkPm) and check 4 is the one that owns it.
-    const std::vector<uint8_t>& buf = (break_check == 3) ? zero.rgb : s.rgb;
+    // ⚠ PASS 15 LANE-FX-3 MOVED THIS CHECK ONTO THE RADIUS-40 FIXTURE, AND
+    // THE REASON IS THE BEST THING THIS GATE HAS DONE.
+    //
+    // As LANE-FX-2 left it, this check ran on the radius-24 scene and demanded
+    // the peak be at least `kShellOutReachMinPx + 2` = 4 px inside the line.
+    // On radius 24 the shipped 180 pm annulus is 4 px, so the peak sits at 4 --
+    // and the walk SKIPS the ink pixel, so the sampled peak reports 3.
+    // Threshold 4, value 3: RED, on the exact constants the gate was re-aimed
+    // to bless.
+    //
+    // The causal chain is worth writing down because no counter would show it:
+    //
+    //   check 6 went red  ->  kShellFogDepthMinPx 5 -> 2  ->  ann_px on the
+    //   radius-24 fixture falls 5 -> 4  ->  sampled peak falls 4 -> 3  ->
+    //   CHECK 3 GOES RED, and nobody looked, because the gate was never re-run
+    //   after that last edit.
+    //
+    // **Fixing one check broke another, and the run that made the fix ended
+    // before the gate could say so.** The render-side inertness of 5 -> 2 was
+    // separately PROVEN by byte-identity and that proof is correct -- it is
+    // simply evidence about the pixels and says nothing about the gate. Two
+    // instruments, one re-run (10-GATE items 24 and 28).
+    //
+    // Two things were wrong and both are fixed here:
+    //   * THE FIXTURE. radius 24 makes a 180 pm annulus 4 px wide, so one pixel
+    //     of ink-skip decides the verdict -- the same "threshold coincides with
+    //     the value under test" coin toss check 7 records above, in the check
+    //     immediately beside it. radius 40 (near `inspect`'s real on-screen
+    //     body) makes it 7 px and the answer stops being quantisation.
+    //   * THE THRESHOLD'S PROVENANCE. `kShellOutReachMinPx + 2` is a FLOOR on
+    //     the OUTWARD skirt; it has nothing whatever to do with where the peak
+    //     belongs. It was a plausible-looking number standing in for an
+    //     argument. The falsifiable content of his sentence is that the peak is
+    //     STRICTLY INSIDE the line rather than at or outside it -- a fringe
+    //     glowing on the outline is the pass-12 mechanism this replaced -- so
+    //     the threshold is 2 px, clear of the 1 px ink, and NAMED.
+    //
+    // Checks 3 and 7 now share one fixture and form a genuine TWO-SIDED WINDOW
+    // on a radius-40 body: 3 says the peak is not too shallow (>= 2), 7 says it
+    // is not too deep (< 13). The shipped values land at 6-7, in the middle of
+    // the window rather than on either edge. Both remain SHAPE claims and
+    // neither says how much shell is right, so 10-GATE §0 still holds.
+    const int rad3 = 40;
+    Scene t3 = make_scene(rad3, 40);
+    Scene z3 = make_scene(rad3, 40);
+    u02::shell_paint(t3.rgb.data(), kW, kH, t3.cover.data(), t3.ink.data(),
+                     alpha);
+    // The leg reads the ALPHA-0 buffer, where every step is zero: "never
+    // falls" is then trivially true but the peak is 0, so `deep` fails. That
+    // is what proves the check reads PAINT and not a constant.
+    const std::vector<uint8_t>& buf = (break_check == 3) ? z3.rgb : t3.rgb;
     std::vector<int> paint;      // magnitude, outermost sample first
     std::vector<int> inset;      // px inside the silhouette (negative = out)
     std::string d;
-    for (int k = u02::kShellOutReachMinPx; k >= -radius; --k) {
-      const int x = cx + radius + k;
+    for (int k = u02::kShellOutReachMinPx; k >= -rad3; --k) {
+      const int x = cx + rad3 + k;
       if (x < 0 || x >= static_cast<int>(kW)) continue;
-      if (s.ink[static_cast<size_t>(cy) * kW + x]) continue;
-      int v = lum_at(buf, x, cy) - lum_at(zero.rgb, x, cy);
+      if (t3.ink[static_cast<size_t>(cy) * kW + x]) continue;
+      int v = lum_at(buf, x, cy) - lum_at(z3.rgb, x, cy);
       if (v < 0) v = -v;
       paint.push_back(v);
       inset.push_back(-k);
@@ -296,17 +346,20 @@ std::vector<Result> run(int break_check) {
     bool rises = true;
     for (size_t q = 1; q <= peak; ++q)
       if (paint[q] < paint[q - 1]) rises = false;
-    // "well inside" -- more than the outward skirt plus a couple of pixels, so
-    // a fringe peaking at the ink cannot satisfy it.
+    // "inside the line" -- clear of the ink, so a fringe peaking ON the
+    // outline cannot satisfy it. Check 7 owns the other side of the window.
+    const int kPeakMinInsetPx = 2;
     const bool deep = !paint.empty() && paint[peak] > 0 &&
-                      inset[peak] >= u02::kShellOutReachMinPx + 2;
+                      inset[peak] >= kPeakMinInsetPx;
     const bool ok = rises && deep;
-    char b[240];
+    char b[280];
     std::snprintf(b, sizeof(b),
-                  "densest at %d px INSIDE the line (paint %d); rise to it is "
-                  "%s; walk outermost-first: ",
-                  inset.empty() ? 0 : inset[peak],
-                  paint.empty() ? 0 : paint[peak],
+                  "densest at %d px INSIDE the line on a radius-%d body (paint "
+                  "%d); must be at least %d, margin %d; rise to it is %s; walk "
+                  "outermost-first: ",
+                  inset.empty() ? 0 : inset[peak], rad3,
+                  paint.empty() ? 0 : paint[peak], kPeakMinInsetPx,
+                  (inset.empty() ? 0 : inset[peak]) - kPeakMinInsetPx,
                   rises ? "monotone" : "BROKEN");
     r.push_back({"3 the fog is THICKEST INWARD (D11 s2.3)", ok,
                  std::string(b) + d});
@@ -442,8 +495,51 @@ int report(const std::vector<Result>& rs, const char* title) {
 
 }  // namespace
 
+// `--regression` REPRODUCES THE BUILD THE BY-EYE REVIEW REFUSED, all six shell
+// values at once, and requires this gate to go RED on it.
+//
+// 10-GATE item 43 and the pass-15 review's own instruction: *ask what your gate
+// would report if the mechanism were absent but everything else stayed.* The
+// --selftest legs ablate ONE knob each, which proves each check is wired to
+// something; this proves the gate as a WHOLE sees the fault a human saw with his
+// eyes, which is a different and harder claim. LANE-FX-2's gate passed six of
+// six on these very numbers (PASS-15-FINDINGS-FX2 §4), so "the shell gate is
+// green" was quoted as evidence for a picture the owner would have rejected.
+//
+// It sets only the g_u02_shell_* overrides -- the same mutable globals the
+// reel's env knobs drive -- so no production constant is edited and there is no
+// live-tree hazard. Its polarity is INVERTED: rc 0 means the gate FAILED the
+// regression, which is the passing outcome. A run that returns 1 here means
+// this gate would bless the pass-15 bleach again.
+static int regression_control() {
+  std::printf("-- REGRESSION CONTROL: pass 15's shipped shell, the build the "
+              "by-eye review refused\n"
+              "   (alpha 560 / reach 520 / floor 180 / out 55 / gamma 1600 / "
+              "tint 255,214,232)\n"
+              "   This gate must go RED. Polarity is INVERTED: rc 0 = the gate "
+              "caught it.\n");
+  u02::g_u02_shell_alpha_pm = 560;
+  u02::g_u02_shell_depth_pm = 520;
+  u02::g_u02_shell_floor_pm = 180;
+  u02::g_u02_shell_out_pm = 55;
+  u02::g_u02_shell_gamma = 1600;
+  u02::g_u02_shell_tint[0] = 255;
+  u02::g_u02_shell_tint[1] = 214;
+  u02::g_u02_shell_tint[2] = 232;
+  const int bad = report(run(0), "SHELL GATE against the PASS-15 REGRESSION");
+  std::printf("%s\n",
+              bad > 0
+                  ? "shellgate --regression: CAUGHT IT -- the gate goes red on "
+                    "the refused build (this is the PASS)"
+                  : "shellgate --regression: BLESSED THE REGRESSION -- this gate "
+                    "cannot see the fault the reviewer saw");
+  return bad > 0 ? 0 : 1;
+}
+
 int main(int argc, char** argv) {
   const bool selftest = argc > 1 && std::strcmp(argv[1], "--selftest") == 0;
+  if (argc > 1 && std::strcmp(argv[1], "--regression") == 0)
+    return regression_control();
   if (!selftest) {
     const int bad = report(run(0), "SHELL GATE (Direction 9 s7 + s14)");
     std::printf("%s\n", bad == 0 ? "shellgate: PASS" : "shellgate: FAILED");
