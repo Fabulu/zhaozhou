@@ -7933,6 +7933,15 @@ int main(int argc, char** argv) {
       u02::g_u02_shell_gamma = std::atoi(e);
       any = true;
     }
+    // U02_SHELL_INK -- how much LESS paint the ink line takes, pm. Added by
+    // LANE-FX-2 because it was the one shell axis with no override, and the
+    // pass-15 profile moves the fog's peak onto the rim, which is where the
+    // ink is. A knob that cannot join a one-binary ladder does not get swept.
+    if (const char* e = std::getenv("U02_SHELL_INK")) {
+      const int v = std::atoi(e);
+      u02::g_u02_shell_over_ink_pm = v < 0 ? 0 : (v > 1000 ? 1000 : v);
+      any = true;
+    }
     // The GAS COLOUR. The one axis of the shell that has never been swept, and
     // the one that decides whether the fog fogs or BLEACHES: a pale rose at
     // 10% over the creature's deep magenta shadow side lifts it a long way,
@@ -7952,11 +7961,19 @@ int main(int argc, char** argv) {
       }
     }
     if (any)
+      // The TINT is printed too. It was absent from this banner while being
+      // the axis the pass-15 findings called "fog versus bleach", so a ladder
+      // log could not say what colour it had rendered -- and provenance that
+      // omits the axis under test is the brief-as-instrument fault
+      // (10-GATE item 38) in a log file.
       std::fprintf(stderr,
-                   "P15 shell rung: alpha=%d reach=%d floor=%d out=%d gamma=%d\n",
+                   "P15 shell rung: alpha=%d reach=%d floor=%d out=%d gamma=%d "
+                   "ink=%d tint=%d,%d,%d\n",
                    u02::g_u02_shell_alpha_pm, u02::g_u02_shell_depth_pm,
                    u02::g_u02_shell_floor_pm, u02::g_u02_shell_out_pm,
-                   u02::g_u02_shell_gamma);
+                   u02::g_u02_shell_gamma, u02::g_u02_shell_over_ink_pm,
+                   u02::g_u02_shell_tint[0], u02::g_u02_shell_tint[1],
+                   u02::g_u02_shell_tint[2]);
   }
   // PASS 10 STAGE A: U02_MIST_NO_EXCLUDE=1 puts the mist back OVER the
   // creature -- pass-9 behaviour -- so the A/B and the colour gate's

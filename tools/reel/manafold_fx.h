@@ -768,43 +768,116 @@ constexpr int kCoreOfHaloPm = 640;
 // R being the deepest interior point of the cover mask this frame, so the fog
 // breathes with the bounce instead of being a fixed pixel count over a body
 // that changes size.
-// PICKED OFF THE PLATE: 380 -> 520 (pass15-fx-plates/B-fog-ladder-hit-f0028-3x
-// .png and -eyezoom-6x.png -- six rungs, ONE binary, on the frame where the eye
-// sinks into the body). See kShellCoreFloorPm: these two moved TOGETHER and
-// that is the finding.
-constexpr int kShellFogDepthPm = 520;
+// PASS 15 LANE-FX-2: 520 -> 180, AND THIS IS THE KNOB THAT DESTROYED THE FORM.
+// At 520 the annulus ran 52% of the radius, so the fog's PEAK sat 0.52 R in --
+// the middle of the ball -- and the creature became a chalky marble
+// (PASS-15-REVIEW.md s1, plate J01: "the fog is on the wrong side of the ink
+// line"). 180 makes it what the sentence says, an OUTER layer.
+//
+// Picked off pass15-fx2-plates/A02 (inspect f0300, six rungs, ONE binary
+// a5f028ff, with an ABLATED rung and a deliberately-too-far rung). At 200 the
+// core was already indistinguishable from the ablated tile; 180 with the
+// re-authored gamma is where the gas still reads plainly at native 384x240.
+//
+// ⚠ IT IS ALSO THE DECAY LENGTH, and that is one knob doing two jobs
+// (09-ENGINE-GOTCHAS s14). The profile rises to its peak at `out+ann` and then
+// falls to the floor over ONE MORE `ann`, so widening the annulus also softens
+// the inner edge. That coupling is why the shipped 520 produced a TIDEMARK --
+// a hard wandering boundary across the lower body (J02) -- rather than a
+// gradient: the decay was landing across the middle of the animal, where the
+// terminator's own cel bands are, and the two fought. Left coupled because at
+// 180 the decay lands in the rim where nothing competes with it; split it
+// before ever widening this again.
+constexpr int kShellFogDepthPm = 180;
 // A floor, so a small or distant subject still gets a band rather than a
 // rounding error. NOT a substitute for the fraction: the fraction is the thing.
-constexpr int32_t kShellFogDepthMinPx = 5;
+//
+// ⚠ PASS 15 LANE-FX-2: 5 -> 2, AND THE GATE CAUGHT THIS, NOT A HUMAN.
+// This is 10-GATE item 24 -- a DERIVED constant invalidated when its input
+// moves -- and the derivation lived only in the comment above it, so nothing
+// recomputed it when kShellFogDepthPm went 520 -> 180.
+//
+// At 520 pm a radius-10 body gave ann = 5, so the floor was exactly the natural
+// value and never bound. At 180 pm it binds for EVERY body under about R=28:
+//
+//     R=10   ann = max(1, 5) = 5   fog reaches 10 px into a 10 px body
+//     R=34   ann = 6               fog reaches 12
+//
+// So on small and distant subjects the shell stopped scaling and became a
+// FIXED PIXEL BAND -- precisely the pass-12 mechanism the pass-15 rewrite
+// exists to replace -- and on a radius-10 body it swallowed the animal whole,
+// which is the bleach again, just only on the clips where he is far away.
+//
+// Check 6 ("the annulus SCALES WITH THE BODY") went red on it and that is the
+// re-aimed gate earning its keep: it failed MY change, on a leg written before
+// I made it, in the one size range no plate in this pass looks at.
+// 2 restores the scaling (R=10 -> 4, R=34 -> 12) and is INERT at shipping body
+// sizes -- inspect and channel are R=34..55, where the fraction was already
+// above the floor -- which is verified by byte-identity, not asserted.
+constexpr int32_t kShellFogDepthMinPx = 2;
 // How far past the cover mask the gas reaches, per-mille of R (D9 s14's "a
 // bit"), with its own floor. This is where the profile's ZERO now lives.
-constexpr int kShellOutReachPm = 55;
+//
+// PASS 15 LANE-FX-2: 55 -> 140. At 55 the gas reached 5.5% of R past the
+// silhouette -- two to eight pixels -- which was THE ENTIRE EXTERIOR, against
+// 520 pm of it inside. The shell he has asked for since Direction 5 is a shell
+// AROUND the form; 55/520 was a veil over the interior with a rounding error
+// outside it. This is the half D9 s14 has been asking for by name ("outside
+// the lines of the creature a bit") and it is now the larger of the two.
+constexpr int kShellOutReachPm = 140;
 constexpr int32_t kShellOutReachMinPx = 2;
 // What the fog does DEEPER than the annulus: it falls from the peak to this
-// fraction of it, over one more annulus depth, and then holds. That plateau is
-// the front layer you look through over the clear core -- and it is the knob
-// that decides whether the body wears gas or the body is WASHED OUT. D8 s4
-// ("we thickened too much... I want to revert that") is what lives at the top
-// of this knob's range.
-// PICKED OFF THE PLATE: 340 -> 180, AND IT IS THE HALF THAT MATTERS.
+// fraction of it, over one more annulus depth, and then holds.
 //
-// My own eye called the first build "washed" -- the body read a dusty mauve
-// where the shipped one is hot pink -- and the obvious response was LESS FOG.
-// The ladder says the obvious response was wrong. Depth and floor are two
-// different things that the old band had conflated into one, and pulling them
-// apart gives what the owner actually described:
+// PASS 15 LANE-FX-2: 180 -> 0. THE CORE IS NOT FOG.
 //
-//     annulus DEEPER (380 -> 520)   more gas exactly where a thing clips in
-//     floor  LOWER  (340 -> 180)    less veil over the body's clean middle
+// This is the knob that painted the whole animal. At 180 the plateau was held
+// across the ENTIRE interior, so every pixel of the creature took
+// 560 * 180/1000 = ~10% of a near-white tint -- and 10% is not a whisper on a
+// terminator. Measured on the pass-14 control's own pigment, that plateau ALONE
+// takes the dark side from saturation 70 to 58 before the annulus is reached.
+// The gradient that made a flat-shaded low-poly ball read as ROUND -- the
+// quality the owner named as praised -- was erased by the floor, not by the
+// peak.
 //
-// The rung that raised both (THICK 520/620/450) is the one that desaturates the
-// pigment; the rung that raised depth and DROPPED the floor is the one where
-// the lens is most absorbed AND the pink survives. "Too much fog" was never the
-// diagnosis -- "fog in the wrong place" was.
-constexpr int kShellCoreFloorPm = 180;
+// The previous pass had a defensible physical argument for a plateau: look at
+// the middle of a foggy ball and you do see the front layer over the core. It
+// is right about the optics and wrong about the PICTURE. At 384x240 on
+// cel-shaded pigment, the front layer's contribution is worth less than the
+// terminator it costs -- and the owner's sentence never asked for it: "the
+// OUTER BODY PART is made of a thick fog" excludes the core in as many words.
+// CLAUDE.md's dorsal-pink lesson exactly: matching the physics is not matching
+// the READ, and the read is the thing.
+//
+// 0 is also what makes the profile CONTINUOUS. The decay runs to zero and stays
+// there, so there is no step -- which is what the shipped tidemark was: a hard
+// wandering boundary where the decay met a non-zero plateau across the middle
+// of the body (J02).
+//
+// ⚠ AND IT IS WHAT GATE CHECK 2 NOW ASSERTS. manafold_shellgate's check 2 used
+// to demand the fog REACH the centre and passed on the shipped build; it now
+// demands the centre be untouched. Raising this knob off zero turns that gate
+// red, deliberately. If a future pass wants a whisper over the core, it must
+// change the gate and say why -- which is the point.
+constexpr int kShellCoreFloorPm = 0;
 // The shape of the inward rise. 1000 linear, 2000 fully quadratic (holds the
 // gas close to the annulus's inner edge and lets the outer skirt stay thin).
-constexpr int kShellRiseGamma = 1600;
+//
+// PASS 15 LANE-FX-2: 1600 -> 1050, AND NOTHING HAD EVER MOVED IT.
+// This is the RIM-versus-RING knob, and it only becomes visible once the
+// annulus is narrow. The distance transform's bands run parallel to the
+// silhouette, so a narrow annulus with a quadratic rise puts almost all its
+// density in one band and reads as a CONCENTRIC RING drawn inside the outline
+// -- a hard arc, plainly visible at 3x on the 300-rung of A02. Near-linear
+// spreads the same gas from the skirt inward and reads as a rim of fog.
+//
+// So the axis has a failure mode at BOTH ends, which is the other reason four
+// passes of "less fog" got nowhere:
+//     annulus WIDE            -> a veil over the whole body
+//     annulus NARROW + gamma HIGH -> a hard ring
+// 1050 also carries more of the gas OUTSIDE the ink line, which is the half of
+// D9 s14 that has been asked for since Direction 5 and never delivered.
+constexpr int kShellRiseGamma = 1050;
 // LEGACY, KEPT AS A DEAD REFERENCE AND NOTHING ELSE. These were the pass-12
 // band's reaches; they are what the paragraph at the top of this block is
 // about. Nothing reads them. They stay named so a future pass grepping for
@@ -821,30 +894,58 @@ constexpr int32_t kShellInReachPx_legacy_p12 = 6;
 // PASS 15: THAT LADDER WAS RUN ON THE 3/6 PX BAND AND ITS PICK DOES NOT
 // TRANSFER. 440 was "the most you can push a fringe before it glows"; this
 // knob is now the PEAK OF A VOLUME and it is re-laddered from scratch.
+// ⚠ PASS 15 LANE-FX-2 LEFT THIS EXACTLY WHERE IT FOUND IT, AND THAT IS THE
+// FINDING. Every argument this shell has ever had was an argument about THIS
+// KNOB -- the amount. D8 s4 ("we thickened too much... I want to revert that"),
+// four passes of alpha ladders, and the pass-15 by-eye review's own remedy
+// ("take kShellAlphaMaxPm down hard"). The fog that was bleaching the animal
+// and the fog that now reads as gas are AT THE SAME STRENGTH. What moved was
+// where it is (kShellFogDepthPm, kShellCoreFloorPm, kShellOutReachPm), what
+// shape it is (kShellRiseGamma) and what colour it is (kShellTint).
+//
+// 09-ENGINE-GOTCHAS s18 is the entry for this and it names the tell: work that
+// is "careful, measured, and exactly as wrong as last time". Turning the amount
+// down dims the wash and the gas together, so it can trade one complaint for
+// the other and never resolve either -- which is precisely the recorded
+// history, "we can't see it" alternating with "it's too much" for four passes.
+// If a fifth pass is ever tempted to move this number, that is the signal to go
+// and find the mechanism instead.
 constexpr int kShellAlphaMaxPm = 560;     // the peak, at the annulus inner edge
-// v1's shell read as a faint whitish-pink haze over the pink body -- looked at
-// in archive-2026-09-04-u02-hover.webm f60 and -channel.webm f180, as s7
-// ordered ("go look it up" is an instruction to look). This is that colour at
-// the presence s7 asks for. The VALUE is chosen by eye in scene and never
-// sampled off the archive: a pale rose that reads pink on one ground reads grey
-// on another (CLAUDE.md, the dorsal-pink lesson).
+// THE GAS COLOUR: fog versus bleach. Pass 15 declared this "the axis that
+// decides fog vs bleach" and that it "has never been swept in any pass". Both
+// were true, and LANE-FX-2 found the reason it had never been swept: the
+// ladder driver itself could not express it. rungsweep.py split a rung's
+// settings on "," and this value IS "r,g,b", so a tint rung was shredded into
+// a variable named "70" and rendered at the DEFAULT COLOUR while calling
+// itself a tint rung. See rungsweep.py --sep. A question the instrument
+// cannot phrase is a question nobody asks.
 //
-// ⚠ AND THIS IS THE AXIS THAT DECIDES FOG-VERSUS-BLEACH, AND IT HAS NEVER BEEN
-// SWEPT. Look at pass15-fx-plates/A-hover-f72-P14-vs-SHIPPED-3x.png and then at
-// `hover` f240, the creature's DARK side: a pale rose at 10% over a deep
-// magenta lifts it a long way, because the tint's distance from the pigment is
-// what the blend actually multiplies. On the bright frames the shift is subtle;
-// on the shadow side it is the whole read. Every previous argument about "too
-// much fog" has been an argument about kShellAlphaMaxPm -- the AMOUNT -- and
-// the amount is only half of it. A gas the colour of the animal fogs; a gas
-// far from the animal's colour bleaches, at any alpha.
+// PASS 15 LANE-FX-2: {255,214,232} -> {240,90,180}, picked by eye off
+// pass15-fx2-plates/A03 -- one profile, one alpha, ONLY the colour differing,
+// at 4x on channel f0180 and confirmed at native on both backdrops.
 //
-// It stays rose because that is what the v1 shell was and what D9 §7 said to go
-// and look up. But it is a knob with an env override now (U02_SHELL_TINT=r,g,b)
-// so the next person can ask the question in one render instead of concluding
-// "less fog" for a fifth time. 09-ENGINE-GOTCHAS §18: when careful tuning keeps
-// failing, the knob is probably not the thing.
-constexpr uint8_t kShellTint[3] = {255, 214, 232};
+// WHY A NEAR-WHITE BLEACHES AT ANY ALPHA, and it is arithmetic:
+// the composite is a straight lerp, px = px*(1-a) + tint*a, so what it does to
+// a pigment is decided by the tint's DISTANCE FROM THAT PIGMENT PER CHANNEL.
+// The body's terminator is about (88,26,72). G is the lever:
+//     -> {255,214,232}   G 26 -> 44   (+69%)   saturation 70 -> 58
+//     -> {240, 90,180}   G 26 -> 30   (+15%)   saturation 70 -> 71
+// Both LIGHTEN the pixel, so the gas is equally present in both; only one of
+// them also destroys the chroma. A gas the colour of the animal fogs; a gas
+// far from the animal's colour bleaches, and no alpha fixes that.
+//
+// ⚠ THE VALUE IS BRACKETED BY TWO FAILURES, NOT BY A PREFERENCE. The ladder
+// carries a paler rung ({255,150,205}, which drifts back toward wash) and a
+// deeper one ({220,55,160}, where the gas starts to VANISH into the pigment).
+// Invisibility is not the safe side: "I still don't see it" is what he has said
+// about this shell for four passes, so a tint that disappears is the same
+// defeat in a better colour.
+//
+// It is NOT sampled off the body's pigment and must never be. It is chosen by
+// looking at it in scene, at 240p, on the salmon day and the violet night --
+// CLAUDE.md's dorsal-pink lesson, which is what a pigment sampled off a
+// reference and shipped unlooked-at costs.
+constexpr uint8_t kShellTint[3] = {240, 90, 180};
 inline uint8_t g_u02_shell_tint[3] = {kShellTint[0], kShellTint[1],
                                       kShellTint[2]};
 constexpr int kShellOverInkPm = 260;      // the ink must survive being crossed
@@ -858,6 +959,14 @@ inline int g_u02_shell_depth_pm = kShellFogDepthPm;
 inline int g_u02_shell_out_pm = kShellOutReachPm;
 inline int g_u02_shell_floor_pm = kShellCoreFloorPm;
 inline int g_u02_shell_gamma = kShellRiseGamma;
+// PASS 15 LANE-FX-2: kShellOverInkPm was the ONE shell axis with no override,
+// so the only way to ask a question about it was a rebuild -- and the pass-15
+// profile moves the peak from the middle of the ball onto the RIM, i.e. onto
+// the ink's own doorstep, which is exactly when this ratio starts to matter.
+// A knob that cannot join a one-binary ladder is a knob nobody sweeps, and the
+// tint spent four passes being that knob (see its comment above). Same shape,
+// same fix.
+inline int g_u02_shell_over_ink_pm = kShellOverInkPm;
 
 /** The falloff profile. `t_pm` is 1000 at the profile's peak and 0 at the gas's
  *  outer edge. Linear at gamma 1000, quadratic at 2000, blended between so the
@@ -1048,7 +1157,7 @@ inline void shell_paint(uint8_t* rgb, uint32_t w, uint32_t h,
     const int32_t dist = cover[i] ? out_px + d : -d;
     if (dist <= 0) continue;
     int a = alpha_at(dist);
-    if (ink != nullptr && ink[i]) a = a * kShellOverInkPm / 1000;
+    if (ink != nullptr && ink[i]) a = a * g_u02_shell_over_ink_pm / 1000;
     if (a <= 0) continue;
     if (a > 1000) a = 1000;
     uint8_t* px = rgb + i * 3;
