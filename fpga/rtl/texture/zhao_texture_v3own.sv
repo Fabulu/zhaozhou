@@ -134,6 +134,51 @@
 // retirement lifetime under test. Adding them would inflate the M10K count of
 // an experiment whose whole purpose is attribution. They are absent ON PURPOSE
 // and their absence is reported, not quietly enjoyed.
+//
+// ---------------------------------------------------------------------------
+// READ_LATE -- THE OWNER/COMBINE RESIDENT-READ SEAM (roadmap 4.2 / Commit4)
+// ---------------------------------------------------------------------------
+// Added 2026-09-10, reports/TEXTURE-READLATE-COMBINE-20260910.md.
+//
+// With READ_LATE=0 (the default, and what every leaf suite elaborates) this
+// block behaves exactly as before: a popped ticket walks k0->k1->k2, the four
+// result planes are read at the registered address, captured into
+// `sres_cap_q`/`ares_cap_q`, and pushed WITH the handle into four 40-bit
+// payload queues that travel out on `cmb_s0_o..cmb_aux_o`. The @g2-prod fit
+// shows what that copy chain costs: `cq_s0_q..cq_ax_q` inferred as FOUR
+// altsyncrams of TWO M10Ks EACH (8 of the island's 49 blocks) plus the 160
+// capture flops -- for data that already sits, immutable, in `g_sres`/`u_ares`.
+//
+// With READ_LATE=1 (the island) the ready queues carry ONLY the owner handle
+// (`cq_own_q`, 4 x 14 bits), the pop lands in one registered stage (`k0`) and
+// is queued, and the sample planes are read BY THE COMBINER'S PHASE ENGINE
+// through `src_rd_slot_i` -> `src_s0_o..src_aux_o`. Each plane keeps exactly
+// one reader; the reader RELOCATES from this block's prefetch pipeline into
+// the consumer (architecture 2.4: "port pressure does NOT grow"). The
+// aux-as-third-sample choice moves behind the boundary with it.
+//
+// WHAT IS ASSERTED AT THE NEW BOUNDARY (the roadmap's gate, 4.2):
+//   * publication-before-read  -- a source read names an owner that is live,
+//     whose committed mask covers its required mask, and that COMBINE has
+//     actually accepted (`a_src_read_published`);
+//   * release-after-last-reader -- no read of an owner whose final has been
+//     claimed, and no read on the owner's release edge
+//     (`a_src_read_before_final`, `a_release_not_under_reader`).
+// The synthesizable tripwire is `ev_src_unpub_o`: a read of an owner that is
+// not live, not combine-accepted, or already final-claimed. It reads three
+// scoreboard bits at the read address (a 64:1 select each) rather than the
+// full committed/required cover, which is left to the simulation assertion:
+// ticket creation already requires the cover, and combine acceptance requires
+// the ticket, so `cbi` implies it structurally. BLIND SPOT, recorded: a read of
+// the WRONG slot that happens to be a published owner is invisible to this
+// counter -- the identity is right by every bit it inspects. Only the
+// differential (tests/texture/material_combine_readlate_diff.cpp) sees that
+// class, and the committed mutant proves it does.
+//
+// WHAT DOES NOT CHANGE: the ticket claim (`rdy_q`), the reservation (`crs_q`),
+// the acceptance (`cbi_q`), the three single-writer ready queues, the arbiter,
+// the CMBQD reservation and every scoreboard bit. The ready-claimed table is
+// RETAINED on purpose -- see the report's section on the binding refusal.
 // ---------------------------------------------------------------------------
 `default_nettype none
 
@@ -153,6 +198,10 @@ module zhao_texture_v3own #(
     parameter int unsigned OUTQD  = 4,
     // COMBINE input reservation domain (section 9.4).
     parameter int unsigned CMBQD  = 4,
+    // 0: legacy copy chain (four payload lanes travel with the handle).
+    // 1: read-late seam (handle only; the combiner reads the planes). See the
+    //    READ_LATE section of the header.
+    parameter int unsigned READ_LATE = 0,
     // Derived; ports cannot name a localparam. Do not override.
     parameter int unsigned OWNERW = SLOTW + GENW,
     parameter int unsigned SMPW   = SLOTW + 2 + GENW,
@@ -197,6 +246,17 @@ module zhao_texture_v3own #(
     output var logic [RESW-1:0]   cmb_s2_o,
     output var logic [RESW-1:0]   cmb_aux_o,
 
+    // ---- read-late plane port (READ_LATE=1; tied off otherwise) ------------
+    // The combiner's phase engine presents the owner SLOT it is reading for
+    // and a valid; the four plane outputs answer one edge later, straight from
+    // each bank's output register, with nothing in between.
+    input  var logic              src_rd_valid_i,
+    input  var logic [SLOTW-1:0]  src_rd_slot_i,
+    output var logic [RESW-1:0]   src_s0_o,
+    output var logic [RESW-1:0]   src_s1_o,
+    output var logic [RESW-1:0]   src_s2_o,
+    output var logic [RESW-1:0]   src_aux_o,
+
     // ---- COMBINE final return (section 18.4) --------------------------------
     input  var logic              fin_valid_i,
     output var logic              fin_ready_o,
@@ -222,6 +282,10 @@ module zhao_texture_v3own #(
     output var logic [31:0]       ev_err_final_o,
     output var logic [31:0]       ev_err_issue_o,
     output var logic [31:0]       ev_wrap_drains_o,
+    // READ_LATE tripwire: source reads of an owner that is not live, not
+    // combine-accepted, or already final-claimed. Constant zero when
+    // READ_LATE=0 (the port stays so the island's wiring is mode-independent).
+    output var logic [31:0]       ev_src_unpub_o,
     output var logic [CNTW-1:0]   ev_live_o,
     output var logic [CNTW-1:0]   ev_live_peak_o,
     output var logic              ev_quiet_o
@@ -897,9 +961,15 @@ module zhao_texture_v3own #(
     end
   end
 
-  logic              k0_v_q, k1_v_q, k2_v_q;
-  logic [OWNERW-1:0] k0_owner_q, k1_owner_q, k2_owner_q;
-  logic [SLOTW-1:0]  cmb_rd_addr_q;
+  // The pop lands in ONE registered stage (`k0`) in both modes, so the job
+  // queue's write enable is a flop output rather than the arbiter's predicate.
+  // Legacy adds k1/k2 (declared inside g_legacy) to cover the bank read and
+  // the capture.
+  logic              k0_v_q;
+  logic [OWNERW-1:0] k0_owner_q;
+  // Mode-resolved wires, driven by exactly one generate branch each.
+  logic              kpipe_busy_c;      // any pop still short of the job queue
+  logic [SLOTW-1:0]  plane_rd_addr_c;   // the ONE reader's address per plane
 
   // ==========================================================================
   // THE PERSISTENT BANKS
@@ -915,8 +985,10 @@ module zhao_texture_v3own #(
     genvar gs;
     for (gs = 0; gs < 3; gs++) begin : g_sres
       // SAMPLE_RESULT_0/1/2, 64 x 40. Single writer: TMU commit bank gs.
-      // Single reader: COMBINE admission. The write enable is one bit of a
-      // registered one-hot -- there is no bank decode in this cone at all.
+      // Single reader: COMBINE admission (READ_LATE=0) or the combiner's
+      // phase engine (READ_LATE=1) -- one reader either way. The write enable
+      // is one bit of a registered one-hot -- there is no bank decode in this
+      // cone at all.
       //
       // V3-WREN-REG: c3t_we_q
       // V3-BANK: SAMPLE_RESULT_0, SAMPLE_RESULT_1, SAMPLE_RESULT_2
@@ -925,7 +997,7 @@ module zhao_texture_v3own #(
           .wr_en_i  (c3t_we_q[gs]),
           .wr_addr_i(c3t_slot_q),
           .wr_data_i(c3t_data_q),
-          .rd_addr_i(cmb_rd_addr_q),
+          .rd_addr_i(plane_rd_addr_c),
           .rd_data_o(sres_rd_c[gs])
       );
     end
@@ -941,7 +1013,7 @@ module zhao_texture_v3own #(
       .wr_en_i  (c3a_we_q),
       .wr_addr_i(c3a_slot_q),
       .wr_data_i(c3a_data_q),
-      .rd_addr_i(cmb_rd_addr_q),
+      .rd_addr_i(plane_rd_addr_c),
       .rd_data_o(ares_rd_c)
   );
 
@@ -972,34 +1044,112 @@ module zhao_texture_v3own #(
       .rd_data_o(ctx_rd_c)
   );
 
-  // ---- RC capture (section 6.3): one fabric register, nothing before it ----
-  logic [RESW-1:0] sres_cap_q [3];
-  logic [RESW-1:0] ares_cap_q;
+  // ---- RC capture (section 6.3), retirement side: one fabric register ------
   logic [RESW-1:0] fres_cap_q;
   logic [CTXW-1:0] ctx_cap_q;
 
   // ==========================================================================
-  // COMBINE INPUT HOLDING QUEUE (registers, depth CMBQD)
+  // COMBINE JOB QUEUE (registers, depth CMBQD): THE OWNER HANDLE, ALWAYS
   // ==========================================================================
+  // In both modes the queue carries the 14-bit handle. Under READ_LATE=0 four
+  // 40-bit payload lanes travel beside it (g_legacy); under READ_LATE=1 the
+  // handle is the whole ticket -- roadmap 4.2: "Ready queues carry only the
+  // owner handle."
   localparam int unsigned CQPW = $clog2(CMBQD);
   logic [OWNERW-1:0]        cq_own_q [CMBQD];
-  logic [RESW-1:0]          cq_s0_q  [CMBQD];
-  logic [RESW-1:0]          cq_s1_q  [CMBQD];
-  logic [RESW-1:0]          cq_s2_q  [CMBQD];
-  logic [RESW-1:0]          cq_ax_q  [CMBQD];
   logic [CQPW:0]            cq_wp_q, cq_rp_q;
   logic [CQPW:0]            cq_occ_c;
-  logic                     cq_push_c;
-  assign cq_occ_c  = cq_wp_q - cq_rp_q;
-  assign cq_push_c = k2_v_q;
-
+  logic                     cq_push_c;          // mode-resolved (generate)
+  logic [OWNERW-1:0]        cq_push_owner_c;    // mode-resolved (generate)
+  assign cq_occ_c    = cq_wp_q - cq_rp_q;
   assign cmb_valid_o = (cq_occ_c != '0);
   assign cmb_owner_o = cq_own_q[cq_rp_q[CQPW-1:0]];
-  assign cmb_s0_o    = cq_s0_q [cq_rp_q[CQPW-1:0]];
-  assign cmb_s1_o    = cq_s1_q [cq_rp_q[CQPW-1:0]];
-  assign cmb_s2_o    = cq_s2_q [cq_rp_q[CQPW-1:0]];
-  assign cmb_aux_o   = cq_ax_q [cq_rp_q[CQPW-1:0]];
   assign cmb_fire_c  = cmb_valid_o && cmb_ready_i;
+
+  generate
+    if (READ_LATE == 0) begin : g_legacy
+      // ---- the k-pipeline: bank read at k1, capture at k2, push at k2 -------
+      logic              k1_v_q, k2_v_q;
+      logic [OWNERW-1:0] k1_owner_q, k2_owner_q;
+      logic [SLOTW-1:0]  cmb_rd_addr_q;
+      // RC capture (section 6.3): one fabric register, nothing before it.
+      logic [RESW-1:0]   sres_cap_q [3];
+      logic [RESW-1:0]   ares_cap_q;
+      // The four payload lanes that travel with the handle. In the @g2-prod
+      // fit these four arrays inferred as altsyncrams of TWO M10Ks each.
+      logic [RESW-1:0]   cq_s0_q [CMBQD];
+      logic [RESW-1:0]   cq_s1_q [CMBQD];
+      logic [RESW-1:0]   cq_s2_q [CMBQD];
+      logic [RESW-1:0]   cq_ax_q [CMBQD];
+
+      assign plane_rd_addr_c = cmb_rd_addr_q;
+      assign kpipe_busy_c    = k0_v_q || k1_v_q || k2_v_q;
+      assign cq_push_c       = k2_v_q;
+      assign cq_push_owner_c = k2_owner_q;
+
+      assign cmb_s0_o  = cq_s0_q[cq_rp_q[CQPW-1:0]];
+      assign cmb_s1_o  = cq_s1_q[cq_rp_q[CQPW-1:0]];
+      assign cmb_s2_o  = cq_s2_q[cq_rp_q[CQPW-1:0]];
+      assign cmb_aux_o = cq_ax_q[cq_rp_q[CQPW-1:0]];
+      // The read-late lanes do not exist in this mode.
+      assign src_s0_o  = '0;
+      assign src_s1_o  = '0;
+      assign src_s2_o  = '0;
+      assign src_aux_o = '0;
+
+      always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+          k1_v_q <= 1'b0;
+          k2_v_q <= 1'b0;
+        end else begin
+          k1_v_q <= k0_v_q;
+          k2_v_q <= k1_v_q;
+        end
+      end
+      always_ff @(posedge clk) begin
+        if (cmb_pop_c) cmb_rd_addr_q <= sel_data_c[OWNERW-1 -: SLOTW];
+        k1_owner_q <= k0_owner_q;
+        k2_owner_q <= k1_owner_q;
+        for (int unsigned s = 0; s < 3; s++) sres_cap_q[s] <= sres_rd_c[s];
+        ares_cap_q <= ares_rd_c;
+        if (cq_push_c) begin
+          cq_s0_q[cq_wp_q[CQPW-1:0]] <= sres_cap_q[0];
+          cq_s1_q[cq_wp_q[CQPW-1:0]] <= sres_cap_q[1];
+          cq_s2_q[cq_wp_q[CQPW-1:0]] <= sres_cap_q[2];
+          cq_ax_q[cq_wp_q[CQPW-1:0]] <= ares_cap_q;
+        end
+      end
+    end else begin : g_readlate
+      // ---- the seam: the consumer addresses the planes ----------------------
+      // `src_rd_slot_i` is a register output in the combiner (its R-stage
+      // slot), so the bank sees a flop, exactly as it saw `cmb_rd_addr_q`.
+      assign plane_rd_addr_c = src_rd_slot_i;
+      assign kpipe_busy_c    = k0_v_q;
+      assign cq_push_c       = k0_v_q;
+      assign cq_push_owner_c = k0_owner_q;
+
+      // Each plane's output register IS the port. Nothing before, nothing
+      // between (QUARTUS_GOTCHAS 14 / v3bank's own header).
+      assign src_s0_o  = sres_rd_c[0];
+      assign src_s1_o  = sres_rd_c[1];
+      assign src_s2_o  = sres_rd_c[2];
+      assign src_aux_o = ares_rd_c;
+      // The legacy payload lanes do not exist in this mode.
+      assign cmb_s0_o  = '0;
+      assign cmb_s1_o  = '0;
+      assign cmb_s2_o  = '0;
+      assign cmb_aux_o = '0;
+    end
+  endgenerate
+
+  // The READ_LATE tripwire's predicate. Written at module scope so that under
+  // READ_LATE=0 it folds to a constant (and the two read-late inputs count as
+  // read, which they are). Three bits, three 64:1 selects -- see the header
+  // for why the committed/required cover is left to the assertion.
+  logic src_unpub_c;
+  assign src_unpub_c = (READ_LATE != 0) && src_rd_valid_i
+                    && !(live_q[src_rd_slot_i] && cbi_q[src_rd_slot_i]
+                         && !fcl_q[src_rd_slot_i]);
 
   // ==========================================================================
   // ORDERED RETIREMENT (section 18)
@@ -1065,7 +1215,7 @@ module zhao_texture_v3own #(
                 && !c0f_v_q && !c1f_v_q && !c3f_v_q && !c4f_v_q
                 && !q0t_v_q && !q0a_v_q && !q0i_v_q
                 && rq_empty_c[0] && rq_empty_c[1] && rq_empty_c[2]
-                && !k0_v_q && !k1_v_q && !k2_v_q
+                && !kpipe_busy_c
                 && (cq_occ_c == '0) && (cmb_res_q == '0)
                 && !g0_v_q && !g1_v_q && !g2_v_q
                 && (oq_occ_c == '0) && (out_res_q == '0);
@@ -1500,20 +1650,19 @@ module zhao_texture_v3own #(
     q0i_owner_q <= {tail_q, adm_gen_c};
   end
 
-  // ---- COMBINE admission read pipeline ------------------------------------
+  // ---- COMBINE admission: pop -> k0 -> job queue (mode-independent part) ---
+  // `cmb_res_q` counts pops in flight AND queued rows in both modes, so the
+  // CMBQD reservation and `a_cmb_reserved`/`a_cmbq_bound` are unchanged; only
+  // the number of in-flight stages behind the pop differs (three vs one).
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       k0_v_q    <= 1'b0;
-      k1_v_q    <= 1'b0;
-      k2_v_q    <= 1'b0;
       rr_q      <= 2'd0;
       cmb_res_q <= '0;
       cq_wp_q   <= '0;
       cq_rp_q   <= '0;
     end else begin
       k0_v_q <= cmb_pop_c;
-      k1_v_q <= k0_v_q;
-      k2_v_q <= k1_v_q;
       if (cmb_pop_c) rr_q <= (sel_c == 2'd2) ? 2'd0 : (sel_c + 2'd1);
       cmb_res_q <= cmb_res_q + CNTW'(cmb_pop_c) - CNTW'(cmb_fire_c);
       if (cq_push_c)  cq_wp_q <= cq_wp_q + (CQPW+1)'(1);
@@ -1521,19 +1670,8 @@ module zhao_texture_v3own #(
     end
   end
   always_ff @(posedge clk) begin
-    if (cmb_pop_c) cmb_rd_addr_q <= sel_data_c[OWNERW-1 -: SLOTW];
     if (cmb_pop_c) k0_owner_q <= sel_data_c;
-    k1_owner_q <= k0_owner_q;
-    k2_owner_q <= k1_owner_q;
-    for (int unsigned s = 0; s < 3; s++) sres_cap_q[s] <= sres_rd_c[s];
-    ares_cap_q <= ares_rd_c;
-    if (cq_push_c) begin
-      cq_own_q[cq_wp_q[CQPW-1:0]] <= k2_owner_q;
-      cq_s0_q [cq_wp_q[CQPW-1:0]] <= sres_cap_q[0];
-      cq_s1_q [cq_wp_q[CQPW-1:0]] <= sres_cap_q[1];
-      cq_s2_q [cq_wp_q[CQPW-1:0]] <= sres_cap_q[2];
-      cq_ax_q [cq_wp_q[CQPW-1:0]] <= ares_cap_q;
-    end
+    if (cq_push_c) cq_own_q[cq_wp_q[CQPW-1:0]] <= cq_push_owner_c;
   end
 
   // ---- retirement read pipeline -------------------------------------------
@@ -1582,8 +1720,10 @@ module zhao_texture_v3own #(
       ev_err_final_o   <= 32'd0;
       ev_err_issue_o   <= 32'd0;
       ev_wrap_drains_o <= 32'd0;
+      ev_src_unpub_o   <= 32'd0;
     end else begin
       ev_admitted_o    <= ev_admitted_o    + 32'(adm_fire_c);
+      ev_src_unpub_o   <= ev_src_unpub_o   + 32'(src_unpub_c);
       ev_emitted_o     <= ev_emitted_o     + 32'(out_fire_c);
       ev_commits_o     <= ev_commits_o     + 32'(d_commit_c);
       ev_tickets_o     <= ev_tickets_o     + 32'(d_ticket_c);
@@ -2074,6 +2214,28 @@ module zhao_texture_v3own #(
       a_rq_not_full : assert (!((q0t_v_q && rq_full_c[0])
                              || (q0a_v_q && rq_full_c[1])
                              || (q0i_v_q && rq_full_c[2])));
+
+      // ---- THE READ-LATE BOUNDARY (roadmap 4.2's gate, READ_LATE=1) --------
+      if (READ_LATE != 0) begin
+        // publication-before-read: the owner named by a source read is live,
+        // ticketed, reserved, ACCEPTED by COMBINE, and its committed mask
+        // covers its required mask -- so every plane the consumer may pick is
+        // written and published. Full cover here; the shipped counter uses the
+        // three-bit form (header).
+        a_src_read_published : assert (!src_rd_valid_i
+            || (live_q[src_rd_slot_i] && rdy_q[src_rd_slot_i]
+                && crs_q[src_rd_slot_i] && cbi_q[src_rd_slot_i]
+                && ((cmt_q[src_rd_slot_i] & req_q[src_rd_slot_i])
+                    == req_q[src_rd_slot_i])));
+        // release-after-last-reader, first half: the consumer's last read of
+        // an owner precedes that owner's FINAL claim.
+        a_src_read_before_final : assert (!src_rd_valid_i
+            || !fcl_q[src_rd_slot_i]);
+        // release-after-last-reader, second half: nothing reads an owner on
+        // the edge that frees it.
+        a_release_not_under_reader : assert (!(out_fire_c && src_rd_valid_i
+            && (src_rd_slot_i == emit_q)));
+      end
     end
   end
 

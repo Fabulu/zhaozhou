@@ -2043,6 +2043,11 @@ module zhao_texture_island_top #(
   // the island's OWNER CREDIT (OWNER_DEPTH = FCTXN) is what bounds fragments.
   // Wiring FCTXN in here would conflate the two bounds and silently give the
   // combiner 64 contexts' worth of storage to hold two numbers.
+  // The read-late port's outputs exist in every elaboration; unused here.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic       comb_src_rd_valid_unused;
+  logic [5:0] comb_src_rd_slot_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
   zhao_texture_material_combine_v2 #(.NCTX(8), .TAGW(ROBTAGW)) u_combine (
       .clk(clk), .rst_n(rst_n),
       .f_valid_i(fr_o_valid), .f_ready_o(comb_f_ready),
@@ -2055,6 +2060,15 @@ module zhao_texture_island_top #(
       // fragments that do not.
       .f_s2_rgb_i(fr_o_has_aux ? fr_o_aux_rgb : fr_o_s_rgb[2]),
       .f_s2_a_i  (fr_o_has_aux ? fr_o_aux_a   : fr_o_s_a[2]),
+      // 2026-09-10: the combiner grew a READ_LATE mode (roadmap 4.2 / Commit4)
+      // for the V3 island. THIS island stays on the copy path -- READ_LATE
+      // defaults to 0 here -- so the read-late pins are tied off. Wiring only;
+      // the netlist this oracle elaborates to is unchanged, which is what
+      // gate 3 (island_v3_paired) compares against.
+      .f_slot_i(6'd0), .f_has_aux_i(1'b0),
+      .src_s0_i(32'd0), .src_s1_i(32'd0), .src_s2_i(32'd0), .src_aux_i(32'd0),
+      .src_rd_valid_o(comb_src_rd_valid_unused),
+      .src_rd_slot_o(comb_src_rd_slot_unused),
       .f_base_rgb_i(fbase_m[fr_o_tok][31:8]),
       .f_base_a_i(fbase_m[fr_o_tok][7:0]),
       .f_tag_i({fseq_m[fr_o_tok], fr_o_ctx[15:0]}),

@@ -1045,6 +1045,49 @@ verilate(test_material_combine_v2_diff
 add_test(NAME material_combine_v2_diff COMMAND test_material_combine_v2_diff)
 set_tests_properties(material_combine_v2_diff PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# READ-LATE (roadmap 4.2 / Commit4, 2026-09-10): the SAME combiner elaborated
+# with READ_LATE=1, behind four REAL owner planes (zhao_texture_v3bank, as v3own
+# wires them), against the SAME oracle with V2's workload -- plus the seam's own
+# laws: publication-before-ready, release-after-last-reader, and every plane read
+# naming an in-flight slot. reports/TEXTURE-READLATE-COMBINE-20260910.md.
+add_executable(test_material_combine_readlate_diff texture/material_combine_readlate_diff.cpp)
+target_link_libraries(test_material_combine_readlate_diff PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_material_combine_readlate_diff PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture)
+verilate(test_material_combine_readlate_diff
+  PREFIX Vtb_combine_readlate
+  TOP_MODULE tb_combine_readlate
+  VERILATOR_ARGS --assert
+  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/texture/tb_combine_readlate.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v2.sv)
+add_test(NAME material_combine_readlate_diff COMMAND test_material_combine_readlate_diff)
+set_tests_properties(material_combine_readlate_diff PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# THE POSITIVE CONTROL: the same driver and wrapper against the committed
+# slot-swap mutant (tests/mutants/zhao_texture_material_combine_v2_slotswap_mutant.sv).
+# It PASSES WHEN THE CHECKERS FIRE -- inverse polarity, evidence about the
+# instruments. A differential that has never been seen to catch a difference has
+# not been tested; this is where the read-late one is seen to.
+add_executable(test_material_combine_readlate_mutant_control
+  texture/material_combine_readlate_diff.cpp)
+target_compile_definitions(test_material_combine_readlate_mutant_control PRIVATE
+  READLATE_EXPECT_MISMATCH=1)
+target_link_libraries(test_material_combine_readlate_mutant_control PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_material_combine_readlate_mutant_control PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture)
+verilate(test_material_combine_readlate_mutant_control
+  PREFIX Vtb_combine_readlate
+  TOP_MODULE tb_combine_readlate
+  VERILATOR_ARGS --assert -DREADLATE_MUTANT
+  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/texture/tb_combine_readlate.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_material_combine_v2_slotswap_mutant.sv)
+add_test(NAME material_combine_readlate_mutant_control
+         COMMAND test_material_combine_readlate_mutant_control)
+set_tests_properties(material_combine_readlate_mutant_control PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 900)
+
 # THE COMPOSED ISLAND, functionally. The composed FIT answers capacity; it
 # cannot answer whether the wiring is right, because a top that connects eleven
 # blocks through mismatched handshakes still synthesises and still reports an
@@ -2963,6 +3006,22 @@ verilate(test_texture_v3own_adversarial
   # "detector that has not been shown to fire" failure, one level down.
   VERILATOR_ARGS --assert)
 add_test(NAME texture_v3own_adversarial COMMAND test_texture_v3own_adversarial)
+
+# READ_LATE=1 (roadmap 4.2 / Commit4): the adversarial suite deliberately keeps
+# elaborating the default, so this elaborates the seam and does what the suite
+# cannot -- reads a committed sample back through the plane port, fires
+# `ev_src_unpub_o` on every class it names by stimulus at THIS boundary (the
+# combiner is outside, so an illegal read is legal input here), and PINS the
+# counter's blind spot. A different PREFIX so the two models can coexist.
+add_executable(test_texture_v3own_readlate_directed texture/texture_v3own_readlate_directed.cpp)
+target_link_libraries(test_texture_v3own_readlate_directed PRIVATE zhao_harness)
+verilate(test_texture_v3own_readlate_directed
+  PREFIX Vzhao_texture_v3own_rl
+  TOP_MODULE zhao_texture_v3own
+  SOURCES ${ZHAO_TEX_V3OWN_SV}
+  VERILATOR_ARGS --assert -GREAD_LATE=1)
+add_test(NAME texture_v3own_readlate_directed COMMAND test_texture_v3own_readlate_directed)
+set_tests_properties(texture_v3own_readlate_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 set_tests_properties(texture_v3own_adversarial PROPERTIES
   LABELS "fast;nightly" TIMEOUT 900)
 
@@ -2985,6 +3044,22 @@ add_test(NAME lint_texture_v3own
                  --top-module zhao_texture_v3own
                  ${ZHAO_TEX_V3OWN_SV})
 set_tests_properties(lint_texture_v3own PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# The READ_LATE=1 elaborations are a different netlist; lint them as such.
+add_test(NAME lint_texture_v3own_readlate
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_v3own -GREAD_LATE=1
+                 ${ZHAO_TEX_V3OWN_SV})
+set_tests_properties(lint_texture_v3own_readlate PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_test(NAME lint_texture_material_combine_v2_readlate
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_material_combine_v2 -GREAD_LATE=1
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v2.sv)
+set_tests_properties(lint_texture_material_combine_v2_readlate PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 

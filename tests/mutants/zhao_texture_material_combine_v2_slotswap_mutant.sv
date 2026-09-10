@@ -1,3 +1,42 @@
+// zhao_texture_material_combine_v2_slotswap_mutant.sv -- A DELIBERATELY BROKEN
+// COPY. NOT SHIPPED.
+//
+// This exists to make the read-late differential a DEMONSTRATED instrument for
+// the one fault class the seam introduces and no counter can see: the combiner
+// reading the RIGHT data from the WRONG owner. Under READ_LATE=1 the samples no
+// longer travel with the job; the combiner names a slot and reads the planes.
+// If the slot it names is not the slot it was given, every phase reads a
+// neighbouring owner's samples -- and every counter balances: phases issued,
+// jobs by recipe, fragments retired, refusals, saturations, all exactly as for
+// the correct design, because the machine did exactly the right amount of work
+// on exactly the wrong operands. v3own's `ev_src_unpub_o` fires only when the
+// neighbour is not itself a live, accepted owner; when it is, that counter is
+// blind (its header records the blind spot). The differential is the witness.
+//
+// The one substantive change, in g_readlate's slot file write:
+//
+//     if (adm_we) slot_m[adm_ctx] <= f_slot_i;              // real
+//  -> if (adm_we) slot_m[adm_ctx] <= f_slot_i + SLOTW'(1);  // mutant
+//
+// INVERTED POLARITY: driven by tests/texture/material_combine_readlate_diff.cpp
+// through tests/texture/tb_combine_readlate.sv with -DREADLATE_MUTANT
+// -DREADLATE_EXPECT_MISMATCH. The control PASSES when (a) the oracle
+// differential reports mismatches and (b) the bench's seam watch reports reads
+// of slots no accepted fragment owned. Evidence about the instruments, not the
+// design.
+//
+// The module is RENAMED so a source-list mistake can never elaborate it in
+// place of the real one, and it lives under tests/ where the production
+// closure tools do not look.
+//
+// REGENERATE IF fpga/rtl/texture/zhao_texture_material_combine_v2.sv changes
+// shape (tools: copy, rename the module, re-apply the one line above): this is
+// a copy, and a copy of an old version is a positive control for a block that
+// no longer exists.
+//
+// ===========================================================================
+// THE ORIGINAL FILE FOLLOWS, VERBATIM APART FROM THE MODULE NAME AND ONE LINE.
+// ===========================================================================
 // zhao_texture_material_combine_v2.sv - paired-phase material combiner.
 //
 // Law: reports/COMBINE-ASSETFETCH-RECOVERY-20260906.txt sections 4, 5 and 6
@@ -121,7 +160,7 @@
 // differential is the instrument for the swap class this argument covers.
 //
 // Conservative SystemVerilog subset only (charter section 2).
-module zhao_texture_material_combine_v2 #(
+module zhao_texture_material_combine_v2_slotswap_mutant #(
     // Bounded execution contexts. EIGHT initially, and the brief is explicit
     // that this is "a latency-hiding choice, not the global fragment capacity"
     // -- the island's owner credit bounds fragments; this bounds how many
@@ -482,7 +521,7 @@ module zhao_texture_material_combine_v2 #(
       logic [SLOTW-1:0] slot_m [NCTX];
       logic [SLOTW-1:0] r_slot;
       always_ff @(posedge clk) begin
-        if (adm_we) slot_m[adm_ctx] <= f_slot_i;
+        if (adm_we) slot_m[adm_ctx] <= f_slot_i + SLOTW'(1);   // MUTANT: the neighbour's slot
         r_slot <= slot_m[q_ctx_c];
       end
       // Presented during R; the owner block's banks register the read at the

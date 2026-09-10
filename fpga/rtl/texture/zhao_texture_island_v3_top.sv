@@ -16,6 +16,9 @@
 // makes this stage checkable at all.
 //
 // `zhao_texture_v3own.sv` IS ALSO NOT EDITED. Its 541-check adversarial suite
+// (2026-09-10: it now carries a READ_LATE parameter for the resident-read
+//  seam; the suite still elaborates the default and is unchanged -- see the
+//  u_own / u_combine instantiations below and the Commit4 report.)
 // reads internal probes (`c3t_we_q`, `cmt_q`, the `vgen_q` shadow) through
 // `verilator public` markers, and that suite passing on the UNMODIFIED file is
 // gate 1 of three. Every adapter lives here or in the expander. If the
@@ -1435,7 +1438,24 @@ module zhao_texture_island_v3_top #(
 
   logic              own_cmb_valid, own_cmb_ready_c;
   logic [13:0]       own_cmb_owner;
+  // READ-LATE SEAM (Commit4, 2026-09-10; reports/TEXTURE-READLATE-COMBINE-
+  // 20260910.md). The four legacy payload lanes are TIED OFF by v3own under
+  // READ_LATE=1 and read by nothing here; they stay connected so the
+  // instantiation names every port explicitly rather than leaving four
+  // outputs dangling for a future reader to wonder about.
+  /* verilator lint_off UNUSEDSIGNAL */
   logic [39:0]       own_cmb_s0, own_cmb_s1, own_cmb_s2, own_cmb_aux;
+  /* verilator lint_on UNUSEDSIGNAL */
+  // The seam itself: the combiner's phase engine names the owner SLOT it is
+  // reading for, and the four result planes answer one edge later. result40
+  // is {status8, alpha8, rgb24}; the combiner's operands are the low 32.
+  logic              cmb_src_rd_valid;
+  logic [5:0]        cmb_src_rd_slot;
+  // Bits [39:32] are the STATUS byte, which is not a combiner operand in
+  // either mode (the legacy `own_cmb_s*[39:32]` were equally unread).
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [39:0]       own_src_s0, own_src_s1, own_src_s2, own_src_aux;
+  /* verilator lint_on UNUSEDSIGNAL */
 
   logic              own_fin_valid_c, own_fin_ready;
   logic [13:0]       own_fin_owner_c;
@@ -1450,12 +1470,16 @@ module zhao_texture_island_v3_top #(
   logic [31:0] own_ev_err_range, own_ev_err_stale, own_ev_err_unsol;
   logic [31:0] own_ev_err_dup, own_ev_err_final, own_ev_err_issue;
   logic [31:0] own_ev_wrap_drains;
+  logic [31:0] own_ev_src_unpub;
   logic [6:0]  own_ev_live, own_ev_live_peak;
   logic        own_ev_quiet;
 
   zhao_texture_v3own #(
       .OWNERS(64), .SLOTW(6), .GENW(8), .RESW(40), .CTXW(CTXW),
-      .OUTQD(4), .CMBQD(4)
+      .OUTQD(4), .CMBQD(4),
+      // The resident-read seam: tickets carry the handle only, the combiner
+      // reads the planes. v3own's own suite elaborates the default (0).
+      .READ_LATE(1)
   ) u_own (
       .clk(clk), .rst_n(rst_n),
       // ---- admission: STEP (c) ----
@@ -1477,6 +1501,10 @@ module zhao_texture_island_v3_top #(
       .cmb_owner_o(own_cmb_owner),
       .cmb_s0_o(own_cmb_s0), .cmb_s1_o(own_cmb_s1), .cmb_s2_o(own_cmb_s2),
       .cmb_aux_o(own_cmb_aux),
+      // ---- the read-late plane port: driven by u_combine's phase engine ----
+      .src_rd_valid_i(cmb_src_rd_valid), .src_rd_slot_i(cmb_src_rd_slot),
+      .src_s0_o(own_src_s0), .src_s1_o(own_src_s1), .src_s2_o(own_src_s2),
+      .src_aux_o(own_src_aux),
       .fin_valid_i(own_fin_valid_c), .fin_ready_o(own_fin_ready),
       .fin_owner_i(own_fin_owner_c), .fin_result_i(own_fin_result_c),
       // ---- ordered output: STEP (c) ----
@@ -1490,6 +1518,7 @@ module zhao_texture_island_v3_top #(
       .ev_err_unsol_o(own_ev_err_unsol), .ev_err_dup_o(own_ev_err_dup),
       .ev_err_final_o(own_ev_err_final), .ev_err_issue_o(own_ev_err_issue),
       .ev_wrap_drains_o(own_ev_wrap_drains),
+      .ev_src_unpub_o(own_ev_src_unpub),
       .ev_live_o(own_ev_live), .ev_live_peak_o(own_ev_live_peak),
       .ev_quiet_o(own_ev_quiet));
 
@@ -2945,9 +2974,14 @@ module zhao_texture_island_v3_top #(
   // generation, duplicate -- so the sum is the closest honest reading, and it
   // must be zero in a healthy run for the same reason the original was.
   // All SIX categories, matching the sticky above. This summed three.
+  // SEVEN since 2026-09-10: `ev_src_unpub` is the read-late seam's tripwire --
+  // a plane read for an owner that is not live, not combine-accepted, or
+  // already final-claimed. Mutually exclusive with the six by construction
+  // (it is an event on a different pipe), so the sum stays addable.
   assign cnt_fragrob_id_errors_o =
       own_ev_err_unsol + own_ev_err_stale + own_ev_err_dup +
-      own_ev_err_range + own_ev_err_issue + own_ev_err_final;
+      own_ev_err_range + own_ev_err_issue + own_ev_err_final +
+      own_ev_src_unpub;
 
 
   // ==========================================================================
@@ -3242,7 +3276,8 @@ module zhao_texture_island_v3_top #(
       // minus range -- three of six -- which is the omission the brief names.
       if (own_ev_err_range != 32'd0 || own_ev_err_stale != 32'd0 ||
           own_ev_err_unsol != 32'd0 || own_ev_err_dup   != 32'd0 ||
-          own_ev_err_issue != 32'd0 || own_ev_err_final != 32'd0)
+          own_ev_err_issue != 32'd0 || own_ev_err_final != 32'd0 ||
+          own_ev_src_unpub != 32'd0)
         err_fragrob_id_error_o <= 1'b1;
       if (aux_degenerate != 32'd0) err_aux_degenerate_o      <= 1'b1;
     end
@@ -3342,23 +3377,41 @@ module zhao_texture_island_v3_top #(
   // fields arrives in `mat_rd_q`, addressed by the owner slot v3own itself
   // presents and whose generation v3own itself re-checks (`cmb_gen_ok_c`).
   //
-  // THE SAMPLE LANES COME FROM THE PACKET. result40 is
-  // {status8, alpha8, rgb24} (v3own Appendix B.1), so rgb is [23:0] and alpha
-  // [31:24] of each lane. No bank read here: v3own already gathered them.
-  zhao_texture_material_combine_v2 #(.NCTX(8), .TAGW(14)) u_combine (
+  // THE SAMPLE LANES USED TO COME FROM THE PACKET. Until 2026-09-10 v3own
+  // gathered the four result40 lanes into its ticket and this instantiation
+  // muxed aux-or-s2 on the way in. That was the copy chain roadmap 4.2 names:
+  // the planes read into capture flops, queued as four 2-M10K altsyncrams,
+  // driven over a 160-bit bus, muxed, and copied AGAIN into the combiner's
+  // payload RAM -- for data that never leaves the owner's planes and is never
+  // modified after its C3 commit.
+  //
+  // NOW THE TICKET IS THE HANDLE ALONE (v3own READ_LATE=1) and the combiner
+  // reads the planes itself, per phase, through the src_* port below
+  // (combine READ_LATE=1). What crosses this seam at acceptance is the owner
+  // handle -- whose SLOT is the plane address -- plus the descriptor from
+  // `mat_m`; the descriptor's `has_aux` bit travels in the combiner's row and
+  // decides aux-or-s2 at the D stage, where the count-based canonicalisation
+  // already lived semantically. Same recipes, same rounding sites, same
+  // outputs: the leaf differential and the paired island gate both say so.
+  //
+  // reports/TEXTURE-READLATE-COMBINE-20260910.md has the accounting and the
+  // one fit gate this change is owed.
+  zhao_texture_material_combine_v2 #(
+      .NCTX(8), .TAGW(14), .READ_LATE(1), .SLOTW(6)
+  ) u_combine (
       .clk(clk), .rst_n(rst_n),
       .f_valid_i(own_cmb_valid && mat_aligned_c), .f_ready_o(comb_f_ready),
       .f_sample_count_i(mat_scount_c), .f_recipe_i(mat_recipe_c),
       .f_weight_i(mat_weight_c),
-      .f_s0_rgb_i(own_cmb_s0[23:0]), .f_s0_a_i(own_cmb_s0[31:24]),
-      .f_s1_rgb_i(own_cmb_s1[23:0]), .f_s1_a_i(own_cmb_s1[31:24]),
-      // AUX, when the fragment has it, genuinely IS the third sample -- that
-      // is what the aux pipeline computes. Sample bank 2 is the fallback for
-      // fragments that do not. `mat_has_aux_c` is the plane's 46th bit, added
-      // because this mux is the one consumer that needs it and v3own's packet
-      // does not carry it.
-      .f_s2_rgb_i(mat_has_aux_c ? own_cmb_aux[23:0]  : own_cmb_s2[23:0]),
-      .f_s2_a_i  (mat_has_aux_c ? own_cmb_aux[31:24] : own_cmb_s2[31:24]),
+      // The copy-mode sample pins do not exist under READ_LATE=1; tied.
+      .f_s0_rgb_i(24'd0), .f_s0_a_i(8'd0),
+      .f_s1_rgb_i(24'd0), .f_s1_a_i(8'd0),
+      .f_s2_rgb_i(24'd0), .f_s2_a_i(8'd0),
+      // The seam: the slot to read, the descriptor's aux bit, and the planes.
+      .f_slot_i(own_cmb_owner[13:8]), .f_has_aux_i(mat_has_aux_c),
+      .src_rd_valid_o(cmb_src_rd_valid), .src_rd_slot_o(cmb_src_rd_slot),
+      .src_s0_i(own_src_s0[31:0]), .src_s1_i(own_src_s1[31:0]),
+      .src_s2_i(own_src_s2[31:0]), .src_aux_i(own_src_aux[31:0]),
       .f_base_rgb_i(mat_base_rgb_c),
       .f_base_a_i(mat_base_a_c),
       .f_tag_i(own_cmb_owner),
