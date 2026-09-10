@@ -532,6 +532,43 @@ targets:
       max_dsp: 33
       max_alms: 6300
 
+  # ==========================================================================
+  # THE PROJECTION-SUBSYSTEM GATE (2026-09-10, RUN-20260910-0846) -- NOT RUN
+  # ==========================================================================
+  # reports/PROJECTION-ADOPTION-20260910.md names exactly one fit for the whole
+  # shared-projector adoption, and this is its top: one service (one core),
+  # the terrain shell (three zhao_vertex_arena copies at 4x81x106, DENSE_SEAL)
+  # and the level-0 walker. Its question, stated before it runs: "does the
+  # composed subsystem measure 33 DSP (not 66), do the three 324x106 arena
+  # copies infer as block RAM (blockMemoryBits > 0, the contract's own
+  # pass/fail line; 18 M10K is the geometry, 6 per copy at 512x20), what
+  # ALM does the whole lane cost against the 12,267 the two spatial
+  # projectors measure today, and does it hold 100 MHz?" Batch it with the
+  # zhao_geom_wcache target below (now 2x1089x106) -- one gate, two leaves.
+  #
+  # max_dsp 33 is the STRUCTURAL claim (one core, nine row products + two
+  # viewport products at 3 DSP each on this calibration); the arena copies
+  # and the walker add no multiplier. A row above 33 means the shell grew a
+  # DSP it has no right to. No ALM rule yet: no baseline exists for any
+  # arena shape, and a bound with no baseline is a guess.
+  - top: zhao_proj_subsystem
+    sources:
+      - fpga/rtl/common/zhao_proj_subsystem.sv
+      - fpga/rtl/common/zhao_project_service.sv
+      - fpga/rtl/common/zhao_project_core.sv
+      - fpga/rtl/terrain/zhao_terrain_wcache.sv
+      - fpga/rtl/terrain/zhao_terrain_topo.sv
+      - fpga/rtl/geometry/zhao_vertex_arena.sv
+    rules:
+      max_dsp: 33
+
+  # The terrain shell alone, so the arena-copy M10K question can be read
+  # without the core in the picture. No rules: no baseline for any shape.
+  - top: zhao_terrain_wcache
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_wcache.sv
+      - fpga/rtl/geometry/zhao_vertex_arena.sv
+
   - top: zhao_raster_perspuv_pairpipe
     sources:
       - fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv

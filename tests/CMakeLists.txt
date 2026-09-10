@@ -6197,6 +6197,87 @@ set_tests_properties(lint_terrain_project PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # ---------------------------------------------------------------------------
+# TERRAIN.WCACHE + the projection subsystem (2026-09-10, RUN-20260910-0846)
+#
+# zhao_proj_subsystem composes ONE zhao_project_service (client A geometry,
+# client B terrain), the terrain arena shell fed straight off the client-B
+# result port, and the level-0 walker. The differential drives that
+# composition beside the retained zhao_terrain_project and requires every
+# replayed triangle to be bit-identical to it (and, for the three `w` the
+# legacy packet never carried, to project_vertex). Three elaborations of ONE
+# unchanged driver: ROWS_PER_PASS=3 (default), ROWS_PER_PASS=1 (the producer
+# honours b_ready_o), VALID_MODE=0 (bitmap primitive under the same shell --
+# the miss-path positive control, since a dense arena provably cannot miss).
+# See reports/PROJECTION-ADOPTION-20260910.md.
+set(ZHAO_PROJ_SUBSYSTEM_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_proj_subsystem.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_project_service.sv
+    ${ZHAO_PROJECT_CORE_SV}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_wcache.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_topo.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_vertex_arena.sv)
+set(ZHAO_TB_TERRAIN_WCACHE_SV
+    ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_wcache.sv
+    ${ZHAO_PROJ_SUBSYSTEM_SV}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_project.sv)
+
+add_executable(test_terrain_wcache_differential terrain/terrain_wcache_differential.cpp)
+target_link_libraries(test_terrain_wcache_differential PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_wcache_differential PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_SOURCE_DIR}/reference/src)  # white-box: zrender/internal.hpp (project_vertex, w)
+verilate(test_terrain_wcache_differential
+  PREFIX Vtb_terrain_wcache
+  TOP_MODULE tb_terrain_wcache
+  SOURCES ${ZHAO_TB_TERRAIN_WCACHE_SV})
+add_test(NAME terrain_wcache_differential COMMAND test_terrain_wcache_differential)
+set_tests_properties(terrain_wcache_differential PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_executable(test_terrain_wcache_differential_rpp1 terrain/terrain_wcache_differential.cpp)
+target_link_libraries(test_terrain_wcache_differential_rpp1 PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_wcache_differential_rpp1 PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_terrain_wcache_differential_rpp1
+  PREFIX Vtb_terrain_wcache
+  TOP_MODULE tb_terrain_wcache
+  VERILATOR_ARGS -GROWS_PER_PASS=1
+  SOURCES ${ZHAO_TB_TERRAIN_WCACHE_SV})
+add_test(NAME terrain_wcache_differential_rpp1 COMMAND test_terrain_wcache_differential_rpp1)
+set_tests_properties(terrain_wcache_differential_rpp1 PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_executable(test_terrain_wcache_differential_bitmap terrain/terrain_wcache_differential.cpp)
+target_link_libraries(test_terrain_wcache_differential_bitmap PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_terrain_wcache_differential_bitmap PRIVATE ZHAO_TWC_VALID_MODE=0)
+target_include_directories(test_terrain_wcache_differential_bitmap PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_terrain_wcache_differential_bitmap
+  PREFIX Vtb_terrain_wcache
+  TOP_MODULE tb_terrain_wcache
+  VERILATOR_ARGS -GVALID_MODE=0
+  SOURCES ${ZHAO_TB_TERRAIN_WCACHE_SV})
+add_test(NAME terrain_wcache_differential_bitmap COMMAND test_terrain_wcache_differential_bitmap)
+set_tests_properties(terrain_wcache_differential_bitmap PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+# The 81-vertex identity obligation (rescue roadmap 8.5), measured on the zref
+# tessellator over every level x neighbour-level x morph x surface x page case:
+# every emitted corner is a lattice vertex inside the 9x9 window and one index
+# has one final position per job. No RTL; the instrument is the oracle.
+add_executable(test_terrain_identity_probe terrain/terrain_identity_probe.cpp)
+target_link_libraries(test_terrain_identity_probe PRIVATE zhao_harness zhao_zref)
+add_test(NAME terrain_identity_probe COMMAND test_terrain_identity_probe)
+set_tests_properties(terrain_identity_probe PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_proj_subsystem
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_proj_subsystem
+                 ${ZHAO_PROJ_SUBSYSTEM_SV})
+set_tests_properties(lint_proj_subsystem PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
 # TERRAIN.LOD (phase 6, ZH-050)
 #
 # The oracle here is MOSTLY DEFINITION, not view: no ratified terrain LOD
