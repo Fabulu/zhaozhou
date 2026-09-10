@@ -4377,3 +4377,67 @@ CLEAN 6-DSP row at 534bbd22. The repo states two disagreeing post-fix numbers
 
 Live: FORGE.CLIFF bitmap RAM and the FIELD program directory, both ALM levers
 from the roadmap's own six-commit list.
+
+
+## 2026-09-10 -- the ALM side worked; four candidates landed; adoption still open
+
+**Landed and verified by me since the reboot**, each rebuilt and rerun rather
+than quoted:
+
+  R3 rcp24_v3 at NCTX=12      island 132/132 -> 133/133 (+1 = the new tripwire)
+  R4 pose decoder sequenced   352 / 176 / 694, legacy arm 352, both mutants fire
+  geom_cull two lanes         40,988 x3 arms; byte-identity 17,212 both RTLs
+  R1 MATW=18                  242 differential, mutant hides on legal content
+  FIELD program directory     1,179 / 507 / 1,113 across three configs
+  FORGE.CLIFF bitmap RAM      752 pages, 0 mismatches, clocks -2.84%
+  read-late COMBINE seam      island 133/133, unchanged by the seam
+  projection subsystem        18,131 checks, 8,192 triangles bit-identical
+
+**THE OWNER SENT ME BACK TO THE BRIEF AND I HAD BEEN SCORING THE WRONG NUMBERS.**
+Liberation Roadmap section 2 is an eight-domain allocation table: **DSP totals 88,
+not the cap of 94**; **M10K envelope is 464, not 553**, and they are REPLACEMENT
+allocations; **ALM objective is 36,000**. Built
+`tools/budget/domain_scoreboard.py`, which RECONCILES with dsp_census
+(58,359/192/147) and prints that reconciliation every run. Six of eight domains
+over on ALM before the 34 unpriced blocks count.
+
+**There is no separate register target because registers ARE the ALM problem:**
+81,925 at this tree's ~1.9/ALM is ~43,118 ALM, more than the whole device.
+
+**SEVEN OF MY OWN CLAIMS REFUTED TODAY**, by the lanes implementing them:
+
+  * pose return is **-14, not -17** -- and "18 -> ~3, return 17" never added up
+  * MATW marginal is **-3, not -10** -- 32x18 is 2 DSP, not 1; 32x19 is FOUR
+  * geom_cull derivation off by **10x** -- I counted one S_EVAL cycle of ten,
+    and had WRITTEN DOWN that the exact-100% result was suspicious, then
+    recorded a caveat instead of recounting
+  * "keep the ready-claimed flag" would have **shipped the deadlock while
+    looking cautious** -- the flag guards the duplicate, the deadlock is a lost
+    ticket
+  * "near-equal thirds" is stale post-pairpipe (21.8/21.2/5.9%)
+  * "~1,200-1,450 registers" was the architect's campaign total; the seam is
+    about -110 flops, and what actually dies is **M10K, not registers**
+  * "~6,100 ALM" is a GROSS, and its 12,267 baseline rests on a row from a
+    **DIRTY TREE** -- after two days of telling other lanes to read
+    rtlCleanAtHead first
+
+**AND ONE THAT CHANGES THE PATH.** Dense fill at 81 per subpatch, every level,
+two views = 663,552 fills. At ROWS_PER_PASS=1 (II=3) that is 1,990,656 clocks =
+**119.4% -- DOES NOT FIT**. So the -18 is single-view only. Computed myself.
+
+**Honest DSP path: 99** against the cap of 94 and the allocation of 88.
+**ALM: 58,359 against 36,000.** Neither ceiling is cracked.
+
+**Two of my own process failures, both the live-tree hazard I keep warning
+others about:** an over-broad `git add` swept a live lane's registration hunks
+into HEAD, leaving it referencing seven targets whose files existed only in a
+working tree -- a clean checkout could not configure for ~30 minutes. Then the
+repair commit MISSED a third mutant file and needed a second repair. Stage by
+explicit path, then read git status for what the list MISSED.
+
+**Where it stands:** the projection cheque has MOVED ONE LEVEL UP rather than
+being cashed -- the service is no longer rootless, zhao_proj_subsystem is PENDING
+in its place, and the manifest was deliberately not flipped. The tessellator
+vertex mode (adoption item 1) is live now; it must be a TESS change, because a
+separate fill block would be the third authored duplication this campaign has
+caught and the FIRST caught before it was written.
