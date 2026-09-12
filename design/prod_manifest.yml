@@ -426,25 +426,28 @@ excluded:
   # ledger, the manifest and a source list are three different acts and doing two
   # of three leaves a file nothing bills and nothing declares absent.
   #
-  # `unused` for now: nothing instantiates it yet, exactly as nothing yet
-  # instantiates the two wrappers it is meant to replace. When a top adopts it,
-  # this becomes an atomic pair with geom_project/terrain_project moving to
-  # excluded -- doing one edit without the other mis-counts the machine.
-  - zhao_project_service: unused  ONE shared projector; replaces the duplicated core in geom_project + terrain_project (66 DSP -> 33)
-  # --- 2026-09-10, the projection subsystem COMPOSED (RUN-20260910-0846) ------
-  # zhao_proj_subsystem is the service with terrain wired as client B, the
-  # terrain arena shell fed straight off the client-B result port, and the
-  # level-0 walker -- the composition the adoption is about, in RTL. Every
-  # replayed triangle is bit-identical to the retained zhao_terrain_project
-  # (tests/terrain/terrain_wcache_differential.cpp, three elaborations). It
-  # stays excluded until the projection-subsystem fit gate named in
-  # reports/PROJECTION-ADOPTION-20260910.md has run AND the two remaining
-  # producers exist (the tessellator's vertex mode; stitched/coarse corner
-  # references). Adopting it moves geom_project + terrain_project to excluded
-  # in the SAME edit -- one edit without the other mis-counts the machine.
-  - zhao_proj_subsystem: not-yet-adopted  service + terrain shell + level-0 walker composed; bit-identical to zhao_terrain_project over 8,192 replayed triangles at RPP=3, RPP=1 and VALID_MODE=0; adopt after the projection-subsystem fit gate and the tessellator vertex mode (reports/PROJECTION-ADOPTION-20260910.md)
-  - zhao_terrain_wcache: not-yet-adopted  the terrain instance of zhao_vertex_arena (3 copies x 4x81x106, DENSE_SEAL) with the triangle-rate replay path; inside zhao_proj_subsystem, which is itself not yet adopted
-  - zhao_terrain_topo: not-yet-adopted  the level-0 unstitched subpatch walker (128 references, three adders, no ROM); stitched/coarse topologies must come from the tessellator; inside zhao_proj_subsystem
+  # `unused` for now: the service is instantiated only below the explicitly
+  # not-yet-adopted terrain composition. Production still counts the retained
+  # geometry and terrain projectors separately; that changes only in one future
+  # adoption edit after the composed fit and remaining seams close.
+  - zhao_project_service: unused  ONE shared projector; instantiated by the not-yet-adopted terrain composition, while production still counts geom_project + terrain_project separately
+  # --- 2026-09-12, terrain projection pipeline composed but NOT ADOPTED --------
+  # zhao_proj_subsystem is now the reusable leaf: one service plus the three-copy
+  # terrain arena shell, driven through generic fill and reference ports. It no
+  # longer owns a topology walker. zhao_terrain_group_seq drives those ports from
+  # real ModeVtx and ModeRef passes, and zhao_terrain_pipe is the true composition
+  # boundary that joins sequencer, tessellator and subsystem.
+  #
+  # The composed dense and bitmap differentials are exact against retained
+  # zhao_terrain_project in both views, and the release detector's committed
+  # renamed mutant fires. Those are functional receipts, not adoption or fit
+  # evidence. Production remains unchanged until zhao_terrain_pipe has a clean
+  # composed fit and the NORMALS and DEPTHQUANT seams are designed and verified.
+  - zhao_proj_subsystem: not-yet-adopted  shared projection service + three-copy terrain arena shell behind generic reference ports; no embedded walker; used only inside the not-yet-adopted zhao_terrain_pipe
+  - zhao_terrain_group_seq: not-yet-adopted  per-view arena allocation, ModeVtx fill/seal, ModeRef replay and release controller; used only inside the not-yet-adopted zhao_terrain_pipe
+  - zhao_terrain_pipe: not-yet-adopted  composed ModeVtx/ModeRef terrain projection boundary; both-view dense/bitmap differential and release-mutant control pass, but composed fit, NORMALS, DEPTHQUANT and production adoption remain open
+  - zhao_terrain_wcache: not-yet-adopted  three zhao_vertex_arena read replicas (4x81x106, DENSE_SEAL) with triangle-rate replay; used inside the not-yet-adopted projection subsystem/pipe
+  - zhao_terrain_topo: superseded  retained level-0 legacy/test walker; topology-aware ModeRef from zhao_terrain_tess now drives the generic subsystem reference ports, and no production composition instantiates this module
   - zhao_texture_ident_probe: probe  exposes the identity encoding functions for ident_encoding_directed
   # Added 2026-09-09, and CAUGHT BY check_prod_manifest.py rather than remembered.
   # I registered this probe in design/fit_targets.yml and in no manifest, and the

@@ -6221,25 +6221,27 @@ set_tests_properties(lint_terrain_project PROPERTIES
 # TERRAIN.WCACHE + the projection subsystem (2026-09-10, RUN-20260910-0846)
 #
 # zhao_proj_subsystem composes ONE zhao_project_service (client A geometry,
-# client B terrain), the terrain arena shell fed straight off the client-B
-# result port, and the level-0 walker. The differential drives that
-# composition beside the retained zhao_terrain_project and requires every
-# replayed triangle to be bit-identical to it (and, for the three `w` the
-# legacy packet never carried, to project_vertex). Three elaborations of ONE
-# unchanged driver: ROWS_PER_PASS=3 (default), ROWS_PER_PASS=1 (the producer
-# honours b_ready_o), VALID_MODE=0 (bitmap primitive under the same shell --
-# the miss-path positive control, since a dense arena provably cannot miss).
+# client B terrain) and the terrain arena shell fed straight off the client-B
+# result port. Its generic reference input is driven here by a bench-local copy
+# of the retained level-0 walker; production composition instead drives it from
+# zhao_terrain_tess ModeRef through zhao_terrain_group_seq. The differential
+# requires every replayed triangle to be bit-identical to the retained projector
+# (and, for the three `w` lanes the legacy packet never carried, to
+# project_vertex). Three elaborations of ONE unchanged driver: ROWS_PER_PASS=3
+# (default), ROWS_PER_PASS=1 (the producer honours b_ready_o), VALID_MODE=0
+# (bitmap primitive under the same shell -- the miss-path positive control,
+# since a dense arena provably cannot miss).
 # See reports/PROJECTION-ADOPTION-20260910.md.
 set(ZHAO_PROJ_SUBSYSTEM_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_proj_subsystem.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_project_service.sv
     ${ZHAO_PROJECT_CORE_SV}
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_wcache.sv
-    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_topo.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_vertex_arena.sv)
 set(ZHAO_TB_TERRAIN_WCACHE_SV
     ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_wcache.sv
     ${ZHAO_PROJ_SUBSYSTEM_SV}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_topo.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_project.sv)
 
 add_executable(test_terrain_wcache_differential terrain/terrain_wcache_differential.cpp)
@@ -6295,6 +6297,127 @@ add_test(NAME lint_proj_subsystem
                  --top-module zhao_proj_subsystem
                  ${ZHAO_PROJ_SUBSYSTEM_SV})
 set_tests_properties(lint_proj_subsystem PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# TERRAIN projection pipeline composition (not production-adopted)
+#
+# Real ModeVtx + ModeRef tessellation, group/view/arena sequencing, one shared
+# projector, and the three-copy arena shell. The same driver compares both
+# views against retained zhao_terrain_project, exercises bitmap sparse fill,
+# and gives release_unsafe_o an inverted-polarity committed-mutant control.
+set(ZHAO_TERRAIN_PIPE_COMMON_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pipe.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_tess.sv
+    ${ZHAO_PROJ_SUBSYSTEM_SV})
+set(ZHAO_TERRAIN_PIPE_SV
+    ${ZHAO_TERRAIN_PIPE_COMMON_SV}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_group_seq.sv)
+set(ZHAO_TERRAIN_PIPE_MUTANT_SV
+    ${ZHAO_TERRAIN_PIPE_COMMON_SV}
+    ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_group_seq_mutant.sv)
+
+add_executable(test_terrain_pipe_differential terrain/terrain_pipe_differential.cpp)
+target_link_libraries(test_terrain_pipe_differential PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_pipe_differential PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_terrain_pipe_differential
+  PREFIX Vzhao_terrain_pipe
+  TOP_MODULE zhao_terrain_pipe
+  SOURCES ${ZHAO_TERRAIN_PIPE_SV})
+verilate(test_terrain_pipe_differential
+  PREFIX Vzhao_terrain_project
+  TOP_MODULE zhao_terrain_project
+  SOURCES ${ZHAO_TERRAIN_PROJECT_SV})
+add_test(NAME terrain_pipe_differential COMMAND test_terrain_pipe_differential)
+set_tests_properties(terrain_pipe_differential PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_executable(test_terrain_pipe_differential_bitmap terrain/terrain_pipe_differential.cpp)
+target_link_libraries(test_terrain_pipe_differential_bitmap PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_terrain_pipe_differential_bitmap PRIVATE ZHAO_PIPE_VALID_MODE=0)
+target_include_directories(test_terrain_pipe_differential_bitmap PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_terrain_pipe_differential_bitmap
+  PREFIX Vzhao_terrain_pipe
+  TOP_MODULE zhao_terrain_pipe
+  VERILATOR_ARGS -GVALID_MODE=0
+  SOURCES ${ZHAO_TERRAIN_PIPE_SV})
+verilate(test_terrain_pipe_differential_bitmap
+  PREFIX Vzhao_terrain_project
+  TOP_MODULE zhao_terrain_project
+  SOURCES ${ZHAO_TERRAIN_PROJECT_SV})
+add_test(NAME terrain_pipe_differential_bitmap COMMAND test_terrain_pipe_differential_bitmap)
+set_tests_properties(terrain_pipe_differential_bitmap PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_executable(test_terrain_pipe_release_mutant terrain/terrain_pipe_differential.cpp)
+target_link_libraries(test_terrain_pipe_release_mutant PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_terrain_pipe_release_mutant PRIVATE ZHAO_EXPECT_RELEASE_MUTANT=1)
+target_include_directories(test_terrain_pipe_release_mutant PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_terrain_pipe_release_mutant
+  PREFIX Vzhao_terrain_pipe
+  TOP_MODULE zhao_terrain_pipe
+  VERILATOR_ARGS -DZHAO_MUTANT_GROUP_SEQ
+  SOURCES ${ZHAO_TERRAIN_PIPE_MUTANT_SV})
+verilate(test_terrain_pipe_release_mutant
+  PREFIX Vzhao_terrain_project
+  TOP_MODULE zhao_terrain_project
+  SOURCES ${ZHAO_TERRAIN_PROJECT_SV})
+add_test(NAME terrain_pipe_release_mutant COMMAND test_terrain_pipe_release_mutant)
+set_tests_properties(terrain_pipe_release_mutant PROPERTIES LABELS "fast;mutant" TIMEOUT 1800)
+
+add_test(NAME lint_terrain_pipe
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_pipe
+                 ${ZHAO_TERRAIN_PIPE_SV})
+set_tests_properties(lint_terrain_pipe PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_test(NAME lint_terrain_pipe_release_mutant
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 -DZHAO_MUTANT_GROUP_SEQ
+                 --top-module zhao_terrain_pipe
+                 ${ZHAO_TERRAIN_PIPE_MUTANT_SV})
+set_tests_properties(lint_terrain_pipe_release_mutant PROPERTIES
+  LABELS "lint;mutant"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# Downstream rate probes recovered from the composition campaign. CLIP->SETUP
+# measures the one-triangle/clock seam; the separate real-binner probe records
+# today's five-clock wall and TRI_CAP=128 without pretending it is composed.
+set(ZHAO_TERRAIN_DOWNSTREAM_SV
+    ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_downstream.sv
+    ${ZHAO_GEOM_CLIP_SV}
+    ${ZHAO_GEOM_SETUP_SV})
+add_executable(test_terrain_downstream_rate terrain/terrain_downstream_rate.cpp)
+target_link_libraries(test_terrain_downstream_rate PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_downstream_rate
+  PREFIX Vtb_terrain_downstream
+  TOP_MODULE tb_terrain_downstream
+  SOURCES ${ZHAO_TERRAIN_DOWNSTREAM_SV})
+add_test(NAME terrain_downstream_rate COMMAND test_terrain_downstream_rate)
+set_tests_properties(terrain_downstream_rate PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_terrain_downstream_binner terrain/terrain_downstream_binner.cpp)
+target_link_libraries(test_terrain_downstream_binner PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_downstream_binner PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry)
+verilate(test_terrain_downstream_binner
+  PREFIX Vzhao_geom_binner
+  TOP_MODULE zhao_geom_binner
+  SOURCES ${ZHAO_GEOM_BINNER_SV})
+add_test(NAME terrain_downstream_binner COMMAND test_terrain_downstream_binner)
+set_tests_properties(terrain_downstream_binner PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_terrain_downstream
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module tb_terrain_downstream
+                 ${ZHAO_TERRAIN_DOWNSTREAM_SV})
+set_tests_properties(lint_terrain_downstream PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
