@@ -1,0 +1,92 @@
+DOMAIN SCOREBOARD -- the ALM Liberation Roadmap section 2 allocations
+Every ALM figure below is a SUM OF FITTED ROWS ONLY. Map-only and
+unpriced blocks contribute 0 ALM and are counted separately: their
+cost is UNKNOWN, never zero.
+
+domain                                 ALM   /objv     DSP  /al    M10K  /al   evidence
+--------------------------------------------------------------------------------------------------------
+Shell/raster/video/memory           16,778   8,000      19    8      30   80   3 fit, 1 map, 4 UNPRICED **OVER**
+Texture                             12,500   7,000      19   12      49   96   2 fit, 1 UNPRICED **OVER**
+Projection and result arenas        12,267   4,500      66    9      52   48   2 fit, 1 UNPRICED **OVER**
+Geometry and lighting                6,922   5,200      57   24       0   64   7 fit, 2 map, 8 UNPRICED **OVER**
+Terrain, forge and maintenance       6,888   3,500      31    9      16   64   4 fit, 4 map, 3 UNPRICED **OVER**
+Complete FIELD                           0   4,500       0   12       0   64   0 fit, 1 map, 12 UNPRICED 
+2D/particles/surfaces/post             993   1,800       0    4       0   24   1 fit, 3 map, 5 UNPRICED 
+Integration and remaining support    2,011   1,500       0   10       0   24   2 fit **OVER**
+--------------------------------------------------------------------------------------------------------
+TOTAL                               58,359  36,000     192   88     147  464   fitted rows only
+DEVICE                              41,910             112          553        
+
+  RECONCILIATION vs dsp_census.totals on the SAME bill:
+    DSP    192 vs   192    ALM   58359 vs   58359    M10K  147 vs  147    OK
+
+  The roadmap's DSP allocation totals 88, NOT the owner cap of 94.
+  It says so itself: 'DSP remaining under owner cap: 6'. Steering at
+  94 is steering 6 DSP past the plan.
+
+  The M10K envelope is 464, not 553, and the roadmap is explicit that
+  these are REPLACEMENT allocations: 'Do not add these 464 M10Ks to
+  the historical 147.' Spending memory is bounded, not free.
+
+== WHERE THE EVIDENCE IS MISSING, which is most of it ==
+  Shell/raster/video/memory -- 5 without a fitted ALM:
+       zhao_cmd_decoder (map-only: ALM UNKNOWN)
+       zhao_raster_attrdiv_svc
+       zhao_raster_attrinterp
+       zhao_raster_attrstep
+       zhao_raster_toon
+  Texture -- 1 without a fitted ALM:
+       zhao_texture_tmu_pipe
+  Projection and result arenas -- 1 without a fitted ALM:
+       zhao_geom_wcache
+  Geometry and lighting -- 10 without a fitted ALM:
+       zhao_geom_assemble
+       zhao_geom_assetfetch
+       zhao_geom_attrsetup
+       zhao_geom_depthquant
+       zhao_geom_meshfetch
+       zhao_geom_parambuf
+       zhao_geom_pose_cache (map-only: ALM UNKNOWN)
+       zhao_geom_pose_decode (map-only: ALM UNKNOWN)
+       ... and 2 more
+  Terrain, forge and maintenance -- 7 without a fitted ALM:
+       zhao_forge_cliff (map-only: ALM UNKNOWN)
+       zhao_forge_prim
+       zhao_terrain_bake (map-only: ALM UNKNOWN)
+       zhao_terrain_island_dir
+       zhao_terrain_mipgen
+       zhao_terrain_normals (map-only: ALM UNKNOWN)
+       zhao_terrain_velocity (map-only: ALM UNKNOWN)
+  Complete FIELD -- 13 without a fitted ALM:
+       zhao_field_progcache (map-only: ALM UNKNOWN)
+       zhao_field_v3_dispatch
+       zhao_field_v3_len
+       zhao_field_v3_mulbank
+       zhao_field_v3_noise
+       zhao_field_v3_normalize
+       zhao_field_v3_rf
+       zhao_field_v3_ring_svc
+       ... and 5 more
+  2D/particles/surfaces/post -- 8 without a fitted ALM:
+       zhao_part_expand (map-only: ALM UNKNOWN)
+       zhao_part_ladder
+       zhao_part_record
+       zhao_part_soft (map-only: ALM UNKNOWN)
+       zhao_post_gather
+       zhao_surface_sheet (map-only: ALM UNKNOWN)
+       zhao_twod_plane
+       zhao_twod_sprite
+
+== THE MAPPING THIS TOOL ASSUMED, printed so it can be argued with ==
+  The roadmap names its domains in prose, not by blocks.yml subsystem
+  key, so this correspondence is the tool author's and is the main
+  thing to check before trusting a row:
+    (excluded: software)               <- sw
+    2D/particles/surfaces/post         <- compositor, particles, surface
+    Complete FIELD                     <- field
+    Geometry and lighting              <- geometry
+    Integration and remaining support  <- debug, input, measure
+    Shell/raster/video/memory          <- audio, command, memory, platform, raster, video
+    Terrain, forge and maintenance     <- forge, terrain
+    Texture                            <- texture
+    Projection and result arenas       <- named modules: zhao_geom_project, zhao_geom_wcache, zhao_proj_arena3, zhao_project_core, zhao_project_service, zhao_terrain_project, zhao_vertex_arena

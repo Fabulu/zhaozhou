@@ -296,7 +296,7 @@ def main():
     seen = {}
     for k, v in sorted(SUBSYSTEM_DOMAIN.items()):
         seen.setdefault(v, []).append(k)
-    for dname, keys in sorted(seen.items()):
+    for dname, keys in sorted(seen.items(), key=lambda item: item[0] or ""):
         print("    %-34s <- %s" % (dname or "(excluded: software)", ", ".join(keys)))
     print("    %-34s <- named modules: %s" % (PROJECTION,
           ", ".join(sorted(PROJECTION_MODULES))))
