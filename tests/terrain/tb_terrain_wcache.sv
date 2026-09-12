@@ -8,7 +8,7 @@
 //                                            v                    v
 //                                     one zhao_project_core   zhao_terrain_wcache.fill
 //                                                                  ^
-//                                          zhao_terrain_topo --> ref (3 corners/clk)
+//     zhao_terrain_topo (in THIS bench) ------------------------> ref (3 corners/clk)
 //                                                                  |
 //                                                                  v
 //                                                          projected triangles
@@ -182,9 +182,58 @@ module tb_terrain_wcache #(
     output wire        [31:0] o_mat_refused_o
 );
 
-  // ---- the composed subsystem: service + terrain shell + walker, in RTL ------------
+  // ---- the composed subsystem: service + terrain shell, in RTL ------------------------
   // The wiring under test lives ONCE, in fpga/rtl/common/zhao_proj_subsystem.sv;
-  // this bench adds only the legacy oracle beside it.
+  // this bench adds the level-0 walker (its reference source, RUN-0846) and
+  // the legacy oracle beside it. RUN-1014 moved the walker OUT of the
+  // subsystem -- the tessellator's ModeRef is the reference source in
+  // zhao_terrain_pipe -- so this bench instantiates it itself, and the
+  // shell's original differential keeps its evidence unchanged.
+  wire                       ref_valid, ref_ready;
+  wire [$clog2(ARENAS):0]    ref_arena;
+  wire [GEN_W-1:0]           ref_gen;
+  wire [$clog2(DEPTH):0]     ref_ia, ref_ib, ref_ic;
+  wire [15:0]                ref_src;
+  wire                       ref_view;
+  wire [7:0]                 ref_mat_a, ref_mat_b, ref_weight;
+  wire [$clog2(ARENAS):0]    fill_arena_unused;
+
+  zhao_terrain_topo #(
+      .ARENAS (ARENAS),
+      .GEN_W  (GEN_W),
+      .INDEX_W($clog2(DEPTH) + 1),
+      .ARENA_W($clog2(ARENAS) + 1)
+  ) u_topo (
+      .clk          (clk),
+      .rst_n        (rst_n),
+      .job_valid_i  (job_valid_i),
+      .job_ready_o  (job_ready_o),
+      .job_arena_i  (job_arena_i),
+      .job_gen_i    (job_gen_i),
+      .job_surface_i(job_surface_i),
+      .job_src_id_i (job_src_id_i),
+      .job_view_i   (job_view_i),
+      .job_mat_a_i  (job_mat_a_i),
+      .job_mat_b_i  (job_mat_b_i),
+      .job_weight_i (job_weight_i),
+      .ref_valid_o  (ref_valid),
+      .ref_ready_i  (ref_ready),
+      .ref_arena_o  (ref_arena),
+      .ref_gen_o    (ref_gen),
+      .ref_ia_o     (ref_ia),
+      .ref_ib_o     (ref_ib),
+      .ref_ic_o     (ref_ic),
+      .ref_src_id_o (ref_src),
+      .ref_view_o   (ref_view),
+      .ref_mat_a_o  (ref_mat_a),
+      .ref_mat_b_o  (ref_mat_b),
+      .ref_weight_o (ref_weight),
+      .hold_o       (hold_o),
+      .hold_arena_o (hold_arena_o),
+      .done_o       (done_o),
+      .jobs_done_o  (jobs_done_o)
+  );
+
   zhao_proj_subsystem #(
       .PAYLOAD_A_W  (16),
       .ROWS_PER_PASS(ROWS_PER_PASS),
@@ -224,25 +273,24 @@ module tb_terrain_wcache #(
       .b_arena_i         (b_arena_i),
       .b_index_i         (b_index_i),
       .fill_landed_o     (fill_seen_o),
+      .fill_arena_o      (fill_arena_unused),
       .open_i            (open_i),
       .open_arena_i      (open_arena_i),
       .open_gen_o        (open_gen_o),
       .seal_i            (seal_i),
       .seal_arena_i      (seal_arena_i),
-      .job_valid_i       (job_valid_i),
-      .job_ready_o       (job_ready_o),
-      .job_arena_i       (job_arena_i),
-      .job_gen_i         (job_gen_i),
-      .job_surface_i     (job_surface_i),
-      .job_src_id_i      (job_src_id_i),
-      .job_view_i        (job_view_i),
-      .job_mat_a_i       (job_mat_a_i),
-      .job_mat_b_i       (job_mat_b_i),
-      .job_weight_i      (job_weight_i),
-      .hold_o            (hold_o),
-      .hold_arena_o      (hold_arena_o),
-      .done_o            (done_o),
-      .jobs_done_o       (jobs_done_o),
+      .ref_valid_i       (ref_valid),
+      .ref_ready_o       (ref_ready),
+      .ref_arena_i       (ref_arena),
+      .ref_gen_i         (ref_gen),
+      .ref_ia_i          (ref_ia),
+      .ref_ib_i          (ref_ib),
+      .ref_ic_i          (ref_ic),
+      .ref_src_id_i      (ref_src),
+      .ref_view_i        (ref_view),
+      .ref_mat_a_i       (ref_mat_a),
+      .ref_mat_b_i       (ref_mat_b),
+      .ref_weight_i      (ref_weight),
       .out_valid_o       (out_valid_o),
       .out_ready_i       (out_ready_i),
       .out_ax_o          (out_ax_o),
