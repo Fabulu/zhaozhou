@@ -36,6 +36,14 @@ class BoardTruthValidationTest(unittest.TestCase):
 
         self.assertTrue(any("configurationFlashTouched" in error for error in errors))
 
+    def test_review_hold_removal_fires(self) -> None:
+        data = copy.deepcopy(BOARD_TRUTH)
+        data["reviewHold"]["futurePhysicalLoadsAuthorized"] = True
+
+        errors = VALIDATOR.validate(data, REPO)
+
+        self.assertTrue(any("futurePhysicalLoadsAuthorized" in error for error in errors))
+
     def test_dropping_open_capability_fires(self) -> None:
         data = copy.deepcopy(BOARD_TRUTH)
         data["openCapabilities"].remove("full_zhaozhou_shell")

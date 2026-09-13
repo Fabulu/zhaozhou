@@ -94,6 +94,7 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
 
 
 def verify_build(build: Path, errors: list[str], summary: dict[str, object]) -> None:
+    common.verify_patched_sys_top(build, errors, summary)
     output = build / "output_files"
     flow = output / f"{PROJECT}.flow.rpt"
     mapping = output / f"{PROJECT}.map.rpt"
@@ -182,17 +183,13 @@ def verify_build(build: Path, errors: list[str], summary: dict[str, object]) -> 
             "sha256": hashlib.sha256(rbf.read_bytes()).hexdigest(),
         }
 
-    critical: list[str] = []
-    for report in sorted(output.glob("*.rpt")):
-        text = common.require_text(report, [], errors)
-        critical.extend(
-            f"{report.name}: {line.strip()}"
-            for line in text.splitlines()
-            if re.search(r"Critical Warning \(\d+\)", line)
-        )
+    critical = common.collect_critical_warnings(output, errors)
     if critical:
         errors.append(f"critical Quartus warnings present: {critical[:5]}")
     summary["criticalWarnings"] = critical
+
+    if fit_text:
+        common.verify_user_io_high_z(fit_text, fit, errors, summary)
 
     if pin_text:
         for signal, package_pin in common.EXPECTED_CLOCK_PINS.items():

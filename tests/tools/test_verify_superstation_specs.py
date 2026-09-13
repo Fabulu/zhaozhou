@@ -14,6 +14,7 @@ SPEC = importlib.util.spec_from_file_location("verify_superstation_specs", VERIF
 assert SPEC is not None and SPEC.loader is not None
 VERIFY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VERIFY)
+import patch_mister_sys_top as PATCH
 
 
 class SuperStationSpecsVerifierTest(unittest.TestCase):
@@ -22,6 +23,9 @@ class SuperStationSpecsVerifierTest(unittest.TestCase):
         build = Path(temporary.name)
         output = build / "output_files"
         output.mkdir()
+        (build / "sys").mkdir()
+        upstream = (REPO / "fpga" / "sys" / "sys_top.v").read_bytes()
+        (build / "sys" / "sys_top.v").write_bytes(PATCH.patch_bytes(upstream))
         (output / "ZhaozhouSpecs.flow.rpt").write_text(
             "; Flow Status ; Successful - now ;\n; Device ; 5CSEBA6U23I7 ;\n",
             encoding="utf-8",
@@ -40,9 +44,12 @@ Quartus Prime Analysis & Synthesis was successful
 """,
             encoding="utf-8",
         )
-        (output / "ZhaozhouSpecs.fit.rpt").write_bytes(
-            "Device 5CSEBA6U23I7 at 100° C\nQuartus Prime Fitter was successful\n".encode("cp1252")
+        fit_text = "Device 5CSEBA6U23I7 at 100° C\nQuartus Prime Fitter was successful\n"
+        fit_text += "".join(
+            f"Pin USER_IO[{bit}] has a permanently disabled output enable\n"
+            for bit in range(7)
         )
+        (output / "ZhaozhouSpecs.fit.rpt").write_bytes(fit_text.encode("cp1252"))
         (output / "ZhaozhouSpecs.sta.rpt").write_text(
             """Device 5CSEBA6U23I7
 Quartus Prime TimeQuest Timing Analyzer was successful
@@ -78,6 +85,21 @@ RESERVED_INPUT : A4 : : : : 7C :
 
         self.assertEqual(errors, [])
         self.assertEqual(summary["implementedDsps"], 34)
+
+    def test_tabular_critical_warning_fires(self) -> None:
+        temporary, build = self.make_build()
+        self.addCleanup(temporary.cleanup)
+        path = build / "output_files" / "ZhaozhouSpecs.map.rpt"
+        path.write_text(
+            path.read_text("utf-8")
+            + "; mode ; Input ; Critical Warning ; width mismatch ;\n",
+            "utf-8",
+        )
+        errors: list[str] = []
+
+        VERIFY.verify_build(build, errors, {})
+
+        self.assertTrue(any("critical Quartus warnings present" in error for error in errors))
 
     def test_missing_shipping_module_fires(self) -> None:
         temporary, build = self.make_build()

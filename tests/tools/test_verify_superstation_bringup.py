@@ -13,6 +13,11 @@ SPEC = importlib.util.spec_from_file_location("verify_superstation_bringup", VER
 assert SPEC is not None and SPEC.loader is not None
 VERIFY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VERIFY)
+PATCH_PATH = REPO / "tools" / "board" / "patch_mister_sys_top.py"
+PATCH_SPEC = importlib.util.spec_from_file_location("patch_mister_sys_top", PATCH_PATH)
+assert PATCH_SPEC is not None and PATCH_SPEC.loader is not None
+PATCH = importlib.util.module_from_spec(PATCH_SPEC)
+PATCH_SPEC.loader.exec_module(PATCH)
 
 
 class SuperStationBringupVerifierTest(unittest.TestCase):
@@ -20,6 +25,7 @@ class SuperStationBringupVerifierTest(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         repo = Path(temporary.name)
         (repo / "fpga" / "rtl" / "platform").mkdir(parents=True)
+        (repo / "tools" / "board").mkdir(parents=True)
         shutil.copy2(REPO / ".gitattributes", repo / ".gitattributes")
         shutil.copytree(REPO / "fpga" / "sys", repo / "fpga" / "sys")
         for name in (
@@ -35,6 +41,14 @@ class SuperStationBringupVerifierTest(unittest.TestCase):
         shutil.copy2(REPO / "fpga" / "rtl" / "pll.qip", repo / "fpga" / "rtl" / "pll.qip")
         shutil.copy2(REPO / "fpga" / "rtl" / "pll.v", repo / "fpga" / "rtl" / "pll.v")
         shutil.copytree(REPO / "fpga" / "rtl" / "pll", repo / "fpga" / "rtl" / "pll")
+        for name in (
+            "patch_mister_sys_top.py",
+            "superstation_build_manifest.py",
+            "invoke_superstation_probe.ps1",
+            "build_superstation_bringup.ps1",
+            "build_superstation_specs.ps1",
+        ):
+            shutil.copy2(REPO / "tools" / "board" / name, repo / "tools" / "board" / name)
         return temporary, repo
 
     def make_build(self) -> tuple[tempfile.TemporaryDirectory[str], Path]:
@@ -42,6 +56,9 @@ class SuperStationBringupVerifierTest(unittest.TestCase):
         build = Path(temporary.name)
         output = build / "output_files"
         output.mkdir()
+        (build / "sys").mkdir()
+        upstream = (REPO / "fpga" / "sys" / "sys_top.v").read_bytes()
+        (build / "sys" / "sys_top.v").write_bytes(PATCH.patch_bytes(upstream))
         (output / "ZhaozhouBringup.flow.rpt").write_text(
             """; Flow Status ; Successful - now ;
 ; Top-level Entity Name ; sys_top ;
@@ -50,9 +67,12 @@ class SuperStationBringupVerifierTest(unittest.TestCase):
 """,
             encoding="utf-8",
         )
-        (output / "ZhaozhouBringup.fit.rpt").write_bytes(
-            "Device 5CSEBA6U23I7 at 100° C\nQuartus Prime Fitter was successful\n".encode("cp1252")
+        fit_text = "Device 5CSEBA6U23I7 at 100° C\nQuartus Prime Fitter was successful\n"
+        fit_text += "".join(
+            f"Pin USER_IO[{bit}] has a permanently disabled output enable\n"
+            for bit in range(7)
         )
+        (output / "ZhaozhouBringup.fit.rpt").write_bytes(fit_text.encode("cp1252"))
         (output / "ZhaozhouBringup.sta.rpt").write_text(
             """Device 5CSEBA6U23I7
 Quartus Prime TimeQuest Timing Analyzer was successful
@@ -94,6 +114,21 @@ RESERVED_INPUT : A4 : : : : 7C :
         self.assertEqual(errors, [])
         self.assertEqual(summary["buildStatus"], "ok")
 
+    def test_unnumbered_tabular_critical_warning_fires(self) -> None:
+        temporary, build = self.make_build()
+        self.addCleanup(temporary.cleanup)
+        path = build / "output_files" / "ZhaozhouBringup.flow.rpt"
+        path.write_text(
+            path.read_text(encoding="utf-8")
+            + "; mode ; Input ; Critical Warning ; 4-bit value drives 5-bit port ;\n",
+            encoding="utf-8",
+        )
+        errors: list[str] = []
+
+        VERIFY.verify_build(build, errors, {})
+
+        self.assertTrue(any("critical Quartus warnings present" in error for error in errors))
+
     def test_negative_timing_slack_fires(self) -> None:
         temporary, build = self.make_build()
         self.addCleanup(temporary.cleanup)
@@ -124,6 +159,39 @@ RESERVED_INPUT : A4 : : : : 7C :
         VERIFY.verify_build(build, errors, {})
 
         self.assertTrue(any("unused output-driving pins" in error for error in errors))
+
+    def test_missing_user_io_high_z_evidence_fires(self) -> None:
+        temporary, build = self.make_build()
+        self.addCleanup(temporary.cleanup)
+        path = build / "output_files" / "ZhaozhouBringup.fit.rpt"
+        data = path.read_bytes().replace(
+            b"Pin USER_IO[2] has a permanently disabled output enable\n",
+            b"",
+            1,
+        )
+        path.write_bytes(data)
+        errors: list[str] = []
+
+        VERIFY.verify_build(build, errors, {})
+
+        self.assertTrue(any("expected all bits 0..6" in error for error in errors))
+
+    def test_loader_fingerprint_pin_removal_fires(self) -> None:
+        temporary, repo = self.make_repo()
+        self.addCleanup(temporary.cleanup)
+        path = repo / "tools" / "board" / "invoke_superstation_probe.ps1"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace(
+                "SHA256:FqNJOsj3FLUoMQxgn+cqGoXvVfENmVK4QFoSCMKl2lU",
+                "SHA256:removed",
+            ),
+            encoding="utf-8",
+        )
+
+        errors, _ = VERIFY.verify_sources(repo)
+
+        self.assertTrue(any("FqNJOsj3FLUoMQxgn" in error for error in errors))
 
     def test_vendor_attribute_removal_fires(self) -> None:
         temporary, repo = self.make_repo()

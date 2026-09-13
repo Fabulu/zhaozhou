@@ -101,12 +101,23 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'fpga\rtl\pll.v') -Destination (Join
 Copy-Item -LiteralPath (Join-Path $repoRoot 'fpga\rtl\pll') -Destination (Join-Path $buildRoot 'rtl\pll') -Recurse
 Copy-Item -LiteralPath (Join-Path $repoRoot 'fpga\sys') -Destination (Join-Path $buildRoot 'sys') -Recurse
 
+$patchScript = Join-Path $repoRoot 'tools\board\patch_mister_sys_top.py'
+& python $patchScript (Join-Path $buildRoot 'sys\sys_top.v') --json
+if ($LASTEXITCODE -ne 0) { throw 'SuperStation sys_top safety overlay failed.' }
+
 $sourceCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
 [System.IO.File]::WriteAllText(
     $marker,
     "sourceCommit=$sourceCommit`ncreated=$((Get-Date).ToString('o'))`n",
     (New-Object System.Text.UTF8Encoding($false))
 )
+
+$manifestScript = Join-Path $repoRoot 'tools\board\superstation_build_manifest.py'
+$sourceManifest = Join-Path $buildRoot 'ZhaozhouSpecs.source-manifest.json'
+$completeManifest = Join-Path $buildRoot 'ZhaozhouSpecs.complete-manifest.json'
+& python $manifestScript create --profile Specs --phase source --repo $repoRoot `
+    --build-dir $buildRoot --output $sourceManifest
+if ($LASTEXITCODE -ne 0) { throw 'SuperStation specs source manifest creation failed.' }
 
 . (Join-Path $repoRoot 'tools\env\zhao-env.ps1')
 Push-Location $buildRoot
@@ -122,5 +133,11 @@ if ($compileRc -ne 0) {
 
 & python $verifyScript --repo $repoRoot --build-dir $buildRoot --json
 if ($LASTEXITCODE -ne 0) { throw 'SuperStation hardware-spec post-build audit failed.' }
+& python $manifestScript create --profile Specs --phase complete --repo $repoRoot `
+    --build-dir $buildRoot --source-manifest $sourceManifest --output $completeManifest
+if ($LASTEXITCODE -ne 0) { throw 'SuperStation specs complete manifest creation failed.' }
+& python $manifestScript verify --manifest $completeManifest --repo $repoRoot --build-dir $buildRoot
+if ($LASTEXITCODE -ne 0) { throw 'SuperStation specs complete manifest verification failed.' }
 
 Write-Host "Built and audited: $buildRoot\output_files\ZhaozhouSpecs.rbf" -ForegroundColor Green
+Write-Host "Complete manifest: $completeManifest" -ForegroundColor Green

@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 EXPECTED_SYS_TREE = "9f95eddd65ebfca9b8dd94ed1a48e3f867165aa8"
+EXPECTED_PATCHED_SYS_TOP_SHA256 = "24eea7b0f76848239c872f626a48f4e0c6150423b9e6561fd3dd63f2a99501e9"
 LOCAL_SYS_FILES = {"LICENSE", "PROVENANCE.md"}
 EXPECTED_DEVICE = "5CSEBA6U23I7"
 EXPECTED_CLOCK_PINS = {
@@ -89,6 +90,61 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
         ],
         errors,
     )
+
+    require_text(
+        repo / "tools" / "board" / "patch_mister_sys_top.py",
+        [
+            EXPECTED_PATCHED_SYS_TOP_SHA256,
+            "assign USER_IO[0] = 1'bZ;",
+            "assign USER_IO[6] = 1'bZ;",
+            "{1'b0,~lowlat,LFB_EN ? LFB_FLT : |scaler_flt,2'b00}",
+        ],
+        errors,
+    )
+    require_text(
+        repo / "tools" / "board" / "superstation_build_manifest.py",
+        [
+            EXPECTED_PATCHED_SYS_TOP_SHA256,
+            '"sourceFiles"',
+            '"buildInputs"',
+            '"artifacts"',
+            '"manifestSha256"',
+            '"flow.rpt", "map.rpt", "fit.rpt", "asm.rpt", "sta.rpt", "pin", "rbf", "sof"',
+        ],
+        errors,
+    )
+    require_text(
+        repo / "tools" / "board" / "invoke_superstation_probe.ps1",
+        [
+            "SHA256:FqNJOsj3FLUoMQxgn+cqGoXvVfENmVK4QFoSCMKl2lU",
+            "HostKeyAlgorithms=ssh-ed25519",
+            "Assert-BoardIdentity",
+            "Assert-BoardState",
+            "bridge:lwhps2fpga",
+            "bridge:hps2fpga",
+            "bridge:fpga2hps",
+            "Assert-WatchdogEvidence",
+            "watchdog-write-ok",
+            "watchdog-menu-ok",
+            "superstation_build_manifest.py",
+            "BUILD-MANIFEST-V2.json",
+            "Physical probe loads require a new explicit -ReceiptPath",
+        ],
+        errors,
+    )
+    for script_name in ("build_superstation_bringup.ps1", "build_superstation_specs.ps1"):
+        require_text(
+            repo / "tools" / "board" / script_name,
+            [
+                "patch_mister_sys_top.py",
+                "sys\\sys_top.v",
+                "SuperStation sys_top safety overlay failed",
+                "superstation_build_manifest.py",
+                "--phase source",
+                "--phase complete",
+            ],
+            errors,
+        )
 
     if not sys_dir.is_dir():
         errors.append(f"missing directory: {sys_dir}")
@@ -197,7 +253,70 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
     return errors, summary
 
 
+def verify_patched_sys_top(
+    build: Path, errors: list[str], summary: dict[str, object]
+) -> None:
+    path = build / "sys" / "sys_top.v"
+    if not path.is_file():
+        errors.append(f"missing patched build-copy sys_top: {path}")
+        return
+    data = path.read_bytes()
+    actual = hashlib.sha256(data).hexdigest()
+    summary["patchedSysTop"] = {
+        "path": str(path),
+        "sha256": actual,
+        "expectedSha256": EXPECTED_PATCHED_SYS_TOP_SHA256,
+    }
+    if actual != EXPECTED_PATCHED_SYS_TOP_SHA256:
+        errors.append(
+            f"{path}: expected safety-overlay digest "
+            f"{EXPECTED_PATCHED_SYS_TOP_SHA256}, got {actual}"
+        )
+    text = data.decode("utf-8")
+    for bit in range(7):
+        required = f"assign USER_IO[{bit}] = 1'bZ;"
+        if required not in text:
+            errors.append(f"{path}: missing unconditional high-Z USER_IO[{bit}]")
+    if "SW[1] ? HDMI_" in text:
+        errors.append(f"{path}: physical SW[1] can still drive USER/SNAC")
+    if "{1'b0,~lowlat,LFB_EN ? LFB_FLT : |scaler_flt,2'b00}" not in text:
+        errors.append(f"{path}: scaler mode input is not explicitly 5 bits")
+
+
+def collect_critical_warnings(
+    output: Path, errors: list[str]
+) -> list[str]:
+    critical: list[str] = []
+    zero_summary = re.compile(r"Critical Warnings?\s*[:=;]\s*0\b", re.IGNORECASE)
+    for report in sorted(output.glob("*.rpt")):
+        report_text = require_text(report, [], errors)
+        for line in report_text.splitlines():
+            if re.search(r"\bCritical Warning\b", line, re.IGNORECASE) and not zero_summary.search(line):
+                critical.append(f"{report.name}: {line.strip()}")
+    return critical
+
+
+def verify_user_io_high_z(
+    fit_text: str, fit: Path, errors: list[str], summary: dict[str, object]
+) -> None:
+    disabled_user_io = sorted(
+        {
+            int(bit)
+            for bit in re.findall(
+                r"Pin USER_IO\[(\d)\] has a permanently disabled output enable",
+                fit_text,
+            )
+        }
+    )
+    if disabled_user_io != list(range(7)):
+        errors.append(
+            f"{fit}: USER/SNAC high-Z proof is {disabled_user_io}, expected all bits 0..6"
+        )
+    summary["userIoDisabledOutputEnables"] = disabled_user_io
+
+
 def verify_build(build: Path, errors: list[str], summary: dict[str, object]) -> None:
+    verify_patched_sys_top(build, errors, summary)
     output = build / "output_files"
     flow = output / "ZhaozhouBringup.flow.rpt"
     fit = output / "ZhaozhouBringup.fit.rpt"
@@ -238,17 +357,13 @@ def verify_build(build: Path, errors: list[str], summary: dict[str, object]) -> 
             "sha256": hashlib.sha256(rbf.read_bytes()).hexdigest(),
         }
 
-    critical: list[str] = []
-    for report in sorted(output.glob("*.rpt")):
-        report_text = require_text(report, [], errors)
-        critical.extend(
-            f"{report.name}: {line.strip()}"
-            for line in report_text.splitlines()
-            if re.search(r"Critical Warning \(\d+\)", line)
-        )
+    critical = collect_critical_warnings(output, errors)
     if critical:
         errors.append(f"critical Quartus warnings present: {critical[:5]}")
     summary["criticalWarnings"] = critical
+
+    if fit_text:
+        verify_user_io_high_z(fit_text, fit, errors, summary)
 
     if pin_text:
         for signal, package_pin in EXPECTED_CLOCK_PINS.items():

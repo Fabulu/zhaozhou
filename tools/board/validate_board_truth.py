@@ -60,14 +60,23 @@ def validate(data: dict[str, Any], repo: Path) -> list[str]:
     require_equal(data, "fpga.buildTarget", "5CSEBA6U23I7", errors)
     require_equal(data, "fpga.compatibilityStatus", "physically_proven_for_mister_rbf", errors)
     require_equal(data, "fpga.physicalMarkingStatus", "unread", errors)
+    require_equal(data, "fpga.volatileLoad.status", "historical_proof_future_loads_held", errors)
     require_equal(data, "fpga.volatileLoad.configurationFlashTouched", False, errors)
     require_equal(data, "fpga.volatileLoad.jtagUsed", False, errors)
+    require_equal(data, "reviewHold.futurePhysicalLoadsAuthorized", False, errors)
     require_equal(data, "jtag.status", "no_hardware_available", errors)
     require_equal(data, "clocks.hpsOsc1.frequencyHz", 25_000_000, errors)
     require_equal(data, "memory.fpgaSdram.timingStatus", "unmeasured", errors)
     require_equal(data, "memory.fpgaSdram.bandwidthStatus", "unmeasured", errors)
     require_equal(data, "memory.fpgaSdram.physicalTransactionStatus", "untested", errors)
     require_equal(data, "memory.hpsDdr.fabricInterfaceStatus", "untested", errors)
+    require_equal(data, "network.ssh.status", "pinned_read_only_identity_preflight_passed", errors)
+    require_equal(
+        data,
+        "network.ssh.ed25519Fingerprint",
+        "SHA256:FqNJOsj3FLUoMQxgn+cqGoXvVfENmVK4QFoSCMKl2lU",
+        errors,
+    )
     require_equal(data, "physicalCapabilities.selectedEngineBlockVectors.signature", "e5f1c57f", errors)
     require_equal(data, "physicalCapabilities.selectedEngineBlockVectors.vectorCount", 16, errors)
 
@@ -123,7 +132,10 @@ def validate(data: dict[str, Any], repo: Path) -> list[str]:
     load_path = evidence.get("specLoadReceipt")
     if isinstance(build_path, str) and (repo / build_path).is_file():
         build = json.loads((repo / build_path).read_text(encoding="utf-8"))
-        require_equal(build, "status", "ok", errors)
+        require_equal(build, "status", "historical-invalidated", errors)
+        require_equal(build, "reviewHold.loadAuthorization", False, errors)
+        require_equal(build, "reviewHold.greenVectorResultCredible", True, errors)
+        require_equal(build, "flow.criticalWarnings", 1, errors)
         require_equal(build, "expectedSignature", "e5f1c57f", errors)
         require_equal(build, "physicalHierarchy.zhao_dual18_mul:u_mul.dspBlocks", 1, errors)
         require_equal(build, "flow.virtualPins", 0, errors)

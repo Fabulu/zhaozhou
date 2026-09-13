@@ -18,6 +18,29 @@ or Zhaozhou customisation belongs outside `fpga/sys/`.
 The import was checked file-by-file with SHA-256 against a detached checkout of
 the pinned commit: 57 expected files, zero missing or mismatched files.
 
+## SuperStation build-copy safety overlay
+
+The vendor tree above remains unchanged. `build_superstation_bringup.ps1` and
+`build_superstation_specs.ps1` copy it into their owned workspace and then run
+`tools/board/patch_mister_sys_top.py` against that copy only.
+
+- pinned upstream `sys_top.v` SHA-256:
+  `9bc5562bcc9d923aa3bff1a9c976c52492edb9ef981f428b7a4101c919a711b8`;
+- exact repaired build-copy SHA-256:
+  `24eea7b0f76848239c872f626a48f4e0c6150423b9e6561fd3dd63f2a99501e9`;
+- repair 1: all seven USER/SNAC assignments are unconditional high-impedance;
+- repair 2: the 4-bit scaler-mode expression receives a leading zero for the
+  5-bit `ascal.mode` port, preserving all four existing bit meanings.
+
+Both replacement anchors and both digests are exact and mutation-tested. Any
+upstream drift refuses before writing the build copy. Post-fit verification must
+also report all seven USER_IO output enables permanently disabled and zero
+Critical Warnings of any spelling.
+
+Historical 2026-09-13 RBFs predate this overlay. Their observed color-bar/green
+results remain historical evidence, but independent review invalidated them for
+future loading.
+
 This closes the original `ZH-000` source-availability block for the
 SuperStation/MiSTer lane. It does not by itself close PLL/reset behaviour or
 board-load safety; those are established by the board-specific project,
