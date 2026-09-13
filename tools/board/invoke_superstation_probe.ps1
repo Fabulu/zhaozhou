@@ -101,18 +101,18 @@ function Arm-BoardRollbackWatchdog {
                "date -u +watchdog-fired=%Y-%m-%dT%H:%M:%SZ; " +
                "printf `"%s\n`" `"load_core $menuPath`" > /dev/MiSTer_cmd; fi' " +
                ">$log 2>&1 </dev/null & echo `$!"
-    $pid = @(Invoke-BoardSsh $command)[-1]
-    if ($pid -notmatch '^\d+$') { throw "HPS rollback watchdog returned invalid PID: $pid" }
-    Invoke-BoardSsh "test -e $token && kill -0 $pid" | Out-Null
-    return [ordered]@{ pid = [int]$pid; token = $token; log = $log; delaySeconds = $DelaySeconds }
+    $watchdogPid = @(Invoke-BoardSsh $command)[-1]
+    if ($watchdogPid -notmatch '^\d+$') { throw "HPS rollback watchdog returned invalid PID: $watchdogPid" }
+    Invoke-BoardSsh "test -e $token && kill -0 $watchdogPid" | Out-Null
+    return [ordered]@{ pid = [int]$watchdogPid; token = $token; log = $log; delaySeconds = $DelaySeconds }
 }
 
 function Disarm-BoardRollbackWatchdog {
     param([Parameter(Mandatory = $true)][System.Collections.IDictionary]$Watchdog)
-    $pid = $Watchdog.pid
+    $watchdogPid = $Watchdog.pid
     $token = $Watchdog.token
     $log = $Watchdog.log
-    $lines = @(Invoke-BoardSsh "rm -f $token; kill $pid 2>/dev/null || true; cat $log 2>/dev/null || true; rm -f $log")
+    $lines = @(Invoke-BoardSsh "rm -f $token; kill $watchdogPid 2>/dev/null || true; cat $log 2>/dev/null || true; rm -f $log")
     return $lines
 }
 

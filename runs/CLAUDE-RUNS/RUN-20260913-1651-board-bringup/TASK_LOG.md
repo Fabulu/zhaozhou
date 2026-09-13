@@ -192,6 +192,21 @@ verified.
   rollback watchdog that is armed before the candidate load and is independent
   of FPGA fabric/video/bridge behavior.
 
+### 2026-09-13 18:43 UTC+02:00 - Rollback rehearsed; candidate not yet loaded
+
+- Committed/pushed the audit and guarded transaction tool as `d6dec802`.
+- Rehearsed the known menu rollback: `menu.rbf` matched its expected SHA-256;
+  MENU returned; SSH stayed reachable; FPGA manager stayed `operating`; all
+  three bridges stayed enabled. MiSTer restarted with a new PID.
+- The first candidate transaction staged and byte-verified the RBF, then stopped
+  **before `load_core`** while arming the watchdog: PowerShell's case-insensitive
+  `$PID` built-in cannot be assigned through local `$pid`.
+- Receipt proves `loaded: []`, `rollbackAttempted: false`, board remained MENU,
+  and the staged RBF was removed. Preserved it as
+  `FIRST-VOLATILE-LOAD-ATTEMPT1-NOLOAD.json`; do not call this a hardware test.
+- Renamed the local watchdog variable to `$watchdogPid`; no RTL, RBF, or board
+  state changed by the repair.
+
 ---
 
 ## Subagent Spawns
@@ -219,6 +234,8 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/QUARTUS-FLOW.rpt`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/QUARTUS-PIN.pin`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/QUARTUS-STA.rpt`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/ROLLBACK-REHEARSAL.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD-ATTEMPT1-NOLOAD.json`
 
 ---
 

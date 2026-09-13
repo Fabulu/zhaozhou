@@ -1,0 +1,52 @@
+{
+    "schema":  "zhaozhou.superstation.load-receipt.v1",
+    "startedUtc":  "2026-09-13T16:42:24.0337775Z",
+    "host":  "192.168.178.59",
+    "branch":  "zhaozhou-board-bringup-20260913",
+    "sourceCommit":  "d6dec80235f2e715ca74928737205ee006216e7e",
+    "buildSourceCommit":  "a28769a1be59e9b40ff4984cda84d2739346ff66",
+    "buildAudit":  {
+                       "path":  "C:\\programmieren\\zencrifice\\zhaozhou-board-bringup-20260913\\runs\\CLAUDE-RUNS\\RUN-20260913-1651-board-bringup\\QUARTUS-BUILD-AUDIT.json",
+                       "status":  "ok",
+                       "sourceCommit":  "a28769a1be59e9b40ff4984cda84d2739346ff66",
+                       "rbfSha256":  "7e7b46f79685383dc85a057f88602154039e27cf4bea37fdfb911a55948ea9c0"
+                   },
+    "mode":  "probe-transaction",
+    "before":  [
+                   "utc=2026-09-13T16:42:23Z",
+                   "core=MENU",
+                   "rbf=MENU",
+                   "fpga=operating",
+                   "bridge:lwhps2fpga=enabled",
+                   "bridge:hps2fpga=enabled",
+                   "bridge:fpga2hps=enabled",
+                   "mister_pid=11870"
+               ],
+    "loaded":  [
+
+               ],
+    "afterRollback":  [
+
+                      ],
+    "localRbf":  {
+                     "path":  "C:\\programmieren\\zencrifice\\zhaozhou-board-bringup-20260913\\build-board-superstation\\output_files\\ZhaozhouBringup.rbf",
+                     "bytes":  2429104,
+                     "sha256":  "7e7b46f79685383dc85a057f88602154039e27cf4bea37fdfb911a55948ea9c0"
+                 },
+    "remoteRbf":  "/media/fat/_Utility/ZhaozhouBringup-7e7b46f79685.rbf",
+    "menuRbf":  {
+                    "path":  "/media/fat/menu.rbf",
+                    "expectedSha256":  "25d5461b55e4d45e79c876a02d69f32b22f414b64e600a1adc930eefea6ea4a7",
+                    "observedSha256":  "25d5461b55e4d45e79c876a02d69f32b22f414b64e600a1adc930eefea6ea4a7"
+                },
+    "watchdog":  null,
+    "watchdogLog":  [
+
+                    ],
+    "rollbackAttempted":  false,
+    "rollbackSucceeded":  false,
+    "stagedFileRemoved":  true,
+    "status":  "failed",
+    "error":  "Die Variable \"PID\" kann nicht überschrieben werden, da sie konstant oder schreibgeschützt ist.",
+    "completedUtc":  "2026-09-13T16:42:28.8556714Z"
+}
