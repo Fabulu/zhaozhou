@@ -85,6 +85,21 @@ with `HARDWARE-SPECS-BUILD-AUDIT.json`.
 The timing non-claim remains: 4 input ports/14 paths and 50 output ports/122
 paths have no board delays. This is not external-I/O timing closure.
 
+## Physical result
+
+The exact audited RBF loaded at `2026-09-13T17:51:11Z`. MiSTer reported
+`Zhaozhou Hardware Specs`; FPGA manager remained `operating`; all three HPS/fabric
+bridges and SSH remained live. After a 30-second hold, host rollback returned
+MENU at `17:51:46Z`, disarmed the independently proven HPS watchdog, and removed
+the staged RBF. The machine receipt is `status=ok`,
+`rollbackSucceeded=true`, `stagedFileRemoved=true`, `error=null`.
+
+At `2026-09-13T19:53:06+02:00` the owner reported **green signature bands** on
+the physical display. Under the committed display contract, green requires all
+16 independent comparisons to have left `fail_code_o=0` and the accumulated
+actual-result signature to equal `e5f1c57f`. This closes the v1 selected-vector
+question on the physical SuperStation One, subject to the claim boundary below.
+
 ## Claim boundary
 
 A physical green result may establish only:

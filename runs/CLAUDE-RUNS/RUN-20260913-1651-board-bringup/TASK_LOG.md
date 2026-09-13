@@ -390,6 +390,25 @@ verified.
 - Physical load remains pending until this audit and strengthened checker are
   committed/pushed; then only the closed Specs profile may stage this hash.
 
+### 2026-09-13 19:52 UTC+02:00 - Real-block image ran; visual result pending
+
+- Committed/pushed exact build evidence as `923a1bba`, then invoked only the
+  closed `Specs` load profile with RBF SHA-256
+  `59407e97e208980c7965b931bcaf920291cadb40f56c623ec32cc3df672c86cd`.
+- Staged bytes matched; HPS watchdog PID 18405 armed for 45 seconds.
+- At `17:51:11Z`, MiSTer reported `Zhaozhou Hardware Specs`; FPGA manager stayed
+  `operating`; all three bridges and SSH stayed live.
+- Held 30 seconds, then host rollback returned MENU at `17:51:46Z`; watchdog was
+  disarmed without firing; staged RBF was removed. Machine receipt is `status=ok`.
+- Machine receipt proves load/identity/continuity/rollback, not HDMI pixels.
+  Owner reported **green signature bands** at 19:53 local. Under the committed
+  display contract, this means all 16 selected physical comparisons left first
+  failure zero and the accumulated actual-result signature matched `e5f1c57f`.
+- This closes only v1 selected CRC/fill/signed-A+unsigned-B packed-multiply
+  vectors in this wrapper. Expanded physical arithmetic, raw host-readable
+  lanes, physical mutants, production migration/saving, and the full shell
+  remain open.
+
 ---
 
 ## Subagent Spawns
@@ -441,6 +460,7 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-QUARTUS-MAP.rpt`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-QUARTUS-PIN.pin`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-QUARTUS-STA.rpt`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-LOAD.json`
 
 ---
 

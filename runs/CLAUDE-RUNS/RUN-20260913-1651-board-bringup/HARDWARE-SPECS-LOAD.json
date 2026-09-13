@@ -1,0 +1,78 @@
+{
+    "schema":  "zhaozhou.superstation.load-receipt.v1",
+    "startedUtc":  "2026-09-13T17:51:02.3694001Z",
+    "host":  "192.168.178.59",
+    "branch":  "zhaozhou-board-bringup-20260913",
+    "profile":  "Specs",
+    "sourceCommit":  "923a1bba97bb6e30adce11fc1117982af686714a",
+    "buildSourceCommit":  "c68cc8ad3e480af6a8a0a5f3dcaffc81b7165d20",
+    "buildAudit":  {
+                       "path":  "C:\\programmieren\\zencrifice\\zhaozhou-board-bringup-20260913\\runs\\CLAUDE-RUNS\\RUN-20260913-1651-board-bringup\\HARDWARE-SPECS-BUILD-AUDIT.json",
+                       "status":  "ok",
+                       "sourceCommit":  "c68cc8ad3e480af6a8a0a5f3dcaffc81b7165d20",
+                       "rbfSha256":  "59407e97e208980c7965b931bcaf920291cadb40f56c623ec32cc3df672c86cd"
+                   },
+    "mode":  "probe-transaction",
+    "before":  [
+                   "utc=2026-09-13T17:51:02Z",
+                   "core=MENU",
+                   "rbf=MENU",
+                   "fpga=operating",
+                   "bridge:lwhps2fpga=enabled",
+                   "bridge:hps2fpga=enabled",
+                   "bridge:fpga2hps=enabled",
+                   "mister_pid=14538"
+               ],
+    "loaded":  [
+                   "utc=2026-09-13T17:51:11Z",
+                   "core=Zhaozhou Hardware Specs",
+                   "rbf=Zhaozhou Hardware Specs",
+                   "fpga=operating",
+                   "bridge:lwhps2fpga=enabled",
+                   "bridge:hps2fpga=enabled",
+                   "bridge:fpga2hps=enabled",
+                   "mister_pid=18420"
+               ],
+    "afterRollback":  [
+                          "utc=2026-09-13T17:51:46Z",
+                          "core=MENU",
+                          "rbf=MENU",
+                          "fpga=operating",
+                          "bridge:lwhps2fpga=enabled",
+                          "bridge:hps2fpga=enabled",
+                          "bridge:fpga2hps=enabled",
+                          "mister_pid=18501"
+                      ],
+    "localRbf":  {
+                     "path":  "C:\\programmieren\\zencrifice\\zhaozhou-board-bringup-20260913\\build-board-superstation-specs\\output_files\\ZhaozhouSpecs.rbf",
+                     "bytes":  2425124,
+                     "sha256":  "59407e97e208980c7965b931bcaf920291cadb40f56c623ec32cc3df672c86cd"
+                 },
+    "remoteRbf":  "/media/fat/_Utility/ZhaozhouSpecs-59407e97e208.rbf",
+    "menuRbf":  {
+                    "path":  "/media/fat/menu.rbf",
+                    "expectedSha256":  "25d5461b55e4d45e79c876a02d69f32b22f414b64e600a1adc930eefea6ea4a7",
+                    "observedSha256":  "25d5461b55e4d45e79c876a02d69f32b22f414b64e600a1adc930eefea6ea4a7"
+                },
+    "watchdog":  {
+                     "pid":  18405,
+                     "token":  "/tmp/zhaozhou-rollback-59407e97e208.armed",
+                     "log":  "/tmp/zhaozhou-rollback-59407e97e208.log",
+                     "script":  "/tmp/zhaozhou-rollback-59407e97e208.sh",
+                     "delaySeconds":  45
+                 },
+    "watchdogLog":  [
+
+                    ],
+    "rollbackAttempted":  true,
+    "rollbackSucceeded":  true,
+    "stagedFileRemoved":  true,
+    "status":  "ok",
+    "error":  null,
+    "ownerVisualObservation":  {
+                                      "reportedLocal":  "2026-09-13T19:53:06+02:00",
+                                      "display":  "green signature bands",
+                                      "interpretation":  "all 16 selected physical comparisons passed and signature matched e5f1c57f"
+                                  },
+    "completedUtc":  "2026-09-13T17:51:47.9214636Z"
+}
