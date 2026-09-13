@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "status": "partial",
-  "capturedAt": "2026-09-13T21:27:26+02:00",
+  "capturedAt": "2026-09-13T23:43:31+02:00",
   "targetId": "superstation-one-rcsh-1001-1002",
   "reviewHold": {
     "futurePhysicalLoadsAuthorized": false,
@@ -114,6 +114,8 @@
       "status": "pinned_read_only_identity_preflight_passed",
       "server": "OpenSSH_8.6",
       "ed25519Fingerprint": "SHA256:FqNJOsj3FLUoMQxgn+cqGoXvVfENmVK4QFoSCMKl2lU",
+      "loaderSourceCommit": "bd73428561da57d373c9da1ea449edbc444dc907",
+      "loaderGitBlob": "98fbb8f856e18cbb5faab01fee085399062fff00",
       "pinnedIdentity": {
         "hostname": "MiSTer",
         "model": "Terasic DE10-nano",
@@ -178,6 +180,7 @@
     "specBuildAudit": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-BUILD-AUDIT.json",
     "specLoadReceipt": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-LOAD.json",
     "identityPreflight": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/IDENTITY-PREFLIGHT.json",
+    "identityPreflightPreSourceBinding": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/IDENTITY-PREFLIGHT-PRE-SOURCE-BINDING.json",
     "identityPreflightFirstAttempt": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/IDENTITY-PREFLIGHT-ATTEMPT1-KEYSCAN-STDERR.json"
   }
 }

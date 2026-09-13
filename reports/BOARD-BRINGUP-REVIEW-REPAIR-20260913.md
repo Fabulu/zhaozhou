@@ -1,6 +1,8 @@
 # Board bring-up independent-review repair — 2026-09-13
 
 **Reviewed snapshot:** `fe684755b8076b005214dc8dbbad7195b678b9f0`
+**Completeness/provenance source fix:** `bd73428561da57d373c9da1ea449edbc444dc907`
+**Board-truth binding verifier:** `bb441091`
 **State:** repair-only; **no new Quartus compile or RBF load authorised**
 
 ## Review disposition
@@ -78,27 +80,41 @@ looked for partial lines rather than requiring a complete exact record.
 
 `invoke_superstation_probe.ps1` now:
 
-1. obtains only the ED25519 key, calculates its SHA-256 itself, and requires
+1. refuses identity/load evidence unless the loader file itself is clean at HEAD,
+   then records its full source commit, exact Git blob, and working SHA-256;
+2. obtains only the ED25519 key, calculates its SHA-256 itself, and requires
    `SHA256:FqNJOsj3FLUoMQxgn+cqGoXvVfENmVK4QFoSCMKl2lU`;
-2. writes that one key to an ephemeral isolated known-hosts file and forces both
+3. writes that one key to an ephemeral isolated known-hosts file and forces both
    user/global host-key lookup plus `HostKeyAlgorithms=ssh-ed25519` to it;
-3. pins hostname, DT model/compatibility, Ethernet MAC, HPS silicon revision,
+4. pins hostname, DT model/compatibility, Ethernet MAC, HPS silicon revision,
    MiSTer binary hash, and MENU RBF hash;
-4. requires exact key sets and values for UTC, core, RBF identity, FPGA
-   `operating`, all three named enabled bridges, and exactly one numeric MiSTer
-   PID before/load/rollback;
-5. requires physical loads to use HPS-watchdog-primary mode and a new explicit
+5. requires exact key sets and values for raw and parsed UTC, core, RBF identity,
+   FPGA `operating`, all three named enabled bridges, and exactly one numeric
+   MiSTer PID before/load/rollback;
+6. requires physical loads to use HPS-watchdog-primary mode and a new explicit
    receipt path;
-6. requires complete watchdog fired/contiguous-attempt/write-ok/MENU-ok evidence;
-7. requires new V2 build audit and complete manifest, so historical audits and
+7. requires the exact contiguous watchdog fired/attempt/timeout/write-ok/MENU-ok
+   sequence with matching summary attempts;
+8. requires non-null/consistent build source, remote RBF, local RBF, V2 audit,
+   complete manifest, audit/manifest/RBF source bindings, and rollback attempted/
+   succeeded/staged-file-removed state;
+9. requires new V2 build audit and complete manifest, so historical audits and
    RBFs cannot pass.
 
-A read-only identity preflight passed and is preserved. A first attempt exposed
-Windows PowerShell 5's native-stderr behavior around `ssh-keyscan`; it was
-replaced with explicit `System.Diagnostics.Process` capture. A second read-only
-positive control aimed the repaired loader at the old Specs RBF: pinned host and
-board identity passed, then the loader refused before SCP, watchdog arm, or
-`load_core` because source no longer matched the old build.
+The first read-only identity attempt exposed Windows PowerShell 5's native-
+stderr behavior around `ssh-keyscan`; explicit Process capture repaired it. The
+next receipt passed identity but was stamped `fe684755`, before the loader source
+binding existed, so it is preserved as `IDENTITY-PREFLIGHT-PRE-SOURCE-BINDING.json`
+and is not cited as proof of the final loader. After committing the completeness
+repair, a new read-only preflight bound itself to loader source commit
+`bd73428561da57d373c9da1ea449edbc444dc907`, Git blob
+`98fbb8f856e18cbb5faab01fee085399062fff00`, and working SHA-256
+`692e735d0f8868723fa9c40a09770d1347cadf40b267ce8402354f37ce3b2d9b`;
+the receipt validator independently resolves that commit:path blob and passes.
+
+A separate read-only positive control aimed the repaired loader at the old Specs
+RBF: pinned host and board identity passed, then the loader refused before SCP,
+watchdog arm, or `load_core` because source no longer matched the old build.
 
 ## Complete manifest
 
@@ -106,28 +122,38 @@ board identity passed, then the loader refused before SCP, watchdog arm, or
 
 - pre-build source manifest: source commit, every repository build source,
   verification file, exact copied build input, and patched sys_top digest;
-- complete manifest: immutable source-manifest digest plus every file under
-  Quartus `output_files`, including required flow/map/fit/asm/STA/pin/RBF/SOF;
-- self-digest and source/build-input/artifact size+SHA-256 verification.
+- complete manifest: immutable source-manifest digest plus the exact 16-file
+  Quartus output set (flow/map/fit/asm/STA reports and summaries, smsg, done,
+  JDI, pin, RBF, SLD, SOF);
+- verifier independently reconstructs the exact profile source, verification,
+  build-input and output record-name sets, rejects missing/extra names, checks
+  every size+SHA-256, validates the canonical self-digest, and reconstructs and
+  validates `sourceManifestSha256` from the complete record.
 
-Source, artifact, and self-digest mutants all fire. No V2 complete manifest
-exists yet because the review hold forbids the repaired compile.
+Source, artifact, self-digest, omitted-source-with-recomputed-self-digest,
+added-output-with-recomputed-self-digest, and source-manifest-digest mutants all
+fire. No V2 complete manifest exists yet because the review hold forbids the
+repaired compile.
 
 ## Verification performed without compile/load
 
-- 36 repair/unit/mutation tests pass.
+- 45 repair/unit/mutation tests pass.
 - Both repaired source verifiers pass.
 - `board_truth.json` remains `partial` and explicitly holds future physical
   loads.
-- Pinned read-only identity preflight passes.
+- Read-only identity preflight is source-bound to `bd734285` and its exact loader
+  blob; independent receipt validation passes.
 - Historical Specs build fails the repaired post-build verifier as intended.
 - Historical RBF refusal receipt contains no loaded state, no remote path, no
   watchdog, and no rollback attempt.
+- No repaired V2 build/audit/manifest exists; compile/load remain HOLD.
 
 ## Remaining gates
 
-1. Commit and push this repair packet for independent review.
-2. Wait for the separate 23:00 shell fit to complete.
+1. Commit/push the source-bound identity receipt and this completeness addendum,
+   then submit exact head for independent review. Do not compile or load.
+2. Confirm the separate 23:00 shell fit has completed before any later Quartus
+   action.
 3. Run one repaired clean Quartus build; create V2 audit and complete manifest.
 4. Obtain explicit independent approval of those exact artifacts.
 5. Run a separately named physical red/failure control, returned by the HPS

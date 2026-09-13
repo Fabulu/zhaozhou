@@ -1,16 +1,10 @@
 {
     "schema":  "zhaozhou.superstation.load-receipt.v1",
-    "startedUtc":  "2026-09-13T21:41:50.5827281Z",
+    "startedUtc":  "2026-09-13T19:27:19.1702621Z",
     "host":  "192.168.178.59",
     "branch":  "zhaozhou-board-bringup-20260913",
     "profile":  "Bringup",
-    "sourceCommit":  "bd73428561da57d373c9da1ea449edbc444dc907",
-    "loaderSource":  {
-                         "path":  "tools/board/invoke_superstation_probe.ps1",
-                         "sourceCommit":  "bd73428561da57d373c9da1ea449edbc444dc907",
-                         "gitBlob":  "98fbb8f856e18cbb5faab01fee085399062fff00",
-                         "workingSha256":  "692e735d0f8868723fa9c40a09770d1347cadf40b267ce8402354f37ce3b2d9b"
-                     },
+    "sourceCommit":  "fe684755b8076b005214dc8dbbad7195b678b9f0",
     "buildSourceCommit":  null,
     "buildAudit":  null,
     "buildManifest":  null,
@@ -30,7 +24,7 @@
                       },
     "mode":  "identity-preflight",
     "before":  [
-                   "utc=2026-09-13T21:41:56Z",
+                   "utc=2026-09-13T19:27:24Z",
                    "core=MENU",
                    "rbf=MENU",
                    "fpga=operating",
@@ -40,7 +34,7 @@
                    "mister_pid=25052"
                ],
     "beforeState":  {
-                        "utc":  "2026-09-13T21:41:56Z",
+                        "utc":  "2026-09-13T19:27:24Z",
                         "core":  "MENU",
                         "rbf":  "MENU",
                         "fpga":  "operating",
@@ -74,5 +68,5 @@
     "stagedFileRemoved":  false,
     "status":  "ok",
     "error":  null,
-    "completedUtc":  "2026-09-13T21:41:57.9252915Z"
+    "completedUtc":  "2026-09-13T19:27:26.6549036Z"
 }

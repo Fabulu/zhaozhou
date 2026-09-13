@@ -494,6 +494,39 @@ verified.
 - Committed and pushed the source/tool/test repair as `9f75c931`; this is a
   review candidate only, not compile or load authorisation.
 
+### 2026-09-13 23:51 UTC+02:00 - Completeness/provenance review gaps closed
+
+- Independent audit of `a6e7b488` kept the HOLD and identified four remaining
+  evidence gaps. Gap 1—no repaired V2 build/audit/manifest—is intentionally open
+  until source review and the separate 23:00 fit finish; no compile was run.
+- Manifest verifier now reconstructs and requires exact profile source,
+  verification, build-input and exact 16-file Quartus output name sets. It
+  validates every size/hash, canonical self-digest, and independently rebuilt
+  `sourceManifestSha256`.
+- Added fired mutants that remove a source or add an output and then recompute
+  the manifest self-digest; both now fail, as do source-manifest digest, raw
+  source, artifact, and self-digest mutations.
+- Receipt verifier now refuses false `rollbackAttempted`, empty raw loaded/
+  rollback arrays, null remote RBF/build source, mismatched audit/manifest/source
+  bindings, old manifest names, raw-vs-parsed state drift, disabled bridges, and
+  noncontiguous/incomplete watchdog attempts.
+- Loader now refuses to produce identity or load evidence unless its own file is
+  clean at HEAD, and records source commit, exact Git blob, and working SHA-256.
+  Physical receipts require exact V2 audit/manifest names and bindings.
+- Committed/pushed these source fixes as `bd734285`. Preserved the prior
+  `fe684755` identity receipt as pre-source-binding evidence, then ran a new
+  **read-only** preflight bound to loader commit `bd734285`, blob
+  `98fbb8f856e18cbb5faab01fee085399062fff00`, and working SHA-256
+  `692e735d0f8868723fa9c40a09770d1347cadf40b267ce8402354f37ce3b2d9b`.
+- New source-bound receipt pins the expected ED25519/unit identity and exact MENU
+  FPGA/bridge/PID state; independent receipt validator resolves and matches the
+  commit:path blob. No RBF, remote path, watchdog, rollback, or board mutation.
+- 45 repair/unit/mutation tests pass. Repair source/truth/identity gates pass.
+  No Quartus compile, staging/load, JTAG, flash, persistence, or SD mutation.
+- Pushed manifest/receipt completeness source as `bd734285` and the
+  board-truth-to-identity binding verifier as `bb441091`. Both remain
+  repair-review candidates, not compile/load authorisation.
+
 ---
 
 ## Subagent Spawns
@@ -557,6 +590,7 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `tests/tools/test_superstation_build_manifest.py`
 - `tests/tools/test_verify_superstation_receipt.py`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/IDENTITY-PREFLIGHT-ATTEMPT1-KEYSCAN-STDERR.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/IDENTITY-PREFLIGHT-PRE-SOURCE-BINDING.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/IDENTITY-PREFLIGHT.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/LOAD-HOLD-OLD-RBF-REJECT.json`
 
