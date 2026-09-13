@@ -283,6 +283,22 @@ verified.
   owns the failure path. The script is base64-staged to avoid shell quoting and
   is removed after the transaction.
 
+### 2026-09-13 19:07 UTC+02:00 - HPS watchdog positive control passed
+
+- Committed/pushed the bounded retry repair as `90897195` and reran the exact
+  audited RBF with a 10-second HPS watchdog deadline.
+- Owner again saw bars; no new engine blocks were claimed because this was the
+  same immutable RBF and a separately named rollback-instrument test.
+- Watchdog fired at `17:06:20Z`, wrote the FIFO on attempt 1, waited for the
+  MiSTer transition, and logged `watchdog-menu-ok=1`.
+- HPS-reported identity was MENU at `17:06:30Z` before the host fallback path
+  could act. FPGA manager, all bridges, and SSH remained healthy.
+- Host cleanup disarmed/removed the ended watchdog artifacts and removed the
+  staged RBF. `WATCHDOG-FIRE-TEST.json` is `status=ok`,
+  `rollbackSucceeded=true`, `stagedFileRemoved=true`, `error=null`.
+- The watchdog instrument has now been made to fire and catch the state it is
+  supposed to catch; future volatile loads may rely on it with host fallback.
+
 ---
 
 ## Subagent Spawns
@@ -316,6 +332,7 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD-ATTEMPT2-BARS-ROLLBACK.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/WATCHDOG-FIRE-TEST-ATTEMPT1-FIFO-BLOCKED.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/WATCHDOG-FIRE-TEST.json`
 
 ---
 

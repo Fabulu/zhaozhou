@@ -287,6 +287,15 @@ FPGA changed. Host rollback succeeded first, the watchdog was disarmed without
 firing, and the temporary RBF was removed from the SD card. Final receipt:
 `status=ok`, `rollbackSucceeded=true`, `stagedFileRemoved=true`, `error=null`.
 
+The watchdog itself was then positive-controlled rather than inferred from its
+silence. A first attempt proved its independent deadline fired but found a
+one-shot FIFO writer could block during MiSTer core-process recreation; host
+fallback restored MENU. The bounded retry repair was tested at
+`2026-09-13T17:06:20Z`: the HPS watchdog fired, wrote the MENU command on
+attempt 1, independently verified `watchdog-menu-ok=1`, and returned the board
+to MENU before the host acted. The host then removed the staged RBF and HPS
+script/token/log. Receipt: `WATCHDOG-FIRE-TEST.json`, `status=ok`.
+
 This proves the MiSTer build -> stage -> volatile configure -> run -> observe ->
 rollback path on the physical SuperStation One. It does not authorise JTAG,
 configuration flash, boot persistence, or pins outside the pinned MiSTer
