@@ -198,6 +198,29 @@ ENGINE1 currently passes read-only requests only in `GEOM.ASSET_POOL`, `0x06A0_0
 
 V3's cache needs a different response shape: one 16-byte-aligned line request, then exactly eight ascending 16-bit beats, with only one fill outstanding and no fill-data ready. It cannot be connected after the current universal 64-bit packer.
 
+### 2.7 Packet-B authority and compatibility ledger
+
+Packet B does not treat agreement between two stale implementations as a specification. Where the present artifacts disagree, authority is frozen in this order:
+
+| question | authority for Packet B | artifact which loses on disagreement |
+|---|---|---|
+| fragment claim/issue/commit/final/emission/release | `zhao_texture_v3own` and its adversarial owner suite | any wrapper, resolver, AUX pipe, or combiner which tries to infer or duplicate owner lifetime |
+| packet widths and named AUX offsets | Packet-A `zhao_render_texture_pkg.sv` | hand-written concatenations or the earlier 330/250 draft |
+| material recipes, counts, RGB, alpha, raw index, and status reduction | `reports/MATERIAL_ARCHITECTURE.md`, **FROZEN MATERIAL COMBINER V1, owner ruling R9** | the stale six-recipe `TEXTURE.COMBINE.md`, current `zhao_texture_material_combine_v2.sv`, and current `zref_material.hpp` where they multiply the wrong alpha, gate MASK, use the wrong detail layers, or implement MODULATE2X as rounded-unit-multiply then double |
+| Surface Sheet storage protocol: opcodes, handle, response status, source echo, and response hold | `design/contracts/SURFACE.SHEET.md` | the narrower unversioned AUX leaf interface |
+| Packet-B AUX adapter, typed owner plane, issue/return, refusal, quiet, and no-sample-2 law | new `design/contracts/TEXTURE.AUX.V2.md`, which normatively imports the READ transaction from `SURFACE.SHEET.md`, plus R9 | `design/contracts/TEXTURE.AUX.md`, which is oracle-only for the unchanged old island, and the inherited old-island `has_aux ? aux : sample2` mux |
+| old-island behavior used for a paired migration comparison | unchanged `zhao_texture_island_top` hierarchy together with unchanged `design/contracts/TEXTURE.AUX.md` | no claim that its AUX-as-sample-2 mux, narrow Sheet boundary, or stale material arithmetic is Packet-B product law |
+| material/resource identity before frame-local selection | `commands.zidl` plus `MATERIAL.RESOLVE.md`, including full upstream binding-generation validation | Packet A's eight-bit consecutive selector, which is only a frame-local compatibility seam |
+| production-accounting disposition | the actual instantiation closure checked by `check_prod_manifest.py` | prose labels such as `excluded:not-yet-adopted` applied to a module which is reachable from a selected accounting root |
+| descriptor physical image and page-generation join | this report §§3.3 and 12.3/12.7: `physical320={33'b0,logical287}` and `zhao_texture_uv_join_v2` | implicit RAM padding or late reads of current active generation |
+| island quiet | this report §4.5's named signals and literal Boolean equation | semantic “all terms empty,” owner-quiet aliasing, or an unlisted held valid |
+| interface-manifest ABI and bytes | this report §12.1's closed schema v1 and canonicalization algorithm | ad hoc parser output, pretty JSON, host/tool defaults, or a hash which includes itself |
+| A-to-B start gate | this report §13's explicit landing rule | the generic packet-overlap permission or the repository-wide “develop while fit runs” rule |
+
+The current old island remains an executable oracle for order, stalls, routing, palette/direct decode, and the explicitly common material subset: PASSTHRU count 1 without AUX. It is not the arithmetic oracle for recipes 1–7. Packet B corrects `zref_material.hpp`, the combine contract, the new versioned RTL combiner, and their tests to R9 together. It does **not** edit the shared unversioned `zhao_texture_aux_pipe.sv` or `zhao_texture_material_combine_v2.sv`; `zhao_texture_island_top` therefore remains executable rather than becoming an oracle whose leaves changed underneath it.
+
+Three safe, reversible defaults are chosen because the product ABI does not yet settle them: (1) Packet A's class/palette fields are sample-0 compatibility witnesses, never routing authorities; (2) successful AUX `{tag,strength}` is deliberately validated and then unconsumed in Packet B rather than disguised as sample 2; and (3) the frame-local binding page uses a nonzero eight-bit generation while upstream retains the full resource-generation check. Each choice has an explicit failure or HOLD below and can be widened without changing owner lifetime.
+
 ## 3. The versioned seam
 
 ### 3.1 New module boundary
@@ -252,7 +275,7 @@ typedef struct packed {
 
 Thus `AUX_WX_LO=0`, `AUX_WZ_LO=32`, `AUX_SHEET_HANDLE_LO=64`, `AUX_ENV_X0_LO=96`, `AUX_ENV_X1_LO=128`, `AUX_ENV_Z0_LO=160`, and `AUX_ENV_Z1_LO=192`. **The existing V3 law is low 32 = world X and high 32 = world Z, i.e. the old 64-bit concatenation is `{wz, wx}`, not `{wx, wz}`.** Accessors use the struct fields or these named offsets; raw numeric slices are forbidden outside the package self-test.
 
-For `aux_required=0`, the entire 224-bit AUX value is canonical zero. For `aux_required=1`, the sheet handle and all four envelope edges are part of the fragment accepted by V3. The handle is the full generation-bearing `handle32`, and the envelope must satisfy `env_x1 > env_x0 && env_z1 > env_z0`. A stale/missing handle or degenerate envelope returns a typed refused AUX completion, sets the sticky frame fault, and issues no read under a guessed/default envelope.
+For `aux_required=0`, the entire 224-bit AUX value is canonical zero. For `aux_required=1`, the sheet handle and all four envelope edges are part of the fragment accepted by V3. The handle is the full generation-bearing `handle32`, and the envelope must satisfy `env_x1 > env_x0 && env_z1 > env_z0`. A degenerate envelope returns a typed local refused AUX completion, sets the sticky frame fault, and issues no read under a guessed/default envelope. Handle residency and generation are not guessed locally: the exact sealed handle is presented to Surface Sheet, whose MISS is the terminal stale/missing-handle refusal.
 
 The 362-bit V3 request portion is:
 
@@ -265,8 +288,8 @@ The 362-bit V3 request portion is:
 | recipe / weight | 3 + 8 |
 | AUX required / typed AUX surface context | 1 + 224 |
 | base RGB / alpha | 24 + 8 |
-| current response class | 2 |
-| palette slot / generation | 2 + 8 |
+| sample-0 response-class witness | 2 |
+| sample-0 palette-slot / generation witness | 2 + 8 |
 | **total** | **362** |
 
 Early-Z continues to take its explicit 80 bits (address, depth, state, source ID) and carries the remaining **410 bits** opaquely. The existing candidate skid therefore changes from `W=168` to `W=490`. This is a packet-width change, not an Early-Z algorithm change. These wider numbers supersede the earlier 330/250 draft; that draft carried world position but omitted the sheet/envelope identity needed to address two live terrain patches safely.
@@ -281,35 +304,93 @@ The sequence register advances only on `candidate_valid && v3_frag_ready`. It is
 
 ### 3.3 Put raster continuation in the existing owner; seal AUX under that owner
 
-Add independent `RCTXW=160` and `AUXCTXW=224` parameters and these ports to the V3 top:
+Retain the existing `CTXW=64` port as a **legacy caller context**, and add independent `RCTXW=160` and `AUXCTXW=224` parameters. The versioned V3 boundary replaces the ambiguous depth spelling and adds:
 
 ```systemverilog
-input  logic [RCTXW-1:0]   frag_retire_ctx_i;
-input  logic [AUXCTXW-1:0] frag_aux_ctx_i;
-output logic [RCTXW-1:0]   out_retire_ctx_o;
-output logic [7:0]         out_texel_idx_o;
-output logic [7:0]         out_status_o;
-output logic               quiet_o;
+input  logic [23:0]          frag_invw24_i;       // replaces frag_depth_i
+input  logic [CTXW-1:0]      frag_ctx_i;          // legacy, unchanged meaning
+input  logic [RCTXW-1:0]     frag_retire_ctx_i;
+input  logic [AUXCTXW-1:0]   frag_aux_ctx_i;
+output logic [RCTXW-1:0]     out_retire_ctx_o;
+output logic [7:0]           out_texel_idx_o;
+output logic [7:0]           out_status_o;
+output logic                 quiet_o;
 ```
 
-The existing 64-bit context meaning survives in `frag_aux_ctx_i[63:0]`: `[31:0]=wx`, `[63:32]=wz`. At owner admission, V3 presents:
+`frag_invw24_i` is the unsigned 24-bit interpolated inverse-W used bit-for-bit by Early-Z, perspective recovery, and `RASTER.FRAGMENT`; it is never projected `w`. `frag_ctx_i` is not repurposed as AUX. At owner admission the context is exactly:
 
 ```text
-adm_ctx = {frag_retire_ctx_i, frag_aux_ctx_i[63:0]} // 224 owner-context bits
+adm_ctx = {frag_retire_ctx_i, frag_ctx_i} // 160 + 64 = 224 bits
 ```
 
-and instantiates the unchanged generic `zhao_texture_v3own` with that context width. At ordered output:
+and at ordered output:
 
 ```text
-out_tag_o        = own_out_ctx[15:0]   // deprecated compatibility view: wx[15:0]
 out_retire_ctx_o = own_out_ctx[223:64]
+out_tag_o        = own_out_ctx[15:0]       // legacy frag_ctx_i[15:0]
 ```
 
-The full 224-bit AUX record is written on that same `own_adm_accept` into a new owner-keyed `zhao_texture_early_desc_v2`, with the allocated `{slot,generation}`. The descriptor is exactly 279 bits: the existing descriptor's 55 non-context bits plus `AUXCTXW=224`, implemented as statically sliced synchronous banks with one shared write/read address. The old `zhao_texture_early_desc` remains the old-island oracle. V2 is not allocated separately, has no independent head/tail/credit, and accepts a read only for a live matching owner generation. The expander transports the descriptor attached to that owner. That makes sheet handle, patch envelope, and world position immutable for the same lifetime as the fragment without duplicating them in the ordered-output bank.
+The connected raster stage has no legacy caller tag and drives all 64 legacy context bits to canonical zero. The compatibility differential may drive historical nonzero context and must observe exactly the old `out_tag_o`. In particular, world X is **not** exposed as the compatibility tag; the former draft's `out_tag_o = aux.wx[15:0]` is superseded.
 
-The owner context bank and its bounded output queue become 224 bits. The owner-sealed early descriptor becomes 279 bits. `zhao_texture_v3own.sv` itself does not need a semantic change; its parameterized context is already admitted once, stored immutably, fetched in order, held under stall, and released on output acceptance.
+The full AUX record and all early material witnesses are written on that same `own_adm_accept` into `zhao_texture_early_desc_v2`, under the allocated `{slot,generation}`. Its logical row is exactly **287 bits**, low field first:
 
-This is smaller and safer than a 64-entry sideband FIFO beside V3. It also makes owner release and raster-continuation release the same event, while the wider early descriptor remains subordinate owner storage rather than a second owner.
+| bits | width | field |
+|---|---:|---|
+| `[223:0]` | 224 | typed `zhao_aux_surface_ctx_v2_t` |
+| `[231:224]` | 8 | LOD Q4.4 |
+| `[233:232]` | 2 | sample-0 class witness |
+| `[234]` | 1 | `aux_required` |
+| `[236:235]` | 2 | sample count |
+| `[238:237]` | 2 | sample-0 palette-slot witness |
+| `[246:239]` | 8 | sample-0 palette-generation witness |
+| `[254:247]` | 8 | retained Mosaic material A byte |
+| `[262:255]` | 8 | retained Mosaic material B byte |
+| `[270:263]` | 8 | retained Mosaic weight byte |
+| `[278:271]` | 8 | base binding selector |
+| `[286:279]` | 8 | captured active binding-page generation; zero means no sealed page |
+
+These are the existing descriptor's 55 non-context bits, the full 224-bit AUX record, and one eight-bit page generation. Owner generation remains a separate side array and is compared with the independently offered read generation. The descriptor's logical and physical images are frozen separately; there is no implicit tool padding:
+
+```systemverilog
+logic [286:0] logical287;
+logic [319:0] physical320;
+logic  [39:0] slice [0:7];
+
+physical320 = {33'b0, logical287};
+for (int k = 0; k < 8; k++)
+  slice[k] = physical320[k*40 +: 40];
+```
+
+Thus slice 0 holds `logical287[39:0]`, slices 1–5 hold the next five ascending 40-bit ranges, slice 6 holds `logical287[279:240]`, and slice 7 is exactly `{33'b0,logical287[286:280]}`; the pad is `physical320[319:287] == slice[7][39:7]`. `slice[0:7]` above is packing notation, not permission to infer a multidimensional unpacked RAM: RTL uses eight statically elaborated 40-bit-by-DEPTH held-read banks with constant `k`, plus the separate owner-generation bank. All eight slices are written on the same `own_adm_accept`. The write data for `slice[7][39:7]` is the literal constant `33'b0`, not old RAM data, a replicated payload bit, or a tool-generated width extension. Payload RAM is not reset.
+
+An accepted descriptor read captures all eight slices and the separate stored owner generation under the same read acceptance, holds them unchanged through backpressure, and performs two **independent** checks before exposing a usable logical row:
+
+```text
+owner_generation_ok = stored_owner_generation == independently offered owner generation
+descriptor_pad_ok    = (|captured_slice7[39:7]) == 1'b0
+descriptor_usable    = owner_generation_ok && descriptor_pad_ok
+logical287_read      = captured_physical320[286:0] only when descriptor_usable
+```
+
+`descriptor_pad_ok` compares stored physical pad bits directly with constant zero; it is not compared with a second value captured by the same enable. The descriptor port is exactly `output logic [31:0] desc_pad_fault_o`, and `desc_read_accept = rd_valid_i && rd_ready_o`. Reset drives the counter to `32'd0`; on `desc_read_accept && (|captured_slice7[39:7])` it updates once as `desc_pad_fault_o <= desc_pad_fault_o + 32'd1`, modulo `2^32`, and otherwise holds. A stalled read response cannot increment it again because only the accepted descriptor-read edge is counted. The same event separately sets the sticky frame fault; the sticky bit is not an alias, saturation bit, clear enable, or clock enable for the counter, and clearing either frame state or the sticky fault does not clear `desc_pad_fault_o`. Only reset clears the counter. The event exposes no bit from the corrupt logical row. The owner-mask copy already stored by `zhao_texture_v3own` is then the only obligation authority: each required sample/AUX receives its normal logical issue and a reserved next-or-later local `SOURCE_REFUSED` return, or an empty required mask creates the refused combine ticket directly. Pad failure therefore cannot turn stale RAM into work and cannot strand an owner. A legal write can never create nonzero pad; the detector's fire evidence is a committed descriptor mutant which drives exactly one `slice[7][39:7]` write bit high. Its inverse-polarity test requires a `desc_pad_fault_o` delta of exactly one and the terminal refusal path to fire. Separate ordinary tests assert all 33 stored/read pad bits stay zero, reset-to-zero, hold without an accepted bad-pad read, one increment despite output stalls, two distinct accepted bad-pad reads producing delta two, and `32'hFFFF_FFFF -> 32'h0000_0000` modulo wrap without changing sticky-fault semantics. Source/elaboration inventory proves `287 -> 320 -> 8*40` and all eight slice offsets.
+
+The V2 descriptor has no allocator, head, tail, credit, or release cursor. It is subordinate owner-keyed storage. The expander transports its accepted row attached to the owner. Sheet handle, patch envelope, world position, page generation, and compatibility witnesses consequently stay immutable for the fragment lifetime without entering a second lifecycle.
+
+#### Descriptor/UV join and page-generation carriage
+
+The unversioned `zhao_texture_uv_join.sv` remains an old-island oracle and is not in Packet B's selected closure. Packet B adds `fpga/rtl/texture/zhao_texture_uv_join_v2.sv`. Its two accepted input records and one output record are exactly:
+
+```text
+desc input = {owner14, logical287}                 // 301 bits
+UV input   = {owner14, U32, V32}                   // 78 bits
+joined365  = {owner14, logical287, U32, V32}       // 365 bits
+```
+
+There is exactly one binding-page-generation field in this path: `logical287[286:279]`. The descriptor input, V2 join, output hold, expander and resolver never append or carry a second copy. Each input has its own one-entry held register and ready/valid acceptance; neither register changes while occupied. The join may assert output valid only when both registers are occupied and their independently captured 14-bit owners match. The entire 365-bit output record is registered/held and remains bit-stable while `out_valid && !out_ready`; input replacement cannot alter any held output field. A mismatching pair asserts the independently clocked `uvjoin_owner_mismatch_o`, sets the sticky frame fault, and produces no apparently valid joined work; it is an internal-corruption fire case, not a legal recovery input.
+
+The captured generation remains solely in `logical287[286:279]` from descriptor write through joined output. When `joined365` is accepted, `zhao_texture_frag_expand_v2` consumes the logical row and copies that slice once into each held sample-job record; a sample job does not also carry `logical287`, so no stage holds both a row copy and a generation sidecar for the same job. `zhao_texture_binding_resolver_v2` compares the job byte with the resolver's active-page register. Neither module may sample live `active_page_generation_o`, reconstruct generation from an owner token, or capture it from the later UV offer. The active-page register's enable is the atomic activation edge rather than the join's capture enable. The stalled A/B control captures descriptor A, whose `logical287[286:279]=A`, and UV A, blocks `joined365`, then offers descriptor/UV B with logical generation B; every held A output and sample job must retain A in that one logical slice. Independent mutants (1) overwrite `logical287[286:279]` in a held joined record from current active page and (2) retain A's owner/U/V while taking B's entire generation slice; both must fail payload hold and the resolver comparison/fire control. `zhao_texture_uv_join_v2.idle_o` is true only when both input registers and the 365-bit output register are empty.
+
+The generic owner is instantiated with `CTXW=RCTXW+CTXW=224` and `RESW=48`. This is a parameter and instrumentation use of `zhao_texture_v3own`, not a semantic lifecycle change.
 
 ### 3.4 Atomic admission
 
@@ -325,9 +406,9 @@ Every V3 operand, the 224-bit typed AUX context, and the 160-bit retirement cont
 
 The context capture must use `own_adm_accept`, the same event that allocates `{slot,generation}`. A local rolling context pointer is forbidden.
 
-### 3.5 Complete V3 result and exact required-source reduction
+### 3.5 Complete V3 result, material authority, and required-source reduction
 
-The V3 owner result changes from 40 to 48 bits:
+The Packet-A external result remains exactly 48 bits:
 
 ```text
 [47:40] status
@@ -336,9 +417,48 @@ The V3 owner result changes from 40 to 48 bits:
 [23:0]  RGB
 ```
 
-For this version, `status[0]` is `SOURCE_REFUSED`; bits `[7:1]` are reserved-zero at every current producer but are carried and bitwise-ORed rather than discarded. `out_refused_o = out_status_o[0]`. Fault-class counters remain separate; this packet does not invent seven new status encodings.
+`status[0]` is `SOURCE_REFUSED`; bits `[7:1]` are reserved-zero at every Packet-B producer, but queues and reduction OR all eight bits so a later typed status cannot be silently narrowed. `out_refused_o = out_status_o[0]`. Any nonzero status or malformed material raises the sticky frame fault. The terminal visible error value is the existing loud sample value `RGB=24'hFF00FF, A=8'hFF`, never admitted base colour or a successful partial recipe; raw index still follows the sample-0 rule below. A refused result remains terminal and handshakes normally so the owner releases and the shell can release, rather than publish, the frame lease.
 
-The required-source mask is frozen at admission and uses the owner's existing order `{AUX, sample2, sample1, sample0}`:
+The immutable owner-keyed material row is exactly **46 bits**, low field first:
+
+| bits | width | field |
+|---|---:|---|
+| `[0]` | 1 | `aux_required` |
+| `[2:1]` | 2 | sample count |
+| `[5:3]` | 3 | recipe ID |
+| `[13:6]` | 8 | recipe weight, unit8 raw/256 |
+| `[21:14]` | 8 | admitted base alpha |
+| `[45:22]` | 24 | admitted base RGB |
+
+It is written only on `own_adm_accept`, read only under the matching owner, and held through combiner admission. No recipe, count, base, or AUX bit may be reread from live fragment pins. The owner's admitted `required_mask` is the source-obligation authority; the descriptor's count/AUX copies drive expansion and the material row's copies drive combine qualification, but both are captured on that same edge and independently checked against the owner mask. A mismatch is a protocol/frame fault and neither copy may rewrite or satisfy the mask. The retained Mosaic A/B/weight bytes in the early descriptor remain Mosaic inputs only; they cannot override recipe, recipe weight, or admitted base RGB/A in this material row.
+
+#### One arithmetic law
+
+Owner ruling R9 in `reports/MATERIAL_ARCHITECTURE.md` is the sole Packet-B arithmetic authority. The helpers operate independently on each RGB byte; all intermediates are wide enough before shifting or saturation:
+
+```text
+rescale_s(x,8)   = (x + 128) >>> 8          // signed arithmetic shift; ties toward +infinity
+unit_mul8(a,b)   = (a*b + 128) >> 8
+modulate2x8(a,b) = sat_u8((a*b + 64) >> 7)
+lerp8(a,b,w)     = sat_u8(a + rescale_s((b-a)*w,8))
+```
+
+The complete legal table is:
+
+| ID | recipe | legal count | RGB | alpha |
+|---:|---|---|---|---|
+| 0 | PASSTHRU | 0 or 1 | count 0: admitted base RGB; count 1: `s0.rgb` | count 0: admitted base alpha; count 1: `s0.a` |
+| 1 | MODULATE | exactly 2 | `unit_mul8(s0.rgb,s1.rgb)` | `s0.a` |
+| 2 | MODULATE2X | exactly 2 | `modulate2x8(s0.rgb,s1.rgb)` | `s0.a` |
+| 3 | LERP | exactly 2 | `lerp8(s0.rgb,s1.rgb,weight)` | `s0.a` |
+| 4 | ADD_SAT | exactly 2 | `sat_u8(s0.rgb+s1.rgb)` | `s0.a` |
+| 5 | MASK | exactly 2 | `s0.rgb` | `unit_mul8(s0.a,s1.a)` |
+| 6 | TERRAIN_DETAIL_LIGHT | exactly 3 | `unit_mul8(modulate2x8(s0.rgb,s1.rgb),s2.rgb)` | `s0.a` |
+| 7 | TERRAIN_DETAIL_MASK | exactly 3 | `modulate2x8(s0.rgb,s1.rgb)` | `unit_mul8(s0.a,s2.a)` |
+
+This explicitly rejects the current stale alternatives: recipes 1–4 do not multiply alpha; MASK is not a nonzero-alpha gate; detail first layers use MODULATE2X; and MODULATE2X rounds once as `(a*b+64)>>7`, not unit-multiply followed by doubling. Count zero is legal **only** for PASSTHRU and reads no sample. A count mismatch is frozen at admission as `material_refused`, raises the sticky material/frame fault, and cannot degrade. Its declared required sources each receive a logical issue followed by a local refused terminal return without planner/cache/sheet access; if the declared mask is empty, the owner creates the refused combine ticket directly.
+
+The required-source mask is frozen at admission in owner order `{AUX,sample2,sample1,sample0}`:
 
 ```text
 sample_count 0 -> sample mask 000
@@ -350,22 +470,29 @@ required_mask  = {aux_required, sample_mask}
 
 The consequences are exact:
 
-* `sample_count==0` issues no TMU work. `PASSTHRU` returns admitted base RGB/A, raw index zero, and status zero unless AUX was required or the material is malformed. Owner admission with `required_mask==0000` must create combine eligibility without waiting for a nonexistent return.
-* If `aux_required==1`, AUX is a required source even when `sample_count==0`: the owner cannot create the combine ticket until the matching AUX terminal return commits. A successful AUX which the selected recipe does not consume arithmetically still contributes status; the boolean does not grant permission to skip its lifecycle. This preserves the current additive required-mask law. A later material revision may replace the boolean with an explicit logical-source selector, but this packet does not silently make that different rule.
-* Recipe/count legality follows frozen material v1: PASSTHRU accepts count 0 or 1; MODULATE, MODULATE2X, LERP, ADD_SAT, and MASK require count 2; TERRAIN_DETAIL_LIGHT and TERRAIN_DETAIL_MASK require count 3. A mismatch is a material refusal, sets status bit 0, and never degrades to a plausible smaller recipe. Command/material validation should reject it before sealing; if it reaches V3, V3 still drains it through the ordinary ordered terminal path.
-* Each TMU source result is `{status8,index8,alpha8,rgb24}`. CLUT8 returns the addressed byte; CLUT4 returns the addressed nibble zero-extended; direct-color and terminal-error samples return index zero.
-* AUX is also stored in a 48-bit owner plane for uniform reduction, with raw index zero. A sheet MISS, stale handle generation, degenerate envelope, or refused sheet response sets `SOURCE_REFUSED`; a successful AUX response leaves status zero.
-* Final status is the bitwise OR of **only committed required sources**, plus `{7'b0,material_refused}`. Unrequested planes and uncommitted RAM contents are never read into the reduction.
-* Final raw index is zero for count 0 and otherwise exactly committed `sample0.index`. AUX, samples 1/2, recipe arithmetic, and palette RGB never replace it. A bad sample 0 therefore remains visibly bad; no later good sample supplies a plausible index.
-* A wrong-generation return, sample index outside the admitted count, AUX return when AUX was not required, return-before-issue, or duplicate return is accepted only into the owner's protocol-fault handling. It increments the independently typed stale/range/unsolicited/issue/duplicate instrument, marks the frame fatal, and **does not set a committed bit, overwrite a result plane, change final status/index, or satisfy the required mask**. A later correct required return is still required for ordinary drain.
+* `sample_count==0` issues no TMU work. Legal PASSTHRU returns admitted base RGB/A and index zero; status is zero when AUX is absent or its required terminal result is HIT, and refused when required AUX fails.
+* AUX never substitutes for sample 2. **No recipe ID 0–7 consumes AUX as an RGB or alpha operand.** The inherited `s2 = has_aux ? aux : sample2` mux in the old island/material leaf is expressly superseded for Packet B.
+* `aux_required==1` remains an independent owner obligation. The AUX terminal status participates in final status and the owner cannot combine until it commits, even at sample count zero.
+* A TMU plane is typed `[47:40]=status, [39:32]=raw_index, [31:24]=alpha, [23:0]=RGB`. An AUX plane is separately typed `[47:40]=status, [39:32]=tag, [31:24]=strength, [23:0]=0`. The combiner reads only AUX status. As the safe reversible Packet-B default, a successful `{tag,strength}` is validated and then **deliberately unconsumed and unexposed**; Packet B makes no completed terrain-surface-effect claim. Adding a typed ordered consumer/output is an explicit later HOLD, not permission to reinterpret these bytes as a colour sample.
+* Final status is the bitwise OR of only committed required source statuses plus `{7'b0,material_refused}`. Unrequested planes and uncommitted RAM contents are never consulted.
+* Final raw index is zero at count zero and otherwise exactly committed `sample0.raw_index`. Samples 1/2, AUX, recipe arithmetic, and palette RGB never replace it.
+* A wrong-generation return, out-of-range sample, unrequested source, return-before-issue, or duplicate return enters only the owner's typed protocol-fault handling. It marks the frame fatal but does not commit a plane, satisfy a required bit, overwrite a result, or increment a committed-source count. A later correct required return remains owed.
 
-`clut_idx_c` is captured into the relevant sample result before palette lookup replaces the index with RGB. `zhao_texture_material_combine_v2` receives the four 48-bit source planes (or their status/index side fields), computes material RGB/A, forwards sample-0 index, and ORs required statuses. Merely widening the owner while leaving the combiner on low 32-bit operands would still lose both facts.
+#### Response/index alignment
 
-The same packet amends `design/contracts/TEXTURE.COMBINE.md` from its stale six-recipe/32-bit-source wording to all eight frozen recipes, the required-mask/status/index law above, and the actual paired-phase cadence. It amends `design/contracts/TEXTURE.CACHE.md` with the terminal refused fill alternative, sample status, and the accepted/completed/phase counters in section 9. A V3 port change without both contract amendments is incomplete.
+Every class-specific terminal response queue carries one immutable **66-bit** tuple:
 
-The V3 top instantiates the generic owner at `RESW=48` and exposes status and index. Existing 40-bit standalone owner tests continue to elaborate the default owner parameter, so this change does not rewrite the owner experiment's law.
+```text
+{route_token18, status8, raw_index8, alpha8, RGB24}
+```
 
-A refused V3 result remains terminal and retirable. The raster stage consumes its loud error value so the machine drains, but raises a sticky frame fault. The slot manager releases rather than publishes that render lease, so video repeats the previous complete frame. Suppressing the handshake on an ordinary V3 refusal would park the ordered head and convert a visible asset fault into a deadlock.
+For CLUT8, `raw_index` is the addressed byte; for CLUT4 it is the selected nibble zero-extended. It is captured from the same accepted cache/class response as the route token and held beside that token through palette lookup and palette backpressure. The palette response registers and queues the original token, index, status, alpha, and resulting RGB together. Direct-colour and locally refused results use index zero. No response path may reconstruct an index from a live planner address, current metadata row, palette output, or whichever request is presently offered.
+
+`zhao_texture_rsp_dispatch_v2` carries that tuple; the shared unversioned dispatcher remains untouched. `zhao_texture_material_combine_v3` consumes typed 48-bit planes, applies exactly the table above, preserves sample-0 index, and performs required-status OR. Its paired physical schedule remains one phase for PASSTHRU/ADD_SAT/MASK/refused work, two for MODULATE/MODULATE2X/LERP/TERRAIN_DETAIL_MASK, and three for TERRAIN_DETAIL_LIGHT; the arithmetic change does not license duplicate phase engines or a one-job-per-clock claim.
+
+Packet B amends `design/contracts/TEXTURE.COMBINE.md` and `reference/include/zref/zref_material.hpp`, creates the normative `design/contracts/TEXTURE.AUX.V2.md`, and changes the new V3 combiner/AUX adapter and tests in the same packet. It leaves oracle-only `design/contracts/TEXTURE.AUX.md` and the unversioned old-island leaves unchanged. It amends the cache contract for typed terminal refusal/accounting used by Packet E. Agreement with the old unversioned combiner or AUX contract does not override R9/AUX V2.
+
+Compatibility is exact and narrow: on PASSTHRU count 1 without AUX and without refusal, old and V3 RGB/A/order/refused must match, and `out_tag_o` remains `frag_ctx_i[15:0]`. On count zero, recipes 1–7, AUX-bearing work, or any refused source, the R9/new-status contract is authoritative and an old-island mismatch is expected evidence of the superseded law, not a reason to copy it.
 
 ### 3.6 Ordered output join
 
@@ -421,33 +548,186 @@ The following packets must be stable, field for field, while `valid && !ready`:
 
 * the widened candidate entering the skid;
 * every V3 input field and both contexts;
+* both `zhao_texture_uv_join_v2` input records and exact `joined365={owner14,logical287,U32,V32}` output, with page generation only at `logical287[286:279]`;
+* every expander/resolver sample job, including captured page generation;
 * fill request address;
-* AUX sheet request U/V/token;
-* V3 ordered RGB/A/index/status/continuation;
+* the versioned AUX Sheet request `{op,handle,texel,src_id}` and response-ready contract;
+* every held class response tuple and V3 ordered RGB/A/index/status/continuation;
 * the exact `RASTER.FRAGMENT` input packet;
 * fragment tile-read and tile-write requests;
 * resolve and framebuffer output packets.
 
 No valid may be a function of its own ready. The direct join adds no valid/ready branch and no acceptance bubble.
 
-### 4.5 Drain and bank swap
+### 4.5 Structural quiet, drain, and bank swap
 
-For `zhao_raster_tile_pipe_v2`, `pipe_empty` must mean all of the following:
+`own_ev_quiet` is necessary but is **not** island quiet. Packet B freezes observable, structural terms rather than the phrase “all pipelines empty.” The following local aliases must exist in `zhao_texture_island_v3_top`; an `idle_o` is one only when every valid bit, occupancy count, issued-but-unreturned credit, continuation, and held output owned by that instance is zero.
+
+| top-local term | exact top-visible source | must be empty/include |
+|---|---|---|
+| `q_owner_idle` | `own_ev_quiet_w`, driven only by `u_own.ev_quiet_o` | no live owner and no capture, claim, issue bookkeeping, TMU/AUX commit, final, ready, combine, emission, ordered-output, or release entry |
+| `q_rcp_idle` | `rcp_idle_w`, driven only by `u_rcp.idle_o` | reciprocal ingress, multiplier stages, ticket queues, and held quotient |
+| `q_persp_idle` | `persp_idle_w`, driven only by `u_persp.idle_o` | pair-pipe stages and held perspective U/V result |
+| `q_metajoin_idle` | `metajoin_idle_w`, driven only by `u_metajoin.idle_o` | both input holds and joined output hold |
+| `q_desc_idle` | `desc_idle_w`, driven only by `u_early_desc.idle_o` | accepted descriptor read, eight captured slices, pad/generation verdict, and held response |
+| `q_uvjoin_idle` | `uvjoin_idle_w`, driven only by `u_uv_join.idle_o` | descriptor input hold, UV input hold, and 365-bit output hold |
+| `q_expand_idle` | `expand_idle_w`, driven only by `u_expand.idle_o` | fragment work, sample work, AUX work, and local malformed-descriptor disposition |
+| `q_bind_idle` | `binding_data_idle_w`, driven only by `u_binding.data_idle_o` | lookup request/read result, pending logical issue disposition, planner offer, and local-refusal offer; configuration state is deliberately separate |
+| `q_plan_idle` | `plan_idle_w`, driven only by `u_plan.idle_o` | every planner elastic stage and held cache request |
+| `q_cache_idle` | `cache_idle_w`, driven only by `u_cache.idle_o` | access/hit/response stage, blocking miss, fill request, accepted fill awaiting verdict/data, partial fill, and held terminal response |
+| `q_dispatch_idle` | `dispatch_idle_w`, driven only by `u_dispatch.idle_o` | credited read/metadata join and every class queue |
+| `q_mosaic_idle` | `mosaic_idle_w`, driven only by `u_mosaic.idle_o` | all Mosaic stages and held result |
+| `q_bilerp_idle` | `&bilerp_lane_idle_w[3:0]`, each bit driven only by the corresponding `u_bilerp[*].idle_o` | every versioned bilerp lane's channel/pipeline/result state |
+| `q_palette_idle` | `palette_idle_w`, driven only by `u_palette.idle_o` | palette lookup, generation verdict, read latency, and held 66-bit response tuple |
+| `q_palette_cfg_idle` | `palette_cfg_idle_w`, driven only by `u_palette.cfg_idle_o` | no accepted palette programming operation in flight; Packet B defines no acknowledgement channel |
+| `q_aux_idle` | `aux_idle_w`, driven only by `u_aux.idle_o` | arithmetic/divider, offer FIFO, issued-identity FIFO, owed Sheet response, local refusal, typed return, and all reserved credits |
+| `q_combine_idle` | `combine_idle_w`, driven only by `u_combine.idle_o` | admitted context, runnable phase, scratch/payload/completion reads, arithmetic/writeback, continuation, completion, and held result |
+
+Packet B uses versioned successors wherever the unchanged shared leaf does not already expose this complete observation: `zhao_raster_rcp24_v4`, `zhao_raster_perspuv_pairpipe_v2`, `zhao_texture_metajoin_v2`, `zhao_texture_uv_join_v2`, `zhao_texture_tmu_plan_v2`, `zhao_texture_cache_pipe_v2`, `zhao_texture_mosaic_v2`, `zhao_texture_bilerp_lane_v2`, and `zhao_texture_palette_res_v2`. The already-new descriptor, expander, resolver, dispatcher, AUX V2, and combiner V3 expose the named idle/data-idle ports in their first version. These observation ports may be reductions of existing state only; they may not add a queue, credit, lifecycle transition, or combinational ready path. The corresponding unversioned leaves remain byte-for-byte in the old executable-island closure. `zhao_texture_v3bank` payload bits and descriptor RAM payload bits are not “busy” merely because unreset stale data exists; their independently owned valid/occupancy state is covered by owner/descriptor terms. Any stateful helper below a listed instance, including an AUX divider, is included in that instance's `idle_o` and cannot disappear from the equation.
+
+The top also declares these exact one-bit channel aliases. They are assertions/checker inputs as well as equation operands, so a held boundary cannot be hidden inside a broad idle label:
+
+| alias | exact top-visible source | represented channel |
+|---|---|---|
+| `q_frag_offer_valid` | `frag_valid_i` | top fragment offer, whether or not admission is enabled |
+| `q_owner_claim_valid`, `q_owner_ready_valid`, `q_owner_combine_valid`, `q_owner_final_valid` | `owner_claim_valid_w`, `owner_ready_valid_w`, `owner_combine_valid_w`, `owner_final_valid_w` | owner claim, ready-ticket, combine-ticket, and final-result interconnect valids |
+| `q_rcp_req_valid`, `q_rcp_rsp_valid` | `rcp_req_valid_w`, `rcp_rsp_valid_w` | reciprocal request and quotient response valids |
+| `q_persp_req_valid`, `q_persp_rsp_valid` | `persp_req_valid_w`, `persp_rsp_valid_w` | perspective request and U/V response valids |
+| `q_metajoin_a_valid`, `q_metajoin_b_valid`, `q_metajoin_rsp_valid` | `metajoin_a_valid_w`, `metajoin_b_valid_w`, `metajoin_rsp_valid_w` | both meta-join input valids and joined response valid |
+| `q_desc_req_valid`, `q_desc_rsp_valid` | `desc_req_valid_w`, `desc_rsp_valid_w` | descriptor read request and eight-slice/verdict response valids |
+| `q_uvjoin_desc_valid`, `q_uvjoin_uv_valid`, `q_uvjoin_rsp_valid` | `uvjoin_desc_valid_w`, `uvjoin_uv_valid_w`, `uvjoin_rsp_valid_w` | both V2 UV-join input valids and `joined365` output valid |
+| `q_expand_frag_valid`, `q_expand_sample_valid`, `q_expand_aux_valid` | `expand_frag_valid_w`, `expand_sample_valid_w`, `expand_aux_valid_w` | expander fragment input and logical sample/AUX output valids |
+| `q_bind_req_valid`, `q_bind_plan_valid`, `q_bind_refuse_valid` | `binding_req_valid_w`, `binding_plan_valid_w`, `binding_refuse_valid_w` | resolver lookup input, planner output, and local-refusal output valids |
+| `q_plan_req_valid`, `q_plan_cache_valid` | `plan_req_valid_w`, `plan_cache_valid_w` | planner input and cache-access output valids |
+| `q_cache_req_valid` | `cache_req_valid_w` | cache-access input valid |
+| `q_fill_req_valid` | `fill_req_valid_o` | external cache fill request valid, including pre-guard stall |
+| `q_fill_rsp_valid` | `fill_data_valid_i || fill_refused_i` | external fill data or refusal physically presented to cache |
+| `q_cache_rsp_valid` | `cache_rsp_valid_w` | cache terminal response valid |
+| `q_dispatch_req_valid` | `dispatch_req_valid_w` | dispatcher input response valid |
+| `q_class_rsp_valid[3:0]` | `class_rsp_valid_w[3:0]`, assembled in fixed `{ERR,BIL,NEAR,CLUT}` order from the four class-output valid wires | one held tuple per class queue |
+| `q_mosaic_req_valid`, `q_mosaic_rsp_valid` | `mosaic_req_valid_w`, `mosaic_rsp_valid_w` | Mosaic request and result valids |
+| `q_bilerp_req_valid[3:0]`, `q_bilerp_rsp_valid[3:0]` | `bilerp_req_valid_w[3:0]`, `bilerp_rsp_valid_w[3:0]`, lane index ascending 0..3 | request/result valid for each bilerp lane |
+| `q_palette_req_valid`, `q_palette_rsp_valid` | `palette_req_valid_w`, `palette_rsp_valid_w` | palette request and result-tuple valids |
+| `q_palette_cfg_valid`, `q_palette_cfg_rsp_valid` | `pal_load_valid_i`, literal `1'b0` | palette programming command; Packet B has no acknowledgement channel |
+| `q_tmu_return_valid` | `tmu_return_valid_w` | typed sample return valid offered to `u_own` |
+| `q_aux_req_valid` | `aux_job_valid_w` | logical AUX job valid offered to `u_aux` |
+| `q_sheet_req_valid` | `sheet_req_valid_w`, driven only by `u_aux.req_valid_o` | Surface Sheet READ request valid |
+| `q_sheet_rsp_owed` | `aux_sheet_rsp_owed_w`, driven only by `u_aux.sheet_rsp_owed_o` | at least one accepted Sheet request still owes its response |
+| `q_sheet_rsp_valid` | `pg_valid_i` | external Sheet response physically presented, including unsolicited/malformed traffic |
+| `q_aux_refuse_valid`, `q_aux_return_valid` | `aux_refuse_valid_w`, `aux_return_valid_w` | local AUX refusal and typed AUX return valids |
+| `q_combine_req_valid`, `q_combine_rsp_valid` | `combine_req_valid_w`, `combine_rsp_valid_w` | combine-job and completed-result valids |
+| `q_retire_valid` | `out_valid_o` | top ordered retirement valid |
+| `q_cfg_cmd_valid` | `cfg_valid_i` | top binding-config command valid |
+| `q_cfg_rsp_valid` | `cfg_rsp_valid_o` | held top binding-config response valid |
+
+Every `*_w` above is a named `logic` declared in `zhao_texture_island_v3_top` and is the same physical interconnect connected to the producing/consuming module port; it is not a recomputed busy guess. Except for the three explicitly shown expressions (`&bilerp_lane_idle_w[3:0]`, `fill_data_valid_i || fill_refused_i`, and literal zero), each `q_*` is a direct continuous alias of exactly one named port/interconnect. Hierarchical references to a child's `_q`, pointer, occupancy, or generate-local signal are forbidden.
+
+The binding-control terms are also frozen as signals, not descriptions:
+
+| control term | exact top-visible source |
+|---|---|
+| `cfg_loader_idle` | `binding_cfg_loader_idle_w`, driven only by `u_binding.cfg_loader_idle_o` |
+| `binding_crc_busy` | `binding_crc_busy_w`, driven only by `u_binding.binding_crc_busy_o` |
+| `binding_seal_pending` | `binding_seal_pending_w`, driven only by `u_binding.binding_seal_pending_o` |
+
+The source-map audit treats every comma-separated scalar and every vector reduction above as a separate declared operand. It requires exact set equality `Q_source_map == Q_data_quiet ∪ Q_public_quiet`, requires the two equation sets to be disjoint, rejects a `q_*` use without one table source, rejects a mapped `q_*` omitted from both equations, checks single-driver connectivity from the named port/interconnect, and rejects any hierarchical child-state reference. Vector mappings additionally prove every declared bit participates in the reduction.
+
+The following is the literal RTL Boolean law; no generated reduction may replace an omitted operand with a comment:
+
+```systemverilog
+data_quiet =
+    q_owner_idle
+ && q_rcp_idle
+ && q_persp_idle
+ && q_metajoin_idle
+ && q_desc_idle
+ && q_uvjoin_idle
+ && q_expand_idle
+ && q_bind_idle
+ && q_plan_idle
+ && q_cache_idle
+ && q_dispatch_idle
+ && q_mosaic_idle
+ && q_bilerp_idle
+ && q_palette_idle
+ && q_aux_idle
+ && q_combine_idle
+ && !q_owner_claim_valid
+ && !q_owner_ready_valid
+ && !q_owner_combine_valid
+ && !q_owner_final_valid
+ && !q_rcp_req_valid
+ && !q_rcp_rsp_valid
+ && !q_persp_req_valid
+ && !q_persp_rsp_valid
+ && !q_metajoin_a_valid
+ && !q_metajoin_b_valid
+ && !q_metajoin_rsp_valid
+ && !q_desc_req_valid
+ && !q_desc_rsp_valid
+ && !q_uvjoin_desc_valid
+ && !q_uvjoin_uv_valid
+ && !q_uvjoin_rsp_valid
+ && !q_expand_frag_valid
+ && !q_expand_sample_valid
+ && !q_expand_aux_valid
+ && !q_bind_req_valid
+ && !q_bind_plan_valid
+ && !q_bind_refuse_valid
+ && !q_plan_req_valid
+ && !q_plan_cache_valid
+ && !q_cache_req_valid
+ && !q_fill_req_valid
+ && !q_cache_rsp_valid
+ && !q_dispatch_req_valid
+ && !(|q_class_rsp_valid[3:0])
+ && !q_mosaic_req_valid
+ && !q_mosaic_rsp_valid
+ && !(|q_bilerp_req_valid[3:0])
+ && !(|q_bilerp_rsp_valid[3:0])
+ && !q_palette_req_valid
+ && !q_palette_rsp_valid
+ && !q_tmu_return_valid
+ && !q_aux_req_valid
+ && !q_sheet_req_valid
+ && !q_sheet_rsp_owed
+ && !q_aux_refuse_valid
+ && !q_aux_return_valid
+ && !q_combine_req_valid
+ && !q_combine_rsp_valid
+ && !q_retire_valid;
+
+quiet_o =
+    data_quiet
+ && cfg_loader_idle
+ && !binding_crc_busy
+ && !binding_seal_pending
+ && q_palette_cfg_idle
+ && !q_frag_offer_valid
+ && !q_fill_rsp_valid
+ && !q_sheet_rsp_valid
+ && !q_palette_cfg_valid
+ && !q_palette_cfg_rsp_valid
+ && !q_cfg_cmd_valid
+ && !q_cfg_rsp_valid;
+```
+
+`q_fill_rsp_valid` and `q_sheet_rsp_valid` are excluded from `data_quiet` because unsolicited external offers are not accepted island obligations and must not deadlock activation; they are included in public `quiet_o` so the island never advertises quiet while a response is physically presented. Likewise `q_frag_offer_valid`, binding/palette configuration command/response state, and `binding_seal_pending` are public-quiet terms but not old-work drain terms. Packet B adds no held palette acknowledgement, so `q_palette_cfg_rsp_valid` is a literal-zero structural placeholder; retaining the named operand means a later version which adds an acknowledgement cannot silently escape the checker. The binding activator uses `data_quiet`, not `quiet_o`: a successful END stops new fragment admission, existing accepted work drains, and the active bank/generation changes atomically on the first `data_quiet` edge. That edge clears `binding_seal_pending`, changes the loader to IDLE, and creates the held END response. Public quiet therefore remains low until that response is accepted and every external offer is absent; there is no circular wait.
+
+For `zhao_raster_tile_pipe_v2`, outer `pipe_empty` additionally requires:
 
 ```text
 no Early-Z candidate held
 candidate skid level == 0
 attribute producer has no covered-pixel record held
 V3 input has no unaccepted candidate
-V3 owner/island quiet (including output reservation/queue)
-no cache fill, response, palette, AUX, or combine work belonging to a live owner
-no V3 ordered output held
+V3 quiet_o == 1
 RASTER.FRAGMENT idle
 ```
 
-The V3 `quiet_o` must be derived from owner quiescence and checked against subordinate queues; it must not be a delayed guess used in admission. The swap condition remains `walk done && pending mask empty && no new coverage accept && pipe_empty`, followed by the existing resolve-ready gate.
+The swap condition remains `walk done && pending mask empty && no new coverage accept && pipe_empty`, followed by the existing resolve-ready gate. The next non-final triangle for the same tile also waits for this drain in the minimum version. Inter-triangle texture overlap is an optimization only after this composition meets its measured frame budget.
 
-The next non-final triangle for the same tile also waits for this drain in the minimum version. That preserves today's simple per-triangle handoff. Inter-triangle texture overlap is an optimization only after this composition meets its measured frame budget.
+The quiet gate independently parks every table row and every channel alias high/nonempty while all other terms—including `q_owner_idle`—indicate empty and requires `quiet_o==0`; it then removes that condition and reaches true quiet. It explicitly holds each request, response, config response, and retirement valid under backpressure. A committed `quiet_o=q_owner_idle` mutant, one omission mutant for **each named equation operand** (not one per prose group), and an AUX-issued-credit mutant must fail. A zero occupancy detector is not credited until its legal positive control or committed unreachable-state mutant fires. The checker also parses the Boolean expression and fails a term present in the tables but absent or negated with the wrong polarity in either equation.
 
 ## 5. Attribute production is a real prerequisite
 
@@ -489,20 +769,39 @@ fragment point = {wx, wz}, two signed Q16.16 words
 
 On `own_adm_accept`, the complete `zhao_aux_surface_ctx_v2_t` is written beside the owner generation. The expander reads it only through `{slot,generation}` and emits one AUX job carrying owner14 plus the same sheet handle/envelope. No module may source an envelope from current terrain pins or a global “active sheet” register after admission.
 
-`zhao_texture_aux_pipe` gains the sheet handle as an offer-FIFO field and output. Its accepted surface request is:
+Packet B creates the normative artifact **`design/contracts/TEXTURE.AUX.V2.md`**. That contract owns exactly the typed 224-bit context in section 3.2, the independent AUX bit in the required-source mask, logical issue before every terminal return, the 48-bit AUX owner plane `[47:40]=status,[39:32]=tag,[31:24]=strength,[23:0]=0`, the request/response credit and hold law, mandatory `sheet_rsp_owed_o`, the READ validation below, accepted/completed accounting, structural-idle contribution, and the rule that AUX never occupies or substitutes for TMU sample 2. It normatively imports only the Surface Sheet storage transaction—READ opcode, `handle32`, texel, source echo, HIT/MISS and ready/valid hold—from `design/contracts/SURFACE.SHEET.md`; where that storage contract and AUX V2 disagree about the adapter or owner plane, `TEXTURE.AUX.V2.md` owns the adapter and `SURFACE.SHEET.md` owns the store. The existing `design/contracts/TEXTURE.AUX.md` is frozen as **oracle-only** documentation for unchanged `zhao_texture_aux_pipe.sv`/`zhao_texture_island_top`; it is not amended, imported as Packet-B behavior, or permitted to outvote AUX V2.
+
+`zhao_texture_aux_pipe_v2` is a new leaf implementing that new contract; Packet B does not modify the unversioned AUX pipe shared by the old island. Its accepted Surface Sheet request is exactly the `SURFACE.SHEET` packet:
 
 ```text
-req_op       = READ
-req_handle   = sealed sheet_handle32
-req_texel    = {sheet_v[5:0], sheet_u[5:0]}
-req_src_id   = zero_extend(owner_handle14) to 16 bits
+req_op[1:0]     = 2'd1 (READ)
+req_handle[31:0]= sealed sheet_handle32
+req_texel[11:0] = {sheet_v[5:0], sheet_u[5:0]}
+req_src_id[15:0]= {2'b00, owner_handle14}
 ```
 
-The sheet response returns its 2-bit status and the same source ID/token. `HIT` supplies tag/strength; `MISS` supplies zero data plus `SOURCE_REFUSED`. The sheet store's full-handle associative lookup is the authority on generation. The AUX pipe must not turn a MISS into a successful all-zero texel. Its existing no-response-ready contract is retained, so its response reservation includes the status bit as well as token/tag/strength.
+The versioned boundary carries `req_valid/req_ready` and the complete response `pg_valid/pg_ready, pg_op[1:0], pg_status[1:0], pg_tag[7:0], pg_strength[7:0], pg_src_id[15:0]`. It also exposes the mandatory structural-observation port:
 
-Interleaved live owners may name sheet A/envelope A, sheet B/envelope B, then sheet A again while every stage is stalled independently. The required differential checks U/V, handle, token, status, tag, and strength for every accepted request and proves A's envelope cannot be paired with B's sheet. A committed slot-swap mutant updates descriptor data from the currently offered owner while retaining the prior owner token; the independent expected record is captured at admission and must fire. Separate stale-generation and same-index/new-generation cases prove that comparing only the patch index is insufficient.
+```systemverilog
+output logic sheet_rsp_owed_o;
+```
 
-The 64-bit low portion remains exactly `[31:0]=wx`, `[63:32]=wz`; the AUX instantiation uses `.req_wx_i(aux_ctx.wx)` and `.req_wz_i(aux_ctx.wz)`. The current raw slices `.req_wx_i(ctx[31:0])` and `.req_wz_i(ctx[63:32])` are equivalent, but new code uses the typed names so a visually plausible `{wx,wz}` concatenation cannot reverse them.
+`sheet_rsp_owed_o` resets low and is exactly `(issued_identity_fifo_occupancy != 0)`: it rises on an accepted Sheet request which creates the FIFO entry and remains high while any accepted READ lacks its one consumed HIT/MISS/malformed terminal response. It falls only as the final owed response is consumed; moving that response into a local AUX return may clear this port, while `idle_o` remains low until the owner accepts the return. The top maps `q_sheet_rsp_owed` only from this port; hierarchical reads of FIFO pointers/occupancy are forbidden.
+
+The V2 boundary does not rely on the old leaf's response-without-ready assumption. AUX admission takes a credit which covers every arithmetic stage, held Sheet offer, issued-identity FIFO entry, response reservation, local-refusal entry, and terminal return until the owner accepts that return. A Sheet request is offered only when both its issued-identity entry and terminal-return capacity are reserved; every request and response payload holds while stalled.
+
+Accepted Sheet requests enter an in-order identity FIFO. For its head, a response is legal only when `pg_op==READ`, `pg_src_id` exactly echoes `{2'b00,owner_handle14}`, and status is HIT or MISS:
+
+* HIT commits typed `{status=0,tag,strength}`;
+* MISS commits `{SOURCE_REFUSED,tag=0,strength=0}` and raises the sticky frame fault;
+* ALLOCATED or OVERFLOW on a READ, wrong opcode, or wrong source ID is a Sheet protocol fault and commits one terminal `SOURCE_REFUSED` for the **owed FIFO head**, never success for the claimed token;
+* a response with no issued FIFO head—including a duplicate after that head was consumed—is accepted into an always-draining protocol-fault sink and increments `sheet_rsp_unsolicited`; it cannot invent an owner or committed completion.
+
+Thus every accepted issued read receives exactly one terminal disposition and no malformed response can park its owner. The Surface Sheet store's full handle lookup remains the generation authority: a stale/missing handle returns MISS. A degenerate envelope emits no Sheet request; the logical AUX issue is nevertheless notified to `zhao_texture_v3own` on expander acceptance, and a reserved local `{SOURCE_REFUSED,tag=0,strength=0}` return is presented no earlier than the following cycle. The same issue-before-return law applies to every other local AUX refusal.
+
+Interleaved live owners may name sheet A/envelope A, sheet B/envelope B, then sheet A again while every stage is stalled independently. The required differential checks U/V, handle, op, source ID, status, tag, and strength for every accepted request and proves A's envelope cannot be paired with B's sheet. A committed slot-swap mutant updates descriptor data from the currently offered owner while retaining the prior owner token; the independent expected record is captured at admission and must fire. Separate stale-generation and same-index/new-generation cases prove that comparing only the patch index is insufficient. Wrong opcode, wrong status, and wrong source each fire their typed owed-response counter; duplicate and response-without-request both fire `sheet_rsp_unsolicited`. None may produce success.
+
+The 64-bit low portion remains exactly `[31:0]=wx`, `[63:32]=wz`; the V2 AUX instantiation uses `.req_wx_i(aux_ctx.wx)` and `.req_wz_i(aux_ctx.wz)`. Raw slices are forbidden in new code. Successful tag/strength reaches the typed AUX owner plane described in section 3.5, where Packet B deliberately consumes status only; this architecture therefore does not claim that the visible terrain effect is connected.
 
 ### 5.2 Binner metadata
 
@@ -519,33 +818,136 @@ This does **not** settle the production binner scale. `TRI_CAP=128`, binning at 
 
 ## 6. Binding and palette composition
 
-A connected production-facing V3 cannot use one live global `bind_base_i/bind_mode_i` while several owners are in flight.
+A connected V3 cannot use live global `bind_base_i/bind_mode_i` while multiple owners are in flight. Packet B removes those two fixture authorities from the versioned path and instantiates `zhao_texture_binding_resolver_v2`.
 
-The minimum resolver packet is:
+### 6.1 Frozen table ABI
+
+Packet A supplies an eight-bit base selector, so the compatibility table has exactly **256 selectors**, two physical banks, and one 75-bit row per selector:
+
+| bits | width | field |
+|---|---:|---|
+| `[31:0]` | 32 | texture base byte address |
+| `[63:32]` | 32 | planner mode |
+| `[65:64]` | 2 | palette slot |
+| `[73:66]` | 8 | palette generation |
+| `[74]` | 1 | valid |
+
+Mode retains the existing planner encoding: format `[2:0]` (`CLUT8=0, RGB565=1, CLUT4=2, ARGB1555=3, ARGB4444=4`), filter `[3]`, wrap-U `[5:4]`, wrap-V `[7:6]` (`REPEAT=0, CLAMP=1, MIRROR=2`), log2 width `[11:8]`, log2 height `[15:12]`, max level `[19:16]`, mip enable `[20]`, reserved `[31:21]`.
+
+A row may become valid only when base is 16-byte aligned, format is 0–4, both wraps are 0–2, reserved bits are zero, both log2 dimensions are at most the selected planner `MAXLOG2=11`, CLUT filter is zero, max level is no greater than `min(log2w,log2h)`, and—safe reversible canonical default—max level is zero when mip is disabled. A direct-colour row must store palette slot/generation as zero. There is no planner sanitization at this boundary: a row which violates any condition is refused by the loader and never marked valid.
+
+Address validation uses the planner's exact packed-chain law. For final legal level `L` (`0` when mip is disabled), let `area_exp=log2w+log2h`, `REP4[0]=0`, and `REP4[L]=(4^L-1)/3` for `L>0`:
 
 ```text
-expanded request:
-  sample_handle[15:0]
-  binding_selector[7:0]
-  U[31:0], V[31:0]
-  LOD[7:0]
-
-resolved request:
-  route_token {derived_class[1:0], sample_handle[15:0]}
-  base[31:0]
-  mode[31:0]
-  palette_slot[1:0]
-  palette_generation[7:0]
-  U, V, LOD
+level_offset_texel = (L==0) ? 0 : REP4[L] << (area_exp - 2*(L-1))
+level_texels       = 1 << (area_exp - 2*L)
+max_total_texel    = level_offset_texel + level_texels - 1
+max_byte_offset    = 16bpp ? 2*max_total_texel + 1
+                   : CLUT4 ? floor(max_total_texel/2)
+                   :         max_total_texel
+max_line_end       = (base + max_byte_offset) | 15
 ```
 
-`zhao_texture_frag_expand` must emit the selected binding (`base binding + sample index` for the currently implemented convention) and the 16-bit sample handle separately. A one-request-per-clock `zhao_texture_binding_resolver` then reads a frame-sealed binding record, derives class from resolved format/filter, and feeds `zhao_texture_tmu_plan`. The issue notification to V3 occurs on **resolved planner acceptance**, not on insertion into the resolver. An invalid binding produces an issue plus terminal refused completion with the same full handle, so it can retire.
+Every intermediate is widened; a carry beyond 32 bits rejects the row. Packet E additionally requires `[base,max_line_end]` to lie within `RENDER.ASSET_POOL`; MEM.GUARD remains the backstop.
 
-Palette slot and generation belong to the resolved binding, not to response routing bits. The current per-fragment pair may remain as a compatibility input for the paired differential, but the connected path must either prove all required samples intentionally share it or move the pair into the resolved record.
+Class is a function, never row data or fragment routing state:
 
-Binding-table writes and palette generation changes are frame-sealed GPU-domain commands. No owner may observe a table generation change between issue and return. If the table is double-buffered, the active generation joins the accepted material packet; a mid-frame live-table write is a sticky asset fault.
+```text
+CLUT8 or CLUT4                         -> CLS_CLUT (0)
+RGB565/ARGB1555/ARGB4444, filter == 0 -> CLS_NEAR (1)
+RGB565/ARGB1555/ARGB4444, filter == 1 -> CLS_BIL  (2)
+anything else                          -> local refusal; CLS_ERR (3) is never issued
+```
 
-No claim about explicit three-UV-set materials is made here. Before sample counts 2/3 are enabled in the connected shell, the material differential must either prove common UV/LOD plus consecutive bindings for every legal recipe or widen the accepted descriptor to explicit per-sample fields. The one-sample baseline does not prove that question.
+### 6.2 Programming, CRC, seal, and activation
+
+The GPU-domain command port is one ready/valid record:
+
+```systemverilog
+cfg_valid_i / cfg_ready_o
+cfg_op_i[1:0]             // 0 BEGIN, 1 WRITE, 2 END, 3 ABORT
+cfg_page_generation_i[7:0]
+cfg_selector_i[7:0]
+cfg_row_i[74:0]
+cfg_crc32_i[31:0]
+
+cfg_rsp_valid_o / cfg_rsp_ready_i
+cfg_rsp_op_o[1:0]
+cfg_rsp_status_o[3:0]     // 0 OK, 1 BAD_STATE, 2 BAD_GENERATION,
+                           // 3 BAD_ROW, 4 DUP_SELECTOR, 5 BAD_CRC,
+                           // 6 INTERNAL_PROTOCOL, 7..15 reserved
+cfg_rsp_page_generation_o[7:0]
+active_page_generation_o[7:0] // zero means no sealed active page
+
+output logic cfg_loader_idle_o;      // 1 iff loader state is IDLE
+output logic binding_crc_busy_o;     // 1 iff loader state is CRC_SCAN
+output logic binding_seal_pending_o; // 1 iff loader state is SEAL_PENDING
+```
+
+These three resolver-V2 outputs are mandatory observation ports, reset respectively to `1,0,0`, and are combinational decodes of the registered loader state. They add no state, ready path, or lifecycle authority. `zhao_texture_island_v3_top` connects them to named top-local wires and never reads hierarchical private child state.
+
+All command fields hold through `cfg_valid && !cfg_ready`; every accepted command produces exactly one held response before another command is accepted. Irrelevant fields for an opcode are required zero and otherwise return BAD_ROW. The state machine is exact:
+
+* reset clears both 256-bit validity masks, sets active generation zero, and leaves row RAM unwritten;
+* BEGIN is legal only while loader IDLE, chooses the inactive bank, requires a nonzero generation different from the current active generation, clears only the staging validity mask, and enters LOADING;
+* WRITE is legal only in LOADING with the matching staging generation, `row.valid==1`, a legal canonical row, and a selector not already written in this load; it writes one staging row and sets that selector's validity. Invalid selectors are represented by never writing them after BEGIN, not by writing stale payload with valid zero;
+* ABORT is legal only in LOADING with the matching staging generation; it discards the staging validity mask, returns OK, and enters IDLE without changing active bank/generation;
+* END in LOADING with the matching generation scans the canonical staging image and compares CRC. While scanning, command ready is low and the old active page may continue serving admitted traffic. BAD_CRC discards the staging validity mask, returns BAD_CRC, and leaves the active page untouched;
+* a successful END enters `SEAL_PENDING`, withholds new fragment admission, permits no further config command, drains all prior island work, and atomically changes active bank plus active generation on the first `data_quiet` edge. The delayed END response is then `OK` for that now-active generation. Activation never occurs merely because owner quiet is high.
+
+CRC is deterministic and independent of WRITE order. It is CRC-32/ISO-HDLC: reflected polynomial `32'hEDB88320`, init `32'hFFFFFFFF`, xorout `32'hFFFFFFFF`, refin/refout true. The byte stream is the one-byte page generation followed by selectors 0 through 255. Each selector contributes ten bytes, least-significant byte first, from `{5'b0,row[74:0]}`; an invalid selector contributes ten zero bytes regardless of stale RAM contents. The CRC field itself is not in the stream.
+
+An eight-bit page generation is frame-local coherence, not resource identity. It uses 1..255 and may wrap 255→1 only through the same complete-drain activation fence; no descriptor survives that fence. Before selectors are emitted, upstream `MATERIAL.RESOLVE` must still validate every material sample's full resource generation (16 bits where that contract requires it) and build the page. Narrowing that upstream comparison to eight bits is forbidden.
+
+Reset intentionally has no active page. Fragments may still be admitted before a seal so they terminate visibly: their captured page generation is zero and every declared sample is locally refused. A bad update cannot corrupt the previous active page. Mid-frame active-bank writes do not exist.
+
+### 6.3 Lookup, selector overflow, and issue timing
+
+For sample index `i`, the expander computes widening arithmetic:
+
+```text
+selector9 = {1'b0,base_selector8} + i
+```
+
+If `selector9[8]` is set, that sample is marked for local refusal and the low eight bits are never used as a modulo-256 table address. The resolver front end still accepts one held logical-job record:
+
+```text
+sample_handle[15:0]
+captured_page_generation[7:0]
+selector_overflow[0:0], force_refuse[0:0], binding_selector[7:0]
+// selector low bits are ignored when either refusal bit is set
+U[31:0], V[31:0], LOD_Q4_4[7:0]
+sample-0 class/palette witnesses carried from the descriptor
+```
+
+The accepted output to the planner is:
+
+```text
+route_token = {derived_class[1:0],sample_handle[15:0]} // 18 bits
+base[31:0], mode[31:0]
+palette_slot[1:0], palette_generation[7:0]
+U[31:0], V[31:0], LOD_Q4_4[7:0]
+```
+
+The resolver has a held one-read elastic stage and a reserved disposition slot, so it can accept one request per clock when downstream capacity exists. `force_refuse` is set only for the admission-frozen malformed-material path and suppresses table/planner/cache access. **The front-end handshake is the logical sample issue**: on the same edge it pulses `iss_tmu_valid_i` with the full handle into `zhao_texture_v3own` and increments `SJ_accepted`. A valid resolved row later increments `SJ_planner_accept` only on planner handshake. Selector overflow, forced refusal, page generation zero/mismatch, invalid row, illegal row bits, or sample-0 witness mismatch enters the local-refusal output and increments `SJ_local_refused` only when that terminal return is accepted by the owner.
+
+A local return may be presented no earlier than cycle N+1 after its cycle-N logical issue. It carries `{status=SOURCE_REFUSED,index=0,alpha=8'hFF,RGB=24'hFF00FF}` with the exact sample handle and sets the sticky binding/frame fault. Input ready is withheld unless capacity for that later terminal disposition is already reserved. Issue and return on the same edge, return before the owner saw issue, silent drop, wraparound lookup, and waiting forever on an invalid row are all forbidden.
+
+The `captured_page_generation` byte at this front end must be copied bit-for-bit from `joined365.logical287[286:279]`; there is no generation sidecar on either V2-join input or output, and the resolver may not reread the current page to populate the job. It is compared with the active page at resolver completion as an independent detector as well as an enforcement condition. The held job byte and the active-page register have different enables—descriptor admission/join transport versus atomic activation. Under the activation fence they cannot differ legally; the stalled A/B join controls and a committed early-activation mutant are therefore required to prove both the carriage and detector can fire.
+
+### 6.4 Remove class/palette dual authority
+
+Packet A has one fragment-level response class and palette tuple but can request three samples. Packet B treats those fields as **sample-0 compatibility witnesses only**:
+
+* resolver-derived class and row palette fields are the sole functional values for routing and lookup;
+* when count is nonzero, sample 0 compares all three witnesses with its resolved row before planner issue; mismatch locally refuses sample 0 and raises typed malformed-binding/frame fault;
+* samples 1 and 2 use only their own resolved rows because Packet A contains no witness for them;
+* at count zero all class/palette witness bits must be canonical zero and no lookup occurs;
+* direct rows require zero palette fields, so their witnesses are checked against zero rather than ignored.
+
+No multiplexer may select between witness and resolved values. The eventual explicit `MaterialSample[3]` ABI remains upstream; common U/V and LOD plus consecutive selectors are only the Packet-A frame-local seam. Before the connected shell enables sample counts 2/3, the material differential must either prove that convention for every shipped record or a later packet must widen the request to explicit per-sample selector/UV/LOD fields. That product limitation does not weaken the deterministic behavior of Packet B itself.
+
+Palette loads and binding activation are both GPU-domain frame-sealed operations. An admitted owner uses the palette generation from its resolved binding row. A stale/cold palette response is a typed sample refusal, not usable RGB, and no current fragment witness or response-token slice may replace the resolved tuple.
 
 ## 7. Memory: share ENGINE1, do not spend client 5
 
@@ -785,11 +1187,14 @@ SJ_accepted       logical sample jobs accepted from the owner expander
 SJ_planner_accept resolved planner/TMU request handshakes
 SJ_local_refused  accepted jobs terminated before planner acceptance
 SJ_completed      full-identity sample terminal returns committed by the owner
+OWN_TMU_COMMIT     instrumentation-only owner sample-commit count
 AJ_required       sum of admitted aux_required bits
 AJ_accepted       logical AUX jobs accepted from the owner expander
 AJ_sheet_accept   Surface Sheet request handshakes
 AJ_local_refused  accepted AUX jobs terminated before a sheet request
 AJ_completed      full-identity AUX terminal returns committed by the owner
+OWN_AUX_COMMIT     instrumentation-only owner AUX-commit count
+OWN_ALL_COMMIT     retained compatibility sum of the two owner commit counts
 CA / CC           texture-cache access jobs accepted / completed
 FI / FOK / FREF   fill jobs accepted / completed with eight beats / refused
 FB                accepted fill data halfwords
@@ -801,7 +1206,17 @@ W_issue/W_retire  framebuffer words issued / retired
 GA/GOK/GDENY      ENGINE1 guard requests accepted / OK verdicts / deny verdicts
 ```
 
-`SJ_local_refused` includes invalid sealed binding/material requests that issue a matching terminal refusal without touching the planner. `AJ_local_refused` includes invalid sealed handle/envelope requests terminated without a sheet read. Stale, duplicate, out-of-range, pre-issue, or unrequested returns increment only their protocol-fault counters; they do not increment `SJ_completed` or `AJ_completed` because they did not satisfy an owner plane.
+`SJ_local_refused` includes selector overflow, absent/mismatched page, invalid row, witness mismatch, and malformed-material sample jobs terminated without planner access. `AJ_local_refused` includes malformed-material AUX jobs and degenerate-envelope jobs terminated without a Sheet read; a stale/missing sealed handle instead counts one Sheet acceptance and one MISS completion. Stale, duplicate, out-of-range, pre-issue, or unrequested owner returns increment only their protocol-fault counters; they do not increment `SJ_completed` or `AJ_completed` because they did not satisfy an owner plane.
+
+The present owner exposes only `ev_commits_o`, which combines TMU and AUX commits and therefore cannot prove either equality independently. Packet B permits the following **instrumentation-only** additions to `zhao_texture_v3own`:
+
+```systemverilog
+output logic [31:0] ev_tmu_commits_o; // increments exactly when c4t_v_q is true
+output logic [31:0] ev_aux_commits_o; // increments exactly when c4a_v_q is true
+// existing ev_commits_o remains their cycle-by-cycle compatibility sum
+```
+
+A cycle committing both paths increments each typed count by one and `ev_commits_o` by two. All three 32-bit counters wrap modulo `2^32`; acceptance windows are bounded below wrap. These ports do not gate or alter claim, issue, commit, ticket creation, final acceptance, emission, or release. Their independent positive control commits one TMU and one AUX return in the same cycle, then separately commits only each kind; a swapped-source and a combined-only mutant must fail.
 
 After complete drain, the exact closure is:
 
@@ -810,9 +1225,12 @@ S == F == owner_admitted == owner_emitted == owner_released == O
 SJ_required == SJ_accepted
 SJ_accepted == SJ_planner_accept + SJ_local_refused
 SJ_completed == SJ_accepted
+SJ_completed == OWN_TMU_COMMIT
 AJ_required == AJ_accepted
 AJ_accepted == AJ_sheet_accept + AJ_local_refused
 AJ_completed == AJ_accepted
+AJ_completed == OWN_AUX_COMMIT
+OWN_ALL_COMMIT == OWN_TMU_COMMIT + OWN_AUX_COMMIT
 CA == CC
 FI == FOK + FREF
 FB == 8*FOK
@@ -951,29 +1369,311 @@ The final margin target is a gate, not a forecast. No numeric ALM, DSP, M10K, or
 
 Each packet's non-fit gates below precede that packet's named subsystem fit: sections 12.1–12.8 precede G8A where applicable, section 12.9 precedes shell-V2/final composition, and section 12.10 precedes G8B and G8C. No fit substitutes for a missing simulation or mutant gate.
 
-### 12.1 Interface and ownership gates
+### 12.1 Interface, source-order, and ownership gates
 
-1. A source/elaboration inventory proves the V2 raster candidate fields and widths exactly, including Early-Z `PAYLOAD_W=410`, skid `W=490`, retirement context 160, owner context 224, typed AUX context 224, early descriptor 279, and result 48.
-2. A role-aware checker rooted at the connected top requires exactly one provider of `raster_texture_fragment_lifecycle`. `zhao_texture_v3own` is that provider. Expanders, descriptor banks, context banks, skids, and the sequence witness declare transport/storage/check roles, not ownership.
-3. A test-only duplicate-owner composition marks both V3 ownership and TEXJOIN ownership for that role. The checker must fail. Counting module containment without role metadata is insufficient.
-4. Generated production/accounting tops are checked separately; a disconnected selected sibling cannot satisfy connected ownership.
+The Packet-B interface artifact is exactly:
 
-### 12.2 V3 differential and result gates
+```text
+manifest  fpga/rtl/generated/zhao_texture_island_v3_top.interface.json
+generator tools/rtl/gen_texture_v3_interface_manifest.py
+parser    tools/rtl/texture_v3_interface_parser.py
+checker        tools/rtl/check_texture_v3_interface_manifest.py
+schema_id      zhao.texture.interface
+schema_version 1
+```
 
-Drive the old island oracle and V3 with identical supported traffic and compare existing RGB/A/tag/refused order. Separately compare the new index/status/context fields against the frozen TMU/material laws:
+#### Closed JSON schema v1
 
-* CLUT8 indices including 0 and values whose RGB has no identifying relationship;
-* both CLUT4 nibbles;
-* all direct formats, which must return index 0;
-* every sample count and recipe, including PASSTHRU count 0 with no TMU issue and count 0 plus required AUX;
-* exact `{AUX,sample2,sample1,sample0}` required masks, proving unrequested/stale/duplicate/pre-issue returns neither commit nor satisfy a bit;
-* status OR across only committed required sources plus material refusal, and final index equal to sample-0 index or zero at count 0;
-* interleaved live sheet A/envelope A, sheet B/envelope B, then sheet A again under independent descriptor, offer, and response stalls;
-* same sheet index with old/new generation, sheet MISS, envelope swap, degenerate envelope, AUX absent, and AUX required;
-* palette stale/cold and invalid binding terminal refusal;
-* output backpressure while later work completes out of order.
+The manifest is not an open-ended JSON document. Its root has **exactly** these members and JSON types; every nested object likewise rejects an extra or missing member, and `null` and floating-point numbers are forbidden everywhere:
 
-The star-disc/halo and alpha-test cases run end to end through `RASTER.FRAGMENT`; forcing index zero or substituting a palette-color byte must fail them.
+| object | exact members and JSON types |
+|---|---|
+| root | `elaboration` object; `hashes` object; `module` object; `parameters` array; `ports` array; `schema_id` string; `schema_version` integer; `source_closure` array; `tools` object |
+| `elaboration` | `argv` array of strings; `cwd` string, exactly `"."`; `parameter_overrides` array; `top_module` string |
+| `parameter_overrides[]` | `name` string; `value` object |
+| parameter `value` and `parameters[].selected_value` | `kind` string, one of `unsigned_integer`, `signed_integer`, `bit_vector`, `string`; `text` string in canonical SystemVerilog form, with integers represented in base-10 and bit vectors as width-qualified lowercase hexadecimal with no X/Z |
+| `hashes` | `canonical_interface_sha256` string; `module_declaration_sha256` string; `top_source_sha256` string; each exactly 64 lowercase hexadecimal characters |
+| `module` | `declaration_end_byte_exclusive` integer; `declaration_start_byte` integer; `name` string; `source_path` string |
+| `parameters[]` | `declared_kind` string; `declared_type` string; `name` string; `ordinal` integer; `selected_value` object; `source_default_expression` string |
+| `ports[]` | `bit_width` integer; `declared_type` string; `direction` string (`input`,`output`,`inout`); `element_width` integer; `name` string; `net_or_var` string (`net`,`variable`); `ordinal` integer; `packed_dimensions` array; `signed` Boolean; `source_expression` string; `unpacked_dimensions` array; `unpacked_element_count` integer |
+| either dimensions array element | `direction` string (`ascending`,`descending`); `left` integer; `right` integer; `size` integer; `source_expression` string |
+| `source_closure[]` | `kind` string (`systemverilog_package`,`systemverilog_module`); `ordinal` integer; `path` string; `sha256` string of 64 lowercase hex characters |
+| `tools` | `checker`, `elaborator`, `generator`, `parser`, and `runtime` objects |
+| `tools.checker/generator/parser` | `name` string; repo-relative `path` string; raw-file `sha256` string; semantic `version` string, exactly `"1.0.0"` for schema v1 |
+| `tools.elaborator` | `name` string, exactly `"Verilator"`; `version` string, exactly the single LF-trimmed first line returned by the recorded command; `version_command` array, exactly `["verilator","--version"]` |
+| `tools.runtime` | `name` string, exactly `"CPython"`; `version` string, exactly `platform.python_version()` with no prefix/suffix |
+
+For `selected_value`, `unsigned_integer.text` matches `0|[1-9][0-9]*`; `signed_integer.text` matches `0|-?[1-9][0-9]*`; `bit_vector.text` is exactly `<width>'h<digits>` with decimal width, lowercase hex, exactly `ceil(width/4)` digits, and zero unused high bits; `string.text` is the decoded NFC string value rather than quoted SystemVerilog source. The kind must agree with the elaborated parameter type. `source_default_expression` and every `source_expression` preserve the exact LF-normalized declaration substring, including internal whitespace and spelling, with no leading/trailing text outside that syntactic item.
+
+`schema_id` is exactly `"zhao.texture.interface"`, `schema_version` is JSON integer `1`, `module.name` and `elaboration.top_module` are exactly `"zhao_texture_island_v3_top"`, and every path is NFC-normalized, `/`-separated, repo-relative, contains neither `.` nor `..` segments, and is case-sensitive. Strings containing non-NFC text are rejected rather than silently normalized. The closed root admits no timestamp, absolute path, host name, environment variable, git worktree state, or tool-cache path. Ordinals begin at zero, are contiguous, and agree with array position. Parameter and port arrays retain source declaration order. `source_closure` retains compile order, package first and selected top last. `elaboration.parameter_overrides` contains every effective parameter once, in the same order as `parameters`; its `{kind,text}` value must equal the selected value. `elaboration.argv` is the exact argument vector used for the elaboration query, with the executable token first, all parameter overrides in parameter order, and all closure paths in source-closure order; no shell-quoted command string is stored.
+
+The selected V3 artifact records every effective parameter, including `MIGRATION_SHADOWS=1, DEPTH=16, CTXW=64, RCTXW=160, AUXCTXW=224, BINDW=8, LODW=8, GENW=8, LANES=4, SRCW=18, DATAW=64, TOKW=18, AUX_TOKW=14, PAL_SLOTS=4, PAL_ENTRIES=256`. A production-profile manifest may select `MIGRATION_SHADOWS=0`, but it is a separately named artifact; it cannot overwrite this laboratory interface.
+
+For dimensions, declaration order is outermost-to-innermost within each packed or unpacked list. `size=abs(left-right)+1`; `direction` is `descending` when `left>right` and `ascending` when `left<right`; a one-element declared range retains the direction implied by its source expression. `element_width` is the product of packed dimension sizes, or 1 when `packed_dimensions=[]`. `unpacked_element_count` is the product of unpacked sizes, or 1 when `unpacked_dimensions=[]`. `bit_width=element_width*unpacked_element_count` and is the elaborator's `$bits(port)`. A port wider than 64 bits remains **one row at its exact integer width**. An unpacked array remains one row and retains all bounds and declared directions. If a later wrapper chunks a port, that separate map orders chunks by declaration ordinal, then unpacked indices in declared left-to-right iteration order, then packed least-significant bit first; it never changes this manifest.
+
+This is the complete pretty-printed shape exemplar used by the schema fixture. It deliberately uses all-zero digest sentinels so copying prose cannot create provenance; the fixture generator must replace every sentinel and the checker must reject this literal example as stale. All object keys below are already in the required lexical order; the accepted artifact itself is emitted as the compact canonical bytes defined after it.
+
+```json
+{
+  "elaboration": {
+    "argv": [
+      "verilator",
+      "--xml-only",
+      "--top-module",
+      "zhao_texture_interface_schema_fixture",
+      "-GW=96",
+      "tests/rtl/fixtures/zhao_texture_interface_schema_fixture.sv"
+    ],
+    "cwd": ".",
+    "parameter_overrides": [
+      {
+        "name": "W",
+        "value": {
+          "kind": "unsigned_integer",
+          "text": "96"
+        }
+      }
+    ],
+    "top_module": "zhao_texture_interface_schema_fixture"
+  },
+  "hashes": {
+    "canonical_interface_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "module_declaration_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "top_source_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "module": {
+    "declaration_end_byte_exclusive": 311,
+    "declaration_start_byte": 0,
+    "name": "zhao_texture_interface_schema_fixture",
+    "source_path": "tests/rtl/fixtures/zhao_texture_interface_schema_fixture.sv"
+  },
+  "parameters": [
+    {
+      "declared_kind": "parameter",
+      "declared_type": "int unsigned",
+      "name": "W",
+      "ordinal": 0,
+      "selected_value": {
+        "kind": "unsigned_integer",
+        "text": "96"
+      },
+      "source_default_expression": "96"
+    }
+  ],
+  "ports": [
+    {
+      "bit_width": 1,
+      "declared_type": "logic",
+      "direction": "input",
+      "element_width": 1,
+      "name": "clk_i",
+      "net_or_var": "net",
+      "ordinal": 0,
+      "packed_dimensions": [],
+      "signed": false,
+      "source_expression": "input wire logic clk_i",
+      "unpacked_dimensions": [],
+      "unpacked_element_count": 1
+    },
+    {
+      "bit_width": 96,
+      "declared_type": "logic",
+      "direction": "input",
+      "element_width": 96,
+      "name": "wide_i",
+      "net_or_var": "variable",
+      "ordinal": 1,
+      "packed_dimensions": [
+        {
+          "direction": "descending",
+          "left": 95,
+          "right": 0,
+          "size": 96,
+          "source_expression": "[W-1:0]"
+        }
+      ],
+      "signed": false,
+      "source_expression": "input var logic [W-1:0] wide_i",
+      "unpacked_dimensions": [],
+      "unpacked_element_count": 1
+    },
+    {
+      "bit_width": 8,
+      "declared_type": "logic",
+      "direction": "input",
+      "element_width": 8,
+      "name": "ascending_signed_i",
+      "net_or_var": "variable",
+      "ordinal": 2,
+      "packed_dimensions": [
+        {
+          "direction": "ascending",
+          "left": 0,
+          "right": 7,
+          "size": 8,
+          "source_expression": "[0:7]"
+        }
+      ],
+      "signed": true,
+      "source_expression": "input var logic signed [0:7] ascending_signed_i",
+      "unpacked_dimensions": [],
+      "unpacked_element_count": 1
+    },
+    {
+      "bit_width": 192,
+      "declared_type": "logic",
+      "direction": "output",
+      "element_width": 32,
+      "name": "counters_o",
+      "net_or_var": "variable",
+      "ordinal": 3,
+      "packed_dimensions": [
+        {
+          "direction": "descending",
+          "left": 31,
+          "right": 0,
+          "size": 32,
+          "source_expression": "[31:0]"
+        }
+      ],
+      "signed": false,
+      "source_expression": "output var logic [31:0] counters_o [2:1][5:7]",
+      "unpacked_dimensions": [
+        {
+          "direction": "descending",
+          "left": 2,
+          "right": 1,
+          "size": 2,
+          "source_expression": "[2:1]"
+        },
+        {
+          "direction": "ascending",
+          "left": 5,
+          "right": 7,
+          "size": 3,
+          "source_expression": "[5:7]"
+        }
+      ],
+      "unpacked_element_count": 6
+    }
+  ],
+  "schema_id": "zhao.texture.interface",
+  "schema_version": 1,
+  "source_closure": [
+    {
+      "kind": "systemverilog_module",
+      "ordinal": 0,
+      "path": "tests/rtl/fixtures/zhao_texture_interface_schema_fixture.sv",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "tools": {
+    "checker": {
+      "name": "check_texture_v3_interface_manifest",
+      "path": "tools/rtl/check_texture_v3_interface_manifest.py",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "version": "1.0.0"
+    },
+    "elaborator": {
+      "name": "Verilator",
+      "version": "Verilator 5.x fixture placeholder",
+      "version_command": [
+        "verilator",
+        "--version"
+      ]
+    },
+    "generator": {
+      "name": "gen_texture_v3_interface_manifest",
+      "path": "tools/rtl/gen_texture_v3_interface_manifest.py",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "version": "1.0.0"
+    },
+    "parser": {
+      "name": "texture_v3_interface_parser",
+      "path": "tools/rtl/texture_v3_interface_parser.py",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "version": "1.0.0"
+    },
+    "runtime": {
+      "name": "CPython",
+      "version": "3.x fixture placeholder"
+    }
+  }
+}
+```
+
+The source view preserves exact declaration text/order/ranges and computes `module.declaration_start_byte` and `declaration_end_byte_exclusive` against raw top-source bytes. `top_source_sha256`, every `source_closure[].sha256`, and every custom-tool `sha256` are lowercase SHA-256 over raw file bytes exactly as stored; `top_source_sha256` must equal the closure row for `module.source_path`. `module_declaration_sha256` alone uses the byte span after converting CRLF and bare CR to LF, with no trimming and UTF-8 encoding. Tool versions are data, not comments: the checker reruns `verilator --version`, verifies its exact LF-trimmed first line, verifies CPython's exact version, requires custom-tool version `1.0.0`, and recomputes all raw tool hashes.
+
+The canonical-interface digest algorithm is exact:
+
+1. Parse UTF-8 with no BOM; reject duplicate object keys, invalid UTF-8, non-NFC strings, floats, `null`, unknown members, and integers outside the schema's nonnegative constraints except signed dimension bounds.
+2. Validate all cross-field equations, ordinals, paths, source/elaboration equality, and hashes except the canonical digest itself.
+3. Deep-copy the root and remove **only** member `hashes.canonical_interface_sha256`; retain the now-two-member `hashes` object and every other byte-relevant value. No other hash, tool version, or field is blanked.
+4. Serialize the copy with recursive Unicode-code-point lexical object-key ordering; arrays unchanged; UTF-8 non-ASCII emitted directly; only JSON-mandatory quote, backslash, and control-character escapes; lowercase `true`/`false`; base-10 integers with no leading zero or `+`; separators exactly `,` and `:`; and no spaces, BOM, or trailing LF. The normative implementation is Python `json.dumps(payload, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))` after the NFC/type checks, encoded with `.encode("utf-8")`.
+5. Set `hashes.canonical_interface_sha256` to lowercase `sha256(canonical_bytes_from_step_4).hexdigest()`.
+6. Serialize the complete root by the same rule for the stored manifest, again with no trailing LF. The stored file's raw SHA-256 is intentionally **not** embedded in itself; freshness is the recomputed step-4 payload digest plus all constituent raw hashes.
+
+The generator performs two independent views: a source-declaration parse and a Verilator elaboration query at the selected values. The checker compares parameter names/order/values and port names/order/directions/kinds/signedness/every dimension/element width/total `$bits`; it then checks exact closure and canonical bytes. Missing Verilator, different Verilator or Python version, an unparseable expression, unknown width, missing/extra/reordered port or parameter, stale source/tool, reordered closure, hand-edited whitespace, a digest computed while retaining its own field, or a manifest not byte-for-byte canonical is a hard nonzero failure, never SKIP. Fixture self-tests include the complete shape above, a >64-bit packed port, ascending/descending packed ranges, two nonzero-bound unpacked dimensions, a signed port, duplicate keys, one self-hash-retained digest, a trailing-newline file, and a deliberate source/elaboration mismatch; each negative fixture must make the checker fail.
+
+The exact Packet-B source closure is package first and top last:
+
+```text
+fpga/rtl/common/zhao_render_texture_pkg.sv
+fpga/rtl/field/zhao_field_rcp24_rom.sv
+fpga/rtl/raster/zhao_raster_ticketq.sv
+fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv
+fpga/rtl/texture/zhao_texture_mod255.sv
+fpga/rtl/texture/zhao_texture_aux_div6.sv
+fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+fpga/rtl/texture/zhao_texture_palette_res_v2.sv
+fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv
+fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv
+fpga/rtl/texture/zhao_texture_v3bank.sv
+fpga/rtl/texture/zhao_texture_v3rq.sv
+fpga/rtl/texture/zhao_texture_v3own.sv
+fpga/rtl/texture/zhao_texture_metajoin_v2.sv
+fpga/rtl/texture/zhao_texture_uv_join_v2.sv
+fpga/rtl/texture/zhao_texture_early_desc_v2.sv
+fpga/rtl/texture/zhao_texture_frag_expand_v2.sv
+fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv
+fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
+fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
+fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+fpga/rtl/texture/zhao_texture_island_v3_top.sv
+```
+
+No consumer may compile before `zhao_render_texture_pkg.sv`; every importing file uses an explicit package import rather than copied widths. The closure checker must prove this list equals the recursively elaborated selected-root module closure **plus its imported package files** exactly—no missing and no unreachable extra source—and the selected V3 fit target uses the same ordered compile closure.
+
+A source/elaboration inventory then proves Early-Z `PAYLOAD_W=410`, skid `W=490`, retirement context 160, owner context 224, typed AUX context 224, descriptor logical image 287, descriptor physical image 320 as eight ascending 40-bit slices with exactly 33 zero pad bits, V2 descriptor/UV `joined365={owner14,logical287,U32,V32}`, material row 46, class response tuple 66, and external result 48. It proves that the captured eight-bit page generation exists exactly once in the join as `logical287[286:279]`, with no appended generation port/field, and that the expander copies only that slice into every resolver sample job. It also proves `frag_invw24_i` exists and `frag_depth_i` does not exist on the versioned top. The leaf-interface inventory requires `zhao_texture_early_desc_v2.desc_pad_fault_o` declared exactly `output logic [31:0]`, `zhao_texture_aux_pipe_v2.sheet_rsp_owed_o` declared exactly `output logic`, and scalar `output logic` ports `zhao_texture_binding_resolver_v2.{cfg_loader_idle_o,binding_crc_busy_o,binding_seal_pending_o}`. The quiet-source audit requires every versioned idle/data-idle port, parses every top-local `q_*` source mapping, proves single-driver connectivity without hierarchical child-state reads, and proves every mapped operand occurs with the frozen polarity in exactly one of the literal `data_quiet`/`quiet_o` expressions.
+
+A role-aware checker rooted at the connected top requires exactly one provider of `raster_texture_fragment_lifecycle`: `zhao_texture_v3own`. Expanders, descriptor banks, resolver, contexts, skids, and sequence witness declare transport/storage/check roles, not ownership. A test-only duplicate-owner composition marks both V3 ownership and TEXJOIN ownership and must make the checker fail. Generated accounting and later connected-production tops are checked separately; a disconnected selected sibling cannot satisfy connected ownership.
+
+### 12.2 V3, material, AUX, and result gates
+
+Drive the unchanged old island and Packet-B V3 with identical PASSTHRU/count-1/no-AUX traffic and compare RGB/A/legacy-tag/refused order under stalls. All other material arithmetic compares the corrected `zref_material.hpp` directly with owner ruling R9 and the new V3 combiner; the old island is not allowed to outvote that oracle.
+
+Required vectors include zero, one, 127, 128, 254, and 255 in every operand position and cover:
+
+* PASSTHRU counts 0 and 1, and every illegal count;
+* recipes 1–5 at exact count 2 and wrong counts 0/1/3;
+* recipes 6–7 at exact count 3 and wrong counts 0/1/2;
+* exact alpha for all eight recipes, including unchanged `s0.a` on 1–4/6, unit alpha on MASK/detail-mask, negative LERP deltas, and saturation boundaries;
+* MODULATE2X's single `(a*b+64)>>7` rounding, MASK's continuous alpha rather than a nonzero gate, and both detail recipes' MODULATE2X first layer;
+* a malformed material generating no planner/cache/Sheet access, one local terminal refusal for each declared required source, loud final error, sticky frame fault, and normal ordered release;
+* sample 2 and AUX both required simultaneously, proving the combiner reads sample 2 and only AUX status; changing AUX tag/strength with status zero must not change RGB/A/index, while changing sample 2 must change the two three-sample recipes;
+* successful AUX tag/strength arriving in the typed AUX plane and being deliberately unexposed; any test that treats it as RGBA fails.
+
+Result-path vectors include CLUT8 indices 0 and 255, both CLUT4 nibbles, all direct formats with index zero, palette latency/backpressure, and independently delayed class queues. Every accepted queue record is scoreboarding the full 66-bit tuple. Final status is ORed only across committed required planes; final index is sample 0 or zero at count zero. The star-disc/halo and alpha-test cases run end to end through `RASTER.FRAGMENT`; forcing index zero, substituting a palette-colour byte, or borrowing a later response's index must fail.
+
+AUX vectors are derived from normative `design/contracts/TEXTURE.AUX.V2.md`, not oracle-only `TEXTURE.AUX.md`. They interleave sheet A/envelope A, sheet B/envelope B, then sheet A under independent descriptor, request, response, and return stalls. They cover same index old/new generation, HIT, MISS, degenerate envelope, wrong opcode, wrong source ID, ALLOCATED/OVERFLOW on READ, duplicate response, response without issue, AUX absent, and AUX required at sample count zero. Each malformed owed response terminates the expected head exactly once and every no-issue response changes no owner state. Contract conformance also proves the 224-bit field offsets, 48-bit AUX plane, issue-before-return, request/response hold, typed counts/quiet, and the absence of any AUX-to-sample-2 data path. A fixture which selects old `TEXTURE.AUX.md` as Packet-B authority must fail the contract-closure checker.
+
+Committed arithmetic mutants reproduce each stale alternative independently: alpha multiplication on recipes 1–4, binary MASK, rounded-unit-then-double MODULATE2X, unit rather than MODULATE2X detail first layer, and count-zero early bypass for a non-PASSTHRU recipe. Additional mutants substitute AUX for sample 2 and drop/reconstruct raw index after palette lookup. The ordinary tests assert correct output; inverse-polarity mutant drivers prove each detector/gate can fail.
+
+Output backpressure is applied while later work completes out of order. RGB, alpha, index, status, all 160 retirement bits, and the legacy 16-bit tag view remain stable. The compatibility test specifically drives `frag_ctx_i[15:0] != frag_aux_ctx_i[15:0]`; only the former may appear on `out_tag_o`.
 
 ### 12.3 Full-identity stall gate
 
@@ -981,13 +1681,15 @@ An independent scoreboard records every accepted V3 fragment as:
 
 ```text
 external: all 160 retirement-context bits plus every V3 request field
-internal sample work: {slot[5:0], generation[7:0], sample_index[1:0]}
+internal descriptor/UV joined365: {owner14, logical287, U32, V32}
+  sole joined generation location: logical287[286:279]
+internal sample work: {slot[5:0], generation[7:0], sample_index[1:0], page_generation[7:0] copied from logical287[286:279]}
 internal AUX work:    {slot[5:0], generation[7:0]}
 ```
 
-It then applies long, independently randomized stalls at V3 input, planner/cache response, AUX response, V3 output, fragment input, tile read/write, resolve, and framebuffer output. On every stalled cycle it checks `valid` and every payload bit, not only the eventually accepted packet. Aggregate accepted/emitted counters are secondary.
+It then applies long, independently randomized stalls at V3 input, descriptor read, both V2 UV-join inputs, V2 UV-join output, planner/cache response, AUX response, V3 output, fragment input, tile read/write, resolve, and framebuffer output. The A/B join case holds A at the output while B is offered and requires A's owner, all 287 logical bits—including sole generation slice `[286:279]`—and U/V to remain unchanged; the resolver's expected generation is the admission-time scoreboard copy, not a duplicate join field. On every stalled cycle the scoreboard checks `valid` and every payload bit, not only the eventually accepted packet. Aggregate accepted/emitted counters are secondary.
 
-A committed renamed context-read/slot-swap mutant changes a held record while keeping its token/counters plausible. The normal driver asserts correct hold and order; a separate inverse-polarity mutant driver passes only when the independent mismatch detector fires. The detector operands must not share the corrupted enable.
+Committed renamed mutants cover three independent timing faults: the context-read/slot swap changes a held descriptor while retaining its token; the UV-join generation-slice swap retains A's owner/U/V and other logical bits while taking B's `logical287[286:279]`; and a late-global mutant overwrites that held slice from current active-page state. Normal drivers assert correct hold/order and compare with the admission-time expected record; separate inverse-polarity mutant drivers pass only when the independently clocked mismatch detector fires. No detector operand may share the corrupted enable. The descriptor physical-image mutant is separate: it writes one of the 33 pad bits high; one accepted read must produce `desc_pad_fault_o` delta one, one terminal refusal path, no usable descriptor, and a separately set sticky frame fault while ordinary RTL continues forcing all pad bits zero.
 
 ### 12.4 Bubble gate
 
@@ -1006,11 +1708,13 @@ Retain and run all of the owner controls:
 * duplicate return;
 * unauthorized final;
 * simultaneous malformed TMU and AUX returns;
-* valid simultaneous TMU and AUX returns;
+* valid simultaneous TMU and AUX returns, proving typed commits each increment one and combined commits increment two;
+* sample-only then AUX-only commits, proving neither typed counter aliases the combined counter;
+* locally refused binding/AUX work with logical issue at N and earliest return at N+1;
 * generation wrap/drain;
 * head incomplete while later owners finish.
 
-The six refusal/error classes remain separately observable. A sum over an unstated subset is not evidence.
+Every named refusal/protocol class remains separately observable. A sum over an unstated subset or the legacy combined commit count is not evidence.
 
 Because a correct work queue cannot overflow under legal stimulus, retain the renamed committed small-queue/full-guard mutant whose inverse-polarity test requires the overflow counter to fire.
 
@@ -1032,7 +1736,13 @@ A committed drain mutant which omits V3 quiet from `pipe_empty` must swap early 
 
 ### 12.7 Binding and memory gates
 
-Binding tests alternate materials every accepted fragment while prior owners remain live; each request must use its own sealed base/mode/palette generation. A late-read-global-binding mutant must fail.
+Binding tests program sparse and dense pages through BEGIN/WRITE/END/ABORT, write selectors out of order, and independently vary active/staging generations. They verify canonical CRC bytes, duplicate-row rejection, illegal mode/base/palette rejection, bad CRC leaving the old page active, reset generation zero, delayed END acknowledgement, fragment-admission fence at successful seal, and atomic activation only after complete `data_quiet`. While prior owners remain live, accepted fragments alternate selectors and every request must retain its own page/base/mode/class/palette tuple. Dedicated descriptor tests prove `physical320={33'b0,logical287}`, `slice[k]=physical320[k*40 +: 40]` for all `k=0..7`, simultaneous eight-slice write, held eight-slice read, and independent zero-pad/generation verdicts. The committed one-pad-bit mutant's first accepted bad-pad read must change `desc_pad_fault_o` from reset zero to one exactly once despite response stalls, expose no logical row, terminally refuse from the owner's required mask, and set the distinct sticky frame fault. Separate counter controls prove hold, delta two for two accepts, and modulo wrap.
+
+The generation-carriage test accepts owner A under page generation A, stalls `zhao_texture_uv_join_v2`, activates/offers distinguishable B only in the mutant/control schedule, and proves every A `joined365.logical287[286:279]` and resolver job still carries A. A current-active late read, a B-generation-slice/A-owner swap, removal or duplication of `logical287[286:279]`, or comparison of two registers clocked by the same join enable must fail independently of final colour.
+
+Selector controls use bases 253, 254, and 255 at counts 1/2/3. A carry produces one logical owner issue and one next-or-later local refusal, zero planner/cache access, and no lookup at wrapped selectors 0 or 1. Invalid row, page generation mismatch, no active page, and sample-0 class/palette mismatch obey the same issue-before-return timing. Count zero requires zero witnesses and performs no lookup. Samples 1/2 deliberately resolve different classes and palette generations to prove the single fragment witnesses never drive them.
+
+Committed binding/descriptor mutants include modulo-256 selector addition, current-active-page late read, V2 UV-join held-generation overwrite, one nonzero descriptor pad write bit, activation on owner quiet instead of structural data quiet, active-bank WRITE, CRC over stale invalid payload, class routed from the fragment witness, palette taken from response-token bits, local refusal in the issue cycle, and local refusal without an issue. Each must fail exact issue/planner/refusal/commit counts as well as payload comparison; late-read-global-binding and generation-swap mutants are not considered covered by output colour alone.
 
 The ENGINE1 local-arbiter test covers geometry lengths 32/64 and texture length 16, both contention orders, guard accept and registered OK/deny verdicts, global stalls, refresh, and interleaved scanout. It checks every raw returned halfword against the captured subowner and request position. For each accepted request it requires exactly one later verdict; it requires no request presentation while `WAIT_VERDICT`, and proves a verdict without acceptance, two verdicts, both verdict bits, and a second pre-verdict acceptance each fire their independently clocked detector.
 
@@ -1050,7 +1760,9 @@ The guard-region test proves the old geometry addresses and newly ratified textu
 
 ### 12.8 Work/cadence gate
 
-Long all-ready homogeneous and mixed streams check every accepted/completed equality and the `J1 + 2*J2 + 3*J3` phase equation in section 9.2. Separate controls duplicate an in-flight sampler job and a combiner phase while keeping output bytes unchanged; both must fail exact job/phase deltas. The steady-state report names accepted fragments, samples, AUX jobs, cache jobs/fills, combiner jobs, issued/completed phases, and ordered outputs. An owner-edge one-per-clock result without those downstream deltas cannot pass.
+Long all-ready homogeneous and mixed streams check every accepted/completed equality, both typed owner commit counts, their compatibility sum, and the `J1 + 2*J2 + 3*J3` phase equation in section 9.2. Separate controls duplicate an in-flight sampler job and a combiner phase while keeping output bytes unchanged; both must fail exact job/phase deltas. A simultaneous sample/AUX commit and sample-only/AUX-only runs prove counter independence. The steady-state report names accepted fragments, samples, AUX jobs, cache jobs/fills, combiner jobs, issued/completed phases, typed commits, and ordered outputs. An owner-edge one-per-clock result without those downstream deltas cannot pass.
+
+The structural-quiet test then exercises every `q_*` state and channel row in section 4.5 one at a time while all other rows—including `q_owner_idle`—indicate empty. It separately holds reciprocal/descriptor/UV/planner/cache/palette/combine requests and responses, every class bit, fill and Sheet requests, top wire `aux_sheet_rsp_owed_w=1` (driven by the AUX V2 output port) with `pg_valid_i=0`, unsolicited fill/Sheet response inputs, local TMU/AUX refusals, top retirement `out_valid_o`, config command `cfg_valid_i`, held `cfg_rsp_valid_o`, and each resolver observation wire corresponding to `cfg_loader_idle_o=0`, `binding_crc_busy_o=1`, and `binding_seal_pending_o=1`. Public `quiet_o` must remain low in every case and must reach true only after that exact condition is removed. The source-map checker proves every `q_*` operand has one exact named source and one equation use, no source is private child state, and all vector bits participate. It requires one inverse-polarity omission mutant per operand, plus the owner-quiet alias and AUX-issued-credit mutants; a single prose-group mutant is insufficient. The AUX control accepts two Sheet reads and retires their responses one at a time, requiring `sheet_rsp_owed_o` to stay high after the first and fall only after the second, while `idle_o` remains low if an AUX return is still held. These fire controls pass before quiet is cited by a tile-swap or binding-activation test.
 
 ### 12.9 Lease, publication, and CDC gate
 
@@ -1076,15 +1788,19 @@ The acceptance order is strict:
 A -> B -> C -> D -> E -> F(G8A) -> G -> H -> I(G8B) -> J(G8C) -> K
 ```
 
-A packet may be developed while an earlier independent fit runs, but it cannot be promoted past its gate or selected by a dependent packet until every predecessor is green. If an upstream packet is reverted, every dependent packet is reverted in reverse order. There is no supported mixed state with new ports and old manifests, contracts, generated accounting RTL, or source closure.
+**Packet A is a hard landing dependency, not an overlap candidate. Before Packet A's complete changeset has landed and its Packet-A gate is green, no Packet-B RTL, generator, parser, checker, fixture, test, mutant, manifest, contract, reference, ledger, fit/source list, or generated-artifact change may begin. Architecture-report editing is the only Packet-B activity permitted before that edge. This specific rule overrides the repository's generic permission to develop a new block while an earlier fit runs and overrides every overlap sentence below.** Packet B starts only from the landed-green Packet-A package widths and role checker; an uncommitted, merely passing, or concurrently changing Packet A does not satisfy the dependency.
+
+After that A-to-B edge, a later packet may be developed while an earlier **independent** fit runs, but it cannot be promoted past its gate or selected by a dependent packet until every predecessor is green. No part of B is independent of A. If an upstream packet is reverted, every dependent packet is reverted in reverse order. There is no supported mixed state with new ports and old manifests, contracts, generated accounting RTL, or source closure.
 
 The following closure law applies to **every** packet, not only final adoption:
 
 1. A module addition, removal, rename, parameter-interface change, or port change updates the production block ledger/manifest consumed by `tools/quartus/check_prod_manifest.py` in that same packet.
-2. The same packet regenerates `fpga/rtl/prod/zhao_prod_top.sv` with `tools/quartus/gen_prod_top.py` and regenerates/checks the production fit's exact source closure. A zero semantic diff is still freshness-checked against the changed source state.
-3. Every new module not instantiated by the selected production hierarchy is registered immediately as `excluded:not-yet-adopted` (or the existing schema's exact equivalent carrying that reason). Merely listing it as a source is not adoption. Fit-only wrappers are registered as fit-only, never production providers.
-4. Every V3 port change additionally updates all direct instantiations, the V3 interface manifest, the accounting top, and its source list in that packet. There is no later manifest-cleanup packet.
-5. Rollback restores RTL, contracts, ledger/manifest, generated accounting top, fit targets, and source lists from the same packet atomically.
+2. Disposition follows the checker-proved instantiation graph. A module reachable from a selected accounting root is counted **inside that root and receives no `excluded` row**. `check_prod_manifest.py` intentionally fails an excluded module which is nevertheless in a selected root's closure.
+3. `zhao_texture_island_v3_top` is already a selected **accounting** root. Therefore every Packet-B successor it instantiates—including the versioned reciprocal/perspective/meta/UV joins, descriptor, expander, resolver, planner, cache, dispatcher, Mosaic/bilerp/palette paths, AUX, and combiner—is inside that root, appears in its exact source closure, and is not `excluded:not-yet-adopted`. In particular `zhao_texture_uv_join_v2.sv` is a counted child, never an instantiated-but-excluded leaf. This accounting fact does **not** mean the shell renders through V3 or that production connection/adoption occurred.
+4. Only a new module unreachable from every selected accounting root is registered `excluded:not-yet-adopted` (or the exact existing schema equivalent). Fit-only wrappers remain fit-only and never become functional providers merely by appearing in a source list.
+5. The same packet regenerates `fpga/rtl/prod/zhao_prod_top.sv` with `tools/quartus/gen_prod_top.py`, refreshes the selected root's exact fit source closure, and runs freshness checks. A zero semantic generated diff is still checked against the changed source state.
+6. Every V3 port change additionally updates all direct instantiations and the exact interface artifact/generator/checker in section 12.1. There is no later manifest-cleanup packet and no SKIP for an unavailable parser/elaborator.
+7. Rollback restores RTL, contracts, reference oracle, tests/mutants, ledger/manifest, generated accounting top, interface artifact, fit targets, and source lists from the same packet atomically.
 
 Throughout A–K, `fpga/rtl/common/zhao_shell_top.sv`, its old `zhao_shell_fit_top.sv`, D3 policy/manifest, and D3 receipt remain byte-for-byte historical artifacts. No packet redirects those names.
 
@@ -1104,20 +1820,24 @@ Throughout A–K, `fpga/rtl/common/zhao_shell_top.sv`, its old `zhao_shell_fit_t
 
 **Owns**
 
-* `fpga/rtl/texture/zhao_texture_island_v3_top.sv`: `RCTXW=160`, `AUXCTXW=224`, retirement-context/status/raw-index/quiet ports and `RESW=48`;
-* `fpga/rtl/texture/zhao_texture_early_desc_v2.sv`, `fpga/rtl/texture/zhao_texture_frag_expand.sv`, and `fpga/rtl/texture/zhao_texture_aux_pipe.sv`: atomic full AUX handle/envelope capture and carriage;
-* `fpga/rtl/texture/zhao_texture_material_combine_v2.sv`: exact required-source reduction, sample-0 index, status OR, accepted/completed job and phase counters;
-* `fpga/rtl/texture/zhao_texture_binding_resolver.sv`: sealed per-request binding carriage and accepted-issue timing;
-* `design/contracts/TEXTURE.COMBINE.md`: all eight recipes, exact count laws, 48-bit source/result semantics, and paired-phase cadence;
-* `design/contracts/TEXTURE.CACHE.md`: versioned terminal-refusal interface and accepted/completed cache/fill accounting to be implemented in Packet E;
-* `design/contracts/SURFACE.SHEET.md`: generation-bearing handle/status behavior used by owner-sealed AUX;
-* V3/AUX differentials, interleaved-sheet tests, required-mask tests, renamed committed mutants, and all same-packet manifest/accounting/source-closure regeneration required by the V3 port change.
+* `fpga/rtl/texture/zhao_texture_island_v3_top.sv`: rename `frag_depth_i` to `frag_invw24_i`; retain legacy `frag_ctx_i`; add `RCTXW=160`, `AUXCTXW=224`, retirement-context/status/raw-index/structural-quiet ports, full binding-config and Surface Sheet fields; map every quiet alias to the exact leaf output port or named top-visible channel in section 4.5; remove live global binding authority; instantiate owner at context 224/result 48;
+* `fpga/rtl/texture/zhao_texture_v3own.sv`: only `ev_tmu_commits_o` and `ev_aux_commits_o` instrumentation, while retaining combined `ev_commits_o`; no lifecycle enable or state transition changes;
+* new `zhao_texture_early_desc_v2.sv`, `zhao_texture_frag_expand_v2.sv`, `zhao_texture_binding_resolver_v2.sv`, `zhao_texture_rsp_dispatch_v2.sv`, `zhao_texture_aux_pipe_v2.sv`, and `zhao_texture_material_combine_v3.sv`: the exact physical/logical descriptor, 32-bit reset-zero modulo `desc_pad_fault_o`, table/issue, resolver config-state observation ports, tuple, AUX-V2 `sheet_rsp_owed_o`, and R9 laws above;
+* new `fpga/rtl/texture/zhao_texture_uv_join_v2.sv`: owner-aligned `joined365={owner14,logical287,U32,V32}` through both input holds and the output hold; captured active-page generation exists only at `logical287[286:279]`, which expansion copies into resolver jobs; the unversioned join remains oracle-only;
+* versioned observation-preserving successors `zhao_raster_rcp24_v4.sv`, `zhao_raster_perspuv_pairpipe_v2.sv`, `zhao_texture_metajoin_v2.sv`, `zhao_texture_tmu_plan_v2.sv`, `zhao_texture_cache_pipe_v2.sv`, `zhao_texture_mosaic_v2.sv`, `zhao_texture_bilerp_lane_v2.sv`, and `zhao_texture_palette_res_v2.sv`: exact `idle_o` coverage required by section 4.5, with no new lifecycle or ready path;
+* `design/contracts/TEXTURE.COMBINE.md` and `reference/include/zref/zref_material.hpp`: one eight-recipe R9 authority, exact counts/alpha/MASK/detail/count-zero behavior, 48-bit status/index result, and paired cadence;
+* new normative `design/contracts/TEXTURE.AUX.V2.md`: typed context/plane, Sheet READ import, independent issue/return/accounting/quiet, malformed-response handling, and no-AUX-as-sample-2 law; existing `design/contracts/TEXTURE.AUX.md` remains byte-for-byte oracle-only;
+* `design/contracts/TEXTURE.CACHE.md`: versioned typed terminal-refusal and accepted/completed cache/fill accounting to be implemented at Packet E, without pretending Packet B connected memory denial;
+* the draw-side clarification in `design/contracts/SURFACE.SHEET.md`: READ opcode/status/source validation and the existing ready/valid page response used by AUX V2;
+* `fpga/rtl/generated/zhao_texture_island_v3_top.interface.json`, `tools/rtl/gen_texture_v3_interface_manifest.py`, `tools/rtl/texture_v3_interface_parser.py`, `tools/rtl/check_texture_v3_interface_manifest.py`, their closed-schema/canonical-byte/self-hash/wide/unpacked/source-vs-elaboration fixtures, and the package-first exact source closure in section 12.1;
+* V3/R9/AUX/binding differentials, descriptor physical-pad and V2 UV-join generation/identity stalls, typed-counter and per-operand structural-quiet tests, interleaved-sheet tests, required-mask tests, and every committed mutant named in sections 12.2, 12.3, 12.5, 12.7, and 12.8;
+* all same-packet ledger/manifest/generated-accounting/fit-source updates demanded by the V3 port and instantiation changes.
 
-`zhao_texture_v3own.sv` remains the sole lifecycle owner and semantically unchanged; its standalone default-width suite remains. Any new resolver/descriptor module is `excluded:not-yet-adopted` immediately.
+The shared unversioned `zhao_texture_aux_pipe.sv`, `zhao_texture_material_combine_v2.sv`, `zhao_texture_rsp_dispatch.sv`, `zhao_texture_uv_join.sv`, `zhao_texture_metajoin.sv`, `zhao_texture_tmu_plan.sv`, `zhao_texture_cache_pipe.sv`, `zhao_texture_mosaic.sv`, `zhao_texture_bilerp_lane.sv`, `zhao_texture_palette_res.sv`, `zhao_raster_rcp24_v3.sv`, `zhao_raster_perspuv_pairpipe.sv`, and `zhao_texture_island_top.sv` are outside Packet B and remain byte-for-byte oracle leaves. Oracle-only `design/contracts/TEXTURE.AUX.md` is likewise unchanged. Because the versioned successors are instantiated by selected accounting root `zhao_texture_island_v3_top`, they are counted inside that root and receive **no excluded rows**. This is accounting closure only; Packet B still makes no shell connection, production adoption, area saving, or fit claim.
 
-**Gate:** count-0 and AUX-required behavior, all recipe/count combinations, raw index/status, interleaved sheet/envelope generations, full-context stalls, malformed returns, exact job/phase counts, queue-overflow control, and uninterrupted prepared ordered output.
+**Gate:** Packet A is already landed green; exact closed-schema source/elaboration manifest, canonical-byte/self-hash/tool-version checks, and fired fixtures; descriptor `287 -> {33'b0,*} -> 320 -> 8*40` packing plus 32-bit reset-zero modulo pad-fault counter independent of sticky fault; V2 UV join exactly `joined365` with generation only in `logical287[286:279]`; explicit AUX owed and resolver loader/CRC/seal output ports; exact single-driver source mapping for every quiet operand with no private-state read; R9 arithmetic/count/alpha/AUX-V2 laws; selector overflow; table programming/CRC/seal/generation/activation; class/palette witness refusal; issue-before-local-return; full Sheet opcode/status/source handling; raw tuple/index alignment; separate sample/AUX commits; literal per-operand structural quiet; full-context stalls; malformed owner returns; exact job/phase counts; queue-overflow controls; and uninterrupted prepared ordered output. Every zero-valued detector named by acceptance has a legal fire case or committed mutant.
 
-**Rollback:** revert every V3 port/width consumer, all three contract amendments, tests/mutants, and the regenerated manifest/accounting/source closure together. The old island/TEXJOIN experiments remain available; no raster selects the new boundary.
+**Rollback:** revert V3 port/width consumers, owner instrumentation, the physical descriptor and all versioned quiet/UV/binding/dispatch/AUX/combine leaves, new AUX-V2 and corrected combine/cache contract/reference updates, tests/mutants, interface generator/parser/checker/artifact, and regenerated ledger/manifest/accounting/source closure together. The old island, unversioned UV join/AUX leaves, oracle-only AUX contract, and TEXJOIN experiments remain executable; no raster selected the Packet-B boundary.
 
 ### Packet C — synthetic post-Early-Z composition
 
@@ -1151,7 +1871,7 @@ The three unversioned modules remain unchanged oracles.
 **Owns**
 
 * `fpga/rtl/memory/zhao_render_asset_mux.sv`, immediately `excluded:not-yet-adopted`, plus raw-16-bit return demultiplexing;
-* `fpga/rtl/texture/zhao_texture_cache_pipe.sv` terminal fill-refusal implementation and the Packet-B cache accounting;
+* Packet-B successor `fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv`: terminal fill-refusal implementation and the Packet-B cache accounting, retaining its complete `idle_o`; the unversioned cache used by the old island remains unchanged;
 * `fpga/rtl/common/zhao_pkg.sv`, `fpga/rtl/memory/zhao_mem_guard.sv`, `design/contracts/MEM.GUARD.md`, and `spec/memory_rules.md`: same-address-range ratification and exact accept-then-verdict master law;
 * local-arbiter/guard/malformed-fill tests, held-valid-denial and subowner mutants, and closure regeneration.
 
@@ -1244,8 +1964,14 @@ The architecture is ready for implementation when these statements remain true:
 
 * the post-Early-Z seam carries every V3 request operand and every downstream fragment field;
 * V3's existing owner context, not a parallel FIFO, owns the continuation lifetime;
-* raw sample-0 index and status reach `RASTER.FRAGMENT`;
-* `invw24` is preserved bit-for-bit and is not confused with projected `w`;
+* raw sample-0 index and status reach `RASTER.FRAGMENT`, with every 66-bit class tuple aligned through palette latency;
+* owner ruling R9 is the sole recipe/count/RGB/alpha authority in contract, RTL, `zref`, and tests;
+* normative `design/contracts/TEXTURE.AUX.V2.md` owns Packet-B AUX while old `TEXTURE.AUX.md` remains oracle-only; AUX never substitutes for sample 2, and Packet B explicitly leaves successful tag/strength without a typed visible consumer;
+* the early descriptor is exactly `physical320={33'b0,logical287}` with `slice[k]=physical320[k*40 +: 40]`, constant-zero writes, independently checked 33-bit pad, and a separate 32-bit reset-zero modulo `desc_pad_fault_o` incremented once per accepted bad-pad read rather than aliased to sticky frame fault;
+* `zhao_texture_uv_join_v2` holds exactly `joined365={owner14,logical287,U32,V32}`; its sole captured page-generation location is `logical287[286:279]`, copied later into resolver jobs for an independently enabled comparison;
+* the 75-bit, 256-entry, two-bank binding table has exact programming, CRC, generation, seal, activation, witness, overflow, and local-refusal laws;
+* every local binding/AUX refusal is logically issued before its later terminal return;
+* `invw24` is preserved bit-for-bit, is named `frag_invw24_i`, and is not confused with projected `w`;
 * full caller source identity reaches the fragment RMW transaction;
 * every state transition is tied to a ready/valid acceptance;
 * full payloads hold under all stalls;
@@ -1255,24 +1981,28 @@ The architecture is ready for implementation when these statements remain true:
 * fill refusal is terminal rather than a hidden deadlock;
 * the GPU-domain lease captures `{writer,slot,generation,mode,base,span}` and both guards use only that record;
 * only an accepted clean publication creates a generation-bearing READY CDC event; fault release and no-ready frames repeat the previous complete display;
-* accepted/completed fragment, sample, AUX, cache, fill, combiner-job, and combiner-phase counts close at drain;
+* accepted/completed fragment, sample, AUX, cache, fill, combiner-job, and combiner-phase counts close at drain, with independent owner TMU/AUX commits and their retained sum;
+* V3 quiet is the literal structural conjunction and exhaustive single-driver source map in section 4.5, including every versioned leaf idle, held request/response, AUX V2 `sheet_rsp_owed_o`, config response, retirement valid, and resolver V2 `cfg_loader_idle_o`/`binding_crc_busy_o`/`binding_seal_pending_o`—never private child state or an alias of owner quiet;
 * tile swap and frame publication include V3/memory drain;
 * both views share one terrain/projector path and one texture island;
 * the legal RPP3/MATW18 two-view workload, not RPP1 or a 128-triangle fixture, is the final workload;
 * G8B elaborates the parameter-fixed `zhao_terrain_pipe_rpp3_matw18_fit_top`, not raw-module defaults;
-* every changed V3 port and every unadopted module is reconciled with the production manifest, generated accounting top, and source closure in its own packet;
+* Packet B begins only after Packet A has landed green; before that edge no Packet-B implementation artifact of any kind changes, irrespective of generic overlap permission;
+* every changed V3 port is reconciled with the closed schema-v1 interface manifest, exact nested JSON types/order, source/elaboration checker, recorded Verilator/CPython/custom-tool versions, raw hashes, self-field-omitting canonical SHA-256 algorithm, wide/unpacked representation, and package-first closure in Packet B;
+* every instantiated Packet-B leaf is counted inside selected accounting root `zhao_texture_island_v3_top` with no contradictory excluded row, while unreachable candidates alone are excluded;
 * only clean connected fits decide the comfortable-margin target below 30,000 ALMs and 85 DSPs.
 
 ### 14.1 Remaining HOLDs
 
-The architecture decision does not clear implementation or production adoption. The explicit HOLDs are:
+No Packet-B ABI, arithmetic, AUX role, binding failure, quiet, manifest-disposition, or interface-manifest choice is left unspecified by this report. The remaining HOLDs are genuine implementation, upstream-product, integration, and measurement gates:
 
-1. **V3/raster HOLD:** Packets A–E and their differentials, source-status/index reduction, owner-sealed AUX descriptor, guard-denial controls, and G8A connected receipt do not yet exist as this report's evidence.
-2. **Attribute/material HOLD:** exact `invw24`, UV/W, color, world-X/Z, sheet handle, and envelope carriage must close; sample counts 2/3 remain disabled until common-UV/LOD/consecutive-binding sufficiency is proven or the descriptor is explicitly widened.
-3. **Lease/CDC HOLD:** writer-aware slot arbitration, captured base/span, clean-publish/fault-release behavior, accepted-ready CDC, generation-matched swap return, and reset barrier must pass Packet G before shell V2 can qualify.
-4. **Shell HOLD:** `zhao_shell_top_v2` is not implemented or selected; `zhao_shell_top.sv` remains the byte-identical live historical specimen until the final selection packet.
-5. **Terrain HOLD:** normals, projected-`w` depth quantization, owner-sealed terrain identity, and production-scale binner/tile scheduling must close before the parameter-fixed G8B and legal two-view end-to-end gate.
-6. **Fit/budget HOLD:** no ALM, DSP, M10K, Fmax, or physical saving is inferred. G8A, G8B, and G8C must each produce its named clean connected receipt; production requires G8C's comfortable measured margin below 30,000 ALMs and 85 DSPs.
-7. **Adoption/accounting HOLD:** no candidate becomes production and TEXJOIN is not marked superseded until Packet K atomically selects the connected hierarchy and regenerates every manifest/accounting/source-closure artifact.
+1. **Packet-A landing / Packet-B implementation-evidence HOLD:** Packet A must land green before any Packet-B implementation artifact changes. None of the versioned resolver/physical-descriptor/UV-join/quiet-leaf/dispatcher/AUX/combiner changes, owner instrumentation, new AUX-V2 or corrected combine/cache contract/`zref`, interface generator/checker/artifact, differentials, or committed mutants is implemented by this architecture edit. Every Packet-B gate must pass before Packet C may select its interface.
+2. **Cache/memory HOLD:** Packet B specifies typed cache refusal, but the guard-denial terminal path and exact cache/fill accounting remain Packet E work; an invalid/denied fill must not be claimed drain-safe before that packet passes.
+3. **Explicit material-ABI HOLD:** Packet B deterministically supports Packet A's common-UV/common-LOD/consecutive-selector seam, but connected sample counts 2/3 remain disabled until shipped material records prove that convention or a later packet carries explicit `MaterialSample[3]` selectors, generations, UV sets, and LODs. Full upstream resource-generation validation remains mandatory.
+4. **AUX-consumer HOLD:** Packet B validates and accounts successful `{tag,strength}` but deliberately exposes no surface-effect result. A complete terrain surface-effect claim requires a separately typed owner-aligned consumer/output and end-to-end visual contract; AUX may never be smuggled in as sample 2 to clear this HOLD.
+5. **Attribute/raster HOLD:** exact `invw24`, UV/W, color, world-X/Z, sheet handle, and envelope carriage, plus Packets C–E and G8A, must close before the raster seam is called connected.
+6. **Lease/CDC HOLD:** writer-aware slot arbitration, captured base/span, clean-publish/fault-release behavior, accepted-ready CDC, generation-matched swap return, and reset barrier must pass Packet G before shell V2 can qualify.
+7. **Shell/terrain HOLD:** `zhao_shell_top_v2` is not implemented or selected. Normals, projected-`w` depth quantization, owner-sealed terrain identity, and production-scale binner/tile scheduling must close before the parameter-fixed G8B and legal two-view end-to-end gate. The protected `zhao_shell_top.sv` remains unchanged.
+8. **Fit/budget/adoption HOLD:** no ALM, DSP, M10K, Fmax, production connection, or physical saving is inferred. G8A, G8B, and G8C require their named clean connected receipts. Only Packet K may atomically select the connected hierarchy and mark TEXJOIN superseded after G8C demonstrates comfortable measured margin below 30,000 ALMs and 85 DSPs.
 
-This report does **not** claim that the current shell contains V3, that the current terrain candidate can feed the current binner at production scale, that the selected material interface already covers every three-sample recipe, that any new module fits, that the whole machine is under budget, or that retiring TEXJOIN saves physical silicon. Those are the gates, not the starting assumptions.
+This report does **not** claim that Packet B RTL exists, that the current shell contains V3, that successful AUX changes a visible effect, that the current terrain candidate can feed the binner at production scale, that the Packet-A selector is the complete three-sample material ABI, that any new module fits, that the whole machine is under budget, or that retiring TEXJOIN saves physical silicon. Those are the gates, not the starting assumptions.
