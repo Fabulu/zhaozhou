@@ -350,6 +350,46 @@ verified.
   and DSP saving remain separate claims. The shell-fit lane accepted this exact
   boundary.
 
+### 2026-09-13 19:42 UTC+02:00 - Specs fit result arrived; work parked first
+
+- Background `ZhaozhouSpecs` build reports success.
+- **Work completed while fit ran:** existing committed
+  `tests/dsp/run_dual18_verilator.py --quick` passed all backend/sign-mode/
+  recombination/CE/reset/lane-swap controls and emitted its distinct transcripts.
+  It still correctly reports `DUAL18_VENDOR_GATE HOLD`; none of that simulator
+  evidence is promoted into this physical v1 claim.
+- **Parked state:** no source changed after fit snapshot `c68cc8ad`; exact v1
+  claim boundary is committed as `f1326088`; load profile already expects a
+  separately committed `HARDWARE-SPECS-BUILD-AUDIT.json`.
+- **Resume now:** inspect the completed map hierarchy, physical MAC/DSP count,
+  pins, timing, and RBF hash; preserve raw key reports and audit before loading.
+
+### 2026-09-13 19:48 UTC+02:00 - Real-block RBF audit passed
+
+- Quartus full flow passed in 4m35s from exact source
+  `c68cc8ad3e480af6a8a0a5f3dcaffc81b7165d20`: zero errors, zero critical
+  warnings, `5CSEBA6U23I7`, `sys_top`, 7,265 ALMs, 11,157 registers,
+  384,498 block-memory bits, 34 DSPs, 145 physical/0 virtual pins, 3 PLLs.
+- Strengthened the post-map gate after the fit: exact resource-table rows prove
+  `zhao_crc32c_fold:u_crc` survived as 133 ALUTs,
+  `zhao_raster_fill:u_fill` as 1 ALUT, and `zhao_dual18_mul:u_mul` as exactly
+  1 DSP under the 317-ALUT/44-register test runner. The direct instance names
+  `cyclonev_mac:u_dual18_mac`.
+- Did not cite `preserve_hierarchy` as evidence: Quartus 17 warns that attribute
+  is unrecognised. Actual hierarchy/resource rows and implemented DSP count are
+  the evidence.
+- Pin audit: canonical 3.3-V clock inputs V11/Y13/E11; 169 reserved inputs;
+  zero reserved outputs; no missing location/I/O-standard warnings.
+- Timing positive: setup +0.648 ns, hold +0.250 ns, recovery +3.243 ns,
+  removal +0.811 ns, min pulse +1.122 ns; zero illegal/unconstrained clocks.
+  External 4 input/14 path and 50 output/122 path board delays remain unsigned.
+- RBF: 2,425,124 bytes, SHA-256
+  `59407e97e208980c7965b931bcaf920291cadb40f56c623ec32cc3df672c86cd`.
+- Preserved exact flow/map/pin/STA reports and all flow/map/fit/asm/STA/pin/RBF/
+  SOF hashes in `HARDWARE-SPECS-BUILD-AUDIT.json`. No second Quartus job.
+- Physical load remains pending until this audit and strengthened checker are
+  committed/pushed; then only the closed Specs profile may stage this hash.
+
 ---
 
 ## Subagent Spawns
@@ -396,6 +436,11 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `tests/tools/test_verify_superstation_specs.py`
 - `tools/board/verify_superstation_specs.py`
 - `tools/board/build_superstation_specs.ps1`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-BUILD-AUDIT.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-QUARTUS-FLOW.rpt`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-QUARTUS-MAP.rpt`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-QUARTUS-PIN.pin`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-QUARTUS-STA.rpt`
 
 ---
 

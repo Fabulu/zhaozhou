@@ -49,6 +49,42 @@ at least one new packed block), no critical warnings, no unused output-driving
 pins, positive internal timing slacks, and an exact RBF receipt. A missing
 hierarchy and missing 34th DSP each have a fired verifier control.
 
+## Build result
+
+The isolated full flow from exact source
+`c68cc8ad3e480af6a8a0a5f3dcaffc81b7165d20` completed successfully in 4m35s:
+
+- device/top: `5CSEBA6U23I7` / `sys_top`;
+- 7,265 ALMs, 11,157 registers, 384,498 block-memory bits;
+- 34 DSP blocks, 145 physical pins, zero virtual pins, three PLLs;
+- zero errors and zero critical warnings;
+- zero unused output-driving pins; 169 reserved input pins;
+- setup +0.648 ns, hold +0.250 ns, recovery +3.243 ns, removal
+  +0.811 ns, minimum pulse width +1.122 ns;
+- zero illegal and zero unconstrained clocks.
+
+The post-map resource hierarchy—not merely source parsing—contains:
+
+| Fitted node | ALUTs | Registers | DSPs |
+|---|---:|---:|---:|
+| `zhao_ssone_spec_tests:u_spec_tests` | 317 | 44 | 1 |
+| `zhao_crc32c_fold:u_crc` | 133 | 0 | 0 |
+| `zhao_raster_fill:u_fill` | 1 | 0 | 0 |
+| `zhao_dual18_mul:u_mul` | 0 | 0 | 1 |
+
+The direct multiplier owns `cyclonev_mac:u_dual18_mac`. Quartus 17 warns that
+`preserve_hierarchy` is not a recognised synthesis attribute, so the audit does
+not cite that attribute as evidence; it cites the actual post-map resource rows
+and the 34th implemented DSP.
+
+RBF: 2,425,124 bytes, SHA-256
+`59407e97e208980c7965b931bcaf920291cadb40f56c623ec32cc3df672c86cd`.
+Exact map, flow, pin, and timing reports plus all artifact hashes are preserved
+with `HARDWARE-SPECS-BUILD-AUDIT.json`.
+
+The timing non-claim remains: 4 input ports/14 paths and 50 output ports/122
+paths have no board delays. This is not external-I/O timing closure.
+
 ## Claim boundary
 
 A physical green result may establish only:

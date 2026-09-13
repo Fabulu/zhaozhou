@@ -35,7 +35,7 @@ not generalise to a neighbouring interface.
 | Persistent boot | **Blocked** | SD boot config not changed; staged RBF removed | Only consider after repeated volatile success and explicit design decision |
 | Internal timing | **Confirmed for probe** | Positive setup/hold/recovery/removal/min-pulse slacks; zero illegal/unconstrained clocks | Applies only to this probe build |
 | External I/O timing | **Unsigned** | 4 input and 50 output ports lack board delays | Must not quote this fit as external timing closure |
-| Real Zhaozhou block execution | **Next** | Bring-up raster is new platform RTL, not the existing engine shell | Build a hardware spec runner from committed engine blocks |
+| Real Zhaozhou block execution | **Built/audited; physical run pending** | Post-map retains CRC (133 ALUT), raster fill (1 ALUT), and direct packed multiplier (1 DSP); 16 simulation vectors/signature pass | A physical green screen can close only these selected vectors in this wrapper |
 | Full Zhaozhou shell | **Not board-composed** | Virtual-pin shell fit succeeds separately | Replace 3,214-pin characterization boundary with real HPS/memory/video interfaces |
 
 ## Immediate sequence

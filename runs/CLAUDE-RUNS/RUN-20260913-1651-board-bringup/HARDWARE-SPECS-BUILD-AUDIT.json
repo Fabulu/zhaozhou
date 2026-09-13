@@ -1,0 +1,107 @@
+{
+  "schema": "zhaozhou.superstation.hardware-specs-build-audit.v1",
+  "status": "ok",
+  "sourceCommit": "c68cc8ad3e480af6a8a0a5f3dcaffc81b7165d20",
+  "project": "ZhaozhouSpecs",
+  "expectedCore": "Zhaozhou Hardware Specs",
+  "expectedSignature": "e5f1c57f",
+  "startedLocal": "2026-09-13T19:36:28+02:00",
+  "completedLocal": "2026-09-13T19:41:01+02:00",
+  "quartus": "17.0.2 Build 602 07/19/2017 SJ Lite Edition",
+  "preflight": {
+    "verilator": "5.051 devel rev v5.050-176-g7da43d830 (mod)",
+    "shippingVectors": 16,
+    "shippingResult": "pass",
+    "detectorMutantFailCode": 1,
+    "signature": "e5f1c57f"
+  },
+  "flow": {
+    "status": "Successful",
+    "top": "sys_top",
+    "family": "Cyclone V",
+    "device": "5CSEBA6U23I7",
+    "alms": "7,265 / 41,910 (17%)",
+    "registers": 11157,
+    "pins": "145 / 314 (46%)",
+    "virtualPins": 0,
+    "blockMemoryBits": "384,498 / 5,662,720 (7%)",
+    "dspBlocks": "34 / 112 (30%)",
+    "plls": "3 / 6 (50%)",
+    "errors": 0,
+    "warnings": 54,
+    "criticalWarnings": 0
+  },
+  "physicalHierarchy": {
+    "zhao_ssone_spec_tests:u_spec_tests": {
+      "combinationalAluts": 317,
+      "registers": 44,
+      "memoryBits": 0,
+      "dspBlocks": 1
+    },
+    "zhao_crc32c_fold:u_crc": {
+      "combinationalAluts": 133,
+      "registers": 0,
+      "memoryBits": 0,
+      "dspBlocks": 0
+    },
+    "zhao_raster_fill:u_fill": {
+      "combinationalAluts": 1,
+      "registers": 0,
+      "memoryBits": 0,
+      "dspBlocks": 0
+    },
+    "zhao_dual18_mul:u_mul": {
+      "combinationalAluts": 0,
+      "registers": 0,
+      "memoryBits": 0,
+      "dspBlocks": 1,
+      "primitive": "cyclonev_mac:u_dual18_mac"
+    }
+  },
+  "pinAudit": {
+    "clockInputs": {
+      "FPGA_CLK1_50": { "location": "V11", "direction": "input", "ioStandard": "3.3-V LVTTL" },
+      "FPGA_CLK2_50": { "location": "Y13", "direction": "input", "ioStandard": "3.3-V LVTTL" },
+      "FPGA_CLK3_50": { "location": "E11", "direction": "input", "ioStandard": "3.3-V LVTTL" }
+    },
+    "reservedInputPins": 169,
+    "reservedOutputPins": 0,
+    "missingLocationOrIoStandardWarnings": 0
+  },
+  "timing": {
+    "model": "Slow 1100mV 100C",
+    "worstSetupSlackNs": 0.648,
+    "worstHoldSlackNs": 0.250,
+    "worstRecoverySlackNs": 3.243,
+    "worstRemovalSlackNs": 0.811,
+    "worstMinimumPulseWidthSlackNs": 1.122,
+    "illegalClocks": 0,
+    "unconstrainedClocks": 0,
+    "unconstrainedInputPorts": 4,
+    "unconstrainedInputPortPaths": 14,
+    "unconstrainedOutputPorts": 50,
+    "unconstrainedOutputPortPaths": 122
+  },
+  "artifacts": {
+    "ZhaozhouSpecs.flow.rpt": { "bytes": 14030, "sha256": "72ef935f81bf83cca574bec48fe2cce2a64288a59364682fd89a246236cb02cb" },
+    "ZhaozhouSpecs.map.rpt": { "bytes": 979843, "sha256": "e6be3c569db8bcb494089b5940b175067ba4d9c6b4e8ed6af57d36d563dac789" },
+    "ZhaozhouSpecs.fit.rpt": { "bytes": 1760150, "sha256": "35f233df30a6d161e4bded7654cfd08fc0a0d9daba36c729e3e05696e2dc20ab" },
+    "ZhaozhouSpecs.asm.rpt": { "bytes": 6550, "sha256": "69c44639c044f3a682d2de2c9aa50286780b61a38d6f0a3362588c5607cfc0fb" },
+    "ZhaozhouSpecs.sta.rpt": { "bytes": 226437, "sha256": "879ee40bb92ed7efd71cdf7b97f7e8c67ec320f7efe9ac3c7684ba73a9f62c64" },
+    "ZhaozhouSpecs.pin": { "bytes": 80275, "sha256": "cbab3462dedbe27f4e28b6a5b41a720b4fe86e2f9d7642125d024ab3cabc13f4" },
+    "ZhaozhouSpecs.rbf": { "bytes": 2425124, "sha256": "59407e97e208980c7965b931bcaf920291cadb40f56c623ec32cc3df672c86cd" },
+    "ZhaozhouSpecs.sof": { "bytes": 6690380, "sha256": "48ea256eb45dd2dc52de04df738dd0c35ec44b1f9c477f5b13aaebd15892ec2b" }
+  },
+  "preservedReports": [
+    "SPECS-QUARTUS-FLOW.rpt",
+    "SPECS-QUARTUS-MAP.rpt",
+    "SPECS-QUARTUS-PIN.pin",
+    "SPECS-QUARTUS-STA.rpt"
+  ],
+  "nonClaims": [
+    "A future green screen establishes only the 16 selected comparisons and e5f1c57f signature in this wrapper.",
+    "The mapped direct cyclonev_mac does not close exhaustive vendor arithmetic semantics or placement generality.",
+    "Mixed-sign expansion, 32x18 recombination, CE/reset sequencing, random physical corpus, raw host-readable lanes, and physical mutants remain separate gates.",
+    "This does not establish production migration, DSP saving, full shell behavior, SDRAM, HPS fabric-DDR, audio, controller, GPIO, JTAG, flash, persistent boot, or external I/O timing."
+  ]
+}

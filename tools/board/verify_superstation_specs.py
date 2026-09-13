@@ -132,6 +132,38 @@ def verify_build(build: Path, errors: list[str], summary: dict[str, object]) -> 
     )
 
     if map_text:
+        hierarchy: dict[str, dict[str, int]] = {}
+        expected_rows = {
+            "zhao_ssone_spec_tests:u_spec_tests": (1, 1),
+            "zhao_crc32c_fold:u_crc": (1, 0),
+            "zhao_raster_fill:u_fill": (1, 0),
+            "zhao_dual18_mul:u_mul": (0, 1),
+        }
+        for node, (minimum_aluts, expected_dsps) in expected_rows.items():
+            match = re.search(
+                rf"(?m)^;\s*\|{re.escape(node)}\|\s*;\s*"
+                rf"(\d+)\s*\(\d+\)\s*;\s*(\d+)\s*\(\d+\)\s*;\s*"
+                rf"(\d+)\s*;\s*(\d+)\s*;",
+                map_text,
+            )
+            if not match:
+                errors.append(f"{mapping}: no post-map resource row for {node}")
+                continue
+            aluts, registers, memory_bits, dsps = map(int, match.groups())
+            hierarchy[node] = {
+                "combinationalAluts": aluts,
+                "registers": registers,
+                "memoryBits": memory_bits,
+                "dspBlocks": dsps,
+            }
+            if aluts < minimum_aluts:
+                errors.append(f"{mapping}: {node} has only {aluts} ALUTs")
+            if dsps != expected_dsps:
+                errors.append(
+                    f"{mapping}: {node} has {dsps} DSPs, expected {expected_dsps}"
+                )
+        summary["physicalHierarchy"] = hierarchy
+
         dsp_match = re.search(r"Implemented\s+(\d+)\s+DSP elements", map_text)
         if not dsp_match:
             errors.append(f"{mapping}: missing implemented DSP count")

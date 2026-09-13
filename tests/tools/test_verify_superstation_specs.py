@@ -32,6 +32,10 @@ zhao_raster_fill
 zhao_dual18_mul
 cyclonev_mac
 Implemented 34 DSP elements
+; |zhao_ssone_spec_tests:u_spec_tests| ; 317 (183) ; 44 (44) ; 0 ; 1 ;
+; |zhao_crc32c_fold:u_crc| ; 133 (133) ; 0 (0) ; 0 ; 0 ;
+; |zhao_raster_fill:u_fill| ; 1 (1) ; 0 (0) ; 0 ; 0 ;
+; |zhao_dual18_mul:u_mul| ; 0 (0) ; 0 (0) ; 0 ; 1 ;
 Quartus Prime Analysis & Synthesis was successful
 """,
             encoding="utf-8",
