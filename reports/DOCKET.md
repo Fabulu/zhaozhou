@@ -30,6 +30,20 @@ is the designated work while any island fit runs. RCP V3 adoption and the
 resource-allocation redlines are OPEN OWNER DECISIONS listed at its end —
 do not decide them in a working pass.
 
+## CURRENT RESOURCE RESCUE STATUS 2026-09-13
+
+Read `reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md` before choosing a
+hardware optimization. It reconciles this docket and the texture roadmap with
+the ordered R0-R9 programme in
+`ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt`, the later implemented
+work, the historical 76,672 -> 58,359 ALM accounting transition, and the current
+30,000-ALM / 85-DSP closure target.
+
+The 11,263.4-ALM protected-shell row is a backend characterization, not a new
+whole-machine baseline. Texture R0 remains first; edgewalk and current timing
+hotspots do not displace R0-R3. No R0-R9 stage has yet closed every physical and
+adoption gate, although substantial candidate work is built.
+
 ---
 
 ## P0 — the console cannot ship without these

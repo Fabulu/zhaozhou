@@ -1,0 +1,131 @@
+# Resource rescue roadmap — current state
+
+Date: 2026-09-13
+
+## Decision
+
+The controlling implementation order is the memory-first rescue programme in
+`ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt`, reconciled with the
+texture packet plan in `reports/V3-REARCHITECTURE-ROADMAP.md`, the live
+corrections in `reports/DOCKET.md`, and the newer 30,000-ALM / 85-DSP closure
+rule in `reports/RESOURCE-CLOSURE-TARGET-20260912.md`.
+
+The current work is not a new ALM campaign beginning at the 11,263-ALM shell
+row. Earlier work had already taken an approximately 76K-ALM per-block census
+toward a corrected 58,359-ALM selected mixed-evidence bill, then landed many
+functional and local physical reductions without producing another connected
+whole-machine fit. The new shell row prices only the protected legacy backend
+subtree.
+
+No clean connected whole-machine receipt exists. No current design may be
+called below either closure target.
+
+## Authority and vocabulary
+
+For every item, keep these states separate:
+
+- **built** — RTL exists;
+- **installed** — the RTL is connected in a functional parent;
+- **proven** — committed functional/formal evidence and fired controls exist;
+- **mapped** — applicable current MapOnly structure exists;
+- **fitted** — applicable current placement/resource/timing evidence exists;
+- **adopted** — the selected connected production composition uses it and the
+  replaced structure is absent;
+- **banked** — a clean applicable physical receipt supports the claimed saving.
+
+`fpga/rtl/prod/zhao_prod_top.sv` is a disconnected resource census harness. An
+instance there is not functional installation or production adoption.
+
+## Historical ALM and fit reconciliation
+
+| evidence | result | permitted conclusion |
+|---|---:|---|
+| 2026-09-04 per-block ledger | 76,672 ALMs across 59 rows | approximately the owner's remembered 80K; upper-bound sum with stale rows, not one machine |
+| 2026-09-09 A0 selected bill | 58,359 ALMs / 192 DSP / 147 M10K | corrected partial mixed-evidence selection; 34 DSP-unpriced and 45 ALM-unpriced roots |
+| cache memory rescue | 5,903 -> 1,633 ALMs | genuine local fitted reduction; storage moved into M10K |
+| texture P0-C Stage A | 13,615 -> 11,562 ALMs | genuine historical composed local reduction |
+| texture Gate 2 `@g2-prod` | 15,483 -> 10,837 ALMs | genuine combined fit of packets 1-3 plus laboratory removal; still failed old redlines |
+| PERSPUV matched leaves | 1,886 -> 794 ALMs | genuine matched leaf result; later installed, no post-adoption island fit |
+| RCP matched NCTX12 leaves | 1,802 -> 986 ALMs; 6 -> 3 DSP | genuine matched leaf result; later installed, no post-adoption island fit |
+| later pose/cull/bake/MATW/shared projection | structural/functional reductions | no current physical ALM endpoint |
+| TEXJOIN census retirement | old row 3,824 ALMs | accounting correction only; it was not connected silicon |
+| D3 legacy shell | whole wrapper 15,046; `u_shell` 11,263.4 ALMs | clean-source physical backend characterization; no texture V3, terrain, missing roots, or framework |
+
+The local fitted reductions above overlap different specimens and cannot be
+summed or subtracted from 58,359. There is no defensible post-58,359
+whole-machine ALM number.
+
+## Current R0-R9 completion matrix
+
+| stage | current state | completion verdict |
+|---|---|---|
+| **R0 — freeze accepted texture** | V3 contains RCP12, paired PERSPUV, owner and read-late combiner; Packet A seam types landed. V3 is a separate selected subsystem, not connected to the shell. No post-adoption composed fit or current Checkpoint C exists. Packets B-K remain. | **Open** |
+| **R1 — reusable ROM/hybrid arithmetic** | Embedded terrain quarter-square and dual-18 calibration exist. Reusable quarter-square primitive, 26+6 full-width hybrid, coefficient-table primitive, and the promised MapOnly bundle do not. Dual-18 proves narrow mapped ownership/routes only. | **Open; partial prerequisite work** |
+| **R2 — arena/replay identity and trace** | Non-power-of-two address repair, dense seal, three-copy terrain replay, 106-bit `w` carriage, ModeVtx/ModeRef, 81-entry topology proof, and tested lifecycle exist. Exact 2x1089/3x17 gates, configuration/deformation epochs, selected RAM mapping, and real workload trace remain open. | **Most advanced stage; substantially built, not accepted** |
+| **R3 — shared projection service** | One service/core is composed with the terrain candidate and functionally proven. Real geometry client, NORMALS, DEPTHQUANT/canonical depth, selected nine-DSP backend, current map/fit, and atomic adoption remain open. | **Candidate built, unfitted and unadopted** |
+| **R4 — colour/fog memory** | Hard arithmetic baselines exist for material combine, bilerp, pixel fog, and vertex fog. The promised quarter-square/coefficient-memory replacements are absent. Fog is not connected end to end. | **Open** |
+| **R5 — pose/skin/normals** | Pose advanced structurally from the stale 18-DSP map toward a four-DSP schedule; 4->3 temporal sharing is only analysis. Legal skin baseline is 9 DSP; one-lane is throughput-illegal and no two-lane parameter exists. ROM normal transform, one-DSP square farm, root bank, and shared palette owner are absent. | **Open; strong baselines, endpoint unbuilt** |
+| **R6 — cull/attributes** | Two-lane cull is built and functionally proven at a structural six-DSP target, but unfitted and its workload row remains disputed. ATTRSETUP/ATTRINTERP/ATTRSTEP baselines exist; coefficient memories, final tie law, mapping, composition, and adoption do not. | **Open** |
+| **R7 — terrain maintenance** | Major world/load organs, TESS replay modes, shared normals, current LOD, bake-v2 pieces, shade/detail leaves, and shared projection pipe exist with substantial functional evidence. Tagged TESS timing rebuild, NORMALS/DEPTHQUANT pipe integration, zero-DSP LOD, complete separable bake/DDA, world-to-draw composition, current fits, and adoption remain. | **Substantially built in pieces, not accepted** |
+| **R8 — lighting and remaining functions** | Shared scalar shade core, fog leaves, some particle/Forge leaves, and FIELD providers exist. GEOM.LIGHT RGB/multi-light shell, emission carriage, particle STATE/UPDATE/COLLIDE/SPAWN, FORGE.SHADOW, selected FIELD executor, provider calendars, and physical prices remain absent. | **Open; several mandatory organs unbuilt/unpriced** |
+| **R9 — selected-console closure** | Manifest/accounting infrastructure and legacy shell exist. `zhao_shell_top_v2`, G8A/G8B/G8C, connected V3/terrain/geometry selection, real board/framework, PLLs/pins/SDRAM integration, and a clean margin receipt do not. | **Open; final closure absent** |
+
+### Completion estimate
+
+These percentages are planning estimates, not evidence or budget arithmetic:
+
+| view | estimate |
+|---|---:|
+| problem discovery and architecture | 65-75% |
+| functional candidate implementation | 45-55% |
+| mapped/fitted/adopted rescue endpoints | 20-30% |
+| R0-R9 stages with every acceptance question closed | 0 of 10 |
+| final connected `<30,000 ALM / <85 DSP` proof | 0% demonstrated |
+
+If one number is unavoidable, the ordered R0-R9 delivery programme is roughly
+**40% complete**. A 60-65% estimate describes understanding and candidate work,
+not installed physical completion.
+
+## Correct immediate order
+
+1. Close the already-paid D3 shell-characterization receipt. Preserve it as a
+   legacy backend measurement; do not substitute it for a connected machine.
+2. Finish **R0** through the accepted A-K texture/shell plan:
+   Packet B, C, D, E, then G8A; lease/CDC and sibling shell V2; parameter-fixed
+   terrain G8B; combined G8C; only then Packet K adoption.
+3. Finish actual **R1** primitives/maps. Dual-18 is one useful calibration, not
+   the whole stage.
+4. Close **R2** identity/epoch/trace/RAM gates, then choose the arena profile.
+5. Close **R3** geometry/NORMALS/DEPTHQUANT/backend gaps and fit one real-neighbour
+   shared projection subsystem before adoption.
+6. Execute R4-R8 in order, reusing already-built organs and avoiding a clean-sheet
+   rewrite. Price every external provider and mandatory absent function.
+7. Enter R9 only after the complete selected map has no unknown required DSP cost;
+   then add board/framework logic and close resource, timing, CDC, bandwidth, and
+   workload margins together.
+
+## Current optimization implications
+
+- Edgewalk is a valid contained backend ALM candidate at 1,997.4 inclusive ALMs,
+  but it does not displace R0-R3. Its factored-row proposal remains unimplemented
+  and unmeasured.
+- The new shell fit's binner path is real for that placement, but an earlier shell
+  epoch reached 100 MHz without the binner rewrite. Do not act on the Astra
+  biased-accumulator proposal until the corrected wrapper measurement confirms the
+  path survives and the exact cycle miter fires on its mutants.
+- Projector 24->11 remains a full structural target. The first safe production
+  step is row-family 24->15; viewport 15->11 is separate. Signed/mixed vendor
+  arithmetic and placement remain HOLD.
+- GEOM.LOD is signed 33x32, structurally 6->3; later dual-18 overlap is only 3->2.
+- Pose 4->3 is plausible only with zero added cycles.
+- Material quarter-square 2->0 and material dual-18 2->1 are mutually exclusive
+  alternatives and cannot both be counted.
+- The one-lane skin point is struck permanently unless the workload law changes.
+
+## Closure statement
+
+The project has already completed extensive expensive fits and substantial rescue
+work. The remaining task is not to rediscover the machine or build another
+measurement framework. It is to finish the ordered compositions, migrate the
+selected replacements, and spend fits only at the named boundaries that convert
+candidate work into current physical evidence.
