@@ -82,16 +82,23 @@ REG_WIDTHS = [18, 32, 64]
 # DUAL-18 PHYSICAL-PACK DISCRIMINATOR
 #
 # These are isolated Quartus MapOnly projects rather than ordinary one-source
-# calibration points: three revisions need the explicit wrapper and exactly one
-# synthesis macro, while the inferred contrast must include neither.  Emitting
-# each revision's effective source/macro receipt here keeps that distinction
-# machine-checkable without changing the shared Quartus runner.
+# calibration points: the explicit candidates and three renamed controls need
+# the wrapper plus exactly one synthesis macro, while the inferred contrast
+# must include neither.  Emitting each revision's effective source/macro and
+# CDB-capture receipt here keeps that distinction machine-checkable without
+# changing the shared Quartus runner.
 # ---------------------------------------------------------------------------
 DUAL18_DEVICE = "5CSEBA6U23I7"
 DUAL18_VENDOR_MACRO = "ZHAO_DUAL18_CYCLONEV=1"
 DUAL18_TOP_SOURCE = "tests/rtl/dual18_physical_pack_discriminator.sv"
 DUAL18_WRAPPER_SOURCE = "fpga/rtl/common/zhao_dual18_mul.sv"
 DUAL18_MUTANT_SOURCE = "tests/mutants/dual18_two_primitives_mutant.sv"
+DUAL18_COLLAPSE_MUTANT_SOURCE = "tests/mutants/dual18_lane_collapse_mutant.sv"
+DUAL18_SWAP_MUTANT_SOURCE = "tests/mutants/dual18_lane_swap_mutant.sv"
+DUAL18_CAPTURE_SCRIPT = "tools/quartus/capture_dual18_atom_routes.tcl"
+DUAL18_CDB_PATH = r"C:\intelFPGA_lite\17.0\quartus\bin64\quartus_cdb.exe"
+DUAL18_MAP_PATH = r"C:\intelFPGA_lite\17.0\quartus\bin64\quartus_map.exe"
+DUAL18_CDB_VERSION = "17.0.2 Build 602"
 
 DUAL18_REVISIONS = [
     {
@@ -122,7 +129,26 @@ DUAL18_REVISIONS = [
         "sources": [DUAL18_WRAPPER_SOURCE, DUAL18_MUTANT_SOURCE],
         "macros": [DUAL18_VENDOR_MACRO],
         "expectedDspBlocks": [2],
-        "positiveControl": "the one-DSP map detector must reject this revision",
+        "controlKind": "two-atom",
+        "positiveControl": "the one-atom route detector must reject two mapped DSP owners",
+    },
+    {
+        "revision": "dual18_lane_collapse_mutant",
+        "top": "dual18_lane_collapse_mutant",
+        "sources": [DUAL18_WRAPPER_SOURCE, DUAL18_COLLAPSE_MUTANT_SOURCE],
+        "macros": [DUAL18_VENDOR_MACRO],
+        "expectedDspBlocks": [1],
+        "controlKind": "lane-collapse",
+        "positiveControl": "the RESULTB cardinality/live-origin detector must reject this mapped graph",
+    },
+    {
+        "revision": "dual18_lane_swap_mutant",
+        "top": "dual18_lane_swap_mutant",
+        "sources": [DUAL18_WRAPPER_SOURCE, DUAL18_SWAP_MUTANT_SOURCE],
+        "macros": [DUAL18_VENDOR_MACRO],
+        "expectedDspBlocks": [1],
+        "controlKind": "lane-swap",
+        "positiveControl": "the per-bit logical-output origin detector must reject this mapped graph",
     },
 ]
 
@@ -212,8 +238,55 @@ def _dual18_vendor_evidence():
     return evidence
 
 
+def _dual18_quartus_tool_record(path):
+    canonical = os.path.abspath(path)
+    record = {
+        "path": canonical.replace(os.sep, "/"),
+        "expectedVersion": DUAL18_CDB_VERSION,
+        "available": os.path.isfile(canonical),
+    }
+    if record["available"]:
+        record["sha256"] = _sha256_file(canonical)
+    return record
+
+
+def _dual18_route_capture_contract():
+    """Content-bound fresh map -> locked database -> CDB contract."""
+    script = os.path.abspath(os.path.join(REPO, DUAL18_CAPTURE_SCRIPT))
+    if not os.path.isfile(script):
+        raise FileNotFoundError("dual18 atom-route capture script is missing: %s" % script)
+    return {
+        "schemaVersion": 2,
+        "gate": "dual18_postmap_lane_route_witness",
+        "artifactClass": "genuine-quartus-cdb-post-map",
+        "syntheticFixturesPhysical": False,
+        "netlistType": "map",
+        "quartusMap": _dual18_quartus_tool_record(DUAL18_MAP_PATH),
+        "quartusCdb": _dual18_quartus_tool_record(DUAL18_CDB_PATH),
+        "captureScript": {
+            "path": DUAL18_CAPTURE_SCRIPT,
+            "absolutePath": script.replace(os.sep, "/"),
+            "sha256": _sha256_file(script),
+        },
+        "mapArgumentOrder": ["project"],
+        "tclArgumentOrder": [
+            "project",
+            "revision",
+            "atomTsv",
+            "optionalAtomVo",
+            "captureId",
+        ],
+        "databaseDirectories": ["db"],
+        "atomAdjacency": "exact-cdb-fanin-and-fanout-only",
+        "internalAtomArcs": "unavailable-hold",
+        "requiredAtomType": "MAC_MULT",
+        "inputPortFamilies": {"AX": 18, "AY": 18, "BX": 18, "BY": 18},
+        "outputPortFamilies": {"RESULTA": 36, "RESULTB": 36},
+    }
+
+
 def emit_dual18_map_revisions(outdir):
-    """Emit four fresh, content-addressed independent MapOnly projects."""
+    """Emit fresh, content-addressed independent MapOnly projects."""
     root = os.path.join(outdir, "dual18")
     anchor_path = os.path.join(outdir, "dual18_invocation_anchor.json")
     # The anchor is an orchestration-owned trust root outside the replaceable
@@ -229,6 +302,7 @@ def emit_dual18_map_revisions(outdir):
     os.makedirs(root)
     emitted = []
     vendor_evidence = _dual18_vendor_evidence()
+    route_capture_contract = _dual18_route_capture_contract()
 
     for spec in DUAL18_REVISIONS:
         base_revision = spec["revision"]
@@ -290,6 +364,7 @@ def emit_dual18_map_revisions(outdir):
             # records here prevents arbitrary files or hand-written excerpts
             # from being substituted without changing the report revision.
             "vendorInterfaceEvidence": vendor_evidence,
+            "routeCaptureContract": route_capture_contract,
         }
         witness_bytes = json.dumps(
             witness_inputs, sort_keys=True, separators=(",", ":"), ensure_ascii=True
@@ -317,6 +392,68 @@ def emit_dual18_map_revisions(outdir):
         if _sha256_file(qsf_path) != qsf_sha256:
             raise RuntimeError("written dual18 QSF differs from witnessed bytes")
 
+        capture_id_inputs = {
+            "schemaVersion": 1,
+            "contentWitness": content_witness,
+            "revision": revision,
+            "routeCaptureContract": route_capture_contract,
+        }
+        capture_id = hashlib.sha256(
+            json.dumps(
+                capture_id_inputs,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+            ).encode("ascii")
+        ).hexdigest()
+        # Preserve 256 bits of fresh-run entropy without needlessly exhausting
+        # Quartus 17's Windows path budget (urlsafe base64 encodes 32 bytes in
+        # 43 characters; the capture identity remains bound in this prefix).
+        workspace_prefix = "d18_%s_" % capture_id[:8]
+        invocation = {
+            "schemaVersion": 2,
+            "gate": "dual18_postmap_lane_route_witness",
+            "artifactClass": "genuine-quartus-cdb-post-map",
+            "synthetic": False,
+            "contentWitness": content_witness,
+            "captureId": capture_id,
+            "workspaceParent": os.path.abspath(output_dir).replace(os.sep, "/"),
+            "freshWorkspacePrefix": workspace_prefix,
+            "freshRunTokenBytes": 32,
+            "projectFileName": os.path.basename(qpf_path),
+            "settingsFileName": os.path.basename(qsf_path),
+            "quartusMap": route_capture_contract["quartusMap"],
+            "quartusCdb": route_capture_contract["quartusCdb"],
+            "captureScript": route_capture_contract["captureScript"],
+            "mapCommandTemplate": [
+                route_capture_contract["quartusMap"]["path"],
+                "{project}",
+            ],
+            "cdbCommandTemplate": [
+                route_capture_contract["quartusCdb"]["path"],
+                "-t",
+                route_capture_contract["captureScript"]["absolutePath"],
+                "{project}",
+                revision,
+                "{atomTsv}",
+                "{optionalAtomVo}",
+                capture_id,
+            ],
+            "runtimeOutputs": {
+                "mapLog": "%s.quartus_map.log" % revision,
+                "mapReport": "output_files/%s.map.rpt" % revision,
+                "mapSummary": "output_files/%s.map.summary" % revision,
+                "atomTsv": "route_evidence/%s.dual18.atom.tsv" % revision,
+                "cdbLog": "route_evidence/%s.quartus_cdb.log" % revision,
+                "optionalAtomVo": "route_evidence/%s.post_map.vo" % revision,
+                "receipt": "route_evidence/%s.atom_route_receipt.json" % revision,
+            },
+        }
+        invocation_path = os.path.join(revision_dir, "atom_route_invocation.json")
+        with open(invocation_path, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(invocation, fh, indent=2)
+            fh.write("\n")
+
         prepared_unix_ns = time.time_ns()
         prepared_local = datetime.datetime.fromtimestamp(
             prepared_unix_ns / 1_000_000_000
@@ -333,6 +470,10 @@ def emit_dual18_map_revisions(outdir):
             "outputDirectoryWasEmpty": True,
             "expectedMapReport": "output_files/%s.map.rpt" % revision,
             "expectedMapSummary": "output_files/%s.map.summary" % revision,
+            "routeCaptureId": capture_id,
+            "routeInvocation": "atom_route_invocation.json",
+            "freshRuntimeWorkspacePrefix": "output_files/%s" % workspace_prefix,
+            "checkerMustRunFreshMap": True,
         }
         preparation_path = os.path.join(revision_dir, "run_preparation.json")
         with open(preparation_path, "w", encoding="utf-8", newline="\n") as fh:
@@ -361,10 +502,20 @@ def emit_dual18_map_revisions(outdir):
                 "sha256": _sha256_file(preparation_path),
             },
             "vendorInterfaceEvidence": vendor_evidence,
+            "routeCaptureContract": route_capture_contract,
+            "routeCapture": {
+                "captureId": capture_id,
+                "invocationFile": os.path.basename(invocation_path),
+                "invocationSha256": _sha256_file(invocation_path),
+                "freshWorkspacePrefix": "output_files/%s" % workspace_prefix,
+                "checkerRunsMap": True,
+            },
             "expectedDspBlocks": spec["expectedDspBlocks"],
         }
         if "note" in spec:
             receipt["note"] = spec["note"]
+        if "controlKind" in spec:
+            receipt["controlKind"] = spec["controlKind"]
         if "positiveControl" in spec:
             receipt["positiveControl"] = spec["positiveControl"]
 
@@ -387,6 +538,9 @@ def emit_dual18_map_revisions(outdir):
             "runPreparationSha256": _sha256_file(preparation_path),
             "effectiveConfig": os.path.relpath(receipt_path, REPO).replace(os.sep, "/"),
             "effectiveConfigSha256": _sha256_file(receipt_path),
+            "routeInvocation": os.path.relpath(invocation_path, REPO).replace(os.sep, "/"),
+            "routeInvocationSha256": _sha256_file(invocation_path),
+            "routeCaptureId": capture_id,
         })
 
     manifest = {
@@ -394,6 +548,13 @@ def emit_dual18_map_revisions(outdir):
         "gate": "dual18_physical_pack_discriminator",
         "stage": "map-only",
         "device": DUAL18_DEVICE,
+        "routeCaptureContract": route_capture_contract,
+        "evidenceBoundary": {
+            "withoutGenuineCurrentCdbArtifacts": "hold",
+            "encryptedVendorModel": "hold",
+            "productionMigration": "none",
+            "productionDspSaving": 0,
+        },
         "revisions": emitted,
     }
     manifest_path = os.path.join(root, "dual18_manifest.json")
@@ -720,7 +881,7 @@ def main():
     ap.add_argument(
         "--dual18-only",
         action="store_true",
-        help="emit only the four isolated dual18 MapOnly revisions",
+        help="emit only the six isolated dual18 MapOnly/route revisions",
     )
     args = ap.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
@@ -739,7 +900,7 @@ def main():
         )
     )
     if args.dual18_only:
-        print("generated %d isolated dual18 MapOnly revision(s) into %s" %
+        print("generated %d isolated dual18 MapOnly/route revision(s) into %s" %
               (len(dual18_revisions), os.path.join(args.outdir, "dual18")))
         return
 

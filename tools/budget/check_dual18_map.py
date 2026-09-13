@@ -32,6 +32,8 @@ VENDOR_MACRO = "ZHAO_DUAL18_CYCLONEV=1"
 TOP_SOURCE = "tests/rtl/dual18_physical_pack_discriminator.sv"
 WRAPPER_SOURCE = "fpga/rtl/common/zhao_dual18_mul.sv"
 MUTANT_SOURCE = "tests/mutants/dual18_two_primitives_mutant.sv"
+COLLAPSE_MUTANT_SOURCE = "tests/mutants/dual18_lane_collapse_mutant.sv"
+SWAP_MUTANT_SOURCE = "tests/mutants/dual18_lane_swap_mutant.sv"
 
 RESOURCE_TABLE = "Analysis & Synthesis Resource Usage Summary"
 ENTITY_TABLE = "Analysis & Synthesis Resource Utilization by Entity"
@@ -101,6 +103,16 @@ VARIANTS = {
     "two-primitives-mutant": {
         "top": "dual18_two_primitives_mutant",
         "sources": [WRAPPER_SOURCE, MUTANT_SOURCE],
+        "macros": [VENDOR_MACRO],
+    },
+    "lane-collapse-mutant": {
+        "top": "dual18_lane_collapse_mutant",
+        "sources": [WRAPPER_SOURCE, COLLAPSE_MUTANT_SOURCE],
+        "macros": [VENDOR_MACRO],
+    },
+    "lane-swap-mutant": {
+        "top": "dual18_lane_swap_mutant",
+        "sources": [WRAPPER_SOURCE, SWAP_MUTANT_SOURCE],
         "macros": [VENDOR_MACRO],
     },
 }
@@ -571,7 +583,7 @@ def check_manifest_binding(config: dict) -> None:
         or len(rows) != len(expected_bases)
         or {row.get("baseRevision") for row in rows if isinstance(row, dict)} != expected_bases
     ):
-        raise GateError("top dual18 manifest does not contain the exact four revisions")
+        raise GateError("top dual18 manifest does not contain the exact six revisions")
 
     for row in rows:
         base = row["baseRevision"]
@@ -590,6 +602,7 @@ def check_manifest_binding(config: dict) -> None:
             "settingsFile": revision_dir / (revision + ".qsf"),
             "runPreparation": revision_dir / "run_preparation.json",
             "effectiveConfig": revision_dir / "effective_config.json",
+            "routeInvocation": revision_dir / "atom_route_invocation.json",
         }
         require_direct_path(revision_dir, "manifest-bound revision directory", "directory")
         for field, expected_path in expected_paths.items():
@@ -603,6 +616,7 @@ def check_manifest_binding(config: dict) -> None:
             ("settingsFile", "settingsFileSha256"),
             ("runPreparation", "runPreparationSha256"),
             ("effectiveConfig", "effectiveConfigSha256"),
+            ("routeInvocation", "routeInvocationSha256"),
         ):
             artifact = expected_paths[path_field]
             if sha256_file(artifact) != row.get(hash_field):
@@ -648,6 +662,15 @@ def check_manifest_binding(config: dict) -> None:
         raise GateError("effective preparation filename is not canonical")
     if preparation_ref.get("sha256") != row.get("runPreparationSha256"):
         raise GateError("effective preparation hash differs from top manifest")
+    route_ref = config.get("routeCapture")
+    if not isinstance(route_ref, dict):
+        raise GateError("effective config has no route-capture reference")
+    if route_ref.get("invocationFile") != "atom_route_invocation.json":
+        raise GateError("effective route invocation filename is not canonical")
+    if route_ref.get("invocationSha256") != row.get("routeInvocationSha256"):
+        raise GateError("effective route invocation hash differs from top manifest")
+    if route_ref.get("captureId") != row.get("routeCaptureId"):
+        raise GateError("effective route capture id differs from top manifest")
     config["_manifestEvidence"] = {
         "path": str(manifest_path),
         "sha256": hashlib.sha256(manifest_raw).hexdigest(),
@@ -730,6 +753,7 @@ def inspect_effective_sources(config: dict, variant: str) -> list[str]:
         "sourceSetSha256": source_set_sha256,
         "qsfSha256": sha256_file(qsf_path),
         "vendorInterfaceEvidence": normalized_vendor_evidence,
+        "routeCaptureContract": config.get("routeCaptureContract"),
     }
     if config.get("witnessInputs") != witness_inputs:
         raise GateError("content-witness inputs differ from the effective source/QSF configuration")
@@ -813,7 +837,13 @@ def inspect_effective_sources(config: dict, variant: str) -> list[str]:
     if wrapper_instances != expected_instances:
         raise GateError("%s source has %d wrapper instances, expected %d" %
                         (spec["top"], wrapper_instances, expected_instances))
-    if variant in ("explicit", "s32x18", "two-primitives-mutant"):
+    if variant in (
+        "explicit",
+        "s32x18",
+        "two-primitives-mutant",
+        "lane-collapse-mutant",
+        "lane-swap-mutant",
+    ):
         arithmetic_free = re.sub(r"<<<|>>>|<<|>>", "", top_body)
         if "*" in arithmetic_free:
             raise GateError("explicit calibration top contains a helper multiplication")
@@ -835,6 +865,23 @@ def inspect_effective_sources(config: dict, variant: str) -> list[str]:
         )
         if not all(re.search(pattern, top_body) for pattern in required_routes):
             raise GateError("s32x18 source does not keep both partial results live in recombination")
+    elif variant == "lane-collapse-mutant":
+        if len(re.findall(r"\bassign\s+result[ab]_o\s*=\s*prod_a_c\s*;", top_body)) != 2:
+            raise GateError("lane-collapse control no longer drives both logical outputs from RESULTA")
+        if not re.search(r"\.resultb_o\s*\(\s*prod_b_wrong_sink_c\s*\)", top_body):
+            raise GateError("lane-collapse control no longer retains physical RESULTB")
+        if not re.search(
+            r"\bassign\s+resultb_wrong_sink_o\s*=\s*prod_b_wrong_sink_c\s*;",
+            top_body,
+        ):
+            raise GateError("lane-collapse control lacks an independently observable RESULTB sink")
+    elif variant == "lane-swap-mutant":
+        required_routes = (
+            r"\bassign\s+resulta_o\s*=\s*prod_b_c\s*;",
+            r"\bassign\s+resultb_o\s*=\s*prod_a_c\s*;",
+        )
+        if not all(re.search(pattern, top_body) for pattern in required_routes):
+            raise GateError("lane-swap control no longer crosses the two logical result routes")
 
     return holds
 
@@ -1091,6 +1138,19 @@ def evaluate(text: str, config: dict, variant: str) -> dict:
             "artifact": "Quartus-17 Analysis & Synthesis .map.rpt",
             "reason": MAPPED_ROUTE_HOLD,
         }
+        return base
+
+    if variant in ("lane-collapse-mutant", "lane-swap-mutant"):
+        check_consistent_totals(parsed)
+        if parsed.resource_dsp != 1 or parsed.independent_mode != 1:
+            raise GateError("route-control map must retain one independent-mode DSP atom")
+        if parsed.wrapper_rows != 1 or parsed.wrapper_dsp != 1:
+            raise GateError("route-control map must retain one wrapper owning one DSP")
+        base["status"] = "hold"
+        base["holds"] = holds + [
+            "route-control rejection requires a fresh genuine quartus_cdb mapped graph"
+        ]
+        base["positiveControl"] = "pending genuine CDB route capture"
         return base
 
     # Positive control: first prove the report itself is the intended two-block

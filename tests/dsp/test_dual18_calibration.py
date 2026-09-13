@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Direct tests for gen_calib.py's four isolated dual18 revisions."""
+"""Direct tests for gen_calib.py's six isolated dual18 revisions."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout)
         return completed.stdout
 
-    def test_four_revisions_are_content_addressed_fresh_and_isolated(self) -> None:
+    def test_six_revisions_are_content_addressed_fresh_and_isolated(self) -> None:
         with tempfile.TemporaryDirectory(prefix="dual18-calib-test-") as temp:
             out = Path(temp)
             generation_output = self.generate(out)
@@ -54,12 +54,24 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
             )
             self.assertEqual(manifest["device"], "5CSEBA6U23I7")
             self.assertEqual(
+                manifest["evidenceBoundary"],
+                {
+                    "withoutGenuineCurrentCdbArtifacts": "hold",
+                    "encryptedVendorModel": "hold",
+                    "productionMigration": "none",
+                    "productionDspSaving": 0,
+                },
+            )
+            self.assertFalse(manifest["routeCaptureContract"]["syntheticFixturesPhysical"])
+            self.assertEqual(
                 [row["baseRevision"] for row in manifest["revisions"]],
                 [
                     "dual18_inferred_pair",
                     "dual18_explicit_pair",
                     "dual18_s32x18_exact",
                     "dual18_two_primitives_mutant",
+                    "dual18_lane_collapse_mutant",
+                    "dual18_lane_swap_mutant",
                 ],
             )
 
@@ -88,6 +100,20 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
                     ],
                     ["ZHAO_DUAL18_CYCLONEV=1"],
                 ),
+                "dual18_lane_collapse_mutant": (
+                    [
+                        "fpga/rtl/common/zhao_dual18_mul.sv",
+                        "tests/mutants/dual18_lane_collapse_mutant.sv",
+                    ],
+                    ["ZHAO_DUAL18_CYCLONEV=1"],
+                ),
+                "dual18_lane_swap_mutant": (
+                    [
+                        "fpga/rtl/common/zhao_dual18_mul.sv",
+                        "tests/mutants/dual18_lane_swap_mutant.sv",
+                    ],
+                    ["ZHAO_DUAL18_CYCLONEV=1"],
+                ),
             }
             first_witnesses = {}
 
@@ -106,6 +132,87 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
                 qsf = qsf_path.read_text(encoding="ascii")
                 self.assertIn('PROJECT_REVISION = "%s"' % revision, qpf)
                 self.assertEqual(config["stage"], "map-only")
+                route_contract = config["routeCaptureContract"]
+                self.assertEqual(route_contract["gate"], "dual18_postmap_lane_route_witness")
+                self.assertFalse(route_contract["syntheticFixturesPhysical"])
+                self.assertEqual(route_contract["requiredAtomType"], "MAC_MULT")
+                self.assertEqual(
+                    route_contract["inputPortFamilies"],
+                    {"AX": 18, "AY": 18, "BX": 18, "BY": 18},
+                )
+                self.assertEqual(
+                    route_contract["outputPortFamilies"], {"RESULTA": 36, "RESULTB": 36}
+                )
+                self.assertEqual(route_contract["schemaVersion"], 2)
+                self.assertEqual(
+                    route_contract["atomAdjacency"],
+                    "exact-cdb-fanin-and-fanout-only",
+                )
+                self.assertEqual(route_contract["internalAtomArcs"], "unavailable-hold")
+                self.assertEqual(
+                    Path(route_contract["quartusMap"]["path"]),
+                    Path(r"C:\intelFPGA_lite\17.0\quartus\bin64\quartus_map.exe"),
+                )
+                self.assertEqual(
+                    Path(route_contract["quartusCdb"]["path"]),
+                    Path(r"C:\intelFPGA_lite\17.0\quartus\bin64\quartus_cdb.exe"),
+                )
+                self.assertEqual(
+                    route_contract["mapArgumentOrder"], ["project"]
+                )
+                self.assertEqual(
+                    route_contract["tclArgumentOrder"],
+                    ["project", "revision", "atomTsv", "optionalAtomVo", "captureId"],
+                )
+                capture = config["routeCapture"]
+                self.assertRegex(capture["captureId"], r"[0-9a-f]{64}$")
+                invocation_path = revision_dir / capture["invocationFile"]
+                self.assertEqual(
+                    capture["invocationSha256"],
+                    hashlib.sha256(invocation_path.read_bytes()).hexdigest(),
+                )
+                invocation = json.loads(invocation_path.read_text(encoding="utf-8"))
+                self.assertFalse(invocation["synthetic"])
+                self.assertEqual(invocation["schemaVersion"], 2)
+                self.assertEqual(invocation["captureId"], capture["captureId"])
+                self.assertTrue(capture["checkerRunsMap"])
+                self.assertEqual(invocation["freshRunTokenBytes"], 32)
+                self.assertRegex(invocation["freshWorkspacePrefix"], r"^d18_[0-9a-f]{8}_$")
+                self.assertEqual(
+                    invocation["workspaceParent"],
+                    str((revision_dir / "output_files").absolute()).replace("\\", "/"),
+                )
+                self.assertEqual(
+                    invocation["mapCommandTemplate"],
+                    [route_contract["quartusMap"]["path"], "{project}"],
+                )
+                self.assertEqual(
+                    invocation["cdbCommandTemplate"],
+                    [
+                        route_contract["quartusCdb"]["path"],
+                        "-t",
+                        route_contract["captureScript"]["absolutePath"],
+                        "{project}",
+                        revision,
+                        "{atomTsv}",
+                        "{optionalAtomVo}",
+                        capture["captureId"],
+                    ],
+                )
+                self.assertEqual(
+                    invocation["runtimeOutputs"],
+                    {
+                        "mapLog": "%s.quartus_map.log" % revision,
+                        "mapReport": "output_files/%s.map.rpt" % revision,
+                        "mapSummary": "output_files/%s.map.summary" % revision,
+                        "atomTsv": "route_evidence/%s.dual18.atom.tsv" % revision,
+                        "cdbLog": "route_evidence/%s.quartus_cdb.log" % revision,
+                        "optionalAtomVo": "route_evidence/%s.post_map.vo" % revision,
+                        "receipt": "route_evidence/%s.atom_route_receipt.json" % revision,
+                    },
+                )
+                self.assertNotIn("freshOutputDirectory", invocation)
+                self.assertNotIn("command", invocation)
                 self.assertEqual(config["device"], "5CSEBA6U23I7")
                 self.assertEqual([row["path"] for row in config["sources"]], sources)
                 self.assertEqual(config["macros"], macros)
@@ -139,6 +246,11 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
                 )
                 preparation = json.loads(preparation_path.read_text(encoding="utf-8"))
                 self.assertTrue(preparation["outputDirectoryWasEmpty"])
+                self.assertTrue(preparation["checkerMustRunFreshMap"])
+                self.assertEqual(
+                    preparation["freshRuntimeWorkspacePrefix"],
+                    "output_files/" + invocation["freshWorkspacePrefix"],
+                )
                 self.assertEqual(preparation["revision"], revision)
                 self.assertEqual(preparation["contentWitness"], config["contentWitness"])
                 output_dir = revision_dir / preparation["outputDirectory"]
@@ -179,6 +291,11 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
                 self.assertEqual(
                     manifest_row["effectiveConfigSha256"],
                     hashlib.sha256(config_path.read_bytes()).hexdigest(),
+                )
+                self.assertEqual(manifest_row["routeCaptureId"], capture["captureId"])
+                self.assertEqual(
+                    manifest_row["routeInvocationSha256"],
+                    hashlib.sha256(invocation_path.read_bytes()).hexdigest(),
                 )
 
             inferred_dir = out / "dual18" / "dual18_inferred_pair"
