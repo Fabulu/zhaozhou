@@ -3,7 +3,7 @@
 **Run:** `RUN-20260913-1651-board-bringup`
 **Branch:** `zhaozhou-board-bringup-20260913`
 **Base:** `158442b57b32f9bbf9cc9e241a88f43c2a660f7a`
-**Safety state:** **HOLD — no Zhaozhou bitstream may be loaded yet**
+**Safety state:** **VOLATILE MiSTer path proven; JTAG/flash/persistence remain blocked**
 
 This record keeps live observations, published facts, and compatibility
 assumptions separate. A standard MiSTer core operating on the unit is valuable
@@ -252,37 +252,79 @@ Therefore the canonical MiSTer constraints are presently the best reproducible
 FPGA-facing pinout, but they do not close the revision-specific board-electrical
 question on their own.
 
+## Physical volatile bring-up result
+
+On 2026-09-13 the lane built and loaded a purpose-made Zhaozhou/MiSTer probe.
+The exact receipt and key raw reports are in
+`runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/`.
+
+- Build source: `a28769a1be59e9b40ff4984cda84d2739346ff66`.
+- Quartus 17.0.2 full flow: successful, zero errors, zero critical warnings.
+- RBF: 2,429,104 bytes, SHA-256
+  `7e7b46f79685383dc85a057f88602154039e27cf4bea37fdfb911a55948ea9c0`.
+- Final target: `sys_top`, Cyclone V `5CSEBA6U23I7`, 145 physical pins,
+  zero virtual pins.
+- Clock pins: `V11`, `Y13`, `E11`, all input/3.3-V LVTTL as required by the
+  pinned MiSTer contract.
+- Unused-pin audit: 169 reserved input pins and zero reserved output-driving
+  pins.
+- Timing passed on the Slow 1100 mV 100 C model: setup +0.217 ns, hold
+  +0.246 ns, recovery +4.141 ns, removal +0.859 ns, minimum pulse width
+  +1.122 ns; zero illegal or unconstrained clocks.
+- External-I/O non-claim: 4 input and 50 output ports have no board-delay
+  constraints. This is not external timing sign-off.
+
+The first visible load occurred at `2026-09-13T16:45:46Z`. MiSTer reported
+`Zhaozhou Board Bring-up`, FPGA manager stayed `operating`, all three bridges
+stayed enabled, SSH remained reachable, and the owner visually confirmed the
+color bars. The early host rollback returned MENU cleanly.
+
+A full guarded replay loaded at `2026-09-13T16:48:32Z`, held for 20 seconds,
+and returned to MENU at `16:48:57Z`. Before loading, the host verified the
+committed build receipt, local and remote RBF hashes, and the known menu RBF
+hash. An independent HPS-side 35-second rollback watchdog was armed before the
+FPGA changed. Host rollback succeeded first, the watchdog was disarmed without
+firing, and the temporary RBF was removed from the SD card. Final receipt:
+`status=ok`, `rollbackSucceeded=true`, `stagedFileRemoved=true`, `error=null`.
+
+This proves the MiSTer build -> stage -> volatile configure -> run -> observe ->
+rollback path on the physical SuperStation One. It does not authorise JTAG,
+configuration flash, boot persistence, or pins outside the pinned MiSTer
+contract.
+
 ## Safety gate
 
 | Required item | State | Evidence needed to close |
 |---|---|---|
 | Exact product | **Confirmed exterior label** | SuperStation One, Retro Remake Hong Kong Limited, model marking `RCSH-1001/1002` |
-| Exact FPGA die target | **Strong** | MiSTer/OpenFPGA target plus currently operating official core |
+| Exact FPGA die target | **Confirmed for MiSTer RBF compatibility** | An audited `5CSEBA6U23I7` RBF configured and ran on the physical unit |
 | Exact FPGA package/speed/top marking | **Open** | Read the physical package marking; do not infer trailing ordering suffix |
 | PCB revision | **Open** | PCB silk or revision label on this unit |
 | JTAG cable and chain | **Absent** | A physically connected, documented cable/header and read-only IDCODE enumeration |
 | Current power input | **Rated input confirmed; live negotiation open** | Exterior marking allows 5 V / 3 A or 9 V / 3 A; present USB-PD contract and rail values remain unmeasured |
 | Power state | **Confirmed operating** | HPS, FPGA manager, and Ethernet are live |
 | HPS clock | **Confirmed contract** | 25 MHz from live device tree |
-| FPGA clocks | **Strong compatibility contract** | 50 MHz x3, canonical MiSTer constraints; physical oscillator marking/routing still open |
+| FPGA clocks | **Confirmed on MiSTer path** | 50 MHz x3 canonical inputs produced a fitted, timed, physically running RBF; oscillator marking remains open |
 | HPS DDR map | **Confirmed contract** | 1 GiB DT map; exact memory component marking open |
 | FPGA SDRAM | **Published, not live-probed** | 128 MB BGA SDR SDRAM; exact part/revision and a safe memory test later |
 | FPGA I/O standards/pinout | **Strong compatibility contract** | Pinned MiSTer constraints; revision-specific SSOne schematic unavailable |
 | Reset contract | **Framework-confirmed** | HPS/MiSTer generated core reset; physical button/reset mapping still open |
-| Safe minimal design | **Not yet approved** | Must explicitly leave every nonessential pin input/tri-stated, use the pinned framework/device, and pass review before any RBF load |
+| Safe minimal design | **Built, audited, physically proven** | Color bars/heartbeat ran; HPS identity/network/bridges survived; automatic MENU rollback passed |
 
 ## Next safe actions
 
-1. If the PCB later becomes safely accessible for another reason, photograph the
+1. Replace the visual-only probe payload with a hardware specification runner
+   that instantiates committed Zhaozhou blocks, runs known vectors in fabric,
+   and exposes pass/fail plus counters over HDMI/HPS.
+2. Keep using the proven volatile transaction and HPS watchdog for each staged
+   image; preserve a separate receipt and return to MENU after every test.
+3. Integrate the composed Zhaozhou shell only through a real MiSTer/HPS command,
+   framebuffer, clock/reset, and memory boundary. The existing 3,214-virtual-pin
+   shell-fit harness is capacity evidence, not a board core.
+4. Keep JTAG, configuration flash, boot persistence, and external-I/O timing
+   claims blocked until they receive their own evidence.
+5. If the PCB later becomes safely accessible for another reason, photograph the
    PCB silk and FPGA top marking; do not open the unit or remove its heatsink
    merely to satisfy this record.
-2. Pin a DHCP reservation for the confirmed MAC or continue using router DNS;
+6. Pin a DHCP reservation for the confirmed MAC or continue using router DNS;
    this is a router state change and was not done automatically.
-3. Prepare a **build-only** MiSTer-framework probe whose default state drives no
-   user, SDRAM, video, audio, LED, or expansion output. Review the final Quartus
-   pin report and unused-pin policy before producing a candidate RBF.
-4. Do not load that RBF until the physical marking/revision and power/clock/pin
-   gate above is explicitly closed.
-5. After first load is authorised, use MiSTer's volatile HPS FPGA-manager path,
-   not configuration-flash programming, and establish a rollback to the known
-   menu core before loading anything.

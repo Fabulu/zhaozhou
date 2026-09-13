@@ -230,6 +230,25 @@ verified.
 - Corrected the RBF identity assertion to the observed MiSTer contract. No RTL
   or bitstream rebuild is needed.
 
+### 2026-09-13 18:49 UTC+02:00 - Full guarded hardware transaction passed
+
+- Replayed the exact audited RBF for the intended 20-second observation window.
+- Preflight re-verified source/audit/RBF/menu hashes and found the remote staging
+  path absent. Remote RBF bytes matched local SHA-256.
+- Armed and verified HPS watchdog PID 12686 with a 35-second independent menu
+  deadline before loading.
+- At 16:48:32 UTC, live identity became `Zhaozhou Board Bring-up`; FPGA manager
+  stayed `operating`; all bridges stayed enabled; SSH/network continuity held.
+- After the full hold, host rollback returned live identity to MENU at
+  16:48:57 UTC. Watchdog was disarmed before its deadline and emitted no fire
+  log. Temporary remote RBF was removed and synced.
+- Final `FIRST-VOLATILE-LOAD.json`: `status=ok`, `rollbackSucceeded=true`,
+  `stagedFileRemoved=true`, `error=null`.
+- **Milestone:** build -> stage -> volatile FPGA configure -> run Zhaozhou RTL ->
+  observe -> HPS-verified rollback is proven on the physical SuperStation One.
+  JTAG, configuration flash, boot persistence, and unsigned external I/O timing
+  remain outside this proof.
+
 ---
 
 ## Subagent Spawns
@@ -260,6 +279,7 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/ROLLBACK-REHEARSAL.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD-ATTEMPT1-NOLOAD.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD-ATTEMPT2-BARS-ROLLBACK.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD.json`
 
 ---
 
