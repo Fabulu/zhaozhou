@@ -206,6 +206,24 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - Committed and pushed accepted Packet A as `cc5c219f` (`feat(fpga): add truthful shell fit wrapper`). This lands characterization infrastructure only; no Quartus result or resource saving exists yet.
 - Cherry-picked independently reviewed terrain composition `1f9a4f95`; Git merged the separated CMake registration blocks without conflict and created local integration commit `1c64c296`. Packet A's 50 registrations and all eight terrain registrations are retained.
 - Regenerated the Windows build with `zhao-env.ps1` and the `windows-native` preset, built the five terrain executables, then ran Packet A plus terrain serially: **58/58 passed in 58.00 seconds**, including two terrain mutant/lint controls. Terrain remains functional/unfitted and not production-adopted; NORMALS, DEPTHQUANT, physical fit, and atomic adoption remain open.
+- Committed and pushed the terrain-integration run-log evidence as `d84a2f34`; the cherry-picked terrain commit `1c64c296` was pushed with it.
+
+### 2026-09-13 05:03 UTC+02:00 - Packet B implementation and final dual-18 path repair active
+
+- The focused dual-18 anchor review confirmed full-chain rollback and all forged/stale/hash/nonce/timestamp controls, but found one low trust-boundary defect: resolving paths before comparison allowed symlink indirection to place the canonical anchor and manifest directory inside the replaceable evidence tree. Resumed the dual-18 implementer to reject symlink, junction, and Windows reparse-point components at the lexical canonical paths.
+- Attempted to resume the completed Packet B preflight agent for implementation; its read-only agent definition correctly refused edits/tests. No files changed. Launched a fresh write-enabled implementation agent with the same disjoint Packet B ownership and no-Quartus constraint instead.
+
+### 2026-09-13 05:18 UTC+02:00 - Final dual-18 path guards independently rerun
+
+- Dual-18 now compares lexical canonical paths before resolution and rejects symlink, junction, and Windows reparse-point indirection on every relevant component. Anchor/manifest files must be regular non-reparse files; configs, QPF/QSF, preparations, sources, reports, and summaries are checked without following indirection. Windows controls cover file symlinks, intermediate directory symlinks, junctions, and `..` aliases with no skips.
+- Coordinator independently reproduced **1/1 generation**, **21/21 map-evidence**, and the full direct Verilator suite; all positive controls fired. Checker SHA-256 is `bcd5986dd464d0cab5de3a93fff29060724b2b0a77510ca001a0dc1fe234c2b6`; anchor/manifest roots are unchanged; all four MapOnly output directories remain empty. A final bounded indirection-only review is active; mapped-result routing and vendor differential simulation remain HOLD.
+
+### 2026-09-13 06:02 UTC+02:00 - Dual-18 evidence accepted; Packet B and texture architecture handed off
+
+- Final bounded dual-18 review found no surviving trust-boundary false-pass. It independently confirmed rejection of `..` aliases; file, intermediate-directory, and revision/output-tree symlinks; Windows junction/reparse indirection; non-regular anchors; and indirection across the anchor, manifest, config, QPF/QSF, preparation, source, report, and summary chain.
+- Accepted the calibration-only behavioral/evidence packet for commit after the coordinator's **1/1 generation**, **21/21 map-evidence**, and full direct Verilator rerun. This does **not** accept `dual18_physical_pack_discriminator`: genuine mapped `resulta`/`resultb` routing and encrypted vendor-model differential simulation remain **HOLD**; no production migration and no DSP saving are banked.
+- Packet B implementation handed off without Quartus or shared CTest execution. It reports an exact 56-source generated-wrapper QSF, no virtual or physical pin assignments, archive/private-index execution, raw-Git reconciliation, preserved raw map/fit/STA/custom outputs, schema-3 emit-then-bind receipts, exact shell hierarchy ingestion, explicit remainder, and `rtlCleanAtHead`-only census use. Started a disjoint read-only hostile review before any named fit.
+- Opus completed `reports/SHELL-TEXTURE-V3-COMPOSITION-ARCHITECTURE-20260913.md` only. It concludes the live shell cannot remain byte-identical if V3 becomes the real raster texture owner and proposes staged single-owner seams, controls, and composed fit gates. Started a disjoint read-only architecture review; no production RTL change or resource claim exists yet.
 
 ---
 
@@ -248,7 +266,15 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 | completed 2026-09-13 04:43 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Reject assume-unchanged and skip-worktree provenance concealment | Seventh handoff; coordinator reproduced 50/50; rejected on malformed records | one finding relayed for eighth repair |
 | completed 2026-09-13 04:49 UTC+02:00 | Agent `a81d75fdc237af727` resumed | Seventh adversarial verification of Packet A | Prior provenance/geometry repairs held; found fail-open unknown/truncated index records | finding relayed for eighth repair |
 | completed 2026-09-13 04:53 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Fail closed on malformed and unknown Git index records | Eighth handoff; coordinator reproduced 50/50 | accepted after bounded review |
-| completed 2026-09-13 04:55 UTC+02:00 | Agent `a81d75fdc237af727` resumed | Bounded verification of eighth Packet A parser repair | Clean; 11/11 hostile controls passed | Packet A accepted for commit |
+| completed 2026-09-13 04:55 UTC+02:00 | Agent `a81d75fdc237af727` resumed | Bounded verification of eighth Packet A parser repair | Clean; 11/11 hostile controls passed | Packet A committed as `cc5c219f` |
+| completed 2026-09-13 05:02 UTC+02:00 | Agent `abb36757fbbc0d4f0` resumed | Focused verification of dual-18 invocation anchor | All replay/forgery controls held; found symlink/reparse boundary bypass | finding relayed for final repair |
+| completed 2026-09-13 05:17 UTC+02:00 | Agent `a8e917989c634bd4d` resumed direct | Reject dual-18 anchor/manifest path indirection | Handoff; coordinator reproduced 1/1, 21/21, and full Verilator | accepted after bounded review; physical/vendor gates HOLD |
+| completed 2026-09-13 05:03 UTC+02:00 | Read-only Packet B preflight agent resumed | Implement Packet B | Correctly refused because its agent definition is read-only; no action | reassigned to write-enabled agent |
+| completed 2026-09-13 06:00 UTC+02:00 | Write-enabled Packet B agent | Implement clean-archive fit flow, schema-3 receipt, hierarchy and census ingestion | Handoff complete; no Quartus/shared CTest, commit, or push | hostile review active |
+| completed 2026-09-13 06:00 UTC+02:00 | Agent `abb36757fbbc0d4f0` resumed | Bounded verification of dual-18 path-indirection repair | Clean; no trust-boundary false-pass survived | calibration evidence accepted; route/vendor HOLD |
+| completed 2026-09-13 05:57 UTC+02:00 | Opus architecture agent | Design the missing shell-to-V3 production composition seam | Report complete; no RTL/build/Quartus/commit/push | `reports/SHELL-TEXTURE-V3-COMPOSITION-ARCHITECTURE-20260913.md`; review active |
+| active from 2026-09-13 06:02 UTC+02:00 | Read-only review agent | Hostile review of Packet B implementation | In progress; no shared test/build ownership | pending verdict |
+| active from 2026-09-13 06:02 UTC+02:00 | Read-only review agent | Verify shell-to-V3 composition architecture against current RTL | In progress; report-only review | pending verdict |
 
 ---
 
