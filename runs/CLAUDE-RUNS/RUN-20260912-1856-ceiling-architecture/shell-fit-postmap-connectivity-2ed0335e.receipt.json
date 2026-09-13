@@ -1,0 +1,137 @@
+{
+  "archive": {
+    "entries": 136,
+    "path": "shell-fit-postmap-connectivity-2ed0335e.zip",
+    "sha256": "4e065ab8c803d340856109d3a37011112d55c6243be50ad8a74bc6f718c64c07",
+    "size": 13969999
+  },
+  "baseline": {
+    "map": "successful",
+    "ports": [
+      {
+        "direction": "input",
+        "mappedEndpointCount": 1,
+        "name": "audio_clk"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_epoch_o[0]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_epoch_o[1]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_epoch_o[2]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 2,
+        "name": "fit_signature_o[0]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 2,
+        "name": "fit_signature_o[1]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 2,
+        "name": "fit_signature_o[2]"
+      },
+      {
+        "direction": "input",
+        "mappedEndpointCount": 1,
+        "name": "gpu_clk"
+      },
+      {
+        "direction": "input",
+        "mappedEndpointCount": 3,
+        "name": "rst_n"
+      },
+      {
+        "direction": "input",
+        "mappedEndpointCount": 1,
+        "name": "vid_clk"
+      }
+    ],
+    "postMap": "successful"
+  },
+  "capturedAtLocal": "2026-09-13T15:50:27+02:00",
+  "device": "5CSEBA6U23I7",
+  "evidenceBoundary": "This packet proves the post-map witness observes mapped top-port direction and nonzero fanin/fanout, and that its audio_clk detector fires on a committed renamed dangling-port mutant. It does not prove shell functionality, timing, resource closure, board connectivity, or a production saving.",
+  "gate": "shell_fit_postmap_connectivity_detector_control",
+  "mutant": {
+    "detectorStatus": "fired",
+    "map": "successful",
+    "ports": [
+      {
+        "direction": "input",
+        "mappedEndpointCount": 0,
+        "name": "audio_clk"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 2,
+        "name": "fit_epoch_o[0]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_epoch_o[1]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_epoch_o[2]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_signature_o[0]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_signature_o[1]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 2,
+        "name": "fit_signature_o[2]"
+      },
+      {
+        "direction": "input",
+        "mappedEndpointCount": 1,
+        "name": "gpu_clk"
+      },
+      {
+        "direction": "input",
+        "mappedEndpointCount": 2,
+        "name": "rst_n"
+      },
+      {
+        "direction": "input",
+        "mappedEndpointCount": 1,
+        "name": "vid_clk"
+      }
+    ],
+    "postMap": "successful",
+    "zeroEndpointPorts": [
+      "audio_clk"
+    ]
+  },
+  "packetManifestSha256": "cf508642b4a732738341d948cfc4b9f8c5de2c036d1c4947ab9c3def443d7cac",
+  "quartus": "Quartus Prime Lite 17.0.2 Build 602",
+  "remoteHeadAtCapture": "2ed0335ed7e7aeb35b14053e30b2f2f26fc011bb",
+  "resultSha256": "526500ac248426af0f5b5852e0c04eb48e049eb1b1b018f87f842b806c732100",
+  "rtlCleanAtCapture": true,
+  "schemaVersion": 1,
+  "sourceBranch": "claude/ceiling-architecture-20260912",
+  "sourceCommit": "2ed0335ed7e7aeb35b14053e30b2f2f26fc011bb",
+  "status": "pass"
+}
