@@ -13,6 +13,8 @@ param(
     [string]$AskPassPath,
     [ValidateRange(5, 120)]
     [int]$HoldSeconds = 20,
+    [Parameter(ParameterSetName = 'Probe')]
+    [switch]$ExerciseWatchdog,
     [string]$ReceiptPath
 )
 
@@ -143,7 +145,7 @@ $receipt = [ordered]@{
     sourceCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
     buildSourceCommit = $null
     buildAudit = $null
-    mode = if ($RehearseRollback) { 'rollback-rehearsal' } else { 'probe-transaction' }
+    mode = if ($RehearseRollback) { 'rollback-rehearsal' } elseif ($ExerciseWatchdog) { 'watchdog-fire-test' } else { 'probe-transaction' }
     before = @()
     loaded = @()
     afterRollback = @()
@@ -160,6 +162,7 @@ $receipt = [ordered]@{
 }
 
 $probeLoadAttempted = $false
+$watchdogRollbackObserved = $false
 $createdRemoteFile = $false
 $remotePath = $null
 $watchdog = $null
@@ -265,9 +268,10 @@ try {
             throw "Remote RBF hash mismatch: expected $localHash, got $remoteHash"
         }
 
+        $watchdogDelay = if ($ExerciseWatchdog) { $HoldSeconds } else { $HoldSeconds + 15 }
         $watchdog = Arm-BoardRollbackWatchdog `
             -Identifier $localHash.Substring(0, 12) `
-            -DelaySeconds ($HoldSeconds + 15)
+            -DelaySeconds $watchdogDelay
         $receipt.watchdog = $watchdog
 
         $probeLoadAttempted = $true
@@ -283,15 +287,28 @@ try {
             throw "Probe did not report its expected RBF identity: $loadedRbf"
         }
 
-        Start-Sleep -Seconds $HoldSeconds
-        $receipt.status = 'probe-observed'
+        if ($ExerciseWatchdog) {
+            Start-Sleep -Seconds ($HoldSeconds + 4)
+            $receipt.rollbackAttempted = $true
+            $receipt.afterRollback = @(Get-BoardState)
+            $watchdogCore = $receipt.afterRollback | Where-Object { $_ -like 'core=*' } | Select-Object -First 1
+            if ($watchdogCore -notmatch '^core=MENU') {
+                throw "HPS watchdog did not return the board to MENU: $watchdogCore"
+            }
+            $watchdogRollbackObserved = $true
+            $receipt.rollbackSucceeded = $true
+            $receipt.status = 'watchdog-rollback-observed'
+        } else {
+            Start-Sleep -Seconds $HoldSeconds
+            $receipt.status = 'probe-observed'
+        }
     }
 } catch {
     $pendingError = $_
     $receipt.error = $_.Exception.Message
     $receipt.status = 'failed'
 } finally {
-    if ($probeLoadAttempted) {
+    if ($probeLoadAttempted -and -not $watchdogRollbackObserved) {
         $receipt.rollbackAttempted = $true
         try {
             Set-BoardCore $menuPath
@@ -314,6 +331,10 @@ try {
     if ($null -ne $watchdog -and $receipt.rollbackSucceeded) {
         try {
             $receipt.watchdogLog = @(Disarm-BoardRollbackWatchdog $watchdog)
+            if ($ExerciseWatchdog -and -not ($receipt.watchdogLog | Where-Object { $_ -like 'watchdog-fired=*' })) {
+                throw 'Board returned to MENU but the HPS watchdog left no fire log.'
+            }
+            if ($receipt.status -eq 'watchdog-rollback-observed') { $receipt.status = 'ok' }
         } catch {
             if ($null -eq $pendingError) { $pendingError = $_ }
             $receipt.status = 'watchdog-cleanup-failed'
@@ -335,7 +356,7 @@ try {
     $receipt.completedUtc = (Get-Date).ToUniversalTime().ToString('o')
     if (-not $ReceiptPath) {
         $runDir = Join-Path $repoRoot 'runs\CLAUDE-RUNS\RUN-20260913-1651-board-bringup'
-        $leaf = if ($RehearseRollback) { 'ROLLBACK-REHEARSAL.json' } else { 'FIRST-VOLATILE-LOAD.json' }
+        $leaf = if ($RehearseRollback) { 'ROLLBACK-REHEARSAL.json' } elseif ($ExerciseWatchdog) { 'WATCHDOG-FIRE-TEST.json' } else { 'FIRST-VOLATILE-LOAD.json' }
         $ReceiptPath = Join-Path $runDir $leaf
     }
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)

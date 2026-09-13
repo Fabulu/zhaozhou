@@ -249,6 +249,22 @@ verified.
   JTAG, configuration flash, boot persistence, and unsigned external I/O timing
   remain outside this proof.
 
+### 2026-09-13 18:58 UTC+02:00 - Capability boundary and watchdog positive control
+
+- Committed/pushed the full physical proof as `2955a9e1`.
+- Wrote `reports/SUPERSTATION-ONE-CAPABILITY-MATRIX-20260913.md`: video,
+  volatile loading, bridge/network continuity, and host rollback are proven;
+  SDRAM, HPS-DDR-from-fabric, audio, controllers, GPIO/SNAC, JTAG, flash,
+  persistence, and external I/O timing remain explicitly open.
+- Did not mislabel the independent HPS watchdog as proven by silence. It was
+  armed but had never reached its deadline, so its actual FIFO action was still
+  untested.
+- Added a separately named `-ExerciseWatchdog` transaction mode. It loads the
+  already-audited RBF, observes the probe, deliberately withholds host rollback,
+  requires the HPS process to return MENU and leave a `watchdog-fired` log, then
+  cleans up. Host rollback remains the failure fallback.
+- No new Quartus compile is planned; this uses the exact RBF already proved.
+
 ---
 
 ## Subagent Spawns
@@ -262,6 +278,7 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/TASK_LOG.md`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPEC_v1.md`
 - `reports/BOARD-BRINGUP-SUPERSTATION-ONE-20260913.md`
+- `reports/SUPERSTATION-ONE-CAPABILITY-MATRIX-20260913.md`
 - `fpga/sys/` — 57 byte-pinned upstream framework files plus license/provenance
 - `fpga/ZhaozhouBringup.qpf`
 - `fpga/ZhaozhouBringup.qsf`
