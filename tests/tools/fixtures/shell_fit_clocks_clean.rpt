@@ -1,0 +1,6 @@
+; TimeQuest Timing Analyzer Status ; Successful ;
+; TimeQuest Clock Constraints ;
+; Clock Name ; Period (ns) ; Status ;
+; gpu_clk ; 10.000 ; Constrained ;
+; vid_clk ; 20.000 ; Constrained ;
+; audio_clk ; 40.000 ; Constrained ;

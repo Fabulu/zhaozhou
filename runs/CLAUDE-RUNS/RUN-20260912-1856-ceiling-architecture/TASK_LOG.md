@@ -165,6 +165,41 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - Updated `reports/TEXJOIN-OWNERSHIP-ALM-RECON-20260913.md` with the proven ownership chain and corrected decision. TEXJOIN may move from selected `top` to `excluded: superseded`, retaining RTL/oracles/leaf evidence, but this is only an accounting correction and cannot be claimed as a physical 3,824-ALM saving. Evidence-complete retirement still needs role-aware duplication, full-identity stall, and uninterrupted-handshake controls after Packet A releases `tests/CMakeLists.txt`.
 - The latest dual-18 repair removed the synthetic mapped-route PASS, so absent per-result mapped evidence now produces explicit HOLD. It also added manifest-bound rollback protection, canonical recomputed vendor metadata in the content witness, and exact-QSF rejection of every extra compile mechanism.
 - Coordinator independently reproduced **1/1 generation**, **15/15 map-evidence**, and the full direct Verilator suite; all positive controls fired, manifest SHA-256 is `6514be4493c93f0c120b484088ba0ff79d3db01377f0782c75a2536107f843a6`, and all four Quartus output directories remain empty. A third adversarial review is active; physical route and encrypted vendor-model gates remain HOLD.
+- Committed and pushed the corrected TEXJOIN ownership report plus run-log snapshot as `fd2e2dd9` (`docs(fpga): settle TEXJOIN ownership boundary`).
+
+### 2026-09-13 04:32 UTC+02:00 - Sixth Packet A rerun green; dual-18 replay root still open
+
+- The sixth Packet A repair now invokes direct repository reconciliation before resource interpretation and adds fault 15 for unsolicited beats during initial idle, request-wait, and first response-pending. The control independently observes all three pre-ownership states while preserving a same-cycle legal first beat.
+- Coordinator independently reran the complete focused group serially: **50/50 passed in 39.33 seconds**. All named hashes match the handoff; protected shell, production QSF/SDC/runner, and architecture remain unchanged; `git diff --check` passes. A sixth adversarial review is active, so Packet A remains uncommitted.
+- Third dual-18 review confirmed mapped-route HOLD, canonical metadata binding, and exact-QSF rejection, but found one remaining co-moving replay: restoring the full old same-content preparation/report/summary and recomputing config plus manifest hashes could still certify `oneBlockResourceGate=pass` because the manifest was not an independent root of trust.
+- Rejected the latest dual-18 evidence handoff and resumed its implementer to add a caller-supplied, fresh, external invocation anchor. Physical route evidence and vendor differential simulation remain HOLD; no DSP saving is banked.
+
+### 2026-09-13 04:34 UTC+02:00 - Sixth Packet A handoff rejected on Git index concealment
+
+- The sixth adversarial review confirmed the direct dirty-tree reconciliation and all geometry repairs, including fault 15's exact `0x200` arm, three-state witness, and legal same-cycle verdict/first-beat behavior.
+- One high provenance escape remains: both `git status` and `git diff` honor `assume-unchanged` and `skip-worktree`. Fresh temporary repositories hid a dirty unrelated tracked file with each flag; the full parser incorrectly returned RC=0 and `receipt=raw-bound`.
+- Rejected Packet A again and resumed the same implementer for a seventh bounded repair that rejects tracked-index concealment flags and positively tests both attacks. Packet A remains uncommitted; terrain integration, Packet B, and the named fit remain held.
+
+### 2026-09-13 04:44 UTC+02:00 - Seventh Packet A repair independently rerun
+
+- Packet A now directly inspects NUL-delimited cached index records and rejects both assume-unchanged and skip-worktree before resource interpretation. New end-to-end temporary-repository controls cover clean ordinary records, visible unrelated dirt, and both hidden-dirt attacks; `gitIndexFlags` is included in bound evidence.
+- Coordinator independently reran the complete focused group serially: **50/50 passed in 43.30 seconds**. Report binder SHA-256 is `f350fb963cb2d7f08dd6beaba2245540485f265c4ece9e392693487a0d3a0016`; receipt `c7d88da0de06cc3306eb9526712407b490aa14a7831d3b52d9f6a57af4513cde`; empty index-flags evidence `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`. All other generated hashes and protected paths remain exact; `git diff --check` passes.
+- Started a seventh read-only adversarial review focused on index-record parsing, stale/co-mutated captured flag evidence, and a broad final false-pass sweep. Packet A remains uncommitted pending that verdict.
+
+### 2026-09-13 04:49 UTC+02:00 - Seventh Packet A handoff rejected on malformed index records
+
+- The seventh adversarial review confirmed assume-unchanged/skip-worktree attacks now reject for unrelated and compile-pool files, leading-space and Unicode paths parse, captured evidence cannot co-move into acceptance, and all prior raw-object/filter/line-ending/direct-dirt and geometry controls remain clean.
+- One medium fail-open parser case remains: unknown `git ls-files -v -z` tags and a non-NUL-terminated final record are filtered into empty clean evidence. No malformed/unknown-tag control existed.
+- Rejected Packet A and resumed the same implementer for an eighth bounded repair requiring terminal-NUL framing and explicit clean-tag allowlisting with malformed/unknown records rejected. Packet A, terrain integration, Packet B, and the named fit remain held.
+
+### 2026-09-13 04:55 UTC+02:00 - Eighth Packet A and anchored dual-18 reruns green
+
+- Packet A's index parser now requires terminal NUL, exact one-byte tag/space/nonempty-path records, and accepts only uppercase `H` as ordinary clean cached state. Lowercase, skip-worktree, dirty, unmerged, removed, killed, empty, unknown, and malformed records reject; leading-space and UTF-8 paths remain legal.
+- Coordinator independently reran the focused group serially: **50/50 passed in 52.70 seconds**. Preflight now reports 66 direct tests. Binder SHA-256 is `ca62e736b033557520acb67c000b96ee8d0b4b29d11a01b147e858d9fca83436`; all other named hashes and protected-path checks remain exact. A final bounded parser-only review is active.
+- Dual-18 now emits a fresh 256-bit invocation nonce and final manifest hash to a caller-supplied anchor outside the replaceable evidence tree. The checker requires the canonical external anchor path, anchor hash, nonce, and manifest hash; missing, forged, old, wrong-location, and mismatched anchors reject. Full-chain rollback with co-mutated preparation/config/manifest/report/summary rejects against the retained current anchor.
+- Coordinator independently reproduced **1/1 generation**, **18/18 map-evidence**, and the full direct Verilator suite. All controls fired; anchor SHA-256 `61c0203bc914dc38bb291d4be33da0f27e568e7aec09d492ade74a8a399c0aa1`, anchored manifest `ed4929c21f693c5f604baafd871ee1c61b2c66a755e1d85c43fc62eecbfd7ad5`; all four Quartus output directories remain empty. Final focused anchor review is active; physical route and vendor-model gates remain HOLD.
+- The bounded eighth Packet A review returned **clean** after 11/11 focused hostile controls. Terminal framing, tag grammar, clean-tag allowlist, concealment and dirty-tag rejection, opaque path handling, CLI fail-closed propagation, and both real Git index attacks were all demonstrated. Packet A is accepted for logical commit; this is simulation/evidence infrastructure, not a fit or resource saving.
+- Staging exposed trailing spaces in generated monitor condition continuations that untracked-file checks had not seen. Corrected the monitor generator to emit each comparison on one line, regenerated, and reran **50/50** in 52.36 seconds. Final monitor-generator SHA-256 is `8f52ee5494ec48bd118de7eb9b5768ce85c42fce82138a42364c4359c89382bb`; generated monitor `fa9af881b8022f329979b82f6bd39b082262200aeba5ff16283243d73dc67c1b`; staged `git diff --check` is clean.
 
 ---
 
@@ -198,10 +233,16 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 | completed 2026-09-13 | Agent `a8e917989c634bd4d` resumed direct | Repair six dual-18 calibration review findings | Corrected behavioral handoff green; rejected by second adversarial review | four findings relayed for third repair |
 | completed 2026-09-13 03:37 UTC+02:00 | Agent `a81d75fdc237af727` | Fifth read-only adversarial verification of Packet A | Found two high false-pass paths; no shared build/CTest or repository edits | findings relayed for sixth repair |
 | completed 2026-09-13 03:33 UTC+02:00 | Agent `abb36757fbbc0d4f0` resumed | Second read-only adversarial review of corrected dual-18 packet | Original six findings corrected; found four remaining evidence gaps | findings relayed for third repair |
-| completed 2026-09-13 03:51 UTC+02:00 | Agent `a8e917989c634bd4d` resumed direct | Repair mapped-route, manifest freshness, vendor metadata, and complete QSF-source gates | Corrected handoff; coordinator reproduced 1/1, 15/15, and full Verilator | third review active |
-| active from 2026-09-13 03:37 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Repair direct dirty-tree reconciliation and pre-first-verdict geometry detection | In progress; Packet A ownership | pending sixth corrected handoff |
+| completed 2026-09-13 03:51 UTC+02:00 | Agent `a8e917989c634bd4d` resumed direct | Repair mapped-route, manifest freshness, vendor metadata, and complete QSF-source gates | Corrected handoff; coordinator reproduced 1/1, 15/15, and full Verilator; rejected on co-moving replay | one finding relayed for invocation-anchor repair |
+| completed 2026-09-13 04:31 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Repair direct dirty-tree reconciliation and pre-first-verdict geometry detection | Sixth handoff; coordinator reproduced 50/50; rejected on index concealment | one finding relayed for seventh repair |
 | completed 2026-09-13 03:49 UTC+02:00 | Read-only Explore agent | Prove TEXJOIN/V3 ownership and connected-shell path | TEXJOIN accounting-only; V3 has sole internal owner but no shell seam | report amended; implementation held on Packet A CMake ownership |
-| active from 2026-09-13 03:51 UTC+02:00 | Agent `abb36757fbbc0d4f0` resumed | Third adversarial review of dual-18 evidence repairs | In progress; isolated tests/probes only | pending verdict |
+| completed 2026-09-13 04:30 UTC+02:00 | Agent `abb36757fbbc0d4f0` resumed | Third adversarial review of dual-18 evidence repairs | Prior four repairs held; found one co-moving full-chain replay | finding relayed for invocation-anchor repair |
+| completed 2026-09-13 04:34 UTC+02:00 | Agent `a81d75fdc237af727` resumed | Sixth adversarial verification of Packet A | Geometry/direct-dirt repairs held; found assume-unchanged and skip-worktree escape | finding relayed for seventh repair |
+| completed 2026-09-13 04:54 UTC+02:00 | Agent `a8e917989c634bd4d` resumed direct | Add independent dual-18 invocation anchor and replay controls | Handoff; coordinator reproduced 1/1, 18/18, and full Verilator | focused anchor review active |
+| completed 2026-09-13 04:43 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Reject assume-unchanged and skip-worktree provenance concealment | Seventh handoff; coordinator reproduced 50/50; rejected on malformed records | one finding relayed for eighth repair |
+| completed 2026-09-13 04:49 UTC+02:00 | Agent `a81d75fdc237af727` resumed | Seventh adversarial verification of Packet A | Prior provenance/geometry repairs held; found fail-open unknown/truncated index records | finding relayed for eighth repair |
+| completed 2026-09-13 04:53 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Fail closed on malformed and unknown Git index records | Eighth handoff; coordinator reproduced 50/50 | accepted after bounded review |
+| completed 2026-09-13 04:55 UTC+02:00 | Agent `a81d75fdc237af727` resumed | Bounded verification of eighth Packet A parser repair | Clean; 11/11 hostile controls passed | Packet A accepted for commit |
 
 ---
 

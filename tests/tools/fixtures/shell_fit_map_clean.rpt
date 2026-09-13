@@ -1,0 +1,29 @@
+Analysis & Synthesis report for zhao_shell_fit
+Quartus Prime Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+
++--------------------------------------+---------------------------------------------+
+; Analysis & Synthesis Summary                                                        ;
++--------------------------------------+---------------------------------------------+
+; Analysis & Synthesis Status          ; Successful - fixture                        ;
+; Quartus Prime Version                ; 17.0.2 Build 602 07/19/2017 SJ Lite Edition ;
+; Top-level Entity Name                ; zhao_shell_fit_top                          ;
++--------------------------------------+---------------------------------------------+
+
++--------------------------------------+--------+
+; Analysis & Synthesis Resource Usage Summary    ;
++--------------------------------------+--------+
+; Combinational ALUT usage for logic   ; 11,234 ;
++--------------------------------------+--------+
+
++------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Analysis & Synthesis Resource Utilization by Entity                                                                                                                                                                                                               ;
++----------------------------------------------+---------------------+---------------------------+-------------------+------------+------+--------------+------------------------------------------------------------------+---------------------------------+--------------+
+; Compilation Hierarchy Node                   ; Combinational ALUTs ; Dedicated Logic Registers ; Block Memory Bits ; DSP Blocks ; Pins ; Virtual Pins ; Full Hierarchy Name                                              ; Entity Name                     ; Library Name ;
++----------------------------------------------+---------------------+---------------------------+-------------------+------------+------+--------------+------------------------------------------------------------------+---------------------------------+--------------+
+; |zhao_shell_fit_top                          ; 11234 (40)          ; 16111 (80)                ; 2200000           ; 87         ; 10   ; 0            ; |zhao_shell_fit_top                                              ; zhao_shell_fit_top              ; work         ;
+;    |zhao_shell_top:u_shell|                  ; 8999 (8999)         ; 14321 (14321)             ; 2097152           ; 84         ; 0    ; 0            ; |zhao_shell_fit_top|zhao_shell_top:u_shell                       ; zhao_shell_top                  ; work         ;
+;    |zhao_shell_fit_stimulus:u_stimulus|      ; 1900 (1900)        ; 1500 (1500)               ; 27848             ; 3          ; 0    ; 0            ; |zhao_shell_fit_top|zhao_shell_fit_stimulus:u_stimulus           ; zhao_shell_fit_stimulus         ; work         ;
+;    |zhao_shell_fit_gpu_sink:u_gpu_sink|      ; 120 (120)          ; 1800 (1800)               ; 0                 ; 0          ; 0    ; 0            ; |zhao_shell_fit_top|zhao_shell_fit_gpu_sink:u_gpu_sink           ; zhao_shell_fit_gpu_sink         ; work         ;
+;    |zhao_shell_fit_video_sink:u_video_sink|  ; 48 (48)            ; 250 (250)                 ; 0                 ; 0          ; 0    ; 0            ; |zhao_shell_fit_top|zhao_shell_fit_video_sink:u_video_sink       ; zhao_shell_fit_video_sink       ; work         ;
+;    |zhao_shell_fit_audio_sink:u_audio_sink|  ; 32 (32)            ; 130 (130)                 ; 0                 ; 0          ; 0    ; 0            ; |zhao_shell_fit_top|zhao_shell_fit_audio_sink:u_audio_sink       ; zhao_shell_fit_audio_sink       ; work         ;
++----------------------------------------------+---------------------+---------------------------+-------------------+------------+------+--------------+------------------------------------------------------------------+---------------------------------+--------------+

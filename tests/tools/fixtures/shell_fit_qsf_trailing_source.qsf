@@ -1,0 +1,1 @@
+set_global_assignment -name TOP_LEVEL_ENTITY zhao_shell_fit_top ; source hidden.tcl

@@ -1,0 +1,11 @@
+{
+  "source_fixture": "shell_ports_complex.sv",
+  "declared_outputs": [
+    "lanes_o",
+    "ready_o"
+  ],
+  "captured_outputs": [
+    "lanes_o"
+  ],
+  "expected_diagnostic": "fixture-sinks differs from parser-outputs: missing=['ready_o'], extra=[]"
+}

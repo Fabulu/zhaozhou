@@ -1,0 +1,1 @@
+Warning (169177): Clock port gpu_clk is fed by a virtual pin and cannot be constrained as a real clock.

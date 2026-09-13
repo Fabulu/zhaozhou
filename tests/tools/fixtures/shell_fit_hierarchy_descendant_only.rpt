@@ -1,0 +1,3 @@
+; Fitter Resource Utilization by Entity ;
+; Compilation Hierarchy Node ; ALMs needed [=A-B+C] ; [A] ALMs used in final placement ; [B] Estimate of ALMs recoverable by dense packing ; [C] Estimate of ALMs unavailable ; ALMs used for memory ; Combinational ALUTs ; Dedicated Logic Registers ; I/O Registers ; Block Memory Bits ; M10Ks ; DSP Blocks ; Pins ; Virtual Pins ; Full Hierarchy Name ; Entity Name ; Library Name ;
+; |zhao_shell_top:u_shell|zhao_cmd_scheduler:u_sched ; 310.5 (310.5) ; 310.5 (310.5) ; 0 (0) ; 0 (0) ; 0 (0) ; 400 (400) ; 600 (600) ; 0 (0) ; 0 ; 0 ; 0 ; 0 ; 0 ; |zhao_shell_fit_top|zhao_shell_top:u_shell|zhao_cmd_scheduler:u_sched ; zhao_cmd_scheduler ; work ;

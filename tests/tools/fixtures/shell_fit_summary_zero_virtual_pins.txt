@@ -1,0 +1,10 @@
+; Fitter Status                    ; Successful - fixture ;
+; Quartus Prime Version            ; 17.0.2 Build 602 07/19/2017 SJ Lite Edition ;
+; Device                           ; 5CSEBA6U23I7 ;
+; Logic utilization (in ALMs)      ; 9,876 / 41,910 ( 24 % ) ;
+; Total registers                  ; 16,000 ;
+; Total block memory bits          ; 2,200,000 ;
+; Total RAM Blocks                 ; 132 ;
+; Total DSP Blocks                 ; 87 ;
+; Total pins                       ; 10 / 314 ( 3 % ) ;
+; Total virtual pins               ; 0 ;

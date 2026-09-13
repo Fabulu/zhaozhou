@@ -1,0 +1,5 @@
+set_global_assignment -name TOP_LEVEL_ENTITY zhao_shell_fit_top
+set_global_assignment -name SYSTEMVERILOG_FILE ../../../fpga/rtl/common/zhao_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../../fpga/rtl/generated/zhao_abi_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../../fpga/rtl/generated/zhao_shell_fit_top.sv
+set_global_assignment -name SDC_FILE shell_fit_constraints_clean.sdc

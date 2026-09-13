@@ -6666,6 +6666,78 @@ set_tests_properties(lint_shell_top PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# D3 Packet A: generated ten-bit characterization wrapper. The shell source
+# pool remains byte-for-byte/order-for-order the existing ZHAO_SHELL_RTL list;
+# only the generated wrapper and simulation-only monitor are appended.
+add_test(NAME lint_shell_fit_top
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_shell_fit_top
+                 ${ZHAO_SHELL_RTL}
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_shell_fit_top.sv)
+set_tests_properties(lint_shell_fit_top PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_executable(test_shell_fit_smoke
+               ${CMAKE_CURRENT_SOURCE_DIR}/shell/shell_fit_smoke.cpp)
+verilate(test_shell_fit_smoke
+  PREFIX Vzhao_shell_fit_smoke_tb
+  TOP_MODULE zhao_shell_fit_smoke_tb
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+  SOURCES ${ZHAO_SHELL_RTL}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_shell_fit_top.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/shell/generated/zhao_shell_fit_smoke_tb.sv)
+add_test(NAME shell_fit_smoke COMMAND test_shell_fit_smoke)
+set(SHELL_FIT_SMOKE_CONTROL_TESTS)
+foreach(domain IN ITEMS gpu video audio)
+  foreach(arm IN ITEMS edges activity wraps misr snapshot epoch capture serializer payload)
+    set(test_name shell_fit_smoke_control_${domain}_${arm})
+    add_test(NAME ${test_name} COMMAND test_shell_fit_smoke --control ${domain} ${arm})
+    list(APPEND SHELL_FIT_SMOKE_CONTROL_TESTS ${test_name})
+  endforeach()
+endforeach()
+foreach(fault IN ITEMS ring hps counter render guard sdr guard-verdict guard-early guard-late guard-extra hps-timing render-stability guard-verdict-extra guard-post-denial guard-preownership)
+  set(test_name shell_fit_smoke_protocol_${fault})
+  add_test(NAME ${test_name} COMMAND test_shell_fit_smoke --protocol-control ${fault})
+  list(APPEND SHELL_FIT_SMOKE_CONTROL_TESTS ${test_name})
+endforeach()
+set_tests_properties(
+  shell_fit_smoke ${SHELL_FIT_SMOKE_CONTROL_TESTS}
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+if(Python3_Interpreter_FOUND)
+  add_test(NAME shell_fit_tools
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_shell_fit_tools.py -q)
+  add_test(NAME shell_fit_preflight_fixtures
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_shell_fit_preflight.py -q)
+  add_test(NAME shell_fit_generated_freshness
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tools/quartus/gen_shell_fit_top.py --check)
+  add_test(NAME shell_fit_smoke_monitor_freshness
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tools/quartus/shell_fit_smoke.py --check)
+  add_test(NAME shell_fit_elaboration_census
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tools/quartus/shell_elab_ports.py
+                   --check-shell-fit
+                   --repo-root ${CMAKE_SOURCE_DIR}
+                   --wrapper ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_shell_fit_top.sv
+                   --manifest ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_shell_fit_top.manifest.json
+                   --work-dir ${CMAKE_CURRENT_BINARY_DIR}/shell-fit-elaboration
+                   --verilator "${ZHAO_VERILATOR_LINT}"
+                   --sources ${ZHAO_SHELL_RTL})
+  set_tests_properties(
+    shell_fit_tools shell_fit_preflight_fixtures shell_fit_generated_freshness
+    shell_fit_smoke_monitor_freshness shell_fit_elaboration_census
+    PROPERTIES LABELS "fast;lint" TIMEOUT 120)
+  set_tests_properties(shell_fit_elaboration_census PROPERTIES
+    ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}" TIMEOUT 300)
+endif()
+
 add_executable(demo_duo_markers
                ${CMAKE_SOURCE_DIR}/demos/wound_lab/duo_markers.cpp)
 target_link_libraries(demo_duo_markers PRIVATE zhao_harness zhao_zref)

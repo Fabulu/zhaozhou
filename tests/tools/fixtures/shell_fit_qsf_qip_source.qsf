@@ -1,0 +1,2 @@
+set_global_assignment -name TOP_LEVEL_ENTITY zhao_shell_fit_top
+set_global_assignment -name QIP_FILE hidden.qip

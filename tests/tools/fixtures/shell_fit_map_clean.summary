@@ -1,0 +1,11 @@
+Analysis & Synthesis Status : Successful - fixture
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : zhao_shell_fit
+Top-level Entity Name : zhao_shell_fit_top
+Family : Cyclone V
+Logic utilization (in ALMs) : N/A
+Total registers : 16,111
+Total pins : 10
+Total virtual pins : 0
+Total block memory bits : 2,200,000
+Total DSP Blocks : 87

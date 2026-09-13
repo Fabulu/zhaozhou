@@ -1,0 +1,1322 @@
+{
+  "schema_version": 1,
+  "module": "zhao_shell_top",
+  "traffic_profile": "shell-fit-legal-ish-v1",
+  "ports": [
+    {
+      "ordinal": 0,
+      "name": "gpu_clk",
+      "direction": "input",
+      "domain": "external",
+      "driver": "top_port"
+    },
+    {
+      "ordinal": 1,
+      "name": "vid_clk",
+      "direction": "input",
+      "domain": "external",
+      "driver": "top_port"
+    },
+    {
+      "ordinal": 2,
+      "name": "audio_clk",
+      "direction": "input",
+      "domain": "external",
+      "driver": "top_port"
+    },
+    {
+      "ordinal": 3,
+      "name": "rst_n",
+      "direction": "input",
+      "domain": "external",
+      "driver": "top_port"
+    },
+    {
+      "ordinal": 4,
+      "name": "hps_state_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "frame_ring",
+      "dynamic_mask": "0x3f"
+    },
+    {
+      "ordinal": 5,
+      "name": "hps_byte_len_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "frame_ring",
+      "dynamic_mask": "0xa8000000a8000000a8",
+      "constant_reason": "All three slots hold the committed 168-byte packet or zero; bits outside the exact 0-to-168 transition remain constant."
+    },
+    {
+      "ordinal": 6,
+      "name": "ring_wr_valid_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 7,
+      "name": "ring_wr_slot_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x3"
+    },
+    {
+      "ordinal": 8,
+      "name": "ring_wr_state_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x3"
+    },
+    {
+      "ordinal": 9,
+      "name": "ring_wr_ready_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "frame_ring",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 10,
+      "name": "hps_req_valid_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 11,
+      "name": "hps_req_write_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "This profile services packet and blit-source reads only; the shell HPS write-request direction remains quiescent."
+    },
+    {
+      "ordinal": 12,
+      "name": "hps_req_addr_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x33ffc0",
+      "constant_reason": "Only the committed packet records and deterministic blit-source window are read; invariant address bits stay constant."
+    },
+    {
+      "ordinal": 13,
+      "name": "hps_req_len_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x68",
+      "constant_reason": "Only the bounded packet-record and blit-source burst lengths are requested; invariant length bits stay constant."
+    },
+    {
+      "ordinal": 14,
+      "name": "hps_req_grant_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "hps_responder",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 15,
+      "name": "hps_wr_valid_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "This profile services packet and blit-source reads only; the shell HPS write-data direction remains quiescent."
+    },
+    {
+      "ordinal": 16,
+      "name": "hps_wr_data_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "This profile services packet and blit-source reads only; the shell HPS write-data bus remains constant."
+    },
+    {
+      "ordinal": 17,
+      "name": "hps_wr_last_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "This profile services packet and blit-source reads only; the shell HPS write-data direction remains quiescent."
+    },
+    {
+      "ordinal": 18,
+      "name": "hps_rd_valid_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "hps_responder",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 19,
+      "name": "hps_rd_data_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "hps_responder",
+      "dynamic_mask": "0xffffffffffffffff"
+    },
+    {
+      "ordinal": 20,
+      "name": "hps_rd_last_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "hps_responder",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 21,
+      "name": "pad_present_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "pads",
+      "dynamic_mask": "0xf"
+    },
+    {
+      "ordinal": 22,
+      "name": "pad_buttons_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "pads",
+      "dynamic_mask": "0xffffffffffffffffffffffffffffffff"
+    },
+    {
+      "ordinal": 23,
+      "name": "pad_lx_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "pads",
+      "dynamic_mask": "0xffffffffffffffff"
+    },
+    {
+      "ordinal": 24,
+      "name": "pad_ly_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "pads",
+      "dynamic_mask": "0xffffffffffffffff"
+    },
+    {
+      "ordinal": 25,
+      "name": "pad_rx_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "pads",
+      "dynamic_mask": "0xffffffffffffffff"
+    },
+    {
+      "ordinal": 26,
+      "name": "pad_ry_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "pads",
+      "dynamic_mask": "0xffffffffffffffff"
+    },
+    {
+      "ordinal": 27,
+      "name": "aud_wr_valid_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "audio_producer",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 28,
+      "name": "aud_wr_l_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "audio_producer",
+      "dynamic_mask": "0xffff"
+    },
+    {
+      "ordinal": 29,
+      "name": "aud_wr_r_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "audio_producer",
+      "dynamic_mask": "0xffff"
+    },
+    {
+      "ordinal": 30,
+      "name": "aud_wr_ready_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The bounded producer never fills the FIFO to its backpressure threshold, so ready remains asserted."
+    },
+    {
+      "ordinal": 31,
+      "name": "aud_refill_req_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The directed refill cadence keeps this GPU-domain request at one invariant logic level."
+    },
+    {
+      "ordinal": 32,
+      "name": "aud_occupancy_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xf",
+      "constant_reason": "Eight-sample bursts followed by bounded drain pauses use only the listed low occupancy bits."
+    },
+    {
+      "ordinal": 33,
+      "name": "pcm_valid_o",
+      "direction": "output",
+      "domain": "audio",
+      "sink": "audio_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 34,
+      "name": "pcm_l_o",
+      "direction": "output",
+      "domain": "audio",
+      "sink": "audio_capture",
+      "dynamic_mask": "0xffff"
+    },
+    {
+      "ordinal": 35,
+      "name": "pcm_r_o",
+      "direction": "output",
+      "domain": "audio",
+      "sink": "audio_capture",
+      "dynamic_mask": "0xffff"
+    },
+    {
+      "ordinal": 36,
+      "name": "underrun_status_o",
+      "direction": "output",
+      "domain": "audio",
+      "sink": "audio_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 37,
+      "name": "audio_underruns_o",
+      "direction": "output",
+      "domain": "audio",
+      "sink": "audio_capture",
+      "dynamic_mask": "0x7ff",
+      "constant_reason": "Intentional bounded producer pauses exercise underrun recovery; the finite run reaches only the listed count bits."
+    },
+    {
+      "ordinal": 38,
+      "name": "px_valid_o",
+      "direction": "output",
+      "domain": "video",
+      "sink": "video_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 39,
+      "name": "px_rgb_o",
+      "direction": "output",
+      "domain": "video",
+      "sink": "video_capture",
+      "dynamic_mask": "0x3fff",
+      "constant_reason": "The deterministic scanout pattern toggles only the listed RGB bits; its invariant colour bits stay constant."
+    },
+    {
+      "ordinal": 40,
+      "name": "px_x_o",
+      "direction": "output",
+      "domain": "video",
+      "sink": "video_capture",
+      "dynamic_mask": "0x1ff",
+      "constant_reason": "The bounded baseline observation interval does not reach the coordinate range that toggles bit 9."
+    },
+    {
+      "ordinal": 41,
+      "name": "px_y_o",
+      "direction": "output",
+      "domain": "video",
+      "sink": "video_capture",
+      "dynamic_mask": "0xff"
+    },
+    {
+      "ordinal": 42,
+      "name": "px_hsync_o",
+      "direction": "output",
+      "domain": "video",
+      "sink": "video_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 43,
+      "name": "px_vsync_o",
+      "direction": "output",
+      "domain": "video",
+      "sink": "video_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 44,
+      "name": "px_hblank_o",
+      "direction": "output",
+      "domain": "video",
+      "sink": "video_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 45,
+      "name": "px_vblank_o",
+      "direction": "output",
+      "domain": "video",
+      "sink": "video_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 46,
+      "name": "scaler_violation_o",
+      "direction": "output",
+      "domain": "video",
+      "sink": "video_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The legal directed mode and coordinates keep the scaler-violation detector clear."
+    },
+    {
+      "ordinal": 47,
+      "name": "crc_frame_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xbf9f77dd",
+      "constant_reason": "The bounded two-job render profile reaches exactly this deterministic counter/status mask; higher bits remain constant within the characterization horizon."
+    },
+    {
+      "ordinal": 48,
+      "name": "crc_valid_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 49,
+      "name": "crc_bytes_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x2d000",
+      "constant_reason": "The fixed frame dimensions yield a bounded byte-count sequence; all other count bits stay constant."
+    },
+    {
+      "ordinal": 50,
+      "name": "crc_size_err_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The directed frame dimensions are legal, so the CRC size-error output stays clear."
+    },
+    {
+      "ordinal": 51,
+      "name": "gpu_tick_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 52,
+      "name": "gpu_tick_frame_id_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x3",
+      "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
+    },
+    {
+      "ordinal": 53,
+      "name": "gpu_tick_repeated_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 54,
+      "name": "gpu_complete_slot_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The directed completion uses slot 0, so the one-bit slot selector remains constant."
+    },
+    {
+      "ordinal": 55,
+      "name": "deadline_faults_o",
+      "direction": "output",
+      "domain": "video",
+      "sink": "video_capture",
+      "dynamic_mask": "0x1",
+      "constant_reason": "The bounded two-job render profile reaches exactly this deterministic counter/status mask; higher bits remain constant within the characterization horizon."
+    },
+    {
+      "ordinal": 56,
+      "name": "frame_cycles_o",
+      "direction": "output",
+      "domain": "video",
+      "sink": "video_capture",
+      "dynamic_mask": "0x3",
+      "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
+    },
+    {
+      "ordinal": 57,
+      "name": "slot_state_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1ff"
+    },
+    {
+      "ordinal": 58,
+      "name": "fence_valid_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 59,
+      "name": "fence_slot_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x3"
+    },
+    {
+      "ordinal": 60,
+      "name": "fence_ok_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The bounded profile keeps the fence result low throughout the observation horizon."
+    },
+    {
+      "ordinal": 61,
+      "name": "fence_status_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x11",
+      "constant_reason": "The characterized fence visits only its deterministic bounded status values; invariant status bits stay constant."
+    },
+    {
+      "ordinal": 62,
+      "name": "mode_act_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The characterization holds the selected video mode constant."
+    },
+    {
+      "ordinal": 63,
+      "name": "dma_done_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 64,
+      "name": "dma_status_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1",
+      "constant_reason": "The bounded debug blit visits only status bit 0; every other DMA status bit remains invariant."
+    },
+    {
+      "ordinal": 65,
+      "name": "blit_done_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 66,
+      "name": "blit_status_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The full-address responder and valid lease produce only successful debug blits, so status remains zero."
+    },
+    {
+      "ordinal": 67,
+      "name": "pad_frame_flat_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x7fff7fff7fff7fffaaaaaaaa00010100000000007fff7fff7fff7fffaaaaaaaa00010100000000007fff7fff7fff7fffaaaaaaaa00010100000000007fff7fff7fff7fffaaaaaaaa00010100",
+      "constant_reason": "The four center, minimum, maximum, and directed pad phases intentionally constrain invariant packed-frame bits."
+    },
+    {
+      "ordinal": 68,
+      "name": "pad_sequence_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1000100010001",
+      "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
+    },
+    {
+      "ordinal": 69,
+      "name": "input_gaps_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The periodic pad producer does not miss a required snapshot interval, so the gap counters remain zero."
+    },
+    {
+      "ordinal": 70,
+      "name": "rumble_duty_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "No rumble command is present in the sealed characterization packet, so duty remains zero."
+    },
+    {
+      "ordinal": 71,
+      "name": "rumble_active_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "No rumble command is present in the sealed characterization packet, so active flags remain clear."
+    },
+    {
+      "ordinal": 72,
+      "name": "rumble_pwm_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "No rumble command is present in the sealed characterization packet, so PWM outputs remain clear."
+    },
+    {
+      "ordinal": 73,
+      "name": "rumble_drops_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "No rumble command is offered, so no rumble command can be dropped."
+    },
+    {
+      "ordinal": 74,
+      "name": "cnt_snap_ready_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "counter_consumer",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 75,
+      "name": "cnt_snap_valid_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 76,
+      "name": "cnt_snap_id_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x3f",
+      "constant_reason": "The complete exact provider window covers IDs 0 through 39, so identifier bits above bit 5 remain constant."
+    },
+    {
+      "ordinal": 77,
+      "name": "cnt_snap_value_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xfffef",
+      "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
+    },
+    {
+      "ordinal": 78,
+      "name": "cnt_window_open_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 79,
+      "name": "cnt_cat_violation_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The exact 0-through-39 counter window is consumed in order, so category violation stays clear."
+    },
+    {
+      "ordinal": 80,
+      "name": "guard_violations_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xfff",
+      "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
+    },
+    {
+      "ordinal": 81,
+      "name": "starvation_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1ffff",
+      "constant_reason": "The compact command-aware SDR model permits bounded scanout starvation; the finite run reaches only the listed count bits."
+    },
+    {
+      "ordinal": 82,
+      "name": "init_done_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 83,
+      "name": "refresh_stalls_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1fff",
+      "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
+    },
+    {
+      "ordinal": 84,
+      "name": "bank_conflicts_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x7ff",
+      "constant_reason": "The bounded two-job render profile reaches exactly this deterministic counter/status mask; higher bits remain constant within the characterization horizon."
+    },
+    {
+      "ordinal": 85,
+      "name": "scanout_preempted_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The bounded SDR traffic schedule does not preempt scanout, so this counter remains zero."
+    },
+    {
+      "ordinal": 86,
+      "name": "hps_err_count_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The registered HPS responder completes accepted reads without errors, so this counter remains zero."
+    },
+    {
+      "ordinal": 87,
+      "name": "shell_err_wfifo_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "Legal directed traffic keeps the shell write-FIFO error detector clear."
+    },
+    {
+      "ordinal": 88,
+      "name": "shell_err_route_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The renderer-to-blit lease handoff keeps every granted burst on its legal client, so the sticky route tripwire stays clear."
+    },
+    {
+      "ordinal": 89,
+      "name": "shell_err_cdc_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "Legal directed traffic keeps the shell CDC error detector clear."
+    },
+    {
+      "ordinal": 90,
+      "name": "shell_err_framer_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The sealed packet keeps the shell framing error detector clear."
+    },
+    {
+      "ordinal": 91,
+      "name": "render_frame_begin_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 92,
+      "name": "render_frame_end_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 93,
+      "name": "render_grid_w_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x4",
+      "constant_reason": "The one-shot legal directed triangle uses fixed field values; only bits differing across the driven phases toggle."
+    },
+    {
+      "ordinal": 94,
+      "name": "render_grid_h_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x4",
+      "constant_reason": "The one-shot legal directed triangle uses fixed field values; only bits differing across the driven phases toggle."
+    },
+    {
+      "ordinal": 95,
+      "name": "render_tri_valid_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 96,
+      "name": "render_tri_ready_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 97,
+      "name": "geom_guard_req_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "geometry_guard",
+      "dynamic_mask": "0x7fffffe07fffffffffffffffff",
+      "constant_reason": "Address bits [5:0] are intentionally zero so every legal and denied guard request remains 64-byte aligned."
+    },
+    {
+      "ordinal": 98,
+      "name": "geom_guard_rsp_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x7"
+    },
+    {
+      "ordinal": 99,
+      "name": "geom_beat_valid_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 100,
+      "name": "geom_beat_data_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x3fff3fff3fff3fff",
+      "constant_reason": "The deterministic bounded traffic profile produces only the listed changed bits; remaining payload bits stay invariant."
+    },
+    {
+      "ordinal": 101,
+      "name": "geom_beat_last_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 102,
+      "name": "render_kx0_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x7ffe00",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 103,
+      "name": "render_ky0_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x7fce00",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 104,
+      "name": "render_kc0_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xdfe0000",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 105,
+      "name": "render_kx1_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x7ffc00",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 106,
+      "name": "render_ky1_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x7ffd00",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 107,
+      "name": "render_kc1_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xffffff7a0000",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 108,
+      "name": "render_kx2_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x7ffe00",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 109,
+      "name": "render_ky2_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x7ffd00",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 110,
+      "name": "render_kc2_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xfffffff20000",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 111,
+      "name": "render_tl_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x7"
+    },
+    {
+      "ordinal": 112,
+      "name": "render_ax_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x1ffc00",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 113,
+      "name": "render_ay_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x3e00",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 114,
+      "name": "render_bx_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x1ffd00",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 115,
+      "name": "render_by_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x1ffc00",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 116,
+      "name": "render_cx_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x3f00",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 117,
+      "name": "render_cy_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x3e00",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 118,
+      "name": "render_min_x_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x4",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 119,
+      "name": "render_max_x_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x3f",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 120,
+      "name": "render_min_y_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x4",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 121,
+      "name": "render_max_y_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x3e",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 122,
+      "name": "render_src_id_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xffef",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 123,
+      "name": "render_fill_word_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xb5fdada5e7e5a7ef",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 124,
+      "name": "render_clear_word_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xfe5efe7ade7fdfff",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 125,
+      "name": "render_state_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xa5e00068",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 126,
+      "name": "render_src_a_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xff"
+    },
+    {
+      "ordinal": 127,
+      "name": "render_texel_rgb_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xff87ff",
+      "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
+    },
+    {
+      "ordinal": 128,
+      "name": "render_texel_a_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xff"
+    },
+    {
+      "ordinal": 129,
+      "name": "render_texel_idx_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0xff"
+    },
+    {
+      "ordinal": 130,
+      "name": "render_fb_base_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The one-shot directed render intentionally uses framebuffer base zero, so every base-address bit remains constant."
+    },
+    {
+      "ordinal": 131,
+      "name": "render_fb_stride_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x80",
+      "constant_reason": "The one-shot legal directed triangle uses fixed field values; only bits differing across the driven phases toggle."
+    },
+    {
+      "ordinal": 132,
+      "name": "fb_writer_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "render_producer",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 133,
+      "name": "render_drain_done_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 134,
+      "name": "render_busy_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 135,
+      "name": "render_pixels_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xff0",
+      "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
+    },
+    {
+      "ordinal": 136,
+      "name": "render_bursts_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xff",
+      "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
+    },
+    {
+      "ordinal": 137,
+      "name": "render_stream_error_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The one-shot directed render keeps the stream error detector clear."
+    },
+    {
+      "ordinal": 138,
+      "name": "render_drained_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 139,
+      "name": "render_fatal_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "Accepted renderer work retires under its valid lease without guard denial or stream failure, so fatal stays clear."
+    },
+    {
+      "ordinal": 140,
+      "name": "render_issued_words_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1ff0",
+      "constant_reason": "The bounded two-job render profile reaches exactly this deterministic counter/status mask; higher bits remain constant within the characterization horizon."
+    },
+    {
+      "ordinal": 141,
+      "name": "render_retired_words_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1ff8",
+      "constant_reason": "The bounded two-job render profile reaches exactly this deterministic counter/status mask; higher bits remain constant within the characterization horizon."
+    },
+    {
+      "ordinal": 142,
+      "name": "render_overflow_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The one-shot directed render remains within queue capacity, so overflow stays clear."
+    },
+    {
+      "ordinal": 143,
+      "name": "render_fragment_error_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The legal directed triangle keeps the fragment error detector clear."
+    },
+    {
+      "ordinal": 144,
+      "name": "phy_cs_n_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "The sampled capture sequence keeps chip-select at one invariant logic level."
+    },
+    {
+      "ordinal": 145,
+      "name": "phy_ras_n_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 146,
+      "name": "phy_cas_n_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 147,
+      "name": "phy_we_n_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 148,
+      "name": "phy_a_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xfff",
+      "constant_reason": "The deterministic bounded traffic profile produces only the listed changed bits; remaining payload bits stay invariant."
+    },
+    {
+      "ordinal": 149,
+      "name": "phy_ba_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x3"
+    },
+    {
+      "ordinal": 150,
+      "name": "phy_dq_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffff"
+    },
+    {
+      "ordinal": 151,
+      "name": "phy_dq_oe_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 152,
+      "name": "phy_dqm_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x0",
+      "constant_reason": "All characterized SDR transfers use full-word masks, so both DQM bits remain constant."
+    },
+    {
+      "ordinal": 153,
+      "name": "phy_dq_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "sdr_phy_responder",
+      "dynamic_mask": "0xffff"
+    }
+  ]
+}

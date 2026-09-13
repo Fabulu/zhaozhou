@@ -1,0 +1,420 @@
+{
+  "compileSourcePool": [
+    "fpga/rtl/common/zhao_pkg.sv",
+    "fpga/rtl/generated/zhao_abi_pkg.sv",
+    "fpga/rtl/generated/zhao_shell_fit_top.sv"
+  ],
+  "compileSourcePoolParity": true,
+  "device": "5CSEBA6U23I7",
+  "entities": [
+    {
+      "almsNeeded": "9876.3",
+      "almsNeededSelf": "20.0",
+      "combinationalAluts": 11000,
+      "combinationalAlutsSelf": 40,
+      "denseRecoverableAlms": "166.1",
+      "denseRecoverableAlmsSelf": "1.0",
+      "dspBlocks": "87",
+      "entityName": "zhao_shell_fit_top",
+      "finalPlacementAlms": "10020.4",
+      "finalPlacementAlmsSelf": "21.0",
+      "fullHierarchyName": "|zhao_shell_fit_top",
+      "instance": null,
+      "ioRegisters": 6,
+      "ioRegistersSelf": 6,
+      "libraryName": "work",
+      "memoryAlms": "4.0",
+      "memoryAlmsSelf": "4.0",
+      "memoryBits": 2200000,
+      "module": "zhao_shell_fit_top",
+      "pins": 10,
+      "ramBlocks": "132",
+      "registers": 16000,
+      "registersSelf": 80,
+      "role": "top",
+      "unavailableAlms": "22.0",
+      "unavailableAlmsSelf": "0.0",
+      "virtualPins": 0
+    },
+    {
+      "almsNeeded": "7421.6",
+      "almsNeededSelf": "7421.6",
+      "combinationalAluts": 8999,
+      "combinationalAlutsSelf": 8999,
+      "denseRecoverableAlms": "241.7",
+      "denseRecoverableAlmsSelf": "241.7",
+      "dspBlocks": "84",
+      "entityName": "zhao_shell_top",
+      "finalPlacementAlms": "7650.2",
+      "finalPlacementAlmsSelf": "7650.2",
+      "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_top:u_shell",
+      "instance": "u_shell",
+      "ioRegisters": 0,
+      "ioRegistersSelf": 0,
+      "libraryName": "work",
+      "memoryAlms": "0.0",
+      "memoryAlmsSelf": "0.0",
+      "memoryBits": 2097152,
+      "module": "zhao_shell_top",
+      "pins": 0,
+      "ramBlocks": "128",
+      "registers": 14321,
+      "registersSelf": 14321,
+      "role": "shell",
+      "unavailableAlms": "13.1",
+      "unavailableAlmsSelf": "13.1",
+      "virtualPins": 0
+    },
+    {
+      "almsNeeded": "2310.4",
+      "almsNeededSelf": "2310.4",
+      "combinationalAluts": 1900,
+      "combinationalAlutsSelf": 1900,
+      "denseRecoverableAlms": "10.0",
+      "denseRecoverableAlmsSelf": "10.0",
+      "dspBlocks": "3",
+      "entityName": "zhao_shell_fit_stimulus",
+      "finalPlacementAlms": "2320.0",
+      "finalPlacementAlmsSelf": "2320.0",
+      "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_fit_stimulus:u_stimulus",
+      "instance": "u_stimulus",
+      "ioRegisters": 6,
+      "ioRegistersSelf": 6,
+      "libraryName": "work",
+      "memoryAlms": "4.0",
+      "memoryAlmsSelf": "4.0",
+      "memoryBits": 27848,
+      "module": "zhao_shell_fit_stimulus",
+      "pins": 0,
+      "ramBlocks": "4",
+      "registers": 1500,
+      "registersSelf": 1500,
+      "role": "stimulus",
+      "unavailableAlms": "0.4",
+      "unavailableAlmsSelf": "0.4",
+      "virtualPins": 0
+    },
+    {
+      "almsNeeded": "92.4",
+      "almsNeededSelf": "92.4",
+      "combinationalAluts": 120,
+      "combinationalAlutsSelf": 120,
+      "denseRecoverableAlms": "2.6",
+      "denseRecoverableAlmsSelf": "2.6",
+      "dspBlocks": "0",
+      "entityName": "zhao_shell_fit_gpu_sink",
+      "finalPlacementAlms": "95.0",
+      "finalPlacementAlmsSelf": "95.0",
+      "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_fit_gpu_sink:u_gpu_sink",
+      "instance": "u_gpu_sink",
+      "ioRegisters": 0,
+      "ioRegistersSelf": 0,
+      "libraryName": "work",
+      "memoryAlms": "0.0",
+      "memoryAlmsSelf": "0.0",
+      "memoryBits": 0,
+      "module": "zhao_shell_fit_gpu_sink",
+      "pins": 0,
+      "ramBlocks": "0",
+      "registers": 1800,
+      "registersSelf": 1800,
+      "role": "gpu_sink",
+      "unavailableAlms": "0.0",
+      "unavailableAlmsSelf": "0.0",
+      "virtualPins": 0
+    },
+    {
+      "almsNeeded": "31.7",
+      "almsNeededSelf": "31.7",
+      "combinationalAluts": 48,
+      "combinationalAlutsSelf": 48,
+      "denseRecoverableAlms": "1.3",
+      "denseRecoverableAlmsSelf": "1.3",
+      "dspBlocks": "0",
+      "entityName": "zhao_shell_fit_video_sink",
+      "finalPlacementAlms": "33.0",
+      "finalPlacementAlmsSelf": "33.0",
+      "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_fit_video_sink:u_video_sink",
+      "instance": "u_video_sink",
+      "ioRegisters": 0,
+      "ioRegistersSelf": 0,
+      "libraryName": "work",
+      "memoryAlms": "0.0",
+      "memoryAlmsSelf": "0.0",
+      "memoryBits": 0,
+      "module": "zhao_shell_fit_video_sink",
+      "pins": 0,
+      "ramBlocks": "0",
+      "registers": 250,
+      "registersSelf": 250,
+      "role": "video_sink",
+      "unavailableAlms": "0.0",
+      "unavailableAlmsSelf": "0.0",
+      "virtualPins": 0
+    },
+    {
+      "almsNeeded": "20.2",
+      "almsNeededSelf": "20.2",
+      "combinationalAluts": 32,
+      "combinationalAlutsSelf": 32,
+      "denseRecoverableAlms": "0.8",
+      "denseRecoverableAlmsSelf": "0.8",
+      "dspBlocks": "0",
+      "entityName": "zhao_shell_fit_audio_sink",
+      "finalPlacementAlms": "21.0",
+      "finalPlacementAlmsSelf": "21.0",
+      "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_fit_audio_sink:u_audio_sink",
+      "instance": "u_audio_sink",
+      "ioRegisters": 0,
+      "ioRegistersSelf": 0,
+      "libraryName": "work",
+      "memoryAlms": "0.0",
+      "memoryAlmsSelf": "0.0",
+      "memoryBits": 0,
+      "module": "zhao_shell_fit_audio_sink",
+      "pins": 0,
+      "ramBlocks": "0",
+      "registers": 130,
+      "registersSelf": 130,
+      "role": "audio_sink",
+      "unavailableAlms": "0.0",
+      "unavailableAlmsSelf": "0.0",
+      "virtualPins": 0
+    }
+  ],
+  "evidenceArtifacts": {
+    "clocks": {
+      "path": "reports/characterization/clocks.rpt",
+      "sha256": "28966f5099593f6b3181cfb17e6afda3a07269dfb6df60312758000a6be88531"
+    },
+    "gitHead": {
+      "path": "tests/tools/fixtures/shell_fit_git_head.txt",
+      "sha256": "3d51eb31d2eaa0c0163e0e6e240f4370d06d484c91f4db87d14778c6140c67e3"
+    },
+    "gitIndexFlags": {
+      "path": "tests/tools/fixtures/shell_fit_git_index_flags.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "gitStagedDiff": {
+      "path": "tests/tools/fixtures/shell_fit_git_staged_diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "gitStatus": {
+      "path": "tests/tools/fixtures/shell_fit_git_status.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "gitWorktreeDiff": {
+      "path": "tests/tools/fixtures/shell_fit_git_worktree_diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "hierarchy": {
+      "path": "tests/tools/fixtures/shell_fit_hierarchy_with_shell.rpt",
+      "sha256": "e43add54c7fecd943d0542353ca4ef79e0e18d371ab255e019b346de12e9cfab"
+    },
+    "mapReport": {
+      "path": "tests/tools/fixtures/shell_fit_map_clean.rpt",
+      "sha256": "431b48717e677ffd69c9919fc1bab882255c51073cdb9a9afb068a3d728ec504"
+    },
+    "mapSummary": {
+      "path": "tests/tools/fixtures/shell_fit_map_clean.summary",
+      "sha256": "c828bea6ed41eba561061efb83175f4501c5e4cead69039421255d4205c5e2ce"
+    },
+    "sta": {
+      "path": "reports/characterization/zhao_shell_fit.sta.rpt",
+      "sha256": "487eed7f858fd85adee7abb17c3ecc5f62ab2fd2c0c648fb84ba36cedc01015d"
+    },
+    "summary": {
+      "path": "tests/tools/fixtures/shell_fit_summary_zero_virtual_pins.txt",
+      "sha256": "d36fa1ecf6f1952134b699611c6e7342b50ddd5a81454d3d45bf8bdc5b67e286"
+    }
+  },
+  "generatedArtifacts": {
+    "manifestSha256": "1188f881f37f4d107cc558c59dabca7aa3cacf4aa9d48f6e723a056a34370873",
+    "rtlSha256": "68120b57ee58551abe072f79a15fe80877d5f5740db41161f4cb161f1388aec0"
+  },
+  "limitations": [
+    "Deterministic legal-ish characterization traffic, not a functional HPS model.",
+    "Command-aware compact SDR response, not an SDRAM storage array.",
+    "Directed render and guard transactions prove activity, not rendered correctness.",
+    "Packet A has not run Quartus and makes no fit, pin, timing, or area claim."
+  ],
+  "mapEntities": [
+    {
+      "combinationalAluts": 11234,
+      "combinationalAlutsSelf": 40,
+      "dspBlocks": "87",
+      "entityName": "zhao_shell_fit_top",
+      "fullHierarchyName": "|zhao_shell_fit_top",
+      "instance": null,
+      "libraryName": "work",
+      "memoryBits": 2200000,
+      "module": "zhao_shell_fit_top",
+      "pins": 10,
+      "registers": 16111,
+      "registersSelf": 80,
+      "role": "top",
+      "virtualPins": 0
+    },
+    {
+      "combinationalAluts": 8999,
+      "combinationalAlutsSelf": 8999,
+      "dspBlocks": "84",
+      "entityName": "zhao_shell_top",
+      "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_top:u_shell",
+      "instance": "u_shell",
+      "libraryName": "work",
+      "memoryBits": 2097152,
+      "module": "zhao_shell_top",
+      "pins": 0,
+      "registers": 14321,
+      "registersSelf": 14321,
+      "role": "shell",
+      "virtualPins": 0
+    },
+    {
+      "combinationalAluts": 1900,
+      "combinationalAlutsSelf": 1900,
+      "dspBlocks": "3",
+      "entityName": "zhao_shell_fit_stimulus",
+      "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_fit_stimulus:u_stimulus",
+      "instance": "u_stimulus",
+      "libraryName": "work",
+      "memoryBits": 27848,
+      "module": "zhao_shell_fit_stimulus",
+      "pins": 0,
+      "registers": 1500,
+      "registersSelf": 1500,
+      "role": "stimulus",
+      "virtualPins": 0
+    },
+    {
+      "combinationalAluts": 120,
+      "combinationalAlutsSelf": 120,
+      "dspBlocks": "0",
+      "entityName": "zhao_shell_fit_gpu_sink",
+      "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_fit_gpu_sink:u_gpu_sink",
+      "instance": "u_gpu_sink",
+      "libraryName": "work",
+      "memoryBits": 0,
+      "module": "zhao_shell_fit_gpu_sink",
+      "pins": 0,
+      "registers": 1800,
+      "registersSelf": 1800,
+      "role": "gpu_sink",
+      "virtualPins": 0
+    },
+    {
+      "combinationalAluts": 48,
+      "combinationalAlutsSelf": 48,
+      "dspBlocks": "0",
+      "entityName": "zhao_shell_fit_video_sink",
+      "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_fit_video_sink:u_video_sink",
+      "instance": "u_video_sink",
+      "libraryName": "work",
+      "memoryBits": 0,
+      "module": "zhao_shell_fit_video_sink",
+      "pins": 0,
+      "registers": 250,
+      "registersSelf": 250,
+      "role": "video_sink",
+      "virtualPins": 0
+    },
+    {
+      "combinationalAluts": 32,
+      "combinationalAlutsSelf": 32,
+      "dspBlocks": "0",
+      "entityName": "zhao_shell_fit_audio_sink",
+      "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_fit_audio_sink:u_audio_sink",
+      "instance": "u_audio_sink",
+      "libraryName": "work",
+      "memoryBits": 0,
+      "module": "zhao_shell_fit_audio_sink",
+      "pins": 0,
+      "registers": 130,
+      "registersSelf": 130,
+      "role": "audio_sink",
+      "virtualPins": 0
+    }
+  ],
+  "remainderAttribution": {
+    "calculatedBySubtraction": false,
+    "method": "reported top row only; never inferred by subtraction",
+    "reportedTopFullHierarchyName": "|zhao_shell_fit_top"
+  },
+  "resources": {
+    "alms": 9876,
+    "dspBlocks": 87,
+    "mapCombinationalAluts": 11234,
+    "mapRegisters": 16111,
+    "memoryBits": 2200000,
+    "ramBlocks": 132,
+    "realPins": 10,
+    "registers": 16000,
+    "virtualPins": 0
+  },
+  "rtlCleanAtHead": true,
+  "schemaVersion": 3,
+  "selectedSdc": "tests/tools/fixtures/shell_fit_constraints_clean.sdc",
+  "sourceArtifacts": {
+    "cmake": {
+      "path": "tests/tools/fixtures/shell_fit_source_pool.cmake",
+      "sha256": "14594683cced56441645516c6d488185427c284e0b64d8d2484c1dcaade60cbd"
+    },
+    "generator": {
+      "path": "tools/quartus/gen_shell_fit_top.py",
+      "sha256": "f34a4609e362f4052a78bcc74f3414ef7e06a1c26da0abafab33abdfb22e73b7"
+    },
+    "package": {
+      "path": "fpga/rtl/common/zhao_pkg.sv",
+      "sha256": "a63ed92194e45580f33b9827547f9bc1fbe57446dbe02555e8ecd7a6b734ed6d"
+    },
+    "packet": {
+      "path": "tests/tools/fixtures/shell_fit_frame_blit.bin",
+      "sha256": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51"
+    },
+    "parser": {
+      "path": "tools/quartus/shell_ports.py",
+      "sha256": "d4da568555ca520691fec7db7dd2893d7a34bc5b5a0aeda879e9d407fc4572a9"
+    },
+    "policy": {
+      "path": "design/shell_fit_ports.yml",
+      "sha256": "e153ed6e4f19ef9855a0f97784886d9ea323245ce4999f3da8696f1178ceb91a"
+    },
+    "qsf": {
+      "path": "tests/tools/fixtures/shell_fit_qsf_clean.qsf",
+      "sha256": "ee1dc1aad8a4cb392071b3e518a2674d4cfbccafe58d9f017c7bd7593e75b0e6"
+    },
+    "sdc": {
+      "path": "tests/tools/fixtures/shell_fit_constraints_clean.sdc",
+      "sha256": "8093d5691df5fc07e6617bf91f1270327fb52f599537259bc46d3b6b82fe9c4e"
+    },
+    "shell": {
+      "path": "fpga/rtl/common/zhao_shell_top.sv",
+      "sha256": "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
+    }
+  },
+  "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+  "sourceHashes": {
+    "cmake": "14594683cced56441645516c6d488185427c284e0b64d8d2484c1dcaade60cbd",
+    "generator": "f34a4609e362f4052a78bcc74f3414ef7e06a1c26da0abafab33abdfb22e73b7",
+    "packageFile": "a63ed92194e45580f33b9827547f9bc1fbe57446dbe02555e8ecd7a6b734ed6d",
+    "packet": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51",
+    "parser": "d4da568555ca520691fec7db7dd2893d7a34bc5b5a0aeda879e9d407fc4572a9",
+    "policy": "e153ed6e4f19ef9855a0f97784886d9ea323245ce4999f3da8696f1178ceb91a",
+    "qsf": "ee1dc1aad8a4cb392071b3e518a2674d4cfbccafe58d9f017c7bd7593e75b0e6",
+    "sdc": "8093d5691df5fc07e6617bf91f1270327fb52f599537259bc46d3b6b82fe9c4e",
+    "shellDeclaration": "a243647455d61afa653a14127a5bc489c7361f767f7e36c880254d81a46e1739",
+    "shellFile": "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
+  },
+  "stages": {
+    "analysis": "successful",
+    "fit": "successful",
+    "map": "successful",
+    "timequest": "successful"
+  },
+  "tool": {
+    "name": "Quartus Prime",
+    "version": "17.0.2 Build 602 07/19/2017 SJ Lite Edition"
+  },
+  "trafficProfile": "shell-fit-legal-ish-v1"
+}
