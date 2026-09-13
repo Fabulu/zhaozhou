@@ -201,6 +201,12 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - The bounded eighth Packet A review returned **clean** after 11/11 focused hostile controls. Terminal framing, tag grammar, clean-tag allowlist, concealment and dirty-tag rejection, opaque path handling, CLI fail-closed propagation, and both real Git index attacks were all demonstrated. Packet A is accepted for logical commit; this is simulation/evidence infrastructure, not a fit or resource saving.
 - Staging exposed trailing spaces in generated monitor condition continuations that untracked-file checks had not seen. Corrected the monitor generator to emit each comparison on one line, regenerated, and reran **50/50** in 52.36 seconds. Final monitor-generator SHA-256 is `8f52ee5494ec48bd118de7eb9b5768ce85c42fce82138a42364c4359c89382bb`; generated monitor `fa9af881b8022f329979b82f6bd39b082262200aeba5ff16283243d73dc67c1b`; staged `git diff --check` is clean.
 
+### 2026-09-13 05:02 UTC+02:00 - Packet A committed; terrain composition integrated
+
+- Committed and pushed accepted Packet A as `cc5c219f` (`feat(fpga): add truthful shell fit wrapper`). This lands characterization infrastructure only; no Quartus result or resource saving exists yet.
+- Cherry-picked independently reviewed terrain composition `1f9a4f95`; Git merged the separated CMake registration blocks without conflict and created local integration commit `1c64c296`. Packet A's 50 registrations and all eight terrain registrations are retained.
+- Regenerated the Windows build with `zhao-env.ps1` and the `windows-native` preset, built the five terrain executables, then ran Packet A plus terrain serially: **58/58 passed in 58.00 seconds**, including two terrain mutant/lint controls. Terrain remains functional/unfitted and not production-adopted; NORMALS, DEPTHQUANT, physical fit, and atomic adoption remain open.
+
 ---
 
 ## Subagent Spawns
