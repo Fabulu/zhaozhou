@@ -29,6 +29,8 @@ fpga/sys/** -text
 fpga/rtl/pll.qip -text
 fpga/rtl/pll.v -text
 fpga/rtl/pll/** -text
+runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/QUARTUS-*.rpt -text
+runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/QUARTUS-*.pin -text
 
 # W2: ledger artifacts (regenerated with LF, byte-diffed by ledger:check)
 design/blocks.yml text eol=lf

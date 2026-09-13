@@ -136,6 +136,62 @@ verified.
   ignored checkout-local build directory and will be replaced with `-Clean`
   after this repair is committed.
 
+### 2026-09-13 18:19 UTC+02:00 - Guarded live transaction prepared
+
+- Committed/pushed the PLL repair as `a28769a1` and started one clean rebuild in
+  the isolated build directory.
+- Added `invoke_superstation_probe.ps1` outside the running fit closure. It
+  supports a menu rollback rehearsal and an automatic probe transaction.
+- The transaction requires explicit `-Execute`, exact checkout/branch, strict
+  known-host checking, an owned build marker, unchanged RBF source paths, a
+  passing source/build audit, an unused remote staging name, and byte-identical
+  local/remote SHA-256 before loading.
+- Probe mode records before/load/rollback FPGA-manager, bridge, core, RBF and
+  MiSTer-process state; always attempts `menu.rbf` rollback after a load; and
+  removes only the uniquely named file it created after successful rollback.
+- Fired the no-`-Execute` guard deliberately; it refused before any SSH or board
+  action. PowerShell syntax parsing passes.
+- **Work while fit continues:** transaction tool is authored; next is commit it,
+  then inspect the single running build when its result arrives. No second
+  Quartus process and no hardware load will start meanwhile.
+
+### 2026-09-13 18:28 UTC+02:00 - Second build result arrived; work parked first
+
+- The repaired background build reported failure; all board-lane Quartus
+  processes have exited.
+- **Parked work:** `invoke_superstation_probe.ps1` is authored and parse-clean;
+  its explicit execution guard fired. It is not yet committed, and no hardware
+  command has been issued.
+- **Resume after attending the build:** preserve and inspect the exact compile
+  reports, state the device/pin/timing/non-claim boundary, repair only the
+  demonstrated cause, then return to the load tool.
+- The owner subsequently removed the witness hold: proceed and preserve a
+  replayable receipt so the test can be run again when they are watching.
+
+### 2026-09-13 18:37 UTC+02:00 - Quartus success and final audit
+
+- The second Quartus flow itself was successful: Analysis & Synthesis, Fitter,
+  Assembler, and TimeQuest all completed in 5m28s with zero errors.
+- The job's failure status came only from the post-build Python checker decoding
+  Quartus's Windows-ANSI degree symbol as UTF-8. Fixed the reader to accept the
+  report's actual encoding and audited the existing build; no Quartus rerun was
+  needed.
+- Final audit passes: `5CSEBA6U23I7`, `sys_top`, three canonical 3.3-V 50 MHz
+  clock pins, zero virtual pins, zero critical warnings, zero unused
+  output-driving pins, and 169 reserved input pins.
+- Timing is positive: setup +0.217 ns, hold +0.246 ns, recovery +4.141 ns,
+  removal +0.859 ns, minimum pulse width +1.122 ns; zero illegal or
+  unconstrained clocks.
+- Non-claim remains explicit: 4 input and 50 output ports lack board-delay
+  constraints, so external I/O timing is not signed off by this fit.
+- RBF: 2,429,104 bytes,
+  SHA-256 `7e7b46f79685383dc85a057f88602154039e27cf4bea37fdfb911a55948ea9c0`.
+- Preserved exact flow, pin, and timing reports plus hashes for map/fit/asm/RBF/
+  SOF in `QUARTUS-BUILD-AUDIT.json`.
+- Strengthened the transaction with a verified `menu.rbf` hash and an HPS-side
+  rollback watchdog that is armed before the candidate load and is independent
+  of FPGA fabric/video/bridge behavior.
+
 ---
 
 ## Subagent Spawns
@@ -158,6 +214,11 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `tools/board/build_superstation_bringup.ps1`
 - `tools/board/verify_superstation_bringup.py`
 - `tests/tools/test_verify_superstation_bringup.py`
+- `tools/board/invoke_superstation_probe.ps1`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/QUARTUS-BUILD-AUDIT.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/QUARTUS-FLOW.rpt`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/QUARTUS-PIN.pin`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/QUARTUS-STA.rpt`
 
 ---
 
@@ -166,10 +227,9 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - Treat the connected SuperStation hardware as the current specification-test
   target, distinct from the later reference/debug FPGA board.
 - Read-only USB/JTAG/network discovery is permitted now.
-- The owner explicitly authorised proceeding on 2026-09-13. Volatile loading
-  through the pinned MiSTer/HPS contract is permitted after the minimal RBF's
-  final pin audit and rollback rehearsal. JTAG, configuration flash, and pins
-  outside that contract remain blocked.
+- The owner first asked to watch the first test, then explicitly said not to
+  stop because it can be replayed. Proceed after the audit; preserve a complete
+  receipt and keep the probe transaction repeatable.
 
 ---
 

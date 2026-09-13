@@ -37,10 +37,93 @@ class SuperStationBringupVerifierTest(unittest.TestCase):
         shutil.copytree(REPO / "fpga" / "rtl" / "pll", repo / "fpga" / "rtl" / "pll")
         return temporary, repo
 
+    def make_build(self) -> tuple[tempfile.TemporaryDirectory[str], Path]:
+        temporary = tempfile.TemporaryDirectory()
+        build = Path(temporary.name)
+        output = build / "output_files"
+        output.mkdir()
+        (output / "ZhaozhouBringup.flow.rpt").write_text(
+            """; Flow Status ; Successful - now ;
+; Top-level Entity Name ; sys_top ;
+; Family ; Cyclone V ;
+; Device ; 5CSEBA6U23I7 ;
+""",
+            encoding="utf-8",
+        )
+        (output / "ZhaozhouBringup.fit.rpt").write_bytes(
+            "Device 5CSEBA6U23I7 at 100° C\nQuartus Prime Fitter was successful\n".encode("cp1252")
+        )
+        (output / "ZhaozhouBringup.sta.rpt").write_text(
+            """Device 5CSEBA6U23I7
+Quartus Prime TimeQuest Timing Analyzer was successful
+Worst-case setup slack is 0.100
+Worst-case hold slack is 0.200
+Worst-case recovery slack is 0.300
+Worst-case removal slack is 0.400
+Worst-case minimum pulse width slack is 0.500
+; Illegal Clocks ; 0 ; 0 ;
+; Unconstrained Clocks ; 0 ; 0 ;
+""",
+            encoding="utf-8",
+        )
+        (output / "ZhaozhouBringup.pin").write_text(
+            """CHIP  "ZhaozhouBringup"  ASSIGNED TO AN: 5CSEBA6U23I7
+FPGA_CLK1_50 : V11 : input : 3.3-V LVTTL : : 3B : Y
+FPGA_CLK2_50 : Y13 : input : 3.3-V LVTTL : : 4A : Y
+FPGA_CLK3_50 : E11 : input : 3.3-V LVTTL : : 8A : Y
+RESERVED_INPUT : A4 : : : : 7C :
+""",
+            encoding="utf-8",
+        )
+        (output / "ZhaozhouBringup.rbf").write_bytes(b"RBF")
+        return temporary, build
+
     def test_current_sources_pass(self) -> None:
         errors, summary = VERIFY.verify_sources(REPO)
         self.assertEqual(errors, [])
         self.assertEqual(summary["sourceStatus"], "ok")
+
+    def test_minimal_build_receipt_passes_with_cp1252_report(self) -> None:
+        temporary, build = self.make_build()
+        self.addCleanup(temporary.cleanup)
+        errors: list[str] = []
+        summary: dict[str, object] = {}
+
+        VERIFY.verify_build(build, errors, summary)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(summary["buildStatus"], "ok")
+
+    def test_negative_timing_slack_fires(self) -> None:
+        temporary, build = self.make_build()
+        self.addCleanup(temporary.cleanup)
+        path = build / "output_files" / "ZhaozhouBringup.sta.rpt"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                "Worst-case setup slack is 0.100",
+                "Worst-case setup slack is -0.100",
+            ),
+            encoding="utf-8",
+        )
+        errors: list[str] = []
+
+        VERIFY.verify_build(build, errors, {})
+
+        self.assertTrue(any("negative worst-case setup slack" in error for error in errors))
+
+    def test_unused_output_pin_fires(self) -> None:
+        temporary, build = self.make_build()
+        self.addCleanup(temporary.cleanup)
+        path = build / "output_files" / "ZhaozhouBringup.pin"
+        path.write_text(
+            path.read_text(encoding="utf-8") + "RESERVED_OUTPUT_DRIVEN_HIGH : B4 : output : : : 7C :\n",
+            encoding="utf-8",
+        )
+        errors: list[str] = []
+
+        VERIFY.verify_build(build, errors, {})
+
+        self.assertTrue(any("unused output-driving pins" in error for error in errors))
 
     def test_vendor_attribute_removal_fires(self) -> None:
         temporary, repo = self.make_repo()

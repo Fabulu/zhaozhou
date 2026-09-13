@@ -61,7 +61,13 @@ def require_text(path: Path, snippets: list[str], errors: list[str]) -> str:
     if not path.is_file():
         errors.append(f"missing file: {path}")
         return ""
-    text = path.read_text(encoding="utf-8")
+    data = path.read_bytes()
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        # Quartus 17 writes localized degree symbols through the Windows ANSI
+        # code page even when the surrounding report is ASCII.
+        text = data.decode("cp1252")
     for snippet in snippets:
         if snippet not in text:
             errors.append(f"{path}: missing required text: {snippet}")
@@ -195,15 +201,33 @@ def verify_build(build: Path, errors: list[str], summary: dict[str, object]) -> 
     output = build / "output_files"
     flow = output / "ZhaozhouBringup.flow.rpt"
     fit = output / "ZhaozhouBringup.fit.rpt"
+    sta = output / "ZhaozhouBringup.sta.rpt"
     pin = output / "ZhaozhouBringup.pin"
     rbf = output / "ZhaozhouBringup.rbf"
 
-    flow_text = require_text(flow, ["Flow Status"], errors)
-    if flow_text and not re.search(r"Flow Status\s*:\s*Successful", flow_text):
+    flow_text = require_text(
+        flow,
+        ["Flow Status", "Top-level Entity Name", EXPECTED_DEVICE],
+        errors,
+    )
+    if flow_text and not re.search(r"Flow Status\s*;\s*Successful", flow_text):
         errors.append(f"{flow}: flow did not report Successful")
 
-    fit_text = require_text(fit, [EXPECTED_DEVICE], errors)
-    pin_text = require_text(pin, list(EXPECTED_CLOCK_PINS.values()), errors)
+    fit_text = require_text(
+        fit,
+        [EXPECTED_DEVICE, "Quartus Prime Fitter was successful"],
+        errors,
+    )
+    sta_text = require_text(
+        sta,
+        [EXPECTED_DEVICE, "Quartus Prime TimeQuest Timing Analyzer was successful"],
+        errors,
+    )
+    pin_text = require_text(
+        pin,
+        [f'CHIP  "ZhaozhouBringup"  ASSIGNED TO AN: {EXPECTED_DEVICE}'],
+        errors,
+    )
 
     if not rbf.is_file() or rbf.stat().st_size == 0:
         errors.append(f"missing or empty RBF: {rbf}")
@@ -214,19 +238,94 @@ def verify_build(build: Path, errors: list[str], summary: dict[str, object]) -> 
             "sha256": hashlib.sha256(rbf.read_bytes()).hexdigest(),
         }
 
-    if fit_text:
-        critical = [
-            line.strip()
-            for line in fit_text.splitlines()
-            if line.lstrip().startswith("Critical Warning")
-        ]
-        if critical:
-            errors.append(f"{fit}: critical warnings present: {critical[:5]}")
+    critical: list[str] = []
+    for report in sorted(output.glob("*.rpt")):
+        report_text = require_text(report, [], errors)
+        critical.extend(
+            f"{report.name}: {line.strip()}"
+            for line in report_text.splitlines()
+            if re.search(r"Critical Warning \(\d+\)", line)
+        )
+    if critical:
+        errors.append(f"critical Quartus warnings present: {critical[:5]}")
+    summary["criticalWarnings"] = critical
 
     if pin_text:
         for signal, package_pin in EXPECTED_CLOCK_PINS.items():
-            if signal not in pin_text or package_pin.removeprefix("PIN_") not in pin_text:
-                errors.append(f"{pin}: missing {signal} at {package_pin}")
+            location = package_pin.removeprefix("PIN_")
+            pattern = (
+                rf"(?m)^{re.escape(signal)}\s*:\s*{re.escape(location)}\s*:\s*"
+                rf"input\s*:\s*3\.3-V LVTTL"
+            )
+            if not re.search(pattern, pin_text):
+                errors.append(
+                    f"{pin}: missing 3.3-V input {signal} at {package_pin}"
+                )
+        reserved_outputs = re.findall(
+            r"(?m)^RESERVED_OUTPUT[^:\r\n]*\s*:\s*[A-Z]{1,2}\d+",
+            pin_text,
+        )
+        if reserved_outputs:
+            errors.append(f"{pin}: unused output-driving pins present: {reserved_outputs[:5]}")
+        summary["unusedOutputPins"] = reserved_outputs
+        summary["reservedInputPins"] = len(
+            re.findall(r"(?m)^RESERVED_INPUT(?:_[A-Z_]+)?\s*:\s*[A-Z]{1,2}\d+", pin_text)
+        )
+
+    timing_slacks: dict[str, float] = {}
+    if sta_text:
+        for check in ("setup", "hold", "recovery", "removal", "minimum pulse width"):
+            match = re.search(
+                rf"Worst-case {re.escape(check)} slack is\s+(-?\d+(?:\.\d+)?)",
+                sta_text,
+                re.IGNORECASE,
+            )
+            if not match:
+                errors.append(f"{sta}: missing worst-case {check} slack")
+                continue
+            slack = float(match.group(1))
+            timing_slacks[check] = slack
+            if slack < 0:
+                errors.append(f"{sta}: negative worst-case {check} slack: {slack}")
+
+        for label in ("Illegal Clocks", "Unconstrained Clocks"):
+            match = re.search(rf";\s*{re.escape(label)}\s*;\s*(\d+)\s*;", sta_text)
+            if not match:
+                errors.append(f"{sta}: missing {label} count")
+            elif int(match.group(1)) != 0:
+                errors.append(f"{sta}: {label} is {match.group(1)}, expected 0")
+
+        unconstrained: dict[str, int] = {}
+        for label in (
+            "Unconstrained Input Ports",
+            "Unconstrained Input Port Paths",
+            "Unconstrained Output Ports",
+            "Unconstrained Output Port Paths",
+        ):
+            match = re.search(rf";\s*{re.escape(label)}\s*;\s*(\d+)\s*;", sta_text)
+            if match:
+                unconstrained[label] = int(match.group(1))
+        summary["unconstrainedIo"] = unconstrained
+    summary["timingSlacksNs"] = timing_slacks
+
+    if flow_text:
+        def flow_value(label: str) -> str | None:
+            match = re.search(rf";\s*{re.escape(label)}\s*;\s*([^;]+?)\s*;", flow_text)
+            return match.group(1).strip() if match else None
+
+        summary["flow"] = {
+            "status": flow_value("Flow Status"),
+            "top": flow_value("Top-level Entity Name"),
+            "family": flow_value("Family"),
+            "device": flow_value("Device"),
+            "alms": flow_value("Logic utilization (in ALMs)"),
+            "registers": flow_value("Total registers"),
+            "pins": flow_value("Total pins"),
+            "virtualPins": flow_value("Total virtual pins"),
+            "memoryBits": flow_value("Total block memory bits"),
+            "dsps": flow_value("Total DSP Blocks"),
+            "plls": flow_value("Total PLLs"),
+        }
 
     summary["buildDirectory"] = str(build)
     summary["buildStatus"] = "ok" if not errors else "failed"

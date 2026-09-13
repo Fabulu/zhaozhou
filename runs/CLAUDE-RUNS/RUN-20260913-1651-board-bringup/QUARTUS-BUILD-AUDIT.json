@@ -1,0 +1,68 @@
+{
+  "schema": "zhaozhou.superstation.quartus-build-audit.v1",
+  "status": "ok",
+  "sourceCommit": "a28769a1be59e9b40ff4984cda84d2739346ff66",
+  "startedLocal": "2026-09-13T18:14:40+02:00",
+  "completedLocal": "2026-09-13T18:20:05+02:00",
+  "quartus": "17.0.2 Build 602 07/19/2017 SJ Lite Edition",
+  "flow": {
+    "status": "Successful",
+    "top": "sys_top",
+    "family": "Cyclone V",
+    "device": "5CSEBA6U23I7",
+    "alms": "7,115 / 41,910 (17%)",
+    "registers": 10893,
+    "pins": "145 / 314 (46%)",
+    "virtualPins": 0,
+    "blockMemoryBits": "384,438 / 5,662,720 (7%)",
+    "dspBlocks": "33 / 112 (29%)",
+    "plls": "3 / 6 (50%)"
+  },
+  "pinAudit": {
+    "clockInputs": {
+      "FPGA_CLK1_50": { "location": "V11", "direction": "input", "ioStandard": "3.3-V LVTTL" },
+      "FPGA_CLK2_50": { "location": "Y13", "direction": "input", "ioStandard": "3.3-V LVTTL" },
+      "FPGA_CLK3_50": { "location": "E11", "direction": "input", "ioStandard": "3.3-V LVTTL" }
+    },
+    "reservedInputPins": 169,
+    "reservedOutputPins": 0,
+    "criticalWarnings": 0,
+    "missingLocationOrIoStandardWarnings": 0
+  },
+  "timing": {
+    "model": "Slow 1100mV 100C",
+    "worstSetupSlackNs": 0.217,
+    "worstHoldSlackNs": 0.246,
+    "worstRecoverySlackNs": 4.141,
+    "worstRemovalSlackNs": 0.859,
+    "worstMinimumPulseWidthSlackNs": 1.122,
+    "illegalClocks": 0,
+    "unconstrainedClocks": 0,
+    "unconstrainedInputPorts": 4,
+    "unconstrainedInputPortPaths": 14,
+    "unconstrainedOutputPorts": 50,
+    "unconstrainedOutputPortPaths": 82
+  },
+  "artifacts": {
+    "ZhaozhouBringup.flow.rpt": { "bytes": 13901, "sha256": "94cb8b09b878d7c501094b9ecfd1d97a471b7df0bc05a4eeecc17450b7d27b4d" },
+    "ZhaozhouBringup.map.rpt": { "bytes": 976171, "sha256": "7c70a713b680f3b1e5ebf04a17eb3e29e05544f85dd04c8fea6dea1bb87ac674" },
+    "ZhaozhouBringup.fit.rpt": { "bytes": 1769239, "sha256": "84a8037c38c0b3fd11a6c3a0f81dcd2858299f08c8ae763137b09b59f26420ed" },
+    "ZhaozhouBringup.asm.rpt": { "bytes": 6452, "sha256": "9962fe9cd7173587329484c58b606077a32d516e35c318dae5d35f78d4a0a1f6" },
+    "ZhaozhouBringup.sta.rpt": { "bytes": 226477, "sha256": "996dbfc75718c0690a6b01b171788b80011c72088ab289b50afc5efde7f00446" },
+    "ZhaozhouBringup.pin": { "bytes": 80277, "sha256": "fbffa98ddcd5c7dff2248ff7ae166c74caf8fb266855471995b0fc73a884e998" },
+    "ZhaozhouBringup.rbf": { "bytes": 2429104, "sha256": "7e7b46f79685383dc85a057f88602154039e27cf4bea37fdfb911a55948ea9c0" },
+    "ZhaozhouBringup.sof": { "bytes": 6690386, "sha256": "566a72fff51a69552a535fd3122d4d9cac50f07cd9e708c26ed692108215b596" }
+  },
+  "preservedReports": [
+    "QUARTUS-FLOW.rpt",
+    "QUARTUS-PIN.pin",
+    "QUARTUS-STA.rpt"
+  ],
+  "nonClaims": [
+    "This is a MiSTer-compatible volatile probe, not the Zhaozhou production shell.",
+    "Unconstrained external I/O ports mean this fit does not sign off board-level input/output timing.",
+    "The resource totals are dominated by the MiSTer framework and are not a Zhaozhou subsystem budget measurement.",
+    "This audit authorizes only the HPS/MiSTer volatile RBF path; it does not authorize JTAG or configuration-flash programming."
+  ],
+  "toolingNote": "The Quartus flow itself succeeded. The original build-script exit code was caused only by the first post-build verifier attempting to decode a Windows-ANSI degree symbol as UTF-8. The corrected verifier re-read the existing artifacts; Quartus was not rerun."
+}
