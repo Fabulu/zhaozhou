@@ -6,7 +6,7 @@ Date: 2026-09-13
 
 The least expensive truthful proof that two logical 18x18 products share one Cyclone V variable-precision DSP is **MapOnly plus a Quartus Compiler Database atom-netlist query**. A fitter run is not required to prove mapped ownership and lane routing.
 
-The implementation now passes that mapped-route question in a **genuine but dirty diagnostic run**. The same run demonstrates all three required mapped positive controls. It is not promotable evidence: the repaired primitive boundary, route-only top, Tcl capture, and checker bytes are uncommitted. A fresh four-variant run from the next clean pushed commit is still required. No production multiplier has migrated and no DSP saving is banked.
+The implementation first passed that mapped-route question in a genuine but dirty diagnostic run, then repeated all four variants serially from clean pushed commit `65364dac5c83c8f6539f825846319b0c096bf9be`. The clean mapped-route packet is accepted for this narrow question. No production multiplier has migrated and no DSP saving is banked.
 
 ## Installed Quartus 17 capability and observed database shape
 
@@ -123,7 +123,33 @@ Results:
 | lane-swap mutant | 1 DSP | detector fired: `resulta_o[0]` originated at RESULTB rather than RESULTA |
 | two-primitives mutant | 2 DSPs | detector fired: expected one mapped `MAC`, got two |
 
-All TSVs, optional post-map Verilog files, raw logs/reports/summaries, and map databases remain below that external diagnostic root. The explicit orchestration result is still overall `status=hold` because encrypted arithmetic semantics are separately unavailable. More importantly, the entire diagnostic set is dirty and may not be promoted. The next step is commit/push, regeneration under a new anchor from that exact clean commit, and serial repetition of all four variants.
+All TSVs, optional post-map Verilog files, raw logs/reports/summaries, and map databases remain below that external diagnostic root. The explicit orchestration result is still overall `status=hold` because encrypted arithmetic semantics are separately unavailable. More importantly, the entire diagnostic set is dirty and may not be promoted.
+
+## Clean pushed four-variant result
+
+The route packet was regenerated after commit `65364dac5c83c8f6539f825846319b0c096bf9be` was pushed and independently read back at the same remote ref. The repository was clean throughout generation and all four serial invocations.
+
+```text
+external root:      C:/d18-65364dac
+anchor SHA-256:     95f8f2b62d0968baa796d1e25382aae9c785d2c3202302eceb1c8b1b9680ed34
+invocation nonce:   ccb9931896026edc404af185c8566e62272210f951f8ac673dc4b49e726cbfb0
+manifest SHA-256:   1183b4242939f0fbd48a0276528419154546aa1d2fc8b62a03f269bb79cc8def
+committed archive:  runs/CLAUDE-RUNS/RUN-20260912-1856-ceiling-architecture/dual18-map-cdb-65364dac.zip
+archive SHA-256:    1d3d8354fe97673cbe38eafc053eaccf6b050d9353909a412b3a5b7c3d8ad859
+```
+
+Clean results:
+
+| variant | map result | CDB detector/result |
+|---|---|---|
+| explicit pair | 1 DSP; 2 fixed multipliers; 1 independent mode | **route gate PASS**; one `MAC`; 72 operand bits and 72 result bits checked |
+| lane-collapse mutant | 1 DSP | positive control PASS: `resultb_o[0]` origin mismatch fired |
+| lane-swap mutant | 1 DSP | positive control PASS: `resulta_o[0]` origin mismatch fired |
+| two-primitives mutant | 2 DSPs | positive control PASS: expected one mapped `MAC`, got two |
+
+The 249-entry archive retains the anchor, manifest, all six generated configurations/QPF/QSF sets, four outer results, four fresh runtime projects, four map reports/summaries/logs, 132 map-database files, four CDB TSV/log/post-map sets, checker receipts, and a source-commit manifest. Its compact sidecar is `dual18-map-cdb-65364dac.receipt.json` in the same run folder.
+
+This promotes only the named mapped-route question. The outer explicit status correctly remains `hold` because encrypted vendor arithmetic is unresolved. Production migration remains `none`, production saving remains zero, and the conditional resource frontier remains 111 DSP.
 
 ## Evidence boundaries
 
@@ -148,9 +174,9 @@ The official Cyclone V functional model chain is present, but the simulator need
 
 ## Current status
 
-- Genuine dirty diagnostic mapped route: **PASS**, not promotable.
-- Three genuine dirty diagnostic mapped positive controls: **FIRED**, not promotable.
-- Clean pushed four-variant mapped route packet: **PENDING**.
+- Genuine dirty diagnostic mapped route: **PASS**, retained as troubleshooting only.
+- Clean pushed four-variant mapped-route packet: **PASS** for abstract mapped ownership and lane routing.
+- Three clean genuine mapped positive controls: **FIRED**.
 - Final placement witness: **HOLD**.
 - Encrypted vendor-model differential: **HOLD**.
 - Production migration or DSP saving: **none**.

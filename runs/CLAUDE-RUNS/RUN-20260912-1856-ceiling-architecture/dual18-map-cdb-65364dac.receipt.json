@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "gate": "dual18_postmap_lane_route_witness",
+  "capturedAtLocal": "2026-09-13T13:00:00+02:00",
+  "sourceCommit": "65364dac5c83c8f6539f825846319b0c096bf9be",
+  "sourceBranch": "claude/ceiling-architecture-20260912",
+  "remoteCommitVerified": "65364dac5c83c8f6539f825846319b0c096bf9be",
+  "rtlCleanAtGenerationAndCapture": true,
+  "quartus": "Quartus Prime Lite 17.0.2 Build 602",
+  "device": "5CSEBA6U23I7",
+  "archive": {
+    "path": "dual18-map-cdb-65364dac.zip",
+    "sha256": "1d3d8354fe97673cbe38eafc053eaccf6b050d9353909a412b3a5b7c3d8ad859",
+    "size": 974271,
+    "entries": 249,
+    "mapReports": 4,
+    "atomTsvFiles": 4,
+    "cdbLogs": 4,
+    "mapDatabaseFiles": 132
+  },
+  "invocationAnchor": {
+    "sha256": "95f8f2b62d0968baa796d1e25382aae9c785d2c3202302eceb1c8b1b9680ed34",
+    "nonce": "ccb9931896026edc404af185c8566e62272210f951f8ac673dc4b49e726cbfb0",
+    "manifestSha256": "1183b4242939f0fbd48a0276528419154546aa1d2fc8b62a03f269bb79cc8def"
+  },
+  "results": [
+    {
+      "variant": "explicit",
+      "resultSha256": "28e1246efbb4d0a63a4cc4ab0599800c06cd636fe3fa203f59f49c9527069cdc",
+      "mappedDspBlocks": 1,
+      "fixedMultiplierRows": 2,
+      "independentModeRows": 1,
+      "mappedOwners": 1,
+      "operandBitsChecked": 72,
+      "resultBitsChecked": 72,
+      "routeGateStatus": "pass"
+    },
+    {
+      "variant": "lane-collapse-mutant",
+      "resultSha256": "9cc5ee86e1a345becd28aeca2f5aa79a1f5150f138da2c42f8548551db926571",
+      "mappedDspBlocks": 1,
+      "positiveControlStatus": "pass",
+      "detector": "resultb_o[0] result origin mismatch"
+    },
+    {
+      "variant": "lane-swap-mutant",
+      "resultSha256": "9c163dc219d356811cf19f55e265b82238adae24d175eb341f88a53c1b1b9978",
+      "mappedDspBlocks": 1,
+      "positiveControlStatus": "pass",
+      "detector": "resulta_o[0] result origin mismatch"
+    },
+    {
+      "variant": "two-primitives-mutant",
+      "resultSha256": "574cd2217a672733965a13f9fcfce5faadeffeca59388538d78c991c05ebf8b7",
+      "mappedDspBlocks": 2,
+      "positiveControlStatus": "pass",
+      "detector": "one-atom gate expected exactly one mapped MAC owner, got 2"
+    }
+  ],
+  "mappedRouteEvidenceStatus": "pass",
+  "encryptedVendorArithmeticStatus": "hold",
+  "finalPlacementStatus": "hold",
+  "productionMigration": "none",
+  "productionDspSaving": 0,
+  "evidenceBoundary": "This packet proves mapped ownership and lane routing only. It does not prove final placement, encrypted primitive arithmetic, production ALM/timing/usability, or a bankable DSP saving."
+}
