@@ -8,7 +8,7 @@
 
 ## Objective
 
-Finish unresolved rescue-roadmap architecture and choose the next structural optimization that can move the production ALM/DSP ceilings, without duplicating the terrain-pipeline composition already owned by another session.
+Finish unresolved rescue-roadmap architecture and continue non-terrain production optimization until clean composed evidence is comfortably below the owner's tightened **30,000 ALM / 85 DSP** targets, without duplicating the terrain-pipeline composition already owned by another session.
 
 ---
 
@@ -29,6 +29,91 @@ Finish unresolved rescue-roadmap architecture and choose the next structural opt
 - Wrote `reports/CEILING-FRONTIER-RECONCILIATION-20260912.md`, explicitly separating partial census evidence, implemented-but-unfitted structural deltas, legal workload points, and clean composed receipts.
 - `zencrifice-ac` confirmed Quartus Lite 17.0.2 Build 602 installed at `C:\intelFPGA_lite\17.0`, version-checked, with no Quartus process active. The toolchain is available; this lane still will not fit before D3 names and passes its simulation/preflight boundary.
 
+### 2026-09-12 20:09 UTC+02:00 - Packet A active; terrain review landed; DSP packing lead recovered
+
+- The serial D3 Packet A implementer is active in this isolated lane. Its current untracked output is confined to the explicit shell policy/parser/generator/elaboration files; it has not committed, pushed, run Quartus, or touched this task log. Coordinator review and tests wait for its handoff rather than duplicating work.
+- Fetched and read independently reviewed terrain composition commit `1f9a4f95` from `origin/zixxtrixx-v8-closeout`. It functionally composes `zhao_terrain_pipe` and registers the correct future subsystem fit boundary, but deliberately leaves production adoption, NORMALS, DEPTHQUANT, and every physical resource/timing claim open. It therefore validates the composition dependency behind the conditional 111-DSP frontier without converting any structural delta into a measurement or installed saving.
+- Deferred cherry-picking `1f9a4f95` until Packet A completes because both packets edit `tests/CMakeLists.txt`; the terrain lane is holding its checkout and Quartus idle. This avoids a live-agent collision.
+- Generated `field-rtl-scan.json` from a clean committed AST pass over all 12 FIELD roots. It found no scanner failure and confirmed that `zhao_field_v3_mulbank` already centralizes four `zhao_field_mul` lanes (the structural 12-DSP roadmap shape); this is research evidence, not a price or fit receipt.
+- Recovered the stronger remaining-DSP lead hidden behind the MATW18 report: Quartus 17.0.2 maps each narrow independent multiply into its own physical variable-precision block even though Cyclone V supports two independent 18x18 products per block. Existing fitted hierarchy proves the waste (`zhao_geom_quat2mat`: nine 16x16 products -> nine DSP; projector: 22 blocks in `Two Independent 18x18` mode plus 11 sum blocks). An explicit dual-lane primitive/megafunction packing architecture could therefore be larger than the earlier hand-split estimate. No saving is claimed; the exact primitive semantics, signed recombination, simulation fallback, ALM/timing cost, and one named MapOnly discriminator still need architecture and proof.
+
+### 2026-09-12 20:21 UTC+02:00 - Packet B preflight prepared without touching the active packet
+
+- Re-read the approved D3 Packet B boundary against the current QSF, SDC, TimeQuest script, fit runner, fitter hierarchy format, and DSP census loader. The current QSF still selects `zhao_shell_top` and contains explicit virtual-pin assignments; the runner still has the obsolete PowerShell shell-port parser, schema-v1 receipt, and `sourceConeParity` provenance alias. No Packet B file was edited while Packet A is active.
+- Confirmed the existing fitter report exposes fractional `ALMs needed` separately from final-placement, dense-packing, unavailable-ALM, register, RAM, DSP, pin, and virtual-pin fields. Packet B must preserve the fitter's own `zhao_shell_top:u_shell` row and a named unaccounted remainder rather than manufacturing wrapper cost by subtraction.
+- Confirmed `tools/budget/dsp_census.py` still loads shell cleanliness from `sourceConeParity`; Packet B must switch it to actual schema-v2 `rtlCleanAtHead` only.
+- Restored upstream tracking for `claude/ceiling-architecture-20260912`; origin already contained the committed architecture packets. No new commit was pushed.
+
+### 2026-09-12 20:54 UTC+02:00 - Packet A handoff verified; independent review active
+
+- Packet A agent completed without Quartus, protected-path edits, terrain edits, task-log edits, commit, or push. It delivered the exact policy/parser/generator, independent Verilator-AST census, generated wrapper/manifest, QSF and receipt fixture parsers, manifest-driven smoke monitor, generated smoke bench, C++ driver, and CMake/CTest registration.
+- Agent evidence: 18/18 parser/generator/AST tests, 17/17 preflight/report tests, full source-pool `-Wall` lint, 154 shell ports / 3,386 bits, six wrapper HDL ports / ten physical bits, baseline traffic at the truthful 500,000-half-step bound, and independent GPU/video/audio freeze controls.
+- Coordinator reran the complete focused CTest group serially from the lane-local configured build: 10/10 passed in 9.35 seconds. Protected-path diff is empty; `zhao_shell_top.sv` remains SHA-256 `00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783`.
+- Started one read-only independent review of every Packet A file against the approved architecture. No integration or commit will occur until its findings are resolved.
+
+### 2026-09-12 21:19 UTC+02:00 - Owner tightened closure targets
+
+- Owner replaced the prior roadmap closure levels with **30,000 ALM / 85 DSP**, both requiring comfortable margin. The legal conditional 111-DSP frontier is therefore now 26 DSP above the target rather than 23; it remains structural and must not be banked as a composed receipt.
+- Wrote `reports/RESOURCE-CLOSURE-TARGET-20260912.md` so the tightened global rule does not get lost behind historical 36,000 / 88 tables. It explicitly leaves per-domain redistribution unratified rather than inventing proportional cuts.
+- Owner reiterated using agents where appropriate and asked that difficult rearchitectures try Astra when available. The active serial review was resumed after session interruption; no Astra endpoint appears in the currently available agent/model list, so the instruction is recorded for the next hard architecture commission rather than emulated with an invented model.
+- Verified zero Quartus processes before resuming. No fit has started.
+
+### 2026-09-12 21:22 UTC+02:00 - Packet A review rejected initial handoff
+
+- The independent static review completed after session-resume and found twelve concrete defects: four high, six medium, two low. High findings were premature render completion, overlapping geometry requests that can corrupt return framing, whole-domain activity passing when only one bit toggles, and descendant-unsafe `u_shell` hierarchy matching.
+- Medium findings covered warning evidence from the wrong report, substring-only clock proof, freeze controls that only stop the clock, presence-only receipt validation, silently ignored QSF Tcl, and FRAME_RING DONE overwritten by FREE in the same cycle. Low findings covered incomplete counter-window coverage and missing directed pad/HPS-progress cases.
+- Rejected the green 10/10 initial smoke/preflight run as insufficient evidence rather than committing it. Resumed the same serial implementer with every finding, exact anchors, required positive controls, and instructions to prove any refutation. Packet A remains uncommitted and Packet B/Fable/terrain integration remain held.
+
+### 2026-09-12 21:36 UTC+02:00 - Accidental review fan-out stopped and drained
+
+- The resumed implementer invoked the generic `code-review --fix` skill despite the serial-agent constraint. It spawned a reviewer plus multiple read-only audit children before the coordinator intercepted it. This was a process violation; none was authorized as a parallel lane.
+- Stopped the implementer, supervisor, and every live child, then repeatedly checked the agent roster until no child remained running. The accidental reviewers did not edit, build, run Quartus, commit, or push; their corroborating observations were treated only as review input.
+- Resumed the original implementer alone with an explicit prohibition on Skill/Agent/workflow/reviewer delegation. Exactly one agent is now running. Additional surfaced checks include configurable packet provenance, policy-to-driver-handler set equality, cleanliness-first receipt validation, and per-detector-arm fire controls.
+- Inspected the accidental skill-created `RUN-20260912-2124-review-ceiling-lane` (only an in-progress boilerplate spec/log describing the forbidden fan-out), then removed that untracked directory after transferring the incident and useful findings here. No unique implementation evidence was discarded.
+
+### 2026-09-12 23:24 UTC+02:00 - Corrected Packet A handoff rejected by adversarial review
+
+- The direct repair handoff completed with 41/41 focused CTests, 54 Python tests, 34 individual smoke/control runs, fresh generated artifacts, exact 154-port / 3,386-bit shell and six-port / ten-bit wrapper censuses, and the protected shell hash unchanged. No Quartus, commit, push, terrain, production QSF/SDC/runner, shell, or task-log action occurred in the agent.
+- A new serial read-only adversarial review reran those gates and then used five targeted probes. It found nine remaining defects, so the green handoff is rejected again rather than committed.
+- High findings: the entropy-width render lane is unreachable after the first drain; geometry accepts early `last` and can wait forever for a verdict; receipt cleanliness/source hashes still compare co-moving metadata rather than raw bytes/constraints; QSF parsing accepts trailing Tcl and ignores alternate source mechanisms such as QIP; and the fitter-summary parser rejects real Quartus 17.0.2 field names.
+- Medium findings: virtual-clock validation accepts empty/unbound prose; hierarchy receipts drop the fitter's self value and required supporting columns/map evidence; elaboration comparison ignores packed range direction and signedness; and HPS first-beat latency is one cycle later than the established shell harness.
+- Resuming only the original implementer for a bounded second repair. Packet A, terrain integration, Packet B, packing architecture, and Quartus remain held until the corrected diff survives another adversarial pass.
+
+### 2026-09-13 00:55 UTC+02:00 - Second corrected Packet A handoff rejected
+
+- The second repair reached 46/46 focused CTests and the coordinator independently reproduced 46/46, all protected paths clean, shell SHA-256 unchanged, wrapper SHA-256 `4d3e72b34128c1582d71cb80355a0dfee1b0edd2ed0c401a472ed2fc48d897d8`, and manifest SHA-256 `dbbf16cc3e215c9d7bf08e65feb4c7e803ea7499e16208fc174d35cd070edb45`.
+- A second serial adversarial pass nevertheless found seven concrete defects, so Packet A remains rejected and uncommitted. High: the entropy render values are overwritten before `tri_valid` acceptance while a co-moving mode bit falsely credits coverage; Git cleanliness/source-pool parity can still be co-mutated; map parsing uses a synthetic schema and lacks per-entity attribution. Medium: delayed extra geometry beats escape the one-cycle detector; TimeQuest parsing rejects genuine `report_clocks`/STA formats; warning scanning accepts synthetic or line-wrapped/unrelated evidence; QSF constraint-file membership is collected but never validated.
+- Resuming only the original implementer for a third bounded direct repair with the genuine archived Quartus artifacts as fixtures. No Quartus, terrain integration, Packet B, packing commission, commit, or push until this pass is independently reviewed.
+
+### 2026-09-13 01:36 UTC+02:00 - Parallel non-overlapping work authorized
+
+- Owner explicitly authorized using more subagents concurrently and asked that independent work proceed while implementation runs, superseding the earlier serial-only scheduling constraint for disjoint work.
+- Packet A remains exclusively owned by its active implementer. In parallel, launched one architecture-only agent owning only `reports/DSP-DUAL18-PACKING-ARCHITECTURE-20260912.md`, and one read-only reconnaissance agent for the terrain cherry-pick conflict recipe plus evidence-qualified non-terrain ALM candidates.
+- Neither parallel lane may edit Packet A, run Quartus/builds, integrate terrain, commit, or push. The architecture agent uses Opus because no genuine Astra endpoint is available; no substitute endpoint was invented.
+
+### 2026-09-13 01:55 UTC+02:00 - Third Packet A repair handed off and independently rerun
+
+- The third direct repair handed off with 47/47 focused CTests, 30/30 generator/parser Python tests, 51/51 preflight/report Python tests, genuine Quartus 17.0.2 fixtures, exact sourceCommit/CMake/QSF/SDC binding, delayed post-last and accepted-entropy fire controls, and all protected paths untouched.
+- Coordinator independently reconfigured the lane-local Windows build, rebuilt `test_shell_fit_smoke`, and reran the focused suite serially: 47/47 passed in 29.90 seconds. No CTest debris preceded the run.
+- `zhao_shell_top.sv` remains SHA-256 `00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783`; wrapper `68c0ead43603344681ede357dae19f3ffe288311dce5b3743253436f0118bd66`; manifest `89ef5075cdd849d5135e9587fa753ebee361f57cf8e1e7eac6687967566f8294`; receipt fixture `4bcfea4d80cb2ea6b91b794a146078e98dcbad682a321ffa2054f190089df11f`.
+- Started a third read-only adversarial verification pass against the complete uncommitted Packet A diff. No commit/integration is allowed until that review returns clean.
+- Read-only terrain integration reconnaissance found no committed-tree overlap with `1f9a4f95`; the only current blocker is the dirty `tests/CMakeLists.txt`, whose Packet A and terrain blocks are separated. Packet A must be committed first, then terrain cherry-picked with both registration sets retained.
+
+### 2026-09-13 02:15 UTC+02:00 - Third Packet A handoff rejected after fresh adversarial probes
+
+- The third adversarial pass reproduced 51/51 preflight tests and 30/30 tool tests, checked generated freshness, ran fresh temporary baseline/fault controls, and found three surviving defects. Packet A remains rejected despite coordinator and implementer green gates.
+- High: receipt validation binds only nine special inputs plus wrapper/manifest, not every member of the 55-file compile source pool; a dirty `zhao_abi_pkg.sv` passed when paired with co-mutable empty archived Git status evidence. The live comparison helper was not called.
+- High: directed and alleged entropy-width render jobs use identical triangle coefficients, vertices, bounds, top-left, and source ID. Existing masks largely measure reset-to-fixed transitions; mode/fill/clear differ, but the valid triangle payload is not width-covered.
+- Medium: a stray geometry beat after the next request handshake but before its verdict is ignored because request acceptance clears old-frame ownership and the response-pending branch does not inspect beat-valid.
+- Resumed only the original Packet A implementer for a fourth bounded direct repair with exact end-to-end positive controls for a dirty non-special source-pool member, accepted distinct entropy triangle payload, and response-pending delayed extra beat. Other agents remain confined to disjoint architecture/read-only work.
+
+### 2026-09-13 02:18 UTC+02:00 - Dual-18 packing architecture committed and pushed
+
+- Reviewed the architecture-only report. It establishes direct `cyclonev_mac` `m18x18_full` as a credible but unproved vendor boundary, derives exact signed/mixed-width decompositions, preserves the legal RPP=3 workload, and refuses to bank any saving before the named MapOnly discriminator plus vendor-model equivalence.
+- The conditional projector target is 24 -> 11 DSP, but remains structural only. The report's honest priced-scope lattice can fall below 85 only after multiple MapOnly/subsystem-fit/adoption promotions and still excludes unpriced roots; it does not claim closure.
+- Committed the report and its bounded commission as `e6f254c5` (`docs(fpga): architect dual-18 DSP packing`) and pushed the branch. No Quartus command or production rewrite occurred.
+- Launched a disjoint calibration-only implementer for the wrapper, behavioral/oracle tests, renamed mutants, `gen_calib.py` revisions, and genuine-format map parser. It cannot touch Packet A, `tests/CMakeLists.txt`, production paths, or Quartus; the physical gate remains held until functional evidence and vendor-model availability are reviewed.
+
 ---
 
 ## Subagent Spawns
@@ -39,6 +124,22 @@ Finish unresolved rescue-roadmap architecture and choose the next structural opt
 |-----------|----------|---------|--------|---------------|
 | 2026-09-12 19:11 UTC+02:00 | Agent tool attempt | Fable architecture of D3 truthful shell fit-top split | Failed before work: backend expanded `fable` to unsupported `claude-fable-5-1` | none |
 | 2026-09-12 19:14 UTC+02:00 | local Claude CLI, `claude-fable-5` | Same D3 architecture brief, restricted to Read/Grep/Glob/Write/Edit | Complete, exit 0; coordinator reviewed | `reports/SHELL-FIT-TOP-SPLIT-ARCHITECTURE-20260912.md` |
+| completed 2026-09-12 20:52 UTC+02:00 | Agent `ab717719b6d124a1a` | Implement D3 Packet A exactly from the approved architecture; no Quartus/terrain/log/commit/push | Initial implementation complete; coordinator test rerun clean | pending corrected handoff |
+| completed 2026-09-12 21:22 UTC+02:00 | Agent `a6edff802916ab3eb` | Read-only independent review of every Packet A file | Found 4 high, 6 medium, 2 low defects; no files changed | findings relayed to implementer |
+| 2026-09-12 21:22-21:36 UTC+02:00 | Agent `ab717719b6d124a1a` resumed | Verify/repair all Packet A review findings | Stopped after it violated serial execution by invoking a fan-out review skill | none |
+| 2026-09-12 21:25-21:36 UTC+02:00 | Accidental `code-review` supervisor and audit children | Unrequested fan-out from implementer | All stopped/drained; read-only findings only, no repository action | none |
+| completed 2026-09-12 23:00 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Verify/repair first review findings without delegation | Corrected handoff green on 41 focused gates; rejected by adversarial review | nine findings relayed for second repair |
+| completed 2026-09-12 23:24 UTC+02:00 | Agent `a8d3c005cf2f4c5c1` | Read-only adversarial review of corrected Packet A | Found 5 high and 4 medium remaining defects; no repository edits | findings relayed to implementer |
+| completed 2026-09-13 00:32 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Repair nine adversarial findings without delegation | Second corrected handoff green on 46 focused gates; rejected by second adversarial pass | seven findings relayed for third repair |
+| completed 2026-09-13 00:55 UTC+02:00 | Agent `a8d3c005cf2f4c5c1` resumed | Read-only adversarial verification of nine repairs | Found 3 high and 4 medium defects; no repository edits | findings relayed to implementer |
+| completed 2026-09-13 01:48 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Repair seven second-pass findings without delegation | Third corrected handoff green on 47 focused gates; rejected by third adversarial pass | three findings relayed for fourth repair |
+| completed 2026-09-13 02:18 UTC+02:00 | Agent `aa983a62b177c46e7` | Author the disjoint dual-18x18 packing architecture report only | Complete; coordinator reviewed, committed, and pushed as `e6f254c5` | `reports/DSP-DUAL18-PACKING-ARCHITECTURE-20260912.md` |
+| completed 2026-09-13 | Agent `ab9ea5469aca02fcb` | Read-only terrain cherry-pick conflict map and current-evidence non-terrain ALM ranking | Complete; one dirty-file blocker, no expected committed merge conflict; evidence-qualified ALM ranking delivered | findings recorded in timeline |
+| completed 2026-09-13 | Agent `a44feecd4e349cefa` | Read-only Packet B integration preflight against stable QSF/runner/census inputs | Complete; exact one-fit integration checklist delivered | pending Packet B implementation |
+| completed 2026-09-13 02:14 UTC+02:00 | Agent `a8d3c005cf2f4c5c1` resumed | Third read-only adversarial verification of Packet A | Found two high and one medium defect with fresh probes; no repository edits | findings relayed for fourth repair |
+| active 2026-09-13 | Agent `a52a3426075a8e97a` | Read-only architecture scout for clean fitted 3,824-ALM `zhao_raster_texjoin_v2` | In progress; no file/build ownership | final handoff pending |
+| active from 2026-09-13 02:15 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Repair three third-pass findings without delegation | In progress; sole owner of Packet A files | pending fourth corrected handoff |
+| active 2026-09-13 | Agent `a8e917989c634bd4d` | Implement calibration-only dual-18 wrapper/tests/mutants/map parser without Quartus | In progress; disjoint files and direct-test ownership | pending handoff |
 
 ---
 
@@ -49,6 +150,9 @@ Finish unresolved rescue-roadmap architecture and choose the next structural opt
 - `fable-d3-prompt.md` — restricted architecture commission for the truthful shell fit top.
 - `reports/CEILING-FRONTIER-RECONCILIATION-20260912.md` — correction striking the illegal 99-DSP two-view point and establishing 111 as conditional/structural.
 - `reports/SHELL-FIT-TOP-SPLIT-ARCHITECTURE-20260912.md` — Fable D3 architecture, reviewed: wrapper-only split, generated exact port accounting, three domain-local sequential signatures, and one shell-boundary fit gate.
+- `reports/RESOURCE-CLOSURE-TARGET-20260912.md` — owner-direction addendum replacing the closure totals with 30,000 ALM / 85 DSP while preserving evidence classes and historical receipts.
+- `field-rtl-scan.json` — clean-HEAD elaborated AST research over the 12 FIELD roots; confirms the centralized four-lane multiplier-bank structure but is not resource evidence.
+- `fable-dsp-packing-prompt.md` — restricted architecture commission for explicit Cyclone V dual-18x18 packing; completed as report commit `e6f254c5`.
 
 ---
 
@@ -57,7 +161,8 @@ Finish unresolved rescue-roadmap architecture and choose the next structural opt
 - Keep this lane isolated from the main checkout's terrain composition and from its build tree.
 - Treat 58,359 ALM / 192 DSP / 147 M10K only as a reconciled partial mixed-evidence census, never as a current production floor or ceiling.
 - Strike 99 DSP as a legal two-view shipping point; it relies on an RPP=1 configuration that overruns the raw frame on terrain fill alone.
-- Carry 111 DSP only as a conditional structural frontier. It still misses the 88-DSP allocation by 23 and depends on composed projector adoption plus unfitted cull/bake deltas.
+- Carry 111 DSP only as a conditional structural frontier. It now misses the owner's tightened 85-DSP target by 26 and still depends on composed projector adoption plus unfitted cull/bake deltas.
+- Treat 30,000 ALM / 85 DSP as the closure targets and require comfortable margin under both on clean committed composed evidence; the earlier 36,000 / 88 roadmap levels are superseded for closure.
 - Use D3 to repair shell ALM attribution, not to claim a resource saving.
 - Accepted Fable's minimal D3 architecture after coordinator review: keep `zhao_shell_top` byte-for-byte as `u_shell`; do not create `zhao_shell_core`, move `tb_zhao_shell`, invent a board top, or repeat the obsolete four-fit proposal. Add a generated ten-bit fit wrapper with explicit policy, registered protocol-aware stimulus, native-domain capture/MISR/serialization, and fitted hierarchy attribution.
 - The 3,214 virtual-pin / 1,608 ALM-containing-virtual-pins figures are genuine historical artifacts at commit `f8c2b32`, but are not current and are not linearly subtractable. Current source audit is 154 ports / 3,386 bits and must be reproduced independently in implementation.
@@ -68,7 +173,8 @@ Finish unresolved rescue-roadmap architecture and choose the next structural opt
 
 ## Next Steps
 
-- Commit and push the reviewed D3 architecture report as its own logical packet.
-- Implement D3 Packet A serially in this isolated lane: side-effect-free port parser, explicit policy, generated wrapper/manifest, independent elaboration census, three-domain smoke, fixtures, and positive controls.
-- Keep Quartus held until Packet A is committed/clean and the terrain lane's independent review has committed its composition.
-- Then update the existing shell fit flow and run only `shell_fit_top_clean_characterization`; use the resulting truthful hierarchy to decide whether `zhao_raster_edgewalk.g_col` is the first actual ALM target.
+- Receive and independently verify the fourth Packet A repair, then run another focused adversarial pass; commit/push Packet A only if no finding survives.
+- Cherry-pick terrain composition commit `1f9a4f95`, preserve both separated CMake registration blocks, and rerun Packet A plus terrain gates before pushing integration.
+- Review the calibration-only dual-18 implementation handoff; keep the physical MapOnly gate held until behavioral, positive-control, parser, and vendor-model prerequisites are truthful.
+- Implement Packet B from committed clean Packet A: generated fit top in QSF, zero virtual pins, clean-cone provenance, schema-v2 receipt/hierarchy attribution, post-map witnesses, and truthful DSP-census ingestion.
+- Then run only `shell_fit_top_clean_characterization`; use fresh fitted hierarchy to choose the first non-terrain ALM rewrite, considering the clean 3,824-ALM texjoin evidence alongside the conditional edgewalk candidate.
