@@ -7,7 +7,7 @@
 # not invent internal data arcs through atoms.  A generated .vo is optional
 # audit material, not route evidence.
 
-package require ::quartus::project 2.0
+package require ::quartus::project
 package require ::quartus::atoms 1.0
 
 proc fail {message} {

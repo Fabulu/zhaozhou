@@ -47,42 +47,42 @@ CASES = (
     ),
     Case(
         "explicit_uu",
-        "dual18_explicit_pair",
+        "dual18_explicit_pair_transaction",
         "DUAL18_TOP_EXPLICIT",
         (WRAPPER, DISCRIMINATOR),
         (0, 0, 0, 0),
     ),
     Case(
         "explicit_ss",
-        "dual18_explicit_pair",
+        "dual18_explicit_pair_transaction",
         "DUAL18_TOP_EXPLICIT",
         (WRAPPER, DISCRIMINATOR),
         (1, 1, 1, 1),
     ),
     Case(
         "explicit_su",
-        "dual18_explicit_pair",
+        "dual18_explicit_pair_transaction",
         "DUAL18_TOP_EXPLICIT",
         (WRAPPER, DISCRIMINATOR),
         (1, 0, 1, 0),
     ),
     Case(
         "explicit_us",
-        "dual18_explicit_pair",
+        "dual18_explicit_pair_transaction",
         "DUAL18_TOP_EXPLICIT",
         (WRAPPER, DISCRIMINATOR),
         (0, 1, 0, 1),
     ),
     Case(
         "explicit_uu_ss",
-        "dual18_explicit_pair",
+        "dual18_explicit_pair_transaction",
         "DUAL18_TOP_EXPLICIT",
         (WRAPPER, DISCRIMINATOR),
         (0, 0, 1, 1),
     ),
     Case(
         "explicit_su_us",
-        "dual18_explicit_pair",
+        "dual18_explicit_pair_transaction",
         "DUAL18_TOP_EXPLICIT",
         (WRAPPER, DISCRIMINATOR),
         (1, 0, 0, 1),
@@ -129,6 +129,15 @@ def tool_environment() -> tuple[dict[str, str], Path]:
         # winlibs C++ runtime are not an interchangeable ABI pair.
         prefixes.insert(0, winlibs)
         env["MAKE"] = "mingw32-make.exe"
+
+        # mingw32-make otherwise falls back to cmd.exe when this runner is
+        # launched from PowerShell.  Verilator's makefile needs sh and uname.
+        git_bash = Path(env.get("CLAUDE_CODE_GIT_BASH_PATH", ""))
+        git_usr_bin = git_bash.parent.parent / "usr" / "bin"
+        git_sh = git_usr_bin / "sh.exe"
+        if git_sh.is_file():
+            prefixes.append(git_usr_bin)
+            env["SHELL"] = str(git_sh)
     env["PATH"] = os.pathsep.join(str(path) for path in prefixes) + os.pathsep + env.get("PATH", "")
     return env, verilator
 

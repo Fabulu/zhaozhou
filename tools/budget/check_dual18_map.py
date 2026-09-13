@@ -312,7 +312,6 @@ def expected_qsf_text(spec: dict, absolute_sources: list[str]) -> str:
         lines.append('set_global_assignment -name SYSTEMVERILOG_FILE "%s"' % source)
     for macro in spec["macros"]:
         lines.append('set_global_assignment -name VERILOG_MACRO "%s"' % macro)
-    lines.append("set_instance_assignment -name VIRTUAL_PIN ON -to *")
     return "\n".join(lines) + "\n"
 
 
@@ -850,10 +849,8 @@ def inspect_effective_sources(config: dict, variant: str) -> list[str]:
 
     if variant == "explicit":
         required_routes = (
-            r"\.resulta_o\s*\(\s*prod_a_c\s*\)",
-            r"\.resultb_o\s*\(\s*prod_b_c\s*\)",
-            r"\bresulta_o\s*<=\s*prod_a_c\s*;",
-            r"\bresultb_o\s*<=\s*prod_b_c\s*;",
+            r"\.resulta_o\s*\(\s*resulta_o\s*\)",
+            r"\.resultb_o\s*\(\s*resultb_o\s*\)",
         )
         if not all(re.search(pattern, top_body) for pattern in required_routes):
             raise GateError("explicit source does not preserve two distinct live result routes")

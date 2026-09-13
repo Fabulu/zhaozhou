@@ -21,8 +21,8 @@
 using TestTop = Vdual18_inferred_pair;
 #define DUAL18_PAIR_TEST 1
 #elif defined(DUAL18_TOP_EXPLICIT)
-#include "Vdual18_explicit_pair.h"
-using TestTop = Vdual18_explicit_pair;
+#include "Vdual18_explicit_pair_transaction.h"
+using TestTop = Vdual18_explicit_pair_transaction;
 #define DUAL18_PAIR_TEST 1
 #elif defined(DUAL18_TOP_CE_MUTANT)
 #include "Vdual18_ce_ignore_mutant.h"

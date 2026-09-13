@@ -53,10 +53,10 @@ module zhao_dual18_mul #(
   cyclonev_mac #(
       .ax_width(18),
       .ay_scan_in_width(18),
-      .az_width(1),
+      .az_width(0),
       .bx_width(18),
       .by_width(18),
-      .bz_width(1),
+      .bz_width(0),
       .scan_out_width(1),
       .result_a_width(36),
       .result_b_width(36),
@@ -95,10 +95,8 @@ module zhao_dual18_mul #(
   ) u_dual18_mac (
       .ax(ax_i),
       .ay(ay_i),
-      .az(1'b0),
       .bx(bx_i),
       .by(by_i),
-      .bz(1'b0),
       .scanin(18'b0),
       .chainin(64'b0),
       .loadconst(1'b0),

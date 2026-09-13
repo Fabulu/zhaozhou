@@ -3,7 +3,8 @@
 //
 // The three mapping revisions select these tops independently:
 //   dual18_inferred_pair
-//   dual18_explicit_pair
+//   dual18_explicit_pair (mapped CDB lane witness)
+//   dual18_explicit_pair_transaction (transaction simulation)
 //   dual18_s32x18_exact
 //
 // A fourth top, dual18_s32xu12_projector, is functional-only.  It exercises the
@@ -120,8 +121,38 @@ module dual18_inferred_pair #(
 endmodule : dual18_inferred_pair
 
 
+// Route-only shell: no state lies between the mapped MAC lanes and the exact
+// IO_IBUF/IO_OBUF boundaries queried by Quartus CDB.  Transaction semantics
+// remain covered by dual18_explicit_pair below; this top answers only mapped
+// ownership and lane-route questions.
 (* preserve_hierarchy *)
-module dual18_explicit_pair #(
+module dual18_explicit_pair (
+    input  var logic [17:0] ax_i,
+    input  var logic [17:0] ay_i,
+    input  var logic [17:0] bx_i,
+    input  var logic [17:0] by_i,
+    output wire      [35:0] resulta_o,
+    output wire      [35:0] resultb_o
+);
+
+  zhao_dual18_mul #(
+      .AX_SIGNED(1'b0),
+      .AY_SIGNED(1'b0),
+      .BX_SIGNED(1'b0),
+      .BY_SIGNED(1'b0)
+  ) u_dual18 (
+      .ax_i(ax_i),
+      .ay_i(ay_i),
+      .bx_i(bx_i),
+      .by_i(by_i),
+      .resulta_o(resulta_o),
+      .resultb_o(resultb_o)
+  );
+endmodule : dual18_explicit_pair
+
+
+(* preserve_hierarchy *)
+module dual18_explicit_pair_transaction #(
     parameter bit AX_SIGNED = 1'b0,
     parameter bit AY_SIGNED = 1'b0,
     parameter bit BX_SIGNED = 1'b0,
@@ -186,7 +217,7 @@ module dual18_explicit_pair #(
       tag_o           <= operand_tag_q;
     end
   end
-endmodule : dual18_explicit_pair
+endmodule : dual18_explicit_pair_transaction
 
 
 (* preserve_hierarchy *)

@@ -50,6 +50,7 @@ MAP_PATH = Path(r"C:\intelFPGA_lite\17.0\quartus\bin64\quartus_map.exe")
 CAPTURE_SCRIPT = REPO / "tools" / "quartus" / "capture_dual18_atom_routes.tcl"
 INPUT_FAMILIES = {"AX": 18, "AY": 18, "BX": 18, "BY": 18}
 OUTPUT_FAMILIES = {"RESULTA": 36, "RESULTB": 36}
+OWNER_ATOM_TYPE = "MAC"
 ROUTE_VARIANTS = {
     "explicit": "dual18_explicit_pair",
     "lane-collapse-mutant": "dual18_lane_collapse_mutant",
@@ -478,10 +479,8 @@ def _validate_source_shapes_from_snapshots(
         raise GateError("route calibration top contains a helper multiplication")
     if variant == "explicit":
         required = (
-            r"\.resulta_o\s*\(\s*prod_a_c\s*\)",
-            r"\.resultb_o\s*\(\s*prod_b_c\s*\)",
-            r"\bresulta_o\s*<=\s*prod_a_c\s*;",
-            r"\bresultb_o\s*<=\s*prod_b_c\s*;",
+            r"\.resulta_o\s*\(\s*resulta_o\s*\)",
+            r"\.resultb_o\s*\(\s*resultb_o\s*\)",
         )
         if not all(re.search(pattern, top_body) for pattern in required):
             raise GateError("explicit source does not preserve two distinct live result routes")
@@ -899,7 +898,7 @@ def _validate_contract_and_invocation(
         or contract["databaseDirectories"] != ["db"]
         or contract["atomAdjacency"] != "exact-cdb-fanin-and-fanout-only"
         or contract["internalAtomArcs"] != "unavailable-hold"
-        or contract["requiredAtomType"] != "MAC_MULT"
+        or contract["requiredAtomType"] != OWNER_ATOM_TYPE
         or contract["inputPortFamilies"] != INPUT_FAMILIES
         or contract["outputPortFamilies"] != OUTPUT_FAMILIES
     ):
@@ -1124,39 +1123,44 @@ def _walk(start: Iterable[tuple[str, str, str]], adjacency: dict) -> set[tuple[s
     return seen
 
 
-def _signal_name_matches(node_name: str, signal: str, direction: str) -> bool:
-    suffix = "input" if direction == "oport" else "output"
-    return re.search(
-        r"(?:^|\|)" + re.escape(signal) + r"(?:~" + suffix + r")?$", node_name
-    ) is not None
-
-
 def _boundary_port(graph: AtomGraph, signal: str, direction: str) -> tuple[str, str, str]:
+    if direction == "oport":
+        node_type, port_type, node_name = "IO_IBUF", "O", signal + "~input"
+    else:
+        node_type, port_type, node_name = "IO_OBUF", "I", signal + "~output"
     node_ids = [
         node_id
-        for node_id, (node_type, _, name) in graph.nodes.items()
-        if node_type.upper() == "PIN"
-        and _signal_name_matches(name, signal, direction)
+        for node_id, (actual_type, _, name) in graph.nodes.items()
+        if actual_type.upper() == node_type and name == node_name
     ]
     matches = [
         ref for ref, port in graph.ports.items()
         if port.node in node_ids
         and port.direction == direction
-        and port.port_type == "PADIO"
+        and port.port_type == port_type
     ]
     if len(node_ids) != 1 or len(matches) != 1:
         raise HoldError(
-            "top PIN/PADIO boundary connectivity for %s is missing or ambiguous" % signal
+            "top %s/%s boundary connectivity for %s is missing or ambiguous"
+            % (node_type, port_type, signal)
         )
     return matches[0]
 
 
 def _family_ports(
-    graph: AtomGraph, owner: str, direction: str, family: str, width: int
+    graph: AtomGraph,
+    owner: str,
+    direction: str,
+    family: str,
+    width: int,
+    connected: dict[tuple[str, str, str], set[tuple[str, str, str]]],
 ) -> dict[int, tuple[str, str, str]]:
     matches = [
         port for port in graph.ports.values()
-        if port.node == owner and port.direction == direction and port.port_type == family
+        if port.node == owner
+        and port.direction == direction
+        and port.port_type == family
+        and connected.get(port.ref)
     ]
     by_index: dict[int, tuple[str, str, str]] = {}
     for port in matches:
@@ -1183,19 +1187,25 @@ def check_lane_graph(graph: AtomGraph) -> dict:
         raise HoldError("CDB graph contains encrypted atom ports")
     if graph.metadata.get("connectivity_complete") != "1":
         raise HoldError("CDB did not attest complete atom connectivity")
-    owners = [node for node, row in graph.nodes.items() if row[0].upper() == "MAC_MULT"]
+    owners = [
+        node for node, row in graph.nodes.items()
+        if row[0].upper() == OWNER_ATOM_TYPE
+    ]
     if len(owners) != 1:
-        raise DetectorFired("one-atom gate expected exactly one MAC_MULT owner, got %d" % len(owners))
+        raise DetectorFired(
+            "one-atom gate expected exactly one mapped %s owner, got %d"
+            % (OWNER_ATOM_TYPE, len(owners))
+        )
     owner = owners[0]
+    forward, reverse = graph.exact_edges()
     input_ports = {
-        family: _family_ports(graph, owner, "iport", family, width)
+        family: _family_ports(graph, owner, "iport", family, width, reverse)
         for family, width in INPUT_FAMILIES.items()
     }
     output_ports = {
-        family: _family_ports(graph, owner, "oport", family, width)
+        family: _family_ports(graph, owner, "oport", family, width, forward)
         for family, width in OUTPUT_FAMILIES.items()
     }
-    forward, reverse = graph.exact_edges()
     top_outputs = {
         family: {
             bit: _boundary_port(graph, "%s_o[%d]" % (family.lower(), bit), "iport")

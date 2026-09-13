@@ -4,20 +4,29 @@ Date: 2026-09-13
 
 ## Decision
 
-The least expensive truthful proof of two logical 18x18 products sharing one Cyclone V variable-precision DSP is **MapOnly plus a Quartus Compiler Database atom-netlist query**. A fitter run is not required to prove mapped lane ownership.
+The least expensive truthful proof that two logical 18x18 products share one Cyclone V variable-precision DSP is **MapOnly plus a Quartus Compiler Database atom-netlist query**. A fitter run is not required to prove mapped ownership and lane routing.
 
-The current calibration remains **HOLD**. Four checker-owned `quartus_map` attempts launched from a clean `fcdcd230` clone at 08:03 on 2026-09-13, but all failed before mapped-database completion or CDB capture because the generated runtime paths exhausted Quartus 17's 260-character internal-path limit. No genuine atom-database witness exists, no production multiplier has migrated, and no DSP saving is banked.
+The implementation now passes that mapped-route question in a **genuine but dirty diagnostic run**. The same run demonstrates all three required mapped positive controls. It is not promotable evidence: the repaired primitive boundary, route-only top, Tcl capture, and checker bytes are uncommitted. A fresh four-variant run from the next clean pushed commit is still required. No production multiplier has migrated and no DSP saving is banked.
 
-## Installed Quartus 17 capability
+## Installed Quartus 17 capability and observed database shape
 
-Quartus Prime Lite 17.0.2 Build 602 exposes the required post-map database through `quartus_cdb` and `::quartus::atoms 1.0`:
+Quartus Prime Lite 17.0.2 Build 602 exposes the post-map database through `quartus_cdb` and `::quartus::atoms 1.0`:
 
 - `C:/intelFPGA_lite/17.0/quartus/common/tcl/internal/init/atoms.advanced.hlp:19-32` documents Compiler Atom Netlist access from `quartus_cdb`.
 - `C:/intelFPGA_lite/17.0/quartus/common/tcl/internal/init/atoms.cmds.advanced.hlp:7-47,70-88` documents `read_atom_netlist -type map` after successful `quartus_map`.
-- The same command reference documents `get_atom_nodes` at lines 330-420, `get_atom_node_info -key NAME|TYPE` at 631-721, `get_atom_oport_by_type` at 975-1054, `get_atom_port_info -key fanout|type|literal_index` at 1194-1304, and `write_atom_netlist -verilog -file ...` at 96-200.
-- The installed atom database exposes the exact port-type names `AX`, `AY`, `BX`, `BY`, `RESULTA`, and `RESULTB`; installed package documentation names `MAC_MULT` as a legal basic atom type.
+- The same reference documents `get_atom_nodes`, node name/type queries, typed ports, exact fanin/fanout, and optional Verilog export.
 
-These APIs can inspect the genuine mapped graph. A generated Verilog/VQM dump may be retained for audit, but parsing its text is not route proof.
+Genuine Quartus output corrected several earlier assumptions:
+
+- the mapped `cyclonev_mac` owner node type is `MAC`, not `MAC_MULT`;
+- its live operand ports are `AX/AY/BX/BY[0:17]`;
+- its live logical results are `RESULTA/RESULTB[0:35]`;
+- CDB also exposes unconnected physical-width tails `RESULTA[36:63]` and `RESULTB[36]`;
+- top inputs enter through `IO_IBUF` node output port `O`, with names such as `ax_i[0]~input`;
+- top outputs leave through `IO_OBUF` node input port `I`, with names such as `resulta_o[0]~output`;
+- physical `IO_PAD` nodes are separate from those logical mapped boundaries.
+
+The checker therefore ignores only unconnected physical-width tails and rejects any live out-of-range tail. It requires exact `IO_IBUF/O` and `IO_OBUF/I` boundaries rather than synthetic `PIN/PADIO` identities.
 
 ## Pre-named gate
 
@@ -25,66 +34,96 @@ Stage:
 
 `dual18_postmap_lane_route_witness`
 
-Proposed implementation files:
+Implementation files:
 
 - `tools/quartus/capture_dual18_atom_routes.tcl`
 - `tools/budget/check_dual18_atom_routes.py`
 
-For each existing content-addressed calibration revision, run from its generated project directory:
+Each invocation creates an exclusive short workspace below `<anchor-parent>/d18_runs/`, copies the immutable generated project there, runs canonical checker-owned `quartus_map`, snapshots the fresh map database, and only then runs canonical `quartus_cdb`. The full nonce remains in the external anchor and receipts; the short leaf is deterministically bound to the capture ID and a fresh 32-byte run token.
 
-```text
-C:/intelFPGA_lite/17.0/quartus/bin64/quartus_map.exe <revision>
-C:/intelFPGA_lite/17.0/quartus/bin64/quartus_cdb.exe \
-  -t <repo>/tools/quartus/capture_dual18_atom_routes.tcl \
-  <project> <revision> \
-  output_files/<revision>.dual18.atom.tsv \
-  output_files/<revision>.post_map.vo
-```
-
-The Tcl entry point must use the mapped database, not source elaboration:
+The CDB entry point uses the mapped database, not source elaboration:
 
 ```tcl
-package require ::quartus::project 2.0
+package require ::quartus::project
 package require ::quartus::atoms 1.0
 project_open -error_on_incompatible_database -revision $revision $project
 read_atom_netlist -type map
 ```
 
-The final checker should invoke the canonical `quartus_cdb.exe` itself in a fresh anchored output directory. It must reject pre-existing or caller-supplied route artifacts.
+The unversioned project-package request is deliberate. `quartus_cdb` has already loaded `::quartus::project 6.0`; requesting `2.0` produces a package-version conflict.
 
 ## Acceptance contract
 
 All of these conditions are required:
 
-1. Existing report gates show exactly one DSP block, exactly one `Two Independent 18x18` mode row, and exactly two logical multipliers.
-2. The genuine post-map atom database contains exactly one mapped atom node owning both `RESULTA` and `RESULTB`.
-3. Every `RESULTA[0:35]` and `RESULTB[0:35]` port exists.
-4. The 72 result-port identities are pairwise lane-correct and each port has live mapped fanout.
-5. Graph traversal proves, for every bit, that logical `resulta_o[i]` originates only at that atom's `RESULTA[i]` and logical `resultb_o[i]` originates only at its `RESULTB[i]`.
-6. The same mapped atom owns the expected `AX/AY/BX/BY[0:17]` operand-port families, and their graph cones agree with the four top operands.
-7. The TSV, optional atom Verilog dump, CDB stdout/stderr, Quartus version, canonical paths, timestamps, and hashes are bound into the existing content-addressed revision, manifest, and external invocation anchor.
-8. Missing, encrypted, ambiguous, or unavailable atom connectivity yields **HOLD**. Source regexes, inferred source wiring, ordinary `.map.rpt` text, and synthetic fixtures may not substitute for mapped graph evidence.
+1. The genuine map report has exactly one DSP block, one `Two Independent 18x18` mode row, and exactly two fixed-point logical multiplier rows.
+2. The mapped graph contains exactly one `MAC` owner.
+3. That owner has live exact `AX/AY/BX/BY[0:17]` and `RESULTA/RESULTB[0:35]` families.
+4. Unconnected wider physical ports may exist, but any connected out-of-range family member rejects.
+5. Every top input bit traverses exact CDB adjacency from its `IO_IBUF/O` boundary to only the corresponding owner operand bit.
+6. Every owner result bit traverses exact CDB adjacency to only the corresponding `IO_OBUF/I` top output bit.
+7. No invented internal atom arcs are permitted. An unexposed sequential or combinational internal arc yields **HOLD**.
+8. The QPF/QSF, sources, preparation, fresh map logs/reports/summaries/database, CDB TSV/log/optional post-map Verilog, tool executables, timestamps, hashes, manifest, invocation nonce, and external anchor are bound in the receipt.
+9. Synthetic fixtures permanently remain nonphysical and cannot satisfy the gate.
 
-## Required real controls
+## Route-only top versus transaction testing
 
-Every detector control must run through genuine `quartus_map` plus the CDB atom query. Parser fixtures test mechanics only.
+The original explicit top registered operands and results. Quartus 17 CDB does not expose arbitrary internal register D-to-Q data arcs, so exact top-boundary traversal stopped honestly at those registers.
 
-1. **Two-primitives control.** Map committed `tests/mutants/dual18_two_primitives_mutant.sv`; the atom query must expose two DSP owners and the one-block gate must reject it.
-2. **Lane-collapse control.** Add a renamed committed mutant that drives both logical outputs from `RESULTA` and leaves `RESULTB` dead. The mapped origin/live-port checks must fire.
-3. **Lane-swap control.** Add a renamed committed mutant that crosses the two result lanes while leaving operands unchanged. The per-logical-output origin checks must fire.
+The calibration now separates the questions:
 
-The control driver passes only when each real map/CDB run produces the expected rejection. It must not accept hand-authored atom fixtures as physical evidence.
+- `dual18_explicit_pair` is a combinational route-only top for MapOnly+CDB;
+- `dual18_explicit_pair_transaction` retains reset, CE, valid, tag, stall, and arithmetic behavior for Verilator.
 
-## First execution result: path-boundary HOLD
+This is not a bypass of transaction checking. The full direct behavioral corpus still exercises the registered transaction top, including backend-selection, CE-hold, and lane-swap positive controls. The mapped gate answers only ownership and route identity.
 
-A checker-owned four-variant attempt did launch from the clean `fcdcd230` clone at 08:03 on 2026-09-13. It did not reach the acceptance question:
+## Required genuine mapped controls
 
-- lane-collapse and lane-swap terminated in Quartus FIO with an internal compiled-partition path of exactly 260 characters;
-- two-primitives terminated on the same boundary at 262 characters;
-- explicit terminated with `Error (114012)` while opening its generated runtime database directory;
-- no variant reached CDB, produced an atom-route TSV, or emitted an accepted receipt.
+Every control runs through fresh canonical `quartus_map` plus CDB:
 
-The failed workspaces and raw `quartus_map` logs remain under `C:/programmieren/zencrifice/zhaozhou-dual18-map-20260913/build-budget/calib/dual18/`. They establish only that the full random run token was embedded too deeply for Quartus 17 on Windows. The orchestration must retain the full nonce in its immutable anchor while deriving an exclusive short runtime leaf and must reject any predicted internal path without explicit margin below 260 before retrying the same named gate.
+1. **Two-primitives mutant:** must expose two `MAC` owners and fire the one-owner detector.
+2. **Lane-collapse mutant:** drives both logical outputs from RESULTA while retaining RESULTB on an independently observable wrong sink; must fire a result-origin detector.
+3. **Lane-swap mutant:** crosses RESULTA and RESULTB while leaving operands unchanged; must fire a per-output origin detector.
+
+The orchestration passes a control only when the genuine mapped graph produces the expected rejection.
+
+## Troubleshooting chronology
+
+None of these attempts is promotable:
+
+| root | source state | result | use |
+|---|---|---|---|
+| original long clean-clone root at `fcdcd230` | clean pushed | Quartus internal paths reached 260/262 characters before CDB | failed path-boundary evidence only |
+| `C:/d18-fd50a17e` | clean pushed `fd50a17e` | `COEFSELA` illegally connected while internal coefficients disabled | failed primitive-interface evidence only |
+| `C:/d18-c15dac6b` | clean pushed `c15dac6b` | `AZ/BZ` connected with illegal zero-width operand-source configuration | failed primitive-interface evidence only |
+| `C:/d18-diag1` | dirty diagnostic | Map passed; CDB rejected `::quartus::project` 2.0/6.0 conflict | troubleshooting only |
+| `C:/d18-diag2` | dirty diagnostic | one DSP mapped; CDB owner was `MAC`, disproving assumed `MAC_MULT` | troubleshooting only |
+| `C:/d18-diag3` | dirty diagnostic | real IO buffer identities observed; registered D-to-Q route remained unexposed | troubleshooting only |
+| `C:/d18-diag4` | dirty diagnostic | unsupported input-port name query made connectivity unavailable | troubleshooting only |
+| `C:/d18-diag5` | dirty diagnostic | route-only explicit gate passed and all three real controls fired | decisive diagnostic, still not promotable |
+
+The primitive repair disables `az_width` and `bz_width` and leaves `AZ`, `BZ`, `COEFSELA`, and `COEFSELB` unconnected, matching Quartus 17's legal `m18x18_full` interface.
+
+## Latest genuine diagnostic result
+
+`C:/d18-diag5` was generated from the current dirty working tree under one external anchor:
+
+```text
+anchor SHA-256:   47caf02922cc8fd42261a4dc5d87d03f136a359df7172434be0865f282ff4395
+invocation nonce: a54b9d92e0893aa5ac021e6e19fd321fc7d9fd07cf4d8558f19fc4c281440afc
+manifest SHA-256: 21d2eca4b030de7761c4846096d2247928593d82ba817ef090d8856d6921a5a3
+```
+
+Results:
+
+| variant | map result | CDB detector/result |
+|---|---|---|
+| explicit pair | 1 DSP; 2 fixed multipliers; 1 independent mode | **route gate PASS**; one `MAC`; 72 operand bits and 72 result bits checked |
+| lane-collapse mutant | 1 DSP | detector fired: `resultb_o[0]` originated at RESULTA rather than RESULTB |
+| lane-swap mutant | 1 DSP | detector fired: `resulta_o[0]` originated at RESULTB rather than RESULTA |
+| two-primitives mutant | 2 DSPs | detector fired: expected one mapped `MAC`, got two |
+
+All TSVs, optional post-map Verilog files, raw logs/reports/summaries, and map databases remain below that external diagnostic root. The explicit orchestration result is still overall `status=hold` because encrypted arithmetic semantics are separately unavailable. More importantly, the entire diagnostic set is dirty and may not be promoted. The next step is commit/push, regeneration under a new anchor from that exact clean commit, and serial repetition of all four variants.
 
 ## Evidence boundaries
 
@@ -101,21 +140,19 @@ If final placement is later required, repeat the atom query with `read_atom_netl
 
 The official Cyclone V functional model chain is present, but the simulator needed to execute it is not installed:
 
-- `C:/intelFPGA_lite/17.0/quartus/eda/sim_lib/cyclonev_atoms.v` declares `cyclonev_mac` and delegates its behavior to `cyclonev_mac_encrypted`;
-- `sim_lib/mentor/cyclonev_atoms_ncrypt.v` and `sim_lib/aldec/cyclonev_atoms_ncrypt.v` are the vendor's protected Mentor and Aldec payloads;
-- `sim_lib_info_pkg.tcl` selects one protected payload plus `cyclonev_atoms.v` into `cyclonev_ver`, with the corresponding Altera support libraries;
-- no `vsim.exe`, `vlog.exe`, `vlib.exe`, `vsimsa.exe`, `asim.exe`, `ncsim.exe`, or `vcs.exe`, compatible simulator tree, or local license file was found on this machine.
+- `C:/intelFPGA_lite/17.0/quartus/eda/sim_lib/cyclonev_atoms.v` declares `cyclonev_mac` and delegates behavior to `cyclonev_mac_encrypted`;
+- `sim_lib/mentor/cyclonev_atoms_ncrypt.v` and `sim_lib/aldec/cyclonev_atoms_ncrypt.v` are protected Mentor and Aldec payloads;
+- no compatible licensed ModelSim, Questa, or Aldec simulator is installed.
 
-`quartus_sim.exe` is not a substitute. It runs Quartus map-generated VWF functional netlists and is not a supported IEEE-1735 HDL decryptor. Map/CDB evidence and a generated `.vo`/`.sdo` timing flow likewise do not prove the primitive's arithmetic semantics.
-
-The future prerequisite is a licensed ModelSim, Questa, or Aldec installation. Compile the official libraries with `quartus_sh --simlib_comp -family cyclonev -language verilog -tool modelsim`, then run one pure-SystemVerilog corpus against both `ZHAO_DUAL18_BEHAVIORAL` and `ZHAO_DUAL18_CYCLONEV`. The corpus must cover UU, SS, SU, US, asymmetric UU/SS and SU/US lanes, reset priority, CE stalls, tags, and independent RESULTA/RESULTB comparison. Until that executable differential exists, the encrypted-model gate remains **HOLD**.
+`quartus_sim.exe` is not a supported IEEE-1735 HDL decryptor and does not close this gate. The future differential must run the same UU, SS, SU, US, asymmetric, reset, CE, tag, and independent-lane corpus against both backends. Until then, arithmetic semantics remain **HOLD**.
 
 ## Current status
 
-- Quartus capability path: **verified from the installed 17.0.2 API and database**.
-- Genuine mapped route witness: **HOLD — four clean-clone map attempts failed before CDB on the Quartus 17 path-length boundary; no route TSV or receipt was produced**.
+- Genuine dirty diagnostic mapped route: **PASS**, not promotable.
+- Three genuine dirty diagnostic mapped positive controls: **FIRED**, not promotable.
+- Clean pushed four-variant mapped route packet: **PENDING**.
 - Final placement witness: **HOLD**.
-- Encrypted vendor-model differential simulation: **HOLD — protected payloads are installed, but no compatible decrypting simulator is installed**.
+- Encrypted vendor-model differential: **HOLD**.
 - Production migration or DSP saving: **none**.
 
 Official secondary references:

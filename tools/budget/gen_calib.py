@@ -367,7 +367,7 @@ def _dual18_route_capture_contract():
         "databaseDirectories": ["db"],
         "atomAdjacency": "exact-cdb-fanin-and-fanout-only",
         "internalAtomArcs": "unavailable-hold",
-        "requiredAtomType": "MAC_MULT",
+        "requiredAtomType": "MAC",
         "inputPortFamilies": {"AX": 18, "AY": 18, "BX": 18, "BY": 18},
         "outputPortFamilies": {"RESULTA": 36, "RESULTB": 36},
     }
@@ -436,7 +436,6 @@ def emit_dual18_map_revisions(outdir):
                              row["absolutePath"])
         for macro in spec["macros"]:
             qsf_lines.append('set_global_assignment -name VERILOG_MACRO "%s"' % macro)
-        qsf_lines.append("set_instance_assignment -name VIRTUAL_PIN ON -to *")
         qsf_text = "\n".join(qsf_lines) + "\n"
         qsf_sha256 = hashlib.sha256(qsf_text.encode("ascii")).hexdigest()
 

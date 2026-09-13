@@ -18,10 +18,12 @@ DUAL18_RTL = REPO / "fpga" / "rtl" / "common" / "zhao_dual18_mul.sv"
 
 
 class Dual18CalibrationGenerationTest(unittest.TestCase):
-    def test_unused_coefficient_select_ports_are_unconnected(self) -> None:
+    def test_unused_preadder_and_coefficient_ports_are_disabled(self) -> None:
         rtl = DUAL18_RTL.read_text(encoding="utf-8")
-        self.assertNotIn(".coefsela(", rtl)
-        self.assertNotIn(".coefselb(", rtl)
+        self.assertIn(".az_width(0)", rtl)
+        self.assertIn(".bz_width(0)", rtl)
+        for port in ("az", "bz", "coefsela", "coefselb"):
+            self.assertNotIn(f".{port}(", rtl)
 
     def generate(self, out: Path) -> str:
         completed = subprocess.run(
@@ -165,10 +167,13 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
                 qsf = qsf_path.read_text(encoding="ascii")
                 self.assertIn('PROJECT_REVISION = "%s"' % revision, qpf)
                 self.assertEqual(config["stage"], "map-only")
+                self.assertNotIn("VIRTUAL_PIN", qsf)
+                if base_revision == "dual18_explicit_pair":
+                    self.assertEqual(config["top"], "dual18_explicit_pair")
                 route_contract = config["routeCaptureContract"]
                 self.assertEqual(route_contract["gate"], "dual18_postmap_lane_route_witness")
                 self.assertFalse(route_contract["syntheticFixturesPhysical"])
-                self.assertEqual(route_contract["requiredAtomType"], "MAC_MULT")
+                self.assertEqual(route_contract["requiredAtomType"], "MAC")
                 self.assertEqual(
                     route_contract["inputPortFamilies"],
                     {"AX": 18, "AY": 18, "BX": 18, "BY": 18},

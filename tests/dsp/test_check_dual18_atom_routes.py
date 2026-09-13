@@ -77,10 +77,10 @@ def synthetic_graph(
         "meta\tgenerated_unix_seconds\t%d" % now,
         "meta\toptional_vo_status\tunavailable",
         "meta\tconnectivity_complete\t1",
-        "node\tatom0\tMAC_MULT\t0\tu_dual18",
+        "node\tatom0\tMAC\t0\tu_dual18",
     ]
     if kind == "two-atom":
-        lines.append("node\tatom1\tMAC_MULT\t0\tu_dual18_second")
+        lines.append("node\tatom1\tMAC\t0\tu_dual18_second")
 
     for family, width in routes.INPUT_FAMILIES.items():
         for bit in range(width):
@@ -88,12 +88,12 @@ def synthetic_graph(
             signal = "%s_i[%d]" % (family.lower(), bit)
             atom_port = "%s_%d" % (family.lower(), bit)
             node_type = (
-                "LUT" if kind == "boundary-node-not-pin" and family == "AX" and bit == 0
-                else "PIN"
+                "LUT" if kind == "boundary-node-not-ibuf" and family == "AX" and bit == 0
+                else "IO_IBUF"
             )
             port_type = (
-                "DATAOUT" if kind == "boundary-port-not-padio" and family == "AX" and bit == 0
-                else "PADIO"
+                "DATAOUT" if kind == "boundary-port-not-o" and family == "AX" and bit == 0
+                else "O"
             )
             lines.append("node\t%s\t%s\t0\t%s~input" % (pin, node_type, signal))
             lines.append(port_row(pin, "oport", "pad", port_type, 0, signal))
@@ -126,8 +126,8 @@ def synthetic_graph(
         for bit in range(width):
             pin = "%s_pin_%d" % (logical_family.lower(), bit)
             signal = "%s_o[%d]" % (logical_family.lower(), bit)
-            lines.append("node\t%s\tPIN\t0\t%s~output" % (pin, signal))
-            lines.append(port_row(pin, "iport", "pad", "PADIO", 0))
+            lines.append("node\t%s\tIO_OBUF\t0\t%s~output" % (pin, signal))
+            lines.append(port_row(pin, "iport", "pad", "I", 0))
             if omitted == (logical_family, bit):
                 continue
             source_family = logical_family
@@ -158,8 +158,8 @@ def synthetic_graph(
         for bit in range(routes.OUTPUT_FAMILIES["RESULTB"]):
             pin = "wrong_resultb_pin_%d" % bit
             signal = "resultb_wrong_sink_o[%d]" % bit
-            lines.append("node\t%s\tPIN\t0\t%s~output" % (pin, signal))
-            lines.append(port_row(pin, "iport", "pad", "PADIO", 0))
+            lines.append("node\t%s\tIO_OBUF\t0\t%s~output" % (pin, signal))
+            lines.append(port_row(pin, "iport", "pad", "I", 0))
             lines += edge_rows("atom0", "resultb_%d" % bit, pin, "pad")
 
     if kind == "hidden":
@@ -343,7 +343,7 @@ class Dual18AtomRouteTest(unittest.TestCase):
         expected = {
             "collapsed": "origin mismatch",
             "swapped": "origin mismatch",
-            "two-atom": "exactly one MAC_MULT",
+            "two-atom": "exactly one mapped MAC",
         }
         for kind, message in expected.items():
             with self.subTest(kind=kind):
@@ -357,18 +357,36 @@ class Dual18AtomRouteTest(unittest.TestCase):
         self.assertEqual(result["mechanicalStatus"], "reject")
         self.assertIn("cardinality/index mismatch", result["detector"])
 
+    def test_unconnected_physical_width_tail_is_ignored_but_live_tail_fires(self) -> None:
+        extra_port = port_row("atom0", "oport", "resulta_36", "RESULTA", 36)
+        unconnected = synthetic_graph() + extra_port + "\n"
+        self.assertEqual(
+            routes.evaluate_synthetic(unconnected)["mechanicalStatus"], "pass"
+        )
+
+        connected = unconnected + "\n".join(
+            [
+                "node\textra_sink\tPIN\t0\textra_result~output",
+                port_row("extra_sink", "iport", "pad", "PADIO", 0),
+                *edge_rows("atom0", "resulta_36", "extra_sink", "pad"),
+            ]
+        ) + "\n"
+        result = routes.evaluate_synthetic(connected)
+        self.assertEqual(result["mechanicalStatus"], "reject")
+        self.assertIn("cardinality/index mismatch", result["detector"])
+
     def test_hidden_or_unavailable_connectivity_is_hold_not_pass(self) -> None:
         result = routes.evaluate_synthetic(synthetic_graph("hidden"))
         self.assertEqual(result["mechanicalStatus"], "unavailable")
         self.assertIn("unavailable connectivity", result["holds"][0])
 
-    def test_non_pin_or_non_padio_named_atom_cannot_masquerade_as_boundary(self) -> None:
-        for kind in ("boundary-node-not-pin", "boundary-port-not-padio"):
+    def test_non_iobuf_or_wrong_io_port_cannot_masquerade_as_boundary(self) -> None:
+        for kind in ("boundary-node-not-ibuf", "boundary-port-not-o"):
             with self.subTest(kind=kind):
                 result = routes.evaluate_synthetic(synthetic_graph(kind))
                 self.assertEqual(result["mechanicalStatus"], "unavailable")
                 self.assertEqual(result["routeGateStatus"], "hold")
-                self.assertIn("PIN/PADIO boundary", result["holds"][0])
+                self.assertRegex(result["holds"][0], r"top IO_[IO]BUF/")
 
     def test_one_sided_fanin_fanout_disagreement_is_hold(self) -> None:
         result = routes.evaluate_synthetic(synthetic_graph("one-sided"))
@@ -387,7 +405,7 @@ class Dual18AtomRouteTest(unittest.TestCase):
         old = synthetic_graph().replace("dual18-atom-route-tsv\t2", "dual18-atom-route-tsv\t1")
         with self.assertRaisesRegex(routes.GateError, "schema"):
             routes.parse_atom_tsv(old)
-        duplicate = synthetic_graph() + "node\tatom0\tMAC_MULT\t0\tdup\n"
+        duplicate = synthetic_graph() + "node\tatom0\tMAC\t0\tdup\n"
         with self.assertRaisesRegex(routes.GateError, "duplicate|malformed"):
             routes.parse_atom_tsv(duplicate)
 
@@ -778,6 +796,8 @@ class Dual18AtomRouteTest(unittest.TestCase):
 
     def test_tcl_capture_contract_is_static_exact_and_read_only(self) -> None:
         text = routes.CAPTURE_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("package require ::quartus::project\n", text)
+        self.assertNotRegex(text, r"package require ::quartus::project\s+[0-9]")
         self.assertIn("project_open -error_on_incompatible_database", text)
         self.assertIn("read_atom_netlist -type map", text)
         self.assertIn("get_atom_port_info", text)
