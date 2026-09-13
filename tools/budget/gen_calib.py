@@ -100,6 +100,93 @@ DUAL18_CDB_PATH = r"C:\intelFPGA_lite\17.0\quartus\bin64\quartus_cdb.exe"
 DUAL18_MAP_PATH = r"C:\intelFPGA_lite\17.0\quartus\bin64\quartus_map.exe"
 DUAL18_CDB_VERSION = "17.0.2 Build 602"
 
+# Quartus 17 uses a 260-character internal path ceiling on Windows.  Its longest
+# retained MapOnly path is a compiled-partition artifact below the runtime
+# workspace.  Keep a forty-character safety margin, and put only a compact
+# digest of the fresh 32-byte token in the directory leaf.  Collision safety is
+# supplied by checker-owned exclusive mkdir plus retry, not by weakening the
+# token carried in the receipt.
+DUAL18_QUARTUS_HARD_PATH_LIMIT = 260
+DUAL18_QUARTUS_PATH_MARGIN = 40
+DUAL18_QUARTUS_INTERNAL_PATH_LIMIT = (
+    DUAL18_QUARTUS_HARD_PATH_LIMIT - DUAL18_QUARTUS_PATH_MARGIN
+)
+DUAL18_RUNTIME_LEAF_PREFIX = "d18_"
+DUAL18_RUNTIME_LEAF_DIGEST_BYTES = 6  # 48 bits -> 8 unpadded base64url chars
+DUAL18_RUNTIME_CREATE_ATTEMPTS = 32
+DUAL18_RUNTIME_HASH_DOMAIN = "dual18-map-cdb-workspace-v1"
+DUAL18_RUNTIME_PARENT_NAME = "d18_runs"
+DUAL18_COMPILED_PARTITION_DIR = "incremental_db/compiled_partitions"
+# Longest retained Quartus-17 compiled-partition artifact in the local smoke
+# suite.  It is longer than the ordinary .root_partition.map.hdb and therefore
+# is the conservative real filename the path gate models.
+DUAL18_COMPILED_PARTITION_SUFFIX = ".root_partition.map.hbdb.hb_info"
+
+
+def _dual18_runtime_path_policy():
+    return {
+        "schemaVersion": 1,
+        "freshRunTokenBytes": 32,
+        "workspaceLeafPrefix": DUAL18_RUNTIME_LEAF_PREFIX,
+        "workspaceLeafHash": "sha256",
+        "workspaceLeafHashDomain": DUAL18_RUNTIME_HASH_DOMAIN,
+        "workspaceLeafHashInputs": ["captureId", "freshRunToken"],
+        "workspaceLeafDigestBytes": DUAL18_RUNTIME_LEAF_DIGEST_BYTES,
+        "exclusiveCreateMaxAttempts": DUAL18_RUNTIME_CREATE_ATTEMPTS,
+        "anchoredWorkspaceParentName": DUAL18_RUNTIME_PARENT_NAME,
+        "quartusHardPathLimit": DUAL18_QUARTUS_HARD_PATH_LIMIT,
+        "quartusHardPathMargin": DUAL18_QUARTUS_PATH_MARGIN,
+        "quartusInternalPathLimit": DUAL18_QUARTUS_INTERNAL_PATH_LIMIT,
+        "longestInternalPathKind": "compiled-partition-artifact",
+        "compiledPartitionArtifactSuffix": DUAL18_COMPILED_PARTITION_SUFFIX,
+        "longestInternalPathTemplate": (
+            DUAL18_COMPILED_PARTITION_DIR
+            + "/{revision}"
+            + DUAL18_COMPILED_PARTITION_SUFFIX
+        ),
+    }
+
+
+def _dual18_path_preflight(workspace_parent, revision):
+    """Compute and enforce the longest expected compiled-partition file path."""
+    policy = _dual18_runtime_path_policy()
+    digest_chars = DUAL18_RUNTIME_LEAF_DIGEST_BYTES * 4 // 3
+    representative_leaf = DUAL18_RUNTIME_LEAF_PREFIX + ("X" * digest_chars)
+    relative = "%s/%s%s" % (
+        DUAL18_COMPILED_PARTITION_DIR,
+        revision,
+        DUAL18_COMPILED_PARTITION_SUFFIX,
+    )
+    expected = os.path.abspath(
+        os.path.join(workspace_parent, representative_leaf, *relative.split("/"))
+    ).replace(os.sep, "/")
+    record = {
+        "schemaVersion": 1,
+        "limit": DUAL18_QUARTUS_INTERNAL_PATH_LIMIT,
+        "quartusHardPathLimit": DUAL18_QUARTUS_HARD_PATH_LIMIT,
+        "quartusHardPathMargin": DUAL18_QUARTUS_PATH_MARGIN,
+        "workspaceLeafLength": len(representative_leaf),
+        "longestInternalRelativePath": relative,
+        "longestExpectedPath": expected,
+        "longestExpectedPathLength": len(expected),
+    }
+    if record["longestExpectedPathLength"] > record["limit"]:
+        raise RuntimeError(
+            "dual18 Quartus internal path preflight exceeds %d characters: "
+            "%s (%d)" % (
+                record["limit"],
+                record["longestExpectedPath"],
+                record["longestExpectedPathLength"],
+            )
+        )
+    if (
+        record["limit"]
+        != policy["quartusHardPathLimit"] - policy["quartusHardPathMargin"]
+    ):
+        raise RuntimeError("dual18 Quartus path policy lost its 40-character margin")
+    return record
+
+
 DUAL18_REVISIONS = [
     {
         "revision": "dual18_inferred_pair",
@@ -256,7 +343,7 @@ def _dual18_route_capture_contract():
     if not os.path.isfile(script):
         raise FileNotFoundError("dual18 atom-route capture script is missing: %s" % script)
     return {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "gate": "dual18_postmap_lane_route_witness",
         "artifactClass": "genuine-quartus-cdb-post-map",
         "syntheticFixturesPhysical": False,
@@ -268,6 +355,7 @@ def _dual18_route_capture_contract():
             "absolutePath": script.replace(os.sep, "/"),
             "sha256": _sha256_file(script),
         },
+        "runtimePathPolicy": _dual18_runtime_path_policy(),
         "mapArgumentOrder": ["project"],
         "tclArgumentOrder": [
             "project",
@@ -300,6 +388,11 @@ def emit_dual18_map_revisions(outdir):
     if os.path.isdir(root):
         shutil.rmtree(root)
     os.makedirs(root)
+    # Runtime Map/CDB workspaces share this short, anchor-parent-owned directory.
+    # It deliberately survives regeneration so genuine raw artifacts remain
+    # available; exclusive nonce-derived leaves prevent any stale reuse.
+    runtime_root = os.path.join(outdir, DUAL18_RUNTIME_PARENT_NAME)
+    os.makedirs(runtime_root, exist_ok=True)
     emitted = []
     vendor_evidence = _dual18_vendor_evidence()
     route_capture_contract = _dual18_route_capture_contract()
@@ -382,6 +475,8 @@ def emit_dual18_map_revisions(outdir):
         if os.listdir(output_dir):
             raise RuntimeError("dual18 output directory was not empty at preparation")
 
+        quartus_path_preflight = _dual18_path_preflight(runtime_root, revision)
+
         qpf_path = os.path.join(revision_dir, revision + ".qpf")
         with open(qpf_path, "w", encoding="ascii", newline="\n") as fh:
             fh.write('QUARTUS_VERSION = "17.0"\n')
@@ -406,20 +501,22 @@ def emit_dual18_map_revisions(outdir):
                 ensure_ascii=True,
             ).encode("ascii")
         ).hexdigest()
-        # Preserve 256 bits of fresh-run entropy without needlessly exhausting
-        # Quartus 17's Windows path budget (urlsafe base64 encodes 32 bytes in
-        # 43 characters; the capture identity remains bound in this prefix).
-        workspace_prefix = "d18_%s_" % capture_id[:8]
+        # The full 32-byte run token remains receipt evidence.  Only a 48-bit
+        # domain-separated digest, also bound to capture_id, becomes path text.
+        # Exclusive directory creation with retry handles the digest collision
+        # case without ever reusing a pre-existing workspace.
         invocation = {
-            "schemaVersion": 2,
+            "schemaVersion": 3,
             "gate": "dual18_postmap_lane_route_witness",
             "artifactClass": "genuine-quartus-cdb-post-map",
             "synthetic": False,
             "contentWitness": content_witness,
             "captureId": capture_id,
-            "workspaceParent": os.path.abspath(output_dir).replace(os.sep, "/"),
-            "freshWorkspacePrefix": workspace_prefix,
+            "workspaceParent": os.path.abspath(runtime_root).replace(os.sep, "/"),
+            "freshWorkspacePrefix": DUAL18_RUNTIME_LEAF_PREFIX,
             "freshRunTokenBytes": 32,
+            "runtimePathPolicy": route_capture_contract["runtimePathPolicy"],
+            "quartusInternalPathPreflight": quartus_path_preflight,
             "projectFileName": os.path.basename(qpf_path),
             "settingsFileName": os.path.basename(qsf_path),
             "quartusMap": route_capture_contract["quartusMap"],
@@ -472,7 +569,10 @@ def emit_dual18_map_revisions(outdir):
             "expectedMapSummary": "output_files/%s.map.summary" % revision,
             "routeCaptureId": capture_id,
             "routeInvocation": "atom_route_invocation.json",
-            "freshRuntimeWorkspacePrefix": "output_files/%s" % workspace_prefix,
+            "freshRuntimeWorkspacePrefix": (
+                DUAL18_RUNTIME_PARENT_NAME + "/" + DUAL18_RUNTIME_LEAF_PREFIX
+            ),
+            "quartusInternalPathPreflight": quartus_path_preflight,
             "checkerMustRunFreshMap": True,
         }
         preparation_path = os.path.join(revision_dir, "run_preparation.json")
@@ -507,7 +607,10 @@ def emit_dual18_map_revisions(outdir):
                 "captureId": capture_id,
                 "invocationFile": os.path.basename(invocation_path),
                 "invocationSha256": _sha256_file(invocation_path),
-                "freshWorkspacePrefix": "output_files/%s" % workspace_prefix,
+                "freshWorkspacePrefix": (
+                    DUAL18_RUNTIME_PARENT_NAME + "/" + DUAL18_RUNTIME_LEAF_PREFIX
+                ),
+                "quartusInternalPathPreflight": quartus_path_preflight,
                 "checkerRunsMap": True,
             },
             "expectedDspBlocks": spec["expectedDspBlocks"],
@@ -541,14 +644,37 @@ def emit_dual18_map_revisions(outdir):
             "routeInvocation": os.path.relpath(invocation_path, REPO).replace(os.sep, "/"),
             "routeInvocationSha256": _sha256_file(invocation_path),
             "routeCaptureId": capture_id,
+            "quartusInternalPathPreflight": quartus_path_preflight,
         })
 
+    preflight_rows = [
+        {
+            "baseRevision": row["baseRevision"],
+            "revision": row["revision"],
+            **row["quartusInternalPathPreflight"],
+        }
+        for row in emitted
+    ]
+    worst_preflight = max(
+        preflight_rows, key=lambda row: row["longestExpectedPathLength"]
+    )
     manifest = {
         "schemaVersion": 1,
         "gate": "dual18_physical_pack_discriminator",
         "stage": "map-only",
         "device": DUAL18_DEVICE,
         "routeCaptureContract": route_capture_contract,
+        "quartusInternalPathPreflight": {
+            "schemaVersion": 1,
+            "limit": DUAL18_QUARTUS_INTERNAL_PATH_LIMIT,
+            "quartusHardPathLimit": DUAL18_QUARTUS_HARD_PATH_LIMIT,
+            "quartusHardPathMargin": DUAL18_QUARTUS_PATH_MARGIN,
+            "variants": preflight_rows,
+            "worstVariant": worst_preflight["baseRevision"],
+            "worstExpectedPathLength": worst_preflight[
+                "longestExpectedPathLength"
+            ],
+        },
         "evidenceBoundary": {
             "withoutGenuineCurrentCdbArtifacts": "hold",
             "encryptedVendorModel": "hold",

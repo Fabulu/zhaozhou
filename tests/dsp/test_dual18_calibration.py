@@ -40,6 +40,7 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
             first_anchor = json.loads(first_anchor_raw.decode("utf-8"))
             self.assertEqual(anchor_path.parent, out)
             self.assertRegex(first_anchor["invocationNonce"], r"[0-9a-f]{64}$")
+            self.assertEqual(len(bytes.fromhex(first_anchor["invocationNonce"])), 32)
             self.assertEqual(
                 first_anchor["manifestSha256"],
                 hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
@@ -63,6 +64,32 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
                 },
             )
             self.assertFalse(manifest["routeCaptureContract"]["syntheticFixturesPhysical"])
+            path_policy = manifest["routeCaptureContract"]["runtimePathPolicy"]
+            self.assertEqual(path_policy["freshRunTokenBytes"], 32)
+            self.assertEqual(path_policy["workspaceLeafPrefix"], "d18_")
+            self.assertEqual(path_policy["workspaceLeafDigestBytes"], 6)
+            self.assertEqual(path_policy["anchoredWorkspaceParentName"], "d18_runs")
+            self.assertEqual(
+                path_policy["compiledPartitionArtifactSuffix"],
+                ".root_partition.map.hbdb.hb_info",
+            )
+            self.assertEqual(path_policy["quartusHardPathLimit"], 260)
+            self.assertEqual(path_policy["quartusHardPathMargin"], 40)
+            self.assertEqual(path_policy["quartusInternalPathLimit"], 220)
+            all_preflights = manifest["quartusInternalPathPreflight"]
+            self.assertEqual(all_preflights["limit"], 220)
+            self.assertEqual(all_preflights["quartusHardPathLimit"], 260)
+            self.assertEqual(all_preflights["quartusHardPathMargin"], 40)
+            self.assertEqual(len(all_preflights["variants"]), 6)
+            self.assertLessEqual(all_preflights["worstExpectedPathLength"], 220)
+            self.assertEqual(
+                all_preflights["worstVariant"],
+                "dual18_two_primitives_mutant",
+            )
+            self.assertEqual(
+                all_preflights["worstExpectedPathLength"],
+                max(row["longestExpectedPathLength"] for row in all_preflights["variants"]),
+            )
             self.assertEqual(
                 [row["baseRevision"] for row in manifest["revisions"]],
                 [
@@ -143,7 +170,7 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
                 self.assertEqual(
                     route_contract["outputPortFamilies"], {"RESULTA": 36, "RESULTB": 36}
                 )
-                self.assertEqual(route_contract["schemaVersion"], 2)
+                self.assertEqual(route_contract["schemaVersion"], 3)
                 self.assertEqual(
                     route_contract["atomAdjacency"],
                     "exact-cdb-fanin-and-fanout-only",
@@ -173,14 +200,45 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
                 )
                 invocation = json.loads(invocation_path.read_text(encoding="utf-8"))
                 self.assertFalse(invocation["synthetic"])
-                self.assertEqual(invocation["schemaVersion"], 2)
+                self.assertEqual(invocation["schemaVersion"], 3)
                 self.assertEqual(invocation["captureId"], capture["captureId"])
                 self.assertTrue(capture["checkerRunsMap"])
                 self.assertEqual(invocation["freshRunTokenBytes"], 32)
-                self.assertRegex(invocation["freshWorkspacePrefix"], r"^d18_[0-9a-f]{8}_$")
+                self.assertEqual(invocation["freshWorkspacePrefix"], "d18_")
+                self.assertEqual(invocation["runtimePathPolicy"], path_policy)
+                path_preflight = invocation["quartusInternalPathPreflight"]
+                self.assertEqual(
+                    path_preflight,
+                    capture["quartusInternalPathPreflight"],
+                )
+                self.assertEqual(path_preflight["limit"], 220)
+                self.assertEqual(path_preflight["quartusHardPathLimit"], 260)
+                self.assertEqual(path_preflight["quartusHardPathMargin"], 40)
+                self.assertEqual(path_preflight["workspaceLeafLength"], 12)
+                self.assertLessEqual(path_preflight["longestExpectedPathLength"], 220)
+                self.assertEqual(
+                    path_preflight["longestExpectedPathLength"],
+                    len(path_preflight["longestExpectedPath"]),
+                )
+                literal_expected_path = (
+                    out
+                    / "d18_runs"
+                    / "d18_XXXXXXXX"
+                    / "incremental_db"
+                    / "compiled_partitions"
+                    / (revision + ".root_partition.map.hbdb.hb_info")
+                ).absolute().as_posix()
+                self.assertEqual(
+                    path_preflight["longestExpectedPath"],
+                    literal_expected_path,
+                )
+                self.assertEqual(
+                    path_preflight["longestExpectedPathLength"],
+                    len(literal_expected_path),
+                )
                 self.assertEqual(
                     invocation["workspaceParent"],
-                    str((revision_dir / "output_files").absolute()).replace("\\", "/"),
+                    str((out / "d18_runs").absolute()).replace("\\", "/"),
                 )
                 self.assertEqual(
                     invocation["mapCommandTemplate"],
@@ -249,10 +307,14 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
                 self.assertTrue(preparation["checkerMustRunFreshMap"])
                 self.assertEqual(
                     preparation["freshRuntimeWorkspacePrefix"],
-                    "output_files/" + invocation["freshWorkspacePrefix"],
+                    "d18_runs/" + invocation["freshWorkspacePrefix"],
                 )
                 self.assertEqual(preparation["revision"], revision)
                 self.assertEqual(preparation["contentWitness"], config["contentWitness"])
+                self.assertEqual(
+                    preparation["quartusInternalPathPreflight"],
+                    path_preflight,
+                )
                 output_dir = revision_dir / preparation["outputDirectory"]
                 self.assertEqual(list(output_dir.iterdir()), [])
 
@@ -294,6 +356,10 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
                 )
                 self.assertEqual(manifest_row["routeCaptureId"], capture["captureId"])
                 self.assertEqual(
+                    manifest_row["quartusInternalPathPreflight"],
+                    path_preflight,
+                )
+                self.assertEqual(
                     manifest_row["routeInvocationSha256"],
                     hashlib.sha256(invocation_path.read_bytes()).hexdigest(),
                 )
@@ -304,12 +370,19 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
             self.assertNotIn("zhao_dual18_mul.sv", inferred_qsf)
             self.assertNotIn("ZHAO_DUAL18_", inferred_qsf)
 
-            # Regeneration is a fresh run: it removes stale raw output even when
-            # unchanged content yields the same deterministic witness/revision.
+            # Regeneration clears the replaceable per-revision output tree while
+            # preserving checker-owned raw runtime artifacts under d18_runs.
             stale = inferred_dir / "output_files" / "stale.map.rpt"
             stale.write_text("old evidence\n", encoding="utf-8")
+            preserved_runtime = out / "d18_runs" / "d18_preserved" / "raw.map.rpt"
+            preserved_runtime.parent.mkdir()
+            preserved_runtime.write_text("preserved raw evidence\n", encoding="utf-8")
             self.generate(out)
             self.assertFalse(stale.exists())
+            self.assertEqual(
+                preserved_runtime.read_text(encoding="utf-8"),
+                "preserved raw evidence\n",
+            )
             second_anchor_raw = anchor_path.read_bytes()
             second_anchor = json.loads(second_anchor_raw.decode("utf-8"))
             self.assertNotEqual(second_anchor["invocationNonce"], first_anchor["invocationNonce"])
@@ -327,6 +400,72 @@ class Dual18CalibrationGenerationTest(unittest.TestCase):
                 )
                 self.assertEqual(config["contentWitness"], witness)
                 self.assertEqual(list((out / "dual18" / base_revision / "output_files").iterdir()), [])
+
+    def _outdir_for_full_artifact_length(self, parent: Path, target: int) -> Path:
+        # Independent literal reconstruction: do not import the generator helper
+        # or its constants, or the boundary test could bless the same defect.
+        revision = "dual18_two_primitives_mutant_" + ("0" * 16)
+        artifact_tail = (
+            Path("d18_runs") / "d18_XXXXXXXX" /
+            "incremental_db" / "compiled_partitions" /
+            (revision + ".root_partition.map.hbdb.hb_info")
+        )
+        filler_length = target - len(str(parent)) - len(str(artifact_tail)) - 2
+        self.assertGreater(filler_length, 0)
+        out = parent / ("x" * filler_length)
+        complete = out / artifact_tail
+        self.assertEqual(len(str(complete.resolve())), target)
+        return out
+
+    def test_generation_accepts_220_and_refuses_221_character_artifact(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dual18-path-preflight-") as temp:
+            parent = Path(temp)
+            accepted_out = self._outdir_for_full_artifact_length(parent, 220)
+            accepted = subprocess.run(
+                [
+                    sys.executable,
+                    str(GENERATOR),
+                    "--dual18-only",
+                    "--outdir",
+                    str(accepted_out),
+                ],
+                cwd=REPO,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
+            self.assertEqual(accepted.returncode, 0, accepted.stdout)
+            manifest = json.loads(
+                (accepted_out / "dual18" / "dual18_manifest.json").read_text(
+                    encoding="utf-8")
+            )
+            self.assertEqual(
+                manifest["quartusInternalPathPreflight"]["worstExpectedPathLength"],
+                220,
+            )
+
+            refused_out = self._outdir_for_full_artifact_length(parent, 221)
+            refused = subprocess.run(
+                [
+                    sys.executable,
+                    str(GENERATOR),
+                    "--dual18-only",
+                    "--outdir",
+                    str(refused_out),
+                ],
+                cwd=REPO,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
+            self.assertNotEqual(refused.returncode, 0, refused.stdout)
+            self.assertIn(
+                "Quartus internal path preflight exceeds 220 characters",
+                refused.stdout,
+            )
+            self.assertIn("(221)", refused.stdout)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ public synthetic API.
 
 from __future__ import annotations
 
+import base64
 import copy
 import datetime
 import hashlib
@@ -395,7 +396,7 @@ class Dual18AtomRouteTest(unittest.TestCase):
         contract = config["routeCaptureContract"]
         invocation_path = self.config_path().parent / config["routeCapture"]["invocationFile"]
         invocation = json.loads(invocation_path.read_text(encoding="utf-8"))
-        self.assertEqual(contract["schemaVersion"], 2)
+        self.assertEqual(contract["schemaVersion"], 3)
         self.assertEqual(contract["atomAdjacency"], "exact-cdb-fanin-and-fanout-only")
         self.assertEqual(contract["internalAtomArcs"], "unavailable-hold")
         self.assertEqual(Path(contract["quartusMap"]["path"]), routes._canonical(routes.MAP_PATH))
@@ -403,8 +404,40 @@ class Dual18AtomRouteTest(unittest.TestCase):
         self.assertEqual(invocation["mapCommandTemplate"], [contract["quartusMap"]["path"], "{project}"])
         self.assertEqual(invocation["cdbCommandTemplate"][1:3], ["-t", contract["captureScript"]["absolutePath"]])
         self.assertEqual(invocation["freshRunTokenBytes"], 32)
-        self.assertRegex(invocation["freshWorkspacePrefix"], r"^d18_[0-9a-f]{8}_$")
+        self.assertEqual(invocation["freshWorkspacePrefix"], "d18_")
+        self.assertEqual(invocation["runtimePathPolicy"], contract["runtimePathPolicy"])
+        self.assertEqual(contract["runtimePathPolicy"], routes._runtime_path_policy())
+        self.assertEqual(
+            contract["runtimePathPolicy"]["compiledPartitionArtifactSuffix"],
+            ".root_partition.map.hbdb.hb_info",
+        )
+        self.assertEqual(
+            Path(invocation["workspaceParent"]),
+            self.out / "d18_runs",
+        )
+        self.assertEqual(invocation["quartusInternalPathPreflight"]["limit"], 220)
+        self.assertEqual(
+            invocation["quartusInternalPathPreflight"]["quartusHardPathMargin"],
+            40,
+        )
+        self.assertLessEqual(
+            invocation["quartusInternalPathPreflight"]["longestExpectedPathLength"],
+            220,
+        )
         self.assertNotIn("freshOutputDirectory", invocation)
+
+    def test_short_leaf_binds_full_nonce_and_capture_id(self) -> None:
+        token_a = base64.urlsafe_b64encode(b"\x01" * 32).decode("ascii").rstrip("=")
+        token_b = base64.urlsafe_b64encode(b"\x02" * 32).decode("ascii").rstrip("=")
+        capture_a = "a" * 64
+        capture_b = "b" * 64
+        leaf = routes._workspace_leaf(capture_a, token_a)
+        self.assertRegex(leaf, r"^d18_[A-Za-z0-9_-]{8}$")
+        self.assertNotIn(token_a, leaf)
+        self.assertNotEqual(leaf, routes._workspace_leaf(capture_a, token_b))
+        self.assertNotEqual(leaf, routes._workspace_leaf(capture_b, token_a))
+        with self.assertRaisesRegex(routes.GateError, "exactly 32 bytes"):
+            routes._workspace_leaf(capture_a, "A" * 42 + "B")
 
     def test_all_real_control_sources_and_independent_wrong_sink_are_bound(self) -> None:
         controls = {
@@ -453,6 +486,92 @@ class Dual18AtomRouteTest(unittest.TestCase):
         finally:
             bound.close()
 
+    def test_runtime_workspace_traversal_and_path_substitution_reject(self) -> None:
+        bound = self.acquire()
+        try:
+            with self.assertRaisesRegex(routes.GateError, "safe workspace-relative"):
+                routes._runtime_child(
+                    Path(bound.invocation["workspaceParent"]),
+                    "../forged.atom.tsv",
+                    "forged traversal",
+                )
+            forged_parent = copy.deepcopy(bound.invocation)
+            forged_parent["workspaceParent"] = str(
+                Path(bound.invocation["workspaceParent"]) / "substituted"
+            )
+            with self.assertRaisesRegex(routes.GateError, "parent is not anchor-derived"):
+                routes._validate_contract_and_invocation(
+                    bound.config,
+                    bound.config["routeCaptureContract"],
+                    forged_parent,
+                    self.config_path().parent,
+                    bound.snapshots["invocation"],
+                )
+            forged_output = copy.deepcopy(bound.invocation)
+            forged_output["runtimeOutputs"]["atomTsv"] = "../forged.atom.tsv"
+            with self.assertRaisesRegex(routes.GateError, "output paths"):
+                routes._validate_contract_and_invocation(
+                    bound.config,
+                    bound.config["routeCaptureContract"],
+                    forged_output,
+                    self.config_path().parent,
+                    bound.snapshots["invocation"],
+                )
+        finally:
+            bound.close()
+
+    def test_checker_recomputes_all_variant_path_preflights_and_bound(self) -> None:
+        bound = self.acquire()
+        try:
+            routes._validate_manifest_path_preflights(
+                bound.manifest, bound.snapshots["manifest"].path
+            )
+            summary = bound.manifest["quartusInternalPathPreflight"]
+            self.assertEqual(len(summary["variants"]), 6)
+            self.assertEqual(summary["worstVariant"], "dual18_two_primitives_mutant")
+            self.assertLessEqual(summary["worstExpectedPathLength"], 220)
+            self.assertEqual(summary["quartusHardPathMargin"], 40)
+            self.assertEqual(summary["quartusHardPathLimit"] - summary["limit"], 40)
+
+            forged = copy.deepcopy(bound.manifest)
+            forged["quartusInternalPathPreflight"]["worstExpectedPathLength"] -= 1
+            with self.assertRaisesRegex(routes.GateError, "manifest-wide"):
+                routes._validate_manifest_path_preflights(
+                    forged, bound.snapshots["manifest"].path
+                )
+        finally:
+            bound.close()
+
+    def test_literal_compiled_partition_artifact_and_one_char_over_margin(self) -> None:
+        revision = "r"
+        literal_suffix = ".root_partition.map.hbdb.hb_info"
+        self.assertGreater(len(literal_suffix), len(".root_partition.map.hdb"))
+
+        def literal_path(parent: Path) -> str:
+            return (
+                parent
+                / "d18_XXXXXXXX"
+                / "incremental_db"
+                / "compiled_partitions"
+                / (revision + literal_suffix)
+            ).absolute().as_posix()
+
+        root = Path(REPO.anchor)
+        probe_parent = root / "p"
+        growth = 220 - len(literal_path(probe_parent))
+        self.assertGreaterEqual(growth, 0)
+        safe_parent = root / ("p" * (growth + 1))
+        over_parent = root / ("p" * (growth + 2))
+        safe_literal = literal_path(safe_parent)
+        over_literal = literal_path(over_parent)
+        self.assertEqual(len(safe_literal), 220)
+        self.assertEqual(len(over_literal), 221)
+        safe = routes._quartus_path_preflight(safe_parent, revision)
+        self.assertEqual(safe["longestExpectedPath"], safe_literal)
+        self.assertEqual(safe["longestExpectedPathLength"], 220)
+        with self.assertRaisesRegex(routes.GateError, "preflight exceeds 220"):
+            routes._quartus_path_preflight(over_parent, revision)
+
     def test_forged_cdb_runtime_version_control_rejects(self) -> None:
         bound = self.acquire()
         try:
@@ -484,7 +603,44 @@ class Dual18AtomRouteTest(unittest.TestCase):
             self.assertEqual(fake.calls[0][0][0], routes._canonical(routes.MAP_PATH).as_posix())
             self.assertEqual(fake.calls[1][0][0], routes._canonical(routes.CDB_PATH).as_posix())
             self.assertEqual(fake.calls[0][1], fake.calls[1][1])
+            self.assertEqual(evidence["schemaVersion"], 3)
             self.assertRegex(evidence["freshRunToken"], r"^[A-Za-z0-9_-]{43}$")
+            self.assertEqual(
+                len(base64.urlsafe_b64decode(evidence["freshRunToken"] + "=")),
+                32,
+            )
+            self.assertEqual(evidence["freshRunTokenBytes"], 32)
+            self.assertRegex(evidence["workspaceLeaf"], r"^d18_[A-Za-z0-9_-]{8}$")
+            self.assertEqual(
+                evidence["workspaceLeaf"],
+                routes._workspace_leaf(
+                    evidence["captureId"], evidence["freshRunToken"]
+                ),
+            )
+            self.assertNotIn(evidence["freshRunToken"], evidence["workspace"])
+            self.assertNotIn(
+                evidence["freshRunToken"], json.dumps(fake.calls[0][0] + fake.calls[1][0])
+            )
+            self.assertEqual(
+                Path(evidence["workspace"]).name, evidence["workspaceLeaf"]
+            )
+            self.assertEqual(
+                evidence["workspaceLeafBinding"]["inputs"]["captureId"],
+                evidence["captureId"],
+            )
+            self.assertEqual(
+                evidence["workspaceLeafBinding"]["inputs"]["freshRunToken"],
+                evidence["freshRunToken"],
+            )
+            self.assertLessEqual(
+                evidence["quartusInternalPathPreflight"]["actualLongestPathLength"],
+                220,
+            )
+            self.assertTrue(
+                evidence["quartusInternalPathPreflight"]["actualLongestPath"].endswith(
+                    bound.config["revision"] + ".root_partition.map.hbdb.hb_info"
+                )
+            )
             self.assertEqual(evidence["routeGateStatus"], "pass")
             self.assertEqual(evidence["mechanics"]["inventedInternalArcs"], 0)
             self.assertTrue(evidence["postMapDatabase"]["files"])
@@ -573,18 +729,49 @@ class Dual18AtomRouteTest(unittest.TestCase):
         finally:
             bound.close()
 
-    def test_replayed_workspace_name_is_rejected_before_map(self) -> None:
+    def test_preexisting_short_leaf_is_never_reused_and_collision_retries(self) -> None:
         bound = self.acquire()
         original = routes.secrets.token_urlsafe
-        routes.secrets.token_urlsafe = lambda _: "b" * 43
+        stale_token = base64.urlsafe_b64encode(b"\x11" * 32).decode("ascii").rstrip("=")
+        fresh_token = base64.urlsafe_b64encode(b"\x22" * 32).decode("ascii").rstrip("=")
+        tokens = iter([stale_token, fresh_token])
+        routes.secrets.token_urlsafe = lambda _: next(tokens)
         try:
-            workspace = (
-                Path(bound.invocation["workspaceParent"])
-                / (bound.invocation["freshWorkspacePrefix"] + "b" * 43)
+            stale_leaf = routes._workspace_leaf(
+                bound.invocation["captureId"], stale_token
             )
-            workspace.mkdir()
-            with self.assertRaisesRegex(routes.GateError, "already exists"):
-                routes.capture_one(bound, "explicit", runner=FakeQuartus(bound))
+            stale_workspace = Path(bound.invocation["workspaceParent"]) / stale_leaf
+            stale_workspace.mkdir()
+            stale_artifact = stale_workspace / "stale.map.rpt"
+            stale_artifact.write_text("old evidence\n", encoding="utf-8")
+            fake = FakeQuartus(bound)
+            evidence = routes.capture_one(bound, "explicit", runner=fake)
+            self.assertEqual(len(fake.calls), 2)
+            self.assertNotEqual(evidence["workspaceLeaf"], stale_leaf)
+            self.assertEqual(
+                evidence["workspaceLeaf"],
+                routes._workspace_leaf(bound.invocation["captureId"], fresh_token),
+            )
+            self.assertEqual(stale_artifact.read_text(encoding="utf-8"), "old evidence\n")
+            self.assertNotEqual(Path(evidence["workspace"]), stale_workspace)
+        finally:
+            routes.secrets.token_urlsafe = original
+            bound.close()
+
+    def test_exhausted_short_leaf_collisions_reject_before_map(self) -> None:
+        bound = self.acquire()
+        original = routes.secrets.token_urlsafe
+        stale_token = base64.urlsafe_b64encode(b"\x33" * 32).decode("ascii").rstrip("=")
+        routes.secrets.token_urlsafe = lambda _: stale_token
+        try:
+            stale_leaf = routes._workspace_leaf(
+                bound.invocation["captureId"], stale_token
+            )
+            (Path(bound.invocation["workspaceParent"]) / stale_leaf).mkdir()
+            fake = FakeQuartus(bound)
+            with self.assertRaisesRegex(routes.GateError, "exclusively create a unique"):
+                routes.capture_one(bound, "explicit", runner=fake)
+            self.assertEqual(fake.calls, [])
         finally:
             routes.secrets.token_urlsafe = original
             bound.close()

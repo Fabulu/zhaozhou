@@ -16,6 +16,7 @@ register/control/clock/reset ports.
 from __future__ import annotations
 
 import argparse
+import base64
 import collections
 import ctypes
 import datetime
@@ -64,6 +65,18 @@ ENCRYPTED_MODEL_HOLD = (
     "encrypted vendor-model differential simulation remains HOLD; mapped routes "
     "do not prove arithmetic semantics"
 )
+QUARTUS_HARD_PATH_LIMIT = 260
+QUARTUS_PATH_MARGIN = 40
+QUARTUS_INTERNAL_PATH_LIMIT = QUARTUS_HARD_PATH_LIMIT - QUARTUS_PATH_MARGIN
+RUNTIME_LEAF_PREFIX = "d18_"
+RUNTIME_LEAF_DIGEST_BYTES = 6
+RUNTIME_CREATE_ATTEMPTS = 32
+RUNTIME_HASH_DOMAIN = "dual18-map-cdb-workspace-v1"
+RUNTIME_PARENT_NAME = "d18_runs"
+COMPILED_PARTITION_DIR = "incremental_db/compiled_partitions"
+# Longest retained Quartus-17 compiled-partition artifact in the local smoke
+# workspace; longer than the ordinary .root_partition.map.hdb.
+COMPILED_PARTITION_SUFFIX = ".root_partition.map.hbdb.hb_info"
 
 
 class GateError(RuntimeError):
@@ -90,6 +103,130 @@ def _same_path(left: str | Path, right: str | Path) -> bool:
     return os.path.normcase(os.path.normpath(os.fspath(left))) == os.path.normcase(
         os.path.normpath(os.fspath(right))
     )
+
+
+def _runtime_path_policy() -> dict:
+    return {
+        "schemaVersion": 1,
+        "freshRunTokenBytes": 32,
+        "workspaceLeafPrefix": RUNTIME_LEAF_PREFIX,
+        "workspaceLeafHash": "sha256",
+        "workspaceLeafHashDomain": RUNTIME_HASH_DOMAIN,
+        "workspaceLeafHashInputs": ["captureId", "freshRunToken"],
+        "workspaceLeafDigestBytes": RUNTIME_LEAF_DIGEST_BYTES,
+        "exclusiveCreateMaxAttempts": RUNTIME_CREATE_ATTEMPTS,
+        "anchoredWorkspaceParentName": RUNTIME_PARENT_NAME,
+        "quartusHardPathLimit": QUARTUS_HARD_PATH_LIMIT,
+        "quartusHardPathMargin": QUARTUS_PATH_MARGIN,
+        "quartusInternalPathLimit": QUARTUS_INTERNAL_PATH_LIMIT,
+        "longestInternalPathKind": "compiled-partition-artifact",
+        "compiledPartitionArtifactSuffix": COMPILED_PARTITION_SUFFIX,
+        "longestInternalPathTemplate": (
+            COMPILED_PARTITION_DIR + "/{revision}" + COMPILED_PARTITION_SUFFIX
+        ),
+    }
+
+
+def _workspace_leaf(capture_id: str, run_token: str) -> str:
+    """Bind a compact path leaf to the full token and immutable capture ID."""
+    if not re.fullmatch(r"[0-9a-f]{64}", capture_id):
+        raise GateError("runtime capture ID is not a lowercase SHA-256")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{43}", run_token):
+        raise GateError("fresh runtime token is not a 32-byte unpadded base64url value")
+    try:
+        token_bytes = base64.urlsafe_b64decode(run_token + "=")
+    except (ValueError, TypeError) as exc:
+        raise GateError("fresh runtime token is malformed base64url") from exc
+    if (
+        len(token_bytes) != 32
+        or base64.urlsafe_b64encode(token_bytes).decode("ascii").rstrip("=")
+        != run_token
+    ):
+        raise GateError("fresh runtime token does not retain exactly 32 bytes")
+    payload = (
+        RUNTIME_HASH_DOMAIN.encode("ascii")
+        + b"\0"
+        + capture_id.encode("ascii")
+        + b"\0"
+        + run_token.encode("ascii")
+    )
+    digest = hashlib.sha256(payload).digest()[:RUNTIME_LEAF_DIGEST_BYTES]
+    encoded = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    leaf = RUNTIME_LEAF_PREFIX + encoded
+    if not re.fullmatch(r"d18_[A-Za-z0-9_-]{8}", leaf):
+        raise GateError("derived runtime workspace leaf is malformed")
+    return leaf
+
+
+def _quartus_path_preflight(workspace_parent: Path, revision: str) -> dict:
+    """Compute and enforce the longest expected compiled-partition file path."""
+    if not isinstance(revision, str) or not re.fullmatch(r"[A-Za-z0-9_]+", revision):
+        raise GateError("Quartus path preflight revision is unsafe")
+    parent = _canonical(workspace_parent)
+    representative_leaf = RUNTIME_LEAF_PREFIX + (
+        "X" * (RUNTIME_LEAF_DIGEST_BYTES * 4 // 3)
+    )
+    relative = "%s/%s%s" % (
+        COMPILED_PARTITION_DIR, revision, COMPILED_PARTITION_SUFFIX
+    )
+    expected = _canonical(parent / representative_leaf / Path(relative)).as_posix()
+    record = {
+        "schemaVersion": 1,
+        "limit": QUARTUS_INTERNAL_PATH_LIMIT,
+        "quartusHardPathLimit": QUARTUS_HARD_PATH_LIMIT,
+        "quartusHardPathMargin": QUARTUS_PATH_MARGIN,
+        "workspaceLeafLength": len(representative_leaf),
+        "longestInternalRelativePath": relative,
+        "longestExpectedPath": expected,
+        "longestExpectedPathLength": len(expected),
+    }
+    if record["longestExpectedPathLength"] > QUARTUS_INTERNAL_PATH_LIMIT:
+        raise GateError(
+            "Quartus internal path preflight exceeds %d characters: %s (%d)"
+            % (
+                QUARTUS_INTERNAL_PATH_LIMIT,
+                expected,
+                record["longestExpectedPathLength"],
+            )
+        )
+    if QUARTUS_INTERNAL_PATH_LIMIT != QUARTUS_HARD_PATH_LIMIT - QUARTUS_PATH_MARGIN:
+        raise GateError("Quartus internal path preflight lost its 40-character margin")
+    return record
+
+
+def _validate_manifest_path_preflights(manifest: dict, manifest_path: Path) -> None:
+    """Recompute every generated variant's path bound from its anchored parent."""
+    rows = manifest["revisions"]
+    expected_variants = []
+    for row in rows:
+        base = row.get("baseRevision")
+        revision = row.get("revision")
+        if not isinstance(base, str) or not isinstance(revision, str):
+            raise GateError("manifest path preflight row identity is malformed")
+        expected = _quartus_path_preflight(
+            _canonical(manifest_path.parent.parent / RUNTIME_PARENT_NAME), revision
+        )
+        if row.get("quartusInternalPathPreflight") != expected:
+            raise GateError(
+                "manifest %s Quartus internal path preflight is stale" % base
+            )
+        expected_variants.append(
+            {"baseRevision": base, "revision": revision, **expected}
+        )
+    worst = max(
+        expected_variants, key=lambda row: row["longestExpectedPathLength"]
+    )
+    expected_summary = {
+        "schemaVersion": 1,
+        "limit": QUARTUS_INTERNAL_PATH_LIMIT,
+        "quartusHardPathLimit": QUARTUS_HARD_PATH_LIMIT,
+        "quartusHardPathMargin": QUARTUS_PATH_MARGIN,
+        "variants": expected_variants,
+        "worstVariant": worst["baseRevision"],
+        "worstExpectedPathLength": worst["longestExpectedPathLength"],
+    }
+    if manifest.get("quartusInternalPathPreflight") != expected_summary:
+        raise GateError("manifest-wide Quartus internal path preflight is stale")
 
 
 def _signature(info: os.stat_result) -> tuple[int, int, int, int, int]:
@@ -459,6 +596,9 @@ def acquire_bound_inputs(
             != expected_bases
         ):
             raise GateError("manifest does not contain the exact six revisions")
+        _validate_manifest_path_preflights(
+            manifest, snapshots["manifest"].path
+        )
         matches = [row for row in rows if row.get("baseRevision") == config.get("baseRevision")]
         if len(matches) != 1:
             raise GateError("manifest has no unique effective-config row")
@@ -549,6 +689,8 @@ def acquire_bound_inputs(
             or preparation.get("outputDirectory") != "output_files"
             or preparation.get("outputDirectoryWasEmpty") is not True
             or preparation.get("checkerMustRunFreshMap") is not True
+            or preparation.get("quartusInternalPathPreflight")
+            != manifest_row.get("quartusInternalPathPreflight")
         ):
             raise GateError("run-preparation identity is malformed")
 
@@ -672,7 +814,7 @@ def acquire_bound_inputs(
 
         route_ref = config.get("routeCapture")
         if preparation.get("freshRuntimeWorkspacePrefix") != (
-            "output_files/" + invocation.get("freshWorkspacePrefix", "")
+            RUNTIME_PARENT_NAME + "/" + invocation.get("freshWorkspacePrefix", "")
         ):
             raise GateError("run-preparation fresh workspace prefix is stale")
         if (
@@ -683,7 +825,9 @@ def acquire_bound_inputs(
             or route_ref.get("captureId") != invocation.get("captureId")
             or route_ref.get("captureId") != manifest_row.get("routeCaptureId")
             or route_ref.get("freshWorkspacePrefix")
-            != "output_files/" + invocation.get("freshWorkspacePrefix", "")
+            != RUNTIME_PARENT_NAME + "/" + invocation.get("freshWorkspacePrefix", "")
+            or route_ref.get("quartusInternalPathPreflight")
+            != manifest_row.get("quartusInternalPathPreflight")
             or route_ref.get("checkerRunsMap") is not True
         ):
             raise GateError("route invocation reference is stale")
@@ -737,16 +881,18 @@ def _validate_contract_and_invocation(
     expected_contract_keys = {
         "schemaVersion", "gate", "artifactClass", "syntheticFixturesPhysical",
         "netlistType", "quartusMap", "quartusCdb", "captureScript",
-        "mapArgumentOrder", "tclArgumentOrder", "databaseDirectories",
+        "runtimePathPolicy", "mapArgumentOrder", "tclArgumentOrder",
+        "databaseDirectories",
         "atomAdjacency", "internalAtomArcs", "requiredAtomType",
         "inputPortFamilies", "outputPortFamilies",
     }
     if set(contract) != expected_contract_keys or (
-        contract["schemaVersion"] != 2
+        contract["schemaVersion"] != 3
         or contract["gate"] != GATE
         or contract["artifactClass"] != ARTIFACT_CLASS
         or contract["syntheticFixturesPhysical"] is not False
         or contract["netlistType"] != "map"
+        or contract["runtimePathPolicy"] != _runtime_path_policy()
         or contract["mapArgumentOrder"] != ["project"]
         or contract["tclArgumentOrder"]
         != ["project", "revision", "atomTsv", "optionalAtomVo", "captureId"]
@@ -762,33 +908,46 @@ def _validate_contract_and_invocation(
     expected_invocation_keys = {
         "schemaVersion", "gate", "artifactClass", "synthetic", "contentWitness",
         "captureId", "workspaceParent", "freshWorkspacePrefix", "freshRunTokenBytes",
+        "runtimePathPolicy", "quartusInternalPathPreflight",
         "projectFileName", "settingsFileName", "quartusMap", "quartusCdb",
         "captureScript", "mapCommandTemplate", "cdbCommandTemplate", "runtimeOutputs",
     }
     if set(invocation) != expected_invocation_keys or (
-        invocation["schemaVersion"] != 2
+        invocation["schemaVersion"] != 3
         or invocation["gate"] != GATE
         or invocation["artifactClass"] != ARTIFACT_CLASS
         or invocation["synthetic"] is not False
         or invocation["contentWitness"] != config["contentWitness"]
         or not re.fullmatch(r"[0-9a-f]{64}", str(invocation["captureId"]))
         or invocation["freshRunTokenBytes"] != 32
+        or invocation["runtimePathPolicy"] != _runtime_path_policy()
+        or invocation["runtimePathPolicy"] != contract["runtimePathPolicy"]
         or invocation["quartusMap"] != contract["quartusMap"]
         or invocation["quartusCdb"] != contract["quartusCdb"]
         or invocation["captureScript"] != contract["captureScript"]
     ):
         raise GateError("route invocation schema/identity is malformed")
-    expected_parent = _canonical(revision_dir / "output_files")
+    expected_parent = _canonical(
+        revision_dir.parent.parent / RUNTIME_PARENT_NAME
+    )
     supplied_parent = Path(invocation["workspaceParent"])
-    expected_prefix = "d18_%s_" % invocation["captureId"][:8]
+    expected_preflight = _quartus_path_preflight(
+        expected_parent, config["revision"]
+    )
+    expected_prefix = RUNTIME_LEAF_PREFIX
     if (
         not supplied_parent.is_absolute()
         or supplied_parent != _canonical(supplied_parent)
         or supplied_parent != expected_parent
     ):
-        raise GateError("runtime workspace parent is not revision-derived canonical path")
+        raise GateError("runtime workspace parent is not anchor-derived canonical path")
     if invocation["freshWorkspacePrefix"] != expected_prefix:
-        raise GateError("runtime workspace prefix is not content-addressed")
+        raise GateError("runtime workspace prefix is not canonical")
+    if (
+        invocation["quartusInternalPathPreflight"] != expected_preflight
+        or route_reference.get("quartusInternalPathPreflight") != expected_preflight
+    ):
+        raise GateError("runtime Quartus internal path preflight is stale")
     if invocation["projectFileName"] != config["qpfFile"] or invocation["settingsFileName"] != config["qsfFile"]:
         raise GateError("runtime project/settings filenames differ from config")
     if invocation["mapCommandTemplate"] != [contract["quartusMap"]["path"], "{project}"]:
@@ -1287,23 +1446,97 @@ def _validate_map_outputs(
     return {"parsed": parsed.__dict__, "status": status, "version": version}
 
 
-def _expand_runtime(bound: BoundInputs) -> tuple[str, Path, dict[str, Path], list[str], list[str]]:
+def _create_runtime_workspace(bound: BoundInputs) -> tuple[str, str, Path]:
+    """Exclusively create a short, nonce-bound workspace; retry collisions."""
     invocation = bound.invocation
-    run_token = secrets.token_urlsafe(invocation["freshRunTokenBytes"])
-    workspace = _canonical(
-        Path(invocation["workspaceParent"])
-        / (invocation["freshWorkspacePrefix"] + run_token)
+    if (
+        invocation.get("freshRunTokenBytes") != 32
+        or invocation.get("freshWorkspacePrefix") != RUNTIME_LEAF_PREFIX
+        or invocation.get("runtimePathPolicy") != _runtime_path_policy()
+    ):
+        raise GateError("runtime workspace policy changed after immutable validation")
+    workspace_parent = _canonical(invocation["workspaceParent"])
+    expected_preflight = _quartus_path_preflight(
+        workspace_parent, bound.config["revision"]
     )
-    outputs = {key: _canonical(workspace / value) for key, value in invocation["runtimeOutputs"].items()}
-    project = _canonical(workspace / Path(invocation["projectFileName"]).stem).as_posix()
-    map_command = [project if value == "{project}" else value for value in invocation["mapCommandTemplate"]]
+    if invocation["quartusInternalPathPreflight"] != expected_preflight:
+        raise GateError("runtime Quartus internal path preflight changed before launch")
+    for _ in range(RUNTIME_CREATE_ATTEMPTS):
+        run_token = secrets.token_urlsafe(invocation["freshRunTokenBytes"])
+        leaf = _workspace_leaf(invocation["captureId"], run_token)
+        workspace = _canonical(workspace_parent / leaf)
+        if workspace.parent != workspace_parent or workspace.name != leaf:
+            raise GateError("derived runtime workspace escaped its anchored parent")
+        compiled_partition_artifact = _canonical(
+            workspace
+            / Path(COMPILED_PARTITION_DIR)
+            / (bound.config["revision"] + COMPILED_PARTITION_SUFFIX)
+        ).as_posix()
+        if len(compiled_partition_artifact) > QUARTUS_INTERNAL_PATH_LIMIT:
+            raise GateError(
+                "actual Quartus compiled-partition artifact path exceeds %d "
+                "characters: %s (%d)"
+                % (
+                    QUARTUS_INTERNAL_PATH_LIMIT,
+                    compiled_partition_artifact,
+                    len(compiled_partition_artifact),
+                )
+            )
+        try:
+            workspace.mkdir()
+        except FileExistsError:
+            continue
+        try:
+            map_check.require_direct_path(
+                workspace, "fresh runtime workspace", "directory"
+            )
+        except map_check.GateError as exc:
+            raise GateError("fresh runtime workspace is not direct: %s" % exc) from exc
+        return run_token, leaf, workspace
+    raise GateError(
+        "could not exclusively create a unique short map/CDB workspace after %d attempts"
+        % RUNTIME_CREATE_ATTEMPTS
+    )
+
+
+def _runtime_child(workspace: Path, relative_value: object, role: str) -> Path:
+    if not isinstance(relative_value, str) or not relative_value:
+        raise GateError("%s path is missing" % role)
+    relative = Path(relative_value)
+    if relative.is_absolute() or any(part in ("", ".", "..") for part in relative.parts):
+        raise GateError("%s path is not a safe workspace-relative path" % role)
+    child = _canonical(workspace / relative)
+    try:
+        child.relative_to(workspace)
+    except ValueError as exc:
+        raise GateError("%s path escaped the runtime workspace" % role) from exc
+    return child
+
+
+def _expand_runtime(
+    bound: BoundInputs, workspace: Path
+) -> tuple[dict[str, Path], list[str], list[str]]:
+    invocation = bound.invocation
+    outputs = {
+        key: _runtime_child(workspace, value, "runtime output %s" % key)
+        for key, value in invocation["runtimeOutputs"].items()
+    }
+    project = _runtime_child(
+        workspace, Path(invocation["projectFileName"]).stem, "runtime project"
+    ).as_posix()
+    map_command = [
+        project if value == "{project}" else value
+        for value in invocation["mapCommandTemplate"]
+    ]
     replacements = {
         "{project}": project,
         "{atomTsv}": outputs["atomTsv"].as_posix(),
         "{optionalAtomVo}": outputs["optionalAtomVo"].as_posix(),
     }
-    cdb_command = [replacements.get(value, value) for value in invocation["cdbCommandTemplate"]]
-    return run_token, workspace, outputs, map_command, cdb_command
+    cdb_command = [
+        replacements.get(value, value) for value in invocation["cdbCommandTemplate"]
+    ]
+    return outputs, map_command, cdb_command
 
 
 def _validate_physical_metadata(
@@ -1349,13 +1582,12 @@ def capture_one(
     runner: ProcessRunner = _default_runner,
     after_cdb_snapshot_hook: Callable[[dict[str, Path]], None] | None = None,
 ) -> dict:
-    run_token, workspace, outputs, map_command, cdb_command = _expand_runtime(bound)
     workspace_parent = _canonical(bound.invocation["workspaceParent"])
-    map_check.require_direct_path(workspace_parent, "runtime workspace parent", "directory")
-    try:
-        workspace.mkdir()
-    except FileExistsError as exc:
-        raise GateError("unpredictable fresh map/CDB workspace already exists") from exc
+    map_check.require_direct_path(
+        workspace_parent, "runtime workspace parent", "directory"
+    )
+    run_token, workspace_leaf, workspace = _create_runtime_workspace(bound)
+    outputs, map_command, cdb_command = _expand_runtime(bound, workspace)
     _write_exclusive(workspace / bound.config["qpfFile"], bound.snapshots["qpf"].data)
     _write_exclusive(workspace / bound.config["qsfFile"], bound.snapshots["qsf"].data)
     expected_initial = {
@@ -1453,8 +1685,13 @@ def capture_one(
         if vo_status == "captured" and vo is None:
             raise GateError("CDB claimed an optional VO that is missing")
 
+        actual_compiled_partition_artifact = _canonical(
+            workspace
+            / Path(COMPILED_PARTITION_DIR)
+            / (bound.config["revision"] + COMPILED_PARTITION_SUFFIX)
+        ).as_posix()
         evidence = {
-            "schemaVersion": 2,
+            "schemaVersion": 3,
             "gate": GATE,
             "artifactClass": ARTIFACT_CLASS,
             "physicalEvidence": True,
@@ -1463,7 +1700,24 @@ def capture_one(
             "contentWitness": bound.config["contentWitness"],
             "captureId": bound.invocation["captureId"],
             "freshRunToken": run_token,
+            "freshRunTokenBytes": bound.invocation["freshRunTokenBytes"],
+            "workspaceLeaf": workspace_leaf,
+            "workspaceLeafBinding": {
+                "leaf": workspace_leaf,
+                "hash": "sha256",
+                "domain": RUNTIME_HASH_DOMAIN,
+                "inputs": {
+                    "captureId": bound.invocation["captureId"],
+                    "freshRunToken": run_token,
+                },
+                "digestBytes": RUNTIME_LEAF_DIGEST_BYTES,
+            },
             "workspace": str(workspace),
+            "quartusInternalPathPreflight": {
+                **bound.invocation["quartusInternalPathPreflight"],
+                "actualLongestPath": actual_compiled_partition_artifact,
+                "actualLongestPathLength": len(actual_compiled_partition_artifact),
+            },
             "mapInvocation": {
                 "argv": map_command,
                 "startedAtUnixNs": map_started,
