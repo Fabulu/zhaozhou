@@ -18,6 +18,12 @@ EXPECTED_CLOCK_PINS = {
     "FPGA_CLK2_50": "PIN_Y13",
     "FPGA_CLK3_50": "PIN_E11",
 }
+EXPECTED_PLL_BLOBS = {
+    "fpga/rtl/pll.qip": "22278c8f7c5338a3b70fb43ddad19d9ca3a86f80",
+    "fpga/rtl/pll.v": "6446867ebec35c20f136ce5f321344a6c559b156",
+    "fpga/rtl/pll/pll_0002.qip": "aec45eb73ea83ceab9b5ad1b7d71b5869c92036f",
+    "fpga/rtl/pll/pll_0002.v": "c599468749fd26ad95fca4593c869fbeace4572f",
+}
 
 
 def object_id(kind: str, body: bytes) -> bytes:
@@ -69,7 +75,12 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
 
     require_text(
         repo / ".gitattributes",
-        ["fpga/sys/** -text"],
+        [
+            "fpga/sys/** -text",
+            "fpga/rtl/pll.qip -text",
+            "fpga/rtl/pll.v -text",
+            "fpga/rtl/pll/** -text",
+        ],
         errors,
     )
 
@@ -82,6 +93,20 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
             errors.append(
                 "vendored MiSTer sys tree mismatch: "
                 f"expected {EXPECTED_SYS_TREE}, got {actual_tree}"
+            )
+
+    actual_pll_blobs: dict[str, str] = {}
+    for relative, expected in EXPECTED_PLL_BLOBS.items():
+        path = repo / relative
+        if not path.is_file():
+            errors.append(f"missing pinned MiSTer PLL file: {path}")
+            continue
+        actual = object_id("blob", path.read_bytes()).hex()
+        actual_pll_blobs[relative] = actual
+        if actual != expected:
+            errors.append(
+                f"pinned MiSTer PLL blob mismatch for {relative}: "
+                f"expected {expected}, got {actual}"
             )
 
     sys_tcl = require_text(
@@ -139,7 +164,10 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
             'assign ADC_BUS = \'z;',
             "assign USER_OUT = '1;",
             "assign {SD_SCK, SD_MOSI, SD_CS} = 'z;",
-            "assign CLK_VIDEO = CLK_50M;",
+            ".outclk_0(clk_core)",
+            ".locked(pll_locked)",
+            "wire reset_request = RESET | !pll_locked | status[0] | buttons[1];",
+            "assign CLK_VIDEO = clk_core;",
             "assign CE_PIXEL = ce_pixel_q;",
             "assign AUDIO_L = '0;",
             "assign AUDIO_R = '0;",
@@ -155,6 +183,8 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
         "sourceStatus": "ok" if not errors else "failed",
         "misterSysTreeExpected": EXPECTED_SYS_TREE,
         "misterSysTreeActual": actual_tree,
+        "misterPllBlobsExpected": EXPECTED_PLL_BLOBS,
+        "misterPllBlobsActual": actual_pll_blobs,
         "device": EXPECTED_DEVICE,
         "clockPins": EXPECTED_CLOCK_PINS,
     }

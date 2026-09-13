@@ -32,6 +32,9 @@ class SuperStationBringupVerifierTest(unittest.TestCase):
             REPO / "fpga" / "rtl" / "platform" / "zhao_ssone_bringup.sv",
             repo / "fpga" / "rtl" / "platform" / "zhao_ssone_bringup.sv",
         )
+        shutil.copy2(REPO / "fpga" / "rtl" / "pll.qip", repo / "fpga" / "rtl" / "pll.qip")
+        shutil.copy2(REPO / "fpga" / "rtl" / "pll.v", repo / "fpga" / "rtl" / "pll.v")
+        shutil.copytree(REPO / "fpga" / "rtl" / "pll", repo / "fpga" / "rtl" / "pll")
         return temporary, repo
 
     def test_current_sources_pass(self) -> None:
@@ -59,6 +62,16 @@ class SuperStationBringupVerifierTest(unittest.TestCase):
         errors, _ = VERIFY.verify_sources(repo)
 
         self.assertTrue(any("sys tree mismatch" in error for error in errors))
+
+    def test_pll_mutation_fires(self) -> None:
+        temporary, repo = self.make_repo()
+        self.addCleanup(temporary.cleanup)
+        path = repo / "fpga" / "rtl" / "pll.v"
+        path.write_bytes(path.read_bytes() + b"\n// committed mutant\n")
+
+        errors, _ = VERIFY.verify_sources(repo)
+
+        self.assertTrue(any("PLL blob mismatch" in error for error in errors))
 
     def test_wrong_device_fires(self) -> None:
         temporary, repo = self.make_repo()

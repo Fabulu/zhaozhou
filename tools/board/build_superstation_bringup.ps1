@@ -29,6 +29,9 @@ $ownedPaths = @(
     'fpga/ZhaozhouBringup.sdc',
     'fpga/files_bringup.qip',
     'fpga/rtl/platform/zhao_ssone_bringup.sv',
+    'fpga/rtl/pll.qip',
+    'fpga/rtl/pll.v',
+    'fpga/rtl/pll',
     'tools/board'
 )
 $dirty = @(& git -C $repoRoot -c core.autocrlf=true status --porcelain -- $ownedPaths)
@@ -77,6 +80,9 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'fpga\ZhaozhouBringup.sdc') -Destina
 Copy-Item -LiteralPath (Join-Path $repoRoot 'fpga\files_bringup.qip') -Destination $buildRoot
 Copy-Item -LiteralPath (Join-Path $repoRoot 'fpga\rtl\platform\zhao_ssone_bringup.sv') `
               -Destination (Join-Path $buildRoot 'rtl\platform\zhao_ssone_bringup.sv')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'fpga\rtl\pll.qip') -Destination (Join-Path $buildRoot 'rtl\pll.qip')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'fpga\rtl\pll.v') -Destination (Join-Path $buildRoot 'rtl\pll.v')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'fpga\rtl\pll') -Destination (Join-Path $buildRoot 'rtl\pll') -Recurse
 Copy-Item -LiteralPath (Join-Path $repoRoot 'fpga\sys') -Destination (Join-Path $buildRoot 'sys') -Recurse
 
 $sourceCommit = (& git -C $repoRoot rev-parse HEAD).Trim()

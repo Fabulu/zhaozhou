@@ -68,10 +68,23 @@ module emu
     wire forced_scandoubler;
     wire [1:0] buttons;
     wire [127:0] status;
+    wire clk_core;
+    wire pll_locked;
+
+    // The MiSTer top-level clock-control blocks require CLK_VIDEO to come from
+    // a PLL output, not directly from a package clock pin. This is the pinned
+    // Template_MiSTer 50 MHz -> 20 MHz core PLL.
+    pll pll
+    (
+        .refclk(CLK_50M),
+        .rst(RESET),
+        .outclk_0(clk_core),
+        .locked(pll_locked)
+    );
 
     hps_io #(.CONF_STR(CONF_STR)) hps_io
     (
-        .clk_sys(CLK_50M),
+        .clk_sys(clk_core),
         .HPS_BUS(HPS_BUS),
         .EXT_BUS(),
         .gamma_bus(),
@@ -81,10 +94,10 @@ module emu
         .status_menumask(1'b0)
     );
 
-    wire reset_request = RESET | status[0] | buttons[1];
+    wire reset_request = RESET | !pll_locked | status[0] | buttons[1];
     reg [2:0] reset_pipe = 3'b111;
 
-    always @(posedge CLK_50M or posedge reset_request) begin
+    always @(posedge clk_core or posedge reset_request) begin
         if (reset_request)
             reset_pipe <= 3'b111;
         else
@@ -93,23 +106,25 @@ module emu
 
     wire core_reset = reset_pipe[2];
 
-    // 640x480 timing from the canonical 50 MHz core clock. CE_PIXEL divides
-    // the pixel rate to 25 MHz; the scaler tolerates the small VGA-rate offset.
-    localparam H_ACTIVE = 10'd640;
-    localparam H_SYNC_START = 10'd656;
-    localparam H_SYNC_END = 10'd752;
-    localparam H_TOTAL = 10'd800;
-    localparam V_ACTIVE = 10'd480;
-    localparam V_SYNC_START = 10'd490;
-    localparam V_SYNC_END = 10'd492;
-    localparam V_TOTAL = 10'd525;
+    // The pinned template PLL emits 20 MHz. Dividing pixel enable by two and
+    // using the template's 638x262 raster gives about 59.9 frames/s. These are
+    // the known-good MiSTer template timings, with only the pixels changed to
+    // unmistakable Zhaozhou bring-up bars.
+    localparam H_ACTIVE = 10'd529;
+    localparam H_SYNC_START = 10'd544;
+    localparam H_SYNC_END = 10'd590;
+    localparam H_TOTAL = 10'd638;
+    localparam V_ACTIVE = 10'd240;
+    localparam V_SYNC_START = 10'd245;
+    localparam V_SYNC_END = 10'd248;
+    localparam V_TOTAL = 10'd262;
 
     reg ce_pixel_q = 1'b0;
     reg [9:0] h_count = 10'd0;
     reg [9:0] v_count = 10'd0;
     reg [25:0] heartbeat = 26'd0;
 
-    always @(posedge CLK_50M) begin
+    always @(posedge clk_core) begin
         if (core_reset) begin
             ce_pixel_q <= 1'b0;
             h_count <= 10'd0;
@@ -135,26 +150,26 @@ module emu
 
     wire video_active = (h_count < H_ACTIVE) && (v_count < V_ACTIVE);
     wire border = video_active &&
-                  ((h_count < 10'd8) || (h_count >= 10'd632) ||
-                   (v_count < 10'd8) || (v_count >= 10'd472));
+                  ((h_count < 10'd8) || (h_count >= 10'd521) ||
+                   (v_count < 10'd8) || (v_count >= 10'd232));
 
     reg [23:0] bars;
     always @* begin
         if (!video_active)
             bars = 24'h000000;
-        else if (h_count < 10'd80)
+        else if (h_count < 10'd66)
             bars = 24'hFFFFFF;
-        else if (h_count < 10'd160)
+        else if (h_count < 10'd132)
             bars = 24'hFFFF00;
-        else if (h_count < 10'd240)
+        else if (h_count < 10'd198)
             bars = 24'h00FFFF;
-        else if (h_count < 10'd320)
+        else if (h_count < 10'd264)
             bars = 24'h00FF00;
-        else if (h_count < 10'd400)
+        else if (h_count < 10'd330)
             bars = 24'hFF00FF;
-        else if (h_count < 10'd480)
+        else if (h_count < 10'd396)
             bars = 24'hFF0000;
-        else if (h_count < 10'd560)
+        else if (h_count < 10'd462)
             bars = 24'h0000FF;
         else
             bars = 24'h000000;
@@ -162,13 +177,13 @@ module emu
 
     wire [23:0] pixel = border ? 24'h20FF80 : bars;
 
-    assign CLK_VIDEO = CLK_50M;
+    assign CLK_VIDEO = clk_core;
     assign CE_PIXEL = ce_pixel_q;
     assign VGA_DE = video_active && !core_reset;
-    assign VGA_HS = core_reset ||
-                    !((h_count >= H_SYNC_START) && (h_count < H_SYNC_END));
-    assign VGA_VS = core_reset ||
-                    !((v_count >= V_SYNC_START) && (v_count < V_SYNC_END));
+    assign VGA_HS = !core_reset &&
+                    ((h_count >= H_SYNC_START) && (h_count < H_SYNC_END));
+    assign VGA_VS = !core_reset &&
+                    ((v_count >= V_SYNC_START) && (v_count < V_SYNC_END));
     assign VGA_R = VGA_DE ? pixel[23:16] : 8'h00;
     assign VGA_G = VGA_DE ? pixel[15:8] : 8'h00;
     assign VGA_B = VGA_DE ? pixel[7:0] : 8'h00;

@@ -96,6 +96,46 @@ verified.
 - Owner reported the console rebooted and available for the upcoming volatile
   load. No board state or SD contents were changed in this step.
 
+### 2026-09-13 18:05 UTC+02:00 - First board compile started
+
+- Committed and pushed the exact build source as `4d74f0fc` before compiling.
+- Started `build_superstation_bringup.ps1` in the background. It copied its
+  closure into checkout-local ignored `build-board-superstation/`; no shared
+  build directory is involved and source files are no longer live inputs.
+- **Work in progress while fit runs:** implement the guarded SSH stage/load/
+  observe/rollback transaction and its tests outside the copied fit closure.
+- **Next step:** finish that transaction tool, then record where it stands before
+  reading the Quartus result and performing the final pin audit.
+
+### 2026-09-13 18:06 UTC+02:00 - Build result arrived; work parked first
+
+- The background build reported failure.
+- **Parked work:** the guarded load/rollback transaction design had established
+  `/dev/MiSTer_cmd` for loading and `/tmp/CORENAME` plus `/tmp/RBFNAME` for live
+  identity. No load script file had yet been authored.
+- **Resume after attending the build:** diagnose and repair the isolated compile,
+  commit the repair, rebuild cleanly, then return to the transaction tool with
+  those three runtime interfaces.
+
+### 2026-09-13 18:13 UTC+02:00 - First compile failure repaired
+
+- The compile failed in 74 seconds during Analysis & Synthesis; no fitter or
+  assembler ran and no RBF was created.
+- Root cause was concrete: the canonical framework's `sys/pll_q17.qip` expected
+  `rtl/pll.qip`, and the core drove `CLK_VIDEO` directly from a package clock.
+  Quartus reported missing `rtl/pll.qip` and rejected that direct clock on
+  clock-control `inclk[3]` for both HDMI and VGA.
+- Imported the four exact pinned Template_MiSTer core-PLL blobs, recorded their
+  Git object IDs, preserved them with `-text`, and extended the verifier.
+- Changed the core to the template's 50 MHz -> 20 MHz PLL, reset-gated on
+  `locked`, and the template's 638x262 raster with a 10 MHz pixel enable
+  (approximately 59.9 frames/s).
+- The checker now has seven fired positive controls, including a PLL mutation;
+  all seven pass and both the framework tree and four PLL blobs match upstream.
+- No board or SD state changed. The failed build remains only in the owned,
+  ignored checkout-local build directory and will be replaced with `-Clean`
+  after this repair is committed.
+
 ---
 
 ## Subagent Spawns

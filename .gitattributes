@@ -26,6 +26,9 @@
 # ending generated IP files. Preserve the pinned Git blobs exactly; normalising
 # all of them in either direction changes the recorded upstream tree.
 fpga/sys/** -text
+fpga/rtl/pll.qip -text
+fpga/rtl/pll.v -text
+fpga/rtl/pll/** -text
 
 # W2: ledger artifacts (regenerated with LF, byte-diffed by ledger:check)
 design/blocks.yml text eol=lf
