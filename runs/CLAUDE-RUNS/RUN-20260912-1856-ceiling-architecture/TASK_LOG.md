@@ -608,6 +608,14 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - Accepted conclusion is deliberately narrow: clean genuine MapOnly+CDB proves one abstract mapped DSP owns both distinct live 18x18 lanes and all three detectors can fire. Overall explicit status remains HOLD because encrypted vendor arithmetic is unavailable; final placement, production ALM/timing/usability, migration, and bankable saving remain HOLD/none. The conditional frontier stays **111 DSP**.
 - Started two disjoint in-process read-only lanes after all Quartus work ended: one audits the clean archive/receipt consistency; one inspects this Claude Code session's configured maximum context/content size, which the owner expects to be one million tokens. Neither may edit, run Quartus, mutate Git, or use HomeAI/Codex.
 
+### 2026-09-13 13:11 UTC+02:00 - Clean shell characterization launched detached
+
+- Clean dual evidence packet committed and pushed as `05736053ef9d1251336c727cad42d5601f7624fa`; remote branch read back exact and working tree was empty before launch.
+- Launched pre-named `shell_fit_top_clean_characterization` detached from exact HEAD `05736053` with `-KeepWorkspace -Processors 4`, parent PID 24332. Independent launcher logs are under `C:\Users\Fabs\AppData\Local\Temp\zhao-shell-fit-launch-05736053-20260913T111045Z`.
+- Runner's frozen-archive preflight reported exact top `zhao_shell_fit_top`, 56 sources, one SDC closure, no virtual/physical pins, no wildcard targets, and CRLF/LF-only launcher equivalence. Canonical Quartus 17.0.2 `quartus_map` then became active as PID 29164, proving the immutable snapshot and private Git evidence were captured before any new live-tree log edit.
+- No file in the 56-source fit closure will be edited while the fit runs. Current disjoint work at launch: one read-only agent rechecks the now-pushed dual evidence archive; one checks the session's expected one-million-token content/context setting; one maps exact fit-safe work outside the source closure; read-only optimization scouts inspect the GEOM.LOD width and material-ROM candidates. The coordinator owns only this run log/report state until the closure map returns.
+- This fit characterizes the protected legacy shell boundary only. It cannot establish a connected V3 production machine or close the 30,000-ALM / 85-DSP target by itself.
+
 ---
 
 ## Subagent Spawns
