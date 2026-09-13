@@ -299,6 +299,22 @@ class ShellGeneratorTests(unittest.TestCase):
             json.loads(changed.manifest)["hashes"]["generator"],
         )
 
+    def test_smoke_monitor_is_pinned_to_lf(self) -> None:
+        relative = "tests/shell/generated/zhao_shell_fit_smoke_tb.sv"
+        completed = subprocess.run(
+            ["git", "-C", str(REPO), "check-attr", "text", "eol", "--", relative],
+            text=True,
+            encoding="utf-8",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout)
+        self.assertEqual(
+            completed.stdout.splitlines(),
+            [f"{relative}: text: set", f"{relative}: eol: lf"],
+        )
+
     def test_smoke_refuses_manifest_without_source_hash_mode(self) -> None:
         manifest = json.loads(self.render_repo().manifest)
         manifest.pop("source_hash_canonicalization")

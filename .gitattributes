@@ -43,6 +43,8 @@ tools/abi-gen/templates/** text eol=lf
 compiler/src/generated/** text eol=lf
 runtime/include/zhao_abi.h text eol=lf
 fpga/rtl/generated/** text eol=lf
+# Shell-fit monitor is generated with LF and checked byte-for-byte in archives.
+tests/shell/generated/zhao_shell_fit_smoke_tb.sv text eol=lf
 spec/generated/** text eol=lf
 tests/fuzz/*.ts text eol=lf
 
