@@ -22,6 +22,11 @@
 # Do not restate a developer's git config here. If a path must not be
 # translated, list it below.
 
+# MiSTer framework import contains an upstream mix of LF, CRLF and a few mixed-
+# ending generated IP files. Preserve the pinned Git blobs exactly; normalising
+# all of them in either direction changes the recorded upstream tree.
+fpga/sys/** -text
+
 # W2: ledger artifacts (regenerated with LF, byte-diffed by ledger:check)
 design/blocks.yml text eol=lf
 design/ops.yml text eol=lf

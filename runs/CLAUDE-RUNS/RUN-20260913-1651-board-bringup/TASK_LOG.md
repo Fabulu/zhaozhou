@@ -75,6 +75,27 @@ verified.
   pin audit and a rehearsed rollback; raw JTAG, configuration flash, and
   non-MiSTer board-specific pin use remain blocked.
 
+### 2026-09-13 18:02 UTC+02:00 - Reproducible MiSTer source and safe core
+
+- Vendored all 57 files in the pinned Template_MiSTer `sys` tree at commit
+  `3ea1134cf05d62c2b1db30362277a823d739ced2`; reconstructed tree ID
+  `9f95eddd65ebfca9b8dd94ed1a48e3f867165aa8` exactly.
+- Preserved the upstream mixture of LF, CRLF, and mixed-ending generated IP with
+  a path-specific `-text` rule; a first normalization-based checker correctly
+  failed and was replaced rather than weakening the expected digest.
+- Added the dedicated `ZhaozhouBringup` Quartus project and safe `emu` core:
+  HPS bridge, 50 MHz clock/reset, color bars, and LED heartbeat are intentional;
+  SDRAM, HPS-DDR requests, SD, UART, user port, and audio are inactive.
+- Explicitly set all unused package pins to `AS INPUT TRI-STATED`.
+- Added an isolated build script that requires the exact checkout/branch, clean
+  committed source, no competing Quartus process, and its own marked build
+  directory. Fired the dirty-source guard deliberately before committing.
+- Added the source/vendor/pin-policy verifier and six positive-control tests;
+  all six pass, including mutations of device, vendor tree, EOL protection,
+  unused-pin policy, and SDRAM tri-state.
+- Owner reported the console rebooted and available for the upcoming volatile
+  load. No board state or SD contents were changed in this step.
+
 ---
 
 ## Subagent Spawns
@@ -88,6 +109,15 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/TASK_LOG.md`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPEC_v1.md`
 - `reports/BOARD-BRINGUP-SUPERSTATION-ONE-20260913.md`
+- `fpga/sys/` — 57 byte-pinned upstream framework files plus license/provenance
+- `fpga/ZhaozhouBringup.qpf`
+- `fpga/ZhaozhouBringup.qsf`
+- `fpga/ZhaozhouBringup.sdc`
+- `fpga/files_bringup.qip`
+- `fpga/rtl/platform/zhao_ssone_bringup.sv`
+- `tools/board/build_superstation_bringup.ps1`
+- `tools/board/verify_superstation_bringup.py`
+- `tests/tools/test_verify_superstation_bringup.py`
 
 ---
 
