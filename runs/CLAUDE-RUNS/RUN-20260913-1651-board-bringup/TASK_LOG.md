@@ -299,6 +299,36 @@ verified.
 - The watchdog instrument has now been made to fire and catch the state it is
   supposed to catch; future volatile loads may rely on it with host fallback.
 
+### 2026-09-13 19:34 UTC+02:00 - Real Zhaozhou hardware spec image authored
+
+- Kept the proven `ZhaozhouBringup` project/RBF unchanged and created a separately
+  named `ZhaozhouSpecs` project and load profile.
+- Added `zhao_ssone_spec_tests`, which executes 16 fabric vectors against three
+  existing shipping blocks: `zhao_crc32c_fold`, the formally proved
+  `zhao_raster_fill`, and `zhao_dual18_mul` with the actual Cyclone V packed-DSP
+  backend selected for synthesis.
+- The runner latches the first failing vector and an independently accumulated
+  `e5f1c57f` datapath signature. It preserves the three block instances; final
+  Quartus audit must still prove their hierarchy and `cyclonev_mac` survived and
+  that total DSP use increased from the framework's 33 to at least 34.
+- Added a separately named MiSTer core/display: green signature bands mean all
+  vectors and signature passed; red plus eight failure-code bands means failure.
+  SDRAM/HPS-DDR requests/audio/user port remain inactive as in the proven probe.
+- Added an isolated Verilator runner using the calibrated Windows MAKE/SHELL/C++
+  environment. It initially emitted PASS and then a later `%Fatal` because
+  `$finish` inside a repeat loop fell through; the runner also trusted exit 0.
+  Rewrote the bench to one terminal check and made `%Fatal` an explicit failure.
+- Clean result: 16 vectors pass, deliberate detector mutant latches fail code 1,
+  signature is `e5f1c57f`, no fatal output.
+- Added three spec-build verifier positive controls: missing shipping hierarchy,
+  missing 34th packed DSP, and a valid cp1252 report fixture. All fire/pass as
+  intended. Source/device/pin safety verifier passes.
+- Added `build_superstation_specs.ps1`: exact branch/clean-source/no-competing-fit
+  guards, isolated build directory, directed preflight, and post-map hierarchy/
+  DSP plus final pin/timing/RBF audit. Its dirty-source guard fired deliberately.
+- Generalized the guarded loader with a closed `Bringup|Specs` profile table;
+  arbitrary RBF/project/audit combinations remain refused.
+
 ---
 
 ## Subagent Spawns
@@ -333,6 +363,17 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/WATCHDOG-FIRE-TEST-ATTEMPT1-FIFO-BLOCKED.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/WATCHDOG-FIRE-TEST.json`
+- `fpga/ZhaozhouSpecs.qpf`
+- `fpga/ZhaozhouSpecs.qsf`
+- `fpga/ZhaozhouSpecs.sdc`
+- `fpga/files_specs.qip`
+- `fpga/rtl/platform/zhao_ssone_spec_tests.sv`
+- `fpga/rtl/platform/zhao_ssone_specs_emu.sv`
+- `tests/board/ssone_spec_tests_tb.sv`
+- `tests/board/run_ssone_spec_tests.py`
+- `tests/tools/test_verify_superstation_specs.py`
+- `tools/board/verify_superstation_specs.py`
+- `tools/board/build_superstation_specs.ps1`
 
 ---
 

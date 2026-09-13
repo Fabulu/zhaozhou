@@ -8,6 +8,9 @@ param(
 
     [switch]$Execute,
 
+    [ValidateSet('Bringup', 'Specs')]
+    [string]$Profile = 'Bringup',
+
     [string]$HostName = '192.168.178.59',
     [string]$UserName = 'root',
     [string]$AskPassPath,
@@ -27,6 +30,53 @@ $expectedBranch = 'zhaozhou-board-bringup-20260913'
 $menuPath = '/media/fat/menu.rbf'
 $menuSha256 = '25d5461b55e4d45e79c876a02d69f32b22f414b64e600a1adc930eefea6ea4a7'
 $target = "$UserName@$HostName"
+$profileConfig = if ($Profile -eq 'Specs') {
+    [ordered]@{
+        project = 'ZhaozhouSpecs'
+        expectedCore = 'Zhaozhou Hardware Specs'
+        verifier = 'tools\board\verify_superstation_specs.py'
+        audit = 'runs\CLAUDE-RUNS\RUN-20260913-1651-board-bringup\HARDWARE-SPECS-BUILD-AUDIT.json'
+        marker = '.zhaozhou-superstation-specs-build'
+        remotePrefix = 'ZhaozhouSpecs'
+        receipt = 'HARDWARE-SPECS-LOAD.json'
+        sourcePaths = @(
+            'fpga/sys',
+            'fpga/ZhaozhouSpecs.qpf',
+            'fpga/ZhaozhouSpecs.qsf',
+            'fpga/ZhaozhouSpecs.sdc',
+            'fpga/files_specs.qip',
+            'fpga/rtl/common/zhao_crc32c_fold.sv',
+            'fpga/rtl/raster/zhao_raster_fill.sv',
+            'fpga/rtl/common/zhao_dual18_mul.sv',
+            'fpga/rtl/platform/zhao_ssone_spec_tests.sv',
+            'fpga/rtl/platform/zhao_ssone_specs_emu.sv',
+            'fpga/rtl/pll.qip',
+            'fpga/rtl/pll.v',
+            'fpga/rtl/pll'
+        )
+    }
+} else {
+    [ordered]@{
+        project = 'ZhaozhouBringup'
+        expectedCore = 'Zhaozhou Board Bring-up'
+        verifier = 'tools\board\verify_superstation_bringup.py'
+        audit = 'runs\CLAUDE-RUNS\RUN-20260913-1651-board-bringup\QUARTUS-BUILD-AUDIT.json'
+        marker = '.zhaozhou-superstation-build'
+        remotePrefix = 'ZhaozhouBringup'
+        receipt = 'FIRST-VOLATILE-LOAD.json'
+        sourcePaths = @(
+            'fpga/sys',
+            'fpga/ZhaozhouBringup.qpf',
+            'fpga/ZhaozhouBringup.qsf',
+            'fpga/ZhaozhouBringup.sdc',
+            'fpga/files_bringup.qip',
+            'fpga/rtl/platform/zhao_ssone_bringup.sv',
+            'fpga/rtl/pll.qip',
+            'fpga/rtl/pll.v',
+            'fpga/rtl/pll'
+        )
+    }
+}
 
 if (-not $Execute) {
     throw 'This tool changes the live FPGA image. Pass -Execute only after reviewing the build and rollback receipt.'
@@ -178,6 +228,7 @@ $receipt = [ordered]@{
     startedUtc = $started
     host = $HostName
     branch = $branch
+    profile = $Profile
     sourceCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
     buildSourceCommit = $null
     buildAudit = $null
@@ -230,7 +281,7 @@ try {
             throw "RBF not found: $localRbfPath"
         }
         $buildRoot = Split-Path (Split-Path $localRbfPath -Parent) -Parent
-        $buildMarker = Join-Path $buildRoot '.zhaozhou-superstation-build'
+        $buildMarker = Join-Path $buildRoot $profileConfig.marker
         if (-not (Test-Path -LiteralPath $buildMarker -PathType Leaf)) {
             throw "RBF is not in an owned SuperStation build directory: $buildRoot"
         }
@@ -243,17 +294,7 @@ try {
         $receipt.buildSourceCommit = $buildSourceCommit
         & git -C $repoRoot cat-file -e "$buildSourceCommit^{commit}"
         if ($LASTEXITCODE -ne 0) { throw "Build source commit is not present: $buildSourceCommit" }
-        $rbfSourcePaths = @(
-            'fpga/sys',
-            'fpga/ZhaozhouBringup.qpf',
-            'fpga/ZhaozhouBringup.qsf',
-            'fpga/ZhaozhouBringup.sdc',
-            'fpga/files_bringup.qip',
-            'fpga/rtl/platform/zhao_ssone_bringup.sv',
-            'fpga/rtl/pll.qip',
-            'fpga/rtl/pll.v',
-            'fpga/rtl/pll'
-        )
+        $rbfSourcePaths = $profileConfig.sourcePaths
         & git -C $repoRoot diff --quiet $buildSourceCommit -- $rbfSourcePaths
         $sourceDiffRc = $LASTEXITCODE
         if ($sourceDiffRc -eq 1) {
@@ -262,13 +303,16 @@ try {
         if ($sourceDiffRc -ne 0) {
             throw "Could not compare current board sources with build commit $buildSourceCommit"
         }
-        $verifyScript = Join-Path $repoRoot 'tools\board\verify_superstation_bringup.py'
+        if ((Split-Path $localRbfPath -Leaf) -ne "$($profileConfig.project).rbf") {
+            throw "RBF name does not match profile $Profile`: $localRbfPath"
+        }
+        $verifyScript = Join-Path $repoRoot $profileConfig.verifier
         & python $verifyScript --repo $repoRoot --build-dir $buildRoot
         if ($LASTEXITCODE -ne 0) { throw 'Local RBF/build verification failed.' }
 
         $localHash = (Get-FileHash -LiteralPath $localRbfPath -Algorithm SHA256).Hash.ToLowerInvariant()
         $localBytes = (Get-Item -LiteralPath $localRbfPath).Length
-        $auditPath = Join-Path $repoRoot 'runs\CLAUDE-RUNS\RUN-20260913-1651-board-bringup\QUARTUS-BUILD-AUDIT.json'
+        $auditPath = Join-Path $repoRoot $profileConfig.audit
         if (-not (Test-Path -LiteralPath $auditPath -PathType Leaf)) {
             throw "Committed Quartus audit not found: $auditPath"
         }
@@ -276,7 +320,10 @@ try {
         if ($audit.status -ne 'ok' -or $audit.sourceCommit -ne $buildSourceCommit) {
             throw "Quartus audit does not authorize build commit $buildSourceCommit"
         }
-        $auditedRbf = $audit.artifacts.'ZhaozhouBringup.rbf'
+        $artifactName = "$($profileConfig.project).rbf"
+        $artifactProperty = $audit.artifacts.PSObject.Properties[$artifactName]
+        if ($null -eq $artifactProperty) { throw "Quartus audit has no $artifactName artifact" }
+        $auditedRbf = $artifactProperty.Value
         if ($auditedRbf.sha256 -ne $localHash -or [int64]$auditedRbf.bytes -ne $localBytes) {
             throw "Local RBF differs from committed Quartus audit: $localRbfPath"
         }
@@ -286,7 +333,7 @@ try {
             sourceCommit = $audit.sourceCommit
             rbfSha256 = $auditedRbf.sha256
         }
-        $remotePath = "/media/fat/_Utility/ZhaozhouBringup-$($localHash.Substring(0, 12)).rbf"
+        $remotePath = "/media/fat/_Utility/$($profileConfig.remotePrefix)-$($localHash.Substring(0, 12)).rbf"
         $receipt.localRbf = [ordered]@{ path = $localRbfPath; bytes = $localBytes; sha256 = $localHash }
         $receipt.remoteRbf = $remotePath
 
@@ -316,10 +363,12 @@ try {
         $receipt.loaded = @(Get-BoardState)
         $loadedCore = $receipt.loaded | Where-Object { $_ -like 'core=*' } | Select-Object -First 1
         $loadedRbf = $receipt.loaded | Where-Object { $_ -like 'rbf=*' } | Select-Object -First 1
-        if ($loadedCore -notmatch '^core=Zhaozhou Board Bring-up') {
+        $expectedCorePattern = '^core=' + [regex]::Escape($profileConfig.expectedCore)
+        $expectedRbfPattern = '^rbf=' + [regex]::Escape($profileConfig.expectedCore)
+        if ($loadedCore -notmatch $expectedCorePattern) {
             throw "Probe did not report its expected core name: $loadedCore"
         }
-        if ($loadedRbf -notmatch '^rbf=Zhaozhou Board Bring-up') {
+        if ($loadedRbf -notmatch $expectedRbfPattern) {
             throw "Probe did not report its expected RBF identity: $loadedRbf"
         }
 
@@ -392,7 +441,7 @@ try {
     $receipt.completedUtc = (Get-Date).ToUniversalTime().ToString('o')
     if (-not $ReceiptPath) {
         $runDir = Join-Path $repoRoot 'runs\CLAUDE-RUNS\RUN-20260913-1651-board-bringup'
-        $leaf = if ($RehearseRollback) { 'ROLLBACK-REHEARSAL.json' } elseif ($ExerciseWatchdog) { 'WATCHDOG-FIRE-TEST.json' } else { 'FIRST-VOLATILE-LOAD.json' }
+        $leaf = if ($RehearseRollback) { 'ROLLBACK-REHEARSAL.json' } elseif ($ExerciseWatchdog) { 'WATCHDOG-FIRE-TEST.json' } else { $profileConfig.receipt }
         $ReceiptPath = Join-Path $runDir $leaf
     }
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)

@@ -1,0 +1,6 @@
+set_global_assignment -name SDC_FILE ZhaozhouSpecs.sdc
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/common/zhao_crc32c_fold.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/raster/zhao_raster_fill.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/common/zhao_dual18_mul.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/platform/zhao_ssone_spec_tests.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/platform/zhao_ssone_specs_emu.sv
