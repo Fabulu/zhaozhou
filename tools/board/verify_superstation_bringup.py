@@ -109,7 +109,8 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
             '"buildInputs"',
             '"artifacts"',
             '"manifestSha256"',
-            '"flow.rpt", "map.rpt", "fit.rpt", "asm.rpt", "sta.rpt", "pin", "rbf", "sof"',
+            "ARTIFACT_SUFFIXES = (",
+            '"sta.summary"',
         ],
         errors,
     )

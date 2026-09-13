@@ -77,6 +77,18 @@ def validate(data: dict[str, Any], repo: Path) -> list[str]:
         "SHA256:FqNJOsj3FLUoMQxgn+cqGoXvVfENmVK4QFoSCMKl2lU",
         errors,
     )
+    require_equal(
+        data,
+        "network.ssh.loaderSourceCommit",
+        "bd73428561da57d373c9da1ea449edbc444dc907",
+        errors,
+    )
+    require_equal(
+        data,
+        "network.ssh.loaderGitBlob",
+        "98fbb8f856e18cbb5faab01fee085399062fff00",
+        errors,
+    )
     require_equal(data, "physicalCapabilities.selectedEngineBlockVectors.signature", "e5f1c57f", errors)
     require_equal(data, "physicalCapabilities.selectedEngineBlockVectors.vectorCount", 16, errors)
 
@@ -127,6 +139,34 @@ def validate(data: dict[str, Any], repo: Path) -> list[str]:
         )
         if result.returncode:
             errors.append(f"evidence.gitCommit is not present: {commit}")
+
+    identity_path = evidence.get("identityPreflight")
+    if isinstance(identity_path, str) and (repo / identity_path).is_file():
+        identity = json.loads((repo / identity_path).read_text(encoding="utf-8"))
+        require_equal(identity, "mode", "identity-preflight", errors)
+        require_equal(identity, "status", "ok", errors)
+        require_equal(
+            identity,
+            "sourceCommit",
+            data.get("network", {}).get("ssh", {}).get("loaderSourceCommit"),
+            errors,
+        )
+        require_equal(
+            identity,
+            "loaderSource.gitBlob",
+            data.get("network", {}).get("ssh", {}).get("loaderGitBlob"),
+            errors,
+        )
+        require_equal(
+            identity,
+            "sshHostKey.fingerprint",
+            data.get("network", {}).get("ssh", {}).get("ed25519Fingerprint"),
+            errors,
+        )
+        require_equal(identity, "loaded", [], errors)
+        require_equal(identity, "remoteRbf", None, errors)
+    else:
+        errors.append("source-bound identity preflight evidence is missing")
 
     build_path = evidence.get("specBuildAudit")
     load_path = evidence.get("specLoadReceipt")
