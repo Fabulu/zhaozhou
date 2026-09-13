@@ -22,7 +22,7 @@ not generalise to a neighbouring interface.
 | Core clock/reset | **Confirmed for probe** | Pinned PLL locked sufficiently to run raster/HPS protocol; reset/load/reload worked | Production GPU/video/audio frequencies and domain reset sequencing remain open |
 | HPS↔FPGA bridges | **Confirmed across load** | `lwhps2fpga`, `hps2fpga`, `fpga2hps` stayed enabled | No production command/data transaction crossed them yet |
 | Host-driven MENU rollback | **Confirmed twice** | MENU identity returned after both custom loads | Known `menu.rbf` hash is pinned in receipts |
-| HPS rollback watchdog armed | **Confirmed** | Independent HPS process/token/PID verified before custom load | **Not yet fire-tested**; silence is not proof that its FIFO action works |
+| HPS rollback watchdog | **Deadline fires; FIFO action under repair** | Attempt 1 logged `watchdog-fired`, but its one-shot FIFO writer blocked; host fallback restored MENU | Retry/readiness script must return MENU and log write/result before this becomes proven |
 | FPGA-side 128 MB SDRAM | **Open / intentionally untouched** | DQ output enables were disabled; no memory transaction | Run a separately audited address/data test before using it |
 | HPS DDR from fabric | **Open / intentionally inactive** | All DDRAM request outputs held zero | Linux HPS memory working is not fabric-interface proof |
 | Audio | **Open / intentionally silent** | Core outputs held zero | Test digital and analog paths separately at bounded level |

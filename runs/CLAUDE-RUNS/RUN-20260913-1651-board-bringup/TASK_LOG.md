@@ -265,6 +265,24 @@ verified.
   cleans up. Host rollback remains the failure fallback.
 - No new Quartus compile is planned; this uses the exact RBF already proved.
 
+### 2026-09-13 19:04 UTC+02:00 - Watchdog fired but its first FIFO write blocked
+
+- Ran the separately named watchdog positive control with the exact audited RBF.
+  Owner again saw bars.
+- HPS log proves the independent process reached its deadline at
+  `17:00:50Z`, but the board still reported the probe after the observation
+  window. The single shell write to `/dev/MiSTer_cmd` had blocked while MiSTer
+  was recreating/reattaching the FIFO around the new core.
+- Host fallback then returned MENU at `17:01:05Z`; FPGA manager, bridges, and
+  SSH remained healthy; staged RBF and watchdog token/log were cleaned.
+- Preserved `WATCHDOG-FIRE-TEST-ATTEMPT1-FIFO-BLOCKED.json`. It is a failed
+  instrument test, not a failed FPGA probe.
+- Replaced the one-shot writer with a staged HPS `/tmp` script: each attempt has
+  a 3-second timeout, retries up to five times, waits for and checks MENU after
+  a successful FIFO write, and logs attempts/write/result. Host rollback still
+  owns the failure path. The script is base64-staged to avoid shell quoting and
+  is removed after the transaction.
+
 ---
 
 ## Subagent Spawns
@@ -297,6 +315,7 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD-ATTEMPT1-NOLOAD.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD-ATTEMPT2-BARS-ROLLBACK.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/WATCHDOG-FIRE-TEST-ATTEMPT1-FIFO-BLOCKED.json`
 
 ---
 

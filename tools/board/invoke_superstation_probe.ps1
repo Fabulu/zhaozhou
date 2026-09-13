@@ -98,15 +98,50 @@ function Arm-BoardRollbackWatchdog {
     if ($Identifier -notmatch '^[0-9a-f]{12}$') { throw "Unsafe watchdog identifier: $Identifier" }
     $token = "/tmp/zhaozhou-rollback-$Identifier.armed"
     $log = "/tmp/zhaozhou-rollback-$Identifier.log"
-    $command = "rm -f $token $log; : > $token; " +
-               "nohup sh -c 'sleep $DelaySeconds; if test -e $token; then " +
-               "date -u +watchdog-fired=%Y-%m-%dT%H:%M:%SZ; " +
-               "printf `"%s\n`" `"load_core $menuPath`" > /dev/MiSTer_cmd; fi' " +
-               ">$log 2>&1 </dev/null & echo `$!"
+    $script = "/tmp/zhaozhou-rollback-$Identifier.sh"
+    $scriptTemplate = @'
+#!/bin/sh
+sleep __DELAY__
+if [ ! -e "__TOKEN__" ]; then
+    exit 0
+fi
+date -u +watchdog-fired=%Y-%m-%dT%H:%M:%SZ
+attempt=1
+while [ "$attempt" -le 5 ] && [ -e "__TOKEN__" ]; do
+    echo "watchdog-attempt=$attempt"
+    if timeout 3 sh -c 'printf "%s\n" "load_core __MENU__" > /dev/MiSTer_cmd'; then
+        echo "watchdog-write-ok=$attempt"
+        sleep 4
+        if [ "$(cat /tmp/CORENAME 2>/dev/null)" = "MENU" ]; then
+            echo "watchdog-menu-ok=$attempt"
+            exit 0
+        fi
+    else
+        echo "watchdog-write-timeout=$attempt"
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+done
+echo watchdog-exhausted
+exit 1
+'@
+    $scriptText = $scriptTemplate.Replace('__DELAY__', [string]$DelaySeconds).
+                                  Replace('__TOKEN__', $token).
+                                  Replace('__MENU__', $menuPath)
+    $encodedScript = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($scriptText))
+    $command = "rm -f $token $log $script; " +
+               "printf '%s' '$encodedScript' | base64 -d > $script; chmod 700 $script; : > $token; " +
+               "nohup $script >$log 2>&1 </dev/null & echo `$!"
     $watchdogPid = @(Invoke-BoardSsh $command)[-1]
     if ($watchdogPid -notmatch '^\d+$') { throw "HPS rollback watchdog returned invalid PID: $watchdogPid" }
-    Invoke-BoardSsh "test -e $token && kill -0 $watchdogPid" | Out-Null
-    return [ordered]@{ pid = [int]$watchdogPid; token = $token; log = $log; delaySeconds = $DelaySeconds }
+    Invoke-BoardSsh "test -e $token && test -x $script && kill -0 $watchdogPid" | Out-Null
+    return [ordered]@{
+        pid = [int]$watchdogPid
+        token = $token
+        log = $log
+        script = $script
+        delaySeconds = $DelaySeconds
+    }
 }
 
 function Disarm-BoardRollbackWatchdog {
@@ -114,7 +149,8 @@ function Disarm-BoardRollbackWatchdog {
     $watchdogPid = $Watchdog.pid
     $token = $Watchdog.token
     $log = $Watchdog.log
-    $lines = @(Invoke-BoardSsh "rm -f $token; kill $watchdogPid 2>/dev/null || true; cat $log 2>/dev/null || true; rm -f $log")
+    $script = $Watchdog.script
+    $lines = @(Invoke-BoardSsh "rm -f $token; kill $watchdogPid 2>/dev/null || true; cat $log 2>/dev/null || true; rm -f $log $script")
     return $lines
 }
 
