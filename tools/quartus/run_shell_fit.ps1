@@ -436,6 +436,26 @@ function Publish-FileAtomic([string]$Source, [string]$Destination) {
     }
 }
 
+function Protect-SnapshotFiles([string]$Root) {
+    $count = 0
+    foreach ($path in [IO.Directory]::EnumerateFiles(
+        $Root,
+        '*',
+        [IO.SearchOption]::AllDirectories
+    )) {
+        $file = [IO.FileInfo]::new($path)
+        $file.IsReadOnly = $true
+        if (-not $file.IsReadOnly) {
+            throw "Could not make frozen snapshot file read-only: $path"
+        }
+        $count++
+    }
+    if ($count -eq 0) {
+        throw 'Frozen snapshot contains no files to protect.'
+    }
+    return $count
+}
+
 if ($PreflightOnly) {
     Invoke-QsfPreflight $RepoRoot
     Assert-WrapperFreshness $RepoRoot
@@ -561,6 +581,8 @@ try {
         '--repo-root', $Snapshot,
         '--output-dir', $RawGit
     ) 'clean frozen Git evidence capture'
+    $protectedFiles = Protect-SnapshotFiles $Snapshot
+    Write-Host "shell-fit-snapshot: protected $protectedFiles frozen files as read-only"
 
     function Invoke-QuartusStage([string]$Name, [string]$Executable, [string[]]$Arguments) {
         $stdoutPath = Join-Path $StageLogs "$Name.stdout.log"

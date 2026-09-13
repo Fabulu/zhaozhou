@@ -829,6 +829,14 @@ class ReportPreflightTests(unittest.TestCase):
             "char.mkdir(parents=True, exist_ok=True)\n"
             "exe = Path(sys.executable).name.lower()\n"
             "if 'quartus_map' in exe:\n"
+            "    qsf_probe = os.environ.get('ZHAO_TEST_QSF_IMMUTABILITY')\n"
+            "    if qsf_probe:\n"
+            "        qsf = cwd/'zhao_shell_fit.qsf'\n"
+            "        protected = bool(getattr(qsf.stat(), 'st_file_attributes', 0) & 1)\n"
+            "        Path(qsf_probe).write_text('protected' if protected else 'rewritten', encoding='ascii')\n"
+            "        if not protected:\n"
+            "            raw = qsf.read_bytes().replace(b'\\r\\n', b'\\n').replace(b'\\r', b'\\n')\n"
+            "            qsf.write_bytes(raw.replace(b'\\n', b'\\r\\n'))\n"
             "    counter = os.environ.get('ZHAO_TEST_MAP_COUNT')\n"
             "    if counter:\n"
             "        with open(counter, 'a', encoding='ascii') as stream: stream.write('map\\n')\n"
@@ -3155,6 +3163,9 @@ class ReportPreflightTests(unittest.TestCase):
             repo = Path(temporary)
             self.make_runner_repository(repo, autocrlf=True)
             fake_bin = self.make_fake_quartus_bin(repo)
+            probe = repo / "qsf-immutability-probe"
+            env = dict(os.environ)
+            env["ZHAO_TEST_QSF_IMMUTABILITY"] = str(probe)
             completed = subprocess.run(
                 [
                     powershell,
@@ -3169,6 +3180,7 @@ class ReportPreflightTests(unittest.TestCase):
                     str(fake_bin),
                     "-TestOnlyFakeQuartus",
                 ],
+                env=env,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
@@ -3177,9 +3189,72 @@ class ReportPreflightTests(unittest.TestCase):
                 check=False,
                 timeout=120,
             )
+            probe_value = probe.read_text(encoding="ascii")
         self.assertEqual(completed.returncode, 0, completed.stdout)
+        self.assertEqual(probe_value, "protected")
         self.assertIn("TEST-ONLY RESULT accepted", completed.stdout)
         self.assertNotIn("specimen bytes differ from Git blobs", completed.stdout)
+
+    def test_fake_runner_detects_qsf_rewrite_without_snapshot_protection(self) -> None:
+        powershell = shutil.which("powershell.exe") or shutil.which("pwsh")
+        if powershell is None:
+            self.skipTest("PowerShell is unavailable")
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary)
+            self.make_runner_repository(repo, autocrlf=True)
+            fake_bin = self.make_fake_quartus_bin(repo)
+            runner = repo / "tools/quartus/run_shell_fit.ps1"
+            text = runner.read_text(encoding="utf-8")
+            seam = "    $protectedFiles = Protect-SnapshotFiles $Snapshot"
+            self.assertEqual(text.count(seam), 1)
+            runner.write_text(
+                text.replace(seam, "    $protectedFiles = 0", 1),
+                encoding="utf-8",
+            )
+            for arguments in (
+                ("add", "--", "tools/quartus/run_shell_fit.ps1"),
+                ("commit", "-m", "disable snapshot protection control"),
+            ):
+                committed = subprocess.run(
+                    ["git", "-C", str(repo), *arguments],
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    check=False,
+                )
+                self.assertEqual(committed.returncode, 0, committed.stdout)
+            probe = repo / "qsf-immutability-probe"
+            env = dict(os.environ)
+            env["ZHAO_TEST_QSF_IMMUTABILITY"] = str(probe)
+            completed = subprocess.run(
+                [
+                    powershell,
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(runner),
+                    "-PythonExe",
+                    sys.executable,
+                    "-QuartusBin",
+                    str(fake_bin),
+                    "-TestOnlyFakeQuartus",
+                ],
+                env=env,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+                timeout=120,
+            )
+            probe_value = probe.read_text(encoding="ascii")
+        self.assertNotEqual(completed.returncode, 0, completed.stdout)
+        self.assertEqual(probe_value, "rewritten")
+        self.assertIn("captured git evidence differs", completed.stdout)
 
     def test_fake_runner_retains_failed_timing_only_as_test_receipt(self) -> None:
         powershell = shutil.which("powershell.exe") or shutil.which("pwsh")

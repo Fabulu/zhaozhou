@@ -782,7 +782,7 @@
     },
     "runner": {
       "path": "tools/quartus/run_shell_fit.ps1",
-      "sha256": "bdfaab8662b6a3f20bc331385389827861e8f81f02241071e9ca5d2b49b5cbec"
+      "sha256": "1affc7f6b9cec1fd320f20de183fdd4b5c1c3dfdead8a555d5b4547f83f47b67"
     },
     "sdc": {
       "path": "tests/tools/fixtures/shell_fit_constraints_clean.sdc",
@@ -808,7 +808,7 @@
     "qsf": "cf3845a5c376596c36cf62608a8271a6dd455bda1da9bbf870d20493edfe02ae",
     "qsfParser": "e549ea0fcf36fbc5c82aa311ebeed32cd923a46c82062abd1c32e6e21811ac9c",
     "reportScript": "6a6374e9618057f2885b9d624aa3e7a306529e47296754fc2de6541382065a9d",
-    "runner": "bdfaab8662b6a3f20bc331385389827861e8f81f02241071e9ca5d2b49b5cbec",
+    "runner": "1affc7f6b9cec1fd320f20de183fdd4b5c1c3dfdead8a555d5b4547f83f47b67",
     "sdc": "a720662d1bea79d21cc826eca008a30ab4b326e56228a757468224694c04172b",
     "shellDeclaration": "a243647455d61afa653a14127a5bc489c7361f767f7e36c880254d81a46e1739",
     "shellFile": "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
