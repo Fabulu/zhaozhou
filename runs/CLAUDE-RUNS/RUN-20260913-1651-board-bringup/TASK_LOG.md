@@ -409,6 +409,24 @@ verified.
   lanes, physical mutants, production migration/saving, and the full shell
   remain open.
 
+### 2026-09-13 20:00 UTC+02:00 - Machine-readable partial board truth
+
+- Created the contract-named `reports/board_truth.json` rather than leaving the
+  day's evidence only in prose/run folders.
+- Encoded confirmed exterior identity, power label, FPGA compatibility target,
+  absent JTAG chain, HPS/FPGA clocks, reset/load method, HPS memory map,
+  network/software identity, physical probe/watchdog/spec results, and exact
+  evidence paths/commit.
+- Kept PCB/FPGA markings, negotiated PD/rails, oscillator parts, physical reset
+  mapping, FPGA SDRAM part/timing/bandwidth, HPS fabric-DDR, audio/input/GPIO,
+  analog video, external timing, JTAG/flash/persistence, and full shell in an
+  explicit `openCapabilities` set. Overall status remains `partial`.
+- Did not emit `sdram_params.svh`; no unmeasured board number has crossed the
+  `ZH-004` seam into architecture constants.
+- Added validator/cross-receipt checks and four fired refusal controls for
+  premature SDRAM closure, flash-access claims, disappearing open capabilities,
+  and current truth. All pass.
+
 ---
 
 ## Subagent Spawns
@@ -461,6 +479,9 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-QUARTUS-PIN.pin`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-QUARTUS-STA.rpt`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-LOAD.json`
+- `reports/board_truth.json`
+- `tools/board/validate_board_truth.py`
+- `tests/tools/test_validate_board_truth.py`
 
 ---
 

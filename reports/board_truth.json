@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "status": "partial",
+  "capturedAt": "2026-09-13T19:53:06+02:00",
+  "targetId": "superstation-one-rcsh-1001-1002",
+  "identity": {
+    "manufacturer": "Retro Remake Hong Kong Limited",
+    "product": "SuperStation One",
+    "modelMarking": "RCSH-1001/1002",
+    "pcbRevision": null,
+    "fpgaTopMarking": null,
+    "ownerReadExteriorLabel": true
+  },
+  "power": {
+    "exteriorInputMarking": {
+      "voltageV": [5, 9],
+      "currentA": [3, 3]
+    },
+    "currentlyNegotiatedUsbPdVoltageV": null,
+    "measuredRails": null,
+    "operatingEvidence": [
+      "HPS Linux reachable",
+      "1 Gbit/s Ethernet carrier",
+      "FPGA manager state operating",
+      "three HPS/fabric bridges enabled"
+    ]
+  },
+  "fpga": {
+    "family": "Cyclone V SoC",
+    "buildTarget": "5CSEBA6U23I7",
+    "packageContract": "UFBGA-672",
+    "speedGradeContract": 7,
+    "compatibilityStatus": "physically_proven_for_mister_rbf",
+    "physicalMarkingStatus": "unread",
+    "hpsSiliconId1": "0x00000003",
+    "hpsSiliconId2": "0x00000000",
+    "volatileLoad": {
+      "method": "MiSTer /dev/MiSTer_cmd FIFO via HPS",
+      "status": "proven",
+      "configurationFlashTouched": false,
+      "jtagUsed": false
+    }
+  },
+  "jtag": {
+    "hostTool": "Quartus 17.0.2 jtagconfig.exe -n",
+    "status": "no_hardware_available",
+    "usbBlasterPresentInWindowsPnp": false,
+    "usbBlasterPresentInBoardUsbTree": false,
+    "chain": null,
+    "idcode": null
+  },
+  "clocks": {
+    "hpsOsc1": {
+      "frequencyHz": 25000000,
+      "evidence": "live device-tree clock-frequency 0x017d7840"
+    },
+    "fpgaInputs": [
+      { "name": "FPGA_CLK1_50", "frequencyHz": 50000000, "pin": "V11", "ioStandard": "3.3-V LVTTL" },
+      { "name": "FPGA_CLK2_50", "frequencyHz": 50000000, "pin": "Y13", "ioStandard": "3.3-V LVTTL" },
+      { "name": "FPGA_CLK3_50", "frequencyHz": 50000000, "pin": "E11", "ioStandard": "3.3-V LVTTL" }
+    ],
+    "fpgaContractStatus": "physically_proven_for_pinned_mister_framework",
+    "physicalOscillatorPartMarkings": null
+  },
+  "reset": {
+    "coreContract": "MiSTer HPS/framework RESET, synchronized release after core PLL lock",
+    "volatileLoadResetSequenceStatus": "proven",
+    "physicalButtonMapping": null
+  },
+  "memory": {
+    "hpsDdr": {
+      "deviceTreeBytes": 1073741824,
+      "linuxBootArgs": "mem=511M memmap=513M$511M",
+      "linuxMemTotalKiB": 504096,
+      "componentMarking": null,
+      "fabricInterfaceStatus": "untested"
+    },
+    "fpgaSdram": {
+      "publishedCapacityBytes": 134217728,
+      "publishedType": "BGA SDR SDRAM",
+      "componentMarking": null,
+      "geometryStatus": "provisional_sim_profile_only",
+      "timingStatus": "unmeasured",
+      "bandwidthStatus": "unmeasured",
+      "physicalTransactionStatus": "untested"
+    },
+    "sdCard": {
+      "reportedCapacityGiB": 238.3,
+      "dataFilesystem": "exFAT",
+      "dataFreeGiBApprox": 228,
+      "persistentBoardTestFilesLeftBehind": false
+    }
+  },
+  "network": {
+    "routerDnsName": "mister.fritz.box",
+    "ipv4": "192.168.178.59",
+    "addressAssignment": "DHCP",
+    "ethernet": "1000baseT full duplex",
+    "ssh": {
+      "status": "proven_across_fpga_loads",
+      "server": "OpenSSH_8.6",
+      "ed25519Fingerprint": "SHA256:FqNJOsj3FLUoMQxgn+cqGoXvVfENmVK4QFoSCMKl2lU"
+    }
+  },
+  "software": {
+    "os": "Buildroot 2021.02.4",
+    "kernel": "Linux 5.15.1-MiSTer",
+    "misterRelease": "MiSTer_20260912",
+    "misterSha256": "9f6e5a237c36be6404ab4823d804821491db4bf125827f84aca2a1ca31f0a8a6",
+    "menuRbfSha256": "25d5461b55e4d45e79c876a02d69f32b22f414b64e600a1adc930eefea6ea4a7"
+  },
+  "physicalCapabilities": {
+    "boardVideoProbe": "passed_owner_visible_color_bars",
+    "hostRollback": "passed",
+    "hpsWatchdogRollback": "passed_positive_control",
+    "selectedEngineBlockVectors": {
+      "status": "passed_owner_visible_green_signature",
+      "vectorCount": 16,
+      "signature": "e5f1c57f",
+      "modules": [
+        "zhao_crc32c_fold",
+        "zhao_raster_fill",
+        "zhao_dual18_mul"
+      ],
+      "claimBoundary": "selected_vectors_in_this_wrapper_only"
+    }
+  },
+  "openCapabilities": [
+    "pcb_revision",
+    "fpga_top_marking",
+    "current_usb_pd_contract",
+    "measured_power_rails",
+    "physical_oscillator_markings",
+    "physical_button_reset_mapping",
+    "fpga_sdram_component_and_geometry",
+    "fpga_sdram_timing_and_bandwidth",
+    "hps_ddr_fabric_interface",
+    "audio",
+    "controller_input",
+    "gpio_user_port_snac",
+    "analog_video",
+    "external_io_timing",
+    "jtag_chain",
+    "configuration_flash",
+    "persistent_boot",
+    "full_zhaozhou_shell"
+  ],
+  "evidence": {
+    "gitCommit": "eee32c4e2c734219e5be1225ea72cc2f8694f0dc",
+    "inventory": "reports/BOARD-BRINGUP-SUPERSTATION-ONE-20260913.md",
+    "capabilityMatrix": "reports/SUPERSTATION-ONE-CAPABILITY-MATRIX-20260913.md",
+    "specScope": "reports/SUPERSTATION-HARDWARE-SPECS-V1-20260913.md",
+    "boardLoadReceipt": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD.json",
+    "watchdogReceipt": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/WATCHDOG-FIRE-TEST.json",
+    "specBuildAudit": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-BUILD-AUDIT.json",
+    "specLoadReceipt": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-LOAD.json"
+  }
+}
