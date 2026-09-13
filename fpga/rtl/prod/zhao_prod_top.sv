@@ -2879,130 +2879,6 @@ module zhao_prod_top (
     if (!rst_n) u45_fold_q <= 1'b0;
     else u45_fold_q <= u45_fold_q ^ (^u45_v_ready_o) ^ (^u45_r_valid_o) ^ (^u45_r_o) ^ (^u45_g_o) ^ (^u45_b_o) ^ (^u45_tag_o) ^ (^u45_fragments_o) ^ (^u45_fogged_fragments_o) ^ (^u45_clear_fragments_o);
 
-  // ---- zhao_raster_texjoin_v2 ----
-  logic [63:0] u46_lfsr_q;
-  logic [1023:0] u46_src;
-  assign u46_src = {16{u46_lfsr_q}};
-  always_ff @(posedge clk or negedge rst_n)
-    if (!rst_n) u46_lfsr_q <= 64'h0000001C6DF90113;
-    else u46_lfsr_q <= {u46_lfsr_q[62:0], (^(u46_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u46_f_ready_o;
-  logic signed [32-1:0] u46_f_u_i [3];
-  always_comb begin
-    u46_f_u_i[0] = u46_src[14 +: 32] ^ (32)'(0);
-    u46_f_u_i[1] = u46_src[14 +: 32] ^ (32)'(1);
-    u46_f_u_i[2] = u46_src[14 +: 32] ^ (32)'(2);
-  end
-  logic signed [32-1:0] u46_f_v_i [3];
-  always_comb begin
-    u46_f_v_i[0] = u46_src[21 +: 32] ^ (32)'(0);
-    u46_f_v_i[1] = u46_src[21 +: 32] ^ (32)'(1);
-    u46_f_v_i[2] = u46_src[21 +: 32] ^ (32)'(2);
-  end
-  logic [8-1:0] u46_f_binding_i [3];
-  always_comb begin
-    u46_f_binding_i[0] = u46_src[28 +: 8] ^ (8)'(0);
-    u46_f_binding_i[1] = u46_src[28 +: 8] ^ (8)'(1);
-    u46_f_binding_i[2] = u46_src[28 +: 8] ^ (8)'(2);
-  end
-  logic [4-1:0] u46_f_lod_i [3];
-  always_comb begin
-    u46_f_lod_i[0] = u46_src[35 +: 4] ^ (4)'(0);
-    u46_f_lod_i[1] = u46_src[35 +: 4] ^ (4)'(1);
-    u46_f_lod_i[2] = u46_src[35 +: 4] ^ (4)'(2);
-  end
-  logic [1-1:0] u46_tmu_valid_o;
-  logic signed [32-1:0] u46_tmu_u_o;
-  logic signed [32-1:0] u46_tmu_v_o;
-  logic [8-1:0] u46_tmu_binding_o;
-  logic [4-1:0] u46_tmu_lod_o;
-  logic [4-1:0] u46_tmu_slot_o;
-  logic [2-1:0] u46_tmu_sidx_o;
-  logic [8-1:0] u46_tmu_gen_o;
-  logic [1-1:0] u46_tmu_rready_o;
-  logic [1-1:0] u46_aux_valid_o;
-  logic [64-1:0] u46_aux_ctx_o;
-  logic [4-1:0] u46_aux_slot_o;
-  logic [8-1:0] u46_aux_gen_o;
-  logic [1-1:0] u46_aux_rready_o;
-  logic [1-1:0] u46_o_valid_o;
-  logic [64-1:0] u46_o_ctx_o;
-  logic [24-1:0] u46_o_rgb_o;
-  logic [8-1:0] u46_o_a_o;
-  logic [24-1:0] u46_o_aux_rgb_o;
-  logic [8-1:0] u46_o_aux_a_o;
-  logic [1-1:0] u46_o_has_aux_o;
-  logic [1-1:0] u46_o_uv_sat_o;
-  logic [32-1:0] u46_fragments_o;
-  logic [32-1:0] u46_samples_o;
-  logic [32-1:0] u46_full_clocks_o;
-  logic [32-1:0] u46_id_errors_o;
-  logic [1-1:0] u46_wq_overflow_o;
-  logic [1-1:0] u46_id_error_o;
-  logic [1-1:0] u46_combiner_unfrozen_o;
-  zhao_raster_texjoin_v2 u46_i (
-      .clk(clk),
-      .rst_n(rst_n),
-      .f_valid_i(u46_src[0 +: 1]),
-      .f_ready_o(u46_f_ready_o),
-      .f_sample_count_i(u46_src[7 +: 2]),
-      .f_u_i(u46_f_u_i),
-      .f_v_i(u46_f_v_i),
-      .f_binding_i(u46_f_binding_i),
-      .f_lod_i(u46_f_lod_i),
-      .f_recipe_i(u46_src[42 +: 3]),
-      .f_ctx_i(u46_src[49 +: 64]),
-      .f_aux_i(u46_src[56 +: 1]),
-      .f_uv_sat_i(u46_src[63 +: 1]),
-      .tmu_valid_o(u46_tmu_valid_o),
-      .tmu_ready_i(u46_src[70 +: 1]),
-      .tmu_u_o(u46_tmu_u_o),
-      .tmu_v_o(u46_tmu_v_o),
-      .tmu_binding_o(u46_tmu_binding_o),
-      .tmu_lod_o(u46_tmu_lod_o),
-      .tmu_slot_o(u46_tmu_slot_o),
-      .tmu_sidx_o(u46_tmu_sidx_o),
-      .tmu_gen_o(u46_tmu_gen_o),
-      .tmu_rvalid_i(u46_src[77 +: 1]),
-      .tmu_rready_o(u46_tmu_rready_o),
-      .tmu_rgb_i(u46_src[84 +: 24]),
-      .tmu_a_i(u46_src[91 +: 8]),
-      .tmu_rslot_i(u46_src[98 +: 4]),
-      .tmu_rsidx_i(u46_src[105 +: 2]),
-      .tmu_rgen_i(u46_src[112 +: 8]),
-      .aux_valid_o(u46_aux_valid_o),
-      .aux_ready_i(u46_src[119 +: 1]),
-      .aux_ctx_o(u46_aux_ctx_o),
-      .aux_slot_o(u46_aux_slot_o),
-      .aux_gen_o(u46_aux_gen_o),
-      .aux_rvalid_i(u46_src[126 +: 1]),
-      .aux_rready_o(u46_aux_rready_o),
-      .aux_rgb_i(u46_src[133 +: 24]),
-      .aux_a_i(u46_src[140 +: 8]),
-      .aux_rslot_i(u46_src[147 +: 4]),
-      .aux_rgen_i(u46_src[154 +: 8]),
-      .o_valid_o(u46_o_valid_o),
-      .o_ready_i(u46_src[161 +: 1]),
-      .o_ctx_o(u46_o_ctx_o),
-      .o_rgb_o(u46_o_rgb_o),
-      .o_a_o(u46_o_a_o),
-      .o_aux_rgb_o(u46_o_aux_rgb_o),
-      .o_aux_a_o(u46_o_aux_a_o),
-      .o_has_aux_o(u46_o_has_aux_o),
-      .o_uv_sat_o(u46_o_uv_sat_o),
-      .fragments_o(u46_fragments_o),
-      .samples_o(u46_samples_o),
-      .full_clocks_o(u46_full_clocks_o),
-      .id_errors_o(u46_id_errors_o),
-      .wq_overflow_o(u46_wq_overflow_o),
-      .id_error_o(u46_id_error_o),
-      .combiner_unfrozen_o(u46_combiner_unfrozen_o)
-  );
-  logic u46_fold_q;
-  always_ff @(posedge clk or negedge rst_n)
-    if (!rst_n) u46_fold_q <= 1'b0;
-    else u46_fold_q <= u46_fold_q ^ (^u46_f_ready_o) ^ (^u46_tmu_valid_o) ^ (^u46_tmu_u_o) ^ (^u46_tmu_v_o) ^ (^u46_tmu_binding_o) ^ (^u46_tmu_lod_o) ^ (^u46_tmu_slot_o) ^ (^u46_tmu_sidx_o) ^ (^u46_tmu_gen_o) ^ (^u46_tmu_rready_o) ^ (^u46_aux_valid_o) ^ (^u46_aux_ctx_o) ^ (^u46_aux_slot_o) ^ (^u46_aux_gen_o) ^ (^u46_aux_rready_o) ^ (^u46_o_valid_o) ^ (^u46_o_ctx_o) ^ (^u46_o_rgb_o) ^ (^u46_o_a_o) ^ (^u46_o_aux_rgb_o) ^ (^u46_o_aux_a_o) ^ (^u46_o_has_aux_o) ^ (^u46_o_uv_sat_o) ^ (^u46_fragments_o) ^ (^u46_samples_o) ^ (^u46_full_clocks_o) ^ (^u46_id_errors_o) ^ (^u46_wq_overflow_o) ^ (^u46_id_error_o) ^ (^u46_combiner_unfrozen_o);
-
   // ---- zhao_raster_toon ----
   logic [63:0] u47_lfsr_q;
   logic [1023:0] u47_src;
@@ -4804,7 +4680,7 @@ module zhao_prod_top (
   // having no load.
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) fold_o <= 1'b0;
-    else fold_o <= u00_fold_q ^ u01_fold_q ^ u02_fold_q ^ u03_fold_q ^ u04_fold_q ^ u05_fold_q ^ u06_fold_q ^ u07_fold_q ^ u08_fold_q ^ u09_fold_q ^ u10_fold_q ^ u11_fold_q ^ u12_fold_q ^ u13_fold_q ^ u14_fold_q ^ u15_fold_q ^ u16_fold_q ^ u17_fold_q ^ u18_fold_q ^ u19_fold_q ^ u20_fold_q ^ u21_fold_q ^ u22_fold_q ^ u23_fold_q ^ u24_fold_q ^ u25_fold_q ^ u26_fold_q ^ u27_fold_q ^ u28_fold_q ^ u29_fold_q ^ u30_fold_q ^ u31_fold_q ^ u32_fold_q ^ u33_fold_q ^ u34_fold_q ^ u35_fold_q ^ u36_fold_q ^ u37_fold_q ^ u38_fold_q ^ u39_fold_q ^ u40_fold_q ^ u41_fold_q ^ u42_fold_q ^ u43_fold_q ^ u44_fold_q ^ u45_fold_q ^ u46_fold_q ^ u47_fold_q ^ u48_fold_q ^ u49_fold_q ^ u50_fold_q ^ u51_fold_q ^ u52_fold_q ^ u53_fold_q ^ u54_fold_q ^ u55_fold_q ^ u56_fold_q ^ u57_fold_q ^ u58_fold_q ^ u59_fold_q ^ u60_fold_q ^ u61_fold_q ^ u62_fold_q ^ u63_fold_q ^ u64_fold_q ^ u65_fold_q;
+    else fold_o <= u00_fold_q ^ u01_fold_q ^ u02_fold_q ^ u03_fold_q ^ u04_fold_q ^ u05_fold_q ^ u06_fold_q ^ u07_fold_q ^ u08_fold_q ^ u09_fold_q ^ u10_fold_q ^ u11_fold_q ^ u12_fold_q ^ u13_fold_q ^ u14_fold_q ^ u15_fold_q ^ u16_fold_q ^ u17_fold_q ^ u18_fold_q ^ u19_fold_q ^ u20_fold_q ^ u21_fold_q ^ u22_fold_q ^ u23_fold_q ^ u24_fold_q ^ u25_fold_q ^ u26_fold_q ^ u27_fold_q ^ u28_fold_q ^ u29_fold_q ^ u30_fold_q ^ u31_fold_q ^ u32_fold_q ^ u33_fold_q ^ u34_fold_q ^ u35_fold_q ^ u36_fold_q ^ u37_fold_q ^ u38_fold_q ^ u39_fold_q ^ u40_fold_q ^ u41_fold_q ^ u42_fold_q ^ u43_fold_q ^ u44_fold_q ^ u45_fold_q ^ u47_fold_q ^ u48_fold_q ^ u49_fold_q ^ u50_fold_q ^ u51_fold_q ^ u52_fold_q ^ u53_fold_q ^ u54_fold_q ^ u55_fold_q ^ u56_fold_q ^ u57_fold_q ^ u58_fold_q ^ u59_fold_q ^ u60_fold_q ^ u61_fold_q ^ u62_fold_q ^ u63_fold_q ^ u64_fold_q ^ u65_fold_q;
 
 endmodule : zhao_prod_top
 

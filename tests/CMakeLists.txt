@@ -2568,6 +2568,84 @@ add_test(NAME desc_join_expand_directed COMMAND test_desc_join_expand_directed)
 set_tests_properties(desc_join_expand_directed PROPERTIES
   LABELS "fast;nightly" TIMEOUT 300)
 
+# TEXJOIN retirement control: independently scoreboard every field of the
+# accepted descriptor at the real join->expander handshake and every emitted
+# {slot,generation,sample} request while all consumers stall independently.
+add_executable(test_desc_identity_stall_control
+  texture/desc_identity_stall_control.cpp)
+target_link_libraries(test_desc_identity_stall_control PRIVATE zhao_harness)
+verilate(test_desc_identity_stall_control
+  PREFIX Vtb_desc_join_expand
+  TOP_MODULE tb_desc_join_expand
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/texture/tb_desc_join_expand.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv)
+add_test(NAME desc_identity_stall_control
+         COMMAND test_desc_identity_stall_control)
+
+# Positive control, inverse polarity. The renamed mutant fetches the adjacent
+# descriptor row while its generation and aggregate counters still describe the
+# requested slot. This passes only when the independent scoreboard fires.
+add_executable(test_desc_identity_slotswap_control
+  texture/desc_identity_stall_control.cpp)
+target_compile_definitions(test_desc_identity_slotswap_control PRIVATE
+  ZHAO_DESC_SLOTSWAP_CONTROL=1)
+target_link_libraries(test_desc_identity_slotswap_control PRIVATE zhao_harness)
+verilate(test_desc_identity_slotswap_control
+  PREFIX Vtb_desc_join_expand
+  TOP_MODULE tb_desc_join_expand_slotswap_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/texture/tb_desc_join_expand.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_early_desc_slotswap_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv
+  VERILATOR_ARGS -DZHAO_DESC_SLOTSWAP_MUTANT)
+add_test(NAME desc_identity_slotswap_control
+         COMMAND test_desc_identity_slotswap_control)
+
+# Persistence positive control, inverse polarity. This renamed wrapper withdraws
+# request valid after it was observed stalled; the checker must retain its hold
+# obligation through the missing-valid cycle and fire before any timeout.
+add_executable(test_desc_identity_valid_withdraw_control
+  texture/desc_identity_stall_control.cpp)
+target_compile_definitions(test_desc_identity_valid_withdraw_control PRIVATE
+  ZHAO_DESC_VALID_WITHDRAW_CONTROL=1)
+target_link_libraries(test_desc_identity_valid_withdraw_control PRIVATE zhao_harness)
+verilate(test_desc_identity_valid_withdraw_control
+  PREFIX Vtb_desc_join_expand
+  TOP_MODULE tb_desc_join_expand_valid_withdraw_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/tb_desc_join_expand_valid_withdraw_mutant.sv
+          ${CMAKE_SOURCE_DIR}/tests/texture/tb_desc_join_expand.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv)
+add_test(NAME desc_identity_valid_withdraw_control
+         COMMAND test_desc_identity_valid_withdraw_control)
+
+# Conservation positive control, inverse polarity. The renamed wrapper consumes
+# one newly-presented AUX beat internally without exposing its valid. No stalled
+# valid is withdrawn, so only exact queue/count conservation may license this lane.
+add_executable(test_desc_identity_substream_drop_control
+  texture/desc_identity_stall_control.cpp)
+target_compile_definitions(test_desc_identity_substream_drop_control PRIVATE
+  ZHAO_DESC_SUBSTREAM_DROP_CONTROL=1)
+target_link_libraries(test_desc_identity_substream_drop_control PRIVATE zhao_harness)
+verilate(test_desc_identity_substream_drop_control
+  PREFIX Vtb_desc_join_expand
+  TOP_MODULE tb_desc_join_expand_substream_drop_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/tb_desc_join_expand_substream_drop_mutant.sv
+          ${CMAKE_SOURCE_DIR}/tests/texture/tb_desc_join_expand.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv)
+add_test(NAME desc_identity_substream_drop_control
+         COMMAND test_desc_identity_substream_drop_control)
+
+set_tests_properties(
+  desc_identity_stall_control desc_identity_slotswap_control
+  desc_identity_valid_withdraw_control desc_identity_substream_drop_control
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME uv_join_directed COMMAND test_uv_join_directed)
 set_tests_properties(uv_join_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
@@ -3024,6 +3102,42 @@ add_test(NAME texture_v3own_readlate_directed COMMAND test_texture_v3own_readlat
 set_tests_properties(texture_v3own_readlate_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 set_tests_properties(texture_v3own_adversarial PROPERTIES
   LABELS "fast;nightly" TIMEOUT 900)
+
+# TEXJOIN retirement bubble gate. Fill the V3 owner's ordered output queue,
+# complete a longer prepared run behind it, release ready, then require one
+# handshake every clock. This is not the intentional full-to-free admission
+# bubble: no new admission occurs during the measured drain.
+add_executable(test_texture_v3own_bubble_control
+  texture/texture_v3own_bubble_control.cpp)
+target_link_libraries(test_texture_v3own_bubble_control PRIVATE zhao_harness)
+verilate(test_texture_v3own_bubble_control
+  PREFIX Vzhao_texture_v3own
+  TOP_MODULE zhao_texture_v3own
+  SOURCES ${ZHAO_TEX_V3OWN_SV}
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_v3own_bubble_control
+         COMMAND test_texture_v3own_bubble_control)
+
+# Positive control, inverse polarity. One source line removes output-pop credit
+# from the ordered fetch reservation; the renamed mutant must create a visible
+# bubble while still draining every owner with exact payload and order.
+add_executable(test_texture_v3own_no_same_edge_reload_control
+  texture/texture_v3own_bubble_control.cpp)
+target_compile_definitions(test_texture_v3own_no_same_edge_reload_control PRIVATE
+  ZHAO_NO_SAME_EDGE_RELOAD_CONTROL=1)
+target_link_libraries(test_texture_v3own_no_same_edge_reload_control PRIVATE zhao_harness)
+verilate(test_texture_v3own_no_same_edge_reload_control
+  PREFIX Vzhao_texture_v3own
+  TOP_MODULE zhao_texture_v3own_no_same_edge_reload_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_v3own_no_same_edge_reload_mutant.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_v3own_no_same_edge_reload_control
+         COMMAND test_texture_v3own_no_same_edge_reload_control)
+set_tests_properties(
+  texture_v3own_bubble_control texture_v3own_no_same_edge_reload_control
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 # M6's CORRECTNESS TEST, RUN AS A KNOWN FAILURE UNTIL M6 LANDS.
 #
@@ -6831,6 +6945,9 @@ set_tests_properties(
   PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 if(Python3_Interpreter_FOUND)
+  add_test(NAME texjoin_accounting_retirement
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_texjoin_accounting.py -q)
   add_test(NAME shell_fit_tools
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_shell_fit_tools.py -q)
@@ -6854,6 +6971,7 @@ if(Python3_Interpreter_FOUND)
                    --verilator "${ZHAO_VERILATOR_LINT}"
                    --sources ${ZHAO_SHELL_RTL})
   set_tests_properties(
+    texjoin_accounting_retirement
     shell_fit_tools shell_fit_preflight_fixtures shell_fit_generated_freshness
     shell_fit_smoke_monitor_freshness shell_fit_elaboration_census
     PROPERTIES LABELS "fast;lint" TIMEOUT 120)

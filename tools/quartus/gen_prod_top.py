@@ -31,7 +31,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from check_prod_manifest import read_manifest  # noqa: E402
+from check_prod_manifest import read_list_section, read_manifest  # noqa: E402
 from module_graph import build, strip_comments  # noqa: E402
 
 OUT = "fpga/rtl/prod/zhao_prod_top.sv"
@@ -299,8 +299,32 @@ def is_reset(name):
     return re.search(r"(^|_)(rst|reset)", name) is not None
 
 
+def census_slots(tops, retired):
+    """Return stable `(ordinal, live_module)` rows for private census drivers.
+
+    The generated names and LFSR seeds used to depend on a live module's position
+    in `sorted(tops)`. Retiring one root therefore renumbered and reseeded every
+    lexically later block, obscuring the only meaningful generated change. A
+    retired slot is a tombstone: it advances the ordinal but emits no RTL.
+    """
+    live = set(tops)
+    tombstones = set(retired)
+    if live & tombstones:
+        raise ValueError("live tops also listed as retired census slots: %s" %
+                         ", ".join(sorted(live & tombstones)))
+    return [(ordinal, module)
+            for ordinal, module in enumerate(sorted(live | tombstones))
+            if module in live]
+
+
 def main():
     tops, _excluded = read_manifest()
+    retired = read_list_section("retired_census_slots")
+    try:
+        slots = census_slots(tops, retired)
+    except ValueError as exc:
+        sys.stderr.write("gen_prod_top: %s\n" % exc)
+        return 2
     decl, _inst = build()
     files = {}
     lines = []
@@ -308,7 +332,7 @@ def main():
     used = []
     needed_types = set()   # user-defined port types the top ends up declaring
 
-    for idx, mod in enumerate(sorted(tops)):
+    for idx, mod in slots:
         path = decl[mod]
         if path not in files:
             files[path] = io.open(path, encoding="utf-8", errors="replace").read()

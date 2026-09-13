@@ -111,7 +111,9 @@ top:
   - zhao_texture_material_combine_v1
 
   # --- the per-pixel texture path ------------------------------------------
-  - zhao_raster_texjoin_v2       # over zhao_raster_texjoin
+  # TEXJOIN V2 remains in-tree as the behavioural oracle, but is excluded below:
+  # V3 owns the lifecycle inside the selected texture subsystem. This is an
+  # accounting correction only; neither path is connected to the shell today.
   - zhao_raster_attrdiv_svc
   - zhao_raster_attrinterp
   - zhao_raster_attrstep
@@ -214,6 +216,32 @@ top:
   - zhao_field_v3_trig
   - zhao_field_v3_spline
   - zhao_field_v3_sbank
+
+# ==============================================================================
+# LOGICAL OWNERSHIP ROLES -- role-aware, not merely graph containment
+# ==============================================================================
+# This records every implementation capable of owning the named lifecycle. The
+# checker starts at `root` and requires exactly one reachable provider. Scope is
+# deliberately `selected_subsystem`: V3 is NOT connected to zhao_shell_top yet,
+# and this declaration must never be cited as evidence that it is.
+ownership_roles:
+  raster_texture_fragment_lifecycle:
+    scope: selected_subsystem
+    root: zhao_texture_island_v3_top
+    # Semantic ownership is explicit metadata. Neither module names nor graph
+    # containment are allowed to infer that a block owns this lifecycle.
+    provider_identification: explicit_registry
+    providers:
+      - zhao_texture_v3own
+      - zhao_raster_texjoin_v2
+      - zhao_texture_fragrob
+
+# Keep retired ordinals as tombstones in the generated accounting hierarchy.
+# Without this, deleting one sorted top renumbers and reseeds every later private
+# LFSR, producing a broad generated diff that falsely resembles a broad hardware
+# change. A tombstone emits no RTL; it only preserves every survivor's identity.
+retired_census_slots:
+  - zhao_raster_texjoin_v2
 
 # ==============================================================================
 # SELECTED PROFILES -- which measurement describes the instance that SHIPS
@@ -585,16 +613,16 @@ excluded:
   - zhao_texture_cache: superseded  by zhao_texture_cache_pipe (C0-C4, M10K-backed)
   - zhao_texture_tmu: superseded  by zhao_texture_tmu_pipe
   - zhao_texture_aux: superseded  by zhao_texture_aux_pipe
-  - zhao_raster_texjoin: superseded  by zhao_raster_texjoin_v2
-  # TEXTURE.FRAGROB is the transaction centre INTENDED to replace the TEXJOIN
-  # monolith (S6.1), and it is deliberately not counted yet. It was built
-  # BESIDE zhao_raster_texjoin_v2 with v2 kept as the behavioural oracle -- the
-  # differential is 280 retirements with zero divergence -- but v2 is still the
-  # shipped implementation until FRAGROB is FIT against its own tripwires
-  # (min_m10k 6, max_registers 2500, max_dsp 0). Counting both would break the
-  # one-implementation rule this file exists to enforce, and counting FRAGROB
-  # instead of v2 would claim an adoption that has no fit behind it.
-  - zhao_texture_fragrob: not-yet-adopted  built beside zhao_raster_texjoin_v2 per S6.1; v2 stays counted until FRAGROB is fit
+  - zhao_raster_texjoin: superseded  by the retained zhao_raster_texjoin_v2 behavioural oracle
+  # 2026-09-13 TEXJOIN ACCOUNTING RETIREMENT. The source, standalone target,
+  # directed/differential oracle tests and historical fit evidence remain. V3OWN
+  # is the sole lifecycle owner INSIDE the selected V3 subsystem; neither V3 nor
+  # TEXJOIN is connected to the shell, so this row records no physical ALM saving.
+  - zhao_raster_texjoin_v2: superseded  redundant accounting root; lifecycle is owned by zhao_texture_v3own inside selected zhao_texture_island_v3_top; retained as the behavioural oracle and leaf-fit specimen; not shell-connected and no physical saving claimed
+  # FRAGROB was the earlier transaction-centre candidate built beside TEXJOIN V2.
+  # It remains a retained differential specimen, but it is not the selected
+  # lifecycle owner and must not put a second root into the census.
+  - zhao_texture_fragrob: not-yet-adopted  retained differential candidate beside the TEXJOIN oracle; zhao_texture_v3own is the sole owner inside the selected V3 subsystem
   - zhao_raster_perspuv: superseded  by zhao_raster_perspuv_svc (two lanes)
   - zhao_raster_rcp24: superseded  by zhao_raster_rcp24_svc (scheduled)
 

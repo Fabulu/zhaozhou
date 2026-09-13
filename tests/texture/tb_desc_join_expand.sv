@@ -18,7 +18,18 @@
 // consumer §5.3 names, the one that must be fed "this descriptor's values, not
 // live ingress values and not another stage's current owner". Its request
 // SEQUENCE is the observable that proves it.
-module tb_desc_join_expand #(
+// The same wrapper is elaborated with a renamed committed slot-swap mutant for
+// the independent full-identity control. The production module name is never
+// shadowed, so an accidental wildcard source list cannot substitute the mutant.
+`ifdef ZHAO_DESC_SLOTSWAP_MUTANT
+  `define ZHAO_DESC_JOIN_TOP tb_desc_join_expand_slotswap_mutant
+  `define ZHAO_EARLY_DESC zhao_texture_early_desc_slotswap_mutant
+`else
+  `define ZHAO_DESC_JOIN_TOP tb_desc_join_expand
+  `define ZHAO_EARLY_DESC zhao_texture_early_desc
+`endif
+
+module `ZHAO_DESC_JOIN_TOP #(
     parameter int unsigned TAGW  = 14,
     parameter int unsigned SLOTW = 6,
     parameter int unsigned GENW  = 8,
@@ -78,6 +89,19 @@ module tb_desc_join_expand #(
     output var logic [7:0] m_mat_b_o,
     output var logic [7:0] m_weight_o,
 
+    // ---- independent full accepted-descriptor observation --------------------
+    // These are the exact join->expander handshake and payload. The focused
+    // stall test scoreboards them from the accepted owner-tagged input rather
+    // than trusting any DUT counter or a second field bank.
+    output var logic               f_valid_o,
+    output var logic               f_ready_o,
+    output var logic [13:0]        f_owner_o,
+    output var logic signed [31:0] f_u_o,
+    output var logic signed [31:0] f_v_o,
+    output var logic [CTXW-1:0]    f_ctx_o,
+    output var logic               f_sat_o,
+    output var logic               f_depth_zero_o,
+
     // ---- what the join hands the expander, observable for checking -----------
     output var logic [7:0]      f_binding_o,
     output var logic [7:0]      f_lod_o,
@@ -106,7 +130,7 @@ module tb_desc_join_expand #(
   logic [1:0]       d_class_c, d_count_c, d_pslot_c;
   logic             d_aux_c, d_rvalid_c;
 
-  zhao_texture_early_desc #(.SLOTW(SLOTW), .GENW(GENW)) u_desc (
+  `ZHAO_EARLY_DESC #(.SLOTW(SLOTW), .GENW(GENW)) u_desc (
       .clk(clk), .rst_n(rst_n),
       .wr_valid_i(wr_valid_i), .wr_slot_i(wr_slot_i),
       .wr_owner_gen_i(wr_owner_gen_i),
@@ -160,6 +184,15 @@ module tb_desc_join_expand #(
       .joined_o(joined_o), .saturated_o(), .depth_zero_o(),
       .gen_mismatch_o(gen_mismatch_o));
 
+  assign f_valid_o      = j_f_valid_c;
+  assign f_ready_o      = j_f_ready_c;
+  assign f_owner_o      = j_owner_c;
+  assign f_u_o          = j_u_c;
+  assign f_v_o          = j_v_c;
+  assign f_ctx_o        = j_ctx_c;
+  assign f_sat_o        = j_sat_c;
+  assign f_depth_zero_o = j_dz_c;
+
   // The class sanitisation lives at the READ POINT, applied to the captured
   // class -- the island does this and the join's header says the rule belongs in
   // one place. CLS_ERR (2'd3) becomes CLS_NEAR (2'd1).
@@ -186,3 +219,6 @@ module tb_desc_join_expand #(
   wire unused_c = &{1'b0, d_rvalid_c, j_sat_c, j_dz_c};
 
 endmodule
+
+`undef ZHAO_EARLY_DESC
+`undef ZHAO_DESC_JOIN_TOP

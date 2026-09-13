@@ -17,14 +17,27 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from module_graph import build  # noqa: E402
+from check_ownership_roles import (  # noqa: E402
+    ElaborationError,
+    RoleManifestError,
+    run_check as check_ownership_roles,
+)
 
 MANIFEST = "design/prod_manifest.yml"
+TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.normpath(os.path.join(TOOL_DIR, "..", ".."))
+PROD_TOP_GENERATOR = os.path.join(TOOL_DIR, "gen_prod_top.py")
+
+
+def _read_lines(path):
+    with io.open(path, encoding="utf-8") as stream:
+        return list(stream)
 
 
 def read_manifest(path=MANIFEST):
     tops, excluded = [], {}
     section = None
-    for raw in io.open(path, encoding="utf-8"):
+    for raw in _read_lines(path):
         line = raw.split("#")[0].rstrip()
         if not line.strip():
             continue
@@ -39,6 +52,31 @@ def read_manifest(path=MANIFEST):
         if m and section == "excluded":
             excluded[m.group(1)] = (m.group(2), m.group(3).strip())
     return tops, excluded
+
+
+def read_list_section(section_name, path=MANIFEST):
+    """Read one top-level manifest section containing bare list entries.
+
+    `retired_census_slots` is metadata, not a second accounting disposition: its
+    rows reserve generated private-stimulus ordinals while the module itself
+    remains accounted exactly once under `excluded`. Keeping this parser narrow
+    prevents nested role-provider lists from being mistaken for tombstones.
+    """
+    values = []
+    section = None
+    for raw in _read_lines(path):
+        line = raw.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        top = re.match(r"^(\w[\w_]*):\s*$", line)
+        if top:
+            section = top.group(1)
+            continue
+        if section == section_name:
+            match = re.match(r"^\s{2}-\s*(\S+)\s*$", line)
+            if match:
+                values.append(match.group(1))
+    return values
 
 
 def module_edges():
@@ -135,40 +173,78 @@ def check_fit_sources(decl, edges=None):
     return out
 
 
-def check_top_fresh():
-    """zhao_prod_top.sv must match what its generator produces RIGHT NOW.
+def check_top_fresh(command=None):
+    """Require the generator's complete ``--check`` contract to succeed.
 
-    The other half of the 2026-09-09 repair. Every check in this file reads the
-    generated top, so all of them silently describe whatever design the top was
-    generated from -- and on 2026-09-09 that was 2,888 lines out of date, with one
-    instance pointing at a different module. This checker reported OK the whole
-    time.
+    RC 1 means at least one selected top was skipped, RC 2 is a refusal to
+    generate, and RC 3 is a stale/missing output. Every nonzero result invalidates
+    the generated accounting hierarchy; treating only RC 3 as failure turns a
+    skipped module or a generator refusal into false freshness.
 
-    `gen_prod_top.py --check` compares without writing, so running the gate can
-    never itself modify the tree -- a checker with a side effect is a checker
-    people stop trusting.
+    ``command`` exists for committed executable status controls. Production use
+    always invokes the real generator.
     """
     import subprocess
     import sys as _sys
-    gen = os.path.join("tools", "quartus", "gen_prod_top.py")
-    if not os.path.exists(gen):
-        return []
+    if command is None:
+        if not os.path.exists(PROD_TOP_GENERATOR):
+            return ["generator freshness command is missing: %s" %
+                    PROD_TOP_GENERATOR]
+        command = [_sys.executable, PROD_TOP_GENERATOR, "--check"]
     try:
-        r = subprocess.run([_sys.executable, gen, "--check"],
-                           capture_output=True, text=True)
+        # gen_prod_top's manifest, RTL and output paths are intentionally
+        # repository-relative. Anchor its process at the source root rather than
+        # inheriting CTest's binary-directory cwd.
+        result = subprocess.run(command, cwd=REPO_ROOT,
+                                capture_output=True, text=True)
     except OSError as exc:
-        return ["could not run %s --check (%s)" % (gen, exc)]
-    if r.returncode == 3:
-        return ["fpga/rtl/prod/zhao_prod_top.sv is STALE -- it does not match "
-                "tools/quartus/gen_prod_top.py's output, so every check in this "
-                "file is describing an older design. Run: python %s" % gen]
-    return []
+        return ["could not run generator freshness command (%s)" % exc]
+    if result.returncode == 0:
+        return []
+
+    diagnostic = "\n".join(
+        line for line in ((result.stdout or "") + "\n" +
+                          (result.stderr or "")).splitlines() if line.strip())
+    meanings = {
+        1: "selected top skipped",
+        2: "generator refusal",
+        3: "stale or mismatched generated top",
+    }
+    meaning = meanings.get(result.returncode, "generator failure")
+    detail = ("; output: " + diagnostic[-2000:]) if diagnostic else ""
+    return [
+        "fpga/rtl/prod/zhao_prod_top.sv freshness is invalid: generator "
+        "--check returned RC %d (%s)%s" %
+        (result.returncode, meaning, detail)
+    ]
 
 
 def main():
     decl, edges = module_edges()
     tops, excluded = read_manifest()
+    retired_slots = read_list_section("retired_census_slots")
     errors = []
+
+    duplicates = sorted({name for name in retired_slots
+                         if retired_slots.count(name) > 1})
+    for name in duplicates:
+        errors.append("retired census slot '%s' is listed more than once" % name)
+    for name in retired_slots:
+        if name not in decl:
+            errors.append("retired census slot '%s' is not a module under fpga/rtl" % name)
+        if name in tops:
+            errors.append("retired census slot '%s' is still a selected top" % name)
+        if name not in excluded or excluded[name][0] != "superseded":
+            errors.append(
+                "retired census slot '%s' must be accounted exactly once as "
+                "excluded:superseded" % name)
+
+    try:
+        role_errors, role_observations = check_ownership_roles()
+        errors.extend(role_errors)
+    except (OSError, RoleManifestError, ElaborationError) as exc:
+        role_observations = []
+        errors.append("ownership role declaration is invalid: %s" % exc)
 
     for t in tops:
         if t not in decl:
@@ -223,9 +299,15 @@ def main():
             % (m, decl[m].replace("fpga/rtl/", ""))
         )
 
+    for role, scope, root, reachable in role_observations:
+        print("ownership role %s: evidence=verilator-v3param-ast "
+              "provider_identification=explicit_registry scope=%s root=%s "
+              "elaborated=[%s]" %
+              (role, scope, root, ", ".join(reachable)))
     print(
-        "prod manifest: %d modules, %d tops, %d inside, %d excluded"
-        % (len(decl), len(tops), len(inside), len(excluded))
+        "prod manifest: %d modules, %d tops, %d inside, %d excluded, "
+        "%d retired census slots"
+        % (len(decl), len(tops), len(inside), len(excluded), len(retired_slots))
     )
     if errors:
         print("\nMANIFEST CHECK FAILED -- %d error(s)" % len(errors))

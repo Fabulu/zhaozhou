@@ -1,0 +1,2253 @@
+// COMMITTED TEST MUTANT -- no-same-edge-retirement-reload control.
+//
+// Renamed so no production or wildcard source list can elaborate it by mistake.
+// Exactly one substantive mutation removes the output-pop credit from the
+// ordered fetch reservation. A full prepared output queue therefore cannot
+// launch its replacement on the pop edge and produces a visible drain bubble.
+// The inverse-polarity driver passes only when that bubble is observed.
+// Source oracle: fpga/rtl/texture/zhao_texture_v3own.sv
+//
+// zhao_texture_v3own.sv -- the V3 owner / completion / retire experiment.
+//
+// reports/TEXTURE-ISLAND-V3-ARCHITECTURE-20260906.txt section 26.1, verbatim:
+//
+//   > Do not begin with a giant top-level rewrite or another full-island fit.
+//   > Build one small V3 owner/completion/retire experiment with the real
+//   > proposed capacities:
+//   >   64 owners and full generation identity;
+//   >   three statically banked 64x40 sample-result stores;
+//   >   one 64x40 AUX result store;
+//   >   required/issued/claimed/committed control;
+//   >   simultaneous TMU and AUX terminal inputs;
+//   >   once-only ready-ticket creation;
+//   >   a final 64x40 result store and 64-bit context path;
+//   >   synchronous credited ordered output;
+//   >   an adversarial testbench and exact-tool synthesis/fit wrapper.
+//
+// It is not the island, it does not sample a texture, and it computes no
+// colour. It is the LIFETIME and the STORAGE, which is the part the fit says
+// is expensive.
+//
+// ---------------------------------------------------------------------------
+// THE DEFECT THIS REPLACES, NAMED AT ITS LINE NUMBER
+// ---------------------------------------------------------------------------
+// fpga/rtl/texture/zhao_texture_fragrob.sv:626
+//
+//     if (tmu_ok_c) begin
+//       res_rgb_m[tmu_sidx_c][tmu_rslot_i] <= tmu_rgb_i;
+//
+// and `tmu_ok_c` at :443 is
+//
+//     tmu_rvalid_i && val_q[tmu_rslot_i] && (gen_q[tmu_rslot_i]==tmu_rgen_i)
+//       && tmu_sidx_ok_c && req_q[..][..] && iss_q[..][..] && !arr_q[..][..]
+//
+// -- an INPUT PIN, through five slot-indexed table lookups and a seven-term
+// predicate, arriving at a payload RAM's write enable in the same cycle. That
+// is section 0's point D, "the reported return-to-RAM-write-enable cone".
+//
+// In this module the corresponding write enable is
+//
+//     .wr_en_i (c3t_we_q[s])
+//
+// a bare flip-flop output with NOTHING between it and the bank. The predicate
+// still exists, still rejects exactly the same six classes, and now runs two
+// pipeline stages earlier where its result has a whole clock to settle before
+// anything writes. Section 0 again: "A delayed write-enable alone is not this
+// pipeline" -- so the claim/commit split below is the substance and the
+// registered enable is only its visible consequence.
+//
+// ---------------------------------------------------------------------------
+// WHAT IS IN FABRIC AND WHY THAT IS NOT A CHEAT
+// ---------------------------------------------------------------------------
+// Section 0 point C: "Keep only small scoreboards, queue pointers, valid bits,
+// and genuinely bounded pipeline registers in fabric." The scoreboard here is
+// 64 x (live + gen8 + required4 + issued4 + claimed4 + committed4 + 5 single
+// bits) = 64 x 30 = 1,920 flops, and section 8.1 asks for it in fabric
+// explicitly ("They have genuine concurrent events and are not the place to
+// force an impossible multiported M10K"). Every WIDE payload -- context64,
+// four result40 planes, the final result40, and the three ready queues -- is a
+// zhao_texture_v3bank instance and appears by name in the Quartus RAM summary.
+//
+// ---------------------------------------------------------------------------
+// EVERY PAYLOAD WRITE ENABLE IN THIS FILE IS A FLOP OUTPUT
+// ---------------------------------------------------------------------------
+//   OWNER_CONTEXT    .wr_en_i(ctxw_v_q)
+//   SAMPLE_RESULT_s  .wr_en_i(c3t_we_q[s])     one-hot, registered at C2->C3
+//   AUX_RESULT       .wr_en_i(c3a_we_q)
+//   FINAL_RESULT     .wr_en_i(c3f_we_q)
+//   READY_TMU        .wr_en_i(q0t_v_q)
+//   READY_AUX        .wr_en_i(q0a_v_q)
+//   READY_INITIAL    .wr_en_i(q0i_v_q)
+//
+// The ready-queue writes are registered one edge behind the eligibility
+// decision, which Appendix B.4 authorises directly: "A queue write delayed by
+// a register does not delay the claim that prevents a second ticket." The
+// ticket CLAIM (rdy_q) still happens on the eligibility edge, so a second
+// event for the same owner cannot produce a second ticket during the delay.
+//
+// The three sample banks are instantiated from a `genvar` generate with the
+// bank instance INSIDE the loop, and the write enable is one bit of a
+// registered one-hot. That shape is deliberate and is the same one
+// reports/V3-DIAGNOSIS-VERIFICATION-20260906.md section 3.2 says must not be
+// "tidied" into `data_r [LANES][N]`: a register-selected lane index costs a
+// wide mux, and in the predecessor block that rewrite cost 5,402 ALMs and
+// produced ZERO M10K. Static index, ports inside the generate, always.
+//
+// ---------------------------------------------------------------------------
+// STAGE MAP (section 8.2, and the same shape reused three times)
+// ---------------------------------------------------------------------------
+//   C0 CAPTURE   register the whole return packet and its range check
+//   C1 CONTROL   register the addressed narrow owner-state snapshot
+//   C2 VALIDATE  identity/required/issued/duplicate + recent-claim forwarding;
+//                an accepted return sets claimed AT THIS EDGE
+//   C3 COMMIT    the registered one-hot enable drives exactly one bank
+//   C4 PUBLISH   committed rises one edge AFTER the payload write edge, and
+//                readiness is evaluated from the coalesced masks
+//
+// The forwarding window is exactly ONE cycle and that is derived, not assumed:
+// C1's snapshot is taken at the edge that also applies C2's claim, so the very
+// next packet's C2 (one cycle later) is the only one that can miss it; the
+// packet after that reads a snapshot taken after the claim landed. The C3
+// record IS the forwarding record -- it carries {valid, slot, generation,
+// mask} of the claim made on the previous edge. If a stage is ever inserted
+// between C1 and C2, this window grows and FWD_WINDOW below must grow with it.
+//
+// ---------------------------------------------------------------------------
+// EVERY TRIPWIRE REACHES A PORT
+// ---------------------------------------------------------------------------
+// reports/V3-DIAGNOSIS-VERIFICATION-20260906.md section 4 item 2: twelve
+// island signals are declared, port-connected and consumed by NOTHING,
+// including FRAGROB's own `id_error_o` and `wq_overflow_o`. "Preserving the
+// logic that sets them is not enough -- they must reach a port, or V3 inherits
+// the same blindness." So every rejection class here has its own counter on
+// its own port, the classes are mutually exclusive by construction so the
+// counters partition the traffic, and the adversarial bench asserts on every
+// one of them. A counter nothing reads is decoration.
+//
+// ENFORCED-BY: fpga/rtl/texture/zhao_texture_v3own.sv:a_reject_partition_t
+// ENFORCED-BY: fpga/rtl/texture/zhao_texture_v3own.sv:a_reject_partition_a
+//
+// The assertions are named above rather than left to prose because that is the
+// kind of sentence which stays true right up until somebody adds a sixth
+// condition. Were two classes ever to fire for one packet, the per-port totals
+// would stop being addable -- and a number that cannot be added up is worse
+// than no number at all.
+//
+// ---------------------------------------------------------------------------
+// SCOPE HONESTY -- what section 6 asks for that is deliberately NOT here
+// ---------------------------------------------------------------------------
+// Section 6's bank table also lists MATERIAL 64x48, AUX_GEOMETRY 64x80, three
+// SAMPLE_DESC 64x80 planes, RCP_RESULT 64x32 and SAMPLE_METADATA 256x40.
+// Section 26.1's experiment does not name them, and they belong to admission /
+// descriptor expansion / the planner rather than to the completion and
+// retirement lifetime under test. Adding them would inflate the M10K count of
+// an experiment whose whole purpose is attribution. They are absent ON PURPOSE
+// and their absence is reported, not quietly enjoyed.
+//
+// ---------------------------------------------------------------------------
+// READ_LATE -- THE OWNER/COMBINE RESIDENT-READ SEAM (roadmap 4.2 / Commit4)
+// ---------------------------------------------------------------------------
+// Added 2026-09-10, reports/TEXTURE-READLATE-COMBINE-20260910.md.
+//
+// With READ_LATE=0 (the default, and what every leaf suite elaborates) this
+// block behaves exactly as before: a popped ticket walks k0->k1->k2, the four
+// result planes are read at the registered address, captured into
+// `sres_cap_q`/`ares_cap_q`, and pushed WITH the handle into four 40-bit
+// payload queues that travel out on `cmb_s0_o..cmb_aux_o`. The @g2-prod fit
+// shows what that copy chain costs: `cq_s0_q..cq_ax_q` inferred as FOUR
+// altsyncrams of TWO M10Ks EACH (8 of the island's 49 blocks) plus the 160
+// capture flops -- for data that already sits, immutable, in `g_sres`/`u_ares`.
+//
+// With READ_LATE=1 (the island) the ready queues carry ONLY the owner handle
+// (`cq_own_q`, 4 x 14 bits), the pop lands in one registered stage (`k0`) and
+// is queued, and the sample planes are read BY THE COMBINER'S PHASE ENGINE
+// through `src_rd_slot_i` -> `src_s0_o..src_aux_o`. Each plane keeps exactly
+// one reader; the reader RELOCATES from this block's prefetch pipeline into
+// the consumer (architecture 2.4: "port pressure does NOT grow"). The
+// aux-as-third-sample choice moves behind the boundary with it.
+//
+// WHAT IS ASSERTED AT THE NEW BOUNDARY (the roadmap's gate, 4.2):
+//   * publication-before-read  -- a source read names an owner that is live,
+//     whose committed mask covers its required mask, and that COMBINE has
+//     actually accepted (`a_src_read_published`);
+//   * release-after-last-reader -- no read of an owner whose final has been
+//     claimed, and no read on the owner's release edge
+//     (`a_src_read_before_final`, `a_release_not_under_reader`).
+// The synthesizable tripwire is `ev_src_unpub_o`: a read of an owner that is
+// not live, not combine-accepted, or already final-claimed. It reads three
+// scoreboard bits at the read address (a 64:1 select each) rather than the
+// full committed/required cover, which is left to the simulation assertion:
+// ticket creation already requires the cover, and combine acceptance requires
+// the ticket, so `cbi` implies it structurally. BLIND SPOT, recorded: a read of
+// the WRONG slot that happens to be a published owner is invisible to this
+// counter -- the identity is right by every bit it inspects. Only the
+// differential (tests/texture/material_combine_readlate_diff.cpp) sees that
+// class, and the committed mutant proves it does.
+//
+// WHAT DOES NOT CHANGE: the ticket claim (`rdy_q`), the reservation (`crs_q`),
+// the acceptance (`cbi_q`), the three single-writer ready queues, the arbiter,
+// the CMBQD reservation and every scoreboard bit. The ready-claimed table is
+// RETAINED on purpose -- see the report's section on the binding refusal.
+// ---------------------------------------------------------------------------
+`default_nettype none
+
+module zhao_texture_v3own_no_same_edge_reload_mutant #(
+    // 64 owners. Section 5.1: "The baseline owner capacity is 64."
+    parameter int unsigned OWNERS = 64,
+    parameter int unsigned SLOTW  = 6,
+    parameter int unsigned GENW   = 8,
+    // result40 = STATUS8 | alpha8 | RGB888 (Appendix B.1).
+    parameter int unsigned RESW   = 40,
+    // Section 5.6: the FULL 64-bit opaque context, returned at the output. A
+    // 16-bit legacy tag is a wrapper's business, not this bank's.
+    parameter int unsigned CTXW   = 64,
+    // Output reservation domain (section 18.1/18.2). 4 covers the three
+    // read/capture stages plus one queued row, which is what lets the read
+    // path sustain one fragment per clock (section 18.3).
+    parameter int unsigned OUTQD  = 4,
+    // COMBINE input reservation domain (section 9.4).
+    parameter int unsigned CMBQD  = 4,
+    // 0: legacy copy chain (four payload lanes travel with the handle).
+    // 1: read-late seam (handle only; the combiner reads the planes). See the
+    //    READ_LATE section of the header.
+    parameter int unsigned READ_LATE = 0,
+    // Derived; ports cannot name a localparam. Do not override.
+    parameter int unsigned OWNERW = SLOTW + GENW,
+    parameter int unsigned SMPW   = SLOTW + 2 + GENW,
+    parameter int unsigned CNTW   = SLOTW + 1
+) (
+    input  var logic clk,
+    input  var logic rst_n,
+
+    // ---- admission (section 5.2) --------------------------------------------
+    input  var logic              adm_valid_i,
+    output var logic              adm_ready_o,
+    input  var logic [CTXW-1:0]   adm_ctx_i,
+    // {AUX, sample2, sample1, sample0}. The FROZEN required mask, section 9.1.
+    input  var logic [3:0]        adm_req_i,
+    output var logic [OWNERW-1:0] adm_owner_o,
+    output var logic              adm_accept_o,
+
+    // ---- issue notification (section 19.3: ISSUED is its own moment) --------
+    input  var logic              iss_tmu_valid_i,
+    input  var logic [SMPW-1:0]   iss_tmu_handle_i,
+    input  var logic              iss_aux_valid_i,
+    input  var logic [OWNERW-1:0] iss_aux_owner_i,
+
+    // ---- TMU terminal return ------------------------------------------------
+    input  var logic              tmu_rvalid_i,
+    output var logic              tmu_rready_o,
+    input  var logic [SMPW-1:0]   tmu_rhandle_i,
+    input  var logic [RESW-1:0]   tmu_rresult_i,
+
+    // ---- AUX terminal return (its own typed port, section 5.1) -------------
+    input  var logic              aux_rvalid_i,
+    output var logic              aux_rready_o,
+    input  var logic [OWNERW-1:0] aux_rowner_i,
+    input  var logic [RESW-1:0]   aux_rresult_i,
+
+    // ---- COMBINE admission (section 9.4) ------------------------------------
+    output var logic              cmb_valid_o,
+    input  var logic              cmb_ready_i,
+    output var logic [OWNERW-1:0] cmb_owner_o,
+    output var logic [RESW-1:0]   cmb_s0_o,
+    output var logic [RESW-1:0]   cmb_s1_o,
+    output var logic [RESW-1:0]   cmb_s2_o,
+    output var logic [RESW-1:0]   cmb_aux_o,
+
+    // ---- read-late plane port (READ_LATE=1; tied off otherwise) ------------
+    // The combiner's phase engine presents the owner SLOT it is reading for
+    // and a valid; the four plane outputs answer one edge later, straight from
+    // each bank's output register, with nothing in between.
+    input  var logic              src_rd_valid_i,
+    input  var logic [SLOTW-1:0]  src_rd_slot_i,
+    output var logic [RESW-1:0]   src_s0_o,
+    output var logic [RESW-1:0]   src_s1_o,
+    output var logic [RESW-1:0]   src_s2_o,
+    output var logic [RESW-1:0]   src_aux_o,
+
+    // ---- COMBINE final return (section 18.4) --------------------------------
+    input  var logic              fin_valid_i,
+    output var logic              fin_ready_o,
+    input  var logic [OWNERW-1:0] fin_owner_i,
+    input  var logic [RESW-1:0]   fin_result_i,
+
+    // ---- ordered output (section 18) ----------------------------------------
+    output var logic              out_valid_o,
+    input  var logic              out_ready_i,
+    output var logic [OWNERW-1:0] out_owner_o,
+    output var logic [RESW-1:0]   out_result_o,
+    output var logic [CTXW-1:0]   out_ctx_o,
+
+    // ---- evidence (section 19.7) --------------------------------------------
+    output var logic [31:0]       ev_admitted_o,
+    output var logic [31:0]       ev_emitted_o,
+    output var logic [31:0]       ev_commits_o,
+    output var logic [31:0]       ev_tickets_o,
+    output var logic [31:0]       ev_err_range_o,
+    output var logic [31:0]       ev_err_stale_o,
+    output var logic [31:0]       ev_err_unsol_o,
+    output var logic [31:0]       ev_err_dup_o,
+    output var logic [31:0]       ev_err_final_o,
+    output var logic [31:0]       ev_err_issue_o,
+    output var logic [31:0]       ev_wrap_drains_o,
+    // READ_LATE tripwire: source reads of an owner that is not live, not
+    // combine-accepted, or already final-claimed. Constant zero when
+    // READ_LATE=0 (the port stays so the island's wiring is mode-independent).
+    output var logic [31:0]       ev_src_unpub_o,
+    output var logic [CNTW-1:0]   ev_live_o,
+    output var logic [CNTW-1:0]   ev_live_peak_o,
+    output var logic              ev_quiet_o
+);
+
+  localparam logic [3:0] SRC_AUX = 4'b1000;
+
+  // ==========================================================================
+  // NARROW OWNER SCOREBOARD -- fabric, section 8.1
+  // ==========================================================================
+  logic            live_q [OWNERS];
+  logic [3:0]      req_q  [OWNERS];
+  logic [3:0]      iss_q  [OWNERS];
+  logic [3:0]      clm_q  [OWNERS];
+  // OBSERVABLE IN SIMULATION, at zero synthesis cost (the marker is a comment).
+  // §6.2's PUBLISH event lives here, and `ev_commits_o` does NOT track it --
+  // that counter counts `c4t_v_q`/`c4a_v_q`, the C4 stage valid, which is a
+  // different thing. A test written against the counter cannot see a change to
+  // this bitplane at all, which is exactly how mutation §22.10-5 escaped twice.
+  logic [3:0]      cmt_q  [OWNERS] /* verilator public */;
+  logic            rdy_q  [OWNERS];   // ready_claimed
+  logic            cbi_q  [OWNERS];   // combine_issued -- ACTUAL acceptance
+  // T4 / 11.1 separates three events the design used to conflate:
+  //   1 local candidate reservation, 2 central bank-read reservation,
+  //   3 actual COMBINE acceptance on valid && ready.
+  // "Only the third sets combine_issued and authorizes a final terminal.
+  //  The old cbi bit was set at the second event." So cbi_q now means
+  // event 3 ONLY, and this bit inherits event 2's guard duty -- an owner
+  // must not be reserved for COMBINE twice, and that is a DIFFERENT fact
+  // from having been accepted.
+  // `gen_q [OWNERS]` -- 64 x 8 = 512 flip-flops -- IS GONE. Every functional
+  // reader now uses `win_gen_of_slot()`, the reconstruction the owner's T2
+  // ruling specifies. A literal table survives ONLY in the synthesis-excluded
+  // verification section as `vgen_q`, maintained by its own old-style per-slot
+  // recurrence so the equivalence assertion is not circular.
+  logic            crs_q  [OWNERS];   // combine_reserved
+  logic            fcl_q  [OWNERS];   // final_claimed
+  logic            fdn_q  [OWNERS];   // final_done
+  logic            ftc_q  [OWNERS];   // fetched (section 18.1)
+
+  logic [SLOTW-1:0] tail_q, emit_q, fetch_q;
+  logic [CNTW-1:0]  live_cnt_q, unf_cnt_q, peak_q;
+
+  // ==========================================================================
+  // ADMISSION
+  // ==========================================================================
+  logic [GENW-1:0] adm_gen_c;
+  logic            wrap_block_c;
+  logic            adm_fire_c;
+  logic            quiet_c;
+
+  // ---- T2 GROUP A: admission and the wrap test leave the table ------------
+  // Derived from the identity `a_win_gen_of_slot` asserts every cycle:
+  //
+  //     gen_q[s] == alloc_gen      for s already allocated this pass (s <  tail_q)
+  //     gen_q[s] == alloc_gen - 1  for s still ahead                 (s >= tail_q)
+  //
+  // At s == tail_q the slot has NOT been reallocated yet, so
+  // `gen_q[tail_q] == alloc_gen - 1`, and therefore:
+  //
+  //     adm_gen_c    = gen_q[tail_q] + 1        ==  alloc_gen
+  //     wrap_block_c = gen_q[tail_q] == 8'hFF   ==  alloc_gen == 8'h00
+  //
+  // Two 64-way selects of an 8-bit array leave the design; the replacements are
+  // an 8-bit register and one equality against zero.
+  assign adm_gen_c    = sh_alloc_gen_q;
+  assign wrap_block_c = (sh_alloc_gen_q == {GENW{1'b0}});
+
+  // SECTION 5.5, the BASELINE DRAIN POLICY, implemented rather than discussed.
+  //
+  //   > before the owner namespace wraps, stop new admission, drain all live
+  //   > owners and all external outstanding transactions, empty return and
+  //   > execution queues, ... and only then reuse the wrapped namespace.
+  //
+  // The slot about to be allocated is the one whose generation is about to
+  // wrap, so the gate is exactly "this allocation may proceed only when the
+  // island is quiet". Widening the field would postpone wrap, not abolish it,
+  // and the document says so in as many words.
+  // ==========================================================================
+  // FOURTH, PART ONE: A REGISTERED OWNER CREDIT
+  // ==========================================================================
+  // The V3.1 recovery brief's FOURTH instruction: "separate normal owner
+  // admission from global quiet. Admission uses a REGISTERED OWNER CREDIT, a
+  // local staging credit, and registered epoch/fence permission."
+  //
+  // WHY: the four-way endpoint split of this block's own fit puts its worst
+  // path at -3.194 ns, ending at `adm_accept_o`, and ten of the ten worst
+  // paths end at these admission outputs. Every term of `adm_ready_o` is on
+  // that path.
+  //
+  // THE CREDIT IS EXACT, NOT STALE, and that distinction is the whole reason
+  // this is safe to register while the fence below is not. `credit_ok_q` is
+  // computed from `live_next_c` -- the value `live_cnt_q` is ABOUT TO TAKE --
+  // so at cycle N it answers "will there be room after this edge", which is
+  // precisely the question admission asks. Registering `live_cnt_q < OWNERS`
+  // itself would have been one cycle late and could have admitted a 65th
+  // owner; taking it from the next-state cannot.
+  logic credit_ok_q;
+
+  // ==========================================================================
+  // FOURTH, PART TWO: AN ACKNOWLEDGED FENCE WITH ITS OWN PHASE MACHINE
+  // ==========================================================================
+  // The owner's master recovery handoff (2026-09-07, §6.1) states the hazard in
+  // the same words this file used when it stopped short of the fix:
+  //
+  //   > For the intermediate per-slot-generation implementation, do not put a
+  //   > flop on wrap_block and call it solved. The tail can advance onto a
+  //   > wrapping slot while the previous permission stays high for one cycle.
+  //   > Compute the permission from the same NEXT-STATE tail/generation event
+  //   > that commits ... A phase machine -- not an indiscriminate delayed quiet
+  //   > bit -- owns reopening.
+  //
+  // So the permission is computed from `tail_next_c` and `gen_n_c`, the values
+  // that are ABOUT to commit, rather than from `tail_q` and `gen_q`. At cycle N
+  // `wrap_block_n_c` asks "after this edge, will the tail sit on a slot whose
+  // generation is exhausted", which is precisely the question admission at N+1
+  // needs answered. An admission at N itself remains safe: it consumes
+  // `gen_q[tail_q]`, which is not exhausted or `wrap_block_c` would already be
+  // set.
+  //
+  // AND §6.1's OTHER HALF IS WHY adm_ready_o GOT SHORTER: "No ready-queue
+  // pointer subtraction, aggregate occupancy, global service quiet, COMBINE-
+  // ready chain or output-ready full-ring bypass belongs in this cone."
+  // `quiet_c` is a ~25-term reduction over every queue, reservation and stage
+  // in the block, and it was in the admission cone. It is now consumed only by
+  // the fence machine, which has a whole phase to evaluate it.
+  //
+  // That also removes the design's worst path: the four-way endpoint split put
+  // it at -3.194 ns from `u_rq_tmu|wp_q[0]` to `adm_accept_o`, reaching it
+  // through `occ_o -> rq_occ_c == 0 -> quiet_c -> adm_ready_o`. Ten of the ten
+  // worst paths ended at these admission outputs.
+  //
+  // NO SAME-EDGE CREDIT BYPASS, per §6.1: "At full capacity, conservatively
+  // refuse same-edge admission even if output returns a credit on that edge."
+  // `credit_ok_q` is registered from `live_next_c` and nothing bypasses it.
+  logic [SLOTW-1:0] tail_next_c;
+  logic             wrap_block_n_c;
+  assign tail_next_c    = tail_q + (adm_fire_c ? SLOTW'(1) : SLOTW'(0));
+
+  // ---- MEASURED, THEN REWRITTEN. -----------------------------------------
+  // This was `(gen_n_c[tail_next_c] == {GENW{1'b1}})`, and the fit of
+  // 2026-09-07 made it the WORST PATH IN THE BLOCK: -2.960 ns,
+  // `fence_open_q~0 -> fence_open_q~0`, 12.804 ns of data. The per-hop walk
+  // named where the time went --
+  //
+  //     fence_open_q -> Add1 (tail_next_c) -> Mux9~24 -> Mux9~1 -> Mux9~4
+  //                  -> Mux9~20 -> Equal1~0 -> fence_open_q~0
+  //
+  // and those four Mux levels are the 64-way select, 9.136 ns of the 12.804 --
+  // 71% of the path. Worse, indexing `gen_n_c` put the whole generation
+  // NEXT-STATE cone inside the fence's own permission loop.
+  //
+  // TWO FACTS MAKE THE REWRITE EXACT rather than approximate:
+  //   1. `gen_n_c[i]` defaults to `gen_q[i]` and is overwritten at exactly one
+  //      index, `i == tail_q`, and only when `adm_fire_c`.
+  //   2. `tail_next_c` is `tail_q + adm_fire_c`. So when the overwrite happens
+  //      the read index has moved off it, and when it does not happen the two
+  //      arrays agree everywhere.
+  // Therefore `gen_n_c[tail_next_c] === gen_q[tail_next_c]` in every case.
+  //
+  // Given that, both candidates are computed from REGISTERS ONLY and in
+  // parallel, so the adder and the 64-way select leave the loop and only a 2:1
+  // mux remains downstream of `adm_fire_c`. This is 6.8's advice applied --
+  // "register it or share predecoded high/low comparison terms".
+  //
+  // `wrap_at_tail_c` is literally the existing `wrap_block_c`, reused rather
+  // than duplicated so the two can never drift apart.
+  //
+  // THE TIMING BENEFIT IS UNMEASURED UNTIL A REFIT. Three predictions made
+  // from reading source today were falsified by the fitter; this one is
+  // recorded as a structural argument, not a number.
+  // ==========================================================================
+  // T2 STEP 2 -- THE WINDOW IS NOW LOAD-BEARING (S6.1/S6.2)
+  // ==========================================================================
+  // Promoted out of `ifndef SYNTHESIS` because the ISSUE lanes now use it. Step
+  // 1 ran these beside the table and asserted the two agree every cycle; the
+  // refit then named the table as the block's honest limiter --
+  //
+  //     -0.950  gen_q[4][4] -> iss_q[52][0]      (core->core, 91.32 MHz)
+  //
+  // and that path is exactly `gen_q[iss_t_slot_c] == iss_t_gen_c`: a 64-way
+  // select feeding a comparison, per event lane. S6.8 named the mechanism in
+  // advance -- "events no longer need a 64-way generation select ... There is
+  // one bounded arithmetic identity check per event lane instead."
+  //
+  // S6.2's encoding: ticket = {generation, slot}, slot in the LOW bits. The
+  // PUBLIC owner token is the other way round, {slot, generation}, and S6.2
+  // warns "Do not apply a numerical subtraction directly to public_owner ...
+  // Decode it into internal ticket order first." So the tickets below are built
+  // explicitly as {gen, slot} rather than by reusing an owner word.
+  logic [GENW-1:0] sh_alloc_gen_q, sh_retire_gen_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      sh_alloc_gen_q  <= GENW'(1);
+      sh_retire_gen_q <= GENW'(1);
+    end else begin
+      if (adm_fire_c && (tail_q == {SLOTW{1'b1}})) sh_alloc_gen_q  <= sh_alloc_gen_q  + GENW'(1);
+      if (out_fire_c && (emit_q == {SLOTW{1'b1}})) sh_retire_gen_q <= sh_retire_gen_q + GENW'(1);
+    end
+  end
+
+  wire [OWNERW-1:0] win_retire_tkt_c = {sh_retire_gen_q, emit_q};
+
+  // GROUP C's primitive: what generation does a slot currently carry?
+  // Straight from the identity `a_win_gen_of_slot` asserts every cycle --
+  // `alloc_gen` for a slot already allocated this pass, `alloc_gen - 1` for one
+  // still ahead. No array read, no 64-way select: one comparison and a mux.
+  function automatic logic [GENW-1:0] win_gen_of_slot(input logic [SLOTW-1:0] sl);
+    win_gen_of_slot = (sl < tail_q) ? sh_alloc_gen_q
+                                    : GENW'(sh_alloc_gen_q - GENW'(1));
+  endfunction
+
+  // 6.1: live(t) = unsigned_14(t - retire_ticket) < used.
+  function automatic logic win_live(input logic [OWNERW-1:0] tkt);
+    win_live = (((tkt - win_retire_tkt_c) & OWNERW'({OWNERW{1'b1}}))
+                < OWNERW'(live_cnt_q));
+  endfunction
+
+  logic [SLOTW-1:0] tail_p1_c;
+  logic             wrap_at_tail_p1_c;
+  assign tail_p1_c         = tail_q + SLOTW'(1);
+  // Site 3 is the one that is NOT a copy of the other two, and the plan got it
+  // wrong once before the assertion corrected it. `tail_p1` is AHEAD of the
+  // tail -- so `alloc_gen - 1` -- EXCEPT when `tail_q == 63`, where it wraps to
+  // slot 0, which was allocated at the START of this pass and holds
+  // `alloc_gen`. That exception is the wrap boundary, the one case the fence
+  // exists for, so getting it wrong would be silent for 16,320 allocations.
+  assign wrap_at_tail_p1_c = (tail_q == {SLOTW{1'b1}})
+                           ? (sh_alloc_gen_q == {GENW{1'b1}})
+                           : (sh_alloc_gen_q == {GENW{1'b0}});
+  assign wrap_block_n_c    = adm_fire_c ? wrap_at_tail_p1_c : wrap_block_c;
+
+  // §6.2's phase sequence, scoped to the LEGACY TRANSITIONAL FENCE that the
+  // same section describes: "may authorize exactly one wrapping admission and
+  // then resume normal checks". The full sequence-window fence belongs to
+  // FIFTH and authorises a new namespace after one complete barrier; §6.2
+  // warns the two "must not be combined into an accidental 64-drain policy or
+  // an indefinitely open reuse permission", so this machine returns to OPEN
+  // after exactly one admission and never holds the permission across two.
+  //
+  //   FN_OPEN     admit on registered local credits
+  //   FN_STOP     admission closed; the reason is latched below
+  //   FN_FINISH   old owners finish through their normal acceptance events
+  //   FN_REOPEN   exactly ONE wrapping admission, then back to FN_OPEN
+  //
+  // TWO OF §6.2's PHASES ARE NOT IMPLEMENTED AND THAT IS DELIBERATE.
+  // QUIESCE_PRODUCERS and DRAIN_RESIDUAL_TRANSPORT require a producer
+  // ACKNOWLEDGEMENT interface -- §6.3: "ACK means all accepted old work has
+  // completed or been canceled under an agreed contract ... A debug idle
+  // signal is not a cancellation agreement." This block has no such port
+  // today, and inventing one from `quiet_c` would be exactly the "delayed
+  // quiet bit" §6.1 forbids. Naming the gap is the honest state; closing it is
+  // an interface change that belongs with the retained-services work.
+  localparam logic [1:0] FN_OPEN   = 2'd0;
+  localparam logic [1:0] FN_STOP   = 2'd1;
+  localparam logic [1:0] FN_FINISH = 2'd2;
+  localparam logic [1:0] FN_REOPEN = 2'd3;
+
+  logic [1:0]      fn_q, fn_n_c;
+  logic            fence_open_q;
+  logic [SLOTW-1:0] fn_slot_q;      // the held request's identity (§6.2)
+
+  always_comb begin
+    fn_n_c = fn_q;
+    unique case (fn_q)
+      FN_OPEN:   if (wrap_block_n_c) fn_n_c = FN_STOP;
+      // One cycle to latch the fence reason and the held request's identity,
+      // so the reopening permission below belongs to THAT request and not to
+      // whatever the ring looks like when quiet finally arrives.
+      FN_STOP:   fn_n_c = FN_FINISH;
+      FN_FINISH: if (quiet_c)        fn_n_c = FN_REOPEN;
+      FN_REOPEN: if (adm_fire_c)     fn_n_c = FN_OPEN;
+      default:   fn_n_c = FN_OPEN;
+    endcase
+  end
+
+  assign adm_ready_o  = credit_ok_q && fence_open_q;
+  assign adm_fire_c   = adm_valid_i && adm_ready_o;
+  assign adm_accept_o = adm_fire_c;
+  // Section 5.4: "Never write a payload using next_tail while stamping the
+  // handle with current_tail." One tail, one generation, one edge.
+  assign adm_owner_o  = {tail_q, adm_gen_c};
+
+  // OWNER_CONTEXT write, registered. Admission is a ready/valid handshake, so
+  // an unregistered enable would be `adm_valid_i && adm_ready_o` -- an input
+  // pin on a RAM write enable, the same shape as the defect being removed.
+  // The row lands one edge later; the earliest possible retirement read of the
+  // same owner is many edges later even for a zero-work owner (READY_INITIAL
+  // push +1, pop +1, bank read +2, COMBINE hand-off +1, final return +4), so
+  // the separation is not marginal.
+  logic              ctxw_v_q;
+  logic [SLOTW-1:0]  ctxw_addr_q;
+  logic [CTXW-1:0]   ctxw_data_q;
+
+  // ==========================================================================
+  // ISSUE (section 19.3 -- ISSUED is a separate moment from REQUIRED)
+  // ==========================================================================
+  logic [SLOTW-1:0] iss_t_slot_c;
+  logic [1:0]       iss_t_sidx_c;
+  logic [GENW-1:0]  iss_t_gen_c;
+  logic             iss_t_rng_c;
+  logic [3:0]       iss_t_bit_c;
+  logic             iss_t_ok_c;
+
+  assign iss_t_slot_c = iss_tmu_handle_i[SMPW-1 -: SLOTW];
+  assign iss_t_sidx_c = iss_tmu_handle_i[GENW+1 -: 2];
+  assign iss_t_gen_c  = iss_tmu_handle_i[GENW-1:0];
+  assign iss_t_rng_c  = (iss_t_sidx_c != 2'd3);
+  assign iss_t_bit_c  = iss_t_rng_c ? (4'b0001 << iss_t_sidx_c) : 4'b0000;
+  assign iss_t_ok_c   = iss_tmu_valid_i && iss_t_rng_c
+                     && win_live({iss_t_gen_c, iss_t_slot_c})
+                     && ((req_q[iss_t_slot_c] & iss_t_bit_c) != 4'd0)
+                     && ((iss_q[iss_t_slot_c] & iss_t_bit_c) == 4'd0);
+
+  logic [SLOTW-1:0] iss_a_slot_c;
+  logic [GENW-1:0]  iss_a_gen_c;
+  logic             iss_a_ok_c;
+  assign iss_a_slot_c = iss_aux_owner_i[OWNERW-1 -: SLOTW];
+  assign iss_a_gen_c  = iss_aux_owner_i[GENW-1:0];
+  assign iss_a_ok_c   = iss_aux_valid_i
+                     && win_live({iss_a_gen_c, iss_a_slot_c})
+                     && ((req_q[iss_a_slot_c] & SRC_AUX) != 4'd0)
+                     && ((iss_q[iss_a_slot_c] & SRC_AUX) == 4'd0);
+
+  // ==========================================================================
+  // RETURN PORTS
+  // ==========================================================================
+  // Section 19.1 RESERVED FIXED LATENCY: these segments never stall after
+  // capture, so ready is unconditional and the proof is a conservation
+  // argument rather than a backward ready chain. Downstream storage is (a) the
+  // owner's own result bank row, which is written at most once per source per
+  // owner, and (b) READY_TMU / READY_AUX, whose depth 64 equals the owner
+  // capacity while every owner claims at most one ticket. Neither can refuse.
+  assign tmu_rready_o = 1'b1;
+  assign aux_rready_o = 1'b1;
+  assign fin_ready_o  = 1'b1;
+
+  logic             c0t_v_q, c0t_rng_q;
+  logic [SLOTW-1:0] c0t_slot_q;
+  logic [1:0]       c0t_sidx_q;
+  logic [GENW-1:0]  c0t_gen_q;
+  logic [RESW-1:0]  c0t_res_q;
+
+  logic             c1t_v_q, c1t_rng_q;
+  logic [SLOTW-1:0] c1t_slot_q;
+  logic [1:0]       c1t_sidx_q;
+  logic [GENW-1:0]  c1t_gen_q;
+  logic [RESW-1:0]  c1t_res_q;
+  logic             c1t_live_q;
+  logic [GENW-1:0]  c1t_tgen_q;
+  logic [3:0]       c1t_req_q, c1t_iss_q, c1t_clm_q, c1t_cmt_q;
+
+  logic             c3t_v_q;
+  // THE BANK WRITE ENABLES ARE OBSERVABLE IN SIMULATION, AT ZERO COST.
+  // V05 asks for "actual bank write enables, not only lack of output", and the
+  // adversarial test previously had to settle for the CONSEQUENCE (the row
+  // contents) with a note saying "the pins need a probe port". They do not: a
+  // `verilator public` marker is a COMMENT, so Quartus never sees it, no port
+  // is added, and no area is spent -- while the simulation can read the enable
+  // directly and distinguish "the write was never enabled" from "the write was
+  // enabled and happened to be harmless".
+  logic [2:0]       c3t_we_q /* verilator public */;
+  logic [SLOTW-1:0] c3t_slot_q;
+  logic [GENW-1:0]  c3t_gen_q;
+  logic [3:0]       c3t_mask_q;
+  logic [RESW-1:0]  c3t_data_q;
+
+  logic             c4t_v_q;
+  logic [SLOTW-1:0] c4t_slot_q;
+  logic [GENW-1:0]  c4t_gen_q;
+  logic [3:0]       c4t_mask_q;
+
+  logic [3:0] c1t_bit_c;
+  assign c1t_bit_c = c1t_rng_q ? (4'b0001 << c1t_sidx_q) : 4'b0000;
+
+  // ---- AUX return pipeline registers --------------------------------------
+  logic             c0a_v_q;
+  logic [SLOTW-1:0] c0a_slot_q;
+  logic [GENW-1:0]  c0a_gen_q;
+  logic [RESW-1:0]  c0a_res_q;
+
+  logic             c1a_v_q;
+  logic [SLOTW-1:0] c1a_slot_q;
+  logic [GENW-1:0]  c1a_gen_q;
+  logic [RESW-1:0]  c1a_res_q;
+  logic             c1a_live_q;
+  logic [GENW-1:0]  c1a_tgen_q;
+  logic [3:0]       c1a_req_q, c1a_iss_q, c1a_clm_q, c1a_cmt_q;
+
+  logic             c3a_v_q;
+  logic             c3a_we_q /* verilator public */;
+  logic [SLOTW-1:0] c3a_slot_q;
+  logic [GENW-1:0]  c3a_gen_q;
+  logic [RESW-1:0]  c3a_data_q;
+
+  logic             c4a_v_q;
+  logic [SLOTW-1:0] c4a_slot_q;
+  logic [GENW-1:0]  c4a_gen_q;
+
+  // ---- FINAL return pipeline registers ------------------------------------
+  logic             c0f_v_q;
+  logic [SLOTW-1:0] c0f_slot_q;
+  logic [GENW-1:0]  c0f_gen_q;
+  logic [RESW-1:0]  c0f_res_q;
+
+  logic             c1f_v_q;
+  logic [SLOTW-1:0] c1f_slot_q;
+  logic [GENW-1:0]  c1f_gen_q;
+  logic [RESW-1:0]  c1f_res_q;
+  logic             c1f_live_q, c1f_cbi_q, c1f_fcl_q, c1f_fdn_q;
+  logic [GENW-1:0]  c1f_tgen_q;
+
+  logic             c3f_v_q;
+  logic             c3f_we_q /* verilator public */;
+  logic [SLOTW-1:0] c3f_slot_q;
+  logic [GENW-1:0]  c3f_gen_q;
+  logic [RESW-1:0]  c3f_data_q;
+
+  logic             c4f_v_q;
+  logic [SLOTW-1:0] c4f_slot_q;
+  logic [GENW-1:0]  c4f_gen_q;
+
+  // ==========================================================================
+  // C2 VALIDATION -- section 8.3's predicate, all six terms, plus forwarding
+  // ==========================================================================
+  // FWD_WINDOW is DERIVED from the pipeline depth, not chosen. Section 8.4:
+  // "The required forwarding window equals the number of cycles from
+  // scoreboard snapshot to claim publication... It is not assumed to be one
+  // forever." C1 registers the snapshot; C2 applies the claim on the very next
+  // edge; so exactly one cycle of returns can hold a stale snapshot, and the
+  // C3 record covers exactly that cycle.
+  localparam int unsigned FWD_WINDOW = 1;
+
+  logic fwd_t_hit_c, fwd_a_hit_c, fwd_f_hit_c;
+  // Forward by FULL owner handle and source bit (section 8.4), never by slot
+  // alone -- a slot match across a generation boundary is a different owner.
+  assign fwd_t_hit_c = c3t_v_q && (c3t_slot_q == c1t_slot_q)
+                    && (c3t_gen_q == c1t_gen_q)
+                    && ((c3t_mask_q & c1t_bit_c) != 4'd0);
+  assign fwd_a_hit_c = c3a_v_q && (c3a_slot_q == c1a_slot_q)
+                    && (c3a_gen_q == c1a_gen_q);
+  assign fwd_f_hit_c = c3f_v_q && (c3f_slot_q == c1f_slot_q)
+                    && (c3f_gen_q == c1f_gen_q);
+
+  logic c2t_idok_c, c2t_rng_bad_c, c2t_stale_c, c2t_unsol_c, c2t_dup_c, c2t_acc_c;
+  // ---- S8.2: BOTH TIME POINTS, per the owner's T2 lifetime ruling ----------
+  // The ruling: an owner's authority ends at its ordered external output
+  // transfer, and "matching a slot's residual generation bits does not extend
+  // the owner's authority after retirement."
+  //
+  // S8.2 requires C2 to check snapshot identity AND "current full-ticket
+  // membership". S8.1 gives the counterexample for each half, and neither is
+  // hypothetical hand-waving -- they are contract counterexamples:
+  //
+  //   FUTURE TOKEN  at snapshot ticket 65 is not yet live (A=65,E=64,U=1);
+  //                 before claim it is admitted (A=66,E=64,U=2). A
+  //                 CURRENT-only check now passes, though the stored row
+  //                 snapshot was never a valid snapshot of that instance.
+  //   RETIRED TOKEN at snapshot ticket 64 is live (E=64,U=1); before claim it
+  //                 retires (E=65,U=0). A SNAPSHOT-only Boolean stays true
+  //                 though authority has ended.
+  //
+  // So the snapshot pair is kept and current membership is added beside it.
+  // The brief is explicit that this is NOT already satisfied by T2 step 2:
+  // "Do not mark that requirement closed merely because ISSUE and READY
+  // eligibility now call win_live()." Those are different events.
+  //
+  // The ticket is built {gen, slot} in internal order -- S6.2's trap -- not by
+  // reusing a public owner word.
+  assign c2t_idok_c = c1t_live_q && (c1t_tgen_q == c1t_gen_q)
+                      && win_live({c1t_gen_q, c1t_slot_q});
+  assign c2t_rng_bad_c = c1t_v_q && !c1t_rng_q;
+  assign c2t_stale_c   = c1t_v_q && c1t_rng_q && !c2t_idok_c;
+  assign c2t_unsol_c   = c1t_v_q && c1t_rng_q && c2t_idok_c
+                      && (((c1t_req_q & c1t_bit_c) == 4'd0)
+                       || ((c1t_iss_q & c1t_bit_c) == 4'd0));
+  assign c2t_dup_c     = c1t_v_q && c1t_rng_q && c2t_idok_c
+                      && ((c1t_req_q & c1t_bit_c) != 4'd0)
+                      && ((c1t_iss_q & c1t_bit_c) != 4'd0)
+                      && (((c1t_clm_q & c1t_bit_c) != 4'd0)
+                       || ((c1t_cmt_q & c1t_bit_c) != 4'd0)
+                       || fwd_t_hit_c);
+  assign c2t_acc_c     = c1t_v_q && c1t_rng_q && c2t_idok_c
+                      && ((c1t_req_q & c1t_bit_c) != 4'd0)
+                      && ((c1t_iss_q & c1t_bit_c) != 4'd0)
+                      && ((c1t_clm_q & c1t_bit_c) == 4'd0)
+                      && ((c1t_cmt_q & c1t_bit_c) == 4'd0)
+                      && !fwd_t_hit_c;
+
+  logic c2a_idok_c, c2a_stale_c, c2a_unsol_c, c2a_dup_c, c2a_acc_c;
+  assign c2a_idok_c = c1a_live_q && (c1a_tgen_q == c1a_gen_q)
+                      && win_live({c1a_gen_q, c1a_slot_q});
+  assign c2a_stale_c = c1a_v_q && !c2a_idok_c;
+  assign c2a_unsol_c = c1a_v_q && c2a_idok_c
+                    && (((c1a_req_q & SRC_AUX) == 4'd0)
+                     || ((c1a_iss_q & SRC_AUX) == 4'd0));
+  assign c2a_dup_c   = c1a_v_q && c2a_idok_c
+                    && ((c1a_req_q & SRC_AUX) != 4'd0)
+                    && ((c1a_iss_q & SRC_AUX) != 4'd0)
+                    && (((c1a_clm_q & SRC_AUX) != 4'd0)
+                     || ((c1a_cmt_q & SRC_AUX) != 4'd0)
+                     || fwd_a_hit_c);
+  assign c2a_acc_c   = c1a_v_q && c2a_idok_c
+                    && ((c1a_req_q & SRC_AUX) != 4'd0)
+                    && ((c1a_iss_q & SRC_AUX) != 4'd0)
+                    && ((c1a_clm_q & SRC_AUX) == 4'd0)
+                    && ((c1a_cmt_q & SRC_AUX) == 4'd0)
+                    && !fwd_a_hit_c;
+
+  // Section 18.4: "Final returns use a credited capture/validate/claim/write/
+  // publish sequence analogous to sample returns; final_done is not used as a
+  // substitute for the earlier claim while a final write is still in flight."
+  logic c2f_idok_c, c2f_bad_c, c2f_acc_c;
+  assign c2f_idok_c = c1f_live_q && (c1f_tgen_q == c1f_gen_q)
+                      && win_live({c1f_gen_q, c1f_slot_q});
+  assign c2f_acc_c  = c1f_v_q && c2f_idok_c && c1f_cbi_q
+                   && !c1f_fcl_q && !c1f_fdn_q && !fwd_f_hit_c;
+  assign c2f_bad_c  = c1f_v_q && !c2f_acc_c;
+
+  // ==========================================================================
+  // C4 PUBLICATION, COALESCING AND THE ONCE-ONLY READY TICKET
+  // ==========================================================================
+  // Appendix D.2 worked exactly: required 1111, committed 0011, texture
+  // source2 and AUX publish on the SAME edge for the SAME full handle -> ONE
+  // eligibility transition and ONE ticket.
+  logic same_owner_c;
+  assign same_owner_c = c4t_v_q && c4a_v_q
+                     && (c4t_slot_q == c4a_slot_q)
+                     && (c4t_gen_q  == c4a_gen_q);
+
+  logic [3:0] t_cmt_next_c, a_cmt_next_c;
+  assign t_cmt_next_c = cmt_q[c4t_slot_q] | c4t_mask_q
+                      | (same_owner_c ? SRC_AUX : 4'd0);
+  assign a_cmt_next_c = cmt_q[c4a_slot_q] | SRC_AUX
+                      | (same_owner_c ? c4t_mask_q : 4'd0);
+
+  logic t_elig_c, a_elig_c, tkt_t_c, tkt_a_c;
+  // The READY-ticket eligibility checks are the SAME shape as the ISSUE lanes:
+  // `live_q[slot] && (gen_q[slot] == gen)`, which is exactly what
+  // `a_win_live_matches_table` asserts equals 6.1's interval test. So this is an
+  // exact substitution, unlike the in-loop comparisons at 1054-1078, where the
+  // guard has no `live_q` term and adding one would be a semantic change.
+  assign t_elig_c = c4t_v_q && win_live({c4t_gen_q, c4t_slot_q})
+                 && ((t_cmt_next_c & req_q[c4t_slot_q]) == req_q[c4t_slot_q])
+                 && !rdy_q[c4t_slot_q] && !crs_q[c4t_slot_q];
+  assign a_elig_c = c4a_v_q && win_live({c4a_gen_q, c4a_slot_q})
+                 && ((a_cmt_next_c & req_q[c4a_slot_q]) == req_q[c4a_slot_q])
+                 && !rdy_q[c4a_slot_q] && !crs_q[c4a_slot_q];
+  assign tkt_t_c  = t_elig_c;
+  // The deterministic winner named by D.2: READY_TMU takes the coalesced
+  // ticket and the AUX insertion is suppressed. Suppression is not a dropped
+  // ticket -- the owner has exactly one, in the other queue.
+  assign tkt_a_c  = a_elig_c && !same_owner_c;
+
+  // Registered ready-queue writes (one edge behind the claim).
+  logic              q0t_v_q, q0a_v_q, q0i_v_q;
+  logic [OWNERW-1:0] q0t_owner_q, q0a_owner_q, q0i_owner_q;
+
+  // ==========================================================================
+  // READY QUEUES -- three, single-writer, depth 64 (section 9.3)
+  // ==========================================================================
+  logic              rq_full_c [3];
+  // §5.1: owned_empty is the drain's question; !valid_o is the consumer's.
+  logic              rq_empty_c [3];
+  logic              rq_valid_c[3];
+  logic [OWNERW-1:0] rq_data_c [3];
+  logic              rq_pop_c  [3];
+  // §5.1 lists logical_count as an "optional DIAGNOSTIC count" and body_count
+  // as "an internal implementation detail, not a drain signal". Since quiet_c
+  // now takes `owned_empty_o` instead, this array has no consumer in control
+  // logic -- which is the point of the change, not an oversight. Kept wired so
+  // the depth is visible in a waveform, waived with its reason rather than
+  // deleted: a diagnostic removed because a lint rule complained is a
+  // diagnostic nobody chose to lose.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [SLOTW:0]    rq_occ_c  [3];
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // INSTANTIATED THREE TIMES BY HAND, NOT IN A GENERATE LOOP, and that is the
+  // point rather than a missed tidy-up. Each queue has a DIFFERENT single
+  // writer (section 9.3), so a loop would have to select the writer through a
+  // combinational alias array -- and `.wr_en_i(rq_wr_c[gq])` puts a wire
+  // between the flop and the memory enable, which is exactly the property
+  // this experiment exists to make checkable. Written out, every `.wr_en_i()`
+  // in this file is a bare identifier or a bit-select of one, so a source-level
+  // gate can decide the "driven by a register output" law without elaborating.
+  //
+  // V3-WREN-REG: q0t_v_q
+  // V3-BANK: READY_TMU
+  zhao_texture_v3rq #(.WIDTH(OWNERW), .DEPTH(OWNERS)) u_rq_tmu (
+      .clk      (clk),
+      .rst_n    (rst_n),
+      .wr_en_i  (q0t_v_q),
+      .wr_data_i(q0t_owner_q),
+      .full_o   (rq_full_c[0]),
+      .valid_o  (rq_valid_c[0]),
+      .data_o   (rq_data_c[0]),
+      .pop_i    (rq_pop_c[0]),
+      .occ_o    (rq_occ_c[0]),
+      .owned_empty_o(rq_empty_c[0])
+  );
+
+  // V3-WREN-REG: q0a_v_q
+  // V3-BANK: READY_AUX
+  zhao_texture_v3rq #(.WIDTH(OWNERW), .DEPTH(OWNERS)) u_rq_aux (
+      .clk      (clk),
+      .rst_n    (rst_n),
+      .wr_en_i  (q0a_v_q),
+      .wr_data_i(q0a_owner_q),
+      .full_o   (rq_full_c[1]),
+      .valid_o  (rq_valid_c[1]),
+      .data_o   (rq_data_c[1]),
+      .pop_i    (rq_pop_c[1]),
+      .occ_o    (rq_occ_c[1]),
+      .owned_empty_o(rq_empty_c[1])
+  );
+
+  // V3-WREN-REG: q0i_v_q
+  // V3-BANK: READY_INITIAL
+  zhao_texture_v3rq #(.WIDTH(OWNERW), .DEPTH(OWNERS)) u_rq_init (
+      .clk      (clk),
+      .rst_n    (rst_n),
+      .wr_en_i  (q0i_v_q),
+      .wr_data_i(q0i_owner_q),
+      .full_o   (rq_full_c[2]),
+      .valid_o  (rq_valid_c[2]),
+      .data_o   (rq_data_c[2]),
+      .pop_i    (rq_pop_c[2]),
+      .occ_o    (rq_occ_c[2]),
+      .owned_empty_o(rq_empty_c[2])
+  );
+
+  // ==========================================================================
+  // ROUND-ROBIN ARBITER AND COMBINE ADMISSION READ (section 9.4)
+  // ==========================================================================
+  // "The arbiter selects only handles. Wide material and sample data are read
+  // after the selection is registered." Exactly that: the arbiter sees three
+  // 14-bit heads, and the four 40-bit planes are read at the registered
+  // address on the following cycles.
+  logic [1:0] rr_q;
+  logic [1:0] ord_c [3];
+  logic [1:0] sel_c;
+  logic       sel_v_c;
+  logic [OWNERW-1:0] sel_data_c;
+
+  always_comb begin
+    case (rr_q)
+      2'd0:    begin ord_c[0] = 2'd0; ord_c[1] = 2'd1; ord_c[2] = 2'd2; end
+      2'd1:    begin ord_c[0] = 2'd1; ord_c[1] = 2'd2; ord_c[2] = 2'd0; end
+      default: begin ord_c[0] = 2'd2; ord_c[1] = 2'd0; ord_c[2] = 2'd1; end
+    endcase
+    sel_c   = 2'd0;
+    sel_v_c = 1'b0;
+    for (int unsigned k = 0; k < 3; k++) begin
+      if (!sel_v_c && rq_valid_c[ord_c[k]]) begin
+        sel_v_c = 1'b1;
+        sel_c   = ord_c[k];
+      end
+    end
+  end
+  assign sel_data_c = rq_data_c[sel_c];
+
+  logic [CNTW-1:0] cmb_res_q;
+  logic            cmb_pop_c, cmb_fire_c;
+  // Section 9.4: "Do not pop a ready ticket merely because COMBINE ready is
+  // high now if the memory read will return several cycles later. The
+  // destination credit must cover that latency." cmb_res_q counts reads in
+  // flight AND queued rows, and the reservation is taken at the pop.
+  assign cmb_pop_c = sel_v_c && ((cmb_res_q - CNTW'(cmb_fire_c)) < CNTW'(CMBQD));
+  always_comb begin
+    for (int unsigned k = 0; k < 3; k++) begin
+      rq_pop_c[k] = cmb_pop_c && (sel_c == 2'(k));
+    end
+  end
+
+  // The pop lands in ONE registered stage (`k0`) in both modes, so the job
+  // queue's write enable is a flop output rather than the arbiter's predicate.
+  // Legacy adds k1/k2 (declared inside g_legacy) to cover the bank read and
+  // the capture.
+  logic              k0_v_q;
+  logic [OWNERW-1:0] k0_owner_q;
+  // Mode-resolved wires, driven by exactly one generate branch each.
+  logic              kpipe_busy_c;      // any pop still short of the job queue
+  logic [SLOTW-1:0]  plane_rd_addr_c;   // the ONE reader's address per plane
+
+  // ==========================================================================
+  // THE PERSISTENT BANKS
+  // ==========================================================================
+  logic [RESW-1:0] sres_rd_c [3];
+  logic [RESW-1:0] ares_rd_c;
+  logic [RESW-1:0] fres_rd_c;
+  logic [CTXW-1:0] ctx_rd_c;
+
+  logic [SLOTW-1:0] fin_rd_addr_q;
+
+  generate
+    genvar gs;
+    for (gs = 0; gs < 3; gs++) begin : g_sres
+      // SAMPLE_RESULT_0/1/2, 64 x 40. Single writer: TMU commit bank gs.
+      // Single reader: COMBINE admission (READ_LATE=0) or the combiner's
+      // phase engine (READ_LATE=1) -- one reader either way. The write enable
+      // is one bit of a registered one-hot -- there is no bank decode in this
+      // cone at all.
+      //
+      // V3-WREN-REG: c3t_we_q
+      // V3-BANK: SAMPLE_RESULT_0, SAMPLE_RESULT_1, SAMPLE_RESULT_2
+      zhao_texture_v3bank #(.WIDTH(RESW), .DEPTH(OWNERS)) u_sres (
+          .clk      (clk),
+          .wr_en_i  (c3t_we_q[gs]),
+          .wr_addr_i(c3t_slot_q),
+          .wr_data_i(c3t_data_q),
+          .rd_addr_i(plane_rd_addr_c),
+          .rd_data_o(sres_rd_c[gs])
+      );
+    end
+  endgenerate
+
+  // AUX_RESULT, 64 x 40. Its own bank so a TMU and an AUX commit for the same
+  // owner can land on the SAME clock (section 8.6) without any arbitration.
+  //
+  // V3-WREN-REG: c3a_we_q
+  // V3-BANK: AUX_RESULT
+  zhao_texture_v3bank #(.WIDTH(RESW), .DEPTH(OWNERS)) u_ares (
+      .clk      (clk),
+      .wr_en_i  (c3a_we_q),
+      .wr_addr_i(c3a_slot_q),
+      .wr_data_i(c3a_data_q),
+      .rd_addr_i(plane_rd_addr_c),
+      .rd_data_o(ares_rd_c)
+  );
+
+  // FINAL_RESULT, 64 x 40. Writer: final commit. Reader: ordered retirement.
+  //
+  // V3-WREN-REG: c3f_we_q
+  // V3-BANK: FINAL_RESULT
+  zhao_texture_v3bank #(.WIDTH(RESW), .DEPTH(OWNERS)) u_fres (
+      .clk      (clk),
+      .wr_en_i  (c3f_we_q),
+      .wr_addr_i(c3f_slot_q),
+      .wr_data_i(c3f_data_q),
+      .rd_addr_i(fin_rd_addr_q),
+      .rd_data_o(fres_rd_c)
+  );
+
+  // OWNER_CONTEXT, 64 x 64. Immutable from admission through output emission
+  // (section 18.4). Writer: admission. Reader: ordered retirement.
+  //
+  // V3-WREN-REG: ctxw_v_q
+  // V3-BANK: OWNER_CONTEXT
+  zhao_texture_v3bank #(.WIDTH(CTXW), .DEPTH(OWNERS)) u_ctx (
+      .clk      (clk),
+      .wr_en_i  (ctxw_v_q),
+      .wr_addr_i(ctxw_addr_q),
+      .wr_data_i(ctxw_data_q),
+      .rd_addr_i(fin_rd_addr_q),
+      .rd_data_o(ctx_rd_c)
+  );
+
+  // ---- RC capture (section 6.3), retirement side: one fabric register ------
+  logic [RESW-1:0] fres_cap_q;
+  logic [CTXW-1:0] ctx_cap_q;
+
+  // ==========================================================================
+  // COMBINE JOB QUEUE (registers, depth CMBQD): THE OWNER HANDLE, ALWAYS
+  // ==========================================================================
+  // In both modes the queue carries the 14-bit handle. Under READ_LATE=0 four
+  // 40-bit payload lanes travel beside it (g_legacy); under READ_LATE=1 the
+  // handle is the whole ticket -- roadmap 4.2: "Ready queues carry only the
+  // owner handle."
+  localparam int unsigned CQPW = $clog2(CMBQD);
+  logic [OWNERW-1:0]        cq_own_q [CMBQD];
+  logic [CQPW:0]            cq_wp_q, cq_rp_q;
+  logic [CQPW:0]            cq_occ_c;
+  logic                     cq_push_c;          // mode-resolved (generate)
+  logic [OWNERW-1:0]        cq_push_owner_c;    // mode-resolved (generate)
+  assign cq_occ_c    = cq_wp_q - cq_rp_q;
+  assign cmb_valid_o = (cq_occ_c != '0);
+  assign cmb_owner_o = cq_own_q[cq_rp_q[CQPW-1:0]];
+  assign cmb_fire_c  = cmb_valid_o && cmb_ready_i;
+
+  generate
+    if (READ_LATE == 0) begin : g_legacy
+      // ---- the k-pipeline: bank read at k1, capture at k2, push at k2 -------
+      logic              k1_v_q, k2_v_q;
+      logic [OWNERW-1:0] k1_owner_q, k2_owner_q;
+      logic [SLOTW-1:0]  cmb_rd_addr_q;
+      // RC capture (section 6.3): one fabric register, nothing before it.
+      logic [RESW-1:0]   sres_cap_q [3];
+      logic [RESW-1:0]   ares_cap_q;
+      // The four payload lanes that travel with the handle. In the @g2-prod
+      // fit these four arrays inferred as altsyncrams of TWO M10Ks each.
+      logic [RESW-1:0]   cq_s0_q [CMBQD];
+      logic [RESW-1:0]   cq_s1_q [CMBQD];
+      logic [RESW-1:0]   cq_s2_q [CMBQD];
+      logic [RESW-1:0]   cq_ax_q [CMBQD];
+
+      assign plane_rd_addr_c = cmb_rd_addr_q;
+      assign kpipe_busy_c    = k0_v_q || k1_v_q || k2_v_q;
+      assign cq_push_c       = k2_v_q;
+      assign cq_push_owner_c = k2_owner_q;
+
+      assign cmb_s0_o  = cq_s0_q[cq_rp_q[CQPW-1:0]];
+      assign cmb_s1_o  = cq_s1_q[cq_rp_q[CQPW-1:0]];
+      assign cmb_s2_o  = cq_s2_q[cq_rp_q[CQPW-1:0]];
+      assign cmb_aux_o = cq_ax_q[cq_rp_q[CQPW-1:0]];
+      // The read-late lanes do not exist in this mode.
+      assign src_s0_o  = '0;
+      assign src_s1_o  = '0;
+      assign src_s2_o  = '0;
+      assign src_aux_o = '0;
+
+      always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+          k1_v_q <= 1'b0;
+          k2_v_q <= 1'b0;
+        end else begin
+          k1_v_q <= k0_v_q;
+          k2_v_q <= k1_v_q;
+        end
+      end
+      always_ff @(posedge clk) begin
+        if (cmb_pop_c) cmb_rd_addr_q <= sel_data_c[OWNERW-1 -: SLOTW];
+        k1_owner_q <= k0_owner_q;
+        k2_owner_q <= k1_owner_q;
+        for (int unsigned s = 0; s < 3; s++) sres_cap_q[s] <= sres_rd_c[s];
+        ares_cap_q <= ares_rd_c;
+        if (cq_push_c) begin
+          cq_s0_q[cq_wp_q[CQPW-1:0]] <= sres_cap_q[0];
+          cq_s1_q[cq_wp_q[CQPW-1:0]] <= sres_cap_q[1];
+          cq_s2_q[cq_wp_q[CQPW-1:0]] <= sres_cap_q[2];
+          cq_ax_q[cq_wp_q[CQPW-1:0]] <= ares_cap_q;
+        end
+      end
+    end else begin : g_readlate
+      // ---- the seam: the consumer addresses the planes ----------------------
+      // `src_rd_slot_i` is a register output in the combiner (its R-stage
+      // slot), so the bank sees a flop, exactly as it saw `cmb_rd_addr_q`.
+      assign plane_rd_addr_c = src_rd_slot_i;
+      assign kpipe_busy_c    = k0_v_q;
+      assign cq_push_c       = k0_v_q;
+      assign cq_push_owner_c = k0_owner_q;
+
+      // Each plane's output register IS the port. Nothing before, nothing
+      // between (QUARTUS_GOTCHAS 14 / v3bank's own header).
+      assign src_s0_o  = sres_rd_c[0];
+      assign src_s1_o  = sres_rd_c[1];
+      assign src_s2_o  = sres_rd_c[2];
+      assign src_aux_o = ares_rd_c;
+      // The legacy payload lanes do not exist in this mode.
+      assign cmb_s0_o  = '0;
+      assign cmb_s1_o  = '0;
+      assign cmb_s2_o  = '0;
+      assign cmb_aux_o = '0;
+    end
+  endgenerate
+
+  // The READ_LATE tripwire's predicate. Written at module scope so that under
+  // READ_LATE=0 it folds to a constant (and the two read-late inputs count as
+  // read, which they are). Three bits, three 64:1 selects -- see the header
+  // for why the committed/required cover is left to the assertion.
+  logic src_unpub_c;
+  assign src_unpub_c = (READ_LATE != 0) && src_rd_valid_i
+                    && !(live_q[src_rd_slot_i] && cbi_q[src_rd_slot_i]
+                         && !fcl_q[src_rd_slot_i]);
+
+  // ==========================================================================
+  // ORDERED RETIREMENT (section 18)
+  // ==========================================================================
+  logic [CNTW-1:0] out_res_q;
+  logic            out_fire_c, fetch_fire_c;
+
+  logic              g0_v_q, g1_v_q, g2_v_q;
+  logic [OWNERW-1:0] g0_owner_q, g1_owner_q, g2_owner_q;
+
+  localparam int unsigned OQPW = $clog2(OUTQD);
+  logic [OWNERW-1:0] oq_own_q [OUTQD];
+  logic [RESW-1:0]   oq_res_q [OUTQD];
+  logic [CTXW-1:0]   oq_ctx_q [OUTQD];
+  logic [OQPW:0]     oq_wp_q, oq_rp_q;
+  logic [OQPW:0]     oq_occ_c;
+  assign oq_occ_c = oq_wp_q - oq_rp_q;
+
+  assign out_valid_o  = (oq_occ_c != '0);
+  assign out_owner_o  = oq_own_q[oq_rp_q[OQPW-1:0]];
+  assign out_result_o = oq_res_q[oq_rp_q[OQPW-1:0]];
+  assign out_ctx_o    = oq_ctx_q[oq_rp_q[OQPW-1:0]];
+  assign out_fire_c   = out_valid_o && out_ready_i;
+
+  // F0. Section 18.1: unfetched work, a live owner with final_done at
+  // fetch_head, and a RESERVED output slot -- reserved before the read is
+  // launched, so the proof does not depend on the consumer staying ready
+  // while the memory answers. Section 18.3: "Stop when the next owner is
+  // incomplete; do not scan for a younger completed owner to skip the hole."
+  // There is no scan here at all -- only fetch_q is ever examined.
+  // S13.1: THE PER-OWNER FETCHED BIT IS GONE FROM THE LOGIC.
+  //
+  //   "F advances only when a final bank read has been reserved. It never scans
+  //    past an incomplete owner. Therefore no owner can be fetched twice if F
+  //    and the reservation counters are correct ... Remove the per-owner
+  //    ftc/fetched array. It represented a property already encoded by a
+  //    monotone ordered cursor."
+  //
+  // `!ftc_q[fetch_q]` was this array's ONLY reader. `fetch_q` is monotone, so it
+  // revisits a slot only after 64 fetches, by which time that slot must have
+  // been re-admitted -- and admission clears ftc. `unf_cnt_q` gates the whole
+  // thing, so the term could never be the reason a fetch was blocked.
+  //
+  // ASSERTED BEFORE REMOVAL, not argued: `a_ftc_bit_is_redundant` checks that
+  // whenever every other condition here holds, `ftc_q[fetch_q]` is already
+  // clear. It passes across the whole 481-check bench, wrap and drain included.
+  //
+  // The ARRAY is deliberately left in place and still maintained: nothing
+  // synthesised reads it now, so Quartus removes its 64 flip-flops as dead
+  // logic, while simulation keeps it alive to go on proving the property. The
+  // check that licensed the removal therefore survives the removal.
+  assign fetch_fire_c = (unf_cnt_q != '0)
+                     && live_q[fetch_q] && fdn_q[fetch_q]
+                     && (out_res_q < CNTW'(OUTQD));
+
+  // ==========================================================================
+  // QUIESCENCE (used by the generation-wrap drain)
+  // ==========================================================================
+  assign quiet_c = (live_cnt_q == '0) && (unf_cnt_q == '0)
+                && !ctxw_v_q
+                && !c0t_v_q && !c1t_v_q && !c3t_v_q && !c4t_v_q
+                && !c0a_v_q && !c1a_v_q && !c3a_v_q && !c4a_v_q
+                && !c0f_v_q && !c1f_v_q && !c3f_v_q && !c4f_v_q
+                && !q0t_v_q && !q0a_v_q && !q0i_v_q
+                && rq_empty_c[0] && rq_empty_c[1] && rq_empty_c[2]
+                && !kpipe_busy_c
+                && (cq_occ_c == '0) && (cmb_res_q == '0)
+                && !g0_v_q && !g1_v_q && !g2_v_q
+                && (oq_occ_c == '0) && (out_res_q == '0);
+  assign ev_quiet_o = quiet_c;
+
+  // ==========================================================================
+  // THE ONE SCOREBOARD NEXT-STATE, COMPUTED ONCE PER OWNER
+  // ==========================================================================
+  // CLAUDE.md, and this repository's own fragrob defect: two nonblocking
+  // assignments to the same register in one always_ff means the LAST one wins
+  // and an event is silently lost. So every per-owner field gets ONE
+  // combinational next value that all events fold into, and ONE assignment.
+  // Appendix B.5's precedence is explicit at the bottom: admission
+  // reinitialises its slot and overrides everything else for that slot.
+  logic            live_n_c [OWNERS];
+  logic [3:0]      req_n_c  [OWNERS];
+  logic [3:0]      iss_n_c  [OWNERS];
+  logic [3:0]      clm_n_c  [OWNERS];
+  logic [3:0]      cmt_n_c  [OWNERS];
+  logic            rdy_n_c  [OWNERS];
+  logic            cbi_n_c  [OWNERS];
+  logic            crs_n_c  [OWNERS];
+  logic            fcl_n_c  [OWNERS];
+  logic            fdn_n_c  [OWNERS];
+  logic            ftc_n_c  [OWNERS];
+
+  // ---- HOISTED GENERATION COMPARISONS -------------------------------------
+  // EXACTLY EQUIVALENT, and that is the whole point. Inside the loop below the
+  // guard already establishes `c4t_slot_q == i`, so `gen_q[i]` IS
+  // `gen_q[c4t_slot_q]`. Lifting the comparison out replaces 64 eight-bit
+  // comparators per lane with one 64-way select and one comparator.
+  //
+  // NOT `win_live` here, deliberately. These guards carry no `live_q` term, so
+  // substituting the interval test would silently reject a stale event that
+  // arrives after its owner is released but before that slot is reallocated --
+  // accepted today. The site calls itself "a fault-injection and drain-boundary
+  // guard"; tightening it may well be right, but that is a correctness decision
+  // about drain semantics, and 11.1's lesson this morning was precisely that
+  // conflating two events in one bit is how a final gets authorised by a
+  // reservation. This hoist buys the logic and changes no behaviour.
+  logic c4t_gen_ok_c, c4a_gen_ok_c, c4f_gen_ok_c, cmb_gen_ok_c;
+  // MIGRATED to the reconstruction, per the owner's T2 lifetime ruling:
+  //
+  //   historical_generation(slot) =
+  //       slot < allocation_slot ? allocation_generation
+  //                              : allocation_generation - 1 modulo 256
+  //
+  // and "the current RTL already implements this function as
+  // win_gen_of_slot()". The predicate below is UNCHANGED -- this is the exact
+  // migration, step 1 of the brief's order. The live-owner authority checks the
+  // ruling requires are a SEPARATE, separately testable change.
+  //
+  // The ruling also corrects my own framing: `win_gen_of_slot` reconstructs the
+  // residual generation of DEAD slots as well as live ones, so keeping today's
+  // generation-only predicate does NOT require keeping `gen_q`. I had welded
+  // the policy question to the table removal; they are two changes.
+  assign c4t_gen_ok_c = (win_gen_of_slot(c4t_slot_q) == c4t_gen_q);
+  assign c4a_gen_ok_c = (win_gen_of_slot(c4a_slot_q) == c4a_gen_q);
+  assign c4f_gen_ok_c = (win_gen_of_slot(c4f_slot_q) == c4f_gen_q);
+  assign cmb_gen_ok_c = (win_gen_of_slot(cmb_owner_o[OWNERW-1 -: SLOTW])
+                         == cmb_owner_o[GENW-1:0]);
+
+  always_comb begin
+    for (int unsigned i = 0; i < OWNERS; i++) begin
+      live_n_c[i] = live_q[i];
+      req_n_c [i] = req_q [i];
+      iss_n_c [i] = iss_q [i];
+      clm_n_c [i] = clm_q [i];
+      cmt_n_c [i] = cmt_q [i];
+      rdy_n_c [i] = rdy_q [i];
+      cbi_n_c [i] = cbi_q [i];
+      crs_n_c [i] = crs_q [i];
+      fcl_n_c [i] = fcl_q [i];
+      fdn_n_c [i] = fdn_q [i];
+      ftc_n_c [i] = ftc_q [i];
+
+      // ---- ISSUE ----
+      if (iss_t_ok_c && (iss_t_slot_c == SLOTW'(i)))
+        iss_n_c[i] = iss_n_c[i] | iss_t_bit_c;
+      if (iss_a_ok_c && (iss_a_slot_c == SLOTW'(i)))
+        iss_n_c[i] = iss_n_c[i] | SRC_AUX;
+
+      // ---- CLAIM (C2). Section 8.6: merge masks with OR. ----
+      if (c2t_acc_c && (c1t_slot_q == SLOTW'(i)))
+        clm_n_c[i] = clm_n_c[i] | c1t_bit_c;
+      if (c2a_acc_c && (c1a_slot_q == SLOTW'(i)))
+        clm_n_c[i] = clm_n_c[i] | SRC_AUX;
+      if (c2f_acc_c && (c1f_slot_q == SLOTW'(i)))
+        fcl_n_c[i] = 1'b1;
+
+      // ---- PUBLISH (C4), one edge after the payload write edge ----
+      // Matched on the FULL owner handle, not the slot. Appendix B.5: "never
+      // combine events from different generations merely because slot
+      // matches." In ordinary operation the generation cannot change between
+      // C2's claim and C4's publication -- the owner is not final until this
+      // very source commits -- so this comparison is a fault-injection and
+      // drain-boundary guard, and it costs one 8-bit compare per lane.
+      if (c4t_v_q && (c4t_slot_q == SLOTW'(i)) && c4t_gen_ok_c)
+        cmt_n_c[i] = cmt_n_c[i] | c4t_mask_q;
+      if (c4a_v_q && (c4a_slot_q == SLOTW'(i)) && c4a_gen_ok_c)
+        cmt_n_c[i] = cmt_n_c[i] | SRC_AUX;
+      if (c4f_v_q && (c4f_slot_q == SLOTW'(i)) && c4f_gen_ok_c)
+        fdn_n_c[i] = 1'b1;
+
+      // ---- READY TICKET CLAIM, atomic with the reservation ----
+      if (tkt_t_c && (c4t_slot_q == SLOTW'(i))) rdy_n_c[i] = 1'b1;
+      if (tkt_a_c && (c4a_slot_q == SLOTW'(i))) rdy_n_c[i] = 1'b1;
+
+      // ---- COMBINE RESERVATION (11.1 event 2) ----
+      // The credited pop off the ready queue. This reserves the owner; it does
+      // NOT mean COMBINE has taken the packet, and it must not authorise a
+      // final.
+      if (cmb_pop_c && (sel_data_c[OWNERW-1 -: SLOTW] == SLOTW'(i)))
+        crs_n_c[i] = 1'b1;
+
+      // ---- ACTUAL COMBINE ISSUE (11.1 event 3) ----
+      // T4: "Set actual issue on cmb_valid && cmb_ready; keep reservation
+      // separate." The generation is checked for the same reason every other
+      // event in this loop checks it: a stale token naming a reused slot must
+      // not mark the CURRENT owner issued.
+      if (cmb_fire_c && (cmb_owner_o[OWNERW-1 -: SLOTW] == SLOTW'(i))
+          && cmb_gen_ok_c)
+        cbi_n_c[i] = 1'b1;
+
+      // ---- FETCH LAUNCH (18.1: an owner can be fetched at most once) ----
+      if (fetch_fire_c && (fetch_q == SLOTW'(i))) ftc_n_c[i] = 1'b1;
+
+      // ---- OUTPUT RELEASE. Section 5.4: THE ONLY ordinary owner-free event.
+      // Appendix D.6: the final write does NOT free the owner, prefetching
+      // does NOT free the owner, COMBINE completing does NOT free the owner.
+      if (out_fire_c && (emit_q == SLOTW'(i))) live_n_c[i] = 1'b0;
+
+      // ---- ADMISSION, last and therefore highest precedence ----
+      if (adm_fire_c && (tail_q == SLOTW'(i))) begin
+        live_n_c[i] = 1'b1;
+        req_n_c [i] = adm_req_i;
+        iss_n_c [i] = 4'd0;
+        clm_n_c [i] = 4'd0;
+        cmt_n_c [i] = 4'd0;
+        // A zero-work owner is eligible at admission and claims its one ticket
+        // there (section 9.1: "Admission can create a zero-work ready owner").
+        rdy_n_c [i] = (adm_req_i == 4'd0);
+        cbi_n_c [i] = 1'b0;
+        crs_n_c [i] = 1'b0;
+        fcl_n_c [i] = 1'b0;
+        fdn_n_c [i] = 1'b0;
+        ftc_n_c [i] = 1'b0;
+      end
+    end
+  end
+
+  // ==========================================================================
+  // DIAGNOSTIC DELTAS -- computed ONCE, assigned ONCE (section 19.7)
+  // ==========================================================================
+  // "Simultaneous TMU and AUX faults increment the error total by two." That
+  // is the fragrob defect this repository already paid for once; the delta is
+  // calculated in one place and the accumulator is assigned in one place.
+  logic [1:0] d_stale_c, d_unsol_c, d_dup_c, d_commit_c, d_ticket_c, d_issue_c;
+  logic       d_range_c, d_final_c;
+  always_comb begin
+    d_stale_c = 2'd0;
+    if (c2t_stale_c) d_stale_c = d_stale_c + 2'd1;
+    if (c2a_stale_c) d_stale_c = d_stale_c + 2'd1;
+    d_unsol_c = 2'd0;
+    if (c2t_unsol_c) d_unsol_c = d_unsol_c + 2'd1;
+    if (c2a_unsol_c) d_unsol_c = d_unsol_c + 2'd1;
+    d_dup_c = 2'd0;
+    if (c2t_dup_c) d_dup_c = d_dup_c + 2'd1;
+    if (c2a_dup_c) d_dup_c = d_dup_c + 2'd1;
+    d_commit_c = 2'd0;
+    if (c4t_v_q) d_commit_c = d_commit_c + 2'd1;
+    if (c4a_v_q) d_commit_c = d_commit_c + 2'd1;
+    d_ticket_c = 2'd0;
+    if (tkt_t_c) d_ticket_c = d_ticket_c + 2'd1;
+    if (tkt_a_c) d_ticket_c = d_ticket_c + 2'd1;
+    if (adm_fire_c && (adm_req_i == 4'd0)) d_ticket_c = d_ticket_c + 2'd1;
+    d_issue_c = 2'd0;
+    if (iss_tmu_valid_i && !iss_t_ok_c) d_issue_c = d_issue_c + 2'd1;
+    if (iss_aux_valid_i && !iss_a_ok_c) d_issue_c = d_issue_c + 2'd1;
+    d_range_c = c2t_rng_bad_c;
+    d_final_c = c2f_bad_c;
+  end
+
+  // ==========================================================================
+  // SEQUENTIAL
+  // ==========================================================================
+  logic [CNTW-1:0] live_next_c;
+  assign live_next_c = live_cnt_q + CNTW'(adm_fire_c) - CNTW'(out_fire_c);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      for (int unsigned i = 0; i < OWNERS; i++) begin
+        live_q[i] <= 1'b0;
+        req_q [i] <= 4'd0;
+        iss_q [i] <= 4'd0;
+        clm_q [i] <= 4'd0;
+        cmt_q [i] <= 4'd0;
+        rdy_q [i] <= 1'b0;
+        cbi_q [i] <= 1'b0;
+        crs_q [i] <= 1'b0;
+        fcl_q [i] <= 1'b0;
+        fdn_q [i] <= 1'b0;
+        ftc_q [i] <= 1'b0;
+      end
+      tail_q     <= '0;
+      emit_q     <= '0;
+      fetch_q    <= '0;
+      live_cnt_q <= '0;
+      credit_ok_q <= 1'b1;   // an empty ring has room
+      fn_q <= FN_OPEN;
+      fence_open_q <= 1'b1;  // an unwrapped namespace is open
+      fn_slot_q <= '0;
+      unf_cnt_q  <= '0;
+      peak_q     <= '0;
+    end else begin
+      for (int unsigned i = 0; i < OWNERS; i++) begin
+        live_q[i] <= live_n_c[i];
+        req_q [i] <= req_n_c [i];
+        iss_q [i] <= iss_n_c [i];
+        clm_q [i] <= clm_n_c [i];
+        cmt_q [i] <= cmt_n_c [i];
+        rdy_q [i] <= rdy_n_c [i];
+        cbi_q [i] <= cbi_n_c [i];
+        crs_q [i] <= crs_n_c [i];
+        fcl_q [i] <= fcl_n_c [i];
+        fdn_q [i] <= fdn_n_c [i];
+        ftc_q [i] <= ftc_n_c [i];
+      end
+      if (adm_fire_c)   tail_q  <= tail_q  + SLOTW'(1);
+      if (out_fire_c)   emit_q  <= emit_q  + SLOTW'(1);
+      if (fetch_fire_c) fetch_q <= fetch_q + SLOTW'(1);
+
+      // ONE delta, ONE assignment: simultaneous admission and retirement is a
+      // net owner-count change of zero (section 19.7).
+      live_cnt_q <= live_next_c;
+      // From the NEXT-state count, so the credit is exact rather than one
+      // cycle behind. See the note beside `adm_ready_o`.
+      credit_ok_q <= (live_next_c < CNTW'(OWNERS));
+
+      // The fence. `fence_open_q` is registered from the NEXT phase, so at any
+      // cycle it agrees with `fn_q` rather than trailing it -- the same
+      // next-state discipline the credit uses, and the reason a flop on
+      // `wrap_block` would not have worked.
+      fn_q         <= fn_n_c;
+      // THE PERMISSION IS THE WRAP TEST, NOT JUST THE PHASE. The first version
+      // of this line was `(fn_n_c == FN_OPEN) || (fn_n_c == FN_REOPEN)`, and it
+      // FAILED case 19 twice -- 32 early reopens, and the pre-existing check
+      // "every wrapping admission happened on a QUIESCENT island" went red.
+      //
+      // The reasoning behind it had a hole: I argued an admission in FN_OPEN
+      // was safe because it consumes gen_q[tail_q], "not exhausted or
+      // wrap_block_c would be set" -- but this design STOPPED CHECKING THE
+      // CURRENT SLOT ALTOGETHER, using the next-state test only as a phase
+      // trigger. After 64x255 admissions every slot sits at generation 255, so
+      // the first wrapping admission walked straight through FN_OPEN.
+      //
+      // `wrap_block_n_c` computed at cycle N-1 answers "would an admission at
+      // N consume an exhausted slot", because the slot consumed at N is
+      // tail_next_c(N-1). So it belongs in the PERMISSION, not only in the
+      // transition -- which is what §6.1 means by computing the permission
+      // "from the same next-state tail/generation event that commits".
+      fence_open_q <= ((fn_n_c == FN_OPEN) && !wrap_block_n_c)
+                   || (fn_n_c == FN_REOPEN);
+      if ((fn_q == FN_OPEN) && wrap_block_n_c) begin
+        fn_slot_q <= tail_next_c;
+      end
+      unf_cnt_q  <= unf_cnt_q + CNTW'(adm_fire_c) - CNTW'(fetch_fire_c);
+
+      // A RETAINED high-water mark. Section 19.7: "A statistic rebuilt fresh
+      // on every query is current occupancy, not a historical peak."
+      if (live_next_c > peak_q) peak_q <= live_next_c;
+    end
+  end
+
+  // ---- admission context write (registered enable) -------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) ctxw_v_q <= 1'b0;
+    else        ctxw_v_q <= adm_fire_c;
+  end
+  always_ff @(posedge clk) begin
+    ctxw_addr_q <= tail_q;
+    ctxw_data_q <= adm_ctx_i;
+  end
+
+  // ---- TMU return pipeline -------------------------------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      c0t_v_q  <= 1'b0;
+      c1t_v_q  <= 1'b0;
+      c3t_v_q  <= 1'b0;
+      c3t_we_q <= 3'b000;
+      c4t_v_q  <= 1'b0;
+    end else begin
+      c0t_v_q  <= tmu_rvalid_i;
+      c1t_v_q  <= c0t_v_q;
+      c3t_v_q  <= c2t_acc_c;
+      c3t_we_q <= c2t_acc_c ? c1t_bit_c[2:0] : 3'b000;
+      c4t_v_q  <= c3t_v_q;
+    end
+  end
+  always_ff @(posedge clk) begin
+    c0t_slot_q <= tmu_rhandle_i[SMPW-1 -: SLOTW];
+    c0t_sidx_q <= tmu_rhandle_i[GENW+1 -: 2];
+    c0t_gen_q  <= tmu_rhandle_i[GENW-1:0];
+    c0t_res_q  <= tmu_rresult_i;
+    c0t_rng_q  <= (tmu_rhandle_i[GENW+1 -: 2] != 2'd3);
+
+    c1t_slot_q <= c0t_slot_q;
+    c1t_sidx_q <= c0t_sidx_q;
+    c1t_gen_q  <= c0t_gen_q;
+    c1t_res_q  <= c0t_res_q;
+    c1t_rng_q  <= c0t_rng_q;
+    c1t_live_q <= live_q[c0t_slot_q];
+    // C1 SNAPSHOT, migrated. These three were MISSING from my own read
+    // inventory and the brief caught them: my search was `gen_q\[` while the
+    // source writes `gen_q [c0t_slot_q]` -- with a space. The brief supplies
+    // `gen_(q|n_c)\s*\[` for exactly that reason.
+    //
+    // "Capture these from the same pre-edge allocator state as the other row
+    // facts. Do not calculate them one clock later from a moved cursor and call
+    // that an unchanged snapshot." `win_gen_of_slot` reads `tail_q` and
+    // `sh_alloc_gen_q`, both registers, so inside this always_ff it sees
+    // pre-edge state on the same edge as every other fact captured here.
+    c1t_tgen_q <= win_gen_of_slot(c0t_slot_q);
+    c1t_req_q  <= req_q [c0t_slot_q];
+    c1t_iss_q  <= iss_q [c0t_slot_q];
+    c1t_clm_q  <= clm_q [c0t_slot_q];
+    c1t_cmt_q  <= cmt_q [c0t_slot_q];
+
+    c3t_slot_q <= c1t_slot_q;
+    c3t_gen_q  <= c1t_gen_q;
+    c3t_mask_q <= c1t_bit_c;
+    c3t_data_q <= c1t_res_q;
+
+    c4t_slot_q <= c3t_slot_q;
+    c4t_gen_q  <= c3t_gen_q;
+    c4t_mask_q <= c3t_mask_q;
+  end
+
+  // ---- AUX return pipeline -------------------------------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      c0a_v_q  <= 1'b0;
+      c1a_v_q  <= 1'b0;
+      c3a_v_q  <= 1'b0;
+      c3a_we_q <= 1'b0;
+      c4a_v_q  <= 1'b0;
+    end else begin
+      c0a_v_q  <= aux_rvalid_i;
+      c1a_v_q  <= c0a_v_q;
+      c3a_v_q  <= c2a_acc_c;
+      c3a_we_q <= c2a_acc_c;
+      c4a_v_q  <= c3a_v_q;
+    end
+  end
+  always_ff @(posedge clk) begin
+    c0a_slot_q <= aux_rowner_i[OWNERW-1 -: SLOTW];
+    c0a_gen_q  <= aux_rowner_i[GENW-1:0];
+    c0a_res_q  <= aux_rresult_i;
+
+    c1a_slot_q <= c0a_slot_q;
+    c1a_gen_q  <= c0a_gen_q;
+    c1a_res_q  <= c0a_res_q;
+    c1a_live_q <= live_q[c0a_slot_q];
+    c1a_tgen_q <= win_gen_of_slot(c0a_slot_q);
+    c1a_req_q  <= req_q [c0a_slot_q];
+    c1a_iss_q  <= iss_q [c0a_slot_q];
+    c1a_clm_q  <= clm_q [c0a_slot_q];
+    c1a_cmt_q  <= cmt_q [c0a_slot_q];
+
+    c3a_slot_q <= c1a_slot_q;
+    c3a_gen_q  <= c1a_gen_q;
+    c3a_data_q <= c1a_res_q;
+
+    c4a_slot_q <= c3a_slot_q;
+    c4a_gen_q  <= c3a_gen_q;
+  end
+
+  // ---- FINAL return pipeline ----------------------------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      c0f_v_q  <= 1'b0;
+      c1f_v_q  <= 1'b0;
+      c3f_v_q  <= 1'b0;
+      c3f_we_q <= 1'b0;
+      c4f_v_q  <= 1'b0;
+    end else begin
+      c0f_v_q  <= fin_valid_i;
+      c1f_v_q  <= c0f_v_q;
+      c3f_v_q  <= c2f_acc_c;
+      c3f_we_q <= c2f_acc_c;
+      c4f_v_q  <= c3f_v_q;
+    end
+  end
+  always_ff @(posedge clk) begin
+    c0f_slot_q <= fin_owner_i[OWNERW-1 -: SLOTW];
+    c0f_gen_q  <= fin_owner_i[GENW-1:0];
+    c0f_res_q  <= fin_result_i;
+
+    c1f_slot_q <= c0f_slot_q;
+    c1f_gen_q  <= c0f_gen_q;
+    c1f_res_q  <= c0f_res_q;
+    c1f_live_q <= live_q[c0f_slot_q];
+    c1f_tgen_q <= win_gen_of_slot(c0f_slot_q);
+    c1f_cbi_q  <= cbi_q [c0f_slot_q];
+    c1f_fcl_q  <= fcl_q [c0f_slot_q];
+    c1f_fdn_q  <= fdn_q [c0f_slot_q];
+
+    c3f_slot_q <= c1f_slot_q;
+    c3f_gen_q  <= c1f_gen_q;
+    c3f_data_q <= c1f_res_q;
+
+    c4f_slot_q <= c3f_slot_q;
+    c4f_gen_q  <= c3f_gen_q;
+  end
+
+  // ---- ready-queue write registers ----------------------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      q0t_v_q <= 1'b0;
+      q0a_v_q <= 1'b0;
+      q0i_v_q <= 1'b0;
+    end else begin
+      q0t_v_q <= tkt_t_c;
+      q0a_v_q <= tkt_a_c;
+      q0i_v_q <= adm_fire_c && (adm_req_i == 4'd0);
+    end
+  end
+  always_ff @(posedge clk) begin
+    q0t_owner_q <= {c4t_slot_q, c4t_gen_q};
+    q0a_owner_q <= {c4a_slot_q, c4a_gen_q};
+    q0i_owner_q <= {tail_q, adm_gen_c};
+  end
+
+  // ---- COMBINE admission: pop -> k0 -> job queue (mode-independent part) ---
+  // `cmb_res_q` counts pops in flight AND queued rows in both modes, so the
+  // CMBQD reservation and `a_cmb_reserved`/`a_cmbq_bound` are unchanged; only
+  // the number of in-flight stages behind the pop differs (three vs one).
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      k0_v_q    <= 1'b0;
+      rr_q      <= 2'd0;
+      cmb_res_q <= '0;
+      cq_wp_q   <= '0;
+      cq_rp_q   <= '0;
+    end else begin
+      k0_v_q <= cmb_pop_c;
+      if (cmb_pop_c) rr_q <= (sel_c == 2'd2) ? 2'd0 : (sel_c + 2'd1);
+      cmb_res_q <= cmb_res_q + CNTW'(cmb_pop_c) - CNTW'(cmb_fire_c);
+      if (cq_push_c)  cq_wp_q <= cq_wp_q + (CQPW+1)'(1);
+      if (cmb_fire_c) cq_rp_q <= cq_rp_q + (CQPW+1)'(1);
+    end
+  end
+  always_ff @(posedge clk) begin
+    if (cmb_pop_c) k0_owner_q <= sel_data_c;
+    if (cq_push_c) cq_own_q[cq_wp_q[CQPW-1:0]] <= cq_push_owner_c;
+  end
+
+  // ---- retirement read pipeline -------------------------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      g0_v_q    <= 1'b0;
+      g1_v_q    <= 1'b0;
+      g2_v_q    <= 1'b0;
+      out_res_q <= '0;
+      oq_wp_q   <= '0;
+      oq_rp_q   <= '0;
+    end else begin
+      g0_v_q <= fetch_fire_c;
+      g1_v_q <= g0_v_q;
+      g2_v_q <= g1_v_q;
+      out_res_q <= out_res_q + CNTW'(fetch_fire_c) - CNTW'(out_fire_c);
+      if (g2_v_q)     oq_wp_q <= oq_wp_q + (OQPW+1)'(1);
+      if (out_fire_c) oq_rp_q <= oq_rp_q + (OQPW+1)'(1);
+    end
+  end
+  always_ff @(posedge clk) begin
+    if (fetch_fire_c) fin_rd_addr_q <= fetch_q;
+    if (fetch_fire_c) g0_owner_q <= {fetch_q, win_gen_of_slot(fetch_q)};
+    g1_owner_q <= g0_owner_q;
+    g2_owner_q <= g1_owner_q;
+    fres_cap_q <= fres_rd_c;
+    ctx_cap_q  <= ctx_rd_c;
+    if (g2_v_q) begin
+      oq_own_q[oq_wp_q[OQPW-1:0]] <= g2_owner_q;
+      oq_res_q[oq_wp_q[OQPW-1:0]] <= fres_cap_q;
+      oq_ctx_q[oq_wp_q[OQPW-1:0]] <= ctx_cap_q;
+    end
+  end
+
+  // ---- evidence counters ---------------------------------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      ev_admitted_o    <= 32'd0;
+      ev_emitted_o     <= 32'd0;
+      ev_commits_o     <= 32'd0;
+      ev_tickets_o     <= 32'd0;
+      ev_err_range_o   <= 32'd0;
+      ev_err_stale_o   <= 32'd0;
+      ev_err_unsol_o   <= 32'd0;
+      ev_err_dup_o     <= 32'd0;
+      ev_err_final_o   <= 32'd0;
+      ev_err_issue_o   <= 32'd0;
+      ev_wrap_drains_o <= 32'd0;
+      ev_src_unpub_o   <= 32'd0;
+    end else begin
+      ev_admitted_o    <= ev_admitted_o    + 32'(adm_fire_c);
+      ev_src_unpub_o   <= ev_src_unpub_o   + 32'(src_unpub_c);
+      ev_emitted_o     <= ev_emitted_o     + 32'(out_fire_c);
+      ev_commits_o     <= ev_commits_o     + 32'(d_commit_c);
+      ev_tickets_o     <= ev_tickets_o     + 32'(d_ticket_c);
+      ev_err_range_o   <= ev_err_range_o   + 32'(d_range_c);
+      ev_err_stale_o   <= ev_err_stale_o   + 32'(d_stale_c);
+      ev_err_unsol_o   <= ev_err_unsol_o   + 32'(d_unsol_c);
+      ev_err_dup_o     <= ev_err_dup_o     + 32'(d_dup_c);
+      ev_err_final_o   <= ev_err_final_o   + 32'(d_final_c);
+      ev_err_issue_o   <= ev_err_issue_o   + 32'(d_issue_c);
+      ev_wrap_drains_o <= ev_wrap_drains_o + 32'(adm_fire_c && wrap_block_c);
+    end
+  end
+
+  assign ev_live_o      = live_cnt_q;
+  assign ev_live_peak_o = peak_q;
+
+  // ==========================================================================
+  // ASSERTION CONTRACTS (Appendix B.7)
+  // ==========================================================================
+  // armed_q is a plain SYNCHRONOUS flag that says "reset has released". Reading
+  // rst_n synchronously in a block where it is also an asynchronous reset
+  // raises SYNCASYNCNET in the simulator's lint, and that is a real caution
+  // rather than a style note: a net used both ways is a net whose timing
+  // closure is being asked for twice.
+  //
+  // (That sentence is phrased to avoid opening a comment line with the
+  // simulator's name. A `//` line that BEGINS with it is read as a pragma and
+  // the file stops lexing -- "%Error-BADVLTPRAGMA: Unknown verilator comment".
+  // This file hit it on its first lint, which is the fifth time in this
+  // repository.)
+  //
+  // And it is armed by RESET, symmetrically -- reports/
+  // V3-DIAGNOSIS-VERIFICATION-20260906.md section 4 item 6: `bil_expect_r` is
+  // a checker that does NOT reset while its issuer does, giving a false
+  // negative at cold start and a sticky false positive after a warm reset, so
+  // its zero counter is no evidence about anything. Every checker register
+  // below resets with the thing it checks.
+  logic armed_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) armed_q <= 1'b0;
+    else        armed_q <= 1'b1;
+  end
+
+  // out_valid && !out_ready |=> stable(entire_output_packet). Checked against a
+  // real previous-cycle snapshot rather than by hoping the FIFO head is stable.
+  logic              ost_v_q;
+  logic [OWNERW-1:0] ost_own_q;
+  logic [RESW-1:0]   ost_res_q;
+  logic [CTXW-1:0]   ost_ctx_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      ost_v_q   <= 1'b0;
+      ost_own_q <= '0;
+      ost_res_q <= '0;
+      ost_ctx_q <= '0;
+    end else begin
+      ost_v_q   <= out_valid_o && !out_ready_i;
+      ost_own_q <= out_owner_o;
+      ost_res_q <= out_result_o;
+      ost_ctx_q <= out_ctx_o;
+    end
+  end
+
+  // c3*_we_seen_q makes "committed rises only after the payload write edge"
+  // checkable without $past.
+  logic c3_we_seen_t_q, c3_we_seen_a_q, c3_we_seen_f_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      c3_we_seen_t_q <= 1'b0;
+      c3_we_seen_a_q <= 1'b0;
+      c3_we_seen_f_q <= 1'b0;
+    end else begin
+      c3_we_seen_t_q <= (c3t_we_q != 3'b000);
+      c3_we_seen_a_q <= c3a_we_q;
+      c3_we_seen_f_q <= c3f_we_q;
+    end
+  end
+
+  // ==========================================================================
+  // T2 STEP 1 -- THE WINDOW, RUNNING BESIDE THE TABLE (verification only)
+  // ==========================================================================
+  // T1's instruction is to "preserve a tested identity-only comparison rather
+  // than one giant patch", and T2 asks for "independent literal-owner/
+  // generation checks, THEN replace per-slot generation access". The model test
+  // (tests/texture/texture_v3_window_identity.cpp) proves the identity in the
+  // abstract; this asserts it against THIS RTL, every cycle, before any site
+  // moves.
+  //
+  // THREE OF THE WINDOW'S FOUR FIELDS ARE ALREADY HERE, in their low bits:
+  //   6.1 alloc_ticket  <- tail_q      (advances on adm_fire_c)
+  //   6.1 retire_ticket <- emit_q      (increments only -- 6.3 holds by
+  //                                     construction, and is asserted below)
+  //   6.1 used          <- live_cnt_q  (live_cnt_q + adm_fire_c - out_fire_c,
+  //                                     which is 6.1's update exactly)
+  // Only the 8 generation bits on each pointer are missing, and `gen_q[64][8]`
+  // is storing per-slot what those 16 bits imply. That is the 576 state bits
+  // 6.8 names, reached from the other direction.
+  //
+  // GUARDED BY `ifndef SYNTHESIS` DELIBERATELY. Step 1 is a claim about
+  // equivalence, not a design change, and it must not move the next fit's
+  // numbers -- otherwise the before/after that decides T2 is contaminated by
+  // the scaffolding built to check it.
+`ifndef SYNTHESIS
+  // One slot checked per cycle, rotating, rather than 64 every cycle: the
+  // bench runs long enough to sweep the ring many times over and this keeps
+  // simulation honest about cost.
+  // ---- THE VERIFICATION-ONLY GENERATION TABLE -----------------------------
+  // The owner's T2 ruling: "keep a literal gen_q reference only in a
+  // synthesis-excluded verification section. Update it from its OWN old-style
+  // per-slot recurrence, not from the new helper it is intended to check.
+  // Otherwise the apparent equivalence assertion becomes circular."
+  //
+  // So `vgen_q` is maintained exactly the way the deleted table was -- increment
+  // this slot's own byte when the slot is allocated -- and NEVER from
+  // `win_gen_of_slot`. That is what keeps `a_win_gen_of_slot` a real check
+  // rather than a restatement of the helper against itself.
+  logic [GENW-1:0] vgen_q [OWNERS];
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      for (int unsigned i = 0; i < OWNERS; i++) vgen_q[i] <= '0;
+    end else if (adm_fire_c) begin
+      vgen_q[tail_q] <= GENW'(vgen_q[tail_q] + GENW'(1));
+    end
+  end
+
+  // The fence-generation latch is verification-only too: classified rather than
+  // guessed, per the brief. Its ONLY consumer is `a_fence_holds_gen` below --
+  // there is no datapath reader -- so it moves here with the table it compares
+  // against, and its next-state read disappears with it.
+  logic [GENW-1:0] vfn_gen_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)                     vfn_gen_q <= '0;
+    else if (fn_n_c == FN_REOPEN)   vfn_gen_q <= win_gen_of_slot(tail_next_c);
+  end
+
+  logic [SLOTW-1:0] gen_chk_s;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) gen_chk_s <= '0;
+    else        gen_chk_s <= gen_chk_s + SLOTW'(1);
+  end
+
+  // A rotating TICKET, so the whole 14-bit namespace is swept over a long run
+  // rather than only the tokens the bench happens to present.
+  logic [OWNERW-1:0] tkt_chk_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) tkt_chk_q <= '0;
+    else        tkt_chk_q <= tkt_chk_q + OWNERW'(1);
+  end
+
+  // retire + k, k = 0..63: a ticket that straddles the live edge every pass.
+  wire [OWNERW-1:0] bnd_tkt_c = sh_retire_tkt_c + OWNERW'(gen_chk_s);
+
+  wire [OWNERW-1:0] sh_alloc_tkt_c  = {sh_alloc_gen_q,  tail_q};
+  wire [OWNERW-1:0] sh_retire_tkt_c = win_retire_tkt_c;
+
+  always_ff @(posedge clk) begin
+    if (armed_q) begin
+      // THE IDENTITY, checked where it actually bites. At admission the table
+      // says the new generation is `gen_q[tail_q] + 1`; the window says it is
+      // the allocation ticket's own generation. If those ever disagree the
+      // whole replacement is unsound, and this fires on the cycle it happens
+      // rather than in a fit weeks later.
+      // NOT `adm_gen_c == sh_alloc_gen_q` any more: Group A made `adm_gen_c`
+      // BE `sh_alloc_gen_q`, so that form became a tautology -- an assertion
+      // that cannot fail, which is the anti-pattern this file is full of
+      // warnings about. It compares against the TABLE instead, which is the
+      // thing the derivation actually claims.
+      a_win_gen_matches_table : assert (!adm_fire_c
+          || (sh_alloc_gen_q == GENW'(vgen_q[tail_q] + GENW'(1))));
+
+      // Site 3's derivation, checked against the table it replaced. This is the
+      // one Group A site that is not a copy of the other two, and the plan had
+      // it wrong once before an assertion corrected it.
+      a_win_wrap_p1_matches_table : assert (
+          wrap_at_tail_p1_c == (vgen_q[tail_p1_c] == {GENW{1'b1}}));
+
+      // And site 2, for the same reason.
+      a_win_wrap_matches_table : assert (
+          wrap_block_c == (vgen_q[tail_q] == {GENW{1'b1}}));
+
+      // 6.1's count, against the two pointers. This is the check that would
+      // fail first if retirement ever stopped being oldest-first.
+      // WIDEN THE COUNT, DO NOT NARROW THE SPAN. The first version of this
+      // truncated the 14-bit span to CNTW to compare it, which would have let a
+      // span of 128 against a count of 0 compare EQUAL -- the assertion would
+      // have passed on exactly the corruption it exists to find. Truncation
+      // always fails in the reassuring direction.
+      a_win_used_matches_span : assert (OWNERW'(live_cnt_q) ==
+          ((sh_alloc_tkt_c - sh_retire_tkt_c) & OWNERW'({OWNERW{1'b1}})));
+
+      // 6.1 again: the live set is one contiguous interval, so the count can
+      // never exceed the ring.
+      a_win_used_bounded : assert (live_cnt_q <= CNTW'(OWNERS));
+
+      // ---- V03 / V04 REACHABILITY, instrumented before being claimed -------
+      // The brief's V03 and V04 are the two counterexamples of S8.1, and it is
+      // explicit about the standard of evidence: "Ensure the schedule is
+      // actually covered or explain why the unmodified pipeline structurally
+      // prevents it." So these detect whether each schedule OCCURS, rather
+      // than asserting it cannot.
+      //
+      // V03, the FUTURE token: invalid at the C1 snapshot, live by the C2
+      // claim. If this fires, a current-only check would have accepted a packet
+      // whose stored snapshot was never valid for that instance -- and the
+      // snapshot half of the predicate is load-bearing.
+      //
+      // V04, the RETIRED token: live at the C1 snapshot, no longer a member by
+      // the C2 claim. If this fires, a snapshot-only check would have accepted
+      // a packet whose owner's authority had ended -- and the current half,
+      // added today under S8.2, is load-bearing.
+      //
+      // Either outcome is a result. Silence across the bench is the "explain
+      // why it is structurally prevented" branch, and must be reported as such
+      // rather than as coverage.
+      // V03's detector is REMOVED for the same reason V04's was: the schedule
+      // is REACHABLE. A return for an owner that has not been admitted yet,
+      // with the admission landing before the claim, hits it at offset zero --
+      // see case 4h. Keeping the assertion would abort on legitimate traffic.
+      //
+      // So BOTH of S8.1's counterexamples occur in real traffic, and both
+      // halves of the C2 predicate are load-bearing: the snapshot half refuses
+      // the future token, the current half refuses the retired one. That is
+      // precisely why the ruling asks for two time points rather than one.
+      // V04's detector is REMOVED, because the schedule turned out to be
+      // REACHABLE -- see case 4e in the bench. A duplicate return captured
+      // while its owner is live, with retirement landing on its C2, hits it on
+      // the very first attempt. Keeping the assertion would abort on legitimate
+      // traffic; the property is now tested as behaviour instead.
+      //
+      // This corrects what I recorded an hour earlier. The first construction
+      // attempt released `out_ready` BEFORE injecting, so the owner had already
+      // retired by capture and `c1t_live_q` was false at snapshot -- the wrong
+      // schedule entirely. Ten offsets "survived" and I reported the schedule
+      // as unreached. Reversing the order hit it at offset zero.
+      //
+      // So S8.2's current-membership term is LOAD-BEARING, not belt and braces.
+
+      // S13.2's THREE POSITIONS, asserted as a partition rather than trusted as
+      // a naming convention. The section's warning is specific:
+      //
+      //   E is next externally emitted owner.
+      //   F is next final row not yet reserved for output reading.
+      //   A is next owner to allocate.
+      //     [E, F) : reserved/fetched for output but not yet emitted;
+      //     [F, A) : not yet fetched;
+      //     [E, A) : all live owners.
+      //   "Avoid two counters whose overlap is inferred only from naming."
+      //
+      // Here `unf_cnt_q` is |[F, A)| and `out_res_q` is |[E, F)|, and they are
+      // disjoint by construction because `fetch_fire_c` decrements one and
+      // increments the other on the same edge. If that is true then
+      // `live_cnt_q` -- which admission and emission maintain independently --
+      // must equal their sum. Three counters, one identity, checked every cycle
+      // instead of argued from their names.
+      a_interval_partition : assert (live_cnt_q == CNTW'(unf_cnt_q + out_res_q));
+
+      // ---- S22.2's PHASE-CONTROL INVARIANTS ------------------------------
+      // The section says "assert at every edge for every active row" and then
+      // lists them. NONE of the first four were asserted anywhere in this file
+      // -- checked before writing these, the same way S16.3's list was checked.
+      //
+      // Applied to one rotating row per cycle rather than all 64 every edge:
+      // `gen_chk_s` sweeps the ring continuously, so across a bench that runs
+      // tens of thousands of cycles every row is examined many times over, at
+      // a fraction of the simulation cost.
+      //
+      // Gated on `live_q` because the section says "for every ACTIVE row"; a
+      // released row keeps its last values until admission clears them.
+      if (live_q[gen_chk_s]) begin
+        // "committed subset claimed subset issued subset required"
+        a_p22_cmt_sub_clm : assert ((cmt_q[gen_chk_s] & ~clm_q[gen_chk_s]) == 4'd0);
+        a_p22_clm_sub_iss : assert ((clm_q[gen_chk_s] & ~iss_q[gen_chk_s]) == 4'd0);
+        a_p22_iss_sub_req : assert ((iss_q[gen_chk_s] & ~req_q[gen_chk_s]) == 4'd0);
+
+        // "combine_issued implies combine_reserved" -- exactly the separation
+        // T4 introduced today: cbi is 11.1's event 3, crs is event 2, and an
+        // issue that was never reserved would mean the credit was bypassed.
+        a_p22_cbi_implies_crs : assert (!cbi_q[gen_chk_s] || crs_q[gen_chk_s]);
+
+        // "final_claimed implies actual combine_issued" -- M6's property, stated
+        // as a row invariant rather than as a single directed case.
+        a_p22_fcl_implies_cbi : assert (!fcl_q[gen_chk_s] || cbi_q[gen_chk_s]);
+
+        // "final_done implies final_claimed"
+        a_p22_fdn_implies_fcl : assert (!fdn_q[gen_chk_s] || fcl_q[gen_chk_s]);
+      end
+
+      // S13.1: IS THE PER-OWNER FETCHED BIT REDUNDANT? Asserted rather than
+      // argued, because the argument is exactly the kind that sounds airtight
+      // and costs a day when it is not.
+      //
+      // S13.1 claims: "F advances only when a final bank read has been
+      // reserved. It never scans past an incomplete owner. Therefore no owner
+      // can be fetched twice if F and the reservation counters are correct ...
+      // Remove the per-owner ftc/fetched array. It represented a property
+      // already encoded by a monotone ordered cursor."
+      //
+      // `ftc_q`'s ONLY reader is `!ftc_q[fetch_q]` inside fetch_fire_c itself.
+      // `fetch_q` is monotone, so it can only revisit a slot after 64 fetches,
+      // by which time that slot must have been re-admitted -- and admission
+      // clears ftc. If that holds, the term never gates anything and the
+      // 64-flop array is dead.
+      //
+      // This asserts the term is redundant: whenever every OTHER condition of
+      // fetch_fire_c is satisfied, ftc_q[fetch_q] is already clear.
+      a_ftc_bit_is_redundant : assert (
+          !((unf_cnt_q != '0) && live_q[fetch_q] && fdn_q[fetch_q]
+            && ((out_res_q - CNTW'(out_fire_c)) < CNTW'(OUTQD)))
+          || !ftc_q[fetch_q]);
+
+      // IS THE T2 DRAIN-GUARD QUESTION EVEN REACHABLE? Turning the open
+      // decision into a measurable property rather than leaving it as a
+      // judgement call.
+      //
+      // The four C4 guards test `gen_q[slot] == gen` with NO `live_q` term, so
+      // substituting 6.1's interval test would tighten them. That only changes
+      // behaviour if a C4 event can arrive for an owner that is DEAD but whose
+      // slot has not yet been reallocated.
+      //
+      // The pipeline argues it cannot: `fdn_q` is set by the FINAL's C4, the
+      // final follows COMBINE, and COMBINE follows every sample commit -- so all
+      // returns must clear C4 before the owner is emittable, and release happens
+      // at emission. These assert that argument instead of trusting it. If they
+      // hold across the bench the substitution is behaviour-preserving in every
+      // reachable state and the "decision" evaporates; if one fires, the case is
+      // real and the decision is genuinely the owner's.
+      a_c4t_never_dead_match : assert (!(c4t_v_q && !live_q[c4t_slot_q]
+                                         && (vgen_q[c4t_slot_q] == c4t_gen_q)));
+      a_c4a_never_dead_match : assert (!(c4a_v_q && !live_q[c4a_slot_q]
+                                         && (vgen_q[c4a_slot_q] == c4a_gen_q)));
+      a_c4f_never_dead_match : assert (!(c4f_v_q && !live_q[c4f_slot_q]
+                                         && (vgen_q[c4f_slot_q] == c4f_gen_q)));
+
+      // THE FULL gen_of_slot IDENTITY -- and the FIRST version of this
+      // assertion was WRONG, which is the entire reason it is here.
+      //
+      // I wrote `gen_q[tail_p1_c] == alloc_gen - 1`, reasoning that the slot
+      // ahead of the tail has not been reallocated this pass. The assertion
+      // failed immediately. Allocation is strict round-robin and `alloc_gen`
+      // increments when the tail wraps 63->0, so within a pass:
+      //
+      //     gen_q[s] == alloc_gen      for s already allocated this pass
+      //     gen_q[s] == alloc_gen - 1  for s still ahead
+      //
+      // `tail_p1` is ahead EXCEPT when `tail_q == 63`, where it wraps to slot
+      // 0 -- which was allocated at the START of this pass and therefore holds
+      // `alloc_gen`. So my rule was wrong at exactly `tail_q == 63`: the wrap
+      // boundary, which is the one case the fence exists for.
+      //
+      // Had site 3 been rewritten from that reasoning the fence would have been
+      // wrong precisely where it matters, and a fence is wrong silently until
+      // 16,320 allocations later. This is why T2's order is assert-then-move.
+      //
+      // Stated over ALL slots rather than just tail+1, because Groups B and C
+      // need `gen_of_slot(s)` for arbitrary s, not just the neighbour.
+      // GROUP B'S IDENTITY, which is the one nine of the twelve sites need.
+      // Every one of them asks "is this token still the live occupant of its
+      // slot?", and today that is `live_q[slot] && (gen_q[slot] == gen)`. 6.1
+      // says it is `(ticket - retire) mod 2^14 < used`. Asserting the two agree
+      // for a rotating ticket sweeps the whole namespace over a long run, so
+      // the claim is tested on tokens the bench never presents as well as ones
+      // it does -- a window that reported spurious live for DEAD tokens would
+      // otherwise pass.
+      a_win_live_matches_table : assert (
+          (((tkt_chk_q - sh_retire_tkt_c) & OWNERW'({OWNERW{1'b1}}))
+             < OWNERW'(live_cnt_q))
+          == (live_q[tkt_chk_q[SLOTW-1:0]]
+              && (vgen_q[tkt_chk_q[SLOTW-1:0]] == tkt_chk_q[OWNERW-1 -: GENW])));
+
+      // THE SAME IDENTITY, AIMED AT THE BOUNDARY. The check above sweeps the
+      // whole namespace uniformly, which sounds thorough and is weak exactly
+      // where it matters: `used` is at most 64 of 16,384 tickets, so a rotating
+      // ticket lands INSIDE the live window under 0.4% of the time. It is
+      // therefore mostly a test that both representations say "dead", and would
+      // barely exercise them agreeing on LIVE.
+      //
+      // This one walks `retire + k` for k = 0..63, so it straddles the live
+      // edge on every pass -- k < used must be live in both, k >= used dead in
+      // both. That is where an off-by-one in either representation lives.
+      a_win_live_at_boundary : assert (
+          ((OWNERW'(gen_chk_s)) < OWNERW'(live_cnt_q))
+          == (live_q[bnd_tkt_c[SLOTW-1:0]]
+              && (vgen_q[bnd_tkt_c[SLOTW-1:0]] == bnd_tkt_c[OWNERW-1 -: GENW])));
+
+      a_win_gen_of_slot : assert (vgen_q[gen_chk_s] ==
+          ((gen_chk_s < tail_q) ? sh_alloc_gen_q : GENW'(sh_alloc_gen_q - GENW'(1))));
+    end
+  end
+`endif
+
+  always_ff @(posedge clk) begin
+    if (armed_q) begin
+      a_owner_bound      : assert (live_cnt_q <= CNTW'(OWNERS));
+      a_unfetched_bound  : assert (unf_cnt_q  <= live_cnt_q);
+      a_out_reserved     : assert (out_res_q  <= CNTW'(OUTQD));
+      a_cmb_reserved     : assert (cmb_res_q  <= CNTW'(CMBQD));
+      a_outq_bound       : assert (oq_occ_c   <= (OQPW+1)'(OUTQD));
+      a_cmbq_bound       : assert (cq_occ_c   <= (CQPW+1)'(CMBQD));
+
+      // sample_claim -> live && generation_matches && sample_index<3
+      //                 && required && issued && !already_claimed
+      a_sample_claim : assert (!c2t_acc_c || (c1t_live_q
+                        && (c1t_tgen_q == c1t_gen_q)
+                        && (c1t_sidx_q != 2'd3)
+                        && ((c1t_req_q & c1t_bit_c) != 4'd0)
+                        && ((c1t_iss_q & c1t_bit_c) != 4'd0)
+                        && ((c1t_clm_q & c1t_bit_c) == 4'd0)));
+
+      // sample_ram_write -> prior accepted commit packet && legal bank
+      a_ram_write_onehot : assert ((c3t_we_q == 3'b000) || (c3t_we_q == 3'b001)
+                                || (c3t_we_q == 3'b010) || (c3t_we_q == 3'b100));
+      a_ram_write_claimed : assert ((c3t_we_q == 3'b000) || c3t_v_q);
+
+      // committed_bit_rises -> payload_write_already_occurred
+      a_commit_after_write_t : assert (!c4t_v_q || c3_we_seen_t_q);
+      a_commit_after_write_a : assert (!c4a_v_q || c3_we_seen_a_q);
+      a_commit_after_write_f : assert (!c4f_v_q || c3_we_seen_f_q);
+
+      // ready_ticket_insert(owner) -> !prior_ready_claimed, and at most ONE
+      // ticket per owner per edge (Appendix D.2).
+      a_ticket_once_t : assert (!tkt_t_c || !rdy_q[c4t_slot_q]);
+      a_ticket_once_a : assert (!tkt_a_c || !rdy_q[c4a_slot_q]);
+      a_ticket_coalesced : assert (!(same_owner_c && tkt_t_c && tkt_a_c));
+
+      // combine_admit(owner) -> ready_claimed && !combine_issued
+      a_combine_admit : assert (!cmb_pop_c
+                          || (rdy_q[sel_data_c[OWNERW-1 -: SLOTW]]
+                              && !crs_q[sel_data_c[OWNERW-1 -: SLOTW]]));
+
+      // final_read_launch -> unfetched>0 && live && final_done && !fetched
+      a_fetch_launch : assert (!fetch_fire_c
+                          || ((unf_cnt_q != '0) && live_q[fetch_q]
+                              && fdn_q[fetch_q] && !ftc_q[fetch_q]));
+
+      // output_fire(owner) -> owner == emit_head_handle && owner_is_live
+      a_out_in_order : assert (!out_fire_c
+                          || ((out_owner_o[OWNERW-1 -: SLOTW] == emit_q)
+                              && live_q[emit_q]));
+
+      // out_valid && !out_ready |=> stable(entire packet)
+      a_out_stable : assert (!ost_v_q || (out_valid_o
+                          && (out_owner_o  == ost_own_q)
+                          && (out_result_o == ost_res_q)
+                          && (out_ctx_o    == ost_ctx_q)));
+
+      // An admission must never overwrite a live owner's row (section 6.4).
+      a_no_live_overwrite : assert (!adm_fire_c || !live_q[tail_q]);
+
+      // THE FENCE'S REOPENING PERMISSION BELONGS TO THE HELD REQUEST.
+      // Master recovery handoff 6.2: "Every required acknowledgement belongs to
+      // the HELD request and remains valid." The fence latches the slot and
+      // generation that closed it; if the ring could reach FN_REOPEN with the
+      // tail somewhere else, the one authorised wrapping admission would be
+      // spent on a different owner than the one the fence was raised for.
+      // Admission is closed for the whole STOP/FINISH interval, so nothing can
+      // move the tail -- these assert that, rather than assuming it.
+      a_fence_holds_slot : assert ((fn_q != FN_REOPEN) || (tail_q == fn_slot_q));
+      a_fence_holds_gen  : assert ((fn_q != FN_REOPEN)
+                                || (vgen_q[fn_slot_q] == vfn_gen_q));
+
+      // And the reopen authorises EXACTLY ONE admission: 6.2 warns the
+      // transitional fence and the sequence-window fence "must not be combined
+      // into an accidental 64-drain policy or an indefinitely open reuse
+      // permission". Leaving FN_REOPEN on adm_fire_c is what bounds it.
+      a_fence_open_bounded : assert ((fn_q != FN_REOPEN) || !adm_fire_c
+                                  || (fn_n_c == FN_OPEN));
+
+      // The forwarding window this design was proved for.
+      a_fwd_window : assert (FWD_WINDOW == 1);
+
+      // THE REJECTION CLASSES PARTITION THE TRAFFIC.
+      // Every presented packet has exactly ONE outcome: out of range, stale,
+      // unsolicited, duplicate, or accepted. This is what makes the separate
+      // ev_err_* ports addable -- section 19.7 wants "current occupancy, peak
+      // occupancy, cumulative stalls and outstanding-service age" to have
+      // distinct names and tests, and the same discipline applies to error
+      // classes. A packet counted twice inflates two totals; a packet counted
+      // zero times is the silent-drop failure this repository has already paid
+      // for. The sum is the enforcement.
+      a_reject_partition_t : assert (
+          (4'(c2t_rng_bad_c) + 4'(c2t_stale_c) + 4'(c2t_unsol_c)
+           + 4'(c2t_dup_c) + 4'(c2t_acc_c)) == 4'(c1t_v_q));
+      a_reject_partition_a : assert (
+          (4'(c2a_stale_c) + 4'(c2a_unsol_c) + 4'(c2a_dup_c) + 4'(c2a_acc_c))
+          == 4'(c1a_v_q));
+
+      // A ready queue must never be written when full.
+      a_rq_not_full : assert (!((q0t_v_q && rq_full_c[0])
+                             || (q0a_v_q && rq_full_c[1])
+                             || (q0i_v_q && rq_full_c[2])));
+
+      // ---- THE READ-LATE BOUNDARY (roadmap 4.2's gate, READ_LATE=1) --------
+      if (READ_LATE != 0) begin
+        // publication-before-read: the owner named by a source read is live,
+        // ticketed, reserved, ACCEPTED by COMBINE, and its committed mask
+        // covers its required mask -- so every plane the consumer may pick is
+        // written and published. Full cover here; the shipped counter uses the
+        // three-bit form (header).
+        a_src_read_published : assert (!src_rd_valid_i
+            || (live_q[src_rd_slot_i] && rdy_q[src_rd_slot_i]
+                && crs_q[src_rd_slot_i] && cbi_q[src_rd_slot_i]
+                && ((cmt_q[src_rd_slot_i] & req_q[src_rd_slot_i])
+                    == req_q[src_rd_slot_i])));
+        // release-after-last-reader, first half: the consumer's last read of
+        // an owner precedes that owner's FINAL claim.
+        a_src_read_before_final : assert (!src_rd_valid_i
+            || !fcl_q[src_rd_slot_i]);
+        // release-after-last-reader, second half: nothing reads an owner on
+        // the edge that frees it.
+        a_release_not_under_reader : assert (!(out_fire_c && src_rd_valid_i
+            && (src_rd_slot_i == emit_q)));
+      end
+    end
+  end
+
+endmodule
+
+`default_nettype wire

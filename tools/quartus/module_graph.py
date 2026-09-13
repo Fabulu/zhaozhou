@@ -25,7 +25,8 @@ def load(rtl_dir):
         for n in names:
             if n.endswith(".sv"):
                 p = os.path.join(root, n).replace(SEP, "/")
-                files[p] = io.open(p, encoding="utf-8", errors="replace").read()
+                with io.open(p, encoding="utf-8", errors="replace") as stream:
+                    files[p] = stream.read()
     return files
 
 
