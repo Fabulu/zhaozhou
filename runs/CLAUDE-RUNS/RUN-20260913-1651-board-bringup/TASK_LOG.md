@@ -329,6 +329,27 @@ verified.
 - Generalized the guarded loader with a closed `Bringup|Specs` profile table;
   arbitrary RBF/project/audit combinations remain refused.
 
+### 2026-09-13 19:36 UTC+02:00 - Real-block boundary compile started
+
+- Committed and pushed the exact source as `c68cc8ad`.
+- Started one isolated `ZhaozhouSpecs` compile after coordinating with the
+  Packet-B/shell-fit lane. Expected duration is the probe fit's ~5 minutes; it
+  is hours ahead of and may not overlap the pinned 23:00 shell fit.
+- Build closure was copied to ignored checkout-local
+  `build-board-superstation-specs/`; no shared build or Packet-B source is live.
+- **Work in progress while fit runs:** prepare the separate build-audit and load
+  receipt boundary from the existing profile; do not edit the copied source
+  closure or start another Quartus process.
+- **Next after result:** record this parked state, inspect hierarchy/DSP/pins/
+  timing, preserve exact key reports, commit the audit, then use only the Specs
+  load profile with the proven watchdog transaction.
+- Wrote `SUPERSTATION-HARDWARE-SPECS-V1-20260913.md` while the copied fit ran.
+  It limits any green result to these 16 selected vectors plus post-map primitive
+  presence. Mixed-sign expansion, 32x18 recombination, CE/reset sequencing,
+  random corpus, raw host-observed lanes, physical mutants, production migration,
+  and DSP saving remain separate claims. The shell-fit lane accepted this exact
+  boundary.
+
 ---
 
 ## Subagent Spawns
@@ -343,6 +364,7 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPEC_v1.md`
 - `reports/BOARD-BRINGUP-SUPERSTATION-ONE-20260913.md`
 - `reports/SUPERSTATION-ONE-CAPABILITY-MATRIX-20260913.md`
+- `reports/SUPERSTATION-HARDWARE-SPECS-V1-20260913.md`
 - `fpga/sys/` — 57 byte-pinned upstream framework files plus license/provenance
 - `fpga/ZhaozhouBringup.qpf`
 - `fpga/ZhaozhouBringup.qsf`
