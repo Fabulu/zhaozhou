@@ -498,12 +498,21 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 
 ## Next Steps
 
-1. Commit and push the expanded read-only receipt.
-2. Add the isolated, pinned MiSTer wrapper and minimal safe core without touching
-   Packet-B or shared build state.
-3. Compile in a new checkout-local board build directory and audit final device,
-   clocks, I/O standards, pin locations, unused-pin policy, and warnings.
-4. Rehearse the SSH `menu.rbf` rollback command, then perform the first volatile
-   minimal load and immediate rollback.
-5. If the PCB later becomes safely accessible for another reason, capture its
-   silk revision and FPGA top marking without opening a powered unit.
+1. Keep the v1 proof immutable. A separately named expanded hardware-spec gate
+   must add host-readable raw lanes, mixed-sign/32x18 vectors, bounded random
+   corpus, and physical lane-swap/collapse/ownership controls before broad
+   packed-arithmetic closure.
+2. Bring up board interfaces one question at a time, starting with the 128 MB
+   FPGA SDRAM component/geometry/timing/read-write test, then controller input,
+   HPS fabric-DDR, audio, and Z60/Storm/Duo video timing. Do not emit measured
+   `sdram_params.svh` until real measurements exist.
+3. Replace the shell's 3,214-virtual-pin characterization boundary with real
+   MiSTer HPS command, memory, and framebuffer interfaces; integrate Packet B
+   only after its separate lane lands.
+4. Run reference-oracle workloads through command -> geometry/field/raster ->
+   framebuffer and preserve physical counters/captures.
+5. Keep JTAG, configuration flash, persistent boot, and external-I/O timing
+   blocked behind separately named evidence. If the PCB later becomes safely
+   accessible for another reason, capture its silk revision and FPGA top mark.
+6. Do not start another Quartus job before the separate lane's pinned 23:00
+   shell-fit window is over.
