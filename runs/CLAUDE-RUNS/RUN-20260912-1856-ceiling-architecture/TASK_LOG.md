@@ -225,6 +225,34 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - Packet B implementation handed off without Quartus or shared CTest execution. It reports an exact 56-source generated-wrapper QSF, no virtual or physical pin assignments, archive/private-index execution, raw-Git reconciliation, preserved raw map/fit/STA/custom outputs, schema-3 emit-then-bind receipts, exact shell hierarchy ingestion, explicit remainder, and `rtlCleanAtHead`-only census use. Started a disjoint read-only hostile review before any named fit.
 - Opus completed `reports/SHELL-TEXTURE-V3-COMPOSITION-ARCHITECTURE-20260913.md` only. It concludes the live shell cannot remain byte-identical if V3 becomes the real raster texture owner and proposes staged single-owner seams, controls, and composed fit gates. Started a disjoint read-only architecture review; no production RTL change or resource claim exists yet.
 
+### 2026-09-13 06:08 UTC+02:00 - Dual-18 committed; Packet B coordinator gates green
+
+- Selectively staged only the accepted dual-18 wrapper, directed tests, committed mutants, deterministic calibration/map-evidence tools, and run log. Confirmed no Packet B or texture-architecture file entered the index and `git diff --cached --check` was clean.
+- Committed and pushed the calibration packet as `2474ea82` (`feat(fpga): add dual-18 calibration boundary`). Its commit message and evidence preserve mapped-route and encrypted vendor-model **HOLD**, no production migration, and no banked DSP saving. The first push used a malformed literal newline before the required attribution trailer; the coordinator immediately amended only this just-created branch tip and updated it with an exact expected-tip force-with-lease.
+- Independently ran Packet B's no-Quartus coordinator gates: preflight **74/74**, shell-fit tools **31/31**, `dsp_census.py --self-test`, generated-wrapper freshness, and smoke-monitor freshness all passed. PowerShell parsing passed, and `run_shell_fit.ps1 -PreflightOnly` succeeded with a deliberately absent Quartus path, reporting top `zhao_shell_fit_top`, exactly 56 sources, no virtual pins, no physical pins, and no wildcard targets.
+- Reconfirmed protected `fpga/rtl/common/zhao_shell_top.sv` is unmodified with SHA-256 `00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783`. Packet B remains uncommitted pending the active hostile review; no Quartus process has been launched.
+- With all implementation agents forbidden from shared CTest/build ownership, cleared stale CTest checkpoint debris and independently ran the complete serial shell-fit regression selection: **50/50 passed in 65.66 seconds**, including both warning-fatal lints, baseline, 27 domain controls, 15 protocol controls, parser/preflight fixtures, both freshness gates, and elaboration census.
+
+### 2026-09-13 06:21 UTC+02:00 - Green Packet B handoff rejected on evidence and integration blockers
+
+- The hostile review demonstrated that the green fixture suite did not settle the production runner. Confirmed blockers include absent per-port post-map connectivity witnesses; unpinned QPF/device/QSF/SDC Tcl semantics; schema-3 shell rows accepted despite failed Quartus stages; invalid shell evidence silently removing the shell root instead of making it UNKNOWN; hierarchy rows silently dropped without the required explicit unaccounted remainder; and a start-dirty live tree still being branded as a clean HEAD characterization.
+- Additional integration probes confirmed that a concurrent commit changes the live Git `HEAD` used by final binding and destroys an otherwise immutable archived run; `-Processors` removal breaks the existing composed-fit caller; the runner replaces only synthesis JSON while leaving a contradictory stale timing ledger; timing/path/critical-warning evidence is not semantically gated; raw launcher hashing can reject a clean CRLF checkout; and process probing is a TOCTOU guard rather than a held lock.
+- Stopped an over-expanding second verification fan-out after the bounded acceptance question was already answered; explicitly stopped its parent and live children and retained only independently confirmed results. No child edited files or ran tests/builds.
+- Rejected Packet B and resumed its original write-enabled owner for one bounded direct repair with executable positive controls. Quartus remains idle and `shell_fit_top_clean_characterization` remains closed.
+
+### 2026-09-13 06:23 UTC+02:00 - Shell-to-V3 architecture accepted in direction, rejected in protocol detail
+
+- Independent review confirmed the current protected shell cannot expose or intercept its post-Early-Z, texture, framebuffer, or arbiter seams from an outer wrapper. The lowest viable production boundary is therefore a new sibling `zhao_shell_top_v2`; `fpga/rtl/common/zhao_shell_top.sv` remains byte-for-byte unchanged as the D3 specimen.
+- Rejected the first architecture report on seven concrete gaps: renderer/blitter slot-lease and publish/fault-release ownership; terrain AUX sheet handle/envelope identity; same-packet manifest/generated-top freshness for V3 port changes; exact status/index reduction and real combiner cadence; denied memory-guard request replay; reversed AUX X/Z packing; and an unpinned MATW18 terrain characterization.
+- Resumed the Opus report owner to repair only the architecture document with explicit interfaces, positive controls, packet ordering, and rollback points. No production RTL has been authorized or changed, and all resource effects remain conditional.
+
+### 2026-09-13 06:25 UTC+02:00 - Truthful dual-lane post-map proof path identified
+
+- Read-only Quartus 17.0.2 capability research found a cheaper decisive route than a fit: after genuine MapOnly, `quartus_cdb` can load the compiler atom netlist with `read_atom_netlist -type map` and query actual `AX/AY/BX/BY/RESULTA/RESULTB` ports and graph fanout through the installed `::quartus::atoms 1.0` API.
+- Pre-named the stage `dual18_postmap_lane_route_witness`. Acceptance requires one actual mapped atom owning distinct live `RESULTA[0:35]` and `RESULTB[0:35]` ports, bitwise graph origin to the two exact top result cones, and the expected four operand-port families. Missing/hidden connectivity remains HOLD; VQM/VO text regex and synthetic fixtures cannot satisfy the gate.
+- Required real mapped controls are the committed two-primitives mutant plus new lane-collapse and lane-swap mutants, each run through MapOnly and the atom database. MapOnly+CDB proves mapped packing/routes only; a `cmp` atom query after a tiny fit is reserved for placement, encrypted vendor simulation for arithmetic semantics, and production fit for ALM/Fmax/usability.
+- The current design remains **HOLD** because no Quartus command or atom witness has run. The read-only researcher correctly refused a follow-up request to edit; the coordinator preserved the returned exact API/command/checker contract in `reports/DSP-DUAL18-ATOM-ROUTE-EVIDENCE-20260913.md`. No DSP saving is banked.
+
 ---
 
 ## Subagent Spawns
@@ -273,8 +301,11 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 | completed 2026-09-13 06:00 UTC+02:00 | Write-enabled Packet B agent | Implement clean-archive fit flow, schema-3 receipt, hierarchy and census ingestion | Handoff complete; no Quartus/shared CTest, commit, or push | hostile review active |
 | completed 2026-09-13 06:00 UTC+02:00 | Agent `abb36757fbbc0d4f0` resumed | Bounded verification of dual-18 path-indirection repair | Clean; no trust-boundary false-pass survived | calibration evidence accepted; route/vendor HOLD |
 | completed 2026-09-13 05:57 UTC+02:00 | Opus architecture agent | Design the missing shell-to-V3 production composition seam | Report complete; no RTL/build/Quartus/commit/push | `reports/SHELL-TEXTURE-V3-COMPOSITION-ARCHITECTURE-20260913.md`; review active |
-| active from 2026-09-13 06:02 UTC+02:00 | Read-only review agent | Hostile review of Packet B implementation | In progress; no shared test/build ownership | pending verdict |
-| active from 2026-09-13 06:02 UTC+02:00 | Read-only review agent | Verify shell-to-V3 composition architecture against current RTL | In progress; report-only review | pending verdict |
+| completed 2026-09-13 06:21 UTC+02:00 | Read-only review agent plus bounded read-only checks | Hostile review of Packet B implementation | Rejected green handoff on evidence false-passes and caller/runner regressions; over-expanding second fan-out stopped | findings relayed for direct repair |
+| completed 2026-09-13 06:23 UTC+02:00 | Read-only review agent | Verify shell-to-V3 composition architecture against current RTL | Forced sibling-v2 boundary confirmed; seven protocol/staging gaps found | findings relayed to report owner |
+| completed 2026-09-13 06:25 UTC+02:00 | Read-only research agent | Define a truthful Quartus 17 mapped dual-lane route evidence gate | MapOnly plus real `quartus_cdb` atom graph is sufficient for mapped lane routes; current evidence HOLD | `reports/DSP-DUAL18-ATOM-ROUTE-EVIDENCE-20260913.md` authored by coordinator |
+| active from 2026-09-13 06:21 UTC+02:00 | Packet B implementation agent resumed direct | Repair confirmed provenance, hierarchy, timing, census, locking, and caller defects | In progress; no Quartus/shared CTest | pending corrected handoff |
+| active from 2026-09-13 06:23 UTC+02:00 | Opus architecture agent resumed | Repair slot/AUX/status/guard/manifest/terrain gaps in texture composition report | In progress; report-only ownership | pending corrected report |
 
 ---
 
@@ -308,8 +339,9 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 
 ## Next Steps
 
-- Receive and independently verify the fourth Packet A repair, then run another focused adversarial pass; commit/push Packet A only if no finding survives.
-- Cherry-pick terrain composition commit `1f9a4f95`, preserve both separated CMake registration blocks, and rerun Packet A plus terrain gates before pushing integration.
-- Review the calibration-only dual-18 implementation handoff; keep the physical MapOnly gate held until behavioral, positive-control, parser, and vendor-model prerequisites are truthful.
-- Implement Packet B from committed clean Packet A: generated fit top in QSF, zero virtual pins, clean-cone provenance, schema-v2 receipt/hierarchy attribution, post-map witnesses, and truthful DSP-census ingestion.
-- Then run only `shell_fit_top_clean_characterization`; use fresh fitted hierarchy to choose the first non-terrain ALM rewrite, considering the clean 3,824-ALM texjoin evidence alongside the conditional edgewalk candidate.
+- Receive and independently verify the bounded Packet B repair against every confirmed provenance, timing, hierarchy, census, caller, and locking control; commit/push only after a clean hostile pass.
+- Review and commit the shell-to-V3 architecture report only if it preserves the protected shell file behind an explicit versioned production composition boundary and keeps all resource claims conditional.
+- Review the no-Quartus TEXJOIN accounting-retirement packet; require exactly-one-owner, full-identity stall, bubble, response, and overflow positive controls before committing an accounting correction with no physical ALM claim.
+- From a clean committed tree, run only `shell_fit_top_clean_characterization`; preserve raw artifacts and use fitted exact-shell hierarchy plus explicit remainder to rank the first live non-terrain ALM rewrite. Do not mistake this protected legacy-shell price for a complete V3-connected machine.
+- Use the dual-lane route-evidence research to decide whether the pre-named physical calibration gate can be proven with MapOnly/post-map artifacts or must remain HOLD; do not migrate production multipliers or bank DSP savings before genuine physical and vendor gates.
+- Continue composition and optimization until clean connected evidence has comfortable margin below 30,000 ALMs and 85 DSPs, including unpriced roots and framework/board overhead.
