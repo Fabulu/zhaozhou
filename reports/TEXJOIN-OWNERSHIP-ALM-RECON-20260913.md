@@ -4,18 +4,34 @@ Date: 2026-09-13
 
 ## Decision
 
-**Do not rearchitect `zhao_raster_texjoin_v2` yet. First prove whether it is a redundant accounting root.**
+**Retire `zhao_raster_texjoin_v2` as a redundant selected accounting root, but do not describe V3 as connected console hardware or bank a physical ALM saving.**
 
 The strongest current standalone row is real and large: clean commit `8de11b1b...` fitted `zhao_raster_texjoin_v2` at **3,824 ALMs, 7,151 registers, 4 M10Ks, 0 DSP, and 93.12 MHz** (`reports/synthesis/zhao_block_fit.json:1206-1222`). Current RTL differs from that specimen only by comments, so it remains useful evidence about this module.
 
-It is not yet evidence that 3,824 ALMs exist in one connected production circuit:
+It is not evidence that 3,824 ALMs exist in one connected production circuit:
 
 - the row is a standalone fit with 830 virtual pins;
 - `fpga/rtl/prod/zhao_prod_top.sv:1-11` declares itself an unconnected resource-accounting hierarchy;
-- the manifest selects TEXJOIN as a production root (`design/prod_manifest.yml:110-115`), but the only RTL instantiation found is that generated resource hierarchy (`fpga/rtl/prod/zhao_prod_top.sv:2943-3000`);
-- the selected V3 texture island already owns fragment expansion/texture transaction state and emits final ordered fragments (`fpga/rtl/texture/zhao_texture_island_v3_top.sv:1-15,202-208`).
+- the manifest selects TEXJOIN as a production root (`design/prod_manifest.yml:110-115`), but the only RTL instantiation is that generated resource hierarchy (`fpga/rtl/prod/zhao_prod_top.sv:2943-3000`);
+- V3 is a separate sibling instance in the same accounting hierarchy, not TEXJOIN's functional successor there;
+- neither TEXJOIN nor `zhao_texture_island_v3_top` is instantiated by the current shell.
 
-The immediate question is therefore ownership, not RAM inference. If the connected RASTER-to-TEXTURE design already has exactly one owner in V3, removing the standalone TEXJOIN root from the accounting manifest is the correct repair. Rebuilding unused RTL would spend engineering effort to optimize silicon that should not exist.
+A source/elaboration ownership audit now settles the bookkeeping question: inside the selected V3 island, `zhao_texture_v3own` is the sole allocator, accepted-issue recorder, full-token return validator, ordered retire selector, and slot releaser. TEXJOIN has no functional consumer anywhere else. It may therefore move from manifest `top` to `excluded: superseded`, with its RTL, standalone target, oracle tests, and historical fit retained.
+
+That result exposes a separate composition gap rather than closing one. The current shell feeds `zhao_geom_bin_pipe`/`zhao_raster_tile_pipe` flat texel fields supplied at the shell boundary; `zhao_raster_tile_pipe` explicitly contains no sampler. There is no shell Early-Z-to-V3 seam and no V3-to-`RASTER.FRAGMENT` seam. Consequently V3 is the sole owner **inside its selected subsystem**, but is not yet the live owner in the console hierarchy. Manifest retirement is an accounting correction only; it removes no demonstrated connected silicon and cannot support a physical ALM claim.
+
+### Ownership chain found
+
+The selected V3 island's live internal chain is:
+
+1. admission and requirement derivation (`zhao_texture_island_v3_top.sv:590-621`);
+2. synchronized reciprocal admission and owner allocation (`:662-689`);
+3. generation-bearing descriptor capture, reciprocal/perspective transport, and exact descriptor rejoin (`:863-956,994-1056,1312-1357`);
+4. TMU/AUX work creation with issue notification only on accepted handshakes (`:1364-1401`);
+5. the sole lifecycle owner `zhao_texture_v3own:u_own` (`:1477-1523`), which allocates/stamps owners, records issued work, validates terminal returns, selects allocation-order output, and releases only on output acceptance;
+6. opaque-handle TMU and AUX execution/return, metadata identity join, material combine, and final owner return (`:1776-1791,1896-1910,1993-2039,2527-2711,2920-2954,3054-3103,3399-3554`).
+
+Those surrounding blocks transport, calculate, store, or independently check identity; none owns fragment lifetime. In the generated census hierarchy, TEXJOIN and V3 instead receive separate private stimulus and are sibling instances (`zhao_prod_top.sv:2882-3000,4357-4525`).
 
 ## Evidence classification
 
@@ -23,8 +39,9 @@ The immediate question is therefore ownership, not RAM inference. If the connect
 |---|---|---|
 | TEXJOIN clean standalone fit: 3,824 ALM / 7,151 registers / 4 M10K / 0 DSP / 93.12 MHz | fitted leaf, current bytes except comments | this module is an expensive implementation |
 | TEXJOIN appears in `prod_manifest.yml` and generated `zhao_prod_top` | current accounting structure | the selected mixed census charges it |
-| no connected functional instantiation was found | source audit | likely accounting duplication; not yet a deletion receipt |
-| V3 island already owns and emits ordered fragments | current functional source | strong ownership lead; exact seam still needs a composed proof |
+| no functional TEXJOIN instantiation exists; its only instance is the generated accounting top | current source/elaboration audit | retire its selected root as an accounting correction |
+| V3's `zhao_texture_v3own` alone owns allocation, accepted issues, token validation, ordered retirement, and release inside that island | current subsystem ownership audit | V3 has exactly one internal owner; TEXJOIN is not part of it |
+| neither V3 nor TEXJOIN is instantiated by `zhao_shell_top`; the shell accepts flat texels externally | current connected-shell audit | V3 is not yet live console hardware; a shell-to-texture composition seam remains open |
 | subtracting 3,824 from 58,359 | arithmetic on a mixed partial census | never a current composed ALM saving |
 
 If ownership is confirmed and the redundant root is retired, the selected accounting census will decrease by the retired row. That is an **accounting correction**, not proof that a physically connected design shrank: an uninstantiated root consumed no silicon in that design. Only the eventual composed boundary fit can establish the physical total.
@@ -56,14 +73,15 @@ The old claim that an asynchronous-reset process alone prevents M10K inference i
 
 ## Ownership-first no-Quartus packet
 
-Before changing `zhao_raster_texjoin_v2.sv`:
+The source/elaboration audit completed the first ownership pass: TEXJOIN is accounting-only, V3 has one internal lifecycle owner, and the current shell has no texture-island seam. The implementation packet should now:
 
-1. Freeze the connected RASTER-to-TEXTURE transaction boundary and enumerate every functional instance from accepted raster row to ordered textured fragment.
-2. Prove exactly one owner allocates slots, issues TMU/AUX work, matches generation/token identity, and retires each legal fragment.
-3. Compare the selected V3 path against TEXJOIN's legal-traffic contract for ordering, backpressure stability, and capacity. Separate sequence equivalence from cycle equivalence.
-4. Require sustained one-beat-per-clock issue and retirement when work and downstream capacity permit; do not accept a test that ignores bubbles.
-5. If V3 owns the boundary completely, remove the redundant TEXJOIN manifest root, regenerate the resource top, and require the census to remove exactly that selected row without changing connected RTL.
-6. If a real consumer still requires the TEXJOIN interface, retain V2 unchanged as the oracle and only then implement a port-identical elastic RAM candidate beside it.
+1. Record the ownership role explicitly and add a role-aware exactly-one-owner checker; graph containment alone cannot distinguish two disconnected implementations of the same logical role.
+2. Keep `zhao_raster_texjoin_v2` unchanged as the retained behavioral oracle.
+3. Move TEXJOIN from manifest `top` to `excluded: superseded`, regenerate `zhao_prod_top.sv`, and prove the generated census removes only its private stimulus/instance/fold branch.
+4. Preserve its standalone fit target, directed/differential tests, and historical evidence; optionally remove only its unused production compile-pool entry.
+5. Retain V3's response controls and add the independent full-identity stall and uninterrupted-handshake controls below before calling the accounting packet evidence-complete.
+6. Treat the absent shell-to-V3 seam as a separate production-composition blocker. Do not imply that manifest selection installs V3 in the shell.
+7. If a future real consumer still requires the TEXJOIN interface, retain V2 as the oracle and only then implement a port-identical elastic RAM candidate beside it.
 
 ### Required controls
 

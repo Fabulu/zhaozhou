@@ -125,6 +125,46 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - Wrote `reports/TEXJOIN-OWNERSHIP-ALM-RECON-20260913.md`. The decision is ownership-first: prove exactly one connected RASTER-to-TEXTURE owner and retire any duplicate manifest root before considering an M10K rewrite. Any 3,824-ALM census change would initially be an accounting correction, not a physical composed saving.
 - Pre-registered `g8a_raster_texture_single_owner_characterization` as the eventual composed subsystem fit question; source/elaboration/simulation must settle ownership before that fit is spent.
 - The ALM scout briefly failed on a WebSocket reset, was resumed once, and completed read-only without file/build/Quartus actions.
+- Committed and pushed the reconciliation report with this run-log snapshot as `7f886f90` (`docs(fpga): reconcile TEXJOIN ownership cost`).
+
+### 2026-09-13 02:52 UTC+02:00 - Fourth Packet A repair handed off and independently rerun
+
+- Fourth direct repair now binds every recomputed compile-pool member to its `sourceCommit` blob and live worktree bytes, drives and accepts two genuinely distinct full triangle payloads, and retains geometry ownership through the next request and pending verdict.
+- New positive controls dirty a non-special compile source (`zhao_abi_pkg.sv`) in an end-to-end temporary Git repository and inject a stray beat during response-pending ownership. The new `guard-verdict-extra` control fires arm `0x200`; prior delayed-extra and render-stability arms remain registered.
+- Coordinator independently reconfigured and rebuilt the lane-local target, then reproduced the complete focused suite serially: **48/48 passed in 32.62 seconds**. Protected shell hash remains `00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783`; wrapper `eee445bc7ece3d0981cd5e02297188fe4b79f938988b72608319d77d6d69efdf`; manifest `f7f9a31a40ef14a7ce5ad93730fafa5be9decf58d4f7b60a39c15bbdbf9e700c`; receipt `f6f804607b8da228f33803b8e5573766acf034c1ce6bd8a63e6f8002a75a8a1d`.
+- Started a fourth read-only adversarial pass. Packet A remains uncommitted until the fresh probes return clean.
+- The disjoint dual-18 calibration implementation also handed off functionally green, but remains unreviewed and its physical gate is HOLD: no Quartus MapOnly and no encrypted vendor-model run occurred.
+
+### 2026-09-13 03:08 UTC+02:00 - Fourth Packet A handoff rejected; dual-18 calibration review rejected
+
+- Packet A's fourth adversarial pass found two surviving defects. High: `git cat-file --filters` applies live mutable filters, so an uncommitted path-specific `.gitattributes` plus smudge command replaced raw `sourceCommit` bytes with the dirty live source and made a full 56-entry closure pass. Medium: an unsolicited geometry beat one cycle after a denied `violation` verdict remains unobserved.
+- Resumed the original Packet A implementer for a fifth direct repair: raw object reads only, end-to-end filter-attack rejection, and a distinct post-denial beat control. Packet A remains rejected and uncommitted.
+- Independent review of the dual-18 calibration packet also rejected its green behavioral handoff. High: the map checker accepted zero or one fixed-point multiplier despite claiming two live lanes; and stale same-revision map reports were not content-bound to the regenerated source/QSF. Medium/low controls missed full lane-B 8-bit pair coverage, asymmetric A/B signedness configurations, enabled reset priority in both wide shells, and hosts without installed Quartus metadata.
+- Resumed the disjoint dual-18 implementer to repair all six findings. `dual18_physical_pack_discriminator` remains HOLD; no DSP saving is banked and no Quartus run is authorized yet.
+
+### 2026-09-13 03:33 UTC+02:00 - Fifth Packet A rerun green; second dual-18 review rejected
+
+- The fifth Packet A repair handed off with raw `ls-tree`/`cat-file blob` provenance, replacement refs disabled, no filtered Git reads, post-denial geometry quarantine, and two new protocol controls. Coordinator independently reran the exact focused group serially: **49/49 passed in 35.37 seconds**.
+- Recomputed all named Packet A hashes; they match the handoff. Protected `zhao_shell_top.sv` remains byte-for-byte unchanged at SHA-256 `00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783`; `git diff --check` passes. A fifth read-only adversarial review remains active, so Packet A is still uncommitted.
+- The corrected dual-18 handoff independently reproduced 1/1 generation test, 11/11 map-parser tests, and the full direct Verilator suite. All arithmetic/sign/reset/stall tests and backend/CE/lane-swap controls fired as expected; generated Quartus output directories remain empty.
+- The second dual-18 adversarial review confirmed the six original repairs but found four remaining evidence defects: distinct mapped routes were source/synthetic rather than mapped evidence; a restored old run-preparation plus co-mutated config could bypass freshness because the parser ignored the top manifest; vendor metadata evidence could be forged outside the content witness; and extra Verilog/VHDL/QIP compile mechanisms were not rejected.
+- Rejected the green dual-18 handoff and resumed its disjoint implementer for a bounded third repair. Physical MapOnly and encrypted vendor-model gates remain **HOLD**; no production multiplier migration or DSP saving is permitted.
+
+### 2026-09-13 03:37 UTC+02:00 - Fifth Packet A handoff rejected
+
+- The fifth adversarial review confirmed raw-object lookup, line-ending rejection, mutable-smudge-filter rejection, disabled replacement refs, exact `ls-tree`, and raw `cat-file blob`, but found two surviving high-severity false-pass paths.
+- Receipt cleanliness still trusts captured empty status/diff files because `verify_captured_git_evidence()` is defined but never invoked. A fresh temporary repository with three modified tracked files still returned RC=0 and `receipt=raw-bound`.
+- Geometry beats before the first accepted legal verdict remain invisible during initial idle, first request-wait, and first response-pending because neither frame ownership nor denial quarantine is active. Existing fault 13 proves only post-frame quarantine.
+- Rejected Packet A despite the coordinator's 49/49 rerun and resumed the same implementer for a sixth bounded repair with direct dirty-tree reconciliation and a distinct pre-first-verdict beat control. Packet A remains uncommitted; terrain integration, Packet B, and the named fit remain held.
+- Started a disjoint read-only TEXJOIN ownership proof while both repairs run. It may trace the live V3 raster-to-texture path and prepare a no-Quartus manifest-retirement packet, but may not edit, build, or claim a physical ALM saving.
+
+### 2026-09-13 03:53 UTC+02:00 - TEXJOIN ownership settled; latest dual-18 repair rerun
+
+- The read-only ownership audit proved `zhao_raster_texjoin_v2` has no functional RTL consumer: its only instance is private unconnected census scaffolding. Inside the selected V3 island, `zhao_texture_v3own:u_own` is the sole lifecycle allocator, accepted-issue recorder, return validator, ordered retire selector, and releaser.
+- The audit also found the more important composition gap: neither TEXJOIN nor V3 is instantiated by the current shell. The shell's raster tile pipe consumes externally supplied flat texels and explicitly contains no sampler. V3 is therefore one-owner internally but is not yet live console hardware.
+- Updated `reports/TEXJOIN-OWNERSHIP-ALM-RECON-20260913.md` with the proven ownership chain and corrected decision. TEXJOIN may move from selected `top` to `excluded: superseded`, retaining RTL/oracles/leaf evidence, but this is only an accounting correction and cannot be claimed as a physical 3,824-ALM saving. Evidence-complete retirement still needs role-aware duplication, full-identity stall, and uninterrupted-handshake controls after Packet A releases `tests/CMakeLists.txt`.
+- The latest dual-18 repair removed the synthetic mapped-route PASS, so absent per-result mapped evidence now produces explicit HOLD. It also added manifest-bound rollback protection, canonical recomputed vendor metadata in the content witness, and exact-QSF rejection of every extra compile mechanism.
+- Coordinator independently reproduced **1/1 generation**, **15/15 map-evidence**, and the full direct Verilator suite; all positive controls fired, manifest SHA-256 is `6514be4493c93f0c120b484088ba0ff79d3db01377f0782c75a2536107f843a6`, and all four Quartus output directories remain empty. A third adversarial review is active; physical route and encrypted vendor-model gates remain HOLD.
 
 ---
 
@@ -150,8 +190,18 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 | completed 2026-09-13 | Agent `a44feecd4e349cefa` | Read-only Packet B integration preflight against stable QSF/runner/census inputs | Complete; exact one-fit integration checklist delivered | pending Packet B implementation |
 | completed 2026-09-13 02:14 UTC+02:00 | Agent `a8d3c005cf2f4c5c1` resumed | Third read-only adversarial verification of Packet A | Found two high and one medium defect with fresh probes; no repository edits | findings relayed for fourth repair |
 | completed 2026-09-13 02:35 UTC+02:00 | Agent `a52a3426075a8e97a` | Read-only architecture scout for clean fitted 3,824-ALM `zhao_raster_texjoin_v2` | Complete after one transport reset; ownership-first recommendation, no file/build action | `reports/TEXJOIN-OWNERSHIP-ALM-RECON-20260913.md` |
-| active from 2026-09-13 02:15 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Repair three third-pass findings without delegation | In progress; sole owner of Packet A files | pending fourth corrected handoff |
-| active 2026-09-13 | Agent `a8e917989c634bd4d` | Implement calibration-only dual-18 wrapper/tests/mutants/map parser without Quartus | In progress; disjoint files and direct-test ownership | pending handoff |
+| completed 2026-09-13 02:48 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Repair three third-pass findings without delegation | Fourth corrected handoff green on 48 focused gates; rejected by fourth adversarial pass | two findings relayed for fifth repair |
+| completed 2026-09-13 | Agent `a8e917989c634bd4d` | Implement calibration-only dual-18 wrapper/tests/mutants/map parser without Quartus | Functional handoff green; rejected by independent review | six findings relayed for repair |
+| completed 2026-09-13 03:08 UTC+02:00 | Agent `a8d3c005cf2f4c5c1` resumed | Fourth read-only adversarial verification of Packet A | Found one high and one medium defect with fresh probes; no repository edits | findings relayed for fifth repair |
+| completed 2026-09-13 | Agent `abb36757fbbc0d4f0` | Read-only adversarial review of dual-18 calibration packet | Found two high, two medium, and two low gaps; no repository edits | findings relayed for repair |
+| completed 2026-09-13 | Agent `ab717719b6d124a1a` resumed direct | Repair raw-Git-filter and post-denial geometry gaps | Fifth corrected handoff green on 49 focused gates; rejected by fifth adversarial pass | two findings relayed for sixth repair |
+| completed 2026-09-13 | Agent `a8e917989c634bd4d` resumed direct | Repair six dual-18 calibration review findings | Corrected behavioral handoff green; rejected by second adversarial review | four findings relayed for third repair |
+| completed 2026-09-13 03:37 UTC+02:00 | Agent `a81d75fdc237af727` | Fifth read-only adversarial verification of Packet A | Found two high false-pass paths; no shared build/CTest or repository edits | findings relayed for sixth repair |
+| completed 2026-09-13 03:33 UTC+02:00 | Agent `abb36757fbbc0d4f0` resumed | Second read-only adversarial review of corrected dual-18 packet | Original six findings corrected; found four remaining evidence gaps | findings relayed for third repair |
+| completed 2026-09-13 03:51 UTC+02:00 | Agent `a8e917989c634bd4d` resumed direct | Repair mapped-route, manifest freshness, vendor metadata, and complete QSF-source gates | Corrected handoff; coordinator reproduced 1/1, 15/15, and full Verilator | third review active |
+| active from 2026-09-13 03:37 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Repair direct dirty-tree reconciliation and pre-first-verdict geometry detection | In progress; Packet A ownership | pending sixth corrected handoff |
+| completed 2026-09-13 03:49 UTC+02:00 | Read-only Explore agent | Prove TEXJOIN/V3 ownership and connected-shell path | TEXJOIN accounting-only; V3 has sole internal owner but no shell seam | report amended; implementation held on Packet A CMake ownership |
+| active from 2026-09-13 03:51 UTC+02:00 | Agent `abb36757fbbc0d4f0` resumed | Third adversarial review of dual-18 evidence repairs | In progress; isolated tests/probes only | pending verdict |
 
 ---
 
