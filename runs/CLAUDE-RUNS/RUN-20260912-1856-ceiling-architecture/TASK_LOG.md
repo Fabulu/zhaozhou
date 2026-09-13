@@ -581,6 +581,12 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - These arithmetic points are not resource receipts. The audit rejected stale/dirty terrain TESS, the deliberately throughput-failing `GEOM.SKIN MUL_LANES=1`, labelled/ungated island rows, retired shell evidence, and unpriced FIELD multipliers. It also records overlap law: later dual-18 packing can add only `3 -> 2` after the LOD width repair and only `1 -> 0` after packed material arithmetic; no double subtraction is allowed.
 - First interim optimization remains the genuine four-variant `dual18_postmap_lane_route_witness` MapOnly+CDB gate. The audit performed no edits, builds, tests, Quartus, commit, push, or HomeAI access.
 
+### 2026-09-13 12:19 UTC+02:00 - First genuine dual-18 MapOnly exposes primitive-port defect
+
+- From clean pushed HEAD `fd50a17e`, generated six content-addressed dual-18 projects under short root `C:\d18-fd50a17e`; external anchor SHA-256 `8b2191276a9aab5eef0628e0f94c7fa932bb630605d4cc508491ee48531059cb`, nonce `cfb36f3b8c079621c10f9ee2d98c539019f78e2b08d9f692eeab81d0e8e47d77`, manifest SHA-256 `97aa7cf8bda0d021e1680acb63d135ffc968ceed7666f24a8240ecb95e840a6a`.
+- The checker-owned explicit-pair transaction ran canonical Quartus MapOnly and returned HOLD before CDB: `quartus_map` RC3, Error 21186 says `COEFSELA` must not be connected when internal coefficients are unused. Raw database/report/log remain under `C:\d18-fd50a17e\d18_runs\d18_zatLPXF7`; no TSV, mapped route PASS, placement claim, arithmetic claim, production migration, or DSP saving exists.
+- Smallest repair removes only the unused `coefsela`/`coefselb` input connections from the installed Quartus-17 `cyclonev_mac` boundary and adds a source regression check. The four-variant run must be regenerated from a new clean pushed commit; the failed anchored evidence is retained and never reused as a pass.
+
 ---
 
 ## Subagent Spawns

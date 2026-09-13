@@ -14,9 +14,15 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 GENERATOR = REPO / "tools" / "budget" / "gen_calib.py"
+DUAL18_RTL = REPO / "fpga" / "rtl" / "common" / "zhao_dual18_mul.sv"
 
 
 class Dual18CalibrationGenerationTest(unittest.TestCase):
+    def test_unused_coefficient_select_ports_are_unconnected(self) -> None:
+        rtl = DUAL18_RTL.read_text(encoding="utf-8")
+        self.assertNotIn(".coefsela(", rtl)
+        self.assertNotIn(".coefselb(", rtl)
+
     def generate(self, out: Path) -> str:
         completed = subprocess.run(
             [sys.executable, str(GENERATOR), "--dual18-only", "--outdir", str(out)],
