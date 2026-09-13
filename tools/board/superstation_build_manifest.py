@@ -12,6 +12,24 @@ from pathlib import Path
 from typing import Any, Iterable
 
 PATCHED_SYS_TOP_SHA256 = "24eea7b0f76848239c872f626a48f4e0c6150423b9e6561fd3dd63f2a99501e9"
+ARTIFACT_SUFFIXES = (
+    "asm.rpt",
+    "done",
+    "fit.rpt",
+    "fit.smsg",
+    "fit.summary",
+    "flow.rpt",
+    "jdi",
+    "map.rpt",
+    "map.smsg",
+    "map.summary",
+    "pin",
+    "rbf",
+    "sld",
+    "sof",
+    "sta.rpt",
+    "sta.summary",
+)
 
 PROFILES = {
     "Bringup": {
@@ -140,17 +158,48 @@ def marker_commit(build: Path, marker_name: str) -> str:
     raise ValueError(f"build marker has no full sourceCommit: {marker}")
 
 
-def build_input_paths(build: Path, profile: dict[str, Any]) -> list[Path]:
+def relative_file_set(root: Path, entries: Iterable[str]) -> set[str]:
+    return {path.relative_to(root).as_posix() for path in expand_files(root, entries)}
+
+
+def expected_build_input_relatives(repo: Path, profile: dict[str, Any]) -> set[str]:
     project = profile["project"]
-    entries = (
+    expected = {
         f"{project}.qpf",
         f"{project}.qsf",
         f"{project}.sdc",
         profile["qip"],
-        "sys",
-        "rtl",
-    )
-    return expand_files(build, entries)
+    }
+    for source in expand_files(repo, ("fpga/sys",)):
+        expected.add(source.relative_to(repo / "fpga").as_posix())
+    for source in expand_files(repo, profile["sourcePaths"]):
+        relative = source.relative_to(repo).as_posix()
+        if relative.startswith("fpga/rtl/"):
+            expected.add(relative.removeprefix("fpga/"))
+    return expected
+
+
+def build_input_paths(repo: Path, build: Path, profile: dict[str, Any]) -> list[Path]:
+    relatives = sorted(expected_build_input_relatives(repo, profile))
+    paths = [build / relative for relative in relatives]
+    missing = [path.relative_to(build).as_posix() for path in paths if not path.is_file()]
+    if missing:
+        raise ValueError(f"build workspace is missing declared inputs: {missing}")
+    return paths
+
+
+def exact_record_set(
+    actual: dict[str, Any], expected: set[str], label: str, errors: list[str]
+) -> None:
+    actual_set = set(actual)
+    missing = sorted(expected - actual_set)
+    extra = sorted(actual_set - expected)
+    if missing or extra:
+        errors.append(f"{label} record set mismatch: missing={missing} extra={extra}")
+
+
+def expected_artifact_relatives(project: str) -> set[str]:
+    return {f"output_files/{project}.{suffix}" for suffix in ARTIFACT_SUFFIXES}
 
 
 def create_source_manifest(repo: Path, build: Path, profile_name: str) -> dict[str, Any]:
@@ -166,7 +215,7 @@ def create_source_manifest(repo: Path, build: Path, profile_name: str) -> dict[s
 
     source_files = expand_files(repo, profile["sourcePaths"])
     verification_files = expand_files(repo, profile["verificationPaths"])
-    build_inputs = build_input_paths(build, profile)
+    build_inputs = build_input_paths(repo, build, profile)
     patched = file_record(build / "sys" / "sys_top.v")
     if patched["sha256"] != PATCHED_SYS_TOP_SHA256:
         raise ValueError(
@@ -204,16 +253,21 @@ def create_complete_manifest(
     output = build / "output_files"
     if not output.is_dir():
         raise ValueError(f"missing Quartus output directory: {output}")
-    artifact_files = sorted(
-        (path for path in output.rglob("*") if path.is_file()),
-        key=lambda path: path.as_posix(),
-    )
     project = PROFILES[profile_name]["project"]
-    required = {f"output_files/{project}.{suffix}" for suffix in ("flow.rpt", "map.rpt", "fit.rpt", "asm.rpt", "sta.rpt", "pin", "rbf", "sof")}
+    expected_artifacts = expected_artifact_relatives(project)
+    observed_artifacts = {
+        path.relative_to(build).as_posix()
+        for path in output.rglob("*")
+        if path.is_file()
+    }
+    missing = sorted(expected_artifacts - observed_artifacts)
+    extra = sorted(observed_artifacts - expected_artifacts)
+    if missing or extra:
+        raise ValueError(
+            f"Quartus output record set mismatch: missing={missing} extra={extra}"
+        )
+    artifact_files = [build / relative for relative in sorted(expected_artifacts)]
     artifact_records = records(build, artifact_files)
-    missing = sorted(required - set(artifact_records))
-    if missing:
-        raise ValueError(f"complete manifest is missing required artifacts: {missing}")
 
     data = dict(source)
     data["phase"] = "complete"
@@ -252,6 +306,19 @@ def verify_manifest_data(
         errors.append("manifest project/profile mismatch")
     if data.get("manifestSha256") != manifest_digest(data):
         errors.append("manifest self-digest mismatch")
+
+    expected_sources = relative_file_set(repo, profile["sourcePaths"])
+    expected_verification = relative_file_set(repo, profile["verificationPaths"])
+    expected_inputs = expected_build_input_relatives(repo, profile)
+    exact_record_set(data.get("sourceFiles", {}), expected_sources, "source", errors)
+    exact_record_set(
+        data.get("verificationFiles", {}),
+        expected_verification,
+        "verification",
+        errors,
+    )
+    exact_record_set(data.get("buildInputs", {}), expected_inputs, "build input", errors)
+
     if data.get("sourceCommit") != marker_commit(build, profile["marker"]):
         errors.append("manifest/build-marker source commit mismatch")
     try:
@@ -269,12 +336,22 @@ def verify_manifest_data(
     if require_complete:
         if data.get("phase") != "complete" or data.get("status") != "candidate":
             errors.append("manifest is not a complete candidate")
+        expected_artifacts = expected_artifact_relatives(profile["project"])
+        exact_record_set(data.get("artifacts", {}), expected_artifacts, "artifact", errors)
         compare_records(build, data.get("artifacts", {}), "artifact", errors)
-        project = profile["project"]
-        for suffix in ("flow.rpt", "map.rpt", "fit.rpt", "asm.rpt", "sta.rpt", "pin", "rbf", "sof"):
-            relative = f"output_files/{project}.{suffix}"
-            if relative not in data.get("artifacts", {}):
-                errors.append(f"required artifact absent from manifest: {relative}")
+
+        source_digest = data.get("sourceManifestSha256")
+        source_projection = dict(data)
+        source_projection.pop("sourceManifestSha256", None)
+        source_projection["phase"] = "source"
+        source_projection["status"] = "source-captured"
+        source_projection["artifacts"] = {}
+        expected_source_digest = manifest_digest(source_projection)
+        if source_digest != expected_source_digest:
+            errors.append(
+                "sourceManifestSha256 mismatch: "
+                f"expected {expected_source_digest}, got {source_digest}"
+            )
     return errors
 
 

@@ -122,6 +122,21 @@ $branch = (& git -C $repoRoot branch --show-current).Trim()
 if ($LASTEXITCODE -ne 0 -or $branch -ne $expectedBranch) {
     throw "Board load requires branch $expectedBranch; current branch is '$branch'"
 }
+$currentSourceCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or $currentSourceCommit -notmatch '^[0-9a-f]{40}$') {
+    throw 'Could not resolve the loader source commit.'
+}
+$loaderRelative = 'tools/board/invoke_superstation_probe.ps1'
+$loaderDirty = @(& git -C $repoRoot -c core.autocrlf=true status --porcelain -- $loaderRelative)
+if ($LASTEXITCODE -ne 0) { throw 'Could not inspect loader source status.' }
+if ($loaderDirty.Count -ne 0) {
+    throw "Loader must be committed and clean before identity or load evidence:`n$($loaderDirty -join "`n")"
+}
+$loaderGitBlob = (& git -C $repoRoot rev-parse "${currentSourceCommit}:$loaderRelative").Trim()
+if ($LASTEXITCODE -ne 0 -or $loaderGitBlob -notmatch '^[0-9a-f]{40}$') {
+    throw 'Could not bind the loader file to its source commit.'
+}
+$loaderWorkingSha256 = (Get-FileHash -LiteralPath (Join-Path $repoRoot $loaderRelative) -Algorithm SHA256).Hash.ToLowerInvariant()
 
 if ($AskPassPath) {
     $AskPassPath = (Resolve-Path $AskPassPath).Path
@@ -377,17 +392,26 @@ function Assert-WatchdogEvidence {
     if ($writeAttempt -ne $menuAttempt) {
         throw "HPS watchdog write/MENU attempt mismatch: $writeAttempt != $menuAttempt"
     }
+    if ($writeAttempt -lt 1 -or $writeAttempt -gt 5) {
+        throw "HPS watchdog success attempt is out of range: $writeAttempt"
+    }
     $attempts = @($attemptLines | ForEach-Object { [int]($_ -replace '^watchdog-attempt=', '') })
     $expectedAttempts = @(1..$writeAttempt)
     if (($attempts -join ',') -ne ($expectedAttempts -join ',')) {
         throw "HPS watchdog attempts are not contiguous through success: '$($attempts -join ',')'"
     }
-    if ($writeAttempt -gt 1) {
-        foreach ($attempt in 1..($writeAttempt - 1)) {
-            if ($Lines -notcontains "watchdog-write-timeout=$attempt") {
-                throw "HPS watchdog attempt $attempt has neither timeout nor terminal success evidence"
-            }
+    $expectedLines = @($fired[0])
+    foreach ($attempt in $expectedAttempts) {
+        $expectedLines += "watchdog-attempt=$attempt"
+        if ($attempt -lt $writeAttempt) {
+            $expectedLines += "watchdog-write-timeout=$attempt"
+        } else {
+            $expectedLines += "watchdog-write-ok=$attempt"
+            $expectedLines += "watchdog-menu-ok=$attempt"
         }
+    }
+    if (($Lines -join "`n") -cne ($expectedLines -join "`n")) {
+        throw "HPS watchdog log is not the exact fired/attempt/write/MENU sequence: $($Lines -join '; ')"
     }
     return [ordered]@{
         firedUtc = $fired[0].Substring('watchdog-fired='.Length)
@@ -422,7 +446,13 @@ $receipt = [ordered]@{
     host = $HostName
     branch = $branch
     profile = $Profile
-    sourceCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
+    sourceCommit = $currentSourceCommit
+    loaderSource = [ordered]@{
+        path = $loaderRelative
+        sourceCommit = $currentSourceCommit
+        gitBlob = $loaderGitBlob
+        workingSha256 = $loaderWorkingSha256
+    }
     buildSourceCommit = $null
     buildAudit = $null
     buildManifest = $null

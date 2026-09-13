@@ -23,7 +23,12 @@ class SuperStationBuildManifestTest(unittest.TestCase):
         self.repo = root / "repo"
         self.build = root / "build"
         self.repo.mkdir()
-        (self.repo / "src.sv").write_text("module src; endmodule\n", encoding="utf-8")
+        (self.repo / "fpga" / "sys").mkdir(parents=True)
+        (self.repo / "fpga" / "rtl").mkdir()
+        (self.repo / "fpga" / "sys" / "sys_top.v").write_bytes(b"upstream sys top\n")
+        (self.repo / "fpga" / "rtl" / "src.sv").write_text(
+            "module src; endmodule\n", encoding="utf-8"
+        )
         (self.repo / "verify.py").write_text("# verifier\n", encoding="utf-8")
         (self.build / "sys").mkdir(parents=True)
         (self.build / "rtl").mkdir()
@@ -44,7 +49,7 @@ class SuperStationBuildManifestTest(unittest.TestCase):
                 "project": "Test",
                 "marker": ".test-build",
                 "qip": "files.qip",
-                "sourcePaths": ("src.sv",),
+                "sourcePaths": ("fpga/sys", "fpga/rtl/src.sv"),
                 "verificationPaths": ("verify.py",),
             }
         }
@@ -70,7 +75,7 @@ class SuperStationBuildManifestTest(unittest.TestCase):
         MANIFEST.write_manifest(source_path, source)
         output = self.build / "output_files"
         output.mkdir()
-        for suffix in ("flow.rpt", "map.rpt", "fit.rpt", "asm.rpt", "sta.rpt", "pin", "rbf", "sof"):
+        for suffix in MANIFEST.ARTIFACT_SUFFIXES:
             (output / f"Test.{suffix}").write_bytes(f"artifact:{suffix}\n".encode())
         return MANIFEST.create_complete_manifest(self.repo, self.build, "Test", source_path)
 
@@ -88,11 +93,42 @@ class SuperStationBuildManifestTest(unittest.TestCase):
 
     def test_source_mutation_fires(self) -> None:
         complete = self.complete_manifest()
-        (self.repo / "src.sv").write_text("module mutant; endmodule\n", encoding="utf-8")
+        (self.repo / "fpga" / "rtl" / "src.sv").write_text(
+            "module mutant; endmodule\n", encoding="utf-8"
+        )
 
         errors = MANIFEST.verify_manifest_data(complete, self.repo, self.build)
 
-        self.assertTrue(any("source hash/size mismatch: src.sv" in error for error in errors))
+        self.assertTrue(any("source hash/size mismatch: fpga/rtl/src.sv" in error for error in errors))
+
+    def test_omitted_source_with_recomputed_self_digest_fires(self) -> None:
+        complete = self.complete_manifest()
+        complete["sourceFiles"].pop("fpga/rtl/src.sv")
+        complete["manifestSha256"] = MANIFEST.manifest_digest(complete)
+
+        errors = MANIFEST.verify_manifest_data(complete, self.repo, self.build)
+
+        self.assertTrue(any("source record set mismatch" in error for error in errors))
+
+    def test_added_output_with_recomputed_self_digest_fires(self) -> None:
+        complete = self.complete_manifest()
+        extra = self.build / "output_files" / "Test.extra"
+        extra.write_bytes(b"extra\n")
+        complete["artifacts"]["output_files/Test.extra"] = MANIFEST.file_record(extra)
+        complete["manifestSha256"] = MANIFEST.manifest_digest(complete)
+
+        errors = MANIFEST.verify_manifest_data(complete, self.repo, self.build)
+
+        self.assertTrue(any("artifact record set mismatch" in error for error in errors))
+
+    def test_source_manifest_digest_mutant_fires(self) -> None:
+        complete = self.complete_manifest()
+        complete["sourceManifestSha256"] = "0" * 64
+        complete["manifestSha256"] = MANIFEST.manifest_digest(complete)
+
+        errors = MANIFEST.verify_manifest_data(complete, self.repo, self.build)
+
+        self.assertTrue(any("sourceManifestSha256 mismatch" in error for error in errors))
 
     def test_manifest_self_digest_mutation_fires(self) -> None:
         complete = self.complete_manifest()
