@@ -759,7 +759,7 @@ class ReportPreflightTests(unittest.TestCase):
         )
         return commit
 
-    def make_runner_repository(self, repo: Path) -> str:
+    def make_runner_repository(self, repo: Path, *, autocrlf: bool = False) -> str:
         fixed = {
             "fpga/quartus/shell_fit/zhao_shell_fit.qpf",
             "fpga/quartus/shell_fit/zhao_shell_fit.qsf",
@@ -849,6 +849,7 @@ class ReportPreflightTests(unittest.TestCase):
             "    print('Info: Quartus Prime Fitter was successful. 0 errors, 9 warnings')\n"
             "elif '--post_map' in sys.argv:\n"
             "    shutil.copyfile(fixtures/'shell_fit_post_map_connectivity.tsv', char/'post_map_connectivity.tsv')\n"
+            "    print('Info: Using post quartus_map netlist')\n"
             "    print('Info: Wrote post-map shell boundary witness to output_files/characterization/post_map_connectivity.tsv')\n"
             "    print('Info: Quartus Prime TimeQuest Timing Analyzer was successful. 0 errors, 1 warning')\n"
             "else:\n"
@@ -878,7 +879,7 @@ class ReportPreflightTests(unittest.TestCase):
             ("init",),
             ("config", "user.name", "Shell Fit Runner Test"),
             ("config", "user.email", "shell-fit-runner@example.invalid"),
-            ("config", "core.autocrlf", "false"),
+            ("config", "core.autocrlf", "true" if autocrlf else "false"),
             ("add", "--", "."),
             ("commit", "-m", "clean runner fixture"),
         ):
@@ -1425,17 +1426,54 @@ class ReportPreflightTests(unittest.TestCase):
             ):
                 parser(text)
 
+    def test_hierarchy_rows_require_exact_trailing_delimiter(self) -> None:
+        controls = (
+            (parse_fitter_hierarchy, self.fixture("shell_fit_hierarchy_with_shell.rpt")),
+            (parse_map_hierarchy, self.fixture("shell_fit_map_clean.rpt")),
+        )
+        for parser, text in controls:
+            lines = text.splitlines(keepends=True)
+            row_index = next(
+                index for index, line in enumerate(lines) if "u_shell" in line
+            )
+            row = lines[row_index]
+            newline = "\n" if row.endswith("\n") else ""
+            body = row.removesuffix("\n").removesuffix("\r")
+            self.assertTrue(body.endswith(";"))
+            for label, replacement in (
+                ("missing", body[:-1] + newline),
+                ("extra", body + ";" + newline),
+            ):
+                mutated = list(lines)
+                mutated[row_index] = replacement
+                with self.subTest(
+                    parser=parser.__name__, mutation=label
+                ), self.assertRaisesRegex(
+                    ShellPortError, "exactly one leading and trailing"
+                ):
+                    parser("".join(mutated))
+
     def test_descendant_rich_hierarchy_matches_exact_shell_identity(self) -> None:
         rows = parse_fitter_hierarchy(
             self.fixture("shell_fit_hierarchy_descendant_rich.rpt")
         )
         shell = require_shell_hierarchy(rows)
-        self.assertEqual(shell.node, "|zhao_shell_top:u_shell")
+        self.assertEqual(shell.node, "|zhao_shell_top:u_shell|")
         self.assertEqual(
             shell.full_hierarchy_name,
             "|zhao_shell_fit_top|zhao_shell_top:u_shell",
         )
         self.assertEqual(shell.entity_name, "zhao_shell_top")
+
+    def test_fitter_hierarchy_node_requires_genuine_trailing_delimiter(self) -> None:
+        text = self.fixture("shell_fit_hierarchy_descendant_rich.rpt").replace(
+            "; |zhao_shell_top:u_shell| ;",
+            "; |zhao_shell_top:u_shell ;",
+            1,
+        )
+        rows = parse_fitter_hierarchy(text)
+        with self.assertRaisesRegex(ShellPortError, "found 0"):
+            require_shell_hierarchy(rows)
 
     def test_descendant_only_hierarchy_does_not_match_shell(self) -> None:
         rows = parse_fitter_hierarchy(
@@ -1748,7 +1786,7 @@ class ReportPreflightTests(unittest.TestCase):
             ),
             "connectivity": (
                 lambda row: row["connectivity"]["ports"][0].__setitem__(
-                    "postMapCount", 0
+                    "mappedEndpointCount", 0
                 ),
                 "connectivity does not match the post-map port-bit witness",
             ),
@@ -2231,36 +2269,115 @@ class ReportPreflightTests(unittest.TestCase):
         self.assertFalse(exists)
         self.assertIn("post-map wrapper port/bit witness", completed.stdout)
 
-    def test_post_map_zero_and_duplicate_port_counts_fire(self) -> None:
+    def test_post_map_script_queries_actual_mapped_endpoint_counts(self) -> None:
+        text = (REPO / "fpga/quartus/shell_fit/post_map_connectivity.tcl").read_text(
+            encoding="utf-8"
+        )
+        for required in (
+            "foreach_in_collection port [get_ports *]",
+            "get_port_info -name $port",
+            "get_port_info -is_input_port $port",
+            "get_port_info -is_output_port $port",
+            "get_fanouts [list $name]",
+            "get_fanins [list $name]",
+            "mapped_endpoint_count",
+        ):
+            self.assertIn(required, text)
+        self.assertEqual(text.count("set mapped_count "), 2)
+        self.assertEqual(text.count("$mapped_count"), 1)
+        self.assertEqual(
+            text.count("lappend rows [list port $name $direction $mapped_count]"),
+            1,
+        )
+        self.assertNotIn("set mapped_count 1", text)
+
+        def query_result_reaches_row(candidate: str) -> bool:
+            return (
+                candidate.count("set mapped_count ") == 2
+                and candidate.count("$mapped_count") == 1
+                and candidate.count(
+                    "lappend rows [list port $name $direction $mapped_count]"
+                )
+                == 1
+                and "set mapped_count 1" not in candidate
+            )
+
+        self.assertTrue(query_result_reaches_row(text))
+        controls = (
+            text.replace(
+                "    lappend rows [list port $name $direction $mapped_count]",
+                "    set mapped_count 1\n"
+                "    lappend rows [list port $name $direction $mapped_count]",
+                1,
+            ),
+            text.replace(
+                "lappend rows [list port $name $direction $mapped_count]",
+                "lappend rows [list port $name $direction 1]",
+                1,
+            ),
+        )
+        for mutated in controls:
+            self.assertFalse(query_result_reaches_row(mutated))
+        self.assertLess(
+            text.index("foreach_in_collection port"),
+            text.index("set witness [open"),
+        )
+
+    def test_post_map_zero_and_duplicate_rows_fire(self) -> None:
         clean = self.fixture("shell_fit_post_map_connectivity.tsv")
         map_report = self.fixture("shell_fit_map_clean.rpt")
-        for label, mutated in (
-            ("zero", clean.replace("port\tgpu_clk\tinput\t1", "port\tgpu_clk\tinput\t0")),
-            ("duplicate", clean.replace("port\tgpu_clk\tinput\t1",
-                                        "port\tgpu_clk\tinput\t2")),
-        ):
+        audio = "port\taudio_clk\tinput\t1\n"
+        controls = (
+            (
+                "zero endpoints",
+                clean.replace(audio, "port\taudio_clk\tinput\t0\n"),
+                "no mapped fanin/fanout endpoints",
+            ),
+            (
+                "duplicate row",
+                clean.replace(audio, audio + audio),
+                "duplicates=.*audio_clk",
+            ),
+        )
+        for label, mutated, message in controls:
             with self.subTest(label=label), self.assertRaisesRegex(
-                ShellPortError, "missing or duplicated"
+                ShellPortError, message
             ):
                 validate_post_map_connectivity(
                     parse_post_map_connectivity(mutated), map_report
                 )
 
+    def test_post_map_witness_fails_closed_on_malformed_records(self) -> None:
+        clean = self.fixture("shell_fit_post_map_connectivity.tsv")
+        audio = "port\taudio_clk\tinput\t1"
+        controls = (
+            ("blank row", clean.replace(audio, audio + "\n"), "malformed"),
+            ("unknown record", clean.replace("port\taudio", "node\taudio"), "unknown"),
+            ("nonnumeric count", clean.replace(audio, "port\taudio_clk\tinput\t1x"), "invalid"),
+            ("extra cell", clean.replace(audio, audio + "\textra"), "malformed"),
+        )
+        for label, mutated, message in controls:
+            with self.subTest(label=label), self.assertRaisesRegex(
+                ShellPortError, message
+            ):
+                parse_post_map_connectivity(mutated)
+
     def test_reports_subprocess_disconnected_mapped_port_fires_without_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repo = Path(temporary)
             self.make_clean_cli_repository(repo)
-            relative = "tests/tools/fixtures/shell_fit_map_clean.rpt"
+            relative = "tests/tools/fixtures/shell_fit_post_map_connectivity.tsv"
             data = (repo / relative).read_bytes().replace(
-                b"; Port   ; Type ; Severity ; Details ;\n+--------+------+----------+---------+\n+--------+------+----------+---------+",
-                b"; Port   ; Type ; Severity ; Details ;\n+--------+------+----------+---------+\n; gpu_clk ; Input ; Warning ; dangling mapped input ;\n+--------+------+----------+---------+",
+                b"port\taudio_clk\tinput\t1\n",
+                b"port\taudio_clk\tinput\t0\n",
             )
             self.commit_fixture_change(repo, relative, data)
             completed, emitted = self.run_reports_emit_subprocess(repo)
             exists = emitted.exists()
         self.assertEqual(completed.returncode, 1, completed.stdout)
         self.assertFalse(exists)
-        self.assertIn("disconnected/dangling ports", completed.stdout)
+        self.assertIn("audio_clk", completed.stdout)
+        self.assertIn("no mapped fanin/fanout endpoints", completed.stdout)
 
     def test_reports_subprocess_negative_timing_retains_clean_resources_and_fails_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -2332,6 +2449,25 @@ class ReportPreflightTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 1, completed.stdout)
         self.assertFalse(exists)
         self.assertIn("mapStdout has no unique successful zero-error completion", completed.stdout)
+
+    def test_post_map_stage_requires_mapped_netlist_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary)
+            self.make_clean_cli_repository(repo)
+            relative = "tests/tools/fixtures/shell_fit_post_map.stdout.log"
+            data = (repo / relative).read_bytes().replace(
+                b"Info: Using post quartus_map netlist\n",
+                b"",
+            )
+            self.commit_fixture_change(repo, relative, data)
+            completed, emitted = self.run_reports_emit_subprocess(repo)
+            exists = emitted.exists()
+        self.assertEqual(completed.returncode, 1, completed.stdout)
+        self.assertFalse(exists)
+        self.assertIn(
+            "postMapStdout does not prove the post-map timing netlist was loaded",
+            completed.stdout,
+        )
 
     def test_receipt_preserves_unmanifested_rows_and_reported_top_self(self) -> None:
         receipt = self.evidence()["receipt"]
@@ -3010,6 +3146,40 @@ class ReportPreflightTests(unittest.TestCase):
         self.assertEqual(set(synthesis["stages"]), {"map", "postMap", "fit", "timequest"})
         self.assertEqual(synthesis["remainderAttribution"]["unmanifestedFitterRows"], 1)
         self.assertEqual(synthesis["remainderAttribution"]["unmanifestedMapRows"], 1)
+
+    def test_fake_runner_archives_raw_blobs_when_autocrlf_is_enabled(self) -> None:
+        powershell = shutil.which("powershell.exe") or shutil.which("pwsh")
+        if powershell is None:
+            self.skipTest("PowerShell is unavailable")
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary)
+            self.make_runner_repository(repo, autocrlf=True)
+            fake_bin = self.make_fake_quartus_bin(repo)
+            completed = subprocess.run(
+                [
+                    powershell,
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(repo / "tools/quartus/run_shell_fit.ps1"),
+                    "-PythonExe",
+                    sys.executable,
+                    "-QuartusBin",
+                    str(fake_bin),
+                    "-TestOnlyFakeQuartus",
+                ],
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+                timeout=120,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stdout)
+        self.assertIn("TEST-ONLY RESULT accepted", completed.stdout)
+        self.assertNotIn("specimen bytes differ from Git blobs", completed.stdout)
 
     def test_fake_runner_retains_failed_timing_only_as_test_receipt(self) -> None:
         powershell = shutil.which("powershell.exe") or shutil.which("pwsh")

@@ -1,0 +1,51 @@
+{
+  "archive": {
+    "entries": 104,
+    "path": "shell-fit-failed-hierarchy-55f29e8e.zip",
+    "sha256": "62a5b81b43c064cf9c43e2bc243c0d6587e7fbd82887a25a4de879fcd1fb2083",
+    "size": 842010
+  },
+  "device": "5CSEBA6U23I7",
+  "evidenceBoundary": "All Quartus stages completed and the raw files are preserved, but receipt derivation failed. This packet is diagnostic evidence, not an accepted schema-3 receipt, timing pass, connected V3 production result, board result, or bankable ALM/DSP saving.",
+  "failureReceiptSha256": "b62225dbdd9c831bc323acbae2f1e4b5ec66a187d213baccfb3a4f36633ffdea",
+  "gate": "shell_fit_top_clean_characterization",
+  "measuredSourceCommit": "55f29e8edfbdfe2ff71e5e90a9349c7df64410cb",
+  "packetManifestSha256": "98e831ea6372f04deab337517bb02fb361b7f7206d11b2b99c0b67a6cc3b7c85",
+  "parser": {
+    "diagnostic": "expected one exact fitted hierarchy row for 'zhao_shell_top:u_shell', found 0",
+    "exitCode": 1,
+    "quartusRerunDuringPreservation": false,
+    "receiptEmitted": false
+  },
+  "preservedAtLocal": "2026-09-13T14:50:39+02:00",
+  "productionDspSaving": 0,
+  "productionMigration": "none",
+  "quartus": "Quartus Prime Lite 17.0.2 Build 602",
+  "remoteHeadAtPreservation": "55f29e8edfbdfe2ff71e5e90a9349c7df64410cb",
+  "resourcesObservedRaw": {
+    "alms": 15046,
+    "dspBlocks": 16,
+    "memoryBits": 184256,
+    "ramBlocks": 26,
+    "realPins": 10,
+    "registers": 19962,
+    "virtualPins": 0
+  },
+  "rtlCleanAtLaunch": true,
+  "schemaVersion": 1,
+  "sourceBranch": "claude/ceiling-architecture-20260912",
+  "stages": {
+    "fit": "successful",
+    "map": "successful",
+    "postMap": "successful",
+    "timequest": "successful"
+  },
+  "status": "failed:receipt-derivation",
+  "timingObservedRaw": {
+    "canonicalGateStatus": "not-derived",
+    "slow100cHoldSlackNs": "0.242",
+    "slow100cSetupSlackNs": "-2.646",
+    "slowMinus40cHoldSlackNs": "0.104",
+    "slowMinus40cSetupSlackNs": "-2.742"
+  }
+}

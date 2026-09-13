@@ -170,53 +170,53 @@
     "ports": [
       {
         "direction": "input",
-        "name": "gpu_clk",
-        "postMapCount": 1
+        "mappedEndpointCount": 1,
+        "name": "audio_clk"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_epoch_o[0]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_epoch_o[1]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_epoch_o[2]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_signature_o[0]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_signature_o[1]"
+      },
+      {
+        "direction": "output",
+        "mappedEndpointCount": 1,
+        "name": "fit_signature_o[2]"
       },
       {
         "direction": "input",
-        "name": "vid_clk",
-        "postMapCount": 1
+        "mappedEndpointCount": 1,
+        "name": "gpu_clk"
       },
       {
         "direction": "input",
-        "name": "audio_clk",
-        "postMapCount": 1
+        "mappedEndpointCount": 1,
+        "name": "rst_n"
       },
       {
         "direction": "input",
-        "name": "rst_n",
-        "postMapCount": 1
-      },
-      {
-        "direction": "output",
-        "name": "fit_signature_o[0]",
-        "postMapCount": 1
-      },
-      {
-        "direction": "output",
-        "name": "fit_signature_o[1]",
-        "postMapCount": 1
-      },
-      {
-        "direction": "output",
-        "name": "fit_signature_o[2]",
-        "postMapCount": 1
-      },
-      {
-        "direction": "output",
-        "name": "fit_epoch_o[0]",
-        "postMapCount": 1
-      },
-      {
-        "direction": "output",
-        "name": "fit_epoch_o[1]",
-        "postMapCount": 1
-      },
-      {
-        "direction": "output",
-        "name": "fit_epoch_o[2]",
-        "postMapCount": 1
+        "mappedEndpointCount": 1,
+        "name": "vid_clk"
       }
     ],
     "top": "zhao_shell_fit_top"
@@ -273,7 +273,7 @@
       "memoryAlmsSelf": "0.0",
       "memoryBits": 2097152,
       "module": "zhao_shell_top",
-      "node": "|zhao_shell_top:u_shell",
+      "node": "|zhao_shell_top:u_shell|",
       "pins": 0,
       "ramBlocks": "128",
       "registers": 14321,
@@ -303,7 +303,7 @@
       "memoryAlmsSelf": "4.0",
       "memoryBits": 27848,
       "module": "zhao_shell_fit_stimulus",
-      "node": "|zhao_shell_fit_stimulus:u_stimulus",
+      "node": "|zhao_shell_fit_stimulus:u_stimulus|",
       "pins": 0,
       "ramBlocks": "4",
       "registers": 1500,
@@ -333,7 +333,7 @@
       "memoryAlmsSelf": "0.0",
       "memoryBits": 0,
       "module": "zhao_shell_fit_gpu_sink",
-      "node": "|zhao_shell_fit_gpu_sink:u_gpu_sink",
+      "node": "|zhao_shell_fit_gpu_sink:u_gpu_sink|",
       "pins": 0,
       "ramBlocks": "0",
       "registers": 1800,
@@ -363,7 +363,7 @@
       "memoryAlmsSelf": "0.0",
       "memoryBits": 0,
       "module": "zhao_shell_fit_video_sink",
-      "node": "|zhao_shell_fit_video_sink:u_video_sink",
+      "node": "|zhao_shell_fit_video_sink:u_video_sink|",
       "pins": 0,
       "ramBlocks": "0",
       "registers": 250,
@@ -393,7 +393,7 @@
       "memoryAlmsSelf": "0.0",
       "memoryBits": 0,
       "module": "zhao_shell_fit_audio_sink",
-      "node": "|zhao_shell_fit_audio_sink:u_audio_sink",
+      "node": "|zhao_shell_fit_audio_sink:u_audio_sink|",
       "pins": 0,
       "ramBlocks": "0",
       "registers": 130,
@@ -423,7 +423,7 @@
       "memoryAlmsSelf": "0.0",
       "memoryBits": 0,
       "module": "zhao_shell_fit_helper",
-      "node": "|zhao_shell_fit_helper:u_hidden",
+      "node": "|zhao_shell_fit_helper:u_hidden|",
       "pins": 0,
       "ramBlocks": "0",
       "registers": 2,
@@ -473,7 +473,7 @@
     },
     "hierarchy": {
       "path": "tests/tools/fixtures/shell_fit_hierarchy_with_shell.rpt",
-      "sha256": "045b411ff1522f43866f38dc8f13cf8fd7ec9b8c16bf1ca99a0104242fb899ed"
+      "sha256": "379a8ae5f02584094c3af95245e3eab71f7d6d8f39d5012a0e7c63ed01a4c5d5"
     },
     "holdPaths": {
       "path": "tests/tools/fixtures/shell_fit_hold_paths_clean.rpt",
@@ -481,7 +481,7 @@
     },
     "mapReport": {
       "path": "tests/tools/fixtures/shell_fit_map_clean.rpt",
-      "sha256": "2a8c74ae0010b484c3ffdc966ab6a5a5fbfe1f5952a9a430c60a65a75cad9f63"
+      "sha256": "c5b37ca4303f2c00a27126d9cb73f8c3ff5b1a8bc8f0ce2f546641a125bb69f0"
     },
     "mapStderr": {
       "path": "tests/tools/fixtures/shell_fit_map.stderr.log",
@@ -497,7 +497,7 @@
     },
     "postMapConnectivity": {
       "path": "tests/tools/fixtures/shell_fit_post_map_connectivity.tsv",
-      "sha256": "2c8e3efad317af524ccb9349685067566a8b726627d42c977dc2f88b72accf4a"
+      "sha256": "11383a02c31397ee1d0802156b2037a5908f5a4131638b4689c68778bcd7a9e3"
     },
     "postMapStderr": {
       "path": "tests/tools/fixtures/shell_fit_post_map.stderr.log",
@@ -505,7 +505,7 @@
     },
     "postMapStdout": {
       "path": "tests/tools/fixtures/shell_fit_post_map.stdout.log",
-      "sha256": "904bdfcbc07f014b1d0f4de5f1bf7a6784002b22b2d83e5dacd1f2ea420438bb"
+      "sha256": "297f63f0840b3518216409e9bd40d81d3556bed740fbd7f9140ccf0d1f63b6c4"
     },
     "recoveryPaths": {
       "path": "tests/tools/fixtures/shell_fit_recovery_paths_clean.rpt",
@@ -734,7 +734,7 @@
     },
     "evidenceParser": {
       "path": "tools/quartus/shell_fit_reports.py",
-      "sha256": "78ba0653939530477cec43c219375a3409d870f7b4452c813106e27fa0a5ec98"
+      "sha256": "07644dba20574d7bbf34a14092b53598ba32831ad7c8b11ba5b17aba8a18cdcf"
     },
     "generator": {
       "path": "tools/quartus/gen_shell_fit_top.py",
@@ -762,7 +762,7 @@
     },
     "postMapScript": {
       "path": "fpga/quartus/shell_fit/post_map_connectivity.tcl",
-      "sha256": "1000bcf790053b2cb8075d73506a0bf1d57dd5a7bc5e54375d7df1d3546d6f0e"
+      "sha256": "beed3500c157e2261975b2848f59ead2cc31842df808119598e8306fbb33e7e3"
     },
     "project": {
       "path": "fpga/quartus/shell_fit/zhao_shell_fit.qpf",
@@ -782,7 +782,7 @@
     },
     "runner": {
       "path": "tools/quartus/run_shell_fit.ps1",
-      "sha256": "8594ac3bed0d61e6324fb7bf90c4be622c913704ba6a97228c5abedee1759603"
+      "sha256": "bdfaab8662b6a3f20bc331385389827861e8f81f02241071e9ca5d2b49b5cbec"
     },
     "sdc": {
       "path": "tests/tools/fixtures/shell_fit_constraints_clean.sdc",
@@ -796,19 +796,19 @@
   "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
   "sourceHashes": {
     "cmake": "14594683cced56441645516c6d488185427c284e0b64d8d2484c1dcaade60cbd",
-    "evidenceParser": "78ba0653939530477cec43c219375a3409d870f7b4452c813106e27fa0a5ec98",
+    "evidenceParser": "07644dba20574d7bbf34a14092b53598ba32831ad7c8b11ba5b17aba8a18cdcf",
     "generator": "8b10ce7065e0ce145a15e8e81ed8f3d4552cdc103c7e44c518de171f460d32c4",
     "gitCapture": "24e128fb8dac00c63774ee3be65775e9a7021e82859dcc890d01fb8632ebbff0",
     "packageFile": "a63ed92194e45580f33b9827547f9bc1fbe57446dbe02555e8ecd7a6b734ed6d",
     "packet": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51",
     "parser": "d4da568555ca520691fec7db7dd2893d7a34bc5b5a0aeda879e9d407fc4572a9",
     "policy": "e153ed6e4f19ef9855a0f97784886d9ea323245ce4999f3da8696f1178ceb91a",
-    "postMapScript": "1000bcf790053b2cb8075d73506a0bf1d57dd5a7bc5e54375d7df1d3546d6f0e",
+    "postMapScript": "beed3500c157e2261975b2848f59ead2cc31842df808119598e8306fbb33e7e3",
     "project": "f638d3249f858a273b2c2035faaccadc0a72f19ddbc2e16b41b81ec4d266298f",
     "qsf": "cf3845a5c376596c36cf62608a8271a6dd455bda1da9bbf870d20493edfe02ae",
     "qsfParser": "e549ea0fcf36fbc5c82aa311ebeed32cd923a46c82062abd1c32e6e21811ac9c",
     "reportScript": "6a6374e9618057f2885b9d624aa3e7a306529e47296754fc2de6541382065a9d",
-    "runner": "8594ac3bed0d61e6324fb7bf90c4be622c913704ba6a97228c5abedee1759603",
+    "runner": "bdfaab8662b6a3f20bc331385389827861e8f81f02241071e9ca5d2b49b5cbec",
     "sdc": "a720662d1bea79d21cc826eca008a30ab4b326e56228a757468224694c04172b",
     "shellDeclaration": "a243647455d61afa653a14127a5bc489c7361f767f7e36c880254d81a46e1739",
     "shellFile": "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"

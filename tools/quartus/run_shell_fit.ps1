@@ -526,9 +526,9 @@ try {
     New-Item -ItemType Directory -Path $Snapshot -Force | Out-Null
 
     Invoke-Checked git @(
-        '-C', $RepoRoot, '--no-replace-objects', 'archive', '--format=zip',
-        "--output=$ArchiveZip", $head
-    ) 'git archive captured commit'
+        '-C', $RepoRoot, '-c', 'core.autocrlf=false', '--no-replace-objects',
+        'archive', '--format=zip', "--output=$ArchiveZip", $head
+    ) 'git archive captured raw commit blobs'
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [System.IO.Compression.ZipFile]::ExtractToDirectory($ArchiveZip, $Snapshot)
     Remove-Item -LiteralPath $ArchiveZip -Force

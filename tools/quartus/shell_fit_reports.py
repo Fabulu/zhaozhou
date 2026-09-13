@@ -116,7 +116,7 @@ class TimingAnalysis:
 class PostMapPort:
     name: str
     direction: str
-    count: int
+    mapped_endpoint_count: int
 
 
 SOURCE_EVIDENCE_NAMES = (
@@ -610,7 +610,17 @@ def verify_captured_git_evidence(
 
 
 def _table_cells(line: str) -> list[str]:
-    return [cell.strip() for cell in line.strip().strip(";").split(";")]
+    stripped = line.strip()
+    if (
+        not stripped.startswith(";")
+        or not stripped.endswith(";")
+        or stripped.startswith(";;")
+        or stripped.endswith(";;")
+    ):
+        raise ShellPortError(
+            "Quartus table row must use exactly one leading and trailing ';' delimiter"
+        )
+    return [cell.strip() for cell in stripped[1:-1].split(";")]
 
 
 def parse_clock_constraints(text: str) -> tuple[ClockConstraint, ...]:
@@ -728,20 +738,33 @@ def validate_clock_constraints(
 
 def parse_post_map_connectivity(text: str) -> tuple[str, tuple[PostMapPort, ...]]:
     rows = list(csv.reader(io.StringIO(text), delimiter="\t"))
-    if not rows or rows[0] != ["record", "name", "direction", "post_map_count"]:
+    expected_header = ["record", "name", "direction", "mapped_endpoint_count"]
+    if not rows or rows[0] != expected_header:
         raise ShellPortError("post-map connectivity witness header is absent")
-    top_rows = [row for row in rows[1:] if len(row) == 4 and row[0] == "top"]
-    if top_rows != [["top", "zhao_shell_fit_top", "-", "1"]]:
-        raise ShellPortError(f"post-map top witness is invalid: {top_rows!r}")
     ports: list[PostMapPort] = []
-    for row in rows[1:]:
-        if len(row) != 4 or row[0] != "port":
-            continue
-        try:
-            count = int(row[3])
-        except ValueError as exc:
-            raise ShellPortError(f"post-map port count is invalid: {row!r}") from exc
-        ports.append(PostMapPort(name=row[1], direction=row[2], count=count))
+    for line_number, row in enumerate(rows[1:], 2):
+        if len(row) != 4:
+            raise ShellPortError(
+                f"malformed post-map connectivity row {line_number}: {row!r}"
+            )
+        if row[0] != "port":
+            raise ShellPortError(
+                f"unknown post-map connectivity record on row {line_number}: {row!r}"
+            )
+        if not re.fullmatch(r"[0-9]+", row[3]):
+            raise ShellPortError(
+                f"post-map endpoint count is invalid on row {line_number}: {row!r}"
+            )
+        ports.append(
+            PostMapPort(
+                name=row[1],
+                direction=row[2],
+                mapped_endpoint_count=int(row[3]),
+            )
+        )
+    if not ports:
+        raise ShellPortError("post-map connectivity witness has no port rows")
+    ports.sort(key=lambda port: port.name)
     return "zhao_shell_fit_top", tuple(ports)
 
 
@@ -750,25 +773,34 @@ def validate_post_map_connectivity(
 ) -> None:
     _top, ports = witness
     expected = (
-        ("gpu_clk", "input"),
-        ("vid_clk", "input"),
         ("audio_clk", "input"),
-        ("rst_n", "input"),
-        ("fit_signature_o[0]", "output"),
-        ("fit_signature_o[1]", "output"),
-        ("fit_signature_o[2]", "output"),
         ("fit_epoch_o[0]", "output"),
         ("fit_epoch_o[1]", "output"),
         ("fit_epoch_o[2]", "output"),
+        ("fit_signature_o[0]", "output"),
+        ("fit_signature_o[1]", "output"),
+        ("fit_signature_o[2]", "output"),
+        ("gpu_clk", "input"),
+        ("rst_n", "input"),
+        ("vid_clk", "input"),
     )
     actual = tuple((port.name, port.direction) for port in ports)
-    if actual != expected:
+    duplicates = sorted({item for item in actual if actual.count(item) > 1})
+    if duplicates or actual != expected:
         raise ShellPortError(
-            f"post-map wrapper port/bit witness is {actual!r}, expected {expected!r}"
+            "post-map wrapper port/bit witness is invalid: "
+            f"duplicates={duplicates!r}, actual={actual!r}, expected={expected!r}"
         )
-    bad_counts = [(port.name, port.count) for port in ports if port.count != 1]
-    if bad_counts:
-        raise ShellPortError(f"post-map wrapper ports are missing or duplicated: {bad_counts!r}")
+    disconnected = [
+        (port.name, port.mapped_endpoint_count)
+        for port in ports
+        if port.mapped_endpoint_count <= 0
+    ]
+    if disconnected:
+        raise ShellPortError(
+            "post-map wrapper ports have no mapped fanin/fanout endpoints: "
+            f"{disconnected!r}"
+        )
     boundary_counts = re.findall(
         r"^;\s*boundary_port\s*;\s*([0-9][0-9,]*)\s*;\s*$",
         map_report_text,
@@ -777,24 +809,6 @@ def validate_post_map_connectivity(
     if boundary_counts != ["10"]:
         raise ShellPortError(
             f"mapped boundary_port count is {boundary_counts!r}, expected exactly ['10']"
-        )
-    section = re.search(
-        r'Port Connectivity Checks:\s*"zhao_shell_fit_top"(?P<body>.*?)(?:\n\s*\n|\Z)',
-        map_report_text,
-        flags=re.S,
-    )
-    if section is None:
-        raise ShellPortError("top-level Port Connectivity Checks section is absent")
-    disconnected = re.findall(
-        r"^;\s*([^;+][^;]*)\s*;\s*(Input|Output|Inout)\s*;\s*([^;]+)\s*;\s*([^;]+)\s*;",
-        section.group("body"),
-        flags=re.M | re.I,
-    )
-    disconnected = [row for row in disconnected if row[0].strip().lower() != "port"]
-    if disconnected:
-        raise ShellPortError(
-            "mapped top-level connectivity report contains disconnected/dangling ports: "
-            + repr([(row[0].strip(), row[3].strip()) for row in disconnected])
         )
 
 
@@ -975,6 +989,9 @@ def validate_stage_logs(stage_logs: Mapping[str, str]) -> None:
         text = stage_logs.get(artifact)
         if text is None or re.search(pattern, text, flags=re.M) is None:
             errors.append(f"{artifact} has no unique successful zero-error completion")
+    post_map_stdout = stage_logs.get("postMapStdout", "")
+    if re.search(r"^Info:\s+Using post quartus_map netlist\s*$", post_map_stdout, re.M) is None:
+        errors.append("postMapStdout does not prove the post-map timing netlist was loaded")
     for artifact in required:
         stderr_name = artifact.replace("Stdout", "Stderr")
         if stderr_name not in stage_logs:
@@ -1325,8 +1342,12 @@ def require_exact_hierarchy_row(
     module: str,
     instance: str | None,
 ) -> HierarchyRow:
-    node = f"|{module}" if instance is None else f"|{module}:{instance}"
-    full = node if instance is None else f"|{top_module}{node}"
+    if instance is None:
+        node = f"|{module}"
+        full = node
+    else:
+        node = f"|{module}:{instance}|"
+        full = f"|{top_module}|{module}:{instance}"
     matches = [
         row
         for row in rows
@@ -1883,7 +1904,11 @@ def _connectivity_evidence(
         "top": top,
         "mappedBoundaryPortCount": 10,
         "ports": [
-            {"name": port.name, "direction": port.direction, "postMapCount": port.count}
+            {
+                "name": port.name,
+                "direction": port.direction,
+                "mappedEndpointCount": port.mapped_endpoint_count,
+            }
             for port in ports
         ],
         "passed": True,
