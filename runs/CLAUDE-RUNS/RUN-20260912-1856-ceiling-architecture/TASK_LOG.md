@@ -114,6 +114,18 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - Committed the report and its bounded commission as `e6f254c5` (`docs(fpga): architect dual-18 DSP packing`) and pushed the branch. No Quartus command or production rewrite occurred.
 - Launched a disjoint calibration-only implementer for the wrapper, behavioral/oracle tests, renamed mutants, `gen_calib.py` revisions, and genuine-format map parser. It cannot touch Packet A, `tests/CMakeLists.txt`, production paths, or Quartus; the physical gate remains held until functional evidence and vendor-model availability are reviewed.
 
+### 2026-09-13 02:20 UTC+02:00 - Tightened closure evidence committed and pushed
+
+- Committed the 30,000-ALM / 85-DSP closure addendum, current live run history, and clean FIELD structural scan as `e3764572` (`docs(fpga): tighten resource closure target`) and pushed the branch.
+- The FIELD scan remains structural research, not a resource receipt; the target addendum does not invent per-domain allocations or bank any of the 26-DSP gap.
+
+### 2026-09-13 02:35 UTC+02:00 - TEXJOIN ownership supersedes an immediate RAM rewrite
+
+- Independent current-evidence ALM reconnaissance found the clean 3,824-ALM `zhao_raster_texjoin_v2` row remains technically current, but likely charges an accounting-only root: its only RTL instantiation is the generated unconnected resource hierarchy, while the selected V3 texture island already owns and emits ordered textured fragments.
+- Wrote `reports/TEXJOIN-OWNERSHIP-ALM-RECON-20260913.md`. The decision is ownership-first: prove exactly one connected RASTER-to-TEXTURE owner and retire any duplicate manifest root before considering an M10K rewrite. Any 3,824-ALM census change would initially be an accounting correction, not a physical composed saving.
+- Pre-registered `g8a_raster_texture_single_owner_characterization` as the eventual composed subsystem fit question; source/elaboration/simulation must settle ownership before that fit is spent.
+- The ALM scout briefly failed on a WebSocket reset, was resumed once, and completed read-only without file/build/Quartus actions.
+
 ---
 
 ## Subagent Spawns
@@ -137,7 +149,7 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 | completed 2026-09-13 | Agent `ab9ea5469aca02fcb` | Read-only terrain cherry-pick conflict map and current-evidence non-terrain ALM ranking | Complete; one dirty-file blocker, no expected committed merge conflict; evidence-qualified ALM ranking delivered | findings recorded in timeline |
 | completed 2026-09-13 | Agent `a44feecd4e349cefa` | Read-only Packet B integration preflight against stable QSF/runner/census inputs | Complete; exact one-fit integration checklist delivered | pending Packet B implementation |
 | completed 2026-09-13 02:14 UTC+02:00 | Agent `a8d3c005cf2f4c5c1` resumed | Third read-only adversarial verification of Packet A | Found two high and one medium defect with fresh probes; no repository edits | findings relayed for fourth repair |
-| active 2026-09-13 | Agent `a52a3426075a8e97a` | Read-only architecture scout for clean fitted 3,824-ALM `zhao_raster_texjoin_v2` | In progress; no file/build ownership | final handoff pending |
+| completed 2026-09-13 02:35 UTC+02:00 | Agent `a52a3426075a8e97a` | Read-only architecture scout for clean fitted 3,824-ALM `zhao_raster_texjoin_v2` | Complete after one transport reset; ownership-first recommendation, no file/build action | `reports/TEXJOIN-OWNERSHIP-ALM-RECON-20260913.md` |
 | active from 2026-09-13 02:15 UTC+02:00 | Agent `ab717719b6d124a1a` resumed direct | Repair three third-pass findings without delegation | In progress; sole owner of Packet A files | pending fourth corrected handoff |
 | active 2026-09-13 | Agent `a8e917989c634bd4d` | Implement calibration-only dual-18 wrapper/tests/mutants/map parser without Quartus | In progress; disjoint files and direct-test ownership | pending handoff |
 
