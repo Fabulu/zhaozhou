@@ -49,7 +49,7 @@ pin was changed.
 | SSH ECDSA host key | `SHA256:H+ACi6DPoz55a51/Ym3DrUNpHU/OEaFoAl5DqerRhko` | Secondary host-key evidence |
 | SSH RSA host key | `SHA256:eDrKAiW7GupcPO/m5f3Rwuo2lJeOPemY7do8nomM5bY` | Secondary host-key evidence |
 | OS | `Linux MiSTer 5.15.1-MiSTer`, Buildroot 2021.02.4 | Standard MiSTer software environment |
-| Live core | Official-style `NES_20260823.rbf` launched by `/media/fat/MiSTer` | Existing MiSTer RBFs configure and operate on the unit |
+| Live core | Owner switched among unmodified official-style cores; at 15:34 UTC the process named `SNES_20260823.rbf`, later verified byte-for-byte against upstream | Existing upstream MiSTer RBFs configure and operate on the unit; active path is transient |
 | Device-tree model | `Terasic DE10-nano` | Compatibility device tree; **not** proof that the PCB is a Terasic DE10-Nano |
 | Device-tree compatibility | `altr,socfpga-cyclone5`, `altr,socfpga` | Confirms the Cyclone V SoC HPS family |
 | CPU | Two Arm Cortex-A9 cores (`ARM part 0xc09`) | Matches Cyclone V SE/SX/ST SoC HPS family; does not identify package/speed grade |
@@ -74,6 +74,54 @@ Windows. Do not commit or paste the root password into project files. The unit
 still accepts the standard MiSTer password; key installation and password
 rotation are prudent later, but are state-changing administration and were not
 performed during identification.
+
+## Live software, active core, bridges, storage, and rollback
+
+A second read-only packet was captured at `2026-09-13 15:34 UTC` while the owner
+was using the console:
+
+- `/media/fat/MiSTer` is 1,166,224 bytes and has SHA-256
+  `9f6e5a237c36be6404ab4823d804821491db4bf125827f84aca2a1ca31f0a8a6`.
+  A separately downloaded upstream
+  [`MiSTer_20260912`](https://github.com/MiSTer-devel/Main_MiSTer/blob/master/releases/MiSTer_20260912)
+  has the same size and SHA-256. The live executable is therefore identified as
+  that release, byte for byte.
+- `/MiSTer.version` says `250402`. This is **not** the executable version. The
+  official SuperStation v1.2 installer notes that it intentionally spoofs that
+  marker to bypass an update-script equality check.
+- The active process then named
+  `/media/fat/_Console/SNES_20260823.rbf`. It is 4,446,024 bytes with SHA-256
+  `0c13347c0939f597ead5f1f835532d4508b10613e82e7316e902eabe712a9c83`.
+  A separately downloaded
+  [`SNES_20260823.rbf`](https://github.com/MiSTer-devel/SNES_MiSTer/blob/master/releases/SNES_20260823.rbf)
+  has the identical size and SHA-256. This proves that an unmodified upstream
+  MiSTer artifact is configuring and running on the physical unit. An earlier
+  observation saw the owner running the similarly named NES release; active
+  core paths are transient and must be timestamped.
+- FPGA manager state is `operating`. All three HPS/fabric bridges report
+  `enabled`: `lwhps2fpga`, `hps2fpga`, and `fpga2hps`.
+- `linux/linux.img` is 393,216,000 bytes with SHA-256
+  `b4d2266a7840495d1ed01e21295db6f0488735c17156c836050ec95ef444c85e`.
+  The booted root image is a 375 MiB ext4 loop; it has 39 MiB free at 88% use.
+  The 238.3 GiB `MiSTer_Data` exFAT partition has about 228 GiB free at 5% use.
+- The relevant current settings are `bootcore_timeout=10`,
+  `vga_mode=subcarrier`, `direct_video=0`, `forced_scandoubler=0`,
+  `fb_size=0`, `reset_combo=0`, and `video_mode=0`.
+- Recovery files are present: `menu.rbf`, `.MiSTer.old`, current/alternate INI
+  files, and the `MiSTer INI Backup` directory. `menu.rbf` SHA-256 is
+  `25d5461b55e4d45e79c876a02d69f32b22f414b64e600a1adc930eefea6ea4a7`.
+- `/dev/MiSTer_cmd` exists as a FIFO. Current MiSTer source at
+  [`0039110c8f8ef7013fb6603a062db3619a40c035`](https://github.com/MiSTer-devel/Main_MiSTer/tree/0039110c8f8ef7013fb6603a062db3619a40c035)
+  implements `load_core <path>` through that FIFO. The intended volatile
+  rollback command is therefore:
+
+```text
+printf '%s\n' 'load_core /media/fat/menu.rbf' > /dev/MiSTer_cmd
+```
+
+That command changes the running FPGA image and was **not** executed during the
+read-only packet. It must be exercised immediately after the first authorised
+minimal load, before attempting a larger Zhaozhou image.
 
 ## USB-Blaster / JTAG chain
 

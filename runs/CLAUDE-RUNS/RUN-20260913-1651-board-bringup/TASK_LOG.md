@@ -57,6 +57,24 @@ verified.
 - Wrote `reports/BOARD-BRINGUP-SUPERSTATION-ONE-20260913.md` with confirmed,
   published, inferred, and open facts separated.
 
+### 2026-09-13 17:41 UTC+02:00 - Software, core, storage, and recovery receipt
+
+- Identified the live `/media/fat/MiSTer` byte-for-byte as upstream
+  `MiSTer_20260912`; did not trust the deliberately spoofed `/MiSTer.version`
+  marker.
+- Identified the then-active `SNES_20260823.rbf` byte-for-byte against the
+  upstream release, proving an unmodified MiSTer artifact configures and runs
+  on this physical unit.
+- Confirmed FPGA manager `operating` and all three HPS/fabric bridges enabled.
+- Captured the boot image hash, storage layout/free space, selected MiSTer INI
+  settings, recovery files, and backup inventory without changing SD contents.
+- Confirmed `/dev/MiSTer_cmd` is a FIFO and pinned the upstream implementation of
+  `load_core <path>`; recorded `menu.rbf` and its hash as the volatile rollback.
+- Owner explicitly directed the lane to proceed. Narrowed the remaining block:
+  MiSTer-managed volatile RBF loading may proceed after a clean minimal-build
+  pin audit and a rehearsed rollback; raw JTAG, configuration flash, and
+  non-MiSTer board-specific pin use remain blocked.
+
 ---
 
 ## Subagent Spawns
@@ -78,14 +96,21 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - Treat the connected SuperStation hardware as the current specification-test
   target, distinct from the later reference/debug FPGA board.
 - Read-only USB/JTAG/network discovery is permitted now.
-- No programming or FPGA pin drive until the complete safety gate is verified.
+- The owner explicitly authorised proceeding on 2026-09-13. Volatile loading
+  through the pinned MiSTer/HPS contract is permitted after the minimal RBF's
+  final pin audit and rollback rehearsal. JTAG, configuration flash, and pins
+  outside that contract remain blocked.
 
 ---
 
 ## Next Steps
 
-1. Commit and push the identification report and RUN on the dedicated branch.
-2. Design a build-only, explicitly tri-stated MiSTer-compatible probe and audit
-   its final Quartus pin report; do not load it while the safety gate is open.
-3. If the PCB later becomes safely accessible for another reason, capture its
+1. Commit and push the expanded read-only receipt.
+2. Add the isolated, pinned MiSTer wrapper and minimal safe core without touching
+   Packet-B or shared build state.
+3. Compile in a new checkout-local board build directory and audit final device,
+   clocks, I/O standards, pin locations, unused-pin policy, and warnings.
+4. Rehearse the SSH `menu.rbf` rollback command, then perform the first volatile
+   minimal load and immediate rollback.
+5. If the PCB later becomes safely accessible for another reason, capture its
    silk revision and FPGA top marking without opening a powered unit.
