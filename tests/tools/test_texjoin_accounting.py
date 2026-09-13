@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -33,6 +34,113 @@ EXPECTED_PROVIDERS = {
 
 def observation_map(observations):
     return {role: reachable for role, _scope, _root, reachable in observations}
+
+
+def stripped_path_environment():
+    environment = os.environ.copy()
+    environment["PATH"] = ""
+    environment["VERILATOR_ROOT"] = str(REPO / "deliberately-wrong-vroot")
+    environment.pop("ZHAO_WINLIBS_BIN", None)
+    return environment
+
+
+class VerilatorLoaderEnvironmentTests(unittest.TestCase):
+    def selected_verilator(self) -> Path:
+        selected = ownership.find_verilator(str(REPO))
+        self.assertIsNotNone(selected, "pinned verilator_bin is unavailable")
+        return Path(selected).resolve()
+
+    def test_builder_loads_selected_verilator_from_stripped_path(self) -> None:
+        verilator = self.selected_verilator()
+        environment = ownership.verilator_environment(
+            str(verilator), str(REPO), stripped_path_environment()
+        )
+        # Rebuilding an already canonical environment must not duplicate paths.
+        environment = ownership.verilator_environment(
+            str(verilator), str(REPO), environment
+        )
+        suite = verilator.parent.parent
+        expected_prefixes = [suite / "bin", suite / "lib"]
+        winlibs = REPO.parents[1] / "dsstuff" / "mingw64" / "bin"
+        if winlibs.is_dir():
+            expected_prefixes.append(winlibs)
+
+        path_entries = environment["PATH"].split(os.pathsep)
+        self.assertEqual(
+            [os.path.normcase(os.path.normpath(entry))
+             for entry in path_entries[:len(expected_prefixes)]],
+            [os.path.normcase(os.path.normpath(str(entry)))
+             for entry in expected_prefixes],
+        )
+        for prefix in expected_prefixes:
+            normalized = os.path.normcase(os.path.normpath(str(prefix)))
+            self.assertEqual(
+                sum(os.path.normcase(os.path.normpath(entry)) == normalized
+                    for entry in path_entries),
+                1,
+            )
+        self.assertEqual(
+            Path(environment["VERILATOR_ROOT"]),
+            suite / "share" / "verilator",
+        )
+
+        result = subprocess.run(
+            [str(verilator), "--version"],
+            cwd=REPO,
+            env=environment,
+            capture_output=True,
+            text=True,
+            errors="replace",
+        )
+        diagnostic = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, diagnostic)
+        self.assertIn("Verilator", diagnostic)
+
+    def test_v3param_ownership_smoke_loads_from_stripped_path(self) -> None:
+        verilator = self.selected_verilator()
+        with tempfile.TemporaryDirectory(prefix="owner-loader-smoke-") as temporary:
+            source = Path(temporary) / "owner_loader_smoke.sv"
+            source.write_text(
+                "module owner_loader_smoke_leaf; endmodule\n"
+                "module owner_loader_smoke_top;\n"
+                "  owner_loader_smoke_leaf u_leaf();\n"
+                "endmodule\n",
+                encoding="utf-8",
+            )
+            cells = ownership.elaborated_cells(
+                "owner_loader_smoke_top",
+                [str(source)],
+                str(REPO),
+                str(verilator),
+                base_environment=stripped_path_environment(),
+            )
+        self.assertIn(("u_leaf", "owner_loader_smoke_leaf"), cells)
+
+    def test_package_only_sources_are_dependency_ordered(self) -> None:
+        sources = [Path(source) for source in ownership.ordered_package_sources(
+            REPO / "fpga" / "rtl")]
+        abi = REPO / "fpga" / "rtl" / "generated" / "zhao_abi_pkg.sv"
+        common = REPO / "fpga" / "rtl" / "common" / "zhao_pkg.sv"
+        self.assertIn(abi, sources)
+        self.assertIn(common, sources)
+        self.assertLess(sources.index(abi), sources.index(common))
+
+    def test_builder_fails_closed_when_suite_lib_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="owner-loader-missing-lib-") as temporary:
+            suite = Path(temporary) / "fake-suite"
+            suite_bin = suite / "bin"
+            suite_bin.mkdir(parents=True)
+            fake_verilator = suite_bin / (
+                "verilator_bin.exe" if os.name == "nt" else "verilator_bin"
+            )
+            fake_verilator.write_text("not executed\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                    ownership.ElaborationError,
+                    r"Verilator loader environment invalid: required suite lib "
+                    r"directory is missing"):
+                ownership.verilator_environment(
+                    str(fake_verilator), str(REPO), stripped_path_environment()
+                )
 
 
 class OwnershipRoleTests(unittest.TestCase):

@@ -6945,6 +6945,9 @@ set_tests_properties(
   PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 if(Python3_Interpreter_FOUND)
+  add_test(NAME render_texture_packet_a
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_render_texture_packet_a.py -q)
   add_test(NAME texjoin_accounting_retirement
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_texjoin_accounting.py -q)
@@ -6971,10 +6974,13 @@ if(Python3_Interpreter_FOUND)
                    --verilator "${ZHAO_VERILATOR_LINT}"
                    --sources ${ZHAO_SHELL_RTL})
   set_tests_properties(
-    texjoin_accounting_retirement
+    render_texture_packet_a texjoin_accounting_retirement
     shell_fit_tools shell_fit_preflight_fixtures shell_fit_generated_freshness
     shell_fit_smoke_monitor_freshness shell_fit_elaboration_census
     PROPERTIES LABELS "fast;lint" TIMEOUT 120)
+  # Packet A compiles and executes sixteen isolated detector models rather than
+  # accepting lint-only failures; keep its CTest backstop above the shared lane.
+  set_tests_properties(render_texture_packet_a PROPERTIES TIMEOUT 300)
   set_tests_properties(shell_fit_elaboration_census PROPERTIES
     ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}" TIMEOUT 300)
 endif()

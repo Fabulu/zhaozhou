@@ -25,7 +25,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from module_graph import build, strip_comments  # noqa: E402
+from module_graph import build, load, strip_comments  # noqa: E402
 
 DEFAULT_MANIFEST = "design/prod_manifest.yml"
 DEFAULT_RTL = "fpga/rtl"
@@ -54,6 +54,10 @@ AST_CELL_RE = re.compile(
     r"De-parameterize:\s+CELL\b.*?\s([A-Za-z_$][\w$]*)\s+->\s+MODULE\b"
     r".*?\s([A-Za-z_$][\w$]*)\s+L\d+\s+D\d+"
 )
+PACKAGE_DECL_RE = re.compile(
+    r"^[ \t]*package[ \t]+([A-Za-z_]\w*)[ \t]*;", re.M
+)
+PACKAGE_REF_RE = re.compile(r"\b([A-Za-z_]\w*)::")
 
 
 class RoleManifestError(ValueError):
@@ -171,6 +175,48 @@ def _instantiated_modules(text, module_names, own_modules):
     return found
 
 
+def ordered_package_sources(rtl_dir=DEFAULT_RTL):
+    """Return every RTL package source in dependency-before-user order."""
+    package_source = {}
+    package_refs = {}
+    for source, text in load(rtl_dir).items():
+        body = strip_comments(text)
+        declarations = PACKAGE_DECL_RE.findall(body)
+        for package in declarations:
+            previous = package_source.get(package)
+            if previous is not None and previous != source:
+                raise RoleManifestError(
+                    "package %s is declared by both %s and %s" %
+                    (package, previous, source))
+            package_source[package] = source
+            package_refs[package] = set(PACKAGE_REF_RE.findall(body)) - {package}
+
+    state = {}
+    ordered = []
+    emitted_sources = set()
+
+    def visit(package, stack):
+        status = state.get(package)
+        if status == "done":
+            return
+        if status == "visiting":
+            raise RoleManifestError(
+                "package dependency cycle: %s" % " -> ".join(stack + [package]))
+        state[package] = "visiting"
+        for dependency in sorted(package_refs.get(package, ())):
+            if dependency in package_source:
+                visit(dependency, stack + [package])
+        source = package_source[package]
+        if source not in emitted_sources:
+            ordered.append(os.path.abspath(source))
+            emitted_sources.add(source)
+        state[package] = "done"
+
+    for package in sorted(package_source):
+        visit(package, [])
+    return ordered
+
+
 def module_edges(rtl_dir=DEFAULT_RTL, extra_sources=()):
     """Build a conservative source-discovery graph, including test sources."""
     decl, inst_by_file = build(rtl_dir)
@@ -272,38 +318,108 @@ def find_verilator(repo_root):
 
 
 def _verilator_root(verilator):
-    configured = os.environ.get("VERILATOR_ROOT")
-    if configured:
-        return configured
-    # The pinned suite is <suite>/bin/verilator_bin and its data is under
-    # <suite>/share/verilator.
+    # The selected pinned suite is <suite>/bin/verilator_bin and its data is
+    # under <suite>/share/verilator. Never trust a caller's unrelated setting.
     suite = os.path.dirname(os.path.dirname(os.path.abspath(verilator)))
     candidate = os.path.join(suite, "share", "verilator")
     return candidate if os.path.isdir(candidate) else None
 
 
-def _source_set(decl, edges, declaration, root, extra_sources):
+def _path_identity(path):
+    return os.path.normcase(os.path.normpath(os.path.abspath(path.strip('"'))))
+
+
+def verilator_environment(verilator, repo_root, base_environment=None,
+                          winlibs_bin=None):
+    """Build the complete loader environment for one selected Verilator.
+
+    Windows resolves this suite's DLLs through PATH.  Setting VERILATOR_ROOT
+    alone therefore turns a missing loader dependency into an empty-output
+    process status that can be mistaken for an RTL failure.  Derive every suite
+    directory from the absolute executable and prepend the documented
+    ``suite/bin; suite/lib; winlibs/bin`` order exactly once.
+    """
+    environment = dict(os.environ if base_environment is None else base_environment)
+    selected = os.path.abspath(str(verilator))
+    if not os.path.isfile(selected):
+        raise ElaborationError(
+            "Verilator loader environment invalid: selected executable is missing: %s" %
+            selected)
+
+    suite = os.path.dirname(os.path.dirname(selected))
+    suite_bin = os.path.join(suite, "bin")
+    suite_lib = os.path.join(suite, "lib")
+    verilator_root = os.path.join(suite, "share", "verilator")
+    required = (
+        ("suite bin", suite_bin),
+        ("suite lib", suite_lib),
+        ("VERILATOR_ROOT", verilator_root),
+    )
+    for label, path in required:
+        if not os.path.isdir(path):
+            raise ElaborationError(
+                "Verilator loader environment invalid: required %s directory is "
+                "missing: %s" % (label, path))
+
+    configured_winlibs = winlibs_bin or environment.get("ZHAO_WINLIBS_BIN")
+    if configured_winlibs is None:
+        workspace = os.path.dirname(os.path.dirname(os.path.abspath(str(repo_root))))
+        candidate = os.path.join(workspace, "dsstuff", "mingw64", "bin")
+        if os.name == "nt" or os.path.isdir(candidate):
+            configured_winlibs = candidate
+
+    prefixes = [suite_bin, suite_lib]
+    if configured_winlibs is not None:
+        configured_winlibs = os.path.abspath(str(configured_winlibs))
+        if not os.path.isdir(configured_winlibs):
+            raise ElaborationError(
+                "Verilator loader environment invalid: configured winlibs bin "
+                "directory is missing: %s" % configured_winlibs)
+        prefixes.append(configured_winlibs)
+
+    prefix_keys = {_path_identity(path) for path in prefixes}
+    inherited = []
+    for entry in environment.get("PATH", "").split(os.pathsep):
+        if entry and _path_identity(entry) not in prefix_keys:
+            inherited.append(entry)
+    environment["PATH"] = os.pathsep.join(prefixes + inherited)
+    environment["VERILATOR_ROOT"] = verilator_root
+    return environment
+
+
+def _source_set(decl, edges, declaration, root, extra_sources,
+                package_sources=()):
     """Conservative input set for an exact Verilator elaboration."""
     modules = {root, declaration["root"]} | set(declaration["providers"])
     for seed in list(modules):
         modules.update(closure(edges, seed))
-    sources = {decl[module] for module in modules if module in decl}
-    sources.update(os.path.abspath(str(path)).replace(os.sep, "/")
-                   for path in extra_sources)
-    return sorted(os.path.abspath(path) for path in sources)
+    sources = {os.path.abspath(decl[module])
+               for module in modules if module in decl}
+    sources.update(os.path.abspath(str(path)) for path in extra_sources)
+
+    # Package-only files are invisible to the module graph. Put all discovered
+    # packages first, in dependency order, so exact roots such as zhao_shell_top
+    # cannot fail before ownership is observed merely because their imports were
+    # omitted. Uninstantiated modules that share a package file remain irrelevant
+    # to the V3Param cell census.
+    packages = []
+    for source in package_sources:
+        absolute = os.path.abspath(str(source))
+        if absolute not in packages:
+            packages.append(absolute)
+    package_set = set(packages)
+    return packages + sorted(sources - package_set)
 
 
-def elaborated_cells(root, sources, repo_root, verilator=None):
+def elaborated_cells(root, sources, repo_root, verilator=None,
+                     base_environment=None):
     """Return concrete ``(instance, module)`` cells from Verilator's V3Param AST."""
     verilator = verilator or find_verilator(repo_root)
     if not verilator:
         raise ElaborationError(
             "Verilator is required for ownership acceptance; no text-graph fallback exists")
-
-    env = dict(os.environ)
-    vroot = _verilator_root(verilator)
-    if vroot:
-        env["VERILATOR_ROOT"] = vroot
+    verilator = os.path.abspath(str(verilator))
+    env = verilator_environment(verilator, repo_root, base_environment)
 
     with tempfile.TemporaryDirectory(prefix="zhao-owner-elab-") as mdir:
         command = [
@@ -342,7 +458,7 @@ def _canonical_provider(module, candidates):
 
 
 def check_roles(roles, decl, edges, extra_text, manifest, extra_sources=(),
-                root_overrides=None, verilator=None):
+                root_overrides=None, verilator=None, package_sources=()):
     """Return ``(errors, observations)`` from exact elaborated role roots."""
     root_overrides = root_overrides or {}
     errors = []
@@ -369,7 +485,8 @@ def check_roles(roles, decl, edges, extra_text, manifest, extra_sources=(),
             errors.append("role '%s' root '%s' is not a module" % (role, root))
             continue
 
-        sources = _source_set(decl, edges, declaration, root, extra_sources)
+        sources = _source_set(
+            decl, edges, declaration, root, extra_sources, package_sources)
         try:
             cells = elaborated_cells(root, sources, repo_root, verilator)
         except ElaborationError as exc:
@@ -402,8 +519,10 @@ def run_check(manifest=DEFAULT_MANIFEST, rtl_dir=DEFAULT_RTL,
               extra_sources=(), root_overrides=None, verilator=None):
     roles = read_roles(manifest)
     decl, edges, extra_text = module_edges(rtl_dir, extra_sources)
-    return check_roles(roles, decl, edges, extra_text, manifest, extra_sources,
-                       root_overrides, verilator)
+    package_sources = ordered_package_sources(rtl_dir)
+    return check_roles(
+        roles, decl, edges, extra_text, manifest, extra_sources,
+        root_overrides, verilator, package_sources)
 
 
 def _parse_override(value):

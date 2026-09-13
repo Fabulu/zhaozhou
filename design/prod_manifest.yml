@@ -607,6 +607,24 @@ excluded:
   - zhao_prod_top: harness  the GENERATED resource top itself; it holds the instances, it is not one
   - zhao_debug_trace: probe  the trace port; a bring-up instrument, not shipped logic
 
+  # Characterization infrastructure discovered by the fail-closed production
+  # manifest census.  The dual18 primitive remains a pending candidate until an
+  # explicitly selected consumer migrates to it.  The generated shell-fit root,
+  # stimulus and sinks exist only to hold the current shell in an isolated fit;
+  # none is a production hierarchy member.
+  - zhao_dual18_mul: not-yet-adopted  dual signed-18x18 characterization primitive; pending until a selected production consumer explicitly migrates to it
+  - zhao_shell_fit_audio_sink: probe  generated shell-fit audio sink helper; characterization only, never production
+  - zhao_shell_fit_gpu_sink: probe  generated shell-fit GPU sink helper; characterization only, never production
+  - zhao_shell_fit_stimulus: probe  generated shell-fit stimulus helper; characterization only, never production
+  - zhao_shell_fit_top: probe  generated isolated shell-fit wrapper; characterization only, never production
+  - zhao_shell_fit_video_sink: probe  generated shell-fit video sink helper; characterization only, never production
+
+  # Packet A, shell/texture V3 composition.  The package is a type-only schema
+  # with no selected consumer yet; this module is its static/runtime fire-control
+  # instrument.  It is a probe rather than a production provider and adding it
+  # does not make the future raster/texture composition adopted.
+  - zhao_render_texture_layout_guard: probe  Packet-A exact packed-layout static/runtime instrument for zhao_render_texture_pkg; uninstantiated by every selected top and exercised only by the committed layout fixture/mutant
+
   # --- superseded implementations -------------------------------------------
   # One newer implementation of the same logical block is chosen above. These
   # are the pairs the source-inventory total counted twice.

@@ -1961,7 +1961,6 @@ targets:
       - fpga/rtl/raster/zhao_raster_rcp24_mul.sv
       - fpga/rtl/raster/zhao_raster_rcp24_v3.sv
       - fpga/rtl/raster/zhao_raster_resolve.sv
-      - fpga/rtl/raster/zhao_raster_texjoin_v2.sv
       - fpga/rtl/raster/zhao_raster_ticketq.sv
       - fpga/rtl/raster/zhao_raster_ticketq_rh.sv
       - fpga/rtl/raster/zhao_raster_tile_pipe.sv

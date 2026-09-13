@@ -310,7 +310,205 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - Focused dual atom-route verification confirmed immutable same-byte hash/parse snapshots, the checker-owned fresh map -> locked database -> CDB transaction, exact two-sided CDB adjacency with HOLD for unprovable paths, observable lane-collapse wrong sink, incompatible-database refusal, and permanent synthetic/physical/vendor/production HOLD boundaries. It found one residue: top boundaries were selected by name/direction without requiring actual `PIN` node and `PADIO` port identities.
 - Coordinator repaired only that boundary identity and added independent same-named ordinary-node and non-PADIO controls. Independently reran Python compilation, **1/1 generation**, **21/21 prior map-evidence**, **21/21 atom-route tests** (43 total), and Tcl `info complete`; all passed. Final focused read-only inspection confirmed the residue closed with no new finding. Accepted the infrastructure packet for commit while genuine MapOnly/CDB route, placement, vendor arithmetic, production migration, and every DSP saving remain **HOLD**; no Quartus ran.
 
+### 2026-09-13 07:12 UTC+02:00 - Dual atom-route witness infrastructure committed
+
+- Selectively staged only the accepted dual atom-route Tcl/checker, calibration integration, two renamed mapped controls, their direct tests, and this run log; no Packet B or texture Packet A file entered the index and the staged whitespace gate passed.
+- Committed and pushed as `fcdcd230` (`test(fpga): bind dual-18 post-map route witness`). The commit preserves genuine mapped route, final placement, encrypted vendor arithmetic, production fit/migration, and DSP saving as **HOLD**; it contains no Quartus artifact or resource claim.
+
+### 2026-09-13 07:15 UTC+02:00 - Pre-named dual MapOnly/CDB gate prepared
+
+- Before launching the accepted physical witness, recorded current work: Packet B's seven-defect repair and texture seam Packet A remain active in the dirty primary lane; neither owns dual calibration sources or outputs. The next dual step is to generate fresh content-addressed projects from committed `fcdcd230` in a separate clean clone, run canonical Quartus 17.0.2 MapOnly then CDB for the explicit pair and all three committed controls, and preserve every receipt/raw artifact. Any incomplete, rejected, or hidden graph remains HOLD.
+- This is the already named `dual18_postmap_lane_route_witness`, not a production fit. It can prove only one abstract mapped DSP owner with distinct live lane routes and detector firing; placement, encrypted arithmetic semantics, production usability, and DSP saving remain separate HOLD gates.
+- Created clean clone `C:\programmieren\zencrifice\zhaozhou-dual18-map-20260913` at exact `fcdcd230`. The first generator invocation completed but its shell-side `tee` failed because the parent log directory did not yet exist; it launched no Quartus and that anchor/output set is superseded. Assigned a fresh generation plus the four real map/CDB invocations to one output-only agent, with no source repair allowed if the gate fails.
+- While implementation and the named map boundary run, launched disjoint read-only reconnaissance for texture composition Packet B's complete V3 port/layout change map and for actual installed Cyclone V vendor-model/simulator availability. Neither may edit, build, simulate, run Quartus, or make resource claims.
+- The output-only map agent could not execute even a no-op because the Bash harness develops an unmatched-quote wrapper error whenever a session starts inside the clean clone; it changed no files and launched no process. Stopped that blocked agent. Handed the exact one-shot absolute-path orchestration to the idle `fpga-ee` peer session, which can remain outside the affected cwd; subscribed for its completion rather than polling.
+
+### 2026-09-13 07:25 UTC+02:00 - Texture composition Packet A handed off
+
+- Packet A author completed exactly seven files: the common seam package/guard, excluded probe manifest row, production source-closure correction, CMake registration, executable Python gate, layout fixture, and renamed wrong-X/Z-layout mutant. It reports exact 128/224/490/410/160/48-bit records and named spans, independent literal fingerprints, runtime round trips, reuse of the existing exact-three-provider owner checker, and no consumer/V3/protected-shell/selected-behavior/resource change.
+- The author could not execute its final commands because the shared cwd harness defect reached its Bash tool. Assigned the four direct no-Quartus commands plus Python compile, whitespace/status, protected-shell, and V3-port checks to an isolated validation agent. That validator violated its explicit no-delegation boundary by spawning `code-review`; the coordinator stopped the child immediately before it produced evidence or edits, reiterated direct-only execution, and then stopped the validator when its own Bash also failed before every command. Started a separate bounded read-only review of only the seven Packet A files; no commit or resource claim is allowed before repair and executable validation.
+
+### 2026-09-13 07:31 UTC+02:00 - Texture Packet A review rejected; encrypted vendor gate unavailable
+
+- Packet A's bounded static review found the exact widths, offsets, nested splices, signedness, X/Z order, manifest/source closure, retained TEXJOIN standalone target, and no-consumer/no-resource boundary correct. It nevertheless rejected the packet because only the AUX layout fingerprint had a committed fire control: width, offset-family/field-span, and pack/unpack roundtrip detectors could be disabled or co-moved without any positive control firing; the mutant's `initial` block is not executed by its `--lint-only` invocation.
+- Resumed the same Packet A owner for only independent committed width/offset/span/roundtrip fire controls, including simulated corruption where runtime execution is required. The clean direct validation agent also inherited the Bash wrapper defect and ran no command; it was stopped rather than represented as evidence.
+- Vendor-model reconnaissance found the official encrypted Cyclone V payloads installed for Mentor and Aldec, with `cyclonev_atoms.v` delegating `cyclonev_mac` semantics to `cyclonev_mac_encrypted`. No supported decrypting simulator executable, library tree, or license exists on C:. `quartus_sim.exe` handles map-generated VWF functional netlists and cannot decrypt the P1735 payload, so it cannot substitute. Encrypted arithmetic semantics remain **HOLD** until licensed ModelSim/Questa/Aldec is installed; MapOnly/CDB and Quartus EDA netlists do not close that gate. Recorded the exact installed paths and future differential prerequisite in `reports/DSP-DUAL18-ATOM-ROUTE-EVIDENCE-20260913.md` without changing mapped-route or resource status.
+- A second mapped-witness runner launched from an isolated worktree also inherited the global Bash-wrapper parse failure and was stopped before target work began. The earlier peer handoff was never approved/delivered and that peer exited. No genuine map/CDB command has run; the named gate remains pending rather than being inferred from fixture evidence.
+- A working PowerShell peer computed the three final Packet B tool hashes read-only and they were supplied to the repair owner for the bound receipt fixture: QSF checker `e549ea0fcf36fbc5c82aa311ebeed32cd923a46c82062abd1c32e6e21811ac9c`, report binder `56d8fa9f894668ad635d0def32d9fe99e38351c7c7c3d4595fc3c9448d7e1e19`, runner `fec4242715c22bf74038d0bbc59d7eb41b5f2c1bbb01f0a367c0a2fee0636f26`. Requested the same unaffected peer run the pending direct Packet A and Packet B no-Quartus tests after edits stop, with exact failure output and no source action.
+
+### 2026-09-13 07:36 UTC+02:00 - Packet B seven-defect repair handed off for reinspection
+
+- Packet B owner stopped edits after applying only the canonical-tool, UNKNOWN-shell collision, whole-tree cleanliness, exact instance-assignment shape, timing self-path, all-row hierarchy, and pair-atomic publication repairs plus direct controls. The externally supplied final tool hashes were written into the bound receipt fixture. Post-edit tests remain unrun because Bash fails before process launch; the earlier 95-test baseline cannot be reused as current evidence.
+- Started a bounded read-only reinspection with the reviewer that found the seven defects, while the unaffected PowerShell peer owns the exact direct preflight/census commands. No CTest or Quartus is authorized. Canonical shell evidence remains UNKNOWN/HOLD until both this review and executable controls pass, the packet is committed, and the later named fit runs from a clean tree.
+
+### 2026-09-13 08:16 UTC+02:00 - Dual evidence report reconciled while executable gates wait
+
+- Recorded the completed encrypted-model reconnaissance in `reports/DSP-DUAL18-ATOM-ROUTE-EVIDENCE-20260913.md`: official Mentor/Aldec protected Cyclone V payloads exist, but no compatible licensed simulator is installed, so primitive arithmetic semantics remain HOLD. Corrected the report's mapped-database example to require `project_open -error_on_incompatible_database`, matching the accepted Tcl implementation.
+- This is documentation only: genuine MapOnly/CDB route evidence, physical placement, production saving, and the vendor differential all remain unbanked.
+
+### 2026-09-13 08:18 UTC+02:00 - Packet B reinspection finds one delimiter residual
+
+- Bounded read-only reinspection accepted six of seven shell-fit repairs but found one remaining fail-open: both map and fitter hierarchy parsers silently stop when a nonempty data row loses its leading `;`, dropping that row and every later row. Existing malformed-cell controls preserve the delimiter and do not reach this state.
+- Resumed the same bounded owner to repair only malformed nonempty-line handling and add map/fitter delimiter-loss controls. The external validator was told to complete only Packet A's first four gates and hold both Packet B commands; any already-started Packet B result is superseded.
+
+### 2026-09-13 08:20 UTC+02:00 - Texture Packet B implementation held for contract closure
+
+- Read-only reconnaissance found the current Packet B prose is not deterministic enough to implement: resolver ABI/programming/sealing, material arithmetic authority, AUX participation, owner commit attribution, whole-island quiet, manifest disposition, V3 interface manifest, old-island oracle isolation, and `depth` versus `invw24` semantics are unresolved or contradictory.
+- Started an architecture-only Opus pass with exclusive ownership of `reports/SHELL-TEXTURE-V3-COMPOSITION-ARCHITECTURE-20260913.md`. It may amend only that report, must choose safe reversible defaults grounded in existing authorities, and may not implement, build, test, fit, or touch the protected shell. No texture Packet B RTL will be commissioned against ambiguous contracts.
+
+### 2026-09-13 08:17 UTC+02:00 - Texture Packet A detector repair stopped
+
+- Packet A owner stopped edits after adding 15 independent elaboration controls (width, nine offset families, six non-AUX fingerprints counting the retained AUX mutant separately), 45 individual simulated field-span controls, and six independently corrupted pack/unpack round-trip controls. No consumer, V3/TEXJOIN behavior, selected hierarchy, or shell boundary changed.
+- Started a bounded read-only re-review of only the earlier detector-observability rejection. The unaffected PowerShell peer owns Packet A's four direct commands with the real Python 3.12 executable; bare `python` is a Microsoft Store alias and is not evidence. No CTest or Quartus is authorized.
+
+### 2026-09-13 08:25 UTC+02:00 - Packet A bounded re-review clean
+
+- Independent read-only re-review found the prior detector-observability rejection closed: width, all eight offset families, all 45 individual field-span checks, and all six pack/unpack round trips now have independent positive controls; the reversed `wx`/`wz` mutant reaches the real AUX fingerprint comparator and remains outside production closure.
+- This is static acceptance only. Executable Packet A evidence is still owned by the unaffected PowerShell peer and remains pending; no behavior, area, timing, or production-connection claim is made.
+
+### 2026-09-13 08:29 UTC+02:00 - Correction: stopped map runner left four failed Quartus children
+
+- Direct artifact inspection disproved the earlier statement that no genuine map command launched. A stopped runner's already-started background work produced four `quartus_map` logs at 08:03 in the clean `fcdcd230` clone. All four failed within seconds before CDB: lane-collapse, lane-swap, and two-primitives hit Quartus 17's 260-character internal-path limit; explicit failed reading the generated runtime database directory at the same overlong boundary.
+- These are failed boundary attempts, not route evidence. No TSV, CDB graph, receipt PASS, placement, production saving, or arithmetic result is banked. The raw failed logs are retained and the prior “no Quartus launched” statement is superseded.
+- The demonstrated defect is in the checker-owned runtime workspace naming: a full 32-byte URL token is embedded under an already long content-addressed project path, leaving no room for Quartus `incremental_db/compiled_partitions` names. Assigned a bounded repair to keep the full nonce in the immutable invocation/receipt while using an exclusive short derived runtime leaf and to add a Windows worst-internal-path preflight/control. No source RTL change is authorized to force the gate green.
+
+### 2026-09-13 08:34 UTC+02:00 - First external direct run rejects Packet A and exposes runner environment defect
+
+- The unaffected PowerShell peer ran the six requested commands serially with Python 3.12.10 from HEAD `fcdcd230`; Packet B commands are explicitly superseded because the delimiter repair landed during the run. Packet A results: `test_render_texture_packet_a.py` RC1, 7 methods with 17 failures/1 error in 19.73 s; `test_texjoin_accounting.py` RC1, 11 methods with 4 failures in 39.95 s; `gen_prod_top.py --check` RC0 in 6.32 s; `check_prod_manifest.py` RC1 with 7 errors in 18.88 s.
+- The Packet A failures collapse to one tool/design interaction plus one accounting omission: every ownership or intentional missing-module elaboration crashed installed Verilator with Windows access-violation RC `3221225781` (`0xC0000005`) and empty diagnostics; the manifest also reports `zhao_dual18_mul` and five generated shell-fit wrapper/helper modules unaccounted. Nonzero-with-empty-output cannot demonstrate detector firing. Resumed the Packet A owner to replace crash-prone unresolved cells with uniquely labelled simulated `$fatal` controls and add truthful nonproduction dispositions without changing production closure.
+- The superseded shell preflight run also proved `run_shell_fit.ps1` resolves bare `python` to the Microsoft Store alias and seven subprocess controls die at exit 9009 before their intended assertions. Resumed the bounded shell owner to add a verified real-Python-3.12 resolver and explicit interpreter injection controls. The parser-hash skew seen mid-run was expected and is now repaired; bounded reinspection of the delimiter repair is clean.
+- No failing or superseded result is accepted as gate evidence. The DSP census self-test happened to pass in 0.48 s but is also superseded by instruction and will be rerun with the final packet.
+
+### 2026-09-13 08:36 UTC+02:00 - Shared toolchain positively idle
+
+- Unaffected PowerShell peer inspected process name and full command line via `Win32_Process` at 08:26:04. Excluding the scanner's own PowerShell self-match, there are zero live Quartus map/CDB/fit/STA/asm/power/shell processes, zero CTest, Verilator, CMake, supported simulator, or stray Python build processes. Nothing was terminated.
+- The four failed 08:03 map children are therefore stopped and cannot mutate the retained failed workspaces while the bounded path-length repair proceeds.
+
+### 2026-09-13 08:40 UTC+02:00 - Bash failure isolated to PATH resolution, not MSYS
+
+- Unaffected PowerShell peer ran both `C:\Program Files\Git\bin\bash.exe` and `C:\Program Files\Git\usr\bin\bash.exe` with `-lc ':'` from both the primary lane and clean dual clone: all four returned RC0 with empty stdout/stderr. Git Bash and both directories are healthy.
+- `Get-Command bash -All` instead resolves bare `bash` first to `C:\Windows\System32\bash.exe` (Microsoft WSL launcher), then the WindowsApps alias; `C:\Program Files\Git\bin` is absent from PATH. This session's generated Bash wrapper is therefore executing its MSYS-oriented bootstrap under WSL, producing the unmatched-quote failure before user commands. The working-directory theory is superseded.
+- Continue executable work only through absolute interpreters in the unaffected PowerShell lane. A future session launch must put Git `bin` ahead of System32 or configure the wrapper to use its absolute executable; bare `bash` and bare `python` are both invalid authorities on this machine. No project state was changed by the probe.
+
+### 2026-09-13 08:43 UTC+02:00 - Packet A executable-crash repair stopped and rerun launched
+
+- Packet A owner replaced the 16 crash-prone unresolved-module controls with uniquely labelled constant `$fatal` checks in an explicit synthesis-visible `initial begin`, then changed every parameter/AUX positive control to compile and execute a model and require its exact label. A clean model baseline is required; nonzero RC with empty or unrelated diagnostics cannot pass. The 45 field-span and six round-trip controls remain.
+- `design/prod_manifest.yml` now truthfully records `zhao_dual18_mul` as not yet adopted and the five generated shell-fit wrapper/helper modules as characterization probes, with assertions that none silently enters selected production closure. The shell override test now reports elaboration failure explicitly rather than raising `KeyError`.
+- Started a bounded read-only re-review and assigned only Packet A's four direct commands to the unaffected PowerShell peer. Shell-fit, DSP-census, CTest, Quartus, git, and edits remain excluded from that validation run.
+
+### 2026-09-13 08:46 UTC+02:00 - Shell runner interpreter repair stopped pending bound hash
+
+- `run_shell_fit.ps1` now takes an optional absolute `-PythonExe`, otherwise selects the installed `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`; it rejects relative/PATH names and WindowsApps aliases, executes a nonce-authenticated isolated probe, requires CPython 3.12 and matching `sys.executable`, and checks executable metadata against spoofing. Existing runner subprocess controls pass the direct suite's `sys.executable` explicitly, with negative controls for aliases, non-runnable files, wrong versions, and probe-spoof fakes.
+- Started a bounded read-only review of only this interpreter boundary. The owner is stopped pending the post-edit runner SHA-256; the PowerShell peer will hash it after the disjoint Packet A run, then exactly two bound receipt-fixture occurrences will be refreshed before Packet B tests are rerun.
+
+### 2026-09-13 08:49 UTC+02:00 - Packet A post-crash static review clean
+
+- Bounded read-only review confirms each control first requires compile RC0 and a normal runtime RC0, then requires a nonzero controlled run with nonempty output and the exact unique fatal label. The AUX mutant reaches label 16; all 45 span and six round-trip controls remain. Actual default checks are outside `translate_off` in Quartus-compatible `initial begin` form.
+- New dual primitive and shell-characterization exclusions are truthful, non-selected, and absent from production fit closure; only Packet A's CTest timeout is raised, to a bounded 300 seconds. Executable rerun remains in progress, so Packet A is not yet accepted.
+
+### 2026-09-13 08:53 UTC+02:00 - Goal check: all three named agents progressing
+
+- Texture Packet B completed reconnaissance across the affected report sections and is applying its sole report-only contract closure; no blocker or mutable scope drift.
+- Dual path-length owner completed four bounded files and entered final static consistency review: full 32-byte nonce retained, short capture/token-bound exclusive leaf, six-variant <=220 preflight, and stale/traversal/substitution controls; no Quartus or test ran. Started an independent bounded read-only review.
+- Shell interpreter reviewer completed the explicit/default alias/version/metadata boundary and is finishing the all-invocation audit. It identified one real trust-boundary concern rather than stalling: nonce, self-reported path, and VERSIONINFO can all be forged by a purpose-built PE without a canonical executable digest. Requested the actual CPython 3.12 path/hash from the unaffected peer before deciding the smallest pin.
+- Packet A rerun reduced the manifest from seven errors to one and removed all crash-obscuring detector failures, but every remaining failure is the same Verilator `0xC0000005` across five exact tops. Assigned a temp-directory-only discriminator for the internal V3Param debug path versus XML and for the package static-check trigger; no repo edit or broad rerun is authorized until the smallest root is known.
+
+### 2026-09-13 08:56 UTC+02:00 - Interpreter review rejects self-authentication
+
+- Bounded review accepted alias, path, runtime, version, and ordinary invocation handling but rejected the interpreter's final trust anchor: a purpose-built PE can echo the received nonce, self-report its own path as CPython 3.12, and forge unsigned VERSIONINFO, then control every Python preflight and receipt step. The existing `.cmd` spoof control cannot exercise that attack.
+- Holding Packet B executable gates. Requested the actual canonical CPython 3.12 executable digest and resumed the bounded owner only to add an exact SHA-256 pin plus mismatch control, followed by a final launcher-hash fixture refresh. No self-reported field will be promoted to a production identity claim.
+
+### 2026-09-13 08:59 UTC+02:00 - Canonical CPython runtime identity established
+
+- Unaffected PowerShell peer resolved the actual gate interpreter to `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`: 104,952 bytes, Python 3.12.10, SHA-256 `4d6f5f81a4bca11191c4c7c6b43632694d0a4ce74e068619d8fdc161d469859a`, non-reparse file, with a valid timestamped Python Software Foundation Authenticode signature (thumbprint `DE01DAAE82D04F466A576E178F6B07A839238953`). The signing certificate's current-date expiry is not used because the timestamped signature remains valid.
+- Because `python.exe` is only the launcher, also bound sibling `python312.dll` (6,945,272 bytes, SHA-256 `9a0e3435aaa680d868150f87ab3e388ad2eebc22f87e036155c7b4eda8cd2120`) and `python3.dll` (70,376 bytes, SHA-256 `fb975a606e7fbf74f64260e3f60c3490b4f74a183c0926fd6ed1ac4c52ac7b1c`). Resumed the shell owner only to enforce these external identities before execution, add independent mismatch controls, and refresh the launcher receipt hash once more.
+
+### 2026-09-13 09:03 UTC+02:00 - Dual preflight and Verilator environment corrections
+
+- Dual path review found the first repair modeled only `incremental_db/compiled_partitions/<revision>`, not a real artifact below it. The worst two-primitives stem is exactly 220 characters, so a suffix such as `.root_partition.map.hdb` would exceed the advertised margin while both tests bless the same incomplete helper. Resumed the same owner to model a conservative literal Quartus artifact path, shorten the leaf as necessary, and add an independent one-character-over-bound control. No Quartus rerun is allowed yet.
+- Packet A's remaining `0xC0000005` was reduced to pinned `verilator_bin.exe --version`, proving no RTL discriminator had executed. Before declaring binary corruption, checked the committed build recipe: it requires both `VERILATOR_ROOT` and PATH prefixes for oss-cad-suite `bin`, `lib`, and winlibs; the direct discriminator set the former but had not established the latter. Requested a fresh `--version`/smoke run with the exact documented dependency environment and WER fault module. Packet A RTL remains stopped; its valid accounting/diagnosability repairs are retained.
+
+### 2026-09-13 09:07 UTC+02:00 - Correction: Verilator RC is loader failure, runtime DLLs exist
+
+- Corrected the decimal decode: `3221225781` is `0xC0000135` (`STATUS_DLL_NOT_FOUND`), not access violation `0xC0000005` (`3221225477`). Every prior “access violation”/“segfault” label is superseded. Empty streams and absent WER events now agree: the process never reached `main()`; no source or flag was examined.
+- `yosys.exe --version` fails identically when the suite dependency environment is absent, proving this is suite loading rather than Verilator RTL behavior. The required DLLs are not missing from disk: `suite\lib` contains `libstdc++-6.dll`, `libgcc_s_seh-1.dll`, and `libwinpthread-1.dll`. The peer's intermediate retest prepended only `suite\bin`; it still had not reproduced the committed recipe's required `suite\bin;suite\lib;winlibs` PATH.
+- Ordered the decisive exact-environment retest before any download, replacement, or RTL/tool change. Packet A remains HOLD on an environment gate, not rejected RTL.
+
+### 2026-09-13 09:10 UTC+02:00 - Shell interpreter external trust pin implemented
+
+- Shell owner completed exact `%LOCALAPPDATA%\Programs\Python\Python312\python.exe` path enforcement; pinned executable, `python312.dll`, and `python3.dll` byte sizes/SHA-256; and requires a valid timestamped PSF Authenticode signer subject/thumbprint before any candidate executes. Existing nonce/version/self-path probes remain secondary checks.
+- Added independent disposable-copy controls for wrong canonical path, executable digest, swapped DLL digest, signer mismatch, and post-pin runtime behavior. Started bounded read-only review. The fixture intentionally still carries the previous launcher hash until the unaffected peer supplies the final digest; no Packet B executable result is accepted before that two-occurrence refresh and rerun.
+
+### 2026-09-13 09:14 UTC+02:00 - Verilator loader root solved; no reinstall and no RTL change
+
+- Exact committed `zhao-env.ps1` environment settles the issue: with `VERILATOR_ROOT` plus PATH `suite\bin;suite\lib;winlibs;<old>`, Verilator 5.051 `--version`, one-module smoke lint, and Yosys 0.68 all return RC0. The sole missing input was `suite\lib` on PATH; the installed 328-DLL suite is healthy. All binary-damage/missing-suite claims are retracted; no download/replacement is needed.
+- Root defect is caller-dependent harnessing: `check_ownership_roles.elaborated_cells` and Packet A's local helper set `VERILATOR_ROOT` but fail to prepend the committed dependency paths, so bare-shell runs die in the Windows loader before RTL. Resumed Packet A owner for a bounded canonical environment builder and stripped-PATH positive/fail-closed controls only. V3Param elaborated-cell evidence and Packet A RTL/layout stay unchanged.
+- Packet A's nine remaining failures are environment HOLDs, not RTL failures. No rerun is authorized until the harness repair stops.
+
+### 2026-09-13 09:16 UTC+02:00 - Final shell runner hash bound; direct Packet B gates launched
+
+- After the interpreter path/executable/DLL/signature edit stopped, the unaffected peer independently hashed `run_shell_fit.ps1` as `435474e051aeeabd92401a0a62cc5f4a06380c9b7c11e11bd70a9d6e7ae64b40` (30,669 bytes). The owner changed only the fixture's two launcher bindings to that digest and stopped.
+- Assigned the final direct `test_shell_fit_preflight.py -v` followed by `dsp_census.py --self-test` to the PowerShell peer with absolute Python 3.12 and separate streams. Packet A, dual tests, CTest, Quartus, git, and edits are excluded; static interpreter review remains in progress.
+
+### 2026-09-13 09:20 UTC+02:00 - Final Python-pin review finds three bounded residuals
+
+- Review rejected caller-controlled `%LOCALAPPDATA%` as a canonical location, found signature validation did not require a timestamp and compared signer `SimpleName` rather than exact subject, and found independent controls missing for file sizes, `python3.dll`, timestamp/status, and subject.
+- Resumed the bounded owner to pin this machine's absolute CPython path, exact PSF signer subject/thumbprint, timestamp presence/identity, and every omitted mismatch detector. Requested the exact timestamp-certificate identity from the PowerShell peer after its current Packet B run. The just-bound launcher hash is therefore superseded again; no Packet B run underway during this edit may be accepted as final.
+
+### 2026-09-13 09:21 UTC+02:00 - Ownership correction: shell editor held against active direct suite
+
+- I resumed the shell owner before receiving the external suite's completion, creating a potential mutable-read overlap on runner/test files. Immediately sent a stop-before-edit instruction. Any Packet B command from that window is superseded regardless of result; it cannot become evidence. If bytes moved, the owner must report them and remain stopped until the reader ends.
+- This was coordinator error, not agent drift. The next Packet B run will start only after the final timestamp/path/control edit, fresh launcher hash binding, static review, and positive edit-quiet confirmation.
+
+- The stop landed after exactly one runner edit: declaration of `$CanonicalPythonExePath = 'C:\Users\Fabs\AppData\Local\Programs\Python\Python312\python.exe'`. No test or fixture bytes moved. This confirms the external read overlapped mutable content, so supersession is mandatory rather than precautionary.
+
+### 2026-09-13 09:24 UTC+02:00 - Texture Packet B contract rescue complete; re-review started
+
+- Architecture-only Opus pass changed only `reports/SHELL-TEXTURE-V3-COMPOSITION-ARCHITECTURE-20260913.md`. It freezes R9 as sole material authority; a 256x75 double-buffered binding table with CRC/generation/seal/activation; issue-before-local-refusal; binding-authoritative class/palette; AUX Sheet semantics with no sample-2 substitution; versioned leaves preserving the old island; typed owner commit counters; structural all-obligation quiet; aligned raw index and 66-bit response carriage; `frag_invw24_i`; selected-inside manifest disposition; and a concrete hashed V3 interface-manifest schema/tool/source-order contract.
+- Remaining HOLDs are implementation/evidence, cache/memory, multi-sample product ABI, visible typed AUX consumer, raster/attribute/lease/CDC/shell/terrain integration, and clean connected fit/adoption. Started the original reconnaissance reviewer on only those prior contradictions; no Packet B RTL is commissioned until it returns clean and Packet A lands.
+
+### 2026-09-13 09:25 UTC+02:00 - Superseded shell run diagnoses UTF-8 harness failure
+
+- The overlapped shell run completed before its stop notice but remains diagnostic-only. Its 117 preflight cases had zero assertion failures; 17 errors were deterministic `UnicodeDecodeError` on byte `0x81` from `subprocess.run(text=True)` using Windows cp1252, plus one downstream `stdout is None` error. The earlier source-hash skew and seven Store-alias failures disappeared, but none is promoted due overlap. DSP census again returned RC0 and is likewise superseded.
+- No gate is running now. Final shell owner is adding explicit UTF-8 replacement decoding plus an invalid-byte control alongside the absolute path, exact signer/timestamp, and missing identity controls. The runner changed during the superseded window exactly as logged; all hashes before the final stop are void.
+
+### 2026-09-13 09:28 UTC+02:00 - Packet A loader harness repaired; bare-PATH gates launched
+
+- Packet A owner changed only `check_ownership_roles.py`, `test_render_texture_packet_a.py`, and `test_texjoin_accounting.py`: one canonical environment builder derives the selected suite, validates bin/lib/Verilator root/winlibs, prepends the three dependency paths exactly once, and is reused by model and V3Param ownership invocations. Missing suite-lib now yields an explicit loader-environment error. V3Param evidence semantics and RTL/package/manifest remain unchanged.
+- Added stripped-PATH positive controls for Verilator `--version`, ownership smoke elaboration, and Packet A model generation; Packet A now chooses the documented absolute winlibs compiler before caller PATH. Started bounded static review.
+- Assigned Packet A's four direct commands to the unaffected peer with a deliberately bare parent PATH excluding suite bin/lib and winlibs. This run is isolated from shell/dual mutable files; no CTest, Quartus, git, or edit overlaps.
+
+### 2026-09-13 09:33 UTC+02:00 - Final bounded repairs stopped; Packet A compiler boundary closed statically
+
+- Dual path repair stopped after replacing the self-confirming directory-stem preflight with the complete retained Quartus artifact suffix `.root_partition.map.hbdb.hb_info`. Runtime workspaces now live under anchor-parent-owned `d18_runs`; policy binds hard limit 260, margin 40, and enforced complete-path limit 220. Independent literal-suffix and exact 220/221 controls were added. No test or Quartus command ran; bounded read-only re-review is active and the physical gate remains HOLD.
+- Packet A static review found one caller-control residue: if the documented native `g++.exe` were absent, `shutil.which("g++")` could select an arbitrary caller-PATH compiler. Removed that fallback and added a positive control that hides the fixed compiler while placing a fake `g++.exe` on caller PATH. Focused re-review returned clean; executable evidence remains pending.
+- Final shell runner/test edits stopped with the absolute canonical CPython path, exact executable/DLL/signature/timestamp identities, independent mismatch controls, and explicit UTF-8 replacement decoding plus an invalid-byte control. The receipt still carries a superseded runner digest in exactly two fixture fields.
+- This session's direct `sha256sum` attempt again failed in the harness wrapper before command execution with the known unmatched-quote error; it changed no file. Requested a read-only final runner SHA-256 from the unaffected PowerShell peer. No shell test may start until that digest is bound after edit stop.
+
+### 2026-09-13 09:38 UTC+02:00 - Bare-PATH execution exposes one real ownership source-closure omission
+
+- The external bare-PATH Packet A run completed all four commands from unchanged HEAD `fcdcd230`: Packet A **7/8**, TEXJOIN accounting **14/14**, production-top freshness RC0, and full manifest RC0. Zero loader-failure signatures occurred. This proves the canonical Verilator environment repair works from a parent with no suite/winlibs entries and turns the former empty `0xC0000135` failures into executable evidence.
+- Packet A's sole failure is ordinary Verilator RC1: the `zhao_shell_top` ownership-HOLD probe omitted package-only `zhao_pkg.sv` and `zhao_abi_pkg.sv` because module-graph source discovery cannot see package declarations. This was previously masked by the loader failure.
+- Repaired only the ownership checker and tests: every RTL package source is now discovered separately, duplicate package declarations and dependency cycles fail closed, dependencies precede users, and package sources precede the exact module closure without contributing ownership cells. Added a direct `zhao_abi_pkg`-before-`zhao_pkg` control. The existing current-shell test remains the executable end-to-end control; focused static re-review is active.
+- The peer independently hashed the stopped shell runner as SHA-256 `3fe3caaf4546e598b90b5fbaccc64d63104540383f4bce02a7bd78ac9416599d`, 31,631 bytes, stable before/during/after its Packet A run. The shell owner refreshed only the two intended receipt-fixture runner bindings and stopped. Final direct shell gates and static review are now authorized; Quartus remains closed.
+
+### 2026-09-13 09:40 UTC+02:00 - Texture Packet B re-review finds six final contract gaps
+
+- The original bounded reviewer confirmed the material law, resolver programming/refusal, AUX non-substitution, typed commits, raw-index alignment, selected-root disposition, old-island oracle isolation, and `frag_invw24_i` are now deterministic, with no production/resource claim.
+- It still rejected implementation on six exact report gaps: unspecified 33 physical descriptor padding bits; no versioned UV join transporting page generation; semantic rather than wire-complete quiet; no named V2 AUX contract disposition; incomplete canonical interface-manifest JSON tree/hash rules; and generic overlap wording that could authorize Packet B before Packet A lands green.
+- Resumed the report-only Opus owner to close exactly those six items. No Packet B RTL, generator, test, manifest, contract artifact, build, fit, or resource claim is authorized while Packet A remains uncommitted.
+
+### 2026-09-13 09:46 UTC+02:00 - Packet A executable gate clean; shell overlap superseded again
+
+- The corrected bare-parent rerun proves Packet A executable closure: `test_render_texture_packet_a.py` **9/9** in 240.38 s, `test_texjoin_accounting.py` **15/15** in 39.31 s, and full manifest RC0 in 19.90 s. The invoking environment had no oss-cad-suite or winlibs PATH entry and removed both `VERILATOR_ROOT` and `ZHAO_VERILATOR`; zero loader-failure signatures occurred. Together with the focused clean review, the package-only source repair is accepted.
+- Final shell static review accepted UTF-8 replacement handling and current runner/report-parser receipt hashes but found six unexercised path-refusal branches: missing canonical executable/two DLLs, canonical-location mismatch, missing explicitly requested executable, and requested executable resolving into WindowsApps. Production pins remain unchanged; only independent PreflightOnly controls are required.
+- Coordinator mistakenly inferred two peer idle notices meant the entire five-command run had stopped and resumed the shell editor while `test_shell_fit_preflight.py` was still running. Sent an immediate stop. The owner confirmed two attempted edits failed before touching bytes and only one read-only search occurred, but the overlapping shell result is nevertheless superseded by policy. Packet A commands had completed before the overlap and remain valid; the later census result is disjoint.
+- After positive external-reader stop, safely resumed the shell owner for only the six missing controls. No final shell result, fit, or resource evidence is accepted until it stops, receives any required new hash binding, passes focused re-review, and reruns edit-quiet.
+- Dual complete-artifact path repair passed focused static re-review after adding an independently constructed generator control requiring RC0 at exactly 220 characters and rejection at 221. Direct dual Python suites are queued separately; genuine MapOnly/CDB remains HOLD.
+
 ---
+
+## Subagent Spawns
 
 *Log subagent spawns and their findings here*
 
@@ -368,9 +566,15 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 | completed 2026-09-13 06:34 UTC+02:00 | TEXJOIN accounting implementation agent | Retire accounting root and add ownership/stall/bubble controls | Direct Python and isolated Verilator controls green; no Quartus/CTest | rejected by hostile review; no physical saving claim |
 | completed 2026-09-13 06:40 UTC+02:00 | Read-only TEXJOIN review agent | Verify accounting-only diff and positive controls | Found textual-owner, provider-completeness, valid-withdraw/drop, and generator-RC false-passes | findings relayed for repair |
 | completed 2026-09-13 06:52 UTC+02:00 | TEXJOIN accounting implementation agent resumed | Repair elaborated ownership, provider, stall/drop, generator, and foreign-cwd controls | Clean focused review; coordinator 11/11 Python and 10/10 CTest | accepted accounting correction; no physical saving |
-| active from 2026-09-13 06:53 UTC+02:00 | Texture composition Packet A implementation agent | Add exact seam types/layout instruments by reusing elaborated owner infrastructure | In progress; no behavior/port/protected-shell change | pending no-Quartus handoff |
+| completed 2026-09-13 07:25 UTC+02:00 | Texture composition Packet A implementation agent | Add exact seam types/layout instruments by reusing elaborated owner infrastructure | Seven-file handoff complete; Bash validation blocked by cwd harness, no behavior/port/protected-shell change | peer validation and review active |
 | completed 2026-09-13 07:09 UTC+02:00 | Dual-18 focused review agent | Verify five repaired atom-route defects and final PIN/PADIO residue | Five defects fixed; one boundary-type residue found, then closed on focused reinspection | packet accepted with physical/vendor/production HOLD |
 | active from 2026-09-13 07:08 UTC+02:00 | Packet B bounded repair agent | Repair only seven residual production-evidence blockers | In progress; no Quartus/shared CTest | pending handoff and review |
+| active from 2026-09-13 07:13 UTC+02:00 | Read-only texture Packet B scout | Map complete V3 boundary consumers, contracts, controls, and stale forwarding | In progress; no edits/builds | pending reconnaissance |
+| active from 2026-09-13 07:17 UTC+02:00 | Read-only vendor-model scout | Locate installed Cyclone V model and usable simulator path | In progress; no simulator execution | vendor semantics remain HOLD |
+| stopped 2026-09-13 07:19 UTC+02:00 | Dual mapped-witness output agent | Run four genuine MapOnly/CDB variants in clean clone | Bash cwd harness failed before every command; no process/file action | reassigned to peer session |
+| active from 2026-09-13 07:20 UTC+02:00 | Peer session `fpga-ee` | Run one-shot absolute-path four-variant MapOnly/CDB boundary | In progress in isolated clean clone; completion subscription active | pending genuine artifacts |
+| active from 2026-09-13 07:25 UTC+02:00 | Peer session `batman-2f` | Run direct no-Quartus texture Packet A validation outside broken cwd | In progress; temp-only Verilator, no CTest/shared build | pending results |
+| active from 2026-09-13 07:25 UTC+02:00 | Texture Packet A review agent | Verify exact types/layout controls and no selected behavior | In progress; read-only and bounded to seven files | pending verdict |
 
 ---
 
@@ -404,9 +608,10 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 
 ## Next Steps
 
-- Receive and independently verify the bounded Packet B repair against every confirmed provenance, timing, hierarchy, census, caller, and locking control; commit/push only after a clean hostile pass.
-- Review and commit the shell-to-V3 architecture report only if it preserves the protected shell file behind an explicit versioned production composition boundary and keeps all resource claims conditional.
-- Review the no-Quartus TEXJOIN accounting-retirement packet; require exactly-one-owner, full-identity stall, bubble, response, and overflow positive controls before committing an accounting correction with no physical ALM claim.
+- Receive and independently verify the bounded Packet B repair against the seven residual canonical-tool, UNKNOWN-shell, whole-tree-cleanliness, QSF, timing, hierarchy, and pair-publication defects; commit/push only after a clean hostile pass.
+- Receive and review texture-composition Packet A's exact seam package/layout controls. Require exact 128/224/490/410/160/48 widths and named AUX offsets, reuse the landed elaborated-owner infrastructure, and prove no consumer, V3 port, protected shell, or selected behavior changed before commit.
+- Preserve and assess all four genuine `dual18_postmap_lane_route_witness` MapOnly/CDB results from committed `fcdcd230`; repair only demonstrated physical-gate defects. Even a mapped route PASS leaves final placement, encrypted vendor arithmetic, production migration/fit, and DSP saving HOLD.
+- Use the vendor-model reconnaissance to run the smallest truthful differential only if the installed model plus simulator path genuinely exists; otherwise record the exact unavailable dependency and keep semantics HOLD.
 - From a clean committed tree, run only `shell_fit_top_clean_characterization`; preserve raw artifacts and use fitted exact-shell hierarchy plus explicit remainder to rank the first live non-terrain ALM rewrite. Do not mistake this protected legacy-shell price for a complete V3-connected machine.
-- Use the dual-lane route-evidence research to decide whether the pre-named physical calibration gate can be proven with MapOnly/post-map artifacts or must remain HOLD; do not migrate production multipliers or bank DSP savings before genuine physical and vendor gates.
+- Continue texture composition with Packet B's complete V3 boundary only after Packet A lands, following the accepted A-K order and reserving G8A/G8B/G8C fits for their pre-named subsystem boundaries.
 - Continue composition and optimization until clean connected evidence has comfortable margin below 30,000 ALMs and 85 DSPs, including unpriced roots and framework/board overhead.
