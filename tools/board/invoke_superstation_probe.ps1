@@ -279,8 +279,8 @@ try {
         if ($loadedCore -notmatch '^core=Zhaozhou Board Bring-up') {
             throw "Probe did not report its expected core name: $loadedCore"
         }
-        if ($loadedRbf -notmatch 'ZhaozhouBringup-') {
-            throw "Probe did not report its staged RBF name: $loadedRbf"
+        if ($loadedRbf -notmatch '^rbf=Zhaozhou Board Bring-up') {
+            throw "Probe did not report its expected RBF identity: $loadedRbf"
         }
 
         Start-Sleep -Seconds $HoldSeconds

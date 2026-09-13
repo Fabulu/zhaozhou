@@ -207,6 +207,29 @@ verified.
 - Renamed the local watchdog variable to `$watchdogPid`; no RTL, RBF, or board
   state changed by the repair.
 
+### 2026-09-13 18:46 UTC+02:00 - FIRST Zhaozhou RBF ran on hardware
+
+- Committed/pushed the watchdog repair as `88d7c7f4` and ran the guarded
+  transaction again.
+- Staged RBF SHA-256 matched the committed audit and remote copy. Armed and
+  verified HPS watchdog PID 12320 with a 35-second menu rollback deadline.
+- Loaded the custom RBF at 16:45:46 UTC. Live identity became
+  `core=Zhaozhou Board Bring-up` / `rbf=Zhaozhou Board Bring-up`; FPGA manager
+  remained `operating`; all three bridges remained enabled; SSH remained live.
+- **Owner visually confirmed the color bars on the physical display.** This is
+  whole-system likeness evidence for the intended first probe, not just a
+  component check.
+- The host rolled back at 16:45:51 UTC because its checker incorrectly expected
+  `/tmp/RBFNAME` to contain the staged filename. MiSTer uses the declared core
+  name there. MENU returned, all bridges/FPGA/SSH remained healthy, the HPS
+  watchdog was disarmed, and the staged RBF was removed.
+- Preserved the exact attempt as
+  `FIRST-VOLATILE-LOAD-ATTEMPT2-BARS-ROLLBACK.json`. Its `status=failed` refers
+  only to the wrong identity assertion; the load, visual output, and rollback
+  all succeeded and are recorded independently.
+- Corrected the RBF identity assertion to the observed MiSTer contract. No RTL
+  or bitstream rebuild is needed.
+
 ---
 
 ## Subagent Spawns
@@ -236,6 +259,7 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/QUARTUS-STA.rpt`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/ROLLBACK-REHEARSAL.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD-ATTEMPT1-NOLOAD.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD-ATTEMPT2-BARS-ROLLBACK.json`
 
 ---
 
