@@ -50,6 +50,11 @@ have all been verified.
 - Reserve USB-Blaster/programming access to this lane, but perform only
   read-only detection until the complete safety gate is documented.
 - Avoid a large Quartus run during the other lane's pinned 23:00 shell fit.
+- Independent review on 2026-09-13 places all future compile/load/programming on
+  HOLD during repair. After 23:00, a repaired compile still requires committed
+  V2 audit/complete manifest and explicit independent approval before loading.
+- Historical physical results remain evidence but their RBFs/audits are not
+  reusable load authorization.
 - Commit and push only on `zhaozhou-board-bringup-20260913`.
 
 ---

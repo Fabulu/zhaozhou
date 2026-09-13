@@ -3,7 +3,7 @@
 **Run:** `RUN-20260913-1651-board-bringup`
 **Branch:** `zhaozhou-board-bringup-20260913`
 **Base:** `158442b57b32f9bbf9cc9e241a88f43c2a660f7a`
-**Safety state:** **VOLATILE MiSTer path proven; JTAG/flash/persistence remain blocked**
+**Safety state:** **HOLD future loads pending reviewed V2 repair; historical physical results remain credible**
 
 This record keeps live observations, published facts, and compatibility
 assumptions separate. A standard MiSTer core operating on the unit is valuable
@@ -301,6 +301,31 @@ rollback path on the physical SuperStation One. It does not authorise JTAG,
 configuration flash, boot persistence, or pins outside the pinned MiSTer
 contract.
 
+### Independent review correction — 2026-09-13
+
+The physical observations above remain credible, but the historical RBFs are no
+longer authorised for another load:
+
+1. `sys_top` could drive USER/SNAC bits 2/4/5 low when physical SW[1] selected
+   MiSTer audio, despite the core releasing `USER_OUT`. A connected peripheral
+   makes that unsafe.
+2. The map report contains a real unnumbered/tabular Critical Warning: a 4-bit
+   scaler-mode expression drove a 5-bit `ascal.mode` port. The first verifier
+   searched only numbered `Critical Warning (...)` lines and falsely reported
+   zero.
+3. The loader relied on ambient `known_hosts` and interpreted partial state
+   lines more loosely than its receipt claims.
+
+Repair keeps the upstream vendor tree byte-identical and deterministically
+patches only the build copy: all seven USER_IO pins are unconditional high-Z and
+a leading zero makes scaler mode exactly 5 bits. Repaired verification rejects
+any Critical Warning spelling and requires all seven disabled output enables.
+The loader now pins ED25519 fingerprint plus hostname/DT/MAC/silicon/MiSTer/menu
+identity, exact core/FPGA/three-bridge states, complete watchdog fired/write/MENU
+evidence, and V2 audit plus complete source/build-input/report/RBF/SOF manifest.
+A read-only pinned identity preflight passed; no repaired RBF has been compiled
+or loaded yet.
+
 ## Safety gate
 
 | Required item | State | Evidence needed to close |
@@ -318,22 +343,23 @@ contract.
 | FPGA SDRAM | **Published, not live-probed** | 128 MB BGA SDR SDRAM; exact part/revision and a safe memory test later |
 | FPGA I/O standards/pinout | **Strong compatibility contract** | Pinned MiSTer constraints; revision-specific SSOne schematic unavailable |
 | Reset contract | **Framework-confirmed** | HPS/MiSTer generated core reset; physical button/reset mapping still open |
-| Safe minimal design | **Built, audited, physically proven** | Color bars/heartbeat ran; HPS identity/network/bridges survived; automatic MENU rollback passed |
+| Safe minimal design | **Historical physical result credible; historical RBF invalidated** | Color bars ran and rollback passed, but USER/SNAC and missed Critical Warning findings prohibit reuse; repaired V2 fit/review required |
 
 ## Next safe actions
 
-1. Replace the visual-only probe payload with a hardware specification runner
-   that instantiates committed Zhaozhou blocks, runs known vectors in fabric,
-   and exposes pass/fail plus counters over HDMI/HPS.
-2. Keep using the proven volatile transaction and HPS watchdog for each staged
-   image; preserve a separate receipt and return to MENU after every test.
-3. Integrate the composed Zhaozhou shell only through a real MiSTer/HPS command,
-   framebuffer, clock/reset, and memory boundary. The existing 3,214-virtual-pin
-   shell-fit harness is capacity evidence, not a board core.
-4. Keep JTAG, configuration flash, boot persistence, and external-I/O timing
-   claims blocked until they receive their own evidence.
-5. If the PCB later becomes safely accessible for another reason, photograph the
-   PCB silk and FPGA top marking; do not open the unit or remove its heatsink
-   merely to satisfy this record.
-6. Pin a DHCP reservation for the confirmed MAC or continue using router DNS;
-   this is a router state change and was not done automatically.
+1. Complete repair-only source/tests and preserve the read-only pinned identity
+   preflight. Do not compile or load during the review hold.
+2. After the separate 23:00 shell fit, make one clean repaired build. Require
+   zero Critical Warnings, all seven USER_IO output enables disabled, exact
+   patched build-copy digest, and complete source/report/RBF/SOF manifest.
+3. Obtain independent approval of the V2 audit/manifest before any physical
+   action.
+4. Run a separately named physical red/failure control followed by a separately
+   named green replay, both using primary HPS-watchdog rollback and exact state
+   receipts.
+5. Make the next design an HPS raw mailbox with nonce-selected vectors and
+   independently host-readable raw lane outputs.
+6. Only then proceed toward SDRAM and shell composition. Keep JTAG,
+   configuration flash, persistent boot, and external-I/O timing blocked.
+7. If the PCB later becomes safely accessible for another reason, photograph the
+   PCB silk and FPGA top marking; do not open the unit merely for this record.

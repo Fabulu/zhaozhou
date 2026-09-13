@@ -427,6 +427,73 @@ verified.
   premature SDRAM closure, flash-access claims, disappearing open capabilities,
   and current truth. All pass.
 
+### 2026-09-13 20:59 UTC+02:00 - Independent review HOLD and repair packet
+
+- Owner relayed the independent review of pushed snapshot `fe684755`. Existing
+  results remain credible: source/RBF/load hashes agree, physical green implies
+  all 16 fixed checks plus `e5f1c57f`, one packed dual18 DSP is mapped, rollback
+  succeeded, and no JTAG/flash/persistence occurred.
+- **HOLD:** no Quartus compile, RBF load, JTAG, programming, or board/SD change
+  until the repair packet is reviewed and tonight's 23:00 shell fit has passed.
+- Blocker 1: pinned upstream `sys_top.v:1661-1667` conditionally drives USER/SNAC
+  low, including SW[1]-selected audio signals on bits 2/4/5. Repair must preserve
+  the vendored tree and apply a deterministic board-build copy patch making all
+  seven pins unconditionally high-impedance.
+- Blocker 2: `ascal.mode` is 5 bits while `sys_top.v:791` supplies 4. Quartus
+  emitted an unnumbered/tabular Critical Warning. Add the missing leading zero
+  without changing existing mode-bit semantics; make every Critical Warning
+  spelling fatal and fire it with a committed fixture mutant.
+- Blocker 3: loader trusts ambient `known_hosts` and loosely interpreted state.
+  Pin the documented ED25519 fingerprint plus unit identity; require exact core,
+  FPGA `operating`, all three named enabled bridges, one live MiSTer PID, and
+  complete watchdog fired/write/MENU evidence where watchdog mode is claimed.
+- Add a complete source/build-copy/report/RBF/SOF hash manifest and make the
+  loader consume it. Correct/invalidate earlier false-green build audit status
+  without erasing the credible historical physical observations.
+- After repair/review and the 23:00 fit, next physical gate is red/failure control
+  followed by green replay; then a nonce-selected HPS raw mailbox with independent
+  host-readable lane results. Repair-only work begins now in this checkout.
+
+### 2026-09-13 21:48 UTC+02:00 - Repair-only packet complete, compile/load still held
+
+- Preserved the 57-file upstream MiSTer tree exactly. Added a deterministic
+  build-copy patch with pinned input/output SHA-256. It adds the scaler's fifth
+  leading-zero bit and makes all seven USER/SNAC pins unconditional high-Z.
+- Both board build scripts apply the overlay after copying `sys/`; no vendored
+  source was edited. Future verifier requires the exact patched digest and all
+  seven permanently disabled USER_IO output enables.
+- Replaced numbered-only Critical Warning parsing with all-format scanning across
+  every report. Added tabular-warning positive controls to both project verifiers.
+- Re-audited the historical Specs workspace: repaired verifier correctly rejects
+  its unpatched sys_top, SW[1] drive path, 4-bit scaler mode, tabular Critical
+  Warning, and incomplete `[0,1,3,6]` USER_IO output-disable set.
+- Marked both historical build audits `historical-invalidated` with future load
+  authorisation false while retaining historical physical-result credibility.
+- Pinned loader ED25519 fingerprint and isolated it from ambient known-hosts;
+  pinned hostname, DT model/compatibility, MAC, HPS silicon revision, MiSTer and
+  MENU hashes. Exact before/load/rollback state now requires core+RBF identity,
+  FPGA operating, three named enabled bridges, UTC, and one numeric MiSTer PID.
+- Physical loads now require watchdog-primary mode, a never-before-used explicit
+  receipt path, V2 audit, complete V2 manifest, and exact watchdog
+  fired/attempt/write/MENU evidence.
+- First read-only identity attempt exposed PowerShell 5 native stderr handling;
+  explicit Process capture repaired it. Second pinned identity preflight passed.
+- A read-only positive control aimed the repaired loader at the historical Specs
+  RBF. It rejected before manifest/audit, SCP, watchdog arm, or `load_core` due
+  source/build mismatch. Receipt records `loaded=[]` and no remote path.
+- Added complete manifest tooling to both build scripts: source commit, every
+  source/verification/build-input hash, exact patched sys_top, every Quartus
+  output file, required reports/RBF/SOF, and canonical self-digest. Source,
+  artifact, and self-digest mutants fire.
+- Corrected `board_truth.json`, capability matrix, provenance, inventory, v1
+  spec report, and historical audit records to carry the review HOLD and not
+  erase credible observations.
+- 36 repair/unit/mutation tests pass; both source verifiers and held board-truth
+  validator pass; PowerShell/Python syntax checks pass. No Quartus process,
+  compilation, RBF staging/load, JTAG, flash, or board/SD mutation occurred.
+- Committed and pushed the source/tool/test repair as `9f75c931`; this is a
+  review candidate only, not compile or load authorisation.
+
 ---
 
 ## Subagent Spawns
@@ -482,6 +549,16 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `reports/board_truth.json`
 - `tools/board/validate_board_truth.py`
 - `tests/tools/test_validate_board_truth.py`
+- `reports/BOARD-BRINGUP-REVIEW-REPAIR-20260913.md`
+- `tools/board/patch_mister_sys_top.py`
+- `tools/board/superstation_build_manifest.py`
+- `tools/board/verify_superstation_receipt.py`
+- `tests/tools/test_patch_mister_sys_top.py`
+- `tests/tools/test_superstation_build_manifest.py`
+- `tests/tools/test_verify_superstation_receipt.py`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/IDENTITY-PREFLIGHT-ATTEMPT1-KEYSCAN-STDERR.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/IDENTITY-PREFLIGHT.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/LOAD-HOLD-OLD-RBF-REJECT.json`
 
 ---
 
@@ -491,28 +568,27 @@ None. This task is restricted to the dedicated Claude Code hardware session.
   target, distinct from the later reference/debug FPGA board.
 - Read-only USB/JTAG/network discovery is permitted now.
 - The owner first asked to watch the first test, then explicitly said not to
-  stop because it can be replayed. Proceed after the audit; preserve a complete
-  receipt and keep the probe transaction repeatable.
+  stop because it can be replayed. Those historical loads completed; independent
+  review now supersedes that standing state with a HOLD on all future physical
+  loads until repaired V2 evidence is approved after the 23:00 fit.
 
 ---
 
 ## Next Steps
 
-1. Keep the v1 proof immutable. A separately named expanded hardware-spec gate
-   must add host-readable raw lanes, mixed-sign/32x18 vectors, bounded random
-   corpus, and physical lane-swap/collapse/ownership controls before broad
-   packed-arithmetic closure.
-2. Bring up board interfaces one question at a time, starting with the 128 MB
-   FPGA SDRAM component/geometry/timing/read-write test, then controller input,
-   HPS fabric-DDR, audio, and Z60/Storm/Duo video timing. Do not emit measured
-   `sdram_params.svh` until real measurements exist.
-3. Replace the shell's 3,214-virtual-pin characterization boundary with real
-   MiSTer HPS command, memory, and framebuffer interfaces; integrate Packet B
-   only after its separate lane lands.
-4. Run reference-oracle workloads through command -> geometry/field/raster ->
-   framebuffer and preserve physical counters/captures.
-5. Keep JTAG, configuration flash, persistent boot, and external-I/O timing
-   blocked behind separately named evidence. If the PCB later becomes safely
-   accessible for another reason, capture its silk revision and FPGA top mark.
-6. Do not start another Quartus job before the separate lane's pinned 23:00
-   shell-fit window is over.
+1. Commit and push the repair-only packet, then request independent review of
+   the exact commit. Do not compile or load from the repair commit yet.
+2. Wait for the separate lane's 23:00 shell fit to finish.
+3. If review accepts the source packet, run one repaired clean Specs build.
+   Require exact patched sys_top digest, zero Critical Warnings, all seven
+   USER_IO output enables disabled, positive timing, physical hierarchy, and a
+   complete V2 source/build-input/report/RBF/SOF manifest.
+4. Commit V2 audit/manifest and obtain explicit independent approval before any
+   physical action.
+5. Build/run the separately named physical red/failure control, returned by the
+   primary HPS watchdog with exact pinned identity/state/write/MENU evidence.
+6. Run a separately named green replay of fixed vectors under the same gates.
+7. Next architecture gate: HPS raw mailbox with nonce-selected vectors and
+   independently host-readable raw results. Keep broader arithmetic,
+   migration/saving, SDRAM, JTAG, flash, persistence, external timing, and full
+   shell claims open until their own gates.

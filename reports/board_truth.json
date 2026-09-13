@@ -1,8 +1,22 @@
 {
   "schemaVersion": 1,
   "status": "partial",
-  "capturedAt": "2026-09-13T19:53:06+02:00",
+  "capturedAt": "2026-09-13T21:27:26+02:00",
   "targetId": "superstation-one-rcsh-1001-1002",
+  "reviewHold": {
+    "futurePhysicalLoadsAuthorized": false,
+    "historicalPhysicalResultsCredible": true,
+    "reason": "USER/SNAC drive hazard, uncounted scaler Critical Warning, and weak loader identity/rollback claims",
+    "requiredBeforeNextLoad": [
+      "repaired build-copy sys_top with unconditional USER/SNAC high impedance and 5-bit scaler mode",
+      "zero Critical Warnings under the all-format verifier",
+      "pinned SSH host fingerprint and exact board identity",
+      "exact core/FPGA/three-bridge state and full watchdog fired/write/MENU receipt",
+      "complete source/build-input/report/RBF/SOF hash manifest",
+      "independent review of the repair",
+      "completion of the separate 23:00 shell fit"
+    ]
+  },
   "identity": {
     "manufacturer": "Retro Remake Hong Kong Limited",
     "product": "SuperStation One",
@@ -36,7 +50,7 @@
     "hpsSiliconId2": "0x00000000",
     "volatileLoad": {
       "method": "MiSTer /dev/MiSTer_cmd FIFO via HPS",
-      "status": "proven",
+      "status": "historical_proof_future_loads_held",
       "configurationFlashTouched": false,
       "jtagUsed": false
     }
@@ -97,9 +111,18 @@
     "addressAssignment": "DHCP",
     "ethernet": "1000baseT full duplex",
     "ssh": {
-      "status": "proven_across_fpga_loads",
+      "status": "pinned_read_only_identity_preflight_passed",
       "server": "OpenSSH_8.6",
-      "ed25519Fingerprint": "SHA256:FqNJOsj3FLUoMQxgn+cqGoXvVfENmVK4QFoSCMKl2lU"
+      "ed25519Fingerprint": "SHA256:FqNJOsj3FLUoMQxgn+cqGoXvVfENmVK4QFoSCMKl2lU",
+      "pinnedIdentity": {
+        "hostname": "MiSTer",
+        "model": "Terasic DE10-nano",
+        "compatible": "altr,socfpga-cyclone5 altr,socfpga",
+        "ethernetMac": "ce:cd:87:14:8d:44",
+        "hpsSiliconId1": "0x00000003",
+        "misterSha256": "9f6e5a237c36be6404ab4823d804821491db4bf125827f84aca2a1ca31f0a8a6",
+        "menuSha256": "25d5461b55e4d45e79c876a02d69f32b22f414b64e600a1adc930eefea6ea4a7"
+      }
     }
   },
   "software": {
@@ -153,6 +176,8 @@
     "boardLoadReceipt": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/FIRST-VOLATILE-LOAD.json",
     "watchdogReceipt": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/WATCHDOG-FIRE-TEST.json",
     "specBuildAudit": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-BUILD-AUDIT.json",
-    "specLoadReceipt": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-LOAD.json"
+    "specLoadReceipt": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-LOAD.json",
+    "identityPreflight": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/IDENTITY-PREFLIGHT.json",
+    "identityPreflightFirstAttempt": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/IDENTITY-PREFLIGHT-ATTEMPT1-KEYSCAN-STDERR.json"
   }
 }

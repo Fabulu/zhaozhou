@@ -57,8 +57,12 @@ The isolated full flow from exact source
 - device/top: `5CSEBA6U23I7` / `sys_top`;
 - 7,265 ALMs, 11,157 registers, 384,498 block-memory bits;
 - 34 DSP blocks, 145 physical pins, zero virtual pins, three PLLs;
-- zero errors and zero critical warnings;
-- zero unused output-driving pins; 169 reserved input pins;
+- zero errors; independent review later found one unnumbered/tabular Critical
+  Warning that the original numbered-only parser missed (4-bit scaler mode into
+  a 5-bit port);
+- zero reserved output pins and 169 reserved input pins, but only USER_IO bits
+  0/1/3/6 had permanently disabled output enables; physical SW[1] could make
+  bits 2/4/5 drive MiSTer audio low;
 - setup +0.648 ns, hold +0.250 ns, recovery +3.243 ns, removal
   +0.811 ns, minimum pulse width +1.122 ns;
 - zero illegal and zero unconstrained clocks.
@@ -99,6 +103,23 @@ the physical display. Under the committed display contract, green requires all
 16 independent comparisons to have left `fail_code_o=0` and the accumulated
 actual-result signature to equal `e5f1c57f`. This closes the v1 selected-vector
 question on the physical SuperStation One, subject to the claim boundary below.
+
+### Independent review correction
+
+The green result remains credible, but the historical build audit is now
+`historical-invalidated` and the RBF cannot be loaded again. The original
+verifier missed the tabular scaler-mode Critical Warning, and the MiSTer wrapper
+could conditionally drive USER/SNAC bits 2/4/5 from physical SW[1]. Loader host
+and rollback identity was also less strict than claimed.
+
+Repair is build-copy-only so the pinned upstream tree remains exact: add the
+fifth scaler-mode bit as a leading zero and force all seven USER_IO assignments
+to high-Z. Future fit verification requires the patched build-copy digest, zero
+Critical Warnings under an all-format scan, and all seven disabled USER_IO output
+enables. Future loading additionally requires a V2 audit, complete source/build-
+input/report/RBF/SOF manifest, pinned SSH/unit identity, exact FPGA/bridge/core
+states, and complete watchdog fired/write/MENU evidence. None of those repaired
+physical gates has run yet.
 
 ## Claim boundary
 

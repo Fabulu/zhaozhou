@@ -1,6 +1,6 @@
 {
   "schema": "zhaozhou.superstation.hardware-specs-build-audit.v1",
-  "status": "ok",
+  "status": "historical-invalidated",
   "sourceCommit": "c68cc8ad3e480af6a8a0a5f3dcaffc81b7165d20",
   "project": "ZhaozhouSpecs",
   "expectedCore": "Zhaozhou Hardware Specs",
@@ -29,7 +29,10 @@
     "plls": "3 / 6 (50%)",
     "errors": 0,
     "warnings": 54,
-    "criticalWarnings": 0
+    "criticalWarnings": 1,
+    "criticalWarningDetails": [
+      "Tabular map connectivity warning: ascal mode input has 5 elements but sys_top supplied 4"
+    ]
   },
   "physicalHierarchy": {
     "zhao_ssone_spec_tests:u_spec_tests": {
@@ -66,6 +69,7 @@
     },
     "reservedInputPins": 169,
     "reservedOutputPins": 0,
+    "userIoDisabledOutputEnables": [0, 1, 3, 6],
     "missingLocationOrIoStandardWarnings": 0
   },
   "timing": {
@@ -98,10 +102,23 @@
     "SPECS-QUARTUS-PIN.pin",
     "SPECS-QUARTUS-STA.rpt"
   ],
+  "reviewHold": {
+    "reviewedAt": "2026-09-13T20:59:00+02:00",
+    "loadAuthorization": false,
+    "historicalPhysicalResultCredible": true,
+    "greenVectorResultCredible": true,
+    "blockers": [
+      "USER_IO[2], USER_IO[4], and USER_IO[5] can drive low when physical SW[1] selects MiSTer audio behavior",
+      "ascal mode width mismatch emitted an unnumbered Critical Warning missed by the original parser",
+      "loader identity and rollback evidence were weaker than claimed"
+    ],
+    "replacementRequired": "HARDWARE-SPECS-BUILD-AUDIT-V2.json plus HARDWARE-SPECS-BUILD-MANIFEST-V2.json from a repaired clean build"
+  },
   "nonClaims": [
     "A future green screen establishes only the 16 selected comparisons and e5f1c57f signature in this wrapper.",
     "The mapped direct cyclonev_mac does not close exhaustive vendor arithmetic semantics or placement generality.",
     "Mixed-sign expansion, 32x18 recombination, CE/reset sequencing, random physical corpus, raw host-readable lanes, and physical mutants remain separate gates.",
-    "This does not establish production migration, DSP saving, full shell behavior, SDRAM, HPS fabric-DDR, audio, controller, GPIO, JTAG, flash, persistent boot, or external I/O timing."
+    "This does not establish production migration, DSP saving, full shell behavior, SDRAM, HPS fabric-DDR, audio, controller, GPIO, JTAG, flash, persistent boot, or external I/O timing.",
+    "This historical audit no longer authorizes any load; repaired V2 audit and complete manifest are required."
   ]
 }
