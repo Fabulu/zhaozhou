@@ -548,6 +548,12 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - Pre-fit environment: C: 1,104.5 GB free; no Quartus/Verilator process alive.
 - Pushing `c433d110`, `6a8ea08d`, `1073fb30`, `8a763344` and this log commit to `origin/claude/ceiling-architecture-20260912`.
 
+### 2026-09-13 11:03 UTC+02:00 - Pushed; fit aborted before Quartus; owner stop
+
+- Push confirmed: remote `claude/ceiling-architecture-20260912` = `02590e37`, working tree clean.
+- Started `shell_fit_top_clean_characterization` at 11:01:23 from HEAD `02590e37`; it reached only QSF generation (`top=zhao_shell_fit_top sources=56`, no virtual/physical pins) before being deliberately aborted, because the tool wrapper's 10-minute ceiling would have killed a 20-90 minute fit mid-run. Runner process gone, no `quartus*` process ever started. **No fit result exists.** Relaunch detached (Start-Process with its own log), not under a timed tool call.
+- Owner then ordered a stop ("stop the stuff we're going back to gpt"). Stopped the read-only DSP-frontier audit agent (no finding delivered, no repository change). Nothing is running for this lane. Next session: relaunch the named fit detached, then resume the DSP-frontier audit.
+
 ### 2026-09-13 - Texture Packet B final report repair handed off
 
 - The report-only owner repaired the last three known architecture defects in `reports/SHELL-TEXTURE-V3-COMPOSITION-ARCHITECTURE-20260913.md`: the UV join is now exactly `joined365={owner14,logical287,U32,V32}` with generation carried only by `logical287[286:279]`; AUX V2 exposes `sheet_rsp_owed_o`; resolver V2 exposes `cfg_loader_idle_o`, `binding_crc_busy_o`, and `binding_seal_pending_o`; every quiet operand is mapped to a named port or top-visible source; and `desc_pad_fault_o` is frozen as a separate 32-bit reset-zero modulo counter incrementing once per accepted read containing nonzero padding.
