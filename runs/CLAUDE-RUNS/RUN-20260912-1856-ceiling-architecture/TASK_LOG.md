@@ -253,6 +253,32 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - Required real mapped controls are the committed two-primitives mutant plus new lane-collapse and lane-swap mutants, each run through MapOnly and the atom database. MapOnly+CDB proves mapped packing/routes only; a `cmp` atom query after a tiny fit is reserved for placement, encrypted vendor simulation for arithmetic semantics, and production fit for ALM/Fmax/usability.
 - The current design remains **HOLD** because no Quartus command or atom witness has run. The read-only researcher correctly refused a follow-up request to edit; the coordinator preserved the returned exact API/command/checker contract in `reports/DSP-DUAL18-ATOM-ROUTE-EVIDENCE-20260913.md`. No DSP saving is banked.
 
+### 2026-09-13 06:34 UTC+02:00 - TEXJOIN accounting retirement handed off for review
+
+- The disjoint no-Quartus implementation moved TEXJOIN from selected `top` to `excluded: superseded`, retained its RTL/leaf/oracles/history, and regenerated a 65-instance accounting top. Its direct diff check reports only private `u46` stimulus/instance/fold removal with all surviving instance IDs and seeds stable.
+- Added a role-aware exactly-one-owner checker and duplicate-owner control, independent full-descriptor stall scoreboard with a renamed slot-swap mutant, and uninterrupted-retirement bubble control with a renamed no-same-edge-reload mutant. Existing response-refusal and overflow controls were not changed.
+- Implementer reported Python accounting **6/6**, default/duplicate ownership controls, golden descriptor 64 accepted/64 joined/96 requests with zero mismatches/hold errors, slot-swap mutant firing 64 full/96 request/32 AUX/64 Mosaic mismatches, golden bubble 24 outputs/zero errors, and bubble mutant five detected gaps. No Quartus or shared CTest ran.
+- Full manifest validation remains expectedly blocked by six concurrent unclassified Packet B/dual18 files. Started a bounded read-only hostile review of only this packet; it remains uncommitted and no 3,824-ALM physical saving or V3 shell connectivity is claimed.
+- Coordinator independently reproduced the accounting suite **6/6**, default ownership check, and generated-top freshness. Regenerated the Windows build through `zhao-env.ps1` plus the `windows-native` preset, built only the four new control targets, then ran their serial CTest selection plus accounting: **5/5 passed in 15.72 seconds**. Rebuilt and ran the three pre-existing descriptor/V3 owner regressions after the shared testbench change: **3/3 passed in 3.46 seconds**. No Quartus ran.
+
+### 2026-09-13 06:40 UTC+02:00 - Green TEXJOIN packet rejected on checker observability
+
+- The bounded hostile review confirmed the accounting manifest move, exact `u46`-only generated-top removal, retained RTL/leaf/oracle evidence, and bubble control structure, but rejected acceptance on four false-pass families.
+- The exactly-one-owner gate used `module_graph`'s deliberately non-elaborated textual overapproximation, so dead generate/ifdef/text-shaped instances could count and macro/renamed live instances could disappear; its provider registry was manual and did not pin the known V3OWN/TEXJOIN/FRAGROB set. The descriptor scoreboard cleared held state when valid withdrew and failed to require all expected substream queues/counts to drain, allowing withdrawal/drop timeouts with zero mismatches. `check_prod_manifest` treated only generator RC=3 as failure and silently accepted RC=1/2.
+- Rejected the green 6/6 plus 5/5 handoff and resumed the same owner to add an exact elaborated-instance role gate, pinned provider registry and extra-provider control, valid-persistence/drop positive controls with exact queue drains, and fail-closed handling of every nonzero generator status. TEXJOIN remains selected only as `excluded: superseded`; no physical saving is claimed.
+
+### 2026-09-13 06:43 UTC+02:00 - Shell-to-V3 composition architecture accepted
+
+- The report owner repaired all seven protocol/staging findings: renderer/blitter lease arbitration and fault-safe publication, 224-bit owner-sealed terrain AUX identity/envelope, same-packet manifest/generated-top updates, exact status/index masks and combiner phase accounting, single-accept memory-guard verdict state, typed X/Z offsets, and a parameter-fixed RPP3/MATW18 terrain wrapper gate.
+- Focused verification found two residual prose defects—an unjustified 8-bit framebuffer-generation narrowing and two wrong generated-top paths. The owner restored the existing 16-bit generation contract and corrected both paths to `fpga/rtl/prod/zhao_prod_top.sv`; final independent verification returned clean.
+- Accepted `reports/SHELL-TEXTURE-V3-COMPOSITION-ARCHITECTURE-20260913.md` as architecture only. It mandates a new sibling `zhao_shell_top_v2`, keeps protected `zhao_shell_top.sv` unchanged, and retains implementation, lease/CDC, terrain, fit, adoption, ALM, and DSP claims on HOLD.
+
+### 2026-09-13 06:44 UTC+02:00 - Dual-18 CDB witness infrastructure handed off
+
+- The disjoint no-Quartus packet added `capture_dual18_atom_routes.tcl`, a canonical CDB checker integrated with the existing content-addressed manifest/external anchor, and real-control revision metadata for two-owner, lane-collapse, and lane-swap mutants.
+- Implementer reports Python compilation, Tcl structural completeness, and **35/35 direct tests**. Synthetic fixtures are permanently nonphysical; absent genuine current MapOnly/CDB outputs the mapped-route gate and overall status remain **HOLD**, as do encrypted vendor simulation and production migration. Generated `build-budget` revisions were deliberately not refreshed outside the agent's ownership.
+- Started a bounded read-only hostile review of Tcl API/graph completeness, genuine-evidence binding, route cardinality, mutant survivability, and replay/forgery controls before any commit or Quartus command.
+
 ---
 
 ## Subagent Spawns
@@ -305,7 +331,12 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 | completed 2026-09-13 06:23 UTC+02:00 | Read-only review agent | Verify shell-to-V3 composition architecture against current RTL | Forced sibling-v2 boundary confirmed; seven protocol/staging gaps found | findings relayed to report owner |
 | completed 2026-09-13 06:25 UTC+02:00 | Read-only research agent | Define a truthful Quartus 17 mapped dual-lane route evidence gate | MapOnly plus real `quartus_cdb` atom graph is sufficient for mapped lane routes; current evidence HOLD | `reports/DSP-DUAL18-ATOM-ROUTE-EVIDENCE-20260913.md` authored by coordinator |
 | active from 2026-09-13 06:21 UTC+02:00 | Packet B implementation agent resumed direct | Repair confirmed provenance, hierarchy, timing, census, locking, and caller defects | In progress; no Quartus/shared CTest | pending corrected handoff |
-| active from 2026-09-13 06:23 UTC+02:00 | Opus architecture agent resumed | Repair slot/AUX/status/guard/manifest/terrain gaps in texture composition report | In progress; report-only ownership | pending corrected report |
+| completed 2026-09-13 06:43 UTC+02:00 | Opus architecture agent resumed | Repair slot/AUX/status/guard/manifest/terrain gaps in texture composition report | All seven findings repaired plus final width/path corrections | accepted after focused clean review |
+| completed 2026-09-13 06:44 UTC+02:00 | Dual-18 evidence implementation agent | Implement CDB atom-route capture/checker and mapped-control mutants without Quartus | Python/Tcl structural 35/35 green; no genuine CDB evidence | hostile review active; physical/vendor gates HOLD |
+| active from 2026-09-13 06:44 UTC+02:00 | Read-only dual-18 witness review agent | Verify CDB graph/evidence binding and real mutant controls | In progress; no edit/build/test ownership | pending verdict |
+| completed 2026-09-13 06:34 UTC+02:00 | TEXJOIN accounting implementation agent | Retire accounting root and add ownership/stall/bubble controls | Direct Python and isolated Verilator controls green; no Quartus/CTest | rejected by hostile review; no physical saving claim |
+| completed 2026-09-13 06:40 UTC+02:00 | Read-only TEXJOIN review agent | Verify accounting-only diff and positive controls | Found textual-owner, provider-completeness, valid-withdraw/drop, and generator-RC false-passes | findings relayed for repair |
+| active from 2026-09-13 06:40 UTC+02:00 | TEXJOIN accounting implementation agent resumed | Repair elaborated ownership, provider, stall/drop, and fail-closed generator controls | In progress; no Quartus/shared CTest | pending corrected handoff |
 
 ---
 
