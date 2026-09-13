@@ -9,17 +9,33 @@ totals.
 from __future__ import annotations
 
 import argparse
+import csv
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 import hashlib
+import io
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
 import sys
 from typing import Mapping, Sequence
+import uuid
 
-from shell_fit_qsf import parse_cmake_source_pool, parse_qsf, validate_qsf
+from shell_fit_qsf import (
+    REQUIRED_QPF_SETTINGS,
+    REQUIRED_QSF_SETTINGS,
+    QpfModel,
+    QsfModel,
+    SdcClosureEntry,
+    parse_cmake_source_pool,
+    parse_qpf,
+    parse_qsf,
+    read_sdc_closure,
+    validate_qsf,
+    validate_sdc_closure,
+)
 from shell_ports import (
     ShellPortError,
     discover_type_signedness,
@@ -85,6 +101,80 @@ class ClockConstraint:
     clock_type: str
     period_ns: Decimal
     targets: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TimingAnalysis:
+    name: str
+    worst_slack_ns: Decimal | None
+    failing_endpoint_count: int
+    reported_path_count: int
+    reported_violated_count: int
+
+
+@dataclass(frozen=True)
+class PostMapPort:
+    name: str
+    direction: str
+    count: int
+
+
+SOURCE_EVIDENCE_NAMES = (
+    "shell",
+    "package",
+    "policy",
+    "generator",
+    "parser",
+    "packet",
+    "cmake",
+    "qsf",
+    "sdc",
+    "qsfParser",
+    "evidenceParser",
+    "gitCapture",
+    "runner",
+    "reportScript",
+    "postMapScript",
+    "project",
+)
+
+EVIDENCE_ARTIFACT_NAMES = (
+    "summary",
+    "sta",
+    "clocks",
+    "hierarchy",
+    "mapSummary",
+    "mapReport",
+    "timingMetrics",
+    "clockTransfers",
+    "unconstrainedPaths",
+    "setupPaths",
+    "holdPaths",
+    "recoveryPaths",
+    "removalPaths",
+    "postMapConnectivity",
+    "mapStdout",
+    "mapStderr",
+    "postMapStdout",
+    "postMapStderr",
+    "fitStdout",
+    "fitStderr",
+    "timequestStdout",
+    "timequestStderr",
+    "gitHead",
+    "gitStatus",
+    "gitWorktreeDiff",
+    "gitStagedDiff",
+    "gitIndexFlags",
+)
+
+CHARACTERIZATION_LIMITATIONS = (
+    "5CSEBA6U23I7 is a provisional capacity/timing target, not frozen board truth.",
+    "The ten fitter pins are an unassigned characterization boundary, not a package or board pinout.",
+    "No framework top, board I/O delays, PLLs, or physical clocks are included.",
+    "gpu_clk and vid_clk remain timing-related; only audio_clk is declared asynchronous.",
+    "The result does not characterize a physical SDRAM interface or fabricated hardware.",
+)
 
 
 @dataclass(frozen=True)
@@ -191,6 +281,8 @@ def validate_fit_summary(summary: FitSummary, *, expected_real_pins: int = 10) -
         errors.append(
             f"Quartus Prime Version is not 17.0.2 evidence: {summary.tool_version!r}"
         )
+    if summary.device != "5CSEBA6U23I7":
+        errors.append(f"fitter device is {summary.device!r}, expected '5CSEBA6U23I7'")
     if summary.virtual_pins != 0:
         errors.append(f"Total virtual pins is {summary.virtual_pins}, expected 0")
     if summary.real_pins != expected_real_pins:
@@ -634,6 +726,331 @@ def validate_clock_constraints(
         raise ShellPortError("; ".join(errors))
 
 
+def parse_post_map_connectivity(text: str) -> tuple[str, tuple[PostMapPort, ...]]:
+    rows = list(csv.reader(io.StringIO(text), delimiter="\t"))
+    if not rows or rows[0] != ["record", "name", "direction", "post_map_count"]:
+        raise ShellPortError("post-map connectivity witness header is absent")
+    top_rows = [row for row in rows[1:] if len(row) == 4 and row[0] == "top"]
+    if top_rows != [["top", "zhao_shell_fit_top", "-", "1"]]:
+        raise ShellPortError(f"post-map top witness is invalid: {top_rows!r}")
+    ports: list[PostMapPort] = []
+    for row in rows[1:]:
+        if len(row) != 4 or row[0] != "port":
+            continue
+        try:
+            count = int(row[3])
+        except ValueError as exc:
+            raise ShellPortError(f"post-map port count is invalid: {row!r}") from exc
+        ports.append(PostMapPort(name=row[1], direction=row[2], count=count))
+    return "zhao_shell_fit_top", tuple(ports)
+
+
+def validate_post_map_connectivity(
+    witness: tuple[str, Sequence[PostMapPort]], map_report_text: str
+) -> None:
+    _top, ports = witness
+    expected = (
+        ("gpu_clk", "input"),
+        ("vid_clk", "input"),
+        ("audio_clk", "input"),
+        ("rst_n", "input"),
+        ("fit_signature_o[0]", "output"),
+        ("fit_signature_o[1]", "output"),
+        ("fit_signature_o[2]", "output"),
+        ("fit_epoch_o[0]", "output"),
+        ("fit_epoch_o[1]", "output"),
+        ("fit_epoch_o[2]", "output"),
+    )
+    actual = tuple((port.name, port.direction) for port in ports)
+    if actual != expected:
+        raise ShellPortError(
+            f"post-map wrapper port/bit witness is {actual!r}, expected {expected!r}"
+        )
+    bad_counts = [(port.name, port.count) for port in ports if port.count != 1]
+    if bad_counts:
+        raise ShellPortError(f"post-map wrapper ports are missing or duplicated: {bad_counts!r}")
+    boundary_counts = re.findall(
+        r"^;\s*boundary_port\s*;\s*([0-9][0-9,]*)\s*;\s*$",
+        map_report_text,
+        flags=re.M,
+    )
+    if boundary_counts != ["10"]:
+        raise ShellPortError(
+            f"mapped boundary_port count is {boundary_counts!r}, expected exactly ['10']"
+        )
+    section = re.search(
+        r'Port Connectivity Checks:\s*"zhao_shell_fit_top"(?P<body>.*?)(?:\n\s*\n|\Z)',
+        map_report_text,
+        flags=re.S,
+    )
+    if section is None:
+        raise ShellPortError("top-level Port Connectivity Checks section is absent")
+    disconnected = re.findall(
+        r"^;\s*([^;+][^;]*)\s*;\s*(Input|Output|Inout)\s*;\s*([^;]+)\s*;\s*([^;]+)\s*;",
+        section.group("body"),
+        flags=re.M | re.I,
+    )
+    disconnected = [row for row in disconnected if row[0].strip().lower() != "port"]
+    if disconnected:
+        raise ShellPortError(
+            "mapped top-level connectivity report contains disconnected/dangling ports: "
+            + repr([(row[0].strip(), row[3].strip()) for row in disconnected])
+        )
+
+
+def parse_timing_metrics(
+    metrics_text: str, path_reports: Mapping[str, str]
+) -> tuple[dict[str, Decimal], tuple[TimingAnalysis, ...]]:
+    rows = list(csv.DictReader(io.StringIO(metrics_text), delimiter="\t"))
+    if not rows or set(rows[0]) != {"record", "name", "value", "count"}:
+        raise ShellPortError("timing_metrics.tsv header or rows are absent")
+    clocks: dict[str, Decimal] = {}
+    metric_analyses: dict[str, tuple[Decimal | None, int]] = {}
+    for row in rows:
+        if row["record"] == "clock":
+            if row["name"] in clocks:
+                raise ShellPortError(f"duplicate timing metric clock {row['name']!r}")
+            clocks[row["name"]] = Decimal(row["value"])
+        elif row["record"] == "analysis":
+            if row["name"] in metric_analyses:
+                raise ShellPortError(f"duplicate timing metric analysis {row['name']!r}")
+            value = None if row["value"] == "NA" else Decimal(row["value"])
+            metric_analyses[row["name"]] = (value, int(row["count"]))
+        else:
+            raise ShellPortError(f"unknown timing metric record {row!r}")
+    expected_clocks = {
+        "gpu_clk": Decimal("10.000"),
+        "vid_clk": Decimal("20.000"),
+        "audio_clk": Decimal("40.000"),
+    }
+    if clocks != expected_clocks:
+        raise ShellPortError(f"timing metric clocks are {clocks!r}, expected {expected_clocks!r}")
+    expected_names = ("setup", "hold", "recovery", "removal")
+    if tuple(metric_analyses) != expected_names:
+        raise ShellPortError(
+            f"timing metric analyses are {tuple(metric_analyses)!r}, expected {expected_names!r}"
+        )
+    analyses: list[TimingAnalysis] = []
+    for name in expected_names:
+        report = path_reports.get(name)
+        if report is None:
+            raise ShellPortError(f"raw {name} path report is absent")
+        value, failing = metric_analyses[name]
+        if "Nothing to report." in report:
+            if name in {"setup", "hold"}:
+                raise ShellPortError(
+                    f"raw {name} path report has no paths for a mapped, clocked shell"
+                )
+            path_count = 0
+            violated = 0
+            reported_slack = None
+        else:
+            match = re.search(
+                rf"Report Timing:\s*Found\s+(\d+)\s+{name}\s+paths\s+\((\d+)\s+violated\)\.\s+"
+                r"Worst case slack is\s+([-+]?\d+(?:\.\d+)?)",
+                report,
+                flags=re.I,
+            )
+            if match is None:
+                raise ShellPortError(f"raw {name} path report identity is absent")
+            path_count = int(match.group(1))
+            violated = int(match.group(2))
+            reported_slack = Decimal(match.group(3))
+            if name in {"setup", "hold"} and path_count <= 0:
+                raise ShellPortError(
+                    f"raw {name} path report has no paths for a mapped, clocked shell"
+                )
+        if reported_slack != value:
+            raise ShellPortError(
+                f"{name} metric/report worst slack mismatch: {value!r} != {reported_slack!r}"
+            )
+        if (failing == 0) != (violated == 0):
+            raise ShellPortError(
+                f"{name} metric/report violation polarity mismatch: {failing} vs {violated}"
+            )
+        analyses.append(
+            TimingAnalysis(
+                name=name,
+                worst_slack_ns=value,
+                failing_endpoint_count=failing,
+                reported_path_count=path_count,
+                reported_violated_count=violated,
+            )
+        )
+    return clocks, tuple(analyses)
+
+
+def parse_unconstrained_summary(text: str) -> dict[str, dict[str, int]]:
+    expected = (
+        "Illegal Clocks",
+        "Unconstrained Clocks",
+        "Unconstrained Input Ports",
+        "Unconstrained Input Port Paths",
+        "Unconstrained Output Ports",
+        "Unconstrained Output Port Paths",
+    )
+    result: dict[str, dict[str, int]] = {}
+    for name in expected:
+        matches = re.findall(
+            rf"^;\s*{re.escape(name)}\s*;\s*([0-9][0-9,]*)\s*;\s*([0-9][0-9,]*)\s*;",
+            text,
+            flags=re.M,
+        )
+        if len(matches) != 1:
+            raise ShellPortError(f"unconstrained-path summary row {name!r} is absent or ambiguous")
+        result[name] = {
+            "setup": int(matches[0][0].replace(",", "")),
+            "hold": int(matches[0][1].replace(",", "")),
+        }
+    return result
+
+
+def parse_clock_transfers(text: str) -> list[dict[str, str]]:
+    transfers: list[dict[str, str]] = []
+    section_name: str | None = None
+    for line in text.splitlines():
+        if "Setup Transfers" in line:
+            section_name = "setup"
+            continue
+        if "Hold Transfers" in line:
+            section_name = "hold"
+            continue
+        if section_name is None or not line.lstrip().startswith(";"):
+            continue
+        cells = _table_cells(line)
+        if len(cells) != 6 or cells[0] in {"From Clock", ""}:
+            continue
+        if cells[0].startswith("-"):
+            continue
+        transfers.append(
+            {"analysis": section_name, "from": cells[0], "to": cells[1], "rrPaths": cells[2]}
+        )
+    for analysis in ("setup", "hold"):
+        rows = [row for row in transfers if row["analysis"] == analysis]
+        pairs = {(row["from"], row["to"]): row["rrPaths"] for row in rows}
+        if len(pairs) != len(rows):
+            raise ShellPortError(f"{analysis} clock-transfer matrix contains duplicate pairs")
+        required = {
+            ("audio_clk", "audio_clk"),
+            ("gpu_clk", "gpu_clk"),
+            ("vid_clk", "vid_clk"),
+            ("gpu_clk", "vid_clk"),
+            ("vid_clk", "gpu_clk"),
+            ("gpu_clk", "audio_clk"),
+            ("audio_clk", "gpu_clk"),
+        }
+        if set(pairs) != required:
+            raise ShellPortError(
+                f"{analysis} clock-transfer matrix is incomplete or contains extra pairs"
+            )
+        for pair in (("audio_clk", "audio_clk"), ("gpu_clk", "gpu_clk"), ("vid_clk", "vid_clk")):
+            value = pairs[pair]
+            if not re.fullmatch(r"[0-9][0-9,]*", value):
+                raise ShellPortError(
+                    f"self-clock transfer {pair!r} is not a positive numeric path count: {value!r}"
+                )
+            if int(value.replace(",", "")) <= 0:
+                raise ShellPortError(
+                    f"self-clock transfer {pair!r} has no mapped paths: {value!r}"
+                )
+        for pair in (("gpu_clk", "audio_clk"), ("audio_clk", "gpu_clk")):
+            if pairs[pair].lower() != "false path":
+                raise ShellPortError(f"audio asynchronous transfer {pair!r} is not a false path")
+        for pair in (("gpu_clk", "vid_clk"), ("vid_clk", "gpu_clk")):
+            value = pairs[pair]
+            if not re.fullmatch(r"[0-9][0-9,]*", value) or int(value.replace(",", "")) <= 0:
+                raise ShellPortError(f"GPU/video transfer {pair!r} was cut or disappeared")
+    return transfers
+
+
+def validate_stage_logs(stage_logs: Mapping[str, str]) -> None:
+    required = {
+        "mapStdout": r"^Info:\s+Quartus Prime Analysis & Synthesis was successful\.\s+0 errors,",
+        "postMapStdout": r"^Info:\s+Quartus Prime TimeQuest Timing Analyzer was successful\.\s+0 errors,",
+        "fitStdout": r"^Info:\s+Quartus Prime Fitter was successful\.\s+0 errors,",
+        "timequestStdout": r"^Info:\s+Quartus Prime TimeQuest Timing Analyzer was successful\.\s+0 errors,",
+    }
+    errors: list[str] = []
+    for artifact, pattern in required.items():
+        text = stage_logs.get(artifact)
+        if text is None or re.search(pattern, text, flags=re.M) is None:
+            errors.append(f"{artifact} has no unique successful zero-error completion")
+    for artifact in required:
+        stderr_name = artifact.replace("Stdout", "Stderr")
+        if stderr_name not in stage_logs:
+            errors.append(f"{stderr_name} is absent")
+    for artifact, text in stage_logs.items():
+        fatal_lines = [
+            line.strip()
+            for line in text.splitlines()
+            if re.match(r"^\s*(?:Error|Fatal)(?:\s*\(\d+\))?\s*:", line, flags=re.I)
+        ]
+        if fatal_lines:
+            errors.append(f"{artifact} contains error diagnostics: {fatal_lines!r}")
+    if errors:
+        raise ShellPortError("; ".join(errors))
+
+
+def collect_critical_warnings(stage_logs: Mapping[str, str]) -> list[dict[str, str]]:
+    warnings: list[dict[str, str]] = []
+    for artifact, text in stage_logs.items():
+        for line in text.splitlines():
+            if re.match(r"^\s*Critical Warning(?:\s*\(\d+\))?\s*:", line):
+                warnings.append({"artifact": artifact, "message": line.strip()})
+    return warnings
+
+
+def timing_evidence(
+    *,
+    metrics_text: str,
+    path_reports: Mapping[str, str],
+    unconstrained_text: str,
+    transfers_text: str,
+    critical_warnings: Sequence[Mapping[str, str]],
+) -> dict[str, object]:
+    clocks, analyses = parse_timing_metrics(metrics_text, path_reports)
+    unconstrained = parse_unconstrained_summary(unconstrained_text)
+    transfers = parse_clock_transfers(transfers_text)
+    failures: list[str] = []
+    for analysis in analyses:
+        if analysis.failing_endpoint_count != 0 or (
+            analysis.worst_slack_ns is not None and analysis.worst_slack_ns < 0
+        ):
+            failures.append(
+                f"{analysis.name}: failing={analysis.failing_endpoint_count}, "
+                f"worstSlackNs={analysis.worst_slack_ns}"
+            )
+    unconstrained_total = sum(
+        counts[polarity]
+        for counts in unconstrained.values()
+        for polarity in ("setup", "hold")
+    )
+    if unconstrained_total:
+        failures.append(f"unconstrained path summary total={unconstrained_total}")
+    if critical_warnings:
+        failures.append(f"critical warnings={len(critical_warnings)}")
+    return {
+        "clocks": {name: str(period) for name, period in clocks.items()},
+        "analyses": [
+            {
+                "name": analysis.name,
+                "worstSlackNs": (
+                    None if analysis.worst_slack_ns is None else str(analysis.worst_slack_ns)
+                ),
+                "failingEndpointCount": analysis.failing_endpoint_count,
+                "reportedPathCount": analysis.reported_path_count,
+                "reportedViolatedCount": analysis.reported_violated_count,
+            }
+            for analysis in analyses
+        ],
+        "unconstrained": unconstrained,
+        "clockTransfers": transfers,
+        "criticalWarnings": list(critical_warnings),
+        "timingPassed": not failures,
+        "gateFailures": failures,
+    }
+
+
 def parse_map_hierarchy(text: str) -> tuple[MapHierarchyRow, ...]:
     lines = text.splitlines()
     header_at = None
@@ -662,17 +1079,28 @@ def parse_map_hierarchy(text: str) -> tuple[MapHierarchyRow, ...]:
         )
     positions = {name: headers.index(name) for name in required}
     rows: list[MapHierarchyRow] = []
-    for line in lines[header_at + 1 :]:
-        if not line.lstrip().startswith(";"):
-            if rows and line.strip():
+    for line_number, line in enumerate(lines[header_at + 1 :], header_at + 2):
+        if line.lstrip().startswith("+"):
+            if rows:
                 break
             continue
+        if not line.strip():
+            continue
+        if not line.lstrip().startswith(";"):
+            raise ShellPortError(
+                f"malformed map hierarchy row {line_number}: missing leading ';' delimiter"
+            )
         cells = _table_cells(line)
+        if cells == headers:
+            continue
         if len(cells) != len(headers):
-            continue
+            raise ShellPortError(
+                f"malformed map hierarchy row {line_number}: "
+                f"found {len(cells)} cells, expected {len(headers)}"
+            )
         node = cells[positions["Compilation Hierarchy Node"]]
-        if not node or node == "Compilation Hierarchy Node":
-            continue
+        if not node:
+            raise ShellPortError(f"malformed map hierarchy row {line_number}: empty node")
         combinational = _number_pair(cells[positions["Combinational ALUTs"]])
         registers = _number_pair(cells[positions["Dedicated Logic Registers"]])
         rows.append(
@@ -813,17 +1241,28 @@ def parse_fitter_hierarchy(text: str) -> tuple[HierarchyRow, ...]:
         raise ShellPortError(f"fitter hierarchy headers are missing {missing_headers}")
     positions = {name: headers.index(name) for name in required}
     rows: list[HierarchyRow] = []
-    for line in lines[header_at + 1 :]:
-        if not line.lstrip().startswith(";"):
-            if rows and line.strip():
+    for line_number, line in enumerate(lines[header_at + 1 :], header_at + 2):
+        if line.lstrip().startswith("+"):
+            if rows:
                 break
             continue
+        if not line.strip():
+            continue
+        if not line.lstrip().startswith(";"):
+            raise ShellPortError(
+                f"malformed fitter hierarchy row {line_number}: missing leading ';' delimiter"
+            )
         cells = _table_cells(line)
+        if cells == headers:
+            continue
         if len(cells) != len(headers):
-            continue
+            raise ShellPortError(
+                f"malformed fitter hierarchy row {line_number}: "
+                f"found {len(cells)} cells, expected {len(headers)}"
+            )
         node = cells[positions["Compilation Hierarchy Node"]]
-        if not node or node == "Compilation Hierarchy Node":
-            continue
+        if not node:
+            raise ShellPortError(f"malformed fitter hierarchy row {line_number}: empty node")
         alms_needed = _number_pair(
             cells[positions["ALMs needed [=A-B+C]"]], decimal=True
         )
@@ -894,6 +1333,7 @@ def require_exact_hierarchy_row(
         if row.node == node
         and row.full_hierarchy_name == full
         and row.entity_name == module
+        and row.library_name == "work"
     ]
     identity = module if instance is None else f"{module}:{instance}"
     if len(matches) != 1:
@@ -934,6 +1374,45 @@ def require_shell_hierarchy(
     return row
 
 
+def load_published_receipt_pair(
+    synthesis_path: Path, timing_path: Path
+) -> Mapping[str, object]:
+    """Load one stable, byte-identical content-addressed ledger generation.
+
+    The publisher replaces the two files separately because no filesystem primitive
+    can rename two destinations atomically. Readers therefore treat the receipt
+    bytes themselves as the generation: an interrupted old/new pair is UNKNOWN,
+    never whichever half happened to be opened first.
+    """
+    if synthesis_path.resolve() == timing_path.resolve():
+        raise ShellPortError("shell-fit ledger pair paths must be distinct")
+    stable: tuple[bytes, bytes] | None = None
+    for _attempt in range(3):
+        try:
+            synthesis_before = synthesis_path.read_bytes()
+            timing_before = timing_path.read_bytes()
+            synthesis_after = synthesis_path.read_bytes()
+            timing_after = timing_path.read_bytes()
+        except OSError as exc:
+            raise ShellPortError(f"shell-fit ledger pair is absent or unreadable: {exc}") from exc
+        if synthesis_before == synthesis_after and timing_before == timing_after:
+            stable = (synthesis_after, timing_after)
+            break
+    if stable is None:
+        raise ShellPortError("shell-fit ledger pair changed while being read")
+    synthesis_bytes, timing_bytes = stable
+    if synthesis_bytes != timing_bytes:
+        raise ShellPortError(
+            "shell-fit ledger pair contains mixed content-addressed generations: "
+            f"synthesis={_sha256(synthesis_bytes)}, timing={_sha256(timing_bytes)}"
+        )
+    payload = parse_receipt(_utf8(synthesis_bytes, "published shell-fit ledger pair"))
+    validate_receipt(payload)
+    if payload.get("evidenceMode") != "production":
+        raise ShellPortError("shell-fit ledger pair is explicitly test-only evidence")
+    return payload
+
+
 def parse_receipt(text: str) -> Mapping[str, object]:
     try:
         payload = json.loads(text)
@@ -947,11 +1426,15 @@ def parse_receipt(text: str) -> Mapping[str, object]:
         raise ShellPortError("receipt rtlCleanAtHead is not true")
     required = {
         "schemaVersion",
+        "characterization",
+        "evidenceMode",
         "sourceCommit",
         "rtlCleanAtHead",
         "compileSourcePoolParity",
         "compileSourcePool",
         "selectedSdc",
+        "configuration",
+        "execution",
         "generatedArtifacts",
         "sourceHashes",
         "sourceArtifacts",
@@ -960,6 +1443,10 @@ def parse_receipt(text: str) -> Mapping[str, object]:
         "device",
         "stages",
         "resources",
+        "boundary",
+        "connectivity",
+        "timing",
+        "gate",
         "entities",
         "mapEntities",
         "remainderAttribution",
@@ -990,6 +1477,14 @@ def validate_receipt(payload: Mapping[str, object]) -> None:
     errors: list[str] = []
     if payload.get("schemaVersion") != 3:
         errors.append(f"receipt schemaVersion {payload.get('schemaVersion')!r} != 3")
+    if payload.get("characterization") != "shell_fit_top_clean_characterization":
+        errors.append(
+            "receipt characterization is not 'shell_fit_top_clean_characterization'"
+        )
+    if payload.get("evidenceMode") not in {"production", "test-only"}:
+        errors.append(
+            f"receipt evidenceMode is invalid: {payload.get('evidenceMode')!r}"
+        )
     if payload.get("compileSourcePoolParity") is not True:
         errors.append("receipt compileSourcePoolParity is not true")
     source_commit = payload.get("sourceCommit")
@@ -1000,8 +1495,10 @@ def validate_receipt(payload: Mapping[str, object]) -> None:
         isinstance(tool.get(key), str) and tool.get(key) for key in ("name", "version")
     ):
         errors.append("receipt tool must contain non-empty name and version")
-    if not isinstance(payload.get("device"), str) or not payload.get("device"):
-        errors.append("receipt device must be a non-empty string")
+    if payload.get("device") != "5CSEBA6U23I7":
+        errors.append(
+            f"receipt device is {payload.get('device')!r}, expected '5CSEBA6U23I7'"
+        )
     resources = payload.get("resources")
     resource_keys = (
         "alms",
@@ -1030,10 +1527,21 @@ def validate_receipt(payload: Mapping[str, object]) -> None:
     if not isinstance(stages, dict):
         errors.append("receipt stages is not an object")
     else:
-        for stage in ("analysis", "map", "fit", "timequest"):
+        expected_stages = {"map", "postMap", "fit", "timequest"}
+        if set(stages) != expected_stages:
+            errors.append(
+                f"receipt stage set is {sorted(stages)!r}, expected {sorted(expected_stages)!r}"
+            )
+        for stage in sorted(expected_stages):
             if stages.get(stage) != "successful":
                 errors.append(f"receipt stage {stage!r} is {stages.get(stage)!r}")
     for key in (
+        "boundary",
+        "connectivity",
+        "configuration",
+        "execution",
+        "gate",
+        "timing",
         "generatedArtifacts",
         "sourceHashes",
         "sourceArtifacts",
@@ -1048,6 +1556,55 @@ def validate_receipt(payload: Mapping[str, object]) -> None:
         errors.append("receipt mapEntities must be a non-empty array")
     if not isinstance(payload.get("limitations"), list):
         errors.append("receipt limitations must be an array")
+    configuration = payload.get("configuration")
+    if isinstance(configuration, dict):
+        if configuration.get("projectRevision") != "zhao_shell_fit":
+            errors.append("receipt configuration has the wrong project revision")
+        if configuration.get("qpfQuartusVersion") != "17.0":
+            errors.append("receipt configuration has the wrong QPF Quartus version")
+        qpf_assignments = configuration.get("qpfAssignments")
+        expected_qpf_assignments = [
+            {"name": name, "value": value} for name, value in REQUIRED_QPF_SETTINGS.items()
+        ]
+        if qpf_assignments != expected_qpf_assignments:
+            errors.append("receipt configuration does not contain the pinned QPF closure")
+        if configuration.get("top") != "zhao_shell_fit_top":
+            errors.append("receipt configuration has the wrong top")
+        settings = configuration.get("effectiveSettings")
+        if settings != REQUIRED_QSF_SETTINGS:
+            errors.append("receipt configuration does not contain the pinned QSF settings")
+        assignments = configuration.get("globalAssignments")
+        if not isinstance(assignments, list) or not assignments:
+            errors.append("receipt configuration has no bound ordered QSF assignment closure")
+        closure = configuration.get("sdcClosure")
+        if not isinstance(closure, list) or not closure:
+            errors.append("receipt configuration has no bound SDC closure")
+    execution = payload.get("execution")
+    if isinstance(execution, dict):
+        processors = execution.get("processors")
+        if not isinstance(processors, int) or isinstance(processors, bool) or processors < 1:
+            errors.append("receipt execution processors must be a positive integer")
+    connectivity = payload.get("connectivity")
+    if isinstance(connectivity, dict):
+        if connectivity.get("passed") is not True:
+            errors.append("receipt post-map connectivity did not pass")
+        if connectivity.get("mappedBoundaryPortCount") != 10:
+            errors.append("receipt mapped boundary-port count is not 10")
+        ports = connectivity.get("ports")
+        if not isinstance(ports, list) or len(ports) != 10:
+            errors.append("receipt does not contain ten post-map port-bit witnesses")
+    timing = payload.get("timing")
+    gate = payload.get("gate")
+    if isinstance(timing, dict) and isinstance(gate, dict):
+        failures = timing.get("gateFailures")
+        passed = timing.get("timingPassed")
+        expected_gate_status = "pass" if passed is True and failures == [] else "fail"
+        if gate.get("name") != "shell_fit_top_clean_characterization":
+            errors.append("receipt gate has the wrong name")
+        if gate.get("status") != expected_gate_status:
+            errors.append("receipt gate status contradicts timing evidence")
+        if gate.get("failures") != failures:
+            errors.append("receipt gate failures contradict timing evidence")
     if errors:
         raise ShellPortError("; ".join(errors))
 
@@ -1076,6 +1633,7 @@ def _decimal_equal(left: object, right: Decimal) -> bool:
 
 def _map_hierarchy_evidence(row: MapHierarchyRow) -> dict[str, object]:
     return {
+        "node": row.node,
         "fullHierarchyName": row.full_hierarchy_name,
         "entityName": row.entity_name,
         "libraryName": row.library_name,
@@ -1092,6 +1650,7 @@ def _map_hierarchy_evidence(row: MapHierarchyRow) -> dict[str, object]:
 
 def _hierarchy_evidence(row: HierarchyRow) -> dict[str, object]:
     return {
+        "node": row.node,
         "fullHierarchyName": row.full_hierarchy_name,
         "entityName": row.entity_name,
         "libraryName": row.library_name,
@@ -1119,6 +1678,362 @@ def _hierarchy_evidence(row: HierarchyRow) -> dict[str, object]:
     }
 
 
+def _receipt_limitations(manifest: Mapping[str, object]) -> list[str]:
+    limitations = manifest.get("limitations")
+    if not isinstance(limitations, list) or not all(isinstance(item, str) for item in limitations):
+        raise ShellPortError("manifest limitations must be an array of strings")
+    traffic = [item for item in limitations if not item.startswith("Packet A has not run Quartus")]
+    return [*traffic, *CHARACTERIZATION_LIMITATIONS]
+
+
+def _boundary_evidence(rtl_bytes: bytes, package_bytes: bytes) -> dict[str, object]:
+    try:
+        rtl_text = rtl_bytes.decode("utf-8")
+        package_text = package_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ShellPortError(f"generated top/package input is not UTF-8: {exc}") from exc
+    declaration = parse_module_declaration(
+        rtl_text,
+        "zhao_shell_fit_top",
+        type_widths=discover_type_widths(package_text),
+        type_signedness=discover_type_signedness(package_text),
+    )
+    ports = [
+        {
+            "ordinal": port.ordinal,
+            "name": port.name,
+            "direction": port.direction,
+            "bitWidth": port.bit_width,
+        }
+        for port in declaration.ports
+    ]
+    expected = [
+        {"ordinal": 0, "name": "gpu_clk", "direction": "input", "bitWidth": 1},
+        {"ordinal": 1, "name": "vid_clk", "direction": "input", "bitWidth": 1},
+        {"ordinal": 2, "name": "audio_clk", "direction": "input", "bitWidth": 1},
+        {"ordinal": 3, "name": "rst_n", "direction": "input", "bitWidth": 1},
+        {
+            "ordinal": 4,
+            "name": "fit_signature_o",
+            "direction": "output",
+            "bitWidth": 3,
+        },
+        {"ordinal": 5, "name": "fit_epoch_o", "direction": "output", "bitWidth": 3},
+    ]
+    if ports != expected or declaration.total_bits != 10:
+        raise ShellPortError(
+            "generated fit-top boundary is not the exact six-port/ten-bit contract: "
+            f"ports={ports!r}, bits={declaration.total_bits}"
+        )
+    return {
+        "module": declaration.module_name,
+        "declarationSha256": declaration.declaration_sha256,
+        "portCount": len(ports),
+        "inputBits": declaration.input_bits,
+        "outputBits": declaration.output_bits,
+        "totalBits": declaration.total_bits,
+        "ports": ports,
+    }
+
+
+def _manifest_hierarchy_specs(
+    manifest: Mapping[str, object],
+) -> tuple[str, list[Mapping[str, object]], Mapping[str, object]]:
+    hierarchy = manifest.get("hierarchy")
+    if not isinstance(hierarchy, dict):
+        raise ShellPortError("manifest hierarchy object is absent")
+    top_spec = hierarchy.get("top")
+    children = hierarchy.get("required_children")
+    if not isinstance(top_spec, dict):
+        raise ShellPortError("manifest hierarchy top is absent")
+    if not isinstance(children, list) or not all(isinstance(item, dict) for item in children):
+        raise ShellPortError("manifest required hierarchy children are absent")
+    top_module = top_spec.get("module")
+    if not isinstance(top_module, str) or not top_module:
+        raise ShellPortError("manifest top module identity is invalid")
+    return top_module, [{**top_spec, "role": "top"}, *children], hierarchy
+
+
+def _hierarchy_self_evidence(row: HierarchyRow) -> dict[str, object]:
+    return {
+        "fullHierarchyName": row.full_hierarchy_name,
+        "entityName": row.entity_name,
+        "almsNeededSelf": str(row.alms_needed_self),
+        "finalPlacementAlmsSelf": str(row.final_placement_alms_self),
+        "denseRecoverableAlmsSelf": str(row.dense_recoverable_alms_self),
+        "unavailableAlmsSelf": str(row.unavailable_alms_self),
+        "memoryAlmsSelf": str(row.memory_alms_self),
+        "combinationalAlutsSelf": row.combinational_aluts_self,
+        "registersSelf": row.registers_self,
+        "ioRegistersSelf": row.io_registers_self,
+    }
+
+
+def _map_self_evidence(row: MapHierarchyRow) -> dict[str, object]:
+    return {
+        "fullHierarchyName": row.full_hierarchy_name,
+        "entityName": row.entity_name,
+        "combinationalAlutsSelf": row.combinational_aluts_self,
+        "registersSelf": row.registers_self,
+    }
+
+
+def _classified_hierarchy(
+    manifest: Mapping[str, object],
+    hierarchy_rows: Sequence[HierarchyRow],
+    map_hierarchy_rows: Sequence[MapHierarchyRow],
+) -> tuple[list[dict[str, object]], list[dict[str, object]], HierarchyRow, MapHierarchyRow, Mapping[str, object]]:
+    top_module, specs, hierarchy = _manifest_hierarchy_specs(manifest)
+    fit_specs: dict[tuple[str, str], Mapping[str, object]] = {}
+    map_specs: dict[tuple[str, str], Mapping[str, object]] = {}
+    top_row: HierarchyRow | None = None
+    top_map_row: MapHierarchyRow | None = None
+    for spec in specs:
+        module = spec.get("module")
+        instance = spec.get("instance")
+        role = spec.get("role")
+        if not isinstance(module, str) or not isinstance(role, str):
+            raise ShellPortError(f"invalid manifest hierarchy spec {spec!r}")
+        if instance is not None and not isinstance(instance, str):
+            raise ShellPortError(f"invalid manifest hierarchy instance {instance!r}")
+        row = require_exact_hierarchy_row(
+            hierarchy_rows, top_module=top_module, module=module, instance=instance
+        )
+        map_row = require_exact_map_hierarchy_row(
+            map_hierarchy_rows, top_module=top_module, module=module, instance=instance
+        )
+        fit_specs[(row.full_hierarchy_name, row.entity_name)] = spec
+        map_specs[(map_row.full_hierarchy_name, map_row.entity_name)] = spec
+        if role == "top":
+            top_row = row
+            top_map_row = map_row
+    if top_row is None or top_map_row is None:
+        raise ShellPortError("manifest hierarchy has no exact top role")
+
+    entities: list[dict[str, object]] = []
+    for row in hierarchy_rows:
+        spec = fit_specs.get((row.full_hierarchy_name, row.entity_name))
+        entities.append(
+            {
+                "role": spec.get("role") if spec is not None else "unmanifested",
+                "module": spec.get("module") if spec is not None else row.entity_name,
+                "instance": spec.get("instance") if spec is not None else None,
+                **_hierarchy_evidence(row),
+            }
+        )
+    map_entities: list[dict[str, object]] = []
+    for row in map_hierarchy_rows:
+        spec = map_specs.get((row.full_hierarchy_name, row.entity_name))
+        map_entities.append(
+            {
+                "role": spec.get("role") if spec is not None else "unmanifested",
+                "module": spec.get("module") if spec is not None else row.entity_name,
+                "instance": spec.get("instance") if spec is not None else None,
+                **_map_hierarchy_evidence(row),
+            }
+        )
+    return entities, map_entities, top_row, top_map_row, hierarchy
+
+
+def _configuration_evidence(
+    qpf: QpfModel,
+    qsf: QsfModel,
+    sdc_closure: Sequence[SdcClosureEntry],
+) -> dict[str, object]:
+    return {
+        "projectRevision": qpf.project_revision,
+        "qpfQuartusVersion": qpf.quartus_version,
+        "qpfAssignments": [
+            {"name": name, "value": value} for name, value in qpf.assignments
+        ],
+        "top": qsf.top,
+        "sources": list(qsf.sources),
+        "constraints": list(qsf.constraint_files),
+        "effectiveSettings": {
+            name: [value for key, value in qsf.global_assignments if key == name][0]
+            for name in REQUIRED_QSF_SETTINGS
+        },
+        "globalAssignments": [
+            {"name": name, "value": value} for name, value in qsf.global_assignments
+        ],
+        "sdcClosure": [
+            {"path": entry.path, "sha256": _sha256(entry.data)}
+            for entry in sdc_closure
+        ],
+    }
+
+
+def _connectivity_evidence(
+    witness: tuple[str, Sequence[PostMapPort]],
+) -> dict[str, object]:
+    top, ports = witness
+    return {
+        "top": top,
+        "mappedBoundaryPortCount": 10,
+        "ports": [
+            {"name": port.name, "direction": port.direction, "postMapCount": port.count}
+            for port in ports
+        ],
+        "passed": True,
+    }
+
+
+def _execution_evidence(processors: int) -> dict[str, object]:
+    if processors < 1:
+        raise ShellPortError(f"execution processor count must be positive, got {processors}")
+    return {"processors": processors}
+
+
+def _gate_evidence(timing: Mapping[str, object]) -> dict[str, object]:
+    failures = timing.get("gateFailures")
+    if not isinstance(failures, list) or not all(isinstance(item, str) for item in failures):
+        raise ShellPortError("derived timing gate failures are malformed")
+    passed = timing.get("timingPassed") is True and not failures
+    return {
+        "name": "shell_fit_top_clean_characterization",
+        "status": "pass" if passed else "fail",
+        "failures": list(failures),
+    }
+
+
+def build_receipt_from_evidence(
+    *,
+    manifest: Mapping[str, object],
+    manifest_bytes: bytes,
+    rtl_bytes: bytes,
+    summary: FitSummary,
+    map_summary: MapSummary,
+    map_hierarchy_rows: Sequence[MapHierarchyRow],
+    timequest_status: str,
+    hierarchy_rows: Sequence[HierarchyRow],
+    git_evidence: GitEvidence,
+    compile_source_pool: Sequence[str],
+    selected_sdc_path: str,
+    source_bytes: Mapping[str, bytes],
+    source_paths: Mapping[str, str],
+    evidence_bytes: Mapping[str, bytes],
+    evidence_paths: Mapping[str, str],
+    qpf_model: QpfModel,
+    qsf_model: QsfModel,
+    sdc_closure: Sequence[SdcClosureEntry],
+    post_map_witness: tuple[str, Sequence[PostMapPort]],
+    timing: Mapping[str, object],
+    processors: int,
+    evidence_mode: str = "production",
+) -> dict[str, object]:
+    if evidence_mode not in {"production", "test-only"}:
+        raise ShellPortError(f"invalid receipt evidence mode {evidence_mode!r}")
+    missing_sources = [
+        name for name in SOURCE_EVIDENCE_NAMES if name not in source_bytes or name not in source_paths
+    ]
+    missing_evidence = [
+        name
+        for name in EVIDENCE_ARTIFACT_NAMES
+        if name not in evidence_bytes or name not in evidence_paths
+    ]
+    if missing_sources or missing_evidence:
+        raise ShellPortError(
+            f"raw evidence inputs are incomplete: sources={missing_sources}, "
+            f"evidence={missing_evidence}"
+        )
+
+    try:
+        shell_text = source_bytes["shell"].decode("utf-8")
+        package_text = source_bytes["package"].decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ShellPortError(f"raw shell/package input is not UTF-8: {exc}") from exc
+    shell_declaration = parse_module_declaration(
+        shell_text,
+        "zhao_shell_top",
+        type_widths=discover_type_widths(package_text),
+        type_signedness=discover_type_signedness(package_text),
+    )
+    source_hashes = {
+        "shellDeclaration": shell_declaration.declaration_sha256,
+        "shellFile": _sha256(source_bytes["shell"]),
+        "packageFile": _sha256(source_bytes["package"]),
+        **{
+            name: _sha256(source_bytes[name])
+            for name in SOURCE_EVIDENCE_NAMES
+            if name not in {"shell", "package"}
+        },
+    }
+
+    entities, map_entities, top_row, top_map_row, hierarchy = _classified_hierarchy(
+        manifest, hierarchy_rows, map_hierarchy_rows
+    )
+
+    return {
+        "schemaVersion": 3,
+        "characterization": "shell_fit_top_clean_characterization",
+        "evidenceMode": evidence_mode,
+        "sourceCommit": git_evidence.source_commit,
+        "rtlCleanAtHead": git_evidence.clean,
+        "compileSourcePoolParity": True,
+        "compileSourcePool": list(compile_source_pool),
+        "selectedSdc": selected_sdc_path,
+        "configuration": _configuration_evidence(qpf_model, qsf_model, sdc_closure),
+        "execution": _execution_evidence(processors),
+        "generatedArtifacts": {
+            "rtlSha256": _sha256(rtl_bytes),
+            "manifestSha256": _sha256(manifest_bytes),
+        },
+        "sourceHashes": source_hashes,
+        "sourceArtifacts": {
+            name: {"path": source_paths[name], "sha256": _sha256(source_bytes[name])}
+            for name in SOURCE_EVIDENCE_NAMES
+        },
+        "evidenceArtifacts": {
+            name: {"path": evidence_paths[name], "sha256": _sha256(evidence_bytes[name])}
+            for name in EVIDENCE_ARTIFACT_NAMES
+        },
+        "tool": {"name": summary.tool_name, "version": summary.tool_version},
+        "device": summary.device,
+        "stages": {
+            "map": (
+                "successful" if map_summary.status.lower().startswith("successful") else "failed"
+            ),
+            "postMap": "successful",
+            "fit": "successful" if summary.status.lower().startswith("successful") else "failed",
+            "timequest": (
+                "successful" if timequest_status.lower().startswith("successful") else "failed"
+            ),
+        },
+        "resources": {
+            "alms": summary.alms,
+            "registers": summary.registers,
+            "memoryBits": summary.memory_bits,
+            "ramBlocks": int(summary.ram_blocks),
+            "dspBlocks": int(summary.dsp_blocks),
+            "mapCombinationalAluts": map_summary.combinational_aluts,
+            "mapRegisters": map_summary.registers,
+            "realPins": summary.real_pins,
+            "virtualPins": summary.virtual_pins,
+        },
+        "boundary": _boundary_evidence(rtl_bytes, source_bytes["package"]),
+        "connectivity": _connectivity_evidence(post_map_witness),
+        "timing": dict(timing),
+        "gate": _gate_evidence(timing),
+        "entities": entities,
+        "mapEntities": map_entities,
+        "remainderAttribution": {
+            "method": hierarchy.get("remainder_attribution"),
+            "reportedTopFullHierarchyName": top_row.full_hierarchy_name,
+            "calculatedBySubtraction": False,
+            "reportedFitterTopSelf": _hierarchy_self_evidence(top_row),
+            "reportedMapTopSelf": _map_self_evidence(top_map_row),
+            "unmanifestedFitterRows": sum(
+                entity["role"] == "unmanifested" for entity in entities
+            ),
+            "unmanifestedMapRows": sum(
+                entity["role"] == "unmanifested" for entity in map_entities
+            ),
+        },
+        "trafficProfile": manifest.get("traffic_profile"),
+        "limitations": _receipt_limitations(manifest),
+    }
+
+
 def bind_receipt_to_evidence(
     payload: Mapping[str, object],
     *,
@@ -1140,32 +2055,19 @@ def bind_receipt_to_evidence(
     source_paths: Mapping[str, str],
     evidence_bytes: Mapping[str, bytes],
     evidence_paths: Mapping[str, str],
+    qpf_model: QpfModel,
+    qsf_model: QsfModel,
+    sdc_closure: Sequence[SdcClosureEntry],
+    post_map_witness: tuple[str, Sequence[PostMapPort]],
+    timing: Mapping[str, object],
+    processors: int,
+    evidence_mode: str = "production",
 ) -> None:
+    if evidence_mode not in {"production", "test-only"}:
+        raise ShellPortError(f"invalid receipt evidence mode {evidence_mode!r}")
     errors: list[str] = []
-    required_sources = (
-        "shell",
-        "package",
-        "policy",
-        "generator",
-        "parser",
-        "packet",
-        "cmake",
-        "qsf",
-        "sdc",
-    )
-    required_evidence = (
-        "summary",
-        "sta",
-        "clocks",
-        "hierarchy",
-        "mapSummary",
-        "mapReport",
-        "gitHead",
-        "gitStatus",
-        "gitWorktreeDiff",
-        "gitStagedDiff",
-        "gitIndexFlags",
-    )
+    required_sources = SOURCE_EVIDENCE_NAMES
+    required_evidence = EVIDENCE_ARTIFACT_NAMES
     missing_sources = [
         name for name in required_sources if name not in source_bytes or name not in source_paths
     ]
@@ -1184,6 +2086,13 @@ def bind_receipt_to_evidence(
         errors.append(
             f"sourceCommit mismatch: receipt={payload.get('sourceCommit')!r}, "
             f"git={git_evidence.source_commit!r}"
+        )
+    if payload.get("characterization") != "shell_fit_top_clean_characterization":
+        errors.append("receipt names the wrong characterization gate")
+    if payload.get("evidenceMode") != evidence_mode:
+        errors.append(
+            f"receipt evidenceMode {payload.get('evidenceMode')!r} does not match "
+            f"invocation mode {evidence_mode!r}"
         )
     if payload.get("rtlCleanAtHead") is not git_evidence.clean:
         errors.append("rtlCleanAtHead does not match direct git repository evidence")
@@ -1230,10 +2139,25 @@ def bind_receipt_to_evidence(
         )
     if payload.get("selectedSdc") != selected_sdc_path:
         errors.append("selectedSdc does not match the exact SDC selected by the QSF")
+    expected_configuration = _configuration_evidence(qpf_model, qsf_model, sdc_closure)
+    if payload.get("configuration") != expected_configuration:
+        errors.append("receipt configuration does not match effective QPF/QSF/SDC closure")
+    expected_execution = _execution_evidence(processors)
+    if payload.get("execution") != expected_execution:
+        errors.append("receipt execution parameters do not match this invocation")
+    expected_connectivity = _connectivity_evidence(post_map_witness)
+    if payload.get("connectivity") != expected_connectivity:
+        errors.append("receipt connectivity does not match the post-map port-bit witness")
+    if payload.get("timing") != timing:
+        errors.append("receipt timing does not match parsed timing evidence")
+    expected_gate = _gate_evidence(timing)
+    if payload.get("gate") != expected_gate:
+        errors.append("receipt gate verdict does not match parsed timing/policy evidence")
     expected_git_bytes = {
         **source_bytes,
         "generatedRtl": rtl_bytes,
         "manifest": manifest_bytes,
+        **{f"sdcClosure:{entry.path}": entry.data for entry in sdc_closure},
     }
     missing_git_blobs = sorted(set(expected_git_bytes) - set(git_blob_bytes))
     changed_git_blobs = sorted(
@@ -1264,8 +2188,8 @@ def bind_receipt_to_evidence(
             f"device mismatch: receipt={payload.get('device')!r}, report={summary.device!r}"
         )
     expected_stages = {
-        "analysis": "successful" if map_summary.status.lower().startswith("successful") else "failed",
         "map": "successful" if map_summary.status.lower().startswith("successful") else "failed",
+        "postMap": "successful",
         "fit": "successful" if summary.status.lower().startswith("successful") else "failed",
         "timequest": "successful"
         if timequest_status.lower().startswith("successful")
@@ -1313,13 +2237,11 @@ def bind_receipt_to_evidence(
         "shellDeclaration": declaration.declaration_sha256,
         "shellFile": _sha256(source_bytes["shell"]),
         "packageFile": _sha256(source_bytes["package"]),
-        "policy": _sha256(source_bytes["policy"]),
-        "generator": _sha256(source_bytes["generator"]),
-        "parser": _sha256(source_bytes["parser"]),
-        "packet": _sha256(source_bytes["packet"]),
-        "cmake": _sha256(source_bytes["cmake"]),
-        "qsf": _sha256(source_bytes["qsf"]),
-        "sdc": _sha256(source_bytes["sdc"]),
+        **{
+            name: _sha256(source_bytes[name])
+            for name in required_sources
+            if name not in {"shell", "package"}
+        },
     }
     if payload.get("sourceHashes") != expected_source_hashes:
         errors.append("receipt sourceHashes do not match independently hashed raw inputs")
@@ -1359,80 +2281,32 @@ def bind_receipt_to_evidence(
             f"trafficProfile mismatch: receipt={payload.get('trafficProfile')!r}, "
             f"manifest={manifest.get('traffic_profile')!r}"
         )
-    if payload.get("limitations") != manifest.get("limitations"):
-        errors.append("receipt limitations do not match manifest limitations")
+    if payload.get("limitations") != _receipt_limitations(manifest):
+        errors.append("receipt limitations do not match bound characterization limitations")
 
-    hierarchy = manifest.get("hierarchy")
-    if not isinstance(hierarchy, dict):
-        errors.append("manifest hierarchy object is absent")
+    expected_boundary = _boundary_evidence(rtl_bytes, source_bytes["package"])
+    if payload.get("boundary") != expected_boundary:
+        errors.append("receipt boundary does not match the exact generated six-port/ten-bit top")
+
+    try:
+        (
+            expected_entities,
+            expected_map_entities,
+            top_row,
+            top_map_row,
+            hierarchy,
+        ) = _classified_hierarchy(manifest, hierarchy_rows, map_hierarchy_rows)
+    except ShellPortError as exc:
+        errors.append(str(exc))
+        expected_entities = []
+        expected_map_entities = []
+        top_row = None
+        top_map_row = None
         hierarchy = {}
-    top_spec = hierarchy.get("top")
-    children = hierarchy.get("required_children")
-    specs: list[Mapping[str, object]] = []
-    if isinstance(top_spec, dict):
-        specs.append({**top_spec, "role": "top"})
-    else:
-        errors.append("manifest hierarchy top is absent")
-    if isinstance(children, list) and all(isinstance(item, dict) for item in children):
-        specs.extend(children)
-    else:
-        errors.append("manifest required hierarchy children are absent")
-    expected_entities: list[dict[str, object]] = []
-    expected_map_entities: list[dict[str, object]] = []
-    top_module = str(top_spec.get("module")) if isinstance(top_spec, dict) else ""
-    top_row: HierarchyRow | None = None
-    for spec in specs:
-        module = spec.get("module")
-        instance = spec.get("instance")
-        role = spec.get("role")
-        if not isinstance(module, str) or not isinstance(role, str):
-            errors.append(f"invalid manifest hierarchy spec {spec!r}")
-            continue
-        if instance is not None and not isinstance(instance, str):
-            errors.append(f"invalid manifest hierarchy instance {instance!r}")
-            continue
-        try:
-            row = require_exact_hierarchy_row(
-                hierarchy_rows,
-                top_module=top_module,
-                module=module,
-                instance=instance,
-            )
-        except ShellPortError as exc:
-            errors.append(str(exc))
-            continue
-        if role == "top":
-            top_row = row
-        expected_entities.append(
-            {
-                "role": role,
-                "module": module,
-                "instance": instance,
-                **_hierarchy_evidence(row),
-            }
-        )
-        try:
-            map_row = require_exact_map_hierarchy_row(
-                map_hierarchy_rows,
-                top_module=top_module,
-                module=module,
-                instance=instance,
-            )
-        except ShellPortError as exc:
-            errors.append(str(exc))
-            continue
-        expected_map_entities.append(
-            {
-                "role": role,
-                "module": module,
-                "instance": instance,
-                **_map_hierarchy_evidence(map_row),
-            }
-        )
     if payload.get("entities") != expected_entities:
-        errors.append("receipt entities do not preserve complete required hierarchy rows")
+        errors.append("receipt entities do not preserve every fitted hierarchy row")
     if payload.get("mapEntities") != expected_map_entities:
-        errors.append("receipt mapEntities do not preserve complete required map rows")
+        errors.append("receipt mapEntities do not preserve every mapped hierarchy row")
     remainder = payload.get("remainderAttribution")
     expected_remainder = {
         "method": hierarchy.get("remainder_attribution"),
@@ -1440,6 +2314,18 @@ def bind_receipt_to_evidence(
             top_row.full_hierarchy_name if top_row is not None else None
         ),
         "calculatedBySubtraction": False,
+        "reportedFitterTopSelf": (
+            _hierarchy_self_evidence(top_row) if top_row is not None else None
+        ),
+        "reportedMapTopSelf": (
+            _map_self_evidence(top_map_row) if top_map_row is not None else None
+        ),
+        "unmanifestedFitterRows": sum(
+            entity["role"] == "unmanifested" for entity in expected_entities
+        ),
+        "unmanifestedMapRows": sum(
+            entity["role"] == "unmanifested" for entity in expected_map_entities
+        ),
     }
     if remainder != expected_remainder:
         errors.append(
@@ -1448,6 +2334,20 @@ def bind_receipt_to_evidence(
         )
     if errors:
         raise ShellPortError("; ".join(errors))
+
+
+def _write_json_atomic(path: Path, payload: Mapping[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temporary.open("xb") as stream:
+            stream.write((json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8"))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
 
 
 def _load_json_object(path: Path, label: str) -> tuple[bytes, Mapping[str, object]]:
@@ -1476,7 +2376,7 @@ def _utf8(data: bytes, label: str) -> str:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, fromfile_prefix_chars="@")
     parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--summary", type=Path, required=True)
     parser.add_argument("--sta", type=Path, required=True)
@@ -1484,7 +2384,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--hierarchy", type=Path, required=True)
     parser.add_argument("--map-summary", type=Path, required=True)
     parser.add_argument("--map-report", type=Path, required=True)
-    parser.add_argument("--receipt", type=Path, required=True)
+    receipt_group = parser.add_mutually_exclusive_group(required=True)
+    receipt_group.add_argument("--receipt", type=Path)
+    receipt_group.add_argument("--emit-receipt", type=Path)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--rtl", type=Path, required=True)
     parser.add_argument("--shell", type=Path, required=True)
@@ -1497,6 +2399,28 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--cmake-variable", default="ZHAO_SHELL_RTL")
     parser.add_argument("--qsf", type=Path, required=True)
     parser.add_argument("--sdc", type=Path, required=True)
+    parser.add_argument("--qsf-parser", type=Path, required=True)
+    parser.add_argument("--evidence-parser", type=Path, required=True)
+    parser.add_argument("--git-capture", type=Path, required=True)
+    parser.add_argument("--runner", type=Path, required=True)
+    parser.add_argument("--report-script", type=Path, required=True)
+    parser.add_argument("--post-map-script", type=Path, required=True)
+    parser.add_argument("--project", type=Path, required=True)
+    parser.add_argument("--timing-metrics", type=Path, required=True)
+    parser.add_argument("--clock-transfers", type=Path, required=True)
+    parser.add_argument("--unconstrained-paths", type=Path, required=True)
+    parser.add_argument("--setup-paths", type=Path, required=True)
+    parser.add_argument("--hold-paths", type=Path, required=True)
+    parser.add_argument("--recovery-paths", type=Path, required=True)
+    parser.add_argument("--removal-paths", type=Path, required=True)
+    parser.add_argument("--post-map-connectivity", type=Path, required=True)
+    for stage in ("map", "post-map", "fit", "timequest"):
+        parser.add_argument(f"--{stage}-stdout", type=Path, required=True)
+        parser.add_argument(f"--{stage}-stderr", type=Path, required=True)
+    parser.add_argument("--processors", type=int, default=4)
+    parser.add_argument(
+        "--evidence-mode", choices=("production", "test-only"), default="production"
+    )
     parser.add_argument("--git-head", type=Path, required=True)
     parser.add_argument("--git-status", type=Path, required=True)
     parser.add_argument("--git-worktree-diff", type=Path, required=True)
@@ -1519,6 +2443,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             "cmake": args.cmake,
             "qsf": args.qsf,
             "sdc": args.sdc,
+            "qsfParser": args.qsf_parser,
+            "evidenceParser": args.evidence_parser,
+            "gitCapture": args.git_capture,
+            "runner": args.runner,
+            "reportScript": args.report_script,
+            "postMapScript": args.post_map_script,
+            "project": args.project,
         }
         evidence_path_objects = {
             "summary": args.summary,
@@ -1527,6 +2458,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             "hierarchy": args.hierarchy,
             "mapSummary": args.map_summary,
             "mapReport": args.map_report,
+            "timingMetrics": args.timing_metrics,
+            "clockTransfers": args.clock_transfers,
+            "unconstrainedPaths": args.unconstrained_paths,
+            "setupPaths": args.setup_paths,
+            "holdPaths": args.hold_paths,
+            "recoveryPaths": args.recovery_paths,
+            "removalPaths": args.removal_paths,
+            "postMapConnectivity": args.post_map_connectivity,
+            "mapStdout": args.map_stdout,
+            "mapStderr": args.map_stderr,
+            "postMapStdout": args.post_map_stdout,
+            "postMapStderr": args.post_map_stderr,
+            "fitStdout": args.fit_stdout,
+            "fitStderr": args.fit_stderr,
+            "timequestStdout": args.timequest_stdout,
+            "timequestStderr": args.timequest_stderr,
             "gitHead": args.git_head,
             "gitStatus": args.git_status,
             "gitWorktreeDiff": args.git_worktree_diff,
@@ -1584,6 +2531,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         map_hierarchy_rows = parse_map_hierarchy(map_report_text)
         validate_map_hierarchy(map_summary, map_hierarchy_rows)
         require_shell_map_hierarchy(map_hierarchy_rows)
+        post_map_witness = parse_post_map_connectivity(
+            _utf8(evidence_bytes["postMapConnectivity"], "post-map connectivity witness")
+        )
+        validate_post_map_connectivity(post_map_witness, map_report_text)
+        stage_logs = {
+            name: _utf8(evidence_bytes[name], f"Quartus stage log {name}")
+            for name in (
+                "mapStdout",
+                "mapStderr",
+                "postMapStdout",
+                "postMapStderr",
+                "fitStdout",
+                "fitStderr",
+                "timequestStdout",
+                "timequestStderr",
+            )
+        }
+        validate_stage_logs(stage_logs)
+        critical_warnings = collect_critical_warnings(stage_logs)
+        timing = timing_evidence(
+            metrics_text=_utf8(evidence_bytes["timingMetrics"], "timing metrics"),
+            path_reports={
+                name: _utf8(evidence_bytes[f"{name}Paths"], f"{name} path report")
+                for name in ("setup", "hold", "recovery", "removal")
+            },
+            unconstrained_text=_utf8(
+                evidence_bytes["unconstrainedPaths"], "unconstrained-path report"
+            ),
+            transfers_text=_utf8(
+                evidence_bytes["clockTransfers"], "clock-transfer report"
+            ),
+            critical_warnings=critical_warnings,
+        )
         scan_virtual_clock_warnings(
             {
                 name: _utf8(evidence_bytes[name], f"bound Quartus artifact {name}")
@@ -1594,11 +2574,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "hierarchy",
                     "mapSummary",
                     "mapReport",
+                    "timingMetrics",
+                    "clockTransfers",
+                    "unconstrainedPaths",
+                    "setupPaths",
+                    "holdPaths",
+                    "recoveryPaths",
+                    "removalPaths",
+                    "postMapConnectivity",
+                    "mapStdout",
+                    "mapStderr",
+                    "postMapStdout",
+                    "postMapStderr",
+                    "fitStdout",
+                    "fitStderr",
+                    "timequestStdout",
+                    "timequestStderr",
                 )
             }
         )
-        receipt = parse_receipt(_utf8(args.receipt.read_bytes(), "receipt"))
-        validate_receipt(receipt)
         manifest_bytes, manifest = _load_json_object(args.manifest, "shell-fit manifest")
         hierarchy_spec = manifest.get("hierarchy")
         if not isinstance(hierarchy_spec, dict) or not isinstance(
@@ -1617,6 +2611,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         qsf_model = parse_qsf(
             _utf8(source_bytes["qsf"], "QSF"), repo=repo, qsf_dir=args.qsf.parent
         )
+        qpf_model = parse_qpf(_utf8(source_bytes["project"], "QPF"))
+        sdc_closure = read_sdc_closure(args.sdc, repo=repo)
+        validate_sdc_closure(sdc_closure)
         compile_source_pool = (*cmake_pool, _repo_identity(args.rtl, repo))
         selected_sdc_path = source_paths["sdc"]
         validate_qsf(
@@ -1635,12 +2632,42 @@ def main(argv: Sequence[str] | None = None) -> int:
             **source_paths,
             "generatedRtl": _repo_identity(args.rtl, repo),
             "manifest": _repo_identity(args.manifest, repo),
+            **{f"sdcClosure:{entry.path}": entry.path for entry in sdc_closure},
         }
         git_blob_bytes = read_git_blobs_at_commit(
             repo,
             source_commit=git_evidence.source_commit,
             source_paths=git_paths,
         )
+        if args.emit_receipt is not None:
+            _repo_identity(args.emit_receipt, repo)
+            receipt = build_receipt_from_evidence(
+                manifest=manifest,
+                manifest_bytes=manifest_bytes,
+                rtl_bytes=args.rtl.read_bytes(),
+                summary=summary,
+                map_summary=map_summary,
+                map_hierarchy_rows=map_hierarchy_rows,
+                timequest_status=timequest_status,
+                hierarchy_rows=hierarchy_rows,
+                git_evidence=git_evidence,
+                compile_source_pool=compile_source_pool,
+                selected_sdc_path=selected_sdc_path,
+                source_bytes=source_bytes,
+                source_paths=source_paths,
+                evidence_bytes=evidence_bytes,
+                evidence_paths=evidence_paths,
+                qpf_model=qpf_model,
+                qsf_model=qsf_model,
+                sdc_closure=sdc_closure,
+                post_map_witness=post_map_witness,
+                timing=timing,
+                processors=args.processors,
+                evidence_mode=args.evidence_mode,
+            )
+        else:
+            receipt = parse_receipt(_utf8(args.receipt.read_bytes(), "receipt"))
+        validate_receipt(receipt)
         bind_receipt_to_evidence(
             receipt,
             manifest=manifest,
@@ -1661,17 +2688,29 @@ def main(argv: Sequence[str] | None = None) -> int:
             source_paths=source_paths,
             evidence_bytes=evidence_bytes,
             evidence_paths=evidence_paths,
+            qpf_model=qpf_model,
+            qsf_model=qsf_model,
+            sdc_closure=sdc_closure,
+            post_map_witness=post_map_witness,
+            timing=timing,
+            processors=args.processors,
+            evidence_mode=args.evidence_mode,
         )
+        if args.emit_receipt is not None:
+            _write_json_atomic(args.emit_receipt, receipt)
     except (OSError, ShellPortError) as exc:
         print(f"shell-fit-reports: {exc}", file=sys.stderr)
         return 1
+    gate = receipt["gate"]
+    gate_passed = isinstance(gate, dict) and gate.get("status") == "pass"
     print(
         "shell-fit-reports: "
+        f"gate={'PASS' if gate_passed else 'FAIL'} "
         f"alms={summary.alms} real-pins={summary.real_pins} virtual-pins=0 "
         f"u-shell-alms={shell.alms_needed} clocks=3 map-aluts={map_summary.combinational_aluts} "
         "receipt=raw-bound"
     )
-    return 0
+    return 0 if gate_passed else 2
 
 
 if __name__ == "__main__":

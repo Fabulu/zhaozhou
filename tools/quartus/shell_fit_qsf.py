@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 import re
 import shlex
 import sys
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from shell_ports import ShellPortError
 
@@ -25,7 +26,45 @@ class QsfModel:
     sources: tuple[str, ...]
     constraint_files: tuple[str, ...]
     virtual_pin_targets: tuple[str, ...]
+    physical_pin_targets: tuple[str, ...]
     wildcard_targets: tuple[str, ...]
+    global_assignments: tuple[tuple[str, str], ...]
+    instance_assignments: tuple[tuple[str, str, str], ...]
+
+
+@dataclass(frozen=True)
+class QpfModel:
+    project_revision: str
+    quartus_version: str
+    assignments: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class SdcClosureEntry:
+    path: str
+    data: bytes
+
+
+REQUIRED_QPF_SETTINGS = {
+    "QUARTUS_VERSION": "17.0",
+    "DATE": "00:00:00  August 18, 2026",
+    "PROJECT_REVISION": "zhao_shell_fit",
+}
+
+
+REQUIRED_QSF_SETTINGS = {
+    "FAMILY": "Cyclone V",
+    "DEVICE": "5CSEBA6U23I7",
+    "TOP_LEVEL_ENTITY": "zhao_shell_fit_top",
+    "PROJECT_OUTPUT_DIRECTORY": "output_files",
+    "SEED": "1",
+    "OPTIMIZATION_MODE": "HIGH PERFORMANCE EFFORT",
+    "OPTIMIZATION_TECHNIQUE": "BALANCED",
+    "FITTER_EFFORT": "STANDARD FIT",
+    "PLACEMENT_EFFORT_MULTIPLIER": "1.0",
+    "PHYSICAL_SYNTHESIS_REGISTER_RETIMING": "OFF",
+    "LAST_QUARTUS_VERSION": "17.0.2 Lite Edition",
+}
 
 
 def _balanced_parenthesis(text: str, opening: int) -> int:
@@ -191,7 +230,10 @@ def parse_qsf(text: str, *, repo: Path, qsf_dir: Path) -> QsfModel:
     sources: list[str] = []
     constraint_files: list[str] = []
     virtual_targets: list[str] = []
+    physical_targets: list[str] = []
     wildcard_targets: list[str] = []
+    global_assignments: list[tuple[str, str]] = []
+    instance_assignments: list[tuple[str, str, str]] = []
     for line_number, raw_line in enumerate(text.splitlines(), 1):
         _reject_unsupported_tcl_syntax(raw_line, line_number)
         try:
@@ -200,62 +242,91 @@ def parse_qsf(text: str, *, repo: Path, qsf_dir: Path) -> QsfModel:
             raise ShellPortError(f"malformed QSF line {line_number}: {exc}") from exc
         if not tokens:
             continue
-        allowed_commands = {
-            "set_global_assignment",
-            "set_instance_assignment",
-            "set_location_assignment",
-        }
-        if tokens[0] not in allowed_commands:
-            raise ShellPortError(
-                f"unsupported active QSF command on line {line_number}: {tokens[0]!r}"
-            )
-        target = ""
-        if "-to" in tokens:
-            target_at = tokens.index("-to")
-            if target_at + 1 >= len(tokens):
-                raise ShellPortError(f"QSF line {line_number} has -to without a target")
-            target = tokens[target_at + 1]
+        command = tokens[0]
+        if command == "set_global_assignment":
+            if len(tokens) != 4 or tokens[1] != "-name":
+                raise ShellPortError(
+                    "QSF set_global_assignment line "
+                    f"{line_number} must have exact shape "
+                    "'set_global_assignment -name NAME VALUE'"
+                )
+            name = tokens[2].upper()
+            assignment_value = tokens[3]
+            global_assignments.append((name, assignment_value))
+            if name == "TOP_LEVEL_ENTITY":
+                tops.append(assignment_value)
+            elif name == "SYSTEMVERILOG_FILE":
+                sources.append(
+                    _literal_assignment_path(
+                        assignment_value,
+                        line_number=line_number,
+                        label="RTL source",
+                        repo=repo,
+                        qsf_dir=qsf_dir,
+                    )
+                )
+            elif name == "SDC_FILE":
+                constraint_files.append(
+                    _literal_assignment_path(
+                        assignment_value,
+                        line_number=line_number,
+                        label="SDC constraint",
+                        repo=repo,
+                        qsf_dir=qsf_dir,
+                    )
+                )
+            elif (
+                name.endswith("_FILE")
+                or name.endswith("_FILES")
+                or name in {"SEARCH_PATH", "USER_LIBRARIES", "QIP_FILE"}
+            ):
+                raise ShellPortError(
+                    f"unsupported source-bearing QSF assignment on line {line_number}: {name!r}"
+                )
+            continue
+        if command == "set_instance_assignment":
+            if (
+                len(tokens) != 6
+                or tokens[1] != "-name"
+                or tokens[4] != "-to"
+                or not tokens[2]
+                or not tokens[3]
+                or not tokens[5]
+            ):
+                raise ShellPortError(
+                    "QSF set_instance_assignment line "
+                    f"{line_number} must have exact shape "
+                    "'set_instance_assignment -name NAME VALUE -to LITERAL_TARGET'"
+                )
+            name = tokens[2].upper()
+            value = tokens[3]
+            target = tokens[5]
             if any(marker in target for marker in ("*", "?", "[", "]")):
                 wildcard_targets.append(target)
-        if "-name" not in tokens:
+            if name == "VIRTUAL_PIN":
+                virtual_targets.append(target)
+            instance_assignments.append((name, value, target))
             continue
-        name_at = tokens.index("-name")
-        if name_at + 1 >= len(tokens):
-            raise ShellPortError(f"QSF line {line_number} has -name without a value")
-        name = tokens[name_at + 1].upper()
-        assignment_value = tokens[name_at + 2] if name_at + 2 < len(tokens) else ""
-        if name == "TOP_LEVEL_ENTITY":
-            tops.append(assignment_value)
-        elif name in {"SYSTEMVERILOG_FILE", "VERILOG_FILE"}:
-            sources.append(
-                _literal_assignment_path(
-                    assignment_value,
-                    line_number=line_number,
-                    label="RTL source",
-                    repo=repo,
-                    qsf_dir=qsf_dir,
+        if command == "set_location_assignment":
+            if (
+                len(tokens) != 4
+                or tokens[2] != "-to"
+                or not tokens[1]
+                or not tokens[3]
+            ):
+                raise ShellPortError(
+                    "QSF set_location_assignment line "
+                    f"{line_number} must have exact shape "
+                    "'set_location_assignment LOCATION -to LITERAL_TARGET'"
                 )
-            )
-        elif name == "SDC_FILE":
-            constraint_files.append(
-                _literal_assignment_path(
-                    assignment_value,
-                    line_number=line_number,
-                    label="SDC constraint",
-                    repo=repo,
-                    qsf_dir=qsf_dir,
-                )
-            )
-        elif (
-            name.endswith("_FILE")
-            or name.endswith("_FILES")
-            or name in {"SEARCH_PATH", "USER_LIBRARIES", "QIP_FILE"}
-        ):
-            raise ShellPortError(
-                f"unsupported source-bearing QSF assignment on line {line_number}: {name!r}"
-            )
-        elif name == "VIRTUAL_PIN":
-            virtual_targets.append(target or "<global>")
+            target = tokens[3]
+            if any(marker in target for marker in ("*", "?", "[", "]")):
+                wildcard_targets.append(target)
+            physical_targets.append(target)
+            continue
+        raise ShellPortError(
+            f"unsupported active QSF command on line {line_number}: {command!r}"
+        )
     if len(tops) != 1:
         raise ShellPortError(f"expected one QSF TOP_LEVEL_ENTITY, found {len(tops)}")
     return QsfModel(
@@ -263,7 +334,10 @@ def parse_qsf(text: str, *, repo: Path, qsf_dir: Path) -> QsfModel:
         sources=tuple(sources),
         constraint_files=tuple(constraint_files),
         virtual_pin_targets=tuple(virtual_targets),
+        physical_pin_targets=tuple(physical_targets),
         wildcard_targets=tuple(wildcard_targets),
+        global_assignments=tuple(global_assignments),
+        instance_assignments=tuple(instance_assignments),
     )
 
 
@@ -277,6 +351,32 @@ def validate_qsf(
     errors: list[str] = []
     if model.top != expected_top:
         errors.append(f"QSF top {model.top!r} != expected {expected_top!r}")
+    allowed_global_assignments = set(REQUIRED_QSF_SETTINGS) | {
+        "SYSTEMVERILOG_FILE",
+        "SDC_FILE",
+        "VERILOG_MACRO",
+    }
+    unsupported_assignments = sorted(
+        {name for name, _value in model.global_assignments if name not in allowed_global_assignments}
+    )
+    if unsupported_assignments:
+        errors.append(
+            f"QSF contains unbound global assignments {unsupported_assignments}"
+        )
+    macro_values = [
+        value for name, value in model.global_assignments if name == "VERILOG_MACRO"
+    ]
+    if macro_values != ["QUARTUS_SYNTHESIS=1"]:
+        errors.append(
+            "QSF VERILOG_MACRO closure is "
+            f"{macro_values!r}, expected one 'QUARTUS_SYNTHESIS=1'"
+        )
+    for name, expected in REQUIRED_QSF_SETTINGS.items():
+        values = [value for key, value in model.global_assignments if key == name]
+        if values != [expected]:
+            errors.append(
+                f"QSF effective setting {name} is {values!r}, expected one {expected!r}"
+            )
     duplicates = sorted(
         {source for source in model.sources if model.sources.count(source) > 1}
     )
@@ -339,10 +439,23 @@ def validate_qsf(
                 f"{first}: expected {expected_constraints[first]!r}, "
                 f"got {model.constraint_files[first]!r}"
             )
+    if model.instance_assignments:
+        errors.append(
+            "QSF contains unapproved instance assignments "
+            + ", ".join(
+                repr({"name": name, "value": value, "target": target})
+                for name, value, target in model.instance_assignments
+            )
+        )
     if model.virtual_pin_targets:
         errors.append(
             "QSF contains VIRTUAL_PIN assignments to "
             + ", ".join(repr(target) for target in model.virtual_pin_targets)
+        )
+    if model.physical_pin_targets:
+        errors.append(
+            "QSF contains physical pin assignments to "
+            + ", ".join(repr(target) for target in model.physical_pin_targets)
         )
     if model.wildcard_targets:
         errors.append(
@@ -353,12 +466,189 @@ def validate_qsf(
         raise ShellPortError("; ".join(errors))
 
 
+def parse_qpf(text: str) -> QpfModel:
+    assignments: dict[str, str] = {}
+    for line_number, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = re.fullmatch(r'([A-Z_]+)\s*=\s*"([^"]*)"', line)
+        if match is None:
+            raise ShellPortError(f"unsupported active QPF syntax on line {line_number}")
+        key, value = match.groups()
+        if key in assignments:
+            raise ShellPortError(f"duplicate QPF assignment {key!r}")
+        assignments[key] = value
+    revision = assignments.get("PROJECT_REVISION")
+    version = assignments.get("QUARTUS_VERSION")
+    if revision != "zhao_shell_fit":
+        raise ShellPortError(
+            f"QPF PROJECT_REVISION is {revision!r}, expected 'zhao_shell_fit'"
+        )
+    if version != "17.0":
+        raise ShellPortError(f"QPF QUARTUS_VERSION is {version!r}, expected '17.0'")
+    if assignments != REQUIRED_QPF_SETTINGS:
+        raise ShellPortError(
+            f"QPF assignment closure is {assignments!r}, expected {REQUIRED_QPF_SETTINGS!r}"
+        )
+    return QpfModel(
+        project_revision=revision,
+        quartus_version=version,
+        assignments=tuple(assignments.items()),
+    )
+
+
+def _sdc_logical_lines(text: str, *, path: str) -> tuple[str, ...]:
+    logical: list[str] = []
+    pending = ""
+    for line_number, raw in enumerate(text.splitlines(), 1):
+        stripped = raw.strip()
+        if not pending and (not stripped or stripped.startswith("#")):
+            continue
+        if ";" in stripped:
+            raise ShellPortError(f"SDC {path}:{line_number} contains a Tcl command boundary")
+        continuation = stripped.endswith("\\")
+        fragment = stripped[:-1].rstrip() if continuation else stripped
+        pending = f"{pending} {fragment}".strip()
+        if not continuation:
+            if pending:
+                logical.append(" ".join(pending.split()))
+            pending = ""
+    if pending:
+        raise ShellPortError(f"SDC {path} ends with an unterminated continuation")
+    return tuple(logical)
+
+
+def read_sdc_closure(root: Path, *, repo: Path) -> tuple[SdcClosureEntry, ...]:
+    repo = repo.resolve()
+    root_path = root.resolve()
+    try:
+        root_relative = root_path.relative_to(repo).as_posix()
+    except ValueError as exc:
+        raise ShellPortError(f"SDC root escapes repository: {root}") from exc
+    entries: list[SdcClosureEntry] = []
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(relative: str) -> None:
+        if relative in visiting:
+            raise ShellPortError(f"SDC source cycle reaches {relative!r}")
+        if relative in visited:
+            raise ShellPortError(f"SDC closure sources {relative!r} more than once")
+        path = (repo / relative).resolve()
+        try:
+            path.relative_to(repo)
+        except ValueError as exc:
+            raise ShellPortError(f"SDC source escapes repository: {relative!r}") from exc
+        data = path.read_bytes()
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ShellPortError(f"SDC {relative!r} is not UTF-8: {exc}") from exc
+        visiting.add(relative)
+        entries.append(SdcClosureEntry(path=relative, data=data))
+        for command in _sdc_logical_lines(text, path=relative):
+            head = command.split(None, 1)[0]
+            if head not in {"create_clock", "set_clock_groups", "source"}:
+                raise ShellPortError(
+                    f"SDC closure contains forbidden or unsupported command {head!r} in {relative!r}"
+                )
+            if re.search(r"\[\s*(?:source|eval|uplevel)\b", command) or "$" in command:
+                raise ShellPortError(f"SDC {relative!r} contains active Tcl indirection")
+            if head != "source":
+                continue
+            try:
+                tokens = shlex.split(command, posix=True)
+            except ValueError as exc:
+                raise ShellPortError(f"malformed SDC source in {relative!r}: {exc}") from exc
+            if len(tokens) != 2:
+                raise ShellPortError(f"SDC source in {relative!r} must name one literal file")
+            child = tokens[1]
+            if child.startswith("{") and child.endswith("}"):
+                child = child[1:-1]
+            if not child or any(marker in child for marker in ("$", "[", "]", "*", "?")):
+                raise ShellPortError(f"SDC source in {relative!r} is not a literal path")
+            child_relative = _repo_path(child, base=path.parent, repo=repo)
+            visit(child_relative)
+        visiting.remove(relative)
+        visited.add(relative)
+
+    visit(root_relative)
+    return tuple(entries)
+
+
+def validate_sdc_closure(entries: Sequence[SdcClosureEntry]) -> None:
+    if not entries:
+        raise ShellPortError("SDC closure is empty")
+    commands: list[str] = []
+    for entry in entries:
+        text = entry.data.decode("utf-8")
+        commands.extend(
+            command
+            for command in _sdc_logical_lines(text, path=entry.path)
+            if not command.startswith("source ")
+        )
+    clocks: list[tuple[str, str, str]] = []
+    groups: list[str] = []
+    for command in commands:
+        if command.startswith("create_clock "):
+            match = re.fullmatch(
+                r"create_clock -name ([A-Za-z_][A-Za-z0-9_]*) -period ([0-9]+(?:\.[0-9]+)?) "
+                r"\[get_ports \{([A-Za-z_][A-Za-z0-9_]*)\}\]",
+                command,
+            )
+            if match is None:
+                raise ShellPortError(f"SDC create_clock is not in the pinned literal form: {command!r}")
+            clocks.append(match.groups())
+        elif command.startswith("set_clock_groups "):
+            groups.append(command)
+    expected_clocks = [
+        ("gpu_clk", "10.000", "gpu_clk"),
+        ("vid_clk", "20.000", "vid_clk"),
+        ("audio_clk", "40.000", "audio_clk"),
+    ]
+    if clocks != expected_clocks:
+        raise ShellPortError(f"SDC effective clocks are {clocks!r}, expected {expected_clocks!r}")
+    expected_group = (
+        "set_clock_groups -asynchronous -group [get_clocks {audio_clk}] "
+        "-group [get_clocks {gpu_clk vid_clk}]"
+    )
+    if groups != [expected_group]:
+        raise ShellPortError(
+            "SDC effective clock groups do not preserve the pinned audio-only asynchronous cut"
+        )
+    if len(commands) != 4:
+        raise ShellPortError(
+            f"SDC closure contains {len(commands)} effective constraints, expected exactly 4"
+        )
+
+
+def _write_json_atomic(path: Path, payload: Mapping[str, object]) -> None:
+    import json
+    import os
+    import uuid
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temporary.open("xb") as stream:
+            stream.write((json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8"))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--cmake", type=Path, required=True)
     parser.add_argument("--qsf", type=Path, required=True)
+    parser.add_argument("--qpf", type=Path, required=True)
     parser.add_argument("--sdc", type=Path, required=True)
+    parser.add_argument("--emit-model", type=Path)
     parser.add_argument("--variable", default="ZHAO_SHELL_RTL")
     parser.add_argument("--wrapper", default="fpga/rtl/generated/zhao_shell_fit_top.sv")
     parser.add_argument("--top", default="zhao_shell_fit_top")
@@ -370,6 +660,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     repo = args.repo_root.resolve()
     cmake = args.cmake if args.cmake.is_absolute() else repo / args.cmake
     qsf = args.qsf if args.qsf.is_absolute() else repo / args.qsf
+    qpf = args.qpf if args.qpf.is_absolute() else repo / args.qpf
     sdc = args.sdc if args.sdc.is_absolute() else repo / args.sdc
     try:
         pool = parse_cmake_source_pool(
@@ -388,12 +679,47 @@ def main(argv: Sequence[str] | None = None) -> int:
             expected_sources=(*pool, wrapper),
             expected_constraints=(_repo_path(str(sdc), base=repo, repo=repo),),
         )
+        qpf_model = parse_qpf(qpf.read_text(encoding="utf-8"))
+        sdc_closure = read_sdc_closure(sdc, repo=repo)
+        validate_sdc_closure(sdc_closure)
+        if args.emit_model is not None:
+            try:
+                emit_path = args.emit_model.resolve()
+                emit_path.relative_to(repo)
+            except ValueError as exc:
+                raise ShellPortError("QSF model output must remain inside the repository") from exc
+            _write_json_atomic(
+                emit_path,
+                {
+                    "top": model.top,
+                    "projectRevision": qpf_model.project_revision,
+                    "quartusVersion": qpf_model.quartus_version,
+                    "qpfAssignments": [
+                        {"name": name, "value": value}
+                        for name, value in qpf_model.assignments
+                    ],
+                    "sources": list(model.sources),
+                    "constraints": [
+                        {"path": entry.path, "sha256": hashlib.sha256(entry.data).hexdigest()}
+                        for entry in sdc_closure
+                    ],
+                    "effectiveSettings": {
+                        name: [value for key, value in model.global_assignments if key == name][0]
+                        for name in REQUIRED_QSF_SETTINGS
+                    },
+                    "globalAssignments": [
+                        {"name": name, "value": value}
+                        for name, value in model.global_assignments
+                    ],
+                },
+            )
     except (OSError, ShellPortError) as exc:
         print(f"shell-fit-qsf: {exc}", file=sys.stderr)
         return 1
     print(
-        f"shell-fit-qsf: top={model.top} sources={len(model.sources)} "
-        "virtual-pins=none wildcard-targets=none"
+        f"shell-fit-qsf: revision={qpf_model.project_revision} top={model.top} "
+        f"sources={len(model.sources)} sdc-closure={len(sdc_closure)} "
+        "virtual-pins=none physical-pins=none wildcard-targets=none"
     )
     return 0
 

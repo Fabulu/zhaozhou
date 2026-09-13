@@ -1,5 +1,16 @@
+set_global_assignment -name FAMILY "Cyclone V"
+set_global_assignment -name DEVICE 5CSEBA6U23I7
 set_global_assignment -name TOP_LEVEL_ENTITY zhao_shell_fit_top
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+set_global_assignment -name SEED 1
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+set_global_assignment -name OPTIMIZATION_TECHNIQUE BALANCED
+set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
+set_global_assignment -name PLACEMENT_EFFORT_MULTIPLIER 1.0
+set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING OFF
+set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"
 set_global_assignment -name SYSTEMVERILOG_FILE ../../../fpga/rtl/common/zhao_pkg.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../../fpga/rtl/generated/zhao_abi_pkg.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../../fpga/rtl/generated/zhao_shell_fit_top.sv
 set_global_assignment -name SDC_FILE shell_fit_constraints_clean.sdc
+set_global_assignment -name LAST_QUARTUS_VERSION "17.0.2 Lite Edition"

@@ -1,0 +1,12 @@
++--------------------------------------------------------------+
+; Unconstrained Path Summary                                   ;
++----------------------------------+------------+---------------+
+; Category                         ; Setup      ; Hold          ;
++----------------------------------+------------+---------------+
+; Illegal Clocks                   ; 0          ; 0             ;
+; Unconstrained Clocks             ; 0          ; 0             ;
+; Unconstrained Input Ports        ; 0          ; 0             ;
+; Unconstrained Input Port Paths   ; 0          ; 0             ;
+; Unconstrained Output Ports       ; 0          ; 0             ;
+; Unconstrained Output Port Paths  ; 0          ; 0             ;
++----------------------------------+------------+---------------+

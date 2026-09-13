@@ -1,10 +1,227 @@
 {
+  "boundary": {
+    "declarationSha256": "513f356097e8bfc97f78cecdf8221cfea871de9114386b912f166947d25848a5",
+    "inputBits": 4,
+    "module": "zhao_shell_fit_top",
+    "outputBits": 6,
+    "portCount": 6,
+    "ports": [
+      {
+        "bitWidth": 1,
+        "direction": "input",
+        "name": "gpu_clk",
+        "ordinal": 0
+      },
+      {
+        "bitWidth": 1,
+        "direction": "input",
+        "name": "vid_clk",
+        "ordinal": 1
+      },
+      {
+        "bitWidth": 1,
+        "direction": "input",
+        "name": "audio_clk",
+        "ordinal": 2
+      },
+      {
+        "bitWidth": 1,
+        "direction": "input",
+        "name": "rst_n",
+        "ordinal": 3
+      },
+      {
+        "bitWidth": 3,
+        "direction": "output",
+        "name": "fit_signature_o",
+        "ordinal": 4
+      },
+      {
+        "bitWidth": 3,
+        "direction": "output",
+        "name": "fit_epoch_o",
+        "ordinal": 5
+      }
+    ],
+    "totalBits": 10
+  },
+  "characterization": "shell_fit_top_clean_characterization",
+  "evidenceMode": "production",
   "compileSourcePool": [
     "fpga/rtl/common/zhao_pkg.sv",
     "fpga/rtl/generated/zhao_abi_pkg.sv",
     "fpga/rtl/generated/zhao_shell_fit_top.sv"
   ],
   "compileSourcePoolParity": true,
+  "configuration": {
+    "constraints": [
+      "tests/tools/fixtures/shell_fit_constraints_clean.sdc"
+    ],
+    "effectiveSettings": {
+      "DEVICE": "5CSEBA6U23I7",
+      "FAMILY": "Cyclone V",
+      "FITTER_EFFORT": "STANDARD FIT",
+      "LAST_QUARTUS_VERSION": "17.0.2 Lite Edition",
+      "OPTIMIZATION_MODE": "HIGH PERFORMANCE EFFORT",
+      "OPTIMIZATION_TECHNIQUE": "BALANCED",
+      "PHYSICAL_SYNTHESIS_REGISTER_RETIMING": "OFF",
+      "PLACEMENT_EFFORT_MULTIPLIER": "1.0",
+      "PROJECT_OUTPUT_DIRECTORY": "output_files",
+      "SEED": "1",
+      "TOP_LEVEL_ENTITY": "zhao_shell_fit_top"
+    },
+    "globalAssignments": [
+      {
+        "name": "FAMILY",
+        "value": "Cyclone V"
+      },
+      {
+        "name": "DEVICE",
+        "value": "5CSEBA6U23I7"
+      },
+      {
+        "name": "TOP_LEVEL_ENTITY",
+        "value": "zhao_shell_fit_top"
+      },
+      {
+        "name": "PROJECT_OUTPUT_DIRECTORY",
+        "value": "output_files"
+      },
+      {
+        "name": "SEED",
+        "value": "1"
+      },
+      {
+        "name": "OPTIMIZATION_MODE",
+        "value": "HIGH PERFORMANCE EFFORT"
+      },
+      {
+        "name": "OPTIMIZATION_TECHNIQUE",
+        "value": "BALANCED"
+      },
+      {
+        "name": "FITTER_EFFORT",
+        "value": "STANDARD FIT"
+      },
+      {
+        "name": "PLACEMENT_EFFORT_MULTIPLIER",
+        "value": "1.0"
+      },
+      {
+        "name": "PHYSICAL_SYNTHESIS_REGISTER_RETIMING",
+        "value": "OFF"
+      },
+      {
+        "name": "VERILOG_MACRO",
+        "value": "QUARTUS_SYNTHESIS=1"
+      },
+      {
+        "name": "SYSTEMVERILOG_FILE",
+        "value": "../../../fpga/rtl/common/zhao_pkg.sv"
+      },
+      {
+        "name": "SYSTEMVERILOG_FILE",
+        "value": "../../../fpga/rtl/generated/zhao_abi_pkg.sv"
+      },
+      {
+        "name": "SYSTEMVERILOG_FILE",
+        "value": "../../../fpga/rtl/generated/zhao_shell_fit_top.sv"
+      },
+      {
+        "name": "SDC_FILE",
+        "value": "shell_fit_constraints_clean.sdc"
+      },
+      {
+        "name": "LAST_QUARTUS_VERSION",
+        "value": "17.0.2 Lite Edition"
+      }
+    ],
+    "projectRevision": "zhao_shell_fit",
+    "qpfAssignments": [
+      {
+        "name": "QUARTUS_VERSION",
+        "value": "17.0"
+      },
+      {
+        "name": "DATE",
+        "value": "00:00:00  August 18, 2026"
+      },
+      {
+        "name": "PROJECT_REVISION",
+        "value": "zhao_shell_fit"
+      }
+    ],
+    "qpfQuartusVersion": "17.0",
+    "sdcClosure": [
+      {
+        "path": "tests/tools/fixtures/shell_fit_constraints_clean.sdc",
+        "sha256": "a720662d1bea79d21cc826eca008a30ab4b326e56228a757468224694c04172b"
+      }
+    ],
+    "sources": [
+      "fpga/rtl/common/zhao_pkg.sv",
+      "fpga/rtl/generated/zhao_abi_pkg.sv",
+      "fpga/rtl/generated/zhao_shell_fit_top.sv"
+    ],
+    "top": "zhao_shell_fit_top"
+  },
+  "connectivity": {
+    "mappedBoundaryPortCount": 10,
+    "passed": true,
+    "ports": [
+      {
+        "direction": "input",
+        "name": "gpu_clk",
+        "postMapCount": 1
+      },
+      {
+        "direction": "input",
+        "name": "vid_clk",
+        "postMapCount": 1
+      },
+      {
+        "direction": "input",
+        "name": "audio_clk",
+        "postMapCount": 1
+      },
+      {
+        "direction": "input",
+        "name": "rst_n",
+        "postMapCount": 1
+      },
+      {
+        "direction": "output",
+        "name": "fit_signature_o[0]",
+        "postMapCount": 1
+      },
+      {
+        "direction": "output",
+        "name": "fit_signature_o[1]",
+        "postMapCount": 1
+      },
+      {
+        "direction": "output",
+        "name": "fit_signature_o[2]",
+        "postMapCount": 1
+      },
+      {
+        "direction": "output",
+        "name": "fit_epoch_o[0]",
+        "postMapCount": 1
+      },
+      {
+        "direction": "output",
+        "name": "fit_epoch_o[1]",
+        "postMapCount": 1
+      },
+      {
+        "direction": "output",
+        "name": "fit_epoch_o[2]",
+        "postMapCount": 1
+      }
+    ],
+    "top": "zhao_shell_fit_top"
+  },
   "device": "5CSEBA6U23I7",
   "entities": [
     {
@@ -27,6 +244,7 @@
       "memoryAlmsSelf": "4.0",
       "memoryBits": 2200000,
       "module": "zhao_shell_fit_top",
+      "node": "|zhao_shell_fit_top",
       "pins": 10,
       "ramBlocks": "132",
       "registers": 16000,
@@ -56,6 +274,7 @@
       "memoryAlmsSelf": "0.0",
       "memoryBits": 2097152,
       "module": "zhao_shell_top",
+      "node": "|zhao_shell_top:u_shell",
       "pins": 0,
       "ramBlocks": "128",
       "registers": 14321,
@@ -85,6 +304,7 @@
       "memoryAlmsSelf": "4.0",
       "memoryBits": 27848,
       "module": "zhao_shell_fit_stimulus",
+      "node": "|zhao_shell_fit_stimulus:u_stimulus",
       "pins": 0,
       "ramBlocks": "4",
       "registers": 1500,
@@ -114,6 +334,7 @@
       "memoryAlmsSelf": "0.0",
       "memoryBits": 0,
       "module": "zhao_shell_fit_gpu_sink",
+      "node": "|zhao_shell_fit_gpu_sink:u_gpu_sink",
       "pins": 0,
       "ramBlocks": "0",
       "registers": 1800,
@@ -143,6 +364,7 @@
       "memoryAlmsSelf": "0.0",
       "memoryBits": 0,
       "module": "zhao_shell_fit_video_sink",
+      "node": "|zhao_shell_fit_video_sink:u_video_sink",
       "pins": 0,
       "ramBlocks": "0",
       "registers": 250,
@@ -172,6 +394,7 @@
       "memoryAlmsSelf": "0.0",
       "memoryBits": 0,
       "module": "zhao_shell_fit_audio_sink",
+      "node": "|zhao_shell_fit_audio_sink:u_audio_sink",
       "pins": 0,
       "ramBlocks": "0",
       "registers": 130,
@@ -180,12 +403,54 @@
       "unavailableAlms": "0.0",
       "unavailableAlmsSelf": "0.0",
       "virtualPins": 0
+    },
+    {
+      "almsNeeded": "1.6",
+      "almsNeededSelf": "1.6",
+      "combinationalAluts": 3,
+      "combinationalAlutsSelf": 3,
+      "denseRecoverableAlms": "0.4",
+      "denseRecoverableAlmsSelf": "0.4",
+      "dspBlocks": "0",
+      "entityName": "zhao_shell_fit_helper",
+      "finalPlacementAlms": "2.0",
+      "finalPlacementAlmsSelf": "2.0",
+      "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_fit_helper:u_hidden",
+      "instance": null,
+      "ioRegisters": 0,
+      "ioRegistersSelf": 0,
+      "libraryName": "work",
+      "memoryAlms": "0.0",
+      "memoryAlmsSelf": "0.0",
+      "memoryBits": 0,
+      "module": "zhao_shell_fit_helper",
+      "node": "|zhao_shell_fit_helper:u_hidden",
+      "pins": 0,
+      "ramBlocks": "0",
+      "registers": 2,
+      "registersSelf": 2,
+      "role": "unmanifested",
+      "unavailableAlms": "0.0",
+      "unavailableAlmsSelf": "0.0",
+      "virtualPins": 0
     }
   ],
   "evidenceArtifacts": {
+    "clockTransfers": {
+      "path": "reports/characterization/clock_transfers.rpt",
+      "sha256": "b6787514a12fe35717e5865ce979864e9a9d645a0fe0b2c55b28628ecc6d1a4b"
+    },
     "clocks": {
       "path": "reports/characterization/clocks.rpt",
       "sha256": "28966f5099593f6b3181cfb17e6afda3a07269dfb6df60312758000a6be88531"
+    },
+    "fitStderr": {
+      "path": "tests/tools/fixtures/shell_fit_fit.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fitStdout": {
+      "path": "tests/tools/fixtures/shell_fit_fit.stdout.log",
+      "sha256": "b0071f5395e06965c7388a13861acef2e3a360f8c97ed2b8676794b15ccf1f8f"
     },
     "gitHead": {
       "path": "tests/tools/fixtures/shell_fit_git_head.txt",
@@ -209,15 +474,51 @@
     },
     "hierarchy": {
       "path": "tests/tools/fixtures/shell_fit_hierarchy_with_shell.rpt",
-      "sha256": "e43add54c7fecd943d0542353ca4ef79e0e18d371ab255e019b346de12e9cfab"
+      "sha256": "045b411ff1522f43866f38dc8f13cf8fd7ec9b8c16bf1ca99a0104242fb899ed"
+    },
+    "holdPaths": {
+      "path": "tests/tools/fixtures/shell_fit_hold_paths_clean.rpt",
+      "sha256": "a091659b887486f5af9d850bc6e11fc7392ca8eb1b2921e0833032b7befefcbc"
     },
     "mapReport": {
       "path": "tests/tools/fixtures/shell_fit_map_clean.rpt",
-      "sha256": "431b48717e677ffd69c9919fc1bab882255c51073cdb9a9afb068a3d728ec504"
+      "sha256": "2a8c74ae0010b484c3ffdc966ab6a5a5fbfe1f5952a9a430c60a65a75cad9f63"
+    },
+    "mapStderr": {
+      "path": "tests/tools/fixtures/shell_fit_map.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "mapStdout": {
+      "path": "tests/tools/fixtures/shell_fit_map.stdout.log",
+      "sha256": "587954c675d86fa27c7ade79116a74b58a4b74c056595380b18539f46a1a50c3"
     },
     "mapSummary": {
       "path": "tests/tools/fixtures/shell_fit_map_clean.summary",
       "sha256": "c828bea6ed41eba561061efb83175f4501c5e4cead69039421255d4205c5e2ce"
+    },
+    "postMapConnectivity": {
+      "path": "tests/tools/fixtures/shell_fit_post_map_connectivity.tsv",
+      "sha256": "2c8e3efad317af524ccb9349685067566a8b726627d42c977dc2f88b72accf4a"
+    },
+    "postMapStderr": {
+      "path": "tests/tools/fixtures/shell_fit_post_map.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "postMapStdout": {
+      "path": "tests/tools/fixtures/shell_fit_post_map.stdout.log",
+      "sha256": "904bdfcbc07f014b1d0f4de5f1bf7a6784002b22b2d83e5dacd1f2ea420438bb"
+    },
+    "recoveryPaths": {
+      "path": "tests/tools/fixtures/shell_fit_recovery_paths_clean.rpt",
+      "sha256": "b904c4dacc43f8c4fd72430f9eb3780f8c3eadefe3ca86b73e266b0556a1d04a"
+    },
+    "removalPaths": {
+      "path": "tests/tools/fixtures/shell_fit_removal_paths_clean.rpt",
+      "sha256": "b904c4dacc43f8c4fd72430f9eb3780f8c3eadefe3ca86b73e266b0556a1d04a"
+    },
+    "setupPaths": {
+      "path": "tests/tools/fixtures/shell_fit_setup_paths_clean.rpt",
+      "sha256": "aecb84d6f57057cd2e38f70cb4a5a81bf27dfb2ff76d91bdccc9b2ce5c66863e"
     },
     "sta": {
       "path": "reports/characterization/zhao_shell_fit.sta.rpt",
@@ -226,7 +527,31 @@
     "summary": {
       "path": "tests/tools/fixtures/shell_fit_summary_zero_virtual_pins.txt",
       "sha256": "d36fa1ecf6f1952134b699611c6e7342b50ddd5a81454d3d45bf8bdc5b67e286"
+    },
+    "timequestStderr": {
+      "path": "tests/tools/fixtures/shell_fit_timequest.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "timequestStdout": {
+      "path": "tests/tools/fixtures/shell_fit_timequest.stdout.log",
+      "sha256": "06402440463d5bb71168409c53730bd448c1612db030ac8e7c77e49ff5dc327a"
+    },
+    "timingMetrics": {
+      "path": "tests/tools/fixtures/shell_fit_timing_metrics_clean.tsv",
+      "sha256": "598217f57f832b687f2a75bb70c60a7c9f8ecd9b676d60bd3559e5e8c981144d"
+    },
+    "unconstrainedPaths": {
+      "path": "tests/tools/fixtures/shell_fit_unconstrained_clean.rpt",
+      "sha256": "95272f05d3431f3bc79a8825a748560de49c577afa164dbac2acb5272d1957a3"
     }
+  },
+  "execution": {
+    "processors": 4
+  },
+  "gate": {
+    "failures": [],
+    "name": "shell_fit_top_clean_characterization",
+    "status": "pass"
   },
   "generatedArtifacts": {
     "manifestSha256": "1188f881f37f4d107cc558c59dabca7aa3cacf4aa9d48f6e723a056a34370873",
@@ -236,7 +561,11 @@
     "Deterministic legal-ish characterization traffic, not a functional HPS model.",
     "Command-aware compact SDR response, not an SDRAM storage array.",
     "Directed render and guard transactions prove activity, not rendered correctness.",
-    "Packet A has not run Quartus and makes no fit, pin, timing, or area claim."
+    "5CSEBA6U23I7 is a provisional capacity/timing target, not frozen board truth.",
+    "The ten fitter pins are an unassigned characterization boundary, not a package or board pinout.",
+    "No framework top, board I/O delays, PLLs, or physical clocks are included.",
+    "gpu_clk and vid_clk remain timing-related; only audio_clk is declared asynchronous.",
+    "The result does not characterize a physical SDRAM interface or fabricated hardware."
   ],
   "mapEntities": [
     {
@@ -249,6 +578,7 @@
       "libraryName": "work",
       "memoryBits": 2200000,
       "module": "zhao_shell_fit_top",
+      "node": "|zhao_shell_fit_top",
       "pins": 10,
       "registers": 16111,
       "registersSelf": 80,
@@ -265,6 +595,7 @@
       "libraryName": "work",
       "memoryBits": 2097152,
       "module": "zhao_shell_top",
+      "node": "|zhao_shell_top:u_shell|",
       "pins": 0,
       "registers": 14321,
       "registersSelf": 14321,
@@ -281,6 +612,7 @@
       "libraryName": "work",
       "memoryBits": 27848,
       "module": "zhao_shell_fit_stimulus",
+      "node": "|zhao_shell_fit_stimulus:u_stimulus|",
       "pins": 0,
       "registers": 1500,
       "registersSelf": 1500,
@@ -297,6 +629,7 @@
       "libraryName": "work",
       "memoryBits": 0,
       "module": "zhao_shell_fit_gpu_sink",
+      "node": "|zhao_shell_fit_gpu_sink:u_gpu_sink|",
       "pins": 0,
       "registers": 1800,
       "registersSelf": 1800,
@@ -313,6 +646,7 @@
       "libraryName": "work",
       "memoryBits": 0,
       "module": "zhao_shell_fit_video_sink",
+      "node": "|zhao_shell_fit_video_sink:u_video_sink|",
       "pins": 0,
       "registers": 250,
       "registersSelf": 250,
@@ -329,17 +663,55 @@
       "libraryName": "work",
       "memoryBits": 0,
       "module": "zhao_shell_fit_audio_sink",
+      "node": "|zhao_shell_fit_audio_sink:u_audio_sink|",
       "pins": 0,
       "registers": 130,
       "registersSelf": 130,
       "role": "audio_sink",
+      "virtualPins": 0
+    },
+    {
+      "combinationalAluts": 3,
+      "combinationalAlutsSelf": 3,
+      "dspBlocks": "0",
+      "entityName": "zhao_shell_fit_helper",
+      "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_fit_helper:u_hidden",
+      "instance": null,
+      "libraryName": "work",
+      "memoryBits": 0,
+      "module": "zhao_shell_fit_helper",
+      "node": "|zhao_shell_fit_helper:u_hidden|",
+      "pins": 0,
+      "registers": 2,
+      "registersSelf": 2,
+      "role": "unmanifested",
       "virtualPins": 0
     }
   ],
   "remainderAttribution": {
     "calculatedBySubtraction": false,
     "method": "reported top row only; never inferred by subtraction",
-    "reportedTopFullHierarchyName": "|zhao_shell_fit_top"
+    "reportedFitterTopSelf": {
+      "almsNeededSelf": "20.0",
+      "combinationalAlutsSelf": 40,
+      "denseRecoverableAlmsSelf": "1.0",
+      "entityName": "zhao_shell_fit_top",
+      "finalPlacementAlmsSelf": "21.0",
+      "fullHierarchyName": "|zhao_shell_fit_top",
+      "ioRegistersSelf": 6,
+      "memoryAlmsSelf": "4.0",
+      "registersSelf": 80,
+      "unavailableAlmsSelf": "0.0"
+    },
+    "reportedMapTopSelf": {
+      "combinationalAlutsSelf": 40,
+      "entityName": "zhao_shell_fit_top",
+      "fullHierarchyName": "|zhao_shell_fit_top",
+      "registersSelf": 80
+    },
+    "reportedTopFullHierarchyName": "|zhao_shell_fit_top",
+    "unmanifestedFitterRows": 1,
+    "unmanifestedMapRows": 1
   },
   "resources": {
     "alms": 9876,
@@ -360,9 +732,17 @@
       "path": "tests/tools/fixtures/shell_fit_source_pool.cmake",
       "sha256": "14594683cced56441645516c6d488185427c284e0b64d8d2484c1dcaade60cbd"
     },
+    "evidenceParser": {
+      "path": "tools/quartus/shell_fit_reports.py",
+      "sha256": "86a4cfa00d6de66b8fd455a106eaaccf2e8bb85d157f80fad7c9ae0bf63d8ced"
+    },
     "generator": {
       "path": "tools/quartus/gen_shell_fit_top.py",
       "sha256": "f34a4609e362f4052a78bcc74f3414ef7e06a1c26da0abafab33abdfb22e73b7"
+    },
+    "gitCapture": {
+      "path": "tools/quartus/capture_shell_fit_git.py",
+      "sha256": "24e128fb8dac00c63774ee3be65775e9a7021e82859dcc890d01fb8632ebbff0"
     },
     "package": {
       "path": "fpga/rtl/common/zhao_pkg.sv",
@@ -380,13 +760,33 @@
       "path": "design/shell_fit_ports.yml",
       "sha256": "e153ed6e4f19ef9855a0f97784886d9ea323245ce4999f3da8696f1178ceb91a"
     },
+    "postMapScript": {
+      "path": "fpga/quartus/shell_fit/post_map_connectivity.tcl",
+      "sha256": "1000bcf790053b2cb8075d73506a0bf1d57dd5a7bc5e54375d7df1d3546d6f0e"
+    },
+    "project": {
+      "path": "fpga/quartus/shell_fit/zhao_shell_fit.qpf",
+      "sha256": "f638d3249f858a273b2c2035faaccadc0a72f19ddbc2e16b41b81ec4d266298f"
+    },
     "qsf": {
       "path": "tests/tools/fixtures/shell_fit_qsf_clean.qsf",
-      "sha256": "ee1dc1aad8a4cb392071b3e518a2674d4cfbccafe58d9f017c7bd7593e75b0e6"
+      "sha256": "cf3845a5c376596c36cf62608a8271a6dd455bda1da9bbf870d20493edfe02ae"
+    },
+    "qsfParser": {
+      "path": "tools/quartus/shell_fit_qsf.py",
+      "sha256": "e549ea0fcf36fbc5c82aa311ebeed32cd923a46c82062abd1c32e6e21811ac9c"
+    },
+    "reportScript": {
+      "path": "fpga/quartus/shell_fit/report.tcl",
+      "sha256": "6a6374e9618057f2885b9d624aa3e7a306529e47296754fc2de6541382065a9d"
+    },
+    "runner": {
+      "path": "tools/quartus/run_shell_fit.ps1",
+      "sha256": "8594ac3bed0d61e6324fb7bf90c4be622c913704ba6a97228c5abedee1759603"
     },
     "sdc": {
       "path": "tests/tools/fixtures/shell_fit_constraints_clean.sdc",
-      "sha256": "8093d5691df5fc07e6617bf91f1270327fb52f599537259bc46d3b6b82fe9c4e"
+      "sha256": "a720662d1bea79d21cc826eca008a30ab4b326e56228a757468224694c04172b"
     },
     "shell": {
       "path": "fpga/rtl/common/zhao_shell_top.sv",
@@ -396,21 +796,180 @@
   "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
   "sourceHashes": {
     "cmake": "14594683cced56441645516c6d488185427c284e0b64d8d2484c1dcaade60cbd",
+    "evidenceParser": "86a4cfa00d6de66b8fd455a106eaaccf2e8bb85d157f80fad7c9ae0bf63d8ced",
     "generator": "f34a4609e362f4052a78bcc74f3414ef7e06a1c26da0abafab33abdfb22e73b7",
+    "gitCapture": "24e128fb8dac00c63774ee3be65775e9a7021e82859dcc890d01fb8632ebbff0",
     "packageFile": "a63ed92194e45580f33b9827547f9bc1fbe57446dbe02555e8ecd7a6b734ed6d",
     "packet": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51",
     "parser": "d4da568555ca520691fec7db7dd2893d7a34bc5b5a0aeda879e9d407fc4572a9",
     "policy": "e153ed6e4f19ef9855a0f97784886d9ea323245ce4999f3da8696f1178ceb91a",
-    "qsf": "ee1dc1aad8a4cb392071b3e518a2674d4cfbccafe58d9f017c7bd7593e75b0e6",
-    "sdc": "8093d5691df5fc07e6617bf91f1270327fb52f599537259bc46d3b6b82fe9c4e",
+    "postMapScript": "1000bcf790053b2cb8075d73506a0bf1d57dd5a7bc5e54375d7df1d3546d6f0e",
+    "project": "f638d3249f858a273b2c2035faaccadc0a72f19ddbc2e16b41b81ec4d266298f",
+    "qsf": "cf3845a5c376596c36cf62608a8271a6dd455bda1da9bbf870d20493edfe02ae",
+    "qsfParser": "e549ea0fcf36fbc5c82aa311ebeed32cd923a46c82062abd1c32e6e21811ac9c",
+    "reportScript": "6a6374e9618057f2885b9d624aa3e7a306529e47296754fc2de6541382065a9d",
+    "runner": "8594ac3bed0d61e6324fb7bf90c4be622c913704ba6a97228c5abedee1759603",
+    "sdc": "a720662d1bea79d21cc826eca008a30ab4b326e56228a757468224694c04172b",
     "shellDeclaration": "a243647455d61afa653a14127a5bc489c7361f767f7e36c880254d81a46e1739",
     "shellFile": "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
   },
   "stages": {
-    "analysis": "successful",
     "fit": "successful",
     "map": "successful",
+    "postMap": "successful",
     "timequest": "successful"
+  },
+  "timing": {
+    "analyses": [
+      {
+        "failingEndpointCount": 0,
+        "name": "setup",
+        "reportedPathCount": 200,
+        "reportedViolatedCount": 0,
+        "worstSlackNs": "0.321"
+      },
+      {
+        "failingEndpointCount": 0,
+        "name": "hold",
+        "reportedPathCount": 200,
+        "reportedViolatedCount": 0,
+        "worstSlackNs": "0.256"
+      },
+      {
+        "failingEndpointCount": 0,
+        "name": "recovery",
+        "reportedPathCount": 0,
+        "reportedViolatedCount": 0,
+        "worstSlackNs": null
+      },
+      {
+        "failingEndpointCount": 0,
+        "name": "removal",
+        "reportedPathCount": 0,
+        "reportedViolatedCount": 0,
+        "worstSlackNs": null
+      }
+    ],
+    "clockTransfers": [
+      {
+        "analysis": "setup",
+        "from": "audio_clk",
+        "rrPaths": "5166",
+        "to": "audio_clk"
+      },
+      {
+        "analysis": "setup",
+        "from": "gpu_clk",
+        "rrPaths": "false path",
+        "to": "audio_clk"
+      },
+      {
+        "analysis": "setup",
+        "from": "audio_clk",
+        "rrPaths": "false path",
+        "to": "gpu_clk"
+      },
+      {
+        "analysis": "setup",
+        "from": "gpu_clk",
+        "rrPaths": "50798906",
+        "to": "gpu_clk"
+      },
+      {
+        "analysis": "setup",
+        "from": "vid_clk",
+        "rrPaths": "173",
+        "to": "gpu_clk"
+      },
+      {
+        "analysis": "setup",
+        "from": "gpu_clk",
+        "rrPaths": "20",
+        "to": "vid_clk"
+      },
+      {
+        "analysis": "setup",
+        "from": "vid_clk",
+        "rrPaths": "89738",
+        "to": "vid_clk"
+      },
+      {
+        "analysis": "hold",
+        "from": "audio_clk",
+        "rrPaths": "5166",
+        "to": "audio_clk"
+      },
+      {
+        "analysis": "hold",
+        "from": "gpu_clk",
+        "rrPaths": "false path",
+        "to": "audio_clk"
+      },
+      {
+        "analysis": "hold",
+        "from": "audio_clk",
+        "rrPaths": "false path",
+        "to": "gpu_clk"
+      },
+      {
+        "analysis": "hold",
+        "from": "gpu_clk",
+        "rrPaths": "50798906",
+        "to": "gpu_clk"
+      },
+      {
+        "analysis": "hold",
+        "from": "vid_clk",
+        "rrPaths": "173",
+        "to": "gpu_clk"
+      },
+      {
+        "analysis": "hold",
+        "from": "gpu_clk",
+        "rrPaths": "20",
+        "to": "vid_clk"
+      },
+      {
+        "analysis": "hold",
+        "from": "vid_clk",
+        "rrPaths": "89738",
+        "to": "vid_clk"
+      }
+    ],
+    "clocks": {
+      "audio_clk": "40.000",
+      "gpu_clk": "10.000",
+      "vid_clk": "20.000"
+    },
+    "criticalWarnings": [],
+    "gateFailures": [],
+    "timingPassed": true,
+    "unconstrained": {
+      "Illegal Clocks": {
+        "hold": 0,
+        "setup": 0
+      },
+      "Unconstrained Clocks": {
+        "hold": 0,
+        "setup": 0
+      },
+      "Unconstrained Input Port Paths": {
+        "hold": 0,
+        "setup": 0
+      },
+      "Unconstrained Input Ports": {
+        "hold": 0,
+        "setup": 0
+      },
+      "Unconstrained Output Port Paths": {
+        "hold": 0,
+        "setup": 0
+      },
+      "Unconstrained Output Ports": {
+        "hold": 0,
+        "setup": 0
+      }
+    }
   },
   "tool": {
     "name": "Quartus Prime",

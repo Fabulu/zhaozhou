@@ -1,66 +1,300 @@
 [CmdletBinding()]
 param(
-    [switch]$ParityOnly,
+    [Alias('ParityOnly')]
+    [switch]$PreflightOnly,
     [switch]$KeepWorkspace,
-    # Peak MEMORY is what stops this flow, not time. Measured 2026-08-18:
-    # quartus_map committed 28.4 GB and thrashed against 24 GB of RAM.
-    # NUM_PARALLEL_PROCESSORS is the biggest lever there, because each worker
-    # holds its own working set of the netlist, so the committed footprint
-    # scales with it. The project QSF asks for 4. Passing a lower number here
-    # overrides it in the STAGED copy only, so the committed project keeps its
-    # value and per-block characterization is unaffected.
-    # Results are identical either way: this changes how the work is divided,
-    # not what is computed.
-    [int]$Processors = 0,
-    # THE NOISE FLOOR IS A MEASUREMENT, NOT AN ASSUMPTION.
-    # The project QSF pins SEED 1 so rounds are comparable, which is right.
-    # But it also means the placement variance has never been measured, and a
-    # whole optimisation series was being read against a guessed "~1.5 MHz"
-    # figure. Re-fitting ONE UNCHANGED COMMIT at several seeds is the only way
-    # to know which round-to-round deltas were signal.
-    # Overrides the STAGED copy only, exactly as -Processors does, so the
-    # committed project keeps SEED 1 and normal rounds stay comparable.
-    [int]$Seed = 0,
-    # THE CONSTRAINT IS THE EXPERIMENT.
-    # SaveTheRendered.md, 2026-09-03: "Quartus was never told the real goal."
-    # The committed SDC says 10.000 ns, so the fitter has only ever solved a
-    # 100 MHz problem, and 99.50 MHz is the DERIVED Fmax of a placement that
-    # was never asked for more. At 10 ns only Early-Z is red and the other four
-    # near-critical owners read as passing, so timing-driven placement spends
-    # its effort on one 50 ps endpoint instead of the cluster.
-    #
-    # At 9.52381 ns (105 MHz) all five go negative and the fitter faces a
-    # materially different problem. That does not conjure 5.5 MHz; it makes the
-    # measurement answer the question actually being asked, which is "can
-    # Quartus place THIS design at 105 MHz", judged on zero WNS and zero TNS
-    # rather than on a derived Fmax borrowed from another target.
-    #
-    # Staged into the snapshot only, exactly as -Processors and -Seed are, so
-    # the committed SDC keeps 10.000 and ordinary rounds stay comparable.
-    [double]$GpuPeriodNs = 0,
-    # Quartus 17.0 effort levers the campaign never exhausted. Both are
-    # measured, not believed: PLACEMENT_EFFORT_MULTIPLIER above 1 spends longer
-    # seeking a placement, and register retiming is supported on Cyclone.
-    # NOT to be retried, both already measured and rejected:
-    # OPTIMIZATION_TECHNIQUE=SPEED (-3.01 MHz, +147 ALM) and explicit physical
-    # register duplication (exactly zero change, identical ALM and slack).
-    [double]$PlacementEffort = 0,
-    [switch]$Retiming,
+    [switch]$TestOnlyFakeQuartus,
+    [string]$PythonExe,
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
-    [string]$ReportRoot
+    [string]$ReportRoot,
+    [ValidateRange(1, 256)]
+    [int]$Processors = 4
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$GateName = 'shell_fit_top_clean_characterization'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $ProjectRel = 'fpga/quartus/shell_fit'
-$ProjectDir = Join-Path $RepoRoot ($ProjectRel -replace '/', '\')
-$QsfPath = Join-Path $ProjectDir 'zhao_shell_fit.qsf'
-$CmakePath = Join-Path $RepoRoot 'tests\CMakeLists.txt'
+$QsfRel = "$ProjectRel/zhao_shell_fit.qsf"
+$SdcRel = "$ProjectRel/zhao_shell_fit.sdc"
+$QpfRel = "$ProjectRel/zhao_shell_fit.qpf"
+$ReportScriptRel = "$ProjectRel/report.tcl"
+$PostMapScriptRel = "$ProjectRel/post_map_connectivity.tcl"
+$CmakeRel = 'tests/CMakeLists.txt'
+$WrapperRel = 'fpga/rtl/generated/zhao_shell_fit_top.sv'
+$ManifestRel = 'fpga/rtl/generated/zhao_shell_fit_top.manifest.json'
+$LauncherRel = 'tools/quartus/run_shell_fit.ps1'
+$CanonicalQuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64'
+$CanonicalQuartusSha256 = @{
+    'quartus_map.exe' = '3DFB729AF88E2EF6217EC6EA0DBAD305485814B84B46610A1CFD41EFF5DBCD45'
+    'quartus_fit.exe' = 'D7C802E80E332AEF0D5D711077B033FE8BEB9E58A2302A3B3F2C5C8CCD7A0917'
+    'quartus_sta.exe' = '5CD28F77B246F2B1324D76E01D15575FD5AB8E9B9297284126701278B8E325A9'
+}
+$CanonicalPythonExePath = 'C:\Users\Fabs\AppData\Local\Programs\Python\Python312\python.exe'
+$CanonicalPythonExeSha256 = '4d6f5f81a4bca11191c4c7c6b43632694d0a4ce74e068619d8fdc161d469859a'
+$CanonicalPythonExeSize = 104952L
+$CanonicalPython312DllSha256 = '9a0e3435aaa680d868150f87ab3e388ad2eebc22f87e036155c7b4eda8cd2120'
+$CanonicalPython312DllSize = 6945272L
+$CanonicalPython3DllSha256 = 'fb975a606e7fbf74f64260e3f60c3490b4f74a183c0926fd6ed1ac4c52ac7b1c'
+$CanonicalPython3DllSize = 70376L
+$CanonicalPythonSignerThumbprint = 'DE01DAAE82D04F466A576E178F6B07A839238953'
+$CanonicalPythonSignerSubject = 'CN=Python Software Foundation, O=Python Software Foundation, L=Beaverton, S=Oregon, C=US'
+$CanonicalPythonTimestampThumbprint = 'AC3199ABB3D05D51499E1A5342738297D8110FA9'
+$CanonicalPythonTimestampSubject = 'CN=Microsoft Public RSA Time Stamping Authority, OU=Thales TSS ESN:3DA5-963B-E1F4, OU=Microsoft America Operations, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'
+$CanonicalPythonTimestampIssuer = 'CN=Microsoft Public RSA Timestamping CA 2020, O=Microsoft Corporation, C=US'
 
-function Get-NormalizedRelativePath([string]$AbsolutePath, [string]$Root) {
+function Assert-PinnedPythonFile(
+    [string]$Path,
+    [string]$Label,
+    [long]$ExpectedSize,
+    [string]$ExpectedSha256
+) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Pinned CPython $Label not found: $Path"
+    }
+    $resolved = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $Path).Path)
+    $expected = [IO.Path]::GetFullPath($Path)
+    if (-not [string]::Equals($resolved, $expected, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Pinned CPython $Label resolves outside its canonical location: '$resolved'."
+    }
+    $actualSize = (Get-Item -LiteralPath $resolved).Length
+    if ($actualSize -ne $ExpectedSize) {
+        throw "Pinned CPython $Label size mismatch: expected $ExpectedSize, got $actualSize."
+    }
+    $actualSha256 = (Get-FileHash -LiteralPath $resolved -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha256 -cne $ExpectedSha256) {
+        throw "Pinned CPython $Label SHA-256 mismatch: $actualSha256"
+    }
+}
+
+function Assert-PinnedPythonInstallation([string]$RequestedFull, [string]$Actual) {
+    $canonical = [IO.Path]::GetFullPath($CanonicalPythonExePath)
+    if (
+        -not [string]::Equals($RequestedFull, $canonical, [StringComparison]::OrdinalIgnoreCase) -or
+        -not [string]::Equals($Actual, $canonical, [StringComparison]::OrdinalIgnoreCase)
+    ) {
+        throw "PythonExe must name the pinned CPython installation '$canonical'; caller resolved '$Actual'."
+    }
+
+    $installRoot = Split-Path -Parent $canonical
+    Assert-PinnedPythonFile $canonical 'python.exe' $CanonicalPythonExeSize $CanonicalPythonExeSha256
+    Assert-PinnedPythonFile (Join-Path $installRoot 'python312.dll') 'python312.dll' $CanonicalPython312DllSize $CanonicalPython312DllSha256
+    Assert-PinnedPythonFile (Join-Path $installRoot 'python3.dll') 'python3.dll' $CanonicalPython3DllSize $CanonicalPython3DllSha256
+
+    $signature = Get-AuthenticodeSignature -FilePath $canonical
+    $signatureStatus = $signature.Status.ToString()
+    $signer = $signature.SignerCertificate
+    $timestamp = $signature.TimeStamperCertificate
+    if ($signatureStatus -cne 'Valid') {
+        throw "Pinned CPython python.exe Authenticode status is '$signatureStatus', not Valid: '$canonical'."
+    }
+    if ($null -eq $signer) {
+        throw "Pinned CPython python.exe has no Authenticode signer certificate: '$canonical'."
+    }
+    if ($null -eq $timestamp) {
+        throw "Pinned CPython python.exe has no Authenticode timestamp certificate: '$canonical'."
+    }
+
+    $signerThumbprint = ($signer.Thumbprint -replace '\s', '').ToUpperInvariant()
+    $signerSubject = $signer.Subject
+    if (
+        $signerThumbprint -cne $CanonicalPythonSignerThumbprint -or
+        $signerSubject -cne $CanonicalPythonSignerSubject
+    ) {
+        throw "Pinned CPython Authenticode signer mismatch: thumbprint '$signerThumbprint', subject '$signerSubject'."
+    }
+
+    $timestampThumbprint = ($timestamp.Thumbprint -replace '\s', '').ToUpperInvariant()
+    $timestampSubject = $timestamp.Subject
+    $timestampIssuer = $timestamp.Issuer
+    if (
+        $timestampThumbprint -cne $CanonicalPythonTimestampThumbprint -or
+        $timestampSubject -cne $CanonicalPythonTimestampSubject -or
+        $timestampIssuer -cne $CanonicalPythonTimestampIssuer
+    ) {
+        throw "Pinned CPython Authenticode timestamp mismatch: thumbprint '$timestampThumbprint', subject '$timestampSubject', issuer '$timestampIssuer'."
+    }
+}
+
+function ConvertTo-WindowsNativeArgument([string]$Argument) {
+    $quoted = [Text.StringBuilder]::new()
+    [void]$quoted.Append('"')
+    $backslashes = 0
+    foreach ($character in $Argument.ToCharArray()) {
+        if ($character -eq [char]92) {
+            $backslashes += 1
+            continue
+        }
+        if ($character -eq [char]34) {
+            if ($backslashes -gt 0) {
+                [void]$quoted.Append((('\' * (2 * $backslashes + 1)) -join ''))
+            } else {
+                [void]$quoted.Append('\')
+            }
+            [void]$quoted.Append('"')
+            $backslashes = 0
+            continue
+        }
+        if ($backslashes -gt 0) {
+            [void]$quoted.Append((('\' * $backslashes) -join ''))
+            $backslashes = 0
+        }
+        [void]$quoted.Append($character)
+    }
+    if ($backslashes -gt 0) {
+        [void]$quoted.Append((('\' * (2 * $backslashes)) -join ''))
+    }
+    [void]$quoted.Append('"')
+    return $quoted.ToString()
+}
+
+function Invoke-PythonIdentityProbe(
+    [string]$Executable,
+    [string]$ProbeScript,
+    [string]$Nonce
+) {
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Executable
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $replacementUtf8 = [Text.UTF8Encoding]::new($false, $false)
+    $startInfo.StandardOutputEncoding = $replacementUtf8
+    $startInfo.StandardErrorEncoding = $replacementUtf8
+
+    $arguments = @('-I', '-c', $ProbeScript, $Nonce)
+    $argumentList = $startInfo.PSObject.Properties['ArgumentList']
+    if ($null -ne $argumentList) {
+        foreach ($argument in $arguments) {
+            [void]$startInfo.ArgumentList.Add($argument)
+        }
+    } else {
+        $startInfo.Arguments = (@(
+            $arguments | ForEach-Object { ConvertTo-WindowsNativeArgument $_ }
+        ) -join ' ')
+    }
+
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) {
+            throw 'native process start returned false'
+        }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        return [pscustomobject]@{
+            ExitCode = $process.ExitCode
+            Stdout = $stdout
+            Stderr = $stderr
+        }
+    } catch {
+        throw "PythonExe could not be executed as a real Python interpreter: '$Executable' ($($_.Exception.Message))"
+    } finally {
+        $process.Dispose()
+    }
+}
+
+function Resolve-PythonExecutable([string]$RequestedExecutable) {
+    if ([string]::IsNullOrWhiteSpace($RequestedExecutable)) {
+        $RequestedExecutable = $CanonicalPythonExePath
+    }
+    if (-not [IO.Path]::IsPathRooted($RequestedExecutable)) {
+        throw "PythonExe must be an absolute path; bare or PATH-resolved interpreters are forbidden: '$RequestedExecutable'."
+    }
+
+    $requestedFull = [IO.Path]::GetFullPath($RequestedExecutable)
+    if (@($requestedFull -split '[\\/]' | Where-Object { $_ -ieq 'WindowsApps' }).Count -ne 0) {
+        throw "PythonExe must not be a WindowsApps/app-execution alias: '$requestedFull'."
+    }
+    if (-not (Test-Path -LiteralPath $requestedFull -PathType Leaf)) {
+        throw "Compatible Python 3.12 executable not found: $requestedFull"
+    }
+
+    $actual = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $requestedFull).Path)
+    if (@($actual -split '[\\/]' | Where-Object { $_ -ieq 'WindowsApps' }).Count -ne 0) {
+        throw "PythonExe resolves to a forbidden WindowsApps/app-execution alias: '$actual'."
+    }
+
+    Assert-PinnedPythonInstallation $requestedFull $actual
+
+    $nonce = [guid]::NewGuid().ToString('N')
+    $probeScript = 'import base64,sys; print("ZHAO_SHELL_FIT_PYTHON_V1|{}|{}|{}|{}|{}|{}".format(sys.argv[1],sys.implementation.name,sys.version_info.major,sys.version_info.minor,sys.version_info.micro,base64.b64encode(sys.executable.encode("utf-8")).decode("ascii")))'
+    $probe = Invoke-PythonIdentityProbe $actual $probeScript $nonce
+    $probeExitCode = $probe.ExitCode
+    $probeStdout = [string]$probe.Stdout
+    $probeStderr = [string]$probe.Stderr
+    if ($probeExitCode -ne 0) {
+        throw "PythonExe probe failed with exit code $probeExitCode`: '$actual' (stdout='$probeStdout'; stderr='$probeStderr')"
+    }
+    if (-not [string]::IsNullOrEmpty($probeStderr)) {
+        throw "PythonExe probe produced unexpected stderr: '$actual' ('$probeStderr')."
+    }
+    if ($probeStdout.EndsWith("`r`n", [StringComparison]::Ordinal)) {
+        $probeLine = $probeStdout.Substring(0, $probeStdout.Length - 2)
+    } elseif ($probeStdout.EndsWith("`n", [StringComparison]::Ordinal)) {
+        $probeLine = $probeStdout.Substring(0, $probeStdout.Length - 1)
+    } else {
+        throw "PythonExe probe produced unterminated or empty output: '$actual'."
+    }
+    if ([string]::IsNullOrEmpty($probeLine) -or $probeLine.IndexOfAny([char[]]"`r`n") -ne -1) {
+        throw "PythonExe probe produced unexpected output: '$actual'."
+    }
+    $probeRows = @($probeLine)
+    if ($probeRows.Count -ne 1) {
+        throw "PythonExe probe produced unexpected output: '$actual'."
+    }
+
+    $fields = ([string]$probeRows[0]) -split '\|', 7
+    if ($fields.Count -ne 7 -or $fields[0] -cne 'ZHAO_SHELL_FIT_PYTHON_V1' -or $fields[1] -cne $nonce) {
+        throw "PythonExe probe output did not authenticate the requested interpreter: '$actual'."
+    }
+    if ($fields[2] -cne 'cpython' -or $fields[3] -cne '3' -or $fields[4] -cne '12' -or $fields[5] -notmatch '^\d+$') {
+        throw "PythonExe must report CPython 3.12; probe reported '$($fields[2]) $($fields[3]).$($fields[4]).$($fields[5])' from '$actual'."
+    }
+    try {
+        $reportedExecutable = [Text.Encoding]::UTF8.GetString(
+            [Convert]::FromBase64String($fields[6])
+        )
+        $reportedFull = [IO.Path]::GetFullPath($reportedExecutable)
+    } catch {
+        throw "PythonExe probe reported an invalid executable identity: '$actual'."
+    }
+    if (-not [string]::Equals($reportedFull, $actual, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "PythonExe probe identity mismatch: requested '$actual', running '$reportedFull'."
+    }
+
+    $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($actual)
+    if (
+        -not [string]::Equals([IO.Path]::GetExtension($actual), '.exe', [StringComparison]::OrdinalIgnoreCase) -or
+        -not [string]::Equals([IO.Path]::GetFileName($actual), 'python.exe', [StringComparison]::OrdinalIgnoreCase) -or
+        -not [string]::Equals($versionInfo.OriginalFilename, 'python.exe', [StringComparison]::OrdinalIgnoreCase) -or
+        -not [string]::Equals($versionInfo.ProductName, 'Python', [StringComparison]::OrdinalIgnoreCase) -or
+        -not [string]::Equals($versionInfo.CompanyName, 'Python Software Foundation', [StringComparison]::OrdinalIgnoreCase) -or
+        $versionInfo.FileMajorPart -ne 3 -or
+        $versionInfo.FileMinorPart -ne 12
+    ) {
+        throw "PythonExe is not a genuine CPython 3.12 python.exe: '$actual'."
+    }
+    return $actual
+}
+
+$Python = Resolve-PythonExecutable $PythonExe
+
+function Invoke-Checked([string]$Executable, [string[]]$Arguments, [string]$Label) {
+    & $Executable @Arguments
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) {
+        throw "$Label failed with exit code $exitCode."
+    }
+}
+
+function Get-RepoRelativePath([string]$AbsolutePath, [string]$Root) {
     $absolute = [IO.Path]::GetFullPath($AbsolutePath).TrimEnd('\')
     $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\')
     if (-not $absolute.StartsWith($rootFull + '\', [StringComparison]::OrdinalIgnoreCase)) {
@@ -69,462 +303,448 @@ function Get-NormalizedRelativePath([string]$AbsolutePath, [string]$Root) {
     return $absolute.Substring($rootFull.Length + 1).Replace('\', '/')
 }
 
-function Get-CmakeShellSources {
-    $text = [IO.File]::ReadAllText($CmakePath)
-    $block = [regex]::Match($text, '(?ms)set\(ZHAO_SHELL_RTL\s+(.*?)\)')
-    if (-not $block.Success) {
-        throw 'Could not locate set(ZHAO_SHELL_RTL ...) in tests/CMakeLists.txt.'
+function Assert-CommittedFlowFile([string]$RelativePath, [string]$Commit) {
+    & git -C $RepoRoot --no-replace-objects cat-file -e "$Commit`:$RelativePath" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Real characterization requires committed flow/source-cone path: $RelativePath"
     }
-
-    $sources = New-Object 'System.Collections.Generic.List[string]'
-    foreach ($token in [regex]::Matches($block.Groups[1].Value, '\$\{ZHAO_ABI_PKG\}|\$\{CMAKE_SOURCE_DIR\}/[^\s\)]+')) {
-        if ($token.Value -eq '${ZHAO_ABI_PKG}') {
-            $sources.Add('fpga/rtl/generated/zhao_abi_pkg.sv')
-        } else {
-            $sources.Add($token.Value.Substring('${CMAKE_SOURCE_DIR}/'.Length))
-        }
-    }
-    return $sources.ToArray()
 }
 
-function Get-QsfShellSources {
-    $sources = New-Object 'System.Collections.Generic.List[string]'
-    foreach ($line in [IO.File]::ReadAllLines($QsfPath)) {
-        $match = [regex]::Match($line, '^\s*set_global_assignment\s+-name\s+SYSTEMVERILOG_FILE\s+(?:"([^"]+)"|(\S+))\s*$')
-        if ($match.Success) {
-            $value = if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Groups[2].Value }
-            $absolute = [IO.Path]::GetFullPath((Join-Path $ProjectDir ($value -replace '/', '\')))
-            $sources.Add((Get-NormalizedRelativePath $absolute $RepoRoot))
-        }
+function Assert-LiveLauncherEquivalent([string]$Commit) {
+    & $Python (Join-Path $RepoRoot 'tools\quartus\capture_shell_fit_git.py') `
+        --repo-root $RepoRoot `
+        --compare-crlf-only (Join-Path $RepoRoot ($LauncherRel -replace '/', '\')) `
+        --commit $Commit
+    if ($LASTEXITCODE -ne 0) {
+        throw "The shell-fit launcher differs from the captured commit beyond CRLF/LF normalization."
     }
-    return $sources.ToArray()
 }
 
-function Assert-SourceParity {
-    $cmake = @(Get-CmakeShellSources)
-    $qsf = @(Get-QsfShellSources)
-    if ($cmake.Count -ne $qsf.Count) {
-        throw "Shell source parity failed: CMake has $($cmake.Count) sources; QSF has $($qsf.Count)."
+function Assert-TrackedTreeClean([string]$Commit) {
+    $statusRows = @(& git -C $RepoRoot --no-replace-objects status --short --untracked-files=no)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Could not inspect whole tracked worktree status.'
     }
-    for ($i = 0; $i -lt $cmake.Count; ++$i) {
-        if ($cmake[$i] -cne $qsf[$i]) {
-            throw "Shell source parity failed at index $i`: CMake='$($cmake[$i])', QSF='$($qsf[$i])'."
-        }
+    if ($statusRows.Count -ne 0) {
+        throw "Whole tracked tree is dirty at shell-fit invocation: $($statusRows -join '; ')"
     }
-    Write-Host "PASS source parity: $($cmake.Count) ordered shell sources match tests/CMakeLists.txt."
-    return $cmake
+    & git -C $RepoRoot --no-replace-objects diff --quiet --no-ext-diff --no-textconv --binary --
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Whole tracked worktree is dirty at shell-fit invocation.'
+    }
+    & git -C $RepoRoot --no-replace-objects diff --cached --quiet --no-ext-diff --no-textconv --binary --
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Whole tracked index is dirty at shell-fit invocation.'
+    }
+    $flagRows = @(& git -C $RepoRoot --no-replace-objects ls-files --cached -v)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Could not inspect whole-tree index flags.'
+    }
+    $concealed = @($flagRows | Where-Object { $_ -and $_[0] -cne 'H' })
+    if ($concealed.Count -ne 0) {
+        throw "Tracked paths use index concealment flags: $($concealed -join '; ')"
+    }
+    Assert-LiveLauncherEquivalent $Commit
 }
 
-
-# ---------------------------------------------------------------------------
-# VIRTUAL-PIN PARITY, added 2026-08-31 after five attempts to reach the fitter.
-#
-# Every top-level port of zhao_shell_top must carry a VIRTUAL_PIN assignment or
-# Quartus makes it a real pad. The device has 145 user I/O and the shell has
-# thousands of port bits, so a single missed port fails the fit -- fifteen
-# minutes in, with a NUMBER and no name:
-#
-#   Error (179000): Design requires 156 user-specified I/O pins
-#
-# Three attempts were spent doing arithmetic on that 156. It was eight ports
-# declared TWO TO A LINE:
-#
-#   input logic signed [22:0] render_kx0_i, render_ky0_i,
-#
-# where a first-identifier-per-line scan virtualises the x half and leaves the y
-# half a pad. 3x23 + 3x21 + 2x12 = 156, exactly.
-#
-# So this check parses the ports the way the language actually declares them --
-# every identifier on the line, and unpacked arrays element by element -- and
-# refuses BEFORE Quartus starts, naming what is missing. See
-# fpga/quartus/FIT-PROJECT-STALENESS.md.
-# ---------------------------------------------------------------------------
-function Get-ShellPortNames {
-    $svPath = Join-Path $RepoRoot 'fpga\rtl\common\zhao_shell_top.sv'
-    $lines = [IO.File]::ReadAllLines($svPath)
-    $keywords = @('logic', 'wire', 'reg', 'signed', 'unsigned', 'var', 'input', 'output', 'inout')
-    $names = New-Object 'System.Collections.Generic.List[string]'
-    $inPorts = $false
-    foreach ($raw in $lines) {
-        $line = ($raw -split '//')[0]
-        if ($line -match '^\s*module\s+zhao_shell_top') { $inPorts = $true; continue }
-        if ($inPorts -and $line -match '^\s*\)\s*;') { break }
-        if (-not $inPorts) { continue }
-        if ($line -notmatch '^\s*(input|output|inout)\b') { continue }
-
-        # An unpacked array port ends with a range AFTER the identifier.
-        $unpacked = $null
-        if ($line -match '\b([A-Za-z_][A-Za-z_0-9]*)\s*\[\s*(\d+)\s*:\s*(\d+)\s*\]\s*,?\s*$') {
-            $cand = $Matches[1]
-            if ($keywords -notcontains $cand) {
-                $unpacked = @{ name = $cand; a = [int]$Matches[2]; b = [int]$Matches[3] }
+function Resolve-QuartusExecutables([string]$RequestedBin, [bool]$TestOnly) {
+    $names = @('quartus_map.exe', 'quartus_fit.exe', 'quartus_sta.exe')
+    $requestedFull = [IO.Path]::GetFullPath($RequestedBin).TrimEnd('\')
+    $canonicalFull = [IO.Path]::GetFullPath($CanonicalQuartusBin).TrimEnd('\')
+    if (-not $TestOnly -and -not [string]::Equals($requestedFull, $canonicalFull, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Production shell fit requires canonical Quartus bin '$canonicalFull'; caller supplied '$requestedFull'."
+    }
+    $resolved = [ordered]@{}
+    foreach ($name in $names) {
+        $expected = Join-Path $requestedFull $name
+        if (-not (Test-Path -LiteralPath $expected -PathType Leaf)) {
+            throw "Required Quartus executable not found: $expected"
+        }
+        $actual = (Resolve-Path -LiteralPath $expected).Path
+        if (-not $TestOnly) {
+            $canonicalExecutable = [IO.Path]::GetFullPath(
+                (Join-Path $canonicalFull $name)
+            )
+            if (-not [string]::Equals($actual, $canonicalExecutable, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Production Quartus executable resolves outside canonical install: $actual"
+            }
+            $actualHash = (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash
+            if ($actualHash -cne $CanonicalQuartusSha256[$name]) {
+                throw "Production Quartus binary identity mismatch for $name`: $actualHash"
             }
         }
-
-        $rest = $line -replace '^\s*(input|output|inout)\b', ''
-        $rest = $rest -replace '\b(var|logic|wire|reg|signed|unsigned)\b', ' '
-        $rest = $rest -replace '\[[^\]]*\]', ' '
-        foreach ($tok in ($rest -split '[,\s]+')) {
-            $t = $tok.Trim()
-            if ([string]::IsNullOrWhiteSpace($t)) { continue }
-            if ($keywords -contains $t) { continue }
-            if ($t -notmatch '^[A-Za-z_][A-Za-z_0-9]*$') { continue }
-            $names.Add($t) | Out-Null
-        }
-        if ($null -ne $unpacked) {
-            $lo = [Math]::Min($unpacked.a, $unpacked.b)
-            $hi = [Math]::Max($unpacked.a, $unpacked.b)
-            for ($i = $lo; $i -le $hi; ++$i) { $names.Add("$($unpacked.name)[$i]") | Out-Null }
-        }
+        $resolved[$name] = $actual
     }
-    return ($names | Select-Object -Unique)
+    return $resolved
 }
 
-function Assert-VirtualPinParity {
-    $ports = @(Get-ShellPortNames)
-    if ($ports.Count -lt 50) {
-        throw "Virtual-pin parity could not parse zhao_shell_top's ports (found $($ports.Count)); refusing rather than passing a check that did nothing."
-    }
-    $qsfText = [IO.File]::ReadAllText($QsfPath)
-    $assigned = @{}
-    foreach ($m in [regex]::Matches($qsfText, 'VIRTUAL_PIN\s+ON\s+-to\s+(\S+)')) {
-        $assigned[$m.Groups[1].Value] = $true
-    }
-    $missing = @($ports | Where-Object { -not $assigned.ContainsKey($_) })
-    if ($missing.Count -gt 0) {
-        Write-Host "MISSING VIRTUAL_PIN for $($missing.Count) port(s):" -ForegroundColor Red
-        foreach ($m in $missing) { Write-Host "    $m" -ForegroundColor Red }
-        throw "Virtual-pin parity failed. Every top-level port needs a VIRTUAL_PIN or the fitter runs out of I/O. See fpga/quartus/FIT-PROJECT-STALENESS.md."
-    }
-    Write-Host "PASS virtual-pin parity: $($ports.Count) shell ports all virtualised."
-}
-
-$SourceCone = @(Assert-SourceParity)
-Assert-VirtualPinParity
-
-if ($ParityOnly) {
-
-    exit 0
-
-}
-
-$QuartusSh = Join-Path $QuartusBin 'quartus_sh.exe'
-$QuartusMap = Join-Path $QuartusBin 'quartus_map.exe'
-$QuartusFit = Join-Path $QuartusBin 'quartus_fit.exe'
-$QuartusSta = Join-Path $QuartusBin 'quartus_sta.exe'
-foreach ($exe in @($QuartusSh, $QuartusMap, $QuartusFit, $QuartusSta)) {
-    if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
-        throw "Required Quartus executable not found: $exe"
-    }
-}
-
-$head = (& git -C $RepoRoot rev-parse HEAD).Trim()
-if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') {
-    throw 'Could not resolve repository HEAD.'
-}
-
-# A real run is always made from committed HEAD. This prevents any pre-existing
-# dirty ABI/environment record in the canonical worktree from entering evidence.
-$requiredFlowFiles = @(
-    '.gitignore',
-    'fpga/quartus/shell_fit/zhao_shell_fit.qpf',
-    'fpga/quartus/shell_fit/zhao_shell_fit.qsf',
-    'fpga/quartus/shell_fit/zhao_shell_fit.sdc',
-    'fpga/quartus/shell_fit/report.tcl',
-    'tools/quartus/run_shell_fit.ps1'
-)
-foreach ($path in $requiredFlowFiles) {
-    & git -C $RepoRoot cat-file -e "HEAD`:$path" 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Real characterization requires committed flow file at HEAD: $path (use -ParityOnly before the flow commit)."
-    }
-}
-
-$Workspace = Join-Path ([IO.Path]::GetTempPath()) ("zhao-shell-fit-{0}-{1}" -f $PID, [guid]::NewGuid().ToString('N'))
-$Archive = "$Workspace.zip"
-$Snapshot = Join-Path $Workspace 'source'
-New-Item -ItemType Directory -Path $Snapshot -Force | Out-Null
-
-try {
-    & git -C $RepoRoot archive --format=zip --output=$Archive HEAD
-    if ($LASTEXITCODE -ne 0) { throw 'git archive HEAD failed.' }
-    # ZipFile over Expand-Archive: the cmdlet pipes every entry through the
-    # PowerShell object model and takes tens of minutes on a tree this size,
-    # which is longer than the synthesis it exists to feed.
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [System.IO.Compression.ZipFile]::ExtractToDirectory($Archive, $Snapshot)
-    Remove-Item -LiteralPath $Archive -Force
-
-    $SnapshotScript = Join-Path $Snapshot 'tools\quartus\run_shell_fit.ps1'
-    $SnapshotProject = Join-Path $Snapshot 'fpga\quartus\shell_fit'
-    $SnapshotCmake = Join-Path $Snapshot 'tests\CMakeLists.txt'
-    if (-not (Test-Path -LiteralPath $SnapshotScript) -or -not (Test-Path -LiteralPath $SnapshotCmake)) {
-        throw 'Clean HEAD archive is missing characterization inputs.'
-    }
-
-    # Repeat parity against the clean snapshot, not merely the canonical tree.
-    $snapshotCmakeText = [IO.File]::ReadAllText($SnapshotCmake)
-    $snapshotBlock = [regex]::Match($snapshotCmakeText, '(?ms)set\(ZHAO_SHELL_RTL\s+(.*?)\)')
-    $snapshotExpected = New-Object 'System.Collections.Generic.List[string]'
-    foreach ($token in [regex]::Matches($snapshotBlock.Groups[1].Value, '\$\{ZHAO_ABI_PKG\}|\$\{CMAKE_SOURCE_DIR\}/[^\s\)]+')) {
-        if ($token.Value -eq '${ZHAO_ABI_PKG}') { $snapshotExpected.Add('fpga/rtl/generated/zhao_abi_pkg.sv') }
-        else { $snapshotExpected.Add($token.Value.Substring('${CMAKE_SOURCE_DIR}/'.Length)) }
-    }
-    if (($snapshotExpected -join "`n") -cne ($SourceCone -join "`n")) {
-        throw 'Clean HEAD archive source cone differs from the parity-checked canonical source cone.'
-    }
-
-    if ($Processors -gt 0) {
-        $stagedQsf = Join-Path $SnapshotProject 'zhao_shell_fit.qsf'
-        $qsfText = [IO.File]::ReadAllText($stagedQsf)
-        # A later assignment of the same name wins in a QSF, so appending is
-        # enough and the original line stays visible in the staged file.
-        $qsfText += "`n# Overridden by run_shell_fit.ps1 -Processors (peak-memory control).`n"
-        $qsfText += "set_global_assignment -name NUM_PARALLEL_PROCESSORS $Processors`n"
-        [IO.File]::WriteAllText($stagedQsf, $qsfText, $Utf8NoBom)
-        Write-Host "staged override: NUM_PARALLEL_PROCESSORS $Processors"
-    }
-
-    if ($Seed -gt 0) {
-        $stagedQsf = Join-Path $SnapshotProject 'zhao_shell_fit.qsf'
-        $qsfText = [IO.File]::ReadAllText($stagedQsf)
-        $qsfText += "`n# Overridden by run_shell_fit.ps1 -Seed (noise-floor measurement).`n"
-        $qsfText += "set_global_assignment -name SEED $Seed`n"
-        [IO.File]::WriteAllText($stagedQsf, $qsfText, $Utf8NoBom)
-        Write-Host "staged override: SEED $Seed  (committed project keeps SEED 1)"
-    }
-
-    if ($GpuPeriodNs -gt 0) {
-        # The SDC is not a QSF: a later assignment does NOT win, so the
-        # create_clock line is REPLACED rather than appended to. Only gpu_clk
-        # moves; vid_clk and audio_clk are frozen ratios of the product clock
-        # and retargeting them would be measuring a different machine.
-        $stagedSdc = Join-Path $SnapshotProject 'zhao_shell_fit.sdc'
-        $sdcText = [IO.File]::ReadAllText($stagedSdc)
-        $periodText = $GpuPeriodNs.ToString('0.00000', [Globalization.CultureInfo]::InvariantCulture)
-        $before = $sdcText
-        $sdcText = [regex]::Replace(
-            $sdcText,
-            '(?m)^(create_clock\s+-name\s+gpu_clk\s+-period\s+)[0-9.]+',
-            ('${1}' + $periodText))
-        if ($sdcText -eq $before) {
-            throw "GpuPeriodNs: no gpu_clk create_clock line found in the staged SDC -- refusing to fit against an unchanged constraint."
-        }
-        $sdcText = "# gpu_clk period staged by run_shell_fit.ps1 -GpuPeriodNs.`n" + $sdcText
-        [IO.File]::WriteAllText($stagedSdc, $sdcText, $Utf8NoBom)
-        $mhz = 1000.0 / $GpuPeriodNs
-        Write-Host ("staged override: gpu_clk period {0} ns ({1:N2} MHz)  (committed SDC keeps 10.000)" -f $periodText, $mhz)
-    }
-
-    if ($PlacementEffort -gt 0) {
-        $stagedQsf = Join-Path $SnapshotProject 'zhao_shell_fit.qsf'
-        $qsfText = [IO.File]::ReadAllText($stagedQsf)
-        $qsfText += "`n# Overridden by run_shell_fit.ps1 -PlacementEffort.`n"
-        $qsfText += "set_global_assignment -name PLACEMENT_EFFORT_MULTIPLIER $PlacementEffort`n"
-        [IO.File]::WriteAllText($stagedQsf, $qsfText, $Utf8NoBom)
-        Write-Host "staged override: PLACEMENT_EFFORT_MULTIPLIER $PlacementEffort"
-    }
-
-    if ($Retiming) {
-        $stagedQsf = Join-Path $SnapshotProject 'zhao_shell_fit.qsf'
-        $qsfText = [IO.File]::ReadAllText($stagedQsf)
-        $qsfText += "`n# Overridden by run_shell_fit.ps1 -Retiming.`n"
-        $qsfText += "set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING ON`n"
-        [IO.File]::WriteAllText($stagedQsf, $qsfText, $Utf8NoBom)
-        Write-Host "staged override: PHYSICAL_SYNTHESIS_REGISTER_RETIMING ON"
-    }
-
-    $LogDir = Join-Path $Workspace 'logs'
-    New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
-    $stageStatus = [ordered]@{}
-
-    function Invoke-QuartusStage([string]$Name, [string]$Exe, [string[]]$Arguments) {
-        Write-Host "RUN $Name`: $([IO.Path]::GetFileName($Exe)) $($Arguments -join ' ')"
-        Push-Location $SnapshotProject
-        try {
-            $lines = @(& $Exe @Arguments 2>&1 | ForEach-Object { $_.ToString() })
-            $exitCode = $LASTEXITCODE
-        } finally {
-            Pop-Location
-        }
-        $logPath = Join-Path $LogDir "$Name.log"
-        [IO.File]::WriteAllText($logPath, (($lines -join "`n") + "`n"), $Utf8NoBom)
-        foreach ($line in $lines) { Write-Host $line }
-        if ($exitCode -ne 0) {
-            $stageStatus[$Name] = 'failed'
-            throw "Quartus stage '$Name' failed with exit code $exitCode; log: $logPath"
-        }
-        $stageStatus[$Name] = 'success'
-    }
-
-    Invoke-QuartusStage 'analysisAndElaboration' $QuartusMap @('zhao_shell_fit', '--analysis_and_elaboration')
-    Invoke-QuartusStage 'synthesis' $QuartusMap @('zhao_shell_fit')
-    Invoke-QuartusStage 'fitter' $QuartusFit @('zhao_shell_fit')
-    Invoke-QuartusStage 'timequest' $QuartusSta @('zhao_shell_fit', '--report_script=report.tcl')
-
-    $versionLines = @(& $QuartusSh --version 2>&1 | ForEach-Object { $_.ToString() })
-    if ($LASTEXITCODE -ne 0) { throw 'quartus_sh --version failed.' }
-    $version = ($versionLines | Where-Object { $_ -match 'Version|Quartus' } | Select-Object -First 1).Trim()
-
-    $outputDir = Join-Path $SnapshotProject 'output_files'
-    $fitSummary = Join-Path $outputDir 'zhao_shell_fit.fit.summary'
-    $metricPath = Join-Path $outputDir 'characterization\timing_metrics.tsv'
-    $ucpPath = Join-Path $outputDir 'characterization\unconstrained_paths.rpt'
-    foreach ($required in @($fitSummary, $metricPath, $ucpPath)) {
-        if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-            throw "Expected Quartus report missing: $required"
-        }
-    }
-
-    function Get-ReportField([string]$Text, [string[]]$Labels) {
-        foreach ($label in $Labels) {
-            $match = [regex]::Match($Text, "(?im)^\s*" + [regex]::Escape($label) + "\s*:\s*([^\r\n]+)")
-            if ($match.Success) { return $match.Groups[1].Value.Trim() }
-        }
-        return $null
-    }
-
-    function Get-LeadingInteger([AllowNull()][string]$Value) {
-        if ($null -eq $Value) { return $null }
-        $match = [regex]::Match($Value, '-?[0-9][0-9,]*')
-        if (-not $match.Success) { return $null }
-        return [int64]::Parse($match.Value.Replace(',', ''), [Globalization.CultureInfo]::InvariantCulture)
-    }
-
-    $fitText = [IO.File]::ReadAllText($fitSummary)
-    $resources = [ordered]@{
-        logicUtilizationAlms = Get-LeadingInteger (Get-ReportField $fitText @('Logic utilization (in ALMs)', 'Logic utilization'))
-        combinationalFunctions = Get-LeadingInteger (Get-ReportField $fitText @('Total combinational functions', 'Combinational ALUT usage'))
-        registers = Get-LeadingInteger (Get-ReportField $fitText @('Total registers', 'Dedicated logic registers'))
-        blockMemoryBits = Get-LeadingInteger (Get-ReportField $fitText @('Total block memory bits', 'Total memory bits'))
-        ramBlocks = Get-LeadingInteger (Get-ReportField $fitText @('Total RAM Blocks', 'Total block memory implementation bits'))
-        dspBlocks = Get-LeadingInteger (Get-ReportField $fitText @('Total DSP Blocks', 'Total DSP block 18-bit elements'))
-        pins = Get-LeadingInteger (Get-ReportField $fitText @('Total pins'))
-        virtualPins = Get-LeadingInteger (Get-ReportField $fitText @('Total virtual pins'))
-    }
-
-    $allLogLines = New-Object 'System.Collections.Generic.List[string]'
-    foreach ($log in Get-ChildItem -LiteralPath $LogDir -Filter '*.log' | Sort-Object Name) {
-        foreach ($line in [IO.File]::ReadAllLines($log.FullName)) { $allLogLines.Add($line) }
-    }
-    $criticalWarnings = @($allLogLines | Where-Object { $_ -match '^Critical Warning' } | ForEach-Object {
-        $normalized = $_ -replace [regex]::Escape($Snapshot), '<clean-head>'
-        $normalized = $normalized -replace '\\', '/'
-        $normalized.Trim()
-    } | Sort-Object -Unique)
-
-    $metricRows = @(Import-Csv -LiteralPath $metricPath -Delimiter "`t")
-    $clocks = [ordered]@{}
-    foreach ($row in $metricRows | Where-Object { $_.record -eq 'clock' } | Sort-Object name) {
-        $clocks[$row.name] = [double]::Parse($row.value, [Globalization.CultureInfo]::InvariantCulture)
-    }
-    $analyses = [ordered]@{}
-    foreach ($name in @('setup', 'hold', 'recovery', 'removal')) {
-        $row = $metricRows | Where-Object { $_.record -eq 'analysis' -and $_.name -eq $name } | Select-Object -First 1
-        if ($null -eq $row) { throw "Timing metric missing for analysis '$name'." }
-        $slack = if ($row.value -eq 'NA') { $null } else { [double]::Parse($row.value, [Globalization.CultureInfo]::InvariantCulture) }
-        $analyses[$name] = [ordered]@{
-            worstSlackNs = $slack
-            failingEndpointCount = [int64]::Parse($row.count, [Globalization.CultureInfo]::InvariantCulture)
-        }
-    }
-
-    $ucpText = [IO.File]::ReadAllText($ucpPath)
-    $ucpRows = New-Object 'System.Collections.Generic.List[object]'
-    foreach ($line in $ucpText -split '\r?\n') {
-        $match = [regex]::Match($line, '^\s*([^;|]+?)\s*[;|]\s*([0-9][0-9,]*)\s*$')
-        if ($match.Success -and $match.Groups[1].Value.Trim() -notmatch '^[-=]+$') {
-            $ucpRows.Add([ordered]@{
-                category = $match.Groups[1].Value.Trim()
-                count = [int64]::Parse($match.Groups[2].Value.Replace(',', ''), [Globalization.CultureInfo]::InvariantCulture)
-            })
-        }
-    }
-
-    $limitations = @(
-        '5CSEBA6U23I7 is a provisional capacity/timing target, not frozen board truth.',
-        'All harness I/O is virtual; no package pins, board I/O delays, PLLs, or physical clocks are claimed.',
-        'gpu_clk and vid_clk remain timing-related so the known phase-dependent displayed-byte crossing is not waived.',
-        'Only audio_clk is grouped asynchronous against GPU/video, matching the dual-clock FIFO boundary.',
-        'Harness data/reset paths have no invented I/O delays or reset exceptions; unconstrained and recovery/removal limitations remain reportable.',
-        'The result does not characterize a physical SDRAM interface, framework integration, or fabricated hardware.'
+function Invoke-QsfPreflight([string]$Root, [string]$EmitModel = '') {
+    $arguments = @(
+        (Join-Path $Root 'tools\quartus\shell_fit_qsf.py'),
+        '--repo-root', $Root,
+        '--cmake', (Join-Path $Root ($CmakeRel -replace '/', '\')),
+        '--qsf', (Join-Path $Root ($QsfRel -replace '/', '\')),
+        '--qpf', (Join-Path $Root ($QpfRel -replace '/', '\')),
+        '--sdc', (Join-Path $Root ($SdcRel -replace '/', '\')),
+        '--wrapper', $WrapperRel,
+        '--top', 'zhao_shell_fit_top'
     )
+    if (-not [string]::IsNullOrWhiteSpace($EmitModel)) {
+        $arguments += @('--emit-model', $EmitModel)
+    }
+    Invoke-Checked $Python $arguments 'shell-fit QPF/QSF/SDC/source preflight'
+}
 
-    $synthesisJson = [ordered]@{
-        schemaVersion = 1
-        characterization = 'provisional-shell-fit'
-        sourceCommit = $head
-        sourceConeParity = $true
-        sourceFileCount = $SourceCone.Count
-        tool = [ordered]@{ name = 'Quartus Prime Lite'; version = $version }
-        design = [ordered]@{ top = 'zhao_shell_top'; device = '5CSEBA6U23I7'; frameworkTopModified = $false }
-        stages = $stageStatus
-        resources = $resources
-        criticalWarningCount = $criticalWarnings.Count
-        criticalWarnings = $criticalWarnings
-        limitations = $limitations
+function Assert-WrapperFreshness([string]$Root) {
+    Push-Location $Root
+    try {
+        Invoke-Checked $Python @('tools/quartus/gen_shell_fit_top.py', '--check') 'generated wrapper freshness'
+    } finally {
+        Pop-Location
+    }
+}
+
+function Publish-FileAtomic([string]$Source, [string]$Destination) {
+    $directory = Split-Path -Parent $Destination
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    $temporary = Join-Path $directory ('.{0}.{1}.tmp' -f ([IO.Path]::GetFileName($Destination)), [guid]::NewGuid().ToString('N'))
+    try {
+        $bytes = [IO.File]::ReadAllBytes($Source)
+        $stream = [IO.FileStream]::new(
+            $temporary,
+            [IO.FileMode]::CreateNew,
+            [IO.FileAccess]::Write,
+            [IO.FileShare]::None,
+            4096,
+            [IO.FileOptions]::WriteThrough
+        )
+        try {
+            $stream.Write($bytes, 0, $bytes.Length)
+            $stream.Flush($true)
+        } finally {
+            $stream.Dispose()
+        }
+        if (Test-Path -LiteralPath $Destination -PathType Leaf) {
+            [IO.File]::Replace($temporary, $Destination, $null)
+        } else {
+            [IO.File]::Move($temporary, $Destination)
+        }
+    } finally {
+        if (Test-Path -LiteralPath $temporary) {
+            Remove-Item -LiteralPath $temporary -Force
+        }
+    }
+}
+
+if ($PreflightOnly) {
+    Invoke-QsfPreflight $RepoRoot
+    Assert-WrapperFreshness $RepoRoot
+    Write-Host "PASS $GateName preflight (Quartus not invoked)."
+    exit 0
+}
+
+$mutex = [Threading.Mutex]::new($false, 'Global\ZhaoShellFitQuartusCharacterization')
+$mutexHeld = $false
+$Workspace = $null
+$ArchiveZip = $null
+$oldGitDir = $env:GIT_DIR
+$oldGitWorkTree = $env:GIT_WORK_TREE
+$oldGitIndex = $env:GIT_INDEX_FILE
+$scriptExitCode = 0
+try {
+    try {
+        $mutexHeld = $mutex.WaitOne(0)
+    } catch [Threading.AbandonedMutexException] {
+        $mutexHeld = $true
+    }
+    if (-not $mutexHeld) {
+        throw "Another machine-wide shell-fit characterization holds the $GateName lock."
     }
 
-    $timingJson = [ordered]@{
-        schemaVersion = 1
-        characterization = 'provisional-shell-fit'
-        sourceCommit = $head
-        tool = [ordered]@{ name = 'Quartus Prime Lite'; version = $version }
-        design = [ordered]@{ top = 'zhao_shell_top'; device = '5CSEBA6U23I7' }
-        targetClocksNs = $clocks
-        analyses = $analyses
-        unconstrainedPathSummary = $ucpRows.ToArray()
-        timingPassed = (($analyses.setup.failingEndpointCount -eq 0) -and ($analyses.hold.failingEndpointCount -eq 0) -and ($analyses.recovery.failingEndpointCount -eq 0) -and ($analyses.removal.failingEndpointCount -eq 0))
-        knownCdc = 'The GPU-to-video displayed-byte serializer crossing is intentionally not false-pathed; its result remains part of setup/hold characterization.'
-        criticalWarningCount = $criticalWarnings.Count
-        criticalWarnings = $criticalWarnings
-        limitations = $limitations
+    $head = (& git -C $RepoRoot --no-replace-objects rev-parse --verify 'HEAD^{commit}').Trim()
+    if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') {
+        throw 'Could not resolve an exact repository HEAD commit.'
     }
+
+    $FlowFiles = @(
+        $QpfRel,
+        $QsfRel,
+        $SdcRel,
+        $ReportScriptRel,
+        $PostMapScriptRel,
+        $LauncherRel,
+        'tools/quartus/capture_shell_fit_git.py',
+        'tools/quartus/shell_fit_qsf.py',
+        'tools/quartus/shell_fit_reports.py',
+        'tools/quartus/shell_ports.py',
+        'tools/quartus/gen_shell_fit_top.py',
+        $CmakeRel,
+        $WrapperRel,
+        $ManifestRel,
+        'design/shell_fit_ports.yml',
+        'tests/tools/fixtures/shell_fit_frame_blit.bin'
+    )
+    foreach ($path in $FlowFiles) {
+        Assert-CommittedFlowFile $path $head
+    }
+    $LiveModel = Join-Path $RepoRoot ("reports\.shell-fit-model-{0}.json" -f [guid]::NewGuid().ToString('N'))
+    try {
+        Invoke-QsfPreflight $RepoRoot $LiveModel
+        $model = Get-Content -LiteralPath $LiveModel -Raw | ConvertFrom-Json
+        $sourceCone = @($model.sources)
+        $constraintCone = @($model.constraints | ForEach-Object { $_.path })
+    } finally {
+        if (Test-Path -LiteralPath $LiveModel) {
+            Remove-Item -LiteralPath $LiveModel -Force
+        }
+    }
+    foreach ($path in @($sourceCone + $constraintCone)) {
+        Assert-CommittedFlowFile $path $head
+    }
+    Assert-TrackedTreeClean $head
+
+    $QuartusExecutables = Resolve-QuartusExecutables $QuartusBin $TestOnlyFakeQuartus.IsPresent
+    $QuartusMap = $QuartusExecutables['quartus_map.exe']
+    $QuartusFit = $QuartusExecutables['quartus_fit.exe']
+    $QuartusSta = $QuartusExecutables['quartus_sta.exe']
 
     if ([string]::IsNullOrWhiteSpace($ReportRoot)) {
         $ReportRoot = Join-Path $RepoRoot 'reports'
     } elseif (-not [IO.Path]::IsPathRooted($ReportRoot)) {
         $ReportRoot = Join-Path $RepoRoot $ReportRoot
     }
-    $synthOut = Join-Path $ReportRoot 'synthesis\zhao_shell_fit.json'
-    $timingOut = Join-Path $ReportRoot 'timing\zhao_shell_fit.json'
-    New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($synthOut)) -Force | Out-Null
-    New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($timingOut)) -Force | Out-Null
-    [IO.File]::WriteAllText($synthOut, (($synthesisJson | ConvertTo-Json -Depth 12) + "`n"), $Utf8NoBom)
-    [IO.File]::WriteAllText($timingOut, (($timingJson | ConvertTo-Json -Depth 12) + "`n"), $Utf8NoBom)
+    $ReportRoot = [IO.Path]::GetFullPath($ReportRoot)
+    $ReportRootRel = Get-RepoRelativePath $ReportRoot $RepoRoot
 
-    # ---- PRESERVE THE PATH DETAIL, NOT JUST THE SUMMARY --------------------
-    # report.tcl already writes setup/hold/recovery/removal path reports at
-    # `-detail full_path`, and until now every one of them died with the
-    # workspace. The JSON kept "hold worst slack -0.952 ns, 1 failing endpoint"
-    # and threw away the only artifact that says WHICH endpoint.
-    #
-    # MEASURED 2026-08-24: the composed shell fit reported exactly that hold
-    # violation, and the path could not be identified afterwards from anything
-    # that survived. The only leftovers on disk were workspaces from 2026-08-22
-    # -- a different commit, so reading them would have been the familiar error
-    # of taking an artifact for something other than what it is.
-    #
-    # A failing number you cannot act on is barely better than no number. This
-    # does not change what is measured; it changes whether it can be worked on.
-    $charSrc = Join-Path $outputDir 'characterization'
-    if (Test-Path -LiteralPath $charSrc) {
-        $charDst = Join-Path $ReportRoot 'characterization'
-        New-Item -ItemType Directory -Path $charDst -Force | Out-Null
-        Copy-Item -Path (Join-Path $charSrc '*.rpt') -Destination $charDst -Force -ErrorAction SilentlyContinue
-        Copy-Item -Path (Join-Path $charSrc '*.tsv') -Destination $charDst -Force -ErrorAction SilentlyContinue
-        $staRpt = Join-Path $outputDir 'zhao_shell_fit.sta.rpt'
-        if (Test-Path -LiteralPath $staRpt) { Copy-Item -LiteralPath $staRpt -Destination $charDst -Force }
-        Write-Host ("WROTE {0} ({1} file(s))" -f $charDst, (Get-ChildItem $charDst -File).Count)
+    $runStamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
+    $runId = "$($head.Substring(0, 12))-$runStamp-$PID"
+    $Workspace = Join-Path ([IO.Path]::GetTempPath()) ("zhao-shell-fit-{0}-{1}" -f $PID, [guid]::NewGuid().ToString('N'))
+    $ArchiveZip = "$Workspace.zip"
+    $Snapshot = Join-Path $Workspace 'source'
+    $FrozenGit = Join-Path $Workspace 'repository.git'
+    $PrivateIndex = Join-Path $Workspace 'git-index'
+    New-Item -ItemType Directory -Path $Snapshot -Force | Out-Null
+
+    Invoke-Checked git @(
+        '-C', $RepoRoot, '--no-replace-objects', 'archive', '--format=zip',
+        "--output=$ArchiveZip", $head
+    ) 'git archive captured commit'
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($ArchiveZip, $Snapshot)
+    Remove-Item -LiteralPath $ArchiveZip -Force
+    $ArchiveZip = $null
+
+    Invoke-Checked git @('clone', '--bare', '--shared', $RepoRoot, $FrozenGit) 'frozen Git object view'
+    Invoke-Checked git @("--git-dir=$FrozenGit", '--no-replace-objects', 'update-ref', 'refs/heads/evidence', $head) 'freeze evidence ref'
+    Invoke-Checked git @("--git-dir=$FrozenGit", '--no-replace-objects', 'symbolic-ref', 'HEAD', 'refs/heads/evidence') 'freeze evidence HEAD'
+
+    $env:GIT_DIR = $FrozenGit
+    $env:GIT_WORK_TREE = $Snapshot
+    $env:GIT_INDEX_FILE = $PrivateIndex
+    Invoke-Checked git @('-C', $Snapshot, '--no-replace-objects', 'read-tree', $head) 'private-index read-tree'
+
+    Invoke-QsfPreflight $Snapshot
+    Assert-WrapperFreshness $Snapshot
+
+    $SnapshotProject = Join-Path $Snapshot ($ProjectRel -replace '/', '\')
+    $SnapshotReportRoot = Join-Path $Snapshot ($ReportRootRel -replace '/', '\')
+    $RunRoot = Join-Path $SnapshotReportRoot "characterization\$GateName\$runId"
+    $RawQuartus = Join-Path $RunRoot 'raw\quartus'
+    $RawGit = Join-Path $RunRoot 'raw\git'
+    $StageLogs = Join-Path $RunRoot 'stage-logs'
+    New-Item -ItemType Directory -Path $RawQuartus -Force | Out-Null
+    New-Item -ItemType Directory -Path $RawGit -Force | Out-Null
+    New-Item -ItemType Directory -Path $StageLogs -Force | Out-Null
+
+    Invoke-Checked $Python @(
+        (Join-Path $Snapshot 'tools\quartus\capture_shell_fit_git.py'),
+        '--repo-root', $Snapshot,
+        '--output-dir', $RawGit
+    ) 'clean frozen Git evidence capture'
+
+    function Invoke-QuartusStage([string]$Name, [string]$Executable, [string[]]$Arguments) {
+        $stdoutPath = Join-Path $StageLogs "$Name.stdout.log"
+        $stderrPath = Join-Path $StageLogs "$Name.stderr.log"
+        Write-Host "RUN $Name`: $([IO.Path]::GetFileName($Executable)) $($Arguments -join ' ')"
+        $process = Start-Process -FilePath $Executable `
+            -ArgumentList $Arguments `
+            -WorkingDirectory $SnapshotProject `
+            -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+        $exitCode = $process.ExitCode
+        if (Test-Path -LiteralPath $stdoutPath) {
+            Get-Content -LiteralPath $stdoutPath | ForEach-Object { Write-Host $_ }
+        }
+        if (Test-Path -LiteralPath $stderrPath) {
+            Get-Content -LiteralPath $stderrPath | ForEach-Object { Write-Host $_ }
+        }
+        if ($exitCode -ne 0) {
+            throw "Quartus stage '$Name' failed with exit code $exitCode; logs: $StageLogs"
+        }
     }
 
-    Write-Host "PASS analysis/elaboration, synthesis, fitter, and TimeQuest."
-    Write-Host "WROTE $synthOut"
-    Write-Host "WROTE $timingOut"
-    Write-Host "CLEAN_HEAD $head"
-    if ($KeepWorkspace) { Write-Host "WORKSPACE $Workspace" }
+    Invoke-QuartusStage 'map' $QuartusMap @('zhao_shell_fit', "--parallel=$Processors")
+    Invoke-QuartusStage 'post-map' $QuartusSta @('zhao_shell_fit', '--post_map', '--report_script=post_map_connectivity.tcl')
+    Invoke-QuartusStage 'fit' $QuartusFit @('zhao_shell_fit', "--parallel=$Processors")
+    Invoke-QuartusStage 'timequest' $QuartusSta @('zhao_shell_fit', '--report_script=report.tcl')
+
+    $OutputDir = Join-Path $SnapshotProject 'output_files'
+    $CharacterizationDir = Join-Path $OutputDir 'characterization'
+    $QuartusArtifacts = [ordered]@{
+        'zhao_shell_fit.fit.summary' = Join-Path $OutputDir 'zhao_shell_fit.fit.summary'
+        'zhao_shell_fit.fit.rpt' = Join-Path $OutputDir 'zhao_shell_fit.fit.rpt'
+        'zhao_shell_fit.map.summary' = Join-Path $OutputDir 'zhao_shell_fit.map.summary'
+        'zhao_shell_fit.map.rpt' = Join-Path $OutputDir 'zhao_shell_fit.map.rpt'
+        'zhao_shell_fit.sta.rpt' = Join-Path $OutputDir 'zhao_shell_fit.sta.rpt'
+        'timing_metrics.tsv' = Join-Path $CharacterizationDir 'timing_metrics.tsv'
+        'clocks.rpt' = Join-Path $CharacterizationDir 'clocks.rpt'
+        'clock_transfers.rpt' = Join-Path $CharacterizationDir 'clock_transfers.rpt'
+        'unconstrained_paths.rpt' = Join-Path $CharacterizationDir 'unconstrained_paths.rpt'
+        'setup_paths.rpt' = Join-Path $CharacterizationDir 'setup_paths.rpt'
+        'hold_paths.rpt' = Join-Path $CharacterizationDir 'hold_paths.rpt'
+        'recovery_paths.rpt' = Join-Path $CharacterizationDir 'recovery_paths.rpt'
+        'removal_paths.rpt' = Join-Path $CharacterizationDir 'removal_paths.rpt'
+        'post_map_connectivity.tsv' = Join-Path $CharacterizationDir 'post_map_connectivity.tsv'
+    }
+    foreach ($entry in $QuartusArtifacts.GetEnumerator()) {
+        if (-not (Test-Path -LiteralPath $entry.Value -PathType Leaf)) {
+            throw "Expected raw Quartus artifact missing: $($entry.Value)"
+        }
+        [IO.File]::Copy($entry.Value, (Join-Path $RawQuartus $entry.Key), $false)
+    }
+
+    $ReceiptPath = Join-Path $RunRoot 'receipt.json'
+    $EvidenceMode = if ($TestOnlyFakeQuartus) { 'test-only' } else { 'production' }
+    $ParserArgs = @(
+        (Join-Path $Snapshot 'tools\quartus\shell_fit_reports.py'),
+        '--repo-root', $Snapshot,
+        '--summary', (Join-Path $RawQuartus 'zhao_shell_fit.fit.summary'),
+        '--sta', (Join-Path $RawQuartus 'zhao_shell_fit.sta.rpt'),
+        '--clocks', (Join-Path $RawQuartus 'clocks.rpt'),
+        '--hierarchy', (Join-Path $RawQuartus 'zhao_shell_fit.fit.rpt'),
+        '--map-summary', (Join-Path $RawQuartus 'zhao_shell_fit.map.summary'),
+        '--map-report', (Join-Path $RawQuartus 'zhao_shell_fit.map.rpt'),
+        '--emit-receipt', $ReceiptPath,
+        '--manifest', (Join-Path $Snapshot ($ManifestRel -replace '/', '\')),
+        '--rtl', (Join-Path $Snapshot ($WrapperRel -replace '/', '\')),
+        '--shell', (Join-Path $Snapshot 'fpga\rtl\common\zhao_shell_top.sv'),
+        '--package', (Join-Path $Snapshot 'fpga\rtl\common\zhao_pkg.sv'),
+        '--policy', (Join-Path $Snapshot 'design\shell_fit_ports.yml'),
+        '--generator', (Join-Path $Snapshot 'tools\quartus\gen_shell_fit_top.py'),
+        '--parser', (Join-Path $Snapshot 'tools\quartus\shell_ports.py'),
+        '--packet', (Join-Path $Snapshot 'tests\tools\fixtures\shell_fit_frame_blit.bin'),
+        '--cmake', (Join-Path $Snapshot ($CmakeRel -replace '/', '\')),
+        '--qsf', (Join-Path $Snapshot ($QsfRel -replace '/', '\')),
+        '--sdc', (Join-Path $Snapshot ($SdcRel -replace '/', '\')),
+        '--qsf-parser', (Join-Path $Snapshot 'tools\quartus\shell_fit_qsf.py'),
+        '--evidence-parser', (Join-Path $Snapshot 'tools\quartus\shell_fit_reports.py'),
+        '--git-capture', (Join-Path $Snapshot 'tools\quartus\capture_shell_fit_git.py'),
+        '--runner', (Join-Path $Snapshot ($LauncherRel -replace '/', '\')),
+        '--report-script', (Join-Path $Snapshot ($ReportScriptRel -replace '/', '\')),
+        '--post-map-script', (Join-Path $Snapshot ($PostMapScriptRel -replace '/', '\')),
+        '--project', (Join-Path $Snapshot ($QpfRel -replace '/', '\')),
+        '--timing-metrics', (Join-Path $RawQuartus 'timing_metrics.tsv'),
+        '--clock-transfers', (Join-Path $RawQuartus 'clock_transfers.rpt'),
+        '--unconstrained-paths', (Join-Path $RawQuartus 'unconstrained_paths.rpt'),
+        '--setup-paths', (Join-Path $RawQuartus 'setup_paths.rpt'),
+        '--hold-paths', (Join-Path $RawQuartus 'hold_paths.rpt'),
+        '--recovery-paths', (Join-Path $RawQuartus 'recovery_paths.rpt'),
+        '--removal-paths', (Join-Path $RawQuartus 'removal_paths.rpt'),
+        '--post-map-connectivity', (Join-Path $RawQuartus 'post_map_connectivity.tsv'),
+        '--map-stdout', (Join-Path $StageLogs 'map.stdout.log'),
+        '--map-stderr', (Join-Path $StageLogs 'map.stderr.log'),
+        '--post-map-stdout', (Join-Path $StageLogs 'post-map.stdout.log'),
+        '--post-map-stderr', (Join-Path $StageLogs 'post-map.stderr.log'),
+        '--fit-stdout', (Join-Path $StageLogs 'fit.stdout.log'),
+        '--fit-stderr', (Join-Path $StageLogs 'fit.stderr.log'),
+        '--timequest-stdout', (Join-Path $StageLogs 'timequest.stdout.log'),
+        '--timequest-stderr', (Join-Path $StageLogs 'timequest.stderr.log'),
+        '--processors', "$Processors",
+        '--evidence-mode', $EvidenceMode,
+        '--git-head', (Join-Path $RawGit 'git-head.txt'),
+        '--git-status', (Join-Path $RawGit 'git-status.txt'),
+        '--git-worktree-diff', (Join-Path $RawGit 'git-worktree.diff'),
+        '--git-staged-diff', (Join-Path $RawGit 'git-staged.diff'),
+        '--git-index-flags', (Join-Path $RawGit 'git-index-flags.bin')
+    )
+    $ParserArgumentFile = Join-Path $RunRoot 'parser-arguments.txt'
+    $ParserArgumentLines = [string[]]($ParserArgs | Select-Object -Skip 1)
+    [IO.File]::WriteAllLines(
+        $ParserArgumentFile,
+        $ParserArgumentLines,
+        [Text.UTF8Encoding]::new($false)
+    )
+    if ($TestOnlyFakeQuartus) {
+        $TestOnlyParserLog = Join-Path $RunRoot 'test-only-parser.log'
+        & $Python $ParserArgs[0] "@$ParserArgumentFile" *> $TestOnlyParserLog
+    } else {
+        & $Python $ParserArgs[0] "@$ParserArgumentFile"
+    }
+    $parserExitCode = $LASTEXITCODE
+    if ($parserExitCode -notin @(0, 2)) {
+        throw "shell-fit receipt derivation failed with exit code $parserExitCode."
+    }
+    if (-not (Test-Path -LiteralPath $ReceiptPath -PathType Leaf)) {
+        throw 'Shell-fit parser did not publish a canonical receipt.'
+    }
+    Remove-Item -LiteralPath $ParserArgumentFile -Force
+    $gatePassed = $parserExitCode -eq 0
+
+    if ($TestOnlyFakeQuartus) {
+        # Explicit fake-tool runs remain inside the disposable frozen workspace.
+        # They never move a receipt into the live repository, update ledgers, or
+        # print the production PASS token.
+        $testResult = if ($gatePassed) { 'accepted' } else { 'rejected' }
+        Write-Host "TEST-ONLY RESULT $testResult; no production evidence published."
+        Write-Host "TEST_ONLY_RECEIPT $ReceiptPath"
+        if (-not $gatePassed) {
+            $scriptExitCode = 2
+        }
+    } else {
+        $FinalRunRoot = Join-Path $ReportRoot "characterization\$GateName\$runId"
+        if (Test-Path -LiteralPath $FinalRunRoot) {
+            throw "Characterization run destination already exists: $FinalRunRoot"
+        }
+        New-Item -ItemType Directory -Path (Split-Path -Parent $FinalRunRoot) -Force | Out-Null
+        [IO.Directory]::Move($RunRoot, $FinalRunRoot)
+
+        $PublishedReceipt = Join-Path $FinalRunRoot 'receipt.json'
+        $SynthesisLedger = Join-Path $ReportRoot 'synthesis\zhao_shell_fit.json'
+        $TimingLedger = Join-Path $ReportRoot 'timing\zhao_shell_fit.json'
+        # Each destination replacement is crash-safe. The canonical reader accepts
+        # only stable byte-identical files, using the receipt hash as the pair
+        # generation, so an interruption between these writes is UNKNOWN rather
+        # than a consumable mixed current/stale pair.
+        Publish-FileAtomic $PublishedReceipt $SynthesisLedger
+        Publish-FileAtomic $PublishedReceipt $TimingLedger
+
+        if ($gatePassed) {
+            Write-Host "PASS $GateName at frozen source commit $head."
+        } else {
+            Write-Host "FAIL $GateName at frozen source commit $head; clean completed map/fit resources retained."
+            $scriptExitCode = 2
+        }
+        Write-Host "RECEIPT $PublishedReceipt"
+        Write-Host "SYNTHESIS_LEDGER $SynthesisLedger"
+        Write-Host "TIMING_LEDGER $TimingLedger"
+    }
+    if ($KeepWorkspace) {
+        Write-Host "WORKSPACE $Workspace"
+    }
 } finally {
-    if (-not $KeepWorkspace -and (Test-Path -LiteralPath $Workspace)) {
+    $env:GIT_DIR = $oldGitDir
+    $env:GIT_WORK_TREE = $oldGitWorkTree
+    $env:GIT_INDEX_FILE = $oldGitIndex
+    if ($mutexHeld) {
+        $mutex.ReleaseMutex()
+    }
+    $mutex.Dispose()
+    if (-not $KeepWorkspace -and $null -ne $Workspace -and (Test-Path -LiteralPath $Workspace)) {
         Remove-Item -LiteralPath $Workspace -Recurse -Force
     }
+    if ($null -ne $ArchiveZip -and (Test-Path -LiteralPath $ArchiveZip)) {
+        Remove-Item -LiteralPath $ArchiveZip -Force
+    }
 }
+exit $scriptExitCode

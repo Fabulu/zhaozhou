@@ -26,4 +26,20 @@ Quartus Prime Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
 ;    |zhao_shell_fit_gpu_sink:u_gpu_sink|      ; 120 (120)          ; 1800 (1800)               ; 0                 ; 0          ; 0    ; 0            ; |zhao_shell_fit_top|zhao_shell_fit_gpu_sink:u_gpu_sink           ; zhao_shell_fit_gpu_sink         ; work         ;
 ;    |zhao_shell_fit_video_sink:u_video_sink|  ; 48 (48)            ; 250 (250)                 ; 0                 ; 0          ; 0    ; 0            ; |zhao_shell_fit_top|zhao_shell_fit_video_sink:u_video_sink       ; zhao_shell_fit_video_sink       ; work         ;
 ;    |zhao_shell_fit_audio_sink:u_audio_sink|  ; 32 (32)            ; 130 (130)                 ; 0                 ; 0          ; 0    ; 0            ; |zhao_shell_fit_top|zhao_shell_fit_audio_sink:u_audio_sink       ; zhao_shell_fit_audio_sink       ; work         ;
+;    |zhao_shell_fit_helper:u_hidden|          ; 3 (3)              ; 2 (2)                     ; 0                 ; 0          ; 0    ; 0            ; |zhao_shell_fit_top|zhao_shell_fit_helper:u_hidden               ; zhao_shell_fit_helper           ; work         ;
 +----------------------------------------------+---------------------+---------------------------+-------------------+------------+------+--------------+------------------------------------------------------------------+---------------------------------+--------------+
+
++-----------------------+-------+
+; Post-Synthesis Netlist Statistics for Top Partition ;
++-----------------------+-------+
+; Type                  ; Count ;
++-----------------------+-------+
+; boundary_port         ; 10    ;
++-----------------------+-------+
+
++------------------------------------------------+
+; Port Connectivity Checks: "zhao_shell_fit_top" ;
++--------+------+----------+---------+
+; Port   ; Type ; Severity ; Details ;
++--------+------+----------+---------+
++--------+------+----------+---------+

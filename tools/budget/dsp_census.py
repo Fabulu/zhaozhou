@@ -58,19 +58,30 @@ Usage:
 import io
 import json
 import os
+from pathlib import Path
+from decimal import Decimal, InvalidOperation
 import subprocess
 import sys
 
 NLC = chr(10)
 
-sys.path.insert(0, os.path.join("tools", "quartus"))
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, "..", ".."))
+_QUARTUS_TOOLS = os.path.join(_REPO_ROOT, "tools", "quartus")
+if _QUARTUS_TOOLS not in sys.path:
+    sys.path.insert(0, _QUARTUS_TOOLS)
+
+from shell_fit_qsf import REQUIRED_QPF_SETTINGS, REQUIRED_QSF_SETTINGS
+from shell_fit_reports import load_published_receipt_pair
+from shell_ports import ShellPortError
 
 DEVICE = {"alm": 41910, "dsp": 112, "m10k": 553}
-OWNER_DSP_TARGET = 94          # brief: "fewer than 95", target DSP <= 94
+OWNER_DSP_TARGET = 85          # closure target; leave visible composition/fitter margin
 
 FIT_LEDGER = os.path.join("reports", "synthesis", "zhao_block_fit.json")
 MAP_LEDGER = os.path.join("reports", "synthesis", "zhao_block_map.json")
 SHELL_LEDGER = os.path.join("reports", "synthesis", "zhao_shell_fit.json")
+SHELL_TIMING_LEDGER = os.path.join("reports", "timing", "zhao_shell_fit.json")
 
 # Evidence stages, most authoritative for AREA first.
 FIT, MAP = "fit", "map"
@@ -128,7 +139,7 @@ def _load_json(path):
 
 
 def load_evidence(fit_path=FIT_LEDGER, map_path=MAP_LEDGER,
-                  shell_path=SHELL_LEDGER):
+                  shell_path=SHELL_LEDGER, shell_timing_path=SHELL_TIMING_LEDGER):
     """Every measurement from every ledger, keyed by BASE module name.
 
     Labelled rows are kept, not dropped. Brief 2.3: "An @label is not extra
@@ -146,6 +157,8 @@ def load_evidence(fit_path=FIT_LEDGER, map_path=MAP_LEDGER,
         for r in d.get("blocks", []):
             name = r.get("module", "")
             base, _, lab = name.partition("@")
+            if base == "zhao_shell_top":
+                continue
             add(Evidence(base, FIT, fit_path, dsp=r.get("dspBlocks"),
                          alm=r.get("alms"), m10k=r.get("ramBlocks"),
                          regs=r.get("registers"), membits=r.get("blockMemoryBits"),
@@ -157,6 +170,8 @@ def load_evidence(fit_path=FIT_LEDGER, map_path=MAP_LEDGER,
         for r in d.get("blocks", []):
             name = r.get("module", "")
             base, _, lab = name.partition("@")
+            if base == "zhao_shell_top":
+                continue
             # A MAP row has no `alms` and no `ramBlocks` -- `estimatedAlms` is an
             # ESTIMATE and is deliberately not loaded as `alm`. Recording an
             # estimate in the same field as a fitted measurement is how a guess
@@ -167,19 +182,78 @@ def load_evidence(fit_path=FIT_LEDGER, map_path=MAP_LEDGER,
                          status=r.get("status"), commit=r.get("sourceCommit"),
                          clean=r.get("rtlCleanAtHead"), label=lab or None))
 
-    d = _load_json(shell_path)
-    if d:
-        res = d.get("resources") or {}
-        stages = d.get("stages") or {}
-        ok = stages.get("fitter") == "success"
-        add(Evidence(d.get("design", {}).get("top", "zhao_shell_top"), FIT,
-                     shell_path, dsp=res.get("dspBlocks"),
-                     alm=res.get("logicUtilizationAlms"),
-                     m10k=res.get("ramBlocks"), regs=res.get("registers"),
-                     membits=res.get("blockMemoryBits"),
-                     status="ok" if ok else "incomplete:shell",
-                     commit=d.get("sourceCommit"),
-                     clean=d.get("sourceConeParity")))
+    shell_error = "canonical shell receipt pair is absent"
+    shell_payload = None
+    try:
+        shell_payload = load_published_receipt_pair(
+            Path(shell_path), Path(shell_timing_path)
+        )
+    except (OSError, ValueError, ShellPortError) as exc:
+        shell_error = str(exc)
+        shell_payload = None
+
+    canonical_shell = None
+    if shell_payload is not None:
+        entities = shell_payload.get("entities")
+        shell_rows = (
+            [row for row in entities if isinstance(row, dict) and row.get("role") == "shell"]
+            if isinstance(entities, list)
+            else []
+        )
+        if len(shell_rows) != 1:
+            shell_error = "canonical receipt does not contain exactly one role:shell row"
+        else:
+            row = shell_rows[0]
+            exact_identity = (
+                row.get("module") == "zhao_shell_top"
+                and row.get("instance") == "u_shell"
+                and row.get("entityName") == "zhao_shell_top"
+                and row.get("fullHierarchyName")
+                == "|zhao_shell_fit_top|zhao_shell_top:u_shell"
+                and row.get("libraryName") == "work"
+                and row.get("virtualPins") == 0
+            )
+            try:
+                dsp_value = Decimal(str(row["dspBlocks"]))
+                alm_value = Decimal(str(row["almsNeeded"]))
+                m10k_value = Decimal(str(row["ramBlocks"]))
+                regs = int(row["registers"])
+                membits = int(row["memoryBits"])
+                if dsp_value != dsp_value.to_integral_value():
+                    raise ValueError("fractional physical DSP count")
+                if any(value < 0 for value in (dsp_value, alm_value, m10k_value, regs, membits)):
+                    raise ValueError("negative shell resource count")
+                dsp = int(dsp_value)
+                alm = float(alm_value)
+                m10k = float(m10k_value)
+            except (KeyError, InvalidOperation, TypeError, ValueError) as exc:
+                exact_identity = False
+                shell_error = "canonical role:shell resource row is malformed: %s" % exc
+            if exact_identity:
+                gate = shell_payload.get("gate")
+                gate_failed = isinstance(gate, dict) and gate.get("status") == "fail"
+                canonical_shell = Evidence(
+                    "zhao_shell_top", FIT, shell_path,
+                    dsp=dsp, alm=alm, m10k=m10k, regs=regs,
+                    membits=membits,
+                    status=("failed:shell-fit-gate" if gate_failed
+                            else "complete:schema3-shell-row"),
+                    commit=shell_payload.get("sourceCommit"), clean=True, label=None,
+                )
+            elif shell_error == "canonical shell receipt pair is absent":
+                shell_error = "canonical role:shell identity is wrong"
+
+    # The canonical pair owns this root absolutely. Generic fit/map rows with the
+    # same module name were ignored above, so an invalid pair cannot be displaced,
+    # outvoted, or made an alternate by a plausible newer generic row.
+    ev["zhao_shell_top"] = [
+        canonical_shell
+        if canonical_shell is not None
+        else Evidence(
+            "zhao_shell_top", FIT, shell_path,
+            status="unpriced:" + shell_error, clean=False, label=None,
+        )
+    ]
     return ev
 
 
@@ -397,6 +471,7 @@ def self_test():
         fit = os.path.join(d, "fit.json")
         mp = os.path.join(d, "map.json")
         sh = os.path.join(d, "shell.json")
+        sht = os.path.join(d, "shell-timing.json")
 
         # normals: an OLD fit at 18 and a NEWER map at 3. HEAD is newer than any
         # ancestor, so HEAD stands in for "newer" without inventing timestamps.
@@ -444,13 +519,73 @@ def self_test():
             {"module": "maponly", "dspBlocks": 17, "estimatedAlms": 500,
              "registers": 512, "status": "ok", "sourceCommit": head},
         ]}))
-        io.open(sh, "w", encoding="utf-8").write(json.dumps({
-            "design": {"top": "shell"}, "stages": {"fitter": "success"},
-            "resources": {"dspBlocks": 16, "logicUtilizationAlms": 12707,
-                          "ramBlocks": 26, "registers": 14812},
-            "sourceCommit": head, "sourceConeParity": True}))
+        shell_receipt = {
+            "schemaVersion": 3,
+            "characterization": "shell_fit_top_clean_characterization",
+            "evidenceMode": "production",
+            "rtlCleanAtHead": True,
+            "sourceCommit": head,
+            "compileSourcePoolParity": True,
+            "compileSourcePool": ["fpga/rtl/common/zhao_shell_top.sv"],
+            "selectedSdc": "fpga/quartus/shell_fit/zhao_shell_fit.sdc",
+            "configuration": {
+                "projectRevision": "zhao_shell_fit",
+                "qpfQuartusVersion": "17.0",
+                "qpfAssignments": [
+                    {"name": name, "value": value}
+                    for name, value in REQUIRED_QPF_SETTINGS.items()
+                ],
+                "top": "zhao_shell_fit_top",
+                "sources": ["fpga/rtl/common/zhao_shell_top.sv"],
+                "constraints": ["fpga/quartus/shell_fit/zhao_shell_fit.sdc"],
+                "effectiveSettings": dict(REQUIRED_QSF_SETTINGS),
+                "globalAssignments": [
+                    {"name": name, "value": value}
+                    for name, value in REQUIRED_QSF_SETTINGS.items()
+                ],
+                "sdcClosure": [{"path": "fpga/quartus/shell_fit/zhao_shell_fit.sdc",
+                                "sha256": "0" * 64}],
+            },
+            "execution": {"processors": 4},
+            "generatedArtifacts": {},
+            "sourceHashes": {},
+            "sourceArtifacts": {},
+            "evidenceArtifacts": {},
+            "tool": {"name": "Quartus Prime", "version": "17.0.2 Build 602"},
+            "device": "5CSEBA6U23I7",
+            "stages": {"map": "successful", "postMap": "successful",
+                       "fit": "successful", "timequest": "successful"},
+            "resources": {"alms": 13000, "registers": 16000,
+                          "memoryBits": 2200000, "ramBlocks": 132,
+                          "dspBlocks": 87, "mapCombinationalAluts": 11234,
+                          "mapRegisters": 16111, "realPins": 10,
+                          "virtualPins": 0},
+            "boundary": {},
+            "connectivity": {"passed": True, "mappedBoundaryPortCount": 10,
+                             "ports": [{} for _ in range(10)]},
+            "timing": {"timingPassed": True, "gateFailures": []},
+            "gate": {"name": "shell_fit_top_clean_characterization",
+                     "status": "pass", "failures": []},
+            "entities": [{
+                "role": "shell", "module": "zhao_shell_top", "instance": "u_shell",
+                "entityName": "zhao_shell_top", "libraryName": "work",
+                "fullHierarchyName": "|zhao_shell_fit_top|zhao_shell_top:u_shell",
+                "dspBlocks": "16", "almsNeeded": "12707.0", "ramBlocks": "26",
+                "registers": 14812, "memoryBits": 1024, "virtualPins": 0,
+            }],
+            "mapEntities": [{}],
+            "remainderAttribution": {},
+            "trafficProfile": "fixture",
+            "limitations": [],
+        }
+        def write_shell(payload):
+            encoded = json.dumps(payload)
+            io.open(sh, "w", encoding="utf-8").write(encoded)
+            io.open(sht, "w", encoding="utf-8").write(encoded)
 
-        ev = load_evidence(fit, mp, sh)
+        write_shell(shell_receipt)
+
+        ev = load_evidence(fit, mp, sh, sht)
 
         # 1. old fit 18 + newer applicable map 3 -> current mapped 3
         chosen, why, _ = select(ev["normals"])
@@ -478,13 +613,38 @@ def self_test():
         assert chosen is not None and chosen.dsp == 17 and chosen.stage == MAP, \
             "a map-only module was not priced from the map ledger"
 
-        # 6. the shell arrives from its own file, as one root
-        chosen, _, _ = select(ev["shell"])
+        # 6. the shell arrives from its own schema-3 role:shell row, never the wrapper
+        chosen, _, _ = select(ev["zhao_shell_top"])
         assert chosen is not None and chosen.dsp == 16 and chosen.alm == 12707, \
-            "the separate shell receipt was not loaded"
+            "the exact separate shell hierarchy row was not loaded"
+
+        # 6b. Every shell trust-boundary detector is shown to fire. Neither an
+        # old sourceConeParity flag nor flattering wrapper totals can rehabilitate
+        # a dirty, duplicate, or wrongly attributed shell row.
+        shell_receipt = json.load(io.open(sh, encoding="utf-8"))
+        dirty_shell = dict(shell_receipt)
+        dirty_shell["rtlCleanAtHead"] = False
+        write_shell(dirty_shell)
+        dirty_loaded = load_evidence(fit, mp, sh, sht)
+        assert "zhao_shell_top" in dirty_loaded and select(dirty_loaded["zhao_shell_top"])[0] is None, \
+            "a dirty shell receipt did not remain as an UNKNOWN root"
+        duplicate_shell = dict(shell_receipt)
+        duplicate_shell["entities"] = shell_receipt["entities"] * 2
+        write_shell(duplicate_shell)
+        duplicate_loaded = load_evidence(fit, mp, sh, sht)
+        assert "zhao_shell_top" in duplicate_loaded and select(duplicate_loaded["zhao_shell_top"])[0] is None, \
+            "duplicate role:shell rows did not force an UNKNOWN root"
+        wrong_shell = dict(shell_receipt)
+        wrong_shell["entities"] = [dict(shell_receipt["entities"][0])]
+        wrong_shell["entities"][0]["instance"] = "u_forged"
+        write_shell(wrong_shell)
+        wrong_loaded = load_evidence(fit, mp, sh, sht)
+        assert "zhao_shell_top" in wrong_loaded and select(wrong_loaded["zhao_shell_top"])[0] is None, \
+            "a wrongly attributed shell row did not force an UNKNOWN root"
+        write_shell(shell_receipt)
 
         # 7. unknown is not zero, in the totals
-        rows = build_bill(["normals", "nulldsp", "maponly", "shell"], ev)
+        rows = build_bill(["normals", "nulldsp", "maponly", "zhao_shell_top"], ev)
         t = totals(rows)
         assert t["dsp"] == 3 + 17 + 16, "dsp total wrong: %s" % t
         assert t["dsp_unknown"] == 1, "an unknown DSP was not counted as unknown"
@@ -547,7 +707,9 @@ def self_test():
         # 12. MUTATION PROOF (brief 2.7): drop the map ledger and the normals
         #    answer must change. A fixture that passes with the map ledger
         #    ignored is not testing the thing it names.
-        ev_nomap = load_evidence(fit, os.path.join(d, "does-not-exist.json"), sh)
+        ev_nomap = load_evidence(
+            fit, os.path.join(d, "does-not-exist.json"), sh, sht
+        )
         chosen, _, _ = select(ev_nomap["normals"])
         assert chosen is not None and chosen.dsp == 18, \
             "with the map ledger removed the answer must revert to the stale 18"
@@ -605,9 +767,9 @@ def main():
     self_test()
     args = sys.argv[1:]
     if "--self-test" in args:
-        print("dsp_census self-test: all twelve fixtures pass through the real "
-              "loader and selector, including the mutation proof that removing "
-              "the map ledger changes the answer.")
+        print("dsp_census self-test: all twelve selection fixtures plus dirty, "
+              "duplicate, and misattributed shell controls pass through the real "
+              "loader; removing the map ledger still changes the answer.")
         return 0
 
     from check_prod_manifest import read_manifest
@@ -622,7 +784,7 @@ def main():
     # The shell is a root of the machine and is NOT in the production manifest's
     # `top:` list. Brief 1.1: "The separate shell receipt contains 16 DSP."
     roots = list(tops)
-    if "zhao_shell_top" in ev and "zhao_shell_top" not in roots:
+    if "zhao_shell_top" not in roots:
         roots.append("zhao_shell_top")
 
     rows = build_bill(roots, ev, targets_text, load_profiles())

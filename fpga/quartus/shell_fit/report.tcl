@@ -1,6 +1,6 @@
 # Custom TimeQuest report script. quartus_sta loads the fitted netlist and SDC
 # before sourcing this file via --report_script. Keep extraction text-based and
-# deterministic so the PowerShell runner can normalize it into committed JSON.
+# deterministic so the evidence binder can archive and hash the raw bytes.
 
 set out_dir [file join [get_global_assignment -name PROJECT_OUTPUT_DIRECTORY] characterization]
 file mkdir $out_dir
