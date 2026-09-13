@@ -2398,6 +2398,40 @@ def _utf8(data: bytes, label: str) -> str:
         raise ShellPortError(f"{label} is not UTF-8: {exc}") from exc
 
 
+_FITTER_CP1252_DEGREE_C = re.compile(rb"(?<=\d )\xb0C(?= ;)")
+
+
+def _fitter_report_text(data: bytes) -> str:
+    """Decode fitter output while admitting only Quartus's numeric CP1252 degree-C token."""
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+
+    parts: list[str] = []
+    cursor = 0
+    for match in _FITTER_CP1252_DEGREE_C.finditer(data):
+        try:
+            parts.append(data[cursor : match.start()].decode("utf-8"))
+        except UnicodeDecodeError as exc:
+            offset = cursor + exc.start
+            raise ShellPortError(
+                "fitter hierarchy report contains unsupported non-UTF-8 byte "
+                f"0x{data[offset]:02x} at offset {offset}"
+            ) from exc
+        parts.append("°C")
+        cursor = match.end()
+    try:
+        parts.append(data[cursor:].decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        offset = cursor + exc.start
+        raise ShellPortError(
+            "fitter hierarchy report contains unsupported non-UTF-8 byte "
+            f"0x{data[offset]:02x} at offset {offset}"
+        ) from exc
+    return "".join(parts)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, fromfile_prefix_chars="@")
     parser.add_argument("--repo-root", type=Path, required=True)
@@ -2541,9 +2575,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         timequest_status = parse_timequest_status(sta_text)
         clocks_text = _utf8(evidence_bytes["clocks"], "report_clocks output")
         validate_clock_constraints(parse_clock_constraints(clocks_text))
-        hierarchy_rows = parse_fitter_hierarchy(
-            _utf8(evidence_bytes["hierarchy"], "fitter hierarchy report")
-        )
+        hierarchy_text = _fitter_report_text(evidence_bytes["hierarchy"])
+        hierarchy_rows = parse_fitter_hierarchy(hierarchy_text)
         shell = require_shell_hierarchy(hierarchy_rows)
         map_summary_text = _utf8(evidence_bytes["mapSummary"], "map summary")
         map_report_text = _utf8(evidence_bytes["mapReport"], "raw map report")
@@ -2589,7 +2622,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         scan_virtual_clock_warnings(
             {
-                name: _utf8(evidence_bytes[name], f"bound Quartus artifact {name}")
+                name: (
+                    hierarchy_text
+                    if name == "hierarchy"
+                    else _utf8(evidence_bytes[name], f"bound Quartus artifact {name}")
+                )
                 for name in (
                     "summary",
                     "sta",

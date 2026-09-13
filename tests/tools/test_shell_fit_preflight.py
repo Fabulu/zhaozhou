@@ -2075,6 +2075,60 @@ class ReportPreflightTests(unittest.TestCase):
             self.assertFalse(emitted.exists())
             self.assertIn("Total virtual pins is 1", output.getvalue())
 
+    def test_reports_cli_accepts_exact_cp1252_degree_c_and_hashes_raw_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_repo = Path(temporary)
+            self.make_clean_cli_repository(temporary_repo)
+            relative = "tests/tools/fixtures/shell_fit_hierarchy_with_shell.rpt"
+            hierarchy = temporary_repo / relative
+            raw = hierarchy.read_bytes() + (
+                b"\r\n+--+\r\n; Characterization Temperature ; -40 \xb0C ;\r\n"
+            )
+            self.commit_fixture_change(temporary_repo, relative, raw)
+            completed, emitted = self.run_reports_emit_subprocess(temporary_repo)
+            self.assertEqual(completed.returncode, 0, completed.stdout)
+            payload = json.loads(emitted.read_bytes())
+            self.assertEqual(
+                payload["evidenceArtifacts"]["hierarchy"]["sha256"],
+                hashlib.sha256(raw).hexdigest(),
+            )
+
+    def test_reports_cli_rejects_other_cp1252_byte_and_emits_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_repo = Path(temporary)
+            self.make_clean_cli_repository(temporary_repo)
+            relative = "tests/tools/fixtures/shell_fit_hierarchy_with_shell.rpt"
+            hierarchy = temporary_repo / relative
+            raw = hierarchy.read_bytes() + (
+                b"\r\n+--+\r\n; Characterization Temperature ; -40 \xa9C ;\r\n"
+            )
+            self.commit_fixture_change(temporary_repo, relative, raw)
+            completed, emitted = self.run_reports_emit_subprocess(temporary_repo)
+            self.assertEqual(completed.returncode, 1, completed.stdout)
+            self.assertFalse(emitted.exists())
+            self.assertIn(
+                "fitter hierarchy report contains unsupported non-UTF-8 byte 0xa9",
+                completed.stdout,
+            )
+
+    def test_reports_cli_rejects_cp1252_degree_outside_numeric_c_token(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_repo = Path(temporary)
+            self.make_clean_cli_repository(temporary_repo)
+            relative = "tests/tools/fixtures/shell_fit_hierarchy_with_shell.rpt"
+            hierarchy = temporary_repo / relative
+            raw = hierarchy.read_bytes() + (
+                b"\r\n+--+\r\n; Characterization Temperature ; -40 \xb0F ;\r\n"
+            )
+            self.commit_fixture_change(temporary_repo, relative, raw)
+            completed, emitted = self.run_reports_emit_subprocess(temporary_repo)
+            self.assertEqual(completed.returncode, 1, completed.stdout)
+            self.assertFalse(emitted.exists())
+            self.assertIn(
+                "fitter hierarchy report contains unsupported non-UTF-8 byte 0xb0",
+                completed.stdout,
+            )
+
     def test_timing_metric_path_report_mismatch_fires(self) -> None:
         evidence = self.evidence()
         paths = {

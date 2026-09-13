@@ -1,0 +1,51 @@
+{
+  "archive": {
+    "entries": 104,
+    "path": "shell-fit-failed-receipt-05736053.zip",
+    "sha256": "62bc144424eb8f186b6c4d028bfea02cdd8f5af69b79cc55d04662c05e4f19ec",
+    "size": 841679
+  },
+  "device": "5CSEBA6U23I7",
+  "evidenceBoundary": "All Quartus stages completed and the raw files are preserved, but receipt derivation failed. This packet is diagnostic evidence, not an accepted schema-3 receipt, timing pass, connected V3 production result, board result, or bankable ALM/DSP saving.",
+  "failureReceiptSha256": "e97a9888afe9cf808b19a4af40aafeaefb932d16604c412c68cac86cc3906bba",
+  "gate": "shell_fit_top_clean_characterization",
+  "measuredSourceCommit": "05736053ef9d1251336c727cad42d5601f7624fa",
+  "packetManifestSha256": "e697750e7520950ffdf95f899c544dd64b8a7276727c06de9270bdc458a2343e",
+  "parser": {
+    "diagnostic": "fitter hierarchy report is not UTF-8: byte 0xb0 at position 1491579",
+    "exitCode": 1,
+    "quartusRerunDuringPreservation": false,
+    "receiptEmitted": false
+  },
+  "preservedAtLocal": "2026-09-13T14:27:33+02:00",
+  "productionDspSaving": 0,
+  "productionMigration": "none",
+  "quartus": "Quartus Prime Lite 17.0.2 Build 602",
+  "remoteHeadAtPreservation": "ea95c6cd1b5f58cff692c8637b21738a6dc45cf4",
+  "resourcesObservedRaw": {
+    "alms": 15046,
+    "dspBlocks": 16,
+    "memoryBits": 184256,
+    "ramBlocks": 26,
+    "realPins": 10,
+    "registers": 19962,
+    "virtualPins": 0
+  },
+  "rtlCleanAtLaunch": true,
+  "schemaVersion": 1,
+  "sourceBranch": "claude/ceiling-architecture-20260912",
+  "stages": {
+    "fit": "successful",
+    "map": "successful",
+    "postMap": "successful",
+    "timequest": "successful"
+  },
+  "status": "failed:receipt-derivation",
+  "timingObservedRaw": {
+    "canonicalGateStatus": "not-derived",
+    "slow100cHoldSlackNs": "0.242",
+    "slow100cSetupSlackNs": "-2.646",
+    "slowMinus40cHoldSlackNs": "0.104",
+    "slowMinus40cSetupSlackNs": "-2.742"
+  }
+}
