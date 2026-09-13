@@ -121,6 +121,15 @@ def _hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _canonical_text_bytes(data: bytes, label: str) -> bytes:
+    """Hash and render text independently of Git checkout line endings."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ShellPortError(f"{label} is not UTF-8: {exc}") from exc
+    return text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+
+
 def _read_utf8(path: Path) -> tuple[bytes, str]:
     data = path.read_bytes()
     try:
@@ -1762,6 +1771,7 @@ def _render_top(
             ],
             "remainder_attribution": "reported top row only; never inferred by subtraction",
         },
+        "source_hash_canonicalization": "utf8-lf-v1",
         "hashes": dict(hashes),
         "external_ports": [
             {"name": "gpu_clk", "direction": "input", "bits": 1, "domain_index": 0,
@@ -1831,12 +1841,14 @@ def render_artifacts(
     generator_bytes: bytes,
     parser_bytes: bytes,
 ) -> RenderedArtifacts:
-    try:
-        shell_text = shell_bytes.decode("utf-8")
-        package_text = package_bytes.decode("utf-8")
-        policy_text = policy_bytes.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise ShellPortError(f"input is not UTF-8: {exc}") from exc
+    shell_canonical = _canonical_text_bytes(shell_bytes, "shell input")
+    package_canonical = _canonical_text_bytes(package_bytes, "package input")
+    policy_canonical = _canonical_text_bytes(policy_bytes, "policy input")
+    generator_canonical = _canonical_text_bytes(generator_bytes, "generator input")
+    parser_canonical = _canonical_text_bytes(parser_bytes, "parser input")
+    shell_text = shell_canonical.decode("utf-8")
+    package_text = package_canonical.decode("utf-8")
+    policy_text = policy_canonical.decode("utf-8")
     type_widths = discover_type_widths(package_text)
     type_signedness = discover_type_signedness(package_text)
     declaration = parse_module_declaration(
@@ -1854,11 +1866,11 @@ def render_artifacts(
         )
     hashes = {
         "shell_declaration": declaration.declaration_sha256,
-        "shell_file": _hash(shell_bytes),
-        "package_file": _hash(package_bytes),
-        "policy": _hash(policy_bytes),
-        "generator": _hash(generator_bytes),
-        "parser": _hash(parser_bytes),
+        "shell_file": _hash(shell_canonical),
+        "package_file": _hash(package_canonical),
+        "policy": _hash(policy_canonical),
+        "generator": _hash(generator_canonical),
+        "parser": _hash(parser_canonical),
         "packet": _hash(packet_bytes),
     }
     rtl_text, manifest = _render_top(

@@ -46,7 +46,6 @@
     "totalBits": 10
   },
   "characterization": "shell_fit_top_clean_characterization",
-  "evidenceMode": "production",
   "compileSourcePool": [
     "fpga/rtl/common/zhao_pkg.sv",
     "fpga/rtl/generated/zhao_abi_pkg.sv",
@@ -545,6 +544,7 @@
       "sha256": "95272f05d3431f3bc79a8825a748560de49c577afa164dbac2acb5272d1957a3"
     }
   },
+  "evidenceMode": "production",
   "execution": {
     "processors": 4
   },
@@ -554,8 +554,8 @@
     "status": "pass"
   },
   "generatedArtifacts": {
-    "manifestSha256": "1188f881f37f4d107cc558c59dabca7aa3cacf4aa9d48f6e723a056a34370873",
-    "rtlSha256": "68120b57ee58551abe072f79a15fe80877d5f5740db41161f4cb161f1388aec0"
+    "manifestSha256": "af52e2f081bbf15cdd4edca0f93fe38380264026e24032895327407ccdf3754f",
+    "rtlSha256": "50f44d462d2bb6ecd7e94d0603b67f769b11757dcc3a10b3a077259aa5476277"
   },
   "limitations": [
     "Deterministic legal-ish characterization traffic, not a functional HPS model.",
@@ -734,11 +734,11 @@
     },
     "evidenceParser": {
       "path": "tools/quartus/shell_fit_reports.py",
-      "sha256": "86a4cfa00d6de66b8fd455a106eaaccf2e8bb85d157f80fad7c9ae0bf63d8ced"
+      "sha256": "32b871186068b4e8de0592fad7f0e538597c4b228c7463b405eba9f0fab8f3f3"
     },
     "generator": {
       "path": "tools/quartus/gen_shell_fit_top.py",
-      "sha256": "f34a4609e362f4052a78bcc74f3414ef7e06a1c26da0abafab33abdfb22e73b7"
+      "sha256": "8b10ce7065e0ce145a15e8e81ed8f3d4552cdc103c7e44c518de171f460d32c4"
     },
     "gitCapture": {
       "path": "tools/quartus/capture_shell_fit_git.py",
@@ -796,8 +796,8 @@
   "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
   "sourceHashes": {
     "cmake": "14594683cced56441645516c6d488185427c284e0b64d8d2484c1dcaade60cbd",
-    "evidenceParser": "86a4cfa00d6de66b8fd455a106eaaccf2e8bb85d157f80fad7c9ae0bf63d8ced",
-    "generator": "f34a4609e362f4052a78bcc74f3414ef7e06a1c26da0abafab33abdfb22e73b7",
+    "evidenceParser": "32b871186068b4e8de0592fad7f0e538597c4b228c7463b405eba9f0fab8f3f3",
+    "generator": "8b10ce7065e0ce145a15e8e81ed8f3d4552cdc103c7e44c518de171f460d32c4",
     "gitCapture": "24e128fb8dac00c63774ee3be65775e9a7021e82859dcc890d01fb8632ebbff0",
     "packageFile": "a63ed92194e45580f33b9827547f9bc1fbe57446dbe02555e8ecd7a6b734ed6d",
     "packet": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51",

@@ -262,6 +262,72 @@ class ShellGeneratorTests(unittest.TestCase):
             parser_bytes=(QUARTUS_TOOLS / "shell_ports.py").read_bytes(),
         )
 
+    def test_text_provenance_is_checkout_line_ending_independent(self) -> None:
+        def with_eol(data: bytes, eol: bytes) -> bytes:
+            canonical = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+            return canonical.replace(b"\n", eol)
+
+        inputs = {
+            "shell_bytes": (REPO / generator.DEFAULT_SHELL).read_bytes(),
+            "package_bytes": (REPO / generator.DEFAULT_PACKAGE).read_bytes(),
+            "policy_bytes": (REPO / generator.DEFAULT_POLICY).read_bytes(),
+            "generator_bytes": GENERATOR.read_bytes(),
+            "parser_bytes": (QUARTUS_TOOLS / "shell_ports.py").read_bytes(),
+        }
+        common = {
+            "packet_bytes": (REPO / generator.DEFAULT_PACKET).read_bytes(),
+            "packet_path": generator.DEFAULT_PACKET.as_posix(),
+        }
+        lf = generator.render_artifacts(
+            **{name: with_eol(data, b"\n") for name, data in inputs.items()},
+            **common,
+        )
+        crlf = generator.render_artifacts(
+            **{name: with_eol(data, b"\r\n") for name, data in inputs.items()},
+            **common,
+        )
+        self.assertEqual(lf, crlf)
+        manifest = json.loads(lf.manifest)
+        self.assertEqual(manifest["source_hash_canonicalization"], "utf8-lf-v1")
+
+        mutated = dict(inputs)
+        mutated["generator_bytes"] += b"\n# substantive provenance mutation\n"
+        changed = generator.render_artifacts(**mutated, **common)
+        self.assertNotEqual(lf.manifest, changed.manifest)
+        self.assertNotEqual(
+            manifest["hashes"]["generator"],
+            json.loads(changed.manifest)["hashes"]["generator"],
+        )
+
+    def test_smoke_refuses_manifest_without_source_hash_mode(self) -> None:
+        manifest = json.loads(self.render_repo().manifest)
+        manifest.pop("source_hash_canonicalization")
+        shell_text = smoke_generator._canonical_text(
+            smoke_generator._read_utf8_exact(REPO / generator.DEFAULT_SHELL)
+        )
+        package_text = smoke_generator._canonical_text(
+            smoke_generator._read_utf8_exact(REPO / generator.DEFAULT_PACKAGE)
+        )
+        policy = load_policy_text(
+            smoke_generator._canonical_text(
+                smoke_generator._read_utf8_exact(REPO / generator.DEFAULT_POLICY)
+            )
+        )
+        declaration = parse_module_declaration(
+            shell_text,
+            "zhao_shell_top",
+            type_widths=discover_type_widths(package_text),
+        )
+        with self.assertRaisesRegex(
+            ShellPortError, "does not declare utf8-lf-v1 source hash canonicalization"
+        ):
+            smoke_generator._require_manifest_freshness(
+                repo=REPO,
+                manifest=manifest,
+                declaration=declaration,
+                policy=policy,
+            )
+
     def test_render_triangle_values_are_derived_and_positive_area(self) -> None:
         values = generator._render_triangle_values(
             a=(-1024, 15872),

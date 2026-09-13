@@ -1165,6 +1165,32 @@ class ReportPreflightTests(unittest.TestCase):
             },
         }
 
+    def build(self, evidence=None):
+        evidence = evidence or self.evidence()
+        return build_receipt_from_evidence(
+            manifest=evidence["manifest"],
+            manifest_bytes=evidence["manifest_bytes"],
+            rtl_bytes=evidence["rtl_bytes"],
+            summary=evidence["summary"],
+            map_summary=evidence["map_summary"],
+            map_hierarchy_rows=evidence["map_hierarchy_rows"],
+            timequest_status=evidence["timequest_status"],
+            hierarchy_rows=evidence["hierarchy_rows"],
+            git_evidence=evidence["git_evidence"],
+            compile_source_pool=evidence["compile_source_pool"],
+            selected_sdc_path=evidence["selected_sdc_path"],
+            source_bytes=evidence["source_bytes"],
+            source_paths=evidence["source_paths"],
+            evidence_bytes=evidence["evidence_bytes"],
+            evidence_paths=evidence["evidence_paths"],
+            qpf_model=evidence["qpf_model"],
+            qsf_model=evidence["qsf_model"],
+            sdc_closure=evidence["sdc_closure"],
+            post_map_witness=evidence["post_map_witness"],
+            timing=evidence["timing"],
+            processors=evidence["processors"],
+        )
+
     def bind(self, receipt, evidence=None) -> None:
         evidence = evidence or self.evidence()
         bind_receipt_to_evidence(
@@ -1971,30 +1997,42 @@ class ReportPreflightTests(unittest.TestCase):
 
     def test_receipt_builder_exactly_reproduces_bound_fixture(self) -> None:
         evidence = self.evidence()
-        built = build_receipt_from_evidence(
-            manifest=evidence["manifest"],
-            manifest_bytes=evidence["manifest_bytes"],
-            rtl_bytes=evidence["rtl_bytes"],
-            summary=evidence["summary"],
-            map_summary=evidence["map_summary"],
-            map_hierarchy_rows=evidence["map_hierarchy_rows"],
-            timequest_status=evidence["timequest_status"],
-            hierarchy_rows=evidence["hierarchy_rows"],
-            git_evidence=evidence["git_evidence"],
-            compile_source_pool=evidence["compile_source_pool"],
-            selected_sdc_path=evidence["selected_sdc_path"],
-            source_bytes=evidence["source_bytes"],
-            source_paths=evidence["source_paths"],
-            evidence_bytes=evidence["evidence_bytes"],
-            evidence_paths=evidence["evidence_paths"],
-            qpf_model=evidence["qpf_model"],
-            qsf_model=evidence["qsf_model"],
-            sdc_closure=evidence["sdc_closure"],
-            post_map_witness=evidence["post_map_witness"],
-            timing=evidence["timing"],
-            processors=evidence["processors"],
+        self.assertEqual(self.build(evidence), evidence["receipt"])
+
+    def test_manifest_text_provenance_is_checkout_line_ending_independent(self) -> None:
+        evidence = self.evidence()
+
+        def with_crlf(data: bytes) -> bytes:
+            canonical = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+            return canonical.replace(b"\n", b"\r\n")
+
+        evidence["source_bytes"] = dict(evidence["source_bytes"])
+        evidence["git_blob_bytes"] = dict(evidence["git_blob_bytes"])
+        for name in ("shell", "package", "policy", "generator", "parser"):
+            converted = with_crlf(evidence["source_bytes"][name])
+            evidence["source_bytes"][name] = converted
+            evidence["git_blob_bytes"][name] = converted
+
+        package_path = "fpga/rtl/common/zhao_pkg.sv"
+        converted_package = evidence["source_bytes"]["package"]
+        evidence["compile_source_bytes"] = dict(evidence["compile_source_bytes"])
+        evidence["compile_source_git_blob_bytes"] = dict(
+            evidence["compile_source_git_blob_bytes"]
         )
-        self.assertEqual(built, evidence["receipt"])
+        evidence["compile_source_bytes"][package_path] = converted_package
+        evidence["compile_source_git_blob_bytes"][package_path] = converted_package
+
+        receipt = self.build(evidence)
+        self.bind(receipt, evidence)
+
+    def test_manifest_missing_text_hash_mode_fires_receipt_binding(self) -> None:
+        evidence = self.evidence()
+        evidence["manifest"] = dict(evidence["manifest"])
+        evidence["manifest"].pop("source_hash_canonicalization")
+        with self.assertRaisesRegex(
+            ShellPortError, "does not declare utf8-lf-v1 source hash canonicalization"
+        ):
+            self.bind(self.build(evidence), evidence)
 
     def test_reports_cli_emits_then_binds_schema_three_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

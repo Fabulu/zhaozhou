@@ -1613,6 +1613,18 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _canonical_text_bytes(data: bytes, label: str) -> bytes:
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ShellPortError(f"{label} is not UTF-8: {exc}") from exc
+    return text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+
+
+def _canonical_text_sha256(data: bytes, label: str) -> str:
+    return _sha256(_canonical_text_bytes(data, label))
+
+
 def _line_ending_only_difference(left: bytes, right: bytes) -> bool:
     """Classify, but never forgive, a byte mismatch caused only by line endings."""
     if left == right:
@@ -2227,14 +2239,21 @@ def bind_receipt_to_evidence(
         package_text = source_bytes["package"].decode("utf-8")
     except UnicodeDecodeError as exc:
         raise ShellPortError(f"raw shell/package input is not UTF-8: {exc}") from exc
+    shell_canonical = _canonical_text_bytes(source_bytes["shell"], "shell input")
+    package_canonical = _canonical_text_bytes(source_bytes["package"], "package input")
     declaration = parse_module_declaration(
-        shell_text,
+        shell_canonical.decode("utf-8"),
         "zhao_shell_top",
-        type_widths=discover_type_widths(package_text),
-        type_signedness=discover_type_signedness(package_text),
+        type_widths=discover_type_widths(package_canonical.decode("utf-8")),
+        type_signedness=discover_type_signedness(package_canonical.decode("utf-8")),
     )
     expected_source_hashes = {
-        "shellDeclaration": declaration.declaration_sha256,
+        "shellDeclaration": parse_module_declaration(
+            shell_text,
+            "zhao_shell_top",
+            type_widths=discover_type_widths(package_text),
+            type_signedness=discover_type_signedness(package_text),
+        ).declaration_sha256,
         "shellFile": _sha256(source_bytes["shell"]),
         "packageFile": _sha256(source_bytes["package"]),
         **{
@@ -2262,17 +2281,21 @@ def bind_receipt_to_evidence(
     if not isinstance(manifest_hashes, dict):
         errors.append("manifest hashes object is absent")
         manifest_hashes = {}
+    if manifest.get("source_hash_canonicalization") != "utf8-lf-v1":
+        errors.append("manifest does not declare utf8-lf-v1 source hash canonicalization")
     manifest_expected = {
-        "shell_declaration": expected_source_hashes["shellDeclaration"],
-        "shell_file": expected_source_hashes["shellFile"],
-        "package_file": expected_source_hashes["packageFile"],
-        "policy": expected_source_hashes["policy"],
-        "generator": expected_source_hashes["generator"],
-        "parser": expected_source_hashes["parser"],
-        "packet": expected_source_hashes["packet"],
+        "shell_declaration": declaration.declaration_sha256,
+        "shell_file": _canonical_text_sha256(source_bytes["shell"], "shell input"),
+        "package_file": _canonical_text_sha256(source_bytes["package"], "package input"),
+        "policy": _canonical_text_sha256(source_bytes["policy"], "policy input"),
+        "generator": _canonical_text_sha256(source_bytes["generator"], "generator input"),
+        "parser": _canonical_text_sha256(source_bytes["parser"], "parser input"),
+        "packet": _sha256(source_bytes["packet"]),
     }
     if manifest_hashes != manifest_expected:
-        errors.append("manifest provenance does not match independently hashed raw inputs")
+        errors.append(
+            "manifest provenance does not match canonical UTF-8/LF text and raw packet inputs"
+        )
     packet_rom = manifest.get("packet_rom")
     if not isinstance(packet_rom, dict) or packet_rom.get("path") != source_paths["packet"]:
         errors.append("manifest packet path does not match the supplied raw packet identity")

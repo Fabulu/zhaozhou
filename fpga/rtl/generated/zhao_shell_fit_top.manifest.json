@@ -92,15 +92,15 @@
       "unpacked_dimensions": []
     }
   ],
-  "generated_rtl_sha256": "68120b57ee58551abe072f79a15fe80877d5f5740db41161f4cb161f1388aec0",
+  "generated_rtl_sha256": "50f44d462d2bb6ecd7e94d0603b67f769b11757dcc3a10b3a077259aa5476277",
   "hashes": {
-    "generator": "f34a4609e362f4052a78bcc74f3414ef7e06a1c26da0abafab33abdfb22e73b7",
-    "package_file": "a63ed92194e45580f33b9827547f9bc1fbe57446dbe02555e8ecd7a6b734ed6d",
+    "generator": "8b10ce7065e0ce145a15e8e81ed8f3d4552cdc103c7e44c518de171f460d32c4",
+    "package_file": "cf01788d9b976bd8873268b633cb3d81895659d4580f045306d3592d5cd79120",
     "packet": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51",
     "parser": "d4da568555ca520691fec7db7dd2893d7a34bc5b5a0aeda879e9d407fc4572a9",
-    "policy": "e153ed6e4f19ef9855a0f97784886d9ea323245ce4999f3da8696f1178ceb91a",
-    "shell_declaration": "a243647455d61afa653a14127a5bc489c7361f767f7e36c880254d81a46e1739",
-    "shell_file": "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
+    "policy": "50b395ef85f9def005309ba44f52baf782df02046860fd6081c315d41362842b",
+    "shell_declaration": "428f942178a8b3a6b900fed93d03fe94ceda3bfc8d929a59ffd3a841aafdd81a",
+    "shell_file": "0dfa37425e6c824112358d8ae9ce32781183cef9cc6d6aed35e5f6039f31ae55"
   },
   "hierarchy": {
     "remainder_attribution": "reported top row only; never inferred by subtraction",
@@ -4370,5 +4370,6 @@
   "schema_version": 1,
   "shell_instance": "u_shell",
   "shell_module": "zhao_shell_top",
+  "source_hash_canonicalization": "utf8-lf-v1",
   "traffic_profile": "shell-fit-legal-ish-v1"
 }

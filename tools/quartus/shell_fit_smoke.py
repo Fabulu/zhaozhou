@@ -62,12 +62,25 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _canonical_text_sha256(path: Path) -> str:
+    try:
+        text = path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ShellPortError(f"{path} is not UTF-8: {exc}") from exc
+    canonical = text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def _read_utf8_exact(path: Path) -> str:
     """Decode without universal-newline or locale-dependent transformations."""
     try:
         return path.read_bytes().decode("utf-8")
     except UnicodeDecodeError as exc:
         raise ShellPortError(f"{path} is not UTF-8: {exc}") from exc
+
+
+def _canonical_text(text: str) -> str:
+    return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _require_manifest_freshness(
@@ -81,6 +94,8 @@ def _require_manifest_freshness(
     packet_rom = manifest.get("packet_rom")
     if not isinstance(hashes, dict) or not isinstance(packet_rom, dict):
         raise ShellPortError("manifest is missing hashes or packet_rom provenance")
+    if manifest.get("source_hash_canonicalization") != "utf8-lf-v1":
+        raise ShellPortError("manifest does not declare utf8-lf-v1 source hash canonicalization")
     packet_raw = packet_rom.get("path")
     if not isinstance(packet_raw, str) or not packet_raw:
         raise ShellPortError("manifest packet_rom.path is absent")
@@ -89,11 +104,11 @@ def _require_manifest_freshness(
         packet_path = repo / packet_path
     expected = {
         "shell_declaration": declaration.declaration_sha256,
-        "shell_file": _sha256(repo / DEFAULT_SHELL),
-        "package_file": _sha256(repo / DEFAULT_PACKAGE),
-        "policy": _sha256(repo / DEFAULT_POLICY),
-        "generator": _sha256(repo / DEFAULT_GENERATOR),
-        "parser": _sha256(repo / DEFAULT_PARSER),
+        "shell_file": _canonical_text_sha256(repo / DEFAULT_SHELL),
+        "package_file": _canonical_text_sha256(repo / DEFAULT_PACKAGE),
+        "policy": _canonical_text_sha256(repo / DEFAULT_POLICY),
+        "generator": _canonical_text_sha256(repo / DEFAULT_GENERATOR),
+        "parser": _canonical_text_sha256(repo / DEFAULT_PARSER),
         "packet": _sha256(packet_path),
     }
     stale = [
@@ -700,9 +715,9 @@ def render_monitor(
 
 
 def render_repo(repo: Path) -> bytes:
-    shell_text = _read_utf8_exact(repo / DEFAULT_SHELL)
-    package_text = _read_utf8_exact(repo / DEFAULT_PACKAGE)
-    policy_text = _read_utf8_exact(repo / DEFAULT_POLICY)
+    shell_text = _canonical_text(_read_utf8_exact(repo / DEFAULT_SHELL))
+    package_text = _canonical_text(_read_utf8_exact(repo / DEFAULT_PACKAGE))
+    policy_text = _canonical_text(_read_utf8_exact(repo / DEFAULT_POLICY))
     declaration = parse_module_declaration(
         shell_text,
         "zhao_shell_top",
