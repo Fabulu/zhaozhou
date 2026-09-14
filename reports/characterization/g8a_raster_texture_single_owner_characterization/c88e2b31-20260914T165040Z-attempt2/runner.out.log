@@ -1,0 +1,11 @@
+fresh: G8A wrapper/manifest match generator (43 sources)
+G8A source commit: c88e2b317c981a98f177a2c049688af1c9e30ba3
+Launching the one physical-top-port raster/texture subsystem fit.
+preflight: zhao_raster_texture_v3_fit_top closure from design/fit_targets.yml (43 file(s))
+snapshot: 43 source(s) copied into the workspace; the live tree cannot reach this fit
+provenance guard: 43 declared source(s)
+source digest: 42f61c4776bb over 43 file(s) -> zhao_raster_texture_v3_fit_top@g8a.sources.sha256
+    RULE  zhao_raster_texture_v3_fit_top@g8a: Fmax 65.96 MHz < required 100 MHz -- the resource gates can all pass while the clock does not; see this rule's note
+zhao_raster_texture_v3_fit_top@g8a failed:structure  1578.5s   ALM 13478
+WROTE C:\programmieren\zencrifice\zhaozhou-ceiling-lane-20260912\reports\synthesis\zhao_block_fit.json (140 block(s); 1 measured this run)
+G8A receipt failed: mapped shadow state survived: ['shadow_metadata_m', 'shadow_metadata_m']

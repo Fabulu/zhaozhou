@@ -153,6 +153,15 @@ reports/synthesis/blockpaths/*.setup.rpt
 reports/synthesis/blockpaths/*.hold.rpt
 reports/synthesis/blockpaths/*.sta.rpt
 
+# G8A is the one predeclared connected subsystem receipt whose validator hashes
+# the raw hierarchy, fitter, and timing reports. Keep this exact row reproducible
+# rather than citing ignored files that disappear in another checkout.
+!reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.map.rpt
+!reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.fit.rpt
+!reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.setup.rpt
+!reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.hold.rpt
+!reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.sta.rpt
+
 # Transient ctest tee output; the evidence is the ctest summary, not the log.
 fast-suite.log
 build-*.log

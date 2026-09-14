@@ -29,6 +29,9 @@ REQUIRED_RAW_SUFFIXES = (
     "fit.summary",
     "fit.rpt",
     "sta.rpt",
+    "setup.rpt",
+    "hold.rpt",
+    "setup.summary.rpt",
 )
 REQUIRED_ENTITY_COUNTS = {
     "zhao_raster_texture_v3_fit_top": 1,
@@ -40,7 +43,8 @@ REQUIRED_ENTITY_COUNTS = {
 FORBIDDEN_ENTITY_FRAGMENTS = ("texjoin",)
 SHADOW_STATE_PATTERNS = (
     r"g_migration_shadows",
-    r"shadow_metadata_m",
+    r"shadow_metadata_m[^\r\n]*(?:~reg|~mem)",
+    r'(?:Inferred RAM node|RAM logic) "[^"\r\n]*shadow_metadata_m',
     r"meta_shadow_(?:mismatch|reads)_o\[\d+\].*~reg",
     r"meta_(?:align|bil)_(?:err|chk|first_q|first_t|first_tok)_o\[\d+\].*~reg",
 )
@@ -151,10 +155,32 @@ def parse_entity_rows(map_text: str) -> list[dict[str, Any]]:
     return rows
 
 
+def parse_sta_summary(sta_text: str, section_name: str) -> dict[str, float]:
+    header = re.compile(
+        rf"(?m)^;\s*Slow 1100mV [^;\r\n]+ Model "
+        rf"{re.escape(section_name)}\s*;"
+    )
+    matches = list(header.finditer(sta_text))
+    if len(matches) != 2:
+        raise ReceiptError(
+            f"expected two slow-corner {section_name} tables, got {len(matches)}"
+        )
+    # Match the same first slow corner used by run_block_fit's first Fmax row.
+    table = sta_text[matches[0].start():matches[0].start() + 2000]
+    row = re.search(
+        r"(?m)^;\s*[^;]+;\s*(-?[0-9]+\.[0-9]+)\s*;"
+        r"\s*(-?[0-9]+\.[0-9]+)\s*;",
+        table,
+    )
+    if row is None:
+        raise ReceiptError(f"{section_name} table has no clock/slack/TNS row")
+    return {"slack_ns": float(row.group(1)), "tns_ns": float(row.group(2))}
+
+
 def parse_v3_parameter(map_text: str) -> dict[str, str]:
     header = re.compile(
-        r"Parameter Settings for User Entity Instance: "
-        r"([^\r\n]*zhao_texture_island_v3_top:u_texture_v3[^\r\n]*)"
+        r"(?m)^;\s*Parameter Settings for User Entity Instance:\s*"
+        r"([^\r\n;]*zhao_texture_island_v3_top:u_texture_v3)\s*;\s*$"
     )
     matches = list(header.finditer(map_text))
     if len(matches) != 1:
@@ -312,20 +338,36 @@ def build_receipt(*, require_current_head: bool) -> dict[str, Any]:
     fit_configuration = validate_fit_configuration(qsf_text, sdc_text, manifest)
 
     map_text = paths["map.rpt"].read_text(encoding="utf-8", errors="replace")
+    sta_text = paths["sta.rpt"].read_text(encoding="utf-8", errors="replace")
     entities = parse_entity_rows(map_text)
     hierarchy = validate_hierarchy(entities, map_text)
     parameter = parse_v3_parameter(map_text)
     ram = validate_ram(map_text)
+    setup = parse_sta_summary(sta_text, "Setup Summary")
+    hold = parse_sta_summary(sta_text, "Hold Summary")
 
     numeric = {}
     for key in (
         "alms", "registers", "blockMemoryBits", "ramBlocks", "dspBlocks",
-        "virtualPins", "fitterSeed", "fmaxMhz", "setupSlackNs", "setupTnsNs",
-        "holdSlackNs", "holdTnsNs",
+        "virtualPins", "fitterSeed", "fmaxMhz",
     ):
         value = row.get(key)
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             raise ReceiptError(f"G8A row lacks numeric {key}")
+        numeric[key] = value
+    retained_timing = {
+        "setupSlackNs": setup["slack_ns"],
+        "setupTnsNs": setup["tns_ns"],
+        "holdSlackNs": hold["slack_ns"],
+        "holdTnsNs": hold["tns_ns"],
+    }
+    for key, value in retained_timing.items():
+        row_value = row.get(key)
+        if row_value is not None and row_value != value:
+            raise ReceiptError(
+                f"G8A row {key} differs from retained STA report: "
+                f"{row_value} != {value}"
+            )
         numeric[key] = value
     if numeric["virtualPins"] != 0:
         raise ReceiptError(f"G8A mapped {numeric['virtualPins']} virtual pins")

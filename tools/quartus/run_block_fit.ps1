@@ -298,8 +298,14 @@ $results = New-Object 'System.Collections.Generic.List[object]'
 # appears. Do not trust a new field here until a real report has been read.
 # ---------------------------------------------------------------------------
 function Get-StaSummary([string]$Text, [string]$Section) {
-    $i = $Text.IndexOf("; $Section")
-    if ($i -lt 0) { return $null }
+    # The actual Quartus 17 headings are corner-qualified, for example
+    # `; Slow 1100mV 100C Model Setup Summary ;`. Select the first slow
+    # corner, matching the first restricted-Fmax row parsed below.
+    $sectionPattern = '(?m)^;\s*Slow 1100mV [^;\r\n]+ Model ' +
+        [regex]::Escape($Section) + '\s*;'
+    $sectionMatch = [regex]::Match($Text, $sectionPattern)
+    if (-not $sectionMatch.Success) { return $null }
+    $i = $sectionMatch.Index
     $tail = $Text.Substring($i, [Math]::Min(2000, $Text.Length - $i))
     # First data row after the header separator: `; <clock> ; <slack> ; <tns> ;`
     $m = [regex]::Match($tail, '(?m)^;\s*[^;]+;\s*(-?[0-9]+\.[0-9]+)\s*;\s*(-?[0-9]+\.[0-9]+)\s*;')

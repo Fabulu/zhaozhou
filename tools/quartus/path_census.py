@@ -148,6 +148,8 @@ def main():
                     help='report the internal ceiling if every path ENDING in this '
                          'instance had zero delay -- the most a perfect replacement '
                          'of that block could possibly buy')
+    ap.add_argument('--top', type=int, default=0,
+                    help='also print the N worst exact endpoint pairs')
     ap.add_argument('--self-test', action='store_true')
     a = ap.parse_args()
 
@@ -176,6 +178,11 @@ def main():
     print('worst OVERALL   %8.3f  %s -> %s' % worst)
     print('                          reported Fmax  %.2f MHz'
           % fmax(worst[0], a.period))
+    if a.top > 0:
+        print()
+        print('worst exact endpoint pairs:')
+        for index, row in enumerate(sorted(rows)[:a.top], 1):
+            print('  %3d  %8.3f  %s -> %s' % (index, row[0], row[1], row[2]))
     if ii:
         wi = min(ii, key=lambda r: r[0])
         print('worst INTERNAL  %8.3f  %s -> %s' % wi)

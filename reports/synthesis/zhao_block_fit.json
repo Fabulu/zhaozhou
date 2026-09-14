@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "cefbd49b889f8dad87a6c69fa03246b58a7ecf5d",
+    "newestRunCommit":  "c88e2b317c981a98f177a2c049688af1c9e30ba3",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1223,23 +1223,31 @@
                    },
                    {
                        "module":  "zhao_raster_texture_v3_fit_top@g8a",
-                       "status":  "incomplete:failed:quartus_map.exe",
-                       "sourceCommit":  "cefbd49b889f8dad87a6c69fa03246b58a7ecf5d",
+                       "status":  "failed:structure",
+                       "sourceCommit":  "c88e2b317c981a98f177a2c049688af1c9e30ba3",
                        "treeCleanAtHead":  true,
                        "rtlCleanAtHead":  true,
                        "ioMode":  "physical-top-ports",
                        "fitterSeed":  1,
                        "seedSource":  "run_block_fit -Seed",
-                       "sourceDigest":  "0cbff4dbf2038d372e1d3917a1e6c9a7b9fbe70f83d06a5b6395cd0f22d2d38c",
+                       "sourceDigest":  "42f61c4776bba4a321e5983bddea849f882c0eea11662aafe9b5f38e437621d4",
                        "variantOf":  "zhao_raster_texture_v3_fit_top",
-                       "seconds":  19.7,
+                       "seconds":  1578.5,
                        "sourcesHashed":  43,
-                       "partial":  true,
-                       "partialStage":  "analysis_and_synthesis",
-                       "registers":  null,
-                       "blockMemoryBits":  null,
-                       "dspBlocks":  null,
-                       "virtualPins":  null
+                       "alms":  13478,
+                       "registers":  21527,
+                       "blockMemoryBits":  92964,
+                       "ramBlocks":  71,
+                       "dspBlocks":  49,
+                       "virtualPins":  0,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  65.96,
+                       "fmaxClock":  "clk",
+                       "ruleViolations":  [
+                                              "Fmax 65.96 MHz \u003c required 100 MHz -- the resource gates can all pass while the clock does not; see this rule\u0027s note"
+                                          ]
                    },
                    {
                        "module":  "zhao_raster_tilestore",

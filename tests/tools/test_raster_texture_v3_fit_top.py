@@ -19,6 +19,10 @@ FAILED_ATTEMPT = (
     REPO / "reports/characterization/g8a_raster_texture_single_owner_characterization"
     / "cefbd49b-20260914T162945Z-attempt1"
 )
+COMPLETED_ATTEMPT = (
+    REPO / "reports/characterization/g8a_raster_texture_single_owner_characterization"
+    / "c88e2b31-20260914T165040Z-attempt2"
+)
 
 spec = importlib.util.spec_from_file_location("g8a_generator", GENERATOR_PATH)
 if spec is None or spec.loader is None:
@@ -123,6 +127,7 @@ def validate_runner(text: str) -> None:
         "'physical-top-ports'",
         "'virtual-top-ports'",
         "I/O mode is recorded per row.",
+        "$sectionPattern = '(?m)^;\\s*Slow 1100mV [^;\\r\\n]+ Model '",
     ), "G8A block-fit runner")
 
 
@@ -170,9 +175,9 @@ def synthetic_map_report(*, shadows: bool = False, texjoin: bool = False,
     rows.extend([
         "Analysis & Synthesis RAM Summary",
         "zhao_raster_tilestore:u_tilestore ram0 ram1",
-        "Parameter Settings for User Entity Instance: "
+        "; Parameter Settings for User Entity Instance: "
         "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|"
-        "zhao_texture_island_v3_top:u_texture_v3",
+        "zhao_texture_island_v3_top:u_texture_v3 ;",
         "; Parameter Name ; Value ; Type ;",
         f"; MIGRATION_SHADOWS ; {parameter} ; Unsigned Binary ;",
     ])
@@ -298,12 +303,56 @@ class G8AFitTopTests(unittest.TestCase):
             validate_runner(runner.replace("treeCleanAtHead = $treeClean;", "", 1))
 
     def test_receipt_parsers_fire_on_hierarchy_parameter_and_shadow_faults(self) -> None:
+        self.assertEqual(receipt.REQUIRED_RAW_SUFFIXES, (
+            "sources.sha256", "qsf", "sdc", "map.rpt", "map.summary",
+            "fit.summary", "fit.rpt", "sta.rpt", "setup.rpt", "hold.rpt",
+            "setup.summary.rpt",
+        ))
         clean = synthetic_map_report()
         entities = receipt.parse_entity_rows(clean)
         hierarchy = receipt.validate_hierarchy(entities, clean)
         self.assertEqual(hierarchy["texjoin_count"], 0)
         self.assertEqual(receipt.parse_v3_parameter(clean)["value"], "0")
+        descendant_header = clean + (
+            "\n; Parameter Settings for User Entity Instance: "
+            "top|zhao_texture_island_v3_top:u_texture_v3|child:u_child ;\n"
+            "; MIGRATION_SHADOWS ; 1 ; Unsigned Binary ;"
+        )
+        self.assertEqual(
+            receipt.parse_v3_parameter(descendant_header)["value"], "0"
+        )
         self.assertTrue(receipt.validate_ram(clean)["pass"])
+        sta = "\n".join((
+            "; Slow 1100mV 100C Model Setup Summary ;",
+            "; Clock ; Slack ; End Point TNS ;",
+            "; clk ; -5.160 ; -4388.685 ;",
+            "; Slow 1100mV -40C Model Setup Summary ;",
+            "; clk ; -5.453 ; -3842.217 ;",
+            "; Slow 1100mV 100C Model Hold Summary ;",
+            "; clk ; 0.236 ; 0.000 ;",
+            "; Slow 1100mV -40C Model Hold Summary ;",
+            "; clk ; 0.100 ; 0.000 ;",
+        ))
+        self.assertEqual(
+            receipt.parse_sta_summary(sta, "Setup Summary"),
+            {"slack_ns": -5.160, "tns_ns": -4388.685},
+        )
+        self.assertEqual(
+            receipt.parse_sta_summary(sta, "Hold Summary"),
+            {"slack_ns": 0.236, "tns_ns": 0.0},
+        )
+        with self.assertRaises(receipt.ReceiptError):
+            receipt.parse_sta_summary(
+                sta.replace("Slow 1100mV -40C Model Hold Summary", "Fast Hold"),
+                "Hold Summary",
+            )
+        warning_only = clean + (
+            '\nWarning (10858): object shadow_metadata_m used but never assigned'
+        )
+        warning_hierarchy = receipt.validate_hierarchy(
+            receipt.parse_entity_rows(warning_only), warning_only
+        )
+        self.assertEqual(warning_hierarchy["shadow_state_matches"], [])
         with self.assertRaises(receipt.ReceiptError):
             bad = synthetic_map_report(texjoin=True)
             receipt.validate_hierarchy(receipt.parse_entity_rows(bad), bad)
@@ -434,6 +483,40 @@ class G8AFitTopTests(unittest.TestCase):
         )
         self.assertIn('near text: "export";  expecting "endmodule"', map_report)
         self.assertNotIn("Analysis & Synthesis Resource Usage Summary", map_report)
+
+        completed = json.loads(
+            (COMPLETED_ATTEMPT / "ATTEMPT.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(completed["schema_id"], "zhao.g8a.completed_attempt")
+        self.assertEqual(completed["schema_version"], 1)
+        self.assertTrue(
+            completed["diagnosis"]["meaningful_resource_or_timing_measurement"]
+        )
+        self.assertEqual(completed["row"]["sourceCommit"],
+                         "c88e2b317c981a98f177a2c049688af1c9e30ba3")
+        self.assertEqual(completed["row"]["sourceDigest"],
+                         "42f61c4776bba4a321e5983bddea849f882c0eea11662aafe9b5f38e437621d4")
+        self.assertEqual(completed["row"]["alms"], 13478)
+        self.assertEqual(completed["row"]["dspBlocks"], 49)
+        self.assertEqual(completed["row"]["fmaxMhz"], 65.96)
+        self.assertEqual(completed["row"]["setupSlackNs"], -5.16)
+        for name in ("runner.out.log", "runner.err.log"):
+            self.assertEqual(
+                sha256(COMPLETED_ATTEMPT / name), completed["artifacts"][name], name
+            )
+        canonical_receipt = completed["artifacts"]["canonical_receipt"]
+        self.assertEqual(canonical_receipt["path"],
+                         "reports/synthesis/zhao_g8a_raster_texture.json")
+        self.assertEqual(sha256(REPO / canonical_receipt["path"]),
+                         canonical_receipt["sha256"])
+        current_receipt = json.loads(
+            (REPO / canonical_receipt["path"]).read_text(encoding="utf-8")
+        )
+        self.assertTrue(current_receipt["gate"]["fit_complete"])
+        self.assertTrue(current_receipt["gate"]["resource_pass"])
+        self.assertTrue(current_receipt["gate"]["structure_pass"])
+        self.assertFalse(current_receipt["gate"]["timing_100mhz_pass"])
+        self.assertFalse(current_receipt["gate"]["pass"])
 
     def test_one_fit_runner_and_receipt_tool_are_fail_closed(self) -> None:
         fit_runner = (REPO / "tools/quartus/run_g8a_fit.ps1").read_text(encoding="utf-8")

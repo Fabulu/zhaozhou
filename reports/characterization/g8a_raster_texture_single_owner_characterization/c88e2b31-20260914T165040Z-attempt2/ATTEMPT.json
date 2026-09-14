@@ -1,0 +1,45 @@
+{
+  "artifacts": {
+    "canonical_receipt": {
+      "path": "reports/synthesis/zhao_g8a_raster_texture.json",
+      "sha256": "d991203addf3f63ce91b5b3818a2a8e78870b9ad1d95ee7199996854453dfdb8"
+    },
+    "runner.err.log": "d3d9b417681d83574140364e44ec30b7685d8b1ec9f742c9e66131db549a9807",
+    "runner.out.log": "c0a2318d3d664a4d30987ddf06fadfee2f6f6c183ffe1de9e034aea4022852a9"
+  },
+  "diagnosis": {
+    "meaningful_resource_or_timing_measurement": true,
+    "next_action": "Preserve this failed 100 MHz gate; serialize the binding-row CRC and verify its protocol in simulation before any later authorized subsystem fit. Do not rerun the unchanged G8A design.",
+    "receipt_repair": "The first receipt attempt confused an unused-source warning for shadow_metadata_m with mapped shadow state and matched parameter-table descendants/table-of-contents rows. The corrected parser requires mapped register/RAM evidence and the exact mapped V3 instance; the retained reports then prove structure pass.",
+    "timing": "All 2,000 summarized paths start inside the design. The worst setup path is the binding resolver's ten-byte combinational row CRC from crc_q[8] into configuration response/state logic.",
+    "timing_gate": "65.96 MHz < 100 MHz; setup WNS -5.160 ns and TNS -4388.685 ns",
+    "resource_gate": "PASS: 13,478 ALMs <= 29,999 and 49 DSP blocks <= 84",
+    "structure_gate": "PASS: exact hierarchy, one V3 owner, zero TEXJOIN, MIGRATION_SHADOWS=0, no mapped shadow state, required RAM witnesses"
+  },
+  "row": {
+    "alms": 13478,
+    "blockMemoryBits": 92964,
+    "dspBlocks": 49,
+    "fitterSeed": 1,
+    "fmaxMhz": 65.96,
+    "holdSlackNs": 0.236,
+    "holdTnsNs": 0.0,
+    "ioMode": "physical-top-ports",
+    "module": "zhao_raster_texture_v3_fit_top@g8a",
+    "ramBlocks": 71,
+    "registers": 21527,
+    "rtlCleanAtHead": true,
+    "seconds": 1578.5,
+    "setupSlackNs": -5.16,
+    "setupTnsNs": -4388.685,
+    "sourceCommit": "c88e2b317c981a98f177a2c049688af1c9e30ba3",
+    "sourceDigest": "42f61c4776bba4a321e5983bddea849f882c0eea11662aafe9b5f38e437621d4",
+    "sourcesHashed": 43,
+    "status": "failed:structure",
+    "treeCleanAtHead": true,
+    "virtualPins": 0
+  },
+  "schema_id": "zhao.g8a.completed_attempt",
+  "schema_version": 1,
+  "started_utc": "2026-09-14T16:50:40Z"
+}
