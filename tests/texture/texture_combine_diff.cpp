@@ -1,7 +1,7 @@
 // texture_combine_diff.cpp — TEXTURE.COMBINE's RTL against its oracle.
 // Authored 2026-09-05 (roadmap G1-C).
 //
-// The scalar law is `zref::material::combine`. This drives the RTL with the
+// The scalar law is `zref::legacy_material_v2::combine`. This drives the RTL with the
 // same inputs and requires bit-exact agreement on RGB, alpha, the refusal flag
 // and `frag_tag`.
 //
@@ -23,7 +23,7 @@
 #include "Vzhao_texture_combine.h"
 
 #include "zhao_sim.hpp"
-#include "zref/zref_material.hpp"
+#include "legacy_material_v2_oracle.hpp"
 
 // ===========================================================================
 // THIS TESTS A RETIRED BLOCK, AT ITS OWN REDUCED SCOPE. READ THIS FIRST.
@@ -65,7 +65,7 @@ void check(bool ok, const char* what, uint32_t expected, uint32_t got) {
   }
 }
 
-namespace mat = zref::material;
+namespace mat = zref::legacy_material_v2;
 
 // A tiny deterministic PRNG. Deterministic on purpose: a differential that
 // cannot be replayed is a differential that cannot be debugged.
@@ -267,8 +267,8 @@ int main(int argc, char** argv) {
 
   if (g_failed) {
     std::printf("[texture_combine_diff] %d/%d checks FAILED\n", g_failed, g_checks);
-    return 1;
+    zhao::exit_hard(1);
   }
   std::printf("[texture_combine_diff] %d checks passed\n", g_checks);
-  return 0;
+  zhao::exit_hard(0);
 }

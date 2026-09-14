@@ -41,6 +41,7 @@
 #include <cstdio>
 
 #include "verilated.h"
+#include "../harness/zhao_sim.hpp"
 
 #include "Vzhao_texture_v3own_rl.h"
 
@@ -281,8 +282,8 @@ int main(int argc, char** argv) {
 
   if (g_failed) {
     std::printf("[texture_v3own_readlate_directed] %d/%d checks FAILED\n", g_failed, g_checks);
-    return 1;
+    zhao::exit_hard(1);
   }
   std::printf("[texture_v3own_readlate_directed] %d checks passed\n", g_checks);
-  return 0;
+  zhao::exit_hard(0);
 }

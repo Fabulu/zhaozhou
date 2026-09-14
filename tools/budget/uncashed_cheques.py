@@ -68,29 +68,43 @@ TARGETS = os.path.join("design", "fit_targets.yml")
 # The manifest is the record of INTENT. A rootless module it explains is not a
 # finding; a rootless module it does not mention is.
 # ---------------------------------------------------------------------------
-def load_manifest_sections(path=MANIFEST):
-    """{module: section} for every module named under a top-level key.
-
-    Deliberately a text scan of `  - name` / `  - name: note` lines under the
-    nearest preceding `key:` header, because that is the file's actual shape
-    and a YAML parse would need the schema to stay put.
-    """
+def _manifest_sections_from_text(text):
+    """Parse only authoritative ``top``/``excluded`` disposition rows."""
     out = {}
-    try:
-        text = io.open(os.path.join(ROOT, path), encoding="utf-8",
-                       errors="replace").read()
-    except OSError:
-        return out
     section = None
-    for line in text.splitlines():
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].rstrip()
         h = re.match(r"^([a-z_]+):\s*$", line)
         if h:
             section = h.group(1)
             continue
         m = re.match(r"^\s+-\s+(\w+)\s*(?::(.*))?$", line)
-        if m and section:
-            out.setdefault(m.group(1), (section, (m.group(2) or "").strip()))
+        if m and section in ("top", "excluded"):
+            name = m.group(1)
+            if name in out:
+                raise ValueError(
+                    "duplicate authoritative production disposition for " + name)
+            out[name] = (section, (m.group(2) or "").strip())
     return out
+
+
+def load_manifest_sections(path=MANIFEST):
+    """{module: section} for authoritative ``top``/``excluded`` dispositions.
+
+    Deliberately a text scan of `  - name` / `  - name: note` lines under the
+    nearest preceding `key:` header, because that is the file's actual shape
+    and a YAML parse would need the schema to stay put. Ancillary lists such as
+    ownership providers and retired census slots may repeat module names, but
+    they are not disposition records. Inline YAML comments are removed before
+    matching, and duplicate authoritative dispositions fail closed.
+    """
+    try:
+        with io.open(os.path.join(ROOT, path), encoding="utf-8",
+                     errors="replace") as stream:
+            text = stream.read()
+    except OSError:
+        return {}
+    return _manifest_sections_from_text(text)
 
 
 def load_fit_targets(path=TARGETS):
@@ -400,14 +414,44 @@ def self_test():
         n = len(load_fit_targets())
         assert n > 50, ("load_fit_targets matched %d entries -- the file's "
                         "shape moved and the regex went vacuous" % n)
+    sample_manifest = """
+ownership_roles:
+  providers:
+    - retired_a
+retired_census_slots:
+  - retired_a
+top:
+  - live_root # inline comment must not hide this row
+excluded:
+  - retired_a: superseded retained oracle # disposition comment
+"""
+    parsed = _manifest_sections_from_text(sample_manifest)
+    assert parsed == {
+        "live_root": ("top", ""),
+        "retired_a": ("excluded", "superseded retained oracle"),
+    }, "ancillary rows or inline comments corrupted authoritative dispositions"
+    try:
+        _manifest_sections_from_text(sample_manifest +
+                                     "  - retired_a: not-yet-adopted duplicate\n")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("duplicate authoritative disposition did not fire")
+
     if os.path.exists(os.path.join(ROOT, MANIFEST)):
-        n = len(load_manifest_sections())
+        manifest = load_manifest_sections()
+        n = len(manifest)
         assert n > 50, ("load_manifest_sections matched %d entries -- the "
                         "file's shape moved and the regex went vacuous" % n)
     return True
 
 
-assert self_test(), "uncashed_cheques self-test failed"
+if not __debug__:
+    raise RuntimeError(
+        "uncashed_cheques refuses Python -O: optimized mode removes its "
+        "assertion-based positive controls")
+if not self_test():
+    raise AssertionError("uncashed_cheques self-test failed")
 
 
 def main():

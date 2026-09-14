@@ -129,6 +129,23 @@ texel answers. The STATUS distinguishes them, and a consumer that ignores status
 gets the fail-safe reading (nothing was stamped there) rather than another
 patch's scar.
 
+### READ-consumer boundary
+
+An accepted READ has `req_op_i == 2'd1` and creates exactly one held page
+response. A legal successful consumer response has `pg_op_o == 2'd1`, status
+HIT, and `pg_src_id_o` equal to the accepted request source. MISS is the one
+legal negative READ result. ALLOCATED or OVERFLOW on a READ, a wrong echoed
+opcode, or a wrong source is malformed traffic at the consuming adapter; it is
+never a successful read. The request payload holds under `req_valid_i &&
+!req_ready_o`, and this block holds the complete response under `pg_valid_o &&
+!pg_ready_i` as stated below.
+
+`design/contracts/TEXTURE.AUX.V2.md` normatively imports this storage
+transaction for Packet B. That contract owns its adapter's issued-identity
+credit, malformed-response disposition, owner return, and accounting; this
+contract continues to own the Sheet store, handle lookup, response bytes, and
+ready/valid hold. This clarification adds no new Sheet state or port.
+
 ### the write port (in, ready/valid)
 
 `wr_handle_i` (32), `wr_texel_i` (12), `wr_tag_i` (8), `wr_strength_i` (8),

@@ -90,7 +90,7 @@
 // samples never reached the cache, and the picture would be wrong but the
 // handshake would look healthy. So the acceptance condition is that **every
 // block's counter moved** -- and, since W10, that every retired colour is the
-// EXACT value `zref::Tmu::sample` and `zref::material::combine` compute for
+// EXACT value `zref::Tmu::sample` and `zref::legacy_material_v2::combine` compute for
 // THAT fragment's own address, from a texture whose neighbouring texels are
 // different by construction.
 //
@@ -222,7 +222,7 @@
 //    `s1.a != 0`, so a hardwired opaque alpha does not merely report the wrong
 //    transparency, it paints a shape that should have been cut away.
 
-#include "zref/zref_material.hpp"
+#include "legacy_material_v2_oracle.hpp"
 #include "zref/zref_texture.hpp"
 
 #include <algorithm>
@@ -232,20 +232,17 @@
 #include <vector>
 
 #include "verilated.h"
+#include "../harness/zhao_sim.hpp"
 
 // ---------------------------------------------------------------------------
-// ONE SOURCE, TWO TOPS -- P0-C Stage C's gate 2
+// ONE SOURCE, TWO TOPS -- NARROW MATERIAL COMPATIBILITY
 // ---------------------------------------------------------------------------
-// This file is compiled TWICE: once against the oracle
-// (`zhao_texture_island_top`) and once, with -DISLAND_V3, against the V3
-// composition (`zhao_texture_island_v3_top`).
-//
-// It is one source rather than a copy DELIBERATELY. The architecture's gate 2
-// asks for "the 119-check suite retargeted to the new top: same stimulus bytes,
-// same zref oracle, same assertions". A copied file satisfies that on the day
-// it is copied and drifts afterwards -- and a drifted comparison is worse than
-// no comparison, because it still produces two numbers that look comparable.
-// With one source, divergence is impossible by construction.
+// This file is compiled twice: the unchanged old island retains the historical
+// eight-recipe/count-3/AUX workload and uses the explicit legacy V2 oracle.
+// Packet B changes those laws, so the ISLAND_V3 build narrows only its material
+// fields to the sole common subset: PASSTHRU, count 1, no AUX.  Texture address,
+// decode, palette/filter, ordering, stall, and tag stimulus remains shared.
+// Comparing wider material traffic would let the old island outvote R9.
 //
 // The two tops have IDENTICAL PORT LISTS (checked, not assumed), which is what
 // makes this possible at all. If a future change breaks that, this file stops
@@ -608,6 +605,7 @@ struct FragSpec {
   uint32_t uow = 0, vow = 0;
   int32_t u = 0, v = 0;  // what the planner must see, S15.16 texture units
   uint8_t recipe = 0;
+  uint8_t sample_count = 3;
   uint8_t weight = 128;
   uint8_t cls = 0;
   bool aux = false;
@@ -683,8 +681,8 @@ const uint8_t kFV[8] = {0x90, 0x30, 0xB0, 0x50, 0xD0, 0x70, 0x10, 0xF0};
 
 // The base colour every fragment carries. Moderate, for the saturation reason
 // above.
-zref::material::Sample base_sample() {
-  zref::material::Sample b;
+zref::legacy_material_v2::Sample base_sample() {
+  zref::legacy_material_v2::Sample b;
   b.r = 0x20;
   b.g = 0x40;
   b.b = 0x60;
@@ -718,10 +716,10 @@ int aux_axis(uint32_t w) {
   return t < 0 ? 0 : (t > 63 ? 63 : t);
 }
 
-zref::material::Sample ref_aux(const FragSpec& f) {
+zref::legacy_material_v2::Sample ref_aux(const FragSpec& f) {
   const int u = aux_axis(f.wx);
   const int v = aux_axis(f.wz);
-  zref::material::Sample s;
+  zref::legacy_material_v2::Sample s;
   s.r = sheet_tag_at(u, v);
   s.g = sheet_str_at(u, v);
   s.b = 0;
@@ -732,7 +730,7 @@ zref::material::Sample ref_aux(const FragSpec& f) {
 // The whole expectation for one fragment, through the canonical components and
 // nothing else: zref::Tmu::sample for the fetch and decode, the aux law above
 // for the third sample when the fragment carries one, and
-// zref::material::combine for the material arithmetic.
+// zref::legacy_material_v2::combine for the material arithmetic.
 //
 // THE LIMIT THIS COMMENT USED TO RECORD IS GONE, and the record of it stays
 // because it names what the new phases are for. It said:
@@ -756,16 +754,16 @@ zref::material::Sample ref_aux(const FragSpec& f) {
 // the two to differ.
 void compute_expectation(FragSpec& f, uint32_t mode, uint32_t base) {
   const zref::Tmu::Sample ts = ref_sample(f, mode, base);
-  zref::material::Sample tex;
+  zref::legacy_material_v2::Sample tex;
   tex.r = ts.r;
   tex.g = ts.g;
   tex.b = ts.b;
   tex.a = ts.a;
 
-  zref::material::Sample s[3] = {tex, tex, f.aux ? ref_aux(f) : tex};
-  zref::material::Ledger led{};
-  const zref::material::Out o =
-      zref::material::combine(f.recipe, f.weight, s, /*count=*/3, base_sample(), f.tag, &led);
+  zref::legacy_material_v2::Sample s[3] = {tex, tex, f.aux ? ref_aux(f) : tex};
+  zref::legacy_material_v2::Ledger led{};
+  const zref::legacy_material_v2::Out o =
+      zref::legacy_material_v2::combine(f.recipe, f.weight, s, f.sample_count, base_sample(), f.tag, &led);
   f.want_rgb = (static_cast<uint32_t>(o.r) << 16) | (static_cast<uint32_t>(o.g) << 8) | o.b;
   f.want_a = o.a;
   f.want_refused = o.refused;
@@ -785,15 +783,15 @@ void compute_expectation(FragSpec& f, uint32_t mode, uint32_t base) {
 void expect_forced_alpha(const FragSpec& f, uint32_t mode, uint32_t base, uint8_t force_a,
                          uint32_t* rgb, uint8_t* a) {
   const zref::Tmu::Sample ts = ref_sample(f, mode, base);
-  zref::material::Sample tex;
+  zref::legacy_material_v2::Sample tex;
   tex.r = ts.r;
   tex.g = ts.g;
   tex.b = ts.b;
   tex.a = force_a;
-  zref::material::Sample s[3] = {tex, tex, f.aux ? ref_aux(f) : tex};
-  zref::material::Ledger led{};
-  const zref::material::Out o =
-      zref::material::combine(f.recipe, f.weight, s, /*count=*/3, base_sample(), f.tag, &led);
+  zref::legacy_material_v2::Sample s[3] = {tex, tex, f.aux ? ref_aux(f) : tex};
+  zref::legacy_material_v2::Ledger led{};
+  const zref::legacy_material_v2::Out o =
+      zref::legacy_material_v2::combine(f.recipe, f.weight, s, f.sample_count, base_sample(), f.tag, &led);
   *rgb = (static_cast<uint32_t>(o.r) << 16) | (static_cast<uint32_t>(o.g) << 8) | o.b;
   *a = o.a;
 }
@@ -802,6 +800,28 @@ uint32_t want_as_rgb565(const FragSpec& f, uint32_t base, bool filtered) {
   FragSpec g = f;
   compute_expectation(g, mode_direct(zref::Tmu::kRgb565, filtered), base);
   return g.want_rgb;
+}
+
+// The old island keeps its original eight-recipe/count-3/AUX workload.  Once
+// Packet B changes the V3 arithmetic and AUX law, the only truthful paired
+// old/new compatibility subset is PASSTHRU, count 1, no AUX.
+void select_compat_material(FragSpec& f, int ordinal) {
+#ifdef ISLAND_V3
+  static_cast<void>(ordinal);
+  f.recipe = zref::legacy_material_v2::kPassthru;
+  f.sample_count = 1;
+  f.aux = false;
+#else
+  f.recipe = static_cast<uint8_t>(ordinal % 8);
+  f.sample_count = 3;
+  f.aux = (ordinal % 3) == 0;
+#endif
+}
+
+uint32_t declared_sample_work(const std::vector<FragSpec>& fragments) {
+  uint32_t total = 0;
+  for (const FragSpec& f : fragments) total += f.sample_count;
+  return total;
 }
 
 // One phase's stimulus. Phases 1 and 2 were written out longhand before there
@@ -823,10 +843,9 @@ void build_frags(std::vector<FragSpec>& v, uint16_t tag_base, uint32_t mode, uin
     const uint32_t scale = f.depth >> 16;
     f.uow = static_cast<uint32_t>(f.u) * scale;
     f.vow = static_cast<uint32_t>(f.v) * scale;
-    f.recipe = static_cast<uint8_t>(i % 8);
+    select_compat_material(f, i);
     f.weight = 128;
     f.cls = class_of_mode(mode);
-    f.aux = (i % 3) == 0;
     f.wx = f.tag;
     f.wz = static_cast<uint32_t>(0x0400 + i * 0x0700);
     compute_expectation(f, mode, base);
@@ -878,7 +897,7 @@ void run_phase(Dut& d, uint32_t mode, uint32_t base, const std::vector<FragSpec>
       d.frag_depth_i = f.depth;
       d.frag_u_over_w_i = f.uow;
       d.frag_v_over_w_i = f.vow;
-      d.frag_sample_count_i = 3;
+      d.frag_sample_count_i = f.sample_count;
       d.frag_binding_i = 1;
       d.frag_lod_i = 0;
       d.frag_recipe_i = f.recipe;
@@ -1171,10 +1190,9 @@ int main(int argc, char** argv) {
     f.vow = static_cast<uint32_t>(f.v) * scale;
     // Recipes cycle so the combiner's bypass, product and continuation paths
     // are all exercised inside the composition.
-    f.recipe = static_cast<uint8_t>(i % 8);
+    select_compat_material(f, i);
     f.weight = 128;
     f.cls = class_of_mode(kModeClut);
-    f.aux = (i % 3) == 0;
     // The context word: the caller's tag in the low 16 bits, which is also the
     // aux world X, and an independent world Z above it. Both stay inside the
     // envelope so the sheet coordinate sweeps rather than sitting still.
@@ -1247,9 +1265,10 @@ int main(int argc, char** argv) {
         "law (`filter_eff = m_filter && !is_clut`), so a single bilerp job in "
         "this phase would mean the island filtered a palette index",
         0, static_cast<long>(bilerp_after_p1));
-  check(palette_after_p1 == static_cast<uint32_t>(kPhaseN * 3),
-        "and every CLUT sample performed its palette lookup", kPhaseN * 3,
-        static_cast<long>(palette_after_p1));
+  const uint32_t p1_sample_work = declared_sample_work(p1);
+  check(palette_after_p1 == p1_sample_work,
+        "and every declared CLUT sample performed its palette lookup",
+        p1_sample_work, static_cast<long>(palette_after_p1));
   check(d.cnt_palette_stale_o == 0,
         "every lookup RESOLVES -- no lookup is answered stale, which is the "
         "miss indication that used to be mistaken for a working path",
@@ -1288,7 +1307,7 @@ int main(int argc, char** argv) {
     check(checked == kPhaseN, "every phase-1 fragment was compared", kPhaseN, checked);
     check(mismatched == 0,
           "every CLUT fragment retires EXACTLY the colour zref::Tmu::sample "
-          "fetches from ITS OWN planned address and zref::material::combine "
+          "fetches from ITS OWN planned address and zref::legacy_material_v2::combine "
           "makes of it -- address, byte select, palette lookup, 565-to-888 "
           "replication, the AUX third sample and the material arithmetic, all "
           "exact and all address-specific",
@@ -1340,10 +1359,9 @@ int main(int argc, char** argv) {
     const uint32_t scale = f.depth >> 16;
     f.uow = static_cast<uint32_t>(f.u) * scale;
     f.vow = static_cast<uint32_t>(f.v) * scale;
-    f.recipe = static_cast<uint8_t>(i % 8);
+    select_compat_material(f, i);
     f.weight = 128;
     f.cls = class_of_mode(kModeBil);
-    f.aux = (i % 3) == 0;
     f.wx = f.tag;
     f.wz = static_cast<uint32_t>(0x0300 + i * 0x0680);
     compute_expectation(f, kModeBil, kBaseRgb);
@@ -1389,17 +1407,13 @@ int main(int argc, char** argv) {
         "colour has no index, and a lookup here would mean the format decode "
         "went to the wrong consumer",
         static_cast<long>(palette_after_p1), static_cast<long>(d.cnt_palette_lookups_o));
-  // FOUR, NOT THREE, AND THE CHANGE IS DEFECT (d). Alpha became a filtered
-  // channel when the shared decode landed, because with ARGB4444 the four taps
-  // carry four different alphas and tap 0's alpha is not the sample's. This
-  // number was 288 before that and is 384 now; it is written as `4` rather
-  // than edited to `384` so the reason stays attached to the arithmetic.
-  check(d.cnt_bilerp_jobs_o - bilerp_after_p1 == static_cast<uint32_t>(kPhaseN * 3 * 4),
-        "and the filter ran FOUR JOBS PER SAMPLE -- R, G, B and A sequenced "
-        "independently -- for all 96 samples. This is the number that proves "
-        "`filter_eff` came out of the mode word: it was ZERO for every "
-        "fragment while the fixture asked for 0x6600",
-        kPhaseN * 3 * 4, static_cast<long>(d.cnt_bilerp_jobs_o - bilerp_after_p1));
+  // Four channel jobs per declared sample.  This remains 384 in the unchanged
+  // old count-3 run and becomes 128 in the V3 count-1 compatibility subset.
+  const uint32_t p2_filter_jobs = declared_sample_work(p2) * 4u;
+  check(d.cnt_bilerp_jobs_o - bilerp_after_p1 == p2_filter_jobs,
+        "and the filter ran four channel jobs for every declared sample",
+        p2_filter_jobs,
+        static_cast<long>(d.cnt_bilerp_jobs_o - bilerp_after_p1));
   check(d.err_bil_chan_o == 0,
         "and the lane retired R, G, B, A in order every time, so no sample's "
         "red was paired with another's blue",
@@ -1437,7 +1451,7 @@ int main(int argc, char** argv) {
     check(mismatched == 0,
           "every BILINEAR fragment retires EXACTLY what zref::Tmu::sample "
           "computes from its four planned tap addresses at its own fractions, "
-          "put through zref::material::combine -- four distinct texels, "
+          "put through zref::legacy_material_v2::combine -- four distinct texels, "
           "per-channel decode, the filter weights and the material arithmetic",
           0, mismatched);
     check(alpha_bad == 0, "and its alpha matches", 0, alpha_bad);
@@ -1591,11 +1605,14 @@ int main(int argc, char** argv) {
         {"MOSAIC saw texture samples", d.cnt_mosaic_samples_o},
         {"PALETTE_RES was looked up -- the CLUT path is no longer idle", d.cnt_palette_lookups_o},
         {"BILERP ran filter jobs -- the direct-colour path is no longer idle", d.cnt_bilerp_jobs_o},
+#ifndef ISLAND_V3
         {"AUX_PIPE accepted requests", d.cnt_aux_accepted_o},
+#endif
     };
     for (const Link& l : chain) check(l.value > 0, l.name, 1, l.value > 0 ? 1 : 0);
   }
 
+#ifndef ISLAND_V3
   // ---- THE AUX SHEET WAS ADDRESSED, AND ADDRESSED CORRECTLY ---------------
   // The sheet responder is now a function of the coordinate it is handed, so a
   // wrong aux coordinate is a wrong colour and the exact checks above already
@@ -1639,6 +1656,14 @@ int main(int argc, char** argv) {
           "constant again by the back door",
           5, static_cast<long>(want.size()));
   }
+#else
+  check(d.cnt_aux_accepted_o == 0,
+        "V3 compatibility subset issues no AUX work", 0,
+        d.cnt_aux_accepted_o);
+  check(o1.sheet_u.empty() && o2.sheet_u.empty(),
+        "V3 compatibility subset presents no Sheet request", 1,
+        o1.sheet_u.empty() && o2.sheet_u.empty() ? 1 : 0);
+#endif
 
   // ---- PER-FRAGMENT RECIPE IDENTITY --------------------------------------
   // The two phases cycle all eight recipes across 64 fragments, so each runs
@@ -1653,36 +1678,40 @@ int main(int argc, char** argv) {
   // When a count is wrong, measure the identity of the things being counted
   // before theorising about the count.
   //
-  // `product_jobs()` in zref_material.hpp is the same table the oracle uses, so
-  // this asserts the hardware against the reference rather than against itself.
+  // `product_jobs()` in legacy_material_v2_oracle.hpp is the same table the
+  // unchanged old combiner uses, so this checks history against its own oracle.
   {
     std::printf("  combine refused(missing samples) = %u, jobs by recipe:",
                 d.cnt_combine_refused_o);
     for (int r = 0; r < 8; ++r) std::printf(" %u", d.cnt_combine_jobs_o[r]);
     std::printf("\n");
     int kJobsPerFrag[8];
+    int occurrences[8] = {0};
     for (int r = 0; r < 8; ++r)
-      kJobsPerFrag[r] = zref::material::product_jobs(static_cast<uint8_t>(r));
+      kJobsPerFrag[r] = zref::legacy_material_v2::product_jobs(static_cast<uint8_t>(r));
+    for (const FragSpec& f : p1) ++occurrences[f.recipe];
+    for (const FragSpec& f : p2) ++occurrences[f.recipe];
     int wrong_recipe = -1;
     for (int r = 0; r < 8; ++r)
-      if (static_cast<int>(d.cnt_combine_jobs_o[r]) != kJobsPerFrag[r] * 8) {
+      if (static_cast<int>(d.cnt_combine_jobs_o[r]) !=
+          kJobsPerFrag[r] * occurrences[r]) {
         wrong_recipe = r;
         break;
       }
     if (wrong_recipe >= 0)
       std::printf("  recipe %d issued %d jobs, expected %d\n", wrong_recipe,
                   static_cast<int>(d.cnt_combine_jobs_o[wrong_recipe]),
-                  kJobsPerFrag[wrong_recipe] * 8);
+                  kJobsPerFrag[wrong_recipe] * occurrences[wrong_recipe]);
     check(wrong_recipe < 0,
-          "every recipe issued EXACTLY the jobs its eight fragments call for -- "
-          "the recipe, and every other per-fragment attribute, travels with its "
-          "fragment instead of being read off the input pin twelve clocks late",
+          "every compatibility recipe issued exactly its historical jobs -- "
+          "old runs retain all eight recipes while V3 is PASSTHRU-only",
           -1, wrong_recipe);
+#ifndef ISLAND_V3
     check(d.cnt_combine_jobs_o[6] > d.cnt_combine_jobs_o[1],
           "and DETAIL_LIGHT issued more than MODULATE, in the ratio 6:4 the "
-          "architecture's job table gives -- the counts follow the RECIPES, "
-          "not the arrival order",
+          "legacy architecture's job table gives",
           1, d.cnt_combine_jobs_o[6] > d.cnt_combine_jobs_o[1] ? 1 : 0);
+#endif
     check(d.cnt_combine_jobs_o[0] == 0, "PASSTHRU issued none, as a bypass must", 0,
           d.cnt_combine_jobs_o[0]);
   }
@@ -1777,7 +1806,7 @@ int main(int argc, char** argv) {
   // is exactly the shape of a broken instrument -- a lane that is never used
   // refuses nothing either. So the nearest phases also require that the palette
   // performed NO lookup and the filter ran NO job, while the dispatcher routed
-  // all 96 responses and all 32 fragments retired the reference's exact colour.
+  // every declared response and all 32 fragments retired the reference colour.
   // With the other two consumers provably idle, the only block that can have
   // produced those colours is the nearest decode station.
   {
@@ -1806,6 +1835,7 @@ int main(int argc, char** argv) {
 
       PhaseOut o;
       run_phase(d, mode, kBaseRgb, ph, o);
+      const uint32_t phase_sample_work = declared_sample_work(ph);
 
       const uint32_t refused = d.cnt_near_refused_o - refused_before;
       const uint32_t bilerp = d.cnt_bilerp_jobs_o - bilerp_before;
@@ -1842,18 +1872,17 @@ int main(int argc, char** argv) {
       check(palette == 0, msg, 0, static_cast<long>(palette));
 
       std::snprintf(msg, sizeof msg,
-                    "and the dispatcher routed all %d sample responses in phase %s, so "
-                    "the traffic the checks below rest on actually existed",
-                    kPhaseN * 3, dp.name);
-      check(dispatch == static_cast<uint32_t>(kPhaseN * 3), msg, kPhaseN * 3,
+                    "and the dispatcher routed all %u declared sample responses in phase %s, "
+                    "so the traffic the checks below rest on actually existed",
+                    phase_sample_work, dp.name);
+      check(dispatch == phase_sample_work, msg, phase_sample_work,
             static_cast<long>(dispatch));
 
       if (dp.filtered) {
         std::snprintf(msg, sizeof msg,
-                      "and phase %s ran FOUR filter jobs per sample -- R, G, B and A -- "
-                      "for all %d samples",
-                      dp.name, kPhaseN * 3);
-        check(bilerp == static_cast<uint32_t>(kPhaseN * 3 * 4), msg, kPhaseN * 3 * 4,
+                      "and phase %s ran four filter jobs for all %u declared samples",
+                      dp.name, phase_sample_work);
+        check(bilerp == phase_sample_work * 4u, msg, phase_sample_work * 4u,
               static_cast<long>(bilerp));
       } else {
         std::snprintf(msg, sizeof msg,
@@ -1866,10 +1895,9 @@ int main(int argc, char** argv) {
 
         std::snprintf(msg, sizeof msg,
                       "AND NOT ONE SAMPLE WAS REFUSED FOR WANT OF A NEAREST DECODE in "
-                      "phase %s. This counter read %d on exactly this stimulus while "
-                      "`near_ok_c` was tied to 1'b0, and every one of those samples "
-                      "retired SMP_ERR_RGB",
-                      dp.name, kPhaseN * 3);
+                      "phase %s. This counter read %u on the corresponding stale-decode "
+                      "mutation, and every one of those samples retired SMP_ERR_RGB",
+                      dp.name, phase_sample_work);
         check(refused == 0, msg, 0, static_cast<long>(refused));
       }
 
@@ -1931,7 +1959,7 @@ int main(int argc, char** argv) {
 
       std::snprintf(msg, sizeof msg,
                     "every %s fragment retires EXACTLY the colour zref::Tmu::sample "
-                    "decodes from ITS OWN planned address and zref::material::combine "
+                    "decodes from ITS OWN planned address and zref::legacy_material_v2::combine "
                     "makes of it -- the format-controlled channel fields, the 5/6/4/1-bit "
                     "replications and the material arithmetic, all exact",
                     dp.name);
@@ -2060,10 +2088,15 @@ int main(int argc, char** argv) {
         d.frag_u_over_w_i = static_cast<uint32_t>(u) * scale;
         d.frag_v_over_w_i = static_cast<uint32_t>(v) * scale;
       }
+#ifdef ISLAND_V3
+      d.frag_sample_count_i = 1;
+      d.frag_recipe_i = zref::legacy_material_v2::kPassthru;
+#else
       d.frag_sample_count_i = 3;
+      d.frag_recipe_i = static_cast<uint8_t>(1 + (p3_submitted % 3));
+#endif
       d.frag_binding_i = 1;
       d.frag_lod_i = 0;
-      d.frag_recipe_i = static_cast<uint8_t>(1 + (p3_submitted % 3));
       d.frag_weight_i = 128;
       d.frag_aux_i = 0;
       d.frag_class_i = class_of_mode(kModeClut);
@@ -2381,10 +2414,20 @@ int main(int argc, char** argv) {
     const uint32_t into_join = d.meta_shadow_reads_o;
     std::printf("  credited join: %u cache responses in, %u dispatched\n", into_join,
                 d.cnt_dispatch_accepted_o);
+#ifdef ISLAND_V3
+    const uint32_t compatibility_responses =
+        static_cast<uint32_t>(g_stream.size());
+    check(into_join == compatibility_responses && compatibility_responses > 300,
+          "the narrowed V3 run joined one response per PASSTHRU fragment and "
+          "still crossed a substantial non-vacuous workload",
+          compatibility_responses,
+          into_join);
+#else
     check(into_join > 500,
           "the join carried a substantial number of responses -- equality over "
           "a handful proves nothing",
           1, into_join > 500 ? 1 : 0);
+#endif
     check(d.cnt_dispatch_accepted_o == into_join,
           "and EVERY cache response reached the dispatcher. The credited join "
           "delays a response by one cycle to pair it with its metadata; if the "
@@ -2442,8 +2485,8 @@ int main(int argc, char** argv) {
 
   if (g_failed) {
     std::printf("[island_composed_directed] %d/%d checks FAILED\n", g_failed, g_checks);
-    return 1;
+    zhao::exit_hard(1);
   }
   std::printf("[island_composed_directed] %d checks passed\n", g_checks);
-  return 0;
+  zhao::exit_hard(0);
 }

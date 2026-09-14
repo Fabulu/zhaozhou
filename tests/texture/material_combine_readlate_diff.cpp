@@ -4,7 +4,7 @@
 // reports/TEXTURE-READLATE-COMBINE-20260910.md (roadmap 4.2 / Commit4).
 //
 // WHAT THIS IS. material_combine_v2_diff.cpp proves the paired-phase
-// arithmetic against `zref::material::combine` with the samples handed over on
+// arithmetic against `zref::legacy_material_v2::combine` with the samples handed over on
 // pins. Under READ_LATE=1 the samples are no longer on pins: the combiner names
 // an owner SLOT per phase and reads them from the planes itself. So this is the
 // SAME workload -- V2's generator, corners and recipes, the same phase-count
@@ -42,11 +42,12 @@
 #include <vector>
 
 #include "verilated.h"
+#include "../harness/zhao_sim.hpp"
 
 #include "Vtb_combine_readlate.h"
-#include "zref/zref_material.hpp"
+#include "legacy_material_v2_oracle.hpp"
 
-namespace mat = zref::material;
+namespace mat = zref::legacy_material_v2;
 
 namespace {
 
@@ -342,7 +343,7 @@ void test_every_recipe_matches_the_oracle() {
   check(missing == 0, "every fragment retired -- none was lost in the scheduler", 0,
         missing);
   check(mismatched == 0,
-        "every recipe's result matches zref::material::combine exactly, with the "
+        "every recipe's result matches zref::legacy_material_v2::combine exactly, with the "
         "samples read late from the planes and the third sample in either plane",
         0, mismatched);
   check(jobs[mat::kPassthru] == 0, "PASSTHRU issues no product jobs", 0, jobs[mat::kPassthru]);
@@ -668,8 +669,8 @@ int main(int argc, char** argv) {
 
   if (g_failed) {
     std::printf("[material_combine_readlate_diff] %d/%d checks FAILED\n", g_failed, g_checks);
-    return 1;
+    zhao::exit_hard(1);
   }
   std::printf("[material_combine_readlate_diff] %d checks passed\n", g_checks);
-  return 0;
+  zhao::exit_hard(0);
 }

@@ -946,12 +946,29 @@ int main(int argc, char** argv) {
     s.ret_tmu(o, 0, mkres(0x80));
     s.ret_tmu(o, 1, mkres(0x81));  // committed becomes 0011
     s.idle(6);
+    zhao::check(dut->ev_tmu_commits_o == 2,
+                "typed TMU counter sees the two sample-only commits", 2,
+                dut->ev_tmu_commits_o);
+    zhao::check(dut->ev_aux_commits_o == 0,
+                "typed AUX counter does not alias sample-only commits", 0,
+                dut->ev_aux_commits_o);
     // this edge publishes texture source2 AND AUX for the same full handle
     s.ret_both(o, 2, mkres(0x82), o, mkres(0x83));
     s.idle(200);
     zhao::check(dut->ev_tickets_o == 1, "D.2 exactly ONE ready ticket", 1,
                 dut->ev_tickets_o);
     zhao::check(dut->ev_commits_o == 4, "D.2 four commits", 4,
+                dut->ev_commits_o);
+    zhao::check(dut->ev_tmu_commits_o == 3,
+                "D.2 typed TMU count increments once on the simultaneous edge", 3,
+                dut->ev_tmu_commits_o);
+    zhao::check(dut->ev_aux_commits_o == 1,
+                "D.2 typed AUX count increments once on the simultaneous edge", 1,
+                dut->ev_aux_commits_o);
+    zhao::check(dut->ev_commits_o ==
+                    dut->ev_tmu_commits_o + dut->ev_aux_commits_o,
+                "D.2 combined commits equal the two typed counters",
+                dut->ev_tmu_commits_o + dut->ev_aux_commits_o,
                 dut->ev_commits_o);
     zhao::check(s.combined.size() == 1, "D.2 one combine admission", 1,
                 s.combined.size());
@@ -979,6 +996,15 @@ int main(int argc, char** argv) {
     s.idle(300);
     zhao::check(dut->ev_tickets_o == 2, "D.2 two tickets, separate queues", 2,
                 dut->ev_tickets_o);
+    zhao::check(dut->ev_tmu_commits_o == 1,
+                "D.2 simultaneous distinct-owner TMU commit is typed once", 1,
+                dut->ev_tmu_commits_o);
+    zhao::check(dut->ev_aux_commits_o == 1,
+                "D.2 simultaneous distinct-owner AUX commit is typed once", 1,
+                dut->ev_aux_commits_o);
+    zhao::check(dut->ev_commits_o == 2,
+                "D.2 simultaneous distinct-owner combined count is two", 2,
+                dut->ev_commits_o);
     zhao::check(s.emitted.size() == 2, "D.2 two emissions", 2,
                 s.emitted.size());
     if (s.emitted.size() == 2) {
@@ -987,6 +1013,42 @@ int main(int argc, char** argv) {
       zhao::check(s.emitted[1].owner == j, "D.2 J emitted second", j,
                   s.emitted[1].owner);
     }
+  }
+
+  // =========================================================================
+  hdr("case 9b: typed commit counters remain independent across separate edges");
+  // =========================================================================
+  {
+    Ob s(dut);
+    s.reset();
+    uint16_t t = s.admit(ctx_of(0), 0x1);
+    uint16_t a = s.admit(ctx_of(1), 0x8);
+    s.issue_tmu(t, 0);
+    s.issue_aux(a);
+
+    s.ret_tmu(t, 0, mkres(0x92));
+    s.idle(8);
+    zhao::check(dut->ev_tmu_commits_o == 1,
+                "sample-only edge advances only typed TMU count", 1,
+                dut->ev_tmu_commits_o);
+    zhao::check(dut->ev_aux_commits_o == 0,
+                "sample-only edge leaves typed AUX count unchanged", 0,
+                dut->ev_aux_commits_o);
+    zhao::check(dut->ev_commits_o == 1,
+                "sample-only edge advances combined count once", 1,
+                dut->ev_commits_o);
+
+    s.ret_aux(a, mkres(0x93));
+    s.idle(300);
+    zhao::check(dut->ev_tmu_commits_o == 1,
+                "AUX-only edge leaves typed TMU count unchanged", 1,
+                dut->ev_tmu_commits_o);
+    zhao::check(dut->ev_aux_commits_o == 1,
+                "AUX-only edge advances only typed AUX count", 1,
+                dut->ev_aux_commits_o);
+    zhao::check(dut->ev_commits_o == 2,
+                "separate typed commits retain the combined sum", 2,
+                dut->ev_commits_o);
   }
 
   // =========================================================================
@@ -1009,6 +1071,12 @@ int main(int argc, char** argv) {
                 2, dut->ev_err_unsol_o);
     zhao::check(dut->ev_commits_o == 0, "no faulted packet wrote a bank", 0,
                 dut->ev_commits_o);
+    zhao::check(dut->ev_tmu_commits_o == 0,
+                "faulted TMU returns do not move the typed commit counter", 0,
+                dut->ev_tmu_commits_o);
+    zhao::check(dut->ev_aux_commits_o == 0,
+                "faulted AUX returns do not move the typed commit counter", 0,
+                dut->ev_aux_commits_o);
   }
 
   // =========================================================================
@@ -1300,6 +1368,9 @@ int main(int argc, char** argv) {
     // Complete them BACKWARDS. Owner 0 -- the emit head -- is completed last.
     for (int i = N - 1; i >= 1; --i) s.ret_tmu(owners[i], 0, mkres(owners[i]));
     s.idle(300);
+    zhao::check(dut->ev_reorder_held_o == static_cast<uint32_t>(N - 1),
+                "every newly ready non-head owner increments the real reorder event",
+                N - 1, dut->ev_reorder_held_o);
     zhao::check(s.emitted.empty(),
                 "nothing emitted while the emit head is incomplete", 0,
                 s.emitted.size());
@@ -1308,6 +1379,9 @@ int main(int argc, char** argv) {
                 s.combined.size());
     s.ret_tmu(owners[0], 0, mkres(owners[0]));
     s.idle(400);
+    zhao::check(dut->ev_reorder_held_o == static_cast<uint32_t>(N - 1),
+                "head completion is not counted as a reorder-held event",
+                N - 1, dut->ev_reorder_held_o);
     zhao::check(s.emitted.size() == static_cast<size_t>(N),
                 "the hole filled, all emitted", N, s.emitted.size());
     for (int i = 0; i < N && i < static_cast<int>(s.emitted.size()); ++i)

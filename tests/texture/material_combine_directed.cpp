@@ -1,395 +1,417 @@
-// material_combine_directed.cpp — the directed suite TEXTURE.COMBINE.md asks
-// for, authored 2026-09-05 (roadmap G1-C).
+// material_combine_directed.cpp -- authoritative R9 scalar material suite.
 //
-// The contract lists exactly these cases and they are implemented one for one:
-//
-//   * each of the six recipes at the unit8 corners (0, 1, 128, 255) --
-//     INCLUDING that modulate by 255 is NOT identity;
-//   * sample_count == 0 returning the untextured colour unchanged;
-//   * a recipe demanding more samples than supplied, refused and counted;
-//   * a seventh recipe encoding refused;
-//   * frag_tag preserved through every path, because retirement order depends
-//     on it;
-//   * saturation reported for ADD_SAT and MODULATE2X.
-//
-// There is no RTL yet. This pins the SCALAR law so that when the RTL arrives it
-// has something to be differentiated against -- which is the whole reason the
-// contract wanted the oracle first.
-
+// This tests reference/include/zref/zref_material.hpp directly against owner
+// ruling R9.  Historical V1/V2 behavior belongs only to
+// legacy_material_v2_oracle.hpp and is not permitted to outvote these checks.
 #include <cstdint>
 #include <cstdio>
 
 #include "zref/zref_material.hpp"
+
+namespace mat = zref::material;
 
 namespace {
 
 int g_checks = 0;
 int g_failed = 0;
 
-void check(bool ok, const char* what, uint32_t expected, uint32_t got) {
+void check(bool ok, const char* what, unsigned long long expected,
+           unsigned long long got) {
   ++g_checks;
   if (!ok) {
     ++g_failed;
-    std::printf("FAIL: %s: expected 0x%X, got 0x%X\n", what, expected, got);
+    std::printf("FAIL: %s: expected 0x%llX, got 0x%llX\n", what, expected, got);
   }
 }
 
-using zref::material::Ledger;
-using zref::material::Out;
-using zref::material::Sample;
-namespace mat = zref::material;
-
-Out run(uint8_t recipe, uint8_t weight, Sample a, Sample b, uint8_t count, Ledger* L = nullptr,
-        uint16_t tag = 0xBEEF) {
-  const Sample s[3] = {a, b, Sample{}};
-  const Sample base{9, 9, 9, 9};
-  return mat::combine(recipe, weight, s, count, base, tag, L);
+mat::Sample sample(uint8_t r, uint8_t g, uint8_t b, uint8_t a,
+                   uint8_t raw_index = 0, uint8_t status = 0) {
+  mat::Sample s;
+  s.r = r;
+  s.g = g;
+  s.b = b;
+  s.a = a;
+  s.raw_index = raw_index;
+  s.status = status;
+  return s;
 }
 
-// Three-sample variant, for the terrain recipes. Separate rather than a
-// defaulted parameter so a two-sample call site cannot silently acquire a
-// third sample it never meant to pass.
-Out run3(uint8_t recipe, uint8_t weight, Sample a, Sample b, Sample c, Ledger* L = nullptr,
-         uint16_t tag = 0xBEEF) {
-  const Sample s[3] = {a, b, c};
-  const Sample base{9, 9, 9, 9};
-  return mat::combine(recipe, weight, s, 3, base, tag, L);
+mat::Out run(uint8_t recipe, uint8_t weight, mat::Sample s0,
+             mat::Sample s1, mat::Sample s2, uint8_t count,
+             mat::Sample base = {}, mat::Ledger* ledger = nullptr,
+             bool aux_required = false, mat::Aux aux = {},
+             uint16_t tag = 0xBEEF) {
+  const mat::Sample samples[3] = {s0, s1, s2};
+  return mat::combine(recipe, weight, samples, count, base, tag, ledger,
+                      aux_required, aux);
 }
 
-// ---------------------------------------------------------------------------
-// The unit8 law itself, which everything below depends on being understood.
-// ---------------------------------------------------------------------------
-// Modulate by 255 is not identity IN GENERAL -- but it is at exactly one
-// value, and both halves of that are pinned here.
-void test_modulate_by_255_is_not_identity() {
-  const Out o = run(mat::kModulate, 0, Sample{200, 128, 1, 255}, Sample{255, 255, 255, 255}, 2);
-  // unit_mul(200,255) = (200*255 + 128) >> 8 = (51000+128)>>8 = 199
-  check(o.r == 199, "modulate 200 by 255 darkens to 199, NOT 200", 199, o.r);
-  // THE EXACT LAW, worked out rather than guessed at:
-  //   unit_mul(a,255) = floor((255a + 128)/256), and that equals a exactly
-  //   when 255a + 128 >= 256a, i.e. when a <= 128.
-  // So modulate by 255 is IDENTITY for every a <= 128 and subtracts exactly 1
-  // for every a > 128. "Modulate by 255 always darkens" is the obvious summary
-  // and it is false for more than half the input range.
-  //
-  // Two drafts of this comment were wrong before this one -- first "128 darkens
-  // to 127", then "the one fixed point". There are 129 of them. Recorded
-  // because a test comment that misstates the law it pins is worse than no
-  // comment: the assertion still passes, so nothing ever contradicts it.
-  check(o.g == 128, "modulate 128 by 255 is EXACTLY 128 (identity holds to 128)", 128, o.g);
-  check(o.b == 1, "modulate 1 by 255 stays 1", 1, o.b);
-  check(o.a == 254, "modulate 255 by 255 is 254 -- 255 is not 1.0", 254, o.a);
+uint32_t rgba(const mat::Out& out) {
+  return (static_cast<uint32_t>(out.r) << 24) |
+         (static_cast<uint32_t>(out.g) << 16) |
+         (static_cast<uint32_t>(out.b) << 8) | out.a;
 }
 
-void test_modulate_by_255_boundary_is_at_128() {
-  // The identity/darken boundary is a property of the frozen unit8 law, so it
-  // is pinned directly rather than left implied by one sampled value.
-  const Sample white{255, 255, 255, 255};
+bool loud(const mat::Out& out) {
+  return out.r == 255 && out.g == 0 && out.b == 255 && out.a == 255;
+}
+
+void test_exact_r9_arithmetic() {
+  const mat::Out pass = run(mat::kPassthru, 0,
+                            sample(1, 128, 255, 77, 0xA5), {}, {}, 1);
+  check(rgba(pass) == 0x0180FF4Du, "PASSTHRU is bit exact", 0x0180FF4D,
+        rgba(pass));
+  check(pass.raw_index == 0xA5, "PASSTHRU preserves sample-0 raw index", 0xA5,
+        pass.raw_index);
+
+  const mat::Out mod = run(mat::kModulate, 0,
+                           sample(200, 128, 1, 201),
+                           sample(128, 255, 255, 0), {}, 2);
+  check(mod.r == 100 && mod.g == 128 && mod.b == 1,
+        "MODULATE uses unit8 independently on RGB", 1,
+        mod.r == 100 && mod.g == 128 && mod.b == 1 ? 1 : 0);
+  check(mod.a == 201, "MODULATE does not multiply alpha", 201, mod.a);
+
+  mat::Ledger mod2_ledger;
+  const mat::Out mod2 = run(mat::kModulate2x, 0,
+                            sample(1, 64, 200, 203),
+                            sample(64, 64, 200, 0), {}, 2, {},
+                            &mod2_ledger);
+  check(mod2.r == 1,
+        "MODULATE2X rounds once: (1*64+64)>>7 is 1", 1, mod2.r);
+  check(mod2.g == 32, "MODULATE2X 64*64 is 32", 32,
+        mod2.g);
+  check(mod2.b == 255, "MODULATE2X saturation is visible", 255, mod2.b);
+  check(mod2.a == 203, "MODULATE2X does not multiply alpha", 203, mod2.a);
+  check(mod2_ledger.saturated_mul2x == 1,
+        "MODULATE2X saturation counts once per fragment", 1,
+        mod2_ledger.saturated_mul2x);
+
+  const mat::Out lerp_down = run(mat::kLerp, 128,
+                                 sample(200, 200, 200, 177),
+                                 sample(199, 199, 199, 1), {}, 2);
+  check(lerp_down.r == 200,
+        "negative LERP tie rounds toward positive infinity", 200,
+        lerp_down.r);
+  check(lerp_down.a == 177, "LERP does not interpolate alpha", 177,
+        lerp_down.a);
+
+  mat::Ledger add_ledger;
+  const mat::Out add = run(mat::kAddSat, 0,
+                           sample(200, 127, 1, 211),
+                           sample(100, 128, 2, 99), {}, 2, {},
+                           &add_ledger);
+  check(add.r == 255 && add.g == 255 && add.b == 3,
+        "ADD_SAT saturates RGB only", 1,
+        add.r == 255 && add.g == 255 && add.b == 3 ? 1 : 0);
+  check(add.a == 211, "ADD_SAT does not add alpha", 211, add.a);
+  check(add_ledger.saturated_add == 1,
+        "ADD_SAT saturation counts once per fragment", 1,
+        add_ledger.saturated_add);
+
+  const mat::Out mask = run(mat::kMask, 0,
+                            sample(11, 22, 33, 200),
+                            sample(255, 0, 0, 128), {}, 2);
+  check(mask.r == 11 && mask.g == 22 && mask.b == 33,
+        "MASK RGB is always sample 0", 1,
+        mask.r == 11 && mask.g == 22 && mask.b == 33 ? 1 : 0);
+  check(mask.a == 100,
+        "MASK is continuous unit alpha, not a nonzero gate", 100, mask.a);
+
+  mat::Ledger detail_light_ledger;
+  const mat::Out detail_light = run(
+      mat::kTerrainDetailLight, 0, sample(1, 1, 1, 173),
+      sample(64, 64, 64, 2), sample(255, 255, 255, 3), 3, {},
+      &detail_light_ledger);
+  check(detail_light.r == 1 && detail_light.g == 1 && detail_light.b == 1,
+        "DETAIL_LIGHT uses MODULATE2X first layer then unit sample 2", 1,
+        detail_light.r == 1 && detail_light.g == 1 && detail_light.b == 1
+            ? 1
+            : 0);
+  check(detail_light.a == 173, "DETAIL_LIGHT keeps sample-0 alpha", 173,
+        detail_light.a);
+
+  const mat::Out detail_mask = run(
+      mat::kTerrainDetailMask, 0, sample(1, 1, 1, 240),
+      sample(64, 64, 64, 7), sample(0, 0, 0, 128), 3);
+  check(detail_mask.r == 1 && detail_mask.g == 1 && detail_mask.b == 1,
+        "DETAIL_MASK RGB uses MODULATE2X first layer", 1,
+        detail_mask.r == 1 && detail_mask.g == 1 && detail_mask.b == 1
+            ? 1
+            : 0);
+  check(detail_mask.a == 120,
+        "DETAIL_MASK alpha is unit(s0.a,s2.a)", 120, detail_mask.a);
+}
+
+void test_exact_count_table_and_loud_error() {
+  int wrong_legality = 0;
+  int malformed_not_loud = 0;
+  int malformed_not_counted = 0;
+
+  for (uint8_t recipe = 0; recipe < 8; ++recipe) {
+    for (uint8_t count = 0; count < 4; ++count) {
+      const bool expected = recipe == 0 ? (count == 0 || count == 1)
+                           : recipe >= 6 ? count == 3
+                                         : count == 2;
+      if (mat::count_legal(recipe, count) != expected) ++wrong_legality;
+
+      mat::Ledger ledger;
+      const mat::Out out = run(recipe, 128, sample(10, 20, 30, 40, 0xA5),
+                               sample(50, 60, 70, 80),
+                               sample(90, 100, 110, 120), count,
+                               sample(7, 8, 9, 10), &ledger);
+      if (!expected) {
+        if (!loud(out) || out.status != 1 || !out.refused)
+          ++malformed_not_loud;
+        if (ledger.refused_count_mismatch != 1)
+          ++malformed_not_counted;
+      }
+    }
+  }
+
+  check(wrong_legality == 0, "all 32 recipe/count cells match R9", 0,
+        wrong_legality);
+  check(malformed_not_loud == 0,
+        "every exact-count mismatch is loud SOURCE_REFUSED", 0,
+        malformed_not_loud);
+  check(malformed_not_counted == 0,
+        "every exact-count mismatch is counted", 0,
+        malformed_not_counted);
+
+  mat::Ledger unknown_ledger;
+  const mat::Out unknown = run(8, 0, sample(1, 2, 3, 4, 0x66), {}, {}, 1,
+                               {}, &unknown_ledger);
+  check(unknown_ledger.refused_unknown_recipe == 1,
+        "unknown recipe is separately counted", 1,
+        unknown_ledger.refused_unknown_recipe);
+  check(unknown.status == 1 && unknown.refused && loud(unknown),
+        "unknown recipe is a loud terminal refusal", 1,
+        unknown.status == 1 && unknown.refused && loud(unknown) ? 1 : 0);
+
+  const mat::Out count0 = run(mat::kPassthru, 0,
+                              sample(255, 0, 255, 255, 0xEE, 0x80), {}, {}, 0,
+                              sample(7, 8, 9, 10));
+  check(rgba(count0) == 0x0708090Au,
+        "PASSTHRU count zero returns admitted base", 0x0708090A,
+        rgba(count0));
+  check(count0.raw_index == 0 && count0.status == 0,
+        "PASSTHRU count zero reads no sample status/index", 0,
+        static_cast<unsigned>(count0.raw_index) | count0.status);
+}
+
+void test_required_status_index_and_aux_typing() {
+  const mat::Out two = run(
+      mat::kModulate, 0, sample(10, 20, 30, 40, 0xA5, 0x02),
+      sample(50, 60, 70, 80, 0xB6, 0x04),
+      sample(90, 100, 110, 120, 0xC7, 0x08), 2, {}, nullptr,
+      false, mat::Aux{0x10, 0xAA, 0xBB});
+  check(two.status == 0x06,
+        "count two ORs only sample 0 and sample 1 status", 0x06,
+        two.status);
+  check(two.raw_index == 0xA5,
+        "sample-0 raw index survives a terminal error", 0xA5,
+        two.raw_index);
+  check(loud(two), "any nonzero status produces loud RGBA", 1,
+        loud(two) ? 1 : 0);
+  check(!two.refused,
+        "reserved status bits are loud but refused remains status[0]", 0,
+        two.refused ? 1 : 0);
+
+  const mat::Out four = run(
+      mat::kTerrainDetailLight, 0,
+      sample(10, 20, 30, 40, 0xA5, 0x02),
+      sample(50, 60, 70, 80, 0xB6, 0x04),
+      sample(90, 100, 110, 120, 0xC7, 0x08), 3, {}, nullptr,
+      true, mat::Aux{0x10, 0xAA, 0xBB});
+  check(four.status == 0x1E,
+        "three samples plus required AUX OR exactly four statuses", 0x1E,
+        four.status);
+
+  const mat::Out aux_a = run(
+      mat::kTerrainDetailLight, 0, sample(100, 120, 140, 201, 0x5A),
+      sample(128, 128, 128, 17), sample(255, 200, 64, 99), 3, {},
+      nullptr, true, mat::Aux{0, 1, 2});
+  const mat::Out aux_b = run(
+      mat::kTerrainDetailLight, 0, sample(100, 120, 140, 201, 0x5A),
+      sample(128, 128, 128, 17), sample(255, 200, 64, 99), 3, {},
+      nullptr, true, mat::Aux{0, 254, 255});
+  check(rgba(aux_a) == rgba(aux_b),
+        "successful AUX tag/strength are deliberately unconsumed", 1,
+        rgba(aux_a) == rgba(aux_b) ? 1 : 0);
+  check(aux_a.raw_index == 0x5A,
+        "AUX cannot replace sample-0 raw index", 0x5A,
+        aux_a.raw_index);
+
+  const mat::Out s2_changed = run(
+      mat::kTerrainDetailLight, 0, sample(100, 120, 140, 201, 0x5A),
+      sample(128, 128, 128, 17), sample(64, 64, 64, 99), 3, {},
+      nullptr, true, mat::Aux{0, 1, 2});
+  check(rgba(aux_a) != rgba(s2_changed),
+        "true sample 2, not AUX, changes DETAIL_LIGHT", 1,
+        rgba(aux_a) != rgba(s2_changed) ? 1 : 0);
+}
+
+void test_cadence_tables_and_corner_primitives() {
+  static constexpr uint8_t expected_phases[8] = {1, 2, 2, 2, 1, 1, 3, 2};
+  static constexpr uint8_t expected_jobs[8] = {0, 3, 3, 3, 0, 1, 6, 4};
+  int wrong_phases = 0;
+  int wrong_jobs = 0;
+  for (uint8_t recipe = 0; recipe < 8; ++recipe) {
+    if (mat::phases_required(recipe) != expected_phases[recipe]) ++wrong_phases;
+    if (mat::product_jobs(recipe) != expected_jobs[recipe]) ++wrong_jobs;
+  }
+  check(wrong_phases == 0, "phase table is 1/2/2/2/1/1/3/2", 0,
+        wrong_phases);
+  check(wrong_jobs == 0, "product-job table is 0/3/3/3/0/1/6/4", 0,
+        wrong_jobs);
+
+  static constexpr uint8_t corners[6] = {0, 1, 127, 128, 254, 255};
+  int wrong_unit = 0;
+  int wrong_mod2 = 0;
+  for (uint8_t a : corners) {
+    for (uint8_t b : corners) {
+      const uint8_t unit_expected = static_cast<uint8_t>(
+          (static_cast<uint32_t>(a) * b + 128u) >> 8);
+      const uint32_t mod2_wide =
+          (static_cast<uint32_t>(a) * b + 64u) >> 7;
+      const uint8_t mod2_expected = static_cast<uint8_t>(
+          mod2_wide > 255u ? 255u : mod2_wide);
+      const mat::Out unit = run(mat::kModulate, 0, sample(a, a, a, 99),
+                                sample(b, b, b, 1), {}, 2);
+      const mat::Out mod2 = run(mat::kModulate2x, 0, sample(a, a, a, 99),
+                                sample(b, b, b, 1), {}, 2);
+      if (unit.r != unit_expected) ++wrong_unit;
+      if (mod2.r != mod2_expected) ++wrong_mod2;
+    }
+  }
+  check(wrong_unit == 0,
+        "unit multiply matches formula at all required corner pairs", 0,
+        wrong_unit);
+  check(wrong_mod2 == 0,
+        "single-round MODULATE2X matches formula at all corner pairs", 0,
+        wrong_mod2);
+}
+
+void test_exhaustive_add_and_signed_lerp() {
+  int add_wrong = 0;
+  int add_sat_wrong = 0;
+  int add_alpha_wrong = 0;
+  uint32_t add_saturations = 0;
+  for (int a = 0; a < 256; ++a) {
+    for (int b = 0; b < 256; ++b) {
+      mat::Ledger ledger;
+      const mat::Out out = run(
+          mat::kAddSat, 0,
+          sample(static_cast<uint8_t>(a), 0, 0, 0xE1),
+          sample(static_cast<uint8_t>(b), 0, 0, 0xF2), {}, 2, {}, &ledger);
+      const int wide = a + b;
+      const uint8_t expected = static_cast<uint8_t>(wide > 255 ? 255 : wide);
+      const uint32_t expected_sat = wide > 255 ? 1u : 0u;
+      if (out.r != expected) ++add_wrong;
+      if (ledger.saturated_add != expected_sat) ++add_sat_wrong;
+      if (out.a != 0xE1) ++add_alpha_wrong;
+      add_saturations += ledger.saturated_add;
+    }
+  }
+  check(add_wrong == 0, "ADD_SAT is exact across all 65,536 byte pairs", 0,
+        add_wrong);
+  check(add_sat_wrong == 0,
+        "ADD_SAT reports exactly the pairs strictly above 255", 0,
+        add_sat_wrong);
+  check(add_saturations == 32640,
+        "ADD_SAT exhaustive sweep has the exact saturation population", 32640,
+        add_saturations);
+  check(add_alpha_wrong == 0,
+        "ADD_SAT keeps sample-0 alpha across every boundary pair", 0,
+        add_alpha_wrong);
+
+  int lerp_wrong = 0;
+  int lerp_alpha_wrong = 0;
+  int positive_ties = 0;
+  int negative_ties = 0;
+  for (int a = 0; a < 256; ++a) {
+    for (int b = 0; b < 256; ++b) {
+      for (int weight = 0; weight < 256; ++weight) {
+        const int product = (b - a) * weight;
+        const int numerator = product + 128;
+        const int scaled = numerator >= 0
+            ? numerator / 256
+            : -((-numerator + 255) / 256);
+        const int wide = a + scaled;
+        const uint8_t expected = static_cast<uint8_t>(
+            wide < 0 ? 0 : (wide > 255 ? 255 : wide));
+        const mat::Out out = run(
+            mat::kLerp, static_cast<uint8_t>(weight),
+            sample(static_cast<uint8_t>(a), 0, 0, 0xD3),
+            sample(static_cast<uint8_t>(b), 0, 0, 0x24), {}, 2);
+        if (out.r != expected) ++lerp_wrong;
+        if (out.a != 0xD3) ++lerp_alpha_wrong;
+        int residue = product % 256;
+        if (residue < 0) residue += 256;
+        if (residue == 128) {
+          if (product >= 0) ++positive_ties;
+          else ++negative_ties;
+        }
+      }
+    }
+  }
+  check(lerp_wrong == 0,
+        "signed LERP is exact for every a/b/weight byte cross-product", 0,
+        lerp_wrong);
+  check(lerp_alpha_wrong == 0,
+        "signed LERP keeps sample-0 alpha in all 16,777,216 cases", 0,
+        lerp_alpha_wrong);
+  check(positive_ties > 0 && negative_ties > 0,
+        "exhaustive LERP reaches ties on both sides of zero", 1,
+        positive_ties > 0 && negative_ties > 0 ? 1 : 0);
+}
+
+void test_one_element_passthru_caller() {
+  mat::Sample only = sample(9, 8, 7, 6, 0xA5, 0);
+  const mat::Out out = mat::combine(mat::kPassthru, 0, &only, 1, {},
+                                    0x1234, nullptr);
+  check(rgba(out) == 0x09080706u,
+        "legal count-1 PASSTHRU accepts a literal one-Sample array", 0x09080706,
+        rgba(out));
+  check(out.raw_index == 0xA5 && out.frag_tag == 0x1234,
+        "one-element PASSTHRU preserves index and tag without touching s1/s2", 1,
+        out.raw_index == 0xA5 && out.frag_tag == 0x1234 ? 1 : 0);
+}
+
+void test_tag_survives_every_path() {
+  constexpr uint16_t kTag = 0x5A5A;
   int wrong = 0;
-  for (int a = 0; a <= 255; ++a) {
-    const Sample s0{static_cast<uint8_t>(a), 0, 0, 0};
-    const uint8_t got = run(mat::kModulate, 0, s0, white, 2).r;
-    const uint8_t want = static_cast<uint8_t>(a <= 128 ? a : a - 1);
-    if (got != want) ++wrong;
+  for (uint8_t recipe = 0; recipe < 8; ++recipe) {
+    const uint8_t count = recipe == 0 ? 1 : (recipe >= 6 ? 3 : 2);
+    const mat::Out out = run(recipe, 128, sample(1, 2, 3, 4),
+                             sample(5, 6, 7, 8), sample(9, 10, 11, 12),
+                             count, {}, nullptr, false, {}, kTag);
+    if (out.frag_tag != kTag) ++wrong;
   }
-  check(wrong == 0, "modulate by 255 is identity for a<=128 and a-1 above, across all 256", 0,
-        wrong);
-}
-
-void test_modulate_by_zero_and_corners() {
-  const Out z = run(mat::kModulate, 0, Sample{255, 255, 255, 255}, Sample{0, 0, 0, 0}, 2);
-  check(z.r == 0 && z.g == 0 && z.b == 0 && z.a == 0, "modulate by 0 is 0 on every channel", 0,
-        z.r | z.g | z.b | z.a);
-
-  // unit_mul(128,128) = (16384+128)>>8 = 64
-  const Out h = run(mat::kModulate, 0, Sample{128, 128, 128, 128}, Sample{128, 128, 128, 128}, 2);
-  check(h.r == 64, "modulate 128 by 128 is 64", 64, h.r);
-
-  // unit_mul(1,1) = (1+128)>>8 = 0 -- rounding, not a bug
-  const Out t = run(mat::kModulate, 0, Sample{1, 1, 1, 1}, Sample{1, 1, 1, 1}, 2);
-  check(t.r == 0, "modulate 1 by 1 rounds to 0", 0, t.r);
-}
-
-void test_passthru_is_exact() {
-  const Out o = run(mat::kPassthru, 0, Sample{1, 128, 255, 77}, Sample{9, 9, 9, 9}, 1);
-  check(o.r == 1 && o.g == 128 && o.b == 255 && o.a == 77, "passthru returns sample 0 bit-exact",
-        0x0180FF4D, (o.r << 24) | (o.g << 16) | (o.b << 8) | o.a);
-}
-
-void test_add_sat_saturates_and_reports() {
-  Ledger L;
-  const Out o = run(mat::kAddSat, 0, Sample{200, 1, 128, 0}, Sample{100, 1, 127, 0}, 2, &L);
-  check(o.r == 255, "200 + 100 saturates to 255", 255, o.r);
-  check(o.g == 2, "1 + 1 is 2", 2, o.g);
-  check(o.b == 255, "128 + 127 is exactly 255, the last unsaturated value", 255, o.b);
-  check(L.saturated_add == 1, "saturation counted ONCE per fragment", 1, L.saturated_add);
-
-  Ledger L2;
-  run(mat::kAddSat, 0, Sample{1, 1, 1, 1}, Sample{2, 2, 2, 2}, 2, &L2);
-  check(L2.saturated_add == 0, "a non-saturating add is not counted", 0, L2.saturated_add);
-}
-
-void test_modulate2x_saturates_and_reports() {
-  Ledger L;
-  // unit_mul(200,200) = (40000+128)>>8 = 156; *2 = 312 -> saturates
-  const Out o = run(mat::kModulate2x, 0, Sample{200, 64, 0, 0}, Sample{200, 64, 0, 0}, 2, &L);
-  check(o.r == 255, "modulate2x 200x200 saturates", 255, o.r);
-  // unit_mul(64,64) = (4096+128)>>8 = 16; *2 = 32
-  check(o.g == 32, "modulate2x 64x64 is 32", 32, o.g);
-  check(L.saturated_mul2x == 1, "modulate2x saturation counted once", 1, L.saturated_mul2x);
-}
-
-void test_lerp_endpoints_and_midpoint() {
-  const Out a = run(mat::kLerp, 0, Sample{10, 10, 10, 10}, Sample{250, 250, 250, 250}, 2);
-  check(a.r == 10, "lerp at weight 0 is exactly sample 0", 10, a.r);
-
-  // w=255: d=240, (240*255+128)>>8 = (61200+128)>>8 = 239 -> 10+239 = 249
-  const Out b = run(mat::kLerp, 255, Sample{10, 10, 10, 10}, Sample{250, 250, 250, 250}, 2);
-  check(b.r == 249, "lerp at weight 255 is ALMOST sample 1 -- 255 is not 1.0", 249, b.r);
-
-  // w=128: d=240, (240*128+128)>>8 = (30720+128)>>8 = 120 -> 130
-  const Out m = run(mat::kLerp, 128, Sample{10, 10, 10, 10}, Sample{250, 250, 250, 250}, 2);
-  check(m.r == 130, "lerp at weight 128 is the midpoint 130", 130, m.r);
-}
-
-void test_lerp_rounds_symmetrically_when_darkening() {
-  // Darkening: s0 > s1, so d is negative. The magnitude is rounded and the sign
-  // reapplied, so a darkening lerp and its mirror move by the same amount.
-  const Out down = run(mat::kLerp, 128, Sample{250, 0, 0, 0}, Sample{10, 0, 0, 0}, 2);
-  const Out up = run(mat::kLerp, 128, Sample{10, 0, 0, 0}, Sample{250, 0, 0, 0}, 2);
-  const int moved_down = 250 - down.r;
-  const int moved_up = up.r - 10;
-  check(moved_down == moved_up, "lerp moves the same distance darkening as brightening", moved_up,
-        moved_down);
-}
-
-void test_mask_uses_alpha_not_rgb() {
-  const Out pass = run(mat::kMask, 0, Sample{11, 22, 33, 44}, Sample{0, 0, 0, 1}, 2);
-  check(pass.r == 11 && pass.a == 44, "mask passes sample 0 when the mask alpha is non-zero", 11,
-        pass.r);
-
-  const Out block = run(mat::kMask, 0, Sample{11, 22, 33, 44}, Sample{255, 255, 255, 0}, 2);
-  check(block.r == 0 && block.a == 0,
-        "a bright but ZERO-ALPHA mask blocks -- the test is alpha, not RGB", 0, block.r | block.a);
-}
-
-// ---------------------------------------------------------------------------
-// Refusals. The contract's reason: quietly accepting a bad input is how a
-// content bug becomes a shipped picture nobody questions.
-// ---------------------------------------------------------------------------
-void test_zero_samples_returns_base_unchanged() {
-  Ledger L;
-  const Out o = run(mat::kModulate, 0, Sample{1, 2, 3, 4}, Sample{5, 6, 7, 8}, 0, &L);
-  check(o.r == 9 && o.g == 9 && o.b == 9 && o.a == 9,
-        "sample_count 0 returns the untextured colour unchanged", 9, o.r);
-  check(!o.refused, "an untextured surface is LEGAL, not a refusal", 0, o.refused ? 1 : 0);
-  check(L.refused_missing_sample == 0, "and it is not counted as a missing sample", 0,
-        L.refused_missing_sample);
-}
-
-void test_recipe_demanding_more_samples_than_supplied_is_refused() {
-  Ledger L;
-  const Out o =
-      run(mat::kModulate, 0, Sample{200, 200, 200, 200}, Sample{200, 200, 200, 200}, 1, &L);
-  check(o.refused, "MODULATE with one sample is REFUSED", 1, o.refused ? 1 : 0);
-  check(L.refused_missing_sample == 1, "and counted", 1, L.refused_missing_sample);
-  check(o.r == 0 && o.a == 0, "a refused fragment does not silently degrade to passthrough", 0,
-        o.r | o.a);
-}
-
-// The set is closed at EIGHT, not six. This test previously asserted that
-// recipe 6 was illegal and passed while the architecture's 15.1 named it
-// TERRAIN_DETAIL_LIGHT -- the worst case its own capacity argument is built
-// on. A green test defending a wrong belief is worse than no test, so the
-// history is kept here rather than quietly deleted (docket D19q).
-void test_the_set_is_closed_at_eight() {
-  Ledger L;
-  const Out o = run(8, 0, Sample{1, 1, 1, 1}, Sample{1, 1, 1, 1}, 2, &L);
-  check(o.refused, "recipe 8 is refused -- the set is closed at eight", 1, o.refused ? 1 : 0);
-  check(L.refused_unknown_recipe == 1, "and counted", 1, L.refused_unknown_recipe);
-
-  Ledger L2;
-  run(255, 0, Sample{1, 1, 1, 1}, Sample{1, 1, 1, 1}, 2, &L2);
-  check(L2.refused_unknown_recipe == 1, "so is 255", 1, L2.refused_unknown_recipe);
-
-  // ...and 6 and 7 are NOT refused, given their three samples.
-  Ledger L3;
-  const Out d6 = run3(mat::kTerrainDetailLight, 0, Sample{200, 200, 200, 200},
-                      Sample{128, 128, 128, 128}, Sample{255, 255, 255, 255}, &L3);
-  const Out d7 = run3(mat::kTerrainDetailMask, 0, Sample{200, 200, 200, 200},
-                      Sample{128, 128, 128, 128}, Sample{255, 255, 255, 255}, &L3);
-  check(!d6.refused && !d7.refused, "6 and 7 are ratified recipes, not illegal encodings", 0,
-        (d6.refused ? 1 : 0) + (d7.refused ? 1 : 0));
-  check(L3.refused_unknown_recipe == 0, "and neither was counted as unknown", 0,
-        L3.refused_unknown_recipe);
-}
-
-// ---------------------------------------------------------------------------
-// The two terrain recipes (15.1 / 15.3).
-// ---------------------------------------------------------------------------
-void test_detail_light_is_two_chained_products() {
-  // 200 * 128 = (200*128+128)>>8 = 100; 100 * 255 = (100*255+128)>>8 = 100.
-  // Computed by hand from the frozen product rather than read off the code, so
-  // this is a check and not a restatement.
-  const Out o = run3(mat::kTerrainDetailLight, 0, Sample{200, 200, 200, 77},
-                     Sample{128, 128, 128, 128}, Sample{255, 255, 255, 255});
-  check(o.r == 100, "((200*128)*255) is 100 through two roundings", 100, o.r);
-  check(o.g == 100 && o.b == 100, "on every colour channel", 100, o.g);
-  check(o.a == 77,
-        "and ALPHA IS SAMPLE 0's, untouched -- this recipe names no mask, so "
-        "15.1's exception does not apply and there is no alpha product",
-        77, o.a);
-
-  // The second layer really is applied: halving it must change the answer.
-  const Out h = run3(mat::kTerrainDetailLight, 0, Sample{200, 200, 200, 77},
-                     Sample{128, 128, 128, 128}, Sample{128, 128, 128, 128});
-  check(h.r == 50, "and the light layer is not ignored", 50, h.r);
-
-  // ROUNDING TWICE IS THE SPECIFIED BEHAVIOUR (15.6 C2: the continuation
-  // consumes a rounded 8-bit intermediate), and pinning it needs an input
-  // where the two actually disagree.
-  //
-  // THE FIRST ATTEMPT AT THIS CHECK WAS VACUOUS. It reused the 200/128/255
-  // values above and claimed a single-rounding implementation would return 99;
-  // it returns 100, exactly as two roundings do, so the check could never fail
-  // and a mutation to single rounding passed it. The claim had been written
-  // rather than computed.
-  //
-  // A sweep found 126,293 disagreeing triples, all by exactly one LSB -- never
-  // more -- which is why an arbitrary sample is a poor discriminator and one
-  // must be chosen deliberately. 255/160/160 is one: two roundings give 99,
-  // one gives 100.
-  const Out r2 = run3(mat::kTerrainDetailLight, 0, Sample{255, 255, 255, 0},
-                      Sample{160, 160, 160, 0}, Sample{160, 160, 160, 0});
-  check(r2.r == 99,
-        "two roundings, not one -- the intermediate on the wire is 8 bits, so "
-        "255*160*160 is 99 and not the 100 a single rounding gives",
-        99, r2.r);
-}
-
-void test_detail_mask_products_rgb_and_masks_alpha() {
-  const Out o = run3(mat::kTerrainDetailMask, 0, Sample{200, 100, 50, 240},
-                     Sample{128, 128, 128, 255}, Sample{0, 0, 0, 128});
-  check(o.r == 100, "RGB is the FIRST-layer product only", 100, o.r);
-  check(o.g == 50, "per channel", 50, o.g);
-  check(o.b == 25, "per channel", 25, o.b);
-  // 240 * 128 = (240*128+128)>>8 = 120. The mask's ALPHA drives it; its RGB is
-  // zero here precisely so an implementation reading the mask's colour would
-  // produce black and be caught.
-  check(o.a == 120, "and ALPHA is the one product s0.a * s2.a", 120, o.a);
-
-  // Sample 2's RGB must not leak into the result.
-  const Out white_mask = run3(mat::kTerrainDetailMask, 0, Sample{200, 100, 50, 240},
-                              Sample{128, 128, 128, 255}, Sample{255, 255, 255, 128});
-  check(white_mask.r == o.r && white_mask.g == o.g && white_mask.b == o.b,
-        "the mask's RGB does not reach the output -- only its alpha does", 1,
-        (white_mask.r == o.r && white_mask.g == o.g && white_mask.b == o.b) ? 1 : 0);
-}
-
-void test_the_terrain_recipes_refuse_two_samples() {
-  // The capacity argument depends on these being three-sample recipes. A
-  // two-sample call must be refused, not quietly degraded to the two-sample
-  // form -- which is exactly the surviving TEXJOIN's failure.
-  Ledger L;
-  const Out a = run(mat::kTerrainDetailLight, 0, Sample{1, 1, 1, 1}, Sample{1, 1, 1, 1}, 2, &L);
-  const Out b = run(mat::kTerrainDetailMask, 0, Sample{1, 1, 1, 1}, Sample{1, 1, 1, 1}, 2, &L);
-  check(a.refused && b.refused, "a three-sample recipe given two samples is REFUSED", 2,
-        (a.refused ? 1 : 0) + (b.refused ? 1 : 0));
-  check(L.refused_missing_sample == 2, "and both counted", 2, L.refused_missing_sample);
-}
-
-void test_product_job_counts_match_the_architecture() {
-  // 15.3's table, restated as a check. 15.4 sizes two lanes from these
-  // numbers, so a mismatch here invalidates the capacity argument rather than
-  // merely being untidy.
-  struct Row {
-    uint8_t recipe;
-    uint8_t jobs;
-    const char* name;
-  };
-  const Row kTable[] = {
-      {mat::kPassthru, 0, "PASSTHRU bypasses the lanes"},
-      {mat::kAddSat, 0, "ADD_SAT bypasses the lanes"},
-      // ZERO, not one. AUDIT R15: MASK is a binary gate -- if s1 alpha is
-      // non-zero copy s0 through, else emit transparent -- so it multiplies
-      // nothing. This row asserted the LABEL rather than the arithmetic, and
-      // was the last place in the tree still claiming a product: the
-      // implementation, the RTL and the composed test all say zero.
-      {mat::kMask, 0, "MASK is a binary gate and costs no product"},
-      {mat::kModulate, 4, "MODULATE is 3 RGB + 1 alpha"},
-      {mat::kModulate2x, 4, "MODULATE2X is 3 RGB + 1 alpha"},
-      {mat::kLerp, 4, "LERP is 3 RGB + 1 alpha, all difference-by-weight"},
-      {mat::kTerrainDetailMask, 4, "DETAIL_MASK is 3 RGB + 1 alpha"},
-      {mat::kTerrainDetailLight, 6, "DETAIL_LIGHT is 3 + 3 -- the worst case"},
-  };
-  for (const Row& e : kTable)
-    check(mat::product_jobs(e.recipe) == e.jobs, e.name, e.jobs, mat::product_jobs(e.recipe));
-}
-
-void test_frag_tag_survives_every_path() {
-  const uint16_t kTag = 0x5A5A;
-  int bad = 0;
-  // every recipe, plus the two refusal paths, plus the untextured path
-  for (uint8_t r = 0; r < mat::kRecipeCount; ++r) {
-    if (run3(r, 128, Sample{1, 1, 1, 1}, Sample{2, 2, 2, 2}, Sample{3, 3, 3, 3}, nullptr, kTag)
-            .frag_tag != kTag)
-      ++bad;
-  }
-  if (run(8, 0, Sample{}, Sample{}, 2, nullptr, kTag).frag_tag != kTag) ++bad;
-  if (run(mat::kModulate, 0, Sample{}, Sample{}, 1, nullptr, kTag).frag_tag != kTag) ++bad;
-  if (run(mat::kPassthru, 0, Sample{}, Sample{}, 0, nullptr, kTag).frag_tag != kTag) ++bad;
-  check(bad == 0, "frag_tag rides through all eleven paths untouched", 0, bad);
-}
-
-// A coverage guard, because the contract warns that this repository "has
-// shipped random tests that never hit their interesting case more than once".
-void test_every_recipe_and_refusal_was_reached() {
-  Ledger L;
-  bool seen[mat::kRecipeCount] = {false};
-  for (uint8_t r = 0; r < mat::kRecipeCount; ++r) {
-    // THREE samples for every recipe, so the two terrain recipes are exercised
-    // rather than refused. The earlier version passed two and would have
-    // reported full coverage while recipes 6 and 7 never ran.
-    const Out o =
-        run3(r, 100, Sample{130, 60, 20, 200}, Sample{90, 200, 5, 128}, Sample{77, 33, 210, 64});
-    seen[r] = !o.refused;
-  }
-  int unseen = 0;
-  for (bool b : seen)
-    if (!b) ++unseen;
-  check(unseen == 0, "all EIGHT ratified recipes produced a result", 0, unseen);
-
-  run(8, 0, Sample{}, Sample{}, 2, &L);
-  run(mat::kModulate, 0, Sample{}, Sample{}, 1, &L);
-  check(L.refused_unknown_recipe == 1 && L.refused_missing_sample == 1,
-        "both refusal classes were reached", 2,
-        L.refused_unknown_recipe + L.refused_missing_sample);
+  const mat::Out malformed = run(mat::kModulate, 0, {}, {}, {}, 0, {},
+                                 nullptr, false, {}, kTag);
+  const mat::Out source_error = run(mat::kPassthru, 0,
+                                    sample(1, 2, 3, 4, 0, 1), {}, {}, 1,
+                                    {}, nullptr, false, {}, kTag);
+  if (malformed.frag_tag != kTag) ++wrong;
+  if (source_error.frag_tag != kTag) ++wrong;
+  check(wrong == 0, "tag survives all recipes and terminal errors", 0, wrong);
 }
 
 }  // namespace
 
 int main() {
-  test_modulate_by_255_is_not_identity();
-  test_modulate_by_255_boundary_is_at_128();
-  test_modulate_by_zero_and_corners();
-  test_passthru_is_exact();
-  test_add_sat_saturates_and_reports();
-  test_modulate2x_saturates_and_reports();
-  test_lerp_endpoints_and_midpoint();
-  test_lerp_rounds_symmetrically_when_darkening();
-  test_mask_uses_alpha_not_rgb();
-  test_zero_samples_returns_base_unchanged();
-  test_recipe_demanding_more_samples_than_supplied_is_refused();
-  test_the_set_is_closed_at_eight();
-  test_detail_light_is_two_chained_products();
-  test_detail_mask_products_rgb_and_masks_alpha();
-  test_the_terrain_recipes_refuse_two_samples();
-  test_product_job_counts_match_the_architecture();
-  test_frag_tag_survives_every_path();
-  test_every_recipe_and_refusal_was_reached();
+  test_exact_r9_arithmetic();
+  test_exact_count_table_and_loud_error();
+  test_required_status_index_and_aux_typing();
+  test_cadence_tables_and_corner_primitives();
+  test_exhaustive_add_and_signed_lerp();
+  test_one_element_passthru_caller();
+  test_tag_survives_every_path();
 
   if (g_failed) {
-    std::printf("[material_combine_directed] %d/%d checks FAILED\n", g_failed, g_checks);
+    std::printf("[material_combine_directed] %d/%d checks FAILED\n", g_failed,
+                g_checks);
     return 1;
   }
   std::printf("[material_combine_directed] %d checks passed\n", g_checks);

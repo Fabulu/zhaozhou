@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -17,6 +19,10 @@ TOOLS = REPO / "tools" / "quartus"
 PACKAGE = REPO / "fpga" / "rtl" / "common" / "zhao_render_texture_pkg.sv"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zhao_render_texture_layout_top.sv"
 MUTANT = REPO / "tests" / "mutants" / "zhao_render_texture_wrong_layout_mutant.sv"
+OBSERVATION_SUCCESSOR_MANIFEST = (
+    REPO / "tests" / "raster" /
+    "packetb_observation_successors.sources.txt"
+)
 ROLE = "raster_texture_fragment_lifecycle"
 EXPECTED_PROVIDERS = {
     "zhao_texture_v3own",
@@ -31,6 +37,106 @@ EXPECTED_NEW_EXCLUSIONS = {
     "zhao_shell_fit_top": "probe",
     "zhao_shell_fit_video_sink": "probe",
 }
+PACKET_B_SOURCES = (
+    "fpga/rtl/common/zhao_render_texture_pkg.sv",
+    "fpga/rtl/field/zhao_field_rcp24_rom.sv",
+    "fpga/rtl/raster/zhao_raster_ticketq.sv",
+    "fpga/rtl/raster/zhao_raster_ticketq_rh.sv",
+    "fpga/rtl/raster/zhao_raster_rcp24_mul.sv",
+    "fpga/rtl/raster/zhao_raster_rcp24_v4.sv",
+    "fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv",
+    "fpga/rtl/texture/zhao_texture_mod255.sv",
+    "fpga/rtl/texture/zhao_texture_aux_div6.sv",
+    "fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv",
+    "fpga/rtl/texture/zhao_texture_mosaic_v2.sv",
+    "fpga/rtl/texture/zhao_texture_palette_res_v2.sv",
+    "fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv",
+    "fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv",
+    "fpga/rtl/texture/zhao_texture_v3bank.sv",
+    "fpga/rtl/texture/zhao_texture_v3rq.sv",
+    "fpga/rtl/texture/zhao_texture_v3own.sv",
+    "fpga/rtl/texture/zhao_texture_metajoin_v2.sv",
+    "fpga/rtl/texture/zhao_texture_uv_join_v2.sv",
+    "fpga/rtl/texture/zhao_texture_early_desc_v2.sv",
+    "fpga/rtl/texture/zhao_texture_frag_expand_v2.sv",
+    "fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv",
+    "fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv",
+    "fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv",
+    "fpga/rtl/texture/zhao_texture_material_combine_v3.sv",
+    "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
+)
+PACKET_B_PRODUCTION_FORBIDDEN_SOURCES = (
+    "fpga/rtl/raster/zhao_raster_perspuv_svc.sv",
+    "fpga/rtl/texture/zhao_texture_bilerp.sv",
+    "fpga/rtl/texture/zhao_texture_tmu_pipe.sv",
+    "fpga/rtl/texture/zhao_texture_combine.sv",
+    "fpga/rtl/texture/zhao_texture_material_combine_v1.sv",
+)
+AUX_ASSERTION_CONTROLS = (
+    ("credit_bound", 1, "CREDIT_BOUND",
+     "zhao_texture_aux_pipe_v2_assertion_control_mutant",
+     "zhao_texture_aux_pipe_v2_assertion_control_mutant.sv"),
+    ("offer_bound", 2, "OFFER_BOUND",
+     "zhao_texture_aux_pipe_v2_offer_bound_mutant",
+     "zhao_texture_aux_pipe_v2_offer_bound_mutant.sv"),
+    ("issued_bound", 3, "ISSUED_BOUND",
+     "zhao_texture_aux_pipe_v2_issued_bound_mutant",
+     "zhao_texture_aux_pipe_v2_issued_bound_mutant.sv"),
+    ("return_bound", 4, "RETURN_BOUND",
+     "zhao_texture_aux_pipe_v2_return_bound_mutant",
+     "zhao_texture_aux_pipe_v2_return_bound_mutant.sv"),
+    ("fixed_producer_room", 5, "FIXED_PRODUCER_ROOM",
+     "zhao_texture_aux_pipe_v2_fixed_room_mutant",
+     "zhao_texture_aux_pipe_v2_fixed_room_mutant.sv"),
+    ("owed_response_room", 6, "OWED_RESPONSE_ROOM",
+     "zhao_texture_aux_pipe_v2_owed_room_mutant",
+     "zhao_texture_aux_pipe_v2_owed_room_mutant.sv"),
+    ("issue_before_local_return", 7, "ISSUE_BEFORE_LOCAL_RETURN",
+     "zhao_texture_aux_pipe_v2_issue_order_mutant",
+     "zhao_texture_aux_pipe_v2_issue_order_mutant.sv"),
+)
+TOP_MUTANT_CONTROLS = (
+    ("dispatch_index_route", "texture_island_v3_packet_b_directed.cpp",
+     "PACKET_B_EXPECT_INDEX_ROUTE_MUTANT",
+     "ZHAO_PACKET_B_MUTANT_DISPATCH_INDEX_ROUTE",
+     "packet-b dispatcher-index-route mutant FIRED"),
+    ("aux_as_sample2", "texture_island_v3_packet_b_directed.cpp",
+     "PACKET_B_EXPECT_AUX_AS_SAMPLE2",
+     "ZHAO_PACKET_B_MUTANT_AUX_AS_SAMPLE2",
+     "packet-b AUX-as-sample2 mutant FIRED"),
+    ("retire_context_truncation", "texture_island_v3_packet_b_directed.cpp",
+     "PACKET_B_EXPECT_RETIRE_TRUNCATION",
+     "ZHAO_PACKET_B_MUTANT_RETIRE_CONTEXT_TRUNCATION",
+     "packet-b retire-context-truncation mutant FIRED"),
+    ("frame_clear_over_fault", "texture_island_v3_packet_b_fullctx.cpp",
+     "PACKET_B_EXPECT_CLEAR_OVER_FAULT",
+     "ZHAO_PACKET_B_MUTANT_FRAME_CLEAR_OVER_FAULT",
+     "packet-b clear-over-fault mutant FIRED"),
+    ("owner_mask_generation", "texture_island_v3_packet_b_directed.cpp",
+     "PACKET_B_EXPECT_OWNER_MASK_LIFETIME",
+     "ZHAO_PACKET_B_MUTANT_OWNER_MASK_GENERATION",
+     "packet-b owner-mask-generation mutant FIRED"),
+    ("cache_sidx3", "texture_island_v3_packet_b_directed.cpp",
+     "PACKET_B_EXPECT_CACHE_SIDX3_LIFETIME",
+     "ZHAO_PACKET_B_MUTANT_CACHE_SIDX3",
+     "packet-b cache-sidx3 mutant FIRED"),
+    ("bilerp_identity", "texture_island_v3_packet_b_directed.cpp",
+     "PACKET_B_EXPECT_BILERP_IDENTITY_REFUSAL",
+     "ZHAO_PACKET_B_MUTANT_BILERP_IDENTITY",
+     "packet-b bilerp-identity mutant FIRED"),
+    ("shadow_one_sided", "texture_island_v3_packet_b_directed.cpp",
+     "PACKET_B_EXPECT_SHADOW_CORRUPTION",
+     "ZHAO_PACKET_B_MUTANT_SHADOW_ONE_SIDED",
+     "packet-b one-sided-shadow mutant FIRED"),
+    ("rsp_drop_observation", "texture_island_v3_packet_b_directed.cpp",
+     "PACKET_B_EXPECT_RSP_DROP_OBSERVATION",
+     "ZHAO_PACKET_B_MUTANT_RSP_DROP_OBSERVATION",
+     "packet-b response-drop detector mutant FIRED"),
+)
+QUIET_CONTROL_FIXTURE = (
+    REPO / "tests" / "tools" / "fixtures" /
+    "texture_v3_quiet_omission_mutants.json"
+)
 
 
 def stripped_path_environment() -> dict[str, str]:
@@ -149,12 +255,422 @@ def run_generated_model(executable: Path, *arguments: str) -> subprocess.Complet
     )
 
 
-def production_source_segment() -> str:
-    text = (REPO / "design" / "fit_targets.yml").read_text(encoding="utf-8")
-    start = text.index("- top: zhao_prod_top")
-    segment = text[start:]
-    next_target = segment.find("\n  - top:")
-    return segment if next_target < 0 else segment[:next_target]
+def active_cmake_text(text: str) -> str:
+    """Mask CMake line/bracket comments while preserving line structure."""
+    bracket = re.compile(r"#\[(=*)\[.*?\]\1\]", re.DOTALL)
+    text = bracket.sub(
+        lambda match: "".join("\n" if char == "\n" else " "
+                              for char in match.group(0)),
+        text,
+    )
+    active: list[str] = []
+    for line in text.splitlines(keepends=True):
+        quoted = False
+        escaped = False
+        comment_at = None
+        for index, char in enumerate(line):
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\" and quoted:
+                escaped = True
+                continue
+            if char == '"':
+                quoted = not quoted
+            elif char == "#" and not quoted:
+                comment_at = index
+                break
+        if comment_at is None:
+            active.append(line)
+        else:
+            suffix = "\n" if line.endswith("\n") else ""
+            active.append(line[:comment_at] + suffix)
+    return "".join(active)
+
+
+def parse_cmake_packet_b_sources(text: str) -> tuple[str, ...]:
+    """Parse the one exact active Packet-B CMake list; never search comments."""
+    text = active_cmake_text(text)
+    lines = text.splitlines()
+    headers = [
+        index for index, line in enumerate(lines)
+        if line == "set(ZHAO_TEXTURE_V3_PACKET_B_SOURCES"
+    ]
+    if len(headers) != 1:
+        raise AssertionError(
+            "expected exactly one exact ZHAO_TEXTURE_V3_PACKET_B_SOURCES set, "
+            f"found {len(headers)}"
+        )
+
+    source_re = re.compile(
+        r"^  \$\{CMAKE_SOURCE_DIR\}/(fpga/[A-Za-z0-9_./-]+\.sv)$"
+    )
+    result: list[str] = []
+    for line in lines[headers[0] + 1:]:
+        if line == ")":
+            return tuple(result)
+        match = source_re.fullmatch(line)
+        if match is None:
+            raise AssertionError(
+                "non-source token inside exact Packet-B CMake list: " + repr(line)
+            )
+        result.append(match.group(1))
+    raise AssertionError("unterminated ZHAO_TEXTURE_V3_PACKET_B_SOURCES set")
+
+
+def parse_fit_target_sources(text: str, top: str) -> tuple[str, ...]:
+    """Parse one exact strict-subset fit target and its flat source list."""
+    lines = text.splitlines()
+    header = f"  - top: {top}"
+    headers = [index for index, line in enumerate(lines) if line == header]
+    if len(headers) != 1:
+        raise AssertionError(
+            f"expected exactly one exact fit target {top!r}, found {len(headers)}"
+        )
+
+    index = headers[0] + 1
+    while index < len(lines) and (not lines[index].strip() or
+                                  lines[index].lstrip().startswith("#")):
+        index += 1
+    if index >= len(lines) or lines[index] != "    sources:":
+        raise AssertionError(f"fit target {top!r} has no exact sources block")
+    index += 1
+
+    source_re = re.compile(r"^      - (fpga/[A-Za-z0-9_./-]+\.sv)$")
+    result: list[str] = []
+    while index < len(lines):
+        line = lines[index]
+        if line.startswith("  - top:") or line == "    rules:":
+            break
+        if not line.strip() or line.lstrip().startswith("#"):
+            index += 1
+            continue
+        match = source_re.fullmatch(line)
+        if match is None:
+            raise AssertionError(
+                f"non-source token inside fit target {top!r}: {line!r}"
+            )
+        result.append(match.group(1))
+        index += 1
+    return tuple(result)
+
+
+def require_exact_packet_b_sources(actual: tuple[str, ...], origin: str) -> None:
+    if len(actual) != len(set(actual)):
+        raise AssertionError(f"{origin} Packet-B list contains a duplicate")
+    if actual != PACKET_B_SOURCES:
+        raise AssertionError(
+            f"{origin} Packet-B list is not the exact ordered 26-entry closure"
+        )
+
+
+def require_production_packet_b_subsequence(actual: tuple[str, ...]) -> None:
+    width = len(PACKET_B_SOURCES)
+    starts = [
+        index for index in range(len(actual) - width + 1)
+        if actual[index:index + width] == PACKET_B_SOURCES
+    ]
+    if len(starts) != 1:
+        raise AssertionError(
+            "production does not contain exactly one contiguous Packet-B closure"
+        )
+    duplicates = [path for path in PACKET_B_SOURCES if actual.count(path) != 1]
+    if duplicates:
+        raise AssertionError(
+            "production duplicates or omits selected Packet-B sources: " +
+            ", ".join(duplicates)
+        )
+    forbidden = sorted(set(actual) & set(PACKET_B_PRODUCTION_FORBIDDEN_SOURCES))
+    if forbidden:
+        raise AssertionError(
+            "production fit compiles superseded Packet-B oracle sources: " +
+            ", ".join(forbidden)
+        )
+
+
+def validate_packet_b_registration_texts(cmake_text: str, fit_text: str) -> None:
+    cmake_sources = parse_cmake_packet_b_sources(cmake_text)
+    selected_sources = parse_fit_target_sources(
+        fit_text, "zhao_texture_island_v3_top"
+    )
+    production_sources = parse_fit_target_sources(fit_text, "zhao_prod_top")
+    require_exact_packet_b_sources(cmake_sources, "CMake")
+    require_exact_packet_b_sources(selected_sources, "selected V3 fit")
+    require_production_packet_b_subsequence(production_sources)
+
+
+def parse_aux_assertion_controls(text: str) -> tuple[tuple[str, int, str, str, str], ...]:
+    text = active_cmake_text(text)
+    pattern = re.compile(
+        r"(?m)^zhao_aux_v2_assertion_control\(\n"
+        r"  ([a-z0-9_]+) ([1-7]) ([A-Z0-9_]+)\n"
+        r"  (zhao_texture_aux_pipe_v2_[a-z0-9_]+)\n"
+        r"  (zhao_texture_aux_pipe_v2_[a-z0-9_]+\.sv)\)$"
+    )
+    rows = tuple(
+        (name, int(control), label, top, source)
+        for name, control, label, top, source in pattern.findall(text)
+    )
+    exact_call_count = text.count("\nzhao_aux_v2_assertion_control(\n")
+    if len(rows) != exact_call_count:
+        raise AssertionError("an AUX assertion-control call escaped the exact parser")
+    return rows
+
+
+def validate_aux_assertion_control_map(text: str) -> None:
+    text = active_cmake_text(text)
+    rows = parse_aux_assertion_controls(text)
+    if rows != AUX_ASSERTION_CONTROLS:
+        raise AssertionError("AUX assertion-control mapping differs from the canonical map")
+    for column, name in ((0, "name"), (1, "control"), (2, "label"),
+                         (3, "top"), (4, "source")):
+        values = [row[column] for row in rows]
+        if len(values) != len(set(values)):
+            raise AssertionError(f"AUX assertion-control {name} mapping is not unique")
+
+    labels = tuple(row[2] for row in rows)
+    label_match = re.search(
+        r"set\(ZHAO_AUX_V2_ASSERT_FIRE_LABELS\n"
+        r"((?:  [A-Z0-9_]+\n)+)\)",
+        text,
+    )
+    if label_match is None:
+        raise AssertionError("missing exact AUX assertion label authority")
+    listed_labels = tuple(
+        line.strip() for line in label_match.group(1).splitlines()
+    )
+    if listed_labels != labels:
+        raise AssertionError("AUX assertion label authority is reordered or incomplete")
+
+    for required in (
+        'list(REMOVE_ITEM wrong_fire_labels "${FIRE_LABEL}")',
+        'list(JOIN wrong_fire_labels "|" wrong_fire_label_pattern)',
+        'PASS_REGULAR_EXPRESSION "ZHAO_AUX_V2_ASSERT_FIRE\\\\[${FIRE_LABEL}\\\\]"',
+        'ZHAO_AUX_V2_ASSERT_FIRE\\\\[(${wrong_fire_label_pattern})\\\\]',
+    ):
+        if required not in text:
+            raise AssertionError(
+                "AUX assertion selected/wrong-label gate is missing: " + required
+            )
+
+
+def cmake_packet_b_fixture(
+        sources: tuple[str, ...],
+        variable: str = "ZHAO_TEXTURE_V3_PACKET_B_SOURCES") -> str:
+    rows = "".join(f"  ${{CMAKE_SOURCE_DIR}}/{path}\n" for path in sources)
+    return f"set({variable}\n{rows})\n"
+
+
+def fit_packet_b_fixture(
+        selected: tuple[str, ...],
+        production: tuple[str, ...],
+        selected_top: str = "zhao_texture_island_v3_top") -> str:
+    selected_rows = "".join(f"      - {path}\n" for path in selected)
+    production_rows = "".join(f"      - {path}\n" for path in production)
+    return (
+        "targets:\n"
+        f"  - top: {selected_top}\n"
+        "    sources:\n"
+        f"{selected_rows}"
+        "  - top: zhao_prod_top\n"
+        "    sources:\n"
+        f"{production_rows}"
+    )
+
+
+def parse_observation_successor_manifest(
+        text: str, repo_root: Path | None = None) -> tuple[str, ...]:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    body = normalized[:-1] if normalized.endswith("\n") else normalized
+    if not body:
+        raise AssertionError("observation successor manifest is empty")
+    lines = body.split("\n")
+    if any(not line or line.strip() != line for line in lines):
+        raise AssertionError("observation successor manifest contains a blank record")
+
+    path_re = re.compile(r"^(?:fpga|tests)/[A-Za-z0-9_./-]+\.sv$")
+    for path in lines:
+        if "\\" in path or path.startswith("/") or re.match(r"^[A-Za-z]:", path):
+            raise AssertionError("observation successor manifest path is not relative")
+        if path_re.fullmatch(path) is None:
+            raise AssertionError("observation successor manifest path is malformed")
+        if any(part in {".", ".."} for part in path.split("/")):
+            raise AssertionError("observation successor manifest path escapes its root")
+    if len(lines) != len(set(lines)):
+        raise AssertionError("observation successor manifest contains a duplicate")
+    if repo_root is not None:
+        missing = [path for path in lines if not (repo_root / path).is_file()]
+        if missing:
+            raise AssertionError(
+                "observation successor manifest path is missing: " + missing[0]
+            )
+    return tuple(lines)
+
+
+def validate_observation_successor_cmake(
+        cmake_text: str, manifest_text: str,
+        repo_root: Path | None = None) -> tuple[str, ...]:
+    cmake_text = active_cmake_text(cmake_text)
+    sources = parse_observation_successor_manifest(manifest_text, repo_root)
+    if len(sources) != 9:
+        raise AssertionError("observation successor manifest must have nine SV paths")
+    if sources[-1] != "tests/raster/tb_packetb_observation_successors.sv":
+        raise AssertionError("observation successor manifest test top is not last")
+
+    manifest_binding = (
+        "set(ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST\n"
+        "  ${CMAKE_CURRENT_SOURCE_DIR}/raster/"
+        "packetb_observation_successors.sources.txt)"
+    )
+    required = (
+        manifest_binding,
+        'file(READ "${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST}"',
+        "Packet-B observation source manifest contains a blank record",
+        'file(STRINGS "${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST}"\n'
+        "  ZHAO_PACKETB_OBSERVATION_SUCCESSOR_RELATIVE_SOURCES)",
+        "set(ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SOURCES)",
+        "foreach(relative_source IN LISTS "
+        "ZHAO_PACKETB_OBSERVATION_SUCCESSOR_RELATIVE_SOURCES)",
+        'IS_ABSOLUTE "${relative_source}"',
+        "relative_source MATCHES",
+        "list(FIND ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SEEN",
+        'if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")',
+        'list(APPEND ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SOURCES\n'
+        '    "${CMAKE_SOURCE_DIR}/${relative_source}")',
+        "SOURCES ${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SOURCES}",
+        "TOP_MODULE tb_packetb_observation_successors",
+        "add_test(NAME packetb_observation_successors",
+    )
+    for statement in required:
+        if statement not in cmake_text:
+            raise AssertionError(
+                "observation successor CMake/manifest binding differs: " + statement
+            )
+    for unique_statement in (
+        manifest_binding,
+        'file(STRINGS "${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST}"\n'
+        "  ZHAO_PACKETB_OBSERVATION_SUCCESSOR_RELATIVE_SOURCES)",
+        "SOURCES ${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SOURCES}",
+        "TOP_MODULE tb_packetb_observation_successors",
+        "add_test(NAME packetb_observation_successors",
+    ):
+        if cmake_text.count(unique_statement) != 1:
+            raise AssertionError(
+                "observation successor CMake binding is not unique: " +
+                unique_statement
+            )
+    section_start = cmake_text.index(manifest_binding)
+    section_end = cmake_text.index(
+        "add_executable(pb_desc", section_start
+    )
+    standalone = cmake_text[section_start:section_end]
+    if "${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv" in standalone:
+        raise AssertionError(
+            "standalone observation target duplicates a manifest source"
+        )
+    return sources
+
+
+def parse_top_mutant_controls(
+        text: str) -> tuple[tuple[str, str, str, str, str], ...]:
+    text = active_cmake_text(text)
+    pattern = re.compile(
+        r'(?m)^zhao_packet_b_top_mutant_control\(\n'
+        r'  ([a-z0-9_]+) ([a-z0-9_]+\.cpp)\n'
+        r'  (PACKET_B_EXPECT_[A-Z0-9_]+)\n'
+        r'  (ZHAO_PACKET_B_MUTANT_[A-Z0-9_]+)\n'
+        r'  "([^"]+)"\)$'
+    )
+    rows = tuple(pattern.findall(text))
+    if len(rows) != text.count("\nzhao_packet_b_top_mutant_control(\n"):
+        raise AssertionError("a Packet-B top-mutant call escaped the exact parser")
+    return rows
+
+
+def validate_top_profiles_mutants_and_quiet_accounting(cmake_text: str) -> None:
+    cmake_text = active_cmake_text(cmake_text)
+    rows = parse_top_mutant_controls(cmake_text)
+    if rows != TOP_MUTANT_CONTROLS:
+        raise AssertionError("Packet-B top-mutant mapping differs from frozen drivers")
+    for column, name in ((0, "name"), (2, "expect macro"),
+                         (3, "selector"), (4, "diagnostic")):
+        values = [row[column] for row in rows]
+        if len(values) != len(set(values)):
+            raise AssertionError(f"Packet-B top-mutant {name} is not unique")
+
+    mutant_source = (
+        REPO / "tests" / "mutants" /
+        "zhao_texture_island_v3_packet_b_mutants.sv"
+    ).read_text(encoding="utf-8")
+    for _name, driver_name, expect_macro, selector, diagnostic in rows:
+        driver = (REPO / "tests" / "texture" / driver_name).read_text(
+            encoding="utf-8"
+        )
+        if f"`ifdef {selector}" not in mutant_source:
+            raise AssertionError(f"missing Packet-B top selector {selector}")
+        if expect_macro not in driver or diagnostic not in driver:
+            raise AssertionError(
+                f"Packet-B top driver branch differs for {expect_macro}"
+            )
+
+    required_cmake = (
+        "PACKET_B_EXPECT_NO_SHADOWS=1",
+        "VERILATOR_ARGS --assert -GMIGRATION_SHADOWS=0)",
+        "VERILATOR_ARGS --assert -GMIGRATION_SHADOWS=1)",
+        "ZHAO_TEXTURE_V3_PACKET_B_MUTANT_SOURCES",
+        "zhao_texture_island_v3_packet_b_mutants.sv",
+        "PASS_REGULAR_EXPRESSION \"${DIAGNOSTIC}\"",
+        "FAIL_REGULAR_EXPRESSION \"FAIL\"",
+    )
+    for required in required_cmake:
+        if required not in cmake_text:
+            raise AssertionError("Packet-B top registration is missing: " + required)
+
+    directed = (
+        REPO / "tests" / "texture" /
+        "texture_island_v3_packet_b_directed.cpp"
+    ).read_text(encoding="utf-8")
+    for required in (
+        "#ifdef PACKET_B_EXPECT_NO_SHADOWS",
+        "!h.dut.shadow_present_o",
+        "h.dut.shadow_present_o && h.dut.meta_shadow_reads_o != 0",
+        "h.dut.meta_shadow_mismatch_o == 0",
+    ):
+        if required not in directed:
+            raise AssertionError("Packet-B shadow profile assertion is missing")
+
+    fullctx_start = cmake_text.index(
+        "add_executable(tpb_ctx"
+    )
+    fullctx_end = cmake_text.index(
+        "set(ZHAO_TEXTURE_DESC_EXPAND_BIND_V2_SOURCES", fullctx_start
+    )
+    fullctx_cmake = cmake_text[fullctx_start:fullctx_end]
+    if "--public-flat-rw" in fullctx_cmake or "--vpi" in fullctx_cmake:
+        raise AssertionError("full-context target still depends on unstable internals")
+    fullctx = (
+        REPO / "tests" / "texture" /
+        "texture_island_v3_packet_b_fullctx.cpp"
+    ).read_text(encoding="utf-8")
+    if "___024root" in fullctx or "__pi" in fullctx:
+        raise AssertionError("full-context driver names a generated class suffix")
+    for required in (
+        "Vzhao_texture_island_v3_top__Dpi.h",
+        "zhao_texture_packet_b_get_owner_context",
+        "zhao_texture_packet_b_set_frame_fault_inject",
+    ):
+        if required not in fullctx:
+            raise AssertionError("full-context stable DPI seam is incomplete")
+
+    payload = json.loads(QUIET_CONTROL_FIXTURE.read_text(encoding="utf-8"))
+    controls = payload["controls"]
+    identities = [(row["equation"], row["operand"]) for row in controls]
+    if len(controls) != 72 or len(identities) != len(set(identities)):
+        raise AssertionError("quiet mutation accounting is not 72 unique terms")
+    bridges = [row for row in controls if row["operand"] == "data_quiet"]
+    named = [row for row in controls if row["operand"] != "data_quiet"]
+    if len(bridges) != 1 or len(named) != 71:
+        raise AssertionError("quiet accounting is not 71 named plus one bridge")
 
 
 class RenderTextureLayoutTests(unittest.TestCase):
@@ -396,10 +912,23 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
         self.assertNotIn("zhao_raster_texjoin_v2", generated_top)
         self.assertEqual(prod_manifest.check_top_fresh(), [])
 
-        source_segment = production_source_segment()
-        self.assertNotIn("zhao_render_texture_pkg.sv", source_segment)
-        self.assertNotIn("zhao_render_texture_layout_guard", source_segment)
-        self.assertNotIn("zhao_raster_texjoin_v2.sv", source_segment)
+        cmake_text = (REPO / "tests" / "CMakeLists.txt").read_text(
+            encoding="utf-8"
+        )
+        fit_text = (REPO / "design" / "fit_targets.yml").read_text(
+            encoding="utf-8"
+        )
+        validate_packet_b_registration_texts(cmake_text, fit_text)
+        self.assertEqual(
+            parse_cmake_packet_b_sources(cmake_text), PACKET_B_SOURCES
+        )
+        self.assertEqual(
+            parse_fit_target_sources(fit_text, "zhao_texture_island_v3_top"),
+            PACKET_B_SOURCES,
+        )
+        require_production_packet_b_subsequence(
+            parse_fit_target_sources(fit_text, "zhao_prod_top")
+        )
 
         previous_cwd = Path.cwd()
         try:
@@ -409,6 +938,204 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
         finally:
             os.chdir(previous_cwd)
         self.assertEqual(closure_errors, [])
+
+    def test_packet_b_source_registrations_are_exact_ordered_and_unique(self) -> None:
+        cmake_text = (REPO / "tests" / "CMakeLists.txt").read_text(
+            encoding="utf-8"
+        )
+        fit_text = (REPO / "design" / "fit_targets.yml").read_text(
+            encoding="utf-8"
+        )
+        validate_packet_b_registration_texts(cmake_text, fit_text)
+        self.assertEqual(len(PACKET_B_SOURCES), 26)
+        self.assertEqual(len(PACKET_B_SOURCES), len(set(PACKET_B_SOURCES)))
+
+    def test_packet_b_source_list_parsers_fire_on_every_structural_mutation(self) -> None:
+        canonical_cmake = cmake_packet_b_fixture(PACKET_B_SOURCES)
+        canonical_fit = fit_packet_b_fixture(PACKET_B_SOURCES, PACKET_B_SOURCES)
+        validate_packet_b_registration_texts(canonical_cmake, canonical_fit)
+
+        reordered = list(PACKET_B_SOURCES)
+        reordered[7], reordered[8] = reordered[8], reordered[7]
+        extra = "fpga/rtl/texture/zhao_packet_b_extra_control.sv"
+        split = len(PACKET_B_SOURCES) // 2
+        controls = (
+            (
+                "extra",
+                cmake_packet_b_fixture(PACKET_B_SOURCES + (extra,)),
+                canonical_fit,
+            ),
+            (
+                "missing",
+                canonical_cmake,
+                fit_packet_b_fixture(PACKET_B_SOURCES[:-1], PACKET_B_SOURCES),
+            ),
+            (
+                "reordered",
+                cmake_packet_b_fixture(tuple(reordered)),
+                canonical_fit,
+            ),
+            (
+                "duplicate",
+                canonical_cmake,
+                fit_packet_b_fixture(
+                    PACKET_B_SOURCES + (PACKET_B_SOURCES[3],),
+                    PACKET_B_SOURCES,
+                ),
+            ),
+            (
+                "production-noncontiguous-extra",
+                canonical_cmake,
+                fit_packet_b_fixture(
+                    PACKET_B_SOURCES,
+                    PACKET_B_SOURCES[:split] + (extra,) + PACKET_B_SOURCES[split:],
+                ),
+            ),
+            (
+                "production-superseded-oracle",
+                canonical_cmake,
+                fit_packet_b_fixture(
+                    PACKET_B_SOURCES,
+                    PACKET_B_SOURCES + (PACKET_B_PRODUCTION_FORBIDDEN_SOURCES[0],),
+                ),
+            ),
+            (
+                "lookalike-cmake-segment",
+                cmake_packet_b_fixture(
+                    PACKET_B_SOURCES,
+                    "ZHAO_TEXTURE_V3_PACKET_B_SOURCES_LOOKALIKE",
+                ),
+                canonical_fit,
+            ),
+            (
+                "lookalike-fit-segment",
+                canonical_cmake,
+                fit_packet_b_fixture(
+                    PACKET_B_SOURCES,
+                    PACKET_B_SOURCES,
+                    "zhao_texture_island_v3_top_lookalike",
+                ),
+            ),
+        )
+        for name, cmake_text, fit_text in controls:
+            with self.subTest(control=name), self.assertRaises(AssertionError):
+                validate_packet_b_registration_texts(cmake_text, fit_text)
+
+    def test_aux_assertion_control_mapping_is_exact_unique_and_exclusive(self) -> None:
+        cmake_text = (REPO / "tests" / "CMakeLists.txt").read_text(
+            encoding="utf-8"
+        )
+        validate_aux_assertion_control_map(cmake_text)
+
+        labels = tuple(row[2] for row in AUX_ASSERTION_CONTROLS)
+        for row in AUX_ASSERTION_CONTROLS:
+            selected = row[2]
+            wrong = tuple(label for label in labels if label != selected)
+            self.assertEqual(len(wrong), 6)
+            selected_diagnostic = f"ZHAO_AUX_V2_ASSERT_FIRE[{selected}]"
+            wrong_pattern = re.compile(
+                r"ZHAO_AUX_V2_ASSERT_FIRE\[(?:" + "|".join(wrong) + r")\]"
+            )
+            self.assertIsNone(wrong_pattern.search(selected_diagnostic))
+            for wrong_label in wrong:
+                with self.subTest(selected=selected, wrong=wrong_label):
+                    self.assertIsNotNone(wrong_pattern.search(
+                        f"ZHAO_AUX_V2_ASSERT_FIRE[{wrong_label}]"
+                    ))
+
+        duplicate_label = cmake_text.replace(
+            "  offer_bound 2 OFFER_BOUND\n",
+            "  offer_bound 2 CREDIT_BOUND\n",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "canonical map|unique"):
+            validate_aux_assertion_control_map(duplicate_label)
+
+        missing_wrong_label_gate = cmake_text.replace(
+            '  list(REMOVE_ITEM wrong_fire_labels "${FIRE_LABEL}")\n',
+            "",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "wrong-label gate"):
+            validate_aux_assertion_control_map(missing_wrong_label_gate)
+
+    def test_observation_successor_cmake_uses_exact_durable_manifest(self) -> None:
+        cmake_text = (REPO / "tests" / "CMakeLists.txt").read_text(
+            encoding="utf-8"
+        )
+        manifest_text = OBSERVATION_SUCCESSOR_MANIFEST.read_text(encoding="utf-8")
+        sources = validate_observation_successor_cmake(
+            cmake_text, manifest_text, REPO
+        )
+        self.assertEqual(len(sources), 9)
+        self.assertEqual(len(sources), len(set(sources)))
+        self.assertEqual(
+            sources[-1], "tests/raster/tb_packetb_observation_successors.sv"
+        )
+
+        replacement = "fpga/rtl/raster/zhao_missing_observation_control.sv"
+        controls = (
+            ("blank", manifest_text.replace("\n", "\n\n", 1), None),
+            ("duplicate", manifest_text + sources[0] + "\n", None),
+            ("absolute", "C:/absolute/control.sv\n" + manifest_text, None),
+            ("backslash", manifest_text.replace("/", "\\", 1), None),
+            ("missing", manifest_text.replace(sources[0], replacement, 1), REPO),
+        )
+        for name, mutated, root in controls:
+            with self.subTest(control=name), self.assertRaises(AssertionError):
+                parse_observation_successor_manifest(mutated, root)
+
+        literal_duplicate = cmake_text.replace(
+            "set(ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SOURCES)\n",
+            "set(ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SOURCES)\n"
+            "  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv\n",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "duplicates a manifest source"):
+            validate_observation_successor_cmake(
+                literal_duplicate, manifest_text, REPO
+            )
+
+        registration = (
+            "add_test(NAME packetb_observation_successors\n"
+            "         COMMAND pb_obs)\n"
+            "set_tests_properties(packetb_observation_successors PROPERTIES\n"
+            "  LABELS \"fast;nightly;packet-b\" TIMEOUT 1200)"
+        )
+        self.assertIn(registration, cmake_text)
+        commented_registration = cmake_text.replace(
+            registration,
+            "\n".join("# " + line for line in registration.splitlines()),
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "CMake/manifest binding differs"):
+            validate_observation_successor_cmake(
+                commented_registration, manifest_text, REPO
+            )
+
+    def test_top_profiles_mutants_and_quiet_accounting_are_exact(self) -> None:
+        cmake_text = (REPO / "tests" / "CMakeLists.txt").read_text(
+            encoding="utf-8"
+        )
+        validate_top_profiles_mutants_and_quiet_accounting(cmake_text)
+
+        duplicate_selector = cmake_text.replace(
+            "  ZHAO_PACKET_B_MUTANT_AUX_AS_SAMPLE2\n",
+            "  ZHAO_PACKET_B_MUTANT_DISPATCH_INDEX_ROUTE\n",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "mapping|unique"):
+            validate_top_profiles_mutants_and_quiet_accounting(duplicate_selector)
+
+        missing_production_witness = cmake_text.replace(
+            "  PACKET_B_EXPECT_NO_SHADOWS=1)\n",
+            ")\n",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "registration is missing"):
+            validate_top_profiles_mutants_and_quiet_accounting(
+                missing_production_witness
+            )
 
 
 if __name__ == "__main__":

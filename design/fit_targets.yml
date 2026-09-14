@@ -1309,44 +1309,38 @@ targets:
 
   - top: zhao_texture_island_v3_top
     sources:
-      - fpga/rtl/texture/zhao_texture_island_v3_top.sv
-      - fpga/rtl/texture/zhao_texture_frag_expand.sv
-      - fpga/rtl/texture/zhao_texture_metajoin.sv
-      # PACKET 2: the island now instantiates both of these. Registering a block
-      # in the ledger, the manifest and THIS list are three different acts --
-      # Verilator said MODMISSING twice before these two lines existed.
-      - fpga/rtl/texture/zhao_texture_early_desc.sv
-      - fpga/rtl/texture/zhao_texture_uv_join.sv
-      - fpga/rtl/texture/zhao_texture_v3own.sv
-      - fpga/rtl/texture/zhao_texture_v3bank.sv
-      - fpga/rtl/texture/zhao_texture_v3rq.sv
-      # R3 swap 2026-09-09 (reports/OWNER-RULINGS-20260909-2300.md): rcp24_svc
-      # -> rcp24_v3 at NCTX=12; the tile brings mul + both ticket queues.
-      - fpga/rtl/raster/zhao_raster_rcp24_v3.sv
-      - fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+      # Packet B's repaired selected closure is exact and compile-ordered:
+      # package first, selected top last. This standalone target deliberately
+      # elaborates the laboratory default MIGRATION_SHADOWS=1 and is not a
+      # production-profile fit. G8A owns the first explicit product
+      # MIGRATION_SHADOWS=0 connected characterization. Historical standalone
+      # targets below retain their unversioned V1/V2 closures.
+      - fpga/rtl/common/zhao_render_texture_pkg.sv
+      - fpga/rtl/field/zhao_field_rcp24_rom.sv
       - fpga/rtl/raster/zhao_raster_ticketq.sv
       - fpga/rtl/raster/zhao_raster_ticketq_rh.sv
-      # REPAIRED 2026-09-10. This closure listed zhao_raster_perspuv_svc.sv --
-      # the SUPERSEDED block -- while the island instantiates
-      # zhao_raster_perspuv_pairpipe at zhao_texture_island_v3_top.sv:1031.
-      # Left over from the pair-pipe swap: the instantiation changed and this
-      # list did not. Found by linting the island standalone from this very
-      # closure, which returned MODMISSING on the pairpipe -- so the island fit
-      # owed for BOTH the pair-pipe swap and the rcp24 swap would have died at
-      # elaboration. pairpipe is a LEAF (instantiates nothing), and the only
-      # remaining mentions of svc in the island and in pairpipe are comments.
-      - fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
-      - fpga/rtl/texture/zhao_texture_tmu_plan.sv
-      - fpga/rtl/texture/zhao_texture_cache_pipe.sv
-      - fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
-      - fpga/rtl/texture/zhao_texture_palette_res.sv
-      - fpga/rtl/texture/zhao_texture_bilerp_lane.sv
-      - fpga/rtl/texture/zhao_texture_mosaic.sv
-      - fpga/rtl/texture/zhao_texture_aux_pipe.sv
-      - fpga/rtl/texture/zhao_texture_material_combine_v2.sv
-      - fpga/rtl/texture/zhao_texture_aux_div6.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+      - fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv
       - fpga/rtl/texture/zhao_texture_mod255.sv
-      - fpga/rtl/field/zhao_field_rcp24_rom.sv
+      - fpga/rtl/texture/zhao_texture_aux_div6.sv
+      - fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+      - fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+      - fpga/rtl/texture/zhao_texture_palette_res_v2.sv
+      - fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv
+      - fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv
+      - fpga/rtl/texture/zhao_texture_v3bank.sv
+      - fpga/rtl/texture/zhao_texture_v3rq.sv
+      - fpga/rtl/texture/zhao_texture_v3own.sv
+      - fpga/rtl/texture/zhao_texture_metajoin_v2.sv
+      - fpga/rtl/texture/zhao_texture_uv_join_v2.sv
+      - fpga/rtl/texture/zhao_texture_early_desc_v2.sv
+      - fpga/rtl/texture/zhao_texture_frag_expand_v2.sv
+      - fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv
+      - fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
+      - fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
+      - fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+      - fpga/rtl/texture/zhao_texture_island_v3_top.sv
     rules:
       max_alms: 7500
       max_registers: 9000
@@ -1859,13 +1853,44 @@ targets:
       # generated top -- which is why check_prod_manifest.py missed it: that
       # checker validates the top-level instantiations only, not the
       # transitive closure. Verilator found it.
-      - fpga/rtl/common/zhao_skid2.sv
-      - fpga/rtl/geometry/zhao_geom_fogfactor.sv
-      - fpga/rtl/prod/zhao_prod_top.sv
+      # Package declarations precede every importer in the production closure.
       - fpga/rtl/generated/zhao_abi_pkg.sv
       - fpga/rtl/common/zhao_pkg.sv
       - fpga/rtl/field/zhao_field_ops_pkg.sv
       - fpga/rtl/memory/zhao_sdram_params_pkg.sv
+
+      # The selected Packet-B accounting root uses the same exact 26-source
+      # compile order as its standalone fit target and interface artifact.
+      - fpga/rtl/common/zhao_render_texture_pkg.sv
+      - fpga/rtl/field/zhao_field_rcp24_rom.sv
+      - fpga/rtl/raster/zhao_raster_ticketq.sv
+      - fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+      - fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv
+      - fpga/rtl/texture/zhao_texture_mod255.sv
+      - fpga/rtl/texture/zhao_texture_aux_div6.sv
+      - fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+      - fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+      - fpga/rtl/texture/zhao_texture_palette_res_v2.sv
+      - fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv
+      - fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv
+      - fpga/rtl/texture/zhao_texture_v3bank.sv
+      - fpga/rtl/texture/zhao_texture_v3rq.sv
+      - fpga/rtl/texture/zhao_texture_v3own.sv
+      - fpga/rtl/texture/zhao_texture_metajoin_v2.sv
+      - fpga/rtl/texture/zhao_texture_uv_join_v2.sv
+      - fpga/rtl/texture/zhao_texture_early_desc_v2.sv
+      - fpga/rtl/texture/zhao_texture_frag_expand_v2.sv
+      - fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv
+      - fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
+      - fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
+      - fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+      - fpga/rtl/texture/zhao_texture_island_v3_top.sv
+
+      - fpga/rtl/common/zhao_skid2.sv
+      - fpga/rtl/geometry/zhao_geom_fogfactor.sv
+      - fpga/rtl/prod/zhao_prod_top.sv
       - fpga/rtl/audio/zhao_audio_fifo.sv
       - fpga/rtl/command/zhao_cmd_decoder.sv
       - fpga/rtl/command/zhao_cmd_dma.sv
@@ -1884,7 +1909,6 @@ targets:
       - fpga/rtl/field/zhao_field_isqrt.sv
       - fpga/rtl/field/zhao_field_mul.sv
       - fpga/rtl/field/zhao_field_progcache.sv
-      - fpga/rtl/field/zhao_field_rcp24_rom.sv
       - fpga/rtl/field/zhao_field_sin.sv
       - fpga/rtl/field/zhao_field_sin_rom.sv
       - fpga/rtl/field/zhao_field_v3_dispatch.sv
@@ -1952,17 +1976,8 @@ targets:
       - fpga/rtl/raster/zhao_raster_fill.sv
       - fpga/rtl/raster/zhao_raster_fog.sv
       - fpga/rtl/raster/zhao_raster_fragment.sv
-      - fpga/rtl/raster/zhao_raster_perspuv_svc.sv
-      - fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
       - fpga/rtl/raster/zhao_raster_quant.sv
-      # R3 swap 2026-09-09: the island now instantiates rcp24_v3 (NCTX=12), so
-      # svc leaves this closure -- nothing in the production graph carries it
-      # any more -- and the tile's leaves come in with it.
-      - fpga/rtl/raster/zhao_raster_rcp24_mul.sv
-      - fpga/rtl/raster/zhao_raster_rcp24_v3.sv
       - fpga/rtl/raster/zhao_raster_resolve.sv
-      - fpga/rtl/raster/zhao_raster_ticketq.sv
-      - fpga/rtl/raster/zhao_raster_ticketq_rh.sv
       - fpga/rtl/raster/zhao_raster_tile_pipe.sv
       - fpga/rtl/raster/zhao_raster_tilestore.sv
       - fpga/rtl/raster/zhao_raster_toon.sv
@@ -1982,33 +1997,6 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_residency_v2.sv
       - fpga/rtl/terrain/zhao_terrain_tess.sv
       - fpga/rtl/terrain/zhao_terrain_velocity.sv
-      - fpga/rtl/texture/zhao_texture_aux_div6.sv
-      - fpga/rtl/texture/zhao_texture_aux_pipe.sv
-      - fpga/rtl/texture/zhao_texture_bilerp.sv
-      - fpga/rtl/texture/zhao_texture_bilerp_lane.sv
-      - fpga/rtl/texture/zhao_texture_cache_pipe.sv
-      - fpga/rtl/texture/zhao_texture_early_desc.sv
-      - fpga/rtl/texture/zhao_texture_frag_expand.sv
-      - fpga/rtl/texture/zhao_texture_island_v3_top.sv
-      - fpga/rtl/texture/zhao_texture_metajoin.sv
-      - fpga/rtl/texture/zhao_texture_mod255.sv
-      - fpga/rtl/texture/zhao_texture_mosaic.sv
-      - fpga/rtl/texture/zhao_texture_palette_res.sv
-      - fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
-      - fpga/rtl/texture/zhao_texture_tmu_pipe.sv
-      - fpga/rtl/texture/zhao_texture_tmu_plan.sv
-      # BOTH COMBINERS. zhao_texture_combine is refuted (D19q) and the
-      # generated top still instantiates it, so it must be here or the
-      # production fit dies at elaboration -- registering a block in the
-      # manifest and putting its source in this list are two different
-      # acts, and check_prod_manifest.py caught that they had diverged.
-      - fpga/rtl/texture/zhao_texture_combine.sv
-      - fpga/rtl/texture/zhao_texture_material_combine_v1.sv
-      - fpga/rtl/texture/zhao_texture_material_combine_v2.sv
-      - fpga/rtl/texture/zhao_texture_uv_join.sv
-      - fpga/rtl/texture/zhao_texture_v3bank.sv
-      - fpga/rtl/texture/zhao_texture_v3own.sv
-      - fpga/rtl/texture/zhao_texture_v3rq.sv
       - fpga/rtl/video/zhao_scanout_fetch.sv
       - fpga/rtl/video/zhao_scanout_linebuf.sv
       - fpga/rtl/video/zhao_scanout_serializer.sv

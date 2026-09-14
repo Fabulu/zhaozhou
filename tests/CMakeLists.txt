@@ -35,9 +35,13 @@ set_tests_properties(stub_top PROPERTIES LABELS "fast;nightly")
 # carries VERILATOR_ROOT from the cache variable resolved by zhao_verilate.cmake
 # (env hint first, then derived from the binary location), so an env-less
 # reconfigure (ninja regenerate) cannot poison it.
-find_program(ZHAO_VERILATOR_BIN NAMES verilator_bin verilator_bin.exe)
+find_program(ZHAO_VERILATOR_BIN NAMES verilator_bin.exe)
 if(NOT ZHAO_VERILATOR_BIN)
-  message(FATAL_ERROR "verilator_bin not found on PATH — source tools/env/zhao-env.ps1|.bat")
+  message(FATAL_ERROR "verilator_bin.exe not found on PATH — source tools/env/zhao-env.ps1|.bat")
+endif()
+get_filename_component(_zhao_verilator_filename "${ZHAO_VERILATOR_BIN}" NAME)
+if(NOT _zhao_verilator_filename STREQUAL "verilator_bin.exe")
+  message(FATAL_ERROR "Packet B requires the exact verilator_bin.exe executable")
 endif()
 set(VERILATOR_ROOT "$ENV{VERILATOR_ROOT}")
 # zhao-env.bat exports the backslash form (C:\...\share\verilator); embedded
@@ -2390,121 +2394,12 @@ set_tests_properties(frag_expand_overflow_control PROPERTIES
 add_test(NAME frag_expand_directed COMMAND test_frag_expand_directed)
 set_tests_properties(frag_expand_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
-# P0-C Stage C gate 2: the SAME 119-check source compiled against the V3
-# composition. One source, two tops -- see the header of
-# island_composed_directed.cpp for why this is not a copy.
-add_executable(test_island_v3_composed_directed texture/island_composed_directed.cpp)
-target_compile_definitions(test_island_v3_composed_directed PRIVATE ISLAND_V3=1)
-target_link_libraries(test_island_v3_composed_directed PRIVATE zhao_harness zhao_zref)
-verilate(test_island_v3_composed_directed
-  PREFIX Vzhao_texture_island_v3_top
-  TOP_MODULE zhao_texture_island_v3_top
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
-          # R3 swap 2026-09-09: rcp24_svc -> rcp24_v3 at NCTX=12, which brings
-          # the tile's own leaves (mul, ticketq, ticketq_rh) into the closure.
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v2.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv
-  # --public-flat-rw so the metadata bank's `reads_o` can be read, which is what
-  # makes `meta_genmis_o == 0` assertable rather than merely printable.
-  #
-  # That port has been PRINTED here since this test was written and never once
-  # asserted. island_v3_fault_directed tried to assert it and its non-vacuity
-  # check failed immediately: writes 4, READS 0, because the fault probe models
-  # no texture memory so no response ever reaches the bank. The zero was real and
-  # meant nothing.
-  #
-  # This test does drive `fill_data_valid_i` and `sheet_rvalid_i`, so the read
-  # side is reachable here and the claim can be gated on it. A flag, not a source
-  # edit -- writable while the island sits in a running fit's closure.
-  VERILATOR_ARGS --public-flat-rw)
-
-# THE PRODUCTION PROFILE (D1/§4.2): the same functional source elaborated with
-# MIGRATION_SHADOWS=0, so the reference table, the three comparators, their
-# counters and the first-error captures do not exist.
-#
-# The brief refuses to let a checker be disabled and the result called healthy,
-# so this target does NOT simply skip the shadow assertions. It asserts the DUT
-# reports shadow_present_o == 0 and reaches the skip on THAT evidence, and it
-# asserts every shadow check-counter reads zero -- so a lab build that silently
-# lost its comparators could not pass as production either.
-#
-# ZHAO_SHADOWS and -GMIGRATION_SHADOWS must agree; the test compares the define
-# against the port, which turns a mismatch into a failure rather than a quietly
-# skipped block.
-add_executable(test_island_v3_prod_composed_directed texture/island_composed_directed.cpp)
-target_compile_definitions(test_island_v3_prod_composed_directed PRIVATE ISLAND_V3=1 ZHAO_SHADOWS=0)
-target_link_libraries(test_island_v3_prod_composed_directed PRIVATE zhao_harness zhao_zref)
-verilate(test_island_v3_prod_composed_directed
-  PREFIX Vzhao_texture_island_v3_top
-  TOP_MODULE zhao_texture_island_v3_top
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
-          # R3 swap 2026-09-09: rcp24_svc -> rcp24_v3 at NCTX=12, which brings
-          # the tile's own leaves (mul, ticketq, ticketq_rh) into the closure.
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v2.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv
-  # --public-flat-rw for the same reason as the lab profile above: the packet-C
-  # phase reads the metadata bank's `reads_o` so that `meta_genmis_o == 0` is a
-  # gated claim rather than a printed number.
-  #
-  # THIS TARGET IS WHY THAT ACCESS COULD NOT JUST BE `#ifdef ISLAND_V3`. It
-  # defines ISLAND_V3 too, so it compiles the same code, and without the flag the
-  # symbols are private -- `'class Vzhao_texture_island_v3_top_...' has no member
-  # named 'u_metajoin__DOT__reads_o'`. Caught by the BUILD, and worth noting how
-  # it presented: the build failed while the previous prod binary still sat on
-  # disk and ran green at 124 checks. Reading BUILD_RC before the test output is
-  # the only reason that did not read as a pass.
-  VERILATOR_ARGS -GMIGRATION_SHADOWS=0 --public-flat-rw)
-add_test(NAME island_v3_prod_composed_directed
-         COMMAND test_island_v3_prod_composed_directed)
-set_tests_properties(island_v3_prod_composed_directed PROPERTIES
-  LABELS "fast;nightly" TIMEOUT 1200)
-
-add_test(NAME island_v3_composed_directed COMMAND test_island_v3_composed_directed)
-set_tests_properties(island_v3_composed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+# The historical island_composed_directed.cpp remains registered above against
+# zhao_texture_island_top.  Its former V3 elaborations are intentionally absent:
+# that driver still names frag_depth_i and the old global binding/AUX boundary,
+# while Packet B exposes frag_invw24_i, sealed contexts, configuration, and the
+# recoverable frame-fault ABI.  Registering it against the repaired top would be
+# a compatibility shim in CMake rather than a test of the new interface.
 
 # P0-C Stage C GATE 3: the paired run. Both tops, identical stimulus, retired
 # streams compared byte for byte on rgb/a/tag/refused AND on ORDER.
@@ -2748,94 +2643,14 @@ verilate(test_ident_encoding_directed
 add_test(NAME ident_encoding_directed COMMAND test_ident_encoding_directed)
 set_tests_properties(ident_encoding_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
-# P0-C, owner brief 3.2: POSITIVE fault tests for the V3 top's evidence ports.
-#
-# BUILT BUT NOT REGISTERED WITH add_test, ON PURPOSE. It is written to FAIL
-# against today's RTL -- `err_class_invalid_o` counts on a signal that lost
-# its driver when FRAGROB was deleted, so the port is a constant zero -- and a
-# red suite hides regressions. The add_test line goes in with the 3.1 repair,
-# in the same commit, so the test is seen to fail and then to pass.
-#
-# Run it by hand meanwhile:
-#   build/tests/test_island_v3_fault_directed.exe
-add_executable(test_island_v3_fault_directed texture/island_v3_fault_directed.cpp)
-target_link_libraries(test_island_v3_fault_directed PRIVATE zhao_harness zhao_zref)
-verilate(test_island_v3_fault_directed
-  PREFIX Vzhao_texture_island_v3_top
-  TOP_MODULE zhao_texture_island_v3_top
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
-          # R3 swap 2026-09-09: rcp24_svc -> rcp24_v3 at NCTX=12, which brings
-          # the tile's own leaves (mul, ticketq, ticketq_rh) into the closure.
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v2.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv
-  # --public-flat-rw so the probe can INJECT the expander's capacity-violation
-  # counter and watch the island's sticky bit latch.
-  #
-  # That hop was recorded in this test's own output as "STILL UNTESTED: the
-  # island-level hop from that counter to this sticky bit", because the counter
-  # is unreachable by legal stimulus -- it needs a queue holding more entries
-  # than it owns, which the correct full-guard forbids. The counter ITSELF was
-  # demonstrated with the committed mutant (frag_expand_overflow_control); what
-  # remained was the one-line `if (exp_wq_overflow != 0)` in the island.
-  #
-  # A flag, not a source edit -- which is what makes it writable while
-  # zhao_texture_island_v3_top.sv sits inside a running fit's closure. Same
-  # reasoning as perspuv_lockstep_directed below, and the same live-tree
-  # constraint (QUARTUS_GOTCHAS 11).
-  VERILATOR_ARGS --public-flat-rw)
-# REGISTERED once it passed. It was written to FAIL first, against the
-# unrepaired RTL, and was seen to fail and then to pass -- the only ordering
-# that proves it can see what it claims to test.
-add_test(NAME island_v3_fault_directed COMMAND test_island_v3_fault_directed)
-set_tests_properties(island_v3_fault_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+# The pre-Packet-B island_v3_fault_directed.cpp is retained as source history but
+# is not registered against the repaired top: it targets the removed V3 boundary.
+# Packet-B fault registration belongs to a driver that names the canonical clear,
+# status, context, and Surface Sheet ports and uses the exact closure below.
 
-# NOT `REQUIRED`, and the test is guarded on the result. A gate that is not
-# in the suite stops being run -- but a hard dependency that fails CONFIGURE
-# breaks every other test on a machine without an interpreter, which is a
-# much worse trade. This can only ever add a test, never fail one.
-find_package(Python3 COMPONENTS Interpreter QUIET)
-if(Python3_Interpreter_FOUND)
-  add_test(NAME island_v3_paired
-           COMMAND ${Python3_EXECUTABLE}
-                   ${CMAKE_SOURCE_DIR}/tools/texture/gate3_paired.py)
-  # NO `DEPENDS`. It was here, naming the two composed tests, and it is both
-  # unnecessary and harmful: `gate3_paired.py` RUNS BOTH EXECUTABLES ITSELF --
-  # that is the whole design, so the comparison cannot drift from a separate
-  # harness. It needs them BUILT, which the target dependency already ensures,
-  # not RUN.
-  #
-  # With `-j2` the redundant DEPENDS wedged the whole `-L fast` suite at this
-  # test, four times. Alone it passes in 0.77 s. I spent three restarts blaming
-  # concurrent ctest invocations and stale checkpoint files -- both of which
-  # were real and neither of which was this.
-  set_tests_properties(island_v3_paired PROPERTIES LABELS "fast;nightly"
-                       TIMEOUT 900)
-else()
-  message(STATUS "ZHAO: no Python3 interpreter -- P0-C gate 3 (island_v3_paired) will NOT run")
-endif()
-set_tests_properties(island_v3_composed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+# Packet-B tooling and every Python registration below are fail-closed.  A
+# configure without the environment's exact CPython is not a reduced gate.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
 set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
@@ -3153,8 +2968,11 @@ set_tests_properties(
 # the designed signal, it fired, and both the guard and this entry are gone.
 # Case 22 now runs in the default bench.
 
+# The default lint models synthesis preprocessing; READ_LATE lint below keeps the
+# verification-only assertion cone live, so both sides of the preprocessor seam
+# are compiled by a registered gate.
 add_test(NAME lint_texture_v3own
-         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall -DSYNTHESIS
                  --top-module zhao_texture_v3own
                  ${ZHAO_TEX_V3OWN_SV})
 set_tests_properties(lint_texture_v3own PROPERTIES
@@ -8462,3 +8280,897 @@ add_test(NAME lint_terrain_world
 set_tests_properties(lint_terrain_world PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# Packet B: repaired Texture-V3 boundary registrations
+# ---------------------------------------------------------------------------
+# This is the single source of truth for every full Packet-B elaboration in
+# CMake.  Its order is frozen by architecture §12.1: package first, selected
+# root last.  Leaf tests below use only their own minimal closures; historical
+# island/V1/V2 tests above retain their unversioned source lists.
+set(ZHAO_TEXTURE_V3_PACKET_B_SOURCES
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
+)
+
+# A reduced Packet-B configure is a failed configure, never a skipped test.
+foreach(packet_b_source IN LISTS ZHAO_TEXTURE_V3_PACKET_B_SOURCES)
+  if(NOT EXISTS "${packet_b_source}")
+    message(FATAL_ERROR "required Packet-B source is missing: ${packet_b_source}")
+  endif()
+endforeach()
+set(ZHAO_TEXTURE_V3_INTERFACE_MANIFEST
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_texture_island_v3_top.interface.json)
+foreach(packet_b_artifact IN ITEMS
+    ${ZHAO_TEXTURE_V3_INTERFACE_MANIFEST}
+    ${CMAKE_SOURCE_DIR}/tools/rtl/gen_texture_v3_interface_manifest.py
+    ${CMAKE_SOURCE_DIR}/tools/rtl/texture_v3_interface_parser.py
+    ${CMAKE_SOURCE_DIR}/tools/rtl/check_texture_v3_interface_manifest.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_texture_v3_interface_manifest.py)
+  if(NOT EXISTS "${packet_b_artifact}")
+    message(FATAL_ERROR "required Packet-B interface artifact is missing: ${packet_b_artifact}")
+  endif()
+endforeach()
+
+# Closed-schema tests, a temp-only generator execution, and the committed
+# artifact checker are independent mandatory gates.  All three run through the
+# REQUIRED absolute CPython, and elaboration receives the exact environment
+# verilator_bin.exe path rather than an extensionless PATH lookup.
+add_test(NAME texture_v3_interface_manifest_tests
+  COMMAND "${Python3_EXECUTABLE}"
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_texture_v3_interface_manifest.py -q)
+add_test(NAME texture_v3_registration_static
+  COMMAND "${Python3_EXECUTABLE}"
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_render_texture_packet_a.py
+          PacketAOwnershipAndClosureTests.test_packet_b_source_registrations_are_exact_ordered_and_unique
+          PacketAOwnershipAndClosureTests.test_packet_b_source_list_parsers_fire_on_every_structural_mutation
+          PacketAOwnershipAndClosureTests.test_aux_assertion_control_mapping_is_exact_unique_and_exclusive
+          PacketAOwnershipAndClosureTests.test_observation_successor_cmake_uses_exact_durable_manifest
+          PacketAOwnershipAndClosureTests.test_top_profiles_mutants_and_quiet_accounting_are_exact
+          -q)
+add_test(NAME texture_v3_interface_manifest_generator
+  COMMAND "${Python3_EXECUTABLE}"
+          ${CMAKE_SOURCE_DIR}/tools/rtl/gen_texture_v3_interface_manifest.py
+          --repo-root ${CMAKE_SOURCE_DIR}
+          --verilator "${ZHAO_VERILATOR_LINT}"
+          --output ${CMAKE_CURRENT_BINARY_DIR}/texture-v3-interface.generated.json)
+add_test(NAME texture_v3_interface_manifest_checker
+  COMMAND "${Python3_EXECUTABLE}"
+          ${CMAKE_SOURCE_DIR}/tools/rtl/check_texture_v3_interface_manifest.py
+          --repo-root ${CMAKE_SOURCE_DIR}
+          --manifest ${ZHAO_TEXTURE_V3_INTERFACE_MANIFEST}
+          --verilator "${ZHAO_VERILATOR_LINT}")
+set_tests_properties(
+  texture_v3_interface_manifest_tests
+  texture_v3_registration_static
+  texture_v3_interface_manifest_generator
+  texture_v3_interface_manifest_checker
+  PROPERTIES LABELS "fast;lint;packet-b" TIMEOUT 900
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# Full Packet-B integration driver.  The laboratory ABI and production profile
+# elaborate the identical 26-source closure at explicit shadow settings.
+add_executable(tpb_dir
+  texture/texture_island_v3_packet_b_directed.cpp)
+target_link_libraries(tpb_dir PRIVATE zhao_harness)
+verilate(tpb_dir
+  PREFIX Vzhao_texture_island_v3_top
+  TOP_MODULE zhao_texture_island_v3_top
+  SOURCES ${ZHAO_TEXTURE_V3_PACKET_B_SOURCES}
+  VERILATOR_ARGS --assert -GMIGRATION_SHADOWS=1)
+add_test(NAME texture_island_v3_packet_b_directed
+         COMMAND tpb_dir)
+
+add_executable(tpb_prod
+  texture/texture_island_v3_packet_b_directed.cpp)
+target_compile_definitions(tpb_prod PRIVATE
+  PACKET_B_EXPECT_NO_SHADOWS=1)
+target_link_libraries(tpb_prod PRIVATE zhao_harness)
+verilate(tpb_prod
+  PREFIX Vzhao_texture_island_v3_top
+  TOP_MODULE zhao_texture_island_v3_top
+  SOURCES ${ZHAO_TEXTURE_V3_PACKET_B_SOURCES}
+  VERILATOR_ARGS --assert -GMIGRATION_SHADOWS=0)
+add_test(NAME texture_island_v3_packet_b_production_profile
+         COMMAND tpb_prod)
+set_tests_properties(
+  texture_island_v3_packet_b_directed
+  texture_island_v3_packet_b_production_profile
+  PROPERTIES LABELS "fast;nightly;packet-b" TIMEOUT 1800)
+
+# Top mutants select one production seam immediately before the real top source;
+# no copied top module exists.  Every driver has inverse polarity and must emit
+# its exact focused diagnostic without any ordinary FAIL diagnostic.
+set(ZHAO_TEXTURE_V3_PACKET_B_MUTANT_SOURCES
+  ${ZHAO_TEXTURE_V3_PACKET_B_SOURCES})
+list(LENGTH ZHAO_TEXTURE_V3_PACKET_B_MUTANT_SOURCES
+  ZHAO_TEXTURE_V3_PACKET_B_MUTANT_SOURCE_COUNT)
+math(EXPR ZHAO_TEXTURE_V3_PACKET_B_MUTANT_TOP_INDEX
+  "${ZHAO_TEXTURE_V3_PACKET_B_MUTANT_SOURCE_COUNT} - 1")
+list(GET ZHAO_TEXTURE_V3_PACKET_B_MUTANT_SOURCES
+  ${ZHAO_TEXTURE_V3_PACKET_B_MUTANT_TOP_INDEX}
+  ZHAO_TEXTURE_V3_PACKET_B_MUTANT_TOP_SOURCE)
+if(NOT ZHAO_TEXTURE_V3_PACKET_B_MUTANT_TOP_SOURCE STREQUAL
+   "${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv")
+  message(FATAL_ERROR "Packet-B mutant closure lost its top-last invariant")
+endif()
+list(REMOVE_AT ZHAO_TEXTURE_V3_PACKET_B_MUTANT_SOURCES
+  ${ZHAO_TEXTURE_V3_PACKET_B_MUTANT_TOP_INDEX})
+list(APPEND ZHAO_TEXTURE_V3_PACKET_B_MUTANT_SOURCES
+  ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_island_v3_packet_b_mutants.sv
+  ${ZHAO_TEXTURE_V3_PACKET_B_MUTANT_TOP_SOURCE})
+
+function(zhao_packet_b_top_mutant_control
+    NAME DRIVER EXPECT_MACRO SELECTOR DIAGNOSTIC)
+  string(MD5 target_hash "${NAME}")
+  string(SUBSTRING "${target_hash}" 0 8 target_hash)
+  set(target tpbm_${target_hash})
+  add_executable(${target} texture/${DRIVER})
+  target_compile_definitions(${target} PRIVATE ${EXPECT_MACRO}=1)
+  verilate(${target}
+    PREFIX Vzhao_texture_island_v3_top
+    TOP_MODULE zhao_texture_island_v3_top
+    SOURCES ${ZHAO_TEXTURE_V3_PACKET_B_MUTANT_SOURCES}
+    VERILATOR_ARGS --assert -GMIGRATION_SHADOWS=1 -D${SELECTOR})
+  add_test(NAME texture_island_v3_packet_b_${NAME}_control COMMAND ${target})
+  set_tests_properties(texture_island_v3_packet_b_${NAME}_control PROPERTIES
+    LABELS "fast;nightly;packet-b;mutant" TIMEOUT 1800
+    PASS_REGULAR_EXPRESSION "${DIAGNOSTIC}"
+    FAIL_REGULAR_EXPRESSION "FAIL")
+endfunction()
+zhao_packet_b_top_mutant_control(
+  dispatch_index_route texture_island_v3_packet_b_directed.cpp
+  PACKET_B_EXPECT_INDEX_ROUTE_MUTANT
+  ZHAO_PACKET_B_MUTANT_DISPATCH_INDEX_ROUTE
+  "packet-b dispatcher-index-route mutant FIRED")
+zhao_packet_b_top_mutant_control(
+  aux_as_sample2 texture_island_v3_packet_b_directed.cpp
+  PACKET_B_EXPECT_AUX_AS_SAMPLE2
+  ZHAO_PACKET_B_MUTANT_AUX_AS_SAMPLE2
+  "packet-b AUX-as-sample2 mutant FIRED")
+zhao_packet_b_top_mutant_control(
+  retire_context_truncation texture_island_v3_packet_b_directed.cpp
+  PACKET_B_EXPECT_RETIRE_TRUNCATION
+  ZHAO_PACKET_B_MUTANT_RETIRE_CONTEXT_TRUNCATION
+  "packet-b retire-context-truncation mutant FIRED")
+zhao_packet_b_top_mutant_control(
+  frame_clear_over_fault texture_island_v3_packet_b_fullctx.cpp
+  PACKET_B_EXPECT_CLEAR_OVER_FAULT
+  ZHAO_PACKET_B_MUTANT_FRAME_CLEAR_OVER_FAULT
+  "packet-b clear-over-fault mutant FIRED")
+zhao_packet_b_top_mutant_control(
+  owner_mask_generation texture_island_v3_packet_b_directed.cpp
+  PACKET_B_EXPECT_OWNER_MASK_LIFETIME
+  ZHAO_PACKET_B_MUTANT_OWNER_MASK_GENERATION
+  "packet-b owner-mask-generation mutant FIRED")
+zhao_packet_b_top_mutant_control(
+  cache_sidx3 texture_island_v3_packet_b_directed.cpp
+  PACKET_B_EXPECT_CACHE_SIDX3_LIFETIME
+  ZHAO_PACKET_B_MUTANT_CACHE_SIDX3
+  "packet-b cache-sidx3 mutant FIRED")
+zhao_packet_b_top_mutant_control(
+  bilerp_identity texture_island_v3_packet_b_directed.cpp
+  PACKET_B_EXPECT_BILERP_IDENTITY_REFUSAL
+  ZHAO_PACKET_B_MUTANT_BILERP_IDENTITY
+  "packet-b bilerp-identity mutant FIRED")
+zhao_packet_b_top_mutant_control(
+  shadow_one_sided texture_island_v3_packet_b_directed.cpp
+  PACKET_B_EXPECT_SHADOW_CORRUPTION
+  ZHAO_PACKET_B_MUTANT_SHADOW_ONE_SIDED
+  "packet-b one-sided-shadow mutant FIRED")
+zhao_packet_b_top_mutant_control(
+  rsp_drop_observation texture_island_v3_packet_b_directed.cpp
+  PACKET_B_EXPECT_RSP_DROP_OBSERVATION
+  ZHAO_PACKET_B_MUTANT_RSP_DROP_OBSERVATION
+  "packet-b response-drop detector mutant FIRED")
+
+# Math/join leaves for which an executable driver exists.  METJOIN V2 is an
+# observation-only successor with the predecessor's public data interface, so
+# the same directed source is compiled under its established generated prefix.
+add_executable(pb_metaj texture/metajoin_directed.cpp)
+target_link_libraries(pb_metaj PRIVATE zhao_harness)
+verilate(pb_metaj
+  PREFIX Vzhao_texture_metajoin
+  TOP_MODULE zhao_texture_metajoin_v2
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin_v2.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_metajoin_v2_directed COMMAND pb_metaj)
+
+add_executable(pb_uvj
+  texture/texture_uv_join_v2_directed.cpp)
+target_link_libraries(pb_uvj PRIVATE zhao_harness)
+verilate(pb_uvj
+  PREFIX Vtb_uv_join_v2_pair
+  TOP_MODULE tb_uv_join_v2_pair
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join_v2.sv
+    ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_uv_join_v2_mutants.sv
+    ${CMAKE_CURRENT_SOURCE_DIR}/texture/tb_uv_join_v2_pair.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_uv_join_v2_directed COMMAND pb_uvj)
+
+# Durable standalone differential for Packet-B's two observation-only math
+# successors.  The durable manifest owns the nine ordered SystemVerilog paths;
+# the C++ driver is the pair's tenth artifact.  Shared queue/arithmetic leaves
+# precede V3/V4, both perspective implementations precede the test top, and the
+# test top is last.
+set(ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster/packetb_observation_successors.sources.txt)
+if(NOT EXISTS "${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST}")
+  message(FATAL_ERROR
+    "required Packet-B observation source manifest is missing: ${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST}")
+endif()
+
+# file(STRINGS) is the source authority.  The raw view independently rejects
+# blank records, because file(STRINGS) would otherwise silently discard them.
+file(READ "${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST}"
+  ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST_RAW)
+string(REPLACE "\r\n" "\n" ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST_RAW
+  "${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST_RAW}")
+string(REPLACE "\r" "\n" ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST_RAW
+  "${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST_RAW}")
+string(REGEX REPLACE "\n$" "" ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST_BODY
+  "${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST_RAW}")
+if(ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST_BODY STREQUAL "" OR
+   ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST_BODY MATCHES
+     "(^|\n)[ \t]*(\n|$)")
+  message(FATAL_ERROR
+    "Packet-B observation source manifest contains a blank record")
+endif()
+file(STRINGS "${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_MANIFEST}"
+  ZHAO_PACKETB_OBSERVATION_SUCCESSOR_RELATIVE_SOURCES)
+
+set(ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SOURCES)
+set(ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SEEN)
+foreach(relative_source IN LISTS ZHAO_PACKETB_OBSERVATION_SUCCESSOR_RELATIVE_SOURCES)
+  if(relative_source STREQUAL "" OR IS_ABSOLUTE "${relative_source}" OR
+     relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+    message(FATAL_ERROR
+      "invalid Packet-B observation source-manifest path: ${relative_source}")
+  endif()
+  list(FIND ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SEEN
+    "${relative_source}" duplicate_index)
+  if(NOT duplicate_index EQUAL -1)
+    message(FATAL_ERROR
+      "duplicate Packet-B observation source-manifest path: ${relative_source}")
+  endif()
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR
+      "missing Packet-B observation source-manifest path: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SEEN "${relative_source}")
+  list(APPEND ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SOURCES
+    "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+list(LENGTH ZHAO_PACKETB_OBSERVATION_SUCCESSOR_RELATIVE_SOURCES
+  ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SOURCE_COUNT)
+if(NOT ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SOURCE_COUNT EQUAL 9)
+  message(FATAL_ERROR
+    "Packet-B observation source manifest must contain exactly 9 SV paths")
+endif()
+list(GET ZHAO_PACKETB_OBSERVATION_SUCCESSOR_RELATIVE_SOURCES -1
+  ZHAO_PACKETB_OBSERVATION_SUCCESSOR_LAST_SOURCE)
+if(NOT ZHAO_PACKETB_OBSERVATION_SUCCESSOR_LAST_SOURCE STREQUAL
+   "tests/raster/tb_packetb_observation_successors.sv")
+  message(FATAL_ERROR
+    "Packet-B observation source manifest must place its test top last")
+endif()
+add_executable(pb_obs
+  raster/packetb_observation_successors.cpp)
+verilate(pb_obs
+  PREFIX Vtb_packetb_observation_successors
+  TOP_MODULE tb_packetb_observation_successors
+  SOURCES ${ZHAO_PACKETB_OBSERVATION_SUCCESSOR_SOURCES}
+  VERILATOR_ARGS --assert)
+add_test(NAME packetb_observation_successors
+         COMMAND pb_obs)
+set_tests_properties(packetb_observation_successors PROPERTIES
+  LABELS "fast;nightly;packet-b" TIMEOUT 1200)
+
+# Descriptor / expander / resolver production leaves.
+add_executable(pb_desc
+  texture/texture_early_desc_v2_directed.cpp)
+target_link_libraries(pb_desc PRIVATE zhao_harness)
+verilate(pb_desc
+  PREFIX Vzhao_texture_early_desc_v2
+  TOP_MODULE zhao_texture_early_desc_v2
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc_v2.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_early_desc_v2_directed COMMAND pb_desc)
+
+add_executable(pb_exp
+  texture/texture_frag_expand_v2_directed.cpp)
+target_link_libraries(pb_exp PRIVATE zhao_harness)
+verilate(pb_exp
+  PREFIX Vzhao_texture_frag_expand_v2
+  TOP_MODULE zhao_texture_frag_expand_v2
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand_v2.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_frag_expand_v2_directed COMMAND pb_exp)
+
+add_executable(pb_bind
+  texture/texture_binding_resolver_v2_directed.cpp)
+target_link_libraries(pb_bind PRIVATE zhao_harness)
+verilate(pb_bind
+  PREFIX Vzhao_texture_binding_resolver_v2
+  TOP_MODULE zhao_texture_binding_resolver_v2
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_binding_resolver_v2_directed
+         COMMAND pb_bind)
+
+# Planner / cache / terminal collector production leaves.
+add_executable(pb_plan
+  texture/texture_tmu_plan_v2_directed.cpp)
+target_link_libraries(pb_plan PRIVATE zhao_harness)
+verilate(pb_plan
+  PREFIX Vzhao_texture_tmu_plan_v2
+  TOP_MODULE zhao_texture_tmu_plan_v2
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_tmu_plan_v2_directed COMMAND pb_plan)
+
+add_executable(pb_cache
+  texture/texture_cache_pipe_v2_directed.cpp)
+target_link_libraries(pb_cache PRIVATE zhao_harness)
+verilate(pb_cache
+  PREFIX Vzhao_texture_cache_pipe_v2
+  TOP_MODULE zhao_texture_cache_pipe_v2
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_cache_pipe_v2_directed COMMAND pb_cache)
+
+add_executable(pb_rsp
+  texture/texture_rsp_dispatch_v2_directed.cpp)
+target_link_libraries(pb_rsp PRIVATE zhao_harness)
+verilate(pb_rsp
+  PREFIX Vzhao_texture_rsp_dispatch_v2
+  TOP_MODULE zhao_texture_rsp_dispatch_v2
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_rsp_dispatch_v2_directed
+         COMMAND pb_rsp)
+
+# Response / AUX production leaves and the cycle-exact legacy/V2 controls.
+add_executable(pb_mos
+  texture/texture_mosaic_v2_directed.cpp)
+target_link_libraries(pb_mos PRIVATE zhao_harness)
+verilate(pb_mos
+  PREFIX Vzhao_texture_mosaic_v2
+  TOP_MODULE zhao_texture_mosaic_v2
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_mosaic_v2_directed COMMAND pb_mos)
+
+add_executable(pb_mosp
+  texture/texture_mosaic_v2_pair_directed.cpp)
+target_link_libraries(pb_mosp PRIVATE zhao_harness)
+verilate(pb_mosp
+  PREFIX Vtb_texture_mosaic_v2_pair
+  TOP_MODULE tb_texture_mosaic_v2_pair
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+    ${CMAKE_CURRENT_SOURCE_DIR}/rtl/tb_texture_mosaic_v2_pair.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_mosaic_v2_pair_directed
+         COMMAND pb_mosp)
+
+add_executable(pb_bil
+  texture/texture_bilerp_lane_v2_directed.cpp)
+target_link_libraries(pb_bil PRIVATE zhao_harness)
+verilate(pb_bil
+  PREFIX Vzhao_texture_bilerp_lane_v2
+  TOP_MODULE zhao_texture_bilerp_lane_v2
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_bilerp_lane_v2_directed
+         COMMAND pb_bil)
+
+add_executable(pb_bilp
+  texture/texture_bilerp_lane_v2_pair_directed.cpp)
+target_link_libraries(pb_bilp PRIVATE zhao_harness)
+verilate(pb_bilp
+  PREFIX Vtb_texture_bilerp_lane_v2_pair
+  TOP_MODULE tb_texture_bilerp_lane_v2_pair
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+    ${CMAKE_CURRENT_SOURCE_DIR}/rtl/tb_texture_bilerp_lane_v2_pair.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_bilerp_lane_v2_pair_directed
+         COMMAND pb_bilp)
+
+add_executable(pb_pal
+  texture/texture_palette_res_v2_directed.cpp)
+target_link_libraries(pb_pal PRIVATE zhao_harness)
+verilate(pb_pal
+  PREFIX Vzhao_texture_palette_res_v2
+  TOP_MODULE zhao_texture_palette_res_v2
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res_v2.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_palette_res_v2_directed
+         COMMAND pb_pal)
+
+add_executable(pb_aux
+  texture/texture_aux_pipe_v2_directed.cpp)
+target_link_libraries(pb_aux PRIVATE zhao_harness)
+verilate(pb_aux
+  PREFIX Vzhao_texture_aux_pipe_v2
+  TOP_MODULE zhao_texture_aux_pipe_v2
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_aux_pipe_v2_directed COMMAND pb_aux)
+
+# Material V3 against R9 and the corrected zref authority.
+add_executable(pb_mat
+  texture/material_combine_v3_diff.cpp)
+target_link_libraries(pb_mat PRIVATE zhao_harness zhao_zref)
+verilate(pb_mat
+  PREFIX Vzhao_texture_material_combine_v3
+  TOP_MODULE zhao_texture_material_combine_v3
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME material_combine_v3_diff COMMAND pb_mat)
+
+set_tests_properties(
+  texture_metajoin_v2_directed texture_uv_join_v2_directed
+  texture_early_desc_v2_directed texture_frag_expand_v2_directed
+  texture_binding_resolver_v2_directed texture_tmu_plan_v2_directed
+  texture_cache_pipe_v2_directed texture_rsp_dispatch_v2_directed
+  texture_mosaic_v2_directed texture_mosaic_v2_pair_directed
+  texture_bilerp_lane_v2_directed texture_bilerp_lane_v2_pair_directed
+  texture_palette_res_v2_directed texture_aux_pipe_v2_directed
+  material_combine_v3_diff
+  PROPERTIES LABELS "fast;nightly;packet-b" TIMEOUT 1200)
+
+# Palette elaboration guards are executable controls, not lint-only claims.
+function(zhao_palette_v2_parameter_control NAME PARAMETER FIRE_LABEL)
+  string(MD5 target_hash "${NAME}")
+  string(SUBSTRING "${target_hash}" 0 8 target_hash)
+  set(target tpv2_${target_hash})
+  add_executable(${target}
+    texture/texture_palette_res_v2_parameter_control.cpp)
+  target_link_libraries(${target} PRIVATE zhao_harness)
+  verilate(${target}
+    PREFIX Vzhao_texture_palette_res_v2
+    TOP_MODULE zhao_texture_palette_res_v2
+    SOURCES
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res_v2.sv
+    VERILATOR_ARGS --assert ${PARAMETER})
+  add_test(NAME texture_palette_res_v2_${NAME}_control COMMAND ${target})
+  set_tests_properties(texture_palette_res_v2_${NAME}_control PROPERTIES
+    LABELS "fast;nightly;packet-b;mutant" TIMEOUT 300
+    PASS_REGULAR_EXPRESSION "ZHAO_PALETTE_V2_PARAM_FIRE\\[${FIRE_LABEL}\\]"
+    FAIL_REGULAR_EXPRESSION "FAIL:")
+endfunction()
+zhao_palette_v2_parameter_control(tuple66 -GTOKW=17 TUPLE66)
+zhao_palette_v2_parameter_control(slots_power_of_two -GSLOTS=3 SLOTS_POWER_OF_TWO)
+zhao_palette_v2_parameter_control(entries256_idxw8 -GENTRIES=128 ENTRIES256_IDXW8)
+zhao_palette_v2_parameter_control(genw8 -GGENW=7 GENW8)
+
+# The AUX lifetime-credit mutant is driven by the ordinary directed suite.  Its
+# CTest polarity is inverted and pinned to the focused boundary diagnostic, so
+# an unrelated later failure cannot masquerade as the intended fire control.
+add_executable(pb_auxcred
+  texture/texture_aux_pipe_v2_directed.cpp)
+target_compile_definitions(pb_auxcred PRIVATE
+  ZHAO_AUX_CREDIT_MUTANT_CONTROL=1)
+target_link_libraries(pb_auxcred PRIVATE zhao_harness)
+verilate(pb_auxcred
+  PREFIX Vzhao_texture_aux_pipe_v2
+  TOP_MODULE zhao_texture_aux_pipe_v2_credit_mutant
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
+    ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_aux_pipe_v2_credit_mutant.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_aux_pipe_v2_credit_control
+         COMMAND pb_auxcred)
+set_tests_properties(texture_aux_pipe_v2_credit_control PROPERTIES
+  LABELS "fast;nightly;packet-b;mutant" TIMEOUT 600
+  PASS_REGULAR_EXPRESSION "AUX credit lifetime mutant FIRED exactly once")
+
+# Each unreachable AUX detector has its own production-shaped committed mutant.
+# The shared driver is compiled under one common class prefix, while the test's
+# runtime control selects the stimulus which must emit that mutant's unique
+# production assertion label and increment the shipped counter exactly.
+set(ZHAO_AUX_V2_ASSERT_FIRE_LABELS
+  CREDIT_BOUND
+  OFFER_BOUND
+  ISSUED_BOUND
+  RETURN_BOUND
+  FIXED_PRODUCER_ROOM
+  OWED_RESPONSE_ROOM
+  ISSUE_BEFORE_LOCAL_RETURN
+)
+function(zhao_aux_v2_assertion_control NAME CONTROL FIRE_LABEL TOP SOURCE)
+  # Keep CMake target and generated prefix short: Quartus/Verilator dependencies
+  # live under an already-long absolute checkout, and Windows' 260-character
+  # path ceiling otherwise rejects generated __Syms__Slow.cpp files.
+  set(target t_auxv2_a${CONTROL})
+  set(wrong_fire_labels ${ZHAO_AUX_V2_ASSERT_FIRE_LABELS})
+  list(REMOVE_ITEM wrong_fire_labels "${FIRE_LABEL}")
+  list(JOIN wrong_fire_labels "|" wrong_fire_label_pattern)
+  add_executable(${target} texture/texture_aux_pipe_v2_assertion_control.cpp)
+  target_link_libraries(${target} PRIVATE zhao_harness)
+  verilate(${target}
+    PREFIX Vauxv2_assert
+    TOP_MODULE ${TOP}
+    SOURCES
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
+      ${CMAKE_SOURCE_DIR}/tests/mutants/${SOURCE}
+    VERILATOR_ARGS --assert)
+  add_test(NAME texture_aux_pipe_v2_assert_${NAME}_control
+           COMMAND ${target} --control=${CONTROL})
+  set_tests_properties(texture_aux_pipe_v2_assert_${NAME}_control PROPERTIES
+    LABELS "fast;nightly;packet-b;mutant" TIMEOUT 300
+    PASS_REGULAR_EXPRESSION "ZHAO_AUX_V2_ASSERT_FIRE\\[${FIRE_LABEL}\\]"
+    FAIL_REGULAR_EXPRESSION
+      "FAIL:;ZHAO_AUX_V2_ASSERT_FIRE\\[(${wrong_fire_label_pattern})\\]")
+endfunction()
+zhao_aux_v2_assertion_control(
+  credit_bound 1 CREDIT_BOUND
+  zhao_texture_aux_pipe_v2_assertion_control_mutant
+  zhao_texture_aux_pipe_v2_assertion_control_mutant.sv)
+zhao_aux_v2_assertion_control(
+  offer_bound 2 OFFER_BOUND
+  zhao_texture_aux_pipe_v2_offer_bound_mutant
+  zhao_texture_aux_pipe_v2_offer_bound_mutant.sv)
+zhao_aux_v2_assertion_control(
+  issued_bound 3 ISSUED_BOUND
+  zhao_texture_aux_pipe_v2_issued_bound_mutant
+  zhao_texture_aux_pipe_v2_issued_bound_mutant.sv)
+zhao_aux_v2_assertion_control(
+  return_bound 4 RETURN_BOUND
+  zhao_texture_aux_pipe_v2_return_bound_mutant
+  zhao_texture_aux_pipe_v2_return_bound_mutant.sv)
+zhao_aux_v2_assertion_control(
+  fixed_producer_room 5 FIXED_PRODUCER_ROOM
+  zhao_texture_aux_pipe_v2_fixed_room_mutant
+  zhao_texture_aux_pipe_v2_fixed_room_mutant.sv)
+zhao_aux_v2_assertion_control(
+  owed_response_room 6 OWED_RESPONSE_ROOM
+  zhao_texture_aux_pipe_v2_owed_room_mutant
+  zhao_texture_aux_pipe_v2_owed_room_mutant.sv)
+zhao_aux_v2_assertion_control(
+  issue_before_local_return 7 ISSUE_BEFORE_LOCAL_RETURN
+  zhao_texture_aux_pipe_v2_issue_order_mutant
+  zhao_texture_aux_pipe_v2_issue_order_mutant.sv)
+
+# Material R9 controls: each compile definition selects the correspondingly
+# renamed top declared by the committed multi-mutant source.
+function(zhao_material_v3_mutant_control NAME MACRO TOP)
+  string(MD5 target_hash "${TOP}")
+  string(SUBSTRING "${target_hash}" 0 8 target_hash)
+  set(target tmv3_${target_hash})
+  add_executable(${target} texture/material_combine_v3_diff.cpp)
+  target_compile_definitions(${target} PRIVATE ${MACRO}=1)
+  target_link_libraries(${target} PRIVATE zhao_harness zhao_zref)
+  verilate(${target}
+    PREFIX Vmatv3_mut
+    TOP_MODULE ${TOP}
+    SOURCES
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+      ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_material_combine_v3_mutants.sv
+    VERILATOR_ARGS --assert)
+  add_test(NAME material_combine_v3_${NAME}_control COMMAND ${target})
+  set_tests_properties(material_combine_v3_${NAME}_control PROPERTIES
+    LABELS "fast;nightly;packet-b;mutant" TIMEOUT 900)
+endfunction()
+zhao_material_v3_mutant_control(
+  stale_alpha MATERIAL_V3_MUTANT_ALPHA
+  zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant)
+zhao_material_v3_mutant_control(
+  binary_mask MATERIAL_V3_MUTANT_MASK
+  zhao_texture_material_combine_v3_binary_mask_mutant)
+zhao_material_v3_mutant_control(
+  double_round_mod2x MATERIAL_V3_MUTANT_MOD2X
+  zhao_texture_material_combine_v3_double_round_mod2x_mutant)
+zhao_material_v3_mutant_control(
+  unit_detail_first MATERIAL_V3_MUTANT_DETAIL
+  zhao_texture_material_combine_v3_unit_detail_first_mutant)
+zhao_material_v3_mutant_control(
+  universal_count_zero MATERIAL_V3_MUTANT_COUNT_ZERO
+  zhao_texture_material_combine_v3_universal_count_zero_mutant)
+zhao_material_v3_mutant_control(
+  aux_as_sample2 MATERIAL_V3_MUTANT_AUX_SAMPLE2
+  zhao_texture_material_combine_v3_aux_as_sample2_mutant)
+zhao_material_v3_mutant_control(
+  omit_required_status MATERIAL_V3_MUTANT_STATUS_OMIT
+  zhao_texture_material_combine_v3_omit_required_status_mutant)
+zhao_material_v3_mutant_control(
+  drop_raw_index MATERIAL_V3_MUTANT_INDEX_DROP
+  zhao_texture_material_combine_v3_drop_raw_index_mutant)
+zhao_material_v3_mutant_control(
+  reconstruct_raw_index MATERIAL_V3_MUTANT_INDEX_RGB
+  zhao_texture_material_combine_v3_reconstruct_raw_index_mutant)
+zhao_material_v3_mutant_control(
+  phase_drop_writeback MATERIAL_V3_MUTANT_PHASE_DROP
+  zhao_texture_material_combine_v3_phase_drop_writeback_mutant)
+zhao_material_v3_mutant_control(
+  phase_reissue_schedule MATERIAL_V3_MUTANT_PHASE_REISSUE
+  zhao_texture_material_combine_v3_phase_reissue_schedule_mutant)
+
+# Terminal-collector raw-index controls.
+add_executable(pb_rspdi
+  texture/texture_rsp_dispatch_v2_directed.cpp)
+target_compile_definitions(pb_rspdi PRIVATE
+  ZHAO_DROP_INDEX_MUTANT=1)
+target_link_libraries(pb_rspdi PRIVATE zhao_harness)
+verilate(pb_rspdi
+  PREFIX Vzhao_texture_rsp_dispatch_v2_drop_index_mutant
+  TOP_MODULE zhao_texture_rsp_dispatch_v2_drop_index_mutant
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
+    ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_rsp_dispatch_v2_index_mutants.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_rsp_dispatch_v2_drop_index_control
+         COMMAND pb_rspdi)
+
+add_executable(pb_rspri
+  texture/texture_rsp_dispatch_v2_directed.cpp)
+target_compile_definitions(pb_rspri PRIVATE
+  ZHAO_RECONSTRUCT_INDEX_MUTANT=1)
+target_link_libraries(pb_rspri PRIVATE zhao_harness)
+verilate(pb_rspri
+  PREFIX Vzhao_texture_rsp_dispatch_v2_reconstruct_index_mutant
+  TOP_MODULE zhao_texture_rsp_dispatch_v2_reconstruct_index_mutant
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
+    ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_rsp_dispatch_v2_index_mutants.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_rsp_dispatch_v2_reconstruct_index_control
+         COMMAND pb_rspri)
+
+# Descriptor pad and held-row identity controls.
+add_executable(pb_descpad
+  texture/texture_early_desc_v2_directed.cpp)
+target_compile_definitions(pb_descpad PRIVATE
+  ZHAO_DESC_PAD_MUTANT=1)
+target_link_libraries(pb_descpad PRIVATE zhao_harness)
+verilate(pb_descpad
+  PREFIX Vzhao_texture_early_desc_v2_pad_mutant
+  TOP_MODULE zhao_texture_early_desc_v2_pad_mutant
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc_v2.sv
+    ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_early_desc_v2_pad_mutant.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_early_desc_v2_pad_control
+         COMMAND pb_descpad)
+
+add_executable(pb_descsw
+  texture/texture_early_desc_v2_directed.cpp)
+target_compile_definitions(pb_descsw PRIVATE
+  ZHAO_DESC_SLOTSWAP_MUTANT=1)
+target_link_libraries(pb_descsw PRIVATE zhao_harness)
+verilate(pb_descsw
+  PREFIX Vzhao_texture_early_desc_v2_slotswap_mutant
+  TOP_MODULE zhao_texture_early_desc_v2_slotswap_mutant
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_early_desc_v2_slotswap_mutant.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_early_desc_v2_slotswap_control
+         COMMAND pb_descsw)
+
+# Expander selector-carry and otherwise-unreachable queue-overflow controls.
+add_executable(pb_expsel
+  texture/texture_frag_expand_v2_directed.cpp)
+target_compile_definitions(pb_expsel PRIVATE
+  ZHAO_FRAG_EXPAND_SELECTOR_MUTANT=1)
+target_link_libraries(pb_expsel PRIVATE zhao_harness)
+verilate(pb_expsel
+  PREFIX Vzhao_texture_frag_expand_v2_mutant
+  TOP_MODULE zhao_texture_frag_expand_v2_mutant
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand_v2.sv
+    ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_frag_expand_v2_mutant.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_frag_expand_v2_selector_control
+         COMMAND pb_expsel)
+
+add_executable(pb_expq
+  texture/texture_frag_expand_v2_directed.cpp)
+target_compile_definitions(pb_expq PRIVATE
+  ZHAO_FRAG_EXPAND_QUEUE_MUTANT=1)
+target_link_libraries(pb_expq PRIVATE zhao_harness)
+verilate(pb_expq
+  PREFIX Vzhao_texture_frag_expand_v2_queue_guard_mutant
+  TOP_MODULE zhao_texture_frag_expand_v2_queue_guard_mutant
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_frag_expand_v2_mutant.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_frag_expand_v2_queue_control
+         COMMAND pb_expq)
+
+set_tests_properties(
+  texture_rsp_dispatch_v2_drop_index_control
+  texture_rsp_dispatch_v2_reconstruct_index_control
+  texture_early_desc_v2_pad_control texture_early_desc_v2_slotswap_control
+  texture_frag_expand_v2_selector_control texture_frag_expand_v2_queue_control
+  PROPERTIES LABELS "fast;nightly;packet-b;mutant" TIMEOUT 900)
+
+# Full 224-bit owner context and 160-bit retirement context under independently
+# randomized output backpressure.  Stable synthesis-excluded DPI tasks expose
+# the owner context, idle components, counters, and fault injection without any
+# generated-class suffix or VPI/public-flat dependency.
+add_executable(tpb_ctx
+  texture/texture_island_v3_packet_b_fullctx.cpp)
+verilate(tpb_ctx
+  PREFIX Vzhao_texture_island_v3_top
+  TOP_MODULE zhao_texture_island_v3_top
+  SOURCES ${ZHAO_TEXTURE_V3_PACKET_B_SOURCES}
+  VERILATOR_ARGS --assert -GMIGRATION_SHADOWS=1)
+add_test(NAME texture_island_v3_packet_b_fullctx
+         COMMAND tpb_ctx)
+set_tests_properties(texture_island_v3_packet_b_fullctx PROPERTIES
+  LABELS "fast;nightly;packet-b" TIMEOUT 1800)
+
+# Descriptor -> expander -> binding resolver seam, including the inverse-polarity
+# committed bad-pad path.  Package is first because all three import its widths.
+set(ZHAO_TEXTURE_DESC_EXPAND_BIND_V2_SOURCES
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc_v2.sv
+  ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_early_desc_v2_pad_mutant.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture/tb_texture_desc_expand_bind_v2_composed.sv)
+add_executable(tdbv2
+  texture/texture_desc_expand_bind_v2_composed.cpp)
+target_link_libraries(tdbv2 PRIVATE zhao_harness)
+verilate(tdbv2
+  PREFIX Vtb_texture_desc_expand_bind_v2_composed
+  TOP_MODULE tb_texture_desc_expand_bind_v2_composed
+  SOURCES ${ZHAO_TEXTURE_DESC_EXPAND_BIND_V2_SOURCES}
+  VERILATOR_ARGS --assert -GPAD_MUTANT=0
+    -I${CMAKE_SOURCE_DIR}/fpga/rtl/texture)
+add_test(NAME texture_desc_expand_bind_v2_composed
+         COMMAND tdbv2)
+
+add_executable(tdbv2_pad
+  texture/texture_desc_expand_bind_v2_composed.cpp)
+target_compile_definitions(tdbv2_pad PRIVATE
+  ZHAO_COMPOSED_PAD_MUTANT=1)
+target_link_libraries(tdbv2_pad PRIVATE zhao_harness)
+verilate(tdbv2_pad
+  PREFIX Vtb_texture_desc_expand_bind_v2_composed
+  TOP_MODULE tb_texture_desc_expand_bind_v2_composed
+  SOURCES ${ZHAO_TEXTURE_DESC_EXPAND_BIND_V2_SOURCES}
+  VERILATOR_ARGS --assert -GPAD_MUTANT=1
+    -I${CMAKE_SOURCE_DIR}/fpga/rtl/texture)
+add_test(NAME texture_desc_expand_bind_v2_pad_control
+         COMMAND tdbv2_pad)
+set_tests_properties(
+  texture_desc_expand_bind_v2_composed
+  texture_desc_expand_bind_v2_pad_control
+  PROPERTIES LABELS "fast;nightly;packet-b" TIMEOUT 1200)
+set_tests_properties(texture_desc_expand_bind_v2_pad_control PROPERTIES
+  LABELS "fast;nightly;packet-b;mutant")
+
+# Randomized AUX differential against the committed zref coordinate oracle.
+add_executable(pb_auxrnd
+  texture/texture_aux_pipe_v2_random.cpp)
+target_link_libraries(pb_auxrnd PRIVATE zhao_harness zhao_zref)
+verilate(pb_auxrnd
+  PREFIX Vzhao_texture_aux_pipe_v2
+  TOP_MODULE zhao_texture_aux_pipe_v2
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_aux_pipe_v2_random COMMAND pb_auxrnd)
+set_tests_properties(texture_aux_pipe_v2_random PROPERTIES
+  LABELS "fast;nightly;packet-b" TIMEOUT 1800)
+
+# Resolver controls use the exact final driver macros and renamed wrapper tops.
+function(zhao_binding_v2_mutant_control NAME MACRO TOP)
+  string(MD5 target_hash "${TOP}")
+  string(SUBSTRING "${target_hash}" 0 8 target_hash)
+  set(target tbv2_${target_hash})
+  add_executable(${target} texture/texture_binding_resolver_v2_directed.cpp)
+  target_compile_definitions(${target} PRIVATE ${MACRO}=1)
+  target_link_libraries(${target} PRIVATE zhao_harness)
+  verilate(${target}
+    PREFIX Vbindv2_mut
+    TOP_MODULE ${TOP}
+    SOURCES
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv
+      ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_binding_resolver_v2_mutants.sv
+    VERILATOR_ARGS --assert)
+  add_test(NAME texture_binding_resolver_v2_${NAME}_control COMMAND ${target})
+  set_tests_properties(texture_binding_resolver_v2_${NAME}_control PROPERTIES
+    LABELS "fast;nightly;packet-b;mutant" TIMEOUT 900)
+endfunction()
+zhao_binding_v2_mutant_control(
+  late_page_generation ZHAO_BIND_LATE_PAGE_MUTANT
+  zhao_texture_binding_resolver_v2_late_page_generation_mutant)
+zhao_binding_v2_mutant_control(
+  early_activation_while_held ZHAO_BIND_OWNER_QUIET_MUTANT
+  zhao_texture_binding_resolver_v2_early_activation_while_held_mutant)
+zhao_binding_v2_mutant_control(
+  active_bank_write ZHAO_BIND_ACTIVE_WRITE_MUTANT
+  zhao_texture_binding_resolver_v2_active_bank_write_mutant)
+zhao_binding_v2_mutant_control(
+  stale_invalid_crc ZHAO_BIND_STALE_CRC_MUTANT
+  zhao_texture_binding_resolver_v2_stale_invalid_crc_mutant)
+zhao_binding_v2_mutant_control(
+  witness_class_route ZHAO_BIND_WITNESS_CLASS_MUTANT
+  zhao_texture_binding_resolver_v2_witness_class_route_mutant)
+zhao_binding_v2_mutant_control(
+  same_cycle_refusal ZHAO_BIND_SAME_CYCLE_MUTANT
+  zhao_texture_binding_resolver_v2_same_cycle_refusal_mutant)
+zhao_binding_v2_mutant_control(
+  refusal_without_issue ZHAO_BIND_WITHOUT_ISSUE_MUTANT
+  zhao_texture_binding_resolver_v2_refusal_without_issue_mutant)
+
+# The second material implementation mode is not inferred from copy-mode results:
+# four real owner planes feed READ_LATE=1 beside the same R9 stream in copy mode.
+add_executable(pb_matrl
+  texture/material_combine_v3_readlate_diff.cpp)
+target_link_libraries(pb_matrl PRIVATE
+  zhao_harness zhao_zref)
+verilate(pb_matrl
+  PREFIX Vtb_material_combine_v3_copy_readlate
+  TOP_MODULE tb_material_combine_v3_copy_readlate
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+    ${CMAKE_CURRENT_SOURCE_DIR}/texture/tb_material_combine_v3_copy_readlate.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME material_combine_v3_readlate_diff
+         COMMAND pb_matrl)
+set_tests_properties(material_combine_v3_readlate_diff PROPERTIES
+  LABELS "fast;nightly;packet-b" TIMEOUT 1200)

@@ -6,7 +6,7 @@
 // as the final repository oracle."
 //
 // So this is V1's workload, verbatim, pointed at V2 and at
-// `zref::material::combine` -- not at a second transcription of the arithmetic,
+// `zref::legacy_material_v2::combine` -- not at a second transcription of the arithmetic,
 // because a codec verified against a copy of itself proves only that two copies
 // agree. V1's file stays as it is: the brief also says to freeze V1 as the
 // historical comparison rather than erase its known failures from evidence.
@@ -30,11 +30,12 @@
 #include <vector>
 
 #include "verilated.h"
+#include "../harness/zhao_sim.hpp"
 
 #include "Vzhao_texture_material_combine_v2.h"
-#include "zref/zref_material.hpp"
+#include "legacy_material_v2_oracle.hpp"
 
-namespace mat = zref::material;
+namespace mat = zref::legacy_material_v2;
 
 namespace {
 
@@ -272,7 +273,7 @@ void test_every_recipe_matches_the_oracle() {
   }
 
   check(missing == 0, "every fragment retired -- none was lost in the scheduler", 0, missing);
-  check(mismatched == 0, "every recipe's result matches zref::material::combine exactly", 0,
+  check(mismatched == 0, "every recipe's result matches zref::legacy_material_v2::combine exactly", 0,
         mismatched);
 
   // §15.4's counters. DETAIL_LIGHT must be the block's most expensive recipe,
@@ -523,8 +524,8 @@ int main(int argc, char** argv) {
 
   if (g_failed) {
     std::printf("[material_combine_v2_diff] %d/%d checks FAILED\n", g_failed, g_checks);
-    return 1;
+    zhao::exit_hard(1);
   }
   std::printf("[material_combine_v2_diff] %d checks passed\n", g_checks);
-  return 0;
+  zhao::exit_hard(0);
 }

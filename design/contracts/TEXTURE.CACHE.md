@@ -116,6 +116,104 @@ A transaction runs from an access's first offer to its acceptance. Withdrawing a
 
 The catalog id and the `frame_tick` shadow latch (`spec/counters.md` §3/§5) are **not** implemented here, exactly as the RASTER blocks deferred theirs; `cache_hits` / `cache_misses` are claimed by three blocks in `design/blocks.yml`, and reconciling multiple producers of one catalog entry belongs with the DEBUG.COUNTERS integration wave.
 
+## Versioned V3 terminal-refusal and accounting law
+
+Packet B creates the observation-preserving `zhao_texture_cache_pipe_v2` and
+reserves `fill_refused_i`, but does not implement denial or the accounting below.
+Packet E revises that same versioned boundary and connects its guarded ENGINE1
+fill path. Nothing in Packet B claims memory denial is connected, tested,
+fitted, or adopted. The unversioned cache and old island retain the behavior
+above.
+
+The V3 cache access record is:
+
+```text
+acc_en[3:0]
+acc_addr[4][31:0]
+route_token18 = {class[1:0],slot[5:0],sample_index[1:0],generation[7:0]}
+```
+
+`CA` is the handshake `acc_valid_i && acc_ready_o` which captures that complete
+record into the cache's first held stage, before hit/miss service. The record and
+every enabled address are immutable until its one terminal disposition. Request
+valid and payload hold while not ready. This deliberately differs from the
+unversioned first-look accounting above, whose access acceptance occurs only
+after its blocking misses have become hits.
+
+A successful access retains the raw held response
+`{route_token18,data64}` for the selected class processor. Raw cache success
+supplies status baseline `8'h00`; successful class processing preserves zero,
+while a class-local refusal such as stale/cold palette state sets or ORs its own
+terminal status before collection. Cache data is not itself a decoded RGB/A
+result.
+
+Packet E adds a separate held terminal-refusal offer which bypasses class
+arithmetic but joins the normal final offer for the class encoded by the
+captured route token. A CLUT refusal therefore arbitrates with CLUT's terminal
+offer, NEAR with NEAR, and BIL with BIL; it is never relabelled onto ERR. Each
+per-class merger reserves capacity, preserves all 66 bits, and accepts only one
+source on an edge before feeding that matching input of the final collector:
+
+```text
+{route_token18, 8'h01, 8'h00, 8'hFF, 24'hFF00FF}
+```
+
+Here `8'h01` is exactly `SOURCE_REFUSED`; reserved status bits `[7:1]` are zero.
+The refusal uses the captured route token, never the currently offered request,
+and cannot silently wait, return old RAM contents, or borrow a later identity.
+
+The fill boundary uses `fill_refused_i` as one terminal event mutually exclusive
+with fill data. One accepted miss creates exactly one held 16-byte-aligned fill
+request; that request and address hold until `fill_valid_o && fill_ready_i`,
+which is `FI`. An approved fill then consumes exactly eight ascending 16-bit
+beats. A refused fill invalidates every partial line, clears the one outstanding
+fill, produces exactly one held terminal sample refusal, and allows later access
+work to proceed. A short fill, ninth beat, data before an accepted fill, refusal
+after data, data and refusal together, or completion without a start sets the
+sticky `fill_protocol_fault_o`. Packet E must give every malformed class a
+positive control; this contract does not invent separate counters for them.
+`frame_fault_clear_i` clears only this sticky summary, never cache contents,
+valids, held payloads, fill state, credits, or counters; any same-edge malformed
+fill sets it again with priority.
+
+The Packet-E `idle_o` is one only when the access/hit/raw-response stage,
+blocking miss, held fill request, accepted fill awaiting verdict/data, partial
+line, reserved terminal-refusal disposition, and either held output are all
+empty. Merely dropping `fill_valid_o` after request acceptance is not idle:
+either refusal or eight beats are still owed.
+
+Packet-E accounting uses reset-zero 32-bit modulo counters and handshake events:
+
+```text
+CA    cache access-record handshakes into the first held stage
+CC    raw-success or typed-refusal output handshakes, counted once per access
+FI    fill-request handshakes
+FOK   fills completed with exactly eight data beats
+FREF  fills completed by terminal refusal
+FB    accepted fill-data halfwords
+```
+
+After complete drain, within a window shorter than counter wrap:
+
+```text
+CA == CC
+FI == FOK + FREF
+FB == 8*FOK
+```
+
+A cache hit contributes one `CA` and one `CC`, but no `FI`. A locally refused
+binding job never enters this cache and contributes none of these events. A
+guard-denied fill contributes one `FI`, one `FREF`, zero `FB`, one `CC`, and one
+owner-visible `SOURCE_REFUSED` return. Counters move on acceptance or terminal
+completion, never on valid alone, so held requests, data, refusals, and responses
+cannot double-count.
+
+Packet E must prove the exact eight-beat success path, denial termination,
+partial-line invalidation, no denied-request replay, every malformed-fill
+sticky-detector control, the drained equalities above, and a renamed committed
+held-valid-denial mutant. Until then these are required successor semantics, not
+implementation evidence.
+
 ## Scalar reference function
 
 `zref::TextureCache` (`reference/include/zref/zref_texture.hpp`, `reference/src/zrender/texture.cpp`), with `zref::TextureMemory` as the flat backing store a fill reads from.

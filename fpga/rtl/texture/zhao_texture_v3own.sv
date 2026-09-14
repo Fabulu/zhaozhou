@@ -274,7 +274,15 @@ module zhao_texture_v3own #(
     output var logic [31:0]       ev_admitted_o,
     output var logic [31:0]       ev_emitted_o,
     output var logic [31:0]       ev_commits_o,
+    // Instrumentation-only typed partition of ev_commits_o. These counters do
+    // not gate or alter lifecycle state; their independent positive control is
+    // what makes a zero typed count meaningful.
+    output var logic [31:0]       ev_tmu_commits_o,
+    output var logic [31:0]       ev_aux_commits_o,
     output var logic [31:0]       ev_tickets_o,
+    // Newly ready owners whose slot is not the current ordered head. This is
+    // the actual reorder-held event; no invalid output payload is consulted.
+    output var logic [31:0]       ev_reorder_held_o,
     output var logic [31:0]       ev_err_range_o,
     output var logic [31:0]       ev_err_stale_o,
     output var logic [31:0]       ev_err_unsol_o,
@@ -288,7 +296,11 @@ module zhao_texture_v3own #(
     output var logic [31:0]       ev_src_unpub_o,
     output var logic [CNTW-1:0]   ev_live_o,
     output var logic [CNTW-1:0]   ev_live_peak_o,
-    output var logic              ev_quiet_o
+    output var logic              ev_quiet_o,
+    // Observation-only internal queue levels for the island's literal quiet
+    // equation. They add no state and do not feed lifecycle decisions.
+    output var logic              obs_claim_valid_o,
+    output var logic              obs_ready_valid_o
 );
 
   localparam logic [3:0] SRC_AUX = 4'b1000;
@@ -504,9 +516,11 @@ module zhao_texture_v3own #(
                 < OWNERW'(live_cnt_q));
   endfunction
 
+`ifndef SYNTHESIS
   logic [SLOTW-1:0] tail_p1_c;
+  assign tail_p1_c = tail_q + SLOTW'(1);
+`endif
   logic             wrap_at_tail_p1_c;
-  assign tail_p1_c         = tail_q + SLOTW'(1);
   // Site 3 is the one that is NOT a copy of the other two, and the plan got it
   // wrong once before the assertion corrected it. `tail_p1` is AHEAD of the
   // tail -- so `alloc_gen - 1` -- EXCEPT when `tail_q == 63`, where it wraps to
@@ -1219,7 +1233,9 @@ module zhao_texture_v3own #(
                 && (cq_occ_c == '0) && (cmb_res_q == '0)
                 && !g0_v_q && !g1_v_q && !g2_v_q
                 && (oq_occ_c == '0) && (out_res_q == '0);
-  assign ev_quiet_o = quiet_c;
+  assign ev_quiet_o        = quiet_c;
+  assign obs_claim_valid_o = c1t_v_q || c1a_v_q;
+  assign obs_ready_valid_o = q0t_v_q || q0a_v_q || q0i_v_q;
 
   // ==========================================================================
   // THE ONE SCOREBOARD NEXT-STATE, COMPUTED ONCE PER OWNER
@@ -1373,7 +1389,8 @@ module zhao_texture_v3own #(
   // "Simultaneous TMU and AUX faults increment the error total by two." That
   // is the fragrob defect this repository already paid for once; the delta is
   // calculated in one place and the accumulator is assigned in one place.
-  logic [1:0] d_stale_c, d_unsol_c, d_dup_c, d_commit_c, d_ticket_c, d_issue_c;
+  logic [1:0] d_stale_c, d_unsol_c, d_dup_c, d_commit_c, d_ticket_c;
+  logic [1:0] d_reorder_c, d_issue_c;
   logic       d_range_c, d_final_c;
   always_comb begin
     d_stale_c = 2'd0;
@@ -1392,6 +1409,13 @@ module zhao_texture_v3own #(
     if (tkt_t_c) d_ticket_c = d_ticket_c + 2'd1;
     if (tkt_a_c) d_ticket_c = d_ticket_c + 2'd1;
     if (adm_fire_c && (adm_req_i == 4'd0)) d_ticket_c = d_ticket_c + 2'd1;
+    d_reorder_c = 2'd0;
+    if (tkt_t_c && (c4t_slot_q != emit_q))
+      d_reorder_c = d_reorder_c + 2'd1;
+    if (tkt_a_c && (c4a_slot_q != emit_q))
+      d_reorder_c = d_reorder_c + 2'd1;
+    if (adm_fire_c && (adm_req_i == 4'd0) && (tail_q != emit_q))
+      d_reorder_c = d_reorder_c + 2'd1;
     d_issue_c = 2'd0;
     if (iss_tmu_valid_i && !iss_t_ok_c) d_issue_c = d_issue_c + 2'd1;
     if (iss_aux_valid_i && !iss_a_ok_c) d_issue_c = d_issue_c + 2'd1;
@@ -1712,7 +1736,10 @@ module zhao_texture_v3own #(
       ev_admitted_o    <= 32'd0;
       ev_emitted_o     <= 32'd0;
       ev_commits_o     <= 32'd0;
+      ev_tmu_commits_o <= 32'd0;
+      ev_aux_commits_o <= 32'd0;
       ev_tickets_o     <= 32'd0;
+      ev_reorder_held_o<= 32'd0;
       ev_err_range_o   <= 32'd0;
       ev_err_stale_o   <= 32'd0;
       ev_err_unsol_o   <= 32'd0;
@@ -1726,7 +1753,10 @@ module zhao_texture_v3own #(
       ev_src_unpub_o   <= ev_src_unpub_o   + 32'(src_unpub_c);
       ev_emitted_o     <= ev_emitted_o     + 32'(out_fire_c);
       ev_commits_o     <= ev_commits_o     + 32'(d_commit_c);
+      ev_tmu_commits_o <= ev_tmu_commits_o + 32'(c4t_v_q);
+      ev_aux_commits_o <= ev_aux_commits_o + 32'(c4a_v_q);
       ev_tickets_o     <= ev_tickets_o     + 32'(d_ticket_c);
+      ev_reorder_held_o<= ev_reorder_held_o+ 32'(d_reorder_c);
       ev_err_range_o   <= ev_err_range_o   + 32'(d_range_c);
       ev_err_stale_o   <= ev_err_stale_o   + 32'(d_stale_c);
       ev_err_unsol_o   <= ev_err_unsol_o   + 32'(d_unsol_c);
@@ -2181,8 +2211,11 @@ module zhao_texture_v3own #(
       // Admission is closed for the whole STOP/FINISH interval, so nothing can
       // move the tail -- these assert that, rather than assuming it.
       a_fence_holds_slot : assert ((fn_q != FN_REOPEN) || (tail_q == fn_slot_q));
+`ifndef SYNTHESIS
+      // Both operands are deliberately verification-only mirrors.
       a_fence_holds_gen  : assert ((fn_q != FN_REOPEN)
                                 || (vgen_q[fn_slot_q] == vfn_gen_q));
+`endif
 
       // And the reopen authorises EXACTLY ONE admission: 6.2 warns the
       // transitional fence and the sequence-window fence "must not be combined

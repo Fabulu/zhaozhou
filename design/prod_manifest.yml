@@ -46,69 +46,27 @@ top:
   - zhao_shell_top
   - zhao_cmd_decoder
 
-  # --- texture island (the production rebuild) -----------------------------
-  - zhao_texture_tmu_pipe        # over zhao_texture_tmu
-  # TEXTURE.COMBINE. TWO ROWS ON PURPOSE, and only for as long as it takes to
-  # measure the second.
+  # --- texture island (Packet B production accounting) ----------------------
+  # Count the current texture implementation exactly once, at its composed V3
+  # boundary. Packet B replaced the stages beneath this root; every reachable
+  # owner, bank, queue and versioned child is therefore counted `inside` it and
+  # must have no `excluded` row.
   #
-  # zhao_texture_combine is the II=1 form, REFUTED 2026-09-05 by the
-  # architecture's own tripwire: 8 DSP blocks against S3.4's "reject DSP > 2",
-  # because S15.5 closes with "Do not write six independent `*` operators and
-  # assume they pack" and that is what it does. Docket D19q.
+  # zhao_texture_tmu_pipe and zhao_texture_material_combine_v1 were independent
+  # selected roots only before this composition became authoritative. They are
+  # now retained pre-Packet-B oracles under `excluded:superseded`, with retired
+  # census slots preserving every surviving generated ordinal and LFSR seed.
+  # Their RTL, tests, standalone fit targets and historical receipts remain.
+  # This accounting correction deletes no hardware source and makes no physical
+  # ALM/DSP reduction claim. The selected shell remains unchanged and does not
+  # compose the V3 texture island; ownership scope below is still explicitly
+  # `selected_subsystem`, not shell production.
   #
-  # zhao_texture_material_combine_v1 is the replacement -- S15.5 variant A
-  # LOGIC2, two multipliers attributed to ALM logic, tokenized microjobs,
-  # queued continuations, all EIGHT ratified recipes including the two
-  # three-sample terrain ones the old block refuses as illegal.
-  #
-  # The refuted block stayed until its replacement had a MEASUREMENT, so the
-  # island was never left with no combiner and no record of why the shape
-  # changed. THAT TRIGGER FIRED 2026-09-09: zhao_texture_material_combine_v1
-  # measures 1663 ALM / 2 DSP / 69.75 MHz on a clean tree.
-  #
-  # The row is gone from `top:` and now sits in `excluded:` -- which takes the
-  # 8 DSP off the census without deleting anything, and records why.
-  #
-  # AND THE MODEL ABOVE IS OUT OF DATE, which matters more than the row. It says
-  # v1 is "the replacement". It is not: BOTH islands instantiate
-  # zhao_texture_material_combine_v2 (island_top:2026, island_v3_top:3279), and
-  # line 283 of this file already says so. So v1 is ALSO instantiated by nothing
-  # but the generated resource top, and its 2 DSP are charged to a block the
-  # console will not contain either. Flagged, not decided -- deleting a second
-  # block on my own reading of the tree is the owner's call, not a bookkeeping
-  # correction.
-  #
-  # The instruction also said to delete the RTL and
-  # tests/texture/texture_combine_diff.cpp. Not done: that is destructive and it
-  # is not needed for the budget. It IS safe whenever the owner wants it --
-  # material_combine_v2 is proven against `zref::material::combine`, the C++
-  # oracle, and NOT against this block, so removing it destroys no proof.
-  # THE TEXTURE ISLAND IS COUNTED ONCE, AS A COMPOSED FIT.
-  #
-  # Owner brief 2.6.C: "Include actual adopted descriptor, owner and join
-  # components or count their containing island once. Do not count both the
-  # island and its leaves."
-  #
-  # Before this edit the bill did NEITHER. It counted NINE island leaves
-  # individually (tmu_plan, cache_pipe, aux_pipe, palette_res, rsp_dispatch,
-  # mosaic, bilerp_lane, perspuv_svc, rcp24_svc) while SIX more that the island
-  # also instantiates sat in `excluded:` as "unused" or "not-yet-adopted" --
-  # frag_expand, metajoin, early_desc, uv_join, v3own, v3bank, v3rq. An
-  # INCOMPLETE COVER, which understates. This file already flagged part of it:
-  # the metajoin entry carried "STALE, 2026-09-08: metajoin IS integrated now".
-  #
-  #   nine leaves counted today   15 DSP    8,667 ALM
-  #   completing the leaf cover   15 DSP   12,338 ALM  (2 still unknown)
-  #   THE ISLAND, ONE FIT         17 DSP   10,837 ALM  49 M10K   <- chosen
-  #
-  # The island is chosen because it is a real COMPOSED measurement at the
-  # declared shipping profile (@g2-prod, MIGRATION_SHADOWS=0), with no unknowns,
-  # and because a sum of leaf fits carries virtual pins the composed design does
-  # not. Verified before moving them: all nine leaves are instantiated ONLY by
-  # the two island tops and by the generated resource top -- none is used
-  # elsewhere in the machine, so nothing is lost by counting them inside.
+  # STALE AFTER PACKET B: the prior @g2-prod composed receipt (historically
+  # 10,837 ALM / 17 DSP / 49 M10K) measured the old V3 child closure. Packet B
+  # changed that closure, so those numbers are not evidence for this selection.
+  # There is no current applicable ALM/DSP receipt for the Packet B hierarchy.
   - zhao_texture_island_v3_top
-  - zhao_texture_material_combine_v1
 
   # --- the per-pixel texture path ------------------------------------------
   # TEXJOIN V2 remains in-tree as the behavioural oracle, but is excluded below:
@@ -242,27 +200,42 @@ ownership_roles:
 # change. A tombstone emits no RTL; it only preserves every survivor's identity.
 retired_census_slots:
   - zhao_raster_texjoin_v2
+  - zhao_texture_material_combine_v1
+  - zhao_texture_tmu_pipe
 
 # ==============================================================================
-# SELECTED PROFILES -- which measurement describes the instance that SHIPS
+# SELECTED-PRODUCTION PARAMETER OVERRIDES -- closed, explicit generator input
 # ==============================================================================
-# Added 2026-09-09, owner brief section 2.6.C: "Specify FIELD LANES/BANKS/
-# CONTEXTS and reciprocal NCTX/TOKW instead of relying on unrelated defaults."
+# Exact schema: one selected `top:` key at two spaces, then one or more declared
+# module parameter names at four spaces. Only explicitly typed integral scalar or
+# packed parameters are accepted, and the literal's numeric value must survive
+# coercion to the declaration's effective width and signedness unchanged. A
+# dependent width sees only defaults and validated overrides from preceding
+# parameter declarations; forward or cyclic widths are rejected. Values use
+# canonical sized, nonnegative SystemVerilog literals (for example 1'b0, 12'd7
+# or 8'hFF); expressions, YAML booleans, quoted scalars, X/Z digits and inferred
+# profile-label settings are rejected. A top or parameter not declared elsewhere
+# is rejected too.
 #
-# WHY A HEURISTIC IS NOT ENOUGH. The census first preferred the UNLABELLED row
-# on the reasoning that a label denotes a variant. That is right for
-# zhao_geom_skin, whose unlabelled fit is the default profile and whose
-# @MUL_LANES rows are alternatives -- and WRONG for the texture island, where
-# the unlabelled row is the LABORATORY build (MIGRATION_SHADOWS=1, 13,133 ALM)
-# and the shipping configuration is the labelled @g2-prod (10,837 ALM). A
-# heuristic cannot tell those apart; only a declaration can.
+# This is deliberately independent of `selected_profiles`: the mapping below
+# chooses generated hardware, while a profile label records measurement intent.
+# After Packet B no existing @g2-prod row is an applicable receipt.
+production_parameter_overrides:
+  zhao_texture_island_v3_top:
+    MIGRATION_SHADOWS: 1'b0
+
+# ==============================================================================
+# SELECTED PROFILES -- intended measurement profile, not current evidence
+# ==============================================================================
+# The texture label below deliberately names the selected Packet-B production
+# configuration even though no receipt has that label. The census must therefore
+# report UNKNOWN instead of substituting any pre-Packet-B @g2-prod/unlabelled row.
 #
-# `label: null` means the unlabelled row IS the shipping profile. An entry here
-# is a statement about what the console contains, not about which number is
-# smaller -- the island entry below selects the LARGER-DSP, SMALLER-ALM row
-# because that is the one that ships.
+# STALE AFTER PACKET B: every existing zhao_texture_island_v3_top profile receipt
+# measured the pre-Packet-B child closure. There is currently no applicable
+# ALM/DSP receipt for the selected Packet B hierarchy.
 selected_profiles:
-  - zhao_texture_island_v3_top: "@g2-prod"   # MIGRATION_SHADOWS=0, the shipping build
+  - zhao_texture_island_v3_top: "@packet-b-prod" # deliberately unmeasured; MIGRATION_SHADOWS=0 above
   - zhao_geom_skin: null                     # unlabelled default; @MUL_LANES=* are alternatives
 
 # ==============================================================================
@@ -366,17 +339,30 @@ excluded:
   - zhao_raster_attrwalk: not-yet-adopted  divider-free exact attribute stepping; differentials pass against the compiled reference and the verilated divider, but adoption needs the owner's ruling on the tie law (the repo's stated law and zref disagree on negative exact halves)
   - zhao_proj_arena3: superseded  a SECOND copy of a mechanism the 2026-08-24 ruling says must live once -- zhao_vertex_arena already owns it, with the committed geom_wcache_arena_bounds.sby proof (8 labelled assertions + 6 covers before the consolidation; the "58 formal assertions" once quoted here counted comment mentions, not properties). Kept as the DESIGN STUDY it is. Its dense-fill valid mechanism WAS folded into zhao_vertex_arena as VALID_MODE=1 on 2026-09-09, with the proof extended (prove_dense/cover_dense/bmc_dense tasks) and its padded-vs-mixed addressing observation repaired in the primitive (linear arena*DEPTH+index; prove_np2 holds it). See reports/ARENA-I-BUILT-A-SECOND-ONE-20260909.md and reports/VERTEX-ARENA-DENSE-SEAL-20260909.md
 
-  # The texture island's own children are NOT listed here any more.
+  # Packet B's CURRENT children are not listed here: they are reachable from
+  # zhao_texture_island_v3_top and the checker counts them `inside` that one root.
   #
-  # They used to be, as "unused" or "not-yet-adopted", while the island itself
-  # was excluded as a probe -- so seven components the island demonstrably
-  # instantiates were in the machine and in nobody's bill. check_prod_manifest
-  # caught every one the moment the island became a counted top: "excluded
-  # 'zhao_texture_v3own' (not-yet-adopted) is nevertheless instantiated by
-  # zhao_texture_island_v3_top -- it is in the machine whatever the manifest
-  # says." They are counted inside the island's composed fit now.
-  #
-  # Dropped: zhao_texture_early_desc, zhao_texture_frag_expand, zhao_texture_material_combine_v2, zhao_texture_material_combine_v2, zhao_texture_metajoin, zhao_texture_uv_join, zhao_texture_v3bank, zhao_texture_v3own, zhao_texture_v3rq
+  # The rows below are the now-unreachable PRE-PACKET-B implementations. They are
+  # retained as oracle/history material with their source, tests, existing fit
+  # target coverage and old receipts intact. `superseded` is an accounting disposition,
+  # not a deletion or an ALM/DSP result.
+  - zhao_texture_tmu_pipe: superseded  retained pre-Packet-B texture-pipe oracle; the selected accounting root is zhao_texture_island_v3_top
+  - zhao_texture_material_combine_v1: superseded  retained pre-Packet-B combiner oracle; zhao_texture_material_combine_v3 is reachable inside the selected V3 root
+  - zhao_raster_rcp24_v3: superseded  retained pre-Packet-B reciprocal-tile oracle; zhao_raster_rcp24_v4 is reachable inside the selected V3 root
+  - zhao_raster_perspuv_pairpipe: superseded  retained pre-Packet-B paired-perspective oracle; zhao_raster_perspuv_pairpipe_v2 is reachable inside the selected V3 root
+  - zhao_texture_metajoin: superseded  retained pre-Packet-B metadata-join oracle; zhao_texture_metajoin_v2 is reachable inside the selected V3 root
+  - zhao_texture_uv_join: superseded  retained pre-Packet-B UV-join oracle; zhao_texture_uv_join_v2 is reachable inside the selected V3 root
+  - zhao_texture_early_desc: superseded  retained pre-Packet-B early-descriptor oracle; zhao_texture_early_desc_v2 is reachable inside the selected V3 root
+  - zhao_texture_frag_expand: superseded  retained pre-Packet-B fragment-expander oracle; zhao_texture_frag_expand_v2 is reachable inside the selected V3 root
+  - zhao_texture_tmu_plan: superseded  retained pre-Packet-B TMU-plan oracle; zhao_texture_tmu_plan_v2 is reachable inside the selected V3 root
+  - zhao_texture_cache_pipe: superseded  retained pre-Packet-B cache-pipe oracle; zhao_texture_cache_pipe_v2 is reachable inside the selected V3 root
+  - zhao_texture_rsp_dispatch: superseded  retained pre-Packet-B response-dispatch oracle; zhao_texture_rsp_dispatch_v2 is reachable inside the selected V3 root
+  - zhao_texture_mosaic: superseded  retained pre-Packet-B mosaic oracle; zhao_texture_mosaic_v2 is reachable inside the selected V3 root
+  - zhao_texture_bilerp: superseded  retained pre-Packet-B transitive TMU bilerp oracle; zhao_texture_bilerp_lane_v2 is reachable inside the selected V3 root
+  - zhao_texture_bilerp_lane: superseded  retained pre-Packet-B bilerp-lane oracle; zhao_texture_bilerp_lane_v2 is reachable inside the selected V3 root
+  - zhao_texture_palette_res: superseded  retained pre-Packet-B palette-resolver oracle; zhao_texture_palette_res_v2 is reachable inside the selected V3 root
+  - zhao_texture_aux_pipe: superseded  retained pre-Packet-B auxiliary-pipe oracle; zhao_texture_aux_pipe_v2 is reachable inside the selected V3 root
+  - zhao_texture_material_combine_v2: superseded  retained pre-Packet-B combiner oracle; zhao_texture_material_combine_v3 is reachable inside the selected V3 root
   # --- composition tops ------------------------------------------------------
   # zhao_texture_island_top wires the eleven approved texture-island components
   # to each other so the island can be MEASURED and DRAWN THROUGH as one thing.
@@ -391,54 +377,33 @@ excluded:
   # in front of the fitter"; if a `composition` code is ever added, this is its
   # first member.
   # REFUTED and superseded, 2026-09-09. 8 DSP against S3.4's "reject DSP > 2"
-  # (docket D19q). Both islands instantiate material_combine_v2; nothing but the
-  # generated resource top instantiates this. Counting it charged the DSP budget
-  # 8 blocks for hardware the console will never hold. RTL retained.
-  - zhao_texture_combine: superseded  refuted II=1 form; material_combine_v2 is the live combiner in both islands
-  - zhao_texture_island_top: probe  the composed G1-D island; its blocks are counted individually
+  # (docket D19q). The retained G1-D island uses material_combine_v2; the Packet B
+  # selected V3 island uses material_combine_v3. Nothing selected instantiates
+  # this earlier combiner, so only its historical oracle evidence remains.
+  - zhao_texture_combine: superseded  refuted II=1 form; material_combine_v3 is the combiner inside the Packet B selected V3 root
+  - zhao_texture_island_top: probe  retained G1-D composition oracle; not a selected accounting root and its descendants do not enter the census through it
   # --- P0-C, 2026-09-08 ------------------------------------------------------
-  # The V3 composition top. Same shape and same reason code as
-  # zhao_texture_island_top directly above: a composition that puts real
-  # inter-block seams in front of the fitter, whose components are each counted
-  # individually. It is the REPLACEMENT for that one, not an addition -- both
-  # exist simultaneously and deliberately, because the old top is gate 3's
-  # oracle and editing an oracle destroys the comparison.
+  # The old G1-D composition remains the excluded probe above. The V3 composition
+  # is instead the single selected texture accounting root; its current Packet B
+  # descendants are counted inside it rather than as independent selected leaves.
+  # Both composition sources remain because the old top is an oracle.
 
-  # FRAGROB's replacement half: the expander that turns one fragment into its
-  # sample requests, with no allocation authority of its own. It IS production
-  # RTL and it IS fitted (323 ALM at the time of writing, a figure since made
-  # stale by the f_ctx_i port). Nothing in the RESOURCE top instantiates it yet,
-  # which is exactly what `unused` means.
-
-  # Packet C's metadata bank, 256 x 40 = one M10K, one writer and one
-  # synchronous reader. Written as a LEAF first, per the post-fit brief's "use
-  # small functional/leaf experiments first" -- deliberately not yet wired into
-  # the island.
-  # STALE, 2026-09-08: metajoin IS integrated now -- zhao_texture_island_v3_top
-  # instantiates it (u_metajoin), and that top is itself `excluded` on the
-  # grounds that its blocks are counted individually. So this block is
-  # instantiated and NOT counted, which understates the planned machine. Left
-  # here rather than silently moved because moving it changes the census total
-  # and that should happen in one deliberate pass, with the number stated.
-
-  # --- built, tested, not yet instantiated (packet 2 moves these to `top:`) ---
-  # Both are leaf-tested AND chain-tested against the real expander
-  # (desc_join_expand_directed, 15 checks). They are excluded today because
-  # nothing instantiates them yet, and counting them beside the early arrays
-  # they REPLACE would double the state they exist to consolidate.
+  # FRAGROB, the old fragment expander, metadata join and descriptor/UV joins are
+  # retained as oracle generations in the explicit superseded rows above. Their
+  # Packet B successors are reachable descendants and have no exclusion rows.
 
   # --- a CANDIDATE, not a plan ------------------------------------------------
   # One scheduler, two lanes, bit-identical to perspuv_svc over 352 U/V pairs.
   # It REPLACES perspuv_svc if FIT GATE 3 accepts it, so counting it now would
   # double against a block that is already in `top:`. It moves in, and svc moves
   # out, together or not at all.
-  # THE SWAP HAPPENED, 2026-09-09. Both island tops now instantiate the
-  # pair-pipe, so it is INSIDE (reachable from a counted top) and must not
-  # also be declared absent here -- and perspuv_svc, now unreachable, must be.
-  # Doing one edit without the other leaves the manifest self-contradictory,
-  # which is why this is an atomic pair.
+  # THE PRE-PACKET-B SWAP HAPPENED, 2026-09-09. Both island tops then
+  # instantiated the original pair-pipe, so it was INSIDE at that revision.
+  # Packet B subsequently selected pairpipe_v2 in the V3 root and retired this
+  # implementation to the explicit superseded oracle row above.
   #
-  # FIT GATE 3, both leaf halves at the same source, same seed, same tool:
+  # HISTORICAL FIT GATE 3, both old leaf halves at the same source, seed and tool.
+  # These figures do not measure pairpipe_v2 or the Packet B hierarchy:
   #   ALM       svc 1,886 -> pairpipe   794   -1,092 (-58%)
   #   registers svc 3,216 -> pairpipe   820   -2,396 (-74%)
   #   Fmax      svc 105.19 -> pairpipe 119.25  +14.06
@@ -446,7 +411,7 @@ excluded:
   # Equivalence in composition checked before the swap landed: all five
   # composed suites at their exact baseline (119/126/132/31/25) and GATE 3
   # paired 392 records byte-identical in rgb, alpha, tag, refused and ORDER.
-  - zhao_raster_perspuv_svc: superseded  by zhao_raster_perspuv_pairpipe on FIT GATE 3 (-1,092 ALM, -2,396 registers, +14 MHz, same DSP)
+  - zhao_raster_perspuv_svc: superseded  by zhao_raster_perspuv_pairpipe_v2 inside the Packet B selected V3 root; earlier FIT GATE 3 pairpipe figures are historical only
 
   # Simulation-only wrapper exposing zhao_texture_ident_pkg's pack/unpack
   # functions to the C++ harness. Never in the machine.
@@ -500,30 +465,10 @@ excluded:
   # counted through its real parents, not here.
   - zhao_probe_v3rq_queue: probe  characterisation wrapper for one production-shaped ready queue (5.7)
 
-  # MATERIAL.COMBINE.V2 is the paired-phase replacement built beside V1 per the
-  # owner's recovery brief, which is explicit that V1 stays as the historical
-  # comparison rather than being erased.
-  #
-  # CORRECTED 2026-09-07. This entry used to say "V2 is not instantiated by
-  # anything yet ... it goes into the island only after the release gate
-  # closes", and justified declaring it absent on the grounds that "counting a
-  # block the machine does not contain would inflate every budget it appears
-  # in". THE ISLAND CONTAINS IT. `zhao_texture_island_top.sv:1956` instantiates
-  # it unconditionally as `u_combine` with `.NCTX(8)` -- there is no generate
-  # block anywhere in that file -- and the only mention of V1 there is a comment
-  # at line 1915.
-  #
-  # So the stated reason now runs the other way: the island's LIVE combiner is
-  # uncounted here, which understates every island budget rather than inflating
-  # it. Combined with the fact that no fit target defined V2 as a top until
-  # today, its cost was invisible in both accounting domains at once. See
-  # reports/V31-ISLAND-BUDGET-BLOCKED-20260907.md.
-  #
-  # STILL DECLARED ABSENT FROM THE PRODUCTION TOP, deliberately and only that:
-  # zhao_prod_top instantiates V1, and swapping it is a decision about what the
-  # next production fit measures. This file's own TERRAIN.VISIBLE note gives the
-  # rule -- such a change is "a decision to take deliberately rather than as a
-  # side effect". Recording the truth is not the same as making that change.
+  # MATERIAL.COMBINE.V2 was the retained G1-D island's paired-phase combiner and
+  # remains part of that excluded composition oracle. Packet B moved the selected
+  # V3 root to material_combine_v3, so V2 is now explicitly `superseded` above.
+  # Its prior tests and fit evidence are historical, not current Packet B evidence.
 
   # TERRAIN.VISIBLE -- the visible-patch builder. It COMPOSES
   # zhao_terrain_island_dir, which is already counted above, and nothing
@@ -628,9 +573,9 @@ excluded:
   # --- superseded implementations -------------------------------------------
   # One newer implementation of the same logical block is chosen above. These
   # are the pairs the source-inventory total counted twice.
-  - zhao_texture_cache: superseded  by zhao_texture_cache_pipe (C0-C4, M10K-backed)
-  - zhao_texture_tmu: superseded  by zhao_texture_tmu_pipe
-  - zhao_texture_aux: superseded  by zhao_texture_aux_pipe
+  - zhao_texture_cache: superseded  by zhao_texture_cache_pipe_v2 inside the Packet B selected V3 root
+  - zhao_texture_tmu: superseded  by the Packet B texture plan/cache/dispatch path inside the selected V3 root
+  - zhao_texture_aux: superseded  by zhao_texture_aux_pipe_v2 inside the Packet B selected V3 root
   - zhao_raster_texjoin: superseded  by the retained zhao_raster_texjoin_v2 behavioural oracle
   # 2026-09-13 TEXJOIN ACCOUNTING RETIREMENT. The source, standalone target,
   # directed/differential oracle tests and historical fit evidence remain. V3OWN
@@ -641,42 +586,17 @@ excluded:
   # It remains a retained differential specimen, but it is not the selected
   # lifecycle owner and must not put a second root into the census.
   - zhao_texture_fragrob: not-yet-adopted  retained differential candidate beside the TEXJOIN oracle; zhao_texture_v3own is the sole owner inside the selected V3 subsystem
-  - zhao_raster_perspuv: superseded  by zhao_raster_perspuv_svc (two lanes)
-  - zhao_raster_rcp24: superseded  by zhao_raster_rcp24_svc (scheduled)
+  - zhao_raster_perspuv: superseded  by zhao_raster_perspuv_pairpipe_v2 inside the Packet B selected V3 root
+  - zhao_raster_rcp24: superseded  by zhao_raster_rcp24_v4 inside the Packet B selected V3 root
 
-  # --- V3 RCP arithmetic tile: ADOPTED 2026-09-09, R3 ------------------------
-  # OWNER RULING 2026-09-09 (reports/OWNER-RULINGS-20260909-2300.md R3): "Use V3
-  # with NCTX=12, but note this down as possible to reverse if we ever find
-  # ourselves wit enough DSPs to flex."
-  #
-  # The swap WAS PERFORMED the same day: zhao_texture_island_v3_top instantiates
-  # zhao_raster_rcp24_v3 #(.NCTX(12), .TOKW(14)) where it held rcp24_svc, so
-  # the tile and its leaves (rcp24_mul, ticketq, ticketq_rh) are counted INSIDE
-  # the island's composed fit now and carry no excluded rows -- the same move
-  # the island's other children made when it became a counted top. S26.1's "do
-  # not merge until the shared record and credit contracts are fixed" was
-  # discharged by P0-C: v3own owns the record and credit contracts the tile
-  # rides on.
-  #
-  # NCTX=12 was the CONDITION, not a preference. Measured at the island's own
-  # parameters: NCTX=8 gives 5.78 clk/recip against the tile's OWN 4.6
-  # acceptance threshold and fails 1 of 52 checks; NCTX=12 gives 4.38 and
-  # passes 52/52. Buys -3 DSP, clearing a live max_dsp: 14 breach, at the price
-  # of four more contexts of per-context state (svc held that state in FLOPS,
-  # so it was not free) and +7 M10K.
-  #
-  # REVERSAL CONDITION, recorded because the owner asked for it explicitly: if
-  # the DSP budget ever has slack, revert to zhao_raster_rcp24_svc at NCTX=8 and
-  # reclaim the registers. The trigger is DSP HEADROOM, not area pressure.
-  # Anyone reversing this must also know that GATE4's -816 ALM was measured at
-  # NCTX=12 and is very likely an overstatement elsewhere; the
-  # parameter-invariant halves are the DSP halving and the +7 M10K.
-  #
-  # zhao_raster_rcp24_svc is what the reversal would restore. It is still
-  # instantiated by the zhao_texture_island_top ORACLE (excluded: probe) and by
-  # the shell test bench's DEPTHQUANT service, so the file and its differential
-  # test stay; it is simply no longer in the machine.
-  - zhao_raster_rcp24_svc: superseded  by zhao_raster_rcp24_v3 at NCTX=12 (R3, 2026-09-09); reversal condition above -- revert on DSP headroom
+  # --- Packet B reciprocal tile ---------------------------------------------
+  # HISTORICAL ONLY: the 2026-09-09 R3 ruling selected rcp24_v3 at NCTX=12 and
+  # its then-current V3 island closure had standalone/composed throughput and
+  # resource receipts. Packet B replaced that child with zhao_raster_rcp24_v4.
+  # V4 is now reachable from the one selected island root; V3 and the older SVC
+  # remain oracle/standalone-fit material under `superseded` rows. None of the
+  # V3/SVC ALM, DSP, M10K or throughput figures is a current Packet B receipt.
+  - zhao_raster_rcp24_svc: superseded  by zhao_raster_rcp24_v4 inside the Packet B selected V3 root; retained reversal/oracle specimen and historical fit target
 
   # The V3 texture-island owner/completion experiment (section 26.1). These are the
   # FIRST implementation task and are deliberately not composed: section 26.1 says

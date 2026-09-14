@@ -1,182 +1,243 @@
-# Contract — TEXTURE.COMBINE (Material combiner)
+# Contract — TEXTURE.COMBINE (R9 fixed material combiner)
 
-> Ledger: `design/blocks.yml` · gpu clock · maturity SPECIFIED
-> RTL: not built
-> Reference: `zref::material::combine` — **WRITTEN 2026-09-05**, `reference/include/zref/zref_material.hpp`
+> Ledger: `design/blocks.yml` · gpu clock · Packet-B required candidate:
+> `zhao_texture_material_combine_v3`
+> Required reference authority: `zref::material::combine`
 
-## Purpose and exclusions
+## Purpose and authority
 
-TEXTURE.COMBINE performs the fixed recipe arithmetic over the zero-to-three
-samples a fragment asked for, producing the single RGB and alpha that
-`RASTER.FRAGMENT` blends.
+TEXTURE.COMBINE consumes the texture owner's committed zero-to-three typed TMU
+planes plus the independent typed AUX plane and produces the one complete
+48-bit texture result accepted by `RASTER.FRAGMENT`.
 
-**Written 2026-09-03.** It is the other half of `MATERIAL.RESOLVE`, and that
-contract says why they are one piece of work in two files:
+Owner ruling R9 in `reports/MATERIAL_ARCHITECTURE.md` is the sole arithmetic
+authority. Earlier six-recipe prose, `zhao_texture_material_combine_v1/v2`, the
+old island, and their matching historical oracle are retained only as migration
+oracles. Agreement between stale implementations cannot override R9.
 
-> The surviving TEXJOIN behaviour returns **sample 0 for every recipe**, and
-> the three-sample terrain recipes were absent from that RTL entirely. So when
-> this block starts returning real `sample_count` and `recipe` values, the
-> combiner must exist to consume them — shipping the resolver alone would make
-> the machine confidently fetch samples nothing combines.
+This block does not sample, resolve a material binding, blend the framebuffer,
+apply fog, quantise toon bands, or consume AUX tag/strength as colour. It owns
+only fixed material arithmetic, required-plane status/index reduction, and its
+bounded paired-phase schedule.
 
-`TEXTURE.FRAGROB` explicitly refuses to own this arithmetic, and
-`reports/islandrearchitecture5.md` §3.3 already budgets it as **its own
-registered II=1 pipeline** — 650 ALM, 500 registers, 1–4 M10K, 0–2 DSP.
+## Clock and reset
 
-**Exclusions, each a specific refusal:**
+Single `gpu` clock. Reset is asynchronous active-low assert and synchronous
+release. It clears all valid/occupancy/scheduler state and all counters. Source
+planes are owned by `zhao_texture_v3own`; the combiner owns no texture memory.
 
-* **No sampling.** The samples arrive; `TEXTURE.TMU` fetched them.
-* **No resolution.** The recipe arrives; `MATERIAL.RESOLVE` looked it up.
-* **No blending against the framebuffer.** That is `RASTER.FRAGMENT`'s, and the
-  distinction matters: this combines *sources with each other*, that combines
-  the *result with what is already there*.
-* **No toon quantisation.** `RASTER.TOON` owns the cel band.
-* **No fog.** See the ordering question in
-  `reports/FUNDAMENTALS-DECISIONS-NEEDED.md` D-5 — fog's position relative to
-  toon is an open owner decision and this block must not pre-empt it.
+## Inputs and outputs
 
-## The recipes
+Parameters are `NCTX=8`, `TAGW=14`, `READ_LATE=0`, and `SLOTW=6` by default.
+One held job arrives on `f_valid_i/f_ready_o` with:
 
-Six encodings, matching the constants already in `zhao_raster_texjoin_v2.sv`
-and `zhao_texture_fragrob.sv` so nothing is renumbered:
+```text
+f_sample_count_i[1:0]
+f_recipe_i[2:0]
+f_weight_i[7:0]
+f_aux_required_i
+f_base_rgb_i[23:0]
+f_base_a_i[7:0]
+f_tag_i[TAGW-1:0]
+```
 
-| id | recipe | arithmetic |
-|---|---|---|
-| 0 | `PASSTHRU` | sample 0 unchanged |
-| 1 | `MODULATE` | `s0 * s1` |
-| 2 | `MODULATE2X` | `s0 * s1 * 2`, saturating |
-| 3 | `LERP` | `lerp(s0, s1, recipe_weight)` |
-| 4 | `ADD_SAT` | `s0 + s1`, saturating |
-| 5 | `MASK` | `s0` where `s1` passes, else transparent |
+In copy mode, the four complete 48-bit planes are `f_s0_i`, `f_s1_i`,
+`f_s2_i`, and `f_aux_i`. In read-late mode the job supplies `f_slot_i`; the
+combiner emits `src_rd_valid_o/src_rd_slot_o` and receives the synchronous
+`src_s0_i/src_s1_i/src_s2_i/src_aux_i` values. The mode changes carriage, not
+arithmetic, phase demand, status, or ordering.
 
-**A seventh encoding is REFUSED and counted**, not treated as passthrough. The
-recipes are a closed set by ruling, and quietly accepting an unknown one is how
-a content bug becomes a shipped picture nobody questions.
+The held output is `o_valid_o/o_ready_i` with `o_result_o[47:0]` and unchanged
+`o_tag_o`. Exact aliases are `o_rgb_o`, `o_a_o`, `o_raw_index_o`,
+`o_status_o`, and `o_refused_o`.
 
-## Q formats and rounding
+```text
+result[47:40] = status
+result[39:32] = sample-0 raw index
+result[31:24] = alpha
+result[23:0]  = RGB
+out_refused   = status[0]
+```
 
-Every sample is RGB888 plus `alpha8`. Products use **unit8** semantics —
-`spec/qformats.md` §2: **value = raw/256, so 255 is the largest representable
-and NOT 1.0.** A modulate by 255 therefore darkens very slightly, which is the
-ratified behaviour and must not be "fixed" to 255/255.
+All job fields, source planes, read-late identity, and output fields hold
+field-for-field under backpressure. No valid is a function of its own ready.
+The accepted tag is never reconstructed or reordered.
 
-**One rounding per result**, round-half-up. `zhao_raster_blend`'s existing
-unit8 arithmetic is the precedent and should be reused rather than restated —
-the console already has one unit8 multiply law.
+## Arithmetic helpers
 
-## Input and output packet layouts
+The helpers operate independently on each RGB byte. Every multiply/add is
+widened before shift or saturation:
 
-**In**, ready/valid: `{ sample_count[1:0], recipe[2:0], recipe_weight (unit8),
-s_rgb[3] (24), s_a[3] (8), has_aux, aux_rgb, aux_a, frag_tag }`.
+```text
+rescale_s(x,8)   = (x + 128) >>> 8
+unit_mul8(a,b)   = (a*b + 128) >> 8
+modulate2x8(a,b) = sat_u8((a*b + 64) >> 7)
+lerp8(a,b,w)     = sat_u8(a + rescale_s((b-a)*w,8))
+```
 
-**Out**: `{ rgb (24), a (8), frag_tag }`.
+`rescale_s` uses a signed arithmetic shift, so exact negative and positive ties
+round toward positive infinity. MODULATE2X has one direct rounding; applying
+unit multiply and then doubling is a different and rejected law. Unit8 remains
+raw/256, so 255 is not mathematical 1.0.
 
-`frag_tag` rides through untouched so FRAGROB can retire in allocation order —
-this block must not reorder, and a reorder here would be invisible in a
-triangle count and obvious in a capture CRC.
+## Eight recipes and exact counts
 
-## Backpressure rules
+| ID | recipe | legal count | RGB | alpha |
+|---:|---|---:|---|---|
+| 0 | PASSTHRU | 0 or 1 | count 0: admitted base; count 1: `s0.rgb` | count 0: admitted base; count 1: `s0.a` |
+| 1 | MODULATE | exactly 2 | `unit_mul8(s0.rgb,s1.rgb)` | `s0.a` |
+| 2 | MODULATE2X | exactly 2 | `modulate2x8(s0.rgb,s1.rgb)` | `s0.a` |
+| 3 | LERP | exactly 2 | `lerp8(s0.rgb,s1.rgb,weight)` | `s0.a` |
+| 4 | ADD_SAT | exactly 2 | `sat_u8(s0.rgb+s1.rgb)` | `s0.a` |
+| 5 | MASK | exactly 2 | `s0.rgb` | `unit_mul8(s0.a,s1.a)` |
+| 6 | TERRAIN_DETAIL_LIGHT | exactly 3 | `unit_mul8(modulate2x8(s0.rgb,s1.rgb),s2.rgb)` | `s0.a` |
+| 7 | TERRAIN_DETAIL_MASK | exactly 3 | `modulate2x8(s0.rgb,s1.rgb)` | `unit_mul8(s0.a,s2.a)` |
 
-Ready/valid, **II=1** per the island budget: one fragment per clock, fully
-pipelined. It is the last arithmetic before the fragment leaves the texture
-island, so a stall here backs up the whole island.
+Count zero is legal only for PASSTHRU and reads no TMU sample. It returns the
+admitted base, never a null or stale `s0`. Recipes 1–4 do not multiply alpha.
+MASK is an alpha product, not a nonzero-alpha Boolean gate. Both terrain recipes
+use MODULATE2X for their first detail layer.
 
-## Memory ownership
+Every count other than the exact row above is malformed. It becomes
+`material_refused`; it does not degrade to PASSTHRU or read an unrequested
+plane. The owner/top separately ensures every declared required source receives
+logical issue and a terminal refusal so the malformed fragment still drains.
 
-None. It is arithmetic on values handed to it.
+## Required planes, AUX, status, and raw index
 
-## Latency (fixed or variable)
+The required sample mask is a function of count:
 
-`fixed`. The pipeline depth is an implementation choice; the throughput is not.
+```text
+0 -> 000
+1 -> 001
+2 -> 011
+3 -> 111
+required_mask = {aux_required,sample2,sample1,sample0}
+```
 
-## Overflow and malformed-input behaviour
+A TMU plane is `{status8,raw_index8,alpha8,RGB24}`. AUX is separately typed as
+`{status8,tag8,strength8,24'd0}`. The combiner reads only AUX status. AUX never
+occupies or substitutes for sample 2, and no recipe consumes AUX tag or strength
+as RGB, alpha, weight, or raw index.
 
-* **`sample_count == 0`** produces the fragment's vertex colour unchanged —
-  an untextured surface is legal and common, and must not require a dummy
-  sample.
-* **A recipe naming more samples than `sample_count` supplied** is malformed
-  and refused: `MODULATE` with one sample cannot multiply by a sample that was
-  never requested. Counted, not silently degraded to passthrough — which is
-  exactly what the surviving TEXJOIN does today and why a wrong material looks
-  plausible.
-* **Saturation is reported.** `ADD_SAT` and `MODULATE2X` saturate by design;
-  the count tells content authors when a recipe is clipping constantly.
+Final status is the bitwise OR of only committed required-plane statuses plus
+`{7'b0,material_refused}`. Bits `[7:1]` are reserved-zero at Packet-B producers
+but remain eight-bit data through the reduction. Unrequested planes and
+uncommitted storage are never consulted.
 
-## Scalar reference function
+Final raw index is zero at count zero and otherwise exactly the committed sample
+0 raw index. Samples 1/2, AUX, palette RGB, and recipe arithmetic cannot replace
+it.
 
-**WRITTEN 2026-09-05** — `zref::material::combine`, in
-`reference/include/zref/zref_material.hpp`, taking
-`(recipe, weight, samples, count, base, frag_tag, ledger)`. It calls
-`zref::unit_mul` rather than restating the unit8 product, as this contract
-requires.
+When final status is nonzero or material is malformed, the terminal visible
+value is exactly RGB `24'hFF00FF`, alpha `8'hFF`; status and the sample-0 index
+rule remain intact. The result still handshakes normally so the owner releases.
+The top's frame-fault mechanism observes every nonzero status and material
+refusal even when no useful colour is produced.
 
-<!-- The bare symbol is cited FIRST and on its own, with the parameter list
-     moved out of the backticks. V17 reads this section and takes the first
-     backticked `zref::...`, matching `[A-Za-z0-9_:]+` up to a closing
-     backtick -- so a symbol written with its arguments attached never closes,
-     the rule falls through to the NEXT zref symbol it finds, and reports that
-     "the contract cites zref::unit_mul". The citation was right and the
-     message named a symbol that was merely mentioned in passing. -->
+## Scheduler and cadence
 
-**One thing this contract leaves open, and the oracle refuses to guess.** The
-overflow section says `sample_count == 0` returns "the fragment's vertex
-colour", but the In-packet list has no vertex-colour field — the only
-non-sample colour in it is `has_aux / aux_rgb / aux_a`. The reference therefore
-takes that colour as an explicit `base` parameter instead of binding it to a
-packet field. When the RTL is written, whichever field carries it is passed in
-and the two agree by construction; hard-coding a guess into the arbiter would
-be the worse error.
+The required implementation has one physical paired phase engine and may issue
+at most one paired phase per clock. One phase can perform up to two independent
+product jobs. The exact legal schedule is:
 
-## Directed tests
+| recipe | paired phases | meaningful product jobs |
+|---|---:|---:|
+| PASSTHRU | 1 | 0 |
+| MODULATE | 2 | 3 |
+| MODULATE2X | 2 | 3 |
+| LERP | 2 | 3 |
+| ADD_SAT | 1 | 0 |
+| MASK | 1 | 1 |
+| TERRAIN_DETAIL_LIGHT | 3 | 6 |
+| TERRAIN_DETAIL_MASK | 2 | 4 |
 
-**WRITTEN 2026-09-05** — `tests/texture/material_combine_directed.cpp`,
-35 checks, green. Every case this section asked for, plus one the writing of it
-turned up:
+A refused/malformed or source-status-failed job takes one terminal phase. Define:
 
-* each of the six recipes against hand-computed values at the unit8 corners
-  (0, 1, 128, 255) — including that modulate by 255 is **not** identity;
-* **and the exact boundary of that, swept across all 256 inputs.**
-  `unit_mul(a,255) = floor((255a+128)/256)`, which equals `a` precisely when
-  `a <= 128`. So modulate by 255 is **identity for every a ≤ 128 and `a-1`
-  above it** — it does not "always darken", it darkens for less than half the
-  range. Two drafts of that comment were wrong before the sweep was written;
-  a test comment that misstates the law it pins is worse than none, because the
-  assertion still passes and nothing ever contradicts it;
-* `sample_count == 0` returning vertex colour unchanged;
-* a recipe demanding more samples than supplied, refused and counted;
-* a seventh recipe encoding refused;
-* `frag_tag` preserved through every path, because retirement order depends on
-  it;
-* saturation reported for `ADD_SAT` and `MODULATE2X`.
+```text
+J1 = PASSTHRU, ADD_SAT, MASK, or any early refused/status-failed job
+J2 = valid MODULATE, MODULATE2X, LERP, or TERRAIN_DETAIL_MASK job
+J3 = valid TERRAIN_DETAIL_LIGHT job
+phase_demand = J1 + 2*J2 + 3*J3
+```
 
-## Randomized differential tests
+A backlogged runnable phase set must issue one phase per post-fill clock until it
+drains. A homogeneous one-phase stream can complete one material per clock after
+fill; two- and three-phase recipes consume two and three issue clocks per job.
+No one-material-job-per-clock claim is legal for a multi-phase recipe.
 
-Planned, against the scalar model over random recipes, counts and sample
-values, with a coverage guard that every recipe and every refusal class was
-actually reached — the repository has shipped random tests that never hit their
-interesting case more than once.
+`idle_o` must be high only when accepted context, runnable phase state,
+payload/scratch reads, arithmetic/writeback, continuations, completion state,
+and held output are all empty.
 
-## Integration capture cases
+## Counters
 
-None on hardware. **The composed case is `MATERIAL.RESOLVE` → `TEXTURE.TMU` →
-FRAGROB → COMBINE**, which is the first point at which a real material produces
-a real pixel.
+All are 32-bit reset-zero modulo counters and move only on their named event:
 
-## Synthesis / resource ceiling
+* `jobs_accepted_o`: `f_valid_i && f_ready_o`;
+* `jobs_completed_o`: `o_valid_o && o_ready_i`, once per material;
+* `phases_issued_o`: every accepted physical paired-phase launch;
+* `phases_completed_o`: every corresponding physical phase result/writeback;
+* `refused_material_o`: accepted jobs with an illegal recipe/count pairing;
+* `saturated_add_o`: accepted ADD_SAT jobs whose RGB result clips;
+* `saturated_mul2x_o`: accepted MODULATE2X/detail jobs whose direct 2x result clips;
+* `jobs_by_recipe_o[8]`: meaningful physical product jobs, accumulated in the
+  element selected by the accepted recipe; per-material demand is exactly
+  `0/3/3/3/0/1/6/4`, not one increment per accepted material;
 
-The island budget's own line: **650 ALM, 500 registers, 1–4 M10K, 0–2 DSP**,
-with the §3.4 tripwire `reject DSP > 2`. Registered in
-`design/fit_targets.yml` with that rule when the RTL exists.
+At complete drain the exact accounting is:
 
-## Notes
+```text
+CJ = jobs_accepted_o
+CD = jobs_completed_o
+PI = phases_issued_o
+PC = phases_completed_o
+CJ == CD
+PI == PC == phase_demand
+```
 
-**It must reuse the existing unit8 multiply rather than define a second one.**
-That law already exists, and `zhao_raster_fragment` was explicitly built to
-call it rather than restate it. A second unit8 multiply is the same defect
-class as the duplicated flat-shade law found earlier today: two arithmetics
-that agree until they do not, with nothing to say which is right.
+Saturation counters count the documented job event rather than each clipping
+channel. Stalled outputs and continuations cannot increment twice. Issued and
+completed phase counters are distinct instruments; a dropped writeback cannot
+make both move together.
 
-**This block is why the terrain three-sample recipes matter.** They were absent
-from the surviving TEXJOIN RTL entirely, so terrain material work has been
-blocked on a combiner nobody had written — another instance of the audit's
-pattern: an endpoint built, the connecting organ missing.
+## Reference and compatibility boundary
+
+`reference/include/zref/zref_material.hpp` must implement R9
+`zref::material::combine`. New V3 tests and product decisions use it.
+
+Historical V1/V2/old-island tests use the retained
+`tests/texture/legacy_material_v2_oracle.hpp` under
+`zref::legacy_material_v2`. Outside PASSTHRU/count-1/no-AUX success, disagreement
+between that oracle and R9 is expected evidence of the superseded arithmetic,
+not permission to change R9.
+
+## Verification
+
+Packet B requires:
+
+1. hand-computed corners and exhaustive byte boundaries for all helpers,
+   including negative LERP ties and direct MODULATE2X cases that distinguish it
+   from unit-multiply-then-double;
+2. every recipe and exact legal count, plus every count mismatch;
+3. alpha-specific controls for recipes 1–7 and both MASK variants;
+4. count-zero admitted-base behavior with no sample read;
+5. required-status OR, reserved-bit transport, loud terminal error, and exact
+   sample-0 raw index under palette and status variation;
+6. AUX present/absent and failing while proving tag/strength never influence
+   arithmetic or sample 2;
+7. copy/read-late equivalence and full tag/result hold under independent stalls;
+8. homogeneous and mixed cadence proving jobs and exact phase demand;
+9. renamed committed mutants for every stale arithmetic family, count fallback,
+   raw-index replacement, status omission, AUX-as-sample-2, and phase reissue.
+
+Every detector must have a demonstrated positive control. Correct R9 tests must
+not use agreement with the old combiner as their oracle.
+
+## Evidence boundary
+
+Packet B's gate must prove functional arithmetic, identity/status/index
+carriage, backpressure, and cadence. Packet B contains no Quartus fit and banks
+no ALM, DSP, M10K, or Fmax result. The former 650-ALM/0–2-DSP line is a budget
+constraint, not evidence. Physical claims wait for G8A after Packets A–E are
+green.

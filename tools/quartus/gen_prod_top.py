@@ -22,8 +22,10 @@ would let the fitter constant-fold whole blocks away and report a beautiful,
 meaningless total; feeding every block the SAME source would let it merge
 common logic across blocks. Different seeds per instance defeat both.
 
-Every output is XOR-reduced into a per-instance register and folded to one
-pin, so nothing is dangling and nothing is optimised away for having no load.
+Every output is XOR-reduced, salted by a distinct per-instance source bit, then
+folded into one pin. The salt prevents two aliased output ports from cancelling
+one another and making their shared producer dead; nothing is dangling or
+optimised away merely for having no load.
 """
 import io
 import os
@@ -31,7 +33,18 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from check_prod_manifest import read_list_section, read_manifest  # noqa: E402
+from check_prod_manifest import (  # noqa: E402
+    MANIFEST,
+    ManifestSchemaError,
+    read_list_section,
+    read_manifest,
+    read_parameter_overrides,
+    validate_parameter_overrides,
+    _eval_parameter_expr,
+    _module_parameter_block,
+    _split_top_level_commas,
+    _sv_default_number,
+)
 from module_graph import build, strip_comments  # noqa: E402
 
 OUT = "fpga/rtl/prod/zhao_prod_top.sv"
@@ -54,7 +67,12 @@ def port_header(text, mod):
     # `module zhao_shell_top import zhao_pkg::*; #( ... ) ( ... )`. Missing this
     # makes the PARAMETER list parse as the port list, which comes back empty
     # and silently drops the console's whole integrated shell from the count.
-    s = re.sub(r"^\s*import\b[^;]*;", "", s)
+    s = body[m.end():]
+    while True:
+        imported = re.match(r"\s*import\b[^;]*;", s)
+        if imported is None:
+            break
+        s = s[imported.end():]
     if re.match(r"\s*#\s*\(", s):
         i = s.index("(")
         depth = 0
@@ -188,49 +206,31 @@ def unpacked_count(dims):
 
 def param_block(text, mod):
     """The `#( ... )` text of `mod`, or None."""
-    body = strip_comments(text)
-    m = re.search(r"\bmodule\s+" + mod + r"\b", body)
-    if not m:
-        return None
-    s = re.sub(r"^\s*import\b[^;]*;", "", body[m.end():])
-    if not re.match(r"\s*#\s*\(", s):
-        return None
-    i = s.index("(")
-    depth = 0
-    for j in range(i, len(s)):
-        if s[j] == "(":
-            depth += 1
-        elif s[j] == ")":
-            depth -= 1
-            if depth == 0:
-                return s[i + 1:j]
-    return None
+    return _module_parameter_block(text, mod)
 
 
 def sv_number(tok):
-    """`12'd7`, `8'hFF`, `4'b1010` or a plain integer, as a Python int."""
-    m = re.match(r"^\s*(?:\d+)?'([sS]?)([dDhHbBoO])([0-9a-fA-FxXzZ_]+)\s*$", tok)
-    if m:
-        base = {"d": 10, "h": 16, "b": 2, "o": 8}[m.group(2).lower()]
-        return int(m.group(3).replace("_", ""), base)
-    return int(tok.strip())
+    """A scalar integral SystemVerilog literal as a Python int."""
+    return _sv_default_number(tok)
 
 
-def resolve_params(text, mod):
-    """Every parameter of `mod` as an integer, using its DEFAULT value.
+def resolve_params(text, mod, overrides=None):
+    """Every parameter of ``mod`` as an integer at the selected production value.
 
     Port widths are written in the module's own parameters (`[ENTRIES-1:0]`),
-    which do not exist in the resource top's scope. Substituting the defaults
-    is what makes the generated wires declarable at all -- and the defaults are
-    the right values, because a resource top instantiates every block as the
-    block ships.
+    which do not exist in the resource top's scope. Substituting defaults keeps
+    the generated wires declarable; explicit selected-production overrides are
+    seeded first so dependent defaults resolve from the value actually emitted.
     """
     block = param_block(text, mod)
-    out = {}
+    out = {
+        name: value if isinstance(value, int) else sv_number(value)
+        for name, value in (overrides or {}).items()
+    }
     if not block:
         return out
     raw = {}
-    for decl in re.split(r",(?![^\[]*\])", block):
+    for decl in _split_top_level_commas(block):
         m = re.search(r"([A-Za-z_]\w*)\s*=\s*(.+)$", decl.strip(), re.S)
         if m:
             raw[m.group(1)] = m.group(2).strip()
@@ -246,18 +246,8 @@ def resolve_params(text, mod):
 
 
 def eval_sv(expr, params):
-    """A SystemVerilog constant expression as an int, or raise."""
-    e = expr.strip()
-    e = re.sub(r"\$clog2", "clog2", e)
-    e = re.sub(r"(\d+)?'[sS]?[dDhHbBoO][0-9a-fA-F_]+",
-               lambda m: str(sv_number(m.group(0))), e)
-    for name in sorted(params, key=len, reverse=True):
-        e = re.sub(r"(?<![\w$])" + name + r"(?![\w])", str(params[name]), e)
-    if re.search(r"[A-Za-z_]", e.replace("clog2", "")):
-        raise ValueError("unresolved: " + e)
-    val = eval(e, {"clog2": lambda x: max(1, (int(x) - 1).bit_length()),
-                   "__builtins__": {}}, {})
-    return int(val)
+    """A supported SystemVerilog constant expression as an int, or raise."""
+    return _eval_parameter_expr(expr, params)
 
 
 def width_expr(widths, params=None):
@@ -317,15 +307,44 @@ def census_slots(tops, retired):
             if module in live]
 
 
-def main():
-    tops, _excluded = read_manifest()
-    retired = read_list_section("retired_census_slots")
+def instance_declaration_lines(mod, pre, conns, overrides=None):
+    """Emit one named instance, preserving the legacy no-override bytes."""
+    lines = []
+    if overrides:
+        lines.append("  %s #(" % mod)
+        lines.append(
+            "      " + ",\n      ".join(
+                ".%s(%s)" % (name, overrides[name])
+                for name in sorted(overrides)
+            )
+        )
+        lines.append("  ) %s_i (" % pre)
+    else:
+        # This is intentionally the historical spelling: modules without an
+        # explicit manifest override must retain byte-identical generated text.
+        lines.append("  %s %s_i (" % (mod, pre))
+    lines.append("      " + ",\n      ".join(conns))
+    lines.append("  );")
+    return lines
+
+
+def main(manifest_path=MANIFEST, out_path=OUT, check=None):
+    tops, _excluded = read_manifest(manifest_path)
+    retired = read_list_section("retired_census_slots", manifest_path)
     try:
+        parameter_overrides = read_parameter_overrides(manifest_path)
         slots = census_slots(tops, retired)
-    except ValueError as exc:
+    except (ManifestSchemaError, ValueError) as exc:
         sys.stderr.write("gen_prod_top: %s\n" % exc)
         return 2
     decl, _inst = build()
+    try:
+        coerced_parameter_overrides = validate_parameter_overrides(
+            parameter_overrides, tops, decl
+        )
+    except ManifestSchemaError as exc:
+        sys.stderr.write("gen_prod_top: %s\n" % exc)
+        return 2
     files = {}
     lines = []
     skipped = []
@@ -340,7 +359,9 @@ def main():
         if header is None:
             skipped.append((mod, "no port list found"))
             continue
-        params = resolve_params(files[path], mod)
+        module_overrides = parameter_overrides.get(mod, {})
+        module_override_values = coerced_parameter_overrides.get(mod, {})
+        params = resolve_params(files[path], mod, module_override_values)
         ports = parse_ports(header)
         if not ports:
             skipped.append((mod, "port list parsed empty"))
@@ -419,7 +440,8 @@ def main():
                             % (fold, fold, wire, index_of(flat, counts))
                         )
                     lines.append("  end")
-                    folds.append("(%s)" % fold)
+                    folds.append("((%s) & %s_src[%d])" %
+                                 (fold, pre, len(folds) % SRCW))
                 continue
             if d == "input":
                 if is_clock(name):
@@ -473,13 +495,14 @@ def main():
                 else:
                     lines.append("  logic%s [%s-1:0] %s;" % (sgn, w, wire))
                 conns.append(".%s(%s)" % (name, wire))
-                folds.append("(^%s)" % wire)
+                folds.append("(((^%s)) & %s_src[%d])" %
+                             (wire, pre, len(folds) % SRCW))
 
         if ports is None:
             continue
-        lines.append("  %s %s_i (" % (mod, pre))
-        lines.append("      " + ",\n      ".join(conns))
-        lines.append("  );")
+        lines.extend(instance_declaration_lines(
+            mod, pre, conns, module_overrides
+        ))
         used.append(pre + "_fold_q")
         lines.append("  logic %s_fold_q;" % pre)
         if folds:
@@ -572,8 +595,8 @@ def main():
         "",
     ] + import_clause
     tail = [
-        "  // One pin, so nothing above is dangling and nothing is removed for",
-        "  // having no load.",
+        "  // One pin, with every output salted by a distinct private source bit,",
+        "  // so aliased outputs cannot cancel and nothing is removed for no load.",
         "  always_ff @(posedge clk or negedge rst_n)",
         "    if (!rst_n) fold_o <= 1'b0;",
         "    else fold_o <= " + (" ^ ".join(used) if used else "1'b0") + ";",
@@ -594,22 +617,25 @@ def main():
     # manifest checker had been PASSING all along, because it was validating the
     # manifest against the stale top. A gate reading a generated file it never
     # checks the freshness of is a gate on last month's design.
-    if "--check" in sys.argv[1:]:
+    if check is None:
+        check = "--check" in sys.argv[1:]
+    if check:
         try:
-            have = io.open(OUT, encoding="utf-8").read()
+            have = io.open(out_path, encoding="utf-8").read()
         except OSError:
-            print("STALE: %s does not exist" % OUT)
+            print("STALE: %s does not exist" % out_path)
             return 3
         if have.replace("\r\n", "\n") != text:
             print("STALE: %s does not match the generator's output. "
-                  "Run: python tools/quartus/gen_prod_top.py" % OUT)
+                  "Run: python tools/quartus/gen_prod_top.py" % out_path)
             return 3
-        print("fresh: %s matches the generator (%d instances)" % (OUT, len(used)))
+        print("fresh: %s matches the generator (%d instances)" %
+              (out_path, len(used)))
         return 1 if skipped else 0
 
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    io.open(OUT, "w", encoding="utf-8", newline="\n").write(text)
-    print("wrote %s: %d instances" % (OUT, len(used)))
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    io.open(out_path, "w", encoding="utf-8", newline="\n").write(text)
+    print("wrote %s: %d instances" % (out_path, len(used)))
     for m, why in skipped:
         print("  SKIPPED %-34s %s" % (m, why))
     return 1 if skipped else 0
