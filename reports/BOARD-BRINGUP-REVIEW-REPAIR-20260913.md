@@ -5,7 +5,8 @@
 **Board-truth binding verifier:** `bb441091`
 **Actual-evidence verifier repair:** `6d0a2a8846f2eb250dc828b02d9931d3bfbbb060`
 **Loader byte-identity repair:** `e66a606636727fb4df27aed87bd1181af01164eb`
-**State:** repair-only; **no new Quartus compile or RBF load authorised**
+**QSF-mutation build-entry repair:** `44a6d88576be382bf5eaa69ea0cf10fcc6d1982d`
+**State:** V2 compile measured but evidence gate `failed:manifest`; **no physical activity authorised**
 
 ## Review disposition
 
@@ -186,7 +187,7 @@ closed without a repository, and a committed control proves that refusal.
 
 ## Verification performed without compile/load
 
-- 60 repair/unit/mutation tests pass.
+- 64 repair/unit/mutation tests pass after the QSF-mutation runner repair.
 - Both repaired source verifiers, board-truth validation, and source-bound
   identity-receipt validation pass; Python and PowerShell syntax checks pass.
 - `board_truth.json` remains `partial` and explicitly holds future physical
@@ -196,21 +197,76 @@ closed without a repository, and a committed control proves that refusal.
 - Historical Specs build fails the repaired post-build verifier as intended.
 - Historical RBF refusal receipt contains no loaded state, no remote path, no
   watchdog, and no rollback attempt.
-- No repaired V2 build/audit/manifest exists; compile/load remain HOLD.
+- No repaired V2 build/audit/manifest existed before the compile-only gate below;
+  physical loading remains HOLD.
+
+## Compile-only gate activation — 2026-09-14
+
+Independent re-review accepted exact head
+`0ba2eefcd2938cd6a50a1853380ab4d8c9b8a629` and authorised exactly one
+repaired V2 Specs compile through the committed manifest-bound build entry point.
+The clean local and remote heads matched, no Quartus process was present, and a
+new ignored build workspace was selected rather than replacing historical
+artifacts. The build started at 04:53:46 UTC+02:00.
+
+Acceptance requires the exact Cyclone V target/profile/source closure, successful
+flow with zero errors and zero Critical Warnings, all seven USER_IO output
+enables disabled, positive reported timing slacks, the expected physical
+Zhaozhou hierarchy/DSP evidence, and matching audit/manifest/RBF hashes. Raw
+reports, source manifest, failed audit, compile receipt and all raw outputs were
+preserved. The complete manifest is intentionally absent because its creation
+refused the build-input mutation.
+
+### Compile outcome
+
+Quartus itself completed successfully for `5CSEBA6U23I7` with 0 errors, 55
+warnings and 0 Critical Warnings. The repaired verifier passed: all USER_IO bits
+0–6 have disabled output enables; the expected Zhaozhou hierarchy and packed DSP
+are present; all five reported internal timing slacks are positive. The measured
+RBF is 2,448,816 bytes with SHA-256
+`31699ff37440f26c8a979f53ce45b02ac63185038a2cc51a139eaba9ecb491eb`.
+
+The overall entry nevertheless returned failure at the correct gate. Quartus
+rewrote the copied `ZhaozhouSpecs.qsf` after source capture: the file changed
+from 3,184 bytes / SHA-256
+`0a4f036ec7aab3faf7a8b74a823add7485714107913b9156db690a1e9feebdd5` to
+3,323 bytes / SHA-256
+`c772638c5ac0ddf73739b1f4f47dbcaeb73a4c8218fce6a367556e2f1123841b`.
+`LAST_QUARTUS_VERSION` changed edition and Quartus appended
+`RESERVE_ALL_UNUSED_PINS_NO_OUTPUT_GND`. Complete-manifest creation refused the
+hash/size mismatch. No complete candidate exists, the RBF is quarantined, and no
+rerun occurred.
+
+### Entry-point repair after failure
+
+The build entries now call `run_superstation_quartus.py`, which invokes the real
+Quartus compiler stages directly. `quartus_map`, `quartus_fit` and `quartus_asm`
+receive `--read_settings_files=on --write_settings_files=off` in Quartus 17's
+supported compiler-option position; `quartus_sta` follows without unsupported
+flags. The helper snapshots QSF bytes and fails immediately if build-ID, map,
+fit, assembly or timing changes them. Both helper and tests are included in each
+profile's exact source/verification manifest closure.
+
+Committed controls prove the flags reach the map/fit/assembly argument vectors,
+the build entries no longer call `quartus_sh --flow`, a clean five-stage fixture
+preserves QSF bytes, and the exact observed mutation shape—edition change plus
+`RESERVE_ALL_UNUSED_PINS_NO_OUTPUT_GND` append—is rejected after map. The repair
+is pushed as `44a6d88576be382bf5eaa69ea0cf10fcc6d1982d`; it has not been
+compiled and requires independent review before any further Quartus action.
+
+This authorisation did not include RBF staging/loading, SSH mutation,
+watchdog/rollback rehearsal, JTAG, flash, persistence, pin drive, or board/SD
+mutation. None occurred. Physical activity remains HOLD.
 
 ## Remaining gates
 
-1. Submit the exact pushed repair head for independent review. Do not compile or
-   load.
-2. Confirm the separate 23:00 shell fit has completed before any later Quartus
-   action.
-3. Run one repaired clean Quartus build; create V2 audit and complete manifest.
-4. Obtain explicit independent approval of those exact artifacts.
-5. Run a separately named physical red/failure control, returned by the HPS
-   watchdog.
-6. Run a separately named green replay of fixed vectors.
-7. Next architecture gate: HPS raw mailbox with nonce-selected vectors and
-   independently host-readable raw results.
+1. Commit/push the failed compile evidence and QSF-mutation build-entry repair.
+2. Obtain independent review of the exact successor source/evidence head.
+3. Do not compile again unless that review separately authorises one clean retry.
+4. If a later retry passes, preserve a complete V2 candidate manifest and obtain
+   explicit independent approval of those exact artifacts before physical action.
+5. Physical red/failure control, green replay and nonce mailbox remain future,
+   separately authorised gates.
 
 JTAG, flash, persistent boot, SDRAM, external-I/O timing, broader arithmetic,
 production migration, DSP saving, and full-shell claims remain open.

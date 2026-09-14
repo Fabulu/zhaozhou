@@ -578,6 +578,66 @@ verified.
   No Quartus process, compile, RBF/load, SSH mutation, JTAG, flash, persistence,
   pin drive, or board/SD mutation occurred. HOLD remains.
 
+### 2026-09-14 04:53 UTC+02:00 - One repaired V2 Specs compile authorised and started
+
+- Independent re-review accepted exact pushed head
+  `0ba2eefcd2938cd6a50a1853380ab4d8c9b8a629` for exactly one compile-only
+  action. Physical activity remains HOLD.
+- A manual head guard initially refused before invoking the build because I
+  mistyped the accepted full hash in the comparison. I corrected only that
+  command literal; the checkout remained clean and no compile had started.
+- Confirmed local/remote accepted head equality, clean tree, absent dedicated
+  build path, and no running Quartus process.
+- Started the committed manifest-bound `build_superstation_specs.ps1` once at
+  04:53:46 in new ignored build directory
+  `build-board-superstation-specs-v2-0ba2eefc`; `quartus_sh` launched
+  `quartus_map`.
+- **Checkpoint before reading the fit:** when the command completes, first
+  preserve its raw output and build workspace, then require repaired Specs
+  verification, exact complete-manifest verification, zero Critical Warnings,
+  source/profile/RBF closure, and positive timing. Create/push V2 audit,
+  manifest, compile receipt, and raw-report copies only if every gate passes.
+  Do not stage/load the RBF or perform any SSH/JTAG/flash/SD action.
+
+### 2026-09-14 06:27 UTC+02:00 - Compile measured; complete-manifest gate failed closed
+
+- The single build entry ended RC=1. Quartus itself completed successfully at
+  04:58:14: target `5CSEBA6U23I7`, 0 errors, 55 warnings, 0 Critical Warnings.
+  The repaired post-build verifier passed.
+- Resources: 7,312 ALMs, 11,173 registers, 384,498 block-memory bits, 34 DSPs,
+  145 pins, 0 virtual pins and 3 PLLs. All USER_IO output enables 0–6 were
+  disabled and reserved outputs were zero. Zhaozhou hierarchy included one DSP
+  in `zhao_dual18_mul:u_mul`.
+- Internal slacks were setup +0.058 ns, hold +0.253 ns, recovery +3.658 ns,
+  removal +0.858 ns and minimum pulse width +1.122 ns. Illegal/unconstrained
+  clocks were zero; external I/O timing remains unsigned.
+- Measured RBF: 2,448,816 bytes, SHA-256
+  `31699ff37440f26c8a979f53ce45b02ac63185038a2cc51a139eaba9ecb491eb`.
+- Overall evidence correctly failed: `quartus_sh --flow` rewrote the copied QSF
+  after source capture. It changed 3,184-byte SHA-256
+  `0a4f036ec7aab3faf7a8b74a823add7485714107913b9156db690a1e9feebdd5` to
+  3,323-byte SHA-256
+  `c772638c5ac0ddf73739b1f4f47dbcaeb73a4c8218fce6a367556e2f1123841b`,
+  changing the edition string and appending
+  `RESERVE_ALL_UNUSED_PINS_NO_OUTPUT_GND`. Complete-manifest creation refused
+  the `ZhaozhouSpecs.qsf` build-input hash/size mismatch. No complete candidate
+  exists; the RBF is quarantined.
+- Preserved source manifest, complete transcript, repaired verifier JSON,
+  `failed:manifest` audit/compile receipt, all 11 raw Quartus reports/summaries/
+  message files, and both QSF states. The programming artifacts remain only in
+  the ignored quarantined build workspace; the audit records all 16 output
+  hashes. No rerun occurred.
+- Repaired both build entries to use `run_superstation_quartus.py`: map/fit/asm
+  receive `--read_settings_files=on --write_settings_files=off`; every stage is
+  guarded by exact pre/post QSF byte equality. Added controls for exact compiler
+  arguments, entry-point use, clean stage sequence and the observed QSF mutation.
+  Helper/tests are bound into both manifest profiles. The complete focused suite
+  passes 64/64; source, truth, bound-identity and PowerShell/Python syntax gates
+  pass. Repair commit `44a6d88576be382bf5eaa69ea0cf10fcc6d1982d`
+  is pushed, has not been compiled, and awaits independent source review.
+- No RBF staging/load, SSH mutation, watchdog/rollback, JTAG, flash,
+  persistence, pin drive or board/SD mutation occurred. Physical HOLD remains.
+
 ---
 
 ## Subagent Spawns
@@ -644,6 +704,16 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/IDENTITY-PREFLIGHT-PRE-SOURCE-BINDING.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/IDENTITY-PREFLIGHT.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/LOAD-HOLD-OLD-RBF-REJECT.json`
+- `tools/board/run_superstation_quartus.py`
+- `tests/tools/test_run_superstation_quartus.py`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-SOURCE-MANIFEST-V2-ATTEMPT1-QSF-MUTATION.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-BUILD-AUDIT-V2-ATTEMPT1-QSF-MUTATION.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-COMPILE-RECEIPT-V2-ATTEMPT1-QSF-MUTATION.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT1-QSF-MUTATION-COMPILE-TRANSCRIPT.txt`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT1-QSF-MUTATION-VERIFY.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT1-QSF-MUTATION-QUARTUS-RAW/`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT1-QSF-MUTATION-BUILD-REPORT.md`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT1-QSF-MUTATION-EVIDENCE-INDEX.md`
 
 ---
 
@@ -661,19 +731,17 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 
 ## Next Steps
 
-1. Submit the exact pushed verifier-repair head for independent review. Do not
-   compile or load from it yet.
-2. Wait for the separate lane's 23:00 shell fit to finish.
-3. If review accepts the source packet, run one repaired clean Specs build.
-   Require exact patched sys_top digest, zero Critical Warnings, all seven
-   USER_IO output enables disabled, positive timing, physical hierarchy, and a
-   complete V2 source/build-input/report/RBF/SOF manifest.
-4. Commit V2 audit/manifest and obtain explicit independent approval before any
-   physical action.
-5. Build/run the separately named physical red/failure control, returned by the
-   primary HPS watchdog with exact pinned identity/state/write/MENU evidence.
-6. Run a separately named green replay of fixed vectors under the same gates.
-7. Next architecture gate: HPS raw mailbox with nonce-selected vectors and
-   independently host-readable raw results. Keep broader arithmetic,
+1. Commit and push the immutable attempt-1 failure evidence and QSF-mutation
+   build-entry repair; submit the exact successor head for independent review.
+2. Do not run Quartus again unless that review separately authorises one clean
+   retry from the accepted head.
+3. A later retry must preserve byte-identical compiled QSF, exact patched
+   sys_top digest, zero Critical Warnings, all seven USER_IO output enables
+   disabled, positive timing, physical hierarchy, and a complete V2
+   source/build-input/report/RBF/SOF manifest.
+4. Commit the successful V2 audit/manifest and obtain explicit independent
+   approval before any physical action.
+5. Physical red/failure control, green replay, and HPS nonce-selected raw mailbox
+   remain later separately authorised gates. Keep broader arithmetic,
    migration/saving, SDRAM, JTAG, flash, persistence, external timing, and full
    shell claims open until their own gates.

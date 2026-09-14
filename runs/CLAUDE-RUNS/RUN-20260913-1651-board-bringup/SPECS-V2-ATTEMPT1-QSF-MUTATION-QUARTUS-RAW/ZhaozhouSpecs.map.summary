@@ -1,0 +1,17 @@
+Analysis & Synthesis Status : Successful - Mon Sep 14 04:54:45 2026
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : ZhaozhouSpecs
+Top-level Entity Name : sys_top
+Family : Cyclone V
+Logic utilization (in ALMs) : N/A
+Total registers : 11488
+Total pins : 145
+Total virtual pins : 0
+Total block memory bits : 384,498
+Total DSP Blocks : 34
+Total HSSI RX PCSs : 0
+Total HSSI PMA RX Deserializers : 0
+Total HSSI TX PCSs : 0
+Total HSSI PMA TX Serializers : 0
+Total PLLs : 3
+Total DLLs : 0

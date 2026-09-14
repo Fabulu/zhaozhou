@@ -1,0 +1,99 @@
+{
+  "buildDirectory": "C:\\programmieren\\zencrifice\\zhaozhou-board-bringup-20260913\\build-board-superstation-specs-v2-0ba2eefc",
+  "buildStatus": "ok",
+  "clockPins": {
+    "FPGA_CLK1_50": "PIN_V11",
+    "FPGA_CLK2_50": "PIN_Y13",
+    "FPGA_CLK3_50": "PIN_E11"
+  },
+  "criticalWarnings": [],
+  "device": "5CSEBA6U23I7",
+  "engineModules": [
+    "zhao_crc32c_fold",
+    "zhao_raster_fill",
+    "zhao_dual18_mul"
+  ],
+  "errors": [],
+  "expectedCore": "Zhaozhou Hardware Specs",
+  "expectedSignature": "e5f1c57f",
+  "flow": {
+    "alms": "7,312 / 41,910 ( 17 % )",
+    "device": "5CSEBA6U23I7",
+    "dsps": "34 / 112 ( 30 % )",
+    "registers": "11173",
+    "status": "Successful - Mon Sep 14 04:58:10 2026",
+    "top": "sys_top",
+    "virtualPins": "0"
+  },
+  "implementedDsps": 34,
+  "misterPllBlobsActual": {
+    "fpga/rtl/pll.qip": "22278c8f7c5338a3b70fb43ddad19d9ca3a86f80",
+    "fpga/rtl/pll.v": "6446867ebec35c20f136ce5f321344a6c559b156",
+    "fpga/rtl/pll/pll_0002.qip": "aec45eb73ea83ceab9b5ad1b7d71b5869c92036f",
+    "fpga/rtl/pll/pll_0002.v": "c599468749fd26ad95fca4593c869fbeace4572f"
+  },
+  "misterPllBlobsExpected": {
+    "fpga/rtl/pll.qip": "22278c8f7c5338a3b70fb43ddad19d9ca3a86f80",
+    "fpga/rtl/pll.v": "6446867ebec35c20f136ce5f321344a6c559b156",
+    "fpga/rtl/pll/pll_0002.qip": "aec45eb73ea83ceab9b5ad1b7d71b5869c92036f",
+    "fpga/rtl/pll/pll_0002.v": "c599468749fd26ad95fca4593c869fbeace4572f"
+  },
+  "misterSysTreeActual": "9f95eddd65ebfca9b8dd94ed1a48e3f867165aa8",
+  "misterSysTreeExpected": "9f95eddd65ebfca9b8dd94ed1a48e3f867165aa8",
+  "patchedSysTop": {
+    "expectedSha256": "24eea7b0f76848239c872f626a48f4e0c6150423b9e6561fd3dd63f2a99501e9",
+    "path": "C:\\programmieren\\zencrifice\\zhaozhou-board-bringup-20260913\\build-board-superstation-specs-v2-0ba2eefc\\sys\\sys_top.v",
+    "sha256": "24eea7b0f76848239c872f626a48f4e0c6150423b9e6561fd3dd63f2a99501e9"
+  },
+  "physicalHierarchy": {
+    "zhao_crc32c_fold:u_crc": {
+      "combinationalAluts": 135,
+      "dspBlocks": 0,
+      "memoryBits": 0,
+      "registers": 0
+    },
+    "zhao_dual18_mul:u_mul": {
+      "combinationalAluts": 0,
+      "dspBlocks": 1,
+      "memoryBits": 0,
+      "registers": 0
+    },
+    "zhao_raster_fill:u_fill": {
+      "combinationalAluts": 1,
+      "dspBlocks": 0,
+      "memoryBits": 0,
+      "registers": 0
+    },
+    "zhao_ssone_spec_tests:u_spec_tests": {
+      "combinationalAluts": 317,
+      "dspBlocks": 1,
+      "memoryBits": 0,
+      "registers": 44
+    }
+  },
+  "project": "ZhaozhouSpecs",
+  "rbf": {
+    "bytes": 2448816,
+    "path": "C:\\programmieren\\zencrifice\\zhaozhou-board-bringup-20260913\\build-board-superstation-specs-v2-0ba2eefc\\output_files\\ZhaozhouSpecs.rbf",
+    "sha256": "31699ff37440f26c8a979f53ce45b02ac63185038a2cc51a139eaba9ecb491eb"
+  },
+  "sourceStatus": "ok",
+  "specSourceStatus": "ok",
+  "timingSlacksNs": {
+    "hold": 0.253,
+    "minimum pulse width": 1.122,
+    "recovery": 3.658,
+    "removal": 0.858,
+    "setup": 0.058
+  },
+  "unusedOutputPins": [],
+  "userIoDisabledOutputEnables": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ]
+}

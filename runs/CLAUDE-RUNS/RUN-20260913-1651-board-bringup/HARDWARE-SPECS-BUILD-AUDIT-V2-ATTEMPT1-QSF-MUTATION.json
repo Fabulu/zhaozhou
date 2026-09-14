@@ -1,0 +1,161 @@
+{
+  "schema": "zhaozhou.superstation.hardware-specs-build-audit.v1",
+  "status": "failed:manifest",
+  "loadAuthorization": false,
+  "sourceCommit": "0ba2eefcd2938cd6a50a1853380ab4d8c9b8a629",
+  "profile": "Specs",
+  "project": "ZhaozhouSpecs",
+  "expectedCore": "Zhaozhou Hardware Specs",
+  "expectedSignature": "e5f1c57f",
+  "startedLocal": "2026-09-14T04:53:46+02:00",
+  "quartusCompletedLocal": "2026-09-14T04:58:14+02:00",
+  "entryPointFailedLocal": "2026-09-14T04:58:15+02:00",
+  "quartus": "17.0.2 Build 602 07/19/2017 SJ Lite Edition",
+  "preflight": {
+    "sourceVerifier": "pass",
+    "verilator": "5.051 devel rev v5.050-176-g7da43d830 (mod)",
+    "shippingVectors": 16,
+    "shippingResult": "pass",
+    "detectorMutantFailCode": 1,
+    "signature": "e5f1c57f"
+  },
+  "sourceManifest": {
+    "status": "source-captured",
+    "manifestSha256": "956b1a41132167ad0bda418a2e4ce319d2bbb24f35208eda3c9fcab069a961bd",
+    "file": {
+      "bytes": 23501,
+      "sha256": "a7fc85f6923d309d723be6674142a9a4526f1d41cebd41ec8b26c9593d162d7e"
+    }
+  },
+  "completeManifest": null,
+  "failure": {
+    "gate": "complete-manifest-creation",
+    "message": "source manifest failed before completion: build input hash/size mismatch: ZhaozhouSpecs.qsf",
+    "cause": "quartus_sh --flow rewrote the manifest-bound copied QSF after source capture",
+    "sourceQsf": {
+      "bytes": 3184,
+      "sha256": "0a4f036ec7aab3faf7a8b74a823add7485714107913b9156db690a1e9feebdd5"
+    },
+    "postQuartusQsf": {
+      "bytes": 3323,
+      "sha256": "c772638c5ac0ddf73739b1f4f47dbcaeb73a4c8218fce6a367556e2f1123841b"
+    },
+    "observedMutations": [
+      "LAST_QUARTUS_VERSION changed from 17.0.2 Standard Edition to 17.0.2 Lite Edition",
+      "RESERVE_ALL_UNUSED_PINS_NO_OUTPUT_GND AS INPUT TRI-STATED was appended"
+    ]
+  },
+  "flow": {
+    "status": "Successful",
+    "top": "sys_top",
+    "family": "Cyclone V",
+    "device": "5CSEBA6U23I7",
+    "alms": "7,312 / 41,910 (17%)",
+    "registers": 11173,
+    "pins": "145 / 314 (46%)",
+    "virtualPins": 0,
+    "blockMemoryBits": "384,498 / 5,662,720 (7%)",
+    "dspBlocks": "34 / 112 (30%)",
+    "plls": "3 / 6 (50%)",
+    "errors": 0,
+    "warnings": 55,
+    "criticalWarnings": 0,
+    "stageDiagnostics": {
+      "buildId": { "errors": 0, "warnings": 0 },
+      "analysisAndSynthesis": { "errors": 0, "warnings": 40 },
+      "fitter": { "errors": 0, "warnings": 11 },
+      "assembler": { "errors": 0, "warnings": 0 },
+      "timeQuest": { "errors": 0, "warnings": 4 }
+    }
+  },
+  "physicalHierarchy": {
+    "zhao_ssone_spec_tests:u_spec_tests": {
+      "combinationalAluts": 317,
+      "registers": 44,
+      "memoryBits": 0,
+      "dspBlocks": 1
+    },
+    "zhao_crc32c_fold:u_crc": {
+      "combinationalAluts": 135,
+      "registers": 0,
+      "memoryBits": 0,
+      "dspBlocks": 0
+    },
+    "zhao_raster_fill:u_fill": {
+      "combinationalAluts": 1,
+      "registers": 0,
+      "memoryBits": 0,
+      "dspBlocks": 0
+    },
+    "zhao_dual18_mul:u_mul": {
+      "combinationalAluts": 0,
+      "registers": 0,
+      "memoryBits": 0,
+      "dspBlocks": 1,
+      "primitive": "cyclonev_mac:u_dual18_mac"
+    }
+  },
+  "pinAudit": {
+    "clockInputs": {
+      "FPGA_CLK1_50": { "location": "V11", "direction": "input", "ioStandard": "3.3-V LVTTL" },
+      "FPGA_CLK2_50": { "location": "Y13", "direction": "input", "ioStandard": "3.3-V LVTTL" },
+      "FPGA_CLK3_50": { "location": "E11", "direction": "input", "ioStandard": "3.3-V LVTTL" }
+    },
+    "reservedInputPins": 169,
+    "reservedOutputPins": 0,
+    "userIoDisabledOutputEnables": [0, 1, 2, 3, 4, 5, 6]
+  },
+  "timing": {
+    "model": "Slow 1100mV 100C",
+    "worstSetupSlackNs": 0.058,
+    "worstHoldSlackNs": 0.253,
+    "worstRecoverySlackNs": 3.658,
+    "worstRemovalSlackNs": 0.858,
+    "worstMinimumPulseWidthSlackNs": 1.122,
+    "illegalClocks": 0,
+    "unconstrainedClocks": 0,
+    "unconstrainedInputPorts": 4,
+    "unconstrainedInputPortPaths": 14,
+    "unconstrainedOutputPorts": 47,
+    "unconstrainedOutputPortPaths": 119,
+    "externalIoTimingStatus": "unsigned"
+  },
+  "artifacts": {
+    "ZhaozhouSpecs.asm.rpt": { "bytes": 6862, "sha256": "aca5b87539ab5fa0c8ec9cf07e28d1a4b9435c4ebaecbd045eda0e49972865c3" },
+    "ZhaozhouSpecs.done": { "bytes": 26, "sha256": "3ceb974fe6f413ee5e89222bf499abff1873e529b01440e8ac4c6ed2414777c2" },
+    "ZhaozhouSpecs.fit.rpt": { "bytes": 1799325, "sha256": "24064444856e61c73a63e1b38a42f67911218b1e9aabedde7c7c09e0cc41c31e" },
+    "ZhaozhouSpecs.fit.smsg": { "bytes": 1028, "sha256": "6523fa00273f83d313a806b43816c131266b0191f9f5b2f3b8fc82bd259ffbf2" },
+    "ZhaozhouSpecs.fit.summary": { "bytes": 699, "sha256": "2473b2c6e2392e93766a48a35c82fc242580d9159941e2006c26fd5c4d2ebede" },
+    "ZhaozhouSpecs.flow.rpt": { "bytes": 14030, "sha256": "940c8084b978094b21068d80e9ac90c423814ea00d1f7d632da0d1bff3f3343e" },
+    "ZhaozhouSpecs.jdi": { "bytes": 232, "sha256": "9f94dc45dd2cc2341f75b0f84402a84a10e0b26cf85608602328f75088d4e674" },
+    "ZhaozhouSpecs.map.rpt": { "bytes": 983346, "sha256": "5435bd81594285c8b4b1e06941f47dd863b13e60659d07c177859848cfdf34b0" },
+    "ZhaozhouSpecs.map.smsg": { "bytes": 15755, "sha256": "98ed205d17fa9a99e8c7cc72b9135af3ad08ffe863d1c10ba1d2ffa6dbf9f3a6" },
+    "ZhaozhouSpecs.map.summary": { "bytes": 534, "sha256": "3739b07702a64f5318a26e9187427cb19b9960a7eafb117db9c7769986d04141" },
+    "ZhaozhouSpecs.pin": { "bytes": 80275, "sha256": "cbab3462dedbe27f4e28b6a5b41a720b4fe86e2f9d7642125d024ab3cabc13f4" },
+    "ZhaozhouSpecs.rbf": { "bytes": 2448816, "sha256": "31699ff37440f26c8a979f53ce45b02ac63185038a2cc51a139eaba9ecb491eb" },
+    "ZhaozhouSpecs.sld": { "bytes": 21, "sha256": "c7de3cc5544a1144192d6825eb69cf5e065bf99f16fb9acb42fadd23adede991" },
+    "ZhaozhouSpecs.sof": { "bytes": 6690380, "sha256": "71afd3baead66cc5990861247c3edb6f0b1e900acf4cea47ef15dfb8aef69dc6" },
+    "ZhaozhouSpecs.sta.rpt": { "bytes": 225901, "sha256": "68cba751e20befc490aa77c269bce7aadb86d0f5c5728dbfa2ea27d91e4f4b02" },
+    "ZhaozhouSpecs.sta.summary": { "bytes": 3638, "sha256": "5acbf232204bbf081b66b96b9f5586db6dbcd103c8d5adb9a84392706f462e10" }
+  },
+  "evidenceFiles": {
+    "transcript": { "bytes": 156470, "sha256": "19a8934a03bd1339ca5c2cdaded0e394724c5ab8fe2353df4f9ad3f110ff5a66" },
+    "verifier": { "bytes": 3103, "sha256": "405b24c98057694566a862c3f6c811f3fba4ea7cd54708f4931f0dd298e7fb87" }
+  },
+  "physicalActions": {
+    "rbfStaged": false,
+    "rbfLoaded": false,
+    "sshMutation": false,
+    "watchdogOrRollbackRehearsed": false,
+    "jtagUsed": false,
+    "flashTouched": false,
+    "persistentBootChanged": false,
+    "boardOrSdMutated": false
+  },
+  "nonClaims": [
+    "This failed evidence packet does not authorize any RBF load.",
+    "Successful Quartus measurement does not override the failed manifest gate.",
+    "The 16 selected vectors do not establish broader arithmetic correctness, production migration, DSP saving, SDRAM, full-shell behavior, or gameplay.",
+    "Internal positive timing does not sign off external I/O timing."
+  ]
+}

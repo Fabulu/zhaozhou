@@ -1,0 +1,67 @@
+{
+  "schema": "zhaozhou.superstation.compile-receipt.v1",
+  "status": "failed:manifest",
+  "authorization": {
+    "scope": "one-repaired-v2-specs-compile-only",
+    "reviewedHead": "0ba2eefcd2938cd6a50a1853380ab4d8c9b8a629",
+    "physicalActivityAuthorized": false,
+    "repeatCompileAuthorized": false
+  },
+  "sourceCommit": "0ba2eefcd2938cd6a50a1853380ab4d8c9b8a629",
+  "branch": "zhaozhou-board-bringup-20260913",
+  "profile": "Specs",
+  "project": "ZhaozhouSpecs",
+  "device": "5CSEBA6U23I7",
+  "entryPoint": "tools/board/build_superstation_specs.ps1",
+  "buildDirectory": "build-board-superstation-specs-v2-0ba2eefc",
+  "startedLocal": "2026-09-14T04:53:46+02:00",
+  "quartusCompletedLocal": "2026-09-14T04:58:14+02:00",
+  "completedLocal": "2026-09-14T04:58:15+02:00",
+  "returnCode": 1,
+  "gates": {
+    "cleanAcceptedSource": "passed",
+    "sourcePreflight": "passed",
+    "selectedVectors": "passed",
+    "sourceManifest": "passed",
+    "quartusFlow": "passed",
+    "postBuildVerifier": "passed",
+    "completeManifestCreation": "failed",
+    "completeManifestVerification": "not-run",
+    "overall": "failed"
+  },
+  "failure": {
+    "message": "source manifest failed before completion: build input hash/size mismatch: ZhaozhouSpecs.qsf",
+    "sourceQsfSha256": "0a4f036ec7aab3faf7a8b74a823add7485714107913b9156db690a1e9feebdd5",
+    "postQuartusQsfSha256": "c772638c5ac0ddf73739b1f4f47dbcaeb73a4c8218fce6a367556e2f1123841b"
+  },
+  "quartusMeasurement": {
+    "status": "Successful",
+    "errors": 0,
+    "warnings": 55,
+    "criticalWarnings": 0,
+    "rbf": {
+      "bytes": 2448816,
+      "sha256": "31699ff37440f26c8a979f53ce45b02ac63185038a2cc51a139eaba9ecb491eb"
+    }
+  },
+  "evidence": {
+    "sourceManifest": "HARDWARE-SPECS-SOURCE-MANIFEST-V2-ATTEMPT1-QSF-MUTATION.json",
+    "completeManifest": null,
+    "audit": "HARDWARE-SPECS-BUILD-AUDIT-V2-ATTEMPT1-QSF-MUTATION.json",
+    "verifier": "SPECS-V2-ATTEMPT1-QSF-MUTATION-VERIFY.json",
+    "transcript": "SPECS-V2-ATTEMPT1-QSF-MUTATION-COMPILE-TRANSCRIPT.txt",
+    "rawReports": "SPECS-V2-ATTEMPT1-QSF-MUTATION-QUARTUS-RAW",
+    "evidenceIndex": "SPECS-V2-ATTEMPT1-QSF-MUTATION-EVIDENCE-INDEX.md",
+    "buildReport": "SPECS-V2-ATTEMPT1-QSF-MUTATION-BUILD-REPORT.md"
+  },
+  "physicalActions": {
+    "rbfStaged": false,
+    "rbfLoaded": false,
+    "sshMutation": false,
+    "watchdogOrRollbackRehearsed": false,
+    "jtagUsed": false,
+    "flashTouched": false,
+    "persistentBootChanged": false,
+    "boardOrSdMutated": false
+  }
+}

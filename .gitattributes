@@ -33,6 +33,10 @@ runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/QUARTUS-*.rpt -text
 runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/QUARTUS-*.pin -text
 runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-QUARTUS-*.rpt -text
 runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-QUARTUS-*.pin -text
+# V2 attempt-1 is hash-audited raw evidence, including Quartus-native whitespace
+# and line endings. Preserve its committed bytes under core.autocrlf=true.
+runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/*ATTEMPT1-QSF-MUTATION* -text
+runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT1-QSF-MUTATION-QUARTUS-RAW/** -text
 
 # W2: ledger artifacts (regenerated with LF, byte-diffed by ledger:check)
 design/blocks.yml text eol=lf
