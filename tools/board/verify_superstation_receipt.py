@@ -136,8 +136,11 @@ def validate_loader_source(
         loader_path = (repo / str(loader.get("path"))).resolve()
         require(loader_path.is_relative_to(repo), "loaderSource path escapes repository", errors)
         require(loader_path.is_file(), "loaderSource working file is absent", errors)
+        working_bytes: bytes | None = None
+        working_sha: str | None = None
         if loader_path.is_file():
-            working_sha = hashlib.sha256(loader_path.read_bytes()).hexdigest()
+            working_bytes = loader_path.read_bytes()
+            working_sha = hashlib.sha256(working_bytes).hexdigest()
             require(working_sha == loader.get("workingSha256"), "loaderSource working SHA-256 mismatch", errors)
         clean = subprocess.run(
             ["git", "-C", str(repo), "status", "--porcelain", "--", str(loader.get("path"))],
@@ -157,6 +160,33 @@ def validate_loader_source(
         require(completed.returncode == 0, "loaderSource commit/path is absent", errors)
         if completed.returncode == 0:
             require(completed.stdout.strip() == loader.get("gitBlob"), "loaderSource git blob mismatch", errors)
+            committed = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo),
+                    "cat-file",
+                    "blob",
+                    f"{commit}:tools/board/invoke_superstation_probe.ps1",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            require(committed.returncode == 0, "loaderSource committed blob cannot be read", errors)
+            if committed.returncode == 0:
+                committed_sha = hashlib.sha256(committed.stdout).hexdigest()
+                require(
+                    committed_sha == loader.get("workingSha256"),
+                    "loaderSource committed/working SHA-256 mismatch",
+                    errors,
+                )
+                if working_bytes is not None:
+                    require(
+                        committed.stdout == working_bytes,
+                        "loaderSource sourceCommit blob bytes differ from working file",
+                        errors,
+                    )
 
 
 def validate_watchdog(data: dict[str, Any], errors: list[str]) -> None:
@@ -196,14 +226,12 @@ def validate_watchdog(data: dict[str, Any], errors: list[str]) -> None:
         require(evidence.get("firedUtc") == fired_match.group(1), "watchdog summary fired UTC mismatch", errors)
 
 
-def validate_identity_receipt(
-    data: dict[str, Any], repo: Path | None = None
-) -> list[str]:
+def validate_identity_structure(data: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     require(data.get("schema") == "zhaozhou.superstation.load-receipt.v1", "schema mismatch", errors)
     require(data.get("mode") == "identity-preflight", "not an identity preflight", errors)
     require(data.get("status") == "ok" and data.get("error") is None, "identity preflight did not pass", errors)
-    validate_loader_source(data, errors, repo)
+    validate_loader_source(data, errors)
     host_key = data.get("sshHostKey", {})
     require(host_key.get("algorithm") == "ssh-ed25519", "SSH algorithm mismatch", errors)
     require(host_key.get("fingerprint") == EXPECTED_FINGERPRINT, "SSH fingerprint mismatch", errors)
@@ -223,6 +251,17 @@ def validate_identity_receipt(
     menu = data.get("menuRbf", {})
     require(menu.get("expectedSha256") == EXPECTED_BOARD["menuSha256"], "identity menu expected hash mismatch", errors)
     require(menu.get("observedSha256") == EXPECTED_BOARD["menuSha256"], "identity menu observed hash mismatch", errors)
+    return errors
+
+
+def validate_identity_receipt(
+    data: dict[str, Any], repo: Path | None = None
+) -> list[str]:
+    errors = validate_identity_structure(data)
+    if repo is None:
+        errors.append("repository is required for identity receipt validation")
+        return errors
+    validate_loader_source(data, errors, repo.resolve())
     return errors
 
 

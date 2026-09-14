@@ -75,6 +75,8 @@ ACTUAL_IDENTITY = json.loads(
         / "IDENTITY-PREFLIGHT.json"
     ).read_text("utf-8")
 )
+PRE_BINDING_COMMIT = "fe684755b8076b005214dc8dbbad7195b678b9f0"
+PRE_BINDING_LOADER_BLOB = "32e22e0f527ebdd2245a002b8951dfee84b94262"
 
 
 class SuperStationReceiptTest(unittest.TestCase):
@@ -302,13 +304,42 @@ class SuperStationReceiptTest(unittest.TestCase):
         )
         return repo, data
 
-    def test_complete_identity_preflight_passes(self) -> None:
-        self.assertEqual(VERIFY.validate_identity_receipt(copy.deepcopy(IDENTITY)), [])
+    def test_complete_identity_structure_passes(self) -> None:
+        self.assertEqual(VERIFY.validate_identity_structure(copy.deepcopy(IDENTITY)), [])
+
+    def test_identity_receipt_requires_repository(self) -> None:
+        errors = VERIFY.validate_identity_receipt(copy.deepcopy(IDENTITY))
+        self.assertTrue(any("repository is required" in error for error in errors))
 
     def test_actual_source_bound_identity_preflight_passes(self) -> None:
         self.assertEqual(
             VERIFY.validate_identity_receipt(copy.deepcopy(ACTUAL_IDENTITY), REPO),
             [],
+        )
+
+    def test_old_loader_blob_with_current_working_sha_fires(self) -> None:
+        data = copy.deepcopy(ACTUAL_IDENTITY)
+        actual_old_blob = self.git(
+            REPO,
+            "rev-parse",
+            f"{PRE_BINDING_COMMIT}:tools/board/invoke_superstation_probe.ps1",
+        )
+        self.assertEqual(actual_old_blob, PRE_BINDING_LOADER_BLOB)
+        self.assertNotEqual(actual_old_blob, data["loaderSource"]["gitBlob"])
+        current_loader = REPO / data["loaderSource"]["path"]
+        self.assertEqual(
+            hashlib.sha256(current_loader.read_bytes()).hexdigest(),
+            data["loaderSource"]["workingSha256"],
+        )
+        data["sourceCommit"] = PRE_BINDING_COMMIT
+        data["loaderSource"]["sourceCommit"] = PRE_BINDING_COMMIT
+        data["loaderSource"]["gitBlob"] = PRE_BINDING_LOADER_BLOB
+        errors = VERIFY.validate_identity_receipt(data, REPO)
+        self.assertTrue(
+            any("committed/working SHA-256 mismatch" in error for error in errors)
+        )
+        self.assertTrue(
+            any("sourceCommit blob bytes differ" in error for error in errors)
         )
 
     def test_loader_working_sha_zero_mutant_fires(self) -> None:
