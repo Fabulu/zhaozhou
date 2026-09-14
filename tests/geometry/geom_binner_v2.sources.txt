@@ -1,0 +1,6 @@
+tests/mutants/zhao_geom_binner_v2_mutants.sv
+fpga/rtl/geometry/zhao_geom_arena.sv
+fpga/rtl/raster/zhao_raster_fill.sv
+fpga/rtl/geometry/zhao_geom_binner.sv
+fpga/rtl/geometry/zhao_geom_binner_v2.sv
+tests/geometry/tb_geom_binner_v2_pair.sv

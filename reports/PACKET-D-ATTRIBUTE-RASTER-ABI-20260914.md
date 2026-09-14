@@ -1,6 +1,6 @@
 # Packet D attribute/raster ABI — 2026-09-14
 
-**Status:** implementation boundary; not implemented, fitted, selected, or physical evidence.
+**Status:** implemented and simulation-verified as an excluded characterization boundary; not fitted, selected, or physical evidence.
 
 This note resolves the concrete Packet-D choices left open by
 `SHELL-TEXTURE-V3-COMPOSITION-ARCHITECTURE-20260913.md`. It does not change the
@@ -220,7 +220,7 @@ Required executable evidence:
 * sequence-identity positive control proving cancellation, `S=F+SD`, owner
   release, no mismatching/later fragment, no new swap, finite full-pipe quiet,
   and successful quiet-clear rebase;
-* committed mutants for metadata identity, one-lane coordinate identity, omitted
+* committed negative-half and omitted-global-min-X-accumulation attribute mutants, each with an exact non-vacuous signature; metadata identity, one-lane coordinate identity, omitted
   V3 quiet in ordinary swap, skipped occupied-skid cancellation, and Packet C's
   retained old-ready deadlock.
 
@@ -230,3 +230,41 @@ Packet-H lease logic. `fpga/rtl/common/zhao_shell_top.sv`, the Packet-B 26-sourc
 interface artifact, and all unversioned binner/tile/attribute RTL remain
 byte-for-byte unchanged. No Quartus fit is spent before the named G8A subsystem
 boundary.
+
+## 8. Implemented evidence
+
+Packet D landed as three independently reviewable but atomically registered
+layers:
+
+* D1: `zhao_raster_attrdiv_v2` and `zhao_raster_attrgrad_v2`, both radix-2 and
+  radix-4 current-zref differentials, with negative-half and omitted-min-X
+  selector controls;
+* D2: `zhao_geom_binner_v2`, exact old/V2 stream/counter parity and all 1,157
+  metadata bits through denial, capacity, non-power-of-two chunk overflow and
+  stalls, with an adjacent-address metadata mutant;
+* D3: `zhao_raster_tile_pipe_v2` and `zhao_geom_bin_pipe_v2`, one 52-source
+  closure containing the real old/V2 flat differential, three-plane textured
+  path, held five-destination start and three-destination row fanouts, Early-Z,
+  Packet C, TILESTORE and RESOLVE.
+
+The final CTest inventory is exactly 13 tests: 5 ordinary and 8 inverse controls.
+The D3 healthy lane executes five scenarios and 64,927 assertions in 26,392
+clocks. Its five full-chain controls prove coordinate abort, omitted-V3-quiet
+135/136-prefix corruption followed by bounded drain, identity cancellation with
+`S=F+SD`, old-ready ordered-head deadlock, and skipped-cancel occupied-skid
+stranding. D1/D2 add their arithmetic and metadata controls. The complete fresh
+native boundary passes 13/13; Packet C remains 4/4 and Packet B 72/72.
+
+Hostile review forced six behavioral repairs and four static-registration
+repairs before acceptance. The final source checker reads only active
+SystemVerilog after comments and `ifdef/ifndef/elsif/else processing, pins all
+five start-valid equations and clear-valid source, exact source manifests,
+profiles, diagnostic regexes, and an independent configure-time 13-name CTest
+inventory. Production accounting closes 251 modules as 63 selected roots, 78
+inside and 110 excluded with three tombstones; regenerated production-top bytes
+remain unchanged.
+
+These are simulation and accounting results only. The 29-slice metadata store,
+three pre-Early-Z divider lanes, ALM/DSP/M10K cost, Fmax and legal terrain-scale
+throughput remain unmeasured until G8A. AUX-on, Gouraud, Packet-E memory sharing,
+Packet-H lease/CDC, shell connection and physical behavior remain HOLD.

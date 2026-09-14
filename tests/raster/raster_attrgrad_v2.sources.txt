@@ -1,0 +1,4 @@
+tests/mutants/zhao_raster_attr_v2_mutants.sv
+fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
+fpga/rtl/raster/zhao_raster_attrgrad_v2.sv
+tests/raster/tb_raster_attrgrad_v2.sv

@@ -1,0 +1,1236 @@
+// zhao_raster_tile_pipe_v2.sv -- Packet-D attribute/texture raster composition.
+//
+// One accepted binner record starts EDGEWALK and exactly three current-oracle
+// attribute-gradient lanes.  Coverage rows are captured once and delivered to
+// every lane through an explicit per-lane mask.  Joined {invw,U/W,V/W} values
+// form the typed 490-bit Packet-C request; no Packet-B field is reconstructed by
+// a numeric slice after the frozen 1,157-bit metadata boundary is unpacked.
+//
+// Recoverable local attribute/profile faults and Packet-C sequence faults are
+// terminating for the current frame.  Producers and already-admitted owners are
+// drained, while every unadmitted skid entry is synchronously popped into a sink
+// and counted.  The skid reset remains exactly rst_n.
+//
+// AUTHORITY: reports/PACKET-D-ATTRIBUTE-RASTER-ABI-20260914.md
+//            reports/SHELL-TEXTURE-V3-COMPOSITION-ARCHITECTURE-20260913.md
+`default_nettype none
+
+// Committed inverse controls override one expression each before this exact RTL
+// is compiled.  Production definitions preserve all coordinates/quiet terms and
+// make abort a synchronous consumer of the skid head.
+`ifndef ZHAO_PACKET_D_LANE1_COL
+`define ZHAO_PACKET_D_LANE1_COL(col) (col)
+`endif
+`ifndef ZHAO_PACKET_D_PIPE_V3_QUIET
+`define ZHAO_PACKET_D_PIPE_V3_QUIET(quiet) (quiet)
+`endif
+`ifndef ZHAO_PACKET_D_SKID_DN_READY
+`define ZHAO_PACKET_D_SKID_DN_READY(aborting, stage_ready) \
+    ((aborting) ? 1'b1 : (stage_ready))
+`endif
+
+module zhao_raster_tile_pipe_v2 (
+    input  logic clk,
+    input  logic rst_n,
+
+    // One binner drain job.  Geometry/source/first-last are the old job fields;
+    // all Packet-D attributes and flat material state are in job_meta_i.
+    input  logic                job_valid_i,
+    output logic                job_ready_o,
+    input  logic signed [20:0]  job_ax_i,
+    input  logic signed [20:0]  job_ay_i,
+    input  logic signed [20:0]  job_bx_i,
+    input  logic signed [20:0]  job_by_i,
+    input  logic signed [20:0]  job_cx_i,
+    input  logic signed [20:0]  job_cy_i,
+    input  logic                job_first_i,
+    input  logic                job_last_i,
+    input  logic signed [11:0]  job_tile_x_i,
+    input  logic signed [11:0]  job_tile_y_i,
+    input  logic         [15:0] job_tile_index_i,
+    input  logic         [15:0] job_src_id_i,
+    input  logic       [1156:0] job_meta_i,
+    input  logic         [63:0] frame_clear_word_i,
+
+    // Recoverable frame-fault clear.  Ready is exposed only at complete local,
+    // Packet-C, fragment and resolve quiet.
+    input  logic                frame_fault_clear_valid_i,
+    output logic                frame_fault_clear_ready_o,
+    output logic                frame_fault_o,
+
+    // Packet-B sealed binding loader.
+    input  logic                cfg_valid_i,
+    output logic                cfg_ready_o,
+    input  logic          [1:0] cfg_op_i,
+    input  logic          [7:0] cfg_page_generation_i,
+    input  logic          [7:0] cfg_selector_i,
+    input  logic         [74:0] cfg_row_i,
+    input  logic         [31:0] cfg_crc32_i,
+    output logic                cfg_rsp_valid_o,
+    input  logic                cfg_rsp_ready_i,
+    output logic          [1:0] cfg_rsp_op_o,
+    output logic          [3:0] cfg_rsp_status_o,
+    output logic          [7:0] cfg_rsp_page_generation_o,
+    output logic          [7:0] active_page_generation_o,
+
+    // External texture-cache fill model/port.
+    output logic                fill_req_valid_o,
+    input  logic                fill_req_ready_i,
+    output logic         [31:0] fill_req_addr_o,
+    input  logic                fill_data_valid_i,
+    input  logic         [15:0] fill_data_i,
+    input  logic                fill_refused_i,
+
+    // Palette programming.
+    input  logic                pal_load_valid_i,
+    output logic                pal_load_ready_o,
+    input  logic          [1:0] pal_load_op_i,
+    input  logic          [1:0] pal_load_slot_i,
+    input  logic          [7:0] pal_load_gen_i,
+    input  logic          [7:0] pal_load_idx_i,
+    input  logic         [15:0] pal_load_rgb565_i,
+    input  logic                pal_load_crc_ok_i,
+
+    // Packet-B Surface Sheet port.  Packet-D's selected profile never issues it.
+    output logic                sheet_req_valid_o,
+    input  logic                sheet_req_ready_i,
+    output logic          [1:0] sheet_req_op_o,
+    output logic         [31:0] sheet_req_handle_o,
+    output logic         [11:0] sheet_req_texel_o,
+    output logic         [15:0] sheet_req_src_id_o,
+    input  logic                pg_valid_i,
+    output logic                pg_ready_o,
+    input  logic          [1:0] pg_op_i,
+    input  logic          [1:0] pg_status_i,
+    input  logic          [7:0] pg_tag_i,
+    input  logic          [7:0] pg_strength_i,
+    input  logic         [15:0] pg_src_id_i,
+
+    // Resolved framebuffer stream.
+    output logic                fb_valid_o,
+    input  logic                fb_ready_i,
+    output logic         [15:0] fb_rgb565_o,
+    output logic          [7:0] fb_tag_o,
+    output logic          [7:0] fb_addr_o,
+    output logic signed [11:0]  fb_x_o,
+    output logic signed [11:0]  fb_y_o,
+    output logic                fb_last_o,
+    output logic         [15:0] fb_src_id_o,
+
+    // Per-tile completion and retained raster observability.
+    output logic         [31:0] tile_crc_o,
+    output logic         [15:0] tile_crc_index_o,
+    output logic                tile_done_o,
+    output logic          [8:0] tile_cov_count_o,
+    output logic                tile_degenerate_o,
+    output logic                front_bank_o,
+    output logic         [31:0] tilestore_references_o,
+    output logic         [31:0] resolved_tiles_o,
+    output logic         [31:0] early_z_rejects_o,
+    output logic         [31:0] early_z_covered_o,
+    output logic         [31:0] fragment_covered_o,
+    output logic         [31:0] blended_fragments_o,
+    output logic          [7:0] bin_mask_o,
+    output logic         [23:0] z_floor_o,
+    output logic                fragment_error_o,
+
+    // Packet-D structural status and exact terminal accounting.
+    output logic                quiet_o,
+    output logic                raster_abort_o,
+    output logic                local_attribute_abort_o,
+    output logic                local_fault_pulse_o,
+    output logic         [31:0] local_fault_count_o,
+    output logic         [31:0] coordinate_fault_count_o,
+    output logic         [31:0] range_fault_count_o,
+    output logic         [31:0] aux_profile_fault_count_o,
+    output logic         [31:0] candidate_cancel_count_o,
+    output logic         [31:0] local_drop_count_o,
+    output logic         [31:0] jobs_started_o,
+    output logic         [31:0] jobs_sunk_o,
+
+    // Packet-C sequence identity/accounting.
+    output logic                sequence_abort_o,
+    output logic                sequence_mismatch_o,
+    output logic         [31:0] sequence_drop_count_o,
+    output logic         [31:0] admission_sequence_o,
+    output logic         [31:0] expected_sequence_o,
+    output logic         [31:0] returned_sequence_o,
+    output logic                packet_c_cand_fire_o,
+    output logic                packet_c_fragment_fire_o,
+    output logic                packet_c_drop_fire_o,
+
+    // Selected Packet-B counters retained at the composition boundary.
+    output logic         [31:0] texture_fragments_o,
+    output logic         [31:0] texture_cache_hits_o,
+    output logic         [31:0] texture_cache_misses_o,
+    output logic         [31:0] texture_palette_lookups_o,
+    output logic         [31:0] texture_plan_accepted_o,
+    output logic         [31:0] texture_dispatch_accepted_o,
+    output logic         [31:0] texture_combine_refused_o,
+
+    // Focused structural probes used by the committed Packet-D gate.
+    output logic                coverage_hold_valid_o,
+    output logic          [2:0] coverage_delivered_mask_o,
+    output logic          [4:0] start_delivered_mask_o,
+    output logic          [2:0] attribute_idle_o,
+    output logic                earlyz_hold_valid_o,
+    output logic          [1:0] skid_level_o,
+    output logic                stage_candidate_valid_o,
+    output logic       [489:0] stage_candidate_data_o,
+    output logic                stage_fragment_valid_o,
+    output logic         [7:0] stage_fragment_addr_o,
+    output logic        [23:0] stage_fragment_depth_o,
+    output logic        [31:0] stage_fragment_state_o,
+    output logic        [15:0] stage_fragment_src_id_o,
+    output logic        [23:0] stage_fragment_texel_rgb_o,
+    output logic         [7:0] stage_fragment_texel_a_o,
+    output logic         [7:0] stage_fragment_texel_idx_o,
+    output logic         [7:0] stage_fragment_status_o,
+    output logic                texture_quiet_o,
+    output logic                fragment_idle_o
+`ifdef ZHAO_PACKET_D_TEST_HOOKS
+    , input logic         [4:0] test_start_enable_i
+    , input logic         [2:0] test_attr_cov_enable_i
+    , input logic               test_stage_admit_enable_i
+`endif
+);
+  import zhao_render_texture_pkg::*;
+
+  localparam logic [1:0] RS_IDLE   = 2'd0;
+  localparam logic [1:0] RS_START  = 2'd1;
+  localparam logic [1:0] RS_ACTIVE = 2'd2;
+  localparam logic [1:0] RS_SWAP   = 2'd3;
+
+  // The terminal state reuses RS_IDLE plus the sticky abort level.  No producer
+  // is reset and jobs offered by a draining binner are accepted into the sink.
+  logic [1:0] rs_state_q;
+
+  initial begin : p_packet_d_contract
+    if (($bits(job_meta_i) != 1157) ||
+        ($bits(zhao_texture_v3_request_v2_t) != 362) ||
+        ($bits(zhao_raster_continuation_v2_t) != 128) ||
+        ($bits(zhao_raster_earlyz_payload_v2_t) != 410) ||
+        ($bits(zhao_raster_pretex_v2_t) != 490))
+      $fatal(1, "zhao_raster_tile_pipe_v2: Packet-D width contract changed");
+  end
+
+  // -------------------------------------------------------------------------
+  // Frozen 1,157-bit metadata boundary.  These are the only raw Packet-D job
+  // slices in this module; all downstream packet handling is through types.
+  logic        [297:0] flat_request_q;
+  logic         [47:0] continuation_tail_bits_q;
+  logic         [31:0] fragment_state_q;
+  logic         [46:0] area2_q;
+  logic signed  [11:0] min_x_q;
+  logic signed  [95:0] plane_n0_q   [0:2];
+  logic signed  [71:0] plane_dndx_q [0:2];
+  logic signed  [71:0] plane_dndy_q [0:2];
+
+  // One and only one raw unpack of the frozen metadata ABI.  Pre-admission
+  // profile checks and accepted registers both consume these named values.
+  logic        [297:0] incoming_flat_request_w;
+  logic         [47:0] incoming_continuation_tail_w;
+  logic         [31:0] incoming_fragment_state_w;
+  logic         [46:0] incoming_area2_w;
+  logic signed  [11:0] incoming_min_x_w;
+  logic signed  [95:0] incoming_plane_n0_w   [0:2];
+  logic signed  [71:0] incoming_plane_dndx_w [0:2];
+  logic signed  [71:0] incoming_plane_dndy_w [0:2];
+
+  assign incoming_flat_request_w = job_meta_i[297:0];
+  assign incoming_continuation_tail_w = job_meta_i[345:298];
+  assign incoming_fragment_state_w = job_meta_i[377:346];
+  assign incoming_area2_w = job_meta_i[424:378];
+  assign incoming_min_x_w = $signed(job_meta_i[436:425]);
+  assign incoming_plane_dndy_w[0] = $signed(job_meta_i[508:437]);
+  assign incoming_plane_dndx_w[0] = $signed(job_meta_i[580:509]);
+  assign incoming_plane_n0_w[0] = $signed(job_meta_i[676:581]);
+  assign incoming_plane_dndy_w[1] = $signed(job_meta_i[748:677]);
+  assign incoming_plane_dndx_w[1] = $signed(job_meta_i[820:749]);
+  assign incoming_plane_n0_w[1] = $signed(job_meta_i[916:821]);
+  assign incoming_plane_dndy_w[2] = $signed(job_meta_i[988:917]);
+  assign incoming_plane_dndx_w[2] = $signed(job_meta_i[1060:989]);
+  assign incoming_plane_n0_w[2] = $signed(job_meta_i[1156:1061]);
+
+  // Accepted old geometric fields and tile lifecycle.
+  logic signed [20:0] ax_q, ay_q, bx_q, by_q, cx_q, cy_q;
+  logic signed [11:0] tile_x_q, tile_y_q;
+  logic        [15:0] tile_index_q, source_id_q;
+  logic               first_q, last_q;
+  logic        [63:0] clear_word_q;
+
+  logic job_accept_w;
+  logic new_job_accept_w;
+  logic terminal_prior_w;
+  logic abort_now_w;
+  logic profile_aux_bad_w, profile_area_bad_w;
+  assign profile_aux_bad_w = incoming_flat_request_w[268] ||
+                             (incoming_flat_request_w[267:44] != 224'd0);
+  assign profile_area_bad_w = (incoming_area2_w == 47'd0);
+
+  // -------------------------------------------------------------------------
+  // EDGEWALK and the one-entry, three-destination row broadcaster.
+  logic ew_job_valid_w, ew_job_ready_w;
+  logic ew_cov_valid_w, ew_cov_ready_w, ew_cov_last_w;
+  logic [3:0] ew_cov_row_w;
+  logic [15:0] ew_cov_mask_w, ew_cov_source_w;
+  logic ew_done_w, ew_degenerate_w;
+  logic [8:0] ew_count_w;
+
+  logic row_hold_valid_q;
+  logic [3:0] row_hold_row_q;
+  logic [15:0] row_hold_mask_q;
+  logic row_hold_last_q;
+  logic [2:0] row_delivered_q;
+  logic [2:0] row_lane_fire_w;
+  logic [2:0] row_delivered_next_w;
+  logic row_retire_w;
+  logic saw_coverage_q;
+  logic ew_done_q;
+  logic [8:0] ew_count_q;
+  logic ew_degenerate_q;
+
+  logic [4:0] start_gate_w;
+  logic [2:0] attr_cov_gate_w;
+  logic stage_admit_gate_w;
+`ifdef ZHAO_PACKET_D_TEST_HOOKS
+  assign start_gate_w = test_start_enable_i;
+  assign attr_cov_gate_w = test_attr_cov_enable_i;
+  assign stage_admit_gate_w = test_stage_admit_enable_i;
+`else
+  assign start_gate_w = 5'b11111;
+  assign attr_cov_gate_w = 3'b111;
+  assign stage_admit_gate_w = 1'b1;
+`endif
+
+  assign coverage_hold_valid_o = row_hold_valid_q;
+  assign coverage_delivered_mask_o = row_delivered_q;
+
+  // -------------------------------------------------------------------------
+  // Exactly three frozen attribute-gradient lanes.
+  logic [2:0] attr_job_ready_w;
+  logic [2:0] attr_cov_ready_w;
+  logic [2:0] attr_q_valid_w;
+  logic [2:0] attr_q_ready_w;
+  logic signed [31:0] attr_q_w [0:2];
+  logic [3:0] attr_row_w [0:2];
+  logic [3:0] attr_col_w [0:2];
+  logic [2:0] attr_last_w;
+  logic [2:0] attr_sat_w, attr_error_w;
+  logic [2:0] attr_idle_w;
+  logic [31:0] attr_pixels_w [0:2];
+  logic [31:0] attr_divides_w [0:2];
+  logic [31:0] attr_saturations_w [0:2];
+  logic [31:0] attr_divide_errors_w [0:2];
+
+  assign attribute_idle_o = attr_idle_w;
+
+  // Held coordinated job-start fanout.  The accepted job record is already in
+  // registers; each destination sees valid until its one acceptance.  No valid
+  // is a function of that destination's ready.
+  logic [4:0] start_delivered_q;
+  logic [4:0] start_valid_w, start_fire_w, start_delivered_next_w;
+  logic start_complete_w;
+  assign start_delivered_mask_o = start_delivered_q;
+  assign start_valid_w[0] = (rs_state_q == RS_START) &&
+                            !start_delivered_q[0] && start_gate_w[0];
+  assign start_valid_w[1] = (rs_state_q == RS_START) &&
+                            !start_delivered_q[1] && start_gate_w[1];
+  assign start_valid_w[2] = (rs_state_q == RS_START) &&
+                            !start_delivered_q[2] && start_gate_w[2];
+  assign start_valid_w[3] = (rs_state_q == RS_START) &&
+                            !start_delivered_q[3] && start_gate_w[3];
+  assign start_valid_w[4] = (rs_state_q == RS_START) && first_q &&
+                            !start_delivered_q[4] && start_gate_w[4];
+  assign start_fire_w[0] = start_valid_w[0] && ew_job_ready_w;
+  assign start_fire_w[1] = start_valid_w[1] && attr_job_ready_w[0];
+  assign start_fire_w[2] = start_valid_w[2] && attr_job_ready_w[1];
+  assign start_fire_w[3] = start_valid_w[3] && attr_job_ready_w[2];
+  assign start_fire_w[4] = start_valid_w[4] && ts_clear_ready_w;
+  assign start_delivered_next_w = start_delivered_q | start_fire_w;
+  assign start_complete_w = &start_delivered_next_w;
+  assign ew_job_valid_w = start_valid_w[0];
+
+  genvar ga;
+  generate
+    for (ga = 0; ga < 3; ga = ga + 1) begin : g_attr
+      zhao_raster_attrgrad_v2 u_attrgrad (
+          .clk(clk),
+          .rst_n(rst_n),
+          .job_valid_i(start_valid_w[ga+1]),
+          .job_ready_o(attr_job_ready_w[ga]),
+          .job_n0_i(plane_n0_q[ga]),
+          .job_dndx_i(plane_dndx_q[ga]),
+          .job_dndy_i(plane_dndy_q[ga]),
+          .job_area2_i(area2_q),
+          .job_min_x_i(min_x_q),
+          .job_tile_x_i(tile_x_q),
+          .job_tile_y_i(tile_y_q),
+          .cov_valid_i(row_hold_valid_q && !row_delivered_q[ga] &&
+                       attr_cov_gate_w[ga]),
+          .cov_ready_o(attr_cov_ready_w[ga]),
+          .cov_row_i(row_hold_row_q),
+          .cov_mask_i(row_hold_mask_q),
+          .cov_last_i(row_hold_last_q),
+          .q_valid_o(attr_q_valid_w[ga]),
+          .q_ready_i(attr_q_ready_w[ga]),
+          .q_o(attr_q_w[ga]),
+          .q_row_o(attr_row_w[ga]),
+          .q_col_o(attr_col_w[ga]),
+          .q_last_o(attr_last_w[ga]),
+          .q_saturated_o(attr_sat_w[ga]),
+          .q_error_o(attr_error_w[ga]),
+          .idle_o(attr_idle_w[ga]),
+          .pixels_o(attr_pixels_w[ga]),
+          .divides_o(attr_divides_w[ga]),
+          .saturations_o(attr_saturations_w[ga]),
+          .divide_errors_o(attr_divide_errors_w[ga])
+      );
+      assign row_lane_fire_w[ga] = row_hold_valid_q &&
+                                   !row_delivered_q[ga] &&
+                                   attr_cov_gate_w[ga] &&
+                                   attr_cov_ready_w[ga];
+    end
+  endgenerate
+
+  assign row_delivered_next_w = row_delivered_q | row_lane_fire_w;
+  assign row_retire_w = row_hold_valid_q && (&row_delivered_next_w);
+  // Deliberately no simultaneous retire/refill: the held row is the explicit
+  // ownership boundary, and one bubble is cheaper than an ambiguous replacement.
+  assign ew_cov_ready_w = !row_hold_valid_q;
+
+  zhao_raster_edgewalk u_edgewalk (
+      .clk(clk),
+      .rst_n(rst_n),
+      .job_valid_i(ew_job_valid_w),
+      .job_ready_o(ew_job_ready_w),
+      .job_ax_i(ax_q), .job_ay_i(ay_q),
+      .job_bx_i(bx_q), .job_by_i(by_q),
+      .job_cx_i(cx_q), .job_cy_i(cy_q),
+      .job_tile_x_i(tile_x_q),
+      .job_tile_y_i(tile_y_q),
+      .job_src_id_i(source_id_q),
+      .cov_valid_o(ew_cov_valid_w),
+      .cov_ready_i(ew_cov_ready_w),
+      .cov_row_o(ew_cov_row_w),
+      .cov_mask_o(ew_cov_mask_w),
+      .cov_last_o(ew_cov_last_w),
+      .cov_src_id_o(ew_cov_source_w),
+      .job_done_o(ew_done_w),
+      .job_degenerate_o(ew_degenerate_w),
+      .cov_count_o(ew_count_w)
+  );
+
+  // -------------------------------------------------------------------------
+  // Joined typed pretexture candidate into Early-Z.
+  logic attr_bundle_valid_w;
+  logic attr_coordinate_bad_w, attr_range_bad_w, attr_bundle_fault_w;
+  logic [3:0] lane1_col_checked_w;
+  assign lane1_col_checked_w = `ZHAO_PACKET_D_LANE1_COL(attr_col_w[1]);
+  assign attr_bundle_valid_w = &attr_q_valid_w;
+  assign attr_coordinate_bad_w =
+      (attr_row_w[0] != attr_row_w[1]) ||
+      (attr_row_w[0] != attr_row_w[2]) ||
+      (attr_col_w[0] != lane1_col_checked_w) ||
+      (attr_col_w[0] != attr_col_w[2]) ||
+      (attr_last_w[0] != attr_last_w[1]) ||
+      (attr_last_w[0] != attr_last_w[2]);
+  assign attr_range_bad_w = (|attr_error_w) || attr_q_w[0][31] ||
+                            (attr_q_w[0][31:24] != 8'd0);
+  assign attr_bundle_fault_w = attr_bundle_valid_w &&
+                               (attr_coordinate_bad_w || attr_range_bad_w);
+
+  zhao_texture_v3_request_v2_t request_w;
+  zhao_raster_continuation_v2_t continuation_w;
+  zhao_raster_pretex_v2_t pretex_w;
+  logic [409:0] earlyz_payload_in_w;
+
+  // The low 298 bits preserve the package request's existing low-field layout.
+  // Each frozen field is named once here; U/W and V/W come only from their lanes.
+  always_comb begin
+    request_w = '0;
+    request_w.palette_generation    = flat_request_q[7:0];
+    request_w.palette_slot          = flat_request_q[9:8];
+    request_w.response_class        = flat_request_q[11:10];
+    request_w.base_alpha            = flat_request_q[19:12];
+    request_w.base_rgb              = flat_request_q[43:20];
+    request_w.aux_surface_ctx       = zhao_aux_surface_ctx_v2_t'(flat_request_q[267:44]);
+    request_w.aux_required          = flat_request_q[268];
+    request_w.recipe_weight         = flat_request_q[276:269];
+    request_w.material_recipe       = flat_request_q[279:277];
+    request_w.lod_q4_4              = flat_request_q[287:280];
+    request_w.base_binding_selector = flat_request_q[295:288];
+    request_w.sample_count          = flat_request_q[297:296];
+    request_w.u_over_w              = attr_q_w[1];
+    request_w.v_over_w              = attr_q_w[2];
+
+    continuation_w = '0;
+    continuation_w.earlyz.in_tile_addr = {attr_row_w[0], attr_col_w[0]};
+    continuation_w.earlyz.invw24 = attr_q_w[0][23:0];
+    continuation_w.earlyz.fragment_state = fragment_state_q;
+    continuation_w.earlyz.source_id = source_id_q;
+    continuation_w.post_earlyz =
+        zhao_raster_continuation_tail_v2_t'(continuation_tail_bits_q);
+
+    pretex_w = make_raster_pretex(continuation_w, request_w);
+    earlyz_payload_in_w = pack_earlyz_payload(pretex_w.payload);
+  end
+
+  logic earlyz_frag_valid_w, earlyz_frag_ready_w;
+  logic earlyz_cand_valid_w, earlyz_cand_ready_w;
+  logic [7:0] earlyz_cand_addr_w;
+  logic [23:0] earlyz_cand_depth_w;
+  logic [31:0] earlyz_cand_state_w;
+  logic [15:0] earlyz_cand_source_w;
+  logic [409:0] earlyz_cand_payload_w;
+  logic [2:0] earlyz_cand_bin_w;
+  logic earlyz_reject_w;
+  logic [7:0] earlyz_reject_addr_w;
+
+  assign earlyz_frag_valid_w = attr_bundle_valid_w &&
+                               !attr_bundle_fault_w && !abort_now_w;
+  // Joined outputs remain atomic in every mode.  During abort, a logical bundle
+  // is accepted into the drop sink only when all three lanes are present, so
+  // local_drop_count_o counts bundles rather than whichever lane arrived first.
+  always_comb begin
+    attr_q_ready_w = 3'b000;
+    if (attr_bundle_valid_w && (abort_now_w || attr_bundle_fault_w)) begin
+      attr_q_ready_w = 3'b111;
+    end else if (attr_bundle_valid_w) begin
+      attr_q_ready_w = {3{earlyz_frag_ready_w}};
+    end
+  end
+
+  assign earlyz_hold_valid_o = earlyz_cand_valid_w;
+
+  zhao_raster_earlyz #(.PAYLOAD_W(410)) u_earlyz (
+      .clk(clk),
+      .rst_n(rst_n),
+      .tile_begin_i(start_fire_w[4]),
+      .tile_clear_depth_i(clear_word_q[31:8]),
+      .frag_valid_i(earlyz_frag_valid_w),
+      .frag_ready_o(earlyz_frag_ready_w),
+      .frag_addr_i(pretex_w.earlyz.in_tile_addr),
+      .frag_depth_i(pretex_w.earlyz.invw24),
+      .frag_state_i(pretex_w.earlyz.fragment_state),
+      .frag_src_id_i(pretex_w.earlyz.source_id),
+      .frag_payload_i(earlyz_payload_in_w),
+      .cand_valid_o(earlyz_cand_valid_w),
+      .cand_ready_i(earlyz_cand_ready_w),
+      .cand_addr_o(earlyz_cand_addr_w),
+      .cand_depth_o(earlyz_cand_depth_w),
+      .cand_state_o(earlyz_cand_state_w),
+      .cand_src_id_o(earlyz_cand_source_w),
+      .cand_payload_o(earlyz_cand_payload_w),
+      .cand_bin_o(earlyz_cand_bin_w),
+      .z_reject_o(earlyz_reject_w),
+      .z_reject_addr_o(earlyz_reject_addr_w),
+      .bin_mask_o(bin_mask_o),
+      .z_floor_o(z_floor_o),
+      .early_z_rejects_o(early_z_rejects_o),
+      .covered_fragments_o(early_z_covered_o)
+  );
+
+  zhao_raster_earlyz_payload_v2_t earlyz_payload_out_w;
+  zhao_raster_continuation_v2_t continuation_after_earlyz_w;
+  zhao_raster_pretex_v2_t pretex_after_earlyz_w;
+  logic [489:0] skid_up_data_w;
+  always_comb begin
+    earlyz_payload_out_w = unpack_earlyz_payload(earlyz_cand_payload_w);
+    continuation_after_earlyz_w = '0;
+    continuation_after_earlyz_w.earlyz.in_tile_addr = earlyz_cand_addr_w;
+    continuation_after_earlyz_w.earlyz.invw24 = earlyz_cand_depth_w;
+    continuation_after_earlyz_w.earlyz.fragment_state = earlyz_cand_state_w;
+    continuation_after_earlyz_w.earlyz.source_id = earlyz_cand_source_w;
+    continuation_after_earlyz_w.post_earlyz =
+        earlyz_payload_out_w.raster_continuation;
+    pretex_after_earlyz_w = make_raster_pretex(
+        continuation_after_earlyz_w, earlyz_payload_out_w.texture_request);
+    skid_up_data_w = pack_raster_pretex(pretex_after_earlyz_w);
+  end
+
+  // -------------------------------------------------------------------------
+  // Real 490-bit skid, Packet-C stage, and real fragment leaf.
+  logic skid_up_ready_w, skid_dn_valid_w, skid_dn_ready_w;
+  logic [489:0] skid_dn_data_w;
+  logic stage_cand_ready_w;
+  logic stage_frame_fault_w;
+  logic stage_clear_valid_w, stage_clear_ready_w;
+  logic skid_cancel_fire_w;
+
+  assign earlyz_cand_ready_w = abort_now_w ? 1'b1 : skid_up_ready_w;
+  assign skid_dn_ready_w = `ZHAO_PACKET_D_SKID_DN_READY(
+      abort_now_w, (stage_cand_ready_w && stage_admit_gate_w));
+  assign skid_cancel_fire_w = skid_dn_valid_w && skid_dn_ready_w && abort_now_w;
+
+  assign stage_candidate_valid_o = skid_dn_valid_w && !abort_now_w &&
+                                   stage_admit_gate_w;
+  assign stage_candidate_data_o = skid_dn_data_w;
+
+  zhao_skid2 #(.W(490)) u_candidate_skid (
+      .clk(clk),
+      .rst_n(rst_n),
+      .up_valid_i(earlyz_cand_valid_w && !abort_now_w),
+      .up_ready_o(skid_up_ready_w),
+      .up_data_i(skid_up_data_w),
+      .dn_valid_o(skid_dn_valid_w),
+      .dn_ready_i(skid_dn_ready_w),
+      .dn_data_o(skid_dn_data_w),
+      .level_o(skid_level_o)
+  );
+
+  logic stage_frag_ready_w;
+  logic [23:0] stage_frag_vert_rgb_w;
+  logic [7:0] stage_frag_vert_a_w;
+  logic [7:0] stage_frag_tag_w;
+  logic [7:0] stage_frag_stencil_w;
+
+  // Packet-B compatibility/evidence signals not promoted as top-level counters.
+  logic unused_err_fragrob_wq_overflow, unused_err_fragrob_id_error;
+  logic unused_err_aux_degenerate, unused_err_rcp_q;
+  logic [31:0] unused_cnt_reorder_held, unused_cnt_live_peak;
+  logic [31:0] unused_cnt_bilerp_jobs, unused_cnt_mosaic_samples;
+  logic [31:0] unused_cnt_aux_accepted, unused_cnt_combine_phases;
+  logic [31:0] unused_cnt_rcp_completed, unused_cnt_persp_fragments;
+  logic [31:0] unused_cnt_fragrob_id_errors;
+  logic unused_shadow_present;
+  logic [31:0] unused_meta_shadow_mismatch, unused_meta_shadow_reads;
+  logic [31:0] unused_meta_align_err, unused_meta_align_chk;
+  logic [31:0] unused_meta_bil_err, unused_meta_bil_chk;
+  logic [31:0] unused_meta_near_err, unused_meta_near_chk;
+  logic [20:0] unused_meta_bil_first_q, unused_meta_bil_first_t;
+  logic [17:0] unused_meta_bil_first_tok;
+  logic [31:0] unused_meta_genmis;
+  logic [31:0] unused_cnt_combine_jobs [0:7];
+  logic [31:0] unused_cnt_palette_stale, unused_cnt_palette_cold;
+  logic unused_err_rsp_dropped, unused_err_bil_chan;
+  logic [31:0] unused_cnt_near_refused;
+  logic [31:0] unused_err_unknown_class, unused_err_class_invalid;
+  logic [31:0] unused_err_palette_unusable, unused_err_class_mismatch;
+  logic unused_err_plan_mode;
+
+  zhao_raster_texture_stage_v3 #(.MIGRATION_SHADOWS(1'b0)) u_texture_stage (
+      .clk(clk),
+      .rst_n(rst_n),
+      .cand_valid_i(stage_candidate_valid_o),
+      .cand_ready_o(stage_cand_ready_w),
+      .cand_data_i(skid_dn_data_w),
+      .frame_fault_clear_valid_i(stage_clear_valid_w),
+      .frame_fault_clear_ready_o(stage_clear_ready_w),
+      .frame_fault_o(stage_frame_fault_w),
+      .cfg_valid_i(cfg_valid_i),
+      .cfg_ready_o(cfg_ready_o),
+      .cfg_op_i(cfg_op_i),
+      .cfg_page_generation_i(cfg_page_generation_i),
+      .cfg_selector_i(cfg_selector_i),
+      .cfg_row_i(cfg_row_i),
+      .cfg_crc32_i(cfg_crc32_i),
+      .cfg_rsp_valid_o(cfg_rsp_valid_o),
+      .cfg_rsp_ready_i(cfg_rsp_ready_i),
+      .cfg_rsp_op_o(cfg_rsp_op_o),
+      .cfg_rsp_status_o(cfg_rsp_status_o),
+      .cfg_rsp_page_generation_o(cfg_rsp_page_generation_o),
+      .active_page_generation_o(active_page_generation_o),
+      .fill_req_valid_o(fill_req_valid_o),
+      .fill_req_ready_i(fill_req_ready_i),
+      .fill_req_addr_o(fill_req_addr_o),
+      .fill_data_valid_i(fill_data_valid_i),
+      .fill_data_i(fill_data_i),
+      .fill_refused_i(fill_refused_i),
+      .pal_load_valid_i(pal_load_valid_i),
+      .pal_load_ready_o(pal_load_ready_o),
+      .pal_load_op_i(pal_load_op_i),
+      .pal_load_slot_i(pal_load_slot_i),
+      .pal_load_gen_i(pal_load_gen_i),
+      .pal_load_idx_i(pal_load_idx_i),
+      .pal_load_rgb565_i(pal_load_rgb565_i),
+      .pal_load_crc_ok_i(pal_load_crc_ok_i),
+      .sheet_req_valid_o(sheet_req_valid_o),
+      .sheet_req_ready_i(sheet_req_ready_i),
+      .sheet_req_op_o(sheet_req_op_o),
+      .sheet_req_handle_o(sheet_req_handle_o),
+      .sheet_req_texel_o(sheet_req_texel_o),
+      .sheet_req_src_id_o(sheet_req_src_id_o),
+      .pg_valid_i(pg_valid_i),
+      .pg_ready_o(pg_ready_o),
+      .pg_op_i(pg_op_i),
+      .pg_status_i(pg_status_i),
+      .pg_tag_i(pg_tag_i),
+      .pg_strength_i(pg_strength_i),
+      .pg_src_id_i(pg_src_id_i),
+      .frag_valid_o(stage_fragment_valid_o),
+      .frag_ready_i(stage_frag_ready_w),
+      .frag_addr_o(stage_fragment_addr_o),
+      .frag_depth_o(stage_fragment_depth_o),
+      .frag_state_o(stage_fragment_state_o),
+      .frag_src_id_o(stage_fragment_src_id_o),
+      .frag_vert_rgb_o(stage_frag_vert_rgb_w),
+      .frag_vert_a_o(stage_frag_vert_a_w),
+      .frag_tag_o(stage_frag_tag_w),
+      .frag_sten_ref_o(stage_frag_stencil_w),
+      .frag_texel_rgb_o(stage_fragment_texel_rgb_o),
+      .frag_texel_a_o(stage_fragment_texel_a_o),
+      .frag_texel_idx_o(stage_fragment_texel_idx_o),
+      .frag_status_o(stage_fragment_status_o),
+      .quiet_o(texture_quiet_o),
+      .sequence_abort_o(sequence_abort_o),
+      .sequence_drop_count_o(sequence_drop_count_o),
+      .sequence_mismatch_o(sequence_mismatch_o),
+      .admission_sequence_o(admission_sequence_o),
+      .expected_sequence_o(expected_sequence_o),
+      .returned_sequence_o(returned_sequence_o),
+      .cand_fire_o(packet_c_cand_fire_o),
+      .fragment_fire_o(packet_c_fragment_fire_o),
+      .drop_fire_o(packet_c_drop_fire_o),
+      .err_fragrob_wq_overflow_o(unused_err_fragrob_wq_overflow),
+      .err_fragrob_id_error_o(unused_err_fragrob_id_error),
+      .err_aux_degenerate_o(unused_err_aux_degenerate),
+      .err_rcp_q_o(unused_err_rcp_q),
+      .cnt_reorder_held_o(unused_cnt_reorder_held),
+      .cnt_live_peak_o(unused_cnt_live_peak),
+      .cnt_fragments_o(texture_fragments_o),
+      .cnt_cache_hits_o(texture_cache_hits_o),
+      .cnt_cache_misses_o(texture_cache_misses_o),
+      .cnt_palette_lookups_o(texture_palette_lookups_o),
+      .cnt_bilerp_jobs_o(unused_cnt_bilerp_jobs),
+      .cnt_mosaic_samples_o(unused_cnt_mosaic_samples),
+      .cnt_aux_accepted_o(unused_cnt_aux_accepted),
+      .cnt_combine_refused_o(texture_combine_refused_o),
+      .cnt_combine_phases_o(unused_cnt_combine_phases),
+      .cnt_rcp_completed_o(unused_cnt_rcp_completed),
+      .cnt_persp_fragments_o(unused_cnt_persp_fragments),
+      .cnt_dispatch_accepted_o(texture_dispatch_accepted_o),
+      .cnt_plan_accepted_o(texture_plan_accepted_o),
+      .cnt_fragrob_id_errors_o(unused_cnt_fragrob_id_errors),
+      .shadow_present_o(unused_shadow_present),
+      .meta_shadow_mismatch_o(unused_meta_shadow_mismatch),
+      .meta_shadow_reads_o(unused_meta_shadow_reads),
+      .meta_align_err_o(unused_meta_align_err),
+      .meta_align_chk_o(unused_meta_align_chk),
+      .meta_bil_err_o(unused_meta_bil_err),
+      .meta_bil_chk_o(unused_meta_bil_chk),
+      .meta_near_err_o(unused_meta_near_err),
+      .meta_near_chk_o(unused_meta_near_chk),
+      .meta_bil_first_q_o(unused_meta_bil_first_q),
+      .meta_bil_first_t_o(unused_meta_bil_first_t),
+      .meta_bil_first_tok_o(unused_meta_bil_first_tok),
+      .meta_genmis_o(unused_meta_genmis),
+      .cnt_combine_jobs_o(unused_cnt_combine_jobs),
+      .cnt_palette_stale_o(unused_cnt_palette_stale),
+      .cnt_palette_cold_o(unused_cnt_palette_cold),
+      .err_rsp_dropped_o(unused_err_rsp_dropped),
+      .err_bil_chan_o(unused_err_bil_chan),
+      .cnt_near_refused_o(unused_cnt_near_refused),
+      .err_unknown_class_o(unused_err_unknown_class),
+      .err_class_invalid_o(unused_err_class_invalid),
+      .err_palette_unusable_o(unused_err_palette_unusable),
+      .err_class_mismatch_o(unused_err_class_mismatch),
+      .err_plan_mode_o(unused_err_plan_mode)
+  );
+
+  // -------------------------------------------------------------------------
+  // Real fragment, TILESTORE, and RESOLVE path retained from the old tile pipe.
+  logic ts_clear_w, ts_clear_ready_w;
+  logic ts_wr_w, ts_wr_ready_w;
+  logic [7:0] ts_wr_addr_w;
+  logic [63:0] ts_wr_data_w;
+  logic ts_rd_w, ts_rd_ready_w, ts_rd_valid_w;
+  logic [7:0] ts_rd_addr_w;
+  logic [15:0] ts_rd_source_in_w, ts_rd_source_w;
+  logic [63:0] ts_rd_data_w;
+  logic ts_swap_w, ts_swap_ready_w;
+
+  assign stage_frag_ready_w = fragment_input_ready_w;
+  logic fragment_input_ready_w;
+
+  zhao_raster_fragment u_fragment (
+      .clk(clk),
+      .rst_n(rst_n),
+      .frag_valid_i(stage_fragment_valid_o),
+      .frag_ready_o(fragment_input_ready_w),
+      .frag_addr_i(stage_fragment_addr_o),
+      .frag_depth_i(stage_fragment_depth_o),
+      .frag_state_i(stage_fragment_state_o),
+      .frag_src_id_i(stage_fragment_src_id_o),
+      .frag_vert_rgb_i(stage_frag_vert_rgb_w),
+      .frag_vert_a_i(stage_frag_vert_a_w),
+      .frag_tag_i(stage_frag_tag_w),
+      .frag_sten_ref_i(stage_frag_stencil_w),
+      .frag_texel_rgb_i(stage_fragment_texel_rgb_o),
+      .frag_texel_a_i(stage_fragment_texel_a_o),
+      .frag_texel_idx_i(stage_fragment_texel_idx_o),
+      .rd_valid_o(ts_rd_w),
+      .rd_ready_i(ts_rd_ready_w),
+      .rd_addr_o(ts_rd_addr_w),
+      .rd_src_id_o(ts_rd_source_in_w),
+      .rd_valid_i(ts_rd_valid_w),
+      .rd_data_i(ts_rd_data_w),
+      .wr_valid_o(ts_wr_w),
+      .wr_ready_i(ts_wr_ready_w),
+      .wr_addr_o(ts_wr_addr_w),
+      .wr_data_o(ts_wr_data_w),
+      .fragment_error_o(fragment_error_o),
+      .idle_o(fragment_idle_o),
+      .covered_fragments_o(fragment_covered_o),
+      .blended_fragments_o(blended_fragments_o)
+  );
+
+  logic tr_valid_w, tr_ready_w, tr_data_valid_w;
+  logic [7:0] tr_addr_w;
+  logic [63:0] tr_data_w;
+  logic resolve_start_w, resolve_ready_w;
+
+  zhao_raster_tilestore u_tilestore (
+      .clk(clk),
+      .rst_n(rst_n),
+      .clear_valid_i(ts_clear_w),
+      .clear_ready_o(ts_clear_ready_w),
+      .clear_data_i(clear_word_q),
+      .wr_valid_i(ts_wr_w),
+      .wr_ready_o(ts_wr_ready_w),
+      .wr_addr_i(ts_wr_addr_w),
+      .wr_data_i(ts_wr_data_w),
+      .rd_valid_i(ts_rd_w),
+      .rd_ready_o(ts_rd_ready_w),
+      .rd_addr_i(ts_rd_addr_w),
+      .rd_src_id_i(ts_rd_source_in_w),
+      .rd_valid_o(ts_rd_valid_w),
+      .rd_data_o(ts_rd_data_w),
+      .rd_src_id_o(ts_rd_source_w),
+      .res_valid_i(tr_valid_w),
+      .res_ready_o(tr_ready_w),
+      .res_addr_i(tr_addr_w),
+      .res_valid_o(tr_data_valid_w),
+      .res_data_o(tr_data_w),
+      .swap_valid_i(ts_swap_w),
+      .swap_ready_o(ts_swap_ready_w),
+      .front_bank_o(front_bank_o),
+      .tile_references_o(tilestore_references_o)
+  );
+
+  logic signed [11:0] resolve_tile_x_q, resolve_tile_y_q;
+  logic [8:0] tile_coverage_acc_q, resolve_coverage_q;
+  logic resolve_degenerate_q;
+
+  assign resolve_start_w = (rs_state_q == RS_SWAP) && !abort_now_w;
+  assign ts_swap_w = resolve_start_w && resolve_ready_w;
+
+  zhao_raster_resolve u_resolve (
+      .clk(clk),
+      .rst_n(rst_n),
+      .start_valid_i(resolve_start_w),
+      .start_ready_o(resolve_ready_w),
+      .start_tile_x_i(tile_x_q),
+      .start_tile_y_i(tile_y_q),
+      .start_tile_index_i(tile_index_q),
+      .start_src_id_i(source_id_q),
+      .tr_valid_o(tr_valid_w),
+      .tr_ready_i(tr_ready_w),
+      .tr_addr_o(tr_addr_w),
+      .tr_data_valid_i(tr_data_valid_w),
+      .tr_data_i(tr_data_w),
+      .fb_valid_o(fb_valid_o),
+      .fb_ready_i(fb_ready_i),
+      .fb_rgb565_o(fb_rgb565_o),
+      .fb_tag_o(fb_tag_o),
+      .fb_addr_o(fb_addr_o),
+      .fb_last_o(fb_last_o),
+      .fb_src_id_o(fb_src_id_o),
+      .tile_crc_o(tile_crc_o),
+      .tile_crc_index_o(tile_crc_index_o),
+      .tile_crc_valid_o(tile_done_o),
+      .tile_references_o(resolved_tiles_o)
+  );
+
+  logic [11:0] fb_x_raw_w, fb_y_raw_w;
+  always_comb begin
+    fb_x_raw_w = resolve_tile_x_q + {8'd0, fb_addr_o[3:0]};
+    fb_y_raw_w = resolve_tile_y_q + {8'd0, fb_addr_o[7:4]};
+  end
+  assign fb_x_o = $signed(fb_x_raw_w);
+  assign fb_y_o = $signed(fb_y_raw_w);
+  assign tile_cov_count_o = resolve_coverage_q;
+  assign tile_degenerate_o = resolve_degenerate_q;
+
+  assign ts_clear_w = start_valid_w[4];
+
+  // -------------------------------------------------------------------------
+  // Complete drain law, fault/clear policy and lifecycle.
+  logic producer_quiet_w, ordinary_pipe_empty_w, complete_own_quiet_w;
+  logic clear_fire_w;
+  logic local_abort_q;
+  logic local_fault_event_w, coordinate_fault_event_w, range_fault_event_w;
+  logic aux_profile_fault_event_w, joined_attr_drop_w, earlyz_abort_drop_w;
+
+  assign terminal_prior_w = local_abort_q || sequence_abort_o ||
+                            sequence_mismatch_o;
+  assign new_job_accept_w = job_valid_i && (rs_state_q == RS_IDLE) &&
+                            !frame_fault_clear_valid_i && !terminal_prior_w;
+  assign coordinate_fault_event_w = attr_bundle_fault_w && attr_coordinate_bad_w &&
+                                    !terminal_prior_w;
+  assign range_fault_event_w =
+      ((attr_bundle_fault_w && attr_range_bad_w && !terminal_prior_w) ||
+       (new_job_accept_w && profile_area_bad_w));
+  assign aux_profile_fault_event_w =
+      new_job_accept_w && profile_aux_bad_w;
+  assign local_fault_event_w = coordinate_fault_event_w || range_fault_event_w ||
+                               aux_profile_fault_event_w;
+
+  // Include the detecting cycle so same-edge skid work is cancelled and no later
+  // useful candidate can be admitted before the sticky level lands.
+  assign abort_now_w = local_abort_q || local_fault_event_w ||
+                       sequence_abort_o || sequence_mismatch_o;
+  assign raster_abort_o = local_abort_q || sequence_abort_o || sequence_mismatch_o;
+  assign local_attribute_abort_o = local_abort_q;
+  assign local_fault_pulse_o = local_fault_event_w;
+  assign frame_fault_o = local_abort_q || local_fault_event_w || stage_frame_fault_w;
+
+  assign producer_quiet_w = (rs_state_q != RS_START) && ew_job_ready_w &&
+                            !row_hold_valid_q &&
+                            (&attr_idle_w) && !(|attr_q_valid_w);
+  assign ordinary_pipe_empty_w = ew_done_q && producer_quiet_w &&
+                                 !earlyz_cand_valid_w &&
+                                 (skid_level_o == 2'd0) &&
+                                 !stage_candidate_valid_o &&
+                                 `ZHAO_PACKET_D_PIPE_V3_QUIET(texture_quiet_o) &&
+                                 !stage_fragment_valid_o && fragment_idle_o;
+  assign complete_own_quiet_w =
+      ((rs_state_q == RS_IDLE) || abort_now_w) &&
+      producer_quiet_w && !earlyz_cand_valid_w &&
+      (skid_level_o == 2'd0) && !stage_candidate_valid_o &&
+      texture_quiet_o && !stage_fragment_valid_o && fragment_idle_o &&
+      resolve_ready_w;
+  assign quiet_o = complete_own_quiet_w;
+
+  // The caller (zhao_geom_bin_pipe_v2) additionally gates this with complete
+  // binner drain.  Packet C receives no clear until this tile owns no work.
+  assign stage_clear_valid_w = frame_fault_clear_valid_i && complete_own_quiet_w;
+  assign frame_fault_clear_ready_o = complete_own_quiet_w && stage_clear_ready_w;
+  assign clear_fire_w = frame_fault_clear_valid_i && frame_fault_clear_ready_o;
+
+  assign job_ready_o = abort_now_w ? 1'b1 :
+                       ((rs_state_q == RS_IDLE) && !frame_fault_clear_valid_i);
+  assign job_accept_w = job_valid_i && job_ready_o;
+  assign joined_attr_drop_w = attr_bundle_valid_w && (&attr_q_ready_w) &&
+                              abort_now_w;
+  assign earlyz_abort_drop_w = earlyz_cand_valid_w && earlyz_cand_ready_w &&
+                               abort_now_w;
+
+  function automatic logic [31:0] sat_add_drop2(
+      input logic [31:0] current,
+      input logic  [1:0] delta);
+    logic [32:0] sum;
+    begin
+      sum = {1'b0, current} + {{31{1'b0}}, delta};
+      sat_add_drop2 = (sum >= 33'h0ffff_ffff) ? 32'hffff_ffff : sum[31:0];
+    end
+  endfunction
+
+  // -------------------------------------------------------------------------
+  // Sequential ownership.  Counters are reset-zero, saturating and never clear
+  // on a recoverable frame rebase.
+  always_ff @(posedge clk or negedge rst_n) begin : p_packet_d_state
+    if (!rst_n) begin
+      rs_state_q <= RS_IDLE;
+      start_delivered_q <= 5'b11111;
+      ax_q <= 21'sd0; ay_q <= 21'sd0;
+      bx_q <= 21'sd0; by_q <= 21'sd0;
+      cx_q <= 21'sd0; cy_q <= 21'sd0;
+      tile_x_q <= 12'sd0; tile_y_q <= 12'sd0;
+      tile_index_q <= 16'd0; source_id_q <= 16'd0;
+      first_q <= 1'b1; last_q <= 1'b1;
+      clear_word_q <= 64'd0;
+      flat_request_q <= 298'd0;
+      continuation_tail_bits_q <= 48'd0;
+      fragment_state_q <= 32'd0;
+      area2_q <= 47'd0;
+      min_x_q <= 12'sd0;
+      for (int lane = 0; lane < 3; lane++) begin
+        plane_n0_q[lane] <= 96'sd0;
+        plane_dndx_q[lane] <= 72'sd0;
+        plane_dndy_q[lane] <= 72'sd0;
+      end
+
+      row_hold_valid_q <= 1'b0;
+      row_hold_row_q <= 4'd0;
+      row_hold_mask_q <= 16'd0;
+      row_hold_last_q <= 1'b0;
+      row_delivered_q <= 3'b000;
+      saw_coverage_q <= 1'b0;
+      ew_done_q <= 1'b1;
+      ew_count_q <= 9'd0;
+      ew_degenerate_q <= 1'b0;
+
+      tile_coverage_acc_q <= 9'd0;
+      resolve_tile_x_q <= 12'sd0;
+      resolve_tile_y_q <= 12'sd0;
+      resolve_coverage_q <= 9'd0;
+      resolve_degenerate_q <= 1'b0;
+
+      local_abort_q <= 1'b0;
+      local_fault_count_o <= 32'd0;
+      coordinate_fault_count_o <= 32'd0;
+      range_fault_count_o <= 32'd0;
+      aux_profile_fault_count_o <= 32'd0;
+      candidate_cancel_count_o <= 32'd0;
+      local_drop_count_o <= 32'd0;
+      jobs_started_o <= 32'd0;
+      jobs_sunk_o <= 32'd0;
+    end else begin
+      // One held coverage row, with exact per-lane delivery ownership.
+      if (row_hold_valid_q) begin
+        if (row_retire_w) begin
+          row_hold_valid_q <= 1'b0;
+          row_delivered_q <= 3'b000;
+        end else begin
+          row_delivered_q <= row_delivered_next_w;
+        end
+      end else if (ew_cov_valid_w && ew_cov_ready_w) begin
+        row_hold_valid_q <= 1'b1;
+        row_hold_row_q <= ew_cov_row_w;
+        row_hold_mask_q <= ew_cov_mask_w;
+        row_hold_last_q <= ew_cov_last_w;
+        row_delivered_q <= 3'b000;
+        saw_coverage_q <= 1'b1;
+      end else if (ew_done_w && !saw_coverage_q) begin
+        // Empty/degenerate walks have no EDGEWALK beat.  A terminal zero-mask row
+        // retires all three frozen attr jobs without producing a candidate.
+        row_hold_valid_q <= 1'b1;
+        row_hold_row_q <= 4'd0;
+        row_hold_mask_q <= 16'd0;
+        row_hold_last_q <= 1'b1;
+        row_delivered_q <= 3'b000;
+      end
+
+      if (ew_done_w) begin
+        ew_done_q <= 1'b1;
+        ew_count_q <= ew_count_w;
+        ew_degenerate_q <= ew_degenerate_w;
+      end
+
+      if (job_accept_w && abort_now_w) begin
+        if (jobs_sunk_o != 32'hffff_ffff)
+          jobs_sunk_o <= jobs_sunk_o + 32'd1;
+      end else if (job_accept_w) begin
+        // Exact frozen metadata unpack, once, on the accepted job identity.
+        ax_q <= job_ax_i; ay_q <= job_ay_i;
+        bx_q <= job_bx_i; by_q <= job_by_i;
+        cx_q <= job_cx_i; cy_q <= job_cy_i;
+        tile_x_q <= job_tile_x_i; tile_y_q <= job_tile_y_i;
+        tile_index_q <= job_tile_index_i;
+        source_id_q <= job_src_id_i;
+        first_q <= job_first_i;
+        last_q <= job_last_i;
+        clear_word_q <= frame_clear_word_i;
+        flat_request_q <= incoming_flat_request_w;
+        continuation_tail_bits_q <= incoming_continuation_tail_w;
+        fragment_state_q <= incoming_fragment_state_w;
+        area2_q <= incoming_area2_w;
+        min_x_q <= incoming_min_x_w;
+        for (int lane = 0; lane < 3; lane++) begin
+          plane_dndy_q[lane] <= incoming_plane_dndy_w[lane];
+          plane_dndx_q[lane] <= incoming_plane_dndx_w[lane];
+          plane_n0_q[lane] <= incoming_plane_n0_w[lane];
+        end
+        row_hold_valid_q <= 1'b0;
+        row_delivered_q <= 3'b000;
+        start_delivered_q <= job_first_i ? 5'b00000 : 5'b10000;
+        saw_coverage_q <= 1'b0;
+        ew_count_q <= 9'd0;
+        ew_degenerate_q <= 1'b0;
+        if (profile_aux_bad_w || profile_area_bad_w) begin
+          ew_done_q <= 1'b1;
+          rs_state_q <= RS_IDLE;
+        end else begin
+          ew_done_q <= 1'b0;
+          rs_state_q <= RS_START;
+          if (jobs_started_o != 32'hffff_ffff)
+            jobs_started_o <= jobs_started_o + 32'd1;
+          if (job_first_i) tile_coverage_acc_q <= 9'd0;
+        end
+      end
+
+      case (rs_state_q)
+        RS_START: begin
+          start_delivered_q <= start_delivered_next_w;
+          if (start_complete_w) rs_state_q <= RS_ACTIVE;
+        end
+
+        RS_ACTIVE: begin
+          if (ordinary_pipe_empty_w && !abort_now_w) begin
+            tile_coverage_acc_q <= tile_coverage_acc_q + ew_count_q;
+            rs_state_q <= last_q ? RS_SWAP : RS_IDLE;
+          end
+        end
+
+        RS_SWAP: begin
+          if (ts_swap_w && ts_swap_ready_w) begin
+            resolve_tile_x_q <= tile_x_q;
+            resolve_tile_y_q <= tile_y_q;
+            resolve_coverage_q <= tile_coverage_acc_q;
+            resolve_degenerate_q <= ew_degenerate_q;
+            rs_state_q <= RS_IDLE;
+          end
+        end
+
+        default: begin end
+      endcase
+
+      // Any terminal indication preempts ordinary completion/swap.  Producer
+      // state is not reset; RS_IDLE plus abort_now is the draining/sink state.
+      if (abort_now_w && !clear_fire_w &&
+          ((rs_state_q != RS_START) || start_complete_w))
+        rs_state_q <= RS_IDLE;
+
+      if (local_fault_event_w) local_abort_q <= 1'b1;
+      else if (clear_fire_w) local_abort_q <= 1'b0;
+
+      if (local_fault_event_w && local_fault_count_o != 32'hffff_ffff)
+        local_fault_count_o <= local_fault_count_o + 32'd1;
+      if (coordinate_fault_event_w && coordinate_fault_count_o != 32'hffff_ffff)
+        coordinate_fault_count_o <= coordinate_fault_count_o + 32'd1;
+      if (range_fault_event_w && range_fault_count_o != 32'hffff_ffff)
+        range_fault_count_o <= range_fault_count_o + 32'd1;
+      if (aux_profile_fault_event_w && aux_profile_fault_count_o != 32'hffff_ffff)
+        aux_profile_fault_count_o <= aux_profile_fault_count_o + 32'd1;
+      if (skid_cancel_fire_w && candidate_cancel_count_o != 32'hffff_ffff)
+        candidate_cancel_count_o <= candidate_cancel_count_o + 32'd1;
+      if (joined_attr_drop_w || earlyz_abort_drop_w)
+        local_drop_count_o <= sat_add_drop2(
+            local_drop_count_o,
+            {1'b0, joined_attr_drop_w} + {1'b0, earlyz_abort_drop_w});
+    end
+  end
+
+  // synthesis translate_off
+  logic held_row_q;
+  logic [20:0] held_row_payload_q;
+  logic held_attr_bundle_q;
+  logic [128:0] held_attr_bundle_payload_q;
+  logic held_earlyz_q;
+  logic [489:0] held_earlyz_payload_q;
+  logic held_stage_fragment_q;
+  logic [175:0] held_stage_fragment_payload_q;
+  logic held_tile_write_q;
+  logic [71:0] held_tile_write_payload_q;
+  logic [128:0] attr_bundle_payload_w;
+  logic [489:0] earlyz_hold_payload_w;
+  logic [175:0] stage_fragment_payload_w;
+
+  assign attr_bundle_payload_w = {
+      attr_q_w[0], attr_row_w[0], attr_col_w[0], attr_last_w[0],
+      attr_sat_w[0], attr_error_w[0],
+      attr_q_w[1], attr_row_w[1], attr_col_w[1], attr_last_w[1],
+      attr_sat_w[1], attr_error_w[1],
+      attr_q_w[2], attr_row_w[2], attr_col_w[2], attr_last_w[2],
+      attr_sat_w[2], attr_error_w[2]};
+  assign earlyz_hold_payload_w = {
+      earlyz_cand_addr_w, earlyz_cand_depth_w, earlyz_cand_state_w,
+      earlyz_cand_source_w, earlyz_cand_payload_w};
+  assign stage_fragment_payload_w = {
+      stage_fragment_addr_o, stage_fragment_depth_o,
+      stage_fragment_state_o, stage_fragment_src_id_o,
+      stage_frag_vert_rgb_w, stage_frag_vert_a_w, stage_frag_tag_w,
+      stage_frag_stencil_w, stage_fragment_texel_rgb_o,
+      stage_fragment_texel_a_o, stage_fragment_texel_idx_o,
+      stage_fragment_status_o};
+
+  always_ff @(posedge clk or negedge rst_n) begin : p_packet_d_assertions
+    if (!rst_n) begin
+      held_row_q <= 1'b0;
+      held_row_payload_q <= 21'd0;
+      held_attr_bundle_q <= 1'b0;
+      held_attr_bundle_payload_q <= 129'd0;
+      held_earlyz_q <= 1'b0;
+      held_earlyz_payload_q <= 490'd0;
+      held_stage_fragment_q <= 1'b0;
+      held_stage_fragment_payload_q <= 176'd0;
+      held_tile_write_q <= 1'b0;
+      held_tile_write_payload_q <= 72'd0;
+    end else begin
+      if (held_row_q && (!row_hold_valid_q ||
+          ({row_hold_row_q, row_hold_mask_q, row_hold_last_q} != held_row_payload_q)))
+        $fatal(1, "Packet-D coverage row changed before all lanes accepted");
+      if (held_attr_bundle_q && (!attr_bundle_valid_w ||
+          (attr_bundle_payload_w != held_attr_bundle_payload_q)))
+        $fatal(1, "Packet-D joined attribute bundle changed under backpressure");
+      if (held_earlyz_q && (!earlyz_cand_valid_w ||
+          (earlyz_hold_payload_w != held_earlyz_payload_q)))
+        $fatal(1, "Packet-D Early-Z candidate changed under backpressure");
+      if (held_stage_fragment_q && (!stage_fragment_valid_o ||
+          (stage_fragment_payload_w != held_stage_fragment_payload_q)))
+        $fatal(1, "Packet-D stage fragment changed under backpressure");
+      if (held_tile_write_q && (!ts_wr_w ||
+          ({ts_wr_addr_w, ts_wr_data_w} != held_tile_write_payload_q)))
+        $fatal(1, "Packet-D tile write changed under backpressure");
+      if (|(start_fire_w & start_delivered_q))
+        $fatal(1, "Packet-D job-start destination accepted twice");
+      if (start_fire_w[4] && !first_q)
+        $fatal(1, "Packet-D issued clear for a non-first tile job");
+      if (skid_cancel_fire_w && !abort_now_w)
+        $fatal(1, "Packet-D counted a non-abort skid transfer as cancellation");
+      if (ts_swap_w && abort_now_w)
+        $fatal(1, "Packet-D started a swap during terminal drain");
+      if (unused_shadow_present)
+        $fatal(1, "Packet-D MIGRATION_SHADOWS=0 exposed shadow state");
+
+      held_row_q <= row_hold_valid_q && !row_retire_w;
+      if (row_hold_valid_q && !row_retire_w)
+        held_row_payload_q <= {row_hold_row_q, row_hold_mask_q, row_hold_last_q};
+      held_attr_bundle_q <= attr_bundle_valid_w && !(|attr_q_ready_w);
+      if (attr_bundle_valid_w && !(|attr_q_ready_w))
+        held_attr_bundle_payload_q <= attr_bundle_payload_w;
+      held_earlyz_q <= earlyz_cand_valid_w && !earlyz_cand_ready_w;
+      if (earlyz_cand_valid_w && !earlyz_cand_ready_w)
+        held_earlyz_payload_q <= earlyz_hold_payload_w;
+      held_stage_fragment_q <= stage_fragment_valid_o && !stage_frag_ready_w;
+      if (stage_fragment_valid_o && !stage_frag_ready_w)
+        held_stage_fragment_payload_q <= stage_fragment_payload_w;
+      held_tile_write_q <= ts_wr_w && !ts_wr_ready_w;
+      if (ts_wr_w && !ts_wr_ready_w)
+        held_tile_write_payload_q <= {ts_wr_addr_w, ts_wr_data_w};
+    end
+  end
+  // synthesis translate_on
+
+  // Explicit sink for diagnostic-only leaf outputs.  Their durable selected
+  // counters are promoted above; this reduction has no datapath authority.
+  logic unused_ok;
+  always_comb begin
+    unused_ok = ^{1'b0, ew_cov_source_w, attr_sat_w,
+                  attr_pixels_w[0], attr_pixels_w[1], attr_pixels_w[2],
+                  attr_divides_w[0], attr_divides_w[1], attr_divides_w[2],
+                  attr_saturations_w[0], attr_saturations_w[1], attr_saturations_w[2],
+                  attr_divide_errors_w[0], attr_divide_errors_w[1], attr_divide_errors_w[2],
+                  earlyz_cand_bin_w, earlyz_reject_w, earlyz_reject_addr_w,
+                  ts_clear_ready_w, ts_wr_ready_w, ts_rd_ready_w, ts_rd_source_w,
+                  ts_swap_ready_w, unused_err_fragrob_wq_overflow,
+                  unused_err_fragrob_id_error, unused_err_aux_degenerate,
+                  unused_err_rcp_q, unused_cnt_reorder_held, unused_cnt_live_peak,
+                  unused_cnt_bilerp_jobs, unused_cnt_mosaic_samples,
+                  unused_cnt_aux_accepted, unused_cnt_combine_phases,
+                  unused_cnt_rcp_completed, unused_cnt_persp_fragments,
+                  unused_cnt_fragrob_id_errors, unused_shadow_present,
+                  unused_meta_shadow_mismatch, unused_meta_shadow_reads,
+                  unused_meta_align_err, unused_meta_align_chk,
+                  unused_meta_bil_err, unused_meta_bil_chk,
+                  unused_meta_near_err, unused_meta_near_chk,
+                  unused_meta_bil_first_q, unused_meta_bil_first_t,
+                  unused_meta_bil_first_tok, unused_meta_genmis,
+                  unused_cnt_combine_jobs[0], unused_cnt_combine_jobs[1],
+                  unused_cnt_combine_jobs[2], unused_cnt_combine_jobs[3],
+                  unused_cnt_combine_jobs[4], unused_cnt_combine_jobs[5],
+                  unused_cnt_combine_jobs[6], unused_cnt_combine_jobs[7],
+                  unused_cnt_palette_stale, unused_cnt_palette_cold,
+                  unused_err_rsp_dropped, unused_err_bil_chan,
+                  unused_cnt_near_refused, unused_err_unknown_class,
+                  unused_err_class_invalid, unused_err_palette_unusable,
+                  unused_err_class_mismatch, unused_err_plan_mode};
+  end
+
+endmodule : zhao_raster_tile_pipe_v2
+
+`undef ZHAO_PACKET_D_LANE1_COL
+`undef ZHAO_PACKET_D_PIPE_V3_QUIET
+`undef ZHAO_PACKET_D_SKID_DN_READY
+`default_nettype wire

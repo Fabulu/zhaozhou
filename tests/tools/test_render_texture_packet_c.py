@@ -156,7 +156,12 @@ def validate_cmake_registration(text: str) -> None:
     packet_c_start = "set(ZHAO_PACKET_C_SOURCE_MANIFEST"
     if active.count(packet_c_start) != 1:
         raise AssertionError("Packet-C CMake section marker is not exact/unique")
-    active = active[active.index(packet_c_start):]
+    section_start = active.index(packet_c_start)
+    packet_d_start = "set(ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST"
+    section_end = active.find(packet_d_start, section_start)
+    if section_end < 0:
+        section_end = len(active)
+    active = active[section_start:section_end]
     required_once = (
         packet_c_start,
         "${CMAKE_CURRENT_SOURCE_DIR}/raster/raster_texture_stage_v3.sources.txt)",

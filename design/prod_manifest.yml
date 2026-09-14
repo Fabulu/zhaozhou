@@ -344,6 +344,14 @@ excluded:
   # Packet C adds the first synthetic post-Early-Z composition around that exact
   # root, but it remains outside production until Packet D owns the tile-pipe seam.
   - zhao_raster_texture_stage_v3: not-yet-adopted  Packet-C synthetic post-Early-Z V3-to-RASTER.FRAGMENT composition with ordered sequence-abort drain; unit verification is not production adoption, and Packet D must connect the widened skid/tile seam before this can replace the selected standalone texture root
+  # Packet D's attribute leaves implement current rast.cpp's row-gradient law,
+  # not the retained per-pixel ATTRDIV/ATTRSTEP candidate. They remain unselected
+  # until all five Packet-D leaves compose and the later G8A fit prices the seam.
+  - zhao_raster_attrdiv_v2: not-yet-adopted  Packet-D tie-to-positive saturating signed attribute divider; current-zref differential at radix 2/4 and committed negative-half mutant are functional evidence only, with no standalone or connected resource measurement
+  - zhao_raster_attrgrad_v2: not-yet-adopted  Packet-D global-min-X row-gradient walker using zhao_raster_attrdiv_v2; current-zref row/stall/cross-tile differential and committed omitted-min-X-accumulation mutant pass, pending full Packet-D composition and G8A fit
+  - zhao_geom_binner_v2: not-yet-adopted  Packet-D version of GEOM.BINNER with exact accepted-triangle-owned 1,157-bit metadata in 29 ascending 40-bit slices; old/V2 stream/counter parity and committed metadata-address mutant are functional evidence only, pending the versioned tile/bin composition and G8A fit
+  - zhao_raster_tile_pipe_v2: not-yet-adopted  Packet-D three-plane current-zref attribute, Early-Z, Packet-C V3, fragment, TILESTORE and RESOLVE composition with synchronous abort cancellation; full simulation evidence is not production adoption or G8A resource evidence
+  - zhao_geom_bin_pipe_v2: not-yet-adopted  Packet-D exact GEOM.BINNER-V2 metadata splice into the versioned tile pipeline with remaining-job sink on raster abort; retained old compositions remain selected/oracle paths until G8A and later adoption packets
   #
   # The rows below are the now-unreachable PRE-PACKET-B implementations. They are
   # retained as oracle/history material with their source, tests, existing fit

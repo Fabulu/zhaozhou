@@ -9284,3 +9284,340 @@ set_tests_properties(
   PROPERTIES LABELS "fast;nightly;packet-c;mutant" TIMEOUT 1800
     PASS_REGULAR_EXPRESSION "packet-c old-ready deadlock mutant FIRED"
     FAIL_REGULAR_EXPRESSION "packet-c directed FAIL")
+
+# Packet D1: current-rast.cpp signed row-gradient law. The manifest keeps each
+# selector immediately before the exact two production leaves and the test top
+# last; all four profiles compile the same source authority.
+set(ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster/raster_attrgrad_v2.sources.txt)
+if(NOT EXISTS "${ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST}")
+  message(FATAL_ERROR
+    "required Packet-D attribute source manifest is missing: ${ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST}")
+endif()
+file(READ "${ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST}"
+  ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST_RAW)
+string(REPLACE "\r\n" "\n" ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST_RAW
+  "${ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST_RAW}")
+string(REPLACE "\r" "\n" ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST_RAW
+  "${ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST_RAW}")
+string(REGEX REPLACE "\n$" "" ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST_BODY
+  "${ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST_RAW}")
+if(ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST_BODY STREQUAL "" OR
+   ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST_BODY MATCHES "(^|\n)[ \t]*(\n|$)")
+  message(FATAL_ERROR "Packet-D attribute source manifest contains a blank record")
+endif()
+file(STRINGS "${ZHAO_PACKET_D_ATTR_SOURCE_MANIFEST}"
+  ZHAO_PACKET_D_ATTR_RELATIVE_SOURCES)
+set(ZHAO_PACKET_D_ATTR_SOURCES)
+set(ZHAO_PACKET_D_ATTR_SEEN)
+foreach(relative_source IN LISTS ZHAO_PACKET_D_ATTR_RELATIVE_SOURCES)
+  if(relative_source STREQUAL "" OR IS_ABSOLUTE "${relative_source}" OR
+     relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+    message(FATAL_ERROR
+      "invalid Packet-D attribute source-manifest path: ${relative_source}")
+  endif()
+  list(FIND ZHAO_PACKET_D_ATTR_SEEN "${relative_source}" duplicate_index)
+  if(NOT duplicate_index EQUAL -1)
+    message(FATAL_ERROR
+      "duplicate Packet-D attribute source-manifest path: ${relative_source}")
+  endif()
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR
+      "missing Packet-D attribute source-manifest path: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKET_D_ATTR_SEEN "${relative_source}")
+  list(APPEND ZHAO_PACKET_D_ATTR_SOURCES
+    "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+if(NOT ZHAO_PACKET_D_ATTR_RELATIVE_SOURCES STREQUAL
+   "tests/mutants/zhao_raster_attr_v2_mutants.sv;fpga/rtl/raster/zhao_raster_attrdiv_v2.sv;fpga/rtl/raster/zhao_raster_attrgrad_v2.sv;tests/raster/tb_raster_attrgrad_v2.sv")
+  message(FATAL_ERROR
+    "Packet-D attribute source manifest is not the exact ordered four-file closure")
+endif()
+
+function(zhao_packet_d_attr_target TARGET RADIX)
+  set(selector_args ${ARGN})
+  add_executable(${TARGET} raster/raster_attrgrad_v2_directed.cpp)
+  target_link_libraries(${TARGET} PRIVATE zhao_zref)
+  target_include_directories(${TARGET} PRIVATE
+    ${CMAKE_SOURCE_DIR}/reference/src)
+  verilate(${TARGET}
+    PREFIX Vtb_raster_attrgrad_v2
+    TOP_MODULE tb_raster_attrgrad_v2
+    SOURCES ${ZHAO_PACKET_D_ATTR_SOURCES}
+    VERILATOR_ARGS --assert -GRADIX=${RADIX} ${selector_args})
+endfunction()
+
+zhao_packet_d_attr_target(pd_a2 2)
+add_test(NAME raster_attrgrad_v2_directed COMMAND pd_a2)
+zhao_packet_d_attr_target(pd_a4 4)
+add_test(NAME raster_attrgrad_v2_r4 COMMAND pd_a4)
+
+zhao_packet_d_attr_target(pd_aneg 2 -DZHAO_ATTR_V2_MUTANT_NEG_HALF)
+target_compile_definitions(pd_aneg PRIVATE EXPECT_NEG_HALF_MUTANT=1)
+add_test(NAME raster_attrgrad_v2_neg_half_mutant COMMAND pd_aneg)
+
+zhao_packet_d_attr_target(pd_amin 2 -DZHAO_ATTR_V2_MUTANT_OMIT_MIN_X_ACCUM)
+target_compile_definitions(pd_amin PRIVATE EXPECT_OMIT_MIN_X_ACCUM_MUTANT=1)
+add_test(NAME raster_attrgrad_v2_omit_min_x_accum_mutant COMMAND pd_amin)
+
+set_tests_properties(
+  raster_attrgrad_v2_directed
+  raster_attrgrad_v2_r4
+  PROPERTIES LABELS "fast;nightly;packet-d" TIMEOUT 1800)
+set_tests_properties(
+  raster_attrgrad_v2_neg_half_mutant
+  PROPERTIES LABELS "fast;nightly;packet-d;mutant" TIMEOUT 1800
+    PASS_REGULAR_EXPRESSION "PASS: negative exact-half mutant fired"
+    FAIL_REGULAR_EXPRESSION "FAIL")
+set_tests_properties(
+  raster_attrgrad_v2_omit_min_x_accum_mutant
+  PROPERTIES LABELS "fast;nightly;packet-d;mutant" TIMEOUT 1800
+    PASS_REGULAR_EXPRESSION "PASS: omitted global-min-X tile offset mutant fired exactly"
+    FAIL_REGULAR_EXPRESSION "FAIL")
+
+# Packet D2: old/V2 binner parity plus exact accepted-triangle metadata identity.
+set(ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry/geom_binner_v2.sources.txt)
+if(NOT EXISTS "${ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST}")
+  message(FATAL_ERROR
+    "required Packet-D binner source manifest is missing: ${ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST}")
+endif()
+file(READ "${ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST}"
+  ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST_RAW)
+string(REPLACE "\r\n" "\n" ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST_RAW
+  "${ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST_RAW}")
+string(REPLACE "\r" "\n" ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST_RAW
+  "${ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST_RAW}")
+string(REGEX REPLACE "\n$" "" ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST_BODY
+  "${ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST_RAW}")
+if(ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST_BODY STREQUAL "" OR
+   ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST_BODY MATCHES "(^|\n)[ \t]*(\n|$)")
+  message(FATAL_ERROR "Packet-D binner source manifest contains a blank record")
+endif()
+file(STRINGS "${ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST}"
+  ZHAO_PACKET_D_BINNER_RELATIVE_SOURCES)
+set(ZHAO_PACKET_D_BINNER_SOURCES)
+set(ZHAO_PACKET_D_BINNER_SEEN)
+foreach(relative_source IN LISTS ZHAO_PACKET_D_BINNER_RELATIVE_SOURCES)
+  if(relative_source STREQUAL "" OR IS_ABSOLUTE "${relative_source}" OR
+     relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+    message(FATAL_ERROR
+      "invalid Packet-D binner source-manifest path: ${relative_source}")
+  endif()
+  list(FIND ZHAO_PACKET_D_BINNER_SEEN "${relative_source}" duplicate_index)
+  if(NOT duplicate_index EQUAL -1)
+    message(FATAL_ERROR
+      "duplicate Packet-D binner source-manifest path: ${relative_source}")
+  endif()
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR
+      "missing Packet-D binner source-manifest path: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKET_D_BINNER_SEEN "${relative_source}")
+  list(APPEND ZHAO_PACKET_D_BINNER_SOURCES
+    "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+if(NOT ZHAO_PACKET_D_BINNER_RELATIVE_SOURCES STREQUAL
+   "tests/mutants/zhao_geom_binner_v2_mutants.sv;fpga/rtl/geometry/zhao_geom_arena.sv;fpga/rtl/raster/zhao_raster_fill.sv;fpga/rtl/geometry/zhao_geom_binner.sv;fpga/rtl/geometry/zhao_geom_binner_v2.sv;tests/geometry/tb_geom_binner_v2_pair.sv")
+  message(FATAL_ERROR
+    "Packet-D binner source manifest is not the exact ordered six-file closure")
+endif()
+
+function(zhao_packet_d_binner_target TARGET)
+  set(selector_args ${ARGN})
+  add_executable(${TARGET} geometry/geom_binner_v2_directed.cpp)
+  verilate(${TARGET}
+    PREFIX Vtb_geom_binner_v2_pair
+    TOP_MODULE tb_geom_binner_v2_pair
+    SOURCES ${ZHAO_PACKET_D_BINNER_SOURCES}
+    VERILATOR_ARGS --assert
+      -GTRI_CAP=8 -GTRI_W=3 -GCHUNKS=6 -GCHUNK_W=3
+      ${selector_args})
+endfunction()
+
+zhao_packet_d_binner_target(pd_bin)
+add_test(NAME geom_binner_v2_directed COMMAND pd_bin)
+
+zhao_packet_d_binner_target(pd_bim
+  -DZHAO_GEOM_BINNER_V2_MUTANT_META_ADDR_SWAP)
+target_compile_definitions(pd_bim PRIVATE
+  EXPECT_GEOM_BINNER_V2_META_ADDR_SWAP_MUTANT=1)
+add_test(NAME geom_binner_v2_meta_addr_swap_mutant COMMAND pd_bim)
+
+set_tests_properties(geom_binner_v2_directed PROPERTIES
+  LABELS "fast;nightly;packet-d" TIMEOUT 1800)
+set_tests_properties(geom_binner_v2_meta_addr_swap_mutant PROPERTIES
+  LABELS "fast;nightly;packet-d;mutant" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "PASS: metadata-address mutant fired exactly"
+  FAIL_REGULAR_EXPRESSION "FAIL")
+
+# Packet D3: exact 52-source binner-to-resolve composition. Packet-C and
+# Packet-D selectors precede the exact production modules they alter.
+set(ZHAO_PACKET_D_FULL_SOURCE_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry/geom_bin_pipe_v2.sources.txt)
+if(NOT EXISTS "${ZHAO_PACKET_D_FULL_SOURCE_MANIFEST}")
+  message(FATAL_ERROR
+    "required Packet-D full source manifest is missing: ${ZHAO_PACKET_D_FULL_SOURCE_MANIFEST}")
+endif()
+file(READ "${ZHAO_PACKET_D_FULL_SOURCE_MANIFEST}"
+  ZHAO_PACKET_D_FULL_SOURCE_MANIFEST_RAW)
+string(REPLACE "\r\n" "\n" ZHAO_PACKET_D_FULL_SOURCE_MANIFEST_RAW
+  "${ZHAO_PACKET_D_FULL_SOURCE_MANIFEST_RAW}")
+string(REPLACE "\r" "\n" ZHAO_PACKET_D_FULL_SOURCE_MANIFEST_RAW
+  "${ZHAO_PACKET_D_FULL_SOURCE_MANIFEST_RAW}")
+string(REGEX REPLACE "\n$" "" ZHAO_PACKET_D_FULL_SOURCE_MANIFEST_BODY
+  "${ZHAO_PACKET_D_FULL_SOURCE_MANIFEST_RAW}")
+if(ZHAO_PACKET_D_FULL_SOURCE_MANIFEST_BODY STREQUAL "" OR
+   ZHAO_PACKET_D_FULL_SOURCE_MANIFEST_BODY MATCHES "(^|\n)[ \t]*(\n|$)")
+  message(FATAL_ERROR "Packet-D full source manifest contains a blank record")
+endif()
+file(STRINGS "${ZHAO_PACKET_D_FULL_SOURCE_MANIFEST}"
+  ZHAO_PACKET_D_FULL_RELATIVE_SOURCES)
+set(ZHAO_PACKET_D_FULL_SOURCES)
+set(ZHAO_PACKET_D_FULL_SEEN)
+foreach(relative_source IN LISTS ZHAO_PACKET_D_FULL_RELATIVE_SOURCES)
+  if(relative_source STREQUAL "" OR IS_ABSOLUTE "${relative_source}" OR
+     relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+    message(FATAL_ERROR
+      "invalid Packet-D full source-manifest path: ${relative_source}")
+  endif()
+  list(FIND ZHAO_PACKET_D_FULL_SEEN "${relative_source}" duplicate_index)
+  if(NOT duplicate_index EQUAL -1)
+    message(FATAL_ERROR
+      "duplicate Packet-D full source-manifest path: ${relative_source}")
+  endif()
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR
+      "missing Packet-D full source-manifest path: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKET_D_FULL_SEEN "${relative_source}")
+  list(APPEND ZHAO_PACKET_D_FULL_SOURCES
+    "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+list(LENGTH ZHAO_PACKET_D_FULL_RELATIVE_SOURCES ZHAO_PACKET_D_FULL_SOURCE_COUNT)
+if(NOT ZHAO_PACKET_D_FULL_SOURCE_COUNT EQUAL 52)
+  message(FATAL_ERROR "Packet-D full source manifest must contain exactly 52 SV paths")
+endif()
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 0 ZHAO_PACKET_D_FULL_FIRST)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 28 ZHAO_PACKET_D_FULL_PC_MUTANT)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 29 ZHAO_PACKET_D_FULL_PC_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 48 ZHAO_PACKET_D_FULL_TILE_MUTANT)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 49 ZHAO_PACKET_D_FULL_TILE_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 50 ZHAO_PACKET_D_FULL_BIN_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 51 ZHAO_PACKET_D_FULL_TOP)
+if(NOT ZHAO_PACKET_D_FULL_FIRST STREQUAL
+   "fpga/rtl/generated/zhao_abi_pkg.sv" OR
+   NOT ZHAO_PACKET_D_FULL_PC_MUTANT STREQUAL
+   "tests/mutants/zhao_raster_texture_stage_v3_mutants.sv" OR
+   NOT ZHAO_PACKET_D_FULL_PC_STAGE STREQUAL
+   "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv" OR
+   NOT ZHAO_PACKET_D_FULL_TILE_MUTANT STREQUAL
+   "tests/mutants/zhao_raster_tile_pipe_v2_mutants.sv" OR
+   NOT ZHAO_PACKET_D_FULL_TILE_STAGE STREQUAL
+   "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv" OR
+   NOT ZHAO_PACKET_D_FULL_BIN_STAGE STREQUAL
+   "fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv" OR
+   NOT ZHAO_PACKET_D_FULL_TOP STREQUAL
+   "tests/geometry/tb_geom_bin_pipe_v2.sv")
+  message(FATAL_ERROR
+    "Packet-D full source manifest lost package/selector/stage/top order")
+endif()
+
+function(zhao_packet_d_full_target TARGET)
+  set(selector_args ${ARGN})
+  add_executable(${TARGET} geometry/geom_bin_pipe_v2_directed.cpp)
+  target_link_libraries(${TARGET} PRIVATE zhao_zref)
+  verilate(${TARGET}
+    PREFIX Vtb_geom_bin_pipe_v2
+    TOP_MODULE tb_geom_bin_pipe_v2
+    SOURCES ${ZHAO_PACKET_D_FULL_SOURCES}
+    VERILATOR_ARGS --assert ${selector_args})
+endfunction()
+
+zhao_packet_d_full_target(pd_full)
+add_test(NAME geom_bin_pipe_v2_directed COMMAND pd_full)
+
+zhao_packet_d_full_target(pd_coord -DZHAO_PACKET_D_MUTANT_COORDINATE)
+target_compile_definitions(pd_coord PRIVATE PACKET_D_EXPECT_COORDINATE=1)
+add_test(NAME geom_bin_pipe_v2_coordinate_mutant COMMAND pd_coord)
+
+zhao_packet_d_full_target(pd_quiet -DZHAO_PACKET_D_MUTANT_OMIT_V3_QUIET)
+target_compile_definitions(pd_quiet PRIVATE PACKET_D_EXPECT_OMIT_V3_QUIET=1)
+add_test(NAME geom_bin_pipe_v2_omit_v3_quiet_mutant COMMAND pd_quiet)
+
+zhao_packet_d_full_target(pd_ident -DZHAO_PACKET_C_MUTANT_IDENTITY_ONLY)
+target_compile_definitions(pd_ident PRIVATE PACKET_D_EXPECT_IDENTITY_ABORT=1)
+add_test(NAME geom_bin_pipe_v2_identity_cancel_control COMMAND pd_ident)
+
+zhao_packet_d_full_target(pd_old -DZHAO_PACKET_C_MUTANT_OLD_READY)
+target_compile_definitions(pd_old PRIVATE PACKET_D_EXPECT_OLD_READY=1)
+add_test(NAME geom_bin_pipe_v2_old_ready_mutant COMMAND pd_old)
+
+zhao_packet_d_full_target(pd_cancel
+  -DZHAO_PACKET_C_MUTANT_IDENTITY_ONLY
+  -DZHAO_PACKET_D_MUTANT_SKIP_CANCEL)
+target_compile_definitions(pd_cancel PRIVATE PACKET_D_EXPECT_SKIP_CANCEL=1)
+add_test(NAME geom_bin_pipe_v2_skip_cancel_mutant COMMAND pd_cancel)
+
+set_tests_properties(geom_bin_pipe_v2_directed PROPERTIES
+  LABELS "fast;nightly;packet-d" TIMEOUT 1800)
+set_tests_properties(geom_bin_pipe_v2_coordinate_mutant PROPERTIES
+  LABELS "fast;nightly;packet-d;mutant" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "Packet-D coordinate mutant FIRED"
+  FAIL_REGULAR_EXPRESSION "packet-d directed FAIL")
+set_tests_properties(geom_bin_pipe_v2_omit_v3_quiet_mutant PROPERTIES
+  LABELS "fast;nightly;packet-d;mutant" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "Packet-D omit-V3-quiet mutant FIRED"
+  FAIL_REGULAR_EXPRESSION "packet-d directed FAIL")
+set_tests_properties(geom_bin_pipe_v2_identity_cancel_control PROPERTIES
+  LABELS "fast;nightly;packet-d;mutant" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "Packet-D identity/cancel control FIRED"
+  FAIL_REGULAR_EXPRESSION "packet-d directed FAIL")
+set_tests_properties(geom_bin_pipe_v2_old_ready_mutant PROPERTIES
+  LABELS "fast;nightly;packet-d;mutant" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "Packet-D old-ready mutant FIRED"
+  FAIL_REGULAR_EXPRESSION "packet-d directed FAIL")
+set_tests_properties(geom_bin_pipe_v2_skip_cancel_mutant PROPERTIES
+  LABELS "fast;nightly;packet-d;mutant" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "Packet-D skip-cancel mutant FIRED"
+  FAIL_REGULAR_EXPRESSION "packet-d directed FAIL")
+
+add_test(NAME packet_d_registration_static
+  COMMAND "${Python3_EXECUTABLE}"
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_render_texture_packet_d.py -q)
+set_tests_properties(packet_d_registration_static PROPERTIES
+  LABELS "fast;nightly;packet-d" TIMEOUT 1800)
+
+# Independent configure-time inventory: deleting the static checker registration
+# cannot make the remaining Packet-D tests look complete.
+set(ZHAO_PACKET_D_REQUIRED_TESTS
+  raster_attrgrad_v2_directed
+  raster_attrgrad_v2_r4
+  raster_attrgrad_v2_neg_half_mutant
+  raster_attrgrad_v2_omit_min_x_accum_mutant
+  geom_binner_v2_directed
+  geom_binner_v2_meta_addr_swap_mutant
+  geom_bin_pipe_v2_directed
+  geom_bin_pipe_v2_coordinate_mutant
+  geom_bin_pipe_v2_omit_v3_quiet_mutant
+  geom_bin_pipe_v2_identity_cancel_control
+  geom_bin_pipe_v2_old_ready_mutant
+  geom_bin_pipe_v2_skip_cancel_mutant
+  packet_d_registration_static)
+list(LENGTH ZHAO_PACKET_D_REQUIRED_TESTS ZHAO_PACKET_D_REQUIRED_TEST_COUNT)
+if(NOT ZHAO_PACKET_D_REQUIRED_TEST_COUNT EQUAL 13)
+  message(FATAL_ERROR "Packet-D required CTest inventory must contain exactly 13 names")
+endif()
+foreach(required_packet_d_test IN LISTS ZHAO_PACKET_D_REQUIRED_TESTS)
+  if(NOT TEST "${required_packet_d_test}")
+    message(FATAL_ERROR
+      "required Packet-D CTest is not registered: ${required_packet_d_test}")
+  endif()
+endforeach()
