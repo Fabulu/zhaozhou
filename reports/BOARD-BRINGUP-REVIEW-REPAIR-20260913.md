@@ -7,6 +7,7 @@
 **Loader byte-identity repair:** `e66a606636727fb4df27aed87bd1181af01164eb`
 **QSF-mutation build-entry repair:** `44a6d88576be382bf5eaa69ea0cf10fcc6d1982d`
 **Projectless build-ID repair:** `2ee7d560d216170a791286b35a871573f8a8581a`
+**Direct-stage receipt repair:** `74d4d30d247bc2c5691b8130c6361f8ce6702bf3`
 **State:** attempt 3 compiled/QSF-clean but failed artifact closure; **no compile or physical activity authorised**
 
 ## Review disposition
@@ -305,15 +306,34 @@ rather than weakening its contract. No complete manifest exists; the RBF remains
 quarantined. Attempt 3 is preserved under immutable `ATTEMPT3-MISSING-DONE`
 names and no repeat/bypass occurred.
 
+### Direct-stage completion receipt repair
+
+Commit `74d4d30d247bc2c5691b8130c6361f8ce6702bf3` removes `.done` from the
+new direct-stage artifact schema without creating or touching it. The stage
+runner now queries and pins Quartus version, records the exact projectless
+build-ID/map/fit/asm/STA command arrays and zero RCs, records identical QSF
+hashes after every stage, hashes all 15 required Quartus outputs including RBF,
+and atomically writes a canonical self-digested
+`ZhaozhouSpecs.stage-receipt.json` only after every stage/guard/output gate
+passes. The complete manifest replaces `.done` with this receipt, hashes it, and
+independently revalidates all receipt commands, RCs, tool version, QSF and
+artifact identities. Both post-build verifiers require and hash it too.
+
+Controls cover missing receipt, failure at each of five stages, QSF mutation,
+noncanonical encoding, forged RC/command/QSF/artifact hashes, missing receipt in
+a post-build verifier and manifest, and unexpected `.done` or arbitrary extra
+artifacts. Full focused suite passes 80/80; source, truth, bound identity and
+syntax gates pass. No compile was run for this repair.
+
 This authorisation did not include RBF staging/loading, SSH mutation,
 watchdog/rollback rehearsal, JTAG, flash, persistence, pin drive, or board/SD
 mutation. None occurred. Physical activity remains HOLD.
 
 ## Remaining gates
 
-1. Commit/push immutable attempt-3 missing-marker evidence.
-2. Obtain independent review before repairing completion-marker generation or
-   running any further Quartus action; do not weaken the exact 16-artifact set.
+1. Commit/push the direct-stage receipt repair report addendum.
+2. Obtain independent review of exact source/evidence head; no further Quartus
+   action is authorised yet.
 3. Do not compile again unless a reviewed successor receives separate one-retry
    authorisation.
 4. If a later retry passes, preserve a complete V2 candidate manifest and obtain

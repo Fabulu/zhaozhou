@@ -738,6 +738,27 @@ verified.
   watchdog/rollback or board/SD mutation occurred. Further compile and physical
   activity remain HOLD.
 
+### 2026-09-14 11:51 UTC+02:00 - Direct-stage receipt repair pushed
+
+- Kept attempt 3 immutable and did not fabricate/touch `.done`. Replaced that
+  flow-wrapper-only artifact in the direct-stage schema with runner-owned
+  `<project>.stage-receipt.json`.
+- Only after build-ID/map/fit/asm/STA each return 0, each QSF byte guard passes,
+  and the exact 15-stage-output set is present, the runner atomically writes a
+  canonical receipt. It binds the actual Quartus version command/result, exact
+  stage command arrays/RCs, pre/after-each QSF record, all report/programming
+  artifact hashes and a canonical self-digest.
+- Complete manifest replaces `done` with `stage-receipt.json`, hashes the receipt
+  and independently revalidates its exact schema/encoding/commands/RCs/version/
+  QSF/artifacts. Post-build Bringup and Specs verifiers also require and hash it.
+- Controls fire for missing receipt, each of five stage failures, QSF mutation,
+  noncanonical encoding, forged RC/command/QSF/artifact hash, missing verifier/
+  manifest receipt, and unexpected `.done` or arbitrary extra artifact.
+- Full focused suite passes 80/80; source, truth, bound identity and syntax gates
+  pass. Repair commit `74d4d30d247bc2c5691b8130c6361f8ce6702bf3` is pushed.
+- No compile or physical/SSH/JTAG/flash/SD action occurred. Compile and physical
+  HOLD remain pending independent review.
+
 ---
 
 ## Subagent Spawns
@@ -848,11 +869,11 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 
 ## Next Steps
 
-1. Commit/push immutable attempt-3 missing-`done` evidence and submit exact head
-   for independent review.
-2. Do not repair completion-marker generation or run Quartus again without
-   reviewed successor source and separate compile authorization; keep the exact
-   16-artifact set unchanged.
+1. Commit/push the direct-stage receipt report addendum and submit exact head for
+   independent review.
+2. Do not run Quartus again without separate compile authorization for that
+   reviewed source; do not touch/fabricate `.done` or weaken the new exact
+   receipt-based 16-artifact schema.
 3. A later retry must preserve byte-identical compiled QSF, exact patched
    sys_top digest, zero Critical Warnings, all seven USER_IO output enables
    disabled, positive timing, physical hierarchy, and a complete V2
