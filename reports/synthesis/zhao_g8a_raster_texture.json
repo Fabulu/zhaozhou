@@ -3028,7 +3028,7 @@
   "source": {
     "commit": "c88e2b317c981a98f177a2c049688af1c9e30ba3",
     "digest": "42f61c4776bba4a321e5983bddea849f882c0eea11662aafe9b5f38e437621d4",
-    "fit_manifest_path": "fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json",
+    "fit_manifest_path": "reports/characterization/g8a_raster_texture_single_owner_characterization/c88e2b31-20260914T165040Z-attempt2/fit.manifest.json",
     "fit_manifest_sha256": "4273fe228ac7300f190c772b5ce732103f13f713b34c8c68f8d4a2a0caf94783",
     "rtl_clean_at_head": true,
     "sources_hashed": 43,

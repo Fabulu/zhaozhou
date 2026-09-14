@@ -50,7 +50,7 @@ SUPPORTED_DUPLICATE_PROFILES = {
     },
     (PRODUCTION_TOP, PRODUCTION_INTERFACE_PURPOSE): {
         "count": 105,
-        "sha256": "899da4fa5ea70fea624a0e4f98d19fc9f2b621a801e1ee6521266b8b21b640cf",
+        "sha256": "628a2ccdf6af33183df4558b7afccc2ad218e693e6220aa8c2fa048de78a173b",
     },
 }
 SUPPORTED_DTYPE_KINDS = frozenset({"BASICDTYPE"})

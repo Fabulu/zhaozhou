@@ -100,7 +100,9 @@ fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv text eol=lf
 reports/characterization/shell_fit_top_clean_characterization/** binary
 reports/characterization/g8a_raster_texture_single_owner_characterization/** binary
 reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.* binary
+reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-crcserial.* binary
 reports/synthesis/zhao_g8a_raster_texture.json binary
+reports/synthesis/zhao_g8a_raster_texture_crcserial.json binary
 reports/synthesis/zhao_shell_fit.json binary
 reports/timing/zhao_shell_fit.json binary
 # Shell-fit monitor is generated with LF and checked byte-for-byte in archives.

@@ -2,8 +2,9 @@
   "artifacts": {
     "canonical_receipt": {
       "path": "reports/synthesis/zhao_g8a_raster_texture.json",
-      "sha256": "d991203addf3f63ce91b5b3818a2a8e78870b9ad1d95ee7199996854453dfdb8"
+      "sha256": "c3b5783df235d1f04181b41ad6c10ed4bdd7e6a11324beb729cbb504e93be693"
     },
+    "fit.manifest.json": "4273fe228ac7300f190c772b5ce732103f13f713b34c8c68f8d4a2a0caf94783",
     "runner.err.log": "d3d9b417681d83574140364e44ec30b7685d8b1ec9f742c9e66131db549a9807",
     "runner.out.log": "c0a2318d3d664a4d30987ddf06fadfee2f6f6c183ffe1de9e034aea4022852a9"
   },

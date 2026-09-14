@@ -116,7 +116,7 @@ void cfg_end(Dut* d, uint8_t generation, uint32_t crc) {
   tick(d);
   d->cfg_valid_i = 0;
   unsigned wait = 0;
-  while (!d->cfg_rsp_valid_o && wait < 700) { tick(d); ++wait; }
+  while (!d->cfg_rsp_valid_o && wait < 4000) { tick(d); ++wait; }
   zhao::check(d->cfg_rsp_valid_o && d->cfg_rsp_status_o == 0 &&
                   d->active_page_generation_o == generation,
               "composed canonical CRC seals and activates requested generation",
@@ -227,13 +227,17 @@ void submit_and_drain(Dut* d, Stats& stats, uint16_t owner_handle,
   d->frag_required_mask_i = count == 1 ? 1 : count == 2 ? 3 : 7;
   d->frag_material_refused_i = 0;
   d->frag_valid_i = 1;
-  do {
+  unsigned admission_wait = 0;
+  d->eval();
+  while (!d->frag_ready_o && admission_wait < 500) {
     d->plan_ready_i = 0;
     d->refuse_ready_i = 0;
-    d->eval();
-    if (!d->frag_ready_o) tick(d);
-  } while (!d->frag_ready_o);
-  tick(d);
+    tick(d);
+    ++admission_wait;
+  }
+  zhao::check(d->frag_ready_o, "composed fragment admission is bounded", 1,
+              d->frag_ready_o);
+  if (d->frag_ready_o) tick(d);
   d->frag_valid_i = 0;
 
   unsigned wait = 0;

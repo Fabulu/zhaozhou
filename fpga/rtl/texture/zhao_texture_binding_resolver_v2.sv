@@ -254,22 +254,6 @@ module zhao_texture_binding_resolver_v2 #(
     end
   endfunction
 
-  function automatic logic [31:0] crc32_row10(
-      input logic [31:0] crc_in,
-      input logic [74:0] row,
-      input logic row_present);
-    logic [31:0] crc;
-    logic [79:0] canonical;
-    integer byte_index;
-    begin
-      crc = crc_in;
-      canonical = row_present ? {5'b0, row} : 80'd0;
-      for (byte_index = 0; byte_index < 10; byte_index = byte_index + 1)
-        crc = crc32_byte(crc, canonical[byte_index*8 +: 8]);
-      crc32_row10 = crc;
-    end
-  endfunction
-
   // --------------------------------------------------------------------------
   // Two physical page banks.  Payload is not reset; validity masks are.
   binding_row_t page0_m [0:255];
@@ -370,12 +354,16 @@ module zhao_texture_binding_resolver_v2 #(
   end
 
   logic [7:0] crc_selector_q;
+  logic [3:0] crc_byte_q;
   logic [31:0] crc_q, crc_expected_q;
   logic [74:0] crc_row_q;
   logic crc_row_present_q, crc_have_row_q;
-  wire [31:0] crc_row_next_c =
-      crc32_row10(crc_q, crc_row_q, crc_row_present_q);
-  wire [31:0] crc_final_c = crc_row_next_c ^ 32'hFFFF_FFFF;
+  wire [79:0] crc_canonical_row_c = crc_row_present_q
+      ? {5'b0, crc_row_q} : 80'd0;
+  wire [7:0] crc_byte_c =
+      crc_canonical_row_c[crc_byte_q*8 +: 8];
+  wire [31:0] crc_step_c = crc32_byte(crc_q, crc_byte_c);
+  wire [31:0] crc_final_c = crc_step_c ^ 32'hFFFF_FFFF;
   wire [7:0] crc_next_selector_c = crc_selector_q + 8'd1;
 
   // --------------------------------------------------------------------------
@@ -460,6 +448,7 @@ module zhao_texture_binding_resolver_v2 #(
       cfg_rsp_status_q <= CFG_OK;
       cfg_rsp_generation_q <= 8'd0;
       crc_selector_q <= 8'd0;
+      crc_byte_q <= 4'd0;
       crc_q <= 32'd0;
       crc_expected_q <= 32'd0;
       crc_row_q <= '0;
@@ -530,13 +519,16 @@ module zhao_texture_binding_resolver_v2 #(
           crc_q <= crc32_byte(32'hFFFF_FFFF, staging_generation_q);
           crc_expected_q <= cfg_crc32_i;
           crc_selector_q <= 8'd0;
+          crc_byte_q <= 4'd0;
           crc_have_row_q <= 1'b0;
           loader_state_q <= LOAD_CRC_SCAN;
         end
       end
 
       // Synchronous staging-bank scan. Invalid selectors contribute ten zero
-      // bytes regardless of stale payload.
+      // bytes regardless of stale payload. One shared byte step is evaluated per
+      // clock; configuration latency is off the render path and the serialized
+      // CRC removes the measured ten-byte combinational chain.
       if (loader_state_q == LOAD_CRC_SCAN) begin
         if (!crc_have_row_q) begin
           if (staging_bank_q) begin
@@ -546,9 +538,14 @@ module zhao_texture_binding_resolver_v2 #(
             crc_row_q <= page0_m[crc_selector_q];
             crc_row_present_q <= page0_valid_q[crc_selector_q];
           end
+          crc_byte_q <= 4'd0;
           crc_have_row_q <= 1'b1;
+        end else if (crc_byte_q != 4'd9) begin
+          crc_q <= crc_step_c;
+          crc_byte_q <= crc_byte_q + 4'd1;
         end else if (crc_selector_q == 8'hFF) begin
           crc_have_row_q <= 1'b0;
+          crc_byte_q <= 4'd0;
           if (crc_final_c == crc_expected_q) begin
             loader_state_q <= LOAD_SEAL_PENDING;
           end else begin
@@ -563,8 +560,9 @@ module zhao_texture_binding_resolver_v2 #(
             binding_fault_o <= 1'b1;
           end
         end else begin
-          crc_q <= crc_row_next_c;
+          crc_q <= crc_step_c;
           crc_selector_q <= crc_next_selector_c;
+          crc_byte_q <= 4'd0;
           if (staging_bank_q) begin
             crc_row_q <= page1_m[crc_next_selector_c];
             crc_row_present_q <= page1_valid_q[crc_next_selector_c];

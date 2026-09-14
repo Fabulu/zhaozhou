@@ -108,7 +108,7 @@ CURRENT_HASHES = {
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
         "4ba2cba9df8c6e6baaf1c68a236b91612fc6b3fff69be76ab3098b335bc50348",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "e77e43a1f6e2baf9b7ee4bbc78093c28b6ad1be683d10babbde698f988ada5b5",
+        "8f9a19dec0d63e926a46c8ee364a006f6e2abf2f388f890ea753b76f25540360",
 }
 
 
@@ -407,6 +407,10 @@ def validate_cmake(text: str) -> None:
     if active.count(start) != 1:
         raise AssertionError("Packet-E CMake section is not exact/unique")
     section = active[active.index(start):]
+    end_marker = "set(ZHAO_G8A_RASTER_TEXTURE_SOURCES"
+    if section.count(end_marker) != 1:
+        raise AssertionError("Packet-E CMake section has no exact Packet-F boundary")
+    section = section[:section.index(end_marker)]
     required = (
         "texture/texture_cache_pipe_v2_packet_e.sources.txt)",
         "Packet-E cache source manifest is not the exact ordered two-file closure",
@@ -650,6 +654,8 @@ class PacketEClosureTests(unittest.TestCase):
             section.replace("SOURCES ${ZHAO_PACKET_E_MUX_SOURCES}", "SOURCES", 1),
             section.replace("  packet_e_registration_static)", ")", 1),
             section.replace("packet_e_mux_cpp_selector_collision", "packet_e_mux_cpp_collision", 1),
+            section.replace("set(ZHAO_G8A_RASTER_TEXTURE_SOURCES",
+                            "set(BROKEN_G8A_RASTER_TEXTURE_SOURCES", 1),
         )
         for mutation in mutations:
             with self.assertRaises(AssertionError):

@@ -369,13 +369,16 @@ int main(int argc, char** argv) {
   const uint32_t crc1 = page_crc(1, page, present);
   start_end(d, 1, crc1);
   unsigned crc_cycles = 0;
-  while (!d->binding_seal_pending_o && crc_cycles < 600) {
+  while (!d->binding_seal_pending_o && crc_cycles < 4000) {
     tick(d);
     ++crc_cycles;
   }
   zhao::check(d->binding_crc_busy_o == 0 && d->binding_seal_pending_o != 0,
               "canonical sparse CRC reaches SEAL_PENDING", 1,
               (!d->binding_crc_busy_o && d->binding_seal_pending_o) ? 1 : 0);
+  zhao::check(crc_cycles == 2561,
+              "serialized CRC scans one preload plus 2560 bytes", 2561,
+              crc_cycles);
   zhao::check(d->active_page_generation_o == 0 && d->cfg_rsp_valid_o == 0,
               "CRC success neither activates nor acknowledges END", 0,
               static_cast<uint64_t>(d->active_page_generation_o || d->cfg_rsp_valid_o));
@@ -435,7 +438,7 @@ int main(int argc, char** argv) {
     send_immediate(d, 1, 2, 5, &page_b[5], 0, 0);
     start_end(d, 2, page_crc(2, page_b, present_b));
     unsigned wait = 0;
-    while (!d->binding_seal_pending_o && wait < 600) { tick(d); ++wait; }
+    while (!d->binding_seal_pending_o && wait < 4000) { tick(d); ++wait; }
     zhao::check(d->binding_seal_pending_o && !d->data_idle_o,
                 "page B seal waits while C disposition and A read hold remain live",
                 1, (d->binding_seal_pending_o && !d->data_idle_o) ? 1 : 0);
@@ -513,7 +516,7 @@ int main(int argc, char** argv) {
     std::array<bool, 256> empty_present{};
     start_end(d, 3, page_crc(3, empty_rows, empty_present));
     unsigned wait = 0;
-    while (!d->cfg_rsp_valid_o && wait < 600) { tick(d); ++wait; }
+    while (!d->cfg_rsp_valid_o && wait < 4000) { tick(d); ++wait; }
     zhao::check(d->cfg_rsp_valid_o && d->cfg_rsp_status_o == 5,
                 "STALE-CRC MUTANT FIRE: an invalid selector's stale payload changed canonical CRC",
                 1, (d->cfg_rsp_valid_o && d->cfg_rsp_status_o == 5) ? 1 : 0);
@@ -659,7 +662,7 @@ int main(int argc, char** argv) {
   retire_plan(d);
   unsigned bad_crc_cycles = 0;
   d->frame_fault_clear_i = 1;
-  while (!d->cfg_rsp_valid_o && bad_crc_cycles < 600) {
+  while (!d->cfg_rsp_valid_o && bad_crc_cycles < 4000) {
     tick(d);
     ++bad_crc_cycles;
   }
@@ -668,6 +671,12 @@ int main(int argc, char** argv) {
   zhao::check(d->cfg_rsp_valid_o && d->cfg_rsp_status_o == 5,
               "bad canonical CRC returns BAD_CRC", 1,
               (d->cfg_rsp_valid_o && d->cfg_rsp_status_o == 5) ? 1 : 0);
+  // Four scan clocks elapsed before this counter started: row-0 preload, two
+  // accepted data-path stages, and planner retirement. The response must still
+  // land on selector 255 byte 9, not merely somewhere inside a loose timeout.
+  zhao::check(bad_crc_cycles == 2557,
+              "BAD_CRC response lands on final serialized byte", 2557,
+              bad_crc_cycles);
   zhao::check(d->binding_fault_o &&
                   d->cfg_errors_o == bad_crc_errors_before + 1,
               "BAD_CRC sets binding fault over same-edge clear and counts once",

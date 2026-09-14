@@ -16,7 +16,10 @@ from typing import Any
 REPO = Path(__file__).resolve().parents[2]
 BLOCK_REPORT = REPO / "reports/synthesis/zhao_block_fit.json"
 BLOCKPATHS = REPO / "reports/synthesis/blockpaths"
-FIT_MANIFEST = REPO / "fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json"
+FIT_MANIFEST = (
+    REPO / "reports/characterization/g8a_raster_texture_single_owner_characterization"
+    / "c88e2b31-20260914T165040Z-attempt2/fit.manifest.json"
+)
 RECEIPT = REPO / "reports/synthesis/zhao_g8a_raster_texture.json"
 MODULE = "zhao_raster_texture_v3_fit_top"
 ROW_NAME = MODULE + "@g8a"
@@ -506,15 +509,30 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write", action="store_true")
+    mode.add_argument("--repair-retained", action="store_true")
     mode.add_argument("--check", action="store_true")
     args = parser.parse_args()
     try:
         expected = build_receipt(require_current_head=args.write)
         validate_receipt(expected)
         raw = canonical(expected)
-        if args.write:
+        if args.write or args.repair_retained:
+            if args.repair_retained:
+                if not RECEIPT.is_file():
+                    raise ReceiptError("retained-repair requires an existing receipt")
+                previous = load_json(RECEIPT)
+                previous_source = previous.get("source")
+                if (not isinstance(previous_source, dict) or
+                        previous_source.get("commit") != expected["source"]["commit"]):
+                    raise ReceiptError(
+                        "retained-repair source commit differs from existing receipt"
+                    )
             write_atomic(RECEIPT, raw)
-            print(f"wrote {RECEIPT.relative_to(REPO)} gate_pass={expected['gate']['pass']}")
+            mode_name = "retained-repair" if args.repair_retained else "write"
+            print(
+                f"wrote {RECEIPT.relative_to(REPO)} mode={mode_name} "
+                f"gate_pass={expected['gate']['pass']}"
+            )
             return 0 if expected["gate"]["pass"] else 2
         if not RECEIPT.is_file() or RECEIPT.read_bytes() != raw:
             raise ReceiptError("committed G8A receipt is absent or stale")

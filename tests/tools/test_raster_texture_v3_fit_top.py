@@ -43,7 +43,7 @@ PROTECTED = {
     "fpga/rtl/common/zhao_shell_top.sv":
         "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "e77e43a1f6e2baf9b7ee4bbc78093c28b6ad1be683d10babbde698f988ada5b5",
+        "8f9a19dec0d63e926a46c8ee364a006f6e2abf2f388f890ea753b76f25540360",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
         "4ba2cba9df8c6e6baaf1c68a236b91612fc6b3fff69be76ab3098b335bc50348",
 }
@@ -500,7 +500,7 @@ class G8AFitTopTests(unittest.TestCase):
         self.assertEqual(completed["row"]["dspBlocks"], 49)
         self.assertEqual(completed["row"]["fmaxMhz"], 65.96)
         self.assertEqual(completed["row"]["setupSlackNs"], -5.16)
-        for name in ("runner.out.log", "runner.err.log"):
+        for name in ("fit.manifest.json", "runner.out.log", "runner.err.log"):
             self.assertEqual(
                 sha256(COMPLETED_ATTEMPT / name), completed["artifacts"][name], name
             )
@@ -513,6 +513,11 @@ class G8AFitTopTests(unittest.TestCase):
             (REPO / canonical_receipt["path"]).read_text(encoding="utf-8")
         )
         self.assertTrue(current_receipt["gate"]["fit_complete"])
+        self.assertEqual(
+            current_receipt["source"]["fit_manifest_path"],
+            "reports/characterization/g8a_raster_texture_single_owner_characterization/"
+            "c88e2b31-20260914T165040Z-attempt2/fit.manifest.json",
+        )
         self.assertTrue(current_receipt["gate"]["resource_pass"])
         self.assertTrue(current_receipt["gate"]["structure_pass"])
         self.assertFalse(current_receipt["gate"]["timing_100mhz_pass"])
@@ -549,10 +554,41 @@ class G8AFitTopTests(unittest.TestCase):
             'validate_ram(map_text)',
             'validate_fit_configuration(qsf_text, sdc_text, manifest)',
             'row["sourceDigest"] != expected_digest',
+            'mode.add_argument("--repair-retained", action="store_true")',
+            'retained-repair requires an existing receipt',
+            'retained-repair source commit differs from existing receipt',
         ), "G8A receipt tool")
         with self.assertRaises(AssertionError):
             require_once(fit_runner.replace("-PhysicalPins", "", 1),
                          ("-PhysicalPins",), "mutated runner")
+
+        repair_runner = (
+            REPO / "tools/quartus/run_g8a_crcserial_fit.ps1"
+        ).read_text(encoding="utf-8")
+        repair_receipt = (
+            REPO / "tools/quartus/g8a_crcserial_receipt.py"
+        ).read_text(encoding="utf-8")
+        require_once(repair_runner, (
+            "$RowLabel = '@g8a-crcserial'",
+            "G8A CRC-serialization fit requires a completely clean committed tree.",
+            "The preserved failed baseline G8A receipt is required before this repair fit.",
+            "The preserved baseline does not describe the exact clean timing-only G8A failure.",
+            "A $RowName row already exists; preserve and diagnose it instead of rerunning.",
+            "gen_raster_texture_v3_fit_top.py') --check",
+            "test_raster_texture_v3_fit_top.py') -q",
+            "-RowLabel $RowLabel",
+            "-Seed 1",
+            "-PhysicalPins",
+            "g8a_crcserial_receipt.py') --write",
+        ), "G8A CRC-serialization runner")
+        require_once(repair_receipt, (
+            'receipt.ROW_NAME = receipt.MODULE + "@g8a-crcserial"',
+            'fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json',
+            'zhao_g8a_raster_texture_crcserial.json',
+        ), "G8A CRC-serialization receipt wrapper")
+        with self.assertRaises(AssertionError):
+            require_once(repair_runner.replace("-Seed 1", "-Seed 2", 1),
+                         ("-Seed 1",), "mutated repair runner")
 
     def test_every_hashed_text_input_has_checkout_stable_lf(self) -> None:
         attrs = (REPO / ".gitattributes").read_text(encoding="utf-8").splitlines()
@@ -577,6 +613,21 @@ class G8AFitTopTests(unittest.TestCase):
             "reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.* binary",
             rows,
         )
+        self.assertIn(
+            "reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-crcserial.* binary",
+            rows,
+        )
+        self.assertIn("reports/synthesis/zhao_g8a_raster_texture.json binary", rows)
+        self.assertIn(
+            "reports/synthesis/zhao_g8a_raster_texture_crcserial.json binary", rows
+        )
+        ignores = set((REPO / ".gitignore").read_text(encoding="utf-8").splitlines())
+        for suffix in ("map.rpt", "fit.rpt", "setup.rpt", "hold.rpt", "sta.rpt"):
+            self.assertIn(
+                "!reports/synthesis/blockpaths/"
+                f"zhao_raster_texture_v3_fit_top@g8a-crcserial.{suffix}",
+                ignores,
+            )
 
     def test_wrapper_is_probe_only_and_protected_bytes_hold(self) -> None:
         tools = REPO / "tools/quartus"

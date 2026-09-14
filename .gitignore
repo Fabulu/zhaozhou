@@ -161,6 +161,11 @@ reports/synthesis/blockpaths/*.sta.rpt
 !reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.setup.rpt
 !reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.hold.rpt
 !reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.sta.rpt
+!reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-crcserial.map.rpt
+!reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-crcserial.fit.rpt
+!reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-crcserial.setup.rpt
+!reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-crcserial.hold.rpt
+!reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-crcserial.sta.rpt
 
 # Transient ctest tee output; the evidence is the ctest summary, not the log.
 fast-suite.log
