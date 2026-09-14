@@ -3,6 +3,7 @@
 **Reviewed snapshot:** `fe684755b8076b005214dc8dbbad7195b678b9f0`
 **Completeness/provenance source fix:** `bd73428561da57d373c9da1ea449edbc444dc907`
 **Board-truth binding verifier:** `bb441091`
+**Actual-evidence verifier repair:** `6d0a2a8846f2eb250dc828b02d9931d3bfbbb060`
 **State:** repair-only; **no new Quartus compile or RBF load authorised**
 
 ## Review disposition
@@ -135,10 +136,38 @@ added-output-with-recomputed-self-digest, and source-manifest-digest mutants all
 fire. No V2 complete manifest exists yet because the review hold forbids the
 repaired compile.
 
+## Follow-up actual-evidence binding
+
+Independent review found that the receipt verifier still accepted syntactically
+valid but nonexistent build commits/evidence paths and an arbitrary 64-hex
+manifest summary. Commit `6d0a2a8846f2eb250dc828b02d9931d3bfbbb060`
+closes that verifier-only gap:
+
+- both build scripts and both manifest profiles now bind the dot-sourced
+  `tools/env/zhao-env.ps1` into the dirty/source closure;
+- future-load validation requires a real repository and exact profile-specific
+  V2 audit/manifest paths inside it;
+- both evidence files must be clean, present at the receipt's loader-source
+  commit, and byte-identical to those committed blobs;
+- the build source commit must resolve, and the complete manifest verifier is run
+  against the actual local build directory;
+- the local RBF size and SHA-256 are recomputed, then cross-checked against the
+  receipt, actual manifest, and actual audit;
+- the actual manifest's canonical self-digest, exact record sets, source commit,
+  source/verification diff against that commit, build marker, build inputs,
+  patched `sys_top.v`, and all 16 artifacts are revalidated;
+- the actual audit schema/profile/source, zero Critical Warnings, all seven
+  disabled USER_IO output enables, and RBF record are cross-checked.
+
+Committed controls fire for a nonexistent V2 file, nonexistent build commit,
+arbitrary manifest digest, mutated local RBF, uncommitted audit mutation, source
+commit drift, and a detached patched-`sys_top.v` record.
+
 ## Verification performed without compile/load
 
-- 45 repair/unit/mutation tests pass.
-- Both repaired source verifiers pass.
+- 58 repair/unit/mutation tests pass.
+- Both repaired source verifiers, board-truth validation, and source-bound
+  identity-receipt validation pass; Python and PowerShell syntax checks pass.
 - `board_truth.json` remains `partial` and explicitly holds future physical
   loads.
 - Read-only identity preflight is source-bound to `bd734285` and its exact loader
@@ -150,8 +179,8 @@ repaired compile.
 
 ## Remaining gates
 
-1. Commit/push the source-bound identity receipt and this completeness addendum,
-   then submit exact head for independent review. Do not compile or load.
+1. Submit the exact pushed repair head for independent review. Do not compile or
+   load.
 2. Confirm the separate 23:00 shell fit has completed before any later Quartus
    action.
 3. Run one repaired clean Quartus build; create V2 audit and complete manifest.

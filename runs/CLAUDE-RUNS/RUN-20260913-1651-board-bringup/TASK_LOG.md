@@ -527,6 +527,35 @@ verified.
   board-truth-to-identity binding verifier as `bb441091`. Both remain
   repair-review candidates, not compile/load authorisation.
 
+### 2026-09-14 03:56 UTC+02:00 - Actual V2 evidence verifier repair pushed
+
+- Latest independent review kept the physical/Quartus HOLD and found two
+  provenance holes: the build scripts dot-sourced `tools/env/zhao-env.ps1`
+  outside their manifest closure, while the future-receipt verifier accepted
+  format-correct but nonexistent V2 evidence/build commits and arbitrary summary
+  digests.
+- Both build-script dirty closures and both production manifest source profiles
+  now bind `tools/env/zhao-env.ps1`.
+- Future-load receipt verification now resolves the exact profile-specific V2
+  audit and complete manifest inside the repository; requires both to be clean,
+  committed at the receipt source commit, and byte-identical to those blobs;
+  resolves the build source commit; invokes the complete manifest verifier; and
+  recomputes the local RBF size/SHA-256 before cross-checking receipt, manifest,
+  and audit identities.
+- Complete-manifest verification additionally binds source/verification content
+  to `sourceCommit` and directly checks the build-copy `sys_top.v` record against
+  both the actual file and build-input record.
+- Added fired controls for nonexistent evidence/commit, arbitrary manifest
+  digest, local-RBF mutation, uncommitted audit mutation, source-commit drift,
+  and detached patched-sys_top provenance.
+- 58 repair/unit/mutation tests pass. Both source verifiers, board-truth gate,
+  source-bound identity receipt, Python syntax, and PowerShell syntax pass.
+- Source/tool/test repair commit
+  `6d0a2a8846f2eb250dc828b02d9931d3bfbbb060` is pushed on the dedicated branch.
+- No Quartus process was running. No compile, RBF staging/load, SSH mutation,
+  JTAG, flash, persistence, board pin drive, or board/SD mutation occurred.
+  Repaired V2 build/audit/manifest remain intentionally absent pending review.
+
 ---
 
 ## Subagent Spawns
@@ -610,8 +639,8 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 
 ## Next Steps
 
-1. Commit and push the repair-only packet, then request independent review of
-   the exact commit. Do not compile or load from the repair commit yet.
+1. Submit the exact pushed verifier-repair head for independent review. Do not
+   compile or load from it yet.
 2. Wait for the separate lane's 23:00 shell fit to finish.
 3. If review accepts the source packet, run one repaired clean Specs build.
    Require exact patched sys_top digest, zero Critical Warnings, all seven
