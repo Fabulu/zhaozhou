@@ -556,6 +556,28 @@ verified.
   JTAG, flash, persistence, board pin drive, or board/SD mutation occurred.
   Repaired V2 build/audit/manifest remain intentionally absent pending review.
 
+### 2026-09-14 04:22 UTC+02:00 - Loader source/working byte false-pass closed
+
+- Independent audit rejected `57dc5ab0`: repository-backed identity validation
+  independently accepted the current clean working SHA and a named historical
+  commit/blob, but did not require those two byte identities to match.
+- Repaired validation now reads the loader blob bytes from the receipt's exact
+  `sourceCommit`, hashes them, and requires both direct equality with the clean
+  working loader and equality with `loaderSource.workingSha256`.
+- Quarantined format-only identity checking under
+  `validate_identity_structure`; production `validate_identity_receipt` now
+  fails closed when no repository is supplied.
+- Added a hostile control combining real pre-binding commit
+  `fe684755b8076b005214dc8dbbad7195b678b9f0`, its real differing loader blob
+  `32e22e0f527ebdd2245a002b8951dfee84b94262`, and the current loader working
+  SHA. Both the committed/working SHA check and byte comparison fire. A separate
+  control proves repository-free production validation fails.
+- Receipt verifier tests pass 23/23; the complete focused repair suite passes
+  60/60. Source, truth, source-bound identity, and syntax gates pass.
+- Repair commit `e66a606636727fb4df27aed87bd1181af01164eb` is pushed.
+  No Quartus process, compile, RBF/load, SSH mutation, JTAG, flash, persistence,
+  pin drive, or board/SD mutation occurred. HOLD remains.
+
 ---
 
 ## Subagent Spawns

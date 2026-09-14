@@ -4,6 +4,7 @@
 **Completeness/provenance source fix:** `bd73428561da57d373c9da1ea449edbc444dc907`
 **Board-truth binding verifier:** `bb441091`
 **Actual-evidence verifier repair:** `6d0a2a8846f2eb250dc828b02d9931d3bfbbb060`
+**Loader byte-identity repair:** `e66a606636727fb4df27aed87bd1181af01164eb`
 **State:** repair-only; **no new Quartus compile or RBF load authorised**
 
 ## Review disposition
@@ -163,9 +164,29 @@ Committed controls fire for a nonexistent V2 file, nonexistent build commit,
 arbitrary manifest digest, mutated local RBF, uncommitted audit mutation, source
 commit drift, and a detached patched-`sys_top.v` record.
 
+## Follow-up loader byte-identity binding
+
+Independent audit of `57dc5ab0` found one remaining false-pass: repository-backed
+identity validation checked the current loader working hash and the named
+historical commit/blob separately, without proving they described the same
+bytes. A fabricated receipt could therefore combine the real pre-binding
+`fe684755` loader blob with the current loader's working SHA-256.
+
+Commit `e66a606636727fb4df27aed87bd1181af01164eb` now reads the loader
+blob bytes directly from `sourceCommit`, computes their SHA-256, and requires
+both byte equality with the clean working loader and equality with the receipt's
+`workingSha256`. The hostile control uses real commit
+`fe684755b8076b005214dc8dbbad7195b678b9f0`, real differing loader blob
+`32e22e0f527ebdd2245a002b8951dfee84b94262`, and the current working hash;
+both the committed/working SHA check and direct byte comparison fire.
+
+Format-only identity checks are explicitly quarantined as
+`validate_identity_structure`. Production `validate_identity_receipt` now fails
+closed without a repository, and a committed control proves that refusal.
+
 ## Verification performed without compile/load
 
-- 58 repair/unit/mutation tests pass.
+- 60 repair/unit/mutation tests pass.
 - Both repaired source verifiers, board-truth validation, and source-bound
   identity-receipt validation pass; Python and PowerShell syntax checks pass.
 - `board_truth.json` remains `partial` and explicitly holds future physical
