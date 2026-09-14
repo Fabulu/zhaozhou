@@ -9174,3 +9174,113 @@ add_test(NAME material_combine_v3_readlate_diff
          COMMAND pb_matrl)
 set_tests_properties(material_combine_v3_readlate_diff PROPERTIES
   LABELS "fast;nightly;packet-b" TIMEOUT 1200)
+
+# Packet C: one test-only 34-source authority composes the exact Packet-B V3
+# root with the 490-bit skid and real RASTER.FRAGMENT.  This is deliberately
+# absent from production fit sources and remains excluded:not-yet-adopted.
+set(ZHAO_PACKET_C_SOURCE_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster/raster_texture_stage_v3.sources.txt)
+if(NOT EXISTS "${ZHAO_PACKET_C_SOURCE_MANIFEST}")
+  message(FATAL_ERROR
+    "required Packet-C source manifest is missing: ${ZHAO_PACKET_C_SOURCE_MANIFEST}")
+endif()
+file(READ "${ZHAO_PACKET_C_SOURCE_MANIFEST}" ZHAO_PACKET_C_SOURCE_MANIFEST_RAW)
+string(REPLACE "\r\n" "\n" ZHAO_PACKET_C_SOURCE_MANIFEST_RAW
+  "${ZHAO_PACKET_C_SOURCE_MANIFEST_RAW}")
+string(REPLACE "\r" "\n" ZHAO_PACKET_C_SOURCE_MANIFEST_RAW
+  "${ZHAO_PACKET_C_SOURCE_MANIFEST_RAW}")
+string(REGEX REPLACE "\n$" "" ZHAO_PACKET_C_SOURCE_MANIFEST_BODY
+  "${ZHAO_PACKET_C_SOURCE_MANIFEST_RAW}")
+if(ZHAO_PACKET_C_SOURCE_MANIFEST_BODY STREQUAL "" OR
+   ZHAO_PACKET_C_SOURCE_MANIFEST_BODY MATCHES "(^|\n)[ \t]*(\n|$)")
+  message(FATAL_ERROR "Packet-C source manifest contains a blank record")
+endif()
+file(STRINGS "${ZHAO_PACKET_C_SOURCE_MANIFEST}"
+  ZHAO_PACKET_C_RELATIVE_SOURCES)
+set(ZHAO_PACKET_C_SOURCES)
+set(ZHAO_PACKET_C_SEEN)
+foreach(relative_source IN LISTS ZHAO_PACKET_C_RELATIVE_SOURCES)
+  if(relative_source STREQUAL "" OR IS_ABSOLUTE "${relative_source}" OR
+     relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+    message(FATAL_ERROR "invalid Packet-C source-manifest path: ${relative_source}")
+  endif()
+  list(FIND ZHAO_PACKET_C_SEEN "${relative_source}" duplicate_index)
+  if(NOT duplicate_index EQUAL -1)
+    message(FATAL_ERROR "duplicate Packet-C source-manifest path: ${relative_source}")
+  endif()
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR "missing Packet-C source-manifest path: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKET_C_SEEN "${relative_source}")
+  list(APPEND ZHAO_PACKET_C_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+list(LENGTH ZHAO_PACKET_C_RELATIVE_SOURCES ZHAO_PACKET_C_SOURCE_COUNT)
+if(NOT ZHAO_PACKET_C_SOURCE_COUNT EQUAL 34)
+  message(FATAL_ERROR "Packet-C source manifest must contain exactly 34 SV paths")
+endif()
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 0 ZHAO_PACKET_C_FIRST_SOURCE)
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 31 ZHAO_PACKET_C_MUTANT_SOURCE)
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 32 ZHAO_PACKET_C_STAGE_SOURCE)
+list(GET ZHAO_PACKET_C_RELATIVE_SOURCES 33 ZHAO_PACKET_C_LAST_SOURCE)
+if(NOT ZHAO_PACKET_C_FIRST_SOURCE STREQUAL
+   "fpga/rtl/common/zhao_render_texture_pkg.sv" OR
+   NOT ZHAO_PACKET_C_MUTANT_SOURCE STREQUAL
+   "tests/mutants/zhao_raster_texture_stage_v3_mutants.sv" OR
+   NOT ZHAO_PACKET_C_STAGE_SOURCE STREQUAL
+   "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv" OR
+   NOT ZHAO_PACKET_C_LAST_SOURCE STREQUAL
+   "tests/raster/tb_raster_texture_stage_v3.sv")
+  message(FATAL_ERROR
+    "Packet-C source manifest lost package-first/mutant-stage/top-last order")
+endif()
+
+add_executable(pc_dir raster/raster_texture_stage_v3_directed.cpp)
+target_link_libraries(pc_dir PRIVATE zhao_harness zhao_zref)
+verilate(pc_dir
+  PREFIX Vtb_raster_texture_stage_v3
+  TOP_MODULE tb_raster_texture_stage_v3
+  SOURCES ${ZHAO_PACKET_C_SOURCES}
+  VERILATOR_ARGS --assert -GMIGRATION_SHADOWS=0)
+add_test(NAME raster_texture_stage_v3_directed COMMAND pc_dir)
+
+add_executable(pc_seq raster/raster_texture_stage_v3_directed.cpp)
+target_compile_definitions(pc_seq PRIVATE PACKET_C_EXPECT_IDENTITY_ABORT=1)
+target_link_libraries(pc_seq PRIVATE zhao_harness zhao_zref)
+verilate(pc_seq
+  PREFIX Vtb_raster_texture_stage_v3
+  TOP_MODULE tb_raster_texture_stage_v3
+  SOURCES ${ZHAO_PACKET_C_SOURCES}
+  VERILATOR_ARGS --assert -GMIGRATION_SHADOWS=0
+    -DZHAO_PACKET_C_MUTANT_IDENTITY_ONLY)
+add_test(NAME raster_texture_stage_v3_identity_abort_control COMMAND pc_seq)
+
+add_executable(pc_old raster/raster_texture_stage_v3_directed.cpp)
+target_compile_definitions(pc_old PRIVATE PACKET_C_EXPECT_OLD_READY=1)
+target_link_libraries(pc_old PRIVATE zhao_harness zhao_zref)
+verilate(pc_old
+  PREFIX Vtb_raster_texture_stage_v3
+  TOP_MODULE tb_raster_texture_stage_v3
+  SOURCES ${ZHAO_PACKET_C_SOURCES}
+  VERILATOR_ARGS --assert -GMIGRATION_SHADOWS=0
+    -DZHAO_PACKET_C_MUTANT_OLD_READY)
+add_test(NAME raster_texture_stage_v3_old_ready_control COMMAND pc_old)
+
+add_test(NAME raster_texture_stage_v3_registration_static
+  COMMAND "${Python3_EXECUTABLE}"
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_render_texture_packet_c.py -q)
+set_tests_properties(
+  raster_texture_stage_v3_directed
+  raster_texture_stage_v3_registration_static
+  PROPERTIES LABELS "fast;nightly;packet-c" TIMEOUT 1800)
+set_tests_properties(
+  raster_texture_stage_v3_identity_abort_control
+  PROPERTIES LABELS "fast;nightly;packet-c;mutant" TIMEOUT 1800
+    PASS_REGULAR_EXPRESSION "packet-c identity-only mismatch detector FIRED"
+    FAIL_REGULAR_EXPRESSION "packet-c directed FAIL")
+set_tests_properties(
+  raster_texture_stage_v3_old_ready_control
+  PROPERTIES LABELS "fast;nightly;packet-c;mutant" TIMEOUT 1800
+    PASS_REGULAR_EXPRESSION "packet-c old-ready deadlock mutant FIRED"
+    FAIL_REGULAR_EXPRESSION "packet-c directed FAIL")

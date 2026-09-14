@@ -341,6 +341,9 @@ excluded:
 
   # Packet B's CURRENT children are not listed here: they are reachable from
   # zhao_texture_island_v3_top and the checker counts them `inside` that one root.
+  # Packet C adds the first synthetic post-Early-Z composition around that exact
+  # root, but it remains outside production until Packet D owns the tile-pipe seam.
+  - zhao_raster_texture_stage_v3: not-yet-adopted  Packet-C synthetic post-Early-Z V3-to-RASTER.FRAGMENT composition with ordered sequence-abort drain; unit verification is not production adoption, and Packet D must connect the widened skid/tile seam before this can replace the selected standalone texture root
   #
   # The rows below are the now-unreachable PRE-PACKET-B implementations. They are
   # retained as oracle/history material with their source, tests, existing fit
