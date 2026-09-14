@@ -1,0 +1,74 @@
++---------------------+
+; Unconstrained Paths ;
++---------------------+
++-------------------------------------------------+
+; Unconstrained Paths Summary                     ;
++---------------------------------+-------+-------+
+; Property                        ; Setup ; Hold  ;
++---------------------------------+-------+-------+
+; Illegal Clocks                  ; 0     ; 0     ;
+; Unconstrained Clocks            ; 0     ; 0     ;
+; Unconstrained Input Ports       ; 1     ; 1     ;
+; Unconstrained Input Port Paths  ; 18445 ; 18445 ;
+; Unconstrained Output Ports      ; 6     ; 6     ;
+; Unconstrained Output Port Paths ; 6     ; 6     ;
++---------------------------------+-------+-------+
+
++--------------------------------------------+
+; Clock Status Summary                       ;
++-----------+-----------+------+-------------+
+; Target    ; Clock     ; Type ; Status      ;
++-----------+-----------+------+-------------+
+; audio_clk ; audio_clk ; Base ; Constrained ;
+; gpu_clk   ; gpu_clk   ; Base ; Constrained ;
+; vid_clk   ; vid_clk   ; Base ; Constrained ;
++-----------+-----------+------+-------------+
+
++----------------+
+; Setup Analysis ;
++----------------+
++---------------------------------------------------------------------------------------------------+
+; Unconstrained Input Ports                                                                         ;
++------------+--------------------------------------------------------------------------------------+
+; Input Port ; Comment                                                                              ;
++------------+--------------------------------------------------------------------------------------+
+; rst_n      ; No input delay, min/max delays, false-path exceptions, or max skew assignments found ;
++------------+--------------------------------------------------------------------------------------+
+
++------------------------------------------------------------------------------------------------------------+
+; Unconstrained Output Ports                                                                                 ;
++--------------------+---------------------------------------------------------------------------------------+
+; Output Port        ; Comment                                                                               ;
++--------------------+---------------------------------------------------------------------------------------+
+; fit_epoch_o[0]     ; No output delay, min/max delays, false-path exceptions, or max skew assignments found ;
+; fit_epoch_o[1]     ; No output delay, min/max delays, false-path exceptions, or max skew assignments found ;
+; fit_epoch_o[2]     ; No output delay, min/max delays, false-path exceptions, or max skew assignments found ;
+; fit_signature_o[0] ; No output delay, min/max delays, false-path exceptions, or max skew assignments found ;
+; fit_signature_o[1] ; No output delay, min/max delays, false-path exceptions, or max skew assignments found ;
+; fit_signature_o[2] ; No output delay, min/max delays, false-path exceptions, or max skew assignments found ;
++--------------------+---------------------------------------------------------------------------------------+
+
++---------------+
+; Hold Analysis ;
++---------------+
++---------------------------------------------------------------------------------------------------+
+; Unconstrained Input Ports                                                                         ;
++------------+--------------------------------------------------------------------------------------+
+; Input Port ; Comment                                                                              ;
++------------+--------------------------------------------------------------------------------------+
+; rst_n      ; No input delay, min/max delays, false-path exceptions, or max skew assignments found ;
++------------+--------------------------------------------------------------------------------------+
+
++------------------------------------------------------------------------------------------------------------+
+; Unconstrained Output Ports                                                                                 ;
++--------------------+---------------------------------------------------------------------------------------+
+; Output Port        ; Comment                                                                               ;
++--------------------+---------------------------------------------------------------------------------------+
+; fit_epoch_o[0]     ; No output delay, min/max delays, false-path exceptions, or max skew assignments found ;
+; fit_epoch_o[1]     ; No output delay, min/max delays, false-path exceptions, or max skew assignments found ;
+; fit_epoch_o[2]     ; No output delay, min/max delays, false-path exceptions, or max skew assignments found ;
+; fit_signature_o[0] ; No output delay, min/max delays, false-path exceptions, or max skew assignments found ;
+; fit_signature_o[1] ; No output delay, min/max delays, false-path exceptions, or max skew assignments found ;
+; fit_signature_o[2] ; No output delay, min/max delays, false-path exceptions, or max skew assignments found ;
++--------------------+---------------------------------------------------------------------------------------+
+

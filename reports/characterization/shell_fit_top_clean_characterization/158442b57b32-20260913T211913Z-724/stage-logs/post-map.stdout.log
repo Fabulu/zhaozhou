@@ -1,0 +1,154 @@
+Warning (125079): The project setting files are read-only and will not be updated with any changes made.
+Info: *******************************************************************
+Info: Running Quartus Prime TimeQuest Timing Analyzer
+    Info: Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+    Info: Copyright (C) 2017  Intel Corporation. All rights reserved.
+    Info: Your use of Intel Corporation's design tools, logic functions 
+    Info: and other software and tools, and its AMPP partner logic 
+    Info: functions, and any output files from any of the foregoing 
+    Info: (including device programming or simulation files), and any 
+    Info: associated documentation or information are expressly subject 
+    Info: to the terms and conditions of the Intel Program License 
+    Info: Subscription Agreement, the Intel Quartus Prime License Agreement,
+    Info: the Intel MegaCore Function License Agreement, or other 
+    Info: applicable license agreement, including, without limitation, 
+    Info: that your use is for the sole purpose of programming logic 
+    Info: devices manufactured by Intel and sold by Intel or its 
+    Info: authorized distributors.  Please refer to the applicable 
+    Info: agreement for further details.
+    Info: Processing started: Sun Sep 13 23:20:11 2026
+Info: Command: quartus_sta zhao_shell_fit --post_map --report_script=post_map_connectivity.tcl
+Info: qsta_default_script.tcl version: #1
+Info: Using post quartus_map netlist
+Info (293031): Detected changes in Quartus Prime Settings File (.qsf).
+    Info (293028): Assignment ROUTER_TIMING_OPTIMIZATION_LEVEL changed value from MAXIMUM to NORMAL.
+    Info (293028): Assignment PHYSICAL_SYNTHESIS_COMBO_LOGIC changed value from ON to OFF.
+Info (119006): Selected device 5CSEBA6U23I7 for design "zhao_shell_fit"
+Warning (18236): Number of processors has not been specified which may cause overloading on shared machines.  Set the global assignment NUM_PARALLEL_PROCESSORS in your QSF to an appropriate value for best performance.
+Info (20030): Parallel compilation is enabled and will use 16 of the 24 processors detected
+Info (21076): High junction temperature operating condition is not set. Assuming a default value of '100'.
+Info (21076): Low junction temperature operating condition is not set. Assuming a default value of '-40'.
+Info (332104): Reading SDC File: 'zhao_shell_fit.sdc'
+Info (332143): No user constrained clock uncertainty found in the design. Calling "derive_clock_uncertainty"
+Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
+Info: Found TIMEQUEST_REPORT_SCRIPT_INCLUDE_DEFAULT_ANALYSIS = ON
+Info: Using custom scripts: post_map_connectivity.tcl
+Info: Analyzing Slow 1100mV 100C Model
+Info: Can't run Report Timing Closure Recommendations. Extra Fitter information is not available. To generate the report, compile the design with the current version of the Quartus Prime software.
+Critical Warning (332148): Timing requirements not met
+    Info (11105): For recommendations on closing timing, run Report Timing Closure Recommendations in the TimeQuest Timing Analyzer.
+Info (332146): Worst-case setup slack is -17.726
+    Info (332119):     Slack       End Point TNS Clock 
+    Info (332119): ========= =================== =====================
+    Info (332119):   -17.726          -33093.881 gpu_clk 
+    Info (332119):     3.875               0.000 vid_clk 
+    Info (332119):    30.947               0.000 audio_clk 
+Info (332146): Worst-case hold slack is -0.109
+    Info (332119):     Slack       End Point TNS Clock 
+    Info (332119): ========= =================== =====================
+    Info (332119):    -0.109             -37.126 gpu_clk 
+    Info (332119):    -0.109              -0.425 vid_clk 
+    Info (332119):     0.051               0.000 audio_clk 
+Info (332140): No Recovery paths to report
+Info (332140): No Removal paths to report
+Info (332146): Worst-case minimum pulse width slack is 3.822
+    Info (332119):     Slack       End Point TNS Clock 
+    Info (332119): ========= =================== =====================
+    Info (332119):     3.822               0.000 gpu_clk 
+    Info (332119):     8.809               0.000 vid_clk 
+    Info (332119):    18.868               0.000 audio_clk 
+Warning (18869): Performing metastability analysis with a pre-fit timing netlist. MTBF values for unplaced blocks are not available, and any reported MTBF values should be treated as an estimate.
+Info (332114): Report Metastability: Found 270 synchronizer chains.
+    Info (332114): Design MTBF is not calculated because the design doesn't meet its timing requirements.
+Info: Analyzing Slow 1100mV -40C Model
+Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
+Critical Warning (332148): Timing requirements not met
+    Info (11105): For recommendations on closing timing, run Report Timing Closure Recommendations in the TimeQuest Timing Analyzer.
+Info (332146): Worst-case setup slack is -18.844
+    Info (332119):     Slack       End Point TNS Clock 
+    Info (332119): ========= =================== =====================
+    Info (332119):   -18.844          -35753.833 gpu_clk 
+    Info (332119):     3.105               0.000 vid_clk 
+    Info (332119):    30.433               0.000 audio_clk 
+Info (332146): Worst-case hold slack is -0.149
+    Info (332119):     Slack       End Point TNS Clock 
+    Info (332119): ========= =================== =====================
+    Info (332119):    -0.149             -51.532 gpu_clk 
+    Info (332119):    -0.093              -0.345 vid_clk 
+    Info (332119):     0.067               0.000 audio_clk 
+Info (332140): No Recovery paths to report
+Info (332140): No Removal paths to report
+Info (332146): Worst-case minimum pulse width slack is 3.828
+    Info (332119):     Slack       End Point TNS Clock 
+    Info (332119): ========= =================== =====================
+    Info (332119):     3.828               0.000 gpu_clk 
+    Info (332119):     8.847               0.000 vid_clk 
+    Info (332119):    18.886               0.000 audio_clk 
+Warning (18869): Performing metastability analysis with a pre-fit timing netlist. MTBF values for unplaced blocks are not available, and any reported MTBF values should be treated as an estimate.
+Info (332114): Report Metastability: Found 270 synchronizer chains.
+    Info (332114): Design MTBF is not calculated because the design doesn't meet its timing requirements.
+Info: Analyzing Fast 1100mV 100C Model
+Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
+Critical Warning (332148): Timing requirements not met
+    Info (11105): For recommendations on closing timing, run Report Timing Closure Recommendations in the TimeQuest Timing Analyzer.
+Info (332146): Worst-case setup slack is -11.995
+    Info (332119):     Slack       End Point TNS Clock 
+    Info (332119): ========= =================== =====================
+    Info (332119):   -11.995          -14018.499 gpu_clk 
+    Info (332119):     7.451               0.000 vid_clk 
+    Info (332119):    33.276               0.000 audio_clk 
+Info (332146): Worst-case hold slack is -0.043
+    Info (332119):     Slack       End Point TNS Clock 
+    Info (332119): ========= =================== =====================
+    Info (332119):    -0.043              -6.097 gpu_clk 
+    Info (332119):    -0.043              -0.095 vid_clk 
+    Info (332119):     0.117               0.000 audio_clk 
+Info (332140): No Recovery paths to report
+Info (332140): No Removal paths to report
+Info (332146): Worst-case minimum pulse width slack is 3.695
+    Info (332119):     Slack       End Point TNS Clock 
+    Info (332119): ========= =================== =====================
+    Info (332119):     3.695               0.000 gpu_clk 
+    Info (332119):     8.681               0.000 vid_clk 
+    Info (332119):    18.711               0.000 audio_clk 
+Warning (18869): Performing metastability analysis with a pre-fit timing netlist. MTBF values for unplaced blocks are not available, and any reported MTBF values should be treated as an estimate.
+Info (332114): Report Metastability: Found 270 synchronizer chains.
+    Info (332114): Design MTBF is not calculated because the design doesn't meet its timing requirements.
+Info: Analyzing Fast 1100mV -40C Model
+Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
+Critical Warning (332148): Timing requirements not met
+    Info (11105): For recommendations on closing timing, run Report Timing Closure Recommendations in the TimeQuest Timing Analyzer.
+Info (332146): Worst-case setup slack is -12.126
+    Info (332119):     Slack       End Point TNS Clock 
+    Info (332119): ========= =================== =====================
+    Info (332119):   -12.126          -13595.682 gpu_clk 
+    Info (332119):     7.339               0.000 vid_clk 
+    Info (332119):    33.230               0.000 audio_clk 
+Info (332146): Worst-case hold slack is -0.038
+    Info (332119):     Slack       End Point TNS Clock 
+    Info (332119): ========= =================== =====================
+    Info (332119):    -0.038              -7.142 gpu_clk 
+    Info (332119):    -0.038              -0.070 vid_clk 
+    Info (332119):     0.122               0.000 audio_clk 
+Info (332140): No Recovery paths to report
+Info (332140): No Removal paths to report
+Info (332146): Worst-case minimum pulse width slack is 3.670
+    Info (332119):     Slack       End Point TNS Clock 
+    Info (332119): ========= =================== =====================
+    Info (332119):     3.670               0.000 gpu_clk 
+    Info (332119):     8.665               0.000 vid_clk 
+    Info (332119):    18.691               0.000 audio_clk 
+Warning (18869): Performing metastability analysis with a pre-fit timing netlist. MTBF values for unplaced blocks are not available, and any reported MTBF values should be treated as an estimate.
+Info (332114): Report Metastability: Found 270 synchronizer chains.
+    Info (332114): Design MTBF is not calculated because the design doesn't meet its timing requirements.
+Info (332102): Design is not fully constrained for setup requirements
+Info (332102): Design is not fully constrained for hold requirements
+Info (21076): High junction temperature operating condition is not set. Assuming a default value of '100'.
+Info (21076): Low junction temperature operating condition is not set. Assuming a default value of '-40'.
+Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
+Info: Wrote post-map shell boundary witness to output_files/characterization/post_map_connectivity.tsv
+Info: Quartus Prime TimeQuest Timing Analyzer was successful. 0 errors, 10 warnings
+    Info: Peak virtual memory: 5461 megabytes
+    Info: Processing ended: Sun Sep 13 23:20:20 2026
+    Info: Elapsed time: 00:00:09
+    Info: Total CPU time (on all processors): 00:00:13

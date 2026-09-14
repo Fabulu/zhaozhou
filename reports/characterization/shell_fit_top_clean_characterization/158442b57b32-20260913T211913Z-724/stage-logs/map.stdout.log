@@ -1,0 +1,569 @@
+Info: *******************************************************************
+Info: Running Quartus Prime Analysis & Synthesis
+    Info: Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+    Info: Copyright (C) 2017  Intel Corporation. All rights reserved.
+    Info: Your use of Intel Corporation's design tools, logic functions 
+    Info: and other software and tools, and its AMPP partner logic 
+    Info: functions, and any output files from any of the foregoing 
+    Info: (including device programming or simulation files), and any 
+    Info: associated documentation or information are expressly subject 
+    Info: to the terms and conditions of the Intel Program License 
+    Info: Subscription Agreement, the Intel Quartus Prime License Agreement,
+    Info: the Intel MegaCore Function License Agreement, or other 
+    Info: applicable license agreement, including, without limitation, 
+    Info: that your use is for the sole purpose of programming logic 
+    Info: devices manufactured by Intel and sold by Intel or its 
+    Info: authorized distributors.  Please refer to the applicable 
+    Info: agreement for further details.
+    Info: Processing started: Sun Sep 13 23:19:26 2026
+Info: Command: quartus_map zhao_shell_fit --parallel=4
+Warning (125079): The project setting files are read-only and will not be updated with any changes made.
+Info (16303): High Performance Effort optimization mode selected -- timing performance will be prioritized at the potential cost of increased compilation time
+    Info (16304): Mode behavior is affected by advanced setting Perform Register Retiming for Performance (default for this mode is On)
+    Info (16304): Mode behavior is affected by advanced setting Placement Effort Multiplier (default for this mode is 4.0)
+Warning (18236): Number of processors has not been specified which may cause overloading on shared machines.  Set the global assignment NUM_PARALLEL_PROCESSORS in your QSF to an appropriate value for best performance.
+Info (20032): Parallel compilation is enabled and will use up to 4 processors
+Info (12021): Found 1 design units, including 0 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_abi_pkg.sv
+    Info (12022): Found design unit 1: zhao_abi_pkg (SystemVerilog) File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_abi_pkg.sv Line: 10
+Info (12021): Found 1 design units, including 0 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_pkg.sv
+    Info (12022): Found design unit 1: zhao_pkg (SystemVerilog) File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_pkg.sv Line: 25
+Info (12021): Found 1 design units, including 0 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_sdram_params_pkg.sv
+    Info (12022): Found design unit 1: zhao_sdram_params_pkg (SystemVerilog) File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_sdram_params_pkg.sv Line: 26
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_crc32c_fold.sv
+    Info (12023): Found entity 1: zhao_crc32c_fold File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_crc32c_fold.sv Line: 48
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_cdc_snapshot.sv
+    Info (12023): Found entity 1: zhao_cdc_snapshot File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_cdc_snapshot.sv Line: 60
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_mode.sv
+    Info (12023): Found entity 1: zhao_video_mode File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_mode.sv Line: 47
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_framectl.sv
+    Info (12023): Found entity 1: zhao_video_framectl File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_framectl.sv Line: 38
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_scaler.sv
+    Info (12023): Found entity 1: zhao_video_scaler File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_scaler.sv Line: 23
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_scanout_fetch.sv
+    Info (12023): Found entity 1: zhao_scanout_fetch File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_scanout_fetch.sv Line: 44
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_dc_sdp_ram.sv
+    Info (12023): Found entity 1: zhao_dc_sdp_ram File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_dc_sdp_ram.sv Line: 31
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_scanout_linebuf.sv
+    Info (12023): Found entity 1: zhao_scanout_linebuf File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_scanout_linebuf.sv Line: 69
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_scanout_serializer.sv
+    Info (12023): Found entity 1: zhao_scanout_serializer File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_scanout_serializer.sv Line: 37
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_scanout.sv
+    Info (12023): Found entity 1: zhao_video_scanout File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_scanout.sv Line: 37
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/command/zhao_cmd_scheduler.sv
+    Info (12023): Found entity 1: zhao_cmd_scheduler File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/command/zhao_cmd_scheduler.sv Line: 46
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/command/zhao_cmd_dma.sv
+    Info (12023): Found entity 1: zhao_cmd_dma File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/command/zhao_cmd_dma.sv Line: 64
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/debug/zhao_debug_counters.sv
+    Info (12023): Found entity 1: zhao_debug_counters File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/debug/zhao_debug_counters.sv Line: 41
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/debug/zhao_debug_crc.sv
+    Info (12023): Found entity 1: zhao_debug_crc File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/debug/zhao_debug_crc.sv Line: 65
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/input/zhao_input_snapshot.sv
+    Info (12023): Found entity 1: zhao_input_snapshot File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/input/zhao_input_snapshot.sv Line: 34
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/input/zhao_input_rumble.sv
+    Info (12023): Found entity 1: zhao_input_rumble File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/input/zhao_input_rumble.sv Line: 30
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/audio/zhao_audio_fifo.sv
+    Info (12023): Found entity 1: zhao_audio_fifo File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/audio/zhao_audio_fifo.sv Line: 49
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_sdram_ctrl.sv
+    Info (12023): Found entity 1: zhao_sdram_ctrl File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_sdram_ctrl.sv Line: 55
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_vram_arbiter.sv
+    Info (12023): Found entity 1: zhao_vram_arbiter File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_vram_arbiter.sv Line: 71
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_mem_guard.sv
+    Info (12023): Found entity 1: zhao_mem_guard File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_mem_guard.sv Line: 55
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_hps_bridge.sv
+    Info (12023): Found entity 1: zhao_hps_bridge File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_hps_bridge.sv Line: 29
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_hps_arbiter.sv
+    Info (12023): Found entity 1: zhao_hps_arbiter File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_hps_arbiter.sv Line: 93
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/debug/zhao_debug_frameblit.sv
+    Info (12023): Found entity 1: zhao_debug_frameblit File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/debug/zhao_debug_frameblit.sv Line: 137
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_slotmgr.sv
+    Info (12023): Found entity 1: zhao_video_slotmgr File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_slotmgr.sv Line: 73
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_fbwrite.sv
+    Info (12023): Found entity 1: zhao_raster_fbwrite File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_fbwrite.sv Line: 69
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_bin_pipe.sv
+    Info (12023): Found entity 1: zhao_geom_bin_pipe File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_bin_pipe.sv Line: 76
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_binner.sv
+    Info (12023): Found entity 1: zhao_geom_binner File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_binner.sv Line: 205
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_arena.sv
+    Info (12023): Found entity 1: zhao_geom_arena File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_arena.sv Line: 24
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_tile_pipe.sv
+    Info (12023): Found entity 1: zhao_raster_tile_pipe File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_tile_pipe.sv Line: 145
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_skid2.sv
+    Info (12023): Found entity 1: zhao_skid2 File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_skid2.sv Line: 45
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_edgewalk.sv
+    Info (12023): Found entity 1: zhao_raster_edgewalk File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_edgewalk.sv Line: 89
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_earlyz.sv
+    Info (12023): Found entity 1: zhao_raster_earlyz File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_earlyz.sv Line: 127
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_fragment.sv
+    Info (12023): Found entity 1: zhao_raster_fragment File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_fragment.sv Line: 240
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_tilestore.sv
+    Info (12023): Found entity 1: zhao_raster_tilestore File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_tilestore.sv Line: 102
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_resolve.sv
+    Info (12023): Found entity 1: zhao_raster_resolve File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_resolve.sv Line: 105
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_blend.sv
+    Info (12023): Found entity 1: zhao_raster_blend File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_blend.sv Line: 80
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_blend_prod.sv
+    Info (12023): Found entity 1: zhao_raster_blend_prod File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_blend_prod.sv Line: 16
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_blend_fin.sv
+    Info (12023): Found entity 1: zhao_raster_blend_fin File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_blend_fin.sv Line: 15
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_div255.sv
+    Info (12023): Found entity 1: zhao_raster_div255 File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_div255.sv Line: 55
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_quant.sv
+    Info (12023): Found entity 1: zhao_raster_quant File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_quant.sv Line: 52
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_fill.sv
+    Info (12023): Found entity 1: zhao_raster_fill File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_fill.sv Line: 27
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_setup.sv
+    Info (12023): Found entity 1: zhao_geom_setup File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_setup.sv Line: 130
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_meshfetch.sv
+    Info (12023): Found entity 1: zhao_geom_meshfetch File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_meshfetch.sv Line: 67
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_assemble.sv
+    Info (12023): Found entity 1: zhao_geom_assemble File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_assemble.sv Line: 43
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_vdecode.sv
+    Info (12023): Found entity 1: zhao_geom_vdecode File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_vdecode.sv Line: 72
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_assetfetch.sv
+    Info (12023): Found entity 1: zhao_geom_assetfetch File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_assetfetch.sv Line: 38
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_project.sv
+    Info (12023): Found entity 1: zhao_geom_project File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_project.sv Line: 65
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_clip.sv
+    Info (12023): Found entity 1: zhao_geom_clip File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_clip.sv Line: 155
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_depthquant.sv
+    Info (12023): Found entity 1: zhao_geom_depthquant File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_depthquant.sv Line: 52
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+    Info (12023): Found entity 1: zhao_raster_rcp24_svc File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_rcp24_svc.sv Line: 53
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/field/zhao_field_rcp24_rom.sv
+    Info (12023): Found entity 1: zhao_field_rcp24_rom File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/field/zhao_field_rcp24_rom.sv Line: 17
+Info (12021): Found 1 design units, including 1 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv
+    Info (12023): Found entity 1: zhao_shell_top File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 96
+Info (12021): Found 5 design units, including 5 entities, in source file /users/fabs/appdata/local/temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv
+    Info (12023): Found entity 1: zhao_shell_fit_top File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 10
+    Info (12023): Found entity 2: zhao_shell_fit_stimulus File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 572
+    Info (12023): Found entity 3: zhao_shell_fit_gpu_sink File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 1867
+    Info (12023): Found entity 4: zhao_shell_fit_video_sink File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 2036
+    Info (12023): Found entity 5: zhao_shell_fit_audio_sink File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 2156
+Info (12127): Elaborating entity "zhao_shell_fit_top" for the top level hierarchy
+Info (12128): Elaborating entity "zhao_shell_fit_stimulus" for hierarchy "zhao_shell_fit_stimulus:u_stimulus" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 385
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(706): object "render_entropy_offer_snapshot_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 706
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(707): object "render_accepted_payload_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 707
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(708): object "render_entropy_accepted_payload_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 708
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(713): object "render_directed_accepted_coefficients_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 713
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(714): object "render_directed_accepted_vertices_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 714
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(715): object "render_directed_accepted_bounds_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 715
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(716): object "render_directed_accepted_identity_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 716
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(717): object "render_entropy_accepted_coefficients_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 717
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(718): object "render_entropy_accepted_vertices_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 718
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(719): object "render_entropy_accepted_bounds_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 719
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(720): object "render_entropy_accepted_identity_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 720
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(771): object "pad_directed_phases_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 771
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(776): object "counter_selector_seen_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 776
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(785): object "render_entropy_accepted_mode_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 785
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(786): object "render_entropy_accepted_fill_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 786
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_fit_top.sv(787): object "render_entropy_accepted_clear_q" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 787
+Warning (10762): Verilog HDL Case Statement warning at zhao_shell_fit_top.sv(861): can't check case statement for completeness because the case expression has too many possible states File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 861
+Info (12128): Elaborating entity "zhao_shell_top" for hierarchy "zhao_shell_top:u_shell" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 542
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_top.sv(646): object "unused_dma" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 646
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_top.sv(1369): object "unused_mem" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1369
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_top.sv(1871): object "unused_input" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1871
+Warning (10036): Verilog HDL or VHDL warning at zhao_shell_top.sv(2031): object "unused_cnt" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 2031
+Warning (10240): Verilog HDL Always Construct warning at zhao_shell_top.sv(970): inferring latch(es) for variable "wf_wp", which holds its previous value in one or more paths through the always construct File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 970
+Info (10264): Verilog HDL Case Statement information at zhao_shell_top.sv(1226): all case item expressions in this case statement are onehot File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1226
+Info (10041): Inferred latch for "wf_wp[0]" at zhao_shell_top.sv(970) File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 970
+Info (10041): Inferred latch for "wf_wp[1]" at zhao_shell_top.sv(970) File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 970
+Info (12128): Elaborating entity "zhao_video_mode" for hierarchy "zhao_shell_top:u_shell|zhao_video_mode:u_mode" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 383
+Info (12128): Elaborating entity "zhao_video_scanout" for hierarchy "zhao_shell_top:u_shell|zhao_video_scanout:u_scanout" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 409
+Warning (10036): Verilog HDL or VHDL warning at zhao_video_scanout.sv(218): object "unused_top" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_scanout.sv Line: 218
+Info (12128): Elaborating entity "zhao_scanout_fetch" for hierarchy "zhao_shell_top:u_shell|zhao_video_scanout:u_scanout|zhao_scanout_fetch:u_fetch" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_scanout.sv Line: 172
+Warning (10036): Verilog HDL or VHDL warning at zhao_scanout_fetch.sv(376): object "unused_conformance" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_scanout_fetch.sv Line: 376
+Info (12128): Elaborating entity "zhao_scanout_linebuf" for hierarchy "zhao_shell_top:u_shell|zhao_video_scanout:u_scanout|zhao_scanout_linebuf:u_linebuf" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_scanout.sv Line: 192
+Info (12128): Elaborating entity "zhao_dc_sdp_ram" for hierarchy "zhao_shell_top:u_shell|zhao_video_scanout:u_scanout|zhao_scanout_linebuf:u_linebuf|zhao_dc_sdp_ram:u_ram" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_scanout_linebuf.sv Line: 132
+Info (12128): Elaborating entity "zhao_scanout_serializer" for hierarchy "zhao_shell_top:u_shell|zhao_video_scanout:u_scanout|zhao_scanout_serializer:u_ser" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_scanout.sv Line: 215
+Warning (10036): Verilog HDL or VHDL warning at zhao_scanout_serializer.sv(231): object "unused_serializer" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_scanout_serializer.sv Line: 231
+Info (12128): Elaborating entity "zhao_video_scaler" for hierarchy "zhao_shell_top:u_shell|zhao_video_scaler:u_scaler" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 418
+Info (12128): Elaborating entity "zhao_video_framectl" for hierarchy "zhao_shell_top:u_shell|zhao_video_framectl:u_framectl" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 443
+Warning (10036): Verilog HDL or VHDL warning at zhao_video_framectl.sv(165): object "unused_raster" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/video/zhao_video_framectl.sv Line: 165
+Info (12128): Elaborating entity "zhao_cmd_scheduler" for hierarchy "zhao_shell_top:u_shell|zhao_cmd_scheduler:u_sched" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 604
+Info (12128): Elaborating entity "zhao_cmd_dma" for hierarchy "zhao_shell_top:u_shell|zhao_cmd_dma:u_dma" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 634
+Warning (10036): Verilog HDL or VHDL warning at zhao_cmd_dma.sv(293): object "hdr_gate" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/command/zhao_cmd_dma.sv Line: 293
+Warning (10036): Verilog HDL or VHDL warning at zhao_cmd_dma.sv(294): object "pay_gate" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/command/zhao_cmd_dma.sv Line: 294
+Info (10264): Verilog HDL Case Statement information at zhao_cmd_dma.sv(417): all case item expressions in this case statement are onehot File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/command/zhao_cmd_dma.sv Line: 417
+Info (10264): Verilog HDL Case Statement information at zhao_cmd_dma.sv(444): all case item expressions in this case statement are onehot File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/command/zhao_cmd_dma.sv Line: 444
+Info (12128): Elaborating entity "zhao_crc32c_fold" for hierarchy "zhao_shell_top:u_shell|zhao_cmd_dma:u_dma|zhao_crc32c_fold:u_fold8" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/command/zhao_cmd_dma.sv Line: 387
+Info (12128): Elaborating entity "zhao_mem_guard" for hierarchy "zhao_shell_top:u_shell|zhao_mem_guard:u_guard_scan" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 696
+Warning (10036): Verilog HDL or VHDL warning at zhao_mem_guard.sv(367): object "unused_arb_credits" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_mem_guard.sv Line: 367
+Info (12128): Elaborating entity "zhao_geom_bin_pipe" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 841
+Info (12128): Elaborating entity "zhao_geom_binner" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_bin_pipe.sv Line: 228
+Warning (10036): Verilog HDL or VHDL warning at zhao_geom_binner.sv(388): object "kc_r" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_binner.sv Line: 388
+Info (12128): Elaborating entity "zhao_geom_arena" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|zhao_geom_arena:u_arena" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_binner.sv Line: 377
+Info (12128): Elaborating entity "zhao_raster_fill" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|zhao_raster_fill:g_edge[0].u_fill" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_binner.sv Line: 439
+Info (12128): Elaborating entity "zhao_raster_tile_pipe" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/geometry/zhao_geom_bin_pipe.sv Line: 288
+Warning (10036): Verilog HDL or VHDL warning at zhao_raster_tile_pipe.sv(496): object "unused_ok" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_tile_pipe.sv Line: 496
+Info (12128): Elaborating entity "zhao_raster_edgewalk" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_tile_pipe.sv Line: 525
+Info (10264): Verilog HDL Case Statement information at zhao_raster_edgewalk.sv(276): all case item expressions in this case statement are onehot File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_edgewalk.sv Line: 276
+Info (12128): Elaborating entity "zhao_raster_fill" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|zhao_raster_fill:g_col[0].u_f0" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_edgewalk.sv Line: 443
+Info (12128): Elaborating entity "zhao_raster_earlyz" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_earlyz:u_earlyz" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_tile_pipe.sv Line: 559
+Info (12128): Elaborating entity "zhao_skid2" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_skid2:u_cand_skid" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_tile_pipe.sv Line: 630
+Info (10264): Verilog HDL Case Statement information at zhao_skid2.sv(102): all case item expressions in this case statement are onehot File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_skid2.sv Line: 102
+Info (12128): Elaborating entity "zhao_raster_fragment" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_fragment:u_fragment" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_tile_pipe.sv Line: 665
+Info (12128): Elaborating entity "zhao_raster_blend_prod" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_fragment:u_fragment|zhao_raster_blend_prod:u_pr" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_fragment.sv Line: 492
+Info (12128): Elaborating entity "zhao_raster_blend_fin" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_fragment:u_fragment|zhao_raster_blend_fin:u_fr" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_fragment.sv Line: 504
+Warning (10036): Verilog HDL or VHDL warning at zhao_raster_blend_fin.sv(47): object "unused_ok" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_blend_fin.sv Line: 47
+Info (12128): Elaborating entity "zhao_raster_tilestore" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_tile_pipe.sv Line: 696
+Info (12128): Elaborating entity "zhao_raster_resolve" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_resolve:u_resolve" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_tile_pipe.sv Line: 727
+Warning (10036): Verilog HDL or VHDL warning at zhao_raster_resolve.sv(155): object "unused_ok" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_resolve.sv Line: 155
+Info (10264): Verilog HDL Case Statement information at zhao_raster_resolve.sv(415): all case item expressions in this case statement are onehot File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_resolve.sv Line: 415
+Info (10264): Verilog HDL Case Statement information at zhao_raster_resolve.sv(420): all case item expressions in this case statement are onehot File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_resolve.sv Line: 420
+Info (12128): Elaborating entity "zhao_raster_quant" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_resolve:u_resolve|zhao_raster_quant:u_qr" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_resolve.sv Line: 252
+Info (12128): Elaborating entity "zhao_raster_div255" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_resolve:u_resolve|zhao_raster_quant:u_qr|zhao_raster_div255:u_div" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_quant.sv Line: 81
+Info (12128): Elaborating entity "zhao_raster_quant" for hierarchy "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_resolve:u_resolve|zhao_raster_quant:u_qg" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_resolve.sv Line: 254
+Info (12128): Elaborating entity "zhao_raster_fbwrite" for hierarchy "zhao_shell_top:u_shell|zhao_raster_fbwrite:u_render_fbw" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 865
+Warning (10036): Verilog HDL or VHDL warning at zhao_raster_fbwrite.sv(194): object "addr_high_unused" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_fbwrite.sv Line: 194
+Warning (10036): Verilog HDL or VHDL warning at zhao_raster_fbwrite.sv(216): object "rsp_violation_unused" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/raster/zhao_raster_fbwrite.sv Line: 216
+Info (12128): Elaborating entity "zhao_vram_arbiter" for hierarchy "zhao_shell_top:u_shell|zhao_vram_arbiter:u_arb" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 958
+Info (12128): Elaborating entity "zhao_sdram_ctrl" for hierarchy "zhao_shell_top:u_shell|zhao_sdram_ctrl:u_ctrl" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1178
+Warning (10036): Verilog HDL or VHDL warning at zhao_sdram_ctrl.sv(392): object "unused_req_client" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_sdram_ctrl.sv Line: 392
+Warning (10036): Verilog HDL or VHDL warning at zhao_sdram_ctrl.sv(399): object "unused_addr_msb" assigned a value but never read File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_sdram_ctrl.sv Line: 399
+Info (10264): Verilog HDL Case Statement information at zhao_sdram_ctrl.sv(179): all case item expressions in this case statement are onehot File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_sdram_ctrl.sv Line: 179
+Info (12128): Elaborating entity "zhao_video_slotmgr" for hierarchy "zhao_shell_top:u_shell|zhao_video_slotmgr:u_slotmgr" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1272
+Info (12128): Elaborating entity "zhao_debug_frameblit" for hierarchy "zhao_shell_top:u_shell|zhao_debug_frameblit:u_frameblit" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1310
+Info (12128): Elaborating entity "zhao_hps_arbiter" for hierarchy "zhao_shell_top:u_shell|zhao_hps_arbiter:u_hps_arb" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1339
+Info (10264): Verilog HDL Case Statement information at zhao_hps_arbiter.sv(151): all case item expressions in this case statement are onehot File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/memory/zhao_hps_arbiter.sv Line: 151
+Info (12128): Elaborating entity "zhao_hps_bridge" for hierarchy "zhao_shell_top:u_shell|zhao_hps_bridge:u_bridge" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1366
+Info (12128): Elaborating entity "zhao_debug_crc" for hierarchy "zhao_shell_top:u_shell|zhao_debug_crc:u_crc" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1625
+Info (12128): Elaborating entity "zhao_input_snapshot" for hierarchy "zhao_shell_top:u_shell|zhao_input_snapshot:u_snapshot" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1835
+Info (12128): Elaborating entity "zhao_input_rumble" for hierarchy "zhao_shell_top:u_shell|zhao_input_rumble:u_rumble" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1868
+Info (12128): Elaborating entity "zhao_audio_fifo" for hierarchy "zhao_shell_top:u_shell|zhao_audio_fifo:u_fifo" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1899
+Info (12128): Elaborating entity "zhao_cdc_snapshot" for hierarchy "zhao_shell_top:u_shell|zhao_cdc_snapshot:u_starve_mbx" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 1957
+Info (12128): Elaborating entity "zhao_debug_counters" for hierarchy "zhao_shell_top:u_shell|zhao_debug_counters:u_counters" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/common/zhao_shell_top.sv Line: 2025
+Info (12128): Elaborating entity "zhao_shell_fit_gpu_sink" for hierarchy "zhao_shell_fit_gpu_sink:u_gpu_sink" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 551
+Info (12128): Elaborating entity "zhao_shell_fit_video_sink" for hierarchy "zhao_shell_fit_video_sink:u_video_sink" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 559
+Info (12128): Elaborating entity "zhao_shell_fit_audio_sink" for hierarchy "zhao_shell_fit_audio_sink:u_audio_sink" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/generated/zhao_shell_fit_top.sv Line: 567
+Warning (276027): Inferred dual-clock RAM node "zhao_shell_top:u_shell|zhao_audio_fifo:u_fifo|mem_rtl_0" from synchronous design logic.  The read-during-write behavior of a dual-clock RAM is undefined and may not match the behavior of the original design.
+Warning (276027): Inferred dual-clock RAM node "zhao_shell_top:u_shell|zhao_video_scanout:u_scanout|zhao_scanout_linebuf:u_linebuf|zhao_dc_sdp_ram:u_ram|mem_rtl_0" from synchronous design logic.  The read-during-write behavior of a dual-clock RAM is undefined and may not match the behavior of the original design.
+Info (19000): Inferred 9 megafunctions from design logic
+    Info (276029): Inferred altsyncram megafunction from the following design logic: "zhao_shell_top:u_shell|zhao_audio_fifo:u_fifo|mem_rtl_0" 
+        Info (286033): Parameter OPERATION_MODE set to DUAL_PORT
+        Info (286033): Parameter WIDTH_A set to 32
+        Info (286033): Parameter WIDTHAD_A set to 11
+        Info (286033): Parameter NUMWORDS_A set to 2048
+        Info (286033): Parameter WIDTH_B set to 32
+        Info (286033): Parameter WIDTHAD_B set to 11
+        Info (286033): Parameter NUMWORDS_B set to 2048
+        Info (286033): Parameter ADDRESS_ACLR_A set to NONE
+        Info (286033): Parameter OUTDATA_REG_B set to UNREGISTERED
+        Info (286033): Parameter ADDRESS_ACLR_B set to NONE
+        Info (286033): Parameter OUTDATA_ACLR_B set to NONE
+        Info (286033): Parameter ADDRESS_REG_B set to CLOCK1
+        Info (286033): Parameter INDATA_ACLR_A set to NONE
+        Info (286033): Parameter WRCONTROL_ACLR_A set to NONE
+    Info (276029): Inferred altsyncram megafunction from the following design logic: "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|ram0_rtl_0" 
+        Info (286033): Parameter OPERATION_MODE set to DUAL_PORT
+        Info (286033): Parameter WIDTH_A set to 64
+        Info (286033): Parameter WIDTHAD_A set to 8
+        Info (286033): Parameter NUMWORDS_A set to 256
+        Info (286033): Parameter WIDTH_B set to 64
+        Info (286033): Parameter WIDTHAD_B set to 8
+        Info (286033): Parameter NUMWORDS_B set to 256
+        Info (286033): Parameter ADDRESS_ACLR_A set to NONE
+        Info (286033): Parameter OUTDATA_REG_B set to UNREGISTERED
+        Info (286033): Parameter ADDRESS_ACLR_B set to NONE
+        Info (286033): Parameter OUTDATA_ACLR_B set to NONE
+        Info (286033): Parameter ADDRESS_REG_B set to CLOCK0
+        Info (286033): Parameter INDATA_ACLR_A set to NONE
+        Info (286033): Parameter WRCONTROL_ACLR_A set to NONE
+        Info (286033): Parameter READ_DURING_WRITE_MODE_MIXED_PORTS set to OLD_DATA
+    Info (276029): Inferred altsyncram megafunction from the following design logic: "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|ram1_rtl_0" 
+        Info (286033): Parameter OPERATION_MODE set to DUAL_PORT
+        Info (286033): Parameter WIDTH_A set to 64
+        Info (286033): Parameter WIDTHAD_A set to 8
+        Info (286033): Parameter NUMWORDS_A set to 256
+        Info (286033): Parameter WIDTH_B set to 64
+        Info (286033): Parameter WIDTHAD_B set to 8
+        Info (286033): Parameter NUMWORDS_B set to 256
+        Info (286033): Parameter ADDRESS_ACLR_A set to NONE
+        Info (286033): Parameter OUTDATA_REG_B set to UNREGISTERED
+        Info (286033): Parameter ADDRESS_ACLR_B set to NONE
+        Info (286033): Parameter OUTDATA_ACLR_B set to NONE
+        Info (286033): Parameter ADDRESS_REG_B set to CLOCK0
+        Info (286033): Parameter INDATA_ACLR_A set to NONE
+        Info (286033): Parameter WRCONTROL_ACLR_A set to NONE
+        Info (286033): Parameter READ_DURING_WRITE_MODE_MIXED_PORTS set to OLD_DATA
+    Info (276029): Inferred altsyncram megafunction from the following design logic: "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|tri_ram_rtl_0" 
+        Info (286033): Parameter OPERATION_MODE set to DUAL_PORT
+        Info (286033): Parameter WIDTH_A set to 126
+        Info (286033): Parameter WIDTHAD_A set to 7
+        Info (286033): Parameter NUMWORDS_A set to 128
+        Info (286033): Parameter WIDTH_B set to 126
+        Info (286033): Parameter WIDTHAD_B set to 7
+        Info (286033): Parameter NUMWORDS_B set to 128
+        Info (286033): Parameter ADDRESS_ACLR_A set to NONE
+        Info (286033): Parameter OUTDATA_REG_B set to UNREGISTERED
+        Info (286033): Parameter ADDRESS_ACLR_B set to NONE
+        Info (286033): Parameter OUTDATA_ACLR_B set to NONE
+        Info (286033): Parameter ADDRESS_REG_B set to CLOCK0
+        Info (286033): Parameter INDATA_ACLR_A set to NONE
+        Info (286033): Parameter WRCONTROL_ACLR_A set to NONE
+        Info (286033): Parameter READ_DURING_WRITE_MODE_MIXED_PORTS set to OLD_DATA
+    Info (276029): Inferred altsyncram megafunction from the following design logic: "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|ref_ram_rtl_0" 
+        Info (286033): Parameter OPERATION_MODE set to DUAL_PORT
+        Info (286033): Parameter WIDTH_A set to 7
+        Info (286033): Parameter WIDTHAD_A set to 10
+        Info (286033): Parameter NUMWORDS_A set to 1024
+        Info (286033): Parameter WIDTH_B set to 7
+        Info (286033): Parameter WIDTHAD_B set to 10
+        Info (286033): Parameter NUMWORDS_B set to 1024
+        Info (286033): Parameter ADDRESS_ACLR_A set to NONE
+        Info (286033): Parameter OUTDATA_REG_B set to UNREGISTERED
+        Info (286033): Parameter ADDRESS_ACLR_B set to NONE
+        Info (286033): Parameter OUTDATA_ACLR_B set to NONE
+        Info (286033): Parameter ADDRESS_REG_B set to CLOCK0
+        Info (286033): Parameter INDATA_ACLR_A set to NONE
+        Info (286033): Parameter WRCONTROL_ACLR_A set to NONE
+        Info (286033): Parameter READ_DURING_WRITE_MODE_MIXED_PORTS set to OLD_DATA
+    Info (276029): Inferred altsyncram megafunction from the following design logic: "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|next_ram_rtl_0" 
+        Info (286033): Parameter OPERATION_MODE set to DUAL_PORT
+        Info (286033): Parameter WIDTH_A set to 8
+        Info (286033): Parameter WIDTHAD_A set to 8
+        Info (286033): Parameter NUMWORDS_A set to 256
+        Info (286033): Parameter WIDTH_B set to 8
+        Info (286033): Parameter WIDTHAD_B set to 8
+        Info (286033): Parameter NUMWORDS_B set to 256
+        Info (286033): Parameter ADDRESS_ACLR_A set to NONE
+        Info (286033): Parameter OUTDATA_REG_B set to UNREGISTERED
+        Info (286033): Parameter ADDRESS_ACLR_B set to NONE
+        Info (286033): Parameter OUTDATA_ACLR_B set to NONE
+        Info (286033): Parameter ADDRESS_REG_B set to CLOCK0
+        Info (286033): Parameter INDATA_ACLR_A set to NONE
+        Info (286033): Parameter WRCONTROL_ACLR_A set to NONE
+        Info (286033): Parameter READ_DURING_WRITE_MODE_MIXED_PORTS set to OLD_DATA
+    Info (276029): Inferred altsyncram megafunction from the following design logic: "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|tile_ram_rtl_0" 
+        Info (286033): Parameter OPERATION_MODE set to DUAL_PORT
+        Info (286033): Parameter WIDTH_A set to 27
+        Info (286033): Parameter WIDTHAD_A set to 10
+        Info (286033): Parameter NUMWORDS_A set to 576
+        Info (286033): Parameter WIDTH_B set to 27
+        Info (286033): Parameter WIDTHAD_B set to 10
+        Info (286033): Parameter NUMWORDS_B set to 576
+        Info (286033): Parameter ADDRESS_ACLR_A set to NONE
+        Info (286033): Parameter OUTDATA_REG_B set to UNREGISTERED
+        Info (286033): Parameter ADDRESS_ACLR_B set to NONE
+        Info (286033): Parameter OUTDATA_ACLR_B set to NONE
+        Info (286033): Parameter ADDRESS_REG_B set to CLOCK0
+        Info (286033): Parameter INDATA_ACLR_A set to NONE
+        Info (286033): Parameter WRCONTROL_ACLR_A set to NONE
+        Info (286033): Parameter READ_DURING_WRITE_MODE_MIXED_PORTS set to OLD_DATA
+    Info (276029): Inferred altsyncram megafunction from the following design logic: "zhao_shell_top:u_shell|zhao_cmd_dma:u_dma|slot_ram_rtl_0" 
+        Info (286033): Parameter OPERATION_MODE set to DUAL_PORT
+        Info (286033): Parameter WIDTH_A set to 64
+        Info (286033): Parameter WIDTHAD_A set to 9
+        Info (286033): Parameter NUMWORDS_A set to 512
+        Info (286033): Parameter WIDTH_B set to 64
+        Info (286033): Parameter WIDTHAD_B set to 9
+        Info (286033): Parameter NUMWORDS_B set to 512
+        Info (286033): Parameter ADDRESS_ACLR_A set to NONE
+        Info (286033): Parameter OUTDATA_REG_B set to UNREGISTERED
+        Info (286033): Parameter ADDRESS_ACLR_B set to NONE
+        Info (286033): Parameter OUTDATA_ACLR_B set to NONE
+        Info (286033): Parameter ADDRESS_REG_B set to CLOCK0
+        Info (286033): Parameter INDATA_ACLR_A set to NONE
+        Info (286033): Parameter WRCONTROL_ACLR_A set to NONE
+        Info (286033): Parameter READ_DURING_WRITE_MODE_MIXED_PORTS set to OLD_DATA
+    Info (276029): Inferred altsyncram megafunction from the following design logic: "zhao_shell_top:u_shell|zhao_video_scanout:u_scanout|zhao_scanout_linebuf:u_linebuf|zhao_dc_sdp_ram:u_ram|mem_rtl_0" 
+        Info (286033): Parameter OPERATION_MODE set to DUAL_PORT
+        Info (286033): Parameter WIDTH_A set to 64
+        Info (286033): Parameter WIDTHAD_A set to 8
+        Info (286033): Parameter NUMWORDS_A set to 256
+        Info (286033): Parameter WIDTH_B set to 64
+        Info (286033): Parameter WIDTHAD_B set to 8
+        Info (286033): Parameter NUMWORDS_B set to 256
+        Info (286033): Parameter ADDRESS_ACLR_A set to NONE
+        Info (286033): Parameter OUTDATA_REG_B set to UNREGISTERED
+        Info (286033): Parameter ADDRESS_ACLR_B set to NONE
+        Info (286033): Parameter OUTDATA_ACLR_B set to NONE
+        Info (286033): Parameter ADDRESS_REG_B set to CLOCK1
+        Info (286033): Parameter INDATA_ACLR_A set to NONE
+        Info (286033): Parameter WRCONTROL_ACLR_A set to NONE
+Info (12130): Elaborated megafunction instantiation "zhao_shell_top:u_shell|zhao_cmd_dma:u_dma|altsyncram:slot_ram_rtl_0"
+Info (12133): Instantiated megafunction "zhao_shell_top:u_shell|zhao_cmd_dma:u_dma|altsyncram:slot_ram_rtl_0" with the following parameter:
+    Info (12134): Parameter "OPERATION_MODE" = "DUAL_PORT"
+    Info (12134): Parameter "WIDTH_A" = "64"
+    Info (12134): Parameter "WIDTHAD_A" = "9"
+    Info (12134): Parameter "NUMWORDS_A" = "512"
+    Info (12134): Parameter "WIDTH_B" = "64"
+    Info (12134): Parameter "WIDTHAD_B" = "9"
+    Info (12134): Parameter "NUMWORDS_B" = "512"
+    Info (12134): Parameter "ADDRESS_ACLR_A" = "NONE"
+    Info (12134): Parameter "OUTDATA_REG_B" = "UNREGISTERED"
+    Info (12134): Parameter "ADDRESS_ACLR_B" = "NONE"
+    Info (12134): Parameter "OUTDATA_ACLR_B" = "NONE"
+    Info (12134): Parameter "ADDRESS_REG_B" = "CLOCK0"
+    Info (12134): Parameter "INDATA_ACLR_A" = "NONE"
+    Info (12134): Parameter "WRCONTROL_ACLR_A" = "NONE"
+    Info (12134): Parameter "READ_DURING_WRITE_MODE_MIXED_PORTS" = "OLD_DATA"
+Info (12021): Found 1 design units, including 1 entities, in source file db/altsyncram_m6n1.tdf
+    Info (12023): Found entity 1: altsyncram_m6n1 File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_m6n1.tdf Line: 28
+Info (12130): Elaborated megafunction instantiation "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0"
+Info (12133): Instantiated megafunction "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0" with the following parameter:
+    Info (12134): Parameter "OPERATION_MODE" = "DUAL_PORT"
+    Info (12134): Parameter "WIDTH_A" = "64"
+    Info (12134): Parameter "WIDTHAD_A" = "8"
+    Info (12134): Parameter "NUMWORDS_A" = "256"
+    Info (12134): Parameter "WIDTH_B" = "64"
+    Info (12134): Parameter "WIDTHAD_B" = "8"
+    Info (12134): Parameter "NUMWORDS_B" = "256"
+    Info (12134): Parameter "ADDRESS_ACLR_A" = "NONE"
+    Info (12134): Parameter "OUTDATA_REG_B" = "UNREGISTERED"
+    Info (12134): Parameter "ADDRESS_ACLR_B" = "NONE"
+    Info (12134): Parameter "OUTDATA_ACLR_B" = "NONE"
+    Info (12134): Parameter "ADDRESS_REG_B" = "CLOCK0"
+    Info (12134): Parameter "INDATA_ACLR_A" = "NONE"
+    Info (12134): Parameter "WRCONTROL_ACLR_A" = "NONE"
+    Info (12134): Parameter "READ_DURING_WRITE_MODE_MIXED_PORTS" = "OLD_DATA"
+Info (12021): Found 1 design units, including 1 entities, in source file db/altsyncram_u6n1.tdf
+    Info (12023): Found entity 1: altsyncram_u6n1 File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 28
+Info (12130): Elaborated megafunction instantiation "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|altsyncram:tri_ram_rtl_0"
+Info (12133): Instantiated megafunction "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|altsyncram:tri_ram_rtl_0" with the following parameter:
+    Info (12134): Parameter "OPERATION_MODE" = "DUAL_PORT"
+    Info (12134): Parameter "WIDTH_A" = "126"
+    Info (12134): Parameter "WIDTHAD_A" = "7"
+    Info (12134): Parameter "NUMWORDS_A" = "128"
+    Info (12134): Parameter "WIDTH_B" = "126"
+    Info (12134): Parameter "WIDTHAD_B" = "7"
+    Info (12134): Parameter "NUMWORDS_B" = "128"
+    Info (12134): Parameter "ADDRESS_ACLR_A" = "NONE"
+    Info (12134): Parameter "OUTDATA_REG_B" = "UNREGISTERED"
+    Info (12134): Parameter "ADDRESS_ACLR_B" = "NONE"
+    Info (12134): Parameter "OUTDATA_ACLR_B" = "NONE"
+    Info (12134): Parameter "ADDRESS_REG_B" = "CLOCK0"
+    Info (12134): Parameter "INDATA_ACLR_A" = "NONE"
+    Info (12134): Parameter "WRCONTROL_ACLR_A" = "NONE"
+    Info (12134): Parameter "READ_DURING_WRITE_MODE_MIXED_PORTS" = "OLD_DATA"
+Info (12021): Found 1 design units, including 1 entities, in source file db/altsyncram_m9n1.tdf
+    Info (12023): Found entity 1: altsyncram_m9n1 File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_m9n1.tdf Line: 28
+Info (12130): Elaborated megafunction instantiation "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|altsyncram:ref_ram_rtl_0"
+Info (12133): Instantiated megafunction "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|altsyncram:ref_ram_rtl_0" with the following parameter:
+    Info (12134): Parameter "OPERATION_MODE" = "DUAL_PORT"
+    Info (12134): Parameter "WIDTH_A" = "7"
+    Info (12134): Parameter "WIDTHAD_A" = "10"
+    Info (12134): Parameter "NUMWORDS_A" = "1024"
+    Info (12134): Parameter "WIDTH_B" = "7"
+    Info (12134): Parameter "WIDTHAD_B" = "10"
+    Info (12134): Parameter "NUMWORDS_B" = "1024"
+    Info (12134): Parameter "ADDRESS_ACLR_A" = "NONE"
+    Info (12134): Parameter "OUTDATA_REG_B" = "UNREGISTERED"
+    Info (12134): Parameter "ADDRESS_ACLR_B" = "NONE"
+    Info (12134): Parameter "OUTDATA_ACLR_B" = "NONE"
+    Info (12134): Parameter "ADDRESS_REG_B" = "CLOCK0"
+    Info (12134): Parameter "INDATA_ACLR_A" = "NONE"
+    Info (12134): Parameter "WRCONTROL_ACLR_A" = "NONE"
+    Info (12134): Parameter "READ_DURING_WRITE_MODE_MIXED_PORTS" = "OLD_DATA"
+Info (12021): Found 1 design units, including 1 entities, in source file db/altsyncram_u8n1.tdf
+    Info (12023): Found entity 1: altsyncram_u8n1 File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u8n1.tdf Line: 28
+Info (12130): Elaborated megafunction instantiation "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|altsyncram:next_ram_rtl_0"
+Info (12133): Instantiated megafunction "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|altsyncram:next_ram_rtl_0" with the following parameter:
+    Info (12134): Parameter "OPERATION_MODE" = "DUAL_PORT"
+    Info (12134): Parameter "WIDTH_A" = "8"
+    Info (12134): Parameter "WIDTHAD_A" = "8"
+    Info (12134): Parameter "NUMWORDS_A" = "256"
+    Info (12134): Parameter "WIDTH_B" = "8"
+    Info (12134): Parameter "WIDTHAD_B" = "8"
+    Info (12134): Parameter "NUMWORDS_B" = "256"
+    Info (12134): Parameter "ADDRESS_ACLR_A" = "NONE"
+    Info (12134): Parameter "OUTDATA_REG_B" = "UNREGISTERED"
+    Info (12134): Parameter "ADDRESS_ACLR_B" = "NONE"
+    Info (12134): Parameter "OUTDATA_ACLR_B" = "NONE"
+    Info (12134): Parameter "ADDRESS_REG_B" = "CLOCK0"
+    Info (12134): Parameter "INDATA_ACLR_A" = "NONE"
+    Info (12134): Parameter "WRCONTROL_ACLR_A" = "NONE"
+    Info (12134): Parameter "READ_DURING_WRITE_MODE_MIXED_PORTS" = "OLD_DATA"
+Info (12021): Found 1 design units, including 1 entities, in source file db/altsyncram_q3n1.tdf
+    Info (12023): Found entity 1: altsyncram_q3n1 File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_q3n1.tdf Line: 28
+Info (12130): Elaborated megafunction instantiation "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|altsyncram:tile_ram_rtl_0"
+Info (12133): Instantiated megafunction "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_geom_binner:u_binner|altsyncram:tile_ram_rtl_0" with the following parameter:
+    Info (12134): Parameter "OPERATION_MODE" = "DUAL_PORT"
+    Info (12134): Parameter "WIDTH_A" = "27"
+    Info (12134): Parameter "WIDTHAD_A" = "10"
+    Info (12134): Parameter "NUMWORDS_A" = "576"
+    Info (12134): Parameter "WIDTH_B" = "27"
+    Info (12134): Parameter "WIDTHAD_B" = "10"
+    Info (12134): Parameter "NUMWORDS_B" = "576"
+    Info (12134): Parameter "ADDRESS_ACLR_A" = "NONE"
+    Info (12134): Parameter "OUTDATA_REG_B" = "UNREGISTERED"
+    Info (12134): Parameter "ADDRESS_ACLR_B" = "NONE"
+    Info (12134): Parameter "OUTDATA_ACLR_B" = "NONE"
+    Info (12134): Parameter "ADDRESS_REG_B" = "CLOCK0"
+    Info (12134): Parameter "INDATA_ACLR_A" = "NONE"
+    Info (12134): Parameter "WRCONTROL_ACLR_A" = "NONE"
+    Info (12134): Parameter "READ_DURING_WRITE_MODE_MIXED_PORTS" = "OLD_DATA"
+Info (12021): Found 1 design units, including 1 entities, in source file db/altsyncram_o9n1.tdf
+    Info (12023): Found entity 1: altsyncram_o9n1 File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_o9n1.tdf Line: 28
+Info (12130): Elaborated megafunction instantiation "zhao_shell_top:u_shell|zhao_audio_fifo:u_fifo|altsyncram:mem_rtl_0"
+Info (12133): Instantiated megafunction "zhao_shell_top:u_shell|zhao_audio_fifo:u_fifo|altsyncram:mem_rtl_0" with the following parameter:
+    Info (12134): Parameter "OPERATION_MODE" = "DUAL_PORT"
+    Info (12134): Parameter "WIDTH_A" = "32"
+    Info (12134): Parameter "WIDTHAD_A" = "11"
+    Info (12134): Parameter "NUMWORDS_A" = "2048"
+    Info (12134): Parameter "WIDTH_B" = "32"
+    Info (12134): Parameter "WIDTHAD_B" = "11"
+    Info (12134): Parameter "NUMWORDS_B" = "2048"
+    Info (12134): Parameter "ADDRESS_ACLR_A" = "NONE"
+    Info (12134): Parameter "OUTDATA_REG_B" = "UNREGISTERED"
+    Info (12134): Parameter "ADDRESS_ACLR_B" = "NONE"
+    Info (12134): Parameter "OUTDATA_ACLR_B" = "NONE"
+    Info (12134): Parameter "ADDRESS_REG_B" = "CLOCK1"
+    Info (12134): Parameter "INDATA_ACLR_A" = "NONE"
+    Info (12134): Parameter "WRCONTROL_ACLR_A" = "NONE"
+Info (12021): Found 1 design units, including 1 entities, in source file db/altsyncram_nuk1.tdf
+    Info (12023): Found entity 1: altsyncram_nuk1 File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_nuk1.tdf Line: 28
+Info (12130): Elaborated megafunction instantiation "zhao_shell_top:u_shell|zhao_video_scanout:u_scanout|zhao_scanout_linebuf:u_linebuf|zhao_dc_sdp_ram:u_ram|altsyncram:mem_rtl_0"
+Info (12133): Instantiated megafunction "zhao_shell_top:u_shell|zhao_video_scanout:u_scanout|zhao_scanout_linebuf:u_linebuf|zhao_dc_sdp_ram:u_ram|altsyncram:mem_rtl_0" with the following parameter:
+    Info (12134): Parameter "OPERATION_MODE" = "DUAL_PORT"
+    Info (12134): Parameter "WIDTH_A" = "64"
+    Info (12134): Parameter "WIDTHAD_A" = "8"
+    Info (12134): Parameter "NUMWORDS_A" = "256"
+    Info (12134): Parameter "WIDTH_B" = "64"
+    Info (12134): Parameter "WIDTHAD_B" = "8"
+    Info (12134): Parameter "NUMWORDS_B" = "256"
+    Info (12134): Parameter "ADDRESS_ACLR_A" = "NONE"
+    Info (12134): Parameter "OUTDATA_REG_B" = "UNREGISTERED"
+    Info (12134): Parameter "ADDRESS_ACLR_B" = "NONE"
+    Info (12134): Parameter "OUTDATA_ACLR_B" = "NONE"
+    Info (12134): Parameter "ADDRESS_REG_B" = "CLOCK1"
+    Info (12134): Parameter "INDATA_ACLR_A" = "NONE"
+    Info (12134): Parameter "WRCONTROL_ACLR_A" = "NONE"
+Info (12021): Found 1 design units, including 1 entities, in source file db/altsyncram_k3k1.tdf
+    Info (12023): Found entity 1: altsyncram_k3k1 File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_k3k1.tdf Line: 28
+Info (286030): Timing-Driven Synthesis is running
+Warning (14284): Synthesized away the following node(s):
+    Warning (14285): Synthesized away the following RAM node(s):
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a32" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 934
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a33" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 962
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a34" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 990
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a35" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 1018
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a36" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 1046
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a37" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 1074
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a38" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 1102
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a39" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 1130
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram1_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a32" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 934
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram1_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a33" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 962
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram1_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a34" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 990
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram1_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a35" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 1018
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram1_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a36" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 1046
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram1_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a37" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 1074
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram1_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a38" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 1102
+        Warning (14320): Synthesized away node "zhao_shell_top:u_shell|zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_tilestore:u_tilestore|altsyncram:ram1_rtl_0|altsyncram_u6n1:auto_generated|ram_block1a39" File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/db/altsyncram_u6n1.tdf Line: 1130
+Critical Warning (18061): Ignored Power-Up Level option on the following registers
+    Critical Warning (18010): Register zhao_shell_top:u_shell|zhao_input_snapshot:u_snapshot|buf0[1].pad_index[0] will power up to High File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/input/zhao_input_snapshot.sv Line: 135
+    Critical Warning (18010): Register zhao_shell_top:u_shell|zhao_input_snapshot:u_snapshot|buf1[1].pad_index[0] will power up to High File: C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/rtl/input/zhao_input_snapshot.sv Line: 135
+Info (17049): 291 registers lost all their fanouts during netlist optimizations.
+Info (144001): Generated suppressed messages file C:/Users/Fabs/AppData/Local/Temp/zhao-shell-fit-724-d3d48ddc4bc7486786e57dc43040f562/source/fpga/quartus/shell_fit/output_files/zhao_shell_fit.map.smsg
+Info (16010): Generating hard_block partition "hard_block:auto_generated_inst"
+    Info (16011): Adding 0 node(s), including 0 DDIO, 0 PLL, 0 transceiver and 0 LCELL
+Info (21057): Implemented 35585 device resources after synthesis - the final resource count might be different
+    Info (21058): Implemented 4 input pins
+    Info (21059): Implemented 6 output pins
+    Info (21061): Implemented 35119 logic cells
+    Info (21064): Implemented 440 RAM segments
+    Info (21062): Implemented 16 DSP elements
+Info: Quartus Prime Analysis & Synthesis was successful. 0 errors, 62 warnings
+    Info: Peak virtual memory: 5223 megabytes
+    Info: Processing ended: Sun Sep 13 23:20:10 2026
+    Info: Elapsed time: 00:00:44
+    Info: Total CPU time (on all processors): 00:01:05

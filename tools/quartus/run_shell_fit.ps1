@@ -425,7 +425,14 @@ function Publish-FileAtomic([string]$Source, [string]$Destination) {
             $stream.Dispose()
         }
         if (Test-Path -LiteralPath $Destination -PathType Leaf) {
-            [IO.File]::Replace($temporary, $Destination, $null)
+            # Windows PowerShell 5.1 converts ordinary `$null` to an empty string
+            # for File.Replace's backup path, which .NET rejects as malformed.
+            # NullString.Value preserves a true CLR null and requests no backup.
+            [IO.File]::Replace(
+                $temporary,
+                $Destination,
+                [System.Management.Automation.Language.NullString]::Value
+            )
         } else {
             [IO.File]::Move($temporary, $Destination)
         }

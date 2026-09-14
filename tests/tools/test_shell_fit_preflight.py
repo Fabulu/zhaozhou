@@ -3072,6 +3072,43 @@ class ReportPreflightTests(unittest.TestCase):
         self.assertFalse(synthesis_exists)
         self.assertFalse(timing_exists)
 
+    def test_publish_file_atomic_replaces_existing_destination_on_powershell_51(self) -> None:
+        powershell = shutil.which("powershell.exe") or shutil.which("pwsh")
+        if powershell is None:
+            self.skipTest("PowerShell is unavailable")
+        runner_text = (TOOLS / "run_shell_fit.ps1").read_text(encoding="utf-8")
+        start = runner_text.index("function Publish-FileAtomic")
+        end = runner_text.index("\nfunction Protect-SnapshotFiles", start)
+        function_text = runner_text[start:end]
+        self.assertIn(
+            "[System.Management.Automation.Language.NullString]::Value",
+            function_text,
+        )
+        with tempfile.TemporaryDirectory(prefix="shell-fit-atomic-replace-") as temporary:
+            root = Path(temporary)
+            source = root / "source.json"
+            destination = root / "destination.json"
+            script = root / "control.ps1"
+            source.write_bytes(b"new canonical receipt")
+            destination.write_bytes(b"old canonical receipt")
+            quote = lambda path: str(path).replace("'", "''")
+            script.write_text(
+                function_text + "\n" +
+                f"Publish-FileAtomic '{quote(source)}' '{quote(destination)}'\n",
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass",
+                 "-File", str(script)],
+                text=True, encoding="utf-8", errors="replace",
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
+            )
+            temporary_files = list(root.glob(".destination.json.*.tmp"))
+            published = destination.read_bytes()
+        self.assertEqual(completed.returncode, 0, completed.stdout)
+        self.assertEqual(published, b"new canonical receipt")
+        self.assertEqual(temporary_files, [])
+
     def test_real_runner_freezes_commit_and_binds_processors_end_to_end(self) -> None:
         powershell = shutil.which("powershell.exe") or shutil.which("pwsh")
         if powershell is None:
