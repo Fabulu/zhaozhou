@@ -9,7 +9,8 @@ import g8a_receipt as receipt
 REPO = Path(__file__).resolve().parents[2]
 receipt.ROW_NAME = receipt.MODULE + "@g8a-crcserial"
 receipt.FIT_MANIFEST = (
-    REPO / "fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json"
+    REPO / "reports/characterization/g8a_raster_texture_single_owner_characterization"
+    / "a03ebe5f-20260914T200926Z-crcserial/fit.manifest.json"
 )
 receipt.RECEIPT = (
     REPO / "reports/synthesis/zhao_g8a_raster_texture_crcserial.json"

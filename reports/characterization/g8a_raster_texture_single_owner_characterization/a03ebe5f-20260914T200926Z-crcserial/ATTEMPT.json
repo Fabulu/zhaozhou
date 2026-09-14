@@ -1,0 +1,53 @@
+{
+  "artifacts": {
+    "canonical_receipt": {
+      "path": "reports/synthesis/zhao_g8a_raster_texture_crcserial.json",
+      "sha256": "0a5b8aa53a0e72bf8482bc391763132673a8b8bae87a9c684d643543bd4c0733"
+    },
+    "fit.manifest.json": "49249cfcaaaad5ac9e2217ac4542348b27bbe9fb880ce42f7f750c80fbd56eb0",
+    "runner.log": "91e74a8a32d4e40d7c651c1e42cce03852af1ee6d18d5bdce92a735b80cc9f04"
+  },
+  "baseline_delta": {
+    "alms": -193,
+    "dspBlocks": 0,
+    "fmaxMhz": 14.65,
+    "registers": 103,
+    "setupSlackNs": 2.754,
+    "setupTnsNs": 1002.035
+  },
+  "diagnosis": {
+    "meaningful_resource_or_timing_measurement": true,
+    "next_action": "Preserve this second timing failure and batch the independently verified ATTRGRAD/ATTRDIV, V3 owner/request-queue, AUXDIV, and material-write timing repairs before any further subsystem fit; do not refit one nodule at a time.",
+    "removed_path": "The former ten-byte binding CRC critical path is absent; serialization improved Fmax from 65.96 to 80.61 MHz and reduced ALMs by 193.",
+    "remaining_path": "Worst setup is now S_GRAD_REQ in attribute lane 0 through wide numerator magnitude/add logic into zhao_raster_attrdiv_v2 dividend_r; the retained path anatomy reports a 12.084 ns data path.",
+    "timing_gate": "80.61 MHz < 100 MHz; setup WNS -2.406 ns and TNS -3386.650 ns",
+    "resource_gate": "PASS: 13,285 ALMs <= 29,999 and 49 DSP blocks <= 84",
+    "structure_gate": "PASS: exact hierarchy, one V3 owner, zero TEXJOIN, MIGRATION_SHADOWS=0, no mapped shadow state, required RAM witnesses"
+  },
+  "row": {
+    "alms": 13285,
+    "blockMemoryBits": 92964,
+    "dspBlocks": 49,
+    "fitterSeed": 1,
+    "fmaxMhz": 80.61,
+    "holdSlackNs": 0.237,
+    "holdTnsNs": 0.0,
+    "ioMode": "physical-top-ports",
+    "module": "zhao_raster_texture_v3_fit_top@g8a-crcserial",
+    "ramBlocks": 71,
+    "registers": 21630,
+    "rtlCleanAtHead": true,
+    "seconds": 697.1,
+    "setupSlackNs": -2.406,
+    "setupTnsNs": -3386.65,
+    "sourceCommit": "a03ebe5f7f89a006e21a69f69b443c5406284235",
+    "sourceDigest": "6f8ebd632d9f5954985a996fdf9f1301476327c8987f1f61ada072a25be4674d",
+    "sourcesHashed": 43,
+    "status": "failed:structure",
+    "treeCleanAtHead": true,
+    "virtualPins": 0
+  },
+  "schema_id": "zhao.g8a.completed_attempt",
+  "schema_version": 1,
+  "started_utc": "2026-09-14T20:09:26Z"
+}

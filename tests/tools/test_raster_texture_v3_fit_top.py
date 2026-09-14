@@ -23,6 +23,10 @@ COMPLETED_ATTEMPT = (
     REPO / "reports/characterization/g8a_raster_texture_single_owner_characterization"
     / "c88e2b31-20260914T165040Z-attempt2"
 )
+CRC_SERIAL_ATTEMPT = (
+    REPO / "reports/characterization/g8a_raster_texture_single_owner_characterization"
+    / "a03ebe5f-20260914T200926Z-crcserial"
+)
 
 spec = importlib.util.spec_from_file_location("g8a_generator", GENERATOR_PATH)
 if spec is None or spec.loader is None:
@@ -523,6 +527,48 @@ class G8AFitTopTests(unittest.TestCase):
         self.assertFalse(current_receipt["gate"]["timing_100mhz_pass"])
         self.assertFalse(current_receipt["gate"]["pass"])
 
+        crc_attempt = json.loads(
+            (CRC_SERIAL_ATTEMPT / "ATTEMPT.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(crc_attempt["schema_id"], "zhao.g8a.completed_attempt")
+        self.assertEqual(crc_attempt["row"]["sourceCommit"],
+                         "a03ebe5f7f89a006e21a69f69b443c5406284235")
+        self.assertEqual(crc_attempt["row"]["sourceDigest"],
+                         "6f8ebd632d9f5954985a996fdf9f1301476327c8987f1f61ada072a25be4674d")
+        self.assertEqual(crc_attempt["row"]["alms"], 13285)
+        self.assertEqual(crc_attempt["row"]["dspBlocks"], 49)
+        self.assertEqual(crc_attempt["row"]["fmaxMhz"], 80.61)
+        self.assertEqual(crc_attempt["row"]["setupSlackNs"], -2.406)
+        self.assertEqual(crc_attempt["baseline_delta"], {
+            "alms": -193,
+            "dspBlocks": 0,
+            "fmaxMhz": 14.65,
+            "registers": 103,
+            "setupSlackNs": 2.754,
+            "setupTnsNs": 1002.035,
+        })
+        for name in ("fit.manifest.json", "runner.log"):
+            self.assertEqual(
+                sha256(CRC_SERIAL_ATTEMPT / name),
+                crc_attempt["artifacts"][name], name,
+            )
+        crc_receipt_ref = crc_attempt["artifacts"]["canonical_receipt"]
+        self.assertEqual(sha256(REPO / crc_receipt_ref["path"]),
+                         crc_receipt_ref["sha256"])
+        crc_receipt = json.loads(
+            (REPO / crc_receipt_ref["path"]).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            crc_receipt["source"]["fit_manifest_path"],
+            "reports/characterization/g8a_raster_texture_single_owner_characterization/"
+            "a03ebe5f-20260914T200926Z-crcserial/fit.manifest.json",
+        )
+        self.assertTrue(crc_receipt["gate"]["fit_complete"])
+        self.assertTrue(crc_receipt["gate"]["resource_pass"])
+        self.assertTrue(crc_receipt["gate"]["structure_pass"])
+        self.assertFalse(crc_receipt["gate"]["timing_100mhz_pass"])
+        self.assertFalse(crc_receipt["gate"]["pass"])
+
     def test_one_fit_runner_and_receipt_tool_are_fail_closed(self) -> None:
         fit_runner = (REPO / "tools/quartus/run_g8a_fit.ps1").read_text(encoding="utf-8")
         receipt_tool = (REPO / "tools/quartus/g8a_receipt.py").read_text(encoding="utf-8")
@@ -583,7 +629,7 @@ class G8AFitTopTests(unittest.TestCase):
         ), "G8A CRC-serialization runner")
         require_once(repair_receipt, (
             'receipt.ROW_NAME = receipt.MODULE + "@g8a-crcserial"',
-            'fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json',
+            'a03ebe5f-20260914T200926Z-crcserial/fit.manifest.json',
             'zhao_g8a_raster_texture_crcserial.json',
         ), "G8A CRC-serialization receipt wrapper")
         with self.assertRaises(AssertionError):
