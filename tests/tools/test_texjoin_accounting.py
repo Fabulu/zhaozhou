@@ -18,13 +18,17 @@ import unittest
 REPO = Path(__file__).resolve().parents[2]
 TOOLS = REPO / "tools" / "quartus"
 BUDGET_TOOLS = REPO / "tools" / "budget"
+DESIGN_TOOLS = REPO / "tools" / "design"
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 MUTANTS = REPO / "tests" / "mutants"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 if str(BUDGET_TOOLS) not in sys.path:
     sys.path.insert(0, str(BUDGET_TOOLS))
+if str(DESIGN_TOOLS) not in sys.path:
+    sys.path.insert(0, str(DESIGN_TOOLS))
 
+import check_counters
 import check_ownership_roles as ownership
 import check_prod_manifest as manifest
 import dsp_census
@@ -461,6 +465,41 @@ class AccountingRetirementTests(unittest.TestCase):
         )
         self.assertEqual(after[45], "zhao_raster_fog")
         self.assertEqual(after[47], "zhao_raster_toon")
+
+    def test_packet_b_counter_maps_bind_selected_v2_v3_ports(self) -> None:
+        previous_cwd = Path.cwd()
+        try:
+            os.chdir(REPO)
+            rows = {bid: (names, mapping)
+                    for bid, names, mapping in check_counters.blocks()}
+            modules = check_counters.modules()
+        finally:
+            os.chdir(previous_cwd)
+
+        expected = {
+            "TEXTURE.AUX": ("zhao_texture_aux_pipe_v2", 12),
+            "TEXTURE.COMBINE": ("zhao_texture_material_combine_v3", 15),
+        }
+        for block_id, (module, count) in expected.items():
+            with self.subTest(block=block_id):
+                self.assertEqual(check_counters.module_for_block(block_id), module)
+                names, mapping = rows[block_id]
+                self.assertEqual(len(names), count)
+                defaults, mapped, unresolved, absent = check_counters.resolve_block(
+                    block_id, names, mapping, modules
+                )
+                self.assertEqual(defaults, [])
+                self.assertEqual(len(mapped), count)
+                self.assertEqual(unresolved, [])
+                self.assertIsNone(absent)
+
+                damaged = dict(mapping)
+                damaged[names[0]] = "impossible_missing_counter_port_o"
+                _defaults, _mapped, fired, _absent = check_counters.resolve_block(
+                    block_id, names, damaged, modules
+                )
+                self.assertEqual(len(fired), 1)
+                self.assertIn("not a port", fired[0][2])
 
     def test_packet_b_profile_is_explicitly_unmeasured(self) -> None:
         profiles = dsp_census.load_profiles(REPO / "design" / "prod_manifest.yml")

@@ -47,6 +47,34 @@ counter_catalog:
   - combine_fragments
   - combine_refused
   - combine_saturated
+  # Packet-B R9 material and typed AUX accounting. These names are catalog
+  # identities; counter_ports below binds them to exact leaf ports.
+  - combine_jobs_accepted
+  - combine_jobs_completed
+  - combine_saturated_add
+  - combine_saturated_mul2x
+  - combine_recipe_0
+  - combine_recipe_1
+  - combine_recipe_2
+  - combine_recipe_3
+  - combine_recipe_4
+  - combine_recipe_5
+  - combine_recipe_6
+  - combine_recipe_7
+  - combine_phases_issued
+  - combine_phases_completed
+  - aux_jobs_accepted
+  - aux_sheet_reads
+  - aux_local_refused
+  - aux_jobs_completed
+  - aux_degenerate
+  - aux_sheet_hits
+  - aux_sheet_misses
+  - aux_sheet_wrong_op
+  - aux_sheet_wrong_status
+  - aux_sheet_wrong_src
+  - aux_sheet_unsolicited
+  - aux_credit_faults
   # The BORING_3D_FUNDAMENTALS_AUDIT blocks (2026-09-03). Each refusal
   # counter is the one that must never be silently zero: a refused
   # triangle, material or depth is a picture that is wrong rather than a
@@ -2948,7 +2976,7 @@ blocks:
     inputs: [sheet_requests]
     outputs: [sheet_pages, residency_status]
     upstream: []
-    downstream: [SURFACE.STAMP, MEM.GUARD]
+    downstream: [SURFACE.STAMP, TEXTURE.AUX, MEM.GUARD]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 sheet texel per clock
@@ -3872,7 +3900,7 @@ blocks:
     inputs: [shaded_candidates, tile_read, texture_samples, soft_particles]
     outputs: [tile_write, fragment_error]
     upstream: [RASTER.TILESTORE, RASTER.EARLYZ, PART.SOFT, MEASURE.TOKENS, TEXTURE.FRAGROB, TEXTURE.COMBINE]
-    downstream: [RASTER.RESOLVE, TEXTURE.TMU, TEXTURE.AUX, MEASURE.HISTOGRAM]
+    downstream: [RASTER.RESOLVE, TEXTURE.TMU, MEASURE.HISTOGRAM]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 accepted fast-path fragment per clock
@@ -4006,22 +4034,39 @@ blocks:
     kind: rtl
     subsystem: texture
     clock_domain: gpu
-    purpose: Restricted aux texel source (surface sheets, light/shadow compare, distortion) — deliberately NOT a general second TMU (§26).
-    contract: design/contracts/TEXTURE.AUX.md
+    purpose: Owner-sealed restricted Surface Sheet source with typed issue/return, independently owed READ identity, and no TMU sample-2 substitution.
+    contract: design/contracts/TEXTURE.AUX.V2.md
     phase: 6
     owner_issue: ZH-060
-    inputs: [aux_requests]
-    outputs: [aux_samples]
-    upstream: [RASTER.FRAGMENT, TEXTURE.FRAGROB]
-    downstream: []
+    inputs: [aux_jobs, sheet_pages]
+    outputs: [aux_results, sheet_reads]
+    upstream: [TEXTURE.FRAGROB, SURFACE.SHEET]
+    downstream: [TEXTURE.COMBINE]
     backpressure: ready_valid
-    latency: variable_bounded:8
+    latency: variable
     target_throughput: 1 aux sample per clock
-    reference_model: zref::AuxSource
+    reference_model: zref::aux::AuxSource
     tests:
-      directed: tests/texture/texture_aux_directed.cpp
-      random: tests/texture/texture_aux_random.cpp
-    counters: [texture_samples]
+      directed: tests/texture/texture_aux_pipe_v2_directed.cpp
+      random: tests/texture/texture_aux_pipe_v2_random.cpp
+    counters:
+      [aux_jobs_accepted, aux_sheet_reads, aux_local_refused,
+       aux_jobs_completed, aux_degenerate, aux_sheet_hits, aux_sheet_misses,
+       aux_sheet_wrong_op, aux_sheet_wrong_status, aux_sheet_wrong_src,
+       aux_sheet_unsolicited, aux_credit_faults]
+    counter_ports:
+      aux_jobs_accepted: accepted_o
+      aux_sheet_reads: sheet_reads_o
+      aux_local_refused: local_refused_o
+      aux_jobs_completed: completed_o
+      aux_degenerate: degenerate_o
+      aux_sheet_hits: sheet_hits_o
+      aux_sheet_misses: sheet_misses_o
+      aux_sheet_wrong_op: sheet_rsp_wrong_op_o
+      aux_sheet_wrong_status: sheet_rsp_wrong_status_o
+      aux_sheet_wrong_src: sheet_rsp_wrong_src_o
+      aux_sheet_unsolicited: sheet_rsp_unsolicited_o
+      aux_credit_faults: credit_fault_o
     source_ids: true
     budget_group: tile
     maturity: UNIT_VERIFIED
@@ -4034,11 +4079,22 @@ blocks:
         date: "2026-08-21"
         commit: 2575a2e
         evidence: tests/texture/texture_aux_directed.cpp
+      - state: UNIT_VERIFIED
+        date: "2026-09-14"
+        commit: 096c7139
+        evidence: tests/texture/texture_aux_pipe_v2_directed.cpp
 
     deferred: false
     cut_order: 2
     superseded_by: null
-    notes: Cut-order 2 (auxiliary filtering, §26).
+    notes: >-
+      Cut-order 2 remains the structural refusal of auxiliary filtering. Packet B
+      selects the owner-sealed V2 adapter; `design/contracts/TEXTURE.AUX.md`,
+      `zhao_texture_aux_pipe.sv`, and their 2026-08-21 evidence remain unchanged
+      old-island arithmetic/protocol oracles only. The new V2 directed and random
+      differential executables plus separate committed mutants cover mapped
+      boundaries, interleaving, malformed Sheet traffic, lifetime credit, and
+      frame clear. Packet B is not a fit or a visible terrain-effect composition.
 
   - id: TEXTURE.CACHE
     name: Texture/material cache
@@ -4088,45 +4144,64 @@ blocks:
     kind: rtl
     subsystem: texture
     clock_domain: gpu
-    purpose: "Fixed recipe arithmetic over the zero-to-three samples a fragment asked for, producing the single RGB and alpha RASTER.FRAGMENT blends. TEXTURE.FRAGROB explicitly refuses to own this arithmetic and islandrearchitecture5 S3.3 already budgets it as its own registered II=1 pipeline."
+    purpose: "R9 fixed material arithmetic and required-plane status/index reduction over zero-to-three TMU samples plus an independent typed AUX status plane."
     contract: design/contracts/TEXTURE.COMBINE.md
     phase: 5
     owner_issue: ZH-088
-    inputs: [texture_samples]
-    outputs: [combined_fragment]
-    upstream: [TEXTURE.FRAGROB]
+    inputs: [material_jobs, texture_owner_planes]
+    outputs: [texture_results]
+    upstream: [TEXTURE.FRAGROB, TEXTURE.AUX]
     downstream: [RASTER.FRAGMENT]
     backpressure: ready_valid
-    latency: fixed:0
-    target_throughput: one fragment per clock, II=1
+    latency: variable
+    target_throughput: one paired phase per clock; legal recipes require one, two, or three phases
     reference_model: zref::material::combine
     tests:
-      directed: "PLANNED -- NOT WRITTEN"
-      random: "PLANNED -- NOT WRITTEN"
-    counters: [combine_fragments, combine_refused, combine_saturated]
+      directed: tests/texture/material_combine_v3_diff.cpp
+      random: tests/texture/material_combine_v3_diff.cpp
+    counters:
+      [combine_jobs_accepted, combine_jobs_completed, combine_refused,
+       combine_saturated_add, combine_saturated_mul2x, combine_recipe_0,
+       combine_recipe_1, combine_recipe_2, combine_recipe_3, combine_recipe_4,
+       combine_recipe_5, combine_recipe_6, combine_recipe_7,
+       combine_phases_issued, combine_phases_completed]
+    counter_ports:
+      combine_jobs_accepted: jobs_accepted_o
+      combine_jobs_completed: jobs_completed_o
+      combine_refused: refused_material_o
+      combine_saturated_add: saturated_add_o
+      combine_saturated_mul2x: saturated_mul2x_o
+      combine_recipe_0: jobs_recipe_0_o
+      combine_recipe_1: jobs_recipe_1_o
+      combine_recipe_2: jobs_recipe_2_o
+      combine_recipe_3: jobs_recipe_3_o
+      combine_recipe_4: jobs_recipe_4_o
+      combine_recipe_5: jobs_recipe_5_o
+      combine_recipe_6: jobs_recipe_6_o
+      combine_recipe_7: jobs_recipe_7_o
+      combine_phases_issued: phases_issued_o
+      combine_phases_completed: phases_completed_o
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-14"
+        commit: 096c7139
+        evidence: tests/texture/material_combine_v3_diff.cpp
     deferred: false
     cut_order: null
     superseded_by: null
     notes: >-
-      The other half of MATERIAL.RESOLVE, and its contract says why they are one
-      piece of work in two files: the surviving TEXJOIN returns sample 0 for EVERY
-      recipe and the three-sample terrain recipes were absent from that RTL, so
-      shipping the resolver alone makes the machine confidently fetch samples nothing
-      combines.
-      A seventh recipe encoding is REFUSED and counted, not treated as passthrough --
-      the recipes are a closed set and quietly accepting an unknown one is how a
-      content bug becomes a shipped picture nobody questions. Likewise a recipe
-      demanding more samples than sample_count supplied is refused rather than
-      silently degraded, which is exactly what TEXJOIN does today.
-      unit8 is value = raw/256, so a modulate by 255 darkens very slightly. That is
-      ratified behaviour and must not be 'fixed'. Reuses zref::unit_mul rather than
-      defining a second multiply law.
-      Island budget S3.3: 650 ALM, 500 reg, 1-4 M10K, 0-2 DSP, with the S3.4
-      tripwire reject DSP > 2.
+      Owner ruling R9 is the sole product law: eight recipes, exact counts,
+      direct MODULATE2X rounding, signed LERP rescale, sample-0 alpha except the
+      two explicit mask products, required-only status OR, and immutable sample-0
+      raw index. AUX contributes status only and never substitutes for sample 2.
+      The physical engine issues one paired phase per clock; legal recipes demand
+      one, two, or three phases, so no blanket one-material-job-per-clock claim is
+      permitted. Historical V1/V2/old-island arithmetic is retained only under
+      the named legacy oracle. Packet B has no fit; 650 ALM and at most 2 DSP are
+      constraints, not evidence.
   - id: TEXTURE.FRAGROB
     name: Fragment transaction centre
     kind: rtl

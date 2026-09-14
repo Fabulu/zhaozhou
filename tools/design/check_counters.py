@@ -74,6 +74,20 @@ assert OUTPUT_LINE_RE.match("    output var logic [31:0] x_o,"), "dead self-chec
 
 UNPARSED = []
 
+# Block IDs usually map mechanically to zhao_<id>, but selected versioned
+# implementations need an explicit checker-side exception until the ledger
+# schema grows a first-class implementation-module field.
+BLOCK_MODULE_OVERRIDES = {
+    "TEXTURE.AUX": "zhao_texture_aux_pipe_v2",
+    "TEXTURE.COMBINE": "zhao_texture_material_combine_v3",
+}
+
+
+def module_for_block(block_id):
+    return BLOCK_MODULE_OVERRIDES.get(
+        block_id, "zhao_" + block_id.lower().replace(".", "_")
+    )
+
 
 def outputs_of(path):
     """Every output port of the FIRST module in the file.
@@ -114,23 +128,122 @@ def counter_shaped_ports(path):
     return [m.group(1) for m in COUNTER_SHAPE.finditer(read(path))]
 
 
-def blocks():
-    s = read("design/blocks.yml")
+def _counter_list(chunk):
+    lines = chunk.splitlines()
+    for index, line in enumerate(lines):
+        if not line.startswith("    counters:"):
+            continue
+        payload = line.split(":", 1)[1].strip()
+        if not payload:
+            continuation = []
+            for row in lines[index + 1:]:
+                if not row.startswith("      "):
+                    break
+                continuation.append(row.strip())
+                if "]" in row:
+                    break
+            payload = " ".join(continuation)
+        match = re.fullmatch(r"\[(.*)\]", payload)
+        if match is None:
+            raise ValueError("counter list is not a closed inline/bracket list")
+        return [name.strip() for name in match.group(1).split(",")
+                if name.strip()]
+    return None
+
+
+def _counter_mapping(chunk):
+    lines = chunk.splitlines()
+    for index, line in enumerate(lines):
+        if line != "    counter_ports:":
+            continue
+        mapping = {}
+        for row in lines[index + 1:]:
+            if not row.startswith("      "):
+                break
+            item = row.strip()
+            if ":" not in item:
+                raise ValueError("malformed counter_ports row: " + item)
+            name, port = item.split(":", 1)
+            if name.strip() in mapping:
+                raise ValueError("duplicate counter_ports row: " + name.strip())
+            mapping[name.strip()] = port.strip()
+        return mapping
+    return {}
+
+
+def blocks(text=None):
+    s = read("design/blocks.yml") if text is None else text
     out = []
     for chunk in re.split(r"\n  - id: ", s)[1:]:
         bid = chunk.split("\n", 1)[0].strip()
-        m = re.search(r"^    counters: \[(.*?)\]", chunk, re.M)
-        if not m:
+        names = _counter_list(chunk)
+        if names is None:
             continue
-        names = [x.strip() for x in m.group(1).split(",") if x.strip()]
-        mapping = {}
-        mm = re.search(r"^    counter_ports:\n((?:      \w+: \w+\n)+)", chunk, re.M)
-        if mm:
-            for line in mm.group(1).strip().splitlines():
-                k, v = line.strip().split(":", 1)
-                mapping[k.strip()] = v.strip()
-        out.append((bid, names, mapping))
+        out.append((bid, names, _counter_mapping(chunk)))
     return out
+
+
+def _self_test():
+    sample = (
+        "schema_version: 1\nblocks:\n"
+        "  - id: TEXTURE.AUX\n"
+        "    counters:\n"
+        "      [aux_jobs_accepted, aux_jobs_completed]\n"
+        "    counter_ports:\n"
+        "      aux_jobs_accepted: accepted_o\n"
+        "      aux_jobs_completed: completed_o\n"
+        "  - id: SIMPLE.BLOCK\n"
+        "    counters: [simple_count]\n"
+    )
+    parsed = blocks(sample)
+    expected = [
+        ("TEXTURE.AUX", ["aux_jobs_accepted", "aux_jobs_completed"],
+         {"aux_jobs_accepted": "accepted_o",
+          "aux_jobs_completed": "completed_o"}),
+        ("SIMPLE.BLOCK", ["simple_count"], {}),
+    ]
+    if parsed != expected:
+        raise AssertionError("counter parser dropped multiline/inline fixture")
+    if module_for_block("TEXTURE.AUX") != "zhao_texture_aux_pipe_v2":
+        raise AssertionError("AUX selected-module override is not live")
+    if module_for_block("TEXTURE.COMBINE") != "zhao_texture_material_combine_v3":
+        raise AssertionError("COMBINE selected-module override is not live")
+    if module_for_block("SIMPLE.BLOCK") != "zhao_simple_block":
+        raise AssertionError("default block-to-module mapping changed")
+    return True
+
+
+if not _self_test():
+    raise AssertionError("check_counters self-test failed")
+
+
+def resolve_block(bid, names, mapping, mods):
+    """Resolve one ledger block through the same path used by ``main``."""
+    mod = module_for_block(bid)
+    if mod not in mods:
+        return [], [], [], (bid, len(names))
+    ports = set(outputs_of(mods[mod]))
+    cand = counter_shaped_ports(mods[mod])
+    has_snap = "zhao_counter_snap_t" in read(mods[mod])
+    by_default, by_mapping, unresolved = [], [], []
+    for name in names:
+        if name in mapping:
+            if mapping[name] in ports:
+                by_mapping.append((bid, name, mapping[name]))
+            else:
+                unresolved.append((
+                    bid, name,
+                    "mapped to %s, which is not a port" % mapping[name],
+                    has_snap,
+                ))
+        elif name + "_o" in ports:
+            by_default.append((bid, name))
+        else:
+            why = "no %s_o and no mapping" % name
+            if cand and "--suggest" in sys.argv:
+                why += "   candidates: " + " ".join(sorted(set(cand))[:6])
+            unresolved.append((bid, name, why, has_snap))
+    return by_default, by_mapping, unresolved, None
 
 
 def main() -> int:
@@ -138,33 +251,14 @@ def main() -> int:
     by_default, by_mapping, unresolved, no_module = [], [], [], []
 
     for bid, names, mapping in blocks():
-        mod = "zhao_" + bid.lower().replace(".", "_")
-        if mod not in mods:
-            no_module.append((bid, len(names)))
-            continue
-        ports = set(outputs_of(mods[mod]))
-        cand = counter_shaped_ports(mods[mod])
-        # spec/counters.md 3: a block may instead own its counters locally and
-        # present them on a D9 SNAP CHANNEL as a zhao_counter_snap_t. Those have
-        # no <counter>_o port and are not supposed to -- so an unresolved row on
-        # such a block wants a MAPPING, while an unresolved row on a block with
-        # neither form is a counter with no visible presentation path at all.
-        # Reporting the two as one list is what made this look like 82 defects.
-        has_snap = "zhao_counter_snap_t" in read(mods[mod])
-        for n in names:
-            if n in mapping:
-                if mapping[n] in ports:
-                    by_mapping.append((bid, n, mapping[n]))
-                else:
-                    unresolved.append((bid, n, "mapped to %s, which is not a port" % mapping[n],
-                                       has_snap))
-            elif n + "_o" in ports:
-                by_default.append((bid, n))
-            else:
-                why = "no %s_o and no mapping" % n
-                if cand and "--suggest" in sys.argv:
-                    why += "   candidates: " + " ".join(sorted(set(cand))[:6])
-                unresolved.append((bid, n, why, has_snap))
+        defaults, mapped, missing, absent = resolve_block(
+            bid, names, mapping, mods
+        )
+        by_default.extend(defaults)
+        by_mapping.extend(mapped)
+        unresolved.extend(missing)
+        if absent is not None:
+            no_module.append(absent)
 
     total = len(by_default) + len(by_mapping) + len(unresolved)
     print("counters: %d declared on blocks with a module; %d resolve by the "
