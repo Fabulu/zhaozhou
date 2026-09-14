@@ -1,0 +1,75 @@
+{
+  "schema": "zhaozhou.superstation.compile-receipt.v1",
+  "status": "failed:qsf-preflow-mutation",
+  "authorization": {
+    "scope": "one-no-write-v2-specs-compile-retry-only",
+    "reviewedHead": "8c91b784ed1f2a3079b7d7802273203be336af5c",
+    "physicalActivityAuthorized": false,
+    "repeatCompileAuthorized": false
+  },
+  "sourceCommit": "8c91b784ed1f2a3079b7d7802273203be336af5c",
+  "branch": "zhaozhou-board-bringup-20260913",
+  "profile": "Specs",
+  "project": "ZhaozhouSpecs",
+  "targetDevice": "5CSEBA6U23I7",
+  "entryPoint": "tools/board/build_superstation_specs.ps1",
+  "stageHelper": "tools/board/run_superstation_quartus.py",
+  "buildDirectory": "build-board-superstation-specs-v2-attempt2-8c91b784",
+  "startedLocal": "2026-09-14T06:46:35+02:00",
+  "completedLocal": "2026-09-14T06:46:43+02:00",
+  "returnCode": 1,
+  "gates": {
+    "cleanAcceptedSource": "passed",
+    "sourcePreflight": "passed",
+    "selectedVectors": "passed",
+    "sourceManifest": "passed",
+    "buildId": "passed",
+    "qsfIdentityAfterBuildId": "failed",
+    "quartusMap": "not-run",
+    "quartusFit": "not-run",
+    "quartusAsm": "not-run",
+    "quartusSta": "not-run",
+    "postBuildVerifier": "not-run",
+    "completeManifestCreation": "not-run",
+    "overall": "failed"
+  },
+  "qsf": {
+    "before": {
+      "bytes": 3184,
+      "sha256": "0a4f036ec7aab3faf7a8b74a823add7485714107913b9156db690a1e9feebdd5"
+    },
+    "afterBuildId": {
+      "bytes": 3323,
+      "sha256": "c772638c5ac0ddf73739b1f4f47dbcaeb73a4c8218fce6a367556e2f1123841b"
+    }
+  },
+  "stageReturnCodes": {
+    "buildIdQuartusSh": 0,
+    "qsfIdentityGuard": 1,
+    "quartusMap": null,
+    "quartusFit": null,
+    "quartusAsm": null,
+    "quartusSta": null,
+    "buildEntry": 1
+  },
+  "completeManifest": null,
+  "audit": "HARDWARE-SPECS-BUILD-AUDIT-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION.json",
+  "rbf": null,
+  "evidence": {
+    "sourceManifest": "HARDWARE-SPECS-SOURCE-MANIFEST-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION.json",
+    "transcript": "SPECS-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION-COMPILE-TRANSCRIPT.txt",
+    "raw": "SPECS-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION-RAW",
+    "evidenceIndex": "SPECS-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION-EVIDENCE-INDEX.md",
+    "buildReport": "SPECS-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION-BUILD-REPORT.md"
+  },
+  "physicalActions": {
+    "rbfStaged": false,
+    "rbfLoaded": false,
+    "sshMutation": false,
+    "watchdogOrRollbackRehearsed": false,
+    "jtagUsed": false,
+    "flashTouched": false,
+    "persistentBootChanged": false,
+    "boardOrSdMutated": false
+  }
+}

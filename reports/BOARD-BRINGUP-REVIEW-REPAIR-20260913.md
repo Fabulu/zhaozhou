@@ -6,7 +6,7 @@
 **Actual-evidence verifier repair:** `6d0a2a8846f2eb250dc828b02d9931d3bfbbb060`
 **Loader byte-identity repair:** `e66a606636727fb4df27aed87bd1181af01164eb`
 **QSF-mutation build-entry repair:** `44a6d88576be382bf5eaa69ea0cf10fcc6d1982d`
-**State:** V2 compile measured but evidence gate `failed:manifest`; **no physical activity authorised**
+**State:** V2 attempts failed closed on QSF mutation; **no compile or physical activity authorised**
 
 ## Review disposition
 
@@ -254,15 +254,30 @@ preserves QSF bytes, and the exact observed mutation shape—edition change plus
 is pushed as `44a6d88576be382bf5eaa69ea0cf10fcc6d1982d`; it has not been
 compiled and requires independent review before any further Quartus action.
 
+### Attempt 2 outcome
+
+Independent Luna review accepted `8c91b784` for exactly one compile-only retry.
+Preflight and source-manifest capture passed, but the guard found the pinned
+upstream build-ID pre-flow itself mutates the QSF: `build_id.tcl` opens and closes
+the project to read device/output assignments, and Quartus rewrote the same
+edition/unused-pin fields before `quartus_map`. Build-ID returned RC 0; the QSF
+guard returned 1; map, fit, assembly and timing were not run. There is no
+attempt-2 RBF, resource/timing result or complete manifest. The attempt was
+preserved under immutable `ATTEMPT2-BUILD-ID-QSF-MUTATION` names and stopped
+without repeat or bypass.
+
 This authorisation did not include RBF staging/loading, SSH mutation,
 watchdog/rollback rehearsal, JTAG, flash, persistence, pin drive, or board/SD
 mutation. None occurred. Physical activity remains HOLD.
 
 ## Remaining gates
 
-1. Commit/push the failed compile evidence and QSF-mutation build-entry repair.
-2. Obtain independent review of the exact successor source/evidence head.
-3. Do not compile again unless that review separately authorises one clean retry.
+1. Commit/push immutable attempt-2 failure evidence.
+2. Obtain independent review before changing the stage helper or running any
+   further Quartus action; the build-ID project-open mutation must be removed
+   without weakening QSF byte identity.
+3. Do not compile again unless a reviewed successor receives separate one-retry
+   authorisation.
 4. If a later retry passes, preserve a complete V2 candidate manifest and obtain
    explicit independent approval of those exact artifacts before physical action.
 5. Physical red/failure control, green replay and nonce mailbox remain future,

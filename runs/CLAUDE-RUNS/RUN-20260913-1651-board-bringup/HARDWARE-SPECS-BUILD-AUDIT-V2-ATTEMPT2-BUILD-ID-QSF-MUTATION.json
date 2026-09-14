@@ -1,0 +1,95 @@
+{
+  "schema": "zhaozhou.superstation.hardware-specs-build-audit.v1",
+  "status": "failed:qsf-preflow-mutation",
+  "loadAuthorization": false,
+  "repeatCompileAuthorization": false,
+  "sourceCommit": "8c91b784ed1f2a3079b7d7802273203be336af5c",
+  "profile": "Specs",
+  "project": "ZhaozhouSpecs",
+  "targetDevice": "5CSEBA6U23I7",
+  "startedLocal": "2026-09-14T06:46:35+02:00",
+  "failedLocal": "2026-09-14T06:46:43+02:00",
+  "preflight": {
+    "sourceVerifier": "pass",
+    "verilator": "5.051 devel rev v5.050-176-g7da43d830 (mod)",
+    "shippingVectors": 16,
+    "shippingResult": "pass",
+    "detectorMutantFailCode": 1,
+    "signature": "e5f1c57f",
+    "patchedSysTopSha256": "24eea7b0f76848239c872f626a48f4e0c6150423b9e6561fd3dd63f2a99501e9"
+  },
+  "sourceManifest": {
+    "status": "source-captured",
+    "manifestSha256": "9ff77ce42eef6a633af3e048863a8f0011d947a363442f52e40a056bc1f9b017",
+    "file": {
+      "bytes": 23826,
+      "sha256": "08a0e0804a2489b9c568bf40f3cb6dbc979c2ff0f50166c0b627501daf7f61a2"
+    }
+  },
+  "completeManifest": null,
+  "failure": {
+    "gate": "qsf-byte-identity-after-build-id",
+    "message": "Quartus mutated manifest-bound ZhaozhouSpecs.qsf while running quartus_sh.exe",
+    "cause": "the pinned upstream build_id.tcl opens and closes the project, causing Quartus 17 Lite to rewrite the copied QSF before quartus_map",
+    "sourceQsf": {
+      "bytes": 3184,
+      "sha256": "0a4f036ec7aab3faf7a8b74a823add7485714107913b9156db690a1e9feebdd5"
+    },
+    "postBuildIdQsf": {
+      "bytes": 3323,
+      "sha256": "c772638c5ac0ddf73739b1f4f47dbcaeb73a4c8218fce6a367556e2f1123841b"
+    },
+    "observedMutations": [
+      "LAST_QUARTUS_VERSION changed from 17.0.2 Standard Edition to 17.0.2 Lite Edition",
+      "RESERVE_ALL_UNUSED_PINS_NO_OUTPUT_GND AS INPUT TRI-STATED was appended"
+    ]
+  },
+  "stageReturnCodes": {
+    "buildIdQuartusSh": 0,
+    "qsfIdentityGuard": 1,
+    "quartusMap": null,
+    "quartusFit": null,
+    "quartusAsm": null,
+    "quartusSta": null,
+    "buildEntry": 1
+  },
+  "quartusMeasurement": null,
+  "resources": null,
+  "timing": null,
+  "rbf": null,
+  "preflowArtifacts": {
+    "build_id.v": {
+      "bytes": 27,
+      "sha256": "6acfc322b2083b9ba6af815bd00a117045a72075b74f2fba11a64348d71046d2"
+    },
+    "jtag.cdf": {
+      "bytes": 305,
+      "sha256": "7d465f5ceefbb32bc69fb9f01df9e178ef16d11e613eba945579bd6c8f1a1d9c"
+    },
+    "ZhaozhouSpecs.db_info": {
+      "bytes": 140,
+      "sha256": "1fccc82609ce66e57436e0101cb25eb68f61a63293b15575610e268fd42cf3f3"
+    }
+  },
+  "evidenceFiles": {
+    "transcript": {
+      "bytes": 4284,
+      "sha256": "36b0f80d43b3374f1d8cb4746592c9b96200a7a6fefcb54680f87fffe80fd5b8"
+    }
+  },
+  "physicalActions": {
+    "rbfStaged": false,
+    "rbfLoaded": false,
+    "sshMutation": false,
+    "watchdogOrRollbackRehearsed": false,
+    "jtagUsed": false,
+    "flashTouched": false,
+    "persistentBootChanged": false,
+    "boardOrSdMutated": false
+  },
+  "nonClaims": [
+    "No Quartus compiler stage ran, so this attempt provides no resource, timing, report, SOF, or RBF measurement.",
+    "The preflight vectors do not authorize loading or broaden prior selected-vector claims.",
+    "The generated jtag.cdf file was not used; no JTAG action occurred."
+  ]
+}

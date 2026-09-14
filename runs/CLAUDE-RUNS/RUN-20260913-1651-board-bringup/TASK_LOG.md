@@ -638,6 +638,42 @@ verified.
 - No RBF staging/load, SSH mutation, watchdog/rollback, JTAG, flash,
   persistence, pin drive or board/SD mutation occurred. Physical HOLD remains.
 
+### 2026-09-14 06:46 UTC+02:00 - One no-write V2 Specs retry authorised and started
+
+- Independent Luna review accepted exact clean pushed head
+  `8c91b784ed1f2a3079b7d7802273203be336af5c` and authorised exactly one
+  compile-only retry through the committed stage helper.
+- Confirmed clean local/remote head equality, a new absent attempt-2 build path,
+  and no existing Quartus process. Started `build_superstation_specs.ps1` once
+  with build directory `build-board-superstation-specs-v2-attempt2-8c91b784`.
+- **Checkpoint before result:** preserve the transcript and workspace before
+  inspection. Require stage RCs zero, exact QSF byte identity across all stages,
+  source/complete manifest closure, zero Critical Warnings, repaired post-build
+  verification and exact RBF/audit/receipt bindings. If any gate fails, preserve
+  and stop without repeat or bypass.
+- Compile-only boundary remains absolute: no RBF staging/load, SSH mutation,
+  JTAG, flash, persistence, pin drive, watchdog/rollback or board/SD mutation.
+
+### 2026-09-14 06:46 UTC+02:00 - Attempt 2 failed closed before map
+
+- Preflight passed: source verifier, 16 vectors, mutant code 1, signature
+  `e5f1c57f`, exact patched sys_top, and source-manifest capture with canonical
+  digest `9ff77ce42eef6a633af3e048863a8f0011d947a363442f52e40a056bc1f9b017`.
+- The helper's first build-ID command returned RC 0, then exact QSF identity
+  failed. The pinned upstream `build_id.tcl` opens/closes the project; Quartus
+  changed QSF SHA-256 from
+  `0a4f036ec7aab3faf7a8b74a823add7485714107913b9156db690a1e9feebdd5` to
+  `c772638c5ac0ddf73739b1f4f47dbcaeb73a4c8218fce6a367556e2f1123841b`.
+- Stage RCs: build-ID 0, QSF guard 1, build entry 1; map/fit/asm/STA not run.
+  Therefore attempt 2 has no Quartus measurement, raw reports, resources,
+  timing, SOF, RBF, post-build verifier result or complete manifest.
+- Preserved exact source manifest/transcript/QSF states plus generated
+  `build_id.v`, unused `jtag.cdf` and database-info file under immutable
+  `ATTEMPT2-BUILD-ID-QSF-MUTATION` names. No repeat or bypass occurred.
+- No RBF staging/load, SSH mutation, JTAG use, flash, persistence, pin drive,
+  watchdog/rollback or board/SD mutation occurred. Further compile and all
+  physical activity remain HOLD pending independent review.
+
 ---
 
 ## Subagent Spawns
@@ -714,6 +750,13 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT1-QSF-MUTATION-QUARTUS-RAW/`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT1-QSF-MUTATION-BUILD-REPORT.md`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT1-QSF-MUTATION-EVIDENCE-INDEX.md`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-SOURCE-MANIFEST-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-BUILD-AUDIT-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-COMPILE-RECEIPT-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION-COMPILE-TRANSCRIPT.txt`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION-RAW/`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION-BUILD-REPORT.md`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION-EVIDENCE-INDEX.md`
 
 ---
 
@@ -731,10 +774,11 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 
 ## Next Steps
 
-1. Commit and push the immutable attempt-1 failure evidence and QSF-mutation
-   build-entry repair; submit the exact successor head for independent review.
-2. Do not run Quartus again unless that review separately authorises one clean
-   retry from the accepted head.
+1. Commit/push immutable attempt-2 failure evidence and submit the exact head for
+   independent review.
+2. Do not alter the stage helper or run Quartus again without reviewed successor
+   source and separate compile authorization. Remove the build-ID project-open
+   mutation without weakening QSF identity.
 3. A later retry must preserve byte-identical compiled QSF, exact patched
    sys_top digest, zero Critical Warnings, all seven USER_IO output enables
    disabled, positive timing, physical hierarchy, and a complete V2

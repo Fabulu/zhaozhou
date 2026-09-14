@@ -1,0 +1,60 @@
+SuperStation hardware specs verification passed: device=5CSEBA6U23I7 modules=zhao_crc32c_fold,zhao_raster_fill,zhao_dual18_mul
+SSONE_SPEC_TOOL Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+SSONE_SPEC_TESTS_PASS vectors=16 mutant_fail=1 signature=e5f1c57f
+- C:\programmieren\zencrifice\zhaozhou-board-bringup-20260913\tests\board\ssone_spec_tests_tb.sv:74: Verilog $finish
+- S i m u l a t i o n   R e p o r t: Verilator 5.051 devel
+- Verilator: $finish at 195ns; walltime 0.000 s; speed 0.000 s/s
+- Verilator: cpu 0.000 s on 1 threads; allocated 5 MB
+SSONE_SPEC_RESULT PASS
+{
+  "patchedSha256": "24eea7b0f76848239c872f626a48f4e0c6150423b9e6561fd3dd63f2a99501e9",
+  "patches": [
+    "ascal-mode-leading-zero-4-to-5-bit",
+    "user-snac-unconditional-high-impedance"
+  ],
+  "path": "C:\\programmieren\\zencrifice\\zhaozhou-board-bringup-20260913\\build-board-superstation-specs-v2-attempt2-8c91b784\\sys\\sys_top.v",
+  "status": "ok",
+  "upstreamSha256": "9bc5562bcc9d923aa3bff1a9c976c52492edb9ef981f428b7a4101c919a711b8"
+}
+{"status": "source-captured", "manifestSha256": "9ff77ce42eef6a633af3e048863a8f0011d947a363442f52e40a056bc1f9b017"}
+zhao: VERILATOR_ROOT=C:\programmieren\zencrifice\.tools\oss-cad-suite\share\verilator
+zhao: PATH prepended: oss-cad-suite bin+lib, winlibs cmake/ninja/g++
+Info: *******************************************************************
+Info: Running Quartus Prime Shell
+    Info: Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+    Info: Copyright (C) 2017  Intel Corporation. All rights reserved.
+    Info: Your use of Intel Corporation's design tools, logic functions 
+    Info: and other software and tools, and its AMPP partner logic 
+    Info: functions, and any output files from any of the foregoing 
+    Info: (including device programming or simulation files), and any 
+    Info: associated documentation or information are expressly subject 
+    Info: to the terms and conditions of the Intel Program License 
+    Info: Subscription Agreement, the Intel Quartus Prime License Agreement,
+    Info: the Intel MegaCore Function License Agreement, or other 
+    Info: applicable license agreement, including, without limitation, 
+    Info: that your use is for the sole purpose of programming logic 
+    Info: devices manufactured by Intel and sold by Intel or its 
+    Info: authorized distributors.  Please refer to the applicable 
+    Info: agreement for further details.
+    Info: Processing started: Mon Sep 14 06:46:40 2026
+Info: Command: quartus_sh -t C:\programmieren\zencrifice\zhaozhou-board-bringup-20260913\build-board-superstation-specs-v2-attempt2-8c91b784\sys\build_id.tcl compile ZhaozhouSpecs ZhaozhouSpecs
+Info: Quartus(args): compile ZhaozhouSpecs ZhaozhouSpecs
+Info: Generated: C:/programmieren/zencrifice/zhaozhou-board-bringup-20260913/build-board-superstation-specs-v2-attempt2-8c91b784/build_id.v: `define BUILD_DATE "260914"
+Info (23030): Evaluation of Tcl script C:\programmieren\zencrifice\zhaozhou-board-bringup-20260913\build-board-superstation-specs-v2-attempt2-8c91b784\sys\build_id.tcl was successful
+Info: Quartus Prime Shell was successful. 0 errors, 0 warnings
+    Info: Peak virtual memory: 4666 megabytes
+    Info: Processing ended: Mon Sep 14 06:46:43 2026
+    Info: Elapsed time: 00:00:03
+    Info: Total CPU time (on all processors): 00:00:01
+SUPERSTATION_QUARTUS_FAIL: Quartus mutated manifest-bound ZhaozhouSpecs.qsf while running quartus_sh.exe
+Quartus specs compile failed with exit code 1; reports remain in 
+C:\programmieren\zencrifice\zhaozhou-board-bringup-20260913\build-board-superstation-specs-v2-attempt2-8c91b784
+In C:\programmieren\zencrifice\zhaozhou-board-bringup-20260913\tools\board\build_superstation_specs.ps1:128 Zeichen:5
++     throw "Quartus specs compile failed with exit code $compileRc; re ...
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Quartus specs c...tempt2-8c91b784:String) [], RuntimeException
+    + FullyQualifiedErrorId : Quartus specs compile failed with exit code 1; reports remain in C:\programmieren\zencri 
+   fice\zhaozhou-board-bringup-20260913\build-board-superstation-specs-v2-attempt2-8c91b784
+ 
+
+[exited with code 1]
