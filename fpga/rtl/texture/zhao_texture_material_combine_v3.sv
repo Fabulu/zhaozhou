@@ -464,12 +464,22 @@ module zhao_texture_material_combine_v3 #(
   logic [7:0] m_index;
   logic m_addsat_sat;
 
+  // The measured G8A path ended at the completion RAM input after product
+  // finish, rounding, saturation and row assembly. This narrow elastic stage
+  // captures the finished row before the actual scratch/completion write.
+  logic wb_v;
+  logic [CW-1:0] wb_ctx;
+  logic [1:0] wb_ph;
+  logic wb_final;
+  logic [48:0] wb_row;
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       r_v <= 1'b0;
       d_v <= 1'b0;
       o_v <= 1'b0;
       m_v <= 1'b0;
+      wb_v <= 1'b0;
       r_ctx <= '0;
       d_ctx <= '0;
       o_ctx <= '0;
@@ -685,6 +695,14 @@ module zhao_texture_material_combine_v3 #(
       m_lerp_neg1 <= o_lerp_neg1;
       m_p0 <= o_a0 * o_b0;
       m_p1 <= o_a1 * o_b1;
+
+      wb_v <= m_v;
+      if (m_v) begin
+        wb_ctx <= m_ctx;
+        wb_ph <= m_ph;
+        wb_final <= m_final;
+        wb_row <= {m_status, m_index, next_scratch};
+      end
     end
   end
 
@@ -765,13 +783,13 @@ module zhao_texture_material_combine_v3 #(
     adm_we = admit_c;
     adm_ctx = admit_ctx;
 
-    scr_we = m_v && !m_final;
-    scr_ctx = m_ctx;
-    scr_row = next_scratch;
+    scr_we = wb_v && !wb_final;
+    scr_ctx = wb_ctx;
+    scr_row = wb_row[32:0];
 
-    cmp_we = m_v && m_final;
-    cmp_ctx = m_ctx;
-    cmp_row = {m_status, m_index, next_scratch};
+    cmp_we = wb_v && wb_final;
+    cmp_ctx = wb_ctx;
+    cmp_row = wb_row;
   end
 
   logic out_full_q;
@@ -825,6 +843,7 @@ module zhao_texture_material_combine_v3 #(
                && !d_v
                && !o_v
                && !m_v
+               && !wb_v
                && !done_rd_q
                && !prefetch_full_q
                && !out_full_q;
@@ -872,7 +891,8 @@ module zhao_texture_material_combine_v3 #(
         else               newq_rp <= newq_rp + 1'b1;
       end
 
-      // Count meaningful product jobs, not powered-but-idle lane slots.
+      // Count meaningful product jobs at the arithmetic result edge, not
+      // powered-but-idle lane slots. Saturation is likewise an M-stage fact.
       if (m_v) begin
         case ({m_en1, m_en0})
           2'b01,
@@ -884,17 +904,23 @@ module zhao_texture_material_combine_v3 #(
         endcase
 
         if (m_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= m_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
           if ((m_recipe == R_MOD2X || m_recipe == R_DLIGHT ||
                m_recipe == R_DMASK) &&
               (((m_ph == 2'd0) ? 1'b0 : m_scratch[32]) | f_mod2_sat))
             saturated_mul2x_o <= saturated_mul2x_o + 32'd1;
           if (m_recipe == R_ADDSAT && m_addsat_sat)
             saturated_add_o <= saturated_add_o + 32'd1;
+        end
+      end
+
+      // Continuation/done ownership advances only with the actual WB RAM write.
+      if (wb_v) begin
+        if (wb_final) begin
+          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+          doneq_wp <= doneq_wp + 1'b1;
         end else begin
-          contq_ctx_m[contq_wp[CW-1:0]] <= m_ctx;
-          contq_ph_m[contq_wp[CW-1:0]] <= m_ph + 2'd1;
+          contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
+          contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
         end
       end

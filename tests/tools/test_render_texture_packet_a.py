@@ -598,6 +598,17 @@ def validate_top_profiles_mutants_and_quiet_accounting(cmake_text: str) -> None:
         if len(values) != len(set(values)):
             raise AssertionError(f"Packet-B top-mutant {name} is not unique")
 
+    timing_methods = (
+        "test_aux_registered_clamp_transport_reaches_all_committed_mutants",
+        "test_v3_owner_combine_feedback_cut_keeps_generation_witness",
+        "test_material_writeback_cut_reaches_all_committed_mutants",
+        "test_rcp_v4_balanced_lzc_direct_oracle_and_mutant_are_exact",
+    )
+    for method in timing_methods:
+        marker = f"PacketAOwnershipAndClosureTests.{method}"
+        if cmake_text.count(marker) != 1:
+            raise AssertionError("G8A timing source control is not registered exactly: " + method)
+
     mutant_source = (
         REPO / "tests" / "mutants" /
         "zhao_texture_island_v3_packet_b_mutants.sv"
@@ -1059,6 +1070,216 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "wrong-label gate"):
             validate_aux_assertion_control_map(missing_wrong_label_gate)
 
+    def test_aux_registered_clamp_transport_reaches_all_committed_mutants(self) -> None:
+        paths = (
+            "fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv",
+            "tests/mutants/zhao_texture_aux_pipe_v2_credit_mutant.sv",
+            "tests/mutants/zhao_texture_aux_pipe_v2_assertion_control_mutant.sv",
+            "tests/mutants/zhao_texture_aux_pipe_v2_offer_bound_mutant.sv",
+            "tests/mutants/zhao_texture_aux_pipe_v2_issued_bound_mutant.sv",
+            "tests/mutants/zhao_texture_aux_pipe_v2_return_bound_mutant.sv",
+            "tests/mutants/zhao_texture_aux_pipe_v2_fixed_room_mutant.sv",
+            "tests/mutants/zhao_texture_aux_pipe_v2_owed_room_mutant.sv",
+            "tests/mutants/zhao_texture_aux_pipe_v2_issue_order_mutant.sv",
+        )
+        markers = (
+            "logic                    div_in_valid_q;",
+            ".in_valid_i(div_in_valid_q)",
+            "&& !div_in_valid_q",
+            "div_in_valid_q              <= 1'b0;",
+            "div_in_valid_q <= a0_valid_q;",
+            "div_in_tag_q <= side_write_q;",
+        )
+
+        def validate(source: str) -> None:
+            if ".in_valid_i(a0_valid_q)" in source:
+                raise AssertionError("AUX mutant retained pre-cut divider input")
+            if not re.search(
+                r"job_ready_o\s*=\s*rst_n\s*&&\s*\(credit_q\s*!=\s*CREDIT_W'\(CREDIT\)\)",
+                source,
+            ):
+                raise AssertionError("AUX admission is not reset-gated")
+            for marker in markers:
+                if source.count(marker) != 1:
+                    raise AssertionError("AUX registered-clamp marker differs: " + marker)
+
+        for relative in paths:
+            with self.subTest(path=relative):
+                validate((REPO / relative).read_text(encoding="utf-8"))
+        source = (REPO / paths[0]).read_text(encoding="utf-8")
+        with self.assertRaises(AssertionError):
+            validate(source.replace("&& !div_in_valid_q", "", 1))
+        with self.assertRaisesRegex(AssertionError, "reset-gated"):
+            validate(source.replace("rst_n && ", "", 1))
+
+    def test_v3_owner_combine_feedback_cut_keeps_generation_witness(self) -> None:
+        top = (REPO / "fpga/rtl/texture/zhao_texture_island_v3_top.sv").read_text(
+            encoding="utf-8"
+        )
+        owner = (REPO / "fpga/rtl/texture/zhao_texture_v3own.sv").read_text(
+            encoding="utf-8"
+        )
+
+        def validate_top(source: str) -> None:
+            required = (
+                "joined_owner_mask_valid_c && expand_frag_ready_w;",
+                "wire owner_combine_validation_ready_c =",
+                "!join_validation_pending_q[owner_combine_owner_w[13:8]];",
+                "(material_read_join_generation_q == material_read_owner_q[7:0])",
+                "join_validation_generation_m[owner_combine_owner_w[13:8]]",
+                "a_combine_after_join_validation",
+            )
+            ready = re.search(
+                r"wire owner_combine_validation_ready_c\s*=.*?;",
+                source,
+                re.DOTALL,
+            )
+            if ready is None or "join_validation_generation_m" in ready.group(0):
+                raise AssertionError("generation lookup remains in COMBINE ready feedback")
+            for marker in required:
+                if marker not in source:
+                    raise AssertionError("owner generation witness missing: " + marker)
+
+        def validate_owner(source: str) -> None:
+            if "cmb_res_q - CNTW'(cmb_fire_c)" in source:
+                raise AssertionError("reservation carry chain remains")
+            markers = (
+                "logic cmb_room_after_fire_c;",
+                "((cmb_res_q < CNTW'(CMBQD)) &&",
+                "(!cmb_fire_c || (cmb_res_q != CNTW'(0)))) ||",
+                "(cmb_fire_c && (cmb_res_q == CNTW'(CMBQD)));",
+                "assign cmb_pop_c = sel_v_c && cmb_room_after_fire_c;",
+            )
+            for marker in markers:
+                if marker not in source:
+                    raise AssertionError("reservation Boolean cut missing: " + marker)
+
+        validate_top(top)
+        validate_owner(owner)
+        for reservation in range(128):
+            for fire in (0, 1):
+                old_room = ((reservation - fire) & 0x7F) < 4
+                new_room = (
+                    (reservation < 4 and (not fire or reservation != 0))
+                    or (bool(fire) and reservation == 4)
+                )
+                self.assertEqual(
+                    old_room,
+                    new_room,
+                    f"reservation rewrite differs at res={reservation} fire={fire}",
+                )
+        with self.assertRaisesRegex(AssertionError, "generation witness missing"):
+            validate_top(
+                top.replace(
+                    "(material_read_join_generation_q == material_read_owner_q[7:0])",
+                    "1'b1",
+                    1,
+                )
+            )
+        with self.assertRaisesRegex(AssertionError, "ready feedback"):
+            validate_top(
+                top.replace(
+                    "!join_validation_pending_q[owner_combine_owner_w[13:8]];",
+                    "!join_validation_pending_q[owner_combine_owner_w[13:8]] &&\n"
+                    "      (join_validation_generation_m[owner_combine_owner_w[13:8]] == "
+                    "owner_combine_owner_w[7:0]);",
+                    1,
+                )
+            )
+        with self.assertRaisesRegex(AssertionError, "Boolean cut missing"):
+            validate_owner(
+                owner.replace(
+                    "cmb_res_q == CNTW'(CMBQD)",
+                    "cmb_res_q != CNTW'(CMBQD)",
+                    1,
+                )
+            )
+
+    def test_material_writeback_cut_reaches_all_committed_mutants(self) -> None:
+        production = (
+            REPO / "fpga/rtl/texture/zhao_texture_material_combine_v3.sv"
+        ).read_text(encoding="utf-8")
+        mutants = (
+            REPO / "tests/mutants/zhao_texture_material_combine_v3_mutants.sv"
+        ).read_text(encoding="utf-8")
+        marker_counts = {
+            "logic wb_v;": 11,
+            "wb_v <= m_v;": 11,
+            "scr_we = wb_v && !wb_final;": 10,
+            "scr_we = wb_v && !wb_final && !wb_drop;": 1,
+            "cmp_we = wb_v && wb_final;": 11,
+            "&& !wb_v": 11,
+            "if (wb_v) begin": 11,
+            "m_p0 <= o_a0 * o_b0;": 11,
+            "m_p1 <= o_a1 * o_b1;": 11,
+        }
+        for marker in marker_counts:
+            self.assertEqual(production.count(marker),
+                             1 if marker != "scr_we = wb_v && !wb_final && !wb_drop;" else 0,
+                             marker)
+            self.assertEqual(mutants.count(marker), marker_counts[marker], marker)
+        self.assertNotIn("scr_we = m_v && !m_final;", production)
+        self.assertNotIn("cmp_we = m_v && m_final;", production)
+        with self.assertRaises(AssertionError):
+            self.assertEqual(
+                mutants.replace("&& !wb_v", "", 1).count("&& !wb_v"), 11
+            )
+
+    def test_rcp_v4_balanced_lzc_direct_oracle_and_mutant_are_exact(self) -> None:
+        production = (
+            REPO / "fpga/rtl/raster/zhao_raster_rcp24_v4.sv"
+        ).read_text(encoding="utf-8")
+        mutant = (
+            REPO / "tests/mutants/zhao_raster_rcp24_v4_timing_mutants.sv"
+        ).read_text(encoding="utf-8")
+        driver = (
+            REPO / "tests/raster/raster_rcp24_v4_timing_directed.cpp"
+        ).read_text(encoding="utf-8")
+        manifest = (
+            REPO / "tests/raster/rcp24_v4_timing.sources.txt"
+        ).read_text(encoding="utf-8").splitlines()
+        expected = [
+            "fpga/rtl/common/zhao_render_texture_pkg.sv",
+            "fpga/rtl/field/zhao_field_rcp24_rom.sv",
+            "fpga/rtl/raster/zhao_raster_ticketq.sv",
+            "fpga/rtl/raster/zhao_raster_ticketq_rh.sv",
+            "fpga/rtl/raster/zhao_raster_rcp24_mul.sv",
+            "tests/mutants/zhao_raster_rcp24_v4_timing_mutants.sv",
+            "fpga/rtl/raster/zhao_raster_rcp24_v4.sv",
+        ]
+        self.assertEqual(manifest, expected)
+        for marker in (
+            "function automatic logic [4:0] leading_zero24",
+            "e_in_c = leading_zero24(`ZHAO_RCP_V4_LZC_VALUE(d_i));",
+            "a0_e_q      <= e_in_c;",
+            "a0_zero_q   <= (d_i == 24'd0);",
+            "a1_k_q    <= a0_zero_q ? 6'd0",
+        ):
+            self.assertEqual(production.count(marker), 1, marker)
+        self.assertNotIn("for (int unsigned b = 0; b < 24", production)
+        self.assertEqual(mutant.count("ZHAO_RCP_V4_LZC_MUTANT_REVERSE"), 1)
+        self.assertIn("value[0], value[1], value[2]", mutant)
+        for marker in (
+            "zref::rcp_u24",
+            "result remains stable under output backpressure",
+            "occupancy is accepted minus completed",
+            "the committed LZC orientation mutant is detected by the oracle",
+        ):
+            self.assertIn(marker, driver)
+        cmake = (REPO / "tests/CMakeLists.txt").read_text(encoding="utf-8")
+        for marker in (
+            "RCP24 V4 timing source manifest is not the exact seven-file closure",
+            "add_test(NAME raster_rcp24_v4_timing_directed",
+            "add_test(NAME raster_rcp24_v4_lzc_orientation_mutant",
+            "-DZHAO_RCP_V4_LZC_MUTANT_REVERSE",
+        ):
+            self.assertEqual(cmake.count(marker), 1, marker)
+        with self.assertRaises(AssertionError):
+            self.assertIn(
+                "a0_e_q      <= e_in_c;",
+                production.replace("a0_e_q      <= e_in_c;", "", 1),
+            )
+
     def test_observation_successor_cmake_uses_exact_durable_manifest(self) -> None:
         cmake_text = (REPO / "tests" / "CMakeLists.txt").read_text(
             encoding="utf-8"
@@ -1136,6 +1357,15 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
             validate_top_profiles_mutants_and_quiet_accounting(
                 missing_production_witness
             )
+
+        missing_timing_control = cmake_text.replace(
+            "          PacketAOwnershipAndClosureTests."
+            "test_aux_registered_clamp_transport_reaches_all_committed_mutants\n",
+            "",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "timing source control"):
+            validate_top_profiles_mutants_and_quiet_accounting(missing_timing_control)
 
 
 if __name__ == "__main__":

@@ -289,6 +289,50 @@ AuxResult wait_result(Vzhao_texture_aux_pipe_v2& top, int* cycle, bool accept) {
   return AuxResult{};
 }
 
+void test_reset_blocks_admission(Vzhao_texture_aux_pipe_v2& top) {
+  clear_inputs(top);
+  const Job held{320, 640, 0, 1024, 0, 1024, 0x12340001u, 0x0123u, false};
+  drive_job(top, held);
+  top.job_valid_i = 1;
+  top.rst_n = 0;
+
+  int phantom_issue = 0;
+  for (int i = 0; i < 8; ++i) {
+    top.eval();
+    if (top.job_ready_o || top.issue_valid_o) ++phantom_issue;
+    zhao::tick(top);
+  }
+  top.eval();
+  zhao::check(phantom_issue == 0,
+              "asserted reset blocks logical admission and issue notification", 0,
+              phantom_issue);
+  zhao::check(top.accepted_o == 0 && top.credit_in_use_o == 0 && top.idle_o == 1,
+              "reset-held job creates no accepted credit or state", 1,
+              (top.accepted_o == 0 && top.credit_in_use_o == 0 && top.idle_o == 1) ? 1 : 0);
+
+  top.rst_n = 1;
+  top.eval();
+  zhao::check(top.job_ready_o == 1 && top.issue_valid_o == 1,
+              "held job becomes one legal issue after reset release", 1,
+              (top.job_ready_o == 1 && top.issue_valid_o == 1) ? 1 : 0);
+  zhao::tick(top);
+  top.job_valid_i = 0;
+
+  int cycle = 1;
+  const SheetReq request = wait_request(top, &cycle, true);
+  zhao::check(same_request(request, expected_request(held)),
+              "post-reset accepted job retains its complete Sheet identity", 1,
+              same_request(request, expected_request(held)) ? 1 : 0);
+  send_response(top, &cycle, kRead, kHit, 0x41, 0x52, held.owner);
+  const AuxResult result = wait_result(top, &cycle, true);
+  top.eval();
+  zhao::check(result.owner == held.owner && result.status == 0 &&
+                  result.tag == 0x41 && result.strength == 0x52 && result.low24 == 0 &&
+                  top.accepted_o == 1 && top.completed_o == 1 && top.idle_o == 1,
+              "post-reset job completes exactly once without phantom accounting", 1,
+              (top.accepted_o == 1 && top.completed_o == 1 && top.idle_o == 1) ? 1 : 0);
+}
+
 void test_hit_and_holds(Vzhao_texture_aux_pipe_v2& top) {
   reset(top);
   int cycle = 0;
@@ -838,6 +882,7 @@ void test_credit_terminal_release(Vzhao_texture_aux_pipe_v2& top) {
 int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
   Vzhao_texture_aux_pipe_v2 top;
+  test_reset_blocks_admission(top);
   test_hit_and_holds(top);
   test_local_refusals(top);
   test_clear_live_state(top);

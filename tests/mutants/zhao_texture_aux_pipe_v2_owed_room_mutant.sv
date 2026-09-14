@@ -136,7 +136,7 @@ module zhao_texture_aux_pipe_v2_owed_room_mutant #(
   always_comb begin
     // Conservative full-to-free fence: a same-cycle terminal pop is not a
     // combinational admission bypass.
-    job_ready_o  = (credit_q != CREDIT_W'(CREDIT));
+    job_ready_o  = rst_n && (credit_q != CREDIT_W'(CREDIT));
     job_fire_c   = job_valid_i && job_ready_o;
     issue_valid_o = job_fire_c;
     issue_owner_o = job_owner_i;
@@ -184,14 +184,22 @@ module zhao_texture_aux_pipe_v2_owed_room_mutant #(
            && ($unsigned(a0_nv_q) >= {2'b00, a0_dv_q, 6'b000000});
   end
 
-  // The divider carries a side-table index.  A slot is read six cycles after it
-  // is written and cannot be reused for CREDIT clocks; CREDIT>=16 is the margin.
+  // The divider carries a side-table index. A slot is read seven cycles after it
+  // is written: one registered clamp edge plus the fixed six-cycle divider. It
+  // cannot be reused for CREDIT clocks; CREDIT>=16 is the margin.
   logic                    side_refuse_q    [CREDIT];
   logic                    side_sat_u_q     [CREDIT];
   logic                    side_sat_v_q     [CREDIT];
   logic [31:0]             side_handle_q    [CREDIT];
   logic [OWNERW-1:0]       side_owner_q     [CREDIT];
   logic [CREDIT_AW-1:0]    side_write_q;
+
+  logic                    div_in_valid_q;
+  logic [REM_W-1:0]        div_in_ru_q;
+  logic [DEN_W-1:0]        div_in_du_q;
+  logic [REM_W-1:0]        div_in_rv_q;
+  logic [DEN_W-1:0]        div_in_dv_q;
+  logic [CREDIT_AW-1:0]    div_in_tag_q;
 
   logic                    div_valid_w;
   logic [5:0]              div_u_w;
@@ -207,14 +215,12 @@ module zhao_texture_aux_pipe_v2_owed_room_mutant #(
   ) u_div (
       .clk(clk),
       .rst_n(rst_n),
-      .in_valid_i(a0_valid_q),
-      .in_ru_i((neg_u_c || sat_u_c) ? {REM_W{1'b0}}
-                                          : REM_W'($unsigned(a0_nu_q))),
-      .in_du_i(a0_du_q),
-      .in_rv_i((neg_v_c || sat_v_c) ? {REM_W{1'b0}}
-                                          : REM_W'($unsigned(a0_nv_q))),
-      .in_dv_i(a0_dv_q),
-      .in_tag_i(side_write_q),
+      .in_valid_i(div_in_valid_q),
+      .in_ru_i(div_in_ru_q),
+      .in_du_i(div_in_du_q),
+      .in_rv_i(div_in_rv_q),
+      .in_dv_i(div_in_dv_q),
+      .in_tag_i(div_in_tag_q),
       .out_valid_o(div_valid_w),
       .out_qu_o(div_u_w),
       .out_qv_o(div_v_w),
@@ -345,6 +351,7 @@ module zhao_texture_aux_pipe_v2_owed_room_mutant #(
 
     idle_o = (credit_q == CREDIT_W'(0))
           && !a0_valid_q
+          && !div_in_valid_q
           && (div_occupancy_w == 4'd0)
           && (offer_count_q == CREDIT_W'(0))
           && (issued_count_q == CREDIT_W'(0))
@@ -396,6 +403,7 @@ module zhao_texture_aux_pipe_v2_owed_room_mutant #(
     if (!rst_n) begin
       credit_q                    <= CREDIT_W'(0);
       a0_valid_q                  <= 1'b0;
+      div_in_valid_q              <= 1'b0;
       side_write_q                <= '0;
       offer_write_q               <= '0;
       offer_read_q                <= '0;
@@ -455,7 +463,21 @@ module zhao_texture_aux_pipe_v2_owed_room_mutant #(
           frame_fault_o <= 1'b1;
       end
 
-      // Side data is written on the exact divider issue edge.
+      // Register the complete clamp/divider identity bundle. Partial retiming
+      // would pair one job's numerator with another job's denominator or side
+      // index under back-to-back traffic.
+      div_in_valid_q <= a0_valid_q;
+      if (a0_valid_q) begin
+        div_in_ru_q <= (neg_u_c || sat_u_c) ? {REM_W{1'b0}}
+                                             : REM_W'($unsigned(a0_nu_q));
+        div_in_du_q <= a0_du_q;
+        div_in_rv_q <= (neg_v_c || sat_v_c) ? {REM_W{1'b0}}
+                                             : REM_W'($unsigned(a0_nv_q));
+        div_in_dv_q <= a0_dv_q;
+        div_in_tag_q <= side_write_q;
+      end
+
+      // Side data is written on the exact registered-clamp edge.
       if (a0_valid_q) begin
         side_refuse_q[side_write_q]     <= a0_refuse_q;
         side_sat_u_q[side_write_q]      <= sat_u_c;

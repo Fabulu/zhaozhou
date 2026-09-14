@@ -91,9 +91,9 @@ PROTECTED_HASHES = {
     # Packet E legitimately refreshes the V3 source and generated interface while
     # retaining Packet D's public closure and every protected old/oracle byte.
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "8f9a19dec0d63e926a46c8ee364a006f6e2abf2f388f890ea753b76f25540360",
+        "85ee87e322446d3a7cc6a39457058a4de88019ba97f722d5b4bdc57a437270bd",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "4ba2cba9df8c6e6baaf1c68a236b91612fc6b3fff69be76ab3098b335bc50348",
+        "01a60a6be13b1878c5ac43dcd0c0da043636f11c85a04feb05297382dae6a33e",
     "fpga/rtl/raster/zhao_raster_attrdiv.sv":
         "5f5e9b0dbd3d1c23d4b0b55c84aaa06e873d0aee72be25bed2d64e7ff1424eca",
     "fpga/rtl/raster/zhao_raster_attrstep.sv":
@@ -179,6 +179,7 @@ def validate_cmake(text: str) -> None:
         "Packet-D attribute source manifest contains a blank record",
         "Packet-D attribute source manifest is not the exact ordered four-file closure",
         "SOURCES ${ZHAO_PACKET_D_ATTR_SOURCES}",
+        "target_compile_definitions(${TARGET} PRIVATE ZHAO_ATTR_RADIX=${RADIX})",
         "-GRADIX=${RADIX}",
         "zhao_packet_d_attr_target(pd_a2 2)",
         "zhao_packet_d_attr_target(pd_a4 4)",
@@ -301,6 +302,10 @@ def validate_d1_shape(divider: str, gradient: str, mutant: str) -> None:
         "`ZHAO_ATTR_V2_ROUND_NUM(num_i, area_ext_c)",
         "rounded_num_c >= pos_sat_limit_c",
         "rounded_num_c <  neg_sat_limit_c",
+        "localparam logic [1:0] D_PREP = 2'd3;",
+        "dividend_r   <= {rounded_num_c[96], rounded_num_c};",
+        "magnitude_c = 98'(-$signed(dividend_r))",
+        "D_PREP: begin",
         "assign v_ready_o = (st_r == D_IDLE) && !r_valid_o;",
     ):
         if marker not in divider:
@@ -312,6 +317,7 @@ def validate_d1_shape(divider: str, gradient: str, mutant: str) -> None:
         "job_tile_x_i[11], job_tile_x_i",
         "job_min_x_i[11], job_min_x_i",
         "`ZHAO_ATTR_V2_TILE_SEED(row_q_ext_c, tile_offset_ext_c)",
+        "tile_offset_r <= $signed(dv_q) * $signed(tile_delta_r);",
         "walk_q_r  <= walk_q_r + grad_x_r",
     ):
         if marker not in gradient:
@@ -525,12 +531,26 @@ class PacketDClosureTests(unittest.TestCase):
         div = (REPO / "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv").read_text(encoding="utf-8")
         grad = (REPO / "fpga/rtl/raster/zhao_raster_attrgrad_v2.sv").read_text(encoding="utf-8")
         amut = (REPO / "tests/mutants/zhao_raster_attr_v2_mutants.sv").read_text(encoding="utf-8")
+        driver = (REPO / "tests/raster/raster_attrgrad_v2_directed.cpp").read_text(
+            encoding="utf-8"
+        )
         binner = (REPO / "fpga/rtl/geometry/zhao_geom_binner_v2.sv").read_text(encoding="utf-8")
         bmut = (REPO / "tests/mutants/zhao_geom_binner_v2_mutants.sv").read_text(encoding="utf-8")
         validate_d1_shape(div, grad, amut)
+        for marker in (
+            "ZHAO_ATTR_RADIX == 4 ? 51u : 100u",
+            "divider response-visible latency changed",
+            "divider busy-clock delta changed",
+            "divider advertised successor ready before response",
+        ):
+            self.assertEqual(driver.count(marker), 1)
         validate_d2_shape(binner, bmut)
         with self.assertRaises(AssertionError):
-            validate_d1_shape(div, grad.replace("job_min_x_i", "job_anchor_x_i"), amut)
+            validate_d1_shape(div.replace("D_PREP: begin", "D_RUN: begin", 1),
+                              grad, amut)
+        with self.assertRaises(AssertionError):
+            validate_d1_shape(div, grad.replace("job_min_x_i", "job_anchor_x_i"),
+                              amut)
         with self.assertRaises(AssertionError):
             validate_d2_shape(binner.replace("if (tri_we)", "if (1'b1)"), bmut)
 

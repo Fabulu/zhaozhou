@@ -8351,6 +8351,10 @@ add_test(NAME texture_v3_registration_static
           PacketAOwnershipAndClosureTests.test_aux_assertion_control_mapping_is_exact_unique_and_exclusive
           PacketAOwnershipAndClosureTests.test_observation_successor_cmake_uses_exact_durable_manifest
           PacketAOwnershipAndClosureTests.test_top_profiles_mutants_and_quiet_accounting_are_exact
+          PacketAOwnershipAndClosureTests.test_aux_registered_clamp_transport_reaches_all_committed_mutants
+          PacketAOwnershipAndClosureTests.test_v3_owner_combine_feedback_cut_keeps_generation_witness
+          PacketAOwnershipAndClosureTests.test_material_writeback_cut_reaches_all_committed_mutants
+          PacketAOwnershipAndClosureTests.test_rcp_v4_balanced_lzc_direct_oracle_and_mutant_are_exact
           -q)
 add_test(NAME texture_v3_interface_manifest_generator
   COMMAND "${Python3_EXECUTABLE}"
@@ -8593,6 +8597,50 @@ add_test(NAME packetb_observation_successors
          COMMAND pb_obs)
 set_tests_properties(packetb_observation_successors PROPERTIES
   LABELS "fast;nightly;packet-b" TIMEOUT 1200)
+
+set(ZHAO_RCP24_V4_TIMING_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster/rcp24_v4_timing.sources.txt)
+file(STRINGS "${ZHAO_RCP24_V4_TIMING_MANIFEST}"
+  ZHAO_RCP24_V4_TIMING_RELATIVE_SOURCES)
+if(NOT ZHAO_RCP24_V4_TIMING_RELATIVE_SOURCES STREQUAL
+   "fpga/rtl/common/zhao_render_texture_pkg.sv;fpga/rtl/field/zhao_field_rcp24_rom.sv;fpga/rtl/raster/zhao_raster_ticketq.sv;fpga/rtl/raster/zhao_raster_ticketq_rh.sv;fpga/rtl/raster/zhao_raster_rcp24_mul.sv;tests/mutants/zhao_raster_rcp24_v4_timing_mutants.sv;fpga/rtl/raster/zhao_raster_rcp24_v4.sv")
+  message(FATAL_ERROR "RCP24 V4 timing source manifest is not the exact seven-file closure")
+endif()
+set(ZHAO_RCP24_V4_TIMING_SOURCES)
+foreach(relative_source IN LISTS ZHAO_RCP24_V4_TIMING_RELATIVE_SOURCES)
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR "missing RCP24 V4 timing source: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_RCP24_V4_TIMING_SOURCES
+    "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+
+add_executable(pb_rcp4time raster/raster_rcp24_v4_timing_directed.cpp)
+target_link_libraries(pb_rcp4time PRIVATE zhao_harness zhao_zref)
+verilate(pb_rcp4time
+  PREFIX Vzhao_raster_rcp24_v4
+  TOP_MODULE zhao_raster_rcp24_v4
+  SOURCES ${ZHAO_RCP24_V4_TIMING_SOURCES}
+  VERILATOR_ARGS --assert)
+add_test(NAME raster_rcp24_v4_timing_directed COMMAND pb_rcp4time)
+
+add_executable(pb_rcp4time_mut raster/raster_rcp24_v4_timing_directed.cpp)
+target_compile_definitions(pb_rcp4time_mut PRIVATE
+  ZHAO_RCP_V4_EXPECT_LZC_MUTANT)
+target_link_libraries(pb_rcp4time_mut PRIVATE zhao_harness zhao_zref)
+verilate(pb_rcp4time_mut
+  PREFIX Vzhao_raster_rcp24_v4
+  TOP_MODULE zhao_raster_rcp24_v4
+  SOURCES ${ZHAO_RCP24_V4_TIMING_SOURCES}
+  VERILATOR_ARGS --assert -DZHAO_RCP_V4_LZC_MUTANT_REVERSE)
+add_test(NAME raster_rcp24_v4_lzc_orientation_mutant COMMAND pb_rcp4time_mut)
+set_tests_properties(
+  raster_rcp24_v4_timing_directed
+  raster_rcp24_v4_lzc_orientation_mutant
+  PROPERTIES LABELS "fast;nightly;packet-b;g8a-timing" TIMEOUT 1200)
+set_tests_properties(raster_rcp24_v4_lzc_orientation_mutant PROPERTIES
+  LABELS "fast;nightly;packet-b;g8a-timing;mutant"
+  PASS_REGULAR_EXPRESSION "DETECTED")
 
 # Descriptor / expander / resolver production leaves.
 add_executable(pb_desc
@@ -9340,6 +9388,7 @@ endif()
 function(zhao_packet_d_attr_target TARGET RADIX)
   set(selector_args ${ARGN})
   add_executable(${TARGET} raster/raster_attrgrad_v2_directed.cpp)
+  target_compile_definitions(${TARGET} PRIVATE ZHAO_ATTR_RADIX=${RADIX})
   target_link_libraries(${TARGET} PRIVATE zhao_zref)
   target_include_directories(${TARGET} PRIVATE
     ${CMAKE_SOURCE_DIR}/reference/src)

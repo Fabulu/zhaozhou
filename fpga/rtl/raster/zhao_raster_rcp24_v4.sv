@@ -5,9 +5,15 @@
 // completion-order result are intentionally unchanged.  The sole interface
 // addition is idle_o.  It is a combinational observation of the existing
 // accepted-but-not-retired occupancy and adds no state, credit, lifecycle edge,
-// or ready path.  That occupancy spans reciprocal ingress, multiplier phases,
-// ticket queues, completed contexts, and the held result.
+// or ready path. G8A timing recovery also captures a balanced leading-zero
+// exponent beside each accepted denominator; this changes no latency or result.
+// The occupancy spans reciprocal ingress, multiplier phases, ticket queues,
+// completed contexts, and the held result.
 `default_nettype none
+
+`ifndef ZHAO_RCP_V4_LZC_VALUE
+`define ZHAO_RCP_V4_LZC_VALUE(value) (value)
+`endif
 
 module zhao_raster_rcp24_v4 #(
     parameter int unsigned NCTX = 16,
@@ -135,9 +141,44 @@ module zhao_raster_rcp24_v4 #(
 
   assign v_ready_o = !free_empty;
 
+  // Five balanced group decisions replace the measured 24-step priority loop.
+  // Zero keeps e=0; k=0 remains a separate captured identity bit.
+  function automatic logic [4:0] leading_zero24(input logic [23:0] value);
+    logic [23:0] work;
+    logic [4:0] count;
+    begin
+      work = value;
+      count = 5'd0;
+      if (value == 24'd0) begin
+        leading_zero24 = 5'd0;
+      end else begin
+        if (!(|work[23:8])) begin
+          count = count + 5'd16;
+          work = {work[7:0], 16'd0};
+        end
+        if (!(|work[23:16])) begin
+          count = count + 5'd8;
+          work = {work[15:0], 8'd0};
+        end
+        if (!(|work[23:20])) begin
+          count = count + 5'd4;
+          work = {work[19:0], 4'd0};
+        end
+        if (!(|work[23:22])) begin
+          count = count + 5'd2;
+          work = {work[21:0], 2'd0};
+        end
+        if (!work[23]) count = count + 5'd1;
+        leading_zero24 = count;
+      end
+    end
+  endfunction
+
   logic            a0_v_q;
   logic [CW-1:0]   a0_ctx_q;
   logic [23:0]     a0_d_q;
+  logic [4:0]      a0_e_q;
+  logic            a0_zero_q;
   logic [TOKW-1:0] a0_tok_q;
 
   logic            a1_v_q;
@@ -148,14 +189,11 @@ module zhao_raster_rcp24_v4 #(
   logic            a1_zero_q;
   logic [TOKW-1:0] a1_tok_q;
 
-  logic [4:0]  e_c;
+  logic [4:0]  e_in_c;
   logic [23:0] m_c;
   always_comb begin
-    e_c = 5'd0;
-    for (int unsigned b = 0; b < 24; ++b) begin
-      if (a0_d_q[23-b] && (e_c == 5'd0) && !a0_d_q[23]) e_c = 5'(b);
-    end
-    m_c = a0_d_q << e_c;
+    e_in_c = leading_zero24(`ZHAO_RCP_V4_LZC_VALUE(d_i));
+    m_c = a0_d_q << a0_e_q;
   end
 
   logic [30:0] seed_c;
@@ -303,6 +341,8 @@ module zhao_raster_rcp24_v4 #(
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       a0_v_q         <= 1'b0;
+      a0_e_q         <= 5'd0;
+      a0_zero_q      <= 1'b0;
       a1_v_q         <= 1'b0;
       s1_v_q         <= 1'b0;
       s2_v_q         <= 1'b0;
@@ -320,6 +360,8 @@ module zhao_raster_rcp24_v4 #(
       if (v_valid_i && v_ready_o) begin
         a0_ctx_q    <= free_dout;
         a0_d_q      <= d_i;
+        a0_e_q      <= e_in_c;
+        a0_zero_q   <= (d_i == 24'd0);
         a0_tok_q    <= v_tok_i;
         accepted_o  <= accepted_o + 32'd1;
         occupancy_o <= occupancy_o + 6'd1 - 6'(retire_c);
@@ -332,8 +374,8 @@ module zhao_raster_rcp24_v4 #(
         a1_ctx_q  <= a0_ctx_q;
         a1_m_q    <= m_c;
         a1_idx_q  <= 8'((m_c - 24'h80_0000) >> 15);
-        a1_k_q    <= (a0_d_q == 24'd0) ? 6'd0 : (6'({1'b0, e_c}) + 6'd1);
-        a1_zero_q <= (a0_d_q == 24'd0);
+        a1_k_q    <= a0_zero_q ? 6'd0 : (6'({1'b0, a0_e_q}) + 6'd1);
+        a1_zero_q <= a0_zero_q;
         a1_tok_q  <= a0_tok_q;
       end
 
@@ -391,4 +433,5 @@ module zhao_raster_rcp24_v4 #(
 
 endmodule : zhao_raster_rcp24_v4
 
+`undef ZHAO_RCP_V4_LZC_VALUE
 `default_nettype wire

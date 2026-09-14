@@ -17,6 +17,13 @@
 using i128 = __int128;
 using u128 = unsigned __int128;
 
+#ifndef ZHAO_ATTR_RADIX
+#define ZHAO_ATTR_RADIX 2
+#endif
+static_assert(ZHAO_ATTR_RADIX == 2 || ZHAO_ATTR_RADIX == 4);
+static constexpr uint64_t kNormalVisibleLatency =
+    ZHAO_ATTR_RADIX == 4 ? 51u : 100u;
+
 double sc_time_stamp() { return 0.0; }
 
 static Vtb_raster_attrgrad_v2* dut = nullptr;  // intentionally heap-resident
@@ -81,6 +88,7 @@ struct DivResult {
 };
 
 static DivResult run_div(i128 n, uint64_t area) {
+  const uint32_t busy_before = dut->d_busy_clocks_o;
   put_wide(dut->d_num_i, n);
   dut->d_area_i = area;
   dut->d_valid_i = 1;
@@ -101,6 +109,7 @@ static DivResult run_div(i128 n, uint64_t area) {
     return {};
   }
   dut->d_valid_i = 0;
+  const uint64_t accepted_cycle = cycles;
 
   bool arrived = false;
   DivResult result{};
@@ -113,12 +122,21 @@ static DivResult run_div(i128 n, uint64_t area) {
       arrived = true;
       break;
     }
+    if (dut->d_ready_o)
+      fail("divider advertised successor ready before response");
     tick();
   }
   if (!arrived) {
     fail("divider response did not arrive finitely");
     return {};
   }
+  const bool exceptional = area == 0 || current_saturates(n, area);
+  const uint64_t expected_latency = exceptional ? 2u : kNormalVisibleLatency;
+  if (cycles - accepted_cycle != expected_latency)
+    fail("divider response-visible latency changed");
+  if (static_cast<uint64_t>(dut->d_busy_clocks_o - busy_before) !=
+      expected_latency)
+    fail("divider busy-clock delta changed");
 
   dut->d_rready_i = 1;
   dut->eval();

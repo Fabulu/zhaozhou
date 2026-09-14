@@ -3,7 +3,9 @@
 // q = sat_s32(floor((num + floor(area/2)) / area)), area > 0.
 // Unlike the retained unversioned candidate, a negative exact half therefore
 // rounds toward positive infinity.  Saturation is a valid oracle result and is
-// reported separately from the terminal zero-area error.
+// reported separately from the terminal zero-area error. A dedicated preparation
+// clock reuses the dividend bank to separate rounding from magnitude formation;
+// it adds one clock without adding a second wide register bank.
 //
 // ENFORCED-BY: tests/raster/raster_attrgrad_v2_directed.cpp
 `default_nettype none
@@ -46,6 +48,7 @@ module zhao_raster_attrdiv_v2 #(
   localparam logic [1:0] D_IDLE = 2'd0;
   localparam logic [1:0] D_RUN  = 2'd1;
   localparam logic [1:0] D_DONE = 2'd2;
+  localparam logic [1:0] D_PREP = 2'd3;
 
   logic [1:0] st_r;
   logic [6:0] iter_r;
@@ -76,13 +79,18 @@ module zhao_raster_attrdiv_v2 #(
     neg_sat_limit_c = -(area_ext_c <<< 31); // INT32_MIN * area
     sat_pos_c = (area_i != 47'd0) && (rounded_num_c >= pos_sat_limit_c);
     sat_neg_c = (area_i != 47'd0) && (rounded_num_c <  neg_sat_limit_c);
+  end
 
-    // Unsigned magnitude for truncating long division.  A negative floor is
-    // -ceil(abs/area), hence the area-1 bias on that branch.
-    if (rounded_num_c[96])
-      magnitude_c = 98'(-rounded_num_c) + 98'({51'd0, area_i}) - 98'd1;
+  // The fitted G8A path formerly combined input rounding with this 98-bit
+  // magnitude/bias formation on the dividend register's input. D_IDLE now
+  // captures the signed rounded value in dividend_r; D_PREP reuses that same
+  // bank to form the unsigned long-division dividend one clock later.
+  always_comb begin
+    if (neg_r)
+      magnitude_c = 98'(-$signed(dividend_r)) +
+                    98'({51'd0, den_r}) - 98'd1;
     else
-      magnitude_c = 98'(rounded_num_c);
+      magnitude_c = dividend_r;
   end
 
   assign v_ready_o = (st_r == D_IDLE) && !r_valid_o;
@@ -159,26 +167,35 @@ module zhao_raster_attrdiv_v2 #(
       case (st_r)
         D_IDLE: begin
           if (v_valid_i && v_ready_o) begin
-            neg_r       <= rounded_num_c[96];
-            final_sat_r <= sat_pos_c || sat_neg_c;
-            final_err_r <= (area_i == 47'd0);
-            den_r       <= area_i;
-            rem_r       <= 49'd0;
-            qmag_r      <= 98'd0;
-            if (area_i == 47'd0) begin
-              final_q_r <= 32'sd0;
-              st_r      <= D_DONE;
-            end else if (sat_pos_c) begin
-              final_q_r <= 32'sh7fff_ffff;
-              st_r      <= D_DONE;
-            end else if (sat_neg_c) begin
-              final_q_r <= -32'sh8000_0000;
-              st_r      <= D_DONE;
-            end else begin
-              dividend_r <= magnitude_c;
-              iter_r     <= 7'(STEPS);
-              st_r       <= D_RUN;
-            end
+            // Reuse dividend_r as the preparation register: sign-extend the
+            // exact rounded numerator now, then overwrite it with magnitude in
+            // D_PREP. This avoids a second 97-bit bank in all three lanes.
+            dividend_r   <= {rounded_num_c[96], rounded_num_c};
+            neg_r         <= rounded_num_c[96];
+            final_sat_r   <= sat_pos_c || sat_neg_c;
+            final_err_r   <= (area_i == 47'd0);
+            den_r         <= area_i;
+            rem_r         <= 49'd0;
+            qmag_r        <= 98'd0;
+            st_r           <= D_PREP;
+          end
+        end
+
+        D_PREP: begin
+          if (final_err_r) begin
+            final_q_r <= 32'sd0;
+            st_r      <= D_DONE;
+          end else if (final_sat_r && !neg_r) begin
+            final_q_r <= 32'sh7fff_ffff;
+            st_r      <= D_DONE;
+          end else if (final_sat_r) begin
+            final_q_r <= -32'sh8000_0000;
+            st_r      <= D_DONE;
+          end else begin
+            // A negative floor is -ceil(abs/area), hence area-1.
+            dividend_r <= magnitude_c;
+            iter_r     <= 7'(STEPS);
+            st_r       <= D_RUN;
           end
         end
 

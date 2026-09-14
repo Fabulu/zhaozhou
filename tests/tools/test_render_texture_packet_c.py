@@ -63,8 +63,8 @@ PACKET_C_SOURCES = (
 # Packet E legitimately changes the V3 implementation while preserving its public
 # schema; these hashes pin that refreshed authority. Shell/accounting bytes remain
 # the protected Packet-C values.
-INTERFACE_SHA256 = "8f9a19dec0d63e926a46c8ee364a006f6e2abf2f388f890ea753b76f25540360"
-PACKET_B_TOP_SHA256 = "4ba2cba9df8c6e6baaf1c68a236b91612fc6b3fff69be76ab3098b335bc50348"
+INTERFACE_SHA256 = "85ee87e322446d3a7cc6a39457058a4de88019ba97f722d5b4bdc57a437270bd"
+PACKET_B_TOP_SHA256 = "01a60a6be13b1878c5ac43dcd0c0da043636f11c85a04feb05297382dae6a33e"
 PROTECTED_SHELL_SHA256 = "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
 PROD_TOP_SHA256 = "d3cf61c302f73c1d656ae481ae40b775ddadccec50efe778d6071ea2238ede54"
 

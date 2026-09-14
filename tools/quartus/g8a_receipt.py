@@ -260,10 +260,18 @@ def validate_fit_configuration(qsf_text: str, sdc_text: str,
         qsf_text,
         re.MULTILINE,
     )
-    source_names = [Path(path.replace("\\", "/")).name for path in source_paths]
+    normalized_sources = [path.replace("\\", "/") for path in source_paths]
+    source_names = [Path(path).name for path in normalized_sources]
     expected_names = [Path(row["path"]).name for row in manifest["source_closure"]]
-    if source_names != expected_names or len(source_names) != len(set(source_names)):
+    source_parents = {path.rsplit("/", 1)[0] for path in normalized_sources
+                      if "/" in path}
+    if (source_names != expected_names or len(source_names) != len(set(source_names))):
         raise ReceiptError("retained G8A QSF source pool is not the exact ordered manifest")
+    if (len(source_parents) != 1 or
+            not next(iter(source_parents)).lower().endswith("/src") or
+            any(not re.match(r"^[A-Za-z]:/", path) or "/../" in f"/{path}/"
+                for path in normalized_sources)):
+        raise ReceiptError("retained G8A QSF sources are not one absolute snapshot src directory")
     required_once = (
         "set_global_assignment -name DEVICE 5CSEBA6U23I7",
         f"set_global_assignment -name TOP_LEVEL_ENTITY {MODULE}",
@@ -272,9 +280,27 @@ def validate_fit_configuration(qsf_text: str, sdc_text: str,
         "# Physical top ports retained by run_block_fit.ps1 -PhysicalPins.",
         'set_global_assignment -name VERILOG_MACRO "SYNTHESIS=1"',
     )
+    qsf_lines = qsf_text.splitlines()
     for marker in required_once:
-        if qsf_text.count(marker) != 1:
-            raise ReceiptError(f"retained G8A QSF marker is not exact: {marker}")
+        if qsf_lines.count(marker) != 1:
+            raise ReceiptError(f"retained G8A QSF active marker is not exact: {marker}")
+
+    def active_assignment_values(name: str) -> list[str]:
+        return re.findall(
+            rf"(?m)^\s*set_global_assignment\s+-name\s+{re.escape(name)}\s+(.+?)\s*$",
+            qsf_text,
+        )
+
+    for name, expected in (
+        ("DEVICE", "5CSEBA6U23I7"),
+        ("TOP_LEVEL_ENTITY", MODULE),
+        ("SDC_FILE", "blockfit.sdc"),
+        ("SEED", "1"),
+    ):
+        if active_assignment_values(name) != [expected]:
+            raise ReceiptError(
+                f"retained G8A QSF active {name} assignment differs or is duplicated"
+            )
     if "set_instance_assignment -name VIRTUAL_PIN" in qsf_text:
         raise ReceiptError("retained G8A QSF contains a virtual-pin assignment")
     clock = "create_clock -name clk        -period 10.000 [get_ports {clk}]"

@@ -166,6 +166,13 @@ drains. A homogeneous one-phase stream can complete one material per clock after
 fill; two- and three-phase recipes consume two and three issue clocks per job.
 No one-material-job-per-clock claim is legal for a multi-phase recipe.
 
+The finished `{status,index,scratch}` row and `{context,phase,final}` control are
+registered once between arithmetic M and the actual scratch/completion RAM write.
+This adds one terminal clock per phase without reducing II=1. Continuation/done
+ownership and `phases_completed_o` advance only on that WB write edge; product
+and saturation accounting remain facts of the preceding M edge. `idle_o` includes
+the WB valid bit.
+
 `idle_o` must be high only when accepted context, runnable phase state,
 payload/scratch reads, arithmetic/writeback, continuations, completion state,
 and held output are all empty.

@@ -968,7 +968,16 @@ module zhao_texture_v3own #(
   // high now if the memory read will return several cycles later. The
   // destination credit must cover that latency." cmb_res_q counts reads in
   // flight AND queued rows, and the reservation is taken at the pop.
-  assign cmb_pop_c = sel_v_c && ((cmb_res_q - CNTW'(cmb_fire_c)) < CNTW'(CMBQD));
+  // A same-cycle COMBINE acceptance frees one reservation.  Spell the two
+  // cases as Boolean range tests instead of subtracting the fire bit through a
+  // carry chain.  The explicit nonzero/full terms preserve the old unsigned
+  // underflow and out-of-range behavior as well as every reachable cycle.
+  logic cmb_room_after_fire_c;
+  assign cmb_room_after_fire_c =
+      ((cmb_res_q < CNTW'(CMBQD)) &&
+       (!cmb_fire_c || (cmb_res_q != CNTW'(0)))) ||
+      (cmb_fire_c && (cmb_res_q == CNTW'(CMBQD)));
+  assign cmb_pop_c = sel_v_c && cmb_room_after_fire_c;
   always_comb begin
     for (int unsigned k = 0; k < 3; k++) begin
       rq_pop_c[k] = cmb_pop_c && (sel_c == 2'(k));

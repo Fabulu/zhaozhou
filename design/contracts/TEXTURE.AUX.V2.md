@@ -25,7 +25,10 @@ old-island AUX-as-sample-2 behavior cannot outvote this contract.
 
 Single `gpu` clock. Reset is asynchronous active-low assert and synchronous
 release. Reset clears every valid, occupancy, reserved credit, owed-response
-bit, sticky fault, and counter. Sheet RAM is not owned or reset here.
+bit, sticky fault, and counter. While reset is asserted, `job_ready_o` and
+`issue_valid_o` are both low: a held input offer cannot create a phantom logical
+issue before the sequential reset branch can accept it. Sheet RAM is not owned
+or reset here.
 
 `frame_fault_clear_i` clears only `frame_fault_o`; it does not clear counters,
 credits, valid bits, payloads, or protocol state. Any fault on the same edge has
@@ -115,6 +118,12 @@ otherwise:   q = trunc_toward_zero(((s64(w) - s64(e0)) * 64) /
                                    (u64(e1) - u64(e0)))
              texel = clamp(q, 0, 63)
 ```
+
+The complete clamped `{ru,du,rv,dv,side_index}` divider-input bundle is
+registered as one identity before the unchanged six-stage divider. This adds one
+caller clock without changing divider latency or II=1. The side-table entry is
+written on that clamp edge and read seven clocks later; no numerator,
+denominator, clamp result, or side index may be retimed alone.
 
 The multiply precedes the divide and the intermediate is widened so every
 32-bit input is defined without overflow. There is no half-texel bias and no
@@ -286,7 +295,7 @@ owner counters once each and the retained combined owner counter by two.
 
 `idle_o` is high if and only if all state owned by the instance is empty:
 
-* no arithmetic/divider work;
+* no A0 arithmetic, registered clamp bundle, or divider work;
 * no held logical job or Sheet request offer;
 * no issued-identity FIFO entry and `sheet_rsp_owed_o == 0`;
 * no reserved credit, response disposition, or local refusal;

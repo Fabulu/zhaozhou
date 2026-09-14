@@ -47,9 +47,9 @@ PROTECTED = {
     "fpga/rtl/common/zhao_shell_top.sv":
         "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "8f9a19dec0d63e926a46c8ee364a006f6e2abf2f388f890ea753b76f25540360",
+        "85ee87e322446d3a7cc6a39457058a4de88019ba97f722d5b4bdc57a437270bd",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "4ba2cba9df8c6e6baaf1c68a236b91612fc6b3fff69be76ab3098b335bc50348",
+        "01a60a6be13b1878c5ac43dcd0c0da043636f11c85a04feb05297382dae6a33e",
 }
 EXPECTED_TESTS = (
     "raster_texture_v3_fit_top_directed",
@@ -389,7 +389,7 @@ class G8AFitTopTests(unittest.TestCase):
             'set_global_assignment -name VERILOG_MACRO "SYNTHESIS=1"',
         ]
         qsf_lines.extend(
-            f'set_global_assignment -name SYSTEMVERILOG_FILE "C:/snap/{Path(path).name}"'
+            f'set_global_assignment -name SYSTEMVERILOG_FILE "C:/snap/src/{Path(path).name}"'
             for path in EXPECTED_SOURCES
         )
         qsf = "\n".join(qsf_lines)
@@ -397,8 +397,20 @@ class G8AFitTopTests(unittest.TestCase):
         parsed = receipt.validate_fit_configuration(qsf, sdc, manifest)
         self.assertEqual(parsed["source_count"], 43)
         for mutation in (
-            qsf + '\nset_global_assignment -name SYSTEMVERILOG_FILE "C:/snap/extra.sv"',
+            qsf + '\nset_global_assignment -name SYSTEMVERILOG_FILE "C:/snap/src/extra.sv"',
             qsf + "\nset_instance_assignment -name VIRTUAL_PIN ON -to *",
+            qsf.replace(
+                f"C:/snap/src/{Path(EXPECTED_SOURCES[0]).name}",
+                f"C:/other/src/{Path(EXPECTED_SOURCES[0]).name}",
+                1,
+            ),
+            qsf.replace(
+                "set_global_assignment -name SEED 1",
+                "# set_global_assignment -name SEED 1\n"
+                "set_global_assignment -name SEED 2",
+                1,
+            ),
+            qsf + "\nset_global_assignment -name SEED 2",
         ):
             with self.assertRaises(receipt.ReceiptError):
                 receipt.validate_fit_configuration(mutation, sdc, manifest)
@@ -636,6 +648,58 @@ class G8AFitTopTests(unittest.TestCase):
             require_once(repair_runner.replace("-Seed 1", "-Seed 2", 1),
                          ("-Seed 1",), "mutated repair runner")
 
+        timing_runner = (
+            REPO / "tools/quartus/run_g8a_timing1_fit.ps1"
+        ).read_text(encoding="utf-8")
+        timing_receipt = (
+            REPO / "tools/quartus/g8a_timing1_receipt.py"
+        ).read_text(encoding="utf-8")
+        require_once(timing_runner, (
+            "$RowLabel = '@g8a-timing1'",
+            "$BaselineReceiptSha256 = "
+            "'0a5b8aa53a0e72bf8482bc391763132673a8b8bae87a9c684d643543bd4c0733'",
+            "G8A timing-batch fit requires a completely clean committed tree.",
+            "git -C $RepoRoot symbolic-ref --quiet --short HEAD",
+            "git -C $RepoRoot ls-remote --heads origin \"refs/heads/$branch\"",
+            "G8A timing-batch source HEAD is not pushed exactly to origin/$branch.",
+            "The post-CRC baseline receipt bytes differ from the immutable expected digest.",
+            "The timing-batch fit source is unchanged from the post-CRC baseline.",
+            "$RetainedFitManifest = Join-Path $RepoRoot "
+            "'reports\\synthesis\\blockpaths\\zhao_raster_texture_v3_fit_top@g8a-timing1.fit.manifest.json'",
+            "$fitManifestBytes = [IO.File]::ReadAllBytes($GeneratedFitManifest)",
+            "$currentManifestBytes = [IO.File]::ReadAllBytes($GeneratedFitManifest)",
+            "The generated G8A fit manifest changed after the pre-fit snapshot.",
+            "[IO.File]::WriteAllBytes($retainedTemporary, $fitManifestBytes)",
+            "$ReceiptToolPaths = @(",
+            "A G8A receipt tool changed during the fit: $toolPath",
+            "[IO.FileShare]::Read)",
+            "A G8A receipt tool changed before its locked invocation: $toolPath",
+            "A $RowName row already exists; preserve and diagnose it instead of rerunning.",
+            "gen_raster_texture_v3_fit_top.py') --check",
+            "test_raster_texture_v3_fit_top.py') -q",
+            "-RowLabel $RowLabel",
+            "-Seed 1",
+            "-PhysicalPins",
+            "g8a_timing1_receipt.py') --write",
+        ), "G8A timing-batch runner")
+        require_once(timing_receipt, (
+            'receipt.ROW_NAME = receipt.MODULE + "@g8a-timing1"',
+            "zhao_raster_texture_v3_fit_top@g8a-timing1.fit.manifest.json",
+            "zhao_g8a_raster_texture_timing1.json",
+            "rebind this path to the immutable retained attempt manifest",
+        ), "G8A timing-batch receipt wrapper")
+        with self.assertRaises(AssertionError):
+            require_once(
+                timing_runner.replace("-PhysicalPins", "", 1),
+                ("-PhysicalPins",), "mutated timing-batch runner",
+            )
+        with self.assertRaises(AssertionError):
+            require_once(
+                timing_runner.replace("ls-remote --heads origin", "rev-parse", 1),
+                ("git -C $RepoRoot ls-remote --heads origin \"refs/heads/$branch\"",),
+                "unpushed timing-batch runner",
+            )
+
     def test_every_hashed_text_input_has_checkout_stable_lf(self) -> None:
         attrs = (REPO / ".gitattributes").read_text(encoding="utf-8").splitlines()
         rows = set(line for line in attrs if line and not line.startswith("#"))
@@ -663,17 +727,25 @@ class G8AFitTopTests(unittest.TestCase):
             "reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-crcserial.* binary",
             rows,
         )
+        self.assertIn(
+            "reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing1.* binary",
+            rows,
+        )
         self.assertIn("reports/synthesis/zhao_g8a_raster_texture.json binary", rows)
         self.assertIn(
             "reports/synthesis/zhao_g8a_raster_texture_crcserial.json binary", rows
         )
+        self.assertIn(
+            "reports/synthesis/zhao_g8a_raster_texture_timing1.json binary", rows
+        )
         ignores = set((REPO / ".gitignore").read_text(encoding="utf-8").splitlines())
         for suffix in ("map.rpt", "fit.rpt", "setup.rpt", "hold.rpt", "sta.rpt"):
-            self.assertIn(
-                "!reports/synthesis/blockpaths/"
-                f"zhao_raster_texture_v3_fit_top@g8a-crcserial.{suffix}",
-                ignores,
-            )
+            for row_label in ("g8a-crcserial", "g8a-timing1"):
+                self.assertIn(
+                    "!reports/synthesis/blockpaths/"
+                    f"zhao_raster_texture_v3_fit_top@{row_label}.{suffix}",
+                    ignores,
+                )
 
     def test_wrapper_is_probe_only_and_protected_bytes_hold(self) -> None:
         tools = REPO / "tools/quartus"

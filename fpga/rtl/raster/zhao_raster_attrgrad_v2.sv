@@ -4,7 +4,9 @@
 // plane at the GLOBAL scissored min_x pixel centre and divides once there.
 // The result is then advanced into this tile by grad_x*(tile_x-min_x), and the
 // signed 32-bit quotient is stepped (wrapping in two's complement) across the
-// row.  A fresh divide at the tile edge is deliberately forbidden.
+// row. The existing global-to-tile product is captured with grad_x so row-divide
+// return performs only the wrapping seed addition. A fresh divide at the tile
+// edge is deliberately forbidden.
 //
 // ENFORCED-BY: tests/raster/raster_attrgrad_v2_directed.cpp
 `default_nettype none
@@ -145,13 +147,12 @@ module zhao_raster_attrgrad_v2 #(
   assign saturations_o  = dv_saturations;
   assign divide_errors_o = dv_errors;
 
-  logic signed [44:0] tile_offset_c;
+  logic signed [44:0] tile_offset_r;
   logic signed [45:0] row_q_ext_c, tile_offset_ext_c;
   logic signed [31:0] tile_seed_c;
   always_comb begin
-    tile_offset_c     = $signed(grad_x_r) * $signed(tile_delta_r);
     row_q_ext_c       = {{14{dv_q[31]}}, dv_q};
-    tile_offset_ext_c = {{1{tile_offset_c[44]}}, tile_offset_c};
+    tile_offset_ext_c = {{1{tile_offset_r[44]}}, tile_offset_r};
     // Exact global-to-tile accumulation leaf.  The committed omit-min-X-offset
     // mutant selects only this expression and leaves the real divider/FSM untouched.
     tile_seed_c = 32'(`ZHAO_ATTR_V2_TILE_SEED(row_q_ext_c, tile_offset_ext_c));
@@ -183,6 +184,7 @@ module zhao_raster_attrgrad_v2 #(
       base_min_y0_r <= 96'sd0;
       area2_r       <= 47'd0;
       tile_delta_r  <= 13'sd0;
+      tile_offset_r <= 45'sd0;
       grad_x_r      <= 32'sd0;
       grad_sat_r    <= 1'b0;
       grad_err_r    <= 1'b0;
@@ -218,7 +220,11 @@ module zhao_raster_attrgrad_v2 #(
 
         S_GRAD_WAIT: begin
           if (dv_rvalid) begin
-            grad_x_r   <= dv_q;
+            grad_x_r      <= dv_q;
+            // Capture the existing global-to-tile product at gradient return.
+            // The later row-divide return then performs only the wrapping seed
+            // addition instead of multiplier-plus-add on one edge.
+            tile_offset_r <= $signed(dv_q) * $signed(tile_delta_r);
             grad_sat_r <= dv_sat;
             grad_err_r <= dv_err;
             st_r       <= S_ROW;

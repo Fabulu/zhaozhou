@@ -2202,16 +2202,12 @@ module zhao_texture_island_v3_top #(
   wire material_fifo_push_c = material_read_valid_q &&
       material_read_owner_mask_valid_c;
   wire owner_combine_fire_c = owner_combine_valid_raw_w && owner_combine_ready_w;
-  logic owner_combine_validation_ready_c;
-  always_comb begin
-    owner_combine_validation_ready_c = 1'b1;
-    if (owner_combine_valid_raw_w) begin
-      owner_combine_validation_ready_c =
-          !join_validation_pending_q[owner_combine_owner_w[13:8]] &&
-          (join_validation_generation_m[owner_combine_owner_w[13:8]] ==
-           owner_combine_owner_w[7:0]);
-    end
-  end
+  // Admission sets this fence before any owner can become ready; only the
+  // generation-sealed joined validation above clears it.  The wide generation
+  // table remains a downstream registered validation witness, but is
+  // deliberately absent from this COMBINE ready feedback path.
+  wire owner_combine_validation_ready_c =
+      !join_validation_pending_q[owner_combine_owner_w[13:8]];
   assign owner_combine_ready_w = !owner_mask_lifetime_fault_q &&
       owner_combine_validation_ready_c &&
       ((material_reservation_count_c < MATERIAL_FIFO_COUNTW'(MATERIAL_FIFO_DEPTH)) ||
