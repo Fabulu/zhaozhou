@@ -47,6 +47,7 @@ PROFILES = {
             "fpga/rtl/pll.qip",
             "fpga/rtl/pll.v",
             "fpga/rtl/pll",
+            "tools/env/zhao-env.ps1",
             "tools/board/patch_mister_sys_top.py",
             "tools/board/superstation_build_manifest.py",
             "tools/board/build_superstation_bringup.ps1",
@@ -80,6 +81,7 @@ PROFILES = {
             "fpga/rtl/pll.qip",
             "fpga/rtl/pll.v",
             "fpga/rtl/pll",
+            "tools/env/zhao-env.ps1",
             "tools/board/patch_mister_sys_top.py",
             "tools/board/superstation_build_manifest.py",
             "tools/board/build_superstation_specs.ps1",
@@ -321,15 +323,43 @@ def verify_manifest_data(
 
     if data.get("sourceCommit") != marker_commit(build, profile["marker"]):
         errors.append("manifest/build-marker source commit mismatch")
+    source_commit = data.get("sourceCommit")
     try:
-        git_output(repo, "cat-file", "-e", f"{data.get('sourceCommit')}^{{commit}}")
+        git_output(repo, "cat-file", "-e", f"{source_commit}^{{commit}}")
     except ValueError as exc:
         errors.append(str(exc))
+    else:
+        owned = (*profile["sourcePaths"], *profile["verificationPaths"])
+        try:
+            git_output(
+                repo,
+                "-c",
+                "core.autocrlf=true",
+                "diff",
+                "--quiet",
+                str(source_commit),
+                "--",
+                *owned,
+            )
+        except ValueError:
+            errors.append("manifest source/verification files differ from sourceCommit")
 
     compare_records(repo, data.get("sourceFiles", {}), "source", errors)
     compare_records(repo, data.get("verificationFiles", {}), "verification", errors)
     compare_records(build, data.get("buildInputs", {}), "build input", errors)
     patched = data.get("patchedSysTop", {})
+    if not isinstance(patched, dict):
+        errors.append("manifest patched sys_top record is invalid")
+        patched = {}
+    patched_path = build / "sys" / "sys_top.v"
+    if not patched_path.is_file():
+        errors.append("patched sys_top missing from build")
+    else:
+        actual_patched = file_record(patched_path)
+        if patched != actual_patched:
+            errors.append("manifest patched sys_top record mismatch")
+        if data.get("buildInputs", {}).get("sys/sys_top.v") != actual_patched:
+            errors.append("build-input sys_top record mismatch")
     if patched.get("sha256") != PATCHED_SYS_TOP_SHA256:
         errors.append("manifest patched sys_top digest mismatch")
 

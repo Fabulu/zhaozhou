@@ -109,6 +109,7 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
             '"buildInputs"',
             '"artifacts"',
             '"manifestSha256"',
+            '"tools/env/zhao-env.ps1"',
             "ARTIFACT_SUFFIXES = (",
             '"sta.summary"',
         ],
@@ -143,6 +144,8 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
                 "superstation_build_manifest.py",
                 "--phase source",
                 "--phase complete",
+                "'tools/env/zhao-env.ps1'",
+                "tools\\env\\zhao-env.ps1",
             ],
             errors,
         )

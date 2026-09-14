@@ -32,6 +32,7 @@ $ownedPaths = @(
     'fpga/rtl/pll.qip',
     'fpga/rtl/pll.v',
     'fpga/rtl/pll',
+    'tools/env/zhao-env.ps1',
     'tools/board'
 )
 $dirty = @(& git -C $repoRoot -c core.autocrlf=true status --porcelain -- $ownedPaths)

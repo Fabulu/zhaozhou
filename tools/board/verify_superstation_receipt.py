@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import importlib.util
 import json
 import re
 import subprocess
@@ -31,17 +33,32 @@ PROFILES = {
         "core": "Zhaozhou Board Bring-up",
         "project": "ZhaozhouBringup",
         "manifest": "BRINGUP-BUILD-MANIFEST-V2.json",
+        "manifestRelative": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/BRINGUP-BUILD-MANIFEST-V2.json",
         "audit": "BRINGUP-BUILD-AUDIT-V2.json",
+        "auditRelative": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/BRINGUP-BUILD-AUDIT-V2.json",
+        "auditSchema": "zhaozhou.superstation.quartus-build-audit.v1",
         "remotePrefix": "ZhaozhouBringup",
     },
     "Specs": {
         "core": "Zhaozhou Hardware Specs",
         "project": "ZhaozhouSpecs",
         "manifest": "HARDWARE-SPECS-BUILD-MANIFEST-V2.json",
+        "manifestRelative": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-BUILD-MANIFEST-V2.json",
         "audit": "HARDWARE-SPECS-BUILD-AUDIT-V2.json",
+        "auditRelative": "runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-BUILD-AUDIT-V2.json",
+        "auditSchema": "zhaozhou.superstation.hardware-specs-build-audit.v1",
         "remotePrefix": "ZhaozhouSpecs",
     },
 }
+
+_MANIFEST_PATH = Path(__file__).with_name("superstation_build_manifest.py")
+_MANIFEST_SPEC = importlib.util.spec_from_file_location(
+    "superstation_build_manifest_for_receipt", _MANIFEST_PATH
+)
+if _MANIFEST_SPEC is None or _MANIFEST_SPEC.loader is None:
+    raise RuntimeError(f"could not load build manifest verifier: {_MANIFEST_PATH}")
+BUILD_MANIFEST = importlib.util.module_from_spec(_MANIFEST_SPEC)
+_MANIFEST_SPEC.loader.exec_module(BUILD_MANIFEST)
 
 
 def require(condition: bool, message: str, errors: list[str]) -> None:
@@ -115,6 +132,21 @@ def validate_loader_source(
     require(is_hex(loader.get("gitBlob"), 40), "loaderSource gitBlob invalid", errors)
     require(is_hex(loader.get("workingSha256"), 64), "loaderSource workingSha256 invalid", errors)
     if repo is not None and is_hex(loader.get("gitBlob"), 40):
+        repo = repo.resolve()
+        loader_path = (repo / str(loader.get("path"))).resolve()
+        require(loader_path.is_relative_to(repo), "loaderSource path escapes repository", errors)
+        require(loader_path.is_file(), "loaderSource working file is absent", errors)
+        if loader_path.is_file():
+            working_sha = hashlib.sha256(loader_path.read_bytes()).hexdigest()
+            require(working_sha == loader.get("workingSha256"), "loaderSource working SHA-256 mismatch", errors)
+        clean = subprocess.run(
+            ["git", "-C", str(repo), "status", "--porcelain", "--", str(loader.get("path"))],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        require(clean.returncode == 0 and not clean.stdout.strip(), "loaderSource working file is not clean", errors)
         completed = subprocess.run(
             ["git", "-C", str(repo), "rev-parse", f"{commit}:tools/board/invoke_superstation_probe.ps1"],
             text=True,
@@ -194,9 +226,7 @@ def validate_identity_receipt(
     return errors
 
 
-def validate_future_load_receipt(
-    data: dict[str, Any], repo: Path | None = None
-) -> list[str]:
+def validate_future_load_structure(data: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     require(data.get("schema") == "zhaozhou.superstation.load-receipt.v1", "schema mismatch", errors)
     profile_name = data.get("profile")
@@ -209,7 +239,7 @@ def validate_future_load_receipt(
 
     require(data.get("status") == "ok" and data.get("error") is None, "load receipt did not pass", errors)
     require(data.get("mode") == "watchdog-fire-test", "future load did not exercise watchdog", errors)
-    validate_loader_source(data, errors, repo)
+    validate_loader_source(data, errors)
 
     host_key = data.get("sshHostKey", {})
     require(host_key.get("algorithm") == "ssh-ed25519", "SSH algorithm mismatch", errors)
@@ -275,6 +305,196 @@ def validate_future_load_receipt(
             require(watchdog.get("log") == f"/tmp/zhaozhou-rollback-{identifier}.log", "watchdog log path mismatch", errors)
             require(watchdog.get("script") == f"/tmp/zhaozhou-rollback-{identifier}.sh", "watchdog script path mismatch", errors)
     validate_watchdog(data, errors)
+    return errors
+
+
+def resolve_evidence_path(
+    repo: Path, recorded: Any, expected_relative: str, label: str, errors: list[str]
+) -> Path | None:
+    expected = (repo / expected_relative).resolve()
+    if not isinstance(recorded, str) or not recorded:
+        errors.append(f"{label} path is null")
+        return None
+    actual = Path(recorded)
+    if not actual.is_absolute():
+        actual = repo / actual
+    actual = actual.resolve()
+    matches = actual == expected
+    require(matches, f"{label} path mismatch: {actual} != {expected}", errors)
+    require(actual.is_file(), f"{label} file does not exist: {actual}", errors)
+    return actual if matches and actual.is_file() else None
+
+
+def validate_evidence_git_binding(
+    repo: Path,
+    receipt_commit: Any,
+    path: Path,
+    label: str,
+    errors: list[str],
+) -> None:
+    relative = path.relative_to(repo).as_posix()
+    clean = subprocess.run(
+        ["git", "-C", str(repo), "status", "--porcelain", "--", relative],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    require(clean.returncode == 0 and not clean.stdout.strip(), f"{label} is not clean", errors)
+    if not is_hex(receipt_commit, 40):
+        return
+    committed = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", f"{receipt_commit}:{relative}"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    require(committed.returncode == 0, f"{label} is absent from receipt sourceCommit", errors)
+    if committed.returncode != 0:
+        return
+    working = subprocess.run(
+        ["git", "-C", str(repo), "hash-object", "--", str(path)],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    require(
+        working.returncode == 0 and working.stdout.strip() == committed.stdout.strip(),
+        f"{label} working file differs from receipt sourceCommit",
+        errors,
+    )
+
+
+def validate_future_load_receipt(
+    data: dict[str, Any], repo: Path | None
+) -> list[str]:
+    errors = validate_future_load_structure(data)
+    if repo is None:
+        errors.append("repository is required for future-load evidence validation")
+        return errors
+    repo = repo.resolve()
+    validate_loader_source(data, errors, repo)
+
+    profile_name = data.get("profile")
+    if profile_name not in PROFILES:
+        return errors
+    profile = PROFILES[profile_name]
+    project = profile["project"]
+    build_commit = data.get("buildSourceCommit")
+    if is_hex(build_commit, 40):
+        commit_check = subprocess.run(
+            ["git", "-C", str(repo), "cat-file", "-e", f"{build_commit}^{{commit}}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        require(commit_check.returncode == 0, "buildSourceCommit does not exist", errors)
+
+    local = data.get("localRbf") if isinstance(data.get("localRbf"), dict) else {}
+    local_path_value = local.get("path")
+    local_path = Path(str(local_path_value)).resolve() if local_path_value else None
+    build_dir: Path | None = None
+    if local_path is None:
+        errors.append("local RBF path is null")
+    else:
+        require(local_path.is_file(), f"local RBF file does not exist: {local_path}", errors)
+        build_dir = local_path.parent.parent
+        expected_local = (build_dir / "output_files" / f"{project}.rbf").resolve()
+        require(local_path == expected_local, "local RBF is not the profile artifact in output_files", errors)
+        if local_path.is_file():
+            actual_record = BUILD_MANIFEST.file_record(local_path)
+            require(actual_record.get("sha256") == local.get("sha256"), "receipt/local RBF SHA-256 mismatch", errors)
+            require(actual_record.get("bytes") == local.get("bytes"), "receipt/local RBF size mismatch", errors)
+
+    manifest_summary = data.get("buildManifest") if isinstance(data.get("buildManifest"), dict) else {}
+    audit_summary = data.get("buildAudit") if isinstance(data.get("buildAudit"), dict) else {}
+    manifest_path = resolve_evidence_path(
+        repo,
+        manifest_summary.get("path"),
+        profile["manifestRelative"],
+        "V2 complete manifest",
+        errors,
+    )
+    audit_path = resolve_evidence_path(
+        repo,
+        audit_summary.get("path"),
+        profile["auditRelative"],
+        "V2 build audit",
+        errors,
+    )
+
+    receipt_commit = data.get("sourceCommit")
+    if manifest_path is not None:
+        validate_evidence_git_binding(repo, receipt_commit, manifest_path, "V2 complete manifest", errors)
+    if audit_path is not None:
+        validate_evidence_git_binding(repo, receipt_commit, audit_path, "V2 build audit", errors)
+
+    manifest_data: dict[str, Any] | None = None
+    if manifest_path is not None:
+        try:
+            parsed_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if not isinstance(parsed_manifest, dict):
+                raise ValueError("top level is not an object")
+            manifest_data = parsed_manifest
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(f"V2 complete manifest cannot be parsed: {exc}")
+    if manifest_data is not None:
+        require(build_dir is not None, "cannot validate manifest without local build directory", errors)
+        if build_dir is not None:
+            try:
+                manifest_errors = BUILD_MANIFEST.verify_manifest_data(manifest_data, repo, build_dir)
+            except (OSError, ValueError, TypeError, AttributeError) as exc:
+                errors.append(f"complete manifest validation failed: {exc}")
+            else:
+                errors.extend(f"complete manifest: {error}" for error in manifest_errors)
+        require(manifest_data.get("profile") == profile_name, "actual manifest profile mismatch", errors)
+        require(manifest_data.get("project") == project, "actual manifest project mismatch", errors)
+        require(manifest_data.get("sourceCommit") == build_commit, "actual manifest source mismatch", errors)
+        require(manifest_summary.get("manifestSha256") == manifest_data.get("manifestSha256"), "receipt/manifest self-digest mismatch", errors)
+        artifact_key = f"output_files/{project}.rbf"
+        artifacts = manifest_data.get("artifacts")
+        manifest_rbf = artifacts.get(artifact_key, {}) if isinstance(artifacts, dict) else {}
+        require(isinstance(manifest_rbf, dict), "actual manifest RBF record is invalid", errors)
+        if not isinstance(manifest_rbf, dict):
+            manifest_rbf = {}
+        require(manifest_rbf.get("sha256") == local.get("sha256"), "actual manifest/local RBF SHA-256 mismatch", errors)
+        require(manifest_rbf.get("bytes") == local.get("bytes"), "actual manifest/local RBF size mismatch", errors)
+
+    audit_data: dict[str, Any] | None = None
+    if audit_path is not None:
+        try:
+            parsed_audit = json.loads(audit_path.read_text(encoding="utf-8"))
+            if not isinstance(parsed_audit, dict):
+                raise ValueError("top level is not an object")
+            audit_data = parsed_audit
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(f"V2 build audit cannot be parsed: {exc}")
+    if audit_data is not None:
+        require(audit_data.get("schema") == profile["auditSchema"], "actual V2 audit schema mismatch", errors)
+        require(audit_data.get("status") == "ok", "actual V2 audit status is not ok", errors)
+        require(audit_data.get("sourceCommit") == build_commit, "actual V2 audit source mismatch", errors)
+        require(audit_data.get("project") == project, "actual V2 audit project mismatch", errors)
+        audit_artifacts = audit_data.get("artifacts")
+        audit_rbf = audit_artifacts.get(f"{project}.rbf", {}) if isinstance(audit_artifacts, dict) else {}
+        require(isinstance(audit_rbf, dict), "actual V2 audit RBF record is invalid", errors)
+        if not isinstance(audit_rbf, dict):
+            audit_rbf = {}
+        require(audit_rbf.get("sha256") == local.get("sha256"), "actual audit/local RBF SHA-256 mismatch", errors)
+        require(audit_rbf.get("bytes") == local.get("bytes"), "actual audit/local RBF size mismatch", errors)
+        flow = audit_data.get("flow")
+        require(isinstance(flow, dict) and flow.get("criticalWarnings") == 0, "actual V2 audit has Critical Warnings", errors)
+        pin_audit = audit_data.get("pinAudit")
+        require(
+            isinstance(pin_audit, dict)
+            and pin_audit.get("userIoDisabledOutputEnables") == list(range(7)),
+            "actual V2 audit does not prove all USER_IO output enables disabled",
+            errors,
+        )
+        require(audit_summary.get("status") == audit_data.get("status"), "receipt/audit status mismatch", errors)
+        require(audit_summary.get("sourceCommit") == audit_data.get("sourceCommit"), "receipt/audit source mismatch", errors)
+        require(audit_summary.get("rbfSha256") == audit_rbf.get("sha256"), "receipt/audit RBF mismatch", errors)
     return errors
 
 

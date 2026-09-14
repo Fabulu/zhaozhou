@@ -13,6 +13,7 @@ SPEC = importlib.util.spec_from_file_location("superstation_build_manifest", MAN
 assert SPEC is not None and SPEC.loader is not None
 MANIFEST = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MANIFEST)
+PRODUCTION_PROFILES = MANIFEST.PROFILES
 
 
 class SuperStationBuildManifestTest(unittest.TestCase):
@@ -62,6 +63,8 @@ class SuperStationBuildManifestTest(unittest.TestCase):
                 return ""
             if args[:2] == ("cat-file", "-e"):
                 return ""
+            if "diff" in args and "--quiet" in args:
+                return ""
             raise AssertionError(args)
 
         MANIFEST.git_output = fake_git_output
@@ -79,9 +82,47 @@ class SuperStationBuildManifestTest(unittest.TestCase):
             (output / f"Test.{suffix}").write_bytes(f"artifact:{suffix}\n".encode())
         return MANIFEST.create_complete_manifest(self.repo, self.build, "Test", source_path)
 
+    def test_production_profiles_bind_zhao_env(self) -> None:
+        for name in ("Bringup", "Specs"):
+            self.assertIn("tools/env/zhao-env.ps1", PRODUCTION_PROFILES[name]["sourcePaths"])
+
     def test_complete_manifest_verifies(self) -> None:
         complete = self.complete_manifest()
         self.assertEqual(MANIFEST.verify_manifest_data(complete, self.repo, self.build), [])
+
+    def test_source_commit_drift_fires(self) -> None:
+        complete = self.complete_manifest()
+        clean_git_output = MANIFEST.git_output
+
+        def drift_git_output(repo: Path, *args: str) -> str:
+            if "diff" in args and "--quiet" in args:
+                raise ValueError("fixture source differs")
+            return clean_git_output(repo, *args)
+
+        MANIFEST.git_output = drift_git_output
+        try:
+            errors = MANIFEST.verify_manifest_data(complete, self.repo, self.build)
+        finally:
+            MANIFEST.git_output = clean_git_output
+
+        self.assertIn("manifest source/verification files differ from sourceCommit", errors)
+
+    def test_detached_patched_sys_top_record_fires(self) -> None:
+        complete = self.complete_manifest()
+        patched_path = self.build / "sys" / "sys_top.v"
+        patched_path.write_bytes(b"unsafe mutant\n")
+        complete["buildInputs"]["sys/sys_top.v"] = MANIFEST.file_record(patched_path)
+        source_projection = dict(complete)
+        source_projection.pop("sourceManifestSha256", None)
+        source_projection["phase"] = "source"
+        source_projection["status"] = "source-captured"
+        source_projection["artifacts"] = {}
+        complete["sourceManifestSha256"] = MANIFEST.manifest_digest(source_projection)
+        complete["manifestSha256"] = MANIFEST.manifest_digest(complete)
+
+        errors = MANIFEST.verify_manifest_data(complete, self.repo, self.build)
+
+        self.assertIn("manifest patched sys_top record mismatch", errors)
 
     def test_artifact_mutation_fires(self) -> None:
         complete = self.complete_manifest()
