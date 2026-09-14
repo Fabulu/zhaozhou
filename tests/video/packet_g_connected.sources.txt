@@ -1,0 +1,11 @@
+fpga/rtl/generated/zhao_abi_pkg.sv
+fpga/rtl/common/zhao_pkg.sv
+fpga/rtl/common/zhao_dc_sdp_ram.sv
+fpga/rtl/memory/zhao_mem_guard.sv
+tests/mutants/zhao_video_slotmgr_v2_mutants.sv
+fpga/rtl/video/zhao_video_slotmgr_v2.sv
+tests/mutants/zhao_fb_ready_cdc_v2_mutants.sv
+fpga/rtl/video/zhao_fb_ready_cdc_v2.sv
+fpga/rtl/video/zhao_video_framectl.sv
+tests/mutants/zhao_packet_g_connected_mutants.sv
+tests/video/tb_packet_g_lease_cdc.sv

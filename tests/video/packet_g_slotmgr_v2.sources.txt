@@ -1,0 +1,4 @@
+fpga/rtl/generated/zhao_abi_pkg.sv
+fpga/rtl/common/zhao_pkg.sv
+tests/mutants/zhao_video_slotmgr_v2_mutants.sv
+fpga/rtl/video/zhao_video_slotmgr_v2.sv

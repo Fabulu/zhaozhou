@@ -10041,3 +10041,231 @@ foreach(required_packet_f_test IN LISTS ZHAO_PACKET_F_REQUIRED_TESTS)
       "required Packet-F CTest is not registered: ${required_packet_f_test}")
   endif()
 endforeach()
+
+# Packet G: writer-aware framebuffer lease authority and generation-bearing,
+# bidirectional READY/swap CDC. Both V2 blocks remain unselected until Packet H.
+function(zhao_packet_g_load_sources MANIFEST EXPECTED_COUNT OUT_VAR)
+  if(NOT EXISTS "${MANIFEST}")
+    message(FATAL_ERROR "required Packet-G source manifest is missing: ${MANIFEST}")
+  endif()
+  file(STRINGS "${MANIFEST}" zhao_packet_g_relative_sources)
+  list(LENGTH zhao_packet_g_relative_sources zhao_packet_g_source_count)
+  if(NOT zhao_packet_g_source_count EQUAL ${EXPECTED_COUNT})
+    message(FATAL_ERROR
+      "Packet-G source manifest ${MANIFEST} must contain exactly ${EXPECTED_COUNT} rows")
+  endif()
+  set(zhao_packet_g_sources)
+  set(zhao_packet_g_seen)
+  foreach(relative_source IN LISTS zhao_packet_g_relative_sources)
+    if(IS_ABSOLUTE "${relative_source}" OR relative_source MATCHES "\\\\" OR
+       NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+       relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+      message(FATAL_ERROR "invalid Packet-G source path: ${relative_source}")
+    endif()
+    list(FIND zhao_packet_g_seen "${relative_source}" duplicate_index)
+    if(NOT duplicate_index EQUAL -1)
+      message(FATAL_ERROR "duplicate Packet-G source path: ${relative_source}")
+    endif()
+    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+      message(FATAL_ERROR "missing Packet-G source: ${relative_source}")
+    endif()
+    list(APPEND zhao_packet_g_seen "${relative_source}")
+    list(APPEND zhao_packet_g_sources "${CMAKE_SOURCE_DIR}/${relative_source}")
+  endforeach()
+  set(${OUT_VAR} "${zhao_packet_g_sources}" PARENT_SCOPE)
+endfunction()
+
+set(ZHAO_PACKET_G_SLOTMGR_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/video/packet_g_slotmgr_v2.sources.txt)
+set(ZHAO_PACKET_G_CDC_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/video/packet_g_cdc_v2.sources.txt)
+set(ZHAO_PACKET_G_CONNECTED_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/video/packet_g_connected.sources.txt)
+zhao_packet_g_load_sources(
+  "${ZHAO_PACKET_G_SLOTMGR_MANIFEST}" 4 ZHAO_PACKET_G_SLOTMGR_SOURCES)
+zhao_packet_g_load_sources(
+  "${ZHAO_PACKET_G_CDC_MANIFEST}" 3 ZHAO_PACKET_G_CDC_SOURCES)
+zhao_packet_g_load_sources(
+  "${ZHAO_PACKET_G_CONNECTED_MANIFEST}" 11 ZHAO_PACKET_G_CONNECTED_SOURCES)
+
+function(zhao_packet_g_slot_test TARGET MUTANT EXPECTED)
+  add_executable(${TARGET} video/video_slotmgr_v2_directed.cpp)
+  target_link_libraries(${TARGET} PRIVATE zhao_harness)
+  if(NOT "${EXPECTED}" STREQUAL "")
+    target_compile_definitions(${TARGET} PRIVATE ${EXPECTED})
+  endif()
+  set(zhao_slot_mutant_arg)
+  if(NOT "${MUTANT}" STREQUAL "")
+    set(zhao_slot_mutant_arg -D${MUTANT})
+  endif()
+  verilate(${TARGET}
+    PREFIX Vzhao_video_slotmgr_v2
+    TOP_MODULE zhao_video_slotmgr_v2
+    VERILATOR_ARGS --assert ${zhao_slot_mutant_arg}
+    SOURCES ${ZHAO_PACKET_G_SLOTMGR_SOURCES})
+  add_test(NAME ${TARGET} COMMAND ${TARGET})
+  set_tests_properties(${TARGET} PROPERTIES
+    LABELS "fast;nightly;packet-g;slotmgr" TIMEOUT 1800
+    PASS_REGULAR_EXPRESSION "passed|DETECTED")
+endfunction()
+
+zhao_packet_g_slot_test(packet_g_slotmgr_directed "" "")
+zhao_packet_g_slot_test(packet_g_slotmgr_term_omit_writer_mutant
+  ZHAO_SLOT_V2_MUTANT_TERM_OMIT_WRITER ZHAO_EXPECT_SLOT_MUTANT_TERM_OMIT_WRITER)
+zhao_packet_g_slot_test(packet_g_slotmgr_term_slot_only_mutant
+  ZHAO_SLOT_V2_MUTANT_TERM_SLOT_ONLY ZHAO_EXPECT_SLOT_MUTANT_TERM_SLOT_ONLY)
+zhao_packet_g_slot_test(packet_g_slotmgr_fault_publishes_mutant
+  ZHAO_SLOT_V2_MUTANT_FAULT_PUBLISHES ZHAO_EXPECT_SLOT_MUTANT_FAULT_PUBLISHES)
+zhao_packet_g_slot_test(packet_g_slotmgr_slot0_base_mutant
+  ZHAO_SLOT_V2_MUTANT_SLOT0_BASE ZHAO_EXPECT_SLOT_MUTANT_SLOT0_BASE)
+zhao_packet_g_slot_test(packet_g_slotmgr_swap_omit_generation_mutant
+  ZHAO_SLOT_V2_MUTANT_SWAP_OMIT_GENERATION
+  ZHAO_EXPECT_SLOT_MUTANT_SWAP_OMIT_GENERATION)
+zhao_packet_g_slot_test(packet_g_slotmgr_live_ready_writer_mutant
+  ZHAO_SLOT_V2_MUTANT_LIVE_READY_WRITER
+  ZHAO_EXPECT_SLOT_MUTANT_LIVE_READY_WRITER)
+
+function(zhao_packet_g_cdc_test TARGET MUTANT EXPECTED)
+  add_executable(${TARGET} video/fb_ready_cdc_v2_directed.cpp)
+  target_link_libraries(${TARGET} PRIVATE zhao_harness)
+  if(NOT "${EXPECTED}" STREQUAL "")
+    target_compile_definitions(${TARGET} PRIVATE ${EXPECTED})
+  endif()
+  set(zhao_cdc_mutant_arg)
+  if(NOT "${MUTANT}" STREQUAL "")
+    set(zhao_cdc_mutant_arg -D${MUTANT})
+  endif()
+  # The full-guard behavioral inverse must observe the fifth acceptance. The
+  # separate assertion control below compiles the same mutant with assertions.
+  if("${MUTANT}" STREQUAL "ZHAO_FB_CDC_MUTANT_IGNORE_FULL")
+    list(APPEND zhao_cdc_mutant_arg -DSYNTHESIS)
+  endif()
+  verilate(${TARGET}
+    PREFIX Vzhao_fb_ready_cdc_v2
+    TOP_MODULE zhao_fb_ready_cdc_v2
+    VERILATOR_ARGS --assert ${zhao_cdc_mutant_arg}
+    SOURCES ${ZHAO_PACKET_G_CDC_SOURCES})
+  add_test(NAME ${TARGET} COMMAND ${TARGET})
+  set_tests_properties(${TARGET} PROPERTIES
+    LABELS "fast;nightly;packet-g;cdc" TIMEOUT 1800
+    PASS_REGULAR_EXPRESSION "passed|DETECTED")
+endfunction()
+
+zhao_packet_g_cdc_test(packet_g_cdc_directed "" "")
+zhao_packet_g_cdc_test(packet_g_cdc_ignore_full_mutant
+  ZHAO_FB_CDC_MUTANT_IGNORE_FULL ZHAO_EXPECT_CDC_MUTANT_IGNORE_FULL)
+zhao_packet_g_cdc_test(packet_g_cdc_bypass_barrier_mutant
+  ZHAO_FB_CDC_MUTANT_BYPASS_BARRIER ZHAO_EXPECT_CDC_MUTANT_BYPASS_BARRIER)
+zhao_packet_g_cdc_test(packet_g_cdc_zero_ready_generation_mutant
+  ZHAO_FB_CDC_MUTANT_ZERO_READY_GENERATION
+  ZHAO_EXPECT_CDC_MUTANT_ZERO_READY_GENERATION)
+zhao_packet_g_cdc_test(packet_g_cdc_repeat_read_mutant
+  ZHAO_FB_CDC_MUTANT_REPEAT_READ ZHAO_EXPECT_CDC_MUTANT_REPEAT_READ)
+
+add_executable(packet_g_cdc_ignore_full_assertion_exe
+  video/fb_ready_cdc_v2_directed.cpp)
+target_link_libraries(packet_g_cdc_ignore_full_assertion_exe PRIVATE zhao_harness)
+target_compile_definitions(packet_g_cdc_ignore_full_assertion_exe PRIVATE
+  ZHAO_EXPECT_CDC_ASSERT_IGNORE_FULL)
+verilate(packet_g_cdc_ignore_full_assertion_exe
+  PREFIX Vzhao_fb_ready_cdc_v2
+  TOP_MODULE zhao_fb_ready_cdc_v2
+  VERILATOR_ARGS --assert -DZHAO_FB_CDC_MUTANT_IGNORE_FULL
+  SOURCES ${ZHAO_PACKET_G_CDC_SOURCES})
+add_test(NAME packet_g_cdc_ignore_full_assertion
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_packet_g_assertion_control.py
+    --exe $<TARGET_FILE:packet_g_cdc_ignore_full_assertion_exe>)
+set_tests_properties(packet_g_cdc_ignore_full_assertion PROPERTIES
+  LABELS "fast;mutant;packet-g;cdc" TIMEOUT 30)
+
+add_executable(packet_g_connected_directed
+  video/packet_g_connected_directed.cpp)
+target_link_libraries(packet_g_connected_directed PRIVATE zhao_harness)
+verilate(packet_g_connected_directed
+  PREFIX Vtb_packet_g_lease_cdc
+  TOP_MODULE tb_packet_g_lease_cdc
+  VERILATOR_ARGS --assert
+  SOURCES ${ZHAO_PACKET_G_CONNECTED_SOURCES})
+add_test(NAME packet_g_connected_directed COMMAND packet_g_connected_directed)
+set_tests_properties(packet_g_connected_directed PROPERTIES
+  LABELS "fast;nightly;packet-g;connected" TIMEOUT 1800)
+
+add_executable(packet_g_connected_raw_terminal_mutant
+  video/packet_g_connected_directed.cpp)
+target_compile_definitions(packet_g_connected_raw_terminal_mutant PRIVATE
+  ZHAO_EXPECT_PACKET_G_CONNECTED_RAW_TERMINAL)
+target_link_libraries(packet_g_connected_raw_terminal_mutant PRIVATE zhao_harness)
+verilate(packet_g_connected_raw_terminal_mutant
+  PREFIX Vtb_packet_g_lease_cdc
+  TOP_MODULE tb_packet_g_lease_cdc
+  VERILATOR_ARGS --assert -DZHAO_PACKET_G_CONNECTED_MUTANT_RAW_TERMINAL_READY
+  SOURCES ${ZHAO_PACKET_G_CONNECTED_SOURCES})
+add_test(NAME packet_g_connected_raw_terminal_mutant
+  COMMAND packet_g_connected_raw_terminal_mutant)
+set_tests_properties(packet_g_connected_raw_terminal_mutant PROPERTIES
+  LABELS "fast;nightly;mutant;packet-g;connected" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "DETECTED")
+
+foreach(packet_g_collision_profile IN ITEMS slot-sv slot-cpp cdc-sv cdc-cpp)
+  string(REPLACE "-" "_" packet_g_collision_name
+    "${packet_g_collision_profile}")
+  add_test(NAME packet_g_${packet_g_collision_name}_selector_collision
+    COMMAND "${Python3_EXECUTABLE}"
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_packet_g_selector_collision.py
+      --profile ${packet_g_collision_profile}
+      --verilator "${ZHAO_VERILATOR_LINT}"
+      --cxx "${CMAKE_CXX_COMPILER}")
+  set_tests_properties(packet_g_${packet_g_collision_name}_selector_collision
+    PROPERTIES LABELS "fast;mutant;packet-g" TIMEOUT 180)
+endforeach()
+
+add_test(NAME packet_g_registration_static
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_render_texture_packet_g.py -q)
+set_tests_properties(packet_g_registration_static PROPERTIES
+  LABELS "fast;packet-g" TIMEOUT 180)
+
+add_test(NAME lint_zhao_video_slotmgr_v2
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_video_slotmgr_v2 ${ZHAO_PACKET_G_SLOTMGR_SOURCES})
+add_test(NAME lint_zhao_fb_ready_cdc_v2
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_fb_ready_cdc_v2 ${ZHAO_PACKET_G_CDC_SOURCES})
+set_tests_properties(lint_zhao_video_slotmgr_v2 lint_zhao_fb_ready_cdc_v2
+  PROPERTIES LABELS "lint;fast;packet-g"
+    ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+set(ZHAO_PACKET_G_REQUIRED_TESTS
+  packet_g_slotmgr_directed
+  packet_g_slotmgr_term_omit_writer_mutant
+  packet_g_slotmgr_term_slot_only_mutant
+  packet_g_slotmgr_fault_publishes_mutant
+  packet_g_slotmgr_slot0_base_mutant
+  packet_g_slotmgr_swap_omit_generation_mutant
+  packet_g_slotmgr_live_ready_writer_mutant
+  packet_g_cdc_directed
+  packet_g_cdc_ignore_full_mutant
+  packet_g_cdc_bypass_barrier_mutant
+  packet_g_cdc_zero_ready_generation_mutant
+  packet_g_cdc_repeat_read_mutant
+  packet_g_cdc_ignore_full_assertion
+  packet_g_connected_directed
+  packet_g_connected_raw_terminal_mutant
+  packet_g_slot_sv_selector_collision
+  packet_g_slot_cpp_selector_collision
+  packet_g_cdc_sv_selector_collision
+  packet_g_cdc_cpp_selector_collision
+  packet_g_registration_static
+  lint_zhao_video_slotmgr_v2
+  lint_zhao_fb_ready_cdc_v2)
+list(LENGTH ZHAO_PACKET_G_REQUIRED_TESTS ZHAO_PACKET_G_REQUIRED_TEST_COUNT)
+if(NOT ZHAO_PACKET_G_REQUIRED_TEST_COUNT EQUAL 22)
+  message(FATAL_ERROR "Packet-G required CTest inventory must contain exactly 22 names")
+endif()
+foreach(required_packet_g_test IN LISTS ZHAO_PACKET_G_REQUIRED_TESTS)
+  if(NOT TEST "${required_packet_g_test}")
+    message(FATAL_ERROR
+      "required Packet-G CTest is not registered: ${required_packet_g_test}")
+  endif()
+endforeach()

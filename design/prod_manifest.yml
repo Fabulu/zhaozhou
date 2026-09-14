@@ -355,6 +355,11 @@ excluded:
   # Packet E shares ENGINE1 only behind the real guard. The shell has no
   # independent raw-last return, so this test-only owner cannot be adopted there.
   - zhao_render_asset_mux: not-yet-adopted  Packet-E excluded local geometry/texture-fill owner mux behind the unchanged ENGINE1 MEM.GUARD client; real accept-then-verdict and explicit raw-last routing are unit-verified, but the protected shell cannot supply raw-last and G8A must price a compatible connected seam
+  # Packet G replaces the raw level/toggle publication crossing only in the
+  # Packet-H sibling shell. Both blocks are unit-verified and intentionally
+  # unreachable from every currently selected accounting root.
+  - zhao_video_slotmgr_v2: not-yet-adopted  Packet-G fair renderer/blitter lease authority with internally derived framebuffer windows, full writer/generation publication identity, same-edge fault priority, and exact swap echo; adoption belongs to Packet H
+  - zhao_fb_ready_cdc_v2: not-yet-adopted  Packet-G paired-reset generation-bearing depth-four READY/swap CDC; adoption belongs to Packet H and the protected shell remains byte-for-byte unchanged
   #
   # The rows below are the now-unreachable PRE-PACKET-B implementations. They are
   # retained as oracle/history material with their source, tests, existing fit

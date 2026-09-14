@@ -1,0 +1,3 @@
+tests/mutants/zhao_fb_ready_cdc_v2_mutants.sv
+fpga/rtl/common/zhao_dc_sdp_ram.sv
+fpga/rtl/video/zhao_fb_ready_cdc_v2.sv

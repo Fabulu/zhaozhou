@@ -205,3 +205,143 @@ be what a fit fails on.
 None yet. The first is Step 5 of the integration order: a successful matching
 publication moving a slot to READY and FRAMECTL swapping to it, with the
 outgoing slot freed and immediately leasable.
+
+## Packet-G V2 successor (excluded, not yet adopted)
+
+`zhao_video_slotmgr_v2` and `zhao_fb_ready_cdc_v2` are the Packet-G successor
+pair. They are unit-verifiable infrastructure for the sibling shell in Packet H;
+the historical manager and protected shell above remain unchanged and selected.
+Nothing in this section claims production adoption.
+
+### V2 lease authority and immutable identity
+
+The manager remains wholly in the GPU clock domain. It admits held requests from
+both writers: writer 0 is the blitter and writer 1 is the renderer. Simultaneous
+requests alternate by the last **accepted contention** result; exactly one source
+sees READY. A losing request held through the winning response is accepted later
+as a typed refusal while that lease is live, and that solo disposition does not
+erase contention priority. One held response carries:
+
+```text
+{writer1, granted1, slot1, generation16, mode2, base32, span32}
+```
+
+A granted lease becomes live only when that response is accepted. A stalled
+response is immutable, and no younger request can overwrite it. There is still
+one live lease globally. A legal request can be refused because another lease is
+live, the requested slot is not FREE, or mode 3 is illegal; refusal is an accepted
+response and creates no ownership state.
+
+The caller supplies no framebuffer address. The manager derives the complete
+window from the accepted slot and mode:
+
+| mode | span |
+|---:|---:|
+| 0 (Z60) | 184,320 bytes |
+| 1 (Storm) | 153,600 bytes |
+| 2 (Duo) | 196,608 bytes |
+
+Slot 0 base is `0x00000000`; slot 1 base is `0x02000000`. The accepted response,
+live lease, READY event, stored slot record, displayed record, and swap echo all
+carry the same immutable `{writer,slot,generation,mode,base,span}` identity. The
+generation increments modulo 16 bits on each accepted grant into WRITING,
+including wrap from `0xffff` to zero.
+
+### Fault, terminal, and publication law
+
+Fault and terminal keys are exactly `{writer,slot,generation}`. A nonmatching
+fault, terminal, or swap is consumed, changes no ownership state, and increments
+the modulo-32-bit stale-event count. A matching fault sticks in the live lease.
+The terminal stream has one explicit `publish` bit and one immediate `fault` bit:
+
+* matching cancel (`publish=0`) releases WRITING to FREE;
+* matching clean publication moves WRITING to READY;
+* a latched fault, terminal fault, or matching fault on the **same edge** as a
+  publication wins and releases to FREE;
+* every fault/cancel release emits zero READY events.
+
+A clean terminal accepted while the READY hold is empty offers its 84-bit tuple
+to the CDC on that same edge. If the CDC accepts, no duplicate is retained. If it
+stalls, the tuple is held. If an older held tuple pops while a new publication is
+accepted, the new tuple replaces it without a bubble or loss. Thus one clean
+publication creates exactly one READY FIFO write, never a raw writer-done pulse.
+
+Swap input is accepted and checked against a READY slot's complete
+`{writer,slot,generation,mode,base,span}` record. Only an exact echo becomes
+DISPLAYED and frees a different previously displayed slot. Omitting writer,
+generation, mode, base, or span is a stale event, not a partial match.
+
+Lifecycle counters are reset-zero modulo-32-bit observations:
+requests/responses accepted, leases granted/refused, matching faults, clean
+publications, releases, READY events, accepted swaps, stale events, and request
+contentions. After response drain,
+`requests_accepted == responses_accepted == leases_granted + leases_refused`.
+
+### V2 bidirectional CDC and reset barrier
+
+The CDC carries one exact 84-bit tuple in each direction:
+
+```text
+{writer1, slot1, generation16, mode2, base32, span32}
+```
+
+READY travels GPU-to-video; the accepted swap echo travels video-to-GPU. Each
+channel uses a depth-four Gray-pointer asynchronous FIFO built from one
+`zhao_dc_sdp_ram` (`DATA_W=84`, `ADDR_W=2`) plus its registered-read pending and
+held-output state. One tuple may sit in the output hold, so RAM admission limits
+live RAM ownership to three and the total channel ownership to four. Full and
+empty decisions use only locally clocked pointers and three-stage synchronized
+remote Gray pointers. Payload bits never cross except through the dual-clock RAM.
+
+Both FIFO outputs are held under destination backpressure, preserve order, and
+emit each accepted tuple once. The source must hold valid and payload while
+READY is low. A valid drop or payload change after a genuinely stalled source
+sets that source domain's sticky protocol fault; each detector has a directed
+positive control. Enqueue/dequeue counters are independent per channel. A domain
+is idle only when its locally owned outgoing memory is empty and its synchronized
+incoming empty, pending read, and held output all prove no work.
+
+Either external reset asserts a shared pair reset immediately. Pair reset then
+feeds independent three-flop reset-release synchronizers; every data, pointer,
+barrier, counter, output, and protocol-fault flop deasserts reset only on its own
+clock. Each domain raises a local three-cycle up level and synchronizes the peer's
+level through three flops. Source READY and RAM read issue remain closed until
+both local and peer acknowledgements form that domain's barrier-done level.
+Reset during FIFO occupancy, pending RAM read, held output, or held source offer
+discards all pre-reset events. A source held through reset can be accepted only
+after the new paired barrier, and no lease may be granted by Packet H before the
+required acknowledgements.
+
+### V2 verification boundary
+
+`tests/video/video_slotmgr_v2_directed.cpp` covers both writers and arbitration
+histories, response stalls, every slot/mode/window, grant/refusal, exact live
+identity, stale writer/slot/generation, sticky and same-edge fault priority,
+clean same-edge READY, publication backpressure, all swap fields, displayed
+identity, generation wrap, reset gating, and drained counter equations.
+
+`tests/video/fb_ready_cdc_v2_directed.cpp` uses independent clocks and phases. It
+covers exact depth-four fill, both-direction backpressure and ordering,
+pop/reload, reset with occupancy/pending-read/held-output/held-input, post-reset
+barriers, changed clock ratios, idle, counter equality, and both stalled-source
+fault controls.
+
+`tests/video/packet_g_connected_directed.cpp` composes the real V2 manager and
+CDC with the real VIDEO.FRAMECTL and two real MEM.GUARD instances. It proves
+empty boundaries repeat without swap, one clean READY crosses and produces one
+unchanged full-tuple echo/display update, later boundaries do not duplicate it,
+a same-edge fault release cannot reach video, both captured writer polarities
+gate the common framebuffer window, exact lower/upper boundaries hold, and reset
+discards video-pending and held-echo work. Its raw-terminal-valid seam mutant
+recreates the historical publication bypass and must reach video while the
+manager correctly refuses the stale return.
+
+Committed selector shims independently break terminal writer/generation, fault
+publication, derived base, swap generation, captured READY writer, FIFO full,
+barrier gating, READY generation, and read-pointer advance. Each runtime control
+passes only after observing its named defect. The full-guard inverse has separate
+behavioral and exact RAM-ownership-assertion controls, proving the three-in-RAM
+bound before the held fourth tuple. Dual-selector controls must fail
+elaboration with one exact collision diagnostic. These V2 modules remain
+`not-yet-adopted`; Packet H owns their first shell composition and any connected
+resource/timing claim.

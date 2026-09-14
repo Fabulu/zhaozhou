@@ -95,6 +95,20 @@ fpga/rtl/raster/zhao_raster_div255.sv text eol=lf
 fpga/rtl/raster/zhao_raster_quant.sv text eol=lf
 fpga/rtl/raster/zhao_raster_resolve.sv text eol=lf
 fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv text eol=lf
+# Packet-G source manifests and selector controls are exact checkout artifacts.
+fpga/rtl/video/zhao_video_slotmgr_v2.sv text eol=lf
+fpga/rtl/video/zhao_fb_ready_cdc_v2.sv text eol=lf
+tests/mutants/zhao_video_slotmgr_v2_mutants.sv text eol=lf
+tests/mutants/zhao_fb_ready_cdc_v2_mutants.sv text eol=lf
+tests/mutants/zhao_packet_g_connected_mutants.sv text eol=lf
+tests/video/packet_g_*.sources.txt text eol=lf
+tests/video/tb_packet_g_lease_cdc.sv text eol=lf
+tests/video/video_slotmgr_v2_directed.cpp text eol=lf
+tests/video/fb_ready_cdc_v2_directed.cpp text eol=lf
+tests/video/packet_g_connected_directed.cpp text eol=lf
+tests/tools/test_packet_g_assertion_control.py text eol=lf
+tests/tools/test_packet_g_selector_collision.py text eol=lf
+tests/tools/test_render_texture_packet_g.py text eol=lf
 # Shell-fit production receipts and their raw evidence are content-addressed.
 # Preserve exact Quartus/JSON/Git bytes; whitespace and CRLF are evidence.
 reports/characterization/shell_fit_top_clean_characterization/** binary
