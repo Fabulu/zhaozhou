@@ -6,6 +6,7 @@
 **Actual-evidence verifier repair:** `6d0a2a8846f2eb250dc828b02d9931d3bfbbb060`
 **Loader byte-identity repair:** `e66a606636727fb4df27aed87bd1181af01164eb`
 **QSF-mutation build-entry repair:** `44a6d88576be382bf5eaa69ea0cf10fcc6d1982d`
+**Projectless build-ID repair:** `2ee7d560d216170a791286b35a871573f8a8581a`
 **State:** V2 attempts failed closed on QSF mutation; **no compile or physical activity authorised**
 
 ## Review disposition
@@ -266,16 +267,35 @@ attempt-2 RBF, resource/timing result or complete manifest. The attempt was
 preserved under immutable `ATTEMPT2-BUILD-ID-QSF-MUTATION` names and stopped
 without repeat or bypass.
 
+### Projectless build-ID repair
+
+Commit `2ee7d560d216170a791286b35a871573f8a8581a` keeps the pinned vendor
+script unchanged and deterministically patches only the copied build input. It
+requires upstream SHA-256
+`148dc6a8124d36ac2898a45d085960cc05178a76d7297fde8877925fc0a74e88`,
+produces projectless SHA-256
+`e9a3daa3d507075abf214fefa115505a7669a14898800b728492f8a4393272c6`,
+and removes `project_open`, `project_close` and `get_global_assignment`.
+Revision, device `5CSEBA6U23I7` and `output_files` are now explicit source-bound
+arguments to the exact production invocation.
+
+The stage runner and complete manifest both require the exact patched build-ID
+record and its copied build-input record. Controls prove pinned input/output,
+mutated/missing/double-patch refusal, absence of project/settings access, exact
+explicit production arguments, immediate rejection of the observed mutation,
+and actual Quartus 17 execution of the projectless build-ID command without any
+QSF byte change. The full focused suite passes 71/71; source, truth, bound
+identity and syntax gates pass. No compile was run for this repair.
+
 This authorisation did not include RBF staging/loading, SSH mutation,
 watchdog/rollback rehearsal, JTAG, flash, persistence, pin drive, or board/SD
 mutation. None occurred. Physical activity remains HOLD.
 
 ## Remaining gates
 
-1. Commit/push immutable attempt-2 failure evidence.
-2. Obtain independent review before changing the stage helper or running any
-   further Quartus action; the build-ID project-open mutation must be removed
-   without weakening QSF byte identity.
+1. Commit/push the projectless build-ID repair report addendum.
+2. Obtain independent review of exact source/evidence head; no further Quartus
+   action is authorised yet.
 3. Do not compile again unless a reviewed successor receives separate one-retry
    authorisation.
 4. If a later retry passes, preserve a complete V2 candidate manifest and obtain

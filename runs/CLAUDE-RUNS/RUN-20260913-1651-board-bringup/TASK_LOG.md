@@ -674,6 +674,29 @@ verified.
   watchdog/rollback or board/SD mutation occurred. Further compile and all
   physical activity remain HOLD pending independent review.
 
+### 2026-09-14 07:12 UTC+02:00 - Projectless build-ID repair pushed
+
+- Preserved the pinned 57-file vendor tree. Added a deterministic build-copy-only
+  patch for `build_id.tcl`: pinned input SHA-256
+  `148dc6a8124d36ac2898a45d085960cc05178a76d7297fde8877925fc0a74e88`,
+  projectless output SHA-256
+  `e9a3daa3d507075abf214fefa115505a7669a14898800b728492f8a4393272c6`.
+- The copied script contains no `project_open`, `project_close` or
+  `get_global_assignment`; revision, device `5CSEBA6U23I7` and `output_files`
+  are passed as explicit source-bound arguments.
+- Both build entries patch it before source-manifest capture. Stage runner,
+  source verifier, build verifier and complete-manifest verifier require the
+  exact projectless digest and copied build-input identity.
+- Added controls for exact input/output and mutation/missing/double-patch
+  refusal, project-access absence, exact production arguments, immediate
+  observed-mutation rejection, detached manifest record, and an actual Quartus
+  17 projectless build-ID invocation that leaves QSF bytes unchanged.
+- Full focused suite passes 71/71; both source verifiers, board truth,
+  source-bound identity, Python syntax and PowerShell syntax pass.
+- Repair commit `2ee7d560d216170a791286b35a871573f8a8581a` is pushed. No compiler
+  stage or physical/SSH/JTAG/flash/SD action occurred. Compile and physical HOLD
+  remain pending independent review.
+
 ---
 
 ## Subagent Spawns
@@ -742,6 +765,8 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/LOAD-HOLD-OLD-RBF-REJECT.json`
 - `tools/board/run_superstation_quartus.py`
 - `tests/tools/test_run_superstation_quartus.py`
+- `tools/board/patch_mister_build_id.py`
+- `tests/tools/test_patch_mister_build_id.py`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-SOURCE-MANIFEST-V2-ATTEMPT1-QSF-MUTATION.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-BUILD-AUDIT-V2-ATTEMPT1-QSF-MUTATION.json`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-COMPILE-RECEIPT-V2-ATTEMPT1-QSF-MUTATION.json`
@@ -774,11 +799,10 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 
 ## Next Steps
 
-1. Commit/push immutable attempt-2 failure evidence and submit the exact head for
-   independent review.
-2. Do not alter the stage helper or run Quartus again without reviewed successor
-   source and separate compile authorization. Remove the build-ID project-open
-   mutation without weakening QSF identity.
+1. Commit/push the projectless build-ID repair report addendum and submit exact
+   successor head for independent review.
+2. Do not run Quartus again without separate compile authorization for that
+   reviewed source.
 3. A later retry must preserve byte-identical compiled QSF, exact patched
    sys_top digest, zero Critical Warnings, all seven USER_IO output enables
    disabled, positive timing, physical hierarchy, and a complete V2
