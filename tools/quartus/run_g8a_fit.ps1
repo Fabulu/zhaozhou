@@ -2,7 +2,8 @@
 param(
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
     [string]$PythonExe = 'C:\Users\Fabs\AppData\Local\Programs\Python\Python312\python.exe',
-    [int]$TimeoutSeconds = 28800
+    [int]$TimeoutSeconds = 28800,
+    [switch]$ResumeAfterPreMapRepair
 )
 
 Set-StrictMode -Version Latest
@@ -35,15 +36,32 @@ if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') {
     throw 'Could not resolve the clean G8A source commit.'
 }
 
+$PreMapAttempt = Join-Path $RepoRoot 'reports\characterization\g8a_raster_texture_single_owner_characterization\cefbd49b-20260914T162945Z-attempt1\ATTEMPT.json'
 if (Test-Path -LiteralPath $Receipt) {
     throw "A G8A receipt already exists at $Receipt; the one-fit packet cannot silently repeat."
 }
+$prior = @()
 if (Test-Path -LiteralPath $BlockReport) {
     $report = Get-Content -LiteralPath $BlockReport -Raw | ConvertFrom-Json
     $prior = @($report.blocks | Where-Object { $_.module -ceq $RowName })
-    if ($prior.Count -ne 0) {
+}
+if ($prior.Count -ne 0) {
+    if (-not $ResumeAfterPreMapRepair) {
         throw "A $RowName row already exists; preserve and diagnose it instead of rerunning."
     }
+    if ($prior.Count -ne 1 -or
+        $prior[0].status -cne 'incomplete:failed:quartus_map.exe' -or
+        $prior[0].sourceCommit -cne 'cefbd49b889f8dad87a6c69fa03246b58a7ecf5d' -or
+        -not (Test-Path -LiteralPath $PreMapAttempt -PathType Leaf)) {
+        throw '-ResumeAfterPreMapRepair is authorized only for the one preserved cefbd49b pre-map syntax failure.'
+    }
+    $attempt = Get-Content -LiteralPath $PreMapAttempt -Raw | ConvertFrom-Json
+    if ($attempt.schema_id -cne 'zhao.g8a.failed_attempt' -or
+        $attempt.row.status -cne 'incomplete:failed:quartus_map.exe') {
+        throw 'The preserved pre-map repair receipt is malformed or describes another failure.'
+    }
+} elseif ($ResumeAfterPreMapRepair) {
+    throw '-ResumeAfterPreMapRepair was requested without the exact preserved failed row.'
 }
 
 & $PythonExe (Join-Path $PSScriptRoot 'gen_raster_texture_v3_fit_top.py') --check

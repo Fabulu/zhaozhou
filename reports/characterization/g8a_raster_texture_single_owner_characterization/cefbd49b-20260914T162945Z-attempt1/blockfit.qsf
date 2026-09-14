@@ -1,0 +1,73 @@
+# D3 shell characterization only.
+# 5CSEBA6U23I7 is a PROVISIONAL capacity/timing target, not board truth.
+# This project fits the generated six-port/ten-bit wrapper around the unchanged
+# zhao_shell_top. No framework files, PLLs, virtual pins, or physical pin
+# assignments belong here.
+
+set_global_assignment -name FAMILY "Cyclone V"
+set_global_assignment -name DEVICE 5CSEBA6U23I7
+set_global_assignment -name TOP_LEVEL_ENTITY zhao_raster_texture_v3_fit_top
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+set_global_assignment -name SDC_FILE blockfit.sdc
+set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"
+
+# Fixed characterization controls. The clean gate never stages overrides; a
+# different seed, effort, or constraint is a separately named experiment.
+set_global_assignment -name SEED 1
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+set_global_assignment -name OPTIMIZATION_TECHNIQUE BALANCED
+set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
+set_global_assignment -name PLACEMENT_EFFORT_MULTIPLIER 1.0
+set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING OFF
+
+# Exact ZHAO_SHELL_RTL pool from tests/CMakeLists.txt, index for index, followed
+# by the generated characterization wrapper. Packet B rejects any other source
+# assignment mechanism rather than asking Quartus to compile an unbound file.
+
+set_global_assignment -name LAST_QUARTUS_VERSION "17.0.2 Lite Edition"
+# Physical top ports retained by run_block_fit.ps1 -PhysicalPins.
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_abi_pkg.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_render_texture_pkg.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_skid2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_field_rcp24_rom.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_ticketq.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_ticketq_rh.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_rcp24_mul.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_rcp24_v4.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_perspuv_pairpipe_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_mod255.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_aux_div6.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_bilerp_lane_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_mosaic_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_palette_res_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_tmu_plan_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_cache_pipe_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_v3bank.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_v3rq.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_v3own.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_metajoin_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_uv_join_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_early_desc_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_frag_expand_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_binding_resolver_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_rsp_dispatch_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_aux_pipe_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_material_combine_v3.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_texture_island_v3_top.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_texture_stage_v3.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_fill.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_edgewalk.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_attrdiv_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_attrgrad_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_earlyz.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_blend_prod.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_blend_fin.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_fragment.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_tilestore.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_div255.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_quant.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_resolve.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_tile_pipe_v2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8184-639250001871497659/zhao_raster_texture_v3_fit_top/src/zhao_raster_texture_v3_fit_top.sv"
+# Overridden by run_block_fit.ps1 -Seed (placement sweep).
+set_global_assignment -name SEED 1

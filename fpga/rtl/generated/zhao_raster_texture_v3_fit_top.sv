@@ -1,7 +1,7 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_raster_texture_v3_fit_top.py
 // generator-sha256: a947b288aa067d896cddf8ea41dee262ed5fab973e72d1b6e388b659bb5eb11e
-// template-sha256: e5f322411a45eba80aed692348d649e284ae8bed42162166008d4bfdd8ae215b
+// template-sha256: 089c83e538003b4d46997b126c15cda1959e08773772d3ba2775855715d9d1d6
 // manifest: fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json
 // Product witness: u_tile.u_texture_stage explicitly sets MIGRATION_SHADOWS=1'b0.
 // Characterization traffic is legal and deterministic; this is not a shell or board top.
@@ -413,7 +413,7 @@ module zhao_raster_texture_v3_fit_top (
     end
   end
 
-  (* preserve_hierarchy *) zhao_raster_tile_pipe_v2 u_tile (
+  zhao_raster_tile_pipe_v2 u_tile (
       .clk(clk), .rst_n(rst_n),
       .job_valid_i(job_valid_w), .job_ready_o(job_ready_w),
       .job_ax_i(21'sd0), .job_ay_i(21'sd0),

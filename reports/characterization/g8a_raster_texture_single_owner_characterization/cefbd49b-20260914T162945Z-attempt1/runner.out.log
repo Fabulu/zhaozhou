@@ -1,0 +1,12 @@
+fresh: G8A wrapper/manifest match generator (43 sources)
+G8A source commit: cefbd49b889f8dad87a6c69fa03246b58a7ecf5d
+Launching the one physical-top-port raster/texture subsystem fit.
+preflight: zhao_raster_texture_v3_fit_top closure from design/fit_targets.yml (43 file(s))
+snapshot: 43 source(s) copied into the workspace; the live tree cannot reach this fit
+provenance guard: 43 declared source(s)
+source digest: 0cbff4dbf203 over 43 file(s) -> zhao_raster_texture_v3_fit_top@g8a.sources.sha256
+WARNUNG: INCOMPLETE: zhao_raster_texture_v3_fit_top kept its synthesis numbers ( registers,  memory bits); ALMs and 
+Fmax were never produced.
+zhao_raster_texture_v3_fit_top@g8a incomplete:failed:quartus_map.exe    19.7s   ALM -
+WROTE C:\programmieren\zencrifice\zhaozhou-ceiling-lane-20260912\reports\synthesis\zhao_block_fit.json (140 block(s); 1 measured this run)
+G8A receipt failed: G8A row source count/digest differs from generated manifest

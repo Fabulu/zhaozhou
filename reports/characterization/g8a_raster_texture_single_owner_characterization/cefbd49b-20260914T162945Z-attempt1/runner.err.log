@@ -1,0 +1,11 @@
+----------------------------------------------------------------------
+Ran 13 tests in 0.036s
+
+OK
+G8A receipt derivation failed closed.
+In C:\programmieren\zencrifice\zhaozhou-ceiling-lane-20260912\tools\quartus\run_g8a_fit.ps1:72 Zeichen:5
++     throw 'G8A receipt derivation failed closed.'
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (G8A receipt derivation failed closed.:String) [], RuntimeException
+    + FullyQualifiedErrorId : G8A receipt derivation failed closed.
+ 

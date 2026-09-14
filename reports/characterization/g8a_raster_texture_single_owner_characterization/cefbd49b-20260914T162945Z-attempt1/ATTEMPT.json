@@ -1,0 +1,43 @@
+{
+  "artifacts": {
+    "blockfit.map.rpt": "7c9ec8b003d6e7f89d8b6877d6c0f7ce7fd9b9acaefdfda4f199a14b1b929446",
+    "blockfit.map.summary": "51ea593f0c9d5b97ab53e03467edc5f63901185d7f91113ee42e2efcfd9e5a2f",
+    "blockfit.qsf": "4f7138bb9dbdcf9eba60cbad6fc2b216f4e4700ec5d49277b9edaaa5f1505619",
+    "blockfit.sdc": "ef8661335a187f6868387b4df0dbb1ef2987b2a3ec21f3805abe5c963e6a820b",
+    "blockfit.sources.sha256": "f776def5ef72325e837d6d8f813edf48c812f186bf7e7780c7fa5902aebbcc7f",
+    "runner.err.log": "2be0cb7a4d6aaeec97230abd78b11e5130db90e0e5337ee24e782e17dd4d9731",
+    "runner.out.log": "c14e2ce8d690213c6c2557c0f96c3dd9c04d3e49b5fa165e49eefcffafb65d6d"
+  },
+  "diagnosis": {
+    "errors": [
+      "Quartus 17.0.2 rejected synthesis-only DPI export declarations in zhao_texture_island_v3_top.sv at lines 659-660",
+      "The G8A QSF defined QUARTUS_SYNTHESIS but not SYNTHESIS"
+    ],
+    "map_elapsed_seconds": 19.7,
+    "meaningful_resource_or_timing_measurement": false,
+    "next_action": "add SYNTHESIS=1 only to the physical-wrapper QSF path, prove the retained QSF, then run one explicitly named post-pre-map-repair attempt; do not reuse this row as ALM/DSP/Fmax evidence"
+  },
+  "row": {
+    "blockMemoryBits": null,
+    "dspBlocks": null,
+    "fitterSeed": 1,
+    "ioMode": "physical-top-ports",
+    "module": "zhao_raster_texture_v3_fit_top@g8a",
+    "partial": true,
+    "partialStage": "analysis_and_synthesis",
+    "registers": null,
+    "rtlCleanAtHead": true,
+    "seconds": 19.7,
+    "seedSource": "run_block_fit -Seed",
+    "sourceCommit": "cefbd49b889f8dad87a6c69fa03246b58a7ecf5d",
+    "sourceDigest": "0cbff4dbf2038d372e1d3917a1e6c9a7b9fbe70f83d06a5b6395cd0f22d2d38c",
+    "sourcesHashed": 43,
+    "status": "incomplete:failed:quartus_map.exe",
+    "treeCleanAtHead": true,
+    "variantOf": "zhao_raster_texture_v3_fit_top",
+    "virtualPins": null
+  },
+  "schema_id": "zhao.g8a.failed_attempt",
+  "schema_version": 1,
+  "started_utc": "2026-09-14T16:29:45Z"
+}

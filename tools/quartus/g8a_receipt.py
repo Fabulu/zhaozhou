@@ -89,7 +89,7 @@ def manifest_source_digest(manifest: dict[str, Any]) -> tuple[str, str, int]:
     rows = manifest.get("source_closure")
     if not isinstance(rows, list) or not rows:
         raise ReceiptError("fit manifest source_closure is absent/empty")
-    lines: list[str] = []
+    entries: list[tuple[str, str]] = []
     seen: set[str] = set()
     for ordinal, row in enumerate(rows):
         row = exact_keys(row, {"ordinal", "path", "sha256"},
@@ -103,8 +103,9 @@ def manifest_source_digest(manifest: dict[str, Any]) -> tuple[str, str, int]:
         if leaf in seen:
             raise ReceiptError(f"flat block-fit snapshot has duplicate basename: {leaf}")
         seen.add(leaf)
-        lines.append(f"{digest.upper()}  {leaf}")
-    lines.sort(key=str.casefold)
+        entries.append((leaf, digest))
+    entries.sort(key=lambda entry: entry[0].casefold())
+    lines = [f"{digest.upper()}  {leaf}" for leaf, digest in entries]
     text = "\n".join(lines)
     return sha256_bytes(text.encode("utf-8")), text, len(lines)
 
@@ -240,6 +241,7 @@ def validate_fit_configuration(qsf_text: str, sdc_text: str,
         "set_global_assignment -name SDC_FILE blockfit.sdc",
         "set_global_assignment -name SEED 1",
         "# Physical top ports retained by run_block_fit.ps1 -PhysicalPins.",
+        'set_global_assignment -name VERILOG_MACRO "SYNTHESIS=1"',
     )
     for marker in required_once:
         if qsf_text.count(marker) != 1:

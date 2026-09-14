@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "e5cc1f812d8e7020c9587fad795529364c3d60d9",
+    "newestRunCommit":  "cefbd49b889f8dad87a6c69fa03246b58a7ecf5d",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1222,6 +1222,26 @@
                        "fmaxClock":  "clk"
                    },
                    {
+                       "module":  "zhao_raster_texture_v3_fit_top@g8a",
+                       "status":  "incomplete:failed:quartus_map.exe",
+                       "sourceCommit":  "cefbd49b889f8dad87a6c69fa03246b58a7ecf5d",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "physical-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "run_block_fit -Seed",
+                       "sourceDigest":  "0cbff4dbf2038d372e1d3917a1e6c9a7b9fbe70f83d06a5b6395cd0f22d2d38c",
+                       "variantOf":  "zhao_raster_texture_v3_fit_top",
+                       "seconds":  19.7,
+                       "sourcesHashed":  43,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  null,
+                       "blockMemoryBits":  null,
+                       "dspBlocks":  null,
+                       "virtualPins":  null
+                   },
+                   {
                        "module":  "zhao_raster_tilestore",
                        "status":  "ok",
                        "sourceCommit":  "180544142353b157638a287d4cf153c10db1bd6c",
@@ -2422,7 +2442,7 @@
                ],
     "limitations":  [
                         "5CSEBA6U23I7 is a provisional capacity target, not board truth.",
-                        "All I/O is virtual: no package pins, no board I/O delays, no PLLs, no physical clocks.",
+                        "I/O mode is recorded per row. Ordinary leaf fits use virtual top ports; an explicit -PhysicalPins characterization wrapper retains its small top boundary as physical pins. Neither mode assigns board pins, board I/O delays, or PLLs.",
                         "A per-block fit does not characterize the composed machine routing or timing closure.",
                         "Rows carry their own sourceCommit. A row measured at an older commit describes THAT code, not HEAD. Check per-row provenance before totalling anything.",
                         "This census does not cover the design: 42 of the repository\u0027s 88 RTL modules, and several of those rows carry no data. See reports/DSP_Audit_2026-08-21.md.",

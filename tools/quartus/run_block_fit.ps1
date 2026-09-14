@@ -572,6 +572,10 @@ try {
             $qsf += 'set_instance_assignment -name VIRTUAL_PIN ON -to *'
         } else {
             $qsf += '# Physical top ports retained by run_block_fit.ps1 -PhysicalPins.'
+            # Quartus 17 does not infer the conventional SYNTHESIS macro. V3's
+            # DPI-only observation tasks are guarded by it and must be absent
+            # from a hardware elaboration, not merely ignored after parsing.
+            $qsf += 'set_global_assignment -name VERILOG_MACRO "SYNTHESIS=1"'
         }
         # SNAPSHOT THE CLOSURE, and compile from the copy.
         #

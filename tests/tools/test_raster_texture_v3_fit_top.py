@@ -15,6 +15,10 @@ REPO = Path(__file__).resolve().parents[2]
 GENERATOR_PATH = REPO / "tools/quartus/gen_raster_texture_v3_fit_top.py"
 WRAPPER = REPO / "fpga/rtl/generated/zhao_raster_texture_v3_fit_top.sv"
 MANIFEST = REPO / "fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json"
+FAILED_ATTEMPT = (
+    REPO / "reports/characterization/g8a_raster_texture_single_owner_characterization"
+    / "cefbd49b-20260914T162945Z-attempt1"
+)
 
 spec = importlib.util.spec_from_file_location("g8a_generator", GENERATOR_PATH)
 if spec is None or spec.loader is None:
@@ -112,6 +116,7 @@ def validate_runner(text: str) -> None:
         "if (-not $PhysicalPins) {",
         "$qsf += 'set_instance_assignment -name VIRTUAL_PIN ON -to *'",
         "$qsf += '# Physical top ports retained by run_block_fit.ps1 -PhysicalPins.'",
+        "$qsf += 'set_global_assignment -name VERILOG_MACRO \"SYNTHESIS=1\"'",
         "($rowModule + '.qsf')",
         "($rowModule + '.sdc')",
         "treeCleanAtHead = $treeClean; rtlCleanAtHead = $rtlClean;",
@@ -212,7 +217,7 @@ class G8AFitTopTests(unittest.TestCase):
             "input  logic       rst_n",
             "output logic [7:0] fit_signature_o",
             "output logic [7:0] fit_epoch_o",
-            "(* preserve_hierarchy *) zhao_raster_tile_pipe_v2 u_tile (",
+            "zhao_raster_tile_pipe_v2 u_tile (",
             ".job_bx_i(21'sd4096)",
             "job_meta_w[297:296] = 2'd1;",
             "job_meta_w[676:581] = 96'h000000000000400000000000;",
@@ -328,6 +333,7 @@ class G8AFitTopTests(unittest.TestCase):
             "set_global_assignment -name SDC_FILE blockfit.sdc",
             "set_global_assignment -name SEED 1",
             "# Physical top ports retained by run_block_fit.ps1 -PhysicalPins.",
+            'set_global_assignment -name VERILOG_MACRO "SYNTHESIS=1"',
         ]
         qsf_lines.extend(
             f'set_global_assignment -name SYSTEMVERILOG_FILE "C:/snap/{Path(path).name}"'
@@ -395,6 +401,40 @@ class G8AFitTopTests(unittest.TestCase):
             with self.assertRaises(receipt.ReceiptError):
                 receipt.validate_receipt(mutation)
 
+    def test_failed_pre_map_attempt_is_complete_and_hash_bound(self) -> None:
+        attempt = json.loads((FAILED_ATTEMPT / "ATTEMPT.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            set(attempt),
+            {"artifacts", "diagnosis", "row", "schema_id", "schema_version",
+             "started_utc"},
+        )
+        self.assertEqual(attempt["schema_id"], "zhao.g8a.failed_attempt")
+        self.assertEqual(attempt["schema_version"], 1)
+        self.assertEqual(attempt["row"]["status"],
+                         "incomplete:failed:quartus_map.exe")
+        self.assertEqual(attempt["row"]["sourceCommit"],
+                         "cefbd49b889f8dad87a6c69fa03246b58a7ecf5d")
+        self.assertFalse(attempt["diagnosis"]["meaningful_resource_or_timing_measurement"])
+        self.assertEqual(set(attempt["artifacts"]), {
+            "blockfit.map.rpt", "blockfit.map.summary", "blockfit.qsf",
+            "blockfit.sdc", "blockfit.sources.sha256", "runner.err.log",
+            "runner.out.log",
+        })
+        for name, digest in attempt["artifacts"].items():
+            self.assertEqual(sha256(FAILED_ATTEMPT / name), digest, name)
+        archived_sources = (FAILED_ATTEMPT / "blockfit.sources.sha256").read_text(
+            encoding="utf-8-sig"
+        ).rstrip("\r\n")
+        self.assertEqual(
+            hashlib.sha256(archived_sources.encode("utf-8")).hexdigest(),
+            attempt["row"]["sourceDigest"],
+        )
+        map_report = (FAILED_ATTEMPT / "blockfit.map.rpt").read_text(
+            encoding="utf-8", errors="replace"
+        )
+        self.assertIn('near text: "export";  expecting "endmodule"', map_report)
+        self.assertNotIn("Analysis & Synthesis Resource Usage Summary", map_report)
+
     def test_one_fit_runner_and_receipt_tool_are_fail_closed(self) -> None:
         fit_runner = (REPO / "tools/quartus/run_g8a_fit.ps1").read_text(encoding="utf-8")
         receipt_tool = (REPO / "tools/quartus/g8a_receipt.py").read_text(encoding="utf-8")
@@ -403,6 +443,8 @@ class G8AFitTopTests(unittest.TestCase):
             "Another Quartus process is already running",
             "A G8A receipt already exists",
             "A $RowName row already exists",
+            "[switch]$ResumeAfterPreMapRepair",
+            "-ResumeAfterPreMapRepair is authorized only for the one preserved cefbd49b pre-map syntax failure.",
             "gen_raster_texture_v3_fit_top.py') --check",
             "test_raster_texture_v3_fit_top.py') -q",
             "-RowLabel '@g8a'",
@@ -442,6 +484,14 @@ class G8AFitTopTests(unittest.TestCase):
         )
         self.assertIn(
             "tools/quartus/templates/zhao_raster_texture_v3_fit_top.sv.in text eol=lf",
+            rows,
+        )
+        self.assertIn(
+            "reports/characterization/g8a_raster_texture_single_owner_characterization/** binary",
+            rows,
+        )
+        self.assertIn(
+            "reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.* binary",
             rows,
         )
 
