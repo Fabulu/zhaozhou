@@ -111,6 +111,28 @@ class SuperStationBuildManifestTest(unittest.TestCase):
         complete = self.complete_manifest()
         self.assertEqual(MANIFEST.verify_manifest_data(complete, self.repo, self.build), [])
 
+    def test_direct_stage_schema_replaces_done_with_receipt(self) -> None:
+        self.assertIn("stage-receipt.json", MANIFEST.ARTIFACT_SUFFIXES)
+        self.assertNotIn("done", MANIFEST.ARTIFACT_SUFFIXES)
+
+    def test_missing_stage_receipt_artifact_fires(self) -> None:
+        complete = self.complete_manifest()
+        (self.build / "output_files" / "Test.stage-receipt.json").unlink()
+
+        errors = MANIFEST.verify_manifest_data(complete, self.repo, self.build)
+
+        self.assertTrue(any("Test.stage-receipt.json" in error for error in errors))
+
+    def test_unexpected_done_artifact_fires(self) -> None:
+        complete = self.complete_manifest()
+        (self.build / "output_files" / "Test.done").write_bytes(b"forbidden\n")
+
+        errors = MANIFEST.verify_manifest_data(complete, self.repo, self.build)
+
+        self.assertTrue(
+            any("actual artifact set mismatch" in error and "Test.done" in error for error in errors)
+        )
+
     def test_source_commit_drift_fires(self) -> None:
         complete = self.complete_manifest()
         clean_git_output = MANIFEST.git_output

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
@@ -13,9 +14,10 @@ from typing import Any, Iterable
 
 PATCHED_SYS_TOP_SHA256 = "24eea7b0f76848239c872f626a48f4e0c6150423b9e6561fd3dd63f2a99501e9"
 PATCHED_BUILD_ID_SHA256 = "e9a3daa3d507075abf214fefa115505a7669a14898800b728492f8a4393272c6"
+EXPECTED_QUARTUS_BIN = Path(r"C:\intelFPGA_lite\17.0\quartus\bin64").resolve()
 ARTIFACT_SUFFIXES = (
     "asm.rpt",
-    "done",
+    "stage-receipt.json",
     "fit.rpt",
     "fit.smsg",
     "fit.summary",
@@ -110,6 +112,15 @@ PROFILES = {
         ),
     },
 }
+
+_RUNNER_PATH = Path(__file__).with_name("run_superstation_quartus.py")
+_RUNNER_SPEC = importlib.util.spec_from_file_location(
+    "run_superstation_quartus_for_manifest", _RUNNER_PATH
+)
+if _RUNNER_SPEC is None or _RUNNER_SPEC.loader is None:
+    raise RuntimeError(f"could not load stage receipt verifier: {_RUNNER_PATH}")
+QUARTUS_RUNNER = importlib.util.module_from_spec(_RUNNER_SPEC)
+_RUNNER_SPEC.loader.exec_module(QUARTUS_RUNNER)
 
 
 def file_record(path: Path) -> dict[str, Any]:
@@ -400,7 +411,31 @@ def verify_manifest_data(
             errors.append("manifest is not a complete candidate")
         expected_artifacts = expected_artifact_relatives(profile["project"])
         exact_record_set(data.get("artifacts", {}), expected_artifacts, "artifact", errors)
+        output = build / "output_files"
+        observed_artifacts = (
+            {
+                path.relative_to(build).as_posix()
+                for path in output.iterdir()
+                if path.is_file()
+            }
+            if output.is_dir()
+            else set()
+        )
+        if observed_artifacts != expected_artifacts:
+            errors.append(
+                "actual artifact set mismatch: "
+                f"missing={sorted(expected_artifacts - observed_artifacts)} "
+                f"extra={sorted(observed_artifacts - expected_artifacts)}"
+            )
         compare_records(build, data.get("artifacts", {}), "artifact", errors)
+        project = profile["project"]
+        if project in QUARTUS_RUNNER.PROJECTS:
+            errors.extend(
+                f"stage receipt: {error}"
+                for error in QUARTUS_RUNNER.verify_stage_receipt_file(
+                    EXPECTED_QUARTUS_BIN, build, project
+                )
+            )
 
         source_digest = data.get("sourceManifestSha256")
         source_projection = dict(data)

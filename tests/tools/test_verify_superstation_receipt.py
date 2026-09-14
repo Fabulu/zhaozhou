@@ -247,10 +247,23 @@ class SuperStationReceiptTest(unittest.TestCase):
         VERIFY.BUILD_MANIFEST.write_manifest(source_path, source)
         output = build / "output_files"
         output.mkdir()
-        for suffix in VERIFY.BUILD_MANIFEST.ARTIFACT_SUFFIXES:
+        for suffix in VERIFY.BUILD_MANIFEST.QUARTUS_RUNNER.STAGE_OUTPUT_SUFFIXES:
             (output / f"ZhaozhouSpecs.{suffix}").write_bytes(
                 f"artifact:{suffix}\n".encode()
             )
+        runner = VERIFY.BUILD_MANIFEST.QUARTUS_RUNNER
+        runner.write_stage_receipt(
+            VERIFY.BUILD_MANIFEST.EXPECTED_QUARTUS_BIN,
+            build,
+            "ZhaozhouSpecs",
+            runner.EXPECTED_TOOL_VERSION,
+            runner.file_record(build / "ZhaozhouSpecs.qsf"),
+            runner.stage_commands(
+                VERIFY.BUILD_MANIFEST.EXPECTED_QUARTUS_BIN,
+                build,
+                "ZhaozhouSpecs",
+            ),
+        )
         complete = VERIFY.BUILD_MANIFEST.create_complete_manifest(
             repo, build, "Specs", source_path
         )

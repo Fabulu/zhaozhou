@@ -109,6 +109,21 @@ RESERVED_INPUT : A4 : : : : 7C :
             encoding="utf-8",
         )
         (output / "ZhaozhouBringup.rbf").write_bytes(b"RBF")
+        (build / "ZhaozhouBringup.qsf").write_bytes(b"fixture qsf\n")
+        for suffix in VERIFY.QUARTUS_RUNNER.STAGE_OUTPUT_SUFFIXES:
+            path = output / f"ZhaozhouBringup.{suffix}"
+            if not path.exists():
+                path.write_bytes(f"fixture:{suffix}\n".encode())
+        VERIFY.QUARTUS_RUNNER.write_stage_receipt(
+            VERIFY.EXPECTED_QUARTUS_BIN,
+            build,
+            "ZhaozhouBringup",
+            VERIFY.QUARTUS_RUNNER.EXPECTED_TOOL_VERSION,
+            VERIFY.QUARTUS_RUNNER.file_record(build / "ZhaozhouBringup.qsf"),
+            VERIFY.QUARTUS_RUNNER.stage_commands(
+                VERIFY.EXPECTED_QUARTUS_BIN, build, "ZhaozhouBringup"
+            ),
+        )
         return temporary, build
 
     def test_current_sources_pass(self) -> None:
@@ -126,6 +141,16 @@ RESERVED_INPUT : A4 : : : : 7C :
 
         self.assertEqual(errors, [])
         self.assertEqual(summary["buildStatus"], "ok")
+
+    def test_missing_stage_receipt_fires(self) -> None:
+        temporary, build = self.make_build()
+        self.addCleanup(temporary.cleanup)
+        (build / "output_files" / "ZhaozhouBringup.stage-receipt.json").unlink()
+        errors: list[str] = []
+
+        VERIFY.verify_build(build, errors, {})
+
+        self.assertTrue(any("stage sequence receipt is missing" in error for error in errors))
 
     def test_unnumbered_tabular_critical_warning_fires(self) -> None:
         temporary, build = self.make_build()

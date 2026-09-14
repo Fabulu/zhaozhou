@@ -78,6 +78,21 @@ RESERVED_INPUT : A4 : : : : 7C :
             encoding="utf-8",
         )
         (output / "ZhaozhouSpecs.rbf").write_bytes(b"RBF")
+        (build / "ZhaozhouSpecs.qsf").write_bytes(b"fixture qsf\n")
+        for suffix in VERIFY.common.QUARTUS_RUNNER.STAGE_OUTPUT_SUFFIXES:
+            path = output / f"ZhaozhouSpecs.{suffix}"
+            if not path.exists():
+                path.write_bytes(f"fixture:{suffix}\n".encode())
+        VERIFY.common.QUARTUS_RUNNER.write_stage_receipt(
+            VERIFY.common.EXPECTED_QUARTUS_BIN,
+            build,
+            "ZhaozhouSpecs",
+            VERIFY.common.QUARTUS_RUNNER.EXPECTED_TOOL_VERSION,
+            VERIFY.common.QUARTUS_RUNNER.file_record(build / "ZhaozhouSpecs.qsf"),
+            VERIFY.common.QUARTUS_RUNNER.stage_commands(
+                VERIFY.common.EXPECTED_QUARTUS_BIN, build, "ZhaozhouSpecs"
+            ),
+        )
         return temporary, build
 
     def test_spec_build_receipt_passes(self) -> None:

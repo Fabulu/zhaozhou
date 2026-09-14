@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import re
 import sys
@@ -26,6 +27,16 @@ EXPECTED_PLL_BLOBS = {
     "fpga/rtl/pll/pll_0002.qip": "aec45eb73ea83ceab9b5ad1b7d71b5869c92036f",
     "fpga/rtl/pll/pll_0002.v": "c599468749fd26ad95fca4593c869fbeace4572f",
 }
+EXPECTED_QUARTUS_BIN = Path(r"C:\intelFPGA_lite\17.0\quartus\bin64").resolve()
+
+_RUNNER_PATH = Path(__file__).with_name("run_superstation_quartus.py")
+_RUNNER_SPEC = importlib.util.spec_from_file_location(
+    "run_superstation_quartus_for_build_verifier", _RUNNER_PATH
+)
+if _RUNNER_SPEC is None or _RUNNER_SPEC.loader is None:
+    raise RuntimeError(f"could not load stage receipt verifier: {_RUNNER_PATH}")
+QUARTUS_RUNNER = importlib.util.module_from_spec(_RUNNER_SPEC)
+_RUNNER_SPEC.loader.exec_module(QUARTUS_RUNNER)
 
 
 def object_id(kind: str, body: bytes) -> bytes:
@@ -139,6 +150,7 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
             '"tools/board/run_superstation_quartus.py"',
             '"tests/tools/test_run_superstation_quartus.py"',
             "ARTIFACT_SUFFIXES = (",
+            '"stage-receipt.json"',
             '"sta.summary"',
         ],
         errors,
@@ -153,6 +165,10 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
             '"quartus_fit.exe"',
             '"quartus_asm.exe"',
             '"quartus_sta.exe"',
+            "STAGE_RECEIPT_SCHEMA",
+            "STAGE_OUTPUT_SUFFIXES",
+            "receiptSha256",
+            "os.replace(temporary, path)",
             "current_qsf != original_qsf",
         ],
         errors,
@@ -396,9 +412,27 @@ def verify_user_io_high_z(
     summary["userIoDisabledOutputEnables"] = disabled_user_io
 
 
+def verify_stage_receipt(
+    build: Path, project: str, errors: list[str], summary: dict[str, object]
+) -> None:
+    path = build / "output_files" / f"{project}.stage-receipt.json"
+    receipt_errors = QUARTUS_RUNNER.verify_stage_receipt_file(
+        EXPECTED_QUARTUS_BIN, build, project
+    )
+    errors.extend(f"{path}: {error}" for error in receipt_errors)
+    if path.is_file():
+        data = path.read_bytes()
+        summary["stageReceipt"] = {
+            "path": str(path),
+            "bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+        }
+
+
 def verify_build(build: Path, errors: list[str], summary: dict[str, object]) -> None:
     verify_patched_sys_top(build, errors, summary)
     verify_patched_build_id(build, errors, summary)
+    verify_stage_receipt(build, "ZhaozhouBringup", errors, summary)
     output = build / "output_files"
     flow = output / "ZhaozhouBringup.flow.rpt"
     fit = output / "ZhaozhouBringup.fit.rpt"

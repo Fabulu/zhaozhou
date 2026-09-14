@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import importlib.util
+import json
 import subprocess
 import tempfile
 import unittest
@@ -45,6 +47,38 @@ class SuperStationQuartusRunnerTest(unittest.TestCase):
         self.qsf.write_text(
             'set_global_assignment -name LAST_QUARTUS_VERSION "17.0.2 Standard Edition"\n',
             encoding="utf-8",
+        )
+        self.output = self.build / "output_files"
+        self.output.mkdir()
+        for suffix in RUNNER.STAGE_OUTPUT_SUFFIXES:
+            (self.output / f"ZhaozhouSpecs.{suffix}").write_bytes(
+                f"artifact:{suffix}\n".encode()
+            )
+
+    def completed(
+        self, command: list[str], return_code: int = 0
+    ) -> subprocess.CompletedProcess[bytes]:
+        stdout = b""
+        if command[-1:] == ["--version"]:
+            stdout = (
+                b"Quartus Prime Shell\n"
+                b"Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition\n"
+            )
+        return subprocess.CompletedProcess(command, return_code, stdout=stdout, stderr=b"")
+
+    def clean_runner(
+        self, command: list[str], *, cwd: Path, check: bool, **kwargs: object
+    ) -> subprocess.CompletedProcess[bytes]:
+        self.assertEqual(cwd, self.build)
+        self.assertFalse(check)
+        return self.completed(command)
+
+    def create_receipt(self) -> Path:
+        return RUNNER.run_compile(
+            self.quartus,
+            self.build,
+            "ZhaozhouSpecs",
+            runner=self.clean_runner,
         )
 
     def test_real_compile_stage_receives_no_write_flags(self) -> None:
@@ -118,14 +152,15 @@ class SuperStationQuartusRunnerTest(unittest.TestCase):
         original = self.qsf.read_bytes()
 
         def clean_runner(
-            command: list[str], *, cwd: Path, check: bool
+            command: list[str], *, cwd: Path, check: bool, **kwargs: object
         ) -> subprocess.CompletedProcess[bytes]:
             self.assertEqual(cwd, self.build)
             self.assertFalse(check)
-            calls.append(command)
-            return subprocess.CompletedProcess(command, 0)
+            if command[-1:] != ["--version"]:
+                calls.append(command)
+            return self.completed(command)
 
-        RUNNER.run_compile(
+        receipt = RUNNER.run_compile(
             self.quartus,
             self.build,
             "ZhaozhouSpecs",
@@ -133,16 +168,108 @@ class SuperStationQuartusRunnerTest(unittest.TestCase):
         )
         self.assertEqual(calls, RUNNER.stage_commands(self.quartus, self.build, "ZhaozhouSpecs"))
         self.assertEqual(self.qsf.read_bytes(), original)
+        self.assertEqual(receipt, self.output / "ZhaozhouSpecs.stage-receipt.json")
+        receipt_data = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(receipt.read_bytes(), RUNNER.receipt_bytes(receipt_data))
+        self.assertFalse(receipt.with_name(receipt.name + ".tmp").exists())
+        self.assertEqual(
+            RUNNER.verify_stage_receipt_file(
+                self.quartus, self.build, "ZhaozhouSpecs"
+            ),
+            [],
+        )
+
+    def test_missing_stage_receipt_is_rejected(self) -> None:
+        errors = RUNNER.verify_stage_receipt_file(
+            self.quartus, self.build, "ZhaozhouSpecs"
+        )
+        self.assertTrue(any("receipt is missing" in error for error in errors))
+
+    def test_noncanonical_receipt_encoding_is_rejected(self) -> None:
+        path = self.create_receipt()
+        data = json.loads(path.read_text(encoding="utf-8"))
+        path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        errors = RUNNER.verify_stage_receipt_file(
+            self.quartus, self.build, "ZhaozhouSpecs"
+        )
+        self.assertIn("stage sequence receipt encoding is not canonical", errors)
+
+    def test_each_stage_failure_prevents_receipt(self) -> None:
+        commands = RUNNER.stage_commands(self.quartus, self.build, "ZhaozhouSpecs")
+        for failed_index, failed_command in enumerate(commands):
+            with self.subTest(stage=RUNNER.STAGE_NAMES[failed_index]):
+                receipt = self.output / "ZhaozhouSpecs.stage-receipt.json"
+                receipt.unlink(missing_ok=True)
+
+                def failing_runner(
+                    command: list[str], *, cwd: Path, check: bool, **kwargs: object
+                ) -> subprocess.CompletedProcess[bytes]:
+                    if command[-1:] == ["--version"]:
+                        return self.completed(command)
+                    return self.completed(command, 1 if command == failed_command else 0)
+
+                with self.assertRaisesRegex(ValueError, "failed with exit code 1"):
+                    RUNNER.run_compile(
+                        self.quartus,
+                        self.build,
+                        "ZhaozhouSpecs",
+                        runner=failing_runner,
+                    )
+                self.assertFalse(receipt.exists())
+
+    def test_forged_stage_receipt_fields_are_rejected(self) -> None:
+        path = self.create_receipt()
+        valid = json.loads(path.read_text(encoding="utf-8"))
+        mutants: list[tuple[str, dict, str]] = []
+
+        rc_mutant = copy.deepcopy(valid)
+        rc_mutant["stages"][2]["returnCode"] = 1
+        mutants.append(("RC", rc_mutant, "command/RC mismatch"))
+
+        command_mutant = copy.deepcopy(valid)
+        command_mutant["stages"][1]["command"][1] = "--read_settings_files=off"
+        mutants.append(("command", command_mutant, "command/RC mismatch"))
+
+        qsf_mutant = copy.deepcopy(valid)
+        qsf_mutant["qsf"]["afterEach"]["fit"]["sha256"] = "0" * 64
+        mutants.append(("QSF hash", qsf_mutant, "QSF stage records mismatch"))
+
+        artifact_mutant = copy.deepcopy(valid)
+        artifact_mutant["artifacts"]["ZhaozhouSpecs.rbf"]["sha256"] = "0" * 64
+        mutants.append(("artifact hash", artifact_mutant, "artifact mismatch"))
+
+        for label, mutant, expected_error in mutants:
+            with self.subTest(field=label):
+                mutant["receiptSha256"] = RUNNER.receipt_digest(mutant)
+                errors = RUNNER.verify_stage_receipt_data(
+                    mutant, self.quartus, self.build, "ZhaozhouSpecs"
+                )
+                self.assertTrue(any(expected_error in error for error in errors), errors)
+
+    def test_unexpected_done_or_extra_artifact_prevents_receipt(self) -> None:
+        for name in ("ZhaozhouSpecs.done", "ZhaozhouSpecs.unexpected"):
+            with self.subTest(name=name):
+                extra = self.output / name
+                extra.write_bytes(b"extra\n")
+                with self.assertRaisesRegex(
+                    ValueError, "direct-stage output record set mismatch"
+                ):
+                    self.create_receipt()
+                self.assertFalse(
+                    (self.output / "ZhaozhouSpecs.stage-receipt.json").exists()
+                )
+                extra.unlink()
 
     def test_quartus_qsf_mutation_is_rejected(self) -> None:
         calls = 0
 
         def mutating_runner(
-            command: list[str], *, cwd: Path, check: bool
+            command: list[str], *, cwd: Path, check: bool, **kwargs: object
         ) -> subprocess.CompletedProcess[bytes]:
             nonlocal calls
-            calls += 1
-            if calls == 1:
+            if command[-1:] != ["--version"]:
+                calls += 1
+            if calls == 1 and command[-1:] != ["--version"]:
                 text = self.qsf.read_text(encoding="utf-8").replace(
                     "17.0.2 Standard Edition", "17.0.2 Lite Edition"
                 )
@@ -151,7 +278,7 @@ class SuperStationQuartusRunnerTest(unittest.TestCase):
                     '"AS INPUT TRI-STATED"\n'
                 )
                 self.qsf.write_text(text, encoding="utf-8")
-            return subprocess.CompletedProcess(command, 0)
+            return self.completed(command)
 
         with self.assertRaisesRegex(
             ValueError,
