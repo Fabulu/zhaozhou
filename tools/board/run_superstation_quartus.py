@@ -4,25 +4,38 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Callable
 
 
-PROJECTS = {"ZhaozhouBringup", "ZhaozhouSpecs"}
+PATCHED_BUILD_ID_SHA256 = "e9a3daa3d507075abf214fefa115505a7669a14898800b728492f8a4393272c6"
+
+PROJECTS = {
+    "ZhaozhouBringup": {
+        "device": "5CSEBA6U23I7",
+        "outputDirectory": "output_files",
+    },
+    "ZhaozhouSpecs": {
+        "device": "5CSEBA6U23I7",
+        "outputDirectory": "output_files",
+    },
+}
 
 
 def stage_commands(quartus_bin: Path, build: Path, project: str) -> list[list[str]]:
+    profile = PROJECTS[project]
     settings = ["--read_settings_files=on", "--write_settings_files=off"]
     return [
         [
             str(quartus_bin / "quartus_sh.exe"),
             "-t",
             str(build / "sys" / "build_id.tcl"),
-            "compile",
             project,
-            project,
+            profile["device"],
+            profile["outputDirectory"],
         ],
         [str(quartus_bin / "quartus_map.exe"), *settings, project, "-c", project],
         [str(quartus_bin / "quartus_fit.exe"), *settings, project, "-c", project],
@@ -43,6 +56,19 @@ def run_compile(
     qsf = build / f"{project}.qsf"
     if not qsf.is_file():
         raise ValueError(f"project QSF is missing: {qsf}")
+    build_id = build / "sys" / "build_id.tcl"
+    if not build_id.is_file():
+        raise ValueError(f"projectless build-ID script is missing: {build_id}")
+    build_id_bytes = build_id.read_bytes()
+    build_id_sha = hashlib.sha256(build_id_bytes).hexdigest()
+    if build_id_sha != PATCHED_BUILD_ID_SHA256:
+        raise ValueError(
+            "projectless build-ID digest mismatch: "
+            f"{build_id_sha} != {PATCHED_BUILD_ID_SHA256}"
+        )
+    forbidden = (b"project_open", b"project_close", b"get_global_assignment")
+    if any(token in build_id_bytes for token in forbidden):
+        raise ValueError("build-ID script still has a project/settings access path")
     original_qsf = qsf.read_bytes()
     commands = stage_commands(quartus_bin, build, project)
     for command in commands:

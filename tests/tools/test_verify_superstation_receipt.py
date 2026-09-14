@@ -171,6 +171,7 @@ class SuperStationReceiptTest(unittest.TestCase):
         old_receipt_profile = VERIFY.PROFILES["Specs"]
         old_manifest_profile = VERIFY.BUILD_MANIFEST.PROFILES["Specs"]
         old_patched_sha = VERIFY.BUILD_MANIFEST.PATCHED_SYS_TOP_SHA256
+        old_patched_build_id_sha = VERIFY.BUILD_MANIFEST.PATCHED_BUILD_ID_SHA256
         self.addCleanup(VERIFY.PROFILES.__setitem__, "Specs", old_receipt_profile)
         self.addCleanup(
             VERIFY.BUILD_MANIFEST.PROFILES.__setitem__, "Specs", old_manifest_profile
@@ -180,6 +181,12 @@ class SuperStationReceiptTest(unittest.TestCase):
             VERIFY.BUILD_MANIFEST,
             "PATCHED_SYS_TOP_SHA256",
             old_patched_sha,
+        )
+        self.addCleanup(
+            setattr,
+            VERIFY.BUILD_MANIFEST,
+            "PATCHED_BUILD_ID_SHA256",
+            old_patched_build_id_sha,
         )
         VERIFY.PROFILES["Specs"] = {
             **old_receipt_profile,
@@ -199,6 +206,7 @@ class SuperStationReceiptTest(unittest.TestCase):
         (repo / "fpga" / "rtl").mkdir()
         (repo / "tools" / "board").mkdir(parents=True)
         (repo / "fpga" / "sys" / "sys_top.v").write_bytes(b"upstream sys top\n")
+        (repo / "fpga" / "sys" / "build_id.tcl").write_bytes(b"upstream build id\n")
         (repo / "fpga" / "rtl" / "src.sv").write_text(
             "module src; endmodule\n", encoding="utf-8"
         )
@@ -214,7 +222,9 @@ class SuperStationReceiptTest(unittest.TestCase):
         (build / "sys").mkdir()
         (build / "rtl").mkdir()
         patched = b"patched sys top\n"
+        patched_build_id = b"patched build id\n"
         (build / "sys" / "sys_top.v").write_bytes(patched)
+        (build / "sys" / "build_id.tcl").write_bytes(patched_build_id)
         (build / "rtl" / "src.sv").write_text(
             "module src; endmodule\n", encoding="utf-8"
         )
@@ -229,6 +239,9 @@ class SuperStationReceiptTest(unittest.TestCase):
             f"sourceCommit={build_commit}\ncreated=test\n", encoding="utf-8"
         )
         VERIFY.BUILD_MANIFEST.PATCHED_SYS_TOP_SHA256 = hashlib.sha256(patched).hexdigest()
+        VERIFY.BUILD_MANIFEST.PATCHED_BUILD_ID_SHA256 = hashlib.sha256(
+            patched_build_id
+        ).hexdigest()
         source = VERIFY.BUILD_MANIFEST.create_source_manifest(repo, build, "Specs")
         source_path = build / "source.json"
         VERIFY.BUILD_MANIFEST.write_manifest(source_path, source)

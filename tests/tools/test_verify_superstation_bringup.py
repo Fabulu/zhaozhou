@@ -18,6 +18,13 @@ PATCH_SPEC = importlib.util.spec_from_file_location("patch_mister_sys_top", PATC
 assert PATCH_SPEC is not None and PATCH_SPEC.loader is not None
 PATCH = importlib.util.module_from_spec(PATCH_SPEC)
 PATCH_SPEC.loader.exec_module(PATCH)
+BUILD_ID_PATCH_PATH = REPO / "tools" / "board" / "patch_mister_build_id.py"
+BUILD_ID_PATCH_SPEC = importlib.util.spec_from_file_location(
+    "patch_mister_build_id", BUILD_ID_PATCH_PATH
+)
+assert BUILD_ID_PATCH_SPEC is not None and BUILD_ID_PATCH_SPEC.loader is not None
+BUILD_ID_PATCH = importlib.util.module_from_spec(BUILD_ID_PATCH_SPEC)
+BUILD_ID_PATCH_SPEC.loader.exec_module(BUILD_ID_PATCH)
 
 
 class SuperStationBringupVerifierTest(unittest.TestCase):
@@ -42,7 +49,9 @@ class SuperStationBringupVerifierTest(unittest.TestCase):
         shutil.copy2(REPO / "fpga" / "rtl" / "pll.v", repo / "fpga" / "rtl" / "pll.v")
         shutil.copytree(REPO / "fpga" / "rtl" / "pll", repo / "fpga" / "rtl" / "pll")
         for name in (
+            "patch_mister_build_id.py",
             "patch_mister_sys_top.py",
+            "run_superstation_quartus.py",
             "superstation_build_manifest.py",
             "invoke_superstation_probe.ps1",
             "build_superstation_bringup.ps1",
@@ -59,6 +68,10 @@ class SuperStationBringupVerifierTest(unittest.TestCase):
         (build / "sys").mkdir()
         upstream = (REPO / "fpga" / "sys" / "sys_top.v").read_bytes()
         (build / "sys" / "sys_top.v").write_bytes(PATCH.patch_bytes(upstream))
+        build_id = (REPO / "fpga" / "sys" / "build_id.tcl").read_bytes()
+        (build / "sys" / "build_id.tcl").write_bytes(
+            BUILD_ID_PATCH.patch_bytes(build_id)
+        )
         (output / "ZhaozhouBringup.flow.rpt").write_text(
             """; Flow Status ; Successful - now ;
 ; Top-level Entity Name ; sys_top ;

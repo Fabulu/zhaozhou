@@ -27,6 +27,7 @@ class SuperStationBuildManifestTest(unittest.TestCase):
         (self.repo / "fpga" / "sys").mkdir(parents=True)
         (self.repo / "fpga" / "rtl").mkdir()
         (self.repo / "fpga" / "sys" / "sys_top.v").write_bytes(b"upstream sys top\n")
+        (self.repo / "fpga" / "sys" / "build_id.tcl").write_bytes(b"upstream build id\n")
         (self.repo / "fpga" / "rtl" / "src.sv").write_text(
             "module src; endmodule\n", encoding="utf-8"
         )
@@ -34,6 +35,7 @@ class SuperStationBuildManifestTest(unittest.TestCase):
         (self.build / "sys").mkdir(parents=True)
         (self.build / "rtl").mkdir()
         (self.build / "sys" / "sys_top.v").write_bytes(b"patched sys top\n")
+        (self.build / "sys" / "build_id.tcl").write_bytes(b"patched build id\n")
         (self.build / "rtl" / "src.sv").write_text("module src; endmodule\n", encoding="utf-8")
         for name in ("Test.qpf", "Test.qsf", "Test.sdc", "files.qip"):
             (self.build / name).write_text(name + "\n", encoding="utf-8")
@@ -44,6 +46,7 @@ class SuperStationBuildManifestTest(unittest.TestCase):
 
         self.old_profiles = MANIFEST.PROFILES
         self.old_patched = MANIFEST.PATCHED_SYS_TOP_SHA256
+        self.old_patched_build_id = MANIFEST.PATCHED_BUILD_ID_SHA256
         self.old_git_output = MANIFEST.git_output
         MANIFEST.PROFILES = {
             "Test": {
@@ -55,6 +58,7 @@ class SuperStationBuildManifestTest(unittest.TestCase):
             }
         }
         MANIFEST.PATCHED_SYS_TOP_SHA256 = hashlib.sha256(b"patched sys top\n").hexdigest()
+        MANIFEST.PATCHED_BUILD_ID_SHA256 = hashlib.sha256(b"patched build id\n").hexdigest()
 
         def fake_git_output(repo: Path, *args: str) -> str:
             if args[:2] == ("rev-parse", "HEAD"):
@@ -70,6 +74,12 @@ class SuperStationBuildManifestTest(unittest.TestCase):
         MANIFEST.git_output = fake_git_output
         self.addCleanup(setattr, MANIFEST, "PROFILES", self.old_profiles)
         self.addCleanup(setattr, MANIFEST, "PATCHED_SYS_TOP_SHA256", self.old_patched)
+        self.addCleanup(
+            setattr,
+            MANIFEST,
+            "PATCHED_BUILD_ID_SHA256",
+            self.old_patched_build_id,
+        )
         self.addCleanup(setattr, MANIFEST, "git_output", self.old_git_output)
 
     def complete_manifest(self) -> dict:
@@ -86,7 +96,12 @@ class SuperStationBuildManifestTest(unittest.TestCase):
         for name in ("Bringup", "Specs"):
             profile = PRODUCTION_PROFILES[name]
             self.assertIn("tools/env/zhao-env.ps1", profile["sourcePaths"])
+            self.assertIn("tools/board/patch_mister_build_id.py", profile["sourcePaths"])
             self.assertIn("tools/board/run_superstation_quartus.py", profile["sourcePaths"])
+            self.assertIn(
+                "tests/tools/test_patch_mister_build_id.py",
+                profile["verificationPaths"],
+            )
             self.assertIn(
                 "tests/tools/test_run_superstation_quartus.py",
                 profile["verificationPaths"],
@@ -129,6 +144,23 @@ class SuperStationBuildManifestTest(unittest.TestCase):
         errors = MANIFEST.verify_manifest_data(complete, self.repo, self.build)
 
         self.assertIn("manifest patched sys_top record mismatch", errors)
+
+    def test_detached_patched_build_id_record_fires(self) -> None:
+        complete = self.complete_manifest()
+        build_id_path = self.build / "sys" / "build_id.tcl"
+        build_id_path.write_bytes(b"project_open mutant\n")
+        complete["buildInputs"]["sys/build_id.tcl"] = MANIFEST.file_record(build_id_path)
+        source_projection = dict(complete)
+        source_projection.pop("sourceManifestSha256", None)
+        source_projection["phase"] = "source"
+        source_projection["status"] = "source-captured"
+        source_projection["artifacts"] = {}
+        complete["sourceManifestSha256"] = MANIFEST.manifest_digest(source_projection)
+        complete["manifestSha256"] = MANIFEST.manifest_digest(complete)
+
+        errors = MANIFEST.verify_manifest_data(complete, self.repo, self.build)
+
+        self.assertIn("manifest patched build-ID record mismatch", errors)
 
     def test_artifact_mutation_fires(self) -> None:
         complete = self.complete_manifest()

@@ -105,6 +105,9 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'fpga\sys') -Destination (Join-Path 
 $patchScript = Join-Path $repoRoot 'tools\board\patch_mister_sys_top.py'
 & python $patchScript (Join-Path $buildRoot 'sys\sys_top.v') --json
 if ($LASTEXITCODE -ne 0) { throw 'SuperStation sys_top safety overlay failed.' }
+$buildIdPatchScript = Join-Path $repoRoot 'tools\board\patch_mister_build_id.py'
+& python $buildIdPatchScript (Join-Path $buildRoot 'sys\build_id.tcl') --json
+if ($LASTEXITCODE -ne 0) { throw 'SuperStation projectless build-ID patch failed.' }
 
 $sourceCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
 [System.IO.File]::WriteAllText(

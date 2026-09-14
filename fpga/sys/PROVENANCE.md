@@ -22,7 +22,8 @@ the pinned commit: 57 expected files, zero missing or mismatched files.
 
 The vendor tree above remains unchanged. `build_superstation_bringup.ps1` and
 `build_superstation_specs.ps1` copy it into their owned workspace and then run
-`tools/board/patch_mister_sys_top.py` against that copy only.
+`tools/board/patch_mister_sys_top.py` and
+`tools/board/patch_mister_build_id.py` against that copy only.
 
 - pinned upstream `sys_top.v` SHA-256:
   `9bc5562bcc9d923aa3bff1a9c976c52492edb9ef981f428b7a4101c919a711b8`;
@@ -32,10 +33,27 @@ The vendor tree above remains unchanged. `build_superstation_bringup.ps1` and
 - repair 2: the 4-bit scaler-mode expression receives a leading zero for the
   5-bit `ascal.mode` port, preserving all four existing bit meanings.
 
-Both replacement anchors and both digests are exact and mutation-tested. Any
+Both sys_top replacement anchors and digests are exact and mutation-tested. Any
 upstream drift refuses before writing the build copy. Post-fit verification must
 also report all seven USER_IO output enables permanently disabled and zero
 Critical Warnings of any spelling.
+
+The upstream `build_id.tcl` opens and closes the project to obtain device/output
+assignments. Quartus 17 Lite rewrites the QSF during that project close, so a
+manifest-bound build cannot invoke it unchanged. The build-copy-only transform:
+
+- requires pinned upstream SHA-256
+  `148dc6a8124d36ac2898a45d085960cc05178a76d7297fde8877925fc0a74e88`;
+- produces projectless SHA-256
+  `e9a3daa3d507075abf214fefa115505a7669a14898800b728492f8a4393272c6`;
+- removes every `project_open`, `project_close` and `get_global_assignment` path;
+- accepts exactly revision, device and output directory as explicit bound script
+  arguments.
+
+The stage runner requires that exact projectless digest and checks QSF bytes
+unchanged after build-ID and every compiler stage. The exact production build-ID
+command is integration-tested with Quartus 17 and mutation-tested against the
+observed edition/unused-pin rewrite.
 
 Historical 2026-09-13 RBFs predate this overlay. Their observed color-bar/green
 results remain historical evidence, but independent review invalidated them for

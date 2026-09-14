@@ -12,6 +12,7 @@ from pathlib import Path
 
 EXPECTED_SYS_TREE = "9f95eddd65ebfca9b8dd94ed1a48e3f867165aa8"
 EXPECTED_PATCHED_SYS_TOP_SHA256 = "24eea7b0f76848239c872f626a48f4e0c6150423b9e6561fd3dd63f2a99501e9"
+EXPECTED_PATCHED_BUILD_ID_SHA256 = "e9a3daa3d507075abf214fefa115505a7669a14898800b728492f8a4393272c6"
 LOCAL_SYS_FILES = {"LICENSE", "PROVENANCE.md"}
 EXPECTED_DEVICE = "5CSEBA6U23I7"
 EXPECTED_CLOCK_PINS = {
@@ -92,6 +93,28 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
     )
 
     require_text(
+        sys_dir / "PROVENANCE.md",
+        [
+            EXPECTED_PATCHED_SYS_TOP_SHA256,
+            EXPECTED_PATCHED_BUILD_ID_SHA256,
+            "patch_mister_sys_top.py",
+            "patch_mister_build_id.py",
+            "removes every `project_open`, `project_close` and `get_global_assignment` path",
+        ],
+        errors,
+    )
+    require_text(
+        repo / "tools" / "board" / "patch_mister_build_id.py",
+        [
+            EXPECTED_PATCHED_BUILD_ID_SHA256,
+            "PROJECTLESS_SAFE",
+            "set revision [lindex $quartus(args) 0]",
+            "set device   [lindex $quartus(args) 1]",
+            "set outpath  [lindex $quartus(args) 2]",
+        ],
+        errors,
+    )
+    require_text(
         repo / "tools" / "board" / "patch_mister_sys_top.py",
         [
             EXPECTED_PATCHED_SYS_TOP_SHA256,
@@ -110,6 +133,9 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
             '"artifacts"',
             '"manifestSha256"',
             '"tools/env/zhao-env.ps1"',
+            '"patchedBuildId"',
+            '"tools/board/patch_mister_build_id.py"',
+            '"tests/tools/test_patch_mister_build_id.py"',
             '"tools/board/run_superstation_quartus.py"',
             '"tests/tools/test_run_superstation_quartus.py"',
             "ARTIFACT_SUFFIXES = (",
@@ -120,6 +146,7 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
     require_text(
         repo / "tools" / "board" / "run_superstation_quartus.py",
         [
+            EXPECTED_PATCHED_BUILD_ID_SHA256,
             '"--read_settings_files=on"',
             '"--write_settings_files=off"',
             '"quartus_map.exe"',
@@ -154,8 +181,11 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
             repo / "tools" / "board" / script_name,
             [
                 "patch_mister_sys_top.py",
+                "patch_mister_build_id.py",
                 "sys\\sys_top.v",
+                "sys\\build_id.tcl",
                 "SuperStation sys_top safety overlay failed",
+                "SuperStation projectless build-ID patch failed",
                 "superstation_build_manifest.py",
                 "run_superstation_quartus.py",
                 "--phase source",
@@ -273,6 +303,37 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
     return errors, summary
 
 
+def verify_patched_build_id(
+    build: Path, errors: list[str], summary: dict[str, object]
+) -> None:
+    path = build / "sys" / "build_id.tcl"
+    if not path.is_file():
+        errors.append(f"missing projectless build-ID script: {path}")
+        return
+    data = path.read_bytes()
+    actual = hashlib.sha256(data).hexdigest()
+    summary["patchedBuildId"] = {
+        "path": str(path),
+        "sha256": actual,
+        "expectedSha256": EXPECTED_PATCHED_BUILD_ID_SHA256,
+    }
+    if actual != EXPECTED_PATCHED_BUILD_ID_SHA256:
+        errors.append(
+            f"{path}: expected projectless build-ID digest "
+            f"{EXPECTED_PATCHED_BUILD_ID_SHA256}, got {actual}"
+        )
+    for forbidden in (b"project_open", b"project_close", b"get_global_assignment"):
+        if forbidden in data:
+            errors.append(f"{path}: forbidden project/settings access remains: {forbidden!r}")
+    for required in (
+        b"set revision [lindex $quartus(args) 0]",
+        b"set device   [lindex $quartus(args) 1]",
+        b"set outpath  [lindex $quartus(args) 2]",
+    ):
+        if required not in data:
+            errors.append(f"{path}: missing explicit build-ID input: {required!r}")
+
+
 def verify_patched_sys_top(
     build: Path, errors: list[str], summary: dict[str, object]
 ) -> None:
@@ -337,6 +398,7 @@ def verify_user_io_high_z(
 
 def verify_build(build: Path, errors: list[str], summary: dict[str, object]) -> None:
     verify_patched_sys_top(build, errors, summary)
+    verify_patched_build_id(build, errors, summary)
     output = build / "output_files"
     flow = output / "ZhaozhouBringup.flow.rpt"
     fit = output / "ZhaozhouBringup.fit.rpt"

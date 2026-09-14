@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 PATCHED_SYS_TOP_SHA256 = "24eea7b0f76848239c872f626a48f4e0c6150423b9e6561fd3dd63f2a99501e9"
+PATCHED_BUILD_ID_SHA256 = "e9a3daa3d507075abf214fefa115505a7669a14898800b728492f8a4393272c6"
 ARTIFACT_SUFFIXES = (
     "asm.rpt",
     "done",
@@ -48,6 +49,7 @@ PROFILES = {
             "fpga/rtl/pll.v",
             "fpga/rtl/pll",
             "tools/env/zhao-env.ps1",
+            "tools/board/patch_mister_build_id.py",
             "tools/board/patch_mister_sys_top.py",
             "tools/board/run_superstation_quartus.py",
             "tools/board/superstation_build_manifest.py",
@@ -57,6 +59,7 @@ PROFILES = {
         "verificationPaths": (
             "tools/board/invoke_superstation_probe.ps1",
             "tools/board/verify_superstation_receipt.py",
+            "tests/tools/test_patch_mister_build_id.py",
             "tests/tools/test_patch_mister_sys_top.py",
             "tests/tools/test_run_superstation_quartus.py",
             "tests/tools/test_superstation_build_manifest.py",
@@ -84,6 +87,7 @@ PROFILES = {
             "fpga/rtl/pll.v",
             "fpga/rtl/pll",
             "tools/env/zhao-env.ps1",
+            "tools/board/patch_mister_build_id.py",
             "tools/board/patch_mister_sys_top.py",
             "tools/board/run_superstation_quartus.py",
             "tools/board/superstation_build_manifest.py",
@@ -96,6 +100,7 @@ PROFILES = {
             "tools/board/verify_superstation_receipt.py",
             "tests/board/run_ssone_spec_tests.py",
             "tests/board/ssone_spec_tests_tb.sv",
+            "tests/tools/test_patch_mister_build_id.py",
             "tests/tools/test_patch_mister_sys_top.py",
             "tests/tools/test_run_superstation_quartus.py",
             "tests/tools/test_superstation_build_manifest.py",
@@ -228,6 +233,12 @@ def create_source_manifest(repo: Path, build: Path, profile_name: str) -> dict[s
             "build-copy sys_top safety digest mismatch: "
             f"{patched['sha256']} != {PATCHED_SYS_TOP_SHA256}"
         )
+    patched_build_id = file_record(build / "sys" / "build_id.tcl")
+    if patched_build_id["sha256"] != PATCHED_BUILD_ID_SHA256:
+        raise ValueError(
+            "build-copy projectless build-ID digest mismatch: "
+            f"{patched_build_id['sha256']} != {PATCHED_BUILD_ID_SHA256}"
+        )
 
     data: dict[str, Any] = {
         "schema": "zhaozhou.superstation.build-manifest.v1",
@@ -240,6 +251,7 @@ def create_source_manifest(repo: Path, build: Path, profile_name: str) -> dict[s
         "verificationFiles": records(repo, verification_files),
         "buildInputs": records(build, build_inputs),
         "patchedSysTop": patched,
+        "patchedBuildId": patched_build_id,
         "artifacts": {},
     }
     data["manifestSha256"] = manifest_digest(data)
@@ -366,6 +378,22 @@ def verify_manifest_data(
             errors.append("build-input sys_top record mismatch")
     if patched.get("sha256") != PATCHED_SYS_TOP_SHA256:
         errors.append("manifest patched sys_top digest mismatch")
+
+    patched_build_id = data.get("patchedBuildId", {})
+    if not isinstance(patched_build_id, dict):
+        errors.append("manifest patched build-ID record is invalid")
+        patched_build_id = {}
+    build_id_path = build / "sys" / "build_id.tcl"
+    if not build_id_path.is_file():
+        errors.append("patched build-ID missing from build")
+    else:
+        actual_build_id = file_record(build_id_path)
+        if patched_build_id != actual_build_id:
+            errors.append("manifest patched build-ID record mismatch")
+        if data.get("buildInputs", {}).get("sys/build_id.tcl") != actual_build_id:
+            errors.append("build-input build-ID record mismatch")
+    if patched_build_id.get("sha256") != PATCHED_BUILD_ID_SHA256:
+        errors.append("manifest patched build-ID digest mismatch")
 
     if require_complete:
         if data.get("phase") != "complete" or data.get("status") != "candidate":

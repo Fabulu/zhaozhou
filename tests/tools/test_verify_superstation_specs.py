@@ -14,6 +14,7 @@ SPEC = importlib.util.spec_from_file_location("verify_superstation_specs", VERIF
 assert SPEC is not None and SPEC.loader is not None
 VERIFY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VERIFY)
+import patch_mister_build_id as BUILD_ID_PATCH
 import patch_mister_sys_top as PATCH
 
 
@@ -26,6 +27,10 @@ class SuperStationSpecsVerifierTest(unittest.TestCase):
         (build / "sys").mkdir()
         upstream = (REPO / "fpga" / "sys" / "sys_top.v").read_bytes()
         (build / "sys" / "sys_top.v").write_bytes(PATCH.patch_bytes(upstream))
+        build_id = (REPO / "fpga" / "sys" / "build_id.tcl").read_bytes()
+        (build / "sys" / "build_id.tcl").write_bytes(
+            BUILD_ID_PATCH.patch_bytes(build_id)
+        )
         (output / "ZhaozhouSpecs.flow.rpt").write_text(
             "; Flow Status ; Successful - now ;\n; Device ; 5CSEBA6U23I7 ;\n",
             encoding="utf-8",

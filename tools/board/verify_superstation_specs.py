@@ -95,6 +95,7 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
 
 def verify_build(build: Path, errors: list[str], summary: dict[str, object]) -> None:
     common.verify_patched_sys_top(build, errors, summary)
+    common.verify_patched_build_id(build, errors, summary)
     output = build / "output_files"
     flow = output / f"{PROJECT}.flow.rpt"
     mapping = output / f"{PROJECT}.map.rpt"
