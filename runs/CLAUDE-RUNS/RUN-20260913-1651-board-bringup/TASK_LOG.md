@@ -697,6 +697,47 @@ verified.
   stage or physical/SSH/JTAG/flash/SD action occurred. Compile and physical HOLD
   remain pending independent review.
 
+### 2026-09-14 10:59 UTC+02:00 - Projectless V2 Specs attempt 3 started
+
+- Independent review accepted exact clean pushed head
+  `5666bce4985b9cfa9c5e0139b540364893b08450` and authorised exactly one
+  compile-only attempt through the projectless build-ID/stage-isolated runner.
+- Confirmed clean local/remote equality, absent new attempt-3 build path and no
+  existing Quartus process. Started the committed build entry once in
+  `build-board-superstation-specs-v2-attempt3-5666bce4`.
+- Projectless build-ID passed its QSF guard; `quartus_map` began at 10:59:33.
+- **Checkpoint before result:** preserve transcript/workspace first. Require every
+  stage RC and QSF guard, repaired post-build verifier, complete manifest,
+  source/RBF identity and all artifact hashes. Any failure is immutable and
+  terminal for this authorization; no repeat/bypass.
+- Compile-only boundary: no RBF staging/load, SSH mutation, JTAG, flash,
+  persistence, pin drive, watchdog/rollback or board/SD mutation.
+
+### 2026-09-14 11:12 UTC+02:00 - Attempt 3 failed exact artifact-set closure
+
+- Projectless build-ID, map, fit, assembly, STA, stage helper and repaired
+  post-build verifier all returned RC 0. Every QSF guard passed; source/final
+  remained 3,184 bytes with SHA-256
+  `0a4f036ec7aab3faf7a8b74a823add7485714107913b9156db690a1e9feebdd5`.
+- Quartus measurements: 0 errors, 55 warnings, 0 Critical Warnings; 7,312 ALMs,
+  11,173 registers, 384,498 memory bits, 34 DSPs, 145 pins, 0 virtual pins,
+  3 PLLs; all USER_IO output enables 0–6 disabled and expected Zhaozhou
+  hierarchy/packed DSP present.
+- Timing: setup +0.058 ns, hold +0.253 ns, recovery +3.658 ns, removal
+  +0.858 ns, minimum pulse width +1.122 ns; illegal/unconstrained clocks zero.
+- RBF: 2,448,816 bytes, SHA-256
+  `31699ff37440f26c8a979f53ce45b02ac63185038a2cc51a139eaba9ecb491eb`.
+- Overall entry returned RC 1 at complete-manifest creation. The direct stage
+  sequence emitted 15/16 exact outputs; required `ZhaozhouSpecs.done`, normally
+  created by `quartus_sh --flow`, was absent. The exact record-set gate refused;
+  no complete manifest exists and the RBF is quarantined.
+- Preserved immutable `ATTEMPT3-MISSING-DONE` source manifest, failed audit,
+  receipt, transcript, verifier result, 11 textual raw reports, both QSF states
+  and build-ID files. No repeat/bypass occurred.
+- No RBF staging/load, SSH mutation, JTAG, flash, persistence, pin drive,
+  watchdog/rollback or board/SD mutation occurred. Further compile and physical
+  activity remain HOLD.
+
 ---
 
 ## Subagent Spawns
@@ -782,6 +823,14 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION-RAW/`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION-BUILD-REPORT.md`
 - `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT2-BUILD-ID-QSF-MUTATION-EVIDENCE-INDEX.md`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-SOURCE-MANIFEST-V2-ATTEMPT3-MISSING-DONE.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-BUILD-AUDIT-V2-ATTEMPT3-MISSING-DONE.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/HARDWARE-SPECS-COMPILE-RECEIPT-V2-ATTEMPT3-MISSING-DONE.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT3-MISSING-DONE-COMPILE-TRANSCRIPT.txt`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT3-MISSING-DONE-VERIFY.json`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT3-MISSING-DONE-RAW/`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT3-MISSING-DONE-BUILD-REPORT.md`
+- `runs/CLAUDE-RUNS/RUN-20260913-1651-board-bringup/SPECS-V2-ATTEMPT3-MISSING-DONE-EVIDENCE-INDEX.md`
 
 ---
 
@@ -799,10 +848,11 @@ None. This task is restricted to the dedicated Claude Code hardware session.
 
 ## Next Steps
 
-1. Commit/push the projectless build-ID repair report addendum and submit exact
-   successor head for independent review.
-2. Do not run Quartus again without separate compile authorization for that
-   reviewed source.
+1. Commit/push immutable attempt-3 missing-`done` evidence and submit exact head
+   for independent review.
+2. Do not repair completion-marker generation or run Quartus again without
+   reviewed successor source and separate compile authorization; keep the exact
+   16-artifact set unchanged.
 3. A later retry must preserve byte-identical compiled QSF, exact patched
    sys_top digest, zero Critical Warnings, all seven USER_IO output enables
    disabled, positive timing, physical hierarchy, and a complete V2

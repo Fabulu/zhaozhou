@@ -7,7 +7,7 @@
 **Loader byte-identity repair:** `e66a606636727fb4df27aed87bd1181af01164eb`
 **QSF-mutation build-entry repair:** `44a6d88576be382bf5eaa69ea0cf10fcc6d1982d`
 **Projectless build-ID repair:** `2ee7d560d216170a791286b35a871573f8a8581a`
-**State:** V2 attempts failed closed on QSF mutation; **no compile or physical activity authorised**
+**State:** attempt 3 compiled/QSF-clean but failed artifact closure; **no compile or physical activity authorised**
 
 ## Review disposition
 
@@ -287,15 +287,33 @@ and actual Quartus 17 execution of the projectless build-ID command without any
 QSF byte change. The full focused suite passes 71/71; source, truth, bound
 identity and syntax gates pass. No compile was run for this repair.
 
+### Attempt 3 compile-only gate
+
+Independent review accepted exact clean head `5666bce4` and authorised one
+compile-only attempt through the projectless/stage-isolated runner. Clean
+local/remote equality, a fresh attempt-3 workspace and no pre-existing Quartus
+process were confirmed. Projectless build-ID and map/fit/asm/STA all returned RC
+0; every QSF guard passed with the file fixed at 3,184 bytes / SHA-256
+`0a4f036ec7aab3faf7a8b74a823add7485714107913b9156db690a1e9feebdd5`.
+The repaired post-build verifier passed, with the same positive resource/timing
+measurement and RBF identity as attempt 1.
+
+The overall entry returned RC 1 at complete-manifest creation because the direct
+stage sequence generated 15 of 16 exact outputs: `ZhaozhouSpecs.done`, normally
+created by `quartus_sh --flow`, was absent. The exact artifact-set gate refused
+rather than weakening its contract. No complete manifest exists; the RBF remains
+quarantined. Attempt 3 is preserved under immutable `ATTEMPT3-MISSING-DONE`
+names and no repeat/bypass occurred.
+
 This authorisation did not include RBF staging/loading, SSH mutation,
 watchdog/rollback rehearsal, JTAG, flash, persistence, pin drive, or board/SD
 mutation. None occurred. Physical activity remains HOLD.
 
 ## Remaining gates
 
-1. Commit/push the projectless build-ID repair report addendum.
-2. Obtain independent review of exact source/evidence head; no further Quartus
-   action is authorised yet.
+1. Commit/push immutable attempt-3 missing-marker evidence.
+2. Obtain independent review before repairing completion-marker generation or
+   running any further Quartus action; do not weaken the exact 16-artifact set.
 3. Do not compile again unless a reviewed successor receives separate one-retry
    authorisation.
 4. If a later retry passes, preserve a complete V2 candidate manifest and obtain

@@ -1,0 +1,144 @@
+Assembler report for ZhaozhouSpecs
+Mon Sep 14 11:11:37 2026
+Quartus Prime Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+
+
+---------------------
+; Table of Contents ;
+---------------------
+  1. Legal Notice
+  2. Assembler Summary
+  3. Assembler Settings
+  4. Assembler Generated Files
+  5. Assembler Device Options: C:/programmieren/zencrifice/zhaozhou-board-bringup-20260913/build-board-superstation-specs-v2-attempt3-5666bce4/output_files/ZhaozhouSpecs.sof
+  6. Assembler Device Options: C:/programmieren/zencrifice/zhaozhou-board-bringup-20260913/build-board-superstation-specs-v2-attempt3-5666bce4/output_files/ZhaozhouSpecs.rbf
+  7. Assembler Messages
+
+
+
+----------------
+; Legal Notice ;
+----------------
+Copyright (C) 2017  Intel Corporation. All rights reserved.
+Your use of Intel Corporation's design tools, logic functions 
+and other software and tools, and its AMPP partner logic 
+functions, and any output files from any of the foregoing 
+(including device programming or simulation files), and any 
+associated documentation or information are expressly subject 
+to the terms and conditions of the Intel Program License 
+Subscription Agreement, the Intel Quartus Prime License Agreement,
+the Intel MegaCore Function License Agreement, or other 
+applicable license agreement, including, without limitation, 
+that your use is for the sole purpose of programming logic 
+devices manufactured by Intel and sold by Intel or its 
+authorized distributors.  Please refer to the applicable 
+agreement for further details.
+
+
+
++---------------------------------------------------------------+
+; Assembler Summary                                             ;
++-----------------------+---------------------------------------+
+; Assembler Status      ; Successful - Mon Sep 14 11:11:37 2026 ;
+; Revision Name         ; ZhaozhouSpecs                         ;
+; Top-level Entity Name ; sys_top                               ;
+; Family                ; Cyclone V                             ;
+; Device                ; 5CSEBA6U23I7                          ;
++-----------------------+---------------------------------------+
+
+
++---------------------------------------------------------------------------------------------------------------+
+; Assembler Settings                                                                                            ;
++-----------------------------------------------------------------------------+----------------+----------------+
+; Option                                                                      ; Setting        ; Default Value  ;
++-----------------------------------------------------------------------------+----------------+----------------+
+; Use smart compilation                                                       ; On             ; Off            ;
+; Maximum processors allowed for parallel compilation                         ; All            ;                ;
+; Enable parallel Assembler and TimeQuest Timing Analyzer during compilation  ; On             ; On             ;
+; Enable compact report table                                                 ; Off            ; Off            ;
+; Generate Raw Binary File (.rbf) For Target Device                           ; On             ; Off            ;
+; Generate compressed bitstreams                                              ; On             ; On             ;
+; Compression mode                                                            ; Off            ; Off            ;
+; Clock source for configuration device                                       ; Internal       ; Internal       ;
+; Clock frequency of the configuration device                                 ; 10 MHZ         ; 10 MHz         ;
+; Divide clock frequency by                                                   ; 1              ; 1              ;
+; Auto user code                                                              ; On             ; On             ;
+; Configuration device                                                        ; Auto           ; Auto           ;
+; Voltage output format                                                       ; Auto discovery ; Auto discovery ;
+; Configuration device auto user code                                         ; Off            ; Off            ;
+; Generate Tabular Text File (.ttf) For Target Device                         ; Off            ; Off            ;
+; Generate Hexadecimal (Intel-Format) Output File (.hexout) for Target Device ; Off            ; Off            ;
+; Hexadecimal Output File start address                                       ; 0              ; 0              ;
+; Hexadecimal Output File count direction                                     ; Up             ; Up             ;
+; Release clears before tri-states                                            ; Off            ; Off            ;
+; Auto-restart configuration after error                                      ; On             ; On             ;
+; Enable OCT_DONE                                                             ; Off            ; Off            ;
+; Use Checkered Pattern as Uninitialized RAM Content                          ; Off            ; Off            ;
+; Enable autonomous PCIe HIP mode                                             ; Off            ; Off            ;
+; Generate Serial Vector Format File (.svf) for Target Device                 ; Off            ; Off            ;
+; Generate a JEDEC STAPL Format File (.jam) for Target Device                 ; Off            ; Off            ;
+; Generate a compressed Jam STAPL Byte Code 2.0 File (.jbc) for Target Device ; Off            ; Off            ;
+; Generate a compressed Jam STAPL Byte Code 2.0 File (.jbc) for Target Device ; On             ; On             ;
++-----------------------------------------------------------------------------+----------------+----------------+
+
+
++------------------------------------------------------------------------------------------------------------------------------------------------+
+; Assembler Generated Files                                                                                                                      ;
++------------------------------------------------------------------------------------------------------------------------------------------------+
+; File Name                                                                                                                                      ;
++------------------------------------------------------------------------------------------------------------------------------------------------+
+; C:/programmieren/zencrifice/zhaozhou-board-bringup-20260913/build-board-superstation-specs-v2-attempt3-5666bce4/output_files/ZhaozhouSpecs.sof ;
+; C:/programmieren/zencrifice/zhaozhou-board-bringup-20260913/build-board-superstation-specs-v2-attempt3-5666bce4/output_files/ZhaozhouSpecs.rbf ;
++------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Assembler Device Options: C:/programmieren/zencrifice/zhaozhou-board-bringup-20260913/build-board-superstation-specs-v2-attempt3-5666bce4/output_files/ZhaozhouSpecs.sof ;
++----------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Option         ; Setting                                                                                                                                                 ;
++----------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+; JTAG usercode  ; 0x02DB92FB                                                                                                                                              ;
+; Checksum       ; 0x02DB92FB                                                                                                                                              ;
++----------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Assembler Device Options: C:/programmieren/zencrifice/zhaozhou-board-bringup-20260913/build-board-superstation-specs-v2-attempt3-5666bce4/output_files/ZhaozhouSpecs.rbf ;
++---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+; Option              ; Setting                                                                                                                                            ;
++---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+; Raw Binary File     ;                                                                                                                                                    ;
+;  Compression Ratio  ; 2                                                                                                                                                  ;
++---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
++--------------------+
+; Assembler Messages ;
++--------------------+
+Info: *******************************************************************
+Info: Running Quartus Prime Assembler
+    Info: Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+    Info: Copyright (C) 2017  Intel Corporation. All rights reserved.
+    Info: Your use of Intel Corporation's design tools, logic functions 
+    Info: and other software and tools, and its AMPP partner logic 
+    Info: functions, and any output files from any of the foregoing 
+    Info: (including device programming or simulation files), and any 
+    Info: associated documentation or information are expressly subject 
+    Info: to the terms and conditions of the Intel Program License 
+    Info: Subscription Agreement, the Intel Quartus Prime License Agreement,
+    Info: the Intel MegaCore Function License Agreement, or other 
+    Info: applicable license agreement, including, without limitation, 
+    Info: that your use is for the sole purpose of programming logic 
+    Info: devices manufactured by Intel and sold by Intel or its 
+    Info: authorized distributors.  Please refer to the applicable 
+    Info: agreement for further details.
+    Info: Processing started: Mon Sep 14 11:11:26 2026
+Info: Command: quartus_asm --read_settings_files=on --write_settings_files=off ZhaozhouSpecs -c ZhaozhouSpecs
+Info (115030): Assembler is generating device programming files
+Info: Quartus Prime Assembler was successful. 0 errors, 0 warnings
+    Info: Peak virtual memory: 5000 megabytes
+    Info: Processing ended: Mon Sep 14 11:11:37 2026
+    Info: Elapsed time: 00:00:11
+    Info: Total CPU time (on all processors): 00:00:07
+
+

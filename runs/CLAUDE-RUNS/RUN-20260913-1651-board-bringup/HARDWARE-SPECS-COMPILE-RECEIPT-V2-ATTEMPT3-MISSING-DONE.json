@@ -1,0 +1,91 @@
+{
+  "schema": "zhaozhou.superstation.compile-receipt.v1",
+  "status": "failed:artifact-set",
+  "authorization": {
+    "scope": "one-projectless-v2-specs-compile-attempt-3-only",
+    "reviewedHead": "5666bce4985b9cfa9c5e0139b540364893b08450",
+    "physicalActivityAuthorized": false,
+    "repeatCompileAuthorized": false
+  },
+  "sourceCommit": "5666bce4985b9cfa9c5e0139b540364893b08450",
+  "branch": "zhaozhou-board-bringup-20260913",
+  "profile": "Specs",
+  "project": "ZhaozhouSpecs",
+  "device": "5CSEBA6U23I7",
+  "buildDirectory": "build-board-superstation-specs-v2-attempt3-5666bce4",
+  "startedLocal": "2026-09-14T10:59:33+02:00",
+  "quartusCompletedLocal": "2026-09-14T11:11:41+02:00",
+  "completedLocal": "2026-09-14T11:11:42+02:00",
+  "returnCode": 1,
+  "qsfBefore": {
+    "bytes": 3184,
+    "sha256": "0a4f036ec7aab3faf7a8b74a823add7485714107913b9156db690a1e9feebdd5"
+  },
+  "qsfAfter": {
+    "bytes": 3184,
+    "sha256": "0a4f036ec7aab3faf7a8b74a823add7485714107913b9156db690a1e9feebdd5"
+  },
+  "stageReturnCodes": {
+    "buildIdQuartusSh": 0,
+    "quartusMap": 0,
+    "quartusFit": 0,
+    "quartusAsm": 0,
+    "quartusSta": 0,
+    "stageHelper": 0,
+    "postBuildVerifier": 0,
+    "completeManifestCreation": 1,
+    "buildEntry": 1
+  },
+  "qsfGuards": {
+    "afterBuildId": "passed",
+    "afterMap": "passed",
+    "afterFit": "passed",
+    "afterAsm": "passed",
+    "afterSta": "passed"
+  },
+  "gates": {
+    "cleanAcceptedSource": "passed",
+    "sourcePreflight": "passed",
+    "selectedVectors": "passed",
+    "sourceManifest": "passed",
+    "projectlessBuildId": "passed",
+    "quartusStages": "passed",
+    "qsfIdentity": "passed",
+    "postBuildVerifier": "passed",
+    "completeManifestCreation": "failed",
+    "overall": "failed"
+  },
+  "failure": {
+    "message": "Quartus output record set mismatch: missing=['output_files/ZhaozhouSpecs.done'] extra=[]",
+    "missing": ["output_files/ZhaozhouSpecs.done"],
+    "extra": []
+  },
+  "sourceManifest": {
+    "path": "HARDWARE-SPECS-SOURCE-MANIFEST-V2-ATTEMPT3-MISSING-DONE.json",
+    "manifestSha256": "c2e61fdf3b7b87e5b04cabe60fdaa0b118257ef5d62a6ea5f0d64db66c7a1eb1"
+  },
+  "completeManifest": null,
+  "audit": "HARDWARE-SPECS-BUILD-AUDIT-V2-ATTEMPT3-MISSING-DONE.json",
+  "rbf": {
+    "bytes": 2448816,
+    "sha256": "31699ff37440f26c8a979f53ce45b02ac63185038a2cc51a139eaba9ecb491eb",
+    "loadAuthorized": false
+  },
+  "evidence": {
+    "transcript": "SPECS-V2-ATTEMPT3-MISSING-DONE-COMPILE-TRANSCRIPT.txt",
+    "verifier": "SPECS-V2-ATTEMPT3-MISSING-DONE-VERIFY.json",
+    "raw": "SPECS-V2-ATTEMPT3-MISSING-DONE-RAW",
+    "evidenceIndex": "SPECS-V2-ATTEMPT3-MISSING-DONE-EVIDENCE-INDEX.md",
+    "buildReport": "SPECS-V2-ATTEMPT3-MISSING-DONE-BUILD-REPORT.md"
+  },
+  "physicalActions": {
+    "rbfStaged": false,
+    "rbfLoaded": false,
+    "sshMutation": false,
+    "watchdogOrRollbackRehearsed": false,
+    "jtagUsed": false,
+    "flashTouched": false,
+    "persistentBootChanged": false,
+    "boardOrSdMutated": false
+  }
+}
