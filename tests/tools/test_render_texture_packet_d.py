@@ -91,7 +91,7 @@ PROTECTED_HASHES = {
     # Packet E legitimately refreshes the V3 source and generated interface while
     # retaining Packet D's public closure and every protected old/oracle byte.
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "e77e43a1f6e2baf9b7ee4bbc78093c28b6ad1be683d10babbde698f988ada5b5",
+        "8f9a19dec0d63e926a46c8ee364a006f6e2abf2f388f890ea753b76f25540360",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
         "4ba2cba9df8c6e6baaf1c68a236b91612fc6b3fff69be76ab3098b335bc50348",
     "fpga/rtl/raster/zhao_raster_attrdiv.sv":
@@ -659,13 +659,20 @@ class PacketDClosureTests(unittest.TestCase):
             self.assertNotIn(module, tops)
             self.assertEqual(excluded[module][0], "not-yet-adopted")
         for relative in (
-            "design/fit_targets.yml",
             "fpga/quartus/prod_fit_sources.txt",
             "fpga/rtl/prod/zhao_prod_top.sv",
         ):
             text = (REPO / relative).read_text(encoding="utf-8")
             for module in modules:
                 self.assertNotIn(module, text)
+        fit_targets = (REPO / "design/fit_targets.yml").read_text(encoding="utf-8")
+        for module in (
+            "zhao_raster_attrdiv_v2", "zhao_raster_attrgrad_v2",
+            "zhao_raster_tile_pipe_v2",
+        ):
+            self.assertEqual(fit_targets.count(f"/{module}.sv"), 1)
+        for module in ("zhao_geom_binner_v2", "zhao_geom_bin_pipe_v2"):
+            self.assertNotIn(module, fit_targets)
         self.assertEqual(check_prod_manifest.check_top_fresh(), [])
 
 

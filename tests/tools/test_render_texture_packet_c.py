@@ -63,7 +63,7 @@ PACKET_C_SOURCES = (
 # Packet E legitimately changes the V3 implementation while preserving its public
 # schema; these hashes pin that refreshed authority. Shell/accounting bytes remain
 # the protected Packet-C values.
-INTERFACE_SHA256 = "e77e43a1f6e2baf9b7ee4bbc78093c28b6ad1be683d10babbde698f988ada5b5"
+INTERFACE_SHA256 = "8f9a19dec0d63e926a46c8ee364a006f6e2abf2f388f890ea753b76f25540360"
 PACKET_B_TOP_SHA256 = "4ba2cba9df8c6e6baaf1c68a236b91612fc6b3fff69be76ab3098b335bc50348"
 PROTECTED_SHELL_SHA256 = "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
 PROD_TOP_SHA256 = "d3cf61c302f73c1d656ae481ae40b775ddadccec50efe778d6071ea2238ede54"
@@ -325,13 +325,14 @@ class PacketCClosureTests(unittest.TestCase):
 
         prod_top = REPO / "fpga" / "rtl" / "prod" / "zhao_prod_top.sv"
         forbidden = (
-            REPO / "design" / "fit_targets.yml",
             REPO / "fpga" / "quartus" / "prod_fit_sources.txt",
             prod_top,
         )
         for path in forbidden:
             with self.subTest(path=path.relative_to(REPO)):
                 self.assertNotIn("zhao_raster_texture_stage_v3", path.read_text(encoding="utf-8"))
+        fit_targets = (REPO / "design" / "fit_targets.yml").read_text(encoding="utf-8")
+        self.assertEqual(fit_targets.count("/zhao_raster_texture_stage_v3.sv"), 1)
         validate_prod_top_bytes(prod_top.read_bytes())
         with self.assertRaises(AssertionError):
             validate_prod_top_bytes(prod_top.read_bytes() + b"\n")
