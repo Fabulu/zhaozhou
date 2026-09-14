@@ -959,15 +959,16 @@ implemented.
 
 ## 5. Attribute production is a real prerequisite
 
-The shell cannot manufacture V3 requests from its existing ports. `zhao_geom_setup` explicitly has no depth or attribute gradients. The exact arithmetic does exist as separate, uncomposed blocks:
+The shell cannot manufacture V3 requests from its existing ports. `zhao_geom_setup` explicitly has no depth or attribute gradients. The numerator-plane arithmetic exists in `zhao_geom_attrsetup`; the retained unversioned raster blocks describe two earlier candidate laws:
 
 * `zhao_geom_attrsetup`: one attribute request produces signed `{n0[95:0], dndx[71:0], dndy[71:0]}`;
-* `zhao_raster_attrinterp`: exact numerator stepping in raster order;
-* `zhao_raster_attrdiv`: exact round-half-away-from-zero quotient;
-* `zhao_raster_attrdiv_svc`: ordered tagged parallel divider service;
-* `zhao_raster_attrstep`: exact quotient/remainder stepping with seed/reseed divides rather than one divide per pixel.
+* `zhao_raster_attrinterp` plus `zhao_raster_attrdiv`: exact per-pixel numerator/divide candidate, with ATTRDIV's historical half-away-from-zero law;
+* `zhao_raster_attrstep`: the same per-pixel quotient optimized as exact quotient/remainder stepping;
+* `zhao_raster_attrwalk`: divider-free exact quotient/remainder walking with an explicit tie-law parameter.
 
-The minimum live attribute set is:
+Current `reference/src/zrender/rast.cpp` has since selected a different scanline law: one tie-to-positive X-gradient divide per triangle/attribute, one full barycentric row-start divide at the triangle's global scissored `min_x`, then signed-32 gradient stepping across the row. Packet D therefore adds versioned `zhao_raster_attrdiv_v2` and `zhao_raster_attrgrad_v2`; none of the unversioned candidates may be relabelled current zref parity.
+
+The complete future live attribute set is:
 
 | stage need | attribute |
 |---|---|
@@ -976,13 +977,11 @@ The minimum live attribute set is:
 | fragment shading when Gouraud is enabled | R, G, B, A |
 | AUX terrain request | final world X, world Z, normally derived from perspective-correct world-X/W and world-Z/W |
 
-An attribute plane is exactly 240 bits. Plane setup happens once per triangle. Pixel stepping must be driven by the same coverage rows and address cursor as the fragment candidate; independent walkers must compare row/column at every accepted bundle.
+An attribute numerator plane is exactly 240 bits. Packet D freezes the minimum flat-colour characterization at exactly three planes—invw/UW/VW—plus shared `area2` and signed scissored `min_x`; Gouraud is seven planes, AUX-only is five, and both are nine. Plane setup happens once per triangle. Pixel stepping is driven by the same accepted coverage rows, and every joined lane compares row/column/last before candidate acceptance. The exact 1,157-bit binner metadata and scanline law are frozen in `PACKET-D-ATTRIBUTE-RASTER-ABI-20260914.md`.
 
-The first implementation should use `zhao_raster_attrstep` as the exact arithmetic candidate and retain `ATTRDIV` as its differential oracle. It preserves one accepted covered value per clock **inside a seeded covered-row run**, but pays documented step and row seed/reseed bubbles. The number of parallel lanes and seed dividers is selected by a legal workload trace before a fit, not guessed from the worst-case attribute count.
+This three-plane characterization computes U/W and V/W before Early-Z. It is functionally legal because sampling/reciprocal/material work remains after Early-Z, but G8A may not price it as the eventual survivor-only attribute schedule. Plane/lane scheduling beyond the frozen characterization is selected by a legal workload trace before adoption, not guessed from the worst-case attribute count.
 
-Early-Z must remain ahead of reciprocal, TMU, palette, AUX, and material combine. It is acceptable for exact numerator/quotient stepping needed to form the candidate to occur before Early-Z; it is not acceptable to sample a texture and then ask whether the fragment was hidden.
-
-AUX world context is not present in the current setup/binner packet. For `aux_required=0`, the typed 224-bit record is canonical zero. Before AUX-bearing terrain can be connected, the shared reciprocal result must produce perspective-correct world X/Z or an independently proven exact upstream service must do so. A flat triangle centroid is not an acceptable substitute.
+AUX world context is not present in the Packet-D three-plane setup/binner packet. Its `aux_required` input must be zero and the typed 224-bit record canonical zero. Before AUX-bearing terrain can be connected, the shared reciprocal result must produce perspective-correct world X/Z or an independently proven exact upstream service must do so. A flat triangle centroid is not an acceptable substitute.
 
 ### 5.1 Owner-sealed terrain AUX identity
 
@@ -1040,9 +1039,9 @@ Because binner acceptance and drain are separated, the attribute/material packet
 
 A wrapper-maintained rolling pointer is refused. It could drift on a triangle the binner declines or token-gates.
 
-For the characterization module, `zhao_geom_binner_v2` should use the first form: a statically sliced metadata bank, an exact same-edge write, and an exact same-record drain. The old binner remains the oracle for tile-reference order and overflow behavior.
+For the characterization module, `zhao_geom_binner_v2` uses the first form: 1,157 logical bits stored as 29 ascending 40-bit slices with a literal three-bit physical pad, exact same-edge write, and exact same-record drain. The record is three 240-bit numerator planes plus shared `area2[46:0]`, signed scissored global `min_x[11:0]`, fragment state32, continuation tail48, and the 298 flat request bits. `min_x` is mandatory because current zref rounds the X gradient once and steps from each row's global scissored start; a fresh divide at every tile edge is not equivalent. The old binner remains the oracle for tile-reference order and overflow behavior.
 
-This does **not** settle the production binner scale. `TRI_CAP=128`, binning at five clocks per one-tile triangle, and frame-end-before-drain are not a legal sink for the full terrain producer described below. That wall must be solved before the final terrain composition; merely widening the metadata of the 128-entry experiment is not adoption.
+This does **not** settle the production binner scale. `TRI_CAP=128`, binning at five clocks per one-tile triangle, frame-end-before-drain, three pre-Early-Z attribute lanes, and the 29-slice metadata store are characterization shapes, not a legal sink or area claim for the full terrain producer described below. That wall must be solved before final terrain composition; merely widening the 128-entry experiment is not adoption.
 
 ## 6. Binding and palette composition
 
@@ -1996,7 +1995,7 @@ Lifetime controls are separate. RCP `qerr`, expander `wq_overflow`, and the hist
 
 ### 12.6 Raster/tile differential
 
-For representable one-sample fixtures, compare old flat `zhao_raster_tile_pipe` with V2 using a texture/palette fixture which returns the same RGB/A/index. Then compare the complete V2 path to `zref` on varying interpolated depth/UV/color, Early-Z accept/reject, alpha test, star tag, blend/stencil hazards, multi-triangle tiles, bank overlap, and framebuffer backpressure.
+For representable one-sample fixtures, compare old flat `zhao_raster_tile_pipe` with V2 using a texture/palette fixture which returns the same RGB/A/index. Packet D then compares the complete three-plane V2 characterization to current `zref` on varying interpolated depth/UW/VW with flat vertex colour, Early-Z accept/reject, alpha test, star tag, blend/stencil hazards, multi-triangle tiles, bank overlap, and framebuffer backpressure. Gouraud colour and AUX world planes remain later gates and are not silently included in this profile.
 
 Checks include:
 
@@ -2004,12 +2003,12 @@ Checks include:
 * exact depth bits at Early-Z, fragment input, and tile write;
 * exact source ID through the fragment read response;
 * exact 64-bit tile words;
-* sequence mismatch latches abort before the mismatching or any later V3 result can enter the fragment stage, blocks new candidate admission, permits only fragment work accepted before the mismatch to finish its pending write, drops the mismatch and every remaining ordered V3 output with exact `sequence_drop_count`, releases every owner, and produces RELEASE/no publication after both pipelines drain;
+* sequence mismatch latches abort before the mismatching or any later V3 result can enter the fragment stage, blocks new candidate admission, permits only fragment work accepted before the mismatch to finish its pending write, drains/cancels every unadmitted 490-bit skid entry and remaining attribute/binner work, drops the mismatch and every remaining ordered V3 output with exact `sequence_drop_count`, releases every V3 owner, starts no new swap/resolve, and reaches finite complete-pipe quiet; Packet H—not Packet D—subsequently turns that drained fault into RELEASE/no publication;
 * exact 256 resolve outputs and tile CRC;
 * no swap until all V3 and fragment work drains;
 * next-front-bank rendering overlaps previous-back-bank resolve as before.
 
-A committed ordinary-drain mutant which omits V3 quiet from `pipe_empty` must swap early under a delayed texture response and fail the tile/CRC comparison. A separate committed sequence mutant retains the old match-gated V3 ready; the mismatch positive control must show the head stranded and fail exact drops, owner release, finite drain, and lease RELEASE.
+A committed ordinary-drain mutant which omits V3 quiet from `pipe_empty` must swap early under a delayed texture response and fail the tile/CRC comparison. A separate committed sequence mutant retains the old match-gated V3 ready; the mismatch positive control must show the head stranded and fail exact drops, owner release, occupied-skid cancellation, and finite complete-pipe drain. Packet H later owns the independently tested lease RELEASE consequence.
 
 ### 12.7 Binding and memory gates
 
@@ -2143,16 +2142,17 @@ Packet C is the first composition which actually drives V3 results into the real
 
 **Owns**
 
-* `fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv`: 410-bit opaque Early-Z payload, 490-bit skid, attribute bundle, V3 stage, sequence-abort admission/write suppression and ordered-drop drain, full ordinary drain law, TILESTORE/RESOLVE;
-* `fpga/rtl/geometry/zhao_geom_binner_v2.sv`: binner-owned metadata at characterization capacity;
-* `fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv`: exact setup/metadata splice;
-* attribute/raster differential, early-swap mutant, and same-packet excluded registrations/generated closure.
+* `fpga/rtl/raster/zhao_raster_attrdiv_v2.sv` and `zhao_raster_attrgrad_v2.sv`: current-zref tie-to-positive/saturating row-gradient law, including global scissored `min_x` anchoring;
+* `fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv`: three 240-bit characterization planes, shared area/min-X, one-entry delivered-mask coverage broadcast, 410-bit opaque Early-Z payload, synchronously drained 490-bit skid, V3 stage, sequence/local-attribute abort drain, full ordinary drain law, TILESTORE/RESOLVE;
+* `fpga/rtl/geometry/zhao_geom_binner_v2.sv`: exact 1,157-bit binner-owned metadata at characterization capacity;
+* `fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv`: exact setup/metadata splice and remaining-job sink after raster abort;
+* current-zref attribute/raster differential, early-swap/coordinate/metadata/cancellation mutants, and same-packet excluded registrations/generated byte-identity closure.
 
 The three unversioned modules remain unchanged oracles.
 
-**Gate:** ATTRSTEP/ATTRDIV and `zref` differential, flat-compatible raster differential, multi-triangle accumulation, exact source/depth, ordinary swap/drain, sequence-abort no-write/drop-drain propagation, resolve overlap, and full backpressure.
+**Gate:** versioned row-gradient/divider parity with current `rast.cpp`; exact three-plane flat-colour profile and 1,157-bit accepted-triangle metadata identity; flat-compatible raster differential; multi-triangle accumulation; exact source/depth/UW/VW; ordinary swap/drain and resolve overlap; sequence/local-attribute abort candidate suppression, skid/binner/producer cancellation, ordered V3 drops, no new resolve, and finite complete-pipe quiet; full backpressure. No Packet-H RELEASE/PUBLISH claim and no G8A resource claim occur here.
 
-**Rollback:** revert all three V2 compositions and their closure records together; the current flat path remains selected.
+**Rollback:** revert the two versioned attribute leaves, all three V2 compositions, tests/mutants and closure records together; the current flat path and every unversioned candidate remain selected/retained.
 
 ### Packet E — guarded ENGINE1 share and refusal completion
 

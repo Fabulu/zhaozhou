@@ -1,5 +1,30 @@
 # The attribute seam: the plane form IS the oracle, and step 6 is unblocked
 
+> ## CURRENT CORRECTION — 2026-09-14
+>
+> The reference renderer moved after the resolution below. Current
+> `reference/src/zrender/rast.cpp` no longer divides the exact numerator at every
+> pixel. For each live attribute it now computes one signed round-half-up X
+> gradient, re-evaluates and divides the full barycentric numerator at each
+> scanline's global `min_x`, then steps the **32-bit rounded quotient** across the
+> row. Its signed division is `floor((n + floor(area/2))/area)`, with saturation;
+> negative exact halves therefore round toward +infinity.
+>
+> The existing `zhao_geom_attrsetup` numerator plane remains valid. The existing
+> `zhao_raster_attrdiv`, `zhao_raster_attrstep`, and `zhao_raster_attrwalk` remain
+> valuable, tested implementations of earlier candidate laws, but none is the
+> current frame oracle: ATTRDIV/ATTRSTEP use symmetric half-away-from-zero and
+> ATTRSTEP reproduces an exact per-pixel quotient, while ATTRWALK exposes both tie
+> laws but still advances the exact quotient/remainder rather than the renderer's
+> once-rounded X gradient.
+>
+> Packet D therefore adds a versioned divider and row-gradient walker. The walker
+> must carry the triangle's scissored global `min_x`: reseeding at each tile's
+> left edge would differ whenever the rounded gradient accumulates across a tile
+> boundary. This correction supersedes only present-tense claims below that the
+> old divider/stepper are bit-identical to current `rast.cpp`; the historical
+> measurements and reasoning remain evidence about the versions they measured.
+
 > ## RESOLVED THE SAME DAY. Read this box; the analysis below is kept for its reasoning.
 >
 > I recommended checking, before deciding anything, whether some incremental
