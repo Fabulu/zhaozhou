@@ -11,7 +11,8 @@
 //   * rejects out-of-region writes (and reads) with NOTHING written
 //   * boundary exactness: last byte in / first byte out
 //   * read-only law: scanout write rejected; blit read rejected
-//   * engines/debug rejected (own nothing in Phase 2)
+//   * ENGINE1 16/32/64-byte reads accepted only in RENDER.ASSET_POOL;
+//     client 5 and every wrong owner remain denied
 //   * byte_enable holes rejected; map_valid=0 deny-all
 
 #include "Vtb_zhao_mem_guard.h"
@@ -21,6 +22,7 @@
 #include "zref/zref_mem.hpp"
 
 #include <cstdio>
+#include <initializer_list>
 
 using namespace zref;
 
@@ -110,14 +112,37 @@ struct GuardHarness {
     else
       expect_viol++;
     const uint32_t viol0 = top.guard_violations;
+    const unsigned saw_ok0 = saw_ok;
+    const unsigned saw_viol0 = saw_viol;
     const uint64_t until = cycle + 5000;  // PER-REQUEST bound (cycle is
+    bool accepted = false;
     while (cycle < until) {               // cumulative across requests)
+      top.clk = 0;
+      top.eval();
+      const bool fire = top.g_valid && top.g_ready;
       tick();
-      if (top.g_ready) break;  // accepted (level; drops after edge)
+      if (fire) {
+        accepted = true;
+        break;
+      }
     }
+    if (!accepted) {
+      std::printf("  request was never accepted before bound\n");
+      mismatches++;
+    }
+    // Drop valid immediately after the actual acceptance edge, before the later
+    // registered verdict. A post-tick ready level is not evidence of acceptance.
     top.g_valid = 0;
-    // drain any forwarded burst (and observe its verdict pulse)
     for (int i = 0; i < 120; i++) tick();
+    const unsigned ok_delta = saw_ok - saw_ok0;
+    const unsigned viol_delta = saw_viol - saw_viol0;
+    if ((ok && (ok_delta != 1 || viol_delta != 0)) ||
+        (!ok && (ok_delta != 0 || viol_delta != 1)) ||
+        top.guard_violations != viol0 + (ok ? 0u : 1u)) {
+      std::printf("  request verdict multiplicity mismatch ok=%u/%u viol=%u/%u\n",
+                  ok_delta, ok ? 1u : 0u, viol_delta, ok ? 0u : 1u);
+      mismatches++;
+    }
     static int nreq = 0;
     if (nreq++ < 6)
       std::printf("  req#%d cyc=%llu ok=%u viol=%u gviol=%u init=%d cgrant=%d\n", nreq,
@@ -233,11 +258,36 @@ int main(int argc, char** argv) {
     GuardMap none{false, 0, 0x0003C000, GuardMap::WRITER_ENGINE0};
     h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, 0x0000, 64, full_be(64)}, none);
 
-    // ENGINE1 and DEBUG still own nothing, under either lease.
+    // ENGINE1 owns nothing in framebuffer space; DEBUG owns no region.
     for (unsigned c = MemoryGuard::ENGINE1; c <= MemoryGuard::DEBUG; c++) {
       h.request(MemoryGuard::Req{true, false, c, 0x0000, 64, full_be(64)}, map);
       h.request(MemoryGuard::Req{true, true, c, 0x0000, 64, full_be(64)}, map);
       h.request(MemoryGuard::Req{true, true, c, 0x0000, 64, full_be(64)}, eng);
+    }
+  }
+
+  // ---- shared RENDER.ASSET_POOL: one read-only ENGINE1 window ------------------
+  {
+    constexpr uint32_t base = kRenderAssetBase;
+    constexpr uint32_t end = kRenderAssetBase + kRenderAssetSpan;
+    for (unsigned len : {16u, 32u, 64u}) {
+      h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE1,
+                                 base, len, full_be(len)}, map);
+      h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE1,
+                                 end - len, len, full_be(len)}, map);
+      h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE1,
+                                 end - len + 1, len, full_be(len)}, map);
+    }
+    h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE1,
+                               base - 1, 16, full_be(16)}, map);
+    h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE1,
+                               base, 16, full_be(16)}, map);
+    const unsigned wrong_clients[] = {
+        MemoryGuard::SCANOUT, MemoryGuard::BLIT_DMA, MemoryGuard::ENGINE0,
+        MemoryGuard::DEBUG, 5u, MemoryGuard::TERRAIN_BUILD};
+    for (unsigned wrong_client : wrong_clients) {
+      h.request(MemoryGuard::Req{true, false, wrong_client,
+                                 base, 16, full_be(16)}, map);
     }
   }
 
@@ -263,11 +313,14 @@ int main(int argc, char** argv) {
     zref::Pcg32 pcg(0x5EEDF00Du);
     // addresses concentrated near the region boundaries (0, span ends,
     // slot bases, the unmapped tail) plus wild addresses
-    const uint32_t anchors[] = {0x00000000, 0x0003BFC0, 0x0003C000, 0x00077FC0, 0x00078000,
-                                0x0007FFFF, 0x01FFFFC0, 0x02000000, 0x0203BFC0, 0x0203C000};
+    const uint32_t anchors[] = {
+        0x00000000, 0x0003BFC0, 0x0003C000, 0x00077FC0, 0x00078000,
+        0x0007FFFF, 0x01FFFFC0, 0x02000000, 0x0203BFC0, 0x0203C000,
+        0x069FFFF0, 0x06A00000, 0x07FFFFC0, 0x08000000};
+    constexpr unsigned NANCHORS = sizeof(anchors) / sizeof(anchors[0]);
     const unsigned NFUZZ = 2000;
     for (unsigned i = 0; i < NFUZZ; i++) {
-      const uint32_t base = anchors[pcg.range(10)];
+      const uint32_t base = anchors[pcg.range(NANCHORS)];
       const uint32_t addr = base + pcg.range(200) - 100;  // signed-ish jitter
       GuardMap m;
       m.valid = pcg.range(4) != 0;
@@ -276,7 +329,7 @@ int main(int argc, char** argv) {
       MemoryGuard::Req r;
       r.valid = true;
       r.write = pcg.range(2) == 0;
-      r.client = pcg.range(5);
+      r.client = pcg.range(7);
       r.addr = addr & 0x07FFFFFF;
       r.len = 1 + pcg.range(72);  // includes illegal >64
       if (r.len > 64 && pcg.range(2)) r.len = 64;
@@ -294,6 +347,8 @@ int main(int argc, char** argv) {
     chk(h.saw_viol == h.expect_viol, "violation verdicts == oracle", h.expect_viol, h.saw_viol);
     chk(h.top.guard_violations == h.expect_viol, "guard_violations counted", h.expect_viol,
         h.top.guard_violations);
+    chk(h.mismatches == 0, "every request accepted once and received one exact verdict",
+        0, h.mismatches);
   }
 
   // drain: model still clean

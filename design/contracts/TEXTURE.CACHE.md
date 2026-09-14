@@ -141,11 +141,12 @@ unversioned first-look accounting above, whose access acceptance occurs only
 after its blocking misses have become hits.
 
 A successful access retains the raw held response
-`{route_token18,data64}` for the selected class processor. Raw cache success
-supplies status baseline `8'h00`; successful class processing preserves zero,
-while a class-local refusal such as stale/cold palette state sets or ORs its own
-terminal status before collection. Cache data is not itself a decoded RGB/A
-result.
+`{route_token18,data64}` for the selected class processor. The versioned leaf
+publishes `smp_status_o[7:0]` beside that same held token/data: success is
+`8'h00`, fill denial is exactly `8'h01`. Raw cache success supplies status
+baseline `8'h00`; successful class processing preserves zero, while a class-local
+refusal such as stale/cold palette state sets or ORs its own terminal status
+before collection. Cache data is not itself a decoded RGB/A result.
 
 Packet E adds a separate held terminal-refusal offer which bypasses class
 arithmetic but joins the normal final offer for the class encoded by the
@@ -170,8 +171,10 @@ beats. A refused fill invalidates every partial line, clears the one outstanding
 fill, produces exactly one held terminal sample refusal, and allows later access
 work to proceed. A short fill, ninth beat, data before an accepted fill, refusal
 after data, data and refusal together, or completion without a start sets the
-sticky `fill_protocol_fault_o`. Packet E must give every malformed class a
-positive control; this contract does not invent separate counters for them.
+sticky `fill_protocol_fault_o`. A partial or simultaneous refusal still wins and
+terminates exactly once after invalidating the line; the malformed data is not
+written or counted. Packet E must give every malformed class a positive control;
+this contract does not invent separate counters for them.
 `frame_fault_clear_i` clears only this sticky summary, never cache contents,
 valids, held payloads, fill state, credits, or counters; any same-edge malformed
 fill sets it again with priority.
@@ -192,6 +195,13 @@ FOK   fills completed with exactly eight data beats
 FREF  fills completed by terminal refusal
 FB    accepted fill-data halfwords
 ```
+
+The concrete leaf outputs are `cache_jobs_accepted_o=CA`,
+`cache_jobs_completed_o=CC`, `fill_jobs_accepted_o=FI`,
+`fill_jobs_completed_o=FOK+FREF`, `fill_jobs_refused_o=FREF`, and
+`fill_data_beats_o=FB`. Thus successful `FOK` is derived as
+`fill_jobs_completed_o-fill_jobs_refused_o`; total completion is not mislabeled
+success, and a denial advances completed and refused together exactly once.
 
 After complete drain, within a window shorter than counter wrap:
 

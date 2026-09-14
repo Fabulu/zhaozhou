@@ -126,7 +126,8 @@ package zhao_pkg;
   localparam logic [31:0] ZHAO_FB_SLOT_SPAN       = 32'h0003_C000; // 245,760
 
   // ---------------------------------------------------------------------
-  // GEOM asset pool -- the Phase-3 region (spec/memory_rules.md 5f, 2026-09-04)
+  // RENDER asset pool -- the Phase-3/Packet-E shared ENGINE1 region
+  // (spec/memory_rules.md 5f, 2026-09-04/2026-09-14)
   //
   // WHY IT EXISTS: GEOM.MESHFETCH is the only zhao_guard_req_t client in the
   // whole geometry subsystem, and every region MEM.GUARD knew was a FRAME
@@ -147,12 +148,15 @@ package zhao_pkg;
   // 22 MiB, ending exactly at the top of the 27-bit VRAM map, so
   // BASE + SPAN cannot wrap 32 bits -- the defect the blit clamp exists for.
   //
-  // READ-ONLY, and that is the safety argument: geometry never writes assets,
-  // so this region cannot corrupt a frame buffer no matter what it admits.
-  // IT IS A KNOB. Both constants are editable and the pool can move to any
-  // unmapped range if board evidence says otherwise; nothing derives them.
-  localparam logic [31:0] ZHAO_GEOM_ASSET_BASE    = 32'h06A0_0000;
-  localparam logic [31:0] ZHAO_GEOM_ASSET_SPAN    = 32'h0160_0000; // 23,068,672
+  // READ-ONLY, and that is the safety argument: geometry and texture fills only
+  // read immutable assets, so this region cannot corrupt a frame buffer no matter
+  // which local ENGINE1 subowner requested it. IT IS A KNOB. Canonical render
+  // constants own the value; historical geometry names remain typed aliases while
+  // existing callers migrate, never a second address authority.
+  localparam logic [31:0] ZHAO_RENDER_ASSET_BASE  = 32'h06A0_0000;
+  localparam logic [31:0] ZHAO_RENDER_ASSET_SPAN  = 32'h0160_0000; // 23,068,672
+  localparam logic [31:0] ZHAO_GEOM_ASSET_BASE    = ZHAO_RENDER_ASSET_BASE;
+  localparam logic [31:0] ZHAO_GEOM_ASSET_SPAN    = ZHAO_RENDER_ASSET_SPAN;
 
   // ---------------------------------------------------------------------
   // TERRAIN.PAGE_POOL -- the bank-2 region (ruling T2, spec/memory_rules.md

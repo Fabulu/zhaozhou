@@ -315,15 +315,16 @@ void run_full_context() {
           "same-edge recoverable fault lost to frame clear", h.cycle);
 #endif
 
-  // Clear the injected recoverable event, then exercise each reset-lifetime
-  // aggregation lane independently.  Each source receives a one-cycle pulse;
-  // the source-specific overlay latch survives pulse withdrawal and frame clear.
+  // Clear the injected recoverable event, then exercise each remaining
+  // reset-lifetime aggregation lane independently. Packet-E removed the old
+  // fill-refusal lane entirely; the six retained sources still receive a
+  // one-cycle pulse and must block fragment/config/palette until reset.
   h.dut.frame_fault_clear_valid_i = 1;
   h.step();
   h.dut.frame_fault_clear_valid_i = 0;
   h.step();
   require(!h.dut.frame_fault_o, "recoverable injection did not clear", h.cycle);
-  for (unsigned source = 0; source < 7; ++source) {
+  for (unsigned source = 0; source < 6; ++source) {
     h.select_dpi_scope();
     zhao_texture_packet_b_set_lifetime_fault_inject(1u << source);
     h.step();
@@ -354,7 +355,7 @@ void run_full_context() {
   }
 
   std::printf("packet-b fullctx PASS: accepted=%u retired=%u "
-              "ingress_stalls=%u output_stalls=%u lifetime_sources=7\n",
+              "ingress_stalls=%u output_stalls=%u lifetime_sources=6\n",
               offered, retired, ingress_stall_cycles, output_stall_cycles);
 }
 

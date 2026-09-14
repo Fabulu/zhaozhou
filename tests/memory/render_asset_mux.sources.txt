@@ -1,0 +1,25 @@
+# Packet-E3 excluded ENGINE1 local mux source order. The committed selector shim
+# MUST be immediately before the exact mux. Ordinary/direct builds define no
+# selector; the harness then instantiates the exact mux feeding the real guard.
+#
+# Private inverse controls (SV define / C++ define):
+#   hold-valid: ZHAO_RENDER_ASSET_MUTANT_HOLD_GUARD_VALID /
+#               EXPECT_RENDER_ASSET_HOLD_GUARD_VALID_MUTANT
+#   drift:      ZHAO_RENDER_ASSET_MUTANT_DRIFT_SUBOWNER /
+#               EXPECT_RENDER_ASSET_DRIFT_SUBOWNER_MUTANT
+#   pack64:     ZHAO_RENDER_ASSET_MUTANT_TEXTURE_PACK64 /
+#               EXPECT_RENDER_ASSET_TEXTURE_PACK64_MUTANT
+#   beat7:      ZHAO_RENDER_ASSET_MUTANT_TERMINATE_BEAT7 /
+#               EXPECT_RENDER_ASSET_TERMINATE_BEAT7_MUTANT
+#   beat9:      ZHAO_RENDER_ASSET_MUTANT_ACCEPT_BEAT9 /
+#               EXPECT_RENDER_ASSET_ACCEPT_BEAT9_MUTANT
+#   silence:    ZHAO_RENDER_ASSET_MUTANT_DENIAL_SILENCE /
+#               EXPECT_RENDER_ASSET_DENIAL_SILENCE_MUTANT
+#   collision: any two SV selectors must fail exact-mux compilation; any two
+#              C++ selectors must fail preprocessing.
+fpga/rtl/generated/zhao_abi_pkg.sv
+fpga/rtl/common/zhao_pkg.sv
+fpga/rtl/memory/zhao_mem_guard.sv
+tests/mutants/zhao_render_asset_mux_mutants.sv
+fpga/rtl/memory/zhao_render_asset_mux.sv
+tests/memory/tb_render_asset_mux.sv

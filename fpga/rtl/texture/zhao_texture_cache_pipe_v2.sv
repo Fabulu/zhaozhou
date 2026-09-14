@@ -1,10 +1,10 @@
-// zhao_texture_cache_pipe_v2.sv — Packet-B observation-preserving cache pipe.
+// zhao_texture_cache_pipe_v2.sv — Packet-E typed-termination cache pipe.
 //
-// This versioned successor keeps the unversioned C0..C4 lookup, replay,
-// multicast, synchronous-RAM, and response-reservation laws unchanged.  It
-// widens the default identity to Packet B's 18-bit route token, exposes exact
-// structural idleness, and reserves the Packet-E fill-refusal pin without
-// claiming that the denial path is functional yet.
+// This versioned successor keeps Packet B's C0..C4 lookup, multicast,
+// synchronous-RAM shape, response timing, and successful data path. Packet E
+// makes the reserved fill refusal functional, carries a held response status,
+// and makes the blocking miss's response reservation explicit so success and
+// refusal can terminate without either losing or recreating that credit.
 //
 // The unversioned cache remains the executable old-island oracle.
 // ENFORCED-BY: tests/texture/texture_cache_pipe_v2_directed.cpp
@@ -76,6 +76,15 @@
 // ---------------------------------------------------------------------------
 `default_nettype none
 
+// Committed Packet-E mutants override these two expressions immediately before
+// this exact source. Ordinary source lists see only the production defaults.
+`ifndef ZHAO_PACKET_E_REFUSAL_NEXT_IP
+  `define ZHAO_PACKET_E_REFUSAL_NEXT_IP(rp, one) ((rp) + (one))
+`endif
+`ifndef ZHAO_PACKET_E_ISSUE_OWNS_FRESH_RESV
+  `define ZHAO_PACKET_E_ISSUE_OWNS_FRESH_RESV(prepaid) (!(prepaid))
+`endif
+
 module zhao_texture_cache_pipe_v2 #(
     parameter int unsigned LANES      = 4,
     parameter int unsigned LINES      = 16,
@@ -113,6 +122,7 @@ module zhao_texture_cache_pipe_v2 #(
     output var logic                smp_valid_o,
     input  var logic                smp_ready_i,
     output var logic [LANES*16-1:0] smp_data_o,
+    output var logic [7:0]          smp_status_o,
     output var logic [SRCW-1:0]     smp_src_id_o,
 
     // ---- fill ----------------------------------------------------------------
@@ -121,21 +131,31 @@ module zhao_texture_cache_pipe_v2 #(
     output var logic [31:0]         fill_addr_o,
     input  var logic                fill_data_valid_i,
     input  var logic [15:0]         fill_data_i,
-    // Packet-E ABI reservation only.  Packet B deliberately does not consume
-    // this pulse, clear a blocking miss, synthesize a refusal result, or claim
-    // denial-safe drain.  Packet E replaces this boundary behavior atomically.
-    /* verilator lint_off UNUSEDSIGNAL */
     input  var logic                fill_refused_i,
-    /* verilator lint_on UNUSEDSIGNAL */
+    input  var logic                frame_fault_clear_i,
 
     // ---- evidence ------------------------------------------------------------
     output var logic [31:0]         cache_hits_o,
     output var logic [31:0]         cache_misses_o,
-    output var logic [31:0]         fills_o,        // LINE fetches, not lane misses
+    output var logic [31:0]         fills_o,        // LINE allocations; unchanged
     output var logic [31:0]         multicast_o,    // lanes served by one fill
     output var logic [31:0]         replays_o,      // probes squashed by a miss
-    // Accepted work only; external access/fill-response offers are separate
-    // q_* operands at island scope.
+    output var logic                fill_protocol_fault_o,
+    output var logic [31:0]         cache_jobs_accepted_o,
+    output var logic [31:0]         cache_jobs_completed_o,
+    output var logic [31:0]         fill_jobs_accepted_o,
+    output var logic [31:0]         fill_jobs_completed_o,
+    output var logic [31:0]         fill_jobs_refused_o,
+    output var logic [31:0]         fill_data_beats_o,
+    // Observation-only leaf evidence. E2 may sink these inside the island; they
+    // are not V3 public ABI. owner_state bits are
+    // {C2-prepaid,C1-prepaid,replay-prepaid,blocking-fill,C2-ordinary,
+    //  C1-ordinary,queued-response}; work_state names every idle term except
+    // the reservation count and the sticky protocol fault.
+    output var logic [31:0]         reservation_count_o,
+    output var logic [6:0]          reservation_owner_state_o,
+    output var logic [8:0]          cache_work_state_o,
+    // Accepted work only; raw external offers are not work until handshaken.
     output var logic                idle_o
 );
 
@@ -149,12 +169,18 @@ module zhao_texture_cache_pipe_v2 #(
   localparam int unsigned TAG_W  = 32 - OFF_W - IDX_W;   // 24
   localparam int unsigned DAW    = IDX_W + BEAT_W;       // data-array address
   localparam int unsigned RQW    = (REQN < 2) ? 1 : $clog2(REQN);
+  // Lane popcounts are properties of LANES, never of the unrelated request
+  // FIFO depth. In particular LANES=8, REQN=2 must represent the value eight.
+  localparam int unsigned POP_W  = (LANES < 1) ? 1 : $clog2(LANES + 1);
 
   // Quartus 17 does not accept bare module-scope elaboration `if`; keep every
   // parameter detector in one explicit initial block.  The minima are not
   // arbitrary: RQW/IDX_W/BEAT_W appear in nonempty bit slices below, and a line
   // contains at least two 16-bit halfwords so BEAT_W is at least one.
   initial begin : p_parameter_contract
+`ifdef ZHAO_PACKET_E_MUTANT_SELECTOR_COLLISION
+    $fatal(1, "ZHAO_TEXTURE_CACHE_PIPE_V2_PACKET_E_MUTANT_SELECTOR_COLLISION: define exactly one selector");
+`endif
     if (REQN < 2)
       $fatal(1, "ZHAO_TEXTURE_CACHE_PIPE_V2_PARAM_FIRE[1]: REQN_MIN");
     if ((REQN & (REQN - 1)) != 0)
@@ -170,6 +196,15 @@ module zhao_texture_cache_pipe_v2 #(
     if ((LINE_BYTES & (LINE_BYTES - 1)) != 0)
       $fatal(1, "ZHAO_TEXTURE_CACHE_PIPE_V2_PARAM_FIRE[7]: LINE_BYTES_POWER_OF_TWO");
   end
+
+`ifdef ZHAO_PACKET_E_MUTANT_SELECTOR_COLLISION
+  // Elaboration sentinel: unlike an initial $fatal, this makes --lint-only/--cc
+  // reject an ambiguous dual-selector build before any simulation can run. The
+  // initial guard above preserves the exact diagnostic in tools that elaborate
+  // unresolved cells differently.
+  ZHAO_PACKET_E_MUTANT_SELECTOR_COLLISION__DEFINE_EXACTLY_ONE_SELECTOR
+      u_packet_e_selector_collision_compile_fail();
+`endif
 
   // ==========================================================================
   // STORAGE
@@ -269,6 +304,7 @@ module zhao_texture_cache_pipe_v2 #(
   end
 
   logic              c1_v;
+  logic              c1_prepaid_r;
   logic [LANES-1:0]  c1_en;
   logic [SRCW-1:0]   c1_src;
   logic [TAG_W-1:0]  c1_tag  [LANES];
@@ -287,6 +323,7 @@ module zhao_texture_cache_pipe_v2 #(
   logic [15:0]       ram_dat [LANES];
 
   logic              c2_v;
+  logic              c2_prepaid_r;
   logic [LANES-1:0]  c2_en;
   logic [SRCW-1:0]   c2_src;
   logic [TAG_W-1:0]  c2_tag  [LANES];   // carried, to compare against
@@ -329,27 +366,29 @@ module zhao_texture_cache_pipe_v2 #(
           m_mask_c[k] = 1'b1;
   end
 
-  logic [RQW+1:0] mask_pop_c, en_pop_c;
+  logic [POP_W-1:0] mask_pop_c, en_pop_c;
   always_comb begin
     mask_pop_c = '0;
     en_pop_c   = '0;
     for (int unsigned k = 0; k < LANES; k++) begin
-      mask_pop_c = mask_pop_c + (RQW+2)'(m_mask_c[k]);
-      en_pop_c   = en_pop_c   + (RQW+2)'(c2_en[k]);
+      mask_pop_c = mask_pop_c + POP_W'(m_mask_c[k]);
+      en_pop_c   = en_pop_c   + POP_W'(c2_en[k]);
     end
   end
 
   // ==========================================================================
   // C4 — response FIFO and miss sequencer
   // ==========================================================================
-  logic [LANES*16-1:0] rs_data [REQN];
-  logic [SRCW-1:0]     rs_src  [REQN];
+  logic [LANES*16-1:0] rs_data   [REQN];
+  logic [7:0]          rs_status [REQN];
+  logic [SRCW-1:0]     rs_src    [REQN];
   logic [RQW:0]        rs_wp, rs_rp;
   logic [RQW:0]        rs_n;
   assign rs_n = rs_wp - rs_rp;
 
   assign smp_valid_o  = (rs_n != '0);
   assign smp_data_o   = rs_data[rs_rp[RQW-1:0]];
+  assign smp_status_o = rs_status[rs_rp[RQW-1:0]];
   assign smp_src_id_o = rs_src[rs_rp[RQW-1:0]];
 
   // `rs_room` is TODAY's occupancy and NOTHING ELSE. It no longer gates
@@ -364,14 +403,43 @@ module zhao_texture_cache_pipe_v2 #(
   logic rs_pop;
   assign rs_pop = smp_valid_o && smp_ready_i;
 
-  logic              fb_busy_r, fb_req_r;
+  logic              fb_busy_r, fb_req_r, fb_accepted_r;
+  logic              fb_resv_r, replay_prepaid_r;
   logic [TAG_W-1:0]  fb_tag_r;
   logic [IDX_W-1:0]  fb_idx_r;
   logic [BEAT_W-1:0] fb_beat_r;
   logic [LANES-1:0]  fb_mask_r;
+  logic [SRCW-1:0]   fb_src_r;
 
   assign fill_valid_o = fb_req_r;
   assign fill_addr_o  = {fb_tag_r, fb_idx_r, {OFF_W{1'b0}}};
+
+  // FI owns the phase transition. Neither data nor refusal is accepted from an
+  // offered request; the request must have been accepted on an earlier edge.
+  logic fill_issue_accept_c, fill_refusal_legal_c, fill_data_accept_c;
+  logic fill_success_c, fill_terminal_c, fill_protocol_fault_set_c;
+  assign fill_issue_accept_c  = fill_valid_o && fill_ready_i;
+  assign fill_refusal_legal_c = fill_refused_i && fb_busy_r && fb_accepted_r;
+  assign fill_data_accept_c   = fill_data_valid_i && fb_busy_r
+                              && fb_accepted_r && !fill_refused_i;
+  assign fill_success_c       = fill_data_accept_c
+                              && (fb_beat_r == BEAT_W'(HW_PL - 1));
+  assign fill_terminal_c      = fill_success_c || fill_refusal_legal_c;
+
+  // Every named malformed source has a reachable positive control in the
+  // directed driver. Refusal still terminates when simultaneous or partial;
+  // malformed data is excluded from the RAM write enable above and below.
+  always_comb begin
+    fill_protocol_fault_set_c = 1'b0;
+    if (fill_data_valid_i && (!fb_busy_r || !fb_accepted_r))
+      fill_protocol_fault_set_c = 1'b1; // before FI, ninth, or unsolicited
+    if (fill_refused_i && (!fb_busy_r || !fb_accepted_r))
+      fill_protocol_fault_set_c = 1'b1; // before FI, no miss, or duplicate
+    if (fill_data_valid_i && fill_refused_i)
+      fill_protocol_fault_set_c = 1'b1; // refusal wins this collision
+    if (fill_refusal_legal_c && (fb_beat_r != '0))
+      fill_protocol_fault_set_c = 1'b1; // partial-line refusal
+  end
 
   // C3 resolves in order, so the request it describes is always `rq_rp`.
   logic c3_all_hit, c3_retire, c3_miss;
@@ -436,47 +504,81 @@ module zhao_texture_cache_pipe_v2 #(
   logic [RQW:0] rs_resv;
   logic         resv_room;
   logic [RQW:0] squash_c;
+  logic         c1_issue_fresh_c;
+  logic         c1_ordinary_live_c, c2_ordinary_live_c;
+  logic [RQW:0] resv_expected_c;
   assign resv_room = (rs_resv != (RQW+1)'(REQN));
+  assign c1_issue_fresh_c = c1_go
+                         && `ZHAO_PACKET_E_ISSUE_OWNS_FRESH_RESV(replay_prepaid_r);
+  assign c1_ordinary_live_c = c1_v && !c1_prepaid_r;
+  assign c2_ordinary_live_c = c2_v && !c2_prepaid_r;
 
-  // Literal structural-idle reduction.  Payload RAM is deliberately unreset and
-  // is not busy state; every ownership/occupancy/credit bit that can keep work
-  // alive is named here.  In particular rs_resv catches a leaked response
-  // credit even if all visible valids have accidentally gone low.
+  // Exact reservation ownership, not a bound. The five terms are clocked by
+  // independent enables: response pushes/pops, each pipeline stage, fill
+  // allocation/termination, and replay issue. A shared bad enable therefore
+  // cannot move both sides of an intended timing comparison in lockstep.
+  always_comb begin
+    resv_expected_c = rs_n
+                    + (RQW+1)'(c1_ordinary_live_c)
+                    + (RQW+1)'(c2_ordinary_live_c)
+                    + (RQW+1)'(fb_resv_r)
+                    + (RQW+1)'(replay_prepaid_r)
+                    + (RQW+1)'(c1_v && c1_prepaid_r)
+                    + (RQW+1)'(c2_v && c2_prepaid_r);
+  end
+
+  assign reservation_count_o = 32'(rs_resv);
+  assign reservation_owner_state_o = {
+      c2_v && c2_prepaid_r,
+      c1_v && c1_prepaid_r,
+      replay_prepaid_r,
+      fb_resv_r,
+      c2_ordinary_live_c,
+      c1_ordinary_live_c,
+      (rs_n != '0)
+  };
+  assign cache_work_state_o = {
+      replay_prepaid_r,
+      fb_resv_r,
+      fb_accepted_r,
+      fb_req_r,
+      fb_busy_r,
+      (rs_n != '0),
+      c2_v,
+      c1_v,
+      (rq_n != '0)
+  };
+
+  // Payload RAM is deliberately unreset and is not busy state. Every accepted
+  // work owner, including FI phase and reservation-transfer state, is explicit.
   assign idle_o = (rq_n == '0)
                && !c1_v
                && !c2_v
                && (rs_n == '0)
                && (rs_resv == '0)
                && !fb_busy_r
-               && !fb_req_r;
+               && !fb_req_r
+               && !fb_accepted_r
+               && !fb_resv_r
+               && !replay_prepaid_r;
 
-  // The probes a miss kills. C3 (`c2_v`) is the missing probe itself and C1 is
-  // the one behind it; both are squashed below, and both must have their
-  // reservations REFUNDED, because `rq_ip` rewinds and they will be re-probed
-  // under fresh ones. Without the refund the counter would leak two slots per
-  // miss and the cache would wedge after a handful of them.
-  //
-  // Safe by construction: `c1_go` contains `!c3_miss`, and a miss implies
-  // `!c3_all_hit`, so a miss can never coincide with an issue or a retire. The
-  // reservations belonging to already-queued responses are untouched.
-  // ENFORCED-BY: fpga/rtl/texture/zhao_texture_cache_pipe.sv:a_resv_never_exceeds_capacity
-  //
-  // "Safe by construction" is the sentence that most wants an enforcer, because
-  // it is exactly the claim nobody re-checks after the construction changes.
-  // ENFORCED-BY: fpga/rtl/texture/zhao_texture_cache_pipe.sv:a_resv_never_exceeds_capacity
-  // If a squash ever did coincide with an issue or a retire, that assertion is
-  // what fires: the counter would over- or under-refund and the reservation
-  // count would leave its capacity.
+  // A miss rewinds both probes and counts both as replayed work, but only the
+  // younger C1 reservation is refunded. C2 is the miss identity; its reservation
+  // changes owner to fb_resv_r and later to either the prepaid replay or refusal
+  // response. If the C2 probe itself was prepaid, the same single credit simply
+  // begins another blocking fill for a second missing line of that request.
   assign squash_c = (RQW+1)'(c2_v) + (RQW+1)'(c1_v);
 
   // Room was reserved two stages ago. If this ever needs `rs_room` back, the
   // counter is broken -- fix the counter, do not re-add the term.
   assign c3_retire = c3_all_hit;
 
-  // A probe may issue when there is something to issue, no miss is being
-  // handled, and a response slot has been RESERVED for it.
+  // A fresh probe needs room; the first replay after a successful fill spends
+  // the reservation already carried by replay_prepaid_r and must not reserve a
+  // second slot.
   logic c1_go;
-  assign c1_go = rq_issuable && !fb_busy_r && !c3_miss && resv_room;
+  assign c1_go = rq_issuable && !fb_busy_r && !c3_miss
+              && (replay_prepaid_r || resv_room);
 
   // Read addresses. Registered, which is what makes the arrays memory.
   logic [IDX_W-1:0] rd_idx  [LANES];
@@ -518,9 +620,9 @@ module zhao_texture_cache_pipe_v2 #(
         // identical to the shared loop it replaces: still non-blocking, so a
         // read and a write to one address on one edge still returns the OLD
         // contents, which is the read-during-write mode an M10K provides.
-        if (fb_busy_r && fill_data_valid_i && fb_mask_r[gl]) begin
+        if (fill_data_accept_c && fb_mask_r[gl]) begin
           g_lane[gl].data_r[{fb_idx_r, fb_beat_r}] <= fill_data_i;
-          if (fb_beat_r == BEAT_W'(HW_PL - 1)) begin
+          if (fill_success_c) begin
             g_lane[gl].tag_r[fb_idx_r] <= fb_tag_r;
           end
         end
@@ -546,28 +648,49 @@ module zhao_texture_cache_pipe_v2 #(
       rq_wp <= '0; rq_rp <= '0; rq_ip <= '0;
       rs_wp <= '0; rs_rp <= '0; rs_resv <= '0;
       c1_v <= 1'b0;
+      c1_prepaid_r <= 1'b0;
       c2_v <= 1'b0;
-      fb_busy_r <= 1'b0;
-      fb_req_r  <= 1'b0;
+      c2_prepaid_r <= 1'b0;
+      fb_busy_r    <= 1'b0;
+      fb_req_r     <= 1'b0;
+      fb_accepted_r <= 1'b0;
+      fb_resv_r    <= 1'b0;
+      replay_prepaid_r <= 1'b0;
+      fill_protocol_fault_o <= 1'b0;
       cache_hits_o   <= 32'd0;
       cache_misses_o <= 32'd0;
       fills_o        <= 32'd0;
       multicast_o    <= 32'd0;
       replays_o      <= 32'd0;
+      cache_jobs_accepted_o  <= 32'd0;
+      cache_jobs_completed_o <= 32'd0;
+      fill_jobs_accepted_o   <= 32'd0;
+      fill_jobs_completed_o  <= 32'd0;
+      fill_jobs_refused_o    <= 32'd0;
+      fill_data_beats_o      <= 32'd0;
       for (int unsigned k = 0; k < LANES; k++)
         for (int unsigned i = 0; i < LINES; i++) valid_r[k][i] <= 1'b0;
     end else begin
+      // Malformed observation dominates clear on the same edge. A frame clear
+      // is effective only after every accepted owner and credit has drained.
+      if (fill_protocol_fault_set_c)
+        fill_protocol_fault_o <= 1'b1;
+      else if (frame_fault_clear_i && idle_o)
+        fill_protocol_fault_o <= 1'b0;
+
       // ---- C0: accept ------------------------------------------------------
       if (acc_valid_i && acc_ready_o) begin
         rq_en[rq_wp[RQW-1:0]]   <= acc_en_i;
         rq_addr[rq_wp[RQW-1:0]] <= acc_addr_i;
         rq_src[rq_wp[RQW-1:0]]  <= acc_src_id_i;
         rq_wp <= rq_wp + (RQW+1)'(1);
+        cache_jobs_accepted_o <= cache_jobs_accepted_o + 32'd1;
       end
 
       // ---- C1: issue -------------------------------------------------------
       c1_v <= c1_go;
       if (c1_go) begin
+        c1_prepaid_r <= replay_prepaid_r;
         c1_en  <= rq_en[rq_ip[RQW-1:0]];
         c1_src <= rq_src[rq_ip[RQW-1:0]];
         for (int unsigned k = 0; k < LANES; k++) begin
@@ -575,6 +698,8 @@ module zhao_texture_cache_pipe_v2 #(
           c1_idx[k] <= i_idx[k];
         end
         rq_ip <= rq_ip + (RQW+1)'(1);
+        if (replay_prepaid_r)
+          replay_prepaid_r <= 1'b0;
       end
 
       // ---- C2: CAPTURE the memory outputs into fabric flops ----------------
@@ -589,6 +714,7 @@ module zhao_texture_cache_pipe_v2 #(
       // request it thinks it sees.
       c2_v <= c1_v;
       if (c1_v) begin
+        c2_prepaid_r <= c1_prepaid_r;
         c2_en  <= c1_en;
         c2_src <= c1_src;
         for (int unsigned k = 0; k < LANES; k++) begin
@@ -604,6 +730,7 @@ module zhao_texture_cache_pipe_v2 #(
       if (c3_retire) begin
         for (int unsigned k = 0; k < LANES; k++)
           rs_data[rs_wp[RQW-1:0]][16*k +: 16] <= c2_rdat[k];
+        rs_status[rs_wp[RQW-1:0]] <= 8'h00;
         rs_src[rs_wp[RQW-1:0]] <= c2_src;
         rs_wp <= rs_wp + (RQW+1)'(1);
         rq_rp <= rq_rp + (RQW+1)'(1);
@@ -612,18 +739,24 @@ module zhao_texture_cache_pipe_v2 #(
         // last lands.
         cache_hits_o <= cache_hits_o + 32'(en_pop_c);
       end
-      if (rs_pop) rs_rp <= rs_rp + (RQW+1)'(1);
+      if (rs_pop) begin
+        rs_rp <= rs_rp + (RQW+1)'(1);
+        cache_jobs_completed_o <= cache_jobs_completed_o + 32'd1;
+      end
 
       // ---- C3: a miss REWINDS the issue pointer and squashes the pipe ------
       // Nothing is lost: a request is only removed from the FIFO when it has
       // fully hit, so rewinding to `rq_rp` re-probes exactly the requests that
       // had not yet retired.
       if (c3_miss) begin
-        fb_busy_r <= 1'b1;
-        fb_req_r  <= 1'b1;
+        fb_busy_r    <= 1'b1;
+        fb_req_r     <= 1'b1;
+        fb_accepted_r <= 1'b0;
+        fb_resv_r    <= 1'b1;
         fb_tag_r  <= m_tag_c;
         fb_idx_r  <= m_idx_c;
         fb_mask_r <= m_mask_c;
+        fb_src_r  <= c2_src;
         fb_beat_r <= '0;
         fills_o   <= fills_o + 32'd1;
         cache_misses_o <= cache_misses_o + 32'(mask_pop_c);
@@ -640,55 +773,76 @@ module zhao_texture_cache_pipe_v2 #(
         replays_o <= replays_o + 32'(squash_c);
       end
 
-      // ---- C4: the reservation counter, as ONE combined next-state ---------
-      // ONE unconditional assignment, never a scatter of `if`s: issue, retire,
-      // pop and miss can all land on the same edge, and separate nonblocking
-      // increments would each read the same old value with only the last
-      // surviving -- the trap the `cache_hits_o` popcount comment above
-      // records. Both arms below are single expressions for that reason.
-      //
-      // Note what is NOT here: `rs_wp++`. Retiring MOVES a reservation from the
-      // pipeline into the FIFO and the total is unchanged; only `rs_pop` frees
-      // one. That is the mechanism, and it is the half that is easy to get
-      // wrong -- decrementing on retirement would let the next probe issue
-      // against a slot the queued response still holds, which is the original
-      // defect with extra steps.
-      //
-      // Neither arm can underflow. `c2_v` and `c1_v` each hold a reservation of
-      // their own, so `rs_resv >= squash_c`; and `rs_pop` implies a queued
-      // response, whose reservation is not one of those two.
-      if (c3_miss) rs_resv <= rs_resv - squash_c - (RQW+1)'(rs_pop);
-      else         rs_resv <= rs_resv + (RQW+1)'(c1_go) - (RQW+1)'(rs_pop);
+      // ---- C4: exact reservation next-state --------------------------------
+      // A fresh issue creates one reservation, a response pop destroys one,
+      // and a miss destroys only a younger ordinary C1 reservation. C2's credit
+      // is transferred to fb_resv_r; response enqueue, successful replay and
+      // refusal retirement are ownership moves and therefore absent here.
+      rs_resv <= rs_resv
+               + (RQW+1)'(c1_issue_fresh_c)
+               - (RQW+1)'(c3_miss && c1_ordinary_live_c)
+               - (RQW+1)'(rs_pop);
 
-      // ---- the fill engine, unchanged in behaviour -------------------------
-      if (fb_busy_r) begin
-        if (fb_req_r && fill_ready_i) fb_req_r <= 1'b0;
-        if (fill_data_valid_i) begin
-          // `data_r` and `tag_r` are written by the CLOCK-ONLY process above,
-          // under these same conditions. They are not written here because an
-          // array touched by an asynchronously-reset process cannot infer as
-          // an M10K. `valid_r` stays: it is 64 bits and it needs the reset.
-          if (fb_beat_r == BEAT_W'(HW_PL - 1)) begin
-            for (int unsigned k = 0; k < LANES; k++)
-              if (fb_mask_r[k]) valid_r[k][fb_idx_r] <= 1'b1;
-            fb_busy_r <= 1'b0;
-          end
+      // ---- C4: typed fill termination --------------------------------------
+      if (fill_issue_accept_c) begin
+        fb_req_r      <= 1'b0;
+        fb_accepted_r <= 1'b1;
+        fill_jobs_accepted_o <= fill_jobs_accepted_o + 32'd1;
+      end
+      if (fill_terminal_c)
+        fill_jobs_completed_o <= fill_jobs_completed_o + 32'd1;
+
+      if (fill_data_accept_c) begin
+        fill_data_beats_o <= fill_data_beats_o + 32'd1;
+        if (fill_success_c) begin
+          // RAM/tag writes occur in the clock-only bank process from this same
+          // legal-data predicate. Publish valid only after beat eight and move
+          // the blocking credit to the first replay of this exact head.
+          for (int unsigned k = 0; k < LANES; k++)
+            if (fb_mask_r[k]) valid_r[k][fb_idx_r] <= 1'b1;
+          fb_busy_r       <= 1'b0;
+          fb_accepted_r   <= 1'b0;
+          fb_resv_r       <= 1'b0;
+          replay_prepaid_r <= 1'b1;
+        end else begin
           fb_beat_r <= fb_beat_r + BEAT_W'(1);
         end
+      end
+
+      if (fill_refusal_legal_c) begin
+        // Refusal wins over same-cycle data, so fill_data_accept_c is false.
+        // Partial storage is made unreachable again. The C2-origin reservation
+        // moves unchanged into this one typed terminal response.
+        for (int unsigned k = 0; k < LANES; k++)
+          if (fb_mask_r[k]) valid_r[k][fb_idx_r] <= 1'b0;
+        rs_data[rs_wp[RQW-1:0]]   <= '0;
+        rs_status[rs_wp[RQW-1:0]] <= 8'h01;
+        rs_src[rs_wp[RQW-1:0]]    <= fb_src_r;
+        rs_wp <= rs_wp + (RQW+1)'(1);
+        rq_rp <= rq_rp + (RQW+1)'(1);
+        rq_ip <= `ZHAO_PACKET_E_REFUSAL_NEXT_IP(rq_rp, (RQW+1)'(1));
+        c1_v <= 1'b0;
+        c2_v <= 1'b0;
+        fb_busy_r       <= 1'b0;
+        fb_req_r        <= 1'b0;
+        fb_accepted_r   <= 1'b0;
+        fb_resv_r       <= 1'b0;
+        replay_prepaid_r <= 1'b0;
+        fill_jobs_refused_o   <= fill_jobs_refused_o + 32'd1;
       end
     end
   end
 
 `ifndef SYNTHESIS
   // ==========================================================================
-  // THE THREE PROPERTIES THE RESERVATION COUNTER EXISTS TO KEEP
+  // THE RESPONSE-RESERVATION PROPERTIES
   // ==========================================================================
   // Simulation-only immediate assertions in a clocked block, matching
   // zhao_geom_assetfetch.sv:632 -- they run under Verilator in the directed
   // test rather than only under a formal frontend, because the defect they
   // guard was found by a cycle model and has to stay caught by an ordinary run.
   //
-  // ENFORCED-BY: tests/texture/texture_cache_pipe_directed.cpp (case 6)
+  // ENFORCED-BY: tests/texture/texture_cache_pipe_v2_directed.cpp
   //
   // `rst_n` is NOT read synchronously here. A net that is an asynchronous reset
   // in one process and a synchronous condition in another is Verilator's
@@ -703,7 +857,28 @@ module zhao_texture_cache_pipe_v2 #(
 
   always_ff @(posedge clk) begin
     if (assert_armed_q) begin
-      // 1. Never promise more slots than exist. If this trips, an issue path
+      // 1. Exact ownership is the contract. A capacity-only assertion cannot
+      //    detect refunded blocking credit or a double-reserved replay.
+      a_resv_exact_ownership :
+        assert (rs_resv == resv_expected_c)
+        else $error("cache_pipe: reservation identity failed rs_resv=%0d expected=%0d (rs=%0d c1o=%0d c2o=%0d fill=%0d prepaid=%0d/%0d/%0d)",
+                    rs_resv, resv_expected_c, rs_n,
+                    c1_ordinary_live_c, c2_ordinary_live_c, fb_resv_r,
+                    replay_prepaid_r, c1_v && c1_prepaid_r,
+                    c2_v && c2_prepaid_r);
+
+      a_prepaid_has_one_owner :
+        assert (((RQW+1)'(replay_prepaid_r)
+               + (RQW+1)'(c1_v && c1_prepaid_r)
+               + (RQW+1)'(c2_v && c2_prepaid_r)) <= (RQW+1)'(1))
+        else $error("cache_pipe: one fill reservation appeared in multiple prepaid owners");
+
+      a_idle_evidence_is_complete :
+        assert (idle_o == ((reservation_count_o == 32'd0)
+                        && (cache_work_state_o == 9'd0)))
+        else $error("cache_pipe: observation-only evidence omitted an idle operand");
+
+      // 2. Never promise more slots than exist. If this trips, an issue path
       //    is missing `resv_room` and results will start overwriting one
       //    another in C2 again.
       a_resv_never_exceeds_capacity :
@@ -737,4 +912,9 @@ module zhao_texture_cache_pipe_v2 #(
 
 endmodule : zhao_texture_cache_pipe_v2
 
+`undef ZHAO_PACKET_E_REFUSAL_NEXT_IP
+`undef ZHAO_PACKET_E_ISSUE_OWNS_FRESH_RESV
+`ifdef ZHAO_PACKET_E_MUTANT_SELECTOR_COLLISION
+  `undef ZHAO_PACKET_E_MUTANT_SELECTOR_COLLISION
+`endif
 `default_nettype wire

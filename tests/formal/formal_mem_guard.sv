@@ -5,7 +5,7 @@
 //      that request lies fully inside its client's OWNED region (the Phase-2
 //      map: scanout read-only within either FB slot (disjoint since the
 //      W2.7 bank split); blit write-only inside the
-//      CMD-granted slot window; ENGINE1 read-only inside GEOM.ASSET_POOL;
+//      CMD-granted slot window; ENGINE1 read-only inside RENDER.ASSET_POOL;
 //      TERRAIN.BUILD -- and NO other client -- inside TERRAIN.PAGE_POOL, in
 //      EITHER direction: WRITE for TERRAIN.PAGELOADER's pages, READ for
 //      TERRAIN.WRITEBACK's layer-F sheets).
@@ -124,6 +124,16 @@ module formal_mem_guard
     .guard_violation, .guard_violations, .guard_violation_req
   );
 
+  // Acceptance and verdict are distinct edges. This witness makes client 5's
+  // deny cover prove the real accepted-request protocol rather than a coincident
+  // violation level with no captured request.
+  logic client5_accept_q;
+  always_ff @(posedge clk) begin
+    if (!rst_n) client5_accept_q <= 1'b0;
+    else client5_accept_q <= req.valid && rsp.ready &&
+                             (req.client == zhao_client_e'(3'd5));
+  end
+
   // the effective (clamped) blit window the DUT is entitled to allow
   wire [31:0] blit_base = env_blit_slot ? ZHAO_FB_SLOT1_BASE : ZHAO_FB_SLOT0_BASE;
   wire [31:0] blit_span_eff =
@@ -135,8 +145,8 @@ module formal_mem_guard
   wire fwd_in_slot1 = (fwd_addr32 >= ZHAO_FB_SLOT1_BASE)
                    && (fwd_end32 <= ZHAO_FB_SLOT1_BASE + ZHAO_FB_SLOT_SPAN);
   // Phase-3 asset pool (spec/memory_rules.md 5f): constant bounds, read-only.
-  wire fwd_in_asset = (fwd_addr32 >= ZHAO_GEOM_ASSET_BASE)
-                   && (fwd_end32 <= ZHAO_GEOM_ASSET_BASE + ZHAO_GEOM_ASSET_SPAN);
+  wire fwd_in_render_asset = (fwd_addr32 >= ZHAO_RENDER_ASSET_BASE)
+                   && (fwd_end32 <= ZHAO_RENDER_ASSET_BASE + ZHAO_RENDER_ASSET_SPAN);
   // TERRAIN.PAGE_POOL (rulings T2 / T3 / T4, spec/memory_rules.md 5b):
   // constant bounds, TERRAIN.BUILD's alone, BOTH DIRECTIONS. It is the only
   // window in the map that carries traffic each way, which is why the
@@ -182,7 +192,7 @@ module formal_mem_guard
         // region can never alter a frame buffer -- plus constant bounds, so no
         // map input can move it and BASE+SPAN cannot wrap.
         || (arb_req.client == ZHAO_CLIENT_ENGINE1 && !arb_req.write
-            && fwd_in_asset)
+            && fwd_in_render_asset)
         // TERRAIN.BUILD owns TERRAIN.PAGE_POOL in BOTH DIRECTIONS. A fourth
         // window, and named as one. The direction term that used to sit here
         // (`arb_req.write`) is GONE, and that is the whole amendment: ruling
@@ -211,12 +221,18 @@ module formal_mem_guard
       // which is the honest form. The alternative, leaving the old assertion
       // and exempting the new client from it, keeps a proof green by removing
       // the new region from its scope.
-      a1_map: assert (fwd_in_slot0 || fwd_in_slot1 || fwd_in_asset
+      a1_map: assert (fwd_in_slot0 || fwd_in_slot1 || fwd_in_render_asset
                    || fwd_in_terrain);
 
-      // The asset pool is read-only at the level of the THEOREM, not merely as
-      // a consequence of pass_ok's spelling: no forward into it is ever a write.
-      a1_asset_ro: assert (!(fwd_in_asset && arb_req.write));
+      // The render asset pool is read-only and has exactly one global owner.
+      // Geometry and texture are local mux subowners, never new client IDs.
+      a1_render_asset_ro: assert (!(fwd_in_render_asset && arb_req.write));
+      a1_render_asset_owner:
+        assert (!(fwd_in_render_asset &&
+                  arb_req.client != ZHAO_CLIENT_ENGINE1));
+      // Client 5 is deliberately unspent and cannot reach any forwarded arm.
+      a1_no_forward_client5:
+        assert (arb_req.client != zhao_client_e'(3'd5));
 
       // WHAT `a1_terrain_wo` BECAME, AND WHY IT IS REPLACED RATHER THAN
       // DELETED.
@@ -243,8 +259,8 @@ module formal_mem_guard
       //
       // WHAT IS NOT WEAKENED. a1_map is untouched: the bounds did not move, so
       // a read arm accidentally spelled with different constants still escapes
-      // the map and still fails there. a1_asset_ro is untouched. a1_client is
-      // untouched. And a read cannot alter a frame buffer -- the GEOM.ASSET_POOL
+      // the map and still fails there. a1_render_asset_ro is untouched. a1_client is
+      // untouched. And a read cannot alter a frame buffer -- the RENDER.ASSET_POOL
       // argument -- which holds twice here, since a forwarded read carries no
       // write data and this window is disjoint from both FB slots.
       a1_terrain_wr_owner: assert (!(fwd_in_terrain && arb_req.write
@@ -279,10 +295,17 @@ module formal_mem_guard
       // Without this the ENGINE0 arm of a1_region could be vacuous, which is
       // the exact failure this file's header records having shipped once.
       c_forward_engine: cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_ENGINE0);
-      // Same reason, one region later: without this the ENGINE1 arm of
-      // a1_region and the whole of a1_asset_ro could be vacuously true.
-      c_forward_asset:  cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_ENGINE1
-                               && fwd_in_asset);
+      // Packet E uses 16-byte texture fills while retained geometry uses 32/64.
+      // Three covers prevent one legal request shape from hiding a dead arm.
+      c_forward_render_asset_16:
+        cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_ENGINE1 &&
+               !arb_req.write && fwd_in_render_asset && arb_req.len == 7'd16);
+      c_forward_render_asset_32:
+        cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_ENGINE1 &&
+               !arb_req.write && fwd_in_render_asset && arb_req.len == 7'd32);
+      c_forward_render_asset_64:
+        cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_ENGINE1 &&
+               !arb_req.write && fwd_in_render_asset && arb_req.len == 7'd64);
       // Same reason, one region later. Without this the TERRAIN.BUILD arm of
       // a1_region and the terrain theorems above could be vacuously true --
       // and a vacuous no-escape proof is exactly what this harness's header
@@ -314,6 +337,8 @@ module formal_mem_guard
                                    && !arb_req.write && fwd_in_terrain);
       c_accept_ok:      cover (rsp.ok);
       c_violation:      cover (guard_violation);
+      c_client5_denied: cover (client5_accept_q && rsp.violation &&
+                               guard_violation);
       c_handshake:      cover (arb_req.valid && arb_rsp.grant);
       c_two_violations: cover (guard_violations >= 32'd2);
     end

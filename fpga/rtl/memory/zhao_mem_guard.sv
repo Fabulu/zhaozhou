@@ -11,7 +11,7 @@
 //   ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
 //
 // Phase-3 extensions, each a window opened WITH the block that needed it:
-//   GEOM.ASSET_POOL   : [0x06A0_0000, 0x0800_0000)  22 MiB, ENGINE1, READ-only
+//   RENDER.ASSET_POOL : [0x06A0_0000, 0x0800_0000)  22 MiB, ENGINE1, READ-only
 //   TERRAIN.PAGE_POOL : [0x0400_0000, 0x054E_0000)  20.875 MiB,
 //                       TERRAIN.BUILD, WRITE (pages in) and READ (F sheets
 //                       out) -- ONE window, TWO arms, TWO theorems
@@ -100,7 +100,7 @@ module zhao_mem_guard
 
   logic [31:0] addr32, end32;
   logic        len_ok, be_ok, shape_ok;
-  logic        scan_ok, blit_ok, asset_ok;
+  logic        scan_ok, blit_ok, render_asset_ok;
   logic        pass_ok;
 
   assign addr32   = {5'b0, req.addr};
@@ -140,10 +140,11 @@ module zhao_mem_guard
   assign blit_ok       = req.write && map_valid
                          && (addr32 >= blit_base) && (end32 <= blit_end);
 
-  // asset pool: READ-ONLY, ENGINE1's geometry region (spec/memory_rules.md 5f).
-  // This is the Phase-3 extension the Phase-2 note promised, and it is the one
-  // thing standing between the console and its geometry front end: every
-  // MESHFETCH descriptor read was landing on `default: pass_ok = 1'b0`.
+  // render asset pool: READ-ONLY, ENGINE1's shared geometry/texture region
+  // (spec/memory_rules.md 5f). Historical geometry constants remain aliases.
+  // The original reason for the window remains: every MESHFETCH descriptor read
+  // otherwise landed on `default: pass_ok = 1'b0`; Packet E now serializes
+  // immutable texture-line reads through the same local ENGINE1 owner.
   //
   // A THIRD WINDOW IS OPENED HERE, unlike the ENGINE0 change which admitted a
   // client to an existing one -- so it is stated plainly rather than folded in.
@@ -154,9 +155,9 @@ module zhao_mem_guard
   // cannot arise here. No map input is consulted, so unlike the blit window
   // this one is not frame-scoped and does not depend on `map_valid`.
   // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
-  assign asset_ok = !req.write
-                  && (addr32 >= ZHAO_GEOM_ASSET_BASE)
-                  && (end32  <= ZHAO_GEOM_ASSET_BASE + ZHAO_GEOM_ASSET_SPAN);
+  assign render_asset_ok = !req.write
+                  && (addr32 >= ZHAO_RENDER_ASSET_BASE)
+                  && (end32  <= ZHAO_RENDER_ASSET_BASE + ZHAO_RENDER_ASSET_SPAN);
 
   // terrain page pool: TERRAIN.BUILD's bank-2 region, WRITE for the loader and
   // READ for the writeback (rulings T2 / T3 / T4, spec/memory_rules.md 5b).
@@ -267,7 +268,7 @@ module zhao_mem_guard
       ZHAO_CLIENT_SCANOUT:  pass_ok = shape_ok && scan_ok;
       ZHAO_CLIENT_BLIT_DMA: pass_ok = shape_ok && blit_ok && (fb_writer == 1'b0);
       ZHAO_CLIENT_ENGINE0:  pass_ok = shape_ok && blit_ok && (fb_writer == 1'b1);
-      ZHAO_CLIENT_ENGINE1:  pass_ok = shape_ok && asset_ok;
+      ZHAO_CLIENT_ENGINE1:  pass_ok = shape_ok && render_asset_ok;
       ZHAO_CLIENT_TERRAIN_BUILD: pass_ok = shape_ok && (terrain_ok || terrain_rd_ok);
       default: pass_ok = 1'b0;      // DEBUG still owns nothing, and neither
                                     // does the unspent client 5

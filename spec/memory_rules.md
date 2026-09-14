@@ -274,6 +274,11 @@ SDRAM integration inherits "FB slots in distinct banks"):
   `addr ≥ base ∧ addr + len ≤ end` for the client's OWNED region and
   forwards to the arbiter, else drops the request (nothing is written),
   pulses `guard_violation`, and counts (formal `mem_guard_no_escape`).
+- Guard acceptance and verdict are different events. A master holds the complete
+  request through `req.valid && rsp.ready`, drops valid immediately after that
+  edge, then receives exactly one registered `rsp.ok` or `rsp.violation` pulse.
+  A denied request occupies no forward slot, so `rsp.ready` may be high during
+  its violation pulse; that level is not permission to resubmit it.
 - Region ownership in Phase 2: a client owns the slot it was granted for
   the frame (blit DMA writes exactly the slot named by `DebugFrameBlit
   .dst_slot` and exactly `byte_len` = `canvas_bytes(mode)` bytes — any other
@@ -348,7 +353,7 @@ with its own non-vacuity cover, so a regression names which direction broke and
 a merged arm cannot satisfy both covers while proving neither.
 
 **A read cannot alter a framebuffer**, the same argument that carried
-`GEOM.ASSET_POOL`, and here it holds twice: a forwarded read carries no write
+`RENDER.ASSET_POOL`, and here it holds twice: a forwarded read carries no write
 data, and these constant bounds are disjoint from both FB slots and from the
 asset pool. The widening is confined to bank 2.
 
@@ -397,15 +402,18 @@ separate, ruled work and it needs the residency→guard interface first.
 See `design/contracts/GEOM.PARAMBUF.md`. ENGINE1 owns the render-geometry
 region; the two views are disjoint for the same reason the two FB slots are.
 
-## 5f. The GEOM asset pool — the Phase-3 region (2026-09-04)
+## 5f. The shared render asset pool — Phase 3 / Packet E
 
 §5 promised that "later phases extend the map (texture/terrain/particle pools
-per the charter allocator)". **This is that extension for geometry, and it is
-the single thing that has kept the geometry front end out of the console.**
+per the charter allocator)". Phase 3 opened this window for geometry; Packet E
+does **not** widen it. Packet E serializes immutable texture-line reads with the
+existing geometry adapter behind one local ENGINE1 mux, preserving the same
+client, direction, bounds and global arbiter slot. Client 5 remains unspent.
+The original geometry blocker and evidence remain below.
 
 | Range | Region | Size | Owner | Access |
 |---|---|---|---|---|
-| `0x06A0_0000` .. `0x07FF_FFFF` | `GEOM.ASSET_POOL` | 22 MiB | `ENGINE1` | **read-only** |
+| `0x06A0_0000` .. `0x07FF_FFFF` | `RENDER.ASSET_POOL` | 22 MiB | `ENGINE1` | **read-only** |
 
 ### Why it was the blocker
 
@@ -443,17 +451,18 @@ ENGINE0 change was the latter and this is honestly not. Two things carry it:
   is not frame-scoped and cannot be moved by a grant.
 
 `tests/formal/formal_mem_guard.sv` widened **with** the region rather than
-around it: `a1_map` now reads `slot0 || slot1 || asset` instead of exempting
-ENGINE1 from a two-slot assertion, which is the shape that keeps a proof green
-by shrinking what it covers. Added: `a1_asset_ro` (no forward into the pool is
-ever a write) and `c_forward_asset` (non-vacuity — the exact failure this
-harness's own header records having shipped once). **bmc and cover both pass,
-and deleting `!req.write` fails `a1_asset_ro` and `a1_region` at step 4.**
+around it: `a1_map` reads both slots, render assets and terrain instead of
+exempting ENGINE1 from scope. `a1_render_asset_ro` and
+`a1_render_asset_owner` pin direction/owner; `a1_no_forward_client5` pins the
+unspent slot. Separate `c_forward_render_asset_16/32/64` covers prevent the new
+texture shape from hiding dead geometry shapes, and `c_client5_denied` proves an
+accepted client-5 request reaches the denial verdict. The earlier bmc/cover and
+mutation evidence remains in the formal-run ledger under its historical
+`a1_asset_ro`/`c_forward_asset` names.
 
 ### It is a knob, and what is NOT decided here
 
-`ZHAO_GEOM_ASSET_BASE` / `ZHAO_GEOM_ASSET_SPAN` are named editable constants in
-`zhao_pkg`; nothing derives them and the pool can move to any unmapped range.
+`ZHAO_RENDER_ASSET_BASE` / `ZHAO_RENDER_ASSET_SPAN` are the named editable constants in `zhao_pkg`; historical `ZHAO_GEOM_ASSET_*` names are aliases, not a second region authority. Nothing derives the values and the pool can move to any unmapped range.
 
 **Not decided:** the pool's internal layout (descriptors vs index streams vs
 vertex records), whether PARAMBUF and assets need separate local arbiter

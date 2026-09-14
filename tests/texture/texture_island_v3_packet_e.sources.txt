@@ -1,0 +1,46 @@
+# Packet-E E2 V3 integration source order.  Package first, selected top last.
+# The 26 production sources below are exactly the Packet-B closure; Packet E
+# changes no production source membership or order.
+#
+# Production/direct/fullctx: compile exactly lines 21-46.
+# Mutant controls: insert
+#   tests/mutants/zhao_texture_island_v3_packet_b_mutants.sv
+# immediately before the final top, then define exactly one paired selector:
+#   ZHAO_PACKET_E_MUTANT_PRE_E_FILL_LIFETIME /
+#     PACKET_E_EXPECT_PRE_E_FILL_LIFETIME
+#   ZHAO_PACKET_E_MUTANT_RELABEL_REFUSAL_ERR /
+#     PACKET_E_EXPECT_RELABEL_REFUSAL_ERR
+#   ZHAO_PACKET_E_MUTANT_REFUSAL_ENTERS_NATIVE /
+#     PACKET_E_EXPECT_REFUSAL_NATIVE_ARITH
+#   ZHAO_PACKET_E_MUTANT_DROP_HELD_REFUSAL /
+#     PACKET_E_EXPECT_DROP_HELD_REFUSAL
+# Dual-selector controls must independently fail SV elaboration and C++
+# preprocessing with their exact collision diagnostics. The shim is never a
+# production source. Use the exact configured verilator_bin.exe and a private
+# --Mdir.
+fpga/rtl/common/zhao_render_texture_pkg.sv
+fpga/rtl/field/zhao_field_rcp24_rom.sv
+fpga/rtl/raster/zhao_raster_ticketq.sv
+fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv
+fpga/rtl/texture/zhao_texture_mod255.sv
+fpga/rtl/texture/zhao_texture_aux_div6.sv
+fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+fpga/rtl/texture/zhao_texture_palette_res_v2.sv
+fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv
+fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv
+fpga/rtl/texture/zhao_texture_v3bank.sv
+fpga/rtl/texture/zhao_texture_v3rq.sv
+fpga/rtl/texture/zhao_texture_v3own.sv
+fpga/rtl/texture/zhao_texture_metajoin_v2.sv
+fpga/rtl/texture/zhao_texture_uv_join_v2.sv
+fpga/rtl/texture/zhao_texture_early_desc_v2.sv
+fpga/rtl/texture/zhao_texture_frag_expand_v2.sv
+fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv
+fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
+fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
+fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+fpga/rtl/texture/zhao_texture_island_v3_top.sv

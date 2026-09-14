@@ -88,10 +88,12 @@ BINNER_SOURCES = (
 PROTECTED_HASHES = {
     "fpga/rtl/common/zhao_shell_top.sv":
         "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
+    # Packet E legitimately refreshes the V3 source and generated interface while
+    # retaining Packet D's public closure and every protected old/oracle byte.
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "c0b6c9667cda653e22a6920e42ab6690c43b15d4ea9ad9f8b2edc51f25d02b13",
+        "e77e43a1f6e2baf9b7ee4bbc78093c28b6ad1be683d10babbde698f988ada5b5",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "3853f6254aef67ba0da3f02f4bc948c87fb77160839dbac70d5b167ff3cd012f",
+        "4ba2cba9df8c6e6baaf1c68a236b91612fc6b3fff69be76ab3098b335bc50348",
     "fpga/rtl/raster/zhao_raster_attrdiv.sv":
         "5f5e9b0dbd3d1c23d4b0b55c84aaa06e873d0aee72be25bed2d64e7ff1424eca",
     "fpga/rtl/raster/zhao_raster_attrstep.sv":
@@ -168,6 +170,10 @@ def validate_cmake(text: str) -> None:
     if active.count(start) != 1:
         raise AssertionError("Packet-D CMake section is not exact/unique")
     active = active[active.index(start):]
+    packet_e_start = "set(ZHAO_PACKET_E_CACHE_SOURCE_MANIFEST"
+    if active.count(packet_e_start) != 1:
+        raise AssertionError("Packet-D CMake section lacks the unique Packet-E boundary")
+    active = active[:active.index(packet_e_start)]
     required_once = (
         "raster/raster_attrgrad_v2.sources.txt)",
         "Packet-D attribute source manifest contains a blank record",

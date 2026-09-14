@@ -1,0 +1,688 @@
+#!/usr/bin/env python3
+"""Static closure and mutation controls for R0 Packet E."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+import re
+import sys
+import unittest
+
+
+REPO = Path(__file__).resolve().parents[2]
+CACHE_MANIFEST = REPO / "tests/texture/texture_cache_pipe_v2_packet_e.sources.txt"
+TOP_MANIFEST = REPO / "tests/texture/texture_island_v3_packet_e.sources.txt"
+MUX_MANIFEST = REPO / "tests/memory/render_asset_mux.sources.txt"
+
+CACHE_SOURCES = (
+    "tests/mutants/zhao_texture_cache_pipe_v2_packet_e_mutants.sv",
+    "fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv",
+)
+TOP_SOURCES = (
+    "fpga/rtl/common/zhao_render_texture_pkg.sv",
+    "fpga/rtl/field/zhao_field_rcp24_rom.sv",
+    "fpga/rtl/raster/zhao_raster_ticketq.sv",
+    "fpga/rtl/raster/zhao_raster_ticketq_rh.sv",
+    "fpga/rtl/raster/zhao_raster_rcp24_mul.sv",
+    "fpga/rtl/raster/zhao_raster_rcp24_v4.sv",
+    "fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv",
+    "fpga/rtl/texture/zhao_texture_mod255.sv",
+    "fpga/rtl/texture/zhao_texture_aux_div6.sv",
+    "fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv",
+    "fpga/rtl/texture/zhao_texture_mosaic_v2.sv",
+    "fpga/rtl/texture/zhao_texture_palette_res_v2.sv",
+    "fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv",
+    "fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv",
+    "fpga/rtl/texture/zhao_texture_v3bank.sv",
+    "fpga/rtl/texture/zhao_texture_v3rq.sv",
+    "fpga/rtl/texture/zhao_texture_v3own.sv",
+    "fpga/rtl/texture/zhao_texture_metajoin_v2.sv",
+    "fpga/rtl/texture/zhao_texture_uv_join_v2.sv",
+    "fpga/rtl/texture/zhao_texture_early_desc_v2.sv",
+    "fpga/rtl/texture/zhao_texture_frag_expand_v2.sv",
+    "fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv",
+    "fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv",
+    "fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv",
+    "fpga/rtl/texture/zhao_texture_material_combine_v3.sv",
+    "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
+)
+MUX_SOURCES = (
+    "fpga/rtl/generated/zhao_abi_pkg.sv",
+    "fpga/rtl/common/zhao_pkg.sv",
+    "fpga/rtl/memory/zhao_mem_guard.sv",
+    "tests/mutants/zhao_render_asset_mux_mutants.sv",
+    "fpga/rtl/memory/zhao_render_asset_mux.sv",
+    "tests/memory/tb_render_asset_mux.sv",
+)
+
+EXPECTED_CTESTS = (
+    "packet_e_cache_directed",
+    "packet_e_cache_lanes8_reqn2",
+    "packet_e_cache_denial_replay_mutant",
+    "packet_e_cache_double_resv_assertion",
+    "packet_e_cache_double_resv_behavior",
+    "texture_island_v3_packet_b_directed",
+    "texture_island_v3_packet_b_production_profile",
+    "texture_island_v3_packet_b_fullctx",
+    "packet_e_top_historical_fill_lifetime_mutant",
+    "packet_e_top_relabel_refusal_mutant",
+    "packet_e_top_refusal_native_arith_mutant",
+    "packet_e_top_drop_held_refusal_mutant",
+    "packet_e_render_asset_mux_directed",
+    "packet_e_render_asset_mux_hold_guard_valid_mutant",
+    "packet_e_render_asset_mux_drift_subowner_mutant",
+    "packet_e_render_asset_mux_texture_pack64_mutant",
+    "packet_e_render_asset_mux_terminate_beat7_mutant",
+    "packet_e_render_asset_mux_accept_beat9_mutant",
+    "packet_e_render_asset_mux_denial_silence_mutant",
+    "packet_e_cache_sv_selector_collision",
+    "packet_e_cache_cpp_selector_collision",
+    "packet_e_top_sv_selector_collision",
+    "packet_e_top_cpp_selector_collision",
+    "packet_e_mux_sv_selector_collision",
+    "packet_e_mux_cpp_selector_collision",
+    "packet_e_registration_static",
+)
+
+PROTECTED_HASHES = {
+    "fpga/rtl/common/zhao_shell_top.sv":
+        "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
+    "fpga/rtl/prod/zhao_prod_top.sv":
+        "d3cf61c302f73c1d656ae481ae40b775ddadccec50efe778d6071ea2238ede54",
+    "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv":
+        "2d452a1e80a75da4a8dac859a69c7467e2190ec7364cf3e8be0f16f8355421da",
+    "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv":
+        "b5a968df15f3380af03e1cc1ba608d34e16a28d3f25368b787a00abd34485ea9",
+    "fpga/rtl/raster/zhao_raster_attrgrad_v2.sv":
+        "096cd57a9813a9c359cf436351b4f01ef1e3c988ab229702461efe70904eb36a",
+    "fpga/rtl/geometry/zhao_geom_binner_v2.sv":
+        "7b89e1705420a2fd5ebfd84ceed9f27fb0855d13bc6f8c2d2c19dbc38ad3e867",
+    "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv":
+        "7b25f7425bf6cdf93b810d8ca514f5c372b9fc18707b51924b0db854a716876e",
+    "fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv":
+        "44d7a155d176c99bd0b4587e93ca693477ae30154e9513e78ecc0a4af2ae4536",
+}
+CURRENT_HASHES = {
+    "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
+        "4ba2cba9df8c6e6baaf1c68a236b91612fc6b3fff69be76ab3098b335bc50348",
+    "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
+        "e77e43a1f6e2baf9b7ee4bbc78093c28b6ad1be683d10babbde698f988ada5b5",
+}
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def source_rows(path: Path) -> tuple[str, ...]:
+    text = path.read_text(encoding="utf-8")
+    if not text.endswith("\n"):
+        raise AssertionError(f"{path.name} lacks a final newline")
+    lines = text.splitlines()
+    if any(not line or line != line.strip() for line in lines):
+        raise AssertionError(f"{path.name} contains blank or padded records")
+    for line in lines:
+        if not line.startswith("#") and not re.fullmatch(
+            r"(?:fpga|tests)/[A-Za-z0-9_./-]+\.sv", line
+        ):
+            raise AssertionError(f"invalid Packet-E source record: {line!r}")
+    return tuple(line for line in lines if not line.startswith("#"))
+
+
+def validate_source_rows(rows: tuple[str, ...], expected: tuple[str, ...],
+                         *, check_files: bool = True) -> None:
+    if rows != expected or len(rows) != len(set(rows)):
+        raise AssertionError("Packet-E source rows are not exact, ordered, and unique")
+    for row in rows:
+        if not re.fullmatch(r"(?:fpga|tests)/[A-Za-z0-9_./-]+\.sv", row):
+            raise AssertionError("invalid Packet-E source path: " + repr(row))
+        if ".." in Path(row).parts or (check_files and not (REPO / row).is_file()):
+            raise AssertionError("missing/escaping Packet-E source path: " + row)
+
+
+def active_cmake_text(text: str) -> str:
+    bracket = re.compile(r"#\[(=*)\[.*?\]\1\]", re.DOTALL)
+    text = bracket.sub(
+        lambda match: "".join("\n" if char == "\n" else " "
+                              for char in match.group(0)), text)
+    active: list[str] = []
+    for line in text.splitlines(keepends=True):
+        quoted = False
+        escaped = False
+        comment_at = None
+        for index, char in enumerate(line):
+            if escaped:
+                escaped = False
+            elif char == "\\" and quoted:
+                escaped = True
+            elif char == '"':
+                quoted = not quoted
+            elif char == "#" and not quoted:
+                comment_at = index
+                break
+        active.append(line if comment_at is None else
+                      line[:comment_at] + ("\n" if line.endswith("\n") else ""))
+    return "".join(active)
+
+
+def active_sv_text(text: str, initial_defines: frozenset[str] = frozenset()) -> str:
+    block = re.compile(r"/\*.*?\*/", re.DOTALL)
+    text = block.sub(
+        lambda match: "".join("\n" if char == "\n" else " "
+                              for char in match.group(0)), text)
+    uncommented: list[str] = []
+    for line in text.splitlines(keepends=True):
+        quoted = False
+        escaped = False
+        cut = None
+        for index, char in enumerate(line):
+            if escaped:
+                escaped = False
+            elif char == "\\" and quoted:
+                escaped = True
+            elif char == '"':
+                quoted = not quoted
+            elif char == "/" and not quoted and index + 1 < len(line) and line[index + 1] == "/":
+                cut = index
+                break
+        uncommented.append(line if cut is None else
+                           line[:cut] + ("\n" if line.endswith("\n") else ""))
+
+    defines = set(initial_defines)
+    stack: list[tuple[bool, bool, bool]] = []
+    active = True
+    result: list[str] = []
+    directive = re.compile(
+        r"^\s*`(ifdef|ifndef|elsif|else|endif|define|undef)\b\s*([A-Za-z_][A-Za-z0-9_]*)?"
+    )
+    for line in uncommented:
+        match = directive.match(line)
+        if match is None:
+            if active:
+                result.append(line)
+            continue
+        op, name = match.group(1), match.group(2)
+        if op in {"ifdef", "ifndef"}:
+            if name is None:
+                raise AssertionError("malformed SystemVerilog conditional")
+            condition = name in defines
+            if op == "ifndef":
+                condition = not condition
+            stack.append((active, condition, False))
+            active = active and condition
+        elif op == "elsif":
+            if not stack or name is None:
+                raise AssertionError("orphan/malformed SystemVerilog `elsif")
+            parent, branch_taken, else_seen = stack[-1]
+            if else_seen:
+                raise AssertionError("SystemVerilog `elsif follows `else")
+            condition = name in defines
+            active = parent and not branch_taken and condition
+            stack[-1] = (parent, branch_taken or condition, False)
+        elif op == "else":
+            if not stack:
+                raise AssertionError("orphan SystemVerilog `else")
+            parent, branch_taken, else_seen = stack[-1]
+            if else_seen:
+                raise AssertionError("duplicate SystemVerilog `else")
+            stack[-1] = (parent, True, True)
+            active = parent and not branch_taken
+        elif op == "endif":
+            if not stack:
+                raise AssertionError("orphan SystemVerilog `endif")
+            parent, _taken, _seen = stack.pop()
+            active = parent
+        elif op == "define" and active:
+            if name is None:
+                raise AssertionError("malformed SystemVerilog `define")
+            defines.add(name)
+        elif op == "undef" and active and name is not None:
+            defines.discard(name)
+    if stack:
+        raise AssertionError("unterminated SystemVerilog conditional")
+    return "".join(result)
+
+
+def require_once(text: str, markers: tuple[str, ...], label: str) -> None:
+    for marker in markers:
+        if text.count(marker) != 1:
+            raise AssertionError(f"{label} marker is not exact/unique: {marker}")
+
+
+def validate_cache_shape(cache: str, mutant: str, driver: str) -> None:
+    active = active_sv_text(cache)
+    require_once(active, (
+        "output var logic [7:0]          smp_status_o",
+        "input  var logic                fill_refused_i",
+        "input  var logic                frame_fault_clear_i",
+        "output var logic                fill_protocol_fault_o",
+        "output var logic [31:0]         cache_jobs_accepted_o",
+        "output var logic [31:0]         cache_jobs_completed_o",
+        "output var logic [31:0]         fill_jobs_accepted_o",
+        "output var logic [31:0]         fill_jobs_completed_o",
+        "output var logic [31:0]         fill_jobs_refused_o",
+        "output var logic [31:0]         fill_data_beats_o",
+        "output var logic [31:0]         reservation_count_o",
+        "output var logic [6:0]          reservation_owner_state_o",
+        "output var logic [8:0]          cache_work_state_o",
+        "localparam int unsigned POP_W  = (LANES < 1) ? 1 : $clog2(LANES + 1);",
+        "assign fill_issue_accept_c  = fill_valid_o && fill_ready_i;",
+        "assign fill_refusal_legal_c = fill_refused_i && fb_busy_r && fb_accepted_r;",
+        "assign fill_data_accept_c   = fill_data_valid_i && fb_busy_r",
+        "assign fill_terminal_c      = fill_success_c || fill_refusal_legal_c;",
+        "assign smp_status_o = rs_status[rs_rp[RQW-1:0]];",
+        "assign c1_issue_fresh_c = c1_go",
+        "resv_expected_c = rs_n",
+        "+ (RQW+1)'(fb_resv_r)",
+        "+ (RQW+1)'(replay_prepaid_r)",
+        "assign idle_o = (rq_n == '0)",
+        "if (fill_data_accept_c && fb_mask_r[gl]) begin",
+        "rs_status[rs_wp[RQW-1:0]] <= 8'h01;",
+        "rs_src[rs_wp[RQW-1:0]]    <= fb_src_r;",
+        "fill_jobs_refused_o   <= fill_jobs_refused_o + 32'd1;",
+        "if (fill_protocol_fault_set_c)",
+        "else if (frame_fault_clear_i && idle_o)",
+        "a_resv_exact_ownership :",
+        "assert (rs_resv == resv_expected_c)",
+    ), "Packet-E cache")
+    for selector in (
+        "ZHAO_PACKET_E_MUTANT_DENIAL_REPLAYS",
+        "ZHAO_PACKET_E_MUTANT_PREPAID_DOUBLE_RESV",
+    ):
+        if mutant.count(selector) != 2:
+            raise AssertionError("Packet-E cache selector missing/duplicated: " + selector)
+    require_once(driver, (
+        "PACKET_E_DRIVER_SELECTOR_COLLISION: define exactly one inverse branch",
+        "PACKET_E_DRIVER_MODE_COLLISION: parameter and inverse controls are exclusive",
+        "void test_data_before_fi_and_quiet_clear()",
+        "void test_simultaneous_data_refusal()",
+    ), "Packet-E cache driver")
+
+
+def validate_top_shape(top: str, mutant: str, direct: str, fullctx: str) -> None:
+    active = active_sv_text(top)
+    forbidden = (
+        "unsupported_fill_refusal_pre_e",
+        "sim_pre_e_fill_refusal_lifetime_q",
+        ".fill_refused_i(1'b0)",
+    )
+    for marker in forbidden:
+        if marker in active:
+            raise AssertionError("pre-E refusal lifetime remains in production: " + marker)
+    require_once(active, (
+        ".smp_data_o(cache_rsp_data_w), .smp_status_o(cache_rsp_status_w)",
+        ".fill_refused_i(fill_refused_i)",
+        "cache_rsp_status_w != cache_rsp_stalled_status_q",
+        "wire cache_status_refusal_c =",
+        "!cache_status_refusal_c && !metadata_read_pending_q",
+        "logic [3:0] refusal_valid_q;",
+        "logic [TUPLEW-1:0] refusal_tuple_q [0:3];",
+        "`ZHAO_PACKET_E_REFUSAL_CLASS(cache_checked_token_w)",
+        "refusal_tuple_q[response_class] <= {\n                cache_checked_token_w, SOURCE_REFUSED_STATUS,\n                8'h00, 8'hff, 24'hff00ff};",
+        "class_merge_rr_refusal_q[merge_class]",
+        "!class_merge_select_refusal_w[merge_class]",
+        "assign class_terminal_offer_valid_w = class_merge_valid_w;",
+        "assign class_dispatch_offer_valid_w = class_merge_valid_w &",
+        "assign q_dispatch_req_valid = |class_terminal_offer_valid_w[3:0];",
+    ), "Packet-E V3 top")
+    for selector in (
+        "ZHAO_PACKET_E_MUTANT_PRE_E_FILL_LIFETIME",
+        "ZHAO_PACKET_E_MUTANT_RELABEL_REFUSAL_ERR",
+        "ZHAO_PACKET_E_MUTANT_REFUSAL_ENTERS_NATIVE",
+        "ZHAO_PACKET_E_MUTANT_DROP_HELD_REFUSAL",
+    ):
+        if mutant.count(selector) != 1:
+            raise AssertionError("Packet-E top selector missing/duplicated: " + selector)
+    require_once(direct, (
+        "PACKET_E_EXPECT_SELECTOR_COLLISION__DEFINE_EXACTLY_ONE",
+        "packet-e historical-pre-E-fill-lifetime mutant FIRED",
+        "packet-e refusal-relabel-to-ERR mutant FIRED",
+        "packet-e refusal-enters-native-arithmetic mutant FIRED",
+        "packet-e dropped-held-refusal mutant FIRED",
+        "run_cache_protocol_fault_controls(h);",
+    ), "Packet-E V3 driver")
+    if "lifetime_sources=6" not in fullctx:
+        raise AssertionError("Packet-E full-context gate did not remove fill lifetime source")
+
+
+def validate_mux_shape(mux: str, mutant: str, driver: str) -> None:
+    active = active_sv_text(mux)
+    require_once(active, (
+        "M_IDLE       = 3'd0",
+        "M_OFFER      = 3'd1",
+        "M_VERDICT    = 3'd2",
+        "M_DATA       = 3'd3",
+        "M_DRAIN_BAD  = 3'd4",
+        "M_STRUCTURAL = 3'd5",
+        "input  logic            engine1_raw16_last_i",
+        "picked_req_c.client = texture_shape_ok_c",
+        "picked_req_c.client = geom_shape_ok_c",
+        "picked_req_c.len    = 7'd16;",
+        "picked_req_c.be     = 64'h0000_0000_0000_FFFF;",
+        "guard_accept_c    = guard_req_o.valid && guard_rsp_i.ready;",
+        "&& !((st_q == M_OFFER)\n                           && (selected_source_missing_c\n                               || selected_source_changed_c));",
+        "if (selected_source_missing_c || selected_source_changed_c) begin",
+        "if (guard_accept_c && !owner_texture_q)",
+        "if (guard_accept_c && owner_texture_q)",
+        "texture_fill_data_valid_o = raw_usable_c && route_texture_c",
+        "geom_beat_valid_o = raw_usable_c && !route_texture_c",
+        "packed_with_raw_c[15:0]  = engine1_raw16_data_i;",
+        "packed_with_raw_c[63:48] = engine1_raw16_data_i;",
+        "if (engine1_raw16_valid_i && engine1_raw16_last_i) begin",
+        "if (structural_event_c)\n        structural_fault_o <= 1'b1;",
+    ), "Packet-E render-asset mux")
+    normalized = " ".join(active.split())
+    for owner in ("texture_shape_ok_c", "geom_shape_ok_c"):
+        expected_client = (
+            f"picked_req_c.client = {owner} ? ZHAO_CLIENT_ENGINE1 : "
+            "ZHAO_CLIENT_NONE;"
+        )
+        if normalized.count(expected_client) != 1:
+            raise AssertionError("Packet-E mux no longer offers malformed shape as CLIENT_NONE")
+    selectors = (
+        "ZHAO_RENDER_ASSET_MUTANT_HOLD_GUARD_VALID",
+        "ZHAO_RENDER_ASSET_MUTANT_DRIFT_SUBOWNER",
+        "ZHAO_RENDER_ASSET_MUTANT_TEXTURE_PACK64",
+        "ZHAO_RENDER_ASSET_MUTANT_TERMINATE_BEAT7",
+        "ZHAO_RENDER_ASSET_MUTANT_ACCEPT_BEAT9",
+        "ZHAO_RENDER_ASSET_MUTANT_DENIAL_SILENCE",
+    )
+    for selector in selectors:
+        if mutant.count(selector) != 1:
+            raise AssertionError("Packet-E mux selector missing/duplicated: " + selector)
+    require_once(driver, (
+        "RENDER_ASSET_MUX_DRIVER_SELECTOR_COLLISION: define exactly one inverse branch",
+        "held geometry A reaches the decisive newly-ready offer cycle",
+        "newly-ready same-cycle geometry drift suppresses guard valid and both local readies",
+        "held texture A reaches the decisive newly-ready offer cycle",
+        "newly-ready same-cycle source disappearance suppresses guard valid and both readies",
+    ), "Packet-E mux driver")
+
+
+def validate_cmake(text: str) -> None:
+    active = active_cmake_text(text)
+    start = "set(ZHAO_PACKET_E_CACHE_SOURCE_MANIFEST"
+    if active.count(start) != 1:
+        raise AssertionError("Packet-E CMake section is not exact/unique")
+    section = active[active.index(start):]
+    required = (
+        "texture/texture_cache_pipe_v2_packet_e.sources.txt)",
+        "Packet-E cache source manifest is not the exact ordered two-file closure",
+        "SOURCES ${ZHAO_PACKET_E_CACHE_SOURCES}",
+        "list(APPEND assert_args --no-assert)",
+        "zhao_packet_e_cache_target(pe_c8 ON -GLANES=8 -GREQN=2)",
+        "EXPECT_PACKET_E_LANES8_REQN2=1",
+        "add_test(NAME packet_e_cache_double_resv_assertion",
+        "tools/test_packet_e_assertion_control.py",
+        "add_test(NAME packet_e_cache_double_resv_behavior COMMAND pe_cb)",
+        "texture/texture_island_v3_packet_e.sources.txt)",
+        "Packet-E top source manifest must contain exactly 26 SV paths",
+        "Packet-E top source manifest diverges from Packet B's exact 26-source authority",
+        "list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 25",
+        "-GMIGRATION_SHADOWS=1 -D${SV_SELECTOR}",
+        "historical_fill_lifetime PACKET_E_EXPECT_PRE_E_FILL_LIFETIME",
+        "relabel_refusal PACKET_E_EXPECT_RELABEL_REFUSAL_ERR",
+        "refusal_native_arith PACKET_E_EXPECT_REFUSAL_NATIVE_ARITH",
+        "drop_held_refusal PACKET_E_EXPECT_DROP_HELD_REFUSAL",
+        "memory/render_asset_mux.sources.txt)",
+        "Packet-E mux source manifest is not the exact ordered six-file closure",
+        "SOURCES ${ZHAO_PACKET_E_MUX_SOURCES}",
+        "hold_guard_valid pe_m1 EXPECT_RENDER_ASSET_HOLD_GUARD_VALID_MUTANT",
+        "drift_subowner pe_m2 EXPECT_RENDER_ASSET_DRIFT_SUBOWNER_MUTANT",
+        "texture_pack64 pe_m3 EXPECT_RENDER_ASSET_TEXTURE_PACK64_MUTANT",
+        "terminate_beat7 pe_m4 EXPECT_RENDER_ASSET_TERMINATE_BEAT7_MUTANT",
+        "accept_beat9 pe_m5 EXPECT_RENDER_ASSET_ACCEPT_BEAT9_MUTANT",
+        "denial_silence pe_m6 EXPECT_RENDER_ASSET_DENIAL_SILENCE_MUTANT",
+        "zhao_packet_e_selector_control(packet_e_cache_sv_selector_collision cache-sv)",
+        "zhao_packet_e_selector_control(packet_e_cache_cpp_selector_collision cache-cpp)",
+        "zhao_packet_e_selector_control(packet_e_top_sv_selector_collision top-sv)",
+        "zhao_packet_e_selector_control(packet_e_top_cpp_selector_collision top-cpp)",
+        "zhao_packet_e_selector_control(packet_e_mux_sv_selector_collision mux-sv)",
+        "zhao_packet_e_selector_control(packet_e_mux_cpp_selector_collision mux-cpp)",
+        "tools/test_packet_e_selector_collision.py",
+        'PASS_REGULAR_EXPRESSION "PACKET_E_SELECTOR_COLLISION\\\\[${PROFILE}\\\\] FIRED"',
+        "add_test(NAME packet_e_registration_static",
+        "Packet-E required CTest inventory must contain exactly 26 names",
+        "foreach(required_packet_e_test IN LISTS ZHAO_PACKET_E_REQUIRED_TESTS)",
+        'if(NOT TEST "${required_packet_e_test}")',
+    )
+    require_once(section, required, "Packet-E CMake")
+    inventory_match = re.search(
+        r"set\(ZHAO_PACKET_E_REQUIRED_TESTS\n(.*?)\)", section, re.DOTALL
+    )
+    if inventory_match is None:
+        raise AssertionError("Packet-E configure-time inventory is missing")
+    inventory = tuple(line.strip() for line in inventory_match.group(1).splitlines())
+    if inventory != EXPECTED_CTESTS or len(inventory) != len(set(inventory)):
+        raise AssertionError("Packet-E configure-time CTest inventory is not exact")
+    if section.count("PASS_REGULAR_EXPRESSION") != 6:
+        raise AssertionError("Packet-E PASS expression inventory is not exact")
+    if section.count('FAIL_REGULAR_EXPRESSION "FAIL"') != 7:
+        raise AssertionError("Packet-E ordinary FAIL expression inventory is not exact")
+    if section.count('FAIL_REGULAR_EXPRESSION "packet-b directed FAIL"') != 1:
+        raise AssertionError("Packet-E V3-mutant FAIL expression is not exact")
+    for diagnostic in (
+        "texture_cache_pipe_v2_packet_e_denial_replay_mutant.*checks passed",
+        "PACKET_E_ASSERTION_CONTROL\\\\[double-reservation\\\\] FIRED",
+        "texture_cache_pipe_v2_packet_e_double_resv_mutant.*checks passed",
+        'PASS_REGULAR_EXPRESSION "${DIAGNOSTIC}"',
+        'PASS_REGULAR_EXPRESSION "${SUITE}.*checks passed"',
+        'PASS_REGULAR_EXPRESSION "PACKET_E_SELECTOR_COLLISION\\\\[${PROFILE}\\\\] FIRED"',
+    ):
+        if section.count(diagnostic) != 1:
+            raise AssertionError("Packet-E PASS diagnostic is not exact: " + diagnostic)
+
+
+class PacketEClosureTests(unittest.TestCase):
+    def test_source_manifests_are_exact(self) -> None:
+        for path, expected in (
+            (CACHE_MANIFEST, CACHE_SOURCES),
+            (TOP_MANIFEST, TOP_SOURCES),
+            (MUX_MANIFEST, MUX_SOURCES),
+        ):
+            rows = source_rows(path)
+            validate_source_rows(rows, expected)
+            self.assertEqual(rows, expected)
+
+    def test_source_manifest_detectors_fire(self) -> None:
+        for expected in (CACHE_SOURCES, TOP_SOURCES, MUX_SOURCES):
+            mutations = (
+                expected[:-1],
+                expected + (expected[-1],),
+                (expected[1], expected[0]) + expected[2:],
+            )
+            for mutation in mutations:
+                with self.assertRaises(AssertionError):
+                    validate_source_rows(mutation, expected, check_files=False)
+
+    def test_cache_typed_terminal_reservation_and_controls(self) -> None:
+        cache = (REPO / CACHE_SOURCES[-1]).read_text(encoding="utf-8")
+        mutant = (REPO / CACHE_SOURCES[0]).read_text(encoding="utf-8")
+        driver = (REPO / "tests/texture/texture_cache_pipe_v2_directed.cpp").read_text(
+            encoding="utf-8"
+        )
+        validate_cache_shape(cache, mutant, driver)
+        with self.assertRaises(AssertionError):
+            validate_cache_shape(cache.replace("rs_status[rs_wp[RQW-1:0]] <= 8'h01;", "", 1), mutant, driver)
+        with self.assertRaises(AssertionError):
+            validate_cache_shape(cache.replace("$clog2(LANES + 1)", "$clog2(REQN + 1)", 1), mutant, driver)
+
+    def test_top_refusal_bypass_merge_and_lifetime_controls(self) -> None:
+        top = (REPO / TOP_SOURCES[-1]).read_text(encoding="utf-8")
+        mutant = (REPO / "tests/mutants/zhao_texture_island_v3_packet_b_mutants.sv").read_text(
+            encoding="utf-8"
+        )
+        direct = (REPO / "tests/texture/texture_island_v3_packet_b_directed.cpp").read_text(
+            encoding="utf-8"
+        )
+        fullctx = (REPO / "tests/texture/texture_island_v3_packet_b_fullctx.cpp").read_text(
+            encoding="utf-8"
+        )
+        validate_top_shape(top, mutant, direct, fullctx)
+        with self.assertRaises(AssertionError):
+            validate_top_shape(top.replace("!cache_status_refusal_c", "1'b1", 1), mutant, direct, fullctx)
+        with self.assertRaises(AssertionError):
+            validate_top_shape(top.replace("assign class_terminal_offer_valid_w = class_merge_valid_w;", "", 1), mutant, direct, fullctx)
+
+    def test_mux_guard_raw_last_and_source_lifetime_controls(self) -> None:
+        mux = (REPO / "fpga/rtl/memory/zhao_render_asset_mux.sv").read_text(encoding="utf-8")
+        mutant = (REPO / "tests/mutants/zhao_render_asset_mux_mutants.sv").read_text(
+            encoding="utf-8"
+        )
+        driver = (REPO / "tests/memory/render_asset_mux_directed.cpp").read_text(
+            encoding="utf-8"
+        )
+        validate_mux_shape(mux, mutant, driver)
+        with self.assertRaises(AssertionError):
+            validate_mux_shape(mux.replace("&& (selected_source_missing_c", "&& 1'b0 && (selected_source_missing_c", 1), mutant, driver)
+        with self.assertRaises(AssertionError):
+            validate_mux_shape(mux.replace("input  logic            engine1_raw16_last_i", "", 1), mutant, driver)
+
+    def test_render_asset_alias_guard_reference_and_proofs(self) -> None:
+        pkg = active_sv_text((REPO / "fpga/rtl/common/zhao_pkg.sv").read_text(encoding="utf-8"))
+        guard = active_sv_text((REPO / "fpga/rtl/memory/zhao_mem_guard.sv").read_text(encoding="utf-8"))
+        reference = (REPO / "reference/include/zref/zref_mem.hpp").read_text(encoding="utf-8")
+        formal = (REPO / "tests/formal/formal_mem_guard.sv").read_text(encoding="utf-8")
+        direct = (REPO / "tests/memory/mem_guard_directed.cpp").read_text(encoding="utf-8")
+        require_once(pkg, (
+            "ZHAO_RENDER_ASSET_BASE  = 32'h06A0_0000",
+            "ZHAO_RENDER_ASSET_SPAN  = 32'h0160_0000",
+            "ZHAO_GEOM_ASSET_BASE    = ZHAO_RENDER_ASSET_BASE",
+            "ZHAO_GEOM_ASSET_SPAN    = ZHAO_RENDER_ASSET_SPAN",
+        ), "Packet-E package")
+        self.assertIsNone(re.search(r"ZHAO_CLIENT_[A-Z0-9_]+\s*=\s*3'd5", pkg))
+        require_once(guard, (
+            "assign render_asset_ok = !req.write",
+            "&& (addr32 >= ZHAO_RENDER_ASSET_BASE)",
+            "&& (end32  <= ZHAO_RENDER_ASSET_BASE + ZHAO_RENDER_ASSET_SPAN);",
+            "ZHAO_CLIENT_ENGINE1:  pass_ok = shape_ok && render_asset_ok;",
+            "default: pass_ok = 1'b0;",
+        ), "Packet-E guard")
+        require_once(reference, (
+            "constexpr uint32_t kRenderAssetBase = 0x06A00000u;",
+            "constexpr uint32_t kRenderAssetSpan = 0x01600000u;",
+            "constexpr uint32_t kGeomAssetBase = kRenderAssetBase;",
+            "constexpr uint32_t kGeomAssetSpan = kRenderAssetSpan;",
+            "case ENGINE1:",
+            "return !r.write && r.addr >= kRenderAssetBase &&",
+        ), "Packet-E reference")
+        for marker in (
+            "fwd_in_render_asset",
+            "a1_render_asset_ro",
+            "a1_render_asset_owner",
+            "a1_no_forward_client5",
+            "c_forward_render_asset_16",
+            "c_forward_render_asset_32",
+            "c_forward_render_asset_64",
+            "c_client5_denied",
+        ):
+            self.assertIn(marker, formal)
+        require_once(direct, (
+            "const bool fire = top.g_valid && top.g_ready;",
+            "Drop valid immediately after the actual acceptance edge",
+            "const unsigned ok_delta = saw_ok - saw_ok0;",
+            "constexpr uint32_t base = kRenderAssetBase;",
+            "for (unsigned len : {16u, 32u, 64u})",
+            "MemoryGuard::DEBUG, 5u, MemoryGuard::TERRAIN_BUILD",
+        ), "Packet-E guard driver")
+
+    def test_interface_artifact_preserves_public_schema(self) -> None:
+        path = REPO / "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["module"]["name"], "zhao_texture_island_v3_top")
+        self.assertEqual(len(payload["parameters"]), 15)
+        self.assertEqual(len(payload["ports"]), 118)
+        self.assertEqual(
+            tuple(row["path"] for row in payload["source_closure"]), TOP_SOURCES
+        )
+        self.assertEqual(
+            payload["hashes"]["top_source_sha256"],
+            CURRENT_HASHES["fpga/rtl/texture/zhao_texture_island_v3_top.sv"],
+        )
+        selected = {row["name"]: row["selected_value"]["text"]
+                    for row in payload["parameters"]}
+        self.assertEqual(selected["MIGRATION_SHADOWS"], "1'h1")
+
+    def test_selector_collision_helper_is_exact(self) -> None:
+        helper = (REPO / "tests/tools/test_packet_e_selector_collision.py").read_text(
+            encoding="utf-8"
+        )
+        require_once(helper, (
+            '"cache-sv": {',
+            '"cache-cpp": {',
+            '"top-sv": {',
+            '"top-cpp": {',
+            '"mux-sv": {',
+            '"mux-cpp": {',
+            '"ZHAO_PACKET_E_MUTANT_SELECTOR_COLLISION___05FDEFINE_EXACTLY_ONE_SELECTOR"',
+            '"ZHAO_PACKET_E_TOP_MUTANT_SELECTOR_COLLISION___05FDEFINE_EXACTLY_ONE_SELECTOR"',
+            '"ZHAO_RENDER_ASSET_MUX_MUTANT_SELECTOR_COLLISION___05FDEFINE_EXACTLY_ONE_SELECTOR"',
+            '"PACKET_E_DRIVER_SELECTOR_COLLISION: define exactly one inverse branch"',
+            '"PACKET_E_EXPECT_SELECTOR_COLLISION__DEFINE_EXACTLY_ONE"',
+            '"RENDER_ASSET_MUX_DRIVER_SELECTOR_COLLISION: define exactly one inverse branch"',
+            'timeout=120',
+            'timeout=30',
+            'if completed.returncode == 0:',
+            'if str(spec["diagnostic"]) not in diagnostic:',
+        ), "Packet-E selector helper")
+        assertion_helper = (
+            REPO / "tests/tools/test_packet_e_assertion_control.py"
+        ).read_text(encoding="utf-8")
+        require_once(assertion_helper, (
+            "cache_pipe: reservation identity failed rs_resv=2 expected=1",
+            'timeout=15',
+            'except subprocess.TimeoutExpired as exc:',
+            'if (EXPECTED not in diagnostic or "Verilog $stop" not in diagnostic',
+            'diagnostic.count("Assertion failed") != 1',
+            'PACKET_E_ASSERTION_CONTROL[double-reservation] FIRED',
+        ), "Packet-E assertion helper")
+
+    def test_cmake_registration_and_detectors(self) -> None:
+        cmake = (REPO / "tests/CMakeLists.txt").read_text(encoding="utf-8")
+        validate_cmake(cmake)
+        start = cmake.index("set(ZHAO_PACKET_E_CACHE_SOURCE_MANIFEST")
+        prefix, section = cmake[:start], cmake[start:]
+        mutations = (
+            section.replace("-GLANES=8 -GREQN=2", "-GLANES=8 -GREQN=8", 1),
+            section.replace("list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 25", "list(APPEND ZHAO_PACKET_E_TOP_MUTANT_SOURCES", 1),
+            section.replace("SOURCES ${ZHAO_PACKET_E_MUX_SOURCES}", "SOURCES", 1),
+            section.replace("  packet_e_registration_static)", ")", 1),
+            section.replace("packet_e_mux_cpp_selector_collision", "packet_e_mux_cpp_collision", 1),
+        )
+        for mutation in mutations:
+            with self.assertRaises(AssertionError):
+                validate_cmake(prefix + mutation)
+
+    def test_protected_and_refreshed_bytes_are_exact(self) -> None:
+        for relative, expected in {**PROTECTED_HASHES, **CURRENT_HASHES}.items():
+            with self.subTest(path=relative):
+                self.assertEqual(sha256(REPO / relative), expected)
+        self.assertNotEqual(
+            hashlib.sha256((REPO / "fpga/rtl/common/zhao_shell_top.sv").read_bytes() + b"\n").hexdigest(),
+            PROTECTED_HASHES["fpga/rtl/common/zhao_shell_top.sv"],
+        )
+
+    def test_mux_is_excluded_and_unconnected(self) -> None:
+        tools = REPO / "tools/quartus"
+        if str(tools) not in sys.path:
+            sys.path.insert(0, str(tools))
+        import check_prod_manifest
+
+        tops, excluded = check_prod_manifest.read_manifest(REPO / "design/prod_manifest.yml")
+        self.assertNotIn("zhao_render_asset_mux", tops)
+        self.assertEqual(excluded["zhao_render_asset_mux"][0], "not-yet-adopted")
+        for relative in (
+            "design/fit_targets.yml",
+            "fpga/quartus/prod_fit_sources.txt",
+            "fpga/rtl/prod/zhao_prod_top.sv",
+            "fpga/rtl/common/zhao_shell_top.sv",
+        ):
+            self.assertNotIn(
+                "zhao_render_asset_mux", (REPO / relative).read_text(encoding="utf-8")
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

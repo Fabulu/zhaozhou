@@ -1,4 +1,4 @@
-// zhao_texture_island_v3_top.sv -- Packet-B shared V3 texture composition.
+// zhao_texture_island_v3_top.sv -- Packet-E E2 shared V3 texture composition.
 //
 // zhao_texture_v3own is the only fragment-lifecycle owner.  Every descriptor,
 // material row, binding lookup, class completion and AUX transaction is keyed by
@@ -32,6 +32,20 @@
 `endif
 `ifndef ZHAO_PACKET_B_RSP_OBS_DATA
 `define ZHAO_PACKET_B_RSP_OBS_DATA(data, pending) data
+`endif
+
+// Packet-E refusal seams.  The production defaults preserve the original cache
+// token, bypass every native arithmetic path on nonzero status, and present the
+// held refusal to the fair per-class merge.  The committed mutant file may
+// override exactly one expression immediately before this source.
+`ifndef ZHAO_PACKET_E_CACHE_STATUS_IS_REFUSAL
+`define ZHAO_PACKET_E_CACHE_STATUS_IS_REFUSAL(status) (|(status))
+`endif
+`ifndef ZHAO_PACKET_E_REFUSAL_CLASS
+`define ZHAO_PACKET_E_REFUSAL_CLASS(token) token[17:16]
+`endif
+`ifndef ZHAO_PACKET_E_REFUSAL_MERGE_VALID
+`define ZHAO_PACKET_E_REFUSAL_MERGE_VALID(valid) (valid)
 `endif
 
 module zhao_texture_island_v3_top #(
@@ -95,7 +109,7 @@ module zhao_texture_island_v3_top #(
     output var logic [7:0]              cfg_rsp_page_generation_o,
     output var logic [7:0]              active_page_generation_o,
 
-    // One-line cache fill.  Packet-B denial is deliberately inert/HOLD.
+    // One-line cache fill. Packet-E denial is a typed terminal response.
     output var logic                    fill_req_valid_o,
     input  var logic                    fill_req_ready_i,
     output var logic [31:0]             fill_req_addr_o,
@@ -198,6 +212,8 @@ module zhao_texture_island_v3_top #(
   localparam logic [1:0] CLS_NEAR = 2'd1;
   localparam logic [1:0] CLS_BIL  = 2'd2;
   localparam logic [1:0] CLS_ERR  = 2'd3;
+  localparam logic [7:0] SOURCE_REFUSED_STATUS =
+      8'h01 << TEXTURE_STATUS_SOURCE_REFUSED_BIT;
   localparam logic [2:0] FMT_CLUT8    = 3'd0;
   localparam logic [2:0] FMT_RGB565   = 3'd1;
   localparam logic [2:0] FMT_CLUT4    = 3'd2;
@@ -205,6 +221,9 @@ module zhao_texture_island_v3_top #(
   localparam logic [2:0] FMT_ARGB4444 = 3'd4;
 
   initial begin : p_packet_b_parameters
+`ifdef ZHAO_PACKET_E_TOP_MUTANT_SELECTOR_COLLISION
+    $fatal(1, "ZHAO_TEXTURE_ISLAND_V3_PACKET_E_MUTANT_SELECTOR_COLLISION: define exactly one selector");
+`endif
     if ((DEPTH != 16) || (CTXW != 64) || (RCTXW != 160) ||
         (AUXCTXW != 224) || (BINDW != 8) || (LODW != 8) ||
         (GENW != 8) || (LANES != 4) || (SRCW != 18) ||
@@ -216,6 +235,11 @@ module zhao_texture_island_v3_top #(
         (RCTXW + CTXW != 224) || (TUPLEW != TOKW + TEXTURE_RESULT_W))
       $fatal(1, "texture island V3 Packet-B width contract changed");
   end
+
+`ifdef ZHAO_PACKET_E_TOP_MUTANT_SELECTOR_COLLISION
+  ZHAO_PACKET_E_TOP_MUTANT_SELECTOR_COLLISION__DEFINE_EXACTLY_ONE_SELECTOR
+      u_packet_e_top_selector_collision_compile_fail();
+`endif
 
   function automatic logic [3:0] required_mask_of(
       input logic [1:0] count, input logic aux_required);
@@ -603,7 +627,6 @@ module zhao_texture_island_v3_top #(
    && !q_cfg_rsp_valid;
 
   logic frame_fault_clear_w;
-  logic unsupported_fill_refusal_q;
   logic owner_mask_lifetime_fault_q;
   logic cache_sidx3_lifetime_fault_q;
   logic lifetime_admission_block_w;
@@ -611,24 +634,28 @@ module zhao_texture_island_v3_top #(
   logic sim_rcp_qerr_overlay_w;
   logic sim_expand_overflow_overlay_w;
   logic sim_uv_mismatch_overlay_w;
-  logic sim_fill_refusal_overlay_w;
   logic sim_owner_mask_overlay_w;
   logic sim_cache_sidx3_overlay_w;
   logic sim_metajoin_illegal_overlay_w;
   logic [2:0] sim_material_fault_mode_w;
   logic sim_combine_hold_w;
+  logic [3:0] sim_packet_e_merge_hold_w;
+  logic sim_packet_e_cache_class_override_en_w;
+  logic [1:0] sim_packet_e_cache_class_override_w;
 `ifndef SYNTHESIS
   logic sim_frame_fault_inject_q = 1'b0;
-  logic [6:0] sim_lifetime_fault_pulse_q = 7'd0;
+  logic [5:0] sim_lifetime_fault_pulse_q = 6'd0;
   logic sim_rcp_qerr_latched_q;
   logic sim_expand_overflow_latched_q;
   logic sim_uv_mismatch_latched_q;
-  logic sim_fill_refusal_latched_q;
   logic sim_owner_mask_latched_q;
   logic sim_cache_sidx3_latched_q;
   logic sim_metajoin_illegal_latched_q;
   logic [2:0] sim_material_fault_mode_q = 3'd0;
   logic sim_combine_hold_q = 1'b0;
+  logic [3:0] sim_packet_e_merge_hold_q = 4'd0;
+  logic sim_packet_e_cache_class_override_en_q = 1'b0;
+  logic [1:0] sim_packet_e_cache_class_override_q = 2'd0;
   export "DPI-C" task zhao_texture_packet_b_set_frame_fault_inject;
   export "DPI-C" task zhao_texture_packet_b_set_lifetime_fault_inject;
   export "DPI-C" task zhao_texture_packet_b_set_material_fault_mode;
@@ -638,11 +665,18 @@ module zhao_texture_island_v3_top #(
   export "DPI-C" task zhao_texture_packet_b_get_leaf_idle_vector;
   export "DPI-C" task zhao_texture_packet_b_get_combine_counters;
   export "DPI-C" task zhao_texture_packet_b_get_hostile_counters;
+  export "DPI-C" task zhao_texture_packet_e_set_merge_hold;
+  export "DPI-C" task zhao_texture_packet_e_set_cache_class_override;
+  export "DPI-C" task zhao_texture_packet_e_get_merge_class_state;
+  export "DPI-C" task zhao_texture_packet_e_get_cache_observation;
+  export "DPI-C" task zhao_texture_packet_e_get_cache_counters;
+  export "DPI-C" task zhao_texture_packet_e_get_protocol_counters;
+  export "DPI-C" task zhao_texture_packet_e_get_quiet_observation;
   task zhao_texture_packet_b_set_frame_fault_inject(input bit enable);
     sim_frame_fault_inject_q = enable;
   endtask
   task zhao_texture_packet_b_set_lifetime_fault_inject(input int unsigned mask);
-    sim_lifetime_fault_pulse_q = mask[6:0];
+    sim_lifetime_fault_pulse_q = mask[5:0];
   endtask
   task zhao_texture_packet_b_set_material_fault_mode(input int unsigned mode);
     sim_material_fault_mode_q = mode[2:0];
@@ -689,13 +723,86 @@ module zhao_texture_island_v3_top #(
     owner_tmu_commits_o = owner_tmu_commits_w;
     material_mismatches_o = material_read_mismatch_count_q;
   endtask
+  task zhao_texture_packet_e_set_merge_hold(input int unsigned mask);
+    sim_packet_e_merge_hold_q = mask[3:0];
+  endtask
+  task zhao_texture_packet_e_set_cache_class_override(
+      input bit enable, input int unsigned response_class);
+    sim_packet_e_cache_class_override_en_q = enable;
+    sim_packet_e_cache_class_override_q = response_class[1:0];
+  endtask
+  task zhao_texture_packet_e_get_merge_class_state(
+      input int unsigned response_class,
+      output bit native_valid_o, output bit refusal_valid_o,
+      output bit merged_valid_o, output bit merged_ready_o,
+      output bit selected_refusal_o, output bit rr_refusal_o,
+      output bit [TUPLEW-1:0] native_tuple_o,
+      output bit [TUPLEW-1:0] refusal_tuple_o,
+      output bit [TUPLEW-1:0] merged_tuple_o);
+    native_valid_o = class_native_valid_w[response_class[1:0]];
+    refusal_valid_o = refusal_valid_q[response_class[1:0]];
+    merged_valid_o = class_merge_valid_w[response_class[1:0]];
+    merged_ready_o = class_dispatch_ready_w[response_class[1:0]] &&
+                     !sim_packet_e_merge_hold_w[response_class[1:0]];
+    selected_refusal_o = class_merge_select_refusal_w[response_class[1:0]];
+    rr_refusal_o = class_merge_rr_refusal_q[response_class[1:0]];
+    native_tuple_o = class_native_tuple_w[response_class[1:0]];
+    refusal_tuple_o = refusal_tuple_q[response_class[1:0]];
+    merged_tuple_o = class_merge_tuple_w[response_class[1:0]];
+  endtask
+  task zhao_texture_packet_e_get_cache_observation(
+      output bit valid_o, output bit ready_o, output bit [7:0] status_o,
+      output bit [TOKW-1:0] token_o, output bit [DATAW-1:0] data_o);
+    valid_o = cache_rsp_valid_w;
+    ready_o = cache_rsp_ready_w;
+    status_o = cache_rsp_status_w;
+    token_o = cache_checked_token_w;
+    data_o = cache_rsp_data_w;
+  endtask
+  task zhao_texture_packet_e_get_cache_counters(
+      output int unsigned cache_accepted_o,
+      output int unsigned cache_completed_o,
+      output int unsigned fill_accepted_o,
+      output int unsigned fill_completed_o,
+      output int unsigned fill_refused_o,
+      output int unsigned fill_beats_o,
+      output bit protocol_fault_o,
+      output int unsigned reservation_count_o,
+      output bit [6:0] reservation_owner_o,
+      output bit [8:0] work_state_o);
+    cache_accepted_o = cache_jobs_accepted_w;
+    cache_completed_o = cache_jobs_completed_w;
+    fill_accepted_o = cache_fill_jobs_accepted_w;
+    fill_completed_o = cache_fill_jobs_completed_w;
+    fill_refused_o = cache_fill_jobs_refused_w;
+    fill_beats_o = cache_fill_data_beats_w;
+    protocol_fault_o = cache_fill_protocol_fault_w;
+    reservation_count_o = cache_reservation_count_w;
+    reservation_owner_o = cache_reservation_owner_state_w;
+    work_state_o = cache_work_state_w;
+  endtask
+  task zhao_texture_packet_e_get_protocol_counters(
+      output int unsigned dispatch_class_mismatch_o,
+      output int unsigned metadata_generation_mismatch_o,
+      output int unsigned owner_identity_error_o);
+    dispatch_class_mismatch_o = dispatch_class_mismatch_w;
+    metadata_generation_mismatch_o = metadata_generation_mismatch_w;
+    owner_identity_error_o = cnt_fragrob_id_errors_o;
+  endtask
+  task zhao_texture_packet_e_get_quiet_observation(
+      output bit q_dispatch_valid_o,
+      output bit data_quiet_o,
+      output bit public_quiet_o);
+    q_dispatch_valid_o = q_dispatch_req_valid;
+    data_quiet_o = data_quiet;
+    public_quiet_o = quiet_o;
+  endtask
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       sim_rcp_qerr_latched_q <= 1'b0;
       sim_expand_overflow_latched_q <= 1'b0;
       sim_uv_mismatch_latched_q <= 1'b0;
-      sim_fill_refusal_latched_q <= 1'b0;
       sim_owner_mask_latched_q <= 1'b0;
       sim_cache_sidx3_latched_q <= 1'b0;
       sim_metajoin_illegal_latched_q <= 1'b0;
@@ -703,10 +810,9 @@ module zhao_texture_island_v3_top #(
       if (sim_lifetime_fault_pulse_q[0]) sim_rcp_qerr_latched_q <= 1'b1;
       if (sim_lifetime_fault_pulse_q[1]) sim_expand_overflow_latched_q <= 1'b1;
       if (sim_lifetime_fault_pulse_q[2]) sim_uv_mismatch_latched_q <= 1'b1;
-      if (sim_lifetime_fault_pulse_q[3]) sim_fill_refusal_latched_q <= 1'b1;
-      if (sim_lifetime_fault_pulse_q[4]) sim_owner_mask_latched_q <= 1'b1;
-      if (sim_lifetime_fault_pulse_q[5]) sim_cache_sidx3_latched_q <= 1'b1;
-      if (sim_lifetime_fault_pulse_q[6]) sim_metajoin_illegal_latched_q <= 1'b1;
+      if (sim_lifetime_fault_pulse_q[3]) sim_owner_mask_latched_q <= 1'b1;
+      if (sim_lifetime_fault_pulse_q[4]) sim_cache_sidx3_latched_q <= 1'b1;
+      if (sim_lifetime_fault_pulse_q[5]) sim_metajoin_illegal_latched_q <= 1'b1;
     end
   end
 
@@ -714,39 +820,54 @@ module zhao_texture_island_v3_top #(
   assign sim_rcp_qerr_overlay_w = sim_rcp_qerr_latched_q;
   assign sim_expand_overflow_overlay_w = sim_expand_overflow_latched_q;
   assign sim_uv_mismatch_overlay_w = sim_uv_mismatch_latched_q;
-  assign sim_fill_refusal_overlay_w = sim_fill_refusal_latched_q;
   assign sim_owner_mask_overlay_w = sim_owner_mask_latched_q;
   assign sim_cache_sidx3_overlay_w = sim_cache_sidx3_latched_q;
   assign sim_metajoin_illegal_overlay_w = sim_metajoin_illegal_latched_q;
   assign sim_material_fault_mode_w = sim_material_fault_mode_q;
   assign sim_combine_hold_w = sim_combine_hold_q;
+  assign sim_packet_e_merge_hold_w = sim_packet_e_merge_hold_q;
+  assign sim_packet_e_cache_class_override_en_w =
+      sim_packet_e_cache_class_override_en_q;
+  assign sim_packet_e_cache_class_override_w = sim_packet_e_cache_class_override_q;
 `else
   assign sim_frame_fault_inject_w = 1'b0;
   assign sim_rcp_qerr_overlay_w = 1'b0;
   assign sim_expand_overflow_overlay_w = 1'b0;
   assign sim_uv_mismatch_overlay_w = 1'b0;
-  assign sim_fill_refusal_overlay_w = 1'b0;
   assign sim_owner_mask_overlay_w = 1'b0;
   assign sim_cache_sidx3_overlay_w = 1'b0;
   assign sim_metajoin_illegal_overlay_w = 1'b0;
   assign sim_material_fault_mode_w = 3'd0;
   assign sim_combine_hold_w = 1'b0;
+  assign sim_packet_e_merge_hold_w = 4'd0;
+  assign sim_packet_e_cache_class_override_en_w = 1'b0;
+  assign sim_packet_e_cache_class_override_w = 2'd0;
 `endif
+
+`ifdef ZHAO_PACKET_E_MUTANT_PRE_E_FILL_LIFETIME
+  // Historical Packet-B behavior, compiled only by its committed inverse control:
+  // denial never reaches the cache and poisons admission until reset.
+  logic sim_pre_e_fill_refusal_lifetime_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) sim_pre_e_fill_refusal_lifetime_q <= 1'b0;
+    else if (fill_refused_i) sim_pre_e_fill_refusal_lifetime_q <= 1'b1;
+  end
+`endif
+
   assign frame_fault_clear_ready_o = quiet_o;
   assign frame_fault_clear_w = frame_fault_clear_valid_i && frame_fault_clear_ready_o;
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) unsupported_fill_refusal_q <= 1'b0;
-    else if (fill_refused_i) unsupported_fill_refusal_q <= 1'b1;
-  end
   assign lifetime_admission_block_w =
       (err_rcp_q_o || sim_rcp_qerr_overlay_w) ||
       (uvjoin_lifetime_fault_w || sim_uv_mismatch_overlay_w) ||
       ((expand_overflow_w != 32'd0) || sim_expand_overflow_overlay_w) ||
-      (unsupported_fill_refusal_q || sim_fill_refusal_overlay_w) ||
       (owner_mask_lifetime_fault_q || sim_owner_mask_overlay_w) ||
       (cache_sidx3_lifetime_fault_q || sim_cache_sidx3_overlay_w) ||
       err_rsp_dropped_o ||
-      ((metadata_illegal_w != 32'd0) || sim_metajoin_illegal_overlay_w);
+      ((metadata_illegal_w != 32'd0) || sim_metajoin_illegal_overlay_w)
+`ifdef ZHAO_PACKET_E_MUTANT_PRE_E_FILL_LIFETIME
+      || sim_pre_e_fill_refusal_lifetime_q
+`endif
+      ;
 
   // ---------------------------------------------------------------------------
   // Atomic admission and reciprocal/perspective path.
@@ -1236,27 +1357,56 @@ module zhao_texture_island_v3_top #(
   logic cache_req_ready_w;
   logic cache_rsp_ready_w;
   logic [DATAW-1:0] cache_rsp_data_w;
+  logic [7:0] cache_rsp_status_w;
   logic [TOKW-1:0] cache_rsp_token_w;
+  logic [TOKW-1:0] cache_request_token_w;
   wire [TOKW-1:0] cache_checked_token_w =
       `ZHAO_PACKET_B_CACHE_TOKEN(cache_rsp_token_w);
   logic [31:0] cache_fills_w, cache_multicast_w, cache_replays_w;
+  logic cache_fill_protocol_fault_w;
+  logic [31:0] cache_jobs_accepted_w, cache_jobs_completed_w;
+  logic [31:0] cache_fill_jobs_accepted_w, cache_fill_jobs_completed_w;
+  logic [31:0] cache_fill_jobs_refused_w, cache_fill_data_beats_w;
+  logic [31:0] cache_reservation_count_w;
+  logic [6:0] cache_reservation_owner_state_w;
+  logic [8:0] cache_work_state_w;
   assign cache_req_valid_w = plan_cache_valid_w;
   assign plan_cache_ready_w = cache_req_ready_w;
+  assign cache_request_token_w = sim_packet_e_cache_class_override_en_w
+      ? {sim_packet_e_cache_class_override_w, plan_cache_token_w[15:0]}
+      : plan_cache_token_w;
 
   zhao_texture_cache_pipe_v2 #(
       .LANES(LANES), .LINES(16), .LINE_BYTES(16), .REQN(4), .SRCW(SRCW)
   ) u_cache (
       .clk(clk), .rst_n(rst_n), .acc_valid_i(cache_req_valid_w),
       .acc_ready_o(cache_req_ready_w), .acc_en_i(plan_cache_enable_w),
-      .acc_addr_i(plan_cache_address_w), .acc_src_id_i(plan_cache_token_w),
+      .acc_addr_i(plan_cache_address_w), .acc_src_id_i(cache_request_token_w),
       .smp_valid_o(cache_rsp_valid_w), .smp_ready_i(cache_rsp_ready_w),
-      .smp_data_o(cache_rsp_data_w), .smp_src_id_o(cache_rsp_token_w),
+      .smp_data_o(cache_rsp_data_w), .smp_status_o(cache_rsp_status_w),
+      .smp_src_id_o(cache_rsp_token_w),
       .fill_valid_o(fill_req_valid_o), .fill_ready_i(fill_req_ready_i),
       .fill_addr_o(fill_req_addr_o), .fill_data_valid_i(fill_data_valid_i),
-      .fill_data_i(fill_data_i), .fill_refused_i(fill_refused_i),
+      .fill_data_i(fill_data_i),
+`ifdef ZHAO_PACKET_E_MUTANT_PRE_E_FILL_LIFETIME
+      .fill_refused_i(1'b0),
+`else
+      .fill_refused_i(fill_refused_i),
+`endif
+      .frame_fault_clear_i(frame_fault_clear_w),
       .cache_hits_o(cnt_cache_hits_o), .cache_misses_o(cnt_cache_misses_o),
       .fills_o(cache_fills_w), .multicast_o(cache_multicast_w),
-      .replays_o(cache_replays_w), .idle_o(cache_idle_w));
+      .replays_o(cache_replays_w),
+      .fill_protocol_fault_o(cache_fill_protocol_fault_w),
+      .cache_jobs_accepted_o(cache_jobs_accepted_w),
+      .cache_jobs_completed_o(cache_jobs_completed_w),
+      .fill_jobs_accepted_o(cache_fill_jobs_accepted_w),
+      .fill_jobs_completed_o(cache_fill_jobs_completed_w),
+      .fill_jobs_refused_o(cache_fill_jobs_refused_w),
+      .fill_data_beats_o(cache_fill_data_beats_w),
+      .reservation_count_o(cache_reservation_count_w),
+      .reservation_owner_state_o(cache_reservation_owner_state_w),
+      .cache_work_state_o(cache_work_state_w), .idle_o(cache_idle_w));
 
   logic metadata_read_launch_w;
   logic metadata_read_pending_q;
@@ -1281,15 +1431,18 @@ module zhao_texture_island_v3_top #(
       `ZHAO_PACKET_B_RSP_OBS_DATA(cache_rsp_data_w, metadata_read_pending_q);
   logic cache_rsp_stalled_q;
   logic [DATAW-1:0] cache_rsp_stalled_data_q;
+  logic [7:0] cache_rsp_stalled_status_q;
   logic [TOKW-1:0] cache_rsp_stalled_token_q;
   wire cache_rsp_hold_violation_c = cache_rsp_stalled_q &&
       (!cache_rsp_valid_w ||
        (cache_rsp_observed_data_c != cache_rsp_stalled_data_q) ||
+       (cache_rsp_status_w != cache_rsp_stalled_status_q) ||
        (cache_checked_token_w != cache_rsp_stalled_token_q));
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       cache_rsp_stalled_q <= 1'b0;
       cache_rsp_stalled_data_q <= '0;
+      cache_rsp_stalled_status_q <= '0;
       cache_rsp_stalled_token_q <= '0;
       err_rsp_dropped_o <= 1'b0;
     end else begin
@@ -1298,17 +1451,21 @@ module zhao_texture_island_v3_top #(
       cache_rsp_stalled_q <= cache_rsp_valid_w && !cache_rsp_ready_w;
       if (cache_rsp_valid_w && !cache_rsp_ready_w && !cache_rsp_stalled_q) begin
         cache_rsp_stalled_data_q <= cache_rsp_observed_data_c;
+        cache_rsp_stalled_status_q <= cache_rsp_status_w;
         cache_rsp_stalled_token_q <= cache_checked_token_w;
       end
     end
   end
 
+  wire cache_status_refusal_c =
+      `ZHAO_PACKET_E_CACHE_STATUS_IS_REFUSAL(cache_rsp_status_w);
   wire cache_sidx3_c = cache_rsp_valid_w &&
       (cache_checked_token_w[9:8] == 2'd3);
   wire cache_sidx3_drop_c = cache_sidx3_c && cache_rsp_ready_w;
 
   assign metadata_read_launch_w = cache_rsp_valid_w && !cache_sidx3_c &&
-      !metadata_read_pending_q && !metadata_hold_valid_q;
+      !cache_status_refusal_c && !metadata_read_pending_q &&
+      !metadata_hold_valid_q;
   assign metajoin_a_valid_w = metadata_read_launch_w;
   assign metajoin_b_valid_w = metadata_rd_result_valid_w;
   assign metajoin_rsp_valid_w = metadata_hold_valid_q ||
@@ -1692,11 +1849,123 @@ module zhao_texture_island_v3_top #(
     end
   end
 
+  // ---------------------------------------------------------------------------
+  // Packet-E typed cache refusal bank and fair physical-class merges.
+  //
+  // Status-zero cache responses retain the Packet-B metadata/native path above.
+  // A nonzero response is accepted only when the one-entry slot named by the
+  // ORIGINAL token class can capture it.  Every slot holds the complete 66-bit
+  // tuple while stalled.  Its per-class arbiter changes preference only after a
+  // genuinely contended acceptance, so neither native nor refusal traffic can
+  // starve the other and no class is relabelled to ERR.
+  logic [3:0] refusal_valid_q;
+  logic [TUPLEW-1:0] refusal_tuple_q [0:3];
+  logic [3:0] refusal_room_w;
+  logic [3:0] refusal_capture_w;
+  logic [3:0] refusal_merge_ready_w;
+  logic [3:0] class_native_valid_w;
+  logic [TUPLEW-1:0] class_native_tuple_w [0:3];
+  logic [3:0] class_native_ready_w;
+  logic [3:0] class_merge_valid_w;
+  logic [TUPLEW-1:0] class_merge_tuple_w [0:3];
+  logic [3:0] class_merge_select_refusal_w;
+  logic [3:0] class_merge_accept_w;
+  logic [3:0] class_dispatch_ready_w;
+  logic [3:0] class_dispatch_offer_valid_w;
+  logic [3:0] class_merge_rr_refusal_q;
+  logic [3:0] refusal_offer_valid_c;
+  wire [1:0] refusal_route_class_c =
+      `ZHAO_PACKET_E_REFUSAL_CLASS(cache_checked_token_w);
+
+  assign class_native_valid_w = {
+      err_terminal_valid_q, bil_terminal_valid_q,
+      near_terminal_valid_q, palette_rsp_valid_w};
+  assign class_native_tuple_w[CLS_CLUT] = palette_rsp_tuple_w;
+  assign class_native_tuple_w[CLS_NEAR] = near_terminal_tuple_q;
+  assign class_native_tuple_w[CLS_BIL] = bil_terminal_tuple_q;
+  assign class_native_tuple_w[CLS_ERR] = err_terminal_tuple_q;
+
+  genvar merge_class;
+  generate
+    for (merge_class = 0; merge_class < 4; merge_class++) begin : g_packet_e_merge
+      assign refusal_offer_valid_c[merge_class] =
+          `ZHAO_PACKET_E_REFUSAL_MERGE_VALID(refusal_valid_q[merge_class]);
+      assign class_merge_select_refusal_w[merge_class] =
+          refusal_offer_valid_c[merge_class] &&
+          (!class_native_valid_w[merge_class] ||
+           class_merge_rr_refusal_q[merge_class]);
+      assign class_merge_valid_w[merge_class] =
+          class_native_valid_w[merge_class] ||
+          refusal_offer_valid_c[merge_class];
+      assign class_merge_tuple_w[merge_class] =
+          class_merge_select_refusal_w[merge_class]
+              ? refusal_tuple_q[merge_class]
+              : class_native_tuple_w[merge_class];
+      assign class_merge_accept_w[merge_class] =
+          class_merge_valid_w[merge_class] &&
+          class_dispatch_ready_w[merge_class] &&
+          !sim_packet_e_merge_hold_w[merge_class];
+      assign class_native_ready_w[merge_class] =
+          class_dispatch_ready_w[merge_class] &&
+          !sim_packet_e_merge_hold_w[merge_class] &&
+          !class_merge_select_refusal_w[merge_class];
+      assign refusal_merge_ready_w[merge_class] =
+          class_dispatch_ready_w[merge_class] &&
+          !sim_packet_e_merge_hold_w[merge_class] &&
+          class_merge_select_refusal_w[merge_class];
+      assign refusal_room_w[merge_class] =
+          !refusal_valid_q[merge_class] ||
+          (refusal_valid_q[merge_class] &&
+           refusal_merge_ready_w[merge_class]);
+    end
+  endgenerate
+
+  always_comb begin
+    refusal_capture_w = '0;
+    if (cache_rsp_valid_w && cache_status_refusal_c && !cache_sidx3_c &&
+        refusal_room_w[refusal_route_class_c])
+      refusal_capture_w[refusal_route_class_c] = 1'b1;
+  end
+
+  assign palette_rsp_ready_w = class_native_ready_w[CLS_CLUT];
+  assign near_dispatch_ready_w = class_native_ready_w[CLS_NEAR];
+  assign bil_dispatch_ready_w = class_native_ready_w[CLS_BIL];
+  assign err_dispatch_ready_w = class_native_ready_w[CLS_ERR];
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      refusal_valid_q <= 4'b0000;
+      class_merge_rr_refusal_q <= 4'b0000;
+      for (int unsigned response_class = 0; response_class < 4;
+           response_class++)
+        refusal_tuple_q[response_class] <= '0;
+    end else begin
+      for (int unsigned response_class = 0; response_class < 4;
+           response_class++) begin
+        if (refusal_room_w[response_class]) begin
+          refusal_valid_q[response_class] <= refusal_capture_w[response_class];
+          if (refusal_capture_w[response_class])
+            refusal_tuple_q[response_class] <= {
+                cache_checked_token_w, SOURCE_REFUSED_STATUS,
+                8'h00, 8'hff, 24'hff00ff};
+        end
+        if (class_native_valid_w[response_class] &&
+            refusal_offer_valid_c[response_class] &&
+            class_merge_accept_w[response_class])
+          class_merge_rr_refusal_q[response_class] <=
+              !class_merge_select_refusal_w[response_class];
+      end
+    end
+  end
+
   always_comb begin
     if (cache_sidx3_c) begin
-      // Sample index 3 is outside every legal owner request.  Consume it before
-      // metadata read/allocation and require reset-barrier recovery.
+      // Sample index 3 remains higher priority than status: it is outside every
+      // legal owner request and can never be converted into a refusal completion.
       cache_rsp_ready_w = 1'b1;
+    end else if (cache_status_refusal_c) begin
+      // Ready means the routed held slot captures on this exact edge.
+      cache_rsp_ready_w = refusal_room_w[refusal_route_class_c];
     end else begin
       unique case (raw_class_c)
         CLS_CLUT: cache_rsp_ready_w = metadata_active_valid_c && palette_req_ready_w;
@@ -1715,20 +1984,26 @@ module zhao_texture_island_v3_top #(
   logic dispatch_return_ready_w;
   logic [31:0] dispatch_emitted_w, dispatch_class_mismatch_w;
 
-  assign class_terminal_offer_valid_w = {
-      err_terminal_valid_q, bil_terminal_valid_q,
-      near_terminal_valid_q, palette_rsp_valid_w};
+  // Structural occupancy remains visible to the unchanged quiet-source alias even
+  // when a simulation-only hold gates actual dispatcher acceptance.
+  assign class_terminal_offer_valid_w = class_merge_valid_w;
+  assign class_dispatch_offer_valid_w = class_merge_valid_w &
+      ~sim_packet_e_merge_hold_w;
 
   zhao_texture_rsp_dispatch_v2 #(.ROUTEW(TOKW)) u_dispatch (
       .clk(clk), .rst_n(rst_n),
-      .clut_valid_i(palette_rsp_valid_w), .clut_ready_o(palette_rsp_ready_w),
-      .clut_tuple_i(palette_rsp_tuple_w),
-      .near_valid_i(near_terminal_valid_q), .near_ready_o(near_dispatch_ready_w),
-      .near_tuple_i(near_terminal_tuple_q),
-      .bil_valid_i(bil_terminal_valid_q), .bil_ready_o(bil_dispatch_ready_w),
-      .bil_tuple_i(bil_terminal_tuple_q),
-      .err_valid_i(err_terminal_valid_q), .err_ready_o(err_dispatch_ready_w),
-      .err_tuple_i(err_terminal_tuple_q),
+      .clut_valid_i(class_dispatch_offer_valid_w[CLS_CLUT]),
+      .clut_ready_o(class_dispatch_ready_w[CLS_CLUT]),
+      .clut_tuple_i(class_merge_tuple_w[CLS_CLUT]),
+      .near_valid_i(class_dispatch_offer_valid_w[CLS_NEAR]),
+      .near_ready_o(class_dispatch_ready_w[CLS_NEAR]),
+      .near_tuple_i(class_merge_tuple_w[CLS_NEAR]),
+      .bil_valid_i(class_dispatch_offer_valid_w[CLS_BIL]),
+      .bil_ready_o(class_dispatch_ready_w[CLS_BIL]),
+      .bil_tuple_i(class_merge_tuple_w[CLS_BIL]),
+      .err_valid_i(class_dispatch_offer_valid_w[CLS_ERR]),
+      .err_ready_o(class_dispatch_ready_w[CLS_ERR]),
+      .err_tuple_i(class_merge_tuple_w[CLS_ERR]),
       .out_valid_o(dispatch_return_valid_w),
       .out_ready_i(dispatch_return_ready_w),
       .out_tuple_o(dispatch_return_tuple_w),
@@ -2113,7 +2388,7 @@ module zhao_texture_island_v3_top #(
       (metadata_generation_mismatch_w != metadata_genmis_base_q) ||
       (aux_credit_fault_w != aux_credit_fault_base_q);
   assign child_fault_level_w = desc_frame_fault_w || expand_frame_fault_w ||
-      binding_frame_fault_w || aux_frame_fault_w;
+      binding_frame_fault_w || aux_frame_fault_w || cache_fill_protocol_fault_w;
 
   assign local_fault_event_w =
       sim_frame_fault_inject_w ||
@@ -2168,11 +2443,14 @@ module zhao_texture_island_v3_top #(
       (err_rcp_q_o || sim_rcp_qerr_overlay_w) ||
       (uvjoin_lifetime_fault_w || sim_uv_mismatch_overlay_w) ||
       ((expand_overflow_w != 32'd0) || sim_expand_overflow_overlay_w) ||
-      (unsupported_fill_refusal_q || sim_fill_refusal_overlay_w) ||
       (owner_mask_lifetime_fault_q || sim_owner_mask_overlay_w) ||
       (cache_sidx3_lifetime_fault_q || sim_cache_sidx3_overlay_w) ||
       err_rsp_dropped_o ||
-      ((metadata_illegal_w != 32'd0) || sim_metajoin_illegal_overlay_w);
+      ((metadata_illegal_w != 32'd0) || sim_metajoin_illegal_overlay_w)
+`ifdef ZHAO_PACKET_E_MUTANT_PRE_E_FILL_LIFETIME
+      || sim_pre_e_fill_refusal_lifetime_q
+`endif
+      ;
 
   // Compatibility/evidence aliases.
   assign cnt_fragments_o = expand_fragments_w;
@@ -2219,6 +2497,19 @@ module zhao_texture_island_v3_top #(
       a_cache_one_class: assert ($onehot0({
           palette_req_valid_w, near_capture_c, bil_capture_c, raw_err_capture_c}));
       a_no_metadata_for_sample3: assert (!(cache_sidx3_c && metadata_read_launch_w));
+      a_no_metadata_for_cache_refusal: assert (
+          !(cache_rsp_valid_w && cache_status_refusal_c &&
+            metadata_read_launch_w));
+      a_refusal_capture_one_class: assert ($onehot0(refusal_capture_w));
+      a_dispatch_quiet_alias_is_structural: assert (
+          q_dispatch_req_valid == (|class_merge_valid_w));
+      if (q_dispatch_req_valid)
+        a_dispatch_occupancy_blocks_data_quiet: assert (!data_quiet);
+      if (cache_rsp_valid_w && cache_rsp_ready_w &&
+          cache_status_refusal_c && !cache_sidx3_c) begin
+        a_refusal_accept_is_held_capture: assert (
+            refusal_capture_w[refusal_route_class_c]);
+      end
       a_metadata_fallthrough_exclusive: assert (
           !(metadata_hold_valid_q && metadata_rd_result_valid_w));
       a_response_drop_enters_barrier: assert (
@@ -2259,5 +2550,11 @@ endmodule : zhao_texture_island_v3_top
 `undef ZHAO_PACKET_B_BILERP_OBS_TOKEN
 `undef ZHAO_PACKET_B_SHADOW_WRITE
 `undef ZHAO_PACKET_B_RSP_OBS_DATA
+`undef ZHAO_PACKET_E_CACHE_STATUS_IS_REFUSAL
+`undef ZHAO_PACKET_E_REFUSAL_CLASS
+`undef ZHAO_PACKET_E_REFUSAL_MERGE_VALID
+`ifdef ZHAO_PACKET_E_TOP_MUTANT_SELECTOR_COLLISION
+  `undef ZHAO_PACKET_E_TOP_MUTANT_SELECTOR_COLLISION
+`endif
 
 `default_nettype wire

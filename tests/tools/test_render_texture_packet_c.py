@@ -60,8 +60,11 @@ PACKET_C_SOURCES = (
     )
 )
 
-INTERFACE_SHA256 = "c0b6c9667cda653e22a6920e42ab6690c43b15d4ea9ad9f8b2edc51f25d02b13"
-PACKET_B_TOP_SHA256 = "3853f6254aef67ba0da3f02f4bc948c87fb77160839dbac70d5b167ff3cd012f"
+# Packet E legitimately changes the V3 implementation while preserving its public
+# schema; these hashes pin that refreshed authority. Shell/accounting bytes remain
+# the protected Packet-C values.
+INTERFACE_SHA256 = "e77e43a1f6e2baf9b7ee4bbc78093c28b6ad1be683d10babbde698f988ada5b5"
+PACKET_B_TOP_SHA256 = "4ba2cba9df8c6e6baaf1c68a236b91612fc6b3fff69be76ab3098b335bc50348"
 PROTECTED_SHELL_SHA256 = "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
 PROD_TOP_SHA256 = "d3cf61c302f73c1d656ae481ae40b775ddadccec50efe778d6071ea2238ede54"
 
@@ -297,7 +300,7 @@ class PacketCClosureTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             validate_stage_shape(text + "\n  zhao_texture_island_v3_top #(\n")
 
-    def test_packet_b_and_protected_shell_bytes_are_unchanged(self) -> None:
+    def test_current_v3_artifacts_and_protected_shell_bytes_are_pinned(self) -> None:
         interface = REPO / "fpga" / "rtl" / "generated" / "zhao_texture_island_v3_top.interface.json"
         packet_b_top = REPO / "fpga" / "rtl" / "texture" / "zhao_texture_island_v3_top.sv"
         protected_shell = REPO / "fpga" / "rtl" / "common" / "zhao_shell_top.sv"

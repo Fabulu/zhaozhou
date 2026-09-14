@@ -9621,3 +9621,320 @@ foreach(required_packet_d_test IN LISTS ZHAO_PACKET_D_REQUIRED_TESTS)
       "required Packet-D CTest is not registered: ${required_packet_d_test}")
   endif()
 endforeach()
+
+# Packet E1: cache refusal is a typed terminal, and its inherited response
+# reservation has exactly one owner through fill, replay, or refused response.
+set(ZHAO_PACKET_E_CACHE_SOURCE_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture/texture_cache_pipe_v2_packet_e.sources.txt)
+if(NOT EXISTS "${ZHAO_PACKET_E_CACHE_SOURCE_MANIFEST}")
+  message(FATAL_ERROR
+    "required Packet-E cache source manifest is missing: ${ZHAO_PACKET_E_CACHE_SOURCE_MANIFEST}")
+endif()
+file(STRINGS "${ZHAO_PACKET_E_CACHE_SOURCE_MANIFEST}"
+  ZHAO_PACKET_E_CACHE_RELATIVE_SOURCES
+  REGEX "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$")
+if(NOT ZHAO_PACKET_E_CACHE_RELATIVE_SOURCES STREQUAL
+   "tests/mutants/zhao_texture_cache_pipe_v2_packet_e_mutants.sv;fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv")
+  message(FATAL_ERROR
+    "Packet-E cache source manifest is not the exact ordered two-file closure")
+endif()
+set(ZHAO_PACKET_E_CACHE_SOURCES)
+foreach(relative_source IN LISTS ZHAO_PACKET_E_CACHE_RELATIVE_SOURCES)
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR
+      "missing Packet-E cache source-manifest path: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKET_E_CACHE_SOURCES
+    "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+
+function(zhao_packet_e_cache_target TARGET ASSERTIONS)
+  set(selector_args ${ARGN})
+  set(assert_args)
+  if(ASSERTIONS)
+    list(APPEND assert_args --assert)
+  else()
+    list(APPEND assert_args --no-assert)
+  endif()
+  add_executable(${TARGET} texture/texture_cache_pipe_v2_directed.cpp)
+  target_link_libraries(${TARGET} PRIVATE zhao_harness)
+  verilate(${TARGET}
+    PREFIX Vzhao_texture_cache_pipe_v2
+    TOP_MODULE zhao_texture_cache_pipe_v2
+    SOURCES ${ZHAO_PACKET_E_CACHE_SOURCES}
+    VERILATOR_ARGS ${assert_args} ${selector_args})
+endfunction()
+
+zhao_packet_e_cache_target(pe_c0 ON)
+add_test(NAME packet_e_cache_directed COMMAND pe_c0)
+
+zhao_packet_e_cache_target(pe_c8 ON -GLANES=8 -GREQN=2)
+target_compile_definitions(pe_c8 PRIVATE EXPECT_PACKET_E_LANES8_REQN2=1)
+add_test(NAME packet_e_cache_lanes8_reqn2 COMMAND pe_c8)
+
+zhao_packet_e_cache_target(pe_cd ON
+  -DZHAO_PACKET_E_MUTANT_DENIAL_REPLAYS)
+target_compile_definitions(pe_cd PRIVATE
+  EXPECT_PACKET_E_DENIAL_REPLAY_MUTANT=1)
+add_test(NAME packet_e_cache_denial_replay_mutant COMMAND pe_cd)
+
+# The same committed unreachable-state mutant has two controls: assertions-on
+# proves the shipped exact-ownership assertion fires; assertions-off lets the
+# focused inverse driver observe the wrong double reservation behavior itself.
+zhao_packet_e_cache_target(pe_ca ON
+  -DZHAO_PACKET_E_MUTANT_PREPAID_DOUBLE_RESV)
+target_compile_definitions(pe_ca PRIVATE
+  EXPECT_PACKET_E_PREPAID_DOUBLE_RESV_MUTANT=1)
+add_test(NAME packet_e_cache_double_resv_assertion
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_packet_e_assertion_control.py
+    --exe $<TARGET_FILE:pe_ca>)
+
+zhao_packet_e_cache_target(pe_cb OFF
+  -DZHAO_PACKET_E_MUTANT_PREPAID_DOUBLE_RESV)
+target_compile_definitions(pe_cb PRIVATE
+  EXPECT_PACKET_E_PREPAID_DOUBLE_RESV_MUTANT=1)
+add_test(NAME packet_e_cache_double_resv_behavior COMMAND pe_cb)
+
+set_tests_properties(
+  packet_e_cache_directed packet_e_cache_lanes8_reqn2
+  PROPERTIES LABELS "fast;nightly;packet-e" TIMEOUT 1200
+    FAIL_REGULAR_EXPRESSION "FAIL")
+set_tests_properties(packet_e_cache_denial_replay_mutant PROPERTIES
+  LABELS "fast;nightly;packet-e;mutant" TIMEOUT 1200
+  PASS_REGULAR_EXPRESSION
+    "texture_cache_pipe_v2_packet_e_denial_replay_mutant.*checks passed"
+  FAIL_REGULAR_EXPRESSION "FAIL")
+set_tests_properties(packet_e_cache_double_resv_assertion PROPERTIES
+  LABELS "fast;nightly;packet-e;mutant" TIMEOUT 60
+  PASS_REGULAR_EXPRESSION
+    "PACKET_E_ASSERTION_CONTROL\\[double-reservation\\] FIRED"
+  FAIL_REGULAR_EXPRESSION "FAIL")
+set_tests_properties(packet_e_cache_double_resv_behavior PROPERTIES
+  LABELS "fast;nightly;packet-e;mutant" TIMEOUT 1200
+  PASS_REGULAR_EXPRESSION
+    "texture_cache_pipe_v2_packet_e_double_resv_mutant.*checks passed"
+  FAIL_REGULAR_EXPRESSION "FAIL")
+
+# Packet E2: the public V3 closure remains Packet B's exact 26 ordered sources.
+# Existing lab, production, and full-context targets are the healthy Packet-E
+# profiles; four private selectors are inserted immediately before the top.
+set(ZHAO_PACKET_E_TOP_SOURCE_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture/texture_island_v3_packet_e.sources.txt)
+if(NOT EXISTS "${ZHAO_PACKET_E_TOP_SOURCE_MANIFEST}")
+  message(FATAL_ERROR
+    "required Packet-E top source manifest is missing: ${ZHAO_PACKET_E_TOP_SOURCE_MANIFEST}")
+endif()
+file(STRINGS "${ZHAO_PACKET_E_TOP_SOURCE_MANIFEST}"
+  ZHAO_PACKET_E_TOP_RELATIVE_SOURCES
+  REGEX "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$")
+list(LENGTH ZHAO_PACKET_E_TOP_RELATIVE_SOURCES ZHAO_PACKET_E_TOP_SOURCE_COUNT)
+if(NOT ZHAO_PACKET_E_TOP_SOURCE_COUNT EQUAL 26)
+  message(FATAL_ERROR "Packet-E top source manifest must contain exactly 26 SV paths")
+endif()
+set(ZHAO_PACKET_E_TOP_SOURCES)
+foreach(relative_source IN LISTS ZHAO_PACKET_E_TOP_RELATIVE_SOURCES)
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR
+      "missing Packet-E top source-manifest path: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKET_E_TOP_SOURCES
+    "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+if(NOT ZHAO_PACKET_E_TOP_SOURCES STREQUAL ZHAO_TEXTURE_V3_PACKET_B_SOURCES)
+  message(FATAL_ERROR
+    "Packet-E top source manifest diverges from Packet B's exact 26-source authority")
+endif()
+set(ZHAO_PACKET_E_TOP_MUTANT_SOURCES ${ZHAO_PACKET_E_TOP_SOURCES})
+list(INSERT ZHAO_PACKET_E_TOP_MUTANT_SOURCES 25
+  ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_island_v3_packet_b_mutants.sv)
+
+function(zhao_packet_e_top_mutant NAME CPP_SELECTOR SV_SELECTOR DIAGNOSTIC)
+  string(MD5 target_hash "${NAME}")
+  string(SUBSTRING "${target_hash}" 0 8 target_hash)
+  set(target pe_t${target_hash})
+  add_executable(${target}
+    texture/texture_island_v3_packet_b_directed.cpp)
+  target_compile_definitions(${target} PRIVATE ${CPP_SELECTOR}=1)
+  target_link_libraries(${target} PRIVATE zhao_harness)
+  verilate(${target}
+    PREFIX Vzhao_texture_island_v3_top
+    TOP_MODULE zhao_texture_island_v3_top
+    SOURCES ${ZHAO_PACKET_E_TOP_MUTANT_SOURCES}
+    VERILATOR_ARGS --assert -GMIGRATION_SHADOWS=1 -D${SV_SELECTOR})
+  add_test(NAME packet_e_top_${NAME}_mutant COMMAND ${target})
+  set_tests_properties(packet_e_top_${NAME}_mutant PROPERTIES
+    LABELS "fast;nightly;packet-e;mutant" TIMEOUT 1800
+    PASS_REGULAR_EXPRESSION "${DIAGNOSTIC}"
+    FAIL_REGULAR_EXPRESSION "packet-b directed FAIL")
+endfunction()
+
+zhao_packet_e_top_mutant(
+  historical_fill_lifetime PACKET_E_EXPECT_PRE_E_FILL_LIFETIME
+  ZHAO_PACKET_E_MUTANT_PRE_E_FILL_LIFETIME
+  "packet-e historical-pre-E-fill-lifetime mutant FIRED")
+zhao_packet_e_top_mutant(
+  relabel_refusal PACKET_E_EXPECT_RELABEL_REFUSAL_ERR
+  ZHAO_PACKET_E_MUTANT_RELABEL_REFUSAL_ERR
+  "packet-e refusal-relabel-to-ERR mutant FIRED")
+zhao_packet_e_top_mutant(
+  refusal_native_arith PACKET_E_EXPECT_REFUSAL_NATIVE_ARITH
+  ZHAO_PACKET_E_MUTANT_REFUSAL_ENTERS_NATIVE
+  "packet-e refusal-enters-native-arithmetic mutant FIRED")
+zhao_packet_e_top_mutant(
+  drop_held_refusal PACKET_E_EXPECT_DROP_HELD_REFUSAL
+  ZHAO_PACKET_E_MUTANT_DROP_HELD_REFUSAL
+  "packet-e dropped-held-refusal mutant FIRED")
+
+set_property(TEST
+  texture_island_v3_packet_b_directed
+  texture_island_v3_packet_b_production_profile
+  texture_island_v3_packet_b_fullctx
+  APPEND PROPERTY LABELS "packet-e")
+
+# Packet E3: excluded local geometry/texture-fill owners share real ENGINE1
+# only behind MEM.GUARD. The raw return includes independent last explicitly.
+set(ZHAO_PACKET_E_MUX_SOURCE_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/memory/render_asset_mux.sources.txt)
+if(NOT EXISTS "${ZHAO_PACKET_E_MUX_SOURCE_MANIFEST}")
+  message(FATAL_ERROR
+    "required Packet-E mux source manifest is missing: ${ZHAO_PACKET_E_MUX_SOURCE_MANIFEST}")
+endif()
+file(STRINGS "${ZHAO_PACKET_E_MUX_SOURCE_MANIFEST}"
+  ZHAO_PACKET_E_MUX_RELATIVE_SOURCES
+  REGEX "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$")
+if(NOT ZHAO_PACKET_E_MUX_RELATIVE_SOURCES STREQUAL
+   "fpga/rtl/generated/zhao_abi_pkg.sv;fpga/rtl/common/zhao_pkg.sv;fpga/rtl/memory/zhao_mem_guard.sv;tests/mutants/zhao_render_asset_mux_mutants.sv;fpga/rtl/memory/zhao_render_asset_mux.sv;tests/memory/tb_render_asset_mux.sv")
+  message(FATAL_ERROR
+    "Packet-E mux source manifest is not the exact ordered six-file closure")
+endif()
+set(ZHAO_PACKET_E_MUX_SOURCES)
+foreach(relative_source IN LISTS ZHAO_PACKET_E_MUX_RELATIVE_SOURCES)
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR
+      "missing Packet-E mux source-manifest path: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKET_E_MUX_SOURCES
+    "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+
+function(zhao_packet_e_mux_target TARGET)
+  set(selector_args ${ARGN})
+  add_executable(${TARGET} memory/render_asset_mux_directed.cpp)
+  verilate(${TARGET}
+    PREFIX Vtb_render_asset_mux
+    TOP_MODULE tb_render_asset_mux
+    SOURCES ${ZHAO_PACKET_E_MUX_SOURCES}
+    VERILATOR_ARGS --assert ${selector_args})
+endfunction()
+
+zhao_packet_e_mux_target(pe_m0)
+add_test(NAME packet_e_render_asset_mux_directed COMMAND pe_m0)
+
+function(zhao_packet_e_mux_mutant NAME TARGET CPP_SELECTOR SV_SELECTOR SUITE)
+  zhao_packet_e_mux_target(${TARGET} -D${SV_SELECTOR})
+  target_compile_definitions(${TARGET} PRIVATE ${CPP_SELECTOR}=1)
+  add_test(NAME packet_e_render_asset_mux_${NAME}_mutant COMMAND ${TARGET})
+  set_tests_properties(packet_e_render_asset_mux_${NAME}_mutant PROPERTIES
+    LABELS "fast;nightly;packet-e;mutant" TIMEOUT 1200
+    PASS_REGULAR_EXPRESSION "${SUITE}.*checks passed"
+    FAIL_REGULAR_EXPRESSION "FAIL")
+endfunction()
+
+zhao_packet_e_mux_mutant(
+  hold_guard_valid pe_m1 EXPECT_RENDER_ASSET_HOLD_GUARD_VALID_MUTANT
+  ZHAO_RENDER_ASSET_MUTANT_HOLD_GUARD_VALID
+  render_asset_mux_hold_guard_valid_mutant)
+zhao_packet_e_mux_mutant(
+  drift_subowner pe_m2 EXPECT_RENDER_ASSET_DRIFT_SUBOWNER_MUTANT
+  ZHAO_RENDER_ASSET_MUTANT_DRIFT_SUBOWNER
+  render_asset_mux_drift_subowner_mutant)
+zhao_packet_e_mux_mutant(
+  texture_pack64 pe_m3 EXPECT_RENDER_ASSET_TEXTURE_PACK64_MUTANT
+  ZHAO_RENDER_ASSET_MUTANT_TEXTURE_PACK64
+  render_asset_mux_texture_pack64_mutant)
+zhao_packet_e_mux_mutant(
+  terminate_beat7 pe_m4 EXPECT_RENDER_ASSET_TERMINATE_BEAT7_MUTANT
+  ZHAO_RENDER_ASSET_MUTANT_TERMINATE_BEAT7
+  render_asset_mux_terminate_beat7_mutant)
+zhao_packet_e_mux_mutant(
+  accept_beat9 pe_m5 EXPECT_RENDER_ASSET_ACCEPT_BEAT9_MUTANT
+  ZHAO_RENDER_ASSET_MUTANT_ACCEPT_BEAT9
+  render_asset_mux_accept_beat9_mutant)
+zhao_packet_e_mux_mutant(
+  denial_silence pe_m6 EXPECT_RENDER_ASSET_DENIAL_SILENCE_MUTANT
+  ZHAO_RENDER_ASSET_MUTANT_DENIAL_SILENCE
+  render_asset_mux_denial_silence_mutant)
+
+set_tests_properties(packet_e_render_asset_mux_directed PROPERTIES
+  LABELS "fast;nightly;packet-e" TIMEOUT 1200
+  FAIL_REGULAR_EXPRESSION "FAIL")
+
+# Dual-selector detectors are executable controls. The helper gives every raw
+# compiler subprocess a hard timeout and checks its exact collision diagnostic;
+# CTest therefore observes a normal PASS instead of owning a hung child process.
+function(zhao_packet_e_selector_control NAME PROFILE)
+  add_test(NAME ${NAME}
+    COMMAND "${Python3_EXECUTABLE}"
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_packet_e_selector_collision.py
+      --profile ${PROFILE}
+      --verilator "${ZHAO_VERILATOR_LINT}"
+      --cxx "${CMAKE_CXX_COMPILER}")
+  set_tests_properties(${NAME} PROPERTIES
+    LABELS "fast;nightly;packet-e;mutant" TIMEOUT 180
+    PASS_REGULAR_EXPRESSION "PACKET_E_SELECTOR_COLLISION\\[${PROFILE}\\] FIRED"
+    FAIL_REGULAR_EXPRESSION "FAIL")
+endfunction()
+
+zhao_packet_e_selector_control(packet_e_cache_sv_selector_collision cache-sv)
+zhao_packet_e_selector_control(packet_e_cache_cpp_selector_collision cache-cpp)
+zhao_packet_e_selector_control(packet_e_top_sv_selector_collision top-sv)
+zhao_packet_e_selector_control(packet_e_top_cpp_selector_collision top-cpp)
+zhao_packet_e_selector_control(packet_e_mux_sv_selector_collision mux-sv)
+zhao_packet_e_selector_control(packet_e_mux_cpp_selector_collision mux-cpp)
+
+add_test(NAME packet_e_registration_static
+  COMMAND "${Python3_EXECUTABLE}"
+          ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_render_texture_packet_e.py -q)
+set_tests_properties(packet_e_registration_static PROPERTIES
+  LABELS "fast;nightly;packet-e" TIMEOUT 1800)
+
+# Independent configure-time inventory: deleting the static checker registration
+# or any executable detector cannot make the remaining Packet-E set look complete.
+set(ZHAO_PACKET_E_REQUIRED_TESTS
+  packet_e_cache_directed
+  packet_e_cache_lanes8_reqn2
+  packet_e_cache_denial_replay_mutant
+  packet_e_cache_double_resv_assertion
+  packet_e_cache_double_resv_behavior
+  texture_island_v3_packet_b_directed
+  texture_island_v3_packet_b_production_profile
+  texture_island_v3_packet_b_fullctx
+  packet_e_top_historical_fill_lifetime_mutant
+  packet_e_top_relabel_refusal_mutant
+  packet_e_top_refusal_native_arith_mutant
+  packet_e_top_drop_held_refusal_mutant
+  packet_e_render_asset_mux_directed
+  packet_e_render_asset_mux_hold_guard_valid_mutant
+  packet_e_render_asset_mux_drift_subowner_mutant
+  packet_e_render_asset_mux_texture_pack64_mutant
+  packet_e_render_asset_mux_terminate_beat7_mutant
+  packet_e_render_asset_mux_accept_beat9_mutant
+  packet_e_render_asset_mux_denial_silence_mutant
+  packet_e_cache_sv_selector_collision
+  packet_e_cache_cpp_selector_collision
+  packet_e_top_sv_selector_collision
+  packet_e_top_cpp_selector_collision
+  packet_e_mux_sv_selector_collision
+  packet_e_mux_cpp_selector_collision
+  packet_e_registration_static)
+list(LENGTH ZHAO_PACKET_E_REQUIRED_TESTS ZHAO_PACKET_E_REQUIRED_TEST_COUNT)
+if(NOT ZHAO_PACKET_E_REQUIRED_TEST_COUNT EQUAL 26)
+  message(FATAL_ERROR "Packet-E required CTest inventory must contain exactly 26 names")
+endif()
+foreach(required_packet_e_test IN LISTS ZHAO_PACKET_E_REQUIRED_TESTS)
+  if(NOT TEST "${required_packet_e_test}")
+    message(FATAL_ERROR
+      "required Packet-E CTest is not registered: ${required_packet_e_test}")
+  endif()
+endforeach()

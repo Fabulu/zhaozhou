@@ -1,5 +1,19 @@
 // Packet-B private directed integration test.
 // Built only with an isolated Verilator --Mdir; intentionally not in CMake/CTest.
+// Packet-E mutant drivers select exactly one expected inverse. Production selects
+// none. Keep this guard before every include so the C++ side fails independently
+// and with one exact diagnostic even when generated headers are unavailable.
+#if ((defined(PACKET_E_EXPECT_PRE_E_FILL_LIFETIME) + \
+      defined(PACKET_E_EXPECT_RELABEL_REFUSAL_ERR) + \
+      defined(PACKET_E_EXPECT_REFUSAL_NATIVE_ARITH) + \
+      defined(PACKET_E_EXPECT_DROP_HELD_REFUSAL)) != 0) && \
+    ((defined(PACKET_E_EXPECT_PRE_E_FILL_LIFETIME) + \
+      defined(PACKET_E_EXPECT_RELABEL_REFUSAL_ERR) + \
+      defined(PACKET_E_EXPECT_REFUSAL_NATIVE_ARITH) + \
+      defined(PACKET_E_EXPECT_DROP_HELD_REFUSAL)) != 1)
+#error PACKET_E_EXPECT_SELECTOR_COLLISION__DEFINE_EXACTLY_ONE
+#else
+
 #define DPI_DLLISPEC
 #define PLI_DLLISPEC
 #include "Vzhao_texture_island_v3_top.h"
@@ -105,6 +119,60 @@ struct SheetPlan {
   unsigned delay = 0;
 };
 
+enum class FillPlan { Success, Refuse, PartialRefuse, SimultaneousRefuse };
+
+struct Tuple66 {
+  std::array<uint32_t, 3> words{};
+
+  uint32_t rgb() const { return words[0] & 0x00ffffffu; }
+  uint8_t alpha() const { return static_cast<uint8_t>(words[0] >> 24); }
+  uint8_t index() const { return static_cast<uint8_t>(words[1]); }
+  uint8_t status() const { return static_cast<uint8_t>(words[1] >> 8); }
+  uint32_t token() const {
+    return ((words[1] >> 16) & 0xffffu) | ((words[2] & 3u) << 16);
+  }
+  bool operator==(const Tuple66& rhs) const { return words == rhs.words; }
+};
+
+struct MergeState {
+  bool native_valid = false;
+  bool refusal_valid = false;
+  bool merged_valid = false;
+  bool merged_ready = false;
+  bool selected_refusal = false;
+  bool rr_refusal = false;
+  Tuple66 native_tuple{};
+  Tuple66 refusal_tuple{};
+  Tuple66 merged_tuple{};
+};
+
+struct MergeAccept {
+  unsigned response_class = 0;
+  bool refusal = false;
+  Tuple66 tuple{};
+  uint64_t cycle = 0;
+  bool contended = false;
+};
+
+struct CacheCounters {
+  uint32_t cache_accepted = 0;
+  uint32_t cache_completed = 0;
+  uint32_t fill_accepted = 0;
+  uint32_t fill_completed = 0;
+  uint32_t fill_refused = 0;
+  uint32_t fill_beats = 0;
+  bool protocol_fault = false;
+  uint32_t reservations = 0;
+  uint8_t reservation_owners = 0;
+  uint16_t work_state = 0;
+};
+
+struct QuietObservation {
+  bool q_dispatch_valid = false;
+  bool data_quiet = false;
+  bool public_quiet = false;
+};
+
 struct Harness {
   VerilatedContext context;
   Vzhao_texture_island_v3_top dut{&context};
@@ -115,6 +183,14 @@ struct Harness {
   uint32_t fill_line = 0;
   unsigned fill_beat = 0;
   bool auto_fill = true;
+  FillPlan active_fill_plan = FillPlan::Success;
+  std::deque<FillPlan> fill_plans;
+  bool observe_packet_e = false;
+  std::vector<MergeAccept> merge_accepts;
+  uint32_t cache_refusal_accepts = 0;
+  uint32_t last_cache_refusal_token = 0;
+  uint8_t last_cache_refusal_status = 0;
+  uint64_t last_cache_refusal_data = 0;
   bool auto_sheet = true;
   std::deque<SheetPlan> sheet_plans;
   bool sheet_pending = false;
@@ -176,6 +252,12 @@ struct Harness {
       case 0x00006000u: return 0x0005u; // CLUT4 low nibble index 5
       case 0x00007000u: return 0xfc00u; // ARGB1555 opaque red
       case 0x00008000u: return 0x8f10u; // ARGB4444 A=8, R=F, G=1, B=0
+      case 0x0000a000u: return 0x0005u; // Packet-E CLUT native
+      case 0x0000c000u: return 0xf800u; // Packet-E NEAR native red
+      case 0x0000e000u: return 0x001fu; // Packet-E BIL native blue
+      case 0x00012000u: return 0x0005u; // Packet-E CLUT native refill
+      case 0x00014000u: return 0xf800u; // Packet-E NEAR native refill
+      case 0x00016000u: return 0x001fu; // Packet-E BIL native refill
       default: return 0x07e0u;
     }
   }
@@ -220,6 +302,117 @@ struct Harness {
     return counters;
   }
 
+  void select_dpi_scope() {
+    svScope scope = svGetScopeFromName(PACKET_B_DPI_SCOPE);
+    require(scope != nullptr, "DPI scope was not registered", cycle);
+    svSetScope(scope);
+  }
+
+  void set_merge_hold(uint32_t mask) {
+    select_dpi_scope();
+    zhao_texture_packet_e_set_merge_hold(mask);
+  }
+
+  void set_cache_class_override(bool enable, unsigned response_class) {
+    select_dpi_scope();
+    zhao_texture_packet_e_set_cache_class_override(enable ? 1 : 0,
+                                                    response_class);
+  }
+
+  MergeState merge_state(unsigned response_class) {
+    select_dpi_scope();
+    svBit native_valid = 0;
+    svBit refusal_valid = 0;
+    svBit merged_valid = 0;
+    svBit merged_ready = 0;
+    svBit selected_refusal = 0;
+    svBit rr_refusal = 0;
+    svBitVecVal native_tuple[3]{};
+    svBitVecVal refusal_tuple[3]{};
+    svBitVecVal merged_tuple[3]{};
+    zhao_texture_packet_e_get_merge_class_state(
+        response_class, &native_valid, &refusal_valid, &merged_valid,
+        &merged_ready, &selected_refusal, &rr_refusal, native_tuple,
+        refusal_tuple, merged_tuple);
+    MergeState state;
+    state.native_valid = native_valid != 0;
+    state.refusal_valid = refusal_valid != 0;
+    state.merged_valid = merged_valid != 0;
+    state.merged_ready = merged_ready != 0;
+    state.selected_refusal = selected_refusal != 0;
+    state.rr_refusal = rr_refusal != 0;
+    for (unsigned word = 0; word < 3; ++word) {
+      state.native_tuple.words[word] = native_tuple[word];
+      state.refusal_tuple.words[word] = refusal_tuple[word];
+      state.merged_tuple.words[word] = merged_tuple[word];
+    }
+    return state;
+  }
+
+  CacheCounters cache_counters() {
+    select_dpi_scope();
+    CacheCounters counters;
+    svBit protocol_fault = 0;
+    svBitVecVal reservation_owners = 0;
+    svBitVecVal work_state = 0;
+    zhao_texture_packet_e_get_cache_counters(
+        &counters.cache_accepted, &counters.cache_completed,
+        &counters.fill_accepted, &counters.fill_completed,
+        &counters.fill_refused, &counters.fill_beats, &protocol_fault,
+        &counters.reservations, &reservation_owners, &work_state);
+    counters.protocol_fault = protocol_fault != 0;
+    counters.reservation_owners = static_cast<uint8_t>(reservation_owners);
+    counters.work_state = static_cast<uint16_t>(work_state);
+    return counters;
+  }
+
+  std::array<uint32_t, 3> packet_e_protocol_counters() {
+    select_dpi_scope();
+    std::array<uint32_t, 3> counters{};
+    zhao_texture_packet_e_get_protocol_counters(
+        &counters[0], &counters[1], &counters[2]);
+    return counters;
+  }
+
+  QuietObservation quiet_observation() {
+    select_dpi_scope();
+    svBit q_dispatch_valid = 0;
+    svBit data_is_quiet = 0;
+    svBit public_is_quiet = 0;
+    zhao_texture_packet_e_get_quiet_observation(
+        &q_dispatch_valid, &data_is_quiet, &public_is_quiet);
+    return QuietObservation{q_dispatch_valid != 0, data_is_quiet != 0,
+                            public_is_quiet != 0};
+  }
+
+  void observe_packet_e_edges() {
+    if (!observe_packet_e) return;
+    for (unsigned response_class = 0; response_class < 4; ++response_class) {
+      const MergeState state = merge_state(response_class);
+      if (state.merged_valid && state.merged_ready)
+        merge_accepts.push_back(
+            MergeAccept{response_class, state.selected_refusal,
+                        state.merged_tuple, cycle,
+                        state.native_valid && state.refusal_valid});
+    }
+
+    select_dpi_scope();
+    svBit valid = 0;
+    svBit ready = 0;
+    svBitVecVal status = 0;
+    svBitVecVal token = 0;
+    svBitVecVal data[2]{};
+    zhao_texture_packet_e_get_cache_observation(
+        &valid, &ready, &status, &token, data);
+    if (valid && ready && status != 0) {
+      ++cache_refusal_accepts;
+      last_cache_refusal_token = token & 0x3ffffu;
+      last_cache_refusal_status = static_cast<uint8_t>(status);
+      last_cache_refusal_data = static_cast<uint64_t>(data[0]) |
+                                (static_cast<uint64_t>(data[1]) << 32);
+    }
+  }
+
   void set_material_fault_mode(uint32_t mode) {
     svScope scope = svGetScopeFromName(PACKET_B_DPI_SCOPE);
     require(scope != nullptr, "DPI scope was not registered", cycle);
@@ -235,12 +428,34 @@ struct Harness {
   }
 
   Events step() {
-    if (auto_fill && fill_active) {
-      dut.fill_data_valid_i = 1;
-      dut.fill_data_i = fill_word(fill_line, fill_beat);
-    } else {
+    if (auto_fill) {
       dut.fill_data_valid_i = 0;
       dut.fill_data_i = 0;
+      dut.fill_refused_i = 0;
+      if (fill_active) {
+        switch (active_fill_plan) {
+          case FillPlan::Success:
+            dut.fill_data_valid_i = 1;
+            dut.fill_data_i = fill_word(fill_line, fill_beat);
+            break;
+          case FillPlan::Refuse:
+            dut.fill_refused_i = 1;
+            break;
+          case FillPlan::PartialRefuse:
+            if (fill_beat == 0) {
+              dut.fill_data_valid_i = 1;
+              dut.fill_data_i = fill_word(fill_line, fill_beat);
+            } else {
+              dut.fill_refused_i = 1;
+            }
+            break;
+          case FillPlan::SimultaneousRefuse:
+            dut.fill_data_valid_i = 1;
+            dut.fill_data_i = fill_word(fill_line, fill_beat);
+            dut.fill_refused_i = 1;
+            break;
+        }
+      }
     }
 
     if (auto_sheet && sheet_pending && sheet_delay == 0) {
@@ -257,6 +472,7 @@ struct Harness {
     dut.clk = 0;
     dut.eval();
     observe_leaf_idles();
+    observe_packet_e_edges();
 
     Events events;
     events.frag_fire = dut.frag_valid_i && dut.frag_ready_o;
@@ -289,10 +505,27 @@ struct Harness {
 
     if (auto_fill) {
       if (fill_active) {
-        ++fill_beat;
-        if (fill_beat == 8) {
-          fill_active = false;
-          fill_beat = 0;
+        switch (active_fill_plan) {
+          case FillPlan::Success:
+            ++fill_beat;
+            if (fill_beat == 8) {
+              fill_active = false;
+              fill_beat = 0;
+            }
+            break;
+          case FillPlan::Refuse:
+          case FillPlan::SimultaneousRefuse:
+            fill_active = false;
+            fill_beat = 0;
+            break;
+          case FillPlan::PartialRefuse:
+            if (fill_beat == 0) {
+              fill_beat = 1;
+            } else {
+              fill_active = false;
+              fill_beat = 0;
+            }
+            break;
         }
       }
       if (events.fill_req_fire) {
@@ -300,6 +533,9 @@ struct Harness {
         fill_active = true;
         fill_line = accepted_fill_line;
         fill_beat = 0;
+        active_fill_plan = fill_plans.empty() ? FillPlan::Success
+                                              : fill_plans.front();
+        if (!fill_plans.empty()) fill_plans.pop_front();
       }
     }
 
@@ -478,14 +714,30 @@ void program_bindings(Harness& h) {
   rows[9] = BindingRow{0x00006000u, 0x00000002u, 0, 1, true};
   rows[10] = BindingRow{0x00007000u, 0x00000003u, 0, 0, true};
   rows[11] = BindingRow{0x00008000u, 0x00000004u, 0, 0, true};
-  for (unsigned selector = 1; selector <= 11; ++selector)
+  rows[12] = BindingRow{0x0000a000u, 0x00000000u, 0, 1, true};
+  rows[13] = BindingRow{0x0000b000u, 0x00000000u, 0, 1, true};
+  rows[14] = BindingRow{0x0000c000u, 0x00000001u, 0, 0, true};
+  rows[15] = BindingRow{0x0000d000u, 0x00000001u, 0, 0, true};
+  rows[16] = BindingRow{0x0000e000u, 0x00000009u, 0, 0, true};
+  rows[17] = BindingRow{0x0000f000u, 0x00000009u, 0, 0, true};
+  rows[18] = BindingRow{0x00010000u, 0x00000001u, 0, 0, true};
+  rows[19] = BindingRow{0x00011000u, 0x00000001u, 0, 0, true};
+  rows[20] = BindingRow{0x00012000u, 0x00000000u, 0, 1, true};
+  rows[21] = BindingRow{0x00013000u, 0x00000000u, 0, 1, true};
+  rows[22] = BindingRow{0x00014000u, 0x00000001u, 0, 0, true};
+  rows[23] = BindingRow{0x00015000u, 0x00000001u, 0, 0, true};
+  rows[24] = BindingRow{0x00016000u, 0x00000009u, 0, 0, true};
+  rows[25] = BindingRow{0x00017000u, 0x00000009u, 0, 0, true};
+  rows[26] = BindingRow{0x00018000u, 0x00000001u, 0, 0, true};
+  rows[27] = BindingRow{0x00019000u, 0x00000001u, 0, 0, true};
+  for (unsigned selector = 1; selector <= 27; ++selector)
     present[selector] = true;
   const uint32_t crc = binding_crc(1, rows, present);
   BindingRow zero{};
 
   require(binding_command(h, 0, 1, 0, zero, 0, true) == 0,
           "binding BEGIN failed", h.cycle);
-  for (unsigned selector = 1; selector <= 11; ++selector)
+  for (unsigned selector = 1; selector <= 27; ++selector)
     require(binding_command(h, 1, 1, static_cast<uint8_t>(selector),
                             rows[selector], 0) == 0,
             "binding WRITE failed", h.cycle);
@@ -651,6 +903,523 @@ void run_material_hostile_cases(Harness& h) {
           "count-zero descriptor refusal incorrectly entered reset lifetime", h.cycle);
 }
 
+uint32_t wait_for_held_fill_request(Harness& h, unsigned stall_cycles = 16) {
+  for (unsigned n = 0; n < 20000 && !h.dut.fill_req_valid_o; ++n) h.step();
+  require(h.dut.fill_req_valid_o && !h.dut.fill_req_ready_i,
+          "refusal control did not establish held fill request", h.cycle);
+  const uint32_t address = h.dut.fill_req_addr_o;
+  for (unsigned n = 0; n < stall_cycles; ++n) {
+    h.step();
+    require(h.dut.fill_req_valid_o && h.dut.fill_req_addr_o == address,
+            "Packet-E fill request changed during long stall", h.cycle);
+  }
+  return address;
+}
+
+void clear_recoverable_fault(Harness& h) {
+  h.wait_quiet();
+  h.dut.frame_fault_clear_valid_i = 1;
+  h.step();
+  h.dut.frame_fault_clear_valid_i = 0;
+  h.step();
+  require(!h.dut.frame_fault_o,
+          "Packet-E recoverable refusal/fill fault did not clear", h.cycle);
+}
+
+void expect_tuple(const Tuple66& tuple, unsigned response_class,
+                  uint32_t rgb, uint8_t alpha, uint8_t index, uint8_t status,
+                  const char* what, uint64_t cycle) {
+  if ((tuple.token() >> 16) != response_class || tuple.rgb() != rgb ||
+      tuple.alpha() != alpha || tuple.index() != index ||
+      tuple.status() != status) {
+    std::fprintf(stderr,
+                 "  %s class=%u token=%05x status=%02x index=%02x "
+                 "alpha=%02x rgb=%06x\n",
+                 what, response_class, tuple.token(), tuple.status(),
+                 tuple.index(), tuple.alpha(), tuple.rgb());
+    fail("Packet-E 66-bit terminal tuple mismatch", cycle);
+  }
+}
+
+bool run_packet_e_refusal_controls(Harness& h) {
+  constexpr unsigned CLS_CLUT = 0;
+  constexpr unsigned CLS_NEAR = 1;
+  constexpr unsigned CLS_BIL = 2;
+  constexpr unsigned CLS_ERR = 3;
+
+#if defined(PACKET_E_EXPECT_PRE_E_FILL_LIFETIME)
+  const auto before = h.cache_counters();
+  h.observe_packet_e = true;
+  h.fill_plans.push_back(FillPlan::Refuse);
+  h.dut.fill_req_ready_i = 0;
+  set_fragment(h, 0x6f01, 0xe0000f01u, 1, 13, 0, false, CLS_CLUT, 1);
+  h.offer_fragment();
+  wait_for_held_fill_request(h);
+  h.dut.fill_req_ready_i = 1;
+  h.step(); // FI
+  h.step(); // presented denial is withheld from the cache by the mutant
+  for (unsigned n = 0; n < 64; ++n) h.step();
+  const auto after = h.cache_counters();
+  require(h.dut.frame_fault_o && !h.dut.frag_ready_o,
+          "historical pre-E fill refusal did not latch/reset-block", h.cycle);
+  require(h.retired.empty() && after.fill_accepted == before.fill_accepted + 1 &&
+          after.fill_completed == before.fill_completed &&
+          after.fill_refused == before.fill_refused,
+          "historical pre-E fill refusal produced a typed completion", h.cycle);
+  h.dut.frame_fault_clear_valid_i = 1;
+  for (unsigned n = 0; n < 4; ++n) h.step();
+  h.dut.frame_fault_clear_valid_i = 0;
+  require(h.dut.frame_fault_o && !h.dut.frame_fault_clear_ready_o,
+          "historical pre-E reset-lifetime fault yielded to frame clear", h.cycle);
+  std::printf("packet-e historical-pre-E-fill-lifetime mutant FIRED\n");
+  return true;
+#elif defined(PACKET_E_EXPECT_RELABEL_REFUSAL_ERR)
+  const auto protocol_before = h.packet_e_protocol_counters();
+  const uint32_t dispatch_before = h.dut.cnt_dispatch_accepted_o;
+  h.observe_packet_e = true;
+  h.fill_plans.push_back(FillPlan::Refuse);
+  h.dut.fill_req_ready_i = 0;
+  set_fragment(h, 0x6f02, 0xe0000f02u, 1, 13, 0, false, CLS_CLUT, 1);
+  const auto retire = current_retire(h);
+  h.offer_fragment();
+  wait_for_held_fill_request(h);
+  h.dut.fill_req_ready_i = 1;
+  h.step();
+  h.wait_outputs(h.retired.size() + 1);
+  expect_result(h.retired.back(), 0xff00ffu, 0xff, 0, 1, 0x6f02,
+                retire, h.cycle);
+  require(!h.merge_accepts.empty(),
+          "relabel mutant produced no merge acceptance", h.cycle);
+  const auto& accepted = h.merge_accepts.back();
+  require(accepted.response_class == CLS_ERR && accepted.refusal &&
+          (accepted.tuple.token() >> 16) == CLS_CLUT &&
+          h.dut.cnt_dispatch_accepted_o == dispatch_before + 1,
+          "relabel mutant did not route original CLUT token through physical ERR",
+          h.cycle);
+  const auto protocol_after = h.packet_e_protocol_counters();
+  require(protocol_after[0] == protocol_before[0] + 1 &&
+          protocol_after[1] == protocol_before[1] &&
+          protocol_after[2] == protocol_before[2] &&
+          !h.cache_counters().protocol_fault,
+          "relabel mutant did not fire only the dispatcher mismatch detector",
+          h.cycle);
+  std::printf("packet-e refusal-relabel-to-ERR mutant FIRED\n");
+  return true;
+#elif defined(PACKET_E_EXPECT_REFUSAL_NATIVE_ARITH)
+  const uint32_t metadata_before = h.dut.meta_shadow_reads_o;
+  const uint32_t near_work_before = h.dut.cnt_near_refused_o;
+  h.fill_plans.push_back(FillPlan::Refuse);
+  h.dut.fill_req_ready_i = 0;
+  set_fragment(h, 0x6f03, 0xe0000f03u, 1, 15, 0, false, CLS_NEAR, 0);
+  const auto retire = current_retire(h);
+  h.offer_fragment();
+  wait_for_held_fill_request(h);
+  h.dut.fill_req_ready_i = 1;
+  h.step();
+  h.wait_outputs(h.retired.size() + 1);
+  expect_result(h.retired.back(), 0x000000u, 0xff, 0, 0, 0x6f03,
+                retire, h.cycle);
+  require(h.dut.meta_shadow_reads_o == metadata_before + 1 &&
+          h.dut.cnt_near_refused_o == near_work_before &&
+          !h.dut.frame_fault_o && !h.cache_counters().protocol_fault,
+          "native-arithmetic mutant did not consume refusal as clean metadata/NEAR",
+          h.cycle);
+  std::printf("packet-e refusal-enters-native-arithmetic mutant FIRED\n");
+  return true;
+#elif defined(PACKET_E_EXPECT_DROP_HELD_REFUSAL)
+  h.observe_packet_e = true;
+  h.fill_plans.push_back(FillPlan::Refuse);
+  h.dut.fill_req_ready_i = 0;
+  set_fragment(h, 0x6f04, 0xe0000f04u, 1, 13, 0, false, CLS_CLUT, 1);
+  h.offer_fragment();
+  wait_for_held_fill_request(h);
+  h.dut.fill_req_ready_i = 1;
+  h.step();
+  for (unsigned n = 0; n < 20000; ++n) {
+    h.dut.clk = 0;
+    h.dut.eval();
+    const MergeState state = h.merge_state(CLS_CLUT);
+    if (state.refusal_valid) {
+      require(!state.merged_valid && h.retired.empty(),
+              "dropped-refusal mutant unexpectedly offered/retired denial", h.cycle);
+      for (unsigned stall = 0; stall < 64; ++stall) h.step();
+      require(h.merge_state(CLS_CLUT).refusal_valid &&
+              !h.merge_state(CLS_CLUT).merged_valid && !h.dut.quiet_o,
+              "dropped-refusal mutant did not leave exact held refusal stranded",
+              h.cycle);
+      std::printf("packet-e dropped-held-refusal mutant FIRED\n");
+      return true;
+    }
+    h.step();
+  }
+  fail("dropped-refusal mutant never captured cache denial", h.cycle);
+#else
+  struct RefusalCase {
+    unsigned response_class;
+    uint8_t native_binding0;
+    uint8_t refusal_binding0;
+    uint8_t native_binding1;
+    uint8_t refusal_binding1;
+    uint8_t native_witness_class;
+    uint8_t refusal_witness_class;
+    uint8_t native_pal_gen;
+    uint8_t refusal_pal_gen;
+    uint32_t native_rgb;
+    uint8_t native_index;
+  };
+  const std::array<RefusalCase, 4> cases{{
+      {CLS_CLUT, 12, 13, 20, 21, CLS_CLUT, CLS_CLUT, 1, 1, 0x00ff00u, 5},
+      {CLS_NEAR, 14, 15, 22, 23, CLS_NEAR, CLS_NEAR, 0, 0, 0xff0000u, 0},
+      {CLS_BIL, 16, 17, 24, 25, CLS_BIL, CLS_BIL, 0, 0, 0x0000ffu, 0},
+      // ERR natives are resolver-local terminals from absent bindings. Cache
+      // refusals use legal NEAR bindings whose accepted cache tokens are
+      // test-only class-forced to ERR; their original returned tokens are ERR.
+      {CLS_ERR, 250, 18, 251, 26, CLS_ERR, CLS_NEAR, 0, 0, 0xff00ffu, 0},
+  }};
+
+  const CacheCounters cache_begin = h.cache_counters();
+  const std::size_t retirement_begin = h.retired.size();
+  h.observe_packet_e = true;
+
+  for (unsigned case_index = 0; case_index < cases.size(); ++case_index) {
+    const RefusalCase& item = cases[case_index];
+    const uint16_t tag0 = static_cast<uint16_t>(0x6000u + case_index * 4u);
+    const uint16_t tag1 = static_cast<uint16_t>(tag0 + 1u);
+    const uint16_t tag2 = static_cast<uint16_t>(tag0 + 2u);
+    const uint16_t tag3 = static_cast<uint16_t>(tag0 + 3u);
+    std::array<std::array<uint32_t, 5>, 4> retire{};
+    h.dut.out_ready_i = 0;
+    h.set_merge_hold(1u << item.response_class);
+    h.set_cache_class_override(false, 0);
+
+    // N0: establish the held native terminal.
+    set_fragment(h, tag0, 0xe0000000u + case_index * 4u,
+                 1, item.native_binding0, 0, false,
+                 item.native_witness_class, item.native_pal_gen);
+    retire[0] = current_retire(h);
+    h.offer_fragment();
+    for (unsigned n = 0; n < 20000; ++n) {
+      h.dut.clk = 0;
+      h.dut.eval();
+      if (h.merge_state(item.response_class).native_valid) break;
+      h.step();
+    }
+    h.dut.clk = 0;
+    h.dut.eval();
+    MergeState held = h.merge_state(item.response_class);
+    require(held.native_valid && !held.refusal_valid,
+            "N0 did not reach held native merge input", h.cycle);
+    expect_tuple(held.native_tuple, item.response_class, item.native_rgb, 0xff,
+                 item.native_index, item.response_class == CLS_ERR ? 1 : 0,
+                 "native N0", h.cycle);
+    const Tuple66 native_tuple0 = held.native_tuple;
+
+    // R0: establish the held refusal terminal beside N0.
+    h.fill_plans.push_back(FillPlan::Refuse);
+    h.dut.fill_req_ready_i = 0;
+    if (item.response_class == CLS_ERR)
+      h.set_cache_class_override(true, CLS_ERR);
+    set_fragment(h, tag1, 0xe0000001u + case_index * 4u,
+                 1, item.refusal_binding0, 0, false,
+                 item.refusal_witness_class, item.refusal_pal_gen);
+    retire[1] = current_retire(h);
+    h.offer_fragment();
+    wait_for_held_fill_request(h);
+    h.dut.fill_req_ready_i = 1;
+    h.step(); // FI; refusal is driven on the next edge.
+    const uint32_t metadata_r0 = h.dut.meta_shadow_reads_o;
+    const uint32_t palette_r0 = h.dut.cnt_palette_lookups_o;
+    const uint32_t bilerp_r0 = h.dut.cnt_bilerp_jobs_o;
+    const uint32_t mosaic_r0 = h.dut.cnt_mosaic_samples_o;
+
+    for (unsigned n = 0; n < 20000; ++n) {
+      h.dut.clk = 0;
+      h.dut.eval();
+      held = h.merge_state(item.response_class);
+      if (held.native_valid && held.refusal_valid) break;
+      h.step();
+    }
+    h.dut.clk = 0;
+    h.dut.eval();
+    held = h.merge_state(item.response_class);
+    require(held.native_valid && held.refusal_valid &&
+            !held.selected_refusal && !held.rr_refusal,
+            "N0/R0 contention did not retain initial native priority", h.cycle);
+    require(h.cache_refusal_accepts == case_index * 2u + 1u,
+            "cache did not capture exact first refusal for class", h.cycle);
+    expect_tuple(held.refusal_tuple, item.response_class, 0xff00ffu, 0xff,
+                 0, 1, "refusal R0", h.cycle);
+    const Tuple66 refusal_tuple0 = held.refusal_tuple;
+    require(refusal_tuple0.token() == h.last_cache_refusal_token &&
+            h.last_cache_refusal_status == 1 &&
+            h.last_cache_refusal_data == 0 &&
+            refusal_tuple0.token() != native_tuple0.token(),
+            "R0 did not preserve distinct original cache token/status/data",
+            h.cycle);
+    require(h.dut.meta_shadow_reads_o == metadata_r0 &&
+            h.dut.cnt_palette_lookups_o == palette_r0 &&
+            h.dut.cnt_bilerp_jobs_o == bilerp_r0 &&
+            h.dut.cnt_mosaic_samples_o == mosaic_r0,
+            "R0 launched metadata/palette/bilerp/Mosaic work", h.cycle);
+
+    // Exact quiet-source mapping positive control. Every public input offer is
+    // parked, but structural merged occupancy must remain q_dispatch=1 and hold
+    // both data_quiet and public quiet low even though the dispatcher valid is
+    // test-gated off.
+    const QuietObservation quiet_held = h.quiet_observation();
+    require(quiet_held.q_dispatch_valid && !quiet_held.data_quiet &&
+            !quiet_held.public_quiet && !h.dut.frag_valid_i &&
+            !h.dut.cfg_valid_i && !h.dut.pal_load_valid_i &&
+            !h.dut.fill_data_valid_i && !h.dut.fill_refused_i &&
+            !h.dut.pg_valid_i && !h.dut.frame_fault_clear_valid_i,
+            "held merge occupancy disappeared from q_dispatch/data_quiet mapping",
+            h.cycle);
+
+    for (unsigned stall = 0; stall < 32; ++stall) {
+      h.step();
+      const MergeState stalled = h.merge_state(item.response_class);
+      const QuietObservation quiet_stalled = h.quiet_observation();
+      require(stalled.native_valid && stalled.refusal_valid &&
+              !stalled.selected_refusal && !stalled.rr_refusal &&
+              stalled.native_tuple == native_tuple0 &&
+              stalled.refusal_tuple == refusal_tuple0 &&
+              quiet_stalled.q_dispatch_valid && !quiet_stalled.data_quiet,
+              "N0/R0 records or structural quiet visibility changed while held",
+              h.cycle);
+    }
+
+    // Stage one native refill and one refusal reload. ERR must send R1 through
+    // its planner before parking local N1 in the single resolver disposition;
+    // every other class stages N1 first so it is ahead of R1 in cache order.
+    auto stage_native_refill = [&]() {
+      h.set_cache_class_override(false, 0);
+      const CacheCounters before_n1 = h.cache_counters();
+      set_fragment(h, tag2, 0xe0000002u + case_index * 4u,
+                   1, item.native_binding1, 0, false,
+                   item.native_witness_class, item.native_pal_gen);
+      retire[2] = current_retire(h);
+      h.offer_fragment();
+      if (item.response_class != CLS_ERR) {
+        for (unsigned n = 0; n < 20000 &&
+             h.cache_counters().fill_completed == before_n1.fill_completed; ++n)
+          h.step();
+        require(h.cache_counters().fill_completed == before_n1.fill_completed + 1,
+                "N1 successful fill did not complete", h.cycle);
+      }
+      for (unsigned n = 0; n < 96; ++n) h.step();
+      held = h.merge_state(item.response_class);
+      require(held.native_valid && held.refusal_valid &&
+              held.native_tuple == native_tuple0 &&
+              held.refusal_tuple == refusal_tuple0,
+              "preloaded N1 overwrote held N0/R0", h.cycle);
+    };
+
+    auto stage_refusal_reload = [&]() {
+      const CacheCounters before_r1 = h.cache_counters();
+      h.fill_plans.push_back(FillPlan::Refuse);
+      h.dut.fill_req_ready_i = 0;
+      if (item.response_class == CLS_ERR)
+        h.set_cache_class_override(true, CLS_ERR);
+      set_fragment(h, tag3, 0xe0000003u + case_index * 4u,
+                   1, item.refusal_binding1, 0, false,
+                   item.refusal_witness_class, item.refusal_pal_gen);
+      retire[3] = current_retire(h);
+      h.offer_fragment();
+      wait_for_held_fill_request(h);
+      h.dut.fill_req_ready_i = 1;
+      h.step(); // FI
+      const uint32_t metadata_r1 = h.dut.meta_shadow_reads_o;
+      const uint32_t palette_r1 = h.dut.cnt_palette_lookups_o;
+      const uint32_t bilerp_r1 = h.dut.cnt_bilerp_jobs_o;
+      const uint32_t mosaic_r1 = h.dut.cnt_mosaic_samples_o;
+      for (unsigned n = 0; n < 20000 &&
+           h.cache_counters().fill_completed == before_r1.fill_completed; ++n)
+        h.step();
+      require(h.cache_counters().fill_completed == before_r1.fill_completed + 1,
+              "R1 refused fill did not terminate", h.cycle);
+      h.step(); // park external offers while R1 remains backpressured.
+      require(h.cache_refusal_accepts == case_index * 2u + 1u &&
+              h.dut.meta_shadow_reads_o == metadata_r1 &&
+              h.dut.cnt_palette_lookups_o == palette_r1 &&
+              h.dut.cnt_bilerp_jobs_o == bilerp_r1 &&
+              h.dut.cnt_mosaic_samples_o == mosaic_r1,
+              "backpressured R1 escaped slot or launched native arithmetic",
+              h.cycle);
+    };
+
+    if (item.response_class == CLS_ERR) {
+      stage_refusal_reload();
+      stage_native_refill();
+    } else {
+      stage_native_refill();
+      stage_refusal_reload();
+    }
+
+    // Release sustained contention. N0 and R0 must be accepted on consecutive
+    // contended clocks in opposite directions. N1 refills native on N0's edge;
+    // R1 refills refusal on R0's edge; N1 is therefore a third consecutive
+    // contended acceptance. R1 then drains without a bubble or overwrite.
+    const std::size_t merge_begin = h.merge_accepts.size();
+    const uint32_t refusal_accepts_before_reload = h.cache_refusal_accepts;
+    h.set_merge_hold(0);
+
+    h.step(); // accept N0, simultaneously reload native with N1
+    require(h.merge_accepts.size() == merge_begin + 1,
+            "N0 was not accepted on first released clock", h.cycle);
+    h.dut.clk = 0; h.dut.eval();
+    const MergeState after_n0 = h.merge_state(item.response_class);
+    require(after_n0.native_valid && after_n0.refusal_valid &&
+            after_n0.selected_refusal && after_n0.rr_refusal &&
+            after_n0.refusal_tuple == refusal_tuple0,
+            "N1 did not same-edge refill native behind contended N0", h.cycle);
+    expect_tuple(after_n0.native_tuple, item.response_class, item.native_rgb,
+                 0xff, item.native_index,
+                 item.response_class == CLS_ERR ? 1 : 0, "native N1", h.cycle);
+    const Tuple66 native_tuple1 = after_n0.native_tuple;
+    require(native_tuple1.token() != native_tuple0.token() &&
+            native_tuple1.token() != refusal_tuple0.token(),
+            "N1 token was not distinct", h.cycle);
+
+    h.step(); // accept R0, simultaneously pop/reload refusal with R1
+    require(h.merge_accepts.size() == merge_begin + 2,
+            "R0 was not accepted on second consecutive released clock", h.cycle);
+    h.dut.clk = 0; h.dut.eval();
+    const MergeState after_r0 = h.merge_state(item.response_class);
+    require(after_r0.native_valid && after_r0.refusal_valid &&
+            !after_r0.selected_refusal && !after_r0.rr_refusal &&
+            h.cache_refusal_accepts == refusal_accepts_before_reload + 1,
+            "R1 did not same-edge pop/reload refusal behind contended R0", h.cycle);
+    expect_tuple(after_r0.refusal_tuple, item.response_class, 0xff00ffu, 0xff,
+                 0, 1, "refusal R1", h.cycle);
+    const Tuple66 refusal_tuple1 = after_r0.refusal_tuple;
+    require(refusal_tuple1.token() == h.last_cache_refusal_token &&
+            refusal_tuple1.token() != refusal_tuple0.token() &&
+            refusal_tuple1.token() != native_tuple1.token(),
+            "R1 did not preserve a distinct original cache token", h.cycle);
+
+    h.step(); // accept N1 under the reloaded N1/R1 contention
+    require(h.merge_accepts.size() == merge_begin + 3,
+            "N1 was not the third consecutive contended acceptance", h.cycle);
+    h.step(); // drain R1 without a bubble
+    require(h.merge_accepts.size() == merge_begin + 4,
+            "R1 did not drain on the fourth consecutive clock", h.cycle);
+
+    const MergeAccept& accept0 = h.merge_accepts[merge_begin + 0];
+    const MergeAccept& accept1 = h.merge_accepts[merge_begin + 1];
+    const MergeAccept& accept2 = h.merge_accepts[merge_begin + 2];
+    const MergeAccept& accept3 = h.merge_accepts[merge_begin + 3];
+    require(accept0.response_class == item.response_class &&
+            accept1.response_class == item.response_class &&
+            accept2.response_class == item.response_class &&
+            accept3.response_class == item.response_class &&
+            accept0.tuple == native_tuple0 && !accept0.refusal &&
+            accept1.tuple == refusal_tuple0 && accept1.refusal &&
+            accept2.tuple == native_tuple1 && !accept2.refusal &&
+            accept3.tuple == refusal_tuple1 && accept3.refusal,
+            "sustained RR changed/relabelled an exact 66-bit record", h.cycle);
+    require(accept0.contended && accept1.contended && accept2.contended &&
+            !accept3.contended &&
+            accept1.cycle == accept0.cycle + 1 &&
+            accept2.cycle == accept1.cycle + 1 &&
+            accept3.cycle == accept2.cycle + 1,
+            "sustained RR did not alternate both directions without bubbles",
+            h.cycle);
+    require(h.merge_state(item.response_class).rr_refusal,
+            "uncontended R1 acceptance illegally changed RR", h.cycle);
+
+    for (unsigned stall = 0; stall < 48; ++stall) h.step();
+    require(h.retired.size() == retirement_begin + case_index * 4,
+            "ordered owner output escaped long output stall", h.cycle);
+    h.dut.out_ready_i = 1;
+    h.wait_outputs(retirement_begin + (case_index + 1) * 4);
+    expect_result(h.retired[retirement_begin + case_index * 4 + 0],
+                  item.native_rgb, 0xff, item.native_index,
+                  item.response_class == CLS_ERR ? 1 : 0,
+                  tag0, retire[0], h.cycle);
+    expect_result(h.retired[retirement_begin + case_index * 4 + 1],
+                  0xff00ffu, 0xff, 0, 1, tag1, retire[1], h.cycle);
+    if (item.response_class == CLS_ERR) {
+      // R1 was admitted before local N1 to clear the single resolver disposition.
+      // The owner must restore admission order even though merge order was N1,R1.
+      expect_result(h.retired[retirement_begin + case_index * 4 + 2],
+                    0xff00ffu, 0xff, 0, 1, tag3, retire[3], h.cycle);
+      expect_result(h.retired[retirement_begin + case_index * 4 + 3],
+                    item.native_rgb, 0xff, item.native_index, 1,
+                    tag2, retire[2], h.cycle);
+    } else {
+      expect_result(h.retired[retirement_begin + case_index * 4 + 2],
+                    item.native_rgb, 0xff, item.native_index, 0,
+                    tag2, retire[2], h.cycle);
+      expect_result(h.retired[retirement_begin + case_index * 4 + 3],
+                    0xff00ffu, 0xff, 0, 1, tag3, retire[3], h.cycle);
+    }
+    h.set_cache_class_override(false, 0);
+    require(h.dut.frame_fault_o,
+            "typed cache refusals did not set recoverable frame fault", h.cycle);
+    clear_recoverable_fault(h);
+  }
+
+  const CacheCounters cache_end = h.cache_counters();
+  require(cache_end.cache_accepted - cache_begin.cache_accepted == 14 &&
+          cache_end.cache_completed - cache_begin.cache_completed == 14,
+          "Packet-E cache CA/CC deltas were not 14/14", h.cycle);
+  require(cache_end.fill_accepted - cache_begin.fill_accepted == 14 &&
+          cache_end.fill_completed - cache_begin.fill_completed == 14 &&
+          cache_end.fill_refused - cache_begin.fill_refused == 8 &&
+          cache_end.fill_beats - cache_begin.fill_beats == 48,
+          "Packet-E FI/FTERM/FREF/FB deltas violated 14/14/8/48", h.cycle);
+  const auto protocol_end = h.packet_e_protocol_counters();
+  require(!cache_end.protocol_fault && cache_end.reservations == 0 &&
+          cache_end.reservation_owners == 0 && cache_end.work_state == 0 &&
+          protocol_end[0] == 0 && protocol_end[1] == 0 && protocol_end[2] == 0,
+          "Packet-E sustained refusal drain left protocol/credit/work evidence",
+          h.cycle);
+  return false;
+#endif
+}
+
+void run_cache_protocol_fault_controls(Harness& h) {
+  // Unsolicited data is malformed. It must set the child cache fault, surface at
+  // the top, and clear without reset once every accepted owner is quiet.
+  clear_recoverable_fault(h);
+  h.auto_fill = false;
+  h.dut.fill_data_valid_i = 1;
+  h.dut.fill_data_i = 0x55aau;
+  h.step();
+  h.dut.fill_data_valid_i = 0;
+  h.step();
+  require(h.cache_counters().protocol_fault && h.dut.frame_fault_o,
+          "unsolicited cache fill beat did not set child/top protocol fault",
+          h.cycle);
+  h.auto_fill = true;
+  clear_recoverable_fault(h);
+  require(!h.cache_counters().protocol_fault,
+          "quiet frame clear did not clear cache protocol fault", h.cycle);
+
+  // Partial refusal is both terminal and malformed: one legal beat, then denial.
+  const CacheCounters before = h.cache_counters();
+  h.fill_plans.push_back(FillPlan::PartialRefuse);
+  h.dut.fill_req_ready_i = 0;
+  set_fragment(h, 0x6e01, 0xe1000001u, 1, 19, 0, false, 1, 0);
+  const auto retire = current_retire(h);
+  h.offer_fragment();
+  wait_for_held_fill_request(h, 4);
+  h.dut.fill_req_ready_i = 1;
+  h.step();
+  h.wait_outputs(h.retired.size() + 1);
+  expect_result(h.retired.back(), 0xff00ffu, 0xff, 0, 1,
+                0x6e01, retire, h.cycle);
+  const CacheCounters after = h.cache_counters();
+  require(after.fill_accepted == before.fill_accepted + 1 &&
+          after.fill_completed == before.fill_completed + 1 &&
+          after.fill_refused == before.fill_refused + 1 &&
+          after.fill_beats == before.fill_beats + 1 &&
+          after.protocol_fault && h.dut.frame_fault_o,
+          "partial refusal did not terminate once and set malformed fault",
+          h.cycle);
+  clear_recoverable_fault(h);
+}
+
 void run_directed() {
   Harness* const harness = new Harness;
   Harness& h = *harness;
@@ -659,6 +1428,22 @@ void run_directed() {
   check_public_quiet_inputs(h);
   program_palette(h);
   program_bindings(h);
+#if !defined(PACKET_B_EXPECT_INDEX_ROUTE_MUTANT) && \
+    !defined(PACKET_B_EXPECT_AUX_AS_SAMPLE2) && \
+    !defined(PACKET_B_EXPECT_RETIRE_TRUNCATION) && \
+    !defined(PACKET_B_EXPECT_OWNER_MASK_LIFETIME) && \
+    !defined(PACKET_B_EXPECT_CACHE_SIDX3_LIFETIME) && \
+    !defined(PACKET_B_EXPECT_BILERP_IDENTITY_REFUSAL) && \
+    !defined(PACKET_B_EXPECT_SHADOW_CORRUPTION) && \
+    !defined(PACKET_B_EXPECT_RSP_DROP_OBSERVATION)
+  if (run_packet_e_refusal_controls(h)) return;
+#if !defined(PACKET_E_EXPECT_PRE_E_FILL_LIFETIME) && \
+    !defined(PACKET_E_EXPECT_RELABEL_REFUSAL_ERR) && \
+    !defined(PACKET_E_EXPECT_REFUSAL_NATIVE_ARITH) && \
+    !defined(PACKET_E_EXPECT_DROP_HELD_REFUSAL)
+  run_cache_protocol_fault_controls(h);
+#endif
+#endif
 #if !defined(PACKET_B_EXPECT_INDEX_ROUTE_MUTANT) && \
     !defined(PACKET_B_EXPECT_AUX_AS_SAMPLE2) && \
     !defined(PACKET_B_EXPECT_RETIRE_TRUNCATION) && \
@@ -1146,25 +1931,32 @@ void run_directed() {
                   0x50ff, fresh_ctx, reset_case.cycle);
   }
 
-  // Packet-B cannot terminate a denied cache fill yet.  Any presented refusal is
-  // therefore a reset-lifetime unsupported condition, not an inert silent wait.
+  // A refusal with no accepted FI is malformed cache protocol, not the removed
+  // Packet-B reset-lifetime unsupported-fill state. It is clearable without reset
+  // and cannot invent an owner completion.
   {
-    Harness* const lifetime_storage = new Harness;
-    Harness& lifetime = *lifetime_storage;
-    lifetime.reset();
-    lifetime.dut.fill_refused_i = 1;
-    lifetime.step();
-    lifetime.dut.fill_refused_i = 0;
-    lifetime.wait_quiet();
-    require(lifetime.dut.frame_fault_o,
-            "unsupported fill refusal did not latch lifetime fault", lifetime.cycle);
-    lifetime.dut.frame_fault_clear_valid_i = 1;
-    lifetime.step();
-    lifetime.dut.frame_fault_clear_valid_i = 0;
-    lifetime.step();
-    require(lifetime.dut.frame_fault_o,
-            "frame clear erased unsupported fill-refusal lifetime fault",
-            lifetime.cycle);
+    Harness* const malformed_storage = new Harness;
+    Harness& malformed = *malformed_storage;
+    malformed.reset();
+    malformed.auto_fill = false;
+    malformed.dut.fill_refused_i = 1;
+    malformed.step();
+    malformed.dut.fill_refused_i = 0;
+    malformed.step();
+    require(malformed.dut.frame_fault_o &&
+            malformed.cache_counters().protocol_fault &&
+            malformed.retired.empty(),
+            "refusal without FI did not set only recoverable cache protocol fault",
+            malformed.cycle);
+    malformed.wait_quiet();
+    malformed.dut.frame_fault_clear_valid_i = 1;
+    malformed.step();
+    malformed.dut.frame_fault_clear_valid_i = 0;
+    malformed.step();
+    require(!malformed.dut.frame_fault_o &&
+            !malformed.cache_counters().protocol_fault,
+            "frame clear failed to recover refusal-without-FI protocol fault",
+            malformed.cycle);
   }
 
   std::printf("packet-b directed PASS: outputs=%zu near/clut/bil exact, "
@@ -1181,3 +1973,5 @@ int main(int argc, char** argv) {
   run_directed();
   zhao::exit_hard(0);
 }
+
+#endif // exactly zero production or one PACKET_E_EXPECT_* mutant mode

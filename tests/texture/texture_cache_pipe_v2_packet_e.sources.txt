@@ -1,0 +1,15 @@
+# Packet-E cache source order. The selector file MUST be immediately before the
+# exact production cache; ordinary builds define no selector.
+#
+# Private driver controls (SV define / C++ define):
+#   production: none / none; assertions on
+#   LANES8: -GLANES=8 -GREQN=2 / EXPECT_PACKET_E_LANES8_REQN2
+#   denial: ZHAO_PACKET_E_MUTANT_DENIAL_REPLAYS /
+#           EXPECT_PACKET_E_DENIAL_REPLAY_MUTANT; assertions on
+#   double: ZHAO_PACKET_E_MUTANT_PREPAID_DOUBLE_RESV /
+#           EXPECT_PACKET_E_PREPAID_DOUBLE_RESV_MUTANT; assertions off only for
+#           the behavioral inverse (an assertion-on run is its separate fire)
+#   collision: both SV selectors must fail exact-cache elaboration; both C++
+#              selectors must fail preprocessing.
+tests/mutants/zhao_texture_cache_pipe_v2_packet_e_mutants.sv
+fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv

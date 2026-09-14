@@ -352,6 +352,9 @@ excluded:
   - zhao_geom_binner_v2: not-yet-adopted  Packet-D version of GEOM.BINNER with exact accepted-triangle-owned 1,157-bit metadata in 29 ascending 40-bit slices; old/V2 stream/counter parity and committed metadata-address mutant are functional evidence only, pending the versioned tile/bin composition and G8A fit
   - zhao_raster_tile_pipe_v2: not-yet-adopted  Packet-D three-plane current-zref attribute, Early-Z, Packet-C V3, fragment, TILESTORE and RESOLVE composition with synchronous abort cancellation; full simulation evidence is not production adoption or G8A resource evidence
   - zhao_geom_bin_pipe_v2: not-yet-adopted  Packet-D exact GEOM.BINNER-V2 metadata splice into the versioned tile pipeline with remaining-job sink on raster abort; retained old compositions remain selected/oracle paths until G8A and later adoption packets
+  # Packet E shares ENGINE1 only behind the real guard. The shell has no
+  # independent raw-last return, so this test-only owner cannot be adopted there.
+  - zhao_render_asset_mux: not-yet-adopted  Packet-E excluded local geometry/texture-fill owner mux behind the unchanged ENGINE1 MEM.GUARD client; real accept-then-verdict and explicit raw-last routing are unit-verified, but the protected shell cannot supply raw-last and G8A must price a compatible connected seam
   #
   # The rows below are the now-unreachable PRE-PACKET-B implementations. They are
   # retained as oracle/history material with their source, tests, existing fit

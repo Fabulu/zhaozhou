@@ -70,6 +70,59 @@
       (data ^ {{63{1'b0}}, pending})
 `endif
 
+// ---------------------------------------------------------------------------
+// Packet-E top selectors. Exactly one may be active. Each hook is consumed by
+// the exact production top immediately after this file; no copied top exists.
+// ---------------------------------------------------------------------------
+
+// Historical pre-E behavior: fill denial is withheld from the cache and latches
+// a reset-lifetime admission barrier. It is test-only and absent from ordinary
+// and synthesis elaboration.
+`ifdef ZHAO_PACKET_E_MUTANT_PRE_E_FILL_LIFETIME
+  `ifdef ZHAO_PACKET_E_TOP_MUTANT_SELECTED
+    `define ZHAO_PACKET_E_TOP_MUTANT_SELECTOR_COLLISION
+  `else
+    `define ZHAO_PACKET_E_TOP_MUTANT_SELECTED
+  `endif
+`endif
+
+// Route every held cache refusal to physical ERR while preserving its original
+// token bits. The unchanged dispatcher must count the class mismatch.
+`ifdef ZHAO_PACKET_E_MUTANT_RELABEL_REFUSAL_ERR
+  `ifdef ZHAO_PACKET_E_TOP_MUTANT_SELECTED
+    `define ZHAO_PACKET_E_TOP_MUTANT_SELECTOR_COLLISION
+  `else
+    `define ZHAO_PACKET_E_TOP_MUTANT_SELECTED
+  `endif
+  `define ZHAO_PACKET_E_REFUSAL_CLASS(token) 2'd3
+`endif
+
+// Defeat the status bypass so a denied cache record enters Packet-B metadata and
+// native arithmetic, losing the typed refusal result instead of terminating it.
+`ifdef ZHAO_PACKET_E_MUTANT_REFUSAL_ENTERS_NATIVE
+  `ifdef ZHAO_PACKET_E_TOP_MUTANT_SELECTED
+    `define ZHAO_PACKET_E_TOP_MUTANT_SELECTOR_COLLISION
+  `else
+    `define ZHAO_PACKET_E_TOP_MUTANT_SELECTED
+  `endif
+  `define ZHAO_PACKET_E_CACHE_STATUS_IS_REFUSAL(status) 1'b0
+`endif
+
+// Native-only merge: the held refusal remains queued forever even when the
+// dispatcher is ready. This is the dropped/backpressured-refusal inverse.
+`ifdef ZHAO_PACKET_E_MUTANT_DROP_HELD_REFUSAL
+  `ifdef ZHAO_PACKET_E_TOP_MUTANT_SELECTED
+    `define ZHAO_PACKET_E_TOP_MUTANT_SELECTOR_COLLISION
+  `else
+    `define ZHAO_PACKET_E_TOP_MUTANT_SELECTED
+  `endif
+  `define ZHAO_PACKET_E_REFUSAL_MERGE_VALID(valid) 1'b0
+`endif
+
+`ifdef ZHAO_PACKET_E_TOP_MUTANT_SELECTED
+  `undef ZHAO_PACKET_E_TOP_MUTANT_SELECTED
+`endif
+
 // The omitted-quiet-operand control is an exact source mutation rather than an
 // RTL helper: the private static driver replaces the one production term
 //     && !q_sheet_rsp_owed

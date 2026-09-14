@@ -675,10 +675,13 @@ constexpr uint32_t kFbSlot0Base = 0x00000000u;
 // bank split (W2.7): slot 1 lives in DRAM bank 1 — zhao_pkg ZHAO_FB_SLOT1_BASE
 constexpr uint32_t kFbSlot1Base = 0x02000000u;
 constexpr uint32_t kFbSlotSpan = 0x0003C000u;
-// Phase-3 windows (zhao_pkg ZHAO_GEOM_ASSET_* / ZHAO_TERRAIN_PAGE_POOL_*).
-// GEOM.ASSET_POOL is ENGINE1's, READ-only (spec/memory_rules.md 5f).
-constexpr uint32_t kGeomAssetBase = 0x06A00000u;
-constexpr uint32_t kGeomAssetSpan = 0x01600000u;  // 22 MiB, ends at 0x0800_0000
+// Phase-3/Packet-E windows (zhao_pkg ZHAO_RENDER_ASSET_* / terrain pool).
+// RENDER.ASSET_POOL is ENGINE1's shared immutable geometry/texture READ window.
+constexpr uint32_t kRenderAssetBase = 0x06A00000u;
+constexpr uint32_t kRenderAssetSpan = 0x01600000u;  // 22 MiB, ends at 0x0800_0000
+// Temporary compatibility aliases; not a second region authority.
+constexpr uint32_t kGeomAssetBase = kRenderAssetBase;
+constexpr uint32_t kGeomAssetSpan = kRenderAssetSpan;
 // TERRAIN.PAGE_POOL is TERRAIN.BUILD's, BOTH DIRECTIONS (rulings T2/T3/T4).
 // 1,024 x 21,376 B = 0x014E_0000, so the pool ends at 0x054E_0000 -- the
 // ruling's inclusive 0x054D_FFFF, to the byte.
@@ -733,7 +736,7 @@ struct MemoryGuard {
         return r.addr >= base && end <= base + m.blit_span;
       }
       case ENGINE1:
-        // GEOM.ASSET_POOL, READ-only (spec/memory_rules.md 5f). This arm was
+        // RENDER.ASSET_POOL, ENGINE1 READ-only (spec/memory_rules.md 5f).
         // MISSING from the oracle while the RTL had it, so the model and the
         // block disagreed about every meshlet descriptor read. Nothing caught
         // it because mem_guard_directed's fuzz anchors sit in the framebuffer
@@ -741,8 +744,8 @@ struct MemoryGuard {
         // at addresses the test never generates. Added with the terrain arm
         // rather than left, because a reference that is right about the region
         // being added and wrong about the one beside it is not a reference.
-        return !r.write && r.addr >= kGeomAssetBase &&
-               end <= kGeomAssetBase + kGeomAssetSpan;
+        return !r.write && r.addr >= kRenderAssetBase &&
+               end <= kRenderAssetBase + kRenderAssetSpan;
       case TERRAIN_BUILD: {
         // TERRAIN.PAGE_POOL, TERRAIN.BUILD's in BOTH DIRECTIONS (rulings T2 /
         // T3 / T4, spec/memory_rules.md 5b). Constant bounds: no map input
