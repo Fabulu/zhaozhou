@@ -51,9 +51,9 @@ if ($LASTEXITCODE -ne 0) { throw 'SuperStation hardware-spec source preflight fa
 & python (Join-Path $repoRoot 'tests\board\run_ssone_spec_tests.py')
 if ($LASTEXITCODE -ne 0) { throw 'SuperStation hardware-spec directed vectors failed.' }
 
-$quartus = Join-Path $QuartusBin 'quartus_sh.exe'
-if (-not (Test-Path -LiteralPath $quartus -PathType Leaf)) {
-    throw "Required Quartus executable not found: $quartus"
+$compileScript = Join-Path $repoRoot 'tools\board\run_superstation_quartus.py'
+if (-not (Test-Path -LiteralPath $compileScript -PathType Leaf)) {
+    throw "Manifest-bound Quartus runner not found: $compileScript"
 }
 $otherQuartus = @(Get-Process -Name 'quartus*' -ErrorAction SilentlyContinue)
 if ($otherQuartus.Count -ne 0) {
@@ -121,13 +121,9 @@ $completeManifest = Join-Path $buildRoot 'ZhaozhouSpecs.complete-manifest.json'
 if ($LASTEXITCODE -ne 0) { throw 'SuperStation specs source manifest creation failed.' }
 
 . (Join-Path $repoRoot 'tools\env\zhao-env.ps1')
-Push-Location $buildRoot
-try {
-    & $quartus --flow compile ZhaozhouSpecs
-    $compileRc = $LASTEXITCODE
-} finally {
-    Pop-Location
-}
+& python $compileScript --quartus-bin $QuartusBin --build-dir $buildRoot `
+    --project ZhaozhouSpecs
+$compileRc = $LASTEXITCODE
 if ($compileRc -ne 0) {
     throw "Quartus specs compile failed with exit code $compileRc; reports remain in $buildRoot"
 }

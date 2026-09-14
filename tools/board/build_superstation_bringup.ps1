@@ -45,9 +45,9 @@ $verifyScript = Join-Path $repoRoot 'tools\board\verify_superstation_bringup.py'
 & python $verifyScript --repo $repoRoot
 if ($LASTEXITCODE -ne 0) { throw 'SuperStation source preflight failed.' }
 
-$quartus = Join-Path $QuartusBin 'quartus_sh.exe'
-if (-not (Test-Path -LiteralPath $quartus -PathType Leaf)) {
-    throw "Required Quartus executable not found: $quartus"
+$compileScript = Join-Path $repoRoot 'tools\board\run_superstation_quartus.py'
+if (-not (Test-Path -LiteralPath $compileScript -PathType Leaf)) {
+    throw "Manifest-bound Quartus runner not found: $compileScript"
 }
 
 $otherQuartus = @(Get-Process -Name 'quartus*' -ErrorAction SilentlyContinue)
@@ -105,14 +105,9 @@ $completeManifest = Join-Path $buildRoot 'ZhaozhouBringup.complete-manifest.json
 if ($LASTEXITCODE -ne 0) { throw 'SuperStation source manifest creation failed.' }
 
 . (Join-Path $repoRoot 'tools\env\zhao-env.ps1')
-
-Push-Location $buildRoot
-try {
-    & $quartus --flow compile ZhaozhouBringup
-    $compileRc = $LASTEXITCODE
-} finally {
-    Pop-Location
-}
+& python $compileScript --quartus-bin $QuartusBin --build-dir $buildRoot `
+    --project ZhaozhouBringup
+$compileRc = $LASTEXITCODE
 if ($compileRc -ne 0) {
     throw "Quartus compile failed with exit code $compileRc; reports remain in $buildRoot"
 }

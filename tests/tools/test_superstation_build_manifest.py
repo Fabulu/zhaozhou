@@ -82,9 +82,15 @@ class SuperStationBuildManifestTest(unittest.TestCase):
             (output / f"Test.{suffix}").write_bytes(f"artifact:{suffix}\n".encode())
         return MANIFEST.create_complete_manifest(self.repo, self.build, "Test", source_path)
 
-    def test_production_profiles_bind_zhao_env(self) -> None:
+    def test_production_profiles_bind_compile_runner(self) -> None:
         for name in ("Bringup", "Specs"):
-            self.assertIn("tools/env/zhao-env.ps1", PRODUCTION_PROFILES[name]["sourcePaths"])
+            profile = PRODUCTION_PROFILES[name]
+            self.assertIn("tools/env/zhao-env.ps1", profile["sourcePaths"])
+            self.assertIn("tools/board/run_superstation_quartus.py", profile["sourcePaths"])
+            self.assertIn(
+                "tests/tools/test_run_superstation_quartus.py",
+                profile["verificationPaths"],
+            )
 
     def test_complete_manifest_verifies(self) -> None:
         complete = self.complete_manifest()

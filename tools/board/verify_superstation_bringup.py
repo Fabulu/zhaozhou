@@ -110,8 +110,23 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
             '"artifacts"',
             '"manifestSha256"',
             '"tools/env/zhao-env.ps1"',
+            '"tools/board/run_superstation_quartus.py"',
+            '"tests/tools/test_run_superstation_quartus.py"',
             "ARTIFACT_SUFFIXES = (",
             '"sta.summary"',
+        ],
+        errors,
+    )
+    require_text(
+        repo / "tools" / "board" / "run_superstation_quartus.py",
+        [
+            '"--read_settings_files=on"',
+            '"--write_settings_files=off"',
+            '"quartus_map.exe"',
+            '"quartus_fit.exe"',
+            '"quartus_asm.exe"',
+            '"quartus_sta.exe"',
+            "current_qsf != original_qsf",
         ],
         errors,
     )
@@ -142,6 +157,7 @@ def verify_sources(repo: Path) -> tuple[list[str], dict[str, object]]:
                 "sys\\sys_top.v",
                 "SuperStation sys_top safety overlay failed",
                 "superstation_build_manifest.py",
+                "run_superstation_quartus.py",
                 "--phase source",
                 "--phase complete",
                 "'tools/env/zhao-env.ps1'",
