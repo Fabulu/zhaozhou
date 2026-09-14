@@ -9938,3 +9938,106 @@ foreach(required_packet_e_test IN LISTS ZHAO_PACKET_E_REQUIRED_TESTS)
       "required Packet-E CTest is not registered: ${required_packet_e_test}")
   endif()
 endforeach()
+
+# Packet F / G8A: exact generated physical-pin/MISR wrapper around the connected
+# Packet-D tile hierarchy. The same 42-source order is frozen in its generated
+# manifest and design/fit_targets.yml; the static gate compares all three.
+set(ZHAO_G8A_RASTER_TEXTURE_SOURCES
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_skid2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_uv_join_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_frag_expand_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_v3_top.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_texture_stage_v3.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrgrad_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_prod.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_fin.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_raster_texture_v3_fit_top.sv)
+list(LENGTH ZHAO_G8A_RASTER_TEXTURE_SOURCES ZHAO_G8A_SOURCE_COUNT)
+if(NOT ZHAO_G8A_SOURCE_COUNT EQUAL 43)
+  message(FATAL_ERROR "G8A raster/texture fit closure must contain exactly 43 sources")
+endif()
+foreach(g8a_source IN LISTS ZHAO_G8A_RASTER_TEXTURE_SOURCES)
+  if(NOT EXISTS "${g8a_source}")
+    message(FATAL_ERROR "required G8A raster/texture source is missing: ${g8a_source}")
+  endif()
+endforeach()
+
+add_executable(pf_g8a raster/raster_texture_v3_fit_top_directed.cpp)
+verilate(pf_g8a
+  PREFIX Vzhao_raster_texture_v3_fit_top
+  TOP_MODULE zhao_raster_texture_v3_fit_top
+  SOURCES ${ZHAO_G8A_RASTER_TEXTURE_SOURCES}
+  VERILATOR_ARGS --assert)
+add_test(NAME raster_texture_v3_fit_top_directed COMMAND pf_g8a)
+
+add_test(NAME lint_raster_texture_v3_fit_top
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall -Wno-fatal
+    --top-module zhao_raster_texture_v3_fit_top
+    -DQUARTUS_SYNTHESIS=1
+    ${ZHAO_G8A_RASTER_TEXTURE_SOURCES})
+set_tests_properties(lint_raster_texture_v3_fit_top PROPERTIES
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME raster_texture_v3_fit_top_generated_freshness
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_SOURCE_DIR}/tools/quartus/gen_raster_texture_v3_fit_top.py --check)
+add_test(NAME packet_f_g8a_registration_static
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_raster_texture_v3_fit_top.py -q)
+set_tests_properties(
+  raster_texture_v3_fit_top_directed
+  lint_raster_texture_v3_fit_top
+  raster_texture_v3_fit_top_generated_freshness
+  packet_f_g8a_registration_static
+  PROPERTIES LABELS "fast;nightly;packet-f;g8a" TIMEOUT 1800
+    FAIL_REGULAR_EXPRESSION "FAIL")
+
+set(ZHAO_PACKET_F_REQUIRED_TESTS
+  raster_texture_v3_fit_top_directed
+  lint_raster_texture_v3_fit_top
+  raster_texture_v3_fit_top_generated_freshness
+  packet_f_g8a_registration_static)
+list(LENGTH ZHAO_PACKET_F_REQUIRED_TESTS ZHAO_PACKET_F_REQUIRED_TEST_COUNT)
+if(NOT ZHAO_PACKET_F_REQUIRED_TEST_COUNT EQUAL 4)
+  message(FATAL_ERROR "Packet-F required CTest inventory must contain exactly 4 names")
+endif()
+foreach(required_packet_f_test IN LISTS ZHAO_PACKET_F_REQUIRED_TESTS)
+  if(NOT TEST "${required_packet_f_test}")
+    message(FATAL_ERROR
+      "required Packet-F CTest is not registered: ${required_packet_f_test}")
+  endif()
+endforeach()

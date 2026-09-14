@@ -576,6 +576,7 @@ excluded:
   - zhao_shell_fit_gpu_sink: probe  generated shell-fit GPU sink helper; characterization only, never production
   - zhao_shell_fit_stimulus: probe  generated shell-fit stimulus helper; characterization only, never production
   - zhao_shell_fit_top: probe  generated isolated shell-fit wrapper; characterization only, never production
+  - zhao_raster_texture_v3_fit_top: probe  Packet-F G8A generated physical-pin/MISR raster-texture characterization wrapper; never a production root
   - zhao_shell_fit_video_sink: probe  generated shell-fit video sink helper; characterization only, never production
 
   # Packet A, shell/texture V3 composition.  The package is a type-only schema

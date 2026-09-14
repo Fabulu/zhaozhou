@@ -94,6 +94,10 @@ param(
     # Pair with -RowLabel so seed points do not overwrite each other in a
     # report that merges by module name.
     [int]$Seed = 0,
+    # Connected characterization wrappers deliberately expose only a small
+    # registered clock/reset/signature boundary. Leave those top ports physical
+    # instead of applying the ordinary leaf-fit wildcard virtual-pin assignment.
+    [switch]$PhysicalPins,
     [switch]$KeepWorkspace
 )
 
@@ -184,7 +188,9 @@ if ($MapOnly -and -not $RowLabel) {
 #
 # LIMITATIONS, which travel with every number this produces:
 #   - 5CSEBA6U23I7 is a PROVISIONAL target, not board truth.
-#   - All I/O is virtual. No package pins, no board I/O delays, no PLLs.
+#   - Ordinary leaf I/O is virtual. An explicit -PhysicalPins wrapper keeps only
+#     its small registered top boundary physical; neither mode assigns board pins,
+#     board I/O delays, or PLLs.
 #   - A per-block fit says nothing about the composed machine's routing or
 #     timing closure.
 #   - Nothing here is a programmed device. This is not hardware proof.
@@ -215,6 +221,8 @@ if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') { throw 'Could not
 # say whether a measurement can be trusted against its commit was answering the
 # same way regardless -- which is indistinguishable from not having it. Forcing
 # the setting makes the check answer the same way whichever git is first.
+$dirtyTree = (& git -C $RepoRoot -c core.autocrlf=true status --porcelain) -join ''
+$treeClean = [string]::IsNullOrWhiteSpace($dirtyTree)
 $dirtyRtl = (& git -C $RepoRoot -c core.autocrlf=true status --porcelain -- fpga/rtl) -join ''
 $rtlClean = [string]::IsNullOrWhiteSpace($dirtyRtl)
 
@@ -227,6 +235,10 @@ if (-not $Module -or $Module.Count -eq 0) {
         'zhao_video_framectl', 'zhao_video_scaler', 'zhao_video_scanout',
         'zhao_cmd_dma', 'zhao_cmd_scheduler', 'zhao_sdram_ctrl', 'zhao_vram_arbiter'
     )
+}
+
+if ($PhysicalPins -and $Module.Count -ne 1) {
+    throw '-PhysicalPins requires exactly one explicit wrapper module.'
 }
 
 # THE WORKSPACE NAME CARRIES A PER-INVOCATION UNIQUIFIER, not just $PID.
@@ -529,6 +541,15 @@ try {
         $qsf = $qsf -replace '^set_global_assignment -name TOP_LEVEL_ENTITY.*', "set_global_assignment -name TOP_LEVEL_ENTITY $mod"
         $qsf = $qsf -replace '^set_global_assignment -name SDC_FILE.*', 'set_global_assignment -name SDC_FILE blockfit.sdc'
         $qsf = $qsf -replace '\.\./\.\./rtl/', "$rtlAbs/"
+        if ($PhysicalPins) {
+            # A connected wrapper is provenance-bound to its declared closure.
+            # Remove the shell project's unrelated pool before appending the
+            # snapshotted target sources below; duplicate/live definitions are
+            # not allowed to decide which entity Quartus elaborates.
+            $qsf = $qsf | Where-Object {
+                $_ -notmatch '^set_global_assignment -name (?:SYSTEMVERILOG|VERILOG|VHDL)_FILE'
+            }
+        }
 
         # THE VIRTUAL-PIN ASYMMETRY, and it is deliberate.
         #
@@ -547,7 +568,11 @@ try {
         # are one block each: the measured fits ran 300-1300 s. It is the
         # composed cone where the same line became unaffordable.
         $qsf = $qsf | Where-Object { $_ -notmatch '^set_instance_assignment -name VIRTUAL_PIN' }
-        $qsf += 'set_instance_assignment -name VIRTUAL_PIN ON -to *'
+        if (-not $PhysicalPins) {
+            $qsf += 'set_instance_assignment -name VIRTUAL_PIN ON -to *'
+        } else {
+            $qsf += '# Physical top ports retained by run_block_fit.ps1 -PhysicalPins.'
+        }
         # SNAPSHOT THE CLOSURE, and compile from the copy.
         #
         # The fit used to name the LIVE working-tree paths, so a fit read
@@ -759,7 +784,9 @@ try {
             $seedSrc = 'UNRECORDED -- no SEED assignment in the project'
         }
         $row = [ordered]@{ module = $rowModule; status = 'unknown'; sourceCommit = $head;
-                           rtlCleanAtHead = $rtlClean; fitterSeed = $effSeed; seedSource = $seedSrc }
+                           treeCleanAtHead = $treeClean; rtlCleanAtHead = $rtlClean;
+                           ioMode = $(if ($PhysicalPins) { 'physical-top-ports' } else { 'virtual-top-ports' });
+                           fitterSeed = $effSeed; seedSource = $seedSrc }
 
         # THE COMMIT IS NOT THE BYTES, AND THIS ROW ALREADY KNEW IT.
         #
@@ -989,9 +1016,8 @@ try {
 
             # ---- the timing answer, from the STA report ----------------------
             # Slow 1100mV 85C is the corner the shell fit reports against, so
-            # the two lanes stay comparable. Fmax here is the block ALONE with
-            # virtual I/O -- it is an upper bound on what the block contributes
-            # composed, never a claim about the machine.
+            # the two lanes stay comparable. Ordinary leaf rows use virtual I/O;
+            # an explicit -PhysicalPins wrapper row records that different mode.
             $sta = Join-Path $dir ('output_files' + [char]92 + 'blockfit.sta.rpt')
             if (Test-Path -LiteralPath $sta) {
                 $s = [IO.File]::ReadAllText($sta)
@@ -1143,6 +1169,12 @@ try {
         # nothing at all. Same failure as deleting the workspace, one level in.
         $mapDir = Join-Path $RepoRoot 'reports/synthesis/blockpaths'
         New-Item -ItemType Directory -Path $mapDir -Force | Out-Null
+        if ($PhysicalPins) {
+            Copy-Item -LiteralPath (Join-Path $dir 'blockfit.qsf') `
+                -Destination (Join-Path $mapDir ($rowModule + '.qsf')) -Force
+            Copy-Item -LiteralPath (Join-Path $dir 'blockfit.sdc') `
+                -Destination (Join-Path $mapDir ($rowModule + '.sdc')) -Force
+        }
         foreach ($mr in @('blockfit.map.rpt', 'blockfit.map.summary')) {
             $mrSrc = Join-Path $dir ('output_files/' + $mr)
             if (Test-Path -LiteralPath $mrSrc) {
@@ -1172,7 +1204,7 @@ try {
         blocks           = $results.ToArray()
         limitations      = @(
             '5CSEBA6U23I7 is a provisional capacity target, not board truth.',
-            'All I/O is virtual: no package pins, no board I/O delays, no PLLs, no physical clocks.',
+            'I/O mode is recorded per row. Ordinary leaf fits use virtual top ports; an explicit -PhysicalPins characterization wrapper retains its small top boundary as physical pins. Neither mode assigns board pins, board I/O delays, or PLLs.',
             'A per-block fit does not characterize the composed machine routing or timing closure.',
             'Rows carry their own sourceCommit. A row measured at an older commit describes THAT code, not HEAD. Check per-row provenance before totalling anything.',
             'This census does not cover the design: 42 of the repository''s 88 RTL modules, and several of those rows carry no data. See reports/DSP_Audit_2026-08-21.md.',
