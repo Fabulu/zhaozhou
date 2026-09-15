@@ -4322,6 +4322,7 @@ module zhao_prod_top (
   logic [32-1:0] u61_err_class_mismatch_o;
   logic [1-1:0] u61_err_plan_mode_o;
   zhao_texture_island_v3_top #(
+      .BILERP_DSP2(1'b0),
       .MIGRATION_SHADOWS(1'b0)
   ) u61_i (
       .clk(clk),

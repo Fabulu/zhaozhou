@@ -70,6 +70,10 @@ param(
     # DSP counts; identical rows mean the parameter was ignored, not that the
     # parameter does not matter.
     [string[]]$TopParameters,
+    # Explicit HDL compile macros, NAME or NAME=VALUE. These are separate from
+    # top parameters because a technology backend is a source-selection contract,
+    # not a run-time/elaboration value on the measured wrapper.
+    [string[]]$VerilogMacros,
     # Suffix for the JSON row's `module` key, so parameter points do not
     # overwrite each other in a file that merges by module name.
     [string]$RowLabel = '',
@@ -94,6 +98,13 @@ param(
     # Pair with -RowLabel so seed points do not overwrite each other in a
     # report that merges by module name.
     [int]$Seed = 0,
+    # Thermal safety is an execution invariant on this host, not a suggestion.
+    # Three concurrent compiler jobs reached 90 C and coincided with a machine
+    # shutdown. Quartus therefore gets exactly two logical processors by default
+    # and inherits a matching affinity as a second all-core backstop.
+    # Process priority is deliberately not treated as thermal protection.
+    [ValidateRange(1, 2)]
+    [int]$Processors = 2,
     # Connected characterization wrappers deliberately expose only a small
     # registered clock/reset/signature boundary. Leave those top ports physical
     # instead of applying the ordinary leaf-fit wildcard virtual-pin assignment.
@@ -429,7 +440,24 @@ $FitTargets = Read-FitTargets (Join-Path $RepoRoot 'design/fit_targets.yml')
 
 $fitRules = Read-FitRules (Join-Path $RepoRoot 'design/fit_targets.yml')
 
+$RunnerProcess = [Diagnostics.Process]::GetCurrentProcess()
+$OriginalAffinity = $RunnerProcess.ProcessorAffinity
+$OriginalOmpThreads = $env:OMP_NUM_THREADS
+$OriginalMklThreads = $env:MKL_NUM_THREADS
+$OriginalQuartusThreads = $env:QUARTUS_NUM_PARALLEL_PROCESSORS
+$ThermalAffinityValue = ([int64]1 -shl $Processors) - 1
+
 try {
+    # Child processes inherit this shell's affinity. Pair that OS boundary with
+    # Quartus's own project and environment limits; any one layer being ignored
+    # must not silently restore all-core execution.
+    $RunnerProcess.ProcessorAffinity = [IntPtr]$ThermalAffinityValue
+    $env:OMP_NUM_THREADS = "$Processors"
+    $env:MKL_NUM_THREADS = "$Processors"
+    $env:QUARTUS_NUM_PARALLEL_PROCESSORS = "$Processors"
+    Write-Host ("thermal-safe execution: processors={0} affinity=0x{1:X}" -f `
+        $Processors, $ThermalAffinityValue)
+
     foreach ($mod in $Module) {
         $dir = Join-Path $Workspace $mod
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
@@ -546,6 +574,10 @@ try {
         $qsf = Get-Content -LiteralPath $SrcQsf
         $qsf = $qsf -replace '^set_global_assignment -name TOP_LEVEL_ENTITY.*', "set_global_assignment -name TOP_LEVEL_ENTITY $mod"
         $qsf = $qsf -replace '^set_global_assignment -name SDC_FILE.*', 'set_global_assignment -name SDC_FILE blockfit.sdc'
+        $qsf = $qsf | Where-Object {
+            $_ -notmatch '^set_global_assignment -name NUM_PARALLEL_PROCESSORS'
+        }
+        $qsf += "set_global_assignment -name NUM_PARALLEL_PROCESSORS $Processors"
         $qsf = $qsf -replace '\.\./\.\./rtl/', "$rtlAbs/"
         if ($PhysicalPins) {
             # A connected wrapper is provenance-bound to its declared closure.
@@ -655,6 +687,22 @@ try {
         # A malformed entry now fails HERE, in milliseconds, naming the actual
         # mistake, rather than 38 seconds later as an incomprehensible Quartus
         # error. See reports/RCP-V3-SWAP-HAS-NO-LIKE-FOR-LIKE-20260908.md.
+        $seenVerilogMacros = @{}
+        foreach ($macro in $VerilogMacros) {
+            if ([string]::IsNullOrWhiteSpace($macro) -or
+                $macro -notmatch '^[A-Za-z_][A-Za-z0-9_]*(?:=[A-Za-z0-9_]+)?$') {
+                throw "-VerilogMacros entry '$macro' is not canonical NAME or NAME=VALUE."
+            }
+            $macroName = @($macro -split '=', 2)[0]
+            if ($macroName -ceq 'SYNTHESIS' -or $macroName -ceq 'QUARTUS_SYNTHESIS') {
+                throw "-VerilogMacros may not override reserved synthesis macro '$macroName'."
+            }
+            if ($seenVerilogMacros.ContainsKey($macroName)) {
+                throw "-VerilogMacros contains duplicate macro '$macroName'."
+            }
+            $seenVerilogMacros[$macroName] = $true
+            $qsf += ('set_global_assignment -name VERILOG_MACRO "' + $macro + '"')
+        }
         foreach ($tp in $TopParameters) {
             $kv = $tp -split '=', 2
             if ($kv.Count -ne 2) { throw "TopParameters entry '$tp' is not NAME=VALUE" }
@@ -796,7 +844,9 @@ try {
         $row = [ordered]@{ module = $rowModule; status = 'unknown'; sourceCommit = $head;
                            treeCleanAtHead = $treeClean; rtlCleanAtHead = $rtlClean;
                            ioMode = $(if ($PhysicalPins) { 'physical-top-ports' } else { 'virtual-top-ports' });
-                           fitterSeed = $effSeed; seedSource = $seedSrc }
+                           fitterSeed = $effSeed; seedSource = $seedSrc;
+                           processors = $Processors;
+                           processorAffinityMask = ('0x{0:X}' -f $ThermalAffinityValue) }
 
         # THE COMMIT IS NOT THE BYTES, AND THIS ROW ALREADY KNEW IT.
         #
@@ -837,6 +887,7 @@ try {
         Write-Host ("source digest: {0} over {1} file(s) -> {2}" -f `
             $row.sourceDigest.Substring(0, 12), $srcBefore.Count, (Split-Path -Leaf $manifestPath))
         if ($TopParameters) { $row.topParameters = ($TopParameters -join ' ') }
+        if ($VerilogMacros) { $row.verilogMacros = @($VerilogMacros) }
         # A parameter VARIANT is a second measurement of the SAME block, not a
         # second block. Marked so a census that totals DSPs by row cannot count
         # one block's frontier three times.
@@ -1302,6 +1353,14 @@ try {
     [IO.File]::WriteAllText($dest, (($out | ConvertTo-Json -Depth 8) + "`n"), $Utf8NoBom)
     Write-Host ("WROTE {0} ({1} block(s); {2} measured this run)" -f $dest, $out.blocks.Count, $results.Count)
 } finally {
+    try {
+        $RunnerProcess.ProcessorAffinity = $OriginalAffinity
+    } catch {
+        Write-Warning "Could not restore runner affinity: $($_.Exception.Message)"
+    }
+    $env:OMP_NUM_THREADS = $OriginalOmpThreads
+    $env:MKL_NUM_THREADS = $OriginalMklThreads
+    $env:QUARTUS_NUM_PARALLEL_PROCESSORS = $OriginalQuartusThreads
     if (-not $KeepWorkspace -and (Test-Path -LiteralPath $Workspace)) {
         Remove-Item -LiteralPath $Workspace -Recurse -Force -ErrorAction SilentlyContinue
     }

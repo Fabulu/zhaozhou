@@ -63,7 +63,8 @@ module zhao_texture_island_v3_top #(
     parameter int unsigned TOKW = 18,
     parameter int unsigned AUX_TOKW = 14,
     parameter int unsigned PAL_SLOTS = 4,
-    parameter int unsigned PAL_ENTRIES = 256
+    parameter int unsigned PAL_ENTRIES = 256,
+    parameter bit BILERP_DSP2 = 1'b0
 ) (
     input  var logic clk,
     input  var logic rst_n,
@@ -1719,24 +1720,45 @@ module zhao_texture_island_v3_top #(
   genvar bil_channel;
   generate
     for (bil_channel = 0; bil_channel < 4; bil_channel = bil_channel + 1) begin : g_bilerp
-      zhao_texture_bilerp_lane_v2 #(.TOKW(TOKW)) u_bilerp (
-          .clk(clk), .rst_n(rst_n),
-          .job_valid_i(bilerp_req_valid_w[bil_channel]),
-          .job_ready_o(bilerp_req_ready_w[bil_channel]),
-          .t00_i(decoded_channel(bil_data_q[15:0], bil_metadata_q[21:19], 2'(bil_channel))),
-          .t10_i(decoded_channel(bil_data_q[31:16], bil_metadata_q[21:19], 2'(bil_channel))),
-          .t01_i(decoded_channel(bil_data_q[47:32], bil_metadata_q[21:19], 2'(bil_channel))),
-          .t11_i(decoded_channel(bil_data_q[63:48], bil_metadata_q[21:19], 2'(bil_channel))),
-          .fu_i(bil_metadata_q[10:3]), .fv_i(bil_metadata_q[18:11]),
-          .tok_i(bil_token_q), .chan_i(2'(bil_channel)),
-          .out_valid_o(bilerp_rsp_valid_w[bil_channel]),
-          .out_ready_i(bil_busy_q && !bil_seen_q[bil_channel] && bil_terminal_room_c),
-          .out_o(bilerp_out_w[bil_channel]),
-          .out_tok_o(bilerp_out_token_w[bil_channel]),
-          .out_chan_o(bilerp_out_channel_w[bil_channel]),
-          .idle_o(bilerp_lane_idle_w[bil_channel]),
-          .jobs_o(bilerp_jobs_w[bil_channel]),
-          .occupancy_o(bilerp_occupancy_w[bil_channel]));
+      if (BILERP_DSP2) begin : g_dsp2
+        zhao_texture_bilerp_lane_dsp2 #(.TOKW(TOKW)) u_bilerp (
+            .clk(clk), .rst_n(rst_n),
+            .job_valid_i(bilerp_req_valid_w[bil_channel]),
+            .job_ready_o(bilerp_req_ready_w[bil_channel]),
+            .t00_i(decoded_channel(bil_data_q[15:0], bil_metadata_q[21:19], 2'(bil_channel))),
+            .t10_i(decoded_channel(bil_data_q[31:16], bil_metadata_q[21:19], 2'(bil_channel))),
+            .t01_i(decoded_channel(bil_data_q[47:32], bil_metadata_q[21:19], 2'(bil_channel))),
+            .t11_i(decoded_channel(bil_data_q[63:48], bil_metadata_q[21:19], 2'(bil_channel))),
+            .fu_i(bil_metadata_q[10:3]), .fv_i(bil_metadata_q[18:11]),
+            .tok_i(bil_token_q), .chan_i(2'(bil_channel)),
+            .out_valid_o(bilerp_rsp_valid_w[bil_channel]),
+            .out_ready_i(bil_busy_q && !bil_seen_q[bil_channel] && bil_terminal_room_c),
+            .out_o(bilerp_out_w[bil_channel]),
+            .out_tok_o(bilerp_out_token_w[bil_channel]),
+            .out_chan_o(bilerp_out_channel_w[bil_channel]),
+            .idle_o(bilerp_lane_idle_w[bil_channel]),
+            .jobs_o(bilerp_jobs_w[bil_channel]),
+            .occupancy_o(bilerp_occupancy_w[bil_channel]));
+      end else begin : g_v2
+        zhao_texture_bilerp_lane_v2 #(.TOKW(TOKW)) u_bilerp (
+            .clk(clk), .rst_n(rst_n),
+            .job_valid_i(bilerp_req_valid_w[bil_channel]),
+            .job_ready_o(bilerp_req_ready_w[bil_channel]),
+            .t00_i(decoded_channel(bil_data_q[15:0], bil_metadata_q[21:19], 2'(bil_channel))),
+            .t10_i(decoded_channel(bil_data_q[31:16], bil_metadata_q[21:19], 2'(bil_channel))),
+            .t01_i(decoded_channel(bil_data_q[47:32], bil_metadata_q[21:19], 2'(bil_channel))),
+            .t11_i(decoded_channel(bil_data_q[63:48], bil_metadata_q[21:19], 2'(bil_channel))),
+            .fu_i(bil_metadata_q[10:3]), .fv_i(bil_metadata_q[18:11]),
+            .tok_i(bil_token_q), .chan_i(2'(bil_channel)),
+            .out_valid_o(bilerp_rsp_valid_w[bil_channel]),
+            .out_ready_i(bil_busy_q && !bil_seen_q[bil_channel] && bil_terminal_room_c),
+            .out_o(bilerp_out_w[bil_channel]),
+            .out_tok_o(bilerp_out_token_w[bil_channel]),
+            .out_chan_o(bilerp_out_channel_w[bil_channel]),
+            .idle_o(bilerp_lane_idle_w[bil_channel]),
+            .jobs_o(bilerp_jobs_w[bil_channel]),
+            .occupancy_o(bilerp_occupancy_w[bil_channel]));
+      end
     end
   endgenerate
 

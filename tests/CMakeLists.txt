@@ -9451,6 +9451,230 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "PASS: omitted global-min-X tile offset mutant fired exactly"
     FAIL_REGULAR_EXPRESSION "FAIL")
 
+# DSPR1 ATTR3 candidate: cycle-exact old/new differential at both supported
+# divider radices. The exact seven-source manifest is the only source authority.
+set(ZHAO_ATTR3_SOURCE_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/raster/raster_attrgrad_dsp3.sources.txt)
+if(NOT EXISTS "${ZHAO_ATTR3_SOURCE_MANIFEST}")
+  message(FATAL_ERROR "required ATTR3 source manifest is missing")
+endif()
+file(READ "${ZHAO_ATTR3_SOURCE_MANIFEST}" ZHAO_ATTR3_SOURCE_MANIFEST_RAW)
+string(REPLACE "\r\n" "\n" ZHAO_ATTR3_SOURCE_MANIFEST_RAW
+  "${ZHAO_ATTR3_SOURCE_MANIFEST_RAW}")
+string(REPLACE "\r" "\n" ZHAO_ATTR3_SOURCE_MANIFEST_RAW
+  "${ZHAO_ATTR3_SOURCE_MANIFEST_RAW}")
+string(REGEX REPLACE "\n$" "" ZHAO_ATTR3_SOURCE_MANIFEST_BODY
+  "${ZHAO_ATTR3_SOURCE_MANIFEST_RAW}")
+if(ZHAO_ATTR3_SOURCE_MANIFEST_BODY STREQUAL "" OR
+   ZHAO_ATTR3_SOURCE_MANIFEST_BODY MATCHES "(^|\n)[ \t]*(\n|$)")
+  message(FATAL_ERROR "ATTR3 source manifest contains a blank record")
+endif()
+file(STRINGS "${ZHAO_ATTR3_SOURCE_MANIFEST}" ZHAO_ATTR3_RELATIVE_SOURCES)
+if(NOT ZHAO_ATTR3_RELATIVE_SOURCES STREQUAL
+   "fpga/rtl/common/zhao_mul27_exact.sv;fpga/rtl/raster/zhao_raster_attrdiv_v2.sv;fpga/rtl/raster/zhao_raster_attrgrad_v2.sv;tests/mutants/zhao_attr_dsp3_mutants.sv;fpga/rtl/raster/zhao_attr_mul72x13_dsp3.sv;fpga/rtl/raster/zhao_raster_attrgrad_dsp3.sv;tests/raster/tb_raster_attrgrad_dsp3_pair.sv")
+  message(FATAL_ERROR "ATTR3 source manifest is not the exact ordered seven-file closure")
+endif()
+set(ZHAO_ATTR3_SOURCES)
+set(ZHAO_ATTR3_SEEN)
+foreach(relative_source IN LISTS ZHAO_ATTR3_RELATIVE_SOURCES)
+  if(relative_source STREQUAL "" OR IS_ABSOLUTE "${relative_source}" OR
+     relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+    message(FATAL_ERROR "invalid ATTR3 source-manifest path: ${relative_source}")
+  endif()
+  list(FIND ZHAO_ATTR3_SEEN "${relative_source}" duplicate_index)
+  if(NOT duplicate_index EQUAL -1)
+    message(FATAL_ERROR "duplicate ATTR3 source-manifest path: ${relative_source}")
+  endif()
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR "missing ATTR3 source-manifest path: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_ATTR3_SEEN "${relative_source}")
+  list(APPEND ZHAO_ATTR3_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+
+function(zhao_attr3_target TARGET RADIX)
+  set(selector_args ${ARGN})
+  add_executable(${TARGET} raster/raster_attrgrad_dsp3_diff.cpp)
+  verilate(${TARGET}
+    PREFIX Vtb_raster_attrgrad_dsp3_pair
+    TOP_MODULE tb_raster_attrgrad_dsp3_pair
+    SOURCES ${ZHAO_ATTR3_SOURCES}
+    VERILATOR_ARGS -GRADIX=${RADIX} ${selector_args})
+endfunction()
+
+zhao_attr3_target(dspr_attr3_r2 2 --assert)
+add_test(NAME dsp_rescue_attr3_radix2 COMMAND dspr_attr3_r2)
+zhao_attr3_target(dspr_attr3_r4 4 --assert)
+add_test(NAME dsp_rescue_attr3_radix4 COMMAND dspr_attr3_r4)
+zhao_attr3_target(dspr_attr3_mid 2 -DZHAO_ATTR_DSP3_MUTANT_SIGNED_MIDDLE)
+target_compile_definitions(dspr_attr3_mid PRIVATE EXPECT_ATTR3_MUTANT=1)
+add_test(NAME dsp_rescue_attr3_signed_middle_mutant COMMAND dspr_attr3_mid)
+zhao_attr3_target(dspr_attr3_shift 2 -DZHAO_ATTR_DSP3_MUTANT_NARROW_HIGH_SHIFT)
+target_compile_definitions(dspr_attr3_shift PRIVATE EXPECT_ATTR3_MUTANT=1)
+add_test(NAME dsp_rescue_attr3_narrow_shift_mutant COMMAND dspr_attr3_shift)
+zhao_attr3_target(dspr_attr3_omit 2 -DZHAO_ATTR_DSP3_MUTANT_OMIT_BASE_Y)
+target_compile_definitions(dspr_attr3_omit PRIVATE EXPECT_ATTR3_MUTANT=1)
+add_test(NAME dsp_rescue_attr3_omit_base_y_mutant COMMAND dspr_attr3_omit)
+zhao_attr3_target(dspr_attr3_idle 2 -DZHAO_ATTR_DSP3_MUTANT_IDLE_EARLY)
+target_compile_definitions(dspr_attr3_idle PRIVATE EXPECT_ATTR3_MUTANT=1)
+add_test(NAME dsp_rescue_attr3_idle_early_mutant COMMAND dspr_attr3_idle)
+zhao_attr3_target(dspr_attr3_offset_guard 2
+  -DZHAO_ATTR_DSP3_MUTANT_DELAY_OFFSET_READY)
+target_compile_definitions(dspr_attr3_offset_guard PRIVATE
+  EXPECT_ATTR3_OFFSET_GUARD=1)
+add_test(NAME dsp_rescue_attr3_offset_ready_assertion COMMAND dspr_attr3_offset_guard)
+set_tests_properties(
+  dsp_rescue_attr3_radix2 dsp_rescue_attr3_radix4
+  PROPERTIES LABELS "fast;nightly;g8a-dsp" TIMEOUT 1800
+  FAIL_REGULAR_EXPRESSION "FAIL")
+set_tests_properties(
+  dsp_rescue_attr3_signed_middle_mutant
+  dsp_rescue_attr3_narrow_shift_mutant
+  dsp_rescue_attr3_omit_base_y_mutant
+  dsp_rescue_attr3_idle_early_mutant
+  PROPERTIES LABELS "fast;nightly;g8a-dsp;mutant" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "ATTR3 MUTANT FIRED")
+set_tests_properties(dsp_rescue_attr3_offset_ready_assertion PROPERTIES
+  LABELS "fast;nightly;g8a-dsp;mutant" TIMEOUT 180
+  PASS_REGULAR_EXPRESSION "ATTR3 OFFSET GUARD FIRED"
+  FAIL_REGULAR_EXPRESSION "FAIL")
+
+# DSPR2 BIL2 candidate: one all-signed dual18 for the simultaneous horizontal
+# pair, with the old lane and an independent host oracle in the same miter.
+set(ZHAO_BIL2_SOURCE_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture/texture_bilerp_lane_dsp2.sources.txt)
+if(NOT EXISTS "${ZHAO_BIL2_SOURCE_MANIFEST}")
+  message(FATAL_ERROR "required BIL2 source manifest is missing")
+endif()
+file(READ "${ZHAO_BIL2_SOURCE_MANIFEST}" ZHAO_BIL2_SOURCE_MANIFEST_RAW)
+string(REPLACE "\r\n" "\n" ZHAO_BIL2_SOURCE_MANIFEST_RAW
+  "${ZHAO_BIL2_SOURCE_MANIFEST_RAW}")
+string(REPLACE "\r" "\n" ZHAO_BIL2_SOURCE_MANIFEST_RAW
+  "${ZHAO_BIL2_SOURCE_MANIFEST_RAW}")
+string(REGEX REPLACE "\n$" "" ZHAO_BIL2_SOURCE_MANIFEST_BODY
+  "${ZHAO_BIL2_SOURCE_MANIFEST_RAW}")
+if(ZHAO_BIL2_SOURCE_MANIFEST_BODY STREQUAL "" OR
+   ZHAO_BIL2_SOURCE_MANIFEST_BODY MATCHES "(^|\n)[ \t]*(\n|$)")
+  message(FATAL_ERROR "BIL2 source manifest contains a blank record")
+endif()
+file(STRINGS "${ZHAO_BIL2_SOURCE_MANIFEST}" ZHAO_BIL2_RELATIVE_SOURCES)
+if(NOT ZHAO_BIL2_RELATIVE_SOURCES STREQUAL
+   "fpga/rtl/common/zhao_dual18_mul.sv;fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv;tests/mutants/zhao_texture_bilerp_lane_dsp2_mutant.sv;fpga/rtl/texture/zhao_texture_bilerp_lane_dsp2.sv;tests/texture/tb_texture_bilerp_lane_dsp2.sv")
+  message(FATAL_ERROR "BIL2 source manifest is not the exact ordered five-file closure")
+endif()
+set(ZHAO_BIL2_SOURCES)
+set(ZHAO_BIL2_SEEN)
+foreach(relative_source IN LISTS ZHAO_BIL2_RELATIVE_SOURCES)
+  if(relative_source STREQUAL "" OR IS_ABSOLUTE "${relative_source}" OR
+     relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+    message(FATAL_ERROR "invalid BIL2 source-manifest path: ${relative_source}")
+  endif()
+  list(FIND ZHAO_BIL2_SEEN "${relative_source}" duplicate_index)
+  if(NOT duplicate_index EQUAL -1)
+    message(FATAL_ERROR "duplicate BIL2 source-manifest path: ${relative_source}")
+  endif()
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR "missing BIL2 source-manifest path: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_BIL2_SEEN "${relative_source}")
+  list(APPEND ZHAO_BIL2_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+
+add_executable(dspr_bil2 texture/texture_bilerp_lane_dsp2_diff.cpp)
+target_link_libraries(dspr_bil2 PRIVATE zhao_harness)
+verilate(dspr_bil2
+  PREFIX Vtb_texture_bilerp_lane_dsp2
+  TOP_MODULE tb_texture_bilerp_lane_dsp2
+  SOURCES ${ZHAO_BIL2_SOURCES}
+  VERILATOR_ARGS --assert -DZHAO_DUAL18_BEHAVIORAL)
+add_test(NAME dsp_rescue_bil2_diff COMMAND dspr_bil2)
+
+add_executable(dspr_bil2_mut texture/texture_bilerp_lane_dsp2_diff.cpp)
+target_compile_definitions(dspr_bil2_mut PRIVATE EXPECT_BIL2_COLLAPSE_RESULTB=1)
+target_link_libraries(dspr_bil2_mut PRIVATE zhao_harness)
+verilate(dspr_bil2_mut
+  PREFIX Vtb_texture_bilerp_lane_dsp2
+  TOP_MODULE tb_texture_bilerp_lane_dsp2
+  SOURCES ${ZHAO_BIL2_SOURCES}
+  VERILATOR_ARGS --assert -DZHAO_DUAL18_BEHAVIORAL
+    -DZHAO_BIL2_MUTANT_COLLAPSE_RESULTB)
+add_test(NAME dsp_rescue_bil2_collapse_resultb_mutant COMMAND dspr_bil2_mut)
+set_tests_properties(dsp_rescue_bil2_diff PROPERTIES
+  LABELS "fast;nightly;g8a-dsp" TIMEOUT 1800 FAIL_REGULAR_EXPRESSION "FAIL")
+set_tests_properties(dsp_rescue_bil2_collapse_resultb_mutant PROPERTIES
+  LABELS "fast;nightly;g8a-dsp;mutant" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "BIL2 collapse-resultb mutant FIRED"
+  FAIL_REGULAR_EXPRESSION "FAIL")
+
+function(zhao_g8a_dsp_selector_control NAME PROFILE)
+  add_test(NAME ${NAME}
+    COMMAND "${Python3_EXECUTABLE}"
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_g8a_dsp_rescue.py
+      --collision ${PROFILE}
+      --verilator "${ZHAO_VERILATOR_LINT}")
+  set_tests_properties(${NAME} PROPERTIES
+    LABELS "fast;nightly;g8a-dsp;mutant" TIMEOUT 180
+    FAIL_REGULAR_EXPRESSION "FAIL")
+endfunction()
+
+zhao_g8a_dsp_selector_control(
+  g8a_dsp_attr_mid_shift_selector_collision attr-mid-shift)
+zhao_g8a_dsp_selector_control(
+  g8a_dsp_attr_mid_omit_selector_collision attr-mid-omit)
+zhao_g8a_dsp_selector_control(
+  g8a_dsp_attr_shift_omit_selector_collision attr-shift-omit)
+zhao_g8a_dsp_selector_control(
+  g8a_dsp_attr_mid_delay_selector_collision attr-mid-delay)
+zhao_g8a_dsp_selector_control(
+  g8a_dsp_attr_mid_idle_selector_collision attr-mid-idle)
+zhao_g8a_dsp_selector_control(
+  g8a_dsp_bil2_selector_collision bil2)
+
+add_test(NAME g8a_dsp_rescue_registration_static
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_g8a_dsp_rescue.py -q)
+set_tests_properties(g8a_dsp_rescue_registration_static PROPERTIES
+  LABELS "fast;nightly;g8a-dsp" TIMEOUT 180)
+add_test(NAME quartus_thermal_limits_static
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_quartus_thermal_limits.py -q)
+set_tests_properties(quartus_thermal_limits_static PROPERTIES
+  LABELS "fast;lint;g8a-dsp" TIMEOUT 60)
+
+set(ZHAO_G8A_DSP_REQUIRED_TESTS
+  dsp_rescue_attr3_radix2
+  dsp_rescue_attr3_radix4
+  dsp_rescue_attr3_signed_middle_mutant
+  dsp_rescue_attr3_narrow_shift_mutant
+  dsp_rescue_attr3_omit_base_y_mutant
+  dsp_rescue_attr3_idle_early_mutant
+  dsp_rescue_attr3_offset_ready_assertion
+  dsp_rescue_bil2_diff
+  dsp_rescue_bil2_collapse_resultb_mutant
+  g8a_dsp_attr_mid_shift_selector_collision
+  g8a_dsp_attr_mid_omit_selector_collision
+  g8a_dsp_attr_shift_omit_selector_collision
+  g8a_dsp_attr_mid_delay_selector_collision
+  g8a_dsp_attr_mid_idle_selector_collision
+  g8a_dsp_bil2_selector_collision
+  g8a_dsp_rescue_registration_static
+  quartus_thermal_limits_static)
+list(LENGTH ZHAO_G8A_DSP_REQUIRED_TESTS ZHAO_G8A_DSP_REQUIRED_TEST_COUNT)
+if(NOT ZHAO_G8A_DSP_REQUIRED_TEST_COUNT EQUAL 17)
+  message(FATAL_ERROR
+    "G8A DSP required CTest inventory must contain exactly 17 names")
+endif()
+foreach(required_g8a_dsp_test IN LISTS ZHAO_G8A_DSP_REQUIRED_TESTS)
+  if(NOT TEST "${required_g8a_dsp_test}")
+    message(FATAL_ERROR
+      "G8A DSP required CTest target is absent: ${required_g8a_dsp_test}")
+  endif()
+endforeach()
+
 # Packet D2: old/V2 binner parity plus exact accepted-triangle metadata identity.
 set(ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST
   ${CMAKE_CURRENT_SOURCE_DIR}/geometry/geom_binner_v2.sources.txt)
@@ -9529,7 +9753,7 @@ set_tests_properties(geom_binner_v2_meta_addr_swap_mutant PROPERTIES
   PASS_REGULAR_EXPRESSION "PASS: metadata-address mutant fired exactly"
   FAIL_REGULAR_EXPRESSION "FAIL")
 
-# Packet D3: exact 52-source binner-to-resolve composition. Packet-C and
+# Packet D3: exact 57-source binner-to-resolve composition. Packet-C and
 # Packet-D selectors precede the exact production modules they alter.
 set(ZHAO_PACKET_D_FULL_SOURCE_MANIFEST
   ${CMAKE_CURRENT_SOURCE_DIR}/geometry/geom_bin_pipe_v2.sources.txt)
@@ -9575,16 +9799,16 @@ foreach(relative_source IN LISTS ZHAO_PACKET_D_FULL_RELATIVE_SOURCES)
     "${CMAKE_SOURCE_DIR}/${relative_source}")
 endforeach()
 list(LENGTH ZHAO_PACKET_D_FULL_RELATIVE_SOURCES ZHAO_PACKET_D_FULL_SOURCE_COUNT)
-if(NOT ZHAO_PACKET_D_FULL_SOURCE_COUNT EQUAL 52)
-  message(FATAL_ERROR "Packet-D full source manifest must contain exactly 52 SV paths")
+if(NOT ZHAO_PACKET_D_FULL_SOURCE_COUNT EQUAL 57)
+  message(FATAL_ERROR "Packet-D full source manifest must contain exactly 57 SV paths")
 endif()
 list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 0 ZHAO_PACKET_D_FULL_FIRST)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 28 ZHAO_PACKET_D_FULL_PC_MUTANT)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 29 ZHAO_PACKET_D_FULL_PC_STAGE)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 48 ZHAO_PACKET_D_FULL_TILE_MUTANT)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 49 ZHAO_PACKET_D_FULL_TILE_STAGE)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 50 ZHAO_PACKET_D_FULL_BIN_STAGE)
-list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 51 ZHAO_PACKET_D_FULL_TOP)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 31 ZHAO_PACKET_D_FULL_PC_MUTANT)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 32 ZHAO_PACKET_D_FULL_PC_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 53 ZHAO_PACKET_D_FULL_TILE_MUTANT)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 54 ZHAO_PACKET_D_FULL_TILE_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 55 ZHAO_PACKET_D_FULL_BIN_STAGE)
+list(GET ZHAO_PACKET_D_FULL_RELATIVE_SOURCES 56 ZHAO_PACKET_D_FULL_TOP)
 if(NOT ZHAO_PACKET_D_FULL_FIRST STREQUAL
    "fpga/rtl/generated/zhao_abi_pkg.sv" OR
    NOT ZHAO_PACKET_D_FULL_PC_MUTANT STREQUAL
@@ -10013,12 +10237,14 @@ foreach(required_packet_e_test IN LISTS ZHAO_PACKET_E_REQUIRED_TESTS)
 endforeach()
 
 # Packet F / G8A: exact generated physical-pin/MISR wrapper around the connected
-# Packet-D tile hierarchy. The same 42-source order is frozen in its generated
+# Packet-D tile hierarchy. The same 48-source order is frozen in its generated
 # manifest and design/fit_targets.yml; the static gate compares all three.
 set(ZHAO_G8A_RASTER_TEXTURE_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_skid2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_mul27_exact.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dual18_mul.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
@@ -10028,6 +10254,7 @@ set(ZHAO_G8A_RASTER_TEXTURE_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane_dsp2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv
@@ -10049,6 +10276,8 @@ set(ZHAO_G8A_RASTER_TEXTURE_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrgrad_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_attr_mul72x13_dsp3.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrgrad_dsp3.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_prod.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_fin.sv
@@ -10060,8 +10289,8 @@ set(ZHAO_G8A_RASTER_TEXTURE_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_raster_texture_v3_fit_top.sv)
 list(LENGTH ZHAO_G8A_RASTER_TEXTURE_SOURCES ZHAO_G8A_SOURCE_COUNT)
-if(NOT ZHAO_G8A_SOURCE_COUNT EQUAL 43)
-  message(FATAL_ERROR "G8A raster/texture fit closure must contain exactly 43 sources")
+if(NOT ZHAO_G8A_SOURCE_COUNT EQUAL 48)
+  message(FATAL_ERROR "G8A raster/texture fit closure must contain exactly 48 sources")
 endif()
 foreach(g8a_source IN LISTS ZHAO_G8A_RASTER_TEXTURE_SOURCES)
   if(NOT EXISTS "${g8a_source}")
@@ -10074,13 +10303,15 @@ verilate(pf_g8a
   PREFIX Vzhao_raster_texture_v3_fit_top
   TOP_MODULE zhao_raster_texture_v3_fit_top
   SOURCES ${ZHAO_G8A_RASTER_TEXTURE_SOURCES}
-  VERILATOR_ARGS --assert)
+  VERILATOR_ARGS --assert -GATTR_DSP3=1 -GBILERP_DSP2=1
+    -DZHAO_DUAL18_BEHAVIORAL)
 add_test(NAME raster_texture_v3_fit_top_directed COMMAND pf_g8a)
 
 add_test(NAME lint_raster_texture_v3_fit_top
   COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall -Wno-fatal
     --top-module zhao_raster_texture_v3_fit_top
-    -DQUARTUS_SYNTHESIS=1 -DSYNTHESIS=1
+    -GATTR_DSP3=1 -GBILERP_DSP2=1
+    -DQUARTUS_SYNTHESIS=1 -DSYNTHESIS=1 -DZHAO_DUAL18_BEHAVIORAL
     ${ZHAO_G8A_RASTER_TEXTURE_SOURCES})
 set_tests_properties(lint_raster_texture_v3_fit_top PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

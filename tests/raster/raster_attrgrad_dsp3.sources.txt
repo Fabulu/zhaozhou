@@ -1,0 +1,7 @@
+fpga/rtl/common/zhao_mul27_exact.sv
+fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
+fpga/rtl/raster/zhao_raster_attrgrad_v2.sv
+tests/mutants/zhao_attr_dsp3_mutants.sv
+fpga/rtl/raster/zhao_attr_mul72x13_dsp3.sv
+fpga/rtl/raster/zhao_raster_attrgrad_dsp3.sv
+tests/raster/tb_raster_attrgrad_dsp3_pair.sv

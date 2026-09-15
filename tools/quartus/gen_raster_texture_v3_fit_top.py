@@ -21,6 +21,8 @@ SOURCE_CLOSURE = (
     "fpga/rtl/generated/zhao_abi_pkg.sv",
     "fpga/rtl/common/zhao_render_texture_pkg.sv",
     "fpga/rtl/common/zhao_skid2.sv",
+    "fpga/rtl/common/zhao_mul27_exact.sv",
+    "fpga/rtl/common/zhao_dual18_mul.sv",
     "fpga/rtl/field/zhao_field_rcp24_rom.sv",
     "fpga/rtl/raster/zhao_raster_ticketq.sv",
     "fpga/rtl/raster/zhao_raster_ticketq_rh.sv",
@@ -30,6 +32,7 @@ SOURCE_CLOSURE = (
     "fpga/rtl/texture/zhao_texture_mod255.sv",
     "fpga/rtl/texture/zhao_texture_aux_div6.sv",
     "fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv",
+    "fpga/rtl/texture/zhao_texture_bilerp_lane_dsp2.sv",
     "fpga/rtl/texture/zhao_texture_mosaic_v2.sv",
     "fpga/rtl/texture/zhao_texture_palette_res_v2.sv",
     "fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv",
@@ -51,6 +54,8 @@ SOURCE_CLOSURE = (
     "fpga/rtl/raster/zhao_raster_edgewalk.sv",
     "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv",
     "fpga/rtl/raster/zhao_raster_attrgrad_v2.sv",
+    "fpga/rtl/raster/zhao_attr_mul72x13_dsp3.sv",
+    "fpga/rtl/raster/zhao_raster_attrgrad_dsp3.sv",
     "fpga/rtl/raster/zhao_raster_earlyz.sv",
     "fpga/rtl/raster/zhao_raster_blend_prod.sv",
     "fpga/rtl/raster/zhao_raster_blend_fin.sv",
@@ -108,6 +113,7 @@ def build_outputs(snapshots: dict[str, bytes]) -> tuple[bytes, bytes]:
         f"// template-sha256: {template_hash}\n"
         "// manifest: fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json\n"
         "// Product witness: u_tile.u_texture_stage explicitly sets MIGRATION_SHADOWS=1'b0.\n"
+        "// ATTR_DSP3/BILERP_DSP2 are explicit top parameters; the G8A flow must set both to 1.\n"
         "// Characterization traffic is legal and deterministic; this is not a shell or board top.\n\n"
     ).encode("utf-8")
     wrapper = header + snapshots[template_path]
@@ -153,6 +159,10 @@ def build_outputs(snapshots: dict[str, bytes]) -> tuple[bytes, bytes]:
             "No shell, lease, CDC, framebuffer publication, or physical-device claim.",
         ],
         "module": "zhao_raster_texture_v3_fit_top",
+        "fit_top_parameters": {
+            "ATTR_DSP3": "1'b1",
+            "BILERP_DSP2": "1'b1",
+        },
         "product_profile": {
             "parameter": "MIGRATION_SHADOWS",
             "stage_instance": "u_tile.u_texture_stage",

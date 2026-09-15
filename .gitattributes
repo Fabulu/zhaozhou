@@ -139,6 +139,37 @@ tools/quartus/run_g8a_timing2_fit.ps1 text eol=lf
 tools/quartus/g8a_timing3_receipt.py text eol=lf
 tools/quartus/run_g8a_timing3_fit.ps1 text eol=lf
 reports/G8A-CRCSERIAL-TIMING-RECOVERY-20260914.md text eol=lf
+# G8A DSP rescue candidates, paired controls and exact source manifests.
+fpga/rtl/common/zhao_dual18_mul.sv text eol=lf
+fpga/rtl/common/zhao_mul27_exact.sv text eol=lf
+fpga/rtl/raster/zhao_attr_mul72x13_dsp3.sv text eol=lf
+fpga/rtl/raster/zhao_raster_attrgrad_dsp3.sv text eol=lf
+fpga/rtl/texture/zhao_texture_bilerp_lane_dsp2.sv text eol=lf
+tests/mutants/zhao_attr_dsp3_mutants.sv text eol=lf
+tests/mutants/zhao_texture_bilerp_lane_dsp2_mutant.sv text eol=lf
+tests/raster/raster_attrgrad_dsp3.sources.txt text eol=lf
+tests/raster/raster_attrgrad_dsp3_diff.cpp text eol=lf
+tests/raster/tb_raster_attrgrad_dsp3_pair.sv text eol=lf
+tests/texture/tb_texture_bilerp_lane_dsp2.sv text eol=lf
+tests/texture/texture_bilerp_lane_dsp2.sources.txt text eol=lf
+tests/texture/texture_bilerp_lane_dsp2_diff.cpp text eol=lf
+tests/tools/test_g8a_dsp_rescue.py text eol=lf
+# DSP selection changes parameterized production accounting and exact closures.
+design/prod_manifest.yml text eol=lf
+design/fit_targets.yml text eol=lf
+tests/CMakeLists.txt text eol=lf
+tests/geometry/geom_bin_pipe_v2.sources.txt text eol=lf
+tools/quartus/check_ownership_roles.py text eol=lf
+tools/quartus/check_prod_manifest.py text eol=lf
+tools/quartus/run_block_fit.ps1 text eol=lf
+tools/quartus/run_block_map.ps1 text eol=lf
+tools/quartus/run_calib.ps1 text eol=lf
+tools/quartus/run_shell_fit.ps1 text eol=lf
+tools/budget/gen_calib.py text eol=lf
+tools/budget/check_dual18_map.py text eol=lf
+tests/tools/test_texjoin_accounting.py text eol=lf
+tests/tools/test_quartus_thermal_limits.py text eol=lf
+tests/tools/test_shell_fit_preflight.py text eol=lf
 # Packet-H raw-LAST leaf and every selector/control artifact are exact text.
 fpga/rtl/memory/zhao_engine1_raw_last_v2.sv text eol=lf
 tests/memory/engine1_raw_last_v2.sources.txt text eol=lf

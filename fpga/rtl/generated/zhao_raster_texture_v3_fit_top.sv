@@ -1,12 +1,16 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_raster_texture_v3_fit_top.py
-// generator-sha256: 361ba599683cec037eeb952ebe899d72615510535559bdecc683b3598cd8b432
-// template-sha256: 7c40798cb7d149508d3e2655db99d2f1c967c30bc8da7506fd94c1165df5491d
+// generator-sha256: 662258920e4f9b70bd138a1f49fc0def0fb352a86d61d26f5a0ff213163ae7b9
+// template-sha256: 270d289296b1eb33586e27916382e8cfbaeed0ad5637eb55990dda0fbdac4234
 // manifest: fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json
 // Product witness: u_tile.u_texture_stage explicitly sets MIGRATION_SHADOWS=1'b0.
+// ATTR_DSP3/BILERP_DSP2 are explicit top parameters; the G8A flow must set both to 1.
 // Characterization traffic is legal and deterministic; this is not a shell or board top.
 
-module zhao_raster_texture_v3_fit_top (
+module zhao_raster_texture_v3_fit_top #(
+    parameter bit ATTR_DSP3 = 1'b0,
+    parameter bit BILERP_DSP2 = 1'b0
+) (
     input  logic       clk,
     input  logic       rst_n,
     (* useioff = 1 *) output logic [7:0] fit_signature_o,
@@ -417,7 +421,10 @@ module zhao_raster_texture_v3_fit_top (
     end
   end
 
-  zhao_raster_tile_pipe_v2 u_tile (
+  zhao_raster_tile_pipe_v2 #(
+      .ATTR_DSP3(ATTR_DSP3),
+      .BILERP_DSP2(BILERP_DSP2)
+  ) u_tile (
       .clk(clk), .rst_n(rst_n),
       .job_valid_i(job_valid_w), .job_ready_o(job_ready_w),
       .job_ax_i(21'sd0), .job_ay_i(21'sd0),

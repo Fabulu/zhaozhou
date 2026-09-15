@@ -20,6 +20,8 @@ from module_graph import build, strip_comments  # noqa: E402
 from check_ownership_roles import (  # noqa: E402
     ElaborationError,
     RoleManifestError,
+    elaborated_cells,
+    ordered_package_sources,
     run_check as check_ownership_roles,
 )
 
@@ -637,6 +639,50 @@ def closure(edges, root):
     return seen
 
 
+def apply_parameterized_elaboration(decl, edges, tops, parameter_overrides):
+    """Replace conservative edges for overridden roots with exact V3Param cells.
+
+    The text graph intentionally sees both arms of a parameterized generate. That
+    remains the safe default, but it is wrong for a selected production root whose
+    manifest pins the controlling parameters. Only such roots are elaborated; all
+    other roots retain the conservative graph. The exact flattened cell set is
+    installed as the root's closure so false generate arms cannot masquerade as
+    production hardware or force their candidate sources into the production fit.
+    """
+    selected = {module: set(children) for module, children in edges.items()}
+    observations = []
+    if not parameter_overrides:
+        return selected, observations
+
+    package_sources = ordered_package_sources()
+    package_set = set(package_sources)
+    for root, overrides in parameter_overrides.items():
+        if root not in tops or root not in decl:
+            continue  # The closed-schema validator reports this more precisely.
+        modules = {root} | closure(edges, root)
+        module_sources = {os.path.abspath(decl[module]) for module in modules}
+        sources = package_sources + sorted(module_sources - package_set)
+        cells = elaborated_cells(
+            root, sources, REPO_ROOT, parameter_overrides=overrides)
+
+        exact = set()
+        for _instance, elaborated_module in cells:
+            if elaborated_module in decl:
+                exact.add(elaborated_module)
+                continue
+            candidates = [module for module in decl
+                          if elaborated_module.startswith(module + "__")]
+            if len(candidates) != 1:
+                raise ElaborationError(
+                    "production root '%s' emitted unknown/ambiguous cell module '%s'" %
+                    (root, elaborated_module))
+            exact.add(candidates[0])
+        exact.discard(root)
+        selected[root] = exact
+        observations.append((root, dict(overrides), sorted(exact)))
+    return selected, observations
+
+
 
 def generated_top_direct_modules(text):
     """Modules instantiated directly by the generated accounting top.
@@ -794,6 +840,7 @@ def main():
         return 1
     retired_slots = read_list_section("retired_census_slots")
     errors = []
+    parameter_overrides_valid = False
     try:
         parameter_overrides = read_parameter_overrides()
     except ManifestSchemaError as exc:
@@ -802,6 +849,7 @@ def main():
     else:
         try:
             validate_parameter_overrides(parameter_overrides, tops, decl)
+            parameter_overrides_valid = True
         except ManifestSchemaError as exc:
             errors.append("production parameter overrides are invalid: %s" % exc)
 
@@ -832,6 +880,14 @@ def main():
     for e in excluded:
         if e not in decl:
             errors.append("excluded '%s' is not a module under fpga/rtl" % e)
+
+    parameter_elaboration_observations = []
+    if parameter_overrides_valid:
+        try:
+            edges, parameter_elaboration_observations = apply_parameterized_elaboration(
+                decl, edges, tops, parameter_overrides)
+        except (OSError, RoleManifestError, ElaborationError) as exc:
+            errors.append("production parameter elaboration is invalid: %s" % exc)
 
     inside = {}
     for t in tops:
@@ -879,6 +935,12 @@ def main():
             % (m, decl[m].replace("fpga/rtl/", ""))
         )
 
+    for root, overrides, reachable in parameter_elaboration_observations:
+        parameter_text = ", ".join("%s=%s" % item
+                                   for item in overrides.items())
+        print("production parameter elaboration: evidence=verilator-v3param-ast "
+              "root=%s parameters=[%s] modules=%d" %
+              (root, parameter_text, len(reachable)))
     for role, scope, root, reachable in role_observations:
         print("ownership role %s: evidence=verilator-v3param-ast "
               "provider_identification=explicit_registry scope=%s root=%s "

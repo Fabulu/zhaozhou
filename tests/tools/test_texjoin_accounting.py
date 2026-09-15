@@ -110,14 +110,26 @@ V3_ROOT = "zhao_texture_island_v3_top"
 SECTION_MARKER = re.compile(r"(?m)^  // ---- (zhao_\w+) ----\n")
 TAIL_MARKER = "  // One pin, with every output salted by a distinct private source bit,"
 _CANONICAL_TOP_CACHE = {}
+_SELECTED_GRAPH_CACHE = None
 
 
 def static_module_graph():
-    """Load the checker's repository-relative graph from any test cwd."""
+    """Load the exact selected-production graph from any test cwd."""
+    global _SELECTED_GRAPH_CACHE
+    if _SELECTED_GRAPH_CACHE is not None:
+        decl, edges = _SELECTED_GRAPH_CACHE
+        return decl, {module: set(children) for module, children in edges.items()}
     previous_cwd = Path.cwd()
     try:
         os.chdir(REPO)
-        return manifest.module_edges()
+        decl, edges = manifest.module_edges()
+        tops, _excluded = manifest.read_manifest()
+        overrides = manifest.read_parameter_overrides()
+        manifest.validate_parameter_overrides(overrides, tops, decl)
+        selected, _observations = manifest.apply_parameterized_elaboration(
+            decl, edges, tops, overrides)
+        _SELECTED_GRAPH_CACHE = (decl, selected)
+        return decl, {module: set(children) for module, children in selected.items()}
     finally:
         os.chdir(previous_cwd)
 
@@ -910,6 +922,7 @@ class ProductionParameterOverrideTests(unittest.TestCase):
             "production_parameter_overrides:\n"
             "  zhao_texture_island_v3_top:\n"
             "    MIGRATION_SHADOWS: 1'b0\n"
+            "    BILERP_DSP2: 1'b0\n"
         )
         if manifest_text.count(override_stanza) != 1:
             cls._temporary.cleanup()
@@ -962,10 +975,12 @@ class ProductionParameterOverrideTests(unittest.TestCase):
         self.assertRegex(
             text,
             r"(?m)^  zhao_texture_island_v3_top #\(\n"
+            r"      \.BILERP_DSP2\(1'b0\),\n"
             r"      \.MIGRATION_SHADOWS\(1'b0\)\n"
             r"  \) u\d+_i \($",
         )
         self.assertEqual(text.count(".MIGRATION_SHADOWS(1'b0)"), 1)
+        self.assertEqual(text.count(".BILERP_DSP2(1'b0)"), 1)
 
     def validate(self, path: Path):
         overrides = manifest.read_parameter_overrides(path)
@@ -999,7 +1014,10 @@ class ProductionParameterOverrideTests(unittest.TestCase):
         overrides = manifest.read_parameter_overrides(path)
         self.assertEqual(
             overrides,
-            {self.TOP: {self.PARAMETER: "1'b0"}},
+            {self.TOP: {
+                self.PARAMETER: "1'b0",
+                "BILERP_DSP2": "1'b0",
+            }},
         )
         tops, _excluded = manifest.read_manifest(path)
         self.assertEqual(
@@ -1010,7 +1028,10 @@ class ProductionParameterOverrideTests(unittest.TestCase):
                  "zhao_texture_island_v3_top.sv"},
                 repo_root=REPO,
             ),
-            {self.TOP: {self.PARAMETER: 0}},
+            {self.TOP: {
+                self.PARAMETER: 0,
+                "BILERP_DSP2": 0,
+            }},
         )
 
     def test_parameter_declaration_metadata_is_explicit(self) -> None:
@@ -1119,6 +1140,7 @@ class ProductionParameterOverrideTests(unittest.TestCase):
     def test_override_block_is_the_only_generated_delta(self) -> None:
         normalized, replacements = re.subn(
             r"  zhao_texture_island_v3_top #\(\n"
+            r"      \.BILERP_DSP2\(1'b0\),\n"
             r"      \.MIGRATION_SHADOWS\(1'b0\)\n"
             r"  \) (u\d+)_i \(",
             r"  zhao_texture_island_v3_top \1_i (",
@@ -1127,6 +1149,7 @@ class ProductionParameterOverrideTests(unittest.TestCase):
         self.assertEqual(replacements, 1)
         self.assertEqual(normalized, self.default_generated)
         self.assertNotIn(".MIGRATION_SHADOWS(", self.default_generated)
+        self.assertNotIn(".BILERP_DSP2(", self.default_generated)
 
     def test_checker_sees_parameterized_and_default_instances(self) -> None:
         tops, _excluded = manifest.read_manifest(
@@ -1146,6 +1169,7 @@ class ProductionParameterOverrideTests(unittest.TestCase):
     def test_override_omission_control_fires_real_generator_check(self) -> None:
         damaged, replacements = re.subn(
             r"  zhao_texture_island_v3_top #\(\n"
+            r"      \.BILERP_DSP2\(1'b0\),\n"
             r"      \.MIGRATION_SHADOWS\(1'b0\)\n"
             r"  \) (u\d+)_i \(",
             r"  zhao_texture_island_v3_top \1_i (",

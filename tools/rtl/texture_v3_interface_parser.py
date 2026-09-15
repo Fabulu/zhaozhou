@@ -50,7 +50,7 @@ SUPPORTED_DUPLICATE_PROFILES = {
     },
     (PRODUCTION_TOP, PRODUCTION_INTERFACE_PURPOSE): {
         "count": 105,
-        "sha256": "b89ad4bad98acfd3dd55b823e652cc5438342b613863d4742f936273f3061571",
+        "sha256": "21508dfb34a81945affd2ebc361fe68d25e3b16004327b6fc63e36f90160e157",
     },
 }
 SUPPORTED_DTYPE_KINDS = frozenset({"BASICDTYPE"})
@@ -101,6 +101,7 @@ PRODUCTION_PARAMETER_VALUES = {
     "AUX_TOKW": ("unsigned_integer", "14"),
     "PAL_SLOTS": ("unsigned_integer", "4"),
     "PAL_ENTRIES": ("unsigned_integer", "256"),
+    "BILERP_DSP2": ("bit_vector", "1'h0"),
 }
 
 CUSTOM_TOOL_SPECS = {

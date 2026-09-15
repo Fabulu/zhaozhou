@@ -223,6 +223,7 @@ retired_census_slots:
 production_parameter_overrides:
   zhao_texture_island_v3_top:
     MIGRATION_SHADOWS: 1'b0
+    BILERP_DSP2: 1'b0
 
 # ==============================================================================
 # SELECTED PROFILES -- intended measurement profile, not current evidence
@@ -578,6 +579,10 @@ excluded:
   # stimulus and sinks exist only to hold the current shell in an isolated fit;
   # none is a production hierarchy member.
   - zhao_dual18_mul: not-yet-adopted  dual signed-18x18 characterization primitive; pending until a selected production consumer explicitly migrates to it
+  - zhao_mul27_exact: not-yet-adopted  exact signed-27x27 ATTR3 leaf; selected only by the G8A DSP-rescue profile until mapped and connected evidence promotes it
+  - zhao_attr_mul72x13_dsp3: not-yet-adopted  exact three-leaf ATTR3 setup worker; counted inside the selected G8A candidate lane, never as an independent production root
+  - zhao_raster_attrgrad_dsp3: not-yet-adopted  current-law ATTR3 lane candidate; default production and historical packet profiles retain zhao_raster_attrgrad_v2
+  - zhao_texture_bilerp_lane_dsp2: not-yet-adopted  two-DSP bilerp lane candidate; production BILERP_DSP2 remains explicitly zero until mapped connected adoption
   - zhao_shell_fit_audio_sink: probe  generated shell-fit audio sink helper; characterization only, never production
   - zhao_shell_fit_gpu_sink: probe  generated shell-fit GPU sink helper; characterization only, never production
   - zhao_shell_fit_stimulus: probe  generated shell-fit stimulus helper; characterization only, never production

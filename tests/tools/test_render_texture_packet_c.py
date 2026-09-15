@@ -63,10 +63,10 @@ PACKET_C_SOURCES = (
 # Packet E legitimately changes the V3 implementation while preserving its public
 # schema; these hashes pin that refreshed authority. Shell/accounting bytes remain
 # the protected Packet-C values.
-INTERFACE_SHA256 = "427a3ed3e592358cd7c29f0ca8033f8665c9afbbea63a5a274941dad8d9dc25f"
-PACKET_B_TOP_SHA256 = "8cb3095799c1cae4ea99f365dad6d4ceee5e41456e17b0945355253e90c02090"
+INTERFACE_SHA256 = "43b68fe6598268c5c22fcecd1744210b23a6a539bf3c19d7bf89a1668425ad95"
+PACKET_B_TOP_SHA256 = "8c721b8fad987202db9a826a89e97110d5749ab5203910b3932603fa9093d73a"
 PROTECTED_SHELL_SHA256 = "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
-PROD_TOP_SHA256 = "28116b822bf1e92844d8c10b08def329c63655cb55deed3d1db31456d7da7b51"
+PROD_TOP_SHA256 = "96121488fabef50e9c4c3181d038b64ce4450c84c2b48713383f06aab192ff61"
 
 
 def sha256(path: Path) -> str:
@@ -110,7 +110,9 @@ def validate_stage_shape(text: str) -> None:
         raise AssertionError("Packet-C stage must not add a second lifecycle owner")
     required = (
         "parameter bit MIGRATION_SHADOWS = 1'b0",
+        "parameter bit BILERP_DSP2 = 1'b0",
         ".MIGRATION_SHADOWS(MIGRATION_SHADOWS)",
+        ".BILERP_DSP2(BILERP_DSP2)",
         "import zhao_render_texture_pkg::*;",
         "unpack_raster_pretex",
         "input  logic [489:0] cand_data_i",

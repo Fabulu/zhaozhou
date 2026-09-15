@@ -1,4 +1,7 @@
-module zhao_raster_texture_v3_fit_top (
+module zhao_raster_texture_v3_fit_top #(
+    parameter bit ATTR_DSP3 = 1'b0,
+    parameter bit BILERP_DSP2 = 1'b0
+) (
     input  logic       clk,
     input  logic       rst_n,
     (* useioff = 1 *) output logic [7:0] fit_signature_o,
@@ -409,7 +412,10 @@ module zhao_raster_texture_v3_fit_top (
     end
   end
 
-  zhao_raster_tile_pipe_v2 u_tile (
+  zhao_raster_tile_pipe_v2 #(
+      .ATTR_DSP3(ATTR_DSP3),
+      .BILERP_DSP2(BILERP_DSP2)
+  ) u_tile (
       .clk(clk), .rst_n(rst_n),
       .job_valid_i(job_valid_w), .job_ready_o(job_ready_w),
       .job_ax_i(21'sd0), .job_ay_i(21'sd0),

@@ -57,9 +57,9 @@ PROTECTED = {
     "fpga/rtl/common/zhao_shell_top.sv":
         "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "427a3ed3e592358cd7c29f0ca8033f8665c9afbbea63a5a274941dad8d9dc25f",
+        "43b68fe6598268c5c22fcecd1744210b23a6a539bf3c19d7bf89a1668425ad95",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "8cb3095799c1cae4ea99f365dad6d4ceee5e41456e17b0945355253e90c02090",
+        "8c721b8fad987202db9a826a89e97110d5749ab5203910b3932603fa9093d73a",
 }
 EXPECTED_TESTS = (
     "raster_texture_v3_fit_top_directed",
@@ -127,6 +127,13 @@ def cmake_sources(text: str) -> tuple[str, ...]:
 def validate_runner(text: str) -> None:
     require_once(text, (
         "[switch]$PhysicalPins",
+        "[ValidateRange(1, 2)]",
+        "[int]$Processors = 2",
+        "$RunnerProcess.ProcessorAffinity = [IntPtr]$ThermalAffinityValue",
+        "$qsf += \"set_global_assignment -name NUM_PARALLEL_PROCESSORS $Processors\"",
+        "[string[]]$VerilogMacros,",
+        "-VerilogMacros entry '$macro' is not canonical NAME or NAME=VALUE.",
+        "$row.verilogMacros = @($VerilogMacros)",
         "$dirtyTree = (& git -C $RepoRoot -c core.autocrlf=true status --porcelain) -join ''",
         "$treeClean = [string]::IsNullOrWhiteSpace($dirtyTree)",
         "if ($PhysicalPins -and $Module.Count -ne 1)",
@@ -150,11 +157,12 @@ def validate_cmake(text: str) -> None:
     if sources != EXPECTED_SOURCES or len(sources) != len(set(sources)):
         raise AssertionError("G8A CMake source closure is not exact")
     require_once(text, (
-        "G8A raster/texture fit closure must contain exactly 43 sources",
+        "G8A raster/texture fit closure must contain exactly 48 sources",
         "add_executable(pf_g8a raster/raster_texture_v3_fit_top_directed.cpp)",
         "TOP_MODULE zhao_raster_texture_v3_fit_top",
         "SOURCES ${ZHAO_G8A_RASTER_TEXTURE_SOURCES}",
-        "-DQUARTUS_SYNTHESIS=1 -DSYNTHESIS=1",
+        "VERILATOR_ARGS --assert -GATTR_DSP3=1 -GBILERP_DSP2=1",
+        "-DQUARTUS_SYNTHESIS=1 -DSYNTHESIS=1 -DZHAO_DUAL18_BEHAVIORAL",
         "gen_raster_texture_v3_fit_top.py --check",
         "tools/test_raster_texture_v3_fit_top.py -q",
         'LABELS "fast;nightly;packet-f;g8a"',
@@ -170,7 +178,8 @@ def validate_cmake(text: str) -> None:
 
 
 def synthetic_map_report(*, shadows: bool = False, texjoin: bool = False,
-                         parameter: str = "0") -> str:
+                         parameter: str = "0", rescue: bool = False,
+                         bilerp_parameter: str = "1") -> str:
     entities = [
         ("zhao_raster_texture_v3_fit_top", "|zhao_raster_texture_v3_fit_top"),
         ("zhao_raster_tile_pipe_v2", "|top|zhao_raster_tile_pipe_v2:u_tile"),
@@ -178,6 +187,12 @@ def synthetic_map_report(*, shadows: bool = False, texjoin: bool = False,
         ("zhao_texture_island_v3_top", "|top|tile|stage|zhao_texture_island_v3_top:u_texture_v3"),
         ("zhao_texture_v3own", "|top|tile|stage|v3|zhao_texture_v3own:u_own"),
     ]
+    if rescue:
+        for entity, count in receipt.DSP_RESCUE_ENTITY_COUNTS.items():
+            entities.extend(
+                (entity, f"|top|dsp_rescue|{entity}:u_{entity}_{index}")
+                for index in range(count)
+            )
     if texjoin:
         entities.append(("zhao_raster_texjoin_v2", "|top|zhao_raster_texjoin_v2:u_bad"))
     rows = ["Analysis & Synthesis Resource Utilization by Entity"]
@@ -195,6 +210,8 @@ def synthetic_map_report(*, shadows: bool = False, texjoin: bool = False,
         "; Parameter Name ; Value ; Type ;",
         f"; MIGRATION_SHADOWS ; {parameter} ; Unsigned Binary ;",
     ])
+    if rescue:
+        rows.append(f"; BILERP_DSP2 ; {bilerp_parameter} ; Unsigned Binary ;")
     if shadows:
         rows.append("g_migration_shadows|shadow_metadata_m[0]~reg")
     return "\n".join(rows)
@@ -212,17 +229,17 @@ class G8AFitTopTests(unittest.TestCase):
         payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
         self.assertEqual(
             set(payload),
-            {"external_ports", "hashes", "hierarchy", "limitations", "module",
-             "product_profile", "schema_id", "schema_version", "source_closure",
-             "traffic_profile"},
+            {"external_ports", "fit_top_parameters", "hashes", "hierarchy",
+             "limitations", "module", "product_profile", "schema_id",
+             "schema_version", "source_closure", "traffic_profile"},
         )
         self.assertEqual(payload["schema_id"], "zhao.g8a.fit_top")
         self.assertEqual(payload["schema_version"], 1)
         self.assertEqual(payload["module"], "zhao_raster_texture_v3_fit_top")
         rows = payload["source_closure"]
         self.assertEqual(tuple(row["path"] for row in rows), EXPECTED_SOURCES)
-        self.assertEqual([row["ordinal"] for row in rows], list(range(43)))
-        self.assertEqual(len({row["path"] for row in rows}), 43)
+        self.assertEqual([row["ordinal"] for row in rows], list(range(48)))
+        self.assertEqual(len({row["path"] for row in rows}), 48)
         for row in rows:
             self.assertEqual(row["sha256"], sha256(REPO / row["path"]))
         self.assertEqual(payload["hashes"]["generated_rtl_sha256"], sha256(WRAPPER))
@@ -232,13 +249,18 @@ class G8AFitTopTests(unittest.TestCase):
             sha256(REPO / "tools/quartus/templates/zhao_raster_texture_v3_fit_top.sv.in"),
         )
         self.assertEqual(payload["product_profile"]["value"], "1'b0")
+        self.assertEqual(payload["fit_top_parameters"], {
+            "ATTR_DSP3": "1'b1", "BILERP_DSP2": "1'b1",
+        })
         self.assertEqual(payload["hierarchy"]["owner"]["required_count"], 1)
         self.assertEqual(payload["hierarchy"]["texjoin_required_count"], 0)
 
     def test_wrapper_has_small_registered_boundary_and_legal_activity(self) -> None:
         text = WRAPPER.read_text(encoding="utf-8")
         require_once(text, (
-            "module zhao_raster_texture_v3_fit_top (",
+            "module zhao_raster_texture_v3_fit_top #(",
+            "parameter bit ATTR_DSP3 = 1'b0",
+            "parameter bit BILERP_DSP2 = 1'b0",
             "input  logic       clk",
             "input  logic       rst_n",
             "output logic [7:0] fit_signature_o",
@@ -253,7 +275,9 @@ class G8AFitTopTests(unittest.TestCase):
             "signature_word_q <= 32'd0;",
             "signature_word_q <= signature_word_c;",
             "^ signature_word_q;",
-            "zhao_raster_tile_pipe_v2 u_tile (",
+            "zhao_raster_tile_pipe_v2 #(",
+            ".ATTR_DSP3(ATTR_DSP3)",
+            ".BILERP_DSP2(BILERP_DSP2)",
             ".job_bx_i(21'sd4096)",
             "job_meta_w[297:296] = 2'd1;",
             "job_meta_w[676:581] = 96'h000000000000400000000000;",
@@ -289,10 +313,10 @@ class G8AFitTopTests(unittest.TestCase):
         stage = (REPO / "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv").read_text(
             encoding="utf-8"
         )
-        self.assertEqual(
-            tile.count("zhao_raster_texture_stage_v3 #(.MIGRATION_SHADOWS(1'b0))"), 1
-        )
+        self.assertEqual(tile.count(".MIGRATION_SHADOWS(1'b0)"), 1)
+        self.assertEqual(tile.count(".BILERP_DSP2(BILERP_DSP2)"), 1)
         self.assertEqual(stage.count(".MIGRATION_SHADOWS(MIGRATION_SHADOWS)"), 1)
+        self.assertEqual(stage.count(".BILERP_DSP2(BILERP_DSP2)"), 1)
         self.assertEqual(stage.count("zhao_texture_island_v3_top #("), 1)
         self.assertNotIn("zhao_raster_texjoin", "\n".join(EXPECTED_SOURCES))
 
@@ -361,6 +385,34 @@ class G8AFitTopTests(unittest.TestCase):
         hierarchy = receipt.validate_hierarchy(entities, clean)
         self.assertEqual(hierarchy["texjoin_count"], 0)
         self.assertEqual(receipt.parse_v3_parameter(clean)["value"], "0")
+        rescue_map = synthetic_map_report(rescue=True)
+        rescue_hierarchy = receipt.validate_hierarchy(
+            receipt.parse_entity_rows(rescue_map), rescue_map,
+            dsp_rescue_selected=True,
+        )
+        self.assertEqual(
+            rescue_hierarchy["entity_counts"],
+            {**receipt.REQUIRED_ENTITY_COUNTS, **receipt.DSP_RESCUE_ENTITY_COUNTS},
+        )
+        self.assertEqual(
+            rescue_hierarchy["baseline_engine_counts"],
+            {name: 0 for name in receipt.DSP_RESCUE_FORBIDDEN_ENTITIES},
+        )
+        self.assertEqual(receipt.parse_v3_bilerp_parameter(rescue_map)["value"], "1")
+        rescue_lines = rescue_map.splitlines()
+        rescue_lines.pop(next(
+            index for index, line in enumerate(rescue_lines)
+            if line.startswith("; |zhao_mul27_exact ;")
+        ))
+        missing_mul27 = "\n".join(rescue_lines)
+        with self.assertRaises(receipt.ReceiptError):
+            receipt.validate_hierarchy(
+                receipt.parse_entity_rows(missing_mul27), missing_mul27,
+                dsp_rescue_selected=True,
+            )
+        with self.assertRaises(receipt.ReceiptError):
+            receipt.parse_v3_bilerp_parameter(
+                synthetic_map_report(rescue=True, bilerp_parameter="0"))
         descendant_header = clean + (
             "\n; Parameter Settings for User Entity Instance: "
             "top|zhao_texture_island_v3_top:u_texture_v3|child:u_child ;\n"
@@ -488,8 +540,8 @@ class G8AFitTopTests(unittest.TestCase):
     def test_receipt_source_digest_matches_block_runner_algorithm(self) -> None:
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         digest, text, count = receipt.manifest_source_digest(manifest)
-        self.assertEqual(count, 43)
-        self.assertEqual(len(text.splitlines()), 43)
+        self.assertEqual(count, 48)
+        self.assertEqual(len(text.splitlines()), 48)
         self.assertRegex(digest, r"^[0-9a-f]{64}$")
         self.assertIn("ZHAO_RASTER_TEXTURE_V3_FIT_TOP.SV", text.upper())
         broken = json.loads(json.dumps(manifest))
@@ -504,8 +556,13 @@ class G8AFitTopTests(unittest.TestCase):
             "set_global_assignment -name TOP_LEVEL_ENTITY zhao_raster_texture_v3_fit_top",
             "set_global_assignment -name SDC_FILE blockfit.sdc",
             "set_global_assignment -name SEED 1",
+            "set_global_assignment -name NUM_PARALLEL_PROCESSORS 2",
             "# Physical top ports retained by run_block_fit.ps1 -PhysicalPins.",
+            'set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"',
             'set_global_assignment -name VERILOG_MACRO "SYNTHESIS=1"',
+            'set_global_assignment -name VERILOG_MACRO "ZHAO_DUAL18_CYCLONEV=1"',
+            "set_parameter -name ATTR_DSP3 1",
+            "set_parameter -name BILERP_DSP2 1",
         ]
         qsf_lines.extend(
             f'set_global_assignment -name SYSTEMVERILOG_FILE "C:/snap/src/{Path(path).name}"'
@@ -514,7 +571,14 @@ class G8AFitTopTests(unittest.TestCase):
         qsf = "\n".join(qsf_lines)
         sdc = "create_clock -name clk        -period 10.000 [get_ports {clk}]\n"
         parsed = receipt.validate_fit_configuration(qsf, sdc, manifest)
-        self.assertEqual(parsed["source_count"], 43)
+        self.assertEqual(parsed["source_count"], 48)
+        self.assertTrue(parsed["dsp_rescue_selected"])
+        self.assertEqual(parsed["processors"], 2)
+        self.assertEqual(parsed["top_parameters"], {
+            "ATTR_DSP3": "1", "BILERP_DSP2": "1",
+        })
+        self.assertEqual(parsed["verilog_macros"][-1],
+                         "ZHAO_DUAL18_CYCLONEV=1")
         for mutation in (
             qsf + '\nset_global_assignment -name SYSTEMVERILOG_FILE "C:/snap/src/extra.sv"',
             qsf + "\nset_instance_assignment -name VIRTUAL_PIN ON -to *",
@@ -530,6 +594,10 @@ class G8AFitTopTests(unittest.TestCase):
                 1,
             ),
             qsf + "\nset_global_assignment -name SEED 2",
+            qsf.replace("set_parameter -name ATTR_DSP3 1", "", 1),
+            qsf.replace("set_global_assignment -name NUM_PARALLEL_PROCESSORS 2", "", 1),
+            qsf.replace("ZHAO_DUAL18_CYCLONEV=1", "ZHAO_DUAL18_BEHAVIORAL", 1),
+            qsf + '\nset_global_assignment -name VERILOG_MACRO "ZHAO_DUAL18_BEHAVIORAL"',
         ):
             with self.assertRaises(receipt.ReceiptError):
                 receipt.validate_fit_configuration(mutation, sdc, manifest)
@@ -547,7 +615,14 @@ class G8AFitTopTests(unittest.TestCase):
                 "top": receipt.MODULE,
                 "virtual_pin_assignments": 0,
             },
-            "gate": {"pass": False},
+            "gate": {
+                "fit_complete": True,
+                "pass": False,
+                "ram_inference_pass": True,
+                "resource_pass": True,
+                "structure_pass": True,
+                "timing_100mhz_pass": False,
+            },
             "hierarchy": {
                 "entity_counts": dict(receipt.REQUIRED_ENTITY_COUNTS),
                 "shadow_state_matches": [],
@@ -576,6 +651,42 @@ class G8AFitTopTests(unittest.TestCase):
             "tool": {"name": "Quartus", "version": "17.0.2"},
         }
         receipt.validate_receipt(payload)
+        rescue_payload = json.loads(json.dumps(payload))
+        rescue_payload["schema_version"] = 2
+        rescue_payload["fit_configuration"] = {
+            **rescue_payload["fit_configuration"],
+            "source_count": 48,
+            "dsp_rescue_selected": True,
+            "processors": 2,
+            "top_parameters": {"ATTR_DSP3": "1", "BILERP_DSP2": "1"},
+            "verilog_macros": [
+                "QUARTUS_SYNTHESIS=1", "SYNTHESIS=1",
+                "ZHAO_DUAL18_CYCLONEV=1",
+            ],
+        }
+        rescue_payload["source"]["sources_hashed"] = 48
+        rescue_payload["parameters"].update({
+            "ATTR_DSP3": {"instance": receipt.MODULE, "value": "1"},
+            "BILERP_DSP2": {"instance": "u", "value": "1"},
+        })
+        rescue_payload["hierarchy"] = {
+            **rescue_payload["hierarchy"],
+            "entity_counts": {
+                **receipt.REQUIRED_ENTITY_COUNTS,
+                **receipt.DSP_RESCUE_ENTITY_COUNTS,
+            },
+            "baseline_engine_counts": {
+                name: 0 for name in receipt.DSP_RESCUE_FORBIDDEN_ENTITIES
+            },
+        }
+        rescue_payload["gate"]["dsp_rescue_target_pass"] = True
+        rescue_payload["resources"]["dspBlocks"] = 30
+        receipt.validate_receipt(rescue_payload)
+        broken_rescue = json.loads(json.dumps(rescue_payload))
+        broken_rescue["fit_configuration"]["verilog_macros"][-1] = \
+            "ZHAO_DUAL18_BEHAVIORAL"
+        with self.assertRaises(receipt.ReceiptError):
+            receipt.validate_receipt(broken_rescue)
         for mutation in (
             {**payload, "io_mode": "virtual-top-ports"},
             {**payload, "resources": {"virtualPins": 1}},
@@ -1059,6 +1170,9 @@ class G8AFitTopTests(unittest.TestCase):
             "if ($lockedHash -cne $receiptToolHashes[$toolPath])",
             "A G8A receipt tool changed before its locked invocation: $toolPath",
             "-RowLabel $RowLabel",
+            "-Processors 2",
+            "-TopParameters @('ATTR_DSP3=1', 'BILERP_DSP2=1')",
+            "-VerilogMacros @('ZHAO_DUAL18_CYCLONEV=1')",
             "-Seed 1",
             "-PhysicalPins",
             "g8a_timing3_receipt.py') --write",
@@ -1080,6 +1194,23 @@ class G8AFitTopTests(unittest.TestCase):
                 "physical mode",
                 timing3_runner.replace("-PhysicalPins", "", 1),
                 ("-PhysicalPins",),
+            ),
+            (
+                "thermal processor cap",
+                timing3_runner.replace("-Processors 2", "", 1),
+                ("-Processors 2",),
+            ),
+            (
+                "ATTR3/BIL2 selection",
+                timing3_runner.replace(
+                    "-TopParameters @('ATTR_DSP3=1', 'BILERP_DSP2=1')", "", 1),
+                ("-TopParameters @('ATTR_DSP3=1', 'BILERP_DSP2=1')",),
+            ),
+            (
+                "dual18 vendor backend",
+                timing3_runner.replace(
+                    "-VerilogMacros @('ZHAO_DUAL18_CYCLONEV=1')", "", 1),
+                ("-VerilogMacros @('ZHAO_DUAL18_CYCLONEV=1')",),
             ),
             (
                 "timing2 baseline",

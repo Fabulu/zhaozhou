@@ -1,0 +1,5 @@
+fpga/rtl/common/zhao_dual18_mul.sv
+fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+tests/mutants/zhao_texture_bilerp_lane_dsp2_mutant.sv
+fpga/rtl/texture/zhao_texture_bilerp_lane_dsp2.sv
+tests/texture/tb_texture_bilerp_lane_dsp2.sv

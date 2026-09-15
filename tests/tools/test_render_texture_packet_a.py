@@ -947,6 +947,10 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
         try:
             os.chdir(REPO)
             declarations, edges = prod_manifest.module_edges()
+            overrides = prod_manifest.read_parameter_overrides()
+            prod_manifest.validate_parameter_overrides(overrides, tops, declarations)
+            edges, _observations = prod_manifest.apply_parameterized_elaboration(
+                declarations, edges, tops, overrides)
             closure_errors = prod_manifest.check_fit_sources(declarations, edges)
         finally:
             os.chdir(previous_cwd)

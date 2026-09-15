@@ -75,6 +75,7 @@ EXPECTED_PRODUCTION_PARAMETER_INVENTORY = (
     ("AUX_TOKW", "unsigned_integer", "14"),
     ("PAL_SLOTS", "unsigned_integer", "4"),
     ("PAL_ENTRIES", "unsigned_integer", "256"),
+    ("BILERP_DSP2", "bit_vector", "1'h0"),
 )
 EXPECTED_PRODUCTION_PORT_NAMES = (
     "clk", "rst_n", "frag_valid_i", "frag_ready_o", "frag_invw24_i",
@@ -178,8 +179,8 @@ EXPECTED_DUPLICATE_MARKER_ROWS = (
     ("/miscsp/0/typesp/58/membersp/2", "(WR)", "alpha", "e,283:18,283:23"),
     ("/miscsp/0/typesp/58/membersp/3", "(WR)", "rgb", "e,284:18,284:21"),
 )
-EXPECTED_PRODUCTION_DUPLICATE_MARKER_SHA256 = "b89ad4bad98acfd3dd55b823e652cc5438342b613863d4742f936273f3061571"
-EXPECTED_PRODUCTION_DUPLICATE_MARKER_ROWS = (
+EXPECTED_PRODUCTION_DUPLICATE_MARKER_SHA256 = "21508dfb34a81945affd2ebc361fe68d25e3b16004327b6fc63e36f90160e157"
+_PRE_DSP_PRODUCTION_DUPLICATE_MARKER_ROWS = (
     ("/miscsp/0/typesp/107/membersp/0", "(WTOB)", "in_tile_addr", "e,33:18,33:30"),
     ("/miscsp/0/typesp/107/membersp/1", "(WTOB)", "invw24", "e,34:18,34:24"),
     ("/miscsp/0/typesp/107/membersp/2", "(WTOB)", "fragment_state", "e,35:18,35:32"),
@@ -298,6 +299,20 @@ def expected_duplicate_markers() -> tuple[interface.VerilatorDuplicateMarker, ..
         )
         for pointer, parent, name, loc in EXPECTED_DUPLICATE_MARKER_ROWS
     )
+
+
+_DSP_PRODUCTION_PARENT_ADDRS = {
+    "(WTOB)": "(CUOB)", "(OUOB)": "(UUOB)", "(WVOB)": "(CWOB)",
+    "(GUJ)": "(MUJ)", "(NZOB)": "(TZOB)", "(JAPB)": "(PAPB)",
+    "(LEPB)": "(REPB)", "(BGPB)": "(HGPB)", "(FHPB)": "(LHPB)",
+    "(IYV)": "(OYV)", "(KYV)": "(QYV)", "(MYV)": "(SYV)",
+    "(BOU)": "(HOU)", "(DOU)": "(JOU)", "(FOU)": "(LOU)",
+    "(XPT)": "(DQT)",
+}
+EXPECTED_PRODUCTION_DUPLICATE_MARKER_ROWS = tuple(
+    (pointer, _DSP_PRODUCTION_PARENT_ADDRS[parent], name, loc)
+    for pointer, parent, name, loc in _PRE_DSP_PRODUCTION_DUPLICATE_MARKER_ROWS
+)
 
 
 def expected_production_duplicate_markers() -> tuple[interface.VerilatorDuplicateMarker, ...]:
@@ -1571,7 +1586,7 @@ class ProductionParameterInventoryTests(unittest.TestCase):
         )
         cls.artifact.verify_live_unchanged()
 
-    def test_exact_fifteen_production_generic_parameters_match_source(self) -> None:
+    def test_exact_sixteen_production_generic_parameters_match_source(self) -> None:
         parameters = self.artifact.payload["parameters"]
         top_source = self.artifact.snapshots[
             interface.PRODUCTION_SOURCE_CLOSURE[-1]
@@ -1589,7 +1604,7 @@ class ProductionParameterInventoryTests(unittest.TestCase):
             )
             for row in parameters
         )
-        self.assertEqual(len(EXPECTED_PRODUCTION_PARAMETER_INVENTORY), 15)
+        self.assertEqual(len(EXPECTED_PRODUCTION_PARAMETER_INVENTORY), 16)
         self.assertEqual(actual, EXPECTED_PRODUCTION_PARAMETER_INVENTORY)
         self.assertTrue(all(row["declared_kind"] == "parameter" for row in parameters))
 

@@ -90,9 +90,9 @@ PROTECTED_HASHES = {
     "fpga/rtl/common/zhao_shell_top.sv":
         "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
     "fpga/rtl/prod/zhao_prod_top.sv":
-        "28116b822bf1e92844d8c10b08def329c63655cb55deed3d1db31456d7da7b51",
+        "96121488fabef50e9c4c3181d038b64ce4450c84c2b48713383f06aab192ff61",
     "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv":
-        "3fddbe917e3e43fc1bb3db2ed08c01b8689aea357ec1ec4c7ef89b75b7297335",
+        "f2c0ee4d054e2f70a37c4179c4fb985b0ba3f95c5533f598858b3b315e57497b",
     "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv":
         "e78372fef643dbb71bdb314a0c436aedf98c6b62336f0f35708cdf84c52f06a5",
     "fpga/rtl/raster/zhao_raster_attrgrad_v2.sv":
@@ -100,15 +100,15 @@ PROTECTED_HASHES = {
     "fpga/rtl/geometry/zhao_geom_binner_v2.sv":
         "7b89e1705420a2fd5ebfd84ceed9f27fb0855d13bc6f8c2d2c19dbc38ad3e867",
     "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv":
-        "3e475e9fbd94cfe81f5f2966feeb35e7b0ecc5bfd0c754b4b593d1bf3c0fdd79",
+        "194dc9815cd5f9fe39d6f8a196807ca3b50a999311feea5f2c2731ada35ec40d",
     "fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv":
-        "fd0e86a403ebd4438b5ab348f1ad0a2edbf63f07bc7718aa5f8135a893b2f815",
+        "675fec61863184aee91692934d3434a9b2cc06c607a71d7250265d5197ccd204",
 }
 CURRENT_HASHES = {
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "8cb3095799c1cae4ea99f365dad6d4ceee5e41456e17b0945355253e90c02090",
+        "8c721b8fad987202db9a826a89e97110d5749ab5203910b3932603fa9093d73a",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "427a3ed3e592358cd7c29f0ca8033f8665c9afbbea63a5a274941dad8d9dc25f",
+        "43b68fe6598268c5c22fcecd1744210b23a6a539bf3c19d7bf89a1668425ad95",
 }
 
 
@@ -596,7 +596,7 @@ class PacketEClosureTests(unittest.TestCase):
         path = REPO / "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json"
         payload = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(payload["module"]["name"], "zhao_texture_island_v3_top")
-        self.assertEqual(len(payload["parameters"]), 15)
+        self.assertEqual(len(payload["parameters"]), 16)
         self.assertEqual(len(payload["ports"]), 119)
         self.assertIn("lifetime_structural_fault_o",
                       {row["name"] for row in payload["ports"]})
@@ -610,6 +610,7 @@ class PacketEClosureTests(unittest.TestCase):
         selected = {row["name"]: row["selected_value"]["text"]
                     for row in payload["parameters"]}
         self.assertEqual(selected["MIGRATION_SHADOWS"], "1'h1")
+        self.assertEqual(selected["BILERP_DSP2"], "1'h0")
 
     def test_selector_collision_helper_is_exact(self) -> None:
         helper = (REPO / "tests/tools/test_packet_e_selector_collision.py").read_text(

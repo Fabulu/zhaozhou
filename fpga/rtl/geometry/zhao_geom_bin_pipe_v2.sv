@@ -19,7 +19,9 @@ module zhao_geom_bin_pipe_v2 #(
     parameter int unsigned TRI_W      = 7,
     parameter int unsigned CHUNKS     = 256,
     parameter int unsigned CHUNK_W    = 8,
-    parameter int unsigned CHUNK_REFS = 4
+    parameter int unsigned CHUNK_REFS = 4,
+    parameter bit ATTR_DSP3           = 1'b0,
+    parameter bit BILERP_DSP2         = 1'b0
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -307,7 +309,10 @@ module zhao_geom_bin_pipe_v2 #(
   assign quiet_o = binner_initialized_o && !frame_inflight_q &&
                    !frame_begin_i && !drain_busy_o && tile_quiet_w;
 
-  zhao_raster_tile_pipe_v2 u_tile (
+  zhao_raster_tile_pipe_v2 #(
+      .ATTR_DSP3(ATTR_DSP3),
+      .BILERP_DSP2(BILERP_DSP2)
+  ) u_tile (
       .clk(clk),
       .rst_n(rst_n),
       .job_valid_i(job_valid_w),

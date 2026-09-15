@@ -25,10 +25,14 @@
       "ordinal": 3
     }
   ],
+  "fit_top_parameters": {
+    "ATTR_DSP3": "1'b1",
+    "BILERP_DSP2": "1'b1"
+  },
   "hashes": {
-    "generated_rtl_sha256": "310ccc986fd80480b2321c173d7438cedc0334a0809a49d76e1a51251782743a",
-    "generator_sha256": "361ba599683cec037eeb952ebe899d72615510535559bdecc683b3598cd8b432",
-    "template_sha256": "7c40798cb7d149508d3e2655db99d2f1c967c30bc8da7506fd94c1165df5491d"
+    "generated_rtl_sha256": "ace5f507eb721632016aba5dcde4b800b7d6ddfef7bb10e7251f33d6358f4838",
+    "generator_sha256": "662258920e4f9b70bd138a1f49fc0def0fb352a86d61d26f5a0ff213163ae7b9",
+    "template_sha256": "270d289296b1eb33586e27916382e8cfbaeed0ad5637eb55990dda0fbdac4234"
   },
   "hierarchy": {
     "owner": {
@@ -84,203 +88,228 @@
     },
     {
       "ordinal": 3,
+      "path": "fpga/rtl/common/zhao_mul27_exact.sv",
+      "sha256": "0686a81c99452791184d27862ac1cd60503100a4d23d1c715d8c9cf0a46847f4"
+    },
+    {
+      "ordinal": 4,
+      "path": "fpga/rtl/common/zhao_dual18_mul.sv",
+      "sha256": "f90a84c2b118e70c3fbe9cec36ad818b6d4788d7e334187cea0a2f8d7f6dc9de"
+    },
+    {
+      "ordinal": 5,
       "path": "fpga/rtl/field/zhao_field_rcp24_rom.sv",
       "sha256": "061e016c1d6226b5580a5657ab897357889b9fba4def6b12b397dcccd0d03c5d"
     },
     {
-      "ordinal": 4,
+      "ordinal": 6,
       "path": "fpga/rtl/raster/zhao_raster_ticketq.sv",
       "sha256": "57ecb236d0f310a77f5bfe71ef8d052c4403d734f1b0da2f7860e19a0fa06612"
     },
     {
-      "ordinal": 5,
+      "ordinal": 7,
       "path": "fpga/rtl/raster/zhao_raster_ticketq_rh.sv",
       "sha256": "610c786e78b506d1d0b9f88de150be91416250b2f9a8ed76eb75cd7809a00ed8"
     },
     {
-      "ordinal": 6,
+      "ordinal": 8,
       "path": "fpga/rtl/raster/zhao_raster_rcp24_mul.sv",
       "sha256": "dfde2d61c39db6077ad80a7937ddb0f78f9f8c18d125f86e57f9d1d9172e6cd8"
     },
     {
-      "ordinal": 7,
+      "ordinal": 9,
       "path": "fpga/rtl/raster/zhao_raster_rcp24_v4.sv",
       "sha256": "e932d23556286a12d6afdf086021808932483ffec62e8031e388becf5ec340de"
     },
     {
-      "ordinal": 8,
+      "ordinal": 10,
       "path": "fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv",
       "sha256": "a672c72db0e27a1f357ea178e15dcc8ff1d2c99efa8cd7b5d6d8bed602f3d48e"
     },
     {
-      "ordinal": 9,
+      "ordinal": 11,
       "path": "fpga/rtl/texture/zhao_texture_mod255.sv",
       "sha256": "dbbaf17d8386293d159ceec1e412e1c217266e5aa2d5efc5d7cccaa29d246d37"
     },
     {
-      "ordinal": 10,
+      "ordinal": 12,
       "path": "fpga/rtl/texture/zhao_texture_aux_div6.sv",
       "sha256": "abb8c4b9622bc57d28638040909c7b7955aefcc9459695d7a7b91c995f07cf88"
     },
     {
-      "ordinal": 11,
+      "ordinal": 13,
       "path": "fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv",
       "sha256": "9439b4b13260655c3f8e7f54d9ae741974a6b222fc197d45568d45e4ee2f12ae"
     },
     {
-      "ordinal": 12,
+      "ordinal": 14,
+      "path": "fpga/rtl/texture/zhao_texture_bilerp_lane_dsp2.sv",
+      "sha256": "64c2fe8f7bd298b6e0775a061a2688016a8d98c7df41360f7858760b2d4d1390"
+    },
+    {
+      "ordinal": 15,
       "path": "fpga/rtl/texture/zhao_texture_mosaic_v2.sv",
       "sha256": "de65d1f3ee0c0b27f9c2347593388b522929b094eed69209b7bb6039d766d274"
     },
     {
-      "ordinal": 13,
+      "ordinal": 16,
       "path": "fpga/rtl/texture/zhao_texture_palette_res_v2.sv",
       "sha256": "40279c6741d524ac3892cd5f0c3973975876074d6e57de9c002c1b27f96abc3b"
     },
     {
-      "ordinal": 14,
+      "ordinal": 17,
       "path": "fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv",
       "sha256": "f074c48a9750cead1e44a66c676112f011705f54b072962abdb5d73c8db04a5b"
     },
     {
-      "ordinal": 15,
+      "ordinal": 18,
       "path": "fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv",
       "sha256": "e650f31b9b745d02985bfa98b001ca81912d650688d0a7b6f9630792a799506b"
     },
     {
-      "ordinal": 16,
+      "ordinal": 19,
       "path": "fpga/rtl/texture/zhao_texture_v3bank.sv",
       "sha256": "65d11cf34c3a2e045f6d3af8fd730eb1ebf647ce2f04e8e2126e201e45c29911"
     },
     {
-      "ordinal": 17,
+      "ordinal": 20,
       "path": "fpga/rtl/texture/zhao_texture_v3rq.sv",
       "sha256": "e4e4de2a79395c8de57e4b40188e059a39532cc76c531b033c24b30e74281ae3"
     },
     {
-      "ordinal": 18,
+      "ordinal": 21,
       "path": "fpga/rtl/texture/zhao_texture_v3own.sv",
       "sha256": "0053921e7389193eb27a7c7387847bfb08f79f356adf0c26e10d81edf1e6ba97"
     },
     {
-      "ordinal": 19,
+      "ordinal": 22,
       "path": "fpga/rtl/texture/zhao_texture_metajoin_v2.sv",
       "sha256": "49e563fe1b9acfb8c7f66e9ace863aeca6e3e1e107b46fdedd0dc15bb9503cea"
     },
     {
-      "ordinal": 20,
+      "ordinal": 23,
       "path": "fpga/rtl/texture/zhao_texture_uv_join_v2.sv",
       "sha256": "ded891c7d6bfb38b232370cfea9d865d1de88ab25642f18290ba5e512e32add9"
     },
     {
-      "ordinal": 21,
+      "ordinal": 24,
       "path": "fpga/rtl/texture/zhao_texture_early_desc_v2.sv",
       "sha256": "da9062d36a8d882898a1072de3d4b217d987f432878fe8443dc56167c9ba4285"
     },
     {
-      "ordinal": 22,
+      "ordinal": 25,
       "path": "fpga/rtl/texture/zhao_texture_frag_expand_v2.sv",
       "sha256": "769884c115e05e882621733df116522e20679d6328411151371ee94ebeabecb2"
     },
     {
-      "ordinal": 23,
+      "ordinal": 26,
       "path": "fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv",
       "sha256": "0f9cf32ec54296a4fe28d5f70365da09699de93053e092ea484f0e58429ce284"
     },
     {
-      "ordinal": 24,
+      "ordinal": 27,
       "path": "fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv",
       "sha256": "6e7b1788f4d356ae36f1703f5969f5d44adf6b96079f8b3274f8894769f5bfa1"
     },
     {
-      "ordinal": 25,
+      "ordinal": 28,
       "path": "fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv",
       "sha256": "8f432f5ed9720ae8ab47b9e217dff46da6a0998d8fd1c87419c0d3990116563d"
     },
     {
-      "ordinal": 26,
+      "ordinal": 29,
       "path": "fpga/rtl/texture/zhao_texture_material_combine_v3.sv",
       "sha256": "841f84edb4412a9b9885492cd39861b51f4dc3c566361a4dc642dc7f60b6dc22"
     },
     {
-      "ordinal": 27,
+      "ordinal": 30,
       "path": "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
-      "sha256": "8cb3095799c1cae4ea99f365dad6d4ceee5e41456e17b0945355253e90c02090"
+      "sha256": "8c721b8fad987202db9a826a89e97110d5749ab5203910b3932603fa9093d73a"
     },
     {
-      "ordinal": 28,
+      "ordinal": 31,
       "path": "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv",
-      "sha256": "3fddbe917e3e43fc1bb3db2ed08c01b8689aea357ec1ec4c7ef89b75b7297335"
+      "sha256": "f2c0ee4d054e2f70a37c4179c4fb985b0ba3f95c5533f598858b3b315e57497b"
     },
     {
-      "ordinal": 29,
+      "ordinal": 32,
       "path": "fpga/rtl/raster/zhao_raster_fill.sv",
       "sha256": "d1572544a821c8f2bf33d6361885e5892b7f7c22cda9c6e6c5aff1c1eb234c37"
     },
     {
-      "ordinal": 30,
+      "ordinal": 33,
       "path": "fpga/rtl/raster/zhao_raster_edgewalk.sv",
       "sha256": "f1843560263e190efdbce7bec5508252b9a57d28e9bbea27d0efda0abf2508dd"
     },
     {
-      "ordinal": 31,
+      "ordinal": 34,
       "path": "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv",
       "sha256": "e78372fef643dbb71bdb314a0c436aedf98c6b62336f0f35708cdf84c52f06a5"
     },
     {
-      "ordinal": 32,
+      "ordinal": 35,
       "path": "fpga/rtl/raster/zhao_raster_attrgrad_v2.sv",
       "sha256": "aa0b2022cce4b9e6a92d7b43130a4a0dcb8b720689a89230065738b5f63c787b"
     },
     {
-      "ordinal": 33,
+      "ordinal": 36,
+      "path": "fpga/rtl/raster/zhao_attr_mul72x13_dsp3.sv",
+      "sha256": "fd035c466d6a42a6d6436e0015ba3f8fd1e384e640b4a4eadd3def9e43d308b0"
+    },
+    {
+      "ordinal": 37,
+      "path": "fpga/rtl/raster/zhao_raster_attrgrad_dsp3.sv",
+      "sha256": "e22a3661a5613544d206a29ae0be049280ada94905e73240f47b932fac749e1f"
+    },
+    {
+      "ordinal": 38,
       "path": "fpga/rtl/raster/zhao_raster_earlyz.sv",
       "sha256": "e0612b97b44fc7ed67418d0a29f2cedc95d2c8b69e8b5e03f0c42c9c06d51200"
     },
     {
-      "ordinal": 34,
+      "ordinal": 39,
       "path": "fpga/rtl/raster/zhao_raster_blend_prod.sv",
       "sha256": "d91b82dc937e957dc58876acec0f037ef16a0a6f1e67fcc81eb70ae54e45ce2d"
     },
     {
-      "ordinal": 35,
+      "ordinal": 40,
       "path": "fpga/rtl/raster/zhao_raster_blend_fin.sv",
       "sha256": "a96f2c8ee8e82ce95f01e557a6602c4472a471192aa3d7986453445e966be6e9"
     },
     {
-      "ordinal": 36,
+      "ordinal": 41,
       "path": "fpga/rtl/raster/zhao_raster_fragment.sv",
       "sha256": "1f4eed809cc2874588f72a7be6097cd8c47d6dc64e37ea25074ea7884b8f7900"
     },
     {
-      "ordinal": 37,
+      "ordinal": 42,
       "path": "fpga/rtl/raster/zhao_raster_tilestore.sv",
       "sha256": "831d005bfcee573145170dd1948064ccca8ea03956ea21556c8ad44430bc4bef"
     },
     {
-      "ordinal": 38,
+      "ordinal": 43,
       "path": "fpga/rtl/raster/zhao_raster_div255.sv",
       "sha256": "8a100d785f745fe906cd02d31f96d206379d9d4fa4fa242f32544fbfef198af3"
     },
     {
-      "ordinal": 39,
+      "ordinal": 44,
       "path": "fpga/rtl/raster/zhao_raster_quant.sv",
       "sha256": "e7301d0330aede246cde6e997dbf9867f31ffef93c5343204a1079199887433a"
     },
     {
-      "ordinal": 40,
+      "ordinal": 45,
       "path": "fpga/rtl/raster/zhao_raster_resolve.sv",
       "sha256": "d4b1074a8c6c11fd389949aa225b84c08d0b6575dc57da9d76326d1c01800382"
     },
     {
-      "ordinal": 41,
+      "ordinal": 46,
       "path": "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv",
-      "sha256": "3e475e9fbd94cfe81f5f2966feeb35e7b0ecc5bfd0c754b4b593d1bf3c0fdd79"
+      "sha256": "194dc9815cd5f9fe39d6f8a196807ca3b50a999311feea5f2c2731ada35ec40d"
     },
     {
-      "ordinal": 42,
+      "ordinal": 47,
       "path": "fpga/rtl/generated/zhao_raster_texture_v3_fit_top.sv",
-      "sha256": "310ccc986fd80480b2321c173d7438cedc0334a0809a49d76e1a51251782743a"
+      "sha256": "ace5f507eb721632016aba5dcde4b800b7d6ddfef7bb10e7251f33d6358f4838"
     }
   ],
   "traffic_profile": {

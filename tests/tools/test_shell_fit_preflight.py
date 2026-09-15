@@ -3130,7 +3130,7 @@ class ReportPreflightTests(unittest.TestCase):
                  str(repo / "tools/quartus/run_shell_fit.ps1"), "-PythonExe",
                  sys.executable, "-QuartusBin",
                  str(fake_bin), "-TestOnlyFakeQuartus", "-KeepWorkspace",
-                 "-Processors", "3"],
+                 "-Processors", "2"],
                 env=env, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             )
             try:
@@ -3187,7 +3187,7 @@ class ReportPreflightTests(unittest.TestCase):
         self.assertEqual(map_count, ["map"])
         self.assertEqual(synthesis["sourceCommit"], source_commit)
         self.assertEqual(synthesis["evidenceMode"], "test-only")
-        self.assertEqual(synthesis["execution"], {"processors": 3})
+        self.assertEqual(synthesis["execution"], {"processors": 2})
         self.assertEqual(set(synthesis["stages"]), {"map", "postMap", "fit", "timequest"})
         self.assertEqual(synthesis["remainderAttribution"]["unmanifestedFitterRows"], 1)
         self.assertEqual(synthesis["remainderAttribution"]["unmanifestedMapRows"], 1)

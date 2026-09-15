@@ -22,7 +22,8 @@
 `endif
 
 module zhao_raster_texture_stage_v3 #(
-    parameter bit MIGRATION_SHADOWS = 1'b0
+    parameter bit MIGRATION_SHADOWS = 1'b0,
+    parameter bit BILERP_DSP2 = 1'b0
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -373,7 +374,8 @@ module zhao_raster_texture_stage_v3 #(
       .TOKW(18),
       .AUX_TOKW(14),
       .PAL_SLOTS(4),
-      .PAL_ENTRIES(256)
+      .PAL_ENTRIES(256),
+      .BILERP_DSP2(BILERP_DSP2)
   ) u_texture_v3 (
       .clk(clk),
       .rst_n(rst_n),

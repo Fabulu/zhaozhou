@@ -412,8 +412,10 @@ def _source_set(decl, edges, declaration, root, extra_sources,
 
 
 def elaborated_cells(root, sources, repo_root, verilator=None,
-                     base_environment=None):
+                     base_environment=None, parameter_overrides=None,
+                     defines=()):
     """Return concrete ``(instance, module)`` cells from Verilator's V3Param AST."""
+    parameter_overrides = parameter_overrides or {}
     verilator = verilator or find_verilator(repo_root)
     if not verilator:
         raise ElaborationError(
@@ -430,6 +432,8 @@ def elaborated_cells(root, sources, repo_root, verilator=None,
             "--Mdir", mdir,
             "--prefix", "Vownership",
             "--top-module", root,
+        ] + ["-G%s=%s" % item for item in parameter_overrides.items()] + [
+            "-D%s" % define for define in defines
         ] + list(sources)
         result = subprocess.run(
             command, cwd=repo_root, env=env, capture_output=True, text=True,

@@ -19,6 +19,8 @@ PACKET_D_FULL_SOURCES = (
     "fpga/rtl/generated/zhao_abi_pkg.sv",
     "fpga/rtl/common/zhao_render_texture_pkg.sv",
     "fpga/rtl/common/zhao_skid2.sv",
+    "fpga/rtl/common/zhao_mul27_exact.sv",
+    "fpga/rtl/common/zhao_dual18_mul.sv",
     "fpga/rtl/field/zhao_field_rcp24_rom.sv",
     "fpga/rtl/raster/zhao_raster_ticketq.sv",
     "fpga/rtl/raster/zhao_raster_ticketq_rh.sv",
@@ -28,6 +30,7 @@ PACKET_D_FULL_SOURCES = (
     "fpga/rtl/texture/zhao_texture_mod255.sv",
     "fpga/rtl/texture/zhao_texture_aux_div6.sv",
     "fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv",
+    "fpga/rtl/texture/zhao_texture_bilerp_lane_dsp2.sv",
     "fpga/rtl/texture/zhao_texture_mosaic_v2.sv",
     "fpga/rtl/texture/zhao_texture_palette_res_v2.sv",
     "fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv",
@@ -50,6 +53,8 @@ PACKET_D_FULL_SOURCES = (
     "fpga/rtl/raster/zhao_raster_edgewalk.sv",
     "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv",
     "fpga/rtl/raster/zhao_raster_attrgrad_v2.sv",
+    "fpga/rtl/raster/zhao_attr_mul72x13_dsp3.sv",
+    "fpga/rtl/raster/zhao_raster_attrgrad_dsp3.sv",
     "fpga/rtl/raster/zhao_raster_earlyz.sv",
     "fpga/rtl/raster/zhao_raster_blend.sv",
     "fpga/rtl/raster/zhao_raster_blend_prod.sv",
@@ -91,9 +96,9 @@ PROTECTED_HASHES = {
     # Packet E legitimately refreshes the V3 source and generated interface while
     # retaining Packet D's public closure and every protected old/oracle byte.
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "427a3ed3e592358cd7c29f0ca8033f8665c9afbbea63a5a274941dad8d9dc25f",
+        "43b68fe6598268c5c22fcecd1744210b23a6a539bf3c19d7bf89a1668425ad95",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "8cb3095799c1cae4ea99f365dad6d4ceee5e41456e17b0945355253e90c02090",
+        "8c721b8fad987202db9a826a89e97110d5749ab5203910b3932603fa9093d73a",
     "fpga/rtl/raster/zhao_raster_attrdiv.sv":
         "5f5e9b0dbd3d1c23d4b0b55c84aaa06e873d0aee72be25bed2d64e7ff1424eca",
     "fpga/rtl/raster/zhao_raster_attrstep.sv":
@@ -105,7 +110,7 @@ PROTECTED_HASHES = {
     "fpga/rtl/geometry/zhao_geom_bin_pipe.sv":
         "70e139852dcd2dd0dca09b5b52a3fb8f50518e970de5eac500dd1b03d4853766",
     "fpga/rtl/prod/zhao_prod_top.sv":
-        "28116b822bf1e92844d8c10b08def329c63655cb55deed3d1db31456d7da7b51",
+        "96121488fabef50e9c4c3181d038b64ce4450c84c2b48713383f06aab192ff61",
 }
 
 
@@ -174,13 +179,17 @@ def validate_cmake(text: str) -> None:
     if active.count(packet_e_start) != 1:
         raise AssertionError("Packet-D CMake section lacks the unique Packet-E boundary")
     active = active[:active.index(packet_e_start)]
+    dsp_start = "set(ZHAO_ATTR3_SOURCE_MANIFEST"
+    d2_start = "set(ZHAO_PACKET_D_BINNER_SOURCE_MANIFEST"
+    if active.count(dsp_start) != 1 or active.count(d2_start) != 1:
+        raise AssertionError("Packet-D CMake slice lost the bounded DSPR insertion")
+    active = active[:active.index(dsp_start)] + active[active.index(d2_start):]
     required_once = (
         "raster/raster_attrgrad_v2.sources.txt)",
         "Packet-D attribute source manifest contains a blank record",
         "Packet-D attribute source manifest is not the exact ordered four-file closure",
         "SOURCES ${ZHAO_PACKET_D_ATTR_SOURCES}",
         "target_compile_definitions(${TARGET} PRIVATE ZHAO_ATTR_RADIX=${RADIX})",
-        "-GRADIX=${RADIX}",
         "zhao_packet_d_attr_target(pd_a2 2)",
         "zhao_packet_d_attr_target(pd_a4 4)",
         "zhao_packet_d_attr_target(pd_aneg 2 -DZHAO_ATTR_V2_MUTANT_NEG_HALF)",
@@ -202,7 +211,7 @@ def validate_cmake(text: str) -> None:
         "add_test(NAME geom_binner_v2_meta_addr_swap_mutant COMMAND pd_bim)",
         "geometry/geom_bin_pipe_v2.sources.txt)",
         "Packet-D full source manifest contains a blank record",
-        "Packet-D full source manifest must contain exactly 52 SV paths",
+        "Packet-D full source manifest must contain exactly 57 SV paths",
         "Packet-D full source manifest lost package/selector/stage/top order",
         "SOURCES ${ZHAO_PACKET_D_FULL_SOURCES}",
         "zhao_packet_d_full_target(pd_full)",
@@ -231,6 +240,8 @@ def validate_cmake(text: str) -> None:
     for marker in required_once:
         if active.count(marker) != 1:
             raise AssertionError("Packet-D CMake marker is not exact/unique: " + marker)
+    if active.count("-GRADIX=${RADIX}") != 1:
+        raise AssertionError("Packet-D RADIX elaboration marker differs")
     for prefix in ("ATTR", "BINNER", "FULL"):
         for marker in (
             f'file(READ "${{ZHAO_PACKET_D_{prefix}_SOURCE_MANIFEST}}"',
@@ -432,7 +443,9 @@ def active_sv_text(text: str, initial_defines: frozenset[str] = frozenset()) -> 
 
 def validate_d3_shape(tile: str, binpipe: str, mutant: str) -> None:
     tile_markers = (
-        "module zhao_raster_tile_pipe_v2 (",
+        "module zhao_raster_tile_pipe_v2 #(",
+        "parameter bit ATTR_DSP3 = 1'b0",
+        "parameter bit BILERP_DSP2 = 1'b0",
         "input  logic       [1156:0] job_meta_i",
         "output logic          [4:0] start_delivered_mask_o",
         "assign start_valid_w[0] = (rs_state_q == RS_START)",
@@ -442,6 +455,9 @@ def validate_d3_shape(tile: str, binpipe: str, mutant: str) -> None:
         ".job_valid_i(start_valid_w[ga+1])",
         "assign row_delivered_next_w = row_delivered_q | row_lane_fire_w;",
         "for (ga = 0; ga < 3; ga = ga + 1)",
+        "if (ATTR_DSP3) begin : g_dsp3",
+        "zhao_raster_attrgrad_dsp3 u_attrgrad",
+        "zhao_raster_attrgrad_v2 u_attrgrad",
         "logic attr_join_valid_q;",
         "assign attr_join_consume_w = attr_bundle_valid_w &&",
         "assign attr_join_room_w = !attr_bundle_valid_w || attr_join_consume_w;",
@@ -456,7 +472,9 @@ def validate_d3_shape(tile: str, binpipe: str, mutant: str) -> None:
         "zhao_raster_earlyz #(.PAYLOAD_W(410))",
         "zhao_skid2 #(.W(490))",
         ".rst_n(rst_n)",
-        "zhao_raster_texture_stage_v3 #(.MIGRATION_SHADOWS(1'b0))",
+        "zhao_raster_texture_stage_v3 #(",
+        ".MIGRATION_SHADOWS(1'b0)",
+        ".BILERP_DSP2(BILERP_DSP2)",
         "output logic                lifetime_structural_fault_o",
         ".lifetime_structural_fault_o(lifetime_structural_fault_o)",
         "`ZHAO_PACKET_D_SKID_DN_READY",
@@ -496,13 +514,17 @@ def validate_d3_shape(tile: str, binpipe: str, mutant: str) -> None:
         raise AssertionError("Packet-D tile restored ready-derived monolithic start")
     bin_markers = (
         "module zhao_geom_bin_pipe_v2 #(",
+        "parameter bit ATTR_DSP3           = 1'b0",
+        "parameter bit BILERP_DSP2         = 1'b0",
         "localparam int unsigned METAW = 1157;",
         "tri_v_over_w_plane_i,",
         "tri_u_over_w_plane_i,",
         "tri_invw_plane_i,",
         "tri_min_x_i,",
         "zhao_geom_binner_v2 #(",
-        "zhao_raster_tile_pipe_v2 u_tile",
+        "zhao_raster_tile_pipe_v2 #(",
+        ".ATTR_DSP3(ATTR_DSP3)",
+        ".BILERP_DSP2(BILERP_DSP2)",
         "output logic               binner_initialized_o",
         "output logic               lifetime_structural_fault_o",
         ".lifetime_structural_fault_o(lifetime_structural_fault_o)",

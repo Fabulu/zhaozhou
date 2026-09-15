@@ -132,6 +132,9 @@ Write-Host 'Launching one physical-top-port combined timing-recovery subsystem f
     -Module $Module `
     -QuartusBin $QuartusBin `
     -TimeoutSeconds $TimeoutSeconds `
+    -Processors 2 `
+    -TopParameters @('ATTR_DSP3=1', 'BILERP_DSP2=1') `
+    -VerilogMacros @('ZHAO_DUAL18_CYCLONEV=1') `
     -RowLabel $RowLabel `
     -Seed 1 `
     -PhysicalPins

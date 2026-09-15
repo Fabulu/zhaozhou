@@ -29,7 +29,10 @@
     ((aborting) ? 1'b1 : (stage_ready))
 `endif
 
-module zhao_raster_tile_pipe_v2 (
+module zhao_raster_tile_pipe_v2 #(
+    parameter bit ATTR_DSP3 = 1'b0,
+    parameter bit BILERP_DSP2 = 1'b0
+) (
     input  logic clk,
     input  logic rst_n,
 
@@ -355,38 +358,73 @@ module zhao_raster_tile_pipe_v2 (
   genvar ga;
   generate
     for (ga = 0; ga < 3; ga = ga + 1) begin : g_attr
-      zhao_raster_attrgrad_v2 u_attrgrad (
-          .clk(clk),
-          .rst_n(rst_n),
-          .job_valid_i(start_valid_w[ga+1]),
-          .job_ready_o(attr_job_ready_w[ga]),
-          .job_n0_i(plane_n0_q[ga]),
-          .job_dndx_i(plane_dndx_q[ga]),
-          .job_dndy_i(plane_dndy_q[ga]),
-          .job_area2_i(area2_q),
-          .job_min_x_i(min_x_q),
-          .job_tile_x_i(tile_x_q),
-          .job_tile_y_i(tile_y_q),
-          .cov_valid_i(row_hold_valid_q && !row_delivered_q[ga] &&
-                       attr_cov_gate_w[ga]),
-          .cov_ready_o(attr_cov_ready_w[ga]),
-          .cov_row_i(row_hold_row_q),
-          .cov_mask_i(row_hold_mask_q),
-          .cov_last_i(row_hold_last_q),
-          .q_valid_o(attr_q_valid_w[ga]),
-          .q_ready_i(attr_q_ready_w[ga]),
-          .q_o(attr_q_w[ga]),
-          .q_row_o(attr_row_w[ga]),
-          .q_col_o(attr_col_w[ga]),
-          .q_last_o(attr_last_w[ga]),
-          .q_saturated_o(attr_sat_w[ga]),
-          .q_error_o(attr_error_w[ga]),
-          .idle_o(attr_idle_w[ga]),
-          .pixels_o(attr_pixels_w[ga]),
-          .divides_o(attr_divides_w[ga]),
-          .saturations_o(attr_saturations_w[ga]),
-          .divide_errors_o(attr_divide_errors_w[ga])
-      );
+      if (ATTR_DSP3) begin : g_dsp3
+        zhao_raster_attrgrad_dsp3 u_attrgrad (
+            .clk(clk),
+            .rst_n(rst_n),
+            .job_valid_i(start_valid_w[ga+1]),
+            .job_ready_o(attr_job_ready_w[ga]),
+            .job_n0_i(plane_n0_q[ga]),
+            .job_dndx_i(plane_dndx_q[ga]),
+            .job_dndy_i(plane_dndy_q[ga]),
+            .job_area2_i(area2_q),
+            .job_min_x_i(min_x_q),
+            .job_tile_x_i(tile_x_q),
+            .job_tile_y_i(tile_y_q),
+            .cov_valid_i(row_hold_valid_q && !row_delivered_q[ga] &&
+                         attr_cov_gate_w[ga]),
+            .cov_ready_o(attr_cov_ready_w[ga]),
+            .cov_row_i(row_hold_row_q),
+            .cov_mask_i(row_hold_mask_q),
+            .cov_last_i(row_hold_last_q),
+            .q_valid_o(attr_q_valid_w[ga]),
+            .q_ready_i(attr_q_ready_w[ga]),
+            .q_o(attr_q_w[ga]),
+            .q_row_o(attr_row_w[ga]),
+            .q_col_o(attr_col_w[ga]),
+            .q_last_o(attr_last_w[ga]),
+            .q_saturated_o(attr_sat_w[ga]),
+            .q_error_o(attr_error_w[ga]),
+            .idle_o(attr_idle_w[ga]),
+            .pixels_o(attr_pixels_w[ga]),
+            .divides_o(attr_divides_w[ga]),
+            .saturations_o(attr_saturations_w[ga]),
+            .divide_errors_o(attr_divide_errors_w[ga])
+        );
+      end else begin : g_v2
+        zhao_raster_attrgrad_v2 u_attrgrad (
+            .clk(clk),
+            .rst_n(rst_n),
+            .job_valid_i(start_valid_w[ga+1]),
+            .job_ready_o(attr_job_ready_w[ga]),
+            .job_n0_i(plane_n0_q[ga]),
+            .job_dndx_i(plane_dndx_q[ga]),
+            .job_dndy_i(plane_dndy_q[ga]),
+            .job_area2_i(area2_q),
+            .job_min_x_i(min_x_q),
+            .job_tile_x_i(tile_x_q),
+            .job_tile_y_i(tile_y_q),
+            .cov_valid_i(row_hold_valid_q && !row_delivered_q[ga] &&
+                         attr_cov_gate_w[ga]),
+            .cov_ready_o(attr_cov_ready_w[ga]),
+            .cov_row_i(row_hold_row_q),
+            .cov_mask_i(row_hold_mask_q),
+            .cov_last_i(row_hold_last_q),
+            .q_valid_o(attr_q_valid_w[ga]),
+            .q_ready_i(attr_q_ready_w[ga]),
+            .q_o(attr_q_w[ga]),
+            .q_row_o(attr_row_w[ga]),
+            .q_col_o(attr_col_w[ga]),
+            .q_last_o(attr_last_w[ga]),
+            .q_saturated_o(attr_sat_w[ga]),
+            .q_error_o(attr_error_w[ga]),
+            .idle_o(attr_idle_w[ga]),
+            .pixels_o(attr_pixels_w[ga]),
+            .divides_o(attr_divides_w[ga]),
+            .saturations_o(attr_saturations_w[ga]),
+            .divide_errors_o(attr_divide_errors_w[ga])
+        );
+      end
       assign row_lane_fire_w[ga] = row_hold_valid_q &&
                                    !row_delivered_q[ga] &&
                                    attr_cov_gate_w[ga] &&
@@ -659,7 +697,10 @@ module zhao_raster_tile_pipe_v2 (
   logic [31:0] unused_err_palette_unusable, unused_err_class_mismatch;
   logic unused_err_plan_mode;
 
-  zhao_raster_texture_stage_v3 #(.MIGRATION_SHADOWS(1'b0)) u_texture_stage (
+  zhao_raster_texture_stage_v3 #(
+      .MIGRATION_SHADOWS(1'b0),
+      .BILERP_DSP2(BILERP_DSP2)
+  ) u_texture_stage (
       .clk(clk),
       .rst_n(rst_n),
       .cand_valid_i(stage_candidate_valid_o),
