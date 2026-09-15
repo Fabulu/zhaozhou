@@ -10318,3 +10318,131 @@ foreach(required_packet_g_test IN LISTS ZHAO_PACKET_G_REQUIRED_TESTS)
       "required Packet-G CTest is not registered: ${required_packet_g_test}")
   endif()
 endforeach()
+
+# ---------------------------------------------------------------------------
+# Packet H: independent ENGINE1 raw16 LAST
+# ---------------------------------------------------------------------------
+set(ZHAO_PACKET_H_RAW_LAST_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/memory/engine1_raw_last_v2.sources.txt)
+if(NOT EXISTS "${ZHAO_PACKET_H_RAW_LAST_MANIFEST}")
+  message(FATAL_ERROR "Packet-H raw-LAST source manifest is missing")
+endif()
+file(STRINGS "${ZHAO_PACKET_H_RAW_LAST_MANIFEST}"
+  ZHAO_PACKET_H_RAW_LAST_RELATIVE_SOURCES)
+if(NOT ZHAO_PACKET_H_RAW_LAST_RELATIVE_SOURCES STREQUAL
+   "tests/mutants/zhao_engine1_raw_last_v2_mutants.sv;fpga/rtl/memory/zhao_engine1_raw_last_v2.sv")
+  message(FATAL_ERROR
+    "Packet-H raw-LAST source manifest is not the exact two-file ordered closure")
+endif()
+set(ZHAO_PACKET_H_RAW_LAST_SOURCES)
+set(ZHAO_PACKET_H_RAW_LAST_SEEN)
+foreach(relative_source IN LISTS ZHAO_PACKET_H_RAW_LAST_RELATIVE_SOURCES)
+  if(IS_ABSOLUTE "${relative_source}" OR relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+    message(FATAL_ERROR "invalid Packet-H raw-LAST source: ${relative_source}")
+  endif()
+  list(FIND ZHAO_PACKET_H_RAW_LAST_SEEN "${relative_source}" duplicate_index)
+  if(NOT duplicate_index EQUAL -1)
+    message(FATAL_ERROR "duplicate Packet-H raw-LAST source: ${relative_source}")
+  endif()
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR "missing Packet-H raw-LAST source: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKET_H_RAW_LAST_SEEN "${relative_source}")
+  list(APPEND ZHAO_PACKET_H_RAW_LAST_SOURCES
+    "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+
+function(zhao_packet_h_raw_last_test TARGET NAME SV_SELECTOR CPP_SELECTOR DIAGNOSTIC)
+  add_executable(${TARGET} memory/engine1_raw_last_v2_directed.cpp)
+  target_link_libraries(${TARGET} PRIVATE zhao_harness)
+  if(NOT "${CPP_SELECTOR}" STREQUAL "")
+    target_compile_definitions(${TARGET} PRIVATE ${CPP_SELECTOR}=1)
+  endif()
+  set(selector_args)
+  if(NOT "${SV_SELECTOR}" STREQUAL "")
+    list(APPEND selector_args -D${SV_SELECTOR})
+  endif()
+  verilate(${TARGET}
+    PREFIX Vzhao_engine1_raw_last_v2
+    TOP_MODULE zhao_engine1_raw_last_v2
+    SOURCES ${ZHAO_PACKET_H_RAW_LAST_SOURCES}
+    VERILATOR_ARGS --assert ${selector_args})
+  add_test(NAME engine1_raw_last_v2_${NAME} COMMAND ${TARGET})
+  set_tests_properties(engine1_raw_last_v2_${NAME} PROPERTIES
+    LABELS "fast;nightly;packet-h" TIMEOUT 300
+    PASS_REGULAR_EXPRESSION "${DIAGNOSTIC}"
+    FAIL_REGULAR_EXPRESSION "FAIL:|checks failed")
+  if(NOT "${SV_SELECTOR}" STREQUAL "")
+    set_property(TEST engine1_raw_last_v2_${NAME}
+      APPEND PROPERTY LABELS "mutant")
+  endif()
+endfunction()
+
+zhao_packet_h_raw_last_test(ph_raw directed "" ""
+  "engine1_raw_last_v2: all checks passed")
+zhao_packet_h_raw_last_test(ph_raw_e early_last_control
+  ZHAO_ENGINE1_RAW_LAST_V2_MUTANT_EARLY_LAST
+  EXPECT_ENGINE1_RAW_LAST_V2_EARLY_LAST_MUTANT
+  "engine1_raw_last_v2: inverse EARLY_LAST control")
+zhao_packet_h_raw_last_test(ph_raw_m missing_last_control
+  ZHAO_ENGINE1_RAW_LAST_V2_MUTANT_MISSING_LAST
+  EXPECT_ENGINE1_RAW_LAST_V2_MISSING_LAST_MUTANT
+  "engine1_raw_last_v2: inverse MISSING_LAST control")
+zhao_packet_h_raw_last_test(ph_raw_l late_last_control
+  ZHAO_ENGINE1_RAW_LAST_V2_MUTANT_LATE_LAST
+  EXPECT_ENGINE1_RAW_LAST_V2_LATE_LAST_MUTANT
+  "engine1_raw_last_v2: inverse LATE_LAST control")
+zhao_packet_h_raw_last_test(ph_raw_s state_invalid_control
+  ZHAO_ENGINE1_RAW_LAST_V2_MUTANT_STATE_INVALID
+  EXPECT_ENGINE1_RAW_LAST_V2_STATE_INVALID_MUTANT
+  "engine1_raw_last_v2: inverse STATE_INVALID control")
+
+foreach(raw_last_collision IN ITEMS sv cpp)
+  add_test(NAME engine1_raw_last_v2_${raw_last_collision}_selector_collision
+    COMMAND "${Python3_EXECUTABLE}"
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_engine1_raw_last_v2_static.py
+      --collision ${raw_last_collision}
+      --verilator "${ZHAO_VERILATOR_LINT}"
+      --cxx "${CMAKE_CXX_COMPILER}")
+  set_tests_properties(engine1_raw_last_v2_${raw_last_collision}_selector_collision
+    PROPERTIES LABELS "fast;mutant;packet-h" TIMEOUT 180)
+endforeach()
+
+add_test(NAME engine1_raw_last_v2_registration_static
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_engine1_raw_last_v2_static.py -q)
+set_tests_properties(engine1_raw_last_v2_registration_static PROPERTIES
+  LABELS "fast;packet-h" TIMEOUT 180)
+
+add_test(NAME lint_zhao_engine1_raw_last_v2
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_engine1_raw_last_v2
+    ${ZHAO_PACKET_H_RAW_LAST_SOURCES})
+set_tests_properties(lint_zhao_engine1_raw_last_v2 PROPERTIES
+  LABELS "lint;fast;packet-h"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+set(ZHAO_PACKET_H_RAW_LAST_REQUIRED_TESTS
+  engine1_raw_last_v2_directed
+  engine1_raw_last_v2_early_last_control
+  engine1_raw_last_v2_missing_last_control
+  engine1_raw_last_v2_late_last_control
+  engine1_raw_last_v2_state_invalid_control
+  engine1_raw_last_v2_sv_selector_collision
+  engine1_raw_last_v2_cpp_selector_collision
+  engine1_raw_last_v2_registration_static
+  lint_zhao_engine1_raw_last_v2)
+list(LENGTH ZHAO_PACKET_H_RAW_LAST_REQUIRED_TESTS
+  ZHAO_PACKET_H_RAW_LAST_REQUIRED_TEST_COUNT)
+if(NOT ZHAO_PACKET_H_RAW_LAST_REQUIRED_TEST_COUNT EQUAL 9)
+  message(FATAL_ERROR
+    "Packet-H raw-LAST required CTest inventory must contain exactly 9 names")
+endif()
+foreach(required_raw_last_test IN LISTS ZHAO_PACKET_H_RAW_LAST_REQUIRED_TESTS)
+  if(NOT TEST "${required_raw_last_test}")
+    message(FATAL_ERROR
+      "required Packet-H raw-LAST CTest is not registered: ${required_raw_last_test}")
+  endif()
+endforeach()
