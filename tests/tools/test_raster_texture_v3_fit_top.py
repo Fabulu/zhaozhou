@@ -192,6 +192,13 @@ def synthetic_map_report(*, shadows: bool = False, texjoin: bool = False,
 
 class G8AFitTopTests(unittest.TestCase):
     def test_generated_manifest_and_all_source_hashes_are_exact(self) -> None:
+        generator.validate_lf_input(Path("good.sv"), b"module good;\nendmodule\n")
+        for bad in (b"module bad;\r\nendmodule\r\n", b"module bad;\rendmodule\n"):
+            with self.assertRaisesRegex(RuntimeError, "checkout-stable LF"):
+                generator.validate_lf_input(Path("bad.sv"), bad)
+        with self.assertRaisesRegex(RuntimeError, "not UTF-8"):
+            generator.validate_lf_input(Path("bad.sv"), b"\xff")
+
         payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
         self.assertEqual(
             set(payload),

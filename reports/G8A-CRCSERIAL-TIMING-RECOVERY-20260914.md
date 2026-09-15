@@ -183,6 +183,16 @@ before/after the fit, then opened under Windows read-sharing locks and rehashed
 under lock through Python import; a focused Luna re-review of that final mutation
 window returned CLEAN (with the route's explicit `unrecognized_model` warning).
 
+The first fresh-clone launch from `00bf552d` correctly stopped before Quartus:
+11 G8A sources had acquired `eol=lf` attributes after their existing working
+copies were already CRLF, so the generated manifest had hashed clean-filtered
+live bytes that did not match the committed LF blobs. The generator now requires
+strict UTF-8 with no CR byte for every generator/template/source input, with
+executed CRLF/bare-CR/invalid-UTF8 controls. The 11 local working copies were
+restored from their exact HEAD blobs, the wrapper/manifest were regenerated, and
+a future clone must reproduce `--check` before any Quartus process can launch.
+The failed `00bf552d` attempt contains no map, resource, or timing evidence.
+
 ## Acceptance before another fit
 
 - Packet-D attribute radix-2/radix-4, negative-half, saturation, zero-area,

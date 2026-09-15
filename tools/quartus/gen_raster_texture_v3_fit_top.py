@@ -72,6 +72,17 @@ def canonical_json(payload: object) -> bytes:
     return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def validate_lf_input(path: Path, raw: bytes) -> None:
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RuntimeError(f"G8A generator input is not UTF-8: {path}") from exc
+    if b"\r" in raw:
+        raise RuntimeError(
+            f"G8A generator input is not checkout-stable LF text: {path}"
+        )
+
+
 def read_inputs() -> dict[str, bytes]:
     paths = [Path(__file__).resolve(), TEMPLATE]
     paths.extend(REPO / path for path in SOURCE_CLOSURE[:-1])
@@ -79,7 +90,9 @@ def read_inputs() -> dict[str, bytes]:
     for path in paths:
         if not path.is_file():
             raise RuntimeError(f"required G8A generator input is missing: {path}")
-        snapshots[str(path)] = path.read_bytes()
+        raw = path.read_bytes()
+        validate_lf_input(path, raw)
+        snapshots[str(path)] = raw
     return snapshots
 
 

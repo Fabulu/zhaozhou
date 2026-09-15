@@ -1,6 +1,6 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_raster_texture_v3_fit_top.py
-// generator-sha256: a947b288aa067d896cddf8ea41dee262ed5fab973e72d1b6e388b659bb5eb11e
+// generator-sha256: 361ba599683cec037eeb952ebe899d72615510535559bdecc683b3598cd8b432
 // template-sha256: 089c83e538003b4d46997b126c15cda1959e08773772d3ba2775855715d9d1d6
 // manifest: fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json
 // Product witness: u_tile.u_texture_stage explicitly sets MIGRATION_SHADOWS=1'b0.
