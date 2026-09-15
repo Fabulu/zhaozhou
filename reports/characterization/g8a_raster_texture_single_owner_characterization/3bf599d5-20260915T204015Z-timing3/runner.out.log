@@ -1,0 +1,12 @@
+fresh: G8A wrapper/manifest match generator (48 sources)
+G8A timing-batch source commit: 3bf599d5b2a9f5af1c0d57bfb540122d9fdbb301
+Launching one physical-top-port combined timing-recovery subsystem fit.
+preflight: zhao_raster_texture_v3_fit_top closure from design/fit_targets.yml (48 file(s))
+snapshot: 48 source(s) copied into the workspace; the live tree cannot reach this fit
+provenance guard: 48 declared source(s)
+source digest: e322536216e7 over 48 file(s) -> zhao_raster_texture_v3_fit_top@g8a-timing3.sources.sha256
+    RULE  zhao_raster_texture_v3_fit_top@g8a-timing3: Fmax 90.96 MHz < required 100 MHz -- the resource gates can all pass while the clock does not; see this rule's note
+zhao_raster_texture_v3_fit_top@g8a-timing3 failed:structure   909.1s   ALM 13195
+WROTE C:\programmieren\zencrifice\zhaozhou-g8a-timing3-3bf599d5\reports\synthesis\zhao_block_fit.json (146 block(s); 1 measured this run)
+wrote reports\synthesis\zhao_g8a_raster_texture_timing3.json mode=write gate_pass=False
+G8A TIMING3 measured honestly but FAILED its gate; preserve and diagnose it.

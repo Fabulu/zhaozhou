@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "d87001c5be815305574a8e57d8913560482bda9c",
+    "newestRunCommit":  "3bf599d5b2a9f5af1c0d57bfb540122d9fdbb301",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1363,6 +1363,42 @@
                        "holdTnsNs":  0,
                        "ruleViolations":  [
                                               "Fmax 84.95 MHz \u003c required 100 MHz -- the resource gates can all pass while the clock does not; see this rule\u0027s note"
+                                          ]
+                   },
+                   {
+                       "module":  "zhao_raster_texture_v3_fit_top@g8a-timing3",
+                       "status":  "failed:structure",
+                       "sourceCommit":  "3bf599d5b2a9f5af1c0d57bfb540122d9fdbb301",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "physical-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "run_block_fit -Seed",
+                       "sourceDigest":  "e322536216e7731564dc8028ddf4f86b25850478a9e7d291e1a2b93677d6718f",
+                       "topParameters":  "ATTR_DSP3=1 BILERP_DSP2=1",
+                       "verilogMacros":  [
+                                             "ZHAO_DUAL18_CYCLONEV=1"
+                                         ],
+                       "variantOf":  "zhao_raster_texture_v3_fit_top",
+                       "seconds":  909.1,
+                       "sourcesHashed":  48,
+                       "alms":  13195,
+                       "registers":  22496,
+                       "blockMemoryBits":  92964,
+                       "ramBlocks":  71,
+                       "dspBlocks":  30,
+                       "virtualPins":  0,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  90.96,
+                       "fmaxClock":  "clk",
+                       "setupSlackNs":  -0.994,
+                       "setupTnsNs":  -131.275,
+                       "holdSlackNs":  0.242,
+                       "holdTnsNs":  0,
+                       "ruleViolations":  [
+                                              "Fmax 90.96 MHz \u003c required 100 MHz -- the resource gates can all pass while the clock does not; see this rule\u0027s note"
                                           ]
                    },
                    {

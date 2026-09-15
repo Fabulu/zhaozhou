@@ -185,6 +185,9 @@ reports/synthesis/zhao_g8a_raster_texture_crcserial.json binary
 reports/synthesis/zhao_g8a_raster_texture_timing1.json binary
 reports/synthesis/zhao_g8a_raster_texture_timing2.json binary
 reports/synthesis/zhao_g8a_raster_texture_timing3.json binary
+reports/synthesis/zhao_g8a_raster_texture_timing2_paths.json binary
+reports/synthesis/zhao_g8a_raster_texture_timing3_paths.json binary
+reports/G8A-TIMING3-DSP-PATH-REPORT-20260915.md text eol=lf
 reports/synthesis/zhao_shell_fit.json binary
 reports/timing/zhao_shell_fit.json binary
 # Shell-fit monitor is generated with LF and checked byte-for-byte in archives.

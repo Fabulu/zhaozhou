@@ -1,0 +1,63 @@
+{
+  "artifacts": {
+    "canonical_receipt": {
+      "path": "reports/synthesis/zhao_g8a_raster_texture_timing3.json",
+      "sha256": "6d5330569172391ef423e371c692a5dba9da5037c31560b2a215abf84dd6337e"
+    },
+    "fit.manifest.json": "c8a3398596d9c83886a16c1dbaaa3b6d343347c1962da9ff701ca0e802cd4db4",
+    "runner.err.log": "f3ed19cffb2944c744190165c9e9f2ca0180694b0b56dc49f7cace468a995ff9",
+    "runner.out.log": "51bc23cd6109ef0c40768c5c25c70aa7c9966a874ee62a81f675229db80a36d7"
+  },
+  "baseline_delta": {
+    "alms": 423,
+    "blockMemoryBits": 0,
+    "dspBlocks": -19,
+    "fmaxMhz": 6.01,
+    "holdSlackNs": -0.008,
+    "ramBlocks": 0,
+    "registers": 1143,
+    "setupSlackNs": 0.777,
+    "setupTnsNs": 2073.336
+  },
+  "diagnosis": {
+    "dsp_gate": "PASS: 30 physical DSP blocks, exactly three ATTR3 lanes / three workers / nine signed27 leaves plus four BIL2 lanes / four dual18 leaves; zero baseline attrgrad/bilerp engines",
+    "meaningful_resource_or_timing_measurement": true,
+    "next_action": "Preserve this complete red receipt; do not repeat unchanged. Build one Timing4 batch around the measured material D-to-O/source-bank boundary, reset-lifetime fanout isolation, combine product-to-writeback finish, and BIL2 vertical stage while preserving II=1 and the proven 30-DSP structure, then spend one later connected fit.",
+    "path_census": "The 2,000-path summary contains 497 negative and 1,503 nonnegative paths. Negative launch families are owner-mask lifetime 196, other core 94, owner control 50, combine product 37, tile control 30, UV-join lifetime 26, BIL2 25, early-descriptor RAM 18, ATTR3 12, sample-result-bank write-enable 7, and fragment expand 2.",
+    "remaining_internal_path": "Worst setup is core-to-core at -0.994 ns from sample-result bank 0's inferred-RAM write-enable register to material-combine O-stage operand o_a0[3], with 9.083 ns data delay and -1.731 ns clock skew. The next broad families are owner-mask lifetime to owner state (-0.848 ns, 10.188 ns data), UV lifetime to owner state (-0.844 ns), combine products to writeback rows (-0.843 ns), fragment expansion to AUX fault (-0.738 ns), and BIL2 vertical interpolation (-0.674 ns).",
+    "resource_gate": "LOCAL SUBSYSTEM PASS ONLY: 13,195 ALMs <= 29,999 and 30 DSP <= 84; 92,964 memory bits / 71 RAM blocks retained. This is not whole-machine ALM headroom and does not answer the owner's final 30,000-ALM / 85-DSP G8C target.",
+    "structure_gate": "PASS: exact 48-source hierarchy, physical pins, seed 1, vendor dual18, ATTR_DSP3=1, BILERP_DSP2=1, MIGRATION_SHADOWS=0, one V3 owner, zero TEXJOIN/old engines, no mapped shadow state, tilestore RAMs, and ordered-retirement RAM witnesses",
+    "timing_gate": "FAIL: 90.96 MHz < 100 MHz; setup WNS -0.994 ns and TNS -131.275 ns across 497 summarized negative paths; hold +0.242 ns / 0 TNS",
+    "timing_recovery": "Versus Timing2, Fmax improved 84.95 -> 90.96 MHz, WNS improved by 0.777 ns, TNS improved by 2,073.336 ns, and the summarized negative population fell from at least the full 2,000-row cap to 497. Timing debt is much smaller but not closed."
+  },
+  "row": {
+    "alms": 13195,
+    "blockMemoryBits": 92964,
+    "dspBlocks": 30,
+    "fitterSeed": 1,
+    "fmaxMhz": 90.96,
+    "holdSlackNs": 0.242,
+    "holdTnsNs": 0.0,
+    "ioMode": "physical-top-ports",
+    "module": "zhao_raster_texture_v3_fit_top@g8a-timing3",
+    "ramBlocks": 71,
+    "registers": 22496,
+    "rtlCleanAtHead": true,
+    "seconds": 909.1,
+    "setupSlackNs": -0.994,
+    "setupTnsNs": -131.275,
+    "sourceCommit": "3bf599d5b2a9f5af1c0d57bfb540122d9fdbb301",
+    "sourceDigest": "e322536216e7731564dc8028ddf4f86b25850478a9e7d291e1a2b93677d6718f",
+    "sourcesHashed": 48,
+    "status": "failed:structure",
+    "topParameters": "ATTR_DSP3=1 BILERP_DSP2=1",
+    "treeCleanAtHead": true,
+    "verilogMacros": [
+      "ZHAO_DUAL18_CYCLONEV=1"
+    ],
+    "virtualPins": 0
+  },
+  "schema_id": "zhao.g8a.completed_attempt",
+  "schema_version": 1,
+  "started_utc": "2026-09-15T20:40:15Z"
+}
