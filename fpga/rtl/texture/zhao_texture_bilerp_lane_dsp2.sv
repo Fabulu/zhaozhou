@@ -179,6 +179,9 @@ module zhao_texture_bilerp_lane_dsp2 #(
   end
 
 `ifndef SYNTHESIS
+  // Keep this live in Verilator while making the unsupported simulation-only
+  // $isunknown call invisible to Quartus leaf MapOnly runs.
+  // synthesis translate_off
   // The reachable signed9-by-nonnegative9 products fit signed18 exactly.
   always_comb begin
     if (b0_valid_q && !$isunknown({pu0_raw_c, pu1_raw_c})) begin
@@ -186,6 +189,7 @@ module zhao_texture_bilerp_lane_dsp2 #(
       a_pu1_fits_s18 : assert (pu1_raw_c[35:18] == {18{pu1_raw_c[17]}});
     end
   end
+  // synthesis translate_on
 `endif
 
 endmodule : zhao_texture_bilerp_lane_dsp2

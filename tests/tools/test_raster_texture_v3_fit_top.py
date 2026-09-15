@@ -144,6 +144,7 @@ def validate_runner(text: str) -> None:
         "'physical-top-ports'",
         "'virtual-top-ports'",
         "I/O mode is recorded per row.",
+        "$row.status = if ($MapOnly -and $ok) { 'map_only' } else { 'incomplete:' + $row.status }",
         "$sectionPattern = '(?m)^;\\s*Slow 1100mV [^;\\r\\n]+ Model '",
     ), "G8A block-fit runner")
 
@@ -369,6 +370,8 @@ class G8AFitTopTests(unittest.TestCase):
             validate_runner(runner.replace("if (-not $PhysicalPins) {", "if ($true) {", 1))
         with self.assertRaises(AssertionError):
             validate_runner(runner.replace("treeCleanAtHead = $treeClean;", "", 1))
+        with self.assertRaises(AssertionError):
+            validate_runner(runner.replace("$MapOnly -and $ok", "$MapOnly", 1))
 
     def test_receipt_parsers_fire_on_hierarchy_parameter_and_shadow_faults(self) -> None:
         self.assertEqual(receipt.REQUIRED_RAW_SUFFIXES, (

@@ -263,6 +263,8 @@ def validate_bil_structure() -> None:
     lane = BIL_LANE.read_text(encoding="utf-8")
     require_once(lane, (
         "(* preserve_hierarchy *)\nmodule zhao_texture_bilerp_lane_dsp2",
+        "// synthesis translate_off",
+        "if (b0_valid_q && !$isunknown({pu0_raw_c, pu1_raw_c})) begin",
         "logic signed [17:0] fu_18_c;",
         "fu_18_c  = $signed({10'b0, b0_fu_q});",
         "zhao_dual18_mul #(",

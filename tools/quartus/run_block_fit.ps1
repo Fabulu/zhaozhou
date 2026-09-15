@@ -1017,7 +1017,7 @@ try {
         # Analysis & Synthesis can produce.
         if (($MapOnly -or -not $ok) -and (Test-Path -LiteralPath $mapSummary)) {
             $mt = [IO.File]::ReadAllText($mapSummary)
-            $row.status = if ($MapOnly) { 'map_only' } else { 'incomplete:' + $row.status }
+            $row.status = if ($MapOnly -and $ok) { 'map_only' } else { 'incomplete:' + $row.status }
             $row.partial = $true
             $row.partialStage = 'analysis_and_synthesis'
             $row.registers = Get-Field $mt @('Total registers')
