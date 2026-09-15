@@ -193,6 +193,15 @@ restored from their exact HEAD blobs, the wrapper/manifest were regenerated, and
 a future clone must reproduce `--check` before any Quartus process can launch.
 The failed `00bf552d` attempt contains no map, resource, or timing evidence.
 
+A replacement clone at `0c65c43c` passed generator freshness, then stopped before
+Quartus when the static archive gate exposed the same historical checkout trap in
+seven attempt-1 raw artifacts. Their metadata correctly names the original CRLF
+bytes, but Git had normalized their blobs before the later directory-wide binary
+attribute was committed. The seven authoritative working-copy bytes match every
+existing `ATTEMPT.json` digest and are now restaged under the active binary rule,
+so future clones retain those exact bytes. No generated manifest, source, Quartus
+stage, resource, or timing claim came from either failed preflight.
+
 ## Acceptance before another fit
 
 - Packet-D attribute radix-2/radix-4, negative-half, saturation, zero-area,
