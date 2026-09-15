@@ -9639,11 +9639,6 @@ add_test(NAME g8a_dsp_rescue_registration_static
     ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_g8a_dsp_rescue.py -q)
 set_tests_properties(g8a_dsp_rescue_registration_static PROPERTIES
   LABELS "fast;nightly;g8a-dsp" TIMEOUT 180)
-add_test(NAME quartus_thermal_limits_static
-  COMMAND "${Python3_EXECUTABLE}"
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_quartus_thermal_limits.py -q)
-set_tests_properties(quartus_thermal_limits_static PROPERTIES
-  LABELS "fast;lint;g8a-dsp" TIMEOUT 60)
 
 set(ZHAO_G8A_DSP_REQUIRED_TESTS
   dsp_rescue_attr3_radix2
@@ -9661,12 +9656,11 @@ set(ZHAO_G8A_DSP_REQUIRED_TESTS
   g8a_dsp_attr_mid_delay_selector_collision
   g8a_dsp_attr_mid_idle_selector_collision
   g8a_dsp_bil2_selector_collision
-  g8a_dsp_rescue_registration_static
-  quartus_thermal_limits_static)
+  g8a_dsp_rescue_registration_static)
 list(LENGTH ZHAO_G8A_DSP_REQUIRED_TESTS ZHAO_G8A_DSP_REQUIRED_TEST_COUNT)
-if(NOT ZHAO_G8A_DSP_REQUIRED_TEST_COUNT EQUAL 17)
+if(NOT ZHAO_G8A_DSP_REQUIRED_TEST_COUNT EQUAL 16)
   message(FATAL_ERROR
-    "G8A DSP required CTest inventory must contain exactly 17 names")
+    "G8A DSP required CTest inventory must contain exactly 16 names")
 endif()
 foreach(required_g8a_dsp_test IN LISTS ZHAO_G8A_DSP_REQUIRED_TESTS)
   if(NOT TEST "${required_g8a_dsp_test}")

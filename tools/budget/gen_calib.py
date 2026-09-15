@@ -427,7 +427,7 @@ def emit_dual18_map_revisions(outdir):
             "set_global_assignment -name DEVICE %s" % DUAL18_DEVICE,
             "set_global_assignment -name TOP_LEVEL_ENTITY %s" % spec["top"],
             "set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files",
-            "set_global_assignment -name NUM_PARALLEL_PROCESSORS 2",
+            "set_global_assignment -name NUM_PARALLEL_PROCESSORS 4",
             "set_global_assignment -name SEED 1",
             'set_global_assignment -name OPTIMIZATION_MODE "BALANCED"',
         ]

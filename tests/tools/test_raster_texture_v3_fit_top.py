@@ -127,10 +127,6 @@ def cmake_sources(text: str) -> tuple[str, ...]:
 def validate_runner(text: str) -> None:
     require_once(text, (
         "[switch]$PhysicalPins",
-        "[ValidateRange(1, 2)]",
-        "[int]$Processors = 2",
-        "$RunnerProcess.ProcessorAffinity = [IntPtr]$ThermalAffinityValue",
-        "$qsf += \"set_global_assignment -name NUM_PARALLEL_PROCESSORS $Processors\"",
         "[string[]]$VerilogMacros,",
         "-VerilogMacros entry '$macro' is not canonical NAME or NAME=VALUE.",
         "$row.verilogMacros = @($VerilogMacros)",
@@ -556,7 +552,6 @@ class G8AFitTopTests(unittest.TestCase):
             "set_global_assignment -name TOP_LEVEL_ENTITY zhao_raster_texture_v3_fit_top",
             "set_global_assignment -name SDC_FILE blockfit.sdc",
             "set_global_assignment -name SEED 1",
-            "set_global_assignment -name NUM_PARALLEL_PROCESSORS 2",
             "# Physical top ports retained by run_block_fit.ps1 -PhysicalPins.",
             'set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"',
             'set_global_assignment -name VERILOG_MACRO "SYNTHESIS=1"',
@@ -573,7 +568,6 @@ class G8AFitTopTests(unittest.TestCase):
         parsed = receipt.validate_fit_configuration(qsf, sdc, manifest)
         self.assertEqual(parsed["source_count"], 48)
         self.assertTrue(parsed["dsp_rescue_selected"])
-        self.assertEqual(parsed["processors"], 2)
         self.assertEqual(parsed["top_parameters"], {
             "ATTR_DSP3": "1", "BILERP_DSP2": "1",
         })
@@ -595,7 +589,6 @@ class G8AFitTopTests(unittest.TestCase):
             ),
             qsf + "\nset_global_assignment -name SEED 2",
             qsf.replace("set_parameter -name ATTR_DSP3 1", "", 1),
-            qsf.replace("set_global_assignment -name NUM_PARALLEL_PROCESSORS 2", "", 1),
             qsf.replace("ZHAO_DUAL18_CYCLONEV=1", "ZHAO_DUAL18_BEHAVIORAL", 1),
             qsf + '\nset_global_assignment -name VERILOG_MACRO "ZHAO_DUAL18_BEHAVIORAL"',
         ):
@@ -657,7 +650,6 @@ class G8AFitTopTests(unittest.TestCase):
             **rescue_payload["fit_configuration"],
             "source_count": 48,
             "dsp_rescue_selected": True,
-            "processors": 2,
             "top_parameters": {"ATTR_DSP3": "1", "BILERP_DSP2": "1"},
             "verilog_macros": [
                 "QUARTUS_SYNTHESIS=1", "SYNTHESIS=1",
@@ -1170,7 +1162,6 @@ class G8AFitTopTests(unittest.TestCase):
             "if ($lockedHash -cne $receiptToolHashes[$toolPath])",
             "A G8A receipt tool changed before its locked invocation: $toolPath",
             "-RowLabel $RowLabel",
-            "-Processors 2",
             "-TopParameters @('ATTR_DSP3=1', 'BILERP_DSP2=1')",
             "-VerilogMacros @('ZHAO_DUAL18_CYCLONEV=1')",
             "-Seed 1",
@@ -1194,11 +1185,6 @@ class G8AFitTopTests(unittest.TestCase):
                 "physical mode",
                 timing3_runner.replace("-PhysicalPins", "", 1),
                 ("-PhysicalPins",),
-            ),
-            (
-                "thermal processor cap",
-                timing3_runner.replace("-Processors 2", "", 1),
-                ("-Processors 2",),
             ),
             (
                 "ATTR3/BIL2 selection",

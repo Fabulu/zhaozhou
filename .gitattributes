@@ -162,14 +162,7 @@ tests/geometry/geom_bin_pipe_v2.sources.txt text eol=lf
 tools/quartus/check_ownership_roles.py text eol=lf
 tools/quartus/check_prod_manifest.py text eol=lf
 tools/quartus/run_block_fit.ps1 text eol=lf
-tools/quartus/run_block_map.ps1 text eol=lf
-tools/quartus/run_calib.ps1 text eol=lf
-tools/quartus/run_shell_fit.ps1 text eol=lf
-tools/budget/gen_calib.py text eol=lf
-tools/budget/check_dual18_map.py text eol=lf
 tests/tools/test_texjoin_accounting.py text eol=lf
-tests/tools/test_quartus_thermal_limits.py text eol=lf
-tests/tools/test_shell_fit_preflight.py text eol=lf
 # Packet-H raw-LAST leaf and every selector/control artifact are exact text.
 fpga/rtl/memory/zhao_engine1_raw_last_v2.sv text eol=lf
 tests/memory/engine1_raw_last_v2.sources.txt text eol=lf

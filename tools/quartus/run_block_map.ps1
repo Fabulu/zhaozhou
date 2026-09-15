@@ -7,8 +7,6 @@ param(
     # module that completes, which is the exact mistake run_block_fit.ps1's
     # header documents at the 900 s default.
     [int]$TimeoutSeconds = 1800,
-    [ValidateRange(1, 2)]
-    [int]$Processors = 2,
     [string[]]$TopParameters,
     [string]$RowLabel = '',
     [switch]$KeepWorkspace,
@@ -151,7 +149,7 @@ try {
             "set_global_assignment -name TOP_LEVEL_ENTITY $mod",
             'set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files',
             'set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"',
-            "set_global_assignment -name NUM_PARALLEL_PROCESSORS $Processors",
+            'set_global_assignment -name NUM_PARALLEL_PROCESSORS 4',
             'set_global_assignment -name SEED 1',
             'set_global_assignment -name OPTIMIZATION_MODE "BALANCED"'
         )

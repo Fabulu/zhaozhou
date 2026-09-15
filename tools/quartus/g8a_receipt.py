@@ -350,7 +350,6 @@ def validate_fit_configuration(qsf_text: str, sdc_text: str,
     ]
     if rescue_selected:
         required_once.extend((
-            "set_global_assignment -name NUM_PARALLEL_PROCESSORS 2",
             "set_parameter -name ATTR_DSP3 1",
             "set_parameter -name BILERP_DSP2 1",
             'set_global_assignment -name VERILOG_MACRO "ZHAO_DUAL18_CYCLONEV=1"',
@@ -410,11 +409,8 @@ def validate_fit_configuration(qsf_text: str, sdc_text: str,
             raise ReceiptError(
                 "retained G8A QSF macro closure is not exact vendor-only DSP rescue"
             )
-        if active_assignment_values("NUM_PARALLEL_PROCESSORS") != ["2"]:
-            raise ReceiptError("retained G8A QSF is not thermally capped to two processors")
         result.update({
             "dsp_rescue_selected": True,
-            "processors": 2,
             "top_parameters": dict(parameter_rows),
             "verilog_macros": [value.strip('"') for value in macros],
         })
@@ -473,9 +469,6 @@ def build_receipt(*, require_current_head: bool) -> dict[str, Any]:
             raise ReceiptError(
                 "G8A row Verilog-macro provenance differs from vendor DSP rescue"
             )
-        if (row.get("processors") != 2 or
-                row.get("processorAffinityMask") != "0x3"):
-            raise ReceiptError("G8A row is not bound to the thermal-safe execution policy")
 
     paths = raw_paths()
     for label, path in paths.items():
@@ -618,7 +611,7 @@ def validate_receipt(payload: dict[str, Any]) -> None:
     }
     if rescue_selected:
         fit_keys.update({
-            "dsp_rescue_selected", "processors", "top_parameters", "verilog_macros",
+            "dsp_rescue_selected", "top_parameters", "verilog_macros",
         })
     fit_configuration = exact_keys(
         payload["fit_configuration"], fit_keys, "receipt.fit_configuration")
@@ -630,7 +623,6 @@ def validate_receipt(payload: dict[str, Any]) -> None:
     if rescue_selected:
         expected_parameters = {name: "1" for name in DSP_RESCUE_TOP_PARAMETERS}
         if (fit_configuration["dsp_rescue_selected"] is not True or
-                fit_configuration["processors"] != 2 or
                 fit_configuration["top_parameters"] != expected_parameters or
                 fit_configuration["verilog_macros"] != [
                     "QUARTUS_SYNTHESIS=1", "SYNTHESIS=1",

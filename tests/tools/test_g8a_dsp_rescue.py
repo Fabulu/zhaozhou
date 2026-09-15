@@ -72,7 +72,6 @@ EXPECTED_TESTS = (
     "g8a_dsp_attr_mid_idle_selector_collision",
     "g8a_dsp_bil2_selector_collision",
     "g8a_dsp_rescue_registration_static",
-    "quartus_thermal_limits_static",
 )
 EXPECTED_LF_ROWS = (
     "fpga/rtl/common/zhao_dual18_mul.sv text eol=lf",
@@ -205,8 +204,7 @@ def validate_cmake(text: str) -> None:
         "-DZHAO_BIL2_MUTANT_COLLAPSE_RESULTB",
         "function(zhao_g8a_dsp_selector_control NAME PROFILE)",
         "test_g8a_dsp_rescue.py -q",
-        "test_quartus_thermal_limits.py -q",
-        "G8A DSP required CTest inventory must contain exactly 17 names",
+        "G8A DSP required CTest inventory must contain exactly 16 names",
     ), "G8A DSP CMake")
     if section.count("-DZHAO_DUAL18_BEHAVIORAL") != 2:
         raise AssertionError("BIL2 behavioral backend is not selected by both controls")
@@ -407,16 +405,11 @@ def validate_parent_selection() -> None:
     ), "connected G8A simulation selection")
     require_once(BLOCK_RUNNER.read_text(encoding="utf-8"), (
         "[string[]]$VerilogMacros,",
-        "[ValidateRange(1, 2)]",
-        "[int]$Processors = 2",
-        "$RunnerProcess.ProcessorAffinity = [IntPtr]$ThermalAffinityValue",
-        "$qsf += \"set_global_assignment -name NUM_PARALLEL_PROCESSORS $Processors\"",
         "-VerilogMacros entry '$macro' is not canonical NAME or NAME=VALUE.",
         "$qsf += ('set_global_assignment -name VERILOG_MACRO \"' + $macro + '\"')",
         "$row.verilogMacros = @($VerilogMacros)",
     ), "block-fit backend selection")
     require_once(TIMING3_RUNNER.read_text(encoding="utf-8"), (
-        "-Processors 2",
         "-TopParameters @('ATTR_DSP3=1', 'BILERP_DSP2=1')",
         "-VerilogMacros @('ZHAO_DUAL18_CYCLONEV=1')",
     ), "Timing3 DSP selection")

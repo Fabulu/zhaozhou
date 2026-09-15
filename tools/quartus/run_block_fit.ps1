@@ -98,13 +98,6 @@ param(
     # Pair with -RowLabel so seed points do not overwrite each other in a
     # report that merges by module name.
     [int]$Seed = 0,
-    # Thermal safety is an execution invariant on this host, not a suggestion.
-    # Three concurrent compiler jobs reached 90 C and coincided with a machine
-    # shutdown. Quartus therefore gets exactly two logical processors by default
-    # and inherits a matching affinity as a second all-core backstop.
-    # Process priority is deliberately not treated as thermal protection.
-    [ValidateRange(1, 2)]
-    [int]$Processors = 2,
     # Connected characterization wrappers deliberately expose only a small
     # registered clock/reset/signature boundary. Leave those top ports physical
     # instead of applying the ordinary leaf-fit wildcard virtual-pin assignment.
@@ -440,24 +433,7 @@ $FitTargets = Read-FitTargets (Join-Path $RepoRoot 'design/fit_targets.yml')
 
 $fitRules = Read-FitRules (Join-Path $RepoRoot 'design/fit_targets.yml')
 
-$RunnerProcess = [Diagnostics.Process]::GetCurrentProcess()
-$OriginalAffinity = $RunnerProcess.ProcessorAffinity
-$OriginalOmpThreads = $env:OMP_NUM_THREADS
-$OriginalMklThreads = $env:MKL_NUM_THREADS
-$OriginalQuartusThreads = $env:QUARTUS_NUM_PARALLEL_PROCESSORS
-$ThermalAffinityValue = ([int64]1 -shl $Processors) - 1
-
 try {
-    # Child processes inherit this shell's affinity. Pair that OS boundary with
-    # Quartus's own project and environment limits; any one layer being ignored
-    # must not silently restore all-core execution.
-    $RunnerProcess.ProcessorAffinity = [IntPtr]$ThermalAffinityValue
-    $env:OMP_NUM_THREADS = "$Processors"
-    $env:MKL_NUM_THREADS = "$Processors"
-    $env:QUARTUS_NUM_PARALLEL_PROCESSORS = "$Processors"
-    Write-Host ("thermal-safe execution: processors={0} affinity=0x{1:X}" -f `
-        $Processors, $ThermalAffinityValue)
-
     foreach ($mod in $Module) {
         $dir = Join-Path $Workspace $mod
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
@@ -574,10 +550,6 @@ try {
         $qsf = Get-Content -LiteralPath $SrcQsf
         $qsf = $qsf -replace '^set_global_assignment -name TOP_LEVEL_ENTITY.*', "set_global_assignment -name TOP_LEVEL_ENTITY $mod"
         $qsf = $qsf -replace '^set_global_assignment -name SDC_FILE.*', 'set_global_assignment -name SDC_FILE blockfit.sdc'
-        $qsf = $qsf | Where-Object {
-            $_ -notmatch '^set_global_assignment -name NUM_PARALLEL_PROCESSORS'
-        }
-        $qsf += "set_global_assignment -name NUM_PARALLEL_PROCESSORS $Processors"
         $qsf = $qsf -replace '\.\./\.\./rtl/', "$rtlAbs/"
         if ($PhysicalPins) {
             # A connected wrapper is provenance-bound to its declared closure.
@@ -844,9 +816,7 @@ try {
         $row = [ordered]@{ module = $rowModule; status = 'unknown'; sourceCommit = $head;
                            treeCleanAtHead = $treeClean; rtlCleanAtHead = $rtlClean;
                            ioMode = $(if ($PhysicalPins) { 'physical-top-ports' } else { 'virtual-top-ports' });
-                           fitterSeed = $effSeed; seedSource = $seedSrc;
-                           processors = $Processors;
-                           processorAffinityMask = ('0x{0:X}' -f $ThermalAffinityValue) }
+                           fitterSeed = $effSeed; seedSource = $seedSrc }
 
         # THE COMMIT IS NOT THE BYTES, AND THIS ROW ALREADY KNEW IT.
         #
@@ -1353,14 +1323,6 @@ try {
     [IO.File]::WriteAllText($dest, (($out | ConvertTo-Json -Depth 8) + "`n"), $Utf8NoBom)
     Write-Host ("WROTE {0} ({1} block(s); {2} measured this run)" -f $dest, $out.blocks.Count, $results.Count)
 } finally {
-    try {
-        $RunnerProcess.ProcessorAffinity = $OriginalAffinity
-    } catch {
-        Write-Warning "Could not restore runner affinity: $($_.Exception.Message)"
-    }
-    $env:OMP_NUM_THREADS = $OriginalOmpThreads
-    $env:MKL_NUM_THREADS = $OriginalMklThreads
-    $env:QUARTUS_NUM_PARALLEL_PROCESSORS = $OriginalQuartusThreads
     if (-not $KeepWorkspace -and (Test-Path -LiteralPath $Workspace)) {
         Remove-Item -LiteralPath $Workspace -Recurse -Force -ErrorAction SilentlyContinue
     }

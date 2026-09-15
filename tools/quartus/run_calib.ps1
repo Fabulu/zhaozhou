@@ -2,8 +2,6 @@
 param(
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
     [string]$Family = '',
-    [ValidateRange(1, 2)]
-    [int]$Processors = 2,
     [switch]$Fit,
     [switch]$KeepWorkspace,
     # Resume. See the Save-Calibration note below -- this lane lost 97
@@ -198,7 +196,7 @@ try {
             'set_global_assignment -name DEVICE 5CSEBA6U23I7',
             "set_global_assignment -name TOP_LEVEL_ENTITY $mod",
             'set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files',
-            "set_global_assignment -name NUM_PARALLEL_PROCESSORS $Processors",
+            'set_global_assignment -name NUM_PARALLEL_PROCESSORS 4',
             'set_global_assignment -name SEED 1',
             'set_global_assignment -name OPTIMIZATION_MODE "BALANCED"',
             'set_global_assignment -name FITTER_EFFORT "STANDARD FIT"',

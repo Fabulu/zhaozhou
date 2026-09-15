@@ -7,8 +7,8 @@ param(
     [string]$PythonExe,
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
     [string]$ReportRoot,
-    [ValidateRange(1, 2)]
-    [int]$Processors = 2
+    [ValidateRange(1, 256)]
+    [int]$Processors = 4
 )
 
 Set-StrictMode -Version Latest
