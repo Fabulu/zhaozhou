@@ -145,9 +145,17 @@ The first four low-coupling cuts are now implemented in the working batch:
   a final logic-only Luna review returned CLEAN with its explicit
   `unrecognized_model` route warning.
 
-The high-coupling V3 owner path remains under one focused Qwen xhigh review. No
-fit is authorized until that result is reconciled with the implemented minimal
-cut, the tree is committed/pushed, and every pre-fit authority remains green.
+The focused local Qwen xhigh review completed on actual profile
+`qwen38-quasar-dflash2-k8v4-112k` with no repository changes. It independently
+selected exactly the two implemented owner cuts: pending-only validation ready
+while retaining the downstream generation witness, and the Boolean reservation
+law. It rejected a per-ticket permission cache as stale-sample risk and deferred
+elastic retirement heads because their ALM direction is unproved and their
+identity coupling is high. It also confirmed `zhao_texture_v3rq` and the
+`oq_ctx` retirement RAM should remain unchanged for this fit. Its additional
+owner/queue/legacy checklist passes 13/13; obsolete pre-Packet-B
+`island_v3_fault_directed.cpp` remains intentionally unregistered and is not
+misrepresented as current execution evidence.
 
 ## Current pre-fit regression
 
@@ -155,7 +163,9 @@ A fresh short-path native build compiled every timing-affected executable from
 current sources. It passes the complete Packet-B boundary **74/74**, combined
 Packet-C/D/E/F boundary **47/47** (4/4, 13/13, 26/26, 4/4), focused timing/V3
 matrix **42/42**, interface oracle **113/113**, production accounting **51/51**,
-and unaffected Packet G **22/22**. The first focused run's sole `Not Run` was a
+and unaffected Packet G **22/22**. The Qwen-requested owner/queue/legacy
+compatibility selection is separately **13/13**. The first focused run's sole
+`Not Run` was a
 missing clean-build DIV6 executable; it was built and the entire 42-test selection
 was rerun green rather than promoting the partial run.
 
