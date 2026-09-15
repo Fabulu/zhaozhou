@@ -1,8 +1,8 @@
 module zhao_raster_texture_v3_fit_top (
     input  logic       clk,
     input  logic       rst_n,
-    output logic [7:0] fit_signature_o,
-    output logic [7:0] fit_epoch_o
+    (* useioff = 1 *) output logic [7:0] fit_signature_o,
+    (* useioff = 1 *) output logic [7:0] fit_epoch_o
 );
 
   localparam logic [3:0] S_PAL_BEGIN = 4'd0;
@@ -423,6 +423,7 @@ module zhao_raster_texture_v3_fit_top (
       .frame_fault_clear_valid_i(frame_fault_clear_valid_w),
       .frame_fault_clear_ready_o(frame_fault_clear_ready_w),
       .frame_fault_o(frame_fault_w),
+      .lifetime_structural_fault_o(),
       .cfg_valid_i(cfg_valid_w), .cfg_ready_o(cfg_ready_w),
       .cfg_op_i(cfg_op_w), .cfg_page_generation_i(cfg_generation_w),
       .cfg_selector_i(cfg_selector_w), .cfg_row_i(cfg_row_w),

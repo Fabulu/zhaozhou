@@ -1,7 +1,7 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_raster_texture_v3_fit_top.py
 // generator-sha256: 361ba599683cec037eeb952ebe899d72615510535559bdecc683b3598cd8b432
-// template-sha256: 4f5b09e996bf6a204ca6a0a6696e076559d395a4289be9bc2119574c0cc341cf
+// template-sha256: 7c40798cb7d149508d3e2655db99d2f1c967c30bc8da7506fd94c1165df5491d
 // manifest: fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json
 // Product witness: u_tile.u_texture_stage explicitly sets MIGRATION_SHADOWS=1'b0.
 // Characterization traffic is legal and deterministic; this is not a shell or board top.
@@ -9,8 +9,8 @@
 module zhao_raster_texture_v3_fit_top (
     input  logic       clk,
     input  logic       rst_n,
-    output logic [7:0] fit_signature_o,
-    output logic [7:0] fit_epoch_o
+    (* useioff = 1 *) output logic [7:0] fit_signature_o,
+    (* useioff = 1 *) output logic [7:0] fit_epoch_o
 );
 
   localparam logic [3:0] S_PAL_BEGIN = 4'd0;
@@ -431,6 +431,7 @@ module zhao_raster_texture_v3_fit_top (
       .frame_fault_clear_valid_i(frame_fault_clear_valid_w),
       .frame_fault_clear_ready_o(frame_fault_clear_ready_w),
       .frame_fault_o(frame_fault_w),
+      .lifetime_structural_fault_o(),
       .cfg_valid_i(cfg_valid_w), .cfg_ready_o(cfg_ready_w),
       .cfg_op_i(cfg_op_w), .cfg_page_generation_i(cfg_generation_w),
       .cfg_selector_i(cfg_selector_w), .cfg_row_i(cfg_row_w),

@@ -63,10 +63,10 @@ PACKET_C_SOURCES = (
 # Packet E legitimately changes the V3 implementation while preserving its public
 # schema; these hashes pin that refreshed authority. Shell/accounting bytes remain
 # the protected Packet-C values.
-INTERFACE_SHA256 = "07d7067153bbc7cd8514818a1487703bdec07109fa2b8932164e1f0ce9f1a057"
-PACKET_B_TOP_SHA256 = "01a60a6be13b1878c5ac43dcd0c0da043636f11c85a04feb05297382dae6a33e"
+INTERFACE_SHA256 = "427a3ed3e592358cd7c29f0ca8033f8665c9afbbea63a5a274941dad8d9dc25f"
+PACKET_B_TOP_SHA256 = "8cb3095799c1cae4ea99f365dad6d4ceee5e41456e17b0945355253e90c02090"
 PROTECTED_SHELL_SHA256 = "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
-PROD_TOP_SHA256 = "d3cf61c302f73c1d656ae481ae40b775ddadccec50efe778d6071ea2238ede54"
+PROD_TOP_SHA256 = "28116b822bf1e92844d8c10b08def329c63655cb55deed3d1db31456d7da7b51"
 
 
 def sha256(path: Path) -> str:
@@ -114,6 +114,13 @@ def validate_stage_shape(text: str) -> None:
         "import zhao_render_texture_pkg::*;",
         "unpack_raster_pretex",
         "input  logic [489:0] cand_data_i",
+        "output logic         lifetime_structural_fault_o",
+        "logic         retire_head_v_q;",
+        "assign retire_head_reload_credit_w = sequence_abort_q || frag_ready_i;",
+        "assign v3_out_ready_w = !retire_head_v_q || retire_head_reload_credit_w;",
+        "assign quiet_o = v3_quiet_w && !retire_head_v_q;",
+        ".lifetime_structural_fault_o(lifetime_structural_fault_o)",
+        "retire_head_ctx_q       <= v3_out_retire_ctx_w;",
     )
     for marker in required:
         if marker not in text:
@@ -299,6 +306,18 @@ class PacketCClosureTests(unittest.TestCase):
                     validate_stage_shape(text.replace(marker, "", 1))
         with self.assertRaises(AssertionError):
             validate_stage_shape(text + "\n  zhao_texture_island_v3_top #(\n")
+        with self.assertRaisesRegex(AssertionError, "lost required shape"):
+            validate_stage_shape(text.replace(
+                "assign retire_head_reload_credit_w = sequence_abort_q || frag_ready_i;",
+                "assign retire_head_reload_credit_w = sequence_mismatch_w || frag_ready_i;",
+                1,
+            ))
+        with self.assertRaisesRegex(AssertionError, "lost required shape"):
+            validate_stage_shape(text.replace(
+                "assign quiet_o = v3_quiet_w && !retire_head_v_q;",
+                "assign quiet_o = v3_quiet_w;",
+                1,
+            ))
 
     def test_current_v3_artifacts_and_protected_shell_bytes_are_pinned(self) -> None:
         interface = REPO / "fpga" / "rtl" / "generated" / "zhao_texture_island_v3_top.interface.json"

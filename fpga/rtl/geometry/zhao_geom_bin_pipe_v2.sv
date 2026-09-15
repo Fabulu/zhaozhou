@@ -69,6 +69,7 @@ module zhao_geom_bin_pipe_v2 #(
     input  logic               frame_fault_clear_valid_i,
     output logic               frame_fault_clear_ready_o,
     output logic               frame_fault_o,
+    output logic               lifetime_structural_fault_o,
 
     // Packet-B binding-page loader.
     input  logic               cfg_valid_i,
@@ -323,6 +324,7 @@ module zhao_geom_bin_pipe_v2 #(
       .frame_fault_clear_valid_i(tile_clear_valid_w),
       .frame_fault_clear_ready_o(tile_clear_ready_w),
       .frame_fault_o(tile_frame_fault_w),
+      .lifetime_structural_fault_o(lifetime_structural_fault_o),
       .cfg_valid_i(cfg_valid_i), .cfg_ready_o(cfg_ready_o),
       .cfg_op_i(cfg_op_i), .cfg_page_generation_i(cfg_page_generation_i),
       .cfg_selector_i(cfg_selector_i), .cfg_row_i(cfg_row_i),

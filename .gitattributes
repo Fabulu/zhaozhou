@@ -113,6 +113,11 @@ tests/tools/test_render_texture_packet_g.py text eol=lf
 tests/mutants/zhao_texture_aux_pipe_v2*.sv text eol=lf
 tests/mutants/zhao_texture_v3own*.sv text eol=lf
 tests/texture/texture_v3own_bubble_control.cpp text eol=lf
+fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv text eol=lf
+fpga/rtl/prod/zhao_prod_top.sv text eol=lf
+tests/geometry/tb_geom_bin_pipe_v2.sv text eol=lf
+tests/raster/tb_raster_texture_stage_v3.sv text eol=lf
+tests/texture/texture_island_v3_packet_b_fullctx.cpp text eol=lf
 tests/texture/texture_aux_pipe_v2_directed.cpp text eol=lf
 tests/mutants/zhao_texture_material_combine_v3_mutants.sv text eol=lf
 tests/mutants/zhao_raster_rcp24_v4_timing_mutants.sv text eol=lf
@@ -131,6 +136,8 @@ tools/quartus/g8a_timing1_receipt.py text eol=lf
 tools/quartus/run_g8a_timing1_fit.ps1 text eol=lf
 tools/quartus/g8a_timing2_receipt.py text eol=lf
 tools/quartus/run_g8a_timing2_fit.ps1 text eol=lf
+tools/quartus/g8a_timing3_receipt.py text eol=lf
+tools/quartus/run_g8a_timing3_fit.ps1 text eol=lf
 reports/G8A-CRCSERIAL-TIMING-RECOVERY-20260914.md text eol=lf
 # Packet-H raw-LAST leaf and every selector/control artifact are exact text.
 fpga/rtl/memory/zhao_engine1_raw_last_v2.sv text eol=lf
@@ -146,10 +153,12 @@ reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.* binary
 reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-crcserial.* binary
 reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing1.* binary
 reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing2.* binary
+reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing3.* binary
 reports/synthesis/zhao_g8a_raster_texture.json binary
 reports/synthesis/zhao_g8a_raster_texture_crcserial.json binary
 reports/synthesis/zhao_g8a_raster_texture_timing1.json binary
 reports/synthesis/zhao_g8a_raster_texture_timing2.json binary
+reports/synthesis/zhao_g8a_raster_texture_timing3.json binary
 reports/synthesis/zhao_shell_fit.json binary
 reports/timing/zhao_shell_fit.json binary
 # Shell-fit monitor is generated with LF and checked byte-for-byte in archives.

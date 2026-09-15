@@ -57,6 +57,7 @@ module zhao_raster_tile_pipe_v2 (
     input  logic                frame_fault_clear_valid_i,
     output logic                frame_fault_clear_ready_o,
     output logic                frame_fault_o,
+    output logic                lifetime_structural_fault_o,
 
     // Packet-B sealed binding loader.
     input  logic                cfg_valid_i,
@@ -422,23 +423,84 @@ module zhao_raster_tile_pipe_v2 (
   );
 
   // -------------------------------------------------------------------------
-  // Joined typed pretexture candidate into Early-Z.
+  // One elastic registered join between the three ATTR lanes and Early-Z.
+  // Timing2 measured the unregistered lane-1 col -> fault/cancel -> V3-admit
+  // path at 11.086 ns.  The head below captures the complete atomic lane bundle,
+  // so both fault classification and Early-Z start from registers.
+  //
+  // All equations use pre-edge state.  A held head is consumed by either the
+  // abort/drop sink or an accepting Early-Z; that same edge may refill it:
+  //
+  //   consume = head_valid && (abort || head_fault || earlyz_ready)
+  //   room    = !head_valid || consume
+  //   capture = all_source_valid && room
+  //   valid'  = capture || (head_valid && !consume)
+  //
+  // Thus stalls hold every bit, malformed bundles never enter Early-Z, and the
+  // steady state consumes and captures one complete bundle per clock.
+  logic attr_source_valid_w;
   logic attr_bundle_valid_w;
+  logic attr_join_valid_q;
   logic attr_coordinate_bad_w, attr_range_bad_w, attr_bundle_fault_w;
+  logic attr_join_room_w, attr_join_capture_w, attr_join_consume_w;
+  logic earlyz_frag_valid_w, earlyz_frag_ready_w;
+  logic signed [31:0] attr_join_q_q [0:2];
+  logic [3:0] attr_join_row_q [0:2];
+  logic [3:0] attr_join_col_q [0:2];
+  logic [2:0] attr_join_last_q;
+  logic [2:0] attr_join_sat_q, attr_join_error_q;
   logic [3:0] lane1_col_checked_w;
-  assign lane1_col_checked_w = `ZHAO_PACKET_D_LANE1_COL(attr_col_w[1]);
-  assign attr_bundle_valid_w = &attr_q_valid_w;
+
+  assign attr_source_valid_w = &attr_q_valid_w;
+  assign attr_bundle_valid_w = attr_join_valid_q;
+  assign lane1_col_checked_w =
+      `ZHAO_PACKET_D_LANE1_COL(attr_join_col_q[1]);
   assign attr_coordinate_bad_w =
-      (attr_row_w[0] != attr_row_w[1]) ||
-      (attr_row_w[0] != attr_row_w[2]) ||
-      (attr_col_w[0] != lane1_col_checked_w) ||
-      (attr_col_w[0] != attr_col_w[2]) ||
-      (attr_last_w[0] != attr_last_w[1]) ||
-      (attr_last_w[0] != attr_last_w[2]);
-  assign attr_range_bad_w = (|attr_error_w) || attr_q_w[0][31] ||
-                            (attr_q_w[0][31:24] != 8'd0);
+      (attr_join_row_q[0] != attr_join_row_q[1]) ||
+      (attr_join_row_q[0] != attr_join_row_q[2]) ||
+      (attr_join_col_q[0] != lane1_col_checked_w) ||
+      (attr_join_col_q[0] != attr_join_col_q[2]) ||
+      (attr_join_last_q[0] != attr_join_last_q[1]) ||
+      (attr_join_last_q[0] != attr_join_last_q[2]);
+  assign attr_range_bad_w = (|attr_join_error_q) || attr_join_q_q[0][31] ||
+                            (attr_join_q_q[0][31:24] != 8'd0);
   assign attr_bundle_fault_w = attr_bundle_valid_w &&
                                (attr_coordinate_bad_w || attr_range_bad_w);
+  assign attr_join_consume_w = attr_bundle_valid_w &&
+      (abort_now_w || attr_bundle_fault_w || earlyz_frag_ready_w);
+  assign attr_join_room_w = !attr_bundle_valid_w || attr_join_consume_w;
+  assign attr_join_capture_w = attr_source_valid_w && attr_join_room_w;
+
+  always_comb begin
+    attr_q_ready_w = {3{attr_join_capture_w}};
+  end
+
+  always_ff @(posedge clk or negedge rst_n) begin : p_attr_join
+    if (!rst_n) begin
+      attr_join_valid_q <= 1'b0;
+      for (int lane = 0; lane < 3; lane++) begin
+        attr_join_q_q[lane] <= 32'sd0;
+        attr_join_row_q[lane] <= 4'd0;
+        attr_join_col_q[lane] <= 4'd0;
+        attr_join_last_q[lane] <= 1'b0;
+        attr_join_sat_q[lane] <= 1'b0;
+        attr_join_error_q[lane] <= 1'b0;
+      end
+    end else begin
+      attr_join_valid_q <= attr_join_capture_w ||
+                           (attr_bundle_valid_w && !attr_join_consume_w);
+      if (attr_join_capture_w) begin
+        for (int lane = 0; lane < 3; lane++) begin
+          attr_join_q_q[lane] <= attr_q_w[lane];
+          attr_join_row_q[lane] <= attr_row_w[lane];
+          attr_join_col_q[lane] <= attr_col_w[lane];
+          attr_join_last_q[lane] <= attr_last_w[lane];
+          attr_join_sat_q[lane] <= attr_sat_w[lane];
+          attr_join_error_q[lane] <= attr_error_w[lane];
+        end
+      end
+    end
+  end
 
   zhao_texture_v3_request_v2_t request_w;
   zhao_raster_continuation_v2_t continuation_w;
@@ -461,12 +523,12 @@ module zhao_raster_tile_pipe_v2 (
     request_w.lod_q4_4              = flat_request_q[287:280];
     request_w.base_binding_selector = flat_request_q[295:288];
     request_w.sample_count          = flat_request_q[297:296];
-    request_w.u_over_w              = attr_q_w[1];
-    request_w.v_over_w              = attr_q_w[2];
+    request_w.u_over_w              = attr_join_q_q[1];
+    request_w.v_over_w              = attr_join_q_q[2];
 
     continuation_w = '0;
-    continuation_w.earlyz.in_tile_addr = {attr_row_w[0], attr_col_w[0]};
-    continuation_w.earlyz.invw24 = attr_q_w[0][23:0];
+    continuation_w.earlyz.in_tile_addr = {attr_join_row_q[0], attr_join_col_q[0]};
+    continuation_w.earlyz.invw24 = attr_join_q_q[0][23:0];
     continuation_w.earlyz.fragment_state = fragment_state_q;
     continuation_w.earlyz.source_id = source_id_q;
     continuation_w.post_earlyz =
@@ -476,7 +538,6 @@ module zhao_raster_tile_pipe_v2 (
     earlyz_payload_in_w = pack_earlyz_payload(pretex_w.payload);
   end
 
-  logic earlyz_frag_valid_w, earlyz_frag_ready_w;
   logic earlyz_cand_valid_w, earlyz_cand_ready_w;
   logic [7:0] earlyz_cand_addr_w;
   logic [23:0] earlyz_cand_depth_w;
@@ -489,17 +550,6 @@ module zhao_raster_tile_pipe_v2 (
 
   assign earlyz_frag_valid_w = attr_bundle_valid_w &&
                                !attr_bundle_fault_w && !abort_now_w;
-  // Joined outputs remain atomic in every mode.  During abort, a logical bundle
-  // is accepted into the drop sink only when all three lanes are present, so
-  // local_drop_count_o counts bundles rather than whichever lane arrived first.
-  always_comb begin
-    attr_q_ready_w = 3'b000;
-    if (attr_bundle_valid_w && (abort_now_w || attr_bundle_fault_w)) begin
-      attr_q_ready_w = 3'b111;
-    end else if (attr_bundle_valid_w) begin
-      attr_q_ready_w = {3{earlyz_frag_ready_w}};
-    end
-  end
 
   assign earlyz_hold_valid_o = earlyz_cand_valid_w;
 
@@ -618,6 +668,7 @@ module zhao_raster_tile_pipe_v2 (
       .frame_fault_clear_valid_i(stage_clear_valid_w),
       .frame_fault_clear_ready_o(stage_clear_ready_w),
       .frame_fault_o(stage_frame_fault_w),
+      .lifetime_structural_fault_o(lifetime_structural_fault_o),
       .cfg_valid_i(cfg_valid_i),
       .cfg_ready_o(cfg_ready_o),
       .cfg_op_i(cfg_op_i),
@@ -887,7 +938,8 @@ module zhao_raster_tile_pipe_v2 (
 
   assign producer_quiet_w = (rs_state_q != RS_START) && ew_job_ready_w &&
                             !row_hold_valid_q &&
-                            (&attr_idle_w) && !(|attr_q_valid_w);
+                            (&attr_idle_w) && !(|attr_q_valid_w) &&
+                            !attr_bundle_valid_w;
   assign ordinary_pipe_empty_w = ew_done_q && producer_quiet_w &&
                                  !earlyz_cand_valid_w &&
                                  (skid_level_o == 2'd0) &&
@@ -911,7 +963,7 @@ module zhao_raster_tile_pipe_v2 (
   assign job_ready_o = abort_now_w ? 1'b1 :
                        ((rs_state_q == RS_IDLE) && !frame_fault_clear_valid_i);
   assign job_accept_w = job_valid_i && job_ready_o;
-  assign joined_attr_drop_w = attr_bundle_valid_w && (&attr_q_ready_w) &&
+  assign joined_attr_drop_w = attr_bundle_valid_w && attr_join_consume_w &&
                               abort_now_w;
   assign earlyz_abort_drop_w = earlyz_cand_valid_w && earlyz_cand_ready_w &&
                                abort_now_w;
@@ -1105,6 +1157,8 @@ module zhao_raster_tile_pipe_v2 (
   // synthesis translate_off
   logic held_row_q;
   logic [20:0] held_row_payload_q;
+  logic held_attr_source_q;
+  logic [128:0] held_attr_source_payload_q;
   logic held_attr_bundle_q;
   logic [128:0] held_attr_bundle_payload_q;
   logic held_earlyz_q;
@@ -1113,17 +1167,25 @@ module zhao_raster_tile_pipe_v2 (
   logic [175:0] held_stage_fragment_payload_q;
   logic held_tile_write_q;
   logic [71:0] held_tile_write_payload_q;
+  logic [128:0] attr_source_payload_w;
   logic [128:0] attr_bundle_payload_w;
   logic [489:0] earlyz_hold_payload_w;
   logic [175:0] stage_fragment_payload_w;
 
-  assign attr_bundle_payload_w = {
+  assign attr_source_payload_w = {
       attr_q_w[0], attr_row_w[0], attr_col_w[0], attr_last_w[0],
       attr_sat_w[0], attr_error_w[0],
       attr_q_w[1], attr_row_w[1], attr_col_w[1], attr_last_w[1],
       attr_sat_w[1], attr_error_w[1],
       attr_q_w[2], attr_row_w[2], attr_col_w[2], attr_last_w[2],
       attr_sat_w[2], attr_error_w[2]};
+  assign attr_bundle_payload_w = {
+      attr_join_q_q[0], attr_join_row_q[0], attr_join_col_q[0],
+      attr_join_last_q[0], attr_join_sat_q[0], attr_join_error_q[0],
+      attr_join_q_q[1], attr_join_row_q[1], attr_join_col_q[1],
+      attr_join_last_q[1], attr_join_sat_q[1], attr_join_error_q[1],
+      attr_join_q_q[2], attr_join_row_q[2], attr_join_col_q[2],
+      attr_join_last_q[2], attr_join_sat_q[2], attr_join_error_q[2]};
   assign earlyz_hold_payload_w = {
       earlyz_cand_addr_w, earlyz_cand_depth_w, earlyz_cand_state_w,
       earlyz_cand_source_w, earlyz_cand_payload_w};
@@ -1139,6 +1201,8 @@ module zhao_raster_tile_pipe_v2 (
     if (!rst_n) begin
       held_row_q <= 1'b0;
       held_row_payload_q <= 21'd0;
+      held_attr_source_q <= 1'b0;
+      held_attr_source_payload_q <= 129'd0;
       held_attr_bundle_q <= 1'b0;
       held_attr_bundle_payload_q <= 129'd0;
       held_earlyz_q <= 1'b0;
@@ -1151,9 +1215,12 @@ module zhao_raster_tile_pipe_v2 (
       if (held_row_q && (!row_hold_valid_q ||
           ({row_hold_row_q, row_hold_mask_q, row_hold_last_q} != held_row_payload_q)))
         $fatal(1, "Packet-D coverage row changed before all lanes accepted");
+      if (held_attr_source_q && (!attr_source_valid_w ||
+          (attr_source_payload_w != held_attr_source_payload_q)))
+        $fatal(1, "Packet-D source attribute bundle changed before join capture");
       if (held_attr_bundle_q && (!attr_bundle_valid_w ||
           (attr_bundle_payload_w != held_attr_bundle_payload_q)))
-        $fatal(1, "Packet-D joined attribute bundle changed under backpressure");
+        $fatal(1, "Packet-D registered attribute join changed under backpressure");
       if (held_earlyz_q && (!earlyz_cand_valid_w ||
           (earlyz_hold_payload_w != held_earlyz_payload_q)))
         $fatal(1, "Packet-D Early-Z candidate changed under backpressure");
@@ -1177,8 +1244,11 @@ module zhao_raster_tile_pipe_v2 (
       held_row_q <= row_hold_valid_q && !row_retire_w;
       if (row_hold_valid_q && !row_retire_w)
         held_row_payload_q <= {row_hold_row_q, row_hold_mask_q, row_hold_last_q};
-      held_attr_bundle_q <= attr_bundle_valid_w && !(|attr_q_ready_w);
-      if (attr_bundle_valid_w && !(|attr_q_ready_w))
+      held_attr_source_q <= attr_source_valid_w && !attr_join_capture_w;
+      if (attr_source_valid_w && !attr_join_capture_w)
+        held_attr_source_payload_q <= attr_source_payload_w;
+      held_attr_bundle_q <= attr_bundle_valid_w && !attr_join_consume_w;
+      if (attr_bundle_valid_w && !attr_join_consume_w)
         held_attr_bundle_payload_q <= attr_bundle_payload_w;
       held_earlyz_q <= earlyz_cand_valid_w && !earlyz_cand_ready_w;
       if (earlyz_cand_valid_w && !earlyz_cand_ready_w)
@@ -1197,7 +1267,7 @@ module zhao_raster_tile_pipe_v2 (
   // counters are promoted above; this reduction has no datapath authority.
   logic unused_ok;
   always_comb begin
-    unused_ok = ^{1'b0, ew_cov_source_w, attr_sat_w,
+    unused_ok = ^{1'b0, ew_cov_source_w, attr_sat_w, attr_join_sat_q,
                   attr_pixels_w[0], attr_pixels_w[1], attr_pixels_w[2],
                   attr_divides_w[0], attr_divides_w[1], attr_divides_w[2],
                   attr_saturations_w[0], attr_saturations_w[1], attr_saturations_w[2],

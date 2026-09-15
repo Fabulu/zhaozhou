@@ -602,6 +602,7 @@ def validate_top_profiles_mutants_and_quiet_accounting(cmake_text: str) -> None:
         "test_aux_registered_clamp_transport_reaches_all_committed_mutants",
         "test_v3_owner_combine_feedback_cut_keeps_generation_witness",
         "test_v3_owner_retirement_head_is_bounded_and_controlled",
+        "test_v3_owner_timing3_notifications_preserve_event_moments",
         "test_material_writeback_cut_reaches_all_committed_mutants",
         "test_rcp_v4_balanced_lzc_direct_oracle_and_mutant_are_exact",
     )
@@ -1306,6 +1307,59 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
             validate(production.replace(
                 "if (oq_head_load_c) oq_rp_q", "if (oq_body_load_c) oq_rp_q", 1
             ))
+
+    def test_v3_owner_timing3_notifications_preserve_event_moments(self) -> None:
+        source = (
+            REPO / "fpga/rtl/texture/zhao_texture_v3own.sv"
+        ).read_text(encoding="utf-8")
+
+        def validate(text: str) -> None:
+            required = (
+                "assign iss_t_capture_ok_c = iss_tmu_valid_i && iss_t_in_rng_c",
+                "&& !iss_t_pending_hit_c;",
+                "assign iss_a_capture_ok_c = iss_aux_valid_i",
+                "&& !iss_a_pending_hit_c;",
+                "iss0t_v_q   <= iss_tmu_valid_i;",
+                "iss0a_v_q   <= iss_aux_valid_i;",
+                "(iss0t_handle_q == {c0t_slot_q, c0t_sidx_q, c0t_gen_q})",
+                "(iss0a_owner_q == {c0a_slot_q, c0a_gen_q})",
+                "if (iss0t_v_q && !iss0t_acc_q) d_issue_c",
+                "if (iss0a_v_q && !iss0a_acc_q) d_issue_c",
+                "cmb_accept_v_q <= cmb_fire_c;",
+                "cmb_accept_gen_ok_q <= cmb_gen_ok_c;",
+                "if (cmb_accept_v_q && (cmb_accept_slot_q == SLOTW'(i))",
+                "assign src_cbi_published_c = cbi_q[src_rd_slot_i] ||",
+                "(cmb_accept_gen_q == win_gen_of_slot(src_rd_slot_i))",
+                "(cmb_accept_gen_q == c0f_gen_q));",
+                "&& !ctxw_v_q && !iss0t_v_q && !iss0a_v_q",
+                "&& !kpipe_busy_c && !cmb_accept_v_q",
+            )
+            for marker in required:
+                if text.count(marker) != 1:
+                    raise AssertionError("timing3 notification marker differs: " + marker)
+            if "if (cmb_fire_c && (cmb_owner_o" in text:
+                raise AssertionError("COMBINE head still drives the owner table directly")
+            if "iss_tmu_valid_i && !iss_t_ok_c" in text:
+                raise AssertionError("raw ISSUE input still drives the error accumulator")
+
+        validate(source)
+        mutations = (
+            source.replace("&& !iss_t_pending_hit_c;", ";", 1),
+            source.replace(
+                "(iss0t_handle_q == {c0t_slot_q, c0t_sidx_q, c0t_gen_q})",
+                "1'b0", 1,
+            ),
+            source.replace("cmb_accept_v_q <= cmb_fire_c;", "cmb_accept_v_q <= 1'b0;", 1),
+            source.replace(
+                "(cmb_accept_gen_q == win_gen_of_slot(src_rd_slot_i))",
+                "1'b1", 1,
+            ),
+            source.replace("&& !kpipe_busy_c && !cmb_accept_v_q",
+                           "&& !kpipe_busy_c", 1),
+        )
+        for mutation in mutations:
+            with self.assertRaises(AssertionError):
+                validate(mutation)
 
     def test_material_writeback_cut_reaches_all_committed_mutants(self) -> None:
         production = (

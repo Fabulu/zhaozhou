@@ -305,6 +305,8 @@ void run_full_context() {
   zhao_texture_packet_b_set_frame_fault_inject(0);
   h.dut.frame_fault_clear_valid_i = 0;
   h.dut.eval();
+  require(!h.dut.lifetime_structural_fault_o,
+          "recoverable fault was misclassified as reset-lifetime", h.cycle);
 #ifdef PACKET_B_EXPECT_CLEAR_OVER_FAULT
   require(!h.dut.frame_fault_o,
           "clear-over-fault mutant did not erase same-edge fault", h.cycle);
@@ -323,7 +325,8 @@ void run_full_context() {
   h.step();
   h.dut.frame_fault_clear_valid_i = 0;
   h.step();
-  require(!h.dut.frame_fault_o, "recoverable injection did not clear", h.cycle);
+  require(!h.dut.frame_fault_o && !h.dut.lifetime_structural_fault_o,
+          "recoverable injection did not clear", h.cycle);
   for (unsigned source = 0; source < 6; ++source) {
     h.select_dpi_scope();
     zhao_texture_packet_b_set_lifetime_fault_inject(1u << source);
@@ -331,8 +334,9 @@ void run_full_context() {
     h.select_dpi_scope();
     zhao_texture_packet_b_set_lifetime_fault_inject(0);
     h.dut.eval();
-    require(h.dut.frame_fault_o && !h.dut.frag_ready_o,
-            "pulsed lifetime source did not latch/block admission", h.cycle);
+    require(h.dut.frame_fault_o && h.dut.lifetime_structural_fault_o &&
+                !h.dut.frag_ready_o,
+            "pulsed lifetime source did not latch/classify/block admission", h.cycle);
     h.dut.cfg_valid_i = 1;
     h.dut.pal_load_valid_i = 1;
     h.dut.eval();
@@ -344,13 +348,13 @@ void run_full_context() {
     h.step();
     h.dut.frame_fault_clear_valid_i = 0;
     h.step();
-    require(h.dut.frame_fault_o,
+    require(h.dut.frame_fault_o && h.dut.lifetime_structural_fault_o,
             "frame clear erased withdrawn lifetime source", h.cycle);
     h.dut.rst_n = 0;
     h.step();
     h.dut.rst_n = 1;
     h.step();
-    require(!h.dut.frame_fault_o,
+    require(!h.dut.frame_fault_o && !h.dut.lifetime_structural_fault_o,
             "reset did not recover lifetime source", h.cycle);
   }
 

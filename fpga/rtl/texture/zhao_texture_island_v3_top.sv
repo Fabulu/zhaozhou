@@ -93,6 +93,7 @@ module zhao_texture_island_v3_top #(
     input  var logic                    frame_fault_clear_valid_i,
     output var logic                    frame_fault_clear_ready_o,
     output var logic                    frame_fault_o,
+    output var logic                    lifetime_structural_fault_o,
 
     // Sealed binding-page loader: BEGIN / WRITE / END / ABORT.
     input  var logic                    cfg_valid_i,
@@ -868,6 +869,7 @@ module zhao_texture_island_v3_top #(
       || sim_pre_e_fill_refusal_lifetime_q
 `endif
       ;
+  assign lifetime_structural_fault_o = lifetime_admission_block_w;
 
   // ---------------------------------------------------------------------------
   // Atomic admission and reciprocal/perspective path.

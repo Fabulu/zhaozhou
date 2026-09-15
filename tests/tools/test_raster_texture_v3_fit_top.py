@@ -57,9 +57,9 @@ PROTECTED = {
     "fpga/rtl/common/zhao_shell_top.sv":
         "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "07d7067153bbc7cd8514818a1487703bdec07109fa2b8932164e1f0ce9f1a057",
+        "427a3ed3e592358cd7c29f0ca8033f8665c9afbbea63a5a274941dad8d9dc25f",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "01a60a6be13b1878c5ac43dcd0c0da043636f11c85a04feb05297382dae6a33e",
+        "8cb3095799c1cae4ea99f365dad6d4ceee5e41456e17b0945355253e90c02090",
 }
 EXPECTED_TESTS = (
     "raster_texture_v3_fit_top_directed",
@@ -243,6 +243,8 @@ class G8AFitTopTests(unittest.TestCase):
             "input  logic       rst_n",
             "output logic [7:0] fit_signature_o",
             "output logic [7:0] fit_epoch_o",
+            "(* useioff = 1 *) output logic [7:0] fit_signature_o",
+            "(* useioff = 1 *) output logic [7:0] fit_epoch_o",
             "fit_signature_o <= 8'h01;",
             "fit_epoch_o <= 8'h00;",
             "fit_signature_o <= signature_misr_q[7:0] ^ signature_misr_q[15:8]",
@@ -265,6 +267,15 @@ class G8AFitTopTests(unittest.TestCase):
             "task zhao_g8a_get_activity(",
             "`ifndef QUARTUS_SYNTHESIS",
         ), "G8A wrapper")
+        with self.assertRaises(AssertionError):
+            require_once(
+                text.replace("(* useioff = 1 *) ", "", 1),
+                (
+                    "(* useioff = 1 *) output logic [7:0] fit_signature_o",
+                    "(* useioff = 1 *) output logic [7:0] fit_epoch_o",
+                ),
+                "G8A I/O-register control",
+            )
         self.assertNotIn("zhao_raster_texjoin", text)
         self.assertNotIn("zhao_texture_island_v3_top", text)
         self.assertNotIn("assign fit_signature_o", text)
@@ -398,6 +409,39 @@ class G8AFitTopTests(unittest.TestCase):
             with self.subTest(missing_timing2_ram=missing):
                 broken_ram = timing2_receipt_module.validate_timing2_ram(
                     timing1_map.replace(missing, "removed_" + missing)
+                )
+                self.assertFalse(broken_ram["pass"])
+
+        timing3_spec = importlib.util.spec_from_file_location(
+            "g8a_timing3_receipt_test",
+            REPO / "tools/quartus/g8a_timing3_receipt.py",
+        )
+        if timing3_spec is None or timing3_spec.loader is None:
+            raise RuntimeError("could not load timing3 G8A receipt tool")
+        receipt_proxy = types.ModuleType("g8a_receipt")
+        for name in ("MODULE", "validate_ram", "parse_entity_rows", "main"):
+            setattr(receipt_proxy, name, getattr(receipt, name))
+        previous_receipt_module = sys.modules.get("g8a_receipt")
+        sys.modules["g8a_receipt"] = receipt_proxy
+        try:
+            timing3_receipt_module = importlib.util.module_from_spec(timing3_spec)
+            timing3_spec.loader.exec_module(timing3_receipt_module)
+        finally:
+            if previous_receipt_module is None:
+                del sys.modules["g8a_receipt"]
+            else:
+                sys.modules["g8a_receipt"] = previous_receipt_module
+        timing2_map = (
+            REPO / "reports/synthesis/blockpaths/"
+            "zhao_raster_texture_v3_fit_top@g8a-timing2.map.rpt"
+        ).read_text(encoding="utf-8", errors="replace")
+        timing3_ram = timing3_receipt_module.validate_timing3_ram(timing2_map)
+        self.assertTrue(timing3_ram["pass"])
+        for missing in ("oq_res_q_rtl_0", "oq_ctx_q_rtl_0", "ram0"):
+            with self.subTest(missing_timing3_ram=missing):
+                replacement = "removed_ram" if missing == "ram0" else "removed_" + missing
+                broken_ram = timing3_receipt_module.validate_timing3_ram(
+                    timing2_map.replace(missing, replacement)
                 )
                 self.assertFalse(broken_ram["pass"])
 
@@ -967,6 +1011,158 @@ class G8AFitTopTests(unittest.TestCase):
             with self.subTest(timing2_control=name), self.assertRaises(AssertionError):
                 require_once(mutation, required, "mutated timing2 runner")
 
+        timing3_runner = (
+            REPO / "tools/quartus/run_g8a_timing3_fit.ps1"
+        ).read_text(encoding="utf-8")
+        timing3_receipt = (
+            REPO / "tools/quartus/g8a_timing3_receipt.py"
+        ).read_text(encoding="utf-8")
+        require_once(timing3_runner, (
+            "$RowLabel = '@g8a-timing3'",
+            "'reports\\synthesis\\zhao_g8a_raster_texture_timing2.json'",
+            "'0d82c3a22b6cb14b92b5624cc0e7dde2e7d86fb1068a8e9f52e1a0dbf6c276b7'",
+            "'e3b3cec9bc17348711a3fa9bf999cb8023d4896e'",
+            "git -C $RepoRoot symbolic-ref --quiet --short HEAD",
+            "git -C $RepoRoot ls-remote --heads origin \"refs/heads/$branch\"",
+            "$remoteFields.Count -ne 2 -or $remoteFields[0] -cne $head -or",
+            '$remoteFields[1] -cne "refs/heads/$branch"',
+            "G8A timing-batch source HEAD is not pushed exactly to origin/$branch.",
+            "The timing2 baseline receipt bytes differ from the immutable expected digest.",
+            "$TimingRawArtifactFilter = \"$RowName.*\"",
+            "Get-ChildItem -LiteralPath $TimingRawArtifactParent",
+            "Timing3 raw artifacts already exist ($priorRawNames); preserve and diagnose "
+            "the partial attempt instead of overwriting it.",
+            "A timing-batch G8A receipt already exists at $TimingReceipt; do not repeat it.",
+            "A timing-batch retained fit manifest already exists at $RetainedFitManifest; "
+            "do not repeat it.",
+            "A $RowName row already exists; preserve and diagnose it instead of rerunning.",
+            "$RetainedFitManifest = Join-Path $RepoRoot "
+            "'reports\\synthesis\\blockpaths\\zhao_raster_texture_v3_fit_top@g8a-timing3.fit.manifest.json'",
+            "gen_raster_texture_v3_fit_top.py') --check",
+            "if ($LASTEXITCODE -ne 0) { throw 'G8A generated wrapper/manifest is stale.' }",
+            "test_raster_texture_v3_fit_top.py') -q",
+            "if ($LASTEXITCODE -ne 0) { throw 'G8A static pre-fit controls failed.' }",
+            "$fitManifestBytes = [IO.File]::ReadAllBytes($GeneratedFitManifest)",
+            "$currentManifestBytes = [IO.File]::ReadAllBytes($GeneratedFitManifest)",
+            "if ([Convert]::ToBase64String($currentManifestBytes) -cne $fitManifestBase64)",
+            "The generated G8A fit manifest changed after the pre-fit snapshot.",
+            "[IO.File]::WriteAllBytes($retainedTemporary, $fitManifestBytes)",
+            "Move-Item -LiteralPath $retainedTemporary -Destination $RetainedFitManifest",
+            "$ReceiptToolPaths = @(\n"
+            "    (Join-Path $PSScriptRoot 'g8a_receipt.py'),\n"
+            "    (Join-Path $PSScriptRoot 'g8a_timing3_receipt.py')\n"
+            ")",
+            "(Join-Path $PSScriptRoot 'g8a_receipt.py'),",
+            "if ($toolHashNow -cne $receiptToolHashes[$toolPath])",
+            "A G8A receipt tool changed during the fit: $toolPath",
+            "[IO.FileShare]::Read)",
+            "if ($lockedHash -cne $receiptToolHashes[$toolPath])",
+            "A G8A receipt tool changed before its locked invocation: $toolPath",
+            "-RowLabel $RowLabel",
+            "-Seed 1",
+            "-PhysicalPins",
+            "g8a_timing3_receipt.py') --write",
+        ), "G8A timing3 runner")
+        require_once(timing3_receipt, (
+            'receipt.ROW_NAME = receipt.MODULE + "@g8a-timing3"',
+            "zhao_raster_texture_v3_fit_top@g8a-timing3.fit.manifest.json",
+            "zhao_g8a_raster_texture_timing3.json",
+            "_BASE_VALIDATE_RAM = receipt.validate_ram",
+            "def validate_timing3_ram(map_text: str)",
+            "result = _BASE_VALIDATE_RAM(map_text)",
+            'owner + "oq_res_q_rtl_0"',
+            'owner + "oq_ctx_q_rtl_0"',
+            'result["pass"] = bool(result["pass"] and result_ram and context_ram)',
+            "receipt.validate_ram = validate_timing3_ram",
+        ), "G8A timing3 receipt wrapper")
+        for name, mutation, required in (
+            (
+                "physical mode",
+                timing3_runner.replace("-PhysicalPins", "", 1),
+                ("-PhysicalPins",),
+            ),
+            (
+                "timing2 baseline",
+                timing3_runner.replace("zhao_g8a_raster_texture_timing2.json",
+                                       "zhao_g8a_raster_texture_timing1.json", 1),
+                ("zhao_g8a_raster_texture_timing2.json",),
+            ),
+            (
+                "remote equality",
+                timing3_runner.replace("ls-remote --heads origin", "rev-parse", 1),
+                ("git -C $RepoRoot ls-remote --heads origin \"refs/heads/$branch\"",),
+            ),
+            (
+                "remote commit predicate",
+                timing3_runner.replace("$remoteFields[0] -cne $head", "$false", 1),
+                ("$remoteFields[0] -cne $head",),
+            ),
+            (
+                "generic receipt tool lock",
+                timing3_runner.replace(
+                    "    (Join-Path $PSScriptRoot 'g8a_receipt.py'),\n", "", 1
+                ),
+                ("(Join-Path $PSScriptRoot 'g8a_receipt.py'),",),
+            ),
+            (
+                "generator failure branch",
+                timing3_runner.replace(
+                    "if ($LASTEXITCODE -ne 0) { throw 'G8A generated wrapper/manifest is stale.' }",
+                    "", 1,
+                ),
+                ("if ($LASTEXITCODE -ne 0) { throw 'G8A generated wrapper/manifest is stale.' }",),
+            ),
+            (
+                "static failure branch",
+                timing3_runner.replace(
+                    "if ($LASTEXITCODE -ne 0) { throw 'G8A static pre-fit controls failed.' }",
+                    "", 1,
+                ),
+                ("if ($LASTEXITCODE -ne 0) { throw 'G8A static pre-fit controls failed.' }",),
+            ),
+            (
+                "atomic retained move",
+                timing3_runner.replace(
+                    "    Move-Item -LiteralPath $retainedTemporary -Destination $RetainedFitManifest\n",
+                    "", 1,
+                ),
+                ("Move-Item -LiteralPath $retainedTemporary -Destination $RetainedFitManifest",),
+            ),
+            (
+                "partial artifact",
+                timing3_runner.replace("-Filter $TimingRawArtifactFilter -File", "-File", 1),
+                ("-Filter $TimingRawArtifactFilter -File",),
+            ),
+            (
+                "post-fit tool hash",
+                timing3_runner.replace(
+                    "if ($toolHashNow -cne $receiptToolHashes[$toolPath])",
+                    "if ($false)", 1,
+                ),
+                ("if ($toolHashNow -cne $receiptToolHashes[$toolPath])",),
+            ),
+            (
+                "manifest drift",
+                timing3_runner.replace(
+                    "if ([Convert]::ToBase64String($currentManifestBytes) -cne "
+                    "$fitManifestBase64)",
+                    "if ($false)", 1,
+                ),
+                ("if ([Convert]::ToBase64String($currentManifestBytes) -cne "
+                 "$fitManifestBase64)",),
+            ),
+            (
+                "locked tool hash",
+                timing3_runner.replace(
+                    "if ($lockedHash -cne $receiptToolHashes[$toolPath])",
+                    "if ($false)", 1,
+                ),
+                ("if ($lockedHash -cne $receiptToolHashes[$toolPath])",),
+            ),
+        ):
+            with self.subTest(timing3_control=name), self.assertRaises(AssertionError):
+                require_once(mutation, required, "mutated timing3 runner")
+
     def test_every_hashed_text_input_has_checkout_stable_lf(self) -> None:
         attrs = (REPO / ".gitattributes").read_text(encoding="utf-8").splitlines()
         rows = set(line for line in attrs if line and not line.startswith("#"))
@@ -1002,8 +1198,14 @@ class G8AFitTopTests(unittest.TestCase):
             "reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing2.* binary",
             rows,
         )
+        self.assertIn(
+            "reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing3.* binary",
+            rows,
+        )
         self.assertIn("tools/quartus/g8a_timing2_receipt.py text eol=lf", rows)
         self.assertIn("tools/quartus/run_g8a_timing2_fit.ps1 text eol=lf", rows)
+        self.assertIn("tools/quartus/g8a_timing3_receipt.py text eol=lf", rows)
+        self.assertIn("tools/quartus/run_g8a_timing3_fit.ps1 text eol=lf", rows)
         self.assertIn("reports/synthesis/zhao_g8a_raster_texture.json binary", rows)
         self.assertIn(
             "reports/synthesis/zhao_g8a_raster_texture_crcserial.json binary", rows
@@ -1014,9 +1216,13 @@ class G8AFitTopTests(unittest.TestCase):
         self.assertIn(
             "reports/synthesis/zhao_g8a_raster_texture_timing2.json binary", rows
         )
+        self.assertIn(
+            "reports/synthesis/zhao_g8a_raster_texture_timing3.json binary", rows
+        )
         ignores = set((REPO / ".gitignore").read_text(encoding="utf-8").splitlines())
         for suffix in ("map.rpt", "fit.rpt", "setup.rpt", "hold.rpt", "sta.rpt"):
-            for row_label in ("g8a-crcserial", "g8a-timing1", "g8a-timing2"):
+            for row_label in (
+                    "g8a-crcserial", "g8a-timing1", "g8a-timing2", "g8a-timing3"):
                 self.assertIn(
                     "!reports/synthesis/blockpaths/"
                     f"zhao_raster_texture_v3_fit_top@{row_label}.{suffix}",

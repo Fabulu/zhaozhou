@@ -597,32 +597,74 @@ module zhao_texture_v3own #(
   // ==========================================================================
   // ISSUE (section 19.3 -- ISSUED is a separate moment from REQUIRED)
   // ==========================================================================
-  logic [SLOTW-1:0] iss_t_slot_c;
-  logic [1:0]       iss_t_sidx_c;
-  logic [GENW-1:0]  iss_t_gen_c;
-  logic             iss_t_rng_c;
-  logic [3:0]       iss_t_bit_c;
-  logic             iss_t_ok_c;
+  // The upstream notification is classified on its original edge, then the
+  // accepted/bad decision and complete identity cross one register before the
+  // per-owner scoreboard. A one-entry forwarding check keeps consecutive
+  // duplicate notifications exact while removing upstream RAM-head data from
+  // the scoreboard/counter write cone.
+  logic             iss0t_v_q, iss0t_acc_q;
+  logic [SMPW-1:0]  iss0t_handle_q;
+  logic             iss0a_v_q, iss0a_acc_q;
+  logic [OWNERW-1:0] iss0a_owner_q;
 
-  assign iss_t_slot_c = iss_tmu_handle_i[SMPW-1 -: SLOTW];
-  assign iss_t_sidx_c = iss_tmu_handle_i[GENW+1 -: 2];
-  assign iss_t_gen_c  = iss_tmu_handle_i[GENW-1:0];
-  assign iss_t_rng_c  = (iss_t_sidx_c != 2'd3);
-  assign iss_t_bit_c  = iss_t_rng_c ? (4'b0001 << iss_t_sidx_c) : 4'b0000;
-  assign iss_t_ok_c   = iss_tmu_valid_i && iss_t_rng_c
-                     && win_live({iss_t_gen_c, iss_t_slot_c})
-                     && ((req_q[iss_t_slot_c] & iss_t_bit_c) != 4'd0)
-                     && ((iss_q[iss_t_slot_c] & iss_t_bit_c) == 4'd0);
+  logic [SLOTW-1:0] iss_t_in_slot_c, iss_t_slot_c;
+  logic [1:0]       iss_t_in_sidx_c, iss_t_sidx_c;
+  logic [GENW-1:0]  iss_t_in_gen_c;
+  logic             iss_t_in_rng_c, iss_t_pending_hit_c;
+  logic [3:0]       iss_t_in_bit_c, iss_t_bit_c;
+  logic             iss_t_capture_ok_c, iss_t_ok_c;
 
-  logic [SLOTW-1:0] iss_a_slot_c;
-  logic [GENW-1:0]  iss_a_gen_c;
-  logic             iss_a_ok_c;
-  assign iss_a_slot_c = iss_aux_owner_i[OWNERW-1 -: SLOTW];
-  assign iss_a_gen_c  = iss_aux_owner_i[GENW-1:0];
-  assign iss_a_ok_c   = iss_aux_valid_i
-                     && win_live({iss_a_gen_c, iss_a_slot_c})
-                     && ((req_q[iss_a_slot_c] & SRC_AUX) != 4'd0)
-                     && ((iss_q[iss_a_slot_c] & SRC_AUX) == 4'd0);
+  assign iss_t_in_slot_c = iss_tmu_handle_i[SMPW-1 -: SLOTW];
+  assign iss_t_in_sidx_c = iss_tmu_handle_i[GENW+1 -: 2];
+  assign iss_t_in_gen_c  = iss_tmu_handle_i[GENW-1:0];
+  assign iss_t_in_rng_c  = (iss_t_in_sidx_c != 2'd3);
+  assign iss_t_in_bit_c  = iss_t_in_rng_c
+                         ? (4'b0001 << iss_t_in_sidx_c) : 4'b0000;
+  assign iss_t_pending_hit_c = iss0t_v_q && iss0t_acc_q &&
+                               (iss0t_handle_q == iss_tmu_handle_i);
+  assign iss_t_capture_ok_c = iss_tmu_valid_i && iss_t_in_rng_c
+                           && win_live({iss_t_in_gen_c, iss_t_in_slot_c})
+                           && ((req_q[iss_t_in_slot_c] & iss_t_in_bit_c) != 4'd0)
+                           && ((iss_q[iss_t_in_slot_c] & iss_t_in_bit_c) == 4'd0)
+                           && !iss_t_pending_hit_c;
+
+  assign iss_t_slot_c = iss0t_handle_q[SMPW-1 -: SLOTW];
+  assign iss_t_sidx_c = iss0t_handle_q[GENW+1 -: 2];
+  assign iss_t_bit_c  = 4'b0001 << iss_t_sidx_c;
+  assign iss_t_ok_c   = iss0t_v_q && iss0t_acc_q;
+
+  logic [SLOTW-1:0] iss_a_in_slot_c, iss_a_slot_c;
+  logic [GENW-1:0]  iss_a_in_gen_c;
+  logic             iss_a_pending_hit_c;
+  logic             iss_a_capture_ok_c, iss_a_ok_c;
+  assign iss_a_in_slot_c = iss_aux_owner_i[OWNERW-1 -: SLOTW];
+  assign iss_a_in_gen_c  = iss_aux_owner_i[GENW-1:0];
+  assign iss_a_pending_hit_c = iss0a_v_q && iss0a_acc_q &&
+                               (iss0a_owner_q == iss_aux_owner_i);
+  assign iss_a_capture_ok_c = iss_aux_valid_i
+                           && win_live({iss_a_in_gen_c, iss_a_in_slot_c})
+                           && ((req_q[iss_a_in_slot_c] & SRC_AUX) != 4'd0)
+                           && ((iss_q[iss_a_in_slot_c] & SRC_AUX) == 4'd0)
+                           && !iss_a_pending_hit_c;
+
+  assign iss_a_slot_c = iss0a_owner_q[OWNERW-1 -: SLOTW];
+  assign iss_a_ok_c   = iss0a_v_q && iss0a_acc_q;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      iss0t_v_q   <= 1'b0;
+      iss0t_acc_q <= 1'b0;
+      iss0a_v_q   <= 1'b0;
+      iss0a_acc_q <= 1'b0;
+    end else begin
+      iss0t_v_q   <= iss_tmu_valid_i;
+      iss0t_acc_q <= iss_t_capture_ok_c;
+      iss0a_v_q   <= iss_aux_valid_i;
+      iss0a_acc_q <= iss_a_capture_ok_c;
+      if (iss_tmu_valid_i) iss0t_handle_q <= iss_tmu_handle_i;
+      if (iss_aux_valid_i) iss0a_owner_q <= iss_aux_owner_i;
+    end
+  end
 
   // ==========================================================================
   // RETURN PORTS
@@ -964,6 +1006,9 @@ module zhao_texture_v3own #(
 
   logic [CNTW-1:0] cmb_res_q;
   logic            cmb_pop_c, cmb_fire_c;
+  logic            cmb_accept_v_q, cmb_accept_gen_ok_q;
+  logic [SLOTW-1:0] cmb_accept_slot_q;
+  logic [GENW-1:0]  cmb_accept_gen_q;
   // Section 9.4: "Do not pop a ready ticket merely because COMBINE ready is
   // high now if the memory read will return several cycles later. The
   // destination credit must cover that latency." cmb_res_q counts reads in
@@ -1166,8 +1211,13 @@ module zhao_texture_v3own #(
   // read, which they are). Three bits, three 64:1 selects -- see the header
   // for why the committed/required cover is left to the assertion.
   logic src_unpub_c;
+  logic src_cbi_published_c;
+  assign src_cbi_published_c = cbi_q[src_rd_slot_i] ||
+      (cmb_accept_v_q && cmb_accept_gen_ok_q &&
+       (cmb_accept_slot_q == src_rd_slot_i) &&
+       (cmb_accept_gen_q == win_gen_of_slot(src_rd_slot_i)));
   assign src_unpub_c = (READ_LATE != 0) && src_rd_valid_i
-                    && !(live_q[src_rd_slot_i] && cbi_q[src_rd_slot_i]
+                    && !(live_q[src_rd_slot_i] && src_cbi_published_c
                          && !fcl_q[src_rd_slot_i]);
 
   // ==========================================================================
@@ -1245,13 +1295,13 @@ module zhao_texture_v3own #(
   // QUIESCENCE (used by the generation-wrap drain)
   // ==========================================================================
   assign quiet_c = (live_cnt_q == '0) && (unf_cnt_q == '0)
-                && !ctxw_v_q
+                && !ctxw_v_q && !iss0t_v_q && !iss0a_v_q
                 && !c0t_v_q && !c1t_v_q && !c3t_v_q && !c4t_v_q
                 && !c0a_v_q && !c1a_v_q && !c3a_v_q && !c4a_v_q
                 && !c0f_v_q && !c1f_v_q && !c3f_v_q && !c4f_v_q
                 && !q0t_v_q && !q0a_v_q && !q0i_v_q
                 && rq_empty_c[0] && rq_empty_c[1] && rq_empty_c[2]
-                && !kpipe_busy_c
+                && !kpipe_busy_c && !cmb_accept_v_q
                 && (cq_occ_c == '0) && (cmb_res_q == '0)
                 && !g0_v_q && !g1_v_q
                 && !oq_head_v_q && (oq_occ_c == '0)
@@ -1317,6 +1367,26 @@ module zhao_texture_v3own #(
   assign cmb_gen_ok_c = (win_gen_of_slot(cmb_owner_o[OWNERW-1 -: SLOTW])
                          == cmb_owner_o[GENW-1:0]);
 
+  // Actual COMBINE acceptance remains cmb_fire_c. Its complete identity crosses
+  // one register before the per-owner table update, so the queue head no longer
+  // fans directly through 64 owner-state next functions. READ_LATE's first
+  // source request is later than this publication edge.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cmb_accept_v_q      <= 1'b0;
+      cmb_accept_gen_ok_q <= 1'b0;
+    end else begin
+      cmb_accept_v_q <= cmb_fire_c;
+      if (cmb_fire_c) begin
+        cmb_accept_slot_q   <= cmb_owner_o[OWNERW-1 -: SLOTW];
+        cmb_accept_gen_q    <= cmb_owner_o[GENW-1:0];
+        cmb_accept_gen_ok_q <= cmb_gen_ok_c;
+      end else begin
+        cmb_accept_gen_ok_q <= 1'b0;
+      end
+    end
+  end
+
   always_comb begin
     for (int unsigned i = 0; i < OWNERS; i++) begin
       live_n_c[i] = live_q[i];
@@ -1375,8 +1445,8 @@ module zhao_texture_v3own #(
       // separate." The generation is checked for the same reason every other
       // event in this loop checks it: a stale token naming a reused slot must
       // not mark the CURRENT owner issued.
-      if (cmb_fire_c && (cmb_owner_o[OWNERW-1 -: SLOTW] == SLOTW'(i))
-          && cmb_gen_ok_c)
+      if (cmb_accept_v_q && (cmb_accept_slot_q == SLOTW'(i)) &&
+          cmb_accept_gen_ok_q)
         cbi_n_c[i] = 1'b1;
 
       // ---- FETCH LAUNCH (18.1: an owner can be fetched at most once) ----
@@ -1440,8 +1510,8 @@ module zhao_texture_v3own #(
     if (adm_fire_c && (adm_req_i == 4'd0) && (tail_q != emit_q))
       d_reorder_c = d_reorder_c + 2'd1;
     d_issue_c = 2'd0;
-    if (iss_tmu_valid_i && !iss_t_ok_c) d_issue_c = d_issue_c + 2'd1;
-    if (iss_aux_valid_i && !iss_a_ok_c) d_issue_c = d_issue_c + 2'd1;
+    if (iss0t_v_q && !iss0t_acc_q) d_issue_c = d_issue_c + 2'd1;
+    if (iss0a_v_q && !iss0a_acc_q) d_issue_c = d_issue_c + 2'd1;
     d_range_c = c2t_rng_bad_c;
     d_final_c = c2f_bad_c;
   end
@@ -1588,7 +1658,10 @@ module zhao_texture_v3own #(
     // pre-edge state on the same edge as every other fact captured here.
     c1t_tgen_q <= win_gen_of_slot(c0t_slot_q);
     c1t_req_q  <= req_q [c0t_slot_q];
-    c1t_iss_q  <= iss_q [c0t_slot_q];
+    c1t_iss_q  <= iss_q [c0t_slot_q] |
+        ((iss_t_ok_c &&
+          (iss0t_handle_q == {c0t_slot_q, c0t_sidx_q, c0t_gen_q}))
+         ? iss_t_bit_c : 4'd0);
     c1t_clm_q  <= clm_q [c0t_slot_q];
     c1t_cmt_q  <= cmt_q [c0t_slot_q];
 
@@ -1629,7 +1702,10 @@ module zhao_texture_v3own #(
     c1a_live_q <= live_q[c0a_slot_q];
     c1a_tgen_q <= win_gen_of_slot(c0a_slot_q);
     c1a_req_q  <= req_q [c0a_slot_q];
-    c1a_iss_q  <= iss_q [c0a_slot_q];
+    c1a_iss_q  <= iss_q [c0a_slot_q] |
+        ((iss_a_ok_c &&
+          (iss0a_owner_q == {c0a_slot_q, c0a_gen_q}))
+         ? SRC_AUX : 4'd0);
     c1a_clm_q  <= clm_q [c0a_slot_q];
     c1a_cmt_q  <= cmt_q [c0a_slot_q];
 
@@ -1667,7 +1743,10 @@ module zhao_texture_v3own #(
     c1f_res_q  <= c0f_res_q;
     c1f_live_q <= live_q[c0f_slot_q];
     c1f_tgen_q <= win_gen_of_slot(c0f_slot_q);
-    c1f_cbi_q  <= cbi_q [c0f_slot_q];
+    c1f_cbi_q  <= cbi_q [c0f_slot_q] ||
+        (cmb_accept_v_q && cmb_accept_gen_ok_q &&
+         (cmb_accept_slot_q == c0f_slot_q) &&
+         (cmb_accept_gen_q == c0f_gen_q));
     c1f_fcl_q  <= fcl_q [c0f_slot_q];
     c1f_fdn_q  <= fdn_q [c0f_slot_q];
 
@@ -2302,7 +2381,7 @@ module zhao_texture_v3own #(
         // three-bit form (header).
         a_src_read_published : assert (!src_rd_valid_i
             || (live_q[src_rd_slot_i] && rdy_q[src_rd_slot_i]
-                && crs_q[src_rd_slot_i] && cbi_q[src_rd_slot_i]
+                && crs_q[src_rd_slot_i] && src_cbi_published_c
                 && ((cmt_q[src_rd_slot_i] & req_q[src_rd_slot_i])
                     == req_q[src_rd_slot_i])));
         // release-after-last-reader, first half: the consumer's last read of

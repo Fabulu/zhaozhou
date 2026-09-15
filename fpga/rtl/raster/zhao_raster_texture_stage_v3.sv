@@ -3,8 +3,9 @@
 // One 490-bit candidate is unpacked through zhao_render_texture_pkg, admitted
 // atomically to exactly one Packet-B V3 island, and returned as the exact
 // RASTER.FRAGMENT packet.  The V3 owner carries both the 32-bit admission
-// sequence and all 128 continuation bits; this stage owns no candidate FIFO,
-// output FIFO, context sidecar, slot allocator, or release cursor.
+// sequence and all 128 continuation bits. This stage owns one bounded elastic
+// result head after V3 acceptance, but no candidate/output FIFO, context sidecar,
+// slot allocator, or release cursor.
 //
 // A returned-sequence mismatch is a recoverable frame terminal.  The mismatched
 // beat and every later ordered V3 output are always accepted and dropped so the
@@ -36,6 +37,7 @@ module zhao_raster_texture_stage_v3 #(
     input  logic         frame_fault_clear_valid_i,
     output logic         frame_fault_clear_ready_o,
     output logic         frame_fault_o,
+    output logic         lifetime_structural_fault_o,
 
     // Sealed binding-page loader.
     input  logic         cfg_valid_i,
@@ -199,6 +201,21 @@ module zhao_raster_texture_stage_v3 #(
   logic        v3_out_refused_w;
   logic        v3_quiet_w;
   logic        v3_frame_fault_w;
+  logic        v3_clear_ready_w;
+
+  // One bounded elastic result head. It owns only a packet already accepted
+  // from V3; it has no allocation cursor and is not a second lifecycle queue.
+  logic         retire_head_v_q;
+  logic [23:0]  retire_head_rgb_q;
+  logic [7:0]   retire_head_a_q;
+  logic [7:0]   retire_head_texel_idx_q;
+  logic [7:0]   retire_head_status_q;
+  logic [15:0]  retire_head_tag_q;
+  logic [159:0] retire_head_ctx_q;
+  logic         retire_head_refused_q;
+  logic         retire_head_capture_w, retire_head_consume_w;
+  logic         retire_head_reload_credit_w, retire_head_drop_policy_w;
+
   logic [31:0] returned_sequence_w;
   logic        sequence_matches_w;
   logic        sequence_mismatch_w;
@@ -210,22 +227,40 @@ module zhao_raster_texture_stage_v3 #(
     admission_request_w = pretex_texture_request(candidate_w);
     admission_retire_ctx_w = make_raster_retire_ctx(
         admission_sequence_q, admission_continuation_w);
-    returned_retire_ctx_w = unpack_raster_retire_ctx(v3_out_retire_ctx_w);
-    returned_result_w = unpack_texture_result({v3_out_status_w,
-                                                v3_out_texel_idx_w,
-                                                v3_out_a_w,
-                                                v3_out_rgb_w});
+    returned_retire_ctx_w = unpack_raster_retire_ctx(retire_head_ctx_q);
+    returned_result_w = unpack_texture_result({retire_head_status_q,
+                                                retire_head_texel_idx_q,
+                                                retire_head_a_q,
+                                                retire_head_rgb_q});
   end
 
   assign returned_sequence_w =
       `ZHAO_PACKET_C_RETURNED_SEQUENCE(returned_retire_ctx_w.raster_sequence);
   assign sequence_matches_w = (returned_sequence_w == expected_sequence_q);
   assign sequence_mismatch_w =
-      v3_out_valid_w && !sequence_matches_w && !sequence_abort_q;
+      retire_head_v_q && !sequence_matches_w && !sequence_abort_q;
 
-  // The mismatch term is deliberately in both admission suppression and the
-  // V3 ready law.  Therefore the bad output is dropped on the detecting edge,
-  // while a candidate offered on that same edge cannot acquire an owner.
+  // Pre-edge H=head valid, C=head consume, R=data-independent reload credit,
+  // A=V3 acceptance. H' = A || (H && !C), and A = v3_valid && (!H || R).
+  // A mismatch is detected and dropped on its first visible edge. If downstream
+  // fragment ready is low, that drop deliberately leaves the head empty for one
+  // edge rather than feeding returned sequence data back into V3 ready.
+  //
+  // The committed old-ready control deliberately restores match-gated reload
+  // and drop. Production keeps returned data completely out of V3 ready.
+`ifdef ZHAO_PACKET_C_MUTANT_OLD_READY
+  assign retire_head_reload_credit_w = `ZHAO_PACKET_C_V3_OUT_READY(
+      sequence_abort_q, sequence_mismatch_w, frag_ready_i, sequence_matches_w);
+  assign retire_head_drop_policy_w = `ZHAO_PACKET_C_V3_OUT_READY(
+      sequence_abort_q, sequence_mismatch_w, frag_ready_i, sequence_matches_w);
+`else
+  assign retire_head_reload_credit_w = sequence_abort_q || frag_ready_i;
+  assign retire_head_drop_policy_w = 1'b1;
+`endif
+
+  // The mismatch term suppresses a candidate on the detecting edge. The V3
+  // output handshake itself depends only on head occupancy, registered abort,
+  // and external fragment credit -- never on returned sequence or payload.
   assign cand_ready_o =
       v3_frag_ready_w && !sequence_abort_q && !sequence_mismatch_w;
   assign v3_frag_valid_w =
@@ -233,13 +268,13 @@ module zhao_raster_texture_stage_v3 #(
   assign cand_fire_o = cand_valid_i && cand_ready_o;
 
   assign frag_valid_o =
-      v3_out_valid_w && sequence_matches_w && !sequence_abort_q;
+      retire_head_v_q && sequence_matches_w && !sequence_abort_q;
   assign fragment_fire_o = frag_valid_o && frag_ready_i;
-  assign v3_out_ready_w = `ZHAO_PACKET_C_V3_OUT_READY(
-      sequence_abort_q, sequence_mismatch_w, frag_ready_i, sequence_matches_w);
-  assign drop_fire_o =
-      v3_out_valid_w && v3_out_ready_w &&
-      (sequence_abort_q || sequence_mismatch_w);
+  assign drop_fire_o = retire_head_v_q &&
+      (sequence_abort_q || sequence_mismatch_w) && retire_head_drop_policy_w;
+  assign retire_head_consume_w = fragment_fire_o || drop_fire_o;
+  assign v3_out_ready_w = !retire_head_v_q || retire_head_reload_credit_w;
+  assign retire_head_capture_w = v3_out_valid_w && v3_out_ready_w;
 
   assign frag_addr_o      = returned_retire_ctx_w.raster_continuation.earlyz.in_tile_addr;
   assign frag_depth_o     = returned_retire_ctx_w.raster_continuation.earlyz.invw24;
@@ -256,7 +291,8 @@ module zhao_raster_texture_stage_v3 #(
 
   assign clear_fire_w =
       frame_fault_clear_valid_i && frame_fault_clear_ready_o;
-  assign quiet_o = v3_quiet_w;
+  assign frame_fault_clear_ready_o = !retire_head_v_q && v3_clear_ready_w;
+  assign quiet_o = v3_quiet_w && !retire_head_v_q;
   assign sequence_abort_o = sequence_abort_q;
   assign sequence_drop_count_o = sequence_drop_count_q;
   assign sequence_mismatch_o = sequence_mismatch_w;
@@ -268,6 +304,27 @@ module zhao_raster_texture_stage_v3 #(
   // classify the frame clean in the cycle before sequence_abort_q latches.
   assign frame_fault_o =
       v3_frame_fault_w || sequence_abort_q || sequence_mismatch_w;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      retire_head_v_q <= 1'b0;
+    end else begin
+      retire_head_v_q <= retire_head_capture_w ||
+                         (retire_head_v_q && !retire_head_consume_w);
+    end
+  end
+
+  always_ff @(posedge clk) begin
+    if (retire_head_capture_w) begin
+      retire_head_rgb_q       <= v3_out_rgb_w;
+      retire_head_a_q         <= v3_out_a_w;
+      retire_head_texel_idx_q <= v3_out_texel_idx_w;
+      retire_head_status_q    <= v3_out_status_w;
+      retire_head_tag_q       <= v3_out_tag_w;
+      retire_head_ctx_q       <= v3_out_retire_ctx_w;
+      retire_head_refused_q   <= v3_out_refused_w;
+    end
+  end
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -339,9 +396,10 @@ module zhao_raster_texture_stage_v3 #(
       .frag_class_i(admission_request_w.response_class),
       .frag_pal_slot_i(admission_request_w.palette_slot),
       .frag_pal_gen_i(admission_request_w.palette_generation),
-      .frame_fault_clear_valid_i(frame_fault_clear_valid_i),
-      .frame_fault_clear_ready_o(frame_fault_clear_ready_o),
+      .frame_fault_clear_valid_i(frame_fault_clear_valid_i && !retire_head_v_q),
+      .frame_fault_clear_ready_o(v3_clear_ready_w),
       .frame_fault_o(v3_frame_fault_w),
+      .lifetime_structural_fault_o(lifetime_structural_fault_o),
       .cfg_valid_i(cfg_valid_i),
       .cfg_ready_o(cfg_ready_o),
       .cfg_op_i(cfg_op_i),
@@ -441,16 +499,34 @@ module zhao_raster_texture_stage_v3 #(
   // The legacy caller context is canonical zero at this seam.  Its compatibility
   // tag/refused aliases are intentionally not used to construct fragment data.
   logic unused_v3_legacy;
-  assign unused_v3_legacy = ^{v3_out_tag_w, v3_out_refused_w};
+  assign unused_v3_legacy = ^{retire_head_tag_q, retire_head_refused_q};
 
   // synthesis translate_off
   logic held_fragment_valid_q;
   logic [175:0] held_fragment_payload_q;
+  logic held_retire_head_valid_q;
+  logic [224:0] held_retire_head_payload_q;
   always_ff @(posedge clk or negedge rst_n) begin : p_packet_c_assertions
     if (!rst_n) begin
       held_fragment_valid_q <= 1'b0;
       held_fragment_payload_q <= 176'd0;
+      held_retire_head_valid_q <= 1'b0;
+      held_retire_head_payload_q <= 225'd0;
     end else begin
+      if (retire_head_capture_w && retire_head_v_q && !retire_head_consume_w)
+        $fatal(1, "Packet-C result head overwritten without consumption");
+      if (held_retire_head_valid_q &&
+          (!retire_head_v_q ||
+           ({retire_head_rgb_q, retire_head_a_q, retire_head_texel_idx_q,
+             retire_head_status_q, retire_head_tag_q, retire_head_ctx_q,
+             retire_head_refused_q} != held_retire_head_payload_q)))
+        $fatal(1, "Packet-C result head changed while held");
+      held_retire_head_valid_q <= retire_head_v_q && !retire_head_consume_w;
+      if (retire_head_v_q && !retire_head_consume_w)
+        held_retire_head_payload_q <=
+            {retire_head_rgb_q, retire_head_a_q, retire_head_texel_idx_q,
+             retire_head_status_q, retire_head_tag_q, retire_head_ctx_q,
+             retire_head_refused_q};
       if (cand_fire_o && (sequence_abort_q || sequence_mismatch_w))
         $fatal(1, "Packet-C admitted a candidate during sequence terminal");
       if (frag_valid_o && (sequence_abort_q || sequence_mismatch_w))

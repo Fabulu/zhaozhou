@@ -91,9 +91,9 @@ PROTECTED_HASHES = {
     # Packet E legitimately refreshes the V3 source and generated interface while
     # retaining Packet D's public closure and every protected old/oracle byte.
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "07d7067153bbc7cd8514818a1487703bdec07109fa2b8932164e1f0ce9f1a057",
+        "427a3ed3e592358cd7c29f0ca8033f8665c9afbbea63a5a274941dad8d9dc25f",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "01a60a6be13b1878c5ac43dcd0c0da043636f11c85a04feb05297382dae6a33e",
+        "8cb3095799c1cae4ea99f365dad6d4ceee5e41456e17b0945355253e90c02090",
     "fpga/rtl/raster/zhao_raster_attrdiv.sv":
         "5f5e9b0dbd3d1c23d4b0b55c84aaa06e873d0aee72be25bed2d64e7ff1424eca",
     "fpga/rtl/raster/zhao_raster_attrstep.sv":
@@ -105,7 +105,7 @@ PROTECTED_HASHES = {
     "fpga/rtl/geometry/zhao_geom_bin_pipe.sv":
         "70e139852dcd2dd0dca09b5b52a3fb8f50518e970de5eac500dd1b03d4853766",
     "fpga/rtl/prod/zhao_prod_top.sv":
-        "d3cf61c302f73c1d656ae481ae40b775ddadccec50efe778d6071ea2238ede54",
+        "28116b822bf1e92844d8c10b08def329c63655cb55deed3d1db31456d7da7b51",
 }
 
 
@@ -442,12 +442,23 @@ def validate_d3_shape(tile: str, binpipe: str, mutant: str) -> None:
         ".job_valid_i(start_valid_w[ga+1])",
         "assign row_delivered_next_w = row_delivered_q | row_lane_fire_w;",
         "for (ga = 0; ga < 3; ga = ga + 1)",
+        "logic attr_join_valid_q;",
+        "assign attr_join_consume_w = attr_bundle_valid_w &&",
+        "assign attr_join_room_w = !attr_bundle_valid_w || attr_join_consume_w;",
+        "assign attr_join_capture_w = attr_source_valid_w && attr_join_room_w;",
+        "attr_join_valid_q <= attr_join_capture_w ||",
+        "request_w.u_over_w              = attr_join_q_q[1];",
+        "continuation_w.earlyz.in_tile_addr = {attr_join_row_q[0], attr_join_col_q[0]};",
+        "(&attr_idle_w) && !(|attr_q_valid_w) &&\n"
+        "                            !attr_bundle_valid_w;",
         "pretex_w = make_raster_pretex(continuation_w, request_w);",
         "earlyz_payload_in_w = pack_earlyz_payload(pretex_w.payload);",
         "zhao_raster_earlyz #(.PAYLOAD_W(410))",
         "zhao_skid2 #(.W(490))",
         ".rst_n(rst_n)",
         "zhao_raster_texture_stage_v3 #(.MIGRATION_SHADOWS(1'b0))",
+        "output logic                lifetime_structural_fault_o",
+        ".lifetime_structural_fault_o(lifetime_structural_fault_o)",
         "`ZHAO_PACKET_D_SKID_DN_READY",
         "joined_attr_drop_w",
         "earlyz_abort_drop_w",
@@ -493,6 +504,8 @@ def validate_d3_shape(tile: str, binpipe: str, mutant: str) -> None:
         "zhao_geom_binner_v2 #(",
         "zhao_raster_tile_pipe_v2 u_tile",
         "output logic               binner_initialized_o",
+        "output logic               lifetime_structural_fault_o",
+        ".lifetime_structural_fault_o(lifetime_structural_fault_o)",
         "if (tri_ready_o) binner_initialized_o <= 1'b1;",
         "assign quiet_o = binner_initialized_o && !frame_inflight_q",
         "assign frame_fault_clear_ready_o = binner_initialized_o",
@@ -618,6 +631,37 @@ class PacketDClosureTests(unittest.TestCase):
                 binpipe,
                 mutant,
             )
+        with self.assertRaises(AssertionError):
+            validate_d3_shape(
+                tile.replace(
+                    "assign attr_join_capture_w = attr_source_valid_w && attr_join_room_w;",
+                    "assign attr_join_capture_w = attr_source_valid_w;",
+                    1,
+                ),
+                binpipe,
+                mutant,
+            )
+        with self.assertRaises(AssertionError):
+            validate_d3_shape(
+                tile.replace(
+                    "(&attr_idle_w) && !(|attr_q_valid_w) &&\n"
+                    "                            !attr_bundle_valid_w;",
+                    "(&attr_idle_w) && !(|attr_q_valid_w);",
+                    1,
+                ),
+                binpipe,
+                mutant,
+            )
+        with self.assertRaises(AssertionError):
+            validate_d3_shape(
+                tile,
+                binpipe.replace(
+                    ".lifetime_structural_fault_o(lifetime_structural_fault_o)",
+                    ".lifetime_structural_fault_o()",
+                    1,
+                ),
+                mutant,
+            )
 
     def test_cmake_registration_and_mutation_controls(self) -> None:
         cmake = (REPO / "tests/CMakeLists.txt").read_text(encoding="utf-8")
@@ -655,6 +699,17 @@ class PacketDClosureTests(unittest.TestCase):
         for relative, expected in PROTECTED_HASHES.items():
             with self.subTest(path=relative):
                 self.assertEqual(sha256(REPO / relative), expected)
+        attributes = set((REPO / ".gitattributes").read_text(
+            encoding="utf-8"
+        ).splitlines())
+        for relative in (
+            "fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv",
+            "fpga/rtl/prod/zhao_prod_top.sv",
+            "tests/geometry/tb_geom_bin_pipe_v2.sv",
+            "tests/raster/tb_raster_texture_stage_v3.sv",
+            "tests/texture/texture_island_v3_packet_b_fullctx.cpp",
+        ):
+            self.assertIn(relative + " text eol=lf", attributes)
         raw = (REPO / "fpga/rtl/prod/zhao_prod_top.sv").read_bytes()
         self.assertNotEqual(hashlib.sha256(raw + b"\n").hexdigest(),
                             PROTECTED_HASHES["fpga/rtl/prod/zhao_prod_top.sv"])

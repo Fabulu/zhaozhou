@@ -333,3 +333,54 @@ feeds owner ready in the same cycle; and cut the measured owner issue/COMBINE
 notification families while preserving actual-accept semantics and read-late
 publication. Only after focused correctness and mutant gates should one later fit
 ask the 100-MHz question again. Packet F remains red and Packet H remains excluded.
+
+## Timing3 implementation state — not yet measured
+
+The third batch is tied directly to timing2's 1,987 core-to-core paths:
+
+- A one-entry **129-bit elastic ATTR join** captures all three quotient/row/column/
+  LAST/saturation/error lanes before coordinate/range classification and Early-Z.
+  It supports same-edge consume/refill, keeps malformed bundles out of Early-Z,
+  includes its head in quiet, and adds one clock without changing II=1.
+- Packet C adds one **225-bit elastic result head** after V3 acceptance. V3 ready
+  now depends only on head occupancy, registered abort, and fragment credit;
+  returned context/sequence cannot feed owner ready. The head supports same-edge
+  consume/refill, holds the complete tuple, drains every younger result after a
+  mismatch, and is included in clear/quiet.
+- Owner ISSUE notifications are classified on their original edge and cross one
+  register before scoreboard/counter writes. Matching pending acceptance forwards
+  into a same-cycle return snapshot and rejects consecutive duplicates. Actual
+  COMBINE acceptance likewise crosses one identity register before `cbi_q`, with
+  one-cycle full-identity forwarding to the first READ_LATE source read and early
+  final snapshot. Quiet includes every new record.
+- The existing reset-lifetime classification now has an explicit output propagated
+  island→Packet C→tile→bin for Packet H; it adds no new fault source. Six injected
+  lifetime sources remain high through clear and low only after reset, while a
+  recoverable same-edge fault leaves this classification low.
+- Both physical characterization outputs carry the Quartus-supported
+  `(* useioff = 1 *)` attribute so their direct registers may pack into I/O cells;
+  this targets timing2's remaining 13 boundary-only paths without changing the
+  observed stream.
+
+Current rebuilt gates are Packet A **20/20** (split 5 layout + 15 ownership),
+Packet B **74/74**, Packet C/D/F **21/21**, Packet E **26/26**, owner **5/5**,
+interface **113/113**, production accounting **51/51**, Packet G **22/22**,
+excluded Packet-H raw-LAST **9/9**, full-context lifetime classification **1/1**,
+and connected G8A activity 15 checks at 7,808 clocks with unchanged jobs=3,
+fills=1, beats=8, framebuffer beats=512, tiles=2, and signatures=256.
+
+Independent read-only review found the three elastic/notification cuts clean and
+confirmed the combiner's registered R-stage supplies the forwarding latency
+assumption. Local Qwen xhigh independently accepted the owner forwarding after
+its first reading was corrected with the actual pending predicate, unconditional
+C0 capture, and legal FINAL ordering. Its later elastic review's two rejections
+do not survive source inspection: `earlyz_frag_ready_w` is the ordinary Early-Z
+input credit, not an “early zero” condition, and every head accepted during
+registered abort is unconditionally consumed by `drop_fire_o` on its next visible
+edge. The concern is retained as a review record rather than silently promoted.
+
+`@g8a-timing3` is prepared as a one-shot clean/pushed seed-1 physical lane pinned
+to the immutable timing2 failed receipt. Static controls are 14/14 and a focused
+review verified the actual remote/hash/preflight/manifest/atomic-move/tool-lock
+predicates, not merely their diagnostics. It has not launched and no Timing3
+resource/Fmax claim exists.

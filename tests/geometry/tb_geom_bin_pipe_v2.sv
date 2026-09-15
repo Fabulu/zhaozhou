@@ -76,6 +76,7 @@ module tb_geom_bin_pipe_v2 (
     input  logic               frame_fault_clear_valid_i,
     output logic               frame_fault_clear_ready_o,
     output logic               frame_fault_o,
+    output logic               lifetime_structural_fault_o,
 
     input  logic               cfg_valid_i,
     output logic               cfg_ready_o,
@@ -255,6 +256,7 @@ module tb_geom_bin_pipe_v2 (
       .frame_fault_clear_valid_i(frame_fault_clear_valid_i),
       .frame_fault_clear_ready_o(frame_fault_clear_ready_o),
       .frame_fault_o(frame_fault_o),
+      .lifetime_structural_fault_o(lifetime_structural_fault_o),
       .cfg_valid_i(cfg_valid_i), .cfg_ready_o(cfg_ready_o),
       .cfg_op_i(cfg_op_i), .cfg_page_generation_i(cfg_page_generation_i),
       .cfg_selector_i(cfg_selector_i), .cfg_row_i(cfg_row_i),

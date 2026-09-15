@@ -8376,6 +8376,7 @@ add_test(NAME texture_v3_registration_static
           PacketAOwnershipAndClosureTests.test_aux_registered_clamp_transport_reaches_all_committed_mutants
           PacketAOwnershipAndClosureTests.test_v3_owner_combine_feedback_cut_keeps_generation_witness
           PacketAOwnershipAndClosureTests.test_v3_owner_retirement_head_is_bounded_and_controlled
+          PacketAOwnershipAndClosureTests.test_v3_owner_timing3_notifications_preserve_event_moments
           PacketAOwnershipAndClosureTests.test_material_writeback_cut_reaches_all_committed_mutants
           PacketAOwnershipAndClosureTests.test_rcp_v4_balanced_lzc_direct_oracle_and_mutant_are_exact
           -q)

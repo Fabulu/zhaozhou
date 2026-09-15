@@ -90,9 +90,9 @@ PROTECTED_HASHES = {
     "fpga/rtl/common/zhao_shell_top.sv":
         "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
     "fpga/rtl/prod/zhao_prod_top.sv":
-        "d3cf61c302f73c1d656ae481ae40b775ddadccec50efe778d6071ea2238ede54",
+        "28116b822bf1e92844d8c10b08def329c63655cb55deed3d1db31456d7da7b51",
     "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv":
-        "2d452a1e80a75da4a8dac859a69c7467e2190ec7364cf3e8be0f16f8355421da",
+        "3fddbe917e3e43fc1bb3db2ed08c01b8689aea357ec1ec4c7ef89b75b7297335",
     "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv":
         "e78372fef643dbb71bdb314a0c436aedf98c6b62336f0f35708cdf84c52f06a5",
     "fpga/rtl/raster/zhao_raster_attrgrad_v2.sv":
@@ -100,15 +100,15 @@ PROTECTED_HASHES = {
     "fpga/rtl/geometry/zhao_geom_binner_v2.sv":
         "7b89e1705420a2fd5ebfd84ceed9f27fb0855d13bc6f8c2d2c19dbc38ad3e867",
     "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv":
-        "7b25f7425bf6cdf93b810d8ca514f5c372b9fc18707b51924b0db854a716876e",
+        "3e475e9fbd94cfe81f5f2966feeb35e7b0ecc5bfd0c754b4b593d1bf3c0fdd79",
     "fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv":
-        "44d7a155d176c99bd0b4587e93ca693477ae30154e9513e78ecc0a4af2ae4536",
+        "fd0e86a403ebd4438b5ab348f1ad0a2edbf63f07bc7718aa5f8135a893b2f815",
 }
 CURRENT_HASHES = {
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "01a60a6be13b1878c5ac43dcd0c0da043636f11c85a04feb05297382dae6a33e",
+        "8cb3095799c1cae4ea99f365dad6d4ceee5e41456e17b0945355253e90c02090",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "07d7067153bbc7cd8514818a1487703bdec07109fa2b8932164e1f0ce9f1a057",
+        "427a3ed3e592358cd7c29f0ca8033f8665c9afbbea63a5a274941dad8d9dc25f",
 }
 
 
@@ -597,7 +597,9 @@ class PacketEClosureTests(unittest.TestCase):
         payload = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(payload["module"]["name"], "zhao_texture_island_v3_top")
         self.assertEqual(len(payload["parameters"]), 15)
-        self.assertEqual(len(payload["ports"]), 118)
+        self.assertEqual(len(payload["ports"]), 119)
+        self.assertIn("lifetime_structural_fault_o",
+                      {row["name"] for row in payload["ports"]})
         self.assertEqual(
             tuple(row["path"] for row in payload["source_closure"]), TOP_SOURCES
         )
