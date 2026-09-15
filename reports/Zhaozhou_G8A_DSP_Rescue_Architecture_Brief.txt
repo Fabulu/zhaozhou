@@ -1,0 +1,1896 @@
+ZHAOZHOU: G8A DSP RESCUE
+Exact local arithmetic sharing and packing; no capability cuts
+Architecture and implementation brief for the hardware coordinator
+Version 1.0 -- 15 September 2026
+===============================================================================
+
+READ THIS FIRST
+
+Primary objective: investigate and implement a same-function G8A reduction from
+49 physical Cyclone V DSP blocks to 30, subject to exact arithmetic, protocol,
+latency/throughput, ALM, RAM and timing qualification. A further exact perspective
+product decomposition targets 28. A more aggressive one-DSP-per-attribute worker
+is a separate alternative, not another saving to add to the first worker.
+
+This is a concrete architecture proposal grounded in the inspected source and
+existing physical receipt. It is NOT implemented RTL, a Quartus measurement,
+production adoption, a whole-console total, or permission to reduce features.
+
+The supplied Python validation ran successfully. It checks mathematical identities,
+bit-vector results, a source-shaped bilerp elastic model, and abstract schedules.
+No SystemVerilog compiler, Verilator, vendor simulator, Quartus, board load, or
+compiled ZRef execution was performed while writing this brief. The distinction
+is essential: arithmetic and a calendar can be checked here; actual mapping,
+fitter area, timing and connected frame capacity must be checked downstairs.
+
+Repository: Fabulu/zhaozhou
+Inspected branch: claude/ceiling-architecture-20260912
+Inspected HEAD: 85085a5349403d331ef5bcc0d35ea4b8ee2a00d1
+Measured specimen source: e3b3cec9bc17348711a3fa9bf999cb8023d4896e
+Measured row: zhao_raster_texture_v3_fit_top@g8a-timing2
+Device: 5CSEBA6U23I7; tool family/version: Quartus Prime Lite 17.0.2
+Known local-work caveat: GitHub does not expose uncommitted timing3/Packet-H work.
+
+The owner has requested this brief, not an interruption of a running immutable
+fit. Read and integrate it with the current coordinator's real local state.
+Do not restart the rescue, regenerate a speculative whole-machine bill, overwrite
+uncommitted changes, change the accepted product laws, or launch a new fit loop.
+
+CONTENTS
+  01. Executive decision and non-overlapping targets
+  02. Authority, freshness and protected scope
+  03. What the current 49 DSPs actually cover
+  04. Arithmetic invariants and width rules
+  05. The exact 27-bit multiplication boundary
+  06. ATTR3: three DSPs per attribute lane
+  07. ATTR3 fixed schedule, including fast divider results
+  08. Attribute state, handshake, cancellation and quiet
+  09. ATTR1: one DSP per attribute lane, optional second endpoint
+  10. BIL2: two DSPs per bilerp lane without fewer filter lanes
+  11. UV2: two DSPs per perspective coordinate
+  12. Timing and ALM containment
+  13. Composition, source selection and accounting
+  14. Functional and cycle verification matrix
+  15. Adversarial controls and falsifiers
+  16. Mapping, vendor proof and the single composed fit
+  17. Integration with timing3 and the existing roadmap
+  18. Delivery packets and review boundaries
+  19. Acceptance, rollback and stop conditions
+  20. What these changes do not prove
+  21. Independent checks actually executed for this brief
+  22. Source index and exact repository pins
+  23. Compact agent handoff
+
+
+01. EXECUTIVE DECISION AND NON-OVERLAPPING TARGETS
+===============================================================================
+
+Do not attack the reciprocal first. The largest local DSP owner is the three
+attribute-gradient lanes, which collectively use 24 physical DSP blocks. Their
+multiplications are job-setup work, while the ongoing pixel walk uses addition.
+This is unusually attractive arithmetic to share without serializing the actual
+pixel walk. [R01,R02]
+
+The selected first portfolio is:
+
+  ATTR3: three existing 8-DSP attribute lanes -> three 3-DSP workers = -15
+  BIL2:  four existing 3-DSP bilerp lanes -> four 2-DSP lanes        =  -4
+                                                                    ---
+  Primary structural objective: 49 -> 30 physical DSP blocks          -19
+
+Then consider:
+
+  UV2: two existing 3-DSP perspective products -> two 2-DSP products = -2
+  Expanded structural objective: 49 -> 28 physical DSP blocks
+
+Optional alternative:
+
+  ATTR1 replaces ATTR3 with one 27-bit multiplier per attribute lane.
+  Attribute contribution becomes 3 rather than 9 DSP blocks.
+  That is six additional blocks below ATTR3, NOT another -21 below ATTR3.
+
+  Portfolio                  ATTR   BILERP   PERSP   OTHER   TOTAL   DELTA
+  Historical G8A timing2        24       12       6       7      49       0
+  BIL2 alone                   24        8       6       7      45      -4
+  ATTR3 alone                   9       12       6       7      34     -15
+  ATTR3 + BIL2                  9        8       6       7      30     -19
+  ATTR3 + BIL2 + UV2            9        8       4       7      28     -21
+  ATTR1 alone                   3       12       6       7      28     -21
+  ATTR1 + BIL2                  3        8       6       7      24     -25
+  ATTR1 + BIL2 + UV2            3        8       4       7      22     -27
+
+Every row except the historical row is a proposed structure, not a new receipt.
+The unmodified remainder is a residual of the inspected hierarchy, not a promise
+that composition will preserve an identical physical remainder under a new fit.
+
+DECISION: Build toward ATTR3 + BIL2 first. Do not stall that useful endpoint on
+ATTR1, on an unrelated signedness mode in a generic wrapper, or on UV2's optional
+recombination timing. Investigate ATTR1 through a bounded implementation/model
+only if it does not derail the primary endpoint.
+
+No feature, arithmetic precision, camera count, fragment order, texture format,
+filter lane count, clock target, frame obligation or legal program is removed.
+If a proposal cannot preserve its required behavior/rate, it is not an accepted
+implementation of this brief.
+
+
+02. AUTHORITY, FRESHNESS AND PROTECTED SCOPE
+===============================================================================
+
+2.1 Start from the real current worktree, not this document's historical HEAD
+
+The pin makes this analysis reproducible. It does not authorize checking out an
+old commit over live work. At receipt, record the actual branch, HEAD, dirty
+paths and active coordinator/fit ownership. Compare only the affected source
+closures with the pin. In particular, timing3 may already have edited:
+
+  fpga/rtl/raster/zhao_raster_attrgrad_v2.sv
+  fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv
+  fpga/rtl/raster/zhao_raster_texture_stage_v3.sv
+  fpga/rtl/texture/zhao_texture_island_v3_top.sv
+
+Preserve all accepted timing3 and fault/ownership changes. The proposed arithmetic
+backend is a small change inside that living architecture, not a competing copy.
+If the divider's latency or operand widths have changed, rederive section 7's
+calendar from the new implementation before preserving its cycle claim.
+
+2.2 Do not interrupt the specimen
+
+Protect every input the running tool can still read: RTL, packages, generated
+files, source lists, macros, ROMs, QSF, SDC, parameter manifests, and collection
+scripts. Candidate development is allowed only in a demonstrably isolated source
+closure/worktree with separate temporary output. Do not mutate shared manifests
+or a generated top while another process may reread them. [R12,R13]
+
+Reuse the current runner, source hashing, ownership checker and report parser.
+This packet must not become a replacement evidence framework or another long
+accounting project. It needs a few new targets/assertions and the existing gates.
+
+2.3 Authority order for behavior
+
+  - Current owner-approved contracts and current ZRef numerical law.
+  - Current accepted packet ABI, ownership, cancellation and quiet contracts.
+  - Existing behavioral RTL and executable controls for that law.
+  - This brief's proposed resource mechanism and schedules.
+
+This brief does not make a stale oracle authoritative. The unversioned attribute
+candidate has different rounding/stepping semantics and is NOT the correct
+oracle for ATTR3 or ATTR1. Use the current div_rhu_s128-based law. [R06,R07]
+
+2.4 Scope deliberately excluded
+
+No new global arithmetic scheduler, frame allocator, generic microcode engine,
+FIELD redesign, geometry projector change, single-filter serialization, FIFO
+capacity reduction, retimed reciprocal, or content/profile reduction belongs in
+this implementation. Three independent small attribute workers are intentional.
+Do not save two more multipliers by coupling every attribute to one global queue.
+
+
+03. WHAT THE CURRENT 49 DSPS ACTUALLY COVER
+===============================================================================
+
+The native G8A timing2 result is 12,772 ALMs, 49 physical DSP blocks, 71 reported
+RAM blocks and 84.95 MHz. The 100 MHz timing rule remains failed. It is a
+three-plane connected subsystem characterization, not a final console fit. [R01]
+
+The non-overlapping DSP cover used here is:
+
+  u_tile.g_attr[0].u_attrgrad      8
+  u_tile.g_attr[1].u_attrgrad      8
+  u_tile.g_attr[2].u_attrgrad      8      attribute total 24
+
+  u_texture_v3.g_bilerp[0]         3
+  u_texture_v3.g_bilerp[1]         3
+  u_texture_v3.g_bilerp[2]         3
+  u_texture_v3.g_bilerp[3]         3      bilerp total 12
+
+  u_texture_v3.u_persp            6      paired perspective total 6
+
+  everything else in the 49       7      leave unchanged in this brief
+
+The nested divider in each attrgrad uses zero DSP. Sharing those dividers would
+not recover the 24 blocks and would create a separate throughput problem.
+The two edgewalk DSPs are inside the residual seven, not a new charge to add.
+Do not sum the inclusive texture parent on top of its bilerp/perspective children.
+
+These counts identify where to act, but they do not establish exact attribution
+of every internal multiplier expression to a physical mode. The new map must
+reconcile the replacement's complete physical hierarchy, not assume that source
+asterisks are physical DSP counts. [R01,R08,V01,V02]
+
+
+04. ARITHMETIC INVARIANTS AND WIDTH RULES
+===============================================================================
+
+4.1 Terminology
+
+  sN(x): interpret N raw bits as a two's-complement signed integer.
+  uN(x): interpret N raw bits as unsigned.
+  sxW:   sign-extend to W bits BEFORE arithmetic or shifting.
+  zxW:   zero-extend to W bits BEFORE arithmetic or shifting.
+  wrapN: retain low N bits and interpret them as signed.
+  floor: mathematical floor, including negative inputs.
+
+The numbers below describe the inspected ports, not informal typical gameplay
+ranges. Do not reduce widths because the current test scene happens to be small.
+
+4.2 Attribute law that must remain exact
+
+Inputs to each lane:
+
+  n0                  signed 96
+  dNdx, dNdy          signed 72
+  area2               unsigned 47; zero is a terminal error in the leaf
+  global min_x        signed 12
+  tile_x, tile_y      signed 12
+  tile_x - min_x      signed 13, subtraction AFTER sign extension
+  grad_x and q        signed 32
+  tile offset         signed 45
+
+With dx/dy sign-extended as necessary:
+
+  base = wrap96(n0 + dx*min_x + dy*tile_y + floor(dx/2) + floor(dy/2))
+  row_n = wrap96(base + dy*coverage_row)
+
+  div_current(n,a) = sat_s32(floor((n + floor(a/2))/a)), for a > 0
+  grad_x          = div_current(dx, area2)
+  row_q           = div_current(row_n, area2)
+  offset          = exact_s45(grad_x * (tile_x - min_x))
+  seed            = wrap32(row_q + offset)
+  pixel_q(c)      = wrap32(seed + c*grad_x)
+
+Negative exact halves round toward positive infinity in div_current. The shifts
+of negative dx/dy are arithmetic/floor halves, not truncation toward zero.
+Saturation belongs to division. The global-to-tile seed and pixel walk wrap;
+they must not start saturating because a shared arithmetic helper saturates.
+
+Preserve the original sequence of numerical truncations. Intermediate exact
+products fit well within 96 bits, but n0 plus those products can cross a 96-bit
+rail for arbitrary legal port bit patterns. Addition modulo 2^96 is associative,
+so the proposed serial base fold reproduces the current RTL's final low 96 bits.
+Do not pass an unbounded Python or C++ sum to the divider and pretend that is
+always equivalent to the RTL. Separately test the valid production ZRef domain.
+
+4.3 Never redivide at the tile edge
+
+The once-rounded grad_x is accumulated from GLOBAL min_x. A fresh division at the
+tile's left edge changes results. Simple witness: area=3, dx=1, row numerator at
+min_x=0, tile delta=2. Rounded grad_x is 0, so the stepped value is 0; a fresh
+rounded division of 2/3 is 1. The existing omitted-min-X mutant protects this
+boundary. [R02,R06]
+
+4.4 No "zero means free" shortcut
+
+Keep zero-area errors, saturated quotients, depth-zero perspective results and
+all logical event counters. Constant/zero operands may simplify naturally in
+Quartus, but they do not justify deleting complete runtime operand paths from
+the selected legal domain or changing divide/product counts.
+
+
+05. THE EXACT 27-BIT MULTIPLICATION BOUNDARY
+===============================================================================
+
+5.1 Required mathematical interface
+
+A small local/common helper, proposed name zhao_mul27_exact, computes:
+
+  a_i: signed 27
+  b_i: signed 27
+  p_o: signed 54 = a_i * b_i, exact and unrounded
+
+The helper itself is combinational and stateless. Caller stages own clocks,
+enables, reset, valid, tags and result holding. Do not add an internal ready
+protocol or shared job queue. The mapping objective is one physical Cyclone V
+DSP per live helper instance. Cyclone V explicitly supports a single 27x27 mode;
+that is a device capability, not proof of this new helper's mapping. [V01,V02]
+
+5.2 First implementation choice: simple exact inference, then inspect
+
+An explicitly signed 27-by-27 expression assigned directly to a signed 54-bit
+signal, with the local multstyle="dsp" preference, is a reasonable FIRST mapped
+candidate. Do not put a 96-bit cast around the operands at this boundary. Keep
+all extension/recombination outside it. Do not apply a broad DSP preference to
+unrelated adders or the entire subsystem.
+
+The documented multstyle attribute is a preference, not a guarantee. The source
+index points to a Standard 18.1 guide for that distinction; the installed 17.0.2
+compiler and its actual result decide the local mapping. [V03]
+
+Only one bounded MapOnly discriminator is needed to establish whether the exact
+used operand shapes and output bits map to the intended blocks. Observe actual
+27-bit/native DSP instances and complete output use, with dynamically varied
+inputs and observed results. Constant or unconnected inputs are not evidence.
+
+5.3 If inference does not produce the required count
+
+Use a native Cyclone V 27x27 implementation behind the same exact boundary.
+Derive the full parameter/port set from the INSTALLED Quartus-17 declaration,
+XML/IP generator and library setup. Do not copy the dual18 atom parameter set
+and merely replace its mode string: the 27-bit mode's port configuration must
+be checked independently. This document deliberately does not invent that recipe.
+
+Before accepting a custom native atom, demonstrate:
+
+  - exact selected mode and operand widths;
+  - one physical DSP in the genuine map;
+  - all required product bits remain live;
+  - signed product behavior on the relevant full operand domain via the real
+    vendor model or an equivalently approved technology-level proof;
+  - the portable branch and custom atom cannot coexist accidentally.
+
+If using a custom primitive, use an explicit exclusive synthesis/behavioral
+selector, like the existing zhao_dual18_mul discipline. Do not let an unselected
+portable fallback silently pass a native-mapping test. If simple inference is
+selected instead, say so honestly; no custom-atom simulation claim is implied.
+
+The geometry projection service is not a prerequisite for this tiny boundary.
+Do not delay the DSP-rescue kernel on the larger shared-projector programme.
+
+
+06. ATTR3: THREE DSPS PER ATTRIBUTE LANE
+===============================================================================
+
+6.1 Replace duplicated expressions with one local worker
+
+The current lane has two large products in base_min_y0_c on job acceptance and
+one grad_x*tile_delta product on gradient return. The row walk itself is add-only;
+the small row-index offset is already a shift/add network. [R02]
+
+Implement exactly ONE local 72x13 worker inside each attribute lane. Its three
+physical 27-bit multipliers are shared between these opcodes:
+
+  BASE_X: A = accepted dNdx; B = sign-extended accepted min_x.
+  BASE_Y: A = accepted dNdy; B = sign-extended accepted tile_y.
+  OFFSET: A = sign-extended captured grad_x; B = captured tile_delta.
+
+The opcodes only route three known results inside one active job. They are not
+new fragment identifiers, owner generations, externally programmable microcode,
+or a new transaction-lifetime owner.
+
+Keep three complete attribute/divider/walk lanes. This packet neither serializes
+their output streams nor shares their dividers.
+
+6.2 Exact decomposition
+
+For signed72 A, use the RAW slices:
+
+  L0 = u24(A[23:0])
+  L1 = u24(A[47:24])
+  H  = s24(A[71:48])
+
+Then the exact signed integer identity is:
+
+  A = L0 + (L1 << 24) + (H << 48)
+  A*B = L0*B + ((L1*B) << 24) + ((H*B) << 48)
+
+L0/L1 must be zero-extended to signed27; H and B must be sign-extended.
+A negative A has an unsigned middle piece. Treating all three pieces as signed
+is just as wrong as treating all three as unsigned.
+
+Illustrative typed expressions (arithmetic skeleton, not tested production RTL):
+
+  logic signed [26:0] a0, a1, ah, b27;
+  logic signed [53:0] p0_full, p1_full, ph_full;
+
+  assign a0  = $signed({3'b000, a72[23:0]});
+  assign a1  = $signed({3'b000, a72[47:24]});
+  assign ah  = $signed({{3{a72[71]}}, a72[71:48]});
+  assign b27 = $signed({{14{b13[12]}}, b13});
+
+  // Three separate exact helpers, each physically qualified as one DSP.
+  // p0_full = a0*b27; p1_full = a1*b27; ph_full = ah*b27.
+
+6.3 Sufficient pipeline widths
+
+These are conservative exact widths, not a proposal to change the public ABI:
+
+  low partials p0/p1: signed38
+  high partial ph:   signed37
+  s01 = p0 + p1<<24: signed62
+  final product:     signed85
+
+Before capturing shortened product registers, assert that all discarded helper
+output bits are the corresponding sign extension. In the small OFFSET mode,
+assert that product85[84:45] equals the sign extension of bit44 before capturing
+signed45. The full signed32-by-signed13 product is exactly representable there.
+
+To combine, SIGN EXTEND BEFORE SHIFTING:
+
+  s01_62 = sx62(p0_38) + (sx62(p1_38) << 24)
+  prod85 = sx85(s01_62) + (sx85(ph37_delayed) << 48)
+
+A left shift in the original narrow operand width loses upper bits before a
+later cast can recover them. Include a committed mutant for that error.
+
+6.4 Concrete micro-pipeline
+
+Feed helper operands from already registered job/gradient state and a small
+registered phase selection. Define M as the rising edge of a micro-issue:
+
+  Edge M:   capture the three partial products and operation tag.
+  Edge M+1: capture s01_62; delay ph37 and the tag/valid.
+  Edge M+2: capture prod85; publish result valid and its operation tag.
+  Edge M+3: architectural consumer commits that result.
+
+This worker has three edge intervals from micro-issue to consumer commit and
+can accept a micro-operation each clock. It does not need an input payload bank
+on top of the already registered job; adding one changes the calendar below.
+
+Reset clears all stage-valid bits and operation-pending bits. Payload registers
+need not be reset merely to hold zero when invalid. Reuse the project's existing
+valid/reset discipline; never expose uninitialized payload as valid work.
+
+6.5 Base accumulation without a second large sum tree
+
+At job acceptance capture n0 in the base accumulator and the required dx/dy,
+min_x, tile_y and tile_delta. Fold exactly one contribution per specified edge:
+
+  floor(dx/2), floor(dy/2), BASE_X product, BASE_Y product.
+
+Use wrapping96 addition after sign extension. Do not keep the original two
+parallel wide multipliers or the original full base sum alongside the new path.
+That would produce correctness but no DSP rescue.
+
+The 96-bit accumulator is the eventual base_min_y0 register, not a separate
+unbounded scratch queue. Product pipeline registers are private transient state.
+There is no reason for this design to allocate any new M10K.
+
+6.6 Expected physical structure
+
+  Per lane: three DSPs for the one worker; zero DSPs in the retained divider.
+  Three lanes: nine DSPs.
+  Deleted: both original independent base product cones and the independent
+           grad_x*tile_delta product cone in every selected candidate lane.
+
+Map must show the deleted cones absent, not merely unconnected source variables.
+The baseline old module may remain as an unselected oracle; it must not also be
+instantiated in the measured candidate hierarchy.
+
+
+07. ATTR3 FIXED SCHEDULE, INCLUDING FAST DIVIDER RESULTS
+===============================================================================
+
+7.1 The important correction to the informal proposal
+
+The inspected divider's externally visible response latency after acceptance is:
+
+  radix 2 ordinary nonsaturated divide: 100 clocks
+  radix 4 ordinary nonsaturated divide:  51 clocks
+  zero-area OR saturated divide:          2 clocks
+
+The RTL performs 98 or 49 main iterations, but those are not the complete visible
+latencies. The existing C++ test explicitly checks 100/51/2 and the corresponding
+busy-clock delta. We leave that divider UNCHANGED. [R03,R07]
+
+The earlier informal argument relied on ordinary division slack. This brief does
+better: it supplies an ATTR3 schedule whose base and offset are ready before EVEN
+THE EARLIEST first-row consumer needs them, assuming section 6's exact three-stage
+micro-pipeline and no extra hidden operand stage. This is a proposed schedule
+checked in an abstract model, not a claim that a new RTL implementation passed.
+
+7.2 Edge convention
+
+J is the rising edge accepting a new attribute job. A registered value produced
+at edge J+n is available combinationally AFTER that edge; another always_ff
+consumer reads it on the following edge unless explicitly sharing next-state
+logic. Do not accidentally count same-edge nonblocking assignments as available
+to another registered consumer.
+
+Micro-result convention:
+
+  micro-issue M -> partial capture M -> first combine M+1 -> final product M+2
+  -> architectural result consumption/accumulation M+3.
+
+The product inputs are read from existing registered job state before edge M.
+There is no additional operand-capture stage hidden ahead of M.
+
+7.3 Fixed base calendar
+
+  Edge     Multiplier micro-issue       Base accumulator action
+  J        none                        capture n0 and job state
+  J+1      BASE_X                      base += arithmetic_half(dx)
+  J+2      BASE_Y                      base += arithmetic_half(dy)
+  J+3      none                        hold
+  J+4      none                        base += completed BASE_X product
+  J+5      OFFSET if fast grad ready   base += completed BASE_Y; base_ready=1
+
+The simultaneous OFFSET issue and BASE_Y result consumption at J+5 are safe:
+these are different pipeline stages, and OFFSET writes tile_offset rather than
+the base accumulator when it later returns.
+
+The base fold has four additions over separate edges rather than an input tree
+of several wide additions. Every addition is modulo 2^96. A single adder can be
+selected explicitly if inference would otherwise instantiate several adders.
+Do not make a variable-width barrel-shift datapath: halves and product shifts
+are fixed positions. Keep operand muxes limited to the named contributions.
+
+7.4 Earliest gradient and coverage events
+
+The unchanged high-level FSM accepts a gradient divide at J+1. On a fast result:
+
+  J+3: divider response becomes visible.
+  J+4: gradient result is consumed; grad_x and flags are captured.
+  J+5: first coverage row can be accepted; OFFSET micro-issue uses captured grad.
+  J+6: first row divide can be accepted, using the completed base from J+5.
+  J+7: OFFSET final product becomes visible.
+  J+8: tile_offset commits; earliest row response becomes visible.
+  J+9: earliest row result is consumed and the pixel-walk seed commits.
+
+Thus the three-DSP worker need not extend the shortest baseline first-row path.
+It does NOT depend on pretending a two-cycle saturated divide takes 98 cycles.
+
+For an ordinary radix-2 gradient:
+
+  J+1:   gradient request accepted.
+  J+101: response visible.
+  J+102: gradient commits.
+  J+103: first coverage accept and OFFSET micro-issue.
+  J+104: row divide request accepted.
+  J+106: offset commits; a fast row result can also become visible.
+  J+107: earliest fast-row seed commits.
+
+For radix 4, replace the ordinary gradient visible latency with 51; the relative
+post-gradient calendar is identical. If coverage is delayed, both the original
+and candidate row schedule are delayed, while completed base/offset data remain
+held. Ordinary long-row division provides more slack, not a necessary premise.
+
+7.5 The invariant to prove in RTL
+
+Let G be the gradient response-consumption edge, C the coverage-accept edge and
+D the row divide acceptance edge. For the first row:
+
+  G >= J+4
+  C >= G+1
+  D >= C+1 >= J+6
+  base_ready commits at J+5, so the base is available before D.
+
+  offset_issue = G+1
+  offset_commit = G+4
+  earliest row result consumption = D + 2 + 1 >= G+5
+
+The offset is therefore available before even the fastest row consumption.
+This proof assumes the unchanged divider/FSM handshake and the stated kernel.
+It is a useful implementation contract: do not casually add another multiplier
+pipeline stage or move issue one edge later and retain the same claim.
+
+7.6 Safe implementation guards
+
+Do not feed an incomplete base to the divider or a stale offset to the seed
+adder just to meet a cycle assertion. Guard row-divide valid with base readiness
+and seed consumption with offset readiness if needed for fail-safe development.
+Then assert that these guards NEVER introduce a stall in the qualified ATTR3
+calendar. If they do, the implementation failed the zero-added-latency objective.
+Do not weaken the assertion to hide the failure.
+
+A changed current divider, changed start protocol, or an additional timing stage
+requires a new calendar. Keep the arithmetic candidate; report the changed
+latency and prove its actual workload before accepting it. Do not silently amend
+an existing exact-latency test for the untouched divider.
+
+7.7 No hidden full-frame claim
+
+This schedule preserves a local baseline under its assumptions. It does not
+certify that the old three-plane G8A path itself sustains final game throughput.
+It retains the divider's current row cost. Later full-plane/terrain composition
+still needs its own real workload proof. Passing this rescue does not turn the
+16x16 characterization profile into the complete cel-shaded game.
+
+
+08. ATTRIBUTE STATE, HANDSHAKE, CANCELLATION AND QUIET
+===============================================================================
+
+8.1 Suggested control implementation
+
+Retain the high-level job/gradient/coverage/row/walk FSM and its public ports.
+Add only the bounded local state needed to launch and recognize:
+
+  BASE_X issued/completed
+  BASE_Y issued/completed
+  OFFSET issued/completed
+  multiplier pipeline valids and a tiny internal operation tag
+  base preparation phase and base_ready
+
+Reuse existing job operands and grad_x/tile_delta storage where possible. Do not
+store another full 1,157-bit triangle record or another per-fragment context.
+There is exactly one active attribute job per lane, as in the inspected design.
+A small phase counter or explicit phase bits are preferable to a generic queue.
+
+Priority is deterministic: issue BASE_X at J+1, BASE_Y at J+2, and OFFSET once
+captured grad_x is available. In the inspected divider the earliest OFFSET issue
+is J+5, so the base issues cannot conflict with it. A duplicate-issue assertion
+must fire if a control error violates that property.
+
+8.2 Fixed local result sinks
+
+The worker is a fixed pipeline with always-available local destinations:
+
+  BASE_X/BASE_Y -> base accumulator on their scheduled result edges.
+  OFFSET        -> signed45 tile_offset register.
+
+Output backpressure on the pixel stream must not freeze this setup worker, replay
+a product, duplicate an accumulator addition or change a valid output's data.
+Because BASE_X and BASE_Y were issued on different clocks, they never contend for
+the one base write port. OFFSET has a different destination. No local response
+FIFO is necessary for this fixed schedule.
+
+If an implementation introduces a variable-latency helper or cannot keep these
+sinks available, it no longer matches this architecture. Design and prove the
+new buffering explicitly rather than treating lost results as harmless stalls.
+
+8.3 Preserve public handshake and exact outputs
+
+Under identical legal input valid/data and output-ready traces, ATTR3's target is
+cycle-by-cycle equivalence of:
+
+  job_ready, cov_ready, q_valid;
+  q value, row, column, last, saturated and error whenever valid;
+  every held output under stall;
+  idle/quiet observability;
+  accepted coverage/pixel/divide/saturation/error event counts.
+
+Keep the current wrapping pixel walk and all uncovered-column progression.
+A zero coverage mask still follows the current FSM/counter semantics; do not
+create a new "empty job" fast path without a separate contract and proof.
+
+ATTR3 does not change the divider implementation, so its response-visible and
+busy-counter tests must remain exactly as they were. Whole-lane cycle comparisons
+must be added, not inferred from matching final pixels.
+
+8.4 Error and cancellation behavior
+
+Preserve current errors as values/events: gradient and row saturation flags are
+combined as before; zero-area is a terminal divider error; invalid interpolated
+invw is handled by the existing parent abort law, not by silent truncation.
+
+The leaf does not gain a new asynchronous cancel or reset. The parent already
+cancels/sinks unadmitted candidates and drains admitted work. Let the bounded
+micro-operations finish and be included in local empty/idle checks. A recoverable
+frame fault must not clear multiplier valid bits in a way that leaves the parent
+waiting for a promised result forever. [R06,R09,R12]
+
+On physical reset, clear all new valids and pending obligations. A result from a
+pre-reset operation must never update a post-reset job. Test reset at every
+micro-pipeline phase, not only when the old lane was idle.
+
+8.5 Quiet and ownership
+
+A lane cannot advertise idle if a setup operation or result remains live, even
+if the high-level FSM is unexpectedly in IDLE. Healthy operation should have no
+micro-work remaining by final pixel retirement. Assert that as a structural
+invariant and expose no contradictory empty indication.
+
+Do not create a second V3 owner, second raster continuation queue, second frame
+sequence generator or new ownership registry. Internal X/Y/OFFSET tags are not
+fragment identities. Existing row/column/last cross-lane identity checks, fault
+priority, sink accounting, and one-owner guarantees remain mandatory.
+
+
+09. ATTR1: ONE DSP PER ATTRIBUTE LANE, OPTIONAL SECOND ENDPOINT
+===============================================================================
+
+9.1 Purpose and relationship to ATTR3
+
+ATTR1 is a more aggressive backend for the SAME numerical lane. It replaces
+ATTR3's three simultaneous partial multipliers with one signed27x27 multiplier.
+There are still three independent lanes and three unchanged dividers.
+
+Attribute DSP target: 24 -> 3. Relative to accepted ATTR3, the incremental target
+is only 9 -> 3, or six additional DSPs. Never double-count these alternatives.
+
+Its resource attraction is real, but it can add latency to short-gradient jobs.
+Do not select it automatically just because its map has the smallest DSP number.
+
+9.2 Partial-product schedule
+
+For each BASE operation use the same three-piece identity as ATTR3, but issue
+one partial per clock. Keep the multiplier result in a register before adding
+it to a wrapping signed85 accumulator. Avoid a multiplier-plus-wide-adder path
+on one edge. The multiplier can accept one partial each clock; the accumulator
+consumes the preceding registered product each clock.
+
+For OFFSET only, exploit the actual signed32 operand without losing semantics:
+
+  G = u24(G[23:0]) + (s8(G[31:24]) << 24)
+  G*delta = low24*delta + ((signed_high8*delta) << 24)
+
+The second OFFSET piece is SIGNED8, not the unsigned middle24 used in BASE.
+This is an opcode-dependent input extension into the same physical multiplier,
+not another multiplier. It needs two partial operations rather than three.
+
+9.3 Explicit calendar, job acceptance J=0
+
+  Edge   Issue partial     Accumulator/architectural action
+  J      none              base := n0; capture job
+  J+1    BASE_X low        base += floor(dx/2)
+  J+2    BASE_X middle     consume X low; base += floor(dy/2)
+  J+3    BASE_X high       accumulate X middle
+  J+4    BASE_Y low        accumulate X high; X complete visible
+  J+5    BASE_Y middle     base += X; initialize accumulator with Y low
+  J+6    BASE_Y high       accumulate Y middle
+  J+7    OFFSET low*       accumulate Y high; Y complete visible
+  J+8    OFFSET high*      base += Y; consume OFFSET low
+  J+9    none*             accumulate OFFSET high; OFFSET complete visible
+  J+10   none*             commit tile_offset
+
+*This earliest OFFSET schedule applies when the fast gradient committed at J+4.
+For a later gradient commit G, issue OFFSET at G+1 and G+2; commit at G+4.
+In general, first OFFSET issue is max(J+7, G+1).
+
+The base accumulator and partial-product accumulator are different registers
+with different roles. Do not accidentally overwrite the completed base with the
+later offset accumulation; every covered row still needs that base.
+
+The completed-partial sum can be consumed on the edge that initializes the next
+operation's accumulator, using the pre-edge completed value. Maintain exact
+operation tags/valids across that edge. A second 85-bit result FIFO is not required
+if this local always-ready consumption protocol is implemented as specified.
+
+9.4 Latency consequence
+
+ATTR1's base commits at J+8 instead of J+5. The first row divide therefore cannot
+accept before J+9. With a fast gradient the old row divide could accept at J+6;
+under the stated schedule, this can introduce three startup clocks.
+
+In the supplied ABSTRACT first-row calendars:
+
+  ATTR3 maximum added first-seed clocks: 0
+  ATTR1 maximum added first-seed clocks: 3
+
+Ordinary radix-2/radix-4 gradient division hides the BASE sequence. Delayed first
+coverage can also hide it. The OFFSET sequence still fits the earliest row-result
+window under the stated stages. None of this is an executed RTL timing claim.
+
+The three-clock figure is not an unconditional end-to-end frame upper bound:
+closed-loop stalls and arbitration can amplify or mask a local phase shift.
+Do not multiply it by a guessed triangle count and call that a workload proof.
+Measure real tile-job counts (including the same triangle visiting multiple
+tiles), short-gradient frequency, coverage distribution and the connected frame.
+
+9.5 Qualification required for selection
+
+ATTR1 may be selected only if:
+
+  - values and logical counters match the current law;
+  - every held interface remains stable and all work drains under fair readiness;
+  - the measured connected workload meets its required deadlines with reserve;
+  - any exact latency/acceptance contract change has explicit authorization;
+  - extra mux/control/accumulator cost is acceptable on the ALM axis;
+  - the selected map actually has one DSP per attribute worker;
+  - it beats ATTR3 on a trade the complete machine needs.
+
+If those questions remain open, retain ATTR3 and do not block BIL2 or roadmap
+progress. A passing arithmetic differential alone does not authorize slower
+production acceptance. A 30-DSP primary result is already worth landing.
+
+
+10. BIL2: TWO DSPS PER BILERP LANE WITHOUT FEWER FILTER LANES
+===============================================================================
+
+10.1 Precisely what to pack
+
+Keep the four existing bilerp channel workers. In EACH worker, replace only the
+two horizontal products in the B0-to-B1 stage:
+
+  du0 = s9(t10 - t00)
+  du1 = s9(t11 - t01)
+  fu  = u8(fraction_u)
+  pu0 = du0 * fu
+  pu1 = du1 * fu
+
+The products are simultaneous, use the same b1_ready decision and b0_valid token,
+and produce separate results. They are ideal partners for the existing stateless
+zhao_dual18_mul boundary. The later vertical product remains unchanged in the
+next pipeline stage. [R04,R08]
+
+10.2 Use all-signed primitive settings for this consumer
+
+The fractions are nonnegative, so sign-extend the differences and ZERO-extend
+fractions, then use signed multiplication on BOTH inputs of BOTH lanes:
+
+  AX_SIGNED=1, AY_SIGNED=1, BX_SIGNED=1, BY_SIGNED=1
+
+  ax = {{9{du0[8]}}, du0[8:0]}
+  ay = {10'b0, fu[7:0]}
+  bx = {{9{du1[8]}}, du1[8:0]}
+  by = {10'b0, fu[7:0]}
+
+The exact typed reconstruction is:
+
+  pu0_s18 = s18(resulta[17:0])
+  pu1_s18 = s18(resultb[17:0])
+
+Assert each 36-bit result's upper 18 bits are sign extension of bit17 before
+that capture. Reachable differences are -255..255 and fractions 0..255, so the
+products are well inside signed18. Do not treat an unsigned fraction with its
+bit7 set as a negative signed8 operand.
+
+This all-signed configuration avoids depending on a mixed-signedness mode for
+this particular consumer. It does NOT let an unsigned-only primitive calibration
+stand in for signed functional proof. Check the exact all-signed tuple used here.
+
+10.3 Preserve the existing filter arithmetic
+
+Keep:
+
+  a = (t00 << 8) + pu0
+  b = (t01 << 8) + pu1
+  dv = b - a
+  pv = dv * fv
+  sum = (a << 8) + pv
+  out = (sum + 32768) >> 16
+
+Keep the original sufficient signed intermediate widths, full U intermediates,
+and single final rounding. Do not quantize a/b to bytes early. An exact bilerp
+is not the same as independently rounding two horizontal lerps and then lerping
+them vertically. The supplied tests include a counterexample.
+
+10.4 Preserve stage timing and control exactly
+
+The current three elastic stages are:
+
+  B0: texels, fractions, token, channel
+  B1: exact horizontal intermediates, V fraction, token, channel
+  B2: held output byte, token, channel
+
+Ready propagates from B2 through B1 to B0. The primitive is combinational; the
+caller retains the existing stage registers and enables. There is no new valid,
+ready, latency, capacity, output reordering, or reset policy.
+
+  r2 = !b2_valid || out_ready
+  r1 = !b1_valid || r2
+  r0 = !b0_valid || r1
+
+The acceptance trace and output trace should therefore match cycle for cycle,
+including arbitrary stalls, full occupancy, back-to-back jobs and resets. Match
+jobs_o and occupancy_o as well as the final byte. On a held B1/B2 transaction,
+do not update its paired products, token, channel or fraction independently.
+
+10.5 Expected physical result and forbidden shortcuts
+
+Per lane: one physical dual18 block for the two horizontal products, plus the
+existing vertical-product block. Four lanes: 8 instead of 12 DSPs.
+
+Do not:
+
+  - reduce four filter lanes to one and claim this proposal's throughput;
+  - pair horizontal and vertical products across different stallable stages;
+  - pair unrelated workers with different stage enables;
+  - accept a DSP mode label without proving both result routes are live;
+  - implement a sum-of-products primitive when two independent outputs are needed;
+  - synthesize both behavioral and vendor branches;
+  - replace the primitive with a new bespoke packing framework.
+
+The existing wrapper and route-evidence work are assets to reuse. A failed generic
+unused signedness combination need not block a proven consumer tuple, but any
+failure in the tuple/width/domain actually used by BIL2 is a real HOLD.
+
+
+11. UV2: TWO DSPS PER PERSPECTIVE COORDINATE
+===============================================================================
+
+11.1 Exact product structure
+
+Current u_persp calculates signed32 numerator times unsigned24 reciprocal
+mantissa for U and V in parallel. It then rounds, shifts, saturates and routes the
+paired result through its existing credit/FIFO/output machinery. The inspected
+physical contribution is six DSP blocks. [R01,R05]
+
+For either signed32 N and unsigned24 M:
+
+  L = u26(N[25:0])
+  H = s6(N[31:26])
+  N = L + (H << 26)
+  N*M = L*M + ((H*M) << 26)
+
+Both products fit one signed27x27 boundary after these exact extensions:
+
+  low27  = {1'b0, N[25:0]}          // zero-extended, then interpreted signed
+  high27 = {{21{N[31]}}, N[31:26]}  // sign-extended
+  mant27 = {3'b000, M[23:0]}       // nonnegative signed27
+
+There are TWO helpers for U and TWO for V, not one helper time-shared between
+coordinates. The paired acceptance-rate target remains one pair per clock.
+
+11.2 Product and storage widths
+
+  L*M is unsigned50.
+  H*M is signed30.
+  Recombined product is signed56; sign-extend into the original signed64 path.
+
+When narrowing a helper's full signed54 output, assert upper-zero bits on the
+low product and upper-sign bits on the high product. Do not store the signed6
+high chunk as unsigned6. N=-1 is a simple decisive falsifier.
+
+Do not first sign-extend M to signed24: mantissa bit23 is a value bit, not a sign.
+Do not round either partial, discard fractional low bits, or saturate before
+recombining the exact full product.
+
+11.3 Preferred same-latency placement
+
+Keep P0 acceptance unchanged. Replace P1's stored full U/V products with the two
+partial products per coordinate. Do NOT store both the original full product and
+all the partials. P2 computes the same rounded sum from the partials; P3 performs
+the existing rescale/saturation preparation, and the FIFO/output path stays in
+place.
+
+Current shape:
+
+  P0 operands -> P1 full product -> P2 product + rounding -> P3 rescaled value
+
+Candidate shape:
+
+  P0 operands -> P1 low/high partials -> P2 reconstructed product + rounding
+              -> P3 rescaled value
+
+This preserves registered-stage count. It moves an extra recombination addition
+into P2; that path must not become the next timing problem.
+
+11.4 Carry-save recombination option
+
+Use a local 64-bit three-operand carry-save reduction followed by one carry-
+propagate addition if the straightforward two-adder expression creates a long
+chain. Let all x/y/z below be raw64 bit vectors:
+
+  x = zx64(low50)
+  y = sx64(high30) << 26
+  z = the ORIGINAL raw64 rounding vector
+
+  s = x XOR y XOR z
+  c = ((x AND y) OR (x AND z) OR (y AND z)) << 1
+  rounded_sum = wrap64(s + c)
+
+The identity is exact modulo 2^64. No new numerical law or intermediate rounding
+is introduced. Keep the existing signed interpretation for the later arithmetic
+right shift. This is a small local expression, not a general-purpose arithmetic
+service.
+
+The required final product itself fits signed56, but the old 64-bit rounding and
+shift semantics must be preserved separately. Do not assume all six-bit k codes
+are legal normalization exponents and quietly simplify their behavior.
+
+11.5 Preserve the actual shift and edge cases
+
+The inspected source uses six-bit sh = 32-k, a 64-bit rounding bit shifted by
+sh-1, and then a signed64 arithmetic shift. Keep those widths and operations
+unchanged. In particular, sh=0/high k bit patterns can have surprising raw-bit
+behavior. This brief does not authorize correcting that behavior while optimizing
+multiplication. The supplied Python model mirrors six-bit subtraction and 64-bit
+wrap, but compiled RTL tests must be the final authority on HDL semantics.
+
+Check all 64 k encodings at the leaf unless the current authoritative port
+contract explicitly rejects some. Independently include the actual RCP-produced
+k/mantissa domain in the connected test. Do not exclude awkward values merely
+because a typical camera does not generate them.
+
+Keep depth_zero exactly: output U/V zero and saturation false, with the same
+logical zero-product counter semantics. Logical products_o still counts two
+coordinate products per nonzero-depth pair; it does not become four because the
+implementation now uses four partial products.
+
+11.6 Credit/FIFO preservation
+
+Keep the existing NTOK/TAGW parameters, CAP=NTOK+1, admission ownership count,
+terminal FIFO, read/write pointers, tag, sat and depth-zero pairing. This packet
+must not shrink capacity or introduce a shared scalar multiplier bottleneck.
+
+Preferred acceptance criterion: cycle-exact valid/ready/output/counter parity
+against the unchanged paired implementation at the same parameters.
+
+If a physical timing result forces an extra stage, treat it as an explicit
+alternative requiring a complete in-flight/credit, queue-capacity, latency and
+connected-throughput proof. An additional pipeline register is not permission
+to add another admission credit or another output queue. Do not weaken tests to
+make an unplanned stage disappear from the contract.
+
+UV2 is optional. If it adds unacceptable ALMs or timing risk, land ATTR3+BIL2 at
+its qualified target and defer the extra two DSPs.
+
+
+12. TIMING AND ALM CONTAINMENT
+===============================================================================
+
+12.1 DSP count alone is not success
+
+The owner is trying to fit a complete console, not minimize one column while
+making another impossible. Every physical comparison must report, at the same
+boundary and parameters:
+
+  physical DSP blocks;
+  ALMs using the SAME metric as the baseline receipt;
+  registers;
+  reported RAM blocks plus actual M10K/MLAB inference witnesses where available;
+  logical memory bits;
+  worst required-clock setup and hold slack, Fmax, and critical path families;
+  functional workload/throughput and drain behavior.
+
+Do not compare combinational ALUTs with ALMs, or an entity's self number with a
+parent's inclusive number. Do not translate fewer declared flops directly into
+fewer fitted ALMs. Explicit reconstruction may trade DSPs for fabric adders.
+
+12.2 Initial area objective
+
+Default objective: no net ALM increase at the matched G8A boundary. This is a
+proposed decision objective for this packet, not a newly ratified console quota.
+There is no automatic authorization in this brief to spend hundreds or thousands
+of extra ALMs for the smallest theoretical DSP endpoint.
+
+If a useful DSP reduction has a measured positive ALM delta, report that exact
+trade and its physical owner, then compare the available alternatives. For
+example, ATTR3+BIL2 may be preferable to adding UV2 if UV2's last two DSPs require
+an unattractive carry/queue expansion. Do not hide the trade behind a much older
+or differently parameterized ALM baseline.
+
+12.3 Expected sources of cost, not numerical estimates
+
+ATTR3 adds/changes:
+
+  - one bounded operand selector into each local worker;
+  - partial-product and recombination pipeline registers;
+  - a tiny phase/tag/valid controller;
+  - a serial base fold and fixed-position recombination adders.
+
+It removes:
+
+  - multiple independently instantiated wide multiplication cones;
+  - the original independent offset multiplication;
+  - the original parallel base preparation arrangement, if it is truly replaced.
+
+ATTR1 trades three simultaneous partial multipliers for one and an accumulator/
+selector. UV2 may store more partial-result bits than the old product stage and
+needs a local recombination network. BIL2 mostly reuses existing stage state,
+but packing can change placement and routing. Net area is not knowable from
+these lists alone. Do not put a predicted ALM saving into an accepted ledger.
+
+12.4 Timing disciplines
+
+ATTR3's product output is registered before recombination. Its two combine
+stages each have one principal carry-propagate operation. Its base fold adds one
+contribution per edge. Do not collapse that back into a multiplier plus two or
+three wide additions on a single critical edge for the sake of a prettier FSM.
+
+If the 96-bit fold or 85-bit reconstruction itself cannot meet 100 MHz, derive
+a bounded split-carry implementation or another local schedule. Any extra stage
+must reenter section 7's fast-path proof. Do not trade a known DSP problem for
+another indefinite timing-closure loop without an explicit alternative endpoint.
+
+BIL2 deliberately uses the existing stage/enable boundaries. UV2 keeps the
+original stage count with a three-input reduction as needed. The native DSP's
+published standalone performance is NOT a timing guarantee for these surrounding
+muxes, wide adders, register placement or complete G8A subsystem. [V02]
+
+12.5 Same clock and no timing exceptions as a "rescue"
+
+Keep the 100 MHz product constraint and the same applicable clock/corner rules.
+Do not introduce a faster private DSP clock, multicycle constraints on paths that
+still transfer every clock, false paths over real control, or a lower frequency
+to make the resource result look qualified. No new CDC is needed here.
+
+A completed fit can provide useful DSP/area evidence while its overall timing
+is still red. Label it accordingly. It cannot promote Packet F or production
+adoption. If timing3 is still red, retain that known failure; do not blame or
+credit this packet for unchanged failures without reading actual paths.
+
+
+13. COMPOSITION, SOURCE SELECTION AND ACCOUNTING
+===============================================================================
+
+13.1 Preserve public semantics and packet widths
+
+The changes occur below the current interfaces. They do not change:
+
+  - Packet-D 1,157-bit triangle metadata;
+  - the three-plane characterization contract;
+  - Packet-C 490-bit pretexture request and sequence identity;
+  - the V3 continuation, samples, refusal status, material or palette law;
+  - the one fragment lifecycle owner;
+  - cache/fill refusal and frame-fault drain behavior;
+  - lease/CDC or framebuffer publication.
+
+No additional attribute plane is introduced, no flat colour is relabelled as
+Gouraud, and no AUX profile restriction is relaxed by this DSP work. [R06,R09,R12]
+
+13.2 Versioning strategy
+
+Use the repository's existing sibling/candidate mechanism rather than inventing
+a broad backend registry. Suggested NEW leaf names, subject to checking actual
+local availability before use:
+
+  zhao_mul27_exact
+  zhao_attr_mul72x13_dsp3
+  zhao_attr_mul72x13_dsp1
+  zhao_raster_attrgrad_dsp3
+  zhao_raster_attrgrad_dsp1
+  zhao_texture_bilerp_lane_dsp2
+  zhao_raster_perspuv_pairpipe_dsp2
+
+These are proposed names, not claims that the modules already exist. A smaller
+parameterized arithmetic backend within an existing leaf is acceptable if it
+fits the current manifest/interface tooling better. In either strategy:
+
+  - keep the old implementation available as an unmodified comparison oracle;
+  - select EXACTLY ONE implementation per physical function at elaboration;
+  - use no runtime baseline/candidate mux and no synthesized migration shadow;
+  - do not copy the entire V3 or tile parent into a second divergent design;
+  - keep existing logical ownership paths and update exact entity expectations;
+  - ensure both sides of a differential do not accidentally select the new helper.
+
+A version/parameter addition that changes a generated interface manifest must
+refresh it intentionally. Do not bypass frozen-schema checks with a wildcard.
+
+13.3 Candidate-parent changes
+
+Only the minimum leaf selections inside the tile and V3 parents should change.
+For ATTR3/ATTR1, every g_attr instance must select the same qualified backend
+unless a separate mixed-lane profile is explicitly reviewed. For BIL2, every
+one of the four existing channel lanes remains instantiated. For UV2, the U/V
+pair stays a single paired flow with unchanged capacity and tag association.
+
+Use explicit candidate fit parameters/macros. For the actual production/measurement
+V3 profile, MIGRATION_SHADOWS must remain 0. Native and portable selectors must
+be exclusive and recorded in the source/parameter receipt. Also retain the
+SYNTHESIS/QUARTUS_SYNTHESIS definitions needed by the existing flow; do not
+reintroduce the earlier DPI-export pre-map failure.
+
+13.4 Manifest and receipt handling
+
+Use design/prod_manifest.yml as the sole ownership/profile registry. Candidate
+roots remain explicitly excluded/not adopted until the existing composition gate
+selects them. Children reachable under a selected candidate root must be counted
+inside that root, not also as independent top-level costs. [R11]
+
+The G8A receipt's exact source count will change when helpers/candidates are
+introduced. Update the source closure, order, hashes, expected entities and
+selected parameters together. Do not insist on the historical 43-file count or
+weaken the equality gate to "at least some files".
+
+The old g8a-timing2 receipt remains immutable historical evidence. Do not edit its
+DSP total to the target, overwrite its JSON, fabricate a successful stage marker,
+or attach its timing/area to a new source tree.
+
+13.5 No accounting detour
+
+A small per-boundary delta table and the existing entity receipt are sufficient.
+Do not stop implementation to reprice every unfinished console organ. Also do
+not take the local target 30 and subtract 19 from a stale whole-machine frontier
+as though the final bill had been measured.
+
+
+14. FUNCTIONAL AND CYCLE VERIFICATION MATRIX
+===============================================================================
+
+14.1 Layer A: exact arithmetic primitives
+
+For signed72x13:
+
+  - zero, +1, -1;
+  - signed72 minimum/maximum and neighbours;
+  - signed13 minimum/maximum (including the helper's full -4096 endpoint);
+  - all carries across bit23/24 and bit47/48;
+  - only low, only middle, and only high piece nonzero;
+  - negative high piece with nonzero unsigned middle and low pieces;
+  - arithmetic sign-extension assertions on every shortened product;
+  - wrapping96 base accumulation, including a deliberate n0 rail crossing.
+
+For OFFSET:
+
+  - full signed32 extrema;
+  - actual 13-bit tile-minus-min subtraction, including opposite signed12 rails;
+  - minimum supported tile delta and the helper's full signed13 domain;
+  - exact signed45 result and deliberate wrap32 seed;
+  - negative gradients and sparse coverage across multiple tiles.
+
+For UV2:
+
+  - signed32 extrema and boundaries around 2^26;
+  - mantissa 0, 1, high-bit-set and 0xFFFFFF;
+  - high6 negative, zero and positive;
+  - full product reconstruction before rounding;
+  - all k codes at leaf level, source-correct shift widths and 64-bit wrapping;
+  - saturating positive/negative outputs and zero-depth override;
+  - distinct U/V values and tags that expose swapped or duplicated products.
+
+Use direct host integer multiplication as the arithmetic comparator, not another
+copy of the candidate decomposition. For the public renderer law, call the
+compiled existing ZRef function instead of relying only on these Python checks.
+
+14.2 Layer B: attribute numerical law and event equivalence
+
+Extend the current tests/raster/raster_attrgrad_v2_directed.cpp/bench conventions.
+Do not replace their compiled div_rhu_s128 oracle. Retain both RADIX=2 and RADIX=4
+coverage and the old direct divider latency assertions. [R07]
+
+Test these axes independently, not only through random triangles:
+
+  grad ordinary / grad positive-saturated / grad negative-saturated / zero-area;
+  first row ordinary / first row saturated / alternating later row cases;
+  min_x equal to tile_x / unequal / negative / opposite rail;
+  coverage arriving immediately / delayed / held while one lane is blocked;
+  masks zero / one low bit / one high bit / disjoint sparse / all 16 bits;
+  q_ready always high / long stalls / alternating / independently phased stalls;
+  one row / many rows / last row with trailing uncovered columns;
+  reset while each setup or division stage is active.
+
+Compare every valid quotient's value, row, column, last, error and saturation,
+not merely the framebuffer CRC. Compare logical event counters exactly.
+
+ATTR3 additional target: compare public handshake/output timing cycle for cycle
+with the old lane under identical inputs. Include the all-short J+0..J+9 case
+explicitly and show that incomplete-base/offset guards do not introduce stalls.
+
+ATTR1: compare ordered transactions under retimed handshakes, then separately
+measure the added latency and complete workload. Do not let a retimed miter count
+latency equivalence as tested; it tests value/order, which is a different claim.
+
+14.3 Layer C: bilerp arithmetic and the actual elastic protocol
+
+Instantiate the unchanged and BIL2 variants with identical TOKW and stimuli.
+Keep the source producer valid/data until acceptance. Vary sink readiness
+independently. Cover:
+
+  - all reachable difference/fraction combinations;
+  - texel rail patterns with all U/V fraction pairs;
+  - arbitrary byte texels and high-bit fractions;
+  - negative horizontal and vertical differences;
+  - full pipeline, empty pipeline, back-to-back acceptance, simultaneous drain/refill;
+  - holding each stage while later or earlier stages move;
+  - reset on every occupancy pattern;
+  - TOKW representative/default/wider supported settings;
+  - distinct tokens/channels and all four channel workers in composition.
+
+Require cycle-exact job_ready/out_valid/output/token/channel/jobs/occupancy parity.
+The primitive's two outputs must be exercised with DIFFERENT values; equal-lane
+stimulus cannot detect a collapsed result port.
+
+14.4 Layer D: paired perspective pipeline
+
+Compare old and UV2 at identical NTOK/TAGW settings, including the selected V3
+profile rather than only defaults. Test:
+
+  - a sustained stream of unique U/V pairs;
+  - CAP saturation while output is blocked;
+  - exact refusal/backpressure after capacity is consumed;
+  - output release and refill with queued completions;
+  - all zero-depth and mixed zero/nonzero sequences;
+  - asymmetric saturation: only U, only V, both, neither;
+  - reset while partial products, shifted sums, FIFO and output are occupied;
+  - all parameter configurations already supported by the original contract.
+
+Do not silently broaden unsupported FIFO-depth profiles, and do not fix unrelated
+parameter bugs as part of this packet. Preserve the logical products counter
+rather than changing it to count partial multiplications.
+
+14.5 Layer E: the connected raster/texture specimen
+
+Use the existing Packet-B/C/D/E, interface, ownership, source-order and G8A activity
+gates. Extend their actual CTest inventory, recording the names executed. Do not
+invent passing test counts from an empty regex selection. Enumerate the tests
+first and require a nonzero expected inventory.
+
+Connected cases must include:
+
+  - nonconstant, varying invw/UW/VW planes in all three lanes;
+  - unlike gradient/row latencies across lanes;
+  - flat and textured reference differentials;
+  - cross-tile global-min-X stepping;
+  - actual nontrivial bilinear traffic, not a nearest-only smoke scene;
+  - depth-zero and both-sign perspective recovery;
+  - Early-Z rejects and downstream stalls;
+  - palette/config changes at the permitted boundaries;
+  - denied cache fills and ordinary refusal drain;
+  - local attribute range/coordinate fault cancellation;
+  - Packet-C sequence mismatch and no subsequent illegal fragment writes;
+  - reset-lifetime corruption barrier behavior without fake ordinary quiet;
+  - first/last multi-triangle accumulation and resolve overlap;
+  - finite complete quiet under fair external service and safe frame clear.
+
+No sample mask, owner handle, sequence, status, source ID, generation, material,
+or framebuffer write may become misassociated because an arithmetic result
+arrives earlier, later, or while an adjacent lane is stalled.
+
+14.6 Workload evaluation is not optional for ATTR1
+
+Count actual triangle-tile jobs, covered rows, covered fragments, divider fast
+cases, first-result latency, tile completion, frame completion and stalls by
+reason. A per-triangle count alone underprices work when triangles touch several
+tiles. Use deterministic stress cases and available actual captures; distinguish
+synthetic stress from mandatory product demand.
+
+For ATTR3/BIL2/UV2 same-cycle profiles, cycle-equivalence is stronger evidence
+that they preserve the local baseline service trace. It is still not evidence
+that all missing production attributes or future terrain jobs fit the final
+frame schedule.
+
+
+15. ADVERSARIAL CONTROLS AND FALSIFIERS
+===============================================================================
+
+The goal is focused falsifiable verification, not another endless generic audit.
+Each mutant changes only the candidate side or one named implementation leaf.
+The comparator/oracle must remain independent. Require the intended detector or
+mismatch signature, not merely any nonzero process exit.
+
+  ID   Deliberate defect                         Required detection
+  A01  Treat high24 of signed72 as unsigned      product mismatch on negative A
+  A02  Treat unsigned middle24 as signed        product mismatch across bit47
+  A03  Shift a narrow partial before extension  lost-upper-bits mismatch
+  A04  Truncate negative dx/2 toward zero       odd-negative base mismatch
+  A05  Omit BASE_Y or add BASE_X twice          base/row output mismatch
+  A06  Consume base before Y is complete       early fast-gradient mismatch
+  A07  Use current pin min_x, not captured one  pin-change-under-job mismatch
+  A08  Offset uses unsigned delta              opposite-rail coordinate mismatch
+  A09  Reuse stale offset from previous job    two-job cross-tile mismatch
+  A10  Recompute quotient at tile edge         current-law differential fires
+  A11  Saturate rather than wrap seed/walk     signed32 rail-crossing mismatch
+  A12  Clear worker valid on recoverable fault missing-work/drain failure
+  A13  Advertise idle with pending product     quiet structural control fires
+  A14  Retain pre-reset result valid           reset/new-job contamination
+  A15  ATTR1 OFFSET high8 treated unsigned     negative-gradient mismatch
+  B01  Collapse resultb onto resulta           unlike-lane bilerp mismatch
+  B02  Fraction fu sign-extended as signed8    high-fraction mismatch
+  B03  Swap only one product's token/channel  composed association mismatch
+  B04  Round horizontal values to bytes       bilerp numerical mismatch
+  B05  Update B1 while its ready is false     held-output/protocol mismatch
+  B06  Select both/no primitive backends      elaboration/selector gate failure
+  C01  Treat perspective high6 as unsigned    negative numerator mismatch
+  C02  Treat unsigned mantissa as signed24    high-mantissa mismatch
+  C03  Drop low partial before rounding       fractional/tie output mismatch
+  C04  Misalign k, tag or depth_zero by 1      paired stream mismatch
+  C05  Omit a CSA carry or shift              full64 sum/output mismatch
+  C06  Increase CAP because a stage was added ownership/overflow assertion
+
+Reuse the existing negative-half, omitted-min-X, coordinate identity, quiet,
+skid-cancellation and owner/sequence controls. Do not duplicate their whole
+framework. For every new assertion that can never fail under legal traffic,
+attach a committed inverse control or deliberate candidate mutation that shows
+it is live.
+
+The eight controls in the supplied Python script are mathematical/model controls,
+not a substitute for these compiled RTL mutants. Their PASS means the Python
+checker observed the intentionally wrong mathematical variant, not that the
+repository's hardware gate already contains the mutant.
+
+
+16. MAPPING, VENDOR PROOF AND THE SINGLE COMPOSED FIT
+===============================================================================
+
+16.1 Gate M0: confirm physical building blocks cheaply
+
+Before a full G8A fit, use a small registered-input/observed-output MapOnly
+calibration for the selected exact 27-bit helper and, if not already qualified
+for this consumer tuple, the existing dual18 wrapper.
+
+Count PHYSICAL Cyclone V variable-precision DSP blocks. Do not count logical
+products, 18-bit submultipliers, source expressions or generic mode labels as
+interchangeable units. Confirm that every product output needed by reconstruction
+or the consumer remains observed, and that no constant folding made the test
+vacuous. [R10,V01,V02]
+
+For ATTR3, the actual helper operands include zero/sign-extension patterns.
+Observe mapping of those actual used shapes as well as a full-width primitive
+calibration. A one-block full27 calibration does not prove the compiler maps
+every narrowed partial expression identically after optimization.
+
+For BIL2, prove TWO independent result routes from each packed block. Reuse the
+existing CDB/atom-route discriminator rather than starting another route checker.
+A row named "two independent multipliers" is insufficient if one output was
+pruned or tied to the other.
+
+16.2 Gate M1: one mapped candidate bundle
+
+After the focused behavior/cycle tests pass, map a bundle containing the selected
+three attribute workers, four bilerp lanes and optional paired perspective unit
+at the actual configuration. A single bundle is sufficient to answer this local
+structural question. Run each alternative only when it changes a decision; do
+not exhaustively sweep arbitrary DSP layouts.
+
+Check:
+
+  ATTR3: exactly one three-DSP worker per lane, expected total 9.
+  ATTR1: exactly one one-DSP worker per lane, expected total 3, IF selected.
+  BIL2:  exactly four two-DSP filter lanes, expected total 8.
+  UV2:   two exact products per coordinate, expected total 4, IF selected.
+
+Also check the OLD multiplier cones are absent, product helpers did not duplicate
+through separate opcode branches, signed result reconstruction is present, and
+ALM/register/RAM inference warnings are understood. Estimates from map are not
+fitted ALM or Fmax. A successfully inferred bank is structural evidence only.
+
+16.3 Vendor arithmetic scope
+
+For custom direct primitives, run the same consumer vectors through the actual
+Quartus-17 vendor simulation setup or an approved technology-level alternative.
+A portable behavioral multiplication agreeing with itself does not prove an
+encrypted native atom's parameters/sign behavior. For ordinary inferred HDL,
+state the usual compiler-mapping basis rather than claiming custom-atom proof.
+
+Signed bilerp needs the all-signed tuple described above. A historical unsigned
+calibration or a board image containing one other multiplier does not establish
+that tuple. Conversely, do not block this narrow consumer on unrelated modes it
+does not select. Reuse existing genuine evidence when its source/config matches.
+
+If the native prerequisite is unavailable, finish other independent work and
+retain a precise HOLD for that replacement. Do not invent success, switch to
+behavioral synthesis silently, or weaken source/selector checks.
+
+16.4 Gate F: one connected characterization
+
+Freeze and commit the accepted chosen candidate with all source/macro/parameter
+and test metadata. Use the existing clean source/archive/runner discipline and
+exact G8A characterization boundary. Prefer incorporating the DSP batch into
+the NEXT appropriate connected timing/resource fit, not a new per-leaf campaign.
+
+The fitted comparison must name:
+
+  baseline source/config/digest and candidate source/config/digest;
+  any intervening timing3 or protocol changes;
+  same physical device, tool, meaningful clock constraints and seed;
+  same activity profile, live hierarchy and mandatory RAM witnesses;
+  the physical DSP/ALM/register/RAM delta and complete timing status.
+
+If timing3 and DSP changes are combined, call the measured area/timing delta the
+COMBINED batch. Use hierarchy/mapping evidence for the local DSP mechanism; do
+not attribute every ALM or MHz movement to these arithmetic changes alone.
+
+16.5 Required receipt facts
+
+Use the existing receipt schema and its raw evidence, not a new parallel schema.
+Record or extract the following decision facts:
+
+  selected attribute backend and instance count;
+  bilerp backend, signedness tuple and four-lane count;
+  perspective backend and NTOK/TAGW;
+  exact native versus inferred/behavioral backend selection;
+  complete G8A boundary physical totals;
+  corresponding named entity/primitive DSP ownership;
+  no old/new duplicate engines or migration shadows;
+  exact current source closure and source list order;
+  no missing RAM evidence, new latches, unexplained replication or unconstrained
+  paths introduced by the candidate;
+  current correctness, cycle and workload results;
+  setup AND hold result at the required corners.
+
+Preserve a failed-but-complete run as evidence of the failure. Do not rerun it
+unchanged hoping for a friendlier placement. A second fit requires a named
+physical diagnosis and a meaningful reviewed change that can answer a decision.
+
+16.6 No artificial ALM dividend
+
+Shrinking a stimulus wrapper or pruning unused test channels is not the same as
+shrinking the functional core. Keep the activity/observation boundary comparable.
+If source changes intentionally make a formerly required function constant or
+unreachable, determine whether that is a profile/capability change before
+claiming DSP savings. This brief authorizes no such change.
+
+
+17. INTEGRATION WITH TIMING3 AND THE EXISTING ROADMAP
+===============================================================================
+
+17.1 This is not a second console project
+
+The owner asked for a concrete DSP rescue inside the current G8A cost. These
+changes target that exact boundary. They do not replace the whole-machine
+memory-first rescue or the later shared-projection/terrain work. [R13]
+
+The published timing2 diagnosis already calls for timing3 cuts around the
+attribute bundle, returned results and owner/COMBINE control. Those changes and
+the existing Packet-H work must not be lost because this brief is pinned to an
+older public source. Read the coordinator's actual local status first. [R14]
+
+17.2 Practical order
+
+If timing3 is already running on an immutable source:
+
+  - leave that run and every possible remaining input alone;
+  - implement arithmetic helpers and candidate leaf tests in an isolated closure;
+  - keep disjoint source ownership explicit;
+  - integrate at the next real selected boundary after the current result/review.
+
+If timing3 is still being implemented/reviewed and no immutable run is reading
+these paths:
+
+  - coordinate ownership of attrgrad, V3 child selection and shared manifests;
+  - keep its control-path repair separate from the arithmetic patch in review;
+  - combine only fully tested changes into the next frozen specimen;
+  - declare the combined measurement scope honestly.
+
+Do not hold the whole project until every optional DSP idea in this document has
+been tried. ATTR3+BIL2 is the primary deliverable. A stuck optional native mode,
+ATTR1 rate question or UV2 adder does not justify another day without a useful
+accepted endpoint.
+
+17.3 No silent permission change
+
+This brief does not override existing owner rules about fit concurrency, evidence,
+repository writes, required 100 MHz timing, or product adoption. Use the already
+named composition gates. It does authorize a detailed proposed implementation
+path for the owner-requested DSP idea; it is not itself proof that any prerequisite
+has passed or that any numeric target is banked.
+
+
+18. DELIVERY PACKETS AND REVIEW BOUNDARIES
+===============================================================================
+
+The DSPR labels below are local work chunks, NOT a new version of the existing
+A-K composition or R0-R9 rescue order.
+
+DSPR0 -- Reconcile only the affected source and freeze the arithmetic contract
+
+Inputs: this brief, current local work, current old/candidate source and receipt.
+Outputs: actual source pin, any changed-width/latency note, reused test locations,
+         selected helper implementation strategy, candidate profile names.
+Bound: no new whole-console census or general architecture report. Run the
+       supplied Python check as an independent sanity test, then use actual
+       repository oracles for implementation.
+
+DSPR1 -- ATTR3
+
+Implement the local three-DSP exact worker, base fold, offset reuse and bounded
+control. Keep the divider and pixel walk unchanged. Add targeted mathematical,
+cycle, reset and fast-path controls. Prove the J+5 base and G+4 offset calendar
+against actual elaborated RTL, or explicitly record/requalify any departure.
+
+Review questions:
+  Are the high and middle pieces typed correctly?
+  Is there physically one reusable worker rather than three opcode copies?
+  Can the earliest fast first row use incomplete base/offset state?
+  Are public hold/ready/valid and counters unchanged?
+  Is every internal operation included in reset/quiet/drain?
+  Did the old independent multipliers disappear from the selected hierarchy?
+
+DSPR2 -- BIL2
+
+Reuse zhao_dual18_mul with the consumer's all-signed tuple. Replace only the two
+horizontal products in each channel lane. Preserve all existing elastic stages,
+rounding and lane count. Add unlike-product controls and actual vendor/mapping
+qualification. This work can be developed independently of ATTR3 if file and
+build ownership are disjoint; one coordinator owns shared integration files.
+
+Review questions:
+  Are fractions zero-extended before signed multiplication?
+  Are there genuinely two live result ports from each packed atom?
+  Do both products use the identical caller stage/enable?
+  Is the U intermediate unrounded and V arithmetic unchanged?
+  Do normal, stall, full-pipeline and reset traces match cycle for cycle?
+
+DSPR3 -- Optional UV2; optional ATTR1
+
+Do not block primary closure on either. UV2 should preserve pipeline stages by
+using P1 partials and P2 exact recombination/rounding. ATTR1 needs a separate
+latency and connected-workload verdict, even when arithmetic is identical.
+
+Only select an optional candidate if all its proof and area/timing questions can
+be settled at the same sensible measurement boundary. Do not run a speculative
+full fit of every table row in section 1.
+
+DSPR4 -- One mapped bundle and one appropriate connected receipt
+
+The coordinator refreshes source/parameter/interface/ownership evidence, selects
+one portfolio, preserves the frozen baseline, runs the focused suite, performs
+the bounded mapping checks and spends the next authorized connected fit.
+
+Deliverables to the owner:
+
+  1. Exact selected profile and the implementation commit(s).
+  2. Actual tests run and fired negative controls, with narrow evidence labels.
+  3. Genuine mapped physical DSP ownership, including deleted old cones.
+  4. One connected resource/timing receipt with explicit confounds and delta.
+  5. Clear disposition: selected candidate versus product adoption status.
+  6. The next real roadmap step; no invented need for another architecture sweep.
+
+Use one clear implementation owner per overlapping file and bounded review.
+Do not recreate the prior shared CMake/manifest/runner ownership collision or
+launch a generic adversarial fan-out over the whole repository.
+
+
+19. ACCEPTANCE, ROLLBACK AND STOP CONDITIONS
+===============================================================================
+
+19.1 Evidence vocabulary
+
+  Architected: this document specifies a concrete candidate.
+  Mathematically checked: host identities/model cases passed.
+  RTL verified: compiled RTL matches the appropriate independent oracle/tests.
+  Mapped: selected technology structure was genuinely produced by Quartus.
+  Fitted: complete placement/resource/timing result exists for the exact closure.
+  Adopted: selected functional production composition uses it and old hardware
+           is absent, after the existing adoption gate.
+
+Do not promote a state by changing a label. The host checks supplied with this
+brief establish only the second state for the particular mathematics/models.
+
+19.2 Primary success conditions
+
+The primary portfolio succeeds when:
+
+  - current arithmetic law, legal input domain and features remain unchanged;
+  - ATTR3 and BIL2 retain their qualified public service/holding behavior;
+  - expected local physical DSP structure is demonstrated;
+  - the complete selected G8A receipt actually approaches/achieves the proposed
+    30-DSP endpoint, with no old/new double instantiation or pruned obligations;
+  - ALM/RAM/timing trade is acceptable and explicitly reported;
+  - the unchanged 100 MHz gate passes before any timing-qualified adoption claim;
+  - applicable connected workload, ownership and reset/fault gates pass;
+  - production adoption follows the existing composition rules, not this table.
+
+A measured 31/32 instead of 30 is not "30 because the arithmetic says so." Read
+where the extra blocks landed and decide whether a bounded repair changes the
+outcome. Conversely, a lower count caused by pruned legal work is a failure.
+
+19.3 Immediate rejection conditions
+
+Reject or roll back the affected candidate if it:
+
+  - changes a negative-half, signed extension, wrap, saturation or final-round law;
+  - loses/misassociates a tag, row, column, status, owner handle or result;
+  - gates valid with its own ready to conceal a lost operation;
+  - signals idle with a live micro-operation or deletes required fault handling;
+  - reduces a filter lane count or serializes paired U/V throughput without ruling;
+  - changes required clock/frame/precision/camera/capability limits;
+  - keeps the old arithmetic in addition to the candidate;
+  - gets smaller only by choosing a weaker characterization profile;
+  - adds unbounded queues/framework control or large unexplained ALM growth;
+  - claims native behavior from only a portable-backend test;
+  - claims fitted ALM/Fmax from a MapOnly estimate;
+  - uses a new identical-rerun loop rather than a named physical diagnosis.
+
+19.4 Safe rollback
+
+Keep baseline source and tests recoverable by commit and keep candidate selection
+explicit. Revert the candidate's leaf selection, helper/source closure, interface
+or parameter additions, ownership expectations and generated artifacts together.
+Do not revert independent accepted timing3 fixes or unrelated Packet-H work.
+
+If BIL2's primitive mode is blocked, retain the original bilerp lanes while
+continuing ATTR3. If UV2 is unattractive, leave u_persp unchanged. If ATTR1 misses
+its schedule, use ATTR3. These separable decisions are why the primary portfolio
+is not dependent on the most aggressive row in the table.
+
+Do not destroy a valid baseline bitstream or load a new image merely to prove
+an arithmetic idea. Board loading is outside this brief's scope.
+
+
+20. WHAT THESE CHANGES DO NOT PROVE
+===============================================================================
+
+20.1 Not a final console cost
+
+G8A is a narrower three-plane raster/texture characterization. The Packet-D
+record explicitly keeps RGB/A flat and leaves additional Gouraud and world-X/W,
+world-Z/W planes for later work. It cannot establish a complete final attribute,
+lighting, fog/emission or AUX resource bill. [R06]
+
+The useful reusable lesson is that a future attribute lane need not automatically
+acquire another permanent 8-DSP setup arrangement. Additional planes still cost
+state, dividers, transport, arithmetic service and workload. Do not label them
+free, and do not extend the 30/28/22 table to a different plane count silently.
+
+20.2 Not universal division acceleration
+
+The current long division remains unchanged. This proposal spends less hardware
+on work surrounding it. It does not prove an arbitrary full scene can afford all
+of those row divisions, or that final scene throughput is one shaded pixel every
+clock merely because the inner walk can offer at that rate.
+
+20.3 Not ALM savings by definition
+
+DSP packing/sharing may free scarce DSPs while costing additional ALMs. The goal
+is a useful complete resource trade. Do not create another exaggerated ALM
+expectation out of a sound DSP target.
+
+20.4 Not a product concession
+
+Unlike a fallback machine that drops split-screen, programmability or lighting,
+these candidates retain the current mathematical and functional promises.
+If a rate concession becomes necessary for ATTR1 or a new UV stage, surface it;
+that variant then needs an explicit product/scheduling decision, not a hidden
+optimization label.
+
+20.5 Not a request to perfect every mathematical engine before proceeding
+
+The owner wants continued concrete optimization and progress into the existing
+large ALM targets. Land the useful qualified local endpoint and continue the
+roadmap. A theoretical 22-DSP G8A should not keep a practical 30-DSP replacement
+unpublished while six more speculative schedules are designed.
+
+
+21. INDEPENDENT CHECKS ACTUALLY EXECUTED FOR THIS BRIEF
+===============================================================================
+
+Companion script:
+  verify_dsp_architecture.py
+
+Recorded result:
+  evidence/verification_results.json
+
+Reproduce without network or third-party packages:
+
+  python verify_dsp_architecture.py --output verification_results.json
+
+For a larger randomized sample:
+
+  python verify_dsp_architecture.py --samples 1000000 --output larger_results.json
+
+The script writes only the requested result JSON. It does not read/write the
+repository, invoke Quartus, launch agents, or contact a service. Its fixed RNG
+seed and sample counts are embedded in the output together with its SHA-256.
+
+Default successful execution used 100,000 randomized samples per relevant
+family and included:
+
+  - 100,080 exact signed72x13 cases, including signed rails;
+  - 100,000 exact signed32x13 cases;
+  - 100,001 wrapping96 base cases, including deliberate overflow;
+  - 100,000 current-law row/seed/walk cases, split equally between full raw
+    port inputs and deliberately constructed nonsaturating row results;
+  - all 130,816 reachable horizontal difference/fraction pairs;
+  - all 1,048,576 rail-texel/fraction bilerp combinations;
+  - 100,000 additional arbitrary-byte bilerp cases;
+  - 100,000 cycles of a source-shaped original/packed elastic bilerp model;
+  - 104,096 perspective cases, including all 64 shift-parameter encodings over
+    the directed rail set and both depth-zero states;
+  - 520 abstract first-row calendars covering both radices, short/long gradient
+    and row combinations, and 65 first-coverage delays.
+
+The arithmetic/model checks passed and eight deliberate mathematical/model
+mutants were detected. The abstract calendars produced zero added first-seed
+cycles for ATTR3 and up to three for ATTR1 UNDER THE STATED MICRO-PIPELINE.
+
+IMPORTANT LIMITS:
+
+  - Random/directed arithmetic checks are not exhaustive full-width formal proof.
+  - The independent algebraic identities in this document explain why the
+    decompositions are exact; the tests protect the implementation of the model.
+  - The bilerp pipeline is a Python model, not compiled original/candidate RTL.
+  - The schedule model assumes specific commit edges. It does not establish that
+    the physical kernel achieves those stages at 100 MHz.
+  - The Python divide uses the mathematical current-law definition. It does not
+    replace calls into the compiled existing ZRef function downstairs.
+  - No raw repository snapshot was archived locally for this brief. Source was
+    inspected through the GitHub connector; source_pins.json records returned
+    commit/blob identities, not a claim of a locally hashed full repository.
+  - No new physical DSP count, ALM number, Fmax, frame capacity or board result
+    was obtained in this authoring session.
+
+
+22. SOURCE INDEX AND EXACT REPOSITORY PINS
+===============================================================================
+
+All R sources below are anchored to:
+  85085a5349403d331ef5bcc0d35ea4b8ee2a00d1
+
+Canonical repository prefix:
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/
+
+The returned Git blob identities of the principal arithmetic files and receipt
+are also recorded in evidence/source_pins.json. They identify the inspected
+GitHub objects; they do not imply any candidate implementation already exists.
+
+[R01] reports/synthesis/zhao_g8a_raster_texture_timing2.json
+  Whole-row metrics and entity_attribution.all_rows. Distinguish parent inclusive
+  counts, child counts, ALUTs and fitted ALMs. Receipt source is e3b3cec9..., not
+  automatically the later commit publishing the receipt.
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/reports/synthesis/zhao_g8a_raster_texture_timing2.json
+
+[R02] fpga/rtl/raster/zhao_raster_attrgrad_v2.sv
+  Module header/ports; base_min_y0_c; divider wiring; S_GRAD_WAIT offset capture;
+  S_ROW_WAIT seed; S_WALK wrapping arithmetic; counters and hold semantics.
+  Blob: 9e0c297827c28c80b318fac7a9cd808db59b833a
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/fpga/rtl/raster/zhao_raster_attrgrad_v2.sv
+
+[R03] fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
+  QPOS=98; RADIX; rounding/magnitude preparation; saturation/zero fast paths;
+  D_IDLE/D_PREP/D_RUN/D_DONE and held-result acceptance exclusion.
+  Blob: 702f0800d2718e611d28e3850dc2e5d1af9e0f81
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
+
+[R04] fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+  B0/B1/B2 stage semantics; horizontal pair, signed widths, vertical product;
+  one final rounding; common elastic enable; jobs and occupancy.
+  Blob: 2ef434de6ef8f38fd42524a0759981bae655953e
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+
+[R05] fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv
+  Signed32*unsigned24 operands; P0-P3; exact shift/round/saturate; NTOK/TAGW;
+  CAP, ownership, terminal FIFO, depth-zero and logical product counters.
+  Blob: de9030738d46c91dd57843097b2ea11039f86ce7
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv
+
+[R06] reports/PACKET-D-ATTRIBUTE-RASTER-ABI-20260914.md
+  Current rast.cpp law; exactly three live planes; 1,157-bit metadata; global
+  min-X requirement; row broadcast/join; cancellation/drain and scope exclusions.
+  Blob: 9cc29a77bbd67630155136557db95e9303004ba3
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/reports/PACKET-D-ATTRIBUTE-RASTER-ABI-20260914.md
+
+[R07] tests/raster/raster_attrgrad_v2_directed.cpp
+  Compiled div_rhu_s128 oracle; kNormalVisibleLatency=100/51; exceptional=2;
+  held-response successor exclusion and actual busy-counter expectations.
+  Blob: fe41ec08f0aea90447da2001e0b8f6f89061105b
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/tests/raster/raster_attrgrad_v2_directed.cpp
+
+[R08] fpga/rtl/common/zhao_dual18_mul.sv
+  Existing stateless native/behavioral wrapper; explicit signedness parameters;
+  installed Quartus-17 atom recipe; exclusive macro and fit-width assertions.
+  Blob: 77a19a8c7db1aab62701b9aa7ed9262d98081717
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/fpga/rtl/common/zhao_dual18_mul.sv
+
+[R09] fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv
+  Independent lane starts, coverage delivered mask, g_attr instances without
+  RADIX overrides, identity join and parent fault/cancel semantics.
+  Blob: 7ddcc164dab0adda84fb7bdaa28e84d01294ba80
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv
+
+[R10] reports/DSP-DUAL18-PACKING-ARCHITECTURE-20260912.md
+  Physical DSP versus logical multiplier distinction, pairing rules, actual
+  installed metadata provenance and technology-evidence limitations.
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/reports/DSP-DUAL18-PACKING-ARCHITECTURE-20260912.md
+
+[R11] design/prod_manifest.yml
+  Single selected/inside/excluded registry, ownership roles, parameter selection,
+  candidate versus selected-subsystem versus shell-production distinctions.
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/design/prod_manifest.yml
+
+[R12] reports/SHELL-TEXTURE-V3-COMPOSITION-ARCHITECTURE-20260913.md
+  One-owner structure, exact quiet/ABI and fault semantics, A-K gates, protected
+  old shell, fixed G8A/G8B/G8C boundaries and independent development constraints.
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/reports/SHELL-TEXTURE-V3-COMPOSITION-ARCHITECTURE-20260913.md
+
+[R13] ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt
+  Protect complete active-run inputs, keep the existing work progressing, distinguish
+  physical measurements from structure and avoid per-small-change fit campaigns.
+  Historical numeric ceilings in that brief are not new overrides here.
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/ZHAOZHOU_MEMORY_FIRST_RESOURCE_RESCUE_2026-09-09.txt
+
+[R14] runs/CLAUDE-RUNS/RUN-20260912-1856-ceiling-architecture/TASK_LOG.md
+  Published work history and coordinator ownership context. Its old active rows
+  are not proof of what an agent is doing in a private worktree at receipt time.
+  Also read the current G8A timing2 receipt/commit for the live timing3 diagnosis.
+  https://github.com/Fabulu/zhaozhou/blob/85085a5349403d331ef5bcc0d35ea4b8ee2a00d1/runs/CLAUDE-RUNS/RUN-20260912-1856-ceiling-architecture/TASK_LOG.md
+
+Vendor sources, retrieved during this architecture pass:
+
+[V01] Altera, Cyclone V Device Handbook, section 3.5.4 Multipliers.
+  Device-level support for one 27x27 and independent narrow multiplier modes.
+  https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/multipliers
+
+[V02] Altera, Cyclone V Device Datasheet, DSP Block Performance Specifications.
+  Single-block independent 27x27 and independent 18x18/18x19 mode capability.
+  Published primitive performance is not the Fmax of the proposed connected design.
+  https://docs.altera.com/r/docs/683801/current/cyclone-v-device-datasheet/dsp-block-performance-specifications
+
+[V03] Intel Quartus Prime Standard Edition User Guide: Design Compilation,
+  version 18.1, section 3.5.10, Multiplier Style for Inferred Multipliers.
+  multstyle="dsp" expresses a preference, not guaranteed resource mapping.
+  Installed 17.0.2 output remains authoritative for this project.
+  https://docs.altera.com/r/docs/683283/18.1/intel-quartus-prime-standard-edition-user-guide-design-compilation/multiplier-style-for-inferred-multipliers
+
+
+23. COMPACT AGENT HANDOFF
+===============================================================================
+
+Implement a bounded same-function DSP rescue inside the CURRENT G8A architecture.
+
+  1. Preserve live timing3/Packet-H work and any active immutable fit.
+  2. Reuse one exact 27-bit multiplication boundary; validate its actual mapping.
+  3. Replace the three attribute lanes' 24 DSPs with three local 3-DSP workers.
+     Keep the divider/walk; use the explicit fast-path-safe schedule in section 7.
+  4. Pack the two horizontal products in EACH of four bilerp lanes using the
+     existing dual18 wrapper. Keep all four lanes, all stages, and final rounding.
+  5. Target the primary 49 -> 30 structure, without claiming it measured.
+  6. Add UV2 only if exact pipeline/ALM/timing qualification is straightforward.
+     It targets two more DSPs, for 28.
+  7. Treat ATTR1 as an alternative, with explicit short-job latency and connected
+     workload qualification. It is not required to land the primary portfolio.
+  8. Prove arithmetic, protocol, reset/fault/quiet, actual service rate and mutant
+     coverage using existing oracles and focused tests, not a new framework.
+  9. Map a bounded selected bundle. Freeze one candidate and use the next
+     appropriate connected fit. No unchanged reruns or leaf-fit parade.
+ 10. Report DSP, ALM, RAM, registers, timing and scope together. Preserve failed
+     evidence honestly, adopt only through the existing gate, then continue the
+     real roadmap rather than chasing every optional theoretical minimum.
+
+Desired engineering outcome:
+
+  The same renderer, the same pixels and required work, fewer permanently occupied
+  arithmetic engines -- with an actual physical receipt proving the trade.
+
+END OF BRIEF
