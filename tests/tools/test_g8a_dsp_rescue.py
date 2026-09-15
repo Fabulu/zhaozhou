@@ -14,6 +14,10 @@ import unittest
 
 
 REPO = Path(__file__).resolve().parents[2]
+BLOCK_REPORT = REPO / "reports/synthesis/zhao_block_fit.json"
+BLOCKPATHS = REPO / "reports/synthesis/blockpaths"
+ATTR_MAP_ROW = "zhao_attr_mul72x13_dsp3@g8a-dspr-attr3-map"
+BIL_MAP_ROW = "zhao_texture_bilerp_lane_dsp2@g8a-dspr-bil2-map"
 ATTR_MANIFEST = REPO / "tests/raster/raster_attrgrad_dsp3.sources.txt"
 BIL_MANIFEST = REPO / "tests/texture/texture_bilerp_lane_dsp2.sources.txt"
 CMAKE = REPO / "tests/CMakeLists.txt"
@@ -417,6 +421,97 @@ def validate_parent_selection() -> None:
     ), "Timing3 DSP selection")
 
 
+def validate_map_evidence() -> None:
+    report = json.loads(BLOCK_REPORT.read_text(encoding="utf-8"))
+    rows = report.get("blocks")
+    if not isinstance(rows, list):
+        raise AssertionError("block-fit ledger lacks rows")
+    if len({row.get("module") for row in rows if isinstance(row, dict)}) != len(rows):
+        raise AssertionError("block-fit ledger contains duplicate module rows")
+
+    specs = {
+        ATTR_MAP_ROW: {
+            "commit": "ce9b2c024f632fa0fd18433e4901aa94b7bcb7a2",
+            "dsp": 3,
+            "registers": 306,
+            "entities": {
+                "zhao_attr_mul72x13_dsp3": 1,
+                "zhao_mul27_exact": 3,
+            },
+            "sources": ("zhao_attr_mul72x13_dsp3.sv", "zhao_mul27_exact.sv"),
+            "macro": None,
+        },
+        BIL_MAP_ROW: {
+            "commit": "d87001c5be815305574a8e57d8913560482bda9c",
+            "dsp": 2,
+            "registers": 195,
+            "entities": {
+                "zhao_texture_bilerp_lane_dsp2": 1,
+                "zhao_dual18_mul": 1,
+            },
+            "sources": ("zhao_dual18_mul.sv", "zhao_texture_bilerp_lane_dsp2.sv"),
+            "macro": "ZHAO_DUAL18_CYCLONEV=1",
+        },
+    }
+    sys.path.insert(0, str(REPO / "tools/quartus"))
+    import g8a_receipt
+
+    for name, spec in specs.items():
+        matches = [row for row in rows
+                   if isinstance(row, dict) and row.get("module") == name]
+        if len(matches) != 1:
+            raise AssertionError(f"MapOnly ledger row is not exact: {name}")
+        row = matches[0]
+        expected = {
+            "status": "map_only",
+            "sourceCommit": spec["commit"],
+            "treeCleanAtHead": True,
+            "rtlCleanAtHead": True,
+            "sourcesHashed": 2,
+            "dspBlocks": spec["dsp"],
+            "registers": spec["registers"],
+            "blockMemoryBits": 0,
+            "partial": True,
+            "partialStage": "analysis_and_synthesis",
+        }
+        for field, value in expected.items():
+            if row.get(field) != value:
+                raise AssertionError(
+                    f"MapOnly row {name} field {field} differs: {row.get(field)!r}")
+        if spec["macro"] is None:
+            if row.get("verilogMacros") is not None:
+                raise AssertionError("ATTR3 MapOnly row unexpectedly selected a macro")
+        elif row.get("verilogMacros") != [spec["macro"]]:
+            raise AssertionError("BIL2 MapOnly row lost its vendor backend")
+
+        paths = {suffix: BLOCKPATHS / f"{name}.{suffix}" for suffix in (
+            "sources.sha256", "qsf", "qpf", "map.summary", "map.rpt", "map.log",
+        )}
+        for path in paths.values():
+            if not path.is_file() or path.stat().st_size == 0:
+                raise AssertionError(f"MapOnly raw artifact is absent/empty: {path}")
+        source_lines = paths["sources.sha256"].read_text(
+            encoding="utf-8-sig").rstrip("\r\n").splitlines()
+        if len(source_lines) != 2 or tuple(
+                line.rsplit("  ", 1)[-1] for line in source_lines) != spec["sources"]:
+            raise AssertionError(f"MapOnly source manifest differs: {name}")
+        qsf = paths["qsf"].read_text(encoding="utf-8-sig")
+        if qsf.count(f"set_global_assignment -name TOP_LEVEL_ENTITY {name.split('@')[0]}") != 1:
+            raise AssertionError(f"MapOnly top selection differs: {name}")
+        vendor_marker = 'set_global_assignment -name VERILOG_MACRO "ZHAO_DUAL18_CYCLONEV=1"'
+        if qsf.count(vendor_marker) != (1 if spec["macro"] else 0):
+            raise AssertionError(f"MapOnly backend selection differs: {name}")
+        map_text = paths["map.rpt"].read_text(encoding="utf-8", errors="replace")
+        counts: dict[str, int] = {}
+        for entity in g8a_receipt.parse_entity_rows(map_text):
+            counts[entity["entity"]] = counts.get(entity["entity"], 0) + 1
+        if counts != spec["entities"]:
+            raise AssertionError(f"MapOnly entity hierarchy differs: {name}: {counts}")
+        log = paths["map.log"].read_text(encoding="utf-8", errors="replace")
+        if "Analysis & Synthesis was successful" not in log or "Error (" in log:
+            raise AssertionError(f"MapOnly raw log is not a successful run: {name}")
+
+
 class G8aDspRescueStaticTests(unittest.TestCase):
     def test_manifests_and_lf_rules_are_exact(self) -> None:
         attr_rows = manifest_rows(ATTR_MANIFEST, EXPECTED_ATTR_SOURCES)
@@ -435,6 +530,9 @@ class G8aDspRescueStaticTests(unittest.TestCase):
         validate_bil_structure()
         validate_mutant_guards()
         validate_driver_coverage()
+
+    def test_maponly_prerequisites_are_raw_bound(self) -> None:
+        validate_map_evidence()
 
     def test_parent_selection_and_evidence_are_pinned(self) -> None:
         validate_parent_selection()

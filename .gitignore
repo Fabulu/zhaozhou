@@ -181,6 +181,9 @@ reports/synthesis/blockpaths/*.sta.rpt
 !reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing3.setup.rpt
 !reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing3.hold.rpt
 !reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing3.sta.rpt
+# DSP-rescue MapOnly prerequisites retain their raw entity/DSP reports.
+!reports/synthesis/blockpaths/zhao_attr_mul72x13_dsp3@g8a-dspr-attr3-map.map.rpt
+!reports/synthesis/blockpaths/zhao_texture_bilerp_lane_dsp2@g8a-dspr-bil2-map.map.rpt
 
 # Transient ctest tee output; the evidence is the ctest summary, not the log.
 fast-suite.log

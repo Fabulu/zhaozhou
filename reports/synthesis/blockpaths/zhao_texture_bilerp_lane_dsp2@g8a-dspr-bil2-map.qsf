@@ -1,0 +1,146 @@
+# D3 shell characterization only.
+# 5CSEBA6U23I7 is a PROVISIONAL capacity/timing target, not board truth.
+# This project fits the generated six-port/ten-bit wrapper around the unchanged
+# zhao_shell_top. No framework files, PLLs, virtual pins, or physical pin
+# assignments belong here.
+
+set_global_assignment -name FAMILY "Cyclone V"
+set_global_assignment -name DEVICE 5CSEBA6U23I7
+set_global_assignment -name TOP_LEVEL_ENTITY zhao_texture_bilerp_lane_dsp2
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+set_global_assignment -name SDC_FILE blockfit.sdc
+set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"
+
+# Fixed characterization controls. The clean gate never stages overrides; a
+# different seed, effort, or constraint is a separately named experiment.
+set_global_assignment -name SEED 1
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+set_global_assignment -name OPTIMIZATION_TECHNIQUE BALANCED
+set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
+set_global_assignment -name PLACEMENT_EFFORT_MULTIPLIER 1.0
+set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING OFF
+
+# Exact ZHAO_SHELL_RTL pool from tests/CMakeLists.txt, index for index, followed
+# by the generated characterization wrapper. Packet B rejects any other source
+# assignment mechanism rather than asking Quartus to compile an unbound file.
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/generated/zhao_abi_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/common/zhao_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/memory/zhao_sdram_params_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/common/zhao_crc32c_fold.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/common/zhao_cdc_snapshot.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_video_mode.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_video_framectl.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_video_scaler.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_scanout_fetch.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/common/zhao_dc_sdp_ram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_scanout_linebuf.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_scanout_serializer.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_video_scanout.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/command/zhao_cmd_scheduler.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/command/zhao_cmd_dma.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/debug/zhao_debug_counters.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/debug/zhao_debug_crc.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/input/zhao_input_snapshot.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/input/zhao_input_rumble.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/audio/zhao_audio_fifo.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/memory/zhao_sdram_ctrl.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/memory/zhao_vram_arbiter.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/memory/zhao_mem_guard.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/memory/zhao_hps_bridge.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/memory/zhao_hps_arbiter.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/debug/zhao_debug_frameblit.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_video_slotmgr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_fbwrite.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_bin_pipe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_binner.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_arena.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_tile_pipe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/common/zhao_skid2.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_edgewalk.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_earlyz.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_fragment.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_tilestore.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_resolve.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_blend.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_blend_prod.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_blend_fin.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_div255.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_quant.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_fill.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_setup.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_meshfetch.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_assemble.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_vdecode.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_assetfetch.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_project.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_clip.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_depthquant.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/field/zhao_field_rcp24_rom.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/common/zhao_shell_top.sv
+set_global_assignment -name SYSTEMVERILOG_FILE C:/programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/generated/zhao_shell_fit_top.sv
+
+set_global_assignment -name LAST_QUARTUS_VERSION "17.0.2 Lite Edition"
+set_instance_assignment -name VIRTUAL_PIN ON -to *
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8304-639251010191509151/zhao_texture_bilerp_lane_dsp2/src/zhao_dual18_mul.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-8304-639251010191509151/zhao_texture_bilerp_lane_dsp2/src/zhao_texture_bilerp_lane_dsp2.sv"
+set_global_assignment -name VERILOG_MACRO "ZHAO_DUAL18_CYCLONEV=1"
+
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/generated/zhao_abi_pkg.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/common/zhao_pkg.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/memory/zhao_sdram_params_pkg.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/common/zhao_crc32c_fold.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/common/zhao_cdc_snapshot.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_video_mode.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_video_framectl.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_video_scaler.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_scanout_fetch.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/common/zhao_dc_sdp_ram.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_scanout_linebuf.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_scanout_serializer.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_video_scanout.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/command/zhao_cmd_scheduler.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/command/zhao_cmd_dma.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/debug/zhao_debug_counters.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/debug/zhao_debug_crc.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/input/zhao_input_snapshot.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/input/zhao_input_rumble.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/audio/zhao_audio_fifo.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/memory/zhao_sdram_ctrl.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/memory/zhao_vram_arbiter.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/memory/zhao_mem_guard.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/memory/zhao_hps_bridge.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/memory/zhao_hps_arbiter.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/debug/zhao_debug_frameblit.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/video/zhao_video_slotmgr.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_fbwrite.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_bin_pipe.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_binner.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_arena.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_tile_pipe.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/common/zhao_skid2.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_edgewalk.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_earlyz.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_fragment.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_tilestore.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_resolve.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_blend.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_blend_prod.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_blend_fin.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_div255.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_quant.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_fill.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_setup.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_meshfetch.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_assemble.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_vdecode.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_assetfetch.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_project.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_clip.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/geometry/zhao_geom_depthquant.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/raster/zhao_raster_rcp24_svc.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/field/zhao_field_rcp24_rom.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/common/zhao_shell_top.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "../../../../../../../programmieren/zencrifice/zhaozhou-g8a-bil2-d87001c5/fpga/rtl/generated/zhao_shell_fit_top.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE src/zhao_dual18_mul.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/zhao_texture_bilerp_lane_dsp2.sv

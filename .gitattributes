@@ -178,6 +178,8 @@ reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-crcserial.* bina
 reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing1.* binary
 reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing2.* binary
 reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing3.* binary
+reports/synthesis/blockpaths/zhao_attr_mul72x13_dsp3@g8a-dspr-attr3-map.* binary
+reports/synthesis/blockpaths/zhao_texture_bilerp_lane_dsp2@g8a-dspr-bil2-map.* binary
 reports/synthesis/zhao_g8a_raster_texture.json binary
 reports/synthesis/zhao_g8a_raster_texture_crcserial.json binary
 reports/synthesis/zhao_g8a_raster_texture_timing1.json binary

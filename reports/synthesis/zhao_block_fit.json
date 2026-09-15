@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "e3b3cec9bc17348711a3fa9bf999cb8023d4896e",
+    "newestRunCommit":  "d87001c5be815305574a8e57d8913560482bda9c",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -9,6 +9,26 @@
              },
     "device":  "5CSEBA6U23I7",
     "blocks":  [
+                   {
+                       "module":  "zhao_attr_mul72x13_dsp3@g8a-dspr-attr3-map",
+                       "status":  "map_only",
+                       "sourceCommit":  "ce9b2c024f632fa0fd18433e4901aa94b7bcb7a2",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "38eafb6460bcabb068b89ca6b3b6491c9e1e8520b287abaf8bbdb21859cc6bc6",
+                       "variantOf":  "zhao_attr_mul72x13_dsp3",
+                       "seconds":  17.1,
+                       "sourcesHashed":  2,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  306,
+                       "blockMemoryBits":  0,
+                       "dspBlocks":  3,
+                       "virtualPins":  179
+                   },
                    {
                        "module":  "zhao_audio_fifo",
                        "sourceCommit":  "96c0394a768519453b80d68998a670dd59f9aeb5",
@@ -1738,6 +1758,29 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  99.69,
                        "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_texture_bilerp_lane_dsp2@g8a-dspr-bil2-map",
+                       "status":  "map_only",
+                       "sourceCommit":  "d87001c5be815305574a8e57d8913560482bda9c",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "6153fc2b969900a5deb10fc89d78b721c6f9d1d9568cc48b167a4d2fb574a37d",
+                       "verilogMacros":  [
+                                             "ZHAO_DUAL18_CYCLONEV=1"
+                                         ],
+                       "variantOf":  "zhao_texture_bilerp_lane_dsp2",
+                       "seconds":  8,
+                       "sourcesHashed":  2,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  195,
+                       "blockMemoryBits":  0,
+                       "dspBlocks":  2,
+                       "virtualPins":  137
                    },
                    {
                        "module":  "zhao_texture_cache",
