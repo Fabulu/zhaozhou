@@ -144,7 +144,7 @@ def validate_cmake(text: str) -> None:
         "add_executable(pf_g8a raster/raster_texture_v3_fit_top_directed.cpp)",
         "TOP_MODULE zhao_raster_texture_v3_fit_top",
         "SOURCES ${ZHAO_G8A_RASTER_TEXTURE_SOURCES}",
-        "-DQUARTUS_SYNTHESIS=1",
+        "-DQUARTUS_SYNTHESIS=1 -DSYNTHESIS=1",
         "gen_raster_texture_v3_fit_top.py --check",
         "tools/test_raster_texture_v3_fit_top.py -q",
         'LABELS "fast;nightly;packet-f;g8a"',
@@ -293,6 +293,11 @@ class G8AFitTopTests(unittest.TestCase):
                 "max_alms": 29999, "max_dsp": 84, "min_fmax_mhz": 100})
         for mutation in (
             cmake.replace("SOURCES ${ZHAO_G8A_RASTER_TEXTURE_SOURCES}", "SOURCES", 1),
+            cmake.replace(
+                "-DQUARTUS_SYNTHESIS=1 -DSYNTHESIS=1",
+                "-DQUARTUS_SYNTHESIS=1",
+                1,
+            ),
             cmake.replace("  packet_f_g8a_registration_static)", ")", 1),
         ):
             with self.assertRaises(AssertionError):

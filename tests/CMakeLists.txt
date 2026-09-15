@@ -10056,7 +10056,7 @@ add_test(NAME raster_texture_v3_fit_top_directed COMMAND pf_g8a)
 add_test(NAME lint_raster_texture_v3_fit_top
   COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall -Wno-fatal
     --top-module zhao_raster_texture_v3_fit_top
-    -DQUARTUS_SYNTHESIS=1
+    -DQUARTUS_SYNTHESIS=1 -DSYNTHESIS=1
     ${ZHAO_G8A_RASTER_TEXTURE_SOURCES})
 set_tests_properties(lint_raster_texture_v3_fit_top PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
