@@ -12,14 +12,16 @@ a shell, terrain, board, or whole-console measurement.
 | `@g8a` | `c88e2b31` | 13,478 | 21,527 | 71 | 49 | 65.96 MHz | -5.160 ns | -4388.685 ns | timing fail |
 | `@g8a-crcserial` | `a03ebe5f` | 13,285 | 21,630 | 71 | 49 | 80.61 MHz | -2.406 ns | -3386.650 ns | timing fail |
 | `@g8a-timing1` | `8908bc6f` | 12,867 | 21,371 | 71 | 49 | 82.33 MHz | -2.146 ns | -1484.079 ns | timing fail |
+| `@g8a-timing2` | `e3b3cec9` | 12,772 | 21,353 | 71 | 49 | 84.95 MHz | -1.771 ns | -2204.611 ns | timing fail |
 
 The canonical receipts are:
 
 - `reports/synthesis/zhao_g8a_raster_texture.json`
 - `reports/synthesis/zhao_g8a_raster_texture_crcserial.json`
 - `reports/synthesis/zhao_g8a_raster_texture_timing1.json`
+- `reports/synthesis/zhao_g8a_raster_texture_timing2.json`
 
-All three prove 18 physical and zero virtual top pins, exact hierarchy, one V3 owner,
+All four prove 18 physical and zero virtual top pins, exact hierarchy, one V3 owner,
 zero TEXJOIN, mapped `MIGRATION_SHADOWS=0`, no mapped shadow state, required RAM
 witnesses, clean source, and seed 1. All three fail only the predeclared 100 MHz rule.
 
@@ -247,10 +249,9 @@ RAM/hierarchy/shadow evidence, and explicit ALM/register deltas. Packet H may
 continue as excluded development but cannot be promoted while Packet F remains
 red.
 
-## Timing2 implementation state — not yet measured
+## `@g8a-timing2` result and next measured batch
 
-The measured next batch is now implemented but has **no Quartus resource or timing
-claim yet**:
+The second measured batch implemented:
 
 - The characterization wrapper registers the complete 32-bit selected signature
   word before the MISR and registers both eight-bit physical observation outputs.
@@ -301,6 +302,34 @@ scheme. Its four qualifications are directly satisfied: the source selector is
 stateful, final/context ports are registered `zhao_texture_v3bank` outputs,
 reservation decrements only on `head_valid && out_ready`, and fetch remains gated
 by the asserted four-position `out_res` accounting. Qwen's resource estimate used
-a wider context than this module's default and is not promoted; only the fit may
-state the actual register/ALM direction. Commit/push, fresh-clone replay, and the
-one physical timing2 fit remain; no new resource or timing result is claimed here.
+a wider context than this module's default and is not promoted.
+
+The one authorized seed-1 physical fit completed from clean, pushed source
+`e3b3cec9bc17348711a3fa9bf999cb8023d4896e` in 644.8 seconds. It remains timing
+red but passes every resource, hierarchy, shadow, and strengthened RAM gate:
+
+- **12,772 ALMs**, down 95 from timing1 and 706 from the original baseline;
+- **21,353 registers**, down 18 from timing1;
+- unchanged **92,964 memory bits / 71 RAM blocks / 49 DSPs**;
+- **84.95 MHz**, setup WNS **-1.771 ns**, TNS **-2204.611 ns**;
+- hold **+0.250 ns / 0 TNS**;
+- `oq_res_q` and `oq_ctx_q` both remain inferred `altsyncram` instances.
+
+The registered characterization source/MISR/output families are absent from the
+worst band. The retirement cut preserved one-per-clock behavior and RAM inference,
+but the broad family now launches from the inferred OQ head/register through
+Packet-C returned-sequence comparison and back into owner control; 1,137 of the
+2,000 summarized paths have that launch family. The new overall/internal worst
+is the ATTR lane-1 registered column through same-edge attribute-fault cancellation
+to the V3 UVW-bank enable, -1.771 ns with an 11.086 ns data path. Of 2,000 paths,
+1,987 are core-to-core and only 13 touch the physical boundary. Other launch
+families are ATTR column 585, COMBINE owner head 56, expander inferred-RAM head/
+write-enable 45, and cache return pointer 17.
+
+Timing3 must therefore be another measured subsystem batch, not an unchanged
+rerun: register an elastic validated attribute bundle before fault/cancel and
+Early-Z; add one bounded Packet-C result head so returned sequence/data no longer
+feeds owner ready in the same cycle; and cut the measured owner issue/COMBINE
+notification families while preserving actual-accept semantics and read-late
+publication. Only after focused correctness and mutant gates should one later fit
+ask the 100-MHz question again. Packet F remains red and Packet H remains excluded.

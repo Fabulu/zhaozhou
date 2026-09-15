@@ -1,0 +1,55 @@
+{
+  "artifacts": {
+    "canonical_receipt": {
+      "path": "reports/synthesis/zhao_g8a_raster_texture_timing2.json",
+      "sha256": "0d82c3a22b6cb14b92b5624cc0e7dde2e7d86fb1068a8e9f52e1a0dbf6c276b7"
+    },
+    "fit.manifest.json": "78fec140b4a2bbed9b442342cdf5d3c2745cc1b319f939d5ba59109b8de0f30b",
+    "runner.err.log": "8fc6abdabe7aeea4376c83d74627618f2dd08df9567fa18f47c156661ffa79b5",
+    "runner.out.log": "adc77309687b5239529da6a3da5d54f7cf0c0b04804f3f663cd5bf75a94e25f8"
+  },
+  "baseline_delta": {
+    "alms": -95,
+    "dspBlocks": 0,
+    "fmaxMhz": 2.62,
+    "registers": -18,
+    "setupSlackNs": 0.375,
+    "setupTnsNs": -720.532
+  },
+  "diagnosis": {
+    "meaningful_resource_or_timing_measurement": true,
+    "next_action": "Preserve this complete timing failure. Do not repeat the unchanged fit. Batch the measured registered attribute-join/control cut, remove returned-sequence data from owner ready feedback with one bounded stage head, and cut the remaining owner issue/combine control families before one later subsystem fit.",
+    "path_census": "Of 2,000 summarized paths, 1,987 are core-to-core and 13 touch only the physical characterization boundary. Launch families are 1,137 oq_ctx inferred-RAM head/write-enable paths, 585 ATTR lane-1 column paths, 56 COMBINE owner-head paths, 45 fragment-expander inferred-RAM head/write-enable paths, and 17 cache return-pointer paths; 147 are outside those labels.",
+    "removed_paths": "The characterization source mux to MISR and MISR four-byte XOR to physical output are absent from the worst band. Ordered retirement still drains one prepared result per clock and both oq_res_q and oq_ctx_q remain inferred altsyncram instances, so the cut preserved throughput and RAM but did not remove the whole downstream sequence/ready family.",
+    "remaining_internal_path": "Worst setup is now core-to-core at -1.771 ns from ATTR lane-1 col_r[1] through registered-bundle fault/cancel admission control to the V3 UVW bank enable; path anatomy reports 11.086 ns. The next major family launches from the inferred oq_ctx head/register through Packet-C returned-sequence comparison and back into owner control, worst -1.464 ns with 8.893 ns data path.",
+    "resource_gate": "PASS: 12,772 ALMs <= 29,999 and 49 DSP blocks <= 84; 92,964 memory bits / 71 RAM blocks retained",
+    "structure_gate": "PASS: exact hierarchy, one V3 owner, zero TEXJOIN, MIGRATION_SHADOWS=0, no mapped shadow state, tilestore RAMs, and explicit oq_res_q/oq_ctx_q inferred-RAM witnesses",
+    "timing_gate": "84.95 MHz < 100 MHz; setup WNS -1.771 ns and TNS -2204.611 ns; hold +0.250 ns / 0 TNS"
+  },
+  "row": {
+    "alms": 12772,
+    "blockMemoryBits": 92964,
+    "dspBlocks": 49,
+    "fitterSeed": 1,
+    "fmaxMhz": 84.95,
+    "holdSlackNs": 0.25,
+    "holdTnsNs": 0.0,
+    "ioMode": "physical-top-ports",
+    "module": "zhao_raster_texture_v3_fit_top@g8a-timing2",
+    "ramBlocks": 71,
+    "registers": 21353,
+    "rtlCleanAtHead": true,
+    "seconds": 644.8,
+    "setupSlackNs": -1.771,
+    "setupTnsNs": -2204.611,
+    "sourceCommit": "e3b3cec9bc17348711a3fa9bf999cb8023d4896e",
+    "sourceDigest": "b414e5433970ff7fbaec85a5cf65b6cf03b83430173f67e8e8609572c9602187",
+    "sourcesHashed": 43,
+    "status": "failed:structure",
+    "treeCleanAtHead": true,
+    "virtualPins": 0
+  },
+  "schema_id": "zhao.g8a.completed_attempt",
+  "schema_version": 1,
+  "started_utc": "2026-09-15T03:16:47Z"
+}

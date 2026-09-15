@@ -33,6 +33,10 @@ TIMING1_ATTEMPT = (
     REPO / "reports/characterization/g8a_raster_texture_single_owner_characterization"
     / "8908bc6f-20260915T003314Z-timing1"
 )
+TIMING2_ATTEMPT = (
+    REPO / "reports/characterization/g8a_raster_texture_single_owner_characterization"
+    / "e3b3cec9-20260915T032912Z-timing2"
+)
 
 spec = importlib.util.spec_from_file_location("g8a_generator", GENERATOR_PATH)
 if spec is None or spec.loader is None:
@@ -694,6 +698,57 @@ class G8AFitTopTests(unittest.TestCase):
         self.assertFalse(timing_receipt["gate"]["timing_100mhz_pass"])
         self.assertFalse(timing_receipt["gate"]["pass"])
 
+        timing2_attempt = json.loads(
+            (TIMING2_ATTEMPT / "ATTEMPT.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(timing2_attempt["schema_id"], "zhao.g8a.completed_attempt")
+        self.assertEqual(timing2_attempt["row"]["sourceCommit"],
+                         "e3b3cec9bc17348711a3fa9bf999cb8023d4896e")
+        self.assertEqual(timing2_attempt["row"]["sourceDigest"],
+                         "b414e5433970ff7fbaec85a5cf65b6cf03b83430173f67e8e8609572c9602187")
+        self.assertEqual(timing2_attempt["row"]["alms"], 12772)
+        self.assertEqual(timing2_attempt["row"]["registers"], 21353)
+        self.assertEqual(timing2_attempt["row"]["dspBlocks"], 49)
+        self.assertEqual(timing2_attempt["row"]["fmaxMhz"], 84.95)
+        self.assertEqual(timing2_attempt["row"]["setupSlackNs"], -1.771)
+        self.assertEqual(timing2_attempt["row"]["setupTnsNs"], -2204.611)
+        self.assertEqual(timing2_attempt["baseline_delta"], {
+            "alms": -95,
+            "dspBlocks": 0,
+            "fmaxMhz": 2.62,
+            "registers": -18,
+            "setupSlackNs": 0.375,
+            "setupTnsNs": -720.532,
+        })
+        for name in ("fit.manifest.json", "runner.out.log", "runner.err.log"):
+            self.assertEqual(
+                sha256(TIMING2_ATTEMPT / name),
+                timing2_attempt["artifacts"][name], name,
+            )
+        timing2_receipt_ref = timing2_attempt["artifacts"]["canonical_receipt"]
+        self.assertEqual(sha256(REPO / timing2_receipt_ref["path"]),
+                         timing2_receipt_ref["sha256"])
+        timing2_receipt = json.loads(
+            (REPO / timing2_receipt_ref["path"]).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            timing2_receipt["source"]["fit_manifest_path"],
+            "reports/characterization/g8a_raster_texture_single_owner_characterization/"
+            "e3b3cec9-20260915T032912Z-timing2/fit.manifest.json",
+        )
+        self.assertTrue(timing2_receipt["gate"]["fit_complete"])
+        self.assertTrue(timing2_receipt["gate"]["resource_pass"])
+        self.assertTrue(timing2_receipt["gate"]["structure_pass"])
+        self.assertTrue(timing2_receipt["gate"]["ram_inference_pass"])
+        self.assertFalse(timing2_receipt["gate"]["timing_100mhz_pass"])
+        self.assertFalse(timing2_receipt["gate"]["pass"])
+        self.assertTrue(
+            timing2_receipt["ram_witness"]["ordered_retirement_result_ram_present"]
+        )
+        self.assertTrue(
+            timing2_receipt["ram_witness"]["ordered_retirement_context_ram_present"]
+        )
+
     def test_one_fit_runner_and_receipt_tool_are_fail_closed(self) -> None:
         fit_runner = (REPO / "tools/quartus/run_g8a_fit.ps1").read_text(encoding="utf-8")
         receipt_tool = (REPO / "tools/quartus/g8a_receipt.py").read_text(encoding="utf-8")
@@ -858,9 +913,9 @@ class G8AFitTopTests(unittest.TestCase):
         ), "G8A timing2 runner")
         require_once(timing2_receipt, (
             'receipt.ROW_NAME = receipt.MODULE + "@g8a-timing2"',
-            "zhao_raster_texture_v3_fit_top@g8a-timing2.fit.manifest.json",
+            "e3b3cec9-20260915T032912Z-timing2/fit.manifest.json",
             "zhao_g8a_raster_texture_timing2.json",
-            "Rebind",
+            "now names the immutable archived copy",
             "_BASE_VALIDATE_RAM = receipt.validate_ram",
             "def validate_timing2_ram(map_text: str)",
             "result = _BASE_VALIDATE_RAM(map_text)",

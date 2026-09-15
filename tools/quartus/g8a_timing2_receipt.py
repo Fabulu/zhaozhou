@@ -8,12 +8,12 @@ import g8a_receipt as receipt
 
 REPO = Path(__file__).resolve().parents[2]
 receipt.ROW_NAME = receipt.MODULE + "@g8a-timing2"
-# The runner snapshots these bytes before Quartus, verifies them after the
-# measured run, and atomically retains them before receipt derivation. Rebind
-# this to the immutable archive copy after the completed attempt is preserved.
+# The runner snapshotted these bytes before Quartus, verified them after the
+# measured run, and atomically retained them before receipt derivation. This path
+# now names the immutable archived copy rather than the moving blockpath output.
 receipt.FIT_MANIFEST = (
-    REPO / "reports/synthesis/blockpaths/"
-    "zhao_raster_texture_v3_fit_top@g8a-timing2.fit.manifest.json"
+    REPO / "reports/characterization/g8a_raster_texture_single_owner_characterization/"
+    "e3b3cec9-20260915T032912Z-timing2/fit.manifest.json"
 )
 receipt.RECEIPT = (
     REPO / "reports/synthesis/zhao_g8a_raster_texture_timing2.json"
