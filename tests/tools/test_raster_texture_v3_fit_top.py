@@ -27,6 +27,10 @@ CRC_SERIAL_ATTEMPT = (
     REPO / "reports/characterization/g8a_raster_texture_single_owner_characterization"
     / "a03ebe5f-20260914T200926Z-crcserial"
 )
+TIMING1_ATTEMPT = (
+    REPO / "reports/characterization/g8a_raster_texture_single_owner_characterization"
+    / "8908bc6f-20260915T003314Z-timing1"
+)
 
 spec = importlib.util.spec_from_file_location("g8a_generator", GENERATOR_PATH)
 if spec is None or spec.loader is None:
@@ -593,6 +597,48 @@ class G8AFitTopTests(unittest.TestCase):
         self.assertFalse(crc_receipt["gate"]["timing_100mhz_pass"])
         self.assertFalse(crc_receipt["gate"]["pass"])
 
+        timing_attempt = json.loads(
+            (TIMING1_ATTEMPT / "ATTEMPT.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(timing_attempt["schema_id"], "zhao.g8a.completed_attempt")
+        self.assertEqual(timing_attempt["row"]["sourceCommit"],
+                         "8908bc6fea718a95658816527a72be39a7601dcc")
+        self.assertEqual(timing_attempt["row"]["sourceDigest"],
+                         "3f739c3645d1b510768655a86ab291bbd3b2248d86e8a887647883fe066ca707")
+        self.assertEqual(timing_attempt["row"]["alms"], 12867)
+        self.assertEqual(timing_attempt["row"]["dspBlocks"], 49)
+        self.assertEqual(timing_attempt["row"]["fmaxMhz"], 82.33)
+        self.assertEqual(timing_attempt["row"]["setupSlackNs"], -2.146)
+        self.assertEqual(timing_attempt["baseline_delta"], {
+            "alms": -418,
+            "dspBlocks": 0,
+            "fmaxMhz": 1.72,
+            "registers": -259,
+            "setupSlackNs": 0.26,
+            "setupTnsNs": 1902.571,
+        })
+        for name in ("fit.manifest.json", "runner.out.log", "runner.err.log"):
+            self.assertEqual(
+                sha256(TIMING1_ATTEMPT / name),
+                timing_attempt["artifacts"][name], name,
+            )
+        timing_receipt_ref = timing_attempt["artifacts"]["canonical_receipt"]
+        self.assertEqual(sha256(REPO / timing_receipt_ref["path"]),
+                         timing_receipt_ref["sha256"])
+        timing_receipt = json.loads(
+            (REPO / timing_receipt_ref["path"]).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            timing_receipt["source"]["fit_manifest_path"],
+            "reports/characterization/g8a_raster_texture_single_owner_characterization/"
+            "8908bc6f-20260915T003314Z-timing1/fit.manifest.json",
+        )
+        self.assertTrue(timing_receipt["gate"]["fit_complete"])
+        self.assertTrue(timing_receipt["gate"]["resource_pass"])
+        self.assertTrue(timing_receipt["gate"]["structure_pass"])
+        self.assertFalse(timing_receipt["gate"]["timing_100mhz_pass"])
+        self.assertFalse(timing_receipt["gate"]["pass"])
+
     def test_one_fit_runner_and_receipt_tool_are_fail_closed(self) -> None:
         fit_runner = (REPO / "tools/quartus/run_g8a_fit.ps1").read_text(encoding="utf-8")
         receipt_tool = (REPO / "tools/quartus/g8a_receipt.py").read_text(encoding="utf-8")
@@ -696,9 +742,9 @@ class G8AFitTopTests(unittest.TestCase):
         ), "G8A timing-batch runner")
         require_once(timing_receipt, (
             'receipt.ROW_NAME = receipt.MODULE + "@g8a-timing1"',
-            "zhao_raster_texture_v3_fit_top@g8a-timing1.fit.manifest.json",
+            "8908bc6f-20260915T003314Z-timing1/fit.manifest.json",
             "zhao_g8a_raster_texture_timing1.json",
-            "rebind this path to the immutable retained attempt manifest",
+            "now names the immutable archived copy",
         ), "G8A timing-batch receipt wrapper")
         with self.assertRaises(AssertionError):
             require_once(

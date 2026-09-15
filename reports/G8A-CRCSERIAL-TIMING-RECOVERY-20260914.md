@@ -11,15 +11,17 @@ a shell, terrain, board, or whole-console measurement.
 |---|---|---:|---:|---:|---:|---:|---:|---:|---|
 | `@g8a` | `c88e2b31` | 13,478 | 21,527 | 71 | 49 | 65.96 MHz | -5.160 ns | -4388.685 ns | timing fail |
 | `@g8a-crcserial` | `a03ebe5f` | 13,285 | 21,630 | 71 | 49 | 80.61 MHz | -2.406 ns | -3386.650 ns | timing fail |
+| `@g8a-timing1` | `8908bc6f` | 12,867 | 21,371 | 71 | 49 | 82.33 MHz | -2.146 ns | -1484.079 ns | timing fail |
 
 The canonical receipts are:
 
 - `reports/synthesis/zhao_g8a_raster_texture.json`
 - `reports/synthesis/zhao_g8a_raster_texture_crcserial.json`
+- `reports/synthesis/zhao_g8a_raster_texture_timing1.json`
 
-Both prove 18 physical and zero virtual top pins, exact hierarchy, one V3 owner,
+All three prove 18 physical and zero virtual top pins, exact hierarchy, one V3 owner,
 zero TEXJOIN, mapped `MIGRATION_SHADOWS=0`, no mapped shadow state, required RAM
-witnesses, clean source, and seed 1. Both fail only the predeclared 100 MHz rule.
+witnesses, clean source, and seed 1. All three fail only the predeclared 100 MHz rule.
 
 ## What the CRC repair proved
 
@@ -202,24 +204,45 @@ existing `ATTEMPT.json` digest and are now restaged under the active binary rule
 so future clones retain those exact bytes. No generated manifest, source, Quartus
 stage, resource, or timing claim came from either failed preflight.
 
-## Acceptance before another fit
+## `@g8a-timing1` result and next batch
 
-- Packet-D attribute radix-2/radix-4, negative-half, saturation, zero-area,
-  min-X, latency, busy, and stall controls;
-- owner full-context, reorder, validation-generation, reservation, queue-full,
-  terminal credit, output hold, and 71-term quiet controls, with new positive
-  controls for every added head/permission bit;
-- AUX divider six-cycle leaf law plus caller-stage identity/idle/credit tests;
-- exact material recipe phase/product ledgers and status-dirty J1 behavior;
-- reciprocal predecessor/successor token-result parity with independent latency
-  scoreboards rather than stale cycle equality;
-- Packet C/D/E regressions, interface 113/113, and G8A legal activity;
-- no new DSP sites and no production/shell adoption.
+The predeclared fit completed from clean exact source `8908bc6f`, source digest
+`3f739c36...ca707`, seed 1, 18 physical/zero virtual pins. Structure, RAM, and
+resource gates pass; timing remains red:
 
-Only after all selected cuts are committed from a clean source may the predeclared
-`@g8a-timing1` subsystem fit answer the combined timing question. Its runner pins
-the exact post-CRC receipt, rejects an unchanged source or prior row/receipt, and
-uses the same seed-1 physical boundary. The gate remains:
-Fmax >=100 MHz, setup WNS >=0, setup TNS=0, passing hold, DSP no greater than 49,
-retained RAM/hierarchy/shadow evidence, and explicit ALM/register deltas. Packet H
-may be developed in parallel but cannot be promoted while Packet F remains red.
+- **12,867 ALMs**, down 418 from post-CRC and 611 from the original baseline;
+- **21,371 registers**, down 259 from post-CRC;
+- unchanged **92,964 memory bits / 71 RAM blocks / 49 DSPs**;
+- **82.33 MHz**, setup WNS **-2.146 ns**, TNS **-1484.079 ns**;
+- hold **+0.262 ns / 0 TNS**.
+
+The first batch therefore improved Fmax only 1.72 MHz, but cut 418 ALMs and more
+than halved remaining TNS. The former ATTRGRAD/ATTRDIV, AUXDIV, material finish,
+RCP priority-normalization, and owner COMBINE-generation/subtract families are
+absent from the worst band, so those cuts did what they were intended to do.
+They did not close Packet F.
+
+The new overall worst path is characterization-only:
+`signature_misr_q[24] -> fit_signature_o[0]` through the four-byte XOR at
+-2.146 ns. Registering the eight signature outputs removes that physical-output
+path without changing activity or the subsystem.
+
+The real internal gate is now the Qwen-deferred retirement trigger. Worst
+internal setup is -1.593 ns / 86.26 MHz from the `oq_ctx_q` M10K output family
+through texture-stage sequence/fault/ready logic; path anatomy measures 9.031 ns
+of data path, and **1,245 of 1,939** summarized internal paths launch from that
+family. The measured trigger Qwen specified has therefore fired. The next batch
+may add a bounded registered/elastic retirement head while preserving total
+`OUTQD=4`, full owner/context/result identity, output hold, ordered release,
+quiet, reset, RAM inference, and exact credit. It must not copy the 4x224-bit RAM
+payload into an additional wide queue or change the owner lifecycle.
+
+Before another fit, require back-to-back retirement, held-head refill, reset with
+all retirement ownership positions, wrap/output-hold, exact admission/emission
+order/context, new head-bit positive controls, complete Packet-B/C/D/E/F/G
+regressions, and fresh interface/G8A manifests. Only one next subsystem fit may
+measure the registered boundary plus retirement-head batch. Its unchanged gate
+is Fmax >=100 MHz, setup WNS >=0, setup TNS=0, passing hold, DSP <=49, retained
+RAM/hierarchy/shadow evidence, and explicit ALM/register deltas. Packet H may
+continue as excluded development but cannot be promoted while Packet F remains
+red.

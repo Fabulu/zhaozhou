@@ -1,0 +1,55 @@
+{
+  "artifacts": {
+    "canonical_receipt": {
+      "path": "reports/synthesis/zhao_g8a_raster_texture_timing1.json",
+      "sha256": "8476f6cfd685c1cc063a049d430b5ff6a460b740e3cccc857d7e0dbd28ab6c59"
+    },
+    "fit.manifest.json": "828aaf7915091508d81d1f1ee76fad4160dddcd9c463631040dbfb9c1b1064a1",
+    "runner.err.log": "9d9238f122b2c8ae217411b3db8723b825369bf6ea7c258e1de769bca0dc113e",
+    "runner.out.log": "612d779e31742892df4ba92472d1bf294987a2ea2f9887ded1e3be91eed6b6c0"
+  },
+  "baseline_delta": {
+    "alms": -418,
+    "dspBlocks": 0,
+    "fmaxMhz": 1.72,
+    "registers": -259,
+    "setupSlackNs": 0.26,
+    "setupTnsNs": 1902.571
+  },
+  "diagnosis": {
+    "meaningful_resource_or_timing_measurement": true,
+    "next_action": "Preserve this complete timing failure, register the characterization MISR outputs, and implement the now-measured oq_ctx retirement-head cut as the next independently verified batch; do not repeat the unchanged fit.",
+    "removed_paths": "The prior ATTRGRAD-to-ATTRDIV, AUX clamp-to-DIV6, material finish-to-RAM, RCP priority-normalization, and owner COMBINE generation/subtract families are absent from the worst band.",
+    "remaining_internal_path": "Worst internal setup is -1.593 ns from the oq_ctx M10K output/write-enable family through texture-stage sequence/fault/ready logic; 1,245 of 1,939 summarized internal paths launch from that family.",
+    "remaining_overall_path": "Worst overall setup is -2.146 ns from signature_misr_q[24] through the four-byte XOR into physical fit_signature_o[0]; the characterization wrapper output must be registered without changing activity semantics.",
+    "resource_gate": "PASS: 12,867 ALMs <= 29,999 and 49 DSP blocks <= 84",
+    "structure_gate": "PASS: exact hierarchy, one V3 owner, zero TEXJOIN, MIGRATION_SHADOWS=0, no mapped shadow state, required RAM witnesses",
+    "timing_gate": "82.33 MHz < 100 MHz; setup WNS -2.146 ns and TNS -1484.079 ns"
+  },
+  "row": {
+    "alms": 12867,
+    "blockMemoryBits": 92964,
+    "dspBlocks": 49,
+    "fitterSeed": 1,
+    "fmaxMhz": 82.33,
+    "holdSlackNs": 0.262,
+    "holdTnsNs": 0.0,
+    "ioMode": "physical-top-ports",
+    "module": "zhao_raster_texture_v3_fit_top@g8a-timing1",
+    "ramBlocks": 71,
+    "registers": 21371,
+    "rtlCleanAtHead": true,
+    "seconds": 631.9,
+    "setupSlackNs": -2.146,
+    "setupTnsNs": -1484.079,
+    "sourceCommit": "8908bc6fea718a95658816527a72be39a7601dcc",
+    "sourceDigest": "3f739c3645d1b510768655a86ab291bbd3b2248d86e8a887647883fe066ca707",
+    "sourcesHashed": 43,
+    "status": "failed:structure",
+    "treeCleanAtHead": true,
+    "virtualPins": 0
+  },
+  "schema_id": "zhao.g8a.completed_attempt",
+  "schema_version": 1,
+  "started_utc": "2026-09-15T00:33:14Z"
+}
