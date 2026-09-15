@@ -1,10 +1,10 @@
 // COMMITTED TEST MUTANT -- no-same-edge-retirement-reload control.
 //
 // Renamed so no production or wildcard source list can elaborate it by mistake.
-// Exactly one substantive mutation removes the output-pop credit from the
-// ordered fetch reservation. A full prepared output queue therefore cannot
-// launch its replacement on the pop edge and produces a visible drain bubble.
-// The inverse-polarity driver passes only when that bubble is observed.
+// Exactly one substantive mutation removes output-fire credit from the logical
+// retirement head. A firing head therefore cannot reload on the same edge and
+// the prepared drain develops a visible bubble. The inverse-polarity driver
+// passes only when that bubble is observed.
 // Source oracle: fpga/rtl/texture/zhao_texture_v3own.sv
 //
 // zhao_texture_v3own.sv -- the V3 owner / completion / retire experiment.
@@ -283,7 +283,15 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
     output var logic [31:0]       ev_admitted_o,
     output var logic [31:0]       ev_emitted_o,
     output var logic [31:0]       ev_commits_o,
+    // Instrumentation-only typed partition of ev_commits_o. These counters do
+    // not gate or alter lifecycle state; their independent positive control is
+    // what makes a zero typed count meaningful.
+    output var logic [31:0]       ev_tmu_commits_o,
+    output var logic [31:0]       ev_aux_commits_o,
     output var logic [31:0]       ev_tickets_o,
+    // Newly ready owners whose slot is not the current ordered head. This is
+    // the actual reorder-held event; no invalid output payload is consulted.
+    output var logic [31:0]       ev_reorder_held_o,
     output var logic [31:0]       ev_err_range_o,
     output var logic [31:0]       ev_err_stale_o,
     output var logic [31:0]       ev_err_unsol_o,
@@ -297,7 +305,11 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
     output var logic [31:0]       ev_src_unpub_o,
     output var logic [CNTW-1:0]   ev_live_o,
     output var logic [CNTW-1:0]   ev_live_peak_o,
-    output var logic              ev_quiet_o
+    output var logic              ev_quiet_o,
+    // Observation-only internal queue levels for the island's literal quiet
+    // equation. They add no state and do not feed lifecycle decisions.
+    output var logic              obs_claim_valid_o,
+    output var logic              obs_ready_valid_o
 );
 
   localparam logic [3:0] SRC_AUX = 4'b1000;
@@ -513,9 +525,11 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
                 < OWNERW'(live_cnt_q));
   endfunction
 
+`ifndef SYNTHESIS
   logic [SLOTW-1:0] tail_p1_c;
+  assign tail_p1_c = tail_q + SLOTW'(1);
+`endif
   logic             wrap_at_tail_p1_c;
-  assign tail_p1_c         = tail_q + SLOTW'(1);
   // Site 3 is the one that is NOT a copy of the other two, and the plan got it
   // wrong once before the assertion corrected it. `tail_p1` is AHEAD of the
   // tail -- so `alloc_gen - 1` -- EXCEPT when `tail_q == 63`, where it wraps to
@@ -963,7 +977,16 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
   // high now if the memory read will return several cycles later. The
   // destination credit must cover that latency." cmb_res_q counts reads in
   // flight AND queued rows, and the reservation is taken at the pop.
-  assign cmb_pop_c = sel_v_c && ((cmb_res_q - CNTW'(cmb_fire_c)) < CNTW'(CMBQD));
+  // A same-cycle COMBINE acceptance frees one reservation.  Spell the two
+  // cases as Boolean range tests instead of subtracting the fire bit through a
+  // carry chain.  The explicit nonzero/full terms preserve the old unsigned
+  // underflow and out-of-range behavior as well as every reachable cycle.
+  logic cmb_room_after_fire_c;
+  assign cmb_room_after_fire_c =
+      ((cmb_res_q < CNTW'(CMBQD)) &&
+       (!cmb_fire_c || (cmb_res_q != CNTW'(0)))) ||
+      (cmb_fire_c && (cmb_res_q == CNTW'(CMBQD)));
+  assign cmb_pop_c = sel_v_c && cmb_room_after_fire_c;
   always_comb begin
     for (int unsigned k = 0; k < 3; k++) begin
       rq_pop_c[k] = cmb_pop_c && (sel_c == 2'(k));
@@ -1052,10 +1075,6 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
       .rd_addr_i(fin_rd_addr_q),
       .rd_data_o(ctx_rd_c)
   );
-
-  // ---- RC capture (section 6.3), retirement side: one fabric register ------
-  logic [RESW-1:0] fres_cap_q;
-  logic [CTXW-1:0] ctx_cap_q;
 
   // ==========================================================================
   // COMBINE JOB QUEUE (registers, depth CMBQD): THE OWNER HANDLE, ALWAYS
@@ -1166,22 +1185,39 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
   logic [CNTW-1:0] out_res_q;
   logic            out_fire_c, fetch_fire_c;
 
-  logic              g0_v_q, g1_v_q, g2_v_q;
-  logic [OWNERW-1:0] g0_owner_q, g1_owner_q, g2_owner_q;
+  logic              g0_v_q, g1_v_q;
+  logic [OWNERW-1:0] g0_owner_q, g1_owner_q;
 
+  // OUTQD remains the total logical retirement capacity. The body has OUTQD
+  // physical rows, but the head, g0 and g1 all consume reservations from the
+  // same total; they are not extra queue entries.
   localparam int unsigned OQPW = $clog2(OUTQD);
   logic [OWNERW-1:0] oq_own_q [OUTQD];
   logic [RESW-1:0]   oq_res_q [OUTQD];
   logic [CTXW-1:0]   oq_ctx_q [OUTQD];
   logic [OQPW:0]     oq_wp_q, oq_rp_q;
   logic [OQPW:0]     oq_occ_c;
-  assign oq_occ_c = oq_wp_q - oq_rp_q;
 
-  assign out_valid_o  = (oq_occ_c != '0);
-  assign out_owner_o  = oq_own_q[oq_rp_q[OQPW-1:0]];
-  assign out_result_o = oq_res_q[oq_rp_q[OQPW-1:0]];
-  assign out_ctx_o    = oq_ctx_q[oq_rp_q[OQPW-1:0]];
-  assign out_fire_c   = out_valid_o && out_ready_i;
+  logic              oq_head_v_q, oq_head_bypass_q;
+  logic [OWNERW-1:0] oq_body_head_own_q, oq_bypass_head_own_q;
+  logic [RESW-1:0]   oq_body_head_res_q, oq_bypass_head_res_q;
+  logic [CTXW-1:0]   oq_body_head_ctx_q, oq_bypass_head_ctx_q;
+  logic              oq_head_room_c, oq_body_load_c;
+  logic              oq_bypass_load_c, oq_head_load_c;
+
+  assign oq_occ_c         = oq_wp_q - oq_rp_q;
+  assign out_valid_o      = oq_head_v_q;
+  assign out_owner_o      = oq_head_bypass_q ? oq_bypass_head_own_q
+                                               : oq_body_head_own_q;
+  assign out_result_o     = oq_head_bypass_q ? oq_bypass_head_res_q
+                                               : oq_body_head_res_q;
+  assign out_ctx_o        = oq_head_bypass_q ? oq_bypass_head_ctx_q
+                                               : oq_body_head_ctx_q;
+  assign out_fire_c       = out_valid_o && out_ready_i;
+  assign oq_head_room_c   = !oq_head_v_q;
+  assign oq_body_load_c   = (oq_occ_c != '0) && oq_head_room_c;
+  assign oq_bypass_load_c = (oq_occ_c == '0) && g1_v_q && oq_head_room_c;
+  assign oq_head_load_c   = oq_body_load_c || oq_bypass_load_c;
 
   // F0. Section 18.1: unfetched work, a live owner with final_done at
   // fetch_head, and a RESERVED output slot -- reserved before the read is
@@ -1212,7 +1248,7 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
   // check that licensed the removal therefore survives the removal.
   assign fetch_fire_c = (unf_cnt_q != '0)
                      && live_q[fetch_q] && fdn_q[fetch_q]
-                     && (out_res_q < CNTW'(OUTQD));
+                     && ((out_res_q - CNTW'(out_fire_c)) < CNTW'(OUTQD));
 
   // ==========================================================================
   // QUIESCENCE (used by the generation-wrap drain)
@@ -1226,9 +1262,12 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
                 && rq_empty_c[0] && rq_empty_c[1] && rq_empty_c[2]
                 && !kpipe_busy_c
                 && (cq_occ_c == '0) && (cmb_res_q == '0)
-                && !g0_v_q && !g1_v_q && !g2_v_q
-                && (oq_occ_c == '0) && (out_res_q == '0);
-  assign ev_quiet_o = quiet_c;
+                && !g0_v_q && !g1_v_q
+                && !oq_head_v_q && (oq_occ_c == '0)
+                && (out_res_q == '0);
+  assign ev_quiet_o        = quiet_c;
+  assign obs_claim_valid_o = c1t_v_q || c1a_v_q;
+  assign obs_ready_valid_o = q0t_v_q || q0a_v_q || q0i_v_q;
 
   // ==========================================================================
   // THE ONE SCOREBOARD NEXT-STATE, COMPUTED ONCE PER OWNER
@@ -1382,7 +1421,8 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
   // "Simultaneous TMU and AUX faults increment the error total by two." That
   // is the fragrob defect this repository already paid for once; the delta is
   // calculated in one place and the accumulator is assigned in one place.
-  logic [1:0] d_stale_c, d_unsol_c, d_dup_c, d_commit_c, d_ticket_c, d_issue_c;
+  logic [1:0] d_stale_c, d_unsol_c, d_dup_c, d_commit_c, d_ticket_c;
+  logic [1:0] d_reorder_c, d_issue_c;
   logic       d_range_c, d_final_c;
   always_comb begin
     d_stale_c = 2'd0;
@@ -1401,6 +1441,13 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
     if (tkt_t_c) d_ticket_c = d_ticket_c + 2'd1;
     if (tkt_a_c) d_ticket_c = d_ticket_c + 2'd1;
     if (adm_fire_c && (adm_req_i == 4'd0)) d_ticket_c = d_ticket_c + 2'd1;
+    d_reorder_c = 2'd0;
+    if (tkt_t_c && (c4t_slot_q != emit_q))
+      d_reorder_c = d_reorder_c + 2'd1;
+    if (tkt_a_c && (c4a_slot_q != emit_q))
+      d_reorder_c = d_reorder_c + 2'd1;
+    if (adm_fire_c && (adm_req_i == 4'd0) && (tail_q != emit_q))
+      d_reorder_c = d_reorder_c + 2'd1;
     d_issue_c = 2'd0;
     if (iss_tmu_valid_i && !iss_t_ok_c) d_issue_c = d_issue_c + 2'd1;
     if (iss_aux_valid_i && !iss_a_ok_c) d_issue_c = d_issue_c + 2'd1;
@@ -1683,35 +1730,51 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
     if (cq_push_c) cq_own_q[cq_wp_q[CQPW-1:0]] <= cq_push_owner_c;
   end
 
-  // ---- retirement read pipeline -------------------------------------------
+  // ---- ordered final/context read and one logical elastic output head -------
+  // The body write enable remains exactly g1_v_q, a registered signal. During
+  // an empty-body bypass the duplicate physical row is written but skipped by
+  // advancing both pointers, so the logical occupancy stays zero. Separate
+  // body/bypass payload registers keep the body read bare at its capture edge;
+  // the selector describes two physical representations of one logical head.
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      g0_v_q    <= 1'b0;
-      g1_v_q    <= 1'b0;
-      g2_v_q    <= 1'b0;
-      out_res_q <= '0;
-      oq_wp_q   <= '0;
-      oq_rp_q   <= '0;
+      g0_v_q           <= 1'b0;
+      g1_v_q           <= 1'b0;
+      oq_head_v_q      <= 1'b0;
+      oq_head_bypass_q <= 1'b0;
+      out_res_q        <= '0;
+      oq_wp_q          <= '0;
+      oq_rp_q          <= '0;
     end else begin
-      g0_v_q <= fetch_fire_c;
-      g1_v_q <= g0_v_q;
-      g2_v_q <= g1_v_q;
-      out_res_q <= out_res_q + CNTW'(fetch_fire_c) - CNTW'(out_fire_c);
-      if (g2_v_q)     oq_wp_q <= oq_wp_q + (OQPW+1)'(1);
-      if (out_fire_c) oq_rp_q <= oq_rp_q + (OQPW+1)'(1);
+      g0_v_q      <= fetch_fire_c;
+      g1_v_q      <= g0_v_q;
+      oq_head_v_q <= oq_head_load_c || (oq_head_v_q && !out_fire_c);
+      out_res_q   <= out_res_q + CNTW'(fetch_fire_c) - CNTW'(out_fire_c);
+      if (g1_v_q)         oq_wp_q <= oq_wp_q + (OQPW+1)'(1);
+      if (oq_head_load_c) oq_rp_q <= oq_rp_q + (OQPW+1)'(1);
+      if (oq_head_load_c) oq_head_bypass_q <= oq_bypass_load_c;
     end
   end
   always_ff @(posedge clk) begin
-    if (fetch_fire_c) fin_rd_addr_q <= fetch_q;
-    if (fetch_fire_c) g0_owner_q <= {fetch_q, win_gen_of_slot(fetch_q)};
+    if (fetch_fire_c) begin
+      fin_rd_addr_q <= fetch_q;
+      g0_owner_q <= {fetch_q, win_gen_of_slot(fetch_q)};
+    end
     g1_owner_q <= g0_owner_q;
-    g2_owner_q <= g1_owner_q;
-    fres_cap_q <= fres_rd_c;
-    ctx_cap_q  <= ctx_rd_c;
-    if (g2_v_q) begin
-      oq_own_q[oq_wp_q[OQPW-1:0]] <= g2_owner_q;
-      oq_res_q[oq_wp_q[OQPW-1:0]] <= fres_cap_q;
-      oq_ctx_q[oq_wp_q[OQPW-1:0]] <= ctx_cap_q;
+    if (g1_v_q) begin
+      oq_own_q[oq_wp_q[OQPW-1:0]] <= g1_owner_q;
+      oq_res_q[oq_wp_q[OQPW-1:0]] <= fres_rd_c;
+      oq_ctx_q[oq_wp_q[OQPW-1:0]] <= ctx_rd_c;
+    end
+    if (oq_body_load_c) begin
+      oq_body_head_own_q <= oq_own_q[oq_rp_q[OQPW-1:0]];
+      oq_body_head_res_q <= oq_res_q[oq_rp_q[OQPW-1:0]];
+      oq_body_head_ctx_q <= oq_ctx_q[oq_rp_q[OQPW-1:0]];
+    end
+    if (oq_bypass_load_c) begin
+      oq_bypass_head_own_q <= g1_owner_q;
+      oq_bypass_head_res_q <= fres_rd_c;
+      oq_bypass_head_ctx_q <= ctx_rd_c;
     end
   end
 
@@ -1721,7 +1784,10 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
       ev_admitted_o    <= 32'd0;
       ev_emitted_o     <= 32'd0;
       ev_commits_o     <= 32'd0;
+      ev_tmu_commits_o <= 32'd0;
+      ev_aux_commits_o <= 32'd0;
       ev_tickets_o     <= 32'd0;
+      ev_reorder_held_o<= 32'd0;
       ev_err_range_o   <= 32'd0;
       ev_err_stale_o   <= 32'd0;
       ev_err_unsol_o   <= 32'd0;
@@ -1735,7 +1801,10 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
       ev_src_unpub_o   <= ev_src_unpub_o   + 32'(src_unpub_c);
       ev_emitted_o     <= ev_emitted_o     + 32'(out_fire_c);
       ev_commits_o     <= ev_commits_o     + 32'(d_commit_c);
+      ev_tmu_commits_o <= ev_tmu_commits_o + 32'(c4t_v_q);
+      ev_aux_commits_o <= ev_aux_commits_o + 32'(c4a_v_q);
       ev_tickets_o     <= ev_tickets_o     + 32'(d_ticket_c);
+      ev_reorder_held_o<= ev_reorder_held_o+ 32'(d_reorder_c);
       ev_err_range_o   <= ev_err_range_o   + 32'(d_range_c);
       ev_err_stale_o   <= ev_err_stale_o   + 32'(d_stale_c);
       ev_err_unsol_o   <= ev_err_unsol_o   + 32'(d_unsol_c);
@@ -2130,6 +2199,12 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
       a_out_reserved     : assert (out_res_q  <= CNTW'(OUTQD));
       a_cmb_reserved     : assert (cmb_res_q  <= CNTW'(CMBQD));
       a_outq_bound       : assert (oq_occ_c   <= (OQPW+1)'(OUTQD));
+      a_out_structure    : assert (out_res_q ==
+          CNTW'(g0_v_q) + CNTW'(g1_v_q) + CNTW'(oq_occ_c)
+          + CNTW'(oq_head_v_q));
+      a_head_load_onehot : assert (!(oq_body_load_c && oq_bypass_load_c));
+      a_bypass_is_empty  : assert (!oq_bypass_load_c
+                                    || ((oq_occ_c == '0) && g1_v_q));
       a_cmbq_bound       : assert (cq_occ_c   <= (CQPW+1)'(CMBQD));
 
       // sample_claim -> live && generation_matches && sample_index<3
@@ -2190,8 +2265,11 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
       // Admission is closed for the whole STOP/FINISH interval, so nothing can
       // move the tail -- these assert that, rather than assuming it.
       a_fence_holds_slot : assert ((fn_q != FN_REOPEN) || (tail_q == fn_slot_q));
+`ifndef SYNTHESIS
+      // Both operands are deliberately verification-only mirrors.
       a_fence_holds_gen  : assert ((fn_q != FN_REOPEN)
                                 || (vgen_q[fn_slot_q] == vfn_gen_q));
+`endif
 
       // And the reopen authorises EXACTLY ONE admission: 6.2 warns the
       // transitional fence and the sequence-window fence "must not be combined

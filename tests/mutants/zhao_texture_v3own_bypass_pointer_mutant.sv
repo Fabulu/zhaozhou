@@ -1,3 +1,12 @@
+// COMMITTED TEST MUTANT -- empty-body bypass pointer control.
+//
+// Renamed so no production or wildcard source list can elaborate it by mistake.
+// Exactly one substantive mutation advances the body read pointer only for a
+// body load, not for the bypassed write. The skipped duplicate row therefore
+// becomes logically occupied and the a_out_structure reservation identity must
+// fire on the first bypass.
+// Source oracle: fpga/rtl/texture/zhao_texture_v3own.sv
+//
 // zhao_texture_v3own.sv -- the V3 owner / completion / retire experiment.
 //
 // reports/TEXTURE-ISLAND-V3-ARCHITECTURE-20260906.txt section 26.1, verbatim:
@@ -182,7 +191,7 @@
 // ---------------------------------------------------------------------------
 `default_nettype none
 
-module zhao_texture_v3own #(
+module zhao_texture_v3own_bypass_pointer_mutant #(
     // 64 owners. Section 5.1: "The baseline owner capacity is 64."
     parameter int unsigned OWNERS = 64,
     parameter int unsigned SLOTW  = 6,
@@ -1742,7 +1751,7 @@ module zhao_texture_v3own #(
       oq_head_v_q <= oq_head_load_c || (oq_head_v_q && !out_fire_c);
       out_res_q   <= out_res_q + CNTW'(fetch_fire_c) - CNTW'(out_fire_c);
       if (g1_v_q)         oq_wp_q <= oq_wp_q + (OQPW+1)'(1);
-      if (oq_head_load_c) oq_rp_q <= oq_rp_q + (OQPW+1)'(1);
+      if (oq_body_load_c) oq_rp_q <= oq_rp_q + (OQPW+1)'(1);
       if (oq_head_load_c) oq_head_bypass_q <= oq_bypass_load_c;
     end
   end

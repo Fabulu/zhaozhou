@@ -971,3 +971,36 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - From a clean committed tree, run only `shell_fit_top_clean_characterization`; preserve raw artifacts and use fitted exact-shell hierarchy plus explicit remainder to rank the first live non-terrain ALM rewrite. Do not mistake this protected legacy-shell price for a complete V3-connected machine.
 - Continue texture composition with Packet B's complete V3 boundary only after Packet A lands, following the accepted A-K order and reserving G8A/G8B/G8C fits for their pre-named subsystem boundaries.
 - Continue composition and optimization until clean connected evidence has comfortable margin below 30,000 ALMs and 85 DSPs, including unpriced roots and framework/board overhead.
+## 2026-09-15 — G8A timing2 implementation in progress
+
+- Implemented the measured retirement cut in `zhao_texture_v3own`: removed `g2` and the extra final/context capture stage; added one logical elastic head; body push now uses registered `g1_v_q` with matching direct bank outputs.
+- Closed the previously found empty-body bubble with direct `g1` bypass. A bypass still writes the physical body row, advances both extended pointers, and leaves logical body occupancy zero. Only external head fire changes owner/output reservation lifetime.
+- Kept the body RAM read bare by using separate body-head and bypass-head payload registers plus one source bit. Added the asserted conservation identity `out_res = g0 + g1 + body + head <= OUTQD(4)` and made quiet include head/body ownership.
+- Healthy evidence: owner adversarial 559 checks; read-late 30 checks; 24-owner drain 6 checks with zero bubbles and exact owner/result/context; connected G8A activity 15 checks at 7,936 clocks with jobs=3/fills=1/fill-beats=8/fb=512/tiles=2/signatures=256.
+- Updated the existing no-same-edge-reload mutant to the new head boundary; it creates 23 bubbles. Added a committed wrong-bypass-pointer mutant and nonfatal assertion driver; its first bypass fires exactly `a_out_structure` before emission.
+- Regenerated G8A wrapper/manifest and V3 interface manifest. The interface remains 54,458 canonical bytes / 15 parameters / 118 ports / 26 ordered sources; internal duplicate-marker profile remains 105 rows and is rebound to SHA-256 `5af0a8cdcfddba0aef64fa3f83365c8606567cd40e92d70ec5baee43405c7ce2`. Interface suite 113/113; Packet-A Python suite 19/19; Packet C/D/E/F static suites green.
+- Current wrapper also registers the complete selected signature word and both physical output buses; this is unfit implementation, not timing evidence.
+- A fresh `%TEMP%\zg8at2` build is compiling the full 74-test Packet-B executable set. The first reused-tree attempt was rejected after stale mixed Verilator objects caused undefined generated symbols; no test result is claimed from it.
+- Focused local Qwen xhigh job `job-20260915-030917-5bd0a7` remains RUNNING; no second Qwen was started. No Quartus process and no board operation are active.
+
+---## 2026-09-15 — timing2 pre-fit gates
+
+- Independent read-only review found no functional RTL counterexample and one evidence defect: the new pointer-mutant executable initially treated any assertion as success. Added a subprocess gate that parses the complete assertion-label list and requires exactly `a_out_structure`, RC0, `fired=1 emitted=0`, and no `FAIL:`. Focused re-review is CLEAN; the wrapper itself executes green.
+- A fresh short-path build at `%TEMP%\zg8at2` avoids the reused-tree mixed-Verilator-object failure. Current source passes Packet B 74/74, Packet C/D/E/F 47/47, owner/queue focused tests 9/9 (owner 5 plus V3RQ/DIV6 4), interface 113/113, Packet G 22/22, and excluded Packet-H raw-LAST 9/9.
+- Production accounting was first invoked from the parent directory and failed its relative-path contract; rerun from repository root passes 51/51. Direct production manifest/ownership/generated-top check passes at 256 modules / 63 tops / 78 inside / 115 excluded / three retired slots.
+- Added one-shot `@g8a-timing2` runner and receipt wrapper. It pins timing1 receipt SHA-256 `8476f6cfd685c1cc063a049d430b5ff6a460b740e3cccc857d7e0dbd28ab6c59` and source `8908bc6fea718a95658816527a72be39a7601dcc`, requires changed clean pushed HEAD, no prior timing2 artifact/row, seed 1, physical pins, pre/post manifest identity, and locked receipt tools. Static Packet-F suite remains 14/14; an executed dirty-tree control stops before Quartus.
+- Original focused Qwen job `job-20260915-030917-5bd0a7` completed read-only with no changes. Its tail confirms the retirement trigger and required tests but proposes a larger head form with worse register direction; a new single small xhigh reconciliation job `job-20260915-045314-23cf8c` is comparing the implemented lower-register split-head equations. No second concurrent Qwen exists.
+- No Quartus and no board operation have run. Commit/push, fresh-clone replay, then exactly one timing2 subsystem fit remain.
+
+---## 2026-09-15 — timing2 evidence-lane review closure
+
+- Read-only audit found timing2 could overwrite harvested raw artifacts after an interrupted run because preflight checked only receipt/retained-manifest/block-row. Runner now refuses any existing exact `zhao_raster_texture_v3_fit_top@g8a-timing2.*` file before launch.
+- The same audit found timing2 static controls did not independently pin remote equality, all one-shot guards, or both post-fit/under-lock tool-hash checks. Added exact required markers plus source mutations for the raw filter, remote lookup, post-fit hash, and locked hash. Packet-F static remains 14/14; focused re-review is CLEAN.
+- Final Packet-A Python suite rerun is 19/19. Protected historical shell remains SHA-256 `00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783`.
+
+---## 2026-09-15 — retirement reconciliation and RAM gate
+
+- Small focused local Qwen xhigh reconciliation `job-20260915-045314-23cf8c` completed on actual profile `qwen38-quasar-dflash2-k8v4-112k`, read-only with no changes. Verdict: implemented split-head equations ACCEPT. Independently checked its four qualifications in source: selector updates only on logical head load; final/context inputs are registered V3-bank ports; output reservation decrements only on `head_valid && out_ready`; fetch remains gated by the asserted four-position reservation count. Qwen's register estimate assumed a wider context and is not used as evidence.
+- Strengthened timing2 receipt beyond the generic historical gate: both `oq_res_q` and `oq_ctx_q` must remain inferred `altsyncram` instances. Actual timing1 map is the positive control; removing either OQ witness fails independently, and removing generic tilestore RAM0 while keeping both OQ witnesses also fails. Static source controls pin the generic base validator capture/call so the new check cannot weaken old RAM laws. Focused review and 14/14 static rerun are CLEAN.
+
+---

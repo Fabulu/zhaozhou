@@ -1,7 +1,7 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_raster_texture_v3_fit_top.py
 // generator-sha256: 361ba599683cec037eeb952ebe899d72615510535559bdecc683b3598cd8b432
-// template-sha256: 089c83e538003b4d46997b126c15cda1959e08773772d3ba2775855715d9d1d6
+// template-sha256: 4f5b09e996bf6a204ca6a0a6696e076559d395a4289be9bc2119574c0cc341cf
 // manifest: fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json
 // Product witness: u_tile.u_texture_stage explicitly sets MIGRATION_SHADOWS=1'b0.
 // Characterization traffic is legal and deterministic; this is not a shell or board top.
@@ -28,6 +28,7 @@ module zhao_raster_texture_v3_fit_top (
   (* keep = "true" *) logic [31:0] signature_misr_q;
   (* keep = "true" *) logic [5:0] signature_source_q;
   logic [31:0] signature_word_c;
+  logic [31:0] signature_word_q;
   logic [3:0] setup_state_q;
   logic [7:0] palette_index_q;
   logic setup_fault_q;
@@ -130,22 +131,25 @@ module zhao_raster_texture_v3_fit_top (
   wire fill_fire_w = fill_req_valid_w && fill_req_ready_w;
   wire fb_fire_w = fb_valid_w && fb_ready_w;
 
-  assign fit_signature_o = signature_misr_q[7:0] ^ signature_misr_q[15:8]
-                         ^ signature_misr_q[23:16] ^ signature_misr_q[31:24];
-  assign fit_epoch_o = {2'b00, signature_source_q};
-
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
+      fit_signature_o <= 8'h01;
+      fit_epoch_o <= 8'h00;
       stimulus_lfsr_q <= 64'hd1b5_4a32_d192_ed03;
       signature_misr_q <= 32'h0000_0001;
       signature_source_q <= 6'd0;
+      signature_word_q <= 32'd0;
     end else begin
+      fit_signature_o <= signature_misr_q[7:0] ^ signature_misr_q[15:8]
+                       ^ signature_misr_q[23:16] ^ signature_misr_q[31:24];
+      fit_epoch_o <= {2'b00, signature_source_q};
       stimulus_lfsr_q <= {stimulus_lfsr_q[62:0],
           stimulus_lfsr_q[63] ^ stimulus_lfsr_q[62] ^
           stimulus_lfsr_q[60] ^ stimulus_lfsr_q[59]};
+      signature_word_q <= signature_word_c;
       signature_misr_q <= {signature_misr_q[30:0], 1'b0}
                         ^ (signature_misr_q[31] ? 32'h0040_0007 : 32'd0)
-                        ^ signature_word_c;
+                        ^ signature_word_q;
       signature_source_q <= signature_source_q + 6'd1;
     end
   end

@@ -8,6 +8,8 @@ import importlib.util
 import json
 from pathlib import Path
 import re
+import sys
+import types
 import unittest
 
 
@@ -51,7 +53,7 @@ PROTECTED = {
     "fpga/rtl/common/zhao_shell_top.sv":
         "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "85ee87e322446d3a7cc6a39457058a4de88019ba97f722d5b4bdc57a437270bd",
+        "07d7067153bbc7cd8514818a1487703bdec07109fa2b8932164e1f0ce9f1a057",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
         "01a60a6be13b1878c5ac43dcd0c0da043636f11c85a04feb05297382dae6a33e",
 }
@@ -237,6 +239,14 @@ class G8AFitTopTests(unittest.TestCase):
             "input  logic       rst_n",
             "output logic [7:0] fit_signature_o",
             "output logic [7:0] fit_epoch_o",
+            "fit_signature_o <= 8'h01;",
+            "fit_epoch_o <= 8'h00;",
+            "fit_signature_o <= signature_misr_q[7:0] ^ signature_misr_q[15:8]",
+            "fit_epoch_o <= {2'b00, signature_source_q};",
+            "logic [31:0] signature_word_q;",
+            "signature_word_q <= 32'd0;",
+            "signature_word_q <= signature_word_c;",
+            "^ signature_word_q;",
             "zhao_raster_tile_pipe_v2 u_tile (",
             ".job_bx_i(21'sd4096)",
             "job_meta_w[297:296] = 2'd1;",
@@ -253,6 +263,9 @@ class G8AFitTopTests(unittest.TestCase):
         ), "G8A wrapper")
         self.assertNotIn("zhao_raster_texjoin", text)
         self.assertNotIn("zhao_texture_island_v3_top", text)
+        self.assertNotIn("assign fit_signature_o", text)
+        self.assertNotIn("assign fit_epoch_o", text)
+        self.assertNotIn("^ signature_word_c;", text)
 
     def test_product_v3_parameter_is_explicit_in_selected_tile_hierarchy(self) -> None:
         tile = (REPO / "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv").read_text(
@@ -342,6 +355,48 @@ class G8AFitTopTests(unittest.TestCase):
             receipt.parse_v3_parameter(descendant_header)["value"], "0"
         )
         self.assertTrue(receipt.validate_ram(clean)["pass"])
+
+        timing2_spec = importlib.util.spec_from_file_location(
+            "g8a_timing2_receipt_test",
+            REPO / "tools/quartus/g8a_timing2_receipt.py",
+        )
+        if timing2_spec is None or timing2_spec.loader is None:
+            raise RuntimeError("could not load timing2 G8A receipt tool")
+        receipt_proxy = types.ModuleType("g8a_receipt")
+        for name in ("MODULE", "validate_ram", "parse_entity_rows", "main"):
+            setattr(receipt_proxy, name, getattr(receipt, name))
+        previous_receipt_module = sys.modules.get("g8a_receipt")
+        sys.modules["g8a_receipt"] = receipt_proxy
+        try:
+            timing2_receipt_module = importlib.util.module_from_spec(timing2_spec)
+            timing2_spec.loader.exec_module(timing2_receipt_module)
+        finally:
+            if previous_receipt_module is None:
+                del sys.modules["g8a_receipt"]
+            else:
+                sys.modules["g8a_receipt"] = previous_receipt_module
+
+        timing1_map = (
+            REPO / "reports/synthesis/blockpaths/"
+            "zhao_raster_texture_v3_fit_top@g8a-timing1.map.rpt"
+        ).read_text(encoding="utf-8", errors="replace")
+        timing2_ram = timing2_receipt_module.validate_timing2_ram(timing1_map)
+        self.assertTrue(timing2_ram["pass"])
+        self.assertTrue(timing2_ram["ordered_retirement_result_ram_present"])
+        self.assertTrue(timing2_ram["ordered_retirement_context_ram_present"])
+        generic_broken_ram = timing2_receipt_module.validate_timing2_ram(
+            timing1_map.replace("ram0", "removed_ram")
+        )
+        self.assertFalse(generic_broken_ram["pass"])
+        self.assertTrue(generic_broken_ram["ordered_retirement_result_ram_present"])
+        self.assertTrue(generic_broken_ram["ordered_retirement_context_ram_present"])
+        for missing in ("oq_res_q_rtl_0", "oq_ctx_q_rtl_0"):
+            with self.subTest(missing_timing2_ram=missing):
+                broken_ram = timing2_receipt_module.validate_timing2_ram(
+                    timing1_map.replace(missing, "removed_" + missing)
+                )
+                self.assertFalse(broken_ram["pass"])
+
         sta = "\n".join((
             "; Slow 1100mV 100C Model Setup Summary ;",
             "; Clock ; Slack ; End Point TNS ;",
@@ -758,6 +813,105 @@ class G8AFitTopTests(unittest.TestCase):
                 "unpushed timing-batch runner",
             )
 
+        timing2_runner = (
+            REPO / "tools/quartus/run_g8a_timing2_fit.ps1"
+        ).read_text(encoding="utf-8")
+        timing2_receipt = (
+            REPO / "tools/quartus/g8a_timing2_receipt.py"
+        ).read_text(encoding="utf-8")
+        require_once(timing2_runner, (
+            "$RowLabel = '@g8a-timing2'",
+            "$BaselineReceipt = Join-Path $RepoRoot "
+            "'reports\\synthesis\\zhao_g8a_raster_texture_timing1.json'",
+            "$BaselineReceiptSha256 = "
+            "'8476f6cfd685c1cc063a049d430b5ff6a460b740e3cccc857d7e0dbd28ab6c59'",
+            "$baseline.source.commit -cne "
+            "'8908bc6fea718a95658816527a72be39a7601dcc'",
+            "git -C $RepoRoot symbolic-ref --quiet --short HEAD",
+            "git -C $RepoRoot ls-remote --heads origin \"refs/heads/$branch\"",
+            "G8A timing-batch source HEAD is not pushed exactly to origin/$branch.",
+            "The timing1 baseline receipt bytes differ from the immutable expected digest.",
+            "The timing-batch fit source is unchanged from the timing1 baseline.",
+            "$TimingRawArtifactFilter = \"$RowName.*\"",
+            "Get-ChildItem -LiteralPath $TimingRawArtifactParent",
+            "-Filter $TimingRawArtifactFilter -File",
+            "Timing2 raw artifacts already exist ($priorRawNames); preserve and diagnose "
+            "the partial attempt instead of overwriting it.",
+            "A timing-batch G8A receipt already exists at $TimingReceipt; do not repeat it.",
+            "A timing-batch retained fit manifest already exists at $RetainedFitManifest; "
+            "do not repeat it.",
+            "A $RowName row already exists; preserve and diagnose it instead of rerunning.",
+            "$RetainedFitManifest = Join-Path $RepoRoot "
+            "'reports\\synthesis\\blockpaths\\zhao_raster_texture_v3_fit_top@g8a-timing2.fit.manifest.json'",
+            "$fitManifestBytes = [IO.File]::ReadAllBytes($GeneratedFitManifest)",
+            "$currentManifestBytes = [IO.File]::ReadAllBytes($GeneratedFitManifest)",
+            "$ReceiptToolPaths = @(",
+            "A G8A receipt tool changed during the fit: $toolPath",
+            "[IO.FileShare]::Read)",
+            "A G8A receipt tool changed before its locked invocation: $toolPath",
+            "gen_raster_texture_v3_fit_top.py') --check",
+            "test_raster_texture_v3_fit_top.py') -q",
+            "-RowLabel $RowLabel",
+            "-Seed 1",
+            "-PhysicalPins",
+            "g8a_timing2_receipt.py') --write",
+        ), "G8A timing2 runner")
+        require_once(timing2_receipt, (
+            'receipt.ROW_NAME = receipt.MODULE + "@g8a-timing2"',
+            "zhao_raster_texture_v3_fit_top@g8a-timing2.fit.manifest.json",
+            "zhao_g8a_raster_texture_timing2.json",
+            "Rebind",
+            "_BASE_VALIDATE_RAM = receipt.validate_ram",
+            "def validate_timing2_ram(map_text: str)",
+            "result = _BASE_VALIDATE_RAM(map_text)",
+            'owner + "oq_res_q_rtl_0"',
+            'owner + "oq_ctx_q_rtl_0"',
+            'result["pass"] = bool(result["pass"] and result_ram and context_ram)',
+            "receipt.validate_ram = validate_timing2_ram",
+        ), "G8A timing2 receipt wrapper")
+        with self.assertRaises(AssertionError):
+            require_once(
+                timing2_runner.replace("-PhysicalPins", "", 1),
+                ("-PhysicalPins",), "mutated timing2 runner",
+            )
+        with self.assertRaises(AssertionError):
+            require_once(
+                timing2_runner.replace("zhao_g8a_raster_texture_timing1.json",
+                                       "zhao_g8a_raster_texture_crcserial.json", 1),
+                ("zhao_g8a_raster_texture_timing1.json",),
+                "wrong timing2 baseline",
+            )
+        for name, mutation, required in (
+            (
+                "unpushed timing2 source",
+                timing2_runner.replace("ls-remote --heads origin", "rev-parse", 1),
+                ("git -C $RepoRoot ls-remote --heads origin \"refs/heads/$branch\"",),
+            ),
+            (
+                "partial-artifact overwrite",
+                timing2_runner.replace("-Filter $TimingRawArtifactFilter -File", "-File", 1),
+                ("-Filter $TimingRawArtifactFilter -File",),
+            ),
+            (
+                "post-fit tool mutation",
+                timing2_runner.replace(
+                    "A G8A receipt tool changed during the fit: $toolPath",
+                    "tool changed", 1,
+                ),
+                ("A G8A receipt tool changed during the fit: $toolPath",),
+            ),
+            (
+                "locked tool mutation",
+                timing2_runner.replace(
+                    "A G8A receipt tool changed before its locked invocation: $toolPath",
+                    "tool changed", 1,
+                ),
+                ("A G8A receipt tool changed before its locked invocation: $toolPath",),
+            ),
+        ):
+            with self.subTest(timing2_control=name), self.assertRaises(AssertionError):
+                require_once(mutation, required, "mutated timing2 runner")
+
     def test_every_hashed_text_input_has_checkout_stable_lf(self) -> None:
         attrs = (REPO / ".gitattributes").read_text(encoding="utf-8").splitlines()
         rows = set(line for line in attrs if line and not line.startswith("#"))
@@ -789,6 +943,12 @@ class G8AFitTopTests(unittest.TestCase):
             "reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing1.* binary",
             rows,
         )
+        self.assertIn(
+            "reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing2.* binary",
+            rows,
+        )
+        self.assertIn("tools/quartus/g8a_timing2_receipt.py text eol=lf", rows)
+        self.assertIn("tools/quartus/run_g8a_timing2_fit.ps1 text eol=lf", rows)
         self.assertIn("reports/synthesis/zhao_g8a_raster_texture.json binary", rows)
         self.assertIn(
             "reports/synthesis/zhao_g8a_raster_texture_crcserial.json binary", rows
@@ -796,9 +956,12 @@ class G8AFitTopTests(unittest.TestCase):
         self.assertIn(
             "reports/synthesis/zhao_g8a_raster_texture_timing1.json binary", rows
         )
+        self.assertIn(
+            "reports/synthesis/zhao_g8a_raster_texture_timing2.json binary", rows
+        )
         ignores = set((REPO / ".gitignore").read_text(encoding="utf-8").splitlines())
         for suffix in ("map.rpt", "fit.rpt", "setup.rpt", "hold.rpt", "sta.rpt"):
-            for row_label in ("g8a-crcserial", "g8a-timing1"):
+            for row_label in ("g8a-crcserial", "g8a-timing1", "g8a-timing2"):
                 self.assertIn(
                     "!reports/synthesis/blockpaths/"
                     f"zhao_raster_texture_v3_fit_top@{row_label}.{suffix}",

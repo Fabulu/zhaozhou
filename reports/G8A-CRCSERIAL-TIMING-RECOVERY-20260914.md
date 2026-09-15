@@ -246,3 +246,61 @@ is Fmax >=100 MHz, setup WNS >=0, setup TNS=0, passing hold, DSP <=49, retained
 RAM/hierarchy/shadow evidence, and explicit ALM/register deltas. Packet H may
 continue as excluded development but cannot be promoted while Packet F remains
 red.
+
+## Timing2 implementation state — not yet measured
+
+The measured next batch is now implemented but has **no Quartus resource or timing
+claim yet**:
+
+- The characterization wrapper registers the complete 32-bit selected signature
+  word before the MISR and registers both eight-bit physical observation outputs.
+  This removes the measured four-byte output XOR and giant source-mux-to-MISR
+  register paths without removing any source from the deterministic rotation.
+  The connected activity test passes 15 checks after 7,936 clocks with jobs=3,
+  fills=1, fill beats=8, framebuffer beats=512, tiles=2, and signatures=256.
+- Retirement is retimed from `g0/g1/g2/body` to `g0/g1/body/head`; the old
+  `g2`, final-result capture, and context capture registers are gone. A direct
+  empty-body bypass lets an old firing head be replaced by `g1` on the same edge.
+  The duplicate physical body write remains enabled by exactly registered
+  `g1_v_q`, while both extended body pointers advance so the bypassed row is
+  logically skipped. Only the external head handshake releases an owner or
+  reservation.
+- The body-loaded and bypass-loaded payloads use separate physical capture
+  registers plus one source bit, but together constitute one logical head. The
+  body array therefore has a bare array-to-register read rather than a bypass mux
+  in front of its capture boundary. Total ownership remains the asserted identity
+  `out_res = g0 + g1 + body_occupancy + head_valid <= OUTQD(4)`; quiet includes
+  every term.
+
+The focused healthy owner tests pass 559 adversarial checks, 30 read-late checks,
+and a 24-owner no-bubble drain with exact owner/result/context identity. The
+same-edge-reload mutant creates 23 detected bubbles. A separate committed mutant
+fails to advance the read pointer on bypass; its first bypass fires the retained
+`a_out_structure` assertion before any output emission, proving the new identity
+instrument. The assertion subprocess accepts exactly that one parsed label and
+rejects any substituted or additional assertion.
+
+A fresh short-path build passes Packet B **74/74**, combined Packet C/D/E/F
+**47/47**, focused owner/queue **9/9**, interface **113/113**, production
+accounting **51/51**, Packet G **22/22**, and excluded Packet-H raw-LAST **9/9**.
+Production remains exact at 256 RTL modules / 63 selected roots / 78 inside /
+115 excluded / three tombstones. The timing2 lane pins the immutable timing1
+receipt hash and source, clean pushed branch equality, no prior row/receipt/
+retained manifest **or raw timing2-prefixed artifact**, seed 1, physical pins,
+manifest snapshot, and receipt-tool hashes/locks. Its static suite is 14/14 and
+an executed dirty-tree control stops before Quartus. The timing2 receipt further
+requires both `oq_res_q` and `oq_ctx_q` to appear as inferred `altsyncram`
+instances; the timing1 map is its positive control and independently removing
+either witness makes the gate fail.
+
+Independent read-only review found the RTL equations clean subject to Quartus-only
+RAM/timing confirmation; it found and then verified repairs for the assertion-label
+and partial-artifact instrument gaps. A focused local Qwen xhigh reconciliation on
+actual profile `qwen38-quasar-dflash2-k8v4-112k` also accepts the implemented
+scheme. Its four qualifications are directly satisfied: the source selector is
+stateful, final/context ports are registered `zhao_texture_v3bank` outputs,
+reservation decrements only on `head_valid && out_ready`, and fetch remains gated
+by the asserted four-position `out_res` accounting. Qwen's resource estimate used
+a wider context than this module's default and is not promoted; only the fit may
+state the actual register/ALM direction. Commit/push, fresh-clone replay, and the
+one physical timing2 fit remain; no new resource or timing result is claimed here.

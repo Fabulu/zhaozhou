@@ -2933,8 +2933,8 @@ verilate(test_texture_v3own_bubble_control
 add_test(NAME texture_v3own_bubble_control
          COMMAND test_texture_v3own_bubble_control)
 
-# Positive control, inverse polarity. One source line removes output-pop credit
-# from the ordered fetch reservation; the renamed mutant must create a visible
+# Positive control, inverse polarity. One source line removes output-fire credit
+# from the logical retirement head; the renamed mutant must create a visible
 # bubble while still draining every owner with exact payload and order.
 add_executable(test_texture_v3own_no_same_edge_reload_control
   texture/texture_v3own_bubble_control.cpp)
@@ -2950,8 +2950,30 @@ verilate(test_texture_v3own_no_same_edge_reload_control
   VERILATOR_ARGS --assert)
 add_test(NAME texture_v3own_no_same_edge_reload_control
          COMMAND test_texture_v3own_no_same_edge_reload_control)
+
+# Positive control for the new structural reservation identity. The committed
+# mutant fails to advance the body read pointer when a direct bypass skips its
+# duplicate physical row; the assertion-control driver passes only when the
+# retained a_out_structure assertion fires.
+add_executable(test_texture_v3own_bypass_pointer_assertion_control
+  texture/texture_v3own_bubble_control.cpp)
+target_compile_definitions(test_texture_v3own_bypass_pointer_assertion_control PRIVATE
+  ZHAO_BYPASS_POINTER_ASSERT_CONTROL=1)
+target_link_libraries(test_texture_v3own_bypass_pointer_assertion_control PRIVATE zhao_harness)
+verilate(test_texture_v3own_bypass_pointer_assertion_control
+  PREFIX Vzhao_texture_v3own
+  TOP_MODULE zhao_texture_v3own_bypass_pointer_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_v3own_bypass_pointer_mutant.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_v3own_bypass_pointer_assertion_control
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_v3own_assertion_control.py
+    --exe $<TARGET_FILE:test_texture_v3own_bypass_pointer_assertion_control>)
 set_tests_properties(
   texture_v3own_bubble_control texture_v3own_no_same_edge_reload_control
+  texture_v3own_bypass_pointer_assertion_control
   PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 # M6's CORRECTNESS TEST, RUN AS A KNOWN FAILURE UNTIL M6 LANDS.
@@ -8353,6 +8375,7 @@ add_test(NAME texture_v3_registration_static
           PacketAOwnershipAndClosureTests.test_top_profiles_mutants_and_quiet_accounting_are_exact
           PacketAOwnershipAndClosureTests.test_aux_registered_clamp_transport_reaches_all_committed_mutants
           PacketAOwnershipAndClosureTests.test_v3_owner_combine_feedback_cut_keeps_generation_witness
+          PacketAOwnershipAndClosureTests.test_v3_owner_retirement_head_is_bounded_and_controlled
           PacketAOwnershipAndClosureTests.test_material_writeback_cut_reaches_all_committed_mutants
           PacketAOwnershipAndClosureTests.test_rcp_v4_balanced_lzc_direct_oracle_and_mutant_are_exact
           -q)

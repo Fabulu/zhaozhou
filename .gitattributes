@@ -111,6 +111,8 @@ tests/tools/test_packet_g_selector_collision.py text eol=lf
 tests/tools/test_render_texture_packet_g.py text eol=lf
 # Batched G8A timing controls mirror full production-shaped mutants.
 tests/mutants/zhao_texture_aux_pipe_v2*.sv text eol=lf
+tests/mutants/zhao_texture_v3own*.sv text eol=lf
+tests/texture/texture_v3own_bubble_control.cpp text eol=lf
 tests/texture/texture_aux_pipe_v2_directed.cpp text eol=lf
 tests/mutants/zhao_texture_material_combine_v3_mutants.sv text eol=lf
 tests/mutants/zhao_raster_rcp24_v4_timing_mutants.sv text eol=lf
@@ -118,6 +120,7 @@ tests/raster/raster_attrgrad_v2_directed.cpp text eol=lf
 tests/raster/raster_rcp24_v4_timing_directed.cpp text eol=lf
 tests/raster/rcp24_v4_timing.sources.txt text eol=lf
 tests/tools/test_render_texture_packet_a.py text eol=lf
+tests/tools/test_v3own_assertion_control.py text eol=lf
 tests/tools/test_render_texture_packet_d.py text eol=lf
 tests/tools/test_raster_texture_v3_fit_top.py text eol=lf
 tests/tools/test_render_texture_packet_c.py text eol=lf
@@ -126,6 +129,8 @@ tests/tools/test_texture_v3_interface_manifest.py text eol=lf
 tools/quartus/g8a_receipt.py text eol=lf
 tools/quartus/g8a_timing1_receipt.py text eol=lf
 tools/quartus/run_g8a_timing1_fit.ps1 text eol=lf
+tools/quartus/g8a_timing2_receipt.py text eol=lf
+tools/quartus/run_g8a_timing2_fit.ps1 text eol=lf
 reports/G8A-CRCSERIAL-TIMING-RECOVERY-20260914.md text eol=lf
 # Packet-H raw-LAST leaf and every selector/control artifact are exact text.
 fpga/rtl/memory/zhao_engine1_raw_last_v2.sv text eol=lf
@@ -140,9 +145,11 @@ reports/characterization/g8a_raster_texture_single_owner_characterization/** bin
 reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a.* binary
 reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-crcserial.* binary
 reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing1.* binary
+reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing2.* binary
 reports/synthesis/zhao_g8a_raster_texture.json binary
 reports/synthesis/zhao_g8a_raster_texture_crcserial.json binary
 reports/synthesis/zhao_g8a_raster_texture_timing1.json binary
+reports/synthesis/zhao_g8a_raster_texture_timing2.json binary
 reports/synthesis/zhao_shell_fit.json binary
 reports/timing/zhao_shell_fit.json binary
 # Shell-fit monitor is generated with LF and checked byte-for-byte in archives.

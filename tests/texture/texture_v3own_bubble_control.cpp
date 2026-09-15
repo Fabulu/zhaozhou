@@ -150,11 +150,35 @@ struct Driver {
 }  // namespace
 
 int main(int argc, char** argv) {
+#ifdef ZHAO_BYPASS_POINTER_ASSERT_CONTROL
+  VerilatedContext context;
+  context.commandArgs(argc, argv);
+  context.fatalOnError(false);
+  auto* dut = new Dut{&context};
+#else
   Verilated::commandArgs(argc, argv);
-  std::setvbuf(stdout, nullptr, _IONBF, 0);
   auto* dut = new Dut;
+#endif
+  std::setvbuf(stdout, nullptr, _IONBF, 0);
   Driver s(dut);
   s.reset();
+
+#ifdef ZHAO_BYPASS_POINTER_ASSERT_CONTROL
+  if (context.gotError()) {
+    std::fprintf(stderr, "FAIL: bypass-pointer control asserted during reset\n");
+    delete dut;
+    zhao::exit_hard(2);
+  }
+  const uint16_t owner = s.admit(context_of(0));
+  for (int i = 0; i < 1000 && !context.gotError(); ++i) s.step();
+  const bool fired = context.gotError();
+  std::printf("V3OWN_BYPASS_POINTER_ASSERT_CONTROL owner=%u fired=%d emitted=%u\n",
+              owner, fired ? 1 : 0, dut->ev_emitted_o);
+  context.gotError(false);
+  context.gotFinish(false);
+  delete dut;
+  zhao::exit_hard(fired ? 0 : 2);
+#endif
 
   constexpr int kOwners = 24;
   std::vector<uint16_t> owners;

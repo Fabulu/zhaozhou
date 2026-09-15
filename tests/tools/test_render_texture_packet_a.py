@@ -601,6 +601,7 @@ def validate_top_profiles_mutants_and_quiet_accounting(cmake_text: str) -> None:
     timing_methods = (
         "test_aux_registered_clamp_transport_reaches_all_committed_mutants",
         "test_v3_owner_combine_feedback_cut_keeps_generation_witness",
+        "test_v3_owner_retirement_head_is_bounded_and_controlled",
         "test_material_writeback_cut_reaches_all_committed_mutants",
         "test_rcp_v4_balanced_lzc_direct_oracle_and_mutant_are_exact",
     )
@@ -1194,6 +1195,117 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
                     1,
                 )
             )
+
+    def test_v3_owner_retirement_head_is_bounded_and_controlled(self) -> None:
+        production = (
+            REPO / "fpga/rtl/texture/zhao_texture_v3own.sv"
+        ).read_text(encoding="utf-8")
+
+        def validate(source: str) -> None:
+            forbidden = (
+                "g2_v_q", "g2_owner_q", "fres_cap_q", "ctx_cap_q",
+                "assign out_ctx_o    = oq_ctx_q",
+                "if (out_fire_c) oq_rp_q",
+            )
+            for marker in forbidden:
+                if marker in source:
+                    raise AssertionError("retirement pre-head structure remains: " + marker)
+            required = (
+                "assign out_valid_o      = oq_head_v_q;",
+                "assign oq_head_room_c   = !oq_head_v_q || out_fire_c;",
+                "assign oq_body_load_c   = (oq_occ_c != '0) && oq_head_room_c;",
+                "assign oq_bypass_load_c = (oq_occ_c == '0) && g1_v_q && oq_head_room_c;",
+                "if (g1_v_q)         oq_wp_q <= oq_wp_q + (OQPW+1)'(1);",
+                "if (oq_head_load_c) oq_rp_q <= oq_rp_q + (OQPW+1)'(1);",
+                "oq_ctx_q[oq_wp_q[OQPW-1:0]] <= ctx_rd_c;",
+                "oq_body_head_ctx_q <= oq_ctx_q[oq_rp_q[OQPW-1:0]];",
+                "oq_bypass_head_ctx_q <= ctx_rd_c;",
+                "a_out_structure    : assert (out_res_q ==",
+                "CNTW'(g0_v_q) + CNTW'(g1_v_q) + CNTW'(oq_occ_c)",
+                "&& !oq_head_v_q && (oq_occ_c == '0)",
+            )
+            for marker in required:
+                if source.count(marker) != 1:
+                    raise AssertionError("retirement head marker differs: " + marker)
+
+        validate(production)
+
+        def production_body(mutant: str) -> str:
+            marker = "// zhao_texture_v3own.sv -- the V3 owner"
+            start = mutant.find(marker)
+            if start < 0:
+                raise AssertionError("retirement mutant lost its production-body boundary")
+            return mutant[start:]
+
+        reload_mutant = (
+            REPO / "tests/mutants/zhao_texture_v3own_no_same_edge_reload_mutant.sv"
+        ).read_text(encoding="utf-8")
+        reload_body = production_body(reload_mutant)
+        reload_broken = "  assign oq_head_room_c   = !oq_head_v_q;"
+        self.assertEqual(reload_body.count(reload_broken), 1)
+        reload_restored = reload_body.replace(
+            "module zhao_texture_v3own_no_same_edge_reload_mutant #(",
+            "module zhao_texture_v3own #(", 1,
+        ).replace(
+            reload_broken,
+            "  assign oq_head_room_c   = !oq_head_v_q || out_fire_c;", 1,
+        )
+        self.assertEqual(reload_restored, production)
+
+        pointer_mutant = (
+            REPO / "tests/mutants/zhao_texture_v3own_bypass_pointer_mutant.sv"
+        ).read_text(encoding="utf-8")
+        pointer_body = production_body(pointer_mutant)
+        pointer_broken = (
+            "      if (oq_body_load_c) oq_rp_q <= oq_rp_q + (OQPW+1)'(1);"
+        )
+        self.assertEqual(pointer_body.count(pointer_broken), 1)
+        pointer_restored = pointer_body.replace(
+            "module zhao_texture_v3own_bypass_pointer_mutant #(",
+            "module zhao_texture_v3own #(", 1,
+        ).replace(
+            pointer_broken,
+            "      if (oq_head_load_c) oq_rp_q <= oq_rp_q + (OQPW+1)'(1);", 1,
+        )
+        self.assertEqual(pointer_restored, production)
+
+        cmake = (REPO / "tests/CMakeLists.txt").read_text(encoding="utf-8")
+        driver = (
+            REPO / "tests/texture/texture_v3own_bubble_control.cpp"
+        ).read_text(encoding="utf-8")
+        assertion_control = (
+            REPO / "tests/tools/test_v3own_assertion_control.py"
+        ).read_text(encoding="utf-8")
+        attributes = (REPO / ".gitattributes").read_text(encoding="utf-8")
+        for marker in (
+            "add_executable(test_texture_v3own_bypass_pointer_assertion_control",
+            "ZHAO_BYPASS_POINTER_ASSERT_CONTROL=1",
+            "TOP_MODULE zhao_texture_v3own_bypass_pointer_mutant",
+            "zhao_texture_v3own_bypass_pointer_mutant.sv",
+            "test_v3own_assertion_control.py",
+            "--exe $<TARGET_FILE:test_texture_v3own_bypass_pointer_assertion_control>",
+        ):
+            self.assertIn(marker, cmake)
+        for marker in (
+            "#ifdef ZHAO_BYPASS_POINTER_ASSERT_CONTROL",
+            "context.fatalOnError(false);",
+            "V3OWN_BYPASS_POINTER_ASSERT_CONTROL",
+            "fired ? 0 : 2",
+        ):
+            self.assertIn(marker, driver)
+        for marker in (
+            'EXPECTED_LABEL = "a_out_structure"',
+            'labels != [EXPECTED_LABEL]',
+            '"fired=1 emitted=0"',
+            '"FAIL:" in diagnostic',
+        ):
+            self.assertIn(marker, assertion_control)
+        self.assertIn("tests/mutants/zhao_texture_v3own*.sv text eol=lf", attributes)
+        self.assertIn("tests/tools/test_v3own_assertion_control.py text eol=lf", attributes)
+        with self.assertRaisesRegex(AssertionError, "head marker differs"):
+            validate(production.replace(
+                "if (oq_head_load_c) oq_rp_q", "if (oq_body_load_c) oq_rp_q", 1
+            ))
 
     def test_material_writeback_cut_reaches_all_committed_mutants(self) -> None:
         production = (
