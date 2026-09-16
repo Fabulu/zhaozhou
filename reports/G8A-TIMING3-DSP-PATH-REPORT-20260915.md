@@ -125,6 +125,50 @@ The generic and Timing3-specific RAM validators both pass. Uninferred small or
 asynchronous arrays remain explicitly listed in the canonical receipt; none
 matches the receipt's critical asynchronous ownership/context categories.
 
+## The 110 MHz inventory does not exist yet, and cannot be recovered
+
+Added 2026-09-16, after the owner's Timing4 brief asked for a comfortable target
+rather than a passing one, and the existing census was re-run to answer it.
+
+The census below groups **negative** paths. That is the right inventory for
+reaching 100 MHz and the wrong one for reaching 110 MHz, because a path sitting
+at +0.05 ns today fails the moment the negative families are repaired and the
+clock is tightened. Repeating the census over a margin band gives:
+
+| band | rows below | rows found | complete? |
+|---|---:|---:|---|
+| 100 MHz | 0.000 ns | 497 | yes |
+| 110 MHz | +0.909 ns | ≥2,000 | **no — export truncated** |
+| 115 MHz | +1.304 ns | ≥2,000 | **no — export truncated** |
+
+**The best slack in the entire 2,000-row export is +0.582 ns.** Every exported
+row is therefore inside the 110 MHz band, the table stops before the margin
+does, and the true population is unknown. `attribute-dsp3` alone goes from 12
+negative rows to at least 131 rows in the band; `owner-mask-lifetime` from 196
+to at least 680. Whatever the real numbers are, they are larger than the ones
+this report's family table quotes, and the family table must not be read as a
+110 MHz work list.
+
+This could not be repaired after the fact. The Timing3 work directory and its
+TimeQuest database were deleted with the workspace, so no report extraction can
+recover the missing rows; only the runner logs survive. The question was asked
+one fit too late.
+
+Two consequences, both already applied:
+
+1. `tools/quartus/g8a_timing_path_census.py` now reports margin bands and marks
+   a band `truncated_by_export` when it swallows the whole table, so this
+   specific blindness cannot be quoted as a tidy count again.
+2. `tools/quartus/block_paths.tcl` now also exports a **slack-bounded** report
+   (`-less_than_slack 1.35`, one path per endpoint) beside the fixed 2,000-row
+   summary, and `run_block_fit.ps1` retains it. Bounded by slack rather than by
+   row count, it covers the band by construction however many paths are in it.
+
+So the honest statement of where Timing4 stands: the batch is scoped against a
+complete 100 MHz inventory and an admittedly incomplete 110 MHz one. The
+comfortable-margin question gets its first real answer from the Timing4 fit's
+own margin export, not from this one.
+
 ## Reproducible path census
 
 Tool:

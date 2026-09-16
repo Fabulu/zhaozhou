@@ -13,7 +13,23 @@ from typing import Callable
 
 
 SCHEMA_ID = "zhao.g8a.timing_path_census"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+# Margin bands, as the period shift from the canonical 100 MHz experiment. A
+# path that is positive today still fails once the negative families are fixed
+# and the clock is tightened, so "negative rows" is not the inventory for a
+# comfortable target -- it is only the inventory for scraping through 100 MHz.
+#
+#   100 MHz = 10.000000 ns, 110 MHz = 9.090909 ns, 115 MHz = 8.695652 ns
+#
+# These are same-clock period-shift estimates over an unchanged report. They do
+# not model uncertainty, pulse width, clock relationships or corner limits, so
+# they plan work; they never accept a result. TimeQuest does that.
+MARGIN_BANDS: tuple[tuple[str, float], ...] = (
+    ("100mhz", 0.0),
+    ("110mhz", 10.0 - (1000.0 / 110.0)),
+    ("115mhz", 10.0 - (1000.0 / 115.0)),
+)
 
 
 def sha256(raw: bytes) -> str:
@@ -125,11 +141,32 @@ def build_payload(raw: bytes, *, input_name: str, label: str | None,
     paths = parse_paths(raw)
     ordered = sorted(paths, key=lambda row: (float(row["slack_ns"]), int(row["line"])))
     negative = [row for row in ordered if float(row["slack_ns"]) < 0]
+    best_slack = float(ordered[-1]["slack_ns"])
+
+    margins: dict[str, object] = {}
+    for name, shift in MARGIN_BANDS:
+        band = [row for row in ordered if float(row["slack_ns"]) < shift]
+        # A band that reaches the end of the export has not been inventoried --
+        # the table stops before the margin does, so the real count is unknown
+        # and a smaller number here would be an artifact of the export length.
+        truncated = bool(band) and len(band) == len(ordered)
+        margins[name] = {
+            "complete": not truncated,
+            "count": len(band),
+            "families": {
+                "endpoint": family_summary(band, "to", ENDPOINT_RULES),
+                "launch": family_summary(band, "from", LAUNCH_RULES),
+            },
+            "slack_below_ns": shift,
+            "truncated_by_export": truncated,
+        }
+
     return {
         "families": {
             "endpoint": family_summary(negative, "to", ENDPOINT_RULES),
             "launch": family_summary(negative, "from", LAUNCH_RULES),
         },
+        "margins": margins,
         "input": {
             "path": input_name.replace("\\", "/"),
             "sha256": sha256(raw),
@@ -138,6 +175,7 @@ def build_payload(raw: bytes, *, input_name: str, label: str | None,
         "paths": {
             "negative": len(negative),
             "nonnegative": len(paths) - len(negative),
+            "best_slack_ns": best_slack,
             "summarized": len(paths),
             "top20": ordered[:20],
             "worst_data_delay_ns": ordered[0]["data_delay_ns"],
@@ -165,6 +203,18 @@ def self_test() -> None:
     assert payload["paths"]["negative"] == 1
     assert payload["families"]["launch"][0]["family"] == "owner-mask-lifetime"
     assert payload["families"]["endpoint"][0]["family"] == "owner-control"
+
+    # The margin bands must widen, and a band that swallows the whole export
+    # must declare itself incomplete rather than reporting a tidy count.
+    margins = payload["margins"]
+    assert margins["100mhz"]["count"] == 1
+    assert margins["110mhz"]["count"] == 2, "a +0.125 ns row is inside the 110 MHz band"
+    assert margins["100mhz"]["complete"] is True
+    assert margins["110mhz"]["truncated_by_export"] is True, (
+        "a band covering every exported row cannot be called a complete inventory"
+    )
+    assert abs(float(margins["110mhz"]["slack_below_ns"]) - 0.9090909) < 1e-6
+    assert payload["paths"]["best_slack_ns"] == 0.125
     broken = sample.replace(b"-0.500", b"not-a-number")
     parsed = parse_paths(broken)
     assert len(parsed) == 1 and parsed[0]["slack_ns"] == 0.125

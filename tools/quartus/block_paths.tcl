@@ -44,5 +44,25 @@ report_timing -hold  -npaths 200 -nworst 1 -detail full_path \
     -file output_files/blockfit_hold_paths.rpt
 report_timing -setup -npaths 2000 -nworst 1 -detail summary \
     -file output_files/blockfit_setup_summary.rpt
+
+# THE MARGIN BAND, AND WHY A FIXED ROW COUNT CANNOT PRODUCE IT.
+#
+# MEASURED 2026-09-16 against the retained Timing3 summary: the BEST slack in
+# all 2000 exported rows is +0.582 ns. A comfortable 110 MHz target needs every
+# path below +0.909 ns, so the entire export sits inside the band and the true
+# population is unknown -- the table stops before the margin does. The census
+# tool now says so (`truncated_by_export`) instead of reporting a tidy count.
+#
+# That could not be repaired after the fact. The Timing3 work directory and its
+# TimeQuest database were gone by the time the question was asked, so the only
+# way to answer it was another fit. Hence this third report: it is bounded by
+# SLACK rather than by a row count, so it covers the band by construction
+# however many paths turn out to be in it.
+#
+# 1.35 ns spans the 115 MHz planning view as well, so one export serves both.
+# -nworst 1 keeps one path per endpoint, so the row count is bounded by endpoint
+# count rather than by bus width, and summary detail is one line per row.
+report_timing -setup -npaths 100000 -nworst 1 -less_than_slack 1.35 \
+    -detail summary -file output_files/blockfit_setup_margin.rpt
 delete_timing_netlist
 project_close

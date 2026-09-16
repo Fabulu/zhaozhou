@@ -1092,6 +1092,16 @@ try {
                 if (Test-Path -LiteralPath $sumSrc) {
                     Copy-Item -LiteralPath $sumSrc -Destination (Join-Path $pathDir ($rowModule + '.setup.summary.rpt')) -Force
                 }
+                # THE SLACK-BOUNDED MARGIN REPORT. The fixed 2000-row summary
+                # above cannot answer "how many paths are inside the 110 MHz
+                # band" once the whole export is inside it, and the database is
+                # deleted with the workspace -- so this is retained at the only
+                # moment it can be. See block_paths.tcl for the measurement that
+                # forced it.
+                $marginSrc = Join-Path $dir 'output_files/blockfit_setup_margin.rpt'
+                if (Test-Path -LiteralPath $marginSrc) {
+                    Copy-Item -LiteralPath $marginSrc -Destination (Join-Path $pathDir ($rowModule + '.setup.margin.rpt')) -Force
+                }
 
                 # THE RAM SUMMARY, AND THE REST OF THE MAP REPORT.
                 #

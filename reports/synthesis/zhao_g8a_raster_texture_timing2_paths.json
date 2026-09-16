@@ -86,11 +86,290 @@
     ]
   },
   "input": {
-    "path": "reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing2.setup.summary.rpt",
+    "path": "C:/programmieren/zencrifice/zhaozhou-ceiling-lane-20260912/reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing2.setup.summary.rpt",
     "sha256": "8937a4d912e56488ddcfe7a5d6da94ece96c9907fce944fee3bbf4719fccf70a"
   },
-  "label": "@g8a-timing2",
+  "label": "g8a-timing2",
+  "margins": {
+    "100mhz": {
+      "complete": false,
+      "count": 2000,
+      "families": {
+        "endpoint": [
+          {
+            "count": 1034,
+            "family": "other-island",
+            "worst_data_delay_ns": 11.086,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_attrgrad_v2:g_attr[1].u_attrgrad|col_r[1]",
+            "worst_slack_ns": -1.771,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|uvw_m~1996"
+          },
+          {
+            "count": 659,
+            "family": "owner-control",
+            "worst_data_delay_ns": 9.338,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_frag_expand_v2:u_expand|altsyncram:fragment_m_rtl_0|altsyncram_h2k1:auto_generated|ram_block1a153~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -1.556,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|ev_err_issue_o[30]"
+          },
+          {
+            "count": 253,
+            "family": "other",
+            "worst_data_delay_ns": 8.804,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|altsyncram:oq_ctx_q_rtl_0|altsyncram_ovp1:auto_generated|ram_block1a27~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -1.373,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_earlyz:u_earlyz|acc_mask_r[81]"
+          },
+          {
+            "count": 1,
+            "family": "aux-pipe",
+            "worst_data_delay_ns": 10.6,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_cache_pipe_v2:u_cache|rq_rp[0]~DUPLICATE",
+            "worst_slack_ns": -1.232,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_aux_pipe_v2:u_aux|frame_fault_o"
+          },
+          {
+            "count": 39,
+            "family": "tile-control",
+            "worst_data_delay_ns": 8.796,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|altsyncram:oq_ctx_q_rtl_0|altsyncram_ovp1:auto_generated|ram_block1a27~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -1.003,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|local_drop_count_o[3]"
+          },
+          {
+            "count": 14,
+            "family": "material-combine",
+            "worst_data_delay_ns": 8.882,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_material_combine_v3:u_combine|altsyncram:payload_m_rtl_0|altsyncram_a0n1:auto_generated|ram_block1a0~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -0.829,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_material_combine_v3:u_combine|o_a0[7]"
+          }
+        ],
+        "launch": [
+          {
+            "count": 630,
+            "family": "other",
+            "worst_data_delay_ns": 11.086,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_attrgrad_v2:g_attr[1].u_attrgrad|col_r[1]",
+            "worst_slack_ns": -1.771,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|uvw_m~1996"
+          },
+          {
+            "count": 165,
+            "family": "fragment-expand",
+            "worst_data_delay_ns": 9.338,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_frag_expand_v2:u_expand|altsyncram:fragment_m_rtl_0|altsyncram_h2k1:auto_generated|ram_block1a153~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -1.556,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|ev_err_issue_o[30]"
+          },
+          {
+            "count": 1197,
+            "family": "owner-control",
+            "worst_data_delay_ns": 10.885,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|cq_own_q~38",
+            "worst_slack_ns": -1.497,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|cbi_q[45]"
+          },
+          {
+            "count": 8,
+            "family": "combine-product",
+            "worst_data_delay_ns": 10.01,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_material_combine_v3:u_combine|m_p0[6]",
+            "worst_slack_ns": -0.631,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_material_combine_v3:u_combine|wb_row[4]"
+          }
+        ]
+      },
+      "slack_below_ns": 0.0,
+      "truncated_by_export": true
+    },
+    "110mhz": {
+      "complete": false,
+      "count": 2000,
+      "families": {
+        "endpoint": [
+          {
+            "count": 1034,
+            "family": "other-island",
+            "worst_data_delay_ns": 11.086,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_attrgrad_v2:g_attr[1].u_attrgrad|col_r[1]",
+            "worst_slack_ns": -1.771,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|uvw_m~1996"
+          },
+          {
+            "count": 659,
+            "family": "owner-control",
+            "worst_data_delay_ns": 9.338,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_frag_expand_v2:u_expand|altsyncram:fragment_m_rtl_0|altsyncram_h2k1:auto_generated|ram_block1a153~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -1.556,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|ev_err_issue_o[30]"
+          },
+          {
+            "count": 253,
+            "family": "other",
+            "worst_data_delay_ns": 8.804,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|altsyncram:oq_ctx_q_rtl_0|altsyncram_ovp1:auto_generated|ram_block1a27~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -1.373,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_earlyz:u_earlyz|acc_mask_r[81]"
+          },
+          {
+            "count": 1,
+            "family": "aux-pipe",
+            "worst_data_delay_ns": 10.6,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_cache_pipe_v2:u_cache|rq_rp[0]~DUPLICATE",
+            "worst_slack_ns": -1.232,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_aux_pipe_v2:u_aux|frame_fault_o"
+          },
+          {
+            "count": 39,
+            "family": "tile-control",
+            "worst_data_delay_ns": 8.796,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|altsyncram:oq_ctx_q_rtl_0|altsyncram_ovp1:auto_generated|ram_block1a27~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -1.003,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|local_drop_count_o[3]"
+          },
+          {
+            "count": 14,
+            "family": "material-combine",
+            "worst_data_delay_ns": 8.882,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_material_combine_v3:u_combine|altsyncram:payload_m_rtl_0|altsyncram_a0n1:auto_generated|ram_block1a0~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -0.829,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_material_combine_v3:u_combine|o_a0[7]"
+          }
+        ],
+        "launch": [
+          {
+            "count": 630,
+            "family": "other",
+            "worst_data_delay_ns": 11.086,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_attrgrad_v2:g_attr[1].u_attrgrad|col_r[1]",
+            "worst_slack_ns": -1.771,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|uvw_m~1996"
+          },
+          {
+            "count": 165,
+            "family": "fragment-expand",
+            "worst_data_delay_ns": 9.338,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_frag_expand_v2:u_expand|altsyncram:fragment_m_rtl_0|altsyncram_h2k1:auto_generated|ram_block1a153~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -1.556,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|ev_err_issue_o[30]"
+          },
+          {
+            "count": 1197,
+            "family": "owner-control",
+            "worst_data_delay_ns": 10.885,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|cq_own_q~38",
+            "worst_slack_ns": -1.497,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|cbi_q[45]"
+          },
+          {
+            "count": 8,
+            "family": "combine-product",
+            "worst_data_delay_ns": 10.01,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_material_combine_v3:u_combine|m_p0[6]",
+            "worst_slack_ns": -0.631,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_material_combine_v3:u_combine|wb_row[4]"
+          }
+        ]
+      },
+      "slack_below_ns": 0.9090909090909083,
+      "truncated_by_export": true
+    },
+    "115mhz": {
+      "complete": false,
+      "count": 2000,
+      "families": {
+        "endpoint": [
+          {
+            "count": 1034,
+            "family": "other-island",
+            "worst_data_delay_ns": 11.086,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_attrgrad_v2:g_attr[1].u_attrgrad|col_r[1]",
+            "worst_slack_ns": -1.771,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|uvw_m~1996"
+          },
+          {
+            "count": 659,
+            "family": "owner-control",
+            "worst_data_delay_ns": 9.338,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_frag_expand_v2:u_expand|altsyncram:fragment_m_rtl_0|altsyncram_h2k1:auto_generated|ram_block1a153~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -1.556,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|ev_err_issue_o[30]"
+          },
+          {
+            "count": 253,
+            "family": "other",
+            "worst_data_delay_ns": 8.804,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|altsyncram:oq_ctx_q_rtl_0|altsyncram_ovp1:auto_generated|ram_block1a27~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -1.373,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_earlyz:u_earlyz|acc_mask_r[81]"
+          },
+          {
+            "count": 1,
+            "family": "aux-pipe",
+            "worst_data_delay_ns": 10.6,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_cache_pipe_v2:u_cache|rq_rp[0]~DUPLICATE",
+            "worst_slack_ns": -1.232,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_aux_pipe_v2:u_aux|frame_fault_o"
+          },
+          {
+            "count": 39,
+            "family": "tile-control",
+            "worst_data_delay_ns": 8.796,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|altsyncram:oq_ctx_q_rtl_0|altsyncram_ovp1:auto_generated|ram_block1a27~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -1.003,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|local_drop_count_o[3]"
+          },
+          {
+            "count": 14,
+            "family": "material-combine",
+            "worst_data_delay_ns": 8.882,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_material_combine_v3:u_combine|altsyncram:payload_m_rtl_0|altsyncram_a0n1:auto_generated|ram_block1a0~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -0.829,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_material_combine_v3:u_combine|o_a0[7]"
+          }
+        ],
+        "launch": [
+          {
+            "count": 630,
+            "family": "other",
+            "worst_data_delay_ns": 11.086,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_attrgrad_v2:g_attr[1].u_attrgrad|col_r[1]",
+            "worst_slack_ns": -1.771,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|uvw_m~1996"
+          },
+          {
+            "count": 165,
+            "family": "fragment-expand",
+            "worst_data_delay_ns": 9.338,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_frag_expand_v2:u_expand|altsyncram:fragment_m_rtl_0|altsyncram_h2k1:auto_generated|ram_block1a153~PORT_B_WRITE_ENABLE_REG",
+            "worst_slack_ns": -1.556,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|ev_err_issue_o[30]"
+          },
+          {
+            "count": 1197,
+            "family": "owner-control",
+            "worst_data_delay_ns": 10.885,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|cq_own_q~38",
+            "worst_slack_ns": -1.497,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_v3own:u_own|cbi_q[45]"
+          },
+          {
+            "count": 8,
+            "family": "combine-product",
+            "worst_data_delay_ns": 10.01,
+            "worst_from": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_material_combine_v3:u_combine|m_p0[6]",
+            "worst_slack_ns": -0.631,
+            "worst_to": "zhao_raster_tile_pipe_v2:u_tile|zhao_raster_texture_stage_v3:u_texture_stage|zhao_texture_island_v3_top:u_texture_v3|zhao_texture_material_combine_v3:u_combine|wb_row[4]"
+          }
+        ]
+      },
+      "slack_below_ns": 1.304347826086957,
+      "truncated_by_export": true
+    }
+  },
   "paths": {
+    "best_slack_ns": -0.485,
     "negative": 2000,
     "nonnegative": 0,
     "summarized": 2000,
@@ -321,6 +600,6 @@
     "worst_slack_ns": -1.771
   },
   "schema_id": "zhao.g8a.timing_path_census",
-  "schema_version": 1,
+  "schema_version": 2,
   "source_commit": "e3b3cec9bc17348711a3fa9bf999cb8023d4896e"
 }
