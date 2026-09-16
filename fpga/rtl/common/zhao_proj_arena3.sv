@@ -93,6 +93,12 @@
 // can audit what it is actually reading. The key is stored per GROUP in
 // flops — GROUPS x KEY_W = 128 bits at defaults — because all DEPTH rows of a
 // lifetime share one provenance by construction (dense fill under one seal).
+// ENFORCED-BY: tests/geometry/proj_arena3_directed.cpp
+// — every accepted read is checked to return the key its group was OPENED
+// with, so a per-row provenance could not differ from the per-group one
+// without that check failing. One key per group is what makes the flop cost
+// GROUPS x KEY_W rather than GROUPS x DEPTH x KEY_W, so this is a claim about
+// area as much as about correctness.
 // If two uses of the same lattice index have different final positions, they
 // are different keys, hence different groups or different lifetimes. The
 // per-group GENERATION then catches the temporal hazard the key cannot: a

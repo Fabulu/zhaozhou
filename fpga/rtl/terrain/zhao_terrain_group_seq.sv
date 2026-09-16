@@ -461,6 +461,15 @@ module zhao_terrain_group_seq #(
       // ---- landings, every cycle, whichever state -------------------------------
       // A landing for an arena being OPENED this cycle cannot happen (a free
       // arena has no fill in flight), so the open's clear below wins safely.
+      // ENFORCED-BY: tests/terrain/terrain_pipe_differential.cpp
+      // -- and the enforcement is INDIRECT, which is worth saying plainly
+      // rather than letting the tag imply otherwise: this block has no directed
+      // test and no assertion of its own. That differential pins the
+      // CONSEQUENCE -- a landing colliding with an open would leave the cleared
+      // arena replaying a vertex the oracle does not have, and the run is
+      // compared packet for packet with arena_overflow_o and arena_seal_short_o
+      // required zero. A targeted assertion here would be better evidence than
+      // a caught symptom, and is not yet written.
       // Compare the complete carries-refusal arena field. An invalid code must
       // never alias a legal arena merely because their AW low bits match.
       if (fill_landed_i) begin

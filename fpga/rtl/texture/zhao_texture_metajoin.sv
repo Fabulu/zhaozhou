@@ -176,6 +176,13 @@ module zhao_texture_metajoin #(
       // SAME expression that enables the join's `r1_d_q`/`r1_t_q`. Gating on it
       // makes the bank and the join load on identical cycles: the metadata now
       // belongs to the data beside it by construction rather than by timing.
+      // ENFORCED-BY: tests/texture/metajoin_directed.cpp
+      // -- and the enforcement matters more here than almost anywhere, because
+      // the defect this repairs is the one CLAUDE.md uses as its worked
+      // example: a live generation-mismatch counter sat beside it reading zero
+      // and could never fire, since the same ungated assignment loaded both
+      // operands. The test must reach the STALL that makes the offered address
+      // differ from the held one; 392 byte-identical paired records could not.
       //
       // It also un-blinds the generation check below. `rd_gen_q` moved with the
       // offered address too, so both operands of that comparison were corrupted

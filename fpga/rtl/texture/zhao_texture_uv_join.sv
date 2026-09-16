@@ -100,6 +100,12 @@ module zhao_texture_uv_join #(
     // sidecar lookup by an identity that may already have been recycled, which
     // is the same class of hazard D0 was. Carried WITH the request, it cannot
     // be stale by construction.
+    // ENFORCED-BY: tests/texture/texture_uv_join_v2_directed.cpp
+    // -- the held result is checked on EVERY stalled cycle, not only at the
+    // handshake, and A must retain all 365 admission-time bits including the
+    // page generation at logical287[286:279] while descriptor/UV B are accepted
+    // behind it. Two committed mutants fire in the one direction that matters:
+    // B-generation-with-A-owner, and late-current-active-generation.
     input  var logic [1:0]         d_palette_slot_i,
     input  var logic [GENW-1:0]    d_palette_gen_i,
 
@@ -224,6 +230,11 @@ module zhao_texture_uv_join #(
   // construction. None of them is read from a live ingress port or from another
   // stage's current owner, which is §5.3's requirement and the thing that made
   // the old arrangement unauditable.
+  // ENFORCED-BY: tests/texture/texture_uv_join_v2_directed.cpp
+  // -- full-owner identity, asserted on every stalled cycle with a second
+  // descriptor accepted behind the held one. That is the exact stimulus a
+  // reading-from-the-live-port arrangement survives and this one must not: a
+  // field taken from ingress would follow B while the owner is still A.
   assign f_valid_o   = r_v_q && !r_f_done_q;
   assign f_owner_o   = r_tag_q[13:0];
   assign f_u_o       = r_u_q;

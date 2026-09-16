@@ -1316,3 +1316,24 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - Verilator lint clean. Not yet built or simulated.
 - **Acceptance stated against the MEASURED neighbour, not an estimate of this block:** better than -4.109 ns, where `zhao_project_core` now sits. Estimating this block is exactly how T1's acceptance came to be missed.
 - **Process note:** I edited this RTL while the full suite was running, and the suite's `lint_terrain_*` tests read sources directly, so four of its failures are self-inflicted. Lint tests read the WORKING TREE; the live-tree rule is not only about fits.
+
+## 2026-09-16 (`@g8b-t1b` measured) - 73.59 MHz, acceptance MET, and the path changed character
+
+- **`@g8b-t1b`, clean `4a33a786`, seed 1, 449.2 s: Fmax 57.87 -> 73.59 MHz. ALM 7,841 -> 7,807 - it went DOWN**, despite T1b adding a pipeline stage, a fourth vertex slot and a second triangle slot. Registering the product let the fitter drop logic elsewhere; the register cost was real and the ALM cost was not.
+- Campaign from clean trees, seed 1: `@g8b` 43.94 / 7,424 -> `@g8b-t2` 43.54 / 7,531 -> `@g8b-t12` 57.87 / 7,841 -> **`@g8b-t1b` 73.59 / 7,807**. **+29.65 MHz for +383 ALMs.**
+- **T1b's acceptance was "better than -4.109 ns, where `zhao_project_core` sits". Measured -3.588. MET** - and stated against the measured neighbour rather than an estimate of this block, which is how T1's acceptance came to be missed.
+- **THE PATH HAS CHANGED CHARACTER, which is the real result:** `u_tess|j_s[0] -> u_tess|Mult1~8|ENA_DFF0`, -3.588 ns, data 13.705. That endpoint is the multiply's **ENABLE**, not its data; `j_s` is the job stride register. The blend arithmetic this campaign has cut since T1 is no longer the constraint at all. What is left in the tessellator is a CONTROL path into the DSP - a different problem needing a different fix, and nothing in the brief so far is about it.
+- **Where the subsystem stands against 100 MHz** (constraint T = 10 ns, so a block's ceiling is 1000/(10+|slack|)): tess -3.588 / 73.6 MHz; project_core -2.449 / 80.3 MHz; worst RAM -2.070 / 82.9 MHz; the next nine RAMs -0.9..-0.57 / 91-94 MHz.
+- **Nothing is far away any more and nothing is close enough.** Ten of the twelve worst endpoints are within 2.1 ns and the RAM family sits in a tight band just over 10 ns of data delay. That is a different kind of problem from a single 22 ns chain and will not yield to one cut. **T3 must cover the tessellator control path, `zhao_project_core` and the RAM band together**, scoped from THIS export rather than from the T2-era plan.
+
+## 2026-09-16 (ledger) - 28 violations to 1
+
+- Worked the V20 backlog the schema errors had been hiding. **28 -> 1.** Every remaining ENFORCED-BY names an enforcer that was verified to exist before it was named, and several turned out to already exist in a form nothing could resolve:
+  - `zhao_field_progdir.sv` had a correct ENFORCED-BY whose path ended in a comma, because prose continued on the next line. A real enforcer, named correctly, invisible for a punctuation mark.
+  - `zhao_field_progdir_scan.sv` said "Simulation asserts it below" and **the assertion is there** - my first grep missed it because it uses `$error`, not `assert`. I nearly recorded it as a missing enforcer.
+  - `zhao_texture_v3own.sv` said "asserted below" twice; the labels are `a_win_used_matches_span` and `a_interval_partition`.
+  - `zhao_terrain_residency_v2.sv` named its two tests in prose on the same line.
+- **`zhao_terrain_group_seq.sv` is the honest exception:** no directed test, no assertion of its own. Its tag says so in as many words and points at the differential that pins the CONSEQUENCE, with "a targeted assertion here would be better evidence than a caught symptom, and is not yet written" left in the file.
+- **My own prose kept triggering the rule.** Writing "by construction" inside an explanation creates a new invariant claim, and an ENFORCED-BY placed ABOVE a claim does not count - it has to follow within 10 lines. Three sites needed re-editing for that reason alone.
+- **The one left red is deliberate.** TEXTURE.AUX's directed test is explicitly a protocol gate - carriage, credit, disposition, idle - and its oracle differential lives in the declared random test, which does exercise `AuxSource`. V17 requires BOTH cited tests to be about the oracle, stricter than its own stated purpose ("catch a test that is not about its oracle at all"). Weakening a verification rule to turn a gate green is the one repair this repository should not accept from me.
+- npm workspace dependencies installed; `tables_check` and `abi:check` go green with no source change.

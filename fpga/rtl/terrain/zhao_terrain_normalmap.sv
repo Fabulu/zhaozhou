@@ -356,6 +356,11 @@ module zhao_terrain_normalmap #(
   // The fragment pipe. One shared advance: when the output register is
   // occupied and the consumer stalls, every stage holds. Fixed latency,
   // in order, II = 1 by construction.
+  //
+  // "By construction" is the argument, not the evidence; section 8 of the test
+  // below drives 64 fragments at latency 6 through a stall and requires 64
+  // back-to-back accepts, comparing the drained stream against the oracle.
+  // ENFORCED-BY: tests/texture/terrain_normalmap_directed.cpp
   // =========================================================================
   logic adv_c;
   assign adv_c = !d_valid_o || d_ready_i;

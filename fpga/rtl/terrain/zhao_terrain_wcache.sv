@@ -69,6 +69,12 @@
 // fill and seal channels BROADCAST — same enable, same data, same edge — so a
 // copy stays a copy by construction, and each copy serves one corner. Three
 // simultaneous corner reads = one triangle per clock.
+// ENFORCED-BY: tests/terrain/terrain_wcache_differential.cpp
+// -- every replayed triangle's three corners are compared against the oracle,
+// so a copy that stopped being a copy shows up as one corner disagreeing while
+// the other two agree. That is also the shape the G8B T2 capture-at-accept
+// violation presented as, caught at 1 of 11,698 checks: three broadcast copies
+// are only equal while nothing can tear between them.
 //
 // The price is 3x memory: 4 x 81 rows x 106 bits = 34,344 bits per copy.
 // M10K arithmetic (GEOMETRY, not a fitted receipt — the fit gate in the
@@ -161,6 +167,12 @@ module zhao_terrain_wcache #(
     parameter int unsigned GEN_W      = 8,
     // 1 = VALID_DENSE_SEAL (the terrain default: a whole subpatch is projected
     // before replay, in lattice order, so the fill is dense by construction).
+    // That phrase describes the producer's habit and not a guarantee, so the
+    // arena REFUSES a seal that is not exactly DEPTH deep, and the control
+    // below fires that refusal on purpose rather than quoting its silence. A
+    // fill that quietly stopped being dense would otherwise replay stale rows
+    // instead of faulting.
+    // ENFORCED-BY: tests/geometry/vertex_arena_dense_seal_control.cpp
     // 0 = VALID_BITMAP is legal too -- same ports, same replay -- and is what
     // the miss-path positive control elaborates.
     parameter int unsigned VALID_MODE = 1,

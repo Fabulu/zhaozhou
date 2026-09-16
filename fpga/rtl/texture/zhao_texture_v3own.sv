@@ -2007,7 +2007,10 @@ module zhao_texture_v3own #(
   // THREE OF THE WINDOW'S FOUR FIELDS ARE ALREADY HERE, in their low bits:
   //   6.1 alloc_ticket  <- tail_q      (advances on adm_fire_c)
   //   6.1 retire_ticket <- emit_q      (increments only -- 6.3 holds by
-  //                                     construction, and is asserted below)
+  //                                     construction, and is asserted below:
+  //   ENFORCED-BY: fpga/rtl/texture/zhao_texture_v3own.sv:a_win_used_matches_span
+  //   with a_win_used_bounded beside it. "Asserted below" was already true and
+  //   already unresolvable; naming the label is the whole change.)
   //   6.1 used          <- live_cnt_q  (live_cnt_q + adm_fire_c - out_fire_c,
   //                                     which is 6.1's update exactly)
   // Only the 8 generation bits on each pointer are missing, and `gen_q[64][8]`
@@ -2225,6 +2228,11 @@ module zhao_texture_v3own #(
       // `live_cnt_q` -- which admission and emission maintain independently --
       // must equal their sum. Three counters, one identity, checked every cycle
       // instead of argued from their names.
+      // ENFORCED-BY: fpga/rtl/texture/zhao_texture_v3own.sv:a_interval_partition
+      // -- and note WHY this one can fire where a naive pair could not:
+      // `live_cnt_q` is maintained by admission and emission, not by
+      // `fetch_fire_c`, so the two sides of the equality are not moved by the
+      // same enable and cannot be corrupted in lockstep inside the checker.
       a_interval_partition : assert (live_cnt_q == CNTW'(unf_cnt_q + out_res_q));
 
       // ---- S22.2's PHASE-CONTROL INVARIANTS ------------------------------

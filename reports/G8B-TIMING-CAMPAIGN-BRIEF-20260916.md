@@ -13,7 +13,95 @@ registers, 34 DSP, 44 RAM blocks, 95,610 memory bits. Hold clean at +0.251/0.
 **Target:** 100 MHz, the machine's operating requirement. That needs
 **+12.758 ns** on the worst path â€” not the +0.587 ns G8A's last mile needed.
 
-## STATUS: `@g8b-t12` IS MEASURED. 43.54 -> 57.87 MHz, and T1 MISSED ITS OWN ACCEPTANCE.
+## STATUS: `@g8b-t1b` IS MEASURED. 43.94 -> 73.59 MHz, and T1b MET its acceptance.
+
+`@g8b-t1b`, clean commit `4a33a786`, seed 1, 449.2 s. **Fmax 73.59 MHz**, **ALM
+7,807** — which is 34 LOWER than `@g8b-t12`'s 7,841 despite T1b adding a
+pipeline stage, a fourth vertex slot and a second triangle slot. Registering the
+product let the fitter drop logic elsewhere; the register cost was real and the
+ALM cost was not.
+
+The campaign so far, all from clean committed trees at seed 1:
+
+| row | Fmax | ALM | worst block | worst slack |
+|---|---:|---:|---|---:|
+| `@g8b` | 43.94 | 7,424 | `zhao_terrain_tess` | −12.758 |
+| `@g8b-t2` | 43.54 | 7,531 | `zhao_terrain_tess` | −12.968 |
+| `@g8b-t12` | 57.87 | 7,841 | `zhao_terrain_tess` | −7.280 |
+| **`@g8b-t1b`** | **73.59** | **7,807** | `zhao_terrain_tess` | **−3.588** |
+
+**+29.65 MHz on the subsystem, for +383 ALMs.** T1b's acceptance was "better
+than −4.109 ns, where `zhao_project_core` sits"; −3.588 meets it.
+
+**AND THE PATH HAS CHANGED CHARACTER, which is the real result:**
+
+```
+u_tess|j_s[0] -> u_tess|Mult1~8|ENA_DFF0     -3.588 ns, data 13.705
+```
+
+That endpoint is the multiply's **ENABLE**, not its data. `j_s` is the job
+stride register. The blend arithmetic this campaign has been cutting since T1 is
+no longer the constraint at all — what is left in the tessellator is a CONTROL
+path into the DSP, which is a different problem needing a different fix, and
+nothing in this brief so far is about it.
+
+**Where the subsystem now stands against 100 MHz** (the constraint is T = 10 ns,
+so a block's ceiling is 1000/(10 + |slack|)):
+
+| endpoint block | slack | data | ceiling |
+|---|---:|---:|---:|
+| `zhao_terrain_tess` | −3.588 | 13.705 | 73.6 MHz |
+| `zhao_project_core` | −2.449 | 11.870 | 80.3 MHz |
+| worst inferred RAM | −2.070 | 11.957 | 82.9 MHz |
+| next nine RAMs | −0.9 … −0.57 | 10.1–10.4 | 91–94 MHz |
+
+**Nothing is far away any more, and nothing is close enough.** Ten of the
+twelve worst endpoints are now within 2.1 ns of target and the RAM family sits
+in a tight band just over 10 ns of data delay, which is a different kind of
+problem from a single 22 ns chain: it will not yield to one cut. T3 must cover
+the tessellator's control path, `zhao_project_core`, and the RAM band together,
+and it should be scoped from this export rather than from the T2-era plan below,
+which was written when the projector and the RAMs were 0.5 ns apart and both
+far behind the tessellator.
+
+### What the tessellator's new worst path actually is, cell by cell
+
+Read from the export rather than guessed, because the endpoint name alone
+("the multiply's enable") suggests the blend and it is not the blend:
+
+```
+j_s[0]
+  -> Mult1~8|ay[0] -> Mult1~8|resulta[3]     a MULTIPLY, cell index x stride
+  -> Add7~21|sumout                          the lattice coordinate
+  -> LessThan18~0|combout                    a bound compare
+  -> Equal0~26 -> Equal0~27 -> Equal0~28     the run-cell / mode decode
+  -> cell_skip|combout                       "is this run-cell void?"
+  -> eb[0]~1|combout                         the ENUMERATOR ADVANCE
+  -> Mult1~8|ena[0] -> ENA_DFF0
+```
+
+**This is the enumerator, and it closes a loop through the same DSP.** `j_s` is
+the job stride; the chain computes the current cell's lattice coordinate,
+decides whether the cell is void and must be skipped, advances the enumerator —
+and the result gates the geomorph multiply's own clock enable. Data out of the
+DSP, round the control logic, back into the DSP's enable, in one cycle.
+
+**It is long for a reason the block states as a virtue**, which is why this is a
+design question and not a tidy-up. `zhao_terrain_tess`'s own header says *"THE
+ENUMERATOR ADVANCES AT ISSUE, NOT AT CAPTURE. That is what keeps the pipe at
+three cycles per triangle — one lattice read per clock... Advancing at capture
+would insert a bubble."* The tightness is deliberate and it is what protects the
+initiation rate. Any cut here has to keep that rate, which means precomputing
+the next cell's coordinates and its skip decision a cycle ahead rather than
+simply registering `cell_skip` — registering it is the bubble the header
+forbids.
+
+**So T3 has three independent sub-problems, not one chain:** this enumerator
+loop (73.6 MHz), `zhao_project_core` (80.3), and the RAM band (82.9 and then a
+cluster at 91–94). Reaching 100 MHz needs all three, and the RAM band is the
+one no one has looked at yet.
+
+## Superseded: `@g8b-t12`, 43.54 -> 57.87 MHz, and T1 MISSED ITS OWN ACCEPTANCE.
 
 `@g8b-t12`, clean commit `834181eb`, seed 1, 488 s. **Fmax 57.87 MHz**, ALM
 7,841 (+417 over `@g8b`'s 7,424), registers 7,997 -> 8,452, RAM 44 unchanged.

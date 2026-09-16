@@ -134,6 +134,11 @@ module zhao_texture_v3rq #(
 
   wire push_taken_c = wr_en_i && !full_o;
   wire pop_taken_c  = pop_c;   // valid_o && pop_i, by construction above
+  // ENFORCED-BY: tests/texture/texture_v3rq_directed.cpp
+  // -- "the ready queue's occupancy must never lie": between an accepted push
+  // and its pop, occupancy is never zero, with ld_q included per §5.2. A
+  // body-only count answers "this queue holds nothing" while an entry is in
+  // flight, which is exactly what this pair of terms must not permit.
 
   assign lcnt_next_c = lcnt_q + (PW+1)'(push_taken_c) - (PW+1)'(pop_taken_c);
 

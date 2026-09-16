@@ -68,6 +68,11 @@
 //                least two edges between them. Simulation asserts it below.
 //                (Same-address read/write would return OLD data on an M10K;
 //                the block does not rely on that because it never occurs.)
+//                ENFORCED-BY: fpga/rtl/field/zhao_field_progdir_scan.sv
+//                -- the `ifndef SYNTHESIS` block at the bottom of this file
+//                fires $error if a write ever lands while the state is S_SCAN.
+//                The enforcement was always there; "Simulation asserts it
+//                below" just is not a form anything can resolve.
 //   init         none. Payload is NEVER reset (no reset loop over the array);
 //                the valid_q bits are reset and an invalid row is never
 //                consulted as contents -- every use of rd_q is gated on

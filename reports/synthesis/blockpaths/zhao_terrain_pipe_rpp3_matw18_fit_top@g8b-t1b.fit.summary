@@ -1,0 +1,20 @@
+Fitter Status : Successful - Wed Sep 16 16:12:42 2026
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : blockfit
+Top-level Entity Name : zhao_terrain_pipe_rpp3_matw18_fit_top
+Family : Cyclone V
+Device : 5CSEBA6U23I7
+Timing Models : Final
+Logic utilization (in ALMs) : 7,807 / 41,910 ( 19 % )
+Total registers : 8634
+Total pins : 0 / 314 ( 0 % )
+Total virtual pins : 18
+Total block memory bits : 95,627 / 5,662,720 ( 2 % )
+Total RAM Blocks : 44 / 553 ( 8 % )
+Total DSP Blocks : 34 / 112 ( 30 % )
+Total HSSI RX PCSs : 0
+Total HSSI PMA RX Deserializers : 0
+Total HSSI TX PCSs : 0
+Total HSSI PMA TX Serializers : 0
+Total PLLs : 0 / 6 ( 0 % )
+Total DLLs : 0 / 4 ( 0 % )

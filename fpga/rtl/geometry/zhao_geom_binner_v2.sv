@@ -371,6 +371,11 @@ module zhao_geom_binner_v2 #(
   // The top physical pad has no ABI-visible consumer by construction. Keep the
   // full vector so each generated slice is exactly 40 bits, and waive only the
   // deliberate unexported pad bits (three bits at the Packet-D default).
+  // ENFORCED-BY: tests/geometry/geom_binner_v2_directed.cpp
+  // -- it carries all 1,157 metadata bits by accepted-triangle identity through
+  // tile fan-out and masks the top word to exactly `kMetaBits`, so a pad bit
+  // that acquired a consumer would show up as metadata the ABI never declared.
+  // The lint waiver below says the pad is unread; this says the ABI agrees.
   logic [META_PHYS_W-1:0] meta_wd;
   /* verilator lint_off UNUSEDSIGNAL */
   logic [META_PHYS_W-1:0] meta_q;

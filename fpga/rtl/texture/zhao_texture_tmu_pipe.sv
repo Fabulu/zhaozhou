@@ -824,6 +824,13 @@ module zhao_texture_tmu_pipe #(
       // responses lose nothing. `pq_rec` differs from this cycle's `rsp_rec`
       // by construction -- a record gets one texel response, and a hit record
       // never gets a second -- so the two ROB writes cannot collide.
+      // ENFORCED-BY: tests/texture/texture_tmu_directed.cpp
+      // -- that test elaborates THIS module as its top (tests/CMakeLists.txt,
+      // target test_texture_tmu_pipe) and requires the RGB, alpha, CLUT index,
+      // source id and mode_error to agree with zref::Tmu over the identical
+      // request sequence. A collided ROB write returns one record's texel under
+      // another record's source id, which is a disagreement that comparison
+      // cannot miss.
       pq_v   <= rsp_take_c && !rsp_is_pal && rb_clut[rsp_rec]
                 && pal_hit_c && pal_ent_c;
       pq_rec <= rsp_rec;

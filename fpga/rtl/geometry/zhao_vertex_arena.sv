@@ -40,12 +40,22 @@
 //      Exactly as deterministic as (3).
 //
 // (3) and (4) are BOTH built, selected by the VALID_MODE parameter, because
-// they serve different producers. (4) costs a real restriction -- fill in
+// they serve different producers.
+//
+// (4) costs a real restriction -- fill in
 // order, fill completely -- which a tessellator walking a lattice satisfies by
 // construction and a fill-on-miss producer does not. GEOM.WCACHE's producer
 // fills on lookup misses, in triangle order: it keeps (3). A terrain shell
-// projecting a whole 9x9 subpatch before replay is dense by construction and
-// takes (4), paying 4x7 = 28 count-register bits where (3) would pay 4x81 =
+// projecting a whole 9x9 subpatch before replay is dense by construction.
+//
+// NEITHER PRODUCER IS TRUSTED TO KEEP IT. A seal is REFUSED unless the arena
+// holds exactly DEPTH vertices, and `arena_seal_short_o` latches it.
+// ENFORCED-BY: tests/geometry/vertex_arena_dense_seal_control.cpp
+// That control fires the refusal deliberately, so its silence is never the
+// evidence; terrain_pipe_differential asserts the counter stays zero on legal
+// terrain, which is the other half and worth nothing without this one.
+//
+// (4) takes 4x7 = 28 count-register bits where (3) would pay 4x81 =
 // 324 bitmap flops (registers, not ALM -- no fit row exists for any shape of
 // this block, so ALM is unknown). For a much deeper BITMAP instantiation the
 // remaining alternative is a clear WALK that holds `sealed` low until it

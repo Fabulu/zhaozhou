@@ -8,8 +8,11 @@
 // call this a fixed-latency drop-in."
 //
 // Port for port it is zhao_field_progcache. Transaction for transaction it is
-// zhao_field_progcache (ENFORCED-BY: tests/field/field_progdir_differential.cpp,
-// old and new elaborated side by side). Clock for clock it is NOT: a lookup or
+// zhao_field_progcache (ENFORCED-BY: tests/field/field_progdir_differential.cpp
+// -- old and new elaborated side by side). The comma that used to end that path
+// was inside the token the checker reads, so it resolved
+// "...differential.cpp," and reported the enforcer missing: a real enforcer,
+// named correctly, invisible for a punctuation mark. Clock for clock it is NOT: a lookup or
 // a valid commit is answered ENTRIES+4 clocks after acceptance instead of one
 // (MEASURED 20 at ENTRIES=16, same for hit, miss and insert; a rejected commit
 // 3), the no-stall accept-to-accept interval is the same 20, and while a

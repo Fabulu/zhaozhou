@@ -296,7 +296,11 @@ module zhao_terrain_residency_v2 #(
   //
   // Behaviour is BIT-IDENTICAL by construction: the two slices are written by
   // the same enable at the same address and reassembled by concatenation.
-  // terrain_residency_v2_directed/_random hold it to the contract oracle.
+  // ENFORCED-BY: tests/terrain/terrain_residency_v2_directed.cpp
+  // -- with terrain_residency_v2_random.cpp, both held to the contract oracle.
+  // The enforcer was already named in prose on this line and simply not in the
+  // form anything can resolve, which is the whole difference between a claim
+  // and an enforced one.
   //
   // VERIFIED BY: the next terrain subsystem fit's map report --
   // `min_memory_bits: 167936` in design/fit_targets.yml finally passing, and
