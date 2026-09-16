@@ -256,16 +256,15 @@ inline int morph_case(const SubpatchJob& job, int vi, int vj) {
 // NO NEW ARITHMETIC. The coarse height at a midpoint is `coarse_height` of the
 // relevant pair and which pair it is comes from `morph_case` -- both ratified,
 // both already used by the tessellator, so this is a walk rather than a law.
-inline uint32_t lod_deviation(const ComposedLattice& lat, Surface surf, int ox, int oz,
-                              int level, bool include_boundary, SatLedger* L = nullptr) {
-  if (level <= 0) return 0u;   // dev[0] is zero by definition
+inline uint32_t lod_deviation(const ComposedLattice& lat, Surface surf, int ox, int oz, int level,
+                              bool include_boundary, SatLedger* L = nullptr) {
+  if (level <= 0) return 0u;  // dev[0] is zero by definition
   // `detail::plane_at` is declared further down this file, so the same one-line
   // access is written here rather than reordering a header around a helper.
   // It is the same expression: `vj * w + vi`, the tree's lattice addressing.
   const auto plane = [&](int pi, int pj) -> int32_t {
-    const std::size_t k =
-        static_cast<std::size_t>(pj) * static_cast<std::size_t>(lat.w) +
-        static_cast<std::size_t>(pi);
+    const std::size_t k = static_cast<std::size_t>(pj) * static_cast<std::size_t>(lat.w) +
+                          static_cast<std::size_t>(pi);
     return surf == Surface::kUnderside ? lat.bottom[k] : lat.top[k];
   };
   const int s = 1 << level;
@@ -278,28 +277,25 @@ inline uint32_t lod_deviation(const ComposedLattice& lat, Surface surf, int ox, 
   for (int vj = oz; vj <= oz + kSubpatchCells; ++vj) {
     for (int vi = ox; vi <= ox + kSubpatchCells; ++vi) {
       if (vi < 0 || vj < 0 || vi >= lat.w || vj >= lat.h) continue;
-      const bool on_border = (vi == ox) || (vi == ox + kSubpatchCells) || (vj == oz) ||
-                             (vj == oz + kSubpatchCells);
+      const bool on_border =
+          (vi == ox) || (vi == ox + kSubpatchCells) || (vj == oz) || (vj == oz + kSubpatchCells);
       if (on_border && !include_boundary) continue;
 
       const bool xc = (vi & (sc - 1)) == 0;
       const bool zc = (vj & (sc - 1)) == 0;
-      if (xc && zc) continue;   // the coarse level already carries this vertex
+      if (xc && zc) continue;  // the coarse level already carries this vertex
 
       const int32_t h = plane(vi, vj);
       int32_t hc = h;
-      if (zc) {                 // an x-midpoint
+      if (zc) {  // an x-midpoint
         if (vi - s < 0 || vi + s >= lat.w) continue;
-        hc = coarse_height(plane(vi - s, vj),
-                           plane(vi + s, vj), L);
-      } else if (xc) {          // a z-midpoint
+        hc = coarse_height(plane(vi - s, vj), plane(vi + s, vj), L);
+      } else if (xc) {  // a z-midpoint
         if (vj - s < 0 || vj + s >= lat.h) continue;
-        hc = coarse_height(plane(vi, vj - s),
-                           plane(vi, vj + s), L);
-      } else {                  // the coarse cell's diagonal midpoint
+        hc = coarse_height(plane(vi, vj - s), plane(vi, vj + s), L);
+      } else {  // the coarse cell's diagonal midpoint
         if (vi - s < 0 || vi + s >= lat.w || vj - s < 0 || vj + s >= lat.h) continue;
-        hc = coarse_height(plane(vi - s, vj - s),
-                           plane(vi + s, vj + s), L);
+        hc = coarse_height(plane(vi - s, vj - s), plane(vi + s, vj + s), L);
       }
 
       const int64_t d = static_cast<int64_t>(h) - hc;

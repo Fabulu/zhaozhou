@@ -236,9 +236,9 @@ std::vector<Retired> run(const std::vector<Frag>& frags, unsigned seed, bool sta
 // zhao_raster_texjoin_v2 does not have those ports. The differential template
 // must compile against both, so the comparison lives here instead.
 struct AuxProbe {
-  int handshakes = 0;   // AUX requests actually accepted
-  int ctx_wrong = 0;    // ... carrying a context that is not their slot's
-  int held_mutated = 0; // ... whose held tuple changed while valid was up
+  int handshakes = 0;    // AUX requests actually accepted
+  int ctx_wrong = 0;     // ... carrying a context that is not their slot's
+  int held_mutated = 0;  // ... whose held tuple changed while valid was up
   int retired = 0;
 };
 

@@ -54,7 +54,8 @@ struct Plan {
  */
 template <class Dut>
 inline long run_page(Dut& dut, const zref::terrain::ComposedLattice& lat, int pi, int pj,
-                     const int32_t* vdist, uint32_t stall_mask, Plan* out, uint32_t ld_stall_mask = 0) {
+                     const int32_t* vdist, uint32_t stall_mask, Plan* out,
+                     uint32_t ld_stall_mask = 0) {
   const int cw_all = lat.w - 1, ch_all = lat.h - 1;
   const int cw = (pi + 32 <= cw_all) ? 32 : (cw_all - pi);
   const int ch = (pj + 32 <= ch_all) ? 32 : (ch_all - pj);
@@ -96,8 +97,7 @@ inline long run_page(Dut& dut, const zref::terrain::ComposedLattice& lat, int pi
     dut.edge_ready_i = ready ? 1 : 0;
     // the load master may pause (ld_stall_mask bit set = no bit offered this
     // cycle); the block's ld_ready_o must simply wait. Default: never pauses.
-    const bool ld_go =
-        (ld_stall_mask == 0) || (((ld_stall_mask >> (clocks & 31)) & 1u) == 0);
+    const bool ld_go = (ld_stall_mask == 0) || (((ld_stall_mask >> (clocks & 31)) & 1u) == 0);
     if (cmd_taken && loaded < 34 * 34 && ld_go) {
       dut.ld_valid_i = 1;
       dut.ld_solid_i = win[loaded];

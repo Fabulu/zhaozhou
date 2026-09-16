@@ -70,8 +70,7 @@ void drive_wide(VlWide<16>& port, const Wide490& value) {
 
 uint32_t crc32_byte(uint32_t crc, uint8_t value) {
   for (unsigned bit = 0; bit < 8; ++bit)
-    crc = ((crc ^ (value >> bit)) & 1u) ? ((crc >> 1) ^ 0xedb88320u)
-                                         : (crc >> 1);
+    crc = ((crc ^ (value >> bit)) & 1u) ? ((crc >> 1) ^ 0xedb88320u) : (crc >> 1);
   return crc;
 }
 
@@ -95,15 +94,14 @@ std::array<uint8_t, 10> row_bytes(const BindingRow& row, bool present) {
   bytes[6] = static_cast<uint8_t>(row.mode >> 16);
   bytes[7] = static_cast<uint8_t>(row.mode >> 24);
   const uint16_t high = static_cast<uint16_t>(row.palette_slot & 3u) |
-      (static_cast<uint16_t>(row.palette_generation) << 2) |
-      (static_cast<uint16_t>(row.valid ? 1u : 0u) << 10);
+                        (static_cast<uint16_t>(row.palette_generation) << 2) |
+                        (static_cast<uint16_t>(row.valid ? 1u : 0u) << 10);
   bytes[8] = static_cast<uint8_t>(high);
   bytes[9] = static_cast<uint8_t>(high >> 8);
   return bytes;
 }
 
-uint32_t binding_crc(uint8_t generation,
-                     const std::array<BindingRow, 256>& rows,
+uint32_t binding_crc(uint8_t generation, const std::array<BindingRow, 256>& rows,
                      const std::array<bool, 256>& present) {
   uint32_t crc = crc32_byte(0xffffffffu, generation);
   for (unsigned selector = 0; selector < 256; ++selector)
@@ -128,12 +126,10 @@ struct Candidate {
   uint8_t result_status = 0;
 };
 
-Candidate make_candidate(uint8_t addr, uint32_t state, uint16_t source,
-                         uint32_t vertex_rgb, uint8_t vertex_alpha,
-                         uint8_t effect_tag, uint8_t stencil_ref,
-                         uint8_t sample_count, uint8_t binding,
-                         uint8_t recipe, uint32_t base_rgb, uint8_t base_alpha,
-                         uint32_t result_rgb, uint8_t result_alpha,
+Candidate make_candidate(uint8_t addr, uint32_t state, uint16_t source, uint32_t vertex_rgb,
+                         uint8_t vertex_alpha, uint8_t effect_tag, uint8_t stencil_ref,
+                         uint8_t sample_count, uint8_t binding, uint8_t recipe, uint32_t base_rgb,
+                         uint8_t base_alpha, uint32_t result_rgb, uint8_t result_alpha,
                          uint8_t result_index, uint8_t result_status) {
   Candidate c;
   c.addr = addr;
@@ -151,19 +147,19 @@ Candidate make_candidate(uint8_t addr, uint32_t state, uint16_t source,
 
   // zhao_render_texture_pkg named spans, low field first.  AUX is canonical
   // zero because these Packet-C vectors do not request Surface Sheet work.
-  set_bits(c.packed, 0, 8, sample_count ? 1u : 0u);  // palette generation
-  set_bits(c.packed, 8, 2, 0);                       // palette slot
-  set_bits(c.packed, 10, 2, sample_count ? 0u : 0u);// response class
+  set_bits(c.packed, 0, 8, sample_count ? 1u : 0u);   // palette generation
+  set_bits(c.packed, 8, 2, 0);                        // palette slot
+  set_bits(c.packed, 10, 2, sample_count ? 0u : 0u);  // response class
   set_bits(c.packed, 12, 8, base_alpha);
   set_bits(c.packed, 20, 24, base_rgb);
-  set_bits(c.packed, 268, 1, 0);                     // AUX absent
-  set_bits(c.packed, 269, 8, 0x5au);                 // distinct recipe weight
+  set_bits(c.packed, 268, 1, 0);      // AUX absent
+  set_bits(c.packed, 269, 8, 0x5au);  // distinct recipe weight
   set_bits(c.packed, 277, 3, recipe);
-  set_bits(c.packed, 280, 8, 0x13u);                 // Q4.4 LOD
+  set_bits(c.packed, 280, 8, 0x13u);  // Q4.4 LOD
   set_bits(c.packed, 288, 8, binding);
   set_bits(c.packed, 296, 2, sample_count);
-  set_bits(c.packed, 298, 32, 0);                    // v_over_w
-  set_bits(c.packed, 330, 32, 0);                    // u_over_w
+  set_bits(c.packed, 298, 32, 0);  // v_over_w
+  set_bits(c.packed, 330, 32, 0);  // u_over_w
   set_bits(c.packed, 362, 8, stencil_ref);
   set_bits(c.packed, 370, 8, effect_tag);
   set_bits(c.packed, 378, 8, vertex_alpha);
@@ -176,14 +172,13 @@ Candidate make_candidate(uint8_t addr, uint32_t state, uint16_t source,
 }
 
 Candidate make_count0(uint8_t addr, uint32_t state = 0) {
-  const uint32_t base = 0x310000u | (static_cast<uint32_t>(addr) << 8) |
-                        (static_cast<uint32_t>(addr) ^ 0x5au);
+  const uint32_t base =
+      0x310000u | (static_cast<uint32_t>(addr) << 8) | (static_cast<uint32_t>(addr) ^ 0x5au);
   const uint8_t alpha = static_cast<uint8_t>(0x80u | (addr & 0x3fu));
   return make_candidate(addr, state, static_cast<uint16_t>(0x7000u | addr),
-                        0x120000u | (static_cast<uint32_t>(addr) << 8) | 0x34u,
-                        alpha, static_cast<uint8_t>(0xa0u ^ addr),
-                        static_cast<uint8_t>(0x50u ^ addr), 0, 0, 0,
-                        base, alpha, base, alpha, 0, 0);
+                        0x120000u | (static_cast<uint32_t>(addr) << 8) | 0x34u, alpha,
+                        static_cast<uint8_t>(0xa0u ^ addr), static_cast<uint8_t>(0x50u ^ addr), 0,
+                        0, 0, base, alpha, base, alpha, 0, 0);
 }
 
 struct OwnerExpected {
@@ -294,8 +289,8 @@ struct Harness {
 
   uint16_t fill_word(uint32_t line, unsigned beat) const {
     if (beat != 0) return 0;
-    if (line == 0x00002000u) return 0x0005u; // raw CLUT8 index 5
-    if (line == 0x00003000u) return 0x0000u; // raw CLUT8 index 0
+    if (line == 0x00002000u) return 0x0005u;  // raw CLUT8 index 5
+    if (line == 0x00003000u) return 0x0000u;  // raw CLUT8 index 0
     return 0x00c7u;
   }
 
@@ -366,8 +361,7 @@ struct Harness {
               "returned sequence did not match independent admission scoreboard");
       const Candidate& c = owner.candidate;
       const FragBeat f = observed_fragment();
-      require(f.addr == c.addr && f.depth == c.depth && f.state == c.state &&
-                  f.source == c.source,
+      require(f.addr == c.addr && f.depth == c.depth && f.state == c.state && f.source == c.source,
               "returned Early-Z continuation fields changed");
       require(f.vertex_rgb == c.vertex_rgb && f.vertex_alpha == c.vertex_alpha &&
                   f.effect_tag == c.effect_tag && f.stencil_ref == c.stencil_ref,
@@ -432,14 +426,12 @@ struct Harness {
       require(!expected_writes.empty(), "real fragment wrote when zref predicted no write");
       const auto expected = expected_writes.front();
       expected_writes.pop_front();
-      require(dut.tile_wr_addr_o == expected.first &&
-                  dut.tile_wr_data_o == expected.second,
+      require(dut.tile_wr_addr_o == expected.first && dut.tile_wr_data_o == expected.second,
               "real fragment write differed from zref::FragmentPipeline");
       tile[dut.tile_wr_addr_o] = dut.tile_wr_data_o;
       ++physical_writes;
     }
-    if (e.tile_rd_fire)
-      accepted_tile_reads.push_back(dut.tile_rd_addr_o);
+    if (e.tile_rd_fire) accepted_tile_reads.push_back(dut.tile_rd_addr_o);
 
     const uint32_t accepted_fill_line = dut.fill_req_addr_o;
     const uint8_t accepted_rd_addr = dut.tile_rd_addr_o;
@@ -489,8 +481,7 @@ struct Harness {
     dut.rst_n = 1;
     dut.skid_rst_n_i = 1;
     for (unsigned n = 0; n < 4; ++n) step();
-    require(dut.texture_quiet_o && dut.fragment_idle_o,
-            "Packet-C harness did not reset quiet");
+    require(dut.texture_quiet_o && dut.fragment_idle_o, "Packet-C harness did not reset quiet");
   }
 
   void replace_last_score(const Candidate& candidate) {
@@ -558,14 +549,14 @@ void program_palette(Harness& h) {
   pulse_palette(h, 0, 0, 0);
   for (unsigned index = 0; index < 256; ++index) {
     uint16_t colour = 0;
-    if (index == 5) colour = 0x07e0u; // green: bytes 00/ff/00, never raw index 5
+    if (index == 5) colour = 0x07e0u;  // green: bytes 00/ff/00, never raw index 5
     pulse_palette(h, 1, static_cast<uint8_t>(index), colour);
   }
   pulse_palette(h, 2, 0, 0);
 }
 
-uint8_t binding_command(Harness& h, uint8_t op, uint8_t generation,
-                        uint8_t selector, const BindingRow& row, uint32_t crc) {
+uint8_t binding_command(Harness& h, uint8_t op, uint8_t generation, uint8_t selector,
+                        const BindingRow& row, uint32_t crc) {
   h.dut.cfg_valid_i = 1;
   h.dut.cfg_op_i = op;
   h.dut.cfg_page_generation_i = generation;
@@ -573,8 +564,8 @@ uint8_t binding_command(Harness& h, uint8_t op, uint8_t generation,
   h.dut.cfg_row_i[0] = row.base;
   h.dut.cfg_row_i[1] = row.mode;
   h.dut.cfg_row_i[2] = static_cast<uint32_t>(row.palette_slot & 3u) |
-      (static_cast<uint32_t>(row.palette_generation) << 2) |
-      (static_cast<uint32_t>(row.valid ? 1u : 0u) << 10);
+                       (static_cast<uint32_t>(row.palette_generation) << 2) |
+                       (static_cast<uint32_t>(row.valid ? 1u : 0u) << 10);
   h.dut.cfg_crc32_i = crc;
 
   bool accepted = false;
@@ -647,7 +638,8 @@ void test_skid_ab_hold(Harness& h) {
 
   drive_wide(h.dut.in_data_i, a);
   h.dut.in_valid_i = 1;
-  while (!h.step().in_fire) {}
+  while (!h.step().in_fire) {
+  }
   h.dut.in_valid_i = 0;
   h.step();
   require(h.dut.obs_cand_valid_o && wide_equal_port(a, h.dut.obs_cand_data_o),
@@ -655,7 +647,8 @@ void test_skid_ab_hold(Harness& h) {
 
   drive_wide(h.dut.in_data_i, b);
   h.dut.in_valid_i = 1;
-  while (!h.step().in_fire) {}
+  while (!h.step().in_fire) {
+  }
   h.dut.in_valid_i = 0;
   require(h.dut.skid_level_o == 2, "A/B hold did not occupy both skid slots");
   for (unsigned n = 0; n < 8; ++n) {
@@ -691,8 +684,7 @@ void test_normal_hold_bubble_and_refusal(Harness& h) {
     h.offer(make_count0(static_cast<uint8_t>(0x20u + index)));
   h.wait_stage_accepts(accept_base + 4);
   for (unsigned n = 1; n < 4; ++n)
-    require(h.cand_fire_cycles[cycle_base + n] ==
-                h.cand_fire_cycles[cycle_base + n - 1] + 1,
+    require(h.cand_fire_cycles[cycle_base + n] == h.cand_fire_cycles[cycle_base + n - 1] + 1,
             "atomic V3 admission inserted a bubble in an all-ready stream");
 
   for (unsigned n = 0; n < 200 && !h.dut.obs_frag_valid_o; ++n) h.step();
@@ -724,9 +716,8 @@ void test_normal_hold_bubble_and_refusal(Harness& h) {
 
   // Recipe 1 requires count 2.  Count 1 must retire as a loud, status-bearing
   // terminal refusal through the ordinary ordered owner path.
-  const Candidate refused = make_candidate(
-      0x2f, 0, 0x7f2f, 0x2468acu, 0x9d, 0xd3, 0x6e,
-      1, 1, 1, 0x112233u, 0x44, 0xff00ffu, 0xff, 0, 1);
+  const Candidate refused = make_candidate(0x2f, 0, 0x7f2f, 0x2468acu, 0x9d, 0xd3, 0x6e, 1, 1, 1,
+                                           0x112233u, 0x44, 0xff00ffu, 0xff, 0, 1);
   h.dut.fragment_pause_i = 1;
   h.offer(refused);
   h.wait_stage_accepts(accept_base + 5);
@@ -749,8 +740,7 @@ void test_normal_hold_bubble_and_refusal(Harness& h) {
   clear_recoverable(h);
 }
 
-uint64_t tile_word(uint8_t r, uint8_t g, uint8_t b, uint8_t tag,
-                   uint32_t depth, uint8_t stencil);
+uint64_t tile_word(uint8_t r, uint8_t g, uint8_t b, uint8_t tag, uint32_t depth, uint8_t stencil);
 
 void test_external_tile_semantics(Harness& h) {
   begin_test("external tile one-cycle, write-stall reissue, same-address hazard");
@@ -761,8 +751,7 @@ void test_external_tile_semantics(Harness& h) {
   h.dut.tile_wr_ready_i = 0;
   const std::size_t read_base = h.accepted_tile_reads.size();
   const uint32_t accept_base = h.fragment_accepts;
-  for (uint8_t i = 0; i < 4; ++i)
-    h.offer(make_count0(static_cast<uint8_t>(0x30u + i)));
+  for (uint8_t i = 0; i < 4; ++i) h.offer(make_count0(static_cast<uint8_t>(0x30u + i)));
   for (unsigned n = 0; n < 4000 && !h.dut.tile_wr_valid_o; ++n) h.step();
   require(h.dut.tile_wr_valid_o, "write-stall control never reached held write");
   const uint8_t held_addr = h.dut.tile_wr_addr_o;
@@ -777,8 +766,7 @@ void test_external_tile_semantics(Harness& h) {
   }
   bool saw_reissue = false;
   for (std::size_t i = read_base + 1; i < h.accepted_tile_reads.size(); ++i)
-    if (h.accepted_tile_reads[i] == h.accepted_tile_reads[i - 1])
-      saw_reissue = true;
+    if (h.accepted_tile_reads[i] == h.accepted_tile_reads[i - 1]) saw_reissue = true;
   require(saw_reissue, "write stall did not re-issue the held stage-1 read");
   h.dut.tile_wr_ready_i = 1;
   h.wait_fragment_accepts(accept_base + 4);
@@ -794,18 +782,17 @@ void test_external_tile_semantics(Harness& h) {
   h.tile[addr] = h.oracle_tile[addr] = tile_word(10, 20, 30, 0x11, 0, 0x22);
   const uint32_t halo = zref::FragmentPipeline::star_halo_additive().pack();
   const uint32_t before = h.fragment_accepts;
-  h.offer(make_candidate(addr, halo, 0x8838, 0x050607u, 0xff, 0x91, 0x31,
-                         0, 0, 0, 0x010203u, 0xff, 0x010203u, 0xff, 0, 0));
-  h.offer(make_candidate(addr, halo, 0x9838, 0x111213u, 0xff, 0x92, 0x32,
-                         0, 0, 0, 0x040506u, 0xff, 0x040506u, 0xff, 0, 0));
+  h.offer(make_candidate(addr, halo, 0x8838, 0x050607u, 0xff, 0x91, 0x31, 0, 0, 0, 0x010203u, 0xff,
+                         0x010203u, 0xff, 0, 0));
+  h.offer(make_candidate(addr, halo, 0x9838, 0x111213u, 0xff, 0x92, 0x32, 0, 0, 0, 0x040506u, 0xff,
+                         0x040506u, 0xff, 0, 0));
   h.wait_fragment_accepts(before + 2);
   h.wait_drained();
   require(h.tile[addr] == h.oracle_tile[addr],
           "same-address hazard/drain result differed from zref::FragmentPipeline");
 }
 
-uint64_t tile_word(uint8_t r, uint8_t g, uint8_t b, uint8_t tag,
-                   uint32_t depth, uint8_t stencil) {
+uint64_t tile_word(uint8_t r, uint8_t g, uint8_t b, uint8_t tag, uint32_t depth, uint8_t stencil) {
   zref::TileStore::Word w;
   w.r = r;
   w.g = g;
@@ -834,15 +821,12 @@ void test_star_fragment_differential(Harness& h) {
 
   const uint32_t disc_state = zref::FragmentPipeline::star_disc_masked().pack();
   const uint32_t halo_state = zref::FragmentPipeline::star_halo_additive().pack();
-  h.offer(make_candidate(disc_zero_addr, disc_state, 0x9140, 0x314159u,
-                         0xff, 0xe1, 0x61, 1, 2, 0, 0, 0,
-                         0x000000u, 0xff, 0, 0));
-  h.offer(make_candidate(disc_five_addr, disc_state, 0x9141, 0x123456u,
-                         0xff, 0xe2, 0x62, 1, 1, 0, 0, 0,
-                         0x00ff00u, 0xff, 5, 0));
-  h.offer(make_candidate(halo_zero_addr, halo_state, 0x9142, 0x000000u,
-                         0xff, 0xe3, 0x63, 1, 2, 0, 0, 0,
-                         0x000000u, 0xff, 0, 0));
+  h.offer(make_candidate(disc_zero_addr, disc_state, 0x9140, 0x314159u, 0xff, 0xe1, 0x61, 1, 2, 0,
+                         0, 0, 0x000000u, 0xff, 0, 0));
+  h.offer(make_candidate(disc_five_addr, disc_state, 0x9141, 0x123456u, 0xff, 0xe2, 0x62, 1, 1, 0,
+                         0, 0, 0x00ff00u, 0xff, 5, 0));
+  h.offer(make_candidate(halo_zero_addr, halo_state, 0x9142, 0x000000u, 0xff, 0xe3, 0x63, 1, 2, 0,
+                         0, 0, 0x000000u, 0xff, 0, 0));
   h.wait_fragment_accepts(h.fragment_accepts + 3);
   h.wait_drained();
 
@@ -854,8 +838,8 @@ void test_star_fragment_differential(Harness& h) {
           "CLUT index zero/opaque-alpha control did not reach real fragment");
   require(h.tile[disc_zero_addr] == disc_zero_before,
           "raw CLUT index zero failed to kill star disc despite opaque alpha");
-  require(five.texture_index == 5 && five.texture_rgb == 0x00ff00u &&
-              five.texture_index != 0x00 && five.texture_index != 0xff,
+  require(five.texture_index == 5 && five.texture_rgb == 0x00ff00u && five.texture_index != 0x00 &&
+              five.texture_index != 0xff,
           "raw index was lost or reconstructed from a palette colour byte");
   require(zref::TileStore::Word::unpack(h.tile[disc_five_addr]).tag == 0x45,
           "nonzero star disc tag was not {01,index[5:0]}");
@@ -892,14 +876,13 @@ void test_mismatch_terminal(Harness& h, bool expect_old_ready) {
   const uint32_t writes_before_mismatch = h.physical_writes;
 
   h.next_fill_delay = 80;
-  h.offer(make_candidate(0x61, 0, 0xa161, 0x456789u, 0xd1, 0xb1, 0x71,
-                         1, 1, 0, 0, 0, 0x00ff00u, 0xff, 5, 0));
+  h.offer(make_candidate(0x61, 0, 0xa161, 0x456789u, 0xd1, 0xb1, 0x71, 1, 1, 0, 0, 0, 0x00ff00u,
+                         0xff, 5, 0));
   h.offer(make_count0(0x62));
   h.offer(make_count0(0x63));
   h.wait_stage_accepts(4);
   for (unsigned n = 0; n < 20000 && !h.fill_active; ++n) {
-    require(h.stage_accepts == 4,
-            "downstream fill wait changed the exact stage-admission census");
+    require(h.stage_accepts == 4, "downstream fill wait changed the exact stage-admission census");
     h.step();
   }
   require(h.fill_active && h.fill_delay != 0,
@@ -941,7 +924,7 @@ void test_mismatch_terminal(Harness& h, bool expect_old_ready) {
           "same-edge mismatch changed admission sequence");
   require(h.dut.sequence_abort_o && h.dut.frame_fault_o,
           "sequence mismatch did not latch abort/frame fault");
-  h.dut.tile_wr_ready_i = 1; // permit the sole pre-alarm accepted fragment write
+  h.dut.tile_wr_ready_i = 1;  // permit the sole pre-alarm accepted fragment write
 
   if (expect_old_ready) {
     for (unsigned n = 0; n < 512; ++n) h.step();
@@ -954,8 +937,7 @@ void test_mismatch_terminal(Harness& h, bool expect_old_ready) {
     h.dut.eval();
     require(!h.dut.synthetic_release_o && !h.dut.synthetic_publish_o,
             "stranded old-ready head falsely classified a terminal event");
-    require(h.dut.fragment_idle_o &&
-                h.physical_writes == writes_before_mismatch + 1,
+    require(h.dut.fragment_idle_o && h.physical_writes == writes_before_mismatch + 1,
             "old-ready control did not allow exactly the earlier accepted write");
     std::printf("packet-c old-ready deadlock mutant FIRED\n");
     return;
@@ -964,18 +946,15 @@ void test_mismatch_terminal(Harness& h, bool expect_old_ready) {
   for (unsigned n = 0; n < 20000; ++n) {
     h.dut.clk = 0;
     h.dut.eval();
-    if (h.dut.texture_quiet_o && h.dut.fragment_idle_o &&
-        h.expected_writes.empty()) break;
+    if (h.dut.texture_quiet_o && h.dut.fragment_idle_o && h.expected_writes.empty()) break;
     h.step();
   }
-  require(h.dut.texture_quiet_o && h.dut.fragment_idle_o &&
-              h.expected_writes.empty(),
+  require(h.dut.texture_quiet_o && h.dut.fragment_idle_o && h.expected_writes.empty(),
           "identity abort did not reach finite texture+fragment drain");
   require(h.stage_accepts == 4 && h.fragment_accepts == 1 && h.drops == 3 &&
               h.dut.sequence_drop_count_o == 3,
           "mismatch accounting did not satisfy S=F+SD with exact later drops");
-  require(h.owner_score.empty() && h.dut.texture_fragments_o == 4 &&
-              h.identity_drop_seen,
+  require(h.owner_score.empty() && h.dut.texture_fragments_o == 4 && h.identity_drop_seen,
           "always-drain did not release every owner with fired identity control");
   require(h.physical_writes == writes_before_mismatch + 1,
           "mismatch path did not allow exactly the pre-alarm accepted write");
@@ -1085,7 +1064,7 @@ int main(int argc, char** argv) {
 #else
   run_healthy();
 #endif
-  std::printf("packet-c directed PASS tests=%u checks=%u cycles=%llu\n",
-              g_tests, g_checks, static_cast<unsigned long long>(g_cycle));
+  std::printf("packet-c directed PASS tests=%u checks=%u cycles=%llu\n", g_tests, g_checks,
+              static_cast<unsigned long long>(g_cycle));
   zhao::exit_hard(0);
 }

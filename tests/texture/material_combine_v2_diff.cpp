@@ -79,8 +79,7 @@ void tick(Dut& d) {
 // allocation order, so an index-keyed collection would be testing the wrong
 // thing and would break as soon as the scheduler behaved correctly.
 std::map<uint16_t, Got> run_batch(const std::vector<Frag>& in, uint32_t jobs_by_recipe[8] = nullptr,
-                                  bool stall_consumer = false,
-                                  uint32_t* phases_issued = nullptr) {
+                                  bool stall_consumer = false, uint32_t* phases_issued = nullptr) {
   Dut d;
   d.rst_n = 0;
   d.o_ready_i = 1;
@@ -207,14 +206,16 @@ void test_the_schedule_issues_exactly_its_phases() {
 
   uint32_t want = 0;
   for (const Frag& f : batch) {
-    if (f.recipe == mat::kTerrainDetailLight) want += 3;
-    else if (f.recipe == mat::kPassthru || f.recipe == mat::kAddSat ||
-             f.recipe == mat::kMask) want += 1;
-    else want += 2;   // MODULATE, MODULATE2X, LERP, DETAIL_MASK
+    if (f.recipe == mat::kTerrainDetailLight)
+      want += 3;
+    else if (f.recipe == mat::kPassthru || f.recipe == mat::kAddSat || f.recipe == mat::kMask)
+      want += 1;
+    else
+      want += 2;  // MODULATE, MODULATE2X, LERP, DETAIL_MASK
   }
 
-  std::printf("  phases issued %u, the schedule owes %u, over %zu fragments\n",
-              phases, want, batch.size());
+  std::printf("  phases issued %u, the schedule owes %u, over %zu fragments\n", phases, want,
+              batch.size());
   check(phases == want,
         "the paired schedule issued EXACTLY the phases it owes -- not one "
         "re-run, which is the fault V1 had while every colour stayed exact",
@@ -273,8 +274,8 @@ void test_every_recipe_matches_the_oracle() {
   }
 
   check(missing == 0, "every fragment retired -- none was lost in the scheduler", 0, missing);
-  check(mismatched == 0, "every recipe's result matches zref::legacy_material_v2::combine exactly", 0,
-        mismatched);
+  check(mismatched == 0, "every recipe's result matches zref::legacy_material_v2::combine exactly",
+        0, mismatched);
 
   // §15.4's counters. DETAIL_LIGHT must be the block's most expensive recipe,
   // because the entire two-lane capacity argument rests on that being true.
@@ -288,8 +289,7 @@ void test_every_recipe_matches_the_oracle() {
         jobs[mat::kTerrainDetailMask]);
   check(jobs[mat::kModulate] == 200 * 4, "MODULATE issues four -- 3 RGB + alpha", 200 * 4,
         jobs[mat::kModulate]);
-  check(jobs[mat::kModulate2x] == 200 * 4,
-        "MODULATE2X issues four -- 3 RGB + alpha", 200 * 4,
+  check(jobs[mat::kModulate2x] == 200 * 4, "MODULATE2X issues four -- 3 RGB + alpha", 200 * 4,
         jobs[mat::kModulate2x]);
   check(jobs[mat::kLerp] == 200 * 4, "LERP issues four -- 3 RGB + alpha", 200 * 4,
         jobs[mat::kLerp]);
@@ -472,8 +472,7 @@ void test_output_stall_keeps_every_context_reserved() {
         8, accepted);
   check(!d.f_ready_o, "input remains blocked while none of those outputs is accepted", 0,
         d.f_ready_o ? 1 : 0);
-  check(d.o_valid_o, "one completed result is held at the stopped output", 1,
-        d.o_valid_o ? 1 : 0);
+  check(d.o_valid_o, "one completed result is held at the stopped output", 1, d.o_valid_o ? 1 : 0);
 
   const uint32_t held_rgb = d.o_rgb_o;
   const uint8_t held_a = d.o_a_o;
@@ -487,8 +486,8 @@ void test_output_stall_keeps_every_context_reserved() {
     d.f_s0_a_i = static_cast<uint8_t>(cyc);
     d.eval();
     stable = stable && d.o_valid_o && d.o_rgb_o == held_rgb && d.o_a_o == held_a &&
-             static_cast<uint16_t>(d.o_tag_o) == held_tag &&
-             (d.o_refused_o != 0) == held_refused && !d.f_ready_o;
+             static_cast<uint16_t>(d.o_tag_o) == held_tag && (d.o_refused_o != 0) == held_refused &&
+             !d.f_ready_o;
     tick(d);
   }
   check(stable, "valid && !ready holds RGBA, tag, status, and input backpressure stable", 1,

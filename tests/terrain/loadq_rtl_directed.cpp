@@ -80,7 +80,7 @@ void ck(bool ok, const char* what, long expect, long got) {
   }
 }
 
-constexpr unsigned kDepth = 32;   // the RTL's default, which is T7's page budget
+constexpr unsigned kDepth = 32;  // the RTL's default, which is T7's page budget
 // ...and what the block can be HOLDING, which is one more: the store's 32 plus
 // the one deserialised at the output port waiting for the loader. Written down
 // because the first version of this bench assumed they were the same number and
@@ -91,7 +91,7 @@ constexpr unsigned kHold = kDepth + 1;
 // are zero cannot tell a working serialiser from one that stops after word 5.
 tq::LoadJob job_of(uint32_t i) {
   tq::LoadJob j;
-  j.slot = i & 0x7FFu;                                    // SLOTW = 11
+  j.slot = i & 0x7FFu;  // SLOTW = 11
   j.gen = static_cast<uint8_t>((i * 7u) & 0xFFu);
   j.epoch = 0xE0000000u ^ (i * 0x01010101u);
   j.island = 0x1500'0000u + i * 0x0002'0003u;
@@ -101,8 +101,8 @@ tq::LoadJob job_of(uint32_t i) {
                                        : static_cast<int>(i * 11u % 30000u));
   j.iz = static_cast<int16_t>((i % 3u) ? static_cast<int>(i * 17u % 30000u)
                                        : -static_cast<int>(i * 19u % 30000u));
-  j.hps_addr = 0x2000'0000ull + static_cast<uint64_t>(i) * 21376ull
-               + (static_cast<uint64_t>(i & 7u) << 40);   // reach the high half
+  j.hps_addr = 0x2000'0000ull + static_cast<uint64_t>(i) * 21376ull +
+               (static_cast<uint64_t>(i & 7u) << 40);  // reach the high half
   j.expect_crc = 0xC0DE'0000u ^ (i * 0x9E37'79B9u);
   j.src_id = 0x5000'0000u + i * 0x0011'0007u;
   return j;
@@ -142,16 +142,13 @@ int diff_report(const tq::LoadJob& got, const tq::LoadJob& want, uint32_t idx, i
     std::printf("   job %u mismatch:\n", idx);
     if (got.slot != want.slot)
       std::printf("      slot       got %u want %u\n", got.slot, want.slot);
-    if (got.gen != want.gen)
-      std::printf("      gen        got %u want %u\n", got.gen, want.gen);
+    if (got.gen != want.gen) std::printf("      gen        got %u want %u\n", got.gen, want.gen);
     if (got.epoch != want.epoch)
       std::printf("      epoch      got 0x%08X want 0x%08X\n", got.epoch, want.epoch);
     if (got.island != want.island)
       std::printf("      island     got 0x%08X want 0x%08X\n", got.island, want.island);
-    if (got.ix != want.ix)
-      std::printf("      ix         got %d want %d\n", got.ix, want.ix);
-    if (got.iz != want.iz)
-      std::printf("      iz         got %d want %d\n", got.iz, want.iz);
+    if (got.ix != want.ix) std::printf("      ix         got %d want %d\n", got.ix, want.ix);
+    if (got.iz != want.iz) std::printf("      iz         got %d want %d\n", got.iz, want.iz);
     if (got.hps_addr != want.hps_addr)
       std::printf("      hps_addr   got 0x%016llX want 0x%016llX\n",
                   (unsigned long long)got.hps_addr, (unsigned long long)want.hps_addr);
@@ -184,10 +181,14 @@ void reset(Vzhao_terrain_loadq& d) {
 bool ready_draw(uint32_t& s, int pattern) {
   s = s * 1664525u + 1013904223u;
   switch (pattern) {
-    case 0: return true;
-    case 1: return ((s >> 16) & 1u) != 0u;
-    case 2: return ((s >> 16) & 3u) != 0u;
-    default: return ((s >> 16) & 7u) == 0u;
+    case 0:
+      return true;
+    case 1:
+      return ((s >> 16) & 1u) != 0u;
+    case 2:
+      return ((s >> 16) & 3u) != 0u;
+    default:
+      return ((s >> 16) & 7u) == 0u;
   }
 }
 
@@ -199,8 +200,10 @@ int main(int argc, char** argv) {
   Vzhao_terrain_loadq& d = *dut;
 
   std::printf("== TERRAIN.LOADQ vs zref::terrain::LoadQueue ==\n");
-  std::printf("   depth %u (ruling T7's per-frame page budget), one M10K, "
-              "8 words of 40 bits per job\n\n", kDepth);
+  std::printf(
+      "   depth %u (ruling T7's per-frame page budget), one M10K, "
+      "8 words of 40 bits per job\n\n",
+      kDepth);
 
   // =========================================================================
   // A -- ONE JOB, EVERY FIELD
@@ -232,7 +235,11 @@ int main(int argc, char** argv) {
     // storage decision the model deliberately does not own -- but it must
     // terminate, so the bound is generous and its exhaustion is a failure.
     int spun = 0;
-    while (!d.q_valid_o && spun < 200) { zhao::tick(d); d.eval(); ++spun; }
+    while (!d.q_valid_o && spun < 200) {
+      zhao::tick(d);
+      d.eval();
+      ++spun;
+    }
     ck(d.q_valid_o != 0, "A and presents it to the loader within 200 cycles", 1,
        d.q_valid_o ? 1 : 0);
     std::printf("   presented after %d cycles\n", spun);
@@ -248,8 +255,8 @@ int main(int argc, char** argv) {
     d.eval();
     m.pop();
     ck(d.q_valid_o == 0, "A and the queue is empty once it is taken");
-    ck(d.accepted_o == m.accepted(), "A accepted agrees with the model",
-       (long)m.accepted(), (long)d.accepted_o);
+    ck(d.accepted_o == m.accepted(), "A accepted agrees with the model", (long)m.accepted(),
+       (long)d.accepted_o);
     ck(d.issued_o == m.issued(), "A issued agrees with the model", (long)m.issued(),
        (long)d.issued_o);
   }
@@ -273,14 +280,17 @@ int main(int argc, char** argv) {
       d.j_valid_i = 1;
       d.eval();
       const bool took = d.j_ready_o != 0;
-      if (took) { m.push(job_of(next)); ++next; }
+      if (took) {
+        m.push(job_of(next));
+        ++next;
+      }
       zhao::tick(d);
       d.eval();
       ++guard;
     }
     ck(m.held() == kHold,
-       "B thirty-three jobs went in: the store's thirty-two plus the one at the port",
-       (long)kHold, (long)m.held());
+       "B thirty-three jobs went in: the store's thirty-two plus the one at the port", (long)kHold,
+       (long)m.held());
     std::printf("   filled in %d cycles\n", guard);
 
     // Now hold valid high against a full queue. Nothing may move.
@@ -296,16 +306,14 @@ int main(int argc, char** argv) {
       ++cycles_full;
     }
     ck(cycles_full == 300,
-       "B a full queue refuses for as long as it is full -- ready never blinked", 300,
-       cycles_full);
-    ck(d.accepted_o == acc_before,
-       "B and accepted nothing while refusing", (long)acc_before, (long)d.accepted_o);
+       "B a full queue refuses for as long as it is full -- ready never blinked", 300, cycles_full);
+    ck(d.accepted_o == acc_before, "B and accepted nothing while refusing", (long)acc_before,
+       (long)d.accepted_o);
     ck(d.refused_o >= 300,
        "B the refusal counter moved: it counts CYCLES, which is the sequencer's stall "
        "and the number worth reading",
        1, d.refused_o >= 300 ? 1 : 0);
-    std::printf("   refused for %u cycles while full, inflight=%u\n", d.refused_o,
-                d.inflight_o);
+    std::printf("   refused for %u cycles while full, inflight=%u\n", d.refused_o, d.inflight_o);
 
     d.j_valid_i = 0;
     d.eval();
@@ -330,8 +338,8 @@ int main(int argc, char** argv) {
     ck(printed == 0, "B in the order they went in, field for field", 0, printed);
     ck(d.issued_o == m.issued(), "B and issued agrees with the model", (long)m.issued(),
        (long)d.issued_o);
-    ck(d.high_water_o == kDepth, "B and the high water mark saw the queue full",
-       (long)kDepth, (long)d.high_water_o);
+    ck(d.high_water_o == kDepth, "B and the high water mark saw the queue full", (long)kDepth,
+       (long)d.high_water_o);
   }
 
   // =========================================================================
@@ -348,7 +356,7 @@ int main(int argc, char** argv) {
       uint32_t s_in = 0x1234u ^ uint32_t(pattern * 977), s_out = 0x9876u ^ uint32_t(pattern * 131);
       uint32_t next = 0, out = 0;
       int printed = 0;
-      const uint32_t kJobs = 200;   // 6.25 wraps of a 32-entry store
+      const uint32_t kJobs = 200;  // 6.25 wraps of a 32-entry store
 
       for (int cyc = 0; cyc < 400000 && out < kJobs; ++cyc) {
         const bool offer = (next < kJobs) && ready_draw(s_in, pattern);
@@ -364,7 +372,10 @@ int main(int argc, char** argv) {
           m.pop();
           ++out;
         }
-        if (took) { m.push(job_of(next)); ++next; }
+        if (took) {
+          m.push(job_of(next));
+          ++next;
+        }
 
         zhao::tick(d);
         d.eval();
@@ -374,22 +385,21 @@ int main(int argc, char** argv) {
       d.eval();
 
       char msg[192];
-      std::snprintf(msg, sizeof msg,
-                    "C pattern %d moved all %u jobs through", pattern, kJobs);
+      std::snprintf(msg, sizeof msg, "C pattern %d moved all %u jobs through", pattern, kJobs);
       ck(out == kJobs, msg, (long)kJobs, (long)out);
-      std::snprintf(msg, sizeof msg,
-                    "C pattern %d delivered them in order, field for field", pattern);
+      std::snprintf(msg, sizeof msg, "C pattern %d delivered them in order, field for field",
+                    pattern);
       ck(printed == 0, msg, 0, printed);
       std::snprintf(msg, sizeof msg, "C pattern %d accepted == model", pattern);
       ck(d.accepted_o == m.accepted(), msg, (long)m.accepted(), (long)d.accepted_o);
       std::snprintf(msg, sizeof msg, "C pattern %d issued == model", pattern);
       ck(d.issued_o == m.issued(), msg, (long)m.issued(), (long)d.issued_o);
-      std::snprintf(msg, sizeof msg,
-                    "C pattern %d conserved: accepted == issued + drained + held", pattern);
-      ck(d.accepted_o == d.issued_o + d.drained_o + d.inflight_o, msg,
-         (long)d.accepted_o, (long)(d.issued_o + d.drained_o + d.inflight_o));
-      std::printf("   pattern %d: %u jobs, high water %u of %u\n", pattern, out,
-                  d.high_water_o, kDepth);
+      std::snprintf(msg, sizeof msg, "C pattern %d conserved: accepted == issued + drained + held",
+                    pattern);
+      ck(d.accepted_o == d.issued_o + d.drained_o + d.inflight_o, msg, (long)d.accepted_o,
+         (long)(d.issued_o + d.drained_o + d.inflight_o));
+      std::printf("   pattern %d: %u jobs, high water %u of %u\n", pattern, out, d.high_water_o,
+                  kDepth);
     }
   }
 
@@ -422,7 +432,10 @@ int main(int argc, char** argv) {
       drive_job(d, job_of(next));
       d.j_valid_i = 1;
       d.eval();
-      if (d.j_ready_o) { m.push(job_of(next)); ++next; }
+      if (d.j_ready_o) {
+        m.push(job_of(next));
+        ++next;
+      }
       zhao::tick(d);
       d.eval();
     }
@@ -466,7 +479,11 @@ int main(int argc, char** argv) {
     d.j_valid_i = 0;
     d.eval();
     int spun = 0;
-    while (!d.q_valid_o && spun < 200) { zhao::tick(d); d.eval(); ++spun; }
+    while (!d.q_valid_o && spun < 200) {
+      zhao::tick(d);
+      d.eval();
+      ++spun;
+    }
     ck(d.q_valid_o != 0, "D and delivers the next job it is given", 1, d.q_valid_o ? 1 : 0);
     int printed = diff_report(out_job(d), after, 0, 0);
     ck(printed == 0, "D intact, field for field, after a drain", 0, printed);

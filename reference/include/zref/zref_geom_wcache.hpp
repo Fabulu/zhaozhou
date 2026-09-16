@@ -194,8 +194,7 @@ class VertexArena {
       ++refusals_;
       return r;
     }
-    const bool written =
-        dense_ ? (index < count_[arena]) : (valid_[arena * depth_ + index] != 0);
+    const bool written = dense_ ? (index < count_[arena]) : (valid_[arena * depth_ + index] != 0);
     if (!written) {
       r.status = LookupStatus::kMiss;
       ++misses_;
@@ -213,9 +212,7 @@ class VertexArena {
   uint32_t refusals() const { return refusals_; }
   bool overflow() const { return overflow_; }
   bool seal_short() const { return seal_short_; }
-  std::size_t count(std::size_t arena) const {
-    return arena < arenas_ ? count_[arena] : 0u;
-  }
+  std::size_t count(std::size_t arena) const { return arena < arenas_ ? count_[arena] : 0u; }
 
  private:
   std::size_t arenas_;

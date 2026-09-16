@@ -380,8 +380,8 @@ int main(int argc, char** argv) {
   for (int k = 0; k < 3; ++k) {
     const auto ok = zr::project_vertex(m, vp, zref::fx16{kTri[k].x}, zref::fx16{kTri[k].y},
                                        zref::fx16{kTri[k].z}, nullptr);
-    std::printf("  vertex %c -> project (%d, %d) w %u   oracle (%d, %d) w %d\n",
-                (char)('A' + k), via.sx[k], via.sy[k], via.sw[k], ok.s.x, ok.s.y, ok.w);
+    std::printf("  vertex %c -> project (%d, %d) w %u   oracle (%d, %d) w %d\n", (char)('A' + k),
+                via.sx[k], via.sy[k], via.sw[k], ok.s.x, ok.s.y, ok.w);
     if (via.sx[k] == ok.s.x && via.sy[k] == ok.s.y && via.sw[k] == (uint32_t)ok.w)
       ++vtx_matched;
     else
@@ -415,8 +415,9 @@ int main(int argc, char** argv) {
   // pipe wrong would produce a wrong depth with everything else correct.
   // ProjOut gained this field on 2026-09-04 precisely because the port had no
   // oracle and "the test's expectation was an uninitialised member for a day".
-  check((int32_t)via.sw[0] == oa.w, "and vertex A's w matches the oracle -- the field DEPTHQUANT quantises",
-        oa.w, (int32_t)via.sw[0]);
+  check((int32_t)via.sw[0] == oa.w,
+        "and vertex A's w matches the oracle -- the field DEPTHQUANT quantises", oa.w,
+        (int32_t)via.sw[0]);
 
   const int nz = nonzero(pre.fb);
   check(nz > 0,

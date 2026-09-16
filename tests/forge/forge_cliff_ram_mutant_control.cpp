@@ -76,7 +76,8 @@ size_t page_bodies(const zt::ComposedLattice& lat, int pi, int pj) {
       const int noff[4][2] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
       for (int s = 0; s < 4; ++s) {
         const int ni = ci + noff[s][0], nj = cj + noff[s][1];
-        if (ni < 0 || nj < 0 || ni >= cw || nj >= ch || lat.substance(ni, nj) != zt::kSolid) ++total;
+        if (ni < 0 || nj < 0 || ni >= cw || nj >= ch || lat.substance(ni, nj) != zt::kSolid)
+          ++total;
       }
     }
   }
@@ -122,11 +123,12 @@ unsigned run_fixture(Vzhao_forge_cliff& dut, const zt::ComposedLattice& lat, con
   const ct::Plan got = ct::plan_lattice(dut, lat, nullptr, 0);
   const zf::RimPlan want = zf::rim_plan(lat, nullptr);
   const unsigned faults = static_cast<unsigned>(dut.walk_fault_o);
-  std::printf("  %s: oracle merged=%u dropped=%u edges=%zu | mutant plan %s the oracle, %s | "
-              "walk_fault_o +%u\n",
-              name, want.merged, want.dropped, want.edges.size(),
-              ct::same(got, want) ? "MATCHES" : "differs from", got.timed_out ? "TIMED OUT" : "completed",
-              faults);
+  std::printf(
+      "  %s: oracle merged=%u dropped=%u edges=%zu | mutant plan %s the oracle, %s | "
+      "walk_fault_o +%u\n",
+      name, want.merged, want.dropped, want.edges.size(),
+      ct::same(got, want) ? "MATCHES" : "differs from", got.timed_out ? "TIMED OUT" : "completed",
+      faults);
   check(!got.timed_out, "the mutant must not hang (the advance-by-one guard)");
   check(!ct::same(got, want), "the differential must see a plan built from broken spans");
   return faults;
@@ -141,9 +143,10 @@ int main(int argc, char** argv) {
   const zt::ComposedLattice b = fixture_b();
   const size_t centre = page_bodies(b, 32, 32);
   const zf::RimPlan wb = zf::rim_plan(b, nullptr);
-  std::printf("  fixture B centre page: %zu edges pre-merge (need >= 535 for a whole 24-run merge); "
-              "oracle merged=%u\n",
-              centre, wb.merged);
+  std::printf(
+      "  fixture B centre page: %zu edges pre-merge (need >= 535 for a whole 24-run merge); "
+      "oracle merged=%u\n",
+      centre, wb.merged);
   check(centre >= 535, "fixture B: enough pressure that the 24-run must merge whole");
   check(wb.merged == 23, "fixture B: the oracle merges exactly the 24-run (23 bodies shed)");
 
@@ -153,6 +156,7 @@ int main(int argc, char** argv) {
   check(fa + fb > 0, "walk_fault_o fired on at least one fixture");
   std::printf("  walk_fault_o total = %u (A %u, B %u)\n", fa + fb, fa, fb);
 
-  if (failures == 0) std::printf("forge_cliff_ram_mutant_control: walk_fault_o FIRED (as it must)\n");
+  if (failures == 0)
+    std::printf("forge_cliff_ram_mutant_control: walk_fault_o FIRED (as it must)\n");
   zhao::exit_hard(failures == 0 ? 0 : 1);
 }

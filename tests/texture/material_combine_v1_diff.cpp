@@ -222,8 +222,8 @@ void test_every_recipe_matches_the_oracle() {
   }
 
   check(missing == 0, "every fragment retired -- none was lost in the scheduler", 0, missing);
-  check(mismatched == 0, "every recipe's result matches zref::legacy_material_v2::combine exactly", 0,
-        mismatched);
+  check(mismatched == 0, "every recipe's result matches zref::legacy_material_v2::combine exactly",
+        0, mismatched);
 
   // §15.4's counters. DETAIL_LIGHT must be the block's most expensive recipe,
   // because the entire two-lane capacity argument rests on that being true.

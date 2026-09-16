@@ -61,19 +61,18 @@ double sc_time_stamp() { return 0; }
 static int g_checks = 0;
 static int g_fails = 0;
 
-#define CHECK(cond, ...)                                   \
-  do {                                                     \
-    ++g_checks;                                            \
-    if (!(cond)) {                                         \
-      ++g_fails;                                           \
-      std::printf("FAIL %s:%d: ", __FILE__, __LINE__);     \
-      std::printf(__VA_ARGS__);                            \
-      std::printf("\n");                                   \
-    }                                                      \
+#define CHECK(cond, ...)                               \
+  do {                                                 \
+    ++g_checks;                                        \
+    if (!(cond)) {                                     \
+      ++g_fails;                                       \
+      std::printf("FAIL %s:%d: ", __FILE__, __LINE__); \
+      std::printf(__VA_ARGS__);                        \
+      std::printf("\n");                               \
+    }                                                  \
   } while (0)
 
 using Vtb = Vtb_proj_matw;
-
 
 // ---------------------------------------------------------------------------
 // stimulus
@@ -90,8 +89,8 @@ struct Rec {
   bool behind, view;
   uint16_t pay;
   bool operator==(const Rec& o) const {
-    return x == o.x && y == o.y && d == o.d && w == o.w && behind == o.behind &&
-           view == o.view && pay == o.pay;
+    return x == o.x && y == o.y && d == o.d && w == o.w && behind == o.behind && view == o.view &&
+           pay == o.pay;
   }
 };
 
@@ -118,38 +117,38 @@ struct Side {
   uint32_t (*refused)(Vtb*);
 };
 
-#define SIDE(P, NAME)                                                                   \
-  Side {                                                                                \
-    NAME,                                                                               \
-        [](Vtb* t, bool we, bool view, uint32_t a, uint32_t d) {                        \
-          t->P##_cfg_we_i = we;                                                         \
-          t->P##_cfg_view_i = view;                                                     \
-          t->P##_cfg_addr_i = a;                                                        \
-          t->P##_cfg_data_i = d;                                                        \
-        },                                                                              \
-        [](Vtb* t, bool e) { t->P##_en_i = e; },                                        \
-        [](Vtb* t, bool v, uint32_t x, uint32_t y, uint32_t z, bool vw, uint16_t p) {   \
-          t->P##_in_valid_i = v;                                                        \
-          t->P##_vx_i = x;                                                              \
-          t->P##_vy_i = y;                                                              \
-          t->P##_vz_i = z;                                                              \
-          t->P##_view_i = vw;                                                           \
-          t->P##_payload_i = p;                                                         \
-        },                                                                              \
-        [](Vtb* t) -> bool { return t->P##_in_ready_o != 0; },                          \
-        [](Vtb* t) -> bool { return t->P##_out_valid_o != 0; },                         \
-        [](Vtb* t) -> Rec {                                                             \
-          Rec r{};                                                                      \
-          r.x = static_cast<int32_t>((t->P##_out_x_o) << 11) >> 11;                     \
-          r.y = static_cast<int32_t>((t->P##_out_y_o) << 11) >> 11;                     \
-          r.d = static_cast<int32_t>(t->P##_out_d_o);                                   \
-          r.w = t->P##_out_w_o;                                                         \
-          r.behind = t->P##_out_behind_o != 0;                                          \
-          r.view = t->P##_out_view_o != 0;                                              \
-          r.pay = t->P##_out_payload_o;                                                 \
-          return r;                                                                     \
-        },                                                                              \
-        [](Vtb* t) -> uint32_t { return t->P##_mat_refused_o; }                         \
+#define SIDE(P, NAME)                                                                 \
+  Side {                                                                              \
+    NAME,                                                                             \
+        [](Vtb* t, bool we, bool view, uint32_t a, uint32_t d) {                      \
+          t->P##_cfg_we_i = we;                                                       \
+          t->P##_cfg_view_i = view;                                                   \
+          t->P##_cfg_addr_i = a;                                                      \
+          t->P##_cfg_data_i = d;                                                      \
+        },                                                                            \
+        [](Vtb* t, bool e) { t->P##_en_i = e; },                                      \
+        [](Vtb* t, bool v, uint32_t x, uint32_t y, uint32_t z, bool vw, uint16_t p) { \
+          t->P##_in_valid_i = v;                                                      \
+          t->P##_vx_i = x;                                                            \
+          t->P##_vy_i = y;                                                            \
+          t->P##_vz_i = z;                                                            \
+          t->P##_view_i = vw;                                                         \
+          t->P##_payload_i = p;                                                       \
+        },                                                                            \
+        [](Vtb* t) -> bool { return t->P##_in_ready_o != 0; },                        \
+        [](Vtb* t) -> bool { return t->P##_out_valid_o != 0; },                       \
+        [](Vtb* t) -> Rec {                                                           \
+          Rec r{};                                                                    \
+          r.x = static_cast<int32_t>((t->P##_out_x_o) << 11) >> 11;                   \
+          r.y = static_cast<int32_t>((t->P##_out_y_o) << 11) >> 11;                   \
+          r.d = static_cast<int32_t>(t->P##_out_d_o);                                 \
+          r.w = t->P##_out_w_o;                                                       \
+          r.behind = t->P##_out_behind_o != 0;                                        \
+          r.view = t->P##_out_view_o != 0;                                            \
+          r.pay = t->P##_out_payload_o;                                               \
+          return r;                                                                   \
+        },                                                                            \
+        [](Vtb* t) -> uint32_t { return t->P##_mat_refused_o; }                       \
   }
 
 static const Side R = SIDE(r, "ref MATW=32");
@@ -169,10 +168,14 @@ static uint32_t xs32(uint32_t& s) {
 // 3: bursty 8-on-5-off.
 static bool pat_en(int pat, uint64_t cyc, uint32_t& lfsr) {
   switch (pat) {
-    case 0: return true;
-    case 1: return (cyc % 3) != 2;
-    case 2: return (xs32(lfsr) & 1u) != 0u;
-    default: return (cyc % 13) < 8;
+    case 0:
+      return true;
+    case 1:
+      return (cyc % 3) != 2;
+    case 2:
+      return (xs32(lfsr) & 1u) != 0u;
+    default:
+      return (cyc % 13) < 8;
   }
 }
 
@@ -262,9 +265,7 @@ static void write_word(Vtb* tb, int mask, bool view, uint32_t addr, uint32_t dat
 }
 
 // Is `addr` (0..15) one of the nine PRODUCT words: columns 0..2 of rows 0, 1, 3?
-static bool is_prod(uint32_t addr) {
-  return addr < 16 && (addr & 3) != 3 && (addr >> 2) != 2;
-}
+static bool is_prod(uint32_t addr) { return addr < 16 && (addr & 3) != 3 && (addr >> 2) != 2; }
 
 struct Cfg {
   int32_t m0[16], m1[16];
@@ -317,17 +318,17 @@ static Cfg make_cfg_edge() {
   }
   c.m0[3] = INT32_MAX;
   c.m0[7] = INT32_MIN;
-  c.m0[15] = INT32_MAX;      // w translation on the rail: w saturates positive
+  c.m0[15] = INT32_MAX;  // w translation on the rail: w saturates positive
   c.m1[3] = INT32_MIN;
   c.m1[7] = INT32_MAX;
-  c.m1[15] = 3 << 16;        // small positive: w is live for small vertices
+  c.m1[15] = 3 << 16;  // small positive: w is live for small vertices
   for (int k = 8; k < 12; ++k) {
     c.m0[k] = static_cast<int32_t>(0xDEADBEEFu + k);
     c.m1[k] = static_cast<int32_t>(0xCAFEF00Du - k);
   }
   c.vp0[0] = (0u << 16) | 0u;
   c.vp0[1] = (240u << 16) | 384u;
-  c.vp1[0] = (100u << 16) | 4000u;   // origin near the 12-bit rail
+  c.vp1[0] = (100u << 16) | 4000u;  // origin near the 12-bit rail
   c.vp1[1] = (192u << 16) | 256u;
   return c;
 }
@@ -359,8 +360,7 @@ static Cfg make_cfg_random18(uint32_t seed) {
 // Load one configuration into every instance in `mask`. `skew_mask`/`skew_addr`
 // add +1 raw to that view-0 word on the skewed instances only -- the
 // positive control's knife.
-static void load_cfg(Vtb* tb, const Cfg& c, int mask, int skew_mask = 0,
-                     int skew_addr = -1) {
+static void load_cfg(Vtb* tb, const Cfg& c, int mask, int skew_mask = 0, int skew_addr = -1) {
   for (uint32_t k = 0; k < 16; ++k) {
     const uint32_t w0 = static_cast<uint32_t>(c.m0[k]);
     if (static_cast<int>(k) == skew_addr && skew_mask) {
@@ -379,8 +379,7 @@ static void load_cfg(Vtb* tb, const Cfg& c, int mask, int skew_mask = 0,
 
 // Drive all three instances through one corpus, each under its own stall
 // pattern, collecting each output stream with acceptance/emission stamps.
-static void run_streams(Vtb* tb, const std::vector<Vtx>& corpus, const int pats[3],
-                        Stream out[3]) {
+static void run_streams(Vtb* tb, const std::vector<Vtx>& corpus, const int pats[3], Stream out[3]) {
   size_t next[3] = {0, 0, 0};
   uint64_t en_count[3] = {0, 0, 0};
   uint32_t lfsr[3] = {0xACE1u, 0xBEEFu, 0x1357u};
@@ -442,12 +441,11 @@ static void run_streams(Vtb* tb, const std::vector<Vtx>& corpus, const int pats[
 
 // Elementwise stream compare. Returns the mismatch count; when `report` is
 // true every mismatch is a CHECK failure that prints both records.
-static int compare_streams(const Stream& a, const Stream& b, bool report,
-                           const char* tag) {
+static int compare_streams(const Stream& a, const Stream& b, bool report, const char* tag) {
   int mm = 0;
   if (report) {
-    CHECK(a.recs.size() == b.recs.size(), "%s: stream lengths %zu vs %zu", tag,
-          a.recs.size(), b.recs.size());
+    CHECK(a.recs.size() == b.recs.size(), "%s: stream lengths %zu vs %zu", tag, a.recs.size(),
+          b.recs.size());
   }
   const size_t n = a.recs.size() < b.recs.size() ? a.recs.size() : b.recs.size();
   for (size_t i = 0; i < n; ++i) {
@@ -457,10 +455,9 @@ static int compare_streams(const Stream& a, const Stream& b, bool report,
         CHECK(false,
               "%s: record %zu differs: ref{x=%d y=%d d=%d w=%u b=%d v=%d p=%u} "
               "dut{x=%d y=%d d=%d w=%u b=%d v=%d p=%u}",
-              tag, i, a.recs[i].x, a.recs[i].y, a.recs[i].d, a.recs[i].w,
-              a.recs[i].behind, a.recs[i].view, a.recs[i].pay, b.recs[i].x,
-              b.recs[i].y, b.recs[i].d, b.recs[i].w, b.recs[i].behind,
-              b.recs[i].view, b.recs[i].pay);
+              tag, i, a.recs[i].x, a.recs[i].y, a.recs[i].d, a.recs[i].w, a.recs[i].behind,
+              a.recs[i].view, a.recs[i].pay, b.recs[i].x, b.recs[i].y, b.recs[i].d, b.recs[i].w,
+              b.recs[i].behind, b.recs[i].view, b.recs[i].pay);
       }
     }
   }
@@ -477,8 +474,8 @@ static void check_corpus_honest(const Stream& g, const char* tag) {
   }
   CHECK(behind > 0, "%s: corpus never crossed the near plane", tag);
   CHECK(live > 0, "%s: corpus never produced a live vertex", tag);
-  std::printf("  %-10s live=%d behind=%d guard-rail=%d 1/w-rail=%d\n", tag, live, behind,
-              railx, sat_d);
+  std::printf("  %-10s live=%d behind=%d guard-rail=%d 1/w-rail=%d\n", tag, live, behind, railx,
+              sat_d);
 }
 
 static void check_no_refusals(Vtb* tb, const char* tag) {
@@ -500,8 +497,8 @@ int main(int argc, char** argv) {
   // of stall patterns so stall-invariance is proven alongside width-invariance.
   {
     Cfg cfgs[6] = {make_cfg_pose(0x5EED5EEDu), make_cfg_edge(),
-                   make_cfg_random18(0x1111u),  make_cfg_random18(0x2222u),
-                   make_cfg_random18(0x3333u),  make_cfg_random18(0x4444u)};
+                   make_cfg_random18(0x1111u), make_cfg_random18(0x2222u),
+                   make_cfg_random18(0x3333u), make_cfg_random18(0x4444u)};
     const char* names[6] = {"pose", "edge", "rnd18-a", "rnd18-b", "rnd18-c", "rnd18-d"};
     for (int ci = 0; ci < 6; ++ci) {
       reset(tb);
@@ -620,8 +617,9 @@ int main(int argc, char** argv) {
       compare_streams(row2[0], row2[1], true, "row2/RPP=3");
       compare_streams(row2[0], row2[2], true, "row2/RPP=1");
     }
-    std::printf("  refusal law: %u refused writes counted on each narrowed instance, 0 on the reference\n",
-                refused(tb, D));
+    std::printf(
+        "  refusal law: %u refused writes counted on each narrowed instance, 0 on the reference\n",
+        refused(tb, D));
   }
 
   // ---- section 3: latency -- spatial identical, sequenced +3 at II=3 ---------

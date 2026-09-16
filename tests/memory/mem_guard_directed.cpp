@@ -116,7 +116,7 @@ struct GuardHarness {
     const unsigned saw_viol0 = saw_viol;
     const uint64_t until = cycle + 5000;  // PER-REQUEST bound (cycle is
     bool accepted = false;
-    while (cycle < until) {               // cumulative across requests)
+    while (cycle < until) {  // cumulative across requests)
       top.clk = 0;
       top.eval();
       const bool fire = top.g_valid && top.g_ready;
@@ -136,11 +136,10 @@ struct GuardHarness {
     for (int i = 0; i < 120; i++) tick();
     const unsigned ok_delta = saw_ok - saw_ok0;
     const unsigned viol_delta = saw_viol - saw_viol0;
-    if ((ok && (ok_delta != 1 || viol_delta != 0)) ||
-        (!ok && (ok_delta != 0 || viol_delta != 1)) ||
+    if ((ok && (ok_delta != 1 || viol_delta != 0)) || (!ok && (ok_delta != 0 || viol_delta != 1)) ||
         top.guard_violations != viol0 + (ok ? 0u : 1u)) {
-      std::printf("  request verdict multiplicity mismatch ok=%u/%u viol=%u/%u\n",
-                  ok_delta, ok ? 1u : 0u, viol_delta, ok ? 0u : 1u);
+      std::printf("  request verdict multiplicity mismatch ok=%u/%u viol=%u/%u\n", ok_delta,
+                  ok ? 1u : 0u, viol_delta, ok ? 0u : 1u);
       mismatches++;
     }
     static int nreq = 0;
@@ -271,23 +270,23 @@ int main(int argc, char** argv) {
     constexpr uint32_t base = kRenderAssetBase;
     constexpr uint32_t end = kRenderAssetBase + kRenderAssetSpan;
     for (unsigned len : {16u, 32u, 64u}) {
-      h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE1,
-                                 base, len, full_be(len)}, map);
-      h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE1,
-                                 end - len, len, full_be(len)}, map);
-      h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE1,
-                                 end - len + 1, len, full_be(len)}, map);
+      h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE1, base, len, full_be(len)}, map);
+      h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE1, end - len, len, full_be(len)},
+                map);
+      h.request(
+          MemoryGuard::Req{true, false, MemoryGuard::ENGINE1, end - len + 1, len, full_be(len)},
+          map);
     }
-    h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE1,
-                               base - 1, 16, full_be(16)}, map);
-    h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE1,
-                               base, 16, full_be(16)}, map);
-    const unsigned wrong_clients[] = {
-        MemoryGuard::SCANOUT, MemoryGuard::BLIT_DMA, MemoryGuard::ENGINE0,
-        MemoryGuard::DEBUG, 5u, MemoryGuard::TERRAIN_BUILD};
+    h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE1, base - 1, 16, full_be(16)}, map);
+    h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE1, base, 16, full_be(16)}, map);
+    const unsigned wrong_clients[] = {MemoryGuard::SCANOUT,
+                                      MemoryGuard::BLIT_DMA,
+                                      MemoryGuard::ENGINE0,
+                                      MemoryGuard::DEBUG,
+                                      5u,
+                                      MemoryGuard::TERRAIN_BUILD};
     for (unsigned wrong_client : wrong_clients) {
-      h.request(MemoryGuard::Req{true, false, wrong_client,
-                                 base, 16, full_be(16)}, map);
+      h.request(MemoryGuard::Req{true, false, wrong_client, base, 16, full_be(16)}, map);
     }
   }
 
@@ -313,10 +312,9 @@ int main(int argc, char** argv) {
     zref::Pcg32 pcg(0x5EEDF00Du);
     // addresses concentrated near the region boundaries (0, span ends,
     // slot bases, the unmapped tail) plus wild addresses
-    const uint32_t anchors[] = {
-        0x00000000, 0x0003BFC0, 0x0003C000, 0x00077FC0, 0x00078000,
-        0x0007FFFF, 0x01FFFFC0, 0x02000000, 0x0203BFC0, 0x0203C000,
-        0x069FFFF0, 0x06A00000, 0x07FFFFC0, 0x08000000};
+    const uint32_t anchors[] = {0x00000000, 0x0003BFC0, 0x0003C000, 0x00077FC0, 0x00078000,
+                                0x0007FFFF, 0x01FFFFC0, 0x02000000, 0x0203BFC0, 0x0203C000,
+                                0x069FFFF0, 0x06A00000, 0x07FFFFC0, 0x08000000};
     constexpr unsigned NANCHORS = sizeof(anchors) / sizeof(anchors[0]);
     const unsigned NFUZZ = 2000;
     for (unsigned i = 0; i < NFUZZ; i++) {
@@ -347,8 +345,8 @@ int main(int argc, char** argv) {
     chk(h.saw_viol == h.expect_viol, "violation verdicts == oracle", h.expect_viol, h.saw_viol);
     chk(h.top.guard_violations == h.expect_viol, "guard_violations counted", h.expect_viol,
         h.top.guard_violations);
-    chk(h.mismatches == 0, "every request accepted once and received one exact verdict",
-        0, h.mismatches);
+    chk(h.mismatches == 0, "every request accepted once and received one exact verdict", 0,
+        h.mismatches);
   }
 
   // drain: model still clean

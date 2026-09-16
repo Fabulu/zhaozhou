@@ -88,9 +88,9 @@ struct Guard {
   // BEAT-PROTOCOL INJECTION (owner recovery brief 11.4). A 64-byte line is
   // exactly eight packed 64-bit words; these make the responder end one early
   // or run one long, which is what the block must refuse instead of believing.
-  int truncate_at = -1;         // assert `last` on this beat instead of 7
-  bool overrun = false;         // withhold `last` on beat 7 and send a ninth
-  bool shape_error = false;     // the block asked for something illegal
+  int truncate_at = -1;      // assert `last` on this beat instead of 7
+  bool overrun = false;      // withhold `last` on beat 7 and send a ninth
+  bool shape_error = false;  // the block asked for something illegal
 
   // Beat delivery state for the line currently in flight.
   bool streaming = false;
@@ -138,8 +138,8 @@ struct Guard {
         }
         return w;
       }();
-      d.beat_last = (truncate_at >= 0) ? (beat == truncate_at)
-                                       : (overrun ? (beat == 8) : (beat == 7));
+      d.beat_last =
+          (truncate_at >= 0) ? (beat == truncate_at) : (overrun ? (beat == 8) : (beat == 7));
       drove = true;
       return;  // one line at a time; no new request while beats flow
     }
@@ -150,7 +150,7 @@ struct Guard {
       verdict_pending = false;
       if (verdict_ok) {
         d.g_ok = 1;
-        streaming = true;   // beats begin the cycle after the VERDICT
+        streaming = true;  // beats begin the cycle after the VERDICT
       } else {
         d.g_violation = 1;
       }
@@ -451,12 +451,10 @@ int main(int argc, char** argv) {
   for (int vp = 0; vp < 2; ++vp) {
     for (int ip = 0; ip < 8; ++ip) {
       char label[128];
-      std::snprintf(label, sizeof label,
-                    "compact vertex prefix %d, index prefix %d, tail %d",
+      std::snprintf(label, sizeof label, "compact vertex prefix %d, index prefix %d, tail %d",
                     vp * 32, ip * 8, (3 * (17 + ip)) & 7);
-      serve_case(s, static_cast<uint32_t>(vp * 32),
-                 16384u + static_cast<uint32_t>(ip * 8), 3, 17 + ip,
-                 label);
+      serve_case(s, static_cast<uint32_t>(vp * 32), 16384u + static_cast<uint32_t>(ip * 8), 3,
+                 17 + ip, label);
     }
   }
 
@@ -466,8 +464,7 @@ int main(int argc, char** argv) {
   // Worst allowed prefixes make the same useful payload cover 7+33=40 lines.
   // The compact RAM remains only 48 meaningful index words and 256 vertex words.
   serve_case(s, 32, 32768 + 56, 64, 126, "the 40-line ruling maximum");
-  ck(s.g.asked.size() == 40,
-     "the maximum legal prefix fixture really fetched all 40 whole lines");
+  ck(s.g.asked.size() == 40, "the maximum legal prefix fixture really fetched all 40 whole lines");
 
   // Degenerate but legal: no triangles, so the index stream is never read.
   serve_case(s, 96, 8192, 3, 0, "no triangles");
@@ -498,7 +495,6 @@ int main(int argc, char** argv) {
        "a denial is NOT counted as a footprint refusal -- different faults");
   }
 
-
   // ---- the block recovers and serves the next meshlet --------------------
   serve_case(s, 128, 4096, 5, 3, "after a denial");
 
@@ -517,27 +513,24 @@ int main(int argc, char** argv) {
 
     dut.ix_index = 0;
     dut.ix_req = 1;
-    s.step();                    // accept triplet 0
-    dut.ix_index = 1;            // poison live input immediately after accept
+    s.step();          // accept triplet 0
+    dut.ix_index = 1;  // poison live input immediately after accept
 
     int valid_pulses = 0;
     af::Triplet held_got{0xFF, 0xFF, 0xFF};
     for (int i = 0; i < 12; ++i) {
       if (dut.ix_valid) {
         ++valid_pulses;
-        held_got = af::Triplet{static_cast<uint8_t>(dut.ix_a),
-                               static_cast<uint8_t>(dut.ix_b),
+        held_got = af::Triplet{static_cast<uint8_t>(dut.ix_a), static_cast<uint8_t>(dut.ix_b),
                                static_cast<uint8_t>(dut.ix_c)};
       }
       s.step();
     }
     dut.ix_req = 0;
-    s.step();                    // deassertion rearms the next episode
+    s.step();  // deassertion rearms the next episode
 
-    ck(valid_pulses == 1,
-       "a held ix_req episode returns exactly one ix_valid pulse");
-    ck(held_got.a == pool_abs_byte(p.index_addr) &&
-           held_got.b == pool_abs_byte(p.index_addr + 1) &&
+    ck(valid_pulses == 1, "a held ix_req episode returns exactly one ix_valid pulse");
+    ck(held_got.a == pool_abs_byte(p.index_addr) && held_got.b == pool_abs_byte(p.index_addr + 1) &&
            held_got.c == pool_abs_byte(p.index_addr + 2),
        "the held request returns captured triplet 0 after live index poison");
 
@@ -595,7 +588,7 @@ int main(int argc, char** argv) {
   // refusal, not a stall or a timeout.
   {
     const uint32_t before = dut.err_beat_truncated;
-    s.g.truncate_at = 5;              // `last` on word five of eight
+    s.g.truncate_at = 5;  // `last` on word five of eight
     af::Request r;
     r.vertex_offset = 0;
     r.index_offset = 4096;
@@ -608,15 +601,14 @@ int main(int argc, char** argv) {
        "a TRUNCATED line yields no servable meshlet -- a partial meshlet emits "
        "NOTHING rather than the part that fits, the same rule a refused "
        "footprint follows");
-    ck(dut.err_beat_truncated == before + 1,
-       "and it is counted as a TRUNCATION, distinctly");
+    ck(dut.err_beat_truncated == before + 1, "and it is counted as a TRUNCATION, distinctly");
     ck(dut.err_beat_overrun == 0,
        "not as an overrun -- the two have different causes and different fixes");
   }
 
   {
     const uint32_t before = dut.err_beat_overrun;
-    s.g.overrun = true;               // no `last` on word eight; a ninth follows
+    s.g.overrun = true;  // no `last` on word eight; a ninth follows
     af::Request r;
     r.vertex_offset = 0;
     r.index_offset = 4096;

@@ -64,15 +64,15 @@ namespace {
 int g_checks = 0;
 int g_fails = 0;
 
-#define CHECK(cond, ...)                       \
-  do {                                         \
-    ++g_checks;                                \
-    if (!(cond)) {                             \
-      ++g_fails;                               \
-      std::printf("FAIL(%d): ", __LINE__);     \
-      std::printf(__VA_ARGS__);                \
-      std::printf("\n");                       \
-    }                                          \
+#define CHECK(cond, ...)                   \
+  do {                                     \
+    ++g_checks;                            \
+    if (!(cond)) {                         \
+      ++g_fails;                           \
+      std::printf("FAIL(%d): ", __LINE__); \
+      std::printf(__VA_ARGS__);            \
+      std::printf("\n");                   \
+    }                                      \
   } while (0)
 
 struct Frag {
@@ -119,8 +119,7 @@ struct Model {
     if (delta == 255 || delta == -256) {
       // The s9 rails are only reachable through saturation with these suns.
       const int64_t raw = zref::terrain::rshift_round(
-          (static_cast<int64_t>(d.nx) * sun_x15 + static_cast<int64_t>(d.nz) * sun_z15) *
-              strength,
+          (static_cast<int64_t>(d.nx) * sun_x15 + static_cast<int64_t>(d.nz) * sun_z15) * strength,
           zref::terrain::kNormalmapDeltaShift);
       if (raw > 255 || raw < -256) ++n_railed;
     }
@@ -261,9 +260,7 @@ struct Bench {
   }
 };
 
-uint16_t texel(int dx, int dz) {
-  return static_cast<uint16_t>(((dz & 0xFF) << 8) | (dx & 0xFF));
-}
+uint16_t texel(int dx, int dz) { return static_cast<uint16_t>(((dz & 0xFF) << 8) | (dx & 0xFF)); }
 
 }  // namespace
 
@@ -288,7 +285,8 @@ int main(int argc, char** argv) {
 
   // ---- 1. COLD LAW --------------------------------------------------------
   CHECK(!d->table_ready_o, "tables claim ready straight out of reset");
-  for (int i = 0; i < 4; ++i) b.offer({0x00010000 * i, 0x00020000, true, 0, static_cast<uint16_t>(0x100 + i)});
+  for (int i = 0; i < 4; ++i)
+    b.offer({0x00010000 * i, 0x00020000, true, 0, static_cast<uint16_t>(0x100 + i)});
   b.offer({0, 0, false, 0, 0x1FF});  // detail=0 while cold: zeroed wins
   b.run(0);
   b.drain_and_compare("cold");
@@ -342,8 +340,7 @@ int main(int argc, char** argv) {
   CHECK(b.expected.size() == 2 && b.expected[0].delta == 255 && b.expected[1].delta == -256,
         "rail expectations wrong in the model itself");
   b.drain_and_compare("rails");
-  CHECK(d->railed_o == railed_before + 2, "railed_o=%u, want %u", d->railed_o,
-        railed_before + 2);
+  CHECK(d->railed_o == railed_before + 2, "railed_o=%u, want %u", d->railed_o, railed_before + 2);
 
   // Round-half-up on negative products, pinned with literals.
   // dot = -128*16384 = -2^21, strength 1: (-2^21 + 2^21) >> 22 == 0.
@@ -379,8 +376,8 @@ int main(int argc, char** argv) {
   b.set_uv_shift(0);
   b.upload(zref::terrain::normalmap_pyramid_addr(0, 63, 0), texel(64, -3));
   b.upload(zref::terrain::normalmap_pyramid_addr(0, 0, 63), texel(-9, 88));
-  b.offer({-1, 0, true, 0, 10});           // u=-1 wraps to texel 63
-  b.offer({64, -64, true, 0, 11});         // u=64 wraps to 0, v=-64 wraps to 0... v=-64 -> 0? (-64)&63 = 0
+  b.offer({-1, 0, true, 0, 10});    // u=-1 wraps to texel 63
+  b.offer({64, -64, true, 0, 11});  // u=64 wraps to 0, v=-64 wraps to 0... v=-64 -> 0? (-64)&63 = 0
   b.run(0);
   b.drain_and_compare("wrap-shift0");
   b.set_uv_shift(15);
@@ -398,8 +395,8 @@ int main(int argc, char** argv) {
     b.upload(zref::terrain::normalmap_pyramid_addr(lvl, u6, v6),
              texel(10 + lvl * 7, -20 - lvl * 5));
   for (int lod = 0; lod < 8; ++lod)  // 7 must clamp to 6
-    b.offer({u6 << 4, v6 << 4, true, static_cast<uint8_t>(lod),
-             static_cast<uint16_t>(0x400 + lod)});
+    b.offer(
+        {u6 << 4, v6 << 4, true, static_cast<uint8_t>(lod), static_cast<uint16_t>(0x400 + lod)});
   b.run(0);
   b.drain_and_compare("mip-sweep");
   // A cfg write lands immediately; offers are only queued. Drain around each
@@ -408,15 +405,15 @@ int main(int argc, char** argv) {
   b.offer({u6 << 4, v6 << 4, true, 1, 0x410});
   b.run(0);
   b.drain_and_compare("mip-bias-neg");
-  b.set_lodcfg(2, 6);   // positive bias
+  b.set_lodcfg(2, 6);  // positive bias
   b.offer({u6 << 4, v6 << 4, true, 1, 0x411});
   b.run(0);
   b.drain_and_compare("mip-bias-pos");
-  b.set_lodcfg(0, 2);   // max_level clamp
+  b.set_lodcfg(0, 2);  // max_level clamp
   b.offer({u6 << 4, v6 << 4, true, 6, 0x412});
   b.run(0);
   b.drain_and_compare("mip-maxlevel");
-  b.set_lodcfg(0, 0);   // reset state: un-mipped, must equal level 0
+  b.set_lodcfg(0, 0);  // reset state: un-mipped, must equal level 0
   b.offer({u6 << 4, v6 << 4, true, 5, 0x413});
   b.run(0);
   b.drain_and_compare("mip-off");

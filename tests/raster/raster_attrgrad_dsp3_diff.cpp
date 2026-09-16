@@ -30,18 +30,15 @@ double sc_time_stamp() { return 0.0; }
 template <size_t N>
 static void put_wide(VlWide<N>& dst, i128 value) {
   const u128 bits = static_cast<u128>(value);
-  for (size_t i = 0; i < N; ++i)
-    dst[i] = static_cast<uint32_t>(bits >> (32 * i));
+  for (size_t i = 0; i < N; ++i) dst[i] = static_cast<uint32_t>(bits >> (32 * i));
 }
 
 static void fail(const char* text) {
   if (failures < 20) {
 #ifdef EXPECT_ATTR3_MUTANT
-    std::printf("MISMATCH: %s at cycle %llu\n", text,
-                static_cast<unsigned long long>(cycles));
+    std::printf("MISMATCH: %s at cycle %llu\n", text, static_cast<unsigned long long>(cycles));
 #else
-    std::printf("FAIL: %s at cycle %llu\n", text,
-                static_cast<unsigned long long>(cycles));
+    std::printf("FAIL: %s at cycle %llu\n", text, static_cast<unsigned long long>(cycles));
 #endif
   }
   ++failures;
@@ -59,16 +56,13 @@ static void compare_low() {
   if (dut->old_cov_ready_o != dut->new_cov_ready_o) fail("coverage ready differs");
   if (dut->old_q_valid_o != dut->new_q_valid_o) fail("output valid differs");
   if (dut->old_idle_o != dut->new_idle_o) fail("idle differs");
-  if (dut->old_pixels_o != dut->new_pixels_o ||
-      dut->old_divides_o != dut->new_divides_o ||
-      dut->old_saturations_o != dut->new_saturations_o ||
-      dut->old_errors_o != dut->new_errors_o)
+  if (dut->old_pixels_o != dut->new_pixels_o || dut->old_divides_o != dut->new_divides_o ||
+      dut->old_saturations_o != dut->new_saturations_o || dut->old_errors_o != dut->new_errors_o)
     fail("logical counters differ");
   if (dut->old_q_valid_o) {
     if (dut->old_q_o != dut->new_q_o || dut->old_row_o != dut->new_row_o ||
         dut->old_col_o != dut->new_col_o || dut->old_last_o != dut->new_last_o ||
-        dut->old_saturated_o != dut->new_saturated_o ||
-        dut->old_error_o != dut->new_error_o)
+        dut->old_saturated_o != dut->new_saturated_o || dut->old_error_o != dut->new_error_o)
       fail("output payload differs");
     if (held && (dut->old_q_o != held_q || dut->old_row_o != held_row ||
                  dut->old_col_o != held_col || dut->old_last_o != held_last ||
@@ -108,7 +102,10 @@ static void reset() {
   tick();
 }
 
-struct Row { uint8_t row; uint16_t mask; };
+struct Row {
+  uint8_t row;
+  uint16_t mask;
+};
 struct Job {
   i128 n0;
   i128 dx;
@@ -138,8 +135,7 @@ static uint64_t run_job(const Job& j, uint64_t seed) {
     dut->clk = 0;
     dut->eval();
     compare_low();
-    const bool fire = dut->job_valid_i && dut->old_job_ready_o &&
-                      dut->new_job_ready_o;
+    const bool fire = dut->job_valid_i && dut->old_job_ready_o && dut->new_job_ready_o;
     dut->clk = 1;
     dut->eval();
     ++cycles;
@@ -175,8 +171,7 @@ static uint64_t run_job(const Job& j, uint64_t seed) {
       forced_hold = true;
     }
     compare_low();
-    const bool cov_fire = dut->cov_valid_i && dut->old_cov_ready_o &&
-                          dut->new_cov_ready_o;
+    const bool cov_fire = dut->cov_valid_i && dut->old_cov_ready_o && dut->new_cov_ready_o;
     const bool q_fire = dut->old_q_valid_o && dut->q_ready_i;
     dut->clk = 1;
     dut->eval();
@@ -190,8 +185,8 @@ static uint64_t run_job(const Job& j, uint64_t seed) {
     dut->clk = 0;
     dut->eval();
     compare_low();
-    if (next_row == j.rows.size() && !row_offered && dut->old_idle_o &&
-        dut->new_idle_o && !dut->old_q_valid_o && !dut->new_q_valid_o) {
+    if (next_row == j.rows.size() && !row_offered && dut->old_idle_o && dut->new_idle_o &&
+        !dut->old_q_valid_o && !dut->new_q_valid_o) {
       dut->q_ready_i = 0;
       return retired;
     }
@@ -217,8 +212,7 @@ static void reset_during_setup(const Job& j, int clocks_after_accept) {
   tick();
   dut->rst_n = 1;
   tick();
-  if (!dut->old_job_ready_o || !dut->new_job_ready_o ||
-      !dut->old_idle_o || !dut->new_idle_o)
+  if (!dut->old_job_ready_o || !dut->new_job_ready_o || !dut->old_idle_o || !dut->new_idle_o)
     fail("reset did not clear setup micro-work");
 }
 
@@ -252,8 +246,7 @@ static void reset_after_gradient(const Job& j, int clocks_after_cov_ready) {
   tick();
   dut->rst_n = 1;
   tick();
-  if (!dut->old_job_ready_o || !dut->new_job_ready_o ||
-      !dut->old_idle_o || !dut->new_idle_o)
+  if (!dut->old_job_ready_o || !dut->new_job_ready_o || !dut->old_idle_o || !dut->new_idle_o)
     fail("reset did not clear offset micro-work");
 }
 
@@ -274,18 +267,22 @@ int main(int argc, char** argv) {
 
   std::vector<Job> jobs = {
       {-3, 6, 0, 10, 0, 2, 0, {{0, 0x8001}}},
-      {4500, 901, -233, 997, -3, 5, -4,
-       {{0, 0x8421}, {5, 0x1088}, {15, 0x9001}}},
-      {-8100, -733, 417, 1024, -7, 8, 3,
-       {{1, 0x00f3}, {7, 0x8101}, {13, 0x2222}}},
+      {4500, 901, -233, 997, -3, 5, -4, {{0, 0x8421}, {5, 0x1088}, {15, 0x9001}}},
+      {-8100, -733, 417, 1024, -7, 8, 3, {{1, 0x00f3}, {7, 0x8101}, {13, 0x2222}}},
       {0, i128{1} << 40, 0, 1, 0, 1, 0, {{2, 0x0005}}},
       // Piece-boundary controls stay nonsaturating so the signed-middle and
       // narrow-high-shift mutants cannot hide behind the same s32 rail.
       {0, i128{1} << 47, 0, uint64_t{1} << 46, 1, 1, 0, {{0, 0x0011}}},
       {0, i128{1} << 48, 0, uint64_t{1} << 46, 1, 1, 0, {{0, 0x0101}}},
       {99, -17, 31, 0, 0, 4, -2, {{0, 0x0003}, {9, 0x8000}}},
-      {(i128{1} << 95) - 1, (i128{1} << 71) - 1, -(i128{1} << 70),
-       (uint64_t{1} << 47) - 1, -2048, 2047, -2048, {{15, 0xffff}}},
+      {(i128{1} << 95) - 1,
+       (i128{1} << 71) - 1,
+       -(i128{1} << 70),
+       (uint64_t{1} << 47) - 1,
+       -2048,
+       2047,
+       -2048,
+       {{15, 0xffff}}},
   };
   std::mt19937_64 rng(0xA773'2026'0915ULL);
   for (int i = 0; i < 24; ++i) {
@@ -297,15 +294,20 @@ int main(int argc, char** argv) {
     const int min_x = static_cast<int>(rng() % 4096) - 2048;
     const int tile_x = static_cast<int>(rng() % 4096) - 2048;
     const int tile_y = static_cast<int>(rng() % 4096) - 2048;
-    jobs.push_back(Job{n0, dx, dy, area, min_x, tile_x, tile_y,
+    jobs.push_back(Job{n0,
+                       dx,
+                       dy,
+                       area,
+                       min_x,
+                       tile_x,
+                       tile_y,
                        {{0, static_cast<uint16_t>(rng() | 1)},
                         {7, static_cast<uint16_t>(rng() | 1)},
                         {15, static_cast<uint16_t>(rng() | 1)}}});
   }
 
   uint64_t pixels = 0;
-  for (size_t i = 0; i < jobs.size(); ++i)
-    pixels += run_job(jobs[i], 0xD500 + i);
+  for (size_t i = 0; i < jobs.size(); ++i) pixels += run_job(jobs[i], 0xD500 + i);
 
   if (pixels == 0 || dut->old_pixels_o == 0 || dut->old_divides_o == 0 ||
       dut->old_saturations_o == 0 || dut->old_errors_o == 0)
@@ -317,13 +319,12 @@ int main(int argc, char** argv) {
 #elif defined(EXPECT_ATTR3_MUTANT)
   std::printf("ATTR3 MUTANT %s: jobs=%zu pixels=%llu cycles=%llu mismatches=%d\n",
               failures != 0 ? "FIRED" : "MISSED", jobs.size(),
-              static_cast<unsigned long long>(pixels),
-              static_cast<unsigned long long>(cycles), failures);
+              static_cast<unsigned long long>(pixels), static_cast<unsigned long long>(cycles),
+              failures);
   hard_exit(failures != 0 ? 0 : 1);
 #else
-  std::printf("ATTR3 %s: jobs=%zu pixels=%llu cycles=%llu\n",
-              failures == 0 ? "PASS" : "FAIL", jobs.size(),
-              static_cast<unsigned long long>(pixels),
+  std::printf("ATTR3 %s: jobs=%zu pixels=%llu cycles=%llu\n", failures == 0 ? "PASS" : "FAIL",
+              jobs.size(), static_cast<unsigned long long>(pixels),
               static_cast<unsigned long long>(cycles));
   hard_exit(failures == 0 ? 0 : 1);
 #endif

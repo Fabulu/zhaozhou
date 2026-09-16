@@ -95,8 +95,8 @@ Record make_record(uint32_t ordinal, uint8_t page_generation) {
   Record r{};
   r.owner = static_cast<uint16_t>(((ordinal * 173u) ^ 0x12A5u) & 0x3FFFu);
   for (size_t word = 0; word < r.logical.size(); ++word) {
-    r.logical[word] = 0x9E3779B9u * static_cast<uint32_t>(word + 1) ^
-                      (ordinal * 0x45D9F3Bu) ^ (0xA5A50000u + static_cast<uint32_t>(word) * 0x1111u);
+    r.logical[word] = 0x9E3779B9u * static_cast<uint32_t>(word + 1) ^ (ordinal * 0x45D9F3Bu) ^
+                      (0xA5A50000u + static_cast<uint32_t>(word) * 0x1111u);
   }
   // Only 31 bits exist in the ninth word.  Bits 23..30 are the sole page
   // generation location (logical bits 279..286).
@@ -112,8 +112,7 @@ Joined expected_joined(const Record& r) {
   Joined result{};
   put_field(result, 0, 32, static_cast<uint32_t>(r.v));
   put_field(result, 32, 32, static_cast<uint32_t>(r.u));
-  for (int bit = 0; bit < kLogicalBits; ++bit)
-    put_bit(result, 64 + bit, get_bit(r.logical, bit));
+  for (int bit = 0; bit < kLogicalBits; ++bit) put_bit(result, 64 + bit, get_bit(r.logical, bit));
   put_field(result, 351, 14, r.owner);
   return result;
 }
@@ -441,11 +440,11 @@ int main(int argc, char** argv) {
     d->out_ready_i = 1;
     d->eval();
     ordinary_is_blocked &= !d->desc_ready_o && !d->uv_ready_o && !d->good_valid_o;
-    ordinary_is_blocked &= d->good_lifetime_fault_o &&
-        d->generation_mutant_lifetime_fault_o && d->late_mutant_lifetime_fault_o;
+    ordinary_is_blocked &= d->good_lifetime_fault_o && d->generation_mutant_lifetime_fault_o &&
+                           d->late_mutant_lifetime_fault_o;
     ordinary_is_blocked &= d->good_mismatch_o == sticky_good_count &&
-        d->generation_mutant_mismatch_o == sticky_generation_count &&
-        d->late_mutant_mismatch_o == sticky_late_count;
+                           d->generation_mutant_mismatch_o == sticky_generation_count &&
+                           d->late_mutant_mismatch_o == sticky_late_count;
     ordinary_is_blocked &= d->good_idle_o;
     tick(d);
   }
@@ -457,10 +456,9 @@ int main(int argc, char** argv) {
   reset(d);
   const bool reset_clears_lifetime =
       d->good_mismatch_o == 0 && !d->good_lifetime_fault_o && d->good_idle_o &&
-      d->generation_mutant_mismatch_o == 0 &&
-      !d->generation_mutant_lifetime_fault_o && d->generation_mutant_idle_o &&
-      d->late_mutant_mismatch_o == 0 && !d->late_mutant_lifetime_fault_o &&
-      d->late_mutant_idle_o;
+      d->generation_mutant_mismatch_o == 0 && !d->generation_mutant_lifetime_fault_o &&
+      d->generation_mutant_idle_o && d->late_mutant_mismatch_o == 0 &&
+      !d->late_mutant_lifetime_fault_o && d->late_mutant_idle_o;
   zhao::check(reset_clears_lifetime,
               "rst_n is the only event that clears UV mismatch lifetime state", 1,
               reset_clears_lifetime ? 1 : 0);
@@ -533,8 +531,8 @@ int main(int argc, char** argv) {
     }
     if (uv_was_stalled) {
       ++uv_source_hold_checks;
-      if (!d->uv_valid_i || d->uv_owner_i != stalled_uv_owner ||
-          d->uv_u_i != stalled_uv_u || d->uv_v_i != stalled_uv_v)
+      if (!d->uv_valid_i || d->uv_owner_i != stalled_uv_owner || d->uv_u_i != stalled_uv_u ||
+          d->uv_v_i != stalled_uv_v)
         ++stream_errors;
     }
 
@@ -586,7 +584,7 @@ int main(int argc, char** argv) {
       if (desc_sent == 1)
         desc_start_gap = 32;  // record 1: long UV lead
       else if ((desc_sent == 2) || (desc_sent == 3))
-        desc_start_gap = 0;   // record 3 waits behind descriptor-held record 2
+        desc_start_gap = 0;  // record 3 waits behind descriptor-held record 2
       else if (desc_sent == 4)
         desc_start_gap = 20;  // record 4: long UV lead; UV 5 waits behind it
       else
@@ -597,11 +595,11 @@ int main(int argc, char** argv) {
       ++uv_sent;
       uv_offer = false;
       if (uv_sent == 1)
-        uv_start_gap = 0;     // record 1 enters before delayed descriptor 1
+        uv_start_gap = 0;  // record 1 enters before delayed descriptor 1
       else if (uv_sent == 2)
-        uv_start_gap = 40;    // record 2 waits while descriptor 3 is offered
+        uv_start_gap = 40;  // record 2 waits while descriptor 3 is offered
       else if ((uv_sent == 3) || (uv_sent == 4) || (uv_sent == 5))
-        uv_start_gap = 0;     // record 5 waits behind UV-held record 4
+        uv_start_gap = 0;  // record 5 waits behind UV-held record 4
       else
         uv_start_gap = static_cast<int>((rng >> 19) & 7u);
     }
@@ -616,21 +614,21 @@ int main(int argc, char** argv) {
   std::printf(
       "  randomized starts: desc %d, uv %d, outputs %d | output stalls %d, "
       "source holds d/u %d/%d | forced leads d/u %d/%d | errors %d\n",
-      desc_sent, uv_sent, outputs, stalled_checks, desc_source_hold_checks,
-      uv_source_hold_checks, descriptor_lead, uv_lead, stream_errors);
+      desc_sent, uv_sent, outputs, stalled_checks, desc_source_hold_checks, uv_source_hold_checks,
+      descriptor_lead, uv_lead, stream_errors);
   zhao::check(desc_sent == kRecords && uv_sent == kRecords && outputs == kRecords,
               "both independently started input streams and every output record completed",
               kRecords * 3, static_cast<uint64_t>(desc_sent + uv_sent + outputs));
   zhao::check(descriptor_lead >= 10 && uv_lead >= 10,
-              "the schedule contains guaranteed long descriptor-leading and UV-leading cases",
-              1, (descriptor_lead >= 10 && uv_lead >= 10) ? 1 : 0);
+              "the schedule contains guaranteed long descriptor-leading and UV-leading cases", 1,
+              (descriptor_lead >= 10 && uv_lead >= 10) ? 1 : 0);
   zhao::check(desc_source_hold_checks > 0 && uv_source_hold_checks > 0,
               "both producers were backpressured and held valid plus their full payload to "
               "their own handshake",
               1, (desc_source_hold_checks > 0 && uv_source_hold_checks > 0) ? 1 : 0);
   zhao::check(stalled_checks > 50,
-              "the output payload was checked on many stalled cycles, not only acceptance",
-              1, stalled_checks > 50 ? 1 : 0);
+              "the output payload was checked on many stalled cycles, not only acceptance", 1,
+              stalled_checks > 50 ? 1 : 0);
   zhao::check(stream_errors == 0,
               "independent randomized offers preserve producer holds and every joined owner, "
               "descriptor, U and V under output backpressure",
@@ -639,8 +637,8 @@ int main(int argc, char** argv) {
               "legal independently started streams produce no identity fault", 0,
               static_cast<uint64_t>(d->good_mismatch_o) + d->good_lifetime_fault_o);
   zhao::check(d->good_idle_o,
-              "after randomized drain, descriptor hold, UV hold, and output hold are all empty",
-              1, d->good_idle_o);
+              "after randomized drain, descriptor hold, UV hold, and output hold are all empty", 1,
+              d->good_idle_o);
 
   // ==========================================================================
   // UNINTERRUPTED PREPARED OUTPUT: one accepted result each clock.
@@ -683,7 +681,8 @@ int main(int argc, char** argv) {
   d->eval();
 
   std::printf("  all-ready cadence: %d outputs, bubbles %d\n", outputs, cadence_bubbles);
-  zhao::check(outputs == kBurst, "the all-ready burst emitted every joined record", kBurst, outputs);
+  zhao::check(outputs == kBurst, "the all-ready burst emitted every joined record", kBurst,
+              outputs);
   zhao::check(cadence_bubbles == 0,
               "after pipeline fill, the registered join emits one result every clock with "
               "same-edge pop/reload",
@@ -716,8 +715,7 @@ int main(int argc, char** argv) {
     if (reload_desc_fire != reload_uv_fire) ++reload_payload_errors;
 
     if (d->reload_mutant_valid_o) {
-      if (reload_previous_output_cycle >= 0 &&
-          cycle != reload_previous_output_cycle + 1)
+      if (reload_previous_output_cycle >= 0 && cycle != reload_previous_output_cycle + 1)
         ++reload_bubbles;
       reload_previous_output_cycle = cycle;
       if (!joined_equal(copy_wide<12>(d->reload_mutant_data_o),
@@ -737,20 +735,20 @@ int main(int argc, char** argv) {
   std::printf("  no-reload mutant cadence: %d outputs, observed bubbles %d, payload errors %d\n",
               reload_outputs, reload_bubbles, reload_payload_errors);
   zhao::check(reload_sent == kBurst && reload_outputs == kBurst,
-              "the no-reload mutant still accepts and emits the entire cadence burst",
-              kBurst * 2, static_cast<uint64_t>(reload_sent + reload_outputs));
+              "the no-reload mutant still accepts and emits the entire cadence burst", kBurst * 2,
+              static_cast<uint64_t>(reload_sent + reload_outputs));
   zhao::check(reload_payload_errors == 0 && d->reload_mutant_mismatch_o == 0 &&
                   !d->reload_mutant_lifetime_fault_o,
-              "the no-reload mutation changes cadence only, not payload/order/identity",
-              0, static_cast<uint64_t>(reload_payload_errors) + d->reload_mutant_mismatch_o +
-                     d->reload_mutant_lifetime_fault_o);
+              "the no-reload mutation changes cadence only, not payload/order/identity", 0,
+              static_cast<uint64_t>(reload_payload_errors) + d->reload_mutant_mismatch_o +
+                  d->reload_mutant_lifetime_fault_o);
   zhao::check(reload_bubbles == kBurst - 1,
               "inverse-polarity control observes one forbidden bubble between every adjacent "
               "result when same-edge reload is removed",
               kBurst - 1, reload_bubbles);
   zhao::check(d->reload_mutant_idle_o,
-              "the no-reload mutant drains back to exact idle after exposing its bubbles",
-              1, d->reload_mutant_idle_o);
+              "the no-reload mutant drains back to exact idle after exposing its bubbles", 1,
+              d->reload_mutant_idle_o);
 
   // ------------------------------------------------------------------
   // TIMING4 E1: the registered descriptor-trust verdict.
@@ -796,18 +794,22 @@ int main(int argc, char** argv) {
   d->eval();
 
   int trust_wait = 0;
-  while (!d->good_valid_o && trust_wait < 16) { tick(d); d->eval(); ++trust_wait; }
+  while (!d->good_valid_o && trust_wait < 16) {
+    tick(d);
+    d->eval();
+    ++trust_wait;
+  }
   const bool bad_emitted = d->good_valid_o != 0;
   const Joined bad_seen = copy_wide<12>(d->good_data_o);
   zhao::check(bad_desc_fire && bad_uv_fire && bad_emitted,
-              "an unusable descriptor is still a joined transaction, not a dropped one",
-              1, (bad_desc_fire && bad_uv_fire && bad_emitted) ? 1 : 0);
+              "an unusable descriptor is still a joined transaction, not a dropped one", 1,
+              (bad_desc_fire && bad_uv_fire && bad_emitted) ? 1 : 0);
   zhao::check(joined_equal(bad_seen, expected_bad),
-              "the held verdict zeroes the logical field while owner, U and V survive",
-              1, joined_equal(bad_seen, expected_bad) ? 1 : 0);
+              "the held verdict zeroes the logical field while owner, U and V survive", 1,
+              joined_equal(bad_seen, expected_bad) ? 1 : 0);
   zhao::check(d->good_mismatch_o == 0 && !d->good_lifetime_fault_o,
-              "a failing usability verdict is not an owner mismatch or a lifetime fault",
-              0, d->good_mismatch_o + d->good_lifetime_fault_o);
+              "a failing usability verdict is not an owner mismatch or a lifetime fault", 0,
+              d->good_mismatch_o + d->good_lifetime_fault_o);
   tick(d);
   d->out_ready_i = 0;
   d->eval();
@@ -822,7 +824,7 @@ int main(int argc, char** argv) {
   d->eval();
   tick(d);
   d->desc_valid_i = 0;
-  d->desc_usable_i = 0;   // stale offer, must not reach the held record
+  d->desc_usable_i = 0;  // stale offer, must not reach the held record
   d->eval();
   tick(d);
   drive_uv(d, trust_good);
@@ -833,11 +835,14 @@ int main(int argc, char** argv) {
   d->uv_valid_i = 0;
   d->eval();
   trust_wait = 0;
-  while (!d->good_valid_o && trust_wait < 16) { tick(d); d->eval(); ++trust_wait; }
+  while (!d->good_valid_o && trust_wait < 16) {
+    tick(d);
+    d->eval();
+    ++trust_wait;
+  }
   const bool good_emitted = d->good_valid_o != 0;
   const bool good_exact =
-      good_emitted && joined_equal(copy_wide<12>(d->good_data_o),
-                                   expected_joined(trust_good));
+      good_emitted && joined_equal(copy_wide<12>(d->good_data_o), expected_joined(trust_good));
   zhao::check(good_exact,
               "a usable descriptor keeps its full logical row even when the offered "
               "verdict later goes false",
@@ -847,8 +852,8 @@ int main(int argc, char** argv) {
   tick(d);
   d->out_ready_i = 0;
   d->eval();
-  zhao::check(d->good_idle_o,
-              "the descriptor-trust cases drain back to exact idle", 1, d->good_idle_o);
+  zhao::check(d->good_idle_o, "the descriptor-trust cases drain back to exact idle", 1,
+              d->good_idle_o);
 
   const int rc = zhao::report_and_exit("texture_uv_join_v2_directed");
   delete d;

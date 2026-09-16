@@ -96,9 +96,9 @@ struct Ledger {
 // island float rather than merely being terrain at altitude.
 struct Desc {
   uint32_t island_id = 0;
-  int32_t origin_x = 0;  // fx16 raw, world
-  int32_t origin_y = 0;  // fx16 raw, the datum this island's heights hang from
-  int32_t origin_z = 0;  // fx16 raw, world
+  int32_t origin_x = 0;   // fx16 raw, world
+  int32_t origin_y = 0;   // fx16 raw, the datum this island's heights hang from
+  int32_t origin_z = 0;   // fx16 raw, world
   int8_t pitch_log2 = 1;  // canonical 2.0 m
   uint16_t extent_ix = 0;
   uint16_t extent_iz = 0;
@@ -181,7 +181,6 @@ class Directory {
   Desc desc_;
   std::map<std::pair<int32_t, int32_t>, uint32_t> entries_;
 };
-
 
 // ===========================================================================
 // THE VISIBLE SET -- which patches a camera's window actually has ground in.

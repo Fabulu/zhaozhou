@@ -81,7 +81,8 @@ zt::ComposedLattice make_lattice(Rng& rng, bool dual, bool with_void) {
     lat.cell_state.assign(32 * 32, 0);  // SOLID
     // a few void cells scattered: (3,3), (12,20), (30,1), (17,17)
     const int voids[4][2] = {{3, 3}, {12, 20}, {30, 1}, {17, 17}};
-    for (auto& v : voids) lat.cell_state[static_cast<size_t>(v[1]) * 32 + static_cast<size_t>(v[0])] = 1;
+    for (auto& v : voids)
+      lat.cell_state[static_cast<size_t>(v[1]) * 32 + static_cast<size_t>(v[0])] = 1;
   }
   return lat;
 }
@@ -98,7 +99,8 @@ int main(int argc, char** argv) {
   (void)argc;
   (void)argv;
   Rng rng;
-  const zt::ComposedLattice lats[3] = {make_lattice(rng, true, false), make_lattice(rng, true, true),
+  const zt::ComposedLattice lats[3] = {make_lattice(rng, true, false),
+                                       make_lattice(rng, true, true),
                                        make_lattice(rng, false, false)};
   const char* lat_names[3] = {"dual", "dual+void", "legacy"};
   const int32_t morphs[6] = {0, 1, 0x4000, 0x8000, 0xFFFF, 0x10000};
@@ -175,16 +177,20 @@ int main(int argc, char** argv) {
     std::printf("lattice %-10s done\n", lat_names[li]);
   }
 
-  std::printf("jobs %ld (rejected void+stitch %ld, legacy-page underside empty %ld), triangles %ld, corners %ld\n",
-              jobs, rejected, empty_underside, tris, corners);
+  std::printf(
+      "jobs %ld (rejected void+stitch %ld, legacy-page underside empty %ld), triangles %ld, "
+      "corners %ld\n",
+      jobs, rejected, empty_underside, tris, corners);
   for (int level = 0; level <= zt::kMaxLevel; ++level)
     std::printf("  level %d: triangles %ld, distinct vertices per job min %d max %d\n", level,
-                tris_per_level[level], distinct_min_per_level[level], distinct_max_per_level[level]);
+                tris_per_level[level], distinct_min_per_level[level],
+                distinct_max_per_level[level]);
 
   check(corners > 0, "the probe emitted corners", 1, corners);
   check(rejected > 0, "the void+stitch rejection was exercised", 1, rejected);
   check(off_lattice == 0, "(1) every corner is a lattice vertex", 0, off_lattice);
-  check(outside_window == 0, "(1) every corner is inside the subpatch's 9x9 window", 0, outside_window);
+  check(outside_window == 0, "(1) every corner is inside the subpatch's 9x9 window", 0,
+        outside_window);
   check(position_conflicts == 0,
         "(2) within one job, one lattice index has ONE final position (stitch, morph, surface)", 0,
         position_conflicts);

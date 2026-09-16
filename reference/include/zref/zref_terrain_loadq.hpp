@@ -54,20 +54,18 @@ namespace terrain {
 // load is due, and the fields are exactly the ten wires on `ld_*`.
 struct LoadJob {
   uint32_t slot = 0;
-  uint8_t  gen = 0;
+  uint8_t gen = 0;
   uint32_t epoch = 0;
   uint32_t island = 0;
-  int16_t  ix = 0;
-  int16_t  iz = 0;
+  int16_t ix = 0;
+  int16_t iz = 0;
   uint64_t hps_addr = 0;
   uint32_t expect_crc = 0;
   uint32_t src_id = 0;
 
   bool operator==(const LoadJob& o) const {
-    return slot == o.slot && gen == o.gen && epoch == o.epoch &&
-           island == o.island && ix == o.ix && iz == o.iz &&
-           hps_addr == o.hps_addr && expect_crc == o.expect_crc &&
-           src_id == o.src_id;
+    return slot == o.slot && gen == o.gen && epoch == o.epoch && island == o.island && ix == o.ix &&
+           iz == o.iz && hps_addr == o.hps_addr && expect_crc == o.expect_crc && src_id == o.src_id;
   }
   bool operator!=(const LoadJob& o) const { return !(*this == o); }
 };

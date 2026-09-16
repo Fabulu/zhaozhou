@@ -88,8 +88,7 @@ namespace {
 int g_checks = 0;
 int g_failed = 0;
 
-void check(bool ok, const char* what, unsigned long long expected,
-           unsigned long long got) {
+void check(bool ok, const char* what, unsigned long long expected, unsigned long long got) {
   ++g_checks;
   if (!ok) {
     ++g_failed;
@@ -124,21 +123,15 @@ struct Got {
 };
 
 uint64_t pack_plane(const Plane& p) {
-  return (static_cast<uint64_t>(p.status) << 40) |
-         (static_cast<uint64_t>(p.raw_index) << 32) |
-         (static_cast<uint64_t>(p.a) << 24) |
-         (static_cast<uint64_t>(p.r) << 16) |
-         (static_cast<uint64_t>(p.g) << 8) |
-         static_cast<uint64_t>(p.b);
+  return (static_cast<uint64_t>(p.status) << 40) | (static_cast<uint64_t>(p.raw_index) << 32) |
+         (static_cast<uint64_t>(p.a) << 24) | (static_cast<uint64_t>(p.r) << 16) |
+         (static_cast<uint64_t>(p.g) << 8) | static_cast<uint64_t>(p.b);
 }
 
 uint64_t pack_result(uint8_t status, uint8_t index, const Plane& p) {
-  return (static_cast<uint64_t>(status) << 40) |
-         (static_cast<uint64_t>(index) << 32) |
-         (static_cast<uint64_t>(p.a) << 24) |
-         (static_cast<uint64_t>(p.r) << 16) |
-         (static_cast<uint64_t>(p.g) << 8) |
-         static_cast<uint64_t>(p.b);
+  return (static_cast<uint64_t>(status) << 40) | (static_cast<uint64_t>(index) << 32) |
+         (static_cast<uint64_t>(p.a) << 24) | (static_cast<uint64_t>(p.r) << 16) |
+         (static_cast<uint64_t>(p.g) << 8) | static_cast<uint64_t>(p.b);
 }
 
 uint8_t unit_mul8(uint8_t a, uint8_t b) {
@@ -150,9 +143,7 @@ uint8_t modulate2x8(uint8_t a, uint8_t b) {
   return static_cast<uint8_t>(value > 255u ? 255u : value);
 }
 
-int floor_div_256(int value) {
-  return value >= 0 ? value / 256 : -((-value + 255) / 256);
-}
+int floor_div_256(int value) { return value >= 0 ? value / 256 : -((-value + 255) / 256); }
 
 uint8_t lerp8(uint8_t a, uint8_t b, uint8_t weight) {
   const int delta = floor_div_256((static_cast<int>(b) - a) * weight + 128);
@@ -293,8 +284,8 @@ void drive_frag(Dut& d, const Frag& f) {
   d.f_recipe_i = f.recipe;
   d.f_weight_i = f.weight;
   d.f_aux_required_i = f.aux_required ? 1 : 0;
-  d.f_base_rgb_i = (static_cast<uint32_t>(f.base.r) << 16) |
-                   (static_cast<uint32_t>(f.base.g) << 8) | f.base.b;
+  d.f_base_rgb_i =
+      (static_cast<uint32_t>(f.base.r) << 16) | (static_cast<uint32_t>(f.base.g) << 8) | f.base.b;
   d.f_base_a_i = f.base.a;
   d.f_tag_i = f.tag;
   d.f_s0_i = pack_plane(f.s[0]);
@@ -326,14 +317,22 @@ struct Run {
 
 uint32_t recipe_alias(const Dut& d, int recipe) {
   switch (recipe) {
-    case 0: return d.jobs_recipe_0_o;
-    case 1: return d.jobs_recipe_1_o;
-    case 2: return d.jobs_recipe_2_o;
-    case 3: return d.jobs_recipe_3_o;
-    case 4: return d.jobs_recipe_4_o;
-    case 5: return d.jobs_recipe_5_o;
-    case 6: return d.jobs_recipe_6_o;
-    default: return d.jobs_recipe_7_o;
+    case 0:
+      return d.jobs_recipe_0_o;
+    case 1:
+      return d.jobs_recipe_1_o;
+    case 2:
+      return d.jobs_recipe_2_o;
+    case 3:
+      return d.jobs_recipe_3_o;
+    case 4:
+      return d.jobs_recipe_4_o;
+    case 5:
+      return d.jobs_recipe_5_o;
+    case 6:
+      return d.jobs_recipe_6_o;
+    default:
+      return d.jobs_recipe_7_o;
   }
 }
 
@@ -345,8 +344,10 @@ Run run_batch(const std::vector<Frag>& batch, bool stall_output = false) {
 
   constexpr int kMaxCycles = 400000;
   for (int cycle = 0; cycle < kMaxCycles; ++cycle) {
-    if (next < batch.size()) drive_frag(d, batch[next]);
-    else d.f_valid_i = 0;
+    if (next < batch.size())
+      drive_frag(d, batch[next]);
+    else
+      d.f_valid_i = 0;
     d.o_ready_i = stall_output ? ((cycle % 5) != 1 && (cycle % 7) != 3) : 1;
     d.eval();
 
@@ -370,9 +371,7 @@ Run run_batch(const std::vector<Frag>& batch, bool stall_output = false) {
     }
 
     d.eval();
-    if (next == batch.size() && run.retired == static_cast<int>(batch.size()) &&
-        d.idle_o)
-      break;
+    if (next == batch.size() && run.retired == static_cast<int>(batch.size()) && d.idle_o) break;
   }
 
   run.refused_material = d.refused_material_o;
@@ -413,16 +412,13 @@ uint64_t zref_rgba(const Frag& f) {
   base.g = f.base.g;
   base.b = f.base.b;
   base.a = f.base.a;
-  const mat::Out out = mat::combine(f.recipe, f.weight, samples, f.count,
-                                    base, f.tag, nullptr);
-  return (static_cast<uint64_t>(out.a) << 24) |
-         (static_cast<uint64_t>(out.r) << 16) |
-         (static_cast<uint64_t>(out.g) << 8) |
-         static_cast<uint64_t>(out.b);
+  const mat::Out out = mat::combine(f.recipe, f.weight, samples, f.count, base, f.tag, nullptr);
+  return (static_cast<uint64_t>(out.a) << 24) | (static_cast<uint64_t>(out.r) << 16) |
+         (static_cast<uint64_t>(out.g) << 8) | static_cast<uint64_t>(out.b);
 }
 
-void compare_batch(const char* name, const std::vector<Frag>& batch,
-                   const Run& run, bool compare_reference) {
+void compare_batch(const char* name, const std::vector<Frag>& batch, const Run& run,
+                   bool compare_reference) {
   int missing = 0;
   int mismatched = 0;
   int split_mismatched = 0;
@@ -438,57 +434,46 @@ void compare_batch(const char* name, const std::vector<Frag>& batch,
     if (it->second.result != want) {
       if (mismatched == 0) {
         std::printf("  first %s mismatch tag=%u recipe=%u count=%u want=%012llX got=%012llX\n",
-                    name, f.tag, f.recipe, f.count,
-                    static_cast<unsigned long long>(want),
+                    name, f.tag, f.recipe, f.count, static_cast<unsigned long long>(want),
                     static_cast<unsigned long long>(it->second.result));
       }
       ++mismatched;
     }
     if (it->second.refused != (((want >> 40) & 1u) != 0)) ++split_mismatched;
 
-    if (compare_reference && legal_count(f.recipe, f.count) &&
-        has_zero_statuses(f)) {
+    if (compare_reference && legal_count(f.recipe, f.count) && has_zero_statuses(f)) {
       const uint64_t local_rgba = want & 0xFFFFFFFFull;
       if (zref_rgba(f) != local_rgba) ++reference_mismatched;
     }
   }
 
-  check(run.accepted == static_cast<int>(batch.size()),
-        "every offered fragment was accepted", batch.size(), run.accepted);
-  check(run.retired == static_cast<int>(batch.size()),
-        "every accepted fragment retired", batch.size(), run.retired);
-  check(run.jobs_accepted == batch.size(),
-        "jobs_accepted counts the input handshake exactly", batch.size(),
-        run.jobs_accepted);
-  check(run.jobs_completed == batch.size(),
-        "jobs_completed counts the output handshake exactly", batch.size(),
-        run.jobs_completed);
-  check(run.jobs_accepted == run.jobs_completed,
-        "drain balances accepted and completed jobs", run.jobs_accepted,
-        run.jobs_completed);
+  check(run.accepted == static_cast<int>(batch.size()), "every offered fragment was accepted",
+        batch.size(), run.accepted);
+  check(run.retired == static_cast<int>(batch.size()), "every accepted fragment retired",
+        batch.size(), run.retired);
+  check(run.jobs_accepted == batch.size(), "jobs_accepted counts the input handshake exactly",
+        batch.size(), run.jobs_accepted);
+  check(run.jobs_completed == batch.size(), "jobs_completed counts the output handshake exactly",
+        batch.size(), run.jobs_completed);
+  check(run.jobs_accepted == run.jobs_completed, "drain balances accepted and completed jobs",
+        run.jobs_accepted, run.jobs_completed);
   check(run.phases_issued == run.phases_completed,
-        "drain balances physical phase launches and writebacks",
-        run.phases_issued, run.phases_completed);
-  check(run.recipe_alias_mismatches == 0,
-        "all eight scalar recipe aliases equal jobs_by_recipe_o", 0,
-        run.recipe_alias_mismatches);
+        "drain balances physical phase launches and writebacks", run.phases_issued,
+        run.phases_completed);
+  check(run.recipe_alias_mismatches == 0, "all eight scalar recipe aliases equal jobs_by_recipe_o",
+        0, run.recipe_alias_mismatches);
   check(missing == 0, "no tag was lost", 0, missing);
   check(run.duplicate_tags == 0, "no tag retired twice", 0, run.duplicate_tags);
-  check(mismatched == 0, "every typed result matches independent R9", 0,
-        mismatched);
-  check(split_mismatched == 0, "o_refused is exactly status[0]", 0,
-        split_mismatched);
-  check(run.premature_idle == 0,
-        "idle never asserted while accepted work remained", 0,
+  check(mismatched == 0, "every typed result matches independent R9", 0, mismatched);
+  check(split_mismatched == 0, "o_refused is exactly status[0]", 0, split_mismatched);
+  check(run.premature_idle == 0, "idle never asserted while accepted work remained", 0,
         run.premature_idle);
   if (compare_reference)
-    check(reference_mismatched == 0,
-          "corrected zref::material::combine agrees with R9 arithmetic", 0,
-          reference_mismatched);
+    check(reference_mismatched == 0, "corrected zref::material::combine agrees with R9 arithmetic",
+          0, reference_mismatched);
 }
 
-Plane plane(uint8_t r, uint8_t g, uint8_t b, uint8_t a,
-            uint8_t index = 0, uint8_t status = 0) {
+Plane plane(uint8_t r, uint8_t g, uint8_t b, uint8_t a, uint8_t index = 0, uint8_t status = 0) {
   Plane p;
   p.r = r;
   p.g = g;
@@ -572,17 +557,15 @@ void test_r9_arithmetic_and_stale_separators() {
 
   const Run focused = run_batch(batch, true);
   compare_batch("focused R9", batch, focused, true);
-  check((focused.by_tag.at(alpha.tag).result >> 24 & 0xFFu) == 201,
-        "MODULATE keeps sample-0 alpha", 201,
-        focused.by_tag.at(alpha.tag).result >> 24 & 0xFFu);
+  check((focused.by_tag.at(alpha.tag).result >> 24 & 0xFFu) == 201, "MODULATE keeps sample-0 alpha",
+        201, focused.by_tag.at(alpha.tag).result >> 24 & 0xFFu);
   check((focused.by_tag.at(mod2.tag).result >> 16 & 0xFFu) == 1,
         "MODULATE2X single rounding distinguishes 1*64", 1,
         focused.by_tag.at(mod2.tag).result >> 16 & 0xFFu);
   check((focused.by_tag.at(lerp_down.tag).result >> 16 & 0xFFu) == 200,
         "negative LERP tie rounds toward positive infinity", 200,
         focused.by_tag.at(lerp_down.tag).result >> 16 & 0xFFu);
-  check((focused.by_tag.at(add.tag).result >> 24 & 0xFFu) == 211,
-        "ADD_SAT does not add alpha", 211,
+  check((focused.by_tag.at(add.tag).result >> 24 & 0xFFu) == 211, "ADD_SAT does not add alpha", 211,
         focused.by_tag.at(add.tag).result >> 24 & 0xFFu);
   check((focused.by_tag.at(mask.tag).result >> 24 & 0xFFu) == 100,
         "MASK alpha is continuous unit multiplication", 100,
@@ -605,16 +588,15 @@ void test_r9_arithmetic_and_stale_separators() {
       f.count = legal_count_for(recipe);
       if (recipe == 0 && (i & 1) == 0) f.count = 0;
       f.weight = corners[(i + 4) % 6];
-      f.s[0] = plane(corners[(i + 0) % 6], corners[(i + 1) % 6],
-                     corners[(i + 2) % 6], corners[(i + 3) % 6],
-                     static_cast<uint8_t>(0x40 + recipe));
-      f.s[1] = plane(corners[(i + 3) % 6], corners[(i + 4) % 6],
-                     corners[(i + 5) % 6], corners[(i + 0) % 6], 0xE1);
-      f.s[2] = plane(corners[(i + 5) % 6], corners[(i + 2) % 6],
-                     corners[(i + 1) % 6], corners[(i + 4) % 6], 0xE2);
+      f.s[0] = plane(corners[(i + 0) % 6], corners[(i + 1) % 6], corners[(i + 2) % 6],
+                     corners[(i + 3) % 6], static_cast<uint8_t>(0x40 + recipe));
+      f.s[1] = plane(corners[(i + 3) % 6], corners[(i + 4) % 6], corners[(i + 5) % 6],
+                     corners[(i + 0) % 6], 0xE1);
+      f.s[2] = plane(corners[(i + 5) % 6], corners[(i + 2) % 6], corners[(i + 1) % 6],
+                     corners[(i + 4) % 6], 0xE2);
       f.aux = plane(0xAA, 0xBB, 0xCC, 0xDD, 0xE3, 0);
-      f.base = plane(corners[(i + 1) % 6], corners[(i + 2) % 6],
-                     corners[(i + 3) % 6], corners[(i + 4) % 6]);
+      f.base = plane(corners[(i + 1) % 6], corners[(i + 2) % 6], corners[(i + 3) % 6],
+                     corners[(i + 4) % 6]);
       f.tag = tag++;
       batch.push_back(f);
     }
@@ -644,19 +626,15 @@ void test_exact_counts_loud_errors_and_required_status() {
   const Run count_run = run_batch(counts, true);
   compare_batch("exact-count table", counts, count_run, false);
   check(count_run.refused_material == static_cast<uint32_t>(malformed),
-        "every and only exact-count mismatch is counted", malformed,
-        count_run.refused_material);
+        "every and only exact-count mismatch is counted", malformed, count_run.refused_material);
 
   int non_loud = 0;
   for (const Frag& f : counts) {
     if (legal_count(f.recipe, f.count)) continue;
     const uint64_t result = count_run.by_tag.at(f.tag).result;
-    if ((result & 0xFFFFFFFFull) != 0xFFFF00FFull ||
-        ((result >> 40) & 1u) == 0)
-      ++non_loud;
+    if ((result & 0xFFFFFFFFull) != 0xFFFF00FFull || ((result >> 40) & 1u) == 0) ++non_loud;
   }
-  check(non_loud == 0,
-        "every malformed material retires loud magenta with SOURCE_REFUSED", 0,
+  check(non_loud == 0, "every malformed material retires loud magenta with SOURCE_REFUSED", 0,
         non_loud);
 
   std::vector<Frag> status;
@@ -759,18 +737,16 @@ void test_aux_is_status_only_and_sample2_is_real() {
 
   const Run run = run_batch(batch, true);
   compare_batch("AUX/sample-2 separation", batch, run, true);
-  check((run.by_tag.at(a.tag).result & 0xFFFFFFFFull) ==
-            (run.by_tag.at(b.tag).result & 0xFFFFFFFFull),
-        "changing successful AUX tag/strength/data cannot change RGBA", 1,
-        (run.by_tag.at(a.tag).result & 0xFFFFFFFFull) ==
-                (run.by_tag.at(b.tag).result & 0xFFFFFFFFull)
-            ? 1
-            : 0);
-  check((run.by_tag.at(a.tag).result & 0xFFFFFFull) !=
-            (run.by_tag.at(c.tag).result & 0xFFFFFFull),
+  check(
+      (run.by_tag.at(a.tag).result & 0xFFFFFFFFull) ==
+          (run.by_tag.at(b.tag).result & 0xFFFFFFFFull),
+      "changing successful AUX tag/strength/data cannot change RGBA", 1,
+      (run.by_tag.at(a.tag).result & 0xFFFFFFFFull) == (run.by_tag.at(b.tag).result & 0xFFFFFFFFull)
+          ? 1
+          : 0);
+  check((run.by_tag.at(a.tag).result & 0xFFFFFFull) != (run.by_tag.at(c.tag).result & 0xFFFFFFull),
         "changing true sample 2 changes DETAIL_LIGHT RGB", 1,
-        (run.by_tag.at(a.tag).result & 0xFFFFFFull) !=
-                (run.by_tag.at(c.tag).result & 0xFFFFFFull)
+        (run.by_tag.at(a.tag).result & 0xFFFFFFull) != (run.by_tag.at(c.tag).result & 0xFFFFFFull)
             ? 1
             : 0);
   check((run.by_tag.at(d.tag).result >> 24 & 0xFFu) == 101,
@@ -827,8 +803,8 @@ void test_rtl_add_lerp_boundary_cross_products() {
   const Run run = run_batch(batch, true);
   compare_batch("ADD/LERP boundary matrix", batch, run, true);
   check(run.saturated_add == expected_add_saturation,
-        "RTL ADD saturation count matches every boundary pair",
-        expected_add_saturation, run.saturated_add);
+        "RTL ADD saturation count matches every boundary pair", expected_add_saturation,
+        run.saturated_add);
   check((run.by_tag.at(positive_tie.tag).result >> 16 & 0xFFu) == 200,
         "positive signed LERP tie rounds upward", 200,
         run.by_tag.at(positive_tie.tag).result >> 16 & 0xFFu);
@@ -841,8 +817,7 @@ void test_exact_saturation_accounting_under_stalls() {
   std::vector<Frag> batch;
   uint16_t tag = 0x3200;
 
-  auto push = [&](uint8_t recipe, uint8_t count, Plane s0, Plane s1,
-                  Plane s2 = {}) {
+  auto push = [&](uint8_t recipe, uint8_t count, Plane s0, Plane s1, Plane s2 = {}) {
     Frag f;
     f.recipe = recipe;
     f.count = count;
@@ -858,10 +833,8 @@ void test_exact_saturation_accounting_under_stalls() {
   push(4, 2, plane(1, 2, 3, 255), plane(2, 3, 4, 255));      // alpha ignored
   push(2, 2, plane(200, 200, 200, 17), plane(200, 200, 200, 99));
   push(2, 2, plane(128, 128, 128, 17), plane(255, 255, 255, 99));  // exact 255
-  push(6, 3, plane(255, 255, 255, 17), plane(255, 255, 255, 99),
-       plane(128, 128, 128, 3));
-  push(7, 3, plane(255, 255, 255, 240), plane(255, 255, 255, 99),
-       plane(0, 0, 0, 128));
+  push(6, 3, plane(255, 255, 255, 17), plane(255, 255, 255, 99), plane(128, 128, 128, 3));
+  push(7, 3, plane(255, 255, 255, 240), plane(255, 255, 255, 99), plane(0, 0, 0, 128));
 
   Frag source_error;
   source_error.recipe = 2;
@@ -882,17 +855,15 @@ void test_exact_saturation_accounting_under_stalls() {
 
   // Force context reuse after saturating jobs; stale scratch flags must not
   // turn later exact/non-saturating MODULATE2X fragments into extra events.
-  for (int i = 0; i < 16; ++i)
-    push(2, 2, plane(1, 2, 3, 4), plane(64, 64, 64, 5));
+  for (int i = 0; i < 16; ++i) push(2, 2, plane(1, 2, 3, 4), plane(64, 64, 64, 5));
 
   const Run run = run_batch(batch, true);
   compare_batch("saturation accounting", batch, run, true);
-  check(run.saturated_add == 1,
-        "ADD_SAT counts only the one RGB-overflow fragment", 1,
+  check(run.saturated_add == 1, "ADD_SAT counts only the one RGB-overflow fragment", 1,
         run.saturated_add);
   check(run.saturated_mod2 == 3,
-        "MODULATE2X saturation counts recipe 2 and both detail first layers once",
-        3, run.saturated_mod2);
+        "MODULATE2X saturation counts recipe 2 and both detail first layers once", 3,
+        run.saturated_mod2);
 }
 
 void test_phase_and_product_cadence() {
@@ -915,17 +886,16 @@ void test_phase_and_product_cadence() {
   const Run legal = run_batch(batch, false);
   compare_batch("cadence legal", batch, legal, true);
   check(legal.phases_issued == expected_phases,
-        "legal recipes issue exactly the frozen 1/2/3 phase schedule",
-        expected_phases, legal.phases_issued);
+        "legal recipes issue exactly the frozen 1/2/3 phase schedule", expected_phases,
+        legal.phases_issued);
   check(legal.phases_completed == expected_phases,
-        "legal recipes complete exactly the frozen phase demand",
-        expected_phases, legal.phases_completed);
+        "legal recipes complete exactly the frozen phase demand", expected_phases,
+        legal.phases_completed);
   for (int recipe = 0; recipe < 8; ++recipe) {
     char what[96];
-    std::snprintf(what, sizeof what,
-                  "recipe %d issues exactly its meaningful product jobs", recipe);
-    check(legal.jobs[recipe] == jobs[recipe], what, jobs[recipe],
-          legal.jobs[recipe]);
+    std::snprintf(what, sizeof what, "recipe %d issues exactly its meaningful product jobs",
+                  recipe);
+    check(legal.jobs[recipe] == jobs[recipe], what, jobs[recipe], legal.jobs[recipe]);
   }
 
   batch.clear();
@@ -938,16 +908,13 @@ void test_phase_and_product_cadence() {
   }
   const Run malformed = run_batch(batch, false);
   compare_batch("cadence malformed", batch, malformed, false);
-  check(malformed.phases_issued == 8,
-        "every malformed material issues one refusal phase", 8,
+  check(malformed.phases_issued == 8, "every malformed material issues one refusal phase", 8,
         malformed.phases_issued);
-  check(malformed.phases_completed == 8,
-        "every malformed material completes one refusal phase", 8,
+  check(malformed.phases_completed == 8, "every malformed material completes one refusal phase", 8,
         malformed.phases_completed);
   uint32_t malformed_jobs = 0;
   for (uint32_t value : malformed.jobs) malformed_jobs += value;
-  check(malformed_jobs == 0,
-        "malformed materials launch no product jobs", 0, malformed_jobs);
+  check(malformed_jobs == 0, "malformed materials launch no product jobs", 0, malformed_jobs);
 
   batch.clear();
   for (uint8_t recipe = 0; recipe < 8; ++recipe) {
@@ -960,16 +927,13 @@ void test_phase_and_product_cadence() {
   }
   const Run source_error = run_batch(batch, false);
   compare_batch("cadence source error", batch, source_error, false);
-  check(source_error.phases_issued == 8,
-        "every terminal source error issues one loud phase", 8,
+  check(source_error.phases_issued == 8, "every terminal source error issues one loud phase", 8,
         source_error.phases_issued);
-  check(source_error.phases_completed == 8,
-        "every terminal source error completes one loud phase", 8,
-        source_error.phases_completed);
+  check(source_error.phases_completed == 8, "every terminal source error completes one loud phase",
+        8, source_error.phases_completed);
   uint32_t source_error_jobs = 0;
   for (uint32_t value : source_error.jobs) source_error_jobs += value;
-  check(source_error_jobs == 0,
-        "terminal source errors launch no product jobs", 0,
+  check(source_error_jobs == 0, "terminal source errors launch no product jobs", 0,
         source_error_jobs);
 }
 
@@ -983,8 +947,8 @@ void test_one_phase_retirement_is_one_per_clock() {
     Frag f;
     f.recipe = 0;
     f.count = 1;
-    f.s[0] = plane(static_cast<uint8_t>(0x20 + accepted), 0x44, 0x66,
-                   0x88, static_cast<uint8_t>(0xA0 + accepted));
+    f.s[0] = plane(static_cast<uint8_t>(0x20 + accepted), 0x44, 0x66, 0x88,
+                   static_cast<uint8_t>(0xA0 + accepted));
     f.tag = static_cast<uint16_t>(0x3400 + accepted);
     drive_frag(d, f);
     d.eval();
@@ -1013,28 +977,21 @@ void test_one_phase_retirement_is_one_per_clock() {
       ++bubbles;
     } else {
       const int index = static_cast<int>(d.o_tag_o) - 0x3400;
-      if (index < 0 || index >= 8 ||
-          d.o_rgb_o != static_cast<uint32_t>(0x204466 + (index << 16)) ||
-          d.o_a_o != 0x88 || d.o_raw_index_o != 0xA0 + index ||
-          d.o_status_o != 0)
+      if (index < 0 || index >= 8 || d.o_rgb_o != static_cast<uint32_t>(0x204466 + (index << 16)) ||
+          d.o_a_o != 0x88 || d.o_raw_index_o != 0xA0 + index || d.o_status_o != 0)
         ++wrong;
       ++handshakes;
     }
     tick(d);
   }
 
-  check(bubbles == 0,
-        "full one-phase queue retires on eight consecutive clocks", 0, bubbles);
-  check(handshakes == 8, "all eight consecutive cycles handshake", 8,
-        handshakes);
-  check(wrong == 0, "elastic reload preserves every held payload and tag", 0,
-        wrong);
-  check(d.jobs_completed_o == 8,
-        "consecutive output handshakes complete each job once", 8,
+  check(bubbles == 0, "full one-phase queue retires on eight consecutive clocks", 0, bubbles);
+  check(handshakes == 8, "all eight consecutive cycles handshake", 8, handshakes);
+  check(wrong == 0, "elastic reload preserves every held payload and tag", 0, wrong);
+  check(d.jobs_completed_o == 8, "consecutive output handshakes complete each job once", 8,
         d.jobs_completed_o);
   check(d.phases_issued_o == 8 && d.phases_completed_o == 8,
-        "elastic output reload neither reissues nor recompletes a phase", 8,
-        d.phases_completed_o);
+        "elastic output reload neither reissues nor recompletes a phase", 8, d.phases_completed_o);
 }
 
 void test_timing4_eight_context_pipeline() {
@@ -1057,8 +1014,8 @@ void test_timing4_eight_context_pipeline() {
       Frag f;
       f.recipe = 0;
       f.count = 1;
-      f.s[0] = plane(static_cast<uint8_t>(0x30 + accepted), 0x51, 0x72,
-                     0x93, static_cast<uint8_t>(0xB0 + accepted));
+      f.s[0] = plane(static_cast<uint8_t>(0x30 + accepted), 0x51, 0x72, 0x93,
+                     static_cast<uint8_t>(0xB0 + accepted));
       f.tag = static_cast<uint16_t>(0x4400 + accepted);
       drive_frag(d, f);
     } else {
@@ -1086,9 +1043,8 @@ void test_timing4_eight_context_pipeline() {
         ++wrong;
       } else {
         retire_cycle[index] = cycle;
-        if (d.o_rgb_o != static_cast<uint32_t>(0x305172 + (index << 16)) ||
-            d.o_a_o != 0x93 || d.o_raw_index_o != 0xB0 + index ||
-            d.o_status_o != 0)
+        if (d.o_rgb_o != static_cast<uint32_t>(0x305172 + (index << 16)) || d.o_a_o != 0x93 ||
+            d.o_raw_index_o != 0xB0 + index || d.o_status_o != 0)
           ++wrong;
       }
       ++retired;
@@ -1108,26 +1064,20 @@ void test_timing4_eight_context_pipeline() {
     if (retire_cycle[i] - accept_cycle[i] != 10) ++latency_errors;
 
   check(accepted == 8 && input_bubbles == 0,
-        "NCTX=8 accepts eight back-to-back phases without a bubble", 8,
-        accepted - input_bubbles);
+        "NCTX=8 accepts eight back-to-back phases without a bubble", 8, accepted - input_bubbles);
   check(retired == 8 && output_bubbles == 0,
         "Timing4 pipeline retires eight results on consecutive clocks", 8,
         retired - output_bubbles);
   check(first_output_cycle == 10 && latency_errors == 0,
-        "S/F pipeline has exact ten-cycle accept-to-visible latency", 10,
-        first_output_cycle);
-  check(wrong == 0,
-        "S/F pipeline preserves every ordered context, phase, and result", 0,
-        wrong);
-  check(d.jobs_accepted_o == 8 && d.jobs_completed_o == 8 &&
-            d.phases_issued_o == 8 && d.phases_completed_o == 8,
-        "S/F pipeline counters close exactly after eight-context traffic", 8,
-        d.jobs_completed_o);
+        "S/F pipeline has exact ten-cycle accept-to-visible latency", 10, first_output_cycle);
+  check(wrong == 0, "S/F pipeline preserves every ordered context, phase, and result", 0, wrong);
+  check(d.jobs_accepted_o == 8 && d.jobs_completed_o == 8 && d.phases_issued_o == 8 &&
+            d.phases_completed_o == 8,
+        "S/F pipeline counters close exactly after eight-context traffic", 8, d.jobs_completed_o);
 
   tick(d);
   d.eval();
-  check(d.idle_o != 0,
-        "S/F pipeline returns to structural idle after complete drain", 1,
+  check(d.idle_o != 0, "S/F pipeline returns to structural idle after complete drain", 1,
         d.idle_o ? 1 : 0);
 }
 
@@ -1173,8 +1123,10 @@ PhaseTrace trace_batch(const std::vector<Frag>& batch, int stall_period) {
   uint32_t prev_completed = 0;
 
   for (int cycle = 0; cycle < 20000; ++cycle) {
-    if (next < batch.size()) drive_frag(d, batch[next]);
-    else d.f_valid_i = 0;
+    if (next < batch.size())
+      drive_frag(d, batch[next]);
+    else
+      d.f_valid_i = 0;
     d.o_ready_i = (stall_period == 0 || (cycle % stall_period) != 0) ? 1 : 0;
     d.eval();
 
@@ -1194,15 +1146,13 @@ PhaseTrace trace_batch(const std::vector<Frag>& batch, int stall_period) {
     if (inflight > trace.max_inflight) trace.max_inflight = inflight;
 
     d.eval();
-    for (uint32_t i = prev_issued; i < d.phases_issued_o; ++i)
-      trace.issue_cycles.push_back(cycle);
+    for (uint32_t i = prev_issued; i < d.phases_issued_o; ++i) trace.issue_cycles.push_back(cycle);
     for (uint32_t i = prev_completed; i < d.phases_completed_o; ++i)
       trace.complete_cycles.push_back(cycle);
     prev_issued = d.phases_issued_o;
     prev_completed = d.phases_completed_o;
 
-    if (next == batch.size() &&
-        trace.retired == static_cast<int>(batch.size()) && d.idle_o) {
+    if (next == batch.size() && trace.retired == static_cast<int>(batch.size()) && d.idle_o) {
       trace.drain_cycle = cycle;
       break;
     }
@@ -1216,8 +1166,7 @@ Frag multi_phase_frag(uint8_t recipe, uint16_t tag, uint8_t seed) {
   // DETAIL_LIGHT and DETAIL_MASK need three real samples; MODULATE needs two.
   f.count = (recipe == 6 || recipe == 7) ? 3 : 2;
   f.weight = 0x40;
-  f.s[0] = plane(static_cast<uint8_t>(0x20 + seed), 0x40, 0x60, 0x80,
-                 static_cast<uint8_t>(seed));
+  f.s[0] = plane(static_cast<uint8_t>(0x20 + seed), 0x40, 0x60, 0x80, static_cast<uint8_t>(seed));
   f.s[1] = plane(0x30, 0x50, 0x70, 0x90, 0);
   f.s[2] = plane(0x38, 0x58, 0x78, 0x98, 0);
   f.base = plane(0x11, 0x22, 0x33, 0x44, 0);
@@ -1241,63 +1190,60 @@ void test_timing4_multiphase_recurrence_and_rate() {
   // ---- 1. Continuation recurrence, measured on a lone multi-phase job ----
   int recurrence[3] = {0, 0, 0};
   const uint8_t lone_recipes[3] = {1, 6, 7};  // MODULATE, DETAIL_LIGHT, DMASK
-  const char* lone_names[3] = {"MODULATE(2ph)", "DETAIL_LIGHT(3ph)",
-                               "DETAIL_MASK(2ph)"};
+  const char* lone_names[3] = {"MODULATE(2ph)", "DETAIL_LIGHT(3ph)", "DETAIL_MASK(2ph)"};
   for (int i = 0; i < 3; ++i) {
     std::vector<Frag> lone{multi_phase_frag(lone_recipes[i], 0x7100, 3)};
     const PhaseTrace t = trace_batch(lone, 0);
     recurrence[i] = steady_recurrence(t.issue_cycles);
-    std::printf("[M3]   %-18s phases=%d recurrence=%d accept->first_out=%d "
-                "accept->drain=%d\n",
-                lone_names[i], static_cast<int>(t.issue_cycles.size()),
-                recurrence[i],
-                t.output_cycles.empty() ? -1
-                                        : t.output_cycles.front() - t.first_accept,
-                t.drain_cycle - t.first_accept);
+    std::printf(
+        "[M3]   %-18s phases=%d recurrence=%d accept->first_out=%d "
+        "accept->drain=%d\n",
+        lone_names[i], static_cast<int>(t.issue_cycles.size()), recurrence[i],
+        t.output_cycles.empty() ? -1 : t.output_cycles.front() - t.first_accept,
+        t.drain_cycle - t.first_accept);
   }
 
   // ---- 2. Saturated multi-phase stream: the rate the recurrence predicts ----
   std::vector<Frag> saturated;
   for (int i = 0; i < 48; ++i)
-    saturated.push_back(multi_phase_frag(6, static_cast<uint16_t>(0x7200 + i),
-                                         static_cast<uint8_t>(i)));
+    saturated.push_back(
+        multi_phase_frag(6, static_cast<uint16_t>(0x7200 + i), static_cast<uint8_t>(i)));
   const PhaseTrace sat = trace_batch(saturated, 0);
-  const int sat_span = sat.issue_cycles.empty()
-                           ? 0
-                           : sat.issue_cycles.back() - sat.issue_cycles.front() + 1;
+  const int sat_span =
+      sat.issue_cycles.empty() ? 0 : sat.issue_cycles.back() - sat.issue_cycles.front() + 1;
   const double sat_rate =
       sat_span > 0 ? static_cast<double>(sat.issue_cycles.size()) / sat_span : 0.0;
-  std::printf("[M3]   saturated DETAIL_LIGHT x48: phases=%d span=%d "
-              "phases/clk=%.3f max_inflight=%d drain=%d\n",
-              static_cast<int>(sat.issue_cycles.size()), sat_span, sat_rate,
-              sat.max_inflight, sat.drain_cycle);
+  std::printf(
+      "[M3]   saturated DETAIL_LIGHT x48: phases=%d span=%d "
+      "phases/clk=%.3f max_inflight=%d drain=%d\n",
+      static_cast<int>(sat.issue_cycles.size()), sat_span, sat_rate, sat.max_inflight,
+      sat.drain_cycle);
 
   // ---- 3. Alternating recipes and mixed continued/new work ----
   std::vector<Frag> mixed;
   for (int i = 0; i < 48; ++i) {
     const uint8_t recipe = (i % 3 == 0) ? 0 : ((i % 3 == 1) ? 1 : 6);
-    Frag f = multi_phase_frag(recipe, static_cast<uint16_t>(0x7300 + i),
-                              static_cast<uint8_t>(i));
+    Frag f = multi_phase_frag(recipe, static_cast<uint16_t>(0x7300 + i), static_cast<uint8_t>(i));
     if (recipe == 0) f.count = 1;  // one-phase PASSTHRU beside the multi-phase
     mixed.push_back(f);
   }
   const PhaseTrace mix = trace_batch(mixed, 0);
-  const int mix_span = mix.issue_cycles.empty()
-                           ? 0
-                           : mix.issue_cycles.back() - mix.issue_cycles.front() + 1;
-  std::printf("[M3]   mixed 1/2/3-phase x48: jobs=%d phases=%d span=%d "
-              "phases/clk=%.3f drain=%d\n",
-              mix.retired, static_cast<int>(mix.issue_cycles.size()), mix_span,
-              mix_span > 0 ? static_cast<double>(mix.issue_cycles.size()) / mix_span
-                           : 0.0,
-              mix.drain_cycle);
+  const int mix_span =
+      mix.issue_cycles.empty() ? 0 : mix.issue_cycles.back() - mix.issue_cycles.front() + 1;
+  std::printf(
+      "[M3]   mixed 1/2/3-phase x48: jobs=%d phases=%d span=%d "
+      "phases/clk=%.3f drain=%d\n",
+      mix.retired, static_cast<int>(mix.issue_cycles.size()), mix_span,
+      mix_span > 0 ? static_cast<double>(mix.issue_cycles.size()) / mix_span : 0.0,
+      mix.drain_cycle);
 
   // ---- 4. DONE backlog and output stalls over the same sequence ----
   const PhaseTrace stalled = trace_batch(saturated, 4);
-  std::printf("[M3]   saturated DETAIL_LIGHT x48, sink stalls 1-in-4: "
-              "jobs=%d phases=%d max_inflight=%d drain=%d\n",
-              stalled.retired, static_cast<int>(stalled.issue_cycles.size()),
-              stalled.max_inflight, stalled.drain_cycle);
+  std::printf(
+      "[M3]   saturated DETAIL_LIGHT x48, sink stalls 1-in-4: "
+      "jobs=%d phases=%d max_inflight=%d drain=%d\n",
+      stalled.retired, static_cast<int>(stalled.issue_cycles.size()), stalled.max_inflight,
+      stalled.drain_cycle);
 
   // ---- 5. Fast error / count-zero jobs ----
   std::vector<Frag> fast;
@@ -1310,24 +1256,25 @@ void test_timing4_multiphase_recurrence_and_rate() {
     fast.push_back(f);
   }
   const PhaseTrace quick = trace_batch(fast, 0);
-  std::printf("[M3]   count-zero x16: jobs=%d phases=%d drain=%d\n",
-              quick.retired, static_cast<int>(quick.issue_cycles.size()),
-              quick.drain_cycle);
+  std::printf("[M3]   count-zero x16: jobs=%d phases=%d drain=%d\n", quick.retired,
+              static_cast<int>(quick.issue_cycles.size()), quick.drain_cycle);
 
   // ---- Invariants the measurement must hold, whatever the calendar is ----
   // Every job retires exactly once, and every launched phase is written back.
-  check(sat.retired == 48 && mix.retired == 48 && stalled.retired == 48 &&
-            quick.retired == 16,
-        "every multi-phase, mixed, stalled and count-zero job retires exactly once",
-        1, (sat.retired == 48 && mix.retired == 48 && stalled.retired == 48 &&
-            quick.retired == 16) ? 1 : 0);
+  check(sat.retired == 48 && mix.retired == 48 && stalled.retired == 48 && quick.retired == 16,
+        "every multi-phase, mixed, stalled and count-zero job retires exactly once", 1,
+        (sat.retired == 48 && mix.retired == 48 && stalled.retired == 48 && quick.retired == 16)
+            ? 1
+            : 0);
   check(sat.issue_cycles.size() == sat.complete_cycles.size() &&
             mix.issue_cycles.size() == mix.complete_cycles.size() &&
             stalled.issue_cycles.size() == stalled.complete_cycles.size(),
         "issued and completed phase counts close on every measured stream", 1,
         (sat.issue_cycles.size() == sat.complete_cycles.size() &&
          mix.issue_cycles.size() == mix.complete_cycles.size() &&
-         stalled.issue_cycles.size() == stalled.complete_cycles.size()) ? 1 : 0);
+         stalled.issue_cycles.size() == stalled.complete_cycles.size())
+            ? 1
+            : 0);
   check(sat.max_inflight <= 8 && stalled.max_inflight <= 8,
         "context occupancy never exceeds NCTX under saturation or stalls", 1,
         (sat.max_inflight <= 8 && stalled.max_inflight <= 8) ? 1 : 0);
@@ -1340,8 +1287,7 @@ void test_timing4_multiphase_recurrence_and_rate() {
   check(recurrence[0] > 0 && recurrence[1] > 0,
         "continuation recurrence is a single stable gap for a lone job", 1,
         (recurrence[0] > 0 && recurrence[1] > 0) ? 1 : 0);
-  check(recurrence[1] <= 8,
-        "eight contexts can cover the measured continuation recurrence", 1,
+  check(recurrence[1] <= 8, "eight contexts can cover the measured continuation recurrence", 1,
         recurrence[1] <= 8 ? 1 : 0);
 
   // THIS FLOOR IS THE MEASURED TRUTH, NOT THE TARGET, AND THE GAP IS REAL.
@@ -1357,23 +1303,22 @@ void test_timing4_multiphase_recurrence_and_rate() {
   //
   // The floor is set just under the measurement so a real regression is caught
   // while the honest gap stays visible instead of being asserted away.
-  check(sat_rate > 0.85,
-        "saturated multi-phase traffic holds its measured phase rate", 1,
+  check(sat_rate > 0.85, "saturated multi-phase traffic holds its measured phase rate", 1,
         sat_rate > 0.85 ? 1 : 0);
-  std::printf("[M3]   shortfall vs one phase/clk: %.3f phases/clk "
-              "(recycle tail, not the phase loop)\n", 1.0 - sat_rate);
+  std::printf(
+      "[M3]   shortfall vs one phase/clk: %.3f phases/clk "
+      "(recycle tail, not the phase loop)\n",
+      1.0 - sat_rate);
 }
 
 void test_held_output_and_structural_idle() {
   Dut d;
   reset(d);
-  check(d.idle_o != 0, "reset state is structurally idle", 1,
-        d.idle_o ? 1 : 0);
-  check(d.jobs_accepted_o == 0 && d.jobs_completed_o == 0 &&
-            d.phases_issued_o == 0 && d.phases_completed_o == 0,
+  check(d.idle_o != 0, "reset state is structurally idle", 1, d.idle_o ? 1 : 0);
+  check(d.jobs_accepted_o == 0 && d.jobs_completed_o == 0 && d.phases_issued_o == 0 &&
+            d.phases_completed_o == 0,
         "all accepted/completed job and phase counters reset to zero", 0,
-        d.jobs_accepted_o | d.jobs_completed_o |
-            d.phases_issued_o | d.phases_completed_o);
+        d.jobs_accepted_o | d.jobs_completed_o | d.phases_issued_o | d.phases_completed_o);
 
   d.o_ready_i = 0;
   int accepted = 0;
@@ -1381,8 +1326,8 @@ void test_held_output_and_structural_idle() {
     Frag f;
     f.recipe = 0;
     f.count = 1;
-    f.s[0] = plane(static_cast<uint8_t>(accepted + 1), 0x22, 0x33,
-                   0xA5, static_cast<uint8_t>(0x80 + accepted));
+    f.s[0] = plane(static_cast<uint8_t>(accepted + 1), 0x22, 0x33, 0xA5,
+                   static_cast<uint8_t>(0x80 + accepted));
     f.tag = static_cast<uint16_t>(0x3800 + accepted);
     drive_frag(d, f);
     d.eval();
@@ -1393,21 +1338,16 @@ void test_held_output_and_structural_idle() {
   d.f_valid_i = 0;
   for (int i = 0; i < 80; ++i) tick(d);
 
-  check(accepted == 8,
-        "stalled output reserves all eight contexts and no ninth", 8,
-        accepted);
-  check(d.o_valid_o != 0, "one complete output is held", 1,
-        d.o_valid_o ? 1 : 0);
+  check(accepted == 8, "stalled output reserves all eight contexts and no ninth", 8, accepted);
+  check(d.o_valid_o != 0, "one complete output is held", 1, d.o_valid_o ? 1 : 0);
   check(d.f_ready_o == 0, "all contexts remain reserved under output stall", 0,
         d.f_ready_o ? 1 : 0);
-  check(d.idle_o == 0, "held output keeps structural idle low", 0,
-        d.idle_o ? 1 : 0);
+  check(d.idle_o == 0, "held output keeps structural idle low", 0, d.idle_o ? 1 : 0);
   check(d.jobs_accepted_o == 8 && d.jobs_completed_o == 0,
-        "eight jobs are accepted but none completes while output ready is low",
-        8, d.jobs_accepted_o - d.jobs_completed_o);
+        "eight jobs are accepted but none completes while output ready is low", 8,
+        d.jobs_accepted_o - d.jobs_completed_o);
   check(d.phases_issued_o == 8 && d.phases_completed_o == 8,
-        "all PASSTHRU phases write back even while retirement is held", 8,
-        d.phases_completed_o);
+        "all PASSTHRU phases write back even while retirement is held", 8, d.phases_completed_o);
 
   const uint32_t held_jobs_accepted = d.jobs_accepted_o;
   const uint32_t held_jobs_completed = d.jobs_completed_o;
@@ -1432,28 +1372,22 @@ void test_held_output_and_structural_idle() {
     drive_frag(d, poison);
     d.o_ready_i = 0;
     d.eval();
-    const uint64_t rebuilt =
-        (static_cast<uint64_t>(d.o_status_o) << 40) |
-        (static_cast<uint64_t>(d.o_raw_index_o) << 32) |
-        (static_cast<uint64_t>(d.o_a_o) << 24) |
-        static_cast<uint64_t>(d.o_rgb_o);
-    stable = stable && d.o_valid_o &&
-             static_cast<uint64_t>(d.o_result_o) == held_result &&
-             static_cast<uint16_t>(d.o_tag_o) == held_tag &&
-             (d.o_refused_o != 0) == held_refused && !d.f_ready_o && !d.idle_o &&
-             d.jobs_accepted_o == held_jobs_accepted &&
-             d.jobs_completed_o == held_jobs_completed &&
-             d.phases_issued_o == held_phases_issued &&
+    const uint64_t rebuilt = (static_cast<uint64_t>(d.o_status_o) << 40) |
+                             (static_cast<uint64_t>(d.o_raw_index_o) << 32) |
+                             (static_cast<uint64_t>(d.o_a_o) << 24) |
+                             static_cast<uint64_t>(d.o_rgb_o);
+    stable = stable && d.o_valid_o && static_cast<uint64_t>(d.o_result_o) == held_result &&
+             static_cast<uint16_t>(d.o_tag_o) == held_tag && (d.o_refused_o != 0) == held_refused &&
+             !d.f_ready_o && !d.idle_o && d.jobs_accepted_o == held_jobs_accepted &&
+             d.jobs_completed_o == held_jobs_completed && d.phases_issued_o == held_phases_issued &&
              d.phases_completed_o == held_phases_completed;
     aliases_exact = aliases_exact && rebuilt == held_result &&
                     (d.o_refused_o != 0) == ((d.o_status_o & 1u) != 0);
     tick(d);
   }
-  check(stable,
-        "valid&&!ready holds payload, credit, and all completion counters", 1,
+  check(stable, "valid&&!ready holds payload, credit, and all completion counters", 1,
         stable ? 1 : 0);
-  check(aliases_exact,
-        "split outputs remain exact aliases of the held 48-bit result", 1,
+  check(aliases_exact, "split outputs remain exact aliases of the held 48-bit result", 1,
         aliases_exact ? 1 : 0);
 
   d.f_valid_i = 0;
@@ -1468,18 +1402,14 @@ void test_held_output_and_structural_idle() {
     d.eval();
     if (retired == 8 && d.idle_o) break;
   }
-  check(retired == 8, "all held contexts retire after ready returns", 8,
-        retired);
+  check(retired == 8, "all held contexts retire after ready returns", 8, retired);
   check(d.jobs_accepted_o == 8 && d.jobs_completed_o == 8,
-        "each held job completes exactly once on its output handshake", 8,
-        d.jobs_completed_o);
+        "each held job completes exactly once on its output handshake", 8, d.jobs_completed_o);
   check(d.phases_issued_o == 8 && d.phases_completed_o == 8,
-        "held retirement does not duplicate phase issue or completion", 8,
-        d.phases_completed_o);
+        "held retirement does not duplicate phase issue or completion", 8, d.phases_completed_o);
   check(!premature_idle, "idle stays low until the final context releases", 0,
         premature_idle ? 1 : 0);
-  check(d.idle_o != 0, "complete drain returns to structural idle", 1,
-        d.idle_o ? 1 : 0);
+  check(d.idle_o != 0, "complete drain returns to structural idle", 1, d.idle_o ? 1 : 0);
 }
 
 #else  // MATERIAL_V3_MUTANT_BUILD
@@ -1570,8 +1500,10 @@ void test_mutant_control_fires() {
   int seen_cycle = -1;
 
   for (int cycle = 0; cycle < 2000 && !seen; ++cycle) {
-    if (!sent) drive_frag(d, f);
-    else d.f_valid_i = 0;
+    if (!sent)
+      drive_frag(d, f);
+    else
+      d.f_valid_i = 0;
     d.o_ready_i = 1;
     d.eval();
     const bool accepted = !sent && d.f_valid_i && d.f_ready_o;
@@ -1589,13 +1521,11 @@ void test_mutant_control_fires() {
 
   const uint64_t want = r9_expected(f);
   std::printf("  mutant %s: want=%012llX got=%012llX\n", kMutationName,
-              static_cast<unsigned long long>(want),
-              static_cast<unsigned long long>(got));
+              static_cast<unsigned long long>(want), static_cast<unsigned long long>(got));
   check(sent, "mutant control accepted its focused fragment", 1, sent ? 1 : 0);
   check(seen, "mutant control retired its focused fragment", 1, seen ? 1 : 0);
   if (kMutation <= 9) {
-    check(got != want,
-          "inverse-polarity R9 checker FIRES on the named stale alternative", 1,
+    check(got != want, "inverse-polarity R9 checker FIRES on the named stale alternative", 1,
           got != want ? 1 : 0);
 
     if (kMutation == 1) {
@@ -1628,12 +1558,13 @@ void test_mutant_control_fires() {
         bool extra_seen = false;
         uint64_t extra_got = 0;
         for (int cycle = 0; cycle < 2000 && !extra_seen; ++cycle) {
-          if (!extra_sent) drive_frag(d, alpha_case);
-          else d.f_valid_i = 0;
+          if (!extra_sent)
+            drive_frag(d, alpha_case);
+          else
+            d.f_valid_i = 0;
           d.o_ready_i = 1;
           d.eval();
-          const bool extra_accept =
-              !extra_sent && d.f_valid_i && d.f_ready_o;
+          const bool extra_accept = !extra_sent && d.f_valid_i && d.f_ready_o;
           if (d.o_valid_o) {
             extra_got = static_cast<uint64_t>(d.o_result_o);
             extra_seen = true;
@@ -1642,52 +1573,43 @@ void test_mutant_control_fires() {
           if (extra_accept) extra_sent = true;
         }
         if (!extra_sent || !extra_seen) ++extra_missing;
-        if (extra_seen && extra_got != r9_expected(alpha_case))
-          ++extra_mismatches;
+        if (extra_seen && extra_got != r9_expected(alpha_case)) ++extra_mismatches;
       }
-      check(extra_missing == 0,
-            "alpha mutant retires the MOD2X/LERP/ADD_SAT controls", 0,
+      check(extra_missing == 0, "alpha mutant retires the MOD2X/LERP/ADD_SAT controls", 0,
             extra_missing);
       check(extra_mismatches == 3,
-            "recipes 2, 3, and 4 each independently expose stale alpha arithmetic",
-            3, extra_mismatches);
+            "recipes 2, 3, and 4 each independently expose stale alpha arithmetic", 3,
+            extra_mismatches);
     }
   } else if (kMutation <= 11) {
     check(d.jobs_accepted_o == 1 && d.jobs_completed_o == 1,
-          "phase mutant still retires exactly one accepted job", 1,
-          d.jobs_completed_o);
+          "phase mutant still retires exactly one accepted job", 1, d.jobs_completed_o);
     if (kMutation == 10) {
-      check(d.phases_issued_o == 3,
-            "phase-drop control launches all three DETAIL_LIGHT phases", 3,
+      check(d.phases_issued_o == 3, "phase-drop control launches all three DETAIL_LIGHT phases", 3,
             d.phases_issued_o);
-      check(d.phases_completed_o == 2,
-            "phase-drop control suppresses one actual scratch writeback", 2,
-            d.phases_completed_o);
+      check(d.phases_completed_o == 2, "phase-drop control suppresses one actual scratch writeback",
+            2, d.phases_completed_o);
       check(d.phases_issued_o != d.phases_completed_o,
             "PI/PC balance checker FIRES on actual writeback loss", 1,
             d.phases_issued_o != d.phases_completed_o ? 1 : 0);
     } else {
-      check(got == want,
-            "phase reissue leaves the idempotent PASSTHRU result unchanged", want,
+      check(got == want, "phase reissue leaves the idempotent PASSTHRU result unchanged", want,
             got);
       check(d.phases_issued_o == 2 && d.phases_completed_o == 2,
-            "phase reissue launches and writes back two actual phases", 2,
-            d.phases_completed_o);
-      check(d.phases_issued_o != 1,
-            "exact phase-demand checker FIRES despite balanced PI/PC", 1,
+            "phase reissue launches and writes back two actual phases", 2, d.phases_completed_o);
+      check(d.phases_issued_o != 1, "exact phase-demand checker FIRES despite balanced PI/PC", 1,
             d.phases_issued_o != 1 ? 1 : 0);
     }
   } else {
-    check(got == want,
-          "pipeline-boundary mutant preserves arithmetic while changing latency",
-          want, got);
+    check(got == want, "pipeline-boundary mutant preserves arithmetic while changing latency", want,
+          got);
     check(seen_cycle - accepted_cycle == 10,
           "missing S/F boundary is detected one cycle before the contract", 10,
           seen_cycle - accepted_cycle);
-    check(d.jobs_accepted_o == 1 && d.jobs_completed_o == 1 &&
-              d.phases_issued_o == 1 && d.phases_completed_o == 1,
-          "pipeline-boundary mutant keeps functional counters deceptively balanced",
-          1, d.jobs_completed_o);
+    check(d.jobs_accepted_o == 1 && d.jobs_completed_o == 1 && d.phases_issued_o == 1 &&
+              d.phases_completed_o == 1,
+          "pipeline-boundary mutant keeps functional counters deceptively balanced", 1,
+          d.jobs_completed_o);
   }
 }
 
@@ -1702,15 +1624,15 @@ void test_pipeline_boundary_mutant_fires() {
     f.recipe = 5;
     f.count = 2;
     f.weight = static_cast<uint8_t>(17 + i * 23);
-    f.s[0] = Plane{static_cast<uint8_t>(11 + i * 7),
-                   static_cast<uint8_t>(31 + i * 5),
-                   static_cast<uint8_t>(53 + i * 3),
-                   static_cast<uint8_t>(91 + i),
-                   static_cast<uint8_t>(0xC0 + i), 0};
+    f.s[0] = Plane{static_cast<uint8_t>(11 + i * 7), static_cast<uint8_t>(31 + i * 5),
+                   static_cast<uint8_t>(53 + i * 3), static_cast<uint8_t>(91 + i),
+                   static_cast<uint8_t>(0xC0 + i),   0};
     f.s[1] = Plane{static_cast<uint8_t>(211 - i * 9),
                    static_cast<uint8_t>(173 - i * 7),
                    static_cast<uint8_t>(137 - i * 5),
-                   static_cast<uint8_t>(41 + i), 0, 0};
+                   static_cast<uint8_t>(41 + i),
+                   0,
+                   0};
     f.tag = static_cast<uint16_t>(0x5200 + i);
     expected[f.tag] = r9_expected(f);
     jobs.push_back(f);
@@ -1725,8 +1647,10 @@ void test_pipeline_boundary_mutant_fires() {
   int retire_cycle[8] = {0};
   bool seen[8] = {false};
   for (int cycle = 0; cycle < 4000 && retired < 8; ++cycle) {
-    if (accepted < 8) drive_frag(d, jobs[accepted]);
-    else d.f_valid_i = 0;
+    if (accepted < 8)
+      drive_frag(d, jobs[accepted]);
+    else
+      d.f_valid_i = 0;
     d.o_ready_i = 1;
     d.eval();
     const bool take = accepted < 8 && d.f_valid_i && d.f_ready_o;
@@ -1758,17 +1682,14 @@ void test_pipeline_boundary_mutant_fires() {
     if (retire_cycle[i] - accept_cycle[i] != 9) ++latency_errors;
 
   check(accepted == 8 && retired == 8,
-        "pipeline mutant accepts and retires the complete eight-context stream",
-        8, retired);
+        "pipeline mutant accepts and retires the complete eight-context stream", 8, retired);
   check(duplicate_or_unknown == 0 && mismatches == 0,
-        "pipeline mutant remains arithmetically plausible and identity-clean",
-        0, duplicate_or_unknown + mismatches);
-  check(latency_errors == 0,
-        "inverse-polarity checker FIRES on the one-cycle-short S/F pipeline", 0,
-        latency_errors);
+        "pipeline mutant remains arithmetically plausible and identity-clean", 0,
+        duplicate_or_unknown + mismatches);
+  check(latency_errors == 0, "inverse-polarity checker FIRES on the one-cycle-short S/F pipeline",
+        0, latency_errors);
   check(d.jobs_accepted_o == 8 && d.jobs_completed_o == 8,
-        "pipeline mutant can balance job counters while violating latency",
-        8, d.jobs_completed_o);
+        "pipeline mutant can balance job counters while violating latency", 8, d.jobs_completed_o);
 }
 
 #endif  // MATERIAL_V3_MUTANT_BUILD
@@ -1779,8 +1700,10 @@ int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
 #ifdef MATERIAL_V3_MUTANT_BUILD
   std::printf("[material_combine_v3_diff] MUTANT CONTROL: %s\n", kMutationName);
-  if (kMutation >= 12) test_pipeline_boundary_mutant_fires();
-  else test_mutant_control_fires();
+  if (kMutation >= 12)
+    test_pipeline_boundary_mutant_fires();
+  else
+    test_mutant_control_fires();
 #else
   // Every result lookup below is by_tag.at(), which THROWS when a fragment the
   // run accepted never retired. Left uncaught that is a bare std::out_of_range
@@ -1810,8 +1733,7 @@ int main(int argc, char** argv) {
 #endif
 
   if (g_failed) {
-    std::printf("[material_combine_v3_diff] %d/%d checks FAILED\n", g_failed,
-                g_checks);
+    std::printf("[material_combine_v3_diff] %d/%d checks FAILED\n", g_failed, g_checks);
     zhao::exit_hard(1);
   }
   std::printf("[material_combine_v3_diff] %d checks passed\n", g_checks);

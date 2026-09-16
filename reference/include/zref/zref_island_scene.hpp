@@ -145,17 +145,17 @@ inline View view_for_camera(const Desc& d, int32_t cam_x_raw, int32_t cam_z_raw,
 // single "drawn" counter would have merged them and a scene missing half its
 // pages would look identical to a scene over open sky.
 struct FrameLedger {
-  WindowTally tally;         // what the directory was asked, and answered
-  uint32_t issued = 0;       // DrawProcedural records emitted
-  uint32_t with_page = 0;    // ...whose page body is registered here
-  uint32_t no_page_body = 0; // ...whose is NOT: the renderer will count a miss
-  uint32_t unplaceable = 0;  // envelope ran off fx16; NOT issued
-  uint32_t records = 0;      // total records in the packet, incl. state-setting
+  WindowTally tally;          // what the directory was asked, and answered
+  uint32_t issued = 0;        // DrawProcedural records emitted
+  uint32_t with_page = 0;     // ...whose page body is registered here
+  uint32_t no_page_body = 0;  // ...whose is NOT: the renderer will count a miss
+  uint32_t unplaceable = 0;   // envelope ran off fx16; NOT issued
+  uint32_t records = 0;       // total records in the packet, incl. state-setting
 };
 
 struct FramePlan {
-  std::vector<uint8_t> packet;   // a sealed, validatable ABI frame
-  std::vector<Visible> issued;   // in visible_set's row-major emission order
+  std::vector<uint8_t> packet;  // a sealed, validatable ABI frame
+  std::vector<Visible> issued;  // in visible_set's row-major emission order
   FrameLedger ledger;
 };
 
@@ -227,8 +227,8 @@ class Scene {
   // unaffected. Skipping it here would hide a missing page inside a smaller
   // command count, which is exactly the kind of quiet subtraction that makes a
   // half-loaded island look like a small one.
-  FramePlan build_frame(uint32_t frame_id, const zhao_abi::ZhMat4fx& view_projection,
-                        const View& v, zhao_abi::video_mode mode = zhao_abi::VIDEO_Z60,
+  FramePlan build_frame(uint32_t frame_id, const zhao_abi::ZhMat4fx& view_projection, const View& v,
+                        zhao_abi::video_mode mode = zhao_abi::VIDEO_Z60,
                         uint16_t view_id = 0) const {
     FramePlan plan;
     const std::vector<Visible> vis = visible_set(dir_, v, &plan.ledger.tally);
@@ -320,15 +320,25 @@ class Scene {
 // A perspective island vista is a DIFFERENT and still-undemonstrated frame; see
 // this header's "what it does not do".
 inline zhao_abi::ZhMat4fx ortho_map_at(int32_t scale_raw, int32_t cam_x_raw, int32_t cam_z_raw) {
-  const int32_t tx =
-      static_cast<int32_t>(-((static_cast<int64_t>(scale_raw) * cam_x_raw) >> 16));
-  const int32_t tz =
-      static_cast<int32_t>(-((static_cast<int64_t>(scale_raw) * cam_z_raw) >> 16));
+  const int32_t tx = static_cast<int32_t>(-((static_cast<int64_t>(scale_raw) * cam_x_raw) >> 16));
+  const int32_t tz = static_cast<int32_t>(-((static_cast<int64_t>(scale_raw) * cam_z_raw) >> 16));
   zhao_abi::ZhMat4fx m{};
-  m.m00 = scale_raw; m.m01 = 0; m.m02 = 0;         m.m03 = tx;
-  m.m10 = 0;         m.m11 = 0; m.m12 = scale_raw; m.m13 = tz;
-  m.m20 = 0;         m.m21 = 0; m.m22 = 1 << 16;   m.m23 = 0;
-  m.m30 = 0;         m.m31 = 0; m.m32 = 0;         m.m33 = 1 << 16;
+  m.m00 = scale_raw;
+  m.m01 = 0;
+  m.m02 = 0;
+  m.m03 = tx;
+  m.m10 = 0;
+  m.m11 = 0;
+  m.m12 = scale_raw;
+  m.m13 = tz;
+  m.m20 = 0;
+  m.m21 = 0;
+  m.m22 = 1 << 16;
+  m.m23 = 0;
+  m.m30 = 0;
+  m.m31 = 0;
+  m.m32 = 0;
+  m.m33 = 1 << 16;
   return m;
 }
 

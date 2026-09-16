@@ -202,7 +202,7 @@ Pass draw_once(int mode) {
     h.step();
     inited = h.top.init_done_o != 0;
   }
-  std::printf("    [mode %d] inited=%d\n", mode, inited?1:0);
+  std::printf("    [mode %d] inited=%d\n", mode, inited ? 1 : 0);
   if (!inited) return r;
 
   h.top.render_fb_base_i = 0;
@@ -233,8 +233,7 @@ Pass draw_once(int mode) {
     const uint32_t base_w = kAssetBase >> 1;
     for (int i = 0; i < 32; ++i)
       for (int j = 0; j < 4; ++j)
-        poke(h, base_w + (uint32_t)(i * 4 + j),
-             (uint16_t)((pool[i] >> (16 * j)) & 0xFFFFu));
+        poke(h, base_w + (uint32_t)(i * 4 + j), (uint16_t)((pool[i] >> (16 * j)) & 0xFFFFu));
     r.pool_word0 = peek(h, base_w);
   }
 
@@ -252,7 +251,7 @@ Pass draw_once(int mode) {
     ps.blit_len = (uint32_t)canvas.size();
     ps.blit_crc = zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
     const bool pub = h.publish(0, zhao_shell::build_packet(ps));
-    std::printf("    [mode %d] published=%d\n", mode, pub?1:0);
+    std::printf("    [mode %d] published=%d\n", mode, pub ? 1 : 0);
     if (!pub) return r;
   }
 
@@ -386,8 +385,8 @@ int main(int argc, char** argv) {
 
   std::printf("  played: beats %u, meshlets %u, stalls %u, painted %d\n", played.beats,
               played.meshlets, played.stalls, nonzero(played.fb));
-  std::printf("  REAL:   beats %u, meshlets %u, stalls %u, painted %d\n", real.beats,
-              real.meshlets, real.stalls, nonzero(real.fb));
+  std::printf("  REAL:   beats %u, meshlets %u, stalls %u, painted %d\n", real.beats, real.meshlets,
+              real.stalls, nonzero(real.fb));
   std::printf("  REAL:   64-bit beats out of the DRAM %u; guard violations %u; route_err %u\n",
               real.geom_beats, real.guard_violations, real.route_err);
   std::printf("  REAL:   footprints refused %u, guard denials %u\n", real.refused_fp, real.denied);

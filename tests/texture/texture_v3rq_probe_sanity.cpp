@@ -73,8 +73,8 @@ int main() {
     seen.insert(d->hash_o);
   }
 
-  std::printf("  hash changed on %d of %d cycles, %zu distinct values\n",
-              changes, kCycles, seen.size());
+  std::printf("  hash changed on %d of %d cycles, %zu distinct values\n", changes, kCycles,
+              seen.size());
 
   zhao::check(changes > 3000,
               "the probe's hash moves on essentially every cycle -- a fixture "

@@ -81,8 +81,7 @@ int main(int, char**) {
         static_cast<uint32_t>(dut.out_m_o[0]));
   // INVERTED POLARITY — this control passes only when the differential
   // checker FAILS the mutant.
-  check(bad > 0, "the differential checker FIRES on the uncleaned accumulator", 1,
-        bad > 0 ? 1 : 0);
+  check(bad > 0, "the differential checker FIRES on the uncleaned accumulator", 1, bad > 0 ? 1 : 0);
   std::printf("[info] boundary mutant: %d of 12 elements diverge\n", bad);
 
   dut.final();

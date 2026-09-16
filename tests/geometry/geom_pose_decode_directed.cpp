@@ -283,8 +283,8 @@ int main(int argc, char** argv) {
     const int chain_cycles = diff(dut, f, "32-bone straight chain (the deepest the format allows)");
     // Informational, not a gate: the measured whole-palette decode cost at the
     // build's MUL_LANES parameters, for the GEOM.POSE throughput derivation.
-    std::printf("[info] 32-bone chain palette decode: %d cycles (%.1f cycles/bone)\n",
-                chain_cycles, chain_cycles / 32.0);
+    std::printf("[info] 32-bone chain palette decode: %d cycles (%.1f cycles/bone)\n", chain_cycles,
+                chain_cycles / 32.0);
   }
 
   // ---- 5. a wide fan: every bone a child of the root ----------------------

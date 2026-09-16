@@ -106,9 +106,7 @@ bool parse_mode(int argc, char** argv, RunMode& mode) {
   return true;
 }
 
-void step(Vzhao_shell_fit_smoke_tb& top,
-          VerilatedContext& context,
-          std::uint64_t phase) {
+void step(Vzhao_shell_fit_smoke_tb& top, VerilatedContext& context, std::uint64_t phase) {
   top.gpu_clk = !top.gpu_clk;
   if ((phase & 1u) == 0) top.vid_clk = !top.vid_clk;
   if ((phase & 3u) == 0) top.audio_clk = !top.audio_clk;
@@ -130,9 +128,8 @@ int main(int argc, char** argv) {
   top->audio_clk = 0;
   top->rst_n = 0;
   top->check_i = 0;
-  top->control_domain_i = mode.control_domain < 0
-                              ? 3
-                              : static_cast<std::uint8_t>(mode.control_domain);
+  top->control_domain_i =
+      mode.control_domain < 0 ? 3 : static_cast<std::uint8_t>(mode.control_domain);
   top->control_arm_i = mode.control_arm;
   top->protocol_fault_i = mode.protocol_fault;
   top->eval();
@@ -145,8 +142,7 @@ int main(int argc, char** argv) {
   top->rst_n = 1;
   top->eval();
 
-  for (std::uint64_t phase = 0; phase < mode.half_steps; ++phase)
-    step(*top, *context, phase);
+  for (std::uint64_t phase = 0; phase < mode.half_steps; ++phase) step(*top, *context, phase);
 
   top->check_i = 1;
   top->eval();
@@ -157,8 +153,7 @@ int main(int argc, char** argv) {
   const auto reasons = static_cast<unsigned>(top->dead_reasons_o);
   if (mode.control_domain >= 0) {
     const unsigned domain_bit = 1u << static_cast<unsigned>(mode.control_domain);
-    const unsigned reason_base =
-        static_cast<unsigned>(mode.control_domain) * kDeadReasonsPerDomain;
+    const unsigned reason_base = static_cast<unsigned>(mode.control_domain) * kDeadReasonsPerDomain;
     const unsigned expected_reasons = mode.control_arm == 9
                                           ? (0xd8u << reason_base)
                                           : (1u << (reason_base + mode.control_arm - 1u));
@@ -167,52 +162,38 @@ int main(int argc, char** argv) {
       std::fprintf(stderr,
                    "SHELL_FIT_SMOKE_CONTROL_FAIL domain=%d arm=%u dead=%u "
                    "reasons=0x%x expected=0x%x group=%u\n",
-                   mode.control_domain,
-                   mode.control_arm,
-                   dead,
-                   reasons,
-                   expected_reasons,
+                   mode.control_domain, mode.control_arm, dead, reasons, expected_reasons,
                    static_cast<unsigned>(top->control_group_failure_o));
       top->final();
       zhao::exit_hard(1);
     }
     std::printf("SHELL_FIT_SMOKE_CONTROL_PASS domain=%d arm=%u dead=%u reasons=0x%x\n",
-                mode.control_domain,
-                mode.control_arm,
-                dead,
-                reasons);
+                mode.control_domain, mode.control_arm, dead, reasons);
     top->final();
     zhao::exit_hard(0);
   }
 
   if (mode.protocol_fault != 0) {
     const unsigned expected_arm =
-        (mode.protocol_fault == 13 || mode.protocol_fault == 14 ||
-         mode.protocol_fault == 15)
+        (mode.protocol_fault == 13 || mode.protocol_fault == 14 || mode.protocol_fault == 15)
             ? (1u << 9u)
             : (1u << (mode.protocol_fault - 1u));
     const unsigned observed_arms = static_cast<unsigned>(top->protocol_failures_o);
     if (!top->protocol_failure_o || observed_arms != expected_arm) {
       std::fprintf(stderr,
                    "SHELL_FIT_SMOKE_PROTOCOL_CONTROL_FAIL fault=%u observed=0x%x expected=0x%x\n",
-                   mode.protocol_fault,
-                   observed_arms,
-                   expected_arm);
+                   mode.protocol_fault, observed_arms, expected_arm);
       top->final();
       zhao::exit_hard(1);
     }
-    std::printf("SHELL_FIT_SMOKE_PROTOCOL_CONTROL_PASS fault=%u arm=0x%x\n",
-                mode.protocol_fault,
+    std::printf("SHELL_FIT_SMOKE_PROTOCOL_CONTROL_PASS fault=%u arm=0x%x\n", mode.protocol_fault,
                 observed_arms);
     top->final();
     zhao::exit_hard(0);
   }
 
   if (top->baseline_failed_o) {
-    std::fprintf(stderr,
-                 "SHELL_FIT_SMOKE_FAIL baseline dead=%u reasons=0x%x\n",
-                 dead,
-                 reasons);
+    std::fprintf(stderr, "SHELL_FIT_SMOKE_FAIL baseline dead=%u reasons=0x%x\n", dead, reasons);
     top->final();
     zhao::exit_hard(1);
   }

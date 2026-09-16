@@ -80,8 +80,7 @@ int main() {
     ++cycles_to_head;
   }
   d->eval();
-  zhao::check(d->empty_o == 0, "the pushed item does reach the head", 0,
-              d->empty_o);
+  zhao::check(d->empty_o == 0, "the pushed item does reach the head", 0, d->empty_o);
   zhao::check(d->dout_o == 0xA5, "with its payload intact", 0xA5, d->dout_o);
 
   // Drain it.
@@ -90,8 +89,7 @@ int main() {
   tick(d);
   d->pop_i = 0;
   d->eval();
-  zhao::check(d->empty_o == 1, "and the queue returns to empty after one pop",
-              1, d->empty_o);
+  zhao::check(d->empty_o == 1, "and the queue returns to empty after one pop", 1, d->empty_o);
 
   // ---- S5.3's CAPACITY CONTRACT -------------------------------------------
   // The body holds D. The heads hold up to two more. If `full_o` came from the
@@ -119,8 +117,7 @@ int main() {
               "the queue accepts EXACTLY D tickets -- not D+2, which is what a "
               "body-only full_o would advertise once the heads are counted",
               kDepth, accepted);
-  zhao::check(d->err_o == 0, "and no error was latched while filling", 0,
-              d->err_o);
+  zhao::check(d->err_o == 0, "and no error was latched while filling", 0, d->err_o);
 
   // Hold at full: the flag must not glitch low and re-open credit.
   int full_held = 0;
@@ -131,8 +128,7 @@ int main() {
     if (d->full_o) ++full_held;
     tick(d);
   }
-  zhao::check(full_held == 8,
-              "full_o stays asserted for eight idle cycles at capacity", 8,
+  zhao::check(full_held == 8, "full_o stays asserted for eight idle cycles at capacity", 8,
               full_held);
 
   // ---- the round trip back to empty ---------------------------------------
@@ -147,8 +143,7 @@ int main() {
   }
   d->pop_i = 0;
   d->eval();
-  zhao::check(drained == kDepth,
-              "exactly as many tickets come back out as went in", kDepth,
+  zhao::check(drained == kDepth, "exactly as many tickets come back out as went in", kDepth,
               drained);
   zhao::check(d->empty_o == 1, "and the queue returns to empty", 1, d->empty_o);
   zhao::check(d->full_o == 0, "with full_o released", 0, d->full_o);
@@ -185,15 +180,13 @@ int main() {
     d->pop_i = 0;
     d->eval();
 
-    zhao::check(pops > 0, "the sustained-rate window actually popped", 1,
-                pops > 0 ? 1 : 0);
+    zhao::check(pops > 0, "the sustained-rate window actually popped", 1, pops > 0 ? 1 : 0);
     zhao::check(bubbles == 0,
                 "one pop per clock with continuous supply and demand -- no "
                 "bubble in 300 cycles, which is what the SPARE slot buys and a "
                 "single registered head would not",
                 0, bubbles);
-    zhao::check(d->err_o == 0, "and the sustained run latched no error", 0,
-                d->err_o);
+    zhao::check(d->err_o == 0, "and the sustained run latched no error", 0, d->err_o);
   }
 
   // ---- S16.3: READY DROPPING JUST AFTER A READ LAUNCHES ---------------------
@@ -224,8 +217,8 @@ int main() {
     d->eval();
 
     uint32_t rng = 0xBEEF01u;
-    int next_push = 0;   // payload counter, so order is checkable
-    int next_pop = 0;    // what we expect out
+    int next_push = 0;  // payload counter, so order is checkable
+    int next_pop = 0;   // what we expect out
     int pushed = 0, popped = 0, order_errors = 0;
 
     for (int i = 0; i < 4000; ++i) {
@@ -268,9 +261,8 @@ int main() {
     d->pop_i = 0;
     d->eval();
 
-    zhao::check(pushed > 1000,
-                "the adversarial pattern actually moved traffic (not vacuous)",
-                1, pushed > 1000 ? 1 : 0);
+    zhao::check(pushed > 1000, "the adversarial pattern actually moved traffic (not vacuous)", 1,
+                pushed > 1000 ? 1 : 0);
     zhao::check(popped == pushed,
                 "every token pushed comes out EXACTLY ONCE under ready dropping "
                 "-- none lost in a launched read, none delivered twice",
@@ -279,9 +271,7 @@ int main() {
                 "and in order: the head/spare pair never reorders a token whose "
                 "read was in flight when ready fell",
                 0, order_errors);
-    zhao::check(d->err_o == 0,
-                "and the queue latched no protocol error throughout", 0,
-                d->err_o);
+    zhao::check(d->err_o == 0, "and the queue latched no protocol error throughout", 0, d->err_o);
   }
 
   const int rc = zhao::report_and_exit("raster_ticketq_rh_directed");

@@ -118,8 +118,8 @@ zc::Verdict dut_cull(Vzhao_geom_cull_mutant& dut, uint8_t active, vec3fx c, fx16
     ++n;
   }
   check(dut.valid_o == 1, "mutant: every evaluation still completes", 1, dut.valid_o);
-  check(n == kWalk, "mutant: the exact walk law STILL HOLDS (the pin cannot see this fault)",
-        kWalk, static_cast<uint64_t>(n));
+  check(n == kWalk, "mutant: the exact walk law STILL HOLDS (the pin cannot see this fault)", kWalk,
+        static_cast<uint64_t>(n));
   check(dut.ready_o == 1, "mutant: ready_o still returns with the verdict", 1, dut.ready_o);
   zc::Verdict v{};
   v.visible_mask = static_cast<uint8_t>(dut.vis_o);
@@ -199,8 +199,9 @@ int main(int argc, char** argv) {
   // would FAIL the mutant.
   check(mismatches > 0, "the differential checker FIRES on the uncleaned accumulator", 1,
         mismatches > 0 ? 1 : 0);
-  std::printf("[info] boundary mutant: %d of %d verdicts diverge (%d of %d oracle-visible spheres)\n",
-              mismatches, cases, inside_mismatches, inside_cases);
+  std::printf(
+      "[info] boundary mutant: %d of %d verdicts diverge (%d of %d oracle-visible spheres)\n",
+      mismatches, cases, inside_mismatches, inside_cases);
 
   dut.final();
   return zhao::report_and_exit("geom_cull_mutant_control");

@@ -139,9 +139,9 @@ Observed run(Vzhao_geom_meshfetch& t, const Desc& d, const MF::InstanceXform& x,
   for (int c = 0; c < 200 && !done; ++c) {
     if (guard_valid(t) && !accepted) {
       o.request_len = guard_len(t);
-      t.guard_rsp_i = 0b100;              // ready, no verdict yet
+      t.guard_rsp_i = 0b100;  // ready, no verdict yet
     } else if (accepted && !granted) {
-      t.guard_rsp_i = 0b010;              // ok, one cycle later
+      t.guard_rsp_i = 0b010;  // ok, one cycle later
     } else {
       t.guard_rsp_i = 0;
     }

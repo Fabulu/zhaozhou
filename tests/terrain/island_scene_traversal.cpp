@@ -136,9 +136,9 @@ int32_t tri_wave(int32_t v, int32_t period) {
 
 // height16 raw (S 1.7.8 -- metres * 256, qformats §9), from world metres.
 int16_t island_height(int32_t world_x_m, int32_t world_z_m) {
-  const int32_t h = 2560                                       // ~10 m of base
-                    + 12 * tri_wave(world_x_m, 373)            // long ridges
-                    + 9 * tri_wave(world_z_m, 257)             // cross swell
+  const int32_t h = 2560                                         // ~10 m of base
+                    + 12 * tri_wave(world_x_m, 373)              // long ridges
+                    + 9 * tri_wave(world_z_m, 257)               // cross swell
                     + 5 * tri_wave(world_x_m + world_z_m, 611);  // diagonal relief
   return static_cast<int16_t>(h);
 }
@@ -161,7 +161,7 @@ void author_page(zref::render::TerrainPatch& p) {
 // ------------------------------------------------------------ canvas reads ---
 
 struct Footprint {
-  uint32_t painted = 0;                      // pixels that are not the background
+  uint32_t painted = 0;  // pixels that are not the background
   uint32_t x0 = 0xFFFFFFFFu, x1 = 0, y0 = 0xFFFFFFFFu, y1 = 0;
   uint32_t width() const { return painted ? x1 - x0 + 1 : 0; }
   uint32_t height() const { return painted ? y1 - y0 + 1 : 0; }
@@ -193,9 +193,9 @@ Footprint footprint_of(const zref::render::RenderCanvas& c, uint32_t slot,
 
 // --------------------------------------------------------------- the world ---
 
-constexpr int32_t kSide = 125;         // patches per side: 8000 m / 64 m
-constexpr int32_t kResidency = 1024;   // pages, TERRAIN.RESIDENCY's plan
-constexpr uint32_t kPageBytes = 21376; // terrain_rules §2 page stride
+constexpr int32_t kSide = 125;          // patches per side: 8000 m / 64 m
+constexpr int32_t kResidency = 1024;    // pages, TERRAIN.RESIDENCY's plan
+constexpr uint32_t kPageBytes = 21376;  // terrain_rules §2 page stride
 constexpr uint32_t kMaterial = 0x4000001u;
 constexpr int32_t kDiscRadiusPatches100 = 1590;  // 15.9 patches, x100 to stay integer
 
@@ -253,8 +253,7 @@ int32_t ribbon_closed_form(const zref::island::View& v) {
 }
 
 // (2) THE DIRECTORY ITSELF. A loop in this file, not the one under test.
-int32_t directory_count_in_window(const zref::island::Directory& dir,
-                                  const zref::island::View& v) {
+int32_t directory_count_in_window(const zref::island::Directory& dir, const zref::island::View& v) {
   int32_t n = 0;
   for (int32_t iz = v.centre_iz - v.radius; iz <= v.centre_iz + v.radius; ++iz)
     for (int32_t ix = v.centre_ix - v.radius; ix <= v.centre_ix + v.radius; ++ix)
@@ -301,8 +300,8 @@ int main(int argc, char** argv) {
     const int64_t tenths = (dense_bytes * 10 + (1 << 19)) / (1 << 20);
     check_eq(static_cast<long>(tenths), 3185,
              "a dense 8x8 km plate is 318.5 MiB of patch pages alone");
-    const int64_t res_tenths = (static_cast<int64_t>(kResidency) * kPageBytes * 10 + (1 << 19)) /
-                               (1 << 20);
+    const int64_t res_tenths =
+        (static_cast<int64_t>(kResidency) * kPageBytes * 10 + (1 << 19)) / (1 << 20);
     check_eq(static_cast<long>(res_tenths), 209, "the 1,024-page residency is 20.9 MiB");
   }
 
@@ -346,7 +345,10 @@ int main(int argc, char** argv) {
         if (g_fire == 8) {  // FIRE: 793 patches all stacked on one spot
           isl::Envelope e;
           isl::patch_envelope(dd, kSide / 2, kSide / 2, &e);
-          p->env_x0 = e.x0; p->env_z0 = e.z0; p->env_x1 = e.x1; p->env_z1 = e.z1;
+          p->env_x0 = e.x0;
+          p->env_z0 = e.z0;
+          p->env_x1 = e.x1;
+          p->env_z1 = e.z1;
         }
         author_page(*p);
       }
@@ -375,21 +377,20 @@ int main(int argc, char** argv) {
   isl::View whole_frame_view = whole;
   if (g_fire == 2) whole_frame_view.radius = 10;
   const isl::FramePlan whole_plan = disc_scene.build_frame(1, map_cam, whole_frame_view);
-  std::printf("  whole-island frame: %u DrawProcedural in %u records, %zu bytes; "
-              "window asked %u, ground %u, sky %u, beyond %u\n",
-              whole_plan.ledger.issued, whole_plan.ledger.records, whole_plan.packet.size(),
-              whole_plan.ledger.tally.examined, whole_plan.ledger.tally.emitted,
-              whole_plan.ledger.tally.sky, whole_plan.ledger.tally.out_of_extent);
+  std::printf(
+      "  whole-island frame: %u DrawProcedural in %u records, %zu bytes; "
+      "window asked %u, ground %u, sky %u, beyond %u\n",
+      whole_plan.ledger.issued, whole_plan.ledger.records, whole_plan.packet.size(),
+      whole_plan.ledger.tally.examined, whole_plan.ledger.tally.emitted,
+      whole_plan.ledger.tally.sky, whole_plan.ledger.tally.out_of_extent);
 
   check_eq(static_cast<long>(whole_plan.ledger.tally.examined), 127L * 127,
            "a radius-63 window asks (2R+1)^2 = 16,129 questions");
-  check_eq(static_cast<long>(whole_plan.ledger.tally.emitted +
-                             whole_plan.ledger.tally.sky +
+  check_eq(static_cast<long>(whole_plan.ledger.tally.emitted + whole_plan.ledger.tally.sky +
                              whole_plan.ledger.tally.out_of_extent),
            static_cast<long>(whole_plan.ledger.tally.examined),
            "every question got exactly one answer, and the answers are counted apart");
-  check_eq(static_cast<long>(whole_plan.ledger.issued),
-           directory_count_in_window(disc, whole),
+  check_eq(static_cast<long>(whole_plan.ledger.issued), directory_count_in_window(disc, whole),
            "the frame issues one DrawProcedural per patch the DIRECTORY calls ground");
   check_eq(static_cast<long>(whole_plan.ledger.issued), static_cast<long>(disc.resident_count()),
            "and a window containing the whole island issues the whole island");
@@ -444,10 +445,11 @@ int main(int argc, char** argv) {
   const int32_t want_w = static_cast<int32_t>(16LL * span_x_m * 192 / 65536);
   const int32_t want_h = static_cast<int32_t>(16LL * span_z_m * 120 / 65536);
   const int32_t one_patch_w = static_cast<int32_t>(16LL * patch_m * 192 / 65536);
-  std::printf("  whole-island frame painted %u px, bbox %ux%u at (%u,%u); directory says "
-              "%d x %d m -> %d x %d px (one patch = %d px)\n",
-              fp.painted, fp.width(), fp.height(), fp.x0, fp.y0, span_x_m, span_z_m, want_w,
-              want_h, one_patch_w);
+  std::printf(
+      "  whole-island frame painted %u px, bbox %ux%u at (%u,%u); directory says "
+      "%d x %d m -> %d x %d px (one patch = %d px)\n",
+      fp.painted, fp.width(), fp.height(), fp.x0, fp.y0, span_x_m, span_z_m, want_w, want_h,
+      one_patch_w);
   check(fp.painted > 2000, "the island actually rasterises -- thousands of pixels, not a dot");
   check(fp.width() >= want_w - 2 && fp.width() <= want_w + 2,
         "the drawn island is exactly as WIDE as the directory's patch range predicts");
@@ -709,9 +711,10 @@ int main(int argc, char** argv) {
     const uint32_t high_water_before = streamer.peak();
     const isl::Stats narrow =
         streamer.update(isl::view_for_camera(rd, ((60 * patch_m) << 16), cam_z_raw, 1), &rl);
-    std::printf("  narrow window: Stats::peak_resident = %u, live = %zu, Streamer::peak() = %u"
-                "   (high-water before the narrowing: %u)\n",
-                narrow.peak_resident, streamer.live_count(), streamer.peak(), high_water_before);
+    std::printf(
+        "  narrow window: Stats::peak_resident = %u, live = %zu, Streamer::peak() = %u"
+        "   (high-water before the narrowing: %u)\n",
+        narrow.peak_resident, streamer.live_count(), streamer.peak(), high_water_before);
     check_eq(static_cast<long>(streamer.peak()), static_cast<long>(high_water_before),
              "Streamer::peak() is a high-water mark and does NOT fall when the window shrinks");
     check_eq(static_cast<long>(narrow.peak_resident), static_cast<long>(high_water_before),

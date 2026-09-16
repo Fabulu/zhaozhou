@@ -41,7 +41,7 @@ void ck(bool ok, const char* what, long long want = 1, long long got = 0) {
   }
 }
 
-constexpr int32_t kSide = 125;  // 8 km at 64 m patches
+constexpr int32_t kSide = 125;    // 8 km at 64 m patches
 constexpr double kRadius = 15.9;  // 3.25 km^2 of ground -> 793 patches
 
 // The SAME shaped island tests/terrain/island_dir_rtl_directed.cpp uses, and for
@@ -63,15 +63,14 @@ struct Snapshot {
 };
 
 Snapshot snap(Vtb_island_visible& d) {
-  return Snapshot{d.cnt_examined,  d.cnt_emitted,          d.cnt_sky,
-                  d.cnt_out_of_extent, d.cnt_bad_pitch,
-                  d.isl_cnt_resident, d.isl_cnt_open_sky, d.isl_cnt_out_of_extent,
-                  d.isl_cnt_bad_pitch};
+  return Snapshot{d.cnt_examined,      d.cnt_emitted,           d.cnt_sky,
+                  d.cnt_out_of_extent, d.cnt_bad_pitch,         d.isl_cnt_resident,
+                  d.isl_cnt_open_sky,  d.isl_cnt_out_of_extent, d.isl_cnt_bad_pitch};
 }
 
 struct WinResult {
   std::vector<Emitted> got;
-  uint64_t cycles = 0;   // from the cycle after acceptance to the done pulse
+  uint64_t cycles = 0;  // from the cycle after acceptance to the done pulse
   bool done = false;
   bool accepted = false;
 };
@@ -127,8 +126,8 @@ WinResult run_window(Vtb_island_visible& d, int32_t cx, int32_t cz, uint8_t radi
     }
     d.eval();
     if (d.p_valid && d.p_ready)
-      R.got.push_back(Emitted{static_cast<int32_t>(d.p_ix), static_cast<int32_t>(d.p_iz),
-                              d.p_handle});
+      R.got.push_back(
+          Emitted{static_cast<int32_t>(d.p_ix), static_cast<int32_t>(d.p_iz), d.p_handle});
     ++R.cycles;
     const bool fin = d.v_done;
     zhao::tick(d);
@@ -144,8 +143,8 @@ WinResult run_window(Vtb_island_visible& d, int32_t cx, int32_t cz, uint8_t radi
         "emitted %zu, p_valid %d, v_busy %d, examined %u emitted %u sky %u out %u bad %u\n",
         cx, cz, static_cast<unsigned>(radius), stall_seed,
         static_cast<unsigned long long>(R.cycles), R.got.size(), static_cast<int>(d.p_valid),
-        static_cast<int>(d.v_busy), d.cnt_examined, d.cnt_emitted, d.cnt_sky,
-        d.cnt_out_of_extent, d.cnt_bad_pitch);
+        static_cast<int>(d.v_busy), d.cnt_examined, d.cnt_emitted, d.cnt_sky, d.cnt_out_of_extent,
+        d.cnt_bad_pitch);
     std::fflush(stdout);
   }
   d.p_ready = 1;
@@ -159,8 +158,7 @@ int compare(const char* label, const WinResult& R, const std::vector<isl::Visibl
             bool verbose = true) {
   int bad = 0;
   if (R.got.size() != want.size()) {
-    if (verbose)
-      std::printf("    %s: emitted %zu, oracle %zu\n", label, R.got.size(), want.size());
+    if (verbose) std::printf("    %s: emitted %zu, oracle %zu\n", label, R.got.size(), want.size());
     ++bad;
   }
   const std::size_t n = R.got.size() < want.size() ? R.got.size() : want.size();
@@ -285,7 +283,11 @@ int main(int argc, char** argv) {
   // water.
   // =====================================================================
   {
-    struct Edge { int32_t cx, cz; uint8_t r; const char* where; };
+    struct Edge {
+      int32_t cx, cz;
+      uint8_t r;
+      const char* where;
+    };
     const Edge edges[] = {
         {2, 2, 5, "the (0,0) corner"},
         {kSide - 2, kSide - 2, 5, "the far corner"},
@@ -389,7 +391,10 @@ int main(int argc, char** argv) {
   // because at radius 6 an extra row is 13 cells lost in 169.
   // =====================================================================
   {
-    struct One { int32_t ix, iz; const char* what; };
+    struct One {
+      int32_t ix, iz;
+      const char* what;
+    };
     const One ones[] = {
         {kSide / 2, kSide / 2, "a resident patch"},
         {5, 5, "a sky patch"},
@@ -553,14 +558,18 @@ int main(int argc, char** argv) {
       total.emitted += T.emitted;
       total.sky += T.sky;
       total.out_of_extent += T.out_of_extent;
-      if (T.out_of_extent == 0) ++wholly_in;
-      else if (T.out_of_extent == T.examined) ++wholly_out;
-      else ++straddling;
+      if (T.out_of_extent == 0)
+        ++wholly_in;
+      else if (T.out_of_extent == T.examined)
+        ++wholly_out;
+      else
+        ++straddling;
       if (T.emitted > 0) ++with_ground;
     }
 
     int radii_seen = 0;
-    for (bool b : radius_drawn) if (b) ++radii_seen;
+    for (bool b : radius_drawn)
+      if (b) ++radii_seen;
 
     const Snapshot phase_end = snap(d);
     std::printf(
@@ -588,8 +597,8 @@ int main(int argc, char** argv) {
        "amounts, so no query was invented and no answer swallowed",
        0, dir_bad);
     ck(phase_end.examined - phase_start.examined == total.examined,
-       "with the phase's total examined count matching the oracle's",
-       total.examined, phase_end.examined - phase_start.examined);
+       "with the phase's total examined count matching the oracle's", total.examined,
+       phase_end.examined - phase_start.examined);
 
     // NOT VACUOUS. A randomised phase whose draws all landed in one region
     // would compare a lot of identical windows and prove one case.
@@ -597,8 +606,7 @@ int main(int argc, char** argv) {
        "and the draws genuinely covered windows wholly inside the island, "
        "wholly outside it, straddling its edge, and containing ground -- so "
        "this is not a randomised walk over one kind of window",
-       1,
-       (wholly_in > 20 && wholly_out > 5 && straddling > 20 && with_ground > 20) ? 1 : 0);
+       1, (wholly_in > 20 && wholly_out > 5 && straddling > 20 && with_ground > 20) ? 1 : 0);
     ck(radii_seen == 8,
        "and every radius from 0 to 7 was actually drawn -- the first version "
        "took the LCG's low bits and produced exactly two radii, 0 and 4, while "

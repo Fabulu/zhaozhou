@@ -32,12 +32,10 @@ int main(int argc, char** argv) {
     top.idx_b_i = (255 - k) & 0xFF;  // port B walks backwards — both ports live
     zhao::tick(top);                 // synchronous read: values after the edge
     top.eval();
-    zhao::check(sext18(top.val_a_o) == zref::forge::kEvalJitterTable[k],
-                "port A entry", (uint32_t)zref::forge::kEvalJitterTable[k],
-                (uint32_t)sext18(top.val_a_o));
-    zhao::check(sext18(top.val_b_o) == zref::forge::kEvalJitterTable[255 - k],
-                "port B entry", (uint32_t)zref::forge::kEvalJitterTable[255 - k],
-                (uint32_t)sext18(top.val_b_o));
+    zhao::check(sext18(top.val_a_o) == zref::forge::kEvalJitterTable[k], "port A entry",
+                (uint32_t)zref::forge::kEvalJitterTable[k], (uint32_t)sext18(top.val_a_o));
+    zhao::check(sext18(top.val_b_o) == zref::forge::kEvalJitterTable[255 - k], "port B entry",
+                (uint32_t)zref::forge::kEvalJitterTable[255 - k], (uint32_t)sext18(top.val_b_o));
   }
 
   return zhao::report_and_exit("forge_jitter_rom_directed");

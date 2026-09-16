@@ -71,13 +71,20 @@ void ck(bool ok, const char* what, long expect, long got) {
 
 constexpr uint32_t kArenaBase = 0x2000'0000u;
 constexpr uint32_t kArenaBytes = 128u * 1024u;
-constexpr uint32_t kListOff = 0x0800u;      // 8-byte aligned, well inside
+constexpr uint32_t kListOff = 0x0800u;  // 8-byte aligned, well inside
 constexpr uint32_t kEpoch = 0x00C0'FFEEu;
 
 // Verdicts, from the RTL's localparams.
 enum : int {
-  kVOk = 0, kVEpoch = 1, kVLen = 2, kVCount = 3, kVAlign = 4,
-  kVUnreach = 5, kVCrc = 6, kVBridge = 7, kVEmpty = 8
+  kVOk = 0,
+  kVEpoch = 1,
+  kVLen = 2,
+  kVCount = 3,
+  kVAlign = 4,
+  kVUnreach = 5,
+  kVCrc = 6,
+  kVBridge = 7,
+  kVEmpty = 8
   // 9 WAS `kVSeq` AND IS DELIBERATELY UNALLOCATED. The block refused any
   // `sequence` above 65,535, on the belief that TERRAIN.SEQ's frame ring
   // carried sixteen bits. It carries thirty-two -- `zhao_terrain_seq.sv:110`
@@ -124,7 +131,7 @@ struct World {
     d.cfg_beat_gap_i = 0;
     d.cfg_err_mode_i = 0;
     d.cfg_err_burst_i = 0;
-    d.cfg_hps_client_i = 6;   // ZHAO_CLIENT_TERRAIN_BUILD
+    d.cfg_hps_client_i = 6;  // ZHAO_CLIENT_TERRAIN_BUILD
     d.cfg_epoch_i = kEpoch;
     d.cfg_arena_base_i = kArenaBase;
     d.cfg_arena_bytes_i = kArenaBytes;
@@ -179,27 +186,30 @@ struct Out {
   int verdict = -1;
   uint32_t crc_seen = 0;
   uint32_t src = 0;
-  int frames = 0;             // fr_start pulses
+  int frames = 0;  // fr_start pulses
   uint32_t fr_count = 0;
   uint32_t fr_seq = 0;
   uint32_t fr_epoch = 0;
-  int rec_before_frame = 0;   // records offered before any fr_start
+  int rec_before_frame = 0;  // records offered before any fr_start
   uint64_t cycles = 0;
 };
 
 bool draw(uint32_t& s, int pattern) {
   s = s * 1664525u + 1013904223u;
   switch (pattern) {
-    case 0: return true;
-    case 1: return ((s >> 16) & 1u) != 0u;
-    case 2: return ((s >> 16) & 3u) != 0u;
-    default: return ((s >> 16) & 7u) == 0u;
+    case 0:
+      return true;
+    case 1:
+      return ((s >> 16) & 1u) != 0u;
+    case 2:
+      return ((s >> 16) & 3u) != 0u;
+    default:
+      return ((s >> 16) & 7u) == 0u;
   }
 }
 
-Out submit(World& w, uint32_t epoch, uint32_t off, uint32_t bytes, uint32_t crc,
-           uint16_t count, uint32_t seq, uint32_t src, int pattern,
-           uint64_t cap = 400000ull) {
+Out submit(World& w, uint32_t epoch, uint32_t off, uint32_t bytes, uint32_t crc, uint16_t count,
+           uint32_t seq, uint32_t src, int pattern, uint64_t cap = 400000ull) {
   Vtb_terrain_cmd& d = w.d;
   Out o;
   uint32_t sr = 0x2468u ^ uint32_t(pattern * 7919), sd = 0x1357u ^ uint32_t(pattern * 104729);
@@ -214,7 +224,11 @@ Out submit(World& w, uint32_t epoch, uint32_t off, uint32_t bytes, uint32_t crc,
   d.j_src_id = src;
   d.eval();
   int guard = 0;
-  while (!d.j_ready && guard < 1000) { zhao::tick(d); d.eval(); ++guard; }
+  while (!d.j_ready && guard < 1000) {
+    zhao::tick(d);
+    d.eval();
+    ++guard;
+  }
   zhao::tick(d);
   d.j_valid = 0;
   d.eval();
@@ -270,9 +284,9 @@ int compare(const char* tag, const std::vector<ss::PatchRecord>& got,
     const ss::PatchRecord& g = got[i];
     const ss::PatchRecord& e = want[i];
     if (g.island_id == e.island_id && g.patch_ix == e.patch_ix && g.patch_iz == e.patch_iz &&
-        g.hps_page_addr == e.hps_page_addr &&
-        g.expected_page_crc32c == e.expected_page_crc32c && g.flags == e.flags &&
-        g.view_mask == e.view_mask && g.priority == e.priority && g.source_id == e.source_id)
+        g.hps_page_addr == e.hps_page_addr && g.expected_page_crc32c == e.expected_page_crc32c &&
+        g.flags == e.flags && g.view_mask == e.view_mask && g.priority == e.priority &&
+        g.source_id == e.source_id)
       continue;
     ++bad;
     if (printed < 4) {
@@ -326,7 +340,9 @@ int main(int argc, char** argv) {
     const uint32_t crc = w.place(kListOff, list);
     const uint32_t bytes = uint32_t(list.size() * ss::kRecordBytes);
 
-    d.stat_clear_i = 1; zhao::tick(d); d.stat_clear_i = 0;
+    d.stat_clear_i = 1;
+    zhao::tick(d);
+    d.stat_clear_i = 0;
     const Out o = submit(w, kEpoch, kListOff, bytes, crc, 8, 0x77u, 0xABCD0001u, 0);
 
     ck(o.done && o.ok, "A the command completed and reported ok", 1, (o.done && o.ok) ? 1 : 0);
@@ -358,12 +374,10 @@ int main(int argc, char** argv) {
                 (unsigned long long)o.cycles, d.bursts_seen, d.beats_seen, d.c_bytes, bytes);
     ck(d.c_accepted == 1, "A counted as one accepted set", 1, long(d.c_accepted));
     ck(d.c_records == 8, "A and eight records emitted", 8, long(d.c_records));
-    ck(d.first_addr >= kArenaBase + kListOff,
-       "A every read was at or after the list's start", long(kArenaBase + kListOff),
-       long(d.first_addr));
-    ck(d.last_addr < kArenaBase + kListOff + bytes,
-       "A and none began past its end", long(kArenaBase + kListOff + bytes),
-       long(d.last_addr));
+    ck(d.first_addr >= kArenaBase + kListOff, "A every read was at or after the list's start",
+       long(kArenaBase + kListOff), long(d.first_addr));
+    ck(d.last_addr < kArenaBase + kListOff + bytes, "A and none began past its end",
+       long(kArenaBase + kListOff + bytes), long(d.last_addr));
   }
 
   // =========================================================================
@@ -380,7 +394,9 @@ int main(int argc, char** argv) {
     const uint32_t crc = w.place(kListOff, list);
     const uint32_t bytes = uint32_t(list.size() * ss::kRecordBytes);
 
-    d.stat_clear_i = 1; zhao::tick(d); d.stat_clear_i = 0;
+    d.stat_clear_i = 1;
+    zhao::tick(d);
+    d.stat_clear_i = 0;
     const Out o = submit(w, kEpoch, kListOff, bytes, crc, 7, 0x78u, 0xABCD0002u, 0);
     ck(o.done && o.ok, "B an odd record count completes", 1, (o.done && o.ok) ? 1 : 0);
     ck(int(o.recs.size()) == 7, "B seven records", 7, int(o.recs.size()));
@@ -408,8 +424,8 @@ int main(int argc, char** argv) {
       d.cfg_beat_gap_i = uint8_t(pattern);
       d.eval();
       const uint32_t crc = w.place(kListOff, list);
-      const Out o = submit(w, kEpoch, kListOff, bytes, crc, 13, 0x79u, 0xABCD0003u, pattern,
-                           2000000ull);
+      const Out o =
+          submit(w, kEpoch, kListOff, bytes, crc, 13, 0x79u, 0xABCD0003u, pattern, 2000000ull);
 
       char msg[176];
       std::snprintf(msg, sizeof msg, "C pattern %d completed ok", pattern);
@@ -442,7 +458,9 @@ int main(int argc, char** argv) {
     w.arena[kListOff + bytes - 5] ^= 0x01u;
     w.upload(kListOff, bytes);
 
-    d.stat_clear_i = 1; zhao::tick(d); d.stat_clear_i = 0;
+    d.stat_clear_i = 1;
+    zhao::tick(d);
+    d.stat_clear_i = 0;
     const Out o = submit(w, kEpoch, kListOff, bytes, crc, 9, 0x7Au, 0xABCD0004u, 0);
 
     ck(o.done, "D a corrupt list still produces a completion");
@@ -453,16 +471,15 @@ int main(int argc, char** argv) {
        "found out",
        0, int(o.recs.size()));
     ck(o.frames == 0,
-       "D and no frame was started -- TERRAIN.SEQ never heard about this command at all",
-       0, o.frames);
+       "D and no frame was started -- TERRAIN.SEQ never heard about this command at all", 0,
+       o.frames);
     ck(o.crc_seen != crc,
        "D the completion reports the CRC it actually computed, which is not the one the "
        "command claimed",
        1, (o.crc_seen != crc) ? 1 : 0);
     ck(d.c_crc_fails == 1, "D counted once", 1, long(d.c_crc_fails));
-    ck(d.c_bytes == bytes,
-       "D and it read the list ONCE -- the second pass never happened", long(bytes),
-       long(d.c_bytes));
+    ck(d.c_bytes == bytes, "D and it read the list ONCE -- the second pass never happened",
+       long(bytes), long(d.c_bytes));
     std::printf("   claimed 0x%08X, computed 0x%08X\n", crc, o.crc_seen);
   }
 
@@ -484,11 +501,11 @@ int main(int argc, char** argv) {
       uint32_t epoch, off, bytes, count, seq;
     };
     const Case cases[] = {
-      {"a stale resource_epoch",       kVEpoch,   kEpoch ^ 1u, kListOff, bytes,   4, 1},
-      {"an empty set",                 kVEmpty,   kEpoch,      kListOff, 0,       0, 1},
-      {"list_bytes != 32*patch_count", kVLen,     kEpoch,      kListOff, bytes+32,4, 1},
-      {"a list that is not 8-aligned", kVAlign,   kEpoch,      kListOff+4, bytes, 4, 1},
-      {"a list past the arena",        kVUnreach, kEpoch,      kArenaBytes - 32, bytes, 4, 1},
+        {"a stale resource_epoch", kVEpoch, kEpoch ^ 1u, kListOff, bytes, 4, 1},
+        {"an empty set", kVEmpty, kEpoch, kListOff, 0, 0, 1},
+        {"list_bytes != 32*patch_count", kVLen, kEpoch, kListOff, bytes + 32, 4, 1},
+        {"a list that is not 8-aligned", kVAlign, kEpoch, kListOff + 4, bytes, 4, 1},
+        {"a list past the arena", kVUnreach, kEpoch, kArenaBytes - 32, bytes, 4, 1},
     };
 
     // AND A SEQUENCE ABOVE 65,535 IS NOT A REFUSAL AT ALL, which is the other
@@ -497,21 +514,21 @@ int main(int argc, char** argv) {
     {
       w.reset();
       const uint32_t crc = w.place(kListOff, list);
-      const Out o = submit(w, kEpoch, kListOff, bytes, crc, 4, 0x1234'5678u, 0xEEEE0001u,
-                           0, 60000);
-      ck(o.done && o.ok,
-         "E a sequence above 65,535 is accepted -- the frame ring is 32 bits wide", 1,
-         (o.done && o.ok) ? 1 : 0);
-      ck(o.fr_seq == 0x1234'5678u,
-         "E and it reaches the ring unaltered", long(0x1234'5678u), long(o.fr_seq));
+      const Out o = submit(w, kEpoch, kListOff, bytes, crc, 4, 0x1234'5678u, 0xEEEE0001u, 0, 60000);
+      ck(o.done && o.ok, "E a sequence above 65,535 is accepted -- the frame ring is 32 bits wide",
+         1, (o.done && o.ok) ? 1 : 0);
+      ck(o.fr_seq == 0x1234'5678u, "E and it reaches the ring unaltered", long(0x1234'5678u),
+         long(o.fr_seq));
     }
 
     for (const Case& c : cases) {
       w.reset();
       const uint32_t crc = w.place(kListOff, list);
-      d.stat_clear_i = 1; zhao::tick(d); d.stat_clear_i = 0;
-      const Out o = submit(w, c.epoch, c.off, c.bytes, crc, uint16_t(c.count), c.seq,
-                           0xEEEE0000u, 0, 60000);
+      d.stat_clear_i = 1;
+      zhao::tick(d);
+      d.stat_clear_i = 0;
+      const Out o =
+          submit(w, c.epoch, c.off, c.bytes, crc, uint16_t(c.count), c.seq, 0xEEEE0000u, 0, 60000);
 
       char msg[200];
       std::snprintf(msg, sizeof msg, "E %s is refused", c.name);
@@ -520,7 +537,8 @@ int main(int argc, char** argv) {
       ck(o.verdict == c.verdict, msg, c.verdict, o.verdict);
       std::snprintf(msg, sizeof msg,
                     "E %s reads NOT ONE BYTE -- the refusal does not issue the read it is "
-                    "refusing", c.name);
+                    "refusing",
+                    c.name);
       ck(d.bursts_seen == 0, msg, 0, long(d.bursts_seen));
       std::snprintf(msg, sizeof msg, "E %s starts no frame", c.name);
       ck(o.frames == 0 && o.recs.empty(), msg, 0, o.frames + int(o.recs.size()));
@@ -540,9 +558,11 @@ int main(int argc, char** argv) {
       w.reset();
       const uint32_t crc = w.place(kListOff, list);
       d.cfg_err_mode_i = uint8_t(mode);
-      d.cfg_err_burst_i = 1;      // not the first, so the walk is under way
+      d.cfg_err_burst_i = 1;  // not the first, so the walk is under way
       d.eval();
-      d.stat_clear_i = 1; zhao::tick(d); d.stat_clear_i = 0;
+      d.stat_clear_i = 1;
+      zhao::tick(d);
+      d.stat_clear_i = 0;
       const Out o = submit(w, kEpoch, kListOff, bytes, crc, 8, 0x7Bu, 0xABCD0005u, 0, 200000);
 
       char msg[160];
@@ -554,7 +574,8 @@ int main(int argc, char** argv) {
       ck(d.c_bridge_errs == 1, msg, 1, long(d.c_bridge_errs));
       std::snprintf(msg, sizeof msg,
                     "F mode %d offered no records -- the failure was in the CRC pass, which "
-                    "is where every read starts", mode);
+                    "is where every read starts",
+                    mode);
       ck(o.recs.empty(), msg, 0, int(o.recs.size()));
       d.cfg_err_mode_i = 0;
     }
@@ -574,8 +595,7 @@ int main(int argc, char** argv) {
     const uint32_t crc = w.place(kListOff, list);
     const uint32_t bytes = uint32_t(list.size() * ss::kRecordBytes);
     const Out o = submit(w, kEpoch, kListOff, bytes, crc, 5, 0x7Cu, 0xABCD0006u, 2);
-    ck(o.done && o.ok, "G it submits again after the fault phases", 1,
-       (o.done && o.ok) ? 1 : 0);
+    ck(o.done && o.ok, "G it submits again after the fault phases", 1, (o.done && o.ok) ? 1 : 0);
     ck(int(o.recs.size()) == 5, "G five records", 5, int(o.recs.size()));
     ck(compare("G", o.recs, list) == 0, "G and they match");
     ck(d.c_idle != 0, "G and the block returns to idle", 1, d.c_idle ? 1 : 0);

@@ -360,8 +360,7 @@ int main(int argc, char** argv) {
     // readable is the same property that makes it unable to fail.
     int observable = 0;
     {
-      const int32_t mi[16] = {kOne, 0, 0, 0, 0, kOne, 0, 0,
-                              0, 0, kOne, 0, 0, 0, 0, kOne};
+      const int32_t mi[16] = {kOne, 0, 0, 0, 0, kOne, 0, 0, 0, 0, kOne, 0, 0, 0, 0, kOne};
       const zref::mat4fx mo = mat_of(mi);
       dev.configure(0, mo, odd_vp);
       const int32_t ndcs[4] = {85, 597, 1109, 1621};
@@ -371,12 +370,10 @@ int main(int argc, char** argv) {
         // before trusting it -- instrumentation only, never the expectation.
         const int64_t mad = static_cast<int64_t>(n) * (3 << 15);
         const bool is_half = ((mad & 0xFFFF) == 0x8000);
-        const bool shows = (((((mad + 32768) >> 16) + 128) >> 8) !=
-                            ((((mad) >> 16) + 128) >> 8));
+        const bool shows = (((((mad + 32768) >> 16) + 128) >> 8) != ((((mad) >> 16) + 128) >> 8));
         if (is_half && shows) ++observable;
         const TriIn t = tri(n, n, kOne, n + 1, n, kOne, n, n + 1, kOne, src++);
-        expect(dev, t, mo, odd_vp,
-               "a vertex where the fx_mad rounding CHANGES the emitted pixel");
+        expect(dev, t, mo, odd_vp, "a vertex where the fx_mad rounding CHANGES the emitted pixel");
       }
       dev.configure(0, m, odd_vp);  // restore this case's own matrix
     }

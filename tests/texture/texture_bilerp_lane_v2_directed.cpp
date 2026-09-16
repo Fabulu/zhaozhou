@@ -36,10 +36,10 @@ uint32_t next_random(uint32_t* state) {
 }
 
 uint8_t oracle(const Job& j) {
-  const int64_t a = static_cast<int64_t>(j.t00) * 256 +
-                    (static_cast<int64_t>(j.t10) - j.t00) * j.fu;
-  const int64_t b = static_cast<int64_t>(j.t01) * 256 +
-                    (static_cast<int64_t>(j.t11) - j.t01) * j.fu;
+  const int64_t a =
+      static_cast<int64_t>(j.t00) * 256 + (static_cast<int64_t>(j.t10) - j.t00) * j.fu;
+  const int64_t b =
+      static_cast<int64_t>(j.t01) * 256 + (static_cast<int64_t>(j.t11) - j.t01) * j.fu;
   const int64_t sum = a * 256 + (b - a) * j.fv;
   return static_cast<uint8_t>((sum + 32768) >> 16);
 }
@@ -68,8 +68,7 @@ void test_lane(Vzhao_texture_bilerp_lane_v2& top) {
   reset(top);
   top.eval();
   zhao::check(top.idle_o == 1, "bilerp-v2 idle after reset", 1, top.idle_o);
-  zhao::check(top.occupancy_o == 0, "bilerp-v2 occupancy zero after reset", 0,
-              top.occupancy_o);
+  zhao::check(top.occupancy_o == 0, "bilerp-v2 occupancy zero after reset", 0, top.occupancy_o);
 
   std::vector<Job> jobs;
   auto add = [&](int t00, int t10, int t01, int t11, int fu, int fv) {
@@ -88,7 +87,7 @@ void test_lane(Vzhao_texture_bilerp_lane_v2& top) {
   add(0, 0, 0, 0, 0, 0);
   add(255, 255, 255, 255, 255, 255);
   add(0, 255, 0, 255, 0, 0);
-  add(0, 255, 0, 255, 128, 0);     // exact half-up tie -> 128
+  add(0, 255, 0, 255, 128, 0);  // exact half-up tie -> 128
   add(0, 255, 255, 0, 128, 128);
   add(255, 0, 0, 255, 1, 254);
   add(255, 0, 0, 255, 254, 1);
@@ -115,8 +114,8 @@ void test_lane(Vzhao_texture_bilerp_lane_v2& top) {
   while ((offered < jobs.size() || retired < jobs.size()) && cycle < 20000) {
     // First 64 clocks are all-ready to fill all three stages at II=1.  Later
     // stalls exercise backward pressure and immutable held output.
-    const bool ready = cycle < 64 ? true : ((cycle % 13) != 5 && (cycle % 13) != 6 &&
-                                            (cycle % 13) != 7);
+    const bool ready =
+        cycle < 64 ? true : ((cycle % 13) != 5 && (cycle % 13) != 6 && (cycle % 13) != 7);
     top.out_ready_i = ready ? 1 : 0;
     top.job_valid_i = offered < jobs.size() ? 1 : 0;
     if (offered < jobs.size()) drive(top, jobs[offered]);
@@ -170,12 +169,9 @@ void test_lane(Vzhao_texture_bilerp_lane_v2& top) {
   zhao::check(wrong == 0, "bilerp-v2 value/token/channel and hold are exact", 0, wrong);
   zhao::check(first_retire - first_accept == 3, "bilerp-v2 latency remains three clocks", 3,
               first_retire - first_accept);
-  zhao::check(max_occupancy == 3, "bilerp-v2 fills all three stages at II=1", 3,
-              max_occupancy);
-  zhao::check(hold_checks > 0, "bilerp-v2 output stall exercised hold", 1,
-              hold_checks > 0 ? 1 : 0);
-  zhao::check(top.jobs_o == jobs.size(), "bilerp-v2 counts accepted jobs", jobs.size(),
-              top.jobs_o);
+  zhao::check(max_occupancy == 3, "bilerp-v2 fills all three stages at II=1", 3, max_occupancy);
+  zhao::check(hold_checks > 0, "bilerp-v2 output stall exercised hold", 1, hold_checks > 0 ? 1 : 0);
+  zhao::check(top.jobs_o == jobs.size(), "bilerp-v2 counts accepted jobs", jobs.size(), top.jobs_o);
   zhao::check(top.idle_o == 1, "bilerp-v2 returns to complete idle", 1, top.idle_o);
 }
 

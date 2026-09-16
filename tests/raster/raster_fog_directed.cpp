@@ -77,9 +77,7 @@ int main() {
   // fogf sweep: every f8 value is reachable, plus the two rails and one value
   // deliberately outside [0, 0x10000] to prove the clamp is a clamp.
   for (int fi = 0; fi <= 257; ++fi) {
-    const int32_t fogf = (fi == 256)   ? -4096
-                         : (fi == 257) ? 0x11000
-                                       : (fi << 8);
+    const int32_t fogf = (fi == 256) ? -4096 : (fi == 257) ? 0x11000 : (fi << 8);
     const int32_t amt8 = 255 - ref_f8(fogf);
     for (int c = 0; c < 256; c += 5) {  // stride 5: 52 x 258 = 13,416 fragments
       d->v_valid_i = 1;

@@ -25,8 +25,7 @@ struct Tuple66 {
 
 void drive_tuple(Vzhao_texture_palette_res_v2& top, const Tuple66& t) {
   top.req_tuple_i[0] = (t.rgb & 0x00FFFFFFu) | (static_cast<uint32_t>(t.alpha) << 24);
-  top.req_tuple_i[1] = static_cast<uint32_t>(t.index) |
-                       (static_cast<uint32_t>(t.status) << 8) |
+  top.req_tuple_i[1] = static_cast<uint32_t>(t.index) | (static_cast<uint32_t>(t.status) << 8) |
                        ((t.token & 0xFFFFu) << 16);
   top.req_tuple_i[2] = (t.token >> 16) & 0x3u;
 }
@@ -37,14 +36,13 @@ Tuple66 read_tuple(const Vzhao_texture_palette_res_v2& top) {
   t.alpha = static_cast<uint8_t>(top.rsp_tuple_o[0] >> 24);
   t.index = static_cast<uint8_t>(top.rsp_tuple_o[1]);
   t.status = static_cast<uint8_t>(top.rsp_tuple_o[1] >> 8);
-  t.token = ((top.rsp_tuple_o[1] >> 16) & 0xFFFFu) |
-            ((top.rsp_tuple_o[2] & 0x3u) << 16);
+  t.token = ((top.rsp_tuple_o[1] >> 16) & 0xFFFFu) | ((top.rsp_tuple_o[2] & 0x3u) << 16);
   return t;
 }
 
 bool same(const Tuple66& a, const Tuple66& b) {
-  return a.token == b.token && a.status == b.status && a.index == b.index &&
-         a.alpha == b.alpha && a.rgb == b.rgb;
+  return a.token == b.token && a.status == b.status && a.index == b.index && a.alpha == b.alpha &&
+         a.rgb == b.rgb;
 }
 
 uint32_t expand565(uint16_t value) {
@@ -67,8 +65,8 @@ void reset(Vzhao_texture_palette_res_v2& top) {
   zhao::tick(top);
 }
 
-void load_op(Vzhao_texture_palette_res_v2& top, int op, int slot, int generation,
-             int index, uint16_t value, bool crc_ok) {
+void load_op(Vzhao_texture_palette_res_v2& top, int op, int slot, int generation, int index,
+             uint16_t value, bool crc_ok) {
   top.ld_valid_i = 1;
   top.ld_op_i = op;
   top.ld_slot_i = slot;
@@ -77,14 +75,12 @@ void load_op(Vzhao_texture_palette_res_v2& top, int op, int slot, int generation
   top.ld_rgb565_i = value;
   top.ld_crc_ok_i = crc_ok ? 1 : 0;
   top.eval();
-  zhao::check(top.ld_ready_o == 1, "palette-v2 programming port accepts", 1,
-              top.ld_ready_o);
+  zhao::check(top.ld_ready_o == 1, "palette-v2 programming port accepts", 1, top.ld_ready_o);
   zhao::tick(top);
   top.ld_valid_i = 0;
 }
 
-void load_slot(Vzhao_texture_palette_res_v2& top, int slot, int generation,
-               uint16_t base) {
+void load_slot(Vzhao_texture_palette_res_v2& top, int slot, int generation, uint16_t base) {
   load_op(top, 0, slot, generation, 0, 0, true);
   top.eval();
   zhao::check(top.cfg_idle_o == 0, "palette-v2 cfg idle is low during open load", 0,
@@ -93,12 +89,11 @@ void load_slot(Vzhao_texture_palette_res_v2& top, int slot, int generation,
     load_op(top, 1, 0, 0, index, static_cast<uint16_t>(base + index), true);
   load_op(top, 2, slot, generation, 0, 0, true);
   top.eval();
-  zhao::check(top.cfg_idle_o == 1, "palette-v2 cfg idle returns after END", 1,
-              top.cfg_idle_o);
+  zhao::check(top.cfg_idle_o == 1, "palette-v2 cfg idle returns after END", 1, top.cfg_idle_o);
 }
 
-void accept_request(Vzhao_texture_palette_res_v2& top, const Tuple66& request,
-                    int slot, int generation) {
+void accept_request(Vzhao_texture_palette_res_v2& top, const Tuple66& request, int slot,
+                    int generation) {
   top.req_valid_i = 1;
   top.req_slot_i = slot;
   top.req_gen_i = generation;
@@ -136,8 +131,7 @@ void test_cold_and_fresh(Vzhao_texture_palette_res_v2& top) {
   reset(top);
   top.eval();
   zhao::check(top.idle_o == 1, "palette-v2 data path idle after reset", 1, top.idle_o);
-  zhao::check(top.cfg_idle_o == 1, "palette-v2 config path idle after reset", 1,
-              top.cfg_idle_o);
+  zhao::check(top.cfg_idle_o == 1, "palette-v2 config path idle after reset", 1, top.cfg_idle_o);
 
   const Tuple66 cold{0x3ABCDu, 0x00, 0xFF, 0x37, 0x123456};
   accept_request(top, cold, 2, 0);
@@ -166,15 +160,13 @@ void test_cold_and_fresh(Vzhao_texture_palette_res_v2& top) {
                   reserved_rsp.rgb == 0xFF00FF,
               "palette-v2 carries all status bits and does not publish partial success", 1,
               reserved_rsp.status == 0x80 ? 1 : 0);
-  zhao::check(top.lookups_o == 3 && top.stale_o == 0 && top.cold_o == 1 &&
-                  top.loads_ok_o == 1,
+  zhao::check(top.lookups_o == 3 && top.stale_o == 0 && top.cold_o == 1 && top.loads_ok_o == 1,
               "cold/fresh lane has exact lookup/stale/cold/load counts", 1,
               (top.lookups_o == 3 && top.cold_o == 1) ? 1 : 0);
   zhao::check(top.err_write_outside_o == 0 && top.err_same_gen_o == 0 &&
                   top.err_incomplete_o == 0 && top.err_crc_o == 0,
               "cold/fresh lane leaves every programming error counter zero", 0,
-              top.err_write_outside_o + top.err_same_gen_o +
-                  top.err_incomplete_o + top.err_crc_o);
+              top.err_write_outside_o + top.err_same_gen_o + top.err_incomplete_o + top.err_crc_o);
 }
 
 void test_generation_and_hold(Vzhao_texture_palette_res_v2& top) {
@@ -195,8 +187,7 @@ void test_generation_and_hold(Vzhao_texture_palette_res_v2& top) {
   top.ld_rgb565_i = 0;
   top.ld_crc_ok_i = 1;
   top.eval();
-  zhao::check(top.req_ready_o == 1, "same-edge reload lookup is accepted", 1,
-              top.req_ready_o);
+  zhao::check(top.req_ready_o == 1, "same-edge reload lookup is accepted", 1, top.req_ready_o);
   zhao::tick(top);
   top.req_valid_i = 0;
   top.ld_valid_i = 0;
@@ -248,17 +239,14 @@ void test_generation_and_hold(Vzhao_texture_palette_res_v2& top) {
               "held palette response remains the original accepted tuple", 1,
               final_held.token == held.token ? 1 : 0);
   top.eval();
-  zhao::check(top.idle_o == 1, "palette-v2 idle only after held response retires", 1,
-              top.idle_o);
-  zhao::check(top.lookups_o == 2 && top.stale_o == 1 && top.cold_o == 0 &&
-                  top.loads_ok_o == 2,
+  zhao::check(top.idle_o == 1, "palette-v2 idle only after held response retires", 1, top.idle_o);
+  zhao::check(top.lookups_o == 2 && top.stale_o == 1 && top.cold_o == 0 && top.loads_ok_o == 2,
               "reload lane has exact lookup/stale/cold/load counts", 1,
               (top.lookups_o == 2 && top.stale_o == 1 && top.loads_ok_o == 2) ? 1 : 0);
   zhao::check(top.err_write_outside_o == 0 && top.err_same_gen_o == 0 &&
                   top.err_incomplete_o == 0 && top.err_crc_o == 0,
               "reload lane leaves programming error counters zero", 0,
-              top.err_write_outside_o + top.err_same_gen_o +
-                  top.err_incomplete_o + top.err_crc_o);
+              top.err_write_outside_o + top.err_same_gen_o + top.err_incomplete_o + top.err_crc_o);
 }
 
 void test_programming_error_controls(Vzhao_texture_palette_res_v2& top) {
@@ -266,32 +254,26 @@ void test_programming_error_controls(Vzhao_texture_palette_res_v2& top) {
 
   // Each misuse is independent and expected exactly once.  Zero-valued error
   // counters are not cited until every detector has been made to fire here.
-  load_op(top, 1, 0, 0, 7, 0x1234, true);   // WRITE outside a load
-  load_op(top, 0, 0, 0, 0, 0, true);        // BEGIN reusing reset generation
+  load_op(top, 1, 0, 0, 7, 0x1234, true);  // WRITE outside a load
+  load_op(top, 0, 0, 0, 0, 0, true);       // BEGIN reusing reset generation
 
   load_op(top, 0, 0, 1, 0, 0, true);
   load_op(top, 1, 0, 0, 0, 0x2000, true);
-  load_op(top, 2, 0, 1, 0, 0, true);        // incomplete
+  load_op(top, 2, 0, 1, 0, 0, true);  // incomplete
 
   load_op(top, 0, 0, 2, 0, 0, true);
-  load_op(top, 2, 0, 2, 0, 0, false);       // CRC has priority over incomplete
+  load_op(top, 2, 0, 2, 0, 0, false);  // CRC has priority over incomplete
 
-  load_slot(top, 0, 3, 0x3000);             // one successful load witness
+  load_slot(top, 0, 3, 0x3000);  // one successful load witness
 
-  zhao::check(top.err_write_outside_o == 1,
-              "WRITE-outside detector fires exactly once", 1,
+  zhao::check(top.err_write_outside_o == 1, "WRITE-outside detector fires exactly once", 1,
               top.err_write_outside_o);
-  zhao::check(top.err_same_gen_o == 1,
-              "same-generation BEGIN detector fires exactly once", 1,
+  zhao::check(top.err_same_gen_o == 1, "same-generation BEGIN detector fires exactly once", 1,
               top.err_same_gen_o);
-  zhao::check(top.err_incomplete_o == 1,
-              "incomplete END detector fires exactly once", 1,
+  zhao::check(top.err_incomplete_o == 1, "incomplete END detector fires exactly once", 1,
               top.err_incomplete_o);
-  zhao::check(top.err_crc_o == 1,
-              "CRC-failed END detector fires exactly once", 1,
-              top.err_crc_o);
-  zhao::check(top.loads_ok_o == 1,
-              "successful-load counter is independent and exact", 1,
+  zhao::check(top.err_crc_o == 1, "CRC-failed END detector fires exactly once", 1, top.err_crc_o);
+  zhao::check(top.loads_ok_o == 1, "successful-load counter is independent and exact", 1,
               top.loads_ok_o);
   zhao::check(top.lookups_o == 0 && top.stale_o == 0 && top.cold_o == 0,
               "programming controls create no phantom lookup verdict", 0,
@@ -335,8 +317,7 @@ void test_pipeline_cadence(Vzhao_texture_palette_res_v2& top) {
     top.eval();
 
     if (top.req_valid_i && !top.req_ready_o) ++ingress_bubbles;
-    if (retirement_started && retired < kJobs && !top.rsp_valid_o)
-      ++retirement_bubbles;
+    if (retirement_started && retired < kJobs && !top.rsp_valid_o) ++retirement_bubbles;
 
     if (top.rsp_valid_o && top.rsp_ready_i) {
       if (!retirement_started) {
@@ -363,28 +344,20 @@ void test_pipeline_cadence(Vzhao_texture_palette_res_v2& top) {
   top.req_valid_i = 0;
   top.rsp_ready_i = 0;
 
-  zhao::check(offered == kJobs, "palette-v2 accepts the complete cadence stream", kJobs,
-              offered);
-  zhao::check(retired == kJobs, "palette-v2 retires the complete cadence stream", kJobs,
-              retired);
+  zhao::check(offered == kJobs, "palette-v2 accepts the complete cadence stream", kJobs, offered);
+  zhao::check(retired == kJobs, "palette-v2 retires the complete cadence stream", kJobs, retired);
   zhao::check(wrong == 0, "palette-v2 cadence stream keeps every tuple aligned", 0, wrong);
-  zhao::check(ingress_bubbles == 0 &&
-                  (last_accept_cycle - first_accept_cycle) == kJobs - 1,
-              "all-ready palette ingress has no acceptance bubble", 0,
-              ingress_bubbles);
-  zhao::check(retirement_bubbles == 0 &&
-                  (last_retire_cycle - first_retire_cycle) == kJobs - 1,
-              "all-ready palette retirement has no valid bubble after fill", 0,
-              retirement_bubbles);
-  zhao::check(top.lookups_o == kJobs && top.stale_o == 0 && top.cold_o == 0 &&
-                  top.loads_ok_o == 1,
+  zhao::check(ingress_bubbles == 0 && (last_accept_cycle - first_accept_cycle) == kJobs - 1,
+              "all-ready palette ingress has no acceptance bubble", 0, ingress_bubbles);
+  zhao::check(retirement_bubbles == 0 && (last_retire_cycle - first_retire_cycle) == kJobs - 1,
+              "all-ready palette retirement has no valid bubble after fill", 0, retirement_bubbles);
+  zhao::check(top.lookups_o == kJobs && top.stale_o == 0 && top.cold_o == 0 && top.loads_ok_o == 1,
               "cadence lane has exact lookup/stale/cold/load counts", 1,
               (top.lookups_o == kJobs && top.loads_ok_o == 1) ? 1 : 0);
   zhao::check(top.err_write_outside_o == 0 && top.err_same_gen_o == 0 &&
                   top.err_incomplete_o == 0 && top.err_crc_o == 0,
               "cadence lane leaves every programming error counter zero", 0,
-              top.err_write_outside_o + top.err_same_gen_o +
-                  top.err_incomplete_o + top.err_crc_o);
+              top.err_write_outside_o + top.err_same_gen_o + top.err_incomplete_o + top.err_crc_o);
 }
 
 }  // namespace

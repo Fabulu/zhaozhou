@@ -102,9 +102,9 @@ void wr32(uint8_t* p, uint32_t v) {
 
 std::vector<uint8_t> make_page(uint32_t island, int16_t ix, int16_t iz, uint32_t seed) {
   std::vector<uint8_t> b(tp::kPageBytes, 0);
-  wr16(&b[0], 1);           // format_version
-  b[2] = 1;                 // pitch_log2 = +1, the canonical 2.0 m
-  b[3] = 0;                 // flags
+  wr16(&b[0], 1);  // format_version
+  b[2] = 1;        // pitch_log2 = +1, the canonical 2.0 m
+  b[3] = 0;        // flags
   wr32(&b[4], island);
   wr16(&b[8], static_cast<uint16_t>(ix));
   wr16(&b[10], static_cast<uint16_t>(iz));
@@ -249,8 +249,8 @@ Fin run_job(Bench& b, const Job& j, int fin_hold) {
   bool stable = true;
   for (int i = 0; i < fin_hold; ++i) {
     b.tick();
-    if (!b.d.fin_valid || b.d.fin_crc != crc0 || b.d.fin_verdict != vd0 ||
-        b.d.fin_slot != slot0 || b.d.fin_src_id != src0 || b.d.fin_ok != ok0) {
+    if (!b.d.fin_valid || b.d.fin_crc != crc0 || b.d.fin_verdict != vd0 || b.d.fin_slot != slot0 ||
+        b.d.fin_src_id != src0 || b.d.fin_ok != ok0) {
       stable = false;
       break;
     }
@@ -281,7 +281,7 @@ Fin run_job(Bench& b, const Job& j, int fin_hold) {
 // pass" and goes green for the wrong reason.
 struct ProbeVerdict {
   uint32_t ok = 0;
-  uint32_t fwd = 0;   // reached the arbiter port -- what no-escape is ABOUT
+  uint32_t fwd = 0;  // reached the arbiter port -- what no-escape is ABOUT
   uint32_t viol = 0;
 };
 
@@ -466,8 +466,7 @@ int main(int argc, char** argv) {
   // same count the played guard accepted -- and "exactly", not "at least",
   // because a machine doing its work twice produces byte-identical output.
   cke(tp::kPageBursts, b.d.shadow_ok_count, "golden: the real MEM.GUARD passed all 334");
-  cke(tp::kPageBursts, b.d.shadow_fwd_count,
-      "golden: and forwarded all 334 to the arbiter port");
+  cke(tp::kPageBursts, b.d.shadow_fwd_count, "golden: and forwarded all 334 to the arbiter port");
   cke(tp::kPageBeats, b.d.wbeats_seen, "golden: exactly 2,672 write beats");
   cke(0, b.d.vram_oob, "golden: no write outside the page's own slot");
   cke(0, b.d.wlast_bad, "golden: wlast is exactly the 8th beat of every burst");
@@ -923,8 +922,8 @@ int main(int argc, char** argv) {
     // shared constants in the RTL, so this is a check that they STAYED shared.
     probe_refuses(b, "probe: TERRAIN.BUILD may not read 64 B below the pool base", false,
                   kTerrainBuildClient, kPoolBase - 64, 64, full_be(64));
-    probe_refuses(b, "probe: TERRAIN.BUILD may not read the 64 B straddling the pool end",
-                  false, kTerrainBuildClient, kPoolEnd - 32, 64, full_be(64));
+    probe_refuses(b, "probe: TERRAIN.BUILD may not read the 64 B straddling the pool end", false,
+                  kTerrainBuildClient, kPoolEnd - 32, 64, full_be(64));
     probe_refuses(b, "probe: TERRAIN.BUILD may not read AT the pool end", false,
                   kTerrainBuildClient, kPoolEnd, 64, full_be(64));
     // The direction bit still means something everywhere it meant something
@@ -1035,10 +1034,14 @@ int main(int argc, char** argv) {
     if (f.src_id != jj.src_id) ++src_bad;
     if (f.held_stable < 0) ++src_bad;
 
-    if (o.verdict == tp::kPageOk) ++saw_ok;
-    else if (o.verdict == tp::kPageCrcFail) ++saw_crc;
-    else if (o.verdict == tp::kPageHeaderIdent) ++saw_ident;
-    else ++saw_refuse;
+    if (o.verdict == tp::kPageOk)
+      ++saw_ok;
+    else if (o.verdict == tp::kPageCrcFail)
+      ++saw_crc;
+    else if (o.verdict == tp::kPageHeaderIdent)
+      ++saw_ident;
+    else
+      ++saw_refuse;
   }
 
   cke(0, static_cast<uint64_t>(mismatches), "random: every draw matches the oracle");

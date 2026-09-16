@@ -77,11 +77,11 @@ void ck(bool ok, const char* what, long expect, long got) {
   }
 }
 
-constexpr uint32_t kPageBytes = tp::kPageBytes;      // 21,376
-constexpr uint32_t kPageWords = kPageBytes / 8;      // 2,672
+constexpr uint32_t kPageBytes = tp::kPageBytes;  // 21,376
+constexpr uint32_t kPageWords = kPageBytes / 8;  // 2,672
 constexpr uint32_t kSlots = 4;
-constexpr uint32_t kPoolBase = 0x04000000u;          // ruling T2
-constexpr int kVerts = tp::kLatticeVerts;            // 1,089
+constexpr uint32_t kPoolBase = 0x04000000u;  // ruling T2
+constexpr int kVerts = tp::kLatticeVerts;    // 1,089
 
 // ---------------------------------------------------------------------------
 // THE PAGE IMAGE
@@ -101,20 +101,16 @@ struct Pool {
 // `salt` moves every plane of a page, so two slots never share a value.
 void fill_page(Pool& p, uint32_t slot, int salt) {
   for (int k = 0; k < kVerts; ++k) {
-    p.put16(slot, tp::kLayerAOff + 2u * uint32_t(k),
-            int16_t(0x1000 + 3 * k + salt * 0x0037));
-    p.put16(slot, tp::kLayerBOff + 2u * uint32_t(k),
-            int16_t(-(0x0500 + 5 * k + salt * 0x0011)));
-    p.put16(slot, tp::kLayerCOff + 2u * uint32_t(k),
-            int16_t(0x4000 + 7 * k + salt * 0x0071));
+    p.put16(slot, tp::kLayerAOff + 2u * uint32_t(k), int16_t(0x1000 + 3 * k + salt * 0x0037));
+    p.put16(slot, tp::kLayerBOff + 2u * uint32_t(k), int16_t(-(0x0500 + 5 * k + salt * 0x0011)));
+    p.put16(slot, tp::kLayerCOff + 2u * uint32_t(k), int16_t(0x4000 + 7 * k + salt * 0x0071));
   }
   // The bytes NOBODY should read, made loud. Layers D..H and the header get a
   // pattern that is not a plausible height, so a cursor that ran past its plane
   // produces something the comparison cannot mistake for terrain.
   for (uint32_t off = tp::kLayerDOff; off + 1 < kPageBytes; off += 2)
     p.put16(slot, off, int16_t(0x7EEE));
-  for (uint32_t off = 0; off + 1 < tp::kLayerAOff; off += 2)
-    p.put16(slot, off, int16_t(0x7DDD));
+  for (uint32_t off = 0; off + 1 < tp::kLayerAOff; off += 2) p.put16(slot, off, int16_t(0x7DDD));
 }
 
 struct World {
@@ -140,7 +136,7 @@ struct World {
     d.cfg_short_mode_i = 0;
     d.cfg_short_idx_i = 0;
     d.cfg_short_beat_i = 0;
-    d.cfg_vram_client_i = 6;   // ZHAO_CLIENT_TERRAIN_BUILD, ruling T3
+    d.cfg_vram_client_i = 6;  // ZHAO_CLIENT_TERRAIN_BUILD, ruling T3
     d.cfg_epoch_i = 0x11u;
   }
 
@@ -158,8 +154,7 @@ struct World {
   void load(const Pool& p) {
     for (uint32_t w = 0; w < kSlots * kPageWords; ++w) {
       uint64_t v = 0;
-      for (int byte = 0; byte < 8; ++byte)
-        v |= uint64_t(p.b[w * 8 + uint32_t(byte)]) << (8 * byte);
+      for (int byte = 0; byte < 8; ++byte) v |= uint64_t(p.b[w * 8 + uint32_t(byte)]) << (8 * byte);
       d.mw_en = 1;
       d.mw_addr = w;
       d.mw_data = v;
@@ -179,9 +174,9 @@ struct Run {
   uint32_t done_slot = 0;
   uint32_t done_gen = 0;
   uint32_t done_src = 0;
-  int first_flags = 0;   // how many vertices claimed v_first
+  int first_flags = 0;  // how many vertices claimed v_first
   int last_flags = 0;
-  int ident_bad = 0;     // vertices whose identity passthrough disagreed
+  int ident_bad = 0;  // vertices whose identity passthrough disagreed
   uint64_t cycles = 0;
 };
 
@@ -192,10 +187,14 @@ struct Run {
 bool draw(uint32_t& s, int pattern) {
   s = s * 1664525u + 1013904223u;
   switch (pattern) {
-    case 0: return true;
-    case 1: return ((s >> 16) & 1u) != 0u;
-    case 2: return ((s >> 16) & 3u) != 0u;
-    default: return ((s >> 16) & 7u) == 0u;
+    case 0:
+      return true;
+    case 1:
+      return ((s >> 16) & 1u) != 0u;
+    case 2:
+      return ((s >> 16) & 3u) != 0u;
+    default:
+      return ((s >> 16) & 7u) == 0u;
   }
 }
 
@@ -212,7 +211,11 @@ Run stream(World& w, uint32_t slot, uint32_t gen, uint32_t epoch, uint32_t src, 
   d.j_src_id = src;
   d.eval();
   int guard = 0;
-  while (!d.j_ready && guard < 1000) { zhao::tick(d); d.eval(); ++guard; }
+  while (!d.j_ready && guard < 1000) {
+    zhao::tick(d);
+    d.eval();
+    ++guard;
+  }
   zhao::tick(d);
   d.j_valid = 0;
   d.eval();
@@ -275,8 +278,8 @@ int compare(const char* tag, const std::vector<tp::LatticeVertex>& got,
       if (got[i].bottom != want[i].bottom)
         std::printf("      bottom got %6d want %6d\n", got[i].bottom, want[i].bottom);
       if (got[i].vi != want[i].vi || got[i].vj != want[i].vj)
-        std::printf("      index  got (%d,%d) want (%d,%d)\n", got[i].vi, got[i].vj,
-                    want[i].vi, want[i].vj);
+        std::printf("      index  got (%d,%d) want (%d,%d)\n", got[i].vi, got[i].vj, want[i].vi,
+                    want[i].vj);
     }
   }
   return bad;
@@ -307,7 +310,9 @@ int main(int argc, char** argv) {
   // =========================================================================
   {
     std::printf("-- A: slot 1, no stalls --\n");
-    d.stat_clear_i = 1; zhao::tick(d); d.stat_clear_i = 0;
+    d.stat_clear_i = 1;
+    zhao::tick(d);
+    d.stat_clear_i = 0;
     const Run r = stream(w, 1, 0x21, 0x11u, 0xABCD0001u, 0);
 
     ck(r.done, "A the job completed");
@@ -333,8 +338,8 @@ int main(int argc, char** argv) {
     ck(d.first_rd_addr >= lo, "A the lowest read address is inside slot 1", long(lo),
        long(d.first_rd_addr));
     ck(d.last_rd_addr < hi,
-       "A and the highest is below the end of plane C -- no cursor ran into layer D",
-       long(hi), long(d.last_rd_addr));
+       "A and the highest is below the end of plane C -- no cursor ran into layer D", long(hi),
+       long(d.last_rd_addr));
 
     // THE REAL GUARD, not the played one's blanket verdict.
     ck(d.shadow_req > 0 && d.shadow_ok == d.shadow_req && d.shadow_viol == 0,
@@ -346,19 +351,17 @@ int main(int argc, char** argv) {
        long(d.shadow_req), long(d.shadow_fwd));
 
     std::printf("   %llu cycles, %u bursts, %u beats; guard: req=%u ok=%u fwd=%u viol=%u\n",
-                (unsigned long long)r.cycles, d.c_bursts, d.rbeats_seen, d.shadow_req,
-                d.shadow_ok, d.shadow_fwd, d.shadow_viol);
+                (unsigned long long)r.cycles, d.c_bursts, d.rbeats_seen, d.shadow_req, d.shadow_ok,
+                d.shadow_fwd, d.shadow_viol);
 
     // THE BURST COUNT, DERIVED RATHER THAN OBSERVED. Each plane is 2,178 bytes
     // starting at 64, 2,242 and 4,420; a 64-byte staging buffer covers the
     // aligned burst containing the wanted sample, so plane P needs one burst
     // per distinct value of `(P + 2k) >> 6` over k in 0..1088. That is
     // floor((P + 2176) / 64) - floor(P / 64) + 1.
-    auto bursts_for = [](uint32_t off) {
-      return (off + 2176u) / 64u - off / 64u + 1u;
-    };
-    const uint32_t expect_bursts = bursts_for(tp::kLayerAOff) + bursts_for(tp::kLayerBOff) +
-                                   bursts_for(tp::kLayerCOff);
+    auto bursts_for = [](uint32_t off) { return (off + 2176u) / 64u - off / 64u + 1u; };
+    const uint32_t expect_bursts =
+        bursts_for(tp::kLayerAOff) + bursts_for(tp::kLayerBOff) + bursts_for(tp::kLayerCOff);
     ck(d.c_bursts == expect_bursts,
        "A it read exactly the bursts the layout requires -- no re-reads, no prefetch",
        long(expect_bursts), long(d.c_bursts));
@@ -387,8 +390,8 @@ int main(int argc, char** argv) {
       ck(bad == 0, msg, 0, bad);
       std::snprintf(msg, sizeof msg, "B pattern %d completed ok", pattern);
       ck(r.done && r.ok, msg, 1, (r.done && r.ok) ? 1 : 0);
-      std::printf("   pattern %d: %llu cycles, %u bursts\n", pattern,
-                  (unsigned long long)r.cycles, d.c_bursts);
+      std::printf("   pattern %d: %llu cycles, %u bursts\n", pattern, (unsigned long long)r.cycles,
+                  d.c_bursts);
     }
     w.reset();
   }
@@ -407,13 +410,11 @@ int main(int argc, char** argv) {
     const std::vector<tp::LatticeVertex> want2 = tp::page_lattice(pool.page(2));
 
     ck(int(r1.got.size()) == kVerts && int(r2.got.size()) == kVerts,
-       "C both jobs emitted a full lattice", kVerts * 2,
-       int(r1.got.size() + r2.got.size()));
+       "C both jobs emitted a full lattice", kVerts * 2, int(r1.got.size() + r2.got.size()));
     ck(compare("C1", r1.got, want1) == 0, "C the first job is slot 1's lattice");
     const int bad2 = compare("C2", r2.got, want2);
     ck(bad2 == 0,
-       "C and the second is slot 2's -- not slot 1's tail carried over in a stale buffer",
-       0, bad2);
+       "C and the second is slot 2's -- not slot 1's tail carried over in a stale buffer", 0, bad2);
     // AND THE TWO ARE ACTUALLY DIFFERENT, so the check above is not vacuous.
     int differ = 0;
     for (int i = 0; i < kVerts; ++i)
@@ -436,7 +437,9 @@ int main(int argc, char** argv) {
     // block's bookkeeping instead of the guard.
     {
       w.reset();
-      d.stat_clear_i = 1; zhao::tick(d); d.stat_clear_i = 0;
+      d.stat_clear_i = 1;
+      zhao::tick(d);
+      d.stat_clear_i = 0;
       const Run r = stream(w, 1024, 0x30, 0x11u, 0x3333u, 0, 20000);
       ck(r.done, "D1 an out-of-range slot still produces a completion");
       ck(!r.ok, "D1 and it is not ok", 0, r.ok ? 1 : 0);
@@ -452,7 +455,9 @@ int main(int argc, char** argv) {
     // D2: a stale epoch.
     {
       w.reset();
-      d.stat_clear_i = 1; zhao::tick(d); d.stat_clear_i = 0;
+      d.stat_clear_i = 1;
+      zhao::tick(d);
+      d.stat_clear_i = 0;
       const Run r = stream(w, 1, 0x31, 0x10u, 0x4444u, 0, 20000);
       ck(r.done && !r.ok, "D2 a job from the previous epoch is refused", 0, r.ok ? 1 : 0);
       ck(r.verdict == 2, "D2 with the epoch verdict", 2, r.verdict);
@@ -463,13 +468,12 @@ int main(int argc, char** argv) {
     {
       w.reset();
       d.cfg_deny_mode_i = 1;
-      d.cfg_deny_idx_i = 4;      // not the first, so the block is mid-stream
+      d.cfg_deny_idx_i = 4;  // not the first, so the block is mid-stream
       d.eval();
       const Run r = stream(w, 1, 0x32, 0x11u, 0x5555u, 0, 200000);
       ck(r.done, "D3 a guard refusal still produces a completion");
       ck(!r.ok && r.verdict == 3, "D3 with the guard verdict", 3, r.verdict);
-      ck(d.c_guard_denied == 1, "D3 and the denial is counted once", 1,
-         long(d.c_guard_denied));
+      ck(d.c_guard_denied == 1, "D3 and the denial is counted once", 1, long(d.c_guard_denied));
       ck(int(r.got.size()) < kVerts,
          "D3 and the lattice stops rather than being completed from a cold buffer", 1,
          int(r.got.size()) < kVerts ? 1 : 0);
@@ -504,8 +508,7 @@ int main(int argc, char** argv) {
     w.reset();
     const Run r = stream(w, 3, 0x40, 0x11u, 0x7777u, 2, 400000);
     const std::vector<tp::LatticeVertex> want3 = tp::page_lattice(pool.page(3));
-    ck(r.done && r.ok, "E it streams again after the fault phase", 1,
-       (r.done && r.ok) ? 1 : 0);
+    ck(r.done && r.ok, "E it streams again after the fault phase", 1, (r.done && r.ok) ? 1 : 0);
     ck(int(r.got.size()) == kVerts, "E a full lattice", kVerts, int(r.got.size()));
     ck(compare("E", r.got, want3) == 0, "E and it is slot 3's, field for field");
     ck(d.c_idle != 0, "E and the block returns to idle", 1, d.c_idle ? 1 : 0);

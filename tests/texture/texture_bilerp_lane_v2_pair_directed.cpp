@@ -13,8 +13,8 @@ uint32_t next(uint32_t* state) {
   return *state;
 }
 
-void compare_cycle(Vtb_texture_bilerp_lane_v2_pair& top, int* mismatches,
-                   int* payload_checks, int* idle_checks) {
+void compare_cycle(Vtb_texture_bilerp_lane_v2_pair& top, int* mismatches, int* payload_checks,
+                   int* idle_checks) {
   if (top.legacy_job_ready_o != top.v2_job_ready_o) ++*mismatches;
   if (top.legacy_out_valid_o != top.v2_out_valid_o) ++*mismatches;
   if (top.legacy_jobs_o != top.v2_jobs_o) ++*mismatches;
@@ -22,8 +22,7 @@ void compare_cycle(Vtb_texture_bilerp_lane_v2_pair& top, int* mismatches,
 
   if (top.legacy_out_valid_o || top.v2_out_valid_o) {
     ++*payload_checks;
-    if (top.legacy_out_o != top.v2_out_o ||
-        top.legacy_out_tok_o != top.v2_out_tok_o ||
+    if (top.legacy_out_o != top.v2_out_o || top.legacy_out_tok_o != top.v2_out_tok_o ||
         top.legacy_out_chan_o != top.v2_out_chan_o)
       ++*mismatches;
   }
@@ -92,8 +91,7 @@ int main(int argc, char** argv) {
 
   top.job_valid_i = 0;
   top.out_ready_i = 1;
-  for (int guard = 0; guard < 100 &&
-       (top.legacy_occupancy_o != 0 || !top.v2_idle_o); ++guard) {
+  for (int guard = 0; guard < 100 && (top.legacy_occupancy_o != 0 || !top.v2_idle_o); ++guard) {
     top.eval();
     compare_cycle(top, &mismatches, &payload_checks, &idle_checks);
     if (top.legacy_out_valid_o && top.v2_out_valid_o) ++retired;
@@ -102,18 +100,15 @@ int main(int argc, char** argv) {
   top.eval();
   compare_cycle(top, &mismatches, &payload_checks, &idle_checks);
 
-  zhao::check(mismatches == 0,
-              "bilerp V2 matches every legacy ready/valid/payload/counter cycle", 0,
-              mismatches);
+  zhao::check(mismatches == 0, "bilerp V2 matches every legacy ready/valid/payload/counter cycle",
+              0, mismatches);
   zhao::check(accepted > 1500 && accepted == retired,
-              "bilerp pair accepts and retires the same nontrivial stream", accepted,
-              retired);
+              "bilerp pair accepts and retires the same nontrivial stream", accepted, retired);
   zhao::check(valid_gap_cycles > 0 && stalled_valid_cycles > 0,
               "bilerp valid gaps and output backpressure were independently exercised", 1,
               (valid_gap_cycles > 0 && stalled_valid_cycles > 0) ? 1 : 0);
-  zhao::check(payload_checks > accepted,
-              "bilerp payload compared through held-valid stall cycles", 1,
-              payload_checks > accepted ? 1 : 0);
+  zhao::check(payload_checks > accepted, "bilerp payload compared through held-valid stall cycles",
+              1, payload_checks > accepted ? 1 : 0);
   zhao::check(idle_checks > 6000 && top.v2_idle_o && top.legacy_occupancy_o == 0,
               "bilerp V2 idle separately equals zero legacy occupancy every cycle", 1,
               (idle_checks > 6000 && top.v2_idle_o) ? 1 : 0);

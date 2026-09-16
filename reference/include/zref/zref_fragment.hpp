@@ -111,9 +111,9 @@ struct FragmentPipeline {
 
   /** One shaded candidate as RASTER.EARLYZ hands it over. */
   struct Frag {
-    uint8_t addr = 0;                // {row[3:0], col[3:0]}
-    uint32_t depth = 0;              // invw24, larger is closer
-    uint32_t state = 0;              // the packed state word
+    uint8_t addr = 0;    // {row[3:0], col[3:0]}
+    uint32_t depth = 0;  // invw24, larger is closer
+    uint32_t state = 0;  // the packed state word
     // Vertex RGB: lit and tinted. NOT fogged -- owner ruling D-5 (2026-09-03,
     // spec/qformats.md §8) rules "do not carry an already-fogged vertex
     // colour"; the fog factor is a separate interpolant and the mix happens at

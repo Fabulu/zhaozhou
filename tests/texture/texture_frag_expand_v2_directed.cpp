@@ -85,11 +85,10 @@ struct Work {
 
 bool forced(const Work& w) {
   const bool count_zero = (w.required_mask & 7u) == 0;
-  const bool witness_ok = !count_zero ||
-      ((w.desc.cls | w.desc.palette_slot | w.desc.palette_generation) == 0);
+  const bool witness_ok =
+      !count_zero || ((w.desc.cls | w.desc.palette_slot | w.desc.palette_generation) == 0);
   const bool aux_ok = w.desc.aux_required || aux_zero(w.desc.aux);
-  return w.material_refused ||
-         descriptor_mask(w.desc) != w.required_mask || !witness_ok || !aux_ok;
+  return w.material_refused || descriptor_mask(w.desc) != w.required_mask || !witness_ok || !aux_ok;
 }
 
 struct SampleExpected {
@@ -110,21 +109,19 @@ struct AuxExpected {
 };
 
 void append_expected(const Work& w, std::deque<SampleExpected>& samples,
-                     std::deque<MosaicExpected>& mosaics,
-                     std::deque<AuxExpected>& auxes) {
+                     std::deque<MosaicExpected>& mosaics, std::deque<AuxExpected>& auxes) {
   const bool force = forced(w);
-  mosaics.push_back(MosaicExpected{w.owner, w.u, w.v,
-                                   w.desc.material_a, w.desc.material_b,
+  mosaics.push_back(MosaicExpected{w.owner, w.u, w.v, w.desc.material_a, w.desc.material_b,
                                    w.desc.mosaic_weight});
   for (unsigned sample = 0; sample < 3; ++sample) {
     if (((w.required_mask >> sample) & 1u) == 0) continue;
     const unsigned selector9 = static_cast<unsigned>(w.desc.selector) + sample;
-    samples.push_back(SampleExpected{
-        static_cast<uint16_t>((((w.owner >> 8) & 0x3Fu) << 10) |
-                              (sample << 8) | (w.owner & 0x00FFu)),
-        w.desc.page_generation, static_cast<uint8_t>((selector9 >> 8) & 1u),
-        static_cast<uint8_t>(force), static_cast<uint8_t>(selector9), w.desc.lod,
-        w.u, w.v, w.desc.cls, w.desc.palette_slot, w.desc.palette_generation});
+    samples.push_back(
+        SampleExpected{static_cast<uint16_t>((((w.owner >> 8) & 0x3Fu) << 10) | (sample << 8) |
+                                             (w.owner & 0x00FFu)),
+                       w.desc.page_generation, static_cast<uint8_t>((selector9 >> 8) & 1u),
+                       static_cast<uint8_t>(force), static_cast<uint8_t>(selector9), w.desc.lod,
+                       w.u, w.v, w.desc.cls, w.desc.palette_slot, w.desc.palette_generation});
   }
   if (w.required_mask & 8u) {
     AuxExpected a{w.owner, w.desc.aux, force};
@@ -143,8 +140,7 @@ void drive(ExpandDut* d, const Work& w) {
   d->frag_valid_i = 1;
   d->frag_owner_i = w.owner;
   const auto bits = pack(w.desc);
-  for (unsigned i = 0; i < bits.size(); ++i)
-    d->frag_logical_descriptor_i[i] = bits[i];
+  for (unsigned i = 0; i < bits.size(); ++i) d->frag_logical_descriptor_i[i] = bits[i];
   d->frag_u_i = w.u;
   d->frag_v_i = w.v;
   d->frag_required_mask_i = w.required_mask;
@@ -180,16 +176,16 @@ int main(int argc, char** argv) {
     trapped.owner = static_cast<uint16_t>(0x1200u + i);
     drive(d, trapped);
     d->eval();
-    zhao::check(d->frag_ready_o,
-                "QUEUE-GUARD MUTANT FIRE setup admitted the next trapped fragment",
+    zhao::check(d->frag_ready_o, "QUEUE-GUARD MUTANT FIRE setup admitted the next trapped fragment",
                 1, d->frag_ready_o);
     tick(d);
   }
   d->frag_valid_i = 0;
   tick(d);
-  zhao::check(d->fragments_accepted_o == 5 && d->wq_overflow_o == 1,
-              "QUEUE-GUARD MUTANT FIRE: weakened full guard made occupancy exceed four and counter fired",
-              1, (d->fragments_accepted_o == 5 && d->wq_overflow_o == 1) ? 1 : 0);
+  zhao::check(
+      d->fragments_accepted_o == 5 && d->wq_overflow_o == 1,
+      "QUEUE-GUARD MUTANT FIRE: weakened full guard made occupancy exceed four and counter fired",
+      1, (d->fragments_accepted_o == 5 && d->wq_overflow_o == 1) ? 1 : 0);
   {
     const int rc = zhao::report_and_exit("frag_expand_v2_queue_guard_mutant");
     delete d;
@@ -200,8 +196,7 @@ int main(int argc, char** argv) {
   std::vector<Work> work;
   for (unsigned i = 0; i < 28; ++i) {
     Work w{};
-    w.owner = static_cast<uint16_t>(((i * 5u) & 0x3Fu) << 8 |
-                                    ((0x31u + i * 13u) & 0xFFu));
+    w.owner = static_cast<uint16_t>(((i * 5u) & 0x3Fu) << 8 | ((0x31u + i * 13u) & 0xFFu));
     w.u = static_cast<int32_t>(0x10000 + i * 0x123);
     w.v = -static_cast<int32_t>(0x20000 + i * 0x87);
     w.desc.lod = static_cast<uint8_t>(0x10u + i);
@@ -216,9 +211,7 @@ int main(int argc, char** argv) {
     w.desc.selector = static_cast<uint8_t>(i == 7 ? 255u : 13u + i * 7u);
     w.desc.page_generation = static_cast<uint8_t>(1u + i);
     for (unsigned k = 0; k < 7; ++k)
-      w.desc.aux[k] = w.desc.aux_required
-                          ? (0xA5000000u | (i << 8) | k)
-                          : 0u;
+      w.desc.aux[k] = w.desc.aux_required ? (0xA5000000u | (i << 8) | k) : 0u;
     w.required_mask = descriptor_mask(w.desc);
     w.material_refused = false;
     if (w.desc.count == 0) {
@@ -265,10 +258,8 @@ int main(int argc, char** argv) {
   std::deque<AuxExpected> auxes;
   size_t next_input = 0;
   uint32_t rng = 0xC001D00Du;
-  unsigned sample_errors = 0, mosaic_errors = 0, aux_errors = 0,
-           issue_errors = 0;
-  unsigned accepted = 0, observed_samples = 0, observed_mosaics = 0,
-           observed_aux = 0;
+  unsigned sample_errors = 0, mosaic_errors = 0, aux_errors = 0, issue_errors = 0;
+  unsigned accepted = 0, observed_samples = 0, observed_mosaics = 0, observed_aux = 0;
   unsigned expected_zero = 0, expected_malformed = 0;
 
   for (unsigned cycle = 0; cycle < 20000; ++cycle) {
@@ -276,8 +267,10 @@ int main(int argc, char** argv) {
     d->sample_ready_i = ((rng >> 5) & 3u) != 0;
     d->mosaic_ready_i = ((rng >> 8) & 3u) != 0;
     d->aux_ready_i = ((rng >> 11) & 1u) != 0;
-    if (next_input < work.size()) drive(d, work[next_input]);
-    else d->frag_valid_i = 0;
+    if (next_input < work.size())
+      drive(d, work[next_input]);
+    else
+      d->frag_valid_i = 0;
     d->eval();
 
     if (d->sample_valid_o) {
@@ -285,14 +278,11 @@ int main(int argc, char** argv) {
         ++sample_errors;
       } else {
         const auto& e = samples.front();
-        if (d->sample_handle_o != e.handle ||
-            d->sample_page_generation_o != e.page_generation ||
-            d->sample_selector_overflow_o != e.overflow ||
-            d->sample_force_refuse_o != e.force ||
+        if (d->sample_handle_o != e.handle || d->sample_page_generation_o != e.page_generation ||
+            d->sample_selector_overflow_o != e.overflow || d->sample_force_refuse_o != e.force ||
             d->sample_binding_selector_o != e.selector ||
             static_cast<int32_t>(d->sample_u_o) != e.u ||
-            static_cast<int32_t>(d->sample_v_o) != e.v ||
-            d->sample_lod_q4_4_o != e.lod ||
+            static_cast<int32_t>(d->sample_v_o) != e.v || d->sample_lod_q4_4_o != e.lod ||
             d->sample0_class_witness_o != e.cls ||
             d->sample0_palette_slot_witness_o != e.palette_slot ||
             d->sample0_palette_generation_witness_o != e.palette_generation)
@@ -304,12 +294,9 @@ int main(int argc, char** argv) {
         ++mosaic_errors;
       } else {
         const auto& e = mosaics.front();
-        if (d->mosaic_owner_o != e.owner ||
-            static_cast<int32_t>(d->mosaic_u_o) != e.u ||
-            static_cast<int32_t>(d->mosaic_v_o) != e.v ||
-            d->mosaic_material_a_o != e.material_a ||
-            d->mosaic_material_b_o != e.material_b ||
-            d->mosaic_weight_o != e.weight)
+        if (d->mosaic_owner_o != e.owner || static_cast<int32_t>(d->mosaic_u_o) != e.u ||
+            static_cast<int32_t>(d->mosaic_v_o) != e.v || d->mosaic_material_a_o != e.material_a ||
+            d->mosaic_material_b_o != e.material_b || d->mosaic_weight_o != e.weight)
           ++mosaic_errors;
       }
     }
@@ -330,20 +317,25 @@ int main(int argc, char** argv) {
     const bool frag_fire = d->frag_valid_i && d->frag_ready_o;
     if (sample_fire) {
       ++observed_samples;
-      if (samples.empty()) ++sample_errors;
-      else samples.pop_front();
+      if (samples.empty())
+        ++sample_errors;
+      else
+        samples.pop_front();
     }
     if (mosaic_fire) {
       ++observed_mosaics;
-      if (mosaics.empty()) ++mosaic_errors;
-      else mosaics.pop_front();
+      if (mosaics.empty())
+        ++mosaic_errors;
+      else
+        mosaics.pop_front();
     }
     if (aux_fire) {
       ++observed_aux;
-      if (!d->iss_aux_valid_o || d->iss_aux_owner_o != d->aux_owner_o)
-        ++issue_errors;
-      if (auxes.empty()) ++aux_errors;
-      else auxes.pop_front();
+      if (!d->iss_aux_valid_o || d->iss_aux_owner_o != d->aux_owner_o) ++issue_errors;
+      if (auxes.empty())
+        ++aux_errors;
+      else
+        auxes.pop_front();
     } else if (d->iss_aux_valid_o) {
       ++issue_errors;
     }
@@ -358,8 +350,8 @@ int main(int argc, char** argv) {
     }
 
     tick(d);
-    if (next_input == work.size() && samples.empty() && mosaics.empty() &&
-        auxes.empty() && d->idle_o)
+    if (next_input == work.size() && samples.empty() && mosaics.empty() && auxes.empty() &&
+        d->idle_o)
       break;
   }
 
@@ -382,32 +374,28 @@ int main(int argc, char** argv) {
     bad_empty.u = 0x13572468;
     bad_empty.v = static_cast<int32_t>(0x89ABCDEFu);
     bad_empty.desc.count = 0;
-    bad_empty.desc.cls = 2; // forbidden nonzero count-zero witness
+    bad_empty.desc.cls = 2;  // forbidden nonzero count-zero witness
     bad_empty.desc.material_a = 0xA1;
     bad_empty.desc.material_b = 0xB2;
     bad_empty.desc.mosaic_weight = 0xC3;
     bad_empty.required_mask = 0;
     bad_empty.material_refused = false;
     d->mosaic_ready_i = 0;
-    d->frame_fault_clear_i = 1; // same edge: malformed set must win
+    d->frame_fault_clear_i = 1;  // same edge: malformed set must win
     drive(d, bad_empty);
     d->eval();
-    zhao::check(d->frag_ready_o, "empty-mask malformed control was accepted", 1,
-                d->frag_ready_o);
+    zhao::check(d->frag_ready_o, "empty-mask malformed control was accepted", 1, d->frag_ready_o);
     tick(d);
     d->frag_valid_i = 0;
     d->frame_fault_clear_i = 0;
     d->eval();
-    zhao::check(d->frame_fault_o &&
-                    d->malformed_descriptors_o == malformed_before + 1,
+    zhao::check(d->frame_fault_o && d->malformed_descriptors_o == malformed_before + 1,
                 "malformed empty-mask acceptance sets fault over same-edge clear and counts once",
-                1, (d->frame_fault_o &&
-                    d->malformed_descriptors_o == malformed_before + 1) ? 1 : 0);
-    zhao::check(d->mosaic_valid_o && !d->sample_valid_o && !d->aux_valid_o &&
-                    !d->idle_o,
-                "Mosaic remains the explicit held obligation for an empty owner mask",
-                1, (d->mosaic_valid_o && !d->sample_valid_o &&
-                    !d->aux_valid_o && !d->idle_o) ? 1 : 0);
+                1,
+                (d->frame_fault_o && d->malformed_descriptors_o == malformed_before + 1) ? 1 : 0);
+    zhao::check(d->mosaic_valid_o && !d->sample_valid_o && !d->aux_valid_o && !d->idle_o,
+                "Mosaic remains the explicit held obligation for an empty owner mask", 1,
+                (d->mosaic_valid_o && !d->sample_valid_o && !d->aux_valid_o && !d->idle_o) ? 1 : 0);
     const uint16_t held_owner = d->mosaic_owner_o;
     const int32_t held_u = static_cast<int32_t>(d->mosaic_u_o);
     const int32_t held_v = static_cast<int32_t>(d->mosaic_v_o);
@@ -421,20 +409,17 @@ int main(int argc, char** argv) {
     zhao::check(d->mosaic_valid_o && d->mosaic_owner_o == held_owner &&
                     static_cast<int32_t>(d->mosaic_u_o) == held_u &&
                     static_cast<int32_t>(d->mosaic_v_o) == held_v &&
-                    d->mosaic_material_a_o == held_a &&
-                    d->mosaic_material_b_o == held_b &&
+                    d->mosaic_material_a_o == held_a && d->mosaic_material_b_o == held_b &&
                     d->mosaic_weight_o == held_w,
-                "every Mosaic owner/U/V/A/B/weight bit holds through backpressure and clear",
-                1, 1);
-    zhao::check(!d->frame_fault_o &&
-                    d->malformed_descriptors_o == malformed_before + 1 &&
-                    d->sample_jobs_accepted_o == samples_before &&
-                    d->aux_jobs_accepted_o == aux_before,
-                "frame clear changes no malformed/sample/AUX counter or held work",
-                1, (!d->frame_fault_o &&
-                    d->malformed_descriptors_o == malformed_before + 1 &&
-                    d->sample_jobs_accepted_o == samples_before &&
-                    d->aux_jobs_accepted_o == aux_before) ? 1 : 0);
+                "every Mosaic owner/U/V/A/B/weight bit holds through backpressure and clear", 1, 1);
+    zhao::check(
+        !d->frame_fault_o && d->malformed_descriptors_o == malformed_before + 1 &&
+            d->sample_jobs_accepted_o == samples_before && d->aux_jobs_accepted_o == aux_before,
+        "frame clear changes no malformed/sample/AUX counter or held work", 1,
+        (!d->frame_fault_o && d->malformed_descriptors_o == malformed_before + 1 &&
+         d->sample_jobs_accepted_o == samples_before && d->aux_jobs_accepted_o == aux_before)
+            ? 1
+            : 0);
     d->mosaic_ready_i = 1;
     tick(d);
     d->mosaic_ready_i = 0;
@@ -445,49 +430,44 @@ int main(int argc, char** argv) {
     ++expected_malformed;
   }
 
-  std::printf("  fragments=%u samples=%u mosaic=%u aux=%u malformed=%u overflow=%u\n",
-              accepted, observed_samples, observed_mosaics, observed_aux,
-              d->malformed_descriptors_o, d->wq_overflow_o);
+  std::printf("  fragments=%u samples=%u mosaic=%u aux=%u malformed=%u overflow=%u\n", accepted,
+              observed_samples, observed_mosaics, observed_aux, d->malformed_descriptors_o,
+              d->wq_overflow_o);
 
-  zhao::check(next_input == work.size(),
-              "every held fragment offer was eventually accepted", work.size(),
-              next_input);
-  zhao::check(samples.empty(),
-              "every owner-required sample received one logical job", 0,
+  zhao::check(next_input == work.size(), "every held fragment offer was eventually accepted",
+              work.size(), next_input);
+  zhao::check(samples.empty(), "every owner-required sample received one logical job", 0,
               samples.size());
-  zhao::check(mosaics.empty(),
-              "every accepted fragment emitted one owner/U/V/Mosaic record", 0,
+  zhao::check(mosaics.empty(), "every accepted fragment emitted one owner/U/V/Mosaic record", 0,
               mosaics.size());
-  zhao::check(auxes.empty(),
-              "every owner-required AUX bit received a separate logical job", 0,
+  zhao::check(auxes.empty(), "every owner-required AUX bit received a separate logical job", 0,
               auxes.size());
 #if defined(ZHAO_FRAG_EXPAND_SELECTOR_MUTANT)
   zhao::check(sample_errors > 0,
-              "SELECTOR-WRAP MUTANT FIRE: a base-255 sample lost its ninth carry bit",
-              1, sample_errors > 0 ? 1 : 0);
+              "SELECTOR-WRAP MUTANT FIRE: a base-255 sample lost its ninth carry bit", 1,
+              sample_errors > 0 ? 1 : 0);
 #else
   zhao::check(sample_errors == 0,
-              "every sample record holds owner/sample/page/selector/U/V/LOD/witness atomically",
-              0, sample_errors);
+              "every sample record holds owner/sample/page/selector/U/V/LOD/witness atomically", 0,
+              sample_errors);
 #endif
-  zhao::check(aux_errors == 0,
-              "AUX retains its own owner and all 224 context bits and never substitutes for sample 2",
-              0, aux_errors);
+  zhao::check(
+      aux_errors == 0,
+      "AUX retains its own owner and all 224 context bits and never substitutes for sample 2", 0,
+      aux_errors);
   zhao::check(mosaic_errors == 0,
-              "Mosaic owner/U/V/material A/B/weight is bit-exact through every stall",
-              0, mosaic_errors);
-  zhao::check(issue_errors == 0,
-              "AUX issue notification occurs exactly on its accepted job edge", 0,
-              issue_errors);
-  zhao::check(d->fragments_accepted_o == accepted,
-              "fragment acceptance counter is exact", accepted,
+              "Mosaic owner/U/V/material A/B/weight is bit-exact through every stall", 0,
+              mosaic_errors);
+  zhao::check(issue_errors == 0, "AUX issue notification occurs exactly on its accepted job edge",
+              0, issue_errors);
+  zhao::check(d->fragments_accepted_o == accepted, "fragment acceptance counter is exact", accepted,
               d->fragments_accepted_o);
   zhao::check(d->sample_jobs_accepted_o == observed_samples,
-              "sample-job counter detects duplicate or missing expansion work",
-              observed_samples, d->sample_jobs_accepted_o);
+              "sample-job counter detects duplicate or missing expansion work", observed_samples,
+              d->sample_jobs_accepted_o);
   zhao::check(d->mosaic_jobs_accepted_o == observed_mosaics,
-              "Mosaic counter is exactly one accepted record per fragment",
-              observed_mosaics, d->mosaic_jobs_accepted_o);
+              "Mosaic counter is exactly one accepted record per fragment", observed_mosaics,
+              d->mosaic_jobs_accepted_o);
   zhao::check(d->aux_jobs_accepted_o == observed_aux,
               "AUX-job counter detects duplicate or missing work", observed_aux,
               d->aux_jobs_accepted_o);
@@ -500,8 +480,7 @@ int main(int argc, char** argv) {
   zhao::check(d->wq_overflow_o == 0,
               "legal backpressure never exceeds the fragment queue's owned depth", 0,
               d->wq_overflow_o);
-  zhao::check(d->idle_o != 0, "all fragment/sample/Mosaic/AUX state drains", 1,
-              d->idle_o);
+  zhao::check(d->idle_o != 0, "all fragment/sample/Mosaic/AUX state drains", 1, d->idle_o);
 
   const int rc = zhao::report_and_exit("texture_frag_expand_v2_directed");
   delete d;

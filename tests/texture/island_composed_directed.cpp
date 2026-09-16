@@ -762,8 +762,8 @@ void compute_expectation(FragSpec& f, uint32_t mode, uint32_t base) {
 
   zref::legacy_material_v2::Sample s[3] = {tex, tex, f.aux ? ref_aux(f) : tex};
   zref::legacy_material_v2::Ledger led{};
-  const zref::legacy_material_v2::Out o =
-      zref::legacy_material_v2::combine(f.recipe, f.weight, s, f.sample_count, base_sample(), f.tag, &led);
+  const zref::legacy_material_v2::Out o = zref::legacy_material_v2::combine(
+      f.recipe, f.weight, s, f.sample_count, base_sample(), f.tag, &led);
   f.want_rgb = (static_cast<uint32_t>(o.r) << 16) | (static_cast<uint32_t>(o.g) << 8) | o.b;
   f.want_a = o.a;
   f.want_refused = o.refused;
@@ -790,8 +790,8 @@ void expect_forced_alpha(const FragSpec& f, uint32_t mode, uint32_t base, uint8_
   tex.a = force_a;
   zref::legacy_material_v2::Sample s[3] = {tex, tex, f.aux ? ref_aux(f) : tex};
   zref::legacy_material_v2::Ledger led{};
-  const zref::legacy_material_v2::Out o =
-      zref::legacy_material_v2::combine(f.recipe, f.weight, s, f.sample_count, base_sample(), f.tag, &led);
+  const zref::legacy_material_v2::Out o = zref::legacy_material_v2::combine(
+      f.recipe, f.weight, s, f.sample_count, base_sample(), f.tag, &led);
   *rgb = (static_cast<uint32_t>(o.r) << 16) | (static_cast<uint32_t>(o.g) << 8) | o.b;
   *a = o.a;
 }
@@ -1267,8 +1267,8 @@ int main(int argc, char** argv) {
         0, static_cast<long>(bilerp_after_p1));
   const uint32_t p1_sample_work = declared_sample_work(p1);
   check(palette_after_p1 == p1_sample_work,
-        "and every declared CLUT sample performed its palette lookup",
-        p1_sample_work, static_cast<long>(palette_after_p1));
+        "and every declared CLUT sample performed its palette lookup", p1_sample_work,
+        static_cast<long>(palette_after_p1));
   check(d.cnt_palette_stale_o == 0,
         "every lookup RESOLVES -- no lookup is answered stale, which is the "
         "miss indication that used to be mistaken for a working path",
@@ -1411,8 +1411,7 @@ int main(int argc, char** argv) {
   // old count-3 run and becomes 128 in the V3 count-1 compatibility subset.
   const uint32_t p2_filter_jobs = declared_sample_work(p2) * 4u;
   check(d.cnt_bilerp_jobs_o - bilerp_after_p1 == p2_filter_jobs,
-        "and the filter ran four channel jobs for every declared sample",
-        p2_filter_jobs,
+        "and the filter ran four channel jobs for every declared sample", p2_filter_jobs,
         static_cast<long>(d.cnt_bilerp_jobs_o - bilerp_after_p1));
   check(d.err_bil_chan_o == 0,
         "and the lane retired R, G, B, A in order every time, so no sample's "
@@ -1657,8 +1656,7 @@ int main(int argc, char** argv) {
           5, static_cast<long>(want.size()));
   }
 #else
-  check(d.cnt_aux_accepted_o == 0,
-        "V3 compatibility subset issues no AUX work", 0,
+  check(d.cnt_aux_accepted_o == 0, "V3 compatibility subset issues no AUX work", 0,
         d.cnt_aux_accepted_o);
   check(o1.sheet_u.empty() && o2.sheet_u.empty(),
         "V3 compatibility subset presents no Sheet request", 1,
@@ -1693,8 +1691,7 @@ int main(int argc, char** argv) {
     for (const FragSpec& f : p2) ++occurrences[f.recipe];
     int wrong_recipe = -1;
     for (int r = 0; r < 8; ++r)
-      if (static_cast<int>(d.cnt_combine_jobs_o[r]) !=
-          kJobsPerFrag[r] * occurrences[r]) {
+      if (static_cast<int>(d.cnt_combine_jobs_o[r]) != kJobsPerFrag[r] * occurrences[r]) {
         wrong_recipe = r;
         break;
       }
@@ -1875,13 +1872,12 @@ int main(int argc, char** argv) {
                     "and the dispatcher routed all %u declared sample responses in phase %s, "
                     "so the traffic the checks below rest on actually existed",
                     phase_sample_work, dp.name);
-      check(dispatch == phase_sample_work, msg, phase_sample_work,
-            static_cast<long>(dispatch));
+      check(dispatch == phase_sample_work, msg, phase_sample_work, static_cast<long>(dispatch));
 
       if (dp.filtered) {
         std::snprintf(msg, sizeof msg,
-                      "and phase %s ran four filter jobs for all %u declared samples",
-                      dp.name, phase_sample_work);
+                      "and phase %s ran four filter jobs for all %u declared samples", dp.name,
+                      phase_sample_work);
         check(bilerp == phase_sample_work * 4u, msg, phase_sample_work * 4u,
               static_cast<long>(bilerp));
       } else {
@@ -2367,17 +2363,16 @@ int main(int argc, char** argv) {
           "metadata -- the D0 defect's exact signature, asserted rather than "
           "printed",
           0, d.meta_align_err_o);
-    check(d.meta_bil_chk_o > 100,
-          "the BILINEAR queue's alignment was exercised in bulk", 1,
+    check(d.meta_bil_chk_o > 100, "the BILINEAR queue's alignment was exercised in bulk", 1,
           d.meta_bil_chk_o > 100 ? 1 : 0);
-    check(d.meta_bil_err_o == 0, "and every bilinear response got its own metadata",
-          0, d.meta_bil_err_o);
+    check(d.meta_bil_err_o == 0, "and every bilinear response got its own metadata", 0,
+          d.meta_bil_err_o);
     check(d.meta_near_chk_o > 50,
           "the NEAREST queue's alignment was exercised too -- both queues, not "
           "just the busy one",
           1, d.meta_near_chk_o > 50 ? 1 : 0);
-    check(d.meta_near_err_o == 0, "and every nearest response got its own metadata",
-          0, d.meta_near_err_o);
+    check(d.meta_near_err_o == 0, "and every nearest response got its own metadata", 0,
+          d.meta_near_err_o);
   } else {
     // The apparatus is absent, and the test says so with a POSITIVE assertion
     // rather than by falling silent. A zero here is the only thing consistent
@@ -2415,13 +2410,11 @@ int main(int argc, char** argv) {
     std::printf("  credited join: %u cache responses in, %u dispatched\n", into_join,
                 d.cnt_dispatch_accepted_o);
 #ifdef ISLAND_V3
-    const uint32_t compatibility_responses =
-        static_cast<uint32_t>(g_stream.size());
+    const uint32_t compatibility_responses = static_cast<uint32_t>(g_stream.size());
     check(into_join == compatibility_responses && compatibility_responses > 300,
           "the narrowed V3 run joined one response per PASSTHRU fragment and "
           "still crossed a substantial non-vacuous workload",
-          compatibility_responses,
-          into_join);
+          compatibility_responses, into_join);
 #else
     check(into_join > 500,
           "the join carried a substantial number of responses -- equality over "
@@ -2463,15 +2456,15 @@ int main(int argc, char** argv) {
     const uint32_t mj_wr = d.rootp->zhao_texture_island_v3_top->u_metajoin__DOT__writes_o;
     std::printf("    bank writes %u reads %u\n", mj_wr, mj_rd);
     check(mj_rd > 0,
-                "the metadata bank was actually READ on the response stream -- "
-                "without this the mismatch zero below is a detector nothing "
-                "reached, which is how the D0 swap was called accounted for",
-                1, mj_rd > 0 ? 1 : 0);
+          "the metadata bank was actually READ on the response stream -- "
+          "without this the mismatch zero below is a detector nothing "
+          "reached, which is how the D0 swap was called accounted for",
+          1, mj_rd > 0 ? 1 : 0);
     check(d.meta_genmis_o == 0,
-                "and no metadata row came back against a generation it was not "
-                "written for -- the D0 claim, asserted rather than printed, on a "
-                "detector the repair made capable of firing",
-                0, d.meta_genmis_o);
+          "and no metadata row came back against a generation it was not "
+          "written for -- the D0 claim, asserted rather than printed, on a "
+          "detector the repair made capable of firing",
+          0, d.meta_genmis_o);
   }
   if (d.meta_bil_err_o) {
     const unsigned q = d.meta_bil_first_q_o, t = d.meta_bil_first_t_o;

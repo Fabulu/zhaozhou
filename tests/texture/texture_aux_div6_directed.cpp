@@ -180,8 +180,7 @@ int main(int argc, char** argv) {
   }
 
 #ifdef ZHAO_EXPECT_AUX_T4_BORROW_MUTANT
-  zhao::check(bad_q > 0,
-              "reversed-borrow mutant disagrees with independent n/d oracle", 1,
+  zhao::check(bad_q > 0, "reversed-borrow mutant disagrees with independent n/d oracle", 1,
               bad_q > 0 ? 1 : 0);
   if (zhao::check_failures() == 0)
     std::printf("AUX Timing4 divider borrow mutant DETECTED mismatches=%d\n", bad_q);

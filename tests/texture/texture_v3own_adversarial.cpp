@@ -61,8 +61,7 @@ inline uint32_t slot_of(uint16_t owner) { return (owner >> 8) & 0x3F; }
 inline uint32_t gen_of(uint16_t owner) { return owner & 0xFF; }
 // sample_handle[15:10]=slot, [9:8]=sample_index, [7:0]=generation
 inline uint16_t smp(uint16_t owner, uint32_t sidx) {
-  return static_cast<uint16_t>((slot_of(owner) << 10) | ((sidx & 3) << 8) |
-                               gen_of(owner));
+  return static_cast<uint16_t>((slot_of(owner) << 10) | ((sidx & 3) << 8) | gen_of(owner));
 }
 inline uint64_t mkres(uint64_t seed) {
   return (seed * 0x9E3779B97F4A7C15ULL >> 17) & 0xFFFFFFFFFFULL;  // result40
@@ -212,7 +211,8 @@ class Ob {
     if (drove_fin) finq.pop_front();
     if (obs_cmb_fire) {
       combined.push_back(cp);
-      if (auto_fin) finq.push_back({cp.owner, final_of(cp.owner), cyc + static_cast<uint64_t>(fin_lat)});
+      if (auto_fin)
+        finq.push_back({cp.owner, final_of(cp.owner), cyc + static_cast<uint64_t>(fin_lat)});
     }
     if (obs_out_fire) emitted.push_back(e);
 
@@ -258,8 +258,7 @@ class Ob {
     step();
   }
   // Both terminal ports firing on the SAME clock (section 8.6).
-  void ret_both(uint16_t towner, uint32_t sidx, uint64_t tres, uint16_t aowner,
-                uint64_t ares) {
+  void ret_both(uint16_t towner, uint32_t sidx, uint64_t tres, uint16_t aowner, uint64_t ares) {
     d->tmu_rvalid_i = 1;
     d->tmu_rhandle_i = smp(towner, sidx);
     d->tmu_rresult_i = tres;
@@ -313,55 +312,44 @@ int main(int argc, char** argv) {
       s.issue_and_return_all(o, 0xF);
     }
     s.idle(400);
-    zhao::check(s.emitted.size() == static_cast<size_t>(N),
-                "case1 emitted count", N, s.emitted.size());
+    zhao::check(s.emitted.size() == static_cast<size_t>(N), "case1 emitted count", N,
+                s.emitted.size());
     for (int i = 0; i < N && i < static_cast<int>(s.emitted.size()); ++i) {
-      zhao::check(s.emitted[i].owner == owners[i], "case1 emission order",
-                  owners[i], s.emitted[i].owner);
-      zhao::check(s.emitted[i].ctx == ctx_of(i), "case1 full 64-bit context",
-                  ctx_of(i), s.emitted[i].ctx);
+      zhao::check(s.emitted[i].owner == owners[i], "case1 emission order", owners[i],
+                  s.emitted[i].owner);
+      zhao::check(s.emitted[i].ctx == ctx_of(i), "case1 full 64-bit context", ctx_of(i),
+                  s.emitted[i].ctx);
       zhao::check(s.emitted[i].res == final_of(owners[i]), "case1 final result",
                   final_of(owners[i]), s.emitted[i].res);
     }
     // The COMBINE packet must carry THIS owner's real sample rows.
-    zhao::check(s.combined.size() == static_cast<size_t>(N),
-                "case1 combine packets", N, s.combined.size());
+    zhao::check(s.combined.size() == static_cast<size_t>(N), "case1 combine packets", N,
+                s.combined.size());
     for (int i = 0; i < N && i < static_cast<int>(s.combined.size()); ++i) {
       uint16_t o = owners[i];
-      zhao::check(s.combined[i].owner == o, "case1 combine owner", o,
-                  s.combined[i].owner);
+      zhao::check(s.combined[i].owner == o, "case1 combine owner", o, s.combined[i].owner);
       for (uint32_t k = 0; k < 3; ++k)
-        zhao::check(s.combined[i].s[k] == mkres(o * 4 + k),
-                    "case1 combine sample row", mkres(o * 4 + k),
-                    s.combined[i].s[k]);
-      zhao::check(s.combined[i].ax == mkres(o * 4 + 3), "case1 combine aux row",
-                  mkres(o * 4 + 3), s.combined[i].ax);
+        zhao::check(s.combined[i].s[k] == mkres(o * 4 + k), "case1 combine sample row",
+                    mkres(o * 4 + k), s.combined[i].s[k]);
+      zhao::check(s.combined[i].ax == mkres(o * 4 + 3), "case1 combine aux row", mkres(o * 4 + 3),
+                  s.combined[i].ax);
     }
-    zhao::check(dut->ev_admitted_o == static_cast<uint32_t>(N),
-                "case1 admitted counter", N, dut->ev_admitted_o);
-    zhao::check(dut->ev_emitted_o == static_cast<uint32_t>(N),
-                "case1 emitted counter", N, dut->ev_emitted_o);
-    zhao::check(dut->ev_commits_o == static_cast<uint32_t>(N * 4),
-                "case1 commit counter", N * 4, dut->ev_commits_o);
+    zhao::check(dut->ev_admitted_o == static_cast<uint32_t>(N), "case1 admitted counter", N,
+                dut->ev_admitted_o);
+    zhao::check(dut->ev_emitted_o == static_cast<uint32_t>(N), "case1 emitted counter", N,
+                dut->ev_emitted_o);
+    zhao::check(dut->ev_commits_o == static_cast<uint32_t>(N * 4), "case1 commit counter", N * 4,
+                dut->ev_commits_o);
     zhao::check(dut->ev_tickets_o == static_cast<uint32_t>(N),
-                "case1 ticket counter (exactly one per owner)", N,
-                dut->ev_tickets_o);
-    zhao::check(dut->ev_err_range_o == 0, "case1 no range errors", 0,
-                dut->ev_err_range_o);
-    zhao::check(dut->ev_err_stale_o == 0, "case1 no stale errors", 0,
-                dut->ev_err_stale_o);
-    zhao::check(dut->ev_err_unsol_o == 0, "case1 no unsolicited errors", 0,
-                dut->ev_err_unsol_o);
-    zhao::check(dut->ev_err_dup_o == 0, "case1 no duplicate errors", 0,
-                dut->ev_err_dup_o);
-    zhao::check(dut->ev_err_final_o == 0, "case1 no final errors", 0,
-                dut->ev_err_final_o);
-    zhao::check(dut->ev_err_issue_o == 0, "case1 no issue errors", 0,
-                dut->ev_err_issue_o);
-    zhao::check(dut->ev_quiet_o == 1, "case1 island quiescent at end", 1,
-                dut->ev_quiet_o);
-    zhao::check(dut->ev_live_o == 0, "case1 no live owners at end", 0,
-                dut->ev_live_o);
+                "case1 ticket counter (exactly one per owner)", N, dut->ev_tickets_o);
+    zhao::check(dut->ev_err_range_o == 0, "case1 no range errors", 0, dut->ev_err_range_o);
+    zhao::check(dut->ev_err_stale_o == 0, "case1 no stale errors", 0, dut->ev_err_stale_o);
+    zhao::check(dut->ev_err_unsol_o == 0, "case1 no unsolicited errors", 0, dut->ev_err_unsol_o);
+    zhao::check(dut->ev_err_dup_o == 0, "case1 no duplicate errors", 0, dut->ev_err_dup_o);
+    zhao::check(dut->ev_err_final_o == 0, "case1 no final errors", 0, dut->ev_err_final_o);
+    zhao::check(dut->ev_err_issue_o == 0, "case1 no issue errors", 0, dut->ev_err_issue_o);
+    zhao::check(dut->ev_quiet_o == 1, "case1 island quiescent at end", 1, dut->ev_quiet_o);
+    zhao::check(dut->ev_live_o == 0, "case1 no live owners at end", 0, dut->ev_live_o);
   }
 
   // =========================================================================
@@ -377,18 +365,14 @@ int main(int argc, char** argv) {
     s.ret_tmu(o, 1, mkres(0x11));
     s.ret_tmu(o, 1, mkres(0x22));  // the duplicate, one clock later
     s.idle(200);
-    zhao::check(dut->ev_err_dup_o == 1, "D.1 duplicate count is exactly one", 1,
-                dut->ev_err_dup_o);
-    zhao::check(dut->ev_commits_o == 1, "D.1 payload write count is one", 1,
-                dut->ev_commits_o);
-    zhao::check(dut->ev_tickets_o == 1, "D.1 terminal count is one", 1,
-                dut->ev_tickets_o);
-    zhao::check(s.combined.size() == 1, "D.1 one combine packet", 1,
-                s.combined.size());
+    zhao::check(dut->ev_err_dup_o == 1, "D.1 duplicate count is exactly one", 1, dut->ev_err_dup_o);
+    zhao::check(dut->ev_commits_o == 1, "D.1 payload write count is one", 1, dut->ev_commits_o);
+    zhao::check(dut->ev_tickets_o == 1, "D.1 terminal count is one", 1, dut->ev_tickets_o);
+    zhao::check(s.combined.size() == 1, "D.1 one combine packet", 1, s.combined.size());
     if (!s.combined.empty())
       zhao::check(s.combined[0].s[1] == mkres(0x11),
-                  "D.1 the FIRST payload survives, not the duplicate",
-                  mkres(0x11), s.combined[0].s[1]);
+                  "D.1 the FIRST payload survives, not the duplicate", mkres(0x11),
+                  s.combined[0].s[1]);
     zhao::check(s.emitted.size() == 1, "D.1 one emission", 1, s.emitted.size());
   }
 
@@ -404,14 +388,11 @@ int main(int argc, char** argv) {
     s.idle(6);                     // claimed and committed are both visible now
     s.ret_tmu(o, 0, mkres(0x32));  // rejected by claimed/committed, not by fwd
     s.idle(200);
-    zhao::check(dut->ev_err_dup_o == 1, "spaced duplicate rejected once", 1,
-                dut->ev_err_dup_o);
-    zhao::check(dut->ev_commits_o == 1, "spaced duplicate: one commit", 1,
-                dut->ev_commits_o);
+    zhao::check(dut->ev_err_dup_o == 1, "spaced duplicate rejected once", 1, dut->ev_err_dup_o);
+    zhao::check(dut->ev_commits_o == 1, "spaced duplicate: one commit", 1, dut->ev_commits_o);
     if (!s.combined.empty())
-      zhao::check(s.combined[0].s[0] == mkres(0x31),
-                  "spaced duplicate did not overwrite", mkres(0x31),
-                  s.combined[0].s[0]);
+      zhao::check(s.combined[0].s[0] == mkres(0x31), "spaced duplicate did not overwrite",
+                  mkres(0x31), s.combined[0].s[0]);
   }
 
   // =========================================================================
@@ -425,10 +406,8 @@ int main(int argc, char** argv) {
     s.issue_tmu(o, 0);
     s.ret_tmu(stale, 0, mkres(0x41));  // right slot, wrong generation
     s.idle(4);
-    zhao::check(dut->ev_err_stale_o == 1, "stale generation rejected", 1,
-                dut->ev_err_stale_o);
-    zhao::check(dut->ev_commits_o == 0, "stale generation wrote nothing", 0,
-                dut->ev_commits_o);
+    zhao::check(dut->ev_err_stale_o == 1, "stale generation rejected", 1, dut->ev_err_stale_o);
+    zhao::check(dut->ev_commits_o == 0, "stale generation wrote nothing", 0, dut->ev_commits_o);
     // A response for a slot that is not live at all is the same class.
     s.ret_tmu(owner_of(40, 7), 0, mkres(0x42));
     s.idle(4);
@@ -437,8 +416,7 @@ int main(int argc, char** argv) {
     // and the owner still completes normally afterwards
     s.ret_tmu(o, 0, mkres(0x43));
     s.idle(200);
-    zhao::check(s.emitted.size() == 1, "owner still completes after stale", 1,
-                s.emitted.size());
+    zhao::check(s.emitted.size() == 1, "owner still completes after stale", 1, s.emitted.size());
   }
 
   // =========================================================================
@@ -467,8 +445,7 @@ int main(int argc, char** argv) {
     s.issue_tmu(owner_of(slot_of(o), gen_of(o) - 1), 0);
     s.idle(2);
     zhao::check(dut->ev_err_issue_o == before + 1,
-                "a stale GENERATION on the issue lane is refused", before + 1,
-                dut->ev_err_issue_o);
+                "a stale GENERATION on the issue lane is refused", before + 1, dut->ev_err_issue_o);
 
     // A slot that is not live at all is the same class of refusal.
     s.issue_tmu(owner_of(40, 7), 0);
@@ -487,8 +464,7 @@ int main(int argc, char** argv) {
                 "the legitimate issue is NOT refused -- the guard is not simply "
                 "always-false",
                 before + 2, dut->ev_err_issue_o);
-    zhao::check(dut->ev_commits_o >= 1,
-                "and the owner's real work still commits", 1,
+    zhao::check(dut->ev_commits_o >= 1, "and the owner's real work still commits", 1,
                 dut->ev_commits_o >= 1 ? 1 : 0);
   }
 
@@ -520,8 +496,8 @@ int main(int argc, char** argv) {
     s.issue_tmu(o, 0);
     s.idle(4);
     zhao::check(dut->ev_err_issue_o == err_before + 1,
-                "S22.4 the repeated issue is refused, not silently absorbed",
-                err_before + 1, dut->ev_err_issue_o);
+                "S22.4 the repeated issue is refused, not silently absorbed", err_before + 1,
+                dut->ev_err_issue_o);
 
     // Finish the owner the ordinary way. If the repeat had erased the claimed
     // result, sample 0 would never commit and this owner would never emit.
@@ -535,8 +511,8 @@ int main(int argc, char** argv) {
                 "S22.4 the owner still completes exactly once -- the repeat "
                 "created no second outstanding request",
                 1, s.emitted.size());
-    zhao::check(s.combined.size() == 1, "S22.4 and exactly one COMBINE packet",
-                1, s.combined.size());
+    zhao::check(s.combined.size() == 1, "S22.4 and exactly one COMBINE packet", 1,
+                s.combined.size());
     int row_errors = 0;
     if (!s.combined.empty()) {
       for (uint32_t k = 0; k < 3; ++k)
@@ -584,8 +560,8 @@ int main(int argc, char** argv) {
     }
     s.idle(400);
 
-    zhao::check(s.emitted.size() == static_cast<size_t>(N),
-                "S22.3 every owner still completes", N, s.emitted.size());
+    zhao::check(s.emitted.size() == static_cast<size_t>(N), "S22.3 every owner still completes", N,
+                s.emitted.size());
     zhao::check(s.combined.size() == static_cast<size_t>(N),
                 "S22.3 every COMBINE packet is produced", N, s.combined.size());
     int row_errors = 0;
@@ -600,8 +576,7 @@ int main(int argc, char** argv) {
                 "S22.3 each row lands by SAMPLE INDEX, not arrival order -- AUX "
                 "first and samples reversed change nothing about placement",
                 0, row_errors);
-    zhao::check(dut->ev_err_stale_o == 0 && dut->ev_err_unsol_o == 0
-                    && dut->ev_err_dup_o == 0,
+    zhao::check(dut->ev_err_stale_o == 0 && dut->ev_err_unsol_o == 0 && dut->ev_err_dup_o == 0,
                 "S22.3 and no completion was mistaken for stale, unsolicited or "
                 "duplicate merely because it arrived early",
                 0, dut->ev_err_stale_o + dut->ev_err_unsol_o + dut->ev_err_dup_o);
@@ -627,16 +602,16 @@ int main(int argc, char** argv) {
   {
     Ob s(dut);
     s.reset();
-    s.out_ready = false;                    // hold it: it cannot retire yet
+    s.out_ready = false;  // hold it: it cannot retire yet
     uint16_t o = s.admit(ctx_of(9500), 0x1);
     s.issue_tmu(o, 0);
     s.ret_tmu(o, 0, mkres(o * 4 + 0));
-    s.idle(40);                             // COMBINE and final complete
-    const uint32_t stale_before  = dut->ev_err_stale_o;
+    s.idle(40);  // COMBINE and final complete
+    const uint32_t stale_before = dut->ev_err_stale_o;
     const uint32_t commit_before = dut->ev_commits_o;
 
-    s.ret_tmu(o, 0, mkres(0xE0E));          // captured while LIVE ...
-    s.out_ready = true;                     // ... retires on its C2
+    s.ret_tmu(o, 0, mkres(0xE0E));  // captured while LIVE ...
+    s.out_ready = true;             // ... retires on its C2
     s.idle(60);
 
     zhao::check(dut->ev_err_stale_o > stale_before,
@@ -644,11 +619,11 @@ int main(int argc, char** argv) {
                 "ended -- residual generation bits do not extend authority",
                 1, dut->ev_err_stale_o > stale_before ? 1 : 0);
     zhao::check(dut->ev_commits_o == commit_before,
-                "V04 and it commits nothing -- no scoreboard change, no write",
-                commit_before, dut->ev_commits_o);
+                "V04 and it commits nothing -- no scoreboard change, no write", commit_before,
+                dut->ev_commits_o);
     zhao::check(s.emitted.size() == 1,
-                "V04 the owner still emits exactly once, and is not resurrected",
-                1, s.emitted.size());
+                "V04 the owner still emits exactly once, and is not resurrected", 1,
+                s.emitted.size());
     zhao::check(s.emitted.empty() || s.emitted[0].ctx == ctx_of(9500),
                 "V04 with its own context intact", 1,
                 (s.emitted.empty() || s.emitted[0].ctx == ctx_of(9500)) ? 1 : 0);
@@ -659,12 +634,10 @@ int main(int argc, char** argv) {
     // a probe port that would cost real area. The two answer different
     // questions: the row proves nothing was corrupted, the enable proves
     // nothing was even attempted.
-    zhao::check(!s.combined.empty()
-                    && s.combined[0].s[0] == mkres(o * 4 + 0),
+    zhao::check(!s.combined.empty() && s.combined[0].s[0] == mkres(o * 4 + 0),
                 "V04 and the sample ROW still holds the owner's own result -- "
                 "no bank write was performed for the refused return",
-                1, (!s.combined.empty()
-                    && s.combined[0].s[0] == mkres(o * 4 + 0)) ? 1 : 0);
+                1, (!s.combined.empty() && s.combined[0].s[0] == mkres(o * 4 + 0)) ? 1 : 0);
   }
 
   hdr("case 4f (V05): the same schedule on the AUX and FINAL lanes");
@@ -681,34 +654,30 @@ int main(int argc, char** argv) {
     Ob s(dut);
     s.reset();
     s.out_ready = false;
-    uint16_t o = s.admit(ctx_of(9600), 0x9);      // sample 0 + AUX
+    uint16_t o = s.admit(ctx_of(9600), 0x9);  // sample 0 + AUX
     s.issue_tmu(o, 0);
     s.issue_aux(o);
     s.ret_tmu(o, 0, mkres(o * 4 + 0));
     s.ret_aux(o, mkres(o * 4 + 3));
     s.idle(40);
-    const uint32_t stale_before  = dut->ev_err_stale_o;
+    const uint32_t stale_before = dut->ev_err_stale_o;
     const uint32_t commit_before = dut->ev_commits_o;
 
-    s.ret_aux(o, mkres(0xA0A));                   // captured while LIVE ...
-    s.out_ready = true;                           // ... retires on its C2
+    s.ret_aux(o, mkres(0xA0A));  // captured while LIVE ...
+    s.out_ready = true;          // ... retires on its C2
     s.idle(60);
 
     zhao::check(dut->ev_err_stale_o > stale_before,
-                "V05/AUX a late AUX return is refused once authority has ended",
-                1, dut->ev_err_stale_o > stale_before ? 1 : 0);
-    zhao::check(dut->ev_commits_o == commit_before,
-                "V05/AUX and it commits nothing", commit_before,
+                "V05/AUX a late AUX return is refused once authority has ended", 1,
+                dut->ev_err_stale_o > stale_before ? 1 : 0);
+    zhao::check(dut->ev_commits_o == commit_before, "V05/AUX and it commits nothing", commit_before,
                 dut->ev_commits_o);
     zhao::check(s.emitted.size() == 1,
-                "V05/AUX the owner emits exactly once and is not resurrected",
-                1, s.emitted.size());
-    zhao::check(!s.combined.empty()
-                    && s.combined[0].ax == mkres(o * 4 + 3),
+                "V05/AUX the owner emits exactly once and is not resurrected", 1, s.emitted.size());
+    zhao::check(!s.combined.empty() && s.combined[0].ax == mkres(o * 4 + 3),
                 "V05/AUX and the AUX ROW still holds the owner's own result, "
                 "not the refused 0xA0A -- no bank write was performed",
-                1, (!s.combined.empty()
-                    && s.combined[0].ax == mkres(o * 4 + 3)) ? 1 : 0);
+                1, (!s.combined.empty() && s.combined[0].ax == mkres(o * 4 + 3)) ? 1 : 0);
   }
   {
     // ---- FINAL ----
@@ -721,8 +690,7 @@ int main(int argc, char** argv) {
     s.issue_tmu(o, 0);
     s.ret_tmu(o, 0, mkres(o * 4 + 0));
     s.idle(30);
-    zhao::check(s.combined.size() == 1, "V05/FINAL owner reached COMBINE", 1,
-                s.combined.size());
+    zhao::check(s.combined.size() == 1, "V05/FINAL owner reached COMBINE", 1, s.combined.size());
 
     // the real final, driven by hand
     dut->fin_valid_i = 1;
@@ -740,14 +708,15 @@ int main(int argc, char** argv) {
     dut->fin_result_i = mkres(0xF0F);
     s.step();
     dut->fin_valid_i = 0;
-    s.out_ready = true;                           // ... retires on its C2
+    s.out_ready = true;  // ... retires on its C2
     s.idle(60);
 
     zhao::check(dut->ev_err_final_o > final_before,
                 "V05/FINAL a late FINAL return is refused once authority has "
-                "ended", 1, dut->ev_err_final_o > final_before ? 1 : 0);
-    zhao::check(s.emitted.size() == 1,
-                "V05/FINAL the owner emits exactly once", 1, s.emitted.size());
+                "ended",
+                1, dut->ev_err_final_o > final_before ? 1 : 0);
+    zhao::check(s.emitted.size() == 1, "V05/FINAL the owner emits exactly once", 1,
+                s.emitted.size());
     zhao::check(s.emitted.empty() || s.emitted[0].res == final_of(o),
                 "V05/FINAL carrying the REAL final result, not the late one", 1,
                 (s.emitted.empty() || s.emitted[0].res == final_of(o)) ? 1 : 0);
@@ -776,22 +745,20 @@ int main(int argc, char** argv) {
       s.ret_tmu(o, 0, mkres(o * 4 + 0));
     }
     s.idle(1200);
-    zhao::check(s.emitted.size() == static_cast<size_t>(OWNERS),
-                "V06 the first ring drained", OWNERS, s.emitted.size());
+    zhao::check(s.emitted.size() == static_cast<size_t>(OWNERS), "V06 the first ring drained",
+                OWNERS, s.emitted.size());
 
     const size_t emitted_before = s.emitted.size();
-    const uint16_t old_tok = first[0];             // slot 0, generation N
+    const uint16_t old_tok = first[0];  // slot 0, generation N
 
     // The slot is now free; admit its successor -- same slot, generation N+1.
     uint16_t nw = s.admit(ctx_of(9999), 0x1);
-    zhao::check(slot_of(nw) == slot_of(old_tok),
-                "V06 the successor genuinely reuses slot 0", slot_of(old_tok),
-                slot_of(nw));
-    zhao::check(gen_of(nw) != gen_of(old_tok),
-                "V06 with a different generation", 1,
+    zhao::check(slot_of(nw) == slot_of(old_tok), "V06 the successor genuinely reuses slot 0",
+                slot_of(old_tok), slot_of(nw));
+    zhao::check(gen_of(nw) != gen_of(old_tok), "V06 with a different generation", 1,
                 gen_of(nw) != gen_of(old_tok) ? 1 : 0);
 
-    const uint32_t stale_before  = dut->ev_err_stale_o;
+    const uint32_t stale_before = dut->ev_err_stale_o;
     const uint32_t commit_before = dut->ev_commits_o;
 
     // (1) BEFORE the new owner's own capture edge.
@@ -810,20 +777,18 @@ int main(int argc, char** argv) {
                 "V06 all three deliveries of the OLD token are refused as "
                 "stale -- slot match is not identity",
                 3, dut->ev_err_stale_o - stale_before);
-    zhao::check(s.emitted.size() == emitted_before + 1,
-                "V06 the new owner completes, exactly once", 1,
-                s.emitted.size() - emitted_before);
+    zhao::check(s.emitted.size() == emitted_before + 1, "V06 the new owner completes, exactly once",
+                1, s.emitted.size() - emitted_before);
     zhao::check(s.emitted.back().ctx == ctx_of(9999),
-                "V06 with ITS OWN context -- payload survived the attack",
-                ctx_of(9999), s.emitted.back().ctx);
-    zhao::check(!s.combined.empty()
-                    && s.combined.back().s[0] == mkres(nw * 4 + 0),
+                "V06 with ITS OWN context -- payload survived the attack", ctx_of(9999),
+                s.emitted.back().ctx);
+    zhao::check(!s.combined.empty() && s.combined.back().s[0] == mkres(nw * 4 + 0),
                 "V06 and its own sample row, not the old token's payload", 1,
-                (!s.combined.empty()
-                 && s.combined.back().s[0] == mkres(nw * 4 + 0)) ? 1 : 0);
+                (!s.combined.empty() && s.combined.back().s[0] == mkres(nw * 4 + 0)) ? 1 : 0);
     zhao::check(dut->ev_commits_o == commit_before + 1,
                 "V06 exactly one commit -- the three stale deliveries added "
-                "none", commit_before + 1, dut->ev_commits_o);
+                "none",
+                commit_before + 1, dut->ev_commits_o);
   }
 
   hdr("case 4h (V03): a FUTURE token -- not live at snapshot, live by the claim");
@@ -842,36 +807,33 @@ int main(int argc, char** argv) {
   {
     Ob s(dut);
     s.reset();
-    const uint32_t stale_before  = dut->ev_err_stale_o;
+    const uint32_t stale_before = dut->ev_err_stale_o;
     const uint32_t commit_before = dut->ev_commits_o;
 
     // After reset the next admission is slot 0, generation 1 -- so this is a
     // token for an owner that does not exist yet.
     const uint16_t future = owner_of(0, 1);
-    s.ret_tmu(future, 0, mkres(0x0FF));      // captured while NOT live
-    uint16_t o = s.admit(ctx_of(9400), 0x1); // ... becomes live before the claim
+    s.ret_tmu(future, 0, mkres(0x0FF));       // captured while NOT live
+    uint16_t o = s.admit(ctx_of(9400), 0x1);  // ... becomes live before the claim
 
-    zhao::check(o == future,
-                "V03 the admitted owner really is the token that was faked", o,
+    zhao::check(o == future, "V03 the admitted owner really is the token that was faked", o,
                 future);
     s.idle(10);
     zhao::check(dut->ev_err_stale_o > stale_before,
                 "V03 the future token is refused FOR THAT SNAPSHOT, even though "
                 "its owner is live by the time the claim is evaluated",
                 1, dut->ev_err_stale_o > stale_before ? 1 : 0);
-    zhao::check(dut->ev_commits_o == commit_before,
-                "V03 and it commits nothing", commit_before, dut->ev_commits_o);
+    zhao::check(dut->ev_commits_o == commit_before, "V03 and it commits nothing", commit_before,
+                dut->ev_commits_o);
 
     // The real owner still works afterwards.
     s.issue_tmu(o, 0);
     s.ret_tmu(o, 0, mkres(o * 4 + 0));
     s.idle(400);
-    zhao::check(s.emitted.size() == 1,
-                "V03 the genuine owner still completes exactly once", 1,
+    zhao::check(s.emitted.size() == 1, "V03 the genuine owner still completes exactly once", 1,
                 s.emitted.size());
-    zhao::check(s.emitted.empty() || s.emitted[0].ctx == ctx_of(9400),
-                "V03 with its own context", 1,
-                (s.emitted.empty() || s.emitted[0].ctx == ctx_of(9400)) ? 1 : 0);
+    zhao::check(s.emitted.empty() || s.emitted[0].ctx == ctx_of(9400), "V03 with its own context",
+                1, (s.emitted.empty() || s.emitted[0].ctx == ctx_of(9400)) ? 1 : 0);
   }
 
   hdr("case 5/6: unsolicited -- required-but-not-issued, and not-required");
@@ -887,14 +849,11 @@ int main(int argc, char** argv) {
     s.issue_tmu(o, 0);
     s.ret_tmu(o, 2, mkres(0x52));  // sample2 is not required at all
     s.idle(4);
-    zhao::check(dut->ev_err_unsol_o == 2, "not-required source rejected", 2,
-                dut->ev_err_unsol_o);
+    zhao::check(dut->ev_err_unsol_o == 2, "not-required source rejected", 2, dut->ev_err_unsol_o);
     s.ret_aux(o, mkres(0x53));  // AUX not required
     s.idle(4);
-    zhao::check(dut->ev_err_unsol_o == 3, "unsolicited AUX rejected", 3,
-                dut->ev_err_unsol_o);
-    zhao::check(dut->ev_commits_o == 0, "no unsolicited packet wrote a bank", 0,
-                dut->ev_commits_o);
+    zhao::check(dut->ev_err_unsol_o == 3, "unsolicited AUX rejected", 3, dut->ev_err_unsol_o);
+    zhao::check(dut->ev_commits_o == 0, "no unsolicited packet wrote a bank", 0, dut->ev_commits_o);
     // An ISSUE for a source that was never required is refused too.
     s.issue_tmu(o, 2);
     s.idle(2);
@@ -902,8 +861,7 @@ int main(int argc, char** argv) {
                 dut->ev_err_issue_o);
     s.ret_tmu(o, 0, mkres(0x54));
     s.idle(200);
-    zhao::check(s.emitted.size() == 1, "owner completes after unsolicited", 1,
-                s.emitted.size());
+    zhao::check(s.emitted.size() == 1, "owner completes after unsolicited", 1, s.emitted.size());
   }
 
   // =========================================================================
@@ -918,22 +876,18 @@ int main(int argc, char** argv) {
     s.idle(4);
     zhao::check(dut->ev_err_range_o == 1, "sample_index 3 rejected by range", 1,
                 dut->ev_err_range_o);
-    zhao::check(dut->ev_err_unsol_o == 0,
-                "range fault is NOT counted as unsolicited", 0,
+    zhao::check(dut->ev_err_unsol_o == 0, "range fault is NOT counted as unsolicited", 0,
                 dut->ev_err_unsol_o);
-    zhao::check(dut->ev_commits_o == 0, "index 3 wrote no bank", 0,
-                dut->ev_commits_o);
+    zhao::check(dut->ev_commits_o == 0, "index 3 wrote no bank", 0, dut->ev_commits_o);
     // An issue with index 3 is refused at its own port.
     s.d->iss_tmu_valid_i = 1;
     s.d->iss_tmu_handle_i = smp(o, 3);
     s.step();
     s.idle(2);
-    zhao::check(dut->ev_err_issue_o == 1, "issue with index 3 refused", 1,
-                dut->ev_err_issue_o);
+    zhao::check(dut->ev_err_issue_o == 1, "issue with index 3 refused", 1, dut->ev_err_issue_o);
     s.ret_tmu(o, 0, mkres(0x72));
     s.idle(200);
-    zhao::check(s.emitted.size() == 1, "owner completes after range fault", 1,
-                s.emitted.size());
+    zhao::check(s.emitted.size() == 1, "owner completes after range fault", 1, s.emitted.size());
   }
 
   // =========================================================================
@@ -948,40 +902,31 @@ int main(int argc, char** argv) {
     s.ret_tmu(o, 0, mkres(0x80));
     s.ret_tmu(o, 1, mkres(0x81));  // committed becomes 0011
     s.idle(6);
-    zhao::check(dut->ev_tmu_commits_o == 2,
-                "typed TMU counter sees the two sample-only commits", 2,
+    zhao::check(dut->ev_tmu_commits_o == 2, "typed TMU counter sees the two sample-only commits", 2,
                 dut->ev_tmu_commits_o);
-    zhao::check(dut->ev_aux_commits_o == 0,
-                "typed AUX counter does not alias sample-only commits", 0,
-                dut->ev_aux_commits_o);
+    zhao::check(dut->ev_aux_commits_o == 0, "typed AUX counter does not alias sample-only commits",
+                0, dut->ev_aux_commits_o);
     // this edge publishes texture source2 AND AUX for the same full handle
     s.ret_both(o, 2, mkres(0x82), o, mkres(0x83));
     s.idle(200);
-    zhao::check(dut->ev_tickets_o == 1, "D.2 exactly ONE ready ticket", 1,
-                dut->ev_tickets_o);
-    zhao::check(dut->ev_commits_o == 4, "D.2 four commits", 4,
-                dut->ev_commits_o);
+    zhao::check(dut->ev_tickets_o == 1, "D.2 exactly ONE ready ticket", 1, dut->ev_tickets_o);
+    zhao::check(dut->ev_commits_o == 4, "D.2 four commits", 4, dut->ev_commits_o);
     zhao::check(dut->ev_tmu_commits_o == 3,
                 "D.2 typed TMU count increments once on the simultaneous edge", 3,
                 dut->ev_tmu_commits_o);
     zhao::check(dut->ev_aux_commits_o == 1,
                 "D.2 typed AUX count increments once on the simultaneous edge", 1,
                 dut->ev_aux_commits_o);
-    zhao::check(dut->ev_commits_o ==
-                    dut->ev_tmu_commits_o + dut->ev_aux_commits_o,
+    zhao::check(dut->ev_commits_o == dut->ev_tmu_commits_o + dut->ev_aux_commits_o,
                 "D.2 combined commits equal the two typed counters",
-                dut->ev_tmu_commits_o + dut->ev_aux_commits_o,
-                dut->ev_commits_o);
-    zhao::check(s.combined.size() == 1, "D.2 one combine admission", 1,
-                s.combined.size());
+                dut->ev_tmu_commits_o + dut->ev_aux_commits_o, dut->ev_commits_o);
+    zhao::check(s.combined.size() == 1, "D.2 one combine admission", 1, s.combined.size());
     if (!s.combined.empty()) {
-      zhao::check(s.combined[0].s[2] == mkres(0x82), "D.2 sample2 row",
-                  mkres(0x82), s.combined[0].s[2]);
-      zhao::check(s.combined[0].ax == mkres(0x83), "D.2 aux row", mkres(0x83),
-                  s.combined[0].ax);
+      zhao::check(s.combined[0].s[2] == mkres(0x82), "D.2 sample2 row", mkres(0x82),
+                  s.combined[0].s[2]);
+      zhao::check(s.combined[0].ax == mkres(0x83), "D.2 aux row", mkres(0x83), s.combined[0].ax);
     }
-    zhao::check(s.emitted.size() == 1, "D.2 one emission", 1,
-                s.emitted.size());
+    zhao::check(s.emitted.size() == 1, "D.2 one emission", 1, s.emitted.size());
   }
 
   // =========================================================================
@@ -996,24 +941,20 @@ int main(int argc, char** argv) {
     s.issue_aux(j);
     s.ret_both(h, 0, mkres(0x90), j, mkres(0x91));
     s.idle(300);
-    zhao::check(dut->ev_tickets_o == 2, "D.2 two tickets, separate queues", 2,
-                dut->ev_tickets_o);
+    zhao::check(dut->ev_tickets_o == 2, "D.2 two tickets, separate queues", 2, dut->ev_tickets_o);
     zhao::check(dut->ev_tmu_commits_o == 1,
                 "D.2 simultaneous distinct-owner TMU commit is typed once", 1,
                 dut->ev_tmu_commits_o);
     zhao::check(dut->ev_aux_commits_o == 1,
                 "D.2 simultaneous distinct-owner AUX commit is typed once", 1,
                 dut->ev_aux_commits_o);
-    zhao::check(dut->ev_commits_o == 2,
-                "D.2 simultaneous distinct-owner combined count is two", 2,
+    zhao::check(dut->ev_commits_o == 2, "D.2 simultaneous distinct-owner combined count is two", 2,
                 dut->ev_commits_o);
-    zhao::check(s.emitted.size() == 2, "D.2 two emissions", 2,
-                s.emitted.size());
+    zhao::check(s.emitted.size() == 2, "D.2 two emissions", 2, s.emitted.size());
     if (s.emitted.size() == 2) {
-      zhao::check(s.emitted[0].owner == h, "D.2 H emitted first (admit order)",
-                  h, s.emitted[0].owner);
-      zhao::check(s.emitted[1].owner == j, "D.2 J emitted second", j,
-                  s.emitted[1].owner);
+      zhao::check(s.emitted[0].owner == h, "D.2 H emitted first (admit order)", h,
+                  s.emitted[0].owner);
+      zhao::check(s.emitted[1].owner == j, "D.2 J emitted second", j, s.emitted[1].owner);
     }
   }
 
@@ -1030,26 +971,20 @@ int main(int argc, char** argv) {
 
     s.ret_tmu(t, 0, mkres(0x92));
     s.idle(8);
-    zhao::check(dut->ev_tmu_commits_o == 1,
-                "sample-only edge advances only typed TMU count", 1,
+    zhao::check(dut->ev_tmu_commits_o == 1, "sample-only edge advances only typed TMU count", 1,
                 dut->ev_tmu_commits_o);
-    zhao::check(dut->ev_aux_commits_o == 0,
-                "sample-only edge leaves typed AUX count unchanged", 0,
+    zhao::check(dut->ev_aux_commits_o == 0, "sample-only edge leaves typed AUX count unchanged", 0,
                 dut->ev_aux_commits_o);
-    zhao::check(dut->ev_commits_o == 1,
-                "sample-only edge advances combined count once", 1,
+    zhao::check(dut->ev_commits_o == 1, "sample-only edge advances combined count once", 1,
                 dut->ev_commits_o);
 
     s.ret_aux(a, mkres(0x93));
     s.idle(300);
-    zhao::check(dut->ev_tmu_commits_o == 1,
-                "AUX-only edge leaves typed TMU count unchanged", 1,
+    zhao::check(dut->ev_tmu_commits_o == 1, "AUX-only edge leaves typed TMU count unchanged", 1,
                 dut->ev_tmu_commits_o);
-    zhao::check(dut->ev_aux_commits_o == 1,
-                "AUX-only edge advances only typed AUX count", 1,
+    zhao::check(dut->ev_aux_commits_o == 1, "AUX-only edge advances only typed AUX count", 1,
                 dut->ev_aux_commits_o);
-    zhao::check(dut->ev_commits_o == 2,
-                "separate typed commits retain the combined sum", 2,
+    zhao::check(dut->ev_commits_o == 2, "separate typed commits retain the combined sum", 2,
                 dut->ev_commits_o);
   }
 
@@ -1063,16 +998,14 @@ int main(int argc, char** argv) {
     uint16_t bad = owner_of(slot_of(o), gen_of(o) + 3);
     s.ret_both(bad, 0, mkres(0xA0), bad, mkres(0xA1));
     s.idle(6);
-    zhao::check(dut->ev_err_stale_o == 2,
-                "the lost-update defect: two faults, two counts", 2,
+    zhao::check(dut->ev_err_stale_o == 2, "the lost-update defect: two faults, two counts", 2,
                 dut->ev_err_stale_o);
     // and the same for the unsolicited class on one edge
     s.ret_both(o, 0, mkres(0xA2), o, mkres(0xA3));  // required, never issued
     s.idle(6);
-    zhao::check(dut->ev_err_unsol_o == 2, "two unsolicited faults, two counts",
-                2, dut->ev_err_unsol_o);
-    zhao::check(dut->ev_commits_o == 0, "no faulted packet wrote a bank", 0,
-                dut->ev_commits_o);
+    zhao::check(dut->ev_err_unsol_o == 2, "two unsolicited faults, two counts", 2,
+                dut->ev_err_unsol_o);
+    zhao::check(dut->ev_commits_o == 0, "no faulted packet wrote a bank", 0, dut->ev_commits_o);
     zhao::check(dut->ev_tmu_commits_o == 0,
                 "faulted TMU returns do not move the typed commit counter", 0,
                 dut->ev_tmu_commits_o);
@@ -1107,25 +1040,21 @@ int main(int argc, char** argv) {
       s.ret_aux(owners[i], mkres(owners[i] * 4 + 3));
     }
     s.idle(400);
-    zhao::check(dut->ev_commits_o == 64, "D.4 every terminal return committed",
-                64, dut->ev_commits_o);
+    zhao::check(dut->ev_commits_o == 64, "D.4 every terminal return committed", 64,
+                dut->ev_commits_o);
     zhao::check(dut->ev_err_dup_o == 0, "D.4 no spurious duplicate rejection", 0,
                 dut->ev_err_dup_o);
-    zhao::check(dut->ev_err_unsol_o == 0, "D.4 no spurious unsolicited", 0,
-                dut->ev_err_unsol_o);
-    zhao::check(s.emitted.empty(), "D.4 nothing emitted while stalled", 0,
-                s.emitted.size());
-    zhao::check(dut->ev_live_o == 16, "D.4 all 16 owners still live", 16,
-                dut->ev_live_o);
+    zhao::check(dut->ev_err_unsol_o == 0, "D.4 no spurious unsolicited", 0, dut->ev_err_unsol_o);
+    zhao::check(s.emitted.empty(), "D.4 nothing emitted while stalled", 0, s.emitted.size());
+    zhao::check(dut->ev_live_o == 16, "D.4 all 16 owners still live", 16, dut->ev_live_o);
     // release
     s.out_ready = true;
     s.idle(400);
-    zhao::check(s.emitted.size() == 16, "D.4 all 16 emitted after release", 16,
-                s.emitted.size());
+    zhao::check(s.emitted.size() == 16, "D.4 all 16 emitted after release", 16, s.emitted.size());
     for (size_t i = 0; i < s.emitted.size(); ++i)
       zhao::check(s.emitted[i].ctx == ctx_of(static_cast<uint32_t>(i)),
-                  "D.4 context intact through the stall",
-                  ctx_of(static_cast<uint32_t>(i)), s.emitted[i].ctx);
+                  "D.4 context intact through the stall", ctx_of(static_cast<uint32_t>(i)),
+                  s.emitted[i].ctx);
   }
 
   // =========================================================================
@@ -1150,18 +1079,17 @@ int main(int argc, char** argv) {
     s.out_ready = true;
     s.idle(2000);
     zhao::check(s.emitted.size() == static_cast<size_t>(N),
-                "backpressure: every owner emitted exactly once", N,
-                s.emitted.size());
+                "backpressure: every owner emitted exactly once", N, s.emitted.size());
     for (int i = 0; i < N && i < static_cast<int>(s.emitted.size()); ++i) {
-      zhao::check(s.emitted[i].owner == owners[i], "backpressure: strict order",
-                  owners[i], s.emitted[i].owner);
+      zhao::check(s.emitted[i].owner == owners[i], "backpressure: strict order", owners[i],
+                  s.emitted[i].owner);
       zhao::check(s.emitted[i].ctx == ctx_of(i), "backpressure: context", ctx_of(i),
                   s.emitted[i].ctx);
-      zhao::check(s.emitted[i].res == final_of(owners[i]),
-                  "backpressure: result", final_of(owners[i]), s.emitted[i].res);
+      zhao::check(s.emitted[i].res == final_of(owners[i]), "backpressure: result",
+                  final_of(owners[i]), s.emitted[i].res);
     }
-    zhao::check(dut->ev_emitted_o == static_cast<uint32_t>(N),
-                "backpressure: emitted counter", N, dut->ev_emitted_o);
+    zhao::check(dut->ev_emitted_o == static_cast<uint32_t>(N), "backpressure: emitted counter", N,
+                dut->ev_emitted_o);
   }
 
   // =========================================================================
@@ -1183,8 +1111,7 @@ int main(int argc, char** argv) {
       s.ret_tmu(o, 0, mkres(o));
     }
     s.idle(600);  // every owner has been combined and written FINAL_RESULT
-    zhao::check(dut->ev_live_o == OWNERS,
-                "D.6 all 64 still live after their final writes", OWNERS,
+    zhao::check(dut->ev_live_o == OWNERS, "D.6 all 64 still live after their final writes", OWNERS,
                 dut->ev_live_o);
     // The ring is full: admission must refuse, whatever the caller does.
     for (int i = 0; i < 8; ++i) {
@@ -1192,18 +1119,17 @@ int main(int argc, char** argv) {
       s.d->adm_ctx_i = ctx_of(0xDEAD);
       s.d->adm_req_i = 0x1;
       s.step();
-      zhao::check(!s.obs_adm_fire,
-                  "D.6 admission refused while owners hold their outputs", 0,
+      zhao::check(!s.obs_adm_fire, "D.6 admission refused while owners hold their outputs", 0,
                   s.obs_adm_fire ? 1 : 0);
     }
     s.out_ready = true;
     s.idle(600);
-    zhao::check(s.emitted.size() == static_cast<size_t>(OWNERS),
-                "D.6 all 64 emitted", OWNERS, s.emitted.size());
+    zhao::check(s.emitted.size() == static_cast<size_t>(OWNERS), "D.6 all 64 emitted", OWNERS,
+                s.emitted.size());
     for (int i = 0; i < OWNERS && i < static_cast<int>(s.emitted.size()); ++i)
       zhao::check(s.emitted[i].ctx == ctx_of(1000 + i),
-                  "D.6 context belongs to the OLD owner, not a new admission",
-                  ctx_of(1000 + i), s.emitted[i].ctx);
+                  "D.6 context belongs to the OLD owner, not a new admission", ctx_of(1000 + i),
+                  s.emitted[i].ctx);
   }
 
   // =========================================================================
@@ -1227,39 +1153,37 @@ int main(int argc, char** argv) {
   {
     Ob s(dut);
     s.reset();
-    s.cmb_ready = false;                 // COMBINE refuses for the whole fill
+    s.cmb_ready = false;  // COMBINE refuses for the whole fill
     std::vector<uint16_t> owners;
     for (int i = 0; i < OWNERS; ++i) {
       uint16_t o = s.admit(ctx_of(2000 + i), 0x1);
       owners.push_back(o);
       s.issue_tmu(o, 0);
-      s.ret_tmu(o, 0, mkres(o * 4 + 0));   // every owner becomes READY
+      s.ret_tmu(o, 0, mkres(o * 4 + 0));  // every owner becomes READY
     }
-    s.idle(200);                          // "a long period"
+    s.idle(200);  // "a long period"
 
     zhao::check(dut->ev_live_o == OWNERS,
-                "S22.5 all 64 owners are live and ready while COMBINE refuses",
-                OWNERS, dut->ev_live_o);
-    zhao::check(s.combined.empty(),
-                "S22.5 and COMBINE has taken nothing", 0, s.combined.size());
-    zhao::check(dut->ev_err_issue_o == 0 && dut->ev_err_stale_o == 0
-                    && dut->ev_err_unsol_o == 0 && dut->ev_err_dup_o == 0,
-                "S22.5 no ready row was lost or mistaken for an error while "
-                "waiting -- 'all other ready rows must remain eligible without "
-                "losing a transition'",
-                0, dut->ev_err_issue_o + dut->ev_err_stale_o
-                       + dut->ev_err_unsol_o + dut->ev_err_dup_o);
+                "S22.5 all 64 owners are live and ready while COMBINE refuses", OWNERS,
+                dut->ev_live_o);
+    zhao::check(s.combined.empty(), "S22.5 and COMBINE has taken nothing", 0, s.combined.size());
+    zhao::check(
+        dut->ev_err_issue_o == 0 && dut->ev_err_stale_o == 0 && dut->ev_err_unsol_o == 0 &&
+            dut->ev_err_dup_o == 0,
+        "S22.5 no ready row was lost or mistaken for an error while "
+        "waiting -- 'all other ready rows must remain eligible without "
+        "losing a transition'",
+        0, dut->ev_err_issue_o + dut->ev_err_stale_o + dut->ev_err_unsol_o + dut->ev_err_dup_o);
 
     // Release, and require EVERY owner exactly once.
     s.cmb_ready = true;
     s.idle(6000);
 
     zhao::check(s.combined.size() == static_cast<size_t>(OWNERS),
-                "S22.5 every owner reaches COMBINE exactly once after release",
-                OWNERS, s.combined.size());
+                "S22.5 every owner reaches COMBINE exactly once after release", OWNERS,
+                s.combined.size());
     zhao::check(s.emitted.size() == static_cast<size_t>(OWNERS),
-                "S22.5 and every owner is emitted exactly once", OWNERS,
-                s.emitted.size());
+                "S22.5 and every owner is emitted exactly once", OWNERS, s.emitted.size());
     int order_errors = 0;
     for (int i = 0; i < OWNERS && i < static_cast<int>(s.emitted.size()); ++i)
       if (s.emitted[i].owner != owners[i]) ++order_errors;
@@ -1287,23 +1211,19 @@ int main(int argc, char** argv) {
         ++accepted;
       }
     }
-    zhao::check(accepted == OWNERS,
-                "exactly 64 admissions accepted before ready fell", OWNERS,
+    zhao::check(accepted == OWNERS, "exactly 64 admissions accepted before ready fell", OWNERS,
                 accepted);
     zhao::check(dut->ev_live_peak_o == OWNERS, "peak live is exactly 64", OWNERS,
                 dut->ev_live_peak_o);
-    for (size_t i = 0; i < owners.size(); ++i)
-      s.issue_tmu(owners[i], 0);
-    for (size_t i = 0; i < owners.size(); ++i)
-      s.ret_tmu(owners[i], 0, mkres(owners[i]));
+    for (size_t i = 0; i < owners.size(); ++i) s.issue_tmu(owners[i], 0);
+    for (size_t i = 0; i < owners.size(); ++i) s.ret_tmu(owners[i], 0, mkres(owners[i]));
     s.out_ready = true;
     s.idle(1200);
-    zhao::check(s.emitted.size() == static_cast<size_t>(OWNERS),
-                "all 64 emitted after release", OWNERS, s.emitted.size());
+    zhao::check(s.emitted.size() == static_cast<size_t>(OWNERS), "all 64 emitted after release",
+                OWNERS, s.emitted.size());
     for (int i = 0; i < OWNERS && i < static_cast<int>(s.emitted.size()); ++i)
-      zhao::check(s.emitted[i].ctx == ctx_of(2000 + i),
-                  "no live row was overwritten", ctx_of(2000 + i),
-                  s.emitted[i].ctx);
+      zhao::check(s.emitted[i].ctx == ctx_of(2000 + i), "no live row was overwritten",
+                  ctx_of(2000 + i), s.emitted[i].ctx);
   }
 
   // =========================================================================
@@ -1328,27 +1248,23 @@ int main(int argc, char** argv) {
     size_t before = s.emitted.size();
     s.reset();  // ASSERTED MID-TRANSACTION
     s.idle(50);
-    zhao::check(s.emitted.size() == before, "reset produced no ghost output",
-                before, s.emitted.size());
-    zhao::check(dut->ev_live_o == 0, "reset cleared live owners", 0,
-                dut->ev_live_o);
-    zhao::check(dut->ev_quiet_o == 1, "reset left the island quiescent", 1,
-                dut->ev_quiet_o);
+    zhao::check(s.emitted.size() == before, "reset produced no ghost output", before,
+                s.emitted.size());
+    zhao::check(dut->ev_live_o == 0, "reset cleared live owners", 0, dut->ev_live_o);
+    zhao::check(dut->ev_quiet_o == 1, "reset left the island quiescent", 1, dut->ev_quiet_o);
     // Section 6.5: reset does NOT clear the payload arrays, and it must not
     // matter -- the machine works completely on the next epoch.
     s.finq.clear();
     uint16_t o = s.admit(ctx_of(4242), 0x7);
     s.issue_and_return_all(o, 0x7);
     s.idle(300);
-    zhao::check(s.emitted.size() == before + 1,
-                "full function after a mid-transaction reset", before + 1,
-                s.emitted.size());
+    zhao::check(s.emitted.size() == before + 1, "full function after a mid-transaction reset",
+                before + 1, s.emitted.size());
     if (s.emitted.size() == before + 1) {
-      zhao::check(s.emitted.back().ctx == ctx_of(4242),
-                  "post-reset context correct", ctx_of(4242),
+      zhao::check(s.emitted.back().ctx == ctx_of(4242), "post-reset context correct", ctx_of(4242),
                   s.emitted.back().ctx);
-      zhao::check(s.emitted.back().res == final_of(o), "post-reset result",
-                  final_of(o), s.emitted.back().res);
+      zhao::check(s.emitted.back().res == final_of(o), "post-reset result", final_of(o),
+                  s.emitted.back().res);
     }
   }
 
@@ -1371,25 +1287,23 @@ int main(int argc, char** argv) {
     for (int i = N - 1; i >= 1; --i) s.ret_tmu(owners[i], 0, mkres(owners[i]));
     s.idle(300);
     zhao::check(dut->ev_reorder_held_o == static_cast<uint32_t>(N - 1),
-                "every newly ready non-head owner increments the real reorder event",
-                N - 1, dut->ev_reorder_held_o);
-    zhao::check(s.emitted.empty(),
-                "nothing emitted while the emit head is incomplete", 0,
+                "every newly ready non-head owner increments the real reorder event", N - 1,
+                dut->ev_reorder_held_o);
+    zhao::check(s.emitted.empty(), "nothing emitted while the emit head is incomplete", 0,
                 s.emitted.size());
     zhao::check(s.combined.size() == static_cast<size_t>(N - 1),
-                "younger fragments DID use COMBINE out of order", N - 1,
-                s.combined.size());
+                "younger fragments DID use COMBINE out of order", N - 1, s.combined.size());
     s.ret_tmu(owners[0], 0, mkres(owners[0]));
     s.idle(400);
     zhao::check(dut->ev_reorder_held_o == static_cast<uint32_t>(N - 1),
-                "head completion is not counted as a reorder-held event",
-                N - 1, dut->ev_reorder_held_o);
-    zhao::check(s.emitted.size() == static_cast<size_t>(N),
-                "the hole filled, all emitted", N, s.emitted.size());
+                "head completion is not counted as a reorder-held event", N - 1,
+                dut->ev_reorder_held_o);
+    zhao::check(s.emitted.size() == static_cast<size_t>(N), "the hole filled, all emitted", N,
+                s.emitted.size());
     for (int i = 0; i < N && i < static_cast<int>(s.emitted.size()); ++i)
       zhao::check(s.emitted[i].owner == owners[i],
-                  "emission is in ADMISSION order, not readiness order",
-                  owners[i], s.emitted[i].owner);
+                  "emission is in ADMISSION order, not readiness order", owners[i],
+                  s.emitted[i].owner);
     // S22.7 asks for the admitted sequence "with unchanged 64-bit context", and
     // the context was NOT checked here. Case 1 checks it but completes IN
     // ORDER, so the check existed only where it could not fail. THIS is the
@@ -1426,20 +1340,16 @@ int main(int argc, char** argv) {
       s.ret_tmu(o, 0, mkres(o));
     }
     s.idle(400);
-    zhao::check(s.combined.empty(), "D.3 nothing combined while stopped", 0,
-                s.combined.size());
+    zhao::check(s.combined.empty(), "D.3 nothing combined while stopped", 0, s.combined.size());
     zhao::check(dut->ev_tickets_o == static_cast<uint32_t>(N),
                 "D.3 every owner still got its ticket", N, dut->ev_tickets_o);
     s.cmb_ready = true;
     s.idle(800);
     zhao::check(s.combined.size() == static_cast<size_t>(N),
-                "D.3 all owners combined after release, none stranded", N,
-                s.combined.size());
-    zhao::check(s.emitted.size() == static_cast<size_t>(N),
-                "D.3 all emitted", N, s.emitted.size());
+                "D.3 all owners combined after release, none stranded", N, s.combined.size());
+    zhao::check(s.emitted.size() == static_cast<size_t>(N), "D.3 all emitted", N, s.emitted.size());
     for (int i = 0; i < N && i < static_cast<int>(s.emitted.size()); ++i)
-      zhao::check(s.emitted[i].owner == owners[i], "D.3 order held", owners[i],
-                  s.emitted[i].owner);
+      zhao::check(s.emitted[i].owner == owners[i], "D.3 order held", owners[i], s.emitted[i].owner);
   }
 
   // =========================================================================
@@ -1457,8 +1367,7 @@ int main(int argc, char** argv) {
     s.issue_tmu(o, 0);
     s.ret_tmu(o, 0, mkres(o));
     s.idle(30);
-    zhao::check(s.combined.size() == 1, "final: owner reached COMBINE", 1,
-                s.combined.size());
+    zhao::check(s.combined.size() == 1, "final: owner reached COMBINE", 1, s.combined.size());
     // A final return for an owner that has NOT been combine-issued.
     uint16_t never = owner_of(30, 1);
     dut->fin_valid_i = 1;
@@ -1467,8 +1376,7 @@ int main(int argc, char** argv) {
     s.step();
     dut->fin_valid_i = 0;
     s.idle(6);
-    zhao::check(dut->ev_err_final_o == 1, "unsolicited final rejected", 1,
-                dut->ev_err_final_o);
+    zhao::check(dut->ev_err_final_o == 1, "unsolicited final rejected", 1, dut->ev_err_final_o);
     // The real final, then two duplicates: one inside the forwarding window,
     // one after it.
     dut->fin_valid_i = 1;
@@ -1501,13 +1409,12 @@ int main(int argc, char** argv) {
     s.step();
     dut->fin_valid_i = 0;
     s.idle(200);
-    zhao::check(dut->ev_err_final_o == 4, "all three final duplicates rejected",
-                4, dut->ev_err_final_o);
+    zhao::check(dut->ev_err_final_o == 4, "all three final duplicates rejected", 4,
+                dut->ev_err_final_o);
     zhao::check(s.emitted.size() == 1, "one emission", 1, s.emitted.size());
     if (!s.emitted.empty())
       zhao::check(s.emitted[0].res == final_of(o),
-                  "the FIRST final result survives both duplicates",
-                  final_of(o), s.emitted[0].res);
+                  "the FIRST final result survives both duplicates", final_of(o), s.emitted[0].res);
   }
 
   // =========================================================================
@@ -1524,8 +1431,8 @@ int main(int argc, char** argv) {
     int admitted = 0;
     bool saw_block_while_busy = false;
     bool quiet_when_wrap_admitted = true;
-    int  fenced_with_live_owners = 0;
-    int  early_reopens = 0;
+    int fenced_with_live_owners = 0;
+    int early_reopens = 0;
     uint32_t drains_before = 0;
 
     // ---- 22.8: RETURN A LATE OLD PACKET DURING LOCAL DRAIN ------------------
@@ -1546,7 +1453,7 @@ int main(int argc, char** argv) {
     // run can produce -- a detector that a collision could spoof is not a
     // detector.
     const uint64_t ATTACK_RES = 0x5A5AA5A5A5ULL;
-    int  attacks = 0;
+    int attacks = 0;
     uint16_t last_owner = 0;
     bool have_owner = false;
     bool fenced_prev = false;
@@ -1577,9 +1484,7 @@ int main(int argc, char** argv) {
         // one the most recent owner occupies -- still live, still draining --
         // and its GENERATION is that slot's previous occupant, which retired
         // one full ring ago.
-        const uint16_t stale =
-            owner_of(slot_of(last_owner),
-                     (gen_of(last_owner) + 255u) & 0xFFu);
+        const uint16_t stale = owner_of(slot_of(last_owner), (gen_of(last_owner) + 255u) & 0xFFu);
         s.d->tmu_rvalid_i = 1;
         s.d->tmu_rhandle_i = smp(stale, 0);
         s.d->tmu_rresult_i = ATTACK_RES;
@@ -1599,8 +1504,7 @@ int main(int argc, char** argv) {
         // refused for a reason other than a full ring: that is the wrap gate
         saw_block_while_busy = true;
       }
-      if (dut->ev_wrap_drains_o != drains_now && !was_quiet)
-        quiet_when_wrap_admitted = false;
+      if (dut->ev_wrap_drains_o != drains_now && !was_quiet) quiet_when_wrap_admitted = false;
 
       // ---- FOURTH part two: the fence's own two properties ---------------
       // The master recovery handoff's DRAIN/RESET coverage (§13.2) names both
@@ -1620,12 +1524,9 @@ int main(int argc, char** argv) {
       // wrap boundary and the island is not quiet. `ev_wrap_drains_o` moving
       // is the wrap being taken; `was_quiet` is the island's own report from
       // the same cycle.
-      if (s.obs_adm_fire && !was_quiet
-          && dut->ev_wrap_drains_o != drains_now)
-        ++early_reopens;
+      if (s.obs_adm_fire && !was_quiet && dut->ev_wrap_drains_o != drains_now) ++early_reopens;
 
-      fenced_prev = (!adm_ready_pre && dut->ev_live_o != 0
-                     && dut->ev_live_o != OWNERS);
+      fenced_prev = (!adm_ready_pre && dut->ev_live_o != 0 && dut->ev_live_o != OWNERS);
       drains_before = drains_now;
     }
     (void)drains_before;
@@ -1653,18 +1554,15 @@ int main(int argc, char** argv) {
       s.step();
     }
     s.idle(2000);
-    zhao::check(dut->ev_wrap_drains_o > 0,
-                "the generation-wrap drain actually fired", 1,
+    zhao::check(dut->ev_wrap_drains_o > 0, "the generation-wrap drain actually fired", 1,
                 dut->ev_wrap_drains_o > 0 ? 1 : 0);
-    zhao::check(saw_block_while_busy,
-                "admission was blocked for wrap while the ring was NOT full", 1,
-                saw_block_while_busy ? 1 : 0);
-    zhao::check(quiet_when_wrap_admitted,
-                "every wrapping admission happened on a QUIESCENT island", 1,
-                quiet_when_wrap_admitted ? 1 : 0);
+    zhao::check(saw_block_while_busy, "admission was blocked for wrap while the ring was NOT full",
+                1, saw_block_while_busy ? 1 : 0);
+    zhao::check(quiet_when_wrap_admitted, "every wrapping admission happened on a QUIESCENT island",
+                1, quiet_when_wrap_admitted ? 1 : 0);
     zhao::check(dut->ev_admitted_o == dut->ev_emitted_o,
-                "wrap run: admitted == emitted, nothing lost",
-                dut->ev_admitted_o, dut->ev_emitted_o);
+                "wrap run: admitted == emitted, nothing lost", dut->ev_admitted_o,
+                dut->ev_emitted_o);
 
     // ---- 22.8's late old packet ---------------------------------------------
     zhao::check(attacks > 0,
@@ -1692,8 +1590,8 @@ int main(int argc, char** argv) {
                   0, static_cast<uint64_t>(leaked));
     }
     zhao::check(dut->ev_admitted_o == dut->ev_emitted_o,
-                "and the refused packets neither created nor destroyed work",
-                dut->ev_admitted_o, dut->ev_emitted_o);
+                "and the refused packets neither created nor destroyed work", dut->ev_admitted_o,
+                dut->ev_emitted_o);
     // RESTORED, AND STRENGTHENED. This line was `== 0` before the injection
     // existed, and the first version of this patch REPLACED it instead of
     // inserting before it -- the detector was deleted and the suite went green,
@@ -1710,10 +1608,8 @@ int main(int argc, char** argv) {
                 "deliberately injected during the drain",
                 static_cast<uint64_t>(attacks), dut->ev_err_stale_o);
 
-    zhao::check(dut->ev_err_dup_o == 0, "wrap run: no duplicate rejections", 0,
-                dut->ev_err_dup_o);
-    zhao::check(dut->ev_err_unsol_o == 0, "wrap run: no unsolicited", 0,
-                dut->ev_err_unsol_o);
+    zhao::check(dut->ev_err_dup_o == 0, "wrap run: no duplicate rejections", 0, dut->ev_err_dup_o);
+    zhao::check(dut->ev_err_unsol_o == 0, "wrap run: no unsolicited", 0, dut->ev_err_unsol_o);
   }
 
   // =========================================================================
@@ -1730,15 +1626,13 @@ int main(int argc, char** argv) {
     const int N = 64;
     for (int i = 0; i < N; ++i) s.admit(ctx_of(8000 + i), 0x0);  // zero-work
     s.idle(1500);
-    zhao::check(s.emitted.size() == static_cast<size_t>(N),
-                "throughput run: all emitted", N, s.emitted.size());
+    zhao::check(s.emitted.size() == static_cast<size_t>(N), "throughput run: all emitted", N,
+                s.emitted.size());
     if (s.emitted.size() == static_cast<size_t>(N)) {
       uint64_t span = s.emitted.back().cyc - s.emitted.front().cyc + 1;
       std::printf("    emission span for %d owners: %llu cycles\n", N,
                   static_cast<unsigned long long>(span));
-      zhao::check(span <= 96,
-                  "64 owners emit within 96 cycles (>=0.66/clock sustained)", 96,
-                  span);
+      zhao::check(span <= 96, "64 owners emit within 96 cycles (>=0.66/clock sustained)", 96, span);
       // The strong form: at least one run of 8 back-to-back emissions.
       int best = 0, run = 0;
       for (size_t i = 1; i < s.emitted.size(); ++i) {
@@ -1750,8 +1644,7 @@ int main(int argc, char** argv) {
         }
       }
       std::printf("    longest back-to-back emission run: %d\n", best + 1);
-      zhao::check(best + 1 >= 8,
-                  "the output path emits back to back, not one-per-FSM-trip", 8,
+      zhao::check(best + 1 >= 8, "the output path emits back to back, not one-per-FSM-trip", 8,
                   best + 1);
     }
   }
@@ -1779,27 +1672,22 @@ int main(int argc, char** argv) {
     s.ret_tmu(o, 0, err_res);
     s.ret_tmu(o, 1, mkres(0xC11));
     s.idle(300);
-    const uint32_t id_faults = dut->ev_err_stale_o + dut->ev_err_unsol_o +
-                               dut->ev_err_dup_o + dut->ev_err_range_o;
-    zhao::check(id_faults == 0,
-                "C11 a service error is NOT an identity fault", 0, id_faults);
-    zhao::check(dut->ev_commits_o == 2, "C11 the error completion committed", 2,
-                dut->ev_commits_o);
-    zhao::check(dut->ev_tickets_o == 1,
-                "C11 the error satisfied its required bit", 1,
+    const uint32_t id_faults =
+        dut->ev_err_stale_o + dut->ev_err_unsol_o + dut->ev_err_dup_o + dut->ev_err_range_o;
+    zhao::check(id_faults == 0, "C11 a service error is NOT an identity fault", 0, id_faults);
+    zhao::check(dut->ev_commits_o == 2, "C11 the error completion committed", 2, dut->ev_commits_o);
+    zhao::check(dut->ev_tickets_o == 1, "C11 the error satisfied its required bit", 1,
                 dut->ev_tickets_o);
-    zhao::check(s.combined.size() == 1, "C11 the owner reached COMBINE", 1,
-                s.combined.size());
+    zhao::check(s.combined.size() == 1, "C11 the owner reached COMBINE", 1, s.combined.size());
     if (!s.combined.empty()) {
       zhao::check(s.combined[0].s[0] == err_res,
-                  "C11 STATUS8 and the fallback payload both survive to COMBINE",
-                  err_res, s.combined[0].s[0]);
+                  "C11 STATUS8 and the fallback payload both survive to COMBINE", err_res,
+                  s.combined[0].s[0]);
       zhao::check((s.combined[0].s[0] >> 32) == 0x08,
                   "C11 the status byte is readable at COMBINE admission", 0x08,
                   s.combined[0].s[0] >> 32);
     }
-    zhao::check(s.emitted.size() == 1, "C11 emitted exactly once", 1,
-                s.emitted.size());
+    zhao::check(s.emitted.size() == 1, "C11 emitted exactly once", 1, s.emitted.size());
   }
 
   // =========================================================================
@@ -1867,11 +1755,9 @@ int main(int argc, char** argv) {
     s.idle(40);
 
     // Preconditions: the owner is live and COMBINE has NOT accepted anything.
-    zhao::check(s.combined.empty(),
-                "M6 precondition: COMBINE has accepted nothing while stalled", 0,
-                s.combined.size());
-    zhao::check(dut->ev_live_o == 1, "M6 precondition: the owner is live", 1,
-                dut->ev_live_o);
+    zhao::check(s.combined.empty(), "M6 precondition: COMBINE has accepted nothing while stalled",
+                0, s.combined.size());
+    zhao::check(dut->ev_live_o == 1, "M6 precondition: the owner is live", 1, dut->ev_live_o);
     const uint32_t err_before = dut->ev_err_final_o;
     const uint32_t emitted_before = dut->ev_emitted_o;
 
@@ -1885,31 +1771,26 @@ int main(int argc, char** argv) {
 
     // §11.3's four expectations.
     zhao::check(dut->ev_err_final_o == err_before + 1,
-                "M6 a final arriving before COMBINE acceptance is an ERROR",
-                err_before + 1, dut->ev_err_final_o);
-    zhao::check(dut->ev_emitted_o == emitted_before,
-                "M6 no final payload write is authorised", emitted_before,
-                dut->ev_emitted_o);
-    zhao::check(s.emitted.empty(), "M6 nothing is published", 0,
-                s.emitted.size());
-    zhao::check(dut->ev_live_o == 1, "M6 the owner is NOT released", 1,
-                dut->ev_live_o);
+                "M6 a final arriving before COMBINE acceptance is an ERROR", err_before + 1,
+                dut->ev_err_final_o);
+    zhao::check(dut->ev_emitted_o == emitted_before, "M6 no final payload write is authorised",
+                emitted_before, dut->ev_emitted_o);
+    zhao::check(s.emitted.empty(), "M6 nothing is published", 0, s.emitted.size());
+    zhao::check(dut->ev_live_o == 1, "M6 the owner is NOT released", 1, dut->ev_live_o);
 
     // After real acceptance, a legitimate final must still succeed -- the
     // rejection above must not have poisoned the owner.
     s.cmb_ready = true;
     s.idle(60);
-    zhao::check(s.combined.size() == 1, "M6 COMBINE accepts once released", 1,
-                s.combined.size());
+    zhao::check(s.combined.size() == 1, "M6 COMBINE accepts once released", 1, s.combined.size());
     dut->fin_valid_i = 1;
     dut->fin_owner_i = o;
     dut->fin_result_i = final_of(o);
     s.step();
     dut->fin_valid_i = 0;
     s.idle(60);
-    zhao::check(s.emitted.size() == 1,
-                "M6 and a legitimate final after acceptance still succeeds", 1,
-                s.emitted.size());
+    zhao::check(s.emitted.size() == 1, "M6 and a legitimate final after acceptance still succeeds",
+                1, s.emitted.size());
   }
 
   // =========================================================================
@@ -1932,14 +1813,14 @@ int main(int argc, char** argv) {
   {
     Ob s(dut);
     s.reset();
-    s.cmb_ready = false;   // hold COMBINE so packets accumulate mid-pipeline
-    s.out_ready = false;   // and hold the output so owners cannot retire
+    s.cmb_ready = false;  // hold COMBINE so packets accumulate mid-pipeline
+    s.out_ready = false;  // and hold the output so owners cannot retire
 
     std::vector<uint16_t> before;
     for (int i = 0; i < 12; ++i) {
       s.d->adm_valid_i = 1;
       s.d->adm_ctx_i = ctx_of(0x9000u + static_cast<uint32_t>(i));
-      s.d->adm_req_i = 0x3;   // two sources, so an owner can be half-complete
+      s.d->adm_req_i = 0x3;  // two sources, so an owner can be half-complete
       s.step();
       if (s.obs_adm_fire) before.push_back(s.obs_adm_owner);
     }
@@ -1980,8 +1861,7 @@ int main(int argc, char** argv) {
     s.emitted.clear();
     s.combined.clear();
 
-    zhao::check(dut->ev_live_o == 0,
-                "after reset no owner is live", 0, dut->ev_live_o);
+    zhao::check(dut->ev_live_o == 0, "after reset no owner is live", 0, dut->ev_live_o);
 
     // ---- the ghost: a return for a PRE-RESET owner -----------------------
     // Its slot and generation are entirely plausible -- they were legitimate
@@ -2000,8 +1880,8 @@ int main(int argc, char** argv) {
                 "22.8/§6.3: a return for a PRE-RESET owner produces no output -- "
                 "a reset context does not write back into its successor",
                 0, s.emitted.size());
-    zhao::check(dut->ev_admitted_o == 0,
-                "and the ghost did not admit anything", 0, dut->ev_admitted_o);
+    zhao::check(dut->ev_admitted_o == 0, "and the ghost did not admit anything", 0,
+                dut->ev_admitted_o);
 
     // ---- and the block still WORKS afterwards ----------------------------
     // A block that refused everything forever would pass every check above.
@@ -2065,8 +1945,8 @@ int main(int argc, char** argv) {
     s.d->tmu_rvalid_i = 0;
     s.idle(60);
     zhao::check(s.emitted.size() == 1,
-                "4i setup: the owner completed and RETIRED through the output",
-                1, s.emitted.size());
+                "4i setup: the owner completed and RETIRED through the output", 1,
+                s.emitted.size());
 
     // Now the late packet, on a retired owner's exact handle.
     int we_asserted = 0;
@@ -2088,11 +1968,9 @@ int main(int argc, char** argv) {
                 "whose owner has retired -- the write is not attempted, not "
                 "merely harmless",
                 0, static_cast<uint64_t>(we_asserted));
-    zhao::check(dut->zhao_texture_v3own->c3a_we_q == 0,
-                "V05: nor the AUX bank enable", 0,
+    zhao::check(dut->zhao_texture_v3own->c3a_we_q == 0, "V05: nor the AUX bank enable", 0,
                 dut->zhao_texture_v3own->c3a_we_q);
-    zhao::check(dut->zhao_texture_v3own->c3f_we_q == 0,
-                "V05: nor the FINAL bank enable", 0,
+    zhao::check(dut->zhao_texture_v3own->c3f_we_q == 0, "V05: nor the FINAL bank enable", 0,
                 dut->zhao_texture_v3own->c3f_we_q);
 
     // NON-VACUITY: the same pin must be seen HIGH on legitimate traffic, or
@@ -2177,8 +2055,7 @@ int main(int argc, char** argv) {
       const bool we_now = dut->zhao_texture_v3own->c3t_we_q != 0;
       const uint32_t commits_before = dut->zhao_texture_v3own->cmt_q[slot_of(o)];
       s.step();
-      const bool commit_moved =
-          dut->zhao_texture_v3own->cmt_q[slot_of(o)] != commits_before;
+      const bool commit_moved = dut->zhao_texture_v3own->cmt_q[slot_of(o)] != commits_before;
       if (we_now) {
         ++we_edges;
         if (commit_moved) ++commit_on_we_edge;
@@ -2221,68 +2098,61 @@ int main(int argc, char** argv) {
       s.d->adm_ctx_i = ctx_of(0xD000u + index);
       s.d->adm_req_i = 0;
       s.step();
-      zhao::check(s.obs_adm_fire, "Timing4 back-to-back admission accepted",
-                  1, s.obs_adm_fire ? 1 : 0);
+      zhao::check(s.obs_adm_fire, "Timing4 back-to-back admission accepted", 1,
+                  s.obs_adm_fire ? 1 : 0);
       owner[index] = s.obs_adm_owner;
       zhao::check(dut->zhao_texture_v3own->ctxw_v_q != 0,
-                  "Timing4 accepted admission crossed the event boundary",
-                  1, dut->zhao_texture_v3own->ctxw_v_q != 0 ? 1 : 0);
+                  "Timing4 accepted admission crossed the event boundary", 1,
+                  dut->zhao_texture_v3own->ctxw_v_q != 0 ? 1 : 0);
       zhao::check(dut->zhao_texture_v3own->ctxw_owner_q == owner[index],
-                  "Timing4 admission event retained full slot/generation",
-                  owner[index], dut->zhao_texture_v3own->ctxw_owner_q);
+                  "Timing4 admission event retained full slot/generation", owner[index],
+                  dut->zhao_texture_v3own->ctxw_owner_q);
       zhao::check(dut->zhao_texture_v3own->ctxw_req_q == 0,
-                  "Timing4 zero-work mask retained across admission event",
-                  0, dut->zhao_texture_v3own->ctxw_req_q);
+                  "Timing4 zero-work mask retained across admission event", 0,
+                  dut->zhao_texture_v3own->ctxw_req_q);
     }
     s.d->adm_valid_i = 0;
 
     std::vector<uint16_t> reservations;
-    for (int watchdog = 0; watchdog < 100 && reservations.size() < owner.size();
-         ++watchdog) {
+    for (int watchdog = 0; watchdog < 100 && reservations.size() < owner.size(); ++watchdog) {
       if (dut->zhao_texture_v3own->k0_v_q) {
         const uint16_t reserved = dut->zhao_texture_v3own->k0_owner_q;
         const uint32_t slot = slot_of(reserved);
         zhao::check(!dut->zhao_texture_v3own->crs_q[slot],
-                    "Timing4 reservation bit did not bypass registered k0 event",
-                    0, dut->zhao_texture_v3own->crs_q[slot]);
+                    "Timing4 reservation bit did not bypass registered k0 event", 0,
+                    dut->zhao_texture_v3own->crs_q[slot]);
         reservations.push_back(reserved);
         s.step();
         zhao::check(dut->zhao_texture_v3own->crs_q[slot],
-                    "Timing4 exact k0 owner published reservation one edge later",
-                    1, dut->zhao_texture_v3own->crs_q[slot]);
+                    "Timing4 exact k0 owner published reservation one edge later", 1,
+                    dut->zhao_texture_v3own->crs_q[slot]);
       } else {
         s.step();
       }
     }
-    zhao::check(reservations.size() == owner.size(),
-                "Timing4 observed both delayed reservations", owner.size(),
-                reservations.size());
-    for (unsigned index = 0;
-         index < owner.size() && index < reservations.size(); ++index)
+    zhao::check(reservations.size() == owner.size(), "Timing4 observed both delayed reservations",
+                owner.size(), reservations.size());
+    for (unsigned index = 0; index < owner.size() && index < reservations.size(); ++index)
       zhao::check(reservations[index] == owner[index],
-                  "Timing4 reservation retained exact ordered owner identity",
-                  owner[index], reservations[index]);
+                  "Timing4 reservation retained exact ordered owner identity", owner[index],
+                  reservations[index]);
 
     s.cmb_ready = true;
-    for (int watchdog = 0; watchdog < 200 && s.emitted.size() < owner.size();
-         ++watchdog)
-      s.step();
+    for (int watchdog = 0; watchdog < 200 && s.emitted.size() < owner.size(); ++watchdog) s.step();
     zhao::check(s.combined.size() == owner.size(),
-                "Timing4 zero-work owners each entered COMBINE exactly once",
-                owner.size(), s.combined.size());
+                "Timing4 zero-work owners each entered COMBINE exactly once", owner.size(),
+                s.combined.size());
     zhao::check(s.emitted.size() == owner.size(),
-                "Timing4 zero-work owners each retired exactly once",
-                owner.size(), s.emitted.size());
+                "Timing4 zero-work owners each retired exactly once", owner.size(),
+                s.emitted.size());
     if (s.combined.size() == owner.size())
       zhao::check(s.combined[1].cyc == s.combined[0].cyc + 1,
-                  "Timing4 registered reservation retained II=1/no bubbles",
-                  s.combined[0].cyc + 1, s.combined[1].cyc);
-    zhao::check(dut->ev_admitted_o == owner.size(),
-                "Timing4 admission counter remained exact", owner.size(),
-                dut->ev_admitted_o);
+                  "Timing4 registered reservation retained II=1/no bubbles", s.combined[0].cyc + 1,
+                  s.combined[1].cyc);
+    zhao::check(dut->ev_admitted_o == owner.size(), "Timing4 admission counter remained exact",
+                owner.size(), dut->ev_admitted_o);
     zhao::check(dut->ev_tickets_o == owner.size(),
-                "Timing4 zero-work ticket counter remained exact", owner.size(),
-                dut->ev_tickets_o);
+                "Timing4 zero-work ticket counter remained exact", owner.size(), dut->ev_tickets_o);
   }
 
   // A return for an established owner and the next admission may share an edge.
@@ -2303,21 +2173,19 @@ int main(int argc, char** argv) {
     s.d->adm_req_i = 0;
     s.step();
     const uint16_t new_owner = s.obs_adm_owner;
-    zhao::check(s.obs_adm_fire,
-                "Timing4 simultaneous old return/new admission accepted", 1,
+    zhao::check(s.obs_adm_fire, "Timing4 simultaneous old return/new admission accepted", 1,
                 s.obs_adm_fire ? 1 : 0);
     zhao::check(dut->zhao_texture_v3own->ctxw_owner_q == new_owner,
-                "Timing4 simultaneous return did not corrupt admission identity",
-                new_owner, dut->zhao_texture_v3own->ctxw_owner_q);
+                "Timing4 simultaneous return did not corrupt admission identity", new_owner,
+                dut->zhao_texture_v3own->ctxw_owner_q);
     s.d->tmu_rvalid_i = 0;
     s.d->adm_valid_i = 0;
     s.idle(300);
-    zhao::check(s.emitted.size() == 2,
-                "Timing4 simultaneous return/admission retired both owners",
+    zhao::check(s.emitted.size() == 2, "Timing4 simultaneous return/admission retired both owners",
                 2, s.emitted.size());
     zhao::check(dut->ev_admitted_o == 2 && dut->ev_emitted_o == 2,
-                "Timing4 simultaneous edge kept exact admission/emission counters",
-                2, dut->ev_emitted_o);
+                "Timing4 simultaneous edge kept exact admission/emission counters", 2,
+                dut->ev_emitted_o);
   }
 
   const int rc = zhao::report_and_exit("texture_v3own_adversarial");

@@ -89,7 +89,7 @@ struct Ledger {
   uint32_t refused_no_storage = 0;
   uint32_t refused_integrity = 0;
   uint32_t refused_generation_wrap = 0;
-  uint32_t refused_oversize = 0;  // longer than one page; see kRefusedOversize
+  uint32_t refused_oversize = 0;        // longer than one page; see kRefusedOversize
   uint32_t reclaim_blocked_by_pin = 0;  // an attempt to reclaim a pinned page
   uint32_t write_blocked_by_pin = 0;    // an attempt to write into a pinned page
 };

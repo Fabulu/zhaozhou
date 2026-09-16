@@ -13,8 +13,8 @@ uint32_t next(uint32_t* state) {
   return *state;
 }
 
-void compare_cycle(Vtb_texture_mosaic_v2_pair& top, int* mismatches,
-                   int* valid_payload_checks, int* idle_checks) {
+void compare_cycle(Vtb_texture_mosaic_v2_pair& top, int* mismatches, int* valid_payload_checks,
+                   int* idle_checks) {
   if (top.legacy_req_ready_o != top.v2_req_ready_o) ++*mismatches;
   if (top.legacy_pick_valid_o != top.v2_pick_valid_o) ++*mismatches;
   if (top.legacy_samples_o != top.v2_samples_o) ++*mismatches;
@@ -23,8 +23,7 @@ void compare_cycle(Vtb_texture_mosaic_v2_pair& top, int* mismatches,
   // implementation claims it valid.  Invalid stale bits are not protocol data.
   if (top.legacy_pick_valid_o || top.v2_pick_valid_o) {
     ++*valid_payload_checks;
-    if (top.legacy_pick_tile_o != top.v2_pick_tile_o ||
-        top.legacy_pick_tx_o != top.v2_pick_tx_o ||
+    if (top.legacy_pick_tile_o != top.v2_pick_tile_o || top.legacy_pick_tx_o != top.v2_pick_tx_o ||
         top.legacy_pick_ty_o != top.v2_pick_ty_o ||
         top.legacy_pick_src_id_o != top.v2_pick_src_id_o)
       ++*mismatches;
@@ -101,12 +100,10 @@ int main(int argc, char** argv) {
   top.eval();
   compare_cycle(top, &mismatches, &payload_checks, &idle_checks);
 
-  zhao::check(mismatches == 0,
-              "Mosaic V2 matches every legacy ready/valid/payload/counter cycle", 0,
-              mismatches);
+  zhao::check(mismatches == 0, "Mosaic V2 matches every legacy ready/valid/payload/counter cycle",
+              0, mismatches);
   zhao::check(accepted > 1000 && accepted == retired,
-              "Mosaic pair accepts and retires the same nontrivial stream", accepted,
-              retired);
+              "Mosaic pair accepts and retires the same nontrivial stream", accepted, retired);
   zhao::check(input_gap_cycles > 0 && output_stall_cycles > 0,
               "Mosaic valid gaps and sink backpressure were independently exercised", 1,
               (input_gap_cycles > 0 && output_stall_cycles > 0) ? 1 : 0);

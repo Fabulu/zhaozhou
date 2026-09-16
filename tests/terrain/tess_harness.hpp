@@ -24,7 +24,7 @@ namespace zt = zref::terrain;
 /** One ModeVtx vertex as the DUT emitted it (2026-09-10, the vertex mode). */
 struct EmitVert {
   int32_t x = 0, y = 0, z = 0;
-  uint8_t index = 0;   // (vj - oz) * 9 + (vi - ox)
+  uint8_t index = 0;    // (vj - oz) * 9 + (vi - ox)
   bool stride = false;  // on the job's own stride grid
   bool surface = false;
   uint16_t src = 0;

@@ -82,8 +82,7 @@ uint64_t result_word(const Vzhao_texture_aux_pipe_v2& top) {
   return static_cast<uint64_t>(top.out_result_o);
 }
 
-bool request_matches(const Vzhao_texture_aux_pipe_v2& top,
-                     const ExpectedRequest& expected) {
+bool request_matches(const Vzhao_texture_aux_pipe_v2& top, const ExpectedRequest& expected) {
   return top.req_op_o == kRead && top.req_handle_o == expected.job.handle &&
          top.req_texel_o == expected.texel && top.req_src_id_o == expected.job.owner;
 }
@@ -105,10 +104,8 @@ void reset(Vzhao_texture_aux_pipe_v2& top) {
   zhao::tick(top);
 }
 
-Job make_job(int index, uint32_t* random,
-             const std::array<uint8_t, 4096>& tags_a,
-             const std::array<uint8_t, 4096>& strengths_a,
-             const std::array<uint8_t, 4096>& tags_b,
+Job make_job(int index, uint32_t* random, const std::array<uint8_t, 4096>& tags_a,
+             const std::array<uint8_t, 4096>& strengths_a, const std::array<uint8_t, 4096>& tags_b,
              const std::array<uint8_t, 4096>& strengths_b) {
   Job job;
   job.handle = (index & 1) ? kHandleB : kHandleA;
@@ -123,7 +120,7 @@ Job make_job(int index, uint32_t* random,
       job.wz = 200;
       break;
     case 1:
-      job.envelope = {-700, 42, 900, 42};    // degenerate Z
+      job.envelope = {-700, 42, 900, 42};  // degenerate Z
       job.wx = -100;
       job.wz = 42;
       break;
@@ -158,20 +155,29 @@ Job make_job(int index, uint32_t* random,
 
   switch (index % 10) {
     case 5:
-    case 6: job.verdict = Verdict::Miss; break;
-    case 7: job.verdict = Verdict::WrongOp; break;
-    case 8: job.verdict = Verdict::WrongStatus; break;
-    case 9: job.verdict = Verdict::WrongSource; break;
-    default: job.verdict = Verdict::Hit; break;
+    case 6:
+      job.verdict = Verdict::Miss;
+      break;
+    case 7:
+      job.verdict = Verdict::WrongOp;
+      break;
+    case 8:
+      job.verdict = Verdict::WrongStatus;
+      break;
+    case 9:
+      job.verdict = Verdict::WrongSource;
+      break;
+    default:
+      job.verdict = Verdict::Hit;
+      break;
   }
 
   const bool resident = job.verdict != Verdict::Miss;
   const uint8_t* tags = job.handle == kHandleA ? tags_a.data() : tags_b.data();
-  const uint8_t* strengths = job.handle == kHandleA ? strengths_a.data()
-                                                     : strengths_b.data();
+  const uint8_t* strengths = job.handle == kHandleA ? strengths_a.data() : strengths_b.data();
   // The one arithmetic/data authority for this randomized test.
-  job.oracle = zref::aux::AuxSource::sample(
-      job.envelope, job.wx, job.wz, tags, strengths, resident);
+  job.oracle =
+      zref::aux::AuxSource::sample(job.envelope, job.wx, job.wz, tags, strengths, resident);
   return job;
 }
 
@@ -274,8 +280,7 @@ int main(int argc, char** argv) {
 
   for (; cycle < 30000; ++cycle) {
     if (!job_pending && made < kJobs && ((next(&valid_random) >> 28) < 12)) {
-      offered_job = make_job(made, &data_random, tags_a, strengths_a,
-                             tags_b, strengths_b);
+      offered_job = make_job(made, &data_random, tags_a, strengths_a, tags_b, strengths_b);
       job_pending = true;
       ++made;
     }
@@ -283,17 +288,14 @@ int main(int argc, char** argv) {
     if (job_pending) drive_job(top, offered_job);
 
     bool request_ready = ((next(&request_random) >> 28) < 10);
-    if ((cycle >= 90 && cycle < 125) || (cycle >= 600 && cycle < 625))
-      request_ready = false;
+    if ((cycle >= 90 && cycle < 125) || (cycle >= 600 && cycle < 625)) request_ready = false;
     top.req_ready_i = request_ready ? 1 : 0;
 
     bool output_ready = ((next(&output_random) >> 28) < 11);
-    if ((cycle >= 180 && cycle < 250) || (cycle >= 900 && cycle < 940))
-      output_ready = false;
+    if ((cycle >= 180 && cycle < 250) || (cycle >= 900 && cycle < 940)) output_ready = false;
     top.out_ready_i = output_ready ? 1 : 0;
 
-    if (!responses.empty() && responses.front().due_cycle > cycle)
-      ++response_delay_cycles;
+    if (!responses.empty() && responses.front().due_cycle > cycle) ++response_delay_cycles;
     if (!responses.empty() && responses.front().due_cycle <= cycle) {
       const Response& response = responses.front();
       top.pg_valid_i = 1;
@@ -310,17 +312,15 @@ int main(int argc, char** argv) {
 
     if (previous_req_stall &&
         (!top.req_valid_o || top.req_op_o != previous_req_op ||
-         top.req_handle_o != previous_req_handle ||
-         top.req_texel_o != previous_req_texel || top.req_src_id_o != previous_req_src))
+         top.req_handle_o != previous_req_handle || top.req_texel_o != previous_req_texel ||
+         top.req_src_id_o != previous_req_src))
       ++mismatches;
-    if (previous_out_stall &&
-        (!top.out_valid_o || top.out_owner_o != previous_out_owner ||
-         result_word(top) != previous_out_result))
+    if (previous_out_stall && (!top.out_valid_o || top.out_owner_o != previous_out_owner ||
+                               result_word(top) != previous_out_result))
       ++mismatches;
     if (previous_pg_stall) {
       if (!top.pg_valid_i || top.pg_op_i != previous_response.op ||
-          top.pg_status_i != previous_response.status ||
-          top.pg_tag_i != previous_response.tag ||
+          top.pg_status_i != previous_response.status || top.pg_tag_i != previous_response.tag ||
           top.pg_strength_i != previous_response.strength ||
           top.pg_src_id_i != previous_response.src)
         ++mismatches;
@@ -344,15 +344,17 @@ int main(int argc, char** argv) {
       if (degenerate) {
         ++degenerate_count;
       } else {
-        const uint16_t texel = static_cast<uint16_t>(offered_job.oracle.v * 64u +
-                                                     offered_job.oracle.u);
+        const uint16_t texel =
+            static_cast<uint16_t>(offered_job.oracle.v * 64u + offered_job.oracle.u);
         requests_expected.push_back(ExpectedRequest{offered_job, texel});
-        if (offered_job.handle == kHandleA) ++handle_a_requests;
-        else                                ++handle_b_requests;
+        if (offered_job.handle == kHandleA)
+          ++handle_a_requests;
+        else
+          ++handle_b_requests;
         if (offered_job.oracle.u == 0 || offered_job.oracle.v == 0) ++clamp_zero;
         if (offered_job.oracle.u == 63 || offered_job.oracle.v == 63) ++clamp_sixty_three;
-        if (offered_job.oracle.u > 0 && offered_job.oracle.u < 63 &&
-            offered_job.oracle.v > 0 && offered_job.oracle.v < 63)
+        if (offered_job.oracle.u > 0 && offered_job.oracle.u < 63 && offered_job.oracle.v > 0 &&
+            offered_job.oracle.v < 63)
           ++interior;
       }
 
@@ -379,22 +381,33 @@ int main(int argc, char** argv) {
         if (!request_matches(top, expected)) ++mismatches;
         Response response = response_for(expected, cycle, &response_random);
         if (!responses.empty())
-          response.due_cycle = std::max(response.due_cycle,
-                                        responses.back().due_cycle + 1);
+          response.due_cycle = std::max(response.due_cycle, responses.back().due_cycle + 1);
         responses.push_back(response);
         switch (expected.job.verdict) {
-          case Verdict::Hit: ++hit_count; break;
-          case Verdict::Miss: ++miss_count; break;
-          case Verdict::WrongOp: ++wrong_op_count; break;
-          case Verdict::WrongStatus: ++wrong_status_count; break;
-          case Verdict::WrongSource: ++wrong_src_count; break;
+          case Verdict::Hit:
+            ++hit_count;
+            break;
+          case Verdict::Miss:
+            ++miss_count;
+            break;
+          case Verdict::WrongOp:
+            ++wrong_op_count;
+            break;
+          case Verdict::WrongStatus:
+            ++wrong_status_count;
+            break;
+          case Verdict::WrongSource:
+            ++wrong_src_count;
+            break;
         }
       }
     }
 
     if (pg_fire) {
-      if (responses.empty()) ++mismatches;
-      else responses.pop_front();
+      if (responses.empty())
+        ++mismatches;
+      else
+        responses.pop_front();
     }
 
     if (out_fire) {
@@ -409,8 +422,7 @@ int main(int argc, char** argv) {
         const uint8_t strength = static_cast<uint8_t>(word >> 24);
         const uint32_t low24 = static_cast<uint32_t>(word) & 0xFFFFFFu;
         if (status != found->second.status || tag != found->second.tag ||
-            strength != found->second.strength || low24 != 0 ||
-            cycle <= found->second.issue_cycle)
+            strength != found->second.strength || low24 != 0 || cycle <= found->second.issue_cycle)
           ++mismatches;
         results_expected.erase(found);
       }
@@ -430,8 +442,8 @@ int main(int argc, char** argv) {
 
     zhao::tick(top);
 
-    if (accepted == kJobs && completed == kJobs && !job_pending &&
-        requests_expected.empty() && responses.empty()) {
+    if (accepted == kJobs && completed == kJobs && !job_pending && requests_expected.empty() &&
+        responses.empty()) {
       top.eval();
       if (top.idle_o) break;
     }
@@ -446,8 +458,7 @@ int main(int argc, char** argv) {
   zhao::check(accepted == kJobs && completed == kJobs,
               "random AUX accepts and completes every oracle job", kJobs,
               accepted == kJobs && completed == kJobs ? kJobs : -1);
-  zhao::check(mismatches == 0,
-              "random AUX Sheet identity/U/V and typed results match AuxSource", 0,
+  zhao::check(mismatches == 0, "random AUX Sheet identity/U/V and typed results match AuxSource", 0,
               mismatches);
   zhao::check(results_expected.empty() && requests_expected.empty() && responses.empty(),
               "random AUX scoreboards drain without missing or duplicate work", 1,
@@ -455,10 +466,9 @@ int main(int argc, char** argv) {
   zhao::check(handle_a_requests > 100 && handle_b_requests > 100,
               "both same-index/different-generation handles were exercised", 1,
               (handle_a_requests > 100 && handle_b_requests > 100) ? 1 : 0);
-  zhao::check(degenerate_count > 40 && hit_count > 100 && miss_count > 40 &&
-                  wrong_op_count > 20 && wrong_status_count > 20 && wrong_src_count > 20,
-              "degenerate/HIT/MISS/all malformed response classes are interesting", 1,
-              1);
+  zhao::check(degenerate_count > 40 && hit_count > 100 && miss_count > 40 && wrong_op_count > 20 &&
+                  wrong_status_count > 20 && wrong_src_count > 20,
+              "degenerate/HIT/MISS/all malformed response classes are interesting", 1, 1);
   zhao::check(clamp_zero > 20 && clamp_sixty_three > 20 && interior > 20,
               "oracle coordinates cover low clamp, high clamp, and interior", 1,
               (clamp_zero > 20 && clamp_sixty_three > 20 && interior > 20) ? 1 : 0);
@@ -471,33 +481,32 @@ int main(int argc, char** argv) {
   zhao::check(response_hold_cycles == 0,
               "reserved legal responses are accepted immediately once presented", 0,
               response_hold_cycles);
-  zhao::check(top.accepted_o == static_cast<uint32_t>(accepted) &&
-                  top.sheet_reads_o == static_cast<uint32_t>(hit_count + miss_count +
-                      wrong_op_count + wrong_status_count + wrong_src_count) &&
-                  top.local_refused_o == static_cast<uint32_t>(degenerate_count) &&
-                  top.completed_o == static_cast<uint32_t>(completed) &&
-                  top.degenerate_o == static_cast<uint32_t>(degenerate_count),
-              "random AUX accepted/read/local/completed/degenerate counters are exact", 1,
-              1);
+  zhao::check(
+      top.accepted_o == static_cast<uint32_t>(accepted) &&
+          top.sheet_reads_o == static_cast<uint32_t>(hit_count + miss_count + wrong_op_count +
+                                                     wrong_status_count + wrong_src_count) &&
+          top.local_refused_o == static_cast<uint32_t>(degenerate_count) &&
+          top.completed_o == static_cast<uint32_t>(completed) &&
+          top.degenerate_o == static_cast<uint32_t>(degenerate_count),
+      "random AUX accepted/read/local/completed/degenerate counters are exact", 1, 1);
   zhao::check(top.sheet_hits_o == static_cast<uint32_t>(hit_count) &&
                   top.sheet_misses_o == static_cast<uint32_t>(miss_count) &&
                   top.sheet_rsp_wrong_op_o == static_cast<uint32_t>(wrong_op_count) &&
                   top.sheet_rsp_wrong_status_o == static_cast<uint32_t>(wrong_status_count) &&
                   top.sheet_rsp_wrong_src_o == static_cast<uint32_t>(wrong_src_count),
-              "random AUX HIT/MISS/malformed verdict counters are exact", 1,
-              1);
+              "random AUX HIT/MISS/malformed verdict counters are exact", 1, 1);
   zhao::check(top.sheet_rsp_unsolicited_o == 0 && top.credit_fault_o == 0,
               "random legal scheduling creates no unsolicited or capacity fault", 0,
               top.sheet_rsp_unsolicited_o + top.credit_fault_o);
-  zhao::check(top.frame_fault_o == 1 && top.sheet_rsp_owed_o == 0 &&
-                  top.credit_in_use_o == 0 && top.idle_o == 1,
+  zhao::check(top.frame_fault_o == 1 && top.sheet_rsp_owed_o == 0 && top.credit_in_use_o == 0 &&
+                  top.idle_o == 1,
               "random refusals set frame fault while owed/credit/idle drain exactly", 1,
               (top.frame_fault_o && top.idle_o) ? 1 : 0);
 
-  std::printf("  random AUX: jobs=%d degen=%d hit=%d miss=%d malformed=%d/%d/%d "
-              "stalls=%d/%d/%d cycles=%d\n",
-              accepted, degenerate_count, hit_count, miss_count,
-              wrong_op_count, wrong_status_count, wrong_src_count,
-              job_stalls, request_stalls, output_stalls, cycle);
+  std::printf(
+      "  random AUX: jobs=%d degen=%d hit=%d miss=%d malformed=%d/%d/%d "
+      "stalls=%d/%d/%d cycles=%d\n",
+      accepted, degenerate_count, hit_count, miss_count, wrong_op_count, wrong_status_count,
+      wrong_src_count, job_stalls, request_stalls, output_stalls, cycle);
   return zhao::report_and_exit("texture_aux_pipe_v2_random");
 }

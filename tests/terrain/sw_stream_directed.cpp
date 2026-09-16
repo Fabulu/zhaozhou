@@ -48,11 +48,11 @@ void check_eq(long got, long want, const char* what) { check(got == want, what, 
 namespace sws = zref::swstream;
 namespace isl = zref::island;
 
-constexpr int32_t kSide = 125;      // 8 km at 64 m patches
-constexpr int32_t kBandLo = 40;     // a solid band of ground across the island
+constexpr int32_t kSide = 125;   // 8 km at 64 m patches
+constexpr int32_t kBandLo = 40;  // a solid band of ground across the island
 constexpr int32_t kBandHi = 85;
 constexpr uint64_t kCartBase = 0x8000'0000ull;
-constexpr uint32_t kCartBytes = 0x0800'0000u;   // 128 MiB of cartridge
+constexpr uint32_t kCartBytes = 0x0800'0000u;  // 128 MiB of cartridge
 constexpr uint32_t kStageBase = 0x2000'0000u;
 constexpr uint32_t kStageSlots = 4096;
 constexpr uint32_t kStageBytes = kStageSlots * sws::kPageBytes;
@@ -71,8 +71,8 @@ void build(isl::Directory& dir, sws::WorldStreamer& ws) {
     for (int32_t ix = 0; ix < kSide; ++ix) {
       sws::PageSource s;
       s.cart_offset = off;
-      s.declared_crc32c = 0xC0DE'0000u ^ (static_cast<uint32_t>(iz) << 8) ^
-                          static_cast<uint32_t>(ix);
+      s.declared_crc32c =
+          0xC0DE'0000u ^ (static_cast<uint32_t>(iz) << 8) ^ static_cast<uint32_t>(ix);
       s.source_id = src++;
       ws.set_source(ix, iz, s);
       off += sws::kPageBytes;
@@ -159,9 +159,10 @@ int main() {
     long unstaged = 0;
     for (const sws::PatchRecord& r : f.list.records)
       if (r.hps_page_addr == 0) ++unstaged;
-    check_eq(unstaged, 0, "no sealed record names a page that was never staged "
-                          "-- T12's 'never expose a half-built page list to "
-                          "CMD.DMA'");
+    check_eq(unstaged, 0,
+             "no sealed record names a page that was never staged "
+             "-- T12's 'never expose a half-built page list to "
+             "CMD.DMA'");
 
     // Report the loads back as completed, so the next frame's "already
     // resident" accounting is real rather than a fresh cold start every time.
@@ -169,10 +170,11 @@ int main() {
       if (r.hps_page_addr != 0) ws.note_load_complete(r.patch_ix, r.patch_iz, true);
   }
 
-  std::printf("  %d frames: worst loads/frame %u, frames over budget %u,\n"
-              "             required deferred %u over %u frames, prefetch deferred %u\n",
-              kFrames, worst_loads, frames_over_budget, total_required_deferred,
-              frames_with_proxy, L.prefetch_deferred);
+  std::printf(
+      "  %d frames: worst loads/frame %u, frames over budget %u,\n"
+      "             required deferred %u over %u frames, prefetch deferred %u\n",
+      kFrames, worst_loads, frames_over_budget, total_required_deferred, frames_with_proxy,
+      L.prefetch_deferred);
 
   check_eq(frames_over_budget, 0,
            "NO FRAME EXCEEDS T7's 32-PAGE CEILING -- the ruling is a ceiling per "
@@ -219,8 +221,9 @@ int main() {
       for (const sws::PatchRecord& r : f.list.records)
         if (r.hps_page_addr != 0) w2.note_load_complete(r.patch_ix, r.patch_iz, true);
     }
-    check_eq(worst8, 8, "the budget is a live parameter: at 8 pages/frame the "
-                        "worst frame loads 8, not 32");
+    check_eq(worst8, 8,
+             "the budget is a live parameter: at 8 pages/frame the "
+             "worst frame loads 8, not 32");
   }
 
   // =========================================================================
@@ -255,14 +258,18 @@ int main() {
         if (f.list.records[i].patch_ix == f.list.records[k].patch_ix &&
             f.list.records[i].patch_iz == f.list.records[k].patch_iz)
           ++dupes;
-    check_eq(dupes, 0, "a patch both views want appears EXACTLY ONCE in the "
-                       "sealed list: the union happens before deduplication");
+    check_eq(dupes, 0,
+             "a patch both views want appears EXACTLY ONCE in the "
+             "sealed list: the union happens before deduplication");
 
     long dual = 0, only0 = 0, only1 = 0;
     for (const sws::PatchRecord& r : f.list.records) {
-      if (r.view_mask == 0x3) ++dual;
-      else if (r.view_mask == 0x1) ++only0;
-      else if (r.view_mask == 0x2) ++only1;
+      if (r.view_mask == 0x3)
+        ++dual;
+      else if (r.view_mask == 0x1)
+        ++only0;
+      else if (r.view_mask == 0x2)
+        ++only1;
     }
     check(dual > 0, "the overlap is flagged DUAL", 1, dual > 0 ? 1 : 0);
     check(only0 > 0 && only1 > 0,
@@ -322,8 +329,9 @@ int main() {
     check_eq(diff, 0, "two runs of the same frame seal BYTE-IDENTICAL list bytes");
     check_eq(static_cast<long>(a.list_crc32c), static_cast<long>(b.list_crc32c),
              "...and therefore the same list_crc32c");
-    check(a.list_crc32c != 0, "the CRC is not the empty-list constant, i.e. the "
-                              "comparison above ran on real bytes",
+    check(a.list_crc32c != 0,
+          "the CRC is not the empty-list constant, i.e. the "
+          "comparison above ran on real bytes",
           1, a.list_crc32c != 0 ? 1 : 0);
 
     // The order itself, checked against the comparator's own law rather than
@@ -338,13 +346,16 @@ int main() {
     bool seen_prefetch = false;
     long required_after_prefetch = 0;
     for (const sws::PatchRecord& r : a.records) {
-      if (r.flags & sws::kFlagPrefetch) seen_prefetch = true;
-      else if (seen_prefetch) ++required_after_prefetch;
+      if (r.flags & sws::kFlagPrefetch)
+        seen_prefetch = true;
+      else if (seen_prefetch)
+        ++required_after_prefetch;
     }
-    check_eq(required_after_prefetch, 0,
-             "every REQUIRED record precedes every PREFETCH record");
-    check(seen_prefetch, "and prefetch records exist, so the check above is not "
-                         "vacuous", 1, seen_prefetch ? 1 : 0);
+    check_eq(required_after_prefetch, 0, "every REQUIRED record precedes every PREFETCH record");
+    check(seen_prefetch,
+          "and prefetch records exist, so the check above is not "
+          "vacuous",
+          1, seen_prefetch ? 1 : 0);
   }
 
   // =========================================================================
@@ -393,8 +404,10 @@ int main() {
     long neighbours_in_list = 0;
     for (const sws::PatchRecord& r : f.list.records) {
       const bool sab = r.patch_iz == 62 && r.patch_ix >= 60 && r.patch_ix <= 62;
-      if (sab) ++sabotaged_in_list;
-      else if (r.hps_page_addr != 0) ++neighbours_in_list;
+      if (sab)
+        ++sabotaged_in_list;
+      else if (r.hps_page_addr != 0)
+        ++neighbours_in_list;
     }
     check_eq(sabotaged_in_list, 0,
              "NOT ONE of the three pages that failed to stage completely "
@@ -571,7 +584,8 @@ int main() {
       check_eq((*saved)[17], -900, "the crater's first cell survived eviction");
       check_eq((*saved)[18], -1200, "and its second");
       long nonzero = 0;
-      for (int16_t v : *saved) if (v != 0) ++nonzero;
+      for (int16_t v : *saved)
+        if (v != 0) ++nonzero;
       check_eq(nonzero, 2, "and nothing else was disturbed");
     }
 
@@ -619,9 +633,8 @@ int main() {
           "unruled_gameplay_starvation -- the model REFUSES LOUDLY instead of "
           "inventing a policy no ruling states",
           1, f.unruled_gameplay_starvation ? 1 : 0);
-    check(f.gameplay_required_deferred >= 2,
-          "and counts exactly how many were starved",
-          2, static_cast<long>(f.gameplay_required_deferred));
+    check(f.gameplay_required_deferred >= 2, "and counts exactly how many were starved", 2,
+          static_cast<long>(f.gameplay_required_deferred));
 
     // Gameplay-required sorts ahead of ordinary required-current, which is an
     // INTERPRETATION derived from T6's ladder, not a ruling. It is asserted
@@ -634,9 +647,10 @@ int main() {
   }
 
   std::printf("\nsw_stream_directed: %d checks, %s\n", g_checks, g_failed ? "FAILED" : "ok");
-  std::printf("  ledger: frames %u, unique candidates %u, dual %u, loads %u,\n"
-              "          staged %u (reused %u), proxy %u, sealed %u lists / %u bytes\n",
-              L.frames, L.candidates_unique, L.dual_patches, L.loads_planned, L.staged_ok,
-              L.staged_reused, L.proxy_patches, L.lists_sealed, L.list_bytes_sealed);
+  std::printf(
+      "  ledger: frames %u, unique candidates %u, dual %u, loads %u,\n"
+      "          staged %u (reused %u), proxy %u, sealed %u lists / %u bytes\n",
+      L.frames, L.candidates_unique, L.dual_patches, L.loads_planned, L.staged_ok, L.staged_reused,
+      L.proxy_patches, L.lists_sealed, L.list_bytes_sealed);
   return g_failed ? 1 : 0;
 }

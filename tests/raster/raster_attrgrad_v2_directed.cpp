@@ -21,8 +21,7 @@ using u128 = unsigned __int128;
 #define ZHAO_ATTR_RADIX 2
 #endif
 static_assert(ZHAO_ATTR_RADIX == 2 || ZHAO_ATTR_RADIX == 4);
-static constexpr uint64_t kNormalVisibleLatency =
-    ZHAO_ATTR_RADIX == 4 ? 51u : 100u;
+static constexpr uint64_t kNormalVisibleLatency = ZHAO_ATTR_RADIX == 4 ? 51u : 100u;
 
 double sc_time_stamp() { return 0.0; }
 
@@ -58,7 +57,9 @@ static int32_t as_i32(uint32_t bits) {
   return cvt.s;
 }
 
-static int32_t wrap32(i128 value) { return as_i32(static_cast<uint32_t>(static_cast<u128>(value))); }
+static int32_t wrap32(i128 value) {
+  return as_i32(static_cast<uint32_t>(static_cast<u128>(value)));
+}
 
 static i128 floor_div(i128 n, i128 d) {
   i128 q = n / d;
@@ -122,8 +123,7 @@ static DivResult run_div(i128 n, uint64_t area) {
       arrived = true;
       break;
     }
-    if (dut->d_ready_o)
-      fail("divider advertised successor ready before response");
+    if (dut->d_ready_o) fail("divider advertised successor ready before response");
     tick();
   }
   if (!arrived) {
@@ -132,10 +132,8 @@ static DivResult run_div(i128 n, uint64_t area) {
   }
   const bool exceptional = area == 0 || current_saturates(n, area);
   const uint64_t expected_latency = exceptional ? 2u : kNormalVisibleLatency;
-  if (cycles - accepted_cycle != expected_latency)
-    fail("divider response-visible latency changed");
-  if (static_cast<uint64_t>(dut->d_busy_clocks_o - busy_before) !=
-      expected_latency)
+  if (cycles - accepted_cycle != expected_latency) fail("divider response-visible latency changed");
+  if (static_cast<uint64_t>(dut->d_busy_clocks_o - busy_before) != expected_latency)
     fail("divider busy-clock delta changed");
 
   dut->d_rready_i = 1;
@@ -151,10 +149,8 @@ static void prove_divider_blocks_followup() {
   constexpr uint64_t first_area = 2;
   constexpr i128 second_n = 29;
   constexpr uint64_t second_area = 7;
-  const int32_t first_want =
-      zref::render::div_rhu_s128(first_n, static_cast<i128>(first_area));
-  const int32_t second_want =
-      zref::render::div_rhu_s128(second_n, static_cast<i128>(second_area));
+  const int32_t first_want = zref::render::div_rhu_s128(first_n, static_cast<i128>(first_area));
+  const int32_t second_want = zref::render::div_rhu_s128(second_n, static_cast<i128>(second_area));
 
   const uint32_t divides_before = dut->d_divides_o;
   const uint32_t saturations_before = dut->d_saturations_o;
@@ -194,8 +190,7 @@ static void prove_divider_blocks_followup() {
     fail("held-response first result did not arrive finitely");
     return;
   }
-  if (static_cast<int32_t>(dut->d_q_o) != first_want || dut->d_saturated_o ||
-      dut->d_error_o)
+  if (static_cast<int32_t>(dut->d_q_o) != first_want || dut->d_saturated_o || dut->d_error_o)
     fail("held-response first result was wrong");
 
   const uint32_t held_divides = dut->d_divides_o;
@@ -214,13 +209,11 @@ static void prove_divider_blocks_followup() {
   dut->d_rready_i = 0;
   for (int held_cycle = 0; held_cycle < 4; ++held_cycle) {
     dut->eval();
-    if (!dut->d_rvalid_o || static_cast<int32_t>(dut->d_q_o) != first_want ||
-        dut->d_saturated_o || dut->d_error_o)
+    if (!dut->d_rvalid_o || static_cast<int32_t>(dut->d_q_o) != first_want || dut->d_saturated_o ||
+        dut->d_error_o)
       fail("divider first result changed while successor was offered");
-    if (dut->d_ready_o)
-      fail("divider admitted a successor behind a held result");
-    if (dut->d_divides_o != held_divides ||
-        dut->d_saturations_o != held_saturations ||
+    if (dut->d_ready_o) fail("divider admitted a successor behind a held result");
+    if (dut->d_divides_o != held_divides || dut->d_saturations_o != held_saturations ||
         dut->d_errors_o != held_errors || dut->d_busy_clocks_o != held_busy)
       fail("divider evidence changed while successor was blocked");
     tick();
@@ -230,11 +223,10 @@ static void prove_divider_blocks_followup() {
   // on this edge, so the second request cannot have been admitted simultaneously.
   dut->d_rready_i = 1;
   dut->eval();
-  if (!dut->d_rvalid_o || dut->d_ready_o ||
-      static_cast<int32_t>(dut->d_q_o) != first_want || dut->d_saturated_o ||
-      dut->d_error_o || dut->d_divides_o != held_divides ||
-      dut->d_saturations_o != held_saturations ||
-      dut->d_errors_o != held_errors || dut->d_busy_clocks_o != held_busy)
+  if (!dut->d_rvalid_o || dut->d_ready_o || static_cast<int32_t>(dut->d_q_o) != first_want ||
+      dut->d_saturated_o || dut->d_error_o || dut->d_divides_o != held_divides ||
+      dut->d_saturations_o != held_saturations || dut->d_errors_o != held_errors ||
+      dut->d_busy_clocks_o != held_busy)
     fail("divider first-consume edge violated held-result exclusion");
   tick();
   dut->d_rready_i = 0;
@@ -242,8 +234,7 @@ static void prove_divider_blocks_followup() {
   bool second_accepted = false;
   for (int guard = 0; guard < 1000; ++guard) {
     dut->eval();
-    if (dut->d_divides_o != held_divides ||
-        dut->d_saturations_o != held_saturations ||
+    if (dut->d_divides_o != held_divides || dut->d_saturations_o != held_saturations ||
         dut->d_errors_o != held_errors)
       fail("divider counters changed before successor admission");
     const bool fire = dut->d_valid_i && dut->d_ready_o;
@@ -272,11 +263,9 @@ static void prove_divider_blocks_followup() {
     fail("accepted successor did not return finitely");
     return;
   }
-  if (static_cast<int32_t>(dut->d_q_o) != second_want || dut->d_saturated_o ||
-      dut->d_error_o)
+  if (static_cast<int32_t>(dut->d_q_o) != second_want || dut->d_saturated_o || dut->d_error_o)
     fail("accepted successor result was not exact");
-  if (dut->d_divides_o != held_divides + 1 ||
-      dut->d_saturations_o != held_saturations ||
+  if (dut->d_divides_o != held_divides + 1 || dut->d_saturations_o != held_saturations ||
       dut->d_errors_o != held_errors)
     fail("accepted successor counters were not exact");
 
@@ -331,8 +320,7 @@ static ExpectedJob expected_job(const Job& j) {
 
   for (size_t ri = 0; ri < j.rows.size(); ++ri) {
     const Row& row = j.rows[ri];
-    const i128 row_n = j.n0 + j.dx * j.min_x +
-                       j.dy * (j.tile_y + static_cast<int>(row.row)) +
+    const i128 row_n = j.n0 + j.dx * j.min_x + j.dy * (j.tile_y + static_cast<int>(row.row)) +
                        floor_half(j.dx) + floor_half(j.dy);
     int32_t row_q = 0;
     bool row_sat = false;
@@ -341,18 +329,15 @@ static ExpectedJob expected_job(const Job& j) {
       row_sat = current_saturates(row_n, j.area);
       if (row_sat) ++e.saturations;
     }
-    int32_t q = wrap32(static_cast<i128>(row_q) +
-                       static_cast<i128>(e.grad) * (j.tile_x - j.min_x));
+    int32_t q = wrap32(static_cast<i128>(row_q) + static_cast<i128>(e.grad) * (j.tile_x - j.min_x));
     int last_col = -1;
     for (int c = 0; c < 16; ++c)
       if ((row.mask >> c) & 1u) last_col = c;
     for (int c = 0; c < 16; ++c) {
       if ((row.mask >> c) & 1u) {
         e.pixels.push_back(Pixel{static_cast<int>(row.row), c, q,
-                                 (j.area != 0) &&
-                                     (current_saturates(j.dx, j.area) || row_sat),
-                                 j.area == 0,
-                                 ri + 1 == j.rows.size() && c == last_col});
+                                 (j.area != 0) && (current_saturates(j.dx, j.area) || row_sat),
+                                 j.area == 0, ri + 1 == j.rows.size() && c == last_col});
       }
       q = wrap32(static_cast<i128>(q) + e.grad);
     }
@@ -430,9 +415,8 @@ static RunJobResult run_job(const Job& j, uint64_t stall_seed) {
                     dut->g_q_error_o != 0,
                     dut->g_q_last_o != 0};
     if (hold_active) {
-      if (!dut->g_q_valid_o || now.row != held.row || now.col != held.col ||
-          now.q != held.q || now.saturated != held.saturated ||
-          now.error != held.error || now.last != held.last)
+      if (!dut->g_q_valid_o || now.row != held.row || now.col != held.col || now.q != held.q ||
+          now.saturated != held.saturated || now.error != held.error || now.last != held.last)
         fail("gradient output changed under backpressure");
     }
 
@@ -455,8 +439,7 @@ static RunJobResult run_job(const Job& j, uint64_t stall_seed) {
     if (q_fire) got.push_back(now);
 
     dut->eval();
-    if (next_row == j.rows.size() && !row_offered && dut->g_idle_o &&
-        !dut->g_q_valid_o) {
+    if (next_row == j.rows.size() && !row_offered && dut->g_idle_o && !dut->g_q_valid_o) {
       dut->g_q_ready_i = 0;
       dut->g_cov_valid_i = 0;
       return RunJobResult{got,
@@ -475,30 +458,29 @@ static RunJobResult run_job(const Job& j, uint64_t stall_seed) {
 static int compare_job(const ExpectedJob& want, const RunJobResult& got, bool report) {
   int mismatches = 0;
   if (want.pixels.size() != got.pixels.size()) ++mismatches;
-  const size_t count = want.pixels.size() < got.pixels.size()
-                           ? want.pixels.size()
-                           : got.pixels.size();
+  const size_t count =
+      want.pixels.size() < got.pixels.size() ? want.pixels.size() : got.pixels.size();
   for (size_t i = 0; i < count; ++i) {
     const Pixel& w = want.pixels[i];
     const Pixel& g = got.pixels[i];
-    if (w.row != g.row || w.col != g.col || w.q != g.q ||
-        w.saturated != g.saturated || w.error != g.error || w.last != g.last) {
+    if (w.row != g.row || w.col != g.col || w.q != g.q || w.saturated != g.saturated ||
+        w.error != g.error || w.last != g.last) {
       ++mismatches;
       if (report && mismatches <= 5)
-        std::printf("  pixel mismatch %zu: got (%d,%d q=%ld sat=%d err=%d last=%d), "
-                    "want (%d,%d q=%ld sat=%d err=%d last=%d)\n",
-                    i, g.row, g.col, static_cast<long>(g.q), g.saturated, g.error,
-                    g.last, w.row, w.col, static_cast<long>(w.q), w.saturated,
-                    w.error, w.last);
+        std::printf(
+            "  pixel mismatch %zu: got (%d,%d q=%ld sat=%d err=%d last=%d), "
+            "want (%d,%d q=%ld sat=%d err=%d last=%d)\n",
+            i, g.row, g.col, static_cast<long>(g.q), g.saturated, g.error, g.last, w.row, w.col,
+            static_cast<long>(w.q), w.saturated, w.error, w.last);
     }
   }
   if (want.divides != got.divides || want.saturations != got.saturations ||
       want.errors != got.errors || want.pixels.size() != got.pixel_count) {
     ++mismatches;
     if (report)
-      std::printf("  counter mismatch: div %u/%u sat %u/%u err %u/%u pix %u/%zu\n",
-                  got.divides, want.divides, got.saturations, want.saturations,
-                  got.errors, want.errors, got.pixel_count, want.pixels.size());
+      std::printf("  counter mismatch: div %u/%u sat %u/%u err %u/%u pix %u/%zu\n", got.divides,
+                  want.divides, got.saturations, want.saturations, got.errors, want.errors,
+                  got.pixel_count, want.pixels.size());
   }
   if (got.stall_cycles == 0) {
     ++mismatches;
@@ -538,8 +520,8 @@ int main(int argc, char** argv) {
   const DivResult got = run_div(-3, 2);
   const int32_t oracle = zref::render::div_rhu_s128(-3, 2);
   if (oracle != -1 || got.q != -2 || got.error || got.saturated || fails != 0) {
-    std::printf("NEG-HALF MUTANT DID NOT FIRE: rtl=%ld oracle=%ld\n",
-                static_cast<long>(got.q), static_cast<long>(oracle));
+    std::printf("NEG-HALF MUTANT DID NOT FIRE: rtl=%ld oracle=%ld\n", static_cast<long>(got.q),
+                static_cast<long>(oracle));
     hard_exit(1);
   }
   std::printf("PASS: negative exact-half mutant fired (rtl=-2, current zref=-1)\n");
@@ -551,38 +533,35 @@ int main(int argc, char** argv) {
   const ExpectedJob want = expected_job(j);
   const RunJobResult got = run_job(j, 0x7711);
   const i128 row_n = j.n0 + floor_half(j.dx);
-  const int32_t forbidden_fresh = zref::render::div_rhu_s128(
-      row_n + j.dx * (j.tile_x - j.min_x), static_cast<i128>(j.area));
+  const int32_t forbidden_fresh =
+      zref::render::div_rhu_s128(row_n + j.dx * (j.tile_x - j.min_x), static_cast<i128>(j.area));
   const int exact_mismatches = compare_job(want, got, false);
 
   const bool want_signature =
-      want.pixels.size() == 2 && want.pixels[0].row == 0 &&
-      want.pixels[0].col == 0 && want.pixels[0].q == 2 &&
-      !want.pixels[0].saturated && !want.pixels[0].error &&
-      !want.pixels[0].last && want.pixels[1].row == 0 &&
-      want.pixels[1].col == 15 && want.pixels[1].q == 17 &&
-      !want.pixels[1].saturated && !want.pixels[1].error &&
-      want.pixels[1].last && want.divides == 2 && want.saturations == 0 &&
-      want.errors == 0;
+      want.pixels.size() == 2 && want.pixels[0].row == 0 && want.pixels[0].col == 0 &&
+      want.pixels[0].q == 2 && !want.pixels[0].saturated && !want.pixels[0].error &&
+      !want.pixels[0].last && want.pixels[1].row == 0 && want.pixels[1].col == 15 &&
+      want.pixels[1].q == 17 && !want.pixels[1].saturated && !want.pixels[1].error &&
+      want.pixels[1].last && want.divides == 2 && want.saturations == 0 && want.errors == 0;
   const bool mutant_signature =
-      got.pixels.size() == 2 && got.pixels[0].row == 0 &&
-      got.pixels[0].col == 0 && got.pixels[0].q == 0 &&
-      !got.pixels[0].saturated && !got.pixels[0].error &&
-      !got.pixels[0].last && got.pixels[1].row == 0 &&
-      got.pixels[1].col == 15 && got.pixels[1].q == 15 &&
-      !got.pixels[1].saturated && !got.pixels[1].error &&
-      got.pixels[1].last && got.divides == 2 && got.saturations == 0 &&
-      got.errors == 0 && got.pixel_count == 2 && got.stall_cycles > 0;
+      got.pixels.size() == 2 && got.pixels[0].row == 0 && got.pixels[0].col == 0 &&
+      got.pixels[0].q == 0 && !got.pixels[0].saturated && !got.pixels[0].error &&
+      !got.pixels[0].last && got.pixels[1].row == 0 && got.pixels[1].col == 15 &&
+      got.pixels[1].q == 15 && !got.pixels[1].saturated && !got.pixels[1].error &&
+      got.pixels[1].last && got.divides == 2 && got.saturations == 0 && got.errors == 0 &&
+      got.pixel_count == 2 && got.stall_cycles > 0;
 
-  if (!want_signature || !mutant_signature || forbidden_fresh != 1 ||
-      exact_mismatches != 2 || fails != 0) {
-    std::printf("OMIT-MIN-X-ACCUM MUTANT DID NOT FIRE EXACTLY: "
-                "mismatches=%d fails=%d\n",
-                exact_mismatches, fails);
+  if (!want_signature || !mutant_signature || forbidden_fresh != 1 || exact_mismatches != 2 ||
+      fails != 0) {
+    std::printf(
+        "OMIT-MIN-X-ACCUM MUTANT DID NOT FIRE EXACTLY: "
+        "mismatches=%d fails=%d\n",
+        exact_mismatches, fails);
     hard_exit(1);
   }
-  std::printf("PASS: omitted global-min-X tile offset mutant fired exactly "
-              "(q={0,15}, stepped={2,17}, fresh=1, mismatches=2)\n");
+  std::printf(
+      "PASS: omitted global-min-X tile offset mutant fired exactly "
+      "(q={0,15}, stepped={2,17}, fresh=1, mismatches=2)\n");
   hard_exit(0);
 #endif
 
@@ -603,13 +582,14 @@ int main(int argc, char** argv) {
       const int32_t want = zref::render::div_rhu_s128(n, static_cast<i128>(area));
       const bool sat = current_saturates(n, area);
       if (sat) ++expected_saturations;
-      if (n < 0) ++negative_cases;
-      else ++positive_cases;
+      if (n < 0)
+        ++negative_cases;
+      else
+        ++positive_cases;
       if (got.q != want || got.saturated != sat || got.error)
         fail("divider disagreed with actual zref");
     }
-    if (dut->d_divides_o != expected_divides ||
-        dut->d_saturations_o != expected_saturations ||
+    if (dut->d_divides_o != expected_divides || dut->d_saturations_o != expected_saturations ||
         dut->d_errors_o != expected_errors)
       fail("divider evidence counters were not exact");
   };
@@ -618,8 +598,10 @@ int main(int argc, char** argv) {
   check_div(1, 2);
   check_div(-1, 2);
   check_div(3, 2);
-  check_div(-3, 2); ++negative_half_cases;
-  check_div(-5, 2); ++negative_half_cases;
+  check_div(-3, 2);
+  ++negative_half_cases;
+  check_div(-5, 2);
+  ++negative_half_cases;
   check_div(7, 4);
   check_div(-6, 4);
 
@@ -652,22 +634,18 @@ int main(int argc, char** argv) {
   if (dut->d_saturations_o < 2 || dut->d_errors_o == 0 || dut->d_busy_clocks_o == 0)
     fail("divider detector positive controls did not fire");
 
-  std::printf("   %u results, %u saturations, %u terminal errors\n",
-              dut->d_divides_o, dut->d_saturations_o, dut->d_errors_o);
+  std::printf("   %u results, %u saturations, %u terminal errors\n", dut->d_divides_o,
+              dut->d_saturations_o, dut->d_errors_o);
 
   std::printf("== V2 rows against current scanline law ==\n");
   std::vector<Job> jobs;
   jobs.push_back(Job{-3, 6, 0, 10, 0, 2, 0, {{0, 0x8001}}});
-  jobs.push_back(Job{4500, 901, -233, 997, -3, 5, -4,
-                     {{0, 0x8421}, {5, 0x1088}, {15, 0x9001}}});
-  jobs.push_back(Job{-8100, -733, 417, 1024, -7, 8, 3,
-                     {{1, 0x00f3}, {7, 0x8101}, {13, 0x2222}}});
+  jobs.push_back(Job{4500, 901, -233, 997, -3, 5, -4, {{0, 0x8421}, {5, 0x1088}, {15, 0x9001}}});
+  jobs.push_back(Job{-8100, -733, 417, 1024, -7, 8, 3, {{1, 0x00f3}, {7, 0x8101}, {13, 0x2222}}});
   // Saturation positive controls for both the x-gradient and row seed.
-  jobs.push_back(Job{0, static_cast<i128>(1) << 40, 0, 1, 0, 1, 0,
-                     {{2, 0x0005}}});
+  jobs.push_back(Job{0, static_cast<i128>(1) << 40, 0, 1, 0, 1, 0, {{2, 0x0005}}});
   // Every requested divide, including each row divide, must terminate in error.
-  jobs.push_back(Job{99, -17, 31, 0, 0, 4, -2,
-                     {{0, 0x0003}, {9, 0x8000}}});
+  jobs.push_back(Job{99, -17, 31, 0, 0, 4, -2, {{0, 0x0003}, {9, 0x8000}}});
 
   for (int i = 0; i < 12; ++i) {
     const uint64_t area = 17 + (rng() % 20000);
@@ -699,8 +677,7 @@ int main(int argc, char** argv) {
   const Job cross = cross_tile_job();
   const i128 cross_row_n = cross.n0 + floor_half(cross.dx);
   const int32_t fresh = zref::render::div_rhu_s128(
-      cross_row_n + cross.dx * (cross.tile_x - cross.min_x),
-      static_cast<i128>(cross.area));
+      cross_row_n + cross.dx * (cross.tile_x - cross.min_x), static_cast<i128>(cross.area));
   const int32_t stepped = expected_job(cross).pixels[0].q;
   if (fresh == stepped || fresh != 1 || stepped != 2)
     fail("cross-tile anti-vacuity vector did not distinguish fresh divide");

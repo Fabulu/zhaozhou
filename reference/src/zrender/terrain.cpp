@@ -371,8 +371,7 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
       sv[idx] = p.s;
       vis[idx] = 1;
       if (dual) {
-        ProjOut pb =
-            project_vertex(vp, vpp, fx16{wx[i]}, fx16{lat.bottom[idx]}, fx16{wz[j]}, L);
+        ProjOut pb = project_vertex(vp, vpp, fx16{wx[i]}, fx16{lat.bottom[idx]}, fx16{wz[j]}, L);
         if (!pb.in) continue;
         if (fog.enabled) apply_vertex_fog(pb, fog.near_m, fog.far_m, fog.k, L);
         svb[idx] = pb.s;

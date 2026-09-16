@@ -94,8 +94,7 @@ int main(int argc, char** argv) {
   d.tick();
   d.idle();
   top->eval();
-  check(top->arena_seal_short_o == 0,
-        "the mutant ACCEPTED the short seal (mutation is live)", 0,
+  check(top->arena_seal_short_o == 0, "the mutant ACCEPTED the short seal (mutation is live)", 0,
         top->arena_seal_short_o);
 
   // Look up an unwritten row with the current generation and a legal index.
@@ -108,14 +107,11 @@ int main(int argc, char** argv) {
   top->eval();
 
   check(top->rep_valid_o == 1, "the lookup replies", 1, top->rep_valid_o);
-  check(top->rep_refuse_o == 0, "and is NOT refused (the guard is broken)", 0,
-        top->rep_refuse_o);
-  check(top->rep_hit_o == 0, "and is not a hit -- it is the impossible MISS", 0,
-        top->rep_hit_o);
+  check(top->rep_refuse_o == 0, "and is NOT refused (the guard is broken)", 0, top->rep_refuse_o);
+  check(top->rep_hit_o == 0, "and is not a hit -- it is the impossible MISS", 0, top->rep_hit_o);
 
   // THE POINT: the miss counter FIRED.
-  check(top->arena_misses_o == 1,
-        "arena_misses_o FIRED -- the dense-mode detector is alive", 1,
+  check(top->arena_misses_o == 1, "arena_misses_o FIRED -- the dense-mode detector is alive", 1,
         top->arena_misses_o);
 
   delete top;

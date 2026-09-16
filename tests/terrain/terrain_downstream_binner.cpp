@@ -28,9 +28,9 @@
 
 using zhao::check;
 using zhao_geom::BinJob;
+using zhao_geom::BinnerDev;
 using zhao_geom::BinStatus;
 using zhao_geom::BinTri;
-using zhao_geom::BinnerDev;
 
 int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
@@ -44,9 +44,10 @@ int main(int argc, char** argv) {
     const int x0 = (tx * 16 + 4) * 256, y0 = (ty * 16 + 4) * 256;
     const int x1 = x0 + 4 * 256, y1 = y0 + 4 * 256;
     BinTri t;
-    const bool ok = (i % 2 == 0)
-                        ? zhao_geom::make_bin_tri(x0, y0, x1, y1, x1, y0, vp, static_cast<uint16_t>(i), &t)
-                        : zhao_geom::make_bin_tri(x0, y0, x0, y1, x1, y1, vp, static_cast<uint16_t>(i), &t);
+    const bool ok =
+        (i % 2 == 0)
+            ? zhao_geom::make_bin_tri(x0, y0, x1, y1, x1, y0, vp, static_cast<uint16_t>(i), &t)
+            : zhao_geom::make_bin_tri(x0, y0, x0, y1, x1, y1, vp, static_cast<uint16_t>(i), &t);
     check(ok, "binner: the oracle clip accepts a one-tile terrain triangle", 1, ok ? 1 : 0);
     tris.push_back(t);
   }
@@ -62,10 +63,11 @@ int main(int argc, char** argv) {
   check(!st.overflow, "binner: no overflow at TRI_CAP", 0, st.overflow ? 1 : 0);
 
   const double per_tri = static_cast<double>(st.bin_cycles) / static_cast<double>(tris.size());
-  std::printf("MEASURED GEOM.BINNER on %zu ONE-TILE terrain triangles: %llu bin clocks = %.2f clocks per "
-              "triangle (drain %llu clocks); TRI_CAP = 128 triangles per frame\n",
-              tris.size(), static_cast<unsigned long long>(st.bin_cycles), per_tri,
-              static_cast<unsigned long long>(st.drain_cycles));
+  std::printf(
+      "MEASURED GEOM.BINNER on %zu ONE-TILE terrain triangles: %llu bin clocks = %.2f clocks per "
+      "triangle (drain %llu clocks); TRI_CAP = 128 triangles per frame\n",
+      tris.size(), static_cast<unsigned long long>(st.bin_cycles), per_tri,
+      static_cast<unsigned long long>(st.drain_cycles));
   // The structural floor for a one-tile triangle is 1 accept + 2 setup + 2
   // (evaluate + push) = 5; the contract's per-reference figure is 2.83 on a
   // big triangle. Hold the measurement to a wide bracket so it cannot drift

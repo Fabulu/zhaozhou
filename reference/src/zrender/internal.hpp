@@ -139,8 +139,8 @@ struct FogParams {
   bool enabled = false;
   fx16 near_m{0};
   fx16 far_m{0};
-  fx16 k{0};                          // field_rcp(far - near), ONCE PER FRAME
-  uint8_t r = 0, g = 0, b = 0;        // the sky set's horizon colour
+  fx16 k{0};                    // field_rcp(far - near), ONCE PER FRAME
+  uint8_t r = 0, g = 0, b = 0;  // the sky set's horizon colour
   bool operator==(const FogParams& o) const {
     return enabled == o.enabled && near_m.raw == o.near_m.raw && far_m.raw == o.far_m.raw;
   }

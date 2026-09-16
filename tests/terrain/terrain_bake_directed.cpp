@@ -285,8 +285,8 @@ void test_degenerate(BakeDut& dut) {
     check(moved == 0, "radius <= 0 writes not one layer-B word (bake_dig returns first)", 0,
           static_cast<uint64_t>(moved));
     check(got.texels_touched == 0, "radius <= 0 touches no texel", 0, got.texels_touched);
-    check(got.breach_ran, "radius <= 0 still runs the breach law — the caller does (chosen B5)", 1,
-          got.breach_ran ? 1 : 0);
+    check(got.breach_ran, "radius <= 0 still runs the breach law — the caller does (chosen B5)",
+          1, got.breach_ran ? 1 : 0);
     compare(dut, p, st, "radius <= 0 matches bake_dig + apply_breach_law");
   }
 
@@ -357,8 +357,8 @@ void test_incremental(BakeDut& dut) {
   int bad2 = 0;
   for (int k = 0; k < bdev::kVerts; ++k)
     if (undo.scar[static_cast<size_t>(k)] != p.scar[static_cast<size_t>(k)]) ++bad2;
-  check(bad2 == 0, "§9: an interrupted cast un-applies cleanly — from->to->from is the identity", 0,
-        static_cast<uint64_t>(bad2));
+  check(bad2 == 0, "§9: an interrupted cast un-applies cleanly — from->to->from is the identity",
+        0, static_cast<uint64_t>(bad2));
 
   // and it is not vacuous: the one-shot must actually have moved the ground.
   int moved = 0;

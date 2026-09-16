@@ -99,12 +99,12 @@ uint8_t want_tag(uint8_t tok) { return static_cast<uint8_t>(0x40 + tok); }
 uint8_t want_str(uint8_t tok) { return static_cast<uint8_t>(0x80 + tok); }
 
 struct Cfg {
-  int sheet_latency = 1;       // clocks from accepted read to sheet_rvalid_i
-  int sr_lo_from = -1;         // sheet_ready_i forced low on [from, to)
+  int sheet_latency = 1;  // clocks from accepted read to sheet_rvalid_i
+  int sr_lo_from = -1;    // sheet_ready_i forced low on [from, to)
   int sr_lo_to = -1;
-  int sr_duty_hi = 0;          // and/or a repeating duty: hi clocks high,
-  int sr_duty_lo = 0;          //   lo clocks low. lo == 0 disables it.
-  int or_lo_from = -1;         // out_ready_i forced low on [from, to)
+  int sr_duty_hi = 0;   // and/or a repeating duty: hi clocks high,
+  int sr_duty_lo = 0;   //   lo clocks low. lo == 0 disables it.
+  int or_lo_from = -1;  // out_ready_i forced low on [from, to)
   int or_lo_to = -1;
   int max_cycles = 4000;
 };
@@ -113,15 +113,15 @@ struct Trace {
   size_t fed = 0;
   int cycles = 0;
   int accept_clocks = 0;
-  int req_stall_clocks = 0;    // we offered and req_ready_o was low
+  int req_stall_clocks = 0;  // we offered and req_ready_o was low
   int sheet_reads = 0;
 
-  int offer_hold_clocks = 0;   // sheet_valid_o high while sheet_ready_i low
-  int offer_retracted = 0;     // valid dropped before acceptance -- MODE 1
-  int offer_unstable = 0;      // payload moved while valid -- MODE 2
+  int offer_hold_clocks = 0;  // sheet_valid_o high while sheet_ready_i low
+  int offer_retracted = 0;    // valid dropped before acceptance -- MODE 1
+  int offer_unstable = 0;     // payload moved while valid -- MODE 2
 
-  int out_hold_clocks = 0;     // out_valid_o high while out_ready_i low
-  int out_retracted = 0;       // the 4-bit-rqcnt wrap signature
+  int out_hold_clocks = 0;  // out_valid_o high while out_ready_i low
+  int out_retracted = 0;    // the 4-bit-rqcnt wrap signature
   int out_unstable = 0;
 
   std::vector<uint8_t> out_tok, out_deg, out_tag, out_str;
@@ -196,8 +196,7 @@ Trace run(Vzhao_texture_aux_pipe& top, const std::vector<Req>& rq, const Cfg& cf
     if (pv_sv && !pv_sr) {
       if (!top.sheet_valid_o) {
         ++t.offer_retracted;
-      } else if (top.sheet_u_o != pv_su || top.sheet_v_o != pv_svc ||
-                 top.sheet_tok_o != pv_stok) {
+      } else if (top.sheet_u_o != pv_su || top.sheet_v_o != pv_svc || top.sheet_tok_o != pv_stok) {
         ++t.offer_unstable;
       }
     }
@@ -207,8 +206,8 @@ Trace run(Vzhao_texture_aux_pipe& top, const std::vector<Req>& rq, const Cfg& cf
     if (pv_ov && !pv_or) {
       if (!top.out_valid_o) {
         ++t.out_retracted;
-      } else if (top.out_tok_o != pv_otok || top.out_tag_o != pv_otag ||
-                 top.out_str_o != pv_ostr || top.out_degenerate_o != pv_odeg) {
+      } else if (top.out_tok_o != pv_otok || top.out_tag_o != pv_otag || top.out_str_o != pv_ostr ||
+                 top.out_degenerate_o != pv_odeg) {
         ++t.out_unstable;
       }
     }
@@ -224,7 +223,8 @@ Trace run(Vzhao_texture_aux_pipe& top, const std::vector<Req>& rq, const Cfg& cf
       t.out_str.push_back(top.out_str_o);
     }
     if (top.sheet_valid_o && sready) {
-      pending.push_back(std::make_pair(c + cfg.sheet_latency, static_cast<uint8_t>(top.sheet_tok_o)));
+      pending.push_back(
+          std::make_pair(c + cfg.sheet_latency, static_cast<uint8_t>(top.sheet_tok_o)));
       t.got_u[top.sheet_tok_o] = top.sheet_u_o;
       t.got_v[top.sheet_tok_o] = top.sheet_v_o;
       ++t.sheet_reads;
@@ -256,9 +256,7 @@ Trace run(Vzhao_texture_aux_pipe& top, const std::vector<Req>& rq, const Cfg& cf
   return t;
 }
 
-std::string tag(const char* phase, const char* what) {
-  return std::string(phase) + ": " + what;
-}
+std::string tag(const char* phase, const char* what) { return std::string(phase) + ": " + what; }
 
 // THE INVARIANT THE ADDENDUM ASKS FOR IN SO MANY WORDS: "Every accepted AUX
 // request must yield exactly one correct terminal result." Checked as a
@@ -299,11 +297,13 @@ int exactly_one_result_each(const char* phase, const std::vector<Req>& rq, const
 
   zhao::check(missing == 0, tag(phase, "no request is lost").c_str(), 0, missing);
   zhao::check(duplicated == 0, tag(phase, "and none returns twice").c_str(), 0, duplicated);
-  zhao::check(flag_bad == 0, tag(phase, "each result is flagged degenerate or not, correctly").c_str(),
-              0, flag_bad);
+  zhao::check(flag_bad == 0,
+              tag(phase, "each result is flagged degenerate or not, correctly").c_str(), 0,
+              flag_bad);
   zhao::check(payload_bad == 0,
-              tag(phase, "and carries the sheet payload for ITS OWN token -- a queue "
-                         "that overwrote an entry fails here, not merely on a count")
+              tag(phase,
+                  "and carries the sheet payload for ITS OWN token -- a queue "
+                  "that overwrote an entry fails here, not merely on a count")
                   .c_str(),
               0, payload_bad);
   zhao::check(t.sheet_reads == want_reads,
@@ -315,18 +315,21 @@ int exactly_one_result_each(const char* phase, const std::vector<Req>& rq, const
 // The two ready/valid laws, checked on both output channels in every phase.
 void handshake_laws(const char* phase, const Trace& t) {
   zhao::check(t.offer_retracted == 0,
-              tag(phase, "the sheet offer is never RETRACTED before acceptance -- the "
-                         "hang mode, where a stalled request evaporated")
+              tag(phase,
+                  "the sheet offer is never RETRACTED before acceptance -- the "
+                  "hang mode, where a stalled request evaporated")
                   .c_str(),
               0, t.offer_retracted);
   zhao::check(t.offer_unstable == 0,
-              tag(phase, "and never MUTATES while valid -- coordinates and token are "
-                         "stable to the acceptance edge")
+              tag(phase,
+                  "and never MUTATES while valid -- coordinates and token are "
+                  "stable to the acceptance edge")
                   .c_str(),
               0, t.offer_unstable);
   zhao::check(t.out_retracted == 0,
-              tag(phase, "out_valid_o is never retracted while the consumer is not "
-                         "ready -- the signature of a wrapped queue count")
+              tag(phase,
+                  "out_valid_o is never retracted while the consumer is not "
+                  "ready -- the signature of a wrapped queue count")
                   .c_str(),
               0, t.out_retracted);
   zhao::check(t.out_unstable == 0,
@@ -383,9 +386,8 @@ int main(int argc, char** argv) {
   for (size_t i = 0; i < rqa.size(); ++i) {
     if (rqa[i].degen) ++want_degen;
   }
-  zhao::check(top.degenerate_o == want_degen,
-              "A/free-running: and the degenerate ones are counted", want_degen,
-              top.degenerate_o);
+  zhao::check(top.degenerate_o == want_degen, "A/free-running: and the degenerate ones are counted",
+              want_degen, top.degenerate_o);
 
   // THE ORDERING RULE, IN THE ONE FIXTURE WHERE IT IS REAL.
   // With a one-clock sheet the response for request i and the degenerate

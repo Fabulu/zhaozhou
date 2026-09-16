@@ -80,8 +80,7 @@ constexpr uint8_t samples_required(uint8_t recipe) {
 constexpr bool count_legal(uint8_t recipe, uint8_t count) {
   if (recipe >= kRecipeCount || count > 3) return false;
   if (recipe == kPassthru) return count == 0 || count == 1;
-  if (recipe == kTerrainDetailLight || recipe == kTerrainDetailMask)
-    return count == 3;
+  if (recipe == kTerrainDetailLight || recipe == kTerrainDetailMask) return count == 3;
   return count == 2;
 }
 
@@ -133,8 +132,7 @@ constexpr uint8_t add_sat8(uint8_t a, uint8_t b, bool* saturated) {
 
 // R9 single-round MODULATE2X: never unit-round and then double.
 constexpr uint8_t modulate2x8(uint8_t a, uint8_t b, bool* saturated) {
-  const uint32_t value =
-      (static_cast<uint32_t>(a) * static_cast<uint32_t>(b) + 64u) >> 7;
+  const uint32_t value = (static_cast<uint32_t>(a) * static_cast<uint32_t>(b) + 64u) >> 7;
   if (value > 255u) {
     *saturated = true;
     return 255;
@@ -152,14 +150,13 @@ constexpr int32_t floor_div_256(int32_t value) {
 // R9: sat_u8(a + (((b-a)*weight + 128) >>> 8)); ties toward +infinity.
 constexpr uint8_t lerp8(uint8_t a, uint8_t b, uint8_t weight) {
   const int32_t difference = static_cast<int32_t>(b) - a;
-  const int32_t scaled = floor_div_256(
-      difference * static_cast<int32_t>(weight) + 128);
+  const int32_t scaled = floor_div_256(difference * static_cast<int32_t>(weight) + 128);
   const int32_t value = static_cast<int32_t>(a) + scaled;
   return static_cast<uint8_t>(value < 0 ? 0 : (value > 255 ? 255 : value));
 }
 
-constexpr uint8_t required_status(const Sample* samples, uint8_t count,
-                                  bool aux_required, Aux aux) {
+constexpr uint8_t required_status(const Sample* samples, uint8_t count, bool aux_required,
+                                  Aux aux) {
   uint8_t status = 0;
   if (count >= 1) status = static_cast<uint8_t>(status | samples[0].status);
   if (count >= 2) status = static_cast<uint8_t>(status | samples[1].status);
@@ -176,10 +173,9 @@ constexpr uint8_t required_status(const Sample* samples, uint8_t count,
  * Existing seven-argument callers remain valid.  Packet-B callers append the
  * independently required AUX flag and typed AUX terminal plane.
  */
-inline Out combine(uint8_t recipe, uint8_t weight, const Sample* samples,
-                   uint8_t count, Sample base, uint16_t frag_tag,
-                   Ledger* ledger = nullptr, bool aux_required = false,
-                   Aux aux = {}) {
+inline Out combine(uint8_t recipe, uint8_t weight, const Sample* samples, uint8_t count,
+                   Sample base, uint16_t frag_tag, Ledger* ledger = nullptr,
+                   bool aux_required = false, Aux aux = {}) {
   Out out;
   out.frag_tag = frag_tag;
   out.raw_index = count == 0 ? 0 : samples[0].raw_index;
@@ -269,12 +265,9 @@ inline Out combine(uint8_t recipe, uint8_t weight, const Sample* samples,
 
     case kTerrainDetailLight: {
       bool saturated = false;
-      const uint8_t first_r =
-          detail::modulate2x8(s0.r, samples[1].r, &saturated);
-      const uint8_t first_g =
-          detail::modulate2x8(s0.g, samples[1].g, &saturated);
-      const uint8_t first_b =
-          detail::modulate2x8(s0.b, samples[1].b, &saturated);
+      const uint8_t first_r = detail::modulate2x8(s0.r, samples[1].r, &saturated);
+      const uint8_t first_g = detail::modulate2x8(s0.g, samples[1].g, &saturated);
+      const uint8_t first_b = detail::modulate2x8(s0.b, samples[1].b, &saturated);
       out.r = unit_mul(unit8{first_r}, unit8{samples[2].r});
       out.g = unit_mul(unit8{first_g}, unit8{samples[2].g});
       out.b = unit_mul(unit8{first_b}, unit8{samples[2].b});

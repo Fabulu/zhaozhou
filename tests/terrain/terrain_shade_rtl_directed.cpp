@@ -87,10 +87,9 @@ int32_t expected_from_normal(const FaceNormal& n, int32_t lx, int32_t ly, int32_
       zref::render::shade_from_world_normal_unclamped(n.x, n.y, n.z, lx, ly, lz, nullptr);
   const uint64_t nmag2 = zref::terrain::shade_nmag2(n);
   const int32_t pieces =
-      (nmag2 == 0)
-          ? 0
-          : zref::render::div_rhu_s128(zref::terrain::shade_ndot(n, lx, ly, lz),
-                                       static_cast<__int128>(zref::isqrt_u64(nmag2)));
+      (nmag2 == 0) ? 0
+                   : zref::render::div_rhu_s128(zref::terrain::shade_ndot(n, lx, ly, lz),
+                                                static_cast<__int128>(zref::isqrt_u64(nmag2)));
   check(pieces == core, "thin-view pieces still compose to the compiled core",
         static_cast<uint32_t>(core), static_cast<uint32_t>(pieces));
   return core;
@@ -203,14 +202,12 @@ void check_tri(Vzhao_terrain_shade& dut, const NormalVertex& a, const NormalVert
                int stall = 0, int32_t inject = 0) {
   const FaceNormal n = zref::terrain::face_normal(a, b, c, nullptr);
   const bool degen = n.degenerate;  // the producer's own verdict, as wired
-  const int32_t expected =
-      zref::render::shade_flat_tri_dir_unclamped(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, lx,
-                                                 ly, lz, nullptr) +
-      inject;
+  const int32_t expected = zref::render::shade_flat_tri_dir_unclamped(
+                               a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, lx, ly, lz, nullptr) +
+                           inject;
   const DriveResult r = drive(dut, n, degen, lx, ly, lz, 0x51AD, stall);
   tally_packet(n, degen, lx, ly, lz);
-  check(r.base == expected, what, static_cast<uint32_t>(expected),
-        static_cast<uint32_t>(r.base));
+  check(r.base == expected, what, static_cast<uint32_t>(expected), static_cast<uint32_t>(r.base));
 }
 
 /** One full-domain check: raw normal -> DUT vs the law's back half. */
@@ -224,8 +221,7 @@ void check_n(Vzhao_terrain_shade& dut, int32_t nx, int32_t ny, int32_t nz, bool 
   const int32_t expected = expected_from_normal(n, lx, ly, lz);
   const DriveResult r = drive(dut, n, degen_flag, lx, ly, lz, src, stall);
   tally_packet(n, degen_flag, lx, ly, lz);
-  check(r.base == expected, what, static_cast<uint32_t>(expected),
-        static_cast<uint32_t>(r.base));
+  check(r.base == expected, what, static_cast<uint32_t>(expected), static_cast<uint32_t>(r.base));
   check(r.src == src, "src_id rides the packet", src, r.src);
 }
 
@@ -242,11 +238,15 @@ int32_t rnd_s32() { return static_cast<int32_t>(rnd()); }
 // names as where the divide and the accumulation break.
 int32_t rnd_biased() {
   switch (rnd() & 3) {
-    case 0: return static_cast<int32_t>(rnd() & 7) - 3;              // -3..4
-    case 1: return rnd_s32() >> 16;                                  // small Q16.16
-    case 2: return (rnd() & 1) ? INT32_MAX - static_cast<int32_t>(rnd() & 3)
-                               : INT32_MIN + static_cast<int32_t>(rnd() & 3);
-    default: return rnd_s32();
+    case 0:
+      return static_cast<int32_t>(rnd() & 7) - 3;  // -3..4
+    case 1:
+      return rnd_s32() >> 16;  // small Q16.16
+    case 2:
+      return (rnd() & 1) ? INT32_MAX - static_cast<int32_t>(rnd() & 3)
+                         : INT32_MIN + static_cast<int32_t>(rnd() & 3);
+    default:
+      return rnd_s32();
   }
 }
 
@@ -334,8 +334,7 @@ int main(int argc, char** argv) {
             "all-rail normal: u64 norm does not wrap", 0x0002);
     check_n(dut, INT32_MIN, INT32_MIN, INT32_MIN, false, KLX, KLY, KLZ,
             "INT32_MIN rails: |INT32_MIN| handled exactly", 0x0003);
-    check_n(dut, INT32_MIN, INT32_MAX, INT32_MIN, false, KLX, KLY, KLZ,
-            "mixed rails", 0x0004);
+    check_n(dut, INT32_MIN, INT32_MAX, INT32_MIN, false, KLX, KLY, KLZ, "mixed rails", 0x0004);
     // single-LSB normals: where the divide's small-denominator band lives
     check_n(dut, 0, 1, 0, false, KLX, KLY, KLZ, "one-LSB normal", 0x0005);
     check_n(dut, 1, 1, 1, false, KLX, KLY, KLZ, "diagonal LSB normal", 0x0006);
@@ -355,10 +354,8 @@ int main(int argc, char** argv) {
             "degenerate_i=0 with a zero normal: base 0 per the law", 0x000C);
     // THE LAW'S INT32 CLAMP, both rails (any int32 sun is in the law's
     // domain; a unit sun cannot reach the clamp, Cauchy-Schwarz):
-    check_n(dut, 1, 1, 0, false, INT32_MAX, INT32_MAX, 0,
-            "law clamp, positive rail", 0x000D);
-    check_n(dut, 1, 1, 0, false, INT32_MIN, INT32_MIN, 0,
-            "law clamp, negative rail", 0x000E);
+    check_n(dut, 1, 1, 0, false, INT32_MAX, INT32_MAX, 0, "law clamp, positive rail", 0x000D);
+    check_n(dut, 1, 1, 0, false, INT32_MIN, INT32_MIN, 0, "law clamp, negative rail", 0x000E);
     // sun of zero: base exactly 0 without degeneracy
     check_n(dut, kOne, kOne, kOne, false, 0, 0, 0, "zero sun, zero base", 0x000F);
   }
@@ -400,8 +397,7 @@ int main(int argc, char** argv) {
       b = {coord(), coord(), coord()};
       c = {coord(), coord(), coord()};
       if ((rnd() & 15) == 0) b = a;  // exact degenerates too
-      check_tri(dut, a, b, c, KLX, KLY, KLZ, "random triangle, key light",
-                (i % 37 == 0) ? 2 : 0);
+      check_tri(dut, a, b, c, KLX, KLY, KLZ, "random triangle, key light", (i % 37 == 0) ? 2 : 0);
     }
   }
 
@@ -429,24 +425,23 @@ int main(int argc, char** argv) {
       const int32_t expected = expected_from_normal(n, lx, ly, lz);
       if (expected < 0) cov_neg++;
       if (expected > 0) cov_pos++;
-      const DriveResult r = drive(dut, n, flag, lx, ly, lz,
-                                  static_cast<uint16_t>(rnd() & 0xFFFF),
+      const DriveResult r = drive(dut, n, flag, lx, ly, lz, static_cast<uint16_t>(rnd() & 0xFFFF),
                                   (i % 41 == 0) ? 1 : 0);
       tally_packet(n, flag, lx, ly, lz);
-      check(r.base == expected, "random normal/sun differential",
-            static_cast<uint32_t>(expected), static_cast<uint32_t>(r.base));
+      check(r.base == expected, "random normal/sun differential", static_cast<uint32_t>(expected),
+            static_cast<uint32_t>(r.base));
     }
   }
 
   // ---- 8: EVERY COUNTER FIRED, AND EVERY COUNT IS EXACT -----------------
   {
-    check(dut.triangles_shaded_o == g_tally.shaded, "triangles_shaded_o exact",
-          g_tally.shaded, dut.triangles_shaded_o);
-    check(dut.degenerate_count_o == g_tally.degen, "degenerate_count_o exact",
-          g_tally.degen, dut.degenerate_count_o);
+    check(dut.triangles_shaded_o == g_tally.shaded, "triangles_shaded_o exact", g_tally.shaded,
+          dut.triangles_shaded_o);
+    check(dut.degenerate_count_o == g_tally.degen, "degenerate_count_o exact", g_tally.degen,
+          dut.degenerate_count_o);
     check(dut.base_sat_o == g_tally.sat, "base_sat_o exact", g_tally.sat, dut.base_sat_o);
-    check(dut.degen_mismatch_o == g_tally.mismatch, "degen_mismatch_o exact",
-          g_tally.mismatch, dut.degen_mismatch_o);
+    check(dut.degen_mismatch_o == g_tally.mismatch, "degen_mismatch_o exact", g_tally.mismatch,
+          dut.degen_mismatch_o);
     check(g_tally.degen > 20, "coverage: degenerates sampled", 1, g_tally.degen > 20);
     check(g_tally.sat >= 2, "coverage: the law's INT32 clamp fired both rails", 1,
           g_tally.sat >= 2);

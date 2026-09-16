@@ -341,15 +341,14 @@ class Bench {
         const zref::render::ProjOut p = zref::render::project_vertex(
             v.m, v.vp, zref::fx16{v.x}, zref::fx16{v.y}, zref::fx16{v.z}, nullptr);
         const bool ok = tb->a_payload_o == v.pay && sx21(tb->a_x_o) == p.s.x &&
-                        sx21(tb->a_y_o) == p.s.y &&
-                        static_cast<int32_t>(tb->a_d_o) == p.s.d &&
+                        sx21(tb->a_y_o) == p.s.y && static_cast<int32_t>(tb->a_d_o) == p.s.d &&
                         (tb->a_behind_o != 0) == !p.in && tb->a_view_o == v.view &&
                         tb->a_w_o == (static_cast<uint32_t>(p.w) & 0x7FFFFFFFu);
         if (!ok && a_bad_printed_ < kMaxPrinted) {
           ++a_bad_printed_;
           std::printf("  client A mismatch: pay %u want %u  x %d/%d y %d/%d d %d/%d\n",
-                      tb->a_payload_o, v.pay, sx21(tb->a_x_o), p.s.x, sx21(tb->a_y_o),
-                      p.s.y, static_cast<int32_t>(tb->a_d_o), p.s.d);
+                      tb->a_payload_o, v.pay, sx21(tb->a_x_o), p.s.x, sx21(tb->a_y_o), p.s.y,
+                      static_cast<int32_t>(tb->a_d_o), p.s.d);
         }
         if (!ok) ++a_bad_;
         ++a_checked;
@@ -529,10 +528,11 @@ class Bench {
         ++mism_zref;
         if (printed_zref < kMaxPrinted) {
           ++printed_zref;
-          std::printf("  shell vs zref: group src %u tri %d  A x %d/%d y %d/%d d %d/%d w %u/%u  "
-                      "behind %u/%u refused %d missed %d\n",
-                      g.src_id, i, s.x[0], z.x[0], s.y[0], z.y[0], s.d[0], z.d[0], s.w[0],
-                      z.w[0], s.behind, z.behind, s.refused ? 1 : 0, s.missed ? 1 : 0);
+          std::printf(
+              "  shell vs zref: group src %u tri %d  A x %d/%d y %d/%d d %d/%d w %u/%u  "
+              "behind %u/%u refused %d missed %d\n",
+              g.src_id, i, s.x[0], z.x[0], s.y[0], z.y[0], s.d[0], z.d[0], s.w[0], z.w[0], s.behind,
+              z.behind, s.refused ? 1 : 0, s.missed ? 1 : 0);
         }
       }
       if (against_legacy) {
@@ -545,10 +545,11 @@ class Bench {
           ++mism_legacy;
           if (printed_legacy < kMaxPrinted) {
             ++printed_legacy;
-            std::printf("  shell vs LEGACY: group src %u tri %d  A x %d/%d y %d/%d d %d/%d  "
-                        "behind %u/%u src %u/%u\n",
-                        g.src_id, i, s.x[0], l.x[0], s.y[0], l.y[0], s.d[0], l.d[0], s.behind,
-                        l.behind, s.src_id, l.src_id);
+            std::printf(
+                "  shell vs LEGACY: group src %u tri %d  A x %d/%d y %d/%d d %d/%d  "
+                "behind %u/%u src %u/%u\n",
+                g.src_id, i, s.x[0], l.x[0], s.y[0], l.y[0], s.d[0], l.d[0], s.behind, l.behind,
+                s.src_id, l.src_id);
           }
         }
       }
@@ -599,8 +600,8 @@ int main(int argc, char** argv) {
   // Two views, two cameras. View 0: w = z. View 1: w = z + 0.75, with a shear
   // in x and a different viewport -- a different behind set, different rails.
   const int32_t m0[16] = {kOne, 0, 0, 0, 0, kOne, 0, 0, 0, 0, kOne, 0, 0, 0, kOne, 0};
-  const int32_t m1[16] = {kOne, 0, kOne / 4, kOne / 2, 0, -kOne, 0, 0, 0, 0, kOne, 0, 0, 0,
-                          kOne, 3 * kOne / 4};
+  const int32_t m1[16] = {kOne, 0, kOne / 4, kOne / 2, 0, -kOne, 0,    0,
+                          0,    0, kOne,     0,        0, 0,     kOne, 3 * kOne / 4};
   const zref::mat4fx M0 = mat_of(m0), M1 = mat_of(m1);
   const zref::render::Viewport VP0{0, 0, 256, 192};
   const zref::render::Viewport VP1{64, 32, 128, 96};
@@ -649,10 +650,10 @@ int main(int argc, char** argv) {
     int sealed_group = -1;
   };
   ArenaState ar[kArenas];
-  size_t next_group[2] = {0, 32};        // group index cursors per view
+  size_t next_group[2] = {0, 32};  // group index cursors per view
   const size_t end_group[2] = {32, 64};
-  std::deque<int> replay_queue;          // groups whose job has been issued, in order
-  size_t shell_base = 0;                 // triangles compared so far
+  std::deque<int> replay_queue;  // groups whose job has been issued, in order
+  size_t shell_base = 0;         // triangles compared so far
   int groups_done = 0;
 
   // A simple round: for each view, if an arena is free, fill+seal the next
@@ -671,12 +672,14 @@ int main(int argc, char** argv) {
           // neighbour arena is meanwhile being walked or filled -- this is
           // the 2-per-view overlap ARENAS=4 exists for.
           int hg = 0;
-          while (top->hold_o && top->hold_arena_o == static_cast<uint32_t>(a) && hg++ < 4000) b.step();
+          while (top->hold_o && top->hold_arena_o == static_cast<uint32_t>(a) && hg++ < 4000)
+            b.step();
           check(hg < 4000, "walker released the arena", 1, hg < 4000 ? 1 : 0);
           g.gen = b.open(a);
           for (int k = 0; k < kDepth; ++k) {
             const int vi = g.job.ox + k % 9, vj = g.job.oz + k / 9;
-            const zt::detail::TessVert v = zt::detail::vertex_at(lat, g.job, vi, vj, g.job.morph, nullptr);
+            const zt::detail::TessVert v =
+                zt::detail::vertex_at(lat, g.job, vi, vj, g.job.morph, nullptr);
             b.fill_vertex(a, k, v, g.view);
             if (b.rng.chance(10)) b.idle(b.rng.range(1, 3));
           }
@@ -712,8 +715,9 @@ int main(int argc, char** argv) {
     }
   }
   check(groups_done == 64, "all 64 groups replayed and compared", 64, groups_done);
-  check(b.mism_legacy == 0, "MAIN RUN: every replayed triangle bit-identical to zhao_terrain_project",
-        0, b.mism_legacy);
+  check(b.mism_legacy == 0,
+        "MAIN RUN: every replayed triangle bit-identical to zhao_terrain_project", 0,
+        b.mism_legacy);
   check(b.mism_zref == 0, "MAIN RUN: every replayed triangle (incl. w) equals project_vertex", 0,
         b.mism_zref);
   std::printf("main run: %d triangles compared against the legacy projector and project_vertex\n",
@@ -739,8 +743,9 @@ int main(int argc, char** argv) {
 
   // counters after the main run
   top->eval();
-  check(top->replay_triangles_o == 64u * kTrisPerGroup, "replay_triangles_o counts every landed triangle",
-        64u * kTrisPerGroup, top->replay_triangles_o);
+  check(top->replay_triangles_o == 64u * kTrisPerGroup,
+        "replay_triangles_o counts every landed triangle", 64u * kTrisPerGroup,
+        top->replay_triangles_o);
   check(top->replay_refused_o == 0, "no refusals in the main run", 0, top->replay_refused_o);
   check(top->replay_missed_o == 0, "no misses in the main run", 0, top->replay_missed_o);
   check(top->corner_hits_o == 64u * kTrisPerGroup * 3, "corner_hits_o = 3 per triangle",
@@ -748,20 +753,23 @@ int main(int argc, char** argv) {
   check(top->corner_refusals_o == 0, "corner_refusals_o zero", 0, top->corner_refusals_o);
   check(top->corner_misses_o == 0, "corner_misses_o zero", 0, top->corner_misses_o);
   check(top->arena_overflow_o == 0, "overflow clear after the main run", 0, top->arena_overflow_o);
-  check(top->arena_seal_short_o == 0, "seal_short clear after the main run", 0, top->arena_seal_short_o);
+  check(top->arena_seal_short_o == 0, "seal_short clear after the main run", 0,
+        top->arena_seal_short_o);
   check(top->jobs_done_o == 64, "walker completed 64 jobs", 64, top->jobs_done_o);
-  check(top->b_grants_o == 64u * kDepth, "client B was granted exactly 64 x 81 vertices", 64u * kDepth,
-        top->b_grants_o);
+  check(top->b_grants_o == 64u * kDepth, "client B was granted exactly 64 x 81 vertices",
+        64u * kDepth, top->b_grants_o);
   check(top->contended_o > 0, "SEEN TO FIRE: contended_o under dual load", 1, top->contended_o);
   check(top->a_grants_o > 0, "client A got grants", 1, top->a_grants_o);
-  check(top->mat_refused_o == 0, "mat_refused_o structurally zero at MATW=32", 0, top->mat_refused_o);
+  check(top->mat_refused_o == 0, "mat_refused_o structurally zero at MATW=32", 0,
+        top->mat_refused_o);
   std::printf("service: a_grants %u b_grants %u contended %u; client A results checked %d\n",
               top->a_grants_o, top->b_grants_o, top->contended_o, b.a_checked);
   b.a_enable = false;
   // let client A drain, then verify it never misrouted
   b.idle(80);
   check(b.a_inflight.empty(), "every client-A vertex came back", 0, b.a_inflight.size());
-  check(b.a_bad() == 0, "client A: in order, payload intact, equal to project_vertex", 0, b.a_bad());
+  check(b.a_bad() == 0, "client A: in order, payload intact, equal to project_vertex", 0,
+        b.a_bad());
 
   // =========================================================================
   // 2. STALE HANDLES: gen-1 on a sealed arena, an old gen after reopen, and an
@@ -789,7 +797,8 @@ int main(int argc, char** argv) {
       if (z) ++zero;
     }
     check(refused == kTrisPerGroup, "stale gen-1: every triangle REFUSED", kTrisPerGroup, refused);
-    check(zero == kTrisPerGroup, "stale gen-1: every refused triangle carries ZEROS", kTrisPerGroup, zero);
+    check(zero == kTrisPerGroup, "stale gen-1: every refused triangle carries ZEROS", kTrisPerGroup,
+          zero);
     top->eval();
     check(top->replay_refused_o == static_cast<uint32_t>(kTrisPerGroup),
           "SEEN TO FIRE: replay_refused_o", kTrisPerGroup, top->replay_refused_o);
@@ -805,8 +814,8 @@ int main(int argc, char** argv) {
     int refused2 = 0;
     for (size_t i = before2; i < before2 + kTrisPerGroup; ++i)
       if (b.shell_out[i].refused) ++refused2;
-    check(refused2 == kTrisPerGroup, "old handle after reopen: every triangle REFUSED", kTrisPerGroup,
-          refused2);
+    check(refused2 == kTrisPerGroup, "old handle after reopen: every triangle REFUSED",
+          kTrisPerGroup, refused2);
     const size_t before3 = b.shell_out.size();
     Group gu = g;
     b.issue_job(gu, newgen);  // right gen, but the arena is not sealed
@@ -814,8 +823,10 @@ int main(int argc, char** argv) {
     int refused3 = 0;
     for (size_t i = before3; i < before3 + kTrisPerGroup; ++i)
       if (b.shell_out[i].refused) ++refused3;
-    check(refused3 == kTrisPerGroup, "unsealed arena: every triangle REFUSED", kTrisPerGroup, refused3);
-    check(top->replay_missed_o == 0, "refusals are refusals, never misses", 0, top->replay_missed_o);
+    check(refused3 == kTrisPerGroup, "unsealed arena: every triangle REFUSED", kTrisPerGroup,
+          refused3);
+    check(top->replay_missed_o == 0, "refusals are refusals, never misses", 0,
+          top->replay_missed_o);
   }
 
   // =========================================================================
@@ -842,8 +853,9 @@ int main(int argc, char** argv) {
       int refused = 0;
       for (size_t i = before; i < before + kTrisPerGroup; ++i)
         if (b.shell_out[i].refused) ++refused;
-      check(refused == kTrisPerGroup, "dense: a short-sealed arena is UNSEALED and refuses every triangle",
-            kTrisPerGroup, refused);
+      check(refused == kTrisPerGroup,
+            "dense: a short-sealed arena is UNSEALED and refuses every triangle", kTrisPerGroup,
+            refused);
       // complete it, seal, replay: identical to the oracle
       const int vi = g.job.ox + 8, vj = g.job.oz + 8;
       b.fill_vertex(0, 80, zt::detail::vertex_at(lat, g.job, vi, vj, g.job.morph, nullptr), g.view);
@@ -854,8 +866,8 @@ int main(int argc, char** argv) {
       b.drain_shell_to(before2 + kTrisPerGroup);
       const int mz = b.mism_zref;
       b.compare_group(gl, before2, /*against_legacy=*/false);
-      check(b.mism_zref == mz, "dense: completed after a refused seal, replay equals project_vertex", mz,
-            b.mism_zref);
+      check(b.mism_zref == mz,
+            "dense: completed after a refused seal, replay equals project_vertex", mz, b.mism_zref);
 
       // a MISORDERED fill is dropped, sticky, and advances nothing
       Group gm = groups[9];
@@ -863,7 +875,8 @@ int main(int argc, char** argv) {
       gm.gen = b.open(1);
       {
         const int vi5 = gm.job.ox + 5, vj5 = gm.job.oz;
-        b.fill_vertex(1, 5, zt::detail::vertex_at(lat, gm.job, vi5, vj5, gm.job.morph, nullptr), gm.view);
+        b.fill_vertex(1, 5, zt::detail::vertex_at(lat, gm.job, vi5, vj5, gm.job.morph, nullptr),
+                      gm.view);
         b.wait_fills();
       }
       top->eval();
@@ -871,7 +884,8 @@ int main(int argc, char** argv) {
             top->arena_overflow_o);
       for (int k = 0; k < kDepth; ++k) {
         const int vi = gm.job.ox + k % 9, vj = gm.job.oz + k / 9;
-        b.fill_vertex(1, k, zt::detail::vertex_at(lat, gm.job, vi, vj, gm.job.morph, nullptr), gm.view);
+        b.fill_vertex(1, k, zt::detail::vertex_at(lat, gm.job, vi, vj, gm.job.morph, nullptr),
+                      gm.view);
       }
       b.wait_fills();
       b.seal(1);
@@ -880,8 +894,9 @@ int main(int argc, char** argv) {
       b.drain_shell_to(before3 + kTrisPerGroup);
       const int mz2 = b.mism_zref;
       b.compare_group(gm, before3, /*against_legacy=*/false);
-      check(b.mism_zref == mz2, "dense: the early misorder left no trace, replay equals project_vertex",
-            mz2, b.mism_zref);
+      check(b.mism_zref == mz2,
+            "dense: the early misorder left no trace, replay equals project_vertex", mz2,
+            b.mism_zref);
     } else {
       // BITMAP: the short seal is ACCEPTED, and the two triangles of cell (7,7)
       // -- the only ones referencing index 80 -- MISS. The miss path is SEEN.
@@ -897,13 +912,16 @@ int main(int argc, char** argv) {
       }
       if (b.shell_out[before + 126].missed) ++missed_last_two;
       if (b.shell_out[before + 127].missed) ++missed_last_two;
-      check(missed == 2, "SEEN TO FIRE (bitmap): exactly the two triangles touching row 80 MISS", 2, missed);
-      check(missed_last_two == 2, "bitmap: the misses are cell (7,7)'s two triangles", 2, missed_last_two);
+      check(missed == 2, "SEEN TO FIRE (bitmap): exactly the two triangles touching row 80 MISS", 2,
+            missed);
+      check(missed_last_two == 2, "bitmap: the misses are cell (7,7)'s two triangles", 2,
+            missed_last_two);
       check(refused == 0, "bitmap: a miss is not a refusal", 0, refused);
       top->eval();
-      check(top->replay_missed_o == 2, "SEEN TO FIRE (bitmap): replay_missed_o", 2, top->replay_missed_o);
-      check(top->corner_misses_o == 2, "SEEN TO FIRE (bitmap): corner_misses_o (one corner each)", 2,
-            top->corner_misses_o);
+      check(top->replay_missed_o == 2, "SEEN TO FIRE (bitmap): replay_missed_o", 2,
+            top->replay_missed_o);
+      check(top->corner_misses_o == 2, "SEEN TO FIRE (bitmap): corner_misses_o (one corner each)",
+            2, top->corner_misses_o);
       // the 126 complete triangles are still exact
       int exact = 0;
       for (int i = 0; i < 126; ++i) {
@@ -938,8 +956,8 @@ int main(int argc, char** argv) {
     }
     b.wait_fills();
     b.seal(2);
-    const int32_t m2[16] = {2 * kOne, 0, 0, kOne / 8, 0, 2 * kOne, 0, -kOne / 8, 0, 0, kOne, 0, 0, 0,
-                            kOne, kOne / 2};
+    const int32_t m2[16] = {2 * kOne, 0, 0,    kOne / 8, 0, 2 * kOne, 0,    -kOne / 8,
+                            0,        0, kOne, 0,        0, 0,        kOne, kOne / 2};
     const zref::mat4fx M2 = mat_of(m2);
     b.write_matrix_only(/*svc=*/true, /*orc=*/false, 0, M2);
     b.idle(40);
@@ -947,7 +965,8 @@ int main(int argc, char** argv) {
     const size_t lbase = b.legacy_out.size();  // the legacy stream has its own base
     b.legacy_feed = true;
     b.issue_job(g, g.gen);
-    for (const zt::MeshTri& t : g.tris) b.legacy_in.push_back({t, g.src_id, g.view, g.mat_a, g.mat_b, g.weight});
+    for (const zt::MeshTri& t : g.tris)
+      b.legacy_in.push_back({t, g.src_id, g.view, g.mat_a, g.mat_b, g.weight});
     b.drain_shell_to(before + kTrisPerGroup);
     b.drain_legacy_to(lbase + kTrisPerGroup);
     {
@@ -956,12 +975,14 @@ int main(int argc, char** argv) {
         const Tri& s = b.shell_out[before + static_cast<size_t>(i)];
         const Tri& l = b.legacy_out[lbase + static_cast<size_t>(i)];
         bool ok = s.behind == l.behind && !s.refused;
-        for (int k = 0; k < 3; ++k) ok = ok && s.x[k] == l.x[k] && s.y[k] == l.y[k] && s.d[k] == l.d[k];
+        for (int k = 0; k < 3; ++k)
+          ok = ok && s.x[k] == l.x[k] && s.y[k] == l.y[k] && s.d[k] == l.d[k];
         if (ok) ++same;
       }
-      check(same == kTrisPerGroup,
-            "reconfig (a): a group sealed under M0 replays the M0 law after the service moved to M2",
-            kTrisPerGroup, same);
+      check(
+          same == kTrisPerGroup,
+          "reconfig (a): a group sealed under M0 replays the M0 law after the service moved to M2",
+          kTrisPerGroup, same);
     }
     // and the same group re-filled under M2 equals the oracle at M2
     b.write_matrix_only(/*svc=*/false, /*orc=*/true, 0, M2);
@@ -975,7 +996,8 @@ int main(int argc, char** argv) {
     b.seal(2);
     const size_t before2 = b.shell_out.size();
     b.issue_job(g, g.gen);
-    for (const zt::MeshTri& t : g.tris) b.legacy_in.push_back({t, g.src_id, g.view, g.mat_a, g.mat_b, g.weight});
+    for (const zt::MeshTri& t : g.tris)
+      b.legacy_in.push_back({t, g.src_id, g.view, g.mat_a, g.mat_b, g.weight});
     b.drain_shell_to(before2 + kTrisPerGroup);
     b.drain_legacy_to(lbase + 2 * kTrisPerGroup);
     {
@@ -984,13 +1006,16 @@ int main(int argc, char** argv) {
         const Tri& s = b.shell_out[before2 + static_cast<size_t>(i)];
         const Tri& l = b.legacy_out[lbase + kTrisPerGroup + static_cast<size_t>(i)];
         bool ok = s.behind == l.behind && !s.refused;
-        for (int k = 0; k < 3; ++k) ok = ok && s.x[k] == l.x[k] && s.y[k] == l.y[k] && s.d[k] == l.d[k];
+        for (int k = 0; k < 3; ++k)
+          ok = ok && s.x[k] == l.x[k] && s.y[k] == l.y[k] && s.d[k] == l.d[k];
         if (ok) ++same;
       }
-      check(same == kTrisPerGroup, "reconfig (a): re-filled under M2, replay equals the legacy at M2",
-            kTrisPerGroup, same);
+      check(same == kTrisPerGroup,
+            "reconfig (a): re-filled under M2, replay equals the legacy at M2", kTrisPerGroup,
+            same);
       b.compare_group(g, before2, /*against_legacy=*/false);
-      check(b.mism_zref == mz, "reconfig (a): re-filled under M2, replay equals project_vertex at M2", mz,
+      check(b.mism_zref == mz,
+            "reconfig (a): re-filled under M2, replay equals project_vertex at M2", mz,
             b.mism_zref);
     }
     b.legacy_feed = false;
@@ -1040,7 +1065,8 @@ int main(int argc, char** argv) {
     check(corners_ok == corners_total,
           "reconfig (b): a torn fill is faithful per corner to the matrix at its accept edge",
           corners_total, corners_ok);
-    check(epoch_changed > 0, "reconfig (b): the tear actually changed some corners", 1, epoch_changed);
+    check(epoch_changed > 0, "reconfig (b): the tear actually changed some corners", 1,
+          epoch_changed);
   }
 
   // =========================================================================
@@ -1070,10 +1096,11 @@ int main(int argc, char** argv) {
     const int fired = b.mism_zref - mz;
     b.mism_zref = mz;  // the control's mismatches are not defects
     b.printed_zref = printed;
-    check(fired > 0, "POSITIVE CONTROL: one raw LSB in one service matrix word makes the comparator fire",
-          1, fired);
-    std::printf("positive control: %d of %d triangles differed under a one-LSB matrix skew\n", fired,
-                kTrisPerGroup);
+    check(fired > 0,
+          "POSITIVE CONTROL: one raw LSB in one service matrix word makes the comparator fire", 1,
+          fired);
+    std::printf("positive control: %d of %d triangles differed under a one-LSB matrix skew\n",
+                fired, kTrisPerGroup);
     b.write_matrix_only(true, false, 1, M1);  // restore
   }
 
@@ -1097,8 +1124,9 @@ int main(int argc, char** argv) {
     b.issue_job(g, g.gen);
     b.drain_shell_to(before + kTrisPerGroup);
     const uint64_t took = b.cycle - c0;
-    check(took <= kTrisPerGroup + 4, "MEASURED: 128 triangles replay in <= 132 clocks (one per clock)",
-          kTrisPerGroup + 4, took);
+    check(took <= kTrisPerGroup + 4,
+          "MEASURED: 128 triangles replay in <= 132 clocks (one per clock)", kTrisPerGroup + 4,
+          took);
     std::printf("throughput: 128 triangles in %llu clocks with the consumer always ready\n",
                 static_cast<unsigned long long>(took));
     const int mz = b.mism_zref;

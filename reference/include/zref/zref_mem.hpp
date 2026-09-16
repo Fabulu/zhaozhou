@@ -692,14 +692,7 @@ struct MemoryGuard {
   // client ids (zhao_client_e)
   // Client ids (zhao_client_e). 5 is the unspent reservation of ruling T3 and
   // is deliberately absent -- naming it here would be spending it.
-  enum Client {
-    SCANOUT = 0,
-    BLIT_DMA = 1,
-    ENGINE0 = 2,
-    ENGINE1 = 3,
-    DEBUG = 4,
-    TERRAIN_BUILD = 6
-  };
+  enum Client { SCANOUT = 0, BLIT_DMA = 1, ENGINE0 = 2, ENGINE1 = 3, DEBUG = 4, TERRAIN_BUILD = 6 };
 
   struct Req {
     bool valid = false;
@@ -744,8 +737,7 @@ struct MemoryGuard {
         // at addresses the test never generates. Added with the terrain arm
         // rather than left, because a reference that is right about the region
         // being added and wrong about the one beside it is not a reference.
-        return !r.write && r.addr >= kRenderAssetBase &&
-               end <= kRenderAssetBase + kRenderAssetSpan;
+        return !r.write && r.addr >= kRenderAssetBase && end <= kRenderAssetBase + kRenderAssetSpan;
       case TERRAIN_BUILD: {
         // TERRAIN.PAGE_POOL, TERRAIN.BUILD's in BOTH DIRECTIONS (rulings T2 /
         // T3 / T4, spec/memory_rules.md 5b). Constant bounds: no map input
@@ -761,8 +753,8 @@ struct MemoryGuard {
         // and the sheet is reachable only through this window. Folding them
         // into a bare range test would be the same verdict and would lose the
         // record of which ruling admitted which direction.
-        const bool in_pool = r.addr >= kTerrainPagePoolBase &&
-                             end <= kTerrainPagePoolBase + kTerrainPagePoolSpan;
+        const bool in_pool =
+            r.addr >= kTerrainPagePoolBase && end <= kTerrainPagePoolBase + kTerrainPagePoolSpan;
         const bool wr_ok = r.write && in_pool;   // pages in  (TERRAIN.PAGELOADER)
         const bool rd_ok = !r.write && in_pool;  // sheets out (TERRAIN.WRITEBACK)
         return wr_ok || rd_ok;

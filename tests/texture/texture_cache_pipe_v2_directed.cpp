@@ -9,9 +9,8 @@
     defined(EXPECT_PACKET_E_PREPAID_DOUBLE_RESV_MUTANT)
 #error "PACKET_E_DRIVER_SELECTOR_COLLISION: define exactly one inverse branch"
 #endif
-#if defined(EXPECT_PACKET_E_LANES8_REQN2) && \
-    (defined(EXPECT_PACKET_E_DENIAL_REPLAY_MUTANT) || \
-     defined(EXPECT_PACKET_E_PREPAID_DOUBLE_RESV_MUTANT))
+#if defined(EXPECT_PACKET_E_LANES8_REQN2) && (defined(EXPECT_PACKET_E_DENIAL_REPLAY_MUTANT) || \
+                                              defined(EXPECT_PACKET_E_PREPAID_DOUBLE_RESV_MUTANT))
 #error "PACKET_E_DRIVER_MODE_COLLISION: parameter and inverse controls are exclusive"
 #endif
 
@@ -33,8 +32,7 @@ uint16_t param_memory_at(uint32_t byte_addr) {
   return static_cast<uint16_t>(0x6A00u ^ ((byte_addr >> 1) * 37u));
 }
 
-void param_check(bool cond, const char* what, uint64_t expected = 1,
-                 uint64_t actual = 0) {
+void param_check(bool cond, const char* what, uint64_t expected = 1, uint64_t actual = 0) {
   zhao::check(cond, what, expected, cond ? expected : actual);
 }
 
@@ -91,8 +89,7 @@ bool param_response_data_exact(const ParamDut& top) {
   for (int lane = 0; lane < 8; ++lane) {
     const uint32_t word = top.smp_data_o[lane / 2];
     const uint16_t got = static_cast<uint16_t>(word >> (16 * (lane & 1)));
-    if (got != param_memory_at(kParamLine + static_cast<uint32_t>(lane) * 2u))
-      return false;
+    if (got != param_memory_at(kParamLine + static_cast<uint32_t>(lane) * 2u)) return false;
   }
   return true;
 }
@@ -118,15 +115,12 @@ int main(int argc, char** argv) {
   param_check(param_wait_fill(top), "LANES8 cold vector reaches fill");
   param_check(top.fill_addr_o == kParamLine, "LANES8 fill address exact", kParamLine,
               top.fill_addr_o);
-  param_check(top.cache_misses_o == 8,
-              "LANES8 miss popcount represents eight without wrapping", 8,
+  param_check(top.cache_misses_o == 8, "LANES8 miss popcount represents eight without wrapping", 8,
               top.cache_misses_o);
   param_check(top.multicast_o == 7,
-              "LANES8 multicast popcount subtracts to seven without underflow", 7,
-              top.multicast_o);
+              "LANES8 multicast popcount subtracts to seven without underflow", 7, top.multicast_o);
   param_check(top.fills_o == 1 && top.replays_o == 1,
-              "LANES8 cold vector allocates one fill and one replay", 1,
-              top.fills_o);
+              "LANES8 cold vector allocates one fill and one replay", 1, top.fills_o);
 
   top.fill_ready_i = 1;
   zhao::tick(top);
@@ -138,13 +132,11 @@ int main(int argc, char** argv) {
   }
   top.fill_data_valid_i = 0;
   param_check(param_wait_response(top), "LANES8 filled replay responds finitely");
-  param_check(top.smp_status_o == 0 && top.smp_src_id_o == kColdSrc &&
-                  param_response_data_exact(top),
-              "LANES8 filled replay carries all eight exact lanes", 1,
-              top.smp_status_o);
-  param_check(top.cache_hits_o == 8,
-              "LANES8 replay hit popcount represents eight without wrapping", 8,
-              top.cache_hits_o);
+  param_check(
+      top.smp_status_o == 0 && top.smp_src_id_o == kColdSrc && param_response_data_exact(top),
+      "LANES8 filled replay carries all eight exact lanes", 1, top.smp_status_o);
+  param_check(top.cache_hits_o == 8, "LANES8 replay hit popcount represents eight without wrapping",
+              8, top.cache_hits_o);
   top.smp_ready_i = 1;
   zhao::tick(top);
   top.smp_ready_i = 0;
@@ -153,26 +145,24 @@ int main(int argc, char** argv) {
   constexpr uint32_t kWarmSrc = 0x12345u;
   param_offer(top, kWarmSrc);
   param_check(param_wait_response(top), "LANES8 warm vector responds finitely");
-  param_check(top.smp_status_o == 0 && top.smp_src_id_o == kWarmSrc &&
-                  param_response_data_exact(top),
-              "LANES8 warm hit retains all lanes and identity", 1,
-              top.smp_status_o);
-  param_check(top.cache_hits_o == 16,
-              "two LANES8 hit retirements accumulate sixteen exactly", 16,
+  param_check(
+      top.smp_status_o == 0 && top.smp_src_id_o == kWarmSrc && param_response_data_exact(top),
+      "LANES8 warm hit retains all lanes and identity", 1, top.smp_status_o);
+  param_check(top.cache_hits_o == 16, "two LANES8 hit retirements accumulate sixteen exactly", 16,
               top.cache_hits_o);
   top.smp_ready_i = 1;
   zhao::tick(top);
   top.smp_ready_i = 0;
   param_check(param_wait_idle(top), "LANES8 final pointers and credits drain");
-  const bool counters = top.cache_misses_o == 8 && top.cache_hits_o == 16 &&
-      top.fills_o == 1 && top.multicast_o == 7 && top.replays_o == 1 &&
-      top.cache_jobs_accepted_o == 2 && top.cache_jobs_completed_o == 2 &&
-      top.fill_jobs_accepted_o == 1 && top.fill_jobs_completed_o == 1 &&
-      top.fill_jobs_refused_o == 0 && top.fill_data_beats_o == 8 &&
-      top.reservation_count_o == 0 && top.reservation_owner_state_o == 0 &&
-      top.cache_work_state_o == 0 && top.fill_protocol_fault_o == 0;
-  zhao::check(counters, "LANES8/REQN2 historical, new, reservation, and work evidence exact",
-              1, counters ? 1 : 0);
+  const bool counters = top.cache_misses_o == 8 && top.cache_hits_o == 16 && top.fills_o == 1 &&
+                        top.multicast_o == 7 && top.replays_o == 1 &&
+                        top.cache_jobs_accepted_o == 2 && top.cache_jobs_completed_o == 2 &&
+                        top.fill_jobs_accepted_o == 1 && top.fill_jobs_completed_o == 1 &&
+                        top.fill_jobs_refused_o == 0 && top.fill_data_beats_o == 8 &&
+                        top.reservation_count_o == 0 && top.reservation_owner_state_o == 0 &&
+                        top.cache_work_state_o == 0 && top.fill_protocol_fault_o == 0;
+  zhao::check(counters, "LANES8/REQN2 historical, new, reservation, and work evidence exact", 1,
+              counters ? 1 : 0);
   return zhao::report_and_exit("texture_cache_pipe_v2_lanes8_reqn2");
 }
 
@@ -206,28 +196,25 @@ struct CounterSnapshot {
 };
 
 CounterSnapshot counters_of(const Dut& top) {
-  return CounterSnapshot{
-      top.cache_hits_o,
-      top.cache_misses_o,
-      top.fills_o,
-      top.multicast_o,
-      top.replays_o,
-      top.cache_jobs_accepted_o,
-      top.cache_jobs_completed_o,
-      top.fill_jobs_accepted_o,
-      top.fill_jobs_completed_o,
-      top.fill_jobs_refused_o,
-      top.fill_data_beats_o};
+  return CounterSnapshot{top.cache_hits_o,
+                         top.cache_misses_o,
+                         top.fills_o,
+                         top.multicast_o,
+                         top.replays_o,
+                         top.cache_jobs_accepted_o,
+                         top.cache_jobs_completed_o,
+                         top.fill_jobs_accepted_o,
+                         top.fill_jobs_completed_o,
+                         top.fill_jobs_refused_o,
+                         top.fill_data_beats_o};
 }
 
 bool counters_equal(const CounterSnapshot& a, const CounterSnapshot& b) {
-  return a.hits == b.hits && a.misses == b.misses &&
-      a.fills == b.fills && a.multicast == b.multicast &&
-      a.replays == b.replays && a.cache_accepted == b.cache_accepted &&
-      a.cache_completed == b.cache_completed &&
-      a.fill_accepted == b.fill_accepted &&
-      a.fill_completed == b.fill_completed &&
-      a.fill_refused == b.fill_refused && a.fill_beats == b.fill_beats;
+  return a.hits == b.hits && a.misses == b.misses && a.fills == b.fills &&
+         a.multicast == b.multicast && a.replays == b.replays &&
+         a.cache_accepted == b.cache_accepted && a.cache_completed == b.cache_completed &&
+         a.fill_accepted == b.fill_accepted && a.fill_completed == b.fill_completed &&
+         a.fill_refused == b.fill_refused && a.fill_beats == b.fill_beats;
 }
 
 uint16_t memory_at(uint32_t byte_addr) {
@@ -238,8 +225,7 @@ void expect(bool cond, const char* what, uint64_t expected = 1, uint64_t actual 
   zhao::check(cond, what, expected, cond ? expected : actual);
 }
 
-void drive_access(Dut& top, uint32_t line, uint32_t route,
-                  uint8_t enables = 0xF) {
+void drive_access(Dut& top, uint32_t line, uint32_t route, uint8_t enables = 0xF) {
   top.acc_en_i = enables;
   for (int lane = 0; lane < 4; ++lane)
     top.acc_addr_i[lane] = line + static_cast<uint32_t>(lane) * 2u;
@@ -253,8 +239,7 @@ uint16_t response_lane(const Response& rsp, int lane) {
 bool response_matches_line(const Response& rsp, uint32_t line) {
   if (rsp.status != kSuccess) return false;
   for (int lane = 0; lane < 4; ++lane) {
-    if (response_lane(rsp, lane) !=
-        memory_at(line + static_cast<uint32_t>(lane) * 2u))
+    if (response_lane(rsp, lane) != memory_at(line + static_cast<uint32_t>(lane) * 2u))
       return false;
   }
   return true;
@@ -283,8 +268,7 @@ void reset(Dut& top) {
          top.fill_protocol_fault_o);
 }
 
-void offer_once(Dut& top, uint32_t line, uint32_t route,
-                uint8_t enables = 0xF) {
+void offer_once(Dut& top, uint32_t line, uint32_t route, uint8_t enables = 0xF) {
   top.acc_valid_i = 1;
   drive_access(top, line, route, enables);
   top.eval();
@@ -306,14 +290,12 @@ void accept_fill(Dut& top) {
   const uint32_t before = top.fill_jobs_accepted_o;
   top.fill_ready_i = 1;
   top.eval();
-  expect(top.fill_valid_o == 1, "FI accepts an actually held fill request", 1,
-         top.fill_valid_o);
+  expect(top.fill_valid_o == 1, "FI accepts an actually held fill request", 1, top.fill_valid_o);
   zhao::tick(top);
   top.fill_ready_i = 0;
   top.eval();
-  expect(top.fill_jobs_accepted_o == before + 1u,
-         "fill accepted counter advances exactly on FI", before + 1u,
-         top.fill_jobs_accepted_o);
+  expect(top.fill_jobs_accepted_o == before + 1u, "fill accepted counter advances exactly on FI",
+         before + 1u, top.fill_jobs_accepted_o);
 }
 
 void send_beats(Dut& top, uint32_t line, int count) {
@@ -334,8 +316,7 @@ void pulse_data(Dut& top, uint16_t data, bool clear_same_edge = false) {
   top.frame_fault_clear_i = 0;
 }
 
-void pulse_refusal(Dut& top, bool with_data = false,
-                   bool clear_same_edge = false) {
+void pulse_refusal(Dut& top, bool with_data = false, bool clear_same_edge = false) {
   top.fill_refused_i = 1;
   top.fill_data_valid_i = with_data ? 1 : 0;
   top.fill_data_i = 0xD15Au;
@@ -357,10 +338,8 @@ bool wait_response(Dut& top, int limit = 150) {
 
 Response observe_response(Dut& top) {
   top.eval();
-  expect(top.smp_valid_o == 1, "response observation has held valid", 1,
-         top.smp_valid_o);
-  return Response{static_cast<uint64_t>(top.smp_data_o),
-                  static_cast<uint8_t>(top.smp_status_o),
+  expect(top.smp_valid_o == 1, "response observation has held valid", 1, top.smp_valid_o);
+  return Response{static_cast<uint64_t>(top.smp_data_o), static_cast<uint8_t>(top.smp_status_o),
                   static_cast<uint32_t>(top.smp_src_id_o)};
 }
 
@@ -381,8 +360,7 @@ bool wait_idle(Dut& top, int limit = 200) {
 
 void quiet_clear(Dut& top) {
   top.eval();
-  expect(top.idle_o == 1, "quiet clear is presented only at exact idle", 1,
-         top.idle_o);
+  expect(top.idle_o == 1, "quiet clear is presented only at exact idle", 1, top.idle_o);
   top.frame_fault_clear_i = 1;
   zhao::tick(top);
   top.frame_fault_clear_i = 0;
@@ -391,21 +369,18 @@ void quiet_clear(Dut& top) {
          top.fill_protocol_fault_o);
 }
 
-void expect_typed(const Response& rsp, uint32_t src, uint8_t status,
-                  uint64_t data, const char* what) {
+void expect_typed(const Response& rsp, uint32_t src, uint8_t status, uint64_t data,
+                  const char* what) {
   const bool exact = rsp.src == src && rsp.status == status && rsp.data == data;
   zhao::check(exact, what, 1, exact ? 1 : 0);
 }
 
 void expect_legal_drain(const Dut& top, const char* what) {
-  const uint32_t successful =
-      top.fill_jobs_completed_o - top.fill_jobs_refused_o;
-  const bool exact = top.idle_o &&
-      top.cache_jobs_accepted_o == top.cache_jobs_completed_o &&
-      top.fill_jobs_accepted_o == top.fill_jobs_completed_o &&
-      top.fill_data_beats_o == 8u * successful &&
-      top.reservation_count_o == 0 &&
-      top.reservation_owner_state_o == 0 && top.cache_work_state_o == 0;
+  const uint32_t successful = top.fill_jobs_completed_o - top.fill_jobs_refused_o;
+  const bool exact = top.idle_o && top.cache_jobs_accepted_o == top.cache_jobs_completed_o &&
+                     top.fill_jobs_accepted_o == top.fill_jobs_completed_o &&
+                     top.fill_data_beats_o == 8u * successful && top.reservation_count_o == 0 &&
+                     top.reservation_owner_state_o == 0 && top.cache_work_state_o == 0;
   zhao::check(exact, what, 1, exact ? 1 : 0);
 }
 
@@ -423,16 +398,11 @@ void test_success_younger_multicast_replay_and_warm_hold() {
   offer_once(top, kB, kSrcB);
   expect(wait_fill(top), "cold A reaches a finite blocking fill");
   top.eval();
-  expect(top.fill_addr_o == kA, "first miss identity is exact A line", kA,
-         top.fill_addr_o);
-  expect(top.replays_o == 2, "A miss squashes exact C2 plus younger C1 probes", 2,
-         top.replays_o);
-  expect(top.fills_o == 1, "A multicast allocates one historical fill", 1,
-         top.fills_o);
-  expect(top.cache_misses_o == 4, "A multicast counts four lane misses", 4,
-         top.cache_misses_o);
-  expect(top.multicast_o == 3, "one A fill serves three extra lanes", 3,
-         top.multicast_o);
+  expect(top.fill_addr_o == kA, "first miss identity is exact A line", kA, top.fill_addr_o);
+  expect(top.replays_o == 2, "A miss squashes exact C2 plus younger C1 probes", 2, top.replays_o);
+  expect(top.fills_o == 1, "A multicast allocates one historical fill", 1, top.fills_o);
+  expect(top.cache_misses_o == 4, "A multicast counts four lane misses", 4, top.cache_misses_o);
+  expect(top.multicast_o == 3, "one A fill serves three extra lanes", 3, top.multicast_o);
   for (int cycle = 0; cycle < 5; ++cycle) {
     top.eval();
     expect(top.fill_valid_o == 1 && top.fill_addr_o == kA,
@@ -450,8 +420,7 @@ void test_success_younger_multicast_replay_and_warm_hold() {
   expect(wait_response(top), "prepaid A replay returns finitely");
   const Response held = observe_response(top);
   expect(held.src == kSrcA && response_matches_line(held, kA),
-         "successful A replay has status zero, original token, and exact data", 1,
-         held.src);
+         "successful A replay has status zero, original token, and exact data", 1, held.src);
 
   // Hold the complete triple while the younger request proceeds to its miss.
   bool b_fill_seen = false;
@@ -467,10 +436,8 @@ void test_success_younger_multicast_replay_and_warm_hold() {
     zhao::tick(top);
   }
   expect(b_fill_seen, "younger B continues into a fill while A response is stalled");
-  expect(top.fill_addr_o == kB, "younger B retains its own missed line", kB,
-         top.fill_addr_o);
-  expect(top.replays_o == 3, "B contributes exactly one later replay probe", 3,
-         top.replays_o);
+  expect(top.fill_addr_o == kB, "younger B retains its own missed line", kB, top.fill_addr_o);
+  expect(top.replays_o == 3, "B contributes exactly one later replay probe", 3, top.replays_o);
   pop_response(top);
 
   accept_fill(top);
@@ -487,8 +454,8 @@ void test_success_younger_multicast_replay_and_warm_hold() {
   const Response warm = observe_response(top);
   expect(warm.src == kSrcWarm && response_matches_line(warm, kA),
          "warm hit preserves Packet-B data and 18-bit order", 1, warm.src);
-  expect(top.fills_o == fills_before_warm, "warm hit allocates no new fill",
-         fills_before_warm, top.fills_o);
+  expect(top.fills_o == fills_before_warm, "warm hit allocates no new fill", fills_before_warm,
+         top.fills_o);
   pop_response(top);
 
   expect(wait_idle(top), "success/multicast/replay scenario drains finitely");
@@ -497,12 +464,10 @@ void test_success_younger_multicast_replay_and_warm_hold() {
   expect(top.cache_hits_o == 12, "three four-lane responses count exact hits", 12,
          top.cache_hits_o);
   expect(top.cache_jobs_accepted_o == 3 && top.cache_jobs_completed_o == 3,
-         "CA and CC are exact after success drain", 3,
-         top.cache_jobs_completed_o);
+         "CA and CC are exact after success drain", 3, top.cache_jobs_completed_o);
   expect(top.fill_jobs_accepted_o == 2 && top.fill_jobs_completed_o == 2 &&
              top.fill_jobs_refused_o == 0 && top.fill_data_beats_o == 16,
-         "FI/FTERM/FREF/FB exact for two successful lines", 1,
-         top.fill_jobs_completed_o);
+         "FI/FTERM/FREF/FB exact for two successful lines", 1, top.fill_jobs_completed_o);
   expect_legal_drain(top, "legal success drain proves CA=CC, FI=FTERM, FB=8*FOK");
 }
 
@@ -548,8 +513,7 @@ void test_refusal_skips_head_and_resumes_younger() {
          top.cache_jobs_completed_o);
   expect(top.fill_jobs_accepted_o == 2 && top.fill_jobs_completed_o == 2 &&
              top.fill_jobs_refused_o == 1 && top.fill_data_beats_o == 8,
-         "refusal/success FI/FTERM/FREF/FB counters are exact", 1,
-         top.fill_jobs_refused_o);
+         "refusal/success FI/FTERM/FREF/FB counters are exact", 1, top.fill_jobs_refused_o);
   expect_legal_drain(top, "legal mixed drain proves FI=FTERM and FB=8*(FTERM-FREF)");
 }
 
@@ -583,8 +547,7 @@ void test_stalled_response_with_new_inputs() {
   expect(issued.size() == static_cast<size_t>(kReqDepth + kRspDepth),
          "stalled sink owns exactly request plus response capacity", kReqDepth + kRspDepth,
          issued.size());
-  expect(top.fills_o == 1, "stalled all-hit burst preserves warm-cache timing", 1,
-         top.fills_o);
+  expect(top.fills_o == 1, "stalled all-hit burst preserves warm-cache timing", 1, top.fills_o);
 
   std::vector<uint32_t> returned;
   std::vector<uint8_t> statuses;
@@ -618,9 +581,8 @@ void test_data_before_fi_and_quiet_clear() {
   expect(wait_fill(top), "pre-FI data case reaches held fill offer");
 
   pulse_data(top, 0xDEADu, true);
-  expect(top.fill_protocol_fault_o == 1,
-         "data before FI sets fault even against same-edge clear", 1,
-         top.fill_protocol_fault_o);
+  expect(top.fill_protocol_fault_o == 1, "data before FI sets fault even against same-edge clear",
+         1, top.fill_protocol_fault_o);
   expect(top.fill_data_beats_o == 0, "pre-FI malformed data is not counted", 0,
          top.fill_data_beats_o);
   expect(top.fill_valid_o == 1, "pre-FI malformed data neither accepts nor terminates fill", 1,
@@ -637,8 +599,7 @@ void test_data_before_fi_and_quiet_clear() {
   expect(wait_response(top), "fill recovers after malformed pre-FI data");
   const Response rsp = observe_response(top);
   expect(rsp.src == kSrc && response_matches_line(rsp, kLine),
-         "malformed pre-FI word never wrote RAM or contaminated legal response", 1,
-         rsp.data);
+         "malformed pre-FI word never wrote RAM or contaminated legal response", 1, rsp.data);
 
   const uint32_t ca = top.cache_jobs_accepted_o;
   const uint32_t cc = top.cache_jobs_completed_o;
@@ -665,8 +626,7 @@ void test_data_before_fi_and_quiet_clear() {
   expect(top.cache_jobs_accepted_o == ca && top.cache_jobs_completed_o == ca &&
              top.fill_jobs_accepted_o == fi && top.fill_jobs_completed_o == ft &&
              top.fill_data_beats_o == fb,
-         "quiet clear changes only fault, never counters", 1,
-         top.cache_jobs_completed_o);
+         "quiet clear changes only fault, never counters", 1, top.cache_jobs_completed_o);
 }
 
 void test_refusal_before_fi_and_no_miss() {
@@ -675,11 +635,9 @@ void test_refusal_before_fi_and_no_miss() {
 
   pulse_refusal(top, false, true);
   expect(top.fill_protocol_fault_o == 1,
-         "refusal with no miss sets fault and beats same-edge clear", 1,
-         top.fill_protocol_fault_o);
+         "refusal with no miss sets fault and beats same-edge clear", 1, top.fill_protocol_fault_o);
   expect(top.fill_jobs_completed_o == 0 && top.fill_jobs_refused_o == 0,
-         "no-miss refusal is observation only, never a terminal", 0,
-         top.fill_jobs_completed_o);
+         "no-miss refusal is observation only, never a terminal", 0, top.fill_jobs_completed_o);
   quiet_clear(top);
 
   constexpr uint32_t kLine = 0x00664040u;
@@ -689,10 +647,8 @@ void test_refusal_before_fi_and_no_miss() {
   pulse_refusal(top);
   expect(top.fill_protocol_fault_o == 1, "refusal before FI independently sets fault", 1,
          top.fill_protocol_fault_o);
-  expect(top.fill_valid_o == 1 && top.fill_jobs_accepted_o == 0 &&
-             top.fill_jobs_completed_o == 0,
-         "pre-FI refusal leaves request held and counters untouched", 1,
-         top.fill_valid_o);
+  expect(top.fill_valid_o == 1 && top.fill_jobs_accepted_o == 0 && top.fill_jobs_completed_o == 0,
+         "pre-FI refusal leaves request held and counters untouched", 1, top.fill_valid_o);
 
   accept_fill(top);
   pulse_refusal(top);
@@ -705,8 +661,7 @@ void test_refusal_before_fi_and_no_miss() {
   quiet_clear(top);
   expect(top.fill_jobs_accepted_o == 1 && top.fill_jobs_completed_o == 1 &&
              top.fill_jobs_refused_o == 1 && top.fill_data_beats_o == 0,
-         "only the later accepted refusal changes fill counters", 1,
-         top.fill_jobs_refused_o);
+         "only the later accepted refusal changes fill counters", 1, top.fill_jobs_refused_o);
 }
 
 void test_simultaneous_data_refusal() {
@@ -718,8 +673,7 @@ void test_simultaneous_data_refusal() {
   expect(wait_fill(top), "simultaneous case reaches fill");
   accept_fill(top);
   pulse_refusal(top, true, true);
-  expect(top.fill_protocol_fault_o == 1,
-         "simultaneous data/refusal sets fault over clear", 1,
+  expect(top.fill_protocol_fault_o == 1, "simultaneous data/refusal sets fault over clear", 1,
          top.fill_protocol_fault_o);
   expect(top.fill_data_beats_o == 0, "refusal wins and simultaneous data is not counted", 0,
          top.fill_data_beats_o);
@@ -751,8 +705,7 @@ void test_partial_refusal_invalidates_then_refills() {
   expect(top.fill_protocol_fault_o == 1, "partial-line refusal independently sets fault", 1,
          top.fill_protocol_fault_o);
   expect(top.fill_jobs_completed_o == 1 && top.fill_jobs_refused_o == 1,
-         "partial refusal still terminates exactly once", 1,
-         top.fill_jobs_completed_o);
+         "partial refusal still terminates exactly once", 1, top.fill_jobs_completed_o);
   expect(wait_response(top), "partial refusal emits typed response");
   expect_typed(observe_response(top), kDeniedSrc, kSourceRefused, 0,
                "partial refusal preserves denied identity and zero data");
@@ -766,8 +719,7 @@ void test_partial_refusal_invalidates_then_refills() {
   expect(wait_fill(top), "retry of partial line must miss and refill");
   expect(top.fill_addr_o == kLine, "fresh refill keeps exact invalidated line", kLine,
          top.fill_addr_o);
-  expect(top.fills_o == 2, "partial refusal followed by retry allocates two fills", 2,
-         top.fills_o);
+  expect(top.fills_o == 2, "partial refusal followed by retry allocates two fills", 2, top.fills_o);
   accept_fill(top);
   send_beats(top, kLine, 8);
   expect(wait_response(top), "fresh full refill returns");
@@ -792,14 +744,12 @@ void test_ninth_unsolicited_and_duplicate_refusal() {
     accept_fill(top);
     send_beats(top, kLine, 8);
     pulse_data(top, 0xBEEFu, true);
-    expect(top.fill_protocol_fault_o == 1,
-           "ninth/unsolicited data sets fault over same-edge clear", 1,
-           top.fill_protocol_fault_o);
+    expect(top.fill_protocol_fault_o == 1, "ninth/unsolicited data sets fault over same-edge clear",
+           1, top.fill_protocol_fault_o);
     expect(top.fill_data_beats_o == 8, "ninth data is neither counted nor written", 8,
            top.fill_data_beats_o);
     expect(top.fill_jobs_completed_o == 1 && top.fill_jobs_refused_o == 0,
-           "ninth data cannot create a second fill terminal", 1,
-           top.fill_jobs_completed_o);
+           "ninth data cannot create a second fill terminal", 1, top.fill_jobs_completed_o);
     expect(wait_response(top), "successful response survives ninth malformed beat");
     const Response rsp = observe_response(top);
     expect(rsp.src == kSrc && response_matches_line(rsp, kLine),
@@ -818,8 +768,7 @@ void test_ninth_unsolicited_and_duplicate_refusal() {
            top.fill_protocol_fault_o);
     expect(top.cache_jobs_accepted_o == ca && top.fill_jobs_accepted_o == fi &&
                top.fill_jobs_completed_o == ft && top.fill_data_beats_o == fb,
-           "busy clear leaves ninth-case counters untouched", 1,
-           top.fill_data_beats_o);
+           "busy clear leaves ninth-case counters untouched", 1, top.fill_data_beats_o);
     pop_response(top);
     expect(wait_idle(top), "ninth case drains finitely");
     quiet_clear(top);
@@ -842,8 +791,7 @@ void test_ninth_unsolicited_and_duplicate_refusal() {
     expect_typed(observe_response(top), first.src, first.status, first.data,
                  "duplicate refusal cannot alter or duplicate held terminal");
     expect(top.fill_jobs_completed_o == 1 && top.fill_jobs_refused_o == 1,
-           "duplicate refusal changes no terminal counter", 1,
-           top.fill_jobs_completed_o);
+           "duplicate refusal changes no terminal counter", 1, top.fill_jobs_completed_o);
     pop_response(top);
     expect(wait_idle(top), "duplicate refusal case drains finitely");
     quiet_clear(top);
@@ -856,8 +804,7 @@ void test_ninth_unsolicited_and_duplicate_refusal() {
     expect(top.fill_protocol_fault_o == 1, "unsolicited idle data independently sets fault", 1,
            top.fill_protocol_fault_o);
     expect(top.fill_data_beats_o == 0 && top.fill_jobs_completed_o == 0,
-           "unsolicited idle data changes no fill accounting", 0,
-           top.fill_data_beats_o);
+           "unsolicited idle data changes no fill accounting", 0, top.fill_data_beats_o);
     quiet_clear(top);
   }
 }
@@ -880,23 +827,22 @@ void run_denial_replay_mutant() {
   expect(wait_fill(top), "denial-replay mutant exposes a second fill");
   const CounterSnapshot observed = counters_of(top);
   const CounterSnapshot expected{
-      0,  // hits: neither denied probe can retire
-      8,  // misses: four lanes on each of two probes
-      2,  // fills: original plus replayed denial
-      6,  // multicast: three extra lanes per fill
-      4,  // replays: C2+C1 on both misses
-      2, 1,  // cache accepted/completed
+      0,          // hits: neither denied probe can retire
+      8,          // misses: four lanes on each of two probes
+      2,          // fills: original plus replayed denial
+      6,          // multicast: three extra lanes per fill
+      4,          // replays: C2+C1 on both misses
+      2, 1,       // cache accepted/completed
       1, 1, 1, 0  // fill accepted/completed/refused/beats
   };
-  const bool exact = top.fill_addr_o == kDenied &&
-      counters_equal(observed, expected) &&
-      top.reservation_count_o == 1 && top.reservation_owner_state_o == 8 &&
-      top.cache_work_state_o == 0x0B1 &&
-      top.fill_protocol_fault_o == 0 && top.fill_valid_o == 1 &&
-      top.smp_valid_o == 0 && top.idle_o == 0;
-  zhao::check(exact,
-      "denial-replay mutant has exact historical/new counters and only second denied fill state",
-      1, exact ? 1 : 0);
+  const bool exact = top.fill_addr_o == kDenied && counters_equal(observed, expected) &&
+                     top.reservation_count_o == 1 && top.reservation_owner_state_o == 8 &&
+                     top.cache_work_state_o == 0x0B1 && top.fill_protocol_fault_o == 0 &&
+                     top.fill_valid_o == 1 && top.smp_valid_o == 0 && top.idle_o == 0;
+  zhao::check(
+      exact,
+      "denial-replay mutant has exact historical/new counters and only second denied fill state", 1,
+      exact ? 1 : 0);
 }
 
 void run_prepaid_double_reservation_mutant() {
@@ -916,22 +862,22 @@ void run_prepaid_double_reservation_mutant() {
   for (int cycle = 0; cycle < 80; ++cycle) zhao::tick(top);
   top.eval();
   const CounterSnapshot expected{
-      4, 4, 1, 3, 1,  // hits/misses/fills/multicast/replays
+      4, 4, 1, 3, 1,    // hits/misses/fills/multicast/replays
       1, 1, 1, 1, 0, 8  // CA/CC/FI/FTERM/FREF/FB
   };
   const CounterSnapshot first = counters_of(top);
   for (int cycle = 0; cycle < 32; ++cycle) zhao::tick(top);
   top.eval();
   const CounterSnapshot stable = counters_of(top);
-  const bool exact = counters_equal(first, expected) &&
-      counters_equal(stable, expected) &&
-      top.reservation_count_o == 1 &&
-      top.reservation_owner_state_o == 0 && top.cache_work_state_o == 0 &&
-      top.idle_o == 0 && top.smp_valid_o == 0 && top.fill_valid_o == 0 &&
-      top.acc_valid_i == 0 && top.fill_protocol_fault_o == 0;
-  zhao::check(exact,
-      "double-resv mutant leaves exactly unowned rs_resv=1 after all work/owners/counters drain",
-      1, exact ? 1 : 0);
+  const bool exact = counters_equal(first, expected) && counters_equal(stable, expected) &&
+                     top.reservation_count_o == 1 && top.reservation_owner_state_o == 0 &&
+                     top.cache_work_state_o == 0 && top.idle_o == 0 && top.smp_valid_o == 0 &&
+                     top.fill_valid_o == 0 && top.acc_valid_i == 0 &&
+                     top.fill_protocol_fault_o == 0;
+  zhao::check(
+      exact,
+      "double-resv mutant leaves exactly unowned rs_resv=1 after all work/owners/counters drain", 1,
+      exact ? 1 : 0);
 }
 
 }  // namespace

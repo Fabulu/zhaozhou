@@ -75,15 +75,12 @@ Activity sample() {
       reinterpret_cast<unsigned int*>(&a.cfg_writes),
       reinterpret_cast<unsigned int*>(&a.jobs_offered),
       reinterpret_cast<unsigned int*>(&a.jobs_accepted),
-      reinterpret_cast<unsigned int*>(&a.out_words),
-      reinterpret_cast<unsigned int*>(&a.out_stalls),
+      reinterpret_cast<unsigned int*>(&a.out_words), reinterpret_cast<unsigned int*>(&a.out_stalls),
       reinterpret_cast<unsigned int*>(&a.tess_vertices),
       reinterpret_cast<unsigned int*>(&a.replay_triangles),
-      reinterpret_cast<unsigned int*>(&a.a_grants),
-      reinterpret_cast<unsigned int*>(&a.b_grants),
+      reinterpret_cast<unsigned int*>(&a.a_grants), reinterpret_cast<unsigned int*>(&a.b_grants),
       reinterpret_cast<unsigned int*>(&a.contended),
-      reinterpret_cast<unsigned int*>(&a.mat_refused),
-      &masks, &dense, &fault, &idle);
+      reinterpret_cast<unsigned int*>(&a.mat_refused), &masks, &dense, &fault, &idle);
   a.masks_seen = static_cast<uint8_t>(masks);
   a.saw_dense_output = dense != 0;
   a.arena_fault = fault != 0;
@@ -116,10 +113,8 @@ int main(int argc, char** argv) {
 
   // The exported task reads the wrapper's own registers, so the DPI scope has
   // to be the wrapper instance before it is called.
-  const svScope scope =
-      svGetScopeFromName("TOP.zhao_terrain_pipe_rpp3_matw18_fit_top");
-  zhao::check(scope != nullptr, "the wrapper's DPI scope resolves", 1,
-              scope != nullptr ? 1 : 0);
+  const svScope scope = svGetScopeFromName("TOP.zhao_terrain_pipe_rpp3_matw18_fit_top");
+  zhao::check(scope != nullptr, "the wrapper's DPI scope resolves", 1, scope != nullptr ? 1 : 0);
   if (scope == nullptr) {
     return zhao::report_and_exit("terrain_pipe_rpp3_matw18_fit_top_directed");
   }
@@ -130,52 +125,44 @@ int main(int argc, char** argv) {
   std::printf(
       "[g8b_fit_top] cfg=%u jobs=%u/%u out=%u stalls=%u tess=%u replay=%u\n"
       "[g8b_fit_top] a_grants=%u b_grants=%u contended=%u refused=%u masks=%u\n",
-      a.cfg_writes, a.jobs_accepted, a.jobs_offered, a.out_words, a.out_stalls,
-      a.tess_vertices, a.replay_triangles, a.a_grants, a.b_grants, a.contended,
-      a.mat_refused, a.masks_seen);
+      a.cfg_writes, a.jobs_accepted, a.jobs_offered, a.out_words, a.out_stalls, a.tess_vertices,
+      a.replay_triangles, a.a_grants, a.b_grants, a.contended, a.mat_refused, a.masks_seen);
 
   // --- the configuration actually completed --------------------------------
-  zhao::check(a.cfg_writes == 36, "wrapper writes both views' 18 config words",
-              36, a.cfg_writes);
+  zhao::check(a.cfg_writes == 36, "wrapper writes both views' 18 config words", 36, a.cfg_writes);
 
   // --- THE CHECK THIS WRAPPER EXISTS FOR ------------------------------------
   // At MATW=18 a product word that does not fit is refused and the register
   // keeps its old value. A nonzero count here means the fit would characterise
   // a projector running on reset values.
-  zhao::check(a.mat_refused == 0,
-              "MATW=18 loaded every product word without a refusal", 0,
+  zhao::check(a.mat_refused == 0, "MATW=18 loaded every product word without a refusal", 0,
               a.mat_refused);
 
   // --- legal-mask activity witness -----------------------------------------
-  zhao::check(a.masks_seen == 0x7,
-              "all three legal view masks 01/10/11 were accepted", 0x7,
+  zhao::check(a.masks_seen == 0x7, "all three legal view masks 01/10/11 were accepted", 0x7,
               a.masks_seen);
 
   // --- the machine did work -------------------------------------------------
-  zhao::check(a.jobs_accepted > 0, "terrain jobs were accepted", 1,
-              a.jobs_accepted > 0 ? 1 : 0);
+  zhao::check(a.jobs_accepted > 0, "terrain jobs were accepted", 1, a.jobs_accepted > 0 ? 1 : 0);
   zhao::check(a.tess_vertices > 0, "the tessellator produced vertices", 1,
               a.tess_vertices > 0 ? 1 : 0);
   zhao::check(a.replay_triangles > 0, "replay produced triangles", 1,
               a.replay_triangles > 0 ? 1 : 0);
-  zhao::check(a.out_words > 0, "triangles were accepted at the output", 1,
-              a.out_words > 0 ? 1 : 0);
+  zhao::check(a.out_words > 0, "triangles were accepted at the output", 1, a.out_words > 0 ? 1 : 0);
 
   // --- BOTH clients used the ONE shared projector ---------------------------
   // a_grants is the geometry stream, b_grants the terrain fills. If either is
   // zero the wrapper is exercising half the subsystem, and `contended` firing
   // is what proves they are sharing rather than taking turns by luck.
-  zhao::check(a.a_grants > 0, "the geometry client used the shared projector",
-              1, a.a_grants > 0 ? 1 : 0);
-  zhao::check(a.b_grants > 0, "the terrain client used the shared projector",
-              1, a.b_grants > 0 ? 1 : 0);
-  zhao::check(a.contended > 0,
-              "shared-projector contention was seen to fire", 1,
+  zhao::check(a.a_grants > 0, "the geometry client used the shared projector", 1,
+              a.a_grants > 0 ? 1 : 0);
+  zhao::check(a.b_grants > 0, "the terrain client used the shared projector", 1,
+              a.b_grants > 0 ? 1 : 0);
+  zhao::check(a.contended > 0, "shared-projector contention was seen to fire", 1,
               a.contended > 0 ? 1 : 0);
 
   // --- backpressure is in the measured circuit ------------------------------
-  zhao::check(a.out_stalls > 0,
-              "the output sink stalled, so held-output logic is exercised", 1,
+  zhao::check(a.out_stalls > 0, "the output sink stalled, so held-output logic is exercised", 1,
               a.out_stalls > 0 ? 1 : 0);
 
   // --- nothing illegal happened --------------------------------------------
@@ -185,8 +172,7 @@ int main(int argc, char** argv) {
   // --- the pins are alive ---------------------------------------------------
   zhao::check(signature_moved, "fit_signature_o changes during the run", 1,
               signature_moved ? 1 : 0);
-  zhao::check(epoch_seen == 0xFFFFFFFFu,
-              "fit_epoch_o visits all 32 low signature sources", 1,
+  zhao::check(epoch_seen == 0xFFFFFFFFu, "fit_epoch_o visits all 32 low signature sources", 1,
               epoch_seen == 0xFFFFFFFFu ? 1 : 0);
 
   return zhao::report_and_exit("terrain_pipe_rpp3_matw18_fit_top_directed");

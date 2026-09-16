@@ -254,8 +254,9 @@ int main(int argc, char** argv) {
       dut.eval();
       ++lat;
     }
-    check(lat == ZHAO_QUAT2MAT_WALK, "the declared walk: m_valid rises exactly WALK ticks after accept",
-          ZHAO_QUAT2MAT_WALK, static_cast<uint64_t>(lat));
+    check(lat == ZHAO_QUAT2MAT_WALK,
+          "the declared walk: m_valid rises exactly WALK ticks after accept", ZHAO_QUAT2MAT_WALK,
+          static_cast<uint64_t>(lat));
     check(dut.m_bone_o == 0x2B, "the bone tag rides through with its matrix", 0x2B, dut.m_bone_o);
     check(dut.m_valid_o == 1, "an accepted bone raises m_valid", 1, dut.m_valid_o);
     check(dut.bones_decoded_o == before + 1, "an accepted bone advances the counter by one",

@@ -81,16 +81,18 @@ int main() {
     d->w_i = static_cast<uint32_t>(w_raw) & 0x7FFFFFFFu;
     d->tag_i = static_cast<uint16_t>(m);
     d->eval();
-    const int32_t expect =
-        zref::fog::vertex_factor(zref::fx16{w_raw}, kNear, kFar, kK, &led);
+    const int32_t expect = zref::fog::vertex_factor(zref::fx16{w_raw}, kNear, kFar, kK, &led);
     tick(d);
     d->eval();
     if (d->r_valid_o) {
       ++compared;
       if (d->fogf_o != expect) ++mismatches;
-      if (expect == 0x10000) ++saw_clear;
-      else if (expect == 0) ++saw_opaque;
-      else ++saw_middle;
+      if (expect == 0x10000)
+        ++saw_clear;
+      else if (expect == 0)
+        ++saw_opaque;
+      else
+        ++saw_middle;
     }
   }
   d->v_valid_i = 0;
@@ -130,8 +132,7 @@ int main() {
     d->eval();
     tick(d);
     d->eval();
-    zhao::check(d->fogf_o == 0,
-                "and a vertex BEYOND fog_far is fully fogged (0)", 0,
+    zhao::check(d->fogf_o == 0, "and a vertex BEYOND fog_far is fully fogged (0)", 0,
                 static_cast<uint64_t>(d->fogf_o));
     d->v_valid_i = 0;
     d->eval();

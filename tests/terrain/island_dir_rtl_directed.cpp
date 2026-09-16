@@ -46,10 +46,14 @@ constexpr int kResident = 0, kOpenSky = 1, kOutOfExtent = 2, kBadPitch = 3;
 
 int oracle_code(isl::Outcome o) {
   switch (o) {
-    case isl::Outcome::kResident: return kResident;
-    case isl::Outcome::kOpenSky: return kOpenSky;
-    case isl::Outcome::kOutOfExtent: return kOutOfExtent;
-    default: return kBadPitch;
+    case isl::Outcome::kResident:
+      return kResident;
+    case isl::Outcome::kOpenSky:
+      return kOpenSky;
+    case isl::Outcome::kOutOfExtent:
+      return kOutOfExtent;
+    default:
+      return kBadPitch;
   }
 }
 
@@ -127,14 +131,14 @@ int main(int argc, char** argv) {
   // tag comparison.
   std::vector<Query> qs;
   uint8_t tag = 0;
-  for (int32_t iz = 45; iz < 80; ++iz) {          // crosses the disc's edges
+  for (int32_t iz = 45; iz < 80; ++iz) {  // crosses the disc's edges
     qs.push_back({60, iz, tag++});
     qs.push_back({0, iz, tag++});
     qs.push_back({kSide - 1, iz, tag++});
   }
-  qs.push_back({-1, 60, tag++});                   // negative: outside, not huge
+  qs.push_back({-1, 60, tag++});  // negative: outside, not huge
   qs.push_back({60, -1, tag++});
-  qs.push_back({kSide, 60, tag++});                // one past the extent
+  qs.push_back({kSide, 60, tag++});  // one past the extent
   qs.push_back({60, kSide, tag++});
   qs.push_back({100000, 60, tag++});
 
@@ -208,15 +212,15 @@ int main(int argc, char** argv) {
      oracle_led.resident, d.cnt_resident);
   ck(d.cnt_open_sky == oracle_led.open_sky, "and the open-sky counter", oracle_led.open_sky,
      d.cnt_open_sky);
-  ck(d.cnt_out_of_extent == oracle_led.out_of_extent, "and out-of-extent",
-     oracle_led.out_of_extent, d.cnt_out_of_extent);
+  ck(d.cnt_out_of_extent == oracle_led.out_of_extent, "and out-of-extent", oracle_led.out_of_extent,
+     d.cnt_out_of_extent);
 
   // NOT VACUOUS: the run must actually contain each interesting answer.
   ck(oracle_led.resident > 0 && oracle_led.open_sky > 0 && oracle_led.out_of_extent > 0,
      "and the run genuinely contained resident, sky AND out-of-extent answers, "
      "so the comparison above is not satisfied by one outcome repeated",
-     1, (oracle_led.resident > 0 && oracle_led.open_sky > 0 && oracle_led.out_of_extent > 0) ? 1
-                                                                                            : 0);
+     1,
+     (oracle_led.resident > 0 && oracle_led.open_sky > 0 && oracle_led.out_of_extent > 0) ? 1 : 0);
   // THE SKY-IS-COMMONEST CLAIM NEEDS THE WHOLE GRID, NOT THIS QUERY SET.
   //
   // My first version asserted `open_sky > resident` right here, on the directed
@@ -255,19 +259,19 @@ int main(int argc, char** argv) {
 
     const uint32_t swept_res = d.cnt_resident - rtl_res;
     const uint32_t swept_sky = d.cnt_open_sky - rtl_sky;
-    std::printf("  full grid sweep: %d patches -> rtl resident %u sky %u | oracle %u / %u\n",
-                total, swept_res, swept_sky, full.resident, full.open_sky);
+    std::printf("  full grid sweep: %d patches -> rtl resident %u sky %u | oracle %u / %u\n", total,
+                swept_res, swept_sky, full.resident, full.open_sky);
 
-    ck(answered == static_cast<std::size_t>(total), "the whole grid was swept",
-       total, static_cast<long long>(answered));
+    ck(answered == static_cast<std::size_t>(total), "the whole grid was swept", total,
+       static_cast<long long>(answered));
     ck(swept_res == full.resident && swept_sky == full.open_sky,
-       "and over the WHOLE grid the counters still match the oracle exactly",
-       full.resident, swept_res);
+       "and over the WHOLE grid the counters still match the oracle exactly", full.resident,
+       swept_res);
     ck(swept_res == 793,
        "with 793 patches of ground -- the figure terrain_rules 1.4 costs out "
        "from the island's 3.25 square km, derived independently",
        793, swept_res);
-    ck(swept_sky > swept_res * 10,   // 14,832 / 793 = 18.7x
+    ck(swept_sky > swept_res * 10,  // 14,832 / 793 = 18.7x
        "and SKY more than ten times commoner than ground, which is the property "
        "the whole block exists for: a store whose miss meant failure would "
        "report the overwhelming majority of an island as broken",
@@ -423,7 +427,11 @@ int main(int argc, char** argv) {
   {
     d.desc_pitch_log2 = 1;
 
-    struct Pattern { const char* name; int period; int high; };
+    struct Pattern {
+      const char* name;
+      int period;
+      int high;
+    };
     // Deliberately including period 1 / high 0 -- a consumer that is NEVER
     // ready -- because that is the case where a block that accepts a query it
     // cannot answer will overrun immediately rather than subtly.
@@ -486,11 +494,10 @@ int main(int argc, char** argv) {
       // THE COUNT IS THE CHECK THAT CATCHES A DROP. A lost answer shows up
       // here and nowhere else: every answer that DOES arrive is still correct,
       // which is why a value-comparing test sails past it.
-      ck(seen == kN, "every query issued under backpressure is answered exactly once",
-         kN, seen);
+      ck(seen == kN, "every query issued under backpressure is answered exactly once", kN, seen);
       ck(sent == static_cast<int>(bq.size()),
-         "and no query was recorded that the block did not accept",
-         static_cast<int>(bq.size()), sent);
+         "and no query was recorded that the block did not accept", static_cast<int>(bq.size()),
+         sent);
       ck(bad == 0, "with the outcome still matching the oracle under stalling", 0, bad);
       ck(tag_bad == 0,
          "and each answer still carrying ITS OWN query's tag -- the pairing a "

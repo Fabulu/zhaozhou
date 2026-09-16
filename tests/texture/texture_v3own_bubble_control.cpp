@@ -22,8 +22,7 @@ namespace {
 using Dut = Vzhao_texture_v3own;
 
 uint64_t context_of(unsigned index) {
-  return (0xBABB1E00ull + index * 0x101ull) << 32 |
-         (0xC0DE0000ull + index * 0x10007ull);
+  return (0xBABB1E00ull + index * 0x101ull) << 32 | (0xC0DE0000ull + index * 0x10007ull);
 }
 uint64_t final_of(uint16_t owner) {
   return (0x5Aull << 32) | (static_cast<uint64_t>(owner) * 0x10203ull + 0x77ull);
@@ -172,8 +171,8 @@ int main(int argc, char** argv) {
   const uint16_t owner = s.admit(context_of(0));
   for (int i = 0; i < 1000 && !context.gotError(); ++i) s.step();
   const bool fired = context.gotError();
-  std::printf("V3OWN_BYPASS_POINTER_ASSERT_CONTROL owner=%u fired=%d emitted=%u\n",
-              owner, fired ? 1 : 0, dut->ev_emitted_o);
+  std::printf("V3OWN_BYPASS_POINTER_ASSERT_CONTROL owner=%u fired=%d emitted=%u\n", owner,
+              fired ? 1 : 0, dut->ev_emitted_o);
   context.gotError(false);
   context.gotFinish(false);
   delete dut;
@@ -182,14 +181,12 @@ int main(int argc, char** argv) {
 
   constexpr int kOwners = 24;
   std::vector<uint16_t> owners;
-  for (int i = 0; i < kOwners; ++i)
-    owners.push_back(s.admit(context_of(static_cast<unsigned>(i))));
+  for (int i = 0; i < kOwners; ++i) owners.push_back(s.admit(context_of(static_cast<unsigned>(i))));
 
   // Keep the output closed until every prepared owner has passed COMBINE and
   // returned its final. The output queue itself fills; younger completed owners
   // remain behind the monotone fetch cursor.
-  for (int i = 0; i < 1000 &&
-                  (static_cast<int>(s.combined.size()) < kOwners || !s.finals.empty());
+  for (int i = 0; i < 1000 && (static_cast<int>(s.combined.size()) < kOwners || !s.finals.empty());
        ++i)
     s.step();
   for (int i = 0; i < 32; ++i) s.step();
@@ -206,14 +203,11 @@ int main(int argc, char** argv) {
     s.step();
   }
 
-  const bool preloaded = dut->out_valid_o && dut->ev_live_o == kOwners &&
-                         dut->ev_emitted_o == 0 &&
-                         static_cast<int>(s.combined.size()) == kOwners &&
-                         s.finals.empty();
+  const bool preloaded = dut->out_valid_o && dut->ev_live_o == kOwners && dut->ev_emitted_o == 0 &&
+                         static_cast<int>(s.combined.size()) == kOwners && s.finals.empty();
 
   s.out_ready = true;
-  for (int i = 0; i < 2000 && static_cast<int>(s.emitted_owner.size()) < kOwners; ++i)
-    s.step();
+  for (int i = 0; i < 2000 && static_cast<int>(s.emitted_owner.size()) < kOwners; ++i) s.step();
 
   int identity_errors = 0;
   for (int i = 0; i < kOwners && i < static_cast<int>(s.emitted_owner.size()); ++i) {
@@ -225,38 +219,35 @@ int main(int argc, char** argv) {
   for (size_t i = 1; i < s.emitted_cycle.size(); ++i)
     if (s.emitted_cycle[i] != s.emitted_cycle[i - 1] + 1) ++bubbles;
 
-  const uint32_t response_errors =
-      dut->ev_err_range_o + dut->ev_err_stale_o + dut->ev_err_unsol_o +
-      dut->ev_err_dup_o + dut->ev_err_final_o + dut->ev_err_issue_o;
+  const uint32_t response_errors = dut->ev_err_range_o + dut->ev_err_stale_o + dut->ev_err_unsol_o +
+                                   dut->ev_err_dup_o + dut->ev_err_final_o + dut->ev_err_issue_o;
   std::printf(
       "  preloaded %d combined %zu live %u | emitted %zu | bubbles %d | "
       "identity %d | response errors %u\n",
-      preloaded ? 1 : 0, s.combined.size(), dut->ev_live_o,
-      s.emitted_owner.size(), bubbles, identity_errors, response_errors);
+      preloaded ? 1 : 0, s.combined.size(), dut->ev_live_o, s.emitted_owner.size(), bubbles,
+      identity_errors, response_errors);
 
-  zhao::check(preloaded,
-              "more completed owners than OUTQD were prepared behind a closed consumer",
+  zhao::check(preloaded, "more completed owners than OUTQD were prepared behind a closed consumer",
               1, preloaded ? 1 : 0);
   zhao::check(pre_hold_errors == 0,
-              "the complete ordered output packet held throughout the closed interval",
-              0, pre_hold_errors);
-  zhao::check(s.emitted_owner.size() == kOwners,
-              "every prepared owner drained", kOwners, s.emitted_owner.size());
-  zhao::check(identity_errors == 0,
-              "drain order, full context and final payload remain exact",
-              0, identity_errors);
+              "the complete ordered output packet held throughout the closed interval", 0,
+              pre_hold_errors);
+  zhao::check(s.emitted_owner.size() == kOwners, "every prepared owner drained", kOwners,
+              s.emitted_owner.size());
+  zhao::check(identity_errors == 0, "drain order, full context and final payload remain exact", 0,
+              identity_errors);
   zhao::check(response_errors == 0,
-              "the bubble control does not exercise or redefine response refusal semantics",
-              0, response_errors);
+              "the bubble control does not exercise or redefine response refusal semantics", 0,
+              response_errors);
 
 #ifdef ZHAO_NO_SAME_EDGE_RELOAD_CONTROL
   zhao::check(bubbles > 0,
-              "POSITIVE CONTROL: removing same-edge reload creates a detected drain bubble",
-              1, bubbles > 0 ? 1 : 0);
+              "POSITIVE CONTROL: removing same-edge reload creates a detected drain bubble", 1,
+              bubbles > 0 ? 1 : 0);
 #else
   zhao::check(bubbles == 0,
-              "after release every prepared output handshakes on every clock until drain",
-              0, bubbles);
+              "after release every prepared output handshakes on every clock until drain", 0,
+              bubbles);
 #endif
 
   const int rc = zhao::report_and_exit("texture_v3own_bubble_control");

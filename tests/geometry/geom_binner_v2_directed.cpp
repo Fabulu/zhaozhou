@@ -102,21 +102,19 @@ bool same_meta(const Meta& a, const Meta& b) {
 }
 
 void drive_meta(const Meta& m) {
-  for (int i = 0; i < kMetaWords; ++i)
-    dut->tri_meta_i[i] = m[static_cast<size_t>(i)];
+  for (int i = 0; i < kMetaWords; ++i) dut->tri_meta_i[i] = m[static_cast<size_t>(i)];
 }
 
 Meta read_meta() {
   Meta m{};
-  for (int i = 0; i < kMetaWords; ++i)
-    m[static_cast<size_t>(i)] = dut->v2_job_meta_o[i];
+  for (int i = 0; i < kMetaWords; ++i) m[static_cast<size_t>(i)] = dut->v2_job_meta_o[i];
   m[kMetaWords - 1] &= kMetaTopMask;
   return m;
 }
 
-#define PARITY(field)                                                                    \
-  do {                                                                                   \
-    if (dut->old_##field != dut->v2_##field) fail("V1/V2 parity: " #field);             \
+#define PARITY(field)                                                       \
+  do {                                                                      \
+    if (dut->old_##field != dut->v2_##field) fail("V1/V2 parity: " #field); \
   } while (false)
 
 void check_parity() {
@@ -176,8 +174,8 @@ struct Tri {
   Meta meta{};
 };
 
-Tri make_tri(int ax_px, int ay_px, int bx_px, int by_px, int cx_px, int cy_px,
-             uint16_t src, const Meta& meta, bool token = true) {
+Tri make_tri(int ax_px, int ay_px, int bx_px, int by_px, int cx_px, int cy_px, uint16_t src,
+             const Meta& meta, bool token = true) {
   int64_t ax = static_cast<int64_t>(ax_px) * 256;
   int64_t ay = static_cast<int64_t>(ay_px) * 256;
   int64_t bx = static_cast<int64_t>(bx_px) * 256;
@@ -206,8 +204,7 @@ Tri make_tri(int ax_px, int ay_px, int bx_px, int by_px, int cx_px, int cy_px,
   for (int i = 0; i < 3; ++i) {
     t.e[i].kx = -(wy[i] - vy[i]);
     t.e[i].ky = wx[i] - vx[i];
-    t.e[i].kc = static_cast<int64_t>(vx[i]) * wy[i] -
-                static_cast<int64_t>(vy[i]) * wx[i];
+    t.e[i].kc = static_cast<int64_t>(vx[i]) * wy[i] - static_cast<int64_t>(vy[i]) * wx[i];
     t.e[i].tl = (vy[i] == wy[i]) ? (vx[i] < wx[i]) : (vy[i] < wy[i]);
   }
   const int min_sub_x = std::min({t.ax, t.bx, t.cx});
@@ -234,9 +231,8 @@ void drive_tri(const Tri& t) {
   dut->tri_kx2_i = m23(t.e[2].kx);
   dut->tri_ky2_i = m23(t.e[2].ky);
   dut->tri_kc2_i = m48(t.e[2].kc);
-  dut->tri_tl_i = static_cast<uint8_t>((t.e[0].tl ? 1u : 0u) |
-                                       (t.e[1].tl ? 2u : 0u) |
-                                       (t.e[2].tl ? 4u : 0u));
+  dut->tri_tl_i =
+      static_cast<uint8_t>((t.e[0].tl ? 1u : 0u) | (t.e[1].tl ? 2u : 0u) | (t.e[2].tl ? 4u : 0u));
   dut->tri_ax_i = m21(t.ax);
   dut->tri_ay_i = m21(t.ay);
   dut->tri_bx_i = m21(t.bx);
@@ -294,9 +290,9 @@ Job v2_job() {
 }
 
 bool same_structure(const Job& a, const Job& b) {
-  return a.ax == b.ax && a.ay == b.ay && a.bx == b.bx && a.by == b.by &&
-         a.cx == b.cx && a.cy == b.cy && a.first == b.first && a.last == b.last &&
-         a.tile_x == b.tile_x && a.tile_y == b.tile_y && a.src == b.src;
+  return a.ax == b.ax && a.ay == b.ay && a.bx == b.bx && a.by == b.by && a.cx == b.cx &&
+         a.cy == b.cy && a.first == b.first && a.last == b.last && a.tile_x == b.tile_x &&
+         a.tile_y == b.tile_y && a.src == b.src;
 }
 
 bool same_job(const Job& a, const Job& b, bool metadata) {
@@ -661,15 +657,17 @@ int main(int argc, char** argv) {
   const bool exact = failures == before && before == 0 && metadata_checks == 2 &&
                      hold_checks >= 4 && parity_checks > 0;
   if (!exact) {
-    std::printf("META-ADDRESS MUTANT DID NOT FIRE EXACTLY: failures=%d metadata_checks=%llu "
-                "hold_checks=%llu parity_checks=%llu\n",
-                failures, static_cast<unsigned long long>(metadata_checks),
-                static_cast<unsigned long long>(hold_checks),
-                static_cast<unsigned long long>(parity_checks));
+    std::printf(
+        "META-ADDRESS MUTANT DID NOT FIRE EXACTLY: failures=%d metadata_checks=%llu "
+        "hold_checks=%llu parity_checks=%llu\n",
+        failures, static_cast<unsigned long long>(metadata_checks),
+        static_cast<unsigned long long>(hold_checks),
+        static_cast<unsigned long long>(parity_checks));
     hard_exit(1);
   }
-  std::printf("PASS: metadata-address mutant fired exactly (A/B swapped, 2 mismatches; "
-              "denied X absent; structural streams/counters exact)\n");
+  std::printf(
+      "PASS: metadata-address mutant fired exactly (A/B swapped, 2 mismatches; "
+      "denied X absent; structural streams/counters exact)\n");
   hard_exit(0);
 #endif
 
@@ -691,8 +689,8 @@ int main(int argc, char** argv) {
   std::printf("  %llu cycle-settle parity checks; %llu clocks\n",
               static_cast<unsigned long long>(parity_checks),
               static_cast<unsigned long long>(cycles));
-  std::printf("%s: geom_binner_v2_directed (%d failures)\n",
-              failures == 0 ? "PASS" : "FAIL", failures);
+  std::printf("%s: geom_binner_v2_directed (%d failures)\n", failures == 0 ? "PASS" : "FAIL",
+              failures);
   hard_exit(failures == 0 ? 0 : 1);
 
   // Implicit `return 0` deadlocks the same way -- see zhao_sim.hpp.

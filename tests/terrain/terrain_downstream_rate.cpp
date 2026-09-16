@@ -70,9 +70,19 @@ std::vector<InTri> terrain_stream(int n, uint16_t src0) {
     const int x0 = cx * 256, x1 = (cx + 4) * 256, y0 = cy * 256, y1 = (cy + 4) * 256;
     InTri tr{};
     if (t == 0) {  // (i00, i11, i10)
-      tr.x[0] = x0; tr.y[0] = y0; tr.x[1] = x1; tr.y[1] = y1; tr.x[2] = x1; tr.y[2] = y0;
-    } else {       // (i00, i01, i11)
-      tr.x[0] = x0; tr.y[0] = y0; tr.x[1] = x0; tr.y[1] = y1; tr.x[2] = x1; tr.y[2] = y1;
+      tr.x[0] = x0;
+      tr.y[0] = y0;
+      tr.x[1] = x1;
+      tr.y[1] = y1;
+      tr.x[2] = x1;
+      tr.y[2] = y0;
+    } else {  // (i00, i01, i11)
+      tr.x[0] = x0;
+      tr.y[0] = y0;
+      tr.x[1] = x0;
+      tr.y[1] = y1;
+      tr.x[2] = x1;
+      tr.y[2] = y1;
     }
     tr.behind = 0;
     tr.src = static_cast<uint16_t>(src0 + i);
@@ -130,7 +140,10 @@ class Bench {
     const bool take = tb->tri_valid_i && tb->tri_ready_o;
     if (tb->out_valid_o && tb->out_ready_i) got.push_back(tb->out_src_id_o);
     if (tb->ret_valid_o) {
-      if (tb->ret_verdict_o == 0) ++ret_accept; else ++ret_reject;
+      if (tb->ret_verdict_o == 0)
+        ++ret_accept;
+      else
+        ++ret_reject;
     }
     step_edge();
     return take;
@@ -145,7 +158,10 @@ class Bench {
     const size_t out0 = got.size();
     int guard = 0;
     while (got.size() < out0 + expect_out && guard++ < 400000) {
-      if (i < in.size()) present(in[i]); else tb->tri_valid_i = 0;
+      if (i < in.size())
+        present(in[i]);
+      else
+        tb->tri_valid_i = 0;
       const size_t before = got.size();
       const bool take = step(stall_pct);
       if (take) ++i;
@@ -179,10 +195,11 @@ int main(int argc, char** argv) {
   {
     const std::vector<InTri> in = terrain_stream(kN, 0x1000);
     const uint64_t cycles = b.run(in, 0, kN);
-    std::printf("MEASURED downstream (GEOM.CLIP -> GEOM.SETUP): %d accepted triangles in %llu clocks "
-                "with the consumer always ready = %.4f clocks/triangle (fixed fill %lld)\n",
-                kN, static_cast<unsigned long long>(cycles),
-                static_cast<double>(cycles) / kN, static_cast<long long>(cycles) - kN);
+    std::printf(
+        "MEASURED downstream (GEOM.CLIP -> GEOM.SETUP): %d accepted triangles in %llu clocks "
+        "with the consumer always ready = %.4f clocks/triangle (fixed fill %lld)\n",
+        kN, static_cast<unsigned long long>(cycles), static_cast<double>(cycles) / kN,
+        static_cast<long long>(cycles) - kN);
     // 3 + 3 stages of fill; anything under N + 16 is one per clock.
     check(cycles >= static_cast<uint64_t>(kN), "downstream: not faster than one per clock (sanity)",
           kN, cycles);
@@ -197,7 +214,8 @@ int main(int argc, char** argv) {
           top->clip_submitted_o);
     check(top->setup_submitted_o == static_cast<uint32_t>(kN), "setup counter: submitted", kN,
           top->setup_submitted_o);
-    check(b.ret_accept == static_cast<uint64_t>(kN), "clip verdicts: all accepted", kN, b.ret_accept);
+    check(b.ret_accept == static_cast<uint64_t>(kN), "clip verdicts: all accepted", kN,
+          b.ret_accept);
     b.got.clear();
   }
 
@@ -207,22 +225,37 @@ int main(int argc, char** argv) {
     int rejects = 0;
     for (size_t i = 0; i < in.size(); ++i) {
       switch (i % 8) {
-        case 1: in[i].behind = 1; in[i].expect_accept = false; ++rejects; break;         // near plane
-        case 3: for (int k = 0; k < 3; ++k) in[i].x[k] += 300 * 256; in[i].expect_accept = false; ++rejects; break;  // off-screen
-        case 5: in[i].x[1] = in[i].x[0]; in[i].y[1] = in[i].y[0]; in[i].expect_accept = false; ++rejects; break;   // degenerate
-        default: break;
+        case 1:
+          in[i].behind = 1;
+          in[i].expect_accept = false;
+          ++rejects;
+          break;  // near plane
+        case 3:
+          for (int k = 0; k < 3; ++k) in[i].x[k] += 300 * 256;
+          in[i].expect_accept = false;
+          ++rejects;
+          break;  // off-screen
+        case 5:
+          in[i].x[1] = in[i].x[0];
+          in[i].y[1] = in[i].y[0];
+          in[i].expect_accept = false;
+          ++rejects;
+          break;  // degenerate
+        default:
+          break;
       }
     }
     const int accepted = kN - rejects;
     const uint64_t r0 = b.ret_reject;
     const uint64_t cycles = b.run(in, 0, static_cast<size_t>(accepted));
-    std::printf("MEASURED downstream with %d of %d rejected: %llu clocks = %.4f clocks per OFFERED triangle\n",
-                rejects, kN, static_cast<unsigned long long>(cycles),
-                static_cast<double>(cycles) / kN);
+    std::printf(
+        "MEASURED downstream with %d of %d rejected: %llu clocks = %.4f clocks per OFFERED "
+        "triangle\n",
+        rejects, kN, static_cast<unsigned long long>(cycles), static_cast<double>(cycles) / kN);
     check(cycles <= static_cast<uint64_t>(kN) + 16, "downstream: rejects cost no extra clocks",
           kN + 16, cycles);
-    check(b.ret_reject - r0 == static_cast<uint64_t>(rejects), "clip verdicts: every reject retired",
-          rejects, b.ret_reject - r0);
+    check(b.ret_reject - r0 == static_cast<uint64_t>(rejects),
+          "clip verdicts: every reject retired", rejects, b.ret_reject - r0);
     check(b.got.size() == static_cast<size_t>(accepted), "downstream: only accepted triangles out",
           accepted, b.got.size());
     size_t gi = 0;
@@ -237,8 +270,9 @@ int main(int argc, char** argv) {
   {
     const std::vector<InTri> in = terrain_stream(kN, 0x5000);
     const uint64_t cycles = b.run(in, 30, kN);
-    std::printf("downstream under a 30%% consumer stall: %d triangles in %llu clocks (%.3f/triangle)\n",
-                kN, static_cast<unsigned long long>(cycles), static_cast<double>(cycles) / kN);
+    std::printf(
+        "downstream under a 30%% consumer stall: %d triangles in %llu clocks (%.3f/triangle)\n", kN,
+        static_cast<unsigned long long>(cycles), static_cast<double>(cycles) / kN);
     check(b.got.size() == static_cast<size_t>(kN), "backpressure: every triangle came out", kN,
           b.got.size());
     bool in_order = true;
@@ -246,7 +280,8 @@ int main(int argc, char** argv) {
     check(in_order, "backpressure: in order", 1, in_order ? 1 : 0);
     // A stalled consumer at 30 % must cost roughly 30 % more clocks, never less
     // than the unstalled run: the check is that the stall REACHED the pipe.
-    check(cycles > static_cast<uint64_t>(kN) + 16, "backpressure: the stall was felt", kN + 16, cycles);
+    check(cycles > static_cast<uint64_t>(kN) + 16, "backpressure: the stall was felt", kN + 16,
+          cycles);
   }
 
   top->final();

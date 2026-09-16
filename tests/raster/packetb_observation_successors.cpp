@@ -19,8 +19,7 @@ void check(bool condition, const char* what, uint64_t expected, uint64_t actual)
   ++g_checks;
   if (condition) return;
   ++g_failures;
-  std::printf("FAIL: %s: expected %llu got %llu\n", what,
-              static_cast<unsigned long long>(expected),
+  std::printf("FAIL: %s: expected %llu got %llu\n", what, static_cast<unsigned long long>(expected),
               static_cast<unsigned long long>(actual));
 }
 
@@ -70,29 +69,22 @@ void drive_persp(Top& d, uint32_t i) {
 }
 
 bool same_rcp_cycle(const Top& d) {
-  return d.rcp_v3_ready_o == d.rcp_v4_ready_o &&
-         d.rcp_v3_valid_o == d.rcp_v4_valid_o &&
-         d.rcp_v3_r_o == d.rcp_v4_r_o &&
-         d.rcp_v3_k_o == d.rcp_v4_k_o &&
-         d.rcp_v3_zero_o == d.rcp_v4_zero_o &&
-         d.rcp_v3_tok_o == d.rcp_v4_tok_o &&
+  return d.rcp_v3_ready_o == d.rcp_v4_ready_o && d.rcp_v3_valid_o == d.rcp_v4_valid_o &&
+         d.rcp_v3_r_o == d.rcp_v4_r_o && d.rcp_v3_k_o == d.rcp_v4_k_o &&
+         d.rcp_v3_zero_o == d.rcp_v4_zero_o && d.rcp_v3_tok_o == d.rcp_v4_tok_o &&
          d.rcp_v3_accepted_o == d.rcp_v4_accepted_o &&
          d.rcp_v3_completed_o == d.rcp_v4_completed_o &&
          d.rcp_v3_mul_jobs_o == d.rcp_v4_mul_jobs_o &&
          d.rcp_v3_zero_jobs_o == d.rcp_v4_zero_jobs_o &&
          d.rcp_v3_phase_jobs_o == d.rcp_v4_phase_jobs_o &&
          d.rcp_v3_negcorr_jobs_o == d.rcp_v4_negcorr_jobs_o &&
-         d.rcp_v3_occupancy_o == d.rcp_v4_occupancy_o &&
-         d.rcp_v3_qerr_o == d.rcp_v4_qerr_o;
+         d.rcp_v3_occupancy_o == d.rcp_v4_occupancy_o && d.rcp_v3_qerr_o == d.rcp_v4_qerr_o;
 }
 
 bool same_persp_cycle(const Top& d) {
-  return d.persp_old_ready_o == d.persp_v2_ready_o &&
-         d.persp_old_valid_o == d.persp_v2_valid_o &&
-         d.persp_old_u_o == d.persp_v2_u_o &&
-         d.persp_old_v_o == d.persp_v2_v_o &&
-         d.persp_old_tag_o == d.persp_v2_tag_o &&
-         d.persp_old_sat_o == d.persp_v2_sat_o &&
+  return d.persp_old_ready_o == d.persp_v2_ready_o && d.persp_old_valid_o == d.persp_v2_valid_o &&
+         d.persp_old_u_o == d.persp_v2_u_o && d.persp_old_v_o == d.persp_v2_v_o &&
+         d.persp_old_tag_o == d.persp_v2_tag_o && d.persp_old_sat_o == d.persp_v2_sat_o &&
          d.persp_old_depth_zero_o == d.persp_v2_depth_zero_o &&
          d.persp_old_fragments_o == d.persp_v2_fragments_o &&
          d.persp_old_products_o == d.persp_v2_products_o &&
@@ -118,9 +110,8 @@ int main(int argc, char** argv) {
   tick(d);
   d.eval();
 
-  check(d.rcp_v4_idle_o && d.rcp_v4_occupancy_o == 0,
-        "RCP V4 starts idle with no owned reciprocal", 1,
-        d.rcp_v4_idle_o && d.rcp_v4_occupancy_o == 0);
+  check(d.rcp_v4_idle_o && d.rcp_v4_occupancy_o == 0, "RCP V4 starts idle with no owned reciprocal",
+        1, d.rcp_v4_idle_o && d.rcp_v4_occupancy_o == 0);
   check(d.persp_v2_idle_o && d.persp_v2_occupancy_o == 0,
         "PERSPUV V2 starts idle with no owned pair", 1,
         d.persp_v2_idle_o && d.persp_v2_occupancy_o == 0);
@@ -179,8 +170,7 @@ int main(int argc, char** argv) {
     // Independent lifecycle oracles: these counts are updated only from the
     // successor's real ingress/egress handshakes below.  Neither DUT occupancy
     // nor DUT idle participates in their construction.
-    if (rcp_obligations < 0 ||
-        d.rcp_v4_occupancy_o != static_cast<uint32_t>(rcp_obligations))
+    if (rcp_obligations < 0 || d.rcp_v4_occupancy_o != static_cast<uint32_t>(rcp_obligations))
       ++rcp_occupancy_mismatches;
     const bool rcp_should_idle = rcp_obligations == 0;
     if (static_cast<bool>(d.rcp_v4_idle_o) != rcp_should_idle) ++rcp_idle_mismatches;
@@ -192,8 +182,7 @@ int main(int argc, char** argv) {
       ++rcp_internal_obligation_cycles;
     }
 
-    if (persp_obligations < 0 ||
-        d.persp_v2_occupancy_o != static_cast<uint32_t>(persp_obligations))
+    if (persp_obligations < 0 || d.persp_v2_occupancy_o != static_cast<uint32_t>(persp_obligations))
       ++persp_occupancy_mismatches;
     const bool persp_should_idle = persp_obligations == 0;
     if (static_cast<bool>(d.persp_v2_idle_o) != persp_should_idle) ++persp_idle_mismatches;
@@ -269,16 +258,12 @@ int main(int argc, char** argv) {
     d.eval();
     if (!same_rcp_cycle(d)) ++rcp_cycle_mismatches;
     if (!same_persp_cycle(d)) ++persp_cycle_mismatches;
-    if (rcp_obligations < 0 ||
-        d.rcp_v4_occupancy_o != static_cast<uint32_t>(rcp_obligations))
+    if (rcp_obligations < 0 || d.rcp_v4_occupancy_o != static_cast<uint32_t>(rcp_obligations))
       ++rcp_occupancy_mismatches;
-    if (static_cast<bool>(d.rcp_v4_idle_o) != (rcp_obligations == 0))
-      ++rcp_idle_mismatches;
-    if (persp_obligations < 0 ||
-        d.persp_v2_occupancy_o != static_cast<uint32_t>(persp_obligations))
+    if (static_cast<bool>(d.rcp_v4_idle_o) != (rcp_obligations == 0)) ++rcp_idle_mismatches;
+    if (persp_obligations < 0 || d.persp_v2_occupancy_o != static_cast<uint32_t>(persp_obligations))
       ++persp_occupancy_mismatches;
-    if (static_cast<bool>(d.persp_v2_idle_o) != (persp_obligations == 0))
-      ++persp_idle_mismatches;
+    if (static_cast<bool>(d.persp_v2_idle_o) != (persp_obligations == 0)) ++persp_idle_mismatches;
     tick(d);
   }
   d.eval();
@@ -286,9 +271,8 @@ int main(int argc, char** argv) {
   std::printf(
       "  RCP v3/v4: issued %u retired %u, cycle/occupancy/idle mismatches %u/%u/%u, "
       "independent obligations %d, internal/held/drained cycles %u/%u/%u\n",
-      rcp_issued, rcp_retired, rcp_cycle_mismatches, rcp_occupancy_mismatches,
-      rcp_idle_mismatches, rcp_obligations, rcp_internal_obligation_cycles,
-      rcp_held_output_cycles, rcp_drained_cycles);
+      rcp_issued, rcp_retired, rcp_cycle_mismatches, rcp_occupancy_mismatches, rcp_idle_mismatches,
+      rcp_obligations, rcp_internal_obligation_cycles, rcp_held_output_cycles, rcp_drained_cycles);
   std::printf(
       "  PERSPUV old/v2: issued %u retired %u, cycle/occupancy/idle mismatches %u/%u/%u, "
       "independent obligations %d, internal/held/drained cycles %u/%u/%u\n",
@@ -299,8 +283,7 @@ int main(int argc, char** argv) {
   check(elapsed < 300000 && rcp_issued == kJobs && rcp_retired == kJobs,
         "RCP bounded workload fully accepted and retired", kJobs * 2,
         static_cast<uint64_t>(rcp_issued) + rcp_retired);
-  check(rcp_obligations == 0,
-        "RCP successor-handshake obligation oracle drains to zero", 0,
+  check(rcp_obligations == 0, "RCP successor-handshake obligation oracle drains to zero", 0,
         static_cast<uint64_t>(rcp_obligations));
   check(rcp_cycle_mismatches == 0,
         "RCP V4 matches V3 ready/valid/payload/every counter on every cycle", 0,
@@ -317,11 +300,10 @@ int main(int argc, char** argv) {
   check(rcp_idle_mismatches == 0,
         "RCP idle is exactly independent accepted-minus-retired equals zero every cycle", 0,
         rcp_idle_mismatches);
-  check(rcp_internal_obligation_cycles > 0 && rcp_held_output_cycles > 0 &&
-            rcp_drained_cycles > 0,
-        "RCP idle control exercised internal, held-output, and drained states", 1,
-        (rcp_internal_obligation_cycles > 0 && rcp_held_output_cycles > 0 &&
-         rcp_drained_cycles > 0));
+  check(
+      rcp_internal_obligation_cycles > 0 && rcp_held_output_cycles > 0 && rcp_drained_cycles > 0,
+      "RCP idle control exercised internal, held-output, and drained states", 1,
+      (rcp_internal_obligation_cycles > 0 && rcp_held_output_cycles > 0 && rcp_drained_cycles > 0));
   check(d.rcp_v4_accepted_o == kJobs && d.rcp_v4_completed_o == kJobs &&
             d.rcp_v4_zero_jobs_o == expected_rcp_zero &&
             d.rcp_v4_mul_jobs_o == 4u * (kJobs - expected_rcp_zero) &&
@@ -337,8 +319,7 @@ int main(int argc, char** argv) {
   check(elapsed < 300000 && persp_issued == kJobs && persp_retired == kJobs,
         "PERSPUV bounded workload fully accepted and retired", kJobs * 2,
         static_cast<uint64_t>(persp_issued) + persp_retired);
-  check(persp_obligations == 0,
-        "PERSPUV successor-handshake obligation oracle drains to zero", 0,
+  check(persp_obligations == 0, "PERSPUV successor-handshake obligation oracle drains to zero", 0,
         static_cast<uint64_t>(persp_obligations));
   check(persp_cycle_mismatches == 0,
         "PERSPUV V2 matches predecessor ready/valid/payload/every counter every cycle", 0,
@@ -360,19 +341,16 @@ int main(int argc, char** argv) {
         "PERSPUV idle control exercised internal, held-output, and drained states", 1,
         (persp_internal_obligation_cycles > 0 && persp_held_output_cycles > 0 &&
          persp_drained_cycles > 0));
-  check(d.persp_v2_fragments_o == kJobs &&
-            d.persp_v2_zero_products_o == expected_persp_zero &&
+  check(d.persp_v2_fragments_o == kJobs && d.persp_v2_zero_products_o == expected_persp_zero &&
             d.persp_v2_products_o == 2u * (kJobs - expected_persp_zero),
         "PERSPUV final accounting closes independently", 1,
-        (d.persp_v2_fragments_o == kJobs &&
-         d.persp_v2_zero_products_o == expected_persp_zero &&
+        (d.persp_v2_fragments_o == kJobs && d.persp_v2_zero_products_o == expected_persp_zero &&
          d.persp_v2_products_o == 2u * (kJobs - expected_persp_zero)));
 
   if (g_failures == 0)
     std::printf("[packetb_observation_successors] %d checks passed\n", g_checks);
   else
-    std::printf("[packetb_observation_successors] %d/%d checks FAILED\n",
-                g_failures, g_checks);
+    std::printf("[packetb_observation_successors] %d/%d checks FAILED\n", g_failures, g_checks);
   std::fflush(nullptr);
   std::_Exit(g_failures == 0 ? 0 : 1);
 

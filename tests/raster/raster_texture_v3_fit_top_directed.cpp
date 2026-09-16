@@ -41,14 +41,12 @@ struct Activity {
 int checks = 0;
 int failures = 0;
 
-void check(bool condition, const char* message, uint64_t expected = 1,
-           uint64_t actual = 0) {
+void check(bool condition, const char* message, uint64_t expected = 1, uint64_t actual = 0) {
   ++checks;
   if (!condition) {
     ++failures;
     std::printf("FAIL: %s (expected %llu, got %llu)\n", message,
-                static_cast<unsigned long long>(expected),
-                static_cast<unsigned long long>(actual));
+                static_cast<unsigned long long>(expected), static_cast<unsigned long long>(actual));
   }
 }
 
@@ -83,12 +81,10 @@ Activity activity() {
   svBit saw_fill = 0;
   svBit saw_fb_stall = 0;
   svBitVecVal generation = 0;
-  zhao_g8a_get_activity(
-      &a.jobs, &a.fills, &a.fill_beats, &a.fb_words, &a.tiles,
-      &a.cfg, &a.palette, &setup_fault, &setup_fault_cause, &frame_fault,
-      &fragment_error, &saw_green, &saw_index5, &first_nonzero_fb,
-      &saw_candidate, &saw_fragment, &saw_fill, &saw_fb_stall,
-      &generation);
+  zhao_g8a_get_activity(&a.jobs, &a.fills, &a.fill_beats, &a.fb_words, &a.tiles, &a.cfg, &a.palette,
+                        &setup_fault, &setup_fault_cause, &frame_fault, &fragment_error, &saw_green,
+                        &saw_index5, &first_nonzero_fb, &saw_candidate, &saw_fragment, &saw_fill,
+                        &saw_fb_stall, &generation);
   a.setup_fault = setup_fault != 0;
   a.setup_fault_cause = static_cast<uint8_t>(setup_fault_cause);
   a.frame_fault = frame_fault != 0;
@@ -142,58 +138,47 @@ int main(int argc, char** argv) {
   }
   a = activity();
 
-  check(clocks < kLimit, "two G8A tiles complete within the bounded run", 1,
-        clocks < kLimit);
-  check(a.palette == 258, "palette BEGIN/256-WRITE/END accepted exactly", 258,
-        a.palette);
+  check(clocks < kLimit, "two G8A tiles complete within the bounded run", 1, clocks < kLimit);
+  check(a.palette == 258, "palette BEGIN/256-WRITE/END accepted exactly", 258, a.palette);
   check(a.cfg == 3, "binding BEGIN/ROW/END accepted exactly", 3, a.cfg);
-  check(a.active_generation == 1, "binding generation one activated", 1,
-        a.active_generation);
-  check(a.jobs >= 2 && a.tiles >= 2,
-        "legal repeating tile jobs and completions are active", 2, a.tiles);
-  check(a.fills >= 1 && a.saw_fill, "real cache miss/fill path is active", 1,
-        a.fills);
-  check(a.fill_beats == 8 * a.fills,
-        "every accepted cache fill receives exactly eight halfwords",
+  check(a.active_generation == 1, "binding generation one activated", 1, a.active_generation);
+  check(a.jobs >= 2 && a.tiles >= 2, "legal repeating tile jobs and completions are active", 2,
+        a.tiles);
+  check(a.fills >= 1 && a.saw_fill, "real cache miss/fill path is active", 1, a.fills);
+  check(a.fill_beats == 8 * a.fills, "every accepted cache fill receives exactly eight halfwords",
         8 * a.fills, a.fill_beats);
   check(a.fb_words == 256 * a.tiles,
-        "every completed tile emits exactly 256 resolved framebuffer words",
-        256 * a.tiles, a.fb_words);
-  check(a.saw_index5,
-        "CLUT path returns raw index five, opaque green, and zero status");
-  check(a.first_nonzero_fb != 0,
-        "textured fragments produce a nonzero resolved framebuffer value", 1,
-        a.first_nonzero_fb);
+        "every completed tile emits exactly 256 resolved framebuffer words", 256 * a.tiles,
+        a.fb_words);
+  check(a.saw_index5, "CLUT path returns raw index five, opaque green, and zero status");
+  check(a.first_nonzero_fb != 0, "textured fragments produce a nonzero resolved framebuffer value",
+        1, a.first_nonzero_fb);
   check(a.saw_candidate && a.saw_fragment,
         "Packet-C candidate and real fragment stages are active");
   check(a.saw_fb_stall, "deterministic responder exercises framebuffer backpressure");
   check(!a.setup_fault && !a.frame_fault && !a.fragment_error,
         "legal G8A traffic raises no setup/frame/fragment fault", 0,
         static_cast<unsigned>(a.setup_fault || a.frame_fault || a.fragment_error));
-  check(signature_count >= 16, "MISR exposes nonconstant connected activity", 16,
-        signature_count);
+  check(signature_count >= 16, "MISR exposes nonconstant connected activity", 16, signature_count);
   check(epoch_changes >= 64, "MISR source epoch traverses the complete schedule", 64,
         epoch_changes);
 
   if (failures != 0) {
-    std::printf("[raster_texture_v3_fit_top] %d of %d checks FAILED ", failures,
-                checks);
-    std::printf("after %u clocks jobs=%u fills=%u beats=%u fb=%u tiles=%u "
-                "cfg=%u pal=%u gen=%u setup_fault=%u cause=%x frame_fault=%u frag_error=%u\n",
-                clocks, a.jobs, a.fills, a.fill_beats, a.fb_words, a.tiles,
-                a.cfg, a.palette, a.active_generation,
-                static_cast<unsigned>(a.setup_fault),
-                static_cast<unsigned>(a.setup_fault_cause),
-                static_cast<unsigned>(a.frame_fault),
-                static_cast<unsigned>(a.fragment_error));
+    std::printf("[raster_texture_v3_fit_top] %d of %d checks FAILED ", failures, checks);
+    std::printf(
+        "after %u clocks jobs=%u fills=%u beats=%u fb=%u tiles=%u "
+        "cfg=%u pal=%u gen=%u setup_fault=%u cause=%x frame_fault=%u frag_error=%u\n",
+        clocks, a.jobs, a.fills, a.fill_beats, a.fb_words, a.tiles, a.cfg, a.palette,
+        a.active_generation, static_cast<unsigned>(a.setup_fault),
+        static_cast<unsigned>(a.setup_fault_cause), static_cast<unsigned>(a.frame_fault),
+        static_cast<unsigned>(a.fragment_error));
     std::fflush(nullptr);
     std::_Exit(1);
   }
   std::printf(
       "[raster_texture_v3_fit_top] %d checks passed after %u clocks; "
       "jobs=%u fills=%u beats=%u fb=%u tiles=%u signatures=%u\n",
-      checks, clocks, a.jobs, a.fills, a.fill_beats, a.fb_words, a.tiles,
-      signature_count);
+      checks, clocks, a.jobs, a.fills, a.fill_beats, a.fb_words, a.tiles, signature_count);
   std::fflush(nullptr);
   std::_Exit(0);
 

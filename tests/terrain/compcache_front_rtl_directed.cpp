@@ -102,9 +102,9 @@ void ck(bool ok, const char* what, long long want = 1, long long got = 0) {
 constexpr int kLW = 33, kLH = 33;
 constexpr int kVerts = kLW * kLH;  // 1,089
 constexpr int kCW = kLW - 1, kCH = kLH - 1;
-constexpr int kCells = kCW * kCH;  // 1,024
-constexpr int kSW = 9, kSH = 9;    // the shrunken instance
-constexpr int kSVerts = kSW * kSH; // 81
+constexpr int kCells = kCW * kCH;   // 1,024
+constexpr int kSW = 9, kSH = 9;     // the shrunken instance
+constexpr int kSVerts = kSW * kSH;  // 81
 
 constexpr uint32_t kPoison = 0x5BADF00Du;
 
@@ -115,8 +115,8 @@ inline uint32_t word(uint32_t field, uint32_t patch, uint32_t idx) {
   return (field << 28) | (patch << 24) | idx;
 }
 inline uint8_t subst(uint32_t patch, int ci, int cj) {
-  return static_cast<uint8_t>(
-      (static_cast<uint32_t>(ci) + 2u * static_cast<uint32_t>(cj) + patch) & 3u);
+  return static_cast<uint8_t>((static_cast<uint32_t>(ci) + 2u * static_cast<uint32_t>(cj) + patch) &
+                              3u);
 }
 
 // ---- the source-id scheme --------------------------------------------------
@@ -218,8 +218,8 @@ ReadPlan build_full_read_plan(const tr::ComposedLattice* L, int pad_to = 0) {
         // top then bottom for the SAME vertex, so consecutive requests differ
         // only in the surface bit: a serve path that failed to re-latch the
         // surface would answer with the previous plane.
-        lr.push_back({true, static_cast<uint8_t>(vi), static_cast<uint8_t>(vj),
-                      static_cast<uint8_t>(s)});
+        lr.push_back(
+            {true, static_cast<uint8_t>(vi), static_cast<uint8_t>(vj), static_cast<uint8_t>(s)});
         ++k;
         if (k % 7 == 0) lr.push_back({false, 0, 0, 0});    // a gap: expect poison
         if (k % 13 == 0) lr.push_back(lr[lr.size() - 2]);  // ask again: expect the same
@@ -443,8 +443,8 @@ void run(Top& d, const std::vector<Step>& plan, Producer* prod, Stats& st, const
         std::printf(
             "    [%s] cycle %zu: req(vi=%u,vj=%u,s=%u,lreq=%u) h %08X/%08X wx %08X/%08X "
             "wz %08X/%08X | cell(ci=%u,cj=%u,creq=%u) sub %u/%u  (rtl/oracle)\n",
-            tag, c - 1, p.vi, p.vj, p.surf, p.lreq, d.lat_h, p.eh, d.lat_wx, p.ewx, d.lat_wz,
-            p.ewz, p.ci, p.cj, p.creq, d.cs_substance, p.esub);
+            tag, c - 1, p.vi, p.vj, p.surf, p.lreq, d.lat_h, p.eh, d.lat_wx, p.ewx, d.lat_wz, p.ewz,
+            p.ci, p.cj, p.creq, d.cs_substance, p.esub);
       }
     }
     zhao::tick(d);
@@ -471,7 +471,6 @@ void quiet(Top& d, int n = 1) {
   d.cs_req = 0;
   for (int i = 0; i < n; ++i) zhao::tick(d);
 }
-
 
 // ============================================================================
 // THE RANDOMISED PHASE
@@ -628,8 +627,10 @@ void random_phase(Top& d, const tr::ComposedLattice& latS) {
 
     uint8_t fill_start = 0;
     if (!m_fill && gen < kNGen) {
-      if (start_wait > 0) --start_wait;
-      else fill_start = 1;
+      if (start_wait > 0)
+        --start_wait;
+      else
+        fill_start = 1;
     }
 
     uint8_t st_valid = 0;
@@ -637,8 +638,10 @@ void random_phase(Top& d, const tr::ComposedLattice& latS) {
     uint16_t st_src = 0xFFFFu;
     if (m_fill && rec < kVerts) {
       if (!armed) {
-        if (static_cast<int>(rg.next() % 100u) >= stall_pct) armed = true;
-        else ++prod_idle;
+        if (static_cast<int>(rg.next() % 100u) >= stall_pct)
+          armed = true;
+        else
+          ++prod_idle;
       }
       if (armed) {
         st_valid = 1;
@@ -736,8 +739,10 @@ void random_phase(Top& d, const tr::ComposedLattice& latS) {
     }
     const bool lat_in_range = (vi < kLW) && (vj < kLH);
     if (lat_req) {
-      if (lat_in_range) ++lat_in;
-      else ++lat_out;
+      if (lat_in_range)
+        ++lat_in;
+      else
+        ++lat_out;
     }
 
     uint8_t cs_req = 0, ci = 0, cj = 0;
@@ -939,14 +944,16 @@ void random_phase(Top& d, const tr::ComposedLattice& latS) {
 
     if (lat_req && !lat_in_range) ++m_latoob;
     if (s_lat_req) {
-      if (s_lat_in_r) ++s_lat_in;
+      if (s_lat_in_r)
+        ++s_lat_in;
       else {
         ++m_slatoob;
         ++s_lat_out;
       }
     }
     if (s_cs_req) {
-      if (s_cs_in_r) ++s_cs_in;
+      if (s_cs_in_r)
+        ++s_cs_in;
       else {
         ++m_scsoob;
         ++s_cs_out;
@@ -1017,10 +1024,14 @@ void random_phase(Top& d, const tr::ComposedLattice& latS) {
       // so neither depends on a seed. The rest are drawn across the whole span
       // of a fill.
       rel_armed = (m_filled < kNGen);
-      if (handovers == 1) rel_wait = 3600;        // late: generation 1 parks
-      else if (handovers == 2) rel_wait = 300;    // early: generation 2 does not
-      else if (handovers == 3) rel_wait = 3600;   // late: generation 3 parks too
-      else rel_wait = 1200 + static_cast<int>(rg.below(2800));
+      if (handovers == 1)
+        rel_wait = 3600;  // late: generation 1 parks
+      else if (handovers == 2)
+        rel_wait = 300;  // early: generation 2 does not
+      else if (handovers == 3)
+        rel_wait = 3600;  // late: generation 3 parks too
+      else
+        rel_wait = 1200 + static_cast<int>(rg.below(2800));
     } else if (m_serve && relpulse) {
       m_serve = false;
     }
@@ -1136,16 +1147,16 @@ void random_phase(Top& d, const tr::ComposedLattice& latS) {
      "many cycles as there were distinct offers, which is exactly the gap between the two "
      "readings of fill_overrun_o",
      1, (m_overrun >= 10 && refused_cycles > 4 * m_overrun) ? 1 : 0);
-  ck(co_req_handover >= 3 && co_handover_relhigh >= 1 && co_start_req >= 2 &&
-         co_take_req > 2000 && co_req_relhigh > 5 && co_req_unserved > 200,
+  ck(co_req_handover >= 3 && co_handover_relhigh >= 1 && co_start_req >= 2 && co_take_req > 2000 &&
+         co_req_relhigh > 5 && co_req_unserved > 200,
      "and the events actually collided: requests were in flight on the clock a buffer changed "
      "hands, a release was HIGH across a handover without anybody placing it there, thousands "
      "of record acceptances landed on request cycles, fills started on request cycles, and "
      "hundreds of requests arrived with nothing served. That coincidence space is what a "
      "hand-ordered directed phase cannot reach",
      1,
-     (co_req_handover >= 3 && co_handover_relhigh >= 1 && co_start_req >= 2 &&
-      co_take_req > 2000 && co_req_relhigh > 5 && co_req_unserved > 200)
+     (co_req_handover >= 3 && co_handover_relhigh >= 1 && co_start_req >= 2 && co_take_req > 2000 &&
+      co_req_relhigh > 5 && co_req_unserved > 200)
          ? 1
          : 0);
   ck(covered >= 1700,
@@ -1162,8 +1173,7 @@ void random_phase(Top& d, const tr::ComposedLattice& latS) {
 
   // ---- and now the answers -------------------------------------------------
   ck(handovers == kNGen && m_filled == kNGen,
-     "all six generations were filled and handed over inside the cycle budget", kNGen,
-     handovers);
+     "all six generations were filled and handed over inside the cycle budget", kNGen, handovers);
   ck(placement_late == 0,
      "with every fill's 66 placement words and 1,024 cells written before its handover, so a "
      "content mismatch can only be the block's",
@@ -1194,9 +1204,10 @@ void random_phase(Top& d, const tr::ComposedLattice& latS) {
      "again by the time anybody looks",
      0, bad_filled + bad_served + bad_overrun + bad_latoob + bad_csoob);
   if (bad_filled + bad_served + bad_overrun + bad_latoob + bad_csoob != 0)
-    std::printf("    [random] counter mismatch cycles: filled %d served %d overrun %d "
-                "lat_oob %d cs_oob %d\n",
-                bad_filled, bad_served, bad_overrun, bad_latoob, bad_csoob);
+    std::printf(
+        "    [random] counter mismatch cycles: filled %d served %d overrun %d "
+        "lat_oob %d cs_oob %d\n",
+        bad_filled, bad_served, bad_overrun, bad_latoob, bad_csoob);
   ck(bad_sctr == 0, "and the 9 x 9 instance's two out-of-range counters likewise", 0, bad_sctr);
   ck(m_csoob == 0 && d.cs_oob == b_csoob,
      "cs_oob_o is still zero at 33 x 33 after thousands of randomised cell requests, which is "
@@ -1269,17 +1280,15 @@ int main(int argc, char** argv) {
        "and distinguishes the two SURFACE planes at every vertex, so a swap is visible "
        "everywhere rather than at a lucky one",
        kVerts, surf_diff);
-    ck(cursor_diff == kVerts - 1,
-       "and an OFF-BY-ONE write cursor at every vertex it could land on", kVerts - 1,
-       cursor_diff);
+    ck(cursor_diff == kVerts - 1, "and an OFF-BY-ONE write cursor at every vertex it could land on",
+       kVerts - 1, cursor_diff);
     ck(patch_diff == kVerts, "and the wrong PARITY served, at every vertex", kVerts, patch_diff);
     ck(axis_diff == kLW, "and wx swapped with wz, at every column", kLW, axis_diff);
     ck(cell_tr == 768,
        "the 2-bit cell plane cannot carry a tag, so its distinguishing power is MEASURED: "
        "768 of 1,024 cells change under a transposed cell index",
        768, cell_tr);
-    ck(cell_patch == kCells, "and all 1,024 change between patch generations", kCells,
-       cell_patch);
+    ck(cell_patch == kCells, "and all 1,024 change between patch generations", kCells, cell_patch);
   }
 
   // =========================================================================
@@ -1428,8 +1437,8 @@ int main(int argc, char** argv) {
 
     ck(d.fill_records == kVerts, "the fill took exactly 1,089 records", kVerts, d.fill_records);
     ck(d.patches_filled == 1, "one patch was filled", 1, d.patches_filled);
-    ck(d.serve_valid == 1, "and it handed over immediately, because nothing was being served",
-       1, d.serve_valid);
+    ck(d.serve_valid == 1, "and it handed over immediately, because nothing was being served", 1,
+       d.serve_valid);
     ck(d.fill_busy == 0, "the fill is finished", 0, d.fill_busy);
     ck(d.patches_served == 0, "and nothing has been retired yet", 0, d.patches_served);
     ck(d.fill_overrun == 0, "with no refused records", 0, d.fill_overrun);
@@ -1599,8 +1608,8 @@ int main(int argc, char** argv) {
   {
     d.fill_start = 1;
     d.eval();
-    ck(d.fill_accept == 1, "a second fill starts while the first patch is still being served",
-       1, d.fill_accept);
+    ck(d.fill_accept == 1, "a second fill starts while the first patch is still being served", 1,
+       d.fill_accept);
     ck(d.serve_valid == 1, "with that patch still available throughout", 1, d.serve_valid);
     zhao::tick(d);
     d.fill_start = 0;
@@ -1666,8 +1675,8 @@ int main(int argc, char** argv) {
   // this case -- and only this case, i.e. every patch when the pipeline works.
   {
     ck(d.fill_busy == 1 && d.fill_done == 1 && d.serve_valid == 1,
-       "the simultaneous case is set up: a completed fill waiting, and a patch being served",
-       1, (d.fill_busy && d.fill_done && d.serve_valid) ? 1 : 0);
+       "the simultaneous case is set up: a completed fill waiting, and a patch being served", 1,
+       (d.fill_busy && d.fill_done && d.serve_valid) ? 1 : 0);
     const uint32_t served0 = d.patches_served;
     d.serve_release = 1;
     d.eval();
@@ -1699,8 +1708,8 @@ int main(int argc, char** argv) {
        0, st.h_bad + st.wx_bad + st.wz_bad + st.sub_bad);
     ck(d.serve_src_id == src_id(1, kVerts - 1),
        "and serve_src_id_o moved with it -- generation B's last record, so a consumer can "
-       "prove the swap happened without reading a single height", src_id(1, kVerts - 1),
-       d.serve_src_id);
+       "prove the swap happened without reading a single height",
+       src_id(1, kVerts - 1), d.serve_src_id);
   }
 
   // =========================================================================
@@ -1724,8 +1733,7 @@ int main(int argc, char** argv) {
   {
     d.fill_start = 1;
     d.eval();
-    ck(d.fill_accept == 1, "a third fill starts while patch B is being served", 1,
-       d.fill_accept);
+    ck(d.fill_accept == 1, "a third fill starts while patch B is being served", 1, d.fill_accept);
     zhao::tick(d);
     d.fill_start = 0;
 
@@ -1780,9 +1788,8 @@ int main(int argc, char** argv) {
        "records: 4 in total against the 27 clocks the condition was true for. The counter "
        "counts what its name says",
        4, static_cast<long long>(d.fill_overrun - ov0));
-    ck(d.fill_records == kVerts,
-       "with the write cursor still stopped at 1,089 through all of it", kVerts,
-       d.fill_records);
+    ck(d.fill_records == kVerts, "with the write cursor still stopped at 1,089 through all of it",
+       kVerts, d.fill_records);
     ck(d.serve_src_id == src_id(1, kVerts - 1),
        "and the served patch's identity untouched by any of it", src_id(1, kVerts - 1),
        d.serve_src_id);
@@ -1830,8 +1837,8 @@ int main(int argc, char** argv) {
     ck(d.patches_filled - filled0 == 1, "the fill is counted once", 1,
        static_cast<long long>(d.patches_filled - filled0));
     ck(d.serve_valid == 1, "a patch is available", 1, d.serve_valid);
-    ck(d.serve_src_id == src_id(3, kVerts - 1), "and it is patch C, by name",
-       src_id(3, kVerts - 1), d.serve_src_id);
+    ck(d.serve_src_id == src_id(3, kVerts - 1), "and it is patch C, by name", src_id(3, kVerts - 1),
+       d.serve_src_id);
 
     const ReadPlan P = build_full_read_plan(&latC);
     Stats st;
@@ -1885,8 +1892,8 @@ int main(int argc, char** argv) {
 
   ck(d.patches_filled == 3 && d.patches_served == 3 && d.fill_overrun == 5,
      "final ledger: 3 filled, 3 served, 5 refused records (1 from section 9 and the 4 "
-     "distinct offers of section 12, against the 28 clocks the refusal was asserted for)", 1,
-     (d.patches_filled == 3 && d.patches_served == 3 && d.fill_overrun == 5) ? 1 : 0);
+     "distinct offers of section 12, against the 28 clocks the refusal was asserted for)",
+     1, (d.patches_filled == 3 && d.patches_served == 3 && d.fill_overrun == 5) ? 1 : 0);
 
   // =========================================================================
   // 15. THE 9 x 9 INSTANCE: cs_oob, and the legacy single-surface page
@@ -2025,8 +2032,7 @@ int main(int argc, char** argv) {
       zhao::tick(d);
     }
     ck(lpoison_bad == 0, "and a 9 x 9 lattice request at vi >= 9 is poisoned", 0, lpoison_bad);
-    ck(d.s_lat_oob - loob0 == 11, "and counted", 11,
-       static_cast<long long>(d.s_lat_oob - loob0));
+    ck(d.s_lat_oob - loob0 == 11, "and counted", 11, static_cast<long long>(d.s_lat_oob - loob0));
   }
 
   std::printf(

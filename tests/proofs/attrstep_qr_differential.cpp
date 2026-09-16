@@ -95,8 +95,10 @@ static Pair edecomp(i128 n, i128 A) {  // A > 0
 //   rounded = q; if (2r > A) ++rounded; else if (2r == A && q >= 0) ++rounded;
 static i128 qr_round(const Pair& p, i128 A) {
   i128 v = p.q;
-  if (2 * p.r > A) v += 1;
-  else if (2 * p.r == A && p.q >= 0) v += 1;
+  if (2 * p.r > A)
+    v += 1;
+  else if (2 * p.r == A && p.q >= 0)
+    v += 1;
   return v;
 }
 
@@ -216,7 +218,7 @@ struct Rtl {
     m->area_i = area;  // 47-bit port
     m->v_valid_i = 1;
     // wait for the accept edge
-    for (int guard = 0; ; ++guard) {
+    for (int guard = 0;; ++guard) {
       m->eval();
       const bool fire = m->v_valid_i && m->v_ready_o;
       tick();
@@ -229,7 +231,7 @@ struct Rtl {
     m->v_valid_i = 0;
     m->r_ready_i = 1;
     Res res{};
-    for (int guard = 0; ; ++guard) {
+    for (int guard = 0;; ++guard) {
       m->eval();
       if (m->r_valid_o) {
         res.q = static_cast<int32_t>(m->q_o);
@@ -260,8 +262,8 @@ struct Counters {
                                    // characterized negative-exact-half case
   long ties_pos = 0;
   long ties_neg = 0;
-  long crossings = 0;   // rows whose N changes sign mid-row
-  long wraps = 0;       // r >= A wrap events in the walk
+  long crossings = 0;  // rows whose N changes sign mid-row
+  long wraps = 0;      // r >= A wrap events in the walk
   long rtl_divides = 0;
 };
 
@@ -273,8 +275,10 @@ static void check_one(Rtl& rtl, Counters& c, i128 n, uint64_t area) {
   ++c.rtl_divides;
   ++c.checks;
   if (2 * p.r == A) {
-    if (p.q >= 0) ++c.ties_pos;
-    else ++c.ties_neg;
+    if (p.q >= 0)
+      ++c.ties_pos;
+    else
+      ++c.ties_neg;
   }
   if (r.ovf) {
     std::printf("FATAL: unexpected RTL overflow (case construction bug)\n");
@@ -284,8 +288,8 @@ static void check_one(Rtl& rtl, Counters& c, i128 n, uint64_t area) {
     ++c.qr_vs_rtl_mismatch;
     if (c.qr_vs_rtl_mismatch <= 5)
       std::printf("  QR vs RTL MISMATCH: n=%lld... area=%llu qr=%lld rtl=%ld\n",
-                  static_cast<long long>(n), (unsigned long long)area,
-                  static_cast<long long>(mine), static_cast<long>(r.q));
+                  static_cast<long long>(n), (unsigned long long)area, static_cast<long long>(mine),
+                  static_cast<long>(r.q));
   }
   const int32_t z = zref::render::div_rhu_s128(n, A);
   if (mine != static_cast<i128>(z)) {
@@ -307,8 +311,7 @@ int main(int argc, char** argv) {
   std::printf("== A. the law: q/r vs ACTUAL RTL divider vs ACTUAL zref ==\n");
   // directed ties on even areas, both signs, small and enormous
   {
-    const uint64_t areas_even[] = {2, 4, 6, 256, 1000, 1u << 20,
-                                   (1ULL << 40), (1ULL << 46) - 2};
+    const uint64_t areas_even[] = {2, 4, 6, 256, 1000, 1u << 20, (1ULL << 40), (1ULL << 46) - 2};
     for (uint64_t A : areas_even) {
       for (int64_t k : {0LL, 1LL, 2LL, 7LL, 1000LL, 2000000000LL}) {
         const i128 half = static_cast<i128>(A) / 2;
@@ -321,8 +324,7 @@ int main(int argc, char** argv) {
     for (uint64_t A : areas_odd) {
       for (int64_t k : {0LL, 1LL, 12345LL}) {
         for (int64_t e : {-1LL, 0LL, 1LL}) {
-          const i128 n = static_cast<i128>(k) * static_cast<i128>(A) +
-                         static_cast<i128>(A) / 2 + e;
+          const i128 n = static_cast<i128>(k) * static_cast<i128>(A) + static_cast<i128>(A) / 2 + e;
           check_one(rtl, c, n, A);
           check_one(rtl, c, -n, A);
         }
@@ -340,8 +342,8 @@ int main(int argc, char** argv) {
   }
   std::printf("   %ld checks: qr-vs-RTL mismatches %ld (MUST be 0)\n", c.checks,
               c.qr_vs_rtl_mismatch);
-  std::printf("   ties driven: %ld positive, %ld negative (both MUST be > 0)\n",
-              c.ties_pos, c.ties_neg);
+  std::printf("   ties driven: %ld positive, %ld negative (both MUST be > 0)\n", c.ties_pos,
+              c.ties_neg);
   std::printf("   qr-vs-zref differences %ld, uncharacterized %ld (MUST be 0)\n",
               c.qr_vs_zref_mismatch, c.zref_diff_not_neg_tie);
   if (c.qr_vs_rtl_mismatch != 0 || c.ties_pos == 0 || c.ties_neg == 0 ||
@@ -369,10 +371,11 @@ int main(int argc, char** argv) {
     const i128 big = (static_cast<i128>(INT32_MAX) + 7) * static_cast<i128>(A);
     const Rtl::Res r = rtl.divide(big, A);
     const int32_t z = zref::render::div_rhu_s128(big, static_cast<i128>(A));
-    std::printf("   boundary q=2^31+6: RTL ovf=%d q=%ld ; zref saturates to %ld\n",
-                r.ovf ? 1 : 0, static_cast<long>(r.q), static_cast<long>(z));
+    std::printf("   boundary q=2^31+6: RTL ovf=%d q=%ld ; zref saturates to %ld\n", r.ovf ? 1 : 0,
+                static_cast<long>(r.q), static_cast<long>(z));
     if (!r.ovf && r.q < 0)
-      std::printf("   ^ DEFECT CONFIRMED: positive quotient in [2^31,2^32) wrapped negative, unflagged\n");
+      std::printf(
+          "   ^ DEFECT CONFIRMED: positive quotient in [2^31,2^32) wrapped negative, unflagged\n");
     if (z != INT32_MAX) ++fails;  // zref's saturation is the stable side
   }
 
@@ -411,9 +414,8 @@ int main(int argc, char** argv) {
         if (r.ovf || mine != static_cast<i128>(r.q)) {
           ++walk_rtl_mismatch;
           if (walk_rtl_mismatch <= 5)
-            std::printf("  WALK vs RTL MISMATCH at (%d,%d): qr=%lld rtl=%ld ovf=%d\n",
-                        x, y, static_cast<long long>(mine),
-                        static_cast<long>(r.q), r.ovf ? 1 : 0);
+            std::printf("  WALK vs RTL MISMATCH at (%d,%d): qr=%lld rtl=%ld ovf=%d\n", x, y,
+                        static_cast<long long>(mine), static_cast<long>(r.q), r.ovf ? 1 : 0);
         }
         const int32_t z = zref::render::div_rhu_s128(n, A);
         if (static_cast<i128>(z) != mine) {
@@ -424,7 +426,8 @@ int main(int argc, char** argv) {
         if (x != 15) {
           const i128 r_before = p.r;
           pair_step(&p, pdx, A);
-          if (p.r < r_before + pdx.r) {}  // (informational; wrap counted below)
+          if (p.r < r_before + pdx.r) {
+          }  // (informational; wrap counted below)
           if (r_before + pdx.r >= A) ++c.wraps;
         }
       }
@@ -434,11 +437,11 @@ int main(int argc, char** argv) {
 
   // directed: sign crossings inside rows, ties woven through the walk,
   // numerators pushed toward the 2^77 setup bound
-  walk_tile(-7 * 1000 - 500, 1000, -3000, 2000);          // crosses zero mid-row
+  walk_tile(-7 * 1000 - 500, 1000, -3000, 2000);  // crosses zero mid-row
   walk_tile(-(static_cast<i128>(1) << 38) - 128, (static_cast<i128>(1) << 33),
-            (static_cast<i128>(1) << 34) + 256, 256);      // big steps, crossings
-  walk_tile(128, 256, 256, 256);                           // tie every pixel, A=2^8
-  walk_tile(-128 - 256 * 8, 256, 256, 512);                // negative ties in-walk
+            (static_cast<i128>(1) << 34) + 256, 256);  // big steps, crossings
+  walk_tile(128, 256, 256, 256);                       // tie every pixel, A=2^8
+  walk_tile(-128 - 256 * 8, 256, 256, 512);            // negative ties in-walk
   {
     // near the numerator ceiling: |N| ~ 2^77, area near 2^46
     const uint64_t A = (1ULL << 46) - 4;
@@ -451,13 +454,12 @@ int main(int argc, char** argv) {
     const int mag = 8 + static_cast<int>(rng() % 38);
     const uint64_t A = (rng() % (1ULL << mag)) + 2;
     const int64_t q0 = static_cast<int64_t>(static_cast<int32_t>(rng())) / 4;
-    const i128 base = static_cast<i128>(q0) * static_cast<i128>(A) +
-                      static_cast<i128>(rng() % A);
+    const i128 base = static_cast<i128>(q0) * static_cast<i128>(A) + static_cast<i128>(rng() % A);
     // steps sized so 15 of them keep the quotient inside 32 bits
-    const i128 dx = static_cast<i128>(static_cast<int64_t>(rng() % (A * 3 + 7))) -
-                    static_cast<i128>(A);
-    const i128 dy = static_cast<i128>(static_cast<int64_t>(rng() % (A * 3 + 7))) -
-                    static_cast<i128>(A);
+    const i128 dx =
+        static_cast<i128>(static_cast<int64_t>(rng() % (A * 3 + 7))) - static_cast<i128>(A);
+    const i128 dy =
+        static_cast<i128>(static_cast<int64_t>(rng() % (A * 3 + 7))) - static_cast<i128>(A);
     walk_tile(base, dx, dy, A);
   }
   std::printf("   %ld tile pixels, ZERO walk divides: walk-vs-RTL mismatches %ld (MUST be 0)\n",
@@ -466,8 +468,7 @@ int main(int argc, char** argv) {
               c.crossings, c.wraps, c.ties_pos, c.ties_neg);
   std::printf("   zref per-pixel differences on walked tiles: %ld (uncharacterized %ld)\n",
               tile_zref_diffs, c.zref_diff_not_neg_tie);
-  if (walk_rtl_mismatch != 0 || c.crossings == 0 || c.wraps == 0 ||
-      c.zref_diff_not_neg_tie != 0)
+  if (walk_rtl_mismatch != 0 || c.crossings == 0 || c.wraps == 0 || c.zref_diff_not_neg_tie != 0)
     ++fails;
 
   // =========================================================================
@@ -488,8 +489,7 @@ int main(int argc, char** argv) {
     const Pair py = edecomp(dndy, Ai);
     const int64_t tx = static_cast<int64_t>(rng() % 4096) - 2048;
     const int64_t ty = static_cast<int64_t>(rng() % 4096) - 2048;
-    const Pair got = pair_add(pa, pair_add(pair_scale(px, tx, Ai),
-                                           pair_scale(py, ty, Ai), Ai), Ai);
+    const Pair got = pair_add(pa, pair_add(pair_scale(px, tx, Ai), pair_scale(py, ty, Ai), Ai), Ai);
     const Pair want = edecomp(anchor + dndx * tx + dndy * ty, Ai);
     ++pair_checks;
     if (got.q != want.q || got.r != want.r) {
@@ -497,8 +497,8 @@ int main(int argc, char** argv) {
       if (pair_mismatch <= 3) std::printf("  PAIR-REACH MISMATCH at t=%d\n", t);
     }
   }
-  std::printf("   %ld anchor->tile reconstructions, %ld mismatches (MUST be 0)\n",
-              pair_checks, pair_mismatch);
+  std::printf("   %ld anchor->tile reconstructions, %ld mismatches (MUST be 0)\n", pair_checks,
+              pair_mismatch);
   if (pair_mismatch != 0) ++fails;
 
   // =========================================================================

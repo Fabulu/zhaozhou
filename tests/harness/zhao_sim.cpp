@@ -30,8 +30,7 @@ namespace {
 struct ZhaoWindowsAbortIsFatal {
   ZhaoWindowsAbortIsFatal() {
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
-    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |
-                 SEM_NOOPENFILEERRORBOX);
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
   }
 };
 const ZhaoWindowsAbortIsFatal g_zhao_windows_abort_is_fatal;

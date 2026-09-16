@@ -251,11 +251,9 @@ zt::ComposedLattice make_island_voids() {
   zt::ComposedLattice lat = make_island();
   for (int cj = 8; cj < 12; ++cj)
     for (int ci = 8; ci < 12; ++ci)
-      lat.cell_state[static_cast<size_t>(cj) * 32 + static_cast<size_t>(ci)] =
-          zt::kVoidAuthored;
+      lat.cell_state[static_cast<size_t>(cj) * 32 + static_cast<size_t>(ci)] = zt::kVoidAuthored;
   for (int d = 0; d < 32; d += 3)
-    lat.cell_state[static_cast<size_t>(d) * 32 + static_cast<size_t>(d)] =
-        zt::kVoidAuthored;
+    lat.cell_state[static_cast<size_t>(d) * 32 + static_cast<size_t>(d)] = zt::kVoidAuthored;
   return lat;
 }
 
@@ -364,8 +362,8 @@ int main(int argc, char** argv) {
             check(mesh.size() == want.tris.size(),
                   "void sweep: the hardware emits exactly the oracle's triangle count",
                   want.tris.size(), mesh.size());
-            check(ns.size() == mesh.size(),
-                  "void sweep: NORMALS answers once per triangle", mesh.size(), ns.size());
+            check(ns.size() == mesh.size(), "void sweep: NORMALS answers once per triangle",
+                  mesh.size(), ns.size());
             for (size_t i = 0; i < mesh.size() && i < want.tris.size(); ++i) {
               const zt::MeshTri& w = want.tris[i];
               check(mesh[i].ax == w.ax && mesh[i].ay == w.ay && mesh[i].az == w.az &&
@@ -400,11 +398,9 @@ int main(int argc, char** argv) {
           "void sweep: the voids REMOVED geometry, so the solidity window was "
           "genuinely exercised",
           1, void_tris < solid_tris ? 1 : 0);
-    check(void_tris > 0, "void sweep: and did not remove all of it", 1,
-          void_tris > 0 ? 1 : 0);
-    std::printf(
-        "terrain_tess_normals: void sweep %u triangles against %u solid -- %u removed\n",
-        void_tris, solid_tris, solid_tris - void_tris);
+    check(void_tris > 0, "void sweep: and did not remove all of it", 1, void_tris > 0 ? 1 : 0);
+    std::printf("terrain_tess_normals: void sweep %u triangles against %u solid -- %u removed\n",
+                void_tris, solid_tris, solid_tris - void_tris);
   }
 
   // The sweep must have carried real slope, or "ny > 0" would be a statement

@@ -719,12 +719,14 @@ int main(int argc, char** argv) {
       dut.cfg_addr_i = 0;
       dut.eval();
       const int n = wait_ready(dut, "12.block never re-readied after one write");
-      check(n == ZHAO_CULL_EXTRACT, "12.extraction: ready exactly ZHAO_CULL_EXTRACT ticks after one write",
+      check(n == ZHAO_CULL_EXTRACT,
+            "12.extraction: ready exactly ZHAO_CULL_EXTRACT ticks after one write",
             ZHAO_CULL_EXTRACT, static_cast<uint64_t>(n));
     }
     // and the verdict after a rewrite of the same matrix is the verdict before it
     const Rig rig = load(dut, a, a);
-    one(dut, rig, "12.after-rewrite", 0x3, vec3fx{fx16{3 * ONE}, fx16{-2 * ONE}, fx16{ONE}}, fx16{ONE});
+    one(dut, rig, "12.after-rewrite", 0x3, vec3fx{fx16{3 * ONE}, fx16{-2 * ONE}, fx16{ONE}},
+        fx16{ONE});
     std::printf("geom_cull 12: walk %d ticks/instance (II %d), extraction %d ticks/view\n",
                 ZHAO_CULL_WALK, ZHAO_CULL_WALK + 1, ZHAO_CULL_EXTRACT);
   }

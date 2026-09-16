@@ -81,12 +81,18 @@ enum class K : uint8_t { kLookup, kClaim, kWriteback, kLoad, kPin, kIssue };
 
 const char* kname(K k) {
   switch (k) {
-    case K::kLookup: return "lookup";
-    case K::kClaim: return "claim";
-    case K::kWriteback: return "writeback";
-    case K::kLoad: return "load";
-    case K::kPin: return "pin";
-    default: return "issue";
+    case K::kLookup:
+      return "lookup";
+    case K::kClaim:
+      return "claim";
+    case K::kWriteback:
+      return "writeback";
+    case K::kLoad:
+      return "load";
+    case K::kPin:
+      return "pin";
+    default:
+      return "issue";
   }
 }
 
@@ -134,9 +140,9 @@ struct Obs {
 };
 
 const char* kCounterNames[14] = {
-    "records_consumed", "patches_issued",   "prefetch_resident", "skipped_not_resident",
-    "claims_issued",    "claims_refused",   "claims_same",       "loads_issued",
-    "loads_deferred",   "writebacks_issued","compose_slots_used","pins_issued",
+    "records_consumed", "patches_issued",    "prefetch_resident",  "skipped_not_resident",
+    "claims_issued",    "claims_refused",    "claims_same",        "loads_issued",
+    "loads_deferred",   "writebacks_issued", "compose_slots_used", "pins_issued",
     "drained",          "frame_faults"};
 
 // ===========================================================================
@@ -146,8 +152,7 @@ const char* kCounterNames[14] = {
 // per-record ACTION ORDER is the reference's own documented order and is
 // asserted by comparison rather than by prose: lookup, then claim, then
 // writeback strictly before load, or pin then issue.
-Obs expect_of(const std::vector<Case>& cs, uint16_t patch_count, uint16_t budget,
-              uint32_t epoch) {
+Obs expect_of(const std::vector<Case>& cs, uint16_t patch_count, uint16_t budget, uint32_t epoch) {
   Obs E;
   sq::Sequencer S(kBenchComposeSlots, budget);
   S.begin_frame(epoch);
@@ -262,11 +267,16 @@ uint32_t hi(uint32_t& s, uint32_t modulus) { return (lcg(s) >> 16) % modulus; }
 // block lost answers); 2 one-in-eight; 3 one-in-two.
 bool ready_draw(uint32_t& s, int pattern) {
   switch (pattern) {
-    case 0: return true;
-    case 1: return hi(s, 4) != 0;
-    case 2: return hi(s, 8) == 0;
-    case 3: return hi(s, 2) == 0;
-    default: return true;
+    case 0:
+      return true;
+    case 1:
+      return hi(s, 4) != 0;
+    case 2:
+      return hi(s, 8) == 0;
+    case 3:
+      return hi(s, 2) == 0;
+    default:
+      return true;
   }
 }
 
@@ -279,8 +289,8 @@ const char* kStallNames[4] = {"always-ready", "3-in-4", "1-in-8", "1-in-2"};
 // so the block is exercised against a fast directory and a slow one without
 // changing a line of it.
 Obs run_frame(Vtb_terrain_seq& d, const std::vector<Case>& cs, uint16_t patch_count,
-              uint16_t budget, uint32_t epoch, int pattern, uint32_t seed,
-              int answer_latency = 1, bool inject_stray = false) {
+              uint16_t budget, uint32_t epoch, int pattern, uint32_t seed, int answer_latency = 1,
+              bool inject_stray = false) {
   Obs O;
   uint32_t s_rec = seed ^ 0xA5A5u, s_cl = seed ^ 0x1234u, s_pin = seed ^ 0x9E37u;
   uint32_t s_wb = seed ^ 0x5A5Au, s_ld = seed ^ 0xBEEFu, s_is = seed ^ 0xC0DEu;
@@ -319,8 +329,8 @@ Obs run_frame(Vtb_terrain_seq& d, const std::vector<Case>& cs, uint16_t patch_co
   zhao::tick(d);
   d.fr_start = 0;
 
-  std::size_t next_rec = 0;   // index of the record to offer
-  std::size_t served = 0;     // index of the record whose answers are owed
+  std::size_t next_rec = 0;  // index of the record to offer
+  std::size_t served = 0;    // index of the record whose answers are owed
   int lu_due = -1, cl_due = -1;
   std::size_t lu_idx = 0, cl_idx = 0;
   bool stray_done = !inject_stray;
@@ -461,8 +471,14 @@ Obs run_frame(Vtb_terrain_seq& d, const std::vector<Case>& cs, uint16_t patch_co
     // record was most recently accepted is the one being answered about.
     if (next_rec > 0) served = next_rec - 1;
 
-    if (lu_due > 0) --lu_due; else if (lu_due == 0) lu_due = -1;
-    if (cl_due > 0) --cl_due; else if (cl_due == 0) cl_due = -1;
+    if (lu_due > 0)
+      --lu_due;
+    else if (lu_due == 0)
+      lu_due = -1;
+    if (cl_due > 0)
+      --cl_due;
+    else if (cl_due == 0)
+      cl_due = -1;
 
     ++O.cycles;
     const bool fin = d.fr_done;
@@ -562,8 +578,8 @@ int compare(const char* label, const Obs& O, const Obs& E, bool check_counters =
       std::printf("    %s: frame_fault rtl=%d oracle=%d\n", label, static_cast<int>(O.fault),
                   static_cast<int>(E.fault));
     }
-    if (O.fault && (O.f_src != E.f_src || O.f_isl != E.f_isl || O.f_ix != E.f_ix ||
-                    O.f_iz != E.f_iz)) {
+    if (O.fault &&
+        (O.f_src != E.f_src || O.f_isl != E.f_isl || O.f_ix != E.f_ix || O.f_iz != E.f_iz)) {
       ++bad;
       std::printf("    %s: fault identity rtl src=%u isl=%u (%d,%d) oracle src=%u isl=%u (%d,%d)\n",
                   label, O.f_src, O.f_isl, O.f_ix, O.f_iz, E.f_src, E.f_isl, E.f_ix, E.f_iz);
@@ -680,8 +696,7 @@ int main(int argc, char** argv) {
                       static_cast<uint16_t>(20 + i), static_cast<uint8_t>(1)));
     Obs base;
     const int bad = run_all_patterns(d, "A1 resident-static", cs, 8, 32, 1, 0xA1u, &base);
-    ck(bad == 0, "A1 resident static set matches the oracle under all four stall patterns", 0,
-       bad);
+    ck(bad == 0, "A1 resident static set matches the oracle under all four stall patterns", 0, bad);
     ck(base.c[1] == 8, "A1 issues all eight patches", 8, base.c[1]);
     ck(base.c[10] == 0, "A1 static patches consume no composed slot", 0, base.c[10]);
     ck(base.c[7] == 0, "A1 no loads on an all-resident frame", 0, base.c[7]);
@@ -693,13 +708,13 @@ int main(int argc, char** argv) {
     // the block's floor, not its typical case. A miss costs more (claim, wait,
     // load) and a dirty miss more again.
     const double per_rec = static_cast<double>(base.cycles) / 8.0;
-    std::printf("   A1 cost: %llu cycles for 8 resident static records = %.2f "
-                "cycles per record (directory latency 1, consumer always ready)\n",
-                static_cast<unsigned long long>(base.cycles), per_rec);
+    std::printf(
+        "   A1 cost: %llu cycles for 8 resident static records = %.2f "
+        "cycles per record (directory latency 1, consumer always ready)\n",
+        static_cast<unsigned long long>(base.cycles), per_rec);
     // A floor and a ceiling, so a regression in either direction is visible.
     // The state walk is FETCH, LOOKUP, WAIT_LU, PIN, ISSUE.
-    ck(per_rec >= 4.0 && per_rec <= 8.0,
-       "A1 the per-record floor is between 4 and 8 cycles", 5,
+    ck(per_rec >= 4.0 && per_rec <= 8.0, "A1 the per-record floor is between 4 and 8 cycles", 5,
        static_cast<long long>(per_rec * 100));
   }
 
@@ -712,8 +727,8 @@ int main(int argc, char** argv) {
     std::vector<Case> cs;
     for (int i = 0; i < 10; ++i) {
       const uint16_t f = static_cast<uint16_t>(kReq | ((i % 2 == 0) ? kDyn : 0));
-      cs.push_back(mk(200u + i, static_cast<int16_t>(i), 9, f, true,
-                      static_cast<uint16_t>(30 + i), 2));
+      cs.push_back(
+          mk(200u + i, static_cast<int16_t>(i), 9, f, true, static_cast<uint16_t>(30 + i), 2));
     }
     Obs base;
     const int bad = run_all_patterns(d, "A2 allocator", cs, 10, 32, 2, 0xA2u, &base);
@@ -743,8 +758,8 @@ int main(int argc, char** argv) {
   {
     std::vector<Case> cs;
     for (int i = 0; i < 6; ++i)
-      cs.push_back(mk(300u + i, static_cast<int16_t>(i), 11, kPre, true,
-                      static_cast<uint16_t>(40 + i), 4));
+      cs.push_back(
+          mk(300u + i, static_cast<int16_t>(i), 11, kPre, true, static_cast<uint16_t>(40 + i), 4));
     Obs base;
     const int bad = run_all_patterns(d, "A3 prefetch-resident", cs, 6, 32, 3, 0xA3u, &base);
     ck(bad == 0, "A3 resident prefetch records match the oracle", 0, bad);
@@ -877,8 +892,7 @@ int main(int argc, char** argv) {
     ck(base.c[7] == 4, "A8 exactly four pages requested under a budget of four", 4, base.c[7]);
     ck(base.c[8] == 8, "A8 the other eight are deferred", 8, base.c[8]);
     ck(base.c[4] == 4, "A8 a deferred record does not even claim", 4, base.c[4]);
-    ck(base.fault == false, "A8 T7 OVERFLOW IS NOT A FRAME FAULT", 0,
-       static_cast<int>(base.fault));
+    ck(base.fault == false, "A8 T7 OVERFLOW IS NOT A FRAME FAULT", 0, static_cast<int>(base.fault));
     ck(base.c[13] == 0, "A8 frame_faults stays zero under load-budget pressure", 0, base.c[13]);
     ck(base.c[0] == 12, "A8 the whole list is still consumed", 12, base.c[0]);
   }
@@ -891,15 +905,13 @@ int main(int argc, char** argv) {
   {
     std::vector<Case> cs;
     for (int i = 0; i < 20; ++i)
-      cs.push_back(mk(900u + i, static_cast<int16_t>(i), 31,
-                      static_cast<uint16_t>(kReq | kDyn), true, static_cast<uint16_t>(60 + i),
-                      6));
+      cs.push_back(mk(900u + i, static_cast<int16_t>(i), 31, static_cast<uint16_t>(kReq | kDyn),
+                      true, static_cast<uint16_t>(60 + i), 6));
     Obs base;
     const int bad = run_all_patterns(d, "A9 compose-overflow", cs, 20, 32, 9, 0xA9u, &base);
     ck(bad == 0, "A9 composed-cache overflow matches the oracle", 0, bad);
     ck(base.fault, "A9 the frame faults");
-    ck(base.c[13] == 1, "A9 exactly one frame fault, not one per rejected record", 1,
-       base.c[13]);
+    ck(base.c[13] == 1, "A9 exactly one frame fault, not one per rejected record", 1, base.c[13]);
     ck(base.c[10] == kBenchComposeSlots, "A9 every slot was allocated before the fault",
        kBenchComposeSlots, base.c[10]);
     ck(base.c[1] == kBenchComposeSlots, "A9 sixteen patches issued, the seventeenth faulted",
@@ -941,9 +953,8 @@ int main(int argc, char** argv) {
   {
     std::vector<Case> cs;
     for (int i = 0; i < 5; ++i)
-      cs.push_back(mk(1100u + i, static_cast<int16_t>(i), 41,
-                      static_cast<uint16_t>(kReq | kDyn), true, static_cast<uint16_t>(70 + i),
-                      7));
+      cs.push_back(mk(1100u + i, static_cast<int16_t>(i), 41, static_cast<uint16_t>(kReq | kDyn),
+                      true, static_cast<uint16_t>(70 + i), 7));
     const Obs E = expect_of(cs, 5, 32, 11);
     const Obs f1 = run_frame(d, cs, 5, 32, 11, 0, 0xB1u, 1);
     const Obs f2 = run_frame(d, cs, 5, 32, 12, 0, 0xB2u, 2);
@@ -979,8 +990,8 @@ int main(int argc, char** argv) {
   {
     std::vector<Case> cs;
     for (int i = 0; i < 9; ++i)
-      cs.push_back(mk(1200u + i, static_cast<int16_t>(i), 43, kReq, true,
-                      static_cast<uint16_t>(80 + i), 8));
+      cs.push_back(
+          mk(1200u + i, static_cast<int16_t>(i), 43, kReq, true, static_cast<uint16_t>(80 + i), 8));
     const Obs E = expect_of(cs, 4, 32, 13);
     const Obs O = run_frame(d, cs, 4, 32, 13, 0, 0xC1u, 1);
     const int bad = compare("A12 short-count", O, E);
@@ -1001,8 +1012,8 @@ int main(int argc, char** argv) {
     reset_dut(d);
     std::vector<Case> cs;
     for (int i = 0; i < 4; ++i)
-      cs.push_back(mk(1300u + i, static_cast<int16_t>(i), 47, kReq, true,
-                      static_cast<uint16_t>(90 + i), 9));
+      cs.push_back(
+          mk(1300u + i, static_cast<int16_t>(i), 47, kReq, true, static_cast<uint16_t>(90 + i), 9));
     const Obs clean = run_frame(d, cs, 4, 32, 14, 0, 0xD1u, 1, /*inject_stray=*/false);
     ck(!clean.err_stray, "A13 a clean frame does not latch err_stray_ans", 0,
        static_cast<int>(clean.err_stray));
@@ -1039,8 +1050,8 @@ int main(int argc, char** argv) {
       ++carried;
       if ((a.src_id & 0xFFFF0000u) != 0xBEEF0000u) ok = false;
     }
-    ck(ok && carried == 9, "A14 every issue, load and writeback carries its record's source id",
-       9, carried);
+    ck(ok && carried == 9, "A14 every issue, load and writeback carries its record's source id", 9,
+       carried);
   }
 
   // =========================================================================
@@ -1054,7 +1065,7 @@ int main(int argc, char** argv) {
   {
     uint32_t s = 0x5EEDBEEFu;
     int bad = 0;
-    uint32_t disp[5] = {0};        // issued / prefetch-resident / skipped / faulted / drained
+    uint32_t disp[5] = {0};  // issued / prefetch-resident / skipped / faulted / drained
     uint32_t br_refused = 0, br_same = 0, br_dirty = 0, br_defer = 0;
     uint32_t br_cslot = 0, br_static = 0, br_fault_frames = 0;
     std::set<uint32_t> shapes;
@@ -1123,8 +1134,8 @@ int main(int argc, char** argv) {
       const int pattern = static_cast<int>(hi(s, 4));
       const int lat = 1 + static_cast<int>(hi(s, 3));
       const Obs E = expect_of(cs, static_cast<uint16_t>(n), budget, epoch);
-      const Obs O = run_frame(d, cs, static_cast<uint16_t>(n), budget, epoch, pattern,
-                              s ^ 0x77u, lat);
+      const Obs O =
+          run_frame(d, cs, static_cast<uint16_t>(n), budget, epoch, pattern, s ^ 0x77u, lat);
       char lab[64];
       std::snprintf(lab, sizeof lab, "R frame %d (%s, lat %d)", f, kStallNames[pattern], lat);
       // Counters are cumulative across the phase, so the log is the
@@ -1136,8 +1147,8 @@ int main(int argc, char** argv) {
         std::printf("    %s: frame_fault rtl=%d oracle=%d\n", lab, static_cast<int>(O.fault),
                     static_cast<int>(E.fault));
       }
-      if (E.fault && (O.f_src != E.f_src || O.f_isl != E.f_isl || O.f_ix != E.f_ix ||
-                      O.f_iz != E.f_iz)) {
+      if (E.fault &&
+          (O.f_src != E.f_src || O.f_isl != E.f_isl || O.f_ix != E.f_ix || O.f_iz != E.f_iz)) {
         ++bad;
         std::printf("    %s: fault identity diverged\n", lab);
       }
@@ -1158,12 +1169,14 @@ int main(int argc, char** argv) {
     std::printf("   randomised: %d frames, %llu records, %llu actions\n", kFrames,
                 static_cast<unsigned long long>(total_records),
                 static_cast<unsigned long long>(total_acts));
-    std::printf("   dispositions: issued %u  prefetch-resident %u  skipped %u  faulted %u  "
-                "drained %u\n",
-                disp[0], disp[1], disp[2], disp[3], disp[4]);
-    std::printf("   branches: refused %u  same %u  dirty-writeback %u  budget-deferred %u  "
-                "cslot %u  static-issue %u  faulting frames %u\n",
-                br_refused, br_same, br_dirty, br_defer, br_cslot, br_static, br_fault_frames);
+    std::printf(
+        "   dispositions: issued %u  prefetch-resident %u  skipped %u  faulted %u  "
+        "drained %u\n",
+        disp[0], disp[1], disp[2], disp[3], disp[4]);
+    std::printf(
+        "   branches: refused %u  same %u  dirty-writeback %u  budget-deferred %u  "
+        "cslot %u  static-issue %u  faulting frames %u\n",
+        br_refused, br_same, br_dirty, br_defer, br_cslot, br_static, br_fault_frames);
     std::printf("   distinct record shapes drawn: %zu of 64\n", shapes.size());
 
     // THE FLOORS. Without these the phase reports a distribution nobody

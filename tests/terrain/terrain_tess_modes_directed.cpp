@@ -97,7 +97,8 @@ zt::ComposedLattice make_lattice(Rng& rng, bool dual, bool with_void) {
   if (dual && with_void) {
     lat.cell_state.assign(32 * 32, 0);  // SOLID
     const int voids[4][2] = {{3, 3}, {12, 20}, {30, 1}, {17, 17}};
-    for (auto& v : voids) lat.cell_state[static_cast<size_t>(v[1]) * 32 + static_cast<size_t>(v[0])] = 1;
+    for (auto& v : voids)
+      lat.cell_state[static_cast<size_t>(v[1]) * 32 + static_cast<size_t>(v[0])] = 1;
   }
   return lat;
 }
@@ -110,11 +111,11 @@ int find_index(const std::vector<int32_t>& axis, int32_t v) {
 
 // ---- the oracle for one job -------------------------------------------------
 struct Want {
-  zt::TessResult tess;              // the triangles, verdict, clamp count
+  zt::TessResult tess;                      // the triangles, verdict, clamp count
   std::vector<zt::detail::TessVert> verts;  // 81, index order
-  std::vector<bool> stride;         // 81: on the own stride grid?
-  std::vector<int> ref;             // 3 per triangle, window indices, emit order
-  bool ref_ok = true;               // every corner inverted to a window index
+  std::vector<bool> stride;                 // 81: on the own stride grid?
+  std::vector<int> ref;                     // 3 per triangle, window indices, emit order
+  bool ref_ok = true;                       // every corner inverted to a window index
 };
 
 Want oracle(const zt::ComposedLattice& lat, const zt::SubpatchJob& job) {
@@ -230,7 +231,8 @@ int main(int argc, char** argv) {
   drv.set_src(kSrc);
 
   Rng rng;
-  const zt::ComposedLattice lats[3] = {make_lattice(rng, true, false), make_lattice(rng, true, true),
+  const zt::ComposedLattice lats[3] = {make_lattice(rng, true, false),
+                                       make_lattice(rng, true, true),
                                        make_lattice(rng, false, false)};
   const char* lat_names[3] = {"dual", "dual+void", "legacy"};
   const int32_t morphs[6] = {0, 1, 0x4000, 0x8000, 0xFFFF, 0x10000};
@@ -292,7 +294,8 @@ int main(int argc, char** argv) {
                   ++vtx_bad;
                   if (vtx_first_bad < 0) vtx_first_bad = jobs - 1;
                 }
-                for (const EmitVert& v : drv.verts) (v.stride ? stride_one_seen : stride_zero_seen)++;
+                for (const EmitVert& v : drv.verts)
+                  (v.stride ? stride_one_seen : stride_zero_seen)++;
                 if (stall == 0) {
                   ++per_level_jobs[level];
                   per_level_fills[level] += static_cast<long>(drv.verts.size());
@@ -337,42 +340,50 @@ int main(int argc, char** argv) {
                 }
               }
             }
-    std::printf("terrain_tess_modes_directed: lattice %-10s done (%ld jobs so far)\n", lat_names[li], jobs);
+    std::printf("terrain_tess_modes_directed: lattice %-10s done (%ld jobs so far)\n",
+                lat_names[li], jobs);
   }
 
-  std::printf("terrain_tess_modes_directed: %ld jobs (rejected %ld, legacy-underside empty %ld); "
-              "VTX %ld jobs / %ld vertices, REF %ld jobs / %ld triples, TRI %ld jobs / %ld triangles\n",
-              jobs, rejected, empty_underside, vtx_jobs, vtx_verts, ref_jobs, ref_tris, tri_jobs, tri_tris);
-  check(jobs == 110592, "the sweep is the identity probe's case space", 110592, static_cast<uint64_t>(jobs));
+  std::printf(
+      "terrain_tess_modes_directed: %ld jobs (rejected %ld, legacy-underside empty %ld); "
+      "VTX %ld jobs / %ld vertices, REF %ld jobs / %ld triples, TRI %ld jobs / %ld triangles\n",
+      jobs, rejected, empty_underside, vtx_jobs, vtx_verts, ref_jobs, ref_tris, tri_jobs, tri_tris);
+  check(jobs == 110592, "the sweep is the identity probe's case space", 110592,
+        static_cast<uint64_t>(jobs));
   check(rejected > 0, "the void+stitch reject was exercised", 1, static_cast<uint64_t>(rejected));
   check(oracle_ref_bad == 0, "the oracle inverted every corner to a window index", 0,
         static_cast<uint64_t>(oracle_ref_bad));
-  check(verdict_bad == 0, "law 7: the reject verdict agrees in every mode", 0, static_cast<uint64_t>(verdict_bad));
-  check(vtx_bad == 0, "VTX: 81 vertices == vertex_at (stride grid) / plain (fillers), index order, flags",
-        0, static_cast<uint64_t>(vtx_bad));
+  check(verdict_bad == 0, "law 7: the reject verdict agrees in every mode", 0,
+        static_cast<uint64_t>(verdict_bad));
+  check(vtx_bad == 0,
+        "VTX: 81 vertices == vertex_at (stride grid) / plain (fillers), index order, flags", 0,
+        static_cast<uint64_t>(vtx_bad));
   if (vtx_first_bad >= 0) std::printf("  first VTX mismatch at sweep job %ld\n", vtx_first_bad);
   check(ref_bad == 0, "REF: triples == tessellate's corners as window indices, in order", 0,
         static_cast<uint64_t>(ref_bad));
   if (ref_first_bad >= 0) std::printf("  first REF mismatch at sweep job %ld\n", ref_first_bad);
   check(rebuild_bad == 0, "REF applied to VTX rebuilds tessellate's triangles bit for bit", 0,
         static_cast<uint64_t>(rebuild_bad));
-  if (rebuild_first_bad >= 0) std::printf("  first rebuild mismatch at sweep job %ld\n", rebuild_first_bad);
-  check(tri_bad == 0, "TRI (mode 0) on the probe's lattices == tessellate", 0, static_cast<uint64_t>(tri_bad));
+  if (rebuild_first_bad >= 0)
+    std::printf("  first rebuild mismatch at sweep job %ld\n", rebuild_first_bad);
+  check(tri_bad == 0, "TRI (mode 0) on the probe's lattices == tessellate", 0,
+        static_cast<uint64_t>(tri_bad));
   check(stride_one_seen > 0 && stride_zero_seen > 0, "vtx_stride_o was seen at both values", 1,
         (stride_one_seen > 0 && stride_zero_seen > 0) ? 1 : 0);
   // the cost table the adoption report carries forward (§3), now MEASURED on
   // the hardware producer: cycles per fill per level, consumer always ready
   for (int l = 0; l <= 3; ++l)
     if (per_level_jobs[l] > 0)
-      std::printf("  level %d: %ld unstalled fills, %ld vertices, %.1f cycles per job (mean, incl. drain; "
-                  "stitched jobs carry the 65-cycle scan)\n",
-                  l, per_level_jobs[l], per_level_fills[l],
-                  static_cast<double>(per_level_reads[l]) / static_cast<double>(per_level_jobs[l]));
+      std::printf(
+          "  level %d: %ld unstalled fills, %ld vertices, %.1f cycles per job (mean, incl. drain; "
+          "stitched jobs carry the 65-cycle scan)\n",
+          l, per_level_jobs[l], per_level_fills[l],
+          static_cast<double>(per_level_reads[l]) / static_cast<double>(per_level_jobs[l]));
 
   // ---- the counters, against the sweep's own tallies ----
   check(dut.terrain_vertices_emitted_o == static_cast<uint32_t>(vtx_verts),
-        "terrain_vertices_emitted_o == vertices the sweep collected", static_cast<uint64_t>(vtx_verts),
-        dut.terrain_vertices_emitted_o);
+        "terrain_vertices_emitted_o == vertices the sweep collected",
+        static_cast<uint64_t>(vtx_verts), dut.terrain_vertices_emitted_o);
   check(dut.terrain_refs_emitted_o == static_cast<uint32_t>(ref_tris),
         "terrain_refs_emitted_o == triples the sweep collected", static_cast<uint64_t>(ref_tris),
         dut.terrain_refs_emitted_o);
@@ -406,14 +417,16 @@ int main(int argc, char** argv) {
                 job.nlevel[3] = (nl >> 6) & 3;
                 job.morph = morphs[mi];
                 job.surface = surf ? zt::Surface::kUnderside : zt::Surface::kTop;
-                if (zt::tessellate(lats[li], job, nullptr).verdict != zt::TessVerdict::kOk) ++tri_rej;
+                if (zt::tessellate(lats[li], job, nullptr).verdict != zt::TessVerdict::kOk)
+                  ++tri_rej;
               }
     rej_presentations = 2 * rejected + tri_rej;
   }
   check(dut.subpatch_rejected_o == static_cast<uint32_t>(rej_presentations),
-        "subpatch_rejected_o counts PRESENTATIONS (law 7)", static_cast<uint64_t>(rej_presentations),
-        dut.subpatch_rejected_o);
-  check(dut.mode_invalid_o == 0, "mode_invalid_o is zero after a sweep of legal modes", 0, dut.mode_invalid_o);
+        "subpatch_rejected_o counts PRESENTATIONS (law 7)",
+        static_cast<uint64_t>(rej_presentations), dut.subpatch_rejected_o);
+  check(dut.mode_invalid_o == 0, "mode_invalid_o is zero after a sweep of legal modes", 0,
+        dut.mode_invalid_o);
   check(dut.lod_clamped_o == 0, "no clamp in the sweep (morph <= 65536)", 0, dut.lod_clamped_o);
 
   // =========================================================================
@@ -430,7 +443,8 @@ int main(int argc, char** argv) {
     drv.set_mode(1);
     bool rej = false;
     (void)drv.run(lat, job, &rej);
-    check(diff_verts(drv.verts, want, false, kSrc) == 0, "positive control baseline: VTX job matches", 0,
+    check(diff_verts(drv.verts, want, false, kSrc) == 0,
+          "positive control baseline: VTX job matches", 0,
           static_cast<uint64_t>(diff_verts(drv.verts, want, false, kSrc)));
     want.verts[40].y += 1;
     check(diff_verts(drv.verts, want, false, kSrc) == 1,
@@ -440,8 +454,8 @@ int main(int argc, char** argv) {
     const std::vector<EmitVert> verts = drv.verts;
     drv.set_mode(2);
     (void)drv.run(lat, job, &rej);
-    check(diff_refs(drv.refs, want, false, kSrc) == 0, "positive control baseline: REF job matches", 0,
-          static_cast<uint64_t>(diff_refs(drv.refs, want, false, kSrc)));
+    check(diff_refs(drv.refs, want, false, kSrc) == 0, "positive control baseline: REF job matches",
+          0, static_cast<uint64_t>(diff_refs(drv.refs, want, false, kSrc)));
     std::vector<EmitRef> refs = drv.refs;
     refs[77].ib = static_cast<uint8_t>(refs[77].ib ^ 1);
     check(diff_refs(refs, want, false, kSrc) == 1,
@@ -466,8 +480,10 @@ int main(int argc, char** argv) {
     drv.set_mode(3);
     bool rej = false;
     const std::vector<zt::MeshTri> got = drv.run(lat, job, &rej);
-    check(dut.mode_invalid_o == 1, "SEEN TO FIRE: mode_invalid_o on job_mode_i == 3", 1, dut.mode_invalid_o);
-    check(diff_tris(got, want.tess.tris) == 0, "an invalid mode runs as ModeTri (counted, never silent)", 0,
+    check(dut.mode_invalid_o == 1, "SEEN TO FIRE: mode_invalid_o on job_mode_i == 3", 1,
+          dut.mode_invalid_o);
+    check(diff_tris(got, want.tess.tris) == 0,
+          "an invalid mode runs as ModeTri (counted, never silent)", 0,
           static_cast<uint64_t>(diff_tris(got, want.tess.tris)));
     check(drv.verts.empty() && drv.refs.empty(), "an invalid mode emits on no other port", 1,
           (drv.verts.empty() && drv.refs.empty()) ? 1 : 0);
@@ -480,8 +496,9 @@ int main(int argc, char** argv) {
     drv.set_mode(1);
     (void)drv.run(lat, over, &rej);
     check(dut.lod_clamped_o == 1, "lod_clamped_o fires in ModeVtx", 1, dut.lod_clamped_o);
-    check(diff_verts(drv.verts, want_over, false, kSrc) == 0, "a clamped morph in ModeVtx == vertex_at at 65536",
-          0, static_cast<uint64_t>(diff_verts(drv.verts, want_over, false, kSrc)));
+    check(diff_verts(drv.verts, want_over, false, kSrc) == 0,
+          "a clamped morph in ModeVtx == vertex_at at 65536", 0,
+          static_cast<uint64_t>(diff_verts(drv.verts, want_over, false, kSrc)));
   }
 
   // =========================================================================
@@ -499,42 +516,47 @@ int main(int argc, char** argv) {
     drv.reset_counters();
     (void)drv.run(lat, job, &rej);
     const uint64_t c_vtx0 = drv.cycles();
-    std::printf("terrain_tess_modes_directed: VTX level 0, no morph: %llu cycles for %u vertices "
-                "(%.2f vertices/clock; no cell-state scan, law 7)\n",
-                static_cast<unsigned long long>(c_vtx0), static_cast<uint32_t>(drv.verts.size()),
-                81.0 / static_cast<double>(c_vtx0));
-    check(drv.verts.size() == 81 && c_vtx0 <= 81 + 12, "VTX unstitched level 0: one vertex per clock, no scan",
-          81 + 12, c_vtx0);
+    std::printf(
+        "terrain_tess_modes_directed: VTX level 0, no morph: %llu cycles for %u vertices "
+        "(%.2f vertices/clock; no cell-state scan, law 7)\n",
+        static_cast<unsigned long long>(c_vtx0), static_cast<uint32_t>(drv.verts.size()),
+        81.0 / static_cast<double>(c_vtx0));
+    check(drv.verts.size() == 81 && c_vtx0 <= 81 + 12,
+          "VTX unstitched level 0: one vertex per clock, no scan", 81 + 12, c_vtx0);
 
     job.morph = 0x8000;
     drv.reset_counters();
     (void)drv.run(lat, job, &rej);
     const uint64_t c_vtx_m = drv.cycles();
-    std::printf("terrain_tess_modes_directed: VTX level 0, morph 0.5: %llu cycles for 81 vertices "
-                "(40 morphing x 3 reads + 41 x 1 = 161 reads)\n",
-                static_cast<unsigned long long>(c_vtx_m));
-    check(c_vtx_m <= 161 + 12, "VTX level 0 with morph: one lattice read per clock", 161 + 12, c_vtx_m);
+    std::printf(
+        "terrain_tess_modes_directed: VTX level 0, morph 0.5: %llu cycles for 81 vertices "
+        "(40 morphing x 3 reads + 41 x 1 = 161 reads)\n",
+        static_cast<unsigned long long>(c_vtx_m));
+    check(c_vtx_m <= 161 + 12, "VTX level 0 with morph: one lattice read per clock", 161 + 12,
+          c_vtx_m);
 
     job.morph = 0;
     job.level = 1;
     drv.reset_counters();
     (void)drv.run(lat, job, &rej);
-    std::printf("terrain_tess_modes_directed: VTX level 1, no morph: %llu cycles for 81 vertices "
-                "(25 on the stride grid, 56 fillers)\n",
-                static_cast<unsigned long long>(drv.cycles()));
-    check(drv.cycles() <= 81 + 12, "VTX level 1: fillers cost one read each, no parent reads", 81 + 12,
-          drv.cycles());
+    std::printf(
+        "terrain_tess_modes_directed: VTX level 1, no morph: %llu cycles for 81 vertices "
+        "(25 on the stride grid, 56 fillers)\n",
+        static_cast<unsigned long long>(drv.cycles()));
+    check(drv.cycles() <= 81 + 12, "VTX level 1: fillers cost one read each, no parent reads",
+          81 + 12, drv.cycles());
 
     // stitched: the scan runs (law 7), so the job is >= 65 cycles longer
     job.level = 0;
     job.nlevel[0] = 1;
     drv.reset_counters();
     (void)drv.run(lat, job, &rej);
-    std::printf("terrain_tess_modes_directed: VTX level 0 STITCHED: %llu cycles (the 65-cycle scan runs "
-                "for the reject decision)\n",
-                static_cast<unsigned long long>(drv.cycles()));
-    check(drv.cycles() >= 65 + 81, "VTX stitched on a dual page runs the cell-state scan (law 7)", 65 + 81,
-          drv.cycles());
+    std::printf(
+        "terrain_tess_modes_directed: VTX level 0 STITCHED: %llu cycles (the 65-cycle scan runs "
+        "for the reject decision)\n",
+        static_cast<unsigned long long>(drv.cycles()));
+    check(drv.cycles() >= 65 + 81, "VTX stitched on a dual page runs the cell-state scan (law 7)",
+          65 + 81, drv.cycles());
     check(drv.verts.size() == 81, "VTX stitched still emits all 81", 81, drv.verts.size());
     job.nlevel[0] = 0;
 
@@ -542,18 +564,20 @@ int main(int argc, char** argv) {
     drv.reset_counters();
     (void)drv.run(lat, job, &rej);
     const uint64_t c_ref = drv.cycles();
-    std::printf("terrain_tess_modes_directed: REF level 0: %llu cycles for %u triples "
-                "(65-cycle scan + one triple per clock + drain)\n",
-                static_cast<unsigned long long>(c_ref), static_cast<uint32_t>(drv.refs.size()));
-    check(drv.refs.size() == 128 && c_ref <= 128 + 65 + 12, "REF level 0: one triple per clock after the scan",
-          128 + 65 + 12, c_ref);
+    std::printf(
+        "terrain_tess_modes_directed: REF level 0: %llu cycles for %u triples "
+        "(65-cycle scan + one triple per clock + drain)\n",
+        static_cast<unsigned long long>(c_ref), static_cast<uint32_t>(drv.refs.size()));
+    check(drv.refs.size() == 128 && c_ref <= 128 + 65 + 12,
+          "REF level 0: one triple per clock after the scan", 128 + 65 + 12, c_ref);
 
     // and mode 0 on the same job is what the directed suite measures
     drv.set_mode(0);
     drv.reset_counters();
     const std::vector<zt::MeshTri> t = drv.run(lat, job, &rej);
-    std::printf("terrain_tess_modes_directed: TRI level 0: %llu cycles for %u triangles (unchanged law)\n",
-                static_cast<unsigned long long>(drv.cycles()), static_cast<uint32_t>(t.size()));
+    std::printf(
+        "terrain_tess_modes_directed: TRI level 0: %llu cycles for %u triangles (unchanged law)\n",
+        static_cast<unsigned long long>(drv.cycles()), static_cast<uint32_t>(t.size()));
     check(drv.cycles() <= 3 * t.size() + 75, "TRI: the directed suite's own bound still holds",
           static_cast<uint64_t>(3 * t.size() + 75), drv.cycles());
     check(dut.idle_o == 1, "the block reports idle when drained", 1, dut.idle_o);

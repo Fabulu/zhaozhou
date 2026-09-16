@@ -107,14 +107,12 @@ struct Score {
     ++*bucket;
     if (printed < 12) {
       std::printf("MISMATCH %-7s %-8s want=%016llx got=%016llx\n", where, field,
-                  static_cast<unsigned long long>(want),
-                  static_cast<unsigned long long>(got));
+                  static_cast<unsigned long long>(want), static_cast<unsigned long long>(got));
       ++printed;
     }
   }
 
-  void check(const char* where, const char* field, uint64_t want, uint64_t got,
-             uint64_t* bucket) {
+  void check(const char* where, const char* field, uint64_t want, uint64_t got, uint64_t* bucket) {
     ++comparisons;
     if (want != got) mismatch(where, field, want, got, bucket);
   }
@@ -149,8 +147,8 @@ uint32_t embed8(uint8_t raw, bool is_signed) {
 
 std::vector<uint32_t> boundary18(bool is_signed) {
   if (is_signed) {
-    return {raw18(-131072), raw18(-131071), raw18(-2), raw18(-1), raw18(0),
-            raw18(1), raw18(2), raw18(131070), raw18(131071)};
+    return {raw18(-131072), raw18(-131071), raw18(-2),     raw18(-1),    raw18(0),
+            raw18(1),       raw18(2),       raw18(131070), raw18(131071)};
   }
   return {0u, 1u, 2u, 131071u, 131072u, 262142u, 262143u};
 }
@@ -195,8 +193,8 @@ struct PairObserved {
 
 PairObserved observe_pair(const TestTop& top) {
   return {static_cast<uint64_t>(top.resulta_o) & kMask36,
-          static_cast<uint64_t>(top.resultb_o) & kMask36,
-          static_cast<uint32_t>(top.tag_o), top.valid_o != 0};
+          static_cast<uint64_t>(top.resultb_o) & kMask36, static_cast<uint32_t>(top.tag_o),
+          top.valid_o != 0};
 }
 
 class PairDriver {
@@ -267,7 +265,9 @@ PairVector random_pair(Prng& rng, uint32_t tag, bool valid = true) {
   return {static_cast<uint32_t>(rng.next()) & static_cast<uint32_t>(kMask18),
           static_cast<uint32_t>(rng.next()) & static_cast<uint32_t>(kMask18),
           static_cast<uint32_t>(rng.next()) & static_cast<uint32_t>(kMask18),
-          static_cast<uint32_t>(rng.next()) & static_cast<uint32_t>(kMask18), tag, valid};
+          static_cast<uint32_t>(rng.next()) & static_cast<uint32_t>(kMask18),
+          tag,
+          valid};
 }
 
 void pair_reset_and_flow(PairDriver& driver) {
@@ -316,8 +316,7 @@ void pair_exhaustive_8bit(PairDriver& driver) {
       const uint8_t by = static_cast<uint8_t>((2u * x + 5u * y + 167u) & 255u);
       const uint32_t lane_b_key = (static_cast<uint32_t>(bx) << 8) | by;
       if (lane_b_seen[lane_b_key]) {
-        std::fprintf(stderr,
-                     "lane-B 8-bit permutation duplicate key=%04x at x=%u y=%u\n",
+        std::fprintf(stderr, "lane-B 8-bit permutation duplicate key=%04x at x=%u y=%u\n",
                      lane_b_key, x, y);
         std::exit(2);
       }
@@ -351,15 +350,20 @@ void pair_boundaries(PairDriver& driver) {
   // visible; then do the same for lane B.  Neither lane is a constant observer.
   for (size_t i = 0; i < ax.size(); ++i) {
     for (size_t j = 0; j < ay.size(); ++j) {
-      PairVector v{ax[i], ay[j], bx[(5 * i + 3 * j + 1) % bx.size()],
-                   by[(7 * i + 11 * j + 2) % by.size()], tag++, true};
+      PairVector v{
+          ax[i], ay[j], bx[(5 * i + 3 * j + 1) % bx.size()], by[(7 * i + 11 * j + 2) % by.size()],
+          tag++, true};
       driver.cycle(v, true, false);
     }
   }
   for (size_t i = 0; i < bx.size(); ++i) {
     for (size_t j = 0; j < by.size(); ++j) {
       PairVector v{ax[(3 * i + 5 * j + 2) % ax.size()],
-                   ay[(11 * i + 7 * j + 1) % ay.size()], bx[i], by[j], tag++, true};
+                   ay[(11 * i + 7 * j + 1) % ay.size()],
+                   bx[i],
+                   by[j],
+                   tag++,
+                   true};
       driver.cycle(v, true, false);
     }
   }
@@ -464,9 +468,9 @@ void wide_corpus(WideDriver& driver) {
   driver.cycle(random_wide(rng, tag++, true), true, false);
   driver.cycle(random_wide(rng, tag++, true), true, true);
 
-  const std::vector<int64_t> avals = {INT32_MIN, static_cast<int64_t>(INT32_MIN) + 1,
-                                      -2, -1, 0, 1, 2,
-                                      static_cast<int64_t>(INT32_MAX) - 1, INT32_MAX};
+  const std::vector<int64_t> avals = {
+      INT32_MIN, static_cast<int64_t>(INT32_MIN) + 1, -2,       -1, 0, 1,
+      2,         static_cast<int64_t>(INT32_MAX) - 1, INT32_MAX};
   const std::vector<int64_t> bvals = {-131072, -131071, -2, -1, 0, 1, 2, 131070, 131071};
   for (int64_t a : avals) {
     for (int64_t b : bvals) {
@@ -575,9 +579,9 @@ void projector_corpus(ProjectDriver& driver) {
   driver.cycle(random_project(rng, tag++, true), true, false);
   driver.cycle(random_project(rng, tag++, true), true, true);
 
-  const std::vector<int64_t> nvals = {INT32_MIN, static_cast<int64_t>(INT32_MIN) + 1,
-                                      -2, -1, 0, 1, 2,
-                                      static_cast<int64_t>(INT32_MAX) - 1, INT32_MAX};
+  const std::vector<int64_t> nvals = {
+      INT32_MIN, static_cast<int64_t>(INT32_MIN) + 1, -2,       -1, 0, 1,
+      2,         static_cast<int64_t>(INT32_MAX) - 1, INT32_MAX};
   const std::vector<uint16_t> extents = {0, 1, 2, 2047, 4094, 4095};
   for (int64_t n : nvals) {
     for (uint16_t extent : extents)
@@ -599,9 +603,12 @@ int main(int argc, char** argv) {
   bool expect_ce_failure = false;
   for (int i = 1; i < argc; ++i) {
     const std::string arg(argv[i]);
-    if (arg == "--control-only") control_only = true;
-    else if (arg == "--inject-lane-swap") inject_lane_swap = true;
-    else if (arg == "--expect-ce-failure") expect_ce_failure = true;
+    if (arg == "--control-only")
+      control_only = true;
+    else if (arg == "--inject-lane-swap")
+      inject_lane_swap = true;
+    else if (arg == "--expect-ce-failure")
+      expect_ce_failure = true;
     else {
       std::fprintf(stderr, "unknown argument: %s\n", argv[i]);
       zhao::exit_hard(2);
@@ -640,30 +647,29 @@ int main(int argc, char** argv) {
 #endif
 
   top.final();
-  std::printf("DUAL18_COUNTS comparisons=%llu enabled_outputs=%llu stalls=%llu resets=%llu "
-              "enabled_mismatches=%llu hold_mismatches=%llu reset_mismatches=%llu\n",
-              static_cast<unsigned long long>(score.comparisons),
-              static_cast<unsigned long long>(score.enabled_outputs),
-              static_cast<unsigned long long>(score.stalls),
-              static_cast<unsigned long long>(score.resets),
-              static_cast<unsigned long long>(score.enabled_mismatches),
-              static_cast<unsigned long long>(score.hold_mismatches),
-              static_cast<unsigned long long>(score.reset_mismatches));
-  std::printf("DUAL18_TRANSCRIPT fnv1a64=%016llx\n",
-              static_cast<unsigned long long>(digest.value));
+  std::printf(
+      "DUAL18_COUNTS comparisons=%llu enabled_outputs=%llu stalls=%llu resets=%llu "
+      "enabled_mismatches=%llu hold_mismatches=%llu reset_mismatches=%llu\n",
+      static_cast<unsigned long long>(score.comparisons),
+      static_cast<unsigned long long>(score.enabled_outputs),
+      static_cast<unsigned long long>(score.stalls), static_cast<unsigned long long>(score.resets),
+      static_cast<unsigned long long>(score.enabled_mismatches),
+      static_cast<unsigned long long>(score.hold_mismatches),
+      static_cast<unsigned long long>(score.reset_mismatches));
+  std::printf("DUAL18_TRANSCRIPT fnv1a64=%016llx\n", static_cast<unsigned long long>(digest.value));
 
   bool pass = false;
   if (expect_ce_failure) {
-    pass = score.hold_mismatches > 0 && score.enabled_mismatches == 0 &&
-           score.reset_mismatches == 0;
+    pass =
+        score.hold_mismatches > 0 && score.enabled_mismatches == 0 && score.reset_mismatches == 0;
     std::printf("DUAL18_POSITIVE_CONTROL ce_hold_detector=%s\n", pass ? "FIRED" : "FAILED");
   } else if (inject_lane_swap) {
-    pass = score.enabled_mismatches > 0 && score.hold_mismatches == 0 &&
-           score.reset_mismatches == 0;
+    pass =
+        score.enabled_mismatches > 0 && score.hold_mismatches == 0 && score.reset_mismatches == 0;
     std::printf("DUAL18_POSITIVE_CONTROL lane_swap_detector=%s\n", pass ? "FIRED" : "FAILED");
   } else {
-    pass = score.enabled_mismatches == 0 && score.hold_mismatches == 0 &&
-           score.reset_mismatches == 0;
+    pass =
+        score.enabled_mismatches == 0 && score.hold_mismatches == 0 && score.reset_mismatches == 0;
   }
   std::printf("DUAL18_RESULT %s\n", pass ? "PASS" : "FAIL");
   zhao::exit_hard(pass ? 0 : 1);

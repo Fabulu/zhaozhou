@@ -207,8 +207,8 @@ inline int page_pre_verdict(const PageLoadRequest& r, const mem::GuardRegion& hp
   // hardware -- a divergence in the model, not in the design. So the delegated
   // call is handed matching epochs (its epoch arm becomes a no-op) and the real
   // test is made below it, last, exactly where the borrowed order puts it.
-  const int v = mem::upload_verdict(pool, hps_arena, r.hps_addr,
-                                    page_vram_addr(r.slot, pool_base), kPageBytes, 0, 0);
+  const int v = mem::upload_verdict(pool, hps_arena, r.hps_addr, page_vram_addr(r.slot, pool_base),
+                                    kPageBytes, 0, 0);
   if (v != mem::kUploadOk) return v;
   if (r.epoch != current_epoch) return kPageEpochStale;
   return kPageOk;
@@ -222,9 +222,9 @@ inline int page_pre_verdict(const PageLoadRequest& r, const mem::GuardRegion& hp
 // derive and the hardware absolutely can.
 inline PageLoadResult page_load(const PageLoadRequest& r, const uint8_t* page,
                                 const mem::GuardRegion& hps_arena, uint32_t pool_base,
-                                uint32_t pool_slots, uint32_t current_epoch,
-                                bool transfer_complete, bool check_header_ident,
-                                bool check_header_crc, PageLoadLedger* L = nullptr) {
+                                uint32_t pool_slots, uint32_t current_epoch, bool transfer_complete,
+                                bool check_header_ident, bool check_header_crc,
+                                PageLoadLedger* L = nullptr) {
   PageLoadResult out;
 
   const int pre = page_pre_verdict(r, hps_arena, pool_base, pool_slots, current_epoch);
@@ -345,7 +345,7 @@ static_assert((kLayerBOff % 2) == 0, "plane B must start on an even byte");
 static_assert((kLayerCOff % 2) == 0, "plane C must start on an even byte");
 
 inline constexpr int kLatticeEdge = 33;
-inline constexpr int kLatticeVerts = kLatticeEdge * kLatticeEdge;   // 1,089
+inline constexpr int kLatticeVerts = kLatticeEdge * kLatticeEdge;  // 1,089
 
 static_assert(kLatticeVerts * 2 == static_cast<int>(kLayerABytes),
               "the 33x33 lattice must account for every byte of plane A");
@@ -366,8 +366,8 @@ struct LatticeVertex {
   // shape -- and it was the composed bench's PLACEMENT readback that found
   // it, because nothing notices a swapped pair of indices until something
   // downstream interprets them rather than passing them along.
-  int vi = 0;          // 0..32, COLUMN, stride 1
-  int vj = 0;          // 0..32, ROW,    stride kLatticeEdge
+  int vi = 0;  // 0..32, COLUMN, stride 1
+  int vj = 0;  // 0..32, ROW,    stride kLatticeEdge
 
   bool operator==(const LatticeVertex& o) const {
     return base == o.base && scar == o.scar && bottom == o.bottom && vi == o.vi && vj == o.vj;
@@ -402,8 +402,8 @@ inline int16_t page_h16(const uint8_t* page, uint32_t off) {
 inline std::vector<LatticeVertex> page_lattice(const uint8_t* page) {
   std::vector<LatticeVertex> out;
   out.reserve(kLatticeVerts);
-  for (int vj = 0; vj < kLatticeEdge; ++vj) {        // ROW, the slow axis
-    for (int vi = 0; vi < kLatticeEdge; ++vi) {      // COLUMN, the fast axis
+  for (int vj = 0; vj < kLatticeEdge; ++vj) {    // ROW, the slow axis
+    for (int vi = 0; vi < kLatticeEdge; ++vi) {  // COLUMN, the fast axis
       const uint32_t k = static_cast<uint32_t>(vj * kLatticeEdge + vi);
       LatticeVertex v;
       v.base = page_h16(page, kLayerAOff + 2u * k);
@@ -425,9 +425,9 @@ inline std::vector<LatticeVertex> page_lattice(const uint8_t* page) {
 // realigns by the constant lane `kSheetLane`. These constants live here so the
 // RTL's parameters and the test's expectations come from ONE derivation.
 inline constexpr uint32_t kSheetChunkStart =
-    (kLayerFOff / kPageBurstBytes) * kPageBurstBytes;                 // 10,688
-inline constexpr uint32_t kSheetLane = kLayerFOff % 8;                // 6
-inline constexpr uint32_t kSheetBeats = kLayerFBytes / 8;             // 1,024
+    (kLayerFOff / kPageBurstBytes) * kPageBurstBytes;      // 10,688
+inline constexpr uint32_t kSheetLane = kLayerFOff % 8;     // 6
+inline constexpr uint32_t kSheetBeats = kLayerFBytes / 8;  // 1,024
 // One extra source beat is needed whenever the lane is non-zero: out[j] spans
 // source beats j and j+1. That single beat is what makes the chunk count 129
 // against 128 write bursts, and the off-by-one lives exactly there.
@@ -445,8 +445,7 @@ static_assert(kSheetReadChunks == 129 && kSheetWriteBursts == 128,
               "129 chunks in, 128 bursts out -- asserted, not derived at a call site");
 // The scheme assumes the sheet begins in the FIRST BEAT of its chunk. True of
 // the v1 layout (10,694 % 64 = 6 < 8); the RTL $fatals if an override breaks it.
-static_assert((kLayerFOff % kPageBurstBytes) < 8,
-              "the sheet must begin in its chunk's first beat");
+static_assert((kLayerFOff % kPageBurstBytes) < 8, "the sheet must begin in its chunk's first beat");
 
 // The payload oracle: exactly the 8,192 bytes T4 says to copy, and nothing else.
 inline void sheet_extract(const uint8_t* page, uint8_t* out) {
@@ -552,9 +551,9 @@ inline uint64_t sheet_journal_addr(uint32_t entry, uint64_t journal_base) {
 // `seq_in_flight` is the caller's knowledge, not the model's: whether a
 // sequence number is outstanding is a property of a hardware table, and a
 // scalar model that kept its own would be a second table to disagree with.
-inline int sheet_pre_verdict(const SheetWritebackRequest& r,
-                             const mem::GuardRegion& journal_arena, uint32_t pool_base,
-                             uint32_t pool_slots, uint32_t current_epoch, bool seq_in_flight) {
+inline int sheet_pre_verdict(const SheetWritebackRequest& r, const mem::GuardRegion& journal_arena,
+                             uint32_t pool_base, uint32_t pool_slots, uint32_t current_epoch,
+                             bool seq_in_flight) {
   // A slot outside the pool is refused BEFORE the address is formed, so a wild
   // slot index can never become a wild address.
   if (r.slot >= pool_slots) return kSheetOutsidePool;
@@ -566,8 +565,7 @@ inline int sheet_pre_verdict(const SheetWritebackRequest& r,
   // model and unequal in the hardware.
   const int v =
       mem::upload_verdict(pool, journal_arena, r.journal_addr,
-                          page_vram_addr(r.slot, pool_base) + kSheetChunkStart,
-                          kLayerFBytes, 0, 0);
+                          page_vram_addr(r.slot, pool_base) + kSheetChunkStart, kLayerFBytes, 0, 0);
   if (v != mem::kUploadOk) return v;
   if (r.epoch != current_epoch) return kSheetEpochStale;
   // Last, because it is the only test whose answer is not a property of the
@@ -591,8 +589,7 @@ inline SheetWritebackResult sheet_writeback(const SheetWritebackRequest& r, cons
                                             uint32_t pool_base, uint32_t pool_slots,
                                             uint32_t current_epoch, bool seq_in_flight,
                                             bool transfer_complete, int ack,
-                                            bool check_header_ident,
-                                            uint8_t* journal_out = nullptr,
+                                            bool check_header_ident, uint8_t* journal_out = nullptr,
                                             SheetWritebackLedger* L = nullptr) {
   SheetWritebackResult out;
 

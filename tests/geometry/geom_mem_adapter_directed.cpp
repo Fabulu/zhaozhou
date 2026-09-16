@@ -63,10 +63,10 @@ struct Sim {
   bool serving = false;
   bool ok_pending = false;
   int beat = 0;
-  int expect = 8;        // packed words this line owes, from the request's len
+  int expect = 8;  // packed words this line owes, from the request's len
   bool deny_next = false;
   bool over_serve = false;  // deliberately send more words than asked
-  int stall_after = -1;  // insert a bubble after this beat, like a scanout burst
+  int stall_after = -1;     // insert a bubble after this beat, like a scanout burst
   int stalled = 0;
 
   explicit Sim(Vtb_geom_mem_adapter& dut) : d(dut) {}
@@ -264,7 +264,7 @@ int main(int argc, char** argv) {
     dut.b_addr = 0x06A0040u;
     dut.b_len = 64;
     dut.b_client = kScanout;
-    dut.b_write = 1;          // the requester asks for a WRITE, on purpose
+    dut.b_write = 1;  // the requester asks for a WRITE, on purpose
     int seen_client = -1;
     int seen_write = -1;
     // Same cycle model as run(): drive, eval, observe, advance.
@@ -308,11 +308,10 @@ int main(int argc, char** argv) {
        "with both asking at once, BOTH were served -- the loser of the "
        "arbitration is held, not dropped",
        1, static_cast<long long>(dut.jobs_a - ja));
-    ck(a.beats == 4 && b.beats == 8,
-       "and each got its own length back: A four words, B eight", 4, a.beats);
+    ck(a.beats == 4 && b.beats == 8, "and each got its own length back: A four words, B eight", 4,
+       a.beats);
     ck(a.lasts == 1 && b.lasts == 1,
-       "with exactly one LAST each -- not one shared pulse seen by both", 1,
-       a.lasts);
+       "with exactly one LAST each -- not one shared pulse seen by both", 1, a.lasts);
     ck(dut.contention > cont_before,
        "and the contention was COUNTED, so the decision to allow a second "
        "outstanding request can be made against a number",
@@ -353,8 +352,7 @@ int main(int argc, char** argv) {
     ck(!b.viol, "and not at the other one", 0, b.viol ? 1 : 0);
     ck(!a.ok, "the denied requester never saw an OK", 0, a.ok ? 1 : 0);
     ck(a.beats == 0, "and received no beats -- a denial returns nothing", 0, a.beats);
-    ck(dut.denied == den + 1, "and it is counted", 1,
-       static_cast<long long>(dut.denied - den));
+    ck(dut.denied == den + 1, "and it is counted", 1, static_cast<long long>(dut.denied - den));
   }
 
   // ---- nothing was lost or invented in the well-behaved scenarios ---------
@@ -384,8 +382,7 @@ int main(int argc, char** argv) {
     // Let B cross the adapter boundary, then queue A while B is still issuing.
     // `run` clears a valid only after the accepting edge.
     for (int i = 0; i < 20 && dut.b_valid; ++i) run(s, 1, &a, &b);
-    ck(!dut.b_valid, "the overlong B fixture was accepted before A queued", 0,
-       dut.b_valid ? 1 : 0);
+    ck(!dut.b_valid, "the overlong B fixture was accepted before A queued", 0, dut.b_valid ? 1 : 0);
 
     dut.a_valid = 1;
     dut.a_addr = 0x05000C0u;
@@ -398,9 +395,7 @@ int main(int argc, char** argv) {
        "requester -- the surplus is not passed on",
        8, b.beats);
     ck(b.lasts == 1, "with exactly one logical LAST", 1, b.lasts);
-    ck(a.beats == 0,
-       "and no surplus word leaks into the queued descriptor request", 0,
-       a.beats);
+    ck(a.beats == 0, "and no surplus word leaks into the queued descriptor request", 0, a.beats);
     ck(dut.a_valid,
        "the queued request remains unaccepted through the physical surplus "
        "and LAST");
@@ -415,13 +410,11 @@ int main(int argc, char** argv) {
     // The cycle after physical LAST may finally admit and serve queued A.
     s.over_serve = false;
     run(s, 200, &a, &b);
-    ck(!dut.a_valid && a.ok,
-       "the queued request is admitted after, not during, the drain");
-    ck(a.beats == 4 && a.last_at == 4,
-       "and it receives an uncontaminated four-word descriptor", 4, a.beats);
-    ck(dut.err_short == 0,
-       "with no SHORT reported anywhere in this run: nothing ended early",
-       0, static_cast<long long>(dut.err_short));
+    ck(!dut.a_valid && a.ok, "the queued request is admitted after, not during, the drain");
+    ck(a.beats == 4 && a.last_at == 4, "and it receives an uncontaminated four-word descriptor", 4,
+       a.beats);
+    ck(dut.err_short == 0, "with no SHORT reported anywhere in this run: nothing ended early", 0,
+       static_cast<long long>(dut.err_short));
   }
 
   std::printf(

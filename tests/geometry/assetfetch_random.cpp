@@ -140,7 +140,7 @@ struct Guard {
       verdict_pending = false;
       if (verdict_ok) {
         d.g_ok = 1;
-        streaming = true;   // beats begin the cycle after the VERDICT
+        streaming = true;  // beats begin the cycle after the VERDICT
       } else {
         d.g_violation = 1;
       }

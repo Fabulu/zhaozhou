@@ -129,14 +129,17 @@ void submit(Vzhao_forge_prim_eval& top, const EvalParams& p, int view_sel) {
 // 3: ready only 1 cycle in 10 (heavy backpressure).
 bool ready_now(int pattern, int cycle, uint32_t& lrng) {
   switch (pattern) {
-    case 0: return true;
-    case 1: return (cycle % 3) == 0;
+    case 0:
+      return true;
+    case 1:
+      return (cycle % 3) == 0;
     case 2:
       lrng ^= lrng << 13;
       lrng ^= lrng >> 17;
       lrng ^= lrng << 5;
       return (lrng & 1) != 0;
-    default: return (cycle % 10) == 0;
+    default:
+      return (cycle % 10) == 0;
   }
 }
 
@@ -191,12 +194,12 @@ EvalParams base_params() {
   EvalParams p{};
   p.start = {-3 << 16, 20 << 16, 5 << 16};
   p.end = {40 << 16, 2 << 16, -7 << 16};
-  p.perp1 = {0, 46341, 46341};        // ~unit, tilted
+  p.perp1 = {0, 46341, 46341};  // ~unit, tilted
   p.perp2 = {65536, 0, 0};
   p.waxis = {0, 65536, 0};
-  p.half_width = 6554;                // 0.1
-  p.branch_half_width = 3277;         // 0.05
-  p.amp = 2 << 16;                    // 2.0 world units of kink
+  p.half_width = 6554;         // 0.1
+  p.branch_half_width = 3277;  // 0.05
+  p.amp = 2 << 16;             // 2.0 world units of kink
   p.branch_amp = 1 << 16;
   p.seed = 0xDEADBEEFu;
   p.tick_phase = 137;
@@ -218,8 +221,8 @@ int main(int argc, char** argv) {
   // Expected cumulative counters, tracked against the oracle as we go.
   uint64_t x_jobs = 0, x_points = 0, x_vertices = 0, x_refused = 0, x_skipped = 0, x_sat = 0;
 
-  auto run_ok_job = [&](const char* what, const EvalParams& p, int pattern)
-      -> std::vector<OutVertex> {
+  auto run_ok_job = [&](const char* what, const EvalParams& p,
+                        int pattern) -> std::vector<OutVertex> {
     std::vector<EvalVec3> want;
     EvalCounts wc;
     zref::forge::eval_job(p, want, wc);
@@ -237,10 +240,8 @@ int main(int argc, char** argv) {
     zhao::check(top.jobs_o == (uint32_t)x_jobs, where, x_jobs, top.jobs_o);
     zhao::check(top.points_o == (uint32_t)x_points, where, x_points, top.points_o);
     zhao::check(top.vertices_o == (uint32_t)x_vertices, where, x_vertices, top.vertices_o);
-    zhao::check(top.refused_limit_o == (uint32_t)x_refused, where, x_refused,
-                top.refused_limit_o);
-    zhao::check(top.skipped_view_o == (uint32_t)x_skipped, where, x_skipped,
-                top.skipped_view_o);
+    zhao::check(top.refused_limit_o == (uint32_t)x_refused, where, x_refused, top.refused_limit_o);
+    zhao::check(top.skipped_view_o == (uint32_t)x_skipped, where, x_skipped, top.skipped_view_o);
     zhao::check(top.sat_events_o == (uint32_t)x_sat, where, x_sat, top.sat_events_o);
     zhao::check(top.walk_overrun_o == 0, where, 0, top.walk_overrun_o);
   };
@@ -254,9 +255,10 @@ int main(int argc, char** argv) {
     // The MEASURED rate of the worst legal bolt with an always-ready
     // consumer, against computeClocksPerFrame = 1,666,666. Also a throughput
     // regression tripwire: 12,000 clocks is ~2x the intended budget.
-    std::printf("[forge_prim_eval_directed] worst legal bolt: %d clocks "
-                "(%.3f%% of a 1,666,666-clock frame)\n",
-                g_last_cycles, 100.0 * g_last_cycles / 1666666.0);
+    std::printf(
+        "[forge_prim_eval_directed] worst legal bolt: %d clocks "
+        "(%.3f%% of a 1,666,666-clock frame)\n",
+        g_last_cycles, 100.0 * g_last_cycles / 1666666.0);
     zhao::check(g_last_cycles < 12000, "T1 worst-bolt clock budget", 12000, g_last_cycles);
 
     // The seam: 86 vertices = 2*(24+1) + 2*(8+1) + 2*(8+1); polyline ids in
@@ -280,8 +282,7 @@ int main(int argc, char** argv) {
       if (tr.i1 > max_idx) max_idx = tr.i1;
       if (tr.i2 > max_idx) max_idx = tr.i2;
     }
-    zhao::check(max_idx == 2 * (24 + 1) - 1, "T1 prim seam: topology spans emission", 49,
-                max_idx);
+    zhao::check(max_idx == 2 * (24 + 1) - 1, "T1 prim seam: topology spans emission", 49, max_idx);
   }
 
   // ---- 2. determinism across stall patterns and reruns ---------------------
@@ -312,14 +313,14 @@ int main(int argc, char** argv) {
     auto got_b = run_ok_job("T3 next tick vs oracle", p, 0);
     int diff = 0;
     for (size_t i = 0; i < want_a.size(); ++i)
-      diff += (got_b[i].x != want_a[i].x) + (got_b[i].y != want_a[i].y) +
-              (got_b[i].z != want_a[i].z);
+      diff +=
+          (got_b[i].x != want_a[i].x) + (got_b[i].y != want_a[i].y) + (got_b[i].z != want_a[i].z);
     zhao::check(diff > 0, "T3 tick_phase animates the bolt", 1, diff > 0 ? 1 : 0);
     // main-polyline endpoint vertices are anchor-exact on BOTH ticks
     for (int i : {0, 1, 48, 49}) {
-      zhao::check(got_b[i].x == want_a[i].x && got_b[i].y == want_a[i].y &&
-                      got_b[i].z == want_a[i].z,
-                  "T3 anchors immune to tick", 1, 0 + 1);
+      zhao::check(
+          got_b[i].x == want_a[i].x && got_b[i].y == want_a[i].y && got_b[i].z == want_a[i].z,
+          "T3 anchors immune to tick", 1, 0 + 1);
     }
     check_counters("T3 counters");
   }
@@ -357,11 +358,11 @@ int main(int argc, char** argv) {
     EvalParams bad[6] = {};
     for (auto& b : bad) b = base_params();
     bad[0].segments = 0;
-    bad[1].segments = 25;   // MAX_MAIN_SEGMENTS + 1 — the boundary
+    bad[1].segments = 25;  // MAX_MAIN_SEGMENTS + 1 — the boundary
     bad[2].branch_count = 3;
     bad[3].br[0].segments = 9;  // MAX_BRANCH_SEGMENTS + 1
     bad[4].br[1].segments = 0;
-    bad[5].br[0].attach = 25;   // past the last main point
+    bad[5].br[0].attach = 25;  // past the last main point
     for (int i = 0; i < 6; ++i) {
       zhao::check(zref::forge::eval_verdict(bad[i], 1) == zref::forge::kEvalRefusedLimit,
                   "T6 oracle agrees this is illegal", zref::forge::kEvalRefusedLimit,
@@ -388,7 +389,7 @@ int main(int argc, char** argv) {
   // ---- 7. a job outside the view is SKIPPED, not refused -------------------
   {
     EvalParams p = base_params();
-    p.view_mask = 2;  // view B only
+    p.view_mask = 2;    // view B only
     submit(top, p, 1);  // we are view A
     x_jobs++;
     x_skipped++;

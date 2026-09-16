@@ -40,8 +40,8 @@ Pick oracle(const Req& r) {
   const int32_t mv = r.v >> 10;
   const uint32_t pu = static_cast<uint32_t>(mu) & 127u;
   const uint32_t pv = static_cast<uint32_t>(mv) & 127u;
-  const uint32_t hash = static_cast<uint32_t>(mu) * 73856093u ^
-                        static_cast<uint32_t>(mv) * 19349663u;
+  const uint32_t hash =
+      static_cast<uint32_t>(mu) * 73856093u ^ static_cast<uint32_t>(mv) * 19349663u;
   const uint32_t residue = hash % 255u;
 
   Pick p;
@@ -63,8 +63,8 @@ void drive(Vzhao_texture_mosaic_v2& top, const Req& r) {
 }
 
 bool equal(const Vzhao_texture_mosaic_v2& top, const Pick& p) {
-  return top.pick_tile_o == p.tile && top.pick_tx_o == p.tx &&
-         top.pick_ty_o == p.ty && top.pick_src_id_o == p.src;
+  return top.pick_tile_o == p.tile && top.pick_tx_o == p.tx && top.pick_ty_o == p.ty &&
+         top.pick_src_id_o == p.src;
 }
 
 void reset(Vzhao_texture_mosaic_v2& top) {
@@ -80,8 +80,7 @@ void test_stream(Vzhao_texture_mosaic_v2& top) {
   reset(top);
   top.eval();
   zhao::check(top.idle_o == 1, "mosaic-v2 is structurally idle after reset", 1, top.idle_o);
-  zhao::check(top.texture_samples_o == 0, "mosaic-v2 counter resets", 0,
-              top.texture_samples_o);
+  zhao::check(top.texture_samples_o == 0, "mosaic-v2 counter resets", 0, top.texture_samples_o);
 
   std::vector<Req> requests;
   // Exhaust every fold residue on both sides of zero, with a nonzero discarded
@@ -172,10 +171,9 @@ void test_stream(Vzhao_texture_mosaic_v2& top) {
 
     prev_stalled = top.pick_valid_o && !top.pick_ready_i;
     if (prev_stalled) {
-      prev_pick = Pick{static_cast<uint8_t>(top.pick_tile_o),
-                       static_cast<uint8_t>(top.pick_tx_o),
-                       static_cast<uint8_t>(top.pick_ty_o),
-                       static_cast<uint16_t>(top.pick_src_id_o)};
+      prev_pick =
+          Pick{static_cast<uint8_t>(top.pick_tile_o), static_cast<uint8_t>(top.pick_tx_o),
+               static_cast<uint8_t>(top.pick_ty_o), static_cast<uint16_t>(top.pick_src_id_o)};
     }
 
     zhao::tick(top);

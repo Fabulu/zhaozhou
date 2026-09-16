@@ -111,8 +111,8 @@ inline bool normalmap_is_noop(int strength) { return strength == 0; }
 // hardware can hold sun-sum coefficient tables instead of multipliers.
 constexpr int kNormalmapDeltaShift = 22;
 
-inline int32_t normalmap_delta_s9(const DetailNormal& d, int sun_x15, int sun_z15,
-                                  int sun_x15_b, int sun_z15_b, int strength) {
+inline int32_t normalmap_delta_s9(const DetailNormal& d, int sun_x15, int sun_z15, int sun_x15_b,
+                                  int sun_z15_b, int strength) {
   const int64_t dot = static_cast<int64_t>(d.nx) * (sun_x15 + sun_x15_b) +
                       static_cast<int64_t>(d.nz) * (sun_z15 + sun_z15_b);
   int64_t delta = rshift_round(dot * strength, kNormalmapDeltaShift);

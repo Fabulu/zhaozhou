@@ -88,7 +88,7 @@ inline constexpr uint32_t kLoadBudgetPerFrame = swstream::kPageBudgetPerFrame;
 // oracle a pure function of (record, answer).
 struct ResAnswer {
   // ---- lookup ----
-  bool hit = false;      // RESIDENT_CLEAN or RESIDENT_DIRTY_F
+  bool hit = false;  // RESIDENT_CLEAN or RESIDENT_DIRTY_F
   uint16_t slot = 0;
   uint8_t gen = 0;
 
@@ -143,20 +143,20 @@ struct Step {
 // number below increments on exactly one accepted handshake or one consumed
 // record. None of them is a duration.
 struct Ledger {
-  uint32_t records_consumed = 0;  // records accepted off the sealed list
-  uint32_t patches_issued = 0;    // patch jobs handed to the terrain engine
-  uint32_t prefetch_resident = 0; // prefetch records whose page was already there
+  uint32_t records_consumed = 0;      // records accepted off the sealed list
+  uint32_t patches_issued = 0;        // patch jobs handed to the terrain engine
+  uint32_t prefetch_resident = 0;     // prefetch records whose page was already there
   uint32_t skipped_not_resident = 0;  // REQUIRED records whose page was missing
   uint32_t claims_issued = 0;
-  uint32_t claims_refused = 0;    // T9 rule 5
-  uint32_t claims_same = 0;       // lookup said miss, claim said already present
+  uint32_t claims_refused = 0;  // T9 rule 5
+  uint32_t claims_same = 0;     // lookup said miss, claim said already present
   uint32_t loads_issued = 0;
-  uint32_t loads_deferred = 0;    // T7 backstop
-  uint32_t writebacks_issued = 0; // T4
+  uint32_t loads_deferred = 0;     // T7 backstop
+  uint32_t writebacks_issued = 0;  // T4
   uint32_t compose_slots_used = 0;
   uint32_t pins_issued = 0;
-  uint32_t drained = 0;           // records consumed after a fault
-  uint32_t frame_faults = 0;      // T6
+  uint32_t drained = 0;       // records consumed after a fault
+  uint32_t frame_faults = 0;  // T6
 };
 
 // The identity T6 requires be recorded when a frame is rejected: "record

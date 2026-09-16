@@ -32,9 +32,9 @@
 namespace {
 
 using progdir::Harness;
-using progdir::Op;
 using progdir::kEntries;
 using progdir::kLruW;
+using progdir::Op;
 
 void run_script(Harness& h, const std::vector<Op>& s, const char* tag) {
   unsigned k = 0;
@@ -52,7 +52,8 @@ void print_intervals(const char* what, const std::vector<long>& iv) {
     if (mn < 0 || v < mn) mn = v;
     if (v > mx) mx = v;
   }
-  std::printf("MEASURED %-52s accept-to-accept: min %ld  max %ld  (%zu intervals)\n", what, mn, mx, iv.size());
+  std::printf("MEASURED %-52s accept-to-accept: min %ld  max %ld  (%zu intervals)\n", what, mn, mx,
+              iv.size());
 }
 
 }  // namespace
@@ -74,7 +75,8 @@ int main(int argc, char** argv) {
   Harness h(top);
   h.reset();
 
-  std::printf("field_progdir_differential: ENTRIES=%u LRUW=%u (compiled constants)\n", kEntries, kLruW);
+  std::printf("field_progdir_differential: ENTRIES=%u LRUW=%u (compiled constants)\n", kEntries,
+              kLruW);
 
   // ---- 0. the compiled constants agree with the elaborated block -----------
   // Fill kEntries programs: none may evict; the next one MUST. If -D and -G
@@ -124,18 +126,23 @@ int main(int argc, char** argv) {
     const progdir::Stats& st = h.stats();
     zhao::check(st.seen_hits > 0, "candidate hits_o fired", 1, st.seen_hits > 0);
     zhao::check(st.seen_misses > 0, "candidate misses_o fired", 1, st.seen_misses > 0);
-    zhao::check(st.seen_rejected > 0, "candidate programs_rejected_o fired", 1, st.seen_rejected > 0);
+    zhao::check(st.seen_rejected > 0, "candidate programs_rejected_o fired", 1,
+                st.seen_rejected > 0);
     zhao::check(st.seen_evictions > 0, "candidate evictions_o fired", 1, st.seen_evictions > 0);
     zhao::check(st.seen_occupancy > 0, "candidate occupancy_o fired", 1, st.seen_occupancy > 0);
-    std::printf("directed: candidate counters reached hits=%u misses=%u rejected=%u evictions=%u occupancy=%u\n",
-                st.seen_hits, st.seen_misses, st.seen_rejected, st.seen_evictions, st.seen_occupancy);
+    std::printf(
+        "directed: candidate counters reached hits=%u misses=%u rejected=%u evictions=%u "
+        "occupancy=%u\n",
+        st.seen_hits, st.seen_misses, st.seen_rejected, st.seen_evictions, st.seen_occupancy);
   }
 
   // ---- 2. THE TIE (and wrap), where the elaboration can reach it -------------
   if (progdir::tie_reachable()) {
     run_script(h, progdir::script_tie(), "tie");
   } else {
-    std::printf("tie: not reachable at LRUW=%u with legal stimulus -- run the ENTRIES=2 LRUW=2 build\n", kLruW);
+    std::printf(
+        "tie: not reachable at LRUW=%u with legal stimulus -- run the ENTRIES=2 LRUW=2 build\n",
+        kLruW);
   }
 
   // ---- 3. THE TIMING PROBE -- derived from RTL, not inherited --------------

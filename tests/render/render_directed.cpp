@@ -904,8 +904,7 @@ void test_d5_fog_after_toon_quantiser() {
     for (int32_t x = 1; x < kDim; ++x) {
       const size_t i = (static_cast<size_t>(row) * kDim + x) * 3;
       const size_t p = (static_cast<size_t>(row) * kDim + (x - 1)) * 3;
-      if (rgb[i] != rgb[p] || rgb[i + 1] != rgb[p + 1] || rgb[i + 2] != rgb[p + 2])
-        e.push_back(x);
+      if (rgb[i] != rgb[p] || rgb[i + 1] != rgb[p + 1] || rgb[i + 2] != rgb[p + 2]) e.push_back(x);
     }
     return e;
   };
@@ -921,17 +920,17 @@ void test_d5_fog_after_toon_quantiser() {
   // Non-vacuity, both directions. Without these the test passes on an image
   // with no bands at all, or on a fog switch that does nothing.
   check(e_clear.size() >= 2,
-         "D-5 setup: the lit gradient actually crosses both band thresholds, so "
-         "there are real band edges to move");
+        "D-5 setup: the lit gradient actually crosses both band thresholds, so "
+        "there are real band edges to move");
   check(clear != foggy,
-         "D-5 setup: turning fog on actually changed the image -- otherwise the "
-         "edge comparison below would be trivially satisfied");
+        "D-5 setup: turning fog on actually changed the image -- otherwise the "
+        "edge comparison below would be trivially satisfied");
 
   check(e_clear == e_foggy,
-         "D-5: the toon band edges land on exactly the same pixels with and "
-         "without fog -- bands come from LIGHTING alone. If fog were mixed in "
-         "before the quantiser, a constant fog would shift every lit value and "
-         "these edges would move.");
+        "D-5: the toon band edges land on exactly the same pixels with and "
+        "without fog -- bands come from LIGHTING alone. If fog were mixed in "
+        "before the quantiser, a constant fog would shift every lit value and "
+        "these edges would move.");
 
   // And the fade itself is uniform: under constant fog every pixel of a given
   // band takes the same fogged colour, so the image still holds exactly as many
@@ -947,8 +946,8 @@ void test_d5_fog_after_toon_quantiser() {
     return u.size();
   };
   check(distinct(clear) == distinct(foggy),
-         "D-5: constant fog recolours the bands without creating or destroying "
-         "any -- the quantiser's output is still exactly as banded as it was");
+        "D-5: constant fog recolours the bands without creating or destroying "
+        "any -- the quantiser's output is still exactly as banded as it was");
 }
 
 int main() {

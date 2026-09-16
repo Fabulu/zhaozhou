@@ -1,6 +1,5 @@
 // texture_bilerp_lane_dsp2_diff.cpp -- cycle-exact V2/BIL2 differential.
-#if (defined(EXPECT_BIL2_COLLAPSE_RESULTB) + \
-     defined(EXPECT_BIL2_BYPASS_VERTICAL_CAPTURE)) > 1
+#if (defined(EXPECT_BIL2_COLLAPSE_RESULTB) + defined(EXPECT_BIL2_BYPASS_VERTICAL_CAPTURE)) > 1
 #error ZHAO_BIL2_CPP_MUTANT_SELECTOR_COLLISION
 #endif
 
@@ -37,10 +36,10 @@ uint32_t next_random(uint32_t* state) {
 }
 
 uint8_t oracle(const Job& j) {
-  const int64_t a = static_cast<int64_t>(j.t00) * 256 +
-                    (static_cast<int64_t>(j.t10) - j.t00) * j.fu;
-  const int64_t b = static_cast<int64_t>(j.t01) * 256 +
-                    (static_cast<int64_t>(j.t11) - j.t01) * j.fu;
+  const int64_t a =
+      static_cast<int64_t>(j.t00) * 256 + (static_cast<int64_t>(j.t10) - j.t00) * j.fu;
+  const int64_t b =
+      static_cast<int64_t>(j.t01) * 256 + (static_cast<int64_t>(j.t11) - j.t01) * j.fu;
   const int64_t sum = a * 256 + (b - a) * j.fv;
   return static_cast<uint8_t>((sum + 32768) >> 16);
 }
@@ -67,13 +66,10 @@ void reset(Dut& d) {
 }
 
 bool same_control(const Dut& d) {
-  const bool payload_equal = !d.old_out_valid_o ||
-      (d.old_out_tok_o == d.new_out_tok_o &&
-       d.old_out_chan_o == d.new_out_chan_o);
-  return d.old_job_ready_o == d.new_job_ready_o &&
-         d.old_out_valid_o == d.new_out_valid_o && payload_equal &&
-         d.old_idle_o == d.new_idle_o &&
-         d.old_jobs_o == d.new_jobs_o &&
+  const bool payload_equal = !d.old_out_valid_o || (d.old_out_tok_o == d.new_out_tok_o &&
+                                                    d.old_out_chan_o == d.new_out_chan_o);
+  return d.old_job_ready_o == d.new_job_ready_o && d.old_out_valid_o == d.new_out_valid_o &&
+         payload_equal && d.old_idle_o == d.new_idle_o && d.old_jobs_o == d.new_jobs_o &&
          d.old_occupancy_o == d.new_occupancy_o;
 }
 
@@ -82,8 +78,8 @@ void reset_occupancy_controls(Dut& d) {
     reset(d);
     d.out_ready_i = 0;
     for (unsigned i = 0; i < depth; ++i) {
-      Job j{static_cast<uint8_t>(i), 255, static_cast<uint8_t>(255 - i), 0,
-            200, 91, 0x100u + i, static_cast<uint8_t>(i)};
+      Job j{static_cast<uint8_t>(i), 255, static_cast<uint8_t>(255 - i), 0, 200, 91, 0x100u + i,
+            static_cast<uint8_t>(i)};
       d.job_valid_i = 1;
       drive(d, j);
       d.eval();
@@ -101,26 +97,24 @@ void reset_occupancy_controls(Dut& d) {
     d.rst_n = 1;
     zhao::tick(d);
     d.eval();
-    zhao::check(d.old_idle_o && d.new_idle_o && d.old_jobs_o == 0 &&
-                    d.new_jobs_o == 0 && d.old_occupancy_o == 0 &&
-                    d.new_occupancy_o == 0,
+    zhao::check(d.old_idle_o && d.new_idle_o && d.old_jobs_o == 0 && d.new_jobs_o == 0 &&
+                    d.old_occupancy_o == 0 && d.new_occupancy_o == 0,
                 "BIL2 reset clears every live stage and counter", 1,
-                (d.old_idle_o && d.new_idle_o && d.old_jobs_o == 0 &&
-                 d.new_jobs_o == 0 && d.old_occupancy_o == 0 &&
-                 d.new_occupancy_o == 0) ? 1 : 0);
+                (d.old_idle_o && d.new_idle_o && d.old_jobs_o == 0 && d.new_jobs_o == 0 &&
+                 d.old_occupancy_o == 0 && d.new_occupancy_o == 0)
+                    ? 1
+                    : 0);
   }
 }
 
 void run_stream(Dut& d) {
   std::vector<Job> jobs;
-  auto add = [&](unsigned t00, unsigned t10, unsigned t01, unsigned t11,
-                 unsigned fu, unsigned fv) {
+  auto add = [&](unsigned t00, unsigned t10, unsigned t01, unsigned t11, unsigned fu, unsigned fv) {
     const uint32_t n = static_cast<uint32_t>(jobs.size());
     jobs.push_back(Job{static_cast<uint8_t>(t00), static_cast<uint8_t>(t10),
                        static_cast<uint8_t>(t01), static_cast<uint8_t>(t11),
                        static_cast<uint8_t>(fu), static_cast<uint8_t>(fv),
-                       (n * 7919u + 0x155u) & 0x3ffffu,
-                       static_cast<uint8_t>(n & 3u)});
+                       (n * 7919u + 0x155u) & 0x3ffffu, static_cast<uint8_t>(n & 3u)});
   };
 
   // Unlike horizontal products plus byte/fraction rails and ties.
@@ -133,18 +127,15 @@ void run_stream(Dut& d) {
     for (unsigned t10 : rails)
       for (unsigned t01 : rails)
         for (unsigned t11 : rails)
-          for (unsigned f : rails)
-            add(t00, t10, t01, t11, f, rails[(f + t01) % 6]);
+          for (unsigned f : rails) add(t00, t10, t01, t11, f, rails[(f + t01) % 6]);
 
   uint32_t seed = 0xb112d5f2u;
   std::unordered_set<uint64_t> random_tuples;
   for (int i = 0; i < 4000; ++i) {
     const uint32_t texels = next_random(&seed);
     const uint32_t fractions = next_random(&seed);
-    add(texels, texels >> 8, texels >> 16, texels >> 24,
-        fractions, fractions >> 8);
-    random_tuples.insert((static_cast<uint64_t>(texels) << 16) |
-                         (fractions & 0xffffu));
+    add(texels, texels >> 8, texels >> 16, texels >> 24, fractions, fractions >> 8);
+    random_tuples.insert((static_cast<uint64_t>(texels) << 16) | (fractions & 0xffffu));
   }
   zhao::check(random_tuples.size() == 4000,
               "BIL2 random sweep contains 4000 distinct six-byte tuples", 4000,
@@ -171,9 +162,8 @@ void run_stream(Dut& d) {
   Expected new_packet{};
 
   while ((offered < jobs.size() || retired < jobs.size()) && cycle < 200000) {
-    d.out_ready_i = (cycle < 96 || ((cycle % 17) != 4 &&
-                                    (cycle % 17) != 5 &&
-                                    (cycle % 17) != 6)) ? 1 : 0;
+    d.out_ready_i =
+        (cycle < 96 || ((cycle % 17) != 4 && (cycle % 17) != 5 && (cycle % 17) != 6)) ? 1 : 0;
     d.job_valid_i = offered < jobs.size();
     if (offered < jobs.size()) drive(d, jobs[offered]);
     d.eval();
@@ -184,13 +174,11 @@ void run_stream(Dut& d) {
     if (held_old) {
       ++hold_checks;
       if (!d.old_out_valid_o || d.old_out_o != old_packet.value ||
-          d.old_out_tok_o != old_packet.token ||
-          d.old_out_chan_o != old_packet.channel)
+          d.old_out_tok_o != old_packet.token || d.old_out_chan_o != old_packet.channel)
         ++old_hold_mismatch;
     }
     if (held_new && (!d.new_out_valid_o || d.new_out_o != new_packet.value ||
-                     d.new_out_tok_o != new_packet.token ||
-                     d.new_out_chan_o != new_packet.channel))
+                     d.new_out_tok_o != new_packet.token || d.new_out_chan_o != new_packet.channel))
       ++new_hold_mismatch;
 
     if (d.old_out_valid_o && d.out_ready_i) {
@@ -221,13 +209,13 @@ void run_stream(Dut& d) {
     held_old = d.old_out_valid_o && !d.out_ready_i;
     held_new = d.new_out_valid_o && !d.out_ready_i;
     if (held_old)
-      old_packet = Expected{static_cast<uint8_t>(d.old_out_o),
-                            static_cast<uint32_t>(d.old_out_tok_o),
-                            static_cast<uint8_t>(d.old_out_chan_o)};
+      old_packet =
+          Expected{static_cast<uint8_t>(d.old_out_o), static_cast<uint32_t>(d.old_out_tok_o),
+                   static_cast<uint8_t>(d.old_out_chan_o)};
     if (held_new)
-      new_packet = Expected{static_cast<uint8_t>(d.new_out_o),
-                            static_cast<uint32_t>(d.new_out_tok_o),
-                            static_cast<uint8_t>(d.new_out_chan_o)};
+      new_packet =
+          Expected{static_cast<uint8_t>(d.new_out_o), static_cast<uint32_t>(d.new_out_tok_o),
+                   static_cast<uint8_t>(d.new_out_chan_o)};
 
     zhao::tick(d);
     ++cycle;
@@ -247,10 +235,8 @@ void run_stream(Dut& d) {
               old_hold_mismatch + new_hold_mismatch);
   zhao::check(first_retire - first_accept == 3, "BIL2 latency remains three clocks", 3,
               first_retire - first_accept);
-  zhao::check(max_occupancy == 3, "BIL2 reaches full three-stage occupancy", 3,
-              max_occupancy);
-  zhao::check(hold_checks > 0, "BIL2 output hold is exercised", 1,
-              hold_checks > 0 ? 1 : 0);
+  zhao::check(max_occupancy == 3, "BIL2 reaches full three-stage occupancy", 3, max_occupancy);
+  zhao::check(hold_checks > 0, "BIL2 output hold is exercised", 1, hold_checks > 0 ? 1 : 0);
   zhao::check(d.old_idle_o && d.new_idle_o, "both bilerp implementations drain", 1,
               (d.old_idle_o && d.new_idle_o) ? 1 : 0);
 
@@ -262,8 +248,7 @@ void run_stream(Dut& d) {
 #elif defined(EXPECT_BIL2_BYPASS_VERTICAL_CAPTURE)
   zhao::check(value_difference > 0 && new_oracle_mismatch > 0 && hold_checks > 0,
               "BIL2 vertical-capture bypass mutant is detected under stalls", 1,
-              (value_difference > 0 && new_oracle_mismatch > 0 && hold_checks > 0)
-                  ? 1 : 0);
+              (value_difference > 0 && new_oracle_mismatch > 0 && hold_checks > 0) ? 1 : 0);
   std::printf("BIL2 vertical-capture bypass mutant FIRED differences=%d holds=%d\n",
               value_difference, hold_checks);
 #else

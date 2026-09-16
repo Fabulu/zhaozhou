@@ -148,9 +148,18 @@ struct PatchRecord {
 inline void encode_record(const PatchRecord& r, uint8_t out[kRecordBytes]) {
   std::size_t o = 0;
   auto put8 = [&](uint8_t v) { out[o++] = v; };
-  auto put16 = [&](uint16_t v) { put8(static_cast<uint8_t>(v)); put8(static_cast<uint8_t>(v >> 8)); };
-  auto put32 = [&](uint32_t v) { put16(static_cast<uint16_t>(v)); put16(static_cast<uint16_t>(v >> 16)); };
-  auto put64 = [&](uint64_t v) { put32(static_cast<uint32_t>(v)); put32(static_cast<uint32_t>(v >> 32)); };
+  auto put16 = [&](uint16_t v) {
+    put8(static_cast<uint8_t>(v));
+    put8(static_cast<uint8_t>(v >> 8));
+  };
+  auto put32 = [&](uint32_t v) {
+    put16(static_cast<uint16_t>(v));
+    put16(static_cast<uint16_t>(v >> 16));
+  };
+  auto put64 = [&](uint64_t v) {
+    put32(static_cast<uint32_t>(v));
+    put32(static_cast<uint32_t>(v >> 32));
+  };
   put32(r.island_id);
   put16(static_cast<uint16_t>(r.patch_ix));
   put16(static_cast<uint16_t>(r.patch_iz));
@@ -229,16 +238,18 @@ enum class Cls : uint8_t {
 
 inline uint8_t priority_of(Cls c) {
   switch (c) {
-    case Cls::kGameplay: return kPriorityGameplay;
-    case Cls::kRequiredCurrent: return kPriorityRequiredCurrent;
-    case Cls::kPredicted: return kPriorityPredicted;
-    default: return kPriorityRing;
+    case Cls::kGameplay:
+      return kPriorityGameplay;
+    case Cls::kRequiredCurrent:
+      return kPriorityRequiredCurrent;
+    case Cls::kPredicted:
+      return kPriorityPredicted;
+    default:
+      return kPriorityRing;
   }
 }
 
-inline bool is_required(Cls c) {
-  return c == Cls::kGameplay || c == Cls::kRequiredCurrent;
-}
+inline bool is_required(Cls c) { return c == Cls::kGameplay || c == Cls::kRequiredCurrent; }
 
 // ===========================================================================
 // A CAMERA
@@ -252,10 +263,10 @@ inline bool is_required(Cls c) {
 // THE PLAYER FACES. That is a determinism bug shaped exactly like a rounding
 // preference, so the shift is arithmetic and the asymmetry is gone.
 struct Camera {
-  island::View view;             // centre + radius in patches
-  int32_t vel_ix_q10 = 0;        // Q10 patches/frame, +x
-  int32_t vel_iz_q10 = 0;        // Q10 patches/frame, +z
-  uint8_t view_bit = 1;          // 1 for view 0, 2 for view 1 (Duo)
+  island::View view;       // centre + radius in patches
+  int32_t vel_ix_q10 = 0;  // Q10 patches/frame, +x
+  int32_t vel_iz_q10 = 0;  // Q10 patches/frame, +z
+  uint8_t view_bit = 1;    // 1 for view 0, 2 for view 1 (Duo)
 };
 
 inline island::View predicted_view(const Camera& c, int32_t frames = kPredictFrames) {
@@ -304,17 +315,17 @@ struct PageSource {
 // it, and throughput budgets are written against the second number."
 struct Ledger {
   uint32_t frames = 0;
-  uint32_t candidates_examined = 0;   // before dedup, summed over views/classes
-  uint32_t candidates_unique = 0;     // after the view union (T7) dedups them
-  uint32_t dual_patches = 0;          // wanted by BOTH views
-  uint32_t already_resident = 0;      // cost no bandwidth, consumed no budget
-  uint32_t loads_planned = 0;         // pages the sealed lists asked to move
-  uint32_t prefetch_deferred = 0;     // legal (T12): prefetch may be deferred
-  uint32_t required_deferred = 0;     // required, over budget -> proxy this frame
+  uint32_t candidates_examined = 0;         // before dedup, summed over views/classes
+  uint32_t candidates_unique = 0;           // after the view union (T7) dedups them
+  uint32_t dual_patches = 0;                // wanted by BOTH views
+  uint32_t already_resident = 0;            // cost no bandwidth, consumed no budget
+  uint32_t loads_planned = 0;               // pages the sealed lists asked to move
+  uint32_t prefetch_deferred = 0;           // legal (T12): prefetch may be deferred
+  uint32_t required_deferred = 0;           // required, over budget -> proxy this frame
   uint32_t gameplay_required_deferred = 0;  // UNRULED. See kPriorityGameplay.
-  uint32_t proxy_patches = 0;         // T7: declared proxy + record the miss
+  uint32_t proxy_patches = 0;               // T7: declared proxy + record the miss
   uint32_t staged_ok = 0;
-  uint32_t staged_reused = 0;         // already in the arena; no copy needed
+  uint32_t staged_reused = 0;  // already in the arena; no copy needed
   uint32_t refused_source_bounds = 0;
   uint32_t refused_staging_full = 0;
   uint32_t staged_incomplete = 0;
@@ -367,8 +378,7 @@ class WorldStreamer {
   // in. Both are GuardRegions so the bound check is `zref::mem`'s, not a fresh
   // comparison written here.
   void configure(const mem::GuardRegion& cartridge, const mem::GuardRegion& staging,
-                 uint32_t resource_epoch,
-                 uint32_t staging_slots = kStagingSlotsDefault) {
+                 uint32_t resource_epoch, uint32_t staging_slots = kStagingSlotsDefault) {
     cartridge_ = cartridge;
     staging_ = staging;
     epoch_ = resource_epoch;
@@ -405,9 +415,7 @@ class WorldStreamer {
 
   // What the game says it must have this frame regardless of what is visible
   // (T7's fourth working-set member).
-  void set_gameplay_required(const std::set<std::pair<int32_t, int32_t>>& g) {
-    gameplay_ = g;
-  }
+  void set_gameplay_required(const std::set<std::pair<int32_t, int32_t>>& g) { gameplay_ = g; }
 
   // -----------------------------------------------------------------------
   // ONE FRAME.
@@ -482,9 +490,12 @@ class WorldStreamer {
       r.patch_iz = static_cast<int16_t>(kv.first.second);
       r.expected_page_crc32c = it->second.declared_crc32c;
       r.flags = static_cast<uint16_t>(is_required(c.cls) ? kFlagRequired : kFlagPrefetch);
-      if (c.view_mask == 0x3) { r.flags |= kFlagDual; if (L) ++L->dual_patches; }
-      if (journal_.has(island::Streamer::resource_index(island_id, kv.first.first,
-                                                        kv.first.second)))
+      if (c.view_mask == 0x3) {
+        r.flags |= kFlagDual;
+        if (L) ++L->dual_patches;
+      }
+      if (journal_.has(
+              island::Streamer::resource_index(island_id, kv.first.first, kv.first.second)))
         r.flags |= kFlagHasSavedF;
       r.view_mask = c.view_mask;
       r.priority = priority_of(c.cls);
@@ -531,7 +542,10 @@ class WorldStreamer {
           // DYNAMIC patches after legal degradation, in the composed cache).
           // Reusing it here would fault frames the rulings say to render.
           ++f.required_deferred;
-          if (L) { ++L->required_deferred; ++L->proxy_patches; }
+          if (L) {
+            ++L->required_deferred;
+            ++L->proxy_patches;
+          }
           if (r.priority == kPriorityGameplay) {
             ++f.gameplay_required_deferred;
             f.unruled_gameplay_starvation = true;
@@ -609,7 +623,9 @@ class WorldStreamer {
     journal_.write(island::Streamer::resource_index(dir_.desc().island_id, ix, iz), f_sheet);
     if (L) ++L->f_journalled;
   }
-  void note_journal_ack(Ledger* L = nullptr) { if (L) ++L->f_acked; }
+  void note_journal_ack(Ledger* L = nullptr) {
+    if (L) ++L->f_acked;
+  }
 
   void note_evicted(int32_t ix, int32_t iz) { resident_.erase({ix, iz}); }
 
@@ -631,12 +647,11 @@ class WorldStreamer {
   // The merge: strongest class wins, view masks OR together. THIS is "union
   // the views before deduplication" (T7) -- the union is the OR, and it
   // happens before anything is dropped.
-  void offer(std::map<std::pair<int32_t, int32_t>, Cand>& want, const island::Visible& p,
-             Cls c, uint8_t view_bit, Ledger* L) {
+  void offer(std::map<std::pair<int32_t, int32_t>, Cand>& want, const island::Visible& p, Cls c,
+             uint8_t view_bit, Ledger* L) {
     if (L) ++L->candidates_examined;
     Cand& e = want[{p.ix, p.iz}];
-    if (e.view_mask == 0 || static_cast<uint8_t>(c) < static_cast<uint8_t>(e.cls))
-      e.cls = c;
+    if (e.view_mask == 0 || static_cast<uint8_t>(c) < static_cast<uint8_t>(e.cls)) e.cls = c;
     e.view_mask = static_cast<uint8_t>(e.view_mask | view_bit);
   }
 
@@ -648,7 +663,10 @@ class WorldStreamer {
     for (std::size_t i = 1; i < ord.size(); ++i) {
       const std::size_t v = ord[i];
       std::size_t j = i;
-      while (j > 0 && canonical_less(recs[v], recs[ord[j - 1]])) { ord[j] = ord[j - 1]; --j; }
+      while (j > 0 && canonical_less(recs[v], recs[ord[j - 1]])) {
+        ord[j] = ord[j - 1];
+        --j;
+      }
       ord[j] = v;
     }
   }
@@ -666,8 +684,7 @@ class WorldStreamer {
   // allocation happens BEFORE any byte moves. T12: "validate cartridge and
   // resource bounds before staging ... nothing partially validated reaches the
   // staging area." A page that fails halfway leaves no slot behind.
-  StageVerdict ensure_staged(const std::pair<int32_t, int32_t>& k, const PageSource& s,
-                             Ledger* L) {
+  StageVerdict ensure_staged(const std::pair<int32_t, int32_t>& k, const PageSource& s, Ledger* L) {
     if (!mem::upload_source_in_arena(cartridge_, cartridge_.base + s.cart_offset, kPageBytes)) {
       if (L) ++L->refused_source_bounds;
       return StageVerdict::kSourceOutsideCartridge;
@@ -711,12 +728,14 @@ class WorldStreamer {
       l.view_mask = static_cast<uint8_t>(l.view_mask | recs[i].view_mask);
     }
     l.patch_count = static_cast<uint16_t>(recs.size());
-    l.list_crc32c = l.bytes.empty()
-                        ? zhao_abi::zhao_crc32c(0, nullptr, 0)
-                        : zhao_abi::zhao_crc32c(0, l.bytes.data(),
-                                                static_cast<uint32_t>(l.bytes.size()));
+    l.list_crc32c = l.bytes.empty() ? zhao_abi::zhao_crc32c(0, nullptr, 0)
+                                    : zhao_abi::zhao_crc32c(0, l.bytes.data(),
+                                                            static_cast<uint32_t>(l.bytes.size()));
     l.sealed = true;
-    if (L) { ++L->lists_sealed; L->list_bytes_sealed += static_cast<uint32_t>(l.bytes.size()); }
+    if (L) {
+      ++L->lists_sealed;
+      L->list_bytes_sealed += static_cast<uint32_t>(l.bytes.size());
+    }
     return l;
   }
 

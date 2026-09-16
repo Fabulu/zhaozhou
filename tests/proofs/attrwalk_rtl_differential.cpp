@@ -170,8 +170,8 @@ struct Walker {
 
   // Run one job: pairs in, coverage rows in, pixels out (with random
   // backpressure so a stallable walker is actually stalled).
-  std::vector<EmittedPix> run(const Pair& p0, const Pair& px, const Pair& py,
-                              uint64_t area, const std::vector<std::pair<int, uint16_t>>& rows) {
+  std::vector<EmittedPix> run(const Pair& p0, const Pair& px, const Pair& py, uint64_t area,
+                              const std::vector<std::pair<int, uint16_t>>& rows) {
     put96(m->job_q0_i, p0.q);
     m->job_r0_i = static_cast<uint64_t>(p0.r);
     put96(m->job_dqx_i, px.q);
@@ -272,8 +272,10 @@ int main(int argc, char** argv) {
         if (!((rw.second >> x) & 1)) continue;
         const Pair p = edecomp(n, A);
         if (2 * p.r == A) {
-          if (p.q >= 0) ++ties_pos;
-          else ++ties_neg;
+          if (p.q >= 0)
+            ++ties_pos;
+          else
+            ++ties_neg;
         }
         bool ovf = false;
         const int32_t want_away = div.divide(n, area, &ovf);
@@ -291,22 +293,21 @@ int main(int argc, char** argv) {
         if (ga.row != rw.first || ga.col != x || ga.err || ovf || ga.q != want_away) {
           ++away_mismatch;
           if (away_mismatch <= 5)
-            std::printf("  AWAY mismatch (%d,%d): walker=%ld err=%d attrdiv=%ld ovf=%d\n",
-                        rw.first, x, (long)ga.q, ga.err ? 1 : 0, (long)want_away,
-                        ovf ? 1 : 0);
+            std::printf("  AWAY mismatch (%d,%d): walker=%ld err=%d attrdiv=%ld ovf=%d\n", rw.first,
+                        x, (long)ga.q, ga.err ? 1 : 0, (long)want_away, ovf ? 1 : 0);
         }
         if (gp.row != rw.first || gp.col != x || gp.err || gp.q != want_pos) {
           ++pos_mismatch;
           if (pos_mismatch <= 5)
-            std::printf("  POS mismatch (%d,%d): walker=%ld err=%d zref=%ld\n",
-                        rw.first, x, (long)gp.q, gp.err ? 1 : 0, (long)want_pos);
+            std::printf("  POS mismatch (%d,%d): walker=%ld err=%d zref=%ld\n", rw.first, x,
+                        (long)gp.q, gp.err ? 1 : 0, (long)want_pos);
         }
         ++k;
       }
     }
     if (k != got_away.size() || k != got_pos.size()) {
-      std::printf("  PIXEL COUNT wrong: want %zu, away %zu, pos %zu\n", k,
-                  got_away.size(), got_pos.size());
+      std::printf("  PIXEL COUNT wrong: want %zu, away %zu, pos %zu\n", k, got_away.size(),
+                  got_pos.size());
       ++away_mismatch;
     }
   };
@@ -320,13 +321,13 @@ int main(int argc, char** argv) {
 
   // directed: zero crossing mid-row, ties of both signs woven through the walk
   run_tile(-7 * 1000 - 500, 1000, -3000, 2000, full);
-  run_tile(128, 256, 256, 256, full);              // a tie at every pixel
+  run_tile(128, 256, 256, 256, full);  // a tie at every pixel
   // negative ties in-walk: N = -2304 + 512(x+y), A = 512 -> r = 256 at EVERY
   // pixel, q < 0 for x+y < 5. The first version of this line used a base that
   // was 384 mod 512 — never a tie — and the anti-vacuity gate below refused
   // the run. That is the gate doing its one job.
   run_tile(-2304, 512, 512, 512, full);
-  {                                                // near the numerator ceiling
+  {  // near the numerator ceiling
     const uint64_t A = (1ULL << 46) - 4;
     const i128 base = -(static_cast<i128>(1) << 30) * static_cast<i128>(A) + 12345;
     run_tile(base, (static_cast<i128>(1) << 45), (static_cast<i128>(1) << 44) + 7, A, full);
@@ -335,8 +336,7 @@ int main(int argc, char** argv) {
   for (int t = 0; t < 16; ++t) {
     const int mag = 8 + static_cast<int>(rng() % 38);
     const uint64_t A = (rng() % (1ULL << mag)) + 2;
-    const i128 base = static_cast<i128>(static_cast<int64_t>(
-                          static_cast<int32_t>(rng()) / 4)) *
+    const i128 base = static_cast<i128>(static_cast<int64_t>(static_cast<int32_t>(rng()) / 4)) *
                           static_cast<i128>(A) +
                       static_cast<i128>(rng() % A);
     const i128 dx =
@@ -356,12 +356,10 @@ int main(int argc, char** argv) {
               rtl_divides);
   std::printf("   away-build vs attrdiv mismatches %ld (MUST be 0)\n", away_mismatch);
   std::printf("   pos-build  vs zref    mismatches %ld (MUST be 0)\n", pos_mismatch);
-  std::printf("   ties %ld/%ld, crossings %ld (all MUST be > 0)\n", ties_pos, ties_neg,
-              crossings);
+  std::printf("   ties %ld/%ld, crossings %ld (all MUST be > 0)\n", ties_pos, ties_neg, crossings);
   std::printf("   pixels where the two LAWS differ: %ld (MUST be > 0, or ties were vacuous)\n",
               laws_differ_px);
-  if (away_mismatch || pos_mismatch || !ties_pos || !ties_neg || !crossings ||
-      !laws_differ_px)
+  if (away_mismatch || pos_mismatch || !ties_pos || !ties_neg || !crossings || !laws_differ_px)
     ++fails;
 
   // ---- fire the range detector with legal stimulus -------------------------
@@ -372,7 +370,7 @@ int main(int argc, char** argv) {
     // covered pixels sit at quotients around +2^31 + few: out of s32 range
     const i128 base = (static_cast<i128>(INT32_MAX) + 3) * A + 7;
     const Pair p0 = edecomp(base, A);
-    const Pair px = edecomp(static_cast<i128>(A), A);      // +1 quotient per px
+    const Pair px = edecomp(static_cast<i128>(A), A);  // +1 quotient per px
     const Pair py = edecomp(static_cast<i128>(0), A);
     std::vector<std::pair<int, uint16_t>> rows{{0, 0x000F}};
     const uint32_t errs_before = w_away.m->range_errs_o;
@@ -385,8 +383,8 @@ int main(int argc, char** argv) {
     if (flagged != 4 || errs_after != errs_before + 4) ++fails;
   }
 
-  std::printf("\nwalker cycles: away %llu, pos %llu\n",
-              (unsigned long long)w_away.cycles, (unsigned long long)w_pos.cycles);
+  std::printf("\nwalker cycles: away %llu, pos %llu\n", (unsigned long long)w_away.cycles,
+              (unsigned long long)w_pos.cycles);
   if (fails == 0) {
     std::printf("ALL SECTIONS PASS\n");
     zhao::exit_hard(0);

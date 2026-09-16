@@ -87,8 +87,7 @@ int main(int, char**) {
   // rotation"): wy != wz, so the swap must surface. INVERTED POLARITY — this
   // control passes only when the differential checker FAILS the mutant.
   const int strong = mismatches(dut, 9000, -7000, 5000, -3000);
-  check(strong > 0, "the differential checker FIRES on the schedule break", 1,
-        strong > 0 ? 1 : 0);
+  check(strong > 0, "the differential checker FIRES on the schedule break", 1, strong > 0 ? 1 : 0);
   std::printf("[info] schedule-swap mutant: %d of 12 elements diverge on the strong vector\n",
               strong);
 

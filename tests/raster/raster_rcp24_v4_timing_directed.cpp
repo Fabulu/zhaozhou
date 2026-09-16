@@ -70,8 +70,7 @@ struct Lcg {
 std::vector<Request> make_stream() {
   const uint32_t kMax = 0xFFFFFFu;
   std::vector<uint32_t> special = {
-      0u,       1u,       2u,       3u,       0x7FFFFEu, 0x7FFFFFu,
-      0x800000u, 0x800001u, 0xFFFFFEu, 0xFFFFFFu, 0xABCDEFu,
+      0u, 1u, 2u, 3u, 0x7FFFFEu, 0x7FFFFFu, 0x800000u, 0x800001u, 0xFFFFFEu, 0xFFFFFFu, 0xABCDEFu,
   };
 
   // Every exponent is represented explicitly.  The neighbours straddle every
@@ -142,8 +141,7 @@ int main(int argc, char** argv) {
   reset(top);
 
   const std::vector<Request> stream = make_stream();
-  zhao::check(stream.size() < 256,
-              "the token scoreboard has no live-token wraparound", 1,
+  zhao::check(stream.size() < 256, "the token scoreboard has no live-token wraparound", 1,
               stream.size() < 256 ? 1 : 0);
 
   uint32_t expected_zero_jobs = 0;
@@ -208,9 +206,8 @@ int main(int argc, char** argv) {
     if (hw_occupancy > peak_occupancy) peak_occupancy = hw_occupancy;
 
     if (offering && top.v_ready_o == 0) ++input_stall_cycles;
-    if (input_held &&
-        (!offering || static_cast<uint32_t>(top.d_i) != held_input.d ||
-         static_cast<uint32_t>(top.v_tok_i) != held_input.tok)) {
+    if (input_held && (!offering || static_cast<uint32_t>(top.d_i) != held_input.d ||
+                       static_cast<uint32_t>(top.v_tok_i) != held_input.tok)) {
       ++input_hold_errors;
     }
 
@@ -309,9 +306,8 @@ int main(int argc, char** argv) {
   zhao::check(pending.empty(), "the token scoreboard is empty after drain", 0, pending.size());
   zhao::check(counter_sync_errors == 0, "accepted/completed counters track the score", 0,
               counter_sync_errors);
-  zhao::check(occupancy_errors == 0,
-              "occupancy is accepted minus completed on every observed edge", 0,
-              occupancy_errors);
+  zhao::check(occupancy_errors == 0, "occupancy is accepted minus completed on every observed edge",
+              0, occupancy_errors);
   zhao::check(idle_errors == 0, "idle is exactly the zero-occupancy observation", 0, idle_errors);
   zhao::check(input_hold_errors == 0, "input remains stable under input backpressure", 0,
               input_hold_errors);
@@ -333,17 +329,14 @@ int main(int argc, char** argv) {
   zhao::check(final_completed == stream.size(), "completed_o is exact", stream.size(),
               final_completed);
   zhao::check(static_cast<uint32_t>(top.mul_jobs_o) == expected_mul_jobs,
-              "mul_jobs_o is exactly four per nonzero request", expected_mul_jobs,
-              top.mul_jobs_o);
+              "mul_jobs_o is exactly four per nonzero request", expected_mul_jobs, top.mul_jobs_o);
   zhao::check(static_cast<uint32_t>(top.zero_jobs_o) == expected_zero_jobs,
-              "zero_jobs_o is exactly one per zero request", expected_zero_jobs,
-              top.zero_jobs_o);
+              "zero_jobs_o is exactly one per zero request", expected_zero_jobs, top.zero_jobs_o);
   zhao::check(static_cast<uint32_t>(top.phase_jobs_o) == expected_phase_jobs,
               "phase_jobs_o is products plus scheduled zero phases", expected_phase_jobs,
               top.phase_jobs_o);
   zhao::check(static_cast<uint32_t>(top.negcorr_jobs_o) == 0,
-              "negcorr_jobs_o stays zero on the u24 reciprocal domain", 0,
-              top.negcorr_jobs_o);
+              "negcorr_jobs_o stays zero on the u24 reciprocal domain", 0, top.negcorr_jobs_o);
   zhao::check(final_occupancy == 0, "the final accepted-minus-completed occupancy is zero", 0,
               final_occupancy);
   zhao::check(top.idle_o != 0, "idle_o is asserted after the final drain", 1,
@@ -359,8 +352,8 @@ int main(int argc, char** argv) {
               value_mismatches != 0 ? 1 : 0);
   if (value_mismatches != 0) std::printf("DETECTED\n");
 #else
-  zhao::check(value_mismatches == 0,
-              "every V4 result matches zref::rcp_u24 in r/k/zero", 0, value_mismatches);
+  zhao::check(value_mismatches == 0, "every V4 result matches zref::rcp_u24 in r/k/zero", 0,
+              value_mismatches);
 #endif
 
   return zhao::report_and_exit("raster_rcp24_v4_timing_directed");

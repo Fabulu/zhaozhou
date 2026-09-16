@@ -154,41 +154,32 @@ class Harness {
     svBitVecVal context_words[7]{};
     select_dpi_scope();
     zhao_texture_packet_b_get_owner_context(context_words);
-    for (unsigned i = 0; i < 7; ++i)
-      value.owner_context[i] = context_words[i];
+    for (unsigned i = 0; i < 7; ++i) value.owner_context[i] = context_words[i];
     return value;
   }
 };
 
 bool snapshots_equal(const Snapshot& lhs, const Snapshot& rhs) {
-  return lhs.rgb == rhs.rgb && lhs.alpha == rhs.alpha &&
-      lhs.index == rhs.index && lhs.status == rhs.status &&
-      lhs.tag == rhs.tag && lhs.retire == rhs.retire &&
-      lhs.owner_context == rhs.owner_context;
+  return lhs.rgb == rhs.rgb && lhs.alpha == rhs.alpha && lhs.index == rhs.index &&
+         lhs.status == rhs.status && lhs.tag == rhs.tag && lhs.retire == rhs.retire &&
+         lhs.owner_context == rhs.owner_context;
 }
 
 void load_offer(Harness& h, const Expected& expected) {
-  h.dut.frag_ctx_i = (static_cast<uint64_t>(expected.legacy[1]) << 32) |
-                     expected.legacy[0];
-  for (unsigned i = 0; i < 5; ++i)
-    h.dut.frag_retire_ctx_i[i] = expected.retire[i];
+  h.dut.frag_ctx_i = (static_cast<uint64_t>(expected.legacy[1]) << 32) | expected.legacy[0];
+  for (unsigned i = 0; i < 5; ++i) h.dut.frag_retire_ctx_i[i] = expected.retire[i];
   h.dut.frag_base_rgb_i = expected.rgb;
   h.dut.frag_base_a_i = expected.alpha;
   h.dut.frag_valid_i = 1;
 }
 
-void check_retirement(const Snapshot& got, const Expected& expected,
-                      uint64_t cycle) {
+void check_retirement(const Snapshot& got, const Expected& expected, uint64_t cycle) {
   require(got.rgb == expected.rgb, "count-zero base RGB changed", cycle);
   require(got.alpha == expected.alpha, "count-zero base alpha changed", cycle);
-  require(got.index == 0 && got.status == 0,
-          "count-zero result status/index changed", cycle);
-  require(got.tag == static_cast<uint16_t>(expected.legacy[0]),
-          "legacy tag alias changed", cycle);
-  require(got.retire == expected.retire,
-          "public 160-bit retirement context changed", cycle);
-  require(got.owner_context[0] == expected.legacy[0] &&
-          got.owner_context[1] == expected.legacy[1],
+  require(got.index == 0 && got.status == 0, "count-zero result status/index changed", cycle);
+  require(got.tag == static_cast<uint16_t>(expected.legacy[0]), "legacy tag alias changed", cycle);
+  require(got.retire == expected.retire, "public 160-bit retirement context changed", cycle);
+  require(got.owner_context[0] == expected.legacy[0] && got.owner_context[1] == expected.legacy[1],
           "full legacy64 owner context changed", cycle);
   for (unsigned i = 0; i < 5; ++i)
     require(got.owner_context[i + 2] == expected.retire[i],
@@ -208,8 +199,7 @@ void run_full_context() {
   for (unsigned index = 0; index < kTransactions; ++index) {
     source[index].legacy[0] = random32();
     source[index].legacy[1] = random32();
-    for (unsigned word = 0; word < 5; ++word)
-      source[index].retire[word] = random32();
+    for (unsigned word = 0; word < 5; ++word) source[index].retire[word] = random32();
     source[index].rgb = random32() & 0x00ffffffu;
     source[index].alpha = static_cast<uint8_t>(random32());
   }
@@ -223,8 +213,7 @@ void run_full_context() {
   unsigned ingress_stall_cycles = 0;
   unsigned output_stall_cycles = 0;
 
-  for (unsigned watchdog = 0; watchdog < 200000 && retired < kTransactions;
-       ++watchdog) {
+  for (unsigned watchdog = 0; watchdog < 200000 && retired < kTransactions; ++watchdog) {
     if (!holding_offer && offered < kTransactions && (random32() & 3u) != 0) {
       load_offer(h, source[offered]);
       holding_offer = true;
@@ -242,8 +231,8 @@ void run_full_context() {
       ++output_stall_cycles;
       const Snapshot now = h.snapshot();
       if (stalled_snapshot_valid)
-        require(snapshots_equal(now, stalled_snapshot),
-                "full output/context changed while stalled", h.cycle);
+        require(snapshots_equal(now, stalled_snapshot), "full output/context changed while stalled",
+                h.cycle);
       stalled_snapshot = now;
       stalled_snapshot_valid = true;
     } else {
@@ -273,28 +262,28 @@ void run_full_context() {
   require(offered == kTransactions && retired == kTransactions,
           "randomized stream did not completely retire", h.cycle);
   require(scoreboard.empty(), "scoreboard did not drain", h.cycle);
-  require(ingress_stall_cycles != 0,
-          "randomized run never exercised ingress backpressure", h.cycle);
-  require(output_stall_cycles != 0,
-          "randomized run never exercised output backpressure", h.cycle);
-  require(h.saw_material_busy_leaf_idle,
-          "material-read pipeline never independently held work", h.cycle);
-  require(h.saw_material_idle_leaf_busy,
-          "combine leaf never independently held work", h.cycle);
+  require(ingress_stall_cycles != 0, "randomized run never exercised ingress backpressure",
+          h.cycle);
+  require(output_stall_cycles != 0, "randomized run never exercised output backpressure", h.cycle);
+  require(h.saw_material_busy_leaf_idle, "material-read pipeline never independently held work",
+          h.cycle);
+  require(h.saw_material_idle_leaf_busy, "combine leaf never independently held work", h.cycle);
 
   h.dut.out_ready_i = 1;
   for (unsigned n = 0; n < 20000; ++n) {
-    h.dut.clk = 0; h.dut.eval();
+    h.dut.clk = 0;
+    h.dut.eval();
     if (h.dut.quiet_o) break;
     h.step();
   }
-  h.dut.clk = 0; h.dut.eval();
+  h.dut.clk = 0;
+  h.dut.eval();
   require(h.dut.quiet_o, "full-context stream did not reach quiet", h.cycle);
 
   // Owner counter fire behavior is exercised by the legal standalone owner suite;
   // this top test checks only the stable public sum at the healthy zero point.
-  require(h.dut.cnt_fragrob_id_errors_o == 0,
-          "healthy full-context run moved owner error sum", h.cycle);
+  require(h.dut.cnt_fragrob_id_errors_o == 0, "healthy full-context run moved owner error sum",
+          h.cycle);
 
   // Inject an independent recoverable event on the exact accepted clear edge
   // through the stable synthesis-excluded DPI seam.
@@ -303,8 +292,8 @@ void run_full_context() {
   h.dut.frame_fault_clear_valid_i = 1;
   h.dut.clk = 0;
   h.dut.eval();
-  require(h.dut.frame_fault_clear_ready_o,
-          "same-edge control did not start from accepted clear", h.cycle);
+  require(h.dut.frame_fault_clear_ready_o, "same-edge control did not start from accepted clear",
+          h.cycle);
   h.dut.clk = 1;
   h.dut.eval();
   ++h.cycle;
@@ -315,13 +304,11 @@ void run_full_context() {
   require(!h.dut.lifetime_structural_fault_o,
           "recoverable fault was misclassified as reset-lifetime", h.cycle);
 #ifdef PACKET_B_EXPECT_CLEAR_OVER_FAULT
-  require(!h.dut.frame_fault_o,
-          "clear-over-fault mutant did not erase same-edge fault", h.cycle);
+  require(!h.dut.frame_fault_o, "clear-over-fault mutant did not erase same-edge fault", h.cycle);
   std::printf("packet-b clear-over-fault mutant FIRED\n");
   return;
 #else
-  require(h.dut.frame_fault_o,
-          "same-edge recoverable fault lost to frame clear", h.cycle);
+  require(h.dut.frame_fault_o, "same-edge recoverable fault lost to frame clear", h.cycle);
 #endif
 
   // Clear the injected recoverable event, then exercise each remaining
@@ -345,8 +332,8 @@ void run_full_context() {
     const uint32_t admitted_before = h.owner_admitted();
     h.dut.clk = 0;
     h.dut.eval();
-    require(!h.dut.frag_ready_o,
-            "fault-coincident fragment offer was not blocked immediately", h.cycle);
+    require(!h.dut.frag_ready_o, "fault-coincident fragment offer was not blocked immediately",
+            h.cycle);
     h.step();
     require(h.owner_admitted() == admitted_before,
             "fault-coincident fragment entered the owner event boundary", h.cycle);
@@ -354,8 +341,7 @@ void run_full_context() {
     h.select_dpi_scope();
     zhao_texture_packet_b_set_lifetime_fault_inject(0);
     h.dut.eval();
-    require(h.dut.frame_fault_o && h.dut.lifetime_structural_fault_o &&
-                !h.dut.frag_ready_o,
+    require(h.dut.frame_fault_o && h.dut.lifetime_structural_fault_o && !h.dut.frag_ready_o,
             "pulsed lifetime source did not latch/classify/block admission", h.cycle);
     h.dut.cfg_valid_i = 1;
     h.dut.pal_load_valid_i = 1;
@@ -378,12 +364,13 @@ void run_full_context() {
             "reset did not recover lifetime source", h.cycle);
   }
 
-  std::printf("packet-b fullctx PASS: accepted=%u retired=%u "
-              "ingress_stalls=%u output_stalls=%u lifetime_sources=6\n",
-              offered, retired, ingress_stall_cycles, output_stall_cycles);
+  std::printf(
+      "packet-b fullctx PASS: accepted=%u retired=%u "
+      "ingress_stalls=%u output_stalls=%u lifetime_sources=6\n",
+      offered, retired, ingress_stall_cycles, output_stall_cycles);
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);

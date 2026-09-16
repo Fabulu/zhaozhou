@@ -52,8 +52,7 @@ Row make_row(unsigned seed) {
   return r;
 }
 
-void put_bits(std::array<uint32_t, 9>& words, unsigned lo, unsigned width,
-              uint32_t value) {
+void put_bits(std::array<uint32_t, 9>& words, unsigned lo, unsigned width, uint32_t value) {
   for (unsigned bit = 0; bit < width; ++bit) {
     const unsigned dst = lo + bit;
     if ((value >> bit) & 1u) words[dst / 32] |= 1u << (dst % 32);
@@ -107,15 +106,13 @@ void launch_read(DescriptorDut* d, unsigned slot, uint8_t generation) {
   d->rd_valid_i = 1;
   d->rd_owner_i = owner(slot, generation);
   d->eval();
-  zhao::check(d->rd_ready_o != 0, "descriptor read storage was available", 1,
-              d->rd_ready_o);
+  zhao::check(d->rd_ready_o != 0, "descriptor read storage was available", 1, d->rd_ready_o);
   tick(d);
   d->rd_valid_i = 0;
   d->eval();
 }
 
-unsigned logical_mismatches(DescriptorDut* d,
-                            const std::array<uint32_t, 9>& expected) {
+unsigned logical_mismatches(DescriptorDut* d, const std::array<uint32_t, 9>& expected) {
   unsigned errors = 0;
   for (unsigned i = 0; i < 9; ++i) {
     uint32_t mask = (i == 8) ? 0x7FFFFFFFu : 0xFFFFFFFFu;
@@ -140,14 +137,12 @@ int main(int argc, char** argv) {
   d->rst_n = 1;
   tick(d);
 
-  zhao::check(d->desc_pad_fault_o == 0,
-              "the reset-only 32-bit pad counter starts at zero", 0,
+  zhao::check(d->desc_pad_fault_o == 0, "the reset-only 32-bit pad counter starts at zero", 0,
               d->desc_pad_fault_o);
   zhao::check(d->rd_generation_mismatch_o == 0,
               "the generation counter independently starts at zero", 0,
               d->rd_generation_mismatch_o);
-  zhao::check(d->idle_o != 0, "the descriptor is idle after reset", 1,
-              d->idle_o);
+  zhao::check(d->idle_o != 0, "the descriptor is idle after reset", 1, d->idle_o);
 
   const Row a = make_row(3);
   const Row b = make_row(41);
@@ -155,9 +150,8 @@ int main(int argc, char** argv) {
   drive_write(d, 29, b);
 
   launch_read(d, 7, a.owner_generation);
-  zhao::check(d->rd_result_valid_o != 0,
-              "an accepted synchronous read produces one held response", 1,
-              d->rd_result_valid_o);
+  zhao::check(d->rd_result_valid_o != 0, "an accepted synchronous read produces one held response",
+              1, d->rd_result_valid_o);
   tick(d);  // one-shot verdict while held
 
 #if defined(ZHAO_DESC_PAD_MUTANT)
@@ -168,8 +162,8 @@ int main(int argc, char** argv) {
               "PAD MUTANT FIRE: no corrupt logical bit is exposed as usable", 0,
               d->rd_descriptor_usable_o);
   zhao::check(d->desc_pad_fault_o == 1,
-              "PAD MUTANT FIRE: one accepted bad-pad read increments exactly once",
-              1, d->desc_pad_fault_o);
+              "PAD MUTANT FIRE: one accepted bad-pad read increments exactly once", 1,
+              d->desc_pad_fault_o);
   tick(d);
   tick(d);
   zhao::check(d->desc_pad_fault_o == 1,
@@ -182,15 +176,15 @@ int main(int argc, char** argv) {
   launch_read(d, 29, b.owner_generation);
   tick(d);
   zhao::check(d->desc_pad_fault_o == 2,
-              "PAD MUTANT FIRE: two distinct accepted bad-pad reads produce delta two",
-              2, d->desc_pad_fault_o);
+              "PAD MUTANT FIRE: two distinct accepted bad-pad reads produce delta two", 2,
+              d->desc_pad_fault_o);
   d->frame_fault_clear_i = 1;
   tick(d);
   d->frame_fault_clear_i = 0;
   d->eval();
   zhao::check(d->frame_fault_o == 0 && d->desc_pad_fault_o == 2,
-              "PAD MUTANT FIRE: sticky clear does not clear the reset-only counter",
-              1, (!d->frame_fault_o && d->desc_pad_fault_o == 2) ? 1 : 0);
+              "PAD MUTANT FIRE: sticky clear does not clear the reset-only counter", 1,
+              (!d->frame_fault_o && d->desc_pad_fault_o == 2) ? 1 : 0);
 
   // Verilator exposes this output register directly for the bounded modulo-wrap
   // control; driving 2^32 physical reads would not be a useful acceptance test.
@@ -202,17 +196,15 @@ int main(int argc, char** argv) {
   launch_read(d, 7, a.owner_generation);
   tick(d);
   zhao::check(d->desc_pad_fault_o == 0,
-              "PAD MUTANT FIRE: 32-bit counter wraps FFFFFFFF to zero modulo 2^32",
-              0, d->desc_pad_fault_o);
+              "PAD MUTANT FIRE: 32-bit counter wraps FFFFFFFF to zero modulo 2^32", 0,
+              d->desc_pad_fault_o);
 #else
   zhao::check(d->rd_descriptor_pad_ok_o != 0,
               "all 33 explicitly written physical pad bits read as zero", 1,
               d->rd_descriptor_pad_ok_o);
-  zhao::check(d->rd_owner_generation_ok_o != 0,
-              "the independently stored owner generation matches", 1,
-              d->rd_owner_generation_ok_o);
-  zhao::check(d->rd_descriptor_usable_o != 0,
-              "both independent verdicts make the row usable", 1,
+  zhao::check(d->rd_owner_generation_ok_o != 0, "the independently stored owner generation matches",
+              1, d->rd_owner_generation_ok_o);
+  zhao::check(d->rd_descriptor_usable_o != 0, "both independent verdicts make the row usable", 1,
               d->rd_descriptor_usable_o);
   zhao::check(logical_mismatches(d, logical_row(a)) == 0,
               "all 287 logical bits retain the frozen low-first layout", 0,
@@ -222,9 +214,8 @@ int main(int argc, char** argv) {
   d->rd_valid_i = 1;
   d->rd_owner_i = owner(29, b.owner_generation);
   d->eval();
-  zhao::check(d->rd_ready_o == 0,
-              "the occupied response withholds another descriptor acceptance", 0,
-              d->rd_ready_o);
+  zhao::check(d->rd_ready_o == 0, "the occupied response withholds another descriptor acceptance",
+              0, d->rd_ready_o);
   tick(d);
   tick(d);
 #if defined(ZHAO_DESC_SLOTSWAP_MUTANT)
@@ -233,8 +224,8 @@ int main(int argc, char** argv) {
               logical_mismatches(d, logical_row(a)) != 0);
 #else
   zhao::check(d->rd_owner_o == owner(7, a.owner_generation),
-              "the held response keeps A's independently captured owner", owner(7, a.owner_generation),
-              d->rd_owner_o);
+              "the held response keeps A's independently captured owner",
+              owner(7, a.owner_generation), d->rd_owner_o);
   zhao::check(logical_mismatches(d, logical_row(a)) == 0,
               "the held eight-slice payload cannot follow offered B", 0,
               logical_mismatches(d, logical_row(a)));
@@ -251,8 +242,7 @@ int main(int argc, char** argv) {
   zhao::check(d->rd_owner_generation_ok_o == 0,
               "a stale independently offered generation fails its verdict", 0,
               d->rd_owner_generation_ok_o);
-  zhao::check(d->rd_descriptor_usable_o == 0,
-              "a stale row exposes no logical descriptor", 0,
+  zhao::check(d->rd_descriptor_usable_o == 0, "a stale row exposes no logical descriptor", 0,
               d->rd_descriptor_usable_o);
   std::array<uint32_t, 9> zero{};
   zhao::check(logical_mismatches(d, zero) == 0,
@@ -262,28 +252,24 @@ int main(int argc, char** argv) {
               "one stale accepted read increments its own modulo counter once", 1,
               d->rd_generation_mismatch_o);
   tick(d);
-  zhao::check(d->rd_generation_mismatch_o == 1,
-              "a stalled stale response is not recounted", 1,
+  zhao::check(d->rd_generation_mismatch_o == 1, "a stalled stale response is not recounted", 1,
               d->rd_generation_mismatch_o);
-  zhao::check(d->frame_fault_o != 0,
-              "the same verdict independently sets sticky frame fault", 1,
+  zhao::check(d->frame_fault_o != 0, "the same verdict independently sets sticky frame fault", 1,
               d->frame_fault_o);
   d->frame_fault_clear_i = 1;
   tick(d);
   d->frame_fault_clear_i = 0;
   d->eval();
-  zhao::check(d->frame_fault_o == 0,
-              "sticky frame state can clear independently", 0, d->frame_fault_o);
+  zhao::check(d->frame_fault_o == 0, "sticky frame state can clear independently", 0,
+              d->frame_fault_o);
   zhao::check(d->rd_generation_mismatch_o == 1,
               "clearing sticky state does not clear a reset-only counter", 1,
               d->rd_generation_mismatch_o);
-  zhao::check(d->desc_pad_fault_o == 0,
-              "legal writes cannot create a pad event", 0,
+  zhao::check(d->desc_pad_fault_o == 0, "legal writes cannot create a pad event", 0,
               d->desc_pad_fault_o);
 #endif
 
-  zhao::check(d->writes_o == 2,
-              "both descriptor writes use the supplied owner slots", 2,
+  zhao::check(d->writes_o == 2, "both descriptor writes use the supplied owner slots", 2,
               d->writes_o);
 
   const int rc = zhao::report_and_exit("texture_early_desc_v2_directed");

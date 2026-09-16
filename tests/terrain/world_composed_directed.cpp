@@ -170,8 +170,8 @@ void defect(bool held, const char* what, const char* evidence) {
 // ---------------------------------------------------------------------------
 // THE SHAPES, mirrored from the bench and from the written law
 // ---------------------------------------------------------------------------
-constexpr uint32_t kPageBytes = tp::kPageBytes;       // 21,376
-constexpr uint32_t kPageWords = kPageBytes / 8;       // 2,672
+constexpr uint32_t kPageBytes = tp::kPageBytes;  // 21,376
+constexpr uint32_t kPageWords = kPageBytes / 8;  // 2,672
 constexpr uint32_t kPoolBase = 0x04000000u;
 constexpr uint32_t kArenaBase = 0x20000000u;
 constexpr uint32_t kStagePages = 64;
@@ -194,12 +194,18 @@ enum class K : uint8_t { kLookup, kClaim, kWriteback, kLoad, kPin, kIssue };
 
 const char* kname(K k) {
   switch (k) {
-    case K::kLookup: return "lookup";
-    case K::kClaim: return "claim";
-    case K::kWriteback: return "writeback";
-    case K::kLoad: return "load";
-    case K::kPin: return "pin";
-    default: return "issue";
+    case K::kLookup:
+      return "lookup";
+    case K::kClaim:
+      return "claim";
+    case K::kWriteback:
+      return "writeback";
+    case K::kLoad:
+      return "load";
+    case K::kPin:
+      return "pin";
+    default:
+      return "issue";
   }
 }
 
@@ -236,9 +242,9 @@ std::string describe(const Act& a) {
 }
 
 const char* kCounterNames[14] = {
-    "records_consumed", "patches_issued",   "prefetch_resident", "skipped_not_resident",
-    "claims_issued",    "claims_refused",   "claims_same",       "loads_issued",
-    "loads_deferred",   "writebacks_issued","compose_slots_used","pins_issued",
+    "records_consumed", "patches_issued",    "prefetch_resident",  "skipped_not_resident",
+    "claims_issued",    "claims_refused",    "claims_same",        "loads_issued",
+    "loads_deferred",   "writebacks_issued", "compose_slots_used", "pins_issued",
     "drained",          "frame_faults"};
 
 struct Frame {
@@ -269,11 +275,16 @@ uint32_t hi(uint32_t& s, uint32_t modulus) { return (lcg(s) >> 16) % modulus; }
 // block lost answers); 2 one-in-eight; 3 one-in-two.
 bool ready_draw(uint32_t& s, int pattern) {
   switch (pattern) {
-    case 0: return true;
-    case 1: return hi(s, 4) != 0;
-    case 2: return hi(s, 8) == 0;
-    case 3: return hi(s, 2) == 0;
-    default: return true;
+    case 0:
+      return true;
+    case 1:
+      return hi(s, 4) != 0;
+    case 2:
+      return hi(s, 8) == 0;
+    case 3:
+      return hi(s, 2) == 0;
+    default:
+      return true;
   }
 }
 const char* kStallNames[4] = {"always-ready", "3-in-4", "1-in-8", "1-in-2"};
@@ -289,8 +300,14 @@ struct Page {
   uint32_t crc = 0;
 };
 
-void put16(uint8_t* p, uint16_t v) { p[0] = uint8_t(v); p[1] = uint8_t(v >> 8); }
-void put32(uint8_t* p, uint32_t v) { put16(p, uint16_t(v)); put16(p + 2, uint16_t(v >> 16)); }
+void put16(uint8_t* p, uint16_t v) {
+  p[0] = uint8_t(v);
+  p[1] = uint8_t(v >> 8);
+}
+void put32(uint8_t* p, uint32_t v) {
+  put16(p, uint16_t(v));
+  put16(p + 2, uint16_t(v >> 16));
+}
 
 Page make_page(uint32_t island, int16_t ix, int16_t iz, uint32_t salt, bool corrupt_crc = false,
                uint32_t ident_island_override = 0xFFFFFFFFu) {
@@ -306,13 +323,13 @@ Page make_page(uint32_t island, int16_t ix, int16_t iz, uint32_t salt, bool corr
     p[i] = uint8_t(s >> 24);
   }
 
-  put16(p + 0, 1);                       // format_version
-  p[2] = 0;                              // pitch_log2
-  p[3] = 0;                              // flags
+  put16(p + 0, 1);  // format_version
+  p[2] = 0;         // pitch_log2
+  p[3] = 0;         // flags
   put32(p + 4, ident_island_override == 0xFFFFFFFFu ? island : ident_island_override);
   put16(p + 8, uint16_t(ix));
   put16(p + 10, uint16_t(iz));
-  put32(p + 12, 7);                      // tileset_id
+  put32(p + 12, 7);  // tileset_id
   pg.crc = tp::page_payload_crc(p);
   put32(p + 32, corrupt_crc ? (pg.crc ^ 0xDEADBEEFu) : pg.crc);
   return pg;
@@ -357,7 +374,7 @@ struct World {
     // ON by default: PAGESTREAM -> MIPFEED -> MIPGEN is real RTL that is really
     // instantiated, so the default is the machine as it now stands.
     d.cfg_mipfeed_i = 1;
-    d.cfg_wb_barrier_i = 0;   // OFF by default: likewise
+    d.cfg_wb_barrier_i = 0;  // OFF by default: likewise
     // ON by default, and that asymmetry is deliberate. The two knobs above
     // stand in for machinery that DOES NOT EXIST in the tree, so their default
     // is off and the suite reports what is missing. `zhao_terrain_loadq` is a
@@ -366,7 +383,7 @@ struct World {
     // back rather than asking anyone to take the improvement on trust.
     d.cfg_loadq_i = 1;
     d.cfg_loadq_drain_i = 0;
-    d.cfg_wat_auto_i = 1;     // the witness arms itself on the victim
+    d.cfg_wat_auto_i = 1;  // the witness arms itself on the victim
     // OFF by default. Every phase but M plays the frame ring by hand, which is
     // what the suite has always done; M runs the identical set BOTH ways and
     // requires the two action logs to be equal. A suite that only ever ran the
@@ -419,8 +436,8 @@ struct World {
   uint64_t mem_read(int sel, uint32_t word) {
     d.mr_sel = uint8_t(sel);
     d.mr_addr = word;
-    zhao::tick(d);   // address captured
-    zhao::tick(d);   // datum out
+    zhao::tick(d);  // address captured
+    zhao::tick(d);  // datum out
     return d.mr_data;
   }
 
@@ -478,8 +495,8 @@ struct Rec {
   uint32_t stage_idx = 0;
 };
 
-Rec mk(uint32_t src, uint32_t island, int16_t ix, int16_t iz, uint16_t flags,
-       uint32_t stage_idx, uint32_t crc) {
+Rec mk(uint32_t src, uint32_t island, int16_t ix, int16_t iz, uint16_t flags, uint32_t stage_idx,
+       uint32_t crc) {
   Rec c;
   c.r.island_id = island;
   c.r.patch_ix = ix;
@@ -507,21 +524,28 @@ Rec mk(uint32_t src, uint32_t island, int16_t ix, int16_t iz, uint16_t flags,
 // function only issues the command and watches -- everything it OBSERVES is
 // the same, which is what makes the two logs comparable.
 Frame run_frame(World& w, const std::vector<Rec>& cs, uint16_t patch_count, uint16_t budget,
-                int pattern, uint32_t seed, uint64_t cap = 400000ull,
-                int collide_lookup = -1, bool via_cmd = false) {
+                int pattern, uint32_t seed, uint64_t cap = 400000ull, int collide_lookup = -1,
+                bool via_cmd = false) {
   Vtb_terrain_world& d = w.d;
   Frame O;
   uint32_t s_rec = seed ^ 0xA5A5u, s_is = seed ^ 0xC0DEu, s_wd = seed ^ 0x77A1u;
 
   uint32_t before[14];
   d.eval();
-  before[0] = d.s_records_consumed;   before[1] = d.s_patches_issued;
-  before[2] = d.s_prefetch_resident;  before[3] = d.s_skipped_not_resident;
-  before[4] = d.s_claims_issued;      before[5] = d.s_claims_refused;
-  before[6] = d.s_claims_same;        before[7] = d.s_loads_issued;
-  before[8] = d.s_loads_deferred;     before[9] = d.s_writebacks_issued;
-  before[10] = d.s_compose_slots_used; before[11] = d.s_pins_issued;
-  before[12] = d.s_drained;           before[13] = d.s_frame_faults;
+  before[0] = d.s_records_consumed;
+  before[1] = d.s_patches_issued;
+  before[2] = d.s_prefetch_resident;
+  before[3] = d.s_skipped_not_resident;
+  before[4] = d.s_claims_issued;
+  before[5] = d.s_claims_refused;
+  before[6] = d.s_claims_same;
+  before[7] = d.s_loads_issued;
+  before[8] = d.s_loads_deferred;
+  before[9] = d.s_writebacks_issued;
+  before[10] = d.s_compose_slots_used;
+  before[11] = d.s_pins_issued;
+  before[12] = d.s_drained;
+  before[13] = d.s_frame_faults;
 
   O.answers.assign(cs.size(), sq::ResAnswer{});
   O.answered.assign(cs.size(), 0u);
@@ -544,17 +568,21 @@ Frame run_frame(World& w, const std::vector<Rec>& cs, uint16_t patch_count, uint
     d.tc_valid = 1;
     d.eval();
     int g = 0;
-    while (!d.tc_ready && g < 1000) { zhao::tick(d); d.eval(); ++g; }
+    while (!d.tc_ready && g < 1000) {
+      zhao::tick(d);
+      d.eval();
+      ++g;
+    }
     zhao::tick(d);
     d.tc_valid = 0;
     d.eval();
   }
 
   std::size_t next_rec = 0;
-  std::size_t cur = 0;         // record whose answers are owed
+  std::size_t cur = 0;  // record whose answers are owed
   int collided = 0;
 
-  bool frame_seen = !via_cmd;   // the hand path pulsed it above
+  bool frame_seen = !via_cmd;  // the hand path pulsed it above
   for (uint64_t cyc = 0; cyc < cap; ++cyc) {
     const bool offer = !via_cmd && next_rec < cs.size() && ready_draw(s_rec, pattern);
     d.rec_valid = offer ? 1 : 0;
@@ -597,38 +625,73 @@ Frame run_frame(World& w, const std::vector<Rec>& cs, uint16_t patch_count, uint
     if (d.seq_fr_start) frame_seen = true;
 
     if (d.lu_valid) {
-      Act x; x.k = K::kLookup; x.island = d.lu_island;
-      x.ix = int16_t(d.lu_ix); x.iz = int16_t(d.lu_iz); x.cycle = d.cyc;
+      Act x;
+      x.k = K::kLookup;
+      x.island = d.lu_island;
+      x.ix = int16_t(d.lu_ix);
+      x.iz = int16_t(d.lu_iz);
+      x.cycle = d.cyc;
       O.acts.push_back(x);
     }
     if (d.cl_valid && d.cl_ready) {
-      Act x; x.k = K::kClaim; x.island = d.cl_island;
-      x.ix = int16_t(d.cl_ix); x.iz = int16_t(d.cl_iz); x.crc = d.cl_expect_crc; x.cycle = d.cyc;
+      Act x;
+      x.k = K::kClaim;
+      x.island = d.cl_island;
+      x.ix = int16_t(d.cl_ix);
+      x.iz = int16_t(d.cl_iz);
+      x.crc = d.cl_expect_crc;
+      x.cycle = d.cyc;
       O.acts.push_back(x);
     }
     if (d.wb_valid && d.wb_ready) {
-      Act x; x.k = K::kWriteback; x.island = d.wb_island;
-      x.ix = int16_t(d.wb_ix); x.iz = int16_t(d.wb_iz);
-      x.slot = d.wb_slot; x.gen = d.wb_gen; x.src_id = d.wb_src_id; x.cycle = d.cyc;
+      Act x;
+      x.k = K::kWriteback;
+      x.island = d.wb_island;
+      x.ix = int16_t(d.wb_ix);
+      x.iz = int16_t(d.wb_iz);
+      x.slot = d.wb_slot;
+      x.gen = d.wb_gen;
+      x.src_id = d.wb_src_id;
+      x.cycle = d.cyc;
       O.acts.push_back(x);
     }
     if (d.ld_valid && d.ld_ready) {
-      Act x; x.k = K::kLoad; x.island = d.ld_island;
-      x.ix = int16_t(d.ld_ix); x.iz = int16_t(d.ld_iz);
-      x.slot = d.ld_slot; x.gen = d.ld_gen; x.src_id = d.ld_src_id;
-      x.crc = d.ld_expect_crc; x.addr = d.ld_hps_addr; x.cycle = d.cyc;
+      Act x;
+      x.k = K::kLoad;
+      x.island = d.ld_island;
+      x.ix = int16_t(d.ld_ix);
+      x.iz = int16_t(d.ld_iz);
+      x.slot = d.ld_slot;
+      x.gen = d.ld_gen;
+      x.src_id = d.ld_src_id;
+      x.crc = d.ld_expect_crc;
+      x.addr = d.ld_hps_addr;
+      x.cycle = d.cyc;
       O.acts.push_back(x);
     }
     if (d.pin_valid && d.pin_ready) {
-      Act x; x.k = K::kPin; x.slot = d.pin_slot; x.gen = d.pin_gen; x.cycle = d.cyc;
+      Act x;
+      x.k = K::kPin;
+      x.slot = d.pin_slot;
+      x.gen = d.pin_gen;
+      x.cycle = d.cyc;
       O.acts.push_back(x);
     }
     if (d.is_valid && d.is_ready) {
-      Act x; x.k = K::kIssue; x.island = d.is_island;
-      x.ix = int16_t(d.is_ix); x.iz = int16_t(d.is_iz);
-      x.slot = d.is_slot; x.gen = d.is_gen; x.src_id = d.is_src_id;
-      x.flags = d.is_flags; x.view = d.is_view_mask; x.prio = d.is_priority;
-      x.cslot = d.is_cslot; x.cslot_valid = d.is_cslot_valid != 0; x.cycle = d.cyc;
+      Act x;
+      x.k = K::kIssue;
+      x.island = d.is_island;
+      x.ix = int16_t(d.is_ix);
+      x.iz = int16_t(d.is_iz);
+      x.slot = d.is_slot;
+      x.gen = d.is_gen;
+      x.src_id = d.is_src_id;
+      x.flags = d.is_flags;
+      x.view = d.is_view_mask;
+      x.prio = d.is_priority;
+      x.cslot = d.is_cslot;
+      x.cslot_valid = d.is_cslot_valid != 0;
+      x.cycle = d.cyc;
       O.acts.push_back(x);
     }
 
@@ -667,7 +730,10 @@ Frame run_frame(World& w, const std::vector<Rec>& cs, uint16_t patch_count, uint
     // standing when this loop begins.
     const bool fin = frame_seen && d.fr_done;
     zhao::tick(d);
-    if (fin) { O.done = true; break; }
+    if (fin) {
+      O.done = true;
+      break;
+    }
   }
 
   d.rec_valid = 0;
@@ -712,46 +778,85 @@ Frame expect_of(const std::vector<Rec>& cs, const std::vector<sq::ResAnswer>& an
     const sq::Step st = S.step(r, a);
 
     if (st.did_lookup) {
-      Act x; x.k = K::kLookup; x.island = r.island_id; x.ix = r.patch_ix; x.iz = r.patch_iz;
+      Act x;
+      x.k = K::kLookup;
+      x.island = r.island_id;
+      x.ix = r.patch_ix;
+      x.iz = r.patch_iz;
       E.acts.push_back(x);
     }
     if (st.did_claim) {
-      Act x; x.k = K::kClaim; x.island = r.island_id; x.ix = r.patch_ix; x.iz = r.patch_iz;
+      Act x;
+      x.k = K::kClaim;
+      x.island = r.island_id;
+      x.ix = r.patch_ix;
+      x.iz = r.patch_iz;
       x.crc = r.expected_page_crc32c;
       E.acts.push_back(x);
     }
     if (st.did_writeback) {
-      Act x; x.k = K::kWriteback; x.island = a.ev_island; x.ix = a.ev_ix; x.iz = a.ev_iz;
-      x.slot = a.claim_slot; x.gen = a.ev_gen; x.src_id = r.source_id;
+      Act x;
+      x.k = K::kWriteback;
+      x.island = a.ev_island;
+      x.ix = a.ev_ix;
+      x.iz = a.ev_iz;
+      x.slot = a.claim_slot;
+      x.gen = a.ev_gen;
+      x.src_id = r.source_id;
       E.acts.push_back(x);
     }
     if (st.did_load) {
-      Act x; x.k = K::kLoad; x.island = r.island_id; x.ix = r.patch_ix; x.iz = r.patch_iz;
-      x.slot = a.claim_slot; x.gen = a.claim_gen; x.src_id = r.source_id;
-      x.crc = r.expected_page_crc32c; x.addr = r.hps_page_addr;
+      Act x;
+      x.k = K::kLoad;
+      x.island = r.island_id;
+      x.ix = r.patch_ix;
+      x.iz = r.patch_iz;
+      x.slot = a.claim_slot;
+      x.gen = a.claim_gen;
+      x.src_id = r.source_id;
+      x.crc = r.expected_page_crc32c;
+      x.addr = r.hps_page_addr;
       E.acts.push_back(x);
     }
     if (st.did_pin) {
-      Act x; x.k = K::kPin; x.slot = a.slot; x.gen = a.gen;
+      Act x;
+      x.k = K::kPin;
+      x.slot = a.slot;
+      x.gen = a.gen;
       E.acts.push_back(x);
     }
     if (st.did_issue) {
-      Act x; x.k = K::kIssue; x.island = r.island_id; x.ix = r.patch_ix; x.iz = r.patch_iz;
-      x.slot = a.slot; x.gen = a.gen; x.src_id = r.source_id; x.flags = r.flags;
-      x.view = r.view_mask; x.prio = r.priority;
+      Act x;
+      x.k = K::kIssue;
+      x.island = r.island_id;
+      x.ix = r.patch_ix;
+      x.iz = r.patch_iz;
+      x.slot = a.slot;
+      x.gen = a.gen;
+      x.src_id = r.source_id;
+      x.flags = r.flags;
+      x.view = r.view_mask;
+      x.prio = r.priority;
       x.cslot = st.compose_slot_valid ? st.compose_slot : 0u;
       x.cslot_valid = st.compose_slot_valid;
       E.acts.push_back(x);
     }
   }
   const sq::Ledger& L = S.ledger();
-  E.c[0] = L.records_consumed;      E.c[1] = L.patches_issued;
-  E.c[2] = L.prefetch_resident;     E.c[3] = L.skipped_not_resident;
-  E.c[4] = L.claims_issued;         E.c[5] = L.claims_refused;
-  E.c[6] = L.claims_same;           E.c[7] = L.loads_issued;
-  E.c[8] = L.loads_deferred;        E.c[9] = L.writebacks_issued;
-  E.c[10] = L.compose_slots_used;   E.c[11] = L.pins_issued;
-  E.c[12] = L.drained;              E.c[13] = L.frame_faults;
+  E.c[0] = L.records_consumed;
+  E.c[1] = L.patches_issued;
+  E.c[2] = L.prefetch_resident;
+  E.c[3] = L.skipped_not_resident;
+  E.c[4] = L.claims_issued;
+  E.c[5] = L.claims_refused;
+  E.c[6] = L.claims_same;
+  E.c[7] = L.loads_issued;
+  E.c[8] = L.loads_deferred;
+  E.c[9] = L.writebacks_issued;
+  E.c[10] = L.compose_slots_used;
+  E.c[11] = L.pins_issued;
+  E.c[12] = L.drained;
+  E.c[13] = L.frame_faults;
   E.fault = S.fault().active;
   return E;
 }
@@ -777,15 +882,17 @@ int compare(const char* label, const Frame& O, const Frame& E) {
   for (int i = 0; i < 14; ++i) {
     if (O.c[i] != E.c[i]) {
       ++bad;
-      std::printf("    %s: counter %s rtl=%u oracle=%u\n", label, kCounterNames[i], O.c[i],
-                  E.c[i]);
+      std::printf("    %s: counter %s rtl=%u oracle=%u\n", label, kCounterNames[i], O.c[i], E.c[i]);
     }
   }
   if (O.fault != E.fault) {
     ++bad;
     std::printf("    %s: frame_fault rtl=%d oracle=%d\n", label, int(O.fault), int(E.fault));
   }
-  if (!O.done) { ++bad; std::printf("    %s: frame never completed\n", label); }
+  if (!O.done) {
+    ++bad;
+    std::printf("    %s: frame never completed\n", label);
+  }
   // The acceptance invariant: only a witness OUTSIDE the block can see a
   // record taken off the ring and not counted.
   if (O.accepted != O.c[0]) {
@@ -836,11 +943,14 @@ void settle(World& w, uint64_t cycles = 600000) {
     // every later phase then measured a machine that had not finished -- the
     // same "nothing is asserted is not nothing is happening" failure this
     // function was rewritten for once already, reached through new blocks.
-    const uint32_t now[8] = {d.arb_c0_bursts, d.arb_c1_bursts, d.h_pool_writes,
+    const uint32_t now[8] = {d.arb_c0_bursts, d.arb_c1_bursts,   d.h_pool_writes,
                              d.h_jnl_writes,  d.pl_pages_loaded, d.wb_sheets_written,
                              d.ps_bursts,     d.mf_samples};
     bool moved = false;
-    for (int k = 0; k < 8; ++k) { if (now[k] != prev[k]) moved = true; prev[k] = now[k]; }
+    for (int k = 0; k < 8; ++k) {
+      if (now[k] != prev[k]) moved = true;
+      prev[k] = now[k];
+    }
     // THE QUEUE COUNTS AS BUSY. Without `lq_level` here a settle could return
     // with jobs still queued and no block asserting anything -- the same
     // "nothing is asserted is not nothing is happening" failure this function
@@ -850,8 +960,7 @@ void settle(World& w, uint64_t cycles = 600000) {
     quiet = busy ? 0 : (quiet + 1);
     if (quiet > 400) return;
   }
-  std::printf("    settle: gave up after %llu cycles still busy\n",
-              (unsigned long long)cycles);
+  std::printf("    settle: gave up after %llu cycles still busy\n", (unsigned long long)cycles);
 }
 
 }  // namespace
@@ -889,8 +998,10 @@ int main(int argc, char** argv) {
     cs.push_back(mk(100, 7, 0, 0, kReq, 0, p0.crc));
     cs.push_back(mk(101, 7, 1, 0, kReq, 0, p0.crc));
 
-    d.cfg_dir_gate_i = 0;   // the glue removed, so the collision can happen
-    d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+    d.cfg_dir_gate_i = 0;  // the glue removed, so the collision can happen
+    d.stat_clear = 1;
+    zhao::tick(d);
+    d.stat_clear = 0;
     const Frame O = run_frame(w, cs, 2, 32, 0, 0xA0u, 8000ull, /*collide_lookup=*/1);
     d.cfg_dir_gate_i = 1;
 
@@ -923,8 +1034,8 @@ int main(int argc, char** argv) {
        "with no stray answer either -- holding the offer must not produce a "
        "second answer for one query",
        0, d.seq_err_stray_ans);
-    std::printf("   offers=%u dropped=%u records_consumed=%u fr_busy=%d\n",
-                d.h_lu_offers, d.h_lu_dropped, O.c[0], int(d.fr_busy));
+    std::printf("   offers=%u dropped=%u records_consumed=%u fr_busy=%d\n", d.h_lu_offers,
+                d.h_lu_dropped, O.c[0], int(d.fr_busy));
   }
 
   w.reset();
@@ -945,7 +1056,7 @@ int main(int argc, char** argv) {
       w.stage_page(uint32_t(i), pg);
       uint16_t flags = kReq;
       if (i < 4) flags = uint16_t(flags | kDyn);
-      if (i == 7) flags = kPre;   // one prefetch-only record
+      if (i == 7) flags = kPre;  // one prefetch-only record
       setA.push_back(mk(uint32_t(200 + i), 7, ix, iz, flags, uint32_t(i), pg.crc));
     }
   }
@@ -956,7 +1067,9 @@ int main(int argc, char** argv) {
   Frame coldB, warmD;
   {
     std::printf("\n-- B: the cold frame --\n");
-    d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+    d.stat_clear = 1;
+    zhao::tick(d);
+    d.stat_clear = 0;
     const Frame O = run_frame(w, setA, 8, 32, 0, 0xB0u);
     const Frame E = expect_of(setA, O.answers, 8, 32, w.epoch);
     coldB = O;
@@ -982,9 +1095,10 @@ int main(int argc, char** argv) {
     // does. Reported in cycles, against the 1,666,667-clock frame.
     std::printf("   B cost: %llu cycles for 8 records with 8 misses = %.0f cycles per miss\n",
                 (unsigned long long)O.cycles, double(O.cycles) / 8.0);
-    std::printf("      that is %.1f%% of a 1,666,667-clock frame for EIGHT pages; T7's\n"
-                "      ceiling is 32 per frame.\n",
-                100.0 * double(O.cycles) / 1666667.0);
+    std::printf(
+        "      that is %.1f%% of a 1,666,667-clock frame for EIGHT pages; T7's\n"
+        "      ceiling is 32 per frame.\n",
+        100.0 * double(O.cycles) / 1666667.0);
     ck(O.cycles < 20000,
        "B the frame does not wait on load ACCEPTANCE -- eight misses cost well under the "
        "53,806 cycles the un-queued wiring charged (phase L turns the queue off and "
@@ -1002,8 +1116,8 @@ int main(int argc, char** argv) {
        "B and nothing was offered to a full queue -- a non-zero refusal means the "
        "sequencer ignored j_ready_o, not that the queue was too small",
        0, d.lq_refused);
-    std::printf("      queue: accepted=%u issued=%u high water=%u of 32\n",
-                d.lq_accepted, d.lq_issued, d.lq_high_water);
+    std::printf("      queue: accepted=%u issued=%u high water=%u of 32\n", d.lq_accepted,
+                d.lq_issued, d.lq_high_water);
     ck(d.lq_high_water > 1,
        "B and the queue actually HELD jobs -- a high water of one would mean the loader "
        "was never the bottleneck and this phase proved nothing about queueing",
@@ -1021,7 +1135,7 @@ int main(int argc, char** argv) {
       ++checked;
       const uint8_t want = tp::residency_set_index(setA[i].r.island_id, setA[i].r.patch_ix,
                                                    setA[i].r.patch_iz, w.epoch);
-      const uint32_t got = O.answers[i].claim_slot >> 2;   // slot = {set, way}
+      const uint32_t got = O.answers[i].claim_slot >> 2;  // slot = {set, way}
       if (got != want) {
         ++wrongset;
         if (wrongset <= 2)
@@ -1029,8 +1143,8 @@ int main(int argc, char** argv) {
       }
     }
     ck(checked == 8, "B all eight claims were answered", 8, checked);
-    ck(wrongset == 0, "B every claim landed in the set zref::terrain::residency_set_index names",
-       0, wrongset);
+    ck(wrongset == 0, "B every claim landed in the set zref::terrain::residency_set_index names", 0,
+       wrongset);
   }
 
   // =========================================================================
@@ -1045,8 +1159,8 @@ int main(int argc, char** argv) {
     ck(d.pl_hdr_ident_fails == 0, "C no header identity failures", 0, d.pl_hdr_ident_fails);
     ck(d.pl_guard_denied == 0, "C the guard denied nothing", 0, d.pl_guard_denied);
     ck(d.pl_bridge_errs == 0, "C no bridge errors", 0, d.pl_bridge_errs);
-    ck(d.pl_load_bytes == 8u * kPageBytes, "C exactly eight pages of bytes moved",
-       8ll * kPageBytes, d.pl_load_bytes);
+    ck(d.pl_load_bytes == 8u * kPageBytes, "C exactly eight pages of bytes moved", 8ll * kPageBytes,
+       d.pl_load_bytes);
     ck(d.h_pool_oob == 0, "C nothing was written outside the page pool", 0, d.h_pool_oob);
     ck(d.r_crc_failures == 0, "C the directory saw no CRC failure", 0, d.r_crc_failures);
     ck(d.r_stale_events == 0, "C no stale event reached the directory", 0, d.r_stale_events);
@@ -1075,10 +1189,10 @@ int main(int argc, char** argv) {
     // AND IT WAS THE BLOCKS THAT DID IT, NOT THE BENCH. `h_mipgen_fins` is the
     // harness's stand-in; it must be ZERO here, or "resident" above would be
     // measuring the knob rather than the machine.
-    ck(d.h_mipgen_fins == 0,
-       "C with no completion played by the harness at all", 0, d.h_mipgen_fins);
-    ck(d.mf_pages_mipped == 8,
-       "C TERRAIN.MIPFEED completed the mips for all eight pages", 8, d.mf_pages_mipped);
+    ck(d.h_mipgen_fins == 0, "C with no completion played by the harness at all", 0,
+       d.h_mipgen_fins);
+    ck(d.mf_pages_mipped == 8, "C TERRAIN.MIPFEED completed the mips for all eight pages", 8,
+       d.mf_pages_mipped);
     ck(d.mf_pages_faulted == 0, "C and faulted none", 0, d.mf_pages_faulted);
     ck(d.h_mipreq_drops == 0,
        "C and the bench's mip-request glue lost none -- a drop here would reappear as a "
@@ -1089,16 +1203,15 @@ int main(int argc, char** argv) {
     // one 16-bit surface at a time and PAGESTREAM emits three planes at once;
     // 1,089 samples per pass; 17x17 and 9x9 selections per surface.
     ck(d.ps_lattices == 16,
-       "C TERRAIN.PAGESTREAM streamed the page TWICE per page -- once for each surface",
-       16, d.ps_lattices);
-    ck(d.mf_samples == 8u * 2u * 1089u,
-       "C and every one of the 17,424 fine samples reached MIPGEN",
+       "C TERRAIN.PAGESTREAM streamed the page TWICE per page -- once for each surface", 16,
+       d.ps_lattices);
+    ck(d.mf_samples == 8u * 2u * 1089u, "C and every one of the 17,424 fine samples reached MIPGEN",
        8 * 2 * 1089, int(d.mf_samples));
     ck(d.mg_m17_writes == 8u * 2u * 289u,
-       "C MIPGEN selected 289 mip17 vertices per surface, ruling T8's 17x17",
-       8 * 2 * 289, int(d.mg_m17_writes));
-    ck(d.mg_m9_writes == 8u * 2u * 81u,
-       "C and 81 mip9 vertices, T8's 9x9", 8 * 2 * 81, int(d.mg_m9_writes));
+       "C MIPGEN selected 289 mip17 vertices per surface, ruling T8's 17x17", 8 * 2 * 289,
+       int(d.mg_m17_writes));
+    ck(d.mg_m9_writes == 8u * 2u * 81u, "C and 81 mip9 vertices, T8's 9x9", 8 * 2 * 81,
+       int(d.mg_m9_writes));
     ck(d.mg_aborts == 0,
        "C with no scan restarted mid-flight -- a `start` between the two passes would "
        "send surface 1's samples into surface 0's mip and count an abort here",
@@ -1113,8 +1226,7 @@ int main(int argc, char** argv) {
     // to TERRAIN.BUILD, so every loader write passes.
     ck(d.gobs_wr_ok > 0 && d.gobs_wr_viol == 0,
        "C the real MEM.GUARD passed every page-pool write and refused none", 0, d.gobs_wr_viol);
-    std::printf("   guard observer: loader writes ok=%u viol=%u\n", d.gobs_wr_ok,
-                d.gobs_wr_viol);
+    std::printf("   guard observer: loader writes ok=%u viol=%u\n", d.gobs_wr_ok, d.gobs_wr_viol);
 
     // The bytes. This is the only end-to-end claim the machine can make today:
     // the page that was staged in HPS DDR is the page that is in the slot.
@@ -1127,8 +1239,8 @@ int main(int argc, char** argv) {
         if (badpages <= 2) {
           std::size_t first = 0;
           while (first < kPageBytes && got[first] == pagesA[i].b[first]) ++first;
-          std::printf("    C page %zu (slot %u) differs first at byte %zu: %02x vs %02x\n", i,
-                      slot, first, got[first], pagesA[i].b[first]);
+          std::printf("    C page %zu (slot %u) differs first at byte %zu: %02x vs %02x\n", i, slot,
+                      first, got[first], pagesA[i].b[first]);
         }
       }
     }
@@ -1183,8 +1295,7 @@ int main(int argc, char** argv) {
     settle(w);
     ck(d.r_resident >= 8, "C2 with the completion PLAYED, the pages become ground", 8,
        d.r_resident);
-    ck(d.h_mipgen_fins >= 8, "C2 and one completion had to be played per page", 8,
-       d.h_mipgen_fins);
+    ck(d.h_mipgen_fins >= 8, "C2 and one completion had to be played per page", 8, d.h_mipgen_fins);
     std::printf("   resident: %u with nothing, %u with the harness playing %u completions\n",
                 resident_none, d.r_resident, d.h_mipgen_fins);
 
@@ -1197,8 +1308,8 @@ int main(int argc, char** argv) {
     d.eval();
     coldB = run_frame(w, setA, 8, 32, 0, 0xB1u);
     settle(w);
-    ck(d.r_resident >= 8,
-       "C2 and with the real chain back in, the machine does it itself", 8, d.r_resident);
+    ck(d.r_resident >= 8, "C2 and with the real chain back in, the machine does it itself", 8,
+       d.r_resident);
   }
 
   // =========================================================================
@@ -1230,8 +1341,8 @@ int main(int argc, char** argv) {
     ck(last_load_cycle < first_issue_cycle,
        "D every load job preceded every patch issue of the page it fetched", 1,
        last_load_cycle < first_issue_cycle);
-    std::printf("   last load job at cycle %u, first patch issue at cycle %u\n",
-                last_load_cycle, first_issue_cycle);
+    std::printf("   last load job at cycle %u, first patch issue at cycle %u\n", last_load_cycle,
+                first_issue_cycle);
 
     // The compose slots are frame-scoped: the n-th composing record of THIS
     // frame gets slot n, with no memory of the last frame.
@@ -1255,8 +1366,7 @@ int main(int argc, char** argv) {
     const Frame O2 = run_frame(w, setA, 8, 32, 0, 0xD0u);
     ck(same_log(warmD, O2), "E replaying the warm frame produces the identical action sequence");
     if (!same_log(warmD, O2)) {
-      const std::size_t n = warmD.acts.size() < O2.acts.size() ? warmD.acts.size()
-                                                               : O2.acts.size();
+      const std::size_t n = warmD.acts.size() < O2.acts.size() ? warmD.acts.size() : O2.acts.size();
       for (std::size_t i = 0; i < n; ++i)
         if (!(warmD.acts[i] == O2.acts[i])) {
           std::printf("    E[%zu]:\n      run1 %s\n      run2 %s\n", i,
@@ -1324,7 +1434,10 @@ int main(int argc, char** argv) {
       for (const Rec& r : setA)
         used[tp::residency_set_index(r.r.island_id, r.r.patch_ix, r.r.patch_iz, w.epoch)] = true;
       for (int s2 = 0; s2 < 256; ++s2)
-        if (!used[s2]) { target_set = uint8_t(s2); break; }
+        if (!used[s2]) {
+          target_set = uint8_t(s2);
+          break;
+        }
     }
 
     // Five keys in it: four to fill the ways, one to displace a dirty way.
@@ -1374,16 +1487,16 @@ int main(int argc, char** argv) {
       if (ok) ++marks;
     }
     ck(marks == 4, "G all four ways were marked dirty in layer F", 4, marks);
-    ck(d.r_stale_events == stale_before,
-       "G and none of the marks was rejected on identity", 0,
+    ck(d.r_stale_events == stale_before, "G and none of the marks was rejected on identity", 0,
        d.r_stale_events - stale_before);
 
     // The sheets as they stand. One of these is what the journal must receive.
     std::vector<std::vector<uint8_t> > sheets;
-    for (int i = 0; i < 4; ++i)
-      sheets.push_back(w.sheet_of(F0.answers[i].claim_slot));
+    for (int i = 0; i < 4; ++i) sheets.push_back(w.sheet_of(F0.answers[i].claim_slot));
 
-    d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+    d.stat_clear = 1;
+    zhao::tick(d);
+    d.stat_clear = 0;
 
     // The journal entry the next sheet will land in, read BEFORE the frame:
     // the ticket is minted by the job's acceptance and the address is
@@ -1428,16 +1541,18 @@ int main(int argc, char** argv) {
     // the job was accepted -- see `cfg_wat_auto_i`. Arming it from here would
     // start recording after the reads it is meant to time.
     settle(w);
-    ck(d.h_wat_slot == victim_slot,
-       "G the witness armed on the slot the writeback job named", victim_slot, d.h_wat_slot);
+    ck(d.h_wat_slot == victim_slot, "G the witness armed on the slot the writeback job named",
+       victim_slot, d.h_wat_slot);
 
-    std::printf("   watched slot %u: loader wrote %u beats (first at cycle %u), "
-                "writeback read %u beats (last at cycle %u)\n",
-                victim_slot, d.wat_wr_count, d.wat_wr_first, d.wat_rd_count, d.wat_rd_last);
-    std::printf("   writeback: sheets written=%u refused=%u faulted=%u hdr ident fails=%u "
-                "guard denied=%u acks ok=%u\n",
-                d.wb_sheets_written, d.wb_sheets_refused, d.wb_sheets_faulted,
-                d.wb_hdr_ident_fails, d.wb_guard_denied, d.wb_acks_ok);
+    std::printf(
+        "   watched slot %u: loader wrote %u beats (first at cycle %u), "
+        "writeback read %u beats (last at cycle %u)\n",
+        victim_slot, d.wat_wr_count, d.wat_wr_first, d.wat_rd_count, d.wat_rd_last);
+    std::printf(
+        "   writeback: sheets written=%u refused=%u faulted=%u hdr ident fails=%u "
+        "guard denied=%u acks ok=%u\n",
+        d.wb_sheets_written, d.wb_sheets_refused, d.wb_sheets_faulted, d.wb_hdr_ident_fails,
+        d.wb_guard_denied, d.wb_acks_ok);
 
     // ---- THE BARRIER, MEASURED --------------------------------------------
     const bool read_any = (d.wat_rd_count > 0);
@@ -1464,11 +1579,13 @@ int main(int argc, char** argv) {
       // makes this a LATENT defect rather than a visible one: the outcome is a
       // bandwidth ratio and nothing in the design fixes that ratio. G3 changes
       // it and asks again.
-      ck(diff == 0,
-         "G at THIS bandwidth ratio the sheet still reached the journal intact", 0, int(diff));
+      ck(diff == 0, "G at THIS bandwidth ratio the sheet still reached the journal intact", 0,
+         int(diff));
       ck(d.wb_sheets_written == 1, "G one sheet was written", 1, d.wb_sheets_written);
-      std::printf("   journal vs the evicted sheet: %zu of %u bytes differ "
-                  "-- intact here, and only here\n", diff, kFBytes);
+      std::printf(
+          "   journal vs the evicted sheet: %zu of %u bytes differ "
+          "-- intact here, and only here\n",
+          diff, kFBytes);
     }
 
     ck(d.wb_acks_unmatched == 0, "G no acknowledgement went unmatched", 0, d.wb_acks_unmatched);
@@ -1492,8 +1609,8 @@ int main(int argc, char** argv) {
            "COUNTED RATHER THAN ADVANCED on purpose: whether a load into an evicting slot "
            "should WIN races the writeback this directory itself ordered, and that is "
            "residency policy, not something to invent in the arm that drops things.");
-    std::printf("   the displacing key, re-submitted twice: resident=%u then %u\n",
-                R.c[2], R2.c[2]);
+    std::printf("   the displacing key, re-submitted twice: resident=%u then %u\n", R.c[2],
+                R2.c[2]);
 
     // =====================================================================
     // G2 -- THE SAME EVICTION WITH THE BARRIER PUT BACK
@@ -1519,13 +1636,14 @@ int main(int argc, char** argv) {
       ck(six.size() == 1, "G2 a sixth key in the same set was found", 1, int(six.size()));
 
       d.cfg_wb_barrier_i = 1;
-      d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+      d.stat_clear = 1;
+      zhao::tick(d);
+      d.stat_clear = 0;
       const uint32_t jnl_entry2 = d.h_wb_ticket % kJournalEntries;
       const Frame O2 = run_frame(w, six, 1, 32, 0, 0x6Du);
       const Frame E2 = expect_of(six, O2.answers, 1, 32, w.epoch);
       const int bad2 = compare("G2 evict", O2, E2);
-      ck(bad2 == 0, "G2 the frame still matches the reference with the barrier in place", 0,
-         bad2);
+      ck(bad2 == 0, "G2 the frame still matches the reference with the barrier in place", 0, bad2);
       ck(O2.c[9] == 1, "G2 one writeback job", 1, O2.c[9]);
 
       uint32_t vslot2 = 0xFFFFFFFFu;
@@ -1536,14 +1654,15 @@ int main(int argc, char** argv) {
         if (F0.answers[i].claim_slot == vslot2) vi2 = i;
 
       settle(w);
-      ck(d.h_wat_slot == vslot2,
-         "G2 the witness armed on the slot the writeback job named", vslot2, d.h_wat_slot);
+      ck(d.h_wat_slot == vslot2, "G2 the witness armed on the slot the writeback job named", vslot2,
+         d.h_wat_slot);
 
-      std::printf("   watched slot %u: loader wrote %u beats (first at cycle %u), "
-                  "writeback read %u beats (last at cycle %u), barrier held the load "
-                  "%u cycles\n",
-                  vslot2, d.wat_wr_count, d.wat_wr_first, d.wat_rd_count, d.wat_rd_last,
-                  d.h_barrier_stalls);
+      std::printf(
+          "   watched slot %u: loader wrote %u beats (first at cycle %u), "
+          "writeback read %u beats (last at cycle %u), barrier held the load "
+          "%u cycles\n",
+          vslot2, d.wat_wr_count, d.wat_wr_first, d.wat_rd_count, d.wat_rd_last,
+          d.h_barrier_stalls);
       // REPAIRED 2026-09-07. This asserted that the HARNESS barrier held the
       // load back, because TERRAIN.SEQ's own S_WB -> S_LOAD advanced on
       // `wb_ready_i` -- the writeback ACCEPTING the job, not completing it.
@@ -1574,18 +1693,17 @@ int main(int argc, char** argv) {
          "G2 both the writeback's reads and the loader's writes touched the slot", 1,
          (d.wat_rd_count > 0 && d.wat_wr_count > 0) ? 1 : 0);
       ck(d.wat_wr_first > d.wat_rd_last,
-         "G2 WITH THE BARRIER, every writeback read of the slot precedes every loader write",
-         1, (d.wat_wr_first > d.wat_rd_last) ? 1 : 0);
+         "G2 WITH THE BARRIER, every writeback read of the slot precedes every loader write", 1,
+         (d.wat_wr_first > d.wat_rd_last) ? 1 : 0);
 
       if (vi2 >= 0) {
         const std::vector<uint8_t> got2 = w.journal_read(jnl_entry2, kFBytes);
         std::size_t diff2 = 0;
         for (std::size_t i = 0; i < kFBytes; ++i)
           if (got2[i] != sheets[vi2][i]) ++diff2;
-        ck(diff2 == 0,
-           "G2 and the journal receives the evicted sheet byte for byte", 0, int(diff2));
-        std::printf("   journal vs the evicted sheet: %zu of %u bytes differ\n", diff2,
-                    kFBytes);
+        ck(diff2 == 0, "G2 and the journal receives the evicted sheet byte for byte", 0,
+           int(diff2));
+        std::printf("   journal vs the evicted sheet: %zu of %u bytes differ\n", diff2, kFBytes);
       }
       d.cfg_wb_barrier_i = 0;
       settle(w);
@@ -1616,11 +1734,13 @@ int main(int argc, char** argv) {
       ck(seven.size() == 1, "G3 a seventh key in the same set was found", 1, int(seven.size()));
 
       d.cfg_wb_barrier_i = 0;
-      d.cfg_rd_latency_i = 12;   // the writeback's page-pool reads: slow
+      d.cfg_rd_latency_i = 12;  // the writeback's page-pool reads: slow
       d.cfg_rd_gap_i = 6;
-      d.cfg_req_latency_i = 1;   // the loader's HPS reads: as fast as the bridge allows
+      d.cfg_req_latency_i = 1;  // the loader's HPS reads: as fast as the bridge allows
       d.cfg_beat_gap_i = 0;
-      d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+      d.stat_clear = 1;
+      zhao::tick(d);
+      d.stat_clear = 0;
       const uint32_t jnl_entry3 = d.h_wb_ticket % kJournalEntries;
       // THE DUT'S COUNTERS ARE CUMULATIVE AND `stat_clear` ONLY ZEROES THE
       // HARNESS'S. G and G2 each journalled a sheet before this phase, so a
@@ -1644,9 +1764,10 @@ int main(int argc, char** argv) {
         if (F0.answers[i].claim_slot == vslot3) vi3 = i;
       settle(w);
 
-      std::printf("   watched slot %u: loader wrote %u beats (first at cycle %u), "
-                  "writeback read %u beats (last at cycle %u)\n",
-                  vslot3, d.wat_wr_count, d.wat_wr_first, d.wat_rd_count, d.wat_rd_last);
+      std::printf(
+          "   watched slot %u: loader wrote %u beats (first at cycle %u), "
+          "writeback read %u beats (last at cycle %u)\n",
+          vslot3, d.wat_wr_count, d.wat_wr_first, d.wat_rd_count, d.wat_rd_last);
 
       // AND THE ANSWER IS SHARPER THAN CORRUPTION. TERRAIN.WRITEBACK reads the
       // evicted page's 64-byte HEADER FIRST and checks it against the identity
@@ -1663,12 +1784,13 @@ int main(int argc, char** argv) {
       // only when both machines finished, so what is asserted here is the
       // machines' own verdict counters rather than a difference against
       // silence.
-      std::printf("   writeback at this ratio: read %u beats, hdr ident fails=%u, "
-                  "faulted=%u, written=%u\n",
-                  d.wat_rd_count, d.wb_hdr_ident_fails - id_before,
-                  d.wb_sheets_faulted - ft_before, d.wb_sheets_written - wr_before);
-      ck(d.wat_wr_count == kPageWords, "G3 the loader wrote the whole displacing page",
-         kPageWords, d.wat_wr_count);
+      std::printf(
+          "   writeback at this ratio: read %u beats, hdr ident fails=%u, "
+          "faulted=%u, written=%u\n",
+          d.wat_rd_count, d.wb_hdr_ident_fails - id_before, d.wb_sheets_faulted - ft_before,
+          d.wb_sheets_written - wr_before);
+      ck(d.wat_wr_count == kPageWords, "G3 the loader wrote the whole displacing page", kPageWords,
+         d.wat_wr_count);
       // REPAIRED 2026-09-07, AND THIS IS THE CASE THAT MATTERED MOST.
       //
       // It used to assert the scar was LOST: at this bandwidth ratio the
@@ -1695,8 +1817,8 @@ int main(int argc, char** argv) {
          "the loader had not reached it, because it had not started",
          0, d.wb_hdr_ident_fails - id_before);
       ck(d.wb_sheets_faulted - ft_before == 0,
-         "G3 so no sheet faulted at a ratio that used to lose one every time",
-         0, d.wb_sheets_faulted - ft_before);
+         "G3 so no sheet faulted at a ratio that used to lose one every time", 0,
+         d.wb_sheets_faulted - ft_before);
       ck(d.wb_sheets_written - wr_before == 1,
          "G3 AND THE SCAR REACHED THE JOURNAL. This is the check the whole "
          "barrier exists for: same blocks, same commands, same hostile ratio, "
@@ -1763,8 +1885,7 @@ int main(int argc, char** argv) {
       for (int i = 0; i < 6; ++i) {
         Page pg = make_page(7, int16_t(60 + i), 60, uint32_t(0x600 + i));
         w.stage_page(uint32_t(22 + i), pg);
-        cs.push_back(mk(uint32_t(500 + i), 7, int16_t(60 + i), 60, kReq, uint32_t(22 + i),
-                        pg.crc));
+        cs.push_back(mk(uint32_t(500 + i), 7, int16_t(60 + i), 60, kReq, uint32_t(22 + i), pg.crc));
       }
       const Frame O = run_frame(w, cs, 6, /*budget=*/2, 0, 0x8Du);
       const Frame E = expect_of(cs, O.answers, 6, 2, w.epoch);
@@ -1791,8 +1912,8 @@ int main(int argc, char** argv) {
         Page pg = make_page(7, int16_t(80 + i), 80, uint32_t(0x800 + i));
         const uint32_t arena = uint32_t(32 + i);
         w.stage_page(arena, pg);
-        cs.push_back(mk(uint32_t(600 + i), 7, int16_t(80 + i), 80, uint16_t(kReq | kDyn),
-                        arena, pg.crc));
+        cs.push_back(
+            mk(uint32_t(600 + i), 7, int16_t(80 + i), 80, uint16_t(kReq | kDyn), arena, pg.crc));
       }
       // Frame 1: everything misses, everything is claimed and loaded.
       run_frame(w, cs, 20, 64, 0, 0x8Eu);
@@ -1803,9 +1924,10 @@ int main(int argc, char** argv) {
       const int bad = compare("H T6", O, E);
       ck(bad == 0, "H the T6 overflow frame matches the reference", 0, bad);
       int resident = 0;
-      for (const sq::ResAnswer& a : O.answers) if (a.hit) ++resident;
-      ck(resident >= 17, "H at least seventeen of the twenty were resident, so T6 is reachable",
-         17, resident);
+      for (const sq::ResAnswer& a : O.answers)
+        if (a.hit) ++resident;
+      ck(resident >= 17, "H at least seventeen of the twenty were resident, so T6 is reachable", 17,
+         resident);
       if (resident >= 17) {
         ck(O.c[13] == 1, "H the seventeenth composing patch faults the frame", 1, O.c[13]);
         ck(O.fault, "H and the fault is latched with the rejected identity");
@@ -1879,15 +2001,16 @@ int main(int argc, char** argv) {
        d.r_refused_all_pinned);
     ck(d.h_pin_drops == 0,
        "H the played engine released every pin it was handed -- a leaked pin makes a page "
-       "permanently unevictable and the suite would still pass", 0, d.h_pin_drops);
+       "permanently unevictable and the suite would still pass",
+       0, d.h_pin_drops);
     ck(d.h_pins == d.h_unpins, "H pins and unpins balance", d.h_pins, d.h_unpins);
     std::printf("   directory: hits=%u misses=%u claims=%u evictions=%u dirty=%u resident=%u\n",
-                d.r_hits, d.r_misses, d.r_claims, d.r_evictions, d.r_dirty_evictions,
-                d.r_resident);
-    std::printf("   harness:   pins=%u unpins=%u dropped=%u acks=%u pool writes=%u "
-                "journal writes=%u mip completions played=%u\n",
-                d.h_pins, d.h_unpins, d.h_pin_drops, d.h_acks_sent, d.h_pool_writes,
-                d.h_jnl_writes, d.h_mipgen_fins);
+                d.r_hits, d.r_misses, d.r_claims, d.r_evictions, d.r_dirty_evictions, d.r_resident);
+    std::printf(
+        "   harness:   pins=%u unpins=%u dropped=%u acks=%u pool writes=%u "
+        "journal writes=%u mip completions played=%u\n",
+        d.h_pins, d.h_unpins, d.h_pin_drops, d.h_acks_sent, d.h_pool_writes, d.h_jnl_writes,
+        d.h_mipgen_fins);
   }
 
   // =========================================================================
@@ -1911,15 +2034,13 @@ int main(int argc, char** argv) {
     settle(w);
     const Frame O = run_frame(w, setA, 5, 32, 0, 0x5Au);
     ck(O.done, "I the frame completed at its declared count");
-    ck(O.accepted == 5, "I the bench was allowed to hand over exactly five records", 5,
-       O.accepted);
+    ck(O.accepted == 5, "I the bench was allowed to hand over exactly five records", 5, O.accepted);
     ck(O.c[0] == 5, "I and the block counted five consumed", 5, O.c[0]);
     const Frame E = expect_of(setA, O.answers, 5, 32, w.epoch);
     const int bad = compare("I short", O, E);
     ck(bad == 0, "I the short frame matches the reference action for action", 0, bad);
     settle(w);
   }
-
 
   // =========================================================================
   // L -- THE LOAD QUEUE, MEASURED IN BOTH DIRECTIONS
@@ -1941,12 +2062,14 @@ int main(int argc, char** argv) {
     uint64_t cyc_off = 0, cyc_on = 0;
 
     // ---- without ----------------------------------------------------------
-    w.reset();                 // config() sets the knob back on...
-    d.cfg_loadq_i = 0;         // ...so it is cleared AFTER the reset, not before
+    w.reset();          // config() sets the knob back on...
+    d.cfg_loadq_i = 0;  // ...so it is cleared AFTER the reset, not before
     d.eval();
     for (int i = 0; i < 8; ++i) w.stage_page(uint32_t(i), pagesA[i]);
     {
-      d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+      d.stat_clear = 1;
+      zhao::tick(d);
+      d.stat_clear = 0;
       const Frame O = run_frame(w, setA, 8, 32, 0, 0xE0u);
       cyc_off = O.cycles;
       ck(O.c[7] == 8, "L the un-queued run still issues all eight loads", 8, O.c[7]);
@@ -1962,7 +2085,9 @@ int main(int argc, char** argv) {
     d.eval();
     for (int i = 0; i < 8; ++i) w.stage_page(uint32_t(i), pagesA[i]);
     {
-      d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+      d.stat_clear = 1;
+      zhao::tick(d);
+      d.stat_clear = 0;
       const Frame O = run_frame(w, setA, 8, 32, 0, 0xE1u);
       cyc_on = O.cycles;
       ck(O.c[7] == 8, "L the queued run issues the same eight loads", 8, O.c[7]);
@@ -1971,15 +2096,17 @@ int main(int argc, char** argv) {
       settle(w);
       ck(int(d.lq_issued) == 8,
          "L and handed all eight on to the loader -- a queue that accepts more than it "
-         "issues is a queue that is eating jobs", 8, int(d.lq_issued));
+         "issues is a queue that is eating jobs",
+         8, int(d.lq_issued));
       ck(d.lq_level == 0, "L and ended empty", 0, d.lq_level);
     }
 
-    std::printf("   L: %llu cycles without the queue, %llu with it -- %.1fx, "
-                "%.0f vs %.0f cycles per miss\n",
-                (unsigned long long)cyc_off, (unsigned long long)cyc_on,
-                cyc_on ? double(cyc_off) / double(cyc_on) : 0.0,
-                double(cyc_off) / 8.0, double(cyc_on) / 8.0);
+    std::printf(
+        "   L: %llu cycles without the queue, %llu with it -- %.1fx, "
+        "%.0f vs %.0f cycles per miss\n",
+        (unsigned long long)cyc_off, (unsigned long long)cyc_on,
+        cyc_on ? double(cyc_off) / double(cyc_on) : 0.0, double(cyc_off) / 8.0,
+        double(cyc_on) / 8.0);
 
     ck(cyc_off > cyc_on * 4,
        "L the queue is what made the frame cheap: removing it puts the acceptance stall "
@@ -2007,15 +2134,20 @@ int main(int argc, char** argv) {
         w.stage_page(uint32_t(16 + i), pg);
         set32.push_back(mk(uint32_t(700 + i), 9, ix, 12, kReq, uint32_t(16 + i), pg.crc));
       }
-      d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+      d.stat_clear = 1;
+      zhao::tick(d);
+      d.stat_clear = 0;
       const Frame O = run_frame(w, set32, 32, 32, 0, 0xE2u, 4000000ull);
       ck(O.c[7] == 32, "L2 all thirty-two misses issue a load", 32, O.c[7]);
-      std::printf("   L2: %llu cycles for 32 misses = %.0f per miss; queue accepted=%u "
-                  "high water=%u refused=%u\n",
-                  (unsigned long long)O.cycles, double(O.cycles) / 32.0, d.lq_accepted,
-                  d.lq_high_water, d.lq_refused);
-      std::printf("   L2: that is %.1f%% of a 1,666,667-clock frame spent waiting on load "
-                  "ACCEPTANCE alone\n", 100.0 * double(O.cycles) / 1666667.0);
+      std::printf(
+          "   L2: %llu cycles for 32 misses = %.0f per miss; queue accepted=%u "
+          "high water=%u refused=%u\n",
+          (unsigned long long)O.cycles, double(O.cycles) / 32.0, d.lq_accepted, d.lq_high_water,
+          d.lq_refused);
+      std::printf(
+          "   L2: that is %.1f%% of a 1,666,667-clock frame spent waiting on load "
+          "ACCEPTANCE alone\n",
+          100.0 * double(O.cycles) / 1666667.0);
       // THE DEPTH IS NOW ASSERTED, because the measurement has been taken and
       // it chose 32. At depth 8 this frame cost 176,768 cycles and the
       // sequencer sat on a full queue for 176,509 of them; at T7's own budget
@@ -2031,8 +2163,8 @@ int main(int argc, char** argv) {
          "176,768 cycles depth 8 charged",
          1, O.cycles < 20000 ? 1 : 0);
       ck(int(d.lq_accepted) == O.c[7],
-         "L2 the queue took exactly the loads the sequencer issued, no more and no fewer",
-         O.c[7], int(d.lq_accepted));
+         "L2 the queue took exactly the loads the sequencer issued, no more and no fewer", O.c[7],
+         int(d.lq_accepted));
       settle(w, 4000000ull);
       ck(int(d.lq_issued) == int(d.lq_accepted),
          "L2 and issued every one of them onward -- depth may be too small, but nothing "
@@ -2050,14 +2182,19 @@ int main(int argc, char** argv) {
       w.reset();
       d.eval();
       for (int i = 0; i < 8; ++i) w.stage_page(uint32_t(i), pagesA[i]);
-      d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+      d.stat_clear = 1;
+      zhao::tick(d);
+      d.stat_clear = 0;
 
       // Start a frame and stop the moment the queue is holding something.
       d.cfg_load_budget_i = 32;
       d.fr_epoch = w.epoch;
       d.fr_patch_count = 8;
       d.fr_sequence = 0x0700u;
-      d.fr_start = 1; d.eval(); zhao::tick(d); d.fr_start = 0;
+      d.fr_start = 1;
+      d.eval();
+      zhao::tick(d);
+      d.fr_start = 0;
 
       std::size_t next_rec = 0;
       int held = 0;
@@ -2065,13 +2202,18 @@ int main(int argc, char** argv) {
         d.rec_valid = (next_rec < setA.size()) ? 1 : 0;
         if (next_rec < setA.size()) {
           const ss::PatchRecord& r = setA[next_rec].r;
-          d.rec_island = r.island_id; d.rec_ix = uint16_t(r.patch_ix);
-          d.rec_iz = uint16_t(r.patch_iz); d.rec_hps_addr = r.hps_page_addr;
-          d.rec_crc = r.expected_page_crc32c; d.rec_flags = r.flags;
-          d.rec_view_mask = r.view_mask; d.rec_priority = r.priority;
+          d.rec_island = r.island_id;
+          d.rec_ix = uint16_t(r.patch_ix);
+          d.rec_iz = uint16_t(r.patch_iz);
+          d.rec_hps_addr = r.hps_page_addr;
+          d.rec_crc = r.expected_page_crc32c;
+          d.rec_flags = r.flags;
+          d.rec_view_mask = r.view_mask;
+          d.rec_priority = r.priority;
           d.rec_src_id = r.source_id;
         }
-        d.is_ready = 1; d.wbdone_ready = 1;
+        d.is_ready = 1;
+        d.wbdone_ready = 1;
         d.eval();
         if (d.rec_valid && d.rec_ready) ++next_rec;
         held = int(d.lq_inflight);
@@ -2097,8 +2239,10 @@ int main(int argc, char** argv) {
       d.cfg_loadq_drain_i = 0;
       d.eval();
 
-      ck(d.lq_inflight == 0, "L one drain pulse empties the queue -- store, serialiser "
-         "and output register alike", 0, d.lq_inflight);
+      ck(d.lq_inflight == 0,
+         "L one drain pulse empties the queue -- store, serialiser "
+         "and output register alike",
+         0, d.lq_inflight);
       ck(d.lq_drained == drained_before + level_before,
          "L and COUNTS what it threw away, exactly the level it held. A drain that "
          "silently empties cannot be told from a queue that was never filled",
@@ -2114,7 +2258,6 @@ int main(int argc, char** argv) {
       for (int i = 0; i < 8; ++i) w.stage_page(uint32_t(i), pagesA[i]);
     }
   }
-
 
   // =========================================================================
   // M -- THE SAME FRAME, FROM A COMMAND
@@ -2177,7 +2320,7 @@ int main(int argc, char** argv) {
     d.tc_list_bytes = list_bytes;
     d.tc_list_crc = list_crc;
     d.tc_count = 8;
-    d.tc_seq = 0x0100u;          // the same sequence the hand path uses
+    d.tc_seq = 0x0100u;  // the same sequence the hand path uses
     d.tc_src_id = 0xC0DEu;
     d.eval();
 
@@ -2185,18 +2328,17 @@ int main(int argc, char** argv) {
     d.cfg_cmd_path_i = 0;
     d.eval();
 
-    ck(d.tc_done_ok != 0 || C.done,
-       "M the command was accepted", 1, (d.tc_done_ok != 0 || C.done) ? 1 : 0);
+    ck(d.tc_done_ok != 0 || C.done, "M the command was accepted", 1,
+       (d.tc_done_ok != 0 || C.done) ? 1 : 0);
     ck(d.tc_crc_fails == 0, "M with no CRC failure", 0, d.tc_crc_fails);
-    ck(int(d.tc_records) == 8,
-       "M and TERRAIN.CMD handed the sequencer all eight records", 8, int(d.tc_records));
-    ck(d.tc_bytes == 2u * list_bytes,
-       "M having read the list twice -- once to verify, once to act", long(2 * list_bytes),
-       long(d.tc_bytes));
+    ck(int(d.tc_records) == 8, "M and TERRAIN.CMD handed the sequencer all eight records", 8,
+       int(d.tc_records));
+    ck(d.tc_bytes == 2u * list_bytes, "M having read the list twice -- once to verify, once to act",
+       long(2 * list_bytes), long(d.tc_bytes));
 
     ck(C.done, "M the command-driven frame completed");
-    ck(C.accepted == H.accepted, "M it consumed the same number of records",
-       long(H.accepted), long(C.accepted));
+    ck(C.accepted == H.accepted, "M it consumed the same number of records", long(H.accepted),
+       long(C.accepted));
 
     // THE LOG, NOT THE COUNTERS. Same helper the reference comparison uses, so
     // "identical" means the same thing here as it does everywhere else in this
@@ -2215,9 +2357,10 @@ int main(int argc, char** argv) {
       // job is to show a mismatch.
       std::printf("   M counter %d: hand %u, command %u\n", k, H.c[k], C.c[k]);
     }
-    std::printf("   hand: %llu cycles; command: %llu cycles (the difference is the CRC "
-                "pass, which reads %u bytes before the frame starts)\n",
-                (unsigned long long)H.cycles, (unsigned long long)C.cycles, list_bytes);
+    std::printf(
+        "   hand: %llu cycles; command: %llu cycles (the difference is the CRC "
+        "pass, which reads %u bytes before the frame starts)\n",
+        (unsigned long long)H.cycles, (unsigned long long)C.cycles, list_bytes);
 
     settle(w);
   }
@@ -2225,8 +2368,9 @@ int main(int argc, char** argv) {
   std::printf("\n== %d checks, %d failures, %d composition defects ==\n", g_checks, g_fail,
               g_defects);
   if (g_defects > 0)
-    std::printf("   The defects above are the deliverable: they are seam faults no unit suite\n"
-                "   could see, and every one of them is reproduced by this test on demand.\n");
+    std::printf(
+        "   The defects above are the deliverable: they are seam faults no unit suite\n"
+        "   could see, and every one of them is reproduced by this test on demand.\n");
   std::fflush(stdout);
 
   const int rc = (g_fail == 0) ? 0 : 1;

@@ -215,10 +215,10 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
   // is an ordinary interpolant now, which is exactly what D-5 changed.
   int32_t fogf_grad_x = 0;
   if (m.fog && !m.fog_exempt) {
-    fogf_grad_x = div_rhu_s128(
-        static_cast<__int128>(dw0_dx) * A.fogf + static_cast<__int128>(dw1_dx) * B.fogf +
-            static_cast<__int128>(dw2_dx) * C.fogf,
-        area);
+    fogf_grad_x = div_rhu_s128(static_cast<__int128>(dw0_dx) * A.fogf +
+                                   static_cast<__int128>(dw1_dx) * B.fogf +
+                                   static_cast<__int128>(dw2_dx) * C.fogf,
+                               area);
   }
   // affine UV gradients (terrain texturing, terrain_rules §6.2): the SAME
   // one-rounding plane setup as depth/alpha; Phase-5 brings the
@@ -283,10 +283,9 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
     }
     int32_t fogf = 0x10000;  // CLEAR unless this triangle actually fogs
     if (m.fog && !m.fog_exempt) {
-      fogf = div_rhu_s128(
-          static_cast<__int128>(w0) * A.fogf + static_cast<__int128>(w1) * B.fogf +
-              static_cast<__int128>(w2) * C.fogf,
-          area);
+      fogf = div_rhu_s128(static_cast<__int128>(w0) * A.fogf + static_cast<__int128>(w1) * B.fogf +
+                              static_cast<__int128>(w2) * C.fogf,
+                          area);
     }
     int32_t cr = 0, cg = 0, cb = 0;
     if (m.gouraud) {  // row start: full barycentric re-evaluation per lane

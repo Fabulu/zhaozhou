@@ -68,8 +68,7 @@ struct Stats {
 
 class Streamer {
  public:
-  Streamer(const Directory& dir, residency::Arena& arena)
-      : dir_(dir), arena_(arena) {}
+  Streamer(const Directory& dir, residency::Arena& arena) : dir_(dir), arena_(arena) {}
 
   // Bring the view's patches into residency and let go of everything else.
   //
@@ -107,13 +106,19 @@ class Streamer {
 
     // ---- 2. publish what is newly wanted -----------------------------------
     for (const auto& k : want) {
-      if (live_.find(k) != live_.end()) { ++st.already; continue; }
+      if (live_.find(k) != live_.end()) {
+        ++st.already;
+        continue;
+      }
       const uint32_t res_index = resource_index(dir_.desc().island_id, k.first, k.second);
       const residency::PublishResult r =
           arena_.publish(res_index, residency::Kind::kTexturePage, /*hps_addr=*/0,
                          /*length=*/page_bytes_, hps_, /*request_epoch=*/1,
                          /*current_epoch=*/1, /*verify_ok=*/true, L);
-      if (r.outcome != residency::Outcome::kPublished) { ++st.refused; continue; }
+      if (r.outcome != residency::Outcome::kPublished) {
+        ++st.refused;
+        continue;
+      }
       live_[k] = res_index;
       ++st.published;
       if (seen_.find(k) != seen_.end()) ++st.returned;

@@ -42,11 +42,11 @@ struct Acc {
   uint8_t fmt{};
 };
 
-uint32_t mode(uint32_t fmt, uint32_t filter, uint32_t wrap_u, uint32_t wrap_v,
-              uint32_t log2w, uint32_t log2h, uint32_t max_level, uint32_t mip) {
-  return (fmt & 7u) | ((filter & 1u) << 3) | ((wrap_u & 3u) << 4) |
-         ((wrap_v & 3u) << 6) | ((log2w & 15u) << 8) |
-         ((log2h & 15u) << 12) | ((max_level & 15u) << 16) | ((mip & 1u) << 20);
+uint32_t mode(uint32_t fmt, uint32_t filter, uint32_t wrap_u, uint32_t wrap_v, uint32_t log2w,
+              uint32_t log2h, uint32_t max_level, uint32_t mip) {
+  return (fmt & 7u) | ((filter & 1u) << 3) | ((wrap_u & 3u) << 4) | ((wrap_v & 3u) << 6) |
+         ((log2w & 15u) << 8) | ((log2h & 15u) << 12) | ((max_level & 15u) << 16) |
+         ((mip & 1u) << 20);
 }
 
 Req make_req(int serial) {
@@ -75,8 +75,7 @@ Acc expect_acc(const Req& r) {
   const uint32_t total1 = y * 16u + ((x + 1u) & 15u);
   const uint32_t total2 = ((y + 1u) & 15u) * 16u + x;
   const uint32_t total3 = ((y + 1u) & 15u) * 16u + ((x + 1u) & 15u);
-  a.addr = {r.base + 2u * total0, r.base + 2u * total1,
-            r.base + 2u * total2, r.base + 2u * total3};
+  a.addr = {r.base + 2u * total0, r.base + 2u * total1, r.base + 2u * total2, r.base + 2u * total3};
   a.route = r.route;
   a.pal_slot = r.pal_slot;
   a.pal_gen = r.pal_gen;
@@ -119,9 +118,8 @@ Acc sample(const Dut& top) {
 
 bool exact(const Acc& a, const Acc& b) {
   return a.addr == b.addr && a.route == b.route && a.pal_slot == b.pal_slot &&
-         a.pal_gen == b.pal_gen && a.en == b.en && a.filter == b.filter &&
-         a.err == b.err && a.nib == b.nib && a.fu == b.fu && a.fv == b.fv &&
-         a.fmt == b.fmt;
+         a.pal_gen == b.pal_gen && a.en == b.en && a.filter == b.filter && a.err == b.err &&
+         a.nib == b.nib && a.fu == b.fu && a.fv == b.fv && a.fmt == b.fmt;
 }
 
 void reset(Dut& top) {
@@ -204,8 +202,7 @@ int main(int argc, char** argv) {
     zhao::check(returned == kCount, "all accepted requests reached the cache boundary", kCount,
                 returned);
     zhao::check(wrong == 0,
-                "addresses and exact route/palette identity survive every elastic stage", 0,
-                wrong);
+                "addresses and exact route/palette identity survive every elastic stage", 0, wrong);
     zhao::check(hold_wrong == 0, "the complete cache-access packet holds while stalled", 0,
                 hold_wrong);
     zhao::check(top.accepted_o == kCount, "accepted counter matches logical issues", kCount,

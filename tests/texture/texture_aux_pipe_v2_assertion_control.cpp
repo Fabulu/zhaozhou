@@ -76,8 +76,7 @@ int main(int argc, char** argv) {
   top.eval();
 
   if (!fired || top.credit_fault_o == 0 || top.frame_fault_o != 1) {
-    std::fprintf(stderr,
-                 "FAIL: control %d expected assertion/counter/set, got %d/%u/%u\n",
+    std::fprintf(stderr, "FAIL: control %d expected assertion/counter/set, got %d/%u/%u\n",
                  selected, fired ? 1 : 0, top.credit_fault_o, top.frame_fault_o);
     zhao::exit_hard(2);
   }
@@ -90,8 +89,7 @@ int main(int argc, char** argv) {
     context.gotError(false);
     for (int hold = 0; hold < 5; ++hold) zhao::tick(top);
     if (before != 1 || top.credit_fault_o != before) {
-      std::fprintf(stderr,
-                   "FAIL: owed-room one-shot expected held counter 1, got %u -> %u\n",
+      std::fprintf(stderr, "FAIL: owed-room one-shot expected held counter 1, got %u -> %u\n",
                    before, top.credit_fault_o);
       zhao::exit_hard(2);
     }

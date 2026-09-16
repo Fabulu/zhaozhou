@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
     h.top.req_client = 0;
     h.top.req_addr = 0x0000'4000;
     h.top.req_len = 16;
-    h.tick();                       // accepted; req_grant high, issued still 0
+    h.tick();  // accepted; req_grant high, issued still 0
     h.top.req_valid = 0;
 
     const uint32_t ready_at_accept = h.top.wr_ready;
@@ -125,7 +125,7 @@ int main(int argc, char** argv) {
     h.top.wr_valid = 1;
     h.top.wr_data = beat_data(0, 0xDEAD);
     h.top.wr_last = 0;
-    h.tick();                       // issued becomes 1 during this tick
+    h.tick();  // issued becomes 1 during this tick
     h.top.wr_valid = 0;
 
     chk(ready_at_accept == 0,

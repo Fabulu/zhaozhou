@@ -28,8 +28,8 @@ int g_failures = 0;
 
 void check(bool cond, const char* what, uint64_t expected, uint64_t actual) {
   if (!cond) {
-    std::printf("FAIL %s: expected %llx actual %llx\n", what,
-                (unsigned long long)expected, (unsigned long long)actual);
+    std::printf("FAIL %s: expected %llx actual %llx\n", what, (unsigned long long)expected,
+                (unsigned long long)actual);
     ++g_failures;
   }
 }
@@ -50,7 +50,9 @@ Rec pattern(int g, int i) {
   r.d = (uint32_t)(0x10000u + i * 0x123u + g * 0x9999u);         // 32b
   r.w = (uint32_t)((0x2000000u + i * 0x777u + g) & 0x7FFFFFFF);  // 31b
   r.behind = (i % 17 == 3) ? 1 : 0;
-  if (r.behind) { r.x = r.y = r.d = r.w = 0; }  // the core's behind law
+  if (r.behind) {
+    r.x = r.y = r.d = r.w = 0;
+  }  // the core's behind law
   return r;
 }
 
@@ -148,12 +150,21 @@ struct Dut {
   }
 
   // Issue on all three replica ports in one cycle, reply next cycle.
-  void read3(int g0, uint32_t gen0, int i0, int g1, uint32_t gen1, int i1,
-             int g2, uint32_t gen2, int i2) {
+  void read3(int g0, uint32_t gen0, int i0, int g1, uint32_t gen1, int i1, int g2, uint32_t gen2,
+             int i2) {
     idle();
-    v->rd0_valid_i = 1; v->rd0_group_i = g0; v->rd0_gen_i = gen0; v->rd0_index_i = i0;
-    v->rd1_valid_i = 1; v->rd1_group_i = g1; v->rd1_gen_i = gen1; v->rd1_index_i = i1;
-    v->rd2_valid_i = 1; v->rd2_group_i = g2; v->rd2_gen_i = gen2; v->rd2_index_i = i2;
+    v->rd0_valid_i = 1;
+    v->rd0_group_i = g0;
+    v->rd0_gen_i = gen0;
+    v->rd0_index_i = i0;
+    v->rd1_valid_i = 1;
+    v->rd1_group_i = g1;
+    v->rd1_gen_i = gen1;
+    v->rd1_index_i = i1;
+    v->rd2_valid_i = 1;
+    v->rd2_group_i = g2;
+    v->rd2_gen_i = gen2;
+    v->rd2_index_i = i2;
     tick();
     idle();
     v->eval();
@@ -163,18 +174,36 @@ struct Dut {
 void expect_hit(Dut& d, int port, const Rec& r, uint32_t key) {
   uint32_t rv, rf, x, y, dd, w, b, k;
   switch (port) {
-    case 0: rv = d.v->rd0_rep_valid_o; rf = d.v->rd0_refuse_o;
-            x = d.v->rd0_x_o & 0x1FFFFF; y = d.v->rd0_y_o & 0x1FFFFF;
-            dd = d.v->rd0_d_o; w = d.v->rd0_w_o; b = d.v->rd0_behind_o;
-            k = d.v->rd0_key_o; break;
-    case 1: rv = d.v->rd1_rep_valid_o; rf = d.v->rd1_refuse_o;
-            x = d.v->rd1_x_o & 0x1FFFFF; y = d.v->rd1_y_o & 0x1FFFFF;
-            dd = d.v->rd1_d_o; w = d.v->rd1_w_o; b = d.v->rd1_behind_o;
-            k = d.v->rd1_key_o; break;
-    default: rv = d.v->rd2_rep_valid_o; rf = d.v->rd2_refuse_o;
-            x = d.v->rd2_x_o & 0x1FFFFF; y = d.v->rd2_y_o & 0x1FFFFF;
-            dd = d.v->rd2_d_o; w = d.v->rd2_w_o; b = d.v->rd2_behind_o;
-            k = d.v->rd2_key_o; break;
+    case 0:
+      rv = d.v->rd0_rep_valid_o;
+      rf = d.v->rd0_refuse_o;
+      x = d.v->rd0_x_o & 0x1FFFFF;
+      y = d.v->rd0_y_o & 0x1FFFFF;
+      dd = d.v->rd0_d_o;
+      w = d.v->rd0_w_o;
+      b = d.v->rd0_behind_o;
+      k = d.v->rd0_key_o;
+      break;
+    case 1:
+      rv = d.v->rd1_rep_valid_o;
+      rf = d.v->rd1_refuse_o;
+      x = d.v->rd1_x_o & 0x1FFFFF;
+      y = d.v->rd1_y_o & 0x1FFFFF;
+      dd = d.v->rd1_d_o;
+      w = d.v->rd1_w_o;
+      b = d.v->rd1_behind_o;
+      k = d.v->rd1_key_o;
+      break;
+    default:
+      rv = d.v->rd2_rep_valid_o;
+      rf = d.v->rd2_refuse_o;
+      x = d.v->rd2_x_o & 0x1FFFFF;
+      y = d.v->rd2_y_o & 0x1FFFFF;
+      dd = d.v->rd2_d_o;
+      w = d.v->rd2_w_o;
+      b = d.v->rd2_behind_o;
+      k = d.v->rd2_key_o;
+      break;
   }
   check(rv == 1, "hit.rep_valid", 1, rv);
   check(rf == 0, "hit.refuse", 0, rf);
@@ -189,21 +218,42 @@ void expect_hit(Dut& d, int port, const Rec& r, uint32_t key) {
 void expect_refuse(Dut& d, int port) {
   uint32_t rv, rf, x, y, dd, w, b, k;
   switch (port) {
-    case 0: rv = d.v->rd0_rep_valid_o; rf = d.v->rd0_refuse_o;
-            x = d.v->rd0_x_o; y = d.v->rd0_y_o; dd = d.v->rd0_d_o;
-            w = d.v->rd0_w_o; b = d.v->rd0_behind_o; k = d.v->rd0_key_o; break;
-    case 1: rv = d.v->rd1_rep_valid_o; rf = d.v->rd1_refuse_o;
-            x = d.v->rd1_x_o; y = d.v->rd1_y_o; dd = d.v->rd1_d_o;
-            w = d.v->rd1_w_o; b = d.v->rd1_behind_o; k = d.v->rd1_key_o; break;
-    default: rv = d.v->rd2_rep_valid_o; rf = d.v->rd2_refuse_o;
-            x = d.v->rd2_x_o; y = d.v->rd2_y_o; dd = d.v->rd2_d_o;
-            w = d.v->rd2_w_o; b = d.v->rd2_behind_o; k = d.v->rd2_key_o; break;
+    case 0:
+      rv = d.v->rd0_rep_valid_o;
+      rf = d.v->rd0_refuse_o;
+      x = d.v->rd0_x_o;
+      y = d.v->rd0_y_o;
+      dd = d.v->rd0_d_o;
+      w = d.v->rd0_w_o;
+      b = d.v->rd0_behind_o;
+      k = d.v->rd0_key_o;
+      break;
+    case 1:
+      rv = d.v->rd1_rep_valid_o;
+      rf = d.v->rd1_refuse_o;
+      x = d.v->rd1_x_o;
+      y = d.v->rd1_y_o;
+      dd = d.v->rd1_d_o;
+      w = d.v->rd1_w_o;
+      b = d.v->rd1_behind_o;
+      k = d.v->rd1_key_o;
+      break;
+    default:
+      rv = d.v->rd2_rep_valid_o;
+      rf = d.v->rd2_refuse_o;
+      x = d.v->rd2_x_o;
+      y = d.v->rd2_y_o;
+      dd = d.v->rd2_d_o;
+      w = d.v->rd2_w_o;
+      b = d.v->rd2_behind_o;
+      k = d.v->rd2_key_o;
+      break;
   }
   check(rv == 1, "refuse.rep_valid", 1, rv);
   check(rf == 1, "refuse.refuse", 1, rf);
   // A refused reply is DETERMINISTICALLY zero — never another group's vertex.
-  check(x == 0 && y == 0 && dd == 0 && w == 0 && b == 0 && k == 0,
-        "refuse.zeroed", 0, (uint64_t)x | y | dd | w | b | k);
+  check(x == 0 && y == 0 && dd == 0 && w == 0 && b == 0 && k == 0, "refuse.zeroed", 0,
+        (uint64_t)x | y | dd | w | b | k);
 }
 
 }  // namespace
@@ -231,19 +281,16 @@ int main(int argc, char** argv) {
   expect_refuse(d, 0);
   expect_refuse(d, 1);
   expect_refuse(d, 2);
-  check(top->read_refusals_o == 3, "ctr.read_refusals.filling", 3,
-        top->read_refusals_o);
+  check(top->read_refusals_o == 3, "ctr.read_refusals.filling", 3, top->read_refusals_o);
 
   // Fill 40 rows, then a SHORT seal: refused, still FILLING.
-  for (int i = 0; i < 40; ++i)
-    check(d.fill(0, pattern(0, i)), "fill.took", 1, 0);
+  for (int i = 0; i < 40; ++i) check(d.fill(0, pattern(0, i)), "fill.took", 1, 0);
   d.seal(0);
   check(top->seal_short_o == 1, "ctr.seal_short", 1, top->seal_short_o);
   check(top->seals_o == 0, "ctr.seals.after_short", 0, top->seals_o);
 
   // Finish the dense fill; then one EXTRA fill must be refused (ready low).
-  for (int i = 40; i < kDepth; ++i)
-    check(d.fill(0, pattern(0, i)), "fill.took2", 1, 0);
+  for (int i = 40; i < kDepth; ++i) check(d.fill(0, pattern(0, i)), "fill.took2", 1, 0);
   check(!d.fill(0, pattern(0, 99)), "fill.overfull_refused", 0, 1);
   check(top->fill_illegal_o == 1, "ctr.fill_illegal", 1, top->fill_illegal_o);
   check(top->fills_o == kDepth, "ctr.fills", kDepth, top->fills_o);
@@ -273,15 +320,14 @@ int main(int argc, char** argv) {
   expect_refuse(d, 0);
   expect_hit(d, 1, pattern(0, 0), kKey0);
   expect_hit(d, 2, pattern(0, 1), kKey0);
-  check(top->read_refusals_o == refusals_before + 4, "ctr.read_refusals.mix",
-        refusals_before + 4, top->read_refusals_o);
+  check(top->read_refusals_o == refusals_before + 4, "ctr.read_refusals.mix", refusals_before + 4,
+        top->read_refusals_o);
 
   // ---- references gate release --------------------------------------------
   d.ref_acq(0);
   d.ref_acq(0);
   d.release(0);
-  check(top->release_blocked_o == 1, "ctr.release_blocked", 1,
-        top->release_blocked_o);
+  check(top->release_blocked_o == 1, "ctr.release_blocked", 1, top->release_blocked_o);
   d.ref_rel(0);
   d.ref_rel(0);
   d.ref_rel(0);  // underflow attempt
@@ -310,13 +356,22 @@ int main(int argc, char** argv) {
     d.v->fill_valid_i = 1;
     d.v->fill_group_i = 1;
     Rec r = pattern(1, i);
-    d.v->fill_x_i = r.x; d.v->fill_y_i = r.y; d.v->fill_d_i = r.d;
-    d.v->fill_w_i = r.w; d.v->fill_behind_i = r.behind;
-    d.v->rd0_valid_i = 1; d.v->rd0_group_i = 0; d.v->rd0_gen_i = gen0b;
+    d.v->fill_x_i = r.x;
+    d.v->fill_y_i = r.y;
+    d.v->fill_d_i = r.d;
+    d.v->fill_w_i = r.w;
+    d.v->fill_behind_i = r.behind;
+    d.v->rd0_valid_i = 1;
+    d.v->rd0_group_i = 0;
+    d.v->rd0_gen_i = gen0b;
     d.v->rd0_index_i = i;
-    d.v->rd1_valid_i = 1; d.v->rd1_group_i = 0; d.v->rd1_gen_i = gen0b;
+    d.v->rd1_valid_i = 1;
+    d.v->rd1_group_i = 0;
+    d.v->rd1_gen_i = gen0b;
     d.v->rd1_index_i = (i + 1) % kDepth;
-    d.v->rd2_valid_i = 1; d.v->rd2_group_i = 0; d.v->rd2_gen_i = gen0b;
+    d.v->rd2_valid_i = 1;
+    d.v->rd2_group_i = 0;
+    d.v->rd2_gen_i = gen0b;
     d.v->rd2_index_i = (i + 2) % kDepth;
     d.v->eval();
     check(d.v->fill_ready_o == 1, "overlap.fill_ready", 1, d.v->fill_ready_o);

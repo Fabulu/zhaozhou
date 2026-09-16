@@ -76,22 +76,36 @@ struct Side {
 
 inline Side oracle_side(Top& t) {
   return Side{"oracle",
-              t.o_lu_valid_i, t.o_lu_ready_o, t.o_lu_hash_i, t.o_lu_resp_valid_o,
-              t.o_lu_resp_ready_i, t.o_lu_hit_o, t.o_lu_slot_o, t.o_cm_valid_i,
-              t.o_cm_ready_o, t.o_cm_hash_i, t.o_cm_ok_i, t.o_cm_resp_valid_o,
-              t.o_cm_resp_ready_i, t.o_cm_inserted_o, t.o_cm_evicted_o, t.o_cm_slot_o,
-              t.o_hits_o, t.o_misses_o, t.o_programs_rejected_o, t.o_evictions_o,
+              t.o_lu_valid_i,
+              t.o_lu_ready_o,
+              t.o_lu_hash_i,
+              t.o_lu_resp_valid_o,
+              t.o_lu_resp_ready_i,
+              t.o_lu_hit_o,
+              t.o_lu_slot_o,
+              t.o_cm_valid_i,
+              t.o_cm_ready_o,
+              t.o_cm_hash_i,
+              t.o_cm_ok_i,
+              t.o_cm_resp_valid_o,
+              t.o_cm_resp_ready_i,
+              t.o_cm_inserted_o,
+              t.o_cm_evicted_o,
+              t.o_cm_slot_o,
+              t.o_hits_o,
+              t.o_misses_o,
+              t.o_programs_rejected_o,
+              t.o_evictions_o,
               t.o_occupancy_o};
 }
 
 inline Side candidate_side(Top& t) {
-  return Side{"candidate",
-              t.n_lu_valid_i, t.n_lu_ready_o, t.n_lu_hash_i, t.n_lu_resp_valid_o,
-              t.n_lu_resp_ready_i, t.n_lu_hit_o, t.n_lu_slot_o, t.n_cm_valid_i,
-              t.n_cm_ready_o, t.n_cm_hash_i, t.n_cm_ok_i, t.n_cm_resp_valid_o,
-              t.n_cm_resp_ready_i, t.n_cm_inserted_o, t.n_cm_evicted_o, t.n_cm_slot_o,
-              t.n_hits_o, t.n_misses_o, t.n_programs_rejected_o, t.n_evictions_o,
-              t.n_occupancy_o};
+  return Side{"candidate",         t.n_lu_valid_i,      t.n_lu_ready_o,    t.n_lu_hash_i,
+              t.n_lu_resp_valid_o, t.n_lu_resp_ready_i, t.n_lu_hit_o,      t.n_lu_slot_o,
+              t.n_cm_valid_i,      t.n_cm_ready_o,      t.n_cm_hash_i,     t.n_cm_ok_i,
+              t.n_cm_resp_valid_o, t.n_cm_resp_ready_i, t.n_cm_inserted_o, t.n_cm_evicted_o,
+              t.n_cm_slot_o,       t.n_hits_o,          t.n_misses_o,      t.n_programs_rejected_o,
+              t.n_evictions_o,     t.n_occupancy_o};
 }
 
 enum class Kind : uint8_t {
@@ -121,7 +135,7 @@ struct Rec {
   unsigned lu_slot = 0;
   bool inserted = false, evicted = false;
   unsigned cm_slot = 0;
-  int order = -1;  // Pair: 0 = lookup accepted first, 1 = commit first
+  int order = -1;           // Pair: 0 = lookup accepted first, 1 = commit first
   bool both_fired = false;  // Pair: a lookup and a commit fired on ONE edge (illegal)
   uint32_t hits = 0, misses = 0, rejected = 0, evictions = 0;
   unsigned occupancy = 0;
@@ -173,11 +187,22 @@ class Runner {
   void drive() {
     if (st_ == St::Start) {
       switch (op_.kind) {
-        case Kind::Lookup: lu_ph_ = Ph::Offer; break;
-        case Kind::Commit: cm_ph_ = Ph::Offer; break;
-        case Kind::Pair: lu_ph_ = Ph::Offer; cm_ph_ = Ph::Offer; break;
-        case Kind::Held: lu_ph_ = Ph::Offer; break;
-        case Kind::Reset: lu_ph_ = Ph::Offer; break;
+        case Kind::Lookup:
+          lu_ph_ = Ph::Offer;
+          break;
+        case Kind::Commit:
+          cm_ph_ = Ph::Offer;
+          break;
+        case Kind::Pair:
+          lu_ph_ = Ph::Offer;
+          cm_ph_ = Ph::Offer;
+          break;
+        case Kind::Held:
+          lu_ph_ = Ph::Offer;
+          break;
+        case Kind::Reset:
+          lu_ph_ = Ph::Offer;
+          break;
       }
       st_ = St::Run;
     }
@@ -228,14 +253,20 @@ class Runner {
   // Called after the edge.
   void edge(long cycle) {
     if (st_ != St::Run) return;
-    if (lu_next_ != Ph::Keep) { lu_ph_ = lu_next_; lu_next_ = Ph::Keep; }
-    if (cm_next_ != Ph::Keep) { cm_ph_ = cm_next_; cm_next_ = Ph::Keep; }
+    if (lu_next_ != Ph::Keep) {
+      lu_ph_ = lu_next_;
+      lu_next_ = Ph::Keep;
+    }
+    if (cm_next_ != Ph::Keep) {
+      cm_ph_ = cm_next_;
+      cm_next_ = Ph::Keep;
+    }
 
     // Response arrival: WaitResp -> Stall (or Parked for Held's lookup).
     if (lu_ph_ == Ph::WaitResp && s_.lu_resp_valid) {
       rec_.lu_resp = cycle;
       if (op_.kind == Kind::Held) {
-        lu_ph_ = Ph::Parked;   // keep it untaken; the commit goes first
+        lu_ph_ = Ph::Parked;  // keep it untaken; the commit goes first
         cm_ph_ = Ph::Offer;
       } else {
         stall_left_lu_ = op_.lu_stall;
@@ -254,10 +285,16 @@ class Runner {
       }
     }
     if (lu_ph_ == Ph::Stall) {
-      if (stall_left_lu_ == 0) lu_ph_ = Ph::Consume; else --stall_left_lu_;
+      if (stall_left_lu_ == 0)
+        lu_ph_ = Ph::Consume;
+      else
+        --stall_left_lu_;
     }
     if (cm_ph_ == Ph::Stall) {
-      if (stall_left_cm_ == 0) cm_ph_ = Ph::Consume; else --stall_left_cm_;
+      if (stall_left_cm_ == 0)
+        cm_ph_ = Ph::Consume;
+      else
+        --stall_left_cm_;
     }
     if (cm_ph_ == Ph::HeldWait && lu_ph_ == Ph::None) {
       cm_ph_ = Ph::Stall;  // lookup consumed; now the commit's stall then consume
@@ -289,12 +326,12 @@ class Runner {
 
 /** Mismatch categories, so a control can say WHICH law the checker saw break. */
 enum : unsigned {
-  kMisLuResult = 1u << 0,   // hit or lookup slot
-  kMisCmSlot   = 1u << 1,   // commit slot only
-  kMisCmFlags  = 1u << 2,   // inserted / evicted
-  kMisCounters = 1u << 3,   // any of the five counters
-  kMisOrder    = 1u << 4,   // Pair accepted order, or both fired on one edge
-  kMisProtocol = 1u << 5,   // a side did not complete the op (hang)
+  kMisLuResult = 1u << 0,  // hit or lookup slot
+  kMisCmSlot = 1u << 1,    // commit slot only
+  kMisCmFlags = 1u << 2,   // inserted / evicted
+  kMisCounters = 1u << 3,  // any of the five counters
+  kMisOrder = 1u << 4,     // Pair accepted order, or both fired on one edge
+  kMisProtocol = 1u << 5,  // a side did not complete the op (hang)
 };
 
 struct Stats {
@@ -346,7 +383,8 @@ class Harness {
     if (!(o_.done() && n_.done())) {
       mask |= kMisProtocol;
       zhao::check(false, (t + ": both sides complete the op").c_str(), 1, 0);
-      std::printf("    oracle done=%d candidate done=%d after %ld cycles\n", o_.done(), n_.done(), spent);
+      std::printf("    oracle done=%d candidate done=%d after %ld cycles\n", o_.done(), n_.done(),
+                  spent);
     } else {
       mask |= compare(o_.rec(), n_.rec(), op, t);
     }
@@ -385,11 +423,20 @@ class Harness {
     uint32_t h = hash_base;
     long guard = 64 + static_cast<long>(count) * (8 + 2 * static_cast<long>(kEntries));
     while (accepts.size() < count && guard-- > 0) {
-      if (commit) { s.cm_valid = 1; s.cm_hash = h; s.cm_ok = ok ? 1 : 0; }
-      else        { s.lu_valid = 1; s.lu_hash = h; }
+      if (commit) {
+        s.cm_valid = 1;
+        s.cm_hash = h;
+        s.cm_ok = ok ? 1 : 0;
+      } else {
+        s.lu_valid = 1;
+        s.lu_hash = h;
+      }
       top_.eval();
       const bool fire = commit ? (s.cm_valid && s.cm_ready) : (s.lu_valid && s.lu_ready);
-      if (fire) { accepts.push_back(cycle_); ++h; }
+      if (fire) {
+        accepts.push_back(cycle_);
+        ++h;
+      }
       tick();
     }
     s.lu_valid = 0;
@@ -410,15 +457,24 @@ class Harness {
     n_.idle_inputs();
     s.lu_resp_ready = 1;
     s.cm_resp_ready = 1;
-    if (commit) { s.cm_valid = 1; s.cm_hash = hash; s.cm_ok = ok ? 1 : 0; }
-    else        { s.lu_valid = 1; s.lu_hash = hash; }
+    if (commit) {
+      s.cm_valid = 1;
+      s.cm_hash = hash;
+      s.cm_ok = ok ? 1 : 0;
+    } else {
+      s.lu_valid = 1;
+      s.lu_hash = hash;
+    }
     long accept = -1, resp = -1;
     for (int k = 0; k < 64 + 4 * static_cast<int>(kEntries) && resp < 0; ++k) {
       top_.eval();
       const bool fire = commit ? (s.cm_valid && s.cm_ready) : (s.lu_valid && s.lu_ready);
       if (fire && accept < 0) accept = cycle_;
       tick();
-      if (accept >= 0) { s.lu_valid = 0; s.cm_valid = 0; }
+      if (accept >= 0) {
+        s.lu_valid = 0;
+        s.cm_valid = 0;
+      }
       const bool rv = commit ? (s.cm_resp_valid != 0) : (s.lu_resp_valid != 0);
       if (accept >= 0 && rv && resp < 0) resp = cycle_;
     }
@@ -435,7 +491,10 @@ class Harness {
     o_.begin(op);
     n_.begin(op);
     long spent = 0;
-    while (!(o_.done() && n_.done()) && spent < 32) { step(); ++spent; }
+    while (!(o_.done() && n_.done()) && spent < 32) {
+      step();
+      ++spent;
+    }
     const std::string t = std::string(tag) + " [" + op.what + "]";
     unsigned mask = 0;
     if (!(o_.done() && n_.done())) {
@@ -502,8 +561,10 @@ class Harness {
       chk(a.cm_slot == b.cm_slot, "commit slot agrees", a.cm_slot, b.cm_slot, kMisCmSlot);
     }
     if (op.kind == Kind::Pair) {
-      chk(a.order == 0, "oracle accepted the LOOKUP first", 0, static_cast<uint64_t>(a.order), kMisOrder);
-      chk(b.order == 0, "candidate accepted the LOOKUP first", 0, static_cast<uint64_t>(b.order), kMisOrder);
+      chk(a.order == 0, "oracle accepted the LOOKUP first", 0, static_cast<uint64_t>(a.order),
+          kMisOrder);
+      chk(b.order == 0, "candidate accepted the LOOKUP first", 0, static_cast<uint64_t>(b.order),
+          kMisOrder);
       chk(!a.both_fired, "oracle never fired both on one edge", 0, a.both_fired, kMisOrder);
       chk(!b.both_fired, "candidate never fired both on one edge", 0, b.both_fired, kMisOrder);
     }
@@ -541,19 +602,50 @@ inline uint32_t hash_of(unsigned k) { return 0x9E37'79B9u * (k + 1) ^ 0xA5A5'000
 // THE DIRECTED SCRIPTS
 // ---------------------------------------------------------------------------
 inline Op lookup(uint32_t h, const char* what, unsigned stall = 0) {
-  Op o; o.kind = Kind::Lookup; o.lu_hash = h; o.lu_stall = stall; o.what = what; return o;
+  Op o;
+  o.kind = Kind::Lookup;
+  o.lu_hash = h;
+  o.lu_stall = stall;
+  o.what = what;
+  return o;
 }
 inline Op commit(uint32_t h, bool ok, const char* what, unsigned stall = 0) {
-  Op o; o.kind = Kind::Commit; o.cm_hash = h; o.ok = ok; o.cm_stall = stall; o.what = what; return o;
+  Op o;
+  o.kind = Kind::Commit;
+  o.cm_hash = h;
+  o.ok = ok;
+  o.cm_stall = stall;
+  o.what = what;
+  return o;
 }
-inline Op pair(uint32_t lh, uint32_t ch, bool ok, const char* what, unsigned ls = 0, unsigned cs = 0) {
-  Op o; o.kind = Kind::Pair; o.lu_hash = lh; o.cm_hash = ch; o.ok = ok; o.lu_stall = ls; o.cm_stall = cs; o.what = what; return o;
+inline Op pair(uint32_t lh, uint32_t ch, bool ok, const char* what, unsigned ls = 0,
+               unsigned cs = 0) {
+  Op o;
+  o.kind = Kind::Pair;
+  o.lu_hash = lh;
+  o.cm_hash = ch;
+  o.ok = ok;
+  o.lu_stall = ls;
+  o.cm_stall = cs;
+  o.what = what;
+  return o;
 }
 inline Op held(uint32_t lh, uint32_t ch, bool ok, const char* what, unsigned cs = 0) {
-  Op o; o.kind = Kind::Held; o.lu_hash = lh; o.cm_hash = ch; o.ok = ok; o.cm_stall = cs; o.what = what; return o;
+  Op o;
+  o.kind = Kind::Held;
+  o.lu_hash = lh;
+  o.cm_hash = ch;
+  o.ok = ok;
+  o.cm_stall = cs;
+  o.what = what;
+  return o;
 }
 inline Op reset_op(uint32_t lh, const char* what) {
-  Op o; o.kind = Kind::Reset; o.lu_hash = lh; o.what = what; return o;
+  Op o;
+  o.kind = Kind::Reset;
+  o.lu_hash = lh;
+  o.what = what;
+  return o;
 }
 
 /** Fill the directory with hashes 0..E-1 the way a caller does: miss, then commit. */
@@ -576,7 +668,8 @@ inline std::vector<Op> script_directed() {
   // 2. fill, then every one hits
   s.push_back(reset_op(hash_of(0), "reset before fill"));
   script_fill(s, E);
-  for (unsigned k = 0; k < E; ++k) s.push_back(lookup(hash_of(k), "full: every resident hits", k % 3));
+  for (unsigned k = 0; k < E; ++k)
+    s.push_back(lookup(hash_of(k), "full: every resident hits", k % 3));
   // 3. LRU: touch 0, insert new -> evicts slot 1 (the oldest); asymmetric probes
   s.push_back(lookup(hash_of(0), "lru: touch hash 0"));
   s.push_back(lookup(hash_of(E), "lru: new hash misses"));
@@ -587,7 +680,8 @@ inline std::vector<Op> script_directed() {
   // 4. rejected commits against a FULL directory: nothing moves
   s.push_back(commit(hash_of(E + 1), false, "reject against full: nothing moves", 2));
   s.push_back(commit(hash_of(E + 1), false, "reject again: not remembered"));
-  for (unsigned k = 2; k < E; ++k) s.push_back(lookup(hash_of(k), "after rejects: residents still hit"));
+  for (unsigned k = 2; k < E; ++k)
+    s.push_back(lookup(hash_of(k), "after rejects: residents still hit"));
   s.push_back(lookup(hash_of(E + 1), "the rejected hash never hits"));
   // 5. duplicate commit of a RESIDENT hash -- caller misuse, old semantics retained
   s.push_back(commit(hash_of(0), true, "duplicate commit of a resident hash inserts anyway"));
@@ -598,9 +692,12 @@ inline std::vector<Op> script_directed() {
   s.push_back(pair(hash_of(3), hash_of(E + 4), false, "pair: hit + rejected commit", 4, 0));
   s.push_back(pair(hash_of(E + 8), hash_of(E + 5), false, "pair: miss + rejected commit", 0, 3));
   // 7. held lookup response while a commit is accepted and answered
-  s.push_back(held(hash_of(E + 8), hash_of(E + 6), true, "held: lookup MISS held, valid commit lands"));
-  s.push_back(held(hash_of(E + 6), hash_of(E + 7), false, "held: lookup HIT held, rejected commit -- the two are not confused", 2));
-  s.push_back(held(hash_of(E + 30), hash_of(E + 31), false, "held: lookup MISS held, rejected commit -- hit=0 vs inserted=0"));
+  s.push_back(
+      held(hash_of(E + 8), hash_of(E + 6), true, "held: lookup MISS held, valid commit lands"));
+  s.push_back(held(hash_of(E + 6), hash_of(E + 7), false,
+                   "held: lookup HIT held, rejected commit -- the two are not confused", 2));
+  s.push_back(held(hash_of(E + 30), hash_of(E + 31), false,
+                   "held: lookup MISS held, rejected commit -- hit=0 vs inserted=0"));
   s.push_back(lookup(hash_of(E + 31), "held: the rejected hash is absent"));
   s.push_back(lookup(hash_of(E + 6), "held: the inserted hash is present"));
   // 8. reset with work outstanding, then a short refill proves both are empty
@@ -623,7 +720,7 @@ inline std::vector<Op> script_tie() {
   std::vector<Op> s;
   if (!tie_reachable()) return s;
   const unsigned E = kEntries;
-  const uint64_t mod = uint64_t{1} << (kLruW & 63u);   // masked: compiled at LRUW=48 too
+  const uint64_t mod = uint64_t{1} << (kLruW & 63u);  // masked: compiled at LRUW=48 too
   s.push_back(reset_op(hash_of(0), "tie: reset"));
   script_fill(s, E);  // stamps 1..E; lru_ctr == E
   // After k >= 1 hits on hash 0 its stamp is (E + k) mod 2^L; hash 1 sits at 2.
@@ -634,9 +731,11 @@ inline std::vector<Op> script_tie() {
   // claim to check hardest.
   unsigned k = static_cast<unsigned>((mod + 2 - (E % mod)) % mod);
   if (k == 0) k = static_cast<unsigned>(mod);
-  for (unsigned n = 0; n < k; ++n) s.push_back(lookup(hash_of(0), "tie: hit hash 0 to walk its stamp round to 2"));
+  for (unsigned n = 0; n < k; ++n)
+    s.push_back(lookup(hash_of(0), "tie: hit hash 0 to walk its stamp round to 2"));
   s.push_back(lookup(hash_of(E + 40), "tie: a fresh hash misses"));
-  s.push_back(commit(hash_of(E + 40), true, "TIE: rows 0 and 1 both stamped 2 -> LOWEST index (slot 0) is the victim"));
+  s.push_back(commit(hash_of(E + 40), true,
+                     "TIE: rows 0 and 1 both stamped 2 -> LOWEST index (slot 0) is the victim"));
   s.push_back(lookup(hash_of(1), "tie: hash 1 survived"));
   s.push_back(lookup(hash_of(0), "tie: hash 0 is gone"));
   return s;
@@ -654,11 +753,16 @@ inline std::vector<Op> script_random(Prng& rng, unsigned n_ops) {
     const bool ok = rng.below(100) < 78;
     const unsigned s1 = rng.below(100) < 30 ? rng.below(7) : 0;
     const unsigned s2 = rng.below(100) < 30 ? rng.below(7) : 0;
-    if (r < 45)      s.push_back(lookup(a, "random lookup", s1));
-    else if (r < 80) s.push_back(commit(a, ok, "random commit", s2));
-    else if (r < 90) s.push_back(pair(a, b, ok, "random pair", s1, s2));
-    else if (r < 98) s.push_back(held(a, b, ok, "random held", s2));
-    else             s.push_back(reset_op(a, "random reset mid-flight"));
+    if (r < 45)
+      s.push_back(lookup(a, "random lookup", s1));
+    else if (r < 80)
+      s.push_back(commit(a, ok, "random commit", s2));
+    else if (r < 90)
+      s.push_back(pair(a, b, ok, "random pair", s1, s2));
+    else if (r < 98)
+      s.push_back(held(a, b, ok, "random held", s2));
+    else
+      s.push_back(reset_op(a, "random reset mid-flight"));
   }
   return s;
 }

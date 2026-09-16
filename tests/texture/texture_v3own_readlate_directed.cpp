@@ -172,7 +172,7 @@ int main(int argc, char** argv) {
 
   // ---- 1. THE DATA PATH ----------------------------------------------------
   const uint64_t kCtxA = 0xA5A5DEADBEEF0001ull;
-  const uint64_t kResA = 0x12345678A9ull;   // 40 bits: status 0x12, a 0x34, rgb 0x5678A9
+  const uint64_t kResA = 0x12345678A9ull;  // 40 bits: status 0x12, a 0x34, rgb 0x5678A9
   Owner A = admit(d, 0x1, kCtxA);
   check(A.handle != 0 || A.gen != 0, "owner A admitted", 1, 1);
   return_s0(d, A, kResA);
@@ -185,8 +185,9 @@ int main(int argc, char** argv) {
         "the plane read at A's slot returns the committed result40 one edge later, "
         "bit-exact (the seam's data path)",
         static_cast<long long>(kResA), static_cast<long long>(got_s0));
-  check(d.ev_src_unpub_o == 0, "a legal read (live, accepted, unfinished) moves the counter "
-                                "by ZERO",
+  check(d.ev_src_unpub_o == 0,
+        "a legal read (live, accepted, unfinished) moves the counter "
+        "by ZERO",
         0, d.ev_src_unpub_o);
 
   // ---- 2. POSITIVE CONTROLS: the counter is seen to fire -------------------
@@ -217,7 +218,7 @@ int main(int argc, char** argv) {
   d.fin_result_i = 0x000000CAFEull;
   tick(d);
   d.fin_valid_i = 0;
-  for (int i = 0; i < 6; ++i) tick(d);   // C0, C1, C2 (claim), C3 (write), C4 (publish)
+  for (int i = 0; i < 6; ++i) tick(d);  // C0, C1, C2 (claim), C3 (write), C4 (publish)
   c0 = d.ev_src_unpub_o;
   (void)read_slot(d, A.slot);
   check(d.ev_src_unpub_o == c0 + 1,
@@ -233,8 +234,8 @@ int main(int argc, char** argv) {
     if (d.out_valid_o) {
       check(static_cast<uint16_t>(d.out_owner_o) == A.handle, "A is the owner emitted first",
             A.handle, d.out_owner_o);
-      check((d.out_result_o & 0xFFFFFFFFull) == 0xCAFEull, "A's final result is emitted",
-            0xCAFE, static_cast<long long>(d.out_result_o & 0xFFFFFFFFull));
+      check((d.out_result_o & 0xFFFFFFFFull) == 0xCAFEull, "A's final result is emitted", 0xCAFE,
+            static_cast<long long>(d.out_result_o & 0xFFFFFFFFull));
       check(d.out_ctx_o == kCtxA, "A's 64-bit context is emitted untouched", 1,
             d.out_ctx_o == kCtxA ? 1 : 0);
       emitted = true;
@@ -266,15 +267,14 @@ int main(int argc, char** argv) {
   return_s0(d, C, 0x0000CCCCCCull);
   check(accept_job(d, C), "C accepted", 1, 1);
   c0 = d.ev_src_unpub_o;
-  const uint64_t wrong = read_slot(d, B.slot);   // the combiner meant C
+  const uint64_t wrong = read_slot(d, B.slot);  // the combiner meant C
   check(wrong == 0x0000BBBBBBull, "the wrong-owner read returns B's data, plausibly", 1,
         wrong == 0x0000BBBBBBull ? 1 : 0);
   check(d.ev_src_unpub_o == c0,
         "BLIND SPOT PINNED: a read of the WRONG but live, accepted, unfinished owner "
         "moves the counter by exactly ZERO -- only the differential sees this class",
         c0, d.ev_src_unpub_o);
-  check(!ctx->gotError(), "and no boundary assertion sees it either", 0,
-        ctx->gotError() ? 1 : 0);
+  check(!ctx->gotError(), "and no boundary assertion sees it either", 0, ctx->gotError() ? 1 : 0);
   ctx->fatalOnError(true);
 
   std::printf("  ev_src_unpub_o = %u after four injections; tickets %u commits %u\n",

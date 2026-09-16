@@ -45,15 +45,15 @@ double sc_time_stamp() { return 0; }
 static int g_checks = 0;
 static int g_fails = 0;
 
-#define CHECK(cond, ...)                                   \
-  do {                                                     \
-    ++g_checks;                                            \
-    if (!(cond)) {                                         \
-      ++g_fails;                                           \
-      std::printf("FAIL %s:%d: ", __FILE__, __LINE__);     \
-      std::printf(__VA_ARGS__);                            \
-      std::printf("\n");                                   \
-    }                                                      \
+#define CHECK(cond, ...)                               \
+  do {                                                 \
+    ++g_checks;                                        \
+    if (!(cond)) {                                     \
+      ++g_fails;                                       \
+      std::printf("FAIL %s:%d: ", __FILE__, __LINE__); \
+      std::printf(__VA_ARGS__);                        \
+      std::printf("\n");                               \
+    }                                                  \
   } while (0)
 
 // ---------------------------------------------------------------------------
@@ -71,8 +71,8 @@ struct Rec {
   bool behind, view;
   uint16_t pay;
   bool operator==(const Rec& o) const {
-    return x == o.x && y == o.y && d == o.d && w == o.w && behind == o.behind &&
-           view == o.view && pay == o.pay;
+    return x == o.x && y == o.y && d == o.d && w == o.w && behind == o.behind && view == o.view &&
+           pay == o.pay;
   }
 };
 
@@ -93,10 +93,14 @@ static uint32_t xs32(uint32_t& s) {
 // 3: bursty 8-on-5-off.
 static bool pat_en(int pat, uint64_t cyc, uint32_t& lfsr) {
   switch (pat) {
-    case 0: return true;
-    case 1: return (cyc % 3) != 2;
-    case 2: return (xs32(lfsr) & 1u) != 0u;
-    default: return (cyc % 13) < 8;
+    case 0:
+      return true;
+    case 1:
+      return (cyc % 3) != 2;
+    case 2:
+      return (xs32(lfsr) & 1u) != 0u;
+    default:
+      return (cyc % 13) < 8;
   }
 }
 
@@ -179,7 +183,7 @@ static Cfg make_cfg(uint32_t seed) {
     c.m0[k] = static_cast<int32_t>(xs32(s)) >> 14;
     c.m1[k] = static_cast<int32_t>(xs32(s)) >> 14;
   }
-  c.m0[3] = static_cast<int32_t>(xs32(s)) >> 6;   // translations
+  c.m0[3] = static_cast<int32_t>(xs32(s)) >> 6;  // translations
   c.m0[7] = static_cast<int32_t>(xs32(s)) >> 6;
   c.m1[3] = static_cast<int32_t>(xs32(s)) >> 6;
   c.m1[7] = static_cast<int32_t>(xs32(s)) >> 6;
@@ -205,8 +209,7 @@ static Cfg make_cfg(uint32_t seed) {
   return c;
 }
 
-static void write_cfg_word(Vtb_proj_rowmux* tb, bool dut, bool view,
-                           uint32_t addr, uint32_t data) {
+static void write_cfg_word(Vtb_proj_rowmux* tb, bool dut, bool view, uint32_t addr, uint32_t data) {
   if (dut) {
     tb->d_cfg_we_i = 1;
     tb->d_cfg_view_i = view;
@@ -247,24 +250,22 @@ static void load_cfg(Vtb_proj_rowmux* tb, const Cfg& c, int skew_dut_addr) {
 // for the DUT that lands with the row sequencer mid-vertex, which is exactly
 // the tear window the capture law must close.
 struct SideState {
-  size_t next = 0;                 // next corpus index to offer
-  uint64_t en_count = 0;           // en-cycles elapsed
-  bool mid_pending = false;        // cfg write scheduled for this cycle
+  size_t next = 0;           // next corpus index to offer
+  uint64_t en_count = 0;     // en-cycles elapsed
+  bool mid_pending = false;  // cfg write scheduled for this cycle
   bool mid_done = false;
   Stream out;
 };
 
-static void run_streams(Vtb_proj_rowmux* tb, const std::vector<Vtx>& corpus,
-                        int pat_ref, int pat_dut, int mid_write_at,
-                        uint32_t mid_write_val, Stream& ref_out,
+static void run_streams(Vtb_proj_rowmux* tb, const std::vector<Vtx>& corpus, int pat_ref,
+                        int pat_dut, int mid_write_at, uint32_t mid_write_val, Stream& ref_out,
                         Stream& dut_out) {
   SideState R, D;
   uint32_t lfsr_r = 0xACE1u, lfsr_d = 0xBEEFu;
   uint64_t cyc = 0;
   const uint64_t kTimeout = 400000;
 
-  while ((R.out.recs.size() < corpus.size() ||
-          D.out.recs.size() < corpus.size()) &&
+  while ((R.out.recs.size() < corpus.size() || D.out.recs.size() < corpus.size()) &&
          cyc < kTimeout) {
     const bool en_r = pat_en(pat_ref, cyc, lfsr_r);
     const bool en_d = pat_en(pat_dut, cyc, lfsr_d);
@@ -346,8 +347,7 @@ static void run_streams(Vtb_proj_rowmux* tb, const std::vector<Vtx>& corpus,
 
     if (acc_r) {
       R.out.acc_stamp.push_back(R.en_count);
-      if (mid_write_at >= 0 && !R.mid_done &&
-          R.next == static_cast<size_t>(mid_write_at)) {
+      if (mid_write_at >= 0 && !R.mid_done && R.next == static_cast<size_t>(mid_write_at)) {
         R.mid_pending = true;
       }
       ++R.next;
@@ -357,8 +357,7 @@ static void run_streams(Vtb_proj_rowmux* tb, const std::vector<Vtx>& corpus,
     }
     if (acc_d) {
       D.out.acc_stamp.push_back(D.en_count);
-      if (mid_write_at >= 0 && !D.mid_done &&
-          D.next == static_cast<size_t>(mid_write_at)) {
+      if (mid_write_at >= 0 && !D.mid_done && D.next == static_cast<size_t>(mid_write_at)) {
         D.mid_pending = true;
       }
       ++D.next;
@@ -372,20 +371,19 @@ static void run_streams(Vtb_proj_rowmux* tb, const std::vector<Vtx>& corpus,
   }
 
   CHECK(cyc < kTimeout, "stream run timed out at %llu cycles (ref %zu/%zu, dut %zu/%zu)",
-        static_cast<unsigned long long>(cyc), R.out.recs.size(), corpus.size(),
-        D.out.recs.size(), corpus.size());
+        static_cast<unsigned long long>(cyc), R.out.recs.size(), corpus.size(), D.out.recs.size(),
+        corpus.size());
   ref_out = R.out;
   dut_out = D.out;
 }
 
 // Elementwise stream compare. Returns the mismatch count; when `report` is
 // true every mismatch is a CHECK failure that prints both records.
-static int compare_streams(const Stream& a, const Stream& b, bool report,
-                           const char* tag) {
+static int compare_streams(const Stream& a, const Stream& b, bool report, const char* tag) {
   int mm = 0;
   if (report) {
-    CHECK(a.recs.size() == b.recs.size(), "%s: stream lengths %zu vs %zu", tag,
-          a.recs.size(), b.recs.size());
+    CHECK(a.recs.size() == b.recs.size(), "%s: stream lengths %zu vs %zu", tag, a.recs.size(),
+          b.recs.size());
   }
   const size_t n = a.recs.size() < b.recs.size() ? a.recs.size() : b.recs.size();
   for (size_t i = 0; i < n; ++i) {
@@ -395,10 +393,9 @@ static int compare_streams(const Stream& a, const Stream& b, bool report,
         CHECK(false,
               "%s: record %zu differs: ref{x=%d y=%d d=%d w=%u b=%d v=%d p=%u} "
               "dut{x=%d y=%d d=%d w=%u b=%d v=%d p=%u}",
-              tag, i, a.recs[i].x, a.recs[i].y, a.recs[i].d, a.recs[i].w,
-              a.recs[i].behind, a.recs[i].view, a.recs[i].pay, b.recs[i].x,
-              b.recs[i].y, b.recs[i].d, b.recs[i].w, b.recs[i].behind,
-              b.recs[i].view, b.recs[i].pay);
+              tag, i, a.recs[i].x, a.recs[i].y, a.recs[i].d, a.recs[i].w, a.recs[i].behind,
+              a.recs[i].view, a.recs[i].pay, b.recs[i].x, b.recs[i].y, b.recs[i].d, b.recs[i].w,
+              b.recs[i].behind, b.recs[i].view, b.recs[i].pay);
       }
     }
   }
@@ -422,8 +419,8 @@ int main(int argc, char** argv) {
     reset(tb);
     load_cfg(tb, cfg, -1);
     run_streams(tb, corpus, /*ref*/ 0, /*dut*/ 0, -1, 0, golden, s_dut);
-    CHECK(golden.recs.size() == static_cast<size_t>(kN),
-          "golden stream short: %zu of %d", golden.recs.size(), kN);
+    CHECK(golden.recs.size() == static_cast<size_t>(kN), "golden stream short: %zu of %d",
+          golden.recs.size(), kN);
     compare_streams(golden, s_dut, true, "P0/P0");
   }
   for (int pat = 1; pat <= 3; ++pat) {
@@ -452,10 +449,8 @@ int main(int argc, char** argv) {
     reset(tb);
     load_cfg(tb, cfg, -1);
     run_streams(tb, corpus, 0, 0, -1, 0, s_ref, s_dut);
-    CHECK(s_ref.acc_stamp.size() == s_ref.out_stamp.size(),
-          "ref accept/emit count skew");
-    CHECK(s_dut.acc_stamp.size() == s_dut.out_stamp.size(),
-          "dut accept/emit count skew");
+    CHECK(s_ref.acc_stamp.size() == s_ref.out_stamp.size(), "ref accept/emit count skew");
+    CHECK(s_dut.acc_stamp.size() == s_dut.out_stamp.size(), "dut accept/emit count skew");
     uint64_t l3 = s_ref.out_stamp[0] - s_ref.acc_stamp[0];
     uint64_t l1 = s_dut.out_stamp[0] - s_dut.acc_stamp[0];
     bool l3_fixed = true, l1_fixed = true, ii3 = true;
@@ -470,14 +465,11 @@ int main(int argc, char** argv) {
     }
     CHECK(l3_fixed, "ROWS_PER_PASS=3 latency is not fixed");
     CHECK(l1_fixed, "ROWS_PER_PASS=1 latency is not fixed");
-    CHECK(l1 == l3 + 2,
-          "latency delta: measured L1=%llu L3=%llu, declared L1=L3+2",
-          static_cast<unsigned long long>(l1),
-          static_cast<unsigned long long>(l3));
+    CHECK(l1 == l3 + 2, "latency delta: measured L1=%llu L3=%llu, declared L1=L3+2",
+          static_cast<unsigned long long>(l1), static_cast<unsigned long long>(l3));
     CHECK(ii3, "ROWS_PER_PASS=1 initiation interval is not exactly 3 under saturation");
     std::printf("  measured: L(RPP=3)=%llu en-cycles, L(RPP=1)=%llu, II(RPP=1)=3\n",
-                static_cast<unsigned long long>(l3),
-                static_cast<unsigned long long>(l1));
+                static_cast<unsigned long long>(l3), static_cast<unsigned long long>(l1));
   }
 
   // ---- section 3: a cfg write mid-sequence cannot tear a vertex -----------
@@ -525,8 +517,9 @@ int main(int argc, char** argv) {
       edge(tb);
     }
     CHECK(emitted, "single-vertex: no emission within 80 cycles");
-    CHECK(busy_all, "busy_o dropped while the vertex was in flight "
-                    "(sequencer holding state not covered)");
+    CHECK(busy_all,
+          "busy_o dropped while the vertex was in flight "
+          "(sequencer holding state not covered)");
     settle0(tb);
     edge(tb);
     settle0(tb);
@@ -543,10 +536,11 @@ int main(int argc, char** argv) {
     std::vector<Vtx> shortc(corpus.begin(), corpus.begin() + 64);
     run_streams(tb, shortc, 0, 0, -1, 0, p_ref, p_dut);
     const int mm = compare_streams(p_ref, p_dut, false, "");
-    CHECK(mm > 0, "positive control: +1 raw on m[5] produced ZERO mismatches "
-                  "— the comparator cannot be trusted");
-    std::printf("  positive control: skewed m[5] -> %d of %zu records differ\n",
-                mm, p_ref.recs.size());
+    CHECK(mm > 0,
+          "positive control: +1 raw on m[5] produced ZERO mismatches "
+          "— the comparator cannot be trusted");
+    std::printf("  positive control: skewed m[5] -> %d of %zu records differ\n", mm,
+                p_ref.recs.size());
   }
 
   delete tb;
@@ -554,7 +548,6 @@ int main(int argc, char** argv) {
     std::printf("proj_rowmux_directed: %d checks passed\n", g_checks);
     zhao::exit_hard(0);
   }
-  std::printf("proj_rowmux_directed: %d of %d checks FAILED\n", g_fails,
-              g_checks);
+  std::printf("proj_rowmux_directed: %d of %d checks FAILED\n", g_fails, g_checks);
   zhao::exit_hard(1);
 }

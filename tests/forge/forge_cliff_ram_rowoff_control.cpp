@@ -78,8 +78,9 @@ int main(int argc, char** argv) {
     const zt::ComposedLattice lat = make_lat(8, 8, checker(8, 8));
     const ct::Plan got = ct::plan_lattice(dut, lat, nullptr, 0);
     const zf::RimPlan want = zf::rim_plan(lat, nullptr);
-    std::printf("  rowoff mutant, 8x8 checkerboard: RTL %zu edges vs oracle %zu; plan %s the oracle\n",
-                got.edges.size(), want.edges.size(), ct::same(got, want) ? "MATCHES" : "differs from");
+    std::printf(
+        "  rowoff mutant, 8x8 checkerboard: RTL %zu edges vs oracle %zu; plan %s the oracle\n",
+        got.edges.size(), want.edges.size(), ct::same(got, want) ? "MATCHES" : "differs from");
     if (ct::same(got, want)) {
       std::fprintf(stderr, "FAIL: the differential did not see a prefetch one row off\n");
       ++failures;
@@ -97,6 +98,7 @@ int main(int argc, char** argv) {
   }
 
   if (failures == 0)
-    std::printf("forge_cliff_ram_rowoff_control: the differential FAILED on the break (as it must)\n");
+    std::printf(
+        "forge_cliff_ram_rowoff_control: the differential FAILED on the break (as it must)\n");
   zhao::exit_hard(failures == 0 ? 0 : 1);
 }

@@ -32,15 +32,15 @@ double sc_time_stamp() { return 0; }
 static int g_checks = 0;
 static int g_fails = 0;
 
-#define CHECK(cond, ...)                                   \
-  do {                                                     \
-    ++g_checks;                                            \
-    if (!(cond)) {                                         \
-      ++g_fails;                                           \
-      std::printf("FAIL %s:%d: ", __FILE__, __LINE__);     \
-      std::printf(__VA_ARGS__);                            \
-      std::printf("\n");                                   \
-    }                                                      \
+#define CHECK(cond, ...)                               \
+  do {                                                 \
+    ++g_checks;                                        \
+    if (!(cond)) {                                     \
+      ++g_fails;                                       \
+      std::printf("FAIL %s:%d: ", __FILE__, __LINE__); \
+      std::printf(__VA_ARGS__);                        \
+      std::printf("\n");                               \
+    }                                                  \
   } while (0)
 
 static void settle0(Vtb_proj_service_rowmux* tb) {
@@ -52,8 +52,7 @@ static void edge(Vtb_proj_service_rowmux* tb) {
   tb->eval();
 }
 
-static void write_cfg(Vtb_proj_service_rowmux* tb, bool view, uint32_t addr,
-                      uint32_t data) {
+static void write_cfg(Vtb_proj_service_rowmux* tb, bool view, uint32_t addr, uint32_t data) {
   tb->cfg_we_i = 1;
   tb->cfg_view_i = view;
   tb->cfg_addr_i = addr;
@@ -101,8 +100,7 @@ int main(int argc, char** argv) {
   int accepts = 0;
   const uint64_t kTimeout = 20000;
 
-  while ((static_cast<int>(a_got.size()) < kPer ||
-          static_cast<int>(b_got.size()) < kPer) &&
+  while ((static_cast<int>(a_got.size()) < kPer || static_cast<int>(b_got.size()) < kPer) &&
          cyc < kTimeout) {
     tb->a_valid_i = (a_sent < kPer);
     tb->a_vx_i = static_cast<uint32_t>(a_sent) << 16;
@@ -116,8 +114,7 @@ int main(int argc, char** argv) {
     tb->b_vy_i = 0x00030000u;
     tb->b_vz_i = 0x00020000u;
     tb->b_view_i = 1;
-    tb->b_payload_i =
-        (0x2AAull << 32) | static_cast<uint64_t>(0xB000u + b_sent);
+    tb->b_payload_i = (0x2AAull << 32) | static_cast<uint64_t>(0xB000u + b_sent);
 
     settle0(tb);
     const bool acc_a = tb->a_valid_i && tb->a_ready_o;
@@ -135,14 +132,12 @@ int main(int argc, char** argv) {
     }
     ++cyc;
   }
-  CHECK(cyc < kTimeout, "smoke timed out (a %zu/%d, b %zu/%d)", a_got.size(),
-        kPer, b_got.size(), kPer);
+  CHECK(cyc < kTimeout, "smoke timed out (a %zu/%d, b %zu/%d)", a_got.size(), kPer, b_got.size(),
+        kPer);
 
   // routing, order, payload integrity
-  CHECK(static_cast<int>(a_got.size()) == kPer, "A got %zu of %d",
-        a_got.size(), kPer);
-  CHECK(static_cast<int>(b_got.size()) == kPer, "B got %zu of %d",
-        b_got.size(), kPer);
+  CHECK(static_cast<int>(a_got.size()) == kPer, "A got %zu of %d", a_got.size(), kPer);
+  CHECK(static_cast<int>(b_got.size()) == kPer, "B got %zu of %d", b_got.size(), kPer);
   bool a_order = true, b_order = true;
   for (int i = 0; i < kPer && i < static_cast<int>(a_got.size()); ++i) {
     if (a_got[i] != 0xA000 + i) a_order = false;
@@ -155,10 +150,8 @@ int main(int argc, char** argv) {
   CHECK(b_order, "client B records out of order or payload-corrupt");
 
   // fairness and rate under II=3 gating
-  CHECK(tb->a_grants_o == static_cast<uint32_t>(kPer), "a_grants %u != %d",
-        tb->a_grants_o, kPer);
-  CHECK(tb->b_grants_o == static_cast<uint32_t>(kPer), "b_grants %u != %d",
-        tb->b_grants_o, kPer);
+  CHECK(tb->a_grants_o == static_cast<uint32_t>(kPer), "a_grants %u != %d", tb->a_grants_o, kPer);
+  CHECK(tb->b_grants_o == static_cast<uint32_t>(kPer), "b_grants %u != %d", tb->b_grants_o, kPer);
   // 120 accepts, one per 3 en-cycles: the span from first to last acceptance
   // is exactly 3*(accepts-1) when the gating is right.
   CHECK(accepts == 2 * kPer, "accept count %d != %d", accepts, 2 * kPer);
@@ -197,15 +190,12 @@ int main(int argc, char** argv) {
     }
   }
   tb->a_valid_i = 0;
-  CHECK(solo_accepts == 22, "solo A accepts %d in 64 cycles (want 22 at II=3)",
-        solo_accepts);
-  CHECK(solo_last - solo_first == 3ull * (solo_accepts - 1),
-        "solo A acceptance spacing broken");
+  CHECK(solo_accepts == 22, "solo A accepts %d in 64 cycles (want 22 at II=3)", solo_accepts);
+  CHECK(solo_last - solo_first == 3ull * (solo_accepts - 1), "solo A acceptance spacing broken");
   CHECK(tb->a_grants_o == a_before + static_cast<uint32_t>(solo_accepts),
         "solo A grants did not track accepts");
-  CHECK(tb->contended_o == cont_before,
-        "contended_o moved with one client offering (%u -> %u)", cont_before,
-        tb->contended_o);
+  CHECK(tb->contended_o == cont_before, "contended_o moved with one client offering (%u -> %u)",
+        cont_before, tb->contended_o);
 
   // drain
   for (int c = 0; c < 80; ++c) {
@@ -220,8 +210,7 @@ int main(int argc, char** argv) {
   if (rc == 0)
     std::printf("proj_service_rowmux_smoke: %d checks passed\n", g_checks);
   else
-    std::printf("proj_service_rowmux_smoke: %d of %d checks FAILED\n", g_fails,
-                g_checks);
+    std::printf("proj_service_rowmux_smoke: %d of %d checks FAILED\n", g_fails, g_checks);
 
   // EXIT HARD, and this file is why the rule exists in tests/harness/
   // zhao_sim.hpp: "every Verilated main must end through here".

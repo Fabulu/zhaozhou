@@ -85,9 +85,9 @@ constexpr int kEvalMaxBranches = 2;        // "at most two bounded branches"
 constexpr int kEvalMaxBranchSegments = 8;  // "each <= 8 segments"
 
 // ---- the named constants of the jitter law --------------------------------
-constexpr uint32_t kEvalHashGolden = 0x9E3779B9u;   // stream-A init salt
-constexpr uint32_t kEvalHashSaltB = 0x7F4A7C15u;    // stream-B init salt
-constexpr uint32_t kEvalSeed2Salt = 0x85EBCA6Bu;    // decorrelates seed 0/1
+constexpr uint32_t kEvalHashGolden = 0x9E3779B9u;  // stream-A init salt
+constexpr uint32_t kEvalHashSaltB = 0x7F4A7C15u;   // stream-B init salt
+constexpr uint32_t kEvalSeed2Salt = 0x85EBCA6Bu;   // decorrelates seed 0/1
 constexpr uint32_t kEvalBranchSalt[2] = {0x243F6A88u, 0x452821E6u};
 
 struct EvalVec3 {
@@ -101,10 +101,10 @@ struct EvalBranch {
 };
 
 struct EvalParams {
-  EvalVec3 start, end;    // bolt anchors
-  EvalVec3 perp1, perp2;  // jitter axes (caller-normalised; used as-is)
-  EvalVec3 waxis;         // ribbon width axis (caller-normalised; used as-is)
-  int32_t half_width;     // fx16, main ribbon half width
+  EvalVec3 start, end;        // bolt anchors
+  EvalVec3 perp1, perp2;      // jitter axes (caller-normalised; used as-is)
+  EvalVec3 waxis;             // ribbon width axis (caller-normalised; used as-is)
+  int32_t half_width;         // fx16, main ribbon half width
   int32_t branch_half_width;  // fx16
   int32_t amp;                // fx16, main jitter amplitude
   int32_t branch_amp;         // fx16
@@ -121,11 +121,11 @@ enum EvalVerdict : int { kEvalAccept = 0, kEvalRefusedLimit = 1, kEvalSkippedVie
 // The refusal taxonomy, in the order the block applies it. Caps are REFUSED,
 // never clamped — a clamped cap is a wrong number that ships quietly.
 inline EvalVerdict eval_verdict(const EvalParams& p, int view_sel) {
-  bool bad = p.segments < 1 || p.segments > kEvalMaxMainSegments ||
-             p.branch_count < 0 || p.branch_count > kEvalMaxBranches;
+  bool bad = p.segments < 1 || p.segments > kEvalMaxMainSegments || p.branch_count < 0 ||
+             p.branch_count > kEvalMaxBranches;
   for (int b = 0; !bad && b < p.branch_count; ++b) {
-    bad = p.br[b].segments < 1 || p.br[b].segments > kEvalMaxBranchSegments ||
-          p.br[b].attach < 0 || p.br[b].attach > p.segments;
+    bad = p.br[b].segments < 1 || p.br[b].segments > kEvalMaxBranchSegments || p.br[b].attach < 0 ||
+          p.br[b].attach > p.segments;
   }
   if (bad) return kEvalRefusedLimit;
   if ((p.view_mask & view_sel) == 0) return kEvalSkippedView;
@@ -190,8 +190,8 @@ inline int32_t eval_rescale16(__int128 x, EvalCounts* c) {
 inline int64_t eval_lerp_off(int64_t d, int i, int n) {
   int64_t num = 2 * d * int64_t(i) + int64_t(n);
   int64_t den = 2 * int64_t(n);
-  int64_t q = num / den;                    // C++ truncates toward zero
-  if (num % den != 0 && num < 0) q -= 1;    // make it floor
+  int64_t q = num / den;                  // C++ truncates toward zero
+  if (num % den != 0 && num < 0) q -= 1;  // make it floor
   return q;
 }
 
@@ -202,11 +202,10 @@ inline int32_t eval_fx_mul(int32_t a, int32_t b, EvalCounts* c) {
 // ---- one polyline ---------------------------------------------------------
 // Emits 2*(n+1) ribbon vertices for the polyline S -> E and, when `cap` is
 // non-null, captures the jittered CENTRE point at the two attach indices.
-inline void eval_polyline(const EvalVec3& s, const EvalVec3& e, int n, uint32_t h_a,
-                          uint32_t h_b, int32_t amp, const EvalVec3& perp1,
-                          const EvalVec3& perp2, const EvalVec3& wvec,
-                          const int attach[2], int attach_count, EvalVec3 cap[2],
-                          std::vector<EvalVec3>& out, EvalCounts& c) {
+inline void eval_polyline(const EvalVec3& s, const EvalVec3& e, int n, uint32_t h_a, uint32_t h_b,
+                          int32_t amp, const EvalVec3& perp1, const EvalVec3& perp2,
+                          const EvalVec3& wvec, const int attach[2], int attach_count,
+                          EvalVec3 cap[2], std::vector<EvalVec3>& out, EvalCounts& c) {
   const int64_t dx = int64_t(e.x) - s.x;
   const int64_t dy = int64_t(e.y) - s.y;
   const int64_t dz = int64_t(e.z) - s.z;
@@ -243,11 +242,9 @@ inline void eval_polyline(const EvalVec3& s, const EvalVec3& e, int n, uint32_t 
     for (int b = 0; b < attach_count; ++b) {
       if (attach[b] == i) cap[b] = p;
     }
-    EvalVec3 v0 = {eval_sat_s32(int64_t(p.x) - wvec.x, &c),
-                   eval_sat_s32(int64_t(p.y) - wvec.y, &c),
+    EvalVec3 v0 = {eval_sat_s32(int64_t(p.x) - wvec.x, &c), eval_sat_s32(int64_t(p.y) - wvec.y, &c),
                    eval_sat_s32(int64_t(p.z) - wvec.z, &c)};
-    EvalVec3 v1 = {eval_sat_s32(int64_t(p.x) + wvec.x, &c),
-                   eval_sat_s32(int64_t(p.y) + wvec.y, &c),
+    EvalVec3 v1 = {eval_sat_s32(int64_t(p.x) + wvec.x, &c), eval_sat_s32(int64_t(p.y) + wvec.y, &c),
                    eval_sat_s32(int64_t(p.z) + wvec.z, &c)};
     out.push_back(v0);
     out.push_back(v1);

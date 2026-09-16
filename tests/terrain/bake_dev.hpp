@@ -122,8 +122,8 @@ inline bool nobake_shadow(const zref::render::TerrainPatch& p, int i, int j) {
  * throughput measurement uses).
  */
 template <class DUT>
-inline BakeOut run_bake(DUT& d, const zref::render::TerrainPatch& p,
-                        const StampRec& st, int stall_mod = 0, bool open_window = true) {
+inline BakeOut run_bake(DUT& d, const zref::render::TerrainPatch& p, const StampRec& st,
+                        int stall_mod = 0, bool open_window = true) {
   BakeOut o;
   o.scar.assign(kVerts, 0);
   o.touched.assign(kVerts, 0);

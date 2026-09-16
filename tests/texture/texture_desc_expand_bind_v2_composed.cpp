@@ -37,9 +37,7 @@ std::array<uint32_t, 3> pack_row(const Row& r) {
 
 uint32_t crc_byte(uint32_t crc, uint8_t data) {
   for (unsigned bit = 0; bit < 8; ++bit)
-    crc = ((crc ^ (data >> bit)) & 1u)
-              ? (crc >> 1) ^ 0xEDB88320u
-              : (crc >> 1);
+    crc = ((crc ^ (data >> bit)) & 1u) ? (crc >> 1) ^ 0xEDB88320u : (crc >> 1);
   return crc;
 }
 
@@ -65,12 +63,10 @@ uint32_t clut_mode() {
 }
 
 uint16_t owner(unsigned slot, unsigned generation) {
-  return static_cast<uint16_t>(((slot & 0x3Fu) << 8) |
-                               (generation & 0xFFu));
+  return static_cast<uint16_t>(((slot & 0x3Fu) << 8) | (generation & 0xFFu));
 }
 uint16_t sample_handle(uint16_t owner_handle, unsigned sample) {
-  return static_cast<uint16_t>((((owner_handle >> 8) & 0x3Fu) << 10) |
-                               ((sample & 3u) << 8) |
+  return static_cast<uint16_t>((((owner_handle >> 8) & 0x3Fu) << 10) | ((sample & 3u) << 8) |
                                (owner_handle & 0x00FFu));
 }
 
@@ -82,17 +78,19 @@ void drive_cfg_row(Dut* d, const Row& row) {
   for (unsigned i = 0; i < 3; ++i) d->cfg_row_i[i] = packed[i];
 }
 
-void cfg_immediate(Dut* d, uint8_t op, uint8_t generation,
-                   uint8_t selector, const Row* row, uint32_t crc) {
+void cfg_immediate(Dut* d, uint8_t op, uint8_t generation, uint8_t selector, const Row* row,
+                   uint32_t crc) {
   d->cfg_op_i = op;
   d->cfg_page_generation_i = generation;
   d->cfg_selector_i = selector;
-  if (row) drive_cfg_row(d, *row); else clear_cfg_row(d);
+  if (row)
+    drive_cfg_row(d, *row);
+  else
+    clear_cfg_row(d);
   d->cfg_crc32_i = crc;
   d->cfg_valid_i = 1;
   d->eval();
-  zhao::check(d->cfg_ready_o, "composed config command accepted", 1,
-              d->cfg_ready_o);
+  zhao::check(d->cfg_ready_o, "composed config command accepted", 1, d->cfg_ready_o);
   tick(d);
   d->cfg_valid_i = 0;
   d->eval();
@@ -116,20 +114,23 @@ void cfg_end(Dut* d, uint8_t generation, uint32_t crc) {
   tick(d);
   d->cfg_valid_i = 0;
   unsigned wait = 0;
-  while (!d->cfg_rsp_valid_o && wait < 4000) { tick(d); ++wait; }
-  zhao::check(d->cfg_rsp_valid_o && d->cfg_rsp_status_o == 0 &&
-                  d->active_page_generation_o == generation,
-              "composed canonical CRC seals and activates requested generation",
-              1, (d->cfg_rsp_valid_o && d->cfg_rsp_status_o == 0 &&
-                  d->active_page_generation_o == generation) ? 1 : 0);
+  while (!d->cfg_rsp_valid_o && wait < 4000) {
+    tick(d);
+    ++wait;
+  }
+  zhao::check(
+      d->cfg_rsp_valid_o && d->cfg_rsp_status_o == 0 && d->active_page_generation_o == generation,
+      "composed canonical CRC seals and activates requested generation", 1,
+      (d->cfg_rsp_valid_o && d->cfg_rsp_status_o == 0 && d->active_page_generation_o == generation)
+          ? 1
+          : 0);
   d->cfg_rsp_ready_i = 1;
   tick(d);
   d->cfg_rsp_ready_i = 0;
 }
 
-void write_descriptor(Dut* d, uint16_t owner_handle, uint8_t selector,
-                      uint8_t count, uint8_t page_generation,
-                      uint8_t material_seed) {
+void write_descriptor(Dut* d, uint16_t owner_handle, uint8_t selector, uint8_t count,
+                      uint8_t page_generation, uint8_t material_seed) {
   d->desc_wr_valid_i = 1;
   d->desc_wr_slot_i = static_cast<uint8_t>(owner_handle >> 8);
   d->desc_wr_owner_generation_i = static_cast<uint8_t>(owner_handle);
@@ -179,13 +180,10 @@ void observe_tick(Dut* d, Stats& s) {
     } else {
       const auto e = s.expected_plans.front();
       s.expected_plans.pop_front();
-      if ((d->plan_route_token_o & 0xFFFFu) != e.handle ||
-          (d->plan_route_token_o >> 16) != 0 || d->plan_base_o != e.base ||
-          d->plan_mode_o != e.mode || d->plan_palette_slot_o != 2 ||
-          d->plan_palette_generation_o != 0x55 ||
-          static_cast<int32_t>(d->plan_u_o) != e.u ||
-          static_cast<int32_t>(d->plan_v_o) != e.v ||
-          d->plan_lod_q4_4_o != e.lod)
+      if ((d->plan_route_token_o & 0xFFFFu) != e.handle || (d->plan_route_token_o >> 16) != 0 ||
+          d->plan_base_o != e.base || d->plan_mode_o != e.mode || d->plan_palette_slot_o != 2 ||
+          d->plan_palette_generation_o != 0x55 || static_cast<int32_t>(d->plan_u_o) != e.u ||
+          static_cast<int32_t>(d->plan_v_o) != e.v || d->plan_lod_q4_4_o != e.lod)
         ++s.errors;
     }
   }
@@ -196,18 +194,15 @@ void observe_tick(Dut* d, Stats& s) {
     } else {
       const uint16_t expected = s.expected_refusals.front();
       s.expected_refusals.pop_front();
-      if (d->refuse_handle_o != expected ||
-          d->refuse_result_o != 0x0100FFFF00FFull)
-        ++s.errors;
+      if (d->refuse_handle_o != expected || d->refuse_result_o != 0x0100FFFF00FFull) ++s.errors;
     }
   }
   tick(d);
 }
 
-void submit_and_drain(Dut* d, Stats& stats, uint16_t owner_handle,
-                      uint8_t selector, uint8_t count, int32_t u, int32_t v,
-                      const std::array<Row, 256>& rows, uint8_t page_generation,
-                      uint8_t seed) {
+void submit_and_drain(Dut* d, Stats& stats, uint16_t owner_handle, uint8_t selector, uint8_t count,
+                      int32_t u, int32_t v, const std::array<Row, 256>& rows,
+                      uint8_t page_generation, uint8_t seed) {
   write_descriptor(d, owner_handle, selector, count, page_generation, seed);
   const uint8_t lod = static_cast<uint8_t>(0x20u + seed);
   for (unsigned sample = 0; sample < count; ++sample) {
@@ -215,8 +210,7 @@ void submit_and_drain(Dut* d, Stats& stats, uint16_t owner_handle,
     const uint16_t handle = sample_handle(owner_handle, sample);
     if (selector9 < 256)
       stats.expected_plans.push_back(
-          PlanExpected{handle, rows[selector9].base, rows[selector9].mode,
-                       u, v, lod});
+          PlanExpected{handle, rows[selector9].base, rows[selector9].mode, u, v, lod});
     else
       stats.expected_refusals.push_back(handle);
   }
@@ -235,17 +229,19 @@ void submit_and_drain(Dut* d, Stats& stats, uint16_t owner_handle,
     tick(d);
     ++admission_wait;
   }
-  zhao::check(d->frag_ready_o, "composed fragment admission is bounded", 1,
-              d->frag_ready_o);
+  zhao::check(d->frag_ready_o, "composed fragment admission is bounded", 1, d->frag_ready_o);
   if (d->frag_ready_o) tick(d);
   d->frag_valid_i = 0;
 
   unsigned wait = 0;
-  while (!d->quiet_o && wait < 500) { observe_tick(d, stats); ++wait; }
+  while (!d->quiet_o && wait < 500) {
+    observe_tick(d, stats);
+    ++wait;
+  }
   zhao::check(d->quiet_o, "composed fragment fully drained", 1, d->quiet_o);
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
@@ -267,8 +263,7 @@ int main(int argc, char** argv) {
   std::array<Row, 256> rows{};
   std::array<bool, 256> present{};
   for (unsigned selector : {0u, 1u, 253u, 254u, 255u}) {
-    rows[selector] = Row{0x00100000u + selector * 0x1000u,
-                         clut_mode(), 2, 0x55, true};
+    rows[selector] = Row{0x00100000u + selector * 0x1000u, clut_mode(), 2, 0x55, true};
     present[selector] = true;
   }
 
@@ -284,8 +279,7 @@ int main(int argc, char** argv) {
   d->frag_material_refused_i = 0;
   d->frag_valid_i = 1;
   d->eval();
-  zhao::check(d->frag_ready_o, "bad-pad composed fragment accepted", 1,
-              d->frag_ready_o);
+  zhao::check(d->frag_ready_o, "bad-pad composed fragment accepted", 1, d->frag_ready_o);
   tick(d);
   d->frag_valid_i = 0;
   unsigned wait = 0;
@@ -297,8 +291,7 @@ int main(int argc, char** argv) {
     tick(d);
     ++wait;
   }
-  zhao::check(d->refuse_valid_o, "bad pad reaches terminal local refusal", 1,
-              d->refuse_valid_o);
+  zhao::check(d->refuse_valid_o, "bad pad reaches terminal local refusal", 1, d->refuse_valid_o);
   d->plan_ready_i = 1;
   d->refuse_ready_i = 0;
   const uint32_t pad_count = d->desc_pad_fault_o;
@@ -308,10 +301,8 @@ int main(int argc, char** argv) {
     d->eval();
     if (d->issue_valid_o) ++stats.issues;
     zhao::check(d->refuse_valid_o && d->refuse_handle_o == held_handle &&
-                    d->refuse_result_o == held_result &&
-                    d->desc_pad_fault_o == pad_count,
-                "bad-pad terminal payload and one-shot counter hold under stall",
-                1, 1);
+                    d->refuse_result_o == held_result && d->desc_pad_fault_o == pad_count,
+                "bad-pad terminal payload and one-shot counter hold under stall", 1, 1);
     tick(d);
   }
   zhao::check(d->desc_pad_fault_o == pad_count && pad_count == 1,
@@ -322,8 +313,7 @@ int main(int argc, char** argv) {
   if (d->issue_valid_o) ++stats.issues;
   if (d->refuse_valid_o) {
     ++stats.refusals;
-    if (stats.expected_refusals.empty() ||
-        d->refuse_handle_o != stats.expected_refusals.front() ||
+    if (stats.expected_refusals.empty() || d->refuse_handle_o != stats.expected_refusals.front() ||
         d->refuse_result_o != 0x0100FFFF00FFull)
       ++stats.errors;
     else
@@ -332,20 +322,19 @@ int main(int argc, char** argv) {
   tick(d);
   d->refuse_ready_i = 0;
   d->eval();
-  zhao::check(d->quiet_o, "bad-pad composed path drains after terminal acceptance",
-              1, d->quiet_o);
-  zhao::check(stats.issues == 1 && stats.plans == 0 && stats.refusals == 1 &&
-                  stats.errors == 0,
-              "bad pad produces exactly one issue, zero planner work, one typed terminal refusal",
-              1, (stats.issues == 1 && stats.plans == 0 &&
-                  stats.refusals == 1 && stats.errors == 0) ? 1 : 0);
-  zhao::check(d->desc_frame_fault_o && d->expand_frame_fault_o &&
-                  d->resolver_frame_fault_o && d->expand_malformed_o == 1 &&
-                  d->resolver_page_mismatch_o == 1,
+  zhao::check(d->quiet_o, "bad-pad composed path drains after terminal acceptance", 1, d->quiet_o);
+  zhao::check(
+      stats.issues == 1 && stats.plans == 0 && stats.refusals == 1 && stats.errors == 0,
+      "bad pad produces exactly one issue, zero planner work, one typed terminal refusal", 1,
+      (stats.issues == 1 && stats.plans == 0 && stats.refusals == 1 && stats.errors == 0) ? 1 : 0);
+  zhao::check(d->desc_frame_fault_o && d->expand_frame_fault_o && d->resolver_frame_fault_o &&
+                  d->expand_malformed_o == 1 && d->resolver_page_mismatch_o == 1,
               "bad pad independently faults descriptor, expander, and resolver generation verdict",
-              1, (d->desc_frame_fault_o && d->expand_frame_fault_o &&
-                  d->resolver_frame_fault_o && d->expand_malformed_o == 1 &&
-                  d->resolver_page_mismatch_o == 1) ? 1 : 0);
+              1,
+              (d->desc_frame_fault_o && d->expand_frame_fault_o && d->resolver_frame_fault_o &&
+               d->expand_malformed_o == 1 && d->resolver_page_mismatch_o == 1)
+                  ? 1
+                  : 0);
 #else
   cfg_immediate(d, 0, 7, 0, nullptr, 0);
   for (unsigned selector : {255u, 0u, 254u, 1u, 253u})
@@ -353,40 +342,36 @@ int main(int argc, char** argv) {
   cfg_end(d, 7, page_crc(7, rows, present));
 
   Stats stats;
-  submit_and_drain(d, stats, owner(4, 0x51), 253, 1,
-                   0x10101010, -0x01010101, rows, 7, 1);
-  submit_and_drain(d, stats, owner(5, 0x52), 254, 2,
-                   0x20202020, -0x02020202, rows, 7, 2);
-  submit_and_drain(d, stats, owner(6, 0x53), 255, 3,
-                   0x30303030, -0x03030303, rows, 7, 3);
+  submit_and_drain(d, stats, owner(4, 0x51), 253, 1, 0x10101010, -0x01010101, rows, 7, 1);
+  submit_and_drain(d, stats, owner(5, 0x52), 254, 2, 0x20202020, -0x02020202, rows, 7, 2);
+  submit_and_drain(d, stats, owner(6, 0x53), 255, 3, 0x30303030, -0x03030303, rows, 7, 3);
 
-  zhao::check(stats.issues == 6 && stats.plans == 4 && stats.refusals == 2 &&
-                  stats.errors == 0 && stats.expected_plans.empty() &&
-                  stats.expected_refusals.empty(),
-              "selectors 253/254/255 at counts 1/2/3 close exact issue/planner/refusal records",
-              1, (stats.issues == 6 && stats.plans == 4 &&
-                  stats.refusals == 2 && stats.errors == 0 &&
-                  stats.expected_plans.empty() &&
-                  stats.expected_refusals.empty()) ? 1 : 0);
-  zhao::check(d->expand_fragments_o == 3 && d->expand_samples_o == 6 &&
-                  d->expand_mosaics_o == 3 && d->resolver_samples_o == 6 &&
-                  d->resolver_plans_o == 4 && d->resolver_refusals_o == 2 &&
-                  d->resolver_overflow_o == 2,
+  zhao::check(stats.issues == 6 && stats.plans == 4 && stats.refusals == 2 && stats.errors == 0 &&
+                  stats.expected_plans.empty() && stats.expected_refusals.empty(),
+              "selectors 253/254/255 at counts 1/2/3 close exact issue/planner/refusal records", 1,
+              (stats.issues == 6 && stats.plans == 4 && stats.refusals == 2 && stats.errors == 0 &&
+               stats.expected_plans.empty() && stats.expected_refusals.empty())
+                  ? 1
+                  : 0);
+  zhao::check(d->expand_fragments_o == 3 && d->expand_samples_o == 6 && d->expand_mosaics_o == 3 &&
+                  d->resolver_samples_o == 6 && d->resolver_plans_o == 4 &&
+                  d->resolver_refusals_o == 2 && d->resolver_overflow_o == 2,
               "composed counters prove one Mosaic per fragment and no wrapped selector 0/1 lookup",
-              1, (d->expand_fragments_o == 3 && d->expand_samples_o == 6 &&
-                  d->expand_mosaics_o == 3 && d->resolver_samples_o == 6 &&
-                  d->resolver_plans_o == 4 && d->resolver_refusals_o == 2 &&
-                  d->resolver_overflow_o == 2) ? 1 : 0);
-  zhao::check(d->desc_pad_fault_o == 0 && d->expand_malformed_o == 0 &&
-                  d->resolver_page_mismatch_o == 0,
-              "legal composed selector workload has no pad/descriptor/page fault",
-              0, static_cast<uint64_t>(d->desc_pad_fault_o ||
-                  d->expand_malformed_o || d->resolver_page_mismatch_o));
+              1,
+              (d->expand_fragments_o == 3 && d->expand_samples_o == 6 && d->expand_mosaics_o == 3 &&
+               d->resolver_samples_o == 6 && d->resolver_plans_o == 4 &&
+               d->resolver_refusals_o == 2 && d->resolver_overflow_o == 2)
+                  ? 1
+                  : 0);
+  zhao::check(
+      d->desc_pad_fault_o == 0 && d->expand_malformed_o == 0 && d->resolver_page_mismatch_o == 0,
+      "legal composed selector workload has no pad/descriptor/page fault", 0,
+      static_cast<uint64_t>(d->desc_pad_fault_o || d->expand_malformed_o ||
+                            d->resolver_page_mismatch_o));
 #endif
 
-  std::printf("  composed: issue=%u plan=%u refuse=%u pad=%u overflow=%u\n",
-              stats.issues, stats.plans, stats.refusals,
-              d->desc_pad_fault_o, d->resolver_overflow_o);
+  std::printf("  composed: issue=%u plan=%u refuse=%u pad=%u overflow=%u\n", stats.issues,
+              stats.plans, stats.refusals, d->desc_pad_fault_o, d->resolver_overflow_o);
   const int rc = zhao::report_and_exit("texture_desc_expand_bind_v2_composed");
   delete d;
   zhao::exit_hard(rc);

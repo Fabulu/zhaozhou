@@ -66,11 +66,11 @@ struct Frag {
   uint8_t recipe = 0;
   uint8_t count = 0;
   uint8_t weight = 0;
-  bool has_aux = false;   // the third sample lives in the AUX plane
+  bool has_aux = false;  // the third sample lives in the AUX plane
   mat::Sample s[3];
   mat::Sample base;
   uint16_t tag = 0;
-  uint8_t slot = 0;       // the owner slot the bench allocates
+  uint8_t slot = 0;  // the owner slot the bench allocates
 };
 
 struct Got {
@@ -96,8 +96,8 @@ void tick(Dut& d) {
 
 uint64_t lane40(const mat::Sample& s) {
   // result40 = {status8, alpha8, rgb24}; status is not a combiner operand.
-  return (static_cast<uint64_t>(s.a) << 24) |
-         (static_cast<uint64_t>(s.r) << 16) | (static_cast<uint64_t>(s.g) << 8) | s.b;
+  return (static_cast<uint64_t>(s.a) << 24) | (static_cast<uint64_t>(s.r) << 16) |
+         (static_cast<uint64_t>(s.g) << 8) | s.b;
 }
 
 // A poison that differs from every legal sample the fragment carries and is
@@ -110,18 +110,21 @@ uint64_t poison(const Frag& f, int lane) {
 // What each plane holds for this fragment.
 uint64_t plane_data(const Frag& f, int lane) {
   switch (lane) {
-    case 0: return (f.count >= 1) ? lane40(f.s[0]) : poison(f, 0);
-    case 1: return (f.count >= 2) ? lane40(f.s[1]) : poison(f, 1);
-    case 2: return (f.count >= 3 && !f.has_aux) ? lane40(f.s[2]) : poison(f, 2);
-    default: return (f.count >= 3 && f.has_aux) ? lane40(f.s[2]) : poison(f, 3);
+    case 0:
+      return (f.count >= 1) ? lane40(f.s[0]) : poison(f, 0);
+    case 1:
+      return (f.count >= 2) ? lane40(f.s[1]) : poison(f, 1);
+    case 2:
+      return (f.count >= 3 && !f.has_aux) ? lane40(f.s[2]) : poison(f, 2);
+    default:
+      return (f.count >= 3 && f.has_aux) ? lane40(f.s[2]) : poison(f, 3);
   }
 }
 
 // Drive a batch and return every retirement keyed by tag (out-of-order
 // retirement is the design, per V2's own bench).
 std::map<uint16_t, Got> run_batch(const std::vector<Frag>& in, Seam& seam,
-                                  uint32_t jobs_by_recipe[8] = nullptr,
-                                  bool stall_consumer = false,
+                                  uint32_t jobs_by_recipe[8] = nullptr, bool stall_consumer = false,
                                   uint32_t* phases_issued = nullptr) {
   Dut d;
   d.rst_n = 0;
@@ -137,7 +140,7 @@ std::map<uint16_t, Got> run_batch(const std::vector<Frag>& in, Seam& seam,
   std::map<uint16_t, uint8_t> slot_of_tag;
 
   std::size_t next = 0;
-  int wstate = 0;   // 0..3 write lanes, 4..5 settle, 6 offer
+  int wstate = 0;  // 0..3 write lanes, 4..5 settle, 6 offer
   int idle = 0;
   const int kMaxCycles = 400000;
 
@@ -200,7 +203,7 @@ std::map<uint16_t, Got> run_batch(const std::vector<Frag>& in, Seam& seam,
       out[tag] = g;
       auto it = slot_of_tag.find(tag);
       if (it != slot_of_tag.end() && busy_tag[it->second] == static_cast<int>(tag))
-        busy_tag[it->second] = -1;   // released at the output, not before
+        busy_tag[it->second] = -1;  // released at the output, not before
     }
 
     tick(d);
@@ -271,10 +274,10 @@ int compare_batch(const std::vector<Frag>& batch, const std::map<uint16_t, Got>&
             "  first mismatch: tag %u recipe %u count %u aux %d w=%u slot %u\n"
             "    s0 %3u %3u %3u %3u   s1 %3u %3u %3u %3u   s2 %3u %3u %3u %3u\n"
             "    want %3u %3u %3u %3u r=%d   got %3u %3u %3u %3u r=%d\n",
-            f.tag, f.recipe, f.count, f.has_aux ? 1 : 0, f.weight, f.slot, f.s[0].r,
-            f.s[0].g, f.s[0].b, f.s[0].a, f.s[1].r, f.s[1].g, f.s[1].b, f.s[1].a,
-            f.s[2].r, f.s[2].g, f.s[2].b, f.s[2].a, want.r, want.g, want.b, want.a,
-            want.refused ? 1 : 0, g.r, g.g, g.b, g.a, g.refused ? 1 : 0);
+            f.tag, f.recipe, f.count, f.has_aux ? 1 : 0, f.weight, f.slot, f.s[0].r, f.s[0].g,
+            f.s[0].b, f.s[0].a, f.s[1].r, f.s[1].g, f.s[1].b, f.s[1].a, f.s[2].r, f.s[2].g,
+            f.s[2].b, f.s[2].a, want.r, want.g, want.b, want.a, want.refused ? 1 : 0, g.r, g.g, g.b,
+            g.a, g.refused ? 1 : 0);
       }
     }
   }
@@ -283,8 +286,8 @@ int compare_batch(const std::vector<Frag>& batch, const std::map<uint16_t, Got>&
 }
 
 void seam_checks(const Seam& seam, const char* where) {
-  std::printf("  [%s] plane reads %ld, seam violations %ld, reuse faults %ld\n", where,
-              seam.reads, seam.violations, seam.reuse_faults);
+  std::printf("  [%s] plane reads %ld, seam violations %ld, reuse faults %ld\n", where, seam.reads,
+              seam.violations, seam.reuse_faults);
   check(seam.reads > 0, "the phase engine actually read the planes (non-vacuity)", 1,
         seam.reads > 0 ? 1 : 0);
 #ifndef READLATE_EXPECT_MISMATCH
@@ -308,7 +311,7 @@ void test_every_recipe_matches_the_oracle() {
       Frag f;
       f.recipe = r;
       f.count = 3;
-      f.has_aux = (i & 1) != 0;   // alternate the plane the third sample lives in
+      f.has_aux = (i & 1) != 0;  // alternate the plane the third sample lives in
       f.weight = byte_of(st);
       f.s[0] = sample_of(st);
       f.s[1] = sample_of(st);
@@ -327,10 +330,9 @@ void test_every_recipe_matches_the_oracle() {
   const int mismatched = compare_batch(batch, got, &missing);
 
 #ifdef READLATE_EXPECT_MISMATCH
-  std::printf("  MUTANT: %d fragments mismatched the oracle, %ld seam violations\n",
-              mismatched, seam.violations);
-  check(missing == 0, "the mutant still retires every fragment (the fault is silent)", 0,
-        missing);
+  std::printf("  MUTANT: %d fragments mismatched the oracle, %ld seam violations\n", mismatched,
+              seam.violations);
+  check(missing == 0, "the mutant still retires every fragment (the fault is silent)", 0, missing);
   check(mismatched > 0,
         "THE DIFFERENTIAL FIRES on the slot-swap mutant -- colours from a "
         "neighbouring owner's planes",
@@ -340,8 +342,7 @@ void test_every_recipe_matches_the_oracle() {
         "slot no accepted fragment owned",
         1, seam.violations > 0 ? 1 : 0);
 #else
-  check(missing == 0, "every fragment retired -- none was lost in the scheduler", 0,
-        missing);
+  check(missing == 0, "every fragment retired -- none was lost in the scheduler", 0, missing);
   check(mismatched == 0,
         "every recipe's result matches zref::legacy_material_v2::combine exactly, with the "
         "samples read late from the planes and the third sample in either plane",
@@ -352,8 +353,7 @@ void test_every_recipe_matches_the_oracle() {
         jobs[mat::kTerrainDetailLight]);
   check(jobs[mat::kTerrainDetailMask] == 200 * 4, "DETAIL_MASK issues four", 200 * 4,
         jobs[mat::kTerrainDetailMask]);
-  check(jobs[mat::kModulate] == 200 * 4, "MODULATE issues four", 200 * 4,
-        jobs[mat::kModulate]);
+  check(jobs[mat::kModulate] == 200 * 4, "MODULATE issues four", 200 * 4, jobs[mat::kModulate]);
   check(jobs[mat::kLerp] == 200 * 4, "LERP issues four", 200 * 4, jobs[mat::kLerp]);
 #endif
   seam_checks(seam, "oracle batch");
@@ -424,10 +424,12 @@ void test_the_schedule_issues_exactly_its_phases() {
   const std::map<uint16_t, Got> got = run_batch(batch, seam, nullptr, false, &phases);
   uint32_t want = 0;
   for (const Frag& f : batch) {
-    if (f.recipe == mat::kTerrainDetailLight) want += 3;
+    if (f.recipe == mat::kTerrainDetailLight)
+      want += 3;
     else if (f.recipe == mat::kPassthru || f.recipe == mat::kAddSat || f.recipe == mat::kMask)
       want += 1;
-    else want += 2;
+    else
+      want += 2;
   }
   std::printf("  phases issued %u, the schedule owes %u, plane reads %ld\n", phases, want,
               seam.reads);
@@ -593,8 +595,7 @@ void test_output_stall_keeps_every_context_reserved_and_planes_immutable() {
         8, accepted);
   d.f_valid_i = 0;
   for (int i = 0; i < 40; ++i) tick(d);
-  check(d.o_valid_o, "one completed result is held at the stopped output", 1,
-        d.o_valid_o ? 1 : 0);
+  check(d.o_valid_o, "one completed result is held at the stopped output", 1, d.o_valid_o ? 1 : 0);
 
   const uint32_t held_rgb = d.o_rgb_o;
   const uint8_t held_a = d.o_a_o;
@@ -619,8 +620,9 @@ void test_output_stall_keeps_every_context_reserved_and_planes_immutable() {
   }
   d.f_valid_i = 0;
   d.pw_en_i = 0;
-  check(stable, "valid && !ready holds RGBA, tag and input backpressure stable while every "
-                "pin is poisoned and foreign slots are rewritten",
+  check(stable,
+        "valid && !ready holds RGBA, tag and input backpressure stable while every "
+        "pin is poisoned and foreign slots are rewritten",
         1, stable ? 1 : 0);
 
   // Release the output: each of the eight comes out with ITS OWN s0 -- the plane

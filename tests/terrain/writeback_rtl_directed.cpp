@@ -68,7 +68,7 @@ void cke(uint64_t want, uint64_t got, const char* what) {
 }
 
 // ---------------------------------------------------------------- geometry --
-constexpr uint32_t kPageWords = tp::kPageBytes / 8;   // 2,672
+constexpr uint32_t kPageWords = tp::kPageBytes / 8;     // 2,672
 constexpr uint32_t kSheetWords = tp::kLayerFBytes / 8;  // 1,024
 
 // The played page-pool image holds TWO slots, so "the neighbouring page was not
@@ -232,8 +232,7 @@ struct Job {
   uint32_t src_id = 0;
 };
 
-void set_timing(Bench& b, int grant_hold, int rd_latency, int rd_gap, int wr_latency,
-                int wr_gap) {
+void set_timing(Bench& b, int grant_hold, int rd_latency, int rd_gap, int wr_latency, int wr_gap) {
   b.d.cfg_grant_hold_i = static_cast<uint8_t>(grant_hold);
   b.d.cfg_rd_latency_i = static_cast<uint8_t>(rd_latency);
   b.d.cfg_rd_gap_i = static_cast<uint8_t>(rd_gap);
@@ -338,8 +337,8 @@ DoneRec take_done(Bench& b, int hold) {
   bool stable = true;
   for (int i = 0; i < hold; ++i) {
     b.tick();
-    if (!b.d.done_valid || b.d.done_verdict != v0 || b.d.done_slot != s0 ||
-        b.d.done_seq != q0 || b.d.done_src_id != i0 || b.d.done_ok != o0) {
+    if (!b.d.done_valid || b.d.done_verdict != v0 || b.d.done_slot != s0 || b.d.done_seq != q0 ||
+        b.d.done_src_id != i0 || b.d.done_ok != o0) {
       stable = false;
       break;
     }
@@ -617,8 +616,7 @@ int main(int argc, char** argv) {
     int bad = 0;
     for (uint32_t w = 0; w < kPageWords; ++w) {
       uint64_t exp = 0;
-      for (int k = 7; k >= 0; --k)
-        exp = (exp << 8) | page1[w * 8 + static_cast<uint32_t>(k)];
+      for (int k = 7; k >= 0; --k) exp = (exp << 8) | page1[w * 8 + static_cast<uint32_t>(k)];
       if (b.vram_word(kPageWords + w) != exp) ++bad;
     }
     cke(0, bad, "golden: the neighbouring page slot is byte-identical");
@@ -631,8 +629,7 @@ int main(int argc, char** argv) {
   cke(gold.slot, w1.slot, "golden: wb names the job's slot");
   cke(gold.gen, w1.gen, "golden: wb names the job's generation");
   cke(gold.epoch, w1.epoch, "golden: wb names the job's epoch");
-  cke(40, static_cast<uint64_t>(w1.held_stable),
-      "golden: wb held stable for 40 stalled cycles");
+  cke(40, static_cast<uint64_t>(w1.held_stable), "golden: wb held stable for 40 stalled cycles");
 
   DoneRec d1 = take_done(b, 30);
   ck(!d1.timed_out, "golden: the completion follows the release");
@@ -640,8 +637,7 @@ int main(int argc, char** argv) {
   ck(d1.ok, "golden: done.ok");
   cke(gold.seq, d1.seq, "golden: the completion carries the job's seq");
   cke(gold.src_id, d1.src_id, "golden: the completion carries the job's source id");
-  cke(30, static_cast<uint64_t>(d1.held_stable),
-      "golden: done held stable for 30 stalled cycles");
+  cke(30, static_cast<uint64_t>(d1.held_stable), "golden: done held stable for 30 stalled cycles");
 
   cke(1, b.d.sheets_written, "golden: sheets_written");
   cke(1, b.d.acks_ok, "golden: acks_ok");
@@ -732,7 +728,8 @@ int main(int argc, char** argv) {
     const char* what;
   };
   const EdgeCase edges[] = {
-      {tp::kLayerFOff - 1, false, "edge: page byte 10,693 (last of layer E) must NOT reach the journal"},
+      {tp::kLayerFOff - 1, false,
+       "edge: page byte 10,693 (last of layer E) must NOT reach the journal"},
       {tp::kLayerFOff, true, "edge: page byte 10,694 (first of layer F) MUST reach it"},
       {tp::kLayerFOff + tp::kLayerFBytes - 1, true,
        "edge: page byte 18,885 (last of layer F) MUST reach it"},
@@ -846,7 +843,8 @@ int main(int argc, char** argv) {
     cke(0, b.d.greqs_seen, "refuse: ZERO guard requests");
     cke(0, b.d.bursts_seen, "refuse: ZERO bridge bursts");
     cke(rc.j.src_id, b.d.fault_src_id, "refuse: the trace names the source id");
-    cke(static_cast<uint64_t>(rc.verdict), b.d.fault_verdict, "refuse: the trace names the verdict");
+    cke(static_cast<uint64_t>(rc.verdict), b.d.fault_verdict,
+        "refuse: the trace names the verdict");
     cke(rc.j.island, b.d.fault_island, "refuse: the trace names the island");
     ck(wb_silent(b, 20), "refuse: no barrier released");
     tp::SheetWritebackResult o = oracle(rc.j, &page0, false, true, 1, nullptr, &want_ledger);
@@ -1039,8 +1037,7 @@ int main(int argc, char** argv) {
     ck(!ww.timed_out, "overdue: a late acknowledgement still releases the barrier");
     cke(jw.slot, ww.slot, "overdue: and names the right slot");
     ck(b.d.ack_wait_max_cycles > kAckDeadline,
-       "overdue: ack_wait_max_cycles recorded the wait, in CYCLES", 1,
-       b.d.ack_wait_max_cycles);
+       "overdue: ack_wait_max_cycles recorded the wait, in CYCLES", 1, b.d.ack_wait_max_cycles);
     take_done(b, 0);
     oracle(jw, &page0, false, true, 1, nullptr, &want_ledger);
   }
@@ -1222,8 +1219,8 @@ int main(int argc, char** argv) {
     const uint32_t slot_addr = tp::page_vram_addr(3);
 
     // --- ADMITTED: the two reads this block actually makes -----------------
-    probe_admits(b, "guard: TERRAIN_BUILD READING the page pool is ADMITTED (the new arm)",
-                 false, kTerrainBuildClient, slot_addr + tp::kSheetChunkStart, 64);
+    probe_admits(b, "guard: TERRAIN_BUILD READING the page pool is ADMITTED (the new arm)", false,
+                 kTerrainBuildClient, slot_addr + tp::kSheetChunkStart, 64);
     probe_admits(b, "guard: ...and so is the page header read", false, kTerrainBuildClient,
                  slot_addr, 64);
     // The exact bounds, read side: first legal byte and last legal 64 B.
@@ -1233,8 +1230,8 @@ int main(int argc, char** argv) {
                  kPoolEnd - 64, 64);
 
     // --- ADMITTED: the write arm is untouched by the amendment -------------
-    probe_admits(b, "guard: TERRAIN_BUILD WRITING the pool still passes (the loader's arm)",
-                 true, kTerrainBuildClient, slot_addr, 64);
+    probe_admits(b, "guard: TERRAIN_BUILD WRITING the pool still passes (the loader's arm)", true,
+                 kTerrainBuildClient, slot_addr, 64);
     probe_admits(b, "guard: the pool's last legal 64-byte write", true, kTerrainBuildClient,
                  kPoolEnd - 64, 64);
 
@@ -1278,10 +1275,10 @@ int main(int argc, char** argv) {
     // The direction bit still matters everywhere it mattered before. If the
     // amendment had been made by deleting direction checks rather than by
     // adding one arm, these are the probes that would have caught it.
-    probe_refuses(b, "guard: ENGINE1 may not WRITE the read-only asset pool", true, 3,
-                  0x06A00000u, 64);
-    probe_refuses(b, "guard: SCANOUT may not WRITE the read-only framebuffer", true, 0,
-                  0x00000000u, 64);
+    probe_refuses(b, "guard: ENGINE1 may not WRITE the read-only asset pool", true, 3, 0x06A00000u,
+                  64);
+    probe_refuses(b, "guard: SCANOUT may not WRITE the read-only framebuffer", true, 0, 0x00000000u,
+                  64);
 
     // --- REFUSED: the shape law applies INSIDE the new read window ---------
     probe_refuses(b, "guard: a byte-enable hole is refused on a pool READ", false,
@@ -1349,9 +1346,8 @@ int main(int argc, char** argv) {
     const uint32_t island = 100 + draw(200);
     const int16_t ix = static_cast<int16_t>(static_cast<int>(draw(64)) - 32);
     const int16_t iz = static_cast<int16_t>(static_cast<int>(draw(64)) - 32);
-    set_timing(b, static_cast<int>(draw(4)), static_cast<int>(draw(6)),
-               static_cast<int>(draw(3)), static_cast<int>(draw(5)),
-               static_cast<int>(draw(3)));
+    set_timing(b, static_cast<int>(draw(4)), static_cast<int>(draw(6)), static_cast<int>(draw(3)),
+               static_cast<int>(draw(5)), static_cast<int>(draw(3)));
 
     std::vector<uint8_t> pg = make_page(island, ix, iz, 0x5000u + static_cast<uint32_t>(t) * 7u);
     if (mal == kMalWrongPatch) pg = make_page(island + 1, ix, iz, 0x777u);
@@ -1427,8 +1423,7 @@ int main(int argc, char** argv) {
     }
 
     const int ack_arg = (mal == kMalNak) ? 0 : 1;
-    tp::SheetWritebackResult o =
-        oracle(j, &pg, dup, !stopped, ack_arg, nullptr, &want_ledger);
+    tp::SheetWritebackResult o = oracle(j, &pg, dup, !stopped, ack_arg, nullptr, &want_ledger);
 
     if (sr.transferred) {
       send_ack(b, j.seq, mal != kMalNak);
@@ -1521,8 +1516,8 @@ int main(int argc, char** argv) {
   // 8,192 bytes must be in there.
   cke(b.d.wbeats_total * 8, b.d.wb_bytes, "ledger: wb_bytes == the bench's own beat count x 8");
   ck(b.d.wb_bytes >= want_ledger.wb_bytes,
-     "ledger: ...and it covers every completed sheet the oracle counted",
-     want_ledger.wb_bytes, b.d.wb_bytes);
+     "ledger: ...and it covers every completed sheet the oracle counted", want_ledger.wb_bytes,
+     b.d.wb_bytes);
   ck(b.d.wb_bytes > want_ledger.wb_bytes,
      "ledger: ...with the aborted sheets' partial bytes on top", 1,
      static_cast<long long>(b.d.wb_bytes) - want_ledger.wb_bytes);
@@ -1532,14 +1527,13 @@ int main(int argc, char** argv) {
   ck(b.d.guard_denied > 0, "ledger: guard_denied moved", 1, b.d.guard_denied);
   ck(b.d.bridge_errs > 0, "ledger: bridge_errs moved", 1, b.d.bridge_errs);
   ck(b.d.jobs_stall_cycles > 0, "ledger: jobs_stall_cycles moved", 1, b.d.jobs_stall_cycles);
-  ck(b.d.ack_wait_max_cycles > 0, "ledger: ack_wait_max_cycles moved", 1,
-     b.d.ack_wait_max_cycles);
+  ck(b.d.ack_wait_max_cycles > 0, "ledger: ack_wait_max_cycles moved", 1, b.d.ack_wait_max_cycles);
   cke(4, b.d.outstanding_hwm, "ledger: outstanding_hwm is the four-ticket high-water mark");
   ck(b.d.sheets_written >= b.d.acks_ok + b.d.acks_nak,
      "ledger: bytes-away can never lag acknowledgements", 1,
      static_cast<long long>(b.d.sheets_written) - b.d.acks_ok - b.d.acks_nak);
 
-  std::printf("writeback_rtl_directed: %d checks, %d failures, %lld gpu clocks\n", g_checks,
-              g_fail, b.cycles);
+  std::printf("writeback_rtl_directed: %d checks, %d failures, %lld gpu clocks\n", g_checks, g_fail,
+              b.cycles);
   zhao::exit_hard(g_fail == 0 ? 0 : 1);
 }

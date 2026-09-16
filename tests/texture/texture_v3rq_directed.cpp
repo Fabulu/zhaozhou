@@ -95,8 +95,7 @@ int main() {
   }
   d->eval();
 
-  zhao::check(d->valid_o == 1, "the pushed item reaches the visible head", 1,
-              d->valid_o);
+  zhao::check(d->valid_o == 1, "the pushed item reaches the visible head", 1, d->valid_o);
   zhao::check(d->data_o == 0x2A, "with its payload intact", 0x2A, d->data_o);
   zhao::check(cycles_to_head >= 1,
               "and it took at least one cycle to get there, so the window this "
@@ -136,8 +135,8 @@ int main() {
   d->wr_en_i = 0;
   d->eval();
 
-  zhao::check(pushed > 50, "the stream actually pushed work (not a vacuous check)",
-              1, pushed > 50 ? 1 : 0);
+  zhao::check(pushed > 50, "the stream actually pushed work (not a vacuous check)", 1,
+              pushed > 50 ? 1 : 0);
   zhao::check(popped > 50, "and actually popped it", 1, popped > 50 ? 1 : 0);
   zhao::check(stream_zero_while_owned == 0,
               "occupancy never reads zero while the queue owns tickets, under a "
@@ -167,8 +166,7 @@ int main() {
   }
   d->pop_i = 0;
   d->eval();
-  zhao::check(d->owned_empty_o == 1,
-              "the queue drains to owned-empty before the capacity fill", 1,
+  zhao::check(d->owned_empty_o == 1, "the queue drains to owned-empty before the capacity fill", 1,
               d->owned_empty_o);
   zhao::check(d->occ_o == 0, "and reports zero occupancy there", 0, d->occ_o);
 
@@ -197,10 +195,8 @@ int main() {
               "the queue accepts EXACTLY CAPACITY tickets -- not 65, and not "
               "the body-plus-two-heads 66 that 5.3 names",
               kCapacity, accepted);
-  zhao::check(d->occ_o == kCapacity,
-              "and occupancy at full equals capacity", kCapacity, d->occ_o);
-  zhao::check(d->owned_empty_o == 0, "a full queue is not owned-empty", 0,
-              d->owned_empty_o);
+  zhao::check(d->occ_o == kCapacity, "and occupancy at full equals capacity", kCapacity, d->occ_o);
+  zhao::check(d->owned_empty_o == 0, "a full queue is not owned-empty", 0, d->owned_empty_o);
 
   // FULL IS A PRODUCER CONTRACT, NOT A SHOCK ABSORBER, and the first version of
   // this block got that wrong. It drove wr_en_i high into a full queue to prove
@@ -232,10 +228,9 @@ int main() {
   d->eval();
   zhao::check(full_held == 8,
               "full_o stays asserted for eight idle cycles at capacity -- it "
-              "never glitches low and re-opens admission", 8, full_held);
-  zhao::check(occ_stable == 8,
-              "and occupancy holds at exactly capacity throughout", 8,
-              occ_stable);
+              "never glitches low and re-opens admission",
+              8, full_held);
+  zhao::check(occ_stable == 8, "and occupancy holds at exactly capacity throughout", 8, occ_stable);
 
   // And back down: the other half of the transition.
   int drained = 0;
@@ -248,11 +243,9 @@ int main() {
   }
   d->pop_i = 0;
   d->eval();
-  zhao::check(drained == kCapacity,
-              "exactly as many tickets come back out as went in", kCapacity,
+  zhao::check(drained == kCapacity, "exactly as many tickets come back out as went in", kCapacity,
               drained);
-  zhao::check(d->owned_empty_o == 1, "and the queue returns to owned-empty", 1,
-              d->owned_empty_o);
+  zhao::check(d->owned_empty_o == 1, "and the queue returns to owned-empty", 1, d->owned_empty_o);
   zhao::check(d->full_o == 0, "with full_o released", 0, d->full_o);
 
   // ---- V3.1 5.4: one external pop per clock, after warmup --------------------
@@ -291,15 +284,13 @@ int main() {
     d->pop_i = 0;
     d->eval();
 
-    zhao::check(pops > 0, "the sustained-rate window actually popped", 1,
-                pops > 0 ? 1 : 0);
+    zhao::check(pops > 0, "the sustained-rate window actually popped", 1, pops > 0 ? 1 : 0);
     zhao::check(bubbles == 0,
                 "5.4: with continuous supply and continuous demand the queue "
                 "sustains ONE POP PER CLOCK after warmup -- no bubble in 400 "
                 "cycles",
                 0, bubbles);
-    zhao::check(pops == kMeasure,
-                "and every measured cycle delivered a head", kMeasure, pops);
+    zhao::check(pops == kMeasure, "and every measured cycle delivered a head", kMeasure, pops);
   }
 
   // ---- S22.6: ready toggling on EVERY edge, across pointer wrap -------------
@@ -366,8 +357,7 @@ int main() {
     d->pop_i = 0;
     d->eval();
 
-    zhao::check(pushed > 2000,
-                "S22.6 the toggling run actually moved traffic (not vacuous)", 1,
+    zhao::check(pushed > 2000, "S22.6 the toggling run actually moved traffic (not vacuous)", 1,
                 pushed > 2000 ? 1 : 0);
     zhao::check(pushed > 64 * 4,
                 "and the 64-deep body pointer wrapped several times while the "

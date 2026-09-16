@@ -68,8 +68,7 @@ Tuple make_tuple(int serial, int token_class) {
 
 void pack(VlWide<3>& words, const Tuple& t) {
   words[0] = (t.rgb & 0xFFFFFFu) | (static_cast<uint32_t>(t.alpha) << 24);
-  words[1] = static_cast<uint32_t>(t.index) |
-             (static_cast<uint32_t>(t.status) << 8) |
+  words[1] = static_cast<uint32_t>(t.index) | (static_cast<uint32_t>(t.status) << 8) |
              ((t.route & 0xFFFFu) << 16);
   words[2] = (t.route >> 16) & 0x3u;
 }
@@ -85,38 +84,56 @@ Tuple unpack(const VlWide<3>& words) {
 }
 
 bool same_except_index(const Tuple& got, const Tuple& want) {
-  return got.route == want.route && got.status == want.status &&
-         got.alpha == want.alpha && got.rgb == want.rgb;
+  return got.route == want.route && got.status == want.status && got.alpha == want.alpha &&
+         got.rgb == want.rgb;
 }
 
-bool exact(const Tuple& a, const Tuple& b) {
-  return same_except_index(a, b) && a.index == b.index;
-}
+bool exact(const Tuple& a, const Tuple& b) { return same_except_index(a, b) && a.index == b.index; }
 
 void set_valid(Dut& top, int channel, bool value) {
   switch (channel) {
-    case kClut: top.clut_valid_i = value; break;
-    case kNear: top.near_valid_i = value; break;
-    case kBil: top.bil_valid_i = value; break;
-    default: top.err_valid_i = value; break;
+    case kClut:
+      top.clut_valid_i = value;
+      break;
+    case kNear:
+      top.near_valid_i = value;
+      break;
+    case kBil:
+      top.bil_valid_i = value;
+      break;
+    default:
+      top.err_valid_i = value;
+      break;
   }
 }
 
 bool ready(const Dut& top, int channel) {
   switch (channel) {
-    case kClut: return top.clut_ready_o != 0;
-    case kNear: return top.near_ready_o != 0;
-    case kBil: return top.bil_ready_o != 0;
-    default: return top.err_ready_o != 0;
+    case kClut:
+      return top.clut_ready_o != 0;
+    case kNear:
+      return top.near_ready_o != 0;
+    case kBil:
+      return top.bil_ready_o != 0;
+    default:
+      return top.err_ready_o != 0;
   }
 }
 
 void drive_tuple(Dut& top, int channel, const Tuple& tuple) {
   switch (channel) {
-    case kClut: pack(top.clut_tuple_i, tuple); break;
-    case kNear: pack(top.near_tuple_i, tuple); break;
-    case kBil: pack(top.bil_tuple_i, tuple); break;
-    default: pack(top.err_tuple_i, tuple); break;
+    case kClut:
+      pack(top.clut_tuple_i, tuple);
+      break;
+    case kNear:
+      pack(top.near_tuple_i, tuple);
+      break;
+    case kBil:
+      pack(top.bil_tuple_i, tuple);
+      break;
+    default:
+      pack(top.err_tuple_i, tuple);
+      break;
   }
 }
 
@@ -166,8 +183,7 @@ int main(int argc, char** argv) {
   top.eval();
   zhao::check(top.idle_o == 1, "reset empties all four reservations and the output hold", 1,
               top.idle_o);
-  zhao::check(top.pending_valid_o == 0, "reset pending vector is zero", 0,
-              top.pending_valid_o);
+  zhao::check(top.pending_valid_o == 0, "reset pending vector is zero", 0, top.pending_valid_o);
 
   // ---- simultaneous four-way reservation and output hold -------------------
   {
@@ -190,8 +206,7 @@ int main(int argc, char** argv) {
       set_valid(top, c, false);
     }
     top.eval();
-    zhao::check(top.pending_valid_o == 0xF,
-                "pending bits are exactly {ERR,BIL,NEAR,CLUT}", 0xF,
+    zhao::check(top.pending_valid_o == 0xF, "pending bits are exactly {ERR,BIL,NEAR,CLUT}", 0xF,
                 top.pending_valid_o);
     zhao::check(top.out_valid_o == 0,
                 "live input valid cannot bypass its reservation into output valid", 0,
@@ -210,8 +225,7 @@ int main(int argc, char** argv) {
       if (!top.out_valid_o || !exact(unpack(top.out_tuple_o), held)) ++hold_wrong;
       zhao::tick(top);
     }
-    zhao::check(hold_wrong == 0,
-                "valid and every one of 66 output bits hold while ready is low", 0,
+    zhao::check(hold_wrong == 0, "valid and every one of 66 output bits hold while ready is low", 0,
                 hold_wrong);
 
     top.out_ready_i = 1;
@@ -228,10 +242,8 @@ int main(int argc, char** argv) {
       zhao::tick(top);
     }
     top.eval();
-    zhao::check(local_outputs == 4, "all four simultaneous reservations emit", 4,
-                local_outputs);
-    zhao::check(class_order_wrong == 0,
-                "initial round-robin order is CLUT, NEAR, BIL, ERR", 0,
+    zhao::check(local_outputs == 4, "all four simultaneous reservations emit", 4, local_outputs);
+    zhao::check(class_order_wrong == 0, "initial round-robin order is CLUT, NEAR, BIL, ERR", 0,
                 class_order_wrong);
     zhao::check(top.accepted_o == 4, "multi-accept counter advances by four on one edge", 4,
                 top.accepted_o);
@@ -280,8 +292,7 @@ int main(int argc, char** argv) {
           holding = false;
           // Until the final tail, every class has a replacement waiting and the
           // retained cursor must produce strict 0,1,2,3 service.
-          if (outputs < kTotal - kClasses &&
-              static_cast<int>(got.route >> 16) != (outputs & 3))
+          if (outputs < kTotal - kClasses && static_cast<int>(got.route >> 16) != (outputs & 3))
             ++rr_wrong;
           score.emit(got);
           ++outputs;
@@ -367,12 +378,10 @@ int main(int argc, char** argv) {
     zhao::check(top.accepted_o == 4 && top.emitted_o == 4,
                 "mismatch does not create a lifecycle hole or duplicate", 1,
                 (top.accepted_o == 4 && top.emitted_o == 4) ? 1 : 0);
-    zhao::check(top.idle_o == 1, "mismatched-but-preserved records drain normally", 1,
-                top.idle_o);
+    zhao::check(top.idle_o == 1, "mismatched-but-preserved records drain normally", 1, top.idle_o);
   }
 
-  zhao::check(score.foreign == 0, "no output tuple was invented or duplicated", 0,
-              score.foreign);
+  zhao::check(score.foreign == 0, "no output tuple was invented or duplicated", 0, score.foreign);
   zhao::check(score.non_index_wrong == 0,
               "route, all status bits, alpha, and RGB preserve exact input alignment", 0,
               score.non_index_wrong);

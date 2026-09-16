@@ -1,8 +1,8 @@
 // video_slotmgr_v2_directed.cpp -- Packet-G dual-writer lease authority.
-#if (defined(ZHAO_EXPECT_SLOT_MUTANT_TERM_OMIT_WRITER) + \
-     defined(ZHAO_EXPECT_SLOT_MUTANT_TERM_SLOT_ONLY) + \
-     defined(ZHAO_EXPECT_SLOT_MUTANT_FAULT_PUBLISHES) + \
-     defined(ZHAO_EXPECT_SLOT_MUTANT_SLOT0_BASE) + \
+#if (defined(ZHAO_EXPECT_SLOT_MUTANT_TERM_OMIT_WRITER) +     \
+     defined(ZHAO_EXPECT_SLOT_MUTANT_TERM_SLOT_ONLY) +       \
+     defined(ZHAO_EXPECT_SLOT_MUTANT_FAULT_PUBLISHES) +      \
+     defined(ZHAO_EXPECT_SLOT_MUTANT_SLOT0_BASE) +           \
      defined(ZHAO_EXPECT_SLOT_MUTANT_SWAP_OMIT_GENERATION) + \
      defined(ZHAO_EXPECT_SLOT_MUTANT_LIVE_READY_WRITER)) > 1
 #error ZHAO_VIDEO_SLOTMGR_V2_CPP_MUTANT_SELECTOR_COLLISION
@@ -59,9 +59,7 @@ void reset(Dut& d) {
   d.eval();
 }
 
-uint8_t state(Dut& d, int slot) {
-  return static_cast<uint8_t>(d.slot_state_o[slot]);
-}
+uint8_t state(Dut& d, int slot) { return static_cast<uint8_t>(d.slot_state_o[slot]); }
 
 struct Lease {
   bool writer;
@@ -73,8 +71,7 @@ struct Lease {
   uint32_t span;
 };
 
-Lease request(Dut& d, bool writer, uint8_t slot, uint8_t mode,
-              int hold_response_cycles = 0) {
+Lease request(Dut& d, bool writer, uint8_t slot, uint8_t mode, int hold_response_cycles = 0) {
   if (writer) {
     d.render_req_valid_i = 1;
     d.render_req_slot_i = slot;
@@ -93,7 +90,8 @@ Lease request(Dut& d, bool writer, uint8_t slot, uint8_t mode,
   d.eval();
 
   zhao::check(d.rsp_valid_o, "response produced", 1, d.rsp_valid_o);
-  Lease result{d.rsp_writer_o != 0, d.rsp_granted_o != 0,
+  Lease result{d.rsp_writer_o != 0,
+               d.rsp_granted_o != 0,
                static_cast<uint8_t>(d.rsp_slot_o),
                static_cast<uint16_t>(d.rsp_generation_o),
                static_cast<uint8_t>(d.rsp_mode_o),
@@ -103,11 +101,9 @@ Lease request(Dut& d, bool writer, uint8_t slot, uint8_t mode,
     zhao::tick(d);
     d.eval();
     zhao::check(d.rsp_valid_o && d.rsp_writer_o == result.writer &&
-                    d.rsp_granted_o == result.granted &&
-                    d.rsp_slot_o == result.slot &&
-                    d.rsp_generation_o == result.generation &&
-                    d.rsp_mode_o == result.mode && d.rsp_base_o == result.base &&
-                    d.rsp_span_o == result.span,
+                    d.rsp_granted_o == result.granted && d.rsp_slot_o == result.slot &&
+                    d.rsp_generation_o == result.generation && d.rsp_mode_o == result.mode &&
+                    d.rsp_base_o == result.base && d.rsp_span_o == result.span,
                 "held response tuple stable", 1, 1);
   }
   d.rsp_ready_i = 1;
@@ -123,8 +119,7 @@ void terminal(Dut& d, const Lease& lease, bool publish, bool fault = false,
   d.term_valid_i = 1;
   d.term_writer_i = use_writer_override ? writer_override : lease.writer;
   d.term_slot_i = slot_override == 0xff ? lease.slot : slot_override;
-  d.term_generation_i = generation_override == 0xffff ? lease.generation
-                                                       : generation_override;
+  d.term_generation_i = generation_override == 0xffff ? lease.generation : generation_override;
   d.term_publish_i = publish;
   d.term_fault_i = fault;
   d.eval();
@@ -147,8 +142,8 @@ void matching_fault(Dut& d, const Lease& lease) {
   d.eval();
 }
 
-void swap(Dut& d, const Lease& lease, bool writer, uint8_t slot,
-          uint16_t generation, uint8_t mode, uint32_t base, uint32_t span) {
+void swap(Dut& d, const Lease& lease, bool writer, uint8_t slot, uint16_t generation, uint8_t mode,
+          uint32_t base, uint32_t span) {
   d.swap_valid_i = 1;
   d.swap_writer_i = writer;
   d.swap_slot_i = slot;
@@ -164,8 +159,7 @@ void swap(Dut& d, const Lease& lease, bool writer, uint8_t slot,
 }
 
 void swap_exact(Dut& d, const Lease& lease) {
-  swap(d, lease, lease.writer, lease.slot, lease.generation, lease.mode,
-       lease.base, lease.span);
+  swap(d, lease, lease.writer, lease.slot, lease.generation, lease.mode, lease.base, lease.span);
 }
 
 [[noreturn]] void mutant_result(const char* name, bool detected) {
@@ -183,14 +177,12 @@ int main() {
   const Lease l = request(d, true, 0, 0);
   const uint32_t stale = d.stale_events_o;
   terminal(d, l, true, false, false, true);
-  mutant_result("slotmgr_v2_term_omit_writer",
-                state(d, 0) == kReady && d.stale_events_o == stale);
+  mutant_result("slotmgr_v2_term_omit_writer", state(d, 0) == kReady && d.stale_events_o == stale);
 #elif defined(ZHAO_EXPECT_SLOT_MUTANT_TERM_SLOT_ONLY)
   const Lease l = request(d, true, 0, 0);
   const uint32_t stale = d.stale_events_o;
   terminal(d, l, true, false, false, true, 0, l.generation + 7u);
-  mutant_result("slotmgr_v2_term_slot_only",
-                state(d, 0) == kReady && d.stale_events_o == stale);
+  mutant_result("slotmgr_v2_term_slot_only", state(d, 0) == kReady && d.stale_events_o == stale);
 #elif defined(ZHAO_EXPECT_SLOT_MUTANT_FAULT_PUBLISHES)
   const Lease l = request(d, true, 0, 0);
   d.fault_valid_i = 1;
@@ -204,28 +196,25 @@ int main() {
   d.term_publish_i = 1;
   d.eval();
   zhao::tick(d);
-  mutant_result("slotmgr_v2_fault_publishes",
-                d.ready_valid_o && state(d, 0) == kReady);
+  mutant_result("slotmgr_v2_fault_publishes", d.ready_valid_o && state(d, 0) == kReady);
 #elif defined(ZHAO_EXPECT_SLOT_MUTANT_SLOT0_BASE)
   const Lease l = request(d, false, 1, 0);
   mutant_result("slotmgr_v2_slot0_base", l.base == kBase[0]);
 #elif defined(ZHAO_EXPECT_SLOT_MUTANT_SWAP_OMIT_GENERATION)
   const Lease l = request(d, true, 0, 1);
   terminal(d, l, true);
-  swap(d, l, l.writer, l.slot, static_cast<uint16_t>(l.generation + 1u),
-       l.mode, l.base, l.span);
+  swap(d, l, l.writer, l.slot, static_cast<uint16_t>(l.generation + 1u), l.mode, l.base, l.span);
   mutant_result("slotmgr_v2_swap_omit_generation", state(d, 0) == kDisplayed);
 #elif defined(ZHAO_EXPECT_SLOT_MUTANT_LIVE_READY_WRITER)
   const Lease l = request(d, true, 0, 2);
   terminal(d, l, true);
-  mutant_result("slotmgr_v2_live_ready_writer",
-                d.ready_valid_o && !d.ready_writer_o);
+  mutant_result("slotmgr_v2_live_ready_writer", d.ready_valid_o && !d.ready_writer_o);
 #else
   // Reset closes every acceptance path and clears every ownership record.
   d.rst_n = 0;
   d.eval();
-  zhao::check(!d.render_req_ready_o && !d.blit_req_ready_o && !d.fault_ready_o &&
-                  !d.term_ready_o && !d.swap_ready_o,
+  zhao::check(!d.render_req_ready_o && !d.blit_req_ready_o && !d.fault_ready_o && !d.term_ready_o &&
+                  !d.swap_ready_o,
               "reset closes all acceptance paths", 1, 1);
   zhao::check(!d.rsp_valid_o && !d.ready_valid_o && !d.lease_valid_o,
               "reset clears held and live records", 1, 1);
@@ -241,15 +230,12 @@ int main() {
       zhao::check(l.slot == slot && l.mode == mode, "response identity exact", 1, 1);
       zhao::check(l.base == kBase[slot], "derived slot base exact", kBase[slot], l.base);
       zhao::check(l.span == kSpan[mode], "derived mode span exact", kSpan[mode], l.span);
-      zhao::check(d.lease_valid_o && d.lease_writer_o == l.writer &&
-                      d.lease_slot_o == l.slot &&
-                      d.lease_generation_o == l.generation &&
-                      d.lease_mode_o == l.mode && d.lease_base_o == l.base &&
-                      d.lease_span_o == l.span,
+      zhao::check(d.lease_valid_o && d.lease_writer_o == l.writer && d.lease_slot_o == l.slot &&
+                      d.lease_generation_o == l.generation && d.lease_mode_o == l.mode &&
+                      d.lease_base_o == l.base && d.lease_span_o == l.span,
                   "accepted response creates exact live lease", 1, 1);
       terminal(d, l, false);
-      zhao::check(state(d, slot) == kFree && !d.ready_valid_o,
-                  "cancel frees without READY", 1, 1);
+      zhao::check(state(d, slot) == kFree && !d.ready_valid_o, "cancel frees without READY", 1, 1);
     }
   }
 
@@ -257,8 +243,7 @@ int main() {
   reset(d);
   const Lease live = request(d, true, 0, 0);
   const Lease refused_live = request(d, false, 1, 1, 2);
-  zhao::check(!refused_live.granted && state(d, 1) == kFree,
-              "second live lease refused", 1, 1);
+  zhao::check(!refused_live.granted && state(d, 1) == kFree, "second live lease refused", 1, 1);
   terminal(d, live, false);
   const Lease refused_mode = request(d, false, 1, 3);
   zhao::check(!refused_mode.granted && refused_mode.span == 0,
@@ -278,19 +263,19 @@ int main() {
     d.blit_req_slot_i = 1;
     d.blit_req_mode_i = 2;
     d.eval();
-    zhao::check((d.render_req_ready_o != 0) == expect_render &&
-                    (d.blit_req_ready_o != 0) == !expect_render,
-                "repeated contention alternates accepted winner", 1, 1);
+    zhao::check(
+        (d.render_req_ready_o != 0) == expect_render && (d.blit_req_ready_o != 0) == !expect_render,
+        "repeated contention alternates accepted winner", 1, 1);
     zhao::tick(d);
 
-    Lease winner{d.rsp_writer_o != 0, d.rsp_granted_o != 0,
+    Lease winner{d.rsp_writer_o != 0,
+                 d.rsp_granted_o != 0,
                  static_cast<uint8_t>(d.rsp_slot_o),
                  static_cast<uint16_t>(d.rsp_generation_o),
                  static_cast<uint8_t>(d.rsp_mode_o),
                  static_cast<uint32_t>(d.rsp_base_o),
                  static_cast<uint32_t>(d.rsp_span_o)};
-    zhao::check(d.rsp_valid_o && winner.granted &&
-                    winner.writer == expect_render,
+    zhao::check(d.rsp_valid_o && winner.granted && winner.writer == expect_render,
                 "contention winner receives held grant", 1, 1);
     if (expect_render) {
       ++render_grants;
@@ -324,8 +309,7 @@ int main() {
     d.render_req_valid_i = 0;
     d.blit_req_valid_i = 0;
     d.eval();
-    zhao::check(d.rsp_valid_o && !d.rsp_granted_o &&
-                    (d.rsp_writer_o != winner.writer) &&
+    zhao::check(d.rsp_valid_o && !d.rsp_granted_o && (d.rsp_writer_o != winner.writer) &&
                     d.rsp_slot_o == (expect_render ? 1 : 0) &&
                     d.rsp_mode_o == (expect_render ? 2 : 1),
                 "held loser receives exact refusal identity", 1, 1);
@@ -338,8 +322,7 @@ int main() {
   zhao::check(render_grants == 8 && blit_grants == 8,
               "neither writer starves across repeated contentions", 8,
               render_grants < blit_grants ? render_grants : blit_grants);
-  zhao::check(d.contentions_o == 16, "every repeated contention counted", 16,
-              d.contentions_o);
+  zhao::check(d.contentions_o == 16, "every repeated contention counted", 16, d.contentions_o);
   zhao::check(d.requests_accepted_o == 32 && d.responses_accepted_o == 32 &&
                   d.leases_granted_o == 16 && d.leases_refused_o == 16,
               "contention grants/refusals account exactly", 1, 1);
@@ -350,12 +333,11 @@ int main() {
   const uint32_t stale0 = d.stale_events_o;
   terminal(d, key, true, false, false, true);
   terminal(d, key, true, false, false, false, 1);
-  terminal(d, key, true, false, false, false, 0,
-           static_cast<uint16_t>(key.generation + 1u));
+  terminal(d, key, true, false, false, false, 0, static_cast<uint16_t>(key.generation + 1u));
   zhao::check(state(d, 0) == kWriting && d.lease_valid_o,
               "three stale terminals preserve live lease", 1, 1);
-  zhao::check(d.stale_events_o == stale0 + 3,
-              "three stale terminals counted", stale0 + 3, d.stale_events_o);
+  zhao::check(d.stale_events_o == stale0 + 3, "three stale terminals counted", stale0 + 3,
+              d.stale_events_o);
   d.fault_valid_i = 1;
   d.fault_writer_i = !key.writer;
   d.fault_slot_i = key.slot;
@@ -369,8 +351,8 @@ int main() {
   matching_fault(d, key);
   zhao::check(d.lease_fault_o, "matching fault sticks in lease", 1, d.lease_fault_o);
   terminal(d, key, true);
-  zhao::check(state(d, 0) == kFree && !d.ready_valid_o,
-              "sticky fault releases without READY", 1, 1);
+  zhao::check(state(d, 0) == kFree && !d.ready_valid_o, "sticky fault releases without READY", 1,
+              1);
   const Lease race = request(d, false, 1, 2);
   const uint32_t faults = d.faults_latched_o;
   d.fault_valid_i = 1;
@@ -383,16 +365,15 @@ int main() {
   d.term_generation_i = race.generation;
   d.term_publish_i = 1;
   d.eval();
-  zhao::check(d.term_ready_o, "same-edge fault/publication accepted", 1,
-              d.term_ready_o);
+  zhao::check(d.term_ready_o, "same-edge fault/publication accepted", 1, d.term_ready_o);
   zhao::tick(d);
   d.fault_valid_i = 0;
   d.term_valid_i = 0;
   d.eval();
-  zhao::check(state(d, 1) == kFree && !d.ready_valid_o,
-              "same-edge fault wins and no READY appears", 1, 1);
-  zhao::check(d.faults_latched_o == faults + 1,
-              "same-edge matching fault counted", faults + 1, d.faults_latched_o);
+  zhao::check(state(d, 1) == kFree && !d.ready_valid_o, "same-edge fault wins and no READY appears",
+              1, 1);
+  zhao::check(d.faults_latched_o == faults + 1, "same-edge matching fault counted", faults + 1,
+              d.faults_latched_o);
 
   // With an empty hold and an accepting CDC, publication and FIFO offer are the
   // same state transition rather than two GPU clocks apart.
@@ -405,8 +386,7 @@ int main() {
   d.term_generation_i = direct.generation;
   d.term_publish_i = 1;
   d.eval();
-  zhao::check(d.term_ready_o && d.ready_valid_o &&
-                  d.ready_writer_o == direct.writer &&
+  zhao::check(d.term_ready_o && d.ready_valid_o && d.ready_writer_o == direct.writer &&
                   d.ready_generation_o == direct.generation,
               "accepted publication offers READY on same edge", 1, 1);
   zhao::tick(d);
@@ -421,11 +401,9 @@ int main() {
   reset(d);
   const Lease pub = request(d, true, 1, 2);
   terminal(d, pub, true);
-  zhao::check(d.ready_valid_o && d.ready_writer_o == pub.writer &&
-                  d.ready_slot_o == pub.slot &&
-                  d.ready_generation_o == pub.generation &&
-                  d.ready_mode_o == pub.mode && d.ready_base_o == pub.base &&
-                  d.ready_span_o == pub.span,
+  zhao::check(d.ready_valid_o && d.ready_writer_o == pub.writer && d.ready_slot_o == pub.slot &&
+                  d.ready_generation_o == pub.generation && d.ready_mode_o == pub.mode &&
+                  d.ready_base_o == pub.base && d.ready_span_o == pub.span,
               "clean publication creates exact READY tuple", 1, 1);
   for (int i = 0; i < 4; ++i) zhao::tick(d);
   zhao::check(d.ready_valid_o && d.ready_generation_o == pub.generation,
@@ -435,23 +413,18 @@ int main() {
   const uint32_t stale_swap = d.stale_events_o;
   swap(d, pub, !pub.writer, pub.slot, pub.generation, pub.mode, pub.base, pub.span);
   swap(d, pub, pub.writer, !pub.slot, pub.generation, pub.mode, pub.base, pub.span);
-  swap(d, pub, pub.writer, pub.slot, static_cast<uint16_t>(pub.generation + 1u),
-       pub.mode, pub.base, pub.span);
-  swap(d, pub, pub.writer, pub.slot, pub.generation, pub.mode ^ 1u, pub.base,
+  swap(d, pub, pub.writer, pub.slot, static_cast<uint16_t>(pub.generation + 1u), pub.mode, pub.base,
        pub.span);
-  swap(d, pub, pub.writer, pub.slot, pub.generation, pub.mode, pub.base + 4u,
-       pub.span);
-  swap(d, pub, pub.writer, pub.slot, pub.generation, pub.mode, pub.base,
-       pub.span + 4u);
+  swap(d, pub, pub.writer, pub.slot, pub.generation, pub.mode ^ 1u, pub.base, pub.span);
+  swap(d, pub, pub.writer, pub.slot, pub.generation, pub.mode, pub.base + 4u, pub.span);
+  swap(d, pub, pub.writer, pub.slot, pub.generation, pub.mode, pub.base, pub.span + 4u);
   zhao::check(state(d, 1) == kReady && d.stale_events_o == stale_swap + 6,
               "all six stale swap shapes refused and counted", 1, 1);
   swap_exact(d, pub);
   zhao::check(state(d, 1) == kDisplayed && d.displayed_valid_o &&
                   d.displayed_writer_o == pub.writer &&
-                  d.displayed_generation_o == pub.generation &&
-                  d.displayed_mode_o == pub.mode &&
-                  d.displayed_base_o == pub.base &&
-                  d.displayed_span_o == pub.span,
+                  d.displayed_generation_o == pub.generation && d.displayed_mode_o == pub.mode &&
+                  d.displayed_base_o == pub.base && d.displayed_span_o == pub.span,
               "exact swap becomes exact displayed tuple", 1, 1);
 
   // Generation is modulo 16 bits and wraps without aliasing a live lease.
@@ -464,15 +437,13 @@ int main() {
   }
   zhao::check(last == 0, "generation wraps after 65536 accepted leases", 0, last);
   const Lease after_wrap = request(d, false, 0, 0);
-  zhao::check(after_wrap.generation == 1,
-              "generation continues after wrap", 1, after_wrap.generation);
+  zhao::check(after_wrap.generation == 1, "generation continues after wrap", 1,
+              after_wrap.generation);
   terminal(d, after_wrap, false);
 
-  zhao::check(d.requests_accepted_o == d.responses_accepted_o,
-              "drained requests equal responses", d.requests_accepted_o,
-              d.responses_accepted_o);
-  zhao::check(d.leases_granted_o + d.leases_refused_o ==
-                  d.responses_accepted_o,
+  zhao::check(d.requests_accepted_o == d.responses_accepted_o, "drained requests equal responses",
+              d.requests_accepted_o, d.responses_accepted_o);
+  zhao::check(d.leases_granted_o + d.leases_refused_o == d.responses_accepted_o,
               "every response is grant or refusal", d.responses_accepted_o,
               d.leases_granted_o + d.leases_refused_o);
   return zhao::report_and_exit("video_slotmgr_v2_directed");

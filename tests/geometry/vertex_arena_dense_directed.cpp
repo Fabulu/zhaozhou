@@ -43,8 +43,8 @@ constexpr int kDepth = 81;  // 9x9 subpatch lattice, NOT a power of two
 
 // A recognisable per-slot payload so a wrong row is loud.
 uint64_t pay(int arena, int index, uint32_t gen) {
-  return (uint64_t(0xA0 | arena) << 56) | (uint64_t(gen & 0xFF) << 48) |
-         (uint64_t(index) << 8) | 0x5Aull;
+  return (uint64_t(0xA0 | arena) << 56) | (uint64_t(gen & 0xFF) << 48) | (uint64_t(index) << 8) |
+         0x5Aull;
 }
 
 struct Dut {
@@ -121,8 +121,7 @@ struct Dut {
 
     check(v->rep_valid_o == 1, what, 1, v->rep_valid_o);
     check(v->rep_hit_o == (r.hit() ? 1 : 0), what, r.hit() ? 1 : 0, v->rep_hit_o);
-    check(v->rep_refuse_o == (r.refused() ? 1 : 0), what, r.refused() ? 1 : 0,
-          v->rep_refuse_o);
+    check(v->rep_refuse_o == (r.refused() ? 1 : 0), what, r.refused() ? 1 : 0, v->rep_refuse_o);
     if (r.hit()) {
       check(v->rep_payload_o == r.payload, what, r.payload, v->rep_payload_o);
     }
@@ -142,8 +141,7 @@ int main(int argc, char** argv) {
   // ---- 0. both sticky fault bits start clear ------------------------------
   top->eval();
   check(top->arena_overflow_o == 0, "overflow clear at reset", 0, top->arena_overflow_o);
-  check(top->arena_seal_short_o == 0, "seal_short clear at reset", 0,
-        top->arena_seal_short_o);
+  check(top->arena_seal_short_o == 0, "seal_short clear at reset", 0, top->arena_seal_short_o);
 
   // ---- 1. lookups before any open refuse ----------------------------------
   d.expect_lookup(0, 0, 0, "lookup before open refuses");
@@ -154,8 +152,8 @@ int main(int argc, char** argv) {
   const bool short_sealed = d.seal(0);  // count = 10 of 81
   check(!short_sealed, "oracle refuses the short seal", 0, short_sealed ? 1 : 0);
   top->eval();
-  check(top->arena_seal_short_o == 1, "SEEN TO FIRE: seal_short sticky after short seal",
-        1, top->arena_seal_short_o);
+  check(top->arena_seal_short_o == 1, "SEEN TO FIRE: seal_short sticky after short seal", 1,
+        top->arena_seal_short_o);
   d.expect_lookup(0, g0, 5, "after refused seal the arena still refuses lookups");
   for (int i = 10; i < kDepth; ++i) d.fill(0, i, pay(0, i, g0));
   const bool sealed = d.seal(0);
@@ -187,8 +185,8 @@ int main(int argc, char** argv) {
   const uint32_t ga = d.open(1);
   d.fill(1, 5, pay(1, 5, ga));  // count is 0: out of order, dropped
   top->eval();
-  check(top->arena_overflow_o == 1, "SEEN TO FIRE: overflow sticky after misordered fill",
-        1, top->arena_overflow_o);
+  check(top->arena_overflow_o == 1, "SEEN TO FIRE: overflow sticky after misordered fill", 1,
+        top->arena_overflow_o);
   d.fill(1, 0, pay(1, 0, ga));          // in order: accepted
   d.fill(1, 0, pay(1, 0, ga) ^ 0xFFu);  // repeat of a written row: dropped
   for (int i = 1; i < kDepth; ++i) d.fill(1, i, pay(1, i, ga));
@@ -239,18 +237,18 @@ int main(int argc, char** argv) {
 
   // ---- 7. THE DENSE LAW: zero misses, and every counter matches the oracle -
   top->eval();
-  check(top->arena_misses_o == 0, "a dense arena NEVER misses (the mutant fires this)",
-        0, top->arena_misses_o);
+  check(top->arena_misses_o == 0, "a dense arena NEVER misses (the mutant fires this)", 0,
+        top->arena_misses_o);
   check(top->arena_hits_o == d.ref.hits(), "hit count matches oracle", d.ref.hits(),
         top->arena_hits_o);
   check(top->arena_misses_o == d.ref.misses(), "miss count matches oracle", d.ref.misses(),
         top->arena_misses_o);
-  check(top->arena_refusals_o == d.ref.refusals(), "refusal count matches oracle",
-        d.ref.refusals(), top->arena_refusals_o);
+  check(top->arena_refusals_o == d.ref.refusals(), "refusal count matches oracle", d.ref.refusals(),
+        top->arena_refusals_o);
   check(top->arena_overflow_o == (d.ref.overflow() ? 1 : 0), "overflow matches oracle",
         d.ref.overflow() ? 1 : 0, top->arena_overflow_o);
-  check(top->arena_seal_short_o == (d.ref.seal_short() ? 1 : 0),
-        "seal_short matches oracle", d.ref.seal_short() ? 1 : 0, top->arena_seal_short_o);
+  check(top->arena_seal_short_o == (d.ref.seal_short() ? 1 : 0), "seal_short matches oracle",
+        d.ref.seal_short() ? 1 : 0, top->arena_seal_short_o);
 
   delete top;
   return zhao::report_and_exit("vertex_arena_dense_directed");

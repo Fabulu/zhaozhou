@@ -78,7 +78,9 @@ zt::ComposedLattice make_lat(int cw, int ch, const std::vector<uint8_t>& state) 
   return lat;
 }
 
-std::vector<uint8_t> all_solid(int cw, int ch) { return std::vector<uint8_t>(static_cast<size_t>(cw) * ch, zt::kSolid); }
+std::vector<uint8_t> all_solid(int cw, int ch) {
+  return std::vector<uint8_t>(static_cast<size_t>(cw) * ch, zt::kSolid);
+}
 
 std::vector<uint8_t> checker(int cw, int ch) {
   std::vector<uint8_t> ck(static_cast<size_t>(cw) * ch, zt::kVoidAuthored);
@@ -151,9 +153,15 @@ std::vector<int32_t> make_vdist(size_t n, uint32_t seed, int mode) {
   };
   for (size_t k = 0; k < n; ++k) {
     switch (mode) {
-      case 0: v[k] = static_cast<int32_t>(next() % 7u) << 16; break;
-      case 1: v[k] = static_cast<int32_t>(next()); break;
-      case 2: v[k] = static_cast<int32_t>(next() % 5u) - 2; break;
+      case 0:
+        v[k] = static_cast<int32_t>(next() % 7u) << 16;
+        break;
+      case 1:
+        v[k] = static_cast<int32_t>(next());
+        break;
+      case 2:
+        v[k] = static_cast<int32_t>(next() % 5u) - 2;
+        break;
       default:
         v[k] = (k % 4 == 0) ? INT32_MIN : ((k % 4 == 1) ? INT32_MAX : static_cast<int32_t>(next()));
         break;
@@ -188,7 +196,7 @@ struct Cover {
   long dropped_span_gt1 = 0;  // a DROPPED entry carried span > 1 (R2 exercised)
   long spans_gt1 = 0;         // a merged span SURVIVED to the output
   long partial = 0, one_wide = 0, one_tall = 0, ld_stalled = 0, out_stalled = 0, vdist_on = 0;
-  long span13 = 0;            // the 20/20 need-31 prefix case reached
+  long span13 = 0;  // the 20/20 need-31 prefix case reached
   long golden_clocks = 0, cand_clocks = 0;
   long golden_worst = 0, cand_worst = 0;
   long cand_slower_lattices = 0;
@@ -269,8 +277,8 @@ bool three_way(Duts& d, const zt::ComposedLattice& lat, const int32_t* vdist, ui
   if (want.merged > 0 && want.dropped == 0) ++cov.merge_only;
   // dropped ENTRIES = enumerated - merged - kept; if dropped BODIES exceed
   // that, at least one dropped entry was a merged span.
-  const long dropped_entries =
-      static_cast<long>(bodies) - static_cast<long>(want.merged) - static_cast<long>(want.edges.size());
+  const long dropped_entries = static_cast<long>(bodies) - static_cast<long>(want.merged) -
+                               static_cast<long>(want.edges.size());
   if (static_cast<long>(want.dropped) > dropped_entries) ++cov.dropped_span_gt1;
   for (const auto& e : want.edges) {
     if (e.span > 1) {
@@ -328,7 +336,8 @@ void lane_golden_fixtures(Duts& d) {
   for (size_t k = 0; k < n; ++k) negs[k] = static_cast<int32_t>((k * 29) % 7) - 3;
   three_way(d, ck, negs.data(), 0, 0, "32x32 checkerboard, negative vdist", true);
   std::vector<int32_t> rails(n, 0);
-  for (size_t k = 0; k < n; ++k) rails[k] = (k % 3 == 0) ? INT32_MIN : ((k % 3 == 1) ? INT32_MAX : 0);
+  for (size_t k = 0; k < n; ++k)
+    rails[k] = (k % 3 == 0) ? INT32_MIN : ((k % 3 == 1) ? INT32_MAX : 0);
   three_way(d, ck, rails.data(), 0, 0, "32x32 checkerboard, INT32 rails", true);
   const uint32_t masks[4] = {0xFFFFFFFEu, 0xAAAAAAAAu, 0x0F0F0F0Fu, 0x80000001u};
   for (int m = 0; m < 4; ++m) {
@@ -455,8 +464,8 @@ void lane_compaction(Duts& d) {
               true);
     const zf::RimPlan want = zf::rim_plan(lat, vd.data());
     const size_t bodies = oracle_rim_bodies(lat);
-    const long dropped_entries =
-        static_cast<long>(bodies) - static_cast<long>(want.merged) - static_cast<long>(want.edges.size());
+    const long dropped_entries = static_cast<long>(bodies) - static_cast<long>(want.merged) -
+                                 static_cast<long>(want.edges.size());
     check(want.merged > 0 && static_cast<long>(want.dropped) > dropped_entries,
           "a MERGED span is among the dropped entries (dropped bodies > dropped entries, oracle)");
   }
@@ -464,8 +473,8 @@ void lane_compaction(Duts& d) {
   for (int t = 0; t < 6; ++t) {
     char what[64];
     std::snprintf(what, sizeof what, "prefix-merge page %d (merge alone suffices)", t);
-    three_way(d, make_lat(32, 32, prefix_mask(88 + (t * 4) % 24, 10 + (t * 3) % 15, 20)), nullptr, 0,
-              0, what, t == 0);
+    three_way(d, make_lat(32, 32, prefix_mask(88 + (t * 4) % 24, 10 + (t * 3) % 15, 20)), nullptr,
+              0, 0, what, t == 0);
   }
 }
 
@@ -479,7 +488,8 @@ void lane_random(Duts& d, int g_trials, int l_trials) {
     const int bias = 5 + (t * 7) % 40;
     const zt::ComposedLattice lat = random_lat(cw, ch, 0x5EED0000u + t * 7919u, bias);
     const bool vd_on = (t % 5) == 0;
-    const std::vector<int32_t> vd = make_vdist(static_cast<size_t>(lat.w) * lat.h, 0xABCD0000u + t, t % 4);
+    const std::vector<int32_t> vd =
+        make_vdist(static_cast<size_t>(lat.w) * lat.h, 0xABCD0000u + t, t % 4);
     char what[48];
     std::snprintf(what, sizeof what, "lane G trial %d", t);
     const int before = failures;
@@ -495,10 +505,12 @@ void lane_random(Duts& d, int g_trials, int l_trials) {
     const int bites = (t % 4);
     const bool prefix_trial = (t % 3) == 2;
     const zt::ComposedLattice lat =
-        prefix_trial ? make_lat(32, 32, prefix_mask(88 + (t % 24), 10 + (t % 15), 20))
-                     : make_lat(cw, ch, pressured_mask(cw, ch, density, bites, 0xC0FFEE00u + t * 104729u));
+        prefix_trial
+            ? make_lat(32, 32, prefix_mask(88 + (t % 24), 10 + (t % 15), 20))
+            : make_lat(cw, ch, pressured_mask(cw, ch, density, bites, 0xC0FFEE00u + t * 104729u));
     const bool vd_on = (t % 2) == 0;
-    const std::vector<int32_t> vd = make_vdist(static_cast<size_t>(lat.w) * lat.h, 0x1234000u + t, t % 4);
+    const std::vector<int32_t> vd =
+        make_vdist(static_cast<size_t>(lat.w) * lat.h, 0x1234000u + t, t % 4);
     char what[48];
     std::snprintf(what, sizeof what, "lane L trial %d", t);
     const int before = failures;
@@ -541,12 +553,13 @@ int main(int argc, char** argv) {
       cov.lattices, cov.pages, cov.merged_pages, cov.dropped_pages, cov.both, cov.merge_only,
       cov.dropped_span_gt1, cov.spans_gt1, cov.span13, cov.partial, cov.one_wide, cov.one_tall,
       cov.ld_stalled, cov.out_stalled, cov.vdist_on);
-  std::printf("clocks:   golden total %ld, candidate total %ld (%+.2f%%); worst page golden %ld, "
-              "candidate %ld; candidate slower on %ld / %ld lattices\n",
-              cov.golden_clocks, cov.cand_clocks,
-              100.0 * (static_cast<double>(cov.cand_clocks) - static_cast<double>(cov.golden_clocks)) /
-                  static_cast<double>(cov.golden_clocks),
-              cov.golden_worst, cov.cand_worst, cov.cand_slower_lattices, cov.lattices);
+  std::printf(
+      "clocks:   golden total %ld, candidate total %ld (%+.2f%%); worst page golden %ld, "
+      "candidate %ld; candidate slower on %ld / %ld lattices\n",
+      cov.golden_clocks, cov.cand_clocks,
+      100.0 * (static_cast<double>(cov.cand_clocks) - static_cast<double>(cov.golden_clocks)) /
+          static_cast<double>(cov.golden_clocks),
+      cov.golden_worst, cov.cand_worst, cov.cand_slower_lattices, cov.lattices);
 
   // a check that never fired is not a check
   check(cov.merged_pages > 0, "coverage: pages with merges");
@@ -556,7 +569,8 @@ int main(int argc, char** argv) {
   check(cov.dropped_span_gt1 > 0, "coverage: a merged span dropped (R2 bodies)");
   check(cov.spans_gt1 > 0, "coverage: a merged span emitted");
   check(cov.span13 > 0, "coverage: the 20/20 need-31 prefix merge (13)");
-  check(cov.partial > 0 && cov.one_wide > 0 && cov.one_tall > 0, "coverage: partial / cw=1 / ch=1 pages");
+  check(cov.partial > 0 && cov.one_wide > 0 && cov.one_tall > 0,
+        "coverage: partial / cw=1 / ch=1 pages");
   check(cov.ld_stalled > 0 && cov.out_stalled > 0, "coverage: load and output stalls");
   check(cov.vdist_on > 0, "coverage: live vdist");
 

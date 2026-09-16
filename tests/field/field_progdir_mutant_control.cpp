@@ -49,8 +49,10 @@ int main() {
   // ---- half 1: the weak vectors. The mutant must AGREE on every non-tie law.
   const unsigned weak = run_script(h, progdir::script_directed(), "weak");
   const int weak_failures = zhao::check_failures();
-  std::printf("control: non-tie directed script -> mismatch mask 0x%x, %d check failures "
-              "(expected 0: the mutant passes every weak vector)\n", weak, weak_failures);
+  std::printf(
+      "control: non-tie directed script -> mismatch mask 0x%x, %d check failures "
+      "(expected 0: the mutant passes every weak vector)\n",
+      weak, weak_failures);
 
   // ---- half 2: the tie. The mutant must DISAGREE, and only on the commit slot
   // first -- counters balance on the very op the victim is chosen.
@@ -70,7 +72,8 @@ int main() {
   const bool slot_first = (st.first_mismatch_mask == progdir::kMisCmSlot);
 
   std::printf("\n=== field_progdir_mutant_control (INVERTED POLARITY) ===\n");
-  std::printf("  mutant agrees on all %s non-tie ops : %s\n", "directed", weak_agreed ? "yes" : "NO");
+  std::printf("  mutant agrees on all %s non-tie ops : %s\n", "directed",
+              weak_agreed ? "yes" : "NO");
   std::printf("  differential FAILS on the tie       : %s\n", tie_seen ? "yes" : "NO");
   std::printf("  first divergence is the victim SLOT alone, counters balanced: %s\n",
               slot_first ? "yes" : "NO");

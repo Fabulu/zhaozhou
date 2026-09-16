@@ -512,21 +512,22 @@ int main(int argc, char** argv) {
         ed_wr, ed_rd, ed_mm, jn_j, jn_sat, jn_dz, jn_mm);
 
     // NON-VACUITY.
-    zhao::check(ed_wr > 0, "the descriptor bank was actually WRITTEN", 1,
-                ed_wr > 0 ? 1 : 0);
-    zhao::check(ed_rd > 0, "and actually READ -- so its mismatch counter is a "
-                           "detector that traffic reached, not one that idled",
+    zhao::check(ed_wr > 0, "the descriptor bank was actually WRITTEN", 1, ed_wr > 0 ? 1 : 0);
+    zhao::check(ed_rd > 0,
+                "and actually READ -- so its mismatch counter is a "
+                "detector that traffic reached, not one that idled",
                 1, ed_rd > 0 ? 1 : 0);
-    zhao::check(jn_j > 0, "the UV join actually JOINED records", 1,
-                jn_j > 0 ? 1 : 0);
+    zhao::check(jn_j > 0, "the UV join actually JOINED records", 1, jn_j > 0 ? 1 : 0);
 
     // ONLY NOW do the zero-claims carry weight.
     zhao::check(ed_mm == 0,
                 "and no descriptor was read against a generation it was not "
-                "written for", 0, ed_mm);
+                "written for",
+                0, ed_mm);
     zhao::check(jn_mm == 0,
                 "and the join saw no PERSPUV result whose owner disagreed with "
-                "the record it was joined to", 0, jn_mm);
+                "the record it was joined to",
+                0, jn_mm);
 
     // AND THE CROSS-BLOCK EQUALITY, which is what actually tests the WIRING.
     //
@@ -572,11 +573,10 @@ int main(int argc, char** argv) {
     const uint32_t mj_mm = isl.u_metajoin__DOT__rd_gen_mismatch_o;
     const uint32_t mj_bad = isl.u_metajoin__DOT__rd_illegal_sidx_o;
 
-    std::printf("  instruments: metajoin writes %u reads %u illegal-sidx %u genmm %u\n",
-                mj_wr, mj_rd, mj_bad, mj_mm);
+    std::printf("  instruments: metajoin writes %u reads %u illegal-sidx %u genmm %u\n", mj_wr,
+                mj_rd, mj_bad, mj_mm);
 
-    zhao::check(mj_wr > 0, "the metadata bank was actually WRITTEN", 1,
-                mj_wr > 0 ? 1 : 0);
+    zhao::check(mj_wr > 0, "the metadata bank was actually WRITTEN", 1, mj_wr > 0 ? 1 : 0);
 
     // AND THE READ SIDE IS UNREACHABLE FROM THIS PROBE, BY ITS OWN DESIGN.
     //
@@ -639,16 +639,15 @@ int main(int argc, char** argv) {
     // count" from "the bit latches on being looked at".
     expander.u_expand__DOT__wq_overflow_o = 0;
     tick(d);
-    zhao::check(d.err_fragrob_wq_overflow_o == 0,
-                "a zero counter does NOT set the sticky bit", 0,
+    zhao::check(d.err_fragrob_wq_overflow_o == 0, "a zero counter does NOT set the sticky bit", 0,
                 d.err_fragrob_wq_overflow_o);
 
     // THE HOP.
     expander.u_expand__DOT__wq_overflow_o = 1;
     tick(d);
     zhao::check(d.err_fragrob_wq_overflow_o == 1,
-                "a nonzero capacity-violation count sets err_fragrob_wq_overflow_o",
-                1, d.err_fragrob_wq_overflow_o);
+                "a nonzero capacity-violation count sets err_fragrob_wq_overflow_o", 1,
+                d.err_fragrob_wq_overflow_o);
 
     // AND IT IS STICKY. Clear the counter; the bit must HOLD. This asserts the
     // CORRECT behaviour rather than the fault -- "the counter fires" would stop

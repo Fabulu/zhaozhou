@@ -38,15 +38,15 @@ double sc_time_stamp() { return 0; }
 static int g_checks = 0;
 static int g_fails = 0;
 
-#define CHECK(cond, ...)                                   \
-  do {                                                     \
-    ++g_checks;                                            \
-    if (!(cond)) {                                         \
-      ++g_fails;                                           \
-      std::printf("FAIL %s:%d: ", __FILE__, __LINE__);     \
-      std::printf(__VA_ARGS__);                            \
-      std::printf("\n");                                   \
-    }                                                      \
+#define CHECK(cond, ...)                               \
+  do {                                                 \
+    ++g_checks;                                        \
+    if (!(cond)) {                                     \
+      ++g_fails;                                       \
+      std::printf("FAIL %s:%d: ", __FILE__, __LINE__); \
+      std::printf(__VA_ARGS__);                        \
+      std::printf("\n");                               \
+    }                                                  \
   } while (0)
 
 using Vtb = Vtb_proj_matw_mutant;
@@ -57,8 +57,8 @@ struct Rec {
   bool behind, view;
   uint16_t pay;
   bool operator==(const Rec& o) const {
-    return x == o.x && y == o.y && d == o.d && w == o.w && behind == o.behind &&
-           view == o.view && pay == o.pay;
+    return x == o.x && y == o.y && d == o.d && w == o.w && behind == o.behind && view == o.view &&
+           pay == o.pay;
   }
 };
 
@@ -69,15 +69,27 @@ static uint32_t xs32(uint32_t& s) {
   return s;
 }
 
-static void settle0(Vtb* tb) { tb->clk = 0; tb->eval(); }
-static void edge(Vtb* tb) { tb->clk = 1; tb->eval(); }
+static void settle0(Vtb* tb) {
+  tb->clk = 0;
+  tb->eval();
+}
+static void edge(Vtb* tb) {
+  tb->clk = 1;
+  tb->eval();
+}
 
 static void reset(Vtb* tb) {
   tb->rst_n = 0;
-  tb->r_en_i = 1; tb->m_en_i = 1;
-  tb->r_in_valid_i = 0; tb->m_in_valid_i = 0;
-  tb->r_cfg_we_i = 0; tb->m_cfg_we_i = 0;
-  for (int i = 0; i < 4; ++i) { settle0(tb); edge(tb); }
+  tb->r_en_i = 1;
+  tb->m_en_i = 1;
+  tb->r_in_valid_i = 0;
+  tb->m_in_valid_i = 0;
+  tb->r_cfg_we_i = 0;
+  tb->m_cfg_we_i = 0;
+  for (int i = 0; i < 4; ++i) {
+    settle0(tb);
+    edge(tb);
+  }
   tb->rst_n = 1;
   settle0(tb);
   edge(tb);
@@ -85,8 +97,18 @@ static void reset(Vtb* tb) {
 
 // Write one word to both instances (mask bit 0 = ref, bit 1 = mutant).
 static void write_word(Vtb* tb, int mask, bool view, uint32_t addr, uint32_t data) {
-  if (mask & 1) { tb->r_cfg_we_i = 1; tb->r_cfg_view_i = view; tb->r_cfg_addr_i = addr; tb->r_cfg_data_i = data; }
-  if (mask & 2) { tb->m_cfg_we_i = 1; tb->m_cfg_view_i = view; tb->m_cfg_addr_i = addr; tb->m_cfg_data_i = data; }
+  if (mask & 1) {
+    tb->r_cfg_we_i = 1;
+    tb->r_cfg_view_i = view;
+    tb->r_cfg_addr_i = addr;
+    tb->r_cfg_data_i = data;
+  }
+  if (mask & 2) {
+    tb->m_cfg_we_i = 1;
+    tb->m_cfg_view_i = view;
+    tb->m_cfg_addr_i = addr;
+    tb->m_cfg_data_i = data;
+  }
   settle0(tb);
   edge(tb);
   tb->r_cfg_we_i = 0;
@@ -101,12 +123,16 @@ static void load_pose(Vtb* tb, uint32_t seed) {
     m0[k] = static_cast<int32_t>(xs32(s)) >> 14;
     m1[k] = static_cast<int32_t>(xs32(s)) >> 14;
   }
-  m0[3] = static_cast<int32_t>(xs32(s)) >> 6;  m0[7] = static_cast<int32_t>(xs32(s)) >> 6;
-  m1[3] = static_cast<int32_t>(xs32(s)) >> 6;  m1[7] = static_cast<int32_t>(xs32(s)) >> 6;
-  m0[12] = static_cast<int32_t>(xs32(s)) >> 18; m0[13] = static_cast<int32_t>(xs32(s)) >> 18;
+  m0[3] = static_cast<int32_t>(xs32(s)) >> 6;
+  m0[7] = static_cast<int32_t>(xs32(s)) >> 6;
+  m1[3] = static_cast<int32_t>(xs32(s)) >> 6;
+  m1[7] = static_cast<int32_t>(xs32(s)) >> 6;
+  m0[12] = static_cast<int32_t>(xs32(s)) >> 18;
+  m0[13] = static_cast<int32_t>(xs32(s)) >> 18;
   m0[14] = (static_cast<int32_t>(xs32(s)) >> 15) | 1;
   m0[15] = 65536 + (static_cast<int32_t>(xs32(s)) >> 16);
-  m1[12] = static_cast<int32_t>(xs32(s)) >> 18; m1[13] = static_cast<int32_t>(xs32(s)) >> 18;
+  m1[12] = static_cast<int32_t>(xs32(s)) >> 18;
+  m1[13] = static_cast<int32_t>(xs32(s)) >> 18;
   m1[14] = (static_cast<int32_t>(xs32(s)) >> 15) | 1;
   m1[15] = 65536 + (static_cast<int32_t>(xs32(s)) >> 16);
   for (uint32_t k = 0; k < 16; ++k) {
@@ -135,34 +161,47 @@ static int run_and_compare(Vtb* tb, int n, uint32_t seed, int* live_out) {
       y = static_cast<int32_t>(xs32(s)) >> (8 + (xs32(s) % 8u));
       z = static_cast<int32_t>(xs32(s)) >> (8 + (xs32(s) % 8u));
     }
-    tb->r_in_valid_i = offer; tb->m_in_valid_i = offer;
-    tb->r_vx_i = static_cast<uint32_t>(x); tb->m_vx_i = static_cast<uint32_t>(x);
-    tb->r_vy_i = static_cast<uint32_t>(y); tb->m_vy_i = static_cast<uint32_t>(y);
-    tb->r_vz_i = static_cast<uint32_t>(z); tb->m_vz_i = static_cast<uint32_t>(z);
-    tb->r_view_i = (next / 3) & 1; tb->m_view_i = (next / 3) & 1;
-    tb->r_payload_i = static_cast<uint16_t>(next); tb->m_payload_i = static_cast<uint16_t>(next);
+    tb->r_in_valid_i = offer;
+    tb->m_in_valid_i = offer;
+    tb->r_vx_i = static_cast<uint32_t>(x);
+    tb->m_vx_i = static_cast<uint32_t>(x);
+    tb->r_vy_i = static_cast<uint32_t>(y);
+    tb->m_vy_i = static_cast<uint32_t>(y);
+    tb->r_vz_i = static_cast<uint32_t>(z);
+    tb->m_vz_i = static_cast<uint32_t>(z);
+    tb->r_view_i = (next / 3) & 1;
+    tb->m_view_i = (next / 3) & 1;
+    tb->r_payload_i = static_cast<uint16_t>(next);
+    tb->m_payload_i = static_cast<uint16_t>(next);
     settle0(tb);
     if (tb->r_out_valid_o) {
       Rec q{};
       q.x = static_cast<int32_t>(tb->r_out_x_o << 11) >> 11;
       q.y = static_cast<int32_t>(tb->r_out_y_o << 11) >> 11;
-      q.d = static_cast<int32_t>(tb->r_out_d_o); q.w = tb->r_out_w_o;
-      q.behind = tb->r_out_behind_o; q.view = tb->r_out_view_o; q.pay = tb->r_out_payload_o;
+      q.d = static_cast<int32_t>(tb->r_out_d_o);
+      q.w = tb->r_out_w_o;
+      q.behind = tb->r_out_behind_o;
+      q.view = tb->r_out_view_o;
+      q.pay = tb->r_out_payload_o;
       r.push_back(q);
     }
     if (tb->m_out_valid_o) {
       Rec q{};
       q.x = static_cast<int32_t>(tb->m_out_x_o << 11) >> 11;
       q.y = static_cast<int32_t>(tb->m_out_y_o << 11) >> 11;
-      q.d = static_cast<int32_t>(tb->m_out_d_o); q.w = tb->m_out_w_o;
-      q.behind = tb->m_out_behind_o; q.view = tb->m_out_view_o; q.pay = tb->m_out_payload_o;
+      q.d = static_cast<int32_t>(tb->m_out_d_o);
+      q.w = tb->m_out_w_o;
+      q.behind = tb->m_out_behind_o;
+      q.view = tb->m_out_view_o;
+      q.pay = tb->m_out_payload_o;
       m.push_back(q);
     }
     edge(tb);
     if (offer) ++next;
     ++cyc;
   }
-  tb->r_in_valid_i = 0; tb->m_in_valid_i = 0;
+  tb->r_in_valid_i = 0;
+  tb->m_in_valid_i = 0;
   CHECK(cyc < 100000, "run timed out");
   CHECK(r.size() == m.size(), "stream lengths %zu vs %zu", r.size(), m.size());
   int mm = 0, live = 0;
@@ -183,8 +222,10 @@ int main(int argc, char** argv) {
   load_pose(tb, 0x5EED5EEDu);
   int live = 0;
   const int mm_legal = run_and_compare(tb, 120, 0xC0FFEEu, &live);
-  CHECK(mm_legal == 0, "mutant differs from the real core on LEGAL content (%d records) -- "
-                       "then this is not the mutant described", mm_legal);
+  CHECK(mm_legal == 0,
+        "mutant differs from the real core on LEGAL content (%d records) -- "
+        "then this is not the mutant described",
+        mm_legal);
   CHECK(live > 0, "weak-vector run produced no live vertices");
   CHECK(tb->m_mat_refused_o == 0 && tb->r_mat_refused_o == 0,
         "counters moved on legal content (mutant %u, ref %u)", tb->m_mat_refused_o,
@@ -201,8 +242,9 @@ int main(int argc, char** argv) {
         "mutant counter read %u -- the fits-check is supposed to be GONE here",
         tb->m_mat_refused_o);
   const int mm_wrap = run_and_compare(tb, 120, 0xC0FFEEu, &live);
-  CHECK(mm_wrap > 0, "differential did NOT fire on a wrapped +2.0 coefficient -- the "
-                     "comparator cannot see the fault the refusal law exists for");
+  CHECK(mm_wrap > 0,
+        "differential did NOT fire on a wrapped +2.0 coefficient -- the "
+        "comparator cannot see the fault the refusal law exists for");
   CHECK(live > 0, "wrap run produced no live vertices");
   std::printf("  +2.0 on m[5]: mutant counter=%u, differential mismatches=%d of 120 (%d live)\n",
               tb->m_mat_refused_o, mm_wrap, live);
@@ -220,8 +262,10 @@ int main(int argc, char** argv) {
 
   delete tb;
   if (g_fails == 0) {
-    std::printf("proj_matw_mutant_control: %d checks passed -- the differential fires and the "
-                "mutant's counter is silent, as a broken guard would be\n", g_checks);
+    std::printf(
+        "proj_matw_mutant_control: %d checks passed -- the differential fires and the "
+        "mutant's counter is silent, as a broken guard would be\n",
+        g_checks);
     zhao::exit_hard(0);
   }
   std::printf("proj_matw_mutant_control: %d of %d checks FAILED\n", g_fails, g_checks);
