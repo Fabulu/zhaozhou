@@ -1424,3 +1424,22 @@ A full run after the reformat surfaced eight failures. **Only one was the reform
 ### The lesson worth keeping
 
 **"Comment-only" is not "consequence-free" in a tree that hashes its sources.** Today one V20 comment pass touched: a byte-frozen file, two fit manifests, an interface manifest with four pinned copies of its hash, two committed mutant copies, and a production-body marker. Every one of those was found by a gate rather than by me, which is the system working - but the cheap check I skipped was `grep` for the file's path in `tests/tools/` before editing it.
+
+## 2026-09-16 (T3b + T3c landed) - and T3a turns out to be an UNCASHED CHEQUE
+
+**Where I am while `@g8b-t3bc` fits:** T3b+T3c committed at `de5a522a`. Expected: both projector cones drop below the tessellator's -3.588, making the tessellator the sole cap again. T3a still owed.
+
+- **T3c - the "RAM band" is the DIVIDER SETUP.** Twelve of fifteen worst endpoints were `shift_taps_*` (ALTSHIFT_TAPS) all launching from ONE node, `s2_cw[25]~DUPLICATE`. They are pure delay lines Quartus maps into M10K; what arrives at their input is `s2_cw -> compare -> mux -> pre_d2 -> 48-bit add -> saturation compare`. **I rejected my own first-listed fix without measuring it:** turning shift-register recognition off makes ~2,000 registers of taps into flops, ~1,000 ALMs, on a machine already over its ALM criterion. The owner's DSP audit is what changed my mind - area is the larger breach. Split the setup instead, for ~100 registers.
+- **T3b - the output stage, a DIFFERENT cone from T2's.** `s6_prod_x[38] -> out_x_o[7]`, one cycle holding a 64-bit add, a rounding rescale and a saturating narrow. Split at the add's output. T2 registered the ROW products at s1 and neither helps this nor is undone by it - the two cuts are in series along the same vertex.
+- Both new stages join `busy_o`. Arithmetic untouched; 167/167 including both terrain differentials bit-exact.
+- **A toolchain trap caught in the act:** the first post-T3b run reported *"100% tests passed out of 15"* in **0.42 s** of test time. The BUILD had failed on a stale Verilator partition (`no member named __VdfgRegularize_h6e95ff9d_0_7`, the `_nba_comb__TOP__` family) and ctest ran the previous binaries. Purged seven `Vtb_terrain_wcache.dir` dirs; the real run takes 23.8 s. **A suite that gets FASTER is the tell.**
+
+### T3a is already designed, in the tree, and explicitly deferred
+
+`zhao_terrain_tess.sv:553` says it outright: *"NOT YET THE REGISTERED FORM. reports/TERRAIN-TESS-CLOCK-20260907.md establishes that `win_mask` can be registered at no latency cost... That is a second step with five paired assignment sites and a real chance of a stale mask -- which is a WRONG SOLIDITY ANSWER, not a timing bug -- so it is taken separately, after this one is measured."*
+
+The report gives the whole shape: at cycle N-1 the advance decision is already made, so `ea(N)`/`eb(N)` are known because they are ASSIGNED at N-1; the mask for N is computable from the same next-state expression. `win_mask_q <= window_mask(ea_next, eb_next, j_s_next)`, consumed as `(solid & win_mask_q) == win_mask_q`. **No added latency, no change to the one-cycle void skip.**
+
+It names its own hazards: `j_s` is assigned on a different edge from the run-cell advance, so the next-state expression must take the same `j_s` the consumer will see; and `ea`/`eb` are assigned in **five** places, every one needing the paired mask assignment.
+
+Its stated precondition - *"not a change to make between two fits without the before-measurement in hand"* - is now satisfied.
