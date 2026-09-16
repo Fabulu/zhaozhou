@@ -123,23 +123,56 @@ TOTAL   40,591.4 ALM / 36,000 objective      173 DSP / 88      94.0 M10K / 464
 DEVICE  41,910                               112              553
 ```
 
-**Every figure is a SUM OF FITTED ROWS ONLY.** Thirty-four blocks are UNPRICED
-and contribute 0 — their cost is unknown, never zero — so 40,591 is a FLOOR and
-the true number is higher. Five of the eight domains are already **OVER** their
-section-2 allocation, including "Projection and result arenas" at 12,267 against
-4,500.
+### "FLOOR" IS WITHDRAWN. This is PARTIAL MIXED EVIDENCE.
 
-Against the owner's closure criterion — comfortably under **30,000 ALM** and
-**85 DSP** — the machine is at least **10,591 ALM and 88 DSP over**, on
-understated evidence. That gap is what R1–R9 exists to close, and it dwarfs
-everything the G8B timing campaign is about: G8B's whole subsystem is 7,807 ALM,
-and the entire T1/T1b package cost +383 of them to buy +29.65 MHz.
+*Corrected 2026-09-16, same day, by
+`reports/Zhaozhou_DSP_Uncashed_Savings_Audit_2026-09-16.txt`.*
+
+When this section was first written it said 40,591 was "a FLOOR and the true
+number is higher", reasoning that 34 unpriced blocks contribute 0. **That is
+wrong in one direction and right in the other at the same time, which is why it
+is not a bound at all:** missing functions undercount, and *stale receipts for
+blocks that have since been rewritten overcount*. The census source says so
+itself. Neither figure is a lower or an upper bound on an optimised connected
+console, and calling one a floor invites exactly the arithmetic the audit
+forbids.
+
+It is also not "fitted rows only" for DSP. That phrase describes how the ALM
+column is built; **map-only evidence participates in the DSP total.**
+
+**What the 173 actually is:** sixteen non-zero charges, several of them prices
+for hardware the repository has already replaced. It still charges TWO separate
+33-DSP projectors; it still carries the old 18-DSP pose and 15-DSP cull
+measurements against RTL whose current defaults are one lane each and two lanes
+respectively; it still carries the original 17-DSP bake while
+`zhao_terrain_bake_v2` exists. It does not incorporate G8A or G8B as the
+production composition, and texture deliberately selects `@packet-b-prod`, which
+has no applicable receipt and so contributes nothing.
+
+**Four large replacements already in the tree** cover 72–75 DSP of
+historical-to-candidate difference — the shared G8B projection group (72 → 34,
+physically fitted), pose (18 → 4), cull (15 → 6) and bake (17 → 3–6), the last
+three structural and unadopted. Restoring the omitted raster/texture scope
+(−9 old raster subtree, +30 G8A) gives an **incomplete, mixed-evidence planning
+subtotal of roughly 119–122** — not a bound, not a forecast, and not a
+completed-console claim. A further documented packing portfolio is worth roughly
+another 30 under its stated baselines, largely unimplemented. Complete FIELD and
+the other missing functions enter as POSITIVE costs.
+
+The audit is the authority on all of this and lists what must not be
+double-counted; read it before quoting any DSP number.
+
+**What still stands, and is the point of R1–R9:** five of eight domains are
+**OVER** their section-2 allocation, "Projection and result arenas" worst at
+12,267 against 4,500, and the machine is a long way from comfortably under
+30,000 ALM and 85 DSP on any reading. That gap dwarfs the G8B timing campaign:
+G8B's whole subsystem is 7,807 ALM and the entire T1/T1b package cost +383 of
+them to buy +29.65 MHz.
 
 **Both things are true and neither substitutes for the other.** 100 MHz is a
 closure requirement and the terrain pipe was at 43.94; that had to be fixed and
-now reads 73.59. But no amount of timing work moves the ALM bill, and the ALM
-bill is the larger breach. The DSP number is worse in proportion: 173 against 85
-is more than double.
+now reads 73.59. But no amount of timing work moves the area bill, and the area
+bill is the larger breach.
 
 ## Current R0-R9 completion matrix
 

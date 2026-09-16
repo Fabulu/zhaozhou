@@ -54,6 +54,7 @@ nobody has recorded a disposition where the sweep can see it.
 | 2026-09-05 | `dd4af89d` | `reports/zhaozhou-terrain-mipmapping-architecture-2026-09-05.txt` | 421 | yes | Agent please read - Mipmapping addendum |
 | 2026-09-14 | `494a82f7` | `reports/Zhaozhou_G8A_DSP_Rescue_Architecture_Brief.txt` | 1834 | yes | G8A DSP rescue brief, imported from the golden-path branch |
 | 2026-09-16 | *this commit* | `reports/Zhaozhou_G8A_Timing4_110MHz_Architecture_Brief.txt` | 1681 | yes | G8A Timing4 / comfortable-110 MHz brief, handed over by the owner |
+| 2026-09-16 | *this commit* | `reports/Zhaozhou_DSP_Uncashed_Savings_Audit_2026-09-16.txt` | 265 | yes | DSP savings not reflected in the 173-DSP scoreboard. **DISPOSITION: READ AND ACTED ON.** It withdrew "floor" as a description of the 173-DSP and 40,591-ALM subtotals, and RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md was corrected the same day to say PARTIAL MIXED EVIDENCE instead. Its seven reconciliation recommendations (separate historical / candidate / adopted prices, represent a shared owner once, expose unpriced functions as unknown) are OPEN. |
 
 ## Hardware-brief dispositions
 

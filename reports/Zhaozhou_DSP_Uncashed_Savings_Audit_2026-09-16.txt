@@ -1,0 +1,264 @@
+ZHAOZHOU — DSP SAVINGS NOT REFLECTED IN THE 173-DSP SCOREBOARD
+Date: 16 September 2026
+Read-only audit of Fabulu/zhaozhou
+Pinned branch: claude/ceiling-architecture-20260912
+Read/rechecked head: ab4f1a36e114dccde2013e8ee06b988eec1852d0
+
+STATUS AND METHOD
+=================
+Reviewed live GitHub heads, the census/scoreboard selector, production manifest,
+fit/map ledgers, original G8A/G8B fitter summaries, original D3 shell hierarchy,
+selected current RTL, and the DSP frontier, packing and memory-first roadmaps.
+No Quartus, Verilator or board test was run. No repository files were modified.
+Arithmetic below is a manually reconstructed planning bridge, not execution of
+the repository's scoreboard and not a composed physical measurement.
+
+MAIN FINDING
+============
+173 DSPs is not an estimate of the completed rescue architecture. It mixes old
+receipts for still-selected roots with zero contribution from unpriced roots.
+It retains both old projectors, old pose/cull prices and the original bake. It
+does not incorporate G8A/G8B as the production composition.
+
+The four largest substitutions identified here cover 72–75 DSPs of reductions
+against their historical scopes. Only the combined G8B endpoint is currently
+physically priced; pose/cull/bake endpoints remain structural and require their
+applicable gates and adoption. Adding the currently omitted raster/texture
+scope back produces approximately 119–122 DSP for an incomplete, mixed-evidence
+planning scope, NOT a completed-console estimate.
+
+There is also a substantial further packing portfolio. Its declared preferred
+endpoints amount to roughly another 30 DSP under the stated baselines, before
+optional ATTR1 and the unverified current TESS-site saving. These are proposed
+implementations, not savings that can be banked now. Complete FIELD and other
+missing functions must still enter as positive costs.
+
+1. EXACT RECONSTRUCTION OF THE 173 NONZERO CHARGES
+================================================
+Module                              DSP charged
+zhao_geom_project                      33
+zhao_terrain_project                   33
+zhao_geom_pose_decode                  18
+zhao_terrain_bake                      17
+zhao_shell_top                         16
+zhao_geom_cull                         15
+zhao_geom_skin                          9
+zhao_geom_lod                           6
+zhao_terrain_tess                       6
+zhao_geom_setup                         4
+zhao_geom_fogfactor                     3
+zhao_raster_fog                         3
+zhao_terrain_lod                        3
+zhao_terrain_normals                    3
+zhao_forge_cliff                        2
+zhao_geom_clip                          2
+TOTAL                                173
+
+These are 16 nonzero charges, not a complete list of selected roots. Map-only
+DSP evidence participates in the total; 'fitted rows only' does not describe
+all DSP inputs. The texture root explicitly selects @packet-b-prod, which has
+no applicable standalone receipt. It contributes no numeric charge. The
+manifest still sets BILERP_DSP2=0 in selected production, while fitted G8A uses
+BILERP_DSP2=1 and ATTR_DSP3=1. That is deliberate unadopted-candidate status.
+
+The change from the older 192-DSP census to 173 numerically removes the old
+17-DSP texture contribution and retired 2-DSP material-combine-v1 contribution.
+It is NOT the independently measured G8A 49-to-30 saving, despite both changes
+being 19.
+
+'Floor' is withdrawn as a description of this total or the 40,591-ALM subtotal.
+The census source itself explains why mixed stale/partial evidence is neither
+a lower nor an upper bound on an optimized connected console.
+
+2. LARGE IMPLEMENTED OR PARTLY MEASURED REPLACEMENTS
+==================================================
+A. Old geometry projector + terrain projector + tessellator: 33+33+6=72.
+   New G8B @g8b-t1b: 34 DSP for its complete wrapper/subsystem, including the
+   shared projector, terrain tessellation and arena machinery.
+   Historical-scope bridge: 72 -> 34, difference 38.
+   This avoids inventing a separately measured 24-DSP projector subtree.
+   It is not a matched composed A/B saving. G8B timing remains red at 73.59 MHz.
+   Original raw T1b fitter summary also reports 18 VIRTUAL pins and 0 physical
+   pins; this must not be described as a physical-board/zero-virtual-pin result.
+   Earlier default/old projector prices are not additional hardware to retain
+   after one shared service is actually adopted.
+
+B. Pose: 18 -> 4 structural, difference 14.
+   Current source defaults MUL_LANES_QUAT=1, MUL_LANES_MAT=1: one 16x16 and one
+   32x32 lane. A 32-bone palette takes 3,694 measured RTL cycles; 128 palettes
+   imply 472,832 cycles, about 28.4% of a 100 MHz/60 Hz raw frame.
+   The current DSP endpoint is NOT independently fitted. The old 18-DSP map
+   remains in the score. Do not reuse the withdrawn '17-DSP pose saving'.
+
+C. Culling: 15 -> 6 structural, difference 9.
+   Current default is two 33x33 lanes, not the old four evaluation lanes plus
+   private extraction multiplier. Functional tests cover the alternatives.
+   Two-lane II is 22. Whole-workload qualification and current fit remain owed;
+   the roadmap explicitly notes a disputed workload row.
+
+D. Bake: 17 -> 3–6 structural, difference 11–14.
+   zhao_terrain_bake_v2 exists, using one state-muxed signed34x34 multiplier
+   and a RAM-oriented meets plane. The manifest retains v1 until the named
+   terrain gate passes. It is NOT in the current G8B projection wrapper.
+   Do not count both this collapse and a later packed 17-to-2 as independent
+   savings: the latter is only the residual 3–6-to-2 improvement.
+
+Conservative subtotal: 38 + 14 + 9 + 11 = 72.
+Aggressive bake endpoint: 38 + 14 + 9 + 14 = 75.
+The portfolio is not banked; its evidence stages differ.
+
+3. ADD OMITTED SCOPE BACK BEFORE DISCUSSING A TOTAL
+=================================================
+173 historical selected subtotal
+ -72 old two-projector-plus-tess group
+ +34 measured G8B group
+ -14 structural pose replacement
+  -9 structural cull replacement
+ -11 conservative bake replacement
+=101, STILL OMITTING CURRENT TEXTURE/ATTRIBUTE SCOPE.
+
+D3's old shell contains a 9-DSP raster tile subtree, inclusive. G8A's latest
+fitter summary is 30 DSP. As an ILLUSTRATIVE scope substitution only:
+101 - 9 old raster subtree + 30 new G8A = 122.
+Using bake=3 rather than 6 gives 119.
+
+The retained shell remainder is 16-9=7 DSP in that old specimen. These are not
+current shell-V2 prices. Full source/profile closure, wrapper contribution,
+pruning, integration duplication and missing owners still require composition.
+Neither 119 nor 122 includes complete FIELD or all remaining requirements.
+They are not bounds, forecasts or approved production budgets.
+
+Do not subtract G8A's 19 again: using its 30-DSP endpoint already includes it.
+Do not calculate old conditional 111 minus 19 = 92 and call that the machine;
+the older frontier used different texture/raster scopes and omitted functions.
+
+4. SUBSTANTIAL PLANS STILL NOT CASHED
+===================================
+All rows below are documented targets unless an evidence note says otherwise.
+Old-version references must be ported to current parents and requalified.
+
+Projector row products: structural 24 -> 15, potential 9.
+  Nine signed32x18 products explicitly use both 18x18 lanes per DSP. Current
+  zhao_project_core still uses inferred multiplication; this endpoint is not
+  the current timing campaign's row-output-register change.
+Projector viewport: 15 -> 11, potential 4 more.
+  Factor literal low zero bits and preserve exact rescale/saturation. Separate
+  from the row-family migration. Preserve legal RPP=3 throughput.
+  Total projector packing target: 13, not 33+9+13 against one current charge.
+
+Perspective U/V (UV2): 6 -> 4, potential 2.
+  Conservative exact schoolbook decomposition. Optional paired Karatsuba 6->3
+  is an alternative, not an additional three after reaching four.
+RCP multiplication: 3 -> 2, potential 1.
+  Pair existing partial products; the old service 6->3 is already in G8A.
+Material products: 2 -> 1, potential 1.
+  Alternative quarter-square 2->0 targets two total, not three combined.
+Bilerp: 12 -> 8 across four lanes is ALREADY in G8A=30. No fresh -4.
+ATTR3: 24 -> 9 across three lanes is ALREADY in G8A=30. No fresh -15.
+ATTR1: 9 -> 3, potential 6 ADDITIONAL.
+  Optional one-DSP worker per independent attribute lane; not implemented as
+  the selected endpoint. Abstract calendar can add three first-seed clocks on
+  short-gradient jobs. Requires tile-job/short-gradient/full-frame measurement
+  and explicit latency/throughput approval; not a free latency-preserving cut.
+
+Skin: 9 -> 6, potential 3 by packing, retaining three arithmetic lanes.
+  One-lane 9->3 variant is throughput-illegal under the current requirement.
+Cull: 6 -> 4, potential 2 after the earlier 15->6 collapse.
+Geometry LOD: 6 -> 3 by exact signed33x32 narrowing, then 3 -> 2 by packing.
+  Potential four total, with state-by-state range proof and unchanged law.
+Pose: 4 -> 3, potential one further; folding quat into the shared lane and
+  packing the wide lane are alternatives toward that endpoint, not two credits.
+Terrain normals: 3 -> 2, potential one. Old 18->3 is already reflected in 173.
+Terrain LOD: 3 -> 2, potential one. Zero-DSP LOD is a separate memory/DDA
+  alternative still owed by R7, not another additive saving.
+Bake v2: conservative 6 -> 2 (or 3 -> 2), potential four (or one).
+TESS morph: old documented site 6 -> 1.
+  DO NOT debit five from current G8B merely on that old site price. G8B=34
+  contains a newer tessellator and other products; extract current attribution.
+  This target is not permission to claim the whole tessellator uses one DSP.
+FIELD multiplier bank: about 12 -> 8 per four-wide bank; optional Karatsuba 6.
+  This provider is UNPRICED in the 173 subtotal. Its final implementation adds
+  a positive cost; there is no four-DSP subtraction from a zero existing charge.
+  Count all actual banks and other providers in the complete selected executor.
+
+Illustrative conservative arithmetic for the known-scope preferred packing
+rows (excluding TESS, ATTR1, FIELD and optional Karatsuba):
+  projector13 + UV2/RCP/material4 + skin3 + cull2 + geometryLOD4 + pose1
+  + normals1 + terrainLOD1 + bake4 = 33 at the conservative bake baseline.
+  122-33=89 for THAT STILL-INCOMPLETE planning scope.
+This is a sensitivity illustration, not a ~89-DSP completed console claim.
+Any failed physical, arithmetic, ALM or throughput premise changes it.
+
+5. MEMORY-FIRST WORK IS NOT AUTOMATICALLY DONE BY NATIVE DSP PACKING
+==================================================================
+R1 reusable quarter-square, coefficient-table and full-width hybrid primitives;
+R3 selected nine-DSP projection backend; R4 colour/fog memory replacements;
+R5 normal-transform/square/root/provider consolidation; R6 coefficient-memory
+attributes; and R7 zero-DSP LOD/separable bake remain partly or wholly open in
+the roadmap. These are further architectural routes, not banked savings.
+The nine-DSP projector is an alternative endpoint to the dual18 eleven-DSP
+projector. Never subtract both full reductions from the same baseline.
+
+6. PROOF AND ADOPTION STILL MATTER
+=================================
+The clean dual18 MapOnly/CDB packet proves one MAC resource has two distinct
+live lane routes. Its report explicitly leaves broad encrypted vendor arithmetic
+validation on HOLD. Later BIL2 and G8A fits establish their selected physical
+DSP counts, not blanket proof of every signed/mixed wide-product construction.
+
+The current frontier is therefore not 'all targets implemented, just update a
+spreadsheet'. It contains physically measured candidate endpoints, implemented
+but unfitted leaves, deliberate unadopted replacements and genuinely unbuilt
+packing/memory endpoints.
+
+Recommended reconciliation, within the existing roadmap:
+* Retain historical receipt prices, but label their source/profile and staleness.
+* Separately track exact current candidate endpoints and selected adoption.
+* Represent a shared physical owner once, with all actual callers.
+* Expose required unpriced functions as unknown, not absent or free.
+* Price pose/cull/bake at existing suitable subsystem gates and adopt atomically.
+* Keep the current G8B timing work intact; packing may change ALM and timing.
+* Do not let a late 'CURRENT' label on a selected old ledger row substitute for
+  source-closure matching or a composed result.
+
+MANDATORY POSITIVE COSTS NOT CLOSED BY THIS AUDIT
+==============================================
+Complete FIELD executor/services/profile adapters; complete lighting and emission;
+particle STATE/UPDATE/COLLIDE/SPAWN; post composition; missing terrain/world and
+normal/depth seams; board/framework and integration changes as applicable.
+Avoiding an unbuilt particle obligation via CPU work is an alternative future
+implementation, not subtraction from the current 173-DSP subtotal.
+
+SOURCE INDEX (all at the pinned commit)
+======================================
+Base URL:
+https://github.com/Fabulu/zhaozhou/blob/ab4f1a36e114dccde2013e8ee06b988eec1852d0/
+
+* tools/budget/domain_scoreboard.py
+* tools/budget/dsp_census.py
+* design/prod_manifest.yml
+* reports/synthesis/zhao_block_fit.json
+* reports/synthesis/zhao_block_map.json
+* reports/synthesis/zhao_shell_fit.json (u_shell and u_pipe hierarchy rows)
+* reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing5.fit.summary
+* reports/synthesis/blockpaths/zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t1b.fit.summary
+* reports/DSP-PATH-TO-94-20260909.md (historical row bill; superseded claims qualified)
+* reports/CEILING-FRONTIER-RECONCILIATION-20260912.md
+* reports/DSP-DUAL18-PACKING-ARCHITECTURE-20260912.md
+* reports/DSP-DUAL18-ATOM-ROUTE-EVIDENCE-20260913.md
+* reports/G8A-TIMING3-DSP-PATH-REPORT-20260915.md
+* reports/Zhaozhou_G8A_DSP_Rescue_Architecture_Brief.txt (especially ATTR1)
+* reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md
+* fpga/rtl/common/zhao_project_core.sv
+* fpga/rtl/geometry/zhao_geom_pose_decode.sv
+* fpga/rtl/geometry/zhao_geom_cull.sv
+* fpga/rtl/terrain/zhao_terrain_bake_v2.sv
+
+CONCLUSION
+==========
+There is no demonstrated post-rescue 173-DSP machine. Large identified savings
+have not been cashed into the selected composition or its scoreboard. That is a
+materially better starting position than a fully optimized 173-DSP total, but
+neither partial arithmetic nor target subtraction proves the complete console
+fits. Finish and qualify the known replacements, then account for every missing
+physical owner before deciding what capability must be cut.
