@@ -400,6 +400,7 @@ module zhao_terrain_tess #(
   logic [5:0] efan;  // 0 = the segment's own triangle, then the fan
   logic       done;  // the enumerator has run out
 
+
   // ---- the per-triangle vertex fetch --------------------------------------
   logic [1:0] f_slot;  // 0..2
   logic [1:0] f_kind;  // 0 = the vertex, 1 = coarse parent A, 2 = parent B
@@ -550,12 +551,17 @@ module zhao_terrain_tess #(
   // latency changes, no state is added, and the run-cell walk is untouched --
   // so the existing suites must pass UNCHANGED, and that is the check.
   //
-  // NOT YET THE REGISTERED FORM. reports/TERRAIN-TESS-CLOCK-20260907.md
-  // establishes that `win_mask` can be registered at no latency cost, because
-  // at cycle N-1 the advance decision is already made and so `ea(N)`/`eb(N)`
-  // are known. That is a second step with five paired assignment sites and a
-  // real chance of a stale mask -- which is a WRONG SOLIDITY ANSWER, not a
-  // timing bug -- so it is taken separately, after this one is measured.
+  // THE REGISTERED FORM IS NOW BELOW, and this paragraph used to defer it.
+  // reports/TERRAIN-TESS-CLOCK-20260907.md established that `win_mask` can be
+  // registered at no latency cost, because at cycle N-1 the advance decision
+  // is already made and so `ea(N)`/`eb(N)` are known -- a second step with
+  // five paired assignment sites and a real chance of a stale mask, which is
+  // a WRONG SOLIDITY ANSWER and not a timing bug, so it was taken separately
+  // after this one was measured. It was measured four times (@g8b, @g8b-t2,
+  // @g8b-t12, @g8b-t1b) and @g8b-t3bc named this block the sole cap, so G8B
+  // T3a cashed it: see `win_mask_q` and `a_win_mask_fresh` below. What stays
+  // true here is the FACTORISATION -- the outer product is what made the
+  // registered form one 64-bit vector instead of a 128-multiply loop.
 
   // The 8-bit span [idx*s, idx*s + s) within a row or a column. Written with
   // `int'` throughout to match the arithmetic of the loop it replaces exactly,
@@ -573,17 +579,72 @@ module zhao_terrain_tess #(
     end
   endfunction
 
-  wire [7:0] col_span_c = span_mask(ea, j_s);
-  wire [7:0] row_span_c = span_mask(eb, j_s);
+  // The whole window mask for a run-cell, as one function, so the registered
+  // form below and the assertion that checks it cannot drift apart.
+  function automatic logic [63:0] window_mask(input logic [3:0] a,
+                                              input logic [3:0] b,
+                                              input logic [3:0] sw);
+    logic [7:0] col, row;
+    logic [63:0] m;
+    begin
+      col = span_mask(a, sw);
+      row = span_mask(b, sw);
+      for (int cj = 0; cj < int'(SubCells); cj++)
+        for (int ci = 0; ci < int'(SubCells); ci++)
+          m[cj*8+ci] = row[cj] & col[ci];
+      window_mask = m;
+    end
+  endfunction
 
-  logic [63:0] win_mask_c;
-  always_comb begin
-    for (int cj = 0; cj < int'(SubCells); cj++)
-      for (int ci = 0; ci < int'(SubCells); ci++)
-        win_mask_c[cj*8+ci] = row_span_c[cj] & col_span_c[ci];
+  // ---- G8B T3a: THE WINDOW MASK IS REGISTERED ------------------------------
+  //
+  // This is the step line 553 deferred and reports/TERRAIN-TESS-CLOCK-20260907
+  // designed: *"the registered form ... can be registered at no latency cost,
+  // because at cycle N-1 the advance decision is already made and so ea(N)/eb(N)
+  // are known."* Its stated precondition was a before-measurement, and there are
+  // now four: @g8b, @g8b-t2, @g8b-t12, @g8b-t1b.
+  //
+  // MEASURED at @g8b-t3bc: with both projector cones cut, the tessellator is the
+  // SOLE constraint at -3.482 ns and `zhao_project_core` behind it would allow
+  // 88 MHz. The path is the enumerator closing a loop through the geomorph DSP:
+  //
+  //   j_s -> span_mask (a multiply) -> win_mask (64-bit outer product)
+  //       -> cell_solid (64-bit masked compare) -> cell_skip
+  //       -> the enumerator advance -> that same DSP's clock enable
+  //
+  // Registering the mask moves the multiply, the outer product and the 64
+  // comparator groups off the consumed path into a next-state cone that has a
+  // whole cycle. The one-cycle void skip is preserved, which the block's own
+  // header states as a goal, so the RATE does not move.
+  //
+  // THE HAZARD IS NOT TIMING, AND THE REPORT SAYS SO: `ea`/`eb` are assigned in
+  // five places and every one needs the paired mask, or the mask goes stale --
+  // "a WRONG SOLIDITY ANSWER, not a timing bug", which emits or drops triangles
+  // silently. Two things guard it:
+  //
+  //   * each site computes its next `ea`/`eb` into locals ONCE and uses them for
+  //     both the state and the mask, so a site cannot pair itself incorrectly;
+  //   * `a_win_mask_fresh` below asserts every cycle that the registered mask
+  //     equals the mask of the state actually in `ea`/`eb`/`j_s`. A missed site
+  //     fires it immediately instead of quietly changing the geometry.
+  logic [63:0] win_mask_q;
+
+  wire cell_solid = ((solid & win_mask_q) == win_mask_q);
+
+`ifndef SYNTHESIS
+  // THE STALE-MASK DETECTOR. Without this the failure mode of a missed paired
+  // assignment is a triangle that should not exist, or one that should and does
+  // not -- found, if at all, by a golden capture a long way downstream.
+  always_ff @(posedge clk) begin
+    // No rst_n term, for the reason the vertex-queue assertion below gives:
+    // reading it synchronously while the design takes it asynchronously is a
+    // SYNCASYNCNET warning. `st` is cleared to StIdle by that same reset, so
+    // the StTri term already covers the reset window.
+    if ((st == StTri) && (win_mask_q !== window_mask(ea, eb, j_s)))
+      $fatal(1, "zhao_terrain_tess: win_mask_q is stale -- ea=%0d eb=%0d j_s=%0d",
+             ea, eb, j_s);
   end
-
-  wire cell_solid = ((solid & win_mask_c) == win_mask_c);
+`endif
 
   // the inner rectangle
   wire [5:0] x_lo = j_ox + {2'b0, j_s};
@@ -1059,6 +1120,7 @@ module zhao_terrain_tess #(
       emode <= EmPlain;
       ea <= '0;
       eb <= '0;
+      win_mask_q <= window_mask(4'd0, 4'd0, 4'd1);
       etri <= 1'b0;
       eside <= '0;
       eg <= '0;
@@ -1214,6 +1276,7 @@ module zhao_terrain_tess #(
             automatic logic [3:0] s_new, n_new;
             automatic logic stitch_new;
             automatic logic vtx_new, ref_new;
+            automatic logic [3:0] e_start_c;  // first run-cell, 0 or 1
             // the mode: anything that is not one of the three is counted and
             // runs as ModeTri, never silently
             vtx_new = (job_mode_i == ModeVtx);
@@ -1287,8 +1350,13 @@ module zhao_terrain_tess #(
               // ModeVtx always walks the plain 9x9 window at stride 1.)
               solid <= {64{1'b1}};
               emode <= (!stitch_new || vtx_new) ? EmPlain : ((n_new < 4'd3) ? EmFan : EmInner);
-              ea <= (stitch_new && n_new >= 4'd3 && !vtx_new) ? 4'd1 : 4'd0;
-              eb <= (stitch_new && n_new >= 4'd3 && !vtx_new) ? 4'd1 : 4'd0;
+              // PAIRED, and it takes s_new rather than j_s: j_s is assigned on
+              // this same edge, so the consumer at the next cycle will see s_new.
+              // The report names this exact hazard.
+              e_start_c = (stitch_new && n_new >= 4'd3 && !vtx_new) ? 4'd1 : 4'd0;
+              ea <= e_start_c;
+              eb <= e_start_c;
+              win_mask_q <= window_mask(e_start_c, e_start_c, s_new);
               etri <= 1'b0;
               eside <= '0;
               eg <= '0;
@@ -1314,11 +1382,14 @@ module zhao_terrain_tess #(
               job_reject_o <= 1'b1;
               st <= StIdle;
             end else begin
+              automatic logic [3:0] e_start_c;  // first run-cell, 0 or 1
               // ModeVtx reaches here only when stitched (for the reject above)
               // and still walks the plain window.
               emode <= (j_stitch && !j_vtx) ? EmInner : EmPlain;
-              ea <= (j_stitch && !j_vtx) ? 4'd1 : 4'd0;
-              eb <= (j_stitch && !j_vtx) ? 4'd1 : 4'd0;
+              e_start_c = (j_stitch && !j_vtx) ? 4'd1 : 4'd0;
+              ea <= e_start_c;
+              eb <= e_start_c;
+              win_mask_q <= window_mask(e_start_c, e_start_c, j_s);
               etri <= 1'b0;
               eside <= '0;
               eg <= '0;
@@ -1506,10 +1577,18 @@ module zhao_terrain_tess #(
                 efan <= efan + 6'd1;
               end
             end else begin
+              automatic logic [3:0] ea_n_c, eb_n_c;
               // the next run-cell in z-then-x scan order
+              //
+              // ONE computation, used for BOTH the state and the mask. The two
+              // advance arms are where the report expects a paired assignment to
+              // be missed, so they do not get two chances to disagree: ea_n/eb_n
+              // are decided here and then written once each.
               etri <= 1'b0;
+              ea_n_c = ea;
+              eb_n_c = eb;
               if (ea >= cell_hi) begin
-                ea <= cell_lo;
+                ea_n_c = cell_lo;
                 if (eb >= cell_hi) begin
                   if (emode == EmInner) begin
                     emode <= EmFan;
@@ -1520,11 +1599,14 @@ module zhao_terrain_tess #(
                     done <= 1'b1;
                   end
                 end else begin
-                  eb <= eb + 4'd1;
+                  eb_n_c = eb + 4'd1;
                 end
               end else begin
-                ea <= ea + 4'd1;
+                ea_n_c = ea + 4'd1;
               end
+              ea <= ea_n_c;
+              eb <= eb_n_c;
+              win_mask_q <= window_mask(ea_n_c, eb_n_c, j_s);
             end
           end
 
