@@ -630,6 +630,23 @@ it is the tell. Compile the reel directly instead, and after any struct-layout
 change **recompile every `.cpp` that uses it** — a stale object with an old
 layout looks exactly like a rendering bug.
 
+**`git stash push` / `pop` does NOT reliably trigger a ninja rebuild, and the
+tell is `ninja: no work to do`.** Added 2026-09-16, after it produced two false
+readings in one investigation. Stashing an RTL file to measure the baseline,
+building, measuring, then popping and building again printed "no work to do"
+and ran the **stashed** binary — so the change under test and its baseline
+reported byte-identical numbers, which is the one thing they could not honestly
+do. It reads as "the change has no effect", the flattering direction.
+
+Two habits kill it. **Never send a build's output to `Out-Null`** — a build
+wrapped in a helper function that discards its output cannot be seen to have
+failed or to have done nothing. And **assert the tree is what you think before
+measuring**: one `Select-String` counting an identifier the change introduces
+(`vs2_valid`, 11 hits with it, 0 without) is a second's work and turns the
+stale-binary trap from a silent wrong number into a loud one. If ninja still
+says "no work to do", force it with
+`(Get-Item <file>).LastWriteTime = Get-Date`.
+
 **Configure from PowerShell with `tools/env/zhao-env.ps1` sourced, always.**
 `CMakePresets.json` gates `windows-base` on `${hostSystemName} equals Windows`.
 Run `cmake` from Git Bash and it resolves to the MSYS cmake, which reports a
@@ -639,6 +656,43 @@ preset windows-native"*. Configure without the preset instead and
 says this and warns about "the broken devkitPro msys2 cmake"; it still cost an
 hour on 2026-09-04 because the symptom looks like a corrupt build tree rather
 than a wrong shell.
+
+**`ctest` needs `tools/env/zhao-env.ps1` SOURCED too, and without it the suite
+hangs silently.** Added 2026-09-16. The rule above is written about `cmake`;
+the same shell requirement applies to the test runner and nothing said so. A
+`ctest` launched from a shell that had only `cd`'d to the repo sat at 28 of 915
+tests for minutes. Its two children were `verilator_bin.exe` and they had
+consumed **0.00 CPU seconds in three minutes** — alive, blocked, doing no work.
+Re-running the identical command with the environment sourced, the same
+children showed 8.8 CPU seconds each within a minute.
+
+Two diagnostic traps came with it, and both pointed at the wrong answer first:
+
+* **Low ctest CPU means nothing.** ctest forks the work, so its own CPU sits
+  near zero however healthy the run is. The wedge signature above is "frozen
+  CPU *and no child test process*" — a conjunction, and quoting it while
+  measuring only the half that is always true reads as confirmation.
+* **`Get-Process | Where ProcessName -like "test_*"` cannot see the children
+  that matter.** They are `verilator_bin.exe` and `cmake.exe`. That filter
+  returns nothing on a perfectly healthy suite, which manufactures the second
+  half of the signature. Use
+  `Get-CimInstance Win32_Process -Filter "ParentProcessId=<pid>"`, which names
+  the children *and* lets you read their CPU.
+
+**The tell worth memorising is ALIVE AT ZERO CPU, measured on the CHILD.** A
+slow test burns CPU. A ctest wedged on `Testing/Temporary` debris burns none
+and has no children. This burns none *while holding children that also burn
+none* — a blocked child, not a stuck parent. It is consistent with the
+launcher-popup trap (a GUI dialog waits forever at zero CPU and is invisible in
+a non-interactive session), but only the fix was confirmed, not the mechanism.
+
+On 2026-09-16 this was misdiagnosed twice before it was measured: first as the
+documented concurrent-ctest wedge — a real rule that had genuinely been broken
+in the same session, which is what made it so easy to believe — and then as
+unresolved. **The explanation that blames something you already did wrong
+arrives first and explains almost all of the evidence**, which is this file's
+own law about diagnoses landing soft, wearing the clothes of an honest mea
+culpa.
 
 **When `build.ninja` is stale it can be unable to regenerate itself.** One
 verilate rule declared `Vtb_perspuv_pair.cmake` among its outputs while running

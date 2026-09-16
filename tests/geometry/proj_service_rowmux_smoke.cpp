@@ -19,6 +19,10 @@
 #include "Vtb_proj_service_rowmux.h"
 #include "verilated.h"
 
+// For zhao::exit_hard -- see the note at the end of main(). The helper is
+// inline in this header, so including it adds no link dependency.
+#include "../harness/zhao_sim.hpp"
+
 #include <cstdint>
 #include <cstdio>
 #include <vector>
@@ -212,11 +216,27 @@ int main(int argc, char** argv) {
   CHECK(!tb->busy_o, "service busy after drain");
 
   delete tb;
-  if (g_fails == 0) {
+  const int rc = (g_fails == 0) ? 0 : 1;
+  if (rc == 0)
     std::printf("proj_service_rowmux_smoke: %d checks passed\n", g_checks);
-    return 0;
-  }
-  std::printf("proj_service_rowmux_smoke: %d of %d checks FAILED\n", g_fails,
-              g_checks);
-  return 1;
+  else
+    std::printf("proj_service_rowmux_smoke: %d of %d checks FAILED\n", g_fails,
+                g_checks);
+
+  // EXIT HARD, and this file is why the rule exists in tests/harness/
+  // zhao_sim.hpp: "every Verilated main must end through here".
+  //
+  // This one ended with a plain `return`, which runs exit-time static
+  // destruction of the default VerilatedContext -- and Verilator 5.051 with
+  // winlibs libwinpthread intermittently deadlocks in VlThreadPool's destructor
+  // there, in WaitForSingleObject, at ~0 CPU. Under ctest at -j 2 on 2026-09-16
+  // it hung for 166 s until the test's own TIMEOUT killed it, AFTER printing
+  // its 413 passing checks into a pipe buffer nobody ever flushed. Run alone it
+  // exits instantly, which is what made it read as a parallelism flake in the
+  // RTL for weeks rather than as an exit-path bug in this file.
+  //
+  // A HUNG TEST IS NEITHER A PASS NOR A FAIL, and it costs a whole suite run.
+  // `exit_hard` flushes every observable side effect and then leaves without
+  // running the destructors that deadlock.
+  zhao::exit_hard(rc);
 }
