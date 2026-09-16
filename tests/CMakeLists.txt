@@ -6347,6 +6347,55 @@ verilate(test_terrain_pipe_differential
 add_test(NAME terrain_pipe_differential COMMAND test_terrain_pipe_differential)
 set_tests_properties(terrain_pipe_differential PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
 
+# PACKET I PREREQUISITE: the pipe at the exact G8B parameters.
+#
+# The G8B target is `zhao_terrain_pipe #(.ROWS_PER_PASS(3), .MATW(18))`, and the
+# architecture is explicit that the wrapper "must not rely on
+# zhao_terrain_pipe's default MATW=32, a fit-target comment, or a runtime
+# convention to establish the parameters", and that G8B runs only once "all
+# non-fit RPP3/MATW18 tests pass". There were none: every terrain_pipe test ran
+# at the DEFAULT MATW=32, so the configuration G8B is meant to characterise had
+# never been elaborated, let alone compared against the oracle.
+#
+# proj_matw_directed already pins MATW=18 against MATW=32 at the projector CORE,
+# at ROWS_PER_PASS 3 and 1, with the refusal law and a positive control that
+# skews one narrowed word by a raw LSB. This is the same question one level up:
+# the whole pipe, against the retained zhao_terrain_project oracle.
+#
+# WHAT THIS TEST DOES AND DOES NOT ESTABLISH, because the division of labour
+# between it and proj_matw_directed is the whole reason it is not redundant:
+#
+#   DOES  -- the pipe ELABORATES at ROWS_PER_PASS=3/MATW=18 and is bit-exact
+#            against the oracle on the dense workload, with zero matrix
+#            refusals, identical packet/vertex/cycle counts and the identical
+#            37 checks the MATW=32 build runs.
+#   DOES NOT -- distinguish 18 from 32 by its own output. It cannot: on this
+#            stimulus the two are bit-identical, which is the RESULT, not an
+#            oversight. That the flag took effect is Verilator's own build
+#            record (-GMATW=18 -GROWS_PER_PASS=3), and that 18 BEHAVES
+#            differently from 32 is proven by proj_matw_directed's control.
+#
+# Said plainly so nobody later reads a green here as "the narrowing is proven
+# harmless everywhere". It is proven harmless on this workload.
+add_executable(test_terrain_pipe_rpp3_matw18 terrain/terrain_pipe_differential.cpp)
+target_link_libraries(test_terrain_pipe_rpp3_matw18 PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_terrain_pipe_rpp3_matw18 PRIVATE ZHAO_PIPE_MATW=18)
+target_include_directories(test_terrain_pipe_rpp3_matw18 PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_terrain_pipe_rpp3_matw18
+  PREFIX Vzhao_terrain_pipe
+  TOP_MODULE zhao_terrain_pipe
+  VERILATOR_ARGS -GROWS_PER_PASS=3 -GMATW=18
+  SOURCES ${ZHAO_TERRAIN_PIPE_SV})
+verilate(test_terrain_pipe_rpp3_matw18
+  PREFIX Vzhao_terrain_project
+  TOP_MODULE zhao_terrain_project
+  SOURCES ${ZHAO_TERRAIN_PROJECT_SV})
+add_test(NAME terrain_pipe_rpp3_matw18 COMMAND test_terrain_pipe_rpp3_matw18)
+set_tests_properties(terrain_pipe_rpp3_matw18 PROPERTIES
+  LABELS "fast;nightly;packet-i" TIMEOUT 1800)
+
 add_executable(test_terrain_pipe_differential_bitmap terrain/terrain_pipe_differential.cpp)
 target_link_libraries(test_terrain_pipe_differential_bitmap PRIVATE zhao_harness zhao_zref)
 target_compile_definitions(test_terrain_pipe_differential_bitmap PRIVATE ZHAO_PIPE_VALID_MODE=0)

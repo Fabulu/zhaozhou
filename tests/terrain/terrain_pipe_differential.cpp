@@ -3,7 +3,16 @@
 // zref tessellator; additive w comes from project_vertex. Memory responses are
 // registered by one clock, never answered combinationally.
 // ENFORCED-BY: tests/CMakeLists.txt terrain_pipe_differential,
-// terrain_pipe_differential_bitmap, terrain_pipe_release_mutant.
+// terrain_pipe_differential_bitmap, terrain_pipe_release_mutant,
+// terrain_pipe_rpp3_matw18.
+
+// The matrix width this build elaborated, so the checks that are CLAIMS ABOUT
+// THE WIDTH can name it instead of asserting a constant that used to be true.
+#ifndef ZHAO_PIPE_MATW
+#define ZHAO_PIPE_MATW 32
+#endif
+#define ZHAO_STR_(x) #x
+#define ZHAO_STR(x) ZHAO_STR_(x)
 
 #include <cstdint>
 #include <cstdio>
@@ -374,7 +383,20 @@ int main(int argc,char** argv) {
   check(pipe.a_grants_o==geometry.size(),"all geometry vertices granted",geometry.size(),pipe.a_grants_o);
   check(pipe.b_grants_o==want.fills,"all terrain fills granted",want.fills,pipe.b_grants_o);
   check(pipe.contended_o>0,"shared-projector contention counter seen to fire",1,pipe.contended_o>0?1:0);
-  check(pipe.mat_refused_o==0,"MATW=32 refuses no projection",0,pipe.mat_refused_o);
+  // The refusal count is a claim about the MATRIX WIDTH, so it has to name the
+  // width it was compiled for. It read "MATW=32" unconditionally, which was
+  // true of every build that existed -- and would have gone on reading MATW=32
+  // in the MATW=18 build the G8B target actually characterises.
+  //
+  // The expectation itself is the same at both widths and deliberately so: the
+  // narrowed core must refuse an out-of-range product rather than clamp it, so
+  // a refusal here is not a tolerated rounding difference, it is this stimulus
+  // going outside the range G8B is specified for. If MATW=18 ever refuses on
+  // legal terrain, that is a finding about the G8B target and not a test to
+  // relax.
+  check(pipe.mat_refused_o==0,
+        "MATW=" ZHAO_STR(ZHAO_PIPE_MATW) " refuses no projection",
+        0,pipe.mat_refused_o);
   check(pipe.held_o==0&&pipe.idle_o,"all arenas released and composition idle",0,pipe.held_o);
   check(got.held_output_errors==0,"stalled output packet remains completely stable",0,
         got.held_output_errors);
