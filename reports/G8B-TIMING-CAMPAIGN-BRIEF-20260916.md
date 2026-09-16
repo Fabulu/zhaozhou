@@ -101,6 +101,52 @@ callers and its contract belongs to both.
 binding. `proj_matw_directed` and `proj_rowmux_directed` still pass, including
 the positive control that skews one matrix word by a raw LSB.
 
+### T2 WAS ATTEMPTED AND REVERTED. Read this before attempting it again.
+
+The obvious form of this fix — register the arbitrated vertex so the core
+launches from flops — **violates a stated contract of this module**, and the
+sentence that forbids it is in `zhao_project_service.sv`'s own header:
+
+> LATENCY IS FIXED FROM THE ACCEPTED CYCLE. … A client that is not granted this
+> cycle is simply not accepted this cycle; **it is never accepted and then
+> delayed.** `*_ready_o` is the whole of that contract.
+
+The projector's capture-at-accept law binds a vertex to the matrix in effect at
+**its accept edge**. Put a register between the accept and the core and the two
+come apart: a configuration write landing in the gap projects a vertex under a
+matrix it was not accepted under.
+
+`terrain_wcache_differential_rpp1` caught it immediately and precisely:
+
+```
+FAIL: reconfig (b): a torn fill is faithful per corner to the matrix at its
+      accept edge
+[terrain_wcache_differential] 1/11698 checks FAILED
+```
+
+One failure in 11,698 — which is what a one-cycle reordering looks like when
+only a write that lands in the gap can see it.
+
+**Delaying the configuration by the same cycle does NOT fix it**, and that was
+tried. It preserves the order of a write against an *earlier* accept, but a
+write one cycle *after* an accept now arrives at the core simultaneously with
+the vertex it should have followed. The same test still failed, the same way.
+
+So T2 has exactly two honest shapes, and both are bigger than "add a register":
+
+1. **Capture the matrix with the vertex.** Register the selected view's sixteen
+   matrix words alongside the operands at the accept edge, so the pair travels
+   together and the law holds by construction. ~512 flops, affordable at 7,424
+   of 41,910 ALMs — but the core reads `mat[view]` internally today, so this
+   changes `zhao_project_core`'s input interface, not just the service.
+2. **Shorten the path without buffering.** Attack the arbitration-to-operand
+   cone itself rather than inserting a stage: the mux is three-way over four
+   32-bit operands plus the rider, gated by a grant computed from two far-away
+   valids. Registering `prefer_b_q`-derived terms, or narrowing what the grant
+   has to decide before the mux, keeps the accept edge intact.
+
+The reverted attempt is not in the tree. What it bought is this section.
+
 ---
 
 ## T3 — the inferred RAM paths
