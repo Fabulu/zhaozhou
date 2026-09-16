@@ -114,6 +114,26 @@ subsystems could be put side by side at all.
    result. It is a real design change with a real contract — the tessellator's
    arithmetic is exact and its cycle laws are asserted — so it is a piece of
    work, not a tweak.
+
+   **And it is not a one-line cut, which is worth knowing before starting.**
+   `last_y` is consumed in six branches of the ModeVtx landing logic
+   (`vland && vpop`, `vland` with and without `vo_valid`, `vpop` with and
+   without `vs_valid`), so registering the blend delays the LANDING, not just a
+   value. `pend_idx`, `pend_stride` and `pend_slot` have to travel with it, and
+   the `vtx_room` credit that guarantees "a landing never finds both slots full
+   without a pop" is stated against the current timing and has to be re-argued
+   against the new one.
+
+   The architecture rule permits this: latency may grow, initiation rate may
+   not. So the target is a blend stage that adds one cycle of latency and no
+   bubbles, with `terrain_pipe_differential`'s exact packet and cycle counts
+   re-derived rather than relaxed — it currently pins 478 packets over 2,343
+   cycles, and that number moving is expected while the RATE must not.
+
+   The cheap trick that worked for RESOLVE — compute the first half a cycle
+   earlier, off the arriving response — does **not** apply here. `m_hc` depends
+   on `lat_h_i` itself, so there is nothing upstream of the memory response to
+   move work into.
 2. `zhao_project_core` holds 1,631 of the negative endpoints and 716 of the
    launches. After the tess chain is cut, it is the next question, and it is
    shared with the geometry client rather than terrain-only.
