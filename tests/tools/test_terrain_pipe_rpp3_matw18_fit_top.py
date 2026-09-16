@@ -192,11 +192,28 @@ def receipt_violations(rows: list[dict]) -> list[str]:
             problems.append(
                 f"{name}: declares virtual-top-ports while reporting "
                 f"{virtual_pins} virtual pin(s)")
+        # WHICH ROWS ARE CLAIMS OF ACCEPTANCE, and this was wrong on its first
+        # writing. The rule was "anything not stamped failed", which swept in
+        # `map_only` -- and a MapOnly row is a PARTIAL measurement by
+        # construction: Analysis & Synthesis runs, the fitter does not, so there
+        # are no ALMs and no Fmax. `run_block_fit.ps1`'s own comment says it is
+        # "marked partial for exactly that reason: an incomplete measurement
+        # labelled complete is how a wrong number gets believed."
+        #
+        # The gate then reported three violations against `@g8b-t8-mapcheck` --
+        # dirty tree, 18 virtual pins, "Fmax None, below the ruled 100 MHz" --
+        # for a row that never claimed any of those things. All three read as
+        # damning and all three were the checker's category error.
+        #
+        # The status vocabulary in this database is `ok` (98), `failed:*` (33),
+        # `map_only` (23), `timeout` (5) and `incomplete:*` (1). Exactly one of
+        # those is a completed fit asserting its numbers passed the budget
+        # rules, so exactly one carries the acceptance condition.
         status = str(row.get("status", ""))
-        if status.startswith("failed") or status.startswith("timeout"):
+        if status != "ok":
             continue
-        # An ACCEPTING row -- one not stamped failed -- carries the whole of the
-        # architecture's G8B receipt condition.
+        # An ACCEPTING row carries the whole of the architecture's G8B receipt
+        # condition.
         if row.get("rtlCleanAtHead") is not True:
             problems.append(f"{name}: accepted from a tree that is not clean at HEAD")
         if virtual_pins not in (0,):
@@ -418,10 +435,27 @@ class G8BFitTopTests(unittest.TestCase):
                           status="failed:structure")
         self.assertTrue(receipt_violations([mismatched]),
                         "an ioMode that contradicts virtualPins is accepted")
-        failed = dict(base, status="failed:structure", fmaxMhz=43.94)
-        self.assertEqual(receipt_violations([failed]), [],
-                         "a row honestly stamped failed is treated as a claim of "
-                         "acceptance; diagnostic rows must stay legal")
+        # EVERY NON-`ok` STATUS MUST STAY LEGAL even while carrying numbers that
+        # would damn an accepting row. These are the four the database actually
+        # uses, and `map_only` is here because the first version of this checker
+        # reported three violations against a MapOnly row for facts it never
+        # claimed -- no Fmax, virtual pins, a dirty tree. A diagnostic row is
+        # evidence, and a gate that refuses evidence for not being a conclusion
+        # is the one that has to change.
+        for diagnostic in ("failed:structure", "map_only", "timeout",
+                           "incomplete:failed:quartus_map.exe"):
+            row = dict(base, status=diagnostic, fmaxMhz=43.94,
+                       ioMode="virtual-top-ports", virtualPins=18,
+                       rtlCleanAtHead=False)
+            self.assertEqual(
+                receipt_violations([row]), [],
+                f"a row stamped {diagnostic} is being read as a claim of "
+                f"acceptance; diagnostic rows must stay legal")
+        # And a MapOnly row with no Fmax at all -- the shape that actually fired.
+        partial = dict(base, status="map_only")
+        partial.pop("fmaxMhz")
+        self.assertEqual(receipt_violations([partial]), [],
+                         "a MapOnly row is judged on numbers it does not carry")
 
 
 if __name__ == "__main__":

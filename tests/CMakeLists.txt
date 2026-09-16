@@ -6996,7 +6996,7 @@ if(Python3_Interpreter_FOUND)
     PROPERTIES LABELS "fast;lint" TIMEOUT 120)
   # Packet A compiles and executes sixteen isolated detector models rather than
   # accepting lint-only failures; keep its CTest backstop above the shared lane.
-  set_tests_properties(render_texture_packet_a PROPERTIES TIMEOUT 300)
+  set_tests_properties(render_texture_packet_a PROPERTIES TIMEOUT 600)
   # MEASURED, not guessed: 51 tests in 176.9 s on this kit, unloaded, exiting 0.
   # The shared 120 s above was killing a PASSING gate, and a killed test reports
   # "***Timeout" -- which reads as "this accounting is broken" when all it meant
@@ -7005,6 +7005,21 @@ if(Python3_Interpreter_FOUND)
   # 600 leaves real headroom rather than sitting just above the measurement,
   # because this lane regenerates zhao_prod_top three times and will grow with
   # the block count.
+  #
+  # AND IT SAT AT 300 UNTIL 2026-09-16, when it killed the gate again. The
+  # paragraph above argues for 600 in its own last sentence; the value beside
+  # it said 300. Nobody had to be careless for that -- the reasoning was
+  # written, the number was not carried across, and nothing in the tree
+  # compares a comment to the constant it justifies. It is this repository's
+  # uncashed-cheque shape in four lines of CMake.
+  #
+  # RE-MEASURED the same day, idle machine, nothing else running:
+  # 21 tests in 256.3 s, exit 0. Note the direction -- FEWER tests, and 45%
+  # LONGER -- because this lane does not lint, it runs Verilator and then a
+  # native compiler on each generated model, so its cost tracks the number of
+  # elaborations rather than the number of test methods. 256 s against 300
+  # is 17% of headroom, which is why it died the moment a Quartus fit took
+  # two processors. 600 is 2.3x the idle measurement and survives that.
   set_tests_properties(texjoin_accounting_retirement PROPERTIES TIMEOUT 600)
   # Same lesson, same shared 120 s: MEASURED at 114-115 s unloaded, which passes
   # alone and is killed under -j 4. A budget that only holds on an idle machine
