@@ -9162,6 +9162,44 @@ zhao_material_v3_mutant_control(
   skip_f_finish MATERIAL_V3_MUTANT_SKIP_F
   zhao_texture_material_combine_v3_skip_f_finish_mutant)
 
+# THE POSITIVE CONTROL for the M3 WB->Q continuation bypass, and the only one
+# in this file that mutates PRODUCTION rather than a renamed copy.
+#
+# The bypass forwards a retiring non-final phase straight to Q when the
+# continuation queue is empty, and must therefore SUPPRESS the push that would
+# otherwise enqueue the same phase. Flipping CONT_BYPASS_SUPPRESS_PUSH enqueues
+# the very phase it also forwards, so the phase is issued twice. Every colour
+# still matches -- recomputing a product is idempotent -- which is precisely the
+# "counters see what pictures cannot" case: only the phase accounting sees it.
+#
+# The mutation is selected by a plain `ifdef, not a function-like `define, so
+# Verilator's -D actually reaches it. The negative control that law requires is
+# the thirteen tests above plus the healthy differential, which compile these
+# same sources with the macro UNDEFINED and pass.
+#
+# Polarity is inverted: this runs the HEALTHY test list against a mutated
+# design, so it PASSES when the accounting fires. The regex names the DIRECT
+# signature of the fault -- nine tags retired twice -- rather than any failure
+# or a nonzero exit, so a build break, a missing DLL or an unrelated regression
+# cannot masquerade as detection. Observed firing before this was registered:
+#   FAIL: no tag retired twice: expected 0x0, got 0x9
+#   FAIL: every typed result matches independent R9: expected 0x0, got 0x2
+#   [material_combine_v3_diff] 18/46 checks FAILED
+add_executable(tmv3_cont_bypass texture/material_combine_v3_diff.cpp)
+target_link_libraries(tmv3_cont_bypass PRIVATE zhao_harness zhao_zref)
+verilate(tmv3_cont_bypass
+  PREFIX Vzhao_texture_material_combine_v3
+  TOP_MODULE zhao_texture_material_combine_v3
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+  VERILATOR_ARGS --assert -DZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE)
+add_test(NAME material_combine_v3_cont_bypass_double_issue_control
+  COMMAND tmv3_cont_bypass)
+set_tests_properties(material_combine_v3_cont_bypass_double_issue_control
+  PROPERTIES LABELS "fast;nightly;packet-b;mutant" TIMEOUT 900
+  PASS_REGULAR_EXPRESSION "FAIL: no tag retired twice")
+
 # The short finish forms are an arithmetic claim over the whole raw-product
 # domain, including products no legal byte pair can make. The differential above
 # drives legal texels and so cannot reach that domain; this compares the two

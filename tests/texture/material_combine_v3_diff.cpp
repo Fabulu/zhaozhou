@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <map>
+#include <stdexcept>
 #include <vector>
 
 #include "verilated.h"
@@ -1768,16 +1769,31 @@ int main(int argc, char** argv) {
   if (kMutation >= 12) test_pipeline_boundary_mutant_fires();
   else test_mutant_control_fires();
 #else
-  test_r9_arithmetic_and_stale_separators();
-  test_exact_counts_loud_errors_and_required_status();
-  test_aux_is_status_only_and_sample2_is_real();
-  test_rtl_add_lerp_boundary_cross_products();
-  test_exact_saturation_accounting_under_stalls();
-  test_phase_and_product_cadence();
-  test_one_phase_retirement_is_one_per_clock();
-  test_timing4_eight_context_pipeline();
-  test_timing4_multiphase_recurrence_and_rate();
-  test_held_output_and_structural_idle();
+  // Every result lookup below is by_tag.at(), which THROWS when a fragment the
+  // run accepted never retired. Left uncaught that is a bare std::out_of_range
+  // and the reader learns nothing; a positive control registered against it
+  // would accept a build break or a missing DLL as evidence of detection.
+  // Convert it into the named diagnostic it actually is. Inert on a healthy
+  // build -- nothing throws -- and load-bearing for
+  // material_combine_v3_cont_bypass_double_issue_control, whose double-issued
+  // phase is invisible in every colour and visible only in the accounting.
+  try {
+    test_r9_arithmetic_and_stale_separators();
+    test_exact_counts_loud_errors_and_required_status();
+    test_aux_is_status_only_and_sample2_is_real();
+    test_rtl_add_lerp_boundary_cross_products();
+    test_exact_saturation_accounting_under_stalls();
+    test_phase_and_product_cadence();
+    test_one_phase_retirement_is_one_per_clock();
+    test_timing4_eight_context_pipeline();
+    test_timing4_multiphase_recurrence_and_rate();
+    test_held_output_and_structural_idle();
+  } catch (const std::out_of_range&) {
+    ++g_failed;
+    std::printf(
+        "FAIL: retirement bookkeeping lost a tag: the machine did not retire "
+        "what it accepted\n");
+  }
 #endif
 
   if (g_failed) {
