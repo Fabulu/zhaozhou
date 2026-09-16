@@ -97,7 +97,20 @@ whole-machine ALM number.
 > subsystem with a 108.37 MHz one and fitting the pair would measure the terrain
 > pipe's chain a second time and learn nothing new.
 >
-> Full measurement and diagnosis: `G8B-TERRAIN-FIRST-MEASUREMENT-20260916.md`.
+> **And it is not one chain.** Worst path per endpoint block says what each fix
+> would actually buy: `zhao_terrain_tess` caps at 43.9 MHz, `zhao_project_core`
+> at **50.5 MHz** behind it with 1,631 of the 2,000 negative endpoints, and the
+> inferred RAMs at about 65 MHz behind that. Cutting the tessellator chain
+> perfectly moves this subsystem to roughly 50 MHz and no further.
+>
+> G8A reached 108.37 MHz from −131 ns of TNS across eleven work packages and
+> three fits. G8B starts from **−7,360 ns** with three ceilings stacked in
+> series, so **it needs its own campaign, scoped and batched like Timing4** —
+> not a patch and a re-fit. `zhao_project_core` is shared with the geometry
+> client, so that part is not terrain-only work.
+>
+> Full measurement, per-block ceilings and diagnosis:
+> `G8B-TERRAIN-FIRST-MEASUREMENT-20260916.md`.
 
 ## Current R0-R9 completion matrix
 

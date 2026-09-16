@@ -1169,3 +1169,13 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - The G8B target is deliberately UNRULED on area and DSP - any result is evidence for this wrapper only, and assuming a saving against the ambiguous default-MATW target is how the stale terrain rows in `fit_targets.yml` came to exist. Fmax ruled at 100 because that is the machine's requirement.
 - Evidence: 203/203 across packets B-I; manifest check OK at 265 modules; `source_list_parity` still fails only on the pre-existing `zhao_shell_fit_top`.
 
+
+## 2026-09-16 (G8B scoping) - three ceilings, not one chain
+
+- Checked the per-block ceiling BEFORE writing any RTL, and it changed the plan. Worst path per endpoint block: `zhao_terrain_tess` 160 rows at -12.758 (43.9 MHz), **`zhao_project_core` 1,631 rows at -9.811 (50.5 MHz)**, inferred RAMs ~130 rows at -5.3 to -4.3 (65-70 MHz).
+- **Cutting the morph chain perfectly takes G8B from 43.94 to about 50.5 MHz and no further.** The block with the worst path is not the block with the most paths, and the second ceiling sits immediately behind the first.
+- `zhao_project_core`'s worst path launches from `u_tess|vo_valid` - a control bit - and spends 19.043 ns inside the projector. Control reaching that deep is arbitration/enable fanning into a datapath: a different repair from shortening an arithmetic chain. It is also SHARED with the geometry client, so it is not terrain-only work.
+- **G8B needs its own campaign, scoped and batched like Timing4.** G8A reached 108.37 MHz from -131 ns TNS across eleven packages and three fits; G8B starts from -7,360 ns with three stacked ceilings. A patch-and-refit would spend a fit to learn what the table already says.
+- Also recorded why the morph cut is not a one-liner: `last_y` feeds six branches of the ModeVtx landing logic, so the blend register delays the LANDING, `pend_idx`/`pend_stride`/`pend_slot` travel with it, and the `vtx_room` credit is argued against the current timing. The RESOLVE trick does not transfer - `m_hc` depends on `lat_h_i` itself, so there is nothing upstream of the memory response to move work into.
+- Final gate state: 789/802 on the fast label, the same 13 pre-existing reds as before this session's work (4 shell_fit, 4 npm with no node_modules, cppcheck, field_crater_ring, source_list_parity, texjoin, shell_golden_replay). No new failures from any of it; `early_desc_layout_guard` and `proj_service_rowmux_smoke` stay repaired.
+

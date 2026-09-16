@@ -108,6 +108,52 @@ for geometry, the shell, video, audio and memory is about 9,500 ALMs and 21
 DSPs. That is tight, and it is the first time the two largest measured
 subsystems could be put side by side at all.
 
+## THE CEILING AFTER EACH FIX — check this before cutting anything
+
+The worst path is in the tessellator, so the obvious plan is to cut that chain
+and re-fit. Here is what that would actually buy, taken from the same export by
+worst path PER ENDPOINT BLOCK:
+
+| endpoint block | negative rows | worst slack | data | ceiling it imposes |
+|---|---:|---:|---:|---:|
+| `zhao_terrain_tess` | 160 | −12.758 ns | 22.481 | **43.9 MHz** |
+| **`zhao_project_core`** | **1,631** | **−9.811 ns** | 19.043 | **50.5 MHz** |
+| `altsyncram_nfc1` | 2 | −5.328 ns | 14.837 | **65.4 MHz** |
+| `altsyncram_3gc1` | 4 | −4.497 ns | 14.118 | 68.9 MHz |
+| `altsyncram_07n1` | 104 | −4.321 ns | 13.444 | 69.7 MHz |
+
+**Cutting the tessellator chain perfectly would take this subsystem from
+43.94 MHz to about 50.5 MHz, and no further.** `zhao_project_core` holds 1,631
+of the 2,000 negative endpoints and caps the clock immediately behind it; the
+inferred RAMs cap it again at about 65 MHz behind that.
+
+So G8B is **not one bad chain**. It is at least three distinct problems in
+series, and the first one is not even the one with the most paths.
+
+`zhao_project_core`'s own worst path is worth reading, because it is a
+different shape from the tessellator's:
+
+```
+  u_tess|vo_valid  ->  u_sub|u_svc|zhao_project_core:...   -9.811 ns, data 19.043
+```
+
+That launches from the tessellator's output VALID — a control bit — and spends
+19 ns inside the projector. A control signal reaching that deep is usually
+arbitration or enable logic fanning into a datapath, which is a different kind
+of repair from shortening an arithmetic chain.
+
+### What this means for the plan
+
+G8A went from 90.96 MHz to 108.37 MHz across **eleven work packages** and three
+fits, starting from −131 ns of TNS and 497 negative paths. G8B starts from
+**−7,360 ns of TNS and 2,000 negative paths** — fifty-six times the total
+negative slack — with three separate ceilings stacked behind each other.
+
+**G8B needs its own campaign, not a patch**, and it should be scoped like the
+Timing4 one: name the work packages, fix them in a batch, and spend one fit at
+the end rather than one per idea. Anyone who cuts the morph chain, re-fits, and
+sees 50 MHz will have spent a fit to learn what this table already says.
+
 ## What is owed next
 
 1. **Pipeline the morph blend.** The chain above is the entire 43.94 MHz
@@ -134,8 +180,13 @@ subsystems could be put side by side at all.
    earlier, off the arriving response — does **not** apply here. `m_hc` depends
    on `lat_h_i` itself, so there is nothing upstream of the memory response to
    move work into.
-2. `zhao_project_core` holds 1,631 of the negative endpoints and 716 of the
-   launches. After the tess chain is cut, it is the next question, and it is
-   shared with the geometry client rather than terrain-only.
-3. Re-fit as a new labelled row. `@g8b` is now taken and the runner is
-   one-shot by design.
+2. **`zhao_project_core`, and it is not optional or second.** It holds 1,631 of
+   the negative endpoints, 716 of the launches, and a ceiling of 50.5 MHz that
+   the tessellator fix cannot get past. It is also SHARED with the geometry
+   client, so a repair here is not terrain-only work and its contract belongs
+   to more than one caller.
+3. **The inferred RAM paths**, ~130 rows at 13–15 ns of data delay, capping at
+   about 65 MHz behind the other two.
+4. Re-fit as a new labelled row — ONCE, after a batch. `@g8b` is taken and the
+   runner is one-shot by design, which is the right shape here: the table above
+   already says what a single-fix re-fit would report.
