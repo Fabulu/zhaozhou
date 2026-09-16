@@ -46,6 +46,53 @@ adoption gate, although substantial candidate work is built.
 
 ---
 
+## OWNER DIRECTION 2026-09-16 — spend M10K to buy ALMs
+
+Fabian, in session, mid-pass: *"remember we have lot's of m10k memory, ALM's
+are over budget 15 times over, so what you can you need to solve with memory."*
+
+**It arrived in conversation, not as a file**, which is exactly how direction
+gets lost between passes — the reason this docket exists. Recorded durably in
+`reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md` under its own heading,
+with the measured position and a work list, and indexed here.
+
+**Status: READ AND ACTED ON, and OPEN as a standing rule.** It is not a task
+that closes; it governs every optimisation choice until the owner says
+otherwise. What landed on the day it arrived:
+
+* `tools/design/check_array_storage.py` widened so the question can be asked at
+  all — it was reporting "0 blocks" beside **206 skipped declarations**, which
+  is the broken-instrument shape, and is now 47. Two CWD defects went with it,
+  one of which MANUFACTURED a finding (1 flagged / 0 stale from outside the
+  repo against 0 / 10 from inside).
+* The answer it then gave, which redirects the work: **no block with a current
+  fit row holds 8 Kbit or more of declared array in flip-flops.** The ALM breach
+  is combinational logic, so the lever is converting COMPUTATION TO LOOKUP, not
+  relocating state.
+* `fpga/rtl/common/zhao_qsq_bytemul.sv` — R1's "reusable quarter-square
+  primitive", extracted from `zhao_terrain_shade`, which had built one correctly
+  on 2026-09-09 and kept it to itself while R1 and R4 both recorded it absent.
+  One M10K, no DSP, exact over all 65,536 byte pairs driven through the RTL.
+* A work list in the roadmap: **51 fitted blocks report zero M10K**, carrying
+  39,121 ALM between them (a sorting aid, not a budget — it double-counts seed
+  variants and overlaps composed roots).
+
+**TWO THINGS THE OWNER MAY WANT TO RULE ON, neither decided in this pass:**
+
+1. **The M10K envelope is 464, not 553, and it is per-domain.** The roadmap is
+   explicit that these are REPLACEMENT allocations. *Projection and result
+   arenas* — the worst ALM breach at 12,267 against 4,500 — is **already over
+   its 48-block memory allocation at 52**, so the domain that most needs to
+   spend memory has none of its own left. Texture holds 96 unspent, FIELD 64,
+   Geometry 64. **Re-allocating across domains is an owner decision.**
+2. **The multiplier in the instruction does not match the measurement, and the
+   direction is right either way.** ALM is 40,591 against a 30,000 target and a
+   41,910 device — 1.35x the target, 97% of the chip. It is not 15x. But whole
+   domains contribute ZERO (Texture 0 of 7,000; Complete FIELD 0 of 4,500; 34
+   unpriced blocks), so the machine as measured does not fit at all, and the
+   urgency the instruction carries is correct even though the number is not a
+   figure this repository can source. Recorded rather than quietly rounded.
+
 ## P0 — the console cannot ship without these
 
 ### D1. The 100 MHz timing surgery — **CLOSED 2026-09-04**
