@@ -1756,3 +1756,51 @@ taught that morning by calling itself blind.
 evidence rather than argument. Deferred deliberately — a 1,600-line copy falls
 straight under `mutant_copy_drift` maintenance, which is the right cost but is
 a packet of its own.
+
+### T8 — the first package scoped from the RIGHT path list
+
+`@g8b-t56-pins` named `zhao_project_core`'s divider setup as the physical-pin
+cap at −1.381 ns. The cone ends in a 31-bit compare (`pre_sat`) stacked on a
+48-bit add (`pre_h`) inside one cycle — **and the value the compare needs is
+already registered**, because `s3_dv[li] <= {15'b0, pre_h[li][47:31], ...}` and
+`s3_d <= s2b_d` are written on the same edge. So `s3_sat` was carrying forward
+a fact two registers beside it already imply.
+
+Deleted it. The compare moves into the first divider cycle (own worst path
+−0.033, with room), **no stage added, latency unchanged** (`proj_matw_directed`
+still measures L=40, II=3), and three flip-flops go away. MapOnly confirms
+8,524 registers against T5/T6's 8,828. The only package in this campaign that
+removes work rather than relocating or splitting it.
+
+**Two self-inflicted faults, both caught, both worth keeping:**
+
+1. **I wrote the detector-clocked-by-two-enables fault into the check meant to
+   police the change.** `a_sat_equiv` fired instantly with
+   `combinational=000 registered=111`. Not T8 — my shadow register used
+   `s2b_valid || s3_valid` while the whole pipeline sits under
+   `end else if (en_i)`, so the two sides were showing different cycles. It
+   failed toward a FALSE ALARM rather than a false silence, which is the
+   luckier half of that law and the only reason it was obvious.
+2. **The fit died in 5.2 s on an implicit generate.** Verilator: zero
+   diagnostics. Quartus 17.0 wants explicit `generate`/`endgenerate` with the
+   genvar outside the header — the form CLAUDE.md already names. Now
+   **QUARTUS_GOTCHAS 18**, which is not about the form but about the gate
+   nobody reaches for: `run_block_fit -MapOnly` answers "does the synthesiser
+   accept this" in **35.7 s against a ten-minute fit**, catches the whole class,
+   and reports registers and memory bits besides. Lint → tests → **MapOnly** →
+   fit; step three was the one being skipped.
+
+### OPEN, and deliberately not fixed by guessing
+
+`render_texture_packet_a` TIMED OUT in the `-L fast` gate while a Quartus fit
+held two processors. Its budget is `TIMEOUT 300`, and that budget carries its
+own note: *"MEASURED, not guessed: 51 tests in 176.9 s on this kit, unloaded"*.
+**Today it runs 21 tests in 241 s unloaded** — so the headroom is 20%, and under
+any contention it fails.
+
+Two things are wrong and only one is the timeout. The runtime has grown while
+the test count fell, which is worth understanding before the budget is moved;
+and raising a budget to paper over a slow gate is exactly the guess the
+existing comment forbids. **Re-measure unloaded, decide with the number.** Not
+done in this pass because the machine has had a fit running almost
+continuously and there is no clean measurement to be had.
