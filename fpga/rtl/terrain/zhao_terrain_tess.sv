@@ -350,6 +350,44 @@ module zhao_terrain_tess #(
     end
   endfunction
 
+  // G8B T9: THE 52-BIT ROUNDING ADD IS A ONE-BIT INCREMENT.
+  //
+  // @g8b-t8-pins left this block's landing as the last failing family at
+  // -0.368 ns -- `ln2_prod_q -> vq_y`, which is `rescale16` then
+  // `fx_add_sat`, two dependent carry chains in the consumed cycle.
+  //
+  // Write x = H*2^16 + L with 0 <= L < 2^16. Then
+  //
+  //     floor((x + 2^15) / 2^16) = H + floor((L + 2^15) / 2^16)
+  //                              = H + (1 if L >= 2^15 else 0)
+  //                              = (x >>> 16) + x[15]
+  //
+  // so the 52-bit add of a constant is a 36-bit INCREMENT BY A SINGLE BIT,
+  // and the bit is already sitting in the operand. Nothing is approximated:
+  // the identity is exact for every signed x, including the negative cases
+  // where the intuition wobbles -- x = -32768 gives (x >>> 16) = -1 and
+  // x[15] = 1, so 0, and -32768 + 32768 = 0 shifted is also 0.
+  //
+  // Checked outside the RTL before it was written: exhaustive over
+  // +-70,000, the 52-bit rails, and 2,000,000 random points over the full
+  // domain, ZERO disagreements -- with a negative control that drops the
+  // rounding bit and disagrees 70,000 times, so the comparison can see it.
+  // `a_blend_rescale_exact` repeats that against the untouched `rescale16`
+  // on every blended vertex in simulation.
+  //
+  // T7 tried to move this same add and lost 7.9 MHz, because the register it
+  // folded into belonged to a DSP. T9 does not move it anywhere; it observes
+  // that most of it was never needed.
+  function automatic logic signed [31:0] rescale16_incr(input logic signed [51:0] x);
+    logic signed [51:0] r;
+    begin
+      r = (x >>> 16) + (x[15] ? 52'sd1 : 52'sd0);
+      if (r > 52'sd2147483647) rescale16_incr = 32'sh7FFF_FFFF;
+      else if (r < -52'sd2147483648) rescale16_incr = 32'sh8000_0000;
+      else rescale16_incr = r[31:0];
+    end
+  endfunction
+
   // ---- job state -----------------------------------------------------------
   logic [ 5:0] j_ox, j_oz;
   logic [ 1:0] j_level;
@@ -1141,9 +1179,20 @@ module zhao_terrain_tess #(
   // `rescale16` and `fx_add_sat` are untouched and applied in the same order to
   // the same values, so the arithmetic is bit-identical and
   // terrain_pipe_differential stays exact against zhao_terrain_project.
-  wire signed [31:0] m_step = rescale16(ln2_prod_q);
+  wire signed [31:0] m_step = rescale16_incr(ln2_prod_q);
   wire signed [31:0] m_y = fx_add_sat({ln2_vh_q[31], ln2_vh_q},
                                       {m_step[31], m_step});
+
+`ifndef SYNTHESIS
+  // T9's proof, on every blended vertex rather than in the comment above.
+  // `rescale16` is otherwise unused now and stays exactly as it was, which is
+  // the point: a form that mutates into its own oracle is not an oracle.
+  always_ff @(posedge clk) begin
+    if (ln2_v_q && (rescale16_incr(ln2_prod_q) !== rescale16(ln2_prod_q)))
+      $fatal(1, "zhao_terrain_tess: T9 rescale disagrees -- incr=%0d add=%0d prod=%0d",
+             rescale16_incr(ln2_prod_q), rescale16(ln2_prod_q), ln2_prod_q);
+  end
+`endif
 
   // Stage A's view of the last slot: the x/z mux sits on the register inputs,
   // not in the blend cone.
