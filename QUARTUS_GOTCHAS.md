@@ -139,3 +139,53 @@ both its neighbours, and a MapOnly row is retained evidence in its own right.
 distinct from `failed:structure`, which is a fit that COMPLETED and whose
 budget rules refused the numbers. Keep both; deleting the first removes the
 only record that a form does not synthesise.
+
+---
+
+## 19. Do not hand-optimise ARITHMETIC for this synthesiser. Optimise STRUCTURE.
+
+Added 2026-09-17, from the G8B timing campaign, which produced five packages
+that worked and two that did not, and the two that did not are the same shape.
+
+| package | what it changed | measured |
+|---|---|---:|
+| T3a | registered the window mask (WHERE it is computed) | **+11.7 MHz** |
+| T5 + T6 | registered the lattice base; split the output cone | **+9.7 MHz** |
+| T8 | **deleted** a register whose value was already implied | **+8.6 MHz** |
+| T7 | moved a constant add into the register ahead of it | **−7.9 MHz** |
+| T9 | strength-reduced a constant add | **0.0** |
+
+**T9.** `rescale16` computed `(x + 2^15) >>> 16`. Writing x = H·2^16 + L, that
+equals `(x >>> 16) + x[15]` -- a 36-bit increment by a single bit instead of a
+52-bit add. The identity is exact; it was verified over the full domain before
+a line was written, with a negative control that fired 70,000 times.
+
+The fit came back **byte-identical in every field** -- same ALM, registers,
+RAM, DSP, Fmax, slack and TNS -- from a different digest and a different
+commit. Quartus had already done it. Adding a constant whose only set bit is
+at position 15 and then discarding bits 15 downward is a pattern the
+synthesiser recognises without help.
+
+**T7** is the same lesson with a price attached. It moved that rounding add
+one stage earlier, into `ln2_prod_q <= m_prod`. That register was **the DSP's
+own output register**, so an adder in front of it evicts the product from the
+DSP into fabric: multiply-to-DSP-register became
+multiply-out-through-an-adder, and it cost 7.9 MHz to save 0.245 ns elsewhere.
+
+**The rule.** Quartus's local arithmetic optimiser is better than hand
+rewriting, and it knows about hard-block boundaries that the RTL does not
+mention. What it CANNOT do is decide where your pipeline registers go or
+whether one of them is redundant -- that is whatever the RTL says. So:
+
+* **Worth doing:** register a value one cycle earlier; split a cone; delete a
+  register whose value is implied by its neighbours; move a computation out of
+  a consumed path into a next-state cone.
+* **Not worth doing:** re-associating adds, strength-reducing constant
+  arithmetic, folding rounding terms. At best zero; at worst it breaks a hard
+  block's packing and costs more than the path was worth.
+
+**And neither of these is visible in simulation.** Verilator has no DSP and no
+carry chains; T7 and T9 were both bit-exact, both had live equivalence
+assertions that stayed silent, and both were confirmed useless or harmful only
+by a fit. That is what gotcha 18's MapOnly step cannot cover either -- it
+answers "does this synthesise", not "is this faster".
