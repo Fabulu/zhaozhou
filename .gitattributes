@@ -147,6 +147,8 @@ tools/quartus/g8a_timing2_receipt.py text eol=lf
 tools/quartus/run_g8a_timing2_fit.ps1 text eol=lf
 tools/quartus/g8a_timing3_receipt.py text eol=lf
 tools/quartus/run_g8a_timing3_fit.ps1 text eol=lf
+tools/quartus/g8a_timing4_receipt.py text eol=lf
+tools/quartus/run_g8a_timing4_fit.ps1 text eol=lf
 reports/G8A-CRCSERIAL-TIMING-RECOVERY-20260914.md text eol=lf
 # G8A DSP rescue candidates, paired controls and exact source manifests.
 fpga/rtl/common/zhao_dual18_mul.sv text eol=lf

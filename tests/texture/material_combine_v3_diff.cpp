@@ -1124,6 +1124,223 @@ void test_timing4_eight_context_pipeline() {
         d.idle_o ? 1 : 0);
 }
 
+// --------------------------------------------------------------------------
+// M3: THE S+F THROUGHPUT CALENDAR, MEASURED RATHER THAN ASSUMED.
+//
+// The two tests above cover ONE-PHASE traffic: eight contexts accepted without a
+// bubble, eight results retired on consecutive clocks, eleven-cycle latency.
+// That is exactly the case which cannot see the trap the owner brief names in
+// section 8.1 -- a one-phase job never rides the continuation queue at all.
+//
+// A multi-phase job does. It launches at Q, walks R/D/S/O/M/F/WB, writes scratch,
+// is re-queued as a continuation, and only then can its NEXT phase launch. Adding
+// the S and F registers lengthens that loop, and with only eight contexts a
+// recurrence longer than eight clocks caps sustained phase throughput at 8/R
+// phases per clock no matter how well each individual stage pipelines.
+//
+// So measure R directly, and measure the sustained rates it predicts. The
+// numbers are printed, not merely asserted, because section 21.5 asks for the
+// calendar itself rather than a pass mark.
+// --------------------------------------------------------------------------
+struct PhaseTrace {
+  std::vector<int> issue_cycles;
+  std::vector<int> complete_cycles;
+  std::vector<int> output_cycles;
+  int first_accept = -1;
+  int last_accept = -1;
+  int accepted = 0;
+  int retired = 0;
+  int max_inflight = 0;
+  int drain_cycle = -1;
+};
+
+// stall_period 0 means the sink is always ready; otherwise the sink refuses on
+// every stall_period-th cycle, which is what exercises DONE backlog and the
+// completion/refill coincidence the brief asks for.
+PhaseTrace trace_batch(const std::vector<Frag>& batch, int stall_period) {
+  Dut d;
+  reset(d);
+  PhaseTrace trace;
+  std::size_t next = 0;
+  uint32_t prev_issued = 0;
+  uint32_t prev_completed = 0;
+
+  for (int cycle = 0; cycle < 20000; ++cycle) {
+    if (next < batch.size()) drive_frag(d, batch[next]);
+    else d.f_valid_i = 0;
+    d.o_ready_i = (stall_period == 0 || (cycle % stall_period) != 0) ? 1 : 0;
+    d.eval();
+
+    const bool accepted = d.f_valid_i && d.f_ready_o;
+    const bool retired = d.o_valid_o && d.o_ready_i;
+    if (retired) trace.output_cycles.push_back(cycle);
+
+    tick(d);
+    if (accepted) {
+      if (trace.first_accept < 0) trace.first_accept = cycle;
+      trace.last_accept = cycle;
+      ++next;
+      ++trace.accepted;
+    }
+    if (retired) ++trace.retired;
+    const int inflight = trace.accepted - trace.retired;
+    if (inflight > trace.max_inflight) trace.max_inflight = inflight;
+
+    d.eval();
+    for (uint32_t i = prev_issued; i < d.phases_issued_o; ++i)
+      trace.issue_cycles.push_back(cycle);
+    for (uint32_t i = prev_completed; i < d.phases_completed_o; ++i)
+      trace.complete_cycles.push_back(cycle);
+    prev_issued = d.phases_issued_o;
+    prev_completed = d.phases_completed_o;
+
+    if (next == batch.size() &&
+        trace.retired == static_cast<int>(batch.size()) && d.idle_o) {
+      trace.drain_cycle = cycle;
+      break;
+    }
+  }
+  return trace;
+}
+
+Frag multi_phase_frag(uint8_t recipe, uint16_t tag, uint8_t seed) {
+  Frag f;
+  f.recipe = recipe;
+  // DETAIL_LIGHT and DETAIL_MASK need three real samples; MODULATE needs two.
+  f.count = (recipe == 6 || recipe == 7) ? 3 : 2;
+  f.weight = 0x40;
+  f.s[0] = plane(static_cast<uint8_t>(0x20 + seed), 0x40, 0x60, 0x80,
+                 static_cast<uint8_t>(seed));
+  f.s[1] = plane(0x30, 0x50, 0x70, 0x90, 0);
+  f.s[2] = plane(0x38, 0x58, 0x78, 0x98, 0);
+  f.base = plane(0x11, 0x22, 0x33, 0x44, 0);
+  f.tag = tag;
+  return f;
+}
+
+int steady_recurrence(const std::vector<int>& cycles) {
+  // The gap between a context's consecutive phase launches, taken from a lone
+  // job so no other context can fill the pipeline in between.
+  if (cycles.size() < 2) return -1;
+  const int gap = cycles[1] - cycles[0];
+  for (std::size_t i = 2; i < cycles.size(); ++i)
+    if (cycles[i] - cycles[i - 1] != gap) return -2;
+  return gap;
+}
+
+void test_timing4_multiphase_recurrence_and_rate() {
+  std::printf("\n[M3] S+F throughput calendar, measured on this RTL\n");
+
+  // ---- 1. Continuation recurrence, measured on a lone multi-phase job ----
+  int recurrence[3] = {0, 0, 0};
+  const uint8_t lone_recipes[3] = {1, 6, 7};  // MODULATE, DETAIL_LIGHT, DMASK
+  const char* lone_names[3] = {"MODULATE(2ph)", "DETAIL_LIGHT(3ph)",
+                               "DETAIL_MASK(2ph)"};
+  for (int i = 0; i < 3; ++i) {
+    std::vector<Frag> lone{multi_phase_frag(lone_recipes[i], 0x7100, 3)};
+    const PhaseTrace t = trace_batch(lone, 0);
+    recurrence[i] = steady_recurrence(t.issue_cycles);
+    std::printf("[M3]   %-18s phases=%d recurrence=%d accept->first_out=%d "
+                "accept->drain=%d\n",
+                lone_names[i], static_cast<int>(t.issue_cycles.size()),
+                recurrence[i],
+                t.output_cycles.empty() ? -1
+                                        : t.output_cycles.front() - t.first_accept,
+                t.drain_cycle - t.first_accept);
+  }
+
+  // ---- 2. Saturated multi-phase stream: the rate the recurrence predicts ----
+  std::vector<Frag> saturated;
+  for (int i = 0; i < 48; ++i)
+    saturated.push_back(multi_phase_frag(6, static_cast<uint16_t>(0x7200 + i),
+                                         static_cast<uint8_t>(i)));
+  const PhaseTrace sat = trace_batch(saturated, 0);
+  const int sat_span = sat.issue_cycles.empty()
+                           ? 0
+                           : sat.issue_cycles.back() - sat.issue_cycles.front() + 1;
+  const double sat_rate =
+      sat_span > 0 ? static_cast<double>(sat.issue_cycles.size()) / sat_span : 0.0;
+  std::printf("[M3]   saturated DETAIL_LIGHT x48: phases=%d span=%d "
+              "phases/clk=%.3f max_inflight=%d drain=%d\n",
+              static_cast<int>(sat.issue_cycles.size()), sat_span, sat_rate,
+              sat.max_inflight, sat.drain_cycle);
+
+  // ---- 3. Alternating recipes and mixed continued/new work ----
+  std::vector<Frag> mixed;
+  for (int i = 0; i < 48; ++i) {
+    const uint8_t recipe = (i % 3 == 0) ? 0 : ((i % 3 == 1) ? 1 : 6);
+    Frag f = multi_phase_frag(recipe, static_cast<uint16_t>(0x7300 + i),
+                              static_cast<uint8_t>(i));
+    if (recipe == 0) f.count = 1;  // one-phase PASSTHRU beside the multi-phase
+    mixed.push_back(f);
+  }
+  const PhaseTrace mix = trace_batch(mixed, 0);
+  const int mix_span = mix.issue_cycles.empty()
+                           ? 0
+                           : mix.issue_cycles.back() - mix.issue_cycles.front() + 1;
+  std::printf("[M3]   mixed 1/2/3-phase x48: jobs=%d phases=%d span=%d "
+              "phases/clk=%.3f drain=%d\n",
+              mix.retired, static_cast<int>(mix.issue_cycles.size()), mix_span,
+              mix_span > 0 ? static_cast<double>(mix.issue_cycles.size()) / mix_span
+                           : 0.0,
+              mix.drain_cycle);
+
+  // ---- 4. DONE backlog and output stalls over the same sequence ----
+  const PhaseTrace stalled = trace_batch(saturated, 4);
+  std::printf("[M3]   saturated DETAIL_LIGHT x48, sink stalls 1-in-4: "
+              "jobs=%d phases=%d max_inflight=%d drain=%d\n",
+              stalled.retired, static_cast<int>(stalled.issue_cycles.size()),
+              stalled.max_inflight, stalled.drain_cycle);
+
+  // ---- 5. Fast error / count-zero jobs ----
+  std::vector<Frag> fast;
+  for (int i = 0; i < 16; ++i) {
+    Frag f;
+    f.recipe = 0;
+    f.count = 0;  // count-zero issues no source request at all
+    f.base = plane(0x10, 0x20, 0x30, 0x40, 0);
+    f.tag = static_cast<uint16_t>(0x7400 + i);
+    fast.push_back(f);
+  }
+  const PhaseTrace quick = trace_batch(fast, 0);
+  std::printf("[M3]   count-zero x16: jobs=%d phases=%d drain=%d\n",
+              quick.retired, static_cast<int>(quick.issue_cycles.size()),
+              quick.drain_cycle);
+
+  // ---- Invariants the measurement must hold, whatever the calendar is ----
+  // Every job retires exactly once, and every launched phase is written back.
+  check(sat.retired == 48 && mix.retired == 48 && stalled.retired == 48 &&
+            quick.retired == 16,
+        "every multi-phase, mixed, stalled and count-zero job retires exactly once",
+        1, (sat.retired == 48 && mix.retired == 48 && stalled.retired == 48 &&
+            quick.retired == 16) ? 1 : 0);
+  check(sat.issue_cycles.size() == sat.complete_cycles.size() &&
+            mix.issue_cycles.size() == mix.complete_cycles.size() &&
+            stalled.issue_cycles.size() == stalled.complete_cycles.size(),
+        "issued and completed phase counts close on every measured stream", 1,
+        (sat.issue_cycles.size() == sat.complete_cycles.size() &&
+         mix.issue_cycles.size() == mix.complete_cycles.size() &&
+         stalled.issue_cycles.size() == stalled.complete_cycles.size()) ? 1 : 0);
+  check(sat.max_inflight <= 8 && stalled.max_inflight <= 8,
+        "context occupancy never exceeds NCTX under saturation or stalls", 1,
+        (sat.max_inflight <= 8 && stalled.max_inflight <= 8) ? 1 : 0);
+  check(sat.issue_cycles.size() == 144,
+        "48 DETAIL_LIGHT jobs launch exactly three physical phases each", 144,
+        static_cast<int>(sat.issue_cycles.size()));
+
+  // The recurrence is the number that decides whether a bypass is owed: with
+  // NCTX contexts, sustained phase throughput cannot exceed NCTX/recurrence.
+  check(recurrence[0] > 0 && recurrence[1] > 0,
+        "continuation recurrence is a single stable gap for a lone job", 1,
+        (recurrence[0] > 0 && recurrence[1] > 0) ? 1 : 0);
+  check(recurrence[1] <= 8,
+        "eight contexts can cover the measured continuation recurrence", 1,
+        recurrence[1] <= 8 ? 1 : 0);
+  check(sat_rate > 0.98,
+        "saturated multi-phase traffic sustains one phase per clock", 1,
+        sat_rate > 0.98 ? 1 : 0);
+}
+
 void test_held_output_and_structural_idle() {
   Dut d;
   reset(d);
