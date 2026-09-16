@@ -46,11 +46,11 @@ SUPPORTED_DUPLICATE_PACKAGE_SHA256 = "54f7a8399b02634f5cf0fb892fa271ead317406fe8
 SUPPORTED_DUPLICATE_PROFILES = {
     (SCHEMA_FIXTURE_TOP, SCHEMA_FIXTURE_PURPOSE): {
         "count": 41,
-        "sha256": "e67f2262777fb19c59dbd1ae8ff15c714d97282de8999e625abd4be4deba1f71",
+        "sha256": "28a1106e736abe08b092f060bbb9cefbc323b92b530cfa854bf250fac1cb166a",
     },
     (PRODUCTION_TOP, PRODUCTION_INTERFACE_PURPOSE): {
         "count": 105,
-        "sha256": "115dbfeef621343004e4c51444a9ca23e85d82a6f770401b4d4803dafbb775f6",
+        "sha256": "0cb6f8812895c285ade5911768134b90d8691f2a7171007d8aa130a05e53640a",
     },
 }
 SUPPORTED_DTYPE_KINDS = frozenset({"BASICDTYPE"})
@@ -148,7 +148,11 @@ QUIET_SOURCE_MAP = {
     "q_owner_combine_valid": "owner_combine_valid_w",
     "q_owner_final_valid": "owner_final_valid_w",
     "q_rcp_req_valid": "rcp_req_valid_w",
-    "q_rcp_rsp_valid": "rcp_rsp_valid_w",
+    # TIMING4 R1T added a registered reciprocal head between the response and
+    # perspective prep. A record parked in that register is work in flight, so
+    # quiet must account for it or the island can report itself quiet while
+    # holding one.
+    "q_rcp_rsp_valid": "rcp_rsp_valid_w || rcp_head_valid_q",
     "q_persp_req_valid": "persp_req_valid_w",
     "q_persp_rsp_valid": "persp_rsp_valid_w",
     "q_metajoin_a_valid": "metajoin_a_valid_w",
@@ -2416,7 +2420,32 @@ def verilator_duplicate_markers(payload: object) -> tuple[VerilatorDuplicateMark
 def canonical_verilator_duplicate_marker_bytes(
     markers: Sequence[VerilatorDuplicateMarker],
 ) -> bytes:
-    rows = [marker.canonical_row() for marker in sorted(markers)]
+    """Serialise the duplicate-marker set for fingerprinting.
+
+    parent_struct_addr is Verilator's own internal label for the parent struct
+    ("(RXPB)"), reassigned wholesale whenever elaboration order moves. Adding
+    one register to the island relabelled 98 of 105 rows while every
+    json_pointer, member_name and loc stayed identical. Hashing it makes the
+    fingerprint fire on changes it is not trying to detect, and it was re-pinned
+    three times in one session for exactly that.
+
+    What this fingerprint is FOR is which members Verilator had to rename, and
+    how they group under their parents. So the label is replaced by its GROUP
+    ORDINAL, assigned by first appearance in sorted order. A pure relabelling
+    now hashes identically; members moving between parents, or the number of
+    distinct parents changing, still move the ordinals and still fire.
+    DuplicateFingerprintGroupingTests is the negative control for that claim.
+    """
+    ordered = sorted(markers)
+    groups: dict[str, str] = {}
+    rows = []
+    for marker in ordered:
+        row = marker.canonical_row()
+        addr = row.pop("parent_struct_addr")
+        if addr not in groups:
+            groups[addr] = f"g{len(groups)}"
+        row["parent_struct_group"] = groups[addr]
+        rows.append(row)
     return json.dumps(
         rows,
         ensure_ascii=False,

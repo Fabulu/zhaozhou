@@ -1097,9 +1097,15 @@ void test_timing4_eight_context_pipeline() {
   }
   d.f_valid_i = 0;
 
+  // TEN, not the eleven this pinned before the section 8.4 WB-final ->
+  // completion-read forwarding. The tail lost exactly one clock: the lap a
+  // finished context used to take through doneq before its completion read
+  // could issue. Kept EXACT rather than relaxed to "<= 11" -- the value of this
+  // check is that it moves when the pipeline moves, and a bound would have
+  // absorbed this change silently.
   int latency_errors = 0;
   for (int i = 0; i < 8; ++i)
-    if (retire_cycle[i] - accept_cycle[i] != 11) ++latency_errors;
+    if (retire_cycle[i] - accept_cycle[i] != 10) ++latency_errors;
 
   check(accepted == 8 && input_bubbles == 0,
         "NCTX=8 accepts eight back-to-back phases without a bubble", 8,
@@ -1107,8 +1113,8 @@ void test_timing4_eight_context_pipeline() {
   check(retired == 8 && output_bubbles == 0,
         "Timing4 pipeline retires eight results on consecutive clocks", 8,
         retired - output_bubbles);
-  check(first_output_cycle == 11 && latency_errors == 0,
-        "S/F pipeline has exact eleven-cycle accept-to-visible latency", 11,
+  check(first_output_cycle == 10 && latency_errors == 0,
+        "S/F pipeline has exact ten-cycle accept-to-visible latency", 10,
         first_output_cycle);
   check(wrong == 0,
         "S/F pipeline preserves every ordered context, phase, and result", 0,
@@ -1741,8 +1747,15 @@ void test_pipeline_boundary_mutant_fires() {
     if (take) ++accepted;
   }
 
+  // NINE: production's ten, less the one stage this mutant removes. Both
+  // numbers dropped by one when section 8.4 shortened the completion tail,
+  // which is shared by the healthy pipeline and by every stage-removal mutant
+  // of it -- so the GAP is what this control actually asserts, and the gap is
+  // unchanged. Kept as two exact numbers rather than a computed difference,
+  // because a difference of "whatever production does minus one" would agree
+  // with production however wrong production became.
   for (int i = 0; i < 8; ++i)
-    if (retire_cycle[i] - accept_cycle[i] != 10) ++latency_errors;
+    if (retire_cycle[i] - accept_cycle[i] != 9) ++latency_errors;
 
   check(accepted == 8 && retired == 8,
         "pipeline mutant accepts and retires the complete eight-context stream",

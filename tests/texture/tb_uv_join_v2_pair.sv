@@ -14,6 +14,10 @@ module tb_uv_join_v2_pair (
     output var logic         desc_ready_o,
     input  var logic [13:0]  desc_owner_i,
     input  var logic [286:0] desc_logical_i,
+    // TIMING4 E1: the descriptor's usability verdict, offered on the same
+    // transfer as its payload. All four instances see the same value so the
+    // mutants stay controls over generation carriage alone.
+    input  var logic         desc_usable_i,
 
     input  var logic               uv_valid_i,
     output var logic               uv_ready_o,
@@ -70,6 +74,7 @@ module tb_uv_join_v2_pair (
       .desc_valid_i            (desc_valid_i),
       .desc_ready_o            (desc_ready_o),
       .desc_data_i             (desc_data_w),
+      .desc_usable_i           (desc_usable_i),
       .uv_valid_i              (uv_valid_i),
       .uv_ready_o              (uv_ready_o),
       .uv_data_i               (uv_data_w),
@@ -87,6 +92,7 @@ module tb_uv_join_v2_pair (
       .desc_valid_i            (desc_valid_i),
       .desc_ready_o            (generation_desc_ready_w),
       .desc_data_i             (desc_data_w),
+      .desc_usable_i           (desc_usable_i),
       .uv_valid_i              (uv_valid_i),
       .uv_ready_o              (generation_uv_ready_w),
       .uv_data_i               (uv_data_w),
@@ -105,6 +111,7 @@ module tb_uv_join_v2_pair (
       .desc_valid_i            (desc_valid_i),
       .desc_ready_o            (late_desc_ready_w),
       .desc_data_i             (desc_data_w),
+      .desc_usable_i           (desc_usable_i),
       .uv_valid_i              (uv_valid_i),
       .uv_ready_o              (late_uv_ready_w),
       .uv_data_i               (uv_data_w),
@@ -123,6 +130,7 @@ module tb_uv_join_v2_pair (
       .desc_valid_i            (reload_desc_valid_i),
       .desc_ready_o            (reload_desc_ready_o),
       .desc_data_i             (desc_data_w),
+      .desc_usable_i           (desc_usable_i),
       .uv_valid_i              (reload_uv_valid_i),
       .uv_ready_o              (reload_uv_ready_o),
       .uv_data_i               (uv_data_w),

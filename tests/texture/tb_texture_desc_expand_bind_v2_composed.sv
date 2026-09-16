@@ -88,6 +88,11 @@ module tb_texture_desc_expand_bind_v2_composed #(
   logic desc_rsp_valid_w, desc_rsp_ready_w;
   logic [13:0] desc_rsp_owner_w;
   logic [286:0] desc_rsp_logical_w;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // TIMING4 E1 untrusted view; this composed bench keeps checking the public
+  // masked output, so the raw row is observed but not consumed here.
+  logic [286:0] desc_rsp_logical_raw_w;
+  /* verilator lint_on UNUSEDSIGNAL */
   logic desc_gen_ok_w, desc_pad_ok_w, desc_usable_w, desc_idle_w;
   logic [31:0] desc_writes_unused, desc_reads_unused;
 
@@ -172,6 +177,7 @@ module tb_texture_desc_expand_bind_v2_composed #(
           .rd_result_valid_o(desc_rsp_valid_w),
           .rd_result_ready_i(desc_rsp_ready_w),
           .rd_owner_o(desc_rsp_owner_w), .rd_logical_o(desc_rsp_logical_w),
+          .rd_logical_raw_o(desc_rsp_logical_raw_w),
           .rd_owner_generation_ok_o(desc_gen_ok_w),
           .rd_descriptor_pad_ok_o(desc_pad_ok_w),
           .rd_descriptor_usable_o(desc_usable_w),
@@ -202,6 +208,7 @@ module tb_texture_desc_expand_bind_v2_composed #(
           .rd_result_valid_o(desc_rsp_valid_w),
           .rd_result_ready_i(desc_rsp_ready_w),
           .rd_owner_o(desc_rsp_owner_w), .rd_logical_o(desc_rsp_logical_w),
+          .rd_logical_raw_o(desc_rsp_logical_raw_w),
           .rd_owner_generation_ok_o(desc_gen_ok_w),
           .rd_descriptor_pad_ok_o(desc_pad_ok_w),
           .rd_descriptor_usable_o(desc_usable_w),

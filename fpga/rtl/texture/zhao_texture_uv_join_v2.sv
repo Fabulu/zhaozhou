@@ -21,6 +21,13 @@
 // already-filled stream acquires no join bubble.
 `default_nettype none
 
+// TIMING4 E1 mutation seam. Production takes the HELD verdict; the committed
+// control takes the live offered one, which is the payload/trust misalignment
+// this register exists to prevent. Ordinary builds define no selector.
+`ifndef ZHAO_UVJOIN_T4_DESC_TRUST
+`define ZHAO_UVJOIN_T4_DESC_TRUST(held, live) (held)
+`endif
+
 module zhao_texture_uv_join_v2 (
     input var logic clk,
     input var logic rst_n,
@@ -29,6 +36,15 @@ module zhao_texture_uv_join_v2 (
     input  var logic         desc_valid_i,
     output var logic         desc_ready_o,
     input  var logic [300:0] desc_data_i,
+    // TIMING4 E1: the producer's usability verdict for THIS descriptor, carried
+    // on the same transfer as its payload and captured beside it. The joined
+    // record's logical field is zeroed from the LOCAL REGISTERED copy, so a
+    // stale or pad-corrupt row cannot become work even though the payload was
+    // accepted unmasked.
+    //
+    // A baseline caller that already supplies a masked, contract-satisfying
+    // payload ties this true and sees exactly the previous behaviour.
+    input  var logic         desc_usable_i,
 
     // Perspective result input: {owner14, U32, V32}.
     input  var logic        uv_valid_i,
@@ -78,6 +94,7 @@ module zhao_texture_uv_join_v2 (
 
   logic         desc_v_q;
   logic [300:0] desc_q;
+  logic         desc_usable_q;
   logic         uv_v_q;
   logic [77:0]  uv_q;
   logic         out_v_q;
@@ -126,7 +143,13 @@ module zhao_texture_uv_join_v2 (
       end else begin
         if (desc_ready_o) begin
           desc_v_q <= desc_valid_i;
-          if (desc_valid_i) desc_q <= desc_data_i;
+          // Payload and verdict are written by the SAME enable on the SAME
+          // transfer. A live flag beside an older registered descriptor is
+          // exactly the trust/payload mismatch this boundary exists to prevent.
+          if (desc_valid_i) begin
+            desc_q        <= desc_data_i;
+            desc_usable_q <= desc_usable_i;
+          end
         end
         if (uv_ready_o) begin
           uv_v_q <= uv_valid_i;
@@ -139,9 +162,15 @@ module zhao_texture_uv_join_v2 (
       if (out_room_c) begin
         out_v_q <= join_c;
         if (join_c) begin
+          // The mask is applied HERE, from the registered verdict, and this is
+          // the first point at which any descriptor bit can leave the join and
+          // become sample or AUX work. Owner identity and response validity
+          // survive a failing verdict: a bad row is an emitted transaction
+          // carrying a zeroed descriptor, never a vanished one.
           out_q <= {
             desc_owner_c,
-            desc_q[LOGICAL_W-1:0],
+            `ZHAO_UVJOIN_T4_DESC_TRUST(desc_usable_q, desc_usable_i)
+                ? desc_q[LOGICAL_W-1:0] : {LOGICAL_W{1'b0}},
             uv_q[UV_U_LO +: UV_COMPONENT_W],
             uv_q[UV_V_LO +: UV_COMPONENT_W]
           };
@@ -193,4 +222,5 @@ module zhao_texture_uv_join_v2 (
 
 endmodule : zhao_texture_uv_join_v2
 
+`undef ZHAO_UVJOIN_T4_DESC_TRUST
 `default_nettype wire

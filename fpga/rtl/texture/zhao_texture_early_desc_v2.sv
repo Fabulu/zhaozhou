@@ -47,6 +47,16 @@ module zhao_texture_early_desc_v2 #(
     input  logic                 rd_result_ready_i,
     output logic [SLOTW+GENW-1:0] rd_owner_o,
     output logic [286:0]         rd_logical_o,
+    // TIMING4 E1: the same held row WITHOUT the usability mask. This is
+    // internal UNTRUSTED data, not a second "usable descriptor" contract, and
+    // it exists so a consumer can register the row and the one-bit verdict at
+    // its own payload boundary instead of pulling a 287-bit masked result
+    // through the generation comparison. rd_logical_o above is unchanged and
+    // remains the public masked output for every baseline client.
+    //
+    // Never consume this without carrying rd_descriptor_usable_o with it and
+    // enforcing that verdict before any bit becomes work.
+    output logic [286:0]         rd_logical_raw_o,
     output logic                 rd_owner_generation_ok_o,
     output logic                 rd_descriptor_pad_ok_o,
     output logic                 rd_descriptor_usable_o,
@@ -167,6 +177,10 @@ module zhao_texture_early_desc_v2 #(
   // No bit from a corrupt/stale row escapes as usable work.
   assign rd_logical_o = rd_descriptor_usable_o
                       ? rd_physical_q[LOGICAL_W-1:0] : '0;
+  // Straight off the held response register: no mask, no generation compare in
+  // the cone. Its trust lives in rd_descriptor_usable_o, which must travel with
+  // it and be enforced downstream.
+  assign rd_logical_raw_o = rd_physical_q[LOGICAL_W-1:0];
   assign idle_o = !rd_v_q;
 
   always_ff @(posedge clk or negedge rst_n) begin

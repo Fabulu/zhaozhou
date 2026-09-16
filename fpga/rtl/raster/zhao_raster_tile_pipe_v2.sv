@@ -265,6 +265,7 @@ module zhao_raster_tile_pipe_v2 #(
 
   logic job_accept_w;
   logic new_job_accept_w;
+  logic job_metadata_capture_w;
   logic terminal_prior_w;
   logic abort_now_w;
   logic profile_aux_bad_w, profile_area_bad_w;
@@ -651,6 +652,29 @@ module zhao_raster_tile_pipe_v2 #(
       abort_now_w, (stage_cand_ready_w && stage_admit_gate_w));
   assign skid_cancel_fire_w = skid_dn_valid_w && skid_dn_ready_w && abort_now_w;
 
+  // TRIED AND REJECTED, 2026-09-16: dropping the sequence terms from this valid.
+  //
+  // Packet C does re-apply them to its own admission (cand_ready_o and
+  // v3_frag_valid_w are each qualified by `!sequence_abort_q &&
+  // !sequence_mismatch_w`), so sending the stage's deep returned-sequence
+  // compare out through this reduction and back into its own candidate capture
+  // looks redundant, and removing it looks free.
+  //
+  // It is not. skid_dn_ready_w and skid_cancel_fire_w below keep the full
+  // abort_now_w, so on an abort edge the skid CANCELS and reloads underneath an
+  // offer whose valid would now still be asserted -- the 490-bit payload changes
+  // while an unaccepted valid is high, which section 5 of the Timing4 brief
+  // forbids outright ("ready/valid offers hold identity and payload under
+  // backpressure").
+  //
+  // The committed control catches it exactly:
+  //   geom_bin_pipe_v2_identity_cancel_control ->
+  //   "490-bit stage candidate changed under backpressure" at cycle 1468.
+  //
+  // Making the cancel terms match would delay sequence-abort cancellation of
+  // skid contents and move the drop counts, which is a different change with a
+  // different contract. So the sequence terms stay here, and the tile-control
+  // relief comes from the metadata bank below instead.
   assign stage_candidate_valid_o = skid_dn_valid_w && !abort_now_w &&
                                    stage_admit_gate_w;
   assign stage_candidate_data_o = skid_dn_data_w;
@@ -1004,6 +1028,34 @@ module zhao_raster_tile_pipe_v2 #(
   assign job_ready_o = abort_now_w ? 1'b1 :
                        ((rs_state_q == RS_IDLE) && !frame_fault_clear_valid_i);
   assign job_accept_w = job_valid_i && job_ready_o;
+
+  // THE WIDE FROZEN-IDENTITY BANK IS NOT QUALIFIED BY A COMBINATIONAL VERDICT.
+  //
+  // MEASURED: the Timing3 census reports a tile-control family whose endpoints
+  // are accepted-job metadata register enables, reached from the PREVIOUS job's
+  // attribute verdicts. The chain was
+  //
+  //   attr_coordinate_bad / attr_range_bad -> local_fault_event_w
+  //     -> abort_now_w -> job_ready_o -> job_accept_w -> ~25 wide enables
+  //
+  // and it put a deep comparison cone in front of every coordinate, plane,
+  // tile-index and clear-word register in the bank.
+  //
+  // The metadata is frozen identity: it is READ only by work that has actually
+  // started, and the state/counter branch below still decides that separately.
+  // So the bank is written on the ordinary acceptance condition alone. A job
+  // that is sunk on a fault edge now writes dead payload which no started job
+  // can observe, and which the next accepted job overwrites.
+  //
+  // BOTH STICKY LEVELS ARE RETAINED, so the freeze during an abort is exactly
+  // what it was: local_abort_q is this tile's latched fault and sequence_abort_o
+  // is Packet C's. Only the two COMBINATIONAL terms are dropped -- this cycle's
+  // local_fault_event_w and the same-edge sequence_mismatch_o -- and only for
+  // this bank. Every start strobe, state transition and counter below keeps the
+  // full abort_now_w, so no bad job starts work and no count moves.
+  assign job_metadata_capture_w =
+      job_valid_i && (rs_state_q == RS_IDLE) && !frame_fault_clear_valid_i &&
+      !local_abort_q && !sequence_abort_o;
   assign joined_attr_drop_w = attr_bundle_valid_w && attr_join_consume_w &&
                               abort_now_w;
   assign earlyz_abort_drop_w = earlyz_cand_valid_w && earlyz_cand_ready_w &&
@@ -1101,11 +1153,10 @@ module zhao_raster_tile_pipe_v2 #(
         ew_degenerate_q <= ew_degenerate_w;
       end
 
-      if (job_accept_w && abort_now_w) begin
-        if (jobs_sunk_o != 32'hffff_ffff)
-          jobs_sunk_o <= jobs_sunk_o + 32'd1;
-      end else if (job_accept_w) begin
-        // Exact frozen metadata unpack, once, on the accepted job identity.
+      // Exact frozen metadata unpack, once, on the accepted job identity. This
+      // is payload only: it starts nothing and counts nothing, which is why it
+      // needs no combinational abort verdict in its enable.
+      if (job_metadata_capture_w) begin
         ax_q <= job_ax_i; ay_q <= job_ay_i;
         bx_q <= job_bx_i; by_q <= job_by_i;
         cx_q <= job_cx_i; cy_q <= job_cy_i;
@@ -1125,6 +1176,12 @@ module zhao_raster_tile_pipe_v2 #(
           plane_dndx_q[lane] <= incoming_plane_dndx_w[lane];
           plane_n0_q[lane] <= incoming_plane_n0_w[lane];
         end
+      end
+
+      if (job_accept_w && abort_now_w) begin
+        if (jobs_sunk_o != 32'hffff_ffff)
+          jobs_sunk_o <= jobs_sunk_o + 32'd1;
+      end else if (job_accept_w) begin
         row_hold_valid_q <= 1'b0;
         row_delivered_q <= 3'b000;
         start_delivered_q <= job_first_i ? 5'b00000 : 5'b10000;

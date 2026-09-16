@@ -36,6 +36,8 @@ module zhao_texture_early_desc_v2_pad_mutant #(
     input  logic rd_result_ready_i,
     output logic [SLOTW+GENW-1:0] rd_owner_o,
     output logic [286:0] rd_logical_o,
+    // TIMING4 E1: pass-through so this control keeps the production shape.
+    output logic [286:0] rd_logical_raw_o,
     output logic rd_owner_generation_ok_o,
     output logic rd_descriptor_pad_ok_o,
     output logic rd_descriptor_usable_o,
@@ -68,6 +70,7 @@ module zhao_texture_early_desc_v2_pad_mutant #(
       .rd_owner_i(rd_owner_i), .rd_result_valid_o(rd_result_valid_o),
       .rd_result_ready_i(rd_result_ready_i), .rd_owner_o(rd_owner_o),
       .rd_logical_o(rd_logical_o),
+      .rd_logical_raw_o(rd_logical_raw_o),
       .rd_owner_generation_ok_o(rd_owner_generation_ok_o),
       .rd_descriptor_pad_ok_o(rd_descriptor_pad_ok_o),
       .rd_descriptor_usable_o(rd_descriptor_usable_o),

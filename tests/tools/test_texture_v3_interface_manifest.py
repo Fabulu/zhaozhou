@@ -136,7 +136,7 @@ CANONICAL_ORACLE_BYTES = (
 )
 CANONICAL_ORACLE_SHA256 = "8e49af33bdba6e2490310867f1ab4eb95e89ec1c49566a52785efd73b5e2e335"
 EXPECTED_DUPLICATE_PACKAGE_SHA256 = "54f7a8399b02634f5cf0fb892fa271ead317406fe8f35caa8cbd80694ff9c162"
-EXPECTED_DUPLICATE_MARKER_SHA256 = "e67f2262777fb19c59dbd1ae8ff15c714d97282de8999e625abd4be4deba1f71"
+EXPECTED_DUPLICATE_MARKER_SHA256 = "28a1106e736abe08b092f060bbb9cefbc323b92b530cfa854bf250fac1cb166a"
 EXPECTED_DUPLICATE_MARKER_ROWS = (
     ("/miscsp/0/typesp/50/membersp/0", "(ME)", "in_tile_addr", "e,33:18,33:30"),
     ("/miscsp/0/typesp/50/membersp/1", "(ME)", "invw24", "e,34:18,34:24"),
@@ -180,7 +180,7 @@ EXPECTED_DUPLICATE_MARKER_ROWS = (
     ("/miscsp/0/typesp/58/membersp/2", "(WR)", "alpha", "e,283:18,283:23"),
     ("/miscsp/0/typesp/58/membersp/3", "(WR)", "rgb", "e,284:18,284:21"),
 )
-EXPECTED_PRODUCTION_DUPLICATE_MARKER_SHA256 = "115dbfeef621343004e4c51444a9ca23e85d82a6f770401b4d4803dafbb775f6"
+EXPECTED_PRODUCTION_DUPLICATE_MARKER_SHA256 = "0cb6f8812895c285ade5911768134b90d8691f2a7171007d8aa130a05e53640a"
 _PRE_DSP_PRODUCTION_DUPLICATE_MARKER_ROWS = (
     ("/miscsp/0/typesp/107/membersp/0", "(WTOB)", "in_tile_addr", "e,33:18,33:30"),
     ("/miscsp/0/typesp/107/membersp/1", "(WTOB)", "invw24", "e,34:18,34:24"),
@@ -309,29 +309,44 @@ def expected_duplicate_markers() -> tuple[interface.VerilatorDuplicateMarker, ..
 # byte-pinned package). That identity is the property worth guarding, and it is
 # unchanged by RTL edits elsewhere in the closure.
 #
-# Two things in a Verilator tree are elaboration ORDER, not design meaning:
-# the `typesp/N` container index, and the mangled parent address such as
-# `(CUOB)`. Both shift when any module in the closure gains or loses a type --
-# the Timing4 combiner rewrite moved them by -3, -6 and -7. Re-deriving the
-# production rows through these two explicit remaps keeps the oracle hand-written
-# and independent of the parser, while making each shift a visible, reviewed
-# edit rather than a silently re-pinned hash.
+# Three things in a Verilator tree move without the design's meaning changing:
 #
-# If a member NAME or LOC ever differs, do not extend these tables: the set of
-# duplicated members has actually changed and needs a decision, not a remap.
+#   * the `typesp/N` container index and the mangled parent address such as
+#     `(CUOB)`, which are elaboration ORDER and shift whenever any module in the
+#     closure gains or loses a type;
+#   * the LINE NUMBERS inside a `loc`, when a struct is pushed down its own file
+#     by an edit above it -- Timing4's `rd_logical_raw_o` port moved every
+#     early-descriptor row by exactly +10.
+#
+# What must never move is which member of which struct is duplicated, its column
+# span, and the order. Re-deriving the production rows through three explicit
+# remaps keeps the oracle hand-written and independent of the parser, and makes
+# each shift a visible reviewed edit instead of a silently re-pinned hash.
+#
+# The per-file offset is deliberately uniform per file and applied to BOTH ends
+# of the span: a struct that moved has all of its members move together. If one
+# member of a file shifted differently from its neighbours, that is not a
+# relocation, and the assertion below refuses it.
+#
+# If a member NAME, COLUMN or ORDER ever differs, do not extend these tables:
+# the set of duplicated members has actually changed and needs a decision.
 _DSP_PRODUCTION_PARENT_ADDRS = {
-    "(WTOB)": "(ZNPB)", "(OUOB)": "(ROPB)", "(WVOB)": "(ZPPB)",
-    "(GUJ)": "(BWJ)", "(NZOB)": "(QTPB)", "(JAPB)": "(MUPB)",
-    "(LEPB)": "(OYPB)", "(BGPB)": "(EAQB)", "(FHPB)": "(IBQB)",
-    "(IYV)": "(BAW)", "(KYV)": "(DAW)", "(MYV)": "(FAW)",
-    "(BOU)": "(UPU)", "(DOU)": "(WPU)", "(FOU)": "(YPU)",
-    "(XPT)": "(QRT)",
+    "(WTOB)": "(RXPB)", "(OUOB)": "(JYPB)", "(WVOB)": "(RZPB)",
+    "(GUJ)": "(GYJ)", "(NZOB)": "(IDQB)", "(JAPB)": "(EEQB)",
+    "(LEPB)": "(GIQB)", "(BGPB)": "(WJQB)", "(FHPB)": "(ALQB)",
+    "(IYV)": "(EIW)", "(KYV)": "(GIW)", "(MYV)": "(IIW)",
+    "(BOU)": "(XXU)", "(DOU)": "(ZXU)", "(FOU)": "(BYU)",
+    "(XPT)": "(OZT)",
 }
 _DSP_PRODUCTION_TYPESP_REMAP = {
-    107: 104, 108: 105, 109: 106, 110: 107, 111: 108, 112: 109,
-    113: 110, 114: 111, 115: 112, 255: 248, 267: 260, 276: 269,
-    311: 305, 317: 311, 329: 323, 354: 348,
+    107: 105, 108: 106, 109: 107, 110: 108, 111: 109, 112: 110,
+    113: 111, 114: 112, 115: 113, 255: 249, 267: 261, 276: 270,
+    311: 306, 317: 312, 329: 324, 354: 349,
 }
+# Source-file tag -> line offset. Only `x`, the early-descriptor source, moved.
+_DSP_PRODUCTION_LOC_LINE_OFFSETS = {"e": 0, "x": 10, "y": 0, "z": 0}
+
+_LOC_PATTERN = re.compile(r"^([A-Za-z]+),(\d+):(\d+),(\d+):(\d+)$")
 
 
 def _remap_production_pointer(pointer: str) -> str:
@@ -345,9 +360,21 @@ def _remap_production_pointer(pointer: str) -> str:
         _DSP_PRODUCTION_TYPESP_REMAP[container], match.group(2))
 
 
+def _remap_production_loc(loc: str) -> str:
+    match = _LOC_PATTERN.fullmatch(loc)
+    if match is None:
+        raise AssertionError(f"unexpected duplicate-marker loc shape: {loc}")
+    tag, start_line, start_col, end_line, end_col = match.groups()
+    if tag not in _DSP_PRODUCTION_LOC_LINE_OFFSETS:
+        raise AssertionError(f"no production line offset for source tag {tag!r}")
+    offset = _DSP_PRODUCTION_LOC_LINE_OFFSETS[tag]
+    return "%s,%d:%s,%d:%s" % (
+        tag, int(start_line) + offset, start_col, int(end_line) + offset, end_col)
+
+
 EXPECTED_PRODUCTION_DUPLICATE_MARKER_ROWS = tuple(
     (_remap_production_pointer(pointer),
-     _DSP_PRODUCTION_PARENT_ADDRS[parent], name, loc)
+     _DSP_PRODUCTION_PARENT_ADDRS[parent], name, _remap_production_loc(loc))
     for pointer, parent, name, loc in _PRE_DSP_PRODUCTION_DUPLICATE_MARKER_ROWS
 )
 
@@ -2057,6 +2084,86 @@ def _flatten_suite(suite: unittest.TestSuite):
             yield from _flatten_suite(item)
         else:
             yield item
+
+
+class DuplicateFingerprintGroupingTests(unittest.TestCase):
+    """The negative control for making the fingerprint address-agnostic.
+
+    canonical_verilator_duplicate_marker_bytes stopped hashing Verilator's
+    internal parent label and hashes a group ordinal instead, because that
+    label is reassigned wholesale on any elaboration-order change and forced
+    three re-pins in one session while nothing about the design moved.
+
+    A change that makes a detector quieter is exactly the change to distrust,
+    so these assert it is quieter ONLY about relabelling: regrouping and
+    renaming must still move the hash.
+    """
+
+    def _marker(self, pointer, addr, name, loc):
+        return interface.VerilatorDuplicateMarker(pointer, addr, name, loc)
+
+    def setUp(self):
+        self.base = [
+            self._marker("/p/0", "(AAA)", "x", "f,1:1,1:2"),
+            self._marker("/p/1", "(AAA)", "y", "f,2:1,2:2"),
+            self._marker("/p/2", "(BBB)", "x", "f,3:1,3:2"),
+        ]
+
+    def test_relabelling_every_parent_does_not_move_the_fingerprint(self):
+        relabelled = [
+            self._marker(m.json_pointer,
+                         {"(AAA)": "(ZZZ)", "(BBB)": "(YYY)"}[
+                             m.parent_struct_addr],
+                         m.member_name, m.loc)
+            for m in self.base
+        ]
+        self.assertEqual(
+            interface.verilator_duplicate_marker_sha256(self.base),
+            interface.verilator_duplicate_marker_sha256(relabelled),
+            "a pure relabelling must not be reported as a design change")
+
+    def test_moving_a_member_to_another_parent_still_fires(self):
+        regrouped = list(self.base)
+        regrouped[1] = self._marker("/p/1", "(BBB)", "y", "f,2:1,2:2")
+        self.assertNotEqual(
+            interface.verilator_duplicate_marker_sha256(self.base),
+            interface.verilator_duplicate_marker_sha256(regrouped),
+            "a member changing parents is a real change and must fire")
+
+    def test_renaming_a_duplicated_member_still_fires(self):
+        renamed = list(self.base)
+        renamed[1] = self._marker("/p/1", "(AAA)", "y_renamed", "f,2:1,2:2")
+        self.assertNotEqual(
+            interface.verilator_duplicate_marker_sha256(self.base),
+            interface.verilator_duplicate_marker_sha256(renamed),
+            "the set of duplicated members changing must fire")
+
+    def test_splitting_one_parent_into_two_still_fires(self):
+        """Two members sharing a parent, then not, is a partition change.
+
+        Written first as "give the last row a brand-new address", which does
+        NOT fire -- and correctly so: that row was alone under its parent
+        before and is alone under a different name after, which is the same
+        partition and therefore the same relabelling this change exists to
+        ignore. The invariant is the GROUPING, so the case that must fire is
+        two members ceasing to share.
+        """
+        split = list(self.base)
+        split[1] = self._marker("/p/1", "(CCC)", "y", "f,2:1,2:2")
+        self.assertNotEqual(
+            interface.verilator_duplicate_marker_sha256(self.base),
+            interface.verilator_duplicate_marker_sha256(split),
+            "two members that shared a parent and now do not must fire")
+
+    def test_renaming_a_lone_parent_is_a_relabelling(self):
+        """The boundary case, asserted rather than left implicit."""
+        renamed = list(self.base)
+        renamed[2] = self._marker("/p/2", "(CCC)", "x", "f,3:1,3:2")
+        self.assertEqual(
+            interface.verilator_duplicate_marker_sha256(self.base),
+            interface.verilator_duplicate_marker_sha256(renamed),
+            "a parent with the same members under a new label is the same "
+            "partition")
 
 
 if __name__ == "__main__":

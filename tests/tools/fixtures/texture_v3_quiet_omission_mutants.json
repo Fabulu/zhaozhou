@@ -24,7 +24,7 @@
     {"name": "q_owner_combine_valid", "source_expression": "owner_combine_valid_w", "width": 1},
     {"name": "q_owner_final_valid", "source_expression": "owner_final_valid_w", "width": 1},
     {"name": "q_rcp_req_valid", "source_expression": "rcp_req_valid_w", "width": 1},
-    {"name": "q_rcp_rsp_valid", "source_expression": "rcp_rsp_valid_w", "width": 1},
+    {"name": "q_rcp_rsp_valid", "source_expression": "rcp_rsp_valid_w || rcp_head_valid_q", "width": 1},
     {"name": "q_persp_req_valid", "source_expression": "persp_req_valid_w", "width": 1},
     {"name": "q_persp_rsp_valid", "source_expression": "persp_rsp_valid_w", "width": 1},
     {"name": "q_metajoin_a_valid", "source_expression": "metajoin_a_valid_w", "width": 1},

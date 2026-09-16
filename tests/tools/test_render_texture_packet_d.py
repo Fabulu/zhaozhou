@@ -96,9 +96,9 @@ PROTECTED_HASHES = {
     # Packet E legitimately refreshes the V3 source and generated interface while
     # retaining Packet D's public closure and every protected old/oracle byte.
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "43b68fe6598268c5c22fcecd1744210b23a6a539bf3c19d7bf89a1668425ad95",
+        "dae91555171fd7f05269e698586fd2d70c415228447599d773c8794711fcba29",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "8c721b8fad987202db9a826a89e97110d5749ab5203910b3932603fa9093d73a",
+        "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c",
     "fpga/rtl/raster/zhao_raster_attrdiv.sv":
         "5f5e9b0dbd3d1c23d4b0b55c84aaa06e873d0aee72be25bed2d64e7ff1424eca",
     "fpga/rtl/raster/zhao_raster_attrstep.sv":
@@ -315,12 +315,27 @@ def validate_d1_shape(divider: str, gradient: str, mutant: str) -> None:
         "rounded_num_c <  neg_sat_limit_c",
         "localparam logic [1:0] D_PREP = 2'd3;",
         "dividend_r   <= {rounded_num_c[96], rounded_num_c};",
-        "magnitude_c = 98'(-$signed(dividend_r))",
+        # Timing4 D1: the negative magnitude is one 98-bit addition of the
+        # complement and the denominator, because -x is (~x)+1 and the explicit
+        # -1 cancels that carry-in. The superseded three-add form is asserted
+        # absent below so this cannot silently regress.
+        "magnitude_c = (~dividend_r) + 98'({51'd0, den_r});",
         "D_PREP: begin",
         "assign v_ready_o = (st_r == D_IDLE) && !r_valid_o;",
     ):
         if marker not in divider:
             raise AssertionError("Packet-D divider shape missing: " + marker)
+    # The superseded form materialized a negate, then added the denominator,
+    # then subtracted one: three dependent 98-bit carry chains in the D_PREP
+    # cone. Its absence is asserted, not merely its replacement's presence,
+    # because an accidental restoration would otherwise pass every gate.
+    for forbidden in (
+        "98'(-$signed(dividend_r))",
+        "- 98'd1;",
+    ):
+        if forbidden in divider:
+            raise AssertionError(
+                "Packet-D divider regressed to the three-add magnitude: " + forbidden)
     for marker in (
         "module zhao_raster_attrgrad_v2 #(",
         "input  var logic signed [11:0] job_min_x_i",
@@ -483,11 +498,33 @@ def validate_d3_shape(tile: str, binpipe: str, mutant: str) -> None:
         "sat_add_drop2(",
         "`ZHAO_PACKET_D_PIPE_V3_QUIET(texture_quiet_o)",
         "resolve_start_w = (rs_state_q == RS_SWAP) && !abort_now_w",
+        # Timing4: the wide frozen-identity bank is written on the ordinary
+        # acceptance condition, carrying both STICKY abort levels and neither
+        # combinational one.
+        "assign job_metadata_capture_w =",
+        "!local_abort_q && !sequence_abort_o;",
+        "if (job_metadata_capture_w) begin",
     )
     for marker in tile_markers:
         if marker not in tile:
             raise AssertionError("Packet-D tile shape missing: " + marker)
     tile_active = active_sv_text(tile)
+
+    # THE ONLY CHECK THAT CAN CATCH THIS ONE.
+    #
+    # Re-coupling the metadata bank to the combinational abort verdict is
+    # behaviourally INVISIBLE -- a sunk job's payload is never read, so no
+    # differential, counter or mutant can see the difference. What it costs is
+    # timing: it puts the previous job's attribute comparison cone back in front
+    # of ~25 wide register enables, which is the reported tile-control launch
+    # family. So the guard has to be static, and it has to name the old shape.
+    if re.search(r"end else if \(job_accept_w\) begin\s*\n\s*ax_q\s*<=", tile_active):
+        raise AssertionError(
+            "Packet-D frozen metadata bank is abort-qualified again; its enable "
+            "must stay job_metadata_capture_w"
+        )
+    if "job_metadata_capture_w" not in tile_active:
+        raise AssertionError("Packet-D metadata capture predicate is not active code")
     expected_start_rhs = {
         0: "(rs_state_q == RS_START) && !start_delivered_q[0] && start_gate_w[0]",
         1: "(rs_state_q == RS_START) && !start_delivered_q[1] && start_gate_w[1]",

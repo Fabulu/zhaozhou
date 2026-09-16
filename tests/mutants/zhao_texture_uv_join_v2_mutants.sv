@@ -29,6 +29,8 @@ module zhao_texture_uv_join_v2_generation_swap_mutant (
     input  var logic         desc_valid_i,
     output var logic         desc_ready_o,
     input  var logic [300:0] desc_data_i,
+    // TIMING4 E1: carried so this control keeps the production shape.
+    input  var logic         desc_usable_i,
 
     input  var logic        uv_valid_i,
     output var logic        uv_ready_o,
@@ -58,6 +60,7 @@ module zhao_texture_uv_join_v2_generation_swap_mutant (
       .desc_valid_i                (desc_valid_i),
       .desc_ready_o                (desc_ready_o),
       .desc_data_i                 (desc_data_i),
+      .desc_usable_i               (desc_usable_i),
       .uv_valid_i                  (uv_valid_i),
       .uv_ready_o                  (uv_ready_o),
       .uv_data_i                   (uv_data_i),
@@ -88,6 +91,8 @@ module zhao_texture_uv_join_v2_late_overwrite_mutant (
     input  var logic         desc_valid_i,
     output var logic         desc_ready_o,
     input  var logic [300:0] desc_data_i,
+    // TIMING4 E1: carried so this control keeps the production shape.
+    input  var logic         desc_usable_i,
 
     input  var logic        uv_valid_i,
     output var logic        uv_ready_o,
@@ -114,6 +119,7 @@ module zhao_texture_uv_join_v2_late_overwrite_mutant (
       .desc_valid_i                (desc_valid_i),
       .desc_ready_o                (desc_ready_o),
       .desc_data_i                 (desc_data_i),
+      .desc_usable_i               (desc_usable_i),
       .uv_valid_i                  (uv_valid_i),
       .uv_ready_o                  (uv_ready_o),
       .uv_data_i                   (uv_data_i),
@@ -143,6 +149,8 @@ module zhao_texture_uv_join_v2_no_same_edge_reload_mutant (
     input  var logic         desc_valid_i,
     output var logic         desc_ready_o,
     input  var logic [300:0] desc_data_i,
+    // TIMING4 E1: carried so this control keeps the production shape.
+    input  var logic         desc_usable_i,
 
     input  var logic        uv_valid_i,
     output var logic        uv_ready_o,
@@ -167,6 +175,7 @@ module zhao_texture_uv_join_v2_no_same_edge_reload_mutant (
 
   logic         desc_v_q;
   logic [300:0] desc_q;
+  logic         desc_usable_q;
   logic         uv_v_q;
   logic [77:0]  uv_q;
   logic         out_v_q;
@@ -208,7 +217,10 @@ module zhao_texture_uv_join_v2_no_same_edge_reload_mutant (
       end else begin
         if (desc_ready_o) begin
           desc_v_q <= desc_valid_i;
-          if (desc_valid_i) desc_q <= desc_data_i;
+          if (desc_valid_i) begin
+            desc_q        <= desc_data_i;
+            desc_usable_q <= desc_usable_i;
+          end
         end
         if (uv_ready_o) begin
           uv_v_q <= uv_valid_i;
@@ -221,7 +233,7 @@ module zhao_texture_uv_join_v2_no_same_edge_reload_mutant (
         out_v_q <= 1'b1;
         out_q <= {
           desc_owner_c,
-          desc_q[LOGICAL_W-1:0],
+          desc_usable_q ? desc_q[LOGICAL_W-1:0] : {LOGICAL_W{1'b0}},
           uv_q[UV_U_LO +: UV_COMPONENT_W],
           uv_q[UV_V_LO +: UV_COMPONENT_W]
         };

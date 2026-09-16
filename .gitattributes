@@ -130,6 +130,7 @@ tests/raster/tb_raster_texture_stage_v3.sv text eol=lf
 tests/texture/texture_island_v3_packet_b_fullctx.cpp text eol=lf
 tests/mutants/zhao_texture_material_combine_v3_mutants.sv text eol=lf
 tests/mutants/zhao_raster_rcp24_v4_timing_mutants.sv text eol=lf
+tests/mutants/zhao_texture_timing4_r1t_e1_mutants.sv text eol=lf
 tests/raster/raster_attrgrad_v2_directed.cpp text eol=lf
 tests/raster/raster_rcp24_v4_timing_directed.cpp text eol=lf
 tests/raster/rcp24_v4_timing.sources.txt text eol=lf

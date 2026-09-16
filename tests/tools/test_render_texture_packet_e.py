@@ -94,21 +94,21 @@ PROTECTED_HASHES = {
     "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv":
         "f2c0ee4d054e2f70a37c4179c4fb985b0ba3f95c5533f598858b3b315e57497b",
     "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv":
-        "e78372fef643dbb71bdb314a0c436aedf98c6b62336f0f35708cdf84c52f06a5",
+        "2955128d655469f1a79f694797af0e70f521bbee08100c7c2190cda7cd2e4b9a",
     "fpga/rtl/raster/zhao_raster_attrgrad_v2.sv":
         "aa0b2022cce4b9e6a92d7b43130a4a0dcb8b720689a89230065738b5f63c787b",
     "fpga/rtl/geometry/zhao_geom_binner_v2.sv":
         "7b89e1705420a2fd5ebfd84ceed9f27fb0855d13bc6f8c2d2c19dbc38ad3e867",
     "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv":
-        "194dc9815cd5f9fe39d6f8a196807ca3b50a999311feea5f2c2731ada35ec40d",
+        "b09af0e8371e52cd8ec104659075dd215cc61d6884cf45ee11654beba8ffd0d3",
     "fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv":
         "675fec61863184aee91692934d3434a9b2cc06c607a71d7250265d5197ccd204",
 }
 CURRENT_HASHES = {
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "8c721b8fad987202db9a826a89e97110d5749ab5203910b3932603fa9093d73a",
+        "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "43b68fe6598268c5c22fcecd1744210b23a6a539bf3c19d7bf89a1668425ad95",
+        "dae91555171fd7f05269e698586fd2d70c415228447599d773c8794711fcba29",
 }
 
 

@@ -9200,6 +9200,56 @@ set_tests_properties(material_combine_v3_cont_bypass_double_issue_control
   PROPERTIES LABELS "fast;nightly;packet-b;mutant" TIMEOUT 900
   PASS_REGULAR_EXPRESSION "FAIL: no tag retired twice")
 
+# THE POSITIVE CONTROL for the section 8.4 WB-final -> completion-read
+# forwarding, built the same way and for the same reason as the one above.
+#
+# The bypass launches a completion read directly from the final phase retiring
+# on this edge, and must suppress the doneq push that would otherwise enqueue
+# the same context. Flipping DONE_BYPASS_SUPPRESS_PUSH enqueues the context it
+# also forwards, so the JOB completes twice -- the tail counterpart of the
+# continuation double-issue above.
+#
+# Watched fire before being registered:
+#   FAIL: jobs_completed counts the output handshake exactly: expected 0x7, got 0xB
+#   FAIL: no tag retired twice: expected 0x0, got 0x4
+#   FAIL: no tag was lost: expected 0x0, got 0xEC
+#
+# Seven jobs accepted, eleven completed. The regex names the JOB-level
+# signature, which is this fault's own -- the continuation control above is
+# pinned to the phase-level one, so the two cannot pass on each other's
+# evidence.
+#
+# Negative control: the same sources with the macro UNDEFINED give 201 checks
+# passed and exit 0.
+add_executable(tmv3_done_bypass texture/material_combine_v3_diff.cpp)
+target_link_libraries(tmv3_done_bypass PRIVATE zhao_harness zhao_zref)
+verilate(tmv3_done_bypass
+  PREFIX Vzhao_texture_material_combine_v3
+  TOP_MODULE zhao_texture_material_combine_v3
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_render_texture_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+  VERILATOR_ARGS --assert -DZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE)
+add_test(NAME material_combine_v3_done_bypass_double_issue_control
+  COMMAND tmv3_done_bypass)
+set_tests_properties(material_combine_v3_done_bypass_double_issue_control
+  PROPERTIES LABELS "fast;nightly;packet-b;mutant" TIMEOUT 900
+  PASS_REGULAR_EXPRESSION
+    "FAIL: jobs_completed counts the output handshake exactly")
+
+# Committed mutant copies go stale silently: production is edited, the copy
+# keeps compiling, keeps passing its own control, and quietly starts describing
+# a machine that no longer exists. Found twice on 2026-09-16, both by accident,
+# and the second time the stale copy reported "exactly 16 live: expected 0x10,
+# got 0x11" -- which reads like a credit overflow in shipped RTL and is nothing
+# of the kind. Nothing in the tree was watching. Now something is.
+add_test(NAME mutant_copy_drift
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_SOURCE_DIR}/tools/budget/mutant_copy_drift.py
+    --repo-root ${CMAKE_SOURCE_DIR})
+set_tests_properties(mutant_copy_drift PROPERTIES
+  LABELS "fast;lint;nightly" TIMEOUT 300)
+
 # The short finish forms are an arithmetic claim over the whole raw-product
 # domain, including products no legal byte pair can make. The differential above
 # drives legal texels and so cannot reach that domain; this compares the two

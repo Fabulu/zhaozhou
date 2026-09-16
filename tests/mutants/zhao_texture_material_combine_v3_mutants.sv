@@ -406,11 +406,18 @@ module zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -960,6 +967,10 @@ module zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -984,8 +995,53 @@ module zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -1026,6 +1082,8 @@ module zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -1075,8 +1133,11 @@ module zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -1090,8 +1151,10 @@ module zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -1102,7 +1165,7 @@ module zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -1111,7 +1174,7 @@ module zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;
@@ -1534,11 +1597,18 @@ module zhao_texture_material_combine_v3_binary_mask_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -2081,6 +2151,10 @@ module zhao_texture_material_combine_v3_binary_mask_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -2105,8 +2179,53 @@ module zhao_texture_material_combine_v3_binary_mask_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -2147,6 +2266,8 @@ module zhao_texture_material_combine_v3_binary_mask_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -2196,8 +2317,11 @@ module zhao_texture_material_combine_v3_binary_mask_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -2211,8 +2335,10 @@ module zhao_texture_material_combine_v3_binary_mask_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -2223,7 +2349,7 @@ module zhao_texture_material_combine_v3_binary_mask_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -2232,7 +2358,7 @@ module zhao_texture_material_combine_v3_binary_mask_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;
@@ -2658,11 +2784,18 @@ module zhao_texture_material_combine_v3_double_round_mod2x_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -3210,6 +3343,10 @@ module zhao_texture_material_combine_v3_double_round_mod2x_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -3234,8 +3371,53 @@ module zhao_texture_material_combine_v3_double_round_mod2x_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -3276,6 +3458,8 @@ module zhao_texture_material_combine_v3_double_round_mod2x_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -3325,8 +3509,11 @@ module zhao_texture_material_combine_v3_double_round_mod2x_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -3340,8 +3527,10 @@ module zhao_texture_material_combine_v3_double_round_mod2x_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -3352,7 +3541,7 @@ module zhao_texture_material_combine_v3_double_round_mod2x_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -3361,7 +3550,7 @@ module zhao_texture_material_combine_v3_double_round_mod2x_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;
@@ -3784,11 +3973,18 @@ module zhao_texture_material_combine_v3_unit_detail_first_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -4336,6 +4532,10 @@ module zhao_texture_material_combine_v3_unit_detail_first_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -4360,8 +4560,53 @@ module zhao_texture_material_combine_v3_unit_detail_first_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -4402,6 +4647,8 @@ module zhao_texture_material_combine_v3_unit_detail_first_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -4451,8 +4698,11 @@ module zhao_texture_material_combine_v3_unit_detail_first_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -4466,8 +4716,10 @@ module zhao_texture_material_combine_v3_unit_detail_first_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -4478,7 +4730,7 @@ module zhao_texture_material_combine_v3_unit_detail_first_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -4487,7 +4739,7 @@ module zhao_texture_material_combine_v3_unit_detail_first_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;
@@ -4910,11 +5162,18 @@ module zhao_texture_material_combine_v3_universal_count_zero_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -5467,6 +5726,10 @@ module zhao_texture_material_combine_v3_universal_count_zero_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -5491,8 +5754,53 @@ module zhao_texture_material_combine_v3_universal_count_zero_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -5533,6 +5841,8 @@ module zhao_texture_material_combine_v3_universal_count_zero_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -5582,8 +5892,11 @@ module zhao_texture_material_combine_v3_universal_count_zero_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -5597,8 +5910,10 @@ module zhao_texture_material_combine_v3_universal_count_zero_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -5609,7 +5924,7 @@ module zhao_texture_material_combine_v3_universal_count_zero_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -5618,7 +5933,7 @@ module zhao_texture_material_combine_v3_universal_count_zero_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;
@@ -6041,11 +6356,18 @@ module zhao_texture_material_combine_v3_aux_as_sample2_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -6593,6 +6915,10 @@ module zhao_texture_material_combine_v3_aux_as_sample2_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -6617,8 +6943,53 @@ module zhao_texture_material_combine_v3_aux_as_sample2_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -6659,6 +7030,8 @@ module zhao_texture_material_combine_v3_aux_as_sample2_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -6708,8 +7081,11 @@ module zhao_texture_material_combine_v3_aux_as_sample2_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -6723,8 +7099,10 @@ module zhao_texture_material_combine_v3_aux_as_sample2_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -6735,7 +7113,7 @@ module zhao_texture_material_combine_v3_aux_as_sample2_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -6744,7 +7122,7 @@ module zhao_texture_material_combine_v3_aux_as_sample2_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;
@@ -7167,11 +7545,18 @@ module zhao_texture_material_combine_v3_omit_required_status_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -7719,6 +8104,10 @@ module zhao_texture_material_combine_v3_omit_required_status_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -7743,8 +8132,53 @@ module zhao_texture_material_combine_v3_omit_required_status_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -7785,6 +8219,8 @@ module zhao_texture_material_combine_v3_omit_required_status_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -7834,8 +8270,11 @@ module zhao_texture_material_combine_v3_omit_required_status_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -7849,8 +8288,10 @@ module zhao_texture_material_combine_v3_omit_required_status_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -7861,7 +8302,7 @@ module zhao_texture_material_combine_v3_omit_required_status_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -7870,7 +8311,7 @@ module zhao_texture_material_combine_v3_omit_required_status_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;
@@ -8293,11 +8734,18 @@ module zhao_texture_material_combine_v3_drop_raw_index_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -8844,6 +9292,10 @@ module zhao_texture_material_combine_v3_drop_raw_index_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -8868,8 +9320,53 @@ module zhao_texture_material_combine_v3_drop_raw_index_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -8910,6 +9407,8 @@ module zhao_texture_material_combine_v3_drop_raw_index_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -8959,8 +9458,11 @@ module zhao_texture_material_combine_v3_drop_raw_index_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -8974,8 +9476,10 @@ module zhao_texture_material_combine_v3_drop_raw_index_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -8986,7 +9490,7 @@ module zhao_texture_material_combine_v3_drop_raw_index_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -8995,7 +9499,7 @@ module zhao_texture_material_combine_v3_drop_raw_index_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;
@@ -9418,11 +9922,18 @@ module zhao_texture_material_combine_v3_reconstruct_raw_index_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -9969,6 +10480,10 @@ module zhao_texture_material_combine_v3_reconstruct_raw_index_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -9993,8 +10508,53 @@ module zhao_texture_material_combine_v3_reconstruct_raw_index_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -10035,6 +10595,8 @@ module zhao_texture_material_combine_v3_reconstruct_raw_index_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -10084,8 +10646,11 @@ module zhao_texture_material_combine_v3_reconstruct_raw_index_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -10099,8 +10664,10 @@ module zhao_texture_material_combine_v3_reconstruct_raw_index_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -10111,7 +10678,7 @@ module zhao_texture_material_combine_v3_reconstruct_raw_index_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -10120,7 +10687,7 @@ module zhao_texture_material_combine_v3_reconstruct_raw_index_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;
@@ -10543,11 +11110,18 @@ module zhao_texture_material_combine_v3_phase_drop_writeback_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -11104,6 +11678,10 @@ module zhao_texture_material_combine_v3_phase_drop_writeback_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -11128,8 +11706,53 @@ module zhao_texture_material_combine_v3_phase_drop_writeback_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -11170,6 +11793,8 @@ module zhao_texture_material_combine_v3_phase_drop_writeback_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -11219,8 +11844,11 @@ module zhao_texture_material_combine_v3_phase_drop_writeback_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -11234,8 +11862,10 @@ module zhao_texture_material_combine_v3_phase_drop_writeback_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -11246,7 +11876,7 @@ module zhao_texture_material_combine_v3_phase_drop_writeback_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -11255,7 +11885,7 @@ module zhao_texture_material_combine_v3_phase_drop_writeback_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;
@@ -11678,11 +12308,18 @@ module zhao_texture_material_combine_v3_phase_reissue_schedule_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -12230,6 +12867,10 @@ module zhao_texture_material_combine_v3_phase_reissue_schedule_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -12254,8 +12895,53 @@ module zhao_texture_material_combine_v3_phase_reissue_schedule_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -12296,6 +12982,8 @@ module zhao_texture_material_combine_v3_phase_reissue_schedule_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -12345,8 +13033,11 @@ module zhao_texture_material_combine_v3_phase_reissue_schedule_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -12360,8 +13051,10 @@ module zhao_texture_material_combine_v3_phase_reissue_schedule_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -12372,7 +13065,7 @@ module zhao_texture_material_combine_v3_phase_reissue_schedule_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -12381,7 +13074,7 @@ module zhao_texture_material_combine_v3_phase_reissue_schedule_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;
@@ -12804,11 +13497,18 @@ module zhao_texture_material_combine_v3_skip_s_capture_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -13356,6 +14056,10 @@ module zhao_texture_material_combine_v3_skip_s_capture_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -13380,8 +14084,53 @@ module zhao_texture_material_combine_v3_skip_s_capture_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -13422,6 +14171,8 @@ module zhao_texture_material_combine_v3_skip_s_capture_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -13471,8 +14222,11 @@ module zhao_texture_material_combine_v3_skip_s_capture_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -13486,8 +14240,10 @@ module zhao_texture_material_combine_v3_skip_s_capture_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -13498,7 +14254,7 @@ module zhao_texture_material_combine_v3_skip_s_capture_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -13507,7 +14263,7 @@ module zhao_texture_material_combine_v3_skip_s_capture_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;
@@ -13930,11 +14686,18 @@ module zhao_texture_material_combine_v3_skip_f_finish_mutant #(
 
   always_ff @(posedge clk) begin
     if (adm_we) tag_m[adm_ctx] <= f_tag_i;
-    tag_rd <= tag_m[done_ctx_c];
+    // tag_m is written only at ADMISSION, so reading the bypassed context on
+    // the same edge its final row is written is safe -- that context was
+    // admitted long before. comp_m below is the opposite case.
+    tag_rd <= tag_m[resp_read_ctx_c];
   end
 
   always_ff @(posedge clk) begin
     if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    // NOT muxed to the bypass context, deliberately. The final row is written
+    // to comp_m on THIS edge and a synchronous read on the same edge returns
+    // the OLD contents, so the bypass cannot read the value it is forwarding.
+    // It carries cmp_row directly instead, in done_val_q below.
     cmp_rd <= comp_m[done_ctx_c];
   end
 
@@ -14481,6 +15244,10 @@ module zhao_texture_material_combine_v3_skip_f_finish_mutant #(
   logic prefetch_full_q;
   logic done_rd_q;
   logic [CW-1:0] done_rd_ctx_q;
+  // Section 8.4 forwarding: the row a bypassed completion carries in place of
+  // the comp_m read it cannot perform, and the flag that selects it.
+  logic done_from_bypass_q;
+  logic [48:0] done_val_q;
 
   assign o_valid_o = out_full_q;
   assign o_rgb_o = out_val_q[23:0];
@@ -14505,8 +15272,53 @@ module zhao_texture_material_combine_v3_skip_f_finish_mutant #(
       {2'd0, out_full_q} + {2'd0, prefetch_full_q} + {2'd0, done_rd_q};
   wire [2:0] response_after_pop_c =
       response_occupancy_c - (out_pop_c ? 3'd1 : 3'd0);
-  wire out_issue_c = !doneq_empty && (response_after_pop_c < 3'd2);
   assign done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
+
+  // WB-FINAL -> COMPLETION-READ FORWARDING (brief section 8.4).
+  //
+  // MEASURED, and the measurement is why this exists rather than the brief.
+  // The 8.3 WB->Q continuation bypass moved the S+F recurrence 8->7 and the
+  // lone 3-phase latency 27->25, and the saturated rate went 0.878->0.867
+  // phases/clk -- which is to say it did not move. That falsifies "the phase
+  // loop is the bottleneck". A context is not freed when its last phase writes
+  // back; it is freed on its OUTPUT HANDSHAKE, and the tail between those two
+  // is DONE, the completion read, and the response slots. Eight contexts
+  // covering a seven-clock recurrence run out in the TAIL, not in the loop.
+  //
+  // So this removes one clock from the tail: when the done queue is empty and
+  // the response path has reserved room, the final phase retiring on this edge
+  // launches its own completion read directly instead of taking a lap through
+  // doneq.
+  //
+  // The asymmetry with 8.3 is the RAM, and it decides the shape. There the
+  // scratch write landed on this edge and the read happened on the NEXT one,
+  // so the bypass could let the ordinary read do its job. Here comp_m is
+  // written on this very edge and a synchronous read returns OLD contents, so
+  // the bypass cannot read what it is forwarding -- it carries cmp_row in
+  // done_val_q instead. tag_m is different again: written only at admission,
+  // so its read is simply re-addressed.
+  //
+  // done_val_q is one deep and that is sufficient: an arrival always leaves it
+  // for out or prefetch on the next edge, and a second bypass issuing on that
+  // same edge writes it non-blocking, after the arrival has sampled the old
+  // value.
+  //
+  // A bypassed context is never also pushed to doneq -- doing both would
+  // complete the job twice. The committed control for that is
+  // material_combine_v3_done_bypass_double_issue_control.
+  localparam bit DONE_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_DONE_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very context it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire done_bypass_c = cmp_we && doneq_empty && (response_after_pop_c < 3'd2);
+  wire out_issue_c = (!doneq_empty && (response_after_pop_c < 3'd2))
+                  || done_bypass_c;
+  wire [CW-1:0] resp_read_ctx_c = done_bypass_c ? wb_ctx : done_ctx_c;
+  // The forwarded row wins its own beat; every other beat reads comp_m.
+  wire [48:0] resp_val_c = done_from_bypass_q ? done_val_q : cmp_rd;
 
   wire [CW:0] free_level_c = freeq_wp - freeq_rp;
   wire all_contexts_free_c =
@@ -14547,6 +15359,8 @@ module zhao_texture_material_combine_v3_skip_f_finish_mutant #(
       prefetch_ctx_q <= '0;
       done_rd_q <= 1'b0;
       done_rd_ctx_q <= '0;
+      done_from_bypass_q <= 1'b0;
+      done_val_q <= '0;
       refused_material_o <= 32'd0;
       saturated_add_o <= 32'd0;
       saturated_mul2x_o <= 32'd0;
@@ -14596,8 +15410,11 @@ module zhao_texture_material_combine_v3_skip_f_finish_mutant #(
       // Continuation/done ownership advances only with the actual WB RAM write.
       if (wb_v) begin
         if (wb_final) begin
-          doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
-          doneq_wp <= doneq_wp + 1'b1;
+          // Enqueue ONLY the completion that was not forwarded this edge.
+          if (!(done_bypass_c && DONE_BYPASS_SUPPRESS_PUSH)) begin
+            doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
+            doneq_wp <= doneq_wp + 1'b1;
+          end
         end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
           // Enqueue ONLY the continuation that was not forwarded this edge.
           // Enqueueing a bypassed phase as well would launch it twice.
@@ -14611,8 +15428,10 @@ module zhao_texture_material_combine_v3_skip_f_finish_mutant #(
       // elastic response slots have reserved capacity for its future arrival.
       done_rd_q <= out_issue_c;
       if (out_issue_c) begin
-        doneq_rp <= doneq_rp + 1'b1;
-        done_rd_ctx_q <= done_ctx_c;
+        if (!done_bypass_c) doneq_rp <= doneq_rp + 1'b1;
+        done_rd_ctx_q <= resp_read_ctx_c;
+        done_from_bypass_q <= done_bypass_c;
+        if (done_bypass_c) done_val_q <= cmp_row;
       end
 
       // Existing prefetch data is older and therefore wins the public slot.
@@ -14623,7 +15442,7 @@ module zhao_texture_material_combine_v3_skip_f_finish_mutant #(
         out_ctx_q <= prefetch_ctx_q;
         out_full_q <= 1'b1;
       end else if (arrival_to_out_c) begin
-        out_val_q <= cmp_rd;
+        out_val_q <= resp_val_c;
         out_tag_q <= tag_rd;
         out_ctx_q <= done_rd_ctx_q;
         out_full_q <= 1'b1;
@@ -14632,7 +15451,7 @@ module zhao_texture_material_combine_v3_skip_f_finish_mutant #(
       end
 
       if (arrival_to_prefetch_c) begin
-        prefetch_val_q <= cmp_rd;
+        prefetch_val_q <= resp_val_c;
         prefetch_tag_q <= tag_rd;
         prefetch_ctx_q <= done_rd_ctx_q;
         prefetch_full_q <= 1'b1;

@@ -33,6 +33,8 @@ module zhao_texture_early_desc_v2_slotswap_mutant #(
     input logic rd_result_ready_i,
     output logic [SLOTW+GENW-1:0] rd_owner_o,
     output logic [286:0] rd_logical_o,
+    // TIMING4 E1: same unmasked view the production leaf now exposes.
+    output logic [286:0] rd_logical_raw_o,
     output logic rd_owner_generation_ok_o,
     output logic rd_descriptor_pad_ok_o,
     output logic rd_descriptor_usable_o,
@@ -86,6 +88,7 @@ module zhao_texture_early_desc_v2_slotswap_mutant #(
   assign rd_descriptor_pad_ok_o = !pad_bad_c;
   assign rd_descriptor_usable_o = rd_v_q && !pad_bad_c && !generation_bad_c;
   assign rd_logical_o = rd_descriptor_usable_o ? rd_physical_q[286:0] : '0;
+  assign rd_logical_raw_o = rd_physical_q[286:0];
   assign idle_o = !rd_v_q;
 
   always_ff @(posedge clk or negedge rst_n) begin

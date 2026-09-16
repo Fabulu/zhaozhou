@@ -8,6 +8,10 @@
 `ifndef ZHAO_PACKET_B_TMU_RESULT
 `define ZHAO_PACKET_B_TMU_RESULT(tuple) tuple[47:0]
 `endif
+// TIMING4 R1T mutation seam: which owner addresses the UVW bank.
+`ifndef ZHAO_ISLAND_T4_UVW_READ_OWNER
+`define ZHAO_ISLAND_T4_UVW_READ_OWNER(head_owner, live_owner) head_owner
+`endif
 `ifndef ZHAO_PACKET_B_COMBINE_S2
 `define ZHAO_PACKET_B_COMBINE_S2(sample2, aux) sample2
 `endif
@@ -504,7 +508,13 @@ module zhao_texture_island_v3_top #(
   assign q_owner_combine_valid = owner_combine_valid_w;
   assign q_owner_final_valid = owner_final_valid_w;
   assign q_rcp_req_valid = rcp_req_valid_w;
-  assign q_rcp_rsp_valid = rcp_rsp_valid_w;
+  // The Timing4 reciprocal head holds an accepted RCP response that has not yet
+  // reached perspective prep, so it is outstanding reciprocal-response work and
+  // belongs in this existing quiet term. Folding it here rather than adding a
+  // new operand keeps data_quiet's operand inventory -- and the committed quiet
+  // mutation fixture built from it -- exactly as it was, while making quiet
+  // strictly stronger: it now stays false until the head is empty too.
+  assign q_rcp_rsp_valid = rcp_rsp_valid_w || rcp_head_valid_q;
   assign q_persp_req_valid = persp_req_valid_w;
   assign q_persp_rsp_valid = persp_rsp_valid_w;
   assign q_metajoin_a_valid = metajoin_a_valid_w;
@@ -920,6 +930,33 @@ module zhao_texture_island_v3_top #(
       .phase_jobs_o(), .negcorr_jobs_o(), .occupancy_o(rcp_occupancy_w),
       .qerr_o(err_rcp_q_o), .idle_o(rcp_idle_w));
 
+  // TIMING4 R1T: A HELD RECIPROCAL HEAD IN FRONT OF THE UVW LOOKUP.
+  //
+  // The reported path started at the reciprocal pipeline's token bypass and
+  // ended at persp_prep_uow_q, combining token selection, owner-slot addressing,
+  // the 64-entry stored UVW value and destination acceptance in one cone. The
+  // live RCP token was the read address.
+  //
+  // Now the RCP output handshake first captures the complete result record --
+  // owner14 + reciprocal24 + shift6 + zero1 + valid, 46 bits -- and its
+  // REGISTERED owner slot drives the uvw_m read on a later accepted transfer.
+  // The reciprocal, shift, zero and owner that travel with that read all come
+  // from the head, never from the next live RCP result, so a stalled prep can
+  // never pair one owner's UVW row with another owner's reciprocal.
+  //
+  // This is a narrow identity boundary, not a second owner UVW table: uvw_m
+  // keeps its sole writer on owner admission. Reading it a cycle later is safe
+  // because the owner stays reserved until its ordinary retirement, which is
+  // far downstream of here, so the slot cannot have been reallocated.
+  //
+  // Both stages accept one transfer per clock and the head permits simultaneous
+  // consume/refill, so II=1 is preserved; only latency grows by one edge.
+  logic rcp_head_valid_q;
+  logic [23:0] rcp_head_recip_q;
+  logic [5:0] rcp_head_shift_q;
+  logic rcp_head_zero_q;
+  logic [OWNERW-1:0] rcp_head_owner_q;
+
   logic persp_prep_valid_q;
   logic signed [31:0] persp_prep_uow_q, persp_prep_vow_q;
   logic [23:0] persp_prep_recip_q;
@@ -928,19 +965,44 @@ module zhao_texture_island_v3_top #(
   logic [OWNERW-1:0] persp_prep_owner_q;
   logic persp_req_ready_w;
 
-  assign rcp_rsp_ready_w = !persp_prep_valid_q || persp_req_ready_w;
+  wire persp_prep_room_c = !persp_prep_valid_q || persp_req_ready_w;
+  wire rcp_head_room_c   = !rcp_head_valid_q || persp_prep_room_c;
+
+  // The UVW read address. Production uses the REGISTERED head owner; the
+  // committed control substitutes the live RCP token, which is the pairing
+  // failure this boundary removes.
+  wire [OWNERW-1:0] uvw_read_owner_c =
+      `ZHAO_ISLAND_T4_UVW_READ_OWNER(rcp_head_owner_q, rcp_owner_w);
+
+  assign rcp_rsp_ready_w = rcp_head_room_c;
   assign persp_req_valid_w = persp_prep_valid_q;
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
+      rcp_head_valid_q <= 1'b0;
       persp_prep_valid_q <= 1'b0;
-    end else if (rcp_rsp_ready_w) begin
-      persp_prep_valid_q <= rcp_rsp_valid_w;
-      if (rcp_rsp_valid_w) begin
-        {persp_prep_uow_q, persp_prep_vow_q} <= uvw_m[rcp_owner_w[13:8]];
-        persp_prep_recip_q <= rcp_result_w;
-        persp_prep_shift_q <= rcp_shift_w;
-        persp_prep_zero_q <= rcp_zero_w;
-        persp_prep_owner_q <= rcp_owner_w;
+    end else begin
+      // Consume-and-refill on one edge: when prep has room the head both
+      // launches its record and accepts the next reciprocal result.
+      if (persp_prep_room_c) begin
+        persp_prep_valid_q <= rcp_head_valid_q;
+        if (rcp_head_valid_q) begin
+          {persp_prep_uow_q, persp_prep_vow_q} <= uvw_m[uvw_read_owner_c[13:8]];
+          persp_prep_recip_q <= rcp_head_recip_q;
+          persp_prep_shift_q <= rcp_head_shift_q;
+          persp_prep_zero_q  <= rcp_head_zero_q;
+          persp_prep_owner_q <= rcp_head_owner_q;
+        end
+      end
+
+      if (rcp_head_room_c) begin
+        rcp_head_valid_q <= rcp_rsp_valid_w;
+        if (rcp_rsp_valid_w) begin
+          rcp_head_recip_q <= rcp_result_w;
+          rcp_head_shift_q <= rcp_shift_w;
+          rcp_head_zero_q  <= rcp_zero_w;
+          rcp_head_owner_q <= rcp_owner_w;
+        end
       end
     end
   end
@@ -969,7 +1031,15 @@ module zhao_texture_island_v3_top #(
   // Exact descriptor physical image and 301/78/365 owner join.
   logic desc_req_ready_w;
   logic [OWNERW-1:0] desc_owner_w;
+  // The public MASKED descriptor output. Since Timing4 E1 the join is fed from
+  // the raw row plus its verdict instead, so nothing in the synthesized island
+  // consumes this any more -- it is retained because it is the leaf's public
+  // contract for every other client, and because it gives the assertion below
+  // an independently derived oracle for what the join must publish.
+  /* verilator lint_off UNUSEDSIGNAL */
   logic [286:0] desc_logical_w;
+  /* verilator lint_on UNUSEDSIGNAL */
+  logic [286:0] desc_logical_raw_w;
   logic desc_rsp_ready_w;
   logic desc_owner_generation_ok_w, desc_pad_ok_w, desc_usable_w;
   logic [31:0] desc_pad_fault_w, desc_generation_mismatch_w;
@@ -1006,6 +1076,7 @@ module zhao_texture_island_v3_top #(
       .rd_owner_i(persp_owner_w), .rd_result_valid_o(desc_rsp_valid_w),
       .rd_result_ready_i(desc_rsp_ready_w), .rd_owner_o(desc_owner_w),
       .rd_logical_o(desc_logical_w),
+      .rd_logical_raw_o(desc_logical_raw_w),
       .rd_owner_generation_ok_o(desc_owner_generation_ok_w),
       .rd_descriptor_pad_ok_o(desc_pad_ok_w),
       .rd_descriptor_usable_o(desc_usable_w),
@@ -1016,11 +1087,18 @@ module zhao_texture_island_v3_top #(
 
   assign uvjoin_desc_valid_w = desc_rsp_valid_w;
   assign desc_rsp_ready_w = uvjoin_desc_ready_w;
-  assign uvjoin_desc_data_w = {desc_owner_w, desc_logical_w};
+  // TIMING4 E1: the RAW held row crosses into the join, and its usability
+  // verdict crosses beside it as one bit on the same transfer. The join
+  // registers both and masks from its own registered copy, which removes
+  // generation-compare -> 287-bit mask -> join register from this cone.
+  // desc_logical_w (the masked public output) keeps its own consumers and is
+  // still what the trust witnesses below are recorded against.
+  assign uvjoin_desc_data_w = {desc_owner_w, desc_logical_raw_w};
 
   zhao_texture_uv_join_v2 u_uv_join (
       .clk(clk), .rst_n(rst_n),
       .desc_valid_i(uvjoin_desc_valid_w), .desc_ready_o(uvjoin_desc_ready_w),
+      .desc_usable_i(desc_usable_w),
       .desc_data_i(uvjoin_desc_data_w),
       .uv_valid_i(uvjoin_uv_valid_w), .uv_ready_o(uvjoin_uv_ready_w),
       .uv_data_i(uvjoin_uv_data_w),
@@ -2526,10 +2604,90 @@ module zhao_texture_island_v3_top #(
     if (!rst_n) assert_armed_q <= 1'b0;
     else        assert_armed_q <= 1'b1;
   end
+
+  // TIMING4 R1T shadow. This latches the owner the UVW row was ACTUALLY
+  // ADDRESSED BY on the launching edge, so it can be compared against the
+  // identity the record went on to carry.
+  //
+  // Its first version latched rcp_head_owner_q instead, under a comment saying
+  // it was "deliberately NOT written by the same enable expression as the
+  // payload it checks". It was written by exactly that enable, from exactly
+  // that source, so persp_prep_shadow_owner_q and persp_prep_owner_q were
+  // provably equal at all times and a_persp_prep_owner_is_head was a
+  // tautology -- a detector wired to two operands that move together, with a
+  // comment asserting the opposite. It could not fire on correct hardware and
+  // it could not fire under the R1T mutant either, because the mutant changes
+  // only the read ADDRESS and never touches persp_prep_owner_q.
+  //
+  // Shadowing uvw_read_owner_c fixes that. In production the macro makes it
+  // rcp_head_owner_q and the comparison holds; under the mutant it is the live
+  // rcp_owner_w, which differs from the head exactly while a second result is
+  // in flight, and the assertion has something real to catch.
+  logic persp_prep_shadow_v_q;
+  logic [OWNERW-1:0] persp_prep_shadow_owner_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      persp_prep_shadow_v_q <= 1'b0;
+      persp_prep_shadow_owner_q <= '0;
+    end else if (persp_prep_room_c) begin
+      persp_prep_shadow_v_q <= rcp_head_valid_q;
+      if (rcp_head_valid_q)
+        persp_prep_shadow_owner_q <= uvw_read_owner_c;
+    end
+  end
+
+  // The head holds while it is stalled -- but "stalled" must be sampled on the
+  // edge where a write COULD have happened, not on the edge where the change is
+  // observed. The first version guarded $stable with THIS cycle's
+  // persp_prep_room_c while $stable reports a change made on the PREVIOUS edge,
+  // so an ordinary accept-then-stall sequence fired it on correct hardware.
+  // geom_bin_pipe_v2_omit_v3_quiet_mutant caught that at cycle 4500.
+  logic rcp_head_write_allowed_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) rcp_head_write_allowed_q <= 1'b1;
+    else        rcp_head_write_allowed_q <= rcp_head_room_c;
+  end
   always_ff @(posedge clk) begin
     if (assert_armed_q) begin
       a_atomic_admission: assert (own_adm_accept_w ==
           (rcp_req_valid_w && rcp_req_ready_w));
+      // TIMING4 R1T. The UVW row must be addressed by the identity of the
+      // record that is actually launching, never by whatever the reciprocal
+      // pipeline happens to be presenting. These two differ only while a
+      // second result is in flight behind a held head -- which is precisely
+      // when a live address pairs one owner's row with another's reciprocal.
+      if (persp_prep_room_c && rcp_head_valid_q) begin
+        a_uvw_read_uses_head_identity: assert (
+            uvw_read_owner_c == rcp_head_owner_q);
+      end
+      // The record handed to perspective is entirely the head's. The expected
+      // owner is latched independently on the launching edge below, so this
+      // compares two separately clocked quantities rather than one signal
+      // against itself.
+      if (persp_prep_valid_q && persp_prep_shadow_v_q) begin
+        a_persp_prep_owner_is_head: assert (
+            persp_prep_owner_q == persp_prep_shadow_owner_q);
+      end
+      // TIMING4 E1 cross-check. The leaf's public masked output and the join's
+      // raw-plus-verdict route are computed from the same row by two different
+      // paths; on the offered edge they must agree exactly. If they ever do
+      // not, the descriptor the join is about to publish is not the descriptor
+      // the rest of the island believes it validated.
+      if (desc_rsp_valid_w) begin
+        a_desc_raw_and_masked_agree: assert (
+            desc_logical_w ==
+            (desc_usable_w ? desc_logical_raw_w : 287'd0));
+      end
+      // A held head must not change while it waits for perspective prep.
+      // Guarded by the REGISTERED write permission, so the condition describes
+      // the edge on which a change could have been made rather than the edge on
+      // which it is observed.
+      if (!rcp_head_write_allowed_q) begin
+        a_rcp_head_holds: assert ($stable(rcp_head_owner_q) &&
+                                  $stable(rcp_head_recip_q) &&
+                                  $stable(rcp_head_shift_q) &&
+                                  $stable(rcp_head_zero_q));
+      end
       a_aux_issue_pulses_equal: assert (expand_issue_aux_valid_w == aux_issue_valid_w);
       a_aux_issue_owner_equal: if (aux_issue_valid_w)
           assert (expand_issue_aux_owner_w == aux_issue_owner_w);
@@ -2584,6 +2742,7 @@ module zhao_texture_island_v3_top #(
 endmodule : zhao_texture_island_v3_top
 
 `undef ZHAO_PACKET_B_TMU_RESULT
+`undef ZHAO_ISLAND_T4_UVW_READ_OWNER
 `undef ZHAO_PACKET_B_COMBINE_S2
 `undef ZHAO_PACKET_B_RETIRE_CONTEXT
 `undef ZHAO_PACKET_B_RECOVERABLE_NEXT

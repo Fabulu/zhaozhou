@@ -253,11 +253,88 @@ as reassurance:
   by planting a syntax error inside one and watching lint reject it. So a guard in
   there is live in simulation -- which is the opposite of what the pragma's name
   suggests to a reader, and worth knowing before deciding a guard is dead weight.
+* **Verilator's `-D` cannot override a FUNCTION-LIKE `` `define ``, and says
+  nothing when it fails to.** Added 2026-09-16, after two combiner mutants passed
+  while measuring unmutated production. The seam was the usual shape --
+
+  ```systemverilog
+  `ifndef ZHAO_THING
+  `define ZHAO_THING(a, b) (a)      // production default
+  `endif
+  ```
+
+  -- and the mutant build passed `-DZHAO_THING=...`. A command-line `-D` defines
+  an OBJECT-like macro, so the `` `ifndef `` still saw the name as undefined,
+  compiled the production default, and the build succeeded with no diagnostic.
+  The mutant ran, the test passed, and it was testing nothing. This is the
+  broken-instrument law wearing the toolchain's clothes: the failure is silent
+  and in the flattering direction.
+
+  The working shape is a plain `` `ifdef `` that selects between two definitions,
+  which `-D` does reach. And the check that separates the two: **compile the
+  mutant with the macro UNDEFINED and confirm the output differs.** If it does
+  not, the selector never engaged. Every macro-selected mutant here owes that
+  negative control.
 
 And when a mutant trips a SIMULATION assertion before the synthesizable counter
 can be read, disable the assertion **in the mutant only**, with the reason beside
 it. The assertion firing is independent corroboration; the counter is the thing
 that ships.
+
+### A committed mutant is a COPY, and a copy goes stale in the flattering direction
+
+Added 2026-09-16, after finding this in three separate lanes in one day. It is
+the `.gitignore` lesson and the uncashed-cheque lesson wearing the same coat:
+the knowledge was written down, correctly, and nothing ever read it back.
+
+`zhao_texture_frag_expand_mutant.sv`'s own header says *"REGENERATE IT if
+zhao_texture_frag_expand.sv changes shape: this is a copy, and a copy of an old
+version is a positive control for a block that no longer exists."* Production
+changed shape two commits later and gained **four ports**. The instruction was
+never carried out, and the control went on passing.
+
+The failure mode is specific and it is not "the test goes red":
+
+* **Thirteen combiner copies** were cut at `005578fb`; production moved twice
+  after. Each "one substantive line" had quietly become 70–140. All thirteen
+  controls stayed GREEN throughout, because the *mutations* were intact — it was
+  the body around them that was two weeks old.
+* **Eight AUX-pipe copies** were cut at `10dd9cc4`; production moved at
+  `005578fb`. **Seven went on passing**, because their drivers do not exercise
+  what changed. The eighth failed with *"AUX credit reserves through terminal
+  owner acceptance (exactly 16 live): expected 0x10, got 0x11"* — which reads
+  exactly like a credit overflow in shipped RTL, was chased as one, and was the
+  mutant measuring a machine that no longer exists. **A stale copy does not
+  report that it is stale; it reports something alarming about the wrong
+  component.**
+
+So the green is worthless in one direction and the red points somewhere else.
+Both halves are the broken-instrument law.
+
+**`tools/budget/mutant_copy_drift.py` now detects it**, registered as the
+`mutant_copy_drift` ctest. The signal is **provenance, not similarity**: if the
+production file has been committed since the copy's file was, the copy cannot
+contain what production gained. Diff size is corroboration only — removing a
+pipeline stage is legitimately a large edit, so a size threshold alone produces
+both false alarms and false silence. Two refinements it needs and has:
+
+* a **wrapper** that instantiates the production module cannot drift, and must
+  not be counted as a copy;
+* a file holding a dozen renamed copies must be diffed **per module**, or the
+  other eleven read as drift and drown the signal.
+
+**To refresh a copy, three-way merge it** — base is the revision it was cut
+from, "ours" is current production, "theirs" is the copy with its rename undone.
+Each copy then carries its own mutation forward and nothing else, and a copy
+whose mutation edited a line production has since replaced CONFLICTS, which is
+the tool telling you the mutation needs re-authoring rather than transplanting.
+When the copies re-aligned whitespace in regions production also edited, every
+merge conflicts; isolate each mutation whitespace-insensitively and re-apply it
+to the current body instead.
+
+And **a refreshed copy is stale again the moment production moves again** —
+`tools/budget/mutant_copy_drift.py` caught exactly that, one change later, in
+the same session that wrote it.
 
 One more from the same day, about receipts rather than RTL. A fit row stamped
 `failed:structure` is **not** a failed measurement — the fit completed and the
@@ -605,3 +682,31 @@ build still could not find the module — `build.ninja` predated the line and
 could not regenerate itself because the failing rule is part of its own
 regeneration. The instinct is to add the file again, which is a no-op followed
 by confusion. Regenerate through `cmake --preset`.
+
+**An `undefined reference to ..._nba_comb__TOP__...` is a STALE VERILATOR
+PARTITION, and purging one target at a time is the expensive way to fix it.**
+Added 2026-09-16, after it cost three consecutive full builds. Verilator splits
+a large module into numbered partitions (`__pi2`, `__0`, `__3`) whose names
+depend on how the design elaborated. Change a parent — here
+`zhao_texture_island_v3_top`, which re-partitioned its `zhao_texture_v3own`
+instance — and the regenerated sources call functions the leftover object files
+never defined. The link fails; the compile never does.
+
+The tell is that the missing symbol is a Verilator-internal name with a
+partition index in it, not anything anyone wrote.
+
+`cmake --preset` alone does NOT fix it. It regenerates the graph and leaves the
+stale `.obj` files in place, so the next build fails on the NEXT target sharing
+the same partition — one failure per build, forever. Delete every partition
+directory for the changed module across the tree at once:
+
+```powershell
+Get-ChildItem build\tests -Recurse -Directory -Filter "V<module>.dir" |
+  ForEach-Object { Remove-Item -Recurse -Force $_.FullName }
+cmake --preset windows-native
+```
+
+Note each target holds TWO such directories (one nested under its own
+`CMakeFiles/<target>.dir/`), and that other build trees — `build/packet-e` here
+— have their own copies that are independent and need the same treatment only
+if they are also being built.

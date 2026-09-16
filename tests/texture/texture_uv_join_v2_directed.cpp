@@ -131,6 +131,11 @@ void drive_uv(Vtb_uv_join_v2_pair* d, const Record& r) {
 
 void reset(Vtb_uv_join_v2_pair* d) {
   d->desc_valid_i = 0;
+  // TIMING4 E1 default. Every case below this point offers descriptors whose
+  // producer already judged them usable, which is what the pre-E1 interface
+  // implied, so all existing expectations remain expectations about the same
+  // traffic. The unusable case is exercised deliberately at the end.
+  d->desc_usable_i = 1;
   d->uv_valid_i = 0;
   d->out_ready_i = 0;
   d->active_page_generation_i = 0;
@@ -746,6 +751,104 @@ int main(int argc, char** argv) {
   zhao::check(d->reload_mutant_idle_o,
               "the no-reload mutant drains back to exact idle after exposing its bubbles",
               1, d->reload_mutant_idle_o);
+
+  // ------------------------------------------------------------------
+  // TIMING4 E1: the registered descriptor-trust verdict.
+  //
+  // The join now accepts the descriptor row UNMASKED and carries a one-bit
+  // usability verdict captured on the same transfer. Three things must hold,
+  // and the third is the one a live flag would break:
+  //   1. an unusable row still produces a joined transaction -- owner, U and V
+  //      intact -- with its logical field zeroed, never a vanished record;
+  //   2. a usable row is unchanged from the pre-E1 behaviour;
+  //   3. the verdict that applies is the one captured WITH the payload, so
+  //      changing the offered flag while a descriptor is held must not alter
+  //      the held record's outcome.
+  // ------------------------------------------------------------------
+  reset(d);
+  const Record trust_bad = make_record(0x5150u, 0x77u);
+  Joined expected_bad = expected_joined(trust_bad);
+  for (int bit = 0; bit < kLogicalBits; ++bit) put_bit(expected_bad, 64 + bit, 0);
+
+  // Offer an unusable descriptor and hold it: no UV partner yet.
+  drive_desc(d, trust_bad);
+  d->desc_usable_i = 0;
+  d->desc_valid_i = 1;
+  d->eval();
+  const bool bad_desc_fire = d->desc_valid_i && d->desc_ready_o;
+  tick(d);
+  d->desc_valid_i = 0;
+
+  // Now flip the OFFERED flag true while the bad row is held. The captured
+  // verdict must win: this is the operand-alignment trap the register exists
+  // to close, and a live flag here would silently publish the stale row.
+  d->desc_usable_i = 1;
+  d->eval();
+  tick(d);
+
+  drive_uv(d, trust_bad);
+  d->uv_valid_i = 1;
+  d->out_ready_i = 1;
+  d->eval();
+  const bool bad_uv_fire = d->uv_valid_i && d->uv_ready_o;
+  tick(d);
+  d->uv_valid_i = 0;
+  d->eval();
+
+  int trust_wait = 0;
+  while (!d->good_valid_o && trust_wait < 16) { tick(d); d->eval(); ++trust_wait; }
+  const bool bad_emitted = d->good_valid_o != 0;
+  const Joined bad_seen = copy_wide<12>(d->good_data_o);
+  zhao::check(bad_desc_fire && bad_uv_fire && bad_emitted,
+              "an unusable descriptor is still a joined transaction, not a dropped one",
+              1, (bad_desc_fire && bad_uv_fire && bad_emitted) ? 1 : 0);
+  zhao::check(joined_equal(bad_seen, expected_bad),
+              "the held verdict zeroes the logical field while owner, U and V survive",
+              1, joined_equal(bad_seen, expected_bad) ? 1 : 0);
+  zhao::check(d->good_mismatch_o == 0 && !d->good_lifetime_fault_o,
+              "a failing usability verdict is not an owner mismatch or a lifetime fault",
+              0, d->good_mismatch_o + d->good_lifetime_fault_o);
+  tick(d);
+  d->out_ready_i = 0;
+  d->eval();
+
+  // The mirror case: a usable row with the offered flag driven false after
+  // capture must still publish its full descriptor.
+  reset(d);
+  const Record trust_good = make_record(0x2701u, 0x31u);
+  drive_desc(d, trust_good);
+  d->desc_usable_i = 1;
+  d->desc_valid_i = 1;
+  d->eval();
+  tick(d);
+  d->desc_valid_i = 0;
+  d->desc_usable_i = 0;   // stale offer, must not reach the held record
+  d->eval();
+  tick(d);
+  drive_uv(d, trust_good);
+  d->uv_valid_i = 1;
+  d->out_ready_i = 1;
+  d->eval();
+  tick(d);
+  d->uv_valid_i = 0;
+  d->eval();
+  trust_wait = 0;
+  while (!d->good_valid_o && trust_wait < 16) { tick(d); d->eval(); ++trust_wait; }
+  const bool good_emitted = d->good_valid_o != 0;
+  const bool good_exact =
+      good_emitted && joined_equal(copy_wide<12>(d->good_data_o),
+                                   expected_joined(trust_good));
+  zhao::check(good_exact,
+              "a usable descriptor keeps its full logical row even when the offered "
+              "verdict later goes false",
+              1, good_exact ? 1 : 0);
+  d->out_ready_i = 1;
+  d->eval();
+  tick(d);
+  d->out_ready_i = 0;
+  d->eval();
+  zhao::check(d->good_idle_o,
+              "the descriptor-trust cases drain back to exact idle", 1, d->good_idle_o);
 
   const int rc = zhao::report_and_exit("texture_uv_join_v2_directed");
   delete d;
