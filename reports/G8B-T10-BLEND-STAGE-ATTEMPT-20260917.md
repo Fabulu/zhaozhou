@@ -275,6 +275,59 @@ Four builds, four test runs and one traced simulation, all of which left the
 tree byte-identical to `b1dbb97d`. No fit was spent on any of them: a design
 that fails `terrain_tess_directed` is a design CLAUDE.md says not to measure,
 and that rule saved four fits at roughly ten minutes each.
+## The enumeration, done — and it corrects the paragraph above
+
+The last section said the next attempt should *"enumerate every consumer of a
+blended height rather than patch the two the emit made obvious"*. Done, and it
+is shorter than expected. Every appearance of `vy[]` in
+`zhao_terrain_tess.sv`:
+
+| line | role |
+|---|---|
+| 416 | declaration |
+| 1259 | reset |
+| **1528** | **write** — `vy[pend_slot] <= lat_h_i`, the stage-A raw height |
+| **1610** | **write** — `vy[ln2_slot_q] <= m_y`, the blend landing |
+| **1568** | **read** — `vy[0]`, in the A→B snapshot |
+| **1570** | **read** — `vy[1]`, in the A→B snapshot |
+
+**Two writers and exactly two readers, and both readers are the same
+snapshot.** There is no third consumer to find. The vertex-queue landing does
+not read `vy[]` at all — `land_y` is the vertex's OWN blend (`m_y`) or its own
+raw height (`ln2_h_q`), never a sibling slot's.
+
+### Which means two things, one of them a correction
+
+**The correction.** The previous section claimed *"the ModeVtx cases fail too,
+and those do not go through the triangle queue at all"*, and offered that as
+evidence for a consumer beyond the triangle's a/b. **That inference was wrong.**
+Both failing check names — *"geomorph at every factor and every stride"* and
+*"geomorph on the underside plane"* — come from `expect_job`, which drives
+ModeTri and compares `MeshTri` output. They are triangle checks. ModeVtx lands
+its own blend and cannot be affected by a sibling slot's staleness, which the
+enumeration above now explains rather than merely asserts. Three candidate
+consumers were listed there; the enumeration finds none of them real.
+
+**And the useful consequence.** If the only consumer is the A→B snapshot, then
+patching the EMIT — which is what T10b did — is patching the wrong end of the
+same wire, and the `*_stale` flags were being applied three stages after the
+damage was done. The value to fix is `lnd_ay_q`/`lnd_by_q` at the moment they
+are captured, and at that moment the blend genuinely does not exist yet.
+
+So the design space really is only:
+
+* **delay the capture** until the blends have landed — which is option (a),
+  correct and rate-refused; or
+* **capture a POINTER instead of a value** — record which slot the triangle
+  needs and resolve it at the emit from a structure the next group cannot
+  disturb. T10b built half of that (`vyh[]`, the blend-only copy) but kept the
+  early value capture alongside it and selected between them with a flag
+  computed at capture time. The pointer form does not capture a value at all,
+  so there is nothing to be stale.
+
+That second form is the one remaining candidate, and it is now the only one:
+the enumeration closes off the possibility that some other consumer was also
+at fault.
 ## Status
 
 * RTL reverted; `zhao_terrain_tess.sv` is byte-identical to `b1dbb97d`, the
