@@ -210,43 +210,73 @@ module zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -296,14 +326,65 @@ module zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -963,9 +1044,10 @@ module zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -995,7 +1077,9 @@ module zhao_texture_material_combine_v3_stale_alpha_arithmetic_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -1254,43 +1338,73 @@ module zhao_texture_material_combine_v3_binary_mask_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -1340,14 +1454,65 @@ module zhao_texture_material_combine_v3_binary_mask_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -2000,9 +2165,10 @@ module zhao_texture_material_combine_v3_binary_mask_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -2032,7 +2198,9 @@ module zhao_texture_material_combine_v3_binary_mask_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -2291,43 +2459,76 @@ module zhao_texture_material_combine_v3_double_round_mod2x_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = (({1'b0, product} + 17'd128) >> 8) << 1; // MUTANT: round then double
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            // MUTANT: round to unit8 first, then double.  Production
+            // rounds ONCE at bit 7; this rounds at bit 8 and shifts,
+            // which differs at real byte inputs (1*64 -> 0, not 1).
+            mod2_sum = {({1'b0, product[15:8]} +
+                         {8'd0, product[7]}), 1'b0};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -2377,14 +2578,65 @@ module zhao_texture_material_combine_v3_double_round_mod2x_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -3042,9 +3294,10 @@ module zhao_texture_material_combine_v3_double_round_mod2x_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -3074,7 +3327,9 @@ module zhao_texture_material_combine_v3_double_round_mod2x_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -3333,43 +3588,73 @@ module zhao_texture_material_combine_v3_unit_detail_first_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -3419,14 +3704,65 @@ module zhao_texture_material_combine_v3_unit_detail_first_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -4084,9 +4420,10 @@ module zhao_texture_material_combine_v3_unit_detail_first_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -4116,7 +4453,9 @@ module zhao_texture_material_combine_v3_unit_detail_first_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -4375,43 +4714,73 @@ module zhao_texture_material_combine_v3_universal_count_zero_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -4461,14 +4830,65 @@ module zhao_texture_material_combine_v3_universal_count_zero_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -5131,9 +5551,10 @@ module zhao_texture_material_combine_v3_universal_count_zero_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -5163,7 +5584,9 @@ module zhao_texture_material_combine_v3_universal_count_zero_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -5422,43 +5845,73 @@ module zhao_texture_material_combine_v3_aux_as_sample2_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -5508,14 +5961,65 @@ module zhao_texture_material_combine_v3_aux_as_sample2_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -6173,9 +6677,10 @@ module zhao_texture_material_combine_v3_aux_as_sample2_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -6205,7 +6710,9 @@ module zhao_texture_material_combine_v3_aux_as_sample2_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -6464,43 +6971,73 @@ module zhao_texture_material_combine_v3_omit_required_status_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -6550,14 +7087,65 @@ module zhao_texture_material_combine_v3_omit_required_status_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -7215,9 +7803,10 @@ module zhao_texture_material_combine_v3_omit_required_status_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -7247,7 +7836,9 @@ module zhao_texture_material_combine_v3_omit_required_status_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -7506,43 +8097,73 @@ module zhao_texture_material_combine_v3_drop_raw_index_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -7592,14 +8213,65 @@ module zhao_texture_material_combine_v3_drop_raw_index_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -8256,9 +8928,10 @@ module zhao_texture_material_combine_v3_drop_raw_index_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -8288,7 +8961,9 @@ module zhao_texture_material_combine_v3_drop_raw_index_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -8547,43 +9222,73 @@ module zhao_texture_material_combine_v3_reconstruct_raw_index_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -8633,14 +9338,65 @@ module zhao_texture_material_combine_v3_reconstruct_raw_index_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -9297,9 +10053,10 @@ module zhao_texture_material_combine_v3_reconstruct_raw_index_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -9329,7 +10086,9 @@ module zhao_texture_material_combine_v3_reconstruct_raw_index_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -9588,43 +10347,73 @@ module zhao_texture_material_combine_v3_phase_drop_writeback_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -9674,14 +10463,65 @@ module zhao_texture_material_combine_v3_phase_drop_writeback_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -10348,9 +11188,10 @@ module zhao_texture_material_combine_v3_phase_drop_writeback_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -10380,7 +11221,9 @@ module zhao_texture_material_combine_v3_phase_drop_writeback_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -10639,43 +11482,73 @@ module zhao_texture_material_combine_v3_phase_reissue_schedule_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -10725,14 +11598,65 @@ module zhao_texture_material_combine_v3_phase_reissue_schedule_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -11390,9 +12314,10 @@ module zhao_texture_material_combine_v3_phase_reissue_schedule_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -11422,7 +12347,9 @@ module zhao_texture_material_combine_v3_phase_reissue_schedule_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -11681,43 +12608,73 @@ module zhao_texture_material_combine_v3_skip_s_capture_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -11767,14 +12724,65 @@ module zhao_texture_material_combine_v3_skip_s_capture_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -12432,9 +13440,10 @@ module zhao_texture_material_combine_v3_skip_s_capture_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -12464,7 +13473,9 @@ module zhao_texture_material_combine_v3_skip_s_capture_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -12723,43 +13734,73 @@ module zhao_texture_material_combine_v3_skip_f_finish_mutant #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase
@@ -12809,14 +13850,65 @@ module zhao_texture_material_combine_v3_skip_f_finish_mutant #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -13473,9 +14565,10 @@ module zhao_texture_material_combine_v3_skip_f_finish_mutant #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -13505,7 +14598,9 @@ module zhao_texture_material_combine_v3_skip_f_finish_mutant #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;

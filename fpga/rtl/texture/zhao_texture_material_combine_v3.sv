@@ -315,14 +315,65 @@ module zhao_texture_material_combine_v3 #(
   wire material_refused_c = !count_legal(f_recipe_i, f_sample_count_i);
 
   // CONT priority keeps a started context moving while NEW work fills latency.
-  wire q_valid_c = !contq_empty || !newq_empty;
+  //
+  // WB->Q CONTINUATION FORWARDING, AND WHY IT IS NOT A SHORTCUT.
+  //
+  // MEASURED on this RTL before the bypass existed: a lone multi-phase job
+  // relaunched its next phase every EIGHT clocks, and 48 saturated DETAIL_LIGHT
+  // jobs sustained only 0.878 phases per clock rather than the 1.000 that eight
+  // contexts covering an eight-clock recurrence should give. The S and F
+  // registers each added one clock to that loop, and a context is not free when
+  // its last phase writes back -- it is free on its OUTPUT handshake -- so the
+  // contexts ran out before the pipeline did.
+  //
+  // The fix is the narrow one: when the continuation queue is EMPTY, the phase
+  // that is writing scratch on this very edge launches its own next phase
+  // directly, instead of taking a lap through the queue. Priority is unchanged;
+  // an already queued continuation still wins, and new work still comes last.
+  //
+  // Three properties make this safe rather than a same-edge hazard:
+  //   * WB is a registered stage, so the bypass carries wb_ctx/wb_ph and never
+  //     reaches backwards into unregistered finish arithmetic;
+  //   * the scratch write happens on THIS edge and `scr_rd <= scratch_m[r_ctx]`
+  //     reads on the FOLLOWING one, so the next phase observes the completed
+  //     write without relying on same-edge old-data behaviour;
+  //   * a bypassed event is never also enqueued. Doing both would run the phase
+  //     twice; the committed double-issue mutant exists for exactly that.
+  //
+  // phases_issued stays tied to this q_valid_c launch and phases_completed to
+  // the actual scratch/completion write, so one physical phase still books one
+  // of each.
+  // The two seams below are plain `ifdef` selectors on purpose. A function-like
+  // `define cannot be overridden from a Verilator -D on the command line: the
+  // override is silently ignored and the default is compiled, so a mutant built
+  // that way measures unmutated production and "passes". That was observed here
+  // before these were rewritten, and it is the broken-instrument failure in its
+  // most flattering direction -- a control that cannot fire reports success.
+  // The empty-queue guard is NOT behind a selector. Inverting it was tried as a
+  // control and could not be made to fire: with CONT holding absolute priority
+  // at Q, the continuation queue is virtually always empty at the moment a
+  // non-final phase retires, so the guarded state is unreachable under every
+  // workload this suite drives. A control that cannot fire would report success
+  // forever, so none is shipped; proving this guard needs stimulus that first
+  // backs CONT up deliberately, and that is recorded as owed rather than faked.
+  localparam bit CONT_BYPASS_SUPPRESS_PUSH =
+`ifdef ZHAO_MATV3_MUTANT_CONT_BYPASS_DOUBLE_ISSUE
+      1'b0;  // WRONG: enqueues the very phase it also forwards.
+`else
+      1'b1;
+`endif
+
+  wire wb_cont_c = wb_v && !wb_final;
+  wire cont_bypass_c = wb_cont_c && contq_empty;
+  wire q_valid_c = !contq_empty || cont_bypass_c || !newq_empty;
   wire q_from_cont_c = !contq_empty;
+  wire q_from_bypass_c = !q_from_cont_c && cont_bypass_c;
   wire [CW-1:0] q_ctx_c = q_from_cont_c
       ? contq_ctx_m[contq_rp[CW-1:0]]
-      : newq_m[newq_rp[CW-1:0]];
+      : (q_from_bypass_c ? wb_ctx : newq_m[newq_rp[CW-1:0]]);
   wire [1:0] q_ph_c = q_from_cont_c
       ? contq_ph_m[contq_rp[CW-1:0]]
-      : 2'd0;
+      : (q_from_bypass_c ? (wb_ph + 2'd1) : 2'd0);
 
   logic [PAYW-1:0] pay_wr_c;
   logic [PAYW-1:0] pay_rd;
@@ -980,9 +1031,10 @@ module zhao_texture_material_combine_v3 #(
           refused_material_o <= refused_material_o + 32'd1;
       end
 
+      // A forwarded continuation consumes neither queue: it never entered one.
       if (q_valid_c) begin
-        if (q_from_cont_c) contq_rp <= contq_rp + 1'b1;
-        else               newq_rp <= newq_rp + 1'b1;
+        if (q_from_cont_c)           contq_rp <= contq_rp + 1'b1;
+        else if (!q_from_bypass_c)   newq_rp <= newq_rp + 1'b1;
       end
 
       // Count meaningful product jobs at the M result edge, not powered-but-idle
@@ -1012,7 +1064,9 @@ module zhao_texture_material_combine_v3 #(
         if (wb_final) begin
           doneq_m[doneq_wp[CW-1:0]] <= wb_ctx;
           doneq_wp <= doneq_wp + 1'b1;
-        end else begin
+        end else if (!(cont_bypass_c && CONT_BYPASS_SUPPRESS_PUSH)) begin
+          // Enqueue ONLY the continuation that was not forwarded this edge.
+          // Enqueueing a bypassed phase as well would launch it twice.
           contq_ctx_m[contq_wp[CW-1:0]] <= wb_ctx;
           contq_ph_m[contq_wp[CW-1:0]] <= wb_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
