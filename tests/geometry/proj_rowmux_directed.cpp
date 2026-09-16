@@ -466,8 +466,8 @@ int main(int argc, char** argv) {
     }
     CHECK(l3_fixed, "ROWS_PER_PASS=3 latency is not fixed");
     CHECK(l1_fixed, "ROWS_PER_PASS=1 latency is not fixed");
-    CHECK(l1 == l3 + 3,
-          "latency delta: measured L1=%llu L3=%llu, declared L1=L3+3",
+    CHECK(l1 == l3 + 2,
+          "latency delta: measured L1=%llu L3=%llu, declared L1=L3+2",
           static_cast<unsigned long long>(l1),
           static_cast<unsigned long long>(l3));
     CHECK(ii3, "ROWS_PER_PASS=1 initiation interval is not exactly 3 under saturation");

@@ -642,8 +642,8 @@ int main(int argc, char** argv) {
       if (out[2].acc_stamp[k] - out[2].acc_stamp[k - 1] != 3) ii3 = false;
     CHECK(lat[1] == lat[0], "MATW=18 RPP=3 latency %llu differs from reference %llu",
           static_cast<unsigned long long>(lat[1]), static_cast<unsigned long long>(lat[0]));
-    CHECK(lat[2] == lat[0] + 3, "MATW=18 RPP=1 latency %llu, declared reference+3 = %llu",
-          static_cast<unsigned long long>(lat[2]), static_cast<unsigned long long>(lat[0] + 3));
+    CHECK(lat[2] == lat[0] + 2, "MATW=18 RPP=1 latency %llu, declared reference+2 = %llu",
+          static_cast<unsigned long long>(lat[2]), static_cast<unsigned long long>(lat[0] + 2));
     CHECK(ii3, "MATW=18 RPP=1 initiation interval is not exactly 3 under saturation");
     std::printf("  measured: L(ref)=%llu  L(MATW=18,RPP=3)=%llu  L(MATW=18,RPP=1)=%llu  II=3\n",
                 static_cast<unsigned long long>(lat[0]), static_cast<unsigned long long>(lat[1]),

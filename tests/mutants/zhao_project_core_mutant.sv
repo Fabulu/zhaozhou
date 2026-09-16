@@ -507,13 +507,11 @@ module zhao_project_core_mutant #(
       // Fits signed MATW iff bits [31:MATW-1] are all the sign bit. This is
       // the exact test, not a magnitude compare: -2^(MATW-1) fits, +2^(MATW-1)
       // does not, and both land on the boundary this reads.
-      // MUTANT: the fits-check is REMOVED (the one substantive change). The
-      // real line is
-      //   assign cfg_fits = (cfg_data_i[31:MATW-1] == {(33 - MATW) {cfg_data_i[31]}});
-      // With it gone, every write is accepted, the counter can never move,
-      // and the multiplier reads the low MATW bits of whatever arrived:
-      // +2.0 (0x0002_0000) becomes -2.0 in silence.
-      assign cfg_fits = 1'b1;
+      // MUTANT: the refusal law removed. Every product word is written,
+  // including those that do not fit a signed MATW-bit value, so an
+  // out-of-range coefficient wraps silently instead of being refused and
+  // counted. This is the fault proj_matw_directed's control must catch.
+  assign cfg_fits = 1'b1;
     end
   endgenerate
 
@@ -565,12 +563,12 @@ module zhao_project_core_mutant #(
   // including a configuration write landing mid-sequence.
   initial begin
     if (ROWS_PER_PASS != 3 && ROWS_PER_PASS != 1)
-      $fatal(1, "zhao_project_core_mutant: ROWS_PER_PASS (%0d) must be 3 or 1",
+      $fatal(1, "zhao_project_core: ROWS_PER_PASS (%0d) must be 3 or 1",
              ROWS_PER_PASS);
     // 19..27 buy nothing and 19 costs MORE than 32 (calibration.json,
     // asymmetric rows). Only the two measured-to-pay widths are legal.
     if (MATW != 32 && MATW != 18)
-      $fatal(1, "zhao_project_core_mutant: MATW (%0d) must be 32 or 18", MATW);
+      $fatal(1, "zhao_project_core: MATW (%0d) must be 32 or 18", MATW);
   end
 
   logic                        s1_valid;
@@ -590,30 +588,61 @@ module zhao_project_core_mutant #(
       // verbatim. `in_ready_o` is constant so a caller predating the port
       // sees exactly the old behaviour, cycle for cycle.
       // ------------------------------------------------------------------------
+      // G8B T2: products registered, sums the next cycle. See
+      // reports/G8B-TIMING-CAMPAIGN-BRIEF-20260916.md and
+      // reports/PROJECT-CORE-CLOCK-20260907.md, which prescribed this cut.
+      logic signed [MUL_W-1:0] p_x0_q, p_x1_q, p_x2_q;
+      logic signed [MUL_W-1:0] p_y0_q, p_y1_q, p_y2_q;
+      logic signed [MUL_W-1:0] p_w0_q, p_w1_q, p_w2_q;
+      logic signed [31:0]      t_x_q, t_y_q, t_w_q;
+      logic                    p_valid_q, p_view_q;
+      logic [PAYLOAD_W-1:0]    p_pay_q;
+
       logic signed [ROW_W-1:0] row_x, row_y, row_cw;
       always_comb begin
-        row_x = extp(mulm(mw(mat[view_i][0]), vx_i)) + extp(mulm(mw(mat[view_i][1]), vy_i)) +
-            extp(mulm(mw(mat[view_i][2]), vz_i)) + (ext32r(mat[view_i][3]) <<< 16);
-        row_y = extp(mulm(mw(mat[view_i][4]), vx_i)) + extp(mulm(mw(mat[view_i][5]), vy_i)) +
-            extp(mulm(mw(mat[view_i][6]), vz_i)) + (ext32r(mat[view_i][7]) <<< 16);
-        row_cw = extp(mulm(mw(mat[view_i][12]), vx_i)) + extp(mulm(mw(mat[view_i][13]), vy_i)) +
-            extp(mulm(mw(mat[view_i][14]), vz_i)) + (ext32r(mat[view_i][15]) <<< 16);
+        row_x  = extp(p_x0_q) + extp(p_x1_q) + extp(p_x2_q) +
+                 (ext32r(t_x_q) <<< 16);
+        row_y  = extp(p_y0_q) + extp(p_y1_q) + extp(p_y2_q) +
+                 (ext32r(t_y_q) <<< 16);
+        row_cw = extp(p_w0_q) + extp(p_w1_q) + extp(p_w2_q) +
+                 (ext32r(t_w_q) <<< 16);
       end
 
       assign in_ready_o = 1'b1;
-      assign seq_holds  = 1'b0;
+      assign seq_holds  = p_valid_q;
 
       always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
+          p_valid_q <= 1'b0; p_view_q <= 1'b0; p_pay_q <= '0;
+          p_x0_q <= '0; p_x1_q <= '0; p_x2_q <= '0;
+          p_y0_q <= '0; p_y1_q <= '0; p_y2_q <= '0;
+          p_w0_q <= '0; p_w1_q <= '0; p_w2_q <= '0;
+          t_x_q  <= '0; t_y_q  <= '0; t_w_q  <= '0;
           s1_valid <= 1'b0; s1_rx <= '0; s1_ry <= '0; s1_rw <= '0;
           s1_view <= 1'b0; s1_pay <= '0;
         end else if (en_i) begin
-          s1_valid <= in_valid_i;
+          p_valid_q <= in_valid_i;
+          p_view_q  <= view_i;
+          p_pay_q   <= payload_i;
+          p_x0_q <= mulm(mw(mat[view_i][0]),  vx_i);
+          p_x1_q <= mulm(mw(mat[view_i][1]),  vy_i);
+          p_x2_q <= mulm(mw(mat[view_i][2]),  vz_i);
+          t_x_q  <= mat[view_i][3];
+          p_y0_q <= mulm(mw(mat[view_i][4]),  vx_i);
+          p_y1_q <= mulm(mw(mat[view_i][5]),  vy_i);
+          p_y2_q <= mulm(mw(mat[view_i][6]),  vz_i);
+          t_y_q  <= mat[view_i][7];
+          p_w0_q <= mulm(mw(mat[view_i][12]), vx_i);
+          p_w1_q <= mulm(mw(mat[view_i][13]), vy_i);
+          p_w2_q <= mulm(mw(mat[view_i][14]), vz_i);
+          t_w_q  <= mat[view_i][15];
+
+          s1_valid <= p_valid_q;
           s1_rx    <= row_x;
           s1_ry    <= row_y;
           s1_rw    <= row_cw;
-          s1_view  <= view_i;
-          s1_pay   <= payload_i;
+          s1_view  <= p_view_q;
+          s1_pay   <= p_pay_q;
         end
       end
     end else begin : g_rows_seq
