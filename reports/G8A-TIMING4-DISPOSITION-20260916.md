@@ -45,17 +45,57 @@ Timing4 fit now exports a slack-bounded report so this is answerable once.
 | **M1 / stage S** | registered source/control capture between D and recipe selection | **landed** `005578fb` |
 | **M2** | byte-wide exact finish arithmetic | **landed** `30e2594f` |
 | **F** | finish boundary between M and row assembly | **landed** `005578fb`, retained per brief §7.6 |
-| **M3** | S+F throughput calendar, and the two narrow bypasses only if measurement demands them | **in progress** |
+| **M3** | S+F throughput calendar, and the two narrow bypasses only if measurement demands them | **partly landed** `2517a356` — §8.3 WB→Q bypass landed with its positive control; §8.4 still owed, see below |
 | **O1** | registered accepted-owner admission and reservation events | **landed** `005578fb` |
 | **B1** | BIL2 vertical product/base registered in B2, latency preserved | **landed** `005578fb` |
 | **D1** | one-carry-chain divider magnitude | **landed** `c683cab7` |
 | **D2** | attribute verdicts captured beside the join payload | **in progress** |
-| **R1T** | reciprocal identity registered before the UVW lookup | **in progress** |
-| **E1** | descriptor trust verdict at an existing payload boundary | **in progress** |
+| **R1T** | reciprocal identity registered before the UVW lookup | **RTL landed, CONTROL OWED** — see below |
+| **E1** | descriptor trust verdict at an existing payload boundary | **RTL landed, CONTROL OWED** — see below |
 | **A1** | A0 fault facts, shared subtract/borrow in the AUX divider | **landed** `005578fb` |
 | **Q1** | held recoverable wrapper clear replacing combinational feedback | **landed** `005578fb` |
 | **margin export** | slack-bounded path report so the band is inventoried at the fit | **landed** `01ca1ac4` |
 | **fit contract** | `@g8a-timing4` runner and receipt, baseline pinned to `3bf599d5` | **landed** `26016ce1` |
+
+### R1T and E1 carry an unpaid control, and it is recorded as unpaid
+
+Both RTL changes are in, and both rest on healthy-path evidence only:
+`texture_uv_join_v2_directed` 30/30 on `tb_uv_join_v2_pair` including the new
+trust-boundary section, and an island lint whose warning set is identical to
+pristine HEAD.
+
+`tests/mutants/zhao_texture_timing4_r1t_e1_mutants.sv` is committed and
+**deliberately not registered in CMake**. Neither mutant has ever been built,
+let alone fired. The first report of this work said they had been; checking
+the build directory rather than the report showed two directories, `baseline`
+and a *healthy* directed build, and no file on disk mentioning `ZHAO_TIMING4`
+at all. The instrument was quoted without anyone watching it go off — the
+exact thing the broken-instrument law names, and the correction came from the
+author of the work.
+
+Registering them now would put two tests in the suite whose green means
+nothing: there is no inverse-polarity driver (no `PACKET_E_EXPECT_*`
+expectation macro was written), no C++-side collision check, and for R1T no
+determination of which of the four island drivers even reaches the fault —
+below back-to-back reciprocal traffic the mutant and production are identical.
+The shim's own header carries the full list of what is owed.
+
+This is a **partial** disposition for `early-descriptor-ram` and for R1T's one
+member of `other`. The structural change is real; the evidence that it is the
+change that matters is not yet in hand.
+
+### §8.4 is owed, and measurement now says why
+
+M3 measured the S+F recurrence at 8 and the saturated rate at 0.878
+phases/clk, 12% short of 1.000. The §8.3 WB→Q forwarding landed and moved the
+recurrence 8→7 and lone 3-phase latency 27→25 — but the rate went 0.878→0.867,
+which is to say **unchanged**. That is the useful result: it falsifies the
+brief's stated root cause. The bottleneck is not the phase loop. It is the
+**context recycle tail** — a context is freed only at the output handshake, so
+DONE plus the completion read plus the response slots cost about five cycles.
+§8.4 (WB-final-to-completion-read forwarding) is therefore owed on evidence
+rather than on the brief's say-so, and the 0.133 phases/clk shortfall is its
+acceptance number.
 
 `B2`/`BIL2T`, the four-slot bilerp fallback and its complete/refill island work
 are **not selected**. They are the explicit fallback if the preferred three-slot
@@ -75,7 +115,7 @@ Against the 497 negative rows of the Timing3 census. Categories are the brief's.
 | tile-control | 30 | -0.375 | FIXED STRUCTURALLY (pending) | tile abort/metadata-enable decoupling, in progress |
 | uv-join-lifetime | 26 | -0.844 | FIXED STRUCTURALLY | O1, same mechanism as owner-mask-lifetime |
 | bilerp-dsp2 | 25 | -0.674 | FIXED STRUCTURALLY | B1 registers the vertical product and finishes from held registers |
-| early-descriptor-ram | 18 | -0.409 | FIXED STRUCTURALLY (pending) | E1, in progress |
+| early-descriptor-ram | 18 | -0.409 | **PARTIAL** — RTL landed, control owed | E1; healthy path 30/30, mutant never fired |
 | attribute-dsp3 | 12 | -0.366 | FIXED STRUCTURALLY | D1 collapses three dependent 98-bit adds into one |
 | bank-sres-write-enable | 7 | **-0.994** | FIXED STRUCTURALLY | stage S — the worst path; source planes now terminate at S instead of reaching a DSP input register |
 | fragment-expand | 2 | -0.738 | FIXED STRUCTURALLY | A1 registers the A0 fault facts that fed the AUX endpoint |
