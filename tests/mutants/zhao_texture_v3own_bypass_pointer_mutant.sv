@@ -5,9 +5,9 @@
 // body load, not for the bypassed write. The skipped duplicate row therefore
 // becomes logically occupied and the a_out_structure reservation identity must
 // fire on the first bypass.
-// Source oracle: fpga/rtl/texture/zhao_texture_v3own.sv
+// Source oracle: fpga/rtl/texture/zhao_texture_v3own_bypass_pointer_mutant.sv
 //
-// zhao_texture_v3own.sv -- the V3 owner / completion / retire experiment.
+// zhao_texture_v3own_bypass_pointer_mutant.sv -- the V3 owner / completion / retire experiment.
 //
 // reports/TEXTURE-ISLAND-V3-ARCHITECTURE-20260906.txt section 26.1, verbatim:
 //
@@ -124,8 +124,8 @@
 // counters partition the traffic, and the adversarial bench asserts on every
 // one of them. A counter nothing reads is decoration.
 //
-// ENFORCED-BY: fpga/rtl/texture/zhao_texture_v3own.sv:a_reject_partition_t
-// ENFORCED-BY: fpga/rtl/texture/zhao_texture_v3own.sv:a_reject_partition_a
+// ENFORCED-BY: fpga/rtl/texture/zhao_texture_v3own_bypass_pointer_mutant.sv:a_reject_partition_t
+// ENFORCED-BY: fpga/rtl/texture/zhao_texture_v3own_bypass_pointer_mutant.sv:a_reject_partition_a
 //
 // The assertions are named above rather than left to prose because that is the
 // kind of sentence which stays true right up until somebody adds a sixth
@@ -2016,7 +2016,10 @@ module zhao_texture_v3own_bypass_pointer_mutant #(
   // THREE OF THE WINDOW'S FOUR FIELDS ARE ALREADY HERE, in their low bits:
   //   6.1 alloc_ticket  <- tail_q      (advances on adm_fire_c)
   //   6.1 retire_ticket <- emit_q      (increments only -- 6.3 holds by
-  //                                     construction, and is asserted below)
+  //                                     construction, and is asserted below:
+  //   ENFORCED-BY: fpga/rtl/texture/zhao_texture_v3own_bypass_pointer_mutant.sv:a_win_used_matches_span
+  //   with a_win_used_bounded beside it. "Asserted below" was already true and
+  //   already unresolvable; naming the label is the whole change.)
   //   6.1 used          <- live_cnt_q  (live_cnt_q + adm_fire_c - out_fire_c,
   //                                     which is 6.1's update exactly)
   // Only the 8 generation bits on each pointer are missing, and `gen_q[64][8]`
@@ -2234,6 +2237,11 @@ module zhao_texture_v3own_bypass_pointer_mutant #(
       // `live_cnt_q` -- which admission and emission maintain independently --
       // must equal their sum. Three counters, one identity, checked every cycle
       // instead of argued from their names.
+      // ENFORCED-BY: fpga/rtl/texture/zhao_texture_v3own_bypass_pointer_mutant.sv:a_interval_partition
+      // -- and note WHY this one can fire where a naive pair could not:
+      // `live_cnt_q` is maintained by admission and emission, not by
+      // `fetch_fire_c`, so the two sides of the equality are not moved by the
+      // same enable and cannot be corrupted in lockstep inside the checker.
       a_interval_partition : assert (live_cnt_q == CNTW'(unf_cnt_q + out_res_q));
 
       // ---- S22.2's PHASE-CONTROL INVARIANTS ------------------------------

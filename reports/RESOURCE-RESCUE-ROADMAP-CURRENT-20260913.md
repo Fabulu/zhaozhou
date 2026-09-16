@@ -112,6 +112,35 @@ whole-machine ALM number.
 > Full measurement, per-block ceilings and diagnosis:
 > `G8B-TERRAIN-FIRST-MEASUREMENT-20260916.md`.
 
+## The live whole-machine position, 2026-09-16
+
+Not a new census: this is `tools/budget/domain_scoreboard.py` run today, and it
+is here because a roadmap that records only historical reconciliations leaves
+the reader comparing a current file to an old measurement.
+
+```
+TOTAL   40,591.4 ALM / 36,000 objective      173 DSP / 88      94.0 M10K / 464
+DEVICE  41,910                               112              553
+```
+
+**Every figure is a SUM OF FITTED ROWS ONLY.** Thirty-four blocks are UNPRICED
+and contribute 0 — their cost is unknown, never zero — so 40,591 is a FLOOR and
+the true number is higher. Five of the eight domains are already **OVER** their
+section-2 allocation, including "Projection and result arenas" at 12,267 against
+4,500.
+
+Against the owner's closure criterion — comfortably under **30,000 ALM** and
+**85 DSP** — the machine is at least **10,591 ALM and 88 DSP over**, on
+understated evidence. That gap is what R1–R9 exists to close, and it dwarfs
+everything the G8B timing campaign is about: G8B's whole subsystem is 7,807 ALM,
+and the entire T1/T1b package cost +383 of them to buy +29.65 MHz.
+
+**Both things are true and neither substitutes for the other.** 100 MHz is a
+closure requirement and the terrain pipe was at 43.94; that had to be fixed and
+now reads 73.59. But no amount of timing work moves the ALM bill, and the ALM
+bill is the larger breach. The DSP number is worse in proportion: 173 against 85
+is more than double.
+
 ## Current R0-R9 completion matrix
 
 | stage | current state | completion verdict |

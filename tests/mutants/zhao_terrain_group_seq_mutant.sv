@@ -1,5 +1,10 @@
 // zhao_terrain_group_seq_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
 //
+// RE-VERIFIED AGAINST PRODUCTION 2026-09-16 (commit 3a7b166f).
+// zhao_terrain_group_seq.sv gained an ENFORCED-BY comment and nothing else.
+// Ignoring comments and whitespace, this body differs from current production
+// by exactly its one mutation: (st == StRef) && t_done_c -> t_ref_valid_i.
+//
 // This exists only to prove `release_unsafe_o` can fire. The production
 // sequencer releases a group after the tess job returns idle, which means its
 // final reference has completed every view's shell handshake. This renamed

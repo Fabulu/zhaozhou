@@ -96,10 +96,53 @@ the next cell's coordinates and its skip decision a cycle ahead rather than
 simply registering `cell_skip` — registering it is the bubble the header
 forbids.
 
-**So T3 has three independent sub-problems, not one chain:** this enumerator
-loop (73.6 MHz), `zhao_project_core` (80.3), and the RAM band (82.9 and then a
-cluster at 91–94). Reaching 100 MHz needs all three, and the RAM band is the
-one no one has looked at yet.
+**So T3 has three sub-problems, not one chain**, and the third is not what its
+endpoint names suggest.
+
+### T3's three cones, named from the export
+
+**(a) The tessellator's enumerator loop — 73.6 MHz.** Above.
+
+**(b) `zhao_project_core`'s output stage — 80.3 MHz.**
+
+```
+s6_prod_x[38] -> out_x_o[7]        -2.449 ns, data 11.870
+```
+
+The viewport transform's final product into the output register. 1,496 of the
+2,000 summarised endpoints are in this block and the worst several all leave
+`s6_prod_x`. This is a DIFFERENT cone from T2's, which registered the row
+products at `s1`; T2 is not undone by it and does not help it.
+
+**(c) THE "RAM BAND" IS NOT A MEMORY PROBLEM. It is the divider's delay lines.**
+
+Every one of the twelve worst RAM endpoints is a Quartus-inferred
+`shift_taps_*` (ALTSHIFT_TAPS) instance, not a design array — and **all twelve
+launch from the same node**, `s2_cw[25]~DUPLICATE`:
+
+| endpoint | owner | worst |
+|---|---|---:|
+| `altsyncram_ofc1` | `shift_taps_nuv` | −2.070 |
+| `altsyncram_2gc1` | `shift_taps_kuv` | −0.901 |
+| `altsyncram_kfc1` | `shift_taps_luv` | −0.734 |
+| … nine more | `shift_taps_*` | −0.68 … −0.27 |
+
+`s2_cw` is the clip-space **w** in `zhao_project_core` (line 730). It feeds
+`pre_d = s2_cw[30:0]` and `pre_d2 = pre_d[30:1]`, the divisor of the long
+division. So these are the DIVIDER PIPELINE's delay registers, which Quartus
+chose to implement in M10K shift registers, and the constraint is one bit of the
+divisor fanning into a dozen of them.
+
+**Reading this as "the inferred RAMs are slow" would send the next pass to look
+at memory inference, which is the wrong component entirely.** The candidates are
+duplicating `s2_cw`'s drivers per consumer (Quartus already made one
+`~DUPLICATE` on its own), restructuring so the delay lines are not all gated
+from one bit, or turning shift-register recognition off for this cone so the
+taps become flops — which trades registers for routing and needs measuring, not
+assuming.
+
+Reaching 100 MHz needs (a), (b) and (c). None of them is the chain this
+campaign has been cutting since T1.
 
 ## Superseded: `@g8b-t12`, 43.54 -> 57.87 MHz, and T1 MISSED ITS OWN ACCEPTANCE.
 
@@ -620,17 +663,72 @@ The reverted attempt is not in the tree. What it bought is this section.
 
 ---
 
-## T3 â€” the inferred RAM paths
+## T3 -- SCOPED from the `@g8b-t1b` export, and it is three packages
 
-**Evidence.** ~130 rows across the `altsyncram_*` instances, worst âˆ’5.328 ns
-with 13â€“15 ns of data delay. These are the lattice/arena/window memories.
+The paragraph this section used to hold said *"this package cannot be scoped
+properly yet... scope it from the post-T1/T2 export, not from this one"*, and
+called itself "the inferred RAM paths". The first half was right and the second
+half was a guess made from endpoint names. Now that the export exists, the name
+is wrong: **there are no slow design memories.** See the status section at the
+top of this brief for the cell-by-cell evidence; this section is the plan.
 
-**What it owns.** Whichever of those paths survives T1 and T2. This package
-cannot be scoped properly yet: T1 and T2 change the placement and the fanout
-around these RAMs, and a path list taken before them describes an arrangement
-that will not exist. **Scope it from the post-T1/T2 export, not from this one.**
+### T3a -- the tessellator's enumerator loop (73.6 MHz, the current cap)
 
-**Acceptance.** Worst RAM path better than âˆ’0.0 ns at 10.000 ns.
+**Owns:** `j_s` -> cell-times-stride multiply -> bound compare -> run-cell
+decode -> `cell_skip` -> enumerator advance -> the geomorph DSP's clock enable.
+
+**The constraint on any fix** is the block's own law: the enumerator advances at
+ISSUE, not at capture, which is what holds three cycles per triangle. Simply
+registering `cell_skip` inserts the bubble that header forbids. The shape that
+can work is precomputing the NEXT run-cell's coordinate and its void decision
+one cycle ahead, so the issue gate reads registers rather than a fresh multiply.
+That is a real enumerator redesign.
+
+**Acceptance:** better than -2.449 ns (where `zhao_project_core` sits) AND
+`terrain_tess_modes_directed` still at 93 cycles or fewer for 81 unstitched
+vertices. The second half is not optional -- T1 met a timing target and lost the
+rate, and only the mode test noticed.
+
+### T3b -- `zhao_project_core`'s output stage (80.3 MHz)
+
+**Owns:** `s6_prod_x[38] -> out_x_o[7]`, -2.449 ns, data 11.870. The viewport
+transform's final product into the output register. **A different cone from
+T2's**, which registered the row products at `s1`; T2 neither helps this nor is
+undone by it.
+
+**Acceptance:** better than -0.5 ns, with `proj_matw_directed` and
+`proj_rowmux_directed` unchanged and the initiation interval still exactly 3.
+
+### T3c -- the divider's shift-register delay lines (82.9 MHz, then 91-94)
+
+**Owns:** twelve `shift_taps_*` (ALTSHIFT_TAPS) instances, all launching from
+`s2_cw[25]~DUPLICATE` -- one bit of the clip-space `w` that feeds `pre_d` and
+`pre_d2`, the long division's divisor.
+
+**Three candidates, none of them assumed:** duplicate `s2_cw`'s drivers per
+consumer (Quartus already made one `~DUPLICATE` unprompted, which is the tool
+pointing at where it hurts); restructure so the taps are not all gated from one
+bit; or turn shift-register recognition off on this cone so the taps become
+flops, trading M10K and routing for registers. **The third is the one to measure
+first**, because it is a single attribute and reversible, and because 94 of the
+device's 553 M10Ks are already spent.
+
+**Acceptance:** worst `shift_taps_*` path better than -0.5 ns, with no increase
+in DSP and the M10K change declared either way.
+
+### The order, and the one thing not to do
+
+**T3c, then T3b, then T3a.** Cheapest first, and deliberately so: T3a is the
+current cap but it is also the only one of the three that is a redesign, and the
+other two sit 2.4 ns and 2.1 ns behind it -- close enough that fixing T3a alone
+buys almost nothing. **Do not fit after each.** One fit after all three, as
+`@g8b-t3`.
+
+**And do not read 73.59 MHz as "nearly there".** The subsystem needs 100, and
+the whole machine is at least 10,591 ALM and 88 DSP over its closure criterion
+on understated evidence (`reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md`,
+live position 2026-09-16). Timing and area are separate breaches and this
+campaign only addresses one of them.
 
 ---
 

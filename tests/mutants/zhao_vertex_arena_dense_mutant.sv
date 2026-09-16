@@ -1,5 +1,11 @@
 // zhao_vertex_arena_dense_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
 //
+// RE-VERIFIED AGAINST PRODUCTION 2026-09-16 (commit 3a7b166f).
+// zhao_vertex_arena.sv gained ENFORCED-BY comments and nothing else. Ignoring
+// comments and whitespace, this body differs from current production by the
+// module rename and exactly one mutation: seal_gate_c compares the fill count
+// == DEPTH in production and <= DEPTH here, so a short seal is let through.
+//
 // This exists to make `arena_misses_o` a detector in DENSE_SEAL mode instead
 // of a hopeful zero.
 //

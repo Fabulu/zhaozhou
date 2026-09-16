@@ -1337,3 +1337,33 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - **My own prose kept triggering the rule.** Writing "by construction" inside an explanation creates a new invariant claim, and an ENFORCED-BY placed ABOVE a claim does not count - it has to follow within 10 lines. Three sites needed re-editing for that reason alone.
 - **The one left red is deliberate.** TEXTURE.AUX's directed test is explicitly a protocol gate - carriage, credit, disposition, idle - and its oracle differential lives in the declared random test, which does exercise `AuxSource`. V17 requires BOTH cited tests to be about the oracle, stricter than its own stated purpose ("catch a test that is not about its oracle at all"). Weakening a verification rule to turn a gate green is the one repair this repository should not accept from me.
 - npm workspace dependencies installed; `tables_check` and `abi:check` go green with no source change.
+
+## 2026-09-16 (T3 scoped, and the RAM band is not the RAMs)
+
+- **T3's old section called itself "the inferred RAM paths" and that name was a guess from endpoint names.** With the `@g8b-t1b` export in hand: **there are no slow design memories.** All twelve worst `altsyncram_*` endpoints are Quartus-inferred `shift_taps_*` (ALTSHIFT_TAPS) instances, and **all twelve launch from the same node**, `s2_cw[25]~DUPLICATE` - one bit of `zhao_project_core`'s clip-space `w`, feeding `pre_d`/`pre_d2`, the long division's divisor. These are the DIVIDER's delay registers. Reading the band as "memory inference is slow" would have sent the next pass to the wrong component entirely.
+- **T3 is now three packages, scoped from the export:**
+  - **T3a** tessellator enumerator loop, 73.6 MHz, the current cap. `j_s` -> cell-times-stride multiply -> bound compare -> run-cell decode -> `cell_skip` -> enumerator advance -> the geomorph DSP's own clock enable. Constrained by the block's law that the enumerator advances at ISSUE, so registering `cell_skip` is the bubble its header forbids; the shape that can work is precomputing the next cell's coordinate and void decision a cycle ahead. **Acceptance carries a RATE clause** - T1 met a timing target and lost the rate, and only `terrain_tess_modes_directed` noticed.
+  - **T3b** `zhao_project_core` output stage, 80.3 MHz, `s6_prod_x[38] -> out_x_o[7]`. A different cone from T2's `s1` row products; T2 neither helps it nor is undone by it.
+  - **T3c** the divider's shift-register taps, 82.9 then 91-94 MHz. Cheapest to try first: turning shift-register recognition off on this cone is one reversible attribute, and 94 of 553 M10Ks are already spent so the trade must be declared.
+  - **Order: T3c, T3b, T3a**, cheapest first - T3a is the cap but the only redesign, and the other two are 2.4 and 2.1 ns behind it, so fixing T3a alone buys almost nothing. **One fit after all three**, as `@g8b-t3`.
+
+## 2026-09-16 (whole-machine position recorded)
+
+- Ran `tools/budget/domain_scoreboard.py` and wrote today's live position into the roadmap, which previously carried only historical reconciliations - the "never compare a current file to an old measurement" law applied to the roadmap itself.
+- **TOTAL 40,591.4 ALM against a 36,000 objective and the owner's 30,000 closure criterion; 173 DSP against 85; 94 M10K of 464.** Five of eight domains are already OVER their section-2 allocation, "Projection and result arenas" worst at 12,267 against 4,500.
+- **Every figure is fitted rows only. 34 blocks are UNPRICED and contribute 0**, so 40,591 is a FLOOR.
+- **At least 10,591 ALM and 88 DSP over closure, on understated evidence.** That gap dwarfs the timing campaign: G8B's whole subsystem is 7,807 ALM and the entire T1+T1b package cost +383 of them. 100 MHz is a closure requirement and had to be fixed; it is not the larger breach, and the brief and roadmap now both say so.
+
+## 2026-09-16 (mutant copies refreshed) - my comment-only edits made six copies stale
+
+- `mutant_copy_drift` went red on **six** committed copies after the V20 work. My production edits were **comment-only** - `git diff` reported zero non-comment changed lines - so the bodies were still faithful, and it was pure provenance drift.
+- **I did not weaken the gate, and the temptation to was real.** CLAUDE.md chose provenance over similarity deliberately and says why: *"Diff size is corroboration only -- removing a pipeline stage is legitimately a large edit, so a size threshold alone produces both false alarms and false silence."* Teaching the tool to ignore comment-only changes would have been a one-line fix to a rule the repository argued its way into.
+- Refreshed by the prescribed three-way merge (base = production at the copy's own commit, ours = current production, theirs = the copy with its rename undone). **Two merged clean; three conflicted** - exactly the documented case where the copy re-aligned whitespace in a region production also edited.
+- For the three, took the documented fallback: **isolate each mutation whitespace-insensitively and re-apply it to the current body.** Each mutation was READ OUT of the existing copy by diff, not taken from the header prose - the header is a claim about the mutation and the diff is the mutation. They agreed in all three, which is itself worth knowing:
+  - `group_seq`: `(st == StRef) && t_done_c` -> `t_ref_valid_i`
+  - `vertex_arena_dense`: `cnt_q[...] == DEPTH` -> `<= DEPTH`
+  - `progdir_scan`: `rd_lru < best_lru` -> `<=` (the LRU tie)
+- **`zhao_field_progdir_scan_mutant` was already stale before I touched anything** - it needed 18 comment blocks brought across, so it predated several production passes. My edit surfaced it; it did not cause it.
+- **One near-miss worth recording:** the group_seq regeneration first reported "production has moved under this mutation and it needs re-authoring". It had not. Production has TWO spaces after `(st == StRef)` and my match string had one. A whitespace slip produced a confident, true-sounding, wrong conclusion about the design - the flattering direction for a tool that then does less work.
+- `progdir_scan`'s copy deliberately carries no `ifndef SYNTHESIS` assertions (they fire before the differential can read the broken tie). That removal is preserved, with the reason written beside it in the copy.
+- Drift gate green: **39 copies checked, every one at least as new as the module it copies.**

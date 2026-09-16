@@ -1,5 +1,15 @@
 // zhao_field_progdir_scan_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
 //
+// RE-VERIFIED AGAINST PRODUCTION 2026-09-16 (commit 3a7b166f).
+// zhao_field_progdir_scan.sv gained ENFORCED-BY comments and nothing else, so
+// this copy was checked rather than rebuilt: ignoring comments and whitespace,
+// its body differs from current production by exactly its one mutation
+// (row_older: rd_lru < best_lru  ->  <=) plus the deliberately removed
+// ifndef SYNTHESIS assertions, which fire on the broken tie before the
+// differential can read it. Rebuilding it from production was TRIED and
+// reverted: this file holds TWO renamed modules and a single-module
+// regeneration silently dropped zhao_field_progdir_mutant.
+//
 // This exists to make the transaction differential in
 // tests/field/field_progdir_differential.cpp a DEMONSTRATED instrument for the
 // one law it is hardest to reach: the LRU TIE. Roadmap section 5 names it
