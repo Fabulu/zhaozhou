@@ -13,11 +13,43 @@ registers, 34 DSP, 44 RAM blocks, 95,610 memory bits. Hold clean at +0.251/0.
 **Target:** 100 MHz, the machine's operating requirement. That needs
 **+12.758 ns** on the worst path â€” not the +0.587 ns G8A's last mile needed.
 
-## STATUS: T1 AND T2 ARE BOTH LANDED IN RTL. `@g8b-t12` is the next fit.
+## STATUS: `@g8b-t12` IS MEASURED. 43.54 -> 57.87 MHz, and T1 MISSED ITS OWN ACCEPTANCE.
 
-T1's implementation notes are in its own section below, including the one thing
-the design sketch got wrong. T2's measurement follows; T1 has no measurement yet
-and no claim is made for it beyond "the chain is cut and the block is green".
+`@g8b-t12`, clean commit `834181eb`, seed 1, 488 s. **Fmax 57.87 MHz**, ALM
+7,841 (+417 over `@g8b`'s 7,424), registers 7,997 -> 8,452, RAM 44 unchanged.
+`failed:structure` is the 100 MHz rule refusing the row, not a failed
+measurement: `rtlCleanAtHead` is true and the digest is real.
+
+**+14.3 MHz is real and it is not the ~69.5 MHz this brief predicted.** The
+prediction is refused by the measurement, and the reason is specific:
+
+| endpoint block | `@g8b` | `@g8b-t2` | `@g8b-t12` | ceiling now |
+|---|---:|---:|---:|---:|
+| **`zhao_terrain_tess`** | −12.758 | −12.968 | **−7.280** | **57.9 MHz** |
+| `zhao_project_core` | −9.811 | −4.388 | −4.109 | 69.1 MHz |
+| inferred RAMs | −5.328 | −4.058 | −3.619 | 71.6 MHz |
+
+**THE TESSELLATOR IS STILL THE WORST BLOCK**, and the path is stage B alone:
+
+```
+u_tess|lnd_morph_q[0] -> u_tess|vo_y[7]     -7.280 ns, data 16.383
+```
+
+The split worked -- 22.481 ns of data delay became 16.383, a genuine 6.1 ns --
+but **this brief estimated stage B at "roughly 13 ns, which clears T1's
+acceptance of better than -4.388 ns", and it is 16.4.** That estimate was made
+by reading the expression and counting operators, and it was optimistic by about
+3.4 ns. T1's stated acceptance is NOT met. The honest statement is that T1 is a
+large partial win, not a completed package.
+
+**What the numbers now say to do.** The remaining 16.383 ns is one multiply plus
+one rescale plus one saturating add, and the multiply's DSP OUTPUT REGISTER IS
+AGAIN UNUSED -- the same finding T2 cashed in `zhao_project_core`, in the block
+next door. Registering `m_prod` splits stage B roughly 10 / 6 and should put the
+tessellator behind `zhao_project_core`, whose −4.109 then caps the subsystem at
+about 69 MHz. That is T1b below, and only after it does T3 (project_core's
+residual and the RAM paths, now 0.5 ns apart) become the binding package the
+plan assumed it already was.
 
 ## T2 IS LANDED AND MEASURED.
 
@@ -214,7 +246,59 @@ is a far better diagnostic than a timeout.
 
 **Result.** `terrain_tess_modes_directed` 33/33, `terrain_tess_directed`
 6,751/0, `terrain_pipe_differential` 37/37 and `_bitmap` 33/33, on the numbers
-above. NOT YET FITTED; that is `@g8b-t12`.
+above. Fitted as `@g8b-t12`: **57.87 MHz**, and T1's acceptance NOT met — see
+the status section at the top and T1b below.
+
+---
+
+## T1b — the multiply's output register, which was again unused
+
+**Evidence.** `@g8b-t12`'s worst path is stage B on its own:
+
+```
+u_tess|lnd_morph_q[0] -> u_tess|vo_y[7]     -7.280 ns, data 16.383
+```
+
+One 17×34 signed multiply, one `rescale16`, one `fx_add_sat`, nothing
+registered between. **The DSP's output register is unused** — the identical
+finding T2 cashed in `zhao_project_core`, in the block next door, and worth
+stating plainly: the same unused output register sat in two blocks of one
+subsystem, and reading one of them did not make anyone look at the other.
+
+**What it does.** `m_prod` is registered. Stage B computes the multiply and
+nothing else; the new stage C does `rescale16` + `fx_add_sat` and owns the
+landing. `rescale16` and `fx_add_sat` are untouched and applied in the same
+order to the same values, so `terrain_pipe_differential` stays bit-exact.
+
+**What it costs, and the two rules it inherits from T1.**
+
+* **A third in-flight stage, so the queue goes to FOUR slots.** T1 established
+  that the buffer must be deeper than the number of vertices in flight, because
+  a read already issued cannot be told to wait. `vtx_room` becomes `vnxt <= 3`
+  and the steady state is `1+1+1+1-1 = 3 <= 3`.
+* **The write-forward moves with the landing, and now needs TWO copies.**
+  `vy[]` is written at stage C, and both the A→B and B→C snapshots are taken on
+  edges where that write can land. Keying the forward on `lnd_*` after the
+  landing moved would forward a value no longer being written there and miss
+  the one that is — wrong in both directions at once. The worked case is a
+  morphing slot 1 followed by a non-morphing slot 2: slot 1's blended `y`
+  reaches `vy[1]` one cycle AFTER slot 2's A→B snapshot, and only the B→C
+  forward catches it.
+
+**The three named skid slots became a queue.** At four, the hand-written
+land / pop / land-and-pop arms stop being readable — three slots already needed
+a nested three-way shift inside each of three arms. `vq_*[0]` is the head, a pop
+shifts down, a landing writes the post-shift occupancy, and because the
+landing's assignment comes second it wins on the index they share, so
+land-and-pop needs no arm of its own. **Ordering semantics are unchanged; only
+the spelling is.** The narrowing of the landing index is asserted rather than
+assumed: a landing at index `VQ_DEPTH` would wrap to 0 and overwrite the head,
+which would present as a corrupted vertex rather than as an overflow.
+
+**Acceptance.** Better than −4.109 ns, which is where `zhao_project_core` now
+sits — that is what "the tessellator is no longer the constraint" means, and it
+is deliberately stated against the MEASURED neighbour rather than against an
+estimate of this block, which is exactly how T1's acceptance came to be missed.
 
 ---
 
