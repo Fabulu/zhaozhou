@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "b9dff4e1e324dea66162c5f6a34c2e50ae7c8570",
+    "newestRunCommit":  "20453f5b6466a965345c92db53384fc49c68aab8",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -2015,6 +2015,38 @@
                        "holdTnsNs":  0,
                        "ruleViolations":  [
                                               "Fmax 97.61 MHz \u003c required 100 MHz -- the resource gates can all pass while the clock does not; see this rule\u0027s note"
+                                          ]
+                   },
+                   {
+                       "module":  "zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t56-pins",
+                       "status":  "failed:structure",
+                       "sourceCommit":  "20453f5b6466a965345c92db53384fc49c68aab8",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "physical-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "run_block_fit -Seed",
+                       "sourceDigest":  "ef2585cecfa0084d013f87089d658077dc72bc3485c416e7410a55b15e8c74f3",
+                       "variantOf":  "zhao_terrain_pipe_rpp3_matw18_fit_top",
+                       "seconds":  534.6,
+                       "sourcesHashed":  9,
+                       "alms":  8247,
+                       "registers":  8748,
+                       "blockMemoryBits":  95805,
+                       "ramBlocks":  45,
+                       "dspBlocks":  32,
+                       "virtualPins":  0,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  87.87,
+                       "fmaxClock":  "clk",
+                       "setupSlackNs":  -1.381,
+                       "setupTnsNs":  -8.225,
+                       "holdSlackNs":  0.262,
+                       "holdTnsNs":  0,
+                       "ruleViolations":  [
+                                              "Fmax 87.87 MHz \u003c required 100 MHz -- the resource gates can all pass while the clock does not; see this rule\u0027s note"
                                           ]
                    },
                    {
