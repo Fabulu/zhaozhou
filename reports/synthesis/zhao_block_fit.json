@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "9fb55946490fb21a0621723d95aed0f32f093ce5",
-    "newestRunClean":  true,
+    "newestRunCommit":  "49620e5c0b967752c93bd3b355d7722af40db98a",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1792,6 +1792,26 @@
                        "ruleViolations":  [
                                               "Fmax 43.94 MHz \u003c required 100 MHz -- the resource gates can all pass while the clock does not; see this rule\u0027s note"
                                           ]
+                   },
+                   {
+                       "module":  "zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t10c-mapcheck",
+                       "status":  "map_only",
+                       "sourceCommit":  "49620e5c0b967752c93bd3b355d7722af40db98a",
+                       "treeCleanAtHead":  false,
+                       "rtlCleanAtHead":  false,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "run_block_fit -Seed",
+                       "sourceDigest":  "a04a7807c296775fea3cc462c8a2f9df2d4c9465922024bdb83a4760cfcf4389",
+                       "variantOf":  "zhao_terrain_pipe_rpp3_matw18_fit_top",
+                       "seconds":  45.4,
+                       "sourcesHashed":  9,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  8657,
+                       "blockMemoryBits":  95802,
+                       "dspBlocks":  32,
+                       "virtualPins":  18
                    },
                    {
                        "module":  "zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t12",
