@@ -2576,10 +2576,34 @@ verilate(test_early_desc_layout_guard
   TOP_MODULE zhao_texture_early_desc
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv
   VERILATOR_ARGS -GGENW=9)
-add_test(NAME early_desc_layout_guard COMMAND test_early_desc_layout_guard)
+# Run through the expect-fatal wrapper rather than directly. The control dies
+# on purpose, and Verilator's abort path does not return under ctest's pipes on
+# Windows -- this printed its expected text in 12 ms standalone and then sat at
+# 0 CPU for the full 300 s timeout under ctest, which read as a guard that had
+# stopped firing. The wrapper closes stdin, bounds the run, and judges it on
+# what it printed.
+add_test(NAME early_desc_layout_guard
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:test_early_desc_layout_guard>
+    -DEXPECT=layout\ is\ 120\ bits,\ not\ the\ reviewed\ 119
+    -DRUN_TIMEOUT=10
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_expect_fatal.cmake)
 set_tests_properties(early_desc_layout_guard PROPERTIES
-  LABELS "fast;nightly" TIMEOUT 300
-  PASS_REGULAR_EXPRESSION "layout is 120 bits, not the reviewed 119")
+  LABELS "fast;nightly" TIMEOUT 120)
+
+# The wrapper's OWN negative control. It reports a pass on a process that never
+# exits, so the branch that must be shown to work is the one where the expected
+# diagnostic is ABSENT -- otherwise the wrapper would launder every hang into a
+# green. This points it at the healthy directed build, which runs the same
+# module without the broken parameter and therefore never prints the fatal.
+add_test(NAME early_desc_layout_guard_wrapper_control
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:test_early_desc_directed>
+    -DEXPECT=layout\ is\ 120\ bits,\ not\ the\ reviewed\ 119
+    -DRUN_TIMEOUT=60
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_expect_fatal.cmake)
+set_tests_properties(early_desc_layout_guard_wrapper_control PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 120 WILL_FAIL TRUE)
 
 add_test(NAME early_desc_directed COMMAND test_early_desc_directed)
 set_tests_properties(early_desc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)

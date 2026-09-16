@@ -7,6 +7,37 @@
 #include <filesystem>
 #include <fstream>
 
+// --- Windows: make an ABORT exit, instead of waiting for a human -----------
+//
+// Verilator's `$stop`/`$fatal` end in std::abort(), and on Windows abort()
+// raises the CRT "abnormal program termination" box and then Windows Error
+// Reporting. With no desktop to dismiss them the process never exits, so a
+// control that fired CORRECTLY looks to ctest exactly like a hung test.
+//
+// early_desc_layout_guard is the case that surfaced it. It prints its expected
+// text -- "layout is 120 bits, not the reviewed 119" -- and then sat at 0 CPU
+// until its 300 s timeout, and was read as a guard that no longer fires. It
+// fires perfectly. proj_service_rowmux_smoke wedged the same way.
+//
+// This is the broken-instrument law with the platform holding the pen: the
+// failure was silent, looked like the design's fault, and pointed at the wrong
+// thing. Suppressing both dialogs makes an aborting test exit immediately with
+// a nonzero code, which is what every positive control here already assumes.
+#ifdef _WIN32
+#include <cstdlib>
+#include <windows.h>
+namespace {
+struct ZhaoWindowsAbortIsFatal {
+  ZhaoWindowsAbortIsFatal() {
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |
+                 SEM_NOOPENFILEERRORBOX);
+  }
+};
+const ZhaoWindowsAbortIsFatal g_zhao_windows_abort_is_fatal;
+}  // namespace
+#endif
+
 // --- sc_time_stamp shim ---------------------------------------------------
 // Required by verilated.cpp in this build (oss-cad-suite 20260814 /
 // Verilator 5.051 devel). We simulate without SystemC time: constant 0.
