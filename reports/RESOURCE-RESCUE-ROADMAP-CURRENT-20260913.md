@@ -237,7 +237,7 @@ fit at all. M10K sits at **94 / 464 allocated / 553 on the device**.
 Three things have to be said with it, because each changes what the direction
 means in practice. None of them softens it.
 
-**1. Memory is bounded, not free, and the worst ALM domain is already over its
+**1. Memory is bounded, not free — and the specific claim below is WITHDRAWN; see "The worst ALM domain is TWO PROJECTORS THAT NO LONGER EXIST" above. The 52 is two stale rows. The general point stands: the envelope is per-domain and finite, and no domain's current memory position can be read off the scoreboard until its stale rows are re-measured.** ~~and the worst ALM domain is already over its
 memory.** The 464 is a REPLACEMENT allocation — the roadmap is explicit: *"Do
 not add these 464 M10Ks to the historical 147."* And *Projection and result
 arenas*, the worst ALM breach at 12,267 against 4,500, is **already over its
@@ -311,6 +311,64 @@ of the critical path. G8C cannot run without this file, so after G8B closes,
 `zhao_shell_top_v2.sv` is the single thing standing between R0 and its last two
 packets — and knowing it is a composition of tested parts is the difference
 between scheduling it and deferring it.
+
+### The worst ALM domain is TWO PROJECTORS THAT NO LONGER EXIST
+
+Measured 2026-09-16. *Projection and result arenas* carries **12,267 ALM
+against a 4,500 allocation**, the largest breach in the scoreboard, and it is
+exactly two rows:
+
+```
+zhao_geom_project      ALM  6,199   DSP 33   M10K 29   fitted at 83f050c5
+zhao_terrain_project   ALM  6,068   DSP 33   M10K 23   fitted at 96c0394a
+                       -----------------------------
+sum                        12,267       66        52
+domain row says            12,267       66        52
+```
+
+Three figures, exact on all three. **The domain IS those two rows**, and they
+are the pair the DSP audit already identified as replaced: the shared G8B
+projection group is physically fitted at 34 DSP against their 66, and is the
+reason the audit puts 72–75 DSP of the 173 in the "already in the tree"
+column.
+
+**The roadmap anticipated this and said so in section 2.1**, which is quoted in
+`tools/budget/domain_scoreboard.py`'s own header:
+
+> *"A 5.8k projection candidate misses its 4.5k objective but might still be a
+> large improvement over two engines."*
+
+The allocation was written for ONE engine. The scoreboard is charging the
+historical TWO-engine price against it, so "2.7x over" is a statement about an
+arrangement the tree has already replaced, not about the current design.
+
+**AND THIS IS NOT PERMISSION TO SUBTRACT.** The replacement is measured — G8B
+is 8,268 ALM, 32 DSP, 45 M10K at `@g8b-t56` — but at a DIFFERENT SCOPE: that
+row is the whole terrain pipe, including tessellation, the w-cache and the group
+sequencer, which belong to *Terrain, forge and maintenance*, and it excludes the
+geometry client that `zhao_geom_project` served. Restating the domain needs the
+shared group fitted AT the domain's boundary, which is a MEASUREMENT and not
+arithmetic. The audit is explicit that historical, candidate and adopted prices
+must be kept in separate columns, and this is exactly the subtraction it
+forbids.
+
+**A CORRECTION THIS FORCES, made the same day it was written.** The M10K
+direction section above says this domain is *"already over its 48-block M10K
+allocation at 52"*, offered as the reason memory cannot simply be poured into
+the worst ALM breach. **That 52 is 29 + 23 from these same two stale rows.**
+The current shared arrangement uses 45 M10K for a wider scope. The caution was
+built on the measurement it was warning about — *never compare a current file
+to an old measurement* — and it is withdrawn as stated. What survives is the
+weaker and still-true form: **the M10K envelope is per-domain and finite, and
+no domain's current memory position can be read off this scoreboard until its
+stale rows are re-measured.**
+
+**What to do about it, in order:** the `uncashed_cheques.py` check-2 list
+already flags both rows (`zhao_terrain_project` measured at a commit older than
+its own source). Re-measuring them is not a new fit — it is the G8C
+composition, which fits the connected hierarchy and prices the whole thing
+once. Until then every domain total containing a stale row is evidence about
+the past, and the scoreboard should say so per row rather than only in prose.
 
 ### The work list the direction implies — blocks that spend ALMs and no memory
 
