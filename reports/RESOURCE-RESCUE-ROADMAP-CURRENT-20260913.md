@@ -282,6 +282,43 @@ coefficient-table primitives stop being one bullet of a stage and become the
 mechanism the owner has asked for, to be reused by R4, R5, R6 and FIELD
 rather than re-derived in each.
 
+### G8B CANNOT CLOSE PACKET I WHILE PACKET H IS MISSING
+
+Noted 2026-09-16, and it changes what "finish R0" means next.
+
+The packet order is fixed by the architecture:
+
+```
+A -> B -> C -> D -> E -> F(G8A) -> G -> H -> I(G8B) -> J(G8C) -> K
+```
+
+and the overlap rule is explicit about what development buys you:
+
+> *"a later packet may be developed while an earlier **independent** fit runs,
+> but it cannot be promoted past its gate or selected by a dependent packet
+> until every predecessor is green."*
+
+**Packet H is H, and it comes before I.** `zhao_shell_top_v2.sv` does not
+exist, so H is not green, so **Packet I cannot be promoted past its gate no
+matter what G8B measures.** A 100 MHz physical-pin receipt would satisfy the
+part of I's gate that says *"one clean G8B receipt proving the parameters
+actually elaborated"* and would still not close the packet.
+
+**This does not make the G8B timing campaign premature.** The same rule
+permits exactly this work — G8B is an independent fit, Packet I's RTL is
+legitimately developed alongside it, and the terrain pipe had to reach 100 MHz
+whenever it was done. What it settles is the ORDER OF WHAT COMES NEXT:
+
+1. finish G8B's timing to a clean **physical-pin** 100 MHz receipt — the fit
+   evidence Packet I needs, and the only part of it that is expensive;
+2. **write `zhao_shell_top_v2.sv`** — Packet H, a composition of eight blocks
+   that all exist and are tested (see the section below), and the single file
+   standing between R0 and its last two packets;
+3. then Packet I promotes, then J/G8C has a hierarchy to fit, then K.
+
+Step 2 is not blocked on step 1 and does not touch its closure, so it is the
+work to do while G8B fits.
+
 ### What Packet H actually costs, now that the correction is in
 
 Scoped 2026-09-16, after finding that `zhao_shell_top_v2.sv` does not exist.
