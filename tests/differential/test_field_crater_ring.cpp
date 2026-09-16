@@ -13,7 +13,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>  // writeFile creates captures/failures/field/ on demand
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include "crater_ring.hpp"  // TS-generated (compiler/tests/generated)
@@ -38,6 +40,20 @@ std::vector<uint8_t> readFile(const std::string& path) {
 }
 
 bool writeFile(const std::string& path, const std::vector<uint8_t>& b) {
+  // CREATE THE PARENT DIRECTORY, because charter 29-17 says the minimal failing
+  // vector is SAVED and gate 6 below reports "commit them" -- and it could not
+  // save anything. captures/failures/field/ has never existed in this tree, so
+  // fopen failed, writeFile returned false, and the gate has been red ever
+  // since with a message about committing files that were never written.
+  //
+  // tests/harness/zhao_sim.hpp's save_failing_vector already documents itself
+  // as "Creates the directory if needed"; this local writer simply did not, so
+  // the two halves of the same charter rule disagreed.
+  const size_t slash = path.find_last_of("/\\");
+  if (slash != std::string::npos) {
+    std::error_code ec;
+    std::filesystem::create_directories(path.substr(0, slash), ec);
+  }
   FILE* f = fopen(path.c_str(), "wb");
   if (!f) return false;
   const bool ok = b.empty() || fwrite(b.data(), 1, b.size(), f) == b.size();
@@ -354,13 +370,24 @@ int main() {
                    {{(int32_t)((uint32_t)expected[faultIdx][0] ^ 0x80000000u),
                      expected[faultIdx][1], expected[faultIdx][2], expected[faultIdx][3]}},
                    {stWord});
+    // NOT "commit them", which is what this said until 2026-09-16 and which
+    // .gitignore:150 forbids in as many words: "captures/failures/ is where a
+    // failing test writes what it saw; it is OUTPUT, NOT EVIDENCE, and it
+    // arrives in a commit only because someone ran `git add -A` while a test
+    // was red." Two statements of one fact, disagreeing -- and the gate was the
+    // wrong one, instructing an action the repository had decided against.
+    //
+    // The artefact is written for a human to look at on the run that produced
+    // it. The charter-29-17 property this gate actually owns is that the
+    // minimizer produces a STABLE record: write it once, and on every later run
+    // require the newly minimized vector to equal what is already on disk.
     if (readFile(failBase + ".zvec").empty()) {
       CHECK(writeFile(failBase + ".zvec", failVec) &&
                 writeFile(failBase + ".txt", std::vector<uint8_t>(report, report + strlen(report))),
-            "gate 6: failing vector + report WRITTEN (first run) — commit them");
+            "gate 6: failing vector + report written (first run on this tree)");
     } else {
       CHECK(readFile(failBase + ".zvec") == failVec,
-            "gate 6: committed failing vector replays (minimized record stable)");
+            "gate 6: failing vector replays (minimized record stable)");
       const std::vector<uint8_t> rep = readFile(failBase + ".txt");
       CHECK(rep == std::vector<uint8_t>(report, report + strlen(report)),
             "gate 6: committed divergence report stable");
