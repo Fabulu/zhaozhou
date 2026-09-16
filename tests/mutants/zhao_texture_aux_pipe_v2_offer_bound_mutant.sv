@@ -31,6 +31,13 @@
 // AUX is never RGB, alpha, raw index, TMU sample 2, or a substitute for sample 2.
 `default_nettype none
 
+`ifndef ZHAO_AUX_T4_DEGENERATE_CAPTURE
+`define ZHAO_AUX_T4_DEGENERATE_CAPTURE(value) (value)
+`endif
+`ifndef ZHAO_AUX_T4_INPUT_FAULT_CAPTURE
+`define ZHAO_AUX_T4_INPUT_FAULT_CAPTURE(value) (value)
+`endif
+
 module zhao_texture_aux_pipe_v2_offer_bound_mutant #(
     parameter int unsigned NUM_W   = 40,
     parameter int unsigned DEN_W   = 32,
@@ -163,6 +170,8 @@ module zhao_texture_aux_pipe_v2_offer_bound_mutant #(
 
   logic                    a0_valid_q;
   logic                    a0_refuse_q;
+  logic                    a0_degenerate_q;
+  logic                    a0_input_fault_q;
   logic [DEN_W-1:0]        a0_du_q;
   logic [DEN_W-1:0]        a0_dv_q;
   logic signed [NUM_W-1:0] a0_nu_q;
@@ -403,6 +412,9 @@ module zhao_texture_aux_pipe_v2_offer_bound_mutant #(
     if (!rst_n) begin
       credit_q                    <= CREDIT_W'(0);
       a0_valid_q                  <= 1'b0;
+      a0_refuse_q                 <= 1'b0;
+      a0_degenerate_q             <= 1'b0;
+      a0_input_fault_q            <= 1'b0;
       div_in_valid_q              <= 1'b0;
       side_write_q                <= '0;
       offer_write_q               <= '0;
@@ -443,11 +455,17 @@ module zhao_texture_aux_pipe_v2_offer_bound_mutant #(
       // The lifetime credit is released only at typed owner-return acceptance.
       credit_q <= credit_q + CREDIT_W'(job_fire_c) - CREDIT_W'(out_fire_c);
 
-      // A0 is the issue-before-local-return fence.  Even force_refuse enters this
-      // registered stage after its logical issue pulse.
+      // A0 is the issue-before-local-return fence. Even force_refuse enters this
+      // registered stage after its logical issue pulse. The two diagnostic facts
+      // are captured independently so the sticky frame/counter fanout starts only
+      // from A0 registers, never from live fragment/envelope inputs.
       a0_valid_q <= job_fire_c;
       if (job_fire_c) begin
         a0_refuse_q     <= job_force_refuse_i || envelope_degenerate_c;
+        a0_degenerate_q <= `ZHAO_AUX_T4_DEGENERATE_CAPTURE(
+                               envelope_degenerate_c);
+        a0_input_fault_q <= `ZHAO_AUX_T4_INPUT_FAULT_CAPTURE(
+                                job_force_refuse_i || envelope_degenerate_c);
         a0_du_q         <= du_c;
         a0_dv_q         <= dv_c;
         a0_nu_q         <= nu_c;
@@ -455,11 +473,11 @@ module zhao_texture_aux_pipe_v2_offer_bound_mutant #(
         a0_handle_q     <= job_sheet_handle_i;
         a0_owner_q      <= job_owner_i;
         accepted_o      <= accepted_o + 32'd1;
-        if (envelope_degenerate_c) begin
-          degenerate_o  <= degenerate_o + 32'd1;
-          frame_fault_o <= 1'b1;
-        end
-        if (job_force_refuse_i)
+      end
+      if (a0_valid_q) begin
+        if (a0_degenerate_q)
+          degenerate_o <= degenerate_o + 32'd1;
+        if (a0_input_fault_q)
           frame_fault_o <= 1'b1;
       end
 
@@ -653,4 +671,6 @@ module zhao_texture_aux_pipe_v2_offer_bound_mutant #(
 
 endmodule : zhao_texture_aux_pipe_v2_offer_bound_mutant
 
+`undef ZHAO_AUX_T4_DEGENERATE_CAPTURE
+`undef ZHAO_AUX_T4_INPUT_FAULT_CAPTURE
 `default_nettype wire
