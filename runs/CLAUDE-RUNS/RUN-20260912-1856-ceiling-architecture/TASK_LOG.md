@@ -1112,3 +1112,26 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - Provenance is nonetheless complete: the row carries `sourceCommit`, `sourceDigest` and `rtlCleanAtHead: true`, and all **48 file hashes in the retained `.sources.sha256` were checked against the manifest at `be615625` and all 48 agree**. Thirteen raw artifacts are retained in `reports/synthesis/blockpaths/`.
 - Attempt 2 was refused twice by the runner's own guards - first because the raw artifacts existed, then because the `@g8a-timing4` row existed. Both refusals are correct one-shot behaviour. D2 therefore has no fit; per "fit at subsystem boundaries" it should batch with the next subsystem change rather than earn one alone.
 
+
+## 2026-09-16 (resolve) - the last two paths, and a quantiser split that adds no stage
+
+- **In progress when this was written:** `@g8a-timing5` fit running from clean `fd78352c`, measuring D2 plus the quantiser split. Staying strictly off its closure this time - no RTL edits, no regeneration - which is the rule the missing Timing4 receipt bought.
+- The Timing4 fit said the entire 100 MHz gap is **two paths in `zhao_raster_resolve`**, a block no work package touched. One colour byte through one quantiser into the skid FIFO, 9.920 ns of a 10.000 ns period, with the third-worst path in the design at +0.069 ns.
+- **The obvious fix is the expensive one here.** Another pipeline stage repeats what Q0 already cost: a cycle, plus the FIFO going from two entries to four to hold the initiation rate, because the architecture rule allows latency to grow and forbids the rate to regress.
+- So the QUANTISER is split rather than the pipeline. `num = v*MAXQ + B*AMP + RND` now happens on the cycle the response arrives, registered beside the colour it belongs to; the divide-by-255 and the rail launch from that register on the next cycle - the cycle that was long. **Same cycle count, same credits, same initiation rate, same arithmetic.**
+- `zhao_raster_quant` keeps its exact ports and becomes the composition of the two halves, so `formal_raster_resolve_quant` still proves what it always proved, and it passes. Both call sites share one `zhao_quant_num` function rather than two transcriptions of one formula.
+- **The thing that had to be right** was the Bayer phase: it moved one stage earlier with the numerator, so it comes from `ret_addr` (the response arriving) and not `q_addr_r` (the pixel held). Backwards, it dithers every pixel with its predecessor's phase - the same off-by-one that once failed 7,038 of 7,115 checks here.
+- Evidence: 5/5 resolve including the formal proof and lint; 54/54 across packet C/D/E, interface manifest, drift gate, combiner and the repaired controls.
+- **Two broken instruments repaired and both now green.** `early_desc_layout_guard` and `proj_service_rowmux_smoke` were on the red list as hung tests. The guard fires perfectly - it prints its expected text in 12 ms standalone - but Verilator's abort path does not return under ctest's captured output, so it sat at 0 CPU to its timeout and read as a guard that had stopped firing. The harness now suppresses the Windows abort/WER dialogs, and `tests/cmake/run_expect_fatal.cmake` judges a control that is MEANT to die on what it printed rather than how it ended, with its own negative control pointed at the healthy build so it cannot launder a hang into a green.
+- Remaining red, all pre-existing and all with closures this session did not touch: `shell_fit_*` (4), the npm gates (4, no `node_modules`), `cppcheck_check`, `field_crater_ring`, `source_list_parity`, `texjoin_accounting_retirement`, and `shell_golden_replay` (1 of 749, byte-identity against a committed capture; identical signature before and after this work, every CRC passing).
+
+
+## 2026-09-16 (closure) - G8A meets 100 MHz with margin
+
+- **`@g8a-timing5` from clean `fd78352c`: `status: ok`.** Fmax **108.37 MHz**, setup WNS **+0.772 ns**, setup **TNS zero**, hold +0.250/0. ALMs 13,076, DSP 30, RAM 71, memory bits 92,964 - DSP, RAM and memory bits unchanged from Timing3 and Timing4. **Zero negative paths of 2,000.**
+- Progression: Fmax 90.96 -> 94.46 -> **108.37**; setup TNS -131.275 -> -0.721 -> **0**; negative paths 497 -> 2 -> **0**; status failed:structure -> failed:structure -> **ok**.
+- The delta from Timing4 is D2 plus the quantiser numerator split, for **+136 ALMs and no DSP, RAM or memory-bit change**.
+- **Category, stated precisely: 100 MHz GREEN with a real reserve, NOT COMFORTABLE.** Comfortable needs a 110 MHz analysis with zero TNS and 108.37 is 1.63 MHz short. The 110 MHz band now holds **12 paths** (6 island, 5 `zhao_raster_earlyz`, 1 v3own) against Timing4's 333 - a bounded job rather than a second campaign.
+- **Do not attribute all 13.91 MHz to the split.** Clearing a -0.587 ns path should have bought about 100.7 MHz, since Timing4's third-worst was +0.069. The rest of the distribution moved as well: D2 took a six-way coordinate compare out of the abort fanout, the split removed a long tail from the resolve cycle, and the fitter had freedom once the two hard paths were gone. The batch did it; no single change is provably responsible.
+- Whole-machine targets are untouched by this. 13,076 ALMs is a SUBSYSTEM number; the 30,000-ALM and 85-DSP goals are whole-machine and only G8C/production composition answers them.
+

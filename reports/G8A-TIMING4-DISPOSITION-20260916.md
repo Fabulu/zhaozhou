@@ -38,6 +38,57 @@ exported row is inside the 110 MHz band and the export is truncated. See the
 "110 MHz inventory" section of `G8A-TIMING3-DSP-PATH-REPORT-20260915.md`. The
 Timing4 fit now exports a slack-bounded report so this is answerable once.
 
+## MEASURED: 100 MHz IS MET — `@g8a-timing5`
+
+Source commit `fd78352c`, `rtlCleanAtHead: true`, `treeCleanAtHead: true`,
+seed 1, 48 sources, digest `42a3e4504f07…`, `physical-top-ports`, 803.3 s.
+**`status: ok`** — no rule violations, which includes the 100 MHz requirement.
+
+| | Timing3 | Timing4 | **Timing5** |
+|---|---:|---:|---:|
+| status | `failed:structure` | `failed:structure` | **`ok`** |
+| Fmax | 90.96 MHz | 94.46 MHz | **108.37 MHz** |
+| setup WNS | −0.994 ns | −0.587 ns | **+0.772 ns** |
+| setup TNS | −131.275 ns | −0.721 ns | **0** |
+| hold WNS / TNS | +0.242 / 0 | +0.237 / 0 | +0.250 / 0 |
+| ALMs | 13,195 | 12,940 | 13,076 |
+| DSP | 30 | 30 | **30** |
+| RAM blocks | 71 | 71 | **71** |
+| memory bits | 92,964 | 92,964 | **92,964** |
+| registers | 22,496 | 22,735 | 22,857 |
+| negative paths (of 2,000) | 497 | 2 | **0** |
+| rows below the 110 MHz band | unknowable¹ | 333 | **12** |
+
+¹ the Timing3 export was truncated; see below.
+
+The delta from Timing4 is **D2** plus the **quantiser numerator split**, and it
+cost **+136 ALMs** and no DSP, RAM or memory bits at all.
+
+### Which acceptance category this is
+
+Against §2, precisely and not generously:
+
+* Not **RED**. Every mandatory check passes at 100 MHz.
+* **100 MHz GREEN** — and the reserve is real, not marginal: **+0.772 ns of
+  worst-case setup slack and zero setup TNS**, with hold clean at +0.250/0.
+* **NOT yet COMFORTABLE G8A.** That category needs a reported 110 MHz analysis
+  with zero TNS, and 108.37 MHz is **1.63 MHz short**. Twelve paths stand in the
+  way — six in the island, five in `zhao_raster_earlyz`, one in `v3own`.
+
+So: the operating requirement is met with margin, and the comfortable target is
+a named, bounded, twelve-path job rather than a second campaign.
+
+### Why the gain is larger than the two paths that were fixed
+
+Clearing a −0.587 ns path should buy about 100.7 MHz, because Timing4's
+third-worst path sat at +0.069 ns. 108.37 MHz means the rest of the
+distribution moved too, and the honest statement is that the batch did it
+rather than either change alone: D2 took a six-way coordinate comparison out of
+the abort fanout, the quantiser split removed a long tail from the resolve
+cycle, and with the two hard paths gone the fitter had freedom it did not have
+before. Attributing the whole 13.91 MHz to the split would be a claim this
+measurement does not support.
+
 ## MEASURED: the Timing4 result
 
 Source commit `be615625`, `rtlCleanAtHead: true`, `treeCleanAtHead: true`,
