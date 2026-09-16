@@ -1135,3 +1135,22 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - **Do not attribute all 13.91 MHz to the split.** Clearing a -0.587 ns path should have bought about 100.7 MHz, since Timing4's third-worst was +0.069. The rest of the distribution moved as well: D2 took a six-way coordinate compare out of the abort fanout, the split removed a long tail from the resolve cycle, and the fitter had freedom once the two hard paths were gone. The batch did it; no single change is provably responsible.
 - Whole-machine targets are untouched by this. 13,076 ALMs is a SUBSYSTEM number; the 30,000-ALM and 85-DSP goals are whole-machine and only G8C/production composition answers them.
 
+
+## 2026-09-16 (Packet I start) - the G8B configuration had never been elaborated
+
+- Confirmed the roadmap position by measurement rather than by reading: `packet-b` 88, `packet-c` 4, `packet-d` 13, `packet-e` 26, `packet-f` 14, `packet-g` 22, `packet-h` 45 - **199/199 green** - and `g8a` 23/23. `packet-i`, `packet-j`, `packet-k`, `g8b`, `g8c` each return **0 tests**, so I/J/K are not started rather than in progress. The roadmap's R0 row still said "Packets B-K remain"; corrected with those counts.
+- Lease/CDC and sibling shell V2 are Packets G and H, both green, so the next roadmap item is **Packet I / G8B**.
+- **The G8B target had never been elaborated.** Its spec is `zhao_terrain_pipe #(.ROWS_PER_PASS(3), .MATW(18))`, it explicitly forbids relying on the default `MATW=32`, and it says G8B runs only once all non-fit RPP3/MATW18 tests pass. There were none - every terrain_pipe test ran at the default. A target specified in detail, its prerequisite named, and nothing in the tree checking whether the thing could be built.
+- It can. `terrain_pipe_rpp3_matw18` is bit-exact against the retained `zhao_terrain_project` on the dense workload: 478 packets, 200 geometry vertices, 2,343 cycles, the same 37 checks as the MATW=32 build, zero matrix refusals. 73/73 across terrain, proj_matw and depthquant.
+- The refusal check asserted `MATW=32` in its own message unconditionally and would have gone on saying so in an MATW=18 build; it now names the width it was compiled for.
+- Limitation recorded beside the test rather than left to be discovered: it CANNOT distinguish 18 from 32 by its own output, because on this stimulus they are bit-identical - that is the result, not an oversight. The flag taking effect is Verilator's build record (`-GMATW=18 -GROWS_PER_PASS=3`); 18 behaving differently from 32 is `proj_matw_directed`'s positive control.
+
+### Where Packet I stands, and what the next unit is
+
+- [x] RPP3/MATW18 pipe test - the spec's named prerequisite
+- [ ] generated `fpga/rtl/generated/zhao_terrain_pipe_rpp3_matw18_fit_top.sv` - registered-pin/MISR wrapper. **This is the large one:** `zhao_terrain_pipe` has **102 port lines**, so it is comparable in size to the G8A wrapper. Follow `tools/quartus/gen_raster_texture_v3_fit_top.py` (10 KB generator + `.sv.in` template + manifest with per-file sha256).
+- [ ] source closure: `zhao_terrain_pipe.sv`, `zhao_terrain_tess.sv`, `zhao_terrain_group_seq.sv`, `zhao_proj_subsystem.sv`, `zhao_project_service.sv`, the project-core set, `zhao_terrain_wcache.sv`, `zhao_vertex_arena.sv`
+- [ ] legal-mask activity test: masks 01/10/11 with distinct matrices/viewports, receipt workload the dense 11
+- [ ] `design/fit_targets.yml` entry, receipt parameter/hierarchy gates, freshness + registration-static tests
+- [ ] one clean G8B receipt proving `ROWS_PER_PASS=3` and `MATW=18` actually elaborated
+
