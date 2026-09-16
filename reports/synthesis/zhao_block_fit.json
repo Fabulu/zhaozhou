@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "20453f5b6466a965345c92db53384fc49c68aab8",
-    "newestRunClean":  true,
+    "newestRunCommit":  "83ed6cfb43199b919c39018669fb0bed39386827",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -2080,6 +2080,46 @@
                        "ruleViolations":  [
                                               "Fmax 89.69 MHz \u003c required 100 MHz -- the resource gates can all pass while the clock does not; see this rule\u0027s note"
                                           ]
+                   },
+                   {
+                       "module":  "zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t8-mapcheck",
+                       "status":  "map_only",
+                       "sourceCommit":  "83ed6cfb43199b919c39018669fb0bed39386827",
+                       "treeCleanAtHead":  false,
+                       "rtlCleanAtHead":  false,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "run_block_fit -Seed",
+                       "sourceDigest":  "7333b0c97cd513bce284385d9f6493579c822db906e34b348108a0f548d28c53",
+                       "variantOf":  "zhao_terrain_pipe_rpp3_matw18_fit_top",
+                       "seconds":  35.7,
+                       "sourcesHashed":  9,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  8524,
+                       "blockMemoryBits":  95802,
+                       "dspBlocks":  32,
+                       "virtualPins":  18
+                   },
+                   {
+                       "module":  "zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t8-pins",
+                       "status":  "incomplete:failed:quartus_map.exe",
+                       "sourceCommit":  "83ed6cfb43199b919c39018669fb0bed39386827",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "physical-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "run_block_fit -Seed",
+                       "sourceDigest":  "8cb6e9228e41999c9518ee82b199c7f2a5e3ccf16aa4a6d1753635e032d260e3",
+                       "variantOf":  "zhao_terrain_pipe_rpp3_matw18_fit_top",
+                       "seconds":  5.2,
+                       "sourcesHashed":  9,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  null,
+                       "blockMemoryBits":  null,
+                       "dspBlocks":  null,
+                       "virtualPins":  null
                    },
                    {
                        "module":  "zhao_terrain_project",

@@ -928,9 +928,22 @@ module zhao_project_core #(
   // Deleting it takes the compare out of the setup cycle and puts it in the
   // first divider cycle, whose own worst path was -0.033 with room. No stage
   // is added, latency does not move, and three flip-flops go away.
-  for (genvar gsat = 0; gsat < 3; gsat = gsat + 1) begin : g_sat0
-    assign dstep_sat[0][gsat] = ({14'b0, s3_dv[gsat][47:31]} >= s3_d);
-  end
+  // EXPLICIT `generate`/`endgenerate`, AND THE GENVAR DECLARED OUTSIDE THE
+  // HEADER. Verilator lints the implicit form with zero diagnostics; Quartus
+  // 17.0 rejects it in five seconds with
+  //
+  //   Error (10170): Verilog HDL syntax error ... near text: "for";
+  //                  expecting "endmodule"
+  //
+  // which is the trap CLAUDE.md records verbatim -- a clean lint settles one
+  // tool's opinion and says nothing about synthesizability. It cost one fit
+  // rather than a day precisely because it fails fast and loud.
+  genvar gsat;
+  generate
+    for (gsat = 0; gsat < 3; gsat = gsat + 1) begin : g_sat0
+      assign dstep_sat[0][gsat] = ({14'b0, s3_dv[gsat][47:31]} >= s3_d);
+    end
+  endgenerate
 
 `ifndef SYNTHESIS
   // THE SHADOW, and the difference. `s3_sat` is written here and nowhere else
