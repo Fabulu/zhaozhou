@@ -481,6 +481,7 @@ module zhao_raster_tile_pipe_v2 #(
   logic attr_bundle_valid_w;
   logic attr_join_valid_q;
   logic attr_coordinate_bad_w, attr_range_bad_w, attr_bundle_fault_w;
+  logic attr_coordinate_bad_q, attr_range_bad_q;
   logic attr_join_room_w, attr_join_capture_w, attr_join_consume_w;
   logic earlyz_frag_valid_w, earlyz_frag_ready_w;
   logic signed [31:0] attr_join_q_q [0:2];
@@ -492,17 +493,44 @@ module zhao_raster_tile_pipe_v2 #(
 
   assign attr_source_valid_w = &attr_q_valid_w;
   assign attr_bundle_valid_w = attr_join_valid_q;
+
+  // TIMING4 D2. THE VERDICTS ARE CAPTURED WITH THE PAYLOAD, NOT DERIVED AFTER
+  // IT.
+  //
+  // MEASURED: these two comparisons used to be computed from the join
+  // registers, so a six-way coordinate agreement plus a range test sat in front
+  // of everything abort_now_w reaches. The Timing3 census names that cone in
+  // the tile-control family.
+  //
+  // They are pure functions of the values the join register loads, computed
+  // here from the INCOMING lanes and registered by the SAME enable, from the
+  // SAME transfer. That is not the lockstep-blindness the repo warns about --
+  // it is its opposite requirement: a verdict must describe the payload it
+  // travels with, so the two MUST move together. Moving them apart is what E1's
+  // committed mutant exists to punish.
+  //
+  // The result is bit-identical at every cycle: on a capture both sides load
+  // from the same sources, and on a hold both sides hold. What changes is only
+  // where the comparison sits relative to the register.
+  wire [3:0] incoming_lane1_col_c = `ZHAO_PACKET_D_LANE1_COL(attr_col_w[1]);
+  wire incoming_coordinate_bad_c =
+      (attr_row_w[0] != attr_row_w[1]) ||
+      (attr_row_w[0] != attr_row_w[2]) ||
+      (attr_col_w[0] != incoming_lane1_col_c) ||
+      (attr_col_w[0] != attr_col_w[2]) ||
+      (attr_last_w[0] != attr_last_w[1]) ||
+      (attr_last_w[0] != attr_last_w[2]);
+  wire incoming_range_bad_c = (|attr_error_w) || attr_q_w[0][31] ||
+                              (attr_q_w[0][31:24] != 8'd0);
+
+  // Retained so the join registers still read as the authority they are: these
+  // are what the captured verdicts were computed from, and the assertion below
+  // checks the two agree on every valid bundle.
   assign lane1_col_checked_w =
       `ZHAO_PACKET_D_LANE1_COL(attr_join_col_q[1]);
-  assign attr_coordinate_bad_w =
-      (attr_join_row_q[0] != attr_join_row_q[1]) ||
-      (attr_join_row_q[0] != attr_join_row_q[2]) ||
-      (attr_join_col_q[0] != lane1_col_checked_w) ||
-      (attr_join_col_q[0] != attr_join_col_q[2]) ||
-      (attr_join_last_q[0] != attr_join_last_q[1]) ||
-      (attr_join_last_q[0] != attr_join_last_q[2]);
-  assign attr_range_bad_w = (|attr_join_error_q) || attr_join_q_q[0][31] ||
-                            (attr_join_q_q[0][31:24] != 8'd0);
+
+  assign attr_coordinate_bad_w = attr_coordinate_bad_q;
+  assign attr_range_bad_w = attr_range_bad_q;
   assign attr_bundle_fault_w = attr_bundle_valid_w &&
                                (attr_coordinate_bad_w || attr_range_bad_w);
   assign attr_join_consume_w = attr_bundle_valid_w &&
@@ -517,6 +545,8 @@ module zhao_raster_tile_pipe_v2 #(
   always_ff @(posedge clk or negedge rst_n) begin : p_attr_join
     if (!rst_n) begin
       attr_join_valid_q <= 1'b0;
+      attr_coordinate_bad_q <= 1'b0;
+      attr_range_bad_q <= 1'b0;
       for (int lane = 0; lane < 3; lane++) begin
         attr_join_q_q[lane] <= 32'sd0;
         attr_join_row_q[lane] <= 4'd0;
@@ -529,6 +559,9 @@ module zhao_raster_tile_pipe_v2 #(
       attr_join_valid_q <= attr_join_capture_w ||
                            (attr_bundle_valid_w && !attr_join_consume_w);
       if (attr_join_capture_w) begin
+        // D2: the verdicts ride the same enable as the payload they describe.
+        attr_coordinate_bad_q <= incoming_coordinate_bad_c;
+        attr_range_bad_q      <= incoming_range_bad_c;
         for (int lane = 0; lane < 3; lane++) begin
           attr_join_q_q[lane] <= attr_q_w[lane];
           attr_join_row_q[lane] <= attr_row_w[lane];
@@ -1319,6 +1352,25 @@ module zhao_raster_tile_pipe_v2 #(
       if (held_attr_bundle_q && (!attr_bundle_valid_w ||
           (attr_bundle_payload_w != held_attr_bundle_payload_q)))
         $fatal(1, "Packet-D registered attribute join changed under backpressure");
+      // TIMING4 D2 invariant, stated for what it is: this cannot fire while
+      // the two enables are the one expression they are today, because the
+      // captured verdict and the captured payload are loaded together from the
+      // same sources. It is not a fault detector and is not offered as one.
+      // It guards the REFACTOR: the moment a later edit gives the verdict its
+      // own enable, or moves one of these loads, the registered verdict stops
+      // describing the payload beside it and this says so on the first bundle.
+      if (attr_bundle_valid_w &&
+          ((attr_coordinate_bad_q !=
+            ((attr_join_row_q[0] != attr_join_row_q[1]) ||
+             (attr_join_row_q[0] != attr_join_row_q[2]) ||
+             (attr_join_col_q[0] != lane1_col_checked_w) ||
+             (attr_join_col_q[0] != attr_join_col_q[2]) ||
+             (attr_join_last_q[0] != attr_join_last_q[1]) ||
+             (attr_join_last_q[0] != attr_join_last_q[2]))) ||
+           (attr_range_bad_q !=
+            ((|attr_join_error_q) || attr_join_q_q[0][31] ||
+             (attr_join_q_q[0][31:24] != 8'd0)))))
+        $fatal(1, "Packet-D captured attribute verdict disagrees with the join it describes");
       if (held_earlyz_q && (!earlyz_cand_valid_w ||
           (earlyz_hold_payload_w != held_earlyz_payload_q)))
         $fatal(1, "Packet-D Early-Z candidate changed under backpressure");

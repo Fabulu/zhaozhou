@@ -100,7 +100,7 @@ PROTECTED_HASHES = {
     "fpga/rtl/geometry/zhao_geom_binner_v2.sv":
         "7b89e1705420a2fd5ebfd84ceed9f27fb0855d13bc6f8c2d2c19dbc38ad3e867",
     "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv":
-        "b09af0e8371e52cd8ec104659075dd215cc61d6884cf45ee11654beba8ffd0d3",
+        "6c4d8d04bc64b7cf1b7ba36e7b4820c1f4e489785021dc12b48286525f61e861",
     "fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv":
         "675fec61863184aee91692934d3434a9b2cc06c607a71d7250265d5197ccd204",
 }
