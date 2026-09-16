@@ -86,6 +86,7 @@ indexed on both axes is what actually broke inference in tmu_pipe.
 """
 from __future__ import annotations
 
+import ast
 import io
 import json
 import os
@@ -93,7 +94,13 @@ import re
 import subprocess
 import sys
 
-RESULTS = "reports/synthesis/zhao_block_fit.json"
+# ANCHORED TO THE FILE, NOT THE WORKING DIRECTORY. Both of these were relative
+# paths, so running the tool from anywhere but the repo root found no fit rows
+# and no RTL and printed a clean, confident, empty report -- the same CWD defect
+# CLAUDE.md records being repaired in tools/design/check_counters.py.
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+RTL_ROOT = os.path.join(REPO, "fpga", "rtl")
+RESULTS = os.path.join(REPO, "reports", "synthesis", "zhao_block_fit.json")
 
 # `logic [15:0] name [A][B];` / `logic [255:0] name [N];` / `logic name [0:3];`
 ARRAY_RE = re.compile(
@@ -107,8 +114,224 @@ ARRAY_RE = re.compile(
             # a tree containing the 65,536-bit array it was written to catch.
 )
 
-PARAM_RE = re.compile(r"^\s*(?:parameter|localparam)\s+(?:int\s+)?(?:unsigned\s+)?"
-                      r"(?:int\s+)?(\w+)\s*=\s*(\d+)")
+# THE OLD FORM, KEPT SO THE WIDENING IS VISIBLE:
+#
+#   PARAM_RE = ... r"(\w+)\s*=\s*(\d+)"
+#
+# It read only a DECIMAL LITERAL, so `localparam int W = 2*ELEM_W;` and every
+# parameter that lives in a package were invisible. That is why this tool
+# reported "0 blocks" beside "206 declaration(s) skipped as unresolvable" -- and
+# a zero standing next to a skip count that large is the broken-instrument law
+# in its exact documented form: precision at zero is a tell, not a result.
+# Widened below to an EXPRESSION, resolved to a fixpoint, with package
+# parameters imported. The skip-never-guess law is unchanged: anything the
+# evaluator cannot reduce to an int is still SKIPPED.
+PARAM_RE = re.compile(
+    r"^\s*(?:parameter|localparam)\s+"
+    r"(?:type\s+)?"
+    r"(?:(?:logic|bit|int|integer|byte|shortint|longint)\s+)?"
+    r"(?:unsigned\s+|signed\s+)?"
+    r"(?:\[[^\]]*\]\s*)?"                         # an optional packed width
+    r"(\w+)\s*=\s*([^;,]+?)\s*(?:[;,]|$)", re.M)
+
+PACKAGE_RE = re.compile(r"^\s*package\s+(\w+)\s*;(.*?)^\s*endpackage", re.M | re.S)
+IMPORT_RE = re.compile(r"^\s*import\s+(\w+)\s*::\s*\*\s*;", re.M)
+
+_PKG_CACHE: dict | None = None
+
+
+def _clog2(value: int) -> int:
+    if value <= 1:
+        return 0
+    return (value - 1).bit_length()
+
+
+class _Unresolvable(Exception):
+    """Raised the moment the evaluator meets something it cannot reduce.
+
+    A separate exception rather than a None return, because this evaluator
+    recurses: a None sentinel has to be checked at every node and one missed
+    check silently becomes a 0, which is a GUESS, and a guessed size reports a
+    defect that may not exist. Raising makes the skip path the default.
+    """
+
+
+def _sv_div(a: int, b: int):
+    """SystemVerilog integer division: TRUNCATES TOWARD ZERO, unlike Python's.
+
+    Found by this file's own self-check, before the tool had run once on the
+    tree. The first version normalised `/` to Python's `//` and separately
+    carried an "exact division only, else skip" rule -- and the normalisation
+    meant that rule NEVER RAN: `DEPTH/2` with DEPTH 81 quietly returned 40. The
+    self-check was written expecting a skip and reported "evaluator GUESSED".
+
+    Both halves of that were wrong, which is the useful part. 40 is the RIGHT
+    answer -- `logic [DEPTH/2-1:0]` really is 40 bits wide, because SV truncates
+    -- so refusing it would have SKIPPED a legitimate declaration and
+    under-reported, the flattering direction. And Python's floor is the right
+    answer only while both operands are non-negative; `-5/2` is -2 in SV and -3
+    in Python, so the normalisation was importing a different language's
+    arithmetic and agreeing with it by luck on the cases that happen to occur.
+    """
+    if b == 0:
+        return None
+    quotient = abs(a) // abs(b)
+    return -quotient if (a < 0) != (b < 0) else quotient
+
+
+def _sv_mod(a: int, b: int):
+    """SV `%` takes the sign of the LEFT operand; Python's takes the right."""
+    if b == 0:
+        return None
+    remainder = abs(a) % abs(b)
+    return -remainder if a < 0 else remainder
+
+
+_BIN_OPS = {
+    ast.Add: lambda a, b: a + b,
+    ast.Sub: lambda a, b: a - b,
+    ast.Mult: lambda a, b: a * b,
+    ast.FloorDiv: _sv_div,
+    ast.Div: _sv_div,
+    ast.Mod: _sv_mod,
+    ast.LShift: lambda a, b: a << b,
+    ast.RShift: lambda a, b: a >> b,
+    ast.BitOr: lambda a, b: a | b,
+    ast.BitAnd: lambda a, b: a & b,
+    ast.BitXor: lambda a, b: a ^ b,
+}
+
+SIZED_LITERAL_RE = re.compile(r"\b(?:\d+)?'([sS])?([dDhHbBoO])([0-9a-fA-F_]+)")
+_RADIX = {"d": 10, "h": 16, "b": 2, "o": 8}
+
+
+def _normalise_expr(expr: str) -> str:
+    """SystemVerilog expression text -> something Python's parser accepts."""
+    text = expr.strip()
+    text = re.sub(r"\$clog2", "_clog2", text)
+    text = re.sub(r"\bint'\s*", "", text)
+    text = re.sub(r"\b\w+'\s*\(", "(", text)          # any cast: WIDTH'(x)
+    text = SIZED_LITERAL_RE.sub(
+        lambda m: str(int(m.group(3).replace("_", ""), _RADIX[m.group(2).lower()])),
+        text)
+    # `/` stays `/`: _BIN_OPS maps BOTH ast.Div and ast.FloorDiv to SV's
+    # truncating division, so there is nothing to normalise and the old rewrite
+    # to `//` only served to hide which operator was written.
+    return text
+
+
+def eval_expr(expr: str, params: dict) -> int:
+    """Reduce a parameter/dimension expression to an int, or raise.
+
+    Deliberately NOT a general evaluator: integers, the named parameters already
+    resolved, $clog2, and the arithmetic/shift/bitwise operators above. A
+    function call, a division that is not exact, an unknown name, a `$bits`, a
+    string -- all raise, and the caller skips the declaration.
+    """
+    try:
+        tree = ast.parse(_normalise_expr(expr), mode="eval")
+    except SyntaxError as exc:
+        raise _Unresolvable(expr) from exc
+
+    def walk(node):
+        if isinstance(node, ast.Expression):
+            return walk(node.body)
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, bool) or not isinstance(node.value, int):
+                raise _Unresolvable(ast.dump(node))
+            return node.value
+        if isinstance(node, ast.Name):
+            if node.id in params:
+                return params[node.id]
+            raise _Unresolvable(node.id)
+        if isinstance(node, ast.Attribute):          # pkg::NAME after normalising
+            raise _Unresolvable(ast.dump(node))
+        if isinstance(node, ast.UnaryOp):
+            if isinstance(node.op, ast.USub):
+                return -walk(node.operand)
+            if isinstance(node.op, ast.UAdd):
+                return walk(node.operand)
+            if isinstance(node.op, ast.Invert):
+                raise _Unresolvable("~")
+            raise _Unresolvable(ast.dump(node.op))
+        if isinstance(node, ast.BinOp):
+            handler = _BIN_OPS.get(type(node.op))
+            if handler is None:
+                raise _Unresolvable(ast.dump(node.op))
+            value = handler(walk(node.left), walk(node.right))
+            if value is None:
+                raise _Unresolvable("inexact division")
+            return value
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id == "_clog2" \
+                    and len(node.args) == 1 and not node.keywords:
+                return _clog2(walk(node.args[0]))
+            raise _Unresolvable("call")
+        raise _Unresolvable(ast.dump(node))
+
+    value = walk(tree)
+    if not isinstance(value, int):
+        raise _Unresolvable(expr)
+    return value
+
+
+def collect_params(text: str, seed: dict | None = None) -> dict:
+    """Every parameter/localparam this text defines, resolved to a fixpoint.
+
+    Iterated because parameters are defined in terms of each other -- `DEPTH`,
+    then `INDEX_W = $clog2(DEPTH) + 1` -- and a single pass in file order would
+    resolve only the ones whose dependencies happen to appear above them.
+    """
+    params = dict(seed or {})
+    pending = [(m.group(1), m.group(2)) for m in PARAM_RE.finditer(text)]
+    for _ in range(len(pending) + 1):
+        progress = False
+        remaining = []
+        for name, expr in pending:
+            if name in params:
+                continue
+            try:
+                params[name] = eval_expr(expr, params)
+                progress = True
+            except _Unresolvable:
+                remaining.append((name, expr))
+        pending = remaining
+        if not pending or not progress:
+            break
+    return params
+
+
+def package_params(repo_root: str) -> dict:
+    """{package name: {parameter: value}} for every package in the RTL tree.
+
+    A package parameter is the single largest reason a declaration was skipped:
+    the widths this machine actually uses live in `zhao_pkg`, not beside the
+    array. Resolved once and cached.
+    """
+    global _PKG_CACHE
+    if _PKG_CACHE is not None:
+        return _PKG_CACHE
+    found: dict = {}
+    for root, _dirs, files in os.walk(repo_root):
+        for name in files:
+            if not name.endswith(".sv") and not name.endswith(".svh"):
+                continue
+            try:
+                text = read(os.path.join(root, name))
+            except OSError:
+                continue
+            for match in PACKAGE_RE.finditer(text):
+                found[match.group(1)] = collect_params(match.group(2))
+    _PKG_CACHE = found
+    return found
+
+
+def file_params(path: str, text: str) -> dict:
+    """The parameters visible inside one file: its imports, then its own."""
+    seed: dict = {}
+    for pkg in IMPORT_RE.findall(text):
+        seed.update(package_params(RTL_ROOT).get(pkg, {}))
+    return collect_params(text, seed)
 
 
 # Never ship a detector that has not been shown to fire. This is the exact shape
@@ -121,9 +344,84 @@ def read(p):
     return io.open(p, encoding="utf-8", errors="replace").read()
 
 
+# ---------------------------------------------------------------------------
+# THE EVALUATOR'S OWN POSITIVE AND NEGATIVE CONTROLS, run at import.
+#
+# A detector that has not been shown to fire has not been tested, and this file
+# already carries one such assert for ARRAY_RE. The widened resolver needs BOTH
+# directions, because its two failure modes point opposite ways: a form it
+# cannot read makes an array invisible (under-reports, the flattering
+# direction), and a form it reads WRONG invents a size (reports a defect that
+# may not exist). The negative half is the one that would otherwise never be
+# checked -- nobody audits a tool for refusing things.
+def _self_check() -> None:
+    params = {"DEPTH": 81, "ELEM_W": 32, "ARENAS": 4}
+    must_resolve = {
+        "16": 16,
+        "DEPTH": 81,
+        "DEPTH - 1": 80,
+        "2 * ELEM_W": 64,
+        "ELEM_W * 3 + 7": 103,
+        "$clog2(DEPTH) + 1": 8,
+        "$clog2(ARENAS)": 2,
+        "1 << 4": 16,
+        "8'd64": 64,
+        "32'h20": 32,
+        "int'(DEPTH)": 81,
+        "(DEPTH + 1) / 2": 41,
+        # SV truncates toward zero. 81/2 is 40 and the array really is 40 bits
+        # wide, so this must RESOLVE, not skip -- and the negative case is the
+        # one where Python's floor would silently disagree.
+        "DEPTH / 2": 40,
+        "(0 - 5) / 2": -2,
+        "(0 - 5) % 2": -1,
+    }
+    for expr, expected in must_resolve.items():
+        got = eval_expr(expr, params)
+        if got != expected:
+            raise AssertionError(
+                "check_array_storage evaluator is broken: %r -> %r, expected %r"
+                % (expr, got, expected))
+    must_refuse = (
+        "WIDTH_THAT_DOES_NOT_EXIST",
+        "$bits(some_struct_t)",
+        "func(DEPTH)",
+        "\"a string\"",
+    )
+    for expr in must_refuse:
+        try:
+            value = eval_expr(expr, params)
+        except _Unresolvable:
+            continue
+        raise AssertionError(
+            "check_array_storage evaluator GUESSED %r -> %r; it must skip"
+            % (expr, value))
+    # $clog2 is the one that silently produces an off-by-one if written from
+    # memory, so it is pinned at the two boundaries that distinguish the forms.
+    if (_clog2(1), _clog2(2), _clog2(3), _clog2(4), _clog2(81)) != (0, 1, 2, 2, 7):
+        raise AssertionError("check_array_storage $clog2 is not Verilog's $clog2")
+
+
 def _git_date(*args):
+    """The commit date, asked INSIDE the repo.
+
+    `cwd=REPO` is not tidiness. Without it this ran git in whatever directory
+    the caller happened to be in; from outside the repository every call
+    failed, `row_predates_source` answered False for everything, and ten rows
+    that ARE older than their source moved silently out of the
+    "cannot be compared" bucket and into "DECLARED BUT NOT IN MEMORY" -- a
+    manufactured finding. Measured: run from the repo root this file reports 0
+    flagged and 10 predating; run from C:\\ it reported 1 flagged and 0
+    predating, off the same tree.
+
+    That is this file's own documented trap -- comparing a current file against
+    a stale measurement is a different question wearing the same shape -- with
+    the working directory as the mechanism, and it fails toward a FINDING
+    rather than toward silence, so it would have been chased rather than
+    noticed.
+    """
     r = subprocess.run(["git", "log", "-1", "--format=%cI"] + list(args),
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, cwd=REPO)
     return r.stdout.strip() or None
 
 
@@ -152,9 +450,9 @@ def row_predates_source(row, path):
 def dim_size(expr, params):
     """Elements in one `[...]` dimension. `[N]` is N, `[a:b]` is |a-b|+1.
 
-    Returns None when the expression uses anything this cannot resolve -- an
-    unknown identifier, arithmetic, a function call. None means SKIP, never a
-    guess: a tool that invents a size reports a defect that may not exist.
+    Returns None when anything in the expression cannot be resolved. None means
+    SKIP, never a guess: a tool that invents a size reports a defect that may
+    not exist.
     """
     e = expr.strip()[1:-1].strip()
     if ":" in e:
@@ -167,26 +465,16 @@ def dim_size(expr, params):
 
 
 def resolve(tok, params):
-    t = tok.strip()
-    if re.fullmatch(r"\d+", t):
-        return int(t)
-    if t in params:
-        return params[t]
-    m = re.fullmatch(r"(\w+)\s*-\s*1", t)
-    if m:
-        v = params.get(m.group(1))
-        return None if v is None else v - 1
-    return None
+    try:
+        return eval_expr(tok, params)
+    except _Unresolvable:
+        return None
 
 
 def bits_of(path):
     """Total declared bits across every resolvable unpacked array in the file."""
     s = read(path)
-    params = {}
-    for line in s.splitlines():
-        m = PARAM_RE.match(line)
-        if m:
-            params[m.group(1)] = int(m.group(2))
+    params = file_params(path, s)
 
     total, biggest, skipped = 0, [], 0
     for m in ARRAY_RE.finditer(s):
@@ -215,6 +503,9 @@ def bits_of(path):
     return total, biggest[:3], skipped
 
 
+_self_check()
+
+
 def main() -> int:
     thresh = 8192
     for a in sys.argv[1:]:
@@ -230,7 +521,7 @@ def main() -> int:
         rows = {r.get("module"): r for r in rs if r.get("module")}
 
     found, unmeasured, outdated, skipped_total = [], [], [], 0
-    for root, _dirs, files in os.walk("fpga/rtl"):
+    for root, _dirs, files in os.walk(RTL_ROOT):
         for f in files:
             if not f.endswith(".sv"):
                 continue
