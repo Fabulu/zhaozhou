@@ -187,6 +187,23 @@ is a `spec/counters.md` amendment, not an RTL decision.
 
 ## Scalar reference function
 
+**`zref::terrain::normalmap_delta_s9`** is this block's oracle — the executable
+form, described at the bottom of this contract, against which the RTL is
+differenced (a `-GDELTA_SHIFT=23` build of the real RTL fails 1,830 checks, so
+the law is instrumented rather than asserted).
+
+*Named here 2026-09-16.* This section used to open with the amendment list
+below, whose first entry is `zref::terrain::normalmap_decode` — the texel
+decoder, which is a STEP of the law and not the law. A reader taking the first
+backticked symbol as the oracle got the wrong one, and so did `ledger_check`:
+the ledger has said `normalmap_delta_s9` since the executable form was added,
+and V17 flagged the drift. It could not report it until 2026-09-16, because a
+schema error elsewhere in `design/blocks.yml` failed the run before the rules
+ever executed.
+
+The amendment list that follows is kept: it is the record of what the header
+still owes, not a competing claim about the oracle.
+
 `reference/include/zref/zref_terrain_normalmap.hpp` **exists but requires
 amendment before it is the law** — the required changes are recorded in
 `reports/NORMALMAP-ARCHITECTURE.md` and are, in one line each:

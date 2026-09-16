@@ -208,6 +208,19 @@ channel. Stalled outputs and continuations cannot increment twice. Issued and
 completed phase counters are distinct instruments; a dropped writeback cannot
 make both move together.
 
+## Scalar reference function
+
+**`zref::material::combine`**, declared in
+`reference/include/zref/zref_material.hpp`. This is the block's oracle and the
+ledger's `reference_model`.
+
+*Heading added 2026-09-16.* The symbol was already named twice in this file —
+in the header's "Required reference authority" line and in the compatibility
+section below — but never under the heading `ledger_check` V17 looks for, so the
+rule read the contract as naming no oracle at all. It is the same
+two-statements-of-one-fact shape the ledger exists to catch: the fact was
+present and the machine-readable statement of it was not.
+
 ## Reference and compatibility boundary
 
 `reference/include/zref/zref_material.hpp` must implement R9

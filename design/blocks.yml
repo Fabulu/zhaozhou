@@ -44,6 +44,16 @@ counter_catalog:
   - primeval_skipped_view
   - primeval_sat_events
   - primeval_walk_overrun
+  # TERRAIN.SHADE. Declared in the block's `counters` since the block was
+  # written and never added here, so V12 rejected all four -- and that rejection
+  # was INVISIBLE, because the schema stage fails before the rule stage runs and
+  # `tests.oracle` was failing the schema. All four are real ports on
+  # fpga/rtl/terrain/zhao_terrain_shade.sv with the default `<counter>_o`
+  # spelling, so none needs a counter_ports entry.
+  - triangles_shaded
+  - degenerate_count
+  - base_sat
+  - degen_mismatch
   - combine_fragments
   - combine_refused
   - combine_saturated
@@ -493,7 +503,7 @@ blocks:
     inputs: [decoded_records, frame_complete]
     outputs: [dispatch, slot_state, guard_policy, fence]
     upstream: [CMD.DECODER, VIDEO.FRAMECTL]
-    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT, MEM.UPLOAD, MATERIAL.RESOLVE, FORGE.SHADOW, TERRAIN.SEQ, TERRAIN.CMD]
+    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, FORGE.PRIM.EVAL, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT, MEM.UPLOAD, MATERIAL.RESOLVE, FORGE.SHADOW, TERRAIN.SEQ, TERRAIN.CMD]
     backpressure: credit
     latency: variable
     target_throughput: 1 slot transition per clock
@@ -2262,7 +2272,12 @@ blocks:
     tests:
       directed: tests/terrain/terrain_shade_rtl_directed.cpp
       random: tests/terrain/terrain_shade_rtl_directed.cpp
-      oracle: tests/terrain/terrain_shade_oracle.cpp
+      # `differential`, not `oracle`: the schema's vocabulary is
+      # directed/random/formal/unit/differential, and this file is an
+      # RTL-against-reference comparison, which is what `differential` means
+      # here. `oracle` was a one-off key the schema has always rejected, so
+      # ledger_check has been red on it rather than on anything about the test.
+      differential: tests/terrain/terrain_shade_oracle.cpp
     counters: [triangles_shaded, degenerate_count, base_sat, degen_mismatch]
     source_ids: true
     budget_group: geometry_mantle
@@ -3541,7 +3556,7 @@ blocks:
     owner_issue: ZH-057
     inputs: [clipped_triangles, forge_primitives, expanded_particles]
     outputs: [setup_triangles]
-    upstream: [GEOM.CLIP, FORGE.PRIM, FORGE.CLIFF, PART.EXPAND, FORGE.SHADOW]
+    upstream: [GEOM.CLIP, FORGE.PRIM, FORGE.PRIM.EVAL, FORGE.CLIFF, PART.EXPAND, FORGE.SHADOW]
     downstream: [GEOM.BINNER]
     backpressure: ready_valid
     latency: variable
@@ -4708,13 +4723,18 @@ blocks:
     budget_group: myriad_forge
     maturity: UNIT_VERIFIED
     maturity_log:
+      # Both states landed in ccd7075d, "FORGE.PRIM.EVAL: the hole
+      # reports/ADDLIGHTNING.md named, filled", 2026-09-09 — the same date these
+      # entries already carried. The placeholder said "replace with the landing
+      # hash" and nothing ever did, which is why ledger_check has been red: the
+      # schema requires ^[0-9a-f]{7,40}$ and "pending" is not a commit.
       - state: REFERENCE_COMPLETE
         date: "2026-09-09"
-        commit: "pending"   # written in-tree 2026-09-09; owner commits — replace with the landing hash
+        commit: "ccd7075d"
         evidence: reference/include/zref/zref_forge_eval.hpp
       - state: UNIT_VERIFIED
         date: "2026-09-09"
-        commit: "pending"   # same landing
+        commit: "ccd7075d"
         evidence: tests/forge/forge_prim_eval_directed.cpp
     deferred: false
     cut_order: null

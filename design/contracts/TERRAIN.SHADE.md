@@ -4,7 +4,7 @@
 > RTL: **built 2026-09-09** — `fpga/rtl/terrain/zhao_terrain_shade.sv`,
 > bit-exact against the compiled law (see Amendments A1–A6 at the bottom;
 > A1/A2 correct this contract's own packet formats)
-> Reference: **`zref::render::shade_flat_tri_dir`** — the ratified law.
+> Reference: **`zref::render::shade_flat_tri_dir_unclamped`** — the ratified law.
 > `reference/include/zref/zref_terrain_shade.hpp` is a THIN VIEW onto it,
 > exposing only what that function does not (squared norm, dot product,
 > degeneracy predicate, light constants).
@@ -134,8 +134,18 @@ cycles. Cold table fill after reset: 512 cycles, gated by `table_ready_o`.
 
 ## Scalar reference function
 
-**`zref::render::shade_flat_tri_dir`** is the law, and it already existed.
-`reference/include/zref/zref_terrain_shade.hpp` is a thin view onto it.
+**`zref::render::shade_flat_tri_dir_unclamped`** is the law, and it already
+existed. `reference/include/zref/zref_terrain_shade.hpp` is a thin view onto it.
+
+**The `_unclamped` suffix is not a detail.** This contract cited the clamped
+`shade_flat_tri_dir` until 2026-09-16, which is the D-1 wrapper GEOM.LIGHT
+declares, not this block's oracle — and this contract's own "Directed tests"
+section already said the RTL differential compares against the compiled
+`shade_flat_tri_dir_unclamped`. The header and this paragraph were simply never
+moved after the split recorded in Amendments below. `ledger_check` V17 is what
+noticed, and it could not report it until 2026-09-16 either, because a schema
+error elsewhere in `design/blocks.yml` was failing the run before the rules ever
+executed.
 
 The first version of this contract cited a `zref::terrain::shade_base` that
 **re-implemented** the law with a different square root, divide, Q format and
