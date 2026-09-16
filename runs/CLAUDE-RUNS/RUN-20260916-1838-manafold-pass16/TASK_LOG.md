@@ -30,6 +30,13 @@ Complete every item in Owner Direction 12 in one integrated Manafold generation:
 - Structural finding: the repeated antenna failure is not insufficient amplitude. Ball C is not rigidly skinned to C, End has no carrier, closure rewrites visible skin against an undeformed body anchor, and existing gates omit or mask those states.
 - Rendering findings: lightning cores explicitly bypass depth; smear is explicitly enabled across nearly all subjects; Lasso is old `taunt2`, not a failed emitter; shell extent shares peak/decay; internal ink is impossible under the one union exterior-only mask.
 
+### 2026-09-16 18:58 UTC+02:00 - Architecture and baseline build
+
+- Fable architect invocation failed because the configured Fable model ID is unavailable; used Opus as the explicit fallback and recorded the failure rather than silently skipping architecture.
+- Added durable `PASS-16-PLAN.md`: identity-default bone translation, real carrier/span skinning, deform-following End/socket, shared lasso track, depth-tested lightning, complete smear removal, split shell optics/profile, and depth-aware internal body ink.
+- Local Qwen 3.8 (112k context, xhigh) supplied a small adversarial acceptance checklist; incorporated per-item false-positive and deliberate-failure requirements.
+- Clean direct baseline `cel` build completed successfully in `manafold-p16/build-reel`; no CMake/Ninja path used.
+
 ---
 
 ## Subagent Spawns
@@ -41,9 +48,9 @@ Complete every item in Owner Direction 12 in one integrated Manafold generation:
 | 2026-09-16 18:23 | rendering-recon | Trace depth, smear, Lasso, shell and outline defects | Complete | `Upheaval/creature/Manafold/PASS-16-INVENTORY.md` |
 | 2026-09-16 18:23 | antenna-recon | Trace bone/skin/closure/body-deform architecture and false-passing gates | Complete | `Upheaval/creature/Manafold/PASS-16-INVENTORY.md` |
 | 2026-09-16 18:23 | direction-process-inventory | Reconcile owner directions, reports, repos and publish process | Complete | `Upheaval/creature/Manafold/PASS-16-INVENTORY.md` |
-| 2026-09-16 18:31 | local Qwen (112k) | Small adversarial acceptance checklist | Running | pending |
-| 2026-09-16 18:37 | Fable architect | Pass-16 architecture | Failed: configured model unavailable | fallback below |
-| 2026-09-16 18:38 | Opus architect | Pass-16 architecture fallback | Running | pending |
+| 2026-09-16 18:31 | local Qwen 3.8 112k | Small adversarial acceptance checklist | Complete | folded into `PASS-16-INVENTORY.md` controls |
+| 2026-09-16 18:37 | Fable architect | Pass-16 architecture | Failed: configured model unavailable | Opus fallback below |
+| 2026-09-16 18:38 | Opus architect | Pass-16 architecture fallback | Complete | `Upheaval/creature/Manafold/PASS-16-PLAN.md` |
 
 ---
 
