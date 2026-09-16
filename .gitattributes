@@ -80,6 +80,24 @@ fpga/rtl/generated/zhao_texture_island_v3_top.interface.json -text -eol
 # Packet-B closure members above are already pinned; these complete G8A's cone.
 tools/quartus/gen_raster_texture_v3_fit_top.py text eol=lf
 tools/quartus/templates/zhao_raster_texture_v3_fit_top.sv.in text eol=lf
+
+# Packet-I / G8B's cone. The generator refuses any input containing CR, because
+# it hashes every closure member into the manifest and a checkout that
+# translated line endings would change those digests without changing the
+# design. None of these eight were pinned, so the generator could not run at
+# all until they were.
+tools/quartus/gen_terrain_pipe_rpp3_matw18_fit_top.py text eol=lf
+tools/quartus/templates/zhao_terrain_pipe_rpp3_matw18_fit_top.sv.in text eol=lf
+fpga/rtl/generated/zhao_terrain_pipe_rpp3_matw18_fit_top.sv text eol=lf
+fpga/rtl/generated/zhao_terrain_pipe_rpp3_matw18_fit_top.manifest.json text eol=lf
+fpga/rtl/common/zhao_project_core.sv text eol=lf
+fpga/rtl/common/zhao_project_service.sv text eol=lf
+fpga/rtl/common/zhao_proj_subsystem.sv text eol=lf
+fpga/rtl/geometry/zhao_vertex_arena.sv text eol=lf
+fpga/rtl/terrain/zhao_terrain_wcache.sv text eol=lf
+fpga/rtl/terrain/zhao_terrain_tess.sv text eol=lf
+fpga/rtl/terrain/zhao_terrain_group_seq.sv text eol=lf
+fpga/rtl/terrain/zhao_terrain_pipe.sv text eol=lf
 fpga/rtl/common/zhao_skid2.sv text eol=lf
 fpga/rtl/raster/zhao_raster_texture_stage_v3.sv text eol=lf
 fpga/rtl/raster/zhao_raster_fill.sv text eol=lf

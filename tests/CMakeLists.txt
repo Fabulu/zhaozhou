@@ -10665,6 +10665,62 @@ set_tests_properties(
   PROPERTIES LABELS "fast;nightly;packet-f;g8a" TIMEOUT 1800
     FAIL_REGULAR_EXPRESSION "FAIL")
 
+# ---------------------------------------------------------------------------
+# PACKET I / G8B -- the parameter-fixed terrain characterization wrapper.
+#
+# Same four gates as Packet F's, for the same reasons: a directed activity
+# witness so the fit cannot characterise an idle box, a synthesis-mode lint, a
+# generated-freshness check so the committed wrapper cannot drift from its
+# generator, and a static registration check.
+set(ZHAO_G8B_TERRAIN_SOURCES
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_project_core.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_project_service.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_proj_subsystem.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_vertex_arena.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_wcache.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_tess.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_group_seq.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pipe.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_terrain_pipe_rpp3_matw18_fit_top.sv)
+list(LENGTH ZHAO_G8B_TERRAIN_SOURCES ZHAO_G8B_SOURCE_COUNT)
+if(NOT ZHAO_G8B_SOURCE_COUNT EQUAL 9)
+  message(FATAL_ERROR "G8B terrain fit closure must contain exactly 9 sources")
+endif()
+foreach(g8b_source IN LISTS ZHAO_G8B_TERRAIN_SOURCES)
+  if(NOT EXISTS "${g8b_source}")
+    message(FATAL_ERROR "required G8B terrain source is missing: ${g8b_source}")
+  endif()
+endforeach()
+
+add_executable(pi_g8b terrain/terrain_pipe_rpp3_matw18_fit_top_directed.cpp)
+target_link_libraries(pi_g8b PRIVATE zhao_harness)
+verilate(pi_g8b
+  PREFIX Vzhao_terrain_pipe_rpp3_matw18_fit_top
+  TOP_MODULE zhao_terrain_pipe_rpp3_matw18_fit_top
+  SOURCES ${ZHAO_G8B_TERRAIN_SOURCES}
+  VERILATOR_ARGS --assert)
+add_test(NAME terrain_pipe_rpp3_matw18_fit_top_directed COMMAND pi_g8b)
+
+add_test(NAME lint_terrain_pipe_rpp3_matw18_fit_top
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall -Wno-fatal
+    --top-module zhao_terrain_pipe_rpp3_matw18_fit_top
+    -DQUARTUS_SYNTHESIS=1 -DSYNTHESIS=1
+    ${ZHAO_G8B_TERRAIN_SOURCES})
+set_tests_properties(lint_terrain_pipe_rpp3_matw18_fit_top PROPERTIES
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME terrain_pipe_rpp3_matw18_generated_freshness
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_SOURCE_DIR}/tools/quartus/gen_terrain_pipe_rpp3_matw18_fit_top.py
+    --check)
+
+set_tests_properties(
+  terrain_pipe_rpp3_matw18_fit_top_directed
+  lint_terrain_pipe_rpp3_matw18_fit_top
+  terrain_pipe_rpp3_matw18_generated_freshness
+  PROPERTIES LABELS "fast;nightly;packet-i;g8b" TIMEOUT 1800
+    FAIL_REGULAR_EXPRESSION "FAIL")
+
 set(ZHAO_PACKET_F_REQUIRED_TESTS
   raster_texture_v3_fit_top_directed
   lint_raster_texture_v3_fit_top

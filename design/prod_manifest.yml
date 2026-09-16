@@ -591,6 +591,8 @@ excluded:
   - zhao_shell_fit_stimulus: probe  generated shell-fit stimulus helper; characterization only, never production
   - zhao_shell_fit_top: probe  generated isolated shell-fit wrapper; characterization only, never production
   - zhao_raster_texture_v3_fit_top: probe  Packet-F G8A generated physical-pin/MISR raster-texture characterization wrapper; never a production root
+  - zhao_terrain_pipe_rpp3_matw18_fit_top: probe  Packet-I G8B generated physical-pin/MISR terrain characterization wrapper at ROWS_PER_PASS=3/MATW=18; never a production root
+  - zhao_raster_quant: probe  the COMPOSITION of zhao_quant_num and zhao_raster_quant_fin, retained as the subject formal_raster_resolve_quant proves. RASTER.RESOLVE instantiates the two halves directly, across a register, so nothing instantiates this module any more -- which is deliberate and is why it is declared here rather than left to read as an orphan. It cannot drift from the halves because it is defined as their composition; if that ever stops being true, or the proof is re-pointed at the halves, delete it rather than leaving a proven module nothing uses
   - zhao_shell_fit_video_sink: probe  generated shell-fit video sink helper; characterization only, never production
 
   # Packet A, shell/texture V3 composition.  The package is a type-only schema

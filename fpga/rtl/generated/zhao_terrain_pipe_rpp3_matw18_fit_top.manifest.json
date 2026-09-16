@@ -1,0 +1,116 @@
+{
+  "external_ports": [
+    {
+      "bit_width": 1,
+      "direction": "input",
+      "name": "clk",
+      "ordinal": 0
+    },
+    {
+      "bit_width": 1,
+      "direction": "input",
+      "name": "rst_n",
+      "ordinal": 1
+    },
+    {
+      "bit_width": 8,
+      "direction": "output",
+      "name": "fit_signature_o",
+      "ordinal": 2
+    },
+    {
+      "bit_width": 8,
+      "direction": "output",
+      "name": "fit_epoch_o",
+      "ordinal": 3
+    }
+  ],
+  "fit_top_parameters": {
+    "MATW": 18,
+    "ROWS_PER_PASS": 3
+  },
+  "hashes": {
+    "generated_rtl_sha256": "745380998d4d263fa7e6b4a1fdb9c8678db5f577e30558156277225f483b6a60",
+    "generator_sha256": "002614c039bff7e0a924c69afa70723740ae8b5280df18563f5c0f155cb1ba30",
+    "template_sha256": "f8cdd1f0289b439a2bed9e29e36918bb77710f766d82ec15a86246b060b97558"
+  },
+  "limitations": [
+    "Subsystem-only terrain characterization; not production world throughput.",
+    "ALM/DSP/M10K/Fmax are reported values for THIS wrapper only; no saving relative to the ambiguous raw or default-MATW target is assumed.",
+    "A refused product word would mean the projector never loaded its matrix; the wrapper asserts mat_refused_o == 0 in simulation."
+  ],
+  "module": "zhao_terrain_pipe_rpp3_matw18_fit_top",
+  "schema_id": "zhao.g8b.fit_top",
+  "schema_version": 1,
+  "source_closure": [
+    {
+      "ordinal": 0,
+      "path": "fpga/rtl/common/zhao_project_core.sv",
+      "sha256": "c3de0bc2a7176d124f968bdf15892dc82cb41df18df66495b7451a1478362b89"
+    },
+    {
+      "ordinal": 1,
+      "path": "fpga/rtl/common/zhao_project_service.sv",
+      "sha256": "c9a72f7915cb9fa48d9416c1c0d70039b2c20f2bca1bf365a628e1e1fe4ea9c2"
+    },
+    {
+      "ordinal": 2,
+      "path": "fpga/rtl/common/zhao_proj_subsystem.sv",
+      "sha256": "8e091ce68aa5331a87e45d8b650973ef708eb53311133bd926764a710f3f4e65"
+    },
+    {
+      "ordinal": 3,
+      "path": "fpga/rtl/geometry/zhao_vertex_arena.sv",
+      "sha256": "656aff6b9ae987f6a963657db7cd04d332f3266d36de134ac782648a2ccc7e7d"
+    },
+    {
+      "ordinal": 4,
+      "path": "fpga/rtl/terrain/zhao_terrain_wcache.sv",
+      "sha256": "5cce2caf7c5ad9156c33adcfc556e8789608b84c764d698040c72f1dabfd1086"
+    },
+    {
+      "ordinal": 5,
+      "path": "fpga/rtl/terrain/zhao_terrain_tess.sv",
+      "sha256": "b8ab483c2949db2bf1471075ec9054e18874ac6501008787fde07682c8d63e62"
+    },
+    {
+      "ordinal": 6,
+      "path": "fpga/rtl/terrain/zhao_terrain_group_seq.sv",
+      "sha256": "fa1b8d409860ccf8ef2166e92c67c11680e7e6aa0126ac827041a90146a2ec7a"
+    },
+    {
+      "ordinal": 7,
+      "path": "fpga/rtl/terrain/zhao_terrain_pipe.sv",
+      "sha256": "06c93906875bcbde5d76957d2a74eeae5452378a58b343114e690d8b1c4f9dd8"
+    },
+    {
+      "ordinal": 8,
+      "path": "fpga/rtl/generated/zhao_terrain_pipe_rpp3_matw18_fit_top.sv",
+      "sha256": "745380998d4d263fa7e6b4a1fdb9c8678db5f577e30558156277225f483b6a60"
+    }
+  ],
+  "traffic_profile": {
+    "config_writes": 36,
+    "distinct_view_extents": [
+      [
+        320,
+        240
+      ],
+      [
+        256,
+        200
+      ]
+    ],
+    "distinct_view_scales": [
+      256,
+      192
+    ],
+    "memory_response_latency_clocks": 1,
+    "receipt_workload": "11",
+    "view_masks": [
+      "01",
+      "10",
+      "11"
+    ]
+  }
+}

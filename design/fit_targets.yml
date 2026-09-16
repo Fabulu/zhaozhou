@@ -1406,6 +1406,34 @@ targets:
       max_dsp: 84
       min_fmax_mhz: 100
   # ==========================================================================
+  # G8B -- terrain_pipe_rpp3_matw18_characterization (Packet I)
+  # ==========================================================================
+  # The top is the WRAPPER, never raw zhao_terrain_pipe: the architecture is
+  # explicit that the target must not inherit ROWS_PER_PASS or MATW from a
+  # module default, a comment here, or a runtime convention. The wrapper sets
+  # both as literals and the manifest records the elaborated values so a receipt
+  # gate can check them rather than trust this block.
+  #
+  # DELIBERATELY UNRULED on area and DSP. Any ALM/DSP/M10K/Fmax result is
+  # evidence for THIS wrapper only, and the architecture forbids assuming a
+  # saving relative to the ambiguous raw or default-MATW target. A max_dsp here
+  # would be a budget invented before the first measurement, which is how the
+  # stale terrain rows in this very file came to exist. Fmax is ruled because
+  # 100 MHz is the operating requirement of the machine, not a guess.
+  - top: zhao_terrain_pipe_rpp3_matw18_fit_top
+    sources:
+      - fpga/rtl/common/zhao_project_core.sv
+      - fpga/rtl/common/zhao_project_service.sv
+      - fpga/rtl/common/zhao_proj_subsystem.sv
+      - fpga/rtl/geometry/zhao_vertex_arena.sv
+      - fpga/rtl/terrain/zhao_terrain_wcache.sv
+      - fpga/rtl/terrain/zhao_terrain_tess.sv
+      - fpga/rtl/terrain/zhao_terrain_group_seq.sv
+      - fpga/rtl/terrain/zhao_terrain_pipe.sv
+      - fpga/rtl/generated/zhao_terrain_pipe_rpp3_matw18_fit_top.sv
+    rules:
+      min_fmax_mhz: 100
+  # ==========================================================================
   # FIELD V3, the rest of the family -- MEASURABLE, and deliberately UNRULED
   # ==========================================================================
   # 2026-09-09. Eight more of the blocks nobody could fit. Closures from
