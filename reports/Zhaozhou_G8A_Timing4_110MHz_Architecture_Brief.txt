@@ -1,0 +1,2151 @@
+ZHAOZHOU G8A TIMING4: COMFORTABLE 100 MHz CLOSURE
+Architecture and implementation brief for the hardware agent
+Prepared 15 September 2026
+Final reconciliation includes plan update 8579e7b, published during this review.
+
+Engineering objective: retain the measured 30-DSP architecture, preserve exact
+rendering and lifetime semantics, and produce a connected implementation with
+real timing margin above 100 MHz. Proposed comfort target: at least 110 MHz;
+design towards 115 MHz where this does not create a disproportionate area cost.
+
+This is an implementation proposal, not a timing receipt. None of the proposed
+changes has been synthesized, placed, routed, or run through RTL simulation as
+part of this brief. The accompanying executed checks cover arithmetic and small
+abstract transport models. Their scope is stated explicitly in Section 23.
+
+===============================================================================
+0. EXECUTIVE DIRECTION
+===============================================================================
+
+Do not solve Timing3's remaining setup debt by restoring the old multipliers,
+relaxing the clock, adding false paths, clearing ownership on faults, or fitting
+one tiny correction while other known negative cones remain.
+
+The useful unit of work is one coherent Timing4 batch:
+
+  A. Capture the combiner's READ_LATE source bundle before operand selection.
+     Replace long signed product finishing with exact short carry arithmetic.
+     Protect its eight-context throughput with narrowly scoped queue forwarding,
+     rather than assuming another stage is free.
+
+  B. Isolate the owner admission event from the large per-slot initialization
+     fanout. Preserve the external acceptance edge and immediately reserved
+     ownership. Do not delay the canonical lifetime-fault admission block.
+
+  C. First use the newly published latency-preserving BIL2 retime: register the
+     vertical product/base in the existing B2 slot and finish from those held
+     registers. A four-slot version, widened occupancy and complete/refill repair
+     are explicit fallbacks only if the short output cone still fails.
+
+  D. Simplify the divider's negative-magnitude preparation algebraically, with
+     no extra divider cycle or DSP. Capture attribute validity verdicts beside
+     the existing join payload, without another wide payload stage.
+
+  E. Register reciprocal result identity before the UVW lookup. Capture the
+     descriptor trust verdict at an existing payload boundary. Stage AUX fault
+     facts and use a shared subtract/borrow result in its divider. Prefer these
+     narrow cuts before adding full payload stages.
+
+  F. Remove the fit wrapper's combinational fault/ready auto-clear feedback with
+     a held recoverable-clear request. Where deep quiet fanout remains, use the
+     conservative FULL-quiet certificate with a complete pending-work inventory.
+
+  G. Inventory the nonnegative paths below the intended margin. The existing
+     497-negative-path census is not a complete inventory for 110 MHz closure.
+
+The highest-risk work is ownership event retiming, not the arithmetic. Give it a
+separate review and a complete early-event/late-event priority matrix. The
+lowest-risk high-value work is the exact finish arithmetic, divider identity,
+and two registered attribute verdict bits.
+
+This is still G8A. It is not a redesign of the whole machine, a new texture
+architecture, an R1 arithmetic campaign, or permission to adopt Packet H or the
+production shell prematurely.
+
+===============================================================================
+1. BASELINE, PROVENANCE AND WHAT THE RESULT ACTUALLY MEANS
+===============================================================================
+
+Reviewed publication head:
+  37ebab94344348551553996186b14672a8b0c61f
+  branch: claude/ceiling-architecture-20260912
+
+Latest plan publication inspected at the final check:
+  8579e7bbb72e8603790d1b9039f2ee50f6ce734e
+
+The comparison from 37ebab94 to 8579e7b is one documentation/task-log commit,
+not a new RTL implementation or measurement. Its corrected plan is incorporated
+below [S16]. The underlying inspected RTL and physical baseline remain pinned
+as above. In particular, its source stage S and this brief's stage P name the
+SAME boundary; do not implement both.
+
+Actually fitted Timing3 RTL specimen:
+  3bf599d5b2a9f5af1c0d57bfb540122d9fdbb301
+
+Primary measured report [S01]:
+  reports/G8A-TIMING3-DSP-PATH-REPORT-20260915.md
+
+Canonical receipt:
+  reports/synthesis/zhao_g8a_raster_texture_timing3.json
+
+Preserved physical result:
+  ALMs                         13,195
+  Physical DSP blocks              30
+  RAM blocks                       71
+  Fitted block memory bits     92,964
+  Fitted registers             22,496
+  Restricted Fmax               90.96 MHz
+  Setup WNS                    -0.994 ns
+  Setup TNS                  -131.275 ns
+  Hold WNS                     +0.242 ns
+  Hold TNS                      0
+  Physical pins                18
+  Virtual pins                  0
+  Seed                          1
+  Device                        5CSEBA6U23I7
+  Tool                          Quartus Prime Lite 17.0.2 Build 602
+  Source inventory              48 ordered entries
+  ATTR_DSP3                     1
+  BILERP_DSP2                    1
+  ZHAO_DUAL18_CYCLONEV           1
+  Nested migration shadows      0
+
+The source digest is:
+  e322536216e7731564dc8028ddf4f86b25850478a9e7d291e1a2b93677d6718f
+The Timing3 receipt SHA-256 is:
+  6d5330569172391ef423e371c692a5dba9da5037c31560b2a215abf84dd6337e
+The fit-manifest SHA-256 is:
+  c8a3398596d9c83886a16c1dbaaa3b6d343347c1962da9ff701ca0e802cd4db4
+
+Timing2 was 12,772 ALMs / 49 DSP / 84.95 MHz. The combined Timing3 timing and DSP
+changes cost a net 423 ALMs and removed 19 DSPs. Do not call those 423 ALMs the
+isolated cost of ATTR3/BIL2: both control retiming and DSP restructuring changed
+in the same measured comparison.
+
+Do not mix the synthesis totals with the fitted totals. The map had 22,141
+registers and 93,004 bits; the final result has 22,496 registers and 92,964 bits.
+The receipt's mapped entity ALUT columns are not fitted per-entity ALMs.
+
+All existing source, hierarchy, RAM and DSP-selection gates passed. Timing did
+not. The result is a valid, useful red measurement, not a failed experiment.
+
+The 13,195 ALMs describe the generated raster/texture subsystem wrapper. They
+exclude terrain, shared projection, final platform/shell integration and other
+required machine components. There is no 16,805-ALM whole-machine margin merely
+because this subsystem is below 30,000.
+
+Before implementation, compare the current agent checkout against the reviewed
+head. Keep any later valid fixes. Integrate this design into the existing lane;
+do not reset the working branch to this older publication commit.
+
+===============================================================================
+2. DEFINE COMFORTABLE CLOSURE BEFORE IMPLEMENTING IT
+===============================================================================
+
+The operating requirement remains 100 MHz. A measurement that just touches
+100.01 MHz is not the requested comfortable result.
+
+Proposed acceptance categories:
+
+  RED:
+    Any required setup/hold or other mandatory timing check fails at 100 MHz,
+    or any existing functional, ownership or RAM gate fails.
+
+  100 MHz GREEN, LIMITED MARGIN:
+    The canonical 100 MHz constraints pass, but the design does not demonstrate
+    the additional headroom described below. This is useful progress; report it
+    honestly rather than calling it comfortable.
+
+  COMFORTABLE G8A:
+    Canonical 100 MHz checks pass and the same physical design also passes the
+    explicitly reported 110 MHz clock analysis at all applicable timing corners,
+    with zero setup/hold TNS and no new timing exclusions. Restricted Fmax is at
+    least 110 MHz on the relevant clock, but the Fmax table alone is not signoff.
+
+  DESIGN AIM:
+    Develop principal data stages towards approximately 115 MHz capability.
+    This is an engineering target, not a forecast that the first fit will reach it.
+
+For an ordinary same-clock path whose other terms remain unchanged:
+
+  100 MHz period = 10.000000 ns
+  110 MHz period =  9.090909 ns
+  115 MHz period =  8.695652 ns
+
+Therefore +0.909091 ns slack at 100 MHz corresponds approximately to zero slack
+at 110 MHz for that particular path. Use actual TimeQuest analysis, not this
+arithmetic alone, for final acceptance: uncertainty, pulse-width requirements,
+clock relationships, I/O requirements and corner-specific limits still matter.
+
+The current worst path needs about 1.903 ns of improvement to reach 110 MHz under
+unchanged clock terms, not merely the 0.994 ns needed to scrape through 100 MHz.
+
+Maintain the canonical 100 MHz experiment for comparability. A 110 MHz analysis
+of the retained post-fit database can be a separately named margin report; it
+need not be a second placement run. Do not overwrite the 100 MHz constraints or
+receipt and pretend the source experiment was unchanged.
+
+At the whole-machine composition, the clock tree and neighbours change. G8A
+comfort is a useful local reserve, not a guarantee that G8C will inherit it.
+
+===============================================================================
+3. THE MEASURED PATH INVENTORY AND THE MISSING MARGIN INVENTORY
+===============================================================================
+
+The retained Timing3 summary contains 2,000 reported rows, of which 497 are
+negative and 1,503 nonnegative [S01, S02]. These are report rows, not an assertion
+that exactly 497 unique physical endpoints in the entire design fail.
+
+Launch family                  Rows   Worst slack   Needed for 110 MHz (*)
+----------------------------   ----   -----------   ----------------------
+Sample-result RAM enable          7     -0.994 ns         1.903 ns
+Owner-mask lifetime fault       196     -0.848 ns         1.757 ns
+UV-join lifetime fault           26     -0.844 ns         1.753 ns
+Combiner product                 37     -0.843 ns         1.752 ns
+Fragment expansion                2     -0.738 ns         1.647 ns
+BIL2 vertical stage              25     -0.674 ns         1.583 ns
+Owner control                    50     -0.582 ns         1.491 ns
+Other                           94     -0.533 ns         1.442 ns
+Early-descriptor RAM             18     -0.409 ns         1.318 ns
+Tile control                     30     -0.375 ns         1.284 ns
+ATTR3 / divider                  12     -0.366 ns         1.275 ns
+
+(*) Simple same-clock period-shift estimate, not a prediction of physical gain.
+
+The current census groups only negative paths. For the requested target, repeat
+the inventory over all rows with slack below +0.910 ns; use +1.305 ns as an
+additional 115 MHz planning view. A currently positive +0.05 ns path becomes a
+failure if the negative paths are fixed and the clock is tightened to 110 MHz.
+
+The supplied timing4_near_critical.py reads the existing raw summary, retains
+source hashes, identifies low-margin paths, and groups them by launch/endpoint
+module. It must be run by the agent against the retained raw report. It was
+self-tested here with synthetic rows, not run against the large original table.
+
+Input:
+  reports/synthesis/blockpaths/
+  zhao_raster_texture_v3_fit_top@g8a-timing3.setup.summary.rpt
+
+Expected raw SHA-256:
+  017fc26de9c37872b50bd85357243da7fe5a87869fba4b23b9c24fbc373f6734
+
+If the last of the 2,000 reported rows is still below the chosen margin, obtain
+more paths from the existing TimeQuest database. That is a report extraction,
+not another fitter run. Do not claim the 2,000-row export covers every candidate
+if it is visibly truncated within the margin band.
+
+For each residual family retain: source and endpoint, clock relationship, data
+path detail, net versus cell delay, setup requirement, clock arrival components,
+and whether the endpoint is a data input, enable, reset/control mux or a counter
+baseline capture. A path ending at a counter register is not necessarily a
+counter-adder problem; it may be the enable cone leading through quiet/clear.
+
+===============================================================================
+4. CLOCK SKEW IS A BUDGET TERM, NOT A FALSE-PATH EXCUSE
+===============================================================================
+
+The worst path [S01, S02] starts at the sample-result bank's inferred RAM control
+register and ends at material-combiner o_a0[3]. It has:
+
+  Data delay        9.083 ns
+  Clock skew       -1.731 ns
+  Setup slack      -0.994 ns at a 10 ns relationship
+
+Calling this a 10.994 ns combinational path is wrong. The effective timing
+requirement includes skew and setup terms. A data path below 10 ns can fail badly
+when the capture edge arrives unfavourably.
+
+Under the same terms, the data budget at 110 MHz is approximately 7.179 ns. This
+is why merely trimming one small mux is not the primary solution. Split the RAM
+read from recipe-dependent operand selection.
+
+Inspect actual clock routing to the RAM, DSP and fabric endpoints. Check the
+fitted global-clock resources and full launch/capture clock paths. The absence
+of an explicit GLOBAL_SIGNAL assignment is not proof that Quartus routed clk as
+ordinary data; automatic promotion exists. Conversely, do not assume a clock is
+well routed merely because it is named clk.
+
+Do not introduce a board PLL into this characterization wrapper, change reset
+semantics, disable uncertainty, or create false/multicycle exceptions to hide a
+real synchronous dependency. A node named PORT_B_WRITE_ENABLE_REG is a vendor
+mapping label; it does not by itself prove an illegal read/write collision.
+
+First preserve the existing device, seed, source boundary and effort settings.
+A separately justified clock-network experiment is permissible only after the
+actual clock report identifies the problem and its provenance is retained.
+
+===============================================================================
+5. NON-NEGOTIABLE BEHAVIOURAL CONTRACTS
+===============================================================================
+
+Preserve these contracts through every timing change:
+
+  - One lifecycle owner, 64 owner slots, complete slot/generation identity.
+  - Existing generation wrap/fence rules, not an invented drain-every-64 policy.
+  - Owner credit reserved on the real admission edge; returned only by the
+    existing release protocol.
+  - Required, issued, claimed and committed remain distinct events.
+  - Publish after actual payload write; read only when ownership permits it.
+  - No use of old-data RAM collisions as an implicit forwarding mechanism.
+  - All four filter lanes and the measured 30-DSP implementation remain present.
+  - Material recipe counts, phases, arithmetic, status, alpha and sample-0 index
+    remain exact. AUX is still a separate typed plane, never sample 2.
+  - Count-zero/no-AUX material phases issue no source-plane request.
+  - Ready/valid offers hold identity and payload under backpressure.
+  - Reset clears valid/control, not wide payload RAMs.
+  - Recoverable frame errors remain distinct from reset-only structural faults.
+  - Existing output/cancellation laws are not replaced by simply suppressing
+    valid and abandoning an already accepted owner.
+  - Quiet covers every pending transaction, including newly inserted stages.
+  - Throughput is checked at leaf, class-service, phase-engine and connected
+    workload boundaries. II=1 in a leaf is not proof of unchanged system rate.
+
+The existing read-only source bank and registered one-hot write-enable structure
+is a protection against historical RAM-to-flop disasters [S13]. Keep it. A
+clock-enable expression around a payload array can change inference materially.
+
+===============================================================================
+6. WORK PACKAGE M1: REGISTER THE COMBINER SOURCE BUNDLE
+===============================================================================
+
+6.1 Actual baseline, rather than a generic pipeline drawing
+
+The selected READ_LATE combiner [S03] has eight contexts and an internal pipeline
+with Q, R, D, O, M and WB responsibilities. Its phase-valid registers shift every
+clock. There is no internal ready/valid stall at every phase stage. Credits and
+context ownership make the writes safe; the completion output is elastic.
+
+Q chooses a continuation before new work and captures context/phase and slot.
+R performs synchronous payload, scratch and source-plane reads.
+D aligns their outputs.
+O performs required-source status reduction, channel selection, signed-difference
+preparation and recipe-dependent operand selection.
+M registers exactly two products.
+WB captures the finished row; its following edge writes scratch/completion RAM.
+
+The failing path exists because READ_LATE aliases the live source-plane outputs
+directly into the O-stage logic. Context alignment alone did not register the
+source payload ahead of the operand-selection cone.
+
+6.2 Proposed boundary (called S in the newest repository plan)
+
+Insert one fixed-rate source-capture stage P between the aligned RAM output and
+O. P captures everything needed to select the operands of exactly one phase.
+All P fields are written on the same valid transfer and remain associated with
+one context and phase. Do not capture payload today and read its phase from a
+live queue tomorrow.
+
+A compact selected-mode bundle is:
+
+  sample 0: full result48                                   48 bits
+  sample 1: status8 plus RGBA32, no unused raw index          40 bits
+  sample 2: status8 plus RGBA32, no unused raw index          40 bits
+  AUX: status8 only                                           8 bits
+  material row including admission-frozen refusal            47 bits
+  scratch row                                               33 bits
+  context index                                               3 bits at NCTX=8
+  phase                                                       2 bits
+  valid                                                       1 bit
+                                                         ------------
+  illustrative total                                       222 bits
+
+This is one in-flight phase register, not another 64-owner plane copy or FIFO.
+Derive context width from NCTX, not a literal three in reusable RTL.
+
+Do not move source selection/status reduction in front of P simply to reduce its
+width further. That recreates the RAM-output-to-selection path. Only discard
+fields proven never consumed by the material law. Keep copy-mode admission data
+and READ_LATE data on equivalent documented phase boundaries for differential
+verification.
+
+In count-zero/no-AUX cases P may carry irrelevant source wires, but they cannot
+influence the result and no source read request may be emitted. Refusal behaviour
+and required-source status masking remain exactly as before.
+
+P is a pipeline stage, not an independently stalled cache. If the phase pipeline
+is converted to elasticity, every upstream store-read reservation and consumer
+must be redesigned consistently. That larger rewrite is not the default plan.
+
+6.3 RAM and ownership checks
+
+Every phase source request continues to use the captured owner slot. P does not
+release the owner. Final-result production, ownership claim and public release
+remain downstream, after the last required read and use of the stored payload.
+Retain the source-before-final and release-not-under-reader assertions, extending
+their in-flight lifetime to P.
+
+All new valid bits appear in idle_o. Do not infer idle from a phase counter alone;
+a held completion, prefetched response or newly captured source can still exist
+when a counter happens to match another counter.
+
+===============================================================================
+7. WORK PACKAGE M2: EXACT SHORT PRODUCT FINISHING
+===============================================================================
+
+The current finish_lane performs wide signed negate, bias, shift, base addition
+and clipping before scratch-row assembly [S03]. Shortening it is preferable to
+immediately adding yet another phase stage behind M.
+
+Let p be the raw unsigned 16-bit product, h=p[15:8], l=p[7:0], and a the 8-bit
+LERP base. All formulas below preserve the current function even for arbitrary
+raw 16-bit p, not merely products of two legal byte operands.
+
+7.1 OP_UNIT
+
+Current result:
+  ((p + 128) >> 8) modulo 256
+
+Equivalent:
+  (h + (l >= 128)) modulo 256
+
+Use an explicitly sized sum and retain the original low-eight-bit behaviour.
+The full arbitrary-product domain includes values outside ordinary byte-product
+reachability; this formulation still agrees with the existing function there.
+
+7.2 OP_MOD2
+
+Current result:
+  r = (p + 64) >> 7
+  output = min(r, 255)
+  saturation witness = (r > 255)
+
+Equivalent saturation condition:
+  p >= 32704
+
+If not saturated:
+  output = (p >> 7) + ((p & 127) >= 64)
+
+The threshold is 32704, not 32640, 32768, or an inferred signed comparison.
+Preserve the saturation witness separately from the clamped output byte. R9's
+one-rounding law remains one-rounding; do not unit-round and then double.
+
+7.3 Positive LERP contribution
+
+Current:
+  clamp_0_255(a + floor((p + 128) / 256))
+
+Build one explicitly unsigned nine-bit sum:
+  u9 = zext9(a) + zext9(h) + (l >= 128)
+  result = u9[8] ? 255 : u9[7:0]
+
+The largest sum is 511, so the ninth bit is sufficient.
+
+7.4 Negative LERP contribution
+
+Current:
+  clamp_0_255(a + floor((-p + 128) / 256))
+
+Since p=256*h+l:
+  floor((-p+128)/256) = -h - (l > 128)
+
+Therefore compute:
+  u9 = zext9(a) + zext9(bitwise_not_8(h)) + (l <= 128)
+  result = u9[8] ? u9[7:0] : 0
+
+Here bit 8 is the no-borrow witness of the unsigned subtraction. The complement
+must be eight bits before zero extension. The thresholds are asymmetric:
+positive uses l>=128; negative borrow uses l>128. This is how the original
+negative-half rounding towards positive infinity is preserved.
+
+Do not implement negative LERP as a - round(p/256). That disagrees at real ties.
+Do not shift a signed value after silently converting it to unsigned.
+
+7.5 Integration
+
+Keep the O->M multiplication sites, product counts and metadata unchanged.
+Implement the shorter finish primitives under the existing recipe controller.
+Feed the current scratch construction and WB stage. Both saturation counters and
+row construction must use the same exact newly finished values; otherwise the
+visible colour can pass while instrumentation disagrees.
+
+Use a balanced predecoded recipe/phase selection where useful, but do not create
+eight parallel full arithmetic engines. Do not add a small ROM for this byte
+arithmetic merely because a table is possible. A short carry chain is the first
+candidate; mapped area and delay decide whether the mapper already optimized an
+expression equivalently.
+
+The accompanying host check exhaustively compared all 65,536 raw products for
+UNIT and MOD2, and all 33,554,432 product/base/sign combinations for LERP. Those
+checks passed. This establishes arithmetic equivalence in the checked model;
+it does not establish RTL sizing, synthesized structure or clock frequency.
+
+7.6 Separate finish register and reconciliation with the latest plan
+
+The new repository plan proposes M->F->WB [S16]. The exact short arithmetic in
+this brief is compatible with that plan: it can make F cheaper and faster. If F
+is already implemented and validated, retain it rather than undoing work to match
+this document's illustrative one-added-stage calendar. Before implementing F from
+scratch, inspect whether the short finish can meet the margin with the current
+WB boundary. If it cannot, introduce F between M and row assembly. Carry finished lane bytes and
+witnesses, context, phase, recipe, final/bypass, saved scratch/direct data, alpha,
+status and index as one aligned bundle.
+
+Move counters according to their specified event meaning, not whichever stage is
+convenient. A finished product and a completed phase are still different events.
+An extra F stage changes context recurrence again. It cannot be merged without
+the throughput analysis in the next section; it is not automatically included
+in the preferred one-source-stage portfolio.
+
+===============================================================================
+8. WORK PACKAGE M3: DO NOT LOSE EIGHT-CONTEXT THROUGHPUT
+===============================================================================
+
+8.1 The trap
+
+One accepted phase per clock does not mean one completed job per clock. There are
+only eight contexts; a context remains occupied until its output is consumed.
+Multi-phase recipes also wait for scratch write and continuation rescheduling.
+Adding two registers can increase those recurrences even when each stage itself
+has II=1.
+
+Retain NCTX=8 as the first implementation. Do not double every context store and
+queue to 16 before showing that a narrower scheduling fix is insufficient.
+
+8.2 Baseline edge calendar
+
+Use E0 as the edge on which a phase is launched into R. A zero-stall baseline
+phase has this illustrative calendar, directly following the existing registered
+assignments:
+
+  E0: Q launch, capture r context/phase/slot
+  E1: R->D and synchronous store outputs
+  E2: D->O operand capture
+  E3: O->M product capture
+  E4: M->WB finished row capture
+  E5: actual scratch/completion write and queue insertion
+  E6: earliest next Q from a newly queued continuation, or DONE read issue
+  E7: completion read arrival can fill output
+  E8: earliest public completion handshake
+
+Adding P shifts the write to E6. Without further work, continuation reissue moves
+to E7 and final handshake to E9. Repeating that penalty per phase is avoidable.
+
+8.3 Narrow WB-to-Q continuation forwarding
+
+Candidate selection order:
+  1. An existing queued continuation, preserving its priority.
+  2. The current registered WB nonfinal phase, if not already queued.
+  3. New work.
+
+When case 2 is selected, the WB phase writes scratch on that edge and launches
+its next-phase context/phase record into R. Suppress that continuation's queue
+insertion; never enqueue and bypass the same event.
+
+The next phase's actual scratch read occurs on the FOLLOWING edge. It therefore
+observes the completed write without depending on same-edge old-data behaviour.
+The bypass carries the registered WB context and incremented phase. It must not
+reach backwards into unregistered finish arithmetic.
+
+If a queued continuation wins, the WB continuation is enqueued normally. A
+simultaneous old queue pop and new queue push remains legal. Do not overwrite a
+queue head just because the queue was empty in a different phase of the cycle.
+
+Keep phases_issued tied to actual Q launch and phases_completed tied to actual
+scratch/completion write. There is one of each for each physical phase.
+
+8.4 Narrow WB-final-to-completion-read forwarding
+
+When DONE is empty and the existing two-slot completion response reservation has
+room, the current WB-final record can launch directly into the completion-read
+response pipeline instead of first occupying DONE.
+
+Still perform the real completion RAM write. Read the immutable tag for that
+context on this edge. Register a one-bit forwarded-response selection, the exact
+49-bit WB row, and the context beside the read-in-flight state. On the response
+arrival edge select the explicitly forwarded row instead of cmp_rd.
+
+The RAM's simultaneous old-data result is irrelevant on this route; it must not
+be used. When no forwarding occurs, the original completion RAM response remains
+the source. Old queued completions retain priority over a new WB-final record.
+
+Suppress DONE insertion only for the exact record successfully bypassed into a
+reserved response slot. If credit is unavailable, enqueue normally. The existing
+out_full/prefetch_full/read_in_flight reservation law counts this forwarded
+arrival as one in-flight response, not as an extra invisible slot.
+
+Public output stability is unchanged. A bypass is not permission to overwrite a
+stalled output. Free a context only on its output handshake as before.
+
+8.5 Why these two bypasses are useful
+
+With one added P stage and the two empty-queue bypasses:
+  next continuation Q can again occur every six clocks;
+  earliest one-phase output handshake can again be E8 from initial Q.
+
+The latest repository plan proposes both S and F, with an approximately eight-
+clock continuation recurrence [S16]. Eight contexts can cover an eight-clock
+recurrence in an ideal phase schedule, but this does NOT by itself prove full
+job throughput: completed contexts still wait for completion delivery and free-
+queue visibility. Test one-phase streams and public-output stalls as well as
+multi-phase recurrence. The bypass calendars below describe the one-added-source-
+stage option; an S+F option needs its own explicit calendar and rate evidence.
+
+The accompanying model verifies the one-added-source-stage abstract calendars
+for one-, two- and three-phase recipes. It does not simulate actual arbitration, RAM hazards or
+backpressure. This is a reason to implement and test the candidate, not a claim
+that all throughput regressions have already been disproved.
+
+Required RTL comparisons include saturated streams, alternating recipes,
+NCTX-full admission, mixed continued/new work, DONE backlog, output stalls,
+completion/refill coincidence and fast error/count-zero jobs. Record accepted
+jobs, completed jobs, issued/completed phases, context occupancy, maximum wait,
+and first/last completion clocks for identical input sequences.
+
+If either bypass becomes the new critical path, do not keep adding bypasses.
+Use its registered selection/data boundary or revisit the P/F distribution.
+Any context-count increase is an explicit measured fallback, with area impact
+and public/internal parameter checks accounted for.
+
+===============================================================================
+9. WORK PACKAGE O1: REMOVE RAW FAULT FANOUT FROM OWNER INITIALIZATION
+===============================================================================
+
+9.1 Diagnose the actual connection
+
+The report names owner_mask_lifetime_fault_q and the UV lifetime fault as major
+launch families [S01, S02]. In the inspected RTL, the island ORs these into
+lifetime_admission_block_w. That signal gates the atomic owner/RCP admission.
+The owner's resulting adm_fire_c participates in initialization of the wide
+per-slot control arrays [S05, S06].
+
+There is no generic owner-reset input in this path that can simply be pipelined.
+The timing objective is to prevent a distant fault reduction from traversing
+admission qualification, slot decode and the many state-update muxes in one
+cycle. Confirm the full path before choosing the precise RTL cut.
+
+The source also directly aliases owner output valid at the island boundary.
+Preserve the existing outer Packet-C/D fault/cancellation handling. Do not add a
+new global valid mask and assume that it is equivalent to the report's phrase
+"publication blocking." Retracting a held valid can lose an accepted owner.
+
+9.2 Preferred architectural candidate: capture an accepted admission event
+
+Keep the externally observable admission edge E exactly where it is:
+
+  - The existing canonical lifetime predicate blocks admission on the same
+    visible fault cycles as before.
+  - Owner credit is reserved at E.
+  - Tail/generation progression belongs to E.
+  - The accepted owner identity is issued at E.
+  - RCP admission and descriptor/material/UVW writes remain atomic at E.
+  - Capture init_pending = {valid, slot, generation, required_mask} at E.
+
+Apply the many per-slot initialization writes at E+1 using this registered
+accepted-event record, rather than the current external admission predicate.
+The record is about work already accepted; it is not a second allocator.
+
+One pending event can be committed while the next is captured. The event pipe
+must accept one admission per clock under legal credit/fence conditions. The
+existing registered context-bank write already supplies part of this structure.
+Reuse it where fields and timing are actually identical, not by approximate name.
+
+9.3 Logical ownership exists before delayed physical initialization
+
+Between E and E+1, the admitted slot is logically reserved/live even though some
+physical per-slot arrays still contain the previous occupant's bits. Every reader
+that can inspect that slot during this interval must see the logical new state.
+
+Use the pending identity as a narrow bypass at the relevant addressed snapshot
+or decision point. Do not build a second 64-slot speculative scoreboard. Do not
+feed a whole-array combinational overlay into every owner decision and recreate
+the very fanout cone being removed.
+
+The event contains generation as well as slot. Never match pending state solely
+by slot. Stale previous-generation returns must remain stale even when their
+slot is currently pending for a new owner.
+
+Inventory all consumers, including C1 snapshots, immediate issue notifications,
+zero-required-mask readiness, read-publication checks, generation-shadow
+assertions, fence logic and any debug probes used as evidence. A consumer omitted
+from this inventory is a correctness bug, not an acceptable transient mismatch.
+
+9.4 Event ordering is the hard part
+
+The existing immediate admission initialization has highest same-edge precedence
+because it creates the new occupant on that very edge. The delayed event refers
+to a creation from the PREVIOUS edge. Its precedence must therefore change.
+
+At E+1:
+  1. Establish the pending owner's initialized base state.
+  2. Apply legal current events to that new state in the existing semantic order.
+  3. Commit the resulting state once.
+
+Do not place the delayed initializer last and erase a legitimate earliest issue
+or claim that arrived for the newly admitted owner. Likewise, do not apply stale
+old-generation events before silently relabelling their result as the new owner.
+
+Write an explicit collision matrix for:
+  pending init + current admission to another slot;
+  pending init + matching issue;
+  pending init + stale issue;
+  pending init + earliest matching return;
+  pending init + old-generation return;
+  pending init + zero-mask ticket creation;
+  pending init + final/retire attempt;
+  pending init + generation wrap/fence event;
+  pending init + lifetime fault visibility;
+  pending init + reset.
+
+Return C0/C1/C2 claim forwarding and the existing issue/combine-notification
+forwarding windows remain intact. If a pipeline boundary changes snapshot age,
+rederive the forwarding window from its actual edge calendar. Do not assume the
+old one-cycle window still covers an extra delayed state event.
+
+9.5 Fault and reset rules
+
+A fault that blocks new admission must not retroactively erase the initialization
+of an owner already accepted. The pending accepted event either completes under
+the existing drain/barrier semantics or is invalidated by the actual reset law.
+
+Do not register the global fault level and use the delayed level as the new
+admission permission. That permits an additional admission on a fault-visible
+cycle. Preserve the baseline event/visibility distinction: a newly detected
+cause and an already asserted sticky fault are not automatically the same edge.
+
+Only reset clears reset-only faults. Recoverable frame clear is not a license to
+clear lifetime ownership or a pending initialization record. Include pending
+initialization in quiet, live/reservation accounting and structural assertions.
+
+9.6 Extend event capture to combine-pop and join-validation state
+
+The latest cone review also names combine-pop to completion reservation and the
+island's join_validation_pending_q [S16]. Apply the same distinction between an
+accepted logical event and its later wide physical updates. Capture the complete
+accepted combine owner and generation; reserve its logical capacity immediately.
+Do not allow another claimant to see the physical reservation as free while the
+accepted event is pending.
+
+The existing READ_LATE source check already forwards a recent cmb_accept event
+with full slot/generation comparison. Extend that forwarding window if a new
+registered pop changes when cbi/reservation state becomes visible. Do not add a
+second nominal event register without auditing the existing one.
+
+If join_validation_pending_q is physically initialized from the registered
+admission event, logical validation-pending still starts on original admission.
+Provide a narrow pending-event match at a consumer that can observe the interval,
+or prove structurally that the consumer cannot run until physical initialization.
+Count-zero owners are the important case. No stale false-pending bit may authorize
+COMBINE for the newly admitted generation.
+
+9.7 Lower-risk implementation alternative
+
+If the accepted-event pipeline cannot be proven within this bounded change,
+retain immediate owner initialization and investigate local permission/predecode
+replication. That is a different candidate, not something to add on top blindly.
+
+Copies must be driven from the same source-next-state fault events on the same
+edge as the authoritative flag, with identical reset and sticky precedence.
+Registering an already registered OR is not equivalent. Any replicated local
+permission must be checked against the canonical predicate on every cycle,
+including all fault sources and same-edge admissions.
+
+Preservation/duplication attributes are tool-specific and must be verified in the
+mapped hierarchy. Identically driven registers may otherwise merge back into a
+single high-fanout source. This route may help routing but has no promised gain.
+
+For either route, prove the relevant owner endpoints no longer have a same-cycle
+cone from a distant lifetime-fault OR through full admission initialization.
+Merely renaming signals or adding an unused local fault register is not a fix.
+
+===============================================================================
+10. WORK PACKAGE B1: RETIME BIL2 WITHOUT GIVING THE DSPS BACK
+===============================================================================
+
+10.0 PREFERRED: preserve the three elastic slots and public latency
+
+The newest repository plan [S16] offers a less disruptive cut than adding a fourth
+slot. Adopt it first: make the EXISTING B2 slot hold the vertical product, its base
+term, token and channel, and compute the short final sum/round from those held
+registers to out_o.
+
+On the existing B1->B2 transfer:
+  b2_pv_q <= signed27((b1_b - b1_a) * signed9({0,b1_fv}));
+  b2_a_q  <= b1_a;
+  b2_tok_q / b2_chan_q / b2_valid_q advance exactly as before.
+
+Combinational output from held B2 state:
+  sum27 = (sign_extend27(b2_a_q) << 8) + b2_pv_q;
+  out_o = ((sum27 + 32768) arithmetic_shift_right 16)[7:0].
+
+There is no extra valid stage and no extra accepted-job slot. B0/B1/B2 readiness,
+occupancy range 0..3, token/channel timing, jobs counter and public latency remain
+the same as the baseline. The output byte is now decoded from registered state
+rather than stored as a byte, but it remains stable whenever valid and stalled
+because ALL its source registers hold together. Keep combinational output timing
+included in both leaf and connected analyses.
+
+This moves the register into the old long subtract->DSP->sum/round cone. The new
+paths are B1->registered vertical product and B2 product/base->short finish->island
+capture. There is no permission to declare the latter path false because it crosses
+a module port. It must achieve the desired margin as part of the connected design.
+
+The current cycle-exact V2/BIL2 differential can remain exact for this candidate.
+Require it to pass unchanged in control/latency meaning, with held outputs and
+all 4,000 distinct random tuples. No two-bit occupancy change is needed here.
+The gross payload increase is about 37 bits per lane (27+18 replacing 8), or
+148 bits for four lanes, not a new full pipeline capacity.
+
+If this version meets the timing reserve, do NOT implement Section 11's scheduling
+changes. They are needed only by the fallback with added latency. If B1->product
+or B2->consumer still cannot meet the margin, the four-slot fallback below remains
+fully specified; activate it only with its latency/throughput tests.
+
+
+10.1 Existing arithmetic and transport
+
+Each of four BIL2 lanes [S04] contains:
+  B0: accepted texels, fractions, token and channel;
+  B1: exact signed18 horizontal intermediates a and b, fv, token, channel;
+  B2: held final output byte, token and channel.
+
+Horizontal products share one vendor dual18 DSP. The vertical product uses the
+other DSP. The remaining B1->B2 path contains subtract, multiply, reconstruction,
+rounding and byte selection, and fails by 0.674 ns in the reported lane.
+
+10.2 FALLBACK: four-stage timing variant
+
+Keep B0 and the exact horizontal arithmetic. Add V after B1:
+
+  V.pv    = signed27((b1_b - b1_a) * signed9({0,fv}))
+  V.a     = b1_a, still signed18
+  V.token = b1_token
+  V.chan  = b1_channel
+  V.valid = transferred B1 valid
+
+B2 then computes:
+  sum = (sign_extend27(V.a) << 8) + V.pv
+  out = ((sum + 32768) arithmetic_shift_right 16)[7:0]
+
+There remains exactly one final rounding. Do not round the horizontal values,
+drop low partial-product bits, saturate a/b early or use a different bilerp law.
+Retain the existing 18/27-bit widths for the first implementation. Proven narrower
+ranges are useful assertions, not a reason to combine retiming and width surgery
+in the same first candidate.
+
+Use a versioned timing variant, for example zhao_texture_bilerp_lane_dsp2_t4, or an
+explicitly versioned latency parameter with correctly derived port widths. Keep
+the current three-stage BIL2 as the executable cycle-exact baseline. Do not edit
+its comments to make the old cycle-exact promise disappear.
+
+10.3 Elasticity and exact capacity
+
+The four-stage lane has four valid bits and storage slots. In the simple local
+implementation:
+  ready_B2 = !valid_B2 || out_ready
+  ready_V  = !valid_V  || ready_B2
+  ready_B1 = !valid_B1 || ready_V
+  ready_B0 = !valid_B0 || ready_B1
+
+Each register updates only when its own stage is ready, and copies old upstream
+state. Token, channel, arithmetic payload and validity move together. Hold the
+public output immutably while valid and not ready.
+
+The original occupancy output is TWO BITS. Four live slots require THREE BITS.
+Update the timing variant, island signal widths, wrappers, probes, casts and
+tests. An occupancy that reports zero for four live jobs can produce false quiet
+or misleading proof results even when the pixels happen to look correct.
+
+All four colour-channel lanes remain present. The current island remembers each
+channel's request acceptance and response arrival separately; do not replace this
+with a requirement that all four lanes accept/respond on one exact edge.
+
+If the expanded ready chain becomes critical, use a bounded credit/skid cut with
+real reserved capacity. Registering ready alone loses data when a downstream
+consumer stalls after an upstream acceptance.
+
+10.4 Architectural latency
+
+Specify latency by edges, not ambiguous "four cycles" prose. If an input is
+accepted at E0 into B0, then horizontal B1 is captured at E1, V at E2, output B2
+at E3, and the earliest pre-edge-qualified output handshake is E4.
+
+The current baseline's earliest output handshake is E3 under that convention.
+This intentional extra cycle is not hidden by changing the comparator. It must
+be accommodated in the connected scheduler and the published timing variant.
+
+10.5 Physical structure
+
+The target remains four lanes times two physical DSPs = eight DSPs total for
+filtering. A V register is not a reason to synthesize a second vertical multiplier
+or serialize colour channels. Inspect the fitted DSP mode table and instance
+counts again. The existing dual18 horizontal proof remains applicable only if its
+actual signed inputs and both distinct outputs remain connected.
+
+===============================================================================
+11. CONDITIONAL B2: PROTECT THE ONE-ACTIVE-BILINEAR-SAMPLE LOOP
+===============================================================================
+
+Apply this section ONLY if the four-slot BIL2 fallback is selected. The preferred
+three-slot product-register retime preserves the existing class calendar and does
+not require these edits.
+
+This is a second throughput constraint found directly in the island [S06]. It is
+not addressed by simply saying that a retimed leaf has II=1.
+
+The island has one bil_busy_q sample, one captured token/data/metadata bundle,
+four request-pending bits, four seen bits, and one held completed tuple.
+bil_capture_c currently requires !bil_busy_q. bil_busy_q clears when the complete
+four-channel result is assembled. A new sample therefore waits until the next
+cycle even when completion and new cache data are both available.
+
+With one extra arithmetic stage, leaving this loop unchanged adds a cycle per
+bilinear sample at this boundary. Avoid that hidden rate reduction.
+
+11.1 Primary candidate: complete and refill on the same edge
+
+Allow a new BIL sample capture when:
+  no sample is active, OR the old active sample completes on this edge.
+
+The old completion must be computed entirely from the old active token,
+metadata, saved channels and current matching lane arrivals. Capture the next
+sample's cache data/token/metadata separately on that edge.
+
+Sequential priority must be rewritten intentionally:
+
+  A. Form/write the OLD completed terminal tuple when old_complete is true.
+  B. If new_capture is true, initialize the NEW active sample and keep busy=1.
+  C. Else if old_complete, clear active state.
+  D. Else update old request-pending, seen and channel state normally.
+
+The existing code has a later completion block that clears busy/pending/seen.
+Simply broadening bil_capture_c while leaving that block last will erase the new
+sample. This is an explicit implementation trap.
+
+Keep sticky old identity-error events outside the capture-versus-update choice,
+so an old mismatch is not swallowed by a simultaneous new capture. Keep terminal
+output updates separate from active-sample updates. A stalled terminal tuple
+cannot be overwritten.
+
+When complete/refill occurs, old channel results are consumed and the old request
+mask must already be fully delivered. The next request mask becomes 1111 for the
+new sample after the edge; no lane receives a mixture of old texels and new token.
+
+In an ideal always-ready class calendar, baseline capture E0 -> lane accept E1 ->
+old lane output E3 -> assembly E4 -> next capture E5 becomes retimed capture E0 ->
+lane accept E1 -> output E4 -> assembly AND next capture E5. This restores the
+five-edge initiation interval at this particular boundary. It is an illustrative
+calendar, not a measured island benchmark.
+
+11.2 If the new ready feedback is physically too long
+
+Complete/refill can introduce a path from terminal readiness or four-channel
+completion through cache acceptance and active-register enables. Inspect that
+path; do not solve timing in the arithmetic and recreate it in the control.
+
+A bounded fallback is one registered prefetched BIL input bundle:
+  data64 + token18 + metadata40 + valid = 123 bits.
+
+The prefetch slot absorbs the next already identified cache response. When the
+active sample completes, the prefetched bundle becomes active on that same edge.
+The next sample's launch no longer depends on a live cache payload path. Maintain
+explicit capacity for active plus prefetched work and the existing held terminal.
+No unbounded queue or second set of filter lanes is required.
+
+Count the prefetch entry in quiet, reset and owner lifetime. Release the cache
+response and metadata ownership only on their true accepted capture. Do not read
+live metadata again when the prefetched sample starts later.
+
+Choose either a proven direct complete/refill boundary or this bounded buffered
+version after inspecting the mapped control path. Do not build both speculative
+frameworks. Record whether startup latency changes separately from steady-state
+class throughput.
+
+===============================================================================
+12. WORK PACKAGE D1: EXACT DIVIDER PREPARATION WITH ONE CARRY CHAIN
+===============================================================================
+
+The reported ATTR3 path is inside zhao_raster_attrdiv_v2, from dividend_r[0] to
+dividend_r[96] [S02, S07]. It is not evidence that the three-DSP setup worker must
+be abandoned.
+
+The divider already separated rounded-numerator capture from magnitude formation.
+The negative PREP expression is now:
+
+  (-x + d - 1) mod 2^98
+
+where x is the 98-bit captured signed-rounded numerator representation and d is
+the zero-extended 47-bit denominator.
+
+The exact bit-vector identity is:
+
+  (-x + d - 1) mod 2^98 = ((~x) + d) mod 2^98
+
+because two's-complement -x is (~x)+1 and the explicit -1 cancels that carry-in.
+Implement one explicitly 98-bit addition of the bitwise complement and denominator.
+Do not retain a separately materialized negate and decrement in front of it.
+
+This retains the same D_PREP edge, register bank and state sequence. Positive
+preparation remains a direct copy. Zero-area and saturation fast paths remain
+unchanged. The original rounded numerator num+floor(area/2), signed saturation
+thresholds, 98-step radix-2 division and held-output handshake remain untouched.
+
+Be exact about width: ~x must complement all 98 bits, and d must be zero-extended
+to 98 bits. Do not complement a narrowed positive magnitude or zero-extend a
+negative 96-bit numerator before the original signed rounding capture.
+
+The host checks compared the identity on 100,024 wide cases and the complete
+signed rounded/saturated quotient law on 25,245 cases. The algebra is exact for
+all 98-bit bit patterns. RTL equivalence and whether Quartus already performs
+this normalization still require checking; the physical benefit is not measured.
+
+If one explicit 98-bit carry chain still misses the reserve, consider a
+latency-neutral 49/49 carry-select formulation before spending a preparation cycle:
+
+  low50 = zext50(~x[48:0]) + zext50(d47);
+  high0 = ~x[97:49];
+  high1 = (high0 + 1) modulo 2^49;
+  result = {low50[49] ? high1 : high0, low50[48:0]}.
+
+All denominator bits fit in the lower 49-bit half. The high increment is computed
+in parallel with the low addition, and the low carry selects the high result.
+This trades some logic/select fanout for shorter carry dependence, with no extra
+state or changed divider latency. Inspect mapped structure; this is not a measured
+improvement and may be unnecessary if Quartus already factors the carry well.
+
+The new repository plan instead proposes two sequential 49-bit preparation steps
+[S16]. That is a valid fallback only with an explicit latency contract: preserve
+the original high half while updating the low half, hold the carry, and update the
+high half on the next edge. Do not complement an already complemented half again.
+Recheck fast zero/saturation paths, first-row seed and each normal row's divide
+calendar. One extra PREP cycle is not magically free merely because RUN has 98
+iterations. The original single-carry identity remains the arithmetic law.
+
+Also inspect the iterative remainder compare/subtract and final quotient-sign
+paths in the near-critical inventory. A proven shared subtract/borrow formulation
+may remove duplicated comparison work, but do not insert a register inside each
+division iteration or silently change radix to hide the timing problem. Those
+changes would affect the per-row service budget and the prior ATTR3 schedule.
+
+===============================================================================
+13. WORK PACKAGE D2: CAPTURE ATTRIBUTE VERDICTS, NOT ANOTHER WIDE BUNDLE
+===============================================================================
+
+Timing3 already inserted a complete atomic three-lane attribute join [S08]. Its
+payload contains values, row/column, last, saturation and error for each lane.
+The coordinate/range checks currently run AFTER that join and feed same-edge
+fault/abort/control logic. The measured residual includes attr_join_row_q to
+source_id_q, so the registration did not end every downstream control cone.
+
+Compute coordinate_bad and range_bad on the incoming accepted three-lane bundle
+in parallel with capturing its existing payload. Capture TWO verdict bits beside
+that payload, under the exact same attr_join_capture condition.
+
+Then:
+  head_fault = head_valid && (coordinate_bad_q || range_bad_q)
+
+The old joined data and old combinational verdict become visible together after
+capture; the new joined data and registered verdict do too. Thus this change need
+not add a transaction stage, duplicate the 129-bit bundle, or delay fault
+visibility by one extra cycle.
+
+Retain the exact checks:
+  row0==row1==row2;
+  col0==checked_col1==col2;
+  last0==last1==last2;
+  no per-lane error;
+  lane0 inverse-W has no forbidden high bits/sign.
+
+Do not turn saturation into an error unless the current law does so. Keep all
+raw joined evidence and the committed column-corruption mutant meaningful.
+Move or adapt its injection seam to the same semantic comparison point; a mutant
+that corrupts only a discarded signal is a false positive-control result.
+
+An assertion should independently recompute the verdict from the held raw joined
+bundle and compare it to the registered verdict whenever valid. This assertion
+must not simply reuse the exact expression feeding the verdict register.
+
+On a stalled head, both raw data and verdict remain unchanged even if upstream
+invalid data moves. On consume/refill, the new verdict belongs to the new bundle.
+Preserve the existing same-edge cancel/drop counts, zero/one/two-drop arithmetic,
+producer drain, frame-abort and tile-swap law.
+
+13.1 Additional measured cut: accepted metadata capture versus abort control
+
+The latest plan [S16] calls out tile abort -> job-metadata enables. Direct review
+of p_packet_d_state confirms that the wide metadata assignments sit behind
+"if (job_accept_w && abort_now_w) sink; else if (job_accept_w) capture" [S08].
+job_accept_w itself includes the abort-dependent job_ready_o. This lets a late
+fault determine hundreds of metadata register enables.
+
+Separate data capture from the decision to launch useful work. A candidate
+capture condition can depend on a registered metadata-slot-available state,
+job_valid_i and the absence of a clear request, rather than the late abort
+reduction. Existing metadata registers can capture a newly presented idle-slot
+payload speculatively; a small registered/qualified control decision determines
+whether it becomes a started job or a counted sink.
+
+Do NOT simply remove abort qualification from every metadata write. The old
+metadata may still be needed by a partially delivered RS_START fanout or a
+producer draining the prior job. Only overwrite when its registered ownership
+says it is safe. Preserve metadata stability throughout START/ACTIVE/SWAP where
+required. If an accepted sink arrives while old metadata is still in use, count
+and drain it without overwriting the old bank.
+
+New-job profile errors and prior-job abort are different causes. A malformed new
+job must not be counted as started, issue tile clear/start side effects, or inherit
+the previous job's identity merely because its payload was captured early. Test
+source-ID changes, partial five-destination start delivery, back-to-back jobs,
+new-job AUX/area errors, prior abort and clear coexistence. Do not duplicate the
+entire 1,157-bit metadata bank unless no safe retiming of its existing owner can
+be shown; that is a materially different area trade.
+
+13.2 Additional measured cut: sequence mismatch versus outer draining
+
+The new plan distinguishes immediate Packet-C suppression from later outer-tile
+draining [S16]. Keep the same-edge mismatch decision on the actual forbidden
+admission/publication/commit boundary. Use the already registered sequence-abort
+state for broad subsequent drain, counter and lifecycle transitions where a
+one-cycle-later reaction cannot admit or publish useful work.
+
+This is not permission to delay sequence checking, let a mismatched fragment
+reach the framebuffer, start a fresh job after a known terminal fault, or swap a
+tile on the detecting edge. Retain immediate containment at these small decisive
+boundaries and remove the raw compare from unrelated wide bookkeeping only.
+
+Every candidate remains either accepted useful work, held work, or an explicitly
+counted drop. Verify exact zero/one/two-drop accounting during coincident mismatch,
+joined-attribute and Early-Z drain events. A one-cycle retime that merely loses a
+drop pulse is not semantically equivalent.
+
+
+===============================================================================
+14. WORK PACKAGE R1T: CAPTURE RECIPROCAL IDENTITY BEFORE THE UVW LOOKUP
+===============================================================================
+
+This section's name is a local Timing4 read-boundary task, NOT the deferred R1
+whole-machine arithmetic roadmap.
+
+The current island consumes the RCP return and reads the 64-owner UVW bank into
+persp_prep in one boundary [S06]. The reported path starts at the reciprocal
+pipeline's token bypass and ends at persp_prep_uow_q. It combines token selection,
+owner-slot addressing, the stored 64-bit UVW value and destination acceptance.
+
+Insert one held reciprocal-result head containing:
+  owner14 + reciprocal24 + shift6 + zero1 + valid = 46 bits.
+
+The RCP output handshake first captures that complete record. Its registered
+owner slot drives the existing synchronous UVW read into the perspective-prep
+record on a subsequent accepted transfer. Carry reciprocal, shift, zero and full
+owner identity with that read. Do not take them from the next live RCP result.
+
+Permit simultaneous head consume/refill so the head itself sustains one transfer
+per clock. Account for the actual UVW read stage and downstream prep reservation;
+do not issue a synchronous response with nowhere to store it when perspective
+backpressures. Retain a direct RAM-read-to-register coding shape.
+
+This adds a narrow identity boundary, not another full owner UVW table. Keep the
+original bank's sole writer on owner admission. The owner remains reserved until
+its ordinary retirement, so the read cannot be serviced from a reused slot.
+
+Add the new head/read occupancy to idle/quiet and reset. Test token alternation
+across all 64 slots, generation reuse, zero inverse-W, output stalls, concurrent
+owner admission and read, and intentional token substitution. The existing
+reciprocal and perspective arithmetic do not change in this work package.
+
+===============================================================================
+15. WORK PACKAGE E1: REGISTER DESCRIPTOR TRUST AT A PAYLOAD BOUNDARY
+===============================================================================
+
+The early descriptor uses the required 287-bit logical / 320-bit physical image
+with eight static 40-bit banks and a separate owner-generation bank [S09]. Its
+current output masks the 287 logical bits using a combinational generation/pad
+verdict derived directly from the RAM outputs. A reported path crosses from the
+generation RAM into UV-join desc_q.
+
+15.1 PREFERRED: use the existing UV-join descriptor register
+
+Following the latest repository plan [S16], first avoid another 287-bit payload
+bank. Capture a usability verdict beside the descriptor at the EXISTING joined
+payload boundary, then mask stale work using that registered verdict.
+
+One concrete internal-interface approach is to expose the raw synchronous logical
+payload separately from the existing externally masked early-descriptor output.
+Keep the old public early-descriptor output contract unchanged for its baseline
+clients/tests. The selected UV join captures raw owner+descriptor in its existing
+desc_q storage and captures the matching generation/pad usability flag alongside.
+Its outgoing descriptor is zeroed from the LOCAL REGISTERED usability flag before
+untrusted fields can become work. Owner identity and response validity remain
+present even for a bad row; do not turn failure into a missing transaction.
+
+The raw payload port is internal untrusted data, not a replacement for the public
+"usable descriptor" contract. Name it accordingly. Never expose or consume it
+without carrying its accepted verdict. Existing island descriptor-trust side
+witnesses are written on the same descriptor acceptance as before and must agree
+with the new staged flag. Baseline callers of an extended join interface can tie
+the flag true only when their supplied payload already satisfies the old contract.
+
+This cuts RAM-generation comparison -> 287-bit mask -> join register into a small
+verdict capture and a later local masked-payload path. The existing join storage
+holds the data; additional state is a few predicate bits, not 305 payload bits.
+Verify the mask precedes the first consumer that could issue descriptor-derived
+sample/AUX work and retains the authoritative required-mask/refusal rules.
+
+Do not merely delete the old mask. Do not carry a live usable flag beside an
+older registered descriptor. Include pad/generation counters, stalls and count-zero
+validation in the proof. If there is no safe existing boundary at which to carry
+and enforce trust, use the explicit full-stage fallback below instead.
+
+15.2 FALLBACK: a distinct validated response stage
+
+Add a validated response stage after the raw synchronous read:
+  logical payload287;
+  offered owner14;
+  generation_ok, pad_ok, usable;
+  valid.
+
+Capture the raw payload and small verdict bits on the same transfer. Mask corrupt
+logical data to zero using the LOCAL REGISTERED verdict at the public boundary;
+do not put a new 287-bit mux behind the generation RAM and before the new register.
+A bad response remains a valid response with a failing usability verdict, not a
+vanished transaction. Preserve the exact all-zero physical pad on writes and
+actually inspect the stored pad on reads.
+
+The raw-read stage and validated stage require real independent capacity and a
+correct ready chain. Keep one accepted read per clock when the downstream is
+ready. Do not reuse one slot alternately for reading and validating and call the
+result pipelined while cutting throughput to one every two clocks.
+
+Pad/generation counters count each raw response exactly once, including a response
+held for many cycles. Preserve frame-fault set-versus-clear priority. The raw
+response's verdict can be recorded on the existing check edge even though the
+consumer now sees the validated response one cycle later.
+
+The island stores descriptor_usable and descriptor_owner_generation when the
+descriptor response is accepted into UV join. Those side witnesses MUST follow
+the new validated response's owner and transfer, not raw current RAM wires.
+Otherwise payload and trust can refer to different owners under backpressure.
+
+Count-zero owners still wait for descriptor/material/required-mask validation
+before COMBINE. Do not allow the new response stage to become an excuse to bypass
+that fence and emit a clean base-colour result from an unvalidated descriptor.
+
+===============================================================================
+16. WORK PACKAGE A1: AUX FAULT FACTS AND RESTORING ARITHMETIC
+===============================================================================
+
+16.1 PREFERRED: stage the fault fact, not the whole input packet
+
+The newest repository plan [S16] narrows the measured input-fault cut. Capture an
+A0 degenerate fact separately from A0 force-refusal/disposition. Update the
+input-derived degenerate counter and frame fault from A0 valid plus that stored
+fact on the following edge, rather than raw incoming descriptor comparisons.
+
+Keep logical input acceptance, AUX issue notification, coordinate arithmetic,
+divider launch, side-table schedule and terminal completion unchanged. Do not
+count force_refuse as an envelope-degenerate event just because both lead to a
+refused result. On consecutive bad inputs, process the old A0 fact while capturing
+the next one. On a bubble do not count old retained payload again.
+
+This intentionally delays this particular fault observation by one cycle, not
+its transaction acceptance or arithmetic. Keep pending fault observation nonquiet
+until posted. Preserve set-dominates-clear on a coincident clear/event edge and
+the distinction between recoverable local faults and lifetime corruption.
+
+This is the first choice if it breaks the reported path. It avoids the roughly
+240-bit Ain stage described as a fallback below.
+
+16.2 PREFERRED: one widened subtract provides both compare and remainder
+
+The inspected zhao_texture_aux_div6.step [S18] currently computes unsigned
+r>=shifted and then r-shifted for each of six fixed quotient bits. Re-express the
+step as one explicitly (REM_W+1)-bit subtract:
+
+  diff = {1'b0,r} - {1'b0,shifted};
+  hit = !diff[REM_W];
+  next_remainder = hit ? diff[REM_W-1:0] : r;
+  step_result = {hit,next_remainder}.
+
+Both operands are unsigned REM_W values extended by a leading zero. Their signed
+difference lies strictly inside the extra-bit range, so that top bit identifies
+borrow. Do not use the high bit of a truncated REM_W subtraction as the borrow.
+Preserve the six stages, fixed k=5..0, both U/V channels, tag, clamp-at-caller law,
+issued count and occupancy. There is no new cycle or DSP in this transformation.
+The mapper may already share parts of the old compare/subtract; only inspection
+and the next physical result establish the actual resource/timing gain.
+
+16.3 FALLBACK: raw input capture if the arithmetic input itself stays critical
+
+The measured fragment-expander-to-AUX path ends at AUX frame_fault_o [S02]. In
+AUX [S10], envelope degeneracy and coordinate arithmetic operate directly on the
+incoming expander payload at logical acceptance. Break that cross-module path.
+
+Add one raw Ain record INSIDE AUX after its existing accepted-job boundary:
+  wx32, wz32;
+  env_x0/1 and env_z0/1, four times 32;
+  sheet handle32;
+  owner14;
+  force_refuse1;
+  valid1.
+This is approximately 240 bits, including valid.
+
+Preserve job_fire and issue_valid_o on the original input handshake edge. The
+island explicitly asserts that expander issue and AUX issue are equal on that
+edge. An external FIFO that delays only AUX's issue notification violates that
+contract.
+
+Reserve one of the existing CREDIT=16 lifetimes when Ain accepts the job. Perform
+the current envelope comparisons, coordinate subtraction and A0 preparation from
+Ain on the next edge. Then use the existing clamp/divider/offer pipeline. Every
+job, including forced refusal or a degenerate envelope, remains attached to its
+accepted owner and generates exactly one appropriate terminal result.
+
+Move the degeneracy observation to the corresponding registered input evaluation;
+count it once. Do not assert a refusal before acceptance and do not drop the
+owner merely because the arithmetic is skipped.
+
+The existing six-stage divider and side-table read/write relationship must remain
+aligned. Do not move a side-table write to a different epoch without adjusting
+its index lifetime. Check the CREDIT=16 bound including Ain, arithmetic, divider,
+Sheet offer, issued response identity, local refusal and terminal return.
+
+No new DSP or general-purpose divider is needed. Include Ain in quiet and reset,
+and preserve the distinction between recoverable AUX refusal and structural
+lifetime failure. Test simultaneous local refusal and an owed Sheet response,
+wrong source/op/status, unsolicited responses, and frame clear at the last live
+input/output boundary.
+
+===============================================================================
+17. WORK PACKAGE Q1: WRAPPER CLEAR FIRST, SAFE QUIET IF STILL NEEDED
+===============================================================================
+
+17.0 REQUIRED: repair the characterization wrapper's clear-request feedback
+
+The generated fit wrapper currently assigns:
+  frame_fault_clear_valid_w = frame_fault_w && frame_fault_clear_ready_w.
+This was read directly from the generated wrapper [S17]. Its downstream ready
+and upstream fault can contain the same large subsystem control families. Do not
+ignore the path because it is "only the wrapper"; it is in the measured design.
+
+Replace it with a registered held recoverable-clear request. Use a small RUN,
+CLEAR_PENDING, RECHECK control sequence: latch a recoverable fault request,
+assert clear valid independent of ready while pending, consume it on the actual
+handshake, then recheck the resulting fault level on a later edge before allowing
+new synthetic jobs. A fresh fault that wins over clear must remain actionable;
+do not wait forever for it to fall without another clear request.
+
+Bring the separate lifetime_structural_fault output into the wrapper's control
+logic. A lifetime fault must never be treated as a recoverable clear request or
+authorize synthetic traffic to resume. A fatal arriving during an already held
+clear request must follow the clear channel's documented cancellation/reset law;
+do not retract a held offer arbitrarily. Clearing recoverable state cannot clear
+the fatal condition.
+
+Stop generating NEW synthetic jobs while clear is pending/rechecked or fatal is
+latched. A job already offered must still be held or accepted by the existing
+abort sink, not silently withdrawn to manufacture quiet. Preserve deterministic
+legal activity and all original datapath observability. Add directed tests for
+clear backpressure, clear/fault coincidence, fatal arrival and resumption.
+
+Edit the generator/template identified by
+  tools/quartus/gen_raster_texture_v3_fit_top.py
+and regenerate the wrapper/manifest. Do not hand-edit the GENERATED FILE only.
+Bind this wrapper revision in the new measurement and disclose the boundary
+change. Do not credit all resulting timing improvement to production RTL.
+
+After this narrow fix, inspect whether the deep internal quiet/clear path still
+needs a registered certificate. Sections 17.1-17.6 specify that safe fallback; do
+not add it automatically if the wrapper fix plus other cuts already resolves the
+known path with sufficient reserve.
+
+17.1 What the names conceal
+
+The island's q_owner_idle, q_rcp_idle and many other q_* terms are combinational
+aliases in the inspected RTL, not registered certificates [S06]. data_quiet is
+a large AND over idle terms and the absence of many pending offers. quiet_o adds
+configuration, palette and external-offer conditions. frame_fault_clear_ready_o
+is directly quiet_o, and its accepted clear enables several 32-bit counter
+baseline captures.
+
+A measured path from owner iss0t_v_q to owner_src_unpublished_base_q can therefore
+be an occupancy -> deep quiet -> clear-enable path, rather than a slow addition
+of the counter value. Inspect the complete path before changing counters.
+
+17.2 Conservative certificate
+
+Define raw_full_quiet as the existing complete quiet predicate, updated to include
+all new Timing4 state. It must include both internal state and all external
+sources that could create work or invalidate the empty condition.
+
+Proposed certificate:
+  at edge E:
+    quiet_cert_q <= raw_full_quiet_before_E
+  externally during a cycle:
+    quiet_o = quiet_cert_q && !external_offer_now && !reset_or_init_block
+
+Reset quiet_cert_q to false. It may become true only after the complete machine
+has been observed empty. It can assert one cycle later than the old exact
+combinational quiet, which is conservative. Any new external offer revokes public
+quiet immediately, before its possible acceptance.
+
+The safety argument requires an explicit invariant: when all enumerated internal
+state is empty, no internal source can generate new work except an enumerated
+external ingress/reset/configuration transition. Prove that invariant against
+actual RTL, including delayed notifications, counters/events, speculative reads,
+initialization engines and wake-up timers. The host model checks the argument
+under this assumption; it cannot prove that the real state inventory is complete.
+
+17.3 Do not implement the tempting broken variant
+
+This is unsafe:
+  internal_empty_q <= internal_empty
+  quiet_o = internal_empty_q && !external_offer_now
+
+An external offer can be accepted on the edge that samples internal_empty=true.
+The offer disappears next cycle, but new internal work now exists. The stale
+empty register and absent current offer can falsely claim quiet.
+
+Sampling FULL quiet, including offers on the sampling edge, closes that gap. A
+separate sticky invalidation/credit protocol could also close it, but do not
+invent another control framework when the complete predicate already exists.
+The included model contains this specific counterexample as a negative control.
+
+17.4 Required inventory
+
+In addition to every existing quiet term, include:
+  combiner P, any optional F, WB bypass response in flight;
+  pending owner initialization and any local barrier transition;
+  BIL V stages, active/refill and optional prefetched BIL sample;
+  reciprocal result head and UVW read response;
+  raw and validated descriptor responses;
+  AUX Ain and all owed responses;
+  any delayed fault/counter event used by the new implementation.
+
+External invalidators must include the existing fragment offer, cache fill data
+OR denial, Sheet response, configuration command/response, palette load and any
+new ingress. Keep offers in the predicate even where the input would currently
+be refused. Dropping unsolicited response visibility can falsely permit clear.
+
+Do not infer quiet only from accepted/completed counter equality. Do not infer it
+only from owner live count. Do not ignore a held output because downstream is
+currently not ready. Do not clear a pipeline to manufacture quiet.
+
+17.5 Counter baseline and fault ordering
+
+Use the short registered certificate for the clear handshake after its safety
+conditions pass. Preserve the current baseline-capture and set-dominates-clear
+law. A new event on a clear edge must remain visible, not be absorbed into the
+new baseline or hidden by a delayed event pulse.
+
+If counter updates are retimed, either keep their pending events nonquiet until
+posted, or explicitly preserve epoch alignment. Never sample a stale counter as
+baseline and then relabel its later update as a new frame error accidentally.
+Conversely, never capture the updated counter in a way that erases a same-edge
+real fault.
+
+A lifetime structural fault is still reset-only. The quiet certificate does not
+make frame clear capable of recovering a corrupted ownership namespace.
+
+17.6 Timing expectations
+
+This change moves a deep reduction to a small certificate destination and removes
+it from many baseline/control enables. It does not guarantee the reduction itself
+is under the margin. Inspect raw_full_quiet -> quiet_cert_q after mapping. If it
+remains long, use component-level proven empty certificates with safe immediate
+ingress invalidation, not an arbitrary delayed AND of stale idle signals.
+
+===============================================================================
+18. SMALLER RESIDUALS AND WHY THEY MUST NOT BE IGNORED
+===============================================================================
+
+The report's "other" family contains 94 negative launch rows. Its worst named
+example is the RCP-token-to-UVW path addressed above, but fixing that example does
+not prove the other 93 disappear. Likewise, 50 owner-control rows can contain
+several distinct enable and payload cones.
+
+Before freezing Timing4, assign every negative family and every low-margin module
+pair to one of these dispositions:
+
+  FIXED STRUCTURALLY:
+    The RTL now contains a named register/shortened arithmetic boundary that
+    breaks the reported causal chain. Verify its live selection in mapping.
+
+  EXPECTED TO IMPROVE INDIRECTLY:
+    A fanout or placement change may affect it. This is weaker evidence; retain
+    it in the first post-fit review and do not declare it closed beforehand.
+
+  UNCHANGED BUT ADEQUATE:
+    Only valid for a path whose existing margin already exceeds the chosen
+    threshold under the corresponding clock relationship and corner.
+
+  UNRESOLVED:
+    Inspect it before pretending the primary batch is a comfortable-closure plan.
+
+Particular checks:
+
+  - Tile-control endpoints may be driven by abort or job-ready enable logic, not
+    source-ID arithmetic. The captured attribute verdicts should terminate one
+    contributing chain, but inspect remaining stage/quiet conditions.
+
+  - Owner read-publication error counters can depend on cbi/recent acceptance
+    forwarding. Do not widen that path while inserting owner initialization.
+
+  - AUX protocol-fault reductions and unsolicited-response sinks may remain
+    visible at the wrapper after input arithmetic is retimed. Keep fault output
+    timing honest rather than declaring such ports unimportant.
+
+  - Material saturation counters should use the shortened finish predicates;
+    leaving a second copy of the old wide function solely for counters preserves
+    the critical arithmetic even when the pixel path improves.
+
+  - A deeper bilerp ready chain, direct complete/refill path or completion queue
+    bypass can itself become a new critical control path. Analyze them by name.
+
+  - Wide source or continuation fields do not need fresh reset muxes simply
+    because another valid stage is added. Reset valid bits; leave invalid payload
+    unspecified where the existing contract allows it.
+
+Do not add an extra pipeline stage to every residual blindly. First identify the
+actual logic and whether a small predicate capture or algebraic simplification
+will remove the same path with less state.
+
+===============================================================================
+19. PROPOSED RESOURCE BUDGET AND WHAT IT DOES NOT PREDICT
+===============================================================================
+
+Retain 30 physical DSPs as the primary Timing4 target. None of the proposed main
+changes requires another multiplier. Do not silently accept 31 or 32 because a
+new expression inferred differently. Diagnose it and request an explicit trade
+decision if retaining an extra DSP becomes the best supported option.
+
+A gross register inventory for the basic changes is approximately:
+
+  Combiner source stage                              222 bits
+  Four BIL vertical product stages                   264 bits
+  AUX raw input                                     240 bits
+  Reciprocal result head                             46 bits
+  Validated descriptor response                     305 bits
+  Owner accepted initialization event                19 bits
+  Attribute verdicts                                  2 bits
+  Quiet certificate                                   1 bit
+  Explicit completion-forward row/control          ~54 bits
+                                                    ---------
+  Gross illustrative new register storage         ~1,153 bits
+  Optional BIL prefetch                             +123 bits
+
+This is NOT an ALM prediction and not a claim that each bit survives synthesis.
+Some fields replace or retime existing registers; some duplicated control may
+collapse; some registers may be absorbed into device primitives; new muxes,
+control and routing duplication can consume additional logic. Exact widths are
+profile-dependent and must be derived in RTL.
+
+The latest plan's preferred three-slot BIL retime, compact descriptor verdict,
+and A0 fault-fact capture avoid much of the FULL-STAGE fallback inventory above.
+Using those preferred choices changes the gross estimate approximately to:
+  combiner source222 + BIL replacement148 + RCP head46 + owner event19
+  + attribute verdict2 + a few descriptor/AUX/clear control bits,
+  plus optional completion forwarding and any deliberately retained finish stage.
+That is roughly 450-550 additional raw register bits before F/other control,
+not an ALM prediction. Do not add both preferred and fallback costs together.
+The full-stage 1,153-bit inventory is retained to make fallback cost visible.
+
+The short finish and divider transformations may recover logic that offsets some
+of this storage, but no ALM saving is booked before the fit. Likewise, moving
+wide payload behind synchronous reads should preserve or improve RAM inference,
+not simply turn storage into more fabric registers.
+
+Proposed design review guide, not a replacement for the owner's resource contract:
+  Prefer a connected ALM increase of no more than roughly 500 over 13,195.
+  An increase above roughly 750 deserves explicit attribution before adoption.
+  Do not sacrifice correct throughput merely to meet that guide, and do not call
+  it a whole-machine budget. A measured trade is preferable to an invented one.
+
+A large increase usually warrants checking for:
+  hidden context-count doubling;
+  loss of M10K inference from reset/decoding on RAM outputs;
+  copied owner planes rather than one bounded in-flight source bundle;
+  duplicate arithmetic in counters or dead migration branches;
+  fanout-buffering/register duplication that the source estimate did not include;
+  a new general scheduler for a job that needed only one event register.
+
+The 71 critical RAM blocks and 92,964 fitted payload bits are the baseline to
+reconcile, not a magical fixed count that every legal retime must reproduce.
+Critical payload stores must still infer. Any changed memory count needs a
+named reason, not a silent unexplained shift into flip-flops.
+
+===============================================================================
+20. IMPLEMENTATION ORDER AND OWNERSHIP OF THE CHANGE
+===============================================================================
+
+Use one coordinating integrator for the shared island and owner changes. Multiple
+agents may develop independent leaves, but they must not concurrently rewrite
+zhao_texture_island_v3_top.sv with incompatible handshakes.
+
+Suggested sequence:
+
+  1. Preserve the current receipt and derive the low-margin path inventory from
+     the existing reports. Define the throughput trace set before editing RTL.
+
+  2. Implement/verify the latency-neutral arithmetic changes and attribute verdict
+     capture first. These have small boundaries and clear differential oracles.
+
+  3. Implement combiner P and the explicit context/queue scheduling contract.
+     Test short finish before deciding whether F is necessary.
+
+  4. Implement the preferred latency-preserving BIL2 retime. Only if it cannot
+     meet the reserve, use BIL2T plus completion/refill or bounded prefetch.
+     Validate the island class loop, not only the four leaf pipelines.
+
+  5. Implement the owner accepted-event pipeline with its collision matrix and
+     logical-state forwarding, or select the reviewed local-permission alternative.
+
+  6. Implement reciprocal identity capture, compact descriptor trust staging,
+     AUX fault-fact capture and shared subtract/borrow. Use full payload-stage
+     fallbacks only when required. Reconcile all events and side witnesses.
+
+  7. Repair held wrapper clear and build the final quiet inventory after the
+     new stages are concrete. Add the full-quiet certificate only if necessary;
+     then prove its empty-state/ingress invariant and clear/event ordering.
+
+  8. Integrate the full candidate and run the complete affected functional and
+     structural gates. Inspect remaining low-margin path causes not addressed by
+     the source changes; do not hide them behind a generic "other" label.
+
+  9. Freeze one clean, pushed specimen and run the connected Timing4 fit.
+
+Use existing versioning/selection practices. The baseline implementations remain
+available as executable oracles, but exactly one selected implementation of each
+engine must survive elaboration in the measured design. New timing variants must
+be explicitly selected in both wrapper and nested instance parameters.
+
+If a new module expands the source inventory beyond 48, regenerate the exact
+manifest and validators. Do not keep "48 sources" in an assertion because it was
+true of Timing3. Source inventory is an identity check, not a fixed feature limit.
+
+Do not promote production defaults simply because a leaf maps or a behavioural
+test passes. Equally, do not withhold preliminary measured numbers while waiting
+for a report generator or review. Measurements and adoption are separate events.
+
+===============================================================================
+21. VERIFICATION CONTRACT: TRANSACTION IDENTITY, TIMING AND CAPACITY
+===============================================================================
+
+21.1 Preserve independent oracles
+
+Use the current R9 material law, the retained three-stage BIL2/V2 comparison and
+the current attribute divide law as reference. New reference code must not be
+written by mechanically copying the new RTL implementation; that merely makes
+the same mistake twice.
+
+The current BIL2 differential [S14] is cycle-exact: it compares ready, valid,
+identity, occupancy and idle each cycle, then compares new output on the old
+output's handshake. Removing only its same_control assertion is not a valid
+latency-aware test. Its data scoreboard would still be using the wrong schedule.
+
+Retain that test unchanged for the baseline candidate. For BIL2T, use independent
+accepted-input and output-handshake accounting for each design, or drive each
+with its own source cursor through the same logical transaction sequence. Match
+results by test transaction ID/owner/token/channel, not by the current clock.
+
+Check the intended new fixed latency in an unstalled test and sustained acceptance
+rate in a saturated test separately. Semantic equivalence alone can hide a
+throughput regression; cycle equality cannot be demanded where latency changes
+were explicitly authorized.
+
+21.2 Minimum directed arithmetic matrix
+
+Material:
+  all eight recipes; exact sample-count legality; zero-sample PASSTHRU;
+  required versus unrequested status bits; independent true sample 2 and AUX;
+  alpha retention versus MASK alpha product;
+  signed LERP at low product bytes 127/128/129;
+  MOD2 at products around 32704 and all endpoint byte rails;
+  saturation witness and per-recipe meaningful-product counts;
+  malformed material and source-error terminal colour/status/index/tag.
+
+Bilerp:
+  all 16 zero/255 texel rail patterns across all 65,536 fraction pairs;
+  diverse full-byte random inputs, unequal horizontal products;
+  channel permutation, token substitution and last-channel delayed arrival;
+  no intermediate rounding and exact final ties.
+
+Divider/attributes:
+  negative exact halves, zero denominator, saturation on both signs;
+  minimum/maximum signed96 numerators and denominator47 rails;
+  signed 98-bit preparation representation;
+  sparse coverage masks, row transitions and global-min-X tile offset;
+  coordinate mismatch, last-bit disagreement and invalid lane0 inverse-W range.
+
+21.3 Transport and occupancy matrix
+
+For every new stage or pending event:
+  reset while empty and while each possible occupancy is present;
+  arbitrary output stalls, including stalls beginning on a response-arrival edge;
+  simultaneous consume/refill;
+  source payload changes while invalid;
+  held valid payload that must not change;
+  full capacity, last free entry, pointer wrap and recovery after backpressure;
+  finite drain with no dropped, duplicated or invented transaction;
+  quiet must remain false until the actual last owned work is gone.
+
+For the four-stage bilerp specifically, reach occupancy four and observe four,
+not zero. For the combiner, test a stalled public output with prefetch and read in
+flight together. For WB forwarding, fill the response reservation immediately
+before another final result appears.
+
+21.4 Owner collision and fault matrix
+
+At least these relationships must be exercised with full slot/generation identity:
+  prior accepted init versus earliest issue, TMU return and AUX return;
+  simultaneous TMU/AUX terminal traffic;
+  duplicate same-owner same-sample returns on adjacent cycles;
+  a stale generation while the slot is pending for reuse;
+  zero-required-mask owner readiness;
+  COMBINE accept/read/final/release coincidence;
+  reset while an accepted init event is pending;
+  every lifetime fault source on cycles adjacent to admission;
+  recoverable frame clear versus a same-edge new event;
+  return/refusal draining after admission is blocked.
+
+Check that the new pending-event priority cannot overwrite legitimate recent
+issued/claimed bits. Check that no pending owner is mistaken for an old published
+owner by source-read validation.
+
+21.5 Connected performance traces
+
+Run the same deterministic workload definitions on Timing3 and Timing4 with the
+same virtual memory/service schedules. Include:
+  all one-phase material recipes under saturated admission;
+  repeated DETAIL_LIGHT and mixed one/two/three-phase material streams;
+  CLUT, nearest, bilinear and refusal-class interleaving;
+  sustained bilinear samples with all channels and metadata always available;
+  delayed single bilinear channel and held terminal output;
+  dense and sparse attribute coverage, multiple rows and tiles;
+  count-zero fragments, maximum owner pressure and full-context stalls;
+  configuration/refusal/fault activity near the end of a frame.
+
+Report first-result latency, last-result latency, steady-state accept/complete
+rates, completed work per defined interval, maximum occupancy, and total frame or
+tile clocks. An authorized fixed startup/drain latency increase is not the same
+as a worse steady-state rate; quantify both. It is only acceptable where the
+existing frame/workload contract still passes with its required reserve.
+
+Do not claim that a faster MHz number compensates for an unapproved cycle-rate
+loss. The console still intends to operate at 100 MHz. Compare useful work per
+100 MHz clock against the actual workload obligations.
+
+===============================================================================
+22. DELIBERATE FAILURE CONTROLS
+===============================================================================
+
+Every major correction needs a test that detects a plausibly wrong version, with
+a distinct expected failure signature rather than a generic simulation crash.
+
+Recommended controls:
+
+  M1: advance source payload without context/phase; use the next live RAM output
+      instead of the captured source on one phase.
+  M2: use l>=128 for negative borrowing; omit the MOD2 saturation witness;
+      unit-round before doubling.
+  M3: enqueue a continuation that was bypassed; read old completion RAM data on
+      a forwarded write; free a context at WB rather than output handshake.
+  O1: delayed init has highest precedence over earliest matching issue;
+      forward pending state by slot but not generation;
+      gate admission using a one-cycle delayed global lifetime fault.
+  B1: retain two-bit occupancy for four stages; fail to carry token or channel
+      through V; round a horizontal intermediate.
+  B2: let old completion clear a simultaneously captured new sample;
+      swallow an old identity mismatch when a new sample arrives.
+  D1: omit the floor correction by using -x+d rather than -x+d-1;
+      complement fewer than 98 bits.
+  D2: compute verdict from live inputs while the held payload is stalled;
+      update verdict on consume without capture.
+  R1T: read UVW using the next live RCP owner while retaining the previous token.
+  E1: combine a staged descriptor with live generation/usable flags;
+      gate away a bad response instead of delivering its refusal semantics.
+  A1: delay issue notification relative to the expander acceptance;
+      omit Ain from lifetime credit or quiet.
+  Q1: register internal empty without sampling external offers;
+      omit one new pending event; let frame clear erase a simultaneous new fault.
+
+Retain the original positive controls as well. A renamed signal or a new generate
+branch can accidentally disconnect a mutant while leaving the test executable
+and its PASS text intact. Validate live mutation selection, expected observation
+and no unrelated early abort that prevents reaching the intended check.
+
+===============================================================================
+23. WHAT THE ACCOMPANYING EXECUTED CHECKS DO AND DO NOT PROVE
+===============================================================================
+
+Executed in the authoring environment:
+  timing4_model_checks.py
+  timing4_model_results.json
+
+The script uses deterministic seeds and bounded-memory NumPy arithmetic checks.
+Observed result: PASS.
+
+  UNIT raw-product comparisons                       65,536
+  MOD2 raw-product comparisons                       65,536
+  LERP product/base/sign comparisons              33,554,432
+  Wrong negative-rounding cases detected             32,640
+  98-bit magnitude comparisons                      100,024
+  Complete signed rounded/saturated divide cases     25,245
+  Bilerp rail/fraction cases                      1,048,576
+  Random full-byte bilerp cases                     300,000
+  49/49 carry-select magnitude cases                100,024
+  AUX unsigned subtract/borrow steps                600,000
+  Four-slot elastic transport model cycles          100,000
+  Full-quiet-certificate model cycles               100,000
+  Combiner empty-queue phase calendars                   3
+
+The additional carry model also checks the latency-neutral 49/49 carry-select
+identity and six unsigned AUX restoring-step positions, including a deliberately
+incorrect truncated-width borrow rule. These are arithmetic witnesses only.
+
+The transport model checks FIFO ordering, held-output stability, occupancy and
+reset-discard conservation. It applies to the four-slot FALLBACK. It is neither
+an RTL test of the preferred three-slot BIL retime nor the four-channel aggregator. The phase-calendar check covers ideal empty-queue
+one/two/three-phase timing, not scheduler arbitration or capacity proof. The quiet
+model assumes that every ingress is represented and an empty system cannot
+spontaneously generate work; that assumption must be established on the real RTL.
+
+These checks are useful independent mathematical witnesses. They are NOT:
+  Verilator/Icarus execution of the proposed RTL;
+  vendor-model verification of new pipeline placement;
+  a formal proof of the entire owner/barrier implementation;
+  Quartus MapOnly or fitter results;
+  a measured 110 MHz capability;
+  measured area savings.
+
+The supplied near-critical scanner has also passed its synthetic self-test,
+including rejection of malformed, nonfinite, empty and incomplete row inputs.
+It has NOT been run here against the full raw Timing3 path table: that large
+resource could not be retrieved through the available raw-file read path.
+Source conclusions in this brief therefore rely on the committed path report,
+its machine-readable census and the inspected RTL, not on an invented independent
+reproduction of all 2,000 timing paths.
+
+===============================================================================
+24. MAPPING, FIT AND MARGIN MEASUREMENT PLAN
+===============================================================================
+
+24.1 Preserve the known good evidence, including the red timing result
+
+Do not overwrite @g8a-timing3 raw files or its receipt. Create a new unique
+@g8a-timing4 identity, exact source manifest and corresponding report paths.
+The receipt's baseline must point to the actual measured Timing3 specimen and
+hash, not merely the latest docs-only branch head.
+
+Clone the existing runner contract carefully: clean committed/pushed specimen,
+exact selected parameters and vendor macro, preserved reference files, no mixed
+source checkout, no concurrent Quartus runs. The current tool returns a red-gate
+status for an honest completed timing failure; do not rewrite that as a crashed
+fit or a successful promotion.
+
+24.2 One canonical connected fit after the batch
+
+Use the same device and seed 1 and the inherited canonical 100 MHz constraints
+for the first connected comparison. The retained QSF has:
+  HIGH PERFORMANCE EFFORT;
+  BALANCED optimization technique;
+  STANDARD FIT;
+  placement effort multiplier 1.0;
+  physical synthesis register retiming OFF.
+
+Do not silently flip several tool options along with RTL changes. If register
+retiming or a different clock-network assignment is needed, make it a separate,
+identified experiment with its own reason and result.
+
+Small mapping checks may validate new source selection, memory inference and DSP
+counts before the connected fit. They do not establish ALMs/Fmax. Do not consume
+a full-fit campaign on every leaf merely because the previous connected fit was
+faster than expected.
+
+24.3 Required outputs
+
+Publish, as they become available, clearly labelled:
+  synthesis DSP/register/memory totals and live hierarchy;
+  fitter ALMs/registers/RAM/DSP totals and success/failure;
+  setup/hold plus the required remaining timing analyses;
+  complete raw constraints/configuration and source identities;
+  exact negative and low-margin path inventories;
+  canonical receipt status and any reason promotion is still blocked.
+
+The owner is entitled to preliminary measurements. Receipt generation or review
+may block formal adoption, not disclosure of a known raw ALM number. If STA has
+not finished, say "ALMs known, timing pending" rather than withholding both.
+
+24.4 Analysis for the requested reserve
+
+After a physical result exists, analyze the same retained database at the
+explicit 110 MHz condition without silently changing unrelated constraints. Keep
+that report separately labelled and bind it to the same placed design.
+
+Use commands supported by the installed Quartus/TimeQuest 17.0.2. Verify command
+syntax locally; do not paste unverified options from a newer online manual into
+a signoff script. Preserve all relevant clock relationships and I/O coverage.
+
+Check setup and hold across applicable corners, recovery/removal and minimum
+pulse-width/period requirements where relevant. Enumerate unconstrained paths
+and exceptions. A newly unconstrained path is not a timing improvement.
+
+The existing physical-pin wrapper is still characterization, not a real board
+pinout/PLL/I/O timing budget. Keep that scope visible in both canonical and
+margin reports.
+
+24.5 When another placement run is justified
+
+If Timing4 is red, diagnose the new full path families and make the next bounded
+architectural correction. Do not repeat unchanged seed 1.
+
+If Timing4 is green with limited margin, use the near-critical report to decide
+whether a small second batch can create useful reserve without upsetting the
+area/throughput result.
+
+If Timing4 reaches comfortable margin, one separately authorized, predeclared
+confirmation seed may help check placement sensitivity. Do not turn this into a
+seed sweep until a lucky green run appears, and do not use the best seed as a
+substitute for a robust architecture. Existing project permissions govern any
+extra fitter invocation.
+
+===============================================================================
+25. ACCEPTANCE CHECKLIST AND STOP CONDITIONS
+===============================================================================
+
+Architectural/functional:
+  [ ] All affected baseline oracles still execute.
+  [ ] Exact material/divider/bilerp arithmetic passes independently.
+  [ ] New latency is explicit; no old cycle-exact test was quietly weakened.
+  [ ] Combiner context recurrence and output-credit schedules are proven in RTL.
+  [ ] BIL island single-active throughput is protected, not just leaf II=1.
+  [ ] Pending owner initialization has a reviewed chronological priority matrix.
+  [ ] Full slot/generation identity survives every new queue or bypass.
+  [ ] Atomic owner/RCP/descriptor/material admission edge remains correct.
+  [ ] Every accepted job retires or follows the original explicit reset/fault law.
+  [ ] Quiet includes every new stateful term and all external invalidators.
+  [ ] Frame clear cannot erase same-edge new faults or reset-only faults.
+  [ ] Deliberately wrong variants fail for the intended reason.
+  [ ] Connected workload cycle budgets and reserve remain legal at 100 MHz.
+
+Mapping/resources:
+  [ ] Exactly one selected engine for each role; no baseline/migration duplicates.
+  [ ] 30-DSP objective retained, or explicit evidence-based exception approved.
+  [ ] Four live bilerp lanes and three live ATTR3 lanes remain.
+  [ ] Critical payload RAMs still infer with valid write/read/publish semantics.
+  [ ] ALM delta is measured and attributed; no map ALUT-to-ALM substitution.
+  [ ] Source/parameter/macro/manifest identities match the actual fitted specimen.
+
+Timing:
+  [ ] Canonical 100 MHz required setup/hold and other timing checks pass.
+  [ ] No new false/multicycle/unconstrained path hides a real dependency.
+  [ ] The complete low-margin inventory is reviewed, not only the old worst path.
+  [ ] Separate 110 MHz analysis of the retained design establishes comfort,
+      or the result is labelled 100 MHz green with limited margin.
+  [ ] Real clock skew is included; Fmax is not substituted for complete timing.
+
+Stop and diagnose before fitting when:
+  - a planned pipeline stage has no identified place for a stalled response;
+  - a source or owner record can be reused before its last read/response;
+  - a queue bypass both forwards and enqueues one event;
+  - occupancy wraps or quiet ignores new valid bits;
+  - a same-edge fault/admission claim depends on a delayed sticky flag;
+  - the proposal only fixed the headline paths while another known large family
+    has no explanation at all;
+  - a broad source/test rewrite prevents meaningful baseline comparison.
+
+Stop and report, rather than hiding results, when:
+  - raw measurements exist but a validator/parser fails;
+  - 100 MHz passes but the comfort target does not;
+  - DSP remains 30 but ALMs increased beyond the proposed review guide;
+  - the current receipt is locally valid but whole-machine composition remains open.
+
+===============================================================================
+26. HOW TO RESPOND TO THE FIRST TIMING4 RESULT
+===============================================================================
+
+Do not lead with only a PASS count or only the highest MHz number. Give the owner:
+
+  Measured specimen and scope: G8A, exact commit/parameters.
+  ALMs / DSP / RAM / registers.
+  100 MHz setup/hold results and restricted Fmax.
+  110 MHz margin-analysis result, if available.
+  Useful-work rate and cycle-budget comparison against Timing3.
+  New worst path family and whether the old targeted families disappeared.
+  Whether the candidate is ready for adoption, or the one remaining reason it is not.
+
+Example of an honest possible outcome format, NOT a forecast:
+
+  "Timing4 fits. DSP count remains 30. ALMs are X. Canonical 100 MHz passes.
+   The 110 MHz check is still red on family Y; this is closure with limited
+   margin, not the requested comfort target. No throughput regression was seen
+   on the defined traces. The next bounded correction is Z."
+
+Or:
+
+  "Timing4 and the separately labelled 110 MHz analysis pass. ALMs are X, DSP
+   remains 30, critical RAM inference is intact, and connected cycle budgets
+   pass. The result is comfortable G8A closure, not whole-console closure."
+
+The larger ALM rescue roadmap remains ahead. Do not spend the newly recovered
+margin on unrelated features before this boundary is stable, and do not keep
+performing G8A micro-optimizations indefinitely after its actual requirements
+and useful reserve have been met.
+
+===============================================================================
+27. SOURCE REGISTER AND REPRODUCTION
+===============================================================================
+
+Baseline RTL and measurement references below are pinned to publication head:
+  37ebab94344348551553996186b14672a8b0c61f
+
+Repository base for explicit review URLs:
+  https://github.com/Fabulu/zhaozhou/blob/37ebab94344348551553996186b14672a8b0c61f/
+
+[S01] reports/G8A-TIMING3-DSP-PATH-REPORT-20260915.md
+      Complete measured report, negative-family summary and proposed Timing4
+      directions. Blob 597e80df7594c0c3f4632c78966847aaf38a9318.
+
+[S02] reports/synthesis/zhao_g8a_raster_texture_timing3_paths.json
+      Machine-readable negative-family census and representative endpoints.
+      Also tools/quartus/g8a_timing_path_census.py, inspected parser and selection
+      rules; blob 8d73f532f4da7b5290905a4a416f353e96bbc497.
+      The full large raw timing table was not independently processed here.
+
+[S03] fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+      Inspected pipeline, finish_lane, context stores, queues, completion credit,
+      counters and idle. Blob dd2d619c4826663461a17193166ff3ccecdc777d.
+
+[S04] fpga/rtl/texture/zhao_texture_bilerp_lane_dsp2.sv
+      Inspected complete three-stage candidate and two-DSP arithmetic.
+      Blob 0454d7658690065ddb74722e86025237d37adba2.
+
+[S05] fpga/rtl/texture/zhao_texture_v3own.sv
+      Inspected owner/admission, return pipeline, state initialization, credit,
+      wrap/fence, registered notifications and source-read ownership structure.
+      The live RTL, not its historical header's old result40 example, determines
+      the selected instance's actual result/context width.
+
+[S06] fpga/rtl/texture/zhao_texture_island_v3_top.sv
+      Inspected atomic admission; lifetime predicate; quiet aliases/reduction;
+      reciprocal/UVW prep; descriptor/UV/material trust; four-channel BIL active
+      sample aggregation; completion output and fault/counter baselines.
+      Blob 9f71f04121212ada4702b75914340bd7a67d9f07.
+      Especially approximate source ranges 460-642, 850-1250, 1700-1860, 2350-end.
+
+[S07] fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
+      Complete rounded signed divide and PREP magnitude expression.
+      Blob 702f0800d2718e611d28e3850dc2e5d1af9e0f81.
+
+[S08] fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv
+      Inspected metadata/profile, three-lane join and fault/cancel path.
+      Blob 787b47b987a86ddffe0089b1b0225c4706c09535.
+      Especially approximate source range 480-630 for attribute verdicts.
+
+[S09] fpga/rtl/texture/zhao_texture_early_desc_v2.sv
+      Complete 287/320-bit descriptor physical layout, held read, verdict,
+      counter and reset semantics.
+      Blob dc41682b0f3b61630c951ae169f221935029a24a.
+
+[S10] fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
+      Inspected input acceptance/issue, credit contract, A0 arithmetic,
+      divider and response/identity FIFO organization.
+      The remainder of the implementation must be checked by its owner when
+      adjusting the clear, counter and side-table timing; do not infer those
+      details solely from this brief's input-path analysis.
+
+[S11] reports/synthesis/blockpaths/
+      zhao_raster_texture_v3_fit_top@g8a-timing3.qsf
+      Actual retained tool/device/seed/retiming and source settings.
+
+[S12] reports/synthesis/blockpaths/
+      zhao_raster_texture_v3_fit_top@g8a-timing3.sdc
+      Actual 10 ns clock model, clock uncertainty and I/O coverage.
+      Blob 62d23139dbad1af8ab76a016d4c809f92da92cde.
+
+[S13] fpga/rtl/texture/zhao_texture_v3bank.sv
+      Complete synchronous M10K bank, registered write-enable and old-data
+      collision contract. Blob 7df769fedaaa0ef86fda48785b3533b885ecc85e.
+
+[S14] tests/texture/texture_bilerp_lane_dsp2_diff.cpp
+      Inspected cycle-exact control/data comparison and occupancy/reset matrix.
+      Blob 3b26874f944ca6dfb6184009c0a805407191202e.
+
+[S15] reports/synthesis/zhao_g8a_raster_texture_timing3.json
+      Canonical measured receipt. Its mapped entity-attribution ALUT/register
+      values are distinct from the fitted resource summary.
+      Blob 6c2d4e55d12f92bc249ac6c3db7586486d94f3c5.
+
+[S16] Latest corrected plan, published during this review:
+      commit 8579e7bbb72e8603790d1b9039f2ee50f6ce734e
+      reports/G8A-TIMING3-DSP-PATH-REPORT-20260915.md
+      Blob 230c3e9302f5a573932aeb4ed02b8041d2e7a93b.
+      Compared against 37ebab94: one commit, report/task-log changes, no RTL.
+      https://github.com/Fabulu/zhaozhou/commit/8579e7bbb72e8603790d1b9039f2ee50f6ce734e
+      Its narrow BIL/AUX/descriptor choices and wrapper clear are incorporated.
+      Its two-PREP-cycle divider and mandatory F stage are explicitly discussed
+      as choices, not silently replaced by our lower-latency alternatives.
+
+[S17] fpga/rtl/generated/zhao_raster_texture_v3_fit_top.sv
+      Inspected generated wrapper, source comments, observability, setup logic
+      and combinational fault/clear ready feedback.
+      Blob fa6eb1cfe5f44960c74529198cc3aac576a74693.
+
+[S18] fpga/rtl/texture/zhao_texture_aux_div6.sv
+      Inspected complete six-stage pipeline and unsigned compare/subtract step.
+      Blob 2173b7153b218a59e4e5e06d350957308464b7ed.
+      Its historical "nothing instantiates it" header is stale; the inspected
+      AUX-v2 module does instantiate it. Connectivity outranks historical prose.
+
+Supplementary vendor background, not substitutes for the pinned source:
+
+[V01] Intel Quartus Prime 17.0 Help, M10K definition:
+https://www.intel.com/content/www/us/en/programmable/quartushelp/17.0/reference/glossary/def_m10k.htm
+      Registered inputs and optional output-register organization explain why
+      source coding shape and a post-RAM register boundary matter.
+
+[V02] Intel TimeQuest Report Fmax Summary help:
+https://www.intel.co.id/content/www/id/id/programmable/quartushelp/19.1/analyze/sta/sta_com_report_fmax.htm
+      Fmax is a benchmark-oriented summary, not a replacement for constrained
+      slack analysis. Verify installed 17.0.2 commands before scripting.
+
+[V03] Intel Quartus Prime Standard Design Recommendations, global clock networks:
+https://docs.altera.com/r/docs/683323/18.1/intel-quartus-prime-standard-edition-user-guide-design-recommendations/use-global-clock-network-resources
+      Dedicated clock-network use and automatic promotion are reasons to inspect
+      actual clock routing, not to infer it from signal names or absent settings.
+
+Reproduce the executed mathematical/model checks:
+
+  python timing4_model_checks.py --output timing4_model_results.json
+
+Requirements: Python 3.10+ and NumPy. These are host checks only.
+
+Run the near-critical scanner's synthetic self-test:
+
+  python timing4_near_critical.py --self-test
+
+Run it on the actual retained report from the repository root:
+
+  python <handoff>/timing4_near_critical.py --input \
+    "reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing3.setup.summary.rpt" \
+    --json-output timing3_near_critical_110.json \
+    --csv-output timing3_near_critical_110.csv --target-mhz 110 --expected-rows 2000
+
+The command is shown with shell line continuations for readability. On Windows,
+use one line or the corresponding PowerShell continuation syntax. The script
+uses only the Python standard library. It reports period-shift ESTIMATES only for
+matching same-clock relationships; it cannot perform STA.
+
+If a different export has more rows, specify that count explicitly. Use an
+explicit encoding only when required by the actual report bytes. The raw byte
+hash must remain the provenance identity before decoding. Do not normalize a
+retained report to make its hash match a newly generated one.
+
+===============================================================================
+28. FINAL INSTRUCTION TO THE IMPLEMENTING AGENT
+===============================================================================
+
+The point is not to create more paperwork around 90.96 MHz. The point is to remove
+specific long combinational dependencies while retaining useful work per clock.
+
+Build the smallest coherent version of this batch that addresses the measured
+families and the intended margin band. Keep ownership, phase scheduling, memory
+ports and error behaviour explicit. Prefer exact shorter arithmetic and narrow
+registered predicates before adding large queues. Where latency is added, repair
+the real feedback loop or prove its workload budget, rather than quoting leaf
+II=1 and moving on.
+
+Target a comfortably timed 30-DSP G8A, not a lucky barely-green fit and not a new
+machine with fewer features. Report actual measurements immediately and distinguish
+100 MHz closure, 110 MHz reserve, and production adoption. A clean physical result
+is the arbiter of timing and area; the proposal does not pre-award that result.
+
+END OF BRIEF

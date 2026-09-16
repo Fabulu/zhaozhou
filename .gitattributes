@@ -113,12 +113,20 @@ tests/tools/test_render_texture_packet_g.py text eol=lf
 tests/mutants/zhao_texture_aux_pipe_v2*.sv text eol=lf
 tests/mutants/zhao_texture_v3own*.sv text eol=lf
 tests/texture/texture_v3own_bubble_control.cpp text eol=lf
+tests/texture/texture_v3own_adversarial.cpp text eol=lf
+tests/texture/material_combine_v3_diff.cpp text eol=lf
+tests/tools/test_v3own_timing4_event_control.py text eol=lf
+tests/mutants/zhao_texture_aux_timing4_mutants.sv text eol=lf
+tests/texture/aux_pipe_v2_timing4.sources.txt text eol=lf
+tests/texture/aux_div6_timing4.sources.txt text eol=lf
+tests/texture/texture_aux_pipe_v2_directed.cpp text eol=lf
+tests/texture/texture_aux_div6_directed.cpp text eol=lf
+tests/tools/test_aux_timing4_controls.py text eol=lf
 fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv text eol=lf
 fpga/rtl/prod/zhao_prod_top.sv text eol=lf
 tests/geometry/tb_geom_bin_pipe_v2.sv text eol=lf
 tests/raster/tb_raster_texture_stage_v3.sv text eol=lf
 tests/texture/texture_island_v3_packet_b_fullctx.cpp text eol=lf
-tests/texture/texture_aux_pipe_v2_directed.cpp text eol=lf
 tests/mutants/zhao_texture_material_combine_v3_mutants.sv text eol=lf
 tests/mutants/zhao_raster_rcp24_v4_timing_mutants.sv text eol=lf
 tests/raster/raster_attrgrad_v2_directed.cpp text eol=lf
@@ -169,6 +177,23 @@ tests/memory/engine1_raw_last_v2.sources.txt text eol=lf
 tests/memory/engine1_raw_last_v2_directed.cpp text eol=lf
 tests/mutants/zhao_engine1_raw_last_v2_mutants.sv text eol=lf
 tests/tools/test_engine1_raw_last_v2_static.py text eol=lf
+# Packet-H excluded renderer/terminal/video bridge leaves and their exact controls.
+fpga/rtl/video/zhao_renderer_lease_v2.sv text eol=lf
+fpga/rtl/video/zhao_video_terminal_adapter_v2.sv text eol=lf
+fpga/rtl/video/zhao_video_ready_bridge_v2.sv text eol=lf
+tests/mutants/zhao_renderer_lease_v2_mutants.sv text eol=lf
+tests/mutants/zhao_video_terminal_adapter_v2_mutants.sv text eol=lf
+tests/mutants/zhao_video_ready_bridge_v2_mutants.sv text eol=lf
+tests/video/renderer_lease_v2.sources.txt text eol=lf
+tests/video/video_terminal_adapter_v2.sources.txt text eol=lf
+tests/video/video_ready_bridge_v2.sources.txt text eol=lf
+tests/video/renderer_lease_v2_directed.cpp text eol=lf
+tests/video/video_terminal_adapter_v2_directed.cpp text eol=lf
+tests/video/video_ready_bridge_v2_directed.cpp text eol=lf
+tests/video/tb_renderer_lease_v2.sv text eol=lf
+tests/video/tb_video_terminal_adapter_v2.sv text eol=lf
+tests/video/tb_video_ready_bridge_v2.sv text eol=lf
+tests/tools/test_packet_h_shell_prereqs.py text eol=lf
 # Shell-fit production receipts and their raw evidence are content-addressed.
 # Preserve exact Quartus/JSON/Git bytes; whitespace and CRLF are evidence.
 reports/characterization/shell_fit_top_clean_characterization/** binary
@@ -216,6 +241,11 @@ tests/fuzz/*.ts text eol=lf
 # mutant table -- a guard that lints nothing must fail, not pass.
 *.sh text eol=lf
 tools/*.py text eol=lf
+
+# Owner-supplied architecture briefs are handed-over evidence: preserve the
+# exact bytes we were given, so a recorded SHA-256 keeps describing the file.
+reports/Zhaozhou_G8A_DSP_Rescue_Architecture_Brief.txt -text
+reports/Zhaozhou_G8A_Timing4_110MHz_Architecture_Brief.txt -text
 
 # Committed binary evidence: never touch.
 *.bin -text

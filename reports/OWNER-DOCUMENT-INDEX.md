@@ -52,6 +52,31 @@ nobody has recorded a disposition where the sweep can see it.
 | 2026-09-05 | `81ee3692` | `reports/zhaozhou-texture-island-rearchitecture-2026-09-05.txt` | 2365 | yes | Agent please read - important texture rearchitecture advice |
 | 2026-09-05 | `bd124f78` | `reports/zhaozhou-texture-island-rearchitecture-v2-2026-09-05.txt` | 2867 | yes | Agent please read - update to previous rearchitect |
 | 2026-09-05 | `dd4af89d` | `reports/zhaozhou-terrain-mipmapping-architecture-2026-09-05.txt` | 421 | yes | Agent please read - Mipmapping addendum |
+| 2026-09-14 | `494a82f7` | `reports/Zhaozhou_G8A_DSP_Rescue_Architecture_Brief.txt` | 1834 | yes | G8A DSP rescue brief, imported from the golden-path branch |
+| 2026-09-16 | *this commit* | `reports/Zhaozhou_G8A_Timing4_110MHz_Architecture_Brief.txt` | 1681 | yes | G8A Timing4 / comfortable-110 MHz brief, handed over by the owner |
+
+## Hardware-brief dispositions
+
+Recorded here rather than left to a filename, per this file's own rule.
+
+* **`Zhaozhou_G8A_DSP_Rescue_Architecture_Brief.txt` — SATISFIED, measured.**
+  Its ATTR3 + BIL2 portfolio was implemented, mapped and physically fitted. The
+  connected G8A went 49 -> 30 physical DSP blocks at `3bf599d5`, recorded in
+  `reports/G8A-TIMING3-DSP-PATH-REPORT-20260915.md`. The brief's DSP objective is
+  closed; its timing objective was not, which is what the next brief addresses.
+* **`Zhaozhou_G8A_Timing4_110MHz_Architecture_Brief.txt` — LIVE, partially
+  implemented.** It reviews publication head `37ebab94` and reconciles against
+  plan commit `8579e7bb`, so it is a review of this lane's current work rather
+  than a new direction. Reconciliation notes that matter, because they prevent
+  double implementation:
+  * its stage **P** and our already-implemented combiner stage **S** are the SAME
+    boundary — implement one, not both (brief §6.2, §1);
+  * our **F** finish stage is newer than the brief's illustrative calendar; §7.6
+    says to retain it, and the brief's exact short finish arithmetic (§7) makes F
+    cheaper rather than replacing it;
+  * an **S+F** combiner needs its own throughput calendar and rate evidence; the
+    brief's verified calendars cover the one-added-stage option only (§8.5).
+  Work packages still owed from it are tracked in `DOCKET.md` and in the run log.
 
 ## Triage still owed
 
