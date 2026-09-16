@@ -282,6 +282,41 @@ coefficient-table primitives stop being one bullet of a stage and become the
 mechanism the owner has asked for, to be reused by R4, R5, R6 and FIELD
 rather than re-derived in each.
 
+### The work list the direction implies — blocks that spend ALMs and no memory
+
+Generated 2026-09-16 from `reports/synthesis/zhao_block_fit.json`, unlabelled
+fitted rows only. **51 fitted blocks report zero M10K**, and they carry
+39,121 ALM between them.
+
+**Read that total carefully; it is a sorting aid, not a budget.** It
+double-counts seed variants of the same block (`zhao_raster_rcp24_svc`,
+`…seed2`, `…seed3` are one design measured three times), it overlaps composed
+roots that contain their own children, and several rows are stale — the two
+33-DSP projector rows below are the pair the shared G8B group already replaced
+at 34 DSP total. What the list is good for is pointing at *where the
+conversion candidates are*, which is what the direction needs.
+
+| block | ALM | DSP | why it is a candidate |
+|---|---:|---:|---|
+| `zhao_geom_skin` | 2,225 | 9 | matrix-vector products; R5. A quarter-square byte multiply removes the DSPs and the LUT multiplier both |
+| `zhao_geom_cull` | 1,102 | 15 | the highest DSP density in the tree with no memory at all |
+| `zhao_raster_rcp24_svc` | 1,041 | 6 | a reciprocal, which is the canonical table lookup |
+| `zhao_texture_material_combine_v1` | 1,663 | 2 | R4 names this one explicitly: *"the promised quarter-square/coefficient-memory replacements are absent"* |
+| `zhao_terrain_lod` / `zhao_geom_lod` | 1,759 / 1,183 | 3 / 6 | signed 33x32, structurally 6->3 per the implications below |
+| `zhao_probe_dist_svc` | 1,745 | 0 | a distance service with no memory; whatever root it computes is a table |
+| `zhao_raster_edgewalk` | 2,286 | 2 | the largest zero-memory block; its factored-row proposal is unimplemented |
+
+**`zhao_qsq_bytemul` is the instrument for most of that column**, extracted
+from `zhao_terrain_shade` on 2026-09-16: one M10K, no DSP, exact for all 65,536
+byte pairs, with the sweep driven through the RTL rather than argued. Every row
+above that has a DSP count can be asked the same question against it.
+
+**Three cautions that belong with the list.** Not every block should hold
+memory — a small table read on several ports in one cycle is correctly logic.
+An M10K read is ~2 ns against a flip-flop's ~0.3, so a lookup on a block's
+critical path can cost more than it saves. And the M10K allocations are
+per-domain and one domain is already over; see the direction above.
+
 ## Current optimization implications
 
 - Edgewalk is a valid contained backend ALM candidate at 1,997.4 inclusive ALMs,

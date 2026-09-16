@@ -1482,3 +1482,68 @@ audit in `reports/Zhaozhou_DSP_Uncashed_Savings_Audit_2026-09-16.txt`. Its four
 replacements cover 72–75 DSP of the 173, restoring omitted raster/texture scope
 gives ~119–122, further packing ~30 more. The 173/40,591 figure is **partial mixed
 evidence**, not a floor and not a bound.
+
+## 2026-09-16 — G8B reaches 92.44 MHz; owner adds the M10K direction
+
+**THE CAMPAIGN, fit by fit.** Every row seed 1, clean tree, `failed:structure`
+against the ruled 100 MHz — which is the fit completing and the budget rules
+refusing it, not a failed measurement.
+
+| row | Fmax | ALM | DSP | what it cut |
+|---|---:|---:|---:|---|
+| `@g8b` | 43.94 | 7,424 | — | baseline (physical pins) |
+| `@g8b-t2` | 43.54 | 7,531 | — | row products at s1 (physical pins) |
+| `@g8b-t12` | 57.87 | 7,841 | — | T1 skid + T2 (virtual pins from here) |
+| `@g8b-t1b` | 73.59 | 7,807 | — | fourth vertex slot + triangle queue |
+| `@g8b-t3bc` | 74.17 | 8,339 | 34 | both projector cones |
+| `@g8b-t3` | 85.90 | 8,460 | 34 | registered window mask |
+| `@g8b-t4` | **92.44** | **8,272** | **32** | span multiply -> shifted-constant compare |
+
+**T4 is the first package that bought clock AND gave area back** (−188 ALM,
+−4 DSP), because it deleted arithmetic rather than adding a stage: the stride
+is always a power of two, so `(k >> L) == idx` replaces a runtime multiply that
+Quartus had been inferring DSPs for. Worth noting against the owner's standing
+priority — the rest of the campaign paid area for clock.
+
+**A MEASUREMENT-CONDITION BREAK, now on record.** The campaign switched from
+`physical-top-ports` to `virtual-top-ports` between `@g8b-t2` and `@g8b-t12`,
+and the 43.54 -> 57.87 step lands on exactly that boundary. T1/T2 genuinely cut
+paths and the mode tests prove the rate held, so the campaign stands — but part
+of that one step is the pin boundary disappearing and nobody had separated the
+two. `packet_i_g8b_registration_static` now requires `ioMode` and `virtualPins`
+on every G8B row and requires them to agree. **Owed: one physical-pin fit at
+the closing commit**, which is also what the Packet-I receipt gate demands
+(zero virtual pins), so it is not an extra fit — it is the accepting one.
+
+**IN FLIGHT, not yet fitted:** T5 (the run-cell lattice base `i0`/`j0`
+registered at the same five paired sites T3a built, with its own
+`a_cell_base_fresh` detector) and T6 (the projector's two output rescales fused
+into one add and one shift, with a live equivalence assertion against the
+composition it replaces). Those are the two remaining cones: −0.818 tess and
+−0.498 core. The next fit answers whether G8B closes at 100 MHz.
+
+**OWNER DIRECTION, 2026-09-16, mid-session:** *"remember we have lot's of m10k
+memory, ALM's are over budget 15 times over, so what you can you need to solve
+with memory."* Recorded in `reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md`
+and in session memory. What the numbers say:
+
+- **40,591 ALM against a 41,910 DEVICE** — 97% of the chip — with Texture,
+  Complete FIELD and 34 further blocks contributing **zero**. M10K is 94 used
+  of 464 allocated, 553 on the device. The direction is right and urgent.
+- **The lever is not relocating state.** `tools/design/check_array_storage.py`
+  was widened (unresolvable declarations 206 -> 47, plus two CWD defects, one of
+  which manufactured a finding) and with that sight finds **no** fit-rowed block
+  holding 8 Kbit or more of array in flip-flops. The breach is combinational.
+- **So the lever is converting COMPUTATION to LOOKUP** — R1's quarter-square and
+  coefficient-table primitives, which R1 and R4 both list as absent while
+  `zhao_terrain_shade` has had a complete, exact, exhaustively proven one
+  embedded in it for weeks. That is the uncashed-cheque shape again.
+- **`fpga/rtl/common/zhao_qsq_bytemul.sv` is written and lint-clean** — the
+  extraction of that table into a reusable primitive, one M10K, no DSP, exact
+  for all 65,536 byte pairs. NOT YET COMMITTED and deliberately so: a primitive
+  that nothing instantiates is precisely the "BUILT, INSTALLED NOWHERE" defect
+  `tools/budget/uncashed_cheques.py` exists to catch, so it lands together with
+  the rewire of `zhao_terrain_shade` onto it, or not at all.
+
+**STILL OPEN AND DELIBERATELY RED:** `ledger_check`'s one V20 error, the
+`PROTECTED_HASHES`-vs-V20 collision on `zhao_geom_binner_v2.sv`. Owner ruling.
