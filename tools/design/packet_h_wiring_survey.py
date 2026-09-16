@@ -95,6 +95,45 @@ assert not _stem_hit("tri_kx0", ".tri_kx01_i(x),"), (
     "packet_h_wiring_survey: the stem matcher matches a LONGER name, so every "
     "report would be a false pairing")
 
+_PARAM_MODULE = """
+module m_with_params #(
+    parameter int unsigned W = 8
+) (
+    input  logic clk,
+    output logic [W-1:0] q_o
+);
+endmodule
+"""
+
+
+def _self_check_ports() -> None:
+    """A parameterised module must yield its PORTS, not its parameters.
+
+    Pinned because the first version returned an empty list for exactly this
+    shape and the survey then reported every port of the V2 block as newly
+    added. It is the only control that would have caught it: the four organs
+    this tool was written for are parameterless and parsed correctly.
+    """
+    import tempfile
+    handle, tmp = tempfile.mkstemp(suffix=".sv", text=True)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as fh:
+            fh.write(_PARAM_MODULE)
+        got = ports(tmp)
+    finally:
+        os.unlink(tmp)
+    names = [n for _d, n in got]
+    if names != ["clk", "q_o"]:
+        raise AssertionError(
+            "packet_h_wiring_survey: a parameterised module yields %r, expected "
+            "['clk', 'q_o'] -- the parameter list is being read as the port list"
+            % (names,))
+
+# The call is at the BOTTOM of the file, not here: `ports()` is defined below,
+# and invoking the check at this point raised NameError -- a self-check that
+# cannot run is worth less than none, because the import failure looks like a
+# broken tool rather than a broken control.
+
 
 def find(module: str) -> str | None:
     for root, _dirs, names in os.walk(RTL):
@@ -103,15 +142,60 @@ def find(module: str) -> str | None:
     return None
 
 
+def _match_paren(text: str, open_at: int) -> int:
+    """Index just past the ')' matching the '(' at open_at, or -1."""
+    depth = 0
+    for i in range(open_at, len(text)):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return -1
+
+
 def ports(path: str) -> list[tuple[str, str]]:
-    """(direction, name) for the module header's ports, header only."""
+    """(direction, name) for the module header's ports.
+
+    THE PARAMETER LIST HAS TO BE SKIPPED, and the first version did not skip it.
+    It took everything between `module ` and the first `);`, which for
+
+        module zhao_geom_bin_pipe #(
+            parameter int W = 8
+        ) (
+            input logic clk, ...
+
+    ends at the PARAMETER list's close, so the port list was never seen and the
+    module reported **zero ports**. `zhao_geom_bin_pipe` -- the block Packet H
+    swaps -- is exactly that shape, so the survey compared a 165-port V2 against
+    a V1 it had read as empty and called all 165 "added".
+
+    A parameterless module parses fine either way, which is why the bug survived
+    a run that looked plausible: the four organs are parameterless and reported
+    21/36/32/29 ports correctly, and only the two SWAPPED blocks were wrong. A
+    tool that is right on the rows you check first is the hardest kind to doubt.
+
+    Now: find `module <name>`, step over a `#( ... )` if present by matching
+    parentheses, and take the port list from the next `(` to ITS match.
+    """
     text = io.open(path, encoding="utf-8", errors="replace").read()
-    start = text.find("module ")
-    if start < 0:
+    m = re.search(r"^\s*module\s+(\w+)", text, re.M)
+    if m is None:
         return []
-    end = text.find(");", start)
-    header = text[start:end] if end > 0 else text[start:]
-    return [(m.group(1), m.group(2)) for m in PORT_RE.finditer(header)]
+    cursor = m.end()
+    hash_at = text.find("#(", cursor)
+    next_paren = text.find("(", cursor)
+    if hash_at >= 0 and (next_paren < 0 or hash_at <= next_paren):
+        cursor = _match_paren(text, hash_at + 1)
+        if cursor < 0:
+            return []
+    open_at = text.find("(", cursor)
+    if open_at < 0:
+        return []
+    close = _match_paren(text, open_at)
+    header = text[open_at:close] if close > 0 else text[open_at:]
+    return [(mm.group(1), mm.group(2)) for mm in PORT_RE.finditer(header)]
 
 
 def stem(name: str) -> str:
@@ -187,6 +271,9 @@ def main() -> int:
     print("likely wire, not a proved one, and an UNMATCHED row may simply be")
     print("spelled differently at its far end. REPORTS; never gates.")
     return 0
+
+
+_self_check_ports()
 
 
 if __name__ == "__main__":
