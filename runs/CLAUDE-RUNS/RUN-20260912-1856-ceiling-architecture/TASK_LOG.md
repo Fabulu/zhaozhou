@@ -1902,3 +1902,43 @@ right about my own work**:
 * **Packet I cannot close regardless**, because Packet H precedes it and
   `zhao_shell_top_v2.sv` does not exist. That file is the next real item and
   it is a composition of eight blocks that all exist and are tested.
+
+### T9: exact, provable, and worth zero — the campaign's shape is now clear
+
+`rescale16`'s `(x + 2^15) >>> 16` is identically `(x >>> 16) + x[15]`, a
+36-bit increment instead of a 52-bit add. Verified over the full domain with
+a negative control that fires 70,000 times. The fit came back **byte-identical
+in every field** — 8,208 ALM, 8,882 registers, 45 RAM, 32 DSP, 96.45 MHz,
+−0.368 slack, −1.603 TNS — from a different digest and a different commit, so
+not the stale-measurement trap. **Quartus had already done it.** Reverted as
+dead weight; all fourteen G8B measurement rows retained, because reverting a
+change is not un-measuring it.
+
+**THE PATTERN, now that there are seven packages to read:**
+
+| package | changed | measured |
+|---|---|---:|
+| T3a | registered the window mask | **+11.7** |
+| T5+T6 | registered the lattice base; split the output cone | **+9.7** |
+| T8 | **deleted** a register whose value was implied | **+8.6** |
+| T7 | moved a constant add into the register ahead | **−7.9** |
+| T9 | strength-reduced a constant add | **0.0** |
+
+Everything that changed WHERE a value is computed or WHETHER a register needs
+to exist bought real clock. Both attempts to out-arithmetic the synthesiser
+bought nothing or less. Written into **QUARTUS_GOTCHAS 19** with the reason:
+Quartus's local arithmetic optimiser is better than hand-rewriting and knows
+about hard-block boundaries the RTL never mentions, while pipeline structure
+is whatever the RTL says.
+
+**Neither failure was visible in simulation.** Both were bit-exact with live
+equivalence assertions that stayed silent. Gotcha 18's MapOnly step does not
+cover it either — that answers "does this synthesise", not "is this faster".
+
+**G8B therefore stands at 96.45 MHz physical**, 18 of 2,000 paths negative,
+−0.368 ns on the blend landing. The next move is the one deferred twice now:
+a genuine extra stage in the landing path, which lands in the vertex queue
+whose credit law T1 and T1b each got wrong once — `occupancy_next +
+in_flight_next <= DEPTH`, and the buffer must be DEEPER than the number of
+items in flight. That is a considered change and the right place to start a
+fresh session, not the end of a long one.
