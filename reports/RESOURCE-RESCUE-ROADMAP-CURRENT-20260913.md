@@ -55,6 +55,29 @@ The local fitted reductions above overlap different specimens and cannot be
 summed or subtracted from 58,359. There is no defensible post-58,359
 whole-machine ALM number.
 
+> **2026-09-16 — G8A's timing gate is CLOSED at the operating requirement.**
+> `zhao_raster_texture_v3_fit_top@g8a-timing5`, clean commit `fd78352c`,
+> `status: ok`: **108.37 MHz, setup TNS 0, WNS +0.772 ns**, 13,076 ALMs, 30 DSP,
+> 71 RAM blocks, 92,964 memory bits, zero negative paths of 2,000. The
+> progression across three fits was 90.96 → 94.46 → 108.37 MHz and
+> −131.275 → −0.721 → 0 ns of setup TNS.
+>
+> What that does and does not settle:
+>
+> * **Does:** step 2's `G8A` gate. The subsystem meets 100 MHz with a real
+>   reserve, on a clean committed tree, with DSP/RAM/memory-bit counts unchanged
+>   throughout the timing campaign.
+> * **Does not:** anything whole-machine. 13,076 ALMs is a SUBSYSTEM figure and
+>   the owner's closure criterion — comfortably under 30,000 ALMs and 85 DSPs —
+>   is whole-machine, answerable only by G8C/production composition.
+> * **Does not:** COMFORTABLE. That needs 110 MHz with zero TNS; 108.37 is
+>   1.63 MHz short, and the band now holds **12 paths** (6 island, 5
+>   `zhao_raster_earlyz`, 1 `v3own`) against the 333 it held one fit earlier.
+>
+> Step 2 therefore advances to **lease/CDC and sibling shell V2**, then
+> parameter-fixed terrain G8B, then combined G8C. Details and the per-family
+> dispositions are in `G8A-TIMING4-DISPOSITION-20260916.md`.
+
 ## Current R0-R9 completion matrix
 
 | stage | current state | completion verdict |
