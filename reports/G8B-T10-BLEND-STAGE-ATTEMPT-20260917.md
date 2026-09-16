@@ -156,6 +156,74 @@ triangle queue through a different cone entirely.
 
 **(b) is the one to try**, and it is a different change from the one attempted
 here — it deletes the three write-forwards instead of extending them.
+## Both named options tested, 2026-09-17 — and both are now CLOSED by evidence
+
+### Option (a): hold the last read until pending blends land — CORRECT, REJECTED
+
+One extra term on `last_blocked`: the last read does not issue while any
+earlier kind-2 read is still in the blend pipe.
+
+```systemverilog
+wire blend_pending = (pend_v  && pend_kind  == 2'd2)
+                  || (lnd_v_q && lnd_kind_q == 2'd2)
+                  || (ln2_v_q && ln2_kind_q == 2'd2);
+wire last_blocked  = blend_pending || (j_vtx ? !vtx_room : !tri_room);
+```
+
+**The geometry is right: `terrain_tess_directed` 6,751/6,751, and
+`terrain_pipe_differential` 37/37 bit-exact against the oracle.** So the
+mechanism diagnosed above is confirmed — waiting for the blends *is* the
+missing condition, and nothing else about the four-stage design is wrong.
+
+**And the rate law rejects it, in the words of the block's own test:**
+
+```
+FAIL: VTX level 0 with morph: one lattice read per clock:
+      expected 0xAD, got 0xF2
+```
+
+173 cycles for 161 reads became **242**. Triangle morph-0.5 went 939 → 1,113
+cycles for 128 triangles, 7.34 → 8.70 per triangle, an 18.5% loss on exactly
+the morphing path. Non-morphing was untouched at 459 (the one extra drain
+cycle). *Latency may grow; the initiation rate may not* — and this is the same
+test that caught T1 doing the same thing, firing on the same clause.
+
+### Option (b): read `vy[]` at the emit — BLOCKED, and the reason is in the file
+
+At the emit, slot 0's and slot 1's blends have necessarily landed: their
+kind-2 reads issued *before* the last read, so they are ahead in the pipe and
+past the landing stage. `vy[0]`/`vy[1]` should therefore be correct with no
+forwarding at all — which would delete all three write-forwards.
+
+They are not, and `zhao_terrain_tess.sv` already says why:
+
+> *"reading `vx[0]`/`vy[1]` a cycle later would read the NEXT job's captures,
+> because the enumerator advances at issue and the next job's first read can be
+> issued on the same edge this one lands."*
+
+The trace confirms it directly — at `TR 76` the emit needed `vy[1] = 562253`
+while `vy[1]` already held `811090`, the following group's value. **That is why
+the snapshots exist at all**, and it is why they are taken as early as
+possible. Option (b) as stated cannot work.
+
+### What is left, stated precisely
+
+The four-stage design is correct except that a snapshot taken at A→B may
+predate a blend it needs, and no forward can reach back to a stage whose
+multiply has not happened. So the value has to be *patched in later* rather
+than forwarded earlier:
+
+* snapshot at A→B as now, and record per slot whether that snapshot was taken
+  before the slot's kind-2 read had landed;
+* keep the landing's value in a small per-slot holding register — one that the
+  next group cannot overwrite, which is exactly what `vy[]` fails to be;
+* at the emit, take the holding register for any slot whose snapshot was
+  stale, and the snapshot otherwise.
+
+That is three flags and three registers, it adds nothing to the binding
+`prod -> rescale -> add -> vq_y` cone, and it does not stall. It is a design
+change rather than a repair, and it should be built and measured on its own
+rather than bolted onto this attempt.
 ## Status
 
 * RTL reverted; `zhao_terrain_tess.sv` is byte-identical to `b1dbb97d`, the
