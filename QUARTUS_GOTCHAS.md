@@ -86,3 +86,56 @@ path, and the same 16 tests pass in 192 s.
 
 **The general rule:** when every member of a large set fails the same way,
 suspect the thing they share before the things they do not.
+
+---
+
+## 18. MAP-CHECK BEFORE YOU FIT. It is 36 seconds against ten minutes.
+
+Added 2026-09-16, after gotcha 15 happened again to a different form.
+
+A G8B timing package added
+
+```systemverilog
+  for (genvar gsat = 0; gsat < 3; gsat = gsat + 1) begin : g_sat0
+    assign dstep_sat[0][gsat] = ({14'b0, s3_dv[gsat][47:31]} >= s3_d);
+  end
+```
+
+Verilator: **zero diagnostics**. `quartus_map`, 5.2 seconds in:
+
+```
+Error (10170): Verilog HDL syntax error ... near text: "for";
+               expecting "endmodule"
+```
+
+Quartus 17.0 wants explicit `generate` / `endgenerate` and the genvar
+declared outside the loop header. CLAUDE.md already records the implicit
+generate as one of the two forms that prove a clean lint settles nothing; this
+entry is not about that form.
+
+**IT IS ABOUT THE CHEAP GATE NOBODY REACHES FOR.**
+`tools/quartus/run_block_fit.ps1 -MapOnly` runs Analysis & Synthesis and
+stops. On this block that is **35.7 seconds**. A full fit is ten minutes here
+and hours on the island. Every syntax and elaboration rejection Quartus has --
+the whole class gotcha 15 is about -- is caught by the short one, and the long
+one has nothing extra to say about it.
+
+So the sequence for any RTL change that will be fitted is:
+
+1. `verilator --lint-only -Wall` — one tool's opinion, seconds.
+2. the directed tests — behaviour, seconds to minutes.
+3. **`run_block_fit -MapOnly`** — *does the synthesiser accept it*, under a
+   minute, **and it also reports registers and memory bits**, so a change that
+   was supposed to delete flip-flops can be checked here rather than at the end.
+4. the fit — area, Fmax, DSP, RAM inference. The expensive question, asked once.
+
+Step 3 was skipped, step 4 failed in five seconds, and the only cost was the
+embarrassment plus one wasted launch. It is a habit rather than a rule because
+a launch is recoverable — but it is free, it answers a different question from
+both its neighbours, and a MapOnly row is retained evidence in its own right.
+
+**A failed MapOnly is not a failed budget.** The row lands as
+`incomplete:failed:quartus_map.exe`, which is a failed MEASUREMENT --
+distinct from `failed:structure`, which is a fit that COMPLETED and whose
+budget rules refused the numbers. Keep both; deleting the first removes the
+only record that a form does not synthesise.
