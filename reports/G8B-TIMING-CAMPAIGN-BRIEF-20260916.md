@@ -83,10 +83,35 @@ half the arithmetic moved to the cycle the memory response arrived. Here `m_hc`
 depends on `lat_h_i` itself, so there is nothing upstream of the response to
 move work into. A stage is required.
 
-**Acceptance.** Worst tess path better than âˆ’9.811 ns, so package 2 becomes the
-binding constraint. Exact arithmetic unchanged â€”
-`terrain_pipe_differential` stays bit-exact against `zhao_terrain_project`.
-Its 478 packets over 2,343 cycles will move; the **rate** must not.
+**Acceptance, REVISED after T2 landed.** Worst tess path better than -4.388 ns,
+which is where `zhao_project_core` and the RAM paths now sit together. Exact
+arithmetic unchanged: `terrain_pipe_differential` stays bit-exact against
+`zhao_terrain_project`. Its 478 packets over 2,343 cycles will move; the
+**rate** must not.
+
+**T1 is now worth 43.5 -> ~69.5 MHz on its own**, not the 6.6 MHz the original
+ceiling table predicted. T2 cleared what was behind it, so this package is no
+longer buying six megahertz before hitting the next wall -- it is the single
+thing standing between this subsystem and roughly 69 MHz.
+
+**Design sketch, from reading the block rather than guessing.** The chain must
+be split and the landing must move with it, because `m_hc` depends on the
+kind-2 lattice response itself and there is nothing upstream to move work into:
+
+* **stage A** (the kind-2 response arrives): `m_dab`, `rescale1`, `fx_add_sat`
+  -> `m_hc`, then `m_d = m_hc - vh[slot]`. Register `m_d` with `lat_wx_i`,
+  `lat_wz_i` and the `pend_*` metadata. For kinds 0 and 1 this stage carries
+  the response and metadata through unchanged.
+* **stage B**: `j_morph * m_d`, `rescale16`, `fx_add_sat` -> `m_y`, and the
+  landing happens here.
+
+Three consumers move with it and all three must be handled together:
+`vy[pend_slot] <= m_y` (the kind-2 capture), `last_x/y/z` into the ModeVtx
+skid, and `last_x/y/z` into the ModeTri triangle emit (`o_bx`/`o_cx` and the
+underside swap). The `vtx_room` credit -- "a landing never finds both slots
+full without a pop" -- is argued against the current timing and must count the
+new in-flight stage, or the arena reports a fill fault exactly as the G8B
+wrapper's first stimulus did.
 
 ---
 
