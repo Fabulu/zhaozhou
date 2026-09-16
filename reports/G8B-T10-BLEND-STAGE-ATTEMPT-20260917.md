@@ -224,6 +224,57 @@ That is three flags and three registers, it adds nothing to the binding
 `prod -> rescale -> add -> vq_y` cone, and it does not stall. It is a design
 change rather than a repair, and it should be built and measured on its own
 rather than bolted onto this attempt.
+## The fourth attempt, and what the four together prove
+
+The narrowed answer above was built: `vyh[]`, a copy of the blended height
+that **only the landing writes**, so the next group's raw reads cannot clobber
+it; per-slot `*_stale` flags set at the A→B snapshot from "a kind-2 read for
+this slot is still in A, B or C"; and the emit selecting `vyh[k]` over the
+snapshot whenever the flag is set.
+
+**The rate came back** — 939 cycles at morph 0.5, exactly the T10 figure, and
+170 for the VTX morph case against option (a)'s 242. **And the same 32 checks
+still failed.**
+
+### Which is the most informative result of the four
+
+| attempt | geometry | rate |
+|---|---|---|
+| T10 — stage D, forward from the landing | **32 fail** | kept |
+| two-level forward, from C and D | **32 fail** (identical) | kept |
+| option (a) — stall the last read | **6,751 pass** | **lost**: 173→242 |
+| T10b — `vyh[]` holding copy + stale flags | **32 fail** (identical) | kept |
+
+Option (a) passing is the load-bearing row: it proves the diagnosis is right —
+the emit consumes values whose blends have not landed — and that nothing else
+about the four-stage design is wrong. It is the control for every other
+attempt.
+
+And T10b failing **identically**, with the count unchanged at 32, says the
+patch was aimed at too narrow a target. It repaired `tq_ay`/`tq_by`/`tq_cy` —
+the triangle emit's a and b — and that was not enough. **Something other than
+the triangle's a/b is also consuming an unlanded blend.** The ModeVtx cases
+fail too, and those do not go through the triangle queue at all: they land
+through `land_y` into the vertex queue. The next attempt should start by
+listing every consumer of a blended height, not by patching the two the emit
+made obvious.
+
+Three candidates it should enumerate first, none of which this attempt
+touched:
+
+* `land_y` into `vq_y[]` for ModeVtx — a landing, not an emit;
+* `v_ha`, the parent-A capture, which feeds the next blend rather than a
+  triangle;
+* the `ln2_ay_q`/`ln2_by_q` chain itself, which after T10 carries a value
+  through *four* stages where it used to carry it through three, giving the
+next group one extra cycle in which to overwrite what it snapshotted.
+
+### Cost of the four attempts, honestly
+
+Four builds, four test runs and one traced simulation, all of which left the
+tree byte-identical to `b1dbb97d`. No fit was spent on any of them: a design
+that fails `terrain_tess_directed` is a design CLAUDE.md says not to measure,
+and that rule saved four fits at roughly ten minutes each.
 ## Status
 
 * RTL reverted; `zhao_terrain_tess.sv` is byte-identical to `b1dbb97d`, the
