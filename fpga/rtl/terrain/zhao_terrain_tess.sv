@@ -652,6 +652,42 @@ module zhao_terrain_tess #(
 
   wire cell_solid = ((solid & win_mask_q) == win_mask_q);
 
+  // ---- G8B T5: THE RUN-CELL'S LATTICE BASE IS REGISTERED TOO -------------
+  //
+  // @g8b-t4 left the block capping the machine at -0.818 ns with every worst
+  // endpoint leaving `j_vshift[0]`, and the cone behind it is
+  //
+  //   j_vshift -> (ea << j_vshift) + j_ox -> tv_i/tv_j -> mcase_f x3
+  //            -> mc[f_slot] -> iss_last -> the enumerator advance
+  //
+  // which is T3a's shape exactly one level up: a lattice coordinate
+  // recomputed combinationally from the enumerator state on every cycle, on
+  // the path that decides whether the enumerator may advance. `mcase_f` is
+  // the expensive middle -- four 6-bit magnitude compares and two masked-zero
+  // tests, three instances -- and it cannot start until the shift and the add
+  // in front of it finish.
+  //
+  // So the shift and the add move into the next-state cone, which T3a already
+  // built the mechanism for: `ea_n_c`/`eb_n_c` are decided one cycle early, at
+  // the same five paired sites, and these registers pair at every one of them.
+  // Nothing new is decided early -- the same decision now feeds two registers
+  // instead of one.
+  //
+  // SAME HAZARD, SAME TWO GUARDS. A missed pairing is a WRONG LATTICE
+  // COORDINATE, which silently emits a triangle from the wrong place rather
+  // than failing; `a_cell_base_fresh` below differences the registers against
+  // the value the live state would give, every StTri cycle.
+  //
+  // UNUSED IN EmFan, exactly like win_mask_q: the fan branch overwrites
+  // tv_i/tv_j from the ring walk and never reads these.
+  function automatic logic [5:0] cell_base(input logic [5:0] origin,
+                                           input logic [3:0] e,
+                                           input logic [1:0] vsh);
+    cell_base = origin + 6'(({2'b0, e}) << vsh);
+  endfunction
+
+  logic [5:0] i0_q, j0_q;
+
 `ifndef SYNTHESIS
   // THE STALE-MASK DETECTOR. Without this the failure mode of a missed paired
   // assignment is a triangle that should not exist, or one that should and does
@@ -664,6 +700,17 @@ module zhao_terrain_tess #(
     if ((st == StTri) && (win_mask_q !== window_mask(ea, eb, j_level)))
       $fatal(1, "zhao_terrain_tess: win_mask_q is stale -- ea=%0d eb=%0d lvl=%0d",
              ea, eb, j_level);
+  end
+
+  // T5's half. Separate from the mask's so a failure names WHICH register
+  // drifted; they pair at the same five sites but they are not the same bug.
+  always_ff @(posedge clk) begin
+    if ((st == StTri) && (emode != EmFan) &&
+        ((i0_q !== cell_base(j_ox, ea, j_vshift)) ||
+         (j0_q !== cell_base(j_oz, eb, j_vshift))))
+      $fatal(1, "zhao_terrain_tess: cell base is stale -- i0_q=%0d want %0d, j0_q=%0d want %0d",
+             i0_q, cell_base(j_ox, ea, j_vshift),
+             j0_q, cell_base(j_oz, eb, j_vshift));
   end
 `endif
 
@@ -780,8 +827,10 @@ module zhao_terrain_tess #(
     wa = 12'd0;
     wb = 12'd0;
     // `j_vshift` IS `j_level` in ModeTri/ModeRef; ModeVtx walks at stride 1.
-    i0 = j_ox + 6'(({2'b0, ea}) << j_vshift);
-    j0 = j_oz + 6'(({2'b0, eb}) << j_vshift);
+    // REGISTERED since T5 -- the shift and the add are in the next-state cone
+    // now, and `a_cell_base_fresh` is what holds these equal to the live state.
+    i0 = i0_q;
+    j0 = j0_q;
     if (emode == EmFan) begin
       w1 = inner_v(fan_t1);
       wa = inner_v(fan_ta);
@@ -1142,6 +1191,8 @@ module zhao_terrain_tess #(
       ea <= '0;
       eb <= '0;
       win_mask_q <= window_mask(4'd0, 4'd0, 2'd0);
+      i0_q <= 6'd0;
+      j0_q <= 6'd0;
       etri <= 1'b0;
       eside <= '0;
       eg <= '0;
@@ -1381,6 +1432,12 @@ module zhao_terrain_tess #(
               ea <= e_start_c;
               eb <= e_start_c;
               win_mask_q <= window_mask(e_start_c, e_start_c, job_level_i);
+              // Same rule as the mask above and it bites harder here: j_ox, j_oz
+              // and j_vshift are ALL assigned on this same edge, so the pair must
+              // be built from the offered ox/oz and the offered shift, never from
+              // the registers, which still hold the previous job's subpatch.
+              i0_q <= cell_base(job_ox_i, e_start_c, vtx_new ? 2'd0 : job_level_i);
+              j0_q <= cell_base(job_oz_i, e_start_c, vtx_new ? 2'd0 : job_level_i);
               etri <= 1'b0;
               eside <= '0;
               eg <= '0;
@@ -1414,6 +1471,8 @@ module zhao_terrain_tess #(
               ea <= e_start_c;
               eb <= e_start_c;
               win_mask_q <= window_mask(e_start_c, e_start_c, j_level);
+              i0_q <= cell_base(j_ox, e_start_c, j_vshift);
+              j0_q <= cell_base(j_oz, e_start_c, j_vshift);
               etri <= 1'b0;
               eside <= '0;
               eg <= '0;
@@ -1631,6 +1690,8 @@ module zhao_terrain_tess #(
               ea <= ea_n_c;
               eb <= eb_n_c;
               win_mask_q <= window_mask(ea_n_c, eb_n_c, j_level);
+              i0_q <= cell_base(j_ox, ea_n_c, j_vshift);
+              j0_q <= cell_base(j_oz, eb_n_c, j_vshift);
             end
           end
 

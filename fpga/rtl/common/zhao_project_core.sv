@@ -434,6 +434,54 @@ module zhao_project_core #(
     end
   endfunction
 
+  // G8B T6: THE TWO RESCALES ON THE OUTPUT PATH ARE ONE SHIFT.
+  //
+  // @g8b-t4 left `s6b_mad_x[18] -> out_x_o[19]` at -0.498 ns, the only
+  // non-tessellator cone still short of 100 MHz. It is
+  //
+  //     rescale16_mad : (x + 2^15) >>> 16, then SATURATE to signed 32
+  //     to_screen_xy  : (. + 2^7)  >>>  8, then CLAMP to +-524288
+  //
+  // -- a 64-bit add, a pair of 64-bit magnitude compares, a 41-bit add and a
+  // pair of 41-bit compares, in one cycle. Two thirds of it is removable
+  // without touching the law, by two facts that are exact rather than
+  // approximate:
+  //
+  // 1. NESTED FLOOR DIVISION BY POWERS OF TWO COMPOSES, and the second
+  //    rounding constant folds through it. `>>>` on a signed value is
+  //    floor-division, and floor((floor(a/2^16) + 2^7) / 2^8) equals
+  //    floor((a + 2^7 * 2^16) / 2^24): writing q = floor(a/2^16) and f for the
+  //    discarded fraction, 0 <= f < 1, the right side is
+  //    floor((q + f + 128)/256), and since q+128 is an integer and
+  //    q+128+f < q+129, no multiple of 256 can lie between q+128 and q+128+f.
+  //    So the two floors and the two rounding adds are one add of
+  //    2^15 + 2^23 = 8,421,376 and one shift of 24.
+  //
+  // 2. THE INTERMEDIATE SATURATION IS INVISIBLE AT THE OUTPUT. Whenever
+  //    rescale16_mad saturates it returns +-2^31, and to_screen_xy of +-2^31
+  //    is +-8,388,608, which is sixteen times past the guard band -- so the
+  //    outer clamp pins the same rail it would have pinned without the
+  //    saturation, which is even further out. The narrow-to-32 can only fire
+  //    on values the guard band rails anyway.
+  //
+  // THE LAW IS NOT CHANGED. Sec 8 says rescale then CLAMP, the clamp is the law
+  // and not a clip, and both survive here exactly; what is removed is one
+  // rounding step's worth of redundant width and a saturation that cannot be
+  // observed. `a_screen_fused_exact` below differences this against the
+  // original two-function composition on EVERY emitted vertex in simulation,
+  // so the algebra above is checked by the machine rather than believed.
+  localparam logic signed [MAD_W-1:0] SCREEN_RND = 64'sd8421376;  // 2^15 + 2^23
+
+  function automatic logic signed [20:0] mad_to_screen(input logic signed [MAD_W-1:0] x);
+    logic signed [MAD_W-1:0] r;
+    begin
+      r = (x + SCREEN_RND) >>> 24;
+      if (r > 64'sd524288) mad_to_screen = 21'sd524288;
+      else if (r < -64'sd524288) mad_to_screen = -21'sd524288;
+      else mad_to_screen = r[20:0];
+    end
+  endfunction
+
   // |v| as an unsigned 32-bit word. INT32_MIN maps to 0x8000_0000 = 2^31, which
   // is exactly right unsigned — the one place ~v + 1 is not a bug.
   function automatic logic [31:0] mag32(input logic signed [31:0] v);
@@ -1029,9 +1077,36 @@ module zhao_project_core #(
   always_comb begin
     mad_x = s6_prod_x + ($signed({{(MAD_W - 13) {1'b0}}, s6_cx13}) <<< 32);
     mad_y = s6_prod_y + ($signed({{(MAD_W - 13) {1'b0}}, s6_cy13}) <<< 32);
+    // KEPT DELIBERATELY, and no longer on the output path: since T6 these
+    // two exist only to be differenced against the fused form below. That
+    // makes the composition proof a MEASUREMENT on every emitted vertex
+    // rather than a paragraph, which is the same device `a_win_mask_fresh`
+    // uses in zhao_terrain_tess. In synthesis they are dead and vanish.
     scr_fx_x = rescale16_mad(s6b_mad_x);
     scr_fx_y = rescale16_mad(s6b_mad_y);
   end
+
+`ifndef SYNTHESIS
+  // THE FUSED FORM AGAINST THE ONE IT REPLACES, every cycle a vertex leaves.
+  //
+  // T6's argument has two steps -- nested floor divisions compose, and the
+  // intermediate 32-bit saturation is invisible behind the guard-band clamp --
+  // and both are the kind of reasoning that is right until it is not. A
+  // one-LSB disagreement on a rounding tie would otherwise reach a golden
+  // capture a long way downstream, or nowhere at all.
+  //
+  // No `rst_n` term: `s6b_valid` is cleared by reset, which is the guard.
+  always_ff @(posedge clk) begin
+    if (s6b_valid && !s6b_behind) begin
+      if (mad_to_screen(s6b_mad_x) !== to_screen_xy(scr_fx_x))
+        $fatal(1, "zhao_project_core: fused screen X disagrees -- fused=%0d composed=%0d",
+               mad_to_screen(s6b_mad_x), to_screen_xy(scr_fx_x));
+      if (mad_to_screen(s6b_mad_y) !== to_screen_xy(scr_fx_y))
+        $fatal(1, "zhao_project_core: fused screen Y disagrees -- fused=%0d composed=%0d",
+               mad_to_screen(s6b_mad_y), to_screen_xy(scr_fx_y));
+    end
+  end
+`endif
 
   // stage 6b — the registered viewport sum, and everything the output needs.
   logic                        s6b_valid;
@@ -1137,8 +1212,8 @@ module zhao_project_core #(
       // zeros. `project_vertex` returns a default ProjOut on the near-plane
       // branch and never writes ScreenV at all, so the vertex carries {0,0,0}.
       out_valid_o <= s6b_valid;
-      out_x_o <= s6b_behind ? 21'sd0 : to_screen_xy(scr_fx_x);
-      out_y_o <= s6b_behind ? 21'sd0 : to_screen_xy(scr_fx_y);
+      out_x_o <= s6b_behind ? 21'sd0 : mad_to_screen(s6b_mad_x);
+      out_y_o <= s6b_behind ? 21'sd0 : mad_to_screen(s6b_mad_y);
       out_d_o <= s6b_behind ? 32'sd0 : s6b_invw;
       out_w_o <= s6b_behind ? 31'd0 : s6b_w;
       out_behind_o <= s6b_behind;
