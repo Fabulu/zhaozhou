@@ -1239,3 +1239,13 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - **Next diagnostic is one edit, not an investigation:** print `r.size()`/`m.size()` when the loop exits on its bound. The existing `CHECK(r.size() == m.size(), "stream lengths %zu vs %zu", ...)` already formats exactly that and is simply never reached while the loop spins. Whether one stream stalls or both splits the remaining space in half.
 - Reverted again; tree clean, 14/14 green across projector, terrain pipe and packet-I.
 
+
+## 2026-09-16 (T2 landed and measured) - +5.42 ns on the projector cone
+
+- **The blocker was never the change.** `proj_matw_mutant_control` appeared to stop producing output across two attempts. It was a **stale mutant copy in the build**: `tests/mutants/zhao_project_core_mutant.sv` is a committed copy of the core, my own change made it 52 lines stale, and the first refresh silently did nothing because its body marker did not match. Refreshed properly, the control passes in 0.019 s with 14 checks, identical to HEAD. Diagnosing it needed one temporary edit - bound the loop low, print the two stream lengths - rather than an investigation; they were never short.
+- Also purged two Verilator partitions still holding `row_x` as a struct member, which it no longer is.
+- **T2 committed** at `3aea9b7d`: 163/163 across projector, terrain, geometry, vertex arena and packet-I, including `terrain_wcache_differential_rpp1` (which caught attempt one), `proj_matw_directed` 242/242, and `proj_rowmux_directed`'s stream equality under four stall patterns.
+- **`@g8b-t2` fit, clean `3aea9b7d`, 497.2 s: Fmax 43.54 MHz** - unchanged, exactly as the ceiling table predicted, because the tessellator still caps it. What moved is what T2 claimed: **`zhao_project_core` -9.811 -> -4.388 ns**, data 19.043 -> 13.685, **+5.42 ns**, for +107 ALMs and no DSP change. Its ceiling went 50.5 -> **69.5 MHz**.
+- **Spending this fit was right despite the brief's own advice against per-package fits**, and the reason is recorded: it could not move Fmax, but it was the only way to confirm the cut did what it was designed to do BEFORE T1 is built on the assumption that it had. Prediction was "Fmax unchanged, projector cone improved"; both halves came true.
+- **Revised outlook: T1 alone now buys 43.5 -> ~69.5 MHz**, not the 6.6 MHz the original table predicted, because T2 already cleared what was behind it. After T1, project_core's residual -4.388 and the RAMs' -4.058 are level, so T3 becomes one package covering both rather than two in series.
+

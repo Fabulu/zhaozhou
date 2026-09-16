@@ -13,6 +13,35 @@ registers, 34 DSP, 44 RAM blocks, 95,610 memory bits. Hold clean at +0.251/0.
 **Target:** 100 MHz, the machine's operating requirement. That needs
 **+12.758 ns** on the worst path â€” not the +0.587 ns G8A's last mile needed.
 
+## STATUS: T2 IS LANDED AND MEASURED. T1 is the only thing left before ~69 MHz.
+
+`@g8b-t2`, clean commit `3aea9b7d`, seed 1, 497.2 s. Fmax **43.54 MHz** —
+essentially unchanged, exactly as the ceiling table below predicted, because
+the tessellator still caps it. What moved is the thing T2 claimed:
+
+| endpoint block | before (`@g8b`) | after (`@g8b-t2`) | ceiling |
+|---|---:|---:|---:|
+| `zhao_terrain_tess` | −12.758 ns | −12.968 ns | 43.5 MHz |
+| **`zhao_project_core`** | **−9.811 ns** | **−4.388 ns** | **69.5 MHz** |
+| inferred RAMs | −5.328 ns | −4.058 ns | 71.1 MHz |
+
+**+5.42 ns on the projector cone** (data 19.043 → 13.685), for +107 ALMs and no
+DSP change. Its ceiling moved 50.5 → 69.5 MHz and it is no longer the second
+constraint — it now sits level with the RAM paths.
+
+This fit was worth spending despite the brief's own advice below, and the
+reason is worth recording: it could not move Fmax, but it was the only way to
+confirm the cut did what it was designed to do BEFORE T1 was built on the
+assumption that it had. The prediction was "Fmax unchanged, projector cone
+improved"; both halves came true, which is what makes the remaining plan
+trustworthy.
+
+**Revised outlook.** T1 alone now takes the subsystem from 43.5 MHz to roughly
+**69.5 MHz** — no longer the 6.6 MHz the original table predicted, because T2
+has already cleared what was behind it. After T1, `zhao_project_core`'s residual
+−4.388 and the RAMs' −4.058 are level, so T3 becomes a single package covering
+both rather than two in series.
+
 ## The ceilings, and why the order is not the obvious one
 
 | # | endpoint block | negative rows | worst | ceiling |
