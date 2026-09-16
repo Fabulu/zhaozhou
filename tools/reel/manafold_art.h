@@ -497,11 +497,13 @@ constexpr int32_t kLoopReentryDepthPm = 590;  // how far inside the surface, per
 constexpr int32_t kLoopReentryXMm = -140;
 constexpr int32_t kLoopReentryYMm = 200;
 // Direction 12: the rear socket is a point on the BODY, not a point recomputed
-// by the return arm. These are the already-recorded visible crossing, promoted
-// from a dead comment into named owner controls. The buried tail continues
+// by the return arm. Pass 16 began at the recorded crossing (-328,467); the
+// independent full-bank review found that still fused into the body silhouette,
+// so it was authored outward to (-360,500) and rechecked on Lasso/Taunt II.
+// The buried tail continues
 // kRearSocketBurialMm along the same straight C->socket line.
-constexpr int32_t kRearSocketTargetXMm = -328;
-constexpr int32_t kRearSocketTargetYMm = 467;
+constexpr int32_t kRearSocketTargetXMm = -360;
+constexpr int32_t kRearSocketTargetYMm = 500;
 constexpr int32_t kRearSocketTargetZMm = 0;
 constexpr int32_t kRearSocketBurialMm = 270;
 // the drawn kink/lean lives in the REST POSE on the neck bone (R8): a small
@@ -2310,6 +2312,20 @@ constexpr int32_t kChannelSwallowMm   = 104;  // the showcase gets the bigger
                                               // press; authored, then looked at
 constexpr int32_t kChannelSwallowLeanPm = 300;
 constexpr int32_t kChannelSwallowRollA16 = 900;
+// Pass 16 review correction: the five carriers were structurally real but most
+// shipping performances still read as one ribbon. Taunt and Taunt II get a
+// deliberately larger, staggered five-joint phrase the eye can follow.
+constexpr int kTauntJointBeatKey = 18;
+constexpr int kTauntJointBeatStagger = 18;
+constexpr int kTauntJointBeatWidth = 42;
+constexpr int32_t kTauntJointBeatMm = 126;
+constexpr int32_t kTauntJointBeatLeanPm = 360;
+constexpr int kTaunt2JointBeatKey = 8;
+constexpr int kTaunt2JointBeatStagger = 14;
+constexpr int kTaunt2JointBeatWidth = 36;
+constexpr int32_t kTaunt2JointBeatMm = 142;
+constexpr int32_t kTaunt2JointBeatLeanPm = 380;
+constexpr int32_t kLassoEndpointJointA16 = 1800;
 
 // ---- THE STARTLE SPLAY (Direction 3 SS7, "ain't bad, make it better") -----
 // The third of the three motion debts, and the one that had no mechanism until
@@ -2836,8 +2852,9 @@ constexpr int kLassoHomeKey = 146;        // gone: shrunk into the pocket
 // not the range.
 constexpr int32_t kLassoThrowMm[3] = {1750, 470, -200};  // apex of the flight
 constexpr int32_t kLassoArcMm = 420;      // the lofted arc over the flight
+constexpr int32_t kLassoReleaseScalePm = 1600;  // readable loop from first detached frame
 constexpr int32_t kLassoOutScalePm = 1800;  // the ring OPENS as it flies
-constexpr int32_t kLassoHomeScalePm = 120;  // and closes to nothing on return
+constexpr int32_t kLassoHomeScalePm = 450;  // stays a readable loop while cinched
 constexpr int32_t kLassoSpinA16 = 2200;     // it spins about the throw axis
 // the wind-up and the whip, in nodule millimetres -- this IS the throw
 constexpr int32_t kLassoWindMm[3][3] = {  // [A,B,C][x,y,z] at full wind-up

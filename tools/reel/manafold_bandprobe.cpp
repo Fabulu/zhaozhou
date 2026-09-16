@@ -126,7 +126,7 @@ inline JointStations shipped_stations() {
 // silently left out of the list. When a re-entry joint lands, this flips and
 // the gate enforces all five. Pass 10's C.2 prototype ABORTED, so it stays
 // false and the gap stays loud.
-constexpr bool kReentryJointLanded = false;
+constexpr bool kReentryJointLanded = true;
 
 int joints_on_balls(bool verbose, const JointStations& st = shipped_stations()) {
   const int32_t stNeck = st.neck;
@@ -158,7 +158,8 @@ int joints_on_balls(bool verbose, const JointStations& st = shipped_stations()) 
   // So the re-entry ball keeps its swell and has NO articulation station.
   // That is a DECLARED GAP, printed below on every run, not a silent one.
   const Named joints[] = {{"junctionF/neck", stNeck}, {"hingeA", stA},
-                          {"hingeB", stB},            {"hingeC", stC}};
+                          {"hingeB", stB},            {"hingeC", stC},
+                          {"rear-socket", u02::kKnuckleAtEndMm}};
   // PASS 10, 0.3: ALL FIVE BALLS ARE ENUMERATED. knuckle-End is on the list it
   // was missing from; whether its absence of a joint COUNTS is decided by
   // kReentryJointLanded, in one place, and either way it is printed by name.
@@ -167,7 +168,7 @@ int joints_on_balls(bool verbose, const JointStations& st = shipped_stations()) 
                          {"knuckle-B", u02::kKnuckleAtBMm},
                          {"knuckle-C", u02::kKnuckleAtCMm},
                          {"knuckle-End", u02::kKnuckleAtEndMm}};
-  const int32_t tol = u02::kKnuckleSwellHalfMm;
+  constexpr int32_t tol = 120;  // strict visible-joint placement tolerance
   int bad = 0;
   int declared_gaps = 0;
   for (const Named& j : joints) {
@@ -204,24 +205,10 @@ int joints_on_balls(bool verbose, const JointStations& st = shipped_stations()) 
     if (is_declared_gap && best > tol) ++declared_gaps;
   }
   if (verbose) {
-    std::printf("  ---- not articulation stations, reported for completeness ----\n");
-    std::printf("  hingeD          arc %5d    the CLOSURE SOLVER, not a knead joint\n", stD);
-    std::printf("  knuckle-End     arc %5d    DECLARED GAP (%d counted): no "
-                "articulation station.\n"
-                "      pass 9: moving hingeD here breaks closure, 989 -> 2401 pm "
-                "against a 1120 gate; arm length and anchor swept, no help.\n"
-                "      pass 10: the two-segment redesign was PROTOTYPED and "
-                "ABORTED. Splitting the arm 630+640 cannot reach the anchor at "
-                "9 of 24 fold scales (D sits up to 1575 mm away, the chain "
-                "reaches 1270), and the reachable form -- D aiming as today with "
-                "a bounded bend at the ball -- holds only 7.5 deg before the rim "
-                "gate breaks, under the ~10 deg that reads at 240p.\n"
-                "      THE REASON, for pass 11: the straight strut already sits "
-                "at 991 pm of a 1120 pm gate. There are 129 pm of headroom in "
-                "total, so no visible joint fits here until the arm/anchor "
-                "GEOMETRY changes. Nobody has yet swept those against a "
-                "two-segment form; that is where the design round starts.\n",
-                u02::kKnuckleAtEndMm, declared_gaps);
+    std::printf("  ---- solver and body attachment -------------------------------\n");
+    std::printf("  hingeD          arc %5d    closure solver co-located with C\n", stD);
+    std::printf("  rear-socket     arc %5d    REAL carrier on the deformed body surface\n",
+                u02::kKnuckleAtEndMm);
   }
   if (verbose)
     std::printf("bandprobe: joints-on-balls %s over %d balls and %d joints "

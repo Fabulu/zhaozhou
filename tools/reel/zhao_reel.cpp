@@ -3310,8 +3310,9 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   // outline. Empty when this frame never built one; the mist call site says so
   // loudly rather than silently compositing over the animal.
   std::vector<uint8_t> u02_cover;
-  // PASS 12 (D9 s14.1): the cel ink ring alone, for the shell to spare.
+  // PASS 12 exterior cel ring plus Direction-12 body/head boundary.
   std::vector<uint8_t> u02_ink;
+  std::vector<uint8_t> u02_inner_ink;
   if (g_exp_contour || g_exp_boil || g_cel_main) {
     const size_t n = static_cast<size_t>(w) * h;
     std::vector<uint8_t> mask(n, 0);
@@ -3465,6 +3466,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       // loop pocket permits it. Exterior neighbours are skipped because the
       // ordinary union contour already owns that edge.
       if (!u02_body_cover.empty()) {
+        u02_inner_ink.assign(n, 0);
         for (uint32_t y = 0; y < h; ++y) {
           for (uint32_t x = 0; x < w; ++x) {
             const size_t i = static_cast<size_t>(y) * w + x;
@@ -3487,7 +3489,10 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
                 }
               }
             }
-            if (internal) edge[i] = 1;
+            if (internal) {
+              edge[i] = 1;
+              u02_inner_ink[i] = 1;
+            }
           }
         }
       }
@@ -3795,6 +3800,18 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
                       ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque,
                       ms.soft);
+    }
+  }
+  // Direction 12: keep the body/head boundary readable even when the post-pass
+  // energy crosses it. This restores only the depth-approved INTERNAL contour;
+  // exterior ink and nearer antenna pixels retain their existing ordering.
+  if (!u02_inner_ink.empty()) {
+    const size_t n = static_cast<size_t>(w) * h;
+    for (size_t i = 0; i < n; ++i) {
+      if (!u02_inner_ink[i]) continue;
+      rgb[i * 3] = kCelInkR;
+      rgb[i * 3 + 1] = kCelInkG;
+      rgb[i * 3 + 2] = kCelInkB;
     }
   }
   if (c.u02_glow && cr_glow_n > 0) {

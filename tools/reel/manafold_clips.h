@@ -1954,7 +1954,7 @@ inline zc::Clip build_hover_idle(uint16_t slot) {
     // See swallow_press() and kIdleSwallowKey. The ambient oscillator above is
     // 2-7 native pixels on the shipped clips; this is the beat on top of it
     // that the eye can actually follow.
-    int32_t swal[3];
+    int32_t swal[5];
     swallow_press(f, kIdleSwallowKey, kIdleSwallowStagger, kIdleSwallowWidth,
                   kIdleSwallowMm, swal);
     swallow_nodules(g, swal, kIdleSwallowLeanPm);
@@ -2082,7 +2082,7 @@ inline zc::Clip build_channel() {
     // antenna direction so far. A ball beat the owner is meant to see belongs
     // where he looks at balls.
     {
-      int32_t swal[3];
+      int32_t swal[5];
       swallow_press(f, kChannelSwallowKey, kChannelSwallowStagger,
                     kChannelSwallowWidth, kChannelSwallowMm, swal);
       swallow_nodules(g, swal, kChannelSwallowLeanPm);
@@ -2345,8 +2345,10 @@ inline zc::Clip build_hasty() {
     apply_gaze(g, f >= 56 && f < 72 ? kGazeMaxA16 / 2 : 0, kGazeLiftMaxA16 / 3);
     apply_squint(g, 220 + blink_at(f, 11));  // squinting into the wind
     g.write(c, f);
-    c.root[static_cast<size_t>(f) * 3 + 0] =
-        fxu(static_cast<int32_t>((f - K / 2) * kHastySpeedMmPerKey));
+    // Direction 12 removes the screen-space smear, which was the only reason
+    // Hasty kept a non-looping net traverse. Hold x at centre: the vertical
+    // floating bob remains, and the site loop no longer ends on an empty frame.
+    c.root[static_cast<size_t>(f) * 3 + 0] = 0;
     c.root[static_cast<size_t>(f) * 3 + 1] =
         hover_at(f, K, kHoverHeightMm, kHastyBobAmpMm, kBobAmpBMm,
                  kHastyBobCycles, K / 20);
@@ -2502,6 +2504,10 @@ inline zc::Clip build_taunt() {
     // the wind-up pulls the WHOLE loop back (neck scale up = a crouching
     // gather), and the body dips with it
     const int32_t wind = curve(kWind, 6, f);
+    int32_t joints[5];
+    swallow_press(f, kTauntJointBeatKey, kTauntJointBeatStagger,
+                  kTauntJointBeatWidth, kTauntJointBeatMm, joints);
+    swallow_nodules(g, joints, kTauntJointBeatLeanPm);
     loop_pose(g, 1000 + wind / 4, 1000 + wag - wind / 5, 1000 - wind / 6,
               1000 - wag,
               static_cast<int32_t>((static_cast<int64_t>(kAntennaTiltA16) *
@@ -2514,6 +2520,7 @@ inline zc::Clip build_taunt() {
     g.q[kBRoot] = quat_mul(
         g.q[kBRoot], quat_z(static_cast<int32_t>(
                          (static_cast<int64_t>(1400) * curve(kLean, 7, f)) / 1000)));
+    swallow_body(g, joints, kTauntJointBeatMm, kIdleSwallowRollA16);
     face_rest(g);
     apply_twinkle(g, static_cast<int32_t>(
                          (static_cast<int64_t>(kBlazeTwinkleA16) * sinp(f, K, 2)) >> 16));
@@ -2570,6 +2577,10 @@ inline zc::Clip build_taunt2() {
         (static_cast<int64_t>(kTaunt2LassoA16) * ramp / 1000 * sinp(f, K, 4)) >> 16);
     const int32_t pump = static_cast<int32_t>(
         (static_cast<int64_t>(130) * ramp / 1000 * sinp(f, K, 4, 0x4000)) >> 16);
+    int32_t joints[5];
+    swallow_press(f, kTaunt2JointBeatKey, kTaunt2JointBeatStagger,
+                  kTaunt2JointBeatWidth, kTaunt2JointBeatMm, joints);
+    swallow_nodules(g, joints, kTaunt2JointBeatLeanPm);
     loop_pose(g, 1000, 1000 + pump, 1000 + pump / 2, 1000 - pump / 3, tilt);
     // PASS 3 (R10 — the one rebuild): the swing PIVOTS AT THE BODY-SIDE
     // JUNCTION. The neck bone circles (lateral x fore-aft in quadrature),
@@ -2583,6 +2594,7 @@ inline zc::Clip build_taunt2() {
                      (static_cast<int64_t>(1500) * ramp / 1000 *
                       sinp(f, K, 4, 0x4000)) >> 16))));
     g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_z(-static_cast<int32_t>(900 * ramp / 1000)));
+    swallow_body(g, joints, kTaunt2JointBeatMm, kIdleSwallowRollA16);
     face_rest(g);
     // the gaze chases the lasso around
     apply_gaze(g,
@@ -3168,8 +3180,8 @@ inline LassoState lasso_at(uint32_t slot, int keys, int32_t kq4) {
   // the LOFT: a thrown loop arcs, it does not slide along a rail
   L.off_mm[1] += static_cast<int32_t>((4LL * kLassoArcMm * e * (1000 - e)) / 1000000);
   if (f < T.reel) {
-    L.scale_pm = 1000 + static_cast<int32_t>(
-                            (static_cast<int64_t>(kLassoOutScalePm - 1000) * e) / 1000);
+    L.scale_pm = kLassoReleaseScalePm + static_cast<int32_t>(
+        (static_cast<int64_t>(kLassoOutScalePm - kLassoReleaseScalePm) * e) / 1000);
   } else {
     // reeled home: it CINCHES to kLassoHomeScalePm over the first 70% of the
     // return, then relaxes back to normal so the hand-back is seamless
@@ -3635,6 +3647,13 @@ inline zc::Clip build_lasso() {
       }
       g.nod = n;
     }
+    // The body-side joints participate visibly too. Their centres remain fixed
+    // to the body; opposite local rotations carry the two end spans through the
+    // wind-up/release instead of leaving A/B/C as the only readable bones.
+    const int32_t end_turn = static_cast<int32_t>(
+        static_cast<int64_t>(kLassoEndpointJointA16) * th / 1000);
+    g.q[kBJunctionF] = quat_mul(g.q[kBJunctionF], quat_x(end_turn));
+    g.q[kBRearSocket] = quat_mul(g.q[kBRearSocket], quat_x(-end_turn));
     // the spans open on the throw and close on the haul -- the antenna
     // REACHES for the throw, which is §13's stretchy spans doing their job
     const int32_t reach = th > 0 ? 1000 + th / 12 : 1000 + th / 20;
@@ -4168,9 +4187,10 @@ inline zc::Clip build_flight() {
                    (static_cast<int64_t>(kGazeLiftMaxA16 / 2) * rise) >> 16));
     apply_squint(g, blink_at(f, 53));
     g.write(c, f);
-    // the traverse: start half the travel back, cross through centre
-    c.root[static_cast<size_t>(f) * 3 + 0] =
-        fxu(static_cast<int32_t>((f - K / 2) * kFlightSpeedMmPerKey));
+    // With the frame-history smear removed, net screen traverse no longer owns
+    // any visual mechanism and only creates a site-loop teleport. Flight keeps
+    // its bob, pitch, breath and nodule hang-back at centred x.
+    c.root[static_cast<size_t>(f) * 3 + 0] = 0;
     // THE BOB. Written from the same `bob` the pitch differentiated, not from a
     // second call to hover_at — one clock means one expression.
     c.root[static_cast<size_t>(f) * 3 + 1] =

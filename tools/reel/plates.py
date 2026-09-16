@@ -7,6 +7,7 @@ this creature have been confidently wrong; two of them were bad readers).
 
     python plates.py grid  OUT.png SCALE LABEL:frame.rgb [LABEL:frame.rgb ...]
     python plates.py sheet OUT.png SCALE COLS dir/*.rgb        (contact sheet)
+      SCALE may be negative for nearest downsampling: -4 makes 96x60 tiles.
     python plates.py pair  OUT.png SCALE before.rgb after.rgb  (A/B, stacked)
     python plates.py crop  OUT.png SCALE COLS LABEL:frame.rgb@X,Y,W,H [...]
 
@@ -85,7 +86,14 @@ def _text(canvas, x0, y0, s, scale=1, col=(255, 255, 80)):
 
 
 def _up(img, k):
-    return img if k == 1 else np.repeat(np.repeat(img, k, axis=0), k, axis=1)
+    if k == 1:
+        return img
+    if k > 1:
+        return np.repeat(np.repeat(img, k, axis=0), k, axis=1)
+    if k < 0:
+        d = -k
+        return np.ascontiguousarray(img[::d, ::d])
+    raise ValueError("scale 0 is invalid; use 1 or a negative downsample factor")
 
 
 BAND = 12  # label strip height

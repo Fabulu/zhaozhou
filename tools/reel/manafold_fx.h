@@ -792,10 +792,10 @@ constexpr int kShellPeakDepthPm = 180;
 // Direction 12 splits the old coupled control. The peak stays on the accepted
 // outer rim while a longer independent decay lets translucency affect more of
 // the body without dragging the brightest fog back across the terminator.
-// Picked by eye at final resolution from 340/220, 420/320 and 500/420
-// decay/transmission rungs on hover f300: 500 reaches substantially farther
-// into the outer body while keeping the pass-15 peak at the rim.
-constexpr int kShellDecayDepthPm = 500;
+// Independent review rejected the earlier 500/420 rung as too narrow/opaque.
+// The 800 rung carries the gradient through most of the outer body while the
+// peak itself stays at 180, so the terminator is not replaced by a bright band.
+constexpr int kShellDecayDepthPm = 800;
 constexpr int kShellFogDepthPm = kShellPeakDepthPm;  // legacy name for gates/reports
 // A floor, so a small or distant subject still gets a band rather than a
 // rounding error. NOT a substitute for the fraction: the fraction is the thing.
@@ -919,13 +919,14 @@ constexpr int32_t kShellInReachPx_legacy_p12 = 6;
 // history, "we can't see it" alternating with "it's too much" for four passes.
 // If a fifth pass is ever tempted to move this number, that is the signal to go
 // and find the mechanism instead.
-constexpr int kShellAlphaMaxPm = 560;     // fog scatter at the annulus peak
+constexpr int kShellAlphaMaxPm = 450;     // fog scatter at the annulus peak
 // Direction 12: actual see-through, distinct from tint/alpha. At the shell
 // peak this much of the already-rendered pigment yields to the saved scene
 // behind the creature before fog colour is applied. Authored by eye.
-// The matching 420 rung lets the scene show through plainly without erasing
-// the magenta terminator or turning the shell back into white bleach.
-constexpr int kShellTransmissionPm = 420;
+// Review likewise found 420 still read as opaque at sheet scale. 750 is the
+// first authored rung where the scene plainly reads through broad outer-body
+// regions; lowering fog scatter to 450 preserves pigment over that transmission.
+constexpr int kShellTransmissionPm = 750;
 // THE GAS COLOUR: fog versus bleach. Pass 15 declared this "the axis that
 // decides fog vs bleach" and that it "has never been swept in any pass". Both
 // were true, and LANE-FX-2 found the reason it had never been swept: the
@@ -2567,8 +2568,14 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       b = nb;
     };
     turn(o[0], o[2], kStencilFaceYawA16);  // Y: the authored facing
-    turn(o[1], o[2], rx_a16);              // X
-    turn(o[0], o[1], rz_a16);              // Z
+    // A thrown ring has to remain recognisable as a loop. The ordinary fold's
+    // slow all-axis knead can turn it edge-on into the white bars the review
+    // caught, so Lasso holds the authored camera-facing plane and keeps only
+    // its in-plane throw spin.
+    if (!lasso.active) {
+      turn(o[1], o[2], rx_a16);            // X
+      turn(o[0], o[1], rz_a16);            // Z
+    }
     // THE LASSO (D9 SS15): the ring OPENS as it flies and CINCHES as it is
     // reeled home, and it spins about the throw axis on the way. Applied here,
     // inside the one place the shape's offset is transformed, so the outline

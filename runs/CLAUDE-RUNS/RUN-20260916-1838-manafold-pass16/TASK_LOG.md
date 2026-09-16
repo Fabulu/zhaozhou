@@ -70,6 +70,34 @@ Complete every item in Owner Direction 12 in one integrated Manafold generation:
 - Shell gate passes all eight checks; every check's failing leg fires; the old bleaching regression is rejected.
 - Creature core suite passes including identity-default local translation and midpoint anchors.
 
+### 2026-09-16 21:05 UTC+02:00 - Full bank rendered
+
+- Committed/pushed implementation packet `a818e70d` with selected candidate/control evidence.
+- Rendered all 28 live Manafold subjects from candidate binary MD5 `93D0BF2388BA34245F7A1B77153C48A2` in one invocation; every subject reached its expected frame total.
+- Summary spans 140–600 frames per subject; full log records one sequence CRC per subject. No mixed generation or resumed binary.
+- Added negative-scale thumbnail support to committed `plates.py`; every-frame contact sheets are generating for all 28 clips before independent review.
+
+### 2026-09-16 22:10 UTC+02:00 - Review held publication; bounded correction loop
+
+- Owner corrected orchestration: no more than two agents, smaller tasks, GPT models only. Stopped spawning; all review workers have now drained. Four child reviews were stopped too abruptly before this correction and their work was wasted; recorded as a process failure.
+- Independent by-eye review inspected all 28 every-frame sheets and returned **FAIL / do not publish**. Technical QA found the requested mechanisms structurally present, but could not write its report; verdict will be persisted by the main lane after re-verification.
+- Confirmed passes: lightning depth, smear removal, ordinary Lasso throw, protected overall likeness/deaths/eyes/violet-night.
+- Real blockers: two `swal[3]` shipping arrays fed five-joint helpers (undefined memory); five-joint motion under-read in public clips; rear socket fused into body silhouette; 500/420 shell still read too opaque; Pirouette energy hid the internal contour; Lasso return collapsed to white bars/mass.
+- Corrections in progress, bounded to those findings: fixed both arrays to five; added explicit five-joint phrases to Taunt/Taunt II and endpoint motion to Mana lasso; authored rear socket outward from (-328,467) to (-360,500); selected stronger 800/750 shell with lower 450 fog scatter; raised lasso cinch floor 120→450; restore depth-approved internal body ink after post-pass energy.
+- Review also reported historical/possibly secondary wrap/form/menu artifacts. These are being rerendered after the memory-safety fix before deciding whether they remain real; no new broad task fan-out.
+
+### 2026-09-16 23:05 UTC+02:00 - Bounded review corrections accepted
+
+- Corrected the two `swal[3]` overflows before any publish candidate; all five Front/A/B/C/End entries are now valid.
+- Added strong staggered five-joint phrases to Taunt and ordinary Lasso/Taunt II; Mana lasso gives Front/End opposite endpoint rotations. Bounded sheets now show distinct antenna configurations in public clips rather than only the solo diagnostic.
+- Rear socket close-up plate shows the body-side carrier outlined at the surface across Rest/Pirouette/Trick; target authored outward to `(-360,500)` while the buried tip remains separate.
+- Review rejected 500/420 as visually too weak. One-binary ladders selected peak 180 / decay 800 / transmission 750 / scatter 450: broad background read through the outer body, dark terminator retained.
+- Internal depth-approved body ink is repainted after post-pass energy; Pirouette can no longer wash away the required body/head line.
+- Lasso holds a camera-facing ring, starts detached flight at 1600 pm scale and cinches only to 450 pm; final sheets retain a loop through release/return instead of white bars and a fused dot.
+- Removed Hasty/Flight net x traverse: it existed to drive the now-removed screen-space smear and created empty/grey loop frames. Both now preserve their authored bob/pitch/breath while looping at centred x.
+- Kept the correction scope bounded. The review's Trick rotation-aspect, Fall restart and alternate Mana-menu mechanism notes are historical/non-Direction-12 items, documented but not pulled into this pass.
+- Clean correction binary MD5: `708E1C8199691BDC91FF0F3AADDD3190`. All bounded gates and controls pass; 28-subject final bank render is in progress from this binary.
+
 ---
 
 ## Subagent Spawns
