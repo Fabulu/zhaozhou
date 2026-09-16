@@ -1230,3 +1230,12 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - **Reverted rather than shipped.** A red instrument is worse than a slow clock, and "242 of 242 passed" is precisely the shape of evidence that tempts one past a control that has gone quiet. The brief carries the full attempt so the next pass starts ~20 minutes from a fit rather than from a reading.
 - Tree green: 18/18 across projector, terrain pipe, wcache, packet-I and the drift gate.
 
+
+## 2026-09-16 (T2 third pass) - the blocker is characterised, not a hang
+
+- Re-applied T2, refreshed the mutant copy again, re-derived both latency deltas, and gave the control a **nine-minute** window. It still did not exit.
+- **It is not a hang.** `run_and_compare`'s loop is bounded at 100,000 cycles and a timeout there is a `CHECK` failure, not a lock-up. No output appeared only because stdout was redirected to a file and therefore block-buffered. What actually happens: **every call runs its full bound** instead of the ~150 cycles it needs at HEAD, so the test goes from 0.019 s to minutes.
+- Ruled out by test rather than argument: **stale binary** (stash, rebuild, re-run -> passes at HEAD, 14 checks, 0.019 s); **mutant drift** (the copy was 52 lines stale because of this very change - the class `mutant_copy_drift` exists for - refreshed, symptom survived); **the core** (`proj_matw_directed` 242/242 on the same core at both MATW and both RPP, measuring latencies successfully); **`en_i`** (set to 1 in reset, never cleared).
+- **Next diagnostic is one edit, not an investigation:** print `r.size()`/`m.size()` when the loop exits on its bound. The existing `CHECK(r.size() == m.size(), "stream lengths %zu vs %zu", ...)` already formats exactly that and is simply never reached while the loop spins. Whether one stream stalls or both splits the remaining space in half.
+- Reverted again; tree clean, 14/14 green across projector, terrain pipe and packet-I.
+
