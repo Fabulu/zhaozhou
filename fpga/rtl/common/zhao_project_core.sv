@@ -869,7 +869,13 @@ module zhao_project_core #(
   logic        [30:0]          s3_d;
   logic        [62:0]          s3_dv[0:2];  // {rem[31:0], work[30:0]}
   logic        [ 2:0]          s3_neg;
+`ifndef SYNTHESIS
+  // KEPT FOR THE PROOF ONLY. T8 deleted this register from the design; it
+  // survives in simulation so `a_sat_equiv` below can difference the new
+  // combinational form against the one it replaced, every cycle, rather than
+  // resting on the slicing argument above. Dead in synthesis.
   logic        [ 2:0]          s3_sat;
+`endif
   logic                        s3_behind;
   logic                        s3_view;
   logic        [PAYLOAD_W-1:0] s3_pay;
@@ -896,7 +902,66 @@ module zhao_project_core #(
   assign dstep_dv[0][1]  = s3_dv[1];
   assign dstep_dv[0][2]  = s3_dv[2];
   assign dstep_neg[0]    = s3_neg;
-  assign dstep_sat[0]    = s3_sat;
+  // G8B T8: THE SATURATION COMPARE MOVES OFF THE SETUP PATH, and it costs
+  // nothing because the value it needs is already registered.
+  //
+  // @g8b-t56-pins -- the PHYSICAL-pin fit, which is the mode Packet I's receipt
+  // gate requires -- named this block the cap at -1.381 ns:
+  //
+  //     s2b_magx[11] -> ... -> an inferred shift-tap's data input
+  //
+  // and the cone is pre_n (free, 16 zero LSBs) -> pre_h (a 48-bit add, or a
+  // compare and a subtract) -> pre_sat (a 31-bit compare on pre_h's top) ->
+  // s3_sat. Two carry chains in series inside one cycle.
+  //
+  // BUT `pre_h` IS ALREADY REGISTERED, on the same edge, as `s3_dv`:
+  //
+  //     s3_dv[li] <= {15'b0, pre_h[li][47:31], pre_h[li][30:0]}
+  //     s3_d      <= s2b_d
+  //
+  // so `s3_dv[li][47:31]` IS `pre_h[li][47:31]` and `s3_d` IS `s2b_d`, and
+  // `{14'b0, s3_dv[li][47:31]} >= s3_d` is the same boolean as `pre_sat[li]`,
+  // one cycle later, by construction rather than by argument. The `s3_sat`
+  // register is therefore redundant: it carries forward a fact already implied
+  // by two registers sitting beside it.
+  //
+  // Deleting it takes the compare out of the setup cycle and puts it in the
+  // first divider cycle, whose own worst path was -0.033 with room. No stage
+  // is added, latency does not move, and three flip-flops go away.
+  for (genvar gsat = 0; gsat < 3; gsat = gsat + 1) begin : g_sat0
+    assign dstep_sat[0][gsat] = ({14'b0, s3_dv[gsat][47:31]} >= s3_d);
+  end
+
+`ifndef SYNTHESIS
+  // THE SHADOW, and the difference. `s3_sat` is written here and nowhere else
+  // now, purely so the deleted register's value exists to compare against.
+  // The equality is exact by construction -- same source, same edge, same
+  // bits -- and a slicing argument is precisely the kind that is right until a
+  // width somewhere moves by one.
+  //
+  // THE ENABLE MUST BE `en_i`, WHICH IS WHAT THE DELETED REGISTER USED.
+  //
+  // The first version of this shadow wrote on `s2b_valid || s3_valid` and the
+  // assertion below fired immediately with `combinational=000 registered=111`.
+  // That was not T8 being wrong; it was this shadow being clocked by a
+  // different enable from the registers it is compared against, so the two
+  // sides were showing different cycles. CLAUDE.md has a chapter on exactly
+  // this shape -- a detector whose two operands do not move together cannot
+  // say anything about timing -- and here it produced a false alarm rather
+  // than a false silence, which is the luckier of the two outcomes.
+  //
+  // The whole pipeline sits under `end else if (en_i)`. So does this.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) s3_sat <= '0;
+    else if (en_i) s3_sat <= pre_sat;
+  end
+
+  always_ff @(posedge clk) begin
+    if (s3_valid && (dstep_sat[0] !== s3_sat))
+      $fatal(1, "zhao_project_core: T8 saturation disagrees -- combinational=%b registered=%b",
+             dstep_sat[0], s3_sat);
+  end
+`endif
   assign dstep_behind[0] = s3_behind;
   assign dstep_view[0]   = s3_view;
   assign dstep_pay[0]    = s3_pay;
@@ -1125,7 +1190,7 @@ module zhao_project_core #(
       s2b_valid <= 1'b0; s2b_d <= '0; s2b_neg <= '0; s2b_behind <= 1'b0;
       s2b_magx <= '0; s2b_magy <= '0; s2b_view <= 1'b0; s2b_pay <= '0;
       s3_valid <= 1'b0; s3_d <= '0; s3_dv[0] <= '0; s3_dv[1] <= '0; s3_dv[2] <= '0;
-      s3_neg <= '0; s3_sat <= '0; s3_behind <= 1'b0; s3_view <= 1'b0; s3_pay <= '0;
+      s3_neg <= '0; s3_behind <= 1'b0; s3_view <= 1'b0; s3_pay <= '0;
       s5_valid <= 1'b0; s5_ndc_x <= '0; s5_ndc_y <= '0; s5_invw <= '0; s5_w <= '0;
       s5_behind <= 1'b0;
       s5_view <= 1'b0; s5_pay <= '0;
@@ -1169,7 +1234,7 @@ module zhao_project_core #(
       s3_dv[1] <= {15'b0, pre_h[1][47:31], pre_h[1][30:0]};
       s3_dv[2] <= {15'b0, pre_h[2][47:31], pre_h[2][30:0]};
       s3_neg <= s2b_neg;
-      s3_sat <= pre_sat;
+
       s3_behind <= s2b_behind;
       s3_view <= s2b_view;
       s3_pay <= s2b_pay;
