@@ -1443,3 +1443,42 @@ The report gives the whole shape: at cycle N-1 the advance decision is already m
 It names its own hazards: `j_s` is assigned on a different edge from the run-cell advance, so the next-state expression must take the same `j_s` the consumer will see; and `ea`/`eb` are assigned in **five** places, every one needing the paired mask assignment.
 
 Its stated precondition - *"not a change to make between two fits without the before-measurement in hand"* - is now satisfied.
+
+## 2026-09-16 — G8B T3a committed; @g8b-t3 fit LAUNCHED
+
+**WHERE I WAS BEFORE THE FIT RESULT LANDS** (written first, per CLAUDE.md, because
+a fit result redirects the work and the half-finished thing in my head is what gets
+lost):
+
+- `4173a780` **G8B T3a** — the tessellator window mask is registered. All five
+  `ea`/`eb` assignment sites paired via block-local `automatic`s so a site cannot
+  pair itself wrong, plus `a_win_mask_fresh`, a `$fatal` stale-mask detector that
+  ran silent over 110,592 jobs. Rate preserved: 89 cycles for 81 unstitched
+  vertices, against the <=93 acceptance clause. 164/164 on the terrain / projector /
+  geometry / vertex-arena slice. The `:553` deferral paragraph that had been sitting
+  in the file since 2026-09-07 is CLOSED rather than left to read as still-open.
+- `6a650fd6` the **@g8b-t3bc receipt**: 74.17 MHz, 8,339 ALM, 34 DSP, clean tree,
+  seed 1. Per-block: tess −3.482 (sole cap), project_core −1.326 (was −2.449),
+  worst RAM −0.735 (was −2.070), one endpoint +0.012.
+
+**THE FIT NOW RUNNING** is `@g8b-t3`, seed 1, on `4173a780`. Its question, stated
+in advance: with the sole −3.482 cap removed, does G8B reach the ~88 MHz the
+@g8b-t3bc per-block split predicts? Anything short of that means the tessellator
+has a SECOND cone behind the one T3a cut, and the next scope comes from the new
+per-block split rather than from the endpoint names.
+
+**NEXT STEP AFTER THE RESULT, whatever it says:** G8B is at 74.17 and the criterion
+is 100, so T3a is not the last timing package either way. Continue the campaign,
+then Packet J / G8C, then Packet K, then R1–R9.
+
+**STILL OPEN AND DELIBERATELY RED:** `ledger_check` carries one V20 error, a genuine
+collision between two verification policies — `zhao_geom_binner_v2.sv` is byte-frozen
+in `PROTECTED_HASHES` while V20 wants an `ENFORCED-BY` comment inside it. Escalated
+to the owner; not something to resolve by editing a protected file.
+
+**ON RECORD, NOT BEING WORKED** (owner direction 2026-09-16: *"but continue the
+roadmap, don't focus on the DSP, just keep them in mind and on record"*): the DSP
+audit in `reports/Zhaozhou_DSP_Uncashed_Savings_Audit_2026-09-16.txt`. Its four
+replacements cover 72–75 DSP of the 173, restoring omitted raster/texture scope
+gives ~119–122, further packing ~30 more. The 173/40,591 figure is **partial mixed
+evidence**, not a floor and not a bound.
