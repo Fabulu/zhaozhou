@@ -3279,6 +3279,27 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     zc::g_creature_point_light_count = saved_point_count;
     zc::g_creature_additive_light = saved_additive;
   }
+
+  // Direction 12: recover the body's own depth/coverage before the union-mask
+  // cel pass erases part identity. This auxiliary type shares the exact pose,
+  // deformation, camera and LOD; only its part list is body-only.
+  static std::vector<uint8_t> u02_body_rgb;
+  static std::vector<int32_t> u02_body_depth;
+  std::vector<uint8_t> u02_body_cover;
+  if (c.u02_shell && c.inst != nullptr && c.poses != nullptr &&
+      c.inst->type == &u02::type()) {
+    const size_t n = static_cast<size_t>(w) * h;
+    u02_body_rgb.assign(pre.begin(), pre.end());
+    u02_body_depth.assign(pre_depth.begin(), pre_depth.end());
+    zc::CreatureInstance body_inst = *c.inst;
+    body_inst.type = &u02::body_type();
+    zc::CreatureInstance* body_live[1] = {&body_inst};
+    zc::compose_creatures(u02_body_rgb.data(), u02_body_depth.data(), w, h,
+                          c.vp, body_live, 1, *c.poses, nullptr);
+    u02_body_cover.assign(n, 0);
+    for (size_t i = 0; i < n; ++i)
+      if (u02_body_depth[i] != pre_depth[i]) u02_body_cover[i] = 1;
+  }
   // ---- RUN 1939 experiment post-pass (env-gated, default off). Placed
   // HERE because the hook returns early when there are no gibs -- the
   // first cut sat after that return and never ran on the idle. ----------
@@ -3437,6 +3458,39 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
         }
         frontier.swap(next);
       }
+      // Direction 12: the full creature's union silhouette has no internal
+      // body/head boundary. Add the BODY-ONLY boundary on the body side, but
+      // only when that body depth is still the final visible depth. A nearer
+      // antenna therefore suppresses the line; a farther antenna or enclosed
+      // loop pocket permits it. Exterior neighbours are skipped because the
+      // ordinary union contour already owns that edge.
+      if (!u02_body_cover.empty()) {
+        for (uint32_t y = 0; y < h; ++y) {
+          for (uint32_t x = 0; x < w; ++x) {
+            const size_t i = static_cast<size_t>(y) * w + x;
+            if (!u02_body_cover[i] || u02_body_depth[i] != depth[i]) continue;
+            bool internal = false;
+            for (int r = 1; r <= ink_width && !internal; ++r) {
+              const int nx[4] = {static_cast<int>(x) - r, static_cast<int>(x) + r,
+                                 static_cast<int>(x), static_cast<int>(x)};
+              const int ny[4] = {static_cast<int>(y), static_cast<int>(y),
+                                 static_cast<int>(y) - r, static_cast<int>(y) + r};
+              for (int d = 0; d < 4; ++d) {
+                if (nx[d] < 0 || ny[d] < 0 || nx[d] >= static_cast<int>(w) ||
+                    ny[d] >= static_cast<int>(h))
+                  continue;
+                const size_t j = static_cast<size_t>(ny[d]) * w +
+                                 static_cast<uint32_t>(nx[d]);
+                if (!u02_body_cover[j] && !exterior[j]) {
+                  internal = true;
+                  break;
+                }
+              }
+            }
+            if (internal) edge[i] = 1;
+          }
+        }
+      }
       for (size_t i = 0; i < n; ++i) {
         if (!edge[i]) continue;
         rgb[i * 3] = kCelInkR;
@@ -3474,7 +3528,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   // s14.3: this is the SHELL, not the mist. The mist runs later, still
   // excluding every creature pixel.
   if (c.u02_shell && !u02_cover.empty())
-    u02::shell_paint(rgb, w, h, u02_cover.data(),
+    u02::shell_paint(rgb, pre.data(), w, h, u02_cover.data(),
                      u02_ink.empty() ? nullptr : u02_ink.data(),
                      u02::g_u02_shell_alpha_pm);
   if (c.moving_light && c.moving_markers)
@@ -5818,30 +5872,9 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // need inventing, it needed SPREADING. Slot 7 stays clean: it is the form
   // diagnostic and the whole point of it is an unobstructed look at geometry.
   s.u02_mana = slot == 7 ? 0 : 9;
-  // the fold's smear rides the lead mid/glitchy rung everywhere; the
-  // channel keeps the SHORT rung (pass-3 lesson: the strand's ghosts pile
-  // up at the mid rung and the pocket reads as cloud, not strands).
-  // PASS 6 E.5: the smear rung is chosen BY MOTION CLASS, because the effect
-  // is screen-space and therefore means different things on a clip that
-  // travels and a clip that does not.
-  //   TRAVELLING (drift 1, hasty 8): rung 3 with the tear -- the approved
-  //   reference look. The creature walks out from under its own ghost and
-  //   leaves the chunky pale-cyan residue the owner called perfect. Untouched.
-  //   STATIONARY (everything else): the new SHORT/TORN rung 5. A stationary
-  //   clip cannot make a trail (no net screen travel), so rung 3 gives it the
-  //   halo AND the haze plateau instead. Rung 5 grants the owner's "some of
-  //   that glitchy smear" -- the tear IS the glitch signature -- on exactly
-  //   the accumulation behaviour channel already ships and the owner already
-  //   likes, so channel's protected read changes only by gaining the tear.
-  // DIRECTION 7 §4: `fall` (slot 9) joins drift and hasty on the TRAVELLING
-  // rung -- "the fall definitely needs the full smear treatment", and hasty's
-  // rung is the one the owner says "looks great for when there's movement", so
-  // the full treatment IS that rung. Slot 7 stays clean: it is the form
-  // diagnostic and an unobstructed look at geometry is the whole point of it,
-  // which is not the same thing as a CLIP standing still. Intensity is no
-  // longer decided here at all -- speed decides it (u02_speed_mul_pm).
-  s.u02_smear =
-      slot == 7 ? 0 : ((slot == 1 || slot == 8 || slot == 9) ? 3 : 5);
+  // DIRECTION 12: the frame-history smear is removed from every live Manafold
+  // subject. The creature-relative mist below stays; it is a different effect.
+  s.u02_smear = 0;
   // DIRECTION 7 §8: the MIST rides EVERY clip that has mana, travelling or
   // not. That is the point of it -- the smear is speed-driven and thins to its
   // floor when the creature holds still, which is exactly the state the owner
@@ -7919,7 +7952,9 @@ int main(int argc, char** argv) {
   // by-eye ladder, from ONE BINARY (10-GATE item 26); unset renders the
   // shipping constants byte for byte.
   //
-  //   U02_SHELL_REACH  annulus depth, per-mille of the body radius R
+  //   U02_SHELL_REACH  peak depth, per-mille of the body radius R
+  //   U02_SHELL_DECAY  independent inward decay length, per-mille of R
+  //   U02_SHELL_TRANSMISSION  background transmission at the peak, per-mille
   //   U02_SHELL_FLOOR  the plateau the fog holds across the core, pm of peak
   //   U02_SHELL_OUT    how far past the ink the gas reaches, pm of R
   //   U02_SHELL_GAMMA  the shape of the inward rise (1000 linear, 2000 quad)
@@ -7928,6 +7963,16 @@ int main(int argc, char** argv) {
     if (const char* e = std::getenv("U02_SHELL_REACH")) {
       const int v = std::atoi(e);
       u02::g_u02_shell_depth_pm = v < 0 ? 0 : v;
+      any = true;
+    }
+    if (const char* e = std::getenv("U02_SHELL_DECAY")) {
+      const int v = std::atoi(e);
+      u02::g_u02_shell_decay_pm = v < 0 ? 0 : v;
+      any = true;
+    }
+    if (const char* e = std::getenv("U02_SHELL_TRANSMISSION")) {
+      const int v = std::atoi(e);
+      u02::g_u02_shell_transmission_pm = v < 0 ? 0 : (v > 1000 ? 1000 : v);
       any = true;
     }
     if (const char* e = std::getenv("U02_SHELL_FLOOR")) {
@@ -7978,9 +8023,10 @@ int main(int argc, char** argv) {
       // omits the axis under test is the brief-as-instrument fault
       // (10-GATE item 38) in a log file.
       std::fprintf(stderr,
-                   "P15 shell rung: alpha=%d reach=%d floor=%d out=%d gamma=%d "
-                   "ink=%d tint=%d,%d,%d\n",
+                   "P16 shell rung: alpha=%d peak=%d decay=%d transmission=%d "
+                   "floor=%d out=%d gamma=%d ink=%d tint=%d,%d,%d\n",
                    u02::g_u02_shell_alpha_pm, u02::g_u02_shell_depth_pm,
+                   u02::g_u02_shell_decay_pm, u02::g_u02_shell_transmission_pm,
                    u02::g_u02_shell_floor_pm, u02::g_u02_shell_out_pm,
                    u02::g_u02_shell_gamma, u02::g_u02_shell_over_ink_pm,
                    u02::g_u02_shell_tint[0], u02::g_u02_shell_tint[1],
@@ -8452,25 +8498,6 @@ int main(int argc, char** argv) {
   // Same base clip, same sun, same keys as the other two: the pair's validity
   // check (a creature-free corner that is byte-identical) still holds, which is
   // what makes the subtraction mean anything.
-  if (wanted("manafold-fogprobe-smear")) {
-    SceneSubject s = subject_u02_clip(5, "manafold-fogprobe-smear", u02::kRestKeys, false, &kU02SunCalm);
-    // NOT `u02_mana = 0`: the whole mana block, the smear INCLUDED, is gated
-    // on u02_mana != 0, and the plane's only source is the splats themselves.
-    // Zeroing the mana would have produced a subject byte-identical to
-    // fogprobe-off -- a second probe that cannot see the smear, which is the
-    // very fault this subject exists to remove.
-    s.u02_mana = 3;   // the shipping candidate: same splats, same feed
-    s.u02_smear_only = true;  // ...but the BODIES are not drawn
-    s.u02_smear = 5;  // the smear plane ONLY, at REST'S OWN RUNG (subject_u02_clip:
-                      // slot 5 -> preset 5). A different rung would make the
-                      // subtraction measure the rung, not the plane.
-    s.u02_mist = false;  // PASS 9: this leg is the SMEAR's own pixels. Leaving
-                         // the mist on would have made pass 9's new layer
-                         // indistinguishable from pass 8's plane -- the exact
-                         // blindness this subject was added to remove.
-    s.note = "fog ablation: smear plane ON, mist OFF, mana OFF -- the leg pass 7 lacked";
-    rc |= render_scene(s);
-  }
   // PASS 9 -- THE FOURTH LEG, for the same reason the third one exists.
   // Direction 7 §8 adds the MIST: a second, creature-following ghost plane.
   // Without this subject the lattice would attribute the mist's pixels to the
@@ -8524,7 +8551,7 @@ int main(int argc, char** argv) {
     SceneSubject s = subject_u02_clip(u02::kIdleFixedSlot, "manafold-crackle",
                                      u02::kIdleKeys, false, &kU02SunChannel);
     s.u02_mana = 4;  // the crackle IS the lightning candidate
-    s.u02_smear = 1;  // pass 3: strikes ghost through the smear plane
+    s.u02_smear = 0;  // Direction 12: no active Manafold subject carries smear
     // R6-bis: the same one call `channel` makes, so the pair cannot diverge
     // again. That divergence is what happened here on 2026-09-08.
     u02_backdrop(s, 58, 96, 132);
@@ -8534,23 +8561,22 @@ int main(int argc, char** argv) {
   // Pass 2 (Direction 2 §3): THE MANA MENU — six named candidates, each a
   // short clip on the reworked hover, for the OWNER to pick from by eye.
   {
-    static const struct { const char* name; int cand; int smear; } kManaMenu[] = {
-        // PASS 3 (R13): six variants, all alive; drip is CUT (dead in 579
-        // of 600 frames — shipping it broken overstated the menu). The two
-        // smear rungs double as the owner's decay/glitch picker.
-        {"manafold-mana-aqua", 3, 3},   // the aqua FOLD on the shipping rung
-        {"manafold-mana-cyan", 6, 4},   // the cyan FOLD on the BROKEN-BUFFER rung
-        {"manafold-mana-blue", 2, 1},   // filled deep blue, minimal smear
-        {"manafold-mana-green", 7, 1},  // filled sea-green ("try greens")
-        {"manafold-mana-boil", 5, 1},   // the boil CENTRE, grown, outer gone
-        {"manafold-mana-stack", 8, 2},  // pulsar + strands + aqua smear
+    static const struct { const char* name; int cand; } kManaMenu[] = {
+        // Direction 12 removes the history-buffer smear from every active
+        // comparison; these rows now differ only in their mana mechanisms.
+        {"manafold-mana-aqua", 3},
+        {"manafold-mana-cyan", 6},
+        {"manafold-mana-blue", 2},
+        {"manafold-mana-green", 7},
+        {"manafold-mana-boil", 5},
+        {"manafold-mana-stack", 8},
     };
     for (const auto& m : kManaMenu) {
       if (!wanted(m.name)) continue;
       SceneSubject s = subject_u02_clip(u02::kIdleFixedSlot, m.name,
                                        u02::kIdleKeys, false, &kU02SunHover);
       s.u02_mana = m.cand;
-      s.u02_smear = m.smear;
+      s.u02_smear = 0;
       s.note = "mana-menu candidate: the owner picks with his eyes";
       rc |= render_scene(s);
     }
@@ -8567,7 +8593,7 @@ int main(int argc, char** argv) {
                                       &kU02SunChannel);
     s.name = nm.c_str();
     s.u02_mana = u02::lab::kLabCandBase + vi;
-    s.u02_smear = V.smear_rung;
+    s.u02_smear = 0;  // Direction 12 supersedes every experimental smear rung
     // the clip TRAVELS (beat 2), so it stages on flat ground -- the reel
     // snaps the root to one terrain column and at bump_ext 6 the mound rises
     // under lateral travel and the creature walks into the hillside (shipped

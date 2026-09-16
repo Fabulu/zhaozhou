@@ -128,6 +128,7 @@ struct NoduleOffsets {
 /** The per-key quat accumulator (mirrors zixx's Rig; bodies differ). */
 struct Rig {
   zc::quat16 q[kBoneCount];
+  int32_t local_t[kBoneCount][3]{};  // optional per-key bone-local translation (fx16)
   // PASS 12: the nodule targets ride the rig rather than loop_pose's argument
   // list. antenna_knead sets them and loop_pose consumes them, which is the
   // ordering every clip already uses -- so not one call site changes, and a
@@ -165,14 +166,23 @@ struct Rig {
    */
   int32_t eye_lean = 0;
   void reset() {
-    for (int b = 0; b < kBoneCount; ++b) q[b] = zc::quat16_identity();
+    for (int b = 0; b < kBoneCount; ++b) {
+      q[b] = zc::quat16_identity();
+      local_t[b][0] = local_t[b][1] = local_t[b][2] = 0;
+    }
     nod = NoduleOffsets{};
     span_pm[0] = span_pm[1] = span_pm[2] = 0;
     eye_lean = 0;
   }
   void write(zc::Clip& c, int f) const {
-    for (int b = 0; b < kBoneCount; ++b)
+    for (int b = 0; b < kBoneCount; ++b) {
       c.quats[static_cast<size_t>(f) * kBoneCount + b] = q[b];
+      if (c.local_translation.size() ==
+          static_cast<size_t>(c.frame_count) * kBoneCount * 3u) {
+        const size_t base = (static_cast<size_t>(f) * kBoneCount + b) * 3u;
+        for (int i = 0; i < 3; ++i) c.local_translation[base + i] = local_t[b][i];
+      }
+    }
     write_span_lanes(c, f);
   }
   /** Emit this key's span stretch onto deform lanes 1..3.
@@ -248,6 +258,7 @@ struct HingePlay {
   int32_t tilt_a = 0, yaw_a = 0;
   int32_t tilt_b = 0, yaw_b = 0;
   int32_t tilt_c = 0, yaw_c = 0;
+  int32_t tilt_end = 0, yaw_end = 0;
 };
 
 /** Turn the span leaving `local`'s bone so it points at `target` instead of
@@ -270,21 +281,17 @@ struct HingePlay {
 inline void nodule_aim(zc::quat16& local, zc::quat16& Q, int32_t len,
                        int32_t& px, int32_t& py, int32_t& pz,
                        int32_t tx, int32_t ty, int32_t tz,
-                       int32_t* short_pm = nullptr) {
-  // PASS 12 (D9 SS13.3 item 2): HOW FAR SHORT THIS AIM LANDS, in per-mille of
-  // the bind arc. The warning above is the whole point -- the end lands along
-  // the target's direction at exactly `len`, so a target 1.2 arc-lengths away
-  // is missed by 20% and nothing downstream ever knew by how much. It does now,
-  // and the deform lanes spend it as span stretch.
-  //
-  // Measured HERE, on the forward-walked posed chain in world millimetres,
-  // which is the only place it is honest: px/py/pz have already been carried by
-  // every solved station above, so this is the POSED gap, not a bind one.
-  if (short_pm != nullptr) {
-    const int64_t dx = tx - px, dy = ty - py, dz = tz - pz;
-    const int64_t want = isqrt64(dx * dx + dy * dy + dz * dz);
+                       int32_t* short_pm = nullptr,
+                       int32_t* delta_mm = nullptr) {
+  const int64_t dx_target = tx - px, dy_target = ty - py, dz_target = tz - pz;
+  const int64_t want = isqrt64(dx_target * dx_target + dy_target * dy_target +
+                               dz_target * dz_target);
+  // PASS 12 measured only the shortfall for a vertex deformation. Pass 16 also
+  // moves the child carrier by the exact same length delta, keeping the visible
+  // ball, its pivot and the stretched span endpoint coincident.
+  if (short_pm != nullptr)
     *short_pm = len > 0 ? static_cast<int32_t>(((want - len) * 1000) / len) : 0;
-  }
+  if (delta_mm != nullptr) *delta_mm = static_cast<int32_t>(want - len);
   int32_t vx, vy, vz;
   quat_rot_vec(quat_conj(Q), tx - px, ty - py, tz - pz, vx, vy, vz);
   const int32_t aim_z = angle16_of(vx, vy);
@@ -296,7 +303,8 @@ inline void nodule_aim(zc::quat16& local, zc::quat16& Q, int32_t len,
   local = quat_mul(local, corr);
   Q = quat_mul(Q, corr);
   int32_t dx, dy, dz;
-  quat_rot_vec(Q, 0, len, 0, dx, dy, dz);
+  const int32_t solved_len = delta_mm != nullptr ? static_cast<int32_t>(want) : len;
+  quat_rot_vec(Q, 0, solved_len, 0, dx, dy, dz);
   px += dx;
   py += dy;
   pz += dz;
@@ -325,6 +333,8 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   const int32_t pt_a = play ? play->tilt_a : 0, py_a = play ? play->yaw_a : 0;
   const int32_t pt_b = play ? play->tilt_b : 0, py_b = play ? play->yaw_b : 0;
   const int32_t pt_c = play ? play->tilt_c : 0, py_c = play ? play->yaw_c : 0;
+  const int32_t pt_end = play ? play->tilt_end : 0,
+                py_end = play ? play->yaw_end : 0;
   const zc::quat16 loc_a = quat_mul(
       quat_mul(quat_z(fa), quat_x(kLoopRestTiltA16 + tilt_a16 + pt_a)), quat_y(py_a));
   // PASS 6 C.1: B and C gain their out-of-plane axis. They were quat_z ONLY,
@@ -342,6 +352,8 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   g.q[kBHingeA] = quat_mul(g.q[kBHingeA], loc_a);
   g.q[kBHingeB] = quat_mul(g.q[kBHingeB], loc_b);
   g.q[kBHingeC] = quat_mul(g.q[kBHingeC], loc_c);
+  g.q[kBRearSocket] = quat_mul(
+      g.q[kBRearSocket], quat_mul(quat_x(pt_end), quat_y(py_end)));
   // ---- PASS 12: THE NODULE SOLVE (Direction 9 SS2) ------------------------
   // Runs BEFORE the closure walk, so the closure sees the nodule rotations and
   // still lands the return arm -- the same ordering rule antenna_knead already
@@ -375,13 +387,15 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
       int32_t nx = kLoopTubeXMm, ny = kLoopNeckExitYMm, nz = 0;
       zc::quat16 NQ = quat_mul(g.q[kBJunctionF], g.q[kBNeck]);
       int32_t ex, ey, ez;
+      int32_t delta_mm = 0;
       // span 1: junction+neck -> nodule A
       quat_rot_vec(NQ, 0, kLoopArcMm[1], 0, ex, ey, ez);
       nodule_aim(g.q[kBNeck], NQ, kLoopArcMm[1], nx, ny, nz,
                  nx + ex + cl(nd.ax, kNoduleOffsetMaxMm[0]),
                  ny + ey + cl(nd.ay, kNoduleOffsetMaxMm[1]),
                  nz + ez + cl(nd.az, kNoduleOffsetMaxMm[2]),
-                 &g.span_pm[0]);
+                 &g.span_pm[0], &delta_mm);
+      g.local_t[kBHingeA][1] = fxu(delta_mm);
       // span 2: nodule A -> nodule B
       NQ = quat_mul(NQ, g.q[kBHingeA]);
       quat_rot_vec(NQ, 0, kLoopArcMm[2], 0, ex, ey, ez);
@@ -389,7 +403,8 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
                  nx + ex + cl(nd.bx, kNoduleOffsetMaxMm[0]),
                  ny + ey + cl(nd.by, kNoduleOffsetMaxMm[1]),
                  nz + ez + cl(nd.bz, kNoduleOffsetMaxMm[2]),
-                 &g.span_pm[1]);
+                 &g.span_pm[1], &delta_mm);
+      g.local_t[kBHingeB][1] = fxu(delta_mm);
       // span 3: nodule B -> nodule C
       NQ = quat_mul(NQ, g.q[kBHingeB]);
       quat_rot_vec(NQ, 0, kLoopArcMm[3], 0, ex, ey, ez);
@@ -397,7 +412,8 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
                  nx + ex + cl(nd.cx, kNoduleOffsetMaxMm[0]),
                  ny + ey + cl(nd.cy, kNoduleOffsetMaxMm[1]),
                  nz + ez + cl(nd.cz, kNoduleOffsetMaxMm[2]),
-                 &g.span_pm[2]);
+                 &g.span_pm[2], &delta_mm);
+      g.local_t[kBHingeC][1] = fxu(delta_mm);
     }
   }
 
@@ -412,9 +428,13 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   zc::quat16 Q = g.q[kBJunctionF];
   const zc::quat16 locs[4] = {g.q[kBNeck], g.q[kBHingeA], g.q[kBHingeB],
                               g.q[kBHingeC]};
+  const uint8_t span_child[5] = {kBNeck, kBHingeA, kBHingeB, kBHingeC,
+                                 kBHingeD};
   for (int i = 0; i < 5; ++i) {
     int32_t dx, dy, dz;
-    quat_rot_vec(Q, 0, kLoopArcMm[i], 0, dx, dy, dz);
+    const int32_t translated_len = kLoopArcMm[i] + static_cast<int32_t>(
+        (static_cast<int64_t>(g.local_t[span_child[i]][1]) * 1000) >> 16);
+    quat_rot_vec(Q, 0, translated_len, 0, dx, dy, dz);
     px += dx;
     py += dy;
     pz += dz;
@@ -468,6 +488,231 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   g.q[kBHingeD] = quat_mul(g.q[kBHingeD],
                            quat_mul(quat_z(aim_z + d_play_a16), quat_x(aim_x)));
 }
+
+// Direction 12: apply the body's real lane-0 deformation to a body-local
+// attachment point. This deliberately reuses the production vertex primitive;
+// a second ellipsoid formula is how the old closure probe became blind.
+inline void deform_body_point(const zc::DeformSample& sample,
+                              int32_t x_mm, int32_t y_mm, int32_t z_mm,
+                              int32_t& ox, int32_t& oy, int32_t& oz) {
+  zc::SkinVertex v{fxu(x_mm), fxu(y_mm), fxu(z_mm), 0, 0, 64};
+  zc::DeformVertex meta;
+  meta.role = zc::DeformRole::kRadial;
+  meta.axis = 1;
+  meta.strength = body_deform_strength_at_y(v.y);
+  zc::DeformFrame frame;
+  frame.lane[0] = sample;
+  const zc::SkinVertex out = zc::deform_skin_vertex_lanes(v, meta, frame);
+  ox = out.x;
+  oy = out.y;
+  oz = out.z;
+}
+
+// The clip builders historically solved closure before assigning c.deform[f].
+// Finish the rear attachment only after the whole clip exists, so the socket,
+// return solver and body surface all consume the exact same authored sample.
+inline void finalize_rear_follow(zc::Clip& c) {
+  const size_t want_local = static_cast<size_t>(c.frame_count) * kBoneCount * 3u;
+  if (c.local_translation.empty()) c.local_translation.assign(want_local, 0);
+  if (c.local_translation.size() != want_local ||
+      c.quats.size() != static_cast<size_t>(c.frame_count) * kBoneCount ||
+      c.deform.size() != c.frame_count)
+    return;
+
+  const int32_t socket_bind_x = fxu(kLoopTubeXMm);
+  const int32_t socket_bind_y =
+      fxu(kLoopNeckExitYMm - kLoopBuryMm + kKnuckleAtEndMm);
+  const int32_t tip_bind_x = fxu(kLoopTubeXMm);
+  const int32_t tip_bind_y = fxu(
+      kLoopNeckExitYMm + kLoopArcMm[0] + kLoopArcMm[1] +
+      kLoopArcMm[2] + kLoopArcMm[3] + kLoopArcMm[4] + kLoopArcMm[5]);
+  const uint8_t span_child[5] = {kBNeck, kBHingeA, kBHingeB, kBHingeC,
+                                 kBHingeD};
+
+  for (int f = 0; f < c.frame_count; ++f) {
+    const size_t qbase = static_cast<size_t>(f) * kBoneCount;
+    const size_t tbase = qbase * 3u;
+    auto local_y_mm = [&](uint8_t bone) {
+      return static_cast<int32_t>(
+          (static_cast<int64_t>(
+               c.local_translation[tbase + static_cast<size_t>(bone) * 3u + 1u]) *
+           1000) >> 16);
+    };
+
+    int32_t px = kLoopTubeXMm, py = kLoopNeckExitYMm, pz = 0;
+    zc::quat16 Q = c.quats[qbase + kBJunctionF];
+    const zc::quat16 locs[4] = {c.quats[qbase + kBNeck],
+                                c.quats[qbase + kBHingeA],
+                                c.quats[qbase + kBHingeB],
+                                c.quats[qbase + kBHingeC]};
+    for (int i = 0; i < 5; ++i) {
+      int32_t dx, dy, dz;
+      const int32_t len = kLoopArcMm[i] + local_y_mm(span_child[i]);
+      quat_rot_vec(Q, 0, len, 0, dx, dy, dz);
+      px += dx;
+      py += dy;
+      pz += dz;
+      if (i < 4) Q = quat_mul(Q, locs[i]);
+    }
+
+    int32_t sx, sy, sz;
+    deform_body_point(c.deform[static_cast<size_t>(f)],
+                      kRearSocketTargetXMm, kRearSocketTargetYMm,
+                      kRearSocketTargetZMm, sx, sy, sz);
+    const int32_t sx_mm = static_cast<int32_t>(
+        (static_cast<int64_t>(sx) * 1000) >> 16);
+    const int32_t sy_mm = static_cast<int32_t>(
+        (static_cast<int64_t>(sy) * 1000) >> 16);
+    const int32_t sz_mm = static_cast<int32_t>(
+        (static_cast<int64_t>(sz) * 1000) >> 16);
+    int32_t vx, vy, vz;
+    quat_rot_vec(quat_conj(Q), sx_mm - px, sy_mm - py, sz_mm - pz,
+                 vx, vy, vz);
+    const int32_t aim_z = angle16_of(vx, vy);
+    int32_t wx, wy, wz;
+    quat_rot_vec(quat_conj(quat_z(aim_z)), vx, vy, vz, wx, wy, wz);
+    (void)wx;
+    const int32_t aim_x = angle16_of(-wz, wy);
+    const zc::quat16 aim = quat_mul(quat_z(aim_z), quat_x(aim_x));
+    c.quats[qbase + kBHingeD] = aim;
+
+    const int64_t dx = sx_mm - px, dy = sy_mm - py, dz = sz_mm - pz;
+    const int64_t mag = isqrt64(dx * dx + dy * dy + dz * dz);
+    const int32_t tx_mm = mag > 0
+        ? sx_mm + static_cast<int32_t>(dx * kRearSocketBurialMm / mag)
+        : sx_mm;
+    const int32_t ty_mm = mag > 0
+        ? sy_mm + static_cast<int32_t>(dy * kRearSocketBurialMm / mag)
+        : sy_mm;
+    const int32_t tz_mm = mag > 0
+        ? sz_mm + static_cast<int32_t>(dz * kRearSocketBurialMm / mag)
+        : sz_mm;
+
+    const size_t socket_i = tbase + static_cast<size_t>(kBRearSocket) * 3u;
+    c.local_translation[socket_i + 0] = sx - socket_bind_x;
+    c.local_translation[socket_i + 1] = sy - socket_bind_y;
+    c.local_translation[socket_i + 2] = sz;
+    const size_t tip_i = tbase + static_cast<size_t>(kBReturnTip) * 3u;
+    c.local_translation[tip_i + 0] = fxu(tx_mm) - tip_bind_x;
+    c.local_translation[tip_i + 1] = fxu(ty_mm) - tip_bind_y;
+    c.local_translation[tip_i + 2] = fxu(tz_mm);
+  }
+}
+
+// compile_creature bakes presentation midpoints after the authored keys above.
+// Re-solve the nonlinear body-following socket on those finished midpoint
+// samples; independently Catmull-baking its translation can drift off the body
+// even when every key is exact.
+inline void finalize_rear_follow_midpoints(zc::Clip& c) {
+  const size_t local_count = static_cast<size_t>(c.frame_count) * kBoneCount * 3u;
+  const size_t quat_count = static_cast<size_t>(c.frame_count) * kBoneCount;
+  if (!c.interpolate || c.local_translation.size() != local_count ||
+      c.quats.size() != quat_count)
+    return;
+
+  // Preserve the runtime interpolation law byte for byte for every ordinary
+  // bone/translation; only D and the rear targets below need a nonlinear solve.
+  if (c.mid_quats.size() != quat_count) {
+    c.mid_quats.assign(quat_count, zc::quat16_identity());
+    for (int f = 0; f < c.frame_count; ++f) {
+      const int nf = f + 1 < c.frame_count ? f + 1 : (c.hold_last ? f : 0);
+      for (int b = 0; b < kBoneCount; ++b)
+        c.mid_quats[static_cast<size_t>(f) * kBoneCount + b] =
+            zc::quat16_nlerp(c.quats[static_cast<size_t>(f) * kBoneCount + b],
+                            c.quats[static_cast<size_t>(nf) * kBoneCount + b], 1, 2);
+    }
+  }
+  if (c.mid_local_translation.size() != local_count) {
+    c.mid_local_translation.assign(local_count, 0);
+    for (int f = 0; f < c.frame_count; ++f) {
+      const int nf = f + 1 < c.frame_count ? f + 1 : (c.hold_last ? f : 0);
+      for (int b = 0; b < kBoneCount; ++b)
+        for (int i = 0; i < 3; ++i) {
+          const size_t at = (static_cast<size_t>(f) * kBoneCount + b) * 3u + i;
+          const size_t nx = (static_cast<size_t>(nf) * kBoneCount + b) * 3u + i;
+          c.mid_local_translation[at] = static_cast<int32_t>(
+              (static_cast<int64_t>(c.local_translation[at]) +
+               c.local_translation[nx]) / 2);
+        }
+    }
+  }
+
+  const int32_t socket_bind_x = fxu(kLoopTubeXMm);
+  const int32_t socket_bind_y =
+      fxu(kLoopNeckExitYMm - kLoopBuryMm + kKnuckleAtEndMm);
+  const int32_t tip_bind_x = fxu(kLoopTubeXMm);
+  const int32_t tip_bind_y = fxu(
+      kLoopNeckExitYMm + kLoopArcMm[0] + kLoopArcMm[1] +
+      kLoopArcMm[2] + kLoopArcMm[3] + kLoopArcMm[4] + kLoopArcMm[5]);
+  const uint8_t span_child[5] = {kBNeck, kBHingeA, kBHingeB, kBHingeC,
+                                 kBHingeD};
+
+  for (int f = 0; f < c.frame_count; ++f) {
+    const size_t qbase = static_cast<size_t>(f) * kBoneCount;
+    const size_t tbase = qbase * 3u;
+    auto local_y_mm = [&](uint8_t bone) {
+      return static_cast<int32_t>(
+          (static_cast<int64_t>(
+               c.mid_local_translation[tbase + static_cast<size_t>(bone) * 3u + 1u]) *
+           1000) >> 16);
+    };
+    int32_t px = kLoopTubeXMm, py = kLoopNeckExitYMm, pz = 0;
+    zc::quat16 Q = c.mid_quats[qbase + kBJunctionF];
+    const zc::quat16 locs[4] = {c.mid_quats[qbase + kBNeck],
+                                c.mid_quats[qbase + kBHingeA],
+                                c.mid_quats[qbase + kBHingeB],
+                                c.mid_quats[qbase + kBHingeC]};
+    for (int i = 0; i < 5; ++i) {
+      int32_t dx, dy, dz;
+      const int32_t len = kLoopArcMm[i] + local_y_mm(span_child[i]);
+      quat_rot_vec(Q, 0, len, 0, dx, dy, dz);
+      px += dx; py += dy; pz += dz;
+      if (i < 4) Q = quat_mul(Q, locs[i]);
+    }
+
+    int32_t sx, sy, sz;
+    zc::DeformSample mid_sample{};
+    if (c.mid_deform.size() == c.frame_count) {
+      mid_sample = c.mid_deform[static_cast<size_t>(f)];
+    } else if (c.deform.size() == c.frame_count) {
+      const int nf = f + 1 < c.frame_count ? f + 1 : (c.hold_last ? f : 0);
+      const zc::DeformSample& a = c.deform[static_cast<size_t>(f)];
+      const zc::DeformSample& b = c.deform[static_cast<size_t>(nf)];
+      mid_sample = zc::DeformSample{
+          static_cast<uint16_t>((static_cast<uint32_t>(a.flatten) + b.flatten) / 2),
+          static_cast<uint16_t>((static_cast<uint32_t>(a.spread) + b.spread) / 2)};
+    }
+    deform_body_point(mid_sample,
+                      kRearSocketTargetXMm, kRearSocketTargetYMm,
+                      kRearSocketTargetZMm, sx, sy, sz);
+    const int32_t sx_mm = static_cast<int32_t>((static_cast<int64_t>(sx) * 1000) >> 16);
+    const int32_t sy_mm = static_cast<int32_t>((static_cast<int64_t>(sy) * 1000) >> 16);
+    const int32_t sz_mm = static_cast<int32_t>((static_cast<int64_t>(sz) * 1000) >> 16);
+    int32_t vx, vy, vz;
+    quat_rot_vec(quat_conj(Q), sx_mm - px, sy_mm - py, sz_mm - pz, vx, vy, vz);
+    const int32_t aim_z = angle16_of(vx, vy);
+    int32_t wx, wy, wz;
+    quat_rot_vec(quat_conj(quat_z(aim_z)), vx, vy, vz, wx, wy, wz);
+    (void)wx;
+    c.mid_quats[qbase + kBHingeD] =
+        quat_mul(quat_z(aim_z), quat_x(angle16_of(-wz, wy)));
+
+    const int64_t dx = sx_mm - px, dy = sy_mm - py, dz = sz_mm - pz;
+    const int64_t mag = isqrt64(dx * dx + dy * dy + dz * dz);
+    const int32_t tx_mm = mag > 0 ? sx_mm + static_cast<int32_t>(dx * kRearSocketBurialMm / mag) : sx_mm;
+    const int32_t ty_mm = mag > 0 ? sy_mm + static_cast<int32_t>(dy * kRearSocketBurialMm / mag) : sy_mm;
+    const int32_t tz_mm = mag > 0 ? sz_mm + static_cast<int32_t>(dz * kRearSocketBurialMm / mag) : sz_mm;
+    const size_t socket_i = tbase + static_cast<size_t>(kBRearSocket) * 3u;
+    c.mid_local_translation[socket_i + 0] = sx - socket_bind_x;
+    c.mid_local_translation[socket_i + 1] = sy - socket_bind_y;
+    c.mid_local_translation[socket_i + 2] = sz;
+    const size_t tip_i = tbase + static_cast<size_t>(kBReturnTip) * 3u;
+    c.mid_local_translation[tip_i + 0] = fxu(tx_mm) - tip_bind_x;
+    c.mid_local_translation[tip_i + 1] = fxu(ty_mm) - tip_bind_y;
+    c.mid_local_translation[tip_i + 2] = fxu(tz_mm);
+  }
+}
+
 inline void loop_rest(Rig& g) { loop_pose(g, 1000, 1000, 1000, 1000); }
 
 /** The face at rest: lenses rolled into their outward V and leaned back. */
@@ -835,6 +1080,7 @@ inline zc::Clip clip_shell(uint16_t slot, int keys, int32_t hover_mm) {
   c.frame_count = static_cast<uint16_t>(keys);
   c.root.assign(static_cast<size_t>(keys) * 3, 0);
   c.quats.assign(static_cast<size_t>(keys) * kBoneCount, zc::quat16_identity());
+  c.local_translation.assign(static_cast<size_t>(keys) * kBoneCount * 3u, 0);
   c.deform.assign(static_cast<size_t>(keys), zc::DeformSample{});
   // PASS 12: lanes 1..4. Allocated identity for EVERY clip, because the nodule
   // schedule is always on (D9 SS2) and therefore so is the span stretch --
@@ -913,8 +1159,8 @@ inline void hinge_play(HingePlay& hp, int f, int keys, int cyc) {
   const int tcyc = keys / kHingeTiltPerKeys > 0 ? keys / kHingeTiltPerKeys : 1;
   const int ycyc = keys / kHingeYawPerKeys > 0 ? keys / kHingeYawPerKeys : 1;
   (void)cyc;
-  int32_t t[4], y[4];
-  for (int st = 0; st < 4; ++st) {
+  int32_t t[5], y[5];
+  for (int st = 0; st < 5; ++st) {
     const int32_t ph = -kHingePhaseStepA16 * st;
     t[st] = static_cast<int32_t>(
         (static_cast<int64_t>(kHingeTiltAmpA16) * kHingeAxisScalePm[st] / 1000 *
@@ -927,6 +1173,7 @@ inline void hinge_play(HingePlay& hp, int f, int keys, int cyc) {
   hp.tilt_a = t[1];    hp.yaw_a = y[1];
   hp.tilt_b = t[2];    hp.yaw_b = y[2];
   hp.tilt_c = t[3];    hp.yaw_c = y[3];
+  hp.tilt_end = t[4];  hp.yaw_end = y[4];
 }
 
 /** The antenna's living sway: per-hinge fold-scale modulation with cumulative
@@ -1087,8 +1334,8 @@ inline int32_t punch_ease(int32_t t) {
  *  it -- which is exactly the ordering fault `nod` and `eye_lean` both exist
  *  to prevent (see struct Rig). */
 inline void swallow_press(int f, int start, int stagger, int width, int32_t amp_mm,
-                          int32_t out[3]) {
-  for (int i = 0; i < 3; ++i) {
+                          int32_t out[5]) {
+  for (int i = 0; i < 5; ++i) {
     out[i] = 0;
     const int lf = f - (start + i * stagger);
     if (lf < 0 || lf >= width || width <= 0) continue;
@@ -1111,21 +1358,27 @@ inline void swallow_press(int f, int start, int stagger, int width, int32_t amp_
  *  Additive on purpose: the ambient layer is texture and §3's never-off floor
  *  wants it kept; what was missing was a beat ON TOP of it.
  *  ⚠ Call BEFORE the clip's loop_pose (or whole_wobble), which consumes g.nod. */
-inline void swallow_nodules(Rig& g, const int32_t swal[3], int32_t lean_pm) {
-  if ((swal[0] | swal[1] | swal[2]) == 0) return;
+inline void swallow_nodules(Rig& g, const int32_t swal[5], int32_t lean_pm) {
+  if ((swal[0] | swal[1] | swal[2] | swal[3] | swal[4]) == 0) return;
   const auto side = [&](int32_t v) {
     return static_cast<int32_t>((static_cast<int64_t>(v) * lean_pm) / 1000);
   };
-  // The lateral shares alternate in sign so the three presses SPLAY rather
-  // than lean as one piece -- the same reason kStartleSplayMm opposes its
-  // signs. A common-mode lateral push tips the loop's plane, and a tipped
-  // loop presents as a line (pass 14 R4 learned that on taunt3's dismissal).
-  g.nod.ay += swal[0];
-  g.nod.az += side(swal[0]);
-  g.nod.by += swal[1];
-  g.nod.bz -= side(swal[1]);
-  g.nod.cy += swal[2];
-  g.nod.cz += side(swal[2]);
+  // Five real carriers, five distinct beats: front, A, B, C, rear socket.
+  // The fixed body junctions articulate by rotation; A/B/C also translate their
+  // child carriers through the nodule solve; End rotates on its body-attached
+  // carrier and never slides its centre around the body.
+  g.q[kBJunctionF] = quat_mul(
+      g.q[kBJunctionF],
+      quat_x(static_cast<int32_t>(swal[0] * kSwallowJointA16PerMm)));
+  g.nod.ay += swal[1];
+  g.nod.az += side(swal[1]);
+  g.nod.by += swal[2];
+  g.nod.bz -= side(swal[2]);
+  g.nod.cy += swal[3];
+  g.nod.cz += side(swal[3]);
+  g.q[kBRearSocket] = quat_mul(
+      g.q[kBRearSocket],
+      quat_x(-static_cast<int32_t>(swal[4] * kSwallowJointA16PerMm)));
 }
 
 /** THE WHOLE-BODY HALF (07-MOTION-STYLE §8b), and it is the half that makes the
@@ -1137,13 +1390,13 @@ inline void swallow_nodules(Rig& g, const int32_t swal[3], int32_t lean_pm) {
  *  exactly neutral the moment the ripple ends -- no held offset, and nothing
  *  to unwind at the loop seam.
  *  ⚠ Call AFTER whatever else the clip composes onto kBRoot. */
-inline void swallow_body(Rig& g, const int32_t swal[3], int32_t amp_mm,
+inline void swallow_body(Rig& g, const int32_t swal[5], int32_t amp_mm,
                          int32_t roll_a16) {
-  if ((swal[0] | swal[2]) == 0 || amp_mm <= 0) return;
+  if ((swal[0] | swal[4]) == 0 || amp_mm <= 0) return;
   g.q[kBRoot] = quat_mul(
       g.q[kBRoot],
       quat_z(static_cast<int32_t>(
-          (static_cast<int64_t>(roll_a16) * (swal[0] - swal[2])) / amp_mm)));
+          (static_cast<int64_t>(roll_a16) * (swal[0] - swal[4])) / amp_mm)));
 }
 
 /** PASS 11 F.3 -- THE PRESS-RECOVER WAVE, which replaces sinp on the knead wag.
@@ -1651,9 +1904,13 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
     g.q[kBHingeB] = quat_mul(
         g.q[kBHingeB],
         quat_z(ax(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagBA16, ph_b.agit_pm)) * w2) >> 16), 3)));
-    g.q[kBLoopBase2] = quat_mul(
-        g.q[kBLoopBase2],
-        quat_z(-static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagB2A16, ph.agit_pm)) * w2) >> 16)));
+    // Direction 12: the old B2 wag moved only the closure target and made the
+    // body attachment slide. Spend that authored beat on the real rear socket
+    // carrier instead; its centre stays attached while its local joint turns.
+    g.q[kBRearSocket] = quat_mul(
+        g.q[kBRearSocket],
+        quat_z(-static_cast<int32_t>(
+            (static_cast<int64_t>(a(kKneadWagB2A16, ph.agit_pm)) * w2) >> 16)));
   }
 }
 
@@ -2293,19 +2550,21 @@ inline zc::Clip build_taunt() {
   return c;
 }
 
+constexpr uint16_t kTaunt2Slot = 12;
+
 /** taunt-lasso, slot 12 (the second taunt): it tips forward and swings the
  *  whole loop in a circle over its head like a lasso — tilt and fold-scale
  *  in quadrature trace the peak around — bouncing on the spot, eyes
  *  following its own antenna around. */
 inline zc::Clip build_taunt2() {
   const int K = kTaunt2Keys;
-  zc::Clip c = clip_shell(12, K, kHoverHeightMm);
+  zc::Clip c = clip_shell(kTaunt2Slot, K, kHoverHeightMm);
   Rig g;
   static const Key kRamp[] = {{0, 0}, {16, 0}, {32, 1000}, {88, 1000},
                               {106, 0}, {119, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
-    antenna_knead(g, 12, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
+    antenna_knead(g, kTaunt2Slot, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
     const int ramp = curve(kRamp, 6, f);  // the lasso spins up and back down
     const int32_t tilt = static_cast<int32_t>(
         (static_cast<int64_t>(kTaunt2LassoA16) * ramp / 1000 * sinp(f, K, 4)) >> 16);
@@ -2529,10 +2788,12 @@ inline zc::Clip build_still() {
  *  were never added. It shows one thing per segment, at the offset ceiling,
  *  with everything else at exact rest:
  *
- *    seg 0  nodule A alone: a vertical arc, then a lateral one
- *    seg 1  nodule B alone: the same two arcs
- *    seg 2  nodule C alone: the same two arcs
- *    seg 3  THE OWNER'S CONFIGURATION -- the middle nodule DOWN while the
+ *    seg 0  front socket alone: tilt, then yaw, centre held at the body
+ *    seg 1  nodule A alone: a vertical arc, then a lateral one
+ *    seg 2  nodule B alone: the same two arcs
+ *    seg 3  nodule C alone: the same two arcs
+ *    seg 4  rear surface socket alone: tilt, then yaw, centre held at surface
+ *    seg 5  THE OWNER'S CONFIGURATION -- the middle nodule DOWN while the
  *           outer two swing UP, which is the sentence this whole mechanism
  *           was built to be able to express.
  *
@@ -2563,11 +2824,31 @@ inline zc::Clip build_nodule_solo() {
         : 0;
     NoduleOffsets n;
     if (seg == 0) {
-      n.ay = vert; n.az = lat;
+      // Front body socket: fixed centre, independent hinge rotation.
+      g.q[kBJunctionF] = quat_mul(
+          g.q[kBJunctionF],
+          quat_mul(quat_x(static_cast<int32_t>(
+                       static_cast<int64_t>(kNoduleSoloJointA16) * vert /
+                       kNoduleSoloAmpMm)),
+                   quat_y(static_cast<int32_t>(
+                       static_cast<int64_t>(kNoduleSoloJointA16) * lat /
+                       kNoduleSoloAmpMm))));
     } else if (seg == 1) {
-      n.by = vert; n.bz = lat;
+      n.ay = vert; n.az = lat;
     } else if (seg == 2) {
+      n.by = vert; n.bz = lat;
+    } else if (seg == 3) {
       n.cy = vert; n.cz = lat;
+    } else if (seg == 4) {
+      // Rear surface socket: its centre stays attached; the joint turns locally.
+      g.q[kBRearSocket] = quat_mul(
+          g.q[kBRearSocket],
+          quat_mul(quat_x(-static_cast<int32_t>(
+                       static_cast<int64_t>(kNoduleSoloJointA16) * vert /
+                       kNoduleSoloAmpMm)),
+                   quat_y(static_cast<int32_t>(
+                       static_cast<int64_t>(kNoduleSoloJointA16) * lat /
+                       kNoduleSoloAmpMm))));
     } else {
       // "the middle one might go down while the other two swing up".
       // The mix is NOT 1:1 and kNoduleSoloMidPm explains why: offsets are
@@ -2577,13 +2858,13 @@ inline zc::Clip build_nodule_solo() {
       // not a bug -- see kNoduleSoloMidPm's note.
       const int32_t w = static_cast<int32_t>(
           (static_cast<int64_t>(kNoduleSoloAmpMm) * sinp(lf, S, 1)) >> 16);
-      n.ay = static_cast<int32_t>((static_cast<int64_t>(w) * kNoduleSoloOutPm) / 1000);
-      n.by = -static_cast<int32_t>((static_cast<int64_t>(w) * kNoduleSoloMidPm) / 1000);
-      n.cy = static_cast<int32_t>((static_cast<int64_t>(w) * kNoduleSoloOutPm) / 1000);
+      n.ay = static_cast<int32_t>((static_cast<int64_t>(w) * kNoduleSoloAPm) / 1000);
+      n.by = -static_cast<int32_t>((static_cast<int64_t>(w) * kNoduleSoloBPm) / 1000);
+      n.cy = static_cast<int32_t>((static_cast<int64_t>(w) * kNoduleSoloCPm) / 1000);
       // ...and A gets its sideways swing too, because a vertical request moves
       // it 3 mm and the segment must still show three nodules doing three
       // different things.
-      n.az = static_cast<int32_t>((static_cast<int64_t>(w) * kNoduleSoloOutPm) / 1000);
+      n.az = static_cast<int32_t>((static_cast<int64_t>(w) * kNoduleSoloAPm) / 1000);
     }
     g.nod = n;
     loop_pose(g, 1000, 1000, 1000, 1000);
@@ -2850,32 +3131,49 @@ struct LassoState {
   int32_t scale_pm = 1000;
   int32_t spin_a16 = 0;
 };
+struct LassoTiming {
+  int release;
+  int catch_key;
+  int reel;
+  int home;
+};
+inline bool is_lasso_slot(uint32_t slot) {
+  return slot == kTaunt2Slot || slot == kLassoSlot;
+}
+inline LassoTiming lasso_timing(uint32_t slot) {
+  return slot == kTaunt2Slot
+             ? LassoTiming{kTaunt2LassoReleaseKey, kTaunt2LassoCatchKey,
+                           kTaunt2LassoReelKey, kTaunt2LassoHomeKey}
+             : LassoTiming{kLassoReleaseKey, kLassoCatchKey,
+                           kLassoReelKey, kLassoHomeKey};
+}
 inline LassoState lasso_at(uint32_t slot, int keys, int32_t kq4) {
   LassoState L;
-  if (slot != kLassoSlot) return L;
+  if (!is_lasso_slot(slot)) return L;
+  const LassoTiming T = lasso_timing(slot);
   const int f = kq4 / 16;
-  if (f < kLassoReleaseKey || f >= kLassoHomeKey) return L;
+  if (f < T.release || f >= T.home) return L;
   L.active = true;
   int32_t t;  // 0..1000 along the throw
-  if (f < kLassoCatchKey) {
-    t = (f - kLassoReleaseKey) * 1000 / (kLassoCatchKey - kLassoReleaseKey);
-  } else if (f < kLassoReelKey) {
+  if (f < T.catch_key) {
+    t = (f - T.release) * 1000 / (T.catch_key - T.release);
+  } else if (f < T.reel) {
     t = 1000;  // SNAGGED: it hangs on the target while the antennae take the jerk
   } else {
-    t = 1000 - (f - kLassoReelKey) * 1000 / (kLassoHomeKey - kLassoReelKey);
+    t = 1000 - (f - T.reel) * 1000 / (T.home - T.reel);
   }
   const int32_t e = fold_ease(t);
   for (int k = 0; k < 3; ++k)
     L.off_mm[k] = static_cast<int32_t>((static_cast<int64_t>(kLassoThrowMm[k]) * e) / 1000);
   // the LOFT: a thrown loop arcs, it does not slide along a rail
   L.off_mm[1] += static_cast<int32_t>((4LL * kLassoArcMm * e * (1000 - e)) / 1000000);
-  if (f < kLassoReelKey) {
+  if (f < T.reel) {
     L.scale_pm = 1000 + static_cast<int32_t>(
                             (static_cast<int64_t>(kLassoOutScalePm - 1000) * e) / 1000);
   } else {
     // reeled home: it CINCHES to kLassoHomeScalePm over the first 70% of the
     // return, then relaxes back to normal so the hand-back is seamless
-    const int32_t r = (f - kLassoReelKey) * 1000 / (kLassoHomeKey - kLassoReelKey);
+    const int32_t r = (f - T.reel) * 1000 / (T.home - T.reel);
     L.scale_pm = r < 700
         ? kLassoOutScalePm +
               (kLassoHomeScalePm - kLassoOutScalePm) * fold_ease(r * 1000 / 700) / 1000
@@ -2883,7 +3181,7 @@ inline LassoState lasso_at(uint32_t slot, int keys, int32_t kq4) {
                                   fold_ease((r - 700) * 1000 / 300) / 1000;
   }
   L.spin_a16 = static_cast<int32_t>(
-      (static_cast<int64_t>(kLassoSpinA16) * (f - kLassoReleaseKey)) & 0xFFFF);
+      (static_cast<int64_t>(kLassoSpinA16) * (f - T.release)) & 0xFFFF);
   (void)keys;
   return L;
 }

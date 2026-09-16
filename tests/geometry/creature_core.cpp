@@ -852,6 +852,52 @@ void test_compositor() {
   check(pts >= 1 && pts <= 9, "glint rung draws a small bright point");
 }
 
+void test_local_translation_track() {
+  zc::Skeleton sk;
+  sk.bone_count = 2;
+  sk.bones[0] = zc::Bone{0, 0, 0, 0};
+  sk.bones[1] = zc::Bone{0, 0, M1, 0};
+  zc::SkeletonBake baked;
+  check(zc::bake_skeleton(sk, baked), "local translation: bake skeleton");
+
+  zc::Clip c;
+  c.slot_id = 1;
+  c.frame_count = 2;
+  c.root.assign(6, 0);
+  c.quats.assign(4, zc::quat16_identity());
+  c.interpolate = true;
+  zc::CreatureType type;
+  type.skeleton = sk;
+  type.baked = baked;
+  type.bank.bone_count = 2;
+  type.bank.clips.push_back(c);
+
+  std::array<zc::mat3x4fx, zc::kMaxBones> empty_pose;
+  zc::decode_pose(type, c, 0, empty_pose, nullptr, 1);
+
+  // Explicit zero is byte-identical to the empty optional track.
+  c.local_translation.assign(2u * 2u * 3u, 0);
+  zc::bake_presentation_midpoints(c, 2);
+  std::array<zc::mat3x4fx, zc::kMaxBones> zero_pose;
+  zc::decode_pose(type, c, 0, zero_pose, nullptr, 1);
+  check(std::memcmp(empty_pose.data(), zero_pose.data(), sizeof(empty_pose)) == 0,
+        "local translation: empty and explicit-zero tracks are identical");
+
+  // Frame 1 moves child 1 one metre along its own +Y. The skin matrix carries
+  // exactly that delta; the baked presentation midpoint carries exactly half.
+  c.local_translation[(1u * 2u + 1u) * 3u + 1u] = M1;
+  zc::bake_presentation_midpoints(c, 2);
+  std::array<zc::mat3x4fx, zc::kMaxBones> key_pose, mid_pose;
+  zc::decode_pose(type, c, 1, key_pose, nullptr, 0);
+  zc::decode_pose(type, c, 0, mid_pose, nullptr, 1);
+  check_eq(key_pose[1].m[7], M1,
+           "local translation: child key reaches authored delta");
+  check_eq(mid_pose[1].m[7], M1 / 2,
+           "local translation: baked midpoint is half the delta");
+  check_eq(key_pose[0].m[7], 0,
+           "local translation: child track does not move root");
+}
+
 }  // namespace
 
 // THE CREATURE EXTENT LAW (owner ruling 2026-08-24 item 3).
@@ -940,6 +986,7 @@ int main() {
   test_clamp_gate();
   test_extent_law();
   test_pose_bank();
+  test_local_translation_track();
   test_anim();
   test_ground_tilt();
   test_tilt_matrix();

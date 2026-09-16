@@ -83,6 +83,8 @@ namespace {
 // span-aim shortfall (a nodule lands ALONG its target direction at span
 // length, not AT the target) without letting a dead nodule pass.
 constexpr int32_t kDrivenMinMm = 150;
+constexpr int32_t kAnchoredJointMinMm = 20;
+constexpr int32_t kJointProbeMm = 100;
 // A nodule that is NOT being driven may still move, because the one that IS
 // carries the sections downstream of it -- that is the requirement, not a
 // fault. So the independence test is DIRECTIONAL, and this is the whole
@@ -97,16 +99,42 @@ constexpr int32_t kOpposeMinMm = 40;
 struct Ball {
   const char* name;
   uint8_t bone;
+  bool anchored;
 };
-const Ball kBalls[3] = {{"A", u02::kBHingeA}, {"B", u02::kBHingeB}, {"C", u02::kBHingeC}};
+const Ball kBalls[5] = {{"Front", u02::kBJunctionF, true},
+                         {"A", u02::kBHingeA, false},
+                         {"B", u02::kBHingeB, false},
+                         {"C", u02::kBHingeC, false},
+                         {"End", u02::kBRearSocket, true}};
 
 /** Posed position of a ball, ROOT-LOCAL, through the production pose path. */
 void posed_ball(const zc::CreatureType& T, const zc::Clip& clip, uint16_t f, uint8_t bone,
                 double& x, double& y, double& z) {
   std::array<zc::mat3x4fx, zc::kMaxBones> pose;
   zc::decode_pose(T, clip, f, pose, nullptr, 0);
-  zc::SkinVertex sv{T.baked.world_x[bone], T.baked.world_y[bone], T.baked.world_z[bone],
-                    bone, bone, 64, 0, 0};
+  // A point 100 mm along the carrier's bind +Y sees both centre translation
+  // and local joint rotation. Anchored front/End centres must stay attached;
+  // their independent articulation is visible in this carried marker.
+  const bool anchored = bone == u02::kBJunctionF || bone == u02::kBRearSocket;
+  zc::SkinVertex sv{T.baked.world_x[bone],
+                    T.baked.world_y[bone] + (anchored ? u02::fxu(kJointProbeMm) : 0),
+                    T.baked.world_z[bone], bone, bone, 64, 0, 0};
+  int32_t wx, wy, wz;
+  zc::skin_vertex(pose.data(), sv, wx, wy, wz, nullptr);
+  const zc::mat3x4fx& rm = pose[u02::kBRoot];
+  const int64_t dx = wx - rm.m[3], dy = wy - rm.m[7], dz = wz - rm.m[11];
+  x = static_cast<double>(((rm.m[0] * dx + rm.m[4] * dy + rm.m[8] * dz) >> 16) * 1000 >> 16);
+  y = static_cast<double>(((rm.m[1] * dx + rm.m[5] * dy + rm.m[9] * dz) >> 16) * 1000 >> 16);
+  z = static_cast<double>(((rm.m[2] * dx + rm.m[6] * dy + rm.m[10] * dz) >> 16) * 1000 >> 16);
+}
+
+void posed_center(const zc::CreatureType& T, const zc::Clip& clip, uint16_t f,
+                  uint8_t sub, uint8_t bone,
+                  double& x, double& y, double& z) {
+  std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+  zc::decode_pose(T, clip, f, pose, nullptr, sub);
+  zc::SkinVertex sv{T.baked.world_x[bone], T.baked.world_y[bone],
+                    T.baked.world_z[bone], bone, bone, 64, 0, 0};
   int32_t wx, wy, wz;
   zc::skin_vertex(pose.data(), sv, wx, wy, wz, nullptr);
   const zc::mat3x4fx& rm = pose[u02::kBRoot];
@@ -160,16 +188,38 @@ int main(int argc, char** argv) {
         ? static_cast<int32_t>((static_cast<int64_t>(u02::kNoduleSoloAmpMm) *
                                 u02::sinp(lf - S / 2, S / 2, 1)) >> 16) : 0;
     u02::NoduleOffsets n;
-    if (seg == 0) { n.ay = vert; n.az = lat; }
-    else if (seg == 1) { n.by = vert; n.bz = lat; }
-    else if (seg == 2) { n.cy = vert; n.cz = lat; }
-    else {
+    if (seg == 0) {
+      if (!ignore_all && !(mute && *mute == 'F'))
+        g.q[u02::kBJunctionF] = u02::quat_mul(
+            g.q[u02::kBJunctionF],
+            u02::quat_mul(
+                u02::quat_x(static_cast<int32_t>(
+                    static_cast<int64_t>(u02::kNoduleSoloJointA16) * vert /
+                    u02::kNoduleSoloAmpMm)),
+                u02::quat_y(static_cast<int32_t>(
+                    static_cast<int64_t>(u02::kNoduleSoloJointA16) * lat /
+                    u02::kNoduleSoloAmpMm))));
+    } else if (seg == 1) { n.ay = vert; n.az = lat; }
+    else if (seg == 2) { n.by = vert; n.bz = lat; }
+    else if (seg == 3) { n.cy = vert; n.cz = lat; }
+    else if (seg == 4) {
+      if (!ignore_all && !(mute && *mute == 'E'))
+        g.q[u02::kBRearSocket] = u02::quat_mul(
+            g.q[u02::kBRearSocket],
+            u02::quat_mul(
+                u02::quat_x(-static_cast<int32_t>(
+                    static_cast<int64_t>(u02::kNoduleSoloJointA16) * vert /
+                    u02::kNoduleSoloAmpMm)),
+                u02::quat_y(static_cast<int32_t>(
+                    static_cast<int64_t>(u02::kNoduleSoloJointA16) * lat /
+                    u02::kNoduleSoloAmpMm))));
+    } else {
       const int32_t w = static_cast<int32_t>(
           (static_cast<int64_t>(u02::kNoduleSoloAmpMm) * u02::sinp(lf, S, 1)) >> 16);
-      n.ay = static_cast<int32_t>((static_cast<int64_t>(w) * u02::kNoduleSoloOutPm) / 1000);
-      n.by = -static_cast<int32_t>((static_cast<int64_t>(w) * u02::kNoduleSoloMidPm) / 1000);
-      n.cy = static_cast<int32_t>((static_cast<int64_t>(w) * u02::kNoduleSoloOutPm) / 1000);
-      n.az = static_cast<int32_t>((static_cast<int64_t>(w) * u02::kNoduleSoloOutPm) / 1000);
+      n.ay = static_cast<int32_t>((static_cast<int64_t>(w) * u02::kNoduleSoloAPm) / 1000);
+      n.by = -static_cast<int32_t>((static_cast<int64_t>(w) * u02::kNoduleSoloBPm) / 1000);
+      n.cy = static_cast<int32_t>((static_cast<int64_t>(w) * u02::kNoduleSoloCPm) / 1000);
+      n.az = static_cast<int32_t>((static_cast<int64_t>(w) * u02::kNoduleSoloAPm) / 1000);
     }
     // ---- THE FAILABLE LEGS, applied where the production path consumes the
     // offsets: not by faking a result, but by removing the mechanism.
@@ -184,6 +234,7 @@ int main(int argc, char** argv) {
     u02::face_rest(g);
     g.write(c, f);
   }
+  u02::finalize_rear_follow(c);
   c.interpolate = banked->interpolate;
 
   // PROOF THAT THIS IS THE SHIPPED ANIMATION: with no leg engaged, every quat
@@ -205,7 +256,14 @@ int main(int argc, char** argv) {
         return 1;
       }
     }
-    std::printf("identity: local pose == committed slot 16, %zu quats\n", c.quats.size());
+    if (c.local_translation != banked->local_translation) {
+      std::fprintf(stderr,
+                   "manafold-nodule: FAIL local translation track differs from "
+                   "the banked slot 16\n");
+      return 1;
+    }
+    std::printf("identity: local pose == committed slot 16, %zu quats + %zu translations\n",
+                c.quats.size(), c.local_translation.size());
   }
 
   if (csv) {
@@ -220,62 +278,50 @@ int main(int argc, char** argv) {
   }
 
   // Rest reference: frame 0 of every segment is exact rest by construction.
-  double rx[3], ry[3], rz[3];
-  for (int i = 0; i < 3; ++i) posed_ball(T, c, 0, kBalls[i].bone, rx[i], ry[i], rz[i]);
+  double rx[5], ry[5], rz[5];
+  for (int i = 0; i < 5; ++i)
+    posed_ball(T, c, 0, kBalls[i].bone, rx[i], ry[i], rz[i]);
 
-  // ---- PASS 15 (Direction 11 §3): WHAT THIS TABLE IS, AND WHAT IT IS NOT ----
-  //
-  //   "This has been reported DONE by four separate passes ... The owner is
-  //    looking at the shipped clips and says the balls do not move. BOTH CAN BE
-  //    TRUE, and that is the whole problem."
-  //
-  // Everything below is honest and reproduces to the millimetre. It is also
-  // measured on the SOLO DIAGNOSTIC, slot 16, which drives one nodule 200 mm --
-  // and the shipping bank never runs anything remotely like that. So this table
-  // is evidence that THE RIG CAN, not evidence that ANY CLIP DOES, and four
-  // passes closed an owner item by quoting it for the second thing.
-  // 10-GATE-CHECKLIST items 12 and 39: reproduce the claim on the artefact that
-  // ships, or treat it as unproven.
-  std::printf("\n⚠ THE TABLE BELOW IS A MECHANISM CHECK ON THE SOLO DIAGNOSTIC "
-              "(slot 16), NOT evidence\n  about the shipped bank. For what the "
-              "owner actually looks at, see the span gate's G6\n  (differential "
-              "ball motion, adjacent pairs, on every shipped clip, with a "
-              "known-negative).\n");
-  std::printf("\nPER-NODULE INDEPENDENCE, posed ball travel from rest (mm), "
+  std::printf("\nFIVE-JOINT INDEPENDENCE, carried-marker travel from rest (mm), "
               "through decode_pose + skin_vertex\n");
-  std::printf("  segment          ball A    ball B    ball C   verdict\n");
+  std::printf("  segment             Front       A       B       C     End   verdict\n");
 
   int fails = 0;
-  const char* segname[4] = {"0  A alone   ", "1  B alone   ", "2  C alone   ",
-                            "3  mid down  "};
-  for (int seg = 0; seg < 4; ++seg) {
-    double peak[3] = {0, 0, 0};
+  const char* segname[6] = {"0 Front alone ", "1 A alone     ", "2 B alone     ",
+                            "3 C alone     ", "4 End alone   ", "5 mid down    "};
+  for (int seg = 0; seg < 6; ++seg) {
+    double peak[5] = {0, 0, 0, 0, 0};
     for (int f = seg * S; f < (seg + 1) * S; ++f) {
-      for (int i = 0; i < 3; ++i) {
+      for (int i = 0; i < 5; ++i) {
         double x, y, z;
         posed_ball(T, c, static_cast<uint16_t>(f), kBalls[i].bone, x, y, z);
-        const double d = std::sqrt((x - rx[i]) * (x - rx[i]) + (y - ry[i]) * (y - ry[i]) +
+        const double d = std::sqrt((x - rx[i]) * (x - rx[i]) +
+                                   (y - ry[i]) * (y - ry[i]) +
                                    (z - rz[i]) * (z - rz[i]));
         if (d > peak[i]) peak[i] = d;
       }
     }
     const char* verdict = "ok";
-    if (seg < 3) {
-      // the driven one must MOVE
-      if (peak[seg] < kDrivenMinMm) { verdict = "FAIL driven nodule is dead"; ++fails; }
-      // every UPSTREAM one must stay put. Downstream ones are CARRIED and are
-      // expected to move -- that is the requirement, not a fault.
-      for (int i = 0; i < seg; ++i)
+    if (seg < 5) {
+      const int driven = seg;
+      const int floor = kBalls[driven].anchored
+                            ? kAnchoredJointMinMm : kDrivenMinMm;
+      if (peak[driven] < floor) {
+        verdict = "FAIL driven joint is dead";
+        ++fails;
+      }
+      // Front/A/B/C form the carried chain; every station before the driven
+      // one must stay put. End is body-rooted, so its solo beat must leave all
+      // four others put as well.
+      const int upstream = driven == 4 ? 4 : driven;
+      for (int i = 0; i < upstream; ++i)
         if (peak[i] > kUpstreamMaxMm) {
-          verdict = "FAIL an upstream nodule moved";
+          verdict = "FAIL an upstream joint moved";
           ++fails;
         }
-    } else {
-      for (int i = 0; i < 3; ++i)
-        if (peak[i] < kDrivenMinMm) { verdict = "FAIL a nodule is dead"; ++fails; }
     }
-    std::printf("  %s  %7.0f   %7.0f   %7.0f   %s\n", segname[seg], peak[0], peak[1],
-                peak[2], verdict);
+    std::printf("  %s  %7.0f %7.0f %7.0f %7.0f %7.0f   %s\n",
+                segname[seg], peak[0], peak[1], peak[2], peak[3], peak[4], verdict);
   }
 
   // ---- THE OPPOSING-VERTICAL TEST -----------------------------------------
@@ -290,12 +336,12 @@ int main(int argc, char** argv) {
   {
     double best = 0;
     int bestf = -1;
-    for (int f = 3 * S; f < 4 * S; ++f) {
+    for (int f = 5 * S; f < 6 * S; ++f) {
       double y[3];
       for (int i = 0; i < 3; ++i) {
         double x, yy, z;
-        posed_ball(T, c, static_cast<uint16_t>(f), kBalls[i].bone, x, yy, z);
-        y[i] = yy - ry[i];
+        posed_ball(T, c, static_cast<uint16_t>(f), kBalls[i + 1].bone, x, yy, z);
+        y[i] = yy - ry[i + 1];
       }
       const double sep = y[2] - y[1];
       if (sep > best) { best = sep; bestf = f; }
@@ -306,8 +352,8 @@ int main(int argc, char** argv) {
     if (bestf >= 0)
       for (int i = 0; i < 3; ++i) {
         double x, yy, z;
-        posed_ball(T, c, static_cast<uint16_t>(bestf), kBalls[i].bone, x, yy, z);
-        y[i] = yy - ry[i];
+        posed_ball(T, c, static_cast<uint16_t>(bestf), kBalls[i + 1].bone, x, yy, z);
+        y[i] = yy - ry[i + 1];
       }
     if (bestf < 0 || !(y[1] < -kOpposeMinMm && y[2] > kOpposeMinMm)) {
       std::printf("    frame %d:  A %+.0f   B %+.0f   C %+.0f mm\n", bestf, y[0], y[1], y[2]);
@@ -363,18 +409,104 @@ int main(int argc, char** argv) {
                 "DECLARED GAP -- reported, not gated):\n");
     for (int i = 0; i < 3; ++i) {
       double lo = 1e9, hi = -1e9;
-      for (int f = i * S; f < i * S + S / 2; ++f) {
+      for (int f = (i + 1) * S; f < (i + 1) * S + S / 2; ++f) {
         double x, y2, z;
-        posed_ball(T, c, static_cast<uint16_t>(f), kBalls[i].bone, x, y2, z);
-        const double d = y2 - ry[i];
+        posed_ball(T, c, static_cast<uint16_t>(f), kBalls[i + 1].bone, x, y2, z);
+        const double d = y2 - ry[i + 1];
         if (d < lo) lo = d;
         if (d > hi) hi = d;
       }
-      std::printf("    ball %s  %+6.0f .. %+6.0f mm%s\n", kBalls[i].name, lo, hi,
+      std::printf("    ball %s  %+6.0f .. %+6.0f mm%s\n", kBalls[i + 1].name, lo, hi,
                   (hi - lo) < 60 ? "   <-- BONE only: the span points along "
                                    "the request. The SKIN answer is mspan's G4"
                                  : "");
     }
+  }
+
+  // ---- THE REAR SOCKET IS ON THE BODY SURFACE, NOT FROZEN INSIDE ----------
+  {
+    int influenced = 0;
+    for (const zc::Meshlet& m : T.mesh)
+      for (const zc::SkinVertex& v : m.verts)
+        if ((v.b0 == u02::kBRearSocket && v.w0 > 0) ||
+            (v.b1 == u02::kBRearSocket && v.w0 < 64))
+          ++influenced;
+    double worst_err = 0.0;
+    double min_actual_rho = 10.0, max_actual_rho = 0.0;
+    double worst_actual[3] = {0, 0, 0}, worst_expected[3] = {0, 0, 0};
+    double worst_stored[3] = {0, 0, 0};
+    uint16_t worst_slot = 0, worst_frame = 0;
+    uint8_t worst_sub = 0;
+    for (const zc::Clip& clip : T.bank.clips) {
+      for (uint16_t f = 0; f < clip.frame_count; ++f) {
+        for (uint8_t sub = 0; sub < 2; ++sub) {
+          double x, y, z;
+          posed_center(T, clip, f, sub, u02::kBRearSocket, x, y, z);
+          const double arx = x / u02::kBodyRadiusMm;
+          const double ary = y / u02::vmm(u02::kBodyRadiusMm);
+          const double arz = z / u02::kBodyRadiusMm;
+          const double actual_rho = std::sqrt(arx * arx + ary * ary + arz * arz);
+          if (actual_rho < min_actual_rho) min_actual_rho = actual_rho;
+          if (actual_rho > max_actual_rho) max_actual_rho = actual_rho;
+          int32_t ex, ey, ez;
+          u02::deform_body_point(zc::deformation_sample(T, clip.slot_id, f, sub),
+                                 u02::kRearSocketTargetXMm,
+                                 u02::kRearSocketTargetYMm,
+                                 u02::kRearSocketTargetZMm, ex, ey, ez);
+          const double expected_x = static_cast<double>(
+              (static_cast<int64_t>(ex) * 1000) >> 16);
+          const double expected_y = static_cast<double>(
+              (static_cast<int64_t>(ey) * 1000) >> 16);
+          const double expected_z = static_cast<double>(
+              (static_cast<int64_t>(ez) * 1000) >> 16);
+          const double dx = x - expected_x;
+          const double dy = y - expected_y;
+          const double dz = z - expected_z;
+          const double err = std::sqrt(dx * dx + dy * dy + dz * dz);
+          if (err > worst_err) {
+            worst_err = err;
+            worst_slot = clip.slot_id;
+            worst_frame = f;
+            worst_sub = sub;
+            worst_actual[0] = x; worst_actual[1] = y; worst_actual[2] = z;
+            worst_expected[0] = expected_x;
+            worst_expected[1] = expected_y;
+            worst_expected[2] = expected_z;
+            const std::vector<int32_t>& tr =
+                sub != 0 ? clip.mid_local_translation : clip.local_translation;
+            const size_t ti =
+                (static_cast<size_t>(f) * u02::kBoneCount + u02::kBRearSocket) * 3u;
+            if (tr.size() >= ti + 3u) {
+              worst_stored[0] = static_cast<double>(
+                  (static_cast<int64_t>(T.baked.world_x[u02::kBRearSocket] + tr[ti]) * 1000) >> 16);
+              worst_stored[1] = static_cast<double>(
+                  (static_cast<int64_t>(T.baked.world_y[u02::kBRearSocket] + tr[ti + 1]) * 1000) >> 16);
+              worst_stored[2] = static_cast<double>(
+                  (static_cast<int64_t>(T.baked.world_z[u02::kBRearSocket] + tr[ti + 2]) * 1000) >> 16);
+            }
+          }
+        }
+      }
+    }
+    const double rx = static_cast<double>(u02::kRearSocketTargetXMm) /
+                      u02::kBodyRadiusMm;
+    const double ry = static_cast<double>(u02::kRearSocketTargetYMm) /
+                      u02::vmm(u02::kBodyRadiusMm);
+    const double rho = std::sqrt(rx * rx + ry * ry);
+    const bool ok = influenced > 0 && worst_err <= 35.0 &&
+                    rho >= 0.90 && rho <= 1.08 &&
+                    min_actual_rho >= 0.82 && max_actual_rho <= 1.18;
+    std::printf("\n  REAR SURFACE SOCKET: %d influenced vertices; authored rho %.3f; "
+                "actual rho %.3f..%.3f; worst target deviation %.1f mm "
+                "(slot %u frame %u sub %u; actual %.0f,%.0f,%.0f expected %.0f,%.0f,%.0f "
+                "stored %.0f,%.0f,%.0f) -- %s\n",
+                influenced, rho, min_actual_rho, max_actual_rho, worst_err,
+                worst_slot, worst_frame, worst_sub,
+                worst_actual[0], worst_actual[1], worst_actual[2],
+                worst_expected[0], worst_expected[1], worst_expected[2],
+                worst_stored[0], worst_stored[1], worst_stored[2],
+                ok ? "OK" : "FAIL");
+    if (!ok) ++fails;
   }
 
   const bool leg = (mute != nullptr) || ignore_all;

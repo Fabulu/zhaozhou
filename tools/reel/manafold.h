@@ -180,16 +180,50 @@ inline const zc::CreatureType& type() {
     // correct and which the owner has approved -- is bit-identical.
     bank.clips.push_back(build_hover_idle(kIdleFixedSlot));  // slot 23
 
+    // Direction 12: clip builders finish their body deformation samples after
+    // authoring poses. Re-solve the rear socket/closure now, from that completed
+    // sample, so the body, socket, return and committed probes share one state.
+    for (zc::Clip& clip : bank.clips) finalize_rear_follow(clip);
+
     zc::CreatureType type;
     type.type_id = 3;  // 1 watchdog, 2 zixxtrixx, 3 manafold
     const char* reason = "";
     if (!zc::compile_creature(sk, bank, parts, type, &reason)) {
       std::fprintf(stderr, "manafold: compile failed: %s\n", reason);
+    } else {
+      for (zc::Clip& clip : type.bank.clips)
+        finalize_rear_follow_midpoints(clip);
     }
 #ifdef U02_HAVE_PAGE
     type.page_direct = &page_direct();
 #endif
     return type;
+  }();
+  return t;
+}
+
+inline const zc::CreatureType& body_type() {
+  static const zc::CreatureType t = [] {
+    // Auxiliary contour type: same authored skeleton, clips, deformation and
+    // page as the full Manafold, but BODY ONLY. It is never a site subject and
+    // never owns animation; the reel uses its depth to recover the body/head
+    // boundary hidden inside the full creature's union silhouette.
+    const zc::CreatureType& full = type();
+    std::vector<zc::RingPart> parts;
+    parts.push_back(make_body(kBRoot));
+    zc::CreatureType body;
+    body.type_id = 4;  // reel-only auxiliary; distinct PoseBank key
+    const char* reason = "";
+    if (!zc::compile_creature(full.skeleton, full.bank, parts, body, &reason)) {
+      std::fprintf(stderr, "manafold body contour: compile failed: %s\n", reason);
+    } else {
+      for (zc::Clip& clip : body.bank.clips)
+        finalize_rear_follow_midpoints(clip);
+    }
+#ifdef U02_HAVE_PAGE
+    body.page_direct = &page_direct();
+#endif
+    return body;
   }();
   return t;
 }

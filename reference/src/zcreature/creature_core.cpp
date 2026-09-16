@@ -188,12 +188,15 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc) {
 void bake_presentation_midpoints(Clip& c, uint8_t bc,
                                  const std::vector<uint8_t>& authored_channels) {
   const int n = c.frame_count;
+  const size_t local_count = static_cast<size_t>(n) * bc * 3u;
+  const bool has_local_translation = c.local_translation.size() == local_count;
   const bool has_deform = c.deform.size() == static_cast<size_t>(n);
   const size_t ex_lanes = static_cast<size_t>(kDeformLaneCount) - 1u;
   const bool has_deform_ex =
       ex_lanes != 0 && c.deform_ex.size() == static_cast<size_t>(n) * ex_lanes;
-  // A midpoint deformation channel is meaningless without one valid source
-  // sample per key. Clear malformed/stale data even on a non-interpolated clip.
+  // A midpoint sidecar is meaningless without one valid source sample per key.
+  // Clear malformed/stale generated data even on a non-interpolated clip.
+  if (!has_local_translation) c.mid_local_translation.clear();
   if (!has_deform) c.mid_deform.clear();
   if (!has_deform_ex) c.mid_deform_ex.clear();
   if (!c.interpolate || n < 2) return;
@@ -207,6 +210,10 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc,
   const std::vector<DeformSample> old_mid_deform = c.mid_deform;
   c.mid_quats.assign(quat_count, quat16_identity());
   c.mid_root.assign(root_count, 0);
+  if (has_local_translation)
+    c.mid_local_translation.assign(local_count, 0);
+  else
+    c.mid_local_translation.clear();
   if (has_deform)
     c.mid_deform.assign(static_cast<size_t>(n), DeformSample{});
   else
@@ -266,6 +273,28 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc,
       if (m < lo) m = lo;
       if (m > hi) m = hi;
       c.mid_root[static_cast<size_t>(k) * 3 + i] = static_cast<int32_t>(m);
+    }
+    if (!c.mid_local_translation.empty()) {
+      for (int b = 0; b < bc; ++b) {
+        for (int i = 0; i < 3; ++i) {
+          const size_t lane = static_cast<size_t>(b) * 3u + static_cast<size_t>(i);
+          const int64_t p0 = c.local_translation[static_cast<size_t>(k0) * bc * 3u + lane];
+          const int64_t p1 = c.local_translation[static_cast<size_t>(k1) * bc * 3u + lane];
+          const int64_t p2 = c.local_translation[static_cast<size_t>(k2) * bc * 3u + lane];
+          const int64_t p3 = c.local_translation[static_cast<size_t>(k3) * bc * 3u + lane];
+          int64_t m = p1 == p2
+                          ? p1
+                          : (plain[static_cast<size_t>(k)]
+                                 ? (p1 + p2) / 2
+                                 : (-p0 + 9 * p1 + 9 * p2 - p3) / 16);
+          const int64_t lo = p1 < p2 ? p1 : p2;
+          const int64_t hi = p1 < p2 ? p2 : p1;
+          if (m < lo) m = lo;
+          if (m > hi) m = hi;
+          c.mid_local_translation[static_cast<size_t>(k) * bc * 3u + lane] =
+              static_cast<int32_t>(m);
+        }
+      }
     }
     if (!c.mid_deform.empty()) {
       const DeformSample& d0 = c.deform[static_cast<size_t>(k0)];
@@ -404,11 +433,29 @@ void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
         q = quat16_nlerp(q, clip.quats[static_cast<size_t>(nf) * bc + b], sub, 2);
       }
     }
+    int32_t local_t[3] = {0, 0, 0};
+    const size_t local_count = static_cast<size_t>(clip.frame_count) * bc * 3u;
+    if (clip.local_translation.size() == local_count) {
+      const size_t base = (static_cast<size_t>(frame) * bc + b) * 3u;
+      for (int i = 0; i < 3; ++i) local_t[i] = clip.local_translation[base + i];
+      if (clip.interpolate && sub != 0) {
+        if (clip.mid_local_translation.size() == local_count) {
+          for (int i = 0; i < 3; ++i) local_t[i] = clip.mid_local_translation[base + i];
+        } else {
+          const uint16_t nf = static_cast<uint16_t>(
+              frame + 1 >= clip.frame_count ? (clip.hold_last ? frame : 0) : frame + 1);
+          const size_t next = (static_cast<size_t>(nf) * bc + b) * 3u;
+          for (int i = 0; i < 3; ++i)
+            local_t[i] = static_cast<int32_t>(
+                (static_cast<int64_t>(local_t[i]) + clip.local_translation[next + i]) / 2);
+        }
+      }
+    }
     quat16_to_mat3(q, r, L);
-    mat3x4fx lr = r;  // LR = R with the rest translation (+ root displacement)
-    lr.m[3] += sk.bones[b].tx + (b == 0 ? disp[0] : 0);
-    lr.m[7] += sk.bones[b].ty + (b == 0 ? disp[1] : 0);
-    lr.m[11] += sk.bones[b].tz + (b == 0 ? disp[2] : 0);
+    mat3x4fx lr = r;  // LR = R with the rest translation (+ authored local/root displacement)
+    lr.m[3] += sk.bones[b].tx + local_t[0] + (b == 0 ? disp[0] : 0);
+    lr.m[7] += sk.bones[b].ty + local_t[1] + (b == 0 ? disp[1] : 0);
+    lr.m[11] += sk.bones[b].tz + local_t[2] + (b == 0 ? disp[2] : 0);
     if (b == 0) {
       a[0] = lr;
     } else {
@@ -1211,6 +1258,9 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
   for (const Clip& c : bank.clips) {
     if (c.quats.size() != static_cast<size_t>(c.frame_count) * bank.bone_count ||
         c.root.size() != static_cast<size_t>(c.frame_count) * 3 ||
+        (!c.local_translation.empty() &&
+         c.local_translation.size() !=
+             static_cast<size_t>(c.frame_count) * bank.bone_count * 3u) ||
         (!c.deform.empty() && c.deform.size() != c.frame_count) ||
         (!c.deform_ex.empty() &&
          c.deform_ex.size() !=

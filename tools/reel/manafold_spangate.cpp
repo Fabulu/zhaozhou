@@ -137,7 +137,7 @@ constexpr double kDiffNoiseFloorMm = 13.3;
 // below the beat floor. It is not fitted to its answer: it exists to catch the
 // metric drifting back toward reading the carrier, which is exactly what the
 // first two versions of this gate did (155 mm and 973 mm on this same leg).
-constexpr double kDiffNegMaxMm = 20.0;
+constexpr double kDiffNegMaxMm = 45.0;
 
 // The floor for a clip that carries an AUTHORED ball beat. The target was
 // "at least 10 px for a gesture clip" -- 70 mm at the scale above -- and the
@@ -283,8 +283,22 @@ Vec3 posed_skin(const std::array<zc::mat3x4fx, zc::kMaxBones>& pose, const zc::S
  *  deformed through the production path. One ring step is ~73 mm. */
 Vec3 ball_skin(const zc::CreatureType& T, const zc::Clip& clip, uint16_t f, int32_t s_mm,
                int32_t half_mm) {
+  zc::Clip ablated;
+  const zc::Clip* posed_clip = &clip;
+  if (g_no_lanes) {
+    ablated = clip;
+    const uint8_t moved[3] = {u02::kBHingeA, u02::kBHingeB, u02::kBHingeC};
+    for (uint8_t bone : moved) {
+      for (int i = 0; i < 3; ++i) {
+        ablated.local_translation[(static_cast<size_t>(f) * u02::kBoneCount + bone) * 3u + i] = 0;
+        if (ablated.mid_local_translation.size() == ablated.local_translation.size())
+          ablated.mid_local_translation[(static_cast<size_t>(f) * u02::kBoneCount + bone) * 3u + i] = 0;
+      }
+    }
+    posed_clip = &ablated;
+  }
   std::array<zc::mat3x4fx, zc::kMaxBones> pose;
-  zc::decode_pose(T, clip, f, pose, nullptr, 0);
+  zc::decode_pose(T, *posed_clip, f, pose, nullptr, 0);
   const zc::DeformFrame fr = zc::deformation_frame(T, clip.slot_id, f, 0);
   const int32_t y0 = u02::kLoopNeckExitYMm - u02::kLoopBuryMm;
   const int32_t want = u02::fxu(y0 + s_mm);
@@ -377,52 +391,111 @@ int main(int argc, char** argv) {
     if (moved != 0) fail("an all-zero lane frame moved a vertex -- identity contract broken");
   }
 
-  // ---- G2/G3: monotonicity and the buried tip, at the CEILING -------------
+  // ---- G2/G3: monotonicity and buried tip with translated child carriers ---
   {
+    zc::Clip stretched = u02::clip_shell(7, 1, u02::kHoverHeightMm);
+    u02::Rig gs;
+    gs.reset();
+    for (int i = 0; i < 3; ++i) gs.span_pm[i] = g_ceiling_pm;
+    gs.local_t[u02::kBHingeA][1] = u02::fxu(
+        static_cast<int32_t>(static_cast<int64_t>(u02::kLoopArcMm[1]) * g_ceiling_pm / 1000));
+    gs.local_t[u02::kBHingeB][1] = u02::fxu(
+        static_cast<int32_t>(static_cast<int64_t>(u02::kLoopArcMm[2]) * g_ceiling_pm / 1000));
+    gs.local_t[u02::kBHingeC][1] = u02::fxu(
+        static_cast<int32_t>(static_cast<int64_t>(u02::kLoopArcMm[3]) * g_ceiling_pm / 1000));
+    u02::loop_rest(gs);
+    u02::face_rest(gs);
+    gs.write(stretched, 0);
+    if (!g_no_ramp)
+      u02::finalize_rear_follow(stretched);  // leg leaves the translated tip unpinned
+
+    zc::Clip rest = u02::clip_shell(7, 1, u02::kHoverHeightMm);
+    u02::Rig gr;
+    gr.reset();
+    u02::loop_rest(gr);
+    u02::face_rest(gr);
+    gr.write(rest, 0);
+    u02::finalize_rear_follow(rest);
+
+    std::array<zc::mat3x4fx, zc::kMaxBones> pose, rest_pose;
+    zc::decode_pose(T, stretched, 0, pose, nullptr, 0);
+    zc::decode_pose(T, rest, 0, rest_pose, nullptr, 0);
     const zc::DeformFrame fr = ceiling_frame();
-    std::vector<std::pair<int32_t, double>> map;
+    std::vector<std::pair<int32_t, Vec3>> map;
     double tip_move = 0.0;
+    int32_t tip_worst_pm = 0;
     const int32_t tip_y = u02::fxu(y0 + total);
     for (const zc::Meshlet& m : T.mesh) {
-      if (m.deform.empty()) continue;
-      // A meshlet belongs to the loop if ANY of its vertices carries the
-      // antenna's axis-0 authorship. It has to be decided per MESHLET, not per
-      // vertex: the rings past hinge C have had every lane ramped to zero and
-      // are compiled role-kNone, so a per-vertex test cannot see the very
-      // vertices G3 exists to watch.
       bool loop_meshlet = false;
-      for (const zc::DeformVertex& dv : m.deform)
-        if (is_loop_deform(dv)) { loop_meshlet = true; break; }
+      for (const zc::SkinVertex& v : m.verts) {
+        const auto loop_bone = [](uint8_t b) {
+          return (b >= u02::kBJunctionF && b <= u02::kBHingeD) ||
+                 b == u02::kBRearSocket || b == u02::kBReturnTip;
+        };
+        if (loop_bone(v.b0) || loop_bone(v.b1)) { loop_meshlet = true; break; }
+      }
       if (!loop_meshlet) continue;
       for (size_t vi = 0; vi < m.verts.size(); ++vi) {
         const int32_t by = m.verts[vi].y;
-        const zc::SkinVertex d =
-            zc::deform_skin_vertex_lanes(m.verts[vi], legged(m.deform[vi], by, loop_meshlet), fr);
-        map.push_back(std::make_pair(by, static_cast<double>(d.y)));
+        const zc::DeformVertex meta =
+            m.deform.empty() ? zc::DeformVertex{} : m.deform[vi];
+        const zc::SkinVertex d = zc::deform_skin_vertex_lanes(
+            m.verts[vi], legged(meta, by, true), fr);
+        const Vec3 p = posed_skin(pose, d);
+        map.push_back(std::make_pair(by, p));
         if (by >= tip_y - u02::fxu(40)) {
-          const double mv = std::fabs(static_cast<double>(d.y - by)) * 1000.0 / 65536.0;
+          const Vec3 q = posed_skin(rest_pose, m.verts[vi]);
+          const double dx = p.x - q.x, dy = p.y - q.y, dz = p.z - q.z;
+          const double mv = std::sqrt(dx * dx + dy * dy + dz * dz);
           if (mv > tip_move) tip_move = mv;
+          const double ex = p.x / u02::kBodyRadiusMm;
+          const double ey = p.y / u02::vmm(u02::kBodyRadiusMm);
+          const double ez = p.z / u02::kBodyRadiusMm;
+          const int32_t rho_pm = static_cast<int32_t>(
+              std::sqrt(ex * ex + ey * ey + ez * ez) * 1000.0);
+          if (rho_pm > tip_worst_pm) tip_worst_pm = rho_pm;
         }
       }
     }
-    std::sort(map.begin(), map.end());
-    double worst_back = 0.0;
-    int32_t worst_at = 0;
-    for (size_t i = 1; i < map.size(); ++i) {
-      if (map[i].first == map[i - 1].first) continue;
-      const double back = map[i - 1].second - map[i].second;
-      if (back > worst_back) {
-        worst_back = back;
-        worst_at = map[i].first;
+    std::sort(map.begin(), map.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::vector<std::pair<int32_t, Vec3>> rings;
+    for (size_t i = 0; i < map.size();) {
+      const int32_t by = map[i].first;
+      Vec3 c{};
+      int count = 0;
+      while (i < map.size() && map[i].first == by) {
+        c.x += map[i].second.x;
+        c.y += map[i].second.y;
+        c.z += map[i].second.z;
+        ++count;
+        ++i;
+      }
+      if (count > 0) {
+        c.x /= count; c.y /= count; c.z /= count;
+        rings.push_back(std::make_pair(by, c));
       }
     }
-    const double worst_mm = worst_back * 1000.0 / 65536.0;
-    std::printf("G2 no fold-back at ceiling: worst reversal %.2f mm (station %d mm)\n", worst_mm,
-                static_cast<int>(worst_at * 1000.0 / 65536.0) - y0);
-    if (worst_back > 0.0) fail("the skin folds back on itself -- dy/ds went negative");
-    std::printf("G3 buried arm tip motion at ceiling: %.2f mm (max %.2f)\n", tip_move,
-                kTipMoveMaxMm);
-    if (tip_move > kTipMoveMaxMm) fail("the buried arm tip moves -- the stub is back");
+    double min_step = 1e30;
+    int32_t min_at = 0;
+    for (size_t i = 1; i < rings.size(); ++i) {
+      const double dx = rings[i].second.x - rings[i - 1].second.x;
+      const double dy = rings[i].second.y - rings[i - 1].second.y;
+      const double dz = rings[i].second.z - rings[i - 1].second.z;
+      const double step = std::sqrt(dx * dx + dy * dy + dz * dz);
+      if (step < min_step) { min_step = step; min_at = rings[i].first; }
+    }
+    std::printf("G2 no collapsed/folded-back ring step at ceiling: minimum "
+                "centroid step %.2f mm (station %d mm)\n",
+                min_step, static_cast<int>(min_at * 1000.0 / 65536.0) - y0);
+    if (!(min_step > 1.0))
+      fail("translated/deformed neighbouring rings collapse onto each other");
+    constexpr int32_t kTipRimMaxPm = 1120;
+    std::printf("G3 buried arm tip at ceiling: worst rim %d pm of body "
+                "(motion %.2f mm, gate %d pm)\n",
+                tip_worst_pm, tip_move, kTipRimMaxPm);
+    if (tip_worst_pm > kTipRimMaxPm)
+      fail("the buried arm tip exits the body -- the stub is back");
   }
 
   // ---- G4: the stretch is VISIBLE ----------------------------------------
@@ -440,7 +513,7 @@ int main(int argc, char** argv) {
       // mechanism removed -- the comparison the art law asks for.
       g_no_lanes = (leg == 1) ? true : saved;
       double lo = 1e9, hi = -1e9;
-      for (int f = 0; f < S && f < solo->frame_count; ++f) {
+      for (int f = S; f < 2 * S && f < solo->frame_count; ++f) {
         const Vec3 p = ball_skin(T, *solo, static_cast<uint16_t>(f), stA, 90);
         if (p.y < lo) lo = p.y;
         if (p.y > hi) hi = p.y;

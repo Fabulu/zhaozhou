@@ -60,6 +60,18 @@ constexpr int kBodySegments = 32;      // at the equator. PASS 14 R2(a): 16 -> 3
                                        // legible for +23% more triangles.
 constexpr int kBodyPoleSegments = 32;  // uniform: the segment-taper zipper cut a
                                        // visible sliver into the face at 240p
+
+// One authority for the body's lane-0 deformation envelope. make_body uses it
+// for real rings; pass 16 also uses it for synthetic rear socket/tip targets so
+// closure follows the same breathing surface rather than a second formula.
+inline uint8_t body_deform_strength_at_y(int32_t y_fx) {
+  const int32_t half_h = fxu(static_cast<int64_t>(kBodyRadiusMm) * kVStretchPm / 1000);
+  const int64_t a = y_fx < 0 ? -static_cast<int64_t>(y_fx) : y_fx;
+  int32_t s = static_cast<int32_t>(255 - (a * 255) / (half_h > 0 ? half_h : 1));
+  if (s < 1) s = 1;
+  if (s > 255) s = 255;
+  return static_cast<uint8_t>(s);
+}
 // Teardrop reshaping (per-ring, ring 0 = bottom): radius multiplier in
 // per-mille of the sphere ring, and a per-ring forward lean. 1000/0
 // everywhere = the pure sphere (the S4 gate ball). Authored at the form
@@ -405,8 +417,14 @@ constexpr int32_t kLoopArcMm[6] = {0, 680, 340, 380, 0, 1280};
 // consecutive stations >= 2*blend apart; 165 sat at the ceiling of 168). It is
 // asserted in the committed probe from these very constants rather than stated
 // here, because it is a structural fact -- checklist 8/19.
-// Order: Neck, A, B, C, D.
+// Order: Neck, A, B, C, End/socket. These are one-sided transition widths;
+// pass 16 gives every visible swell a rigid carrier core instead of blending
+// straight through its centre.
 constexpr int32_t kFoldBlendMm[5] = {90, 90, 90, 90, 90};
+// Half-width of the carrier-owned core around each visible swell. Independent
+// owner knobs: they decide how much of a ball/socket moves as one joint while
+// the continuous skin still feathers into each neighbouring span.
+constexpr int32_t kLoopCarrierCoreHalfMm[5] = {70, 50, 50, 50, 120};
 // fold angles at the neck exit and hinges A..C (angle16, about Z); hinge D
 // has NO authored fold — loop_pose computes it per key (closure). Derived
 // from the sheet's ring read (tall upright egg, W/H ~0.8), tuned by LOOKING.
@@ -478,6 +496,14 @@ constexpr int32_t kLoopFoldCA16 = 12740;      // ~70 deg at the rear hinge
 constexpr int32_t kLoopReentryDepthPm = 590;  // how far inside the surface, per-mille
 constexpr int32_t kLoopReentryXMm = -140;
 constexpr int32_t kLoopReentryYMm = 200;
+// Direction 12: the rear socket is a point on the BODY, not a point recomputed
+// by the return arm. These are the already-recorded visible crossing, promoted
+// from a dead comment into named owner controls. The buried tail continues
+// kRearSocketBurialMm along the same straight C->socket line.
+constexpr int32_t kRearSocketTargetXMm = -328;
+constexpr int32_t kRearSocketTargetYMm = 467;
+constexpr int32_t kRearSocketTargetZMm = 0;
+constexpr int32_t kRearSocketBurialMm = 270;
 // the drawn kink/lean lives in the REST POSE on the neck bone (R8): a small
 // yaw opens the front view's slot-hole read and gives the antenna the
 // sheet's asymmetric attitude; the rest tilt at A is the drawn front KINK.
@@ -723,6 +749,15 @@ constexpr int32_t kKnuckleAtCMm = 1650;
 // PAST the body surface -- entirely buried, so the swell the side sheet draws
 // where the band returns to the body was invisible.
 constexpr int32_t kKnuckleAtEndMm = 2660;
+// Pass 16 carrier locations relative to the C/D shared pivot. Keep these
+// derived from authored semantic stations so the mesh swell and skeleton
+// carrier cannot silently drift apart again.
+constexpr int32_t kRearSocketFromCMm = kKnuckleAtEndMm - kKnuckleAtCMm;
+constexpr int32_t kReturnTipFromCMm = kLoopArcMm[5];
+static_assert(kRearSocketFromCMm > 0 && kRearSocketFromCMm < kReturnTipFromCMm,
+              "rear socket must lie on the straight return before the buried tip");
+static_assert(kRearSocketBurialMm == kReturnTipFromCMm - kRearSocketFromCMm,
+              "rear socket burial must preserve the accepted straight-tail length");
 // How far each knuckle stands PROUD of the band, broadwise (x, in the loop
 // plane) and across the blade (z). Every one is an independent owner knob: set
 // a pair to 0 and that knuckle goes away without touching the others.
@@ -1884,9 +1919,9 @@ constexpr int32_t kAntennaTiltA16 = 700;
 // off without touching the others.
 constexpr int32_t kHingeTiltAmpA16 = 1500;   // ~8.2 deg out-of-plane, per hinge
 constexpr int32_t kHingeYawAmpA16 = 1100;    // ~6.0 deg of twist, per hinge
-// neck, A, B, C. The peak is the loosest joint and the neck the stiffest, which
-// is what "guided" means here: the further from the head, the more play.
-constexpr int32_t kHingeAxisScalePm[4] = {620, 1000, 1150, 880};
+// neck/front, A, B, C, End/socket. The peak is the loosest joint; the body
+// socket is calmer but still independently alive rather than exempt.
+constexpr int32_t kHingeAxisScalePm[5] = {620, 1000, 1150, 880, 700};
 // THE RATES. PASS 12 (D9 SS1, third owner report; Wave-0 discriminator D4).
 //
 // These were MULTIPLIERS on the caller's cycle count -- 3 and 5 -- under a
@@ -1972,7 +2007,7 @@ constexpr int32_t kHingePhaseStepA16 = 0x2C00;
 // The closure sweep runs the WHOLE envelope, swept and not cornered (gotcha
 // SS17: the eye lab's collision sat mid-ramp while both endpoints looked
 // clean).
-constexpr int32_t kNoduleOffsetMaxMm[3] = {200, 200, 200};  // x, y, z
+constexpr int32_t kNoduleOffsetMaxMm[3] = {200, 320, 200};  // x, y, z
 
 // ==== PASS 12 -- STRETCHY SPANS (Direction 9 SS13) ========================
 //
@@ -2170,9 +2205,12 @@ constexpr int kNoduleClipSlots =
 //
 // The amplitude is the ceiling itself: a diagnostic shows the envelope, not a
 // tasteful fraction of it. The shipped clips use kNoduleAmpMm.
+// Slot 16, six segments: front socket, A, B, C, rear socket, then the owner's
+// opposed configuration. Every visible ball therefore has its own plate beat.
 constexpr int kNoduleSoloSegKeys = 48;
-constexpr int kNoduleSoloKeys = kNoduleSoloSegKeys * 4;
+constexpr int kNoduleSoloKeys = kNoduleSoloSegKeys * 6;
 constexpr int32_t kNoduleSoloAmpMm = 200;
+constexpr int32_t kNoduleSoloJointA16 = 3000;
 
 // ---- SEGMENT 3's MIX, and the geometry that forces it --------------------
 // Segment 3 is the owner's own sentence: "the middle one might go down while
@@ -2199,8 +2237,9 @@ constexpr int32_t kNoduleSoloAmpMm = 200;
 //    ⚠ This is the single clearest argument for Direction 9 SS13, and it is
 //    why SS13.4 says stretchy spans are what let the nodules go where they are
 //    told. It is stated on the acceptance plate, not hidden behind a gate.
-constexpr int32_t kNoduleSoloMidPm = 300;   // the middle's share of the swing
-constexpr int32_t kNoduleSoloOutPm = 1000;  // the outers' share
+constexpr int32_t kNoduleSoloAPm = 400;   // front outer rises 80 mm
+constexpr int32_t kNoduleSoloBPm = 700;   // middle counter-presses 140 mm
+constexpr int32_t kNoduleSoloCPm = 1600;  // carried rear needs 320 mm to read up
 
 // ---- PASS 15 (Direction 11 §3) -- THE SWALLOW: A BALL-LED BEAT IN THE IDLE --
 //
@@ -2249,6 +2288,10 @@ constexpr int32_t kIdleSwallowLeanPm = 340;  // the lateral share of each press
 // body leans away from the bulge and returns. Family: kTaunt3ShrugRollA16 is
 // 3000 for a comic shrug; an idle gets well under half of it.
 constexpr int32_t kIdleSwallowRollA16 = 1150;
+// Direction 12: front and End are body-attached joints, so their swallow beat
+// is a rotation rather than a centre translation. One named conversion shared
+// by both keeps the two ends comparable while opposite signs make it travel.
+constexpr int32_t kSwallowJointA16PerMm = 9;
 
 // The same beat on CHANNEL (slot 2), placed on its blaze. Its own knobs rather
 // than the idle's, because the two clips want different things from it: the
@@ -2500,6 +2543,13 @@ constexpr int kTauntHoldStartKey = 62;     // the waggle freezes at its extreme
 constexpr int kTauntHoldEndKey = 86;       // >= 16-key beat, wink inside it
 constexpr int kTaunt2Keys = 120;
 constexpr int32_t kTaunt2LassoA16 = 1900;  // the loop-peak lasso tilt sweep
+// DIRECTION 12: the original site `Lasso` (taunt2) now throws the same mana
+// ring vocabulary as the dedicated mana-lasso, on a shorter authored phrase.
+// These are separate knobs because the two performances keep different timing.
+constexpr int kTaunt2LassoReleaseKey = 32;
+constexpr int kTaunt2LassoCatchKey = 76;
+constexpr int kTaunt2LassoReelKey = 90;
+constexpr int kTaunt2LassoHomeKey = 112;
 // PASS 3 — THE HEADSTAND TRICK (owner-suggested, uncuttable): it pitches
 // over, PLANTS the loop peak on the ground (declared, authored contact —
 // the probe asserts the window and depth), balances upside down with the

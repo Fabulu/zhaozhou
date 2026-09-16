@@ -435,8 +435,9 @@ constexpr int32_t kFoldEdgeStampMm = 14;   // 22 * (2/3), one core again
 //   1. CONNECTED -- kFoldStrandPerSeg sets how many stamps subdivide each
 //      or the line is beads again (pass 12 learned this the hard way one
 //      constant above).
-//   2. WHITE -- kRampWhite, additive, depth test OFF (the pulsar-core law:
-//      energy reads over flesh).
+//   2. WHITE -- kRampWhite, additive, depth-tested with every other lightning
+//      layer. Direction 12 overrules the old "energy reads over flesh" policy:
+//      a bolt behind the antenna is behind the antenna.
 //      ⚠ THIS DELIBERATELY REVERSES A STANDING LAW. manafold_art.h records the
 //      lab's finding that a white outline "put 366 near-white px on screen and
 //      dropped saturation to 108.9" and concludes "a white outline reads as a
@@ -511,11 +512,10 @@ constexpr int32_t kFoldStrandDarkRPx = 14;   // the navy BACKING, wide not deep
 // A knob nobody can read the direction of is a knob the owner does not have.
 constexpr int kFoldStrandDarkGainPm = 1000;
 // ---- D11: THE BLUE SHIMMER LAYER ---------------------------------------
-// Between the white core (3 px) and the navy backing (9 px), additive, depth
-// test OFF like the core -- it is light coming off the bolt, and light reads
-// over flesh (the pulsar-core law). Radius is deliberately close to the
-// core's: a shimmer HUGS its bolt. Make it wide and it becomes a blue cloud,
-// which is the pass-12 "spazzy cloud" failure wearing a new colour.
+// Between the white core (3 px) and the navy backing (9 px), additive and
+// depth-tested with the core. Radius is deliberately close to the core's: a
+// shimmer HUGS its bolt. Make it wide and it becomes a blue cloud, which is
+// the pass-12 "spazzy cloud" failure wearing a new colour.
 constexpr int32_t kFoldShimmerRPx = 6;
 constexpr int kFoldShimmerGainPm = 620;
 // ...and the thing that makes it SHIMMER rather than sit: a per-stamp,
@@ -788,7 +788,15 @@ constexpr int kCoreOfHaloPm = 640;
 // terminator's own cel bands are, and the two fought. Left coupled because at
 // 180 the decay lands in the rim where nothing competes with it; split it
 // before ever widening this again.
-constexpr int kShellFogDepthPm = 180;
+constexpr int kShellPeakDepthPm = 180;
+// Direction 12 splits the old coupled control. The peak stays on the accepted
+// outer rim while a longer independent decay lets translucency affect more of
+// the body without dragging the brightest fog back across the terminator.
+// Picked by eye at final resolution from 340/220, 420/320 and 500/420
+// decay/transmission rungs on hover f300: 500 reaches substantially farther
+// into the outer body while keeping the pass-15 peak at the rim.
+constexpr int kShellDecayDepthPm = 500;
+constexpr int kShellFogDepthPm = kShellPeakDepthPm;  // legacy name for gates/reports
 // A floor, so a small or distant subject still gets a band rather than a
 // rounding error. NOT a substitute for the fraction: the fraction is the thing.
 //
@@ -815,6 +823,7 @@ constexpr int kShellFogDepthPm = 180;
 // sizes -- inspect and channel are R=34..55, where the fraction was already
 // above the floor -- which is verified by byte-identity, not asserted.
 constexpr int32_t kShellFogDepthMinPx = 2;
+constexpr int32_t kShellDecayDepthMinPx = 2;
 // How far past the cover mask the gas reaches, per-mille of R (D9 s14's "a
 // bit"), with its own floor. This is where the profile's ZERO now lives.
 //
@@ -910,7 +919,13 @@ constexpr int32_t kShellInReachPx_legacy_p12 = 6;
 // history, "we can't see it" alternating with "it's too much" for four passes.
 // If a fifth pass is ever tempted to move this number, that is the signal to go
 // and find the mechanism instead.
-constexpr int kShellAlphaMaxPm = 560;     // the peak, at the annulus inner edge
+constexpr int kShellAlphaMaxPm = 560;     // fog scatter at the annulus peak
+// Direction 12: actual see-through, distinct from tint/alpha. At the shell
+// peak this much of the already-rendered pigment yields to the saved scene
+// behind the creature before fog colour is applied. Authored by eye.
+// The matching 420 rung lets the scene show through plainly without erasing
+// the magenta terminator or turning the shell back into white bleach.
+constexpr int kShellTransmissionPm = 420;
 // THE GAS COLOUR: fog versus bleach. Pass 15 declared this "the axis that
 // decides fog vs bleach" and that it "has never been swept in any pass". Both
 // were true, and LANE-FX-2 found the reason it had never been swept: the
@@ -955,7 +970,9 @@ constexpr int kShellOverInkPm = 260;      // the ink must survive being crossed
 // item 21: a comparison split across two builds measures the builds). Never a
 // shipping setting.
 inline int g_u02_shell_alpha_pm = kShellAlphaMaxPm;
-inline int g_u02_shell_depth_pm = kShellFogDepthPm;
+inline int g_u02_shell_depth_pm = kShellPeakDepthPm;
+inline int g_u02_shell_decay_pm = kShellDecayDepthPm;
+inline int g_u02_shell_transmission_pm = kShellTransmissionPm;
 inline int g_u02_shell_out_pm = kShellOutReachPm;
 inline int g_u02_shell_floor_pm = kShellCoreFloorPm;
 inline int g_u02_shell_gamma = kShellRiseGamma;
@@ -1003,10 +1020,11 @@ inline int shell_profile_pm(int t_pm, int gamma_pm) {
  *  740k integer ops at 384x240, which is nothing next to the composite that
  *  follows. (Arithmetic, not measurement: 09-ENGINE-GOTCHAS s5.)
  */
-inline void shell_paint(uint8_t* rgb, uint32_t w, uint32_t h,
+inline void shell_paint(uint8_t* rgb, const uint8_t* behind,
+                        uint32_t w, uint32_t h,
                         const uint8_t* cover, const uint8_t* ink,
                         int alpha_max_pm) {
-  if (cover == nullptr || alpha_max_pm <= 0) return;
+  if (cover == nullptr || behind == nullptr || alpha_max_pm <= 0) return;
   const size_t n = static_cast<size_t>(w) * h;
   const int iw = static_cast<int>(w), ih = static_cast<int>(h);
 
@@ -1082,20 +1100,22 @@ inline void shell_paint(uint8_t* rgb, uint32_t w, uint32_t h,
   int32_t out_px = static_cast<int32_t>(
       static_cast<int64_t>(r_px) * g_u02_shell_out_pm / 1000);
   if (out_px < kShellOutReachMinPx) out_px = kShellOutReachMinPx;
-  int32_t ann_px = static_cast<int32_t>(
+  int32_t peak_px = static_cast<int32_t>(
       static_cast<int64_t>(r_px) * g_u02_shell_depth_pm / 1000);
-  if (ann_px < kShellFogDepthMinPx) ann_px = kShellFogDepthMinPx;
+  if (peak_px < kShellFogDepthMinPx) peak_px = kShellFogDepthMinPx;
+  int32_t decay_px = static_cast<int32_t>(
+      static_cast<int64_t>(r_px) * g_u02_shell_decay_pm / 1000);
+  if (decay_px < kShellDecayDepthMinPx) decay_px = kShellDecayDepthMinPx;
   // Where the profile peaks, measured from the gas's own outer edge.
-  const int32_t peak_at = out_px + ann_px;
+  const int32_t peak_at = out_px + peak_px;
   int floor_pm = g_u02_shell_floor_pm;
   if (floor_pm < 0) floor_pm = 0;
   if (floor_pm > 1000) floor_pm = 1000;
 
-  // ---- 3. one profile, outer edge inward --------------------------------
   // alpha_at(dist), dist measured from the gas's outer edge:
-  //   dist <= peak_at        rise, gamma-shaped, 0 -> alpha_max
-  //   peak_at .. +ann_px     decay, alpha_max -> alpha_max * floor
-  //   deeper                 hold at the plateau
+  //   dist <= peak_at         rise, gamma-shaped, 0 -> alpha_max
+  //   peak_at .. +decay_px    independent decay, alpha_max -> floor
+  //   deeper                  hold at the plateau
   const auto alpha_at = [&](int32_t dist) -> int {
     if (dist <= 0) return 0;
     if (dist <= peak_at) {
@@ -1104,9 +1124,9 @@ inline void shell_paint(uint8_t* rgb, uint32_t w, uint32_t h,
       return alpha_max_pm * shell_profile_pm(t, g_u02_shell_gamma) / 1000;
     }
     int32_t over = dist - peak_at;
-    if (over > ann_px) over = ann_px;
+    if (over > decay_px) over = decay_px;
     const int fall = static_cast<int>(
-        static_cast<int64_t>(over) * 1000 / (ann_px > 0 ? ann_px : 1));
+        static_cast<int64_t>(over) * 1000 / (decay_px > 0 ? decay_px : 1));
     const int scale = 1000 - fall * (1000 - floor_pm) / 1000;
     return alpha_max_pm * scale / 1000;
   };
@@ -1157,14 +1177,39 @@ inline void shell_paint(uint8_t* rgb, uint32_t w, uint32_t h,
     const int32_t dist = cover[i] ? out_px + d : -d;
     if (dist <= 0) continue;
     int a = alpha_at(dist);
-    if (ink != nullptr && ink[i]) a = a * g_u02_shell_over_ink_pm / 1000;
-    if (a <= 0) continue;
+    int transmission = cover[i]
+        ? static_cast<int>(static_cast<int64_t>(g_u02_shell_transmission_pm) * a /
+                           (alpha_max_pm > 0 ? alpha_max_pm : 1))
+        : 0;
+    if (ink != nullptr && ink[i]) {
+      a = a * g_u02_shell_over_ink_pm / 1000;
+      transmission = transmission * g_u02_shell_over_ink_pm / 1000;
+    }
+    if (a <= 0 && transmission <= 0) continue;
     if (a > 1000) a = 1000;
+    if (transmission > 1000) transmission = 1000;
     uint8_t* px = rgb + i * 3;
-    for (int k = 0; k < 3; ++k)
-      px[k] = static_cast<uint8_t>(
-          (px[k] * (1000 - a) + g_u02_shell_tint[k] * a) / 1000);
+    const uint8_t* bg = behind + i * 3;
+    if (transmission > 0)
+      for (int k = 0; k < 3; ++k)
+        px[k] = static_cast<uint8_t>(
+            (px[k] * (1000 - transmission) + bg[k] * transmission) / 1000);
+    if (a > 0)
+      for (int k = 0; k < 3; ++k)
+        px[k] = static_cast<uint8_t>(
+            (px[k] * (1000 - a) + g_u02_shell_tint[k] * a) / 1000);
   }
+}
+
+// Compatibility for the committed synthetic shell gate. It snapshots the
+// gate's input as the behind plate, preserving every old profile assertion;
+// pass 16 adds a separate real-background/transmission leg.
+inline void shell_paint(uint8_t* rgb, uint32_t w, uint32_t h,
+                        const uint8_t* cover, const uint8_t* ink,
+                        int alpha_max_pm) {
+  static std::vector<uint8_t> behind;
+  behind.assign(rgb, rgb + static_cast<size_t>(w) * h * 3u);
+  shell_paint(rgb, behind.data(), w, h, cover, ink, alpha_max_pm);
 }
 
 // ============================ THE SMEAR PLANE ==============================
@@ -1686,6 +1731,26 @@ inline void mana_push(std::vector<ManaSplat>& out, int32_t x, int32_t y, int32_t
                           depth_test, opaque, pre, soft});
 }
 
+inline bool lightning_depth_test() {
+  static const bool enabled = [] {
+    const char* e = std::getenv("ZHAO_U02_FORCE_LIGHTNING_THROUGH");
+    return !(e && *e && std::atoi(e) != 0);
+  }();
+  return enabled;
+}
+
+// Direction 12: every visual layer of LIGHTNING obeys creature depth. Keep
+// this separate from mana_push so a future white/shimmer layer cannot quietly
+// revive the old "energy shines through flesh" exception. The env override is
+// the committed positive control: it restores the rejected policy from the
+// same binary and must make the occlusion gate/render turn red.
+inline void lightning_push(std::vector<ManaSplat>& out, int32_t x, int32_t y,
+                           int32_t z, int32_t r_px, uint8_t ramp, int gain_pm,
+                           bool pre, bool opaque = false, bool soft = false) {
+  mana_push(out, x, y, z, r_px, ramp, gain_pm, lightning_depth_test(), pre,
+            opaque, soft);
+}
+
 inline int32_t fx_sin16(uint32_t ph) {
   return zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw;
 }
@@ -1741,12 +1806,8 @@ inline void bolt_stamp(std::vector<ManaSplat>& out, const int32_t pts[][3], int 
       const int32_t x = lerp32(pts[i][0], pts[i + 1][0], t, n);
       const int32_t y = lerp32(pts[i][1], pts[i + 1][1], t, n);
       const int32_t z = lerp32(pts[i][2], pts[i + 1][2], t, n);
-      mana_push(out, x, y, z, kBoltHaloRPx, kRampCyan, gain_halo_pm, true, false);
-      // the hot core SHINES THROUGH the blade (the pulsar-core law): with
-      // the depth test on, every place a strand wove behind the neck tube
-      // chopped the filament into beads — looked at on the channel's
-      // hottest frames. Energy reads over flesh; the halo stays grounded.
-      mana_push(out, x, y, z, kBoltCoreRPx, kRampWhite, gain_core_pm, false, false);
+      lightning_push(out, x, y, z, kBoltHaloRPx, kRampCyan, gain_halo_pm, false);
+      lightning_push(out, x, y, z, kBoltCoreRPx, kRampWhite, gain_core_pm, false);
     }
   }
 }
@@ -1850,8 +1911,8 @@ inline void mana_lightning(uint32_t frame, const FxAnchors& A,
   if (frame % kBoltRehashFrames == 0) {
     for (int i = -2; i <= 2; ++i) {
       const int32_t r = 6 - (i < 0 ? -i : i) * 2;
-      mana_push(out, A.ring[0] + fxu(i * kStreakSpanPx * 25 / 24), A.ring[1],
-                A.ring[2], r, kRampWhite, kStreakGainPm / 2, false, false);
+      lightning_push(out, A.ring[0] + fxu(i * kStreakSpanPx * 25 / 24), A.ring[1],
+                     A.ring[2], r, kRampWhite, kStreakGainPm / 2, false);
     }
   }
 }
@@ -2622,14 +2683,14 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               // is grounded, it is not energy shining through the animal.
               // It rides `lit` like everything else, so a figure that is not
               // gripping does not stamp a dark bruise on the sky.
-              mana_push(out, x, y, z, dark_r, kRampStorm,
-                        dark_gain * lit / 1000, true, false,
-                        /*opaque=*/true, /*soft=*/true);
+              lightning_push(out, x, y, z, dark_r, kRampStorm,
+                             dark_gain * lit / 1000, false,
+                             /*opaque=*/true, /*soft=*/true);
             } else if (pass == 1) {
               // LAYER 2: THE BLUE SHIMMER (D11) -- the layer this creature has
               // never had. ADDITIVE, because it is light and light adds;
-              // depth test OFF, with the white core, because they are one
-              // object. It sits on the finished navy, so the blue has
+              // depth-tested with the core and backing because all three are
+              // one bolt. It sits on the finished navy, so the blue has
               // something dark to be bright against instead of the pale
               // sunset it would otherwise wash into (08-LIGHTING: measure
               // what an additive effect is drawn AGAINST before tuning it).
@@ -2646,31 +2707,30 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               const int span = shim_flick * 2 + 1;
               const int mod = 1000 - shim_flick +
                               static_cast<int>(sh % static_cast<uint32_t>(span));
-              mana_push(out, x, y, z, shim_r, kRampShimmer,
-                        shim_gain * lit / 1000 * mod / 1000, false, false);
+              lightning_push(out, x, y, z, shim_r, kRampShimmer,
+                             shim_gain * lit / 1000 * mod / 1000, false);
             } else {
               // LAYER 3: THE WHITE LINE, over the finished navy AND its
-              // shimmer -- the hot centre of the bolt. Additive, depth
-              // test OFF (the pulsar-core law: energy reads over flesh). It
-              // lands inside a surround the whole figure already has, which
+              // shimmer -- the hot centre of the bolt. Additive and depth-
+              // tested by the Direction-12 lightning policy. It lands inside a surround the whole figure already has, which
               // is the difference between this and the lab's rejected white
               // outline -- and, per the plate above, between a line and a
               // string of pale blobs.
-              mana_push(out, x, y, z, core_r, kRampWhite,
-                        core_gain * lit / 1000, false, false);
+              lightning_push(out, x, y, z, core_r, kRampWhite,
+                             core_gain * lit / 1000, false);
             }
           } else {
-            mana_push(out, x, y, z, kFoldEdgeHaloRPx, ramp,
-                      kFoldEdgeHaloGainPm * lit / 1000, true, false);
+            lightning_push(out, x, y, z, kFoldEdgeHaloRPx, ramp,
+                           kFoldEdgeHaloGainPm * lit / 1000, false);
             // The core is pass 8's SOFT body, in the fold's own ramp. The lab
             // measured that an outline stamped with the lightning primitive's
             // hard-coded white core put 366 near-white px on screen and
             // dropped saturation to 108.9 against a 142.1 control -- true, and
             // superseded by Direction 10 above, which gives the white a dark
             // surround the lab's version never had.
-            mana_push(out, x, y, z, kFoldEdgeCoreRPx, mana_core_ramp(ramp),
-                      kFoldEdgeCoreGainPm, false, false, /*opaque=*/true,
-                      /*soft=*/true);
+            lightning_push(out, x, y, z, kFoldEdgeCoreRPx, mana_core_ramp(ramp),
+                           kFoldEdgeCoreGainPm, false, /*opaque=*/true,
+                           /*soft=*/true);
           }
         }
       }

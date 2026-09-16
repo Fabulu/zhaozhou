@@ -411,23 +411,20 @@ int main(int argc, char** argv) {
       // TUMBLE rotates the body, and the anchor rotates with it).
       const zc::mat3x4fx& rm = pose[u02::kBRoot];
       int32_t worst = 0;
-      // PASS 3 (the reviewer's ask): test the terminal rings' RIM, not only
-      // their centrelines — five sample offsets per ring: centre, ±rx (in
-      // the loop plane), ±rz (across it), at the terminal blade radii.
-      const int32_t rim_rx = u02::kLoopBladeRxMm[6];  // PASS 9: 7 keys, not 8
+      // Pass 16: the buried tip is a real carrier. Test its centre and rim
+      // through production skinning instead of reconstructing terminal rings as
+      // if they were still all rigidly bound to D.
+      const int32_t rim_rx = u02::kLoopBladeRxMm[6];
       const int32_t rim_rz = u02::kLoopBladeRzMm[6];
       const int32_t offs[5][2] = {
           {0, 0}, {rim_rx, 0}, {-rim_rx, 0}, {0, rim_rz}, {0, -rim_rz}};
-      for (int ri = u02::kLoopRings - 3; ri < u02::kLoopRings; ++ri) {
-        const int32_t s =
-            static_cast<int32_t>((static_cast<int64_t>(total) * ri) / (u02::kLoopRings - 1));
-        for (int oi = 0; oi < 5; ++oi) {
+      for (int oi = 0; oi < 5; ++oi) {
         zc::SkinVertex sv{};
-        sv.x = u02::fxu(u02::kLoopTubeXMm + offs[oi][0]);
-        sv.y = u02::fxu(y0 + s);
-        sv.z = u02::fxu(offs[oi][1]);
-        sv.b0 = u02::kBHingeD;  // the terminal rings are fully on the arm bone
-        sv.b1 = u02::kBHingeD;
+        sv.x = T.baked.world_x[u02::kBReturnTip] + u02::fxu(offs[oi][0]);
+        sv.y = T.baked.world_y[u02::kBReturnTip];
+        sv.z = T.baked.world_z[u02::kBReturnTip] + u02::fxu(offs[oi][1]);
+        sv.b0 = u02::kBReturnTip;
+        sv.b1 = u02::kBReturnTip;
         sv.w0 = 64;
         int32_t x, y, z;
         zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
@@ -441,7 +438,6 @@ int main(int argc, char** argv) {
         const int32_t e = static_cast<int32_t>(
             (u02::isqrt64(ex * ex + ey * ey + ez * ez) * 1000) >> 16);
         if (e > worst) worst = e;
-        }
       }
       return worst;
     };
@@ -457,6 +453,7 @@ int main(int argc, char** argv) {
         u02::face_rest(g);
         g.write(sweep, i);
       }
+      u02::finalize_rear_follow(sweep);
       for (int i = 0; i < kSteps; ++i) {
         std::array<zc::mat3x4fx, zc::kMaxBones> pose;
         zc::decode_pose(T, sweep, static_cast<uint16_t>(i), pose, nullptr, 0);
@@ -567,7 +564,11 @@ int main(int argc, char** argv) {
         for (uint16_t f = 0; f < clip.frame_count; ++f) {
           u02::Rig live_rig;
           live_rig.reset();
-          u02::antenna_knead(live_rig, clip.slot_id, keys, static_cast<int>(f));
+          u02::antenna_knead(
+              live_rig, clip.slot_id,
+              u02::clip_cam_orbits(clip.slot_id) ? u02::EyeCam::kOrbit
+                                                  : u02::EyeCam::kFixed,
+              keys, static_cast<int>(f));
           u02::Rig mute_rig = live_rig;
           mute_rig.q[u02::kBLoopBase2] = zc::quat16_identity();
           u02::loop_pose(live_rig, 1000, 1000, 1000, 1000);
@@ -586,20 +587,18 @@ int main(int argc, char** argv) {
         }
         if (clip_worst > 0) ++moving_clips;
       }
-      // The bound is deliberately modest: this is a "the mechanism is live"
-      // gate, not an amplitude judgement. Amplitude is kKneadWagB2A16, and it
-      // is authored BY EYE against the render, never fitted to this number.
-      constexpr int64_t kMinSlideMm = 2;
-      const bool live = worst_slide_mm >= kMinSlideMm;
-      std::printf("u02-probe: C.1 kBLoopBase2 moves loop_pose's aimed return tip "
-                  "up to %lld mm (slot %u key %u; %d of %zu clips move it) — %s "
-                  "(measured THROUGH loop_pose, never re-derived; floor %lld mm)\n",
-                  static_cast<long long>(worst_slide_mm), slide_slot, slide_key,
-                  moving_clips, T.bank.clips.size(), live ? "LIVE" : "DEAD",
-                  static_cast<long long>(kMinSlideMm));
-      if (!live) {
-        std::printf("u02-probe: FAIL kBLoopBase2 moves the closure anchor nowhere. "
-                    "The bone is inert again and every comment naming it is now false.\n");
+      // Direction 12 retires the sliding B2 attachment target. The visible End
+      // has its own surface carrier now, and manafold-nodule gates that carrier
+      // against the deformed body. Any causal B2 influence here is a regression.
+      const bool retired = worst_slide_mm == 0;
+      std::printf("u02-probe: C.1 legacy kBLoopBase2 closure influence %lld mm "
+                  "(%d of %zu clips) — %s (must remain exactly zero; rear socket "
+                  "is the replacement)\n",
+                  static_cast<long long>(worst_slide_mm), moving_clips,
+                  T.bank.clips.size(), retired ? "RETIRED" : "LIVE AGAIN");
+      if (!retired) {
+        std::printf("u02-probe: FAIL the old sliding attachment target influences "
+                    "closure again.\n");
         rc = 1;
       }
     }

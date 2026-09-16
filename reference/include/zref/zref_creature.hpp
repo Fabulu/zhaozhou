@@ -245,6 +245,10 @@ struct Clip {
   uint16_t frame_count = 0;
   std::vector<int32_t> root;      // 3 * frame_count fx16 (x, y, z per frame)
   std::vector<quat16> quats;      // frame_count * bone_count
+  // Optional per-bone local translations, frame-major xyz in fx16. Empty is
+  // exact identity for every existing creature. When present, decode adds the
+  // sample to the bone's authored bind translation before parent composition.
+  std::vector<int32_t> local_translation;  // frame_count * bone_count * 3
   std::vector<ClipEvent> events;  // frame-sorted
   // Optional narrow deformation sidecar. Empty means exact identity; otherwise
   // one fixed-point sample per authored key. It never enters the PoseBank, so
@@ -326,6 +330,7 @@ struct Clip {
    */
   std::vector<quat16> mid_quats;         // frame_count * bone_count, or empty
   std::vector<int32_t> mid_root;         // frame_count * 3, or empty
+  std::vector<int32_t> mid_local_translation;  // frame_count * bone_count * 3, or empty
   std::vector<DeformSample> mid_deform;  // frame_count, or empty
   /**
    * LANES 1..kDeformLaneCount-1 (pass 12). Either EMPTY -- exact identity on

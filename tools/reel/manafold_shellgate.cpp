@@ -479,6 +479,37 @@ std::vector<Result> run(int break_check) {
                   u02::g_u02_shell_depth_pm);
     r.push_back({"7 the fog is an OUTER LAYER (D11 s2.3)", ok, b});
   }
+  // ---- 8. translucency exposes the saved scene, not merely a new tint -----
+  {
+    const int rad8 = 40;
+    Scene t = make_scene(rad8, 70);
+    Scene no = make_scene(rad8, 70);
+    std::vector<uint8_t> behind(static_cast<size_t>(kW) * kH * 3, 0);
+    for (size_t i = 0; i < static_cast<size_t>(kW) * kH; ++i) {
+      behind[i * 3 + 0] = 12;
+      behind[i * 3 + 1] = 118;
+      behind[i * 3 + 2] = 210;
+    }
+    const int saved = u02::g_u02_shell_transmission_pm;
+    if (break_check == 8) u02::g_u02_shell_transmission_pm = 0;
+    u02::shell_paint(t.rgb.data(), behind.data(), kW, kH, t.cover.data(),
+                     t.ink.data(), alpha);
+    u02::g_u02_shell_transmission_pm = 0;
+    u02::shell_paint(no.rgb.data(), behind.data(), kW, kH, no.cover.data(),
+                     no.ink.data(), alpha);
+    u02::g_u02_shell_transmission_pm = saved;
+    const int x = cx + rad8 - 7;
+    const size_t at = (static_cast<size_t>(cy) * kW + x) * 3;
+    int delta = 0;
+    for (int k = 0; k < 3; ++k)
+      delta += std::abs(static_cast<int>(t.rgb[at + k]) - no.rgb[at + k]);
+    char b[200];
+    std::snprintf(b, sizeof(b),
+                  "annulus pixel (%d,%d) differs by %d RGB levels from the "
+                  "same fog with transmission=0 (shipping transmission=%d pm)",
+                  x, cy, delta, saved);
+    r.push_back({"8 the shell is ACTUALLY SEE-THROUGH (D12)", delta > 0, b});
+  }
   return r;
 }
 
@@ -520,6 +551,8 @@ static int regression_control() {
               "caught it.\n");
   u02::g_u02_shell_alpha_pm = 560;
   u02::g_u02_shell_depth_pm = 520;
+  u02::g_u02_shell_decay_pm = 520;
+  u02::g_u02_shell_transmission_pm = 0;
   u02::g_u02_shell_floor_pm = 180;
   u02::g_u02_shell_out_pm = 55;
   u02::g_u02_shell_gamma = 1600;
@@ -547,7 +580,7 @@ int main(int argc, char** argv) {
   }
   // Every check must be demonstrably breakable through the real code path.
   int unbreakable = 0;
-  for (int k = 1; k <= 7; ++k) {
+  for (int k = 1; k <= 8; ++k) {
     char t[96];
     std::snprintf(t, sizeof(t), "SELFTEST: check %d must FAIL when broken", k);
     const std::vector<Result> rs = run(k);

@@ -115,8 +115,14 @@ enum BoneId : uint8_t {
   kBEyeR = 11,      // right lens
   kBPupilL = 12,    // left star
   kBPupilR = 13,    // right star
+  // PASS 16 / Direction 12: the body-side swell and buried tip finally get
+  // real carriers. Both are children of the C-shared return solver so the
+  // return remains one straight line; the socket is allowed its own local
+  // articulation while the tip stays a sibling and cannot inherit that bend.
+  kBRearSocket = 14,
+  kBReturnTip = 15,
 };
-constexpr int kBoneCount = 14;
+constexpr int kBoneCount = 16;
 
 /**
  * Bind translations: each hinge bone's pivot sits AT its ball's own centre
@@ -187,6 +193,20 @@ inline zc::Skeleton build_skeleton() {
   // The re-entry anchor is a child of the BODY at the deep plunge target.
   sk.bones[kBLoopBase2] =
       zc::Bone{kBRoot, fxu(kLoopReentryXMm), fxu(kLoopReentryYMm), 0};
+  // Direction 12: the visible rear socket and buried tip are body-root children,
+  // not descendants of the closure solver. Their bind pivots match the straight
+  // chain's authored swell/tip so rest skinning is identity; pass-16 clip
+  // translations place them on the deformed body. Blending D->socket->tip keeps
+  // one continuous surface without letting socket articulation bend the tail.
+  sk.bones[kBRearSocket] = zc::Bone{
+      kBRoot, fxu(kLoopTubeXMm),
+      fxu(kLoopNeckExitYMm - kLoopBuryMm + kKnuckleAtEndMm), 0};
+  sk.bones[kBReturnTip] = zc::Bone{
+      kBRoot, fxu(kLoopTubeXMm),
+      fxu(kLoopNeckExitYMm - kLoopBuryMm + kLoopBuryMm +
+          kLoopArcMm[0] + kLoopArcMm[1] + kLoopArcMm[2] +
+          kLoopArcMm[3] + kLoopArcMm[4] + kLoopArcMm[5]),
+      0};
   // PASS 6 (Direction 5 §5c): the eye bone's pivot moves INWARD by
   // kEyeShiftPivotMm and make_eye_lens pushes the lens geometry back out by the
   // same amount. Rest is bit-identical; what changes is that a rotation here

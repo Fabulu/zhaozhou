@@ -57,22 +57,13 @@ inline zc::RingPart make_ball(int32_t radius_mm, int rings, int max_seg, int pol
  */
 inline zc::RingPart make_body(uint8_t bone) {
   zc::RingPart p = make_ball(kBodyRadiusMm, kBodyRings, kBodySegments, kBodyPoleSegments, bone);
-  const int32_t R = fxu(kBodyRadiusMm);
   for (int i = 0; i < kBodyRings; ++i) {
     zc::RingSpec& rs = p.rings[static_cast<size_t>(i)];
     rs.radius = static_cast<int32_t>((static_cast<int64_t>(rs.radius) * kBodyTaperPm[i]) / 1000);
     rs.cx = fxu(kBodyLeanXMm[i]);
     rs.deform_role = zc::DeformRole::kRadial;
     rs.deform_axis = 1;  // vertical: flatten squashes up-down, spread bulges out
-    // strength peaks at the equator, eases toward the poles (|y| over the
-    // STRETCHED half-height; the pole rings keep a floor of 1 so the
-    // authored role stays valid everywhere on the ball)
-    const int32_t half_h = static_cast<int32_t>(static_cast<int64_t>(R) * kVStretchPm / 1000);
-    const int64_t a = static_cast<int64_t>(rs.y < 0 ? -rs.y : rs.y);
-    int32_t s = static_cast<int32_t>(255 - (a * 255) / (half_h > 0 ? half_h : 1));
-    if (s < 1) s = 1;
-    if (s > 255) s = 255;
-    rs.deform_strength = static_cast<uint8_t>(s);
+    rs.deform_strength = body_deform_strength_at_y(rs.y);
     rs.deform_center_x = 0;
     rs.deform_center_y = 0;
     rs.deform_center_z = 0;
@@ -198,72 +189,74 @@ inline zc::RingPart make_loop() {
     rs.rx = fxu(taper(kLoopBladeRxMm, s) + sw_x);
     rs.rz = fxu(taper(kLoopBladeRzMm, s) + sw_z);
     rs.segments = static_cast<uint8_t>(kLoopSegments);
-    // weights: a ladder of two-bone blends across the five fold stations
-    const auto blend_of = [&](int32_t st, int32_t bl) {
-      int32_t t = ((s - (st - bl)) * 64) / (2 * bl);
+    // PASS 16: one continuous skin, but real carrier-owned swell cores.
+    // Previous versions blended THROUGH every visible ball and, at C, skipped
+    // kBHingeC entirely. A gate could move the bone while the ball itself was
+    // still split between its neighbours. Each incoming transition now ends
+    // before the swell core; the intervening span stays on the lower carrier.
+    const auto set_pair = [&](uint8_t lower, uint8_t upper, int32_t t) {
       if (t < 0) t = 0;
       if (t > 64) t = 64;
-      return t;  // 0 = fully lower bone, 64 = fully upper bone
+      rs.b0 = lower;
+      rs.b1 = upper;
+      rs.w0 = static_cast<uint8_t>(64 - t);
     };
-    // PASS 9 (Direction 7 §9.1): FIVE rungs, one per articulation station, and
-    // every station is now a BALL or a BODY JUNCTION. kBJunctionF drops out of
-    // the ladder and becomes a pure parent: it shares kBNeck's pivot exactly
-    // (kLoopArcMm[0] == 0), so weighting a ring to it would be weighting to the
-    // same point twice, while a rotation on it still bends the whole antenna by
-    // construction because every loop bone descends from it.
-    //
-    // The continuity condition this ladder depends on: a branch flips at
-    // (station - blend), and the previous station's weight must already have
-    // SATURATED by then, which needs consecutive stations >= 2*blend apart. It
-    // is ASSERTED in the committed probe from kFoldBlendMm and kLoopArcMm, not
-    // stated in a comment that the next station move would rot (checklist 19).
-    const int32_t tN = blend_of(stNeck, kFoldBlendMm[0]),
-                  tA = blend_of(stA, kFoldBlendMm[1]),
-                  tB = blend_of(stB, kFoldBlendMm[2]),
-                  tC = blend_of(stC, kFoldBlendMm[3]);
-    // PASS 15: there is no tD any more. kBHingeD shares ball C's pivot, so its
-    // rung and ball C's are the same ramp -- see the final branch below.
-    // kFoldBlendMm[4] is consequently no longer read HERE; the committed probe
-    // still reads it for the F.1 continuity report, where a coincident pair is
-    // an explicit by-design row rather than a silent zero gap.
-    (void)stD;
-    if (tA == 0) {  // the buried base -> the front junction
-      rs.b0 = kBRoot;
-      rs.b1 = kBNeck;
-      rs.w0 = static_cast<uint8_t>(64 - tN);
-    } else if (tB == 0) {  // the front junction -> ball A
-      rs.b0 = kBNeck;
-      rs.b1 = kBHingeA;
-      rs.w0 = static_cast<uint8_t>(64 - tA);
-    } else if (tC == 0) {  // ball A -> ball B
-      rs.b0 = kBHingeA;
-      rs.b1 = kBHingeB;
-      rs.w0 = static_cast<uint8_t>(64 - tB);
+    const auto ramp64 = [&](int32_t start, int32_t end) {
+      if (s <= start) return 0;
+      if (s >= end) return 64;
+      return static_cast<int32_t>(
+          (static_cast<int64_t>(s - start) * 64) / (end - start));
+    };
+    const int32_t stEnd = kKnuckleAtEndMm;
+    const int32_t inN0 = stNeck - kLoopCarrierCoreHalfMm[0] - kFoldBlendMm[0];
+    const int32_t inN1 = stNeck - kLoopCarrierCoreHalfMm[0];
+    const int32_t outN0 = stNeck + kLoopCarrierCoreHalfMm[0];
+    const int32_t outN1 = outN0 + kFoldBlendMm[0];
+    const int32_t inA0 = stA - kLoopCarrierCoreHalfMm[1] - kFoldBlendMm[1];
+    const int32_t inA1 = stA - kLoopCarrierCoreHalfMm[1];
+    const int32_t inB0 = stB - kLoopCarrierCoreHalfMm[2] - kFoldBlendMm[2];
+    const int32_t inB1 = stB - kLoopCarrierCoreHalfMm[2];
+    const int32_t inC0 = stC - kLoopCarrierCoreHalfMm[3] - kFoldBlendMm[3];
+    const int32_t inC1 = stC - kLoopCarrierCoreHalfMm[3];
+    const int32_t outC0 = stC + kLoopCarrierCoreHalfMm[3];
+    const int32_t outC1 = outC0 + kFoldBlendMm[3];
+    const int32_t inE0 = stEnd - kLoopCarrierCoreHalfMm[4] - kFoldBlendMm[4];
+    const int32_t inE1 = stEnd - kLoopCarrierCoreHalfMm[4];
+    const int32_t outE0 = stEnd + kLoopCarrierCoreHalfMm[4];
+    const int32_t outE1 = outE0 + kFoldBlendMm[4];
+
+    if (s < inN1) {
+      set_pair(kBRoot, kBJunctionF, ramp64(inN0, inN1));
+    } else if (s < outN0) {
+      set_pair(kBJunctionF, kBNeck, 0);  // front swell belongs to JunctionF
+    } else if (s < outN1) {
+      set_pair(kBJunctionF, kBNeck, ramp64(outN0, outN1));
+    } else if (s < inA0) {
+      set_pair(kBNeck, kBHingeA, 0);
+    } else if (s < inA1) {
+      set_pair(kBNeck, kBHingeA, ramp64(inA0, inA1));
+    } else if (s < inB0) {
+      set_pair(kBHingeA, kBHingeB, 0);
+    } else if (s < inB1) {
+      set_pair(kBHingeA, kBHingeB, ramp64(inB0, inB1));
+    } else if (s < inC0) {
+      set_pair(kBHingeB, kBHingeC, 0);
+    } else if (s < inC1) {
+      set_pair(kBHingeB, kBHingeC, ramp64(inC0, inC1));
+    } else if (s < outC0) {
+      set_pair(kBHingeC, kBHingeD, 0);  // the full C swell belongs to C
+    } else if (s < outC1) {
+      set_pair(kBHingeC, kBHingeD, ramp64(outC0, outC1));
+    } else if (s < inE0) {
+      set_pair(kBHingeD, kBRearSocket, 0);
+    } else if (s < inE1) {
+      set_pair(kBHingeD, kBRearSocket, ramp64(inE0, inE1));
+    } else if (s < outE0) {
+      set_pair(kBRearSocket, kBReturnTip, 0);  // the End swell belongs to its socket
+    } else if (s < outE1) {
+      set_pair(kBRearSocket, kBReturnTip, ramp64(outE0, outE1));
     } else {
-      // PASS 15 (Direction 11 §3) -- BALL B -> THE SHARED C/D STATION, and then
-      // ONE RIGID RUN to the buried tip.
-      //
-      // There used to be two rungs here, (B,C) then (C,D), because kBHingeD
-      // pivoted 380 mm further along at arc 2030 -- in the middle of a limb the
-      // drawing runs straight, which is the elbow the owner named. kBHingeD now
-      // shares ball C's pivot (kLoopArcMm[4] == 0), so those two rungs are two
-      // ramps across ONE station and cannot both exist: a ring picks one bone
-      // pair, and with equal blends the (B,C) branch is unreachable, which
-      // would have stepped the skin straight from B's pair to D's.
-      //
-      // So ball C joins kBJunctionF as a PURE PARENT -- the same resolution
-      // pass 9 used for the other coincident pair, for the same reason.
-      // ⚠ AND "PURE PARENT" IS NOT "DEAD" (checklist item 13, which this file
-      // has already shipped three false versions of): no ring names kBHingeC,
-      // but every ring past this station is weighted to kBHingeD, which is
-      // kBHingeC's CHILD -- so ball C's knead rotation carries all of them by
-      // construction, and the closure aim composes on top of it AT THE SAME
-      // POINT. Both bends happen at the ball; nothing bends between it and the
-      // body. That is Direction 11 §3's "should just be straight", structurally
-      // rather than by tuning.
-      rs.b0 = kBHingeB;
-      rs.b1 = kBHingeD;
-      rs.w0 = static_cast<uint8_t>(64 - tC);
+      set_pair(kBReturnTip, kBReturnTip, 0);
     }
     // chain rings are creature-global: carry the tube x
     rs.cx = fxu(kLoopTubeXMm);
@@ -353,8 +346,33 @@ inline zc::RingPart make_loop() {
     // `compile_creature` rejects the whole creature -- rendering NOTHING, not
     // a creature without the effect -- if any lane has authority and the role
     // is kNone. So the role is set from whether ANY lane wants this ring.
+    // PASS 16: each span's visible vertices stretch only while they are carried
+    // by that span's LOWER bone. The child carrier's local translation supplies
+    // the same endpoint delta to the ball and every descendant, so retaining
+    // the old cumulative authority would move them twice.
     const int32_t span_start[3] = {stNeck, stA, stB};
     const int32_t span_len[3] = {kLoopArcMm[1], kLoopArcMm[2], kLoopArcMm[3]};
+    const uint8_t span_lower[3] = {kBNeck, kBHingeA, kBHingeB};
+    const auto bone_weight64 = [&](uint8_t bone) {
+      if (rs.b0 == bone && rs.b1 == bone) return 64;
+      if (rs.b0 == bone) return static_cast<int32_t>(rs.w0);
+      if (rs.b1 == bone) return 64 - static_cast<int32_t>(rs.w0);
+      return 0;
+    };
+    int32_t lane_st[3] = {0, 0, 0};
+    for (int L = 0; L < 3; ++L) {
+      int32_t run = s - span_start[L];
+      if (run < 0) run = 0;
+      if (run > span_len[L]) run = span_len[L];
+      const int32_t lower_w = bone_weight64(span_lower[L]);
+      const int32_t st = s > 0 ? static_cast<int32_t>(
+                                     (static_cast<int64_t>(run) * 255 * lower_w) /
+                                     (static_cast<int64_t>(s) * 64))
+                               : 0;
+      lane_st[L] = st < 0 ? 0 : (st > 255 ? 255 : st);
+    }
+    // lane 0: the old breath coupling remains a live, default-off knob. It
+    // keeps the historical C->tip taper because it has no translated carrier.
     int32_t ramp_num = 1, ramp_den = 1;
     if (s > stC) {
       ramp_num = total - s;
@@ -362,19 +380,6 @@ inline zc::RingPart make_loop() {
       if (ramp_num < 0) ramp_num = 0;
       if (ramp_den <= 0) ramp_den = 1;
     }
-    int32_t lane_st[3] = {0, 0, 0};
-    for (int L = 0; L < 3; ++L) {
-      int32_t run = s - span_start[L];
-      if (run < 0) run = 0;
-      if (run > span_len[L]) run = span_len[L];
-      const int32_t st = s > 0 ? static_cast<int32_t>(
-                                     (static_cast<int64_t>(run) * 255 * ramp_num) /
-                                     (static_cast<int64_t>(s) * ramp_den))
-                               : 0;
-      lane_st[L] = st < 0 ? 0 : (st > 255 ? 255 : st);
-    }
-    // lane 0: the wave-1 breath coupling, kept as a live knob and OFF by
-    // default (kLoopStretchStrength). Same ramp, same reason.
     int32_t stretch = kLoopStretchStrength;
     if (s > stC)
       stretch = static_cast<int32_t>(
