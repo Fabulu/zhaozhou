@@ -84,8 +84,7 @@ int main(int argc, char** argv) {
     }
     check(cycles_low == 512, "table_ready_o low for exactly 512 cycles", 512, cycles_low);
     check(rises == 1, "table_ready_o rises exactly once", 1, rises);
-    check(dut.table_ready_o == 1, "table_ready_o is high after the fill", 1,
-          dut.table_ready_o);
+    check(dut.table_ready_o == 1, "table_ready_o is high after the fill", 1, dut.table_ready_o);
   }
 
   // ---- every one of the 65,536 pairs -------------------------------------
@@ -153,8 +152,7 @@ int main(int argc, char** argv) {
     dut.a_i = 7;
     dut.b_i = 9;
     tick(dut);
-    check(static_cast<int>(dut.p_o) == 63, "en_i high resumes", 63,
-          static_cast<int>(dut.p_o));
+    check(static_cast<int>(dut.p_o) == 63, "en_i high resumes", 63, static_cast<int>(dut.p_o));
   }
 
   // ---- the corners, named -------------------------------------------------
@@ -175,8 +173,7 @@ int main(int argc, char** argv) {
       dut.a_i = static_cast<uint8_t>(c.a);
       dut.b_i = static_cast<uint8_t>(c.b);
       tick(dut);
-      check(static_cast<int>(dut.p_o) == c.a * c.b, c.why, c.a * c.b,
-            static_cast<int>(dut.p_o));
+      check(static_cast<int>(dut.p_o) == c.a * c.b, c.why, c.a * c.b, static_cast<int>(dut.p_o));
     }
   }
 
