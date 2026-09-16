@@ -1,0 +1,49 @@
+# D3 shell characterization only.
+# 5CSEBA6U23I7 is a PROVISIONAL capacity/timing target, not board truth.
+# This project fits the generated six-port/ten-bit wrapper around the unchanged
+# zhao_shell_top. No framework files, PLLs, virtual pins, or physical pin
+# assignments belong here.
+
+set_global_assignment -name FAMILY "Cyclone V"
+set_global_assignment -name DEVICE 5CSEBA6U23I7
+set_global_assignment -name TOP_LEVEL_ENTITY zhao_terrain_pipe_rpp3_matw18_fit_top
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+set_global_assignment -name SDC_FILE blockfit.sdc
+set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"
+
+# Fixed characterization controls. The clean gate never stages overrides; a
+# different seed, effort, or constraint is a separately named experiment.
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+set_global_assignment -name OPTIMIZATION_TECHNIQUE BALANCED
+set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
+set_global_assignment -name PLACEMENT_EFFORT_MULTIPLIER 1.0
+set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING OFF
+
+# Exact ZHAO_SHELL_RTL pool from tests/CMakeLists.txt, index for index, followed
+# by the generated characterization wrapper. Packet B rejects any other source
+# assignment mechanism rather than asking Quartus to compile an unbound file.
+
+set_global_assignment -name LAST_QUARTUS_VERSION "17.0.2 Lite Edition"
+# Physical top ports retained by run_block_fit.ps1 -PhysicalPins.
+set_global_assignment -name VERILOG_MACRO "SYNTHESIS=1"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-24048-639251986434723217/zhao_terrain_pipe_rpp3_matw18_fit_top/src/zhao_project_core.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-24048-639251986434723217/zhao_terrain_pipe_rpp3_matw18_fit_top/src/zhao_project_service.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-24048-639251986434723217/zhao_terrain_pipe_rpp3_matw18_fit_top/src/zhao_proj_subsystem.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-24048-639251986434723217/zhao_terrain_pipe_rpp3_matw18_fit_top/src/zhao_vertex_arena.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-24048-639251986434723217/zhao_terrain_pipe_rpp3_matw18_fit_top/src/zhao_terrain_wcache.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-24048-639251986434723217/zhao_terrain_pipe_rpp3_matw18_fit_top/src/zhao_terrain_tess.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-24048-639251986434723217/zhao_terrain_pipe_rpp3_matw18_fit_top/src/zhao_terrain_group_seq.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-24048-639251986434723217/zhao_terrain_pipe_rpp3_matw18_fit_top/src/zhao_terrain_pipe.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "C:/Users/Fabs/AppData/Local/Temp/zhao-block-fit-24048-639251986434723217/zhao_terrain_pipe_rpp3_matw18_fit_top/src/zhao_terrain_pipe_rpp3_matw18_fit_top.sv"
+# Overridden by run_block_fit.ps1 -Seed (placement sweep).
+set_global_assignment -name SEED 1
+
+set_global_assignment -name SYSTEMVERILOG_FILE src/zhao_project_core.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/zhao_project_service.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/zhao_proj_subsystem.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/zhao_vertex_arena.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/zhao_terrain_wcache.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/zhao_terrain_tess.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/zhao_terrain_group_seq.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/zhao_terrain_pipe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE src/zhao_terrain_pipe_rpp3_matw18_fit_top.sv
