@@ -65,9 +65,17 @@ Its 478 packets over 2,343 cycles will move; the **rate** must not.
 
 **This is the big one: 1,631 of the 2,000 negative endpoints.**
 
-**Evidence.** Worst path −9.811 ns, data 19.043 ns, launching from
-`u_tess|vo_valid` — a CONTROL bit — into `zhao_project_core`. Reading
-`zhao_project_service` shows why:
+**Evidence.** Worst path −9.811 ns, data 19.043 ns, from `u_tess|vo_valid` to
+**`zhao_project_core|s1_ry[53]`** — stage 1's row sum. The nine MATW×32 row
+multiplies and their sum happen in one cycle, with the service's operand mux in
+series ahead of them.
+
+**The package is: pipeline stage 1's row sum.** The matrix is read at stage 1's
+input, on the accept edge, so splitting the sum *after* that read leaves the
+capture-at-accept law intact — which the first attempt at this package did not,
+and see below.
+
+The service's arbitration is in the path but is not its length:
 
 ```systemverilog
 wire both_c  = a_valid_i && b_valid_i;
@@ -132,7 +140,38 @@ tried. It preserves the order of a write against an *earlier* accept, but a
 write one cycle *after* an accept now arrives at the core simultaneously with
 the vertex it should have followed. The same test still failed, the same way.
 
-So T2 has exactly two honest shapes, and both are bigger than "add a register":
+### AND THE REVERT LED TO THE RIGHT DIAGNOSIS, WHICH IS NOT ARBITRATION AT ALL
+
+Nineteen nanoseconds is far more than a grant and a mux, so the endpoint was
+worth reading rather than assuming. Of the 1,717 paths ending inside
+`zhao_project_core`, the worst six all land in the same place:
+
+```
+  vo_valid  ->  s1_ry[53]    -9.811 ns, data 19.043
+  vo_valid  ->  s1_ry[50]    -9.754 ns, data 18.982
+  vo_valid  ->  s1_ry[48]    -9.737 ns, data 18.953
+```
+
+`s1_ry` is **stage 1's row sum** — §2's `mat4_vec4`. So the path is not
+"arbitration is slow". It is the nine MATW×32 row multiplies and their sum,
+**all in one cycle**, with the arbitration mux select sitting in series in front
+of them. The launch is a control bit because a select fans out across 32 mux
+bits and therefore beats the data into the cone, not because the control logic
+is deep.
+
+That relocates the package. **T2 is: pipeline stage 1's row sum inside
+`zhao_project_core`.** And crucially, it does **not** run into the wall the
+first attempt hit: the matrix is read at stage 1's input, at the accept edge,
+and splitting the SUM after that read leaves the capture-at-accept law
+untouched. No buffering between accept and the matrix, so nothing tears.
+
+The other launch points confirm the shape rather than competing with it:
+`ram_block8a4` and `ram_block8a3` launch 734 of these paths, and the divider
+lanes (`g_div_stage[..].r_dv[..]`) another few hundred — the core is a long
+arithmetic pipeline whose first stage is the widest.
+
+So the two shapes below are **superseded**. They were the right answers to the
+wrong question, and are kept only so nobody re-derives them:
 
 1. **Capture the matrix with the vertex.** Register the selected view's sixteen
    matrix words alongside the operands at the accept edge, so the pair travels

@@ -1199,3 +1199,13 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - Delaying the config by the same cycle does **not** fix it, and that was tried: it preserves order against an EARLIER accept, but a write one cycle AFTER an accept then arrives simultaneously with the vertex it should have followed. Same failure.
 - **Reverted.** Tree back to 17/17 across terrain, projector and packet-I. The campaign brief now carries a "T2 WAS ATTEMPTED AND REVERTED" section with the two honest shapes it actually has: capture the selected view's sixteen matrix words alongside the operands (~512 flops, affordable, but it changes `zhao_project_core`'s input interface), or shorten the arbitration-to-operand cone without buffering so the accept edge stays intact.
 
+
+## 2026-09-16 (T2 re-diagnosed) - it is not arbitration, it is stage 1's row sum
+
+- Reading the ENDPOINT rather than assuming relocated the package. Of 1,717 paths ending in `zhao_project_core`, the worst six all land on **`s1_ry[..]` - stage 1's row sum**, 19.043 ns from `u_tess|vo_valid`.
+- So the 19 ns is **the nine MATW x 32 row multiplies and their sum, all in one cycle**, with the service's operand mux in series ahead of them. The launch is a control bit because a mux select fans out across 32 bits and beats the data into the cone - not because the arbitration is deep.
+- **T2 is therefore: pipeline stage 1's row sum inside `zhao_project_core`.** And it does not hit the wall the first attempt did: the matrix is read at stage 1's INPUT, on the accept edge, so splitting the sum after that read leaves capture-at-accept untouched. Nothing can tear.
+- Corroborating shape: `ram_block8a4`/`ram_block8a3` launch 734 of these paths and the divider lanes a few hundred more - a long arithmetic pipeline whose first stage is the widest.
+- The two shapes I had written for T2 (capture the matrix with the vertex; shorten the arbitration cone) are marked SUPERSEDED in the brief rather than deleted - right answers to the wrong question, kept so nobody re-derives them.
+- Nineteen nanoseconds was always too much for a grant and a mux. Reading the endpoint cost one command and moved the package to a different module.
+
