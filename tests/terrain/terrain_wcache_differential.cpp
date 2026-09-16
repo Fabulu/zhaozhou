@@ -155,8 +155,14 @@ class Bench {
   uint64_t cycle = 0;
 
   // configuration the two clients project through (the service's bank)
-  zref::mat4fx svc_m[2];
-  zref::render::Viewport svc_vp[2];
+  //
+  // VALUE-INITIALISED. These are only written when a view is configured
+  // (`svc_m[view] = m`), and read unconditionally when a vertex is projected
+  // (`v.m = svc_m[v.view]`), so a view that no case configures would have been
+  // read indeterminate -- and the symptom would be a wrong projected vertex
+  // blamed on the RTL rather than on the bench.
+  zref::mat4fx svc_m[2] = {};
+  zref::render::Viewport svc_vp[2] = {};
 
   // client A bookkeeping
   struct AVert {

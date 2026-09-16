@@ -203,7 +203,14 @@ class Wizards : public zcon::GameTruth {
       }
       // Normalise on the L1 norm: no square root, no float, and monotone in
       // the stick -- exact in integers, which is what a replay needs.
-      const int32_t n = (ax < 0 ? -ax : ax) + (ay < 0 ? -ay : ay);
+      const int32_t mag = (ax < 0 ? -ax : ax) + (ay < 0 ? -ay : ay);
+      // `mag` cannot be 0: the branch above replaces a dead stick with
+      // ax = +/-1. The clamp is therefore unreachable, and it is written down
+      // rather than reasoned about because the thing it protects is a DIVIDE --
+      // if that guard is ever narrowed, the failure is a crash in the game
+      // loop, not a wrong bolt. Static analysis could not see the connection
+      // either, and said so.
+      const int32_t n = mag > 0 ? mag : 1;
       b.vx = (ax * kBoltSpeed) / n;
       b.vy = (ay * kBoltSpeed) / n;
       b.fuse = kBoltFuse;

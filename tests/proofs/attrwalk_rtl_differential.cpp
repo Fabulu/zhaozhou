@@ -73,6 +73,12 @@ struct RtlDiv {
     m->final();
     delete m;
   }
+  // Rule of three, and not a formality: this owns a `new`ed Verilated model
+  // and calls final()+delete in the destructor, so a copy would final() and
+  // free the same model twice. Nothing copies one today; deleting the
+  // operations means nothing can start to.
+  RtlDiv(const RtlDiv&) = delete;
+  RtlDiv& operator=(const RtlDiv&) = delete;
   void tick() {
     m->clk = 0;
     m->eval();
@@ -142,6 +148,12 @@ struct Walker {
     m->final();
     delete m;
   }
+  // Rule of three, and not a formality: this owns a `new`ed Verilated model
+  // and calls final()+delete in the destructor, so a copy would final() and
+  // free the same model twice. Nothing copies one today; deleting the
+  // operations means nothing can start to.
+  Walker(const Walker&) = delete;
+  Walker& operator=(const Walker&) = delete;
   void tick() {
     m->clk = 0;
     m->eval();

@@ -187,6 +187,12 @@ struct Rtl {
     m->final();
     delete m;
   }
+  // Rule of three, and not a formality: this owns a `new`ed Verilated model and
+  // calls final()+delete in the destructor, so a copy would final() and free the
+  // same model twice. Nothing copies one today; deleting the operations means
+  // nothing can start to.
+  Rtl(const Rtl&) = delete;
+  Rtl& operator=(const Rtl&) = delete;
   void tick() {
     m->clk = 0;
     m->eval();

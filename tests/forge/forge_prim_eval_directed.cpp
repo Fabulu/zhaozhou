@@ -350,7 +350,11 @@ int main(int argc, char** argv) {
 
   // ---- 6. caps REFUSED, nothing emitted ------------------------------------
   {
-    EvalParams bad[6];
+    // Value-initialised, then every element overwritten. The six are fully
+    // assigned on the next line either way, but declaring them indeterminate
+    // and relying on that is what cppcheck objects to, and it is right that
+    // there is no reason to leave the window open.
+    EvalParams bad[6] = {};
     for (auto& b : bad) b = base_params();
     bad[0].segments = 0;
     bad[1].segments = 25;   // MAX_MAIN_SEGMENTS + 1 — the boundary

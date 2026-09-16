@@ -2210,7 +2210,10 @@ int main(int argc, char** argv) {
 
     for (int k = 0; k < 14; ++k) {
       if (C.c[k] == H.c[k]) continue;
-      std::printf("   M counter %d: hand %d, command %d\n", k, H.c[k], C.c[k]);
+      // %u for the counters: they are unsigned, and %d on an unsigned counter
+      // prints a negative number for anything past 2^31 -- in a line whose whole
+      // job is to show a mismatch.
+      std::printf("   M counter %d: hand %u, command %u\n", k, H.c[k], C.c[k]);
     }
     std::printf("   hand: %llu cycles; command: %llu cycles (the difference is the CRC "
                 "pass, which reads %u bytes before the frame starts)\n",

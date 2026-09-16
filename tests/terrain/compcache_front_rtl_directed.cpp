@@ -396,14 +396,25 @@ struct Stats {
 
 void run(Top& d, const std::vector<Step>& plan, Producer* prod, Stats& st, const char* tag) {
   for (size_t c = 0; c <= plan.size(); ++c) {
+    // The loop deliberately runs ONE cycle past the plan, to drive an idle
+    // request and let the last response land. Seven `have ? plan[c].x : 0`
+    // ternaries used to express that, and cppcheck's container analysis does
+    // not follow the guard through a ternary -- it reported seven
+    // containerOutOfBounds errors on accesses that cannot happen.
+    //
+    // An `if` says the same thing in a form the checker can read, and `Step`
+    // default-initialises every request field to 0, which is exactly what the
+    // else-branches supplied. Behaviour is unchanged; only the shape is.
     const bool have = c < plan.size();
-    d.lat_req = have ? plan[c].lreq : 0;
-    d.lat_vi = have ? plan[c].vi : 0;
-    d.lat_vj = have ? plan[c].vj : 0;
-    d.lat_surface = have ? plan[c].surf : 0;
-    d.cs_req = have ? plan[c].creq : 0;
-    d.cs_ci = have ? plan[c].ci : 0;
-    d.cs_cj = have ? plan[c].cj : 0;
+    Step s{};
+    if (have) s = plan[c];
+    d.lat_req = s.lreq;
+    d.lat_vi = s.vi;
+    d.lat_vj = s.vj;
+    d.lat_surface = s.surf;
+    d.cs_req = s.creq;
+    d.cs_ci = s.ci;
+    d.cs_cj = s.cj;
     if (prod) {
       prod->drive(d);
     } else {

@@ -2319,7 +2319,7 @@ int main(int argc, char** argv) {
   // not skipped because the author knows which build this is, they are skipped
   // because the DUT says the apparatus is not there.
   std::printf("  shadow capability: shadow_present_o = %u (build expects %u)\n", d.shadow_present_o,
-              ZHAO_SHADOWS);
+              static_cast<unsigned>(ZHAO_SHADOWS));
   check(d.shadow_present_o == ZHAO_SHADOWS,
         "the island reports the shadow capability this build was elaborated "
         "with -- every shadow counter below is meaningless without it",

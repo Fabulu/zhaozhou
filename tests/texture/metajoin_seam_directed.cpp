@@ -117,7 +117,7 @@ int main(int argc, char** argv) {
   std::printf(
       "  after stall with B offered: pal_gen %02X (A=%02X, B=%02X), "
       "format %u (A=%u, B=%u)\n",
-      d->rd_pal_gen_o, 0x30, 0x7C, d->rd_format_o, 2, 5);
+      d->rd_pal_gen_o, 0x30, 0x7C, d->rd_format_o, 2u, 5u);
 
   zhao::check(a_pgen_now == 0x30 && a_fmt_now == 2,
               "A's metadata was correctly presented before the stall -- "
