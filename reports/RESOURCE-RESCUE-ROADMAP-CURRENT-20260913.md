@@ -78,6 +78,27 @@ whole-machine ALM number.
 > parameter-fixed terrain G8B, then combined G8C. Details and the per-family
 > dispositions are in `G8A-TIMING4-DISPOSITION-20260916.md`.
 
+> **2026-09-16, later — G8B IS MEASURED, AND IT IS THE MACHINE'S REAL TIMING
+> PROBLEM.** Packet I built the parameter-fixed wrapper the target needed and
+> `zhao_terrain_pipe_rpp3_matw18_fit_top@g8b` fitted from clean `968243b5`:
+> **43.94 MHz**, setup WNS **−12.758 ns**, setup TNS **−7,360 ns**, and **all
+> 2,000 exported paths negative**. 7,424 ALMs, 34 DSPs, 44 RAM blocks.
+>
+> Every resource gate passes. Only the clock fails, by 56 MHz.
+>
+> This reorders the remaining work. G8A's worst state was 90.96 MHz with 497
+> slow paths; G8B is at 43.94 with every path slow, and had never been timed at
+> all. The whole result traces to one combinational chain in
+> `zhao_terrain_tess`: from the registered lattice response through two
+> subtracts, a 17×34 multiply, two rescales and two saturating adds before
+> anything is registered — 22.5 ns of data delay against 0.1 ns of skew.
+>
+> **G8C cannot be usefully attempted before this is cut.** Composing a 43.94 MHz
+> subsystem with a 108.37 MHz one and fitting the pair would measure the terrain
+> pipe's chain a second time and learn nothing new.
+>
+> Full measurement and diagnosis: `G8B-TERRAIN-FIRST-MEASUREMENT-20260916.md`.
+
 ## Current R0-R9 completion matrix
 
 | stage | current state | completion verdict |

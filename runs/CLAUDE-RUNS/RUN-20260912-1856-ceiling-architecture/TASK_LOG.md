@@ -1154,3 +1154,18 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - [ ] `design/fit_targets.yml` entry, receipt parameter/hierarchy gates, freshness + registration-static tests
 - [ ] one clean G8B receipt proving `ROWS_PER_PASS=3` and `MATW=18` actually elaborated
 
+
+## 2026-09-16 (Packet I) - the G8B wrapper, and the three ways it first measured nothing
+
+- **In progress when this was written:** `@g8b` fit running from clean `968243b5`. Staying off its closure.
+- Built the parameter-fixed terrain characterization wrapper: generator, template, generated wrapper + manifest, `design/fit_targets.yml` entry, synthesis-mode lint, generated-freshness check, and the legal-mask activity witness. `ROWS_PER_PASS=3` and `MATW=18` are LITERALS at the instantiation, as the architecture demands.
+- **It measured nothing three times before it measured anything**, and each failure would have produced a confident number about a machine that was not running:
+  1. **The matrix.** At MATW=18 the nine row product words must fit signed 18 bits or the write is REFUSED - register keeps its old value, `mat_refused_o` counts, never a clamp. Random config words would have refused all nine and characterised a projector on reset values. The wrapper writes deliberate small scales there and asserts `mat_refused_o == 0`.
+  2. **The offer contract.** Driving job/vertex fields straight from the LFSR meant an unaccepted offer presented a DIFFERENT job next edge under the same valid. The pipe noticed: legal-looking traffic produced an arena fill fault. Both streams now latch and refresh only on fire.
+  3. **The geometry.** Random ox/oz/level/morph gave unaligned origins and groups that could not fill to DEPTH. In DENSE_SEAL a seal is refused unless the arena holds exactly DEPTH, and the refusal is sticky - random geometry makes a permanently faulted pipe, not odd pictures. The subpatch geometry is now a ROM of the eight legal shapes `terrain_pipe_differential` drives.
+- **Witness:** `cfg=36 jobs=144 out=1664 stalls=603 tess=11602 replay=1664 a_grants=16258 b_grants=15425 contended=14928 refused=0 masks=7`. All three legal masks, both projector clients sharing one core with contention firing 14,928 times, backpressure exercised 603 times, zero refusals. 15/15 checks.
+- The eight closure files were not pinned to LF in `.gitattributes`, so the generator - which hashes every closure member and refuses any input containing CR - could not run at all until they were.
+- **`zhao_raster_quant` now has no instantiator.** After the numerator split, RESOLVE instantiates the two halves directly and the composed module survives only as what `formal_raster_resolve_quant` proves. Declared in `prod_manifest.yml` with the reason and with what to do if it stops being true, rather than left reading as an orphan.
+- The G8B target is deliberately UNRULED on area and DSP - any result is evidence for this wrapper only, and assuming a saving against the ambiguous default-MATW target is how the stale terrain rows in `fit_targets.yml` came to exist. Fmax ruled at 100 because that is the machine's requirement.
+- Evidence: 203/203 across packets B-I; manifest check OK at 265 modules; `source_list_parity` still fails only on the pre-existing `zhao_shell_fit_top`.
+
