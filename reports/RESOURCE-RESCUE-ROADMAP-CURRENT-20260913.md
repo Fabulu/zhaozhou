@@ -223,6 +223,65 @@ not installed physical completion.
    then add board/framework logic and close resource, timing, CDC, bandwidth, and
    workload margins together.
 
+## OWNER DIRECTION 2026-09-16 — spend M10K to buy ALMs
+
+Fabian, 2026-09-16: *"remember we have lot's of m10k memory, ALM's are over
+budget 15 times over, so what you can you need to solve with memory"*.
+
+Standing, and it governs every optimisation choice below rather than one
+block. The direction is right and the scoreboard above is why: **40,591 ALM
+against a 41,910 DEVICE** — 97% of the chip — while Texture, Complete FIELD
+and 34 further blocks contribute **zero**. The machine as measured does not
+fit at all. M10K sits at **94 / 464 allocated / 553 on the device**.
+
+Three things have to be said with it, because each changes what the direction
+means in practice. None of them softens it.
+
+**1. Memory is bounded, not free, and the worst ALM domain is already over its
+memory.** The 464 is a REPLACEMENT allocation — the roadmap is explicit: *"Do
+not add these 464 M10Ks to the historical 147."* And *Projection and result
+arenas*, the worst ALM breach at 12,267 against 4,500, is **already over its
+48-block M10K allocation at 52**. So the domain that most needs to spend
+memory is the one with none of its own left. Re-allocating across domains is
+available — Texture holds 96 unspent, FIELD 64, Geometry 64 — but it is a
+plan change and belongs to the owner, not to an implementer who needs a few
+blocks.
+
+**2. The lever is NOT relocating state, and this is measured rather than
+assumed.** `tools/design/check_array_storage.py` was widened on 2026-09-16 to
+read expression-valued and package-sourced parameters (unresolvable
+declarations 206 → 47), and with that sight it finds **no block carrying a
+current fit row that holds 8 Kbit or more of declared array in flip-flops**.
+At a 2 Kbit threshold exactly two appear and both are small. The 1.35x ALM
+breach is therefore **combinational logic**, not misplaced registers.
+
+What that leaves is the conversion of COMPUTATION to LOOKUP, and the roadmap
+already names those primitives and already records them as absent:
+
+* **R1** — *"Reusable quarter-square primitive, 26+6 full-width hybrid,
+  coefficient-table primitive, and the promised MapOnly bundle do not [exist]."*
+* **R4** — *"The promised quarter-square/coefficient-memory replacements are
+  absent."*
+
+A quarter-square multiply is `((a+b)^2 - (a-b)^2) / 4` against a table of
+squares in M10K: it removes a DSP **and** the LUT-multiplier logic, and pays
+in memory. It is simultaneously the owner's DSP audit lever and this
+direction's ALM lever, and it is the single highest-value unbuilt thing in
+R1–R9 under both.
+
+**3. A ROM is not free on the timing side.** M10K clock-to-out is roughly
+2 ns against a flip-flop's 0.3. On a path that is already the block's cap a
+lookup can cost more than the logic it replaces — G8B T4 is a worked example
+in the other direction, where the cheap fix was noticing the stride is always
+a power of two and the multiply was never needed at all. Check the CONSUMED
+side before converting, not just the generating side.
+
+**The order this implies** is unchanged — finish R0 (Packets I/J/K) — but R1
+is promoted in importance within itself: the quarter-square and
+coefficient-table primitives stop being one bullet of a stage and become the
+mechanism the owner has asked for, to be reused by R4, R5, R6 and FIELD
+rather than re-derived in each.
+
 ## Current optimization implications
 
 - Edgewalk is a valid contained backend ALM candidate at 1,997.4 inclusive ALMs,
