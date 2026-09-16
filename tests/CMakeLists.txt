@@ -10761,12 +10761,44 @@ add_test(NAME terrain_pipe_rpp3_matw18_generated_freshness
     ${CMAKE_SOURCE_DIR}/tools/quartus/gen_terrain_pipe_rpp3_matw18_fit_top.py
     --check)
 
+# THE FOURTH GATE, which the paragraph above has promised since Packet I was
+# registered and which nothing delivered. Packet F has its static check at
+# tests/tools/test_raster_texture_v3_fit_top.py; Packet I had three gates and
+# a comment claiming four, so the four places that state G8B's source closure
+# could drift apart in silence and the architecture's own receipt conditions
+# were enforced by nobody. It also carries the G8B RECEIPT LAW: a row that
+# stops being stamped `failed` must carry clean-tree, zero-virtual-pin and
+# 100 MHz together, so a promoted diagnostic row turns it red.
+add_test(NAME packet_i_g8b_registration_static
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_terrain_pipe_rpp3_matw18_fit_top.py -q)
+
 set_tests_properties(
   terrain_pipe_rpp3_matw18_fit_top_directed
   lint_terrain_pipe_rpp3_matw18_fit_top
   terrain_pipe_rpp3_matw18_generated_freshness
+  packet_i_g8b_registration_static
   PROPERTIES LABELS "fast;nightly;packet-i;g8b" TIMEOUT 1800
     FAIL_REGULAR_EXPRESSION "FAIL")
+
+# The same inventory guard Packet F carries: registering a test and listing it
+# as required are two different acts, and a gate that is quietly dropped from
+# the file leaves no trace anywhere else.
+set(ZHAO_PACKET_I_REQUIRED_TESTS
+  terrain_pipe_rpp3_matw18_fit_top_directed
+  lint_terrain_pipe_rpp3_matw18_fit_top
+  terrain_pipe_rpp3_matw18_generated_freshness
+  packet_i_g8b_registration_static)
+list(LENGTH ZHAO_PACKET_I_REQUIRED_TESTS ZHAO_PACKET_I_REQUIRED_TEST_COUNT)
+if(NOT ZHAO_PACKET_I_REQUIRED_TEST_COUNT EQUAL 4)
+  message(FATAL_ERROR "Packet-I required CTest inventory must contain exactly 4 names")
+endif()
+foreach(required_packet_i_test IN LISTS ZHAO_PACKET_I_REQUIRED_TESTS)
+  if(NOT TEST "${required_packet_i_test}")
+    message(FATAL_ERROR
+      "required Packet-I CTest is not registered: ${required_packet_i_test}")
+  endif()
+endforeach()
 
 set(ZHAO_PACKET_F_REQUIRED_TESTS
   raster_texture_v3_fit_top_directed
