@@ -64,6 +64,13 @@ sys.path.insert(0, os.path.join(ROOT, "tools", "quartus"))
 sys.path.insert(0, HERE)
 
 from dsp_census import (load_evidence, build_bill, load_profiles)  # noqa: E402
+# STALENESS IS NOT REIMPLEMENTED HERE EITHER. `uncashed_cheques.stale_receipts`
+# already owns "is this row older than the file it describes", with both of its
+# grounds (DIRTY -- never described committed state; BEHIND -- the file moved
+# after the fit). This file's own header says never reimplement a selector, and
+# the same applies to a predicate.
+from uncashed_cheques import stale_receipts  # noqa: E402
+import module_graph  # noqa: E402
 
 BLOCKS = os.path.join("design", "blocks.yml")
 MANIFEST = os.path.join("design", "prod_manifest.yml")
@@ -186,6 +193,27 @@ def main():
     rows = build_bill(roots, ev, targets_text, load_profiles())
     sub, mod = load_block_subsystems()
 
+    # WHICH FITTED ROWS DESCRIBE A DESIGN THE TREE HAS MOVED PAST.
+    #
+    # Added 2026-09-16, after the worst breach in this table turned out to be
+    # entirely stale. `Projection and result arenas` read 12,267 ALM / 66 DSP /
+    # 52 M10K against a 4,500 allocation -- and that is EXACTLY
+    # zhao_geom_project plus zhao_terrain_project, the two duplicate engines
+    # the shared G8B group replaced, matching on all three figures. The
+    # roadmap's own section 2.1 had written that allocation for ONE engine.
+    #
+    # The prose said "read rtlCleanAtHead first, always" in three places.
+    # Nothing in this table did. A domain total made of stale rows is evidence
+    # about the past wearing the format of a current measurement, and it is
+    # flattering or damning at random -- here it made a replaced arrangement
+    # look like the design's single biggest problem.
+    try:
+        _decl, _inst = module_graph.build()
+        _stale_rows = stale_receipts(_decl, load_evidence())
+    except Exception:            # never let the annotation break the totals
+        _stale_rows = []
+    stale_mods = {r["module"] for r in _stale_rows}
+
     # module -> subsystem, via blocks.yml's rtl: field where present, else by
     # the module's own directory, which is how the tree is actually organised.
     mod_sub = {}
@@ -201,7 +229,8 @@ def main():
     agg = {}
     for name, alm, dsp, m10k in ALLOCATION:
         agg[name] = dict(alm=0, dsp=0, m10k=0, fit=0, mapo=0, unpriced=0,
-                         unpriced_names=[])
+                         unpriced_names=[], stale=0, stale_alm=0, stale_dsp=0,
+                         stale_m10k=0, stale_names=[])
 
     unmapped = []
     for row in sorted(rows, key=lambda r: r.get("module", "")):
@@ -225,6 +254,12 @@ def main():
             g["dsp"] += p
         if k is not None:
             g["m10k"] += k
+        if module in stale_mods:
+            g["stale"] += 1
+            g["stale_alm"] += (a or 0)
+            g["stale_dsp"] += (p or 0)
+            g["stale_m10k"] += (k or 0)
+            g["stale_names"].append(module)
 
     print("DOMAIN SCOREBOARD -- the ALM Liberation Roadmap section 2 allocations")
     print("Every ALM figure below is a SUM OF FITTED ROWS ONLY. Map-only and")
@@ -245,6 +280,8 @@ def main():
             ev_s += ", %d map" % g["mapo"]
         if g["unpriced"]:
             ev_s += ", %d UNPRICED" % g["unpriced"]
+        if g["stale"]:
+            ev_s += ", %d STALE" % g["stale"]
         print(hdr % (name, "{:,}".format(g["alm"]), "{:,}".format(alm),
                      g["dsp"], dsp, g["m10k"], m10k, ev_s) + " " + flag)
     print("-" * 104)
@@ -274,6 +311,29 @@ def main():
     print("  these are REPLACEMENT allocations: 'Do not add these 464 M10Ks to")
     print("  the historical 147.' Spending memory is bounded, not free.")
     print()
+    any_stale = any(g["stale"] for g in agg.values())
+    if any_stale:
+        print("")
+        print("== ROWS DESCRIBING A DESIGN THE FILE HAS MOVED PAST ==")
+        print("  A stale row is not a missing measurement -- it is a REAL number")
+        print("  about an arrangement that no longer exists, and it is flattering")
+        print("  or damning at random. Subtracting it is NOT permitted: the")
+        print("  replacement has to be MEASURED, usually at a different scope.")
+        for name, _a, _d, _m in ALLOCATION:
+            g = agg[name]
+            if not g["stale"]:
+                continue
+            print("  %s -- %d stale row(s) carrying %d ALM, %d DSP, %d M10K"
+                  % (name, g["stale"], g["stale_alm"], g["stale_dsp"],
+                     g["stale_m10k"]))
+            for n in sorted(g["stale_names"])[:8]:
+                print("       %s" % n)
+            if len(g["stale_names"]) > 8:
+                print("       ... and %d more" % (len(g["stale_names"]) - 8))
+        print("  tools/budget/uncashed_cheques.py CHECK 2 names the ground for")
+        print("  each (DIRTY or BEHIND) and by how long.")
+        print("")
+
     print("== WHERE THE EVIDENCE IS MISSING, which is most of it ==")
     for name, _a, _d, _k in ALLOCATION:
         g = agg[name]
