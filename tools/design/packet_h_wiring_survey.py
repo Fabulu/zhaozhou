@@ -35,6 +35,20 @@ It reports three classes:
 The heuristic's own blind spot, stated: a stem that appears on BOTH sides for
 unrelated reasons (clk, rst_n, busy) is reported paired and means nothing. Those
 are listed separately as TRIVIAL rather than padding the paired count.
+
+**UNMATCHED IS A CEILING, NOT A COUNT**, and the difference is large. This tree
+RENAMES ACROSS BOUNDARIES on purpose -- `zhao_shell_top` wires
+`.tri_kx0_i(render_kx0_i)`, and the same practice hides most of
+`zhao_engine1_raw_last_v2`'s eighteen "unmatched" ports behind different
+spellings: `verdict_ok_i`, `raw16_valid_i` and `guard_accept_i` have no stem
+match anywhere, yet `verdict`, `raw16` and `engine1` all appear in
+`zhao_shell_top`, `zhao_mem_guard`, `zhao_vram_arbiter`,
+`zhao_render_asset_mux` and `zhao_geom_mem_adapter`. The producers exist; only
+the names differ.
+
+So read UNMATCHED as "ports whose far end this tool could not NAME", which is an
+upper bound on the wiring Packet H has to invent and a lower bound on nothing.
+A row leaving that column is good news; a row in it is a question.
 """
 
 from __future__ import annotations
