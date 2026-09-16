@@ -49,6 +49,70 @@
 // Conservative SystemVerilog subset only (charter §2); depends only on
 // zhao_raster_div255. Lint: clean under `-Wall` (lint_raster_resolve).
 
+// THE TWO HALVES ARE SEPARATELY INSTANTIABLE, AND zhao_raster_quant IS THEIR
+// COMPOSITION.
+//
+// That module keeps its exact ports and its exact behaviour, so
+// formal_raster_resolve_quant still proves the thing it always proved. What is
+// new is that a caller may put a REGISTER between the halves when the whole
+// chain will not fit in one clock.
+//
+// RASTER.RESOLVE needs that. The Timing4 fit left exactly two negative paths in
+// the entire G8A subsystem, and both were `q_data_r -> fifo_q` in resolve --
+// one colour byte through one of these quantisers into the skid FIFO, 9.920 ns
+// of a 10.000 ns period. Splitting at the numerator lets resolve compute `num`
+// on the cycle the response arrives and divide on the next, WITHOUT adding a
+// pipeline stage. That matters because the obvious fix, another stage, is the
+// expensive one here: the Q0 capture already cost a cycle and forced the FIFO
+// from two entries to four to keep the initiation rate, and the architecture
+// rule says latency may grow while initiation rate may not.
+//
+// The split point is chosen so neither half is trivial: the numerator is a
+// shift-subtract and two adds, the finisher is the divide-by-255 and the rail.
+localparam int unsigned ZHAO_QUANT_NUM_W = 15;
+
+// num = v*MAXQ + bayer*AMP + RND -- the oracle's numerator, verbatim, so the
+// two call sites cannot drift into two transcriptions of one formula.
+// The coefficients are taken at the numerator's own width, not as `int
+// unsigned`: a 32-bit parameter whose top 17 bits can never be used is a lint
+// warning on every call, and widening only to truncate says the wrong thing
+// about what the values are.
+function automatic logic [ZHAO_QUANT_NUM_W-1:0] zhao_quant_num(
+    input logic [7:0]                   v,
+    input logic [3:0]                   bayer,
+    input logic [ZHAO_QUANT_NUM_W-1:0]  maxq,
+    input logic [ZHAO_QUANT_NUM_W-1:0]  amp,
+    input logic [ZHAO_QUANT_NUM_W-1:0]  rnd);
+  zhao_quant_num =
+      ({{(ZHAO_QUANT_NUM_W-8){1'b0}}, v} * maxq) +
+      ({{(ZHAO_QUANT_NUM_W-4){1'b0}}, bayer} * amp) +
+      rnd;
+endfunction
+
+// The back half: divide by 255, then the rail. Takes a numerator the caller may
+// have registered.
+//
+// It shares this file with zhao_raster_quant deliberately -- the two are one
+// arithmetic definition split at a register boundary, and separating them into
+// two files would make it possible to update one and not the other, which is
+// the whole failure this split is trying not to introduce. The filename warning
+// is silenced HERE ONLY, for that reason.
+/* verilator lint_off DECLFILENAME */
+module zhao_raster_quant_fin #(
+  parameter int unsigned MAXQ = 31,
+  parameter int unsigned QW   = 5
+) (
+  input  logic [ZHAO_QUANT_NUM_W-1:0] num_i,
+  output logic [QW-1:0]               q_o
+);
+  logic [ZHAO_QUANT_NUM_W-1:0] quo;
+  zhao_raster_div255 #(.W(ZHAO_QUANT_NUM_W)) u_div (.n_i(num_i), .q_o(quo));
+  always_comb begin
+    q_o = (quo > ZHAO_QUANT_NUM_W'(MAXQ)) ? QW'(MAXQ) : quo[QW-1:0];
+  end
+endmodule : zhao_raster_quant_fin
+/* verilator lint_on DECLFILENAME */
+
 module zhao_raster_quant #(
   parameter int unsigned MAXQ = 31,  // 31 for a 5-bit channel, 63 for green
   parameter int unsigned QW   = 5,   // RGB565 field width: 5, or 6 for green
@@ -66,23 +130,20 @@ module zhao_raster_quant #(
   // figure was the LARGER one, so NUM_W was conservative rather than wrong --
   // but it is the justification for the width and should state the real
   // number.)
-  localparam int unsigned NUM_W = 15;
-
-  logic [NUM_W-1:0] num;
-  logic [NUM_W-1:0] quo;
+  localparam int unsigned NUM_W = ZHAO_QUANT_NUM_W;
 
   // v·31 and v·63 fold to (v<<5)−v and (v<<6)−v; B·16 and B·32 are shifts.
+  //
+  // COMPOSED from the two halves above rather than written out again. The
+  // arithmetic and the ports are unchanged, which is the point: this is still
+  // the module formal_raster_resolve_quant proves, and a caller that needs a
+  // register in the middle instantiates the halves instead of forking this.
+  logic [NUM_W-1:0] num;
   always_comb begin
-    num = ({{(NUM_W-8){1'b0}}, v_i} * NUM_W'(MAXQ)) +
-          ({{(NUM_W-4){1'b0}}, bayer_i} * NUM_W'(AMP)) +
-          NUM_W'(RND);
+    num = zhao_quant_num(v_i, bayer_i, NUM_W'(MAXQ), NUM_W'(AMP), NUM_W'(RND));
   end
 
-  zhao_raster_div255 #(.W(NUM_W)) u_div (.n_i(num), .q_o(quo));
-
-  // The rail (resolve.cpp, 2026-08-16).
-  always_comb begin
-    q_o = (quo > NUM_W'(MAXQ)) ? QW'(MAXQ) : quo[QW-1:0];
-  end
+  zhao_raster_quant_fin #(.MAXQ(MAXQ), .QW(QW)) u_fin (
+      .num_i(num), .q_o(q_o));
 
 endmodule : zhao_raster_quant

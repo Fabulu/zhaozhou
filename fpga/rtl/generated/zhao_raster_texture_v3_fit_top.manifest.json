@@ -294,12 +294,12 @@
     {
       "ordinal": 44,
       "path": "fpga/rtl/raster/zhao_raster_quant.sv",
-      "sha256": "e7301d0330aede246cde6e997dbf9867f31ffef93c5343204a1079199887433a"
+      "sha256": "f81ab9ed3b8d4acdad5d46569b4227f0d7110fd0dcce48812b316a779f99902c"
     },
     {
       "ordinal": 45,
       "path": "fpga/rtl/raster/zhao_raster_resolve.sv",
-      "sha256": "d4b1074a8c6c11fd389949aa225b84c08d0b6575dc57da9d76326d1c01800382"
+      "sha256": "d2659304ffd9cc78fea8f2733abed34c19ffc3889391ce8887ace109750a9351"
     },
     {
       "ordinal": 46,

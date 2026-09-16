@@ -147,13 +147,19 @@ module zhao_raster_resolve (
   //   [63:40] RGB colour   [39:32] effect tag   [31:8] depth   [7:0] stencil
   // Only colour and tag are resolved; depth and stencil are dropped here by
   // design (charter §8: no external full-screen depth buffer).
-  logic [7:0] px_r, px_g, px_b, px_tag;
+  logic [7:0] px_tag;
   // Depth [31:8] and stencil [7:0] are deliberately NOT resolved (charter §8:
   // no external full-screen depth buffer in the normal tile path), and only
   // the low two bits of the tile origin can affect the Bayer phase. Both are
   // sunk explicitly rather than left to a lint waiver.
+  //
+  // q_data_r[63:40] joins them: since the quantiser split, the held response's
+  // COLOUR bytes are read one stage earlier, straight off tr_data_i, and only
+  // its tag is still taken from here. The register itself is kept whole because
+  // it is the response, and slicing it down to the tag would lose the thing the
+  // Q0 comment above is about.
   logic unused_ok;
-  assign unused_ok = &{1'b0, tr_data_i[31:0], q_data_r[31:0],
+  assign unused_ok = &{1'b0, tr_data_i[31:0], q_data_r[63:40], q_data_r[31:0],
                        start_tile_x_i[11:2], start_tile_y_i[11:2]};
 
   // ---- Q0: THE RESPONSE IS CAPTURED BEFORE IT IS QUANTISED ---------------
@@ -184,10 +190,10 @@ module zhao_raster_resolve (
   logic [63:0] q_data_r;
   logic [7:0]  q_addr_r;
 
+  // Only the tag is taken from the held response now. The three colour bytes
+  // are consumed one stage earlier, at the Q0 edge, where their numerators are
+  // formed -- see the quantiser split below.
   always_comb begin
-    px_r   = q_data_r[63:56];
-    px_g   = q_data_r[55:48];
-    px_b   = q_data_r[47:40];
     px_tag = q_data_r[39:32];
   end
 
@@ -227,16 +233,11 @@ module zhao_raster_resolve (
   endfunction
 
   // ------------------------------------------------------- the quantizer ---
-  // The absolute Bayer phase of the pixel this response belongs to.
-  logic [1:0] ph_y, ph_x;
-  logic [3:0] bay;
-  always_comb begin
-    // `q_addr_r`, not `ret_addr`: the phase must belong to the pixel being
-    // quantised, which is now one cycle behind the response counter.
-    ph_y = tile_yp_r + q_addr_r[5:4];   // (tile_y + row) & 3
-    ph_x = tile_xp_r + q_addr_r[1:0];   // (tile_x + col) & 3
-    bay  = bayer4(ph_y, ph_x);
-  end
+  // The absolute Bayer phase moved one stage EARLIER with the numerator, and
+  // the address it is taken from moved with it: see `bay_in` below, which uses
+  // `ret_addr` because it dithers the response arriving now rather than the one
+  // being held. The old `q_addr_r` phase went with the old position and is gone
+  // rather than left behind computing a value nothing reads.
 
   // One zhao_raster_quant per channel, with resolve.cpp's constants NAMED at
   // the instantiation. All three take AMP=16, RND=8; only MAXQ and QW differ
@@ -246,14 +247,52 @@ module zhao_raster_resolve (
   //
   // This comment used to say green takes (63, 32, 16). It does not, and never
   // did in this code; see the header for why that law was retired.
+  // TIMING4 FOLLOW-UP: THE NUMERATOR IS COMPUTED ON THE RESPONSE CYCLE AND
+  // DIVIDED ON THE NEXT, AND NO STAGE IS ADDED.
+  //
+  // MEASURED: the Timing4 fit left exactly TWO negative paths in the whole G8A
+  // subsystem, out of 2,000 summarised. Both were here --
+  //
+  //     u_resolve|q_data_r[61] -> u_resolve|fifo_q[2][14]   -0.587 ns
+  //     u_resolve|q_data_r[45] -> u_resolve|fifo_q[2][4]    -0.134 ns
+  //
+  // -- one colour byte, through one quantiser, into the FIFO: 9.920 ns of a
+  // 10.000 ns period. The third-worst path in the design is +0.069 ns, so this
+  // is the entire 100 MHz gap.
+  //
+  // The obvious fix is another pipeline stage, and it is the expensive one. Q0
+  // above already cost a cycle and forced the FIFO from two entries to four to
+  // keep the initiation rate, because the architecture rule allows latency to
+  // grow and forbids the rate to regress. A second stage would repeat that.
+  //
+  // So the quantiser is split instead of the pipeline. `num` is a shift-
+  // subtract and two adds off the ARRIVING response, registered beside the
+  // colour it belongs to; the divide-by-255 and the rail launch from that
+  // register on the next cycle, which is the cycle that was long. Same cycle
+  // count, same credits, same initiation rate, same arithmetic -- the oracle's
+  // numerator is the one function both halves share.
+  //
+  // THE PHASE IS `ret_addr`, NOT `q_addr_r`, and that is the one thing to get
+  // right. Downstream of Q0 the bayer phase belongs to `q_addr_r`, the pixel
+  // being quantised. Computed HERE the numerator belongs to the response
+  // arriving now, whose address is `ret_addr` -- the same counter Q0 captures
+  // into `q_addr_r` on this very edge. Using `q_addr_r` here would dither every
+  // pixel with its predecessor's phase.
+  logic [3:0] bay_in;
+  always_comb begin
+    bay_in = bayer4(tile_yp_r + ret_addr[5:4], tile_xp_r + ret_addr[1:0]);
+  end
+
+  logic [ZHAO_QUANT_NUM_W-1:0] q_num_r_r, q_num_g_r, q_num_b_r;
+
   logic [4:0] c_r5, c_b5;
   logic [5:0] c_g6;
-  zhao_raster_quant #(.MAXQ(31), .QW(5), .AMP(16), .RND(8))
-    u_qr (.v_i(px_r), .bayer_i(bay), .q_o(c_r5));
-  zhao_raster_quant #(.MAXQ(63), .QW(6), .AMP(16), .RND(8))
-    u_qg (.v_i(px_g), .bayer_i(bay), .q_o(c_g6));
-  zhao_raster_quant #(.MAXQ(31), .QW(5), .AMP(16), .RND(8))
-    u_qb (.v_i(px_b), .bayer_i(bay), .q_o(c_b5));
+  zhao_raster_quant_fin #(.MAXQ(31), .QW(5))
+    u_qr (.num_i(q_num_r_r), .q_o(c_r5));
+  zhao_raster_quant_fin #(.MAXQ(63), .QW(6))
+    u_qg (.num_i(q_num_g_r), .q_o(c_g6));
+  zhao_raster_quant_fin #(.MAXQ(31), .QW(5))
+    u_qb (.num_i(q_num_b_r), .q_o(c_b5));
 
   // video_rules.md §3: [15:11] R, [10:5] G, [4:0] B.
   logic [15:0] px565;
@@ -340,6 +379,9 @@ module zhao_raster_resolve (
       q_v_r     <= 1'b0;
       q_data_r  <= 64'd0;
       q_addr_r  <= 8'd0;
+      q_num_r_r <= '0;
+      q_num_g_r <= '0;
+      q_num_b_r <= '0;
       wptr      <= 2'd0;
       rptr      <= 2'd0;
       fifo_q[0] <= {FW{1'b0}};
@@ -406,6 +448,20 @@ module zhao_raster_resolve (
       // corner case.
       q_v_r    <= tr_data_valid_i;
       q_data_r <= tr_data_i;
+      // The three numerators are captured by the SAME edge, from the SAME
+      // response, with the phase of the SAME address Q0 is latching below.
+      // Payload and its dither phase must not be able to come from different
+      // pixels -- that is the off-by-one that cost 7,038 of 7,115 checks when
+      // the address counter was left on `push`.
+      q_num_r_r <= zhao_quant_num(tr_data_i[63:56], bay_in,
+                                  ZHAO_QUANT_NUM_W'(31), ZHAO_QUANT_NUM_W'(16),
+                                  ZHAO_QUANT_NUM_W'(8));
+      q_num_g_r <= zhao_quant_num(tr_data_i[55:48], bay_in,
+                                  ZHAO_QUANT_NUM_W'(63), ZHAO_QUANT_NUM_W'(16),
+                                  ZHAO_QUANT_NUM_W'(8));
+      q_num_b_r <= zhao_quant_num(tr_data_i[47:40], bay_in,
+                                  ZHAO_QUANT_NUM_W'(31), ZHAO_QUANT_NUM_W'(16),
+                                  ZHAO_QUANT_NUM_W'(8));
       if (tr_data_valid_i) begin
         q_addr_r <= ret_addr;
         ret_addr <= ret_addr + 8'd1;
