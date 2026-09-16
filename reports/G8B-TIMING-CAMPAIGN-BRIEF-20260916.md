@@ -170,6 +170,40 @@ The other launch points confirm the shape rather than competing with it:
 lanes (`g_div_stage[..].r_dv[..]`) another few hundred — the core is a long
 arithmetic pipeline whose first stage is the widest.
 
+### THIS CUT WAS ALREADY SPECIFIED, NINE DAYS AGO, AND DELIBERATELY DEFERRED
+
+`zhao_project_core.sv`'s own comment says so in passing —
+
+> This block already misses the product clock on exactly this cone (73.62 MHz
+> after the stage-5b cut; `reports/PROJECT-CORE-CLOCK-20260907.md` names
+> `mat -> view mux -> Mult0 -> row adder -> s1` as the standing worst path)
+
+— and that report ends with the fix and the reason it was not done:
+
+> **`Mult0`, not `Mult9`.** The cut moved the viewport `fx_mad` off the critical
+> path and exposed the **row transform** … a combinational DSP output worth
+> 3.938 ns, **output register unused**. … The next cut is
+> `row_x/row_y/row_w` registered before `rescale16_row`.
+>
+> **Not pursued.** The owner's 2026-09-07 direction puts texture first, and this
+> is the geometry lane. **Recorded with its evidence so the pass that owns it
+> does not start from a reading.**
+
+**This is that pass**, and the reason for the deferral has expired: the texture
+lane closed at 108.37 MHz with zero setup TNS on 2026-09-16.
+
+Two things follow. First, T2 does not start from a blank page — the path was
+walked hop by hop in that report, the DSP's **unused output register** is named
+as the specific waste, and 61.09 → 73.62 MHz is the measured precedent for the
+same treatment one stage later. Second, this is the healthy form of the
+uncashed-cheque pattern rather than the usual one: the knowledge was written
+down properly, with its evidence, by someone who knew they were deferring it,
+and it was read back before anyone re-derived it.
+
+The standalone core measured 73.62 MHz on this cone. G8B measures the same cone
+at 19.043 ns — worse, because the service's operand mux now sits in front of it
+and the terrain client's valid launches it from another block.
+
 So the two shapes below are **superseded**. They were the right answers to the
 wrong question, and are kept only so nobody re-derives them:
 

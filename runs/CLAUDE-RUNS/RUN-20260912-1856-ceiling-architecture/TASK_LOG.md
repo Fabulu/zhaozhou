@@ -1209,3 +1209,13 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - The two shapes I had written for T2 (capture the matrix with the vertex; shorten the arbitration cone) are marked SUPERSEDED in the brief rather than deleted - right answers to the wrong question, kept so nobody re-derives them.
 - Nineteen nanoseconds was always too much for a grant and a mux. Reading the endpoint cost one command and moved the package to a different module.
 
+
+## 2026-09-16 (T2 already specified) - the cheque was written nine days ago and is now cashable
+
+- Before designing anything, read the block's own comment - which names the problem and cites a report: *"already misses the product clock on exactly this cone (73.62 MHz after the stage-5b cut; `reports/PROJECT-CORE-CLOCK-20260907.md` names `mat -> view mux -> Mult0 -> row adder -> s1` as the standing worst path)"*.
+- That report ends with the fix AND the reason it was not done: *"a combinational DSP output worth 3.938 ns, **output register unused** ... The next cut is `row_x/row_y/row_w` registered before `rescale16_row`. **Not pursued.** The owner's 2026-09-07 direction puts texture first, and this is the geometry lane. **Recorded with its evidence so the pass that owns it does not start from a reading.**"*
+- **This is that pass, and the deferral's reason has expired** - the texture lane closed at 108.37 MHz with zero setup TNS today.
+- So T2 does not start from a blank page: the path is walked hop by hop in that report, the DSP's UNUSED OUTPUT REGISTER is named as the specific waste, and 61.09 -> 73.62 MHz is the measured precedent for the same treatment one stage earlier.
+- **This is the healthy form of the uncashed-cheque pattern**, not the usual one. The knowledge was written down properly, with its evidence, by someone who knew they were deferring it - and it was read back before anyone re-derived it. The habit CLAUDE.md prescribes (read the contract of every block that produces the same quantity, before building) paid for itself here in one command.
+- Context note: the standalone core measured 73.62 MHz on this cone; G8B measures the same cone at 19.043 ns, worse, because the service's operand mux now sits in front of it and the terrain client's valid launches it from another block.
+
