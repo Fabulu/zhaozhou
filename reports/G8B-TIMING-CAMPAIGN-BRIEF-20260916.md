@@ -13,7 +13,13 @@ registers, 34 DSP, 44 RAM blocks, 95,610 memory bits. Hold clean at +0.251/0.
 **Target:** 100 MHz, the machine's operating requirement. That needs
 **+12.758 ns** on the worst path â€” not the +0.587 ns G8A's last mile needed.
 
-## STATUS: T2 IS LANDED AND MEASURED. T1 is the only thing left before ~69 MHz.
+## STATUS: T1 AND T2 ARE BOTH LANDED IN RTL. `@g8b-t12` is the next fit.
+
+T1's implementation notes are in its own section below, including the one thing
+the design sketch got wrong. T2's measurement follows; T1 has no measurement yet
+and no claim is made for it beyond "the chain is cut and the block is green".
+
+## T2 IS LANDED AND MEASURED.
 
 `@g8b-t2`, clean commit `3aea9b7d`, seed 1, 497.2 s. Fmax **43.54 MHz** —
 essentially unchanged, exactly as the ceiling table below predicted, because
@@ -112,6 +118,103 @@ underside swap). The `vtx_room` credit -- "a landing never finds both slots
 full without a pop" -- is argued against the current timing and must count the
 new in-flight stage, or the arena reports a fill fault exactly as the G8B
 wrapper's first stimulus did.
+
+### T1 IS IMPLEMENTED. Four things the sketch above did not foresee.
+
+All four were found by a test, none by reading, and each is worth carrying into
+the sequenced-branch cut that still owes the same treatment.
+
+1. **THE JOB'S OWN PARAMETERS HAVE TO TRAVEL WITH THE VERTEX.** `j_morph`,
+   `j_surface` and `j_src` are JOB registers. Read them at stage B and a vertex
+   whose job has since been replaced is blended with the NEXT job's morph factor
+   and emitted under the next job's winding. `terrain_tess_directed` reported the
+   same blended `y` for morph factors that must differ -- every vertex was using
+   its successor's. The sketch listed the three *value* consumers and missed the
+   three *parameter* ones.
+
+2. **THE SNAPSHOT NEEDS A WRITE-FORWARD, and this one nearly shipped.** `vy[]`
+   is the one corner field the blend writes, and since the split that write
+   happens at stage B -- the same edge stage A snapshots `vy[0]`/`vy[1]` on. A
+   slot whose blend completes on that edge is captured at its stale pre-blend
+   value. `terrain_tess_directed` caught it as a wrong `b` corner with a correct
+   `a` and `c`. The first hypothesis was wrong (`j_morph` read at stage B) and
+   the tell that it was wrong is worth recording: **the output was byte-identical
+   after the "fix", and the change was verified to be in the build.** A repair
+   that changes nothing did not repair anything.
+
+3. **THE DRAIN CONDITIONS BOTH NEEDED THE NEW STAGE.** `StTri`'s exit and
+   `idle_o` each enumerate what is in flight, and leaving either alone strands a
+   vertex in stage B: the triangle is never emitted and the job never drains.
+
+4. **COUNTING THE NEW STAGE IN THE CREDIT IS NECESSARY AND NOT SUFFICIENT.**
+   This is the one the sketch got half right, and the half it missed cost the
+   rate rather than correctness. The credit was extended to reserve for both
+   in-flight vertices, which is the exactly-minimal invariant --
+
+   ```
+   occupancy_next + in_flight_next <= DEPTH
+   ```
+
+   -- and with DEPTH still 2 it is **never satisfiable in steady state**, because
+   a read already issued cannot be told to wait: its lattice response arrives on
+   the next edge whatever the consumer is doing. With the consumer ALWAYS READY,
+   `cnt=1, land=1, land_a=1, pop=1` gives `2 > 1`, so a bubble every other
+   vertex. `terrain_tess_modes_directed` measured it exactly: **128 cycles for 81
+   unstitched vertices against a budget of 93**, on all three of its ModeVtx rate
+   checks and on nothing else.
+
+   **The buffer must be DEEPER than the number of vertices in flight.** The skid
+   is now three slots, `vtx_room` is `vnxt <= 2`, and the same steady state is
+   `2 <= 2` -- 88 cycles for 81 vertices, one per clock again. The cost is one
+   more `{x, y, z, idx, stride}` register set, and it is the honest price of the
+   stage: latency may grow, the initiation rate may not.
+
+   The trap here is that the failure is a RATE failure with correct values.
+   `terrain_tess_directed` (6,751 checks) and `terrain_pipe_differential` (37,
+   bit-exact) were both green while this was live, because neither asserts
+   cycles. Only the mode test counts them -- which is what CLAUDE.md's *counters
+   see what pictures cannot* says, arriving from the other direction: here the
+   picture was right and the counter was the whole finding.
+
+### A FIFTH thing, found only by the bitmap mode: the overlap check is coverage
+
+`terrain_pipe_differential_bitmap` went red on *"next job accepts and reopens
+arenas while an older copied output remains stalled"*, reporting 0. That check
+asserts the CROSS-JOB PIPELINING property, and a bare `expected 0x1, got 0x0`
+cannot distinguish "the machine stopped overlapping" from "this stimulus
+stopped reaching the overlap". The first costs an investigation of the wrong
+component, so both counters are now PRINTED beside the cycle count.
+
+They were marginal before T1 and nobody knew: each mode reached the state
+**exactly once per run**, by the periodic `cycle%13` stall pattern happening to
+be low on the cycle `job_ready_o` rose. That is a coincidence, not stimulus.
+
+**The wrong fix is recorded because it is the tempting one.** Holding
+`out_ready_i` low until `job_ready_o` rises guarantees an output is pending at
+the handoff -- and it BACKS PRESSURE UP THE PIPE: the replay output cannot
+drain, so the arena is not released, so the tessellator cannot push its vertices
+and never reaches StIdle, and StIdle is exactly what drives `job_ready_o`. The
+stimulus meant to reach the state is what prevents it. Measured: still 0 and 0.
+
+Gating the JOB OFFER instead (withhold `job_valid_i` until an output is pending)
+worked with T1 and **failed at HEAD** -- the opposite direction to the periodic
+pattern. Two stimuli that each work on one tree are two coincidences, not a
+gate. The committed driver does both, with a short armed output stall bounded at
+14 cycles so it cannot jam, and it reaches the state on both trees:
+
+| tree | bitmap cycles | coverage | dense cycles | coverage |
+|---|---:|---:|---:|---:|
+| HEAD | 2,442 | 1 / 1 | 2,552 | 4 / 6 |
+| T1 | 2,446 | 2 / 3 | 2,563 | 2 / 3 |
+
+**So T1 does not cost the overlap**, which is the question the red was actually
+asking. Both budgets are bounded deliberately: a pipe that genuinely could not
+overlap now FAILS the check rather than hanging the driver, and a red assertion
+is a far better diagnostic than a timeout.
+
+**Result.** `terrain_tess_modes_directed` 33/33, `terrain_tess_directed`
+6,751/0, `terrain_pipe_differential` 37/37 and `_bitmap` 33/33, on the numbers
+above. NOT YET FITTED; that is `@g8b-t12`.
 
 ---
 

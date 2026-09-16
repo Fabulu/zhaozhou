@@ -106,10 +106,47 @@ class PipeDriver {
     RunResult r; size_t ji=0,gi=0; int idle_run=0,hold=0;
     bool output_held=false; PipePacket held_output;
     uint32_t prior_opened=d_.groups_opened_o;
+    // THE OVERLAP IS CONSTRUCTED, NOT WAITED FOR.
+    //
+    // The check below asserts that a new job is accepted while an older output
+    // is still pending -- the cross-job pipelining property. It used to depend
+    // on the periodic `cycle%13` stall pattern being low on the exact cycle
+    // `job_ready_o` rose, which is a COINCIDENCE and not stimulus. It was
+    // already hanging by a thread: each mode reached the state ONCE per run.
+    //
+    // THE WRONG FIX, tried first and recorded because it is the tempting one:
+    // hold `out_ready_i` LOW until `job_ready_o` rises, so an output is
+    // guaranteed pending at the handoff. That BACKS PRESSURE UP THE PIPE -- the
+    // replay output cannot drain, so the arena cannot be released, so the
+    // tessellator cannot push its vertices and never reaches StIdle, and
+    // `job_ready_o` is precisely what StIdle drives. The stimulus meant to
+    // reach the state is what prevents it.
+    //
+    // Gating the JOB OFFER is half of it: withhold `job_valid_i` until an
+    // output is actually pending. On its own that is still a coincidence hunt,
+    // because the offered job may not be taken before the output drains -- and
+    // measured on both trees it reached the state on one and not the other, in
+    // the OPPOSITE direction to the periodic pattern. Two stimuli that each work
+    // on one tree are two coincidences, not a gate.
+    //
+    // The other half is a SHORT output stall, armed only once the offer is out
+    // and an output is pending, to stop that output draining before
+    // `job_ready_o` rises. It must be short: the long version jams the pipe as
+    // described above. Both are budgeted, so a pipe that genuinely cannot
+    // overlap fails the check rather than hanging the driver.
+    int offer_budget=600;
+    int arm_budget=14;
     for (int cycle=0;cycle<max_cycles;++cycle) {
-      serve_memory(lat); drive_job(ji<jobs.size()?&jobs[ji]:nullptr);
+      // `out_valid_o` is a register, so its value is stable here, before eval.
+      const bool pending = d_.out_valid_o!=0;
+      const bool hold_offer = ji!=0 && ji<jobs.size() && !pending && offer_budget>0;
+      if (hold_offer) --offer_budget;
+      const bool arm = ji!=0 && ji<jobs.size() && !hold_offer && pending && arm_budget>0;
+      if (arm) --arm_budget;
+      serve_memory(lat); drive_job((ji<jobs.size() && !hold_offer)?&jobs[ji]:nullptr);
       drive_geometry(gi<geometry.size()?&geometry[gi]:nullptr);
-      bool out_ready=hold==0 && ((cycle%13)>=4); d_.out_ready_i=out_ready; d_.eval();
+      bool out_ready=hold==0 && !arm && ((cycle%13)>=4);
+      d_.out_ready_i=out_ready; d_.eval();
       const bool job_take=ji<jobs.size() && d_.job_valid_i && d_.job_ready_o;
       if (job_take && ji!=0 && d_.out_valid_o) {
         d_.out_ready_i=0; out_ready=false; hold=6; d_.eval();
@@ -409,8 +446,15 @@ int main(int argc,char** argv) {
     const int broken_bad=diff_pipe(got.terrain,broken,want.inputs,matrices,viewports);
     check(broken_bad==1,"POSITIVE CONTROL: comparator catches one flipped coordinate",1,broken_bad);
   }
-  std::printf("terrain_pipe_differential: %zu packets, %zu geometry vertices, %d cycles; mode=%s\n",
-    got.terrain.size(),got.geometry.size(),got.cycles,kSparse?"bitmap+sparse":"dense");
+  // The two overlap counters are PRINTED, not merely asserted. They are
+  // coverage, not results: the check above fails when this stimulus stops
+  // REACHING the overlap, which looks identical to the machine losing it. A
+  // bare "expected 0x1, got 0x0" cannot tell those apart, and the first costs
+  // an investigation of the wrong component. Printing both says which.
+  std::printf("terrain_pipe_differential: %zu packets, %zu geometry vertices, %d cycles; mode=%s"
+    " (overlap coverage: accepted_with_pending_output=%d, opens_with_stalled_output=%d)\n",
+    got.terrain.size(),got.geometry.size(),got.cycles,kSparse?"bitmap+sparse":"dense",
+    got.accepted_with_pending_output,got.opens_with_stalled_output);
   if(!kSparse) {
     pd.reset();pd.configure(0,matrices[0],viewports[0]);pd.configure(1,matrices[1],viewports[1]);
     Spec fault;fault.job=job(8,8,2,0x2000);fault.views=3;fault.dual=true;

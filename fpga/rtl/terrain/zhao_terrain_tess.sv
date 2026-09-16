@@ -423,19 +423,39 @@ module zhao_terrain_tess #(
 
   wire out_busy = o_valid && !tri_ready_i;
 
-  // ---- ModeVtx output: a credit-gated TWO-deep skid -----------------------
+  // ---- ModeVtx output: a credit-gated THREE-deep skid ---------------------
   // A vertex needs as few as ONE lattice read, so unlike a triangle (>= 3
   // reads) the next vertex's last read can be issued the very cycle the
   // previous one lands. With a single output register that is a lost vertex
   // under a stall, and gating on "the register is free NOW" halves the rate to
-  // one vertex per two clocks. Two slots and the arena shell's own credit rule
-  // (`zhao_terrain_wcache`: issue only when cnt + land - pop <= 1) hold one
-  // vertex per clock with the consumer always ready and lose nothing under
-  // backpressure. `vo_*` is the head the consumer sees; `vs_*` the second slot.
-  logic vo_valid, vs_valid;
-  logic signed [31:0] vo_x, vo_y, vo_z, vs_x, vs_y, vs_z;
-  logic [IDX_W-1:0] vo_idx, vs_idx;
-  logic vo_stride, vs_stride;
+  // one vertex per two clocks. The credit rule is the arena shell's
+  // (`zhao_terrain_wcache`): issue only when occupancy + landings - pop leaves
+  // a slot for every vertex already committed to land.
+  //
+  // G8B T1 MADE THIS THREE DEEP, and the depth is not a comfort margin -- it is
+  // the exact price of the extra pipeline stage. THE BUFFER MUST BE DEEPER THAN
+  // THE NUMBER OF VERTICES IN FLIGHT, or the credit can never be granted in
+  // steady state. Two slots were right while one vertex was in flight (stage A
+  // alone); splitting the blend put TWO in flight (stages A and B), and a read
+  // already issued CANNOT be told to wait -- its lattice response arrives on the
+  // next edge whatever the consumer is doing. So the credit has to reserve a
+  // slot for both of them, and with only two slots
+  //
+  //     cnt=1, land=1, land_a=1, pop=1  ->  1+1+1-1 = 2 > 1
+  //
+  // is the steady state with the consumer ALWAYS READY: never grantable, so a
+  // bubble every other vertex. terrain_tess_modes_directed measured exactly
+  // that -- 128 cycles for 81 unstitched vertices against a budget of 93.
+  // The third slot makes the same steady state 1+1+1-1 = 2 <= 2, and the rate
+  // is one vertex per clock again. Latency may grow; the initiation rate may
+  // not, and this is the register cost of keeping that true.
+  //
+  // `vo_*` is the head the consumer sees; `vs_*` and `vs2_*` are the tail, and
+  // they fill in order, so `vs2_valid` implies `vs_valid` implies `vo_valid`.
+  logic vo_valid, vs_valid, vs2_valid;
+  logic signed [31:0] vo_x, vo_y, vo_z, vs_x, vs_y, vs_z, vs2_x, vs2_y, vs2_z;
+  logic [IDX_W-1:0] vo_idx, vs_idx, vs2_idx;
+  logic vo_stride, vs_stride, vs2_stride;
 
   // ---- ModeRef output: one registered triple ------------------------------
   logic r_valid;
@@ -742,11 +762,19 @@ module zhao_terrain_tess #(
   // ---- ModeVtx credit: may a vertex's LAST read be issued now? ------------
   // It lands next cycle; the skid must then have a slot for certain.
   //     room = (occupancy + landing_now - popping_now) <= 1
-  wire vland = pend_v && pend_last && j_vtx;  // a vertex lands this cycle
+  // G8B T1: a vertex now lands from the BLEND stage, one cycle after its
+  // response, so the credit has to count BOTH the landing happening now and the
+  // one already committed to land next cycle. Counting only the first would
+  // issue a last read whose slot is promised to a vertex still in stage A --
+  // the queue-occupancy defect this credit exists to prevent, one stage deeper.
+  wire vland = lnd_v_q && lnd_last_q && j_vtx;   // lands this cycle, from stage B
+  wire vland_a = pend_v && pend_last && j_vtx;   // committed to land next cycle
   wire vpop = vo_valid && vtx_ready_i;  // the consumer drains one this cycle
-  wire [1:0] vcnt = {1'b0, vo_valid} + {1'b0, vs_valid};
-  wire [2:0] vnxt = {1'b0, vcnt} + {2'b0, vland} - {2'b0, vpop};
-  wire vtx_room = (vnxt <= 3'd1);
+  wire [1:0] vcnt = {1'b0, vo_valid} + {1'b0, vs_valid} + {1'b0, vs2_valid};
+  wire [2:0] vnxt = {1'b0, vcnt} + {2'b0, vland} + {2'b0, vland_a} - {2'b0, vpop};
+  // three slots, two vertices in flight: the invariant this enforces is
+  // occupancy_next + in_flight_next <= 3.
+  wire vtx_room = (vnxt <= 3'd2);
   // the gate on the last read: the output register in ModeTri, the credit in
   // ModeVtx (j_vtx is a register; in mode 0 this IS `out_busy`)
   wire last_blocked = j_vtx ? !vtx_room : out_busy;
@@ -790,19 +818,77 @@ module zhao_terrain_tess #(
   // y = h + fx_mul(morph, hc - h): §4.3's shape, an exact add of a rounded
   // delta. morph = 0 gives h and morph = 65536 gives hc, both bit-exactly.
   wire signed [33:0] m_d = {{2{m_hc[31]}}, m_hc} - {{2{vh[pend_slot][31]}}, vh[pend_slot]};
-  wire signed [51:0] m_prod = $signed({1'b0, j_morph}) * m_d;
+
+  // ---- G8B T1: THE BLEND IS SPLIT AND THE LANDING MOVES WITH IT -----------
+  //
+  // MEASURED. The first G8B fit's worst path was this chain, end to end:
+  //
+  //   lat_h_q -> u_tess|vs_y[0]        -12.758 ns, data 22.481, skew -0.097
+  //
+  // Logic depth, not placement: a 34-bit subtract, a rescale, a saturating
+  // add, a second 34-bit subtract, a 17x34 signed multiply, a second rescale
+  // and a second saturating add, all between the registered lattice response
+  // and the vertex registers.
+  //
+  // The split is at `m_d`, which halves it: stage A keeps the two subtracts,
+  // `rescale1` and the first `fx_add_sat`; stage B takes the multiply,
+  // `rescale16` and the second `fx_add_sat`. Stage B is the longer half at
+  // roughly 13 ns, which clears T1's acceptance of better than -4.388 ns --
+  // the level `zhao_project_core` and the RAM paths now share after T2.
+  //
+  // WHY THE LANDING HAS TO MOVE TOO, rather than only the arithmetic. `m_y` is
+  // consumed by the kind-2 capture, by the ModeVtx skid landing and by the
+  // ModeTri triangle emit, and the last read of a job is exactly the one whose
+  // blend those consumers need. So a stage in the blend is a stage in the
+  // landing, and everything the landing reads has to travel with it -- reading
+  // `vx[0]`/`vy[1]` a cycle later would read the NEXT job's captures, because
+  // the enumerator advances at issue and the next job's first read can be
+  // issued on the same edge this one lands.
+  //
+  // WHAT IS NOT MOVED, deliberately: `vh[]` and `v_ha` are still written on the
+  // response edge, because stage A's own arithmetic reads them. Moving those
+  // would make the blend read its own delayed inputs.
+  //
+  // `rescale1`, `rescale16` and `fx_add_sat` are untouched, so the arithmetic
+  // is the same expression in the same order -- `terrain_pipe_differential`
+  // stays bit-exact against `zhao_terrain_project`.
+  logic                    lnd_v_q;
+  logic [1:0]              lnd_kind_q, lnd_slot_q;
+  logic                    lnd_last_q;
+  logic [IDX_W-1:0]        lnd_idx_q;
+  logic                    lnd_stride_q;
+  logic signed [33:0]      lnd_md_q;
+  logic signed [31:0]      lnd_vh_q;
+  logic signed [31:0]      lnd_x_q, lnd_z_q, lnd_h_q;
+  // The triangle's other two corners, snapshotted with the landing so the emit
+  // cannot read a successor job's captures.
+  logic signed [31:0]      lnd_ax_q, lnd_ay_q, lnd_az_q;
+  logic signed [31:0]      lnd_bx_q, lnd_by_q, lnd_bz_q;
+  // THE JOB'S OWN PARAMETERS TRAVEL WITH ITS VERTEX, and they have to.
+  // `j_morph`, `j_surface` and `j_src` are JOB registers: read them at stage B
+  // and a vertex whose job has since been replaced is blended with the NEXT
+  // job's morph factor and emitted under the next job's winding. That is not
+  // hypothetical -- terrain_tess_directed sweeps every morph factor, and with
+  // these read live it reported the same blended y for factors that must
+  // differ, because every vertex was using its successor's morph.
+  logic [16:0]             lnd_morph_q;
+  logic                    lnd_surface_q;
+  logic [15:0]             lnd_src_q;
+
+  wire signed [51:0] m_prod = $signed({1'b0, lnd_morph_q}) * lnd_md_q;
   wire signed [31:0] m_step = rescale16(m_prod);
-  wire signed [31:0] m_y = fx_add_sat({vh[pend_slot][31], vh[pend_slot]},
+  wire signed [31:0] m_y = fx_add_sat({lnd_vh_q[31], lnd_vh_q},
                                       {m_step[31], m_step});
 
-  // the last slot's values at the emit cycle: registers unless its last read
-  // is landing right now (it always is — that is what `pend_last` means). The
-  // last slot is 2 in ModeTri and 0 in ModeVtx; the mux sits on the x/z
-  // register inputs, not in the blend cone (`m_y` already indexes by
-  // `pend_slot`).
+  // Stage A's view of the last slot: the x/z mux sits on the register inputs,
+  // not in the blend cone.
   wire signed [31:0] last_x = (pend_kind == 2'd0) ? lat_wx_i : (j_vtx ? vx[0] : vx[2]);
   wire signed [31:0] last_z = (pend_kind == 2'd0) ? lat_wz_i : (j_vtx ? vz[0] : vz[2]);
-  wire signed [31:0] last_y = (pend_kind == 2'd0) ? lat_h_i : m_y;
+
+  // Stage B's landed values -- what every consumer below now reads.
+  wire signed [31:0] land_x = lnd_x_q;
+  wire signed [31:0] land_z = lnd_z_q;
+  wire signed [31:0] land_y = (lnd_kind_q == 2'd0) ? lnd_h_q : m_y;
 
   // =========================================================================
   // sequential
@@ -852,19 +938,40 @@ module zhao_terrain_tess #(
       pend_last <= 1'b0;
       pend_idx <= '0;
       pend_stride <= 1'b0;
+      // G8B T1's blend stage.
+      lnd_v_q <= 1'b0;
+      lnd_kind_q <= '0;
+      lnd_slot_q <= '0;
+      lnd_last_q <= 1'b0;
+      lnd_idx_q <= '0;
+      lnd_stride_q <= 1'b0;
+      lnd_md_q <= '0;
+      lnd_vh_q <= '0;
+      lnd_x_q <= '0;
+      lnd_z_q <= '0;
+      lnd_h_q <= '0;
+      lnd_ax_q <= '0; lnd_ay_q <= '0; lnd_az_q <= '0;
+      lnd_bx_q <= '0; lnd_by_q <= '0; lnd_bz_q <= '0;
+      lnd_morph_q <= '0; lnd_surface_q <= 1'b0; lnd_src_q <= '0;
       v_ha <= '0;
       vo_valid <= 1'b0;
       vs_valid <= 1'b0;
+      vs2_valid <= 1'b0;
       vo_x <= '0;
       vo_y <= '0;
       vo_z <= '0;
       vs_x <= '0;
       vs_y <= '0;
       vs_z <= '0;
+      vs2_x <= '0;
+      vs2_y <= '0;
+      vs2_z <= '0;
       vo_idx <= '0;
       vs_idx <= '0;
+      vs2_idx <= '0;
       vo_stride <= 1'b0;
       vs_stride <= 1'b0;
+      vs2_stride <= 1'b0;
       r_valid <= 1'b0;
       r_ia <= '0;
       r_ib <= '0;
@@ -899,52 +1006,87 @@ module zhao_terrain_tess #(
       if (o_valid && tri_ready_i) o_valid <= 1'b0;
 
       // ---- ModeVtx skid: land and pop, jointly ------------------------------
-      // The credit (`vtx_room`) guarantees a landing never finds both slots
-      // full without a pop, so the "else" of the land-only branch is the
-      // second slot and never an overwrite.
+      // The credit (`vtx_room`) guarantees a landing never finds all THREE
+      // slots full without a pop, so the last arm of the land-only branch is an
+      // append and never an overwrite. The slots fill in order, so `vs2_valid`
+      // implies `vs_valid` implies `vo_valid`, and every branch below preserves
+      // that: a pop shifts down rather than clearing the head in place.
       if (vland && vpop) begin
+        // Occupancy is unchanged, so every valid bit holds; the payloads shift
+        // down one and the landing takes the tail.
         if (vs_valid) begin
           vo_x <= vs_x;
           vo_y <= vs_y;
           vo_z <= vs_z;
           vo_idx <= vs_idx;
           vo_stride <= vs_stride;
-          vs_x <= last_x;
-          vs_y <= last_y;
-          vs_z <= last_z;
-          vs_idx <= pend_idx;
-          vs_stride <= pend_stride;
+          if (vs2_valid) begin
+            vs_x <= vs2_x;
+            vs_y <= vs2_y;
+            vs_z <= vs2_z;
+            vs_idx <= vs2_idx;
+            vs_stride <= vs2_stride;
+            vs2_x <= land_x;
+            vs2_y <= land_y;
+            vs2_z <= land_z;
+            vs2_idx <= lnd_idx_q;
+            vs2_stride <= lnd_stride_q;
+          end else begin
+            vs_x <= land_x;
+            vs_y <= land_y;
+            vs_z <= land_z;
+            vs_idx <= lnd_idx_q;
+            vs_stride <= lnd_stride_q;
+          end
         end else begin
-          vo_x <= last_x;
-          vo_y <= last_y;
-          vo_z <= last_z;
-          vo_idx <= pend_idx;
-          vo_stride <= pend_stride;
+          vo_x <= land_x;
+          vo_y <= land_y;
+          vo_z <= land_z;
+          vo_idx <= lnd_idx_q;
+          vo_stride <= lnd_stride_q;
         end
       end else if (vland) begin
+        // The credit guarantees a landing never finds all three slots full, so
+        // the last arm is an append and never an overwrite.
         if (!vo_valid) begin
           vo_valid <= 1'b1;
-          vo_x <= last_x;
-          vo_y <= last_y;
-          vo_z <= last_z;
-          vo_idx <= pend_idx;
-          vo_stride <= pend_stride;
-        end else begin
+          vo_x <= land_x;
+          vo_y <= land_y;
+          vo_z <= land_z;
+          vo_idx <= lnd_idx_q;
+          vo_stride <= lnd_stride_q;
+        end else if (!vs_valid) begin
           vs_valid <= 1'b1;
-          vs_x <= last_x;
-          vs_y <= last_y;
-          vs_z <= last_z;
-          vs_idx <= pend_idx;
-          vs_stride <= pend_stride;
+          vs_x <= land_x;
+          vs_y <= land_y;
+          vs_z <= land_z;
+          vs_idx <= lnd_idx_q;
+          vs_stride <= lnd_stride_q;
+        end else begin
+          vs2_valid <= 1'b1;
+          vs2_x <= land_x;
+          vs2_y <= land_y;
+          vs2_z <= land_z;
+          vs2_idx <= lnd_idx_q;
+          vs2_stride <= lnd_stride_q;
         end
       end else if (vpop) begin
         if (vs_valid) begin
-          vs_valid <= 1'b0;
           vo_x <= vs_x;
           vo_y <= vs_y;
           vo_z <= vs_z;
           vo_idx <= vs_idx;
           vo_stride <= vs_stride;
+          if (vs2_valid) begin
+            vs2_valid <= 1'b0;
+            vs_x <= vs2_x;
+            vs_y <= vs2_y;
+            vs_z <= vs2_z;
+            vs_idx <= vs2_idx;
+            vs_stride <= vs2_stride;
+          end else begin
+            vs_valid <= 1'b0;
+          end
         end else begin
           vo_valid <= 1'b0;
         end
@@ -1120,7 +1262,10 @@ module zhao_terrain_tess #(
             end
           end
 
-          // capture the read issued last cycle
+          // ---- stage A: capture the read issued last cycle -----------------
+          // vh/v_ha/vx/vz stay HERE, on the response edge, because stage A's
+          // own blend arithmetic reads them. Only the blend's second half and
+          // everything that consumes it moved to stage B below.
           if (pend_v) begin
             if (pend_kind == 2'd0) begin
               vx[pend_slot] <= lat_wx_i;
@@ -1129,34 +1274,74 @@ module zhao_terrain_tess #(
               vy[pend_slot] <= lat_h_i;
             end else if (pend_kind == 2'd1) begin
               v_ha <= lat_h_i;
-            end else begin
-              vy[pend_slot] <= m_y;
             end
 
+          end
+
+          // ---- stage A -> stage B ------------------------------------------
+          // The blend's first half, the landed x/z, and the two corners the
+          // emit will need, all snapshotted together on the response edge.
+          lnd_v_q <= pend_v;
+          if (pend_v) begin
+            lnd_kind_q   <= pend_kind;
+            lnd_slot_q   <= pend_slot;
+            lnd_last_q   <= pend_last;
+            lnd_idx_q    <= pend_idx;
+            lnd_stride_q <= pend_stride;
+            lnd_md_q     <= m_d;
+            lnd_vh_q     <= vh[pend_slot];
+            lnd_x_q      <= last_x;
+            lnd_z_q      <= last_z;
+            lnd_h_q      <= lat_h_i;
+            lnd_ax_q     <= vx[0];
+            lnd_az_q     <= vz[0];
+            lnd_bx_q     <= vx[1];
+            lnd_bz_q     <= vz[1];
+            // WRITE-FORWARD, and it is not optional. `vy[]` is the one corner
+            // field the blend writes, and since G8B T1 that write happens at
+            // stage B -- the SAME edge this snapshot is taken on. A slot whose
+            // blend is completing right now would be captured at its stale
+            // pre-blend value, which is exactly what happens when the last slot
+            // carries no morph and its only read lands one cycle after the
+            // previous slot's blend. terrain_tess_directed caught it as a wrong
+            // `b` corner with a correct `a` and `c`.
+            lnd_ay_q     <= (lnd_v_q && lnd_kind_q == 2'd2 && lnd_slot_q == 2'd0)
+                            ? m_y : vy[0];
+            lnd_by_q     <= (lnd_v_q && lnd_kind_q == 2'd2 && lnd_slot_q == 2'd1)
+                            ? m_y : vy[1];
+            lnd_morph_q  <= j_morph;
+            lnd_surface_q <= j_surface;
+            lnd_src_q    <= j_src;
+          end
+
+          // ---- stage B: the blend completes, and everything that reads it --
+          if (lnd_v_q) begin
+            if (lnd_kind_q == 2'd2) vy[lnd_slot_q] <= m_y;
+
             // ModeTri only: a ModeVtx landing goes to the skid above.
-            if (pend_last && !j_vtx) begin
+            if (lnd_last_q && !j_vtx) begin
               // The underside is the top's pair with b and c swapped — the ONE
               // place the inverted winding lives.
               o_valid <= 1'b1;
-              o_src   <= j_src;
-              o_surf  <= j_surface;
-              o_ax    <= vx[0];
-              o_ay    <= vy[0];
-              o_az    <= vz[0];
-              if (!j_surface) begin
-                o_bx <= vx[1];
-                o_by <= vy[1];
-                o_bz <= vz[1];
-                o_cx <= last_x;
-                o_cy <= last_y;
-                o_cz <= last_z;
+              o_src   <= lnd_src_q;
+              o_surf  <= lnd_surface_q;
+              o_ax    <= lnd_ax_q;
+              o_ay    <= lnd_ay_q;
+              o_az    <= lnd_az_q;
+              if (!lnd_surface_q) begin
+                o_bx <= lnd_bx_q;
+                o_by <= lnd_by_q;
+                o_bz <= lnd_bz_q;
+                o_cx <= land_x;
+                o_cy <= land_y;
+                o_cz <= land_z;
               end else begin
-                o_bx <= last_x;
-                o_by <= last_y;
-                o_bz <= last_z;
-                o_cx <= vx[1];
-                o_cy <= vy[1];
-                o_cz <= vz[1];
+                o_bx <= land_x;
+                o_by <= land_y;
+                o_bz <= land_z;
+                o_cx <= lnd_bx_q;
+                o_cy <= lnd_by_q;
+                o_cz <= lnd_bz_q;
               end
               terrain_triangles_emitted_o <= terrain_triangles_emitted_o + 32'd1;
             end
@@ -1206,7 +1391,16 @@ module zhao_terrain_tess #(
             end
           end
 
-          if (done && !pend_v && !o_valid && !vo_valid && !vs_valid && !r_valid) st <= StIdle;
+          // `lnd_v_q` JOINS THIS, and it is not optional. The state machine
+          // already refuses to leave StTri while a read is in flight; G8B T1's
+          // blend split added a SECOND in-flight stage, and the stage-A capture
+          // and stage-B landing both live inside this case. Leaving while the
+          // blend still holds a vertex would strand its landing -- the triangle
+          // is never emitted and the job never drains, which is exactly what
+          // the dense sparse-fill fault control reported.
+          if (done && !pend_v && !lnd_v_q && !o_valid && !vo_valid && !vs_valid &&
+              !vs2_valid &&
+              !r_valid) st <= StIdle;
         end
 
         default: st <= StIdle;
@@ -1242,6 +1436,13 @@ module zhao_terrain_tess #(
   assign cz_o = o_cz;
   assign surface_o = o_surf;
   assign src_id_o = o_src;
-  assign idle_o = (st == StIdle) && !o_valid && !vo_valid && !vs_valid && !r_valid;
+  // `pend_v` and `lnd_v_q` JOIN THIS REDUCTION. A read that has been issued but
+  // not yet landed is work in flight, and since G8B T1 split the blend there
+  // are TWO such stages rather than one. Reporting idle while either holds a
+  // vertex is the queue-occupancy defect -- and it is not theoretical here: the
+  // dense sparse-fill fault control drives a job that faults mid-flight, and
+  // with the blend stage uncounted the drain never completed.
+  assign idle_o = (st == StIdle) && !o_valid && !vo_valid && !vs_valid && !vs2_valid &&
+                  !r_valid && !pend_v && !lnd_v_q;
 
 endmodule : zhao_terrain_tess
