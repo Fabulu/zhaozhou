@@ -5923,7 +5923,42 @@ set_tests_properties(lint_terrain_normals PROPERTIES
 # error the oracle's own history records catching. The suite's positive
 # control is `--break-oracle` (must FAIL); every DUT counter is asserted
 # with an exact count, so no counter can be a hopeful zero.
+# ---------------------------------------------------------------------------
+# R1 -- zhao_qsq_bytemul, the shared quarter-square byte multiplier.
+#
+# One M10K, no DSP, exact for every byte pair. Extracted from
+# zhao_terrain_shade, which had built it correctly and kept it to itself while
+# R1 and R4 both recorded the reusable primitive as absent.
+#
+# The test drives ALL 65,536 pairs. That is not thoroughness for its own sake:
+# the quarter-square identity is exact for a reason that depends on the PARITY
+# of a+b, so a defect shows on half the domain and a sampling test can land
+# entirely on the other half and report clean.
+add_executable(test_qsq_bytemul_directed common/qsq_bytemul_directed.cpp)
+target_link_libraries(test_qsq_bytemul_directed PRIVATE zhao_harness)
+verilate(test_qsq_bytemul_directed
+  PREFIX Vzhao_qsq_bytemul
+  TOP_MODULE zhao_qsq_bytemul
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_qsq_bytemul.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME qsq_bytemul_directed COMMAND test_qsq_bytemul_directed)
+set_tests_properties(qsq_bytemul_directed PROPERTIES LABELS "fast;nightly")
+
+add_test(NAME lint_qsq_bytemul
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_qsq_bytemul
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_qsq_bytemul.sv)
+set_tests_properties(lint_qsq_bytemul PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# zhao_terrain_shade is NO LONGER SELF-CONTAINED: its quarter-square table
+# moved out to the shared zhao_qsq_bytemul primitive (R1), and a source list
+# that named the contents rather than the wrapper has to move with it. That is
+# the founding defect of source_list_parity and the reason
+# formal_raster_fragment_blend reported ERROR instead of a proof for days.
 set(ZHAO_TERRAIN_SHADE_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_qsq_bytemul.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_shade.sv)
 
 add_executable(test_terrain_shade_rtl_directed terrain/terrain_shade_rtl_directed.cpp)

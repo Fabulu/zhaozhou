@@ -166,8 +166,6 @@ module zhao_terrain_shade #(
 
   // ---- named shapes (localparams: structural, but named so the next
   // reader can retune the walk without re-deriving it) ----------------------
-  localparam int unsigned QROM_DEPTH = 512;  // Q[s], s in [0, 511]
-  localparam int unsigned QW         = 16;   // floor(510^2/4) = 65025 < 2^16
   localparam int unsigned SQ_STEPS   = 10;   // byte-products per square
   localparam int unsigned MUL_STEPS  = 16;   // byte-products per full multiply
   localparam int unsigned SQRT_STEPS = 32;   // qformats §7.2 digit recurrence
@@ -177,8 +175,7 @@ module zhao_terrain_shade #(
   // and note --lint-only does not run these, so a clean lint proves nothing
   // about them — the ctest/standalone run is what executes them) ------------
   initial begin
-    if ((510 * 510) / 4 > (1 << QW) - 1)
-      $fatal(1, "zhao_terrain_shade: QW too narrow for the quarter-square table");
+
     if (3 * SQ_STEPS + 3 * MUL_STEPS != 78)
       $fatal(1, "zhao_terrain_shade: product walk is not the 78 steps the timing law states");
     if (CNTW < 8)
@@ -198,27 +195,47 @@ module zhao_terrain_shade #(
 
   state_e st_q;
 
-  // ---- the ONE memory: quarter-square table, true dual port ---------------
-  // Written only during ST_FILL (port A), read on both ports during ST_PROD.
-  // Clock-only process, untouched by reset, so it can infer an M10K.
-  logic [QW-1:0] qmem [0:QROM_DEPTH-1];
-  logic [QW-1:0] qa_q, qb_q;
+  // ---- the ONE memory, now a SHARED PRIMITIVE ----------------------------
+  //
+  // The quarter-square table, its cold fill and the Q[a+b] - Q[|a-b|]
+  // subtraction used to live here, and R1 has recorded the consequence for
+  // weeks: *"Embedded terrain quarter-square ... exist[s]. Reusable
+  // quarter-square primitive ... [does] not."* R4 wants the same table
+  // (*"The promised quarter-square/coefficient-memory replacements are
+  // absent"*), and so do R5, R6 and FIELD. The hard part was done here,
+  // correctly and exhaustively proven, and the last step -- making it
+  // something another block could instantiate -- was never taken.
+  //
+  // It is `zhao_qsq_bytemul` now, and this block is its first client. The
+  // arithmetic is byte-for-byte the same code; what changed is where it lives.
+  //
+  // `en_i` IS `issue_active_c`, WHICH IS ALSO WHAT SETS `pv_q`. That is not
+  // tidiness either. The read here used to be UNCONDITIONAL, and CLAUDE.md
+  // carries a chapter on what that costs in a block that can stall: data and
+  // metadata clocked by different enables separate, and every counter still
+  // balances. Here the walk is fixed-rate so the old form was not wrong --
+  // qa_q/qb_q were only ever read on a cycle where pv_q was set, which is
+  // exactly when issue_active_c was high one cycle earlier -- but driving the
+  // primitive from the same enable makes that a structural fact rather than a
+  // property of this block's schedule that the next edit could quietly break.
+  //
+  // NOT SELF-CONTAINED ANY MORE. Every source list that names this file now
+  // needs zhao_qsq_bytemul.sv beside it. `formal_raster_fragment_blend` was
+  // reporting ERROR rather than a proof for days after exactly this kind of
+  // split, because a wrapper staying bit-identical still moves every list that
+  // named what was inside it.
+  logic        tbl_ready_w;
+  logic [15:0] p16_w;
 
-  logic [8:0]  fill_s_q;   // s, 0..511
-  logic [17:0] fill_sq_q;  // s^2 by recurrence; 511^2 = 261121 < 2^18
-  logic        fill_we_c;
-  logic [8:0]  qaddr_a_c;
-  logic [7:0]  qaddr_b_c;
-
-  assign fill_we_c = (st_q == ST_FILL);
-
-  always_ff @(posedge clk) begin
-    if (fill_we_c) qmem[fill_s_q] <= fill_sq_q[17:2];  // floor(s^2/4)
-    else           qa_q           <= qmem[qaddr_a_c];
-  end
-  always_ff @(posedge clk) begin
-    qb_q <= qmem[{1'b0, qaddr_b_c}];
-  end
+  zhao_qsq_bytemul u_qsq (
+      .clk          (clk),
+      .rst_n        (rst_n),
+      .table_ready_o(tbl_ready_w),
+      .en_i         (issue_active_c),
+      .a_i          (abyte_c),
+      .b_i          (bbyte_c),
+      .p_o          (p16_w)
+  );
 
   // ---- captured packet ----------------------------------------------------
   // Magnitude/sign split at accept: |INT32_MIN| = 2^31 fits unsigned 32.
@@ -271,8 +288,6 @@ module zhao_terrain_shade #(
     sgn_c          = is_sq_c ? 1'b0 : (nsgn_q[axis_c] ^ lsgn_q[axis_c]);
     abyte_c        = un_q[axis_c][8*ia_c +: 8];
     bbyte_c        = is_sq_c ? un_q[axis_c][8*ib_c +: 8] : ul_q[axis_c][8*ib_c +: 8];
-    qaddr_a_c      = {1'b0, abyte_c} + {1'b0, bbyte_c};
-    qaddr_b_c      = (abyte_c >= bbyte_c) ? (abyte_c - bbyte_c) : (bbyte_c - abyte_c);
     issue_active_c = (st_q == ST_PROD) && !issue_done_q;
     k_last_c       = is_sq_c ? (k_q == 5'(SQ_STEPS - 1)) : (k_q == 5'(MUL_STEPS - 1));
   end
@@ -287,7 +302,7 @@ module zhao_terrain_shade #(
   logic signed [65:0] dacc_q;
 
   always_comb begin
-    p16_c = qa_q - qb_q;  // Q[a+b] - Q[|a-b|] = a*b, exact
+    p16_c = p16_w;  // Q[a+b] - Q[|a-b|] = a*b, exact; see zhao_qsq_bytemul
     unique case (psh_q)
       3'd0:    term_sh_c = {50'd0, p16_c};
       3'd1:    term_sh_c = {42'd0, p16_c, 8'd0};
@@ -350,8 +365,6 @@ module zhao_terrain_shade #(
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       st_q          <= ST_FILL;
-      fill_s_q      <= 9'd0;
-      fill_sq_q     <= 18'd0;
       table_ready_o <= 1'b0;
       un_q[0] <= '0; un_q[1] <= '0; un_q[2] <= '0;
       ul_q[0] <= '0; ul_q[1] <= '0; ul_q[2] <= '0;
@@ -372,14 +385,13 @@ module zhao_terrain_shade #(
       base_sat_o         <= '0;
       degen_mismatch_o   <= '0;
     end else begin
-      // ---- cold fill: Q[s] = floor(s^2/4) by the (s+1)^2 recurrence ------
-      if (st_q == ST_FILL) begin
-        fill_sq_q <= fill_sq_q + {8'd0, fill_s_q, 1'b0} + 18'd1;
-        fill_s_q  <= fill_s_q + 9'd1;
-        if (fill_s_q == 9'd511) begin
-          st_q          <= ST_IDLE;
-          table_ready_o <= 1'b1;
-        end
+      // ---- cold fill: owned by zhao_qsq_bytemul, waited on here ----------
+      // Same 512 cycles and the same recurrence; this block no longer counts
+      // them, it watches the primitive's ready. `table_ready_o` stays a port of
+      // THIS block because the contract names it and clients gate on it.
+      if (st_q == ST_FILL && tbl_ready_w) begin
+        st_q          <= ST_IDLE;
+        table_ready_o <= 1'b1;
       end
 
       // ---- accept ---------------------------------------------------------

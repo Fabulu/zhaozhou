@@ -1775,6 +1775,7 @@ targets:
   # (G-BUMP1's batch), not alone.
   - top: zhao_terrain_shade
     sources:
+      - fpga/rtl/common/zhao_qsq_bytemul.sv
       - fpga/rtl/terrain/zhao_terrain_shade.sv
 
   - top: zhao_terrain_bake
