@@ -35,6 +35,10 @@
 #include <cstring>
 #include <vector>
 
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+#include "../harness/zhao_sim.hpp"
+
 // This Verilator runtime's verilated.o references the legacy SystemC hook.
 double sc_time_stamp() { return 0; }
 
@@ -548,9 +552,9 @@ int main(int argc, char** argv) {
   delete tb;
   if (g_fails == 0) {
     std::printf("proj_rowmux_directed: %d checks passed\n", g_checks);
-    return 0;
+    zhao::exit_hard(0);
   }
   std::printf("proj_rowmux_directed: %d of %d checks FAILED\n", g_fails,
               g_checks);
-  return 1;
+  zhao::exit_hard(1);
 }

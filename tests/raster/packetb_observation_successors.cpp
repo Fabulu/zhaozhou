@@ -5,6 +5,10 @@
 #include <cstdio>
 #include <cstdlib>
 
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+#include "../harness/zhao_sim.hpp"
+
 namespace {
 
 using Top = Vtb_packetb_observation_successors;
@@ -371,4 +375,7 @@ int main(int argc, char** argv) {
                 g_failures, g_checks);
   std::fflush(nullptr);
   std::_Exit(g_failures == 0 ? 0 : 1);
+
+  // Implicit `return 0` deadlocks the same way -- see zhao_sim.hpp.
+  zhao::exit_hard(0);
 }

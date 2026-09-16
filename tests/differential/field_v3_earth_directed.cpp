@@ -5241,7 +5241,7 @@ int main(int argc, char** argv) {
   }
   if (files.empty()) {
     printf("usage: test_field_v3_earth [--points N] prog.zprog ...\n");
-    return 2;
+    zhao::exit_hard(2);
   }
 
   printf("== GATE 3: real Earth programs on the composed engine ==\n");
@@ -5434,5 +5434,5 @@ int main(int argc, char** argv) {
 
   printf("\n[field_v3_earth_directed] %d value check(s), %d failure(s)\n", total_checks, failures);
 
-  return failures == 0 ? 0 : 1;
+  zhao::exit_hard(failures == 0 ? 0 : 1);
 }

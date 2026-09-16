@@ -10,6 +10,10 @@
 #include "verilated.h"
 #include "svdpi.h"
 
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+#include "../harness/zhao_sim.hpp"
+
 namespace {
 
 struct Activity {
@@ -192,4 +196,7 @@ int main(int argc, char** argv) {
       signature_count);
   std::fflush(nullptr);
   std::_Exit(0);
+
+  // Implicit `return 0` deadlocks the same way -- see zhao_sim.hpp.
+  zhao::exit_hard(0);
 }

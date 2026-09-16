@@ -1201,5 +1201,5 @@ int main(int argc, char** argv) {
 
   const int rc = (g_fail == 0) ? 0 : 1;
   delete dut;
-  return rc;
+  zhao::exit_hard(rc);
 }

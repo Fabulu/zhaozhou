@@ -342,5 +342,5 @@ int main(int argc, char** argv) {
 
   std::printf("[shell_assemble_path_directed] %d non-zero words drawn; %d checks %s\n", nz,
               g_checks, g_failed ? "FAILED" : "passed");
-  return g_failed ? 1 : 0;
+  zhao::exit_hard(g_failed ? 1 : 0);
 }

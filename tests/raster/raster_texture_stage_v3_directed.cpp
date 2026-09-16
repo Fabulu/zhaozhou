@@ -19,6 +19,10 @@
 #include <deque>
 #include <vector>
 
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+#include "../harness/zhao_sim.hpp"
+
 namespace {
 
 using Wide490 = std::array<uint32_t, 16>;
@@ -1083,5 +1087,5 @@ int main(int argc, char** argv) {
 #endif
   std::printf("packet-c directed PASS tests=%u checks=%u cycles=%llu\n",
               g_tests, g_checks, static_cast<unsigned long long>(g_cycle));
-  return 0;
+  zhao::exit_hard(0);
 }

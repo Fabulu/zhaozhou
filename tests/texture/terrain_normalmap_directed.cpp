@@ -49,6 +49,10 @@
 
 #include "zref/zref_terrain_normalmap.hpp"
 
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+#include "../harness/zhao_sim.hpp"
+
 // verilated.cpp of this oss-cad-suite build references the legacy SystemC
 // time hook even in plain C++ mode; the harness lib hosts this shim, and a
 // standalone build has to bring its own (tests/harness/zhao_sim.cpp, P1
@@ -491,5 +495,5 @@ int main(int argc, char** argv) {
 
   std::printf("terrain_normalmap_directed: %d checks, %d failures\n", g_checks, g_fails);
   delete d;
-  return g_fails == 0 ? 0 : 1;
+  zhao::exit_hard(g_fails == 0 ? 0 : 1);
 }

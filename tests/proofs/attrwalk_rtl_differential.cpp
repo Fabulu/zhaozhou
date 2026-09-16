@@ -33,6 +33,10 @@
 #include "Vzhao_raster_attrdiv.h"
 #include "verilated.h"
 
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+#include "../harness/zhao_sim.hpp"
+
 using i128 = __int128;
 
 struct Pair {
@@ -373,8 +377,8 @@ int main(int argc, char** argv) {
               (unsigned long long)w_away.cycles, (unsigned long long)w_pos.cycles);
   if (fails == 0) {
     std::printf("ALL SECTIONS PASS\n");
-    return 0;
+    zhao::exit_hard(0);
   }
   std::printf("FAILURES: %d\n", fails);
-  return 1;
+  zhao::exit_hard(1);
 }

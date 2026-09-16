@@ -18,6 +18,10 @@
 #include "Vtb_geom_binner_v2_pair.h"
 #include "verilated.h"
 
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+#include "../harness/zhao_sim.hpp"
+
 double sc_time_stamp() { return 0.0; }
 
 namespace {
@@ -690,4 +694,7 @@ int main(int argc, char** argv) {
   std::printf("%s: geom_binner_v2_directed (%d failures)\n",
               failures == 0 ? "PASS" : "FAIL", failures);
   hard_exit(failures == 0 ? 0 : 1);
+
+  // Implicit `return 0` deadlocks the same way -- see zhao_sim.hpp.
+  zhao::exit_hard(0);
 }

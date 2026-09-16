@@ -460,5 +460,5 @@ int main(int argc, char** argv) {
         0, diff);
 
   std::printf("[shell_realmem_path_directed] %d checks, %d failed\n", g_checks, g_failed);
-  return g_failed ? 1 : 0;
+  zhao::exit_hard(g_failed ? 1 : 0);
 }

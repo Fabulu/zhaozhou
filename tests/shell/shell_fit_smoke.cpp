@@ -7,6 +7,10 @@
 #include "Vzhao_shell_fit_smoke_tb.h"
 #include "verilated.h"
 
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+#include "../harness/zhao_sim.hpp"
+
 double sc_time_stamp() { return 0.0; }
 
 namespace {
@@ -116,7 +120,7 @@ void step(Vzhao_shell_fit_smoke_tb& top,
 
 int main(int argc, char** argv) {
   RunMode mode;
-  if (!parse_mode(argc, argv, mode)) return 2;
+  if (!parse_mode(argc, argv, mode)) zhao::exit_hard(2);
 
   auto context = std::make_unique<VerilatedContext>();
   context->commandArgs(argc, argv);
@@ -170,7 +174,7 @@ int main(int argc, char** argv) {
                    expected_reasons,
                    static_cast<unsigned>(top->control_group_failure_o));
       top->final();
-      return 1;
+      zhao::exit_hard(1);
     }
     std::printf("SHELL_FIT_SMOKE_CONTROL_PASS domain=%d arm=%u dead=%u reasons=0x%x\n",
                 mode.control_domain,
@@ -178,7 +182,7 @@ int main(int argc, char** argv) {
                 dead,
                 reasons);
     top->final();
-    return 0;
+    zhao::exit_hard(0);
   }
 
   if (mode.protocol_fault != 0) {
@@ -195,13 +199,13 @@ int main(int argc, char** argv) {
                    observed_arms,
                    expected_arm);
       top->final();
-      return 1;
+      zhao::exit_hard(1);
     }
     std::printf("SHELL_FIT_SMOKE_PROTOCOL_CONTROL_PASS fault=%u arm=0x%x\n",
                 mode.protocol_fault,
                 observed_arms);
     top->final();
-    return 0;
+    zhao::exit_hard(0);
   }
 
   if (top->baseline_failed_o) {
@@ -210,10 +214,10 @@ int main(int argc, char** argv) {
                  dead,
                  reasons);
     top->final();
-    return 1;
+    zhao::exit_hard(1);
   }
   std::printf("SHELL_FIT_SMOKE_PASS half_steps=%llu domains=3\n",
               static_cast<unsigned long long>(mode.half_steps));
   top->final();
-  return 0;
+  zhao::exit_hard(0);
 }

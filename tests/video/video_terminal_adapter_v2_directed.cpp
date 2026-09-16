@@ -16,6 +16,10 @@
 #include "verilated.h"
 #include "Vtb_video_terminal_adapter_v2.h"
 
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+#include "../harness/zhao_sim.hpp"
+
 double sc_time_stamp() { return 0.0; }
 
 namespace {
@@ -572,4 +576,7 @@ int main(int argc, char** argv) {
   randomized_scoreboard(d);
   finish("video_terminal_adapter_v2_directed");
 #endif
+
+  // Implicit `return 0` deadlocks the same way -- see zhao_sim.hpp.
+  zhao::exit_hard(0);
 }

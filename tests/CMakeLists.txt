@@ -2976,6 +2976,22 @@ add_test(NAME source_list_parity_controls
 set_tests_properties(source_list_parity_controls PROPERTIES
   LABELS "lint;fast" TIMEOUT 300)
 
+# ---- every Verilated main must leave through a hard exit ------------------
+# tests/harness/zhao_sim.hpp has said since 2026-08-16 that a plain `return`
+# from a Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU,
+# AFTER every check has passed. NOTHING WAS WATCHING: on 2026-09-16
+# proj_service_rowmux_smoke hung a ctest run for 166 s, had been read as an RTL
+# parallelism flake for weeks, and a sweep found 26 more mains breaking the
+# same rule. A hung test is neither a pass nor a fail and it costs a whole
+# suite run. The gate carries its own self-check and knows that
+# `return zhao::report_and_exit(...)` is safe (it ends in std::_Exit), as is a
+# file-local helper that does the same.
+add_test(NAME verilated_exit_path
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/lint/verilated_exit_path.py)
+set_tests_properties(verilated_exit_path PROPERTIES
+  LABELS "lint;fast" TIMEOUT 300)
+
 # READ_LATE=1 (roadmap 4.2 / Commit4): the adversarial suite deliberately keeps
 # elaborating the default, so this elaborates the seam and does what the suite
 # cannot -- reads a committed sample back through the plane port, fires

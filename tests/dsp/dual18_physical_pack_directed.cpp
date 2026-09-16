@@ -34,6 +34,10 @@ using TestTop = Vdual18_s32x18_exact;
 #define DUAL18_S32X18_TEST 1
 #elif defined(DUAL18_TOP_PROJECTOR)
 #include "Vdual18_s32xu12_projector.h"
+
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+#include "../harness/zhao_sim.hpp"
 using TestTop = Vdual18_s32xu12_projector;
 #define DUAL18_PROJECTOR_TEST 1
 #else
@@ -600,19 +604,19 @@ int main(int argc, char** argv) {
     else if (arg == "--expect-ce-failure") expect_ce_failure = true;
     else {
       std::fprintf(stderr, "unknown argument: %s\n", argv[i]);
-      return 2;
+      zhao::exit_hard(2);
     }
   }
 
 #if !defined(DUAL18_PAIR_TEST)
   if (control_only || inject_lane_swap || expect_ce_failure) {
     std::fprintf(stderr, "pair-only control argument used for a wide-product top\n");
-    return 2;
+    zhao::exit_hard(2);
   }
 #endif
   if (inject_lane_swap && expect_ce_failure) {
     std::fprintf(stderr, "functional and CE controls must run separately\n");
-    return 2;
+    zhao::exit_hard(2);
   }
 
   TestTop top;
@@ -662,5 +666,5 @@ int main(int argc, char** argv) {
            score.reset_mismatches == 0;
   }
   std::printf("DUAL18_RESULT %s\n", pass ? "PASS" : "FAIL");
-  return pass ? 0 : 1;
+  zhao::exit_hard(pass ? 0 : 1);
 }

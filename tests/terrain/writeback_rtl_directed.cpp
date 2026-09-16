@@ -1541,5 +1541,5 @@ int main(int argc, char** argv) {
 
   std::printf("writeback_rtl_directed: %d checks, %d failures, %lld gpu clocks\n", g_checks,
               g_fail, b.cycles);
-  return g_fail == 0 ? 0 : 1;
+  zhao::exit_hard(g_fail == 0 ? 0 : 1);
 }

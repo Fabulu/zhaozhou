@@ -8,6 +8,10 @@
 #include <random>
 #include <vector>
 
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+#include "../harness/zhao_sim.hpp"
+
 using i128 = __int128;
 using u128 = unsigned __int128;
 
@@ -323,4 +327,7 @@ int main(int argc, char** argv) {
               static_cast<unsigned long long>(cycles));
   hard_exit(failures == 0 ? 0 : 1);
 #endif
+
+  // Implicit `return 0` deadlocks the same way -- see zhao_sim.hpp.
+  zhao::exit_hard(0);
 }

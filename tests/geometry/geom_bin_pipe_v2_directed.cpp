@@ -21,6 +21,10 @@
 #include <limits>
 #include <vector>
 
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+#include "../harness/zhao_sim.hpp"
+
 namespace {
 
 uint64_t g_cycle = 0;
@@ -1686,4 +1690,7 @@ int main(int argc, char** argv) {
   std::fflush(stdout);
   std::fflush(stderr);
   std::_Exit(0);  // Deliberate hard exit: do not enter Windows model teardown.
+
+  // Implicit `return 0` deadlocks the same way -- see zhao_sim.hpp.
+  zhao::exit_hard(0);
 }
