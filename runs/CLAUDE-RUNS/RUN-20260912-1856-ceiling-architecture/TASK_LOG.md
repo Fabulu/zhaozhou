@@ -1633,3 +1633,64 @@ tree while every other test had already finished, and it has nothing to do with
 terrain or projector RTL. The gate that matters is the `fast` label, which is
 what CI runs. Stopped it and switched; the soak is deliberately NOT run in this
 pass and that is a scope statement, not a pass.
+
+### T7 measured WORSE and was reverted; 66% of the ALM bill is unverified
+
+**THE CAMPAIGN STANDS AT 97.61 MHz** (`@g8b-t56`, commit `2f89c391`), TNS
+−1.164, ALM 8,268, DSP 32. The tree is byte-identical to that commit again.
+
+| row | Fmax | setup | TNS | ALM |
+|---|---:|---:|---:|---:|
+| `@g8b-t4` | 92.44 | −0.818 | −36.97 | 8,272 |
+| `@g8b-t56` | **97.61** | −0.245 | −1.164 | 8,268 |
+| `@g8b-t7` | 89.69 | −1.150 | −19.22 | 8,284 | ← **reverted** |
+
+**T7 IS THE MOST USEFUL THING THAT HAPPENED TODAY**, because it was right on
+paper and wrong in silicon and nothing in simulation could tell. It moved the
+blend's rounding constant from the consumed path into the register write —
+the same transformation T6 had just made in `zhao_project_core` for +6.5 MHz.
+Here it cost 7.9. The new worst path was the one T7 never touched:
+`lnd_morph_q -> ln2_prod_q`, the MULTIPLY.
+
+`ln2_prod_q <= m_prod` was not a fabric register — it was **the DSP's own
+output register**, which is precisely what T1b cashed. Putting an adder between
+the multiplier and it evicts the product from the DSP entirely. **Folding a
+constant into a register write is free when the register is FABRIC and not when
+it belongs to a hard block**, the two are indistinguishable in Verilator, and
+only a fit separates them. Written into the revert commit rather than left as
+experience.
+
+**THE BIGGER FINDING, and it is the owner's ALM question directly.** Chasing
+the worst domain breach — *Projection and result arenas*, 12,267 ALM against a
+4,500 allocation — showed it is **exactly `zhao_geom_project` + 
+`zhao_terrain_project`**, matching on ALM, DSP and M10K, the two duplicate
+engines the shared G8B group already replaced. The roadmap wrote that
+allocation for ONE engine and section 2.1 says so.
+
+Generalised: **26,981 ALM of the 40,591 total — 66% — comes from rows whose
+commit predates the last change to their own source, or which were fitted from
+a dirty tree.** `tools/budget/domain_scoreboard.py` now marks them per domain,
+reusing `uncashed_cheques.stale_receipts` rather than reimplementing the
+predicate. It does NOT license subtraction: BEHIND means the file moved, and a
+file can move either way. The word is UNVERIFIED, not OVERSTATED.
+
+**A correction this forced**, made the same day: I had told the owner that the
+worst ALM domain is "already over its 48-block M10K allocation at 52", as the
+reason memory cannot simply be poured into it. That 52 is 29 + 23 from those
+same two stale rows. Withdrawn at its source in the roadmap; the weaker form
+survives.
+
+**GATE STATUS, `-L fast`, 509 s:** two failures, both explained and neither new.
+`ledger_check` carries its one deliberate V20 error (the PROTECTED_HASHES
+collision, now written up in the DOCKET as a costed owner decision).
+`render_texture_packet_a` TIMED OUT under `-j4` while a Quartus fit held two
+processors — it passes standalone in 241 s, measured. That is contention, not a
+defect, and the honest fix is to not run a fast gate against a live fit rather
+than to raise the budget.
+
+**Roadmap corrections landed today**, all in the flattering direction before
+correction: Packet H is NOT landed (its 45 green tests are its PREREQUISITES;
+`zhao_shell_top_v2.sv` does not exist anywhere in the tree), Packet I is in
+progress rather than not-started, and Packet H is a COMPOSITION whose eight
+component blocks all exist and are tested — which is what makes it schedulable
+once G8B closes, since G8C cannot run without it.
