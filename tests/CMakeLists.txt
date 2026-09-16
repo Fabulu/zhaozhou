@@ -6971,6 +6971,11 @@ if(Python3_Interpreter_FOUND)
   # because this lane regenerates zhao_prod_top three times and will grow with
   # the block count.
   set_tests_properties(texjoin_accounting_retirement PROPERTIES TIMEOUT 600)
+  # Same lesson, same shared 120 s: MEASURED at 114-115 s unloaded, which passes
+  # alone and is killed under -j 4. A budget that only holds on an idle machine
+  # is a flake generator, and the report it produces ("***Timeout") says nothing
+  # about the 148 checks it was running.
+  set_tests_properties(shell_fit_preflight_fixtures PROPERTIES TIMEOUT 600)
   set_tests_properties(shell_fit_elaboration_census PROPERTIES
     ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}" TIMEOUT 300)
 endif()

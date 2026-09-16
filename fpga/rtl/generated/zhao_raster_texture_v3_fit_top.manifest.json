@@ -174,12 +174,12 @@
     {
       "ordinal": 20,
       "path": "fpga/rtl/texture/zhao_texture_v3rq.sv",
-      "sha256": "e4e4de2a79395c8de57e4b40188e059a39532cc76c531b033c24b30e74281ae3"
+      "sha256": "f0b3c86734ee78228134103daea79b9aea53628cda7c0f60220e80d194341a13"
     },
     {
       "ordinal": 21,
       "path": "fpga/rtl/texture/zhao_texture_v3own.sv",
-      "sha256": "b1391944358ea5c81bd8d5f14482cb5cbc8e9e232969cf3c57afc18c86336f42"
+      "sha256": "dfbf2cc9949297d25eb68810c07548fc81e4ac3c16f8bcf57e656c5acb87b0dc"
     },
     {
       "ordinal": 22,

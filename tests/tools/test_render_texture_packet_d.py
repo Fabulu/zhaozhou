@@ -96,7 +96,11 @@ PROTECTED_HASHES = {
     # Packet E legitimately refreshes the V3 source and generated interface while
     # retaining Packet D's public closure and every protected old/oracle byte.
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "dae91555171fd7f05269e698586fd2d70c415228447599d773c8794711fcba29",
+    # Refreshed 2026-09-16 with the interface manifest: only the two source
+    # hashes in its closure moved (ENFORCED-BY comments in zhao_texture_v3own.sv
+    # and zhao_texture_uv_join.sv) plus the canonical hash derived from them.
+    # No port, parameter or elaboration value changed.
+        "3d70b8fad0c7648200b4d790f037ee04a4183edef945284e1ad0dd6255b25189",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
         "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c",
     "fpga/rtl/raster/zhao_raster_attrdiv.sv":

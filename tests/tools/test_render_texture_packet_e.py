@@ -107,8 +107,16 @@ PROTECTED_HASHES = {
 CURRENT_HASHES = {
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
         "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c",
+    # Refreshed 2026-09-16. The .sv hash is UNCHANGED; only the generated
+    # interface manifest moved, because two files in its source closure gained
+    # ENFORCED-BY comments (zhao_texture_v3own.sv, zhao_texture_uv_join.sv) and
+    # the manifest records their sha256. Field-diffed before refreshing: exactly
+    # three fields differ, the two source hashes and the canonical_interface
+    # hash derived from them. No port, parameter or elaboration value changed --
+    # which is the difference between refreshing a CURRENT hash and quietly
+    # editing a PROTECTED one.
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "dae91555171fd7f05269e698586fd2d70c415228447599d773c8794711fcba29",
+        "3d70b8fad0c7648200b4d790f037ee04a4183edef945284e1ad0dd6255b25189",
 }
 
 
@@ -245,9 +253,31 @@ def active_sv_text(text: str, initial_defines: frozenset[str] = frozenset()) -> 
     return "".join(result)
 
 
+def _collapse_ws(s: str) -> str:
+    """Whitespace-collapsed view for marker matching.
+
+    These markers assert that a LAW is present verbatim -- the render-asset
+    alias guard, the cache port shape, the mutant FIRED strings. They are not
+    assertions about line layout, and treating them as such made them fragile in
+    a way that cost a real failure on 2026-09-16: clang-format (newly active
+    after the pinned binary was finally installed) split
+
+        {MemoryGuard::DEBUG, 5u, MemoryGuard::TERRAIN_BUILD}
+
+    across three lines, and the marker stopped matching although nothing about
+    the guard had changed.
+
+    Collapsing runs of whitespace to one space compares the law and ignores the
+    reflow. Uniqueness is still required -- count must be exactly 1 -- so a
+    marker that becomes ambiguous under collapsing is still rejected.
+    """
+    return " ".join(s.split())
+
+
 def require_once(text: str, markers: tuple[str, ...], label: str) -> None:
+    flat = _collapse_ws(text)
     for marker in markers:
-        if text.count(marker) != 1:
+        if flat.count(_collapse_ws(marker)) != 1:
             raise AssertionError(f"{label} marker is not exact/unique: {marker}")
 
 
