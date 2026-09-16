@@ -282,6 +282,36 @@ coefficient-table primitives stop being one bullet of a stage and become the
 mechanism the owner has asked for, to be reused by R4, R5, R6 and FIELD
 rather than re-derived in each.
 
+### What Packet H actually costs, now that the correction is in
+
+Scoped 2026-09-16, after finding that `zhao_shell_top_v2.sv` does not exist.
+**Every component it composes DOES**, built, linted and tested with controls:
+
+| file | bytes | packet-h tests |
+|---|---:|---|
+| `zhao_engine1_raw_last_v2.sv` | 19,521 | directed + 4 controls + 2 collisions + lint |
+| `zhao_renderer_lease_v2.sv` | 15,155 | directed + 8 controls + 2 collisions + lint |
+| `zhao_video_ready_bridge_v2.sv` | 13,696 | directed + 8 controls + 2 collisions + lint |
+| `zhao_video_terminal_adapter_v2.sv` | 11,166 | directed + 7 controls + 2 collisions + lint |
+| `zhao_video_slotmgr_v2.sv` | 19,490 | (Packet G) |
+| `zhao_geom_bin_pipe_v2.sv` | 20,759 | (Packet G / byte-frozen) |
+| `zhao_raster_tile_pipe_v2.sv` | 64,535 | (byte-frozen) |
+| `zhao_geom_binner_v2.sv` | 46,692 | (byte-frozen) |
+
+**So Packet H is a COMPOSITION, not a build.** The historical
+`zhao_shell_top` instantiates 22 blocks; the sibling swaps `zhao_geom_bin_pipe`
+and `zhao_video_slotmgr` for their V2s, adds the four Packet-H organs above,
+and wires the V3 island's frame-fault clear handshake, the writer-aware lease
+and the reset-barrier law its packet description sets out. That is real work —
+the terminal law and the clear handshake are most of the packet's gate — but it
+is wiring an inventory that exists rather than commissioning blocks.
+
+**Why this belongs in the roadmap rather than a run log:** it changes the cost
+of the critical path. G8C cannot run without this file, so after G8B closes,
+`zhao_shell_top_v2.sv` is the single thing standing between R0 and its last two
+packets — and knowing it is a composition of tested parts is the difference
+between scheduling it and deferring it.
+
 ### The work list the direction implies — blocks that spend ALMs and no memory
 
 Generated 2026-09-16 from `reports/synthesis/zhao_block_fit.json`, unlabelled
