@@ -1219,3 +1219,14 @@ Finish unresolved rescue-roadmap architecture and continue non-terrain productio
 - **This is the healthy form of the uncashed-cheque pattern**, not the usual one. The knowledge was written down properly, with its evidence, by someone who knew they were deferring it - and it was read back before anyone re-derived it. The habit CLAUDE.md prescribes (read the contract of every block that produces the same quantity, before building) paid for itself here in one command.
 - Context note: the standalone core measured 73.62 MHz on this cone; G8B measures the same cone at 19.043 ns, worse, because the service's operand mux now sits in front of it and the terrain client's valid launches it from another block.
 
+
+## 2026-09-16 (T2 second attempt) - written, 242/242, blocked on one control
+
+- Implemented the prescribed cut: nine row products registered in `zhao_project_core`'s spatial branch, three four-term sums moved to the next cycle, `seq_holds` becomes `p_valid_q` so `busy_o` still covers the new stage.
+- **Passed:** `proj_matw_directed` **242/242** (both MATW, both RPP, the narrowing differential, the refusal law); `proj_rowmux_directed` stream equality under all four stall patterns; **capture-at-accept untouched by construction**, mid-sequence config write included - the property that killed attempt 1 does not apply to this shape, because the matrix is still read on the accept edge and only the sum moved.
+- **Legitimately moved:** spatial branch +1 cycle, so declared `L1 = L3 + 3` becomes `+2` in both tests that pin it. **II unchanged at exactly 3** - the half of the rule that may not move. Sequenced branch not cut (RPP=1 is an unselected lever, its row sum is inside an FSM); it still owes the same treatment and the +2 is the reminder.
+- **Blocked on:** `proj_matw_mutant_control` stops producing output - passes at HEAD in 0.019 s with 14 checks, and with the change its `run_and_compare` loop runs to its 100,000-cycle bound without collecting records. Confirmed by stashing and re-running, so it is the change and not a stale binary.
+- **Ruled out on the way:** `tests/mutants/zhao_project_core_mutant.sv` was stale by 52 substantive lines - my own change made it so, which is exactly the class `mutant_copy_drift` exists for - and was refreshed onto the new body first, keeping its one mutation (`cfg_fits = 1'b1`). The failure survives that.
+- **Reverted rather than shipped.** A red instrument is worse than a slow clock, and "242 of 242 passed" is precisely the shape of evidence that tempts one past a control that has gone quiet. The brief carries the full attempt so the next pass starts ~20 minutes from a fit rather than from a reading.
+- Tree green: 18/18 across projector, terrain pipe, wcache, packet-I and the drift gate.
+

@@ -204,6 +204,48 @@ The standalone core measured 73.62 MHz on this cone. G8B measures the same cone
 at 19.043 ns — worse, because the service's operand mux now sits in front of it
 and the terrain client's valid launches it from another block.
 
+### THE CUT WAS IMPLEMENTED AND IT ALMOST WORKS. Start from here, not from zero.
+
+Written out in the spatial branch of `zhao_project_core`: the nine products
+registered into `p_x0_q … p_w2_q` plus `t_x_q/t_y_q/t_w_q` on the accept edge,
+and the three four-term sums moved to the next cycle, feeding `s1_rx/ry/rw`.
+`seq_holds` becomes `p_valid_q` so `busy_o` still covers the new stage — the
+queue-occupancy law the module's own comment insists on.
+
+**What passed:**
+
+* `proj_matw_directed` — **242/242**, both MATW values, both ROWS_PER_PASS,
+  including the exhaustive narrowing differential and the refusal law.
+* `proj_rowmux_directed` — the full stream equality under four stall patterns.
+* Capture-at-accept is untouched by construction, and the mid-sequence
+  configuration-write case passes. This is the property that killed the first
+  attempt at this package; the second shape does not have the problem.
+
+**What had to move, and legitimately:** the spatial branch gains one cycle, so
+the declared `L1 = L3 + 3` becomes `+2` in `proj_rowmux_directed` and
+`proj_matw_directed`. The initiation interval is **unchanged at exactly 3** —
+the half of the rule that may not move. The sequenced branch was deliberately
+not cut: `ROWS_PER_PASS=1` is an unselected DSP lever and its row sum lives
+inside an FSM. It still owes the same treatment, and the `+2` is the reminder.
+
+**WHAT BLOCKED IT, and it is the only thing left:**
+`proj_matw_mutant_control` stops producing output. It passes at HEAD in
+**0.019 s with 14 checks**; with this change its `run_and_compare` loop runs to
+its 100,000-cycle bound without collecting the records it waits for. That was
+confirmed by stashing the change and re-running, so it is this change and not a
+stale binary.
+
+The stale committed copy `tests/mutants/zhao_project_core_mutant.sv` was
+**refreshed onto the new body first** (its one mutation is `cfg_fits = 1'b1`)
+and the failure survives that, so mutant drift is not the cause either. The
+control drives two core instances through its own `tb_proj_matw` testbench with
+`r_`/`m_` prefixes; the next step is to find why records stop arriving there
+when the main directed suite on the same core is fully green.
+
+**The change is not in the tree.** It was reverted rather than shipped with a
+control that no longer reports, because a red instrument is worse than a slow
+clock. Redoing it is perhaps twenty minutes with this section in hand.
+
 So the two shapes below are **superseded**. They were the right answers to the
 wrong question, and are kept only so nobody re-derives them:
 
