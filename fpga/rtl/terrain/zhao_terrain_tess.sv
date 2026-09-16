@@ -350,21 +350,6 @@ module zhao_terrain_tess #(
     end
   endfunction
 
-  // rescale16 with the rounding term ALREADY ADDED by the caller (T7). Same
-  // shift, same saturation, same order; only the `+ 2^15` is missing, because
-  // it happened a cycle earlier. Kept as a separate function rather than a
-  // parameter on the original so that `rescale16` stays the untouched form the
-  // simulation assertion differences against.
-  function automatic logic signed [31:0] rescale16_pre(input logic signed [52:0] x);
-    logic signed [52:0] r;
-    begin
-      r = x >>> 16;
-      if (r > 53'sd2147483647) rescale16_pre = 32'sh7FFF_FFFF;
-      else if (r < -53'sd2147483648) rescale16_pre = 32'sh8000_0000;
-      else rescale16_pre = r[31:0];
-    end
-  endfunction
-
   // ---- job state -----------------------------------------------------------
   logic [ 5:0] j_ox, j_oz;
   logic [ 1:0] j_level;
@@ -1137,8 +1122,7 @@ module zhao_terrain_tess #(
   //
   // So the product is registered. The split is roughly 10 / 6 rather than the
   // 6 / 16 T1 actually achieved, and it costs a THIRD in-flight stage.
-  // 53 BITS, NOT 52, AND IT CARRIES THE ROUNDING TERM -- see stage C below.
-  logic signed [52:0]      ln2_prod_q;
+  logic signed [51:0]      ln2_prod_q;
   logic                    ln2_v_q;
   logic [1:0]              ln2_kind_q, ln2_slot_q;
   logic                    ln2_last_q;
@@ -1154,47 +1138,12 @@ module zhao_terrain_tess #(
   // stage B: the multiply, and nothing else.
   wire signed [51:0] m_prod = $signed({1'b0, lnd_morph_q}) * lnd_md_q;
   // stage C: the rescale and the saturating add, on the registered product.
-  //
-  // G8B T7: THE ROUNDING ADD MOVED INTO THE REGISTER WRITE. @g8b-t56 measured
-  // this as the block's last cap -- ln2_prod_q -> vq_y at -0.245 ns, with a
-  // whole-block TNS of only -1.164 -- and the cone is a 52-bit add, a shift, a
-  // 52-bit saturation compare and then fx_add_sat, all in the consumed cycle.
-  //
-  // `rescale16(x)` is `(x + 2^15) >>> 16` then saturate, and the `+ 2^15` does
-  // not depend on anything the consumed cycle learns. So it is added when the
-  // product is REGISTERED, one stage earlier, where stage B holds only a
-  // multiply and has the slack for it. Stage C keeps the shift, the saturation
-  // and fx_add_sat -- the whole 52-bit carry chain leaves the path.
-  //
-  // THE REGISTER IS 53 BITS FOR THIS, and the extra bit is not decoration.
-  // `m_prod` is a 17x34 product that already fills 52, so `m_prod + 2^15`
-  // can leave the range even though the morph factor's actual domain keeps it
-  // far inside. Widening makes the sum exact by CONSTRUCTION rather than by an
-  // argument about a value's range -- and an argument about range is exactly
-  // what this file's own history says not to trust: a 32-step divide over a
-  // 64-bit numerator was once shipped yielding the wrong quotient bits because
-  // the real range was assumed rather than carried.
-  //
-  // `a_blend_round_exact` below differences this against the untouched
-  // `rescale16(m_prod)` on every blended vertex in simulation, so the move is
-  // measured rather than reasoned about. `fx_add_sat` is untouched.
-  wire signed [31:0] m_step = rescale16_pre(ln2_prod_q);
+  // `rescale16` and `fx_add_sat` are untouched and applied in the same order to
+  // the same values, so the arithmetic is bit-identical and
+  // terrain_pipe_differential stays exact against zhao_terrain_project.
+  wire signed [31:0] m_step = rescale16(ln2_prod_q);
   wire signed [31:0] m_y = fx_add_sat({ln2_vh_q[31], ln2_vh_q},
                                       {m_step[31], m_step});
-
-`ifndef SYNTHESIS
-  // T7's proof, run on every blended vertex rather than argued in the comment
-  // above. `ln2_prod_dbg_q` is the product WITHOUT the rounding term, carried
-  // only so the untouched `rescale16` can be applied to it and the two
-  // compared. Dead in synthesis: nothing else reads it.
-  logic signed [51:0] ln2_prod_dbg_q;
-  always_ff @(posedge clk) ln2_prod_dbg_q <= m_prod;
-  always_ff @(posedge clk) begin
-    if (ln2_v_q && (rescale16_pre(ln2_prod_q) !== rescale16(ln2_prod_dbg_q)))
-      $fatal(1, "zhao_terrain_tess: pre-rounded blend disagrees -- pre=%0d orig=%0d",
-             rescale16_pre(ln2_prod_q), rescale16(ln2_prod_dbg_q));
-  end
-`endif
 
   // Stage A's view of the last slot: the x/z mux sits on the register inputs,
   // not in the blend cone.
@@ -1634,7 +1583,7 @@ module zhao_terrain_tess #(
           // whose blend completes now must be forwarded here too.
           ln2_v_q <= lnd_v_q;
           if (lnd_v_q) begin
-            ln2_prod_q   <= 53'(m_prod) + 53'sd32768;
+            ln2_prod_q   <= m_prod;
             ln2_kind_q   <= lnd_kind_q;
             ln2_slot_q   <= lnd_slot_q;
             ln2_last_q   <= lnd_last_q;
