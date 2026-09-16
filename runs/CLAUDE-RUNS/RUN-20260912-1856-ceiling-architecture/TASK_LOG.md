@@ -1804,3 +1804,51 @@ and raising a budget to paper over a slow gate is exactly the guess the
 existing comment forbids. **Re-measure unloaded, decide with the number.** Not
 done in this pass because the machine has had a fit running almost
 continuously and there is no clean measurement to be had.
+
+### WHERE G8B STANDS — 96.45 MHz on the mode that counts
+
+| row | pins | Fmax | setup | TNS | ALM | regs |
+|---|---|---:|---:|---:|---:|---:|
+| `@g8b-t56-pins` | physical | 87.87 | −1.381 | −8.225 | 8,247 | 8,828 |
+| `@g8b-t8-pins` | physical | **96.45** | −0.368 | −1.603 | **8,208** | **8,524** |
+
+**+8.58 MHz for deleting a register**, and area fell with it. Every other
+package in this campaign bought clock by adding stages or registers; T8 bought
+more than any of them by taking one away, because the boolean `s3_sat` carried
+was already implied by two registers beside it.
+
+**18 of 2,000 summarised paths are negative**, in three families:
+
+```
+-0.368  tess   ln2_prod_q[22] -> vq_y[1][30]     the geomorph blend landing
+-0.141  core   s5_view -> s6_prod_x[63]          the viewport multiply
+-0.110  core   Mult3 -> s1_ry[53]                a row product at the DSP
+```
+
+T5's registered lattice base sits at **+0.131** — a second fit confirming it
+moved work rather than relocating it.
+
+**3.55 MHz remain and the binding family is the one T7 already failed at.**
+The obvious next move — reassociating `rescale16(p)` + `fx_add_sat(vh, ·)`
+into one add, which works because `vh`'s low sixteen bits are zero so
+`vh·2^16 + 2^15` is the concatenation `{ln2_vh_q, 16'h8000}` — **is not
+equivalent, and the disqualifying case is reachable.** The merged form
+saturates once; the original clamps the inner rescale to int32 first. With
+`t = 2^33` and `vh = −2^31` the original yields **−1** and the merged form
+**+2^31−1**. That is a sign flip in the middle of the range, not a rail-only
+disagreement, and `p` is a 17-bit morph times a signed 34-bit delta so
+`p >> 16` really does reach 2^33.
+
+So the remaining gap needs a genuine extra stage in the landing path, which
+lands in the vertex queue whose credit law T1 and T1b each got wrong once.
+Scoped, not started.
+
+**THE CAMPAIGN, both modes, for the record:**
+
+```
+virtual   43.94  43.54  57.87  73.59  74.17  85.90  92.44  97.61
+physical  43.94  43.54                              87.87  96.45
+```
+
+The two columns are only comparable within themselves. The 9.74 MHz boundary
+measured at `@g8b-t56` is why.
