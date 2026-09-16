@@ -95,6 +95,67 @@ snapshots cycle by cycle, rather than reasoning about the forward conditions in
 isolation as this one did. The three conditions are each individually defensible
 and the interaction is what is wrong.
 
+## Traced, 2026-09-17 — the mechanism, and why a fourth forward level is not it
+
+The first hypothesis was that a snapshot can now fall one cycle *before* the
+blend lands, so `vy[k]` still holds the raw height and no forward fires. A
+two-level forward was built to test it — forward from stage C (lands next
+edge, value is the old three-stage `m_y`) as well as from stage D. **Result:
+the same 32 failures, unchanged.** Hypothesis refuted, cheaply.
+
+So the pipeline was traced instead of argued about: a `$display` of every
+stage's `(valid, kind, slot, last)`, `vy[0..2]`, both blend outputs and all
+six snapshot registers, on every edge with traffic.
+
+### What the trace settles
+
+**1. Non-morphing traffic is correct through the four-stage pipe.** 400 cycles
+of kind-0 jobs were checked by hand against the emit edges: every `a` and `b`
+matched the `vy[]` value written for that group, including the shared-vertex
+repeats between adjacent triangles. The stage, the credits, the widened
+indices and the drain all work. The fault is *only* in morphing vertices.
+
+**2. THE READ WALK IS NOT (s0, s1, s2).** This is the fact the whole attempt
+was built on a wrong picture of. A morphing vertex takes THREE reads — kind 0,
+then coarse parent A, then parent B — and the walk is over (slot, kind) pairs:
+
+```
+TR 329863  A(k1 s1)     slot 1, parent A
+TR 329864  A(k2 s1)     slot 1, parent B  -> its blend completes at D on 329867
+TR 329865  A(k0 s2)     slot 2, raw
+TR 329866  A(k0 s0)     ... the next group has already started
+```
+
+So a triangle takes between three and nine reads, and **the `last` read can
+itself be the kind-2 read of the last slot** — `TR 329872  C(k2 s2 L1)`.
+
+**3. Which gives the real mechanism.** When the last read is slot 2's kind-2
+read, the emit needs slot 0's and slot 1's *blends*, and slot 1's kind-2 read
+may have issued only one or two cycles earlier. With a three-stage blend the
+two snapshot levels (A→B, B→C) were exactly enough to catch both landings;
+with four stages the blend lands one cycle later than the snapshot chain can
+reach, and **no number of forward levels fixes it**, because forwarding from A
+or B means forwarding a value whose multiply has not happened yet.
+
+### Which leaves two real options, neither of them a bug fix
+
+**(a) Hold the last read until pending blends have landed.** Correct and
+simple, and it is a STALL — it would cost initiation rate on exactly the
+morphing path, which `terrain_tess_modes_directed` measures at 169 cycles for
+81 vertices at morph 0.5. The architecture rule is that latency may grow and
+the initiation rate may not, so this needs the rate measured before it is
+accepted, not after.
+
+**(b) Select at the EMIT rather than snapshotting early.** For each of `a` and
+`b`, choose between `vy[k]` and whichever pipeline stage currently holds slot
+k's unlanded blend — a four-way match on `(kind == 2, slot == k)` across A, B,
+C, D. That removes the snapshot registers rather than adding to them, and it
+puts the mux on the `a`/`b` path, which is **not** the critical one: the
+binding path is `prod -> rescale -> add -> vq_y`, and `a`/`b` reach the
+triangle queue through a different cone entirely.
+
+**(b) is the one to try**, and it is a different change from the one attempted
+here — it deletes the three write-forwards instead of extending them.
 ## Status
 
 * RTL reverted; `zhao_terrain_tess.sv` is byte-identical to `b1dbb97d`, the
