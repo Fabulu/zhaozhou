@@ -57,9 +57,9 @@ PROTECTED = {
     "fpga/rtl/common/zhao_shell_top.sv":
         "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "43b68fe6598268c5c22fcecd1744210b23a6a539bf3c19d7bf89a1668425ad95",
+        "c9be95719e3d5f1712d075b75d917045ac925382b65e6203b81d0cf3cc4e6fe1",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "8c721b8fad987202db9a826a89e97110d5749ab5203910b3932603fa9093d73a",
+        "ae92ec135c5884652dc236b0fea762d968a0713ec3950db45f599cef96c7785d",
 }
 EXPECTED_TESTS = (
     "raster_texture_v3_fit_top_directed",
@@ -249,6 +249,10 @@ class G8AFitTopTests(unittest.TestCase):
         self.assertEqual(payload["fit_top_parameters"], {
             "ATTR_DSP3": "1'b1", "BILERP_DSP2": "1'b1",
         })
+        self.assertEqual(
+            payload["traffic_profile"]["frame_fault_clear"],
+            "registered-held-recoverable-only",
+        )
         self.assertEqual(payload["hierarchy"]["owner"]["required_count"], 1)
         self.assertEqual(payload["hierarchy"]["texjoin_required_count"], 0)
 
@@ -285,8 +289,19 @@ class G8AFitTopTests(unittest.TestCase):
             ".pal_load_rgb565_i((palette_index_q == 8'd5) ? 16'h07e0 : 16'h0000)",
             "if (palette_index_q == 8'hff)",
             "assign fb_ready_w = stimulus_lfsr_q[0] || stimulus_lfsr_q[3];",
+            "logic frame_fault_clear_pending_q;",
+            "wire frame_fault_clear_fire_w =",
+            "assign job_valid_w = job_pending_q && !frame_fault_clear_pending_q;",
+            "assign frame_fault_clear_valid_w = frame_fault_clear_pending_q;",
+            "if (frame_fault_clear_fire_w)",
+            "else if (frame_fault_w)",
+            "!setup_blocking_fault_w && !lifetime_structural_fault_w &&",
+            ".lifetime_structural_fault_o(lifetime_structural_fault_w)",
+            "g8a_fit_top: recoverable clear request was not held",
+            "g8a_fit_top: synthetic job escaped pending clear",
+            "g8a_fit_top: lifetime fault initiated recoverable clear",
             "task zhao_g8a_get_activity(",
-            "`ifndef QUARTUS_SYNTHESIS",
+            "`ifndef QUARTUS_SYNTHESIS\n  export \"DPI-C\" task zhao_g8a_get_activity;",
         ), "G8A wrapper")
         with self.assertRaises(AssertionError):
             require_once(
@@ -302,6 +317,22 @@ class G8AFitTopTests(unittest.TestCase):
         self.assertNotIn("assign fit_signature_o", text)
         self.assertNotIn("assign fit_epoch_o", text)
         self.assertNotIn("^ signature_word_c;", text)
+        self.assertNotIn(
+            "frame_fault_w && frame_fault_clear_ready_w", text,
+        )
+        self.assertNotRegex(
+            text,
+            r"frame_fault_clear_pending_q\s*<=\s*lifetime_structural_fault_w",
+        )
+        with self.assertRaises(AssertionError):
+            require_once(
+                text.replace(
+                    "assign frame_fault_clear_valid_w = frame_fault_clear_pending_q;",
+                    "assign frame_fault_clear_valid_w = frame_fault_w;", 1,
+                ),
+                ("assign frame_fault_clear_valid_w = frame_fault_clear_pending_q;",),
+                "G8A registered-clear control",
+            )
 
     def test_product_v3_parameter_is_explicit_in_selected_tile_hierarchy(self) -> None:
         tile = (REPO / "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv").read_text(

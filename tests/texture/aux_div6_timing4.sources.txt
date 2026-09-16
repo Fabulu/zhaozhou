@@ -1,0 +1,2 @@
+tests/mutants/zhao_texture_aux_timing4_mutants.sv
+fpga/rtl/texture/zhao_texture_aux_div6.sv

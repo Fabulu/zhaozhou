@@ -4,6 +4,11 @@
 // request/return hold, typed HIT/MISS/malformed disposition, owed-response FIFO,
 // unsolicited sink, owner identity, lifetime credit, structural idle, and the
 // explicit no-AUX-as-sample2 plane layout.
+#if (defined(ZHAO_AUX_T4_DEGENERATE_MUTANT_CONTROL) + \
+     defined(ZHAO_AUX_T4_INPUT_FAULT_MUTANT_CONTROL)) > 1
+#error ZHAO_AUX_T4_A0_DRIVER_SELECTOR_COLLISION
+#endif
+
 #include <cstdint>
 #include <cstdio>
 #include <deque>
@@ -417,6 +422,48 @@ void test_hit_and_holds(Vzhao_texture_aux_pipe_v2& top) {
   zhao::check(top.frame_fault_o == 0 && top.credit_fault_o == 0,
               "ordinary HIT leaves frame and reserved-capacity faults clear", 0,
               top.frame_fault_o + top.credit_fault_o);
+}
+
+int g_timing4_a0_degenerate = -1;
+int g_timing4_a0_fault = -1;
+
+void test_timing4_a0_fault_stage(Vzhao_texture_aux_pipe_v2& top) {
+  reset(top);
+  int cycle = 0;
+  const Job degenerate{100, 200, 50, 50, 0, 1000,
+                       0x7A000001u, 0x0711u, false};
+  const Job benign{100, 200, 0, 1000, 0, 1000,
+                   0x7A000002u, 0x0712u, false};
+
+  accept_job(top, degenerate, &cycle);
+  top.eval();
+  zhao::check(top.frame_fault_o == 0 && top.degenerate_o == 0,
+              "accepted degenerate input cannot bypass the A0 fault register", 1,
+              (top.frame_fault_o == 0 && top.degenerate_o == 0) ? 1 : 0);
+
+  // Change every live input and clear on the registered-observation edge. The
+  // accepted A0 facts, not these later pins, must set both observations and must
+  // win over clear.
+  drive_job(top, benign);
+  top.frame_fault_clear_i = 1;
+  top.eval();
+  zhao::tick(top);
+  ++cycle;
+  top.frame_fault_clear_i = 0;
+  top.eval();
+  g_timing4_a0_degenerate = static_cast<int>(top.degenerate_o);
+  g_timing4_a0_fault = static_cast<int>(top.frame_fault_o);
+  zhao::check(top.degenerate_o == 1,
+              "registered A0 degenerate fact increments exactly one cycle later", 1,
+              top.degenerate_o);
+  zhao::check(top.frame_fault_o == 1,
+              "registered A0 input fault has priority over same-edge clear", 1,
+              top.frame_fault_o);
+
+  const AuxResult refused = wait_result(top, &cycle, true);
+  zhao::check(refused.owner == degenerate.owner && refused.status == 1,
+              "A0 retime preserves the exact local-refusal owner and payload", 1,
+              (refused.owner == degenerate.owner && refused.status == 1) ? 1 : 0);
 }
 
 void test_local_refusals(Vzhao_texture_aux_pipe_v2& top) {
@@ -882,7 +929,31 @@ void test_credit_terminal_release(Vzhao_texture_aux_pipe_v2& top) {
 int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
   Vzhao_texture_aux_pipe_v2 top;
+#if defined(ZHAO_AUX_T4_DEGENERATE_MUTANT_CONTROL) || \
+    defined(ZHAO_AUX_T4_INPUT_FAULT_MUTANT_CONTROL)
+  test_timing4_a0_fault_stage(top);
+  const int failures = zhao::check_failures();
+#if defined(ZHAO_AUX_T4_DEGENERATE_MUTANT_CONTROL)
+  if (failures == 1 && g_timing4_a0_degenerate == 0 &&
+      g_timing4_a0_fault == 1) {
+    std::printf("AUX Timing4 A0 degenerate mutant FIRED exactly once\n");
+    zhao::exit_hard(0);
+  }
+#else
+  if (failures == 1 && g_timing4_a0_degenerate == 1 &&
+      g_timing4_a0_fault == 0) {
+    std::printf("AUX Timing4 A0 input-fault mutant FIRED exactly once\n");
+    zhao::exit_hard(0);
+  }
+#endif
+  std::fprintf(stderr,
+               "FAIL: AUX Timing4 A0 mutant signature differs; "
+               "failures=%d degenerate=%d fault=%d\n",
+               failures, g_timing4_a0_degenerate, g_timing4_a0_fault);
+  zhao::exit_hard(1);
+#else
   test_reset_blocks_admission(top);
+  test_timing4_a0_fault_stage(top);
   test_hit_and_holds(top);
   test_local_refusals(top);
   test_clear_live_state(top);
@@ -906,5 +977,6 @@ int main(int argc, char** argv) {
   zhao::exit_hard(1);
 #else
   return zhao::report_and_exit("texture_aux_pipe_v2_directed");
+#endif
 #endif
 }

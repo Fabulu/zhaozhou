@@ -63,6 +63,14 @@ constexpr const char* kMutationName = "dropped phase completion accounting";
 #define MATERIAL_V3_MUTANT_BUILD 1
 constexpr int kMutation = 11;
 constexpr const char* kMutationName = "reissued phase launch accounting";
+#elif defined(MATERIAL_V3_MUTANT_SKIP_S)
+#define MATERIAL_V3_MUTANT_BUILD 1
+constexpr int kMutation = 12;
+constexpr const char* kMutationName = "missing source-capture S boundary";
+#elif defined(MATERIAL_V3_MUTANT_SKIP_F)
+#define MATERIAL_V3_MUTANT_BUILD 1
+constexpr int kMutation = 13;
+constexpr const char* kMutationName = "missing finish-result F boundary";
 #endif
 
 #if defined(MATERIAL_V3_MUTANT_BUILD)
@@ -1028,6 +1036,94 @@ void test_one_phase_retirement_is_one_per_clock() {
         d.phases_completed_o);
 }
 
+void test_timing4_eight_context_pipeline() {
+  Dut d;
+  reset(d);
+  d.o_ready_i = 1;
+
+  int accepted = 0;
+  int retired = 0;
+  int input_bubbles = 0;
+  int output_bubbles = 0;
+  int first_output_cycle = -1;
+  int last_output_cycle = -1;
+  int wrong = 0;
+  int accept_cycle[8] = {0};
+  int retire_cycle[8] = {0};
+
+  for (int cycle = 0; cycle < 80 && retired < 8; ++cycle) {
+    if (accepted < 8) {
+      Frag f;
+      f.recipe = 0;
+      f.count = 1;
+      f.s[0] = plane(static_cast<uint8_t>(0x30 + accepted), 0x51, 0x72,
+                     0x93, static_cast<uint8_t>(0xB0 + accepted));
+      f.tag = static_cast<uint16_t>(0x4400 + accepted);
+      drive_frag(d, f);
+    } else {
+      d.f_valid_i = 0;
+    }
+    d.o_ready_i = 1;
+    d.eval();
+
+    if (accepted < 8) {
+      if (d.f_ready_o) {
+        accept_cycle[accepted] = cycle;
+        ++accepted;
+      } else {
+        ++input_bubbles;
+      }
+    }
+
+    if (d.o_valid_o) {
+      const int index = static_cast<int>(d.o_tag_o) - 0x4400;
+      if (first_output_cycle < 0) first_output_cycle = cycle;
+      if (last_output_cycle >= 0 && cycle != last_output_cycle + 1)
+        output_bubbles += cycle - last_output_cycle - 1;
+      last_output_cycle = cycle;
+      if (index < 0 || index >= 8) {
+        ++wrong;
+      } else {
+        retire_cycle[index] = cycle;
+        if (d.o_rgb_o != static_cast<uint32_t>(0x305172 + (index << 16)) ||
+            d.o_a_o != 0x93 || d.o_raw_index_o != 0xB0 + index ||
+            d.o_status_o != 0)
+          ++wrong;
+      }
+      ++retired;
+    }
+    tick(d);
+  }
+  d.f_valid_i = 0;
+
+  int latency_errors = 0;
+  for (int i = 0; i < 8; ++i)
+    if (retire_cycle[i] - accept_cycle[i] != 11) ++latency_errors;
+
+  check(accepted == 8 && input_bubbles == 0,
+        "NCTX=8 accepts eight back-to-back phases without a bubble", 8,
+        accepted - input_bubbles);
+  check(retired == 8 && output_bubbles == 0,
+        "Timing4 pipeline retires eight results on consecutive clocks", 8,
+        retired - output_bubbles);
+  check(first_output_cycle == 11 && latency_errors == 0,
+        "S/F pipeline has exact eleven-cycle accept-to-visible latency", 11,
+        first_output_cycle);
+  check(wrong == 0,
+        "S/F pipeline preserves every ordered context, phase, and result", 0,
+        wrong);
+  check(d.jobs_accepted_o == 8 && d.jobs_completed_o == 8 &&
+            d.phases_issued_o == 8 && d.phases_completed_o == 8,
+        "S/F pipeline counters close exactly after eight-context traffic", 8,
+        d.jobs_completed_o);
+
+  tick(d);
+  d.eval();
+  check(d.idle_o != 0,
+        "S/F pipeline returns to structural idle after complete drain", 1,
+        d.idle_o ? 1 : 0);
+}
+
 void test_held_output_and_structural_idle() {
   Dut d;
   reset(d);
@@ -1230,6 +1326,8 @@ void test_mutant_control_fires() {
   bool sent = false;
   bool seen = false;
   uint64_t got = 0;
+  int accepted_cycle = -1;
+  int seen_cycle = -1;
 
   for (int cycle = 0; cycle < 2000 && !seen; ++cycle) {
     if (!sent) drive_frag(d, f);
@@ -1239,10 +1337,14 @@ void test_mutant_control_fires() {
     const bool accepted = !sent && d.f_valid_i && d.f_ready_o;
     if (d.o_valid_o) {
       got = static_cast<uint64_t>(d.o_result_o);
+      seen_cycle = cycle;
       seen = true;
     }
     tick(d);
-    if (accepted) sent = true;
+    if (accepted) {
+      accepted_cycle = cycle;
+      sent = true;
+    }
   }
 
   const uint64_t want = r9_expected(f);
@@ -1310,7 +1412,7 @@ void test_mutant_control_fires() {
             "recipes 2, 3, and 4 each independently expose stale alpha arithmetic",
             3, extra_mismatches);
     }
-  } else {
+  } else if (kMutation <= 11) {
     check(d.jobs_accepted_o == 1 && d.jobs_completed_o == 1,
           "phase mutant still retires exactly one accepted job", 1,
           d.jobs_completed_o);
@@ -1335,7 +1437,91 @@ void test_mutant_control_fires() {
             "exact phase-demand checker FIRES despite balanced PI/PC", 1,
             d.phases_issued_o != 1 ? 1 : 0);
     }
+  } else {
+    check(got == want,
+          "pipeline-boundary mutant preserves arithmetic while changing latency",
+          want, got);
+    check(seen_cycle - accepted_cycle == 10,
+          "missing S/F boundary is detected one cycle before the contract", 10,
+          seen_cycle - accepted_cycle);
+    check(d.jobs_accepted_o == 1 && d.jobs_completed_o == 1 &&
+              d.phases_issued_o == 1 && d.phases_completed_o == 1,
+          "pipeline-boundary mutant keeps functional counters deceptively balanced",
+          1, d.jobs_completed_o);
   }
+}
+
+void test_pipeline_boundary_mutant_fires() {
+  Dut d;
+  reset(d);
+
+  std::vector<Frag> jobs;
+  std::map<uint16_t, uint64_t> expected;
+  for (int i = 0; i < 8; ++i) {
+    Frag f;
+    f.recipe = 5;
+    f.count = 2;
+    f.weight = static_cast<uint8_t>(17 + i * 23);
+    f.s[0] = Plane{static_cast<uint8_t>(11 + i * 7),
+                   static_cast<uint8_t>(31 + i * 5),
+                   static_cast<uint8_t>(53 + i * 3),
+                   static_cast<uint8_t>(91 + i),
+                   static_cast<uint8_t>(0xC0 + i), 0};
+    f.s[1] = Plane{static_cast<uint8_t>(211 - i * 9),
+                   static_cast<uint8_t>(173 - i * 7),
+                   static_cast<uint8_t>(137 - i * 5),
+                   static_cast<uint8_t>(41 + i), 0, 0};
+    f.tag = static_cast<uint16_t>(0x5200 + i);
+    expected[f.tag] = r9_expected(f);
+    jobs.push_back(f);
+  }
+
+  int accepted = 0;
+  int retired = 0;
+  int mismatches = 0;
+  int duplicate_or_unknown = 0;
+  int latency_errors = 0;
+  int accept_cycle[8] = {0};
+  int retire_cycle[8] = {0};
+  bool seen[8] = {false};
+  for (int cycle = 0; cycle < 4000 && retired < 8; ++cycle) {
+    if (accepted < 8) drive_frag(d, jobs[accepted]);
+    else d.f_valid_i = 0;
+    d.o_ready_i = 1;
+    d.eval();
+    const bool take = accepted < 8 && d.f_valid_i && d.f_ready_o;
+    if (take) accept_cycle[accepted] = cycle;
+    if (d.o_valid_o) {
+      const uint16_t tag = static_cast<uint16_t>(d.o_tag_o);
+      const int index = static_cast<int>(tag) - 0x5200;
+      if (index < 0 || index >= 8 || seen[index]) {
+        ++duplicate_or_unknown;
+      } else {
+        seen[index] = true;
+        retire_cycle[index] = cycle;
+        if (static_cast<uint64_t>(d.o_result_o) != expected[tag]) ++mismatches;
+      }
+      ++retired;
+    }
+    tick(d);
+    if (take) ++accepted;
+  }
+
+  for (int i = 0; i < 8; ++i)
+    if (retire_cycle[i] - accept_cycle[i] != 10) ++latency_errors;
+
+  check(accepted == 8 && retired == 8,
+        "pipeline mutant accepts and retires the complete eight-context stream",
+        8, retired);
+  check(duplicate_or_unknown == 0 && mismatches == 0,
+        "pipeline mutant remains arithmetically plausible and identity-clean",
+        0, duplicate_or_unknown + mismatches);
+  check(latency_errors == 0,
+        "inverse-polarity checker FIRES on the one-cycle-short S/F pipeline", 0,
+        latency_errors);
+  check(d.jobs_accepted_o == 8 && d.jobs_completed_o == 8,
+        "pipeline mutant can balance job counters while violating latency",
+        8, d.jobs_completed_o);
 }
 
 #endif  // MATERIAL_V3_MUTANT_BUILD
@@ -1346,7 +1532,8 @@ int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
 #ifdef MATERIAL_V3_MUTANT_BUILD
   std::printf("[material_combine_v3_diff] MUTANT CONTROL: %s\n", kMutationName);
-  test_mutant_control_fires();
+  if (kMutation >= 12) test_pipeline_boundary_mutant_fires();
+  else test_mutant_control_fires();
 #else
   test_r9_arithmetic_and_stale_separators();
   test_exact_counts_loud_errors_and_required_status();
@@ -1355,6 +1542,7 @@ int main(int argc, char** argv) {
   test_exact_saturation_accounting_under_stalls();
   test_phase_and_product_cadence();
   test_one_phase_retirement_is_one_per_clock();
+  test_timing4_eight_context_pipeline();
   test_held_output_and_structural_idle();
 #endif
 

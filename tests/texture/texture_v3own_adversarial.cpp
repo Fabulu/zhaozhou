@@ -84,6 +84,7 @@ struct CmbPkt {
   uint16_t owner;
   uint64_t s[3];
   uint64_t ax;
+  uint64_t cyc;
 };
 
 // The bench driver. It is the island's other half: it accepts COMBINE
@@ -194,6 +195,7 @@ class Ob {
       cp.s[1] = d->cmb_s1_o;
       cp.s[2] = d->cmb_s2_o;
       cp.ax = d->cmb_aux_o;
+      cp.cyc = cyc;
     }
 
     obs_out_fire = (d->out_valid_o != 0) && (d->out_ready_i != 0);
@@ -2202,6 +2204,120 @@ int main(int argc, char** argv) {
                 "above is an ordering result and not a source that never "
                 "commits at all",
                 1, commit_after_we > 0 ? 1 : 0);
+  }
+
+  // =========================================================================
+  hdr("case 25 (Timing4): registered admission/reservation events preserve identity");
+  // =========================================================================
+  {
+    Ob s(dut);
+    s.reset();
+    s.cmb_ready = false;
+    s.out_ready = true;
+
+    std::array<uint16_t, 2> owner{};
+    for (unsigned index = 0; index < owner.size(); ++index) {
+      s.d->adm_valid_i = 1;
+      s.d->adm_ctx_i = ctx_of(0xD000u + index);
+      s.d->adm_req_i = 0;
+      s.step();
+      zhao::check(s.obs_adm_fire, "Timing4 back-to-back admission accepted",
+                  1, s.obs_adm_fire ? 1 : 0);
+      owner[index] = s.obs_adm_owner;
+      zhao::check(dut->zhao_texture_v3own->ctxw_v_q != 0,
+                  "Timing4 accepted admission crossed the event boundary",
+                  1, dut->zhao_texture_v3own->ctxw_v_q != 0 ? 1 : 0);
+      zhao::check(dut->zhao_texture_v3own->ctxw_owner_q == owner[index],
+                  "Timing4 admission event retained full slot/generation",
+                  owner[index], dut->zhao_texture_v3own->ctxw_owner_q);
+      zhao::check(dut->zhao_texture_v3own->ctxw_req_q == 0,
+                  "Timing4 zero-work mask retained across admission event",
+                  0, dut->zhao_texture_v3own->ctxw_req_q);
+    }
+    s.d->adm_valid_i = 0;
+
+    std::vector<uint16_t> reservations;
+    for (int watchdog = 0; watchdog < 100 && reservations.size() < owner.size();
+         ++watchdog) {
+      if (dut->zhao_texture_v3own->k0_v_q) {
+        const uint16_t reserved = dut->zhao_texture_v3own->k0_owner_q;
+        const uint32_t slot = slot_of(reserved);
+        zhao::check(!dut->zhao_texture_v3own->crs_q[slot],
+                    "Timing4 reservation bit did not bypass registered k0 event",
+                    0, dut->zhao_texture_v3own->crs_q[slot]);
+        reservations.push_back(reserved);
+        s.step();
+        zhao::check(dut->zhao_texture_v3own->crs_q[slot],
+                    "Timing4 exact k0 owner published reservation one edge later",
+                    1, dut->zhao_texture_v3own->crs_q[slot]);
+      } else {
+        s.step();
+      }
+    }
+    zhao::check(reservations.size() == owner.size(),
+                "Timing4 observed both delayed reservations", owner.size(),
+                reservations.size());
+    for (unsigned index = 0;
+         index < owner.size() && index < reservations.size(); ++index)
+      zhao::check(reservations[index] == owner[index],
+                  "Timing4 reservation retained exact ordered owner identity",
+                  owner[index], reservations[index]);
+
+    s.cmb_ready = true;
+    for (int watchdog = 0; watchdog < 200 && s.emitted.size() < owner.size();
+         ++watchdog)
+      s.step();
+    zhao::check(s.combined.size() == owner.size(),
+                "Timing4 zero-work owners each entered COMBINE exactly once",
+                owner.size(), s.combined.size());
+    zhao::check(s.emitted.size() == owner.size(),
+                "Timing4 zero-work owners each retired exactly once",
+                owner.size(), s.emitted.size());
+    if (s.combined.size() == owner.size())
+      zhao::check(s.combined[1].cyc == s.combined[0].cyc + 1,
+                  "Timing4 registered reservation retained II=1/no bubbles",
+                  s.combined[0].cyc + 1, s.combined[1].cyc);
+    zhao::check(dut->ev_admitted_o == owner.size(),
+                "Timing4 admission counter remained exact", owner.size(),
+                dut->ev_admitted_o);
+    zhao::check(dut->ev_tickets_o == owner.size(),
+                "Timing4 zero-work ticket counter remained exact", owner.size(),
+                dut->ev_tickets_o);
+  }
+
+  // A return for an established owner and the next admission may share an edge.
+  // The registered admission event must retain its new identity while the old
+  // return independently walks C0..C4.
+  {
+    Ob s(dut);
+    s.reset();
+    s.out_ready = true;
+    const uint16_t old_owner = s.admit(ctx_of(0xD100u), 0x1);
+    s.issue_tmu(old_owner, 0);
+
+    s.d->tmu_rvalid_i = 1;
+    s.d->tmu_rhandle_i = smp(old_owner, 0);
+    s.d->tmu_rresult_i = mkres(old_owner * 4u);
+    s.d->adm_valid_i = 1;
+    s.d->adm_ctx_i = ctx_of(0xD101u);
+    s.d->adm_req_i = 0;
+    s.step();
+    const uint16_t new_owner = s.obs_adm_owner;
+    zhao::check(s.obs_adm_fire,
+                "Timing4 simultaneous old return/new admission accepted", 1,
+                s.obs_adm_fire ? 1 : 0);
+    zhao::check(dut->zhao_texture_v3own->ctxw_owner_q == new_owner,
+                "Timing4 simultaneous return did not corrupt admission identity",
+                new_owner, dut->zhao_texture_v3own->ctxw_owner_q);
+    s.d->tmu_rvalid_i = 0;
+    s.d->adm_valid_i = 0;
+    s.idle(300);
+    zhao::check(s.emitted.size() == 2,
+                "Timing4 simultaneous return/admission retired both owners",
+                2, s.emitted.size());
+    zhao::check(dut->ev_admitted_o == 2 && dut->ev_emitted_o == 2,
+                "Timing4 simultaneous edge kept exact admission/emission counters",
+                2, dut->ev_emitted_o);
   }
 
   const int rc = zhao::report_and_exit("texture_v3own_adversarial");

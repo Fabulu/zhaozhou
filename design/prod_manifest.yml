@@ -356,12 +356,15 @@ excluded:
   # Packet E shares ENGINE1 only behind the real guard. The shell has no
   # independent raw-last return, so this test-only owner cannot be adopted there.
   - zhao_render_asset_mux: not-yet-adopted  Packet-E excluded local geometry/texture-fill owner mux behind the unchanged ENGINE1 MEM.GUARD client; real accept-then-verdict and explicit raw-last routing are unit-verified, but the protected shell cannot supply raw-last and G8A must price a compatible connected seam
-  - zhao_engine1_raw_last_v2: not-yet-adopted  Packet-H independent accepted-length raw16 terminal generator for the excluded ENGINE1 asset mux; exact 16/32/64-byte retirement and early/missing/late/state controls are unit-verified, but first shell composition and any resource/timing claim remain open
+  - zhao_engine1_raw_last_v2: not-yet-adopted  Packet-H independent ENGINE1 controller-retirement validator and held raw16 framer for the excluded asset mux; exact 16/32/64-byte counts, 1-8-halfword credits, missing-final detection, FINAL_HELD backpressure, and early/missing/late/state controls are unit-verified, but connected controller/mux integration and any resource/timing claim remain open
   # Packet G replaces the raw level/toggle publication crossing only in the
   # Packet-H sibling shell. Both blocks are unit-verified and intentionally
   # unreachable from every currently selected accounting root.
   - zhao_video_slotmgr_v2: not-yet-adopted  Packet-G fair renderer/blitter lease authority with internally derived framebuffer windows, full writer/generation publication identity, same-edge fault priority, and exact swap echo; adoption belongs to Packet H
   - zhao_fb_ready_cdc_v2: not-yet-adopted  Packet-G paired-reset generation-bearing depth-four READY/swap CDC; adoption belongs to Packet H and the protected shell remains byte-for-byte unchanged
+  - zhao_renderer_lease_v2: not-yet-adopted  Packet-H renderer lease and V3-clear front end with lowest-FREE slot selection, held manager identity, reset-epoch admission gate, and fixed Z60/Storm/Duo canvas geometry; connected sibling-shell integration remains open
+  - zhao_video_terminal_adapter_v2: not-yet-adopted  Packet-H one-entry blitter-pulse/renderer-stream terminal join with release priority, immutable writer/slot/generation disposition, explicit pulse refusal, and accepted/captured conservation; connected manager integration remains open
+  - zhao_video_ready_bridge_v2: not-yet-adopted  Packet-H split-clock READY/echo, FRAMECTL, scanout-completion, blank-proof, and lease-barrier bridge; connected sibling-shell integration and physical CDC/timing evidence remain open
   #
   # The rows below are the now-unreachable PRE-PACKET-B implementations. They are
   # retained as oracle/history material with their source, tests, existing fit

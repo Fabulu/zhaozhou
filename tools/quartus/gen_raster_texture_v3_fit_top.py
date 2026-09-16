@@ -178,6 +178,7 @@ def build_outputs(snapshots: dict[str, bytes]) -> tuple[bytes, bytes]:
             "binding_selector": 1,
             "cache_fill_halfwords": 8,
             "framebuffer_backpressure": "deterministic-lfsr",
+            "frame_fault_clear": "registered-held-recoverable-only",
             "material": "one-sample-clut4-index5-green",
             "tile": "one 16x16 half-tile triangle per quiet interval",
         },

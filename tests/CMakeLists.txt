@@ -2900,6 +2900,41 @@ verilate(test_texture_v3own_adversarial
   VERILATOR_ARGS --assert)
 add_test(NAME texture_v3own_adversarial COMMAND test_texture_v3own_adversarial)
 
+# Timing4 event boundaries: corrupt only the registered owner generation and
+# require the independently clocked identity assertion to fire exactly once.
+function(zhao_v3own_timing4_event_control TARGET NAME SELECTOR EXPECTED)
+  add_executable(${TARGET} texture/texture_v3own_adversarial.cpp)
+  target_link_libraries(${TARGET} PRIVATE zhao_harness)
+  verilate(${TARGET}
+    PREFIX Vzhao_texture_v3own
+    TOP_MODULE zhao_texture_v3own
+    SOURCES
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
+      ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_texture_v3own_timing4_event_mutants.sv
+      ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv
+    VERILATOR_ARGS --assert -D${SELECTOR})
+  add_test(NAME texture_v3own_timing4_${NAME}_control
+    COMMAND "${Python3_EXECUTABLE}"
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_v3own_timing4_event_control.py
+      --exe $<TARGET_FILE:${TARGET}> --expected ${EXPECTED})
+  set_tests_properties(texture_v3own_timing4_${NAME}_control PROPERTIES
+    LABELS "fast;nightly;mutant;packet-b;packet-f" TIMEOUT 600)
+endfunction()
+zhao_v3own_timing4_event_control(
+  t_v3own_t4a admission_identity ZHAO_V3OWN_T4_MUTANT_ADMISSION_STALE
+  a_admission_event_identity)
+zhao_v3own_timing4_event_control(
+  t_v3own_t4r reservation_identity ZHAO_V3OWN_T4_MUTANT_RESERVATION_STALE
+  a_reservation_event_identity)
+add_test(NAME texture_v3own_timing4_event_selector_collision
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_v3own_timing4_event_control.py
+    --collision --verilator "${ZHAO_VERILATOR_LINT}")
+set_tests_properties(texture_v3own_timing4_event_selector_collision PROPERTIES
+  LABELS "fast;mutant;packet-b;packet-f" TIMEOUT 180
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # READ_LATE=1 (roadmap 4.2 / Commit4): the adversarial suite deliberately keeps
 # elaborating the default, so this elaborates the seam and does what the suite
 # cannot -- reads a committed sample back through the plane port, fires
@@ -8377,6 +8412,7 @@ add_test(NAME texture_v3_registration_static
           PacketAOwnershipAndClosureTests.test_v3_owner_combine_feedback_cut_keeps_generation_witness
           PacketAOwnershipAndClosureTests.test_v3_owner_retirement_head_is_bounded_and_controlled
           PacketAOwnershipAndClosureTests.test_v3_owner_timing3_notifications_preserve_event_moments
+          PacketAOwnershipAndClosureTests.test_v3_owner_timing4_event_boundaries_are_registered
           PacketAOwnershipAndClosureTests.test_material_writeback_cut_reaches_all_committed_mutants
           PacketAOwnershipAndClosureTests.test_rcp_v4_balanced_lzc_direct_oracle_and_mutant_are_exact
           -q)
@@ -8816,6 +8852,117 @@ verilate(pb_aux
   VERILATOR_ARGS --assert)
 add_test(NAME texture_aux_pipe_v2_directed COMMAND pb_aux)
 
+# Packet B/Timing4: AUX registered-fault and borrow controls.
+set(ZHAO_AUX_T4_PIPE_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture/aux_pipe_v2_timing4.sources.txt)
+set(ZHAO_AUX_T4_DIV_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture/aux_div6_timing4.sources.txt)
+file(STRINGS "${ZHAO_AUX_T4_PIPE_MANIFEST}" ZHAO_AUX_T4_PIPE_RELATIVE_SOURCES)
+file(STRINGS "${ZHAO_AUX_T4_DIV_MANIFEST}" ZHAO_AUX_T4_DIV_RELATIVE_SOURCES)
+if(NOT ZHAO_AUX_T4_PIPE_RELATIVE_SOURCES STREQUAL
+   "tests/mutants/zhao_texture_aux_timing4_mutants.sv;fpga/rtl/texture/zhao_texture_aux_div6.sv;fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv")
+  message(FATAL_ERROR "Timing4 AUX pipe source manifest is not exact and ordered")
+endif()
+if(NOT ZHAO_AUX_T4_DIV_RELATIVE_SOURCES STREQUAL
+   "tests/mutants/zhao_texture_aux_timing4_mutants.sv;fpga/rtl/texture/zhao_texture_aux_div6.sv")
+  message(FATAL_ERROR "Timing4 AUX divider source manifest is not exact and ordered")
+endif()
+set(ZHAO_AUX_T4_PIPE_SOURCES)
+set(ZHAO_AUX_T4_DIV_SOURCES)
+foreach(relative_source IN LISTS ZHAO_AUX_T4_PIPE_RELATIVE_SOURCES)
+  if(IS_ABSOLUTE "${relative_source}" OR relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)" OR
+     NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR "invalid Timing4 AUX pipe source: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_AUX_T4_PIPE_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+foreach(relative_source IN LISTS ZHAO_AUX_T4_DIV_RELATIVE_SOURCES)
+  if(IS_ABSOLUTE "${relative_source}" OR relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)" OR
+     NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR "invalid Timing4 AUX divider source: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_AUX_T4_DIV_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+
+function(zhao_aux_t4_pipe_control TARGET NAME SV_SELECTOR CPP_SELECTOR DIAGNOSTIC)
+  add_executable(${TARGET} texture/texture_aux_pipe_v2_directed.cpp)
+  target_compile_definitions(${TARGET} PRIVATE ${CPP_SELECTOR}=1)
+  target_link_libraries(${TARGET} PRIVATE zhao_harness)
+  verilate(${TARGET}
+    PREFIX Vzhao_texture_aux_pipe_v2
+    TOP_MODULE zhao_texture_aux_pipe_v2
+    SOURCES ${ZHAO_AUX_T4_PIPE_SOURCES}
+    VERILATOR_ARGS --assert -D${SV_SELECTOR})
+  add_test(NAME texture_aux_pipe_v2_timing4_${NAME}_control COMMAND ${TARGET})
+  # NO FAIL_REGULAR_EXPRESSION here, deliberately. This is an inverse-polarity
+  # control: the mutant makes exactly one zhao::check fail, and that helper
+  # prints "FAIL: <what>". The driver's own signature test is the gate -- it
+  # requires exactly one failure with the exact observed-fact pair, and prints
+  # the named diagnostic only then. A "FAIL" regex here fails the control for
+  # containing the evidence it exists to produce.
+  set_tests_properties(texture_aux_pipe_v2_timing4_${NAME}_control PROPERTIES
+    LABELS "fast;nightly;mutant;packet-b;packet-f" TIMEOUT 600
+    PASS_REGULAR_EXPRESSION "${DIAGNOSTIC}")
+endfunction()
+zhao_aux_t4_pipe_control(
+  pb_aux_t4d degenerate ZHAO_AUX_T4_MUTANT_DEGENERATE_DROP
+  ZHAO_AUX_T4_DEGENERATE_MUTANT_CONTROL
+  "AUX Timing4 A0 degenerate mutant FIRED exactly once")
+zhao_aux_t4_pipe_control(
+  pb_aux_t4f input_fault ZHAO_AUX_T4_MUTANT_INPUT_FAULT_DROP
+  ZHAO_AUX_T4_INPUT_FAULT_MUTANT_CONTROL
+  "AUX Timing4 A0 input-fault mutant FIRED exactly once")
+
+add_executable(auxdiv_t4b texture/texture_aux_div6_directed.cpp)
+target_compile_definitions(auxdiv_t4b PRIVATE ZHAO_EXPECT_AUX_T4_BORROW_MUTANT=1)
+target_link_libraries(auxdiv_t4b PRIVATE zhao_harness)
+verilate(auxdiv_t4b
+  PREFIX Vzhao_texture_aux_div6
+  TOP_MODULE zhao_texture_aux_div6
+  SOURCES ${ZHAO_AUX_T4_DIV_SOURCES}
+  VERILATOR_ARGS --assert -DZHAO_AUX_T4_MUTANT_BORROW_REVERSE)
+add_test(NAME texture_aux_div6_timing4_borrow_control COMMAND auxdiv_t4b)
+set_tests_properties(texture_aux_div6_timing4_borrow_control PROPERTIES
+  LABELS "fast;nightly;mutant;packet-b;packet-f" TIMEOUT 600
+  PASS_REGULAR_EXPRESSION "AUX Timing4 divider borrow mutant DETECTED"
+  FAIL_REGULAR_EXPRESSION "FAIL")
+
+foreach(aux_t4_collision IN ITEMS sv cpp)
+  add_test(NAME texture_aux_timing4_${aux_t4_collision}_selector_collision
+    COMMAND "${Python3_EXECUTABLE}"
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_aux_timing4_controls.py
+      --collision ${aux_t4_collision}
+      --verilator "${ZHAO_VERILATOR_LINT}" --cxx "${CMAKE_CXX_COMPILER}")
+  set_tests_properties(texture_aux_timing4_${aux_t4_collision}_selector_collision
+    PROPERTIES LABELS "fast;mutant;packet-b;packet-f" TIMEOUT 180
+    ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+endforeach()
+add_test(NAME texture_aux_timing4_registration_static
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_aux_timing4_controls.py -q)
+set_tests_properties(texture_aux_timing4_registration_static PROPERTIES
+  LABELS "fast;packet-b;packet-f" TIMEOUT 180)
+set(ZHAO_AUX_TIMING4_REQUIRED_TESTS
+  texture_aux_pipe_v2_timing4_degenerate_control
+  texture_aux_pipe_v2_timing4_input_fault_control
+  texture_aux_div6_timing4_borrow_control
+  texture_aux_timing4_sv_selector_collision
+  texture_aux_timing4_cpp_selector_collision
+  texture_aux_timing4_registration_static)
+list(LENGTH ZHAO_AUX_TIMING4_REQUIRED_TESTS ZHAO_AUX_TIMING4_REQUIRED_TEST_COUNT)
+if(NOT ZHAO_AUX_TIMING4_REQUIRED_TEST_COUNT EQUAL 6)
+  message(FATAL_ERROR "Timing4 AUX CTest inventory must contain exactly 6 names")
+endif()
+foreach(required_aux_t4_test IN LISTS ZHAO_AUX_TIMING4_REQUIRED_TESTS)
+  if(NOT TEST "${required_aux_t4_test}")
+    message(FATAL_ERROR "required Timing4 AUX CTest is absent: ${required_aux_t4_test}")
+  endif()
+endforeach()
+
 # Material V3 against R9 and the corrected zref authority.
 add_executable(pb_mat
   texture/material_combine_v3_diff.cpp)
@@ -9008,6 +9155,12 @@ zhao_material_v3_mutant_control(
 zhao_material_v3_mutant_control(
   phase_reissue_schedule MATERIAL_V3_MUTANT_PHASE_REISSUE
   zhao_texture_material_combine_v3_phase_reissue_schedule_mutant)
+zhao_material_v3_mutant_control(
+  skip_s_capture MATERIAL_V3_MUTANT_SKIP_S
+  zhao_texture_material_combine_v3_skip_s_capture_mutant)
+zhao_material_v3_mutant_control(
+  skip_f_finish MATERIAL_V3_MUTANT_SKIP_F
+  zhao_texture_material_combine_v3_skip_f_finish_mutant)
 
 # Terminal-collector raw-index controls.
 add_executable(pb_rspdi
@@ -9603,6 +9756,22 @@ verilate(dspr_bil2_mut
   VERILATOR_ARGS --assert -DZHAO_DUAL18_BEHAVIORAL
     -DZHAO_BIL2_MUTANT_COLLAPSE_RESULTB)
 add_test(NAME dsp_rescue_bil2_collapse_resultb_mutant COMMAND dspr_bil2_mut)
+
+add_executable(dspr_bil2_b2_mut texture/texture_bilerp_lane_dsp2_diff.cpp)
+target_compile_definitions(dspr_bil2_b2_mut PRIVATE
+  EXPECT_BIL2_BYPASS_VERTICAL_CAPTURE=1)
+target_link_libraries(dspr_bil2_b2_mut PRIVATE zhao_harness)
+verilate(dspr_bil2_b2_mut
+  PREFIX Vtb_texture_bilerp_lane_dsp2
+  TOP_MODULE tb_texture_bilerp_lane_dsp2
+  SOURCES ${ZHAO_BIL2_SOURCES}
+  VERILATOR_ARGS --assert -DZHAO_DUAL18_BEHAVIORAL
+    -DZHAO_BIL2_MUTANT_BYPASS_VERTICAL_CAPTURE)
+add_test(NAME dsp_rescue_bil2_vertical_capture_mutant COMMAND dspr_bil2_b2_mut)
+set_tests_properties(dsp_rescue_bil2_vertical_capture_mutant PROPERTIES
+  LABELS "fast;nightly;g8a-dsp;mutant" TIMEOUT 1800
+  PASS_REGULAR_EXPRESSION "BIL2 vertical-capture bypass mutant FIRED"
+  FAIL_REGULAR_EXPRESSION "FAIL")
 set_tests_properties(dsp_rescue_bil2_diff PROPERTIES
   LABELS "fast;nightly;g8a-dsp" TIMEOUT 1800 FAIL_REGULAR_EXPRESSION "FAIL")
 set_tests_properties(dsp_rescue_bil2_collapse_resultb_mutant PROPERTIES
@@ -9650,6 +9819,7 @@ set(ZHAO_G8A_DSP_REQUIRED_TESTS
   dsp_rescue_attr3_offset_ready_assertion
   dsp_rescue_bil2_diff
   dsp_rescue_bil2_collapse_resultb_mutant
+  dsp_rescue_bil2_vertical_capture_mutant
   g8a_dsp_attr_mid_shift_selector_collision
   g8a_dsp_attr_mid_omit_selector_collision
   g8a_dsp_attr_shift_omit_selector_collision
@@ -9658,9 +9828,9 @@ set(ZHAO_G8A_DSP_REQUIRED_TESTS
   g8a_dsp_bil2_selector_collision
   g8a_dsp_rescue_registration_static)
 list(LENGTH ZHAO_G8A_DSP_REQUIRED_TESTS ZHAO_G8A_DSP_REQUIRED_TEST_COUNT)
-if(NOT ZHAO_G8A_DSP_REQUIRED_TEST_COUNT EQUAL 16)
+if(NOT ZHAO_G8A_DSP_REQUIRED_TEST_COUNT EQUAL 17)
   message(FATAL_ERROR
-    "G8A DSP required CTest inventory must contain exactly 16 names")
+    "G8A DSP required CTest inventory must contain exactly 17 names")
 endif()
 foreach(required_g8a_dsp_test IN LISTS ZHAO_G8A_DSP_REQUIRED_TESTS)
   if(NOT TEST "${required_g8a_dsp_test}")
@@ -10693,5 +10863,372 @@ foreach(required_raw_last_test IN LISTS ZHAO_PACKET_H_RAW_LAST_REQUIRED_TESTS)
   if(NOT TEST "${required_raw_last_test}")
     message(FATAL_ERROR
       "required Packet-H raw-LAST CTest is not registered: ${required_raw_last_test}")
+  endif()
+endforeach()
+
+# ---------------------------------------------------------------------------
+# Packet H: renderer lease and READY/blank bridge leaves
+# ---------------------------------------------------------------------------
+set(ZHAO_PACKET_H_RENDERER_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/video/renderer_lease_v2.sources.txt)
+file(STRINGS "${ZHAO_PACKET_H_RENDERER_MANIFEST}"
+  ZHAO_PACKET_H_RENDERER_RELATIVE_SOURCES)
+if(NOT ZHAO_PACKET_H_RENDERER_RELATIVE_SOURCES STREQUAL
+   "fpga/rtl/generated/zhao_abi_pkg.sv;fpga/rtl/common/zhao_pkg.sv;tests/mutants/zhao_renderer_lease_v2_mutants.sv;fpga/rtl/video/zhao_renderer_lease_v2.sv;tests/video/tb_renderer_lease_v2.sv")
+  message(FATAL_ERROR "Packet-H renderer source manifest is not exact and ordered")
+endif()
+set(ZHAO_PACKET_H_RENDERER_SOURCES)
+set(ZHAO_PACKET_H_RENDERER_SEEN)
+foreach(relative_source IN LISTS ZHAO_PACKET_H_RENDERER_RELATIVE_SOURCES)
+  if(IS_ABSOLUTE "${relative_source}" OR relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+    message(FATAL_ERROR "invalid Packet-H renderer source: ${relative_source}")
+  endif()
+  list(FIND ZHAO_PACKET_H_RENDERER_SEEN "${relative_source}" duplicate_index)
+  if(NOT duplicate_index EQUAL -1)
+    message(FATAL_ERROR "duplicate Packet-H renderer source: ${relative_source}")
+  endif()
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR "missing Packet-H renderer source: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKET_H_RENDERER_SEEN "${relative_source}")
+  list(APPEND ZHAO_PACKET_H_RENDERER_SOURCES
+    "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+
+function(zhao_packet_h_renderer_test TARGET NAME SV_SELECTOR CPP_SELECTOR DIAGNOSTIC)
+  add_executable(${TARGET} video/renderer_lease_v2_directed.cpp)
+  target_link_libraries(${TARGET} PRIVATE zhao_harness)
+  if(NOT "${CPP_SELECTOR}" STREQUAL "")
+    target_compile_definitions(${TARGET} PRIVATE ${CPP_SELECTOR}=1)
+  endif()
+  set(selector_args)
+  if(NOT "${SV_SELECTOR}" STREQUAL "")
+    list(APPEND selector_args -D${SV_SELECTOR})
+  endif()
+  verilate(${TARGET}
+    PREFIX Vtb_renderer_lease_v2
+    TOP_MODULE tb_renderer_lease_v2
+    SOURCES ${ZHAO_PACKET_H_RENDERER_SOURCES}
+    VERILATOR_ARGS --assert ${selector_args})
+  add_test(NAME renderer_lease_v2_${NAME} COMMAND ${TARGET})
+  set_tests_properties(renderer_lease_v2_${NAME} PROPERTIES
+    LABELS "fast;packet-h" TIMEOUT 300
+    PASS_REGULAR_EXPRESSION "${DIAGNOSTIC}"
+    FAIL_REGULAR_EXPRESSION "FAIL:|FAILED")
+  if(NOT "${SV_SELECTOR}" STREQUAL "")
+    set_property(TEST renderer_lease_v2_${NAME} APPEND PROPERTY LABELS "mutant")
+  endif()
+endfunction()
+
+zhao_packet_h_renderer_test(ph_renderer directed "" ""
+  "renderer_lease_v2_directed.*passed")
+zhao_packet_h_renderer_test(ph_renderer_g lease_open_control
+  ZHAO_RENDERER_LEASE_MUTANT_LEASE_OPEN_BYPASS
+  ZHAO_EXPECT_RENDERER_LEASE_MUTANT_LEASE_OPEN_BYPASS
+  "renderer_lease_lease_open_bypass.*DETECTED")
+zhao_packet_h_renderer_test(ph_renderer_s slot_choice_control
+  ZHAO_RENDERER_LEASE_MUTANT_SLOT_CHOICE
+  ZHAO_EXPECT_RENDERER_LEASE_MUTANT_SLOT_CHOICE
+  "renderer_lease_slot_choice.*DETECTED")
+zhao_packet_h_renderer_test(ph_renderer_h request_hold_control
+  ZHAO_RENDERER_LEASE_MUTANT_REQUEST_HOLD
+  ZHAO_EXPECT_RENDERER_LEASE_MUTANT_REQUEST_HOLD
+  "renderer_lease_request_hold.*DETECTED")
+zhao_packet_h_renderer_test(ph_renderer_w writer_response_control
+  ZHAO_RENDERER_LEASE_MUTANT_WRITER_RESPONSE
+  ZHAO_EXPECT_RENDERER_LEASE_MUTANT_WRITER_RESPONSE
+  "renderer_lease_writer_response.*DETECTED")
+zhao_packet_h_renderer_test(ph_renderer_c skip_clear_control
+  ZHAO_RENDERER_LEASE_MUTANT_SKIP_CLEAR
+  ZHAO_EXPECT_RENDERER_LEASE_MUTANT_SKIP_CLEAR
+  "renderer_lease_skip_clear.*DETECTED")
+zhao_packet_h_renderer_test(ph_renderer_t bad_stride_control
+  ZHAO_RENDERER_LEASE_MUTANT_BAD_STRIDE
+  ZHAO_EXPECT_RENDERER_LEASE_MUTANT_BAD_STRIDE
+  "renderer_lease_bad_stride.*DETECTED")
+zhao_packet_h_renderer_test(ph_renderer_d duo_boundary_control
+  ZHAO_RENDERER_LEASE_MUTANT_DUO_BOUNDARY
+  ZHAO_EXPECT_RENDERER_LEASE_MUTANT_DUO_BOUNDARY
+  "renderer_lease_duo_boundary.*DETECTED")
+zhao_packet_h_renderer_test(ph_renderer_i stale_identity_control
+  ZHAO_RENDERER_LEASE_MUTANT_STALE_IDENTITY
+  ZHAO_EXPECT_RENDERER_LEASE_MUTANT_STALE_IDENTITY
+  "renderer_lease_stale_identity.*DETECTED")
+
+set(ZHAO_PACKET_H_BRIDGE_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/video/video_ready_bridge_v2.sources.txt)
+file(STRINGS "${ZHAO_PACKET_H_BRIDGE_MANIFEST}"
+  ZHAO_PACKET_H_BRIDGE_RELATIVE_SOURCES)
+if(NOT ZHAO_PACKET_H_BRIDGE_RELATIVE_SOURCES STREQUAL
+   "tests/mutants/zhao_video_ready_bridge_v2_mutants.sv;fpga/rtl/generated/zhao_abi_pkg.sv;fpga/rtl/common/zhao_pkg.sv;fpga/rtl/video/zhao_video_ready_bridge_v2.sv;tests/video/tb_video_ready_bridge_v2.sv")
+  message(FATAL_ERROR "Packet-H video bridge source manifest is not exact and ordered")
+endif()
+set(ZHAO_PACKET_H_BRIDGE_SOURCES)
+set(ZHAO_PACKET_H_BRIDGE_SEEN)
+foreach(relative_source IN LISTS ZHAO_PACKET_H_BRIDGE_RELATIVE_SOURCES)
+  if(IS_ABSOLUTE "${relative_source}" OR relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+    message(FATAL_ERROR "invalid Packet-H video bridge source: ${relative_source}")
+  endif()
+  list(FIND ZHAO_PACKET_H_BRIDGE_SEEN "${relative_source}" duplicate_index)
+  if(NOT duplicate_index EQUAL -1)
+    message(FATAL_ERROR "duplicate Packet-H video bridge source: ${relative_source}")
+  endif()
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR "missing Packet-H video bridge source: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKET_H_BRIDGE_SEEN "${relative_source}")
+  list(APPEND ZHAO_PACKET_H_BRIDGE_SOURCES
+    "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+
+function(zhao_packet_h_bridge_test TARGET NAME SV_SELECTOR CPP_SELECTOR DIAGNOSTIC)
+  add_executable(${TARGET} video/video_ready_bridge_v2_directed.cpp)
+  target_link_libraries(${TARGET} PRIVATE zhao_harness)
+  if(NOT "${CPP_SELECTOR}" STREQUAL "")
+    target_compile_definitions(${TARGET} PRIVATE ${CPP_SELECTOR}=1)
+  endif()
+  set(selector_args)
+  if(NOT "${SV_SELECTOR}" STREQUAL "")
+    list(APPEND selector_args -D${SV_SELECTOR})
+  endif()
+  verilate(${TARGET}
+    PREFIX Vtb_video_ready_bridge_v2
+    TOP_MODULE tb_video_ready_bridge_v2
+    SOURCES ${ZHAO_PACKET_H_BRIDGE_SOURCES}
+    VERILATOR_ARGS --assert ${selector_args})
+  add_test(NAME video_ready_bridge_v2_${NAME} COMMAND ${TARGET})
+  set_tests_properties(video_ready_bridge_v2_${NAME} PROPERTIES
+    LABELS "fast;packet-h" TIMEOUT 300
+    PASS_REGULAR_EXPRESSION "${DIAGNOSTIC}"
+    FAIL_REGULAR_EXPRESSION "FAIL:|FAILED")
+  if(NOT "${SV_SELECTOR}" STREQUAL "")
+    set_property(TEST video_ready_bridge_v2_${NAME} APPEND PROPERTY LABELS "mutant")
+  endif()
+endfunction()
+
+zhao_packet_h_bridge_test(ph_bridge directed "" ""
+  "video_ready_bridge_v2_directed.*passed")
+zhao_packet_h_bridge_test(ph_bridge_d drop_held_tuple_control
+  ZHAO_VIDEO_BRIDGE_MUTANT_DROP_HELD_TUPLE
+  ZHAO_EXPECT_VIDEO_BRIDGE_DROP_HELD_TUPLE
+  "video_bridge_drop_held_tuple.*DETECTED")
+zhao_packet_h_bridge_test(ph_bridge_c change_held_tuple_control
+  ZHAO_VIDEO_BRIDGE_MUTANT_CHANGE_HELD_TUPLE
+  ZHAO_EXPECT_VIDEO_BRIDGE_CHANGE_HELD_TUPLE
+  "video_bridge_change_held_tuple.*DETECTED")
+zhao_packet_h_bridge_test(ph_bridge_o wrong_onehot_control
+  ZHAO_VIDEO_BRIDGE_MUTANT_WRONG_ONEHOT
+  ZHAO_EXPECT_VIDEO_BRIDGE_WRONG_ONEHOT
+  "video_bridge_wrong_onehot.*DETECTED")
+zhao_packet_h_bridge_test(ph_bridge_b blank_ack_bypass_control
+  ZHAO_VIDEO_BRIDGE_MUTANT_BLANK_ACK_BYPASS
+  ZHAO_EXPECT_VIDEO_BRIDGE_BLANK_ACK_BYPASS
+  "video_bridge_blank_ack_bypass.*DETECTED")
+zhao_packet_h_bridge_test(ph_bridge_l early_lease_open_control
+  ZHAO_VIDEO_BRIDGE_MUTANT_EARLY_LEASE_OPEN
+  ZHAO_EXPECT_VIDEO_BRIDGE_EARLY_LEASE_OPEN
+  "video_bridge_early_lease_open.*DETECTED")
+zhao_packet_h_bridge_test(ph_bridge_r retain_reset_tuple_control
+  ZHAO_VIDEO_BRIDGE_MUTANT_RETAIN_RESET_TUPLE
+  ZHAO_EXPECT_VIDEO_BRIDGE_RETAIN_RESET_TUPLE
+  "video_bridge_retain_reset_tuple.*DETECTED")
+zhao_packet_h_bridge_test(ph_bridge_u unblank_scanout_only_control
+  ZHAO_VIDEO_BRIDGE_MUTANT_UNBLANK_SCANOUT_ONLY
+  ZHAO_EXPECT_VIDEO_BRIDGE_UNBLANK_SCANOUT_ONLY
+  "video_bridge_unblank_scanout_only.*DETECTED")
+
+# Negative-polarity control: the healthy RTL must miss the scanout-only defect.
+add_executable(ph_bridge_unblank_negative video/video_ready_bridge_v2_directed.cpp)
+target_link_libraries(ph_bridge_unblank_negative PRIVATE zhao_harness)
+target_compile_definitions(ph_bridge_unblank_negative PRIVATE
+  ZHAO_EXPECT_VIDEO_BRIDGE_UNBLANK_SCANOUT_ONLY=1)
+verilate(ph_bridge_unblank_negative
+  PREFIX Vtb_video_ready_bridge_v2
+  TOP_MODULE tb_video_ready_bridge_v2
+  SOURCES ${ZHAO_PACKET_H_BRIDGE_SOURCES}
+  VERILATOR_ARGS --assert)
+add_test(NAME video_ready_bridge_v2_unblank_negative_control
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_packet_h_shell_prereqs.py
+    --negative-exe "$<TARGET_FILE:ph_bridge_unblank_negative>"
+    --diagnostic "[video_bridge_unblank_scanout_only] MISSED")
+set_tests_properties(video_ready_bridge_v2_unblank_negative_control PROPERTIES
+  LABELS "fast;mutant;packet-h" TIMEOUT 180)
+
+# One-entry terminal join for pulse-only blitter and held renderer events.
+set(ZHAO_PACKET_H_TERMINAL_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/video/video_terminal_adapter_v2.sources.txt)
+file(STRINGS "${ZHAO_PACKET_H_TERMINAL_MANIFEST}"
+  ZHAO_PACKET_H_TERMINAL_RELATIVE_SOURCES)
+if(NOT ZHAO_PACKET_H_TERMINAL_RELATIVE_SOURCES STREQUAL
+   "tests/mutants/zhao_video_terminal_adapter_v2_mutants.sv;fpga/rtl/video/zhao_video_terminal_adapter_v2.sv;tests/video/tb_video_terminal_adapter_v2.sv")
+  message(FATAL_ERROR "Packet-H terminal-adapter source manifest is not exact and ordered")
+endif()
+set(ZHAO_PACKET_H_TERMINAL_SOURCES)
+set(ZHAO_PACKET_H_TERMINAL_SEEN)
+foreach(relative_source IN LISTS ZHAO_PACKET_H_TERMINAL_RELATIVE_SOURCES)
+  if(IS_ABSOLUTE "${relative_source}" OR relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+    message(FATAL_ERROR "invalid Packet-H terminal-adapter source: ${relative_source}")
+  endif()
+  list(FIND ZHAO_PACKET_H_TERMINAL_SEEN "${relative_source}" duplicate_index)
+  if(NOT duplicate_index EQUAL -1)
+    message(FATAL_ERROR "duplicate Packet-H terminal-adapter source: ${relative_source}")
+  endif()
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR "missing Packet-H terminal-adapter source: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKET_H_TERMINAL_SEEN "${relative_source}")
+  list(APPEND ZHAO_PACKET_H_TERMINAL_SOURCES
+    "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+
+function(zhao_packet_h_terminal_test TARGET NAME SV_SELECTOR CPP_SELECTOR DIAGNOSTIC)
+  add_executable(${TARGET} video/video_terminal_adapter_v2_directed.cpp)
+  target_link_libraries(${TARGET} PRIVATE zhao_harness)
+  if(NOT "${CPP_SELECTOR}" STREQUAL "")
+    target_compile_definitions(${TARGET} PRIVATE ${CPP_SELECTOR}=1)
+  endif()
+  set(selector_args)
+  if(NOT "${SV_SELECTOR}" STREQUAL "")
+    list(APPEND selector_args -D${SV_SELECTOR})
+  endif()
+  verilate(${TARGET}
+    PREFIX Vtb_video_terminal_adapter_v2
+    TOP_MODULE tb_video_terminal_adapter_v2
+    SOURCES ${ZHAO_PACKET_H_TERMINAL_SOURCES}
+    VERILATOR_ARGS --assert ${selector_args})
+  add_test(NAME video_terminal_adapter_v2_${NAME} COMMAND ${TARGET})
+  set_tests_properties(video_terminal_adapter_v2_${NAME} PROPERTIES
+    LABELS "fast;packet-h" TIMEOUT 300
+    PASS_REGULAR_EXPRESSION "${DIAGNOSTIC}"
+    FAIL_REGULAR_EXPRESSION "FAIL:|FAILED")
+  if(NOT "${SV_SELECTOR}" STREQUAL "")
+    set_property(TEST video_terminal_adapter_v2_${NAME} APPEND PROPERTY LABELS "mutant")
+  endif()
+endfunction()
+
+zhao_packet_h_terminal_test(ph_term directed "" ""
+  "video_terminal_adapter_v2_directed.*passed")
+zhao_packet_h_terminal_test(ph_term_d drop_held_control
+  ZHAO_VIDEO_TERM_MUTANT_DROP_HELD ZHAO_EXPECT_VIDEO_TERM_DROP_HELD
+  "video_term_drop_held.*DETECTED")
+zhao_packet_h_terminal_test(ph_term_c change_held_control
+  ZHAO_VIDEO_TERM_MUTANT_CHANGE_HELD ZHAO_EXPECT_VIDEO_TERM_CHANGE_HELD
+  "video_term_change_held.*DETECTED")
+zhao_packet_h_terminal_test(ph_term_w wrong_writer_control
+  ZHAO_VIDEO_TERM_MUTANT_WRONG_WRITER ZHAO_EXPECT_VIDEO_TERM_WRONG_WRITER
+  "video_term_wrong_writer.*DETECTED")
+zhao_packet_h_terminal_test(ph_term_p publish_wins_control
+  ZHAO_VIDEO_TERM_MUTANT_PUBLISH_WINS ZHAO_EXPECT_VIDEO_TERM_PUBLISH_WINS
+  "video_term_publish_wins.*DETECTED")
+zhao_packet_h_terminal_test(ph_term_r render_ready_control
+  ZHAO_VIDEO_TERM_MUTANT_RENDER_READY ZHAO_EXPECT_VIDEO_TERM_RENDER_READY
+  "video_term_render_ready.*DETECTED")
+zhao_packet_h_terminal_test(ph_term_s silent_blit_drop_control
+  ZHAO_VIDEO_TERM_MUTANT_SILENT_BLIT_DROP
+  ZHAO_EXPECT_VIDEO_TERM_SILENT_BLIT_DROP
+  "video_term_silent_blit_drop.*DETECTED")
+zhao_packet_h_terminal_test(ph_term_n no_pop_replace_control
+  ZHAO_VIDEO_TERM_MUTANT_NO_POP_REPLACE ZHAO_EXPECT_VIDEO_TERM_NO_POP_REPLACE
+  "video_term_no_pop_replace.*DETECTED")
+
+foreach(packet_h_collision IN ITEMS
+    renderer-sv renderer-cpp bridge-sv bridge-cpp terminal-sv terminal-cpp)
+  string(REPLACE "-" ";" collision_parts "${packet_h_collision}")
+  list(GET collision_parts 0 collision_family)
+  list(GET collision_parts 1 collision_language)
+  if(collision_family STREQUAL "bridge")
+    set(collision_test "video_ready_bridge_v2_${collision_language}_selector_collision")
+  elseif(collision_family STREQUAL "terminal")
+    set(collision_test "video_terminal_adapter_v2_${collision_language}_selector_collision")
+  else()
+    set(collision_test "renderer_lease_v2_${collision_language}_selector_collision")
+  endif()
+  add_test(NAME ${collision_test}
+    COMMAND "${Python3_EXECUTABLE}"
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_packet_h_shell_prereqs.py
+      --collision ${packet_h_collision}
+      --verilator "${ZHAO_VERILATOR_LINT}"
+      --cxx "${CMAKE_CXX_COMPILER}")
+  set_tests_properties(${collision_test} PROPERTIES
+    LABELS "fast;mutant;packet-h" TIMEOUT 180
+    ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+endforeach()
+
+add_test(NAME lint_zhao_renderer_lease_v2
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall --assert
+    --top-module tb_renderer_lease_v2 ${ZHAO_PACKET_H_RENDERER_SOURCES})
+set_tests_properties(lint_zhao_renderer_lease_v2 PROPERTIES
+  LABELS "lint;fast;packet-h" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_test(NAME lint_zhao_video_ready_bridge_v2
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall --assert
+    --top-module tb_video_ready_bridge_v2 ${ZHAO_PACKET_H_BRIDGE_SOURCES})
+set_tests_properties(lint_zhao_video_ready_bridge_v2 PROPERTIES
+  LABELS "lint;fast;packet-h" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_test(NAME lint_zhao_video_terminal_adapter_v2
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall --assert
+    --top-module tb_video_terminal_adapter_v2 ${ZHAO_PACKET_H_TERMINAL_SOURCES})
+set_tests_properties(lint_zhao_video_terminal_adapter_v2 PROPERTIES
+  LABELS "lint;fast;packet-h" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME packet_h_shell_prereqs_registration_static
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_packet_h_shell_prereqs.py -q)
+set_tests_properties(packet_h_shell_prereqs_registration_static PROPERTIES
+  LABELS "fast;packet-h" TIMEOUT 180)
+
+set(ZHAO_PACKET_H_SHELL_PREREQ_REQUIRED_TESTS
+  renderer_lease_v2_directed
+  renderer_lease_v2_lease_open_control
+  renderer_lease_v2_slot_choice_control
+  renderer_lease_v2_request_hold_control
+  renderer_lease_v2_writer_response_control
+  renderer_lease_v2_skip_clear_control
+  renderer_lease_v2_bad_stride_control
+  renderer_lease_v2_duo_boundary_control
+  renderer_lease_v2_stale_identity_control
+  video_ready_bridge_v2_directed
+  video_ready_bridge_v2_drop_held_tuple_control
+  video_ready_bridge_v2_change_held_tuple_control
+  video_ready_bridge_v2_wrong_onehot_control
+  video_ready_bridge_v2_blank_ack_bypass_control
+  video_ready_bridge_v2_early_lease_open_control
+  video_ready_bridge_v2_retain_reset_tuple_control
+  video_ready_bridge_v2_unblank_scanout_only_control
+  video_ready_bridge_v2_unblank_negative_control
+  video_terminal_adapter_v2_directed
+  video_terminal_adapter_v2_drop_held_control
+  video_terminal_adapter_v2_change_held_control
+  video_terminal_adapter_v2_wrong_writer_control
+  video_terminal_adapter_v2_publish_wins_control
+  video_terminal_adapter_v2_render_ready_control
+  video_terminal_adapter_v2_silent_blit_drop_control
+  video_terminal_adapter_v2_no_pop_replace_control
+  video_terminal_adapter_v2_sv_selector_collision
+  video_terminal_adapter_v2_cpp_selector_collision
+  lint_zhao_video_terminal_adapter_v2
+  renderer_lease_v2_sv_selector_collision
+  renderer_lease_v2_cpp_selector_collision
+  video_ready_bridge_v2_sv_selector_collision
+  video_ready_bridge_v2_cpp_selector_collision
+  lint_zhao_renderer_lease_v2
+  lint_zhao_video_ready_bridge_v2
+  packet_h_shell_prereqs_registration_static)
+list(LENGTH ZHAO_PACKET_H_SHELL_PREREQ_REQUIRED_TESTS
+  ZHAO_PACKET_H_SHELL_PREREQ_REQUIRED_TEST_COUNT)
+if(NOT ZHAO_PACKET_H_SHELL_PREREQ_REQUIRED_TEST_COUNT EQUAL 36)
+  message(FATAL_ERROR
+    "Packet-H shell prerequisite CTest inventory must contain exactly 36 names")
+endif()
+foreach(required_packet_h_test IN LISTS ZHAO_PACKET_H_SHELL_PREREQ_REQUIRED_TESTS)
+  if(NOT TEST "${required_packet_h_test}")
+    message(FATAL_ERROR
+      "required Packet-H shell prerequisite CTest is not registered: ${required_packet_h_test}")
   endif()
 endforeach()

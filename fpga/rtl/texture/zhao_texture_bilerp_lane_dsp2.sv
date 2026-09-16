@@ -2,12 +2,20 @@
 //
 // Public arithmetic and the B0/B1/B2 elastic schedule are cycle-identical to
 // zhao_texture_bilerp_lane_v2.  Only B0's simultaneous horizontal products are
-// packed into one all-signed zhao_dual18_mul; the vertical product remains in B1.
+// packed into one all-signed zhao_dual18_mul.  B1's separate vertical product
+// is captured with its aligned base in B2; final add/round is combinational from
+// those held B2 registers, preserving the public three-stage elastic contract.
 // This is an unselected DSPR2 candidate until mapping and connected-fit gates pass.
 `default_nettype none
 
 `ifndef ZHAO_BIL2_RESULTB
 `define ZHAO_BIL2_RESULTB(resulta, resultb) resultb
+`endif
+`ifndef ZHAO_BIL2_FINISH_A
+`define ZHAO_BIL2_FINISH_A(held, live) held
+`endif
+`ifndef ZHAO_BIL2_FINISH_PV
+`define ZHAO_BIL2_FINISH_PV(held, live) held
 `endif
 
 (* preserve_hierarchy *)
@@ -58,11 +66,18 @@ module zhao_texture_bilerp_lane_dsp2 #(
   logic [TOKW-1:0]    b1_tok_q;
   logic [1:0]         b1_chan_q;
 
-  // B2: held terminal byte.
-  logic            b2_valid_q;
-  logic [7:0]      b2_out_q;
-  logic [TOKW-1:0] b2_tok_q;
-  logic [1:0]      b2_chan_q;
+  // B2: registered vertical-DSP result and aligned base.  The final add/round is
+  // combinational from these held registers, so stalls retain the complete tuple
+  // without putting subtract -> DSP -> add/round in one register-to-register cone.
+  logic               b2_valid_q;
+  // Kept physically live in production; the committed bypass mutant deliberately
+  // selects B1 instead, so suppress only that mutant build's unused warning.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic signed [17:0] b2_a_q;
+  logic signed [26:0] b2_pv_q;
+  /* verilator lint_on UNUSEDSIGNAL */
+  logic [TOKW-1:0]    b2_tok_q;
+  logic [1:0]         b2_chan_q;
 
   logic b0_ready_c;
   logic b1_ready_c;
@@ -75,7 +90,7 @@ module zhao_texture_bilerp_lane_dsp2 #(
 
     job_ready_o = b0_ready_c;
     out_valid_o = b2_valid_q;
-    out_o       = b2_out_q;
+    out_o       = b2_filtered_c;
     out_tok_o   = b2_tok_q;
     out_chan_o  = b2_chan_q;
     occupancy_o = 2'(b0_valid_q) + 2'(b1_valid_q) + 2'(b2_valid_q);
@@ -89,7 +104,11 @@ module zhao_texture_bilerp_lane_dsp2 #(
   logic signed [17:0] fu_18_c;
   logic        [35:0] pu0_raw_c;
   logic        [35:0] pu1_raw_c;
+  // The selector keeps the full packed multiplier result so the route mutant
+  // changes only source identity; arithmetic consumes the exact signed low half.
+  /* verilator lint_off UNUSEDSIGNAL */
   logic        [35:0] pu1_selected_c;
+  /* verilator lint_on UNUSEDSIGNAL */
   logic signed [17:0] pu0_c;
   logic signed [17:0] pu1_c;
   logic signed [17:0] a_c;
@@ -120,18 +139,25 @@ module zhao_texture_bilerp_lane_dsp2 #(
 
   logic signed [8:0]  fv_s_c;
   logic signed [17:0] dv_c;
-  logic signed [26:0] pv_c;
-  logic signed [26:0] a_ext_c;
-  logic signed [26:0] sum_c;
-  logic        [7:0]  filtered_c;
+  (* multstyle = "dsp" *) logic signed [26:0] pv_c;
+  logic signed [17:0] b2_finish_a_c;
+  logic signed [26:0] b2_finish_pv_c;
+  logic signed [26:0] b2_a_ext_c;
+  logic signed [26:0] b2_sum_c;
+  logic        [7:0]  b2_filtered_c;
 
+  // B1's vertical multiply now terminates at b2_pv_q.  The selectable live
+  // operands exist only so the committed boundary-bypass mutant can prove the
+  // B2 capture is load-bearing; production always selects the held values.
   always_comb begin
-    fv_s_c     = $signed({1'b0, b1_fv_q});
-    dv_c       = b1_b_q - b1_a_q;
-    pv_c       = 27'(dv_c * fv_s_c);
-    a_ext_c    = 27'(b1_a_q);
-    sum_c      = (a_ext_c <<< 8) + pv_c;
-    filtered_c = 8'((sum_c + 27'sd32768) >>> 16);
+    fv_s_c          = $signed({1'b0, b1_fv_q});
+    dv_c            = b1_b_q - b1_a_q;
+    pv_c            = 27'(dv_c * fv_s_c);
+    b2_finish_a_c   = `ZHAO_BIL2_FINISH_A(b2_a_q, b1_a_q);
+    b2_finish_pv_c  = `ZHAO_BIL2_FINISH_PV(b2_pv_q, pv_c);
+    b2_a_ext_c      = 27'(b2_finish_a_c);
+    b2_sum_c        = (b2_a_ext_c <<< 8) + b2_finish_pv_c;
+    b2_filtered_c   = 8'((b2_sum_c + 27'sd32768) >>> 16);
   end
 
   always_ff @(posedge clk or negedge rst_n) begin
@@ -170,7 +196,8 @@ module zhao_texture_bilerp_lane_dsp2 #(
       if (b2_ready_c) begin
         b2_valid_q <= b1_valid_q;
         if (b1_valid_q) begin
-          b2_out_q  <= filtered_c;
+          b2_a_q    <= b1_a_q;
+          b2_pv_q   <= pv_c;
           b2_tok_q  <= b1_tok_q;
           b2_chan_q <= b1_chan_q;
         end
@@ -195,4 +222,6 @@ module zhao_texture_bilerp_lane_dsp2 #(
 endmodule : zhao_texture_bilerp_lane_dsp2
 
 `undef ZHAO_BIL2_RESULTB
+`undef ZHAO_BIL2_FINISH_A
+`undef ZHAO_BIL2_FINISH_PV
 `default_nettype wire

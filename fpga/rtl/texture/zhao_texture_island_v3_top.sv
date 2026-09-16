@@ -206,6 +206,7 @@ module zhao_texture_island_v3_top #(
   import zhao_render_texture_pkg::*;
 
   localparam int unsigned OWNERW = 14;
+  localparam int unsigned OWNER_SLOTW = 6;
   localparam int unsigned SMPW = 16;
   localparam int unsigned OWNERS = 64;
   localparam int unsigned MATW = 46;
@@ -663,6 +664,7 @@ module zhao_texture_island_v3_top #(
   export "DPI-C" task zhao_texture_packet_b_set_material_fault_mode;
   export "DPI-C" task zhao_texture_packet_b_set_combine_hold;
   export "DPI-C" task zhao_texture_packet_b_get_owner_context;
+  export "DPI-C" task zhao_texture_packet_b_get_owner_admitted;
   export "DPI-C" task zhao_texture_packet_b_get_combine_idle_components;
   export "DPI-C" task zhao_texture_packet_b_get_leaf_idle_vector;
   export "DPI-C" task zhao_texture_packet_b_get_combine_counters;
@@ -689,6 +691,9 @@ module zhao_texture_island_v3_top #(
   task zhao_texture_packet_b_get_owner_context(
       output bit [RCTXW+CTXW-1:0] context_o);
     context_o = owner_out_context_w;
+  endtask
+  task zhao_texture_packet_b_get_owner_admitted(output int unsigned admitted_o);
+    admitted_o = owner_admitted_w;
   endtask
   task zhao_texture_packet_b_get_combine_idle_components(
       output bit material_read_idle_o, output bit combine_leaf_idle_o);
@@ -1047,6 +1052,22 @@ module zhao_texture_island_v3_top #(
     end
   end
 
+  // Timing4 admission event boundary. Outer lifetime levels continue to block
+  // frag_ready/owner/RCP admission combinationally above; only a real accepted
+  // full owner identity reaches the wide validation-pending table one edge later.
+  logic owner_admission_event_valid_q;
+  logic [OWNERW-1:0] owner_admission_event_owner_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      owner_admission_event_valid_q <= 1'b0;
+      owner_admission_event_owner_q <= '0;
+    end else begin
+      owner_admission_event_valid_q <= own_adm_accept_w;
+      if (own_adm_accept_w)
+        owner_admission_event_owner_q <= own_adm_owner_w;
+    end
+  end
+
   // Descriptor trust is written only when the held descriptor response is
   // accepted by the UV join.  Generation seals the unreset per-slot payload.
   logic descriptor_usable_m [0:OWNERS-1];
@@ -1115,8 +1136,9 @@ module zhao_texture_island_v3_top #(
       for (int unsigned i = 0; i < OWNERS; i++)
         join_validation_pending_q[i] <= 1'b0;
     end else begin
-      if (own_adm_accept_w)
-        join_validation_pending_q[own_adm_owner_w[13:8]] <= 1'b1;
+      if (owner_admission_event_valid_q)
+        join_validation_pending_q[
+            owner_admission_event_owner_q[OWNERW-1 -: OWNER_SLOTW]] <= 1'b1;
       if (join_validation_accept_c) begin
         join_validation_pending_q[joined_owner_c[13:8]] <= 1'b0;
         join_force_refuse_m[joined_owner_c[13:8]] <= joined_force_refuse_c;

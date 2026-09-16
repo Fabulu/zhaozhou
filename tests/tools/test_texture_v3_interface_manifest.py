@@ -179,7 +179,7 @@ EXPECTED_DUPLICATE_MARKER_ROWS = (
     ("/miscsp/0/typesp/58/membersp/2", "(WR)", "alpha", "e,283:18,283:23"),
     ("/miscsp/0/typesp/58/membersp/3", "(WR)", "rgb", "e,284:18,284:21"),
 )
-EXPECTED_PRODUCTION_DUPLICATE_MARKER_SHA256 = "21508dfb34a81945affd2ebc361fe68d25e3b16004327b6fc63e36f90160e157"
+EXPECTED_PRODUCTION_DUPLICATE_MARKER_SHA256 = "9272000bb46140bd6b754841c4f93cccf236e07f2fb072e2984ead014da9f679"
 _PRE_DSP_PRODUCTION_DUPLICATE_MARKER_ROWS = (
     ("/miscsp/0/typesp/107/membersp/0", "(WTOB)", "in_tile_addr", "e,33:18,33:30"),
     ("/miscsp/0/typesp/107/membersp/1", "(WTOB)", "invw24", "e,34:18,34:24"),

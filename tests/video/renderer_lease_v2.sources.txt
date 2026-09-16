@@ -1,0 +1,5 @@
+fpga/rtl/generated/zhao_abi_pkg.sv
+fpga/rtl/common/zhao_pkg.sv
+tests/mutants/zhao_renderer_lease_v2_mutants.sv
+fpga/rtl/video/zhao_renderer_lease_v2.sv
+tests/video/tb_renderer_lease_v2.sv

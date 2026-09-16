@@ -323,24 +323,28 @@ module zhao_texture_material_combine_v3 #(
   end
 
   // Q -> R -> D aligns the synchronous payload/scratch and optional owner-plane
-  // reads.  O selects operands, M contains exactly two product registers, and
-  // the combinational finish feeds the one whole-row W write.
-  logic r_v, d_v, o_v, m_v;
-  logic [CW-1:0] r_ctx, d_ctx, o_ctx, m_ctx;
-  logic [1:0] r_ph, d_ph, o_ph, m_ph;
+  // reads.  S captures those complete source facts before recipe selection; O
+  // selects operands; M contains exactly two product registers; F captures the
+  // finished lanes; and WB captures the assembled whole row.  The two added
+  // boundaries make Q-to-continuation exactly eight clocks at NCTX=8.
+  logic r_v, d_v, s_v, o_v, m_v, f_v;
+  logic [CW-1:0] r_ctx, d_ctx, s_ctx, o_ctx, m_ctx, f_ctx;
+  logic [1:0] r_ph, d_ph, s_ph, o_ph, m_ph, f_ph;
 
   // Sample-1/2 raw indices and all AUX payload bits are present because these
   // are typed planes.  R9 deliberately consumes neither; only sample-0 index
   // and AUX status have meaning at this boundary.
   /* verilator lint_off UNUSEDSIGNAL */
   logic [zhao_render_texture_pkg::TEXTURE_RESULT_W-1:0] p_s0, p_s1, p_s2, p_aux;
+  logic [zhao_render_texture_pkg::TEXTURE_RESULT_W-1:0] s_s0, s_s1, s_s2, s_aux;
   /* verilator lint_on UNUSEDSIGNAL */
-  logic [31:0] p_base;
-  logic p_aux_required;
-  logic [7:0] p_weight;
-  logic [2:0] p_recipe;
-  logic [1:0] p_count;
-  logic p_material_refused;
+  logic [31:0] p_base, s_base;
+  logic p_aux_required, s_aux_required;
+  logic [7:0] p_weight, s_weight;
+  logic [2:0] p_recipe, s_recipe;
+  logic [1:0] p_count, s_count;
+  logic p_material_refused, s_material_refused;
+  logic [32:0] s_scratch;
 
   generate
     if (READ_LATE == 0) begin : g_copy
@@ -411,27 +415,30 @@ module zhao_texture_material_combine_v3 #(
     end
   endgenerate
 
-  // Canonical operands and the exact required-source reduction.  Unrequested
-  // status bytes and all AUX tag/strength/data bits have no influence.
-  logic [31:0] p_rgba0, p_rgba1, p_rgba2;
-  logic [7:0] p_status;
-  logic [7:0] p_raw_index;
+  // Canonical operands and exact required-source reduction consume only S-stage
+  // registers.  Raw owner-bank outputs therefore terminate at S and cannot feed
+  // an O-stage multiplier input in the same timing cone.
+  logic [31:0] s_rgba0, s_rgba1, s_rgba2;
+  logic [7:0] s_status;
+  logic [7:0] s_raw_index;
   always_comb begin
-    p_rgba0 = (p_count == 2'd0) ? p_base : p_s0[31:0];
-    p_rgba1 = (p_count >= 2'd2) ? p_s1[31:0] : p_rgba0;
-    p_rgba2 = (p_count == 2'd3) ? p_s2[31:0] : p_rgba0;
+    s_rgba0 = (s_count == 2'd0) ? s_base : s_s0[31:0];
+    s_rgba1 = (s_count >= 2'd2) ? s_s1[31:0] : s_rgba0;
+    s_rgba2 = (s_count == 2'd3) ? s_s2[31:0] : s_rgba0;
 
-    p_status = 8'd0;
-    case (p_count)
-      2'd1: p_status = p_s0[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO];
-      2'd2: p_status = p_s0[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO] | p_s1[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO];
-      2'd3: p_status = p_s0[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO] | p_s1[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO] | p_s2[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO];
-      default: p_status = 8'd0;
+    s_status = 8'd0;
+    case (s_count)
+      2'd1: s_status = s_s0[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO];
+      2'd2: s_status = s_s0[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO] | s_s1[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO];
+      2'd3: s_status = s_s0[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO] | s_s1[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO] | s_s2[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO];
+      default: s_status = 8'd0;
     endcase
-    if (p_aux_required) p_status = p_status | p_aux[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO];
-    if (p_material_refused) p_status[0] = 1'b1;
+    if (s_aux_required)
+      s_status = s_status | s_aux[TEXTURE_RESULT_STATUS_HI:TEXTURE_RESULT_STATUS_LO];
+    if (s_material_refused) s_status[0] = 1'b1;
 
-    p_raw_index = (p_count == 2'd0) ? 8'd0 : p_s0[TEXTURE_RESULT_SAMPLE0_INDEX_HI:TEXTURE_RESULT_SAMPLE0_INDEX_LO];
+    s_raw_index = (s_count == 2'd0) ? 8'd0 :
+        s_s0[TEXTURE_RESULT_SAMPLE0_INDEX_HI:TEXTURE_RESULT_SAMPLE0_INDEX_LO];
   end
 
   // O-stage controls and operands.
@@ -464,9 +471,21 @@ module zhao_texture_material_combine_v3 #(
   logic [7:0] m_index;
   logic m_addsat_sat;
 
-  // The measured G8A path ended at the completion RAM input after product
-  // finish, rounding, saturation and row assembly. This narrow elastic stage
-  // captures the finished row before the actual scratch/completion write.
+  // F-stage registered finish results and controls.  The expensive signed
+  // LERP/round/saturate functions end here; row assembly begins only from F.
+  logic [8:0] f_lane0, f_lane1;
+  logic f_en0, f_en1;
+  logic [2:0] f_recipe;
+  logic f_final, f_bypass;
+  logic [32:0] f_scratch;
+  logic [31:0] f_direct;
+  logic [7:0] f_keep_a;
+  logic [7:0] f_status;
+  logic [7:0] f_index;
+  logic f_addsat_sat;
+
+  // WB is a narrow assembled-row boundary.  Completion/scratch RAM writes and
+  // continuation ownership consume only this registered row.
   logic wb_v;
   logic [CW-1:0] wb_ctx;
   logic [1:0] wb_ph;
@@ -477,22 +496,28 @@ module zhao_texture_material_combine_v3 #(
     if (!rst_n) begin
       r_v <= 1'b0;
       d_v <= 1'b0;
+      s_v <= 1'b0;
       o_v <= 1'b0;
       m_v <= 1'b0;
+      f_v <= 1'b0;
       wb_v <= 1'b0;
       r_ctx <= '0;
       d_ctx <= '0;
+      s_ctx <= '0;
       o_ctx <= '0;
       m_ctx <= '0;
+      f_ctx <= '0;
       r_ph <= 2'd0;
       d_ph <= 2'd0;
+      s_ph <= 2'd0;
       o_ph <= 2'd0;
       m_ph <= 2'd0;
+      f_ph <= 2'd0;
       phases_issued_o <= 32'd0;
       phases_completed_o <= 32'd0;
     end else begin
-      // Q is the physical phase-launch edge.  M is the independently clocked
-      // result/writeback edge; neither counter aliases the other.
+      // Q is the physical phase-launch edge.  WB is the independently clocked
+      // scratch/completion write edge; neither counter aliases the other.
       r_v <= q_valid_c;
       r_ctx <= q_ctx_c;
       r_ph <= q_ph_c;
@@ -505,19 +530,38 @@ module zhao_texture_material_combine_v3 #(
       d_ctx <= r_ctx;
       d_ph <= r_ph;
 
-      // D -> O defaults.
-      o_v <= d_v;
-      o_ctx <= d_ctx;
-      o_ph <= d_ph;
-      o_recipe <= p_recipe;
-      o_final <= p_material_refused || (|p_status) ||
-                 (d_ph + 2'd1 == phases_of(p_recipe));
+      // D -> S captures the complete synchronous-read answer.  All recipe and
+      // operand logic below consumes only these registers.
+      s_v <= d_v;
+      s_ctx <= d_ctx;
+      s_ph <= d_ph;
+      if (d_v) begin
+        s_s0 <= p_s0;
+        s_s1 <= p_s1;
+        s_s2 <= p_s2;
+        s_aux <= p_aux;
+        s_base <= p_base;
+        s_aux_required <= p_aux_required;
+        s_weight <= p_weight;
+        s_recipe <= p_recipe;
+        s_count <= p_count;
+        s_material_refused <= p_material_refused;
+        s_scratch <= scr_rd;
+      end
+
+      // S -> O defaults.
+      o_v <= s_v;
+      o_ctx <= s_ctx;
+      o_ph <= s_ph;
+      o_recipe <= s_recipe;
+      o_final <= s_material_refused || (|s_status) ||
+                 (s_ph + 2'd1 == phases_of(s_recipe));
       o_bypass <= 1'b0;
-      o_scratch <= scr_rd;
+      o_scratch <= s_scratch;
       o_direct <= 32'd0;
-      o_keep_a <= p_rgba0[31:24];
-      o_status <= p_status;
-      o_index <= p_raw_index;
+      o_keep_a <= s_rgba0[31:24];
+      o_status <= s_status;
+      o_index <= s_raw_index;
       o_addsat_sat <= 1'b0;
       o_a0 <= 8'd0;
       o_b0 <= 8'd0;
@@ -534,38 +578,38 @@ module zhao_texture_material_combine_v3 #(
 
       // Any nonzero final status is a terminal loud error.  It still retires,
       // preserving index and tag, but never publishes a plausible partial mix.
-      if (|p_status) begin
+      if (|s_status) begin
         o_bypass <= 1'b1;
         o_direct <= {8'hFF, 24'hFF00FF};
       end else begin
-        case (p_recipe)
+        case (s_recipe)
           R_PASSTHRU: begin
             o_bypass <= 1'b1;
-            o_direct <= p_rgba0;
+            o_direct <= s_rgba0;
           end
 
           R_ADDSAT: begin
             o_bypass <= 1'b1;
             o_direct <= {
-                p_rgba0[31:24],
-                add_sat8(p_rgba0[23:16], p_rgba1[23:16]),
-                add_sat8(p_rgba0[15:8], p_rgba1[15:8]),
-                add_sat8(p_rgba0[7:0], p_rgba1[7:0])
+                s_rgba0[31:24],
+                add_sat8(s_rgba0[23:16], s_rgba1[23:16]),
+                add_sat8(s_rgba0[15:8], s_rgba1[15:8]),
+                add_sat8(s_rgba0[7:0], s_rgba1[7:0])
             };
             o_addsat_sat <=
-                ({1'b0, p_rgba0[7:0]} + {1'b0, p_rgba1[7:0]} > 9'd255) ||
-                ({1'b0, p_rgba0[15:8]} + {1'b0, p_rgba1[15:8]} > 9'd255) ||
-                ({1'b0, p_rgba0[23:16]} + {1'b0, p_rgba1[23:16]} > 9'd255);
+                ({1'b0, s_rgba0[7:0]} + {1'b0, s_rgba1[7:0]} > 9'd255) ||
+                ({1'b0, s_rgba0[15:8]} + {1'b0, s_rgba1[15:8]} > 9'd255) ||
+                ({1'b0, s_rgba0[23:16]} + {1'b0, s_rgba1[23:16]} > 9'd255);
           end
 
           R_MASK: begin
             // One product in one phase: RGB is exactly sample 0, while alpha
             // is continuous unit8 s0.a*s1.a.  It is not a binary gate.
-            o_a0 <= p_rgba0[31:24];
-            o_b0 <= p_rgba1[31:24];
+            o_a0 <= s_rgba0[31:24];
+            o_b0 <= s_rgba1[31:24];
             o_op0 <= OP_UNIT;
             o_en0 <= 1'b1;
-            o_direct <= {8'd0, p_rgba0[23:0]};
+            o_direct <= {8'd0, s_rgba0[23:0]};
           end
 
           R_MODULATE,
@@ -573,29 +617,29 @@ module zhao_texture_material_combine_v3 #(
           R_LERP: begin
             logic [1:0] c0, c1;
             logic [7:0] av0, bv0, av1, bv1;
-            c0 = (d_ph == 2'd0) ? 2'd0 : 2'd2;
+            c0 = (s_ph == 2'd0) ? 2'd0 : 2'd2;
             c1 = 2'd1;
-            av0 = chan32(p_rgba0, c0);
-            bv0 = chan32(p_rgba1, c0);
-            av1 = chan32(p_rgba0, c1);
-            bv1 = chan32(p_rgba1, c1);
+            av0 = chan32(s_rgba0, c0);
+            bv0 = chan32(s_rgba1, c0);
+            av1 = chan32(s_rgba0, c1);
+            bv1 = chan32(s_rgba1, c1);
 
             o_en0 <= 1'b1;
-            o_en1 <= (d_ph == 2'd0);
-            o_a0 <= (p_recipe == R_LERP && bv0 < av0) ? (av0 - bv0) :
-                    ((p_recipe == R_LERP) ? (bv0 - av0) : av0);
-            o_b0 <= (p_recipe == R_LERP) ? p_weight : bv0;
-            o_a1 <= (p_recipe == R_LERP && bv1 < av1) ? (av1 - bv1) :
-                    ((p_recipe == R_LERP) ? (bv1 - av1) : av1);
-            o_b1 <= (p_recipe == R_LERP) ? p_weight : bv1;
+            o_en1 <= (s_ph == 2'd0);
+            o_a0 <= (s_recipe == R_LERP && bv0 < av0) ? (av0 - bv0) :
+                    ((s_recipe == R_LERP) ? (bv0 - av0) : av0);
+            o_b0 <= (s_recipe == R_LERP) ? s_weight : bv0;
+            o_a1 <= (s_recipe == R_LERP && bv1 < av1) ? (av1 - bv1) :
+                    ((s_recipe == R_LERP) ? (bv1 - av1) : av1);
+            o_b1 <= (s_recipe == R_LERP) ? s_weight : bv1;
             o_lerp_base0 <= av0;
             o_lerp_base1 <= av1;
             o_lerp_neg0 <= (bv0 < av0);
             o_lerp_neg1 <= (bv1 < av1);
-            if (p_recipe == R_MOD2X) begin
+            if (s_recipe == R_MOD2X) begin
               o_op0 <= OP_MOD2;
               o_op1 <= OP_MOD2;
-            end else if (p_recipe == R_LERP) begin
+            end else if (s_recipe == R_LERP) begin
               o_op0 <= OP_LERP;
               o_op1 <= OP_LERP;
             end else begin
@@ -610,16 +654,16 @@ module zhao_texture_material_combine_v3 #(
             o_en0 <= 1'b1;
             o_en1 <= 1'b1;
             o_op0 <= OP_MOD2;
-            o_a0 <= chan32(p_rgba0, (d_ph == 2'd0) ? 2'd0 : 2'd2);
-            o_b0 <= chan32(p_rgba1, (d_ph == 2'd0) ? 2'd0 : 2'd2);
-            if (d_ph == 2'd0) begin
+            o_a0 <= chan32(s_rgba0, (s_ph == 2'd0) ? 2'd0 : 2'd2);
+            o_b0 <= chan32(s_rgba1, (s_ph == 2'd0) ? 2'd0 : 2'd2);
+            if (s_ph == 2'd0) begin
               o_op1 <= OP_MOD2;
-              o_a1 <= chan32(p_rgba0, 2'd1);
-              o_b1 <= chan32(p_rgba1, 2'd1);
+              o_a1 <= chan32(s_rgba0, 2'd1);
+              o_b1 <= chan32(s_rgba1, 2'd1);
             end else begin
               o_op1 <= OP_UNIT;
-              o_a1 <= p_rgba0[31:24];
-              o_b1 <= p_rgba2[31:24];
+              o_a1 <= s_rgba0[31:24];
+              o_b1 <= s_rgba2[31:24];
             end
           end
 
@@ -627,36 +671,36 @@ module zhao_texture_material_combine_v3 #(
             // MODULATE2X first layer, then unit-multiply by the true sample 2.
             // Phase 1 pairs first-layer R with second-layer B, exactly as V2's
             // dependency-aware schedule did; AUX is nowhere in this data path.
-            case (d_ph)
+            case (s_ph)
               2'd0: begin
                 o_en0 <= 1'b1;
                 o_en1 <= 1'b1;
                 o_op0 <= OP_MOD2;
                 o_op1 <= OP_MOD2;
-                o_a0 <= chan32(p_rgba0, 2'd0);
-                o_b0 <= chan32(p_rgba1, 2'd0);
-                o_a1 <= chan32(p_rgba0, 2'd1);
-                o_b1 <= chan32(p_rgba1, 2'd1);
+                o_a0 <= chan32(s_rgba0, 2'd0);
+                o_b0 <= chan32(s_rgba1, 2'd0);
+                o_a1 <= chan32(s_rgba0, 2'd1);
+                o_b1 <= chan32(s_rgba1, 2'd1);
               end
               2'd1: begin
                 o_en0 <= 1'b1;
                 o_en1 <= 1'b1;
                 o_op0 <= OP_MOD2;
                 o_op1 <= OP_UNIT;
-                o_a0 <= chan32(p_rgba0, 2'd2);
-                o_b0 <= chan32(p_rgba1, 2'd2);
-                o_a1 <= scr_rd[7:0];
-                o_b1 <= chan32(p_rgba2, 2'd0);
+                o_a0 <= chan32(s_rgba0, 2'd2);
+                o_b0 <= chan32(s_rgba1, 2'd2);
+                o_a1 <= s_scratch[7:0];
+                o_b1 <= chan32(s_rgba2, 2'd0);
               end
               default: begin
                 o_en0 <= 1'b1;
                 o_en1 <= 1'b1;
                 o_op0 <= OP_UNIT;
                 o_op1 <= OP_UNIT;
-                o_a0 <= scr_rd[15:8];
-                o_b0 <= chan32(p_rgba2, 2'd1);
-                o_a1 <= scr_rd[23:16];
-                o_b1 <= chan32(p_rgba2, 2'd2);
+                o_a0 <= s_scratch[15:8];
+                o_b0 <= chan32(s_rgba2, 2'd1);
+                o_a1 <= s_scratch[23:16];
+                o_b1 <= chan32(s_rgba2, 2'd2);
               end
             endcase
           end
@@ -666,7 +710,7 @@ module zhao_texture_material_combine_v3 #(
             // remains loud if the encoding width changes without this table.
             o_bypass <= 1'b1;
             o_direct <= {8'hFF, 24'hFF00FF};
-            o_status <= p_status | 8'h01;
+            o_status <= s_status | 8'h01;
             o_final <= 1'b1;
           end
         endcase
@@ -696,40 +740,58 @@ module zhao_texture_material_combine_v3 #(
       m_p0 <= o_a0 * o_b0;
       m_p1 <= o_a1 * o_b1;
 
-      wb_v <= m_v;
+      // M -> F.  Finish arithmetic terminates at these registers.
+      f_v <= m_v;
       if (m_v) begin
-        wb_ctx <= m_ctx;
-        wb_ph <= m_ph;
-        wb_final <= m_final;
-        wb_row <= {m_status, m_index, next_scratch};
+        f_ctx <= m_ctx;
+        f_ph <= m_ph;
+        f_lane0 <= finish_lane(m_p0, m_op0, m_lerp_neg0, m_lerp_base0);
+        f_lane1 <= finish_lane(m_p1, m_op1, m_lerp_neg1, m_lerp_base1);
+        f_en0 <= m_en0;
+        f_en1 <= m_en1;
+        f_recipe <= m_recipe;
+        f_final <= m_final;
+        f_bypass <= m_bypass;
+        f_scratch <= m_scratch;
+        f_direct <= m_direct;
+        f_keep_a <= m_keep_a;
+        f_status <= m_status;
+        f_index <= m_index;
+        f_addsat_sat <= m_addsat_sat;
+      end
+
+      // F -> WB.  Only the registered finish results enter row assembly.
+      wb_v <= f_v;
+      if (f_v) begin
+        wb_ctx <= f_ctx;
+        wb_ph <= f_ph;
+        wb_final <= f_final;
+        wb_row <= {f_status, f_index, next_scratch};
       end
     end
   end
 
-  logic [8:0] f_lane0, f_lane1;
   logic [7:0] f_r0, f_r1;
   logic f_mod2_sat;
   always_comb begin
-    f_lane0 = finish_lane(m_p0, m_op0, m_lerp_neg0, m_lerp_base0);
-    f_lane1 = finish_lane(m_p1, m_op1, m_lerp_neg1, m_lerp_base1);
     f_r0 = f_lane0[7:0];
     f_r1 = f_lane1[7:0];
-    f_mod2_sat = (m_en0 && f_lane0[8]) || (m_en1 && f_lane1[8]);
+    f_mod2_sat = (f_en0 && f_lane0[8]) || (f_en1 && f_lane1[8]);
   end
 
   logic [32:0] next_scratch;
   always_comb begin
-    next_scratch = m_scratch;
-    if (m_bypass) begin
-      next_scratch = {1'b0, m_direct};
+    next_scratch = f_scratch;
+    if (f_bypass) begin
+      next_scratch = {1'b0, f_direct};
     end else begin
-      case (m_recipe)
+      case (f_recipe)
         R_MASK: begin
-          next_scratch = {1'b0, f_r0, m_direct[23:0]};
+          next_scratch = {1'b0, f_r0, f_direct[23:0]};
         end
 
         R_DLIGHT: begin
-          case (m_ph)
+          case (f_ph)
             2'd0: begin
               next_scratch[7:0] = f_r0;
               next_scratch[15:8] = f_r1;
@@ -743,37 +805,37 @@ module zhao_texture_material_combine_v3 #(
               next_scratch[23:16] = f_r1;
             end
           endcase
-          next_scratch[31:24] = m_keep_a;
-          next_scratch[32] = (m_ph == 2'd0)
+          next_scratch[31:24] = f_keep_a;
+          next_scratch[32] = (f_ph == 2'd0)
               ? f_mod2_sat
-              : (m_scratch[32] | f_mod2_sat);
+              : (f_scratch[32] | f_mod2_sat);
         end
 
         R_DMASK: begin
-          if (m_ph == 2'd0) begin
+          if (f_ph == 2'd0) begin
             next_scratch[7:0] = f_r0;
             next_scratch[15:8] = f_r1;
-            next_scratch[31:24] = m_keep_a;
+            next_scratch[31:24] = f_keep_a;
           end else begin
             next_scratch[23:16] = f_r0;
             next_scratch[31:24] = f_r1;
           end
-          next_scratch[32] = (m_ph == 2'd0)
+          next_scratch[32] = (f_ph == 2'd0)
               ? f_mod2_sat
-              : (m_scratch[32] | f_mod2_sat);
+              : (f_scratch[32] | f_mod2_sat);
         end
 
         default: begin
-          if (m_ph == 2'd0) begin
+          if (f_ph == 2'd0) begin
             next_scratch[7:0] = f_r0;
             next_scratch[15:8] = f_r1;
           end else begin
             next_scratch[23:16] = f_r0;
           end
-          next_scratch[31:24] = m_keep_a;
-          next_scratch[32] = (m_ph == 2'd0)
+          next_scratch[31:24] = f_keep_a;
+          next_scratch[32] = (f_ph == 2'd0)
               ? f_mod2_sat
-              : (m_scratch[32] | f_mod2_sat);
+              : (f_scratch[32] | f_mod2_sat);
         end
       endcase
     end
@@ -841,8 +903,10 @@ module zhao_texture_material_combine_v3 #(
                && doneq_empty
                && !r_v
                && !d_v
+               && !s_v
                && !o_v
                && !m_v
+               && !f_v
                && !wb_v
                && !done_rd_q
                && !prefetch_full_q
@@ -891,8 +955,8 @@ module zhao_texture_material_combine_v3 #(
         else               newq_rp <= newq_rp + 1'b1;
       end
 
-      // Count meaningful product jobs at the arithmetic result edge, not
-      // powered-but-idle lane slots. Saturation is likewise an M-stage fact.
+      // Count meaningful product jobs at the M result edge, not powered-but-idle
+      // lane slots.  Saturation consumes the aligned registered F results.
       if (m_v) begin
         case ({m_en1, m_en0})
           2'b01,
@@ -902,15 +966,15 @@ module zhao_texture_material_combine_v3 #(
                      jobs_by_recipe_o[m_recipe] + 32'd2;
           default: begin end
         endcase
+      end
 
-        if (m_final) begin
-          if ((m_recipe == R_MOD2X || m_recipe == R_DLIGHT ||
-               m_recipe == R_DMASK) &&
-              (((m_ph == 2'd0) ? 1'b0 : m_scratch[32]) | f_mod2_sat))
-            saturated_mul2x_o <= saturated_mul2x_o + 32'd1;
-          if (m_recipe == R_ADDSAT && m_addsat_sat)
-            saturated_add_o <= saturated_add_o + 32'd1;
-        end
+      if (f_v && f_final) begin
+        if ((f_recipe == R_MOD2X || f_recipe == R_DLIGHT ||
+             f_recipe == R_DMASK) &&
+            (((f_ph == 2'd0) ? 1'b0 : f_scratch[32]) | f_mod2_sat))
+          saturated_mul2x_o <= saturated_mul2x_o + 32'd1;
+        if (f_recipe == R_ADDSAT && f_addsat_sat)
+          saturated_add_o <= saturated_add_o + 32'd1;
       end
 
       // Continuation/done ownership advances only with the actual WB RAM write.

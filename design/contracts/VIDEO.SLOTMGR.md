@@ -247,6 +247,47 @@ carry the same immutable `{writer,slot,generation,mode,base,span}` identity. The
 generation increments modulo 16 bits on each accepted grant into WRITING,
 including wrap from `0xffff` to zero.
 
+### Packet-H renderer request and canvas policy
+
+Packet H keeps the tested V2 manager ABI exactly as `{slot,mode}`. The earlier
+shell-architecture sentence saying that a renderer lease request carries mode
+only is superseded at this boundary: a renderer front-end, not the manager,
+chooses and holds the slot. The synchronized Packet-H `lease_open` level gates
+creation of both an upstream frame acceptance and a refusal retry: while it is
+closed the front-end asserts neither frame-request READY nor an unowned manager
+request. Once an open edge captures a frame or retry, that request is owned and
+must remain held through a later gate closure; its response, V3 clear, and admitted
+frame likewise retire normally rather than being discarded. The front-end captures
+the presentation mode at frame admission,
+chooses the lowest currently FREE slot (`0` before `1`) from `slot_state_o`, and
+holds `render_req_valid_i`, slot, and mode unchanged until acceptance. A response
+is consumed only when `rsp_writer_o==1`; a granted response captures the complete
+manager-derived lease identity. A refusal creates no frame and may be retried only
+after the current live lease clears and a FREE slot is observed. Simultaneous
+blitter contention remains governed solely by the manager's accepted-contention
+fairness; the front-end does not rewrite its held request to chase a same-edge
+state change.
+
+The accepted mode also freezes the renderer's storage geometry. Addresses remain
+manager-base-relative RGB565 bytes with no padding between stored rows:
+
+| mode | logical stored surface | byte stride | valid logical coordinates |
+|---:|---:|---:|---:|
+| 0 (Z60) | 384×240 | 768 | `x=0..383`, `y=0..239` |
+| 1 (Storm) | 320×240 | 640 | `x=0..319`, `y=0..239` |
+| 2 (Duo) | 256×384 | 512 | `x=0..255`, `y=0..383` |
+
+Duo logical rows `0..191` are view 0 and rows `192..383` are view 1. Therefore
+view 1 begins at `192*512 = 0x18000`, exactly matching `video_rules.md`; horizontal
+side-by-side placement and the 24-line display borders remain scanout-only. The
+front-end derives stride and coordinate bounds from the captured lease mode. No
+caller-supplied framebuffer base, span, or stride is authoritative after grant.
+
+A renderer grant does not immediately admit raster work. The front-end must first
+present one held V3 frame-clear request and observe its accepted ready/valid edge;
+only then may it open the frame under the captured lease. This ordering prevents
+old recoverable fault state from being attributed to a new generation.
+
 ### Fault, terminal, and publication law
 
 Fault and terminal keys are exactly `{writer,slot,generation}`. A nonmatching
@@ -311,6 +352,42 @@ Reset during FIFO occupancy, pending RAM read, held output, or held source offer
 discards all pre-reset events. A source held through reset can be accepted only
 after the new paired barrier, and no lease may be granted by Packet H before the
 required acknowledgements.
+
+### Packet-H terminal adapter and blank acknowledgement
+
+The manager's terminal input remains one held ready/valid stream. Packet H places
+a one-entry adapter in front of it because the retained FRAMEBLIT publishes and
+releases as one-cycle pulses. The adapter captures either blitter pulse with
+writer `0` and that pulse's slot/generation, and accepts one held renderer event
+with writer `1`. It holds the complete
+`{writer,slot,generation,publish,fault}` tuple until `term_ready_o`.
+
+Release class (`publish=0` or `fault=1`) always outranks clean publication.
+Matching same-edge blitter publish+release resolves to one release. If their keys
+differ, release is captured and publication is explicitly refused. Across writers,
+a release/fault beats a clean publication; within the same class the pulse-only
+blitter wins and the renderer remains backpressured. A blitter pulse that loses
+arbitration or arrives while the entry cannot accept produces `blit_refused_o`
+and increments a saturating refusal count once per logical pulse; it is never
+silently merged or dropped. Pop-and-replace may capture a new event on the exact
+manager-acceptance edge without an empty bubble. Captured-source and
+manager-accepted counters must conserve after drain: one captured logical event
+creates exactly one manager terminal acceptance.
+
+The pair-reset CDC acknowledgements prove FIFO restart only; they are not video
+blank proof. Packet H therefore adds an explicit video-domain blank command and
+`blank_ack`. Either GPU or video reset immediately asserts the paired reset and
+blank command; the bridge releases its GPU and video state only through separate
+three-flop synchronizers clocked in the receiving domain. Video raises `blank_ack`
+only after scanout output is forced to the
+frozen blank colour and no pre-reset tuple can reach FRAMECTL. The synchronized
+acknowledgement joins both CDC barrier-done levels before the renderer or blitter
+lease front-ends may assert request valid. Old READY/swap tuples are discarded by
+pair reset. Blank may lift only after a post-reset READY tuple is accepted by
+FRAMECTL, scanout acknowledges that swap, **and the exact swap echo is accepted
+into the reverse CDC**. Those two completion facts may arrive in either order and
+must be retained independently; reset release or either acknowledgement alone
+never shows a partially initialized or pre-reset framebuffer.
 
 ### V2 verification boundary
 

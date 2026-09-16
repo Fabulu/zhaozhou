@@ -1,4 +1,9 @@
 // texture_bilerp_lane_dsp2_diff.cpp -- cycle-exact V2/BIL2 differential.
+#if (defined(EXPECT_BIL2_COLLAPSE_RESULTB) + \
+     defined(EXPECT_BIL2_BYPASS_VERTICAL_CAPTURE)) > 1
+#error ZHAO_BIL2_CPP_MUTANT_SELECTOR_COLLISION
+#endif
+
 #include "Vtb_texture_bilerp_lane_dsp2.h"
 
 #include <cstdint>
@@ -254,6 +259,13 @@ void run_stream(Dut& d) {
               "BIL2 collapse-resultb mutant is detected", 1,
               (value_difference > 0 && new_oracle_mismatch > 0) ? 1 : 0);
   std::printf("BIL2 collapse-resultb mutant FIRED differences=%d\n", value_difference);
+#elif defined(EXPECT_BIL2_BYPASS_VERTICAL_CAPTURE)
+  zhao::check(value_difference > 0 && new_oracle_mismatch > 0 && hold_checks > 0,
+              "BIL2 vertical-capture bypass mutant is detected under stalls", 1,
+              (value_difference > 0 && new_oracle_mismatch > 0 && hold_checks > 0)
+                  ? 1 : 0);
+  std::printf("BIL2 vertical-capture bypass mutant FIRED differences=%d holds=%d\n",
+              value_difference, hold_checks);
 #else
   zhao::check(new_oracle_mismatch == 0 && value_difference == 0,
               "BIL2 candidate matches old and host oracle exactly", 0,

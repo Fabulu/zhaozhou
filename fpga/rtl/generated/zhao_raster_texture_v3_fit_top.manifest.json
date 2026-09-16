@@ -30,9 +30,9 @@
     "BILERP_DSP2": "1'b1"
   },
   "hashes": {
-    "generated_rtl_sha256": "ace5f507eb721632016aba5dcde4b800b7d6ddfef7bb10e7251f33d6358f4838",
-    "generator_sha256": "662258920e4f9b70bd138a1f49fc0def0fb352a86d61d26f5a0ff213163ae7b9",
-    "template_sha256": "270d289296b1eb33586e27916382e8cfbaeed0ad5637eb55990dda0fbdac4234"
+    "generated_rtl_sha256": "4d509cc7ad4d16ca7c7d21b3acd100202e0f841af28943efb9d422a907781bd4",
+    "generator_sha256": "2d2ae17769fb6931c3812d1c20bd02f610b7bad968f54f197c9a5968d2ba0291",
+    "template_sha256": "42b2d178e244764ce8cf4ec1beba3f98a331db6471b944a5a2c1886b35bdda99"
   },
   "hierarchy": {
     "owner": {
@@ -134,7 +134,7 @@
     {
       "ordinal": 12,
       "path": "fpga/rtl/texture/zhao_texture_aux_div6.sv",
-      "sha256": "abb8c4b9622bc57d28638040909c7b7955aefcc9459695d7a7b91c995f07cf88"
+      "sha256": "eb326899942e4d1b520f95f8e28bc8fe40a35d84ef5184e3c21a0e955a5b6735"
     },
     {
       "ordinal": 13,
@@ -144,7 +144,7 @@
     {
       "ordinal": 14,
       "path": "fpga/rtl/texture/zhao_texture_bilerp_lane_dsp2.sv",
-      "sha256": "897596a3d3cfa3388c272a231990824ef460109bd2ca72016164e4bc6c2d1337"
+      "sha256": "74a1e08ea13142ef4173c6613a5e525afc58ca147a8ca86159aa094528b9d270"
     },
     {
       "ordinal": 15,
@@ -179,7 +179,7 @@
     {
       "ordinal": 21,
       "path": "fpga/rtl/texture/zhao_texture_v3own.sv",
-      "sha256": "0053921e7389193eb27a7c7387847bfb08f79f356adf0c26e10d81edf1e6ba97"
+      "sha256": "b1391944358ea5c81bd8d5f14482cb5cbc8e9e232969cf3c57afc18c86336f42"
     },
     {
       "ordinal": 22,
@@ -214,17 +214,17 @@
     {
       "ordinal": 28,
       "path": "fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv",
-      "sha256": "8f432f5ed9720ae8ab47b9e217dff46da6a0998d8fd1c87419c0d3990116563d"
+      "sha256": "ccefd5d8f6a54574ec8b3148bdedb60f015645cff82ae599612db67ffdb9e087"
     },
     {
       "ordinal": 29,
       "path": "fpga/rtl/texture/zhao_texture_material_combine_v3.sv",
-      "sha256": "841f84edb4412a9b9885492cd39861b51f4dc3c566361a4dc642dc7f60b6dc22"
+      "sha256": "ebb8207f9b61ccb3ac6db7dcec5c8441d515f4bd126ac83550124dbb00891ab3"
     },
     {
       "ordinal": 30,
       "path": "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
-      "sha256": "8c721b8fad987202db9a826a89e97110d5749ab5203910b3932603fa9093d73a"
+      "sha256": "ae92ec135c5884652dc236b0fea762d968a0713ec3950db45f599cef96c7785d"
     },
     {
       "ordinal": 31,
@@ -309,7 +309,7 @@
     {
       "ordinal": 47,
       "path": "fpga/rtl/generated/zhao_raster_texture_v3_fit_top.sv",
-      "sha256": "ace5f507eb721632016aba5dcde4b800b7d6ddfef7bb10e7251f33d6358f4838"
+      "sha256": "4d509cc7ad4d16ca7c7d21b3acd100202e0f841af28943efb9d422a907781bd4"
     }
   ],
   "traffic_profile": {
@@ -317,6 +317,7 @@
     "binding_generation": 1,
     "binding_selector": 1,
     "cache_fill_halfwords": 8,
+    "frame_fault_clear": "registered-held-recoverable-only",
     "framebuffer_backpressure": "deterministic-lfsr",
     "material": "one-sample-clut4-index5-green",
     "tile": "one 16x16 half-tile triangle per quiet interval"

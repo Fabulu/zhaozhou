@@ -132,7 +132,9 @@ int main(int argc, char** argv) {
 
   zhao::check(fed == jobs.size(), "every job was offered", jobs.size(), fed);
   zhao::check(got == jobs.size(), "and every job came back exactly once", jobs.size(), got);
+#ifndef ZHAO_EXPECT_AUX_T4_BORROW_MUTANT
   zhao::check(bad_q == 0, "every quotient matches n/d computed independently", 0, bad_q);
+#endif
   zhao::check(bad_tag == 0, "and each answer carries its own request's tag", 0, bad_tag);
 
   // THE THROUGHPUT CLAIM, asserted rather than described.
@@ -172,8 +174,17 @@ int main(int argc, char** argv) {
       zhao::tick(top);
     }
     zhao::check(outs == 3, "three sparse requests produce exactly three answers", 3, outs);
+#ifndef ZHAO_EXPECT_AUX_T4_BORROW_MUTANT
     zhao::check(bad_q == 0, "and bubbles between them produce none", 0, bad_q);
+#endif
   }
 
+#ifdef ZHAO_EXPECT_AUX_T4_BORROW_MUTANT
+  zhao::check(bad_q > 0,
+              "reversed-borrow mutant disagrees with independent n/d oracle", 1,
+              bad_q > 0 ? 1 : 0);
+  if (zhao::check_failures() == 0)
+    std::printf("AUX Timing4 divider borrow mutant DETECTED mismatches=%d\n", bad_q);
+#endif
   return zhao::report_and_exit("texture_aux_div6_directed");
 }

@@ -1,0 +1,3 @@
+tests/mutants/zhao_video_terminal_adapter_v2_mutants.sv
+fpga/rtl/video/zhao_video_terminal_adapter_v2.sv
+tests/video/tb_video_terminal_adapter_v2.sv

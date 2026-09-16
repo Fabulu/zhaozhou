@@ -603,6 +603,7 @@ def validate_top_profiles_mutants_and_quiet_accounting(cmake_text: str) -> None:
         "test_v3_owner_combine_feedback_cut_keeps_generation_witness",
         "test_v3_owner_retirement_head_is_bounded_and_controlled",
         "test_v3_owner_timing3_notifications_preserve_event_moments",
+        "test_v3_owner_timing4_event_boundaries_are_registered",
         "test_material_writeback_cut_reaches_all_committed_mutants",
         "test_rcp_v4_balanced_lzc_direct_oracle_and_mutant_are_exact",
     )
@@ -1118,6 +1119,40 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "reset-gated"):
             validate(source.replace("rst_n && ", "", 1))
 
+        divider = (
+            REPO / "fpga/rtl/texture/zhao_texture_aux_div6.sv"
+        ).read_text(encoding="utf-8")
+        timing4_mutants = (
+            REPO / "tests/mutants/zhao_texture_aux_timing4_mutants.sv"
+        ).read_text(encoding="utf-8")
+        cmake = (REPO / "tests/CMakeLists.txt").read_text(encoding="utf-8")
+        for marker in (
+            "a0_degenerate_q <= `ZHAO_AUX_T4_DEGENERATE_CAPTURE(",
+            "a0_input_fault_q <= `ZHAO_AUX_T4_INPUT_FAULT_CAPTURE(",
+            "if (a0_degenerate_q)",
+            "if (a0_input_fault_q)",
+        ):
+            self.assertEqual(source.count(marker), 1, marker)
+        for marker in (
+            "difference = {1'b0, r} - {1'b0, shifted};",
+            "hit        = `ZHAO_AUX_T4_DIV_HIT(difference);",
+        ):
+            self.assertEqual(divider.count(marker), 1, marker)
+        for marker in (
+            "ZHAO_AUX_T4_MUTANT_DEGENERATE_DROP",
+            "ZHAO_AUX_T4_MUTANT_INPUT_FAULT_DROP",
+            "ZHAO_AUX_T4_MUTANT_BORROW_REVERSE",
+            "ZHAO_AUX_TIMING4_MUTANT_SELECTOR_COLLISION",
+        ):
+            self.assertGreaterEqual(timing4_mutants.count(marker), 1, marker)
+        for marker in (
+            "pb_aux_t4d degenerate ZHAO_AUX_T4_MUTANT_DEGENERATE_DROP",
+            "pb_aux_t4f input_fault ZHAO_AUX_T4_MUTANT_INPUT_FAULT_DROP",
+            "add_test(NAME texture_aux_div6_timing4_borrow_control",
+            "add_test(NAME texture_aux_timing4_registration_static",
+        ):
+            self.assertEqual(cmake.count(marker), 1, marker)
+
     def test_v3_owner_combine_feedback_cut_keeps_generation_witness(self) -> None:
         top = (REPO / "fpga/rtl/texture/zhao_texture_island_v3_top.sv").read_text(
             encoding="utf-8"
@@ -1320,9 +1355,8 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
         def validate(text: str) -> None:
             required = (
                 "assign iss_t_capture_ok_c = iss_tmu_valid_i && iss_t_in_rng_c",
-                "&& !iss_t_pending_hit_c;",
-                "assign iss_a_capture_ok_c = iss_aux_valid_i",
-                "&& !iss_a_pending_hit_c;",
+                "!iss_t_pending_hit_c &&",
+                "assign iss_a_capture_ok_c = iss_aux_valid_i && !iss_a_pending_hit_c &&",
                 "iss0t_v_q   <= iss_tmu_valid_i;",
                 "iss0a_v_q   <= iss_aux_valid_i;",
                 "(iss0t_handle_q == {c0t_slot_q, c0t_sidx_q, c0t_gen_q})",
@@ -1348,7 +1382,7 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
 
         validate(source)
         mutations = (
-            source.replace("&& !iss_t_pending_hit_c;", ";", 1),
+            source.replace("!iss_t_pending_hit_c &&", "1'b1 &&", 1),
             source.replace(
                 "(iss0t_handle_q == {c0t_slot_q, c0t_sidx_q, c0t_gen_q})",
                 "1'b0", 1,
@@ -1361,9 +1395,82 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
             source.replace("&& !kpipe_busy_c && !cmb_accept_v_q",
                            "&& !kpipe_busy_c", 1),
         )
-        for mutation in mutations:
+        for index, mutation in enumerate(mutations):
+            self.assertNotEqual(
+                mutation, source,
+                f"timing notification mutation {index} matched nothing")
             with self.assertRaises(AssertionError):
                 validate(mutation)
+
+    def test_v3_owner_timing4_event_boundaries_are_registered(self) -> None:
+        owner = (
+            REPO / "fpga/rtl/texture/zhao_texture_v3own.sv"
+        ).read_text(encoding="utf-8")
+        island = (
+            REPO / "fpga/rtl/texture/zhao_texture_island_v3_top.sv"
+        ).read_text(encoding="utf-8")
+        mutant = (
+            REPO / "tests/mutants/zhao_texture_v3own_timing4_event_mutants.sv"
+        ).read_text(encoding="utf-8")
+        cmake = (REPO / "tests/CMakeLists.txt").read_text(encoding="utf-8")
+        control = (
+            REPO / "tests/tools/test_v3own_timing4_event_control.py"
+        ).read_text(encoding="utf-8")
+
+        owner_markers = (
+            "`define ZHAO_V3OWN_ADMISSION_EVENT_OWNER(owner) owner",
+            "`define ZHAO_V3OWN_RESERVATION_EVENT_OWNER(owner) owner",
+            "ctxw_v_q <= adm_fire_c;",
+            "ctxw_owner_q <= `ZHAO_V3OWN_ADMISSION_EVENT_OWNER(",
+            "if (ctxw_v_q &&",
+            "assign iss_t_admission_hit_c = ctxw_v_q &&",
+            "assign iss_a_admission_hit_c = ctxw_v_q &&",
+            "if (k0_v_q && k0_gen_ok_q &&",
+            "k0_owner_q <= `ZHAO_V3OWN_RESERVATION_EVENT_OWNER(sel_data_c);",
+            "a_admission_event_identity : assert",
+            "a_reservation_event_identity : assert",
+        )
+        for marker in owner_markers:
+            self.assertEqual(owner.count(marker), 1, marker)
+        self.assertNotIn("if (adm_fire_c &&\n          (adm_owner_o", owner)
+
+        island_markers = (
+            "assign frag_ready_o = binding_admission_enable_w && !lifetime_admission_block_w",
+            "owner_admission_event_valid_q <= own_adm_accept_w;",
+            "if (owner_admission_event_valid_q)",
+            "join_validation_pending_q[\n            owner_admission_event_owner_q",
+        )
+        for marker in island_markers:
+            self.assertEqual(island.count(marker), 1, marker)
+
+        for marker in (
+            "ZHAO_V3OWN_T4_MUTANT_ADMISSION_STALE",
+            "ZHAO_V3OWN_T4_MUTANT_RESERVATION_STALE",
+            "ZHAO_V3OWN_T4_EVENT_MUTANT_SELECTOR_COLLISION",
+            "ZHAO_V3OWN_ADMISSION_EVENT_OWNER",
+            "ZHAO_V3OWN_RESERVATION_EVENT_OWNER",
+        ):
+            self.assertGreaterEqual(mutant.count(marker), 1, marker)
+        for marker in (
+            "t_v3own_t4a admission_identity ZHAO_V3OWN_T4_MUTANT_ADMISSION_STALE",
+            "t_v3own_t4r reservation_identity ZHAO_V3OWN_T4_MUTANT_RESERVATION_STALE",
+            "add_test(NAME texture_v3own_timing4_${NAME}_control",
+            "add_test(NAME texture_v3own_timing4_event_selector_collision",
+            "tests/mutants/zhao_texture_v3own_timing4_event_mutants.sv",
+        ):
+            self.assertEqual(cmake.count(marker), 1, marker)
+        for marker in (
+            '"a_admission_event_identity", "a_reservation_event_identity"',
+            "set(labels) != {expected}",
+            "ZHAO_V3OWN_T4_EVENT_MUTANT_SELECTOR_COLLISION",
+        ):
+            self.assertIn(marker, control)
+
+        with self.assertRaises(AssertionError):
+            mutated = owner.replace("if (ctxw_v_q &&", "if (adm_fire_c &&", 1)
+            for marker in owner_markers:
+                if mutated.count(marker) != 1:
+                    raise AssertionError(marker)
 
     def test_material_writeback_cut_reaches_all_committed_mutants(self) -> None:
         production = (
@@ -1373,26 +1480,50 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
             REPO / "tests/mutants/zhao_texture_material_combine_v3_mutants.sv"
         ).read_text(encoding="utf-8")
         marker_counts = {
-            "logic wb_v;": 11,
-            "wb_v <= m_v;": 11,
-            "scr_we = wb_v && !wb_final;": 10,
+            "logic r_v, d_v, s_v, o_v, m_v, f_v;": 13,
+            "logic wb_v;": 13,
+            "s_v <= d_v;": 13,
+            "o_v <= s_v;": 12,
+            "m_p0 <= o_a0 * o_b0;": 13,
+            "m_p1 <= o_a1 * o_b1;": 13,
+            "f_v <= m_v;": 13,
+            "f_lane0 <= finish_lane(": 12,
+            "f_lane1 <= finish_lane(": 12,
+            "wb_v <= f_v;": 12,
+            "wb_row <= {f_status, f_index, next_scratch};": 12,
+            "scr_we = wb_v && !wb_final;": 12,
             "scr_we = wb_v && !wb_final && !wb_drop;": 1,
-            "cmp_we = wb_v && wb_final;": 11,
-            "&& !wb_v": 11,
-            "if (wb_v) begin": 11,
-            "m_p0 <= o_a0 * o_b0;": 11,
-            "m_p1 <= o_a1 * o_b1;": 11,
+            "cmp_we = wb_v && wb_final;": 13,
+            "&& !wb_v": 13,
+            "if (wb_v) begin": 13,
         }
-        for marker in marker_counts:
-            self.assertEqual(production.count(marker),
-                             1 if marker != "scr_we = wb_v && !wb_final && !wb_drop;" else 0,
-                             marker)
-            self.assertEqual(mutants.count(marker), marker_counts[marker], marker)
-        self.assertNotIn("scr_we = m_v && !m_final;", production)
-        self.assertNotIn("cmp_we = m_v && m_final;", production)
+        for marker, mutant_count in marker_counts.items():
+            production_count = 0 if marker == (
+                "scr_we = wb_v && !wb_final && !wb_drop;") else 1
+            self.assertEqual(production.count(marker), production_count, marker)
+            self.assertEqual(mutants.count(marker), mutant_count, marker)
+
+        bypass_controls = {
+            "o_v <= d_v;": 1,
+            "wb_v <= m_v;": 1,
+            "wb_row <= {m_status, m_index, next_scratch};": 1,
+        }
+        for marker, count in bypass_controls.items():
+            self.assertNotIn(marker, production)
+            self.assertEqual(mutants.count(marker), count, marker)
+
+        cmake = (REPO / "tests/CMakeLists.txt").read_text(encoding="utf-8")
+        for marker in (
+            "skip_s_capture MATERIAL_V3_MUTANT_SKIP_S",
+            "zhao_texture_material_combine_v3_skip_s_capture_mutant",
+            "skip_f_finish MATERIAL_V3_MUTANT_SKIP_F",
+            "zhao_texture_material_combine_v3_skip_f_finish_mutant",
+        ):
+            self.assertEqual(cmake.count(marker), 1, marker)
         with self.assertRaises(AssertionError):
             self.assertEqual(
-                mutants.replace("&& !wb_v", "", 1).count("&& !wb_v"), 11
+                mutants.replace("o_v <= d_v;", "o_v <= s_v;", 1).count(
+                    "o_v <= d_v;"), 1
             )
 
     def test_rcp_v4_balanced_lzc_direct_oracle_and_mutant_are_exact(self) -> None:

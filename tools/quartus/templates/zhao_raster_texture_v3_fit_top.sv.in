@@ -32,7 +32,13 @@ module zhao_raster_texture_v3_fit_top #(
   logic job_pending_q;
   logic job_valid_w, job_ready_w;
   logic [1156:0] job_meta_w;
+  logic frame_fault_clear_pending_q;
   logic frame_fault_clear_valid_w, frame_fault_clear_ready_w, frame_fault_w;
+  logic lifetime_structural_fault_w;
+  logic setup_blocking_fault_w;
+
+  wire frame_fault_clear_fire_w =
+      frame_fault_clear_valid_w && frame_fault_clear_ready_w;
 
   logic cfg_valid_w, cfg_ready_w;
   logic [1:0] cfg_op_w;
@@ -340,8 +346,14 @@ module zhao_raster_texture_v3_fit_top #(
     job_meta_w[676:581] = 96'h000000000000400000000000;
   end
 
-  assign job_valid_w = job_pending_q;
-  assign frame_fault_clear_valid_w = frame_fault_w && frame_fault_clear_ready_w;
+  // Recoverable frame fault is captured into a held request before it can affect
+  // synthetic job admission.  Lifetime structural fault is deliberately absent
+  // from this request: only reset can recover that condition.
+  assign setup_blocking_fault_w = setup_fault_q &&
+      (setup_fault_cause_q[0] || setup_fault_cause_q[2] ||
+       setup_fault_cause_q[3]);
+  assign job_valid_w = job_pending_q && !frame_fault_clear_pending_q;
+  assign frame_fault_clear_valid_w = frame_fault_clear_pending_q;
   assign fill_req_ready_w = !fill_busy_q;
   assign fill_data_valid_w = fill_busy_q;
   assign fill_data_w = (fill_beat_q == 3'd0) ? 16'h0005 : 16'h0000;
@@ -351,6 +363,7 @@ module zhao_raster_texture_v3_fit_top #(
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       job_pending_q <= 1'b0;
+      frame_fault_clear_pending_q <= 1'b0;
       fill_busy_q <= 1'b0;
       fill_beat_q <= 3'd0;
       jobs_accepted_q <= 32'd0;
@@ -368,7 +381,17 @@ module zhao_raster_texture_v3_fit_top #(
       saw_fb_stall_q <= 1'b0;
       first_nonzero_fb_q <= 16'd0;
     end else begin
-      if (!job_pending_q && (setup_state_q == S_RUN) && quiet_w && !setup_fault_q)
+      // Handshake has priority over the old frame-fault level sampled on the same
+      // edge.  If a genuinely new/reasserted fault survives the clear, its level
+      // is observed on the following edge and creates the next held request.
+      if (frame_fault_clear_fire_w)
+        frame_fault_clear_pending_q <= 1'b0;
+      else if (frame_fault_w)
+        frame_fault_clear_pending_q <= 1'b1;
+
+      if (!job_pending_q && (setup_state_q == S_RUN) && quiet_w &&
+          !setup_blocking_fault_w && !lifetime_structural_fault_w &&
+          !frame_fault_w && !frame_fault_clear_pending_q)
         job_pending_q <= 1'b1;
       if (job_fire_w) begin
         job_pending_q <= 1'b0;
@@ -429,7 +452,7 @@ module zhao_raster_texture_v3_fit_top #(
       .frame_fault_clear_valid_i(frame_fault_clear_valid_w),
       .frame_fault_clear_ready_o(frame_fault_clear_ready_w),
       .frame_fault_o(frame_fault_w),
-      .lifetime_structural_fault_o(),
+      .lifetime_structural_fault_o(lifetime_structural_fault_w),
       .cfg_valid_i(cfg_valid_w), .cfg_ready_o(cfg_ready_w),
       .cfg_op_i(cfg_op_w), .cfg_page_generation_i(cfg_generation_w),
       .cfg_selector_i(cfg_selector_w), .cfg_row_i(cfg_row_w),
@@ -507,6 +530,29 @@ module zhao_raster_texture_v3_fit_top #(
       .stage_fragment_texel_idx_o(stage_fragment_index_w),
       .stage_fragment_status_o(stage_fragment_status_w),
       .texture_quiet_o(texture_quiet_w), .fragment_idle_o(fragment_idle_w));
+
+`ifndef SYNTHESIS
+`ifndef QUARTUS_SYNTHESIS
+  always_ff @(posedge clk) begin
+    if (rst_n) begin
+      if ($past(rst_n && frame_fault_clear_valid_w &&
+                !frame_fault_clear_ready_w))
+        assert (frame_fault_clear_valid_w)
+          else $error("g8a_fit_top: recoverable clear request was not held");
+      if (frame_fault_clear_pending_q)
+        assert (!job_valid_w && !job_fire_w)
+          else $error("g8a_fit_top: synthetic job escaped pending clear");
+      if (lifetime_structural_fault_w && !frame_fault_w &&
+          !$past(frame_fault_clear_pending_q))
+        assert (!frame_fault_clear_pending_q)
+          else $error("g8a_fit_top: lifetime fault initiated recoverable clear");
+      if ($past(rst_n && frame_fault_w && !frame_fault_clear_fire_w))
+        assert (frame_fault_clear_pending_q)
+          else $error("g8a_fit_top: recoverable frame fault was not captured");
+    end
+  end
+`endif
+`endif
 
 `ifndef QUARTUS_SYNTHESIS
   export "DPI-C" task zhao_g8a_get_activity;

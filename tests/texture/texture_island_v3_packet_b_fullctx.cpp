@@ -136,6 +136,13 @@ class Harness {
     svSetScope(scope);
   }
 
+  uint32_t owner_admitted() {
+    unsigned int admitted = 0;
+    select_dpi_scope();
+    zhao_texture_packet_b_get_owner_admitted(&admitted);
+    return admitted;
+  }
+
   Snapshot snapshot() {
     Snapshot value;
     value.rgb = dut.out_rgb_o;
@@ -327,10 +334,23 @@ void run_full_context() {
   h.step();
   require(!h.dut.frame_fault_o && !h.dut.lifetime_structural_fault_o,
           "recoverable injection did not clear", h.cycle);
-  for (unsigned source = 0; source < 6; ++source) {
+  for (unsigned fault_source = 0; fault_source < 6; ++fault_source) {
+    // Hold a complete legal offer on the first cycle with the registered
+    // lifetime level asserted. The outer combinational barrier must refuse it
+    // before either registered admission event can exist.
     h.select_dpi_scope();
-    zhao_texture_packet_b_set_lifetime_fault_inject(1u << source);
+    zhao_texture_packet_b_set_lifetime_fault_inject(1u << fault_source);
     h.step();
+    load_offer(h, source[fault_source]);
+    const uint32_t admitted_before = h.owner_admitted();
+    h.dut.clk = 0;
+    h.dut.eval();
+    require(!h.dut.frag_ready_o,
+            "fault-coincident fragment offer was not blocked immediately", h.cycle);
+    h.step();
+    require(h.owner_admitted() == admitted_before,
+            "fault-coincident fragment entered the owner event boundary", h.cycle);
+    h.dut.frag_valid_i = 0;
     h.select_dpi_scope();
     zhao_texture_packet_b_set_lifetime_fault_inject(0);
     h.dut.eval();

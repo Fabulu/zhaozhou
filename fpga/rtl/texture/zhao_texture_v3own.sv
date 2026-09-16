@@ -182,6 +182,15 @@
 // ---------------------------------------------------------------------------
 `default_nettype none
 
+// Timing4 event-boundary mutation seams. Production leaves both identities
+// unchanged; committed shims alter exactly one capture for positive controls.
+`ifndef ZHAO_V3OWN_ADMISSION_EVENT_OWNER
+`define ZHAO_V3OWN_ADMISSION_EVENT_OWNER(owner) owner
+`endif
+`ifndef ZHAO_V3OWN_RESERVATION_EVENT_OWNER
+`define ZHAO_V3OWN_RESERVATION_EVENT_OWNER(owner) owner
+`endif
+
 module zhao_texture_v3own #(
     // 64 owners. Section 5.1: "The baseline owner capacity is 64."
     parameter int unsigned OWNERS = 64,
@@ -333,7 +342,7 @@ module zhao_texture_v3own #(
   // ruling specifies. A literal table survives ONLY in the synthesis-excluded
   // verification section as `vgen_q`, maintained by its own old-style per-slot
   // recurrence so the equivalence assertion is not circular.
-  logic            crs_q  [OWNERS];   // combine_reserved
+  logic            crs_q  [OWNERS] /* verilator public */;   // combine_reserved
   logic            fcl_q  [OWNERS];   // final_claimed
   logic            fdn_q  [OWNERS];   // final_done
   logic            ftc_q  [OWNERS];   // fetched (section 18.1)
@@ -590,9 +599,14 @@ module zhao_texture_v3own #(
   // same owner is many edges later even for a zero-work owner (READY_INITIAL
   // push +1, pop +1, bank read +2, COMBINE hand-off +1, final return +4), so
   // the separation is not marginal.
-  logic              ctxw_v_q;
+  // This registered context write is also the complete admission event boundary.
+  // The full owner identity and required mask cross with the context; the
+  // 64-entry scoreboard consumes only this registered event on the next edge.
+  logic              ctxw_v_q /* verilator public */;
   logic [SLOTW-1:0]  ctxw_addr_q;
   logic [CTXW-1:0]   ctxw_data_q;
+  logic [OWNERW-1:0] ctxw_owner_q /* verilator public */;
+  logic [3:0]        ctxw_req_q /* verilator public */;
 
   // ==========================================================================
   // ISSUE (section 19.3 -- ISSUED is a separate moment from REQUIRED)
@@ -611,6 +625,7 @@ module zhao_texture_v3own #(
   logic [1:0]       iss_t_in_sidx_c, iss_t_sidx_c;
   logic [GENW-1:0]  iss_t_in_gen_c;
   logic             iss_t_in_rng_c, iss_t_pending_hit_c;
+  logic             iss_t_admission_hit_c;
   logic [3:0]       iss_t_in_bit_c, iss_t_bit_c;
   logic             iss_t_capture_ok_c, iss_t_ok_c;
 
@@ -622,11 +637,18 @@ module zhao_texture_v3own #(
                          ? (4'b0001 << iss_t_in_sidx_c) : 4'b0000;
   assign iss_t_pending_hit_c = iss0t_v_q && iss0t_acc_q &&
                                (iss0t_handle_q == iss_tmu_handle_i);
-  assign iss_t_capture_ok_c = iss_tmu_valid_i && iss_t_in_rng_c
-                           && win_live({iss_t_in_gen_c, iss_t_in_slot_c})
-                           && ((req_q[iss_t_in_slot_c] & iss_t_in_bit_c) != 4'd0)
-                           && ((iss_q[iss_t_in_slot_c] & iss_t_in_bit_c) == 4'd0)
-                           && !iss_t_pending_hit_c;
+  // A legal producer may issue on the clock immediately following admission,
+  // while the registered admission event is only now publishing the row state.
+  // Forward that independently captured full identity/mask, never live input.
+  assign iss_t_admission_hit_c = ctxw_v_q &&
+      (ctxw_owner_q == {iss_t_in_slot_c, iss_t_in_gen_c}) &&
+      ((ctxw_req_q & iss_t_in_bit_c) != 4'd0);
+  assign iss_t_capture_ok_c = iss_tmu_valid_i && iss_t_in_rng_c &&
+      !iss_t_pending_hit_c &&
+      (iss_t_admission_hit_c ||
+       (win_live({iss_t_in_gen_c, iss_t_in_slot_c}) &&
+        ((req_q[iss_t_in_slot_c] & iss_t_in_bit_c) != 4'd0) &&
+        ((iss_q[iss_t_in_slot_c] & iss_t_in_bit_c) == 4'd0)));
 
   assign iss_t_slot_c = iss0t_handle_q[SMPW-1 -: SLOTW];
   assign iss_t_sidx_c = iss0t_handle_q[GENW+1 -: 2];
@@ -635,17 +657,20 @@ module zhao_texture_v3own #(
 
   logic [SLOTW-1:0] iss_a_in_slot_c, iss_a_slot_c;
   logic [GENW-1:0]  iss_a_in_gen_c;
-  logic             iss_a_pending_hit_c;
+  logic             iss_a_pending_hit_c, iss_a_admission_hit_c;
   logic             iss_a_capture_ok_c, iss_a_ok_c;
   assign iss_a_in_slot_c = iss_aux_owner_i[OWNERW-1 -: SLOTW];
   assign iss_a_in_gen_c  = iss_aux_owner_i[GENW-1:0];
   assign iss_a_pending_hit_c = iss0a_v_q && iss0a_acc_q &&
                                (iss0a_owner_q == iss_aux_owner_i);
-  assign iss_a_capture_ok_c = iss_aux_valid_i
-                           && win_live({iss_a_in_gen_c, iss_a_in_slot_c})
-                           && ((req_q[iss_a_in_slot_c] & SRC_AUX) != 4'd0)
-                           && ((iss_q[iss_a_in_slot_c] & SRC_AUX) == 4'd0)
-                           && !iss_a_pending_hit_c;
+  assign iss_a_admission_hit_c = ctxw_v_q &&
+      (ctxw_owner_q == iss_aux_owner_i) &&
+      ((ctxw_req_q & SRC_AUX) != 4'd0);
+  assign iss_a_capture_ok_c = iss_aux_valid_i && !iss_a_pending_hit_c &&
+      (iss_a_admission_hit_c ||
+       (win_live({iss_a_in_gen_c, iss_a_in_slot_c}) &&
+        ((req_q[iss_a_in_slot_c] & SRC_AUX) != 4'd0) &&
+        ((iss_q[iss_a_in_slot_c] & SRC_AUX) == 4'd0)));
 
   assign iss_a_slot_c = iss0a_owner_q[OWNERW-1 -: SLOTW];
   assign iss_a_ok_c   = iss0a_v_q && iss0a_acc_q;
@@ -1033,8 +1058,9 @@ module zhao_texture_v3own #(
   // queue's write enable is a flop output rather than the arbiter's predicate.
   // Legacy adds k1/k2 (declared inside g_legacy) to cover the bank read and
   // the capture.
-  logic              k0_v_q;
-  logic [OWNERW-1:0] k0_owner_q;
+  logic              k0_v_q /* verilator public */;
+  logic [OWNERW-1:0] k0_owner_q /* verilator public */;
+  logic              k0_gen_ok_q /* verilator public */;
   // Mode-resolved wires, driven by exactly one generate branch each.
   logic              kpipe_busy_c;      // any pop still short of the job queue
   logic [SLOTW-1:0]  plane_rd_addr_c;   // the ONE reader's address per plane
@@ -1434,10 +1460,12 @@ module zhao_texture_v3own #(
       if (tkt_a_c && (c4a_slot_q == SLOTW'(i))) rdy_n_c[i] = 1'b1;
 
       // ---- COMBINE RESERVATION (11.1 event 2) ----
-      // The credited pop off the ready queue. This reserves the owner; it does
-      // NOT mean COMBINE has taken the packet, and it must not authorise a
-      // final.
-      if (cmb_pop_c && (sel_data_c[OWNERW-1 -: SLOTW] == SLOTW'(i)))
+      // The credited pop is captured as the complete owner in k0 before this
+      // 64-entry decode. It still reserves exactly the popped ticket; delaying
+      // only the per-slot publication cannot create another ticket because
+      // ready_claimed was already set before the ticket entered its queue.
+      if (k0_v_q && k0_gen_ok_q &&
+          (k0_owner_q[OWNERW-1 -: SLOTW] == SLOTW'(i)))
         crs_n_c[i] = 1'b1;
 
       // ---- ACTUAL COMBINE ISSUE (11.1 event 3) ----
@@ -1457,16 +1485,21 @@ module zhao_texture_v3own #(
       // does NOT free the owner, COMBINE completing does NOT free the owner.
       if (out_fire_c && (emit_q == SLOTW'(i))) live_n_c[i] = 1'b0;
 
-      // ---- ADMISSION, last and therefore highest precedence ----
-      if (adm_fire_c && (tail_q == SLOTW'(i))) begin
+      // ---- ADMISSION COMMIT, last and therefore highest precedence ---------
+      // The external ready/valid edge still reserves credit, advances the tail,
+      // stamps the owner and blocks immediately on every outer lifetime fault.
+      // Only the complete registered event reaches this 64-entry decode.
+      if (ctxw_v_q &&
+          (ctxw_owner_q[OWNERW-1 -: SLOTW] == SLOTW'(i))) begin
         live_n_c[i] = 1'b1;
-        req_n_c [i] = adm_req_i;
+        req_n_c [i] = ctxw_req_q;
         iss_n_c [i] = 4'd0;
         clm_n_c [i] = 4'd0;
         cmt_n_c [i] = 4'd0;
         // A zero-work owner is eligible at admission and claims its one ticket
-        // there (section 9.1: "Admission can create a zero-work ready owner").
-        rdy_n_c [i] = (adm_req_i == 4'd0);
+        // on the original handshake edge; this state publication is aligned
+        // with that ticket's registered READY_INITIAL write.
+        rdy_n_c [i] = (ctxw_req_q == 4'd0);
         cbi_n_c [i] = 1'b0;
         crs_n_c [i] = 1'b0;
         fcl_n_c [i] = 1'b0;
@@ -1607,14 +1640,18 @@ module zhao_texture_v3own #(
     end
   end
 
-  // ---- admission context write (registered enable) -------------------------
+  // ---- admission event/context write (registered boundary) ------------------
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) ctxw_v_q <= 1'b0;
     else        ctxw_v_q <= adm_fire_c;
   end
   always_ff @(posedge clk) begin
-    ctxw_addr_q <= tail_q;
-    ctxw_data_q <= adm_ctx_i;
+    if (adm_fire_c) begin
+      ctxw_addr_q  <= tail_q;
+      ctxw_data_q  <= adm_ctx_i;
+      ctxw_owner_q <= `ZHAO_V3OWN_ADMISSION_EVENT_OWNER({tail_q, adm_gen_c});
+      ctxw_req_q   <= adm_req_i;
+    end
   end
 
   // ---- TMU return pipeline -------------------------------------------------
@@ -1782,21 +1819,28 @@ module zhao_texture_v3own #(
   // the number of in-flight stages behind the pop differs (three vs one).
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      k0_v_q    <= 1'b0;
-      rr_q      <= 2'd0;
-      cmb_res_q <= '0;
+      k0_v_q      <= 1'b0;
+      k0_gen_ok_q <= 1'b0;
+      rr_q        <= 2'd0;
+      cmb_res_q   <= '0;
       cq_wp_q   <= '0;
       cq_rp_q   <= '0;
     end else begin
       k0_v_q <= cmb_pop_c;
-      if (cmb_pop_c) rr_q <= (sel_c == 2'd2) ? 2'd0 : (sel_c + 2'd1);
+      if (cmb_pop_c) begin
+        k0_gen_ok_q <=
+            (win_gen_of_slot(sel_data_c[OWNERW-1 -: SLOTW]) ==
+             sel_data_c[GENW-1:0]);
+        rr_q <= (sel_c == 2'd2) ? 2'd0 : (sel_c + 2'd1);
+      end
       cmb_res_q <= cmb_res_q + CNTW'(cmb_pop_c) - CNTW'(cmb_fire_c);
       if (cq_push_c)  cq_wp_q <= cq_wp_q + (CQPW+1)'(1);
       if (cmb_fire_c) cq_rp_q <= cq_rp_q + (CQPW+1)'(1);
     end
   end
   always_ff @(posedge clk) begin
-    if (cmb_pop_c) k0_owner_q <= sel_data_c;
+    if (cmb_pop_c)
+      k0_owner_q <= `ZHAO_V3OWN_RESERVATION_EVENT_OWNER(sel_data_c);
     if (cq_push_c) cq_own_q[cq_wp_q[CQPW-1:0]] <= cq_push_owner_c;
   end
 
@@ -1975,6 +2019,61 @@ module zhao_texture_v3own #(
   // numbers -- otherwise the before/after that decides T2 is contaminated by
   // the scaffolding built to check it.
 `ifndef SYNTHESIS
+  // Independent histories prove that both Timing4 event boundaries carry the
+  // exact identity sampled on the source handshake. The expected side never
+  // uses either mutation seam, so each committed mutant can make this fire.
+  logic verify_adm_applied_v_q;
+  logic [OWNERW-1:0] verify_adm_owner_q, verify_adm_applied_owner_q;
+  logic [3:0] verify_adm_req_q, verify_adm_applied_req_q;
+  logic verify_res_applied_v_q;
+  logic [OWNERW-1:0] verify_res_owner_q, verify_res_applied_owner_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      verify_adm_applied_v_q <= 1'b0;
+      verify_res_applied_v_q <= 1'b0;
+    end else begin
+      if (armed_q && ctxw_v_q) begin
+        a_admission_event_identity : assert (ctxw_owner_q == verify_adm_owner_q);
+        a_admission_event_request : assert (ctxw_req_q == verify_adm_req_q);
+      end
+      if (armed_q && verify_adm_applied_v_q) begin
+        a_admission_event_applied_generation : assert (
+            win_gen_of_slot(verify_adm_applied_owner_q[OWNERW-1 -: SLOTW]) ==
+            verify_adm_applied_owner_q[GENW-1:0]);
+        a_admission_event_live : assert (
+            live_q[verify_adm_applied_owner_q[OWNERW-1 -: SLOTW]]);
+        a_admission_event_req_applied : assert (
+            req_q[verify_adm_applied_owner_q[OWNERW-1 -: SLOTW]] ==
+            verify_adm_applied_req_q);
+      end
+      if (armed_q && k0_v_q) begin
+        a_reservation_event_identity : assert (k0_owner_q == verify_res_owner_q);
+        a_reservation_event_generation : assert (k0_gen_ok_q);
+      end
+      if (armed_q && verify_res_applied_v_q) begin
+        a_reservation_applied_generation : assert (
+            win_gen_of_slot(verify_res_applied_owner_q[OWNERW-1 -: SLOTW]) ==
+            verify_res_applied_owner_q[GENW-1:0]);
+        a_reservation_event_applied : assert (
+            crs_q[verify_res_applied_owner_q[OWNERW-1 -: SLOTW]]);
+      end
+
+      if (adm_fire_c) begin
+        verify_adm_owner_q <= {tail_q, adm_gen_c};
+        verify_adm_req_q <= adm_req_i;
+      end
+      verify_adm_applied_v_q <= ctxw_v_q;
+      if (ctxw_v_q) begin
+        verify_adm_applied_owner_q <= ctxw_owner_q;
+        verify_adm_applied_req_q <= ctxw_req_q;
+      end
+
+      if (cmb_pop_c) verify_res_owner_q <= sel_data_c;
+      verify_res_applied_v_q <= k0_v_q;
+      if (k0_v_q) verify_res_applied_owner_q <= k0_owner_q;
+    end
+  end
+
   // One slot checked per cycle, rotating, rather than 64 every cycle: the
   // bench runs long enough to sweep the ring many times over and this keeps
   // simulation honest about cost.
@@ -2238,8 +2337,12 @@ module zhao_texture_v3own #(
       a_win_live_matches_table : assert (
           (((tkt_chk_q - sh_retire_tkt_c) & OWNERW'({OWNERW{1'b1}}))
              < OWNERW'(live_cnt_q))
-          == (live_q[tkt_chk_q[SLOTW-1:0]]
-              && (vgen_q[tkt_chk_q[SLOTW-1:0]] == tkt_chk_q[OWNERW-1 -: GENW])));
+          == ((live_q[tkt_chk_q[SLOTW-1:0]]
+               && (vgen_q[tkt_chk_q[SLOTW-1:0]] ==
+                   tkt_chk_q[OWNERW-1 -: GENW]))
+              || (ctxw_v_q &&
+                  ({ctxw_owner_q[GENW-1:0],
+                    ctxw_owner_q[OWNERW-1 -: SLOTW]} == tkt_chk_q))));
 
       // THE SAME IDENTITY, AIMED AT THE BOUNDARY. The check above sweeps the
       // whole namespace uniformly, which sounds thorough and is weak exactly
@@ -2253,8 +2356,12 @@ module zhao_texture_v3own #(
       // both. That is where an off-by-one in either representation lives.
       a_win_live_at_boundary : assert (
           ((OWNERW'(gen_chk_s)) < OWNERW'(live_cnt_q))
-          == (live_q[bnd_tkt_c[SLOTW-1:0]]
-              && (vgen_q[bnd_tkt_c[SLOTW-1:0]] == bnd_tkt_c[OWNERW-1 -: GENW])));
+          == ((live_q[bnd_tkt_c[SLOTW-1:0]]
+               && (vgen_q[bnd_tkt_c[SLOTW-1:0]] ==
+                   bnd_tkt_c[OWNERW-1 -: GENW]))
+              || (ctxw_v_q &&
+                  ({ctxw_owner_q[GENW-1:0],
+                    ctxw_owner_q[OWNERW-1 -: SLOTW]} == bnd_tkt_c))));
 
       a_win_gen_of_slot : assert (vgen_q[gen_chk_s] ==
           ((gen_chk_s < tail_q) ? sh_alloc_gen_q : GENW'(sh_alloc_gen_q - GENW'(1))));
@@ -2398,4 +2505,6 @@ module zhao_texture_v3own #(
 
 endmodule
 
+`undef ZHAO_V3OWN_ADMISSION_EVENT_OWNER
+`undef ZHAO_V3OWN_RESERVATION_EVENT_OWNER
 `default_nettype wire

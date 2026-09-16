@@ -69,6 +69,7 @@ EXPECTED_TESTS = (
     "dsp_rescue_attr3_offset_ready_assertion",
     "dsp_rescue_bil2_diff",
     "dsp_rescue_bil2_collapse_resultb_mutant",
+    "dsp_rescue_bil2_vertical_capture_mutant",
     "g8a_dsp_attr_mid_shift_selector_collision",
     "g8a_dsp_attr_mid_omit_selector_collision",
     "g8a_dsp_attr_shift_omit_selector_collision",
@@ -149,7 +150,7 @@ COLLISIONS = {
         EXPECTED_BIL_SOURCES,
         (
             "ZHAO_BIL2_MUTANT_COLLAPSE_RESULTB",
-            "ZHAO_BIL2_MUTANT_RESERVED_SECOND",
+            "ZHAO_BIL2_MUTANT_BYPASS_VERTICAL_CAPTURE",
         ),
         "ZHAO_BIL2_MUTANT_SELECTOR_COLLISION",
         ("ZHAO_DUAL18_BEHAVIORAL",),
@@ -206,12 +207,14 @@ def validate_cmake(text: str) -> None:
         "EXPECT_ATTR3_OFFSET_GUARD=1",
         'PASS_REGULAR_EXPRESSION "ATTR3 OFFSET GUARD FIRED"',
         "-DZHAO_BIL2_MUTANT_COLLAPSE_RESULTB",
+        "-DZHAO_BIL2_MUTANT_BYPASS_VERTICAL_CAPTURE",
+        "EXPECT_BIL2_BYPASS_VERTICAL_CAPTURE=1",
         "function(zhao_g8a_dsp_selector_control NAME PROFILE)",
         "test_g8a_dsp_rescue.py -q",
-        "G8A DSP required CTest inventory must contain exactly 16 names",
+        "G8A DSP required CTest inventory must contain exactly 17 names",
     ), "G8A DSP CMake")
-    if section.count("-DZHAO_DUAL18_BEHAVIORAL") != 2:
-        raise AssertionError("BIL2 behavioral backend is not selected by both controls")
+    if section.count("-DZHAO_DUAL18_BEHAVIORAL") != 3:
+        raise AssertionError("BIL2 behavioral backend is not selected by all controls")
     match = re.search(r"set\(ZHAO_G8A_DSP_REQUIRED_TESTS\n(.*?)\)", section, re.DOTALL)
     if match is None:
         raise AssertionError("G8A DSP required-test inventory is absent")
@@ -275,8 +278,18 @@ def validate_bil_structure() -> None:
         ".AX_SIGNED(1'b1), .AY_SIGNED(1'b1),",
         ".BX_SIGNED(1'b1), .BY_SIGNED(1'b1)",
         ".resulta_o(pu0_raw_c), .resultb_o(pu1_raw_c)",
-        "pv_c       = 27'(dv_c * fv_s_c);",
+        "pv_c            = 27'(dv_c * fv_s_c);",
+        "logic signed [17:0] b2_a_q;",
+        "logic signed [26:0] b2_pv_q;",
+        "b2_finish_a_c   = `ZHAO_BIL2_FINISH_A(b2_a_q, b1_a_q);",
+        "b2_finish_pv_c  = `ZHAO_BIL2_FINISH_PV(b2_pv_q, pv_c);",
+        "b2_sum_c        = (b2_a_ext_c <<< 8) + b2_finish_pv_c;",
+        "out_o       = b2_filtered_c;",
+        "b2_a_q    <= b1_a_q;",
+        "b2_pv_q   <= pv_c;",
     ), "BIL2 lane")
+    if "b2_filtered_q" in lane:
+        raise AssertionError("BIL2 retained the old vertical-DSP-to-output register cone")
     if len(re.findall(r"\bzhao_dual18_mul\s*#", lane)) != 1:
         raise AssertionError("BIL2 lane does not contain exactly one packed horizontal pair")
 
@@ -302,7 +315,8 @@ def validate_mutant_guards() -> None:
     require_once(bil, (
         '`error "ZHAO_BIL2_MUTANT_SELECTOR_COLLISION"',
         "`define ZHAO_BIL2_RESULTB(resulta, resultb) resulta",
-        '`error "ZHAO_BIL2_MUTANT_RESERVED_SECOND is not an implemented selector"',
+        "`define ZHAO_BIL2_FINISH_A(held, live) live",
+        "`define ZHAO_BIL2_FINISH_PV(held, live) live",
     ), "BIL2 mutant")
 
 
@@ -321,6 +335,10 @@ def validate_driver_coverage() -> None:
         "const uint32_t texels = next_random(&seed);",
         "const uint32_t fractions = next_random(&seed);",
         '"BIL2 random sweep contains 4000 distinct six-byte tuples"',
+        '"BIL2 latency remains three clocks"',
+        '"BIL2 reaches full three-stage occupancy"',
+        '"BIL2 vertical-capture bypass mutant is detected under stalls"',
+        '"BIL2 vertical-capture bypass mutant FIRED differences=%d holds=%d\\n"',
     ), "BIL2 random coverage")
 
 

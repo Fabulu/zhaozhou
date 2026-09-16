@@ -70,25 +70,47 @@ def validate_rtl(text: str) -> None:
         "input  logic       verdict_ok_i",
         "input  logic       verdict_denied_i",
         "input  logic       raw16_valid_i",
+        "input  logic [15:0] raw16_data_i",
+        "input  logic [7:0] controller_retire_halfwords_i",
+        "input  logic        framed_raw_ready_i",
+        "output logic        framed_raw_valid_o",
+        "output logic [15:0] framed_raw_data_o",
+        "output logic        framed_raw_last_o",
+        "logic [5:0]  controller_retired_halfwords_q;",
+        "logic        final_candidate_q;",
+        "logic        final_held_q;",
         "assign accepted_length_legal_c = (len_bytes_i == 7'd16)",
         "|| (len_bytes_i == 7'd32)",
         "|| (len_bytes_i == 7'd64);",
         "assign retired_plus_one_c = {1'b0, retired_halfwords_q} + 7'd1;",
-        "assign raw_last_o = (state_q == S_ARMED) && raw16_valid_i",
+        "assign controller_retired_next_c =",
+        "assign exact_raw_terminal_c = raw16_valid_i",
+        "assign controller_terminal_c = controller_retire_c",
+        "assign controller_raw_count_mismatch_c = stream_active_c",
+        "assign terminal_raw_mismatch_c = stream_active_c && controller_terminal_c",
+        "else if ((state_q == S_ARMED) && final_held_q) begin",
+        "assign raw_last_o        = framed_raw_last_o;",
+        "assign framed_backpressure_c = stream_active_c && framed_raw_valid_o",
+        "assign published_last_mismatch_c = framed_raw_valid_o",
         "assign checked_state_c = `ZHAO_ENGINE1_RAW_LAST_V2_STATE_EXPR(state_q);",
         "assign protocol_event_c = state_invalid_c",
-        "|| accept_overlap_c",
-        "|| verdict_without_pending_c",
-        "|| verdict_both_c",
-        "|| illegal_approval_c",
+        "|| controller_retire_wrong_state_c",
+        "|| controller_raw_count_mismatch_c",
+        "|| terminal_raw_mismatch_c",
+        "|| framed_backpressure_c",
+        "|| published_last_mismatch_c",
         "|| raw_wrong_state_c;",
+        "if (controller_terminal_c) begin",
+        "final_held_q <= 1'b1;",
+        "if (framed_raw_ready_i) begin",
         "`undef ZHAO_ENGINE1_RAW_LAST_V2_TERMINAL_EXPR",
         "`undef ZHAO_ENGINE1_RAW_LAST_V2_LAST_EXPR",
         "`undef ZHAO_ENGINE1_RAW_LAST_V2_STATE_EXPR",
     ), "raw-LAST RTL")
-    if (text.count("retired_plus_one_c,") != 2 or
-            text.count("{1'b0, expected_halfwords_q});") != 2):
-        raise AssertionError("raw-LAST terminal comparisons are not full seven-bit")
+    if "assign controller_retire_halfwords_i" in text:
+        raise AssertionError("raw-LAST independent controller retirement became derived")
+    if re.search(r"assign\s+raw_last_o\s*=.*raw16_valid_i", text):
+        raise AssertionError("raw-LAST legacy alias regressed to the raw input cycle")
     if "OVERRUN" in text or "raw_overrun" in text:
         raise AssertionError("raw-LAST RTL retained the redundant overrun detector")
 
@@ -113,6 +135,18 @@ def validate_driver(text: str) -> None:
         "check_healthy_length(16, 8);",
         "check_healthy_length(32, 16);",
         "check_healthy_length(64, 32);",
+        "test_split_controller_credits();",
+        "test_final_candidate_may_lead_retirement();",
+        "test_real_missing_final_raw_pulse();",
+        "test_short_and_mismatched_retirement();",
+        "test_healthy_terminal_clears_legality();",
+        "split 3+5 controller credits validate one eight-halfword request",
+        "later physical terminal retirement releases the captured candidate",
+        "physical terminal retirement with a missing final raw pulse faults",
+        "terminal retirement with a short raw count faults",
+        "terminal raw beat with a mismatched controller count faults",
+        "nonterminal downstream backpressure enters fail-stop",
+        "FINAL_HELD remains stable while ready is low",
         "denial emits no LAST and retires zero raw halfwords",
         "overlapping accepted request enters fail-stop",
         "verdict without pending request enters fail-stop",
@@ -175,7 +209,17 @@ class RawLastStaticTests(unittest.TestCase):
         validate_mutants(mutants)
         validate_driver(driver)
         with self.assertRaises(AssertionError):
-            validate_rtl(rtl.replace("&& raw16_valid_i", "", 1))
+            validate_rtl(rtl.replace(
+                "input  logic [7:0] controller_retire_halfwords_i",
+                "input  logic [7:0] controller_retire_halfwords_broken_i",
+                1,
+            ))
+        with self.assertRaises(AssertionError):
+            validate_rtl(rtl.replace(
+                "assign raw_last_o        = framed_raw_last_o;",
+                "assign raw_last_o = raw16_valid_i;",
+                1,
+            ))
         with self.assertRaises(AssertionError):
             validate_mutants(mutants.replace(
                 "`define ZHAO_ENGINE1_RAW_LAST_V2_STATE_EXPR(state_value) 2'b11",

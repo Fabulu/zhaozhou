@@ -103,6 +103,13 @@ repeated (§4), and the raster keeps ticking.
   `FB_SLOT0 = 0x0000_0000`, `FB_SLOT1 = 0x0200_0000` (distinct DRAM banks —
   the W2.7 bank split, memory_rules §5; both slots are always sized for the
   LARGEST canvas, 0x3C000 = 245,760 B, so a mode switch never moves a slot).
+- The renderer-facing stored-surface geometry is fixed and contains no
+  caller-supplied stride: Z60 is 384×240 at **768 bytes/row**, Storm is 320×240
+  at **640 bytes/row**, and Duo is one logical 256×384 surface at **512
+  bytes/row**. Duo logical rows 0..191 address view 0 and rows 192..383 address
+  view 1, so the latter begins at byte `192*512 = 0x18000`. This logical stacking
+  is storage addressing only; scanout performs the side-by-side placement and
+  24-line top/bottom borders described below.
 - Phase 2 writes to a slot come exclusively from `DebugFrameBlit` DMA; the
   resolved-tile path (RASTER.RESOLVE) lands in later phases and must respect
   the same layout.

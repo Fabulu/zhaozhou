@@ -48,6 +48,10 @@
 // ---------------------------------------------------------------------------
 `default_nettype none
 
+`ifndef ZHAO_AUX_T4_DIV_HIT
+`define ZHAO_AUX_T4_DIV_HIT(difference) (!difference[REM_W])
+`endif
+
 module zhao_texture_aux_div6 #(
     parameter int unsigned REM_W = 39,
     parameter int unsigned DEN_W = 32,
@@ -89,17 +93,21 @@ module zhao_texture_aux_div6 #(
   logic [5:0]       qv_q  [NSTAGE];
   logic [TAGW-1:0]  tag_q [NSTAGE];
 
-  // The single restoring step, identical to the original's two functions fused.
+  // One widened subtract does both jobs: its borrow is the comparison and its
+  // low bits are the candidate restored remainder. This removes the duplicated
+  // compare/subtract carry cones without changing the six restoring steps.
   function automatic logic [REM_W:0] step(input logic [REM_W-1:0] r,
                                           input logic [DEN_W-1:0] d,
                                           input int unsigned k);
     logic [REM_W-1:0] shifted;
+    logic [REM_W:0]   difference;
     logic             hit;
     begin
-      shifted = {{(REM_W - DEN_W){1'b0}}, d} << k;
-      hit     = (r >= shifted);
+      shifted    = {{(REM_W - DEN_W){1'b0}}, d} << k;
+      difference = {1'b0, r} - {1'b0, shifted};
+      hit        = `ZHAO_AUX_T4_DIV_HIT(difference);
       // {quotient bit, remainder}
-      step    = {hit, (hit ? (r - shifted) : r)};
+      step       = {hit, (hit ? difference[REM_W-1:0] : r)};
     end
   endfunction
 
@@ -156,4 +164,5 @@ module zhao_texture_aux_div6 #(
 
 endmodule : zhao_texture_aux_div6
 
+`undef ZHAO_AUX_T4_DIV_HIT
 `default_nettype wire
