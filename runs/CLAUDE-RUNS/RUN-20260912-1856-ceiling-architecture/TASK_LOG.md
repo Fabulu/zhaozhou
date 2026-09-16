@@ -1547,3 +1547,41 @@ and in session memory. What the numbers say:
 
 **STILL OPEN AND DELIBERATELY RED:** `ledger_check`'s one V20 error, the
 `PROTECTED_HASHES`-vs-V20 collision on `zhao_geom_binner_v2.sv`. Owner ruling.
+
+### While `@g8b-t56` fits — what landed, and the two fits still owed
+
+**A committed mutant went stale the moment T5/T6 landed, and the detector said
+so within the hour.** `tools/budget/mutant_copy_drift.py` flagged
+`zhao_project_core_mutant` as older than the module it copies, 109 substantive
+diff lines against a faithful copy's handful. That tool was written after
+thirteen combiner copies and eight AUX copies were found two weeks stale and
+still passing, so this is it working rather than a new problem. Regenerated
+onto the current body, keeping its one mutation (`cfg_fits` forced true, the
+MATW refusal law removed), with the two traps this file has already been bitten
+by avoided by construction: the rename touches the module declaration and its
+`endmodule` label ONLY, never prose, and the `// MUTANT:` comment goes BEFORE
+the statement. Lint clean; drift now OK across all 40 copies. **Its control run
+(`proj_matw_mutant_control`, inverted polarity) is owed** and is blocked only
+by a ctest holding the build tree.
+
+**TWO FITS ARE OWED AND THEY ARE THE SAME FIT.** The campaign has been measured
+with `virtual-top-ports` since `@g8b-t12`, and Packet I's receipt gate requires
+ZERO virtual pins. So the accepting run is `-PhysicalPins` at the closing
+commit — and because it is the same commit as the virtual row, it is also the
+A/B that separates "T1/T2 cut paths" from "the pin boundary disappeared",
+which no measurement in this campaign currently does. One fit, two questions
+answered, and it has to happen anyway.
+
+**A caution that follows from it:** a virtual-pin row reaching 100 MHz is NOT
+G8B closing. CLAUDE.md records a leaf fit's virtual boundary as worth a few MHz,
+so the physical row can land short of a virtual row that cleared the bar. Do not
+report closure from the virtual number.
+
+**Also landed while waiting, none of it touching the fit's closure:** the M10K
+direction indexed in `reports/DOCKET.md` where direction is tracked, with the
+two things left for the owner (the per-domain M10K envelope, and the fact that
+"15 times over" is not a figure this repository can source while the direction
+is right anyway); and the `ledger_check` V20 collision written up as a costed
+three-option decision rather than a line in a log — including the precedent
+that settles half of it, since two files gained exactly this kind of ENFORCED-BY
+comment on 2026-09-16 and had their CURRENT hashes refreshed.
