@@ -1409,3 +1409,18 @@ All thirteen pre-existing red gates are green except one deliberate item. Every 
 ### Gate status at the end of the day
 
 All thirteen originally-red gates are green, plus `format_check` which was never running. The one item I am NOT claiming is the `@g8b-t3` fit: T3 is scoped into three packages with acceptances and an order, and none of them is implemented.
+
+## 2026-09-16 (repairs) - the reformat was only ONE of eight failures; six were my earlier edits
+
+A full run after the reformat surfaced eight failures. **Only one was the reformat.** The rest were consequences of edits I made earlier the same day and did not check widely enough - a reminder that "comment-only" is a statement about semantics, not about what the repository hashes.
+
+- **I EDITED A PROTECTED FILE.** `fpga/rtl/geometry/zhao_geom_binner_v2.sv` is one of eight whose exact bytes are pinned in `PROTECTED_HASHES`, and I added a V20 ENFORCED-BY comment to it. Reverted to `7d7cdb7e`; sha256 now matches the pin. **I should have checked the freeze before editing, not after a gate told me.**
+- **AND THAT LEAVES ONE HONEST CONFLICT, UNRESOLVED ON PURPOSE.** `ledger_check` is at ONE error: V20 wants an ENFORCED-BY within ten lines of that file's "no ABI-visible consumer by construction" claim; `PROTECTED_HASHES` forbids putting one there. The enforcer EXISTS (`geom_binner_v2_directed.cpp` carries all 1,157 metadata bits and masks the top word to exactly `kMetaBits`) but cannot be written into a frozen file. **Which policy wins is an owner decision about two verification rules.** I had already overridden one stated position today; doing it twice unilaterally is a pattern I should not set. It is the only red item in the tree.
+- **My mutant refresh renamed PROSE, not just identifiers.** The two v3own copies had every `zhao_texture_v3own` replaced with the mutant name, including three comments that deliberately name PRODUCTION: the "Source oracle" line, the "-- the V3 owner" line `test_render_texture_packet_a.py` uses to locate the production body inside the mutant, and an ENFORCED-BY self-reference. The gate named it exactly - *"retirement mutant lost its production-body boundary"*. Narrowed to the module declaration only: five occurrences per file became one.
+- **Exact-text markers are fragile under reformatting** - the one real reformat casualty. Packet-E asserts laws present verbatim; clang-format split `{MemoryGuard::DEBUG, 5u, MemoryGuard::TERRAIN_BUILD}` across three lines. `require_once` now compares with whitespace collapsed - it asserts a LAW, not a line layout - and still requires uniqueness.
+- Regenerated `zhao_raster_texture_v3_fit_top.manifest.json` and `zhao_texture_island_v3_top.interface.json`, **diffing before accepting**: the interface manifest differs in exactly three fields, two source hashes plus the canonical hash derived from them; no port, parameter or elaboration value moved. Its pinned CURRENT hash refreshed in all FOUR places that carry it, each with a note.
+- `shell_fit_preflight_fixtures` gets a measured 600 s budget (114-115 s unloaded, killed by the shared 120 s under -j 4).
+
+### The lesson worth keeping
+
+**"Comment-only" is not "consequence-free" in a tree that hashes its sources.** Today one V20 comment pass touched: a byte-frozen file, two fit manifests, an interface manifest with four pinned copies of its hash, two committed mutant copies, and a production-body marker. Every one of those was found by a gate rather than by me, which is the system working - but the cheap check I skipped was `grep` for the file's path in `tests/tools/` before editing it.

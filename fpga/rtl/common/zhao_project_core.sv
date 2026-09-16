@@ -743,29 +743,77 @@ module zhao_project_core #(
   logic        pre_behind;
   integer      li;
 
+  // stage 2b — the registered half of the divider setup (G8B T3c).
+  logic                        s2b_valid;
+  logic        [30:0]          s2b_d;
+  logic        [ 2:0]          s2b_neg;
+  logic                        s2b_behind;
+  logic        [31:0]          s2b_magx, s2b_magy;
+  logic                        s2b_view;
+  logic        [PAYLOAD_W-1:0] s2b_pay;
+
+  // ---- G8B T3c: THE DIVIDER SETUP IS SPLIT ---------------------------------
+  //
+  // MEASURED, `@g8b-t1b`. Twelve of the fifteen worst endpoints in this
+  // subsystem were Quartus-inferred `shift_taps_*` (ALTSHIFT_TAPS) instances,
+  // and ALL TWELVE launched from the same node, `s2_cw[25]~DUPLICATE`, with
+  // 10.1-12.0 ns of data delay.
+  //
+  // READING THAT AS "THE INFERRED RAMS ARE SLOW" WOULD SEND THE NEXT PASS TO
+  // MEMORY INFERENCE, which is the wrong component. The shift registers are
+  // only where the path LANDS: `dstep_neg/sat/behind/view/pay/valid` are pure
+  // delay lines through DIV_STEPS stages, so Quartus maps them into M10K, and
+  // the data arriving at their input is the whole divider setup:
+  //
+  //   s2_cw -> pre_behind (32-bit compare) -> pre_d (mux) -> pre_d2
+  //         -> pre_h (48-bit add/subtract) -> pre_sat (compare) -> s3_*
+  //
+  // The cheap-looking fix -- turning shift-register recognition off so the taps
+  // become flops -- was REJECTED without measuring it, and the reason is the
+  // area bill: `dstep_pay` alone is PAYLOAD_W x 32, and the whole family is
+  // roughly two thousand registers. Trading ~1,000 ALMs for a fraction of one
+  // stage, on a machine already over its ALM criterion, is the wrong direction.
+  //
+  // So the SETUP is split instead, which costs about a hundred registers. The
+  // cheap half -- the compare, the mux and the magnitudes -- lands in `s2b_*`;
+  // the expensive half -- the three 48-bit add/subtracts and the saturation
+  // compare -- runs from those registers.
+  //
+  // `pre_d2` and `pre_n` are NOT registered: both are derivable from what is
+  // (`s2b_d[30:1]`, and the magnitudes zero-extended), so registering them
+  // would pay for the same information twice.
+  logic [31:0] pre_magx, pre_magy;
+
   always_comb begin
     pre_behind = (s2_cw <= 32'sd0);
     // A behind-the-eye vertex never uses its quotients, but the divisor must
     // still be legal: forcing 1 keeps the recurrence's rem < D invariant true on
     // every cycle instead of only on the cycles that matter.
     pre_d  = pre_behind ? 31'd1 : s2_cw[30:0];
-    pre_d2 = pre_d[30:1];
 
     pre_neg[0] = !pre_behind && s2_cx[31];
     pre_neg[1] = !pre_behind && s2_cy[31];
     pre_neg[2] = 1'b0;  // the 1/w lane's numerator is the constant +1.0
 
-    pre_n[0] = {mag32(s2_cx), 16'b0};
-    pre_n[1] = {mag32(s2_cy), 16'b0};
+    pre_magx = mag32(s2_cx);
+    pre_magy = mag32(s2_cy);
+  end
+
+  // stage 2b -> stage 3: the adds, on registered operands.
+  always_comb begin
+    pre_d2 = s2b_d[30:1];
+
+    pre_n[0] = {s2b_magx, 16'b0};
+    pre_n[1] = {s2b_magy, 16'b0};
     pre_n[2] = 48'h0001_0000_0000;  // (1 << 16) << 16
 
     for (li = 0; li < 3; li = li + 1) begin
-      if (pre_neg[li]) begin
+      if (s2b_neg[li]) begin
         pre_h[li] = (pre_n[li] >= {18'b0, pre_d2}) ? (pre_n[li] - {18'b0, pre_d2}) : 48'd0;
       end else begin
         pre_h[li] = pre_n[li] + {18'b0, pre_d2};
       end
-      pre_sat[li] = ({14'b0, pre_h[li][47:31]} >= pre_d);
+      pre_sat[li] = ({14'b0, pre_h[li][47:31]} >= s2b_d);
     end
   end
 
@@ -961,14 +1009,37 @@ module zhao_project_core #(
   logic        [30:0]          s6_w;
   logic        [PAYLOAD_W-1:0] s6_pay;
 
+  // ---- G8B T3b: THE OUTPUT STAGE IS SPLIT AT THE VIEWPORT ADD --------------
+  //
+  // MEASURED, `@g8b-t1b`: `s6_prod_x[38] -> out_x_o[7]`, -2.449 ns, data
+  // 11.870 -- and 1,496 of the 2,000 summarised endpoints were in this block,
+  // with the worst several all leaving `s6_prod_x`. One cycle held a 64-bit
+  // add, a rounding rescale and a saturating narrow-to-21-bits.
+  //
+  // THIS IS A DIFFERENT CONE FROM T2's, which registered the ROW products at
+  // s1. T2 neither helps this path nor is undone by it; the two cuts are in
+  // series along the same vertex and both were needed.
+  //
+  // The split is at the add's output, which is the balanced point: the 64-bit
+  // add on one side, the rescale and the clamp on the other. `mad_*` is
+  // registered rather than `scr_fx_*` because registering after the rescale
+  // would leave the add and the rounding together and the clamp alone.
   logic signed [MAD_W-1:0] mad_x, mad_y;
   logic signed [31:0] scr_fx_x, scr_fx_y;
   always_comb begin
     mad_x = s6_prod_x + ($signed({{(MAD_W - 13) {1'b0}}, s6_cx13}) <<< 32);
     mad_y = s6_prod_y + ($signed({{(MAD_W - 13) {1'b0}}, s6_cy13}) <<< 32);
-    scr_fx_x = rescale16_mad(mad_x);
-    scr_fx_y = rescale16_mad(mad_y);
+    scr_fx_x = rescale16_mad(s6b_mad_x);
+    scr_fx_y = rescale16_mad(s6b_mad_y);
   end
+
+  // stage 6b — the registered viewport sum, and everything the output needs.
+  logic                        s6b_valid;
+  logic signed [MAD_W-1:0]     s6b_mad_x, s6b_mad_y;
+  logic                        s6b_behind, s6b_view;
+  logic signed [31:0]          s6b_invw;
+  logic        [30:0]          s6b_w;
+  logic        [PAYLOAD_W-1:0] s6b_pay;
 
   // ---------------------------------------------------------------------------
   // the pipeline registers
@@ -976,12 +1047,16 @@ module zhao_project_core #(
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       s2_valid <= 1'b0; s2_cx <= '0; s2_cy <= '0; s2_cw <= '0; s2_view <= 1'b0; s2_pay <= '0;
+      s2b_valid <= 1'b0; s2b_d <= '0; s2b_neg <= '0; s2b_behind <= 1'b0;
+      s2b_magx <= '0; s2b_magy <= '0; s2b_view <= 1'b0; s2b_pay <= '0;
       s3_valid <= 1'b0; s3_d <= '0; s3_dv[0] <= '0; s3_dv[1] <= '0; s3_dv[2] <= '0;
       s3_neg <= '0; s3_sat <= '0; s3_behind <= 1'b0; s3_view <= 1'b0; s3_pay <= '0;
       s5_valid <= 1'b0; s5_ndc_x <= '0; s5_ndc_y <= '0; s5_invw <= '0; s5_w <= '0;
       s5_behind <= 1'b0;
       s5_view <= 1'b0; s5_pay <= '0;
       s6_valid <= 1'b0; s6_behind <= 1'b0; s6_view <= 1'b0;
+      s6b_valid <= 1'b0; s6b_mad_x <= '0; s6b_mad_y <= '0;
+      s6b_behind <= 1'b0; s6b_view <= 1'b0; s6b_invw <= '0; s6b_w <= '0; s6b_pay <= '0;
       s6_prod_x <= '0; s6_prod_y <= '0;
       s6_cx13 <= '0; s6_cy13 <= '0;
       s6_invw <= '0; s6_w <= '0; s6_pay <= '0;
@@ -999,20 +1074,30 @@ module zhao_project_core #(
       s2_view <= s1_view;
       s2_pay <= s1_pay;
 
-      // stage 3 — divider setup
-      s3_valid <= s2_valid;
-      s3_d <= pre_d;
+      // stage 2b — the cheap half of the divider setup (G8B T3c)
+      s2b_valid  <= s2_valid;
+      s2b_d      <= pre_d;
+      s2b_neg    <= pre_neg;
+      s2b_behind <= pre_behind;
+      s2b_magx   <= pre_magx;
+      s2b_magy   <= pre_magy;
+      s2b_view   <= s2_view;
+      s2b_pay    <= s2_pay;
+
+      // stage 3 — divider setup, now fed from stage 2b
+      s3_valid <= s2b_valid;
+      s3_d <= s2b_d;
       // rem = h[47:31] (17 bits, zero-extended into the 32-bit remainder
       // field), work = h[30:0]. The saturation compare above has already ruled
       // out rem >= D, which is exactly the invariant the recurrence needs.
       s3_dv[0] <= {15'b0, pre_h[0][47:31], pre_h[0][30:0]};
       s3_dv[1] <= {15'b0, pre_h[1][47:31], pre_h[1][30:0]};
       s3_dv[2] <= {15'b0, pre_h[2][47:31], pre_h[2][30:0]};
-      s3_neg <= pre_neg;
+      s3_neg <= s2b_neg;
       s3_sat <= pre_sat;
-      s3_behind <= pre_behind;
-      s3_view <= s2_view;
-      s3_pay <= s2_pay;
+      s3_behind <= s2b_behind;
+      s3_view <= s2b_view;
+      s3_pay <= s2b_pay;
 
       // stage 5 — quotients
       s5_valid <= dstep_valid[DIV_STEPS];
@@ -1038,17 +1123,27 @@ module zhao_project_core #(
       s6_w      <= s5_w;
       s6_pay    <= s5_pay;
 
-      // stage 6 / output — the viewport add, the rescale and the behind-the-eye
+      // stage 6b — the viewport add lands here (G8B T3b).
+      s6b_valid  <= s6_valid;
+      s6b_mad_x  <= mad_x;
+      s6b_mad_y  <= mad_y;
+      s6b_behind <= s6_behind;
+      s6b_view   <= s6_view;
+      s6b_invw   <= s6_invw;
+      s6b_w      <= s6_w;
+      s6b_pay    <= s6_pay;
+
+      // stage 6c / output — the rescale, the clamp and the behind-the-eye
       // zeros. `project_vertex` returns a default ProjOut on the near-plane
       // branch and never writes ScreenV at all, so the vertex carries {0,0,0}.
-      out_valid_o <= s6_valid;
-      out_x_o <= s6_behind ? 21'sd0 : to_screen_xy(scr_fx_x);
-      out_y_o <= s6_behind ? 21'sd0 : to_screen_xy(scr_fx_y);
-      out_d_o <= s6_behind ? 32'sd0 : s6_invw;
-      out_w_o <= s6_behind ? 31'd0 : s6_w;
-      out_behind_o <= s6_behind;
-      out_view_o <= s6_view;
-      out_payload_o <= s6_pay;
+      out_valid_o <= s6b_valid;
+      out_x_o <= s6b_behind ? 21'sd0 : to_screen_xy(scr_fx_x);
+      out_y_o <= s6b_behind ? 21'sd0 : to_screen_xy(scr_fx_y);
+      out_d_o <= s6b_behind ? 32'sd0 : s6b_invw;
+      out_w_o <= s6b_behind ? 31'd0 : s6b_w;
+      out_behind_o <= s6b_behind;
+      out_view_o <= s6b_view;
+      out_payload_o <= s6b_pay;
     end
   end
 
@@ -1062,7 +1157,11 @@ module zhao_project_core #(
     // same class of defect as a queue occupancy that omits its pending read.
     // seq_holds covers a vertex the ROWS_PER_PASS=1 sequencer has captured
     // but not yet launched into s1 (constant 0 at ROWS_PER_PASS=3).
-    busy_o = seq_holds || s1_valid || s2_valid || s5_valid || s6_valid || out_valid_o;
+    // s2b_valid JOINS THIS LIST for the same reason s6_valid did: G8B T3c split
+    // the divider setup, and a stage left out of the reduction makes the block
+    // report idle while it still holds a vertex.
+    busy_o = seq_holds || s1_valid || s2_valid || s2b_valid || s5_valid ||
+             s6_valid || s6b_valid || out_valid_o;
     for (bi = 0; bi <= DIV_STEPS; bi = bi + 1) busy_o = busy_o || dstep_valid[bi];
   end
 
