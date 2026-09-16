@@ -563,18 +563,39 @@ module zhao_terrain_tess #(
   // true here is the FACTORISATION -- the outer product is what made the
   // registered form one 64-bit vector instead of a 128-multiply loop.
 
-  // The 8-bit span [idx*s, idx*s + s) within a row or a column. Written with
-  // `int'` throughout to match the arithmetic of the loop it replaces exactly,
-  // including the out-of-range case where the span falls off the edge.
+  // The 8-bit span [idx*s, idx*s + s) within a row or a column.
+  //
+  // G8B T4: THE MULTIPLY IS GONE, AND WITH IT THE ADD AND HALF THE COMPARES.
+  // @g8b-t3 measured this function as the whole of the block's remaining cap:
+  // every one of the worst forty endpoints was j_plain_hi -> win_mask_q at
+  // 11.524 ns, through cell_hi, the advance compare, and then THIS.
+  //
+  // The stride is 1/2/4/8 -- always 2**level -- so the span of index `idx` is
+  // exactly the set of k whose high bits are idx:
+  //
+  //     k >= idx*2**L  &&  k < (idx+1)*2**L   <=>   (k >> L) == idx
+  //
+  // and because k is the LOOP CONSTANT, `k >> L` is a four-way select among
+  // four constants rather than a shifter. What was a 4x4 runtime multiply, an
+  // add and sixteen magnitude compares is eight equality compares against a
+  // 4-bit register.
+  //
+  // BIT-IDENTICAL, INCLUDING THE EDGE. `idx` is four bits and `k >> L` is at
+  // most 3 bits, so any idx >= 8 matches nothing -- which is the old form's
+  // `lo = idx*sw >= 8`, the span falling off the edge, and ModeVtx's
+  // j_plain_hi = 8 depends on it. The equality is over the full four bits for
+  // exactly that reason; comparing three would make idx = 8 alias idx = 0.
+  //
+  // It takes the LEVEL, not the stride. `j_s` is the decoded 1/2/4/8 and the
+  // level is what the shift wants; `j_level` already exists and already
+  // carries it, so nothing new is stored.
   function automatic logic [7:0] span_mask(input logic [3:0] idx,
-                                           input logic [3:0] sw);
+                                           input logic [1:0] lvl);
     logic [7:0] m;
-    int lo;
     begin
-      lo = int'(idx) * int'(sw);
-      m  = 8'd0;
+      m = 8'd0;
       for (int k = 0; k < int'(SubCells); k++)
-        if (k >= lo && k < lo + int'(sw)) m[k] = 1'b1;
+        m[k] = (4'(k >> lvl) == idx);
       span_mask = m;
     end
   endfunction
@@ -583,12 +604,12 @@ module zhao_terrain_tess #(
   // form below and the assertion that checks it cannot drift apart.
   function automatic logic [63:0] window_mask(input logic [3:0] a,
                                               input logic [3:0] b,
-                                              input logic [3:0] sw);
+                                              input logic [1:0] lvl);
     logic [7:0] col, row;
     logic [63:0] m;
     begin
-      col = span_mask(a, sw);
-      row = span_mask(b, sw);
+      col = span_mask(a, lvl);
+      row = span_mask(b, lvl);
       for (int cj = 0; cj < int'(SubCells); cj++)
         for (int ci = 0; ci < int'(SubCells); ci++)
           m[cj*8+ci] = row[cj] & col[ci];
@@ -640,9 +661,9 @@ module zhao_terrain_tess #(
     // reading it synchronously while the design takes it asynchronously is a
     // SYNCASYNCNET warning. `st` is cleared to StIdle by that same reset, so
     // the StTri term already covers the reset window.
-    if ((st == StTri) && (win_mask_q !== window_mask(ea, eb, j_s)))
-      $fatal(1, "zhao_terrain_tess: win_mask_q is stale -- ea=%0d eb=%0d j_s=%0d",
-             ea, eb, j_s);
+    if ((st == StTri) && (win_mask_q !== window_mask(ea, eb, j_level)))
+      $fatal(1, "zhao_terrain_tess: win_mask_q is stale -- ea=%0d eb=%0d lvl=%0d",
+             ea, eb, j_level);
   end
 `endif
 
@@ -1120,7 +1141,7 @@ module zhao_terrain_tess #(
       emode <= EmPlain;
       ea <= '0;
       eb <= '0;
-      win_mask_q <= window_mask(4'd0, 4'd0, 4'd1);
+      win_mask_q <= window_mask(4'd0, 4'd0, 2'd0);
       etri <= 1'b0;
       eside <= '0;
       eg <= '0;
@@ -1350,13 +1371,16 @@ module zhao_terrain_tess #(
               // ModeVtx always walks the plain 9x9 window at stride 1.)
               solid <= {64{1'b1}};
               emode <= (!stitch_new || vtx_new) ? EmPlain : ((n_new < 4'd3) ? EmFan : EmInner);
-              // PAIRED, and it takes s_new rather than j_s: j_s is assigned on
-              // this same edge, so the consumer at the next cycle will see s_new.
+              // PAIRED, and it takes job_level_i rather than j_level: j_level is
+              // assigned on this same edge, so the consumer at the next cycle sees
+              // the level this job was offered with, which is the same value.
+              // (T4 changed the third argument from the decoded stride to the
+              // level; before it, this line read s_new for the identical reason.)
               // The report names this exact hazard.
               e_start_c = (stitch_new && n_new >= 4'd3 && !vtx_new) ? 4'd1 : 4'd0;
               ea <= e_start_c;
               eb <= e_start_c;
-              win_mask_q <= window_mask(e_start_c, e_start_c, s_new);
+              win_mask_q <= window_mask(e_start_c, e_start_c, job_level_i);
               etri <= 1'b0;
               eside <= '0;
               eg <= '0;
@@ -1389,7 +1413,7 @@ module zhao_terrain_tess #(
               e_start_c = (j_stitch && !j_vtx) ? 4'd1 : 4'd0;
               ea <= e_start_c;
               eb <= e_start_c;
-              win_mask_q <= window_mask(e_start_c, e_start_c, j_s);
+              win_mask_q <= window_mask(e_start_c, e_start_c, j_level);
               etri <= 1'b0;
               eside <= '0;
               eg <= '0;
@@ -1606,7 +1630,7 @@ module zhao_terrain_tess #(
               end
               ea <= ea_n_c;
               eb <= eb_n_c;
-              win_mask_q <= window_mask(ea_n_c, eb_n_c, j_s);
+              win_mask_q <= window_mask(ea_n_c, eb_n_c, j_level);
             end
           end
 
