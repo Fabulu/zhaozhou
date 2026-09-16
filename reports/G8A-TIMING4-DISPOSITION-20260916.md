@@ -38,6 +38,124 @@ exported row is inside the 110 MHz band and the export is truncated. See the
 "110 MHz inventory" section of `G8A-TIMING3-DSP-PATH-REPORT-20260915.md`. The
 Timing4 fit now exports a slack-bounded report so this is answerable once.
 
+## MEASURED: the Timing4 result
+
+Source commit `be615625`, `rtlCleanAtHead: true`, `treeCleanAtHead: true`,
+seed 1, 48 sources, digest `e7947623b3e3…`, `physical-top-ports`, 846.8 s.
+Thirteen raw artifacts are retained under `reports/synthesis/blockpaths/` and
+the row is in `reports/synthesis/zhao_block_fit.json`.
+
+**There is no `@g8a-timing4` receipt, and there will not be one.** The reason is
+an operator error worth keeping: I read the runner's *"the live tree cannot
+reach this fit"* as licence to keep working inside its declared closure. It does
+protect the MEASUREMENT — the numbers below come from the snapshot and are sound
+— but the D2 work done during the run regenerated the G8A manifest, so the
+runner's post-check found the manifest no longer matched the one it started from
+and refused to stamp a receipt. Refusing was right: a receipt whose manifest
+describes different sources than the fit consumed is exactly the
+worthless-but-reassuring row the `rtlCleanAtHead` law exists for. **A snapshot
+protects the fit from the tree; it does not protect the receipt from the tree.**
+
+It cannot be written after the fact either, because the receipt tool requires the
+row's commit to equal HEAD and HEAD has moved on. So the evidence for this row is
+the row's own `sourceCommit` / `sourceDigest` / `rtlCleanAtHead`, plus the
+retained `.sources.sha256`, whose **48 file hashes were each checked against the
+manifest at `be615625` and all 48 agree**. Provenance is complete; the
+convenience wrapper around it is missing.
+
+| | Timing3 `3bf599d5` | **Timing4** | delta |
+|---|---:|---:|---:|
+| ALMs | 13,195 | **12,940** | −255 |
+| Fmax | 90.96 MHz | **94.46 MHz** | **+3.50** |
+| setup WNS | −0.994 ns | **−0.587 ns** | +0.407 |
+| setup TNS | −131.275 ns | **−0.721 ns** | **+130.554** |
+| hold WNS / TNS | +0.242 / 0 | +0.237 / 0 | — |
+| DSP | 30 | 30 | 0 |
+| RAM blocks | 71 | 71 | 0 |
+| memory bits | 92,964 | 92,964 | 0 |
+| registers | 22,496 | 22,735 | +239 |
+
+### The verdict is RED, and the shape of the failure changed completely
+
+94.46 MHz is below 100 MHz, so by §2 this is **RED**. It is not "nearly green"
+and it is a long way from COMFORTABLE. Say that first, because the rest of this
+section is good news and good news is what goes unaudited.
+
+**The result that matters is TNS, not Fmax.** −131.275 ns became −0.721 ns: a
+99.45% reduction. Timing3 had 497 negative paths out of 2,000 summarised rows
+and a design that was broadly, diffusely slow. Timing4 has a total negative
+slack of 0.721 ns against a worst path of 0.587 ns, which means **essentially
+one path, plus a fraction of another, is left.** That is a different engineering
+problem from the one the brief was written against: not "the machine is slow"
+but "one cone is".
+
++3.50 MHz for −255 ALMs and no DSP, RAM or memory-bit change is the honest
+summary of what eleven work packages bought.
+
+### The two remaining paths are in a block no work package touched
+
+2,000 summarised rows. **Two are negative. Both are in `zhao_raster_resolve`.**
+
+| slack | skew | data | from → to |
+|---:|---:|---:|---|
+| **−0.587** | −0.487 | 9.920 | `u_resolve\|q_data_r[61]` → `u_resolve\|fifo_q[2][14]` |
+| **−0.134** | −0.493 | 9.461 | `u_resolve\|q_data_r[45]` → `u_resolve\|fifo_q[2][4]` |
+
+The third-worst path in the whole design is **+0.069 ns**.
+
+Every one of the eleven Timing4 work packages targeted the texture island, the
+combiner, AUX, the divider, the join or tile control. `zhao_raster_resolve` was
+not among them, and it is now the entire 100 MHz gap. The packages did their
+job and then handed the bottleneck to a block nobody was looking at.
+
+Note the skew column before concluding anything about logic: these two paths
+carry **−0.487/−0.493 ns of clock skew** against −0.108 to −0.150 on typical
+rows. Roughly a third of the worst path's deficit is skew rather than data
+delay. The data delay is still 9.920 ns of a 10.000 ns period, so this is a
+genuinely long path AND a badly skewed one, and whoever takes it should check
+which half is cheaper to buy back before rewriting the queue.
+
+### The 110 MHz inventory, which Timing3 could not answer
+
+The Timing3 export was truncated — its best slack was +0.582 ns, below the
+110 MHz band's +0.909, so every exported row was inside the band and the true
+population was unknown. This export's best slack is **+1.554 ns**, above both
+bands, so the 2,000 worst paths bound the question completely.
+
+| target | threshold | rows below | dominant endpoints |
+|---|---:|---:|---|
+| 100 MHz | +0.000 ns | **2** | resolve 2 |
+| 110 MHz | +0.909 ns | **333** | island 146, attrgrad_dsp3 87, resolve 36, tile_pipe 30, texture_stage 29 |
+| 115 MHz | +1.304 ns | **1,069** | island 670, attrgrad_dsp3 120, resolve 62, tile_pipe 59, texture_stage 43 |
+
+This is the number the brief wanted and the Timing3 evidence could not supply.
+**100 MHz is two paths in one block. 110 MHz is 333 paths across five**, and the
+island's 146 and `zhao_raster_attrgrad_dsp3`'s 87 are the bulk of it — the
+latter being a block the Timing4 packages also never touched.
+
+The practical consequence for sequencing: 100 MHz is a small, targeted job.
+COMFORTABLE at 110 MHz is a second campaign of comparable size to the one just
+completed, and its inventory now exists to plan against.
+
+### What is still owed, in nanoseconds
+
+* **100 MHz** needs **+0.587 ns** on the worst path.
+* **110 MHz** needs **+1.496 ns** on it, because the whole period shifts.
+
+The 110 MHz inventory question from the Timing3 report is now answerable: this
+fit exported the slack-bounded report, so the band is inventoried rather than
+truncated. `reports/synthesis/blockpaths/zhao_raster_texture_v3_fit_top@g8a-timing4.setup.margin.rpt`
+holds it.
+
+### Two things this measurement does NOT say
+
+* It says nothing about the **whole machine**. 12,940 ALMs is a subsystem
+  number. The 30,000-ALM and 85-DSP targets are whole-machine and only
+  G8C/production composition can answer them.
+* It does not contain **D2**, which landed after the snapshot. The tile-control
+  family's disposition stays open until a fit that includes it — attempt 2, from
+  `6f9ab770`.
+
 ## Work-package ledger
 
 | package | what it does | state |
