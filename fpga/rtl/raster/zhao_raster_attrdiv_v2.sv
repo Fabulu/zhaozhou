@@ -85,10 +85,26 @@ module zhao_raster_attrdiv_v2 #(
   // magnitude/bias formation on the dividend register's input. D_IDLE now
   // captures the signed rounded value in dividend_r; D_PREP reuses that same
   // bank to form the unsigned long-division dividend one clock later.
+  // ONE 98-BIT CARRY CHAIN, NOT THREE. The negative branch used to materialize
+  // a negate, then add the denominator, then subtract one -- three dependent
+  // 98-bit additions in the D_PREP cone, which the Timing3 census reports as
+  // the ATTR3/divider family (dividend_r[0] -> dividend_r[96]).
+  //
+  // The saving is an exact bit-vector identity, not an approximation. In two's
+  // complement -x is (~x)+1, so modulo 2^98:
+  //
+  //     (-x + d - 1)  ==  ((~x) + 1 + d - 1)  ==  ((~x) + d)
+  //
+  // The explicit -1 is precisely what cancels the negate's carry-in, so the
+  // complement can be added to the denominator directly. This holds for every
+  // 98-bit x including the most negative value, where an explicit negate would
+  // have wrapped anyway; the truncating modulo arithmetic is unchanged.
+  //
+  // Same D_PREP edge, same register bank, same state sequence, no extra clock
+  // and no DSP. Do not "simplify" this back into a materialized negate.
   always_comb begin
     if (neg_r)
-      magnitude_c = 98'(-$signed(dividend_r)) +
-                    98'({51'd0, den_r}) - 98'd1;
+      magnitude_c = (~dividend_r) + 98'({51'd0, den_r});
     else
       magnitude_c = dividend_r;
   end
