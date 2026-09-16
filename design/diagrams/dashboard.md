@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **117** (97 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **118** (98 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -14,7 +14,7 @@ Blocks: **117** (97 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | compositor | 2 | 3 | · | · | · | · | · | · | 5 |
 | debug | · | · | 1 | 3 | · | · | · | · | 4 |
 | field | 5 | · | 1 | 1 | · | · | · | · | 7 |
-| forge | 1 | · | 2 | · | · | · | · | · | 3 |
+| forge | 1 | · | 3 | · | · | · | · | · | 4 |
 | geometry | 4 | 3 | 10 | · | · | · | · | · | 17 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 1 | · | 2 | · | · | · | · | · | 3 |
@@ -25,9 +25,9 @@ Blocks: **117** (97 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | surface | · | · | 2 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
 | terrain | · | 2 | 19 | · | · | · | · | · | 21 |
-| texture | 2 | · | 5 | · | · | · | · | · | 7 |
+| texture | 1 | · | 6 | · | · | · | · | · | 7 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 33 | 13 | 55 | 16 | · | · | · | 6 | 117 |
+| **all** | 32 | 13 | 57 | 16 | · | · | · | 6 | 118 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -173,8 +173,10 @@ Blocks: **117** (97 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | TEXTURE.TMU | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/texture/texture_tmu_directed.cpp |
 | TEXTURE.AUX | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_aux.hpp |
 | TEXTURE.AUX | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/texture/texture_aux_directed.cpp |
+| TEXTURE.AUX | UNIT_VERIFIED | 2026-09-14 | `096c7139` | tests/texture/texture_aux_pipe_v2_directed.cpp |
 | TEXTURE.CACHE | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_texture.hpp |
 | TEXTURE.CACHE | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/texture/texture_cache_directed.cpp |
+| TEXTURE.COMBINE | UNIT_VERIFIED | 2026-09-14 | `096c7139` | tests/texture/material_combine_v3_diff.cpp |
 | TEXTURE.FRAGROB | UNIT_VERIFIED | 2026-09-03 | `5f4fec80` | tests/texture/fragrob_differential.cpp |
 | TEXTURE.FRAGROB | REFERENCE_COMPLETE | 2026-09-03 | `5f4fec80` | fpga/rtl/texture/zhao_texture_fragrob.sv |
 | TEXTURE.MOSAIC | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/texture/texture_mosaic_directed.cpp |
@@ -186,6 +188,8 @@ Blocks: **117** (97 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | PART.SOFT | UNIT_VERIFIED | 2026-08-21 | `84cce0d` | tests/particles/part_soft_directed.cpp |
 | FORGE.PRIM | UNIT_VERIFIED | 2026-09-03 | `c3dcd49e` | tests/forge/forge_prim_directed.cpp |
 | FORGE.PRIM | REFERENCE_COMPLETE | 2026-09-03 | `de209ee5` | fpga/rtl/forge/zhao_forge_prim.sv |
+| FORGE.PRIM.EVAL | REFERENCE_COMPLETE | 2026-09-09 | `ccd7075d` | reference/include/zref/zref_forge_eval.hpp |
+| FORGE.PRIM.EVAL | UNIT_VERIFIED | 2026-09-09 | `ccd7075d` | tests/forge/forge_prim_eval_directed.cpp |
 | FORGE.CLIFF | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/forge/forge_cliff_directed.cpp |
 | FORGE.CLIFF | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/forge/forge_cliff_directed.cpp |
 | TWOD.PLANE | REFERENCE_COMPLETE | 2026-09-03 | `cc6b091c` | fpga/rtl/compositor/zhao_twod_plane.sv |
@@ -234,7 +238,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 | field | 6% | 2 | 0% |
 | geometry_mantle | 20% | 41 | 0% |
 | tile | 30% | 14 | 0% |
-| myriad_forge | 9% | 10 | 0% |
+| myriad_forge | 9% | 11 | 0% |
 | twod_post | 6% | 5 | 0% |
 | _reserve (untouchable)_ | 10% | — | — |
 
