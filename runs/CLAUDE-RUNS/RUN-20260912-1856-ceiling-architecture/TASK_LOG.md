@@ -1585,3 +1585,51 @@ is right anyway); and the `ledger_check` V20 collision written up as a costed
 three-option decision rather than a line in a log — including the precedent
 that settles half of it, since two files gained exactly this kind of ENFORCED-BY
 comment on 2026-09-16 and had their CURRENT hashes refreshed.
+
+### 97.61 MHz, and the campaign is down to one path
+
+| row | Fmax | setup | **TNS** | ALM | DSP |
+|---|---:|---:|---:|---:|---:|
+| `@g8b-t3` | 85.90 | −1.641 | −72.4 | 8,460 | 34 |
+| `@g8b-t4` | 92.44 | −0.818 | −36.97 | 8,272 | 32 |
+| `@g8b-t56` | **97.61** | −0.245 | **−1.164** | 8,268 | 32 |
+
+**TNS is the number to read, not Fmax.** −36.97 to −1.164 is a factor of
+thirty-two: the block no longer has a POPULATION of failing paths, it has one.
+T5's own new register lands at **+0.019** on its next-state cone, which is the
+check that it moved work rather than relocating it, and T6's output stage has
+left the list entirely — the projector's two survivors (−0.065, −0.043) are a
+divider shift-tap and the viewport multiply, neither of which T6 touched.
+
+**T7 committed, fitting now:** the geomorph blend's rounding add moves into the
+register write, the same move T6 made next door. The register widens to 53 bits
+so the sum is exact by construction rather than by an argument about the morph
+factor's range — this file's own history has a committed 32-step divide that
+yielded the wrong quotient bits for exactly that reason.
+
+**THREE LIVE EQUIVALENCE ASSERTIONS NOW GUARD THIS CAMPAIGN'S ARITHMETIC**, and
+they are the pattern worth keeping: `a_win_mask_fresh` (T3a), `a_cell_base_fresh`
+(T5) and `a_blend_round_exact` (T7) difference the optimised form against the
+live state or the untouched original on every cycle it matters, in simulation,
+dead in synthesis. T6's `a_screen_fused_exact` is the same device in
+`zhao_project_core`. Every one of them was silent across 110,592 jobs.
+
+**T6's algebra was also checked independently**, outside the RTL, over the whole
+64-bit domain rather than the values a workload happens to produce: exhaustive
+±2²², every 2²⁴ boundary in a 4,096-wide band, the saturation rails, and
+3,000,000 random signed-64 points. Its NEGATIVE control is the instructive part —
+the first version scanned ±2²⁰ and reported "THE CHECK IS BLIND", because a +1
+perturbation of a folded constant disagrees at exactly ONE point per 2²⁴ and a
+2²¹-wide scan has a one-in-eight chance of containing it. **A negative control
+that samples too narrowly reports the instrument broken**, and would have sent
+the next reader to rewrite a correct check. Rescoped to a full period: exactly
+one disagreement, as the arithmetic requires.
+
+**A PROCESS NOTE ABOUT THE SUITE.** Running `ctest` unfiltered pulled in
+`shell_duo_markers_soak`, which is `nightly`-labelled with an eight-hour budget
+and is described in its own registration as *"the scaled Verilator surrogate of
+the 8-hour hardware stress"*. It burned thirteen CPU-minutes holding the build
+tree while every other test had already finished, and it has nothing to do with
+terrain or projector RTL. The gate that matters is the `fast` label, which is
+what CI runs. Stopped it and switched; the soak is deliberately NOT run in this
+pass and that is a scope statement, not a pass.
