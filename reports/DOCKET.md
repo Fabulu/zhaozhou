@@ -93,6 +93,62 @@ otherwise. What landed on the day it arrived:
    urgency the instruction carries is correct even though the number is not a
    figure this repository can source. Recorded rather than quietly rounded.
 
+## OPEN OWNER DECISION 2026-09-16 — two verification policies collide on one file
+
+`ledger_check` carries **one V20 error**, deliberately left red, and it is not a
+defect in either rule. Two policies that are each correct want opposite things
+from the same bytes.
+
+**The claim.** `fpga/rtl/geometry/zhao_geom_binner_v2.sv:371`:
+
+> The top physical pad has no ABI-visible consumer **by construction**.
+
+V20 requires a prose invariant claim to name its enforcer machine-resolvably —
+`ENFORCED-BY: <path[:symbol]>` within ten lines — and this one names none. The
+other two "by construction" claims in the same file (lines 202 and 532) each
+carry one, so the file is not ignoring the rule; it has one gap.
+
+**The collision.** The fix is one added comment line. The file is byte-frozen
+in `PROTECTED_HASHES` in `tests/tools/test_render_texture_packet_e.py`, and
+`test_protected_and_refreshed_bytes_are_exact` fails the moment it moves. There
+is no sidecar: V20 resolves the annotation from the RTL text only, so the claim
+cannot be enforced from anywhere else, and the alternative — deleting the prose
+— changes the same bytes.
+
+**THE DECISION IS NOT "may this comment be added". It is WHICH SET THE FILE
+BELONGS IN**, and the repository has already answered the first question in the
+other direction. On 2026-09-16 `zhao_texture_v3own.sv` and
+`zhao_texture_uv_join.sv` **gained exactly this kind of ENFORCED-BY comment**,
+and the interface manifest hash that records them was refreshed, with the note:
+
+> No port, parameter or elaboration value changed — which is the difference
+> between refreshing a CURRENT hash and quietly editing a PROTECTED one.
+
+So adding an ENFORCED-BY comment is established as a legitimate change to a
+CURRENT-hashed file. The only open question is whether `zhao_geom_binner_v2.sv`
+is genuinely frozen or was placed in the protected set as a Packet-E SCOPE
+GUARD — "Packet E must not touch this" — which a non-Packet-E, reviewed,
+comment-only change does not violate.
+
+**The three options, and what each costs:**
+
+| | action | cost |
+|---|---|---|
+| a | Move the entry `PROTECTED_HASHES` -> `CURRENT_HASHES`, add the comment, refresh | the file stops being byte-frozen against accidental edits from any packet |
+| b | Keep it protected; add the comment and re-pin the protected hash with the review recorded | weakens "protected" to "protected until someone has a reason" |
+| c | Leave red | a standing red gate, and the next reader cannot tell a policy collision from a real defect |
+
+**Recommendation, not a decision: (a).** The change is comment-only and carries
+no port, parameter or elaboration consequence, which is the exact test the
+CURRENT/PROTECTED note already states; and (b) makes the protected set mean
+less every time it is used. But an implementer unfreezing a file because a lint
+rule asked is the shape CLAUDE.md warns about — *the first explanation that
+absolves the design is the one to check hardest* — so this stays the owner's.
+
+**Until then it is RED ON PURPOSE**, and this entry is what distinguishes that
+from an unnoticed failure. I edited the protected file once by accident in the
+same session, reverted to `7d7cdb7e`, and confirmed the hash matches the pin.
+
 ## P0 — the console cannot ship without these
 
 ### D1. The 100 MHz timing surgery — **CLOSED 2026-09-04**
