@@ -346,6 +346,10 @@ configure_file(lint/source_list_parity.cmake.in lint/source_list_parity.cmake @O
 add_test(NAME source_list_parity
          COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/lint/source_list_parity.cmake)
 set_tests_properties(source_list_parity PROPERTIES LABELS "lint;fast")
+#
+# Its POSITIVE CONTROLS are registered as `source_list_parity_controls`, and
+# they cannot live here: they need Python3_EXECUTABLE, which find_package does
+# not provide until much further down this file.
 
 # The per-beat CRC users may not chain the bit-serial byte step. Three lines
 # to write, obviously correct, passes every functional test, and costs 45 ns
@@ -2958,6 +2962,19 @@ add_test(NAME texture_v3own_timing4_event_selector_collision
 set_tests_properties(texture_v3own_timing4_event_selector_collision PROPERTIES
   LABELS "fast;mutant;packet-b;packet-f" TIMEOUT 180
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- source_list_parity is shown to FIRE, not merely to pass --------------
+# That gate carries two sanctioned asymmetries -- the generated zhao_abi_pkg
+# and the generated Quartus-only top zhao_shell_fit_top -- and an exclusion is
+# where a gate goes quietly blind. These are its positive controls: five faults
+# it must reject plus the unmutated negative control, run against SUBSTITUTE
+# lists in a temp dir, so it never touches the real QSF or this file. CLAUDE.md:
+# a detector that has not been shown to fire has not been tested.
+add_test(NAME source_list_parity_controls
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/lint/fire_source_list_parity.py)
+set_tests_properties(source_list_parity_controls PROPERTIES
+  LABELS "lint;fast" TIMEOUT 300)
 
 # READ_LATE=1 (roadmap 4.2 / Commit4): the adversarial suite deliberately keeps
 # elaborating the default, so this elaborates the seam and does what the suite
