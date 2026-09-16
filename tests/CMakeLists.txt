@@ -6962,6 +6962,15 @@ if(Python3_Interpreter_FOUND)
   # Packet A compiles and executes sixteen isolated detector models rather than
   # accepting lint-only failures; keep its CTest backstop above the shared lane.
   set_tests_properties(render_texture_packet_a PROPERTIES TIMEOUT 300)
+  # MEASURED, not guessed: 51 tests in 176.9 s on this kit, unloaded, exiting 0.
+  # The shared 120 s above was killing a PASSING gate, and a killed test reports
+  # "***Timeout" -- which reads as "this accounting is broken" when all it meant
+  # was "we did not wait". That is the same mistake tools/quartus/run_block_fit
+  # .ps1's own timeout comment records twice over, one lane down.
+  # 600 leaves real headroom rather than sitting just above the measurement,
+  # because this lane regenerates zhao_prod_top three times and will grow with
+  # the block count.
+  set_tests_properties(texjoin_accounting_retirement PROPERTIES TIMEOUT 600)
   set_tests_properties(shell_fit_elaboration_census PROPERTIES
     ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}" TIMEOUT 300)
 endif()

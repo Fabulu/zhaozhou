@@ -46,13 +46,36 @@ import sys
 PORT_RE = re.compile(r"^\s*output\s+(?:var\s+)?(?:[\w:]+\s+)*?(?:\[[^\]]*\]\s*)*(\w+)\s*(?:\[[^\]]*\]\s*)*(?:,|\)|;)?\s*(?://.*)?$")
 
 
+# ANCHOR EVERY PATH TO THE REPOSITORY, not to the caller's cwd.
+#
+# `modules()` used to walk the bare string "fpga/rtl" and `read()` used to open
+# whatever it was handed, so this tool only worked when it happened to be run
+# from the repository root. Imported by a test that ctest runs from the build
+# directory, it raised
+#
+#     FileNotFoundError: 'fpga/rtl\\texture\\zhao_texture_aux_pipe_v2.sv'
+#
+# on two of fifty-one cases -- and that failure was invisible for as long as the
+# lane was also exceeding its CTest timeout, because a killed test reports
+# "***Timeout" and never gets to say why. Raising the budget is what surfaced
+# it.
+#
+# tests/tools/test_texjoin_accounting.py already carried a chdir(REPO) helper
+# for SOME of its calls into these tools, which is the shape of a workaround
+# that has to be remembered at every call site. Anchoring here fixes it for all
+# of them.
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 def read(p):
+    if not os.path.isabs(p):
+        p = os.path.join(REPO, p)
     return io.open(p, encoding="utf-8", errors="replace").read()
 
 
 def modules():
     out = {}
-    for root, _d, files in os.walk("fpga/rtl"):
+    for root, _d, files in os.walk(os.path.join(REPO, "fpga", "rtl")):
         for f in files:
             if f.endswith(".sv"):
                 out[f[:-3]] = os.path.join(root, f)
