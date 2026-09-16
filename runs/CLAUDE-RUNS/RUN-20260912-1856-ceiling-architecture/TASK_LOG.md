@@ -1694,3 +1694,65 @@ correction: Packet H is NOT landed (its 45 green tests are its PREREQUISITES;
 progress rather than not-started, and Packet H is a COMPOSITION whose eight
 component blocks all exist and are tested — which is what makes it schedulable
 once G8B closes, since G8C cannot run without it.
+
+### THE PIN A/B: G8B is at 87.87 MHz, not 97.61
+
+Same source digest `ef2585cecfa0`, same nine files, same seed, clean tree. The
+only difference is the pin mode, which is what makes this an A/B:
+
+| row | ioMode | vpins | Fmax | setup | TNS | ALM |
+|---|---|---:|---:|---:|---:|---:|
+| `@g8b-t56` | virtual-top-ports | 18 | 97.61 | −0.245 | −1.164 | 8,268 |
+| `@g8b-t56-pins` | physical-top-ports | 0 | **87.87** | −1.381 | −8.225 | 8,247 |
+
+**The virtual boundary was worth 9.74 MHz.** CLAUDE.md records it as "about
+4 MHz of 36 needed" on the island; here it is more than twice that. Packet I's
+receipt gate requires ZERO virtual pins, so **87.87 is the number against the
+100 MHz criterion** and every virtual row in this campaign is a diagnostic,
+not a closure claim. The fit was owed for the gate anyway, so separating the
+boundary from the design cost nothing extra.
+
+**AND IT NAMES A DIFFERENT BLOCK.** Physical pins reshuffle placement rather
+than shifting slack uniformly:
+
+```
+virtual                                physical
+-0.245 tess ln2_prod_q -> vq_y         -1.381 core s2b_magx -> shift-tap RAM
+-0.065 core s2b_d -> shift-tap RAM     -0.519 tess ln2_prod_q -> vq_y
+-0.043 core s5_view -> s6_prod_y       -0.378 seq  vs_q -> RAM address
++0.279 seq  vs_q -> RAM address        -0.281 core Mult8 -> s1_rw
+```
+
+The tessellator is no longer the cap; `zhao_project_core`'s divider setup is,
+and `zhao_terrain_group_seq` went from +0.279 to negative. **A path list taken
+with the wrong boundary does not just understate slack — it names the wrong
+block**, and T8 would have been scoped from it.
+
+**T8, scoped but NOT started:** `s2b_magx -> pre_n -> pre_h (48-bit add/sub)
+-> pre_sat (compare against s2b_d) -> s3_sat`, landing in an inferred
+shift-register's data input. The move is T3c's again — register `pre_h` and
+put `pre_sat` in a new stage — latency +1, rate unchanged, and the
+latency-pinned tests take it the way they took T3b/T3c because both branches
+gain the stage.
+
+### The four detectors, SEEN TO FIRE
+
+Full write-up in `reports/G8B-DETECTOR-FIRE-EVIDENCE-20260916.md`. Three
+assertions fired on deliberate breaks, tree restored, tests green from it.
+
+The fire test lied first and that is the half worth keeping. It reported all
+three DEAD because PowerShell 5.1 has no three-argument `String.Replace`, so
+the mutation never reached the file; the same bug then truncated
+`zhao_terrain_tess.sv` to **zero bytes**, restored from a backup taken one
+statement earlier. Every mutant then reached `$fatal` and sat at **0% CPU**
+forever on the Verilated exit deadlock — so in this one context, *alive at zero
+CPU means the detector fired*, the opposite of what that signature means
+everywhere else here. And `a_screen_fused_exact` would not fire on a +1
+perturbation of its folded constant, because that differs at one input in
+2²⁴ against 242 driven checks — the same lesson the Python control had already
+taught that morning by calling itself blind.
+
+**Owed:** committed mutants under `tests/mutants/` so the next person inherits
+evidence rather than argument. Deferred deliberately — a 1,600-line copy falls
+straight under `mutant_copy_drift` maintenance, which is the right cost but is
+a packet of its own.
