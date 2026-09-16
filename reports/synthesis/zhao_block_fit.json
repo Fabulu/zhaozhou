@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "7459f5c7238490fc1c98ca99c5804e078d1b244b",
-    "newestRunClean":  true,
+    "newestRunCommit":  "a499f33699baaca4b351ada17716d389ff8a7539",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1844,6 +1844,58 @@
                        "ruleViolations":  [
                                               "Fmax 98.44 MHz \u003c required 100 MHz -- the resource gates can all pass while the clock does not; see this rule\u0027s note"
                                           ]
+                   },
+                   {
+                       "module":  "zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t10c-pins-s3",
+                       "status":  "failed:structure",
+                       "sourceCommit":  "a499f33699baaca4b351ada17716d389ff8a7539",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "physical-top-ports",
+                       "fitterSeed":  3,
+                       "seedSource":  "run_block_fit -Seed",
+                       "sourceDigest":  "a04a7807c296775fea3cc462c8a2f9df2d4c9465922024bdb83a4760cfcf4389",
+                       "variantOf":  "zhao_terrain_pipe_rpp3_matw18_fit_top",
+                       "seconds":  510.7,
+                       "sourcesHashed":  9,
+                       "alms":  8266,
+                       "registers":  9043,
+                       "blockMemoryBits":  95802,
+                       "ramBlocks":  45,
+                       "dspBlocks":  32,
+                       "virtualPins":  0,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  94.41,
+                       "fmaxClock":  "clk",
+                       "setupSlackNs":  -0.592,
+                       "setupTnsNs":  -4.391,
+                       "holdSlackNs":  0.255,
+                       "holdTnsNs":  0,
+                       "ruleViolations":  [
+                                              "Fmax 94.41 MHz \u003c required 100 MHz -- the resource gates can all pass while the clock does not; see this rule\u0027s note"
+                                          ]
+                   },
+                   {
+                       "module":  "zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t11-mapcheck",
+                       "status":  "map_only",
+                       "sourceCommit":  "a499f33699baaca4b351ada17716d389ff8a7539",
+                       "treeCleanAtHead":  false,
+                       "rtlCleanAtHead":  false,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "run_block_fit -Seed",
+                       "sourceDigest":  "fda08fed99724dedb9e7eae071c65e84a4b6dbd5d7bc68b4a37d60e2ff678f6a",
+                       "variantOf":  "zhao_terrain_pipe_rpp3_matw18_fit_top",
+                       "seconds":  36.3,
+                       "sourcesHashed":  9,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  8612,
+                       "blockMemoryBits":  95877,
+                       "dspBlocks":  32,
+                       "virtualPins":  18
                    },
                    {
                        "module":  "zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t12",

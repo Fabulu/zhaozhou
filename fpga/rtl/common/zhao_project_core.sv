@@ -1065,6 +1065,23 @@ module zhao_project_core #(
   logic        [30:0]          s5_w;
   logic                        s5_behind;
   logic                        s5_view;
+  // G8B T11: THE VIEWPORT MUX COMES OFF THE DSP'S INPUT.
+  //
+  // @g8b-t10c-pins left five paths in this block, two of them
+  //
+  //     vp_w[0][7] -> s6_prod_x[63]     -0.121
+  //     vp_h[1][0] -> s6_prod_y[63]     -0.108
+  //
+  // and the cone is `vp_w[s5_view]` -- a two-way select on a configuration
+  // register -- feeding a multiply operand. The other operand, `s5_ndc_x`, is
+  // a register; this one is a mux output, so it arrives late and it is fabric
+  // logic sitting between a register and a hard multiplier.
+  //
+  // `s5_view` is known one stage earlier, so the SELECTION can be made there
+  // and registered, leaving the multiply to read two registers. Twenty-four
+  // flip-flops, no stage added, no arithmetic changed. Same shape as T3a, T5
+  // and T8: move where a value is computed, do not rewrite what it computes.
+  logic        [11:0]          s5_vpw, s5_vph;
   logic        [PAYLOAD_W-1:0] s5_pay;
 
   // ---------------------------------------------------------------------------
@@ -1122,10 +1139,10 @@ module zhao_project_core #(
   logic [12:0] cx13, cy13;
   logic signed [MAD_W-1:0] prod_x_c, prod_y_c;
   always_comb begin
-    cx13 = {1'b0, vp_x0[s5_view]} + {2'b0, vp_w[s5_view][11:1]};
-    cy13 = {1'b0, vp_y0[s5_view]} + {2'b0, vp_h[s5_view][11:1]};
-    prod_x_c = ext32m(s5_ndc_x) * $signed({{(MAD_W - 27) {1'b0}}, vp_w[s5_view], 15'b0});
-    prod_y_c = ext32m(s5_ndc_y) * $signed({{(MAD_W - 27) {1'b0}}, vp_h[s5_view], 15'b0});
+    cx13 = {1'b0, vp_x0[s5_view]} + {2'b0, s5_vpw[11:1]};
+    cy13 = {1'b0, vp_y0[s5_view]} + {2'b0, s5_vph[11:1]};
+    prod_x_c = ext32m(s5_ndc_x) * $signed({{(MAD_W - 27) {1'b0}}, s5_vpw, 15'b0});
+    prod_y_c = ext32m(s5_ndc_y) * $signed({{(MAD_W - 27) {1'b0}}, s5_vph, 15'b0});
   end
 
   logic                        s6_valid, s6_behind, s6_view;
@@ -1206,7 +1223,7 @@ module zhao_project_core #(
       s3_neg <= '0; s3_behind <= 1'b0; s3_view <= 1'b0; s3_pay <= '0;
       s5_valid <= 1'b0; s5_ndc_x <= '0; s5_ndc_y <= '0; s5_invw <= '0; s5_w <= '0;
       s5_behind <= 1'b0;
-      s5_view <= 1'b0; s5_pay <= '0;
+      s5_view <= 1'b0; s5_pay <= '0; s5_vpw <= '0; s5_vph <= '0;
       s6_valid <= 1'b0; s6_behind <= 1'b0; s6_view <= 1'b0;
       s6b_valid <= 1'b0; s6b_mad_x <= '0; s6b_mad_y <= '0;
       s6b_behind <= 1'b0; s6b_view <= 1'b0; s6b_invw <= '0; s6b_w <= '0; s6b_pay <= '0;
@@ -1262,6 +1279,10 @@ module zhao_project_core #(
       s5_w <= dstep_d[DIV_STEPS];
       s5_behind <= dstep_behind[DIV_STEPS];
       s5_view <= dstep_view[DIV_STEPS];
+      // Selected with the SAME index, on the same edge, from the same
+      // registers -- so the value a vertex is projected with is unchanged.
+      s5_vpw  <= vp_w[dstep_view[DIV_STEPS]];
+      s5_vph  <= vp_h[dstep_view[DIV_STEPS]];
       s5_pay <= dstep_pay[DIV_STEPS];
 
       // stage 5b — the multiply, and everything that must arrive with it.
