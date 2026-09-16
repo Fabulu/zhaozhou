@@ -1852,3 +1852,53 @@ physical  43.94  43.54                              87.87  96.45
 
 The two columns are only comparable within themselves. The 9.74 MHz boundary
 measured at `@g8b-t56` is why.
+
+### GOLDEN PATH: 807 / 808 on the `fast` tier
+
+Idle machine, nothing competing, `-L fast` — the tier CI runs. **The one
+failure is `ledger_check`'s single V20 error**, which is the deliberate
+PROTECTED_HASHES policy collision, written up in `reports/DOCKET.md` as a
+costed three-option owner decision. It is red on purpose and cannot be
+resolved by an implementer without unfreezing a protected file.
+
+Three reds were cleared to get there and **two of them were gates being
+right about my own work**:
+
+1. **`render_texture_packet_a` — the fix was already written down.** Its
+   budget said `TIMEOUT 300` and the comment beside it ends *"600 leaves real
+   headroom rather than sitting just above the measurement"*. The paragraph
+   argued for 600; the constant said 300. Nobody was careless — the reasoning
+   was written and the number never carried across, and **nothing in the tree
+   compares a comment to the constant it justifies.** Re-measured idle first,
+   in the discipline that note set: 21 tests in 256.3 s, against its own
+   earlier 51 tests in 176.9 s — fewer tests, 45% longer, because this lane
+   runs Verilator and a native compiler per generated model, so its cost
+   tracks elaborations rather than test methods.
+2. **`mutant_copy_drift`** — T8 moved `zhao_project_core` and the committed
+   mutant went stale for the second time today. Refreshed; the control still
+   fires. Twice in one session is the tool working at its intended cadence.
+3. **`packet_i_g8b_registration_static` — the gate I wrote this morning, and
+   it was wrong.** It convicted `@g8b-t8-mapcheck` of a dirty tree, 18 virtual
+   pins and "Fmax None, below the ruled 100 MHz". All three read as damning;
+   all three were a category error, because a **MapOnly** row has no Fmax and
+   no ALMs by construction and never claimed otherwise. The rule had been
+   "anything not stamped `failed` is a claim of acceptance"; the vocabulary is
+   `ok` (98), `failed:*` (33), `map_only` (23), `timeout` (5), `incomplete:*`
+   (1), and exactly one of those asserts its numbers passed the budget rules.
+   Narrowed to `status == "ok"`, with negative controls walking every other
+   status carrying numbers that would damn an accepting row. **A gate that
+   refuses evidence for not being a conclusion is the one that has to change.**
+
+### What "finished" does and does not mean here
+
+* **Golden path — DONE**, modulo one escalated owner decision.
+* **Roadmap — corrected, not completed.** Four statements were wrong in the
+  flattering direction and are now right: Packet H is not landed (its file
+  does not exist), Packet I is in progress, the worst ALM domain is two
+  replaced engines, and 66% of the ALM bill is unverified. Correcting a map is
+  not walking the route.
+* **G8B — 96.45 MHz physical against a 100 MHz criterion.** 18 of 2,000 paths
+  negative. Not closed.
+* **Packet I cannot close regardless**, because Packet H precedes it and
+  `zhao_shell_top_v2.sv` does not exist. That file is the next real item and
+  it is a composition of eight blocks that all exist and are tested.
