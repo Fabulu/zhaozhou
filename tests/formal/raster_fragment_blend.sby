@@ -39,8 +39,19 @@
 # proved is the arithmetic every blended fragment in the machine flows
 # through, three times over.
 #
-# Frontend: read_slang (the lane choice since W2.3). No package dependencies:
-# zhao_raster_blend.sv is self-contained, so nothing is staged or copied.
+# Frontend: read_slang (the lane choice since W2.3). No package dependencies,
+# but zhao_raster_blend.sv is NO LONGER SELF-CONTAINED: f562e676 ("Split
+# zhao_raster_blend at the product -- wrapper still bit-identical") made it
+# instantiate zhao_raster_blend_prod and zhao_raster_blend_fin, and this lane's
+# file list was not updated with it. yosys said so plainly --
+#
+#   zhao_raster_blend.sv:112:3: error: unknown module 'zhao_raster_blend_prod'
+#   zhao_raster_blend.sv:120:3: error: unknown module 'zhao_raster_blend_fin'
+#
+# -- and the lane had been failing elaboration ever since, which is a formal
+# proof reporting ERROR rather than a proof reporting anything about the blend.
+# A split that keeps the wrapper bit-identical still moves every source list
+# that named the wrapper's contents.
 
 [tasks]
 bmc
@@ -57,9 +68,11 @@ expect pass
 smtbmc boolector
 
 [script]
-read_slang --top raster_fragment_blend_fv zhao_raster_blend.sv raster_fragment_blend_fv.sv
+read_slang --top raster_fragment_blend_fv zhao_raster_blend.sv zhao_raster_blend_prod.sv zhao_raster_blend_fin.sv raster_fragment_blend_fv.sv
 prep -top raster_fragment_blend_fv
 
 [files]
 ../../fpga/rtl/raster/zhao_raster_blend.sv
+../../fpga/rtl/raster/zhao_raster_blend_prod.sv
+../../fpga/rtl/raster/zhao_raster_blend_fin.sv
 raster_fragment_blend_fv.sv
