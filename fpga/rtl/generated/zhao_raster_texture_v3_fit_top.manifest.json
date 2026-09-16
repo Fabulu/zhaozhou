@@ -219,7 +219,7 @@
     {
       "ordinal": 29,
       "path": "fpga/rtl/texture/zhao_texture_material_combine_v3.sv",
-      "sha256": "ebb8207f9b61ccb3ac6db7dcec5c8441d515f4bd126ac83550124dbb00891ab3"
+      "sha256": "8efb23ad7aad00ac1d765a8084e5f3a8a7594fbc518e48be28708a0ad15db66e"
     },
     {
       "ordinal": 30,
@@ -244,7 +244,7 @@
     {
       "ordinal": 34,
       "path": "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv",
-      "sha256": "e78372fef643dbb71bdb314a0c436aedf98c6b62336f0f35708cdf84c52f06a5"
+      "sha256": "2955128d655469f1a79f694797af0e70f521bbee08100c7c2190cda7cd2e4b9a"
     },
     {
       "ordinal": 35,

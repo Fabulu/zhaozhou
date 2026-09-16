@@ -57,7 +57,7 @@ PROTECTED = {
     "fpga/rtl/common/zhao_shell_top.sv":
         "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "c9be95719e3d5f1712d075b75d917045ac925382b65e6203b81d0cf3cc4e6fe1",
+        "80afcb023416bc264b96e287dd876330216152a64e6a4a6ae38275f37fffe7d6",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
         "ae92ec135c5884652dc236b0fea762d968a0713ec3950db45f599cef96c7785d",
 }

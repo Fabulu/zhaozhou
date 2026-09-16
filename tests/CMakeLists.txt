@@ -9162,6 +9162,16 @@ zhao_material_v3_mutant_control(
   skip_f_finish MATERIAL_V3_MUTANT_SKIP_F
   zhao_texture_material_combine_v3_skip_f_finish_mutant)
 
+# The short finish forms are an arithmetic claim over the whole raw-product
+# domain, including products no legal byte pair can make. The differential above
+# drives legal texels and so cannot reach that domain; this compares the two
+# formulas directly and carries its own negative control.
+add_test(NAME material_combine_v3_finish_equivalence
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_material_finish_equivalence.py -q)
+set_tests_properties(material_combine_v3_finish_equivalence PROPERTIES
+  LABELS "fast;nightly;packet-b;packet-f" TIMEOUT 300)
+
 # Terminal-collector raw-index controls.
 add_executable(pb_rspdi
   texture/texture_rsp_dispatch_v2_directed.cpp)

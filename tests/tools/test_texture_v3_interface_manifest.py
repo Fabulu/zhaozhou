@@ -8,6 +8,7 @@ from dataclasses import replace
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import platform
 import sys
@@ -179,7 +180,7 @@ EXPECTED_DUPLICATE_MARKER_ROWS = (
     ("/miscsp/0/typesp/58/membersp/2", "(WR)", "alpha", "e,283:18,283:23"),
     ("/miscsp/0/typesp/58/membersp/3", "(WR)", "rgb", "e,284:18,284:21"),
 )
-EXPECTED_PRODUCTION_DUPLICATE_MARKER_SHA256 = "9272000bb46140bd6b754841c4f93cccf236e07f2fb072e2984ead014da9f679"
+EXPECTED_PRODUCTION_DUPLICATE_MARKER_SHA256 = "115dbfeef621343004e4c51444a9ca23e85d82a6f770401b4d4803dafbb775f6"
 _PRE_DSP_PRODUCTION_DUPLICATE_MARKER_ROWS = (
     ("/miscsp/0/typesp/107/membersp/0", "(WTOB)", "in_tile_addr", "e,33:18,33:30"),
     ("/miscsp/0/typesp/107/membersp/1", "(WTOB)", "invw24", "e,34:18,34:24"),
@@ -301,16 +302,52 @@ def expected_duplicate_markers() -> tuple[interface.VerilatorDuplicateMarker, ..
     )
 
 
+# WHAT MOVES WHEN THE V3 CLOSURE CHANGES, AND WHAT MUST NOT.
+#
+# The table above is the durable record: for each duplicate, WHICH member of
+# WHICH struct it is and WHERE it is written (`file,line:col,line:col` in the
+# byte-pinned package). That identity is the property worth guarding, and it is
+# unchanged by RTL edits elsewhere in the closure.
+#
+# Two things in a Verilator tree are elaboration ORDER, not design meaning:
+# the `typesp/N` container index, and the mangled parent address such as
+# `(CUOB)`. Both shift when any module in the closure gains or loses a type --
+# the Timing4 combiner rewrite moved them by -3, -6 and -7. Re-deriving the
+# production rows through these two explicit remaps keeps the oracle hand-written
+# and independent of the parser, while making each shift a visible, reviewed
+# edit rather than a silently re-pinned hash.
+#
+# If a member NAME or LOC ever differs, do not extend these tables: the set of
+# duplicated members has actually changed and needs a decision, not a remap.
 _DSP_PRODUCTION_PARENT_ADDRS = {
-    "(WTOB)": "(CUOB)", "(OUOB)": "(UUOB)", "(WVOB)": "(CWOB)",
-    "(GUJ)": "(MUJ)", "(NZOB)": "(TZOB)", "(JAPB)": "(PAPB)",
-    "(LEPB)": "(REPB)", "(BGPB)": "(HGPB)", "(FHPB)": "(LHPB)",
-    "(IYV)": "(OYV)", "(KYV)": "(QYV)", "(MYV)": "(SYV)",
-    "(BOU)": "(HOU)", "(DOU)": "(JOU)", "(FOU)": "(LOU)",
-    "(XPT)": "(DQT)",
+    "(WTOB)": "(ZNPB)", "(OUOB)": "(ROPB)", "(WVOB)": "(ZPPB)",
+    "(GUJ)": "(BWJ)", "(NZOB)": "(QTPB)", "(JAPB)": "(MUPB)",
+    "(LEPB)": "(OYPB)", "(BGPB)": "(EAQB)", "(FHPB)": "(IBQB)",
+    "(IYV)": "(BAW)", "(KYV)": "(DAW)", "(MYV)": "(FAW)",
+    "(BOU)": "(UPU)", "(DOU)": "(WPU)", "(FOU)": "(YPU)",
+    "(XPT)": "(QRT)",
 }
+_DSP_PRODUCTION_TYPESP_REMAP = {
+    107: 104, 108: 105, 109: 106, 110: 107, 111: 108, 112: 109,
+    113: 110, 114: 111, 115: 112, 255: 248, 267: 260, 276: 269,
+    311: 305, 317: 311, 329: 323, 354: 348,
+}
+
+
+def _remap_production_pointer(pointer: str) -> str:
+    match = re.fullmatch(r"/miscsp/0/typesp/(\d+)/membersp/(\d+)", pointer)
+    if match is None:
+        raise AssertionError(f"unexpected duplicate-marker pointer shape: {pointer}")
+    container = int(match.group(1))
+    if container not in _DSP_PRODUCTION_TYPESP_REMAP:
+        raise AssertionError(f"no production remap for typesp/{container}")
+    return "/miscsp/0/typesp/%d/membersp/%s" % (
+        _DSP_PRODUCTION_TYPESP_REMAP[container], match.group(2))
+
+
 EXPECTED_PRODUCTION_DUPLICATE_MARKER_ROWS = tuple(
-    (pointer, _DSP_PRODUCTION_PARENT_ADDRS[parent], name, loc)
+    (_remap_production_pointer(pointer),
+     _DSP_PRODUCTION_PARENT_ADDRS[parent], name, loc)
     for pointer, parent, name, loc in _PRE_DSP_PRODUCTION_DUPLICATE_MARKER_ROWS
 )
 

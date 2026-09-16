@@ -199,43 +199,73 @@ module zhao_texture_material_combine_v3 #(
       input logic [1:0]  operation,
       input logic        negative,
       input logic [7:0]  lerp_base);
-    logic [16:0] rounded;
-    logic signed [17:0] signed_num;
-    logic signed [9:0] delta;
-    logic signed [10:0] lerped;
+    // SHORT EXACT FINISH. Every arm below computes the SAME function as the
+    // long form it replaces, for every one of the 65,536 raw products -- not
+    // merely for products reachable from two legal byte operands. The long form
+    // built a 17-bit biased sum, or an 18-bit signed negate followed by a
+    // biased shift and an 11-bit clamped add, and put all of it in the M->F
+    // cone. These are byte-wide carry chains instead.
+    //
+    // The algebra, with p = 256*high + low:
+    //
+    //   UNIT   (p + 128) >> 8            == high + (low >= 128)
+    //   LERP+  a + floor((p + 128)/256)  == a + high + (low >= 128)
+    //   LERP-  a + floor((-p + 128)/256) == a + ~high + (low <= 128)
+    //          because floor((-p+128)/256) = -high - (low > 128)
+    //
+    // The two LERP thresholds are deliberately ASYMMETRIC -- >= 128 positive,
+    // <= 128 negative -- and that asymmetry is exactly what preserves the old
+    // ties-toward-positive-infinity behaviour on the negative half. Do not
+    // "tidy" them into one comparison, and do not rewrite the negative half as
+    // a - round(p/256): that disagrees at real ties.
+    //
+    // In the negative arm bit 8 of the 9-bit sum is the NO-BORROW witness of an
+    // unsigned subtraction, so it selects the value rather than the clamp: set
+    // means in range, clear means the true result was below zero.
+    //
+    // MOD2 keeps R9's one-rounding law. Saturation is a direct threshold on the
+    // raw product: (p + 64) >> 7 > 255 exactly when p >= 32704. That constant is
+    // not 32640 and not 32768. Bit 8 of the result remains the saturation
+    // witness and is reported separately from the clamped byte.
+    //
+    // Checked exhaustively against the previous expressions by
+    // tests/tools/test_material_finish_equivalence.py.
+    logic [7:0] high;
+    logic [7:0] low;
+    logic       round_up;
+    logic       no_borrow_carry;
+    logic [8:0] lerp_sum;
+    logic [9:0] mod2_sum;
     begin
       finish_lane = 9'd0;
-      rounded = 17'd0;
-      signed_num = 18'sd0;
-      delta = 10'sd0;
-      lerped = 11'sd0;
+      high = product[15:8];
+      low  = product[7:0];
+      round_up = low[7];                 // low >= 128
+      no_borrow_carry = (low <= 8'd128); // NOT low < 128; the tie belongs here
+      lerp_sum = 9'd0;
+      mod2_sum = 10'd0;
       case (operation)
         OP_UNIT: begin
-          rounded = {1'b0, product} + 17'd128;
-          finish_lane[7:0] = rounded[15:8];
+          finish_lane[7:0] = high + {7'd0, round_up};
         end
         OP_MOD2: begin
-          // R9: ONE rounding, (a*b + 64) >> 7.  Unit-round-then-double
-          // differs at real byte inputs (for example 1*64 -> 1, not 0).
-          rounded = ({1'b0, product} + 17'd64) >> 7;
-          if (rounded > 17'd255) begin
+          if (product >= 16'd32704) begin
             finish_lane = {1'b1, 8'hFF};
           end else begin
-            finish_lane[7:0] = rounded[7:0];
+            mod2_sum = {1'b0, product[15:7]} +
+                       {9'd0, (product[6:0] >= 7'd64)};
+            finish_lane[7:0] = mod2_sum[7:0];
           end
         end
         OP_LERP: begin
-          // R9 signed rescale: ((b-a)*w + 128) >>> 8, ties toward
-          // +infinity.  The sign is applied BEFORE the bias and shift.
-          signed_num = $signed({2'b00, product});
-          if (negative) signed_num = -signed_num;
-          signed_num = signed_num + 18'sd128;
-          delta = signed_num[17:8];
-          lerped = $signed({3'b000, lerp_base}) +
-                   $signed({delta[9], delta});
-          if (lerped < 0) finish_lane[7:0] = 8'd0;
-          else if (lerped > 11'sd255) finish_lane[7:0] = 8'hFF;
-          else finish_lane[7:0] = lerped[7:0];
+          if (negative) begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, ~high} +
+                       {8'd0, no_borrow_carry};
+            finish_lane[7:0] = lerp_sum[8] ? lerp_sum[7:0] : 8'd0;
+          end else begin
+            lerp_sum = {1'b0, lerp_base} + {1'b0, high} + {8'd0, round_up};
+            finish_lane[7:0] = lerp_sum[8] ? 8'hFF : lerp_sum[7:0];
+          end
         end
         default: finish_lane = 9'd0;
       endcase

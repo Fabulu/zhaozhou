@@ -116,6 +116,7 @@ tests/texture/texture_v3own_bubble_control.cpp text eol=lf
 tests/texture/texture_v3own_adversarial.cpp text eol=lf
 tests/texture/material_combine_v3_diff.cpp text eol=lf
 tests/tools/test_v3own_timing4_event_control.py text eol=lf
+tests/tools/test_material_finish_equivalence.py text eol=lf
 tests/mutants/zhao_texture_aux_timing4_mutants.sv text eol=lf
 tests/texture/aux_pipe_v2_timing4.sources.txt text eol=lf
 tests/texture/aux_div6_timing4.sources.txt text eol=lf
