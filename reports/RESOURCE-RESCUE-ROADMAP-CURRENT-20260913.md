@@ -419,7 +419,7 @@ structurally blind here, since pack and unpack read the same constants.
 **WHAT REMAINS, counted rather than estimated.**
 `tools/design/packet_h_driver_contract.py` computes it and
 `reports/PACKET-H-DRIVER-CONTRACT-20260917.md` is that output with judgement
-applied. There are **60 new inputs** across the two swapped blocks. Twelve have
+applied. There are **57 new inputs** across the two swapped blocks. Twelve have
 organ drivers and are composed and tested today. The rest:
 
 | group | inputs | what it needs |
@@ -429,7 +429,7 @@ organ drivers and are composed and tested today. The rest:
 | Packet-E ENGINE1 share (`fill_*`) | 4 | `fill_refused_i` is already ruled: typed recoverable path only |
 | structural fault entry (`fault_*`) | 4 | the largest single clause of the gate, on four wires |
 | READY/swap CDC return | 7 | six of them are the tuple, now pinned |
-| remaining | 6 | incl. THREE `test_*` enables to tie low *and comment* |
+| remaining | 3 | the three `test_*` enables do not exist in a production build |
 
 So the honest state is: **the lease path is finished and proven; the V3
 programming, attribute, share and fault paths are specified and unwired; the

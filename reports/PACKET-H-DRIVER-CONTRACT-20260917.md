@@ -9,15 +9,15 @@ The sibling shell swaps two blocks and adds five organs. The swapped blocks
 grow enormously:
 
 ```
-zhao_geom_bin_pipe  ->  zhao_geom_bin_pipe_v2     63 ports -> 168
+zhao_geom_bin_pipe  ->  zhao_geom_bin_pipe_v2     63 ports -> 165
 zhao_video_slotmgr  ->  zhao_video_slotmgr_v2     22 ports -> 74
 ```
 
 Ports are not the work, though. **Inputs are the work**, because every one of
 them is a wire somebody has to decide the source of, and an input nobody
 decided about is a `PINMISSING` at the next fit or — worse — a tie-off that
-looks deliberate. There are **60 new inputs**. Twelve already have a producer.
-The other forty-eight are this packet.
+looks deliberate. There are **57 new inputs**. Twelve already have a producer.
+The other forty-five are this packet.
 
 ---
 
@@ -98,7 +98,7 @@ ranges written eighty lines apart.
 
 ---
 
-## 3. The forty-eight, grouped by where they have to come from
+## 3. The forty-five, grouped by where they have to come from
 
 ### 3.1 V3 programming: config, palette, page generation (20)
 
@@ -185,16 +185,16 @@ ready_ready_i, swap_{writer,slot,generation,mode,base,span}_i
 From `zhao_video_ready_bridge_v2`. See section 2 — six of these seven are the
 tuple.
 
-### 3.6 Remaining (6)
+### 3.6 Remaining (3)
 
 ```
 frame_clear_word_i     the V3 clear payload
 sheet_req_ready_i      Surface Sheet backpressure
 blit_req_{slot,mode}_i belong in section 1
-test_{start_enable,attr_cov_enable,stage_admit_enable}_i  tie low, and SAY so
+(the three test_* enables are NOT here -- see below)
 ```
 
-The three `test_*` enables are the ones to write a comment against rather than a
+The three `test_*` enables DO NOT EXIST in a production build rather than a
 tie-off: a test hook wired to zero in the top is invisible, and a test hook
 wired to something by accident is worse.
 
@@ -324,3 +324,46 @@ disagreement -- rather than by the check itself.
 
 One input was hidden by this: `test_stage_admit_enable_i`. The headline goes
 59 -> 60 and section 3.6 gains it.
+
+---
+
+## 6. The port count, resolved -- and it was a mutant shim
+
+*Settled 2026-09-17 by an elaboration error, after three wrong answers.*
+
+`zhao_geom_bin_pipe_v2` has **165** ports in a production build. The last
+three sit behind `` `ifdef ZHAO_PACKET_D_TEST_HOOKS ``:
+
+```systemverilog
+    output logic [23:0] z_floor_o
+  `ifdef ZHAO_PACKET_D_TEST_HOOKS
+    , input logic [4:0] test_start_enable_i
+    , input logic [2:0] test_attr_cov_enable_i
+    , input logic       test_stage_admit_enable_i
+  `endif
+```
+
+**and the define comes from a MUTANT SHIM inside a shared source list.**
+`tests/mutants/zhao_raster_tile_pipe_v2_mutants.sv` is in Packet D's manifest
+and defines it unconditionally, so every build through that list gets a
+production module with three extra ports. A selector file changing a shipped
+module's INTERFACE is a different and worse thing than one changing its
+behaviour, because nothing downstream is looking for it.
+
+The three wrong answers, all low, and each wrong for its own reason:
+
+| method | answer | why |
+|---|---:|---|
+| per-line scan | 165 | missed the three comma-led declarations -- right total, wrong reasoning |
+| first probe regex | 166 | dropped `z_floor_o` (no trailing comma), kept two of the three |
+| second probe regex | 168 | counted the guarded ports as unconditional |
+
+The roadmap's hand-recorded 165 was right the whole time. The probe's
+"correction" to 168 replaced a right number with a conditional one **and
+asserted it in its own self-check**, so the instrument certified the error.
+What broke it was a third party with a different job: a generated port map
+that failed to elaborate with `PINNOTFOUND`. A self-check written from the
+same reading as the code it checks cannot be independent evidence, and this
+one was not.
+
+New inputs needing a driver: **57**.
