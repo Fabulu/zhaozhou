@@ -366,6 +366,53 @@ whenever it was done. What it settles is the ORDER OF WHAT COMES NEXT:
 Step 2 is not blocked on step 1 and does not touch its closure, so it is the
 work to do while G8B fits.
 
+### Packet H measured properly — it is a PROTOCOL job, not a wiring job
+
+*2026-09-17, and this corrects the estimate in the section below.*
+
+That section says Packet H is *"wiring an inventory that exists rather than
+commissioning blocks"*, on the strength of all eight component blocks being
+present and tested. The blocks are present. **The estimate was still too
+optimistic, and the port delta says so:**
+
+```
+zhao_video_slotmgr -> zhao_video_slotmgr_v2     22 ports -> 73
+    KEPT       8   clk, rst_n, swap_valid_i, swap_slot_i,
+                   displayed_valid_o, displayed_slot_o,
+                   leases_granted_o, stale_events_o
+    REMOVED   14   the ENTIRE lease/publish/release interface --
+                   lease_req_*, lease_grant_o, lease_refused_o,
+                   fb_lease_*, publish_*, release_*, slot_ready_o
+    ADDED     65   a writer-aware protocol: lease_{valid,slot,base,span,
+                   writer,mode,generation,fault}_o, rsp_*, ready_*, term_*,
+                   fault_*, blit_req_*, render_req_*, and eight counters
+```
+
+**Eight of twenty-two ports survive.** This is not a block whose name changed
+— it is a different block implementing a different protocol, and the
+lease/publish/release flow the historical shell wires directly between
+`u_slotmgr`, `u_frameblit` and the renderer now has to be re-plumbed through
+`zhao_renderer_lease_v2`, `zhao_video_terminal_adapter_v2` and
+`zhao_video_ready_bridge_v2`. `zhao_geom_bin_pipe` tells the same story more
+mildly: 63 → 165 ports, 114 added and 12 removed.
+
+**Which also rules out generating the sibling from the original.** A generator
+that renamed two instances and patched their port maps looked attractive — it
+would be reproducible and could not go stale, which is how the other generated
+tops in this tree earn their keep. It cannot work here: there is no
+transformation from the V1 lease wiring to the V2 protocol, only a design.
+
+**So the honest cost of Packet H** is: learn the writer-aware lease protocol
+from the four organs' interfaces and section 13's gate clauses, compose it
+through a ~2,000-line top, and satisfy a gate that includes the frame-fault
+clear handshake, the sequence-abort RELEASE control and the reset-barrier
+entry for five distinct structural faults. That is a packet-sized piece of
+design work and it should be started with the protocol in front of you, not
+bolted onto the end of a timing campaign.
+
+It remains the next item, and it is the only thing between a closed G8B and
+Packet I's promotion.
+
 ### What Packet H actually costs, now that the correction is in
 
 Scoped 2026-09-16, after finding that `zhao_shell_top_v2.sv` does not exist.
