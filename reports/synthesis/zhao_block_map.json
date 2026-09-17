@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "04cf890ab48eca1104235425adfa2ec42b8f636d",
-    "newestRunClean":  false,
+    "newestRunCommit":  "6c96fc7b3c472f0ac18b4930caaa66ab3f317e90",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -3692,8 +3692,8 @@
                    {
                        "module":  "zhao_video_blit_lease_v2",
                        "status":  "ok",
-                       "sourceCommit":  "04cf890ab48eca1104235425adfa2ec42b8f636d",
-                       "rtlCleanAtHead":  false,
+                       "sourceCommit":  "6c96fc7b3c472f0ac18b4930caaa66ab3f317e90",
+                       "rtlCleanAtHead":  true,
                        "sourceListHash":  "2420a1b66b4699cd",
                        "sourceFileCount":  267,
                        "tool":  "Quartus Prime Lite 17.0.2",
