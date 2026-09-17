@@ -11359,6 +11359,108 @@ zhao_packet_h_renderer_test(ph_renderer_i stale_identity_control
   ZHAO_EXPECT_RENDERER_LEASE_MUTANT_STALE_IDENTITY
   "renderer_lease_stale_identity.*DETECTED")
 
+# ---------------------------------------------------------------------------
+# Packet H: the writer-0 lease front end.
+#
+# zhao_renderer_lease_v2 acquires writer 1's lease and
+# zhao_video_terminal_adapter_v2 already carries BOTH writers' terminal events
+# back to the manager -- but nothing acquired the BLITTER's lease, so the
+# retained zhao_debug_frameblit had no way to be told which slot and generation
+# it owns. This leaf is that missing path.
+#
+# Its controls are the six ways the seam can be wired wrong, and the one worth
+# naming is ISSUE_EARLY: the blitter latches fb_lease_generation_i on the SAME
+# edge it accepts a request, so offering the request while the answer is still
+# landing makes it latch the PRE-GRANT generation and every publication is then
+# refused as stale by a slot manager that is working perfectly. The historical
+# shell carries a four-state sequencer and a long comment about exactly this;
+# the comment is now a test.
+set(ZHAO_PACKET_H_BLIT_MANIFEST
+  ${CMAKE_CURRENT_SOURCE_DIR}/video/blit_lease_v2.sources.txt)
+file(STRINGS "${ZHAO_PACKET_H_BLIT_MANIFEST}" ZHAO_PACKET_H_BLIT_RELATIVE_SOURCES)
+if(NOT ZHAO_PACKET_H_BLIT_RELATIVE_SOURCES STREQUAL
+   "tests/mutants/zhao_video_blit_lease_v2_mutants.sv;fpga/rtl/video/zhao_video_blit_lease_v2.sv")
+  message(FATAL_ERROR "Packet-H blit source manifest is not exact and ordered")
+endif()
+set(ZHAO_PACKET_H_BLIT_SOURCES)
+set(ZHAO_PACKET_H_BLIT_SEEN)
+foreach(relative_source IN LISTS ZHAO_PACKET_H_BLIT_RELATIVE_SOURCES)
+  if(IS_ABSOLUTE "${relative_source}" OR relative_source MATCHES "\\\\" OR
+     NOT relative_source MATCHES "^(fpga|tests)/[A-Za-z0-9_./-]+\\.sv$" OR
+     relative_source MATCHES "(^|/)\\.\\.?(/|$)")
+    message(FATAL_ERROR "invalid Packet-H blit source: ${relative_source}")
+  endif()
+  list(FIND ZHAO_PACKET_H_BLIT_SEEN "${relative_source}" duplicate_index)
+  if(NOT duplicate_index EQUAL -1)
+    message(FATAL_ERROR "duplicate Packet-H blit source: ${relative_source}")
+  endif()
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+    message(FATAL_ERROR "missing Packet-H blit source: ${relative_source}")
+  endif()
+  list(APPEND ZHAO_PACKET_H_BLIT_SEEN "${relative_source}")
+  list(APPEND ZHAO_PACKET_H_BLIT_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")
+endforeach()
+
+function(zhao_packet_h_blit_test TARGET NAME SV_SELECTOR CPP_SELECTOR DIAGNOSTIC)
+  add_executable(${TARGET} video/blit_lease_v2_directed.cpp)
+  target_link_libraries(${TARGET} PRIVATE zhao_harness)
+  if(NOT "${CPP_SELECTOR}" STREQUAL "")
+    target_compile_definitions(${TARGET} PRIVATE ${CPP_SELECTOR}=1)
+  endif()
+  set(selector_args)
+  if(NOT "${SV_SELECTOR}" STREQUAL "")
+    list(APPEND selector_args -D${SV_SELECTOR})
+  endif()
+  verilate(${TARGET}
+    PREFIX Vzhao_video_blit_lease_v2
+    TOP_MODULE zhao_video_blit_lease_v2
+    SOURCES ${ZHAO_PACKET_H_BLIT_SOURCES}
+    VERILATOR_ARGS --assert ${selector_args})
+  add_test(NAME blit_lease_v2_${NAME} COMMAND ${TARGET})
+  set_tests_properties(blit_lease_v2_${NAME} PROPERTIES
+    LABELS "fast;packet-h" TIMEOUT 300
+    PASS_REGULAR_EXPRESSION "${DIAGNOSTIC}"
+    FAIL_REGULAR_EXPRESSION "FAIL:|FAILED")
+  if(NOT "${SV_SELECTOR}" STREQUAL "")
+    set_property(TEST blit_lease_v2_${NAME} APPEND PROPERTY LABELS "mutant")
+  endif()
+endfunction()
+
+zhao_packet_h_blit_test(ph_blit directed "" "" "blit_lease_v2_directed.*passed")
+zhao_packet_h_blit_test(ph_blit_a admission_bypass_control
+  ZHAO_BLIT_LEASE_MUTANT_ADMISSION_BYPASS
+  ZHAO_EXPECT_BLIT_LEASE_MUTANT_ADMISSION_BYPASS
+  "blit_lease_admission_bypass.*DETECTED")
+zhao_packet_h_blit_test(ph_blit_w writer_response_control
+  ZHAO_BLIT_LEASE_MUTANT_WRITER_RESPONSE
+  ZHAO_EXPECT_BLIT_LEASE_MUTANT_WRITER_RESPONSE
+  "blit_lease_writer_response.*DETECTED")
+zhao_packet_h_blit_test(ph_blit_h request_hold_control
+  ZHAO_BLIT_LEASE_MUTANT_REQUEST_HOLD
+  ZHAO_EXPECT_BLIT_LEASE_MUTANT_REQUEST_HOLD
+  "blit_lease_request_hold.*DETECTED")
+zhao_packet_h_blit_test(ph_blit_r live_record_control
+  ZHAO_BLIT_LEASE_MUTANT_LIVE_RECORD
+  ZHAO_EXPECT_BLIT_LEASE_MUTANT_LIVE_RECORD
+  "blit_lease_live_record.*DETECTED")
+zhao_packet_h_blit_test(ph_blit_e issue_early_control
+  ZHAO_BLIT_LEASE_MUTANT_ISSUE_EARLY
+  ZHAO_EXPECT_BLIT_LEASE_MUTANT_ISSUE_EARLY
+  "blit_lease_issue_early.*DETECTED")
+zhao_packet_h_blit_test(ph_blit_f refused_valid_control
+  ZHAO_BLIT_LEASE_MUTANT_REFUSED_VALID
+  ZHAO_EXPECT_BLIT_LEASE_MUTANT_REFUSED_VALID
+  "blit_lease_refused_valid.*DETECTED")
+
+add_test(NAME lint_zhao_video_blit_lease_v2
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+          --top-module zhao_video_blit_lease_v2
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_blit_lease_v2.sv)
+set_tests_properties(lint_zhao_video_blit_lease_v2 PROPERTIES
+  LABELS "lint;fast;packet-h"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+
 set(ZHAO_PACKET_H_BRIDGE_MANIFEST
   ${CMAKE_CURRENT_SOURCE_DIR}/video/video_ready_bridge_v2.sources.txt)
 file(STRINGS "${ZHAO_PACKET_H_BRIDGE_MANIFEST}"
