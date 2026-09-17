@@ -48,9 +48,27 @@ SUPPORTED_DUPLICATE_PROFILES = {
         "count": 41,
         "sha256": "28a1106e736abe08b092f060bbb9cefbc323b92b530cfa854bf250fac1cb166a",
     },
+    # RE-PINNED 2026-09-18, for the binding banks' move into M10K.
+    #
+    # `zhao_texture_binding_resolver_v2` gained per-bank read ports so its two
+    # 256-entry page tables would infer as block RAM instead of 38,400
+    # flip-flops. That is INTERNAL to a leaf -- no port, parameter or
+    # elaboration value of the island changed -- and the count stayed at 105.
+    #
+    # This is the family of movement the serialiser's own docstring describes:
+    # the fingerprint is sensitive to how members group under their parents,
+    # and adding declarations to a module in the closure moves that grouping
+    # without changing any member's name or location. It records having been
+    # re-pinned three times in one session for exactly this.
+    #
+    # Refreshed only after field-diffing the regenerated manifest against the
+    # committed one and confirming `canonical_interface` is unchanged -- the
+    # same evidence the CURRENT-hash refresh of 2026-09-16 recorded, and the
+    # difference between refreshing a derived fingerprint and quietly moving a
+    # frozen one.
     (PRODUCTION_TOP, PRODUCTION_INTERFACE_PURPOSE): {
         "count": 105,
-        "sha256": "0cb6f8812895c285ade5911768134b90d8691f2a7171007d8aa130a05e53640a",
+        "sha256": "3d2cad0cafd8b39b6ac27c441dd203833eb5bcbf4be4c4a18645880f1152938e",
     },
 }
 SUPPORTED_DTYPE_KINDS = frozenset({"BASICDTYPE"})

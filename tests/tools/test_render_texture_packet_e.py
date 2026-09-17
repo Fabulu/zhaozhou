@@ -116,7 +116,7 @@ CURRENT_HASHES = {
     # which is the difference between refreshing a CURRENT hash and quietly
     # editing a PROTECTED one.
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "3d70b8fad0c7648200b4d790f037ee04a4183edef945284e1ad0dd6255b25189",
+        "8859f06686717edc5c29ca095250a6311024b8fd6f1eeb935c2d03d506fd595f",
 }
 
 

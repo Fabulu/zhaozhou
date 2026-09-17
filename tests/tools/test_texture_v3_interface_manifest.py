@@ -180,7 +180,7 @@ EXPECTED_DUPLICATE_MARKER_ROWS = (
     ("/miscsp/0/typesp/58/membersp/2", "(WR)", "alpha", "e,283:18,283:23"),
     ("/miscsp/0/typesp/58/membersp/3", "(WR)", "rgb", "e,284:18,284:21"),
 )
-EXPECTED_PRODUCTION_DUPLICATE_MARKER_SHA256 = "0cb6f8812895c285ade5911768134b90d8691f2a7171007d8aa130a05e53640a"
+EXPECTED_PRODUCTION_DUPLICATE_MARKER_SHA256 = "3d2cad0cafd8b39b6ac27c441dd203833eb5bcbf4be4c4a18645880f1152938e"
 _PRE_DSP_PRODUCTION_DUPLICATE_MARKER_ROWS = (
     ("/miscsp/0/typesp/107/membersp/0", "(WTOB)", "in_tile_addr", "e,33:18,33:30"),
     ("/miscsp/0/typesp/107/membersp/1", "(WTOB)", "invw24", "e,34:18,34:24"),
@@ -338,10 +338,25 @@ _DSP_PRODUCTION_PARENT_ADDRS = {
     "(BOU)": "(XXU)", "(DOU)": "(ZXU)", "(FOU)": "(BYU)",
     "(XPT)": "(OZT)",
 }
+# EXTENDED 2026-09-18 for the binding banks' move into M10K.
+#
+# `zhao_texture_binding_resolver_v2` gained per-bank read ports so its two
+# 256-entry page tables infer as block RAM rather than 38,400 flip-flops. New
+# declarations in a module of the closure shift the typesp indices below it,
+# and FOUR containers moved -- each by exactly +3, the other twelve unchanged:
+#
+#     311: 306 -> 309      329: 324 -> 327
+#     317: 312 -> 315      354: 349 -> 352
+#
+# Derived by replaying the elaboration the manifest itself records -- its
+# `elaboration.argv`, parameter overrides included -- and reading the actual
+# containers back, not by adjusting numbers until the digest matched. Fitting a
+# remap to a target digest would make this oracle agree with the tool by
+# construction, which is the one thing an INDEPENDENT oracle must never do.
 _DSP_PRODUCTION_TYPESP_REMAP = {
     107: 105, 108: 106, 109: 107, 110: 108, 111: 109, 112: 110,
     113: 111, 114: 112, 115: 113, 255: 249, 267: 261, 276: 270,
-    311: 306, 317: 312, 329: 324, 354: 349,
+    311: 309, 317: 315, 329: 327, 354: 352,
 }
 # Source-file tag -> line offset. Only `x`, the early-descriptor source, moved.
 _DSP_PRODUCTION_LOC_LINE_OFFSETS = {"e": 0, "x": 10, "y": 0, "z": 0}
