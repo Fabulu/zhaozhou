@@ -147,12 +147,25 @@ tri_{area2,invw_plane,u_over_w_plane,v_over_w_plane,flat_request,
      continuation_tail,fragment_state}_i
 ```
 
-The post-Early-Z attribute ABI. Produced upstream by the binner/projector, and
-the one to watch is `tri_invw_plane_i` — CLAUDE.md records that `GEOM.DEPTHQUANT`
-was corrected to consume `w` rather than `1/w`, that both projectors grew
-`out_w_o`, and that `zhao_geom_wcache`'s 75-bit payload was never widened. A
-replay cache between a fixed producer and a fixed consumer is a frozen copy of
-yesterday's agreement. Check the width before wiring, not after.
+The post-Early-Z attribute ABI, produced upstream by the binner/projector.
+
+**The hazard this section carried has already been repaired, and checking it
+took one grep.** CLAUDE.md records that `GEOM.DEPTHQUANT` was corrected to
+consume `w` rather than `1/w`, that both projectors grew `out_w_o`, and that
+`zhao_geom_wcache`'s 75-bit payload *was never widened* -- a replay cache
+between a fixed producer and a fixed consumer being a frozen copy of
+yesterday's agreement.
+
+It was widened. `zhao_geom_wcache.sv` says so in its own header: **75 -> 106
+on 2026-09-09**, with `w` at `[104:74]` and `invw` still at `[73:42]`, and it
+calls the widening a REPAIR rather than a feature. So there is nothing to fix
+here and nobody should re-derive it. The CLAUDE.md entry describes the DEFECT,
+which is the right thing for a lessons file to hold, and not the current state
+of the RTL.
+
+Checked 2026-09-17. This is the cheapest kind of correction -- the sort that
+removes work rather than adding it -- and it is exactly what the uncashed
+cheque sweep is for, arriving already cashed.
 
 ### 3.3 Packet-E ENGINE1 share (4)
 
