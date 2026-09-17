@@ -366,6 +366,76 @@ whenever it was done. What it settles is the ORDER OF WHAT COMES NEXT:
 Step 2 is not blocked on step 1 and does not touch its closure, so it is the
 work to do while G8B fits.
 
+### Packet H: what is BUILT, and what the remaining work actually is
+
+*2026-09-17, later the same day. The section below correctly says Packet H is
+a protocol job. This says how much of the protocol now exists.*
+
+The section below names four organs. **There were five**, and the fifth was
+missing rather than unfinished:
+
+* `zhao_renderer_lease_v2` acquires writer 1's lease;
+* `zhao_video_terminal_adapter_v2` already carried BOTH writers' terminal
+  events back to the manager;
+* **nothing acquired the BLITTER's lease.** The retained `zhao_debug_frameblit`
+  still speaks the V1 `fb_lease_*` interface and had no way to be told which
+  slot and generation it owns. The manager's `blit_req_*` channel exists and
+  looks connected, which is why the gap was invisible from the port delta.
+
+`fpga/rtl/video/zhao_video_blit_lease_v2.sv` is that organ. It carries forward
+the historical shell's one-cycle law -- DEBUG.FRAMEBLIT latches
+`fb_lease_generation_i` on the same edge it accepts a request, so the record is
+frozen a state EARLIER and cannot be the pre-grant one -- structurally, and as a
+fired control rather than as a comment. 45 directed checks, seven committed
+mutants all DETECTED, `quartus_map` clean, 117 ALUTs / 123 registers / 0 DSP.
+
+**The composition is driven, not just wired.**
+`tests/shell/zhao_shell_v2_lease_path.sv` composes both leases, the manager and
+the terminal adapter, and `shell_v2_lease_path_directed.cpp` drives one legal
+frame end to end, both writers contending on the shared response, and a stalled
+blitter that must not stop the renderer. 43 checks, counts asserted exactly.
+`packet-h` is 59/59, up from 47.
+
+**Two claims were withdrawn on measurement rather than carried forward**, both
+about where a protection lives. The harness comment said its response demux was
+what stopped either writer retiring the other's response; miswiring it as a
+plain OR fired at that claim and nothing noticed, because each leaf qualifies
+its own ready and asserts the invariant internally. And the starvation control
+that the hand-driven stub version had is GONE -- with the real leaf that state
+is unreachable from outside, so the deadlock is structurally absent rather than
+untested, and the case was replaced by the head-of-line failure that is still
+reachable.
+
+**The 84-bit tuple is pinned.** `zhao_video_slotmgr_v2` takes the swap echo as
+six fields summing to exactly 84, `zhao_fb_ready_cdc_v2` carries "one frozen
+84-bit tuple" and never looks inside, and **the field order was defined nowhere**
+-- both the pack and the unpack belonged to a file that does not exist, and a
+rotated layout produces a plausible slot and a plausible generation that are not
+the frame's, refused as stale with every counter balancing.
+`fpga/rtl/video/zhao_fb_tuple_pkg.sv` defines it once, with an elaboration
+tiling check and a directed test written against literals -- a round trip is
+structurally blind here, since pack and unpack read the same constants.
+
+**WHAT REMAINS, counted rather than estimated.**
+`tools/design/packet_h_driver_contract.py` computes it and
+`reports/PACKET-H-DRIVER-CONTRACT-20260917.md` is that output with judgement
+applied. There are **59 new inputs** across the two swapped blocks. Twelve have
+organ drivers and are composed and tested today. The rest:
+
+| group | inputs | what it needs |
+|---|---:|---|
+| V3 config / palette / page-generation programming | 20 | a channel the historical shell does not have at all |
+| Packet-D attribute carriage (`tri_*`) | 7 | check `zhao_geom_wcache`'s payload width first |
+| Packet-E ENGINE1 share (`fill_*`) | 4 | `fill_refused_i` is already ruled: typed recoverable path only |
+| structural fault entry (`fault_*`) | 4 | the largest single clause of the gate, on four wires |
+| READY/swap CDC return | 7 | six of them are the tuple, now pinned |
+| remaining | 5 | incl. two `test_*` enables to tie low *and comment* |
+
+So the honest state is: **the lease path is finished and proven; the V3
+programming, attribute, share and fault paths are specified and unwired; the
+file is not started.** Sections 3.1 to 3.4 of the contract are design work, not
+transcription, which is the section below's correction made specific.
+
 ### Packet H measured properly — it is a PROTOCOL job, not a wiring job
 
 *2026-09-17, and this corrects the estimate in the section below.*
