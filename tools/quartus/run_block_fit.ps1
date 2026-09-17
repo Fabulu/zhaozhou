@@ -582,11 +582,28 @@ try {
             $qsf += 'set_instance_assignment -name VIRTUAL_PIN ON -to *'
         } else {
             $qsf += '# Physical top ports retained by run_block_fit.ps1 -PhysicalPins.'
-            # Quartus 17 does not infer the conventional SYNTHESIS macro. V3's
-            # DPI-only observation tasks are guarded by it and must be absent
-            # from a hardware elaboration, not merely ignored after parsing.
-            $qsf += 'set_global_assignment -name VERILOG_MACRO "SYNTHESIS=1"'
         }
+        # Quartus 17 does not infer the conventional SYNTHESIS macro. V3's
+        # DPI-only observation tasks are guarded by it and must be absent from a
+        # hardware elaboration, not merely ignored after parsing.
+        #
+        # OUTSIDE THE PIN BRANCH, and it was inside it until 2026-09-17. The
+        # macro has nothing to do with pin mode -- it decides whether
+        # simulation-only regions are compiled at all -- but it sat in the
+        # `-PhysicalPins` arm, so every VIRTUAL-pin fit elaborated them.
+        #
+        # It went unnoticed because no virtual-pin fit's cone had ever contained
+        # `zhao_texture_island_v3_top`, whose `export "DPI-C" task` lines
+        # Quartus rejects outright. Packet H's composed shell is the first, and
+        # it failed in 14 s with the same three errors `run_block_map.ps1`
+        # already records having hit and fixed in its own copy of this line.
+        #
+        # Every other virtual-pin row was quieter about it: a cone whose
+        # `ifndef SYNTHESIS` regions happen to be Quartus-parsable compiles
+        # them INTO the netlist, which inflates the area it reports. Those rows
+        # are not wrong in the flattering direction, but they are not clean
+        # either, and any that matter should be re-measured.
+        $qsf += 'set_global_assignment -name VERILOG_MACRO "SYNTHESIS=1"'
         # SNAPSHOT THE CLOSURE, and compile from the copy.
         #
         # The fit used to name the LIVE working-tree paths, so a fit read

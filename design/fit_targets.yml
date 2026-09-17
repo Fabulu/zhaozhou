@@ -2092,3 +2092,132 @@ targets:
       - fpga/rtl/video/zhao_video_scaler.sv
       - fpga/rtl/video/zhao_video_scanout.sv
       - fpga/rtl/video/zhao_video_slotmgr.sv
+  # PACKET H: THE COMPOSED SIBLING SHELL.
+  #
+  # The question this target exists to answer, named in advance as CLAUDE.md
+  # requires: WHAT DOES THE COMPOSED SIBLING SHELL COST IN ALMs, DSPs AND RAM
+  # BLOCKS, AND AT WHAT FMAX? Every gate Packet H has passed so far is a
+  # Verilator or source-level one; its area is an unmeasured claim, and ALMs are
+  # the binding constraint on this device.
+  #
+  # VIRTUAL PINS, DELIBERATELY, and the reasoning is the point. 209 top-level
+  # ports is far past the device's user I/O, so there is no physical-pin fit of
+  # this shell without a ten-pin characterization instrument like the historical
+  # shell's -- and that instrument needs six new protocol-aware stimulus drivers
+  # before it would say anything true.
+  #
+  # Virtual pins INFLATE area and distort boundary timing. That is a known
+  # limitation here (the island fit's standalone rows carried 889 of them), and
+  # it points the error in the SAFE direction for the question being asked: a
+  # virtual-pin composed shell that comes in UNDER budget is strong evidence,
+  # because the real one is smaller. A result OVER budget is inconclusive and
+  # is the case that would justify building the ten-pin instrument.
+  #
+  # So this row must never be read as an Fmax receipt, and it is not the
+  # post-adoption composed fit R0 asks for. It is the cheap measurement that
+  # decides whether the expensive one is needed.
+  #
+  # The source list is CMake's own, extracted from the resolved
+  # `lint_shell_top_v2` command rather than re-derived -- it is built there from
+  # Packet D's lease-path closure and the historical shell list minus the two
+  # blocks the sibling replaces, plus the six V2 organs, and a third hand copy
+  # of that derivation is how generated tops go stale.
+  - top: zhao_shell_top_v2
+    sources:
+      - fpga/rtl/generated/zhao_abi_pkg.sv
+      - fpga/rtl/common/zhao_render_texture_pkg.sv
+      - fpga/rtl/common/zhao_skid2.sv
+      - fpga/rtl/common/zhao_mul27_exact.sv
+      - fpga/rtl/common/zhao_dual18_mul.sv
+      - fpga/rtl/field/zhao_field_rcp24_rom.sv
+      - fpga/rtl/raster/zhao_raster_ticketq.sv
+      - fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+      - fpga/rtl/raster/zhao_raster_perspuv_pairpipe_v2.sv
+      - fpga/rtl/texture/zhao_texture_mod255.sv
+      - fpga/rtl/texture/zhao_texture_aux_div6.sv
+      - fpga/rtl/texture/zhao_texture_bilerp_lane_v2.sv
+      - fpga/rtl/texture/zhao_texture_bilerp_lane_dsp2.sv
+      - fpga/rtl/texture/zhao_texture_mosaic_v2.sv
+      - fpga/rtl/texture/zhao_texture_palette_res_v2.sv
+      - fpga/rtl/texture/zhao_texture_tmu_plan_v2.sv
+      - fpga/rtl/texture/zhao_texture_cache_pipe_v2.sv
+      - fpga/rtl/texture/zhao_texture_v3bank.sv
+      - fpga/rtl/texture/zhao_texture_v3rq.sv
+      - fpga/rtl/texture/zhao_texture_v3own.sv
+      - fpga/rtl/texture/zhao_texture_metajoin_v2.sv
+      - fpga/rtl/texture/zhao_texture_uv_join_v2.sv
+      - fpga/rtl/texture/zhao_texture_early_desc_v2.sv
+      - fpga/rtl/texture/zhao_texture_frag_expand_v2.sv
+      - fpga/rtl/texture/zhao_texture_binding_resolver_v2.sv
+      - fpga/rtl/texture/zhao_texture_rsp_dispatch_v2.sv
+      - fpga/rtl/texture/zhao_texture_aux_pipe_v2.sv
+      - fpga/rtl/texture/zhao_texture_material_combine_v3.sv
+      - fpga/rtl/texture/zhao_texture_island_v3_top.sv
+      - fpga/rtl/raster/zhao_raster_texture_stage_v3.sv
+      - fpga/rtl/raster/zhao_raster_fill.sv
+      - fpga/rtl/raster/zhao_raster_edgewalk.sv
+      - fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
+      - fpga/rtl/raster/zhao_raster_attrgrad_v2.sv
+      - fpga/rtl/raster/zhao_attr_mul72x13_dsp3.sv
+      - fpga/rtl/raster/zhao_raster_attrgrad_dsp3.sv
+      - fpga/rtl/raster/zhao_raster_earlyz.sv
+      - fpga/rtl/raster/zhao_raster_blend.sv
+      - fpga/rtl/raster/zhao_raster_blend_prod.sv
+      - fpga/rtl/raster/zhao_raster_blend_fin.sv
+      - fpga/rtl/raster/zhao_raster_fragment.sv
+      - fpga/rtl/raster/zhao_raster_tilestore.sv
+      - fpga/rtl/raster/zhao_raster_div255.sv
+      - fpga/rtl/raster/zhao_raster_quant.sv
+      - fpga/rtl/raster/zhao_raster_resolve.sv
+      - fpga/rtl/geometry/zhao_geom_arena.sv
+      - fpga/rtl/geometry/zhao_geom_binner_v2.sv
+      - fpga/rtl/geometry/zhao_geom_binner.sv
+      - fpga/rtl/raster/zhao_raster_tile_pipe.sv
+      - fpga/rtl/geometry/zhao_geom_bin_pipe.sv
+      - fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv
+      - fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv
+      - fpga/rtl/common/zhao_pkg.sv
+      - fpga/rtl/memory/zhao_sdram_params_pkg.sv
+      - fpga/rtl/common/zhao_crc32c_fold.sv
+      - fpga/rtl/common/zhao_cdc_snapshot.sv
+      - fpga/rtl/video/zhao_video_mode.sv
+      - fpga/rtl/video/zhao_video_framectl.sv
+      - fpga/rtl/video/zhao_video_scaler.sv
+      - fpga/rtl/video/zhao_scanout_fetch.sv
+      - fpga/rtl/common/zhao_dc_sdp_ram.sv
+      - fpga/rtl/video/zhao_scanout_linebuf.sv
+      - fpga/rtl/video/zhao_scanout_serializer.sv
+      - fpga/rtl/video/zhao_video_scanout.sv
+      - fpga/rtl/command/zhao_cmd_scheduler.sv
+      - fpga/rtl/command/zhao_cmd_dma.sv
+      - fpga/rtl/debug/zhao_debug_counters.sv
+      - fpga/rtl/debug/zhao_debug_crc.sv
+      - fpga/rtl/input/zhao_input_snapshot.sv
+      - fpga/rtl/input/zhao_input_rumble.sv
+      - fpga/rtl/audio/zhao_audio_fifo.sv
+      - fpga/rtl/memory/zhao_sdram_ctrl.sv
+      - fpga/rtl/memory/zhao_vram_arbiter.sv
+      - fpga/rtl/memory/zhao_mem_guard.sv
+      - fpga/rtl/memory/zhao_hps_bridge.sv
+      - fpga/rtl/memory/zhao_hps_arbiter.sv
+      - fpga/rtl/debug/zhao_debug_frameblit.sv
+      - fpga/rtl/raster/zhao_raster_fbwrite.sv
+      - fpga/rtl/geometry/zhao_geom_setup.sv
+      - fpga/rtl/geometry/zhao_geom_meshfetch.sv
+      - fpga/rtl/geometry/zhao_geom_assemble.sv
+      - fpga/rtl/geometry/zhao_geom_vdecode.sv
+      - fpga/rtl/geometry/zhao_geom_assetfetch.sv
+      - fpga/rtl/geometry/zhao_geom_project.sv
+      - fpga/rtl/geometry/zhao_geom_clip.sv
+      - fpga/rtl/geometry/zhao_geom_depthquant.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+      - fpga/rtl/video/zhao_fb_tuple_pkg.sv
+      - fpga/rtl/video/zhao_video_slotmgr_v2.sv
+      - fpga/rtl/video/zhao_renderer_lease_v2.sv
+      - fpga/rtl/video/zhao_video_terminal_adapter_v2.sv
+      - fpga/rtl/video/zhao_video_blit_lease_v2.sv
+      - fpga/rtl/video/zhao_fb_ready_cdc_v2.sv
+      - fpga/rtl/video/zhao_video_ready_bridge_v2.sv
+      - fpga/rtl/common/zhao_shell_top_v2.sv
