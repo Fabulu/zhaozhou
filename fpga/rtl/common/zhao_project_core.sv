@@ -998,14 +998,38 @@ module zhao_project_core #(
       logic [PAYLOAD_W-1:0]    r_pay;
 
       for (gl = 0; gl < 3; gl = gl + 1) begin : g_div_lane
+        // DSF-01: ONE 33-BIT SUBTRACTION SUPPLIES BOTH THE DECISION AND THE
+        // REMAINDER. The old form expressed an unsigned compare and an
+        // unsigned subtract separately and left Quartus to notice they are
+        // the same carry chain. This states the sharing instead of hoping
+        // for it. Bit-exact and cycle-exact: every register, stage,
+        // handshake, enable, reset and quotient convention is unchanged.
+        //
+        // BIT 32, NOT BIT 31. Bit 31 can be one for a perfectly nonnegative
+        // 32-bit difference -- t=0x80000000, d=0 is legal and must be taken
+        // -- so it is not the borrow bit.
+        //
+        // The extensions are explicit and UNSIGNED. These operands are not
+        // signed, and a 32-bit subtraction whose high bit is inspected after
+        // it has already wrapped is a different function.
+        //
+        // `take_sub` must be >= and not >: t == d gives difference 0,
+        // take_sub 1, remainder 0 and quotient bit 1.
+        //
+        // Proved for ALL 63-bit dv and 31-bit d, including d = 0, by
+        // reports/dsf01/divstep_formula.smt2 (unsat), with four failure
+        // controls that each fire: reports/dsf01/run_controls.py.
         logic [31:0] t;
+        logic [32:0] difference;
+        logic        take_sub;
         logic [62:0] nxt;
         logic [62:0] r_dv;
         always_comb begin
-          t   = {dstep_dv[gs][gl][61:31], dstep_dv[gs][gl][30]};
-          nxt = (t >= {1'b0, dstep_d[gs]}) ?
-              {t - {1'b0, dstep_d[gs]}, dstep_dv[gs][gl][29:0], 1'b1} :
-              {t, dstep_dv[gs][gl][29:0], 1'b0};
+          t = {dstep_dv[gs][gl][61:31], dstep_dv[gs][gl][30]};
+          difference = {1'b0, t} - {2'b0, dstep_d[gs]};
+          take_sub = ~difference[32];
+          nxt = {(take_sub ? difference[31:0] : t),
+                 dstep_dv[gs][gl][29:0], take_sub};
         end
         always_ff @(posedge clk or negedge rst_n) begin
           if (!rst_n) r_dv <= '0;
