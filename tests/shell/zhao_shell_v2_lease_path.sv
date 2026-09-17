@@ -231,6 +231,45 @@ module zhao_shell_v2_lease_path
     // else about it is held quiescent and said so at the instantiation --
     // this harness is about the protocol, not about rasterisation, and a
     // triangle stream would test the binner and the ordering at once.
+    // ---- THE V3 PROGRAMMING CHANNEL --------------------------------------
+    //
+    // Twenty inputs, exposed at the boundary rather than decoded from the
+    // command stream. That was decided in
+    // reports/PACKET-H-DRIVER-CONTRACT-20260917.md section 3.1: the
+    // historical shell's entire configuration surface is already top-level
+    // and harness-driven, a decoder is a second design with its own ABI and
+    // tests that the Packet-H gate does not ask for, and a decoder inserted
+    // later sits BEHIND these same ports and changes nothing the V2 blocks
+    // see.
+    //
+    // NOTHING IN THE TREE DRIVES THESE FOR REAL. Every other instantiation
+    // is a harness: zhao_prod_top feeds them from generated stimulus slices
+    // and the V3 fit top fabricates a sequence so the fitter has something
+    // to measure. This is the first composition that runs a legal
+    // programming sequence into the block that will carry it.
+    input  logic        cfg_valid_i,
+    output logic        cfg_ready_o,
+    input  logic [1:0]  cfg_op_i,
+    input  logic [7:0]  cfg_page_generation_i,
+    input  logic [7:0]  cfg_selector_i,
+    input  logic [74:0] cfg_row_i,
+    input  logic [31:0] cfg_crc32_i,
+    output logic        cfg_rsp_valid_o,
+    input  logic        cfg_rsp_ready_i,
+    output logic [1:0]  cfg_rsp_op_o,
+    output logic [3:0]  cfg_rsp_status_o,
+    output logic [7:0]  cfg_rsp_page_generation_o,
+    output logic [7:0]  active_page_generation_o,
+
+    input  logic        pal_load_valid_i,
+    output logic        pal_load_ready_o,
+    input  logic [1:0]  pal_load_op_i,
+    input  logic [1:0]  pal_load_slot_i,
+    input  logic [7:0]  pal_load_gen_i,
+    input  logic [7:0]  pal_load_idx_i,
+    input  logic [15:0] pal_load_rgb565_i,
+    input  logic        pal_load_crc_ok_i,
+
     input  logic        bin_frame_end_i,
     input  logic [5:0]  bin_grid_w_i,
     input  logic [5:0]  bin_grid_h_i,
@@ -496,33 +535,33 @@ module zhao_shell_v2_lease_path
       .frame_fault_clear_ready_o    (lease_clear_ready),
       .frame_fault_o                (bin_frame_fault_o),
       .lifetime_structural_fault_o  (bin_lifetime_fault_o),
-      .cfg_valid_i                  (1'b0),
-      .cfg_ready_o                  (),
-      .cfg_op_i                     (2'd0),
-      .cfg_page_generation_i        (8'd0),
-      .cfg_selector_i               (8'd0),
-      .cfg_row_i                    (75'd0),
-      .cfg_crc32_i                  (32'd0),
-      .cfg_rsp_valid_o              (),
-      .cfg_rsp_ready_i              (1'b1),
-      .cfg_rsp_op_o                 (),
-      .cfg_rsp_status_o             (),
-      .cfg_rsp_page_generation_o    (),
-      .active_page_generation_o     (),
+      .cfg_valid_i                  (cfg_valid_i),
+      .cfg_ready_o                  (cfg_ready_o),
+      .cfg_op_i                     (cfg_op_i),
+      .cfg_page_generation_i        (cfg_page_generation_i),
+      .cfg_selector_i               (cfg_selector_i),
+      .cfg_row_i                    (cfg_row_i),
+      .cfg_crc32_i                  (cfg_crc32_i),
+      .cfg_rsp_valid_o              (cfg_rsp_valid_o),
+      .cfg_rsp_ready_i              (cfg_rsp_ready_i),
+      .cfg_rsp_op_o                 (cfg_rsp_op_o),
+      .cfg_rsp_status_o             (cfg_rsp_status_o),
+      .cfg_rsp_page_generation_o    (cfg_rsp_page_generation_o),
+      .active_page_generation_o     (active_page_generation_o),
       .fill_req_valid_o             (),
       .fill_req_ready_i             (1'b1),
       .fill_req_addr_o              (),
       .fill_data_valid_i            (1'b0),
       .fill_data_i                  (16'd0),
       .fill_refused_i               (1'b0),
-      .pal_load_valid_i             (1'b0),
-      .pal_load_ready_o             (),
-      .pal_load_op_i                (2'd0),
-      .pal_load_slot_i              (2'd0),
-      .pal_load_gen_i               (8'd0),
-      .pal_load_idx_i               (8'd0),
-      .pal_load_rgb565_i            (16'd0),
-      .pal_load_crc_ok_i            (1'b0),
+      .pal_load_valid_i             (pal_load_valid_i),
+      .pal_load_ready_o             (pal_load_ready_o),
+      .pal_load_op_i                (pal_load_op_i),
+      .pal_load_slot_i              (pal_load_slot_i),
+      .pal_load_gen_i               (pal_load_gen_i),
+      .pal_load_idx_i               (pal_load_idx_i),
+      .pal_load_rgb565_i            (pal_load_rgb565_i),
+      .pal_load_crc_ok_i            (pal_load_crc_ok_i),
       .sheet_req_valid_o            (),
       .sheet_req_ready_i            (1'b1),
       .sheet_req_op_o               (),

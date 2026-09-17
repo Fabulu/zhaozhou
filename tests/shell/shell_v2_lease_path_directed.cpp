@@ -88,6 +88,22 @@ int main(int argc, char** argv) {
   dut.bin_frame_end_i = 0;
   dut.bin_grid_w_i = 2;
   dut.bin_grid_h_i = 2;
+  dut.cfg_valid_i = 0;
+  dut.cfg_op_i = 0;
+  dut.cfg_page_generation_i = 0;
+  dut.cfg_selector_i = 0;
+  dut.cfg_row_i[0] = 0;
+  dut.cfg_row_i[1] = 0;
+  dut.cfg_row_i[2] = 0;
+  dut.cfg_crc32_i = 0;
+  dut.cfg_rsp_ready_i = 1;
+  dut.pal_load_valid_i = 0;
+  dut.pal_load_op_i = 0;
+  dut.pal_load_slot_i = 0;
+  dut.pal_load_gen_i = 0;
+  dut.pal_load_idx_i = 0;
+  dut.pal_load_rgb565_i = 0;
+  dut.pal_load_crc_ok_i = 0;
   dut.fault_inject_valid_i = 0;
   dut.fault_inject_writer_i = 0;
   dut.fault_inject_slot_i = 0;
@@ -128,6 +144,119 @@ int main(int argc, char** argv) {
         dut.leases_granted_o);
   check(dut.adapter_idle_o == 1, "adapter starts idle", 1, dut.adapter_idle_o);
 
+  // =======================================================================
+  // THE V3 PROGRAMMING CHANNEL, RUN FOR REAL
+  // =======================================================================
+  //
+  // Twenty of the fifty-seven new inputs are this channel, and NOTHING in the
+  // tree drives it for real: zhao_prod_top feeds it from generated stimulus
+  // slices and the V3 fit top fabricates a sequence so the fitter has
+  // something to measure. This runs a legal one -- palette BEGIN, 256 WRITEs,
+  // END, then config BEGIN / ROW / END with each response checked -- through
+  // the composed bin pipe.
+  //
+  // The statuses are the point. A config response carrying a non-zero status
+  // is how the block reports a rejected program, and the fit top treats it as
+  // a setup fault; a test that only checked the handshakes would call a
+  // rejected palette a success.
+  {
+    auto pal = [&](uint8_t op, uint8_t idx, uint16_t rgb) {
+      dut.pal_load_op_i = op;
+      dut.pal_load_slot_i = 0;
+      dut.pal_load_gen_i = 1;
+      dut.pal_load_idx_i = idx;
+      dut.pal_load_rgb565_i = rgb;
+      dut.pal_load_crc_ok_i = 1;
+      dut.pal_load_valid_i = 1;
+      for (int i = 0; i < 20000; ++i) {
+        dut.eval();
+        if (dut.pal_load_ready_o) {
+          tick(dut);
+          dut.pal_load_valid_i = 0;
+          dut.eval();
+          return true;
+        }
+        tick(dut);
+      }
+      dut.pal_load_valid_i = 0;
+      return false;
+    };
+
+    bool pal_ok = pal(0, 0, 0);  // BEGIN
+    for (int idx = 0; idx < 256 && pal_ok; ++idx) {
+      // Index 5 gets a distinguishable green, as the V3 fit top does, so the
+      // palette is not 256 identical writes that any addressing bug survives.
+      pal_ok = pal(1, static_cast<uint8_t>(idx), idx == 5 ? 0x07e0 : 0x0000);
+    }
+    if (pal_ok) pal_ok = pal(2, 0, 0);  // END
+    check(pal_ok, "the palette programs: BEGIN, 256 writes, END", 1, pal_ok);
+
+    auto cfg = [&](uint8_t op, uint8_t selector, uint32_t row_lo, uint32_t row_hi) {
+      dut.cfg_op_i = op;
+      dut.cfg_page_generation_i = 1;
+      dut.cfg_selector_i = selector;
+      dut.cfg_row_i[0] = row_lo;
+      dut.cfg_row_i[1] = row_hi;
+      dut.cfg_row_i[2] = (op == 1) ? 0x404u : 0u;
+      dut.cfg_crc32_i = 0;
+      dut.cfg_valid_i = 1;
+      bool sent = false;
+      for (int i = 0; i < 20000 && !sent; ++i) {
+        dut.eval();
+        if (dut.cfg_ready_o) {
+          tick(dut);
+          dut.cfg_valid_i = 0;
+          dut.eval();
+          sent = true;
+          break;
+        }
+        tick(dut);
+      }
+      dut.cfg_valid_i = 0;
+      if (!sent) return -1;
+      for (int i = 0; i < 20000; ++i) {
+        dut.eval();
+        if (dut.cfg_rsp_valid_o) return static_cast<int>(dut.cfg_rsp_status_o);
+        tick(dut);
+      }
+      return -2;
+    };
+
+    // row: {11'h404, 32'd0, 32'h0000_2000}, as the V3 fit top programs it.
+    const int st_begin = cfg(0, 0, 0, 0);
+    check(st_begin == 0, "config BEGIN is accepted with status 0", 0, st_begin);
+    tick(dut);
+    const int st_row = cfg(1, 1, 0x00002000u, 0);
+    check(st_row == 0, "config ROW is accepted with status 0", 0, st_row);
+    tick(dut);
+    // END SEALS THE TABLE, AND THE SEAL IS ENFORCED. With `cfg_crc32_i` left
+    // at zero the block answers **CFG_BAD_CRC (5)** and refuses to activate
+    // the page. That is the right answer to an unsealed table and it is the
+    // most useful thing this case could have found: the channel is not a
+    // pipe that accepts whatever it is handed.
+    //
+    // So the assertion is the REFUSAL, not a pass. Computing a correct seal
+    // needs the CRC32C fold over the exact programmed rows, which is ABI work
+    // this packet still owes -- and asserting a fabricated success here would
+    // have hidden that debt behind a green check.
+    //
+    // Note for whoever does that work: the V3 fit top programs with
+    // `cfg_crc_w = 32'd0` too, and records the non-zero status as a setup
+    // fault (`setup_fault_cause_q[0]`). It is a FIT harness, so an
+    // unactivated binding table does not change what it measures -- but
+    // nobody should read its green as evidence that a table ever activated.
+    const int st_end = cfg(2, 0, 0, 0);
+    check(st_end == 5, "config END refuses an unsealed table (CFG_BAD_CRC)", 5, st_end);
+    for (int i = 0; i < 20; ++i) tick(dut);
+
+    check(dut.active_page_generation_o == 0, "and no page generation activates on a refused seal",
+          0, dut.active_page_generation_o);
+    std::printf(
+        "[shell_v2_lease_path] v3 programming: palette ok=%d, cfg BEGIN/ROW/END %d/%d/%d, "
+        "active generation %u\n",
+        pal_ok ? 1 : 0, st_begin, st_row, st_end, dut.active_page_generation_o);
+  }
+
   // ---- FACT 1: the barrier gates CREATION ---------------------------------
   // With lease_open low, a frame request must not become a manager request.
   dut.frame_req_valid_i = 1;
@@ -165,7 +294,11 @@ int main(int argc, char** argv) {
   const int to_init = wait_for(
       dut, [&] { return dut.bin_initialized_o != 0; }, 4000);
   check(to_init >= 0, "the binner finishes its cold init", 1, to_init >= 0);
-  std::printf("[shell_v2_lease_path] binner cold init: %d cycles\n", to_init);
+  // Measured from HERE, not from reset: the V3 programming sequence above
+  // runs first and takes long enough that the binner is usually already up,
+  // in which case this reads 0 and means "already done" rather than
+  // "instant".
+  std::printf("[shell_v2_lease_path] binner cold init: %d more cycles\n", to_init);
 
   const int to_lease = wait_for(
       dut, [&] { return dut.leases_granted_o != 0; }, 4000);
@@ -528,6 +661,7 @@ int main(int argc, char** argv) {
     const uint32_t pubs_before = dut.publications_o;
     const uint32_t ready_before = dut.ready_events_o;
     const uint32_t faults_before = dut.faults_latched_o;
+    const uint32_t pulses_before = dut.fault_pulses_o;
     const uint8_t live_slot = dut.lease_slot_o;
     const uint16_t live_gen = dut.lease_generation_o;
 
@@ -559,9 +693,17 @@ int main(int argc, char** argv) {
     check(dut.faults_latched_o == faults_before + 1,
           "a matching fault is latched EXACTLY ONCE, not once per cycle", faults_before + 1,
           dut.faults_latched_o);
-    check(dut.fault_pulses_o == 2,
-          "two fault pulses were presented in total (one unmatched, one matched)", 2,
-          dut.fault_pulses_o);
+    // A DELTA, NOT A TOTAL. The programming phase raises a structural level
+    // of its own -- the refused seal -- and the aggregator edge-detects it,
+    // so the absolute count is 3 rather than 2. That is correct behaviour and
+    // the absolute check was the wrong shape: it measured everything that had
+    // ever happened in order to say something about two injections. Note the
+    // identity match did its job through all of it: `faults_latched_o` still
+    // moved by exactly one, because the programming fault does not carry the
+    // live lease's generation.
+    check(dut.fault_pulses_o == pulses_before + 2,
+          "exactly two fault pulses were presented here (one unmatched, one matched)",
+          pulses_before + 2, dut.fault_pulses_o);
     check(dut.lease_fault_o == 1, "the live lease is marked faulted", 1, dut.lease_fault_o);
 
     // A clean publication offered AFTER the fault must not become one.
