@@ -17,32 +17,24 @@ using BindingDut = Vzhao_texture_binding_resolver_v2;
 
 #include "verilated.h"
 #include "../harness/zhao_sim.hpp"
+// The seal is modelled once, in one header, because the shell composition now
+// needs it too and a second fold of the same CRC is the duplication this
+// repository keeps paying for.
+#include "../harness/zhao_binding_seal.hpp"
 
 namespace {
+
+using zhao_binding_seal::Row;
+using zhao_binding_seal::crc_byte;
+using zhao_binding_seal::mode;
+using zhao_binding_seal::pack_row;
+using zhao_binding_seal::page_crc;
 
 void tick(BindingDut* d) {
   d->clk = 0;
   d->eval();
   d->clk = 1;
   d->eval();
-}
-
-struct Row {
-  uint32_t base = 0;
-  uint32_t mode = 0;
-  uint8_t palette_slot = 0;
-  uint8_t palette_generation = 0;
-  bool valid = true;
-};
-
-std::array<uint32_t, 3> pack_row(const Row& r) {
-  std::array<uint32_t, 3> words{};
-  words[0] = r.base;
-  words[1] = r.mode;
-  words[2] = static_cast<uint32_t>(r.palette_slot & 3u) |
-             (static_cast<uint32_t>(r.palette_generation) << 2) |
-             (static_cast<uint32_t>(r.valid ? 1u : 0u) << 10);
-  return words;
 }
 
 void drive_row(BindingDut* d, const Row& r) {
@@ -52,37 +44,6 @@ void drive_row(BindingDut* d, const Row& r) {
 
 void clear_row(BindingDut* d) {
   for (unsigned i = 0; i < 3; ++i) d->cfg_row_i[i] = 0;
-}
-
-uint32_t mode(uint8_t format, bool filter, uint8_t wrap_u, uint8_t wrap_v, uint8_t log2w,
-              uint8_t log2h, uint8_t max_level, bool mip_enable) {
-  return static_cast<uint32_t>(format & 7u) | (static_cast<uint32_t>(filter) << 3) |
-         (static_cast<uint32_t>(wrap_u & 3u) << 4) | (static_cast<uint32_t>(wrap_v & 3u) << 6) |
-         (static_cast<uint32_t>(log2w & 15u) << 8) | (static_cast<uint32_t>(log2h & 15u) << 12) |
-         (static_cast<uint32_t>(max_level & 15u) << 16) | (static_cast<uint32_t>(mip_enable) << 20);
-}
-
-uint32_t crc_byte(uint32_t crc, uint8_t data) {
-  for (unsigned bit = 0; bit < 8; ++bit)
-    crc = ((crc ^ (data >> bit)) & 1u) ? (crc >> 1) ^ 0xEDB88320u : (crc >> 1);
-  return crc;
-}
-
-uint32_t page_crc(uint8_t generation, const std::array<Row, 256>& rows,
-                  const std::array<bool, 256>& present) {
-  uint32_t crc = crc_byte(0xFFFFFFFFu, generation);
-  for (unsigned selector = 0; selector < 256; ++selector) {
-    std::array<uint8_t, 10> bytes{};
-    if (present[selector]) {
-      const auto words = pack_row(rows[selector]);
-      for (unsigned bit = 0; bit < 75; ++bit) {
-        if ((words[bit / 32] >> (bit % 32)) & 1u)
-          bytes[bit / 8] |= static_cast<uint8_t>(1u << (bit % 8));
-      }
-    }
-    for (uint8_t byte : bytes) crc = crc_byte(crc, byte);
-  }
-  return crc ^ 0xFFFFFFFFu;
 }
 
 void set_cfg(BindingDut* d, uint8_t op, uint8_t generation, uint8_t selector, const Row* row,

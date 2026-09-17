@@ -387,7 +387,7 @@ programming channel run for real, and the swap echo through both CDC FIFOs.
 | one held-until-quiet clear per accepted lease, before admission | **measured** -- counted in RTL, and the counter seen to move |
 | old-work drain ordering | **measured** -- refused in flight, accepted 1 cycle after drain |
 | structural fault: no READY, no publication, lease released | **measured** |
-| V3 programming channel | **wired and run**; the seal (CRC32C) is still owed |
+| V3 programming channel | **SEALED.** BEGIN/ROW/END with a correct seal is accepted (status 0) and generation 2 activates; the unsealed attempt is kept ahead of it and still refused with CFG_BAD_CRC, because a test that only ever presents a correct seal cannot tell a channel that checks it from one that ignores it. Seal `0x12b4803e`, modelled in `tests/harness/zhao_binding_seal.hpp` -- extracted from the binding resolver's own test rather than folded a second time, and that test plus all 7 of its mutant controls still pass against the shared header. **The name in this document was wrong: the polynomial is `0xEDB88320`, reflected CRC-32 (zlib/IEEE), NOT CRC-32C** -- Castagnoli is `0x82F63B78`. Two details are load-bearing and neither is guessable from one row: the generation byte folds FIRST, and an absent selector contributes ten ZERO bytes, so a one-row page still folds 2,560 bytes |
 | READY/swap CDC round trip | **measured** -- 10 cycles, through the real FIFOs |
 | every new port connected | **audited** -- `packet_h_tieoff_audit`, 0 silent across 74 declared decisions. **The earlier "0 silent" was measured by an audit that could not see two whole classes.** It skipped EMPTY connections as "an unread output, named on purpose" -- an assumption wearing a check's clothes -- and its regex was anchored `^...$`, so a port map packing several connections onto one line was invisible. Widened to audit empty FAULT outputs (not telemetry; 89 reasons all saying "telemetry" is silence a tool manufactured for itself) and to read every connection on a line, the shell went from "19 declared, 0 silent" to 13 silent, ten of them literal tie-offs |
 | the shell's fault OR names every structural fault | **6 terms, and two arrived by audit.** `attr_abort` sat in an empty port connection beside the `raster_abort` that WAS wired -- same class, same instance, dropped only because nobody looked. `cdc_gpu_protocol_fault` fires when a stalled producer mutates the 84-bit tuple or drops valid, and the shell discarded it. Its video-domain twin is declared and OWED a synchroniser: OR-ing a `vid_clk` level into a `gpu_clk` one is the CDC violation this packet already made once |
@@ -481,7 +481,7 @@ organ drivers and are composed and tested today. The rest:
 
 | group | inputs | what it needs |
 |---|---:|---|
-| V3 config / palette / page-generation programming | 20 | **WIRED** -- legal sequence runs; the seal (CRC32C) is still owed |
+| V3 config / palette / page-generation programming | 20 | **WIRED AND SEALED** -- legal sequence runs, a correct seal is accepted and the page activates, an incorrect one is still refused. The seal is reflected CRC-32 (`0xEDB88320`), not CRC-32C as this table previously said |
 | Packet-D attribute carriage (`tri_*`) | 7 | check `zhao_geom_wcache`'s payload width first |
 | Packet-E ENGINE1 share (`fill_*`) | 4 | `fill_refused_i` is already ruled: typed recoverable path only |
 | structural fault entry (`fault_*`) | 4 | **DONE** -- wired, edge-detected, tested |

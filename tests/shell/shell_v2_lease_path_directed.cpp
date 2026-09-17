@@ -31,6 +31,9 @@
 #include "Vzhao_shell_v2_lease_path.h"
 
 #include "zhao_sim.hpp"
+// The binding-page seal, modelled once and shared with the binding resolver's
+// own directed test rather than folded a second time here.
+#include "../harness/zhao_binding_seal.hpp"
 
 using zhao::check;
 
@@ -191,14 +194,16 @@ int main(int argc, char** argv) {
     if (pal_ok) pal_ok = pal(2, 0, 0);  // END
     check(pal_ok, "the palette programs: BEGIN, 256 writes, END", 1, pal_ok);
 
+    uint8_t cfg_gen = 1;
+    uint32_t cfg_seal = 0;
     auto cfg = [&](uint8_t op, uint8_t selector, uint32_t row_lo, uint32_t row_hi) {
       dut.cfg_op_i = op;
-      dut.cfg_page_generation_i = 1;
+      dut.cfg_page_generation_i = cfg_gen;
       dut.cfg_selector_i = selector;
       dut.cfg_row_i[0] = row_lo;
       dut.cfg_row_i[1] = row_hi;
       dut.cfg_row_i[2] = (op == 1) ? 0x404u : 0u;
-      dut.cfg_crc32_i = 0;
+      dut.cfg_crc32_i = cfg_seal;
       dut.cfg_valid_i = 1;
       bool sent = false;
       for (int i = 0; i < 20000 && !sent; ++i) {
@@ -235,26 +240,66 @@ int main(int argc, char** argv) {
     // most useful thing this case could have found: the channel is not a
     // pipe that accepts whatever it is handed.
     //
-    // So the assertion is the REFUSAL, not a pass. Computing a correct seal
-    // needs the CRC32C fold over the exact programmed rows, which is ABI work
-    // this packet still owes -- and asserting a fabricated success here would
-    // have hidden that debt behind a green check.
-    //
-    // Note for whoever does that work: the V3 fit top programs with
-    // `cfg_crc_w = 32'd0` too, and records the non-zero status as a setup
-    // fault (`setup_fault_cause_q[0]`). It is a FIT harness, so an
-    // unactivated binding table does not change what it measures -- but
-    // nobody should read its green as evidence that a table ever activated.
+    // So the negative case comes FIRST and is asserted as a refusal. A test
+    // that only ever presented a correct seal could not tell a channel that
+    // checks it from one that ignores it.
     const int st_end = cfg(2, 0, 0, 0);
     check(st_end == 5, "config END refuses an unsealed table (CFG_BAD_CRC)", 5, st_end);
     for (int i = 0; i < 20; ++i) tick(dut);
 
     check(dut.active_page_generation_o == 0, "and no page generation activates on a refused seal",
           0, dut.active_page_generation_o);
+
+    // ---- AND NOW A CORRECTLY SEALED PAGE, WHICH ACTIVATES -----------------
+    //
+    // The seal is `zhao_binding_seal::page_crc`, modelled once in
+    // tests/harness/zhao_binding_seal.hpp and shared with the binding
+    // resolver's own directed test -- folding it a second time here is the
+    // duplication this repository keeps paying for.
+    //
+    // The row is the one programmed above: `cfg_row_i` = {0x404, 0, 0x2000} at
+    // selector 1, which decodes as base 0x2000, palette generation 1, valid.
+    // The other 255 selectors are absent and each still folds TEN ZERO BYTES,
+    // which is the part of the algorithm that is impossible to guess from
+    // looking at one row.
+    //
+    // A NEW GENERATION, because the refused page cleared its valid mask and
+    // the loader will not re-seal a generation it has already rejected.
+    cfg_gen = 2;
+    zhao_binding_seal::Row sealed_row;
+    sealed_row.base = 0x00002000u;
+    sealed_row.mode = 0;
+    sealed_row.palette_slot = 0;
+    sealed_row.palette_generation = 1;
+    sealed_row.valid = true;
+    const uint32_t seal = zhao_binding_seal::page_crc_single(cfg_gen, 1, sealed_row);
+
+    const int st_begin2 = cfg(0, 0, 0, 0);
+    check(st_begin2 == 0, "a second config BEGIN is accepted", 0, st_begin2);
+    tick(dut);
+    const int st_row2 = cfg(1, 1, 0x00002000u, 0);
+    check(st_row2 == 0, "the row is accepted into the new generation", 0, st_row2);
+    tick(dut);
+    cfg_seal = seal;
+    const int st_end2 = cfg(2, 0, 0, 0);
+    cfg_seal = 0;
+    check(st_end2 == 0, "config END ACCEPTS a correctly sealed table", 0, st_end2);
+
+    // The seal passing is not the page activating. `zhao_texture_binding_resolver_v2`
+    // parks in LOAD_SEAL_PENDING and swaps banks only on structural data
+    // quiet, which is the whole point of the two-bank design -- work already
+    // admitted keeps reading the old page.
+    const int to_active = wait_for(
+        dut, [&] { return dut.active_page_generation_o == cfg_gen; }, 4000);
+    check(to_active >= 0, "the sealed page activates", 1, to_active >= 0);
+    check(dut.active_page_generation_o == 2,
+          "the active generation is the one that sealed", 2,
+          dut.active_page_generation_o);
     std::printf(
         "[shell_v2_lease_path] v3 programming: palette ok=%d, cfg BEGIN/ROW/END %d/%d/%d, "
-        "active generation %u\n",
-        pal_ok ? 1 : 0, st_begin, st_row, st_end, dut.active_page_generation_o);
+        "sealed END %d, seal 0x%08x, active generation %u after %d cycles\n",
+        pal_ok ? 1 : 0, st_begin, st_row, st_end, st_end2, seal,
+        dut.active_page_generation_o, to_active);
   }
 
   // ---- FACT 1: the barrier gates CREATION ---------------------------------
