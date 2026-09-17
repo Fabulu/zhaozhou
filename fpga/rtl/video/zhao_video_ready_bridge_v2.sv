@@ -48,6 +48,7 @@
 
 module zhao_video_ready_bridge_v2
   import zhao_pkg::*;
+  import zhao_fb_tuple_pkg::*;
 (
     input  logic        gpu_clk,
     input  logic        gpu_rst_n,
@@ -161,7 +162,18 @@ module zhao_video_ready_bridge_v2
       `ZHAO_VIDEO_BRIDGE_ECHO_VALID(echo_valid_q, cdc_swap_ready_i);
   wire echo_pop_c = echo_visible_c && cdc_swap_ready_i;
   wire echo_room_c = !echo_valid_q || echo_pop_c;
-  wire pending_slot_c = pending_tuple_q[82];
+  // THE ONE PLACE THIS BLOCK LOOKS INSIDE THE TUPLE, and it used to be the bare
+  // literal `pending_tuple_q[82]`. 82 was correct and it was also the only
+  // statement of the layout that anything depended on -- the header's
+  // `{writer, slot, generation, mode, base, span}` being a comment, and the CDC
+  // underneath deliberately carrying 84 opaque bits.
+  //
+  // That is how a layout gets reimplemented backwards: `zhao_fb_tuple_pkg` was
+  // written on the premise that nothing constrained the order, declared writer
+  // at bit 0, and its own tests agreed with it perfectly because they read the
+  // same constants. This line is what disagreed. Now it uses the package, so
+  // the two cannot drift again without the compiler noticing.
+  wire pending_slot_c = zhao_fb_tuple_slot(pending_tuple_q);
   wire frame_swap_take_c = vid_local_rst_n && vid_barrier_done_i &&
       !blank_cmd_i && frame_swap_valid_i && pending_q &&
       !scanout_wait_q && echo_room_c &&

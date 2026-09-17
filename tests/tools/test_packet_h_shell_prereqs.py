@@ -39,6 +39,11 @@ BRIDGE_SOURCES = (
     "tests/mutants/zhao_video_ready_bridge_v2_mutants.sv",
     "fpga/rtl/generated/zhao_abi_pkg.sv",
     "fpga/rtl/common/zhao_pkg.sv",
+    # The bridge imports zhao_fb_tuple_pkg so that the ONE place it looks inside
+    # the 84-bit tuple -- the slot, which used to be a bare `[82]` -- names the
+    # layout instead of restating it. See zhao_fb_tuple_pkg.sv's header for what
+    # that bare literal cost.
+    "fpga/rtl/video/zhao_fb_tuple_pkg.sv",
     "fpga/rtl/video/zhao_video_ready_bridge_v2.sv",
     "tests/video/tb_video_ready_bridge_v2.sv",
 )

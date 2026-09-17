@@ -7,11 +7,22 @@
 //
 //     writer 1 + slot 1 + generation 16 + mode 2 + base 32 + span 32 = 84
 //
-// So the correspondence is certain and THE FIELD ORDER WAS DEFINED NOWHERE.
-// Both the pack and the unpack belong to the sibling shell, both were
-// unwritten, and `fb_ready_cdc_v2_directed.cpp` drives arbitrary values and
-// checks only that what goes in comes out -- so nothing in the tree would have
-// noticed the two sides disagreeing.
+// THE ORDER WAS ALREADY DEFINED, AND THIS FILE FIRST GOT IT BACKWARDS.
+//
+// `zhao_video_ready_bridge_v2.sv` states it in its own header -- "The packed
+// tuple is: {writer1, slot1, generation16, mode2, base32, span32}" -- and,
+// more to the point, DEPENDS on it: line 164 reads the slot as
+// `pending_tuple_q[82]`. As a SystemVerilog concatenation that puts writer at
+// bit 83 and span in the low 32 bits.
+//
+// The first version of this package declared the opposite, writer at bit 0,
+// on the stated grounds that nothing constrained the choice. Something did.
+// It was found by composing the bridge and reading the magic 82 -- not by any
+// check in this file, because a package that defines a layout and a test that
+// reads the same package agree with each other however wrong they both are.
+// The literal-based test caught a swapped WRITER and SLOT; it could not catch
+// the whole layout being reversed, because the literals were written from the
+// same wrong premise.
 //
 // WHAT A DISAGREEMENT LOOKS LIKE, which is the reason this is a package and not
 // two bit ranges written eighty lines apart. A rotated layout does not produce
@@ -35,10 +46,10 @@
 // against independently written bit positions can see it -- which is why the
 // directed test carries literals rather than a round trip.
 `ifndef ZHAO_FB_WRITER_LO_SEL
-`define ZHAO_FB_WRITER_LO_SEL 0
+`define ZHAO_FB_WRITER_LO_SEL 83
 `endif
 `ifndef ZHAO_FB_SLOT_LO_SEL
-`define ZHAO_FB_SLOT_LO_SEL 1
+`define ZHAO_FB_SLOT_LO_SEL 82
 `endif
 
 package zhao_fb_tuple_pkg;
@@ -52,12 +63,15 @@ package zhao_fb_tuple_pkg;
   localparam int unsigned ZHAO_FB_BASE_W   = 32;
   localparam int unsigned ZHAO_FB_SPAN_W   = 32;
 
-  localparam int unsigned ZHAO_FB_WRITER_LO = `ZHAO_FB_WRITER_LO_SEL;
+  // MSB-FIRST, because that is what the tuple already IS. See the header: the
+  // order is `{writer, slot, generation, mode, base, span}` as a SystemVerilog
+  // concatenation, so span occupies the low 32 bits and writer the top one.
+  localparam int unsigned ZHAO_FB_SPAN_LO   = 0;
+  localparam int unsigned ZHAO_FB_BASE_LO   = ZHAO_FB_SPAN_LO + ZHAO_FB_SPAN_W;
+  localparam int unsigned ZHAO_FB_MODE_LO   = ZHAO_FB_BASE_LO + ZHAO_FB_BASE_W;
+  localparam int unsigned ZHAO_FB_GEN_LO    = ZHAO_FB_MODE_LO + ZHAO_FB_MODE_W;
   localparam int unsigned ZHAO_FB_SLOT_LO   = `ZHAO_FB_SLOT_LO_SEL;
-  localparam int unsigned ZHAO_FB_GEN_LO    = 2;
-  localparam int unsigned ZHAO_FB_MODE_LO   = ZHAO_FB_GEN_LO    + ZHAO_FB_GEN_W;
-  localparam int unsigned ZHAO_FB_BASE_LO   = ZHAO_FB_MODE_LO   + ZHAO_FB_MODE_W;
-  localparam int unsigned ZHAO_FB_SPAN_LO   = ZHAO_FB_BASE_LO   + ZHAO_FB_BASE_W;
+  localparam int unsigned ZHAO_FB_WRITER_LO = `ZHAO_FB_WRITER_LO_SEL;
 
   function automatic logic [ZHAO_FB_TUPLE_W-1:0] zhao_fb_tuple_pack(
       input logic        writer,

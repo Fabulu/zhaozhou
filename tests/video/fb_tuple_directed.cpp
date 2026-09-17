@@ -42,16 +42,24 @@ constexpr uint8_t kMode = 2;
 constexpr uint32_t kBase = 0xDEADBEEFu;
 constexpr uint32_t kSpan = 0x12345678u;
 
-// 84 bits: writer at 0, slot at 1, generation at 2, mode at 18, base at 20,
-// span at 52. Written as shifts, not as a call into the thing under test.
+// 84 bits, MSB-first: span at 0, base at 32, mode at 64, generation at 66,
+// slot at 82, writer at 83. Written as shifts, not as a call into the thing
+// under test.
+//
+// THESE LITERALS WERE WRONG ONCE, in a way this file could not catch. The
+// first version had the layout reversed -- writer at bit 0 -- and so did the
+// package, so every check here passed. Literals written from the same wrong
+// premise as the code are not independent of it. What settled it was
+// `zhao_video_ready_bridge_v2.sv`, which documents the order in its header
+// AND reads the slot as `pending_tuple_q[82]`.
 __uint128_t expected_tuple() {
   __uint128_t t = 0;
-  t |= static_cast<__uint128_t>(kWriter ? 1u : 0u) << 0;
-  t |= static_cast<__uint128_t>(kSlot ? 1u : 0u) << 1;
-  t |= static_cast<__uint128_t>(kGeneration) << 2;
-  t |= static_cast<__uint128_t>(kMode) << 18;
-  t |= static_cast<__uint128_t>(kBase) << 20;
-  t |= static_cast<__uint128_t>(kSpan) << 52;
+  t |= static_cast<__uint128_t>(kSpan) << 0;
+  t |= static_cast<__uint128_t>(kBase) << 32;
+  t |= static_cast<__uint128_t>(kMode) << 64;
+  t |= static_cast<__uint128_t>(kGeneration) << 66;
+  t |= static_cast<__uint128_t>(kSlot ? 1u : 0u) << 82;
+  t |= static_cast<__uint128_t>(kWriter ? 1u : 0u) << 83;
   return t;
 }
 
@@ -98,7 +106,7 @@ int main() {
   d.eval();
 
 #if defined(ZHAO_EXPECT_FB_TUPLE_MUTANT_SWAP_WRITER_SLOT)
-  const bool origins_moved = (d.writer_lo_o != 0) || (d.slot_lo_o != 1);
+  const bool origins_moved = (d.writer_lo_o != 83) || (d.slot_lo_o != 82);
   const bool literal_disagrees = (read_packed(d) != expected_tuple());
   // Both must be true, and the second is the one that matters: it says the
   // LITERAL caught it. If only the origins moved, this test would be reporting
@@ -107,12 +115,14 @@ int main() {
 #else
   using zhao::check;
 
-  check(d.writer_lo_o == 0, "writer sits at bit 0", 0, d.writer_lo_o);
-  check(d.slot_lo_o == 1, "slot sits at bit 1", 1, d.slot_lo_o);
-  check(d.gen_lo_o == 2, "generation sits at bit 2", 2, d.gen_lo_o);
-  check(d.mode_lo_o == 18, "mode sits at bit 18", 18, d.mode_lo_o);
-  check(d.base_lo_o == 20, "base sits at bit 20", 20, d.base_lo_o);
-  check(d.span_lo_o == 52, "span sits at bit 52", 52, d.span_lo_o);
+  check(d.span_lo_o == 0, "span sits at bit 0", 0, d.span_lo_o);
+  check(d.base_lo_o == 32, "base sits at bit 32", 32, d.base_lo_o);
+  check(d.mode_lo_o == 64, "mode sits at bit 64", 64, d.mode_lo_o);
+  check(d.gen_lo_o == 66, "generation sits at bit 66", 66, d.gen_lo_o);
+  check(d.slot_lo_o == 82, "slot sits at bit 82", 82, d.slot_lo_o);
+  // 82 is not an arbitrary number: zhao_video_ready_bridge_v2.sv:164 reads
+  // the slot from exactly there. If this check ever fails, that line is why.
+  check(d.writer_lo_o == 83, "writer sits at bit 83", 83, d.writer_lo_o);
 
   const __uint128_t got = read_packed(d);
   const __uint128_t want = expected_tuple();
@@ -140,16 +150,18 @@ int main() {
   d.span_i = 0;
   d.eval();
   const __uint128_t only_gen = read_packed(d);
-  const __uint128_t want_gen = static_cast<__uint128_t>(0xFFFFu) << 2;
-  check(only_gen == want_gen, "an all-ones generation touches bits 17:2 and nothing else", 1,
+  const __uint128_t want_gen = static_cast<__uint128_t>(0xFFFFu) << 66;
+  check(only_gen == want_gen,
+        "an all-ones generation touches bits 81:66 and nothing else", 1,
         only_gen == want_gen);
 
   d.generation_i = 0;
   d.span_i = 0xFFFFFFFFu;
   d.eval();
   const __uint128_t only_span = read_packed(d);
-  const __uint128_t want_span = static_cast<__uint128_t>(0xFFFFFFFFu) << 52;
-  check(only_span == want_span, "an all-ones span touches bits 83:52 and nothing else", 1,
+  const __uint128_t want_span = static_cast<__uint128_t>(0xFFFFFFFFu) << 0;
+  check(only_span == want_span,
+        "an all-ones span touches bits 31:0 and nothing else", 1,
         only_span == want_span);
 
   std::printf("[fb_tuple] layout writer=%u slot=%u gen=%u mode=%u base=%u span=%u\n", d.writer_lo_o,

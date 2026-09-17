@@ -11565,7 +11565,7 @@ set(ZHAO_PACKET_H_BRIDGE_MANIFEST
 file(STRINGS "${ZHAO_PACKET_H_BRIDGE_MANIFEST}"
   ZHAO_PACKET_H_BRIDGE_RELATIVE_SOURCES)
 if(NOT ZHAO_PACKET_H_BRIDGE_RELATIVE_SOURCES STREQUAL
-   "tests/mutants/zhao_video_ready_bridge_v2_mutants.sv;fpga/rtl/generated/zhao_abi_pkg.sv;fpga/rtl/common/zhao_pkg.sv;fpga/rtl/video/zhao_video_ready_bridge_v2.sv;tests/video/tb_video_ready_bridge_v2.sv")
+   "tests/mutants/zhao_video_ready_bridge_v2_mutants.sv;fpga/rtl/generated/zhao_abi_pkg.sv;fpga/rtl/common/zhao_pkg.sv;fpga/rtl/video/zhao_fb_tuple_pkg.sv;fpga/rtl/video/zhao_video_ready_bridge_v2.sv;tests/video/tb_video_ready_bridge_v2.sv")
   message(FATAL_ERROR "Packet-H video bridge source manifest is not exact and ordered")
 endif()
 set(ZHAO_PACKET_H_BRIDGE_SOURCES)

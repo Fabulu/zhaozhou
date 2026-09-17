@@ -1,5 +1,6 @@
 tests/mutants/zhao_video_ready_bridge_v2_mutants.sv
 fpga/rtl/generated/zhao_abi_pkg.sv
 fpga/rtl/common/zhao_pkg.sv
+fpga/rtl/video/zhao_fb_tuple_pkg.sv
 fpga/rtl/video/zhao_video_ready_bridge_v2.sv
 tests/video/tb_video_ready_bridge_v2.sv

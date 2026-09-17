@@ -12,8 +12,8 @@
 `default_nettype none
 
 `ifdef ZHAO_FB_TUPLE_MUTANT_SWAP_WRITER_SLOT
-  `define ZHAO_FB_WRITER_LO_SEL 1
-  `define ZHAO_FB_SLOT_LO_SEL 0
+  `define ZHAO_FB_WRITER_LO_SEL 82
+  `define ZHAO_FB_SLOT_LO_SEL 83
 `endif
 
 `default_nettype wire
