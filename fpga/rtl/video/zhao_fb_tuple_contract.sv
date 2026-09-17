@@ -3,6 +3,25 @@
 // Its own file because Verilator's DECLFILENAME is right: a module that does
 // not share its file's name is one a reader cannot find. It is a module rather
 // than prose so that a wrong width is a COMPILE failure and not a test failure.
+//
+// DO NOT PUT THIS IN THE PER-BLOCK MAP LANE. It was tried on 2026-09-17 and
+// came back `failed:analysis` with
+//
+//   Error (12061): Can't synthesize current design -- Top partition does not
+//                  contain any logic
+//
+// which is correct and is not a defect: a per-block map characterizes area, DSP
+// and RAM inference, and a module with no circuit in it has none of those. That
+// is a measurement which does not exist, not one that came out badly, and the
+// row was removed from reports/synthesis/zhao_block_map.json because left in
+// place it reads as "this block is broken".
+//
+// The question a map WOULD have answered -- does Quartus 17.0.2's parser accept
+// this, given that a clean Verilator lint settles one tool's opinion and nothing
+// else -- was answered instead by mapping it inside a wrapper that does contain
+// logic: Analysis & Synthesis successful, 0 errors. So the `initial begin`/
+// `$fatal` form, `int unsigned` inside it, and the `+:` part-selects are all
+// accepted.
 `default_nettype none
 
 // THE TILING CHECK, and why it is a module rather than prose. The fields must

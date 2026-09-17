@@ -44,7 +44,24 @@ stop the renderer. 43 checks. It is the prerequisite, not the packet.
 
 ---
 
-## 2. The eighty-four-bit tuple nobody has defined
+## 2. The eighty-four-bit tuple nobody has defined — CLOSED, same day
+
+> **Update, later on 2026-09-17.** Done. `fpga/rtl/video/zhao_fb_tuple_pkg.sv`
+> defines the layout once, with pack and six accessors;
+> `zhao_fb_tuple_contract.sv` checks at elaboration that the fields tile the 84
+> bits with no hole and no overlap; and `fb_tuple_directed.cpp` checks the bit
+> positions against literals written longhand, because a round trip through
+> pack and unpack is structurally blind here — both read the same constants, so
+> they agree even when a constant is wrong.
+>
+> The committed mutant swaps the writer and slot bits: it tiles perfectly, so
+> the elaboration check passes, and it round-trips perfectly, so only the
+> literal sees it. **It reported MISSED on its first run** — the sample record
+> had `writer = 1` and `slot = 1`, and swapping two identical bits produces an
+> identical tuple. The stimulus could not reach the fault.
+>
+> The rest of this section is left as written, because the reasoning is why the
+> package exists.
 
 **The sharpest finding here, and it is a hazard rather than a task.**
 
