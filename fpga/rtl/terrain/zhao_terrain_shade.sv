@@ -50,7 +50,7 @@
 //                block reproduces it exactly there too.
 //
 // ---------------------------------------------------------------------------
-// THE ARITHMETIC SHAPE: 0 DSP, 1 M10K, ~147 clocks per triangle
+// THE ARITHMETIC SHAPE: 0 DSP, 2 M10K, ~147 clocks per triangle
 // ---------------------------------------------------------------------------
 // The demand is 2,000 terrain triangles per frame against a 1,666,666-clock
 // compute frame (design/budgets/workloads.yml; zhao_terrain_normals' own
@@ -60,7 +60,10 @@
 // This block spends the abundant resource instead:
 //
 //   * ALL six 32x32 products (three squares for |n|^2, three sun products
-//     for ndot) come from ONE quarter-square table in ONE M10K:
+//     for ndot) come from ONE quarter-square table -- which Quartus
+//     INSTANTIATES TWICE, once per read port, so it costs two M10K and 16,384
+//     bits rather than the one this header used to claim. Measured 2026-09-17;
+//     see zhao_qsq_bytemul.sv's header for why and for what it does not imply:
 //         Q[s] = floor(s*s/4),  s in [0, 511],  16 bits
 //         a*b  = Q[a+b] - Q[|a-b|]        (exact for all bytes a, b)
 //     The identity is exact because (a+b) and (a-b) share parity: both even

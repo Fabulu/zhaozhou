@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "f833e324719b8235c7c18d698d5cfc592b83a985",
+    "newestRunCommit":  "bd08a637e1165ef7fd94b41fdc96a736e9267b7b",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -318,7 +318,6 @@
                        "errors":  0,
                        "critical":  1
                    },
-                   
                    {
                        "module":  "zhao_field_alu",
                        "status":  "ok",
@@ -3409,6 +3408,49 @@
                                                 "Fixed Point Unsigned Multiplier":  13,
                                                 "Fixed Point Mixed Sign Multiplier":  22
                                             },
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
+                       "module":  "zhao_terrain_shade",
+                       "status":  "ok",
+                       "sourceCommit":  "bd08a637e1165ef7fd94b41fdc96a736e9267b7b",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "ff9b6f02d9294dbe",
+                       "sourceFileCount":  269,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "seconds":  13.2,
+                       "dspBlocks":  0,
+                       "registers":  911,
+                       "blockMemoryBits":  16384,
+                       "virtualPins":  394,
+                       "pins":  0,
+                       "estimatedAlms":  1061,
+                       "combAluts":  1475,
+                       "mlabMemoryBits":  0,
+                       "inferredMemories":  [
+                                                {
+                                                    "name":  "zhao_qsq_bytemul:u_qsq|altsyncram:qmem_rtl_0|altsyncram_c3q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  512,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_qsq_bytemul:u_qsq|altsyncram:qmem_rtl_1|altsyncram_c3q1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  512,
+                                                    "width":  16,
+                                                    "autoShift":  false
+                                                }
+                                            ],
+                       "inferredMemoryCount":  2,
+                       "inferredDesignMemoryCount":  2,
                        "ramConversionWarnings":  0,
                        "errors":  0,
                        "critical":  1

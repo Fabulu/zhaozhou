@@ -1,4 +1,25 @@
-// zhao_qsq_bytemul.sv -- an exact 8x8 unsigned multiply in ONE M10K and no DSP.
+// zhao_qsq_bytemul.sv -- an exact 8x8 unsigned multiply in M10K and no DSP.
+//
+// MEASURED 2026-09-17, and it corrects this header's first line. It used to say
+// "in ONE M10K". Quartus 17.0.2 infers **TWO** 512x16 simple-dual-port RAMs from
+// this block -- 16,384 bits, not 8,192 -- and the reason is structural rather
+// than arithmetic: the two reads `Q[a+b]` and `Q[|a-b|]` happen in the same
+// cycle at different addresses, in separate `always_ff` blocks, so the table is
+// duplicated to give each read a port.
+//
+// The old claim was a SIZE claim and as a size claim it is still true: 512 x 16
+// is 8,192 bits and fits inside one M10K's 10,240. What it got wrong is the
+// BLOCK count, which is what a budget is written against. Measured whole:
+// zhao_terrain_shade, this block's first client, maps to 0 DSP, 16,384 memory
+// bits, 2 inferred memories, ~1,061 estimated ALM.
+//
+// THE EXCHANGE RATE THIS SETS, which is the number that matters for the owner
+// direction below: one quarter-square site costs TWO M10K, not one. Against 464
+// allocated and 94 used that is still cheap -- room for well over a hundred more
+// sites -- so this is recorded rather than optimised away. It is very likely
+// reducible to one block by restructuring both reads into a true-dual-port
+// idiom, and that is a HYPOTHESIS, untested here; nobody should quote it as a
+// saving until a map row shows it.
 //
 // R1's "reusable quarter-square primitive", and it is an EXTRACTION, not a new
 // arithmetic. The identity, the table, the cold fill and the exactness proof
@@ -43,10 +64,12 @@
 // fill-at-cold). `table_ready_o` is low until the last word lands and a client
 // must not issue before it rises.
 //
-// SIZE. 512 words x 16 bits = 8,192 bits, one M10K of the 553 on the device.
-// Q[510] = 65,025 and the largest product 255*255 = 65,025, so sixteen bits is
-// exact at both ends and seventeen would be waste; the elaboration check below
-// asserts it rather than trusting this sentence.
+// SIZE. 512 words x 16 bits = 8,192 bits, which fits one M10K of the 553 on the
+// device -- but see the header: it is INSTANTIATED TWICE, once per read port, so
+// the block costs two M10K and 16,384 bits. Q[510] = 65,025 and the largest
+// product 255*255 = 65,025, so sixteen bits is exact at both ends and seventeen
+// would be waste; the elaboration check below asserts it rather than trusting
+// this sentence.
 //
 // `en_i` IS NOT OPTIONAL FOR A CLIENT THAT STALLS, and the reason is in
 // CLAUDE.md as its own chapter. A metadata bank in this repository registered
