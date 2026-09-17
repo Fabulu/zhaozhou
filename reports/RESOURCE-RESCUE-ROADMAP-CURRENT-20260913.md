@@ -654,6 +654,72 @@ the past, and the scoreboard should say so per row rather than only in prose.
 
 ### The work list the direction implies — blocks that spend ALMs and no memory
 
+> ## 2026-09-18 — THE COMPOSED SHELL ANSWERS THE DIRECTION, AND THE ANSWER IS ONE BLOCK
+>
+> The first composed measurement of `zhao_shell_top_v2` (97 sources, virtual
+> pins, clean tree at `3e41ba61`) **did not fit the device**, and Analysis &
+> Synthesis says by how much:
+>
+>     Estimate of Logic utilization (ALMs needed)   62,534      device: 41,910
+>     Total registers                               80,173
+>     Total DSP Blocks                                  63      budget:     85
+>     Total block memory bits                      422,480      device: 5,662,720
+>
+> `quartus_fit` then failed, which is consistent with a design at 149% of the
+> device. The row is stamped `incomplete:failed:quartus_fit.exe` and carries NO
+> ALM or Fmax, because the fitter never produced any.
+>
+> **THE HIERARCHY NAMES ONE BLOCK.** The nodes nest, so read it as containment:
+>
+> | node | ALUT | registers |
+> |---|---:|---:|
+> | `zhao_shell_top_v2` | 65,696 | 80,173 |
+> | ` └ zhao_geom_bin_pipe_v2` | 54,301 | 68,753 |
+> | ` └ zhao_raster_tile_pipe_v2` | 52,910 | 66,687 |
+> | ` └ zhao_raster_texture_stage_v3` | 42,165 | 58,943 |
+> | ` └ zhao_texture_island_v3_top` | 42,075 | 58,705 |
+> | ` └ **zhao_texture_binding_resolver_v2**` | **28,957** | **39,449** |
+>
+> **One leaf is 44% of the composed shell's logic and 49% of its registers**, and
+> Quartus says why in its own words:
+>
+>     Info (276007): RAM logic "...page0_m" is uninferred due to asynchronous
+>     read logic   zhao_texture_binding_resolver_v2.sv Line: 259
+>     ...same for page1_m Line 260, and uvw_m in zhao_texture_island_v3_top Line 916
+>
+> The two binding page banks are `binding_row_t page0_m [0:255]` and `page1_m`,
+> and `binding_row_t` is exactly 75 bits (valid + 8 + 2 + 32 + 32). So
+> **2 x 256 x 75 = 38,400 bits of page table are sitting in flip-flops**, plus
+> 512 valid bits — 38,912 against a measured 39,449 registers. The page banks
+> ARE the block's register count; the remaining 537 is its FSM and CRC state.
+>
+> **THIS IS THE OWNER'S DIRECTION, EXACTLY.** *"We have lots of M10K memory,
+> ALMs are over budget — what you can, you need to solve with memory."* 422 Kbit
+> of a 5.66 Mbit device is in use. Moving 38 Kbit of page table out of fabric is
+> the single largest lever in the machine and it is not an architecture change.
+>
+> **WHY THE EARLIER SWEEP MISSED IT, which matters more than the number.** On
+> 2026-09-16 `check_array_storage.py` concluded *"no block with a current fit
+> row holds 8 Kbit or more of declared array in flip-flops"*, and the work was
+> redirected to converting computation to lookup on that basis. The conclusion
+> was true as stated and misleading as used: **`zhao_texture_binding_resolver_v2`
+> had no current fit row**, so the qualifier excluded the one block that breaks
+> the rule by a factor of five. A filter keyed on "has a fit row" hides exactly
+> the blocks nobody has measured, which are the blocks most likely to be wrong.
+>
+> **NOT YET ESTABLISHED, and it decides the size of the fix.** Each bank is read
+> at THREE distinct addresses in one clock — two CRC-walk reads
+> (`crc_selector_q`, `crc_next_selector_c`) and the data-plane read
+> (`req_binding_selector_i`) — and an M10K offers one read port. The measured
+> exchange rate elsewhere is two M10K per extra read (commit `dd5ab471`), so a
+> naive port-per-reader split is roughly 6 copies x 19,200 bits ≈ 12 M10K
+> against 553 available. Whether the CRC walk can share a port with the data
+> plane, and whether the reads can be made to look like a simple dual-port
+> idiom, is the actual engineering question and it has not been answered here.
+>
+> `zhao_texture_binding_resolver_v2.sv` is **not** in Packet D's or Packet E's
+> `PROTECTED_HASHES`, so this is editable work rather than an owner decision.
+
 Generated 2026-09-16 from `reports/synthesis/zhao_block_fit.json`, unlabelled
 fitted rows only. **51 fitted blocks report zero M10K**, and they carry
 39,121 ALM between them.
