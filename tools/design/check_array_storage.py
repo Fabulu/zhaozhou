@@ -103,6 +103,48 @@ RTL_ROOT = os.path.join(REPO, "fpga", "rtl")
 RESULTS = os.path.join(REPO, "reports", "synthesis", "zhao_block_fit.json")
 
 # `logic [15:0] name [A][B];` / `logic [255:0] name [N];` / `logic name [0:3];`
+# ARRAYS OF A USER-DEFINED TYPE, which the pattern below cannot see.
+#
+# `ARRAY_RE` requires `logic|reg|bit`, so `binding_row_t page0_m [0:255];` did
+# not match -- and because it did not match, it was not counted as SKIPPED
+# either. An invisible declaration is worse than an unresolvable one: the skip
+# counter is this file's own tripwire, and a declaration that never reaches it
+# is a gap nothing reports.
+#
+# It hid the largest flip-flop array in the machine. The first composed fit of
+# `zhao_shell_top_v2` put `zhao_texture_binding_resolver_v2` at 28,957 ALUT and
+# 39,449 registers -- 44% of the whole composition's logic -- and its two
+# 256-entry `binding_row_t` banks are 38,400 of those bits, held in fabric
+# because Quartus could not infer them. This tool said nothing about that block
+# at all, which is the shape its own header warns about two comments down.
+#
+# The type must be resolvable from a `typedef ... packed { } NAME;` in the SAME
+# FILE. Anything else is SKIPPED, never guessed -- the rule the rest of the
+# file already keeps.
+TYPED_ARRAY_RE = re.compile(
+    r"^\s*(?:var\s+)?(\w+_t)\s+"                   # a *_t type name
+    r"(\w+)\s*"                                     # name
+    r"((?:\[[^\];]*\]\s*)+);",                      # one or more unpacked dims
+    re.M,
+)
+
+# `typedef struct packed { ... } NAME_t;` and `typedef logic [..] NAME_t;`.
+TYPEDEF_STRUCT_RE = re.compile(
+    r"typedef\s+(?:struct|union)\s+packed\s*(?:signed\s*)?\{(.*?)\}\s*(\w+_t)\s*;",
+    re.S,
+)
+TYPEDEF_SCALAR_RE = re.compile(
+    r"typedef\s+(?:logic|bit|reg)\s*(?:signed\s*)?(\[[^\];]*\])?\s*(\w+_t)\s*;",
+)
+# One member of a packed struct: `logic [a:b] x, y;` or `logic x;` or a nested
+# `some_t x;`.
+MEMBER_RE = re.compile(
+    r"^\s*(?:(logic|bit|reg)\s*(?:signed\s*)?(\[[^\];]*\])?|(\w+_t))\s+"
+    r"([\w\s,]+);",
+    re.M,
+)
+
+
 ARRAY_RE = re.compile(
     r"^\s*(?:var\s+)?(?:logic|reg|bit)\s*"
     r"(?:signed\s*)?(\[[^\];]*\]\s*)?"            # packed width, optional
@@ -471,10 +513,46 @@ def resolve(tok, params):
         return None
 
 
+def file_typedefs(s, params):
+    """Width in bits of every `*_t` this file declares, where resolvable.
+
+    Same-file only, and skipped rather than guessed when a member's width does
+    not reduce -- the rule the rest of this file already keeps. Nested `*_t`
+    members resolve if the nested type was declared earlier in the file, which
+    is the ordinary SystemVerilog case; a forward reference is skipped.
+    """
+    widths = {}
+    for m in TYPEDEF_SCALAR_RE.finditer(s):
+        dim, name = m.group(1), m.group(2)
+        w = 1 if not dim else dim_size(dim, params)
+        if w is not None:
+            widths[name] = w
+    for m in TYPEDEF_STRUCT_RE.finditer(s):
+        body, name = m.group(1), m.group(2)
+        total, ok = 0, True
+        for mem in MEMBER_RE.finditer(body):
+            base, dim, typed, names = mem.groups()
+            count = len([x for x in names.split(",") if x.strip()])
+            if typed:
+                w = widths.get(typed)
+            elif dim:
+                w = dim_size(dim, params)
+            else:
+                w = 1
+            if w is None or count == 0:
+                ok = False
+                break
+            total += w * count
+        if ok and total:
+            widths[name] = total
+    return widths
+
+
 def bits_of(path):
     """Total declared bits across every resolvable unpacked array in the file."""
     s = read(path)
     params = file_params(path, s)
+    typedefs = file_typedefs(s, params)
 
     total, biggest, skipped = 0, [], 0
     for m in ARRAY_RE.finditer(s):
@@ -499,11 +577,70 @@ def bits_of(path):
         b = w * n
         total += b
         biggest.append((b, name, "%s%s" % (packed or "", unpacked.strip())))
+
+    # The same pass for arrays of a user-defined type. A `*_t` this file does
+    # not declare is SKIPPED and counted, so it reaches the tripwire instead of
+    # vanishing the way these declarations used to.
+    for m in TYPED_ARRAY_RE.finditer(s):
+        tname, name, unpacked = m.group(1), m.group(2), m.group(3)
+        w = typedefs.get(tname)
+        if w is None:
+            skipped += 1
+            continue
+        n, ok = 1, True
+        for d in re.findall(r"\[[^\]]*\]", unpacked):
+            v = dim_size(d, params)
+            if v is None:
+                ok = False
+                break
+            n *= v
+        if not ok:
+            skipped += 1
+            continue
+        b = w * n
+        total += b
+        biggest.append((b, name, "%s %s" % (tname, unpacked.strip())))
+
     biggest.sort(reverse=True)
     return total, biggest[:3], skipped
 
 
+def _typed_array_self_check() -> None:
+    """An array of a `*_t` must be SEEN, and its width summed from the typedef.
+
+    This capability was absent until 2026-09-18, and its absence was silent:
+    `binding_row_t page0_m [0:255];` did not match `ARRAY_RE`, so it was
+    neither reported NOR counted as skipped. The largest flip-flop array in the
+    machine -- 38,400 bits, 44% of the composed shell's logic -- produced no
+    line of output at all, which is worse than an unresolvable one: the skip
+    counter is this file's own tripwire and that declaration never reached it.
+
+    So the check is that the exact declaration form resolves, not that some
+    typedef somewhere works.
+    """
+    src = """
+      typedef struct packed {
+        logic        valid;
+        logic [7:0]  palette_generation;
+        logic [1:0]  palette_slot;
+        logic [31:0] mode;
+        logic [31:0] base;
+      } binding_row_t;
+      binding_row_t page0_m [0:255];
+      binding_row_t page1_m [0:255];
+    """
+    widths = file_typedefs(src, {})
+    assert widths.get("binding_row_t") == 75, widths
+
+    seen = {m.group(2): m.group(1) for m in TYPED_ARRAY_RE.finditer(src)}
+    assert seen == {"page0_m": "binding_row_t", "page1_m": "binding_row_t"}, seen
+
+    # A type this file does not declare must SKIP, never guess.
+    assert file_typedefs("some_other_t x;", {}).get("some_other_t") is None
+
+
 _self_check()
+_typed_array_self_check()
 
 
 def main() -> int:
