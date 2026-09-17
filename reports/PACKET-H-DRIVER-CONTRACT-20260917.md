@@ -175,6 +175,40 @@ wired to something by accident is worse.
 
 ---
 
+## 3.7 Two things looked up rather than assumed
+
+*Added later on 2026-09-17, while deciding section 3.1.*
+
+**Nothing in the tree drives the V3 programming channel for real.** Every
+instantiation of `cfg_valid_i`, `pal_load_valid_i` and `pg_valid_i` outside the
+V2 blocks themselves is a harness: `zhao_prod_top.sv` drives them from generated
+stimulus slices (`u61_src[133 +: 1]` and friends), and
+`zhao_raster_texture_v3_fit_top.sv` fabricates a palette/config sequence to give
+the fitter something to measure. So section 3.1 is not "find where this comes
+from" — there is nowhere. It is a new external interface, and because it is the
+shell's *boundary* it is worth one explicit decision rather than twenty
+implicit ones.
+
+**The fault discipline, by contrast, has a worked reference.**
+`zhao_raster_texture_v3_fit_top.sv:286-404` implements exactly the law Packet
+H's gate demands, compactly enough to read in one sitting:
+
+* a recoverable frame fault is captured into a HELD clear request before it can
+  affect job admission, and the handshake has priority over an old fault level
+  sampled on the same edge — the same-edge rule the gate spells out;
+* the **lifetime structural fault is deliberately absent from that request**,
+  with the reason stated: only reset recovers that condition;
+* the cause vector distinguishes them. Bit 1 is the recoverable frame fault and
+  is **not** in the blocking set, because the clear handshake is what resolves
+  it; bits 0 (setup/programming rejection), 2 (fragment error) and 3 (raster
+  abort) are.
+
+That is the shape section 3.4's four `fault_*` wires need, and it means the
+largest clause of the gate is transcription plus judgement rather than
+invention. Worth stating that bit 0 looked dead on a first read — assigned only
+in reset in the lines that were on screen — and is not: it is set three times in
+the setup state machine forty lines up.
+
 ## 4. What this does not say
 
 It does not say the shell is nearly written. Sections 3.1 through 3.4 are
