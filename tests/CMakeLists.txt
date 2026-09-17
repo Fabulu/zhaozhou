@@ -5938,9 +5938,43 @@ set_tests_properties(lint_terrain_normals PROPERTIES
 # RELEASE are behaviour with their own gate clauses and none is exercised here.
 # What it establishes is that the channels carry one clean frame, which is what
 # makes composing them into a 2,000-line top safe rather than speculative.
+# THE BIN PIPE CLOSURE COMES FROM PACKET D'S OWN MANIFEST, not retyped here.
+# zhao_geom_bin_pipe_v2 instantiates zhao_geom_binner_v2 and
+# zhao_raster_tile_pipe_v2, which drag in the whole V3 texture island -- 54
+# files. A second copy of that list would go stale silently, which is this
+# repository's most-repeated lesson. Read from the same file Packet D reads.
+#
+# THREE ENTRIES ARE DROPPED ON PURPOSE, and one of them is a trap worth
+# naming. `tb_geom_bin_pipe_v2.sv` is Packet D's own top. The two mutant shims
+# are selector files -- and `zhao_raster_tile_pipe_v2_mutants.sv` **defines**
+# ZHAO_PACKET_D_TEST_HOOKS, which appends three ports to
+# zhao_geom_bin_pipe_v2. So a mutant shim sitting in a shared source list
+# silently changes a production module's INTERFACE: with it in, this harness
+# fails to elaborate with PINMISSING on ports no shipped build has; with it
+# out, naming those ports is PINNOTFOUND. The difference between 165 and 168
+# ports is entirely that one line.
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/geometry/geom_bin_pipe_v2.sources.txt"
+  ZHAO_LEASE_PATH_PD_RELATIVE)
+set(ZHAO_LEASE_PATH_PD_SOURCES)
+foreach(relative_source IN LISTS ZHAO_LEASE_PATH_PD_RELATIVE)
+  if(NOT relative_source MATCHES "^tests/")
+    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${relative_source}")
+      message(FATAL_ERROR "lease-path closure: missing ${relative_source}")
+    endif()
+    list(APPEND ZHAO_LEASE_PATH_PD_SOURCES
+      "${CMAKE_SOURCE_DIR}/${relative_source}")
+  endif()
+endforeach()
+list(LENGTH ZHAO_LEASE_PATH_PD_SOURCES ZHAO_LEASE_PATH_PD_COUNT)
+if(ZHAO_LEASE_PATH_PD_COUNT LESS 50)
+  message(FATAL_ERROR
+    "lease-path closure has only ${ZHAO_LEASE_PATH_PD_COUNT} files; expected 50+")
+endif()
+
 set(ZHAO_SHELL_V2_LEASE_PATH_SOURCES
-  ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell/zhao_shell_v2_lease_path.vlt
   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+  ${ZHAO_LEASE_PATH_PD_SOURCES}
   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_slotmgr_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_renderer_lease_v2.sv

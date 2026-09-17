@@ -55,8 +55,13 @@ module zhao_shell_v2_lease_path (
     input  logic [1:0]  frame_req_mode_i,
 
     // V3's recoverable frame-clear handshake, normally to the island.
+    // THE CLEAR HANDSHAKE IS NO LONGER DRIVEN BY THE TEST. Its ready now
+    // comes from `zhao_geom_bin_pipe_v2`, which accepts a clear only once
+    // the binner and tile path are quiet -- `binner_initialized_o &&
+    // !frame_inflight_q && !frame_begin_i`. That gating IS the Packet-H
+    // gate's old-work-drain ordering clause, and with a test driving ready
+    // high it was being asserted rather than exercised.
     output logic        frame_fault_clear_valid_o,
-    input  logic        frame_fault_clear_ready_i,
 
     // The admitted frame.
     output logic        frame_valid_o,
@@ -186,6 +191,25 @@ module zhao_shell_v2_lease_path (
     output logic        fb_lease_slot_o,
     output logic [15:0] fb_lease_generation_o,
 
+    // ---- THE V3 BIN PIPE -----------------------------------------------
+    //
+    // Composed for ONE reason: to own the frame-clear handshake. Everything
+    // else about it is held quiescent and said so at the instantiation --
+    // this harness is about the protocol, not about rasterisation, and a
+    // triangle stream would test the binner and the ordering at once.
+    input  logic        bin_frame_end_i,
+    input  logic [5:0]  bin_grid_w_i,
+    input  logic [5:0]  bin_grid_h_i,
+    output logic        bin_quiet_o,
+    output logic        bin_initialized_o,
+    output logic        bin_drain_busy_o,
+    output logic        bin_drain_done_o,
+    output logic        bin_frame_fault_o,
+    output logic        bin_lifetime_fault_o,
+    output logic        bin_frame_begin_o,
+    output logic        clear_valid_o,
+    output logic        clear_ready_o,
+
     output logic        blit_idle_o,
     output logic [31:0] blit_leases_acquired_o,
     output logic [31:0] blit_leases_refused_o,
@@ -199,6 +223,18 @@ module zhao_shell_v2_lease_path (
 
   logic        rsp_valid, rsp_ready, rsp_writer, rsp_granted, rsp_slot;
   logic        lease_rsp_ready;
+  logic        lease_clear_valid, lease_clear_ready;
+
+  // The admitted frame becomes the bin pipe's frame_begin PULSE. This is the
+  // shell's law in miniature: the renderer's work is withheld until the
+  // lease has been granted AND the clear accepted, so `frame_begin_i` can
+  // only ever be the fire of an admitted frame.
+  logic        bin_frame_begin_w;
+  assign bin_frame_begin_w = frame_valid_o && frame_ready_i;
+  assign bin_frame_begin_o = bin_frame_begin_w;
+  assign clear_valid_o     = lease_clear_valid;
+  assign clear_ready_o     = lease_clear_ready;
+  assign frame_fault_clear_valid_o = lease_clear_valid;
   logic        blit_rsp_ready;
   logic        blit_mgr_req_valid, blit_mgr_req_slot;
   logic [1:0]  blit_mgr_req_mode;
@@ -235,7 +271,194 @@ module zhao_shell_v2_lease_path (
 
 
 
-  // The writer-0 half of the protocol. Its ports face two ways: the manager
+  // THE BIN PIPE, quiescent except for the clear handshake. Every one of its
+// 165 ports is named: an input nobody decided about is a tie-off that looks
+// deliberate, and an omitted port map entry and an intentional one are
+// indistinguishable afterwards. Quiescent means ZERO for data and ONE for a
+// downstream ready -- a ready held low is a stall, and a stall here would
+// look exactly like the ordering law under test.
+//
+// 165 AND NOT 168. The last three ports sit behind
+// `ifdef ZHAO_PACKET_D_TEST_HOOKS, so a default build does not have them and
+// naming them here is a PINNOTFOUND elaboration error. That error is how the
+// guard was found -- after a port-counting script had already "corrected"
+// 165 to 168 and asserted 168 in its own self-check.
+//
+// The unread outputs are written `.name()` rather than omitted, and
+// PINCONNECTEMPTY is waived for exactly that span. The warning is right to
+// notice them; what it pushes towards -- leaving them out -- makes a
+// deliberate decision and an oversight look identical.
+  /* verilator lint_off PINCONNECTEMPTY */
+  zhao_geom_bin_pipe_v2 u_bin (
+      .clk                          (clk),
+      .rst_n                        (rst_n),
+      .frame_begin_i                (bin_frame_begin_w),
+      .frame_end_i                  (bin_frame_end_i),
+      .grid_w_i                     (bin_grid_w_i),
+      .grid_h_i                     (bin_grid_h_i),
+      .frame_clear_word_i           (64'd0),
+      .tri_valid_i                  (1'b0),
+      .tri_ready_o                  (),
+      .tri_kx0_i                    (23'd0),
+      .tri_ky0_i                    (23'd0),
+      .tri_kc0_i                    (48'd0),
+      .tri_kx1_i                    (23'd0),
+      .tri_ky1_i                    (23'd0),
+      .tri_kc1_i                    (48'd0),
+      .tri_kx2_i                    (23'd0),
+      .tri_ky2_i                    (23'd0),
+      .tri_kc2_i                    (48'd0),
+      .tri_tl_i                     (3'd0),
+      .tri_ax_i                     (21'd0),
+      .tri_ay_i                     (21'd0),
+      .tri_bx_i                     (21'd0),
+      .tri_by_i                     (21'd0),
+      .tri_cx_i                     (21'd0),
+      .tri_cy_i                     (21'd0),
+      .tri_min_x_i                  (12'd0),
+      .tri_max_x_i                  (12'd0),
+      .tri_min_y_i                  (12'd0),
+      .tri_max_y_i                  (12'd0),
+      .tri_src_id_i                 (16'd0),
+      .tri_area2_i                  (47'd0),
+      .tri_invw_plane_i             (240'd0),
+      .tri_u_over_w_plane_i         (240'd0),
+      .tri_v_over_w_plane_i         (240'd0),
+      .tri_flat_request_i           (298'd0),
+      .tri_continuation_tail_i      (48'd0),
+      .tri_fragment_state_i         (32'd0),
+      .tok_req_o                    (),
+      .tok_grant_i                  (1'b1),
+      .frame_fault_clear_valid_i    (lease_clear_valid),
+      .frame_fault_clear_ready_o    (lease_clear_ready),
+      .frame_fault_o                (bin_frame_fault_o),
+      .lifetime_structural_fault_o  (bin_lifetime_fault_o),
+      .cfg_valid_i                  (1'b0),
+      .cfg_ready_o                  (),
+      .cfg_op_i                     (2'd0),
+      .cfg_page_generation_i        (8'd0),
+      .cfg_selector_i               (8'd0),
+      .cfg_row_i                    (75'd0),
+      .cfg_crc32_i                  (32'd0),
+      .cfg_rsp_valid_o              (),
+      .cfg_rsp_ready_i              (1'b1),
+      .cfg_rsp_op_o                 (),
+      .cfg_rsp_status_o             (),
+      .cfg_rsp_page_generation_o    (),
+      .active_page_generation_o     (),
+      .fill_req_valid_o             (),
+      .fill_req_ready_i             (1'b1),
+      .fill_req_addr_o              (),
+      .fill_data_valid_i            (1'b0),
+      .fill_data_i                  (16'd0),
+      .fill_refused_i               (1'b0),
+      .pal_load_valid_i             (1'b0),
+      .pal_load_ready_o             (),
+      .pal_load_op_i                (2'd0),
+      .pal_load_slot_i              (2'd0),
+      .pal_load_gen_i               (8'd0),
+      .pal_load_idx_i               (8'd0),
+      .pal_load_rgb565_i            (16'd0),
+      .pal_load_crc_ok_i            (1'b0),
+      .sheet_req_valid_o            (),
+      .sheet_req_ready_i            (1'b1),
+      .sheet_req_op_o               (),
+      .sheet_req_handle_o           (),
+      .sheet_req_texel_o            (),
+      .sheet_req_src_id_o           (),
+      .pg_valid_i                   (1'b0),
+      .pg_ready_o                   (),
+      .pg_op_i                      (2'd0),
+      .pg_status_i                  (2'd0),
+      .pg_tag_i                     (8'd0),
+      .pg_strength_i                (8'd0),
+      .pg_src_id_i                  (16'd0),
+      .fb_valid_o                   (),
+      .fb_ready_i                   (1'b1),
+      .fb_rgb565_o                  (),
+      .fb_tag_o                     (),
+      .fb_addr_o                    (),
+      .fb_x_o                       (),
+      .fb_y_o                       (),
+      .fb_last_o                    (),
+      .fb_src_id_o                  (),
+      .tile_crc_o                   (),
+      .tile_crc_index_o             (),
+      .tile_done_o                  (),
+      .tile_cov_count_o             (),
+      .tile_degenerate_o            (),
+      .drain_busy_o                 (bin_drain_busy_o),
+      .drain_done_o                 (bin_drain_done_o),
+      .binner_initialized_o         (bin_initialized_o),
+      .binner_tile_references_o     (),
+      .binner_max_tile_list_depth_o (),
+      .binner_triangles_culled_o    (),
+      .binner_overflow_o            (),
+      .binner_arena_full_o          (),
+      .binner_arena_used_o          (),
+      .jobs_taken_o                 (),
+      .job_stall_clocks_o           (),
+      .quiet_o                      (bin_quiet_o),
+      .raster_abort_o               (),
+      .local_attribute_abort_o      (),
+      .local_fault_pulse_o          (),
+      .local_fault_count_o          (),
+      .coordinate_fault_count_o     (),
+      .range_fault_count_o          (),
+      .aux_profile_fault_count_o    (),
+      .candidate_cancel_count_o     (),
+      .local_drop_count_o           (),
+      .raster_jobs_started_o        (),
+      .raster_jobs_sunk_o           (),
+      .sequence_abort_o             (),
+      .sequence_mismatch_o          (),
+      .sequence_drop_count_o        (),
+      .admission_sequence_o         (),
+      .expected_sequence_o          (),
+      .returned_sequence_o          (),
+      .packet_c_cand_fire_o         (),
+      .packet_c_fragment_fire_o     (),
+      .packet_c_drop_fire_o         (),
+      .tilestore_references_o       (),
+      .resolved_tiles_o             (),
+      .early_z_rejects_o            (),
+      .early_z_covered_o            (),
+      .fragment_covered_o           (),
+      .blended_fragments_o          (),
+      .texture_fragments_o          (),
+      .texture_cache_hits_o         (),
+      .texture_cache_misses_o       (),
+      .texture_palette_lookups_o    (),
+      .texture_plan_accepted_o      (),
+      .texture_dispatch_accepted_o  (),
+      .texture_combine_refused_o    (),
+      .fragment_error_o             (),
+      .coverage_hold_valid_o        (),
+      .coverage_delivered_mask_o    (),
+      .start_delivered_mask_o       (),
+      .attribute_idle_o             (),
+      .earlyz_hold_valid_o          (),
+      .skid_level_o                 (),
+      .stage_candidate_valid_o      (),
+      .stage_candidate_data_o       (),
+      .stage_fragment_valid_o       (),
+      .stage_fragment_addr_o        (),
+      .stage_fragment_depth_o       (),
+      .stage_fragment_state_o       (),
+      .stage_fragment_src_id_o      (),
+      .stage_fragment_texel_rgb_o   (),
+      .stage_fragment_texel_a_o     (),
+      .stage_fragment_texel_idx_o   (),
+      .stage_fragment_status_o      (),
+      .texture_quiet_o              (),
+      .fragment_idle_o              (),
+      .front_bank_o                 (),
+      .bin_mask_o                   (),
+      .z_floor_o                    ()
+  );
+  /* verilator lint_on PINCONNECTEMPTY */
+
+// The writer-0 half of the protocol. Its ports face two ways: the manager
 // channel it contends on, and the V1 `fb_lease_*` record the retained
 // blitter latches on the edge it accepts a request.
 zhao_video_blit_lease_v2 u_blit_lease (
@@ -290,8 +513,8 @@ zhao_renderer_lease_v2 u_lease (
       .rsp_mode_i               (rsp_mode),
       .rsp_base_i               (rsp_base),
       .rsp_span_i               (rsp_span),
-      .frame_fault_clear_valid_o(frame_fault_clear_valid_o),
-      .frame_fault_clear_ready_i(frame_fault_clear_ready_i),
+      .frame_fault_clear_valid_o(lease_clear_valid),
+      .frame_fault_clear_ready_i(lease_clear_ready),
       .frame_valid_o            (frame_valid_o),
       .frame_ready_i            (frame_ready_i),
       .frame_writer_o           (frame_writer_o),

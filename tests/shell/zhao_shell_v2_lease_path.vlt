@@ -1,0 +1,52 @@
+// zhao_shell_v2_lease_path.vlt -- inherited-warning waivers, scoped BY FILE.
+//
+// The lease-path harness now composes `zhao_geom_bin_pipe_v2`, which drags in
+// the whole V3 texture closure. Linting that closure at `-Wall` produces 113
+// warnings -- 89 UNUSEDSIGNAL, 17 UNUSEDPARAM, 4 PINCONNECTEMPTY, and one each
+// of SYNCASYNCNET, UNDRIVEN and DECLFILENAME.
+//
+// NONE OF THEM ARE THIS HARNESS'S, and that was measured rather than assumed:
+// the identical set appears when `tests/geometry/tb_geom_bin_pipe_v2.sv` is
+// linted the same way, and nothing in the tree lints that closure at `-Wall`
+// today, so they have simply never been surfaced.
+//
+// WHY A .vlt AND NOT `-Wno-UNUSEDSIGNAL` ON THE COMMAND LINE. A blanket
+// suppression would also hide the next unused signal somebody leaves in the
+// HARNESS, which is the one file this test exists to keep clean. Waiving by
+// file keeps `-Wall` strict where it can be met and silent only where the
+// warnings were inherited. If the V3 closure is ever cleaned up, deleting lines
+// from here is how that progress becomes visible.
+//
+// This is a WAIVER, not a fix. The warnings are real and they belong to their
+// own packets.
+// A NOTE ON THE GLOBS. Verilator reports Windows paths with MIXED
+// separators -- `fpga/rtl/texture\zhao_texture_island_v3_top.sv` -- so a
+// pattern with a forward slash before the basename matches NOTHING, and a
+// waiver that matches nothing is perfectly silent about being useless. The
+// first version of this file had exactly that and the warnings all came
+// back. Separator-agnostic prefixes only.
+`verilator_config
+
+lint_off -rule UNUSEDSIGNAL    -file "*fpga/rtl/texture*"
+lint_off -rule UNUSEDSIGNAL    -file "*fpga/rtl/raster*"
+lint_off -rule UNUSEDSIGNAL    -file "*fpga/rtl/geometry*"
+lint_off -rule UNUSEDSIGNAL    -file "*fpga/rtl/common*"
+lint_off -rule UNUSEDSIGNAL    -file "*fpga/rtl/video*"
+
+lint_off -rule UNUSEDPARAM     -file "*fpga/rtl/texture*"
+lint_off -rule UNUSEDPARAM     -file "*fpga/rtl/raster*"
+lint_off -rule UNUSEDPARAM     -file "*fpga/rtl/geometry*"
+lint_off -rule UNUSEDPARAM     -file "*fpga/rtl/common*"
+
+lint_off -rule PINCONNECTEMPTY -file "*fpga/rtl/texture*"
+lint_off -rule UNDRIVEN        -file "*fpga/rtl/texture*"
+lint_off -rule DECLFILENAME    -file "*zhao_render_texture_pkg.sv"
+
+// The one warning Verilator attributes to the harness rather than the closure.
+// Its `rst_n` port is flopped asynchronously here and synchronously somewhere
+// inside the V3 closure, and the report lands on the port declaration. The
+// identical warning lands on `tb_geom_bin_pipe_v2.sv:11` for the same reason,
+// which is what says it is inherited: this harness's own always_ff blocks are
+// all async-reset, and the assertion block that used to read `rst_n`
+// synchronously was removed earlier for exactly this rule.
+lint_off -rule SYNCASYNCNET    -file "*zhao_shell_v2_lease_path.sv"

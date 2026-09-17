@@ -66,7 +66,9 @@ int main(int argc, char** argv) {
   dut.lease_open_i = 0;
   dut.frame_req_valid_i = 0;
   dut.frame_req_mode_i = 0;
-  dut.frame_fault_clear_ready_i = 0;
+  dut.bin_frame_end_i = 0;
+  dut.bin_grid_w_i = 2;
+  dut.bin_grid_h_i = 2;
   dut.frame_ready_i = 0;
   dut.term_valid_i = 0;
   dut.term_slot_i = 0;
@@ -109,11 +111,26 @@ int main(int argc, char** argv) {
 
   // ---- open the barrier and let the request through ------------------------
   dut.lease_open_i = 1;
-  dut.frame_fault_clear_ready_i = 1;  // V3 accepts the clear
-  dut.frame_ready_i = 1;              // the render path accepts the frame
-  dut.ready_ready_i = 1;              // the CDC accepts the publication
+  // The clear is no longer accepted by the test. `zhao_geom_bin_pipe_v2`
+  // accepts it, and only once the binner and tile path are quiet.
+  //
+  dut.frame_ready_i = 1;  // the render path accepts the frame
+  dut.ready_ready_i = 1;  // the CDC accepts the publication
 
-  const int to_lease = wait_for(dut, [&] { return dut.leases_granted_o != 0; });
+  // THE BINNER HAS A COLD INIT AND IT GATES THE FIRST FRAME. This is a real
+  // property of the composition, not a testbench detail: the bin pipe raises
+  // `frame_fault_clear_ready_o` only once `binner_initialized_o` is set, the
+  // lease will not admit a frame until that clear handshakes, so nothing
+  // renders until the binner has finished initialising. Measured here at a
+  // few hundred cycles. The old version of this test drove the clear ready
+  // itself and therefore could not see it at all.
+  const int to_init = wait_for(
+      dut, [&] { return dut.bin_initialized_o != 0; }, 4000);
+  check(to_init >= 0, "the binner finishes its cold init", 1, to_init >= 0);
+  std::printf("[shell_v2_lease_path] binner cold init: %d cycles\n", to_init);
+
+  const int to_lease = wait_for(
+      dut, [&] { return dut.leases_granted_o != 0; }, 4000);
   check(to_lease >= 0, "a lease is granted once the barrier opens", 1, to_lease >= 0);
   check(dut.requests_accepted_o == 1, "exactly ONE request was accepted", 1,
         dut.requests_accepted_o);
@@ -125,7 +142,8 @@ int main(int argc, char** argv) {
         dut.lease_writer_o);
 
   // ---- the frame is admitted ----------------------------------------------
-  const int to_frame = wait_for(dut, [&] { return dut.frame_valid_o != 0; });
+  const int to_frame = wait_for(
+      dut, [&] { return dut.frame_valid_o != 0; }, 4000);
   check(to_frame >= 0, "a frame is admitted", 1, to_frame >= 0);
   check(dut.frame_writer_o == 1, "the admitted frame is writer 1", 1, dut.frame_writer_o);
   check(dut.frame_slot_o == dut.lease_slot_o, "the admitted frame carries the live lease's slot",
@@ -212,6 +230,49 @@ int main(int argc, char** argv) {
   check(dut.publications_o == 1, "still exactly one publication after settling", 1,
         dut.publications_o);
   check(dut.contentions_o == 0, "no contention with a single requester", 0, dut.contentions_o);
+
+  // =======================================================================
+  // THE FRAME-CLEAR HANDSHAKE, DRIVEN BY ITS REAL CONSUMER
+  // =======================================================================
+  //
+  // Until now this test held `frame_fault_clear_ready_i` high and the clause
+  // was asserted rather than exercised. `zhao_geom_bin_pipe_v2` gates its
+  // ready on `binner_initialized_o && !frame_inflight_q && !frame_begin_i` --
+  // the Packet-H gate's old-work-drain ordering, in RTL -- so composing it
+  // is what turns the clause into a measurement.
+  //
+  // What the first frame above already proves, now that the ready is real:
+  // the lease requested a clear, the bin pipe accepted it only when quiet,
+  // and the frame followed. A frame was admitted, so all three happened.
+  check(dut.bin_initialized_o == 1, "the binner initialised", 1, dut.bin_initialized_o);
+  check(dut.bin_frame_fault_o == 0, "no frame fault on a clean frame", 0, dut.bin_frame_fault_o);
+  check(dut.bin_lifetime_fault_o == 0, "no lifetime structural fault", 0, dut.bin_lifetime_fault_o);
+
+  // AND THE ORDERING ITSELF. Hold a frame in flight and the clear must NOT
+  // be accepted: `frame_end_i` has not been seen, so old work has not
+  // drained. This is the half a test-driven ready could never see.
+  {
+    const bool clear_ready_while_inflight = dut.clear_ready_o;
+    check(clear_ready_while_inflight == 0, "the clear is refused while a frame is in flight", 0,
+          clear_ready_while_inflight);
+
+    // End the frame and let it drain. `frame_end_i` starts the drain; the
+    // bin pipe is not quiet until the tile path has emptied, and the clear
+    // ready follows that rather than the pulse.
+    dut.bin_frame_end_i = 1;
+    tick(dut);
+    dut.bin_frame_end_i = 0;
+
+    const int to_drain = wait_for(
+        dut, [&] { return dut.bin_drain_done_o != 0; }, 4000);
+    const int to_quiet = wait_for(
+        dut, [&] { return dut.clear_ready_o != 0; }, 4000);
+    check(to_quiet >= 0, "the clear is accepted once the frame has drained", 1, to_quiet >= 0);
+    std::printf(
+        "[shell_v2_lease_path] clear refused in flight; drain_done %d, clear ready %d "
+        "cycles later (busy=%u quiet=%u done=%u)\n",
+        to_drain, to_quiet, dut.bin_drain_busy_o, dut.bin_quiet_o, dut.bin_drain_done_o);
+  }
 
   // =======================================================================
   // THE SHARED RESPONSE CHANNEL, WITH BOTH WRITERS ASKING

@@ -63,8 +63,42 @@ def balanced(t, o):
     raise AssertionError('unbalanced')
 
 
+def strip_ifdefs(t):
+    """Drop `ifdef ... `endif regions -- ports that a default build does not have.
+
+    THE COUNT IS CONFIGURATION-DEPENDENT, and that is the actual answer rather
+    than a caveat on one. `zhao_geom_bin_pipe_v2` ends with
+
+        output logic [23:0] z_floor_o
+      `ifdef ZHAO_PACKET_D_TEST_HOOKS
+        , input logic [4:0] test_start_enable_i
+        ...
+      `endif
+
+    so it has 165 ports in a production build and 168 under the test hooks. A
+    text scraper that ignores the guard reports 168 unconditionally and is wrong
+    for the configuration that ships -- which is how this script came to assert
+    168 and to be corrected back. Only `ifdef is stripped: `ifndef guards are
+    the "define a default" idiom and their bodies ARE in a default build.
+    """
+    out, depth = [], 0
+    for line in t.split('\n'):
+        s = line.strip()
+        if s.startswith('`ifdef '):
+            depth += 1
+            continue
+        if s.startswith('`endif') and depth:
+            depth -= 1
+            continue
+        if s.startswith('`else') and depth:
+            continue
+        if depth == 0:
+            out.append(line)
+    return '\n'.join(out)
+
+
 def header(path, name):
-    t = io.open(path, encoding='utf-8', errors='replace').read()
+    t = strip_ifdefs(io.open(path, encoding='utf-8', errors='replace').read())
     # ANCHORED TO THE DECLARATION, not to the word. `\bmodule\s+\w+` matched the
     # phrase "module inputs," inside zhao_geom_bin_pipe.sv's header comment,
     # took the next '(' from a sentence, and returned prose as a port list.
@@ -94,13 +128,22 @@ def stem(p):
     return re.sub(r'_[io]$', '', p)
 
 
-# SELF-CHECKS, and these are the CORRECTED numbers. The roadmap records
-# 63 -> 165 and 22 -> 73 from a hand count; this script's first version asserted
-# 166 and PASSED, enshrining its own blind spot as a fact -- which is precisely
-# the failure a self-check exists to prevent, arriving inside the self-check.
-# See the note on PORT_RE. A parser that cannot reproduce these is broken, and
-# the way it breaks is by reporting less work than exists.
-for _m, _n in (('zhao_geom_bin_pipe', 63), ('zhao_geom_bin_pipe_v2', 168),
+# SELF-CHECKS, for a DEFAULT build -- which is the configuration that ships and
+# the only one a work list should be written against.
+#
+# This script got the bin-pipe number wrong three times before this, and the
+# third one is the one worth remembering: it read 166, was corrected to 168, and
+# **168 was also wrong**. 168 counts three ports that exist only under
+# `ZHAO_PACKET_D_TEST_HOOKS`. The roadmap's hand-recorded 165 was right the whole
+# time, and the "correction" replaced a right number with a conditional one --
+# then asserted it here, so the self-check certified the error. Twice now this
+# check has confirmed a reading rather than tested one, because it was written
+# from the same reading as the code.
+#
+# What actually caught it was a THIRD party with a different job: a generated
+# port map for a test harness, which failed to elaborate with PINNOTFOUND on the
+# three guarded ports. Independent evidence is evidence; a restatement is not.
+for _m, _n in (('zhao_geom_bin_pipe', 63), ('zhao_geom_bin_pipe_v2', 165),
                ('zhao_video_slotmgr', 22), ('zhao_video_slotmgr_v2', 74)):
     _got = len(ports(_m))
     assert _got == _n, 'port count for %s: expected %d, parsed %d' % (_m, _n, _got)
