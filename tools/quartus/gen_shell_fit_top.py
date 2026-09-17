@@ -68,6 +68,31 @@ FIT_STIM_MODULE = "zhao_shell_fit_stimulus"
 
 GENERATOR_SCHEMA = 1
 TRAFFIC_PROFILE = "shell-fit-legal-ish-v1"
+
+# The profile a given shell's policy must declare. It is a CONTRACT NAME, not a
+# version stamp: the sibling adds five channels the historical shell has no
+# concept of -- a binding page loader, a palette loader, a fill responder, a
+# sheet responder and a video host -- so a policy claiming v1 traffic while
+# carrying v2 ports would be describing stimulus that does not exist.
+#
+# Keyed by shell module so the two cannot be confused, and so adding a third
+# shell forces a deliberate answer rather than inheriting one.
+TRAFFIC_PROFILE_FOR_SHELL = {
+    "zhao_shell_top": "shell-fit-legal-ish-v1",
+    "zhao_shell_top_v2": "shell-fit-legal-ish-v2",
+}
+
+
+def traffic_profile() -> str:
+    """The profile name required of the shell currently being instrumented."""
+    try:
+        return TRAFFIC_PROFILE_FOR_SHELL[SHELL_MODULE]
+    except KeyError:
+        raise ShellPortError(
+            f"no traffic profile is declared for shell {SHELL_MODULE!r}; add "
+            f"one to TRAFFIC_PROFILE_FOR_SHELL rather than defaulting, because "
+            f"a borrowed profile name describes stimulus that does not exist"
+        ) from None
 HANDLER_INPUT_PORTS: Mapping[str, tuple[str, ...]] = {
     "top_port": ("gpu_clk", "vid_clk", "audio_clk", "rst_n"),
     "frame_ring": ("hps_state_i", "hps_byte_len_i", "ring_wr_ready_i"),
@@ -214,7 +239,15 @@ def handler_input_ports() -> Mapping[str, tuple[str, ...]]:
         return HANDLER_INPUT_PORTS
     merged = dict(HANDLER_INPUT_PORTS)
     for driver, names in SIBLING_HANDLER_INPUT_PORTS.items():
-        merged[driver] = tuple(merged.get(driver, ())) + tuple(names)
+        # PREPENDED, not appended, and the reason is the sibling's port order.
+        # `validate_handler_ownership` compares this tuple against the policy's
+        # ports in ORDINAL order, and `zhao_shell_top_v2` declares its new
+        # ports FIRST -- so `tri_area2_i` and the rest of the renderer's
+        # attribute carriage sit at ordinals 21-33, ahead of the inherited
+        # `render_frame_begin_i` at 154. Appending produced an ownership
+        # mismatch with empty missing/extra sets and two different orders,
+        # which is the validator saying "same ports, wrong sequence".
+        merged[driver] = tuple(names) + tuple(merged.get(driver, ()))
     return merged
 
 
@@ -579,6 +612,9 @@ def _render_stimulus(
             "render_fb_base_i",
             "render_fb_stride_i",
             "fb_writer_i",
+            # PACKET H: a FRAME-level field, like render_clear_word_i beside
+            # it, so it belongs in the offer rather than in a triangle group.
+            "frame_clear_word_i",
         }
     ]
     render_offer_payload_bits = 264 + sum(port.bit_width for port in render_payload)
@@ -613,6 +649,21 @@ def _render_stimulus(
         ),
         "identity": ("render_tl_i", "render_src_id_i"),
     }
+    # PACKET H: the sibling's attribute carriage is PER-TRIANGLE data, so it is
+    # a triangle group rather than an offer field -- the planes, the flat
+    # request and the continuation tail all belong to the triangle being
+    # issued. Added only when the shell declares them, so the historical
+    # shell's accounting is untouched.
+    if any(port.name == "tri_area2_i" for port in render_payload):
+        render_triangle_groups["attributes"] = (
+            "tri_area2_i",
+            "tri_invw_plane_i",
+            "tri_u_over_w_plane_i",
+            "tri_v_over_w_plane_i",
+            "tri_flat_request_i",
+            "tri_continuation_tail_i",
+            "tri_fragment_state_i",
+        )
     grouped_triangle_names = tuple(
         name for fields in render_triangle_groups.values() for name in fields
     )
@@ -1968,9 +2019,9 @@ def render_artifacts(
     policy = load_policy_text(policy_text)
     validate_policy(declaration, policy)
     validate_handler_ownership(declaration, policy)
-    if policy.traffic_profile != TRAFFIC_PROFILE:
+    if policy.traffic_profile != traffic_profile():
         raise ShellPortError(
-            f"unsupported traffic profile {policy.traffic_profile!r}, expected {TRAFFIC_PROFILE!r}"
+            f"unsupported traffic profile {policy.traffic_profile!r}, expected {traffic_profile()!r}"
         )
     hashes = {
         "shell_declaration": declaration.declaration_sha256,

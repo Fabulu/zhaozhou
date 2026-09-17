@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "3bb857a234dce126a072562de2a6f54b02051440",
+    "newestRunCommit":  "3e41ba61ad09e78e43c55bc7109155858fa3c359",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1534,6 +1534,26 @@
                        "ramBlocks":  0,
                        "dspBlocks":  0,
                        "virtualPins":  205
+                   },
+                   {
+                       "module":  "zhao_shell_top_v2@packet-h-composed",
+                       "status":  "incomplete:failed:quartus_fit.exe",
+                       "sourceCommit":  "3e41ba61ad09e78e43c55bc7109155858fa3c359",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "06d0dec332fe8b4bd580470319042ab81c1d074796ac4e44f44c7c34d6467a38",
+                       "variantOf":  "zhao_shell_top_v2",
+                       "seconds":  1556.6,
+                       "sourcesHashed":  97,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  80173,
+                       "blockMemoryBits":  422480,
+                       "dspBlocks":  63,
+                       "virtualPins":  5358
                    },
                    {
                        "module":  "zhao_shell_top_v2@packet-h-mapcheck",

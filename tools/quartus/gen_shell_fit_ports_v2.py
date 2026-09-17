@@ -36,8 +36,33 @@ AUTHORED, and wrong answers here are not caught by any tool:
   from the stimulus -- but both being too narrow passes, so the mask is not a
   substitute for driving the port properly.
 
-INCOMPLETE, DELIBERATELY, AND HERE IS EXACTLY WHAT IS LEFT
-----------------------------------------------------------
+STATE, 2026-09-18: EVERY STRUCTURAL CHECK PASSES. ONE THING IS LEFT
+-------------------------------------------------------------------
+The generator's complaint count went 157 -> 0 for everything it can decide
+from the policy: drivers registered, handler table made per-shell, ownership
+order fixed, domains accepted, masks declared, traffic profile named, and the
+sibling's attribute carriage classified as a triangle group.
+
+What stops it generating is the LAST item below, and it is the one that cannot
+be done mechanically:
+
+    KeyError: 'tri_area2_i'  in _render_triangle_values
+
+`_render_triangle_values` derives a LEGAL setup packet from actual S12.8
+vertices -- edge coefficients, the top-left mask, bounds -- and checks the
+triangle has positive area. The sibling's `tri_*` carriage needs the same
+treatment against the V2 attribute ABI: a 47-bit area2 and three 240-bit
+planes that must agree with those vertices, a 298-bit flat request, a 48-bit
+continuation tail and a 32-bit fragment state.
+
+DO NOT DRIVE THOSE WITH ENTROPY. `tri_flat_request_i` is a packed request, and
+random values are illegal opcodes that park the pipe in refusal states -- which
+SHRINKS the area being measured, in the flattering direction, while the smoke
+harness blesses it because the declared mask still matches what toggled. That
+is this instrument's whole failure mode, arrived at from a different direction.
+
+WHAT WAS LEFT BEFORE, now done except the above
+------------------------------------------------
 What this file produces today is the ordinals, domains and handler ownership --
 the authored decisions that need a human reading the RTL. Running
 `gen_shell_fit_top.py` against the result lists the rest precisely, and it is

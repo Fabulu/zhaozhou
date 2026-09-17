@@ -859,8 +859,29 @@ def validate_policy(declaration: ModuleDeclaration, policy: ShellPolicy) -> None
                 if row.dynamic_mask not in (None, 0):
                     errors.append(f"top port {port.name!r} must not declare a stimulus dynamic mask")
             else:
-                if row.domain != "gpu":
-                    errors.append(f"pseudo-input {port.name!r} must be explicitly gpu-domain")
+                # GPU OR VIDEO, and the second was added 2026-09-18 for the
+                # sibling shell rather than to be permissive.
+                #
+                # The instrument's stimulus module is gpu-clocked, which is why
+                # this used to demand gpu and nothing else. `zhao_shell_top_v2`
+                # adds four inputs -- blank_cmd_i, scanout_ack_i,
+                # frame_swap_valid_i, frame_swap_slot_i -- that
+                # `zhao_video_ready_bridge_v2` consumes in logic gated on
+                # `vid_local_rst_n`. Driving those from a gpu register would
+                # build an unsynchronised clock-domain crossing INTO the
+                # measuring instrument and corrupt the Fmax it exists to
+                # report, so the honest fix is a video-clocked stimulus bank,
+                # symmetric with the video-domain CAPTURE bank that already
+                # exists -- not a relabelled domain.
+                #
+                # `audio` is still refused: no shell declares a driven audio
+                # input, and a domain nothing exercises would be an untested
+                # path in the instrument.
+                if row.domain not in ("gpu", "video"):
+                    errors.append(
+                        f"pseudo-input {port.name!r} must be gpu- or "
+                        f"video-domain, not {row.domain!r}"
+                    )
                 if row.dynamic_mask is None:
                     errors.append(f"pseudo-input {port.name!r} is missing dynamic_mask")
                 elif row.dynamic_mask < 0 or row.dynamic_mask >= (1 << port.bit_width):
