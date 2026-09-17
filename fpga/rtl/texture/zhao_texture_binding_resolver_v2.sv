@@ -452,8 +452,19 @@ module zhao_texture_binding_resolver_v2 #(
     if (page1_re_c) page1_rd_q <= page1_m[page1_ra_c];
   end
 
-  wire binding_row_t crc_row_c  = crc_bank_q  ? page1_rd_q : page0_rd_q;
-  wire binding_row_t read_row_c = read_bank_q ? page1_rd_q : page0_rd_q;
+  // DECLARED THEN ASSIGNED, not `wire binding_row_t x = ...`. Verilator accepts
+  // the combined form and Quartus 17.0 rejects it outright:
+  //
+  //   Error (10149): identifier "binding_row_t" is already declared in the
+  //   present scope
+  //   Error (10170): syntax error near text: "crc_row_c"; expecting ";"
+  //
+  // QUARTUS_GOTCHAS' standing lesson, one form further on: a clean Verilator
+  // lint settles one tool's opinion and says nothing about synthesizability.
+  binding_row_t crc_row_c;
+  binding_row_t read_row_c;
+  assign crc_row_c  = crc_bank_q  ? page1_rd_q : page0_rd_q;
+  assign read_row_c = read_bank_q ? page1_rd_q : page0_rd_q;
 
   assign iss_tmu_valid_o = req_accept_c;
   assign iss_tmu_handle_o = req_sample_handle_i;

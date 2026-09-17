@@ -737,10 +737,38 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > composed shell goes from 62,534 ALMs — 149% of the device — to roughly 34,000,
 > which fits with margin and is close to the 30,000 target.
 >
-> **Stated as an argument, not a measurement.** The restructure is real RTL
-> surgery on a block with a directed test and seven committed mutant controls,
-> and the number above is arithmetic plus Quartus's own inference rules, not a
-> fit row. It needs building, running against those controls, and re-fitting.
+> ### BUILT AND MEASURED, same day. The trade is real.
+>
+> | | before | after | change |
+> |---|---:|---:|---:|
+> | **ALMs needed (A&S estimate)** | 62,534 | **31,589** | **−30,945** |
+> | registers | 80,173 | 41,526 | −38,647 |
+> | block memory bits | 422,480 | 460,880 | **+38,400** |
+> | DSP blocks | 63 | 63 | — |
+>
+> The memory grew by **exactly 38,400 bits** — the page table, relocated, not
+> re-estimated. Quartus reports `altsyncram:page0_m_rtl_0` and
+> `page1_m_rtl_0`, so both banks inferred.
+>
+> **The composed shell went from 149% of the 41,910-ALM device to 75% of it**,
+> and to within 5% of the whole-machine 30,000 target — from a design that
+> could not be placed to one with room. One block, one structural change, no
+> architecture change, and the owner's standing direction is what named it.
+>
+> `texture_binding_resolver_v2_directed` and all SEVEN committed mutant
+> controls pass: late page generation, early activation while held, active bank
+> write, stale invalid CRC, witness class route, same-cycle refusal, refusal
+> without issue.
+>
+> **STILL AN ESTIMATE, AND STILL VIRTUAL-PIN.** 31,589 is Analysis & Synthesis
+> before placement, not a fitter ALM count, and the row carries virtual pins
+> which inflate. Both point the same way — the real number should be lower —
+> but the fitter has not yet produced one, so this is not a receipt.
+>
+> **ONE ARRAY IS STILL IN FABRIC.** The same run reports `uvw_m` in
+> `zhao_texture_island_v3_top.sv:916` uninferred for the same reason. That file
+> IS in Packet D's `PROTECTED_HASHES`, so it is an owner decision rather than
+> editable work — and it is the obvious next one.
 >
 > **AND THERE IS A TRAP IN IT, which is this repository's most-cited defect
 > wearing the opposite sign.** Both reads are CONDITIONAL today:
