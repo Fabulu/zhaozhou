@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "7990bda3a7463aeed547d515b6401de8cfc13947",
-    "newestRunClean":  false,
+    "newestRunCommit":  "e05d409b90e8d17a328090f36a001cdd62ac1d50",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1554,6 +1554,35 @@
                        "blockMemoryBits":  422480,
                        "dspBlocks":  63,
                        "virtualPins":  5358
+                   },
+                   {
+                       "module":  "zhao_shell_top_v2@packet-h-m10k",
+                       "status":  "ok",
+                       "sourceCommit":  "e05d409b90e8d17a328090f36a001cdd62ac1d50",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "6927be23edeae1fee630037fb50aaf92dc6a0da2176cef44c0faba8ac11d239d",
+                       "variantOf":  "zhao_shell_top_v2",
+                       "seconds":  1408.4,
+                       "sourcesHashed":  97,
+                       "alms":  29044,
+                       "registers":  40773,
+                       "blockMemoryBits":  460880,
+                       "ramBlocks":  134,
+                       "dspBlocks":  63,
+                       "virtualPins":  5358,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  54.12,
+                       "fmaxClock":  "gpu_clk",
+                       "setupSlackNs":  -8.477,
+                       "setupTnsNs":  -29688.774,
+                       "holdSlackNs":  0.243,
+                       "holdTnsNs":  0
                    },
                    {
                        "module":  "zhao_shell_top_v2@packet-h-m10k-map",

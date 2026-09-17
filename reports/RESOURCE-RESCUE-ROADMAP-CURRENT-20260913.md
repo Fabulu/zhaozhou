@@ -737,6 +737,49 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > composed shell goes from 62,534 ALMs — 149% of the device — to roughly 34,000,
 > which fits with margin and is close to the 30,000 target.
 >
+> ### THE FITTER'S OWN RECEIPT: `zhao_shell_top_v2@packet-h-m10k`, status `ok`
+>
+> | | measured | budget |
+> |---|---:|---:|
+> | **ALMs** | **29,044** of 41,910 | 30,000 — **inside** |
+> | DSP blocks | 63 of 112 | 85 — inside |
+> | M10K | 134 of 553 | — |
+> | registers | 40,773 | — |
+> | **Fmax** | **54.12 MHz** | 100 — **fails** |
+> | setup TNS | −29,688.8 ns | |
+>
+> Clean tree at `e05d409b`, 97 sources, digest `6927be23edea`, seed 1, virtual
+> pins. **The first `ok` row this target has produced.**
+>
+> **READ `status: ok` NARROWLY.** It means the budget rules for this target
+> accepted the row, and this target has no Fmax rule — unlike G8B's, which is
+> why G8B sat at `failed:structure` for its whole campaign. The area question
+> is answered and the CLOCK question is not: 54.12 MHz against a ruled 100.
+>
+> **AND THE BLOCK JUST OPTIMISED IS NOW THE WORST TIMING SOURCE.** Grouping the
+> 2,000 summarised negative paths by the leaf they start in:
+>
+> | source leaf | paths | total | worst |
+> |---|---:|---:|---:|
+> | `zhao_texture_binding_resolver_v2` | 538 | −2,715.7 | −8.273 |
+> | `zhao_texture_island_v3_top` | 527 | −2,098.1 | −4.475 |
+> | `zhao_texture_v3own` | 278 | −1,162.5 | −5.221 |
+> | `zhao_raster_attrdiv_v2` | 161 | −699.9 | **−8.477** |
+> | `zhao_skid2:u_candidate_skid` | 123 | −460.8 | −4.263 |
+>
+> That is exactly the caution recorded three paragraphs below this section: *an
+> M10K read is ~2 ns against a flip-flop's ~0.3, so a lookup on a block's
+> critical path can cost more than it saves.*
+>
+> **What is NOT established is that the M10K move caused it.** There is no
+> before-picture to compare against: the pre-change fit FAILED, so it produced
+> no timing at all, and the map-only rows produce none by construction. The
+> honest statement is that after the change this block starts 27% of the worst
+> paths, that the mechanism is known and plausible, and that the next fit
+> question is whether registering the RAM output — or reverting one bank —
+> moves it. Assuming the answer either way would be the comfortable-diagnosis
+> failure this file has a chapter about.
+>
 > ### BUILT AND MEASURED, same day. The trade is real.
 >
 > | | before | after | change |
@@ -784,6 +827,20 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > recovered, and NOT small against the 1,589 ALUT that currently separate this
 > composition from the 30,000 target. **Owner decision, with the number
 > attached rather than a hunch.**
+>
+> **AND IT IS THE ONLY ONE LEFT**, which is worth stating because it bounds the
+> lever. Cross-referencing the composed map's own RAM-inference messages
+> against every file the fit compiles: `uvw_m` is the single array Quartus
+> still reports `uninferred` in the whole composition. Eleven files in the cone
+> declare 8 Kbit or more — `zhao_audio_fifo` 65,536, `zhao_geom_binner_v2`
+> 48,856, `zhao_cmd_dma` 33,280, `zhao_raster_tilestore` 32,768,
+> `zhao_texture_palette_res_v2` 16,420 and the rest — **and every one of them
+> infers.**
+>
+> So after this change the memory-for-ALM trade is spent for this composition
+> apart from 4,096 bits behind an owner decision. Further ALM reduction has to
+> come from LOGIC, which is what the candidate list below is for, and
+> `zhao_raster_edgewalk` at 3,350 ALUT against 2 DSP is the right shape for it.
 >
 > ### And the distribution afterwards, which is where the next work goes
 >
