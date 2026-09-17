@@ -145,6 +145,21 @@ less every time it is used. But an implementer unfreezing a file because a lint
 rule asked is the shape CLAUDE.md warns about — *the first explanation that
 absolves the design is the one to check hardest* — so this stays the owner's.
 
+**The "no sidecar" claim was re-checked independently on 2026-09-17**, because
+it is the load-bearing one: if V20 had a waiver channel, this would not be an
+owner decision at all. `tools/ledger/src/rules.ts` resolves the annotation from
+the RTL text alone -- `V20_ANNOTATION` scanned within a ten-line window of the
+claim, with no exemption list, no per-file opt-out and no note channel. There
+is nowhere else to put the enforcer. The three options above are the three
+there are.
+
+Checking it was worth the two minutes for the reason CLAUDE.md gives: a fourth
+option that made a red gate green without touching the protected bytes would
+have been *exactly* the comfortable explanation that arrives first. It does not
+exist. And inventing one -- adding a waiver mechanism to a rule because this
+one file is inconvenient -- would be a rule that hides the thing it was built
+to find.
+
 **Until then it is RED ON PURPOSE**, and this entry is what distinguishes that
 from an unnoticed failure. I edited the protected file once by accident in the
 same session, reverted to `7d7cdb7e`, and confirmed the hash matches the pin.
