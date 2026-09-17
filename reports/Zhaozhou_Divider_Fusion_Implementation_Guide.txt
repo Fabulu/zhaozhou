@@ -1,0 +1,1457 @@
+ZHAOZHOU: PROJECTOR DIVIDER COMPARE/SUBTRACT FUSION
+DSF-01 -- bounded implementation, verification, measurement and abort guide
+Prepared 17 September 2026
+
+PURPOSE
+-------
+Find out whether a small, bit-exact rewrite can reduce ALMs in the shared
+projector, without sacrificing clock margin, throughput, gamefeel, FIELD,
+rendering quality, or any existing numerical behavior.
+
+This is an EXPERIMENT, not an instruction to obtain a predetermined saving.
+The acceptable outcomes include "Quartus already does this; stop" and "the
+rewrite costs timing; revert". Do not turn a failed small experiment into a
+new projector rearchitecture campaign.
+
+The sole proposed production change is inside the repeated restoring-divider
+step in:
+    fpga/rtl/common/zhao_project_core.sv
+
+Replace the separately expressed unsigned comparison and subtraction with a
+33-bit unsigned subtraction whose high bit supplies the borrow decision.
+Keep every existing register, pipeline stage, handshake, enable, reset,
+quotient convention and output packet.
+
+Planning hypothesis: about 1,000 ALMs per physically instantiated shared
+projector, CONDITIONAL on duplicate arithmetic surviving baseline synthesis.
+An illustrative successful range was 500-1,500 ALMs. Zero or negative savings
+remain entirely possible. This is not a measured range, confidence interval,
+or guaranteed saving. Do not enter it in the resource budget.
+
+READ THIS FIRST
+---------------
+1. Work in isolated checkouts. Do not edit the active Packet-H/G8C checkout.
+2. Prove the exact step rewrite and fire its failure controls.
+3. Compare matched Quartus maps before spending any full fit.
+4. Run fresh functional and cycle-level regressions.
+5. Fit a matched physical-pin seed-2 pair only if there is a reason to proceed.
+6. Confirm a promising result with a matched physical-pin seed-4 pair.
+7. Adopt only under the predeclared acceptance policy; otherwise stop and
+   preserve the evidence. A clean negative result finishes this experiment.
+
+Do not broaden this task to shared reciprocals, reduced precision, CPU offload,
+new dividers, DSP packing, FIELD changes, Packet H, G8C, or V20 cleanup.
+Those are independent projects.
+
+CONTENTS
+--------
+1. Evidence snapshot and limits
+2. Exact contract and why the arithmetic is equivalent
+3. The production patch
+4. Experimental policy and stage gates
+5. Step-by-step implementation
+6. Matched mapping and physical-fit procedure
+7. Abort, diagnosis and rollback guide
+8. Adoption and final report
+Appendix A. Source-derived proof exporter (complete Python)
+Appendix B. Fail-closed Yosys proof runner (complete Python)
+Appendix C. Standalone SMT-LIB arithmetic check
+Appendix D. Evidence record template
+References
+
+===============================================================================
+1. EVIDENCE SNAPSHOT AND LIMITS
+===============================================================================
+
+Repository: Fabulu/zhaozhou
+Active branch inspected: claude/ceiling-architecture-20260912
+Inspected head:
+    891934fe19d534874785f42bd95759ae85476fd8
+Core Git blob:
+    95bb7374a440700882178aa84b37334c6eb6b360
+
+These identifiers are a REFERENCE SNAPSHOT, not permission to assume the branch
+has stopped moving. Refresh the remote at execution time and freeze a new base.
+If the actual divider recurrence changed, inspect it before applying this guide.
+
+At the inspected head, the core has DIV_STEPS=31 and three generated divider
+lanes. Its g_div_stage/g_div_lane body explicitly writes both a comparison and
+a subtraction. Thus there are 93 SOURCE-LEVEL step instances. That is not proof
+of 93 independent full-width comparators in the mapped FPGA: synthesis can
+share, simplify, propagate constants, and optimize widths. [R1]
+
+The already existing G8B wrapper is the right measured subsystem for the
+experiment:
+    zhao_terrain_pipe_rpp3_matw18_fit_top
+
+Its manifest fixes ROWS_PER_PASS=3 and MATW=18. The inspected manifest lists
+nine source-closure entries including the generated wrapper. The measured
+boundary is a terrain/projection SUBSYSTEM, not the completed console. [R2]
+
+Reference measurements, NOT automatic A-side substitutes:
+    G8B T11, physical pins, seed 2:
+        8,295 ALMs, 32 DSPs, 46 RAM blocks, 95,877 memory bits,
+        8,985 registers, 18 physical pins, 0 virtual pins.
+    G8B T11, physical pins, seed 4:
+        8,274 ALMs, 32 DSPs, 46 RAM blocks, 95,877 memory bits,
+        8,998 registers, 18 physical pins, 0 virtual pins.
+
+The raw fitter summaries report 46 RAM blocks for these T11 rows. Do not copy
+the earlier T8/T10 figure of 45 into a T11 comparison. [R3]
+
+The reported timing for those T11 rows was:
+    seed 2: Fmax 102.19 MHz, setup WNS +0.214 ns, setup TNS 0;
+    seed 4: Fmax 101.68 MHz, setup WNS +0.165 ns, setup TNS 0.
+Seed 1 remained below 100 MHz. Therefore preserving physical margin matters:
+this is not a subsystem with enormous spare timing slack. [R4]
+
+The tooling inspected supports:
+    tools/quartus/run_block_fit.ps1
+        -Module, -MapOnly, -TopParameters, -VerilogMacros, -RowLabel,
+        -Seed, -PhysicalPins, -KeepWorkspace.
+
+Use -MapOnly on this existing runner for the matched subsystem maps. Do not
+silently switch to a different source-selection or constraint flow. The
+separate run_block_map.ps1 exists, but it is not interchangeable in every
+respect. In particular, this experiment wants the same bounded source closure
+and physical boundary for A and B. [R5]
+
+AUTHOR VALIDATION ALREADY PERFORMED FOR THIS DOCUMENT
+---------------------------------------------------
+A standalone, two-state bit-vector model of the full 63-bit next-state step
+was checked with Z3 4.13.3. There are 94 declared symbolic input bits: a 63-bit
+divider state and a 31-bit divisor. The original and fused results are equal
+for every assignment: the inequality query returned UNSAT.
+
+Four intentionally broken variants each returned SAT, finding a counterexample:
+    inverted borrow polarity;
+    using bit 31 instead of bit 32 for the decision;
+    never using the subtraction remainder;
+    inverted quotient bit.
+
+The Python exporter in Appendix A was syntax-checked and exercised on a small
+source fixture built from the inspected recurrence. It generated six cases and
+refused an existing output directory, an unchanged candidate, a changed stage
+count, and an edit outside the permitted slice. Appendix B was syntax-checked
+and tested with mocked solver responses: it accepted the required six-case
+pattern and rejected empty inventories, stale source, altered proof files and
+tool errors. These mock tests are not actual Yosys proof executions.
+
+IMPORTANT LIMIT: the standalone Z3 model is NOT an elaboration of the actual
+SystemVerilog. Yosys, Verilator, and Quartus were not run by the author for this
+experiment. No ALM saving or timing result has been measured. The implementation
+must run the source-derived proof and all subsequent gates below.
+
+===============================================================================
+2. EXACT CONTRACT AND WHY THE ARITHMETIC IS EQUIVALENT
+===============================================================================
+
+The current step reads:
+    dv: 63-bit unsigned state
+    d : 31-bit unsigned divisor
+
+It constructs:
+    t    = {dv[61:31], dv[30]}       // 32 bits
+    tail = dv[29:0]                 // 30 bits
+
+The old next state is:
+    if t >= zero_extend_32(d):
+        next = {t - zero_extend_32(d), tail, 1'b1}
+    else:
+        next = {t,                     tail, 1'b0}
+
+Both selected results are exactly 63 bits. dv[62] is not used in constructing
+this step's t; preserve that fact rather than changing the recurrence.
+
+Define a 33-bit UNSIGNED subtraction:
+    difference = zero_extend_33(t) - zero_extend_33(d)
+    take_sub   = NOT difference[32]
+
+When t >= d:
+    0 <= t-d <= 2^32-1.
+The 33rd bit is therefore zero, take_sub is one, and difference[31:0] is the
+same 32-bit subtraction result as the old branch.
+
+When t < d:
+    -(2^31-1) <= t-d <= -1.
+The unsigned 33-bit wrapped value has bit 32 set. take_sub is zero and the
+selected remainder is t, exactly as before. The low wrapped subtraction bits
+are discarded in this case.
+
+Equality is important: t=d produces difference=0, take_sub=1, remainder=0 and
+quotient bit=1. A strict greater-than condition would be wrong.
+
+The argument does NOT assume d is nonzero, rem<d, a legal matrix, a visible
+vertex, or an in-range projected result. Even d=0 is covered: subtraction by
+zero produces take_sub=1, which matches the old unsigned t>=0 branch. The
+full-domain proof is deliberately stronger than the usual runtime invariant.
+
+WHY BIT 31 IS WRONG
+-------------------
+Bit 31 can be one for a perfectly nonnegative 32-bit difference. It is not the
+borrow bit. Example: t=0x80000000, d=0. The subtraction is legal and must be
+taken, even though difference[31] is one. Use difference[32].
+
+WHY ZERO EXTENSION MUST BE EXPLICIT
+----------------------------------
+The operands are not signed. Use exactly:
+    {1'b0, t}                 // 33 bits
+    {2'b0, dstep_d[gs]}       // 33 bits
+
+Do not substitute $signed casts, unsized arithmetic constants, or a 32-bit
+subtraction whose high bit is inspected after it has already wrapped.
+
+SEQUENTIAL CONSEQUENCE
+----------------------
+The local next-state functions are equal for all binary input states. If every
+register update, reset, enable and inter-stage connection stays unchanged,
+induction from reset gives the same registered divider state on every clock.
+Stalls preserve the same state; resets create the same state; configuration
+and data traffic see the same state transitions.
+
+This justifies BIT- AND CYCLE-EXACT behavior, not just visual equivalence.
+No error tolerance, alternate rounding, new timing calendar or golden update
+is needed or permitted by this experiment.
+
+The formal model is two-state. It does not promise identical X/Z propagation
+for uninitialized four-state simulation inputs. Keep reset discipline and
+valid-data checks intact; never mask a meaningful simulation failure with X
+assignments or case equality.
+
+PHYSICAL CONSEQUENCE IS NOT PROVEN
+---------------------------------
+The rewrite offers Quartus one explicitly shared result/decision. It does not
+force a particular ALM topology. A separate comparator can also have a faster
+implementation than the full subtraction carry chain, so removing it could
+hurt the subtract-to-mux timing path. Only mapping and fitting settle that.
+
+The earlier ALM estimate used the rough scale of a 32-bit carry structure and
+93 source repetitions. Cyclone V arithmetic ALMs contain two dedicated full
+adders, but a comparator is not automatically one full adder per bit, register
+packing is not linear, and some repeated stages may simplify. [W1]
+
+===============================================================================
+3. THE PRODUCTION PATCH
+===============================================================================
+
+Edit only the combinational slice inside g_div_lane. Keep the generate labels,
+register declaration and sequential block recognizable. Do not introduce a
+runtime option or retain two selectable production divider implementations.
+
+CURRENT BODY
+------------
+
+        logic [31:0] t;
+        logic [62:0] nxt;
+        logic [62:0] r_dv;
+        always_comb begin
+          t   = {dstep_dv[gs][gl][61:31], dstep_dv[gs][gl][30]};
+          nxt = (t >= {1'b0, dstep_d[gs]}) ?
+              {t - {1'b0, dstep_d[gs]}, dstep_dv[gs][gl][29:0], 1'b1} :
+              {t, dstep_dv[gs][gl][29:0], 1'b0};
+        end
+
+REPLACEMENT BODY
+----------------
+
+        logic [31:0] t;
+        logic [32:0] difference;
+        logic take_sub;
+        logic [62:0] nxt;
+        logic [62:0] r_dv;
+        always_comb begin
+          t = {dstep_dv[gs][gl][61:31], dstep_dv[gs][gl][30]};
+          difference = {1'b0, t} - {2'b0, dstep_d[gs]};
+          take_sub = ~difference[32];
+          nxt = {(take_sub ? difference[31:0] : t),
+                 dstep_dv[gs][gl][29:0], take_sub};
+        end
+
+The existing always_ff block immediately after this body stays UNCHANGED:
+
+        always_ff @(posedge clk or negedge rst_n) begin
+          if (!rst_n) r_dv <= '0;
+          else if (en_i) r_dv <= nxt;
+        end
+        assign dstep_dv[gs+1][gl] = r_dv;
+
+Do not move the operation across that register. Do not change DIV_STEPS,
+divisor width, r_dv width, metadata delay lines, or anything in the row-products,
+viewport, saturation, quotient assembly, near-plane, or configuration sections.
+
+The new logic declarations are combinational wires/signals, not state.
+Expected source-level cost changes:
+    + one named 33-bit difference signal;
+    + one named decision signal;
+    - separately expressed >= operation in this particular recurrence;
+    + no registers, stages, memories, DSP operations or external ports.
+
+Allowed supporting changes, only when necessary:
+    - refresh the existing projector MUTANT COPY to this body while retaining
+      its original and only MATW-refusal mutation;
+    - regenerate current source-hash manifests through their existing generator;
+    - add test-only proof/regression files and their explicit registrations;
+    - add the experiment report and named evidence rows.
+
+Changing a current provenance hash after a real source edit is not falsifying a
+receipt. Editing a historical fit row so it appears to certify the new source
+IS falsification. Preserve old measurements as measurements of old specimens.
+
+===============================================================================
+4. EXPERIMENTAL POLICY AND STAGE GATES
+===============================================================================
+
+Freeze this policy BEFORE looking at B's area result. These are proposed
+DSF-01 decision thresholds, not pre-existing repository requirements and not a
+claim that the owner previously selected these exact numbers. The owner may
+choose a different policy before execution; record it once, not after a result.
+
+DEFAULT AUTOMATIC-ADOPTION POLICY
+--------------------------------
+    MIN_NET_ALM_SAVING_PER_MATCHED_SEED = 250
+    MAX_SETUP_WNS_LOSS_NS              = 0.050
+    MIN_CANDIDATE_SETUP_WNS_NS         = 0.100
+    REQUIRED_CLOCK_MHZ                = 100.0
+    PRIMARY_SEED                     = 2
+    CONFIRMATION_SEED                = 4
+    MAX_DSP_INCREASE                  = 0
+    MAX_RAM_BLOCK_INCREASE            = 0
+    MAX_BLOCK_MEMORY_BIT_INCREASE     = 0
+
+At BOTH matched seeds:
+    A and B must use the same legal source/parameter/boundary/constraint setup;
+    B must save at least 250 placed ALMs against A at THAT seed;
+    B must satisfy the applicable 100 MHz setup requirement with zero setup TNS;
+    B must have WNS >= +0.100 ns;
+    B's setup WNS may be no worse than A's minus 0.050 ns;
+    all applicable hold/removal/recovery/minimum-pulse requirements must pass;
+    there must be no unexplained loss of timing coverage or new exceptions;
+    DSP and memory resource use must not increase.
+
+Do not confuse the two WNS tests. Both the absolute floor and the matched loss
+limit apply. A's narrower existing margin is not a license to spend it freely.
+No new full-console margin claim follows from these local thresholds.
+
+A positive but smaller saving is "SMALL WIN -- NOT AUTO-ADOPTED", not a failure
+of arithmetic. Stop and report it; do not secretly lower the threshold to keep
+the patch. A result outside the timing envelope is "TIMING TRADE -- REJECTED
+UNDER THIS POLICY", even if it saves 1,000 ALMs.
+
+CHEAP STOP RULE
+---------------
+If a valid, sufficiently detailed A/B map shows Quartus already implements
+both forms as the same physical logic structure, STOP before fitting.
+
+The four-field .map.summary alone may show only registers, DSPs, memory and
+pins. Equal values there DO NOT establish that combinational logic is equal.
+If the map evidence is inadequate, label it INCONCLUSIVE rather than zero
+saving. Consult one detailed post-map resource/netlist comparison. Do not
+launch an open-ended parser-development or tool-upgrade project.
+
+FIT BUDGET
+----------
+By default, at most two matched full-fit pairs: seed 2, then seed 4 only if
+seed 2 is promising. Each pair is A and B, so four full executions at most
+unless a rigorously matched archived A can be reused. No whole-console/G8C
+fit is required for this local question. Coordinate with the owner of the
+machine's existing fit queue; do not run competing Quartus jobs.
+
+STAGE GATES
+-----------
+    G0: immutable baseline + isolated checkouts + predeclared policy
+    G1: source-derived exact proof + A/A proof + four live failure controls
+    G2: matched mapping with real combinational evidence and valid source cone
+    G3: fresh functional/cycle regressions and maintained existing mutants
+    G4: matched physical seed-2 A/B fit
+    G5: matched physical seed-4 confirmation
+    G6: controlled adoption, or documented stop/rollback
+
+An unmet gate blocks later gates. "Tool unavailable", "test skipped", "zero
+tests matched", "timed out" and "stale binary" are not passes.
+
+===============================================================================
+5. STEP-BY-STEP IMPLEMENTATION
+===============================================================================
+
+STEP 0 -- ESTABLISH OWNERSHIP, REFRESH, FREEZE
+-------------------------------------------
+Read the current AGENT_START_HERE/CLAUDE guidance, fit-runner help, and relevant
+protected-file rules. This brief is a narrow experiment; it does not waive
+protected files, grant permission to stop another agent, or authorize edits to
+the live shell-integration lane. [R6]
+
+Refresh the active remote branch. Record BASE as a full commit, not a moving
+branch name. Confirm that the core still contains the original slice in
+Section 3 and DIV_STEPS=31 with three lanes.
+
+The following PowerShell setup assumes you start inside the existing repo.
+It changes neither that checkout's files nor its HEAD. Choose a new empty
+working area; do not reuse someone else's experiment directory.
+
+    $ErrorActionPreference = 'Stop'
+    $Repo = (& git rev-parse --show-toplevel).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'Start inside the repository.' }
+    & git -C $Repo fetch origin
+    if ($LASTEXITCODE -ne 0) { throw 'Fetch failed.' }
+    $Base = (& git -C $Repo rev-parse `
+      'origin/claude/ceiling-architecture-20260912').Trim()
+    if ($LASTEXITCODE -ne 0 -or $Base -notmatch '^[0-9a-f]{40}$') {
+        throw 'Could not freeze BASE.'
+    }
+    $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $Root = Join-Path (Split-Path $Repo -Parent) "zhaozhou-dsf01-$Stamp"
+    if (Test-Path -LiteralPath $Root) { throw 'Use a new experiment root.' }
+    New-Item -ItemType Directory -Path $Root | Out-Null
+    $A = Join-Path $Root 'baseline'
+    $B = Join-Path $Root 'candidate'
+    $Evidence = Join-Path $Root 'evidence'
+    New-Item -ItemType Directory -Path $Evidence | Out-Null
+    & git -C $Repo worktree add --detach $A $Base
+    if ($LASTEXITCODE -ne 0) { throw 'Baseline worktree failed.' }
+    & git -C $Repo worktree add -b "experiment/dsf01-$Stamp" $B $Base
+    if ($LASTEXITCODE -ne 0) { throw 'Candidate worktree failed.' }
+
+Use separate build and Verilator-generated-model directories for A and B.
+Never point either at the active checkout's build directory. Worktrees share
+Git objects, not build outputs. If repository tooling assumes a fixed working
+directory, use independent clones instead; first inspect and respect that
+assumption rather than overriding it.
+
+Record BASE, the core blob ID, raw hashes of core/wrapper/constraints/generator,
+tool versions, OS/environment, target device, and the intended comparison seeds.
+Do not use PowerShell's default text redirection to preserve a source blob:
+some versions change encoding. Prefer Python subprocess capture to bytes or
+an existing repository export tool. Preserve both raw-byte hashes and the
+repository's documented newline-normalized hash when needed.
+
+Before any build, check for existing Quartus/native build processes and establish
+who owns them. Do not kill or attach to them. If the resource is busy, complete
+only non-contending work or leave the experiment blocked with a handoff note.
+
+STEP 1 -- TAKE BASELINE EVIDENCE BEFORE EDITING
+--------------------------------------------
+A remains immutable. Capture the current original lane body in the evidence
+bundle directly from A, and preserve the actual whole core's digest.
+
+Inspect tests/CMakeLists.txt and list the chosen tests before running them.
+Build the relevant A targets with the repository's current documented Windows
+environment and configure command. Do not invent a Unix build recipe for this
+Windows-specific CMake setup; the inspected file explicitly expects
+verilator_bin.exe. [R7]
+
+Use ctest -N or its JSON inventory to prove the selection is nonempty and covers
+all the intended names. Never interpret a zero-test exit code as green.
+
+A useful focused discovery regex, to be validated against the live inventory:
+    geom_project|terrain_project|proj_|proj_subsystem|terrain_pipe|terrain_tess
+
+Explicitly look for these KNOWN existing names, then confirm their current
+registration and executable targets rather than assuming the list is complete:
+    proj_rowmux_directed
+    proj_matw_directed
+    proj_matw_mutant_control
+    terrain_pipe_rpp3_matw18_fit_top_directed
+    lint_terrain_pipe_rpp3_matw18_fit_top
+    terrain_pipe_rpp3_matw18_generated_freshness
+    packet_i_g8b_registration_static
+
+The existing ROWS_PER_PASS/MATW tests exercise both supported matrix widths and
+row schedules. The G8B wrapper tests are additionally needed; a core-only test
+is not proof that the intended subsystem elaboration was used. [R7]
+
+Record any PRE-EXISTING failures with the full test name and log. A known unrelated
+V20 problem is not permission to hide a new failure or label a mixed suite "all
+green". Do not fix unrelated infrastructure under DSF-01. A required affected
+baseline test that cannot run leaves the corresponding gate blocked.
+
+STEP 2 -- APPLY THE SMALL PATCH
+------------------------------
+Apply the Section 3 replacement to B only. The entire production-core change
+must lie between the g_div_lane header and its existing first always_ff block.
+No change to the sequential block is allowed.
+
+Do not add keep/dont_touch/preserve attributes, hierarchy barriers, or a second
+production implementation to force the result. The purpose is to test ordinary
+production mapping, not create an artificial baseline that cannot optimize.
+
+Inspect the diff immediately. Expected: one small combinational body change.
+If the divider was already fused when execution started, stop as ALREADY DONE.
+Do not reverse it simply to recreate the opportunity described here.
+
+STEP 3 -- EXPORT AND RUN THE PROOF FROM ACTUAL SOURCE
+---------------------------------------------------
+Save Appendices A and B as the named Python files in the experiment's evidence
+area or an explicitly owned tools directory. Run:
+
+    python export_divstep_proofs.py `
+      --baseline "$A\fpga\rtl\common\zhao_project_core.sv" `
+      --candidate "$B\fpga\rtl\common\zhao_project_core.sv" `
+      --out "$Evidence\proof-01"
+
+    python run_divstep_proofs.py `
+      --proof-dir "$Evidence\proof-01" --yosys "<your Yosys executable>"
+
+Replace the Yosys placeholder with a real executable path. Record its version.
+The runner does not install tools, invoke a network service, or modify source.
+
+The exporter refuses a changed baseline recurrence, an unchanged candidate,
+changes elsewhere in the core, or an existing output directory. It extracts
+both real expressions into standalone wrappers rather than proving two
+hand-maintained copies unrelated to production.
+
+Review the small generated source adapters once: they only alias
+    dstep_dv[gs][gl] -> dv_i
+    dstep_d[gs]     -> d_i
+and omit the local register declaration from the combinational proof wrapper.
+They must not rewrite comparisons, widths, literals, signedness or slices.
+
+The expected results are:
+    A_equals_A             PASS
+    healthy A_equals_B     PASS
+    M1 inverted borrow     genuine counterexample
+    M2 wrong high bit      genuine counterexample
+    M3 unchanged remainder genuine counterexample
+    M4 inverted quotient   genuine counterexample
+
+Yosys's SAT proof command and -verify behavior are documented by YosysHQ. [W2]
+The runner also verifies the fixed six-case inventory, source hashes and all
+exported proof-file hashes before execution. It refuses stale or edited evidence.
+The script requires a genuine proof-success marker for healthy cases and a
+genuine counterexample marker plus VCD for the fault controls. A parser crash,
+missing executable, unsupported feature, timeout or license/tool failure does
+NOT count as a mutant being detected.
+
+Inspect at least the equality case and one high-bit counterexample manually.
+The four broken expressions exist only in exported test files, not in production.
+
+STOP if the healthy proof fails. Capture the counterexample and the first
+incorrect next-state bit before editing anything. At most one obvious clerical
+correction and rerun is within this brief. Anything requiring a new arithmetic
+or pipeline design is outside DSF-01.
+
+The standalone SMT-LIB check in Appendix C is a useful independent check of the
+arithmetic identity. It cannot replace the source-derived proof: a correct
+formula in a separate file does not prove that the production patch implements
+that formula.
+
+STEP 4 -- REFRESH NECESSARY COPIES/MANIFESTS, THEN COMMIT THE CANDIDATE
+------------------------------------------------------------------
+The repository contains tests/mutants/zhao_project_core_mutant.sv. It is meant
+to be a copy of the core with the MATW-refusal behavior deliberately broken.
+Refresh its healthy body to B, retaining exactly its existing mutation and
+module-name changes. Do not accidentally turn the mutant into the healthy core,
+change its intended defect, or add the DSF fault controls to this production-like
+copy. Run its existing inverse-polarity test. [R7]
+
+Regenerate provenance rather than hand-editing checksums:
+    python tools/quartus/gen_terrain_pipe_rpp3_matw18_fit_top.py
+    python tools/quartus/gen_terrain_pipe_rpp3_matw18_fit_top.py --check
+
+Run this from B. Inspect --help first if the live CLI differs. The inspected
+CTest registration uses this generator's --check mode. [R7]
+
+Expected generated-wrapper RTL: BYTE-IDENTICAL if the generator only refreshes
+the changed source hash. Expected manifest: the core source hash changes.
+Any unrelated source, parameter, port or wrapper-logic change requires explanation
+and re-establishment of a controlled pair; do not conceal it in a checksum edit.
+
+Review the complete allowlist and commit the coherent candidate in its own
+branch before measurement. Record CANDIDATE as a full immutable SHA. Keep the
+production patch easy to revert as one coherent unit with its necessary mutant
+and manifest updates. Use explicit git add paths, not a repository-wide add.
+
+Do not push or merge onto the active hardware branch merely to run the experiment.
+A private experiment branch can hold the candidate and results until accepted.
+
+STEP 5 -- RUN THE CHEAP MATCHED MAP (G2)
+--------------------------------------
+Follow Section 6. Stop if the detailed map refutes the duplicate-hardware
+hypothesis or reveals a clearly worse implementation. An inconclusive map needs
+one bounded inspection, not a fabricated saving.
+
+STEP 6 -- RUN FUNCTIONAL AND CYCLE REGRESSIONS (G3)
+-------------------------------------------------
+Only a promising/inconclusive-but-justified mapping candidate earns the broader
+regression work and later physical fit. Reconfigure/build B in its own clean
+build tree, not A's. Ensure the native binaries and generated Verilator models
+really incorporate CANDIDATE; save source/build logs and binary digests.
+
+Run the identical focused test selection on A and B. Re-run the existing mutant
+controls and generated-artifact freshness checks. Inspect the final named list:
+labels can overlap and test counts must not be added as disjoint evidence.
+
+In addition to the existing tests, require an A/B lockstep check with one frozen
+baseline core and one candidate core, or an equally strong existing independent
+oracle-and-cycle check. If a baseline core is instantiated beside B, rename only
+its module declaration and matching endmodule label in a TEST-ONLY copy. Record
+its original digest. Do not compile two names that secretly select the same
+new core. Do not keep the baseline implementation in the synthesis source cone.
+
+The checker must cover:
+    - ROWS_PER_PASS=3 and 1, each with MATW=18 and 32;
+    - full input rate and sparse valid traffic;
+    - en_i held low while external inputs change;
+    - backpressure patterns and drain after input stops;
+    - reset with in-flight work, then fresh traffic;
+    - both views, differing viewport settings, legal configuration changes;
+    - signed coordinates, near-plane w<=0, saturation rails and edge values;
+    - payload/identity patterns that differ between successive vertices.
+
+Compare every contract-relevant output and handshake on each appropriate cycle:
+valid/ready/control signals, accepted result values, payload/view/identity,
+refusal behavior, and output stability under backpressure. Also compare an
+expected next-state trace where practical; count equality alone is insufficient.
+Do not compare undefined invalid-cycle payloads as though they were specified.
+
+The new single-step directed smoke cases should include:
+    d = 0, 1, 2, powers of two, powers of two +/-1, 0x7fffffff;
+    t = 0, d-1 where representable, d, d+1 where representable;
+    t = 0x7fffffff, 0x80000000, 0xffffffff;
+    several different low-30-bit tail patterns.
+
+A full-domain formal proof covers arithmetic corners, but the system tests catch
+source selection, connection, build, reset, enable and integration mistakes.
+If latency or throughput differs by even one specified cycle, STOP. This rewrite
+has no reason to change either. Do not relax a test or regenerate a golden.
+
+Run the repository's relevant fast/regression gate when resources permit.
+Do not accidentally start an unrelated multi-hour nightly soak by running an
+unfiltered CTest suite. Preserve any omitted test as OMITTED, not PASS.
+
+STEP 7 -- MEASURE PHYSICAL SEED 2, THEN SEED 4 IF JUSTIFIED
+---------------------------------------------------------
+Follow Section 6. No further production-source edits while the paired fits run.
+If a defect requires an edit, create a new candidate SHA, redo affected gates,
+and invalidate all measurements that no longer describe it.
+
+STEP 8 -- DECIDE, REPORT AND STOP
+-------------------------------
+Apply the predeclared Section 4 policy, fill Appendix D, and either prepare the
+coherent patch for adoption or leave the active project unchanged. Section 7
+covers every abort route. Do not automatically move on to a reciprocal rewrite.
+
+===============================================================================
+6. MATCHED MAPPING AND PHYSICAL-FIT PROCEDURE
+===============================================================================
+
+6.1 One boundary, one toolchain, two specimens
+--------------------------------------------
+Use the existing G8B fit top on the exact Cyclone V target:
+    DEVICE: 5CSEBA6U23I7
+    TOOL:   Quartus Prime Lite 17.0.2 Build 602 for the historical baseline
+    TOP:    zhao_terrain_pipe_rpp3_matw18_fit_top
+    PARAMS: fixed ROWS_PER_PASS=3, MATW=18
+    PINS:   physical, 0 virtual pins
+    CLOCK:  the existing 100 MHz requirement and unchanged constraints
+
+If the current authorized flow uses a different version/device/constraint set,
+run BOTH A and B under it and declare the difference from the historical rows.
+Do not upgrade just to make this experiment succeed.
+
+Validate generated QSF, SDC, macros, source membership, source-byte digests,
+parameter realization, wrapper parameters, physical/virtual pin mode and seed
+before trusting a result. Absolute paths may differ across worktrees; compare
+normalized project semantics and source contents, not merely file names.
+
+Only the intended core bytes should differ inside the synthesizable source
+closure. The test-only mutant and proof files must NOT enter that closure.
+The generated provenance manifest may differ in the expected source hash; that
+is not a change in the actual datapath boundary.
+
+Read fresh invocation evidence, not only an old status:ok entry. Some repository
+flows preserve earlier successful rows when a later attempt fails. Missing new
+output, an old sourceCommit, an unexpected digest, a lastAttempt failure, or an
+incomplete run is not the requested measurement.
+
+6.2 Commands for the matched maps
+--------------------------------
+Run one side at a time from its own repository root. Use the exact same runner
+version and arguments on both sides. Example commands, after native toolchain
+setup and gate G1:
+
+Baseline A:
+    powershell.exe -NoProfile -File tools/quartus/run_block_fit.ps1 `
+      -Module zhao_terrain_pipe_rpp3_matw18_fit_top `
+      -MapOnly -PhysicalPins -Seed 2 -KeepWorkspace `
+      -RowLabel '@dsf01-A-map-s2'
+
+Candidate B:
+    powershell.exe -NoProfile -File tools/quartus/run_block_fit.ps1 `
+      -Module zhao_terrain_pipe_rpp3_matw18_fit_top `
+      -MapOnly -PhysicalPins -Seed 2 -KeepWorkspace `
+      -RowLabel '@dsf01-B-map-s2'
+
+Check the native exit code immediately after each command. Do not let a following
+PowerShell command overwrite $LASTEXITCODE. Save complete output, including the
+reported workspace path, before proceeding.
+
+RowLabel is a literal suffix and must include its separator. Never omit the
+label on a map-only run: a map row must not overwrite an existing fitted row.
+MapOnly does NOT yield placed ALMs or Fmax. [R5]
+
+6.3 What to inspect in the map
+-----------------------------
+Archive the raw map report, detailed resource-by-entity report where available,
+post-mapping netlist evidence, source list/digests, QSF/SDC and warnings. Retain
+the workspace using the existing option; do not throw away the only netlist
+that could answer the hypothesis.
+
+Inspect the divider group and representative early/middle/late stages across
+all three lanes. Do not expect 93 equally sized surviving structures: early
+stages, constant values, the reciprocal lane and unused bits may optimize
+differently. Use the actual mapped hierarchy and any merged/flattened attribution
+rather than source-name counting as a final answer.
+
+Questions to answer explicitly:
+    A. Does the baseline really retain separate compare and subtract logic?
+    B. Does B's decision use the subtraction's borrow/carry-related logic?
+    C. Does mapped combinational resource use fall at the actual core/subsystem?
+    D. Are all required outputs and consumers still present and exercised?
+    E. Are DSP, RAM, clocking and state architecture unchanged?
+
+Evidence can come from the Technology Map Viewer/post-map netlist and real
+Quartus resource attribution. Do not prescribe an invented report column or
+infer an ALM count by dividing ALUTs by two. Record the exact metric and stage.
+
+Decision:
+    - Same canonical mapped logic, adequately demonstrated:
+          STOP_NO_STRUCTURAL_GAIN. Retain the simpler incumbent source.
+    - Clearly reduced divider logic, no unexpected resource substitution:
+          Continue to functional regressions and the primary fit pair.
+    - Clearly more expensive mapped logic with no compensating target benefit:
+          STOP_MAP_REGRESSION.
+    - Only summary counts available or ambiguous reshuffling:
+          MAP_INCONCLUSIVE. Inspect once more using the retained netlist.
+          A single primary fit pair is allowed only with an explicit rationale;
+          there is no basis for claiming savings yet.
+
+Do not disable optimization or add preservation directives to prevent A from
+sharing logic. That would manufacture the very opportunity being tested.
+
+6.4 Physical fit pair, primary seed 2
+-------------------------------------
+From A, after ensuring the same clean measured inputs:
+    powershell.exe -NoProfile -File tools/quartus/run_block_fit.ps1 `
+      -Module zhao_terrain_pipe_rpp3_matw18_fit_top `
+      -PhysicalPins -Seed 2 -KeepWorkspace -RowLabel '@dsf01-A-fit-s2'
+
+From B:
+    powershell.exe -NoProfile -File tools/quartus/run_block_fit.ps1 `
+      -Module zhao_terrain_pipe_rpp3_matw18_fit_top `
+      -PhysicalPins -Seed 2 -KeepWorkspace -RowLabel '@dsf01-B-fit-s2'
+
+Commit/archive newly generated reports as appropriate AFTER each measurement,
+then establish a clean starting state before another invocation. Do not edit the
+measured RTL to make report generation convenient. Before each run record actual
+HEAD and confirm the measured source cone still matches the frozen specimen.
+A reports-only commit may change HEAD without changing the silicon inputs;
+record both facts instead of pretending the commit IDs match.
+
+Use a fresh invocation workspace. Never reuse an incremental database from A for
+B or vice versa. Do not inherit a placement/incremental partition cache unless
+that identical treatment was deliberately part of both frozen runs.
+
+A historical A row can be reused ONLY after matching all relevant source bytes,
+wrapper, tool/build, macros, QSF/SDC semantics, device, pin mode, parameters,
+seed and fitter settings, with raw completed reports and sufficient provenance.
+Otherwise rerun A. A matching module name or similar ALM count is not enough.
+
+For seed 2 compute:
+    saving_2  = ALM_A2 - ALM_B2
+    WNS_loss_2 = WNS_A2 - WNS_B2
+
+If the primary candidate has no positive area result, violates timing/resource
+policy, or the evidence is invalid, stop or diagnose under Section 7. Do not
+try arbitrary seeds until one produces a flattering number.
+
+6.5 Confirmation seed 4
+----------------------
+Only if seed 2 passes the policy, repeat the exact A/B commands with:
+    -Seed 4 -RowLabel '@dsf01-A-fit-s4'
+    -Seed 4 -RowLabel '@dsf01-B-fit-s4'
+
+Compute saving_4 and WNS_loss_4 against the SAME seed on A. Do not compare B's
+best seed against A's worst seed or average virtual and physical runs together.
+Two seeds are a practical confirmation, not a statistical proof of robustness.
+
+For final reporting:
+    confirmed_local_saving = min(saving_2, saving_4)
+    paired_mean_saving     = (saving_2 + saving_4) / 2
+
+Both must be labeled as results for this exact G8B boundary. Never multiply the
+saving by two for "geometry plus terrain": the target contains the shared core.
+Do not claim the complete console now fits or that G8C inherits this margin.
+
+6.6 Timing and area validity checklist
+-------------------------------------
+- Full placement/routing completed, not only synthesis/map or a retained old row.
+- 18 physical top-pin bits and 0 virtual pins for this inspected wrapper.
+- Same required clocks, uncertainties, input/output timing and exceptions.
+- Setup AND hold checked; no negative TNS on applicable clocks.
+- Other required timing analyses pass, or missing analyses are clearly blocking.
+- No newly unconstrained relevant paths or clocks; counts/reports inspected.
+- No change to seeds/macros/parameters/dead-output pruning disguised as DSF.
+- Placed ALMs read from the fitter, not estimated from declarations/registers.
+- All RAM/DSP counts and raw memory bits recorded alongside ALMs.
+- Area attribution distinguishes core/hierarchy evidence from whole wrapper totals.
+- A and B freshness/hash checks describe the invocation that actually ran.
+- No new production debug outputs or preservation attributes in only one variant.
+- Applicable repository receipt checks run even for specially labeled rows;
+  an empty ruleViolations array alone is not proof the rules were evaluated.
+
+===============================================================================
+7. ABORT, DIAGNOSIS AND ROLLBACK GUIDE
+===============================================================================
+
+7.1 Stop classes
+----------------
+ALREADY_DONE
+    The live baseline is already fused or the candidate is unchanged.
+    Action: document and stop. Do not create synthetic work.
+
+BLOCKED_BASELINE / BLOCKED_TOOL / BLOCKED_RESOURCE
+    Missing tools, unavailable fit queue, invalid baseline, unrun required test,
+    timeout or a genuinely missing report prevents a verdict.
+    Action: preserve all logs and state exactly what is missing. This says
+    nothing about whether the optimization is good or bad.
+
+FAIL_FUNCTIONAL
+    Source-derived proof, cycle behavior, oracle outputs, or required
+    fault-control behavior differs.
+    Action: preserve counterexample; no mapping/fit until corrected. One small
+    clerical repair is allowed; algorithmic redesign is not.
+
+NO_STRUCTURAL_GAIN
+    A proper map comparison shows the baseline already uses the same logic.
+    Action: stop before physical fits. Remove/abandon the production patch.
+
+NO_PHYSICAL_GAIN
+    Proper matched physical measurements show no placed ALM saving.
+    Action: preserve map/fit results and retain the incumbent implementation.
+
+SMALL_WIN_NOT_AUTO_ADOPTED
+    It is exact and saves area, but misses the preset 250-ALM-per-seed threshold.
+    Action: report the real saving; stop. Further adoption is an explicit owner
+    choice, not a pretext to reinterpret the original ~1,000 estimate.
+
+TIMING_OR_RESOURCE_REGRESSION
+    It is exact but spends excessive WNS, fails 100 MHz/hold, or adds DSP/RAM.
+    Action: reject under the preset policy. Do not "repair" it by extra stages,
+    relaxed clocks, new false paths, width changes, or borrowing DSPs.
+
+MEASUREMENT_INVALID
+    Wrong cone/parameters, stale binary/row, mismatched pin mode, source edited
+    mid-fit, missing constraints, dead datapath or invalid report attribution.
+    Action: discard the COMPARISON, not the logs. Recreate the affected pair only
+    if the mistake is small and the fit budget/owner allows it. No savings claim.
+
+PASS_LOCAL
+    Both source/cycle tests and both matched physical pairs pass policy.
+    Action: prepare controlled adoption and the evidence-qualified report.
+
+7.2 First diagnosis by symptom
+-----------------------------
+Fails at t=d:
+    Check borrow polarity and equality handling. take_sub must be one.
+
+Fails at t>=0x80000000:
+    Check for bit-31-as-sign mistakes or signed arithmetic. Use bit 32 of a
+    zero-extended 33-bit subtraction, not bit 31 of a 32-bit value.
+
+Fails only when subtraction is refused:
+    Ensure the remainder selects the original t, not wrapped low subtraction
+    bits. Quotient bit must also be zero.
+
+Remainder right, quotient wrong:
+    Compare the ENTIRE 63-bit next state. Tail/quotient packing is part of the
+    operation. A checker looking only at the remainder is incomplete.
+
+Pure proof passes, end-to-end test fails:
+    Suspect patch outside the proved slice, stale/incorrect build, the wrong
+    source selected, copied mutant drift, or a driver error. Preserve the first
+    differing cycle/packet; do not change rounding to match it.
+
+Map summaries identical:
+    Determine whether they report combinational resources. Register/DSP/RAM
+    equality is expected and cannot by itself reject the hypothesis.
+
+Map smaller but fitter ALMs unchanged:
+    Packing and placement absorbed the difference. The actual objective did
+    not improve at this boundary. Report that, not an imaginary ALM saving.
+
+ALMs improve but timing worsens:
+    The borrow decision may now lie on the subtraction carry-to-mux path or
+    route/fanout may be worse. That trade is plausible. Reject it under this
+    experiment's no-material-timing-loss policy; do not start another campaign.
+
+Mutant "fails" before the solver/test executes:
+    It was not detected. Repair the test instrument or leave the gate blocked.
+    Build errors, crashes, missing modules and timeouts are not counterexamples.
+
+7.3 Safe rollback BEFORE production adoption
+--------------------------------------------
+The safest rollback is no change at all to the active branch: leave B unmerged
+and mark the experiment closed. Preserve the candidate SHA, source patch and
+results on its isolated branch/evidence archive.
+
+If B is already committed, capture its implementation SHA before any cleanup:
+    git -C <B> show --stat <IMPLEMENTATION_SHA>
+    git -C <B> diff <BASE> <IMPLEMENTATION_SHA> -- <explicit owned paths>
+
+A single candidate implementation commit should contain the core change and
+necessary mutant/manifest coherence. If a rollback commit is desired IN B:
+    git -C <B> status --porcelain
+    git -C <B> revert --no-edit <IMPLEMENTATION_SHA>
+
+Do not execute revert on a dirty tree. Resolve report/provenance conflicts
+manually if necessary; do not use a blanket conflict strategy. If implementation
+spans several dependent commits, identify them explicitly and revert newest to
+oldest, preserving unrelated work and evidence.
+
+If the candidate is still uncommitted, archive its diff and stop using the
+isolated worktree. There is no need to erase it. Restore individual owned files
+only after verifying they contain no other agent's work; never use a whole-tree
+reset or clean to make the status look tidy.
+
+Prohibited cleanup shortcuts:
+    git reset --hard on a shared/unknown checkout;
+    git clean -fdx;
+    force-pushing a branch to erase the attempt;
+    killing all Quartus/Verilator processes by name;
+    deleting the only completed map/fit database before evidence extraction;
+    overwriting historical receipts with restored numbers.
+
+If the restored core is intended for further use, verify its canonical bytes
+match A, regenerate any current source manifests, and rerun the focused proof/
+regression checks. Exact restored source may refer to the old valid fit evidence;
+do not invent a new physical measurement.
+
+7.4 Rollback AFTER controlled adoption
+--------------------------------------
+Revert the specific integration commit on the destination branch. Do NOT reset
+that branch to BASE: it may contain other people's later work. Keep the current
+mutant copy coherent with the restored core, regenerate current manifests, and
+rerun the affected regression slice.
+
+If intervening edits touched the recurrence or the same manifests, merge the
+rollback deliberately. If old hardware source bytes are no longer restored,
+old fit receipts no longer certify this new combination. Record that limitation
+and run the appropriate new gate instead of relabeling an old row.
+
+7.5 Boundedness rule
+--------------------
+This task ends after one genuine source-form hypothesis, one matched map pair,
+and at most two matched physical seed pairs. Small clerical/infrastructure
+repairs must be logged. A different subtract architecture, explicit vendor
+primitive, timing stage, word width, reciprocal scheme, or scheduling change
+is a NEW experiment, not "DSF-01 attempt 27".
+
+===============================================================================
+8. ADOPTION AND FINAL REPORT
+===============================================================================
+
+If PASS_LOCAL is reached, offer/prepare a small coherent integration change
+according to the owner's branch policy. This document does not instruct an
+unreviewed push onto the shared active branch.
+
+Before adoption, refresh the destination branch. If relevant core, caller,
+wrapper, parameter, constraint or resource-owner files moved, repeat the affected
+gates on the merged candidate. Exact local arithmetic still helps, but the old
+physical result cannot certify a materially different composition.
+
+Keep the tested production form only. Do not ship a selector choosing old versus
+new divider. Retain the old expression as an immutable TEST reference and retain
+the failure controls. Any production-size attribution must exclude those tests.
+
+The experiment exporter intentionally checks whole-core equality outside the
+slice. That is a TRANSACTION SAFETY GUARD, not a rule that freezes every other
+core section forever. Future unrelated core edits require re-scoping that guard
+for a new transaction while keeping the mathematical baseline expression fixed.
+A permanent regression should generate its candidate slice from current source
+and verify freshness; it must not repeatedly prove an obsolete generated file.
+
+Update current provenance and document which historical receipts became stale.
+Record all actual fit specimens, even rejected candidates. No percentage-complete
+or whole-console-saving claim is justified by a local win.
+
+The final report must answer, in this order:
+    1. Did exact functional and cycle equivalence pass?
+    2. Did every required failure control actually expose its fault?
+    3. Did the baseline contain the hypothesized duplicate mapped logic?
+    4. How many ALMs did each SAME-SEED physical pair save?
+    5. What happened to setup, hold, DSPs, RAM blocks and memory bits?
+    6. Which exact source/constraint hashes produced those numbers?
+    7. Was the patch adopted, left as a small optional win, rejected, or blocked?
+
+Examples of honest one-line conclusions:
+    "STOP: Quartus maps both expressions to the same logic. No saving measured;
+     no full fit spent; production remains unchanged."
+
+    "REJECT: exact, saves N ALMs, but WNS loses X ns and breaches the preset
+     timing policy. Candidate retained for evidence, not installed."
+
+    "PASS_LOCAL: exact and cycle-identical; saves N/M ALMs at seeds 2/4 with
+     preserved timing and no DSP/RAM increase, on the named G8B wrapper.
+     Complete-console fit and margin remain separate questions."
+
+    "BLOCKED: solver/tool/build evidence unavailable. No pass/fail claim about
+     the optimization and no saving entered in the budget."
+
+There is no requirement for DSF-01 to deliver the earlier ~1,000-ALM hypothesis.
+Its job is to find out cheaply and honestly whether the opportunity exists.
+
+===============================================================================
+APPENDIX A. SOURCE-DERIVED PROOF EXPORTER
+===============================================================================
+
+Save the following as export_divstep_proofs.py. Python 3.9+ is recommended.
+This is newly supplied experiment tooling, not a claim that this file already
+exists in the repository. It is intentionally strict about the inspected source
+shape. Read an extraction refusal; do not weaken it merely to obtain a PASS.
+
+BEGIN FILE: export_divstep_proofs.py
+
+#!/usr/bin/env python3
+"""Export source-derived divider-step proofs. Never modifies repository files."""
+from __future__ import annotations
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import re
+import sys
+
+LANE = '      for (gl = 0; gl < 3; gl = gl + 1) begin : g_div_lane'
+REGISTER = '        always_ff @(posedge clk or negedge rst_n) begin'
+ORIGINAL = """
+        logic [31:0] t;
+        logic [62:0] nxt;
+        logic [62:0] r_dv;
+        always_comb begin
+          t   = {dstep_dv[gs][gl][61:31], dstep_dv[gs][gl][30]};
+          nxt = (t >= {1'b0, dstep_d[gs]}) ?
+              {t - {1'b0, dstep_d[gs]}, dstep_dv[gs][gl][29:0], 1'b1} :
+              {t, dstep_dv[gs][gl][29:0], 1'b0};
+        end
+"""
+
+def squash(s: str) -> str:
+    return re.sub(r'\s+', '', s)
+
+def split_lane(text: str) -> tuple[str, str, str]:
+    if text.count(LANE) != 1:
+        raise ValueError('Expected exactly one known g_div_lane generate body; inspect live source.')
+    if not re.search(r'\bDIV_STEPS\s*=\s*31\s*;', text):
+        raise ValueError('Expected DIV_STEPS=31; re-scope rather than guessing.')
+    start = text.index(LANE) + len(LANE)
+    end = text.find(REGISTER, start)
+    if end < 0:
+        raise ValueError('Register boundary missing; refusing extraction.')
+    body = text[start:end]
+    if body.count('always_comb') != 1:
+        raise ValueError('Expected one combinational block.')
+    return text[:start], body, text[end:]
+
+def replace_once(s: str, before: str, after: str) -> str:
+    if s.count(before) != 1:
+        raise ValueError(f'Expected one mutation anchor: {before!r}')
+    return s.replace(before, after, 1)
+
+def module(name: str, body: str) -> str:
+    # These are local textual aliases, not changes to the expressions.
+    body = body.replace('dstep_dv[gs][gl]', 'dv_i')
+    body = body.replace('dstep_d[gs]', 'd_i')
+    body = replace_once(body, 'logic [62:0] r_dv;', '')
+    if any(x in body for x in ('dstep_', '[gs]', '[gl]', '`', '$', 'always_ff')):
+        raise ValueError('Unexpected external dependency/preprocessor content in proof slice.')
+    return (f'module {name}(input logic [62:0] dv_i, input logic [30:0] d_i,\n'
+            '                   output logic [62:0] nxt_o);\n' + body +
+            '\nassign nxt_o = nxt;\nendmodule\n')
+
+def bundle(out: Path, name: str, a: str, b: str) -> None:
+    folder = out / name
+    folder.mkdir()
+    (folder / 'a.sv').write_text(module('step_a', a), encoding='utf-8')
+    (folder / 'b.sv').write_text(module('step_b', b), encoding='utf-8')
+    (folder / 'miter.sv').write_text('''module divstep_miter(
+  input logic [62:0] dv_i,
+  input logic [30:0] d_i,
+  output logic [62:0] a_o,
+  output logic [62:0] b_o,
+  output logic eq_o
+);
+step_a a(.dv_i(dv_i), .d_i(d_i), .nxt_o(a_o));
+step_b b(.dv_i(dv_i), .d_i(d_i), .nxt_o(b_o));
+assign eq_o = (a_o == b_o);
+endmodule
+''', encoding='utf-8')
+    (folder / 'prove.ys').write_text('''read_verilog -sv a.sv b.sv miter.sv
+hierarchy -check -top divstep_miter
+proc
+flatten
+opt
+check -assert
+sat -verify -prove eq_o 1 -show-inputs -show-outputs -dump_vcd counterexample.vcd
+''', encoding='utf-8')
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--baseline', type=Path, required=True)
+    p.add_argument('--candidate', type=Path, required=True)
+    p.add_argument('--out', type=Path, required=True)
+    a = p.parse_args()
+    raw_a = a.baseline.read_bytes()
+    raw_b = a.candidate.read_bytes()
+    # Normalize line endings for source comparison only; preserve raw digests.
+    sa = raw_a.decode('utf-8-sig').replace('\r\n', '\n')
+    sb = raw_b.decode('utf-8-sig').replace('\r\n', '\n')
+    pre_a, body_a, post_a = split_lane(sa)
+    pre_b, body_b, post_b = split_lane(sb)
+    if (pre_a, post_a) != (pre_b, post_b):
+        raise ValueError('Core changed outside the permitted combinational slice; abort.')
+    if squash(body_a) != squash(ORIGINAL):
+        raise ValueError('Baseline no longer matches reviewed recurrence; inspect/re-scope.')
+    if squash(body_a) == squash(body_b):
+        raise ValueError('Candidate is unchanged; refusing a vacuous A/A experiment.')
+    mutants = {
+        'M1_inverted_borrow': replace_once(body_b, 'take_sub = ~difference[32];',
+                                          'take_sub = difference[32];'),
+        'M2_wrong_bit31': replace_once(body_b, 'take_sub = ~difference[32];',
+                                      'take_sub = ~difference[31];'),
+        'M3_unchanged_remainder': replace_once(body_b, 'take_sub ? difference[31:0] : t',
+                                              'take_sub ? t : t'),
+        'M4_inverted_quotient': replace_once(body_b, 'dstep_dv[gs][gl][29:0], take_sub',
+                                            'dstep_dv[gs][gl][29:0], ~take_sub'),
+    }
+    # Refuse overwrites, including old proof results.
+    a.out.mkdir(parents=True, exist_ok=False)
+    bundle(a.out, 'A_equals_A', body_a, body_a)
+    bundle(a.out, 'healthy', body_a, body_b)
+    for name, body in mutants.items():
+        bundle(a.out, name, body_a, body)
+    meta = {
+        'baseline_path': str(a.baseline.resolve()),
+        'candidate_path': str(a.candidate.resolve()),
+        'baseline_raw_sha256': hashlib.sha256(raw_a).hexdigest(),
+        'candidate_raw_sha256': hashlib.sha256(raw_b).hexdigest(),
+        'baseline_slice_sha256': hashlib.sha256(body_a.encode()).hexdigest(),
+        'candidate_slice_sha256': hashlib.sha256(body_b.encode()).hexdigest(),
+        'outside_slice_equal_after_newline_normalization': True,
+        'expected': {'A_equals_A': 'PASS', 'healthy': 'PASS', **{k: 'COUNTEREXAMPLE' for k in mutants}},
+        'stage': 'export-only',
+        'generated_files_sha256': {
+            str(f.relative_to(a.out)): hashlib.sha256(f.read_bytes()).hexdigest()
+            for f in sorted(a.out.rglob('*')) if f.is_file()
+        },
+    }
+    (a.out / 'manifest.json').write_text(json.dumps(meta, indent=2)+'\n', encoding='utf-8')
+    print('Exported source slices and six proof cases. NO PROOF HAS RUN.')
+    return 0
+
+if __name__ == '__main__':
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError, UnicodeError) as exc:
+        print(f'ERROR: {exc}', file=sys.stderr)
+        raise SystemExit(2)
+
+END FILE: export_divstep_proofs.py
+
+===============================================================================
+APPENDIX B. FAIL-CLOSED YOSYS PROOF RUNNER
+===============================================================================
+
+Save as run_divstep_proofs.py. Use a real installed Yosys executable and retain
+its version. The default per-case timeout bounds a tiny proof, not a Quartus
+fit. A timeout is INCONCLUSIVE. If a tool version uses different log wording,
+verify its documented behavior and real passing/failing controls before adapting
+the parser; never classify all nonzero exits as successful mutant detection.
+
+BEGIN FILE: run_divstep_proofs.py
+
+#!/usr/bin/env python3
+"""Run exported Yosys proofs; tool errors are NOT successful mutant kills."""
+from __future__ import annotations
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+PASS_MARK = 'SAT proof finished - no model found: SUCCESS!'
+FAIL_MARK = 'SAT proof finished - model found: FAIL!'
+EXPECTED = {
+    'A_equals_A': 'PASS',
+    'healthy': 'PASS',
+    'M1_inverted_borrow': 'COUNTEREXAMPLE',
+    'M2_wrong_bit31': 'COUNTEREXAMPLE',
+    'M3_unchanged_remainder': 'COUNTEREXAMPLE',
+    'M4_inverted_quotient': 'COUNTEREXAMPLE',
+}
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--proof-dir', type=Path, required=True)
+    p.add_argument('--yosys', default='yosys', help='Executable path, not a shell command.')
+    p.add_argument('--timeout', type=int, default=120, help='Per-case limit in seconds.')
+    a = p.parse_args()
+    if a.timeout <= 0:
+        p.error('--timeout must be positive')
+    manifest = json.loads((a.proof_dir/'manifest.json').read_text(encoding='utf-8'))
+    if manifest.get('expected') != EXPECTED:
+        raise ValueError('Proof inventory must contain exactly the six required cases.')
+    for side in ('baseline', 'candidate'):
+        path = Path(manifest[f'{side}_path'])
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != manifest[f'{side}_raw_sha256']:
+            raise ValueError(f'{side}: source changed after export; re-export and re-prove.')
+    expected_files = {str(Path(case)/name) for case in EXPECTED
+                      for name in ('a.sv','b.sv','miter.sv','prove.ys')}
+    digests = manifest.get('generated_files_sha256', {})
+    if set(digests) != expected_files:
+        raise ValueError('Generated proof-file inventory is incomplete or unexpected.')
+    for name, expected_hash in digests.items():
+        actual = hashlib.sha256((a.proof_dir/name).read_bytes()).hexdigest()
+        if actual != expected_hash:
+            raise ValueError(f'{name}: exported proof changed; do not certify it.')
+    rows = []
+    for name, expected in manifest['expected'].items():
+        work = a.proof_dir/name
+        if any((work/x).exists() for x in ('yosys.log','console.txt','counterexample.vcd')):
+            raise ValueError(f'{name}: stale output exists; use a fresh export directory.')
+        try:
+            r = subprocess.run([a.yosys,'-l','yosys.log','-s','prove.ys'], cwd=work,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               text=True, errors='replace', timeout=a.timeout, check=False)
+            (work/'console.txt').write_text(r.stdout, encoding='utf-8')
+            logfile = work/'yosys.log'
+            log = logfile.read_text(encoding='utf-8',errors='replace') if logfile.exists() else r.stdout
+            if expected == 'PASS':
+                ok = r.returncode == 0 and PASS_MARK in log and FAIL_MARK not in log
+            else:
+                # -verify must fail for the actual SAT counterexample, not parsing.
+                ok = r.returncode != 0 and FAIL_MARK in log and (work/'counterexample.vcd').is_file()
+            row = {'case':name, 'expected':expected, 'exit_code':r.returncode, 'passed':ok}
+        except subprocess.TimeoutExpired:
+            row = {'case':name, 'expected':expected, 'passed':False, 'error':'TIMEOUT: inconclusive'}
+        rows.append(row)
+        print(json.dumps(row))
+        if not row['passed']:
+            break
+    ok_all = len(rows) == len(manifest['expected']) and all(x['passed'] for x in rows)
+    (a.proof_dir/'results.json').write_text(json.dumps({'all_passed':ok_all,'results':rows},indent=2)+'\n',encoding='utf-8')
+    return 0 if ok_all else 1
+
+if __name__ == '__main__':
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError, KeyError) as exc:
+        print(f'ERROR: {exc}', file=sys.stderr)
+        raise SystemExit(2)
+
+END FILE: run_divstep_proofs.py
+
+===============================================================================
+APPENDIX C. INDEPENDENT STANDALONE ARITHMETIC CHECK
+===============================================================================
+
+This SMT-LIB file expresses the same two-state recurrence at the bit-vector
+level. It was checked by the document author through the installed Z3 library.
+On an ordinary Z3 command-line installation:
+    z3 -smt2 divstep_formula.smt2
+Expected output:
+    unsat
+
+This is independent arithmetic evidence. It is NOT a replacement for compiling
+the source-derived SystemVerilog miter in Appendices A/B.
+
+BEGIN FILE: divstep_formula.smt2
+
+(set-logic QF_BV)
+(declare-fun dv () (_ BitVec 63))
+(declare-fun d () (_ BitVec 31))
+(define-fun t () (_ BitVec 32) ((_ extract 61 30) dv))
+(define-fun tail () (_ BitVec 30) ((_ extract 29 0) dv))
+(define-fun d32 () (_ BitVec 32) ((_ zero_extend 1) d))
+(define-fun old_take () Bool (bvuge t d32))
+(define-fun old_rem () (_ BitVec 32) (ite old_take (bvsub t d32) t))
+(define-fun old_next () (_ BitVec 63) (concat old_rem (concat tail (ite old_take #b1 #b0))))
+(define-fun diff () (_ BitVec 33) (bvsub ((_ zero_extend 1) t) ((_ zero_extend 2) d)))
+(define-fun new_take () Bool (= ((_ extract 32 32) diff) #b0))
+(define-fun new_rem () (_ BitVec 32) (ite new_take ((_ extract 31 0) diff) t))
+(define-fun new_next () (_ BitVec 63) (concat new_rem (concat tail (ite new_take #b1 #b0))))
+(assert (not (= old_next new_next)))
+(check-sat)
+
+END FILE: divstep_formula.smt2
+
+===============================================================================
+APPENDIX D. EVIDENCE RECORD TEMPLATE
+===============================================================================
+
+DSF-01 outcome:
+    NOT_STARTED / BLOCKED / ALREADY_DONE / FAIL_FUNCTIONAL /
+    NO_STRUCTURAL_GAIN / NO_PHYSICAL_GAIN / SMALL_WIN_NOT_AUTO_ADOPTED /
+    TIMING_OR_RESOURCE_REGRESSION / MEASUREMENT_INVALID / PASS_LOCAL
+
+Baseline:
+    BASE commit:
+    core Git blob:
+    raw/normalized core SHA-256:
+    current measured source-closure hashes:
+    wrapper/generator hashes:
+    tool versions:
+    QSF/SDC/macro/parameter record:
+    device/pin mode:
+
+Candidate:
+    implementation commit(s):
+    actual measured HEAD(s):
+    core raw/normalized SHA-256:
+    synthesis-source differences:
+    supporting test/mutant/manifest changes:
+
+Predeclared policy:
+    minimum saving per matched seed:
+    minimum setup WNS:
+    maximum matched setup-WNS loss:
+    timing coverage and hold requirements:
+    allowed DSP/memory changes:
+    seed list and fit-budget authorization:
+
+Proof:
+    source-derived A/A:
+    source-derived A/B:
+    M1 inversion:
+    M2 bit31:
+    M3 remainder:
+    M4 quotient:
+    counterexample/log locations and hashes:
+    full-core outside-slice comparison:
+
+Functional:
+    inventory and actual executed tests:
+    baseline failures/skips/omissions:
+    candidate failures/skips/omissions:
+    four parameter combinations:
+    stall/reset/throughput/cycle/payload evidence:
+    existing MATW-mutant control:
+    freshness/build identity:
+
+Mapping:
+    baseline raw reports/workspace:
+    candidate raw reports/workspace:
+    actual combinational metric used:
+    baseline sharing observed:
+    candidate change observed:
+    surviving/optimized divider stages:
+    unintended resource/state/source changes:
+    proceed/stop rationale:
+
+Physical results -- use one row per actual run, never fill missing values with 0:
+    variant | sourceCommit | seed | pins/vpins | ALM | regs | DSP | RAM |
+    memory bits | Fmax | setup WNS/TNS | hold WNS/TNS | other timing |
+    constraints valid | fresh/complete | raw evidence location
+
+Matched differences:
+    seed 2 saving and WNS loss:
+    seed 4 saving and WNS loss:
+    conservative local saving = minimum paired saving:
+    paired mean saving:
+    timing/resource policy satisfied at both seeds:
+
+Disposition:
+    adopted commit OR unmerged/reverted status:
+    active project unchanged/restored:
+    stale receipts identified:
+    remaining uncertainty:
+    next action, if any (must not silently broaden DSF-01):
+
+AUTHOR'S PRE-IMPLEMENTATION VALIDATION RECORD
+-------------------------------------------
+
+{
+  "scope": "Standalone bit-vector model of the current 63-bit divider step; not an HDL elaboration or FPGA measurement",
+  "solver": "4.13.3.0",
+  "symbolic_input_bits": 94,
+  "results": [
+    {
+      "mode": "healthy",
+      "answer": "UNSAT",
+      "expected": "UNSAT",
+      "passed": true
+    },
+    {
+      "mode": "inverted_borrow",
+      "answer": "SAT",
+      "expected": "SAT",
+      "passed": true
+    },
+    {
+      "mode": "wrong_bit31",
+      "answer": "SAT",
+      "expected": "SAT",
+      "passed": true
+    },
+    {
+      "mode": "unchanged_remainder",
+      "answer": "SAT",
+      "expected": "SAT",
+      "passed": true
+    },
+    {
+      "mode": "inverted_quotient",
+      "answer": "SAT",
+      "expected": "SAT",
+      "passed": true
+    }
+  ]
+}
+
+===============================================================================
+REFERENCES
+===============================================================================
+
+Repository sources are pinned to the inspected head, not moving branch URLs.
+[R3] in the text means both raw summaries R3a and R3b.
+
+[R1] fpga/rtl/common/zhao_project_core.sv
+https://github.com/Fabulu/zhaozhou/blob/891934fe19d534874785f42bd95759ae85476fd8/fpga/rtl/common/zhao_project_core.sv
+
+[R2] fpga/rtl/generated/zhao_terrain_pipe_rpp3_matw18_fit_top.manifest.json
+https://github.com/Fabulu/zhaozhou/blob/891934fe19d534874785f42bd95759ae85476fd8/fpga/rtl/generated/zhao_terrain_pipe_rpp3_matw18_fit_top.manifest.json
+
+[R3a] reports/synthesis/blockpaths/zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t11-pins-s2.fit.summary
+https://github.com/Fabulu/zhaozhou/blob/891934fe19d534874785f42bd95759ae85476fd8/reports/synthesis/blockpaths/zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t11-pins-s2.fit.summary
+
+[R3b] reports/synthesis/blockpaths/zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t11-pins-s4.fit.summary
+https://github.com/Fabulu/zhaozhou/blob/891934fe19d534874785f42bd95759ae85476fd8/reports/synthesis/blockpaths/zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t11-pins-s4.fit.summary
+
+[R4] runs/CLAUDE-RUNS/RUN-20260912-1856-ceiling-architecture/TASK_LOG.md
+https://github.com/Fabulu/zhaozhou/blob/891934fe19d534874785f42bd95759ae85476fd8/runs/CLAUDE-RUNS/RUN-20260912-1856-ceiling-architecture/TASK_LOG.md
+
+[R5] tools/quartus/run_block_fit.ps1
+https://github.com/Fabulu/zhaozhou/blob/891934fe19d534874785f42bd95759ae85476fd8/tools/quartus/run_block_fit.ps1
+
+[R6] CLAUDE.md
+https://github.com/Fabulu/zhaozhou/blob/891934fe19d534874785f42bd95759ae85476fd8/CLAUDE.md
+
+[R7] tests/CMakeLists.txt
+https://github.com/Fabulu/zhaozhou/blob/891934fe19d534874785f42bd95759ae85476fd8/tests/CMakeLists.txt
+
+[W1] Altera, Cyclone V Device Handbook, Arithmetic Mode.
+Supports the hardware context (two dedicated full adders per arithmetic ALM),
+not the assertion that Quartus retains a duplicate comparator in this design.
+https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/arithmetic-mode
+
+[W2] YosysHQ, Symbolic Model Checking, documented miter/SAT proof workflow.
+The source-derived exporter uses the same documented SAT equivalence approach.
+https://yosyshq.readthedocs.io/projects/yosys/en/0.44/using_yosys/more_scripting/model_checking.html
+
+All local savings thresholds, experiment budgets, and implementation proposals
+in this guide are newly proposed engineering policy. They are not measurements
+or quotations of an existing owner ruling. Equivalence is the mathematical
+claim; resource savings remain an empirical question.
+
+END OF GUIDE
