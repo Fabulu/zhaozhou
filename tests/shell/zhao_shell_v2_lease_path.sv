@@ -218,6 +218,30 @@ module zhao_shell_v2_lease_path (
     output logic [31:0] clear_handshakes_o,
     output logic [31:0] frames_admitted_o,
 
+    // ---- STRUCTURAL FAULT ENTRY ----------------------------------------
+    //
+    // The gate requires five distinct faults -- RCP qerr, expander wq
+    // overflow, consumed UV mismatch, invalid authoritative owner-mask
+    // identity, metajoin sidx3 -- to bypass normal quiet/clear, RELEASE the
+    // lease and produce no READY and no publication.
+    //
+    // NONE OF THEM IS REACHABLE FROM A QUIESCENT BIN PIPE, and a clause that
+    // cannot be reached is not evidence about the clause. So the shell's
+    // real aggregation is wired -- the bin pipe's structural outputs do
+    // drive the manager's fault port -- and an INJECTION port is OR'd beside
+    // it so the manager's response can be exercised now. The injection is
+    // the test's; the aggregation is the shell's, and it is the part that
+    // has to be right when real traffic arrives.
+    input  logic        fault_inject_valid_i,
+    input  logic        fault_inject_writer_i,
+    input  logic        fault_inject_slot_i,
+    input  logic [15:0] fault_inject_generation_i,
+    output logic        bin_raster_abort_o,
+    output logic        bin_sequence_mismatch_o,
+    output logic        bin_sequence_abort_o,
+    output logic        shell_fault_valid_o,
+    output logic [31:0] fault_pulses_o,
+
     output logic        blit_idle_o,
     output logic [31:0] blit_leases_acquired_o,
     output logic [31:0] blit_leases_refused_o,
@@ -242,6 +266,58 @@ module zhao_shell_v2_lease_path (
   assign bin_frame_begin_o = bin_frame_begin_w;
   assign clear_valid_o     = lease_clear_valid;
   assign clear_ready_o     = lease_clear_ready;
+
+  // THE SHELL'S FAULT ATTRIBUTION, and it is a decision rather than a wire.
+  // A structural fault is reported by the bin pipe with no identity of its
+  // own -- it is a property of the machine, not of a frame. The lease it
+  // belongs to is therefore whichever one is LIVE, and the manager needs
+  // that identity to match its lease record before it will latch anything.
+  // Getting this wrong is silent: an unmatched fault is simply ignored, the
+  // publication proceeds, and the frame that was ruined is shown.
+  logic        bin_fault_w;
+  logic        mgr_fault_valid, mgr_fault_writer, mgr_fault_slot;
+  logic [15:0] mgr_fault_generation;
+
+  assign bin_fault_w = bin_frame_fault_o || bin_lifetime_fault_o ||
+                       bin_raster_abort_o || bin_sequence_mismatch_o;
+
+  // AND IT MUST BE A PULSE. `zhao_video_slotmgr_v2` increments
+  // `faults_latched_o` on EVERY cycle a matching fault is asserted -- there
+  // is no "already faulted" guard on the counter, and `fault_ready_o` is
+  // simply `rst_n`, so the port is a level input with no handshake. The bin
+  // pipe's structural outputs are LEVELS that stay high until reset. Wiring
+  // one straight through turns a single structural fault into a fault count
+  // of however many cycles the machine sat in it.
+  //
+  // That is not a defect in the manager; it is an unstated obligation on
+  // whoever drives the port, and this is the first thing that ever drove it.
+  // Measured before it was fixed: a six-cycle injection read SIX faults.
+  logic fault_level_q;
+  logic fault_level_c;
+  assign fault_level_c = fault_inject_valid_i || bin_fault_w;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) fault_level_q <= 1'b0;
+    else fault_level_q <= fault_level_c;
+  end
+
+  assign mgr_fault_valid = fault_level_c && !fault_level_q;
+  assign mgr_fault_writer = fault_inject_valid_i ? fault_inject_writer_i
+                                                 : lease_writer_o;
+  assign mgr_fault_slot = fault_inject_valid_i ? fault_inject_slot_i
+                                               : lease_slot_o;
+  assign mgr_fault_generation = fault_inject_valid_i ? fault_inject_generation_i
+                                                     : lease_generation_o;
+
+  // Exposed so the test can assert the pulse is one cycle wide rather than
+  // inferring it from a count that happens to read 1.
+  logic [31:0] fault_pulses_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) fault_pulses_q <= 32'd0;
+    else if (mgr_fault_valid) fault_pulses_q <= fault_pulses_q + 32'd1;
+  end
+  assign fault_pulses_o = fault_pulses_q;
+  assign shell_fault_valid_o = mgr_fault_valid;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -418,7 +494,7 @@ module zhao_shell_v2_lease_path (
       .jobs_taken_o                 (),
       .job_stall_clocks_o           (),
       .quiet_o                      (bin_quiet_o),
-      .raster_abort_o               (),
+      .raster_abort_o               (bin_raster_abort_o),
       .local_attribute_abort_o      (),
       .local_fault_pulse_o          (),
       .local_fault_count_o          (),
@@ -429,8 +505,8 @@ module zhao_shell_v2_lease_path (
       .local_drop_count_o           (),
       .raster_jobs_started_o        (),
       .raster_jobs_sunk_o           (),
-      .sequence_abort_o             (),
-      .sequence_mismatch_o          (),
+      .sequence_abort_o             (bin_sequence_abort_o),
+      .sequence_mismatch_o          (bin_sequence_mismatch_o),
       .sequence_drop_count_o        (),
       .admission_sequence_o         (),
       .expected_sequence_o          (),
@@ -610,11 +686,11 @@ zhao_renderer_lease_v2 u_lease (
       .lease_base_o          (lease_base_o),
       .lease_span_o          (lease_span_o),
       .lease_fault_o         (lease_fault_o),
-      .fault_valid_i         (1'b0),
+      .fault_valid_i         (mgr_fault_valid),
       .fault_ready_o         (fault_ready_o),
-      .fault_writer_i        (1'b0),
-      .fault_slot_i          (1'b0),
-      .fault_generation_i    (16'd0),
+      .fault_writer_i        (mgr_fault_writer),
+      .fault_slot_i          (mgr_fault_slot),
+      .fault_generation_i    (mgr_fault_generation),
       .term_valid_i          (mterm_valid),
       .term_ready_o          (mterm_ready),
       .term_writer_i         (mterm_writer),

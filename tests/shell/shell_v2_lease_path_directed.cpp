@@ -69,6 +69,10 @@ int main(int argc, char** argv) {
   dut.bin_frame_end_i = 0;
   dut.bin_grid_w_i = 2;
   dut.bin_grid_h_i = 2;
+  dut.fault_inject_valid_i = 0;
+  dut.fault_inject_writer_i = 0;
+  dut.fault_inject_slot_i = 0;
+  dut.fault_inject_generation_i = 0;
   dut.frame_ready_i = 0;
   dut.term_valid_i = 0;
   dut.term_slot_i = 0;
@@ -440,6 +444,97 @@ int main(int argc, char** argv) {
     dut.fb_req_ready_i = 0;
     for (int i = 0; i < 10; ++i) tick(dut);
     check(dut.blit_idle_o == 1, "the released blit leaf returns to idle", 1, dut.blit_idle_o);
+  }
+
+  // =======================================================================
+  // A STRUCTURAL FAULT SUPPRESSES PUBLICATION AND RELEASES THE LEASE
+  // =======================================================================
+  //
+  // The gate: each of the five structural faults bypasses normal
+  // quiet/clear, RELEASES the lease, and produces no READY and no
+  // publication. None of them is reachable from a quiescent bin pipe, so the
+  // fault is injected at the shell's fault port -- the same port the bin
+  // pipe's own structural outputs are aggregated into.
+  //
+  // THE IDENTITY IS THE POINT. The manager latches a fault only when it
+  // MATCHES the live lease. An unmatched fault is silently ignored, the
+  // publication proceeds, and the ruined frame is shown -- so the case
+  // below drives the live lease's own writer/slot/generation, and a
+  // mismatched one is checked first to prove the match is doing work.
+  {
+    // A fresh lease to ruin.
+    dut.frame_req_valid_i = 1;
+    dut.frame_req_mode_i = 1;
+    const int to_lease2 = wait_for(
+        dut, [&] { return dut.lease_valid_o != 0; }, 4000);
+    check(to_lease2 >= 0, "a lease is live for the fault case", 1, to_lease2 >= 0);
+    dut.frame_req_valid_i = 0;
+
+    const uint32_t pubs_before = dut.publications_o;
+    const uint32_t ready_before = dut.ready_events_o;
+    const uint32_t faults_before = dut.faults_latched_o;
+    const uint8_t live_slot = dut.lease_slot_o;
+    const uint16_t live_gen = dut.lease_generation_o;
+
+    // FIRST, A FAULT THAT DOES NOT MATCH. It must latch nothing -- otherwise
+    // the match below proves only that the port is connected.
+    dut.fault_inject_writer_i = 1;
+    dut.fault_inject_slot_i = live_slot;
+    dut.fault_inject_generation_i = static_cast<uint16_t>(live_gen ^ 0xFFFFu);
+    dut.fault_inject_valid_i = 1;
+    for (int i = 0; i < 6; ++i) tick(dut);
+    dut.fault_inject_valid_i = 0;
+    for (int i = 0; i < 4; ++i) tick(dut);
+    check(dut.faults_latched_o == faults_before,
+          "a fault with the wrong generation latches nothing", faults_before, dut.faults_latched_o);
+
+    // NOW THE MATCHING ONE.
+    dut.fault_inject_generation_i = live_gen;
+    dut.fault_inject_valid_i = 1;
+    for (int i = 0; i < 6; ++i) tick(dut);
+    dut.fault_inject_valid_i = 0;
+    for (int i = 0; i < 4; ++i) tick(dut);
+    // EXACTLY ONCE, not once per cycle. The manager has no "already faulted"
+    // guard on this counter and its ready is simply `rst_n`, so a level held
+    // across six cycles reads SIX faults -- which is what this measured
+    // before the shell edge-detected the port. The bin pipe's structural
+    // outputs are levels that stay high until reset, so a shell that wires
+    // one straight through reports a fault count of however many cycles the
+    // machine sat in the fault.
+    check(dut.faults_latched_o == faults_before + 1,
+          "a matching fault is latched EXACTLY ONCE, not once per cycle", faults_before + 1,
+          dut.faults_latched_o);
+    check(dut.fault_pulses_o == 2,
+          "two fault pulses were presented in total (one unmatched, one matched)", 2,
+          dut.fault_pulses_o);
+    check(dut.lease_fault_o == 1, "the live lease is marked faulted", 1, dut.lease_fault_o);
+
+    // A clean publication offered AFTER the fault must not become one.
+    dut.term_slot_i = static_cast<uint8_t>(live_slot);
+    dut.term_generation_i = live_gen;
+    dut.term_publish_i = 1;
+    dut.term_fault_i = 0;
+    dut.term_valid_i = 1;
+    for (int i = 0; i < 200; ++i) {
+      if (dut.term_valid_i && dut.term_ready_o) {
+        tick(dut);
+        dut.term_valid_i = 0;
+        dut.eval();
+        break;
+      }
+      tick(dut);
+    }
+    for (int i = 0; i < 30; ++i) tick(dut);
+
+    check(dut.publications_o == pubs_before, "the faulted frame produces NO publication",
+          pubs_before, dut.publications_o);
+    check(dut.ready_events_o == ready_before, "the faulted frame produces NO ready event",
+          ready_before, dut.ready_events_o);
+    check(dut.lease_valid_o == 0, "the faulted lease is released", 0, dut.lease_valid_o);
+    std::printf(
+        "[shell_v2_lease_path] fault: latched %u->%u, publications held at %u, "
+        "ready held at %u\n",
+        faults_before, dut.faults_latched_o, dut.publications_o, dut.ready_events_o);
   }
 
   std::printf(
