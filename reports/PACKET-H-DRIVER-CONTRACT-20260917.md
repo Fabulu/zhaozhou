@@ -16,8 +16,8 @@ zhao_video_slotmgr  ->  zhao_video_slotmgr_v2     22 ports -> 74
 Ports are not the work, though. **Inputs are the work**, because every one of
 them is a wire somebody has to decide the source of, and an input nobody
 decided about is a `PINMISSING` at the next fit or — worse — a tie-off that
-looks deliberate. There are **57 new inputs**. Twelve already have a producer.
-The other forty-five are this packet.
+looks deliberate. There are **57 new inputs**. Nineteen now have a producer.
+The other thirty-eight are this packet.
 
 ---
 
@@ -98,7 +98,7 @@ ranges written eighty lines apart.
 
 ---
 
-## 3. The forty-five, grouped by where they have to come from
+## 3. The thirty-eight, grouped by where they have to come from
 
 ### 3.1 V3 programming: config, palette, page generation (20)
 
@@ -176,7 +176,25 @@ metajoin sidx3 — must reach this port, bypass normal quiet/clear, RELEASE the
 lease and produce no READY or publication. This is the largest single clause of
 the Packet-H gate and it is four wires.
 
-### 3.5 READY/swap CDC return (7)
+### 3.5 READY/swap CDC return (7) -- CLOSED 2026-09-17
+
+> **Done.** `zhao_fb_ready_cdc_v2` and `zhao_video_ready_bridge_v2` are
+> composed in `tests/shell/zhao_shell_v2_lease_path.sv` and the round trip
+> runs: manager READY -> pack -> forward FIFO -> bridge holds the tuple ->
+> FRAMECTL swap -> reverse echo -> reverse FIFO -> unpack -> manager ->
+> displayed, in 10 cycles. It also INSTALLS `zhao_fb_tuple_pkg`, which until
+> then was a package with no consumer.
+>
+> Two things fell out. The **barrier is self-driven**: the CDC raises both
+> `barrier_done` outputs from its own release chains, so nothing external
+> declares it complete and two more test inputs disappeared. And the first
+> wiring was a **CDC violation** -- the bridge's `cdc_ready_*` is the
+> VIDEO-domain output of the forward FIFO, not a GPU-domain source, so a
+> video flop sampled a GPU level. It presented as `ready_events_o` reading
+> 1 while the bridge's `pending_q` stayed 0: the screen never updates and
+> every counter is right.
+
+**Original entry:**
 
 ```
 ready_ready_i, swap_{writer,slot,generation,mode,base,span}_i
