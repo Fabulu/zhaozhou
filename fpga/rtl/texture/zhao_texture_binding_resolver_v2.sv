@@ -258,6 +258,45 @@ module zhao_texture_binding_resolver_v2 #(
   // Two physical page banks.  Payload is not reset; validity masks are.
   binding_row_t page0_m [0:255];
   binding_row_t page1_m [0:255];
+
+  // ---- ONE READ PORT PER BANK, so each infers as M10K ----------------------
+  //
+  // These arrays used to be read directly by both consumers, giving each array
+  // two registered reads at two addresses. Quartus cannot map that onto one
+  // M10K read port, so it kept the whole table in fabric:
+  //
+  //     Info (276007): RAM logic "...page0_m" is uninferred due to
+  //     asynchronous read logic
+  //
+  // 2 x 256 x 75 is 38,400 flip-flops, and the first composed measurement of
+  // the sibling shell put this block at 28,957 ALUT / 39,449 registers -- 44%
+  // of the whole composition's logic and 49% of its registers, on a design
+  // that needed 62,534 ALMs against a 41,910-ALM device.
+  //
+  // THE TWO READERS NEVER COLLIDE. The data plane reads the ACTIVE bank, the
+  // CRC walk reads the STAGING bank, and `staging_bank_q == ~active_bank_q` is
+  // maintained at every assignment to either. So each array needs ONE address
+  // and ONE enable, chosen by which role that bank currently holds.
+  //
+  // THE ENABLE IS NOT OPTIONAL. Registering the read unconditionally is how
+  // this repository's most-cited defect was built: a metadata bank whose
+  // output "tracked whatever address was being OFFERED while the stage
+  // downstream held the previous response", yielding one response's data with
+  // another's metadata while every counter balanced. The enables below
+  // reproduce the conditions the old conditional loads used, so the held-row
+  // behaviour is unchanged.
+  logic         crc_read_first_c, crc_read_next_c, crc_re_c, data_re_c;
+  logic [7:0]   crc_ra_c;
+  logic         page0_re_c, page1_re_c;
+  logic [7:0]   page0_ra_c, page1_ra_c;
+  binding_row_t page0_rd_q, page1_rd_q;
+
+  // The bank each consumer read FROM, latched with the read. Muxing on the
+  // live `active_bank_q` would select the wrong register if the atomic
+  // activation edge landed between a read and its use. The design only swaps
+  // on data quiet, so that cannot happen today -- a one-bit latch makes the
+  // argument unnecessary rather than load-bearing.
+  logic crc_bank_q, read_bank_q;
   logic [255:0] page0_valid_q, page1_valid_q;
   logic active_bank_q, staging_bank_q;
   logic [7:0] active_generation_q, staging_generation_q;
@@ -356,10 +395,9 @@ module zhao_texture_binding_resolver_v2 #(
   logic [7:0] crc_selector_q;
   logic [3:0] crc_byte_q;
   logic [31:0] crc_q, crc_expected_q;
-  logic [74:0] crc_row_q;
   logic crc_row_present_q, crc_have_row_q;
   wire [79:0] crc_canonical_row_c = crc_row_present_q
-      ? {5'b0, crc_row_q} : 80'd0;
+      ? {5'b0, crc_row_c} : 80'd0;
   wire [7:0] crc_byte_c =
       crc_canonical_row_c[crc_byte_q*8 +: 8];
   wire [31:0] crc_step_c = crc32_byte(crc_q, crc_byte_c);
@@ -369,7 +407,6 @@ module zhao_texture_binding_resolver_v2 #(
   // --------------------------------------------------------------------------
   // Data plane: a synchronous read hold followed by one reserved disposition.
   sample_job_t read_job_q;
-  binding_row_t read_row_q;
   logic read_v_q, read_row_present_q;
 
   planner_job_t disposition_plan_q;
@@ -384,6 +421,40 @@ module zhao_texture_binding_resolver_v2 #(
   assign req_ready_o = read_ready_c;
   wire req_accept_c = req_valid_i && req_ready_o;
 
+  // The two CRC-walk reads are mutually exclusive branches of one FSM writing
+  // one destination, so they are ONE port with a muxed address, not two.
+  always_comb begin
+    crc_read_first_c = (loader_state_q == LOAD_CRC_SCAN) && !crc_have_row_q;
+    crc_read_next_c  = (loader_state_q == LOAD_CRC_SCAN) && crc_have_row_q &&
+                       (crc_byte_q == 4'd9) && (crc_selector_q != 8'hFF);
+    crc_re_c = crc_read_first_c || crc_read_next_c;
+    crc_ra_c = crc_read_first_c ? crc_selector_q : crc_next_selector_c;
+
+    // Exactly the condition the data plane's own read used.
+    data_re_c = req_accept_c && !req_force_refuse_i &&
+                !req_selector_overflow_i &&
+                (req_page_generation_i != 8'd0) &&
+                (req_page_generation_i == active_generation_q);
+
+    // page0 serves the data plane while it is ACTIVE and the CRC walk while it
+    // is STAGING; page1 is the complement.
+    page0_re_c = active_bank_q ? crc_re_c : data_re_c;
+    page0_ra_c = active_bank_q ? crc_ra_c : req_binding_selector_i;
+    page1_re_c = active_bank_q ? data_re_c : crc_re_c;
+    page1_ra_c = active_bank_q ? req_binding_selector_i : crc_ra_c;
+  end
+
+  // The inferrable memories. No reset on the output registers: a reset there is
+  // one of the things that costs the inference, and every consumer gates on its
+  // own `_present` flag rather than on the row's contents.
+  always_ff @(posedge clk) begin
+    if (page0_re_c) page0_rd_q <= page0_m[page0_ra_c];
+    if (page1_re_c) page1_rd_q <= page1_m[page1_ra_c];
+  end
+
+  wire binding_row_t crc_row_c  = crc_bank_q  ? page1_rd_q : page0_rd_q;
+  wire binding_row_t read_row_c = read_bank_q ? page1_rd_q : page0_rd_q;
+
   assign iss_tmu_valid_o = req_accept_c;
   assign iss_tmu_handle_o = req_sample_handle_i;
 
@@ -391,19 +462,19 @@ module zhao_texture_binding_resolver_v2 #(
   logic read_row_bad_c, read_witness_bad_c;
   logic read_generation_bad_c, read_refuse_c;
   always_comb begin
-    read_class_c = binding_class(read_row_q.mode);
+    read_class_c = binding_class(read_row_c.mode);
     read_generation_bad_c =
         (read_job_q.page_generation == 8'd0) ||
         (read_job_q.page_generation != active_generation_q);
     read_row_bad_c = !read_row_present_q ||
-                     !binding_row_legal(read_row_q);
+                     !binding_row_legal(read_row_c);
     read_witness_bad_c =
         (read_job_q.handle[GENW +: 2] == 2'd0) &&
         ({read_job_q.witness_class,
           read_job_q.witness_palette_slot,
           read_job_q.witness_palette_generation} !=
-         {read_class_c, read_row_q.palette_slot,
-          read_row_q.palette_generation});
+         {read_class_c, read_row_c.palette_slot,
+          read_row_c.palette_generation});
     read_refuse_c = read_job_q.force_refuse ||
                     read_job_q.selector_overflow ||
                     read_generation_bad_c || read_row_bad_c ||
@@ -451,7 +522,6 @@ module zhao_texture_binding_resolver_v2 #(
       crc_byte_q <= 4'd0;
       crc_q <= 32'd0;
       crc_expected_q <= 32'd0;
-      crc_row_q <= '0;
       crc_row_present_q <= 1'b0;
       crc_have_row_q <= 1'b0;
 
@@ -531,13 +601,11 @@ module zhao_texture_binding_resolver_v2 #(
       // CRC removes the measured ten-byte combinational chain.
       if (loader_state_q == LOAD_CRC_SCAN) begin
         if (!crc_have_row_q) begin
-          if (staging_bank_q) begin
-            crc_row_q <= page1_m[crc_selector_q];
+          crc_bank_q <= staging_bank_q;
+          if (staging_bank_q)
             crc_row_present_q <= page1_valid_q[crc_selector_q];
-          end else begin
-            crc_row_q <= page0_m[crc_selector_q];
+          else
             crc_row_present_q <= page0_valid_q[crc_selector_q];
-          end
           crc_byte_q <= 4'd0;
           crc_have_row_q <= 1'b1;
         end else if (crc_byte_q != 4'd9) begin
@@ -563,13 +631,11 @@ module zhao_texture_binding_resolver_v2 #(
           crc_q <= crc_step_c;
           crc_selector_q <= crc_next_selector_c;
           crc_byte_q <= 4'd0;
-          if (staging_bank_q) begin
-            crc_row_q <= page1_m[crc_next_selector_c];
+          crc_bank_q <= staging_bank_q;
+          if (staging_bank_q)
             crc_row_present_q <= page1_valid_q[crc_next_selector_c];
-          end else begin
-            crc_row_q <= page0_m[crc_next_selector_c];
+          else
             crc_row_present_q <= page0_valid_q[crc_next_selector_c];
-          end
         end
       end
 
@@ -608,15 +674,18 @@ module zhao_texture_binding_resolver_v2 #(
           if (!req_force_refuse_i && !req_selector_overflow_i &&
               (req_page_generation_i != 8'd0) &&
               (req_page_generation_i == active_generation_q)) begin
-            if (active_bank_q) begin
-              read_row_q <= page1_m[req_binding_selector_i];
+            read_bank_q <= active_bank_q;
+            if (active_bank_q)
               read_row_present_q <= page1_valid_q[req_binding_selector_i];
-            end else begin
-              read_row_q <= page0_m[req_binding_selector_i];
+            else
               read_row_present_q <= page0_valid_q[req_binding_selector_i];
-            end
           end else begin
-            read_row_q <= '0;
+            // The row itself is no longer cleared here: a constant written into
+            // a RAM read register costs the inference. Every consumer
+            // short-circuits on `read_row_present_q` -- `read_row_bad_c` tests
+            // it first -- and the disposition stage loads its plan and its
+            // refusal on the same edge under the same condition, so a held row
+            // behind a cleared present can never be published.
             read_row_present_q <= 1'b0;
           end
           sample_jobs_accepted_o <= sample_jobs_accepted_o + 32'd1;
@@ -631,11 +700,11 @@ module zhao_texture_binding_resolver_v2 #(
           disposition_handle_q <= read_job_q.handle;
           disposition_plan_q.route_token <=
               {read_class_c, read_job_q.handle};
-          disposition_plan_q.base <= read_row_q.base;
-          disposition_plan_q.mode <= read_row_q.mode;
-          disposition_plan_q.palette_slot <= read_row_q.palette_slot;
+          disposition_plan_q.base <= read_row_c.base;
+          disposition_plan_q.mode <= read_row_c.mode;
+          disposition_plan_q.palette_slot <= read_row_c.palette_slot;
           disposition_plan_q.palette_generation <=
-              read_row_q.palette_generation;
+              read_row_c.palette_generation;
           disposition_plan_q.u <= read_job_q.u;
           disposition_plan_q.v <= read_job_q.v;
           disposition_plan_q.lod_q4_4 <= read_job_q.lod_q4_4;
