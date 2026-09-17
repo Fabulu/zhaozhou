@@ -770,6 +770,32 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > IS in Packet D's `PROTECTED_HASHES`, so it is an owner decision rather than
 > editable work — and it is the obvious next one.
 >
+> ### And the distribution afterwards, which is where the next work goes
+>
+> The block itself went **28,957 → 2,770 ALUT** and **39,449 → 901 registers**.
+> What is left has no dominant consumer, which is a different and healthier
+> problem than the one before:
+>
+> | leaf | ALUT | registers |
+> |---|---:|---:|
+> | `zhao_texture_v3own` | 3,745 | 2,604 |
+> | `zhao_raster_edgewalk` | 3,350 | 934 |
+> | `zhao_texture_binding_resolver_v2` | 2,770 | 901 |
+> | `zhao_cmd_dma` | 2,361 | 1,141 |
+> | `zhao_raster_attrgrad_v2` x3 | ~1,530 each | 734 each |
+> | `zhao_geom_binner_v2` | 1,406 | 2,008 |
+>
+> `zhao_raster_edgewalk` is now the largest single leaf, and the candidate list
+> below already names it: *"the largest zero-memory block; its factored-row
+> proposal is unimplemented."* It is also the right SHAPE for the owner's
+> direction — 3,350 ALUT against 2 DSP — where the rows above it that carry
+> nine to eighteen DSPs are not.
+>
+> **`zhao_geom_binner_v2` is worth a second look for the opposite reason.** It
+> declares 48,856 array bits and shows 2,008 registers, so those arrays already
+> infer — 2,008 flip-flops cannot hold 48,856 bits. It is on the no-fit-row
+> list and is NOT a gap.
+>
 > **AND THERE IS A TRAP IN IT, which is this repository's most-cited defect
 > wearing the opposite sign.** Both reads are CONDITIONAL today:
 >
