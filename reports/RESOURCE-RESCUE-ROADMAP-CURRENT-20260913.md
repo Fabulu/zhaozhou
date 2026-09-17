@@ -390,6 +390,7 @@ programming channel run for real, and the swap echo through both CDC FIFOs.
 | V3 programming channel | **wired and run**; the seal (CRC32C) is still owed |
 | READY/swap CDC round trip | **measured** -- 10 cycles, through the real FIFOs |
 | every new port connected | **audited** -- `packet_h_tieoff_audit`, 0 silent |
+| nested V3 has no migration shadows | **witnessed** -- `packet_h_shadow_witness`, and the witness fires on two broken trees |
 | old/new differential under paired traffic | not started |
 | sequence-abort RELEASE control | not started |
 | five structural faults each through the reset barrier | one path proven; the five are not individually reachable yet |
