@@ -38,11 +38,24 @@ namespace {
 
 using Dut = Vzhao_shell_v2_lease_path;
 
+// TWO CLOCKS NOW. The bridge is the CDC, and the shell's frozen ratio is
+// vid = gpu/2, so the video edge lands on every other GPU edge. The ratio is
+// not cosmetic: the bridge's reset-release chains and its barrier are three
+// flops in each domain, and a video clock that never ticks leaves the lease
+// gate shut forever.
+int g_gpu_edges = 0;
+
 void tick(Dut& d) {
   d.clk = 0;
   d.eval();
   d.clk = 1;
   d.eval();
+  if ((++g_gpu_edges & 1) == 0) {
+    d.vid_clk = 0;
+    d.eval();
+    d.vid_clk = 1;
+    d.eval();
+  }
 }
 
 // Run until `pred` holds, or give up. Returns the cycles taken, or -1.
@@ -63,7 +76,13 @@ int main(int argc, char** argv) {
 
   dut.clk = 0;
   dut.rst_n = 0;
-  dut.lease_open_i = 0;
+  dut.vid_clk = 0;
+  dut.vid_rst_n = 0;
+
+  dut.blank_cmd_i = 0;
+  dut.scanout_ack_i = 0;
+  dut.frame_swap_valid_i = 0;
+  dut.frame_swap_slot_i = 0;
   dut.frame_req_valid_i = 0;
   dut.frame_req_mode_i = 0;
   dut.bin_frame_end_i = 0;
@@ -79,14 +98,7 @@ int main(int argc, char** argv) {
   dut.term_generation_i = 0;
   dut.term_publish_i = 0;
   dut.term_fault_i = 0;
-  dut.ready_ready_i = 0;
-  dut.swap_valid_i = 0;
-  dut.swap_writer_i = 0;
-  dut.swap_slot_i = 0;
-  dut.swap_generation_i = 0;
-  dut.swap_mode_i = 0;
-  dut.swap_base_i = 0;
-  dut.swap_span_i = 0;
+
   dut.blit_dispatch_valid_i = 0;
   dut.blit_dispatch_slot_i = 0;
   dut.blit_dispatch_mode_i = 0;
@@ -96,8 +108,19 @@ int main(int argc, char** argv) {
   tick(dut);
   tick(dut);
   dut.rst_n = 1;
+  // THE VIDEO DOMAIN STAYS IN RESET for the barrier-closed case below.
+  // `zhao_fb_ready_cdc_v2` raises `vid_barrier_done_o` from its own
+  // release chain, and the bridge will not open the lease gate without it,
+  // so a video domain still in reset is exactly why the barrier is shut --
+  // a real state, and the one the reset-epoch clause is about. Releasing
+  // both resets together opened the gate in FOUR cycles and the case had
+  // nothing left to observe.
   dut.eval();
   tick(dut);
+
+  // The barriers stay UNDONE here on purpose: that is the state the
+  // barrier-closed case below is about, and declaring them done at reset
+  // opened the gate in zero cycles and made that case pass for no reason.
 
   check(dut.requests_accepted_o == 0, "manager starts with no accepted requests", 0,
         dut.requests_accepted_o);
@@ -113,13 +136,24 @@ int main(int argc, char** argv) {
   check(dut.requests_accepted_o == 0, "barrier closed: no request reaches the manager", 0,
         dut.requests_accepted_o);
 
-  // ---- open the barrier and let the request through ------------------------
-  dut.lease_open_i = 1;
+  // ---- wait for the BRIDGE to open the barrier ----------------------------
+  // Release the video domain. Nothing here declares the barrier DONE: `zhao_fb_ready_cdc_v2` raises
+  // both `barrier_done` outputs from its own reset-release chains and the
+  // bridge consumes them, so the whole reset-epoch barrier is self-driven
+  // and the test only ever releases the two resets. An earlier version drove
+  // the barriers directly and the gate opened in ZERO cycles, which made the
+  // barrier-closed case above pass for no reason at all.
+  dut.vid_rst_n = 1;
+  dut.eval();
+  const int to_open = wait_for(
+      dut, [&] { return dut.lease_open_o != 0; }, 4000);
+  check(to_open >= 0, "the bridge opens the lease gate", 1, to_open >= 0);
+  std::printf("[shell_v2_lease_path] lease gate opened after %d cycles\n", to_open);
   // The clear is no longer accepted by the test. `zhao_geom_bin_pipe_v2`
   // accepts it, and only once the binner and tile path are quiet.
   //
   dut.frame_ready_i = 1;  // the render path accepts the frame
-  dut.ready_ready_i = 1;  // the CDC accepts the publication
+  // `ready_ready` is the BRIDGE's now, not the test's.
 
   // THE BINNER HAS A COLD INIT AND IT GATES THE FIRST FRAME. This is a real
   // property of the composition, not a testbench detail: the bin pipe raises
@@ -207,18 +241,39 @@ int main(int argc, char** argv) {
         dut.faults_latched_o);
 
   // ---- video echoes the swap ----------------------------------------------
-  dut.swap_valid_i = 1;
-  dut.swap_writer_i = 1;
-  dut.swap_slot_i = static_cast<uint8_t>(slot);
-  dut.swap_generation_i = generation;
-  dut.swap_mode_i = 1;
-  dut.swap_base_i = dut.ready_base_o;
-  dut.swap_span_i = dut.ready_span_o;
+  // THE ECHO IS NO LONGER HAND-BUILT. The test used to assemble the six swap
+  // fields itself and hand them to the manager, which meant the echo agreed
+  // with the publication because the same driver wrote both. Now the bridge
+  // holds the published tuple, VIDEO says "I swapped to this slot", and the
+  // bridge returns that exact tuple through the reverse CDC. If the layout
+  // were wrong, THIS is the path that would carry a plausible wrong slot.
+  //
+  // The bridge advertises which slot it is holding, one-hot, and refuses a
+  // swap for any other -- so the test reads the advertisement rather than
+  // assuming it matches the frame.
+  const int to_ready_slot = wait_for(
+      dut, [&] { return dut.frame_slot_ready_o != 0; }, 4000);
+  check(to_ready_slot >= 0, "the bridge advertises a ready slot", 1, to_ready_slot >= 0);
+  // The bridge is HOLDING the published tuple, which is the fact the echo
+  // depends on. It was 0 here while `ready_events_o` read 1, and that gap is
+  // what exposed the missing CDC.
+  check(dut.bridge_pending_o == 1, "the bridge holds the published tuple", 1, dut.bridge_pending_o);
+  std::printf(
+      "[shell_v2_lease_path] bridge: pending=%u slot_ready=%u blank_active=%u "
+      "ready_enq=%u ready_deq=%u\n",
+      dut.bridge_pending_o, dut.frame_slot_ready_o, dut.blank_active_o, dut.ready_enqueued_o,
+      dut.ready_dequeued_o);
+  const uint8_t advertised = (dut.frame_slot_ready_o & 0x2u) ? 1 : 0;
+  check(advertised == slot, "the advertised slot is the frame's", slot, advertised);
+
+  dut.frame_swap_slot_i = advertised;
+  dut.frame_swap_valid_i = 1;
+  dut.scanout_ack_i = 1;
 
   const int to_disp = wait_for(dut, [&] { return dut.displayed_valid_o != 0; });
   check(to_disp >= 0, "the echoed swap becomes the displayed record", 1, to_disp >= 0);
   tick(dut);
-  dut.swap_valid_i = 0;
+  dut.frame_swap_valid_i = 0;
   check(dut.displayed_slot_o == slot, "the displayed record is the frame's slot", slot,
         dut.displayed_slot_o);
   check(dut.displayed_generation_o == generation, "the displayed record is the frame's generation",

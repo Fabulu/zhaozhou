@@ -151,8 +151,7 @@ int main() {
   d.eval();
   const __uint128_t only_gen = read_packed(d);
   const __uint128_t want_gen = static_cast<__uint128_t>(0xFFFFu) << 66;
-  check(only_gen == want_gen,
-        "an all-ones generation touches bits 81:66 and nothing else", 1,
+  check(only_gen == want_gen, "an all-ones generation touches bits 81:66 and nothing else", 1,
         only_gen == want_gen);
 
   d.generation_i = 0;
@@ -160,8 +159,7 @@ int main() {
   d.eval();
   const __uint128_t only_span = read_packed(d);
   const __uint128_t want_span = static_cast<__uint128_t>(0xFFFFFFFFu) << 0;
-  check(only_span == want_span,
-        "an all-ones span touches bits 31:0 and nothing else", 1,
+  check(only_span == want_span, "an all-ones span touches bits 31:0 and nothing else", 1,
         only_span == want_span);
 
   std::printf("[fb_tuple] layout writer=%u slot=%u gen=%u mode=%u base=%u span=%u\n", d.writer_lo_o,

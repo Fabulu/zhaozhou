@@ -42,12 +42,50 @@
 //      recomputed. Exported so the testbench can check it moves with the mode.
 //   5. engine1_raw_last is off this path.
 
-module zhao_shell_v2_lease_path (
+module zhao_shell_v2_lease_path
+  import zhao_pkg::*, zhao_fb_tuple_pkg::*;
+(
     input  logic        clk,
     input  logic        rst_n,
 
     // The Packet-H reset-epoch barrier, normally from the CDC bridge.
-    input  logic        lease_open_i,
+    // ---- THE VIDEO DOMAIN AND THE BARRIER -------------------------------
+    //
+    // `lease_open` is NO LONGER A TEST INPUT. It comes from
+    // `zhao_video_ready_bridge_v2`, which opens the gate once per reset epoch
+    // only after both CDC barriers and a synchronized blank acknowledgement.
+    // Holding it high from the test asserted the barrier clause instead of
+    // exercising it.
+    input  logic        vid_clk,
+    input  logic        vid_rst_n,
+    // THE BARRIERS ARE NOT TEST INPUTS EITHER. `zhao_fb_ready_cdc_v2`
+    // produces `gpu_barrier_done_o` and `vid_barrier_done_o` from its own
+    // reset-release chains, and the bridge consumes them. The whole
+    // reset-epoch barrier is therefore self-driven and the test only
+    // releases the two resets.
+    input  logic        blank_cmd_i,
+    input  logic        scanout_ack_i,
+
+    // The FRAMECTL side of the echo: video says "I swapped to this slot" and
+    // the bridge turns the tuple it holds into the reverse echo.
+    input  logic        frame_swap_valid_i,
+    input  logic        frame_swap_slot_i,
+
+    output logic        lease_open_o,
+    output logic        blank_ack_o,
+    output logic        blank_active_o,
+    output logic        bridge_pending_o,
+    output logic [1:0]  frame_slot_ready_o,
+    output logic        gpu_reset_released_o,
+    output logic        vid_reset_released_o,
+    output logic        gpu_barrier_done_o,
+    output logic        vid_barrier_done_o,
+    output logic        cdc_gpu_protocol_fault_o,
+    output logic        cdc_vid_protocol_fault_o,
+    output logic [31:0] ready_enqueued_o,
+    output logic [31:0] ready_dequeued_o,
+    output logic [31:0] swap_enqueued_o,
+    output logic [31:0] swap_dequeued_o,
 
     // The renderer's frame request.
     input  logic        frame_req_valid_i,
@@ -86,7 +124,6 @@ module zhao_shell_v2_lease_path (
 
     // The manager's ready publication, normally into the CDC bridge.
     output logic        ready_valid_o,
-    input  logic        ready_ready_i,
     output logic        ready_writer_o,
     output logic        ready_slot_o,
     output logic [15:0] ready_generation_o,
@@ -94,15 +131,12 @@ module zhao_shell_v2_lease_path (
     output logic [31:0] ready_base_o,
     output logic [31:0] ready_span_o,
 
-    // The swap echo, normally from the CDC bridge after video accepts.
-    input  logic        swap_valid_i,
+    // THE SWAP ECHO IS NO LONGER SIX TEST INPUTS. It arrives as the bridge's
+    // 84-bit reverse tuple and is unpacked through zhao_fb_tuple_pkg -- which
+    // is the entire reason that package exists, and the path on which a
+    // reversed layout shows a plausible WRONG slot while every count
+    // balances.
     output logic        swap_ready_o,
-    input  logic        swap_writer_i,
-    input  logic        swap_slot_i,
-    input  logic [15:0] swap_generation_i,
-    input  logic [1:0]  swap_mode_i,
-    input  logic [31:0] swap_base_i,
-    input  logic [31:0] swap_span_i,
 
     output logic        displayed_valid_o,
     output logic        displayed_slot_o,
@@ -255,6 +289,40 @@ module zhao_shell_v2_lease_path (
 
   logic        rsp_valid, rsp_ready, rsp_writer, rsp_granted, rsp_slot;
   logic        lease_rsp_ready;
+
+  // ---- THE VIDEO BRIDGE AND THE 84-BIT TUPLE -----------------------------
+  logic        lease_open_w;
+  logic [83:0] cdc_ready_tuple_w;      // gpu side, packed here
+  // A declared quiet pixel stream rather than a cast: the type is a struct
+  // in zhao_pkg and Verilator will not cast an expression to it.
+  zhao_px_stream_t px_quiet_w;
+  assign px_quiet_w = '0;
+  logic        cdc_ready_ready_w;      // gpu side, from the CDC
+
+  // THE FORWARD AND REVERSE FIFOS SIT BETWEEN THE MANAGER AND THE BRIDGE,
+  // and getting that wrong is what this composition caught. The bridge's
+  // `cdc_ready_*` port is the VIDEO-domain OUTPUT of the forward FIFO -- its
+  // own comment says so -- not a GPU-domain source. Wiring the manager
+  // straight to it sampled a GPU level with a video flop across an
+  // unsynchronised boundary. The symptom was `ready_events_o` reading 1
+  // while the bridge's `pending_q` stayed 0: a CDC violation presenting as
+  // "the screen never updates".
+  logic        vid_ready_valid_w, vid_ready_ready_w;
+  logic [83:0] vid_ready_tuple_w;
+  logic        vid_swap_valid_w, vid_swap_ready_w;
+  logic [83:0] vid_swap_tuple_w;
+  logic        gpu_swap_valid_w;
+  logic [83:0] gpu_swap_tuple_w;
+
+  // THE PACK SIDE. The manager presents READY as six fields; the CDC beneath
+  // the bridge carries 84 opaque bits. This is one of exactly two places the
+  // layout is applied, and the other is the unpack at the manager's swap
+  // port a few lines below -- both through the package, so they cannot
+  // disagree.
+  assign cdc_ready_tuple_w = zhao_fb_tuple_pack(
+      ready_writer_o, ready_slot_o, ready_generation_o, ready_mode_o,
+      ready_base_o, ready_span_o);
+  assign lease_open_o = lease_open_w;
   logic        lease_clear_valid, lease_clear_ready;
 
   // The admitted frame becomes the bin pipe's frame_begin PULSE. This is the
@@ -553,13 +621,95 @@ module zhao_shell_v2_lease_path (
   );
   /* verilator lint_on PINCONNECTEMPTY */
 
+// THE VIDEO BRIDGE. Two clocks, and it owns the reset-epoch barrier: the
+// lease gate opens once per epoch and only after both CDC barriers and a
+// synchronized blank acknowledgement. Nothing else in this harness is
+// allowed to open it.
+// THE TWO ASYNCHRONOUS FIFOS. Depth four each, gray-coded, with their own
+// reset-release chains -- which is where `gpu_barrier_done_o` and
+// `vid_barrier_done_o` come from, so the reset-epoch barrier is self-driven
+// and nothing external declares it complete.
+/* verilator lint_off PINCONNECTEMPTY */
+zhao_fb_ready_cdc_v2 u_cdc (
+    .gpu_clk               (clk),
+    .gpu_rst_n             (rst_n),
+    .vid_clk               (vid_clk),
+    .vid_rst_n             (vid_rst_n),
+    .gpu_ready_valid_i     (ready_valid_o),
+    .gpu_ready_ready_o     (cdc_ready_ready_w),
+    .gpu_ready_tuple_i     (cdc_ready_tuple_w),
+    .vid_ready_valid_o     (vid_ready_valid_w),
+    .vid_ready_ready_i     (vid_ready_ready_w),
+    .vid_ready_tuple_o     (vid_ready_tuple_w),
+    .vid_swap_valid_i      (vid_swap_valid_w),
+    .vid_swap_ready_o      (vid_swap_ready_w),
+    .vid_swap_tuple_i      (vid_swap_tuple_w),
+    .gpu_swap_valid_o      (gpu_swap_valid_w),
+    .gpu_swap_ready_i      (swap_ready_o),
+    .gpu_swap_tuple_o      (gpu_swap_tuple_w),
+    .gpu_barrier_done_o    (gpu_barrier_done_o),
+    .vid_barrier_done_o    (vid_barrier_done_o),
+    .gpu_protocol_fault_o  (cdc_gpu_protocol_fault_o),
+    .vid_protocol_fault_o  (cdc_vid_protocol_fault_o),
+    .ready_enqueued_o      (ready_enqueued_o),
+    .ready_dequeued_o      (ready_dequeued_o),
+    .swap_enqueued_o       (swap_enqueued_o),
+    .swap_dequeued_o       (swap_dequeued_o),
+    .ready_memory_level_o  (),
+    .swap_memory_level_o   (),
+    .gpu_idle_o            (),
+    .vid_idle_o            ()
+);
+/* verilator lint_on PINCONNECTEMPTY */
+
+/* verilator lint_off PINCONNECTEMPTY */
+zhao_video_ready_bridge_v2 u_bridge (
+    .gpu_clk               (clk),
+    .gpu_rst_n             (rst_n),
+    .vid_clk               (vid_clk),
+    .vid_rst_n             (vid_rst_n),
+    .gpu_barrier_done_i    (gpu_barrier_done_o),
+    .vid_barrier_done_i    (vid_barrier_done_o),
+    .blank_cmd_i           (blank_cmd_i),
+    .blank_ack_o           (blank_ack_o),
+    .lease_open_o          (lease_open_w),
+    .cdc_ready_valid_i     (vid_ready_valid_w),
+    .cdc_ready_ready_o     (vid_ready_ready_w),
+    .cdc_ready_tuple_i     (vid_ready_tuple_w),
+    .cdc_swap_valid_o      (vid_swap_valid_w),
+    .cdc_swap_ready_i      (vid_swap_ready_w),
+    .cdc_swap_tuple_o      (vid_swap_tuple_w),
+    .frame_slot_ready_o    (frame_slot_ready_o),
+    .frame_swap_valid_i    (frame_swap_valid_i),
+    .frame_swap_slot_i     (frame_swap_slot_i),
+    .scanout_ack_i         (scanout_ack_i),
+    // The pixel stream passes THROUGH the bridge: it registers colour and
+    // timing metadata together so colour can never become phase-shifted from
+    // its sync. This harness does not look at pixels, so the input is quiet
+    // and the output is deliberately unread -- named rather than omitted.
+    .scanout_px_i          (px_quiet_w),
+    .output_px_o           (),
+    .gpu_reset_released_o  (gpu_reset_released_o),
+    .vid_reset_released_o  (vid_reset_released_o),
+    .pending_o             (bridge_pending_o),
+    .pending_tuple_o       (),
+    .echo_hold_o           (),
+    .blank_active_o        (blank_active_o),
+    .scanout_wait_o        (),
+    .unblank_candidate_o   (),
+    .unblank_tuple_o       (),
+    .unblank_echo_seen_o   (),
+    .unblank_scanout_seen_o()
+);
+/* verilator lint_on PINCONNECTEMPTY */
+
 // The writer-0 half of the protocol. Its ports face two ways: the manager
 // channel it contends on, and the V1 `fb_lease_*` record the retained
 // blitter latches on the edge it accepts a request.
 zhao_video_blit_lease_v2 u_blit_lease (
     .clk                   (clk),
     .rst_n                 (rst_n),
-    .lease_open_i          (lease_open_i),
+    .lease_open_i          (lease_open_w),
     .dispatch_valid_i      (blit_dispatch_valid_i),
     .dispatch_ready_o      (blit_dispatch_ready_o),
     .dispatch_slot_i       (blit_dispatch_slot_i),
@@ -589,7 +739,7 @@ zhao_video_blit_lease_v2 u_blit_lease (
 zhao_renderer_lease_v2 u_lease (
       .clk                      (clk),
       .rst_n                    (rst_n),
-      .lease_open_i             (lease_open_i),
+      .lease_open_i             (lease_open_w),
       .frame_req_valid_i        (frame_req_valid_i),
       .frame_req_ready_o        (frame_req_ready_o),
       .frame_req_mode_i         (frame_req_mode_i),
@@ -699,21 +849,21 @@ zhao_renderer_lease_v2 u_lease (
       .term_publish_i        (mterm_publish),
       .term_fault_i          (mterm_fault),
       .ready_valid_o         (ready_valid_o),
-      .ready_ready_i         (ready_ready_i),
+      .ready_ready_i         (cdc_ready_ready_w),
       .ready_writer_o        (ready_writer_o),
       .ready_slot_o          (ready_slot_o),
       .ready_generation_o    (ready_generation_o),
       .ready_mode_o          (ready_mode_o),
       .ready_base_o          (ready_base_o),
       .ready_span_o          (ready_span_o),
-      .swap_valid_i          (swap_valid_i),
+      .swap_valid_i          (gpu_swap_valid_w),
       .swap_ready_o          (swap_ready_o),
-      .swap_writer_i         (swap_writer_i),
-      .swap_slot_i           (swap_slot_i),
-      .swap_generation_i     (swap_generation_i),
-      .swap_mode_i           (swap_mode_i),
-      .swap_base_i           (swap_base_i),
-      .swap_span_i           (swap_span_i),
+      .swap_writer_i         (zhao_fb_tuple_writer(gpu_swap_tuple_w)),
+      .swap_slot_i           (zhao_fb_tuple_slot(gpu_swap_tuple_w)),
+      .swap_generation_i     (zhao_fb_tuple_generation(gpu_swap_tuple_w)),
+      .swap_mode_i           (zhao_fb_tuple_mode(gpu_swap_tuple_w)),
+      .swap_base_i           (zhao_fb_tuple_base(gpu_swap_tuple_w)),
+      .swap_span_i           (zhao_fb_tuple_span(gpu_swap_tuple_w)),
       .displayed_valid_o     (displayed_valid_o),
       .displayed_writer_o    (displayed_writer_o),
       .displayed_slot_o      (displayed_slot_o),

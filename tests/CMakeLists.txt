@@ -5980,6 +5980,9 @@ set(ZHAO_SHELL_V2_LEASE_PATH_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_renderer_lease_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_terminal_adapter_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_blit_lease_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_fb_tuple_pkg.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_fb_ready_cdc_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_ready_bridge_v2.sv
   ${CMAKE_CURRENT_SOURCE_DIR}/shell/zhao_shell_v2_lease_path.sv)
 
 add_executable(test_shell_v2_lease_path_directed
