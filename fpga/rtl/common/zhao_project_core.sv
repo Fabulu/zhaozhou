@@ -925,6 +925,8 @@ module zhao_project_core #(
   // register is therefore redundant: it carries forward a fact already implied
   // by two registers sitting beside it.
   //
+  // ENFORCED-BY: fpga/rtl/common/zhao_project_core.sv:a_t8_saturation_shadow
+  //
   // Deleting it takes the compare out of the setup cycle and puts it in the
   // first divider cycle, whose own worst path was -0.033 with room. No stage
   // is added, latency does not move, and three flip-flops go away.
@@ -952,6 +954,11 @@ module zhao_project_core #(
   // bits -- and a slicing argument is precisely the kind that is right until a
   // width somewhere moves by one.
   //
+  // ENFORCED-BY: fpga/rtl/common/zhao_project_core.sv:a_t8_saturation_shadow
+  //
+  // which is this file's own point: the claim is only as good as the thing
+  // differencing it, and that thing is thirty lines below.
+  //
   // THE ENABLE MUST BE `en_i`, WHICH IS WHAT THE DELETED REGISTER USED.
   //
   // The first version of this shadow wrote on `s2b_valid || s3_valid` and the
@@ -969,7 +976,7 @@ module zhao_project_core #(
     else if (en_i) s3_sat <= pre_sat;
   end
 
-  always_ff @(posedge clk) begin
+  always_ff @(posedge clk) begin : a_t8_saturation_shadow
     if (s3_valid && (dstep_sat[0] !== s3_sat))
       $fatal(1, "zhao_project_core: T8 saturation disagrees -- combinational=%b registered=%b",
              dstep_sat[0], s3_sat);

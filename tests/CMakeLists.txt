@@ -5945,6 +5945,7 @@ set(ZHAO_SHELL_V2_LEASE_PATH_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_slotmgr_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_renderer_lease_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_terminal_adapter_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_blit_lease_v2.sv
   ${CMAKE_CURRENT_SOURCE_DIR}/shell/zhao_shell_v2_lease_path.sv)
 
 add_executable(test_shell_v2_lease_path_directed
@@ -11451,6 +11452,10 @@ zhao_packet_h_blit_test(ph_blit_f refused_valid_control
   ZHAO_BLIT_LEASE_MUTANT_REFUSED_VALID
   ZHAO_EXPECT_BLIT_LEASE_MUTANT_REFUSED_VALID
   "blit_lease_refused_valid.*DETECTED")
+zhao_packet_h_blit_test(ph_blit_g rsp_gated_control
+  ZHAO_BLIT_LEASE_MUTANT_RSP_GATED
+  ZHAO_EXPECT_BLIT_LEASE_MUTANT_RSP_GATED
+  "blit_lease_rsp_gated.*DETECTED")
 
 add_test(NAME lint_zhao_video_blit_lease_v2
   COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall

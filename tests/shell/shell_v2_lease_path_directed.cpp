@@ -81,10 +81,11 @@ int main(int argc, char** argv) {
   dut.swap_mode_i = 0;
   dut.swap_base_i = 0;
   dut.swap_span_i = 0;
-  dut.blit_req_valid_i = 0;
-  dut.blit_req_slot_i = 0;
-  dut.blit_req_mode_i = 0;
-  dut.blit_rsp_ready_i = 0;
+  dut.blit_dispatch_valid_i = 0;
+  dut.blit_dispatch_slot_i = 0;
+  dut.blit_dispatch_mode_i = 0;
+  dut.fb_req_ready_i = 0;
+  dut.blit_done_i = 0;
   dut.eval();
   tick(dut);
   tick(dut);
@@ -216,24 +217,29 @@ int main(int argc, char** argv) {
   // THE SHARED RESPONSE CHANNEL, WITH BOTH WRITERS ASKING
   // =======================================================================
   //
-  // `rsp_*` is ONE channel tagged by writer, and the renderer's lease raises
-  // ready only for writer 1. Everything about that is invisible while only
-  // the renderer requests -- which is all the case above proves.
+  // `rsp_*` is ONE channel tagged by writer, and all of it is invisible while
+  // only the renderer requests -- which is all the case above proves. Both
+  // contenders here are now the REAL leaves the shell will contain.
   //
-  // The failure this guards against is not a wrong pixel. If nobody accepts
-  // a writer-0 response the manager HOLDS it, and the renderer stops behind
-  // it: a stalled renderer with nothing wrong in the renderer. The harness
-  // also asserts in RTL that the lease never accepts a response that is not
-  // its own, which would retire the blit's grant and strand it the other way.
+  // AND THAT CHANGES WHAT THE CONTROL CAN BE, which is worth stating rather
+  // than quietly dropping. The previous version drove the manager's blit
+  // requester by hand and could starve the channel by holding the blit's
+  // response-ready low; the counts then stalled at two requests and one
+  // response, with the RENDERER stopped behind a writer-0 response nobody
+  // took. With the real leaf that state is unreachable from outside:
+  // zhao_video_blit_lease_v2 raises ready for its own tag whenever it is
+  // waiting for an answer, and it is only ever waiting for one. The deadlock
+  // is structurally gone rather than merely untested -- so the control below
+  // is the failure that IS still reachable.
   {
     const uint32_t req_before = dut.requests_accepted_o;
     const uint32_t rsp_before = dut.responses_accepted_o;
 
-    dut.blit_rsp_ready_i = 1;  // the blit path accepts its own responses
-    dut.blit_req_valid_i = 1;
-    dut.blit_req_slot_i = 0;
-    dut.blit_req_mode_i = 1;
-    dut.frame_req_valid_i = 1;  // and the renderer asks at the same time
+    dut.fb_req_ready_i = 1;         // the stub blitter accepts its request
+    dut.blit_dispatch_valid_i = 1;  // the blit path asks...
+    dut.blit_dispatch_slot_i = 0;
+    dut.blit_dispatch_mode_i = 1;
+    dut.frame_req_valid_i = 1;  // ...and the renderer asks too
     dut.frame_req_mode_i = 1;
 
     const int to_both = wait_for(
@@ -245,7 +251,7 @@ int main(int argc, char** argv) {
     check(to_rsp >= 0, "both responses are accepted -- neither writer strands the channel", 1,
           to_rsp >= 0);
 
-    dut.blit_req_valid_i = 0;
+    dut.blit_dispatch_valid_i = 0;
     dut.frame_req_valid_i = 0;
     for (int i = 0; i < 40; ++i) tick(dut);
 
@@ -254,8 +260,104 @@ int main(int argc, char** argv) {
     // contended and the case proved nothing.
     check(dut.contentions_o > 0, "coverage: the two requesters actually contended", 1,
           dut.contentions_o > 0);
-    std::printf("[shell_v2_lease_path] contended: requests=%u responses=%u contentions=%u\n",
-                dut.requests_accepted_o, dut.responses_accepted_o, dut.contentions_o);
+
+    // And the blit leaf resolved a real lease through the real protocol.
+    check(dut.blit_leases_acquired_o + dut.blit_leases_refused_o == 1,
+          "the blit leaf resolved exactly one lease request", 1,
+          dut.blit_leases_acquired_o + dut.blit_leases_refused_o);
+    check(dut.blits_dispatched_o == 1, "exactly one blit was dispatched", 1,
+          dut.blits_dispatched_o);
+
+    // RETURN THE RENDERER'S FRAME AS A RELEASE, and the reason is the whole
+    // lesson of the failure this replaced. The next case asks whether a
+    // stalled blitter blocks the renderer. It reported YES -- and the cause
+    // was nothing to do with the blitter: the renderer still held the
+    // manager's live lease from this case, and `frame_req_ready_o` needs
+    // both no live lease AND a FREE slot. A clean publication leaves the slot
+    // READY, not FREE, so publishing would not have fixed it either; with one
+    // slot DISPLAYED and one READY the renderer cannot start a third frame at
+    // all. Release-class terminal returns the slot to FREE and clears the
+    // lease, which is the only state in which the head-of-line question has a
+    // meaning. Left as it was, the case measured the SLOT LIFECYCLE and
+    // reported it as a deadlock.
+    dut.term_slot_i = static_cast<uint8_t>(dut.lease_slot_o);
+    dut.term_generation_i = dut.lease_generation_o;
+    dut.term_publish_i = 0;  // release-class: back to FREE
+    dut.term_fault_i = 0;
+    dut.term_valid_i = 1;
+    for (int i = 0; i < 200; ++i) {
+      if (dut.term_valid_i && dut.term_ready_o) {
+        tick(dut);
+        dut.term_valid_i = 0;
+        dut.eval();
+        break;
+      }
+      tick(dut);
+    }
+    for (int i = 0; i < 10; ++i) tick(dut);
+    check(dut.lease_valid_o == 0, "the released renderer lease is cleared", 0, dut.lease_valid_o);
+
+    // RETIRE IT. The leaf holds its lease until the blitter reports done, so
+    // leaving this out parks it in RUN -- and the next case then silently
+    // tests nothing, because a busy leaf refuses the dispatch and every
+    // subsequent assertion reads "the blit never got anywhere". That is what
+    // the first version of this case did, and the failure named the stall it
+    // was trying to create rather than the setup that never happened.
+    dut.blit_done_i = 1;
+    for (int i = 0; i < 4; ++i) tick(dut);
+    dut.blit_done_i = 0;
+    dut.fb_req_ready_i = 0;
+    for (int i = 0; i < 4; ++i) tick(dut);
+    check(dut.blit_idle_o == 1, "the blit leaf retires back to idle", 1, dut.blit_idle_o);
+    std::printf(
+        "[shell_v2_lease_path] contended: requests=%u responses=%u contentions=%u "
+        "blit_acquired=%u blit_refused=%u\n",
+        dut.requests_accepted_o, dut.responses_accepted_o, dut.contentions_o,
+        dut.blit_leases_acquired_o, dut.blit_leases_refused_o);
+  }
+
+  // =======================================================================
+  // A STALLED BLITTER MUST NOT STOP THE RENDERER
+  // =======================================================================
+  //
+  // The reachable head-of-line failure. fb_req_ready_i low models a blitter
+  // that is busy moving bytes -- the ordinary case, not a fault -- and the
+  // blit leaf then sits in ISSUE holding a lease it cannot hand over. If any
+  // of that reaches the shared channel the renderer stops for a reason that is
+  // nowhere near the renderer, which is the symptom this harness exists to
+  // make impossible to ship undetected.
+  {
+    dut.blit_done_i = 0;
+    dut.fb_req_ready_i = 0;  // the blitter is busy and stays busy
+    dut.blit_dispatch_valid_i = 1;
+    dut.blit_dispatch_slot_i = 0;
+    dut.blit_dispatch_mode_i = 1;
+
+    const int to_stuck = wait_for(
+        dut, [&] { return dut.fb_req_valid_o != 0; }, 200);
+    check(to_stuck >= 0, "the blit leaf reaches its blitter request", 1, to_stuck >= 0);
+    dut.blit_dispatch_valid_i = 0;
+    for (int i = 0; i < 20; ++i) tick(dut);
+    check(dut.fb_req_valid_o == 1, "the blit leaf is genuinely stalled", 1, dut.fb_req_valid_o);
+    check(dut.blit_idle_o == 0, "coverage: the blit leaf is holding a lease", 0, dut.blit_idle_o);
+
+    const uint32_t req_before = dut.requests_accepted_o;
+    dut.frame_req_valid_i = 1;
+    dut.frame_req_mode_i = 1;
+    const int to_render = wait_for(
+        dut, [&] { return dut.requests_accepted_o >= req_before + 1; }, 400);
+    check(to_render >= 0, "the renderer is served while the blitter is stalled", 1, to_render >= 0);
+    dut.frame_req_valid_i = 0;
+
+    // Release it, so the case leaves nothing held.
+    dut.fb_req_ready_i = 1;
+    for (int i = 0; i < 4; ++i) tick(dut);
+    dut.blit_done_i = 1;
+    for (int i = 0; i < 4; ++i) tick(dut);
+    dut.blit_done_i = 0;
+    dut.fb_req_ready_i = 0;
+    for (int i = 0; i < 10; ++i) tick(dut);
+    check(dut.blit_idle_o == 1, "the released blit leaf returns to idle", 1, dut.blit_idle_o);
   }
 
   std::printf(

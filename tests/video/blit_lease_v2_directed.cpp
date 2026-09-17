@@ -4,7 +4,8 @@
      defined(ZHAO_EXPECT_BLIT_LEASE_MUTANT_REQUEST_HOLD) +     \
      defined(ZHAO_EXPECT_BLIT_LEASE_MUTANT_LIVE_RECORD) +      \
      defined(ZHAO_EXPECT_BLIT_LEASE_MUTANT_ISSUE_EARLY) +      \
-     defined(ZHAO_EXPECT_BLIT_LEASE_MUTANT_REFUSED_VALID)) > 1
+     defined(ZHAO_EXPECT_BLIT_LEASE_MUTANT_REFUSED_VALID) +    \
+     defined(ZHAO_EXPECT_BLIT_LEASE_MUTANT_RSP_GATED)) > 1
 #error "define at most one blit-lease mutant expectation"
 #endif
 
@@ -132,7 +133,7 @@ int main() {
   give_response(d, /*writer=*/false, /*granted=*/true, /*slot=*/1, /*generation=*/0xBEEFu);
   zhao::tick(d);
   d.rsp_valid_i = 0;
-  d.rsp_slot_i = 0;          // the bus moves on; the record must not
+  d.rsp_slot_i = 0;  // the bus moves on; the record must not
   d.rsp_generation_i = 0x0000u;
   d.eval();
   mutant_result("blit_lease_live_record",
@@ -158,6 +159,16 @@ int main() {
   d.eval();
   mutant_result("blit_lease_refused_valid", d.fb_lease_valid_o);
 
+#elif defined(ZHAO_EXPECT_BLIT_LEASE_MUTANT_RSP_GATED)
+  reset(d);
+  dispatch(d, 0, 1);
+  accept_manager_request(d);
+  d.blit_req_ready_i = 0;  // the blitter is busy, which must not matter
+  give_response(d, /*writer=*/false, /*granted=*/true, 0, 0x1234u);
+  // Refusing its own response here holds it on a SHARED channel, and the
+  // renderer stops behind it.
+  mutant_result("blit_lease_rsp_gated", !d.rsp_ready_o);
+
 #else
   using zhao::check;
 
@@ -168,8 +179,7 @@ int main() {
   check(d.fb_lease_valid_o == 0, "no lease record out of reset", 0, d.fb_lease_valid_o);
   check(d.leases_acquired_o == 0, "acquired counter starts at zero", 0, d.leases_acquired_o);
   check(d.leases_refused_o == 0, "refused counter starts at zero", 0, d.leases_refused_o);
-  check(d.blits_dispatched_o == 0, "dispatched counter starts at zero", 0,
-        d.blits_dispatched_o);
+  check(d.blits_dispatched_o == 0, "dispatched counter starts at zero", 0, d.blits_dispatched_o);
 
   // ---- the barrier gates CREATION -----------------------------------------
   d.lease_open_i = 0;
@@ -200,10 +210,8 @@ int main() {
   d.dispatch_mode_i = 2;
   for (int i = 0; i < 4; ++i) zhao::tick(d);
   d.eval();
-  check(d.mgr_req_slot_o == 1, "a stalled request keeps the accepted slot", 1,
-        d.mgr_req_slot_o);
-  check(d.mgr_req_mode_o == 1, "a stalled request keeps the accepted mode", 1,
-        d.mgr_req_mode_o);
+  check(d.mgr_req_slot_o == 1, "a stalled request keeps the accepted slot", 1, d.mgr_req_slot_o);
+  check(d.mgr_req_mode_o == 1, "a stalled request keeps the accepted mode", 1, d.mgr_req_mode_o);
 
   accept_manager_request(d);
 
@@ -217,6 +225,16 @@ int main() {
   check(d.fb_lease_valid_o == 0, "a renderer response does not create a lease record", 0,
         d.fb_lease_valid_o);
 
+  // A BUSY BLITTER MUST NOT DELAY ACCEPTING THE RESPONSE. `rsp_*` is shared,
+  // and the manager holds whatever is not accepted -- so waiting for the
+  // blitter here would stop the RENDERER, on a channel it has no part in.
+  d.blit_req_ready_i = 0;
+  give_response(d, /*writer=*/false, /*granted=*/true, /*slot=*/1, 0xBEEFu);
+  check(d.rsp_ready_o == 1, "the response is accepted though the blitter is busy", 1,
+        d.rsp_ready_o);
+  d.rsp_valid_i = 0;
+  d.eval();
+
   // ---- the one-cycle law ---------------------------------------------------
   // zhao_debug_frameblit latches fb_lease_generation_i on the SAME edge it
   // accepts a request, so the request must NOT be on offer while the answer is
@@ -224,18 +242,17 @@ int main() {
   // from the result.
   give_response(d, /*writer=*/false, /*granted=*/true, /*slot=*/1, /*generation=*/0xBEEFu);
   check(d.rsp_ready_o == 1, "the blitter's own response is accepted", 1, d.rsp_ready_o);
-  check(d.blit_req_valid_o == 0,
-        "the request is NOT offered on the edge the response lands", 0, d.blit_req_valid_o);
+  check(d.blit_req_valid_o == 0, "the request is NOT offered on the edge the response lands", 0,
+        d.blit_req_valid_o);
   zhao::tick(d);
   d.rsp_valid_i = 0;
-  d.rsp_slot_i = 0;            // scramble the bus: the record is frozen now
+  d.rsp_slot_i = 0;  // scramble the bus: the record is frozen now
   d.rsp_generation_i = 0x0000u;
   d.eval();
 
   check(d.blit_req_valid_o == 1, "the request reaches the blitter one state later", 1,
         d.blit_req_valid_o);
-  check(d.fb_lease_valid_o == 1, "a granted lease presents a valid record", 1,
-        d.fb_lease_valid_o);
+  check(d.fb_lease_valid_o == 1, "a granted lease presents a valid record", 1, d.fb_lease_valid_o);
   check(d.fb_lease_slot_o == 1, "the record holds the granted slot", 1, d.fb_lease_slot_o);
   check(d.fb_lease_generation_o == 0xBEEFu, "the record holds the granted generation", 0xBEEF,
         d.fb_lease_generation_o);
@@ -247,8 +264,7 @@ int main() {
   zhao::tick(d);
   d.blit_req_ready_i = 0;
   d.eval();
-  check(d.fb_lease_valid_o == 1, "the record is held while the blit runs", 1,
-        d.fb_lease_valid_o);
+  check(d.fb_lease_valid_o == 1, "the record is held while the blit runs", 1, d.fb_lease_valid_o);
   check(d.fb_lease_generation_o == 0xBEEFu, "the held record is still the granted one", 0xBEEF,
         d.fb_lease_generation_o);
   check(d.blits_dispatched_o == 1, "exactly one blit dispatched", 1, d.blits_dispatched_o);
@@ -272,16 +288,13 @@ int main() {
   zhao::tick(d);
   d.rsp_valid_i = 0;
   d.eval();
-  check(d.blit_req_valid_o == 1, "a refused lease still issues the request", 1,
-        d.blit_req_valid_o);
-  check(d.fb_lease_valid_o == 0, "a refused lease presents NO valid record", 0,
-        d.fb_lease_valid_o);
+  check(d.blit_req_valid_o == 1, "a refused lease still issues the request", 1, d.blit_req_valid_o);
+  check(d.fb_lease_valid_o == 0, "a refused lease presents NO valid record", 0, d.fb_lease_valid_o);
   check(d.leases_refused_o == 1, "exactly one refusal counted", 1, d.leases_refused_o);
   check(d.leases_acquired_o == 1, "a refusal does not count as an acquisition", 1,
         d.leases_acquired_o);
   retire_blit(d);
-  check(d.blits_dispatched_o == 2, "the refused blit was dispatched too", 2,
-        d.blits_dispatched_o);
+  check(d.blits_dispatched_o == 2, "the refused blit was dispatched too", 2, d.blits_dispatched_o);
 
   // ---- closing the epoch does not drop work already owned -----------------
   dispatch(d, /*slot=*/1, /*mode=*/0);
@@ -301,14 +314,12 @@ int main() {
         d.fb_lease_valid_o);
   retire_blit(d);
   check(d.leases_acquired_o == 2, "two leases acquired in total", 2, d.leases_acquired_o);
-  check(d.blits_dispatched_o == 3, "three blits dispatched in total", 3,
-        d.blits_dispatched_o);
+  check(d.blits_dispatched_o == 3, "three blits dispatched in total", 3, d.blits_dispatched_o);
 
   // ...and the closed epoch still refuses anything NEW.
   d.dispatch_valid_i = 1;
   d.eval();
-  check(d.dispatch_ready_o == 0, "the closed epoch still refuses new work", 0,
-        d.dispatch_ready_o);
+  check(d.dispatch_ready_o == 0, "the closed epoch still refuses new work", 0, d.dispatch_ready_o);
   d.dispatch_valid_i = 0;
   d.eval();
 

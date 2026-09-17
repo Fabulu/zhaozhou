@@ -149,27 +149,47 @@ module zhao_shell_v2_lease_path (
     output logic        blit_req_ready_o,
     output logic        fault_ready_o,
 
-    // ---- THE BLIT SIDE, and why it is here -----------------------------
+    // ---- THE BLIT SIDE, and why it is a REAL LEAF now ------------------
     //
-    // `rsp_*` is ONE channel shared by both writers, and the renderer's lease
-    // raises `rsp_ready_o` only for writer 1. Everything about that is
-    // invisible while only the renderer requests -- which is the state the
-    // first version of this harness tested. The shared channel is the single
-    // most likely thing to deadlock in the real shell: if nobody accepts a
-    // writer-0 response, the manager holds it and the RENDERER stops too,
-    // and the symptom is a stalled renderer with nothing wrong in the
-    // renderer.
+    // `rsp_*` is ONE channel shared by both writers, and each lease raises
+    // ready only for its own tag. All of that is invisible while only the
+    // renderer requests -- which is the state the first version of this
+    // harness tested. The shared channel is the single most likely thing to
+    // deadlock in the real shell: if nobody accepts a writer-0 response, the
+    // manager holds it and the RENDERER stops too, and the symptom is a
+    // stalled renderer with nothing wrong in the renderer.
     //
-    // So the blit requester is driven directly and its responses are accepted
-    // here, which is what the shell's blit path will do.
-    input  logic        blit_req_valid_i,
-    input  logic        blit_req_slot_i,
-    input  logic [1:0]  blit_req_mode_i,
-    input  logic        blit_rsp_ready_i,   // the blit half of rsp_ready
-    output logic        blit_rsp_valid_o,   // rsp_valid when writer == 0
-    output logic        blit_rsp_granted_o,
-    output logic        blit_rsp_slot_o,
-    output logic [15:0] blit_rsp_generation_o,
+    // The second version drove the manager's blit requester by hand. This one
+    // instantiates `zhao_video_blit_lease_v2`, so both contenders are the
+    // leaves the shell will actually contain and the channel is exercised by
+    // the real protocol on both sides rather than by a stub that agrees with
+    // it by construction.
+    //
+    // `zhao_debug_frameblit` is deliberately NOT here. It is a 38 KB retained
+    // V1 block that moves bytes through guards and an arbiter; composing it
+    // would test the blitter and the protocol at once, and the protocol is
+    // the question. Its two seams are presented at this boundary instead: the
+    // request handshake it would complete, and the lease record it latches.
+    input  logic        blit_dispatch_valid_i,
+    output logic        blit_dispatch_ready_o,
+    input  logic        blit_dispatch_slot_i,
+    input  logic [1:0]  blit_dispatch_mode_i,
+
+    // The retained blitter's seams, stubbed at the boundary. `fb_req_*` is
+    // the leaf's request to the BLITTER; `blit_req_ready_o` above is the
+    // MANAGER's ready on the lease request channel. Two different channels,
+    // deliberately not two similar names.
+    input  logic        fb_req_ready_i,
+    input  logic        blit_done_i,
+    output logic        fb_req_valid_o,
+    output logic        fb_lease_valid_o,
+    output logic        fb_lease_slot_o,
+    output logic [15:0] fb_lease_generation_o,
+
+    output logic        blit_idle_o,
+    output logic [31:0] blit_leases_acquired_o,
+    output logic [31:0] blit_leases_refused_o,
+    output logic [31:0] blits_dispatched_o,
     output logic        rsp_writer_o        // the live tag, so a test can see it
 );
 
@@ -179,24 +199,27 @@ module zhao_shell_v2_lease_path (
 
   logic        rsp_valid, rsp_ready, rsp_writer, rsp_granted, rsp_slot;
   logic        lease_rsp_ready;
+  logic        blit_rsp_ready;
+  logic        blit_mgr_req_valid, blit_mgr_req_slot;
+  logic [1:0]  blit_mgr_req_mode;
 
-  // THE SHARED RESPONSE, DEMULTIPLEXED BY TAG. Each writer accepts only its
-  // own; the manager sees one `rsp_ready`.
+  // THE SHARED RESPONSE, DEMULTIPLEXED BY TAG. The manager sees one
+  // `rsp_ready` and each leaf accepts only its own tag.
   //
-  // A PLAIN OR OF THE TWO READIES WAS TRIED HERE AND NOTHING NOTICED. That
-  // is worth writing down rather than quietly fixing, because it says where
-  // the protection actually lives: `zhao_renderer_lease_v2` qualifies its own
-  // `rsp_ready_o` by `rsp_writer_i` (line 209) and asserts the invariant
-  // itself (line 361), so the renderer cannot retire a writer-0 response
-  // whatever this line does. The demux earns its keep on the OTHER side --
-  // `blit_rsp_ready_i` arrives from outside and carries no such guard, so the
-  // tag is what stops the blit path retiring the renderer's response.
-  assign rsp_ready             = rsp_writer ? lease_rsp_ready : blit_rsp_ready_i;
-  assign blit_rsp_valid_o      = rsp_valid && !rsp_writer;
-  assign blit_rsp_granted_o    = rsp_granted;
-  assign blit_rsp_slot_o       = rsp_slot;
-  assign blit_rsp_generation_o = rsp_generation;
-  assign rsp_writer_o          = rsp_writer;
+  // WITH BOTH LEAVES REAL, THIS MUX AND A PLAIN OR ARE EQUIVALENT, and saying
+  // so is the point. Each leaf already qualifies its own ready by the writer
+  // tag -- `zhao_renderer_lease_v2` at line 209, `zhao_video_blit_lease_v2` at
+  // its own `rsp_ready_o` -- and each asserts the invariant internally, so
+  // neither can be high for the other's response and an OR could not
+  // mis-retire anything. An earlier version of this file claimed the mux was
+  // what prevented that; miswiring it as an OR fired at the claim and nothing
+  // noticed, because the protection was always one level down.
+  //
+  // It stays a mux anyway: it costs nothing, it states the intent at the
+  // junction where a reader looks for it, and it is the one form that stays
+  // correct if a participant ever arrives without its own guard.
+  assign rsp_ready    = rsp_writer ? lease_rsp_ready : blit_rsp_ready;
+  assign rsp_writer_o = rsp_writer;
   logic [15:0] rsp_generation;
   logic [1:0]  rsp_mode;
   logic [31:0] rsp_base, rsp_span;
@@ -212,7 +235,40 @@ module zhao_shell_v2_lease_path (
 
 
 
-  zhao_renderer_lease_v2 u_lease (
+  // The writer-0 half of the protocol. Its ports face two ways: the manager
+// channel it contends on, and the V1 `fb_lease_*` record the retained
+// blitter latches on the edge it accepts a request.
+zhao_video_blit_lease_v2 u_blit_lease (
+    .clk                   (clk),
+    .rst_n                 (rst_n),
+    .lease_open_i          (lease_open_i),
+    .dispatch_valid_i      (blit_dispatch_valid_i),
+    .dispatch_ready_o      (blit_dispatch_ready_o),
+    .dispatch_slot_i       (blit_dispatch_slot_i),
+    .dispatch_mode_i       (blit_dispatch_mode_i),
+    .blit_req_valid_o      (fb_req_valid_o),
+    .blit_req_ready_i      (fb_req_ready_i),
+    .blit_done_i           (blit_done_i),
+    .fb_lease_valid_o      (fb_lease_valid_o),
+    .fb_lease_slot_o       (fb_lease_slot_o),
+    .fb_lease_generation_o (fb_lease_generation_o),
+    .mgr_req_valid_o       (blit_mgr_req_valid),
+    .mgr_req_ready_i       (blit_req_ready_o),
+    .mgr_req_slot_o        (blit_mgr_req_slot),
+    .mgr_req_mode_o        (blit_mgr_req_mode),
+    .rsp_valid_i           (rsp_valid),
+    .rsp_ready_o           (blit_rsp_ready),
+    .rsp_writer_i          (rsp_writer),
+    .rsp_granted_i         (rsp_granted),
+    .rsp_slot_i            (rsp_slot),
+    .rsp_generation_i      (rsp_generation),
+    .idle_o                (blit_idle_o),
+    .leases_acquired_o     (blit_leases_acquired_o),
+    .leases_refused_o      (blit_leases_refused_o),
+    .blits_dispatched_o    (blits_dispatched_o)
+);
+
+zhao_renderer_lease_v2 u_lease (
       .clk                      (clk),
       .rst_n                    (rst_n),
       .lease_open_i             (lease_open_i),
@@ -291,10 +347,10 @@ module zhao_shell_v2_lease_path (
       .render_req_ready_o    (render_req_ready),
       .render_req_slot_i     (render_req_slot),
       .render_req_mode_i     (render_req_mode),
-      .blit_req_valid_i      (blit_req_valid_i),
+      .blit_req_valid_i      (blit_mgr_req_valid),
       .blit_req_ready_o      (blit_req_ready_o),
-      .blit_req_slot_i       (blit_req_slot_i),
-      .blit_req_mode_i       (blit_req_mode_i),
+      .blit_req_slot_i       (blit_mgr_req_slot),
+      .blit_req_mode_i       (blit_mgr_req_mode),
       .rsp_valid_o           (rsp_valid),
       .rsp_ready_i           (rsp_ready),
       .rsp_writer_o          (rsp_writer),
@@ -383,7 +439,7 @@ module zhao_shell_v2_lease_path (
     // wording above suggests on its own.
     //
     // The control that IS evidence about the composition is in the driver:
-    // hold `blit_rsp_ready_i` low during contention and the counts stall at
+    // stall the blit leaf's retirement during contention and the counts stall at
     // two requests and one response -- the renderer stopping behind a
     // writer-0 response nobody took.
     //

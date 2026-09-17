@@ -66,6 +66,13 @@ ORGANS = (
     "zhao_renderer_lease_v2",
     "zhao_video_ready_bridge_v2",
     "zhao_video_terminal_adapter_v2",
+    # The writer-0 lease, added 2026-09-17. It was not in the original four
+    # because it did not exist -- and the survey is the reason that was worth
+    # noticing: the manager's `blit_req_*` channel had no offerer in ANY organ,
+    # and the retained blitter's `fb_lease_*` inputs had no producer. Both sat
+    # in the UNMATCHED column, which is the column this tool exists to make
+    # somebody read.
+    "zhao_video_blit_lease_v2",
 )
 # The V2 blocks the sibling swaps in for their historical counterparts.
 SWAPS = {

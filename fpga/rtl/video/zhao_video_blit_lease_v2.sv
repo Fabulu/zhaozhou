@@ -60,6 +60,15 @@
 `ifndef ZHAO_BLIT_LEASE_ISSUE
 `define ZHAO_BLIT_LEASE_ISSUE(in_issue, in_response) (in_issue)
 `endif
+// The response is accepted on the leaf's own state ALONE, never on whether the
+// blitter downstream happens to be free. Qualifying it with the blitter would
+// read as prudence -- do not take a lease you cannot use yet -- and would put a
+// busy blitter in the way of a HELD response on a channel the renderer shares.
+// The manager holds an unaccepted response, so the renderer would stop behind
+// it, and the symptom appears in the renderer.
+`ifndef ZHAO_BLIT_LEASE_RSP_ACCEPT
+`define ZHAO_BLIT_LEASE_RSP_ACCEPT(in_response, blitter_ready) (in_response)
+`endif
 
 module zhao_video_blit_lease_v2 (
     input  logic        clk,
@@ -159,7 +168,8 @@ module zhao_video_blit_lease_v2 (
       request_mode_q, dispatch_mode_i);
   assign mgr_req_fire_c = mgr_req_valid_o && mgr_req_ready_i;
 
-  assign rsp_ready_o = rst_n && (state_q == ST_RESPONSE) &&
+  assign rsp_ready_o = rst_n &&
+      `ZHAO_BLIT_LEASE_RSP_ACCEPT(state_q == ST_RESPONSE, blit_req_ready_i) &&
       `ZHAO_BLIT_LEASE_RESPONSE_IS_BLIT(rsp_writer_i);
   assign rsp_fire_c = rsp_valid_i && rsp_ready_o;
 

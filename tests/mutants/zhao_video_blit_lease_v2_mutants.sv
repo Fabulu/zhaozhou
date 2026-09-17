@@ -85,4 +85,19 @@
   `endif
 `endif
 
+`ifdef ZHAO_BLIT_LEASE_MUTANT_RSP_GATED
+  `ifdef ZHAO_BLIT_LEASE_MUTANT_SELECTED
+    `define ZHAO_BLIT_LEASE_MUTANT_COLLISION
+  `else
+    `define ZHAO_BLIT_LEASE_MUTANT_SELECTED
+    // Wrong, and wrong in the way that looks careful: accepts the response only
+    // while the blitter is free to take the request, on the reasoning that one
+    // should not hold a lease one cannot use. `rsp_*` is SHARED, and the manager
+    // holds an unaccepted response -- so a busy blitter stops the RENDERER, and
+    // the fault presents as a stalled renderer with nothing wrong in it.
+    `define ZHAO_BLIT_LEASE_RSP_ACCEPT(in_response, blitter_ready) \
+      ((in_response) && (blitter_ready))
+  `endif
+`endif
+
 `default_nettype wire
