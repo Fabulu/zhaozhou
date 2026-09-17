@@ -26,9 +26,21 @@ from pathlib import Path
 
 REPO = Path(r'C:\programmieren\zencrifice\zhaozhou-ceiling-lane-20260912')
 
+# The lookahead accepts END OF LINE as well as ',' or ')'. Without that it
+# silently drops the last port before a LEADING-COMMA continuation, which is the
+# style zhao_geom_bin_pipe_v2 uses for its final three:
+#
+#       output logic [23:0] z_floor_o
+#     , input  logic  [4:0] test_start_enable_i
+#
+# `z_floor_o` has no trailing comma, so it vanished, and the count came back 166
+# against a true 168. A per-LINE scan gets it wrong the other way -- it misses
+# the three comma-led declarations and reports 165, which is the number the
+# roadmap recorded by hand. Three methods, three answers, ALL OF THEM LOW.
 PORT_RE = re.compile(
     r'\b(input|output|inout)\s+(?:var\s+)?(?:logic|wire|reg)?\s*'
-    r'(?:signed\s+)?(?:\[[^\]]*\]\s*)*([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)?(?=[,)])')
+    r'(?:signed\s+)?(?:\[[^\]]*\]\s*)*([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)?(?=[,)]|$)',
+    re.M)
 
 
 def find(name):
@@ -82,12 +94,13 @@ def stem(p):
     return re.sub(r'_[io]$', '', p)
 
 
-# SELF-CHECKS. These four counts are recorded independently in
-# reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md (63 -> 165/166 and
-# 22 -> 73/74; the roadmap counted one fewer on each, by hand). A parser
-# that cannot reproduce them is broken, and the way it breaks is by
-# reporting less work than exists.
-for _m, _n in (('zhao_geom_bin_pipe', 63), ('zhao_geom_bin_pipe_v2', 166),
+# SELF-CHECKS, and these are the CORRECTED numbers. The roadmap records
+# 63 -> 165 and 22 -> 73 from a hand count; this script's first version asserted
+# 166 and PASSED, enshrining its own blind spot as a fact -- which is precisely
+# the failure a self-check exists to prevent, arriving inside the self-check.
+# See the note on PORT_RE. A parser that cannot reproduce these is broken, and
+# the way it breaks is by reporting less work than exists.
+for _m, _n in (('zhao_geom_bin_pipe', 63), ('zhao_geom_bin_pipe_v2', 168),
                ('zhao_video_slotmgr', 22), ('zhao_video_slotmgr_v2', 74)):
     _got = len(ports(_m))
     assert _got == _n, 'port count for %s: expected %d, parsed %d' % (_m, _n, _got)

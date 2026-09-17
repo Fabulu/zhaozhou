@@ -9,15 +9,15 @@ The sibling shell swaps two blocks and adds five organs. The swapped blocks
 grow enormously:
 
 ```
-zhao_geom_bin_pipe  ->  zhao_geom_bin_pipe_v2     63 ports -> 166
+zhao_geom_bin_pipe  ->  zhao_geom_bin_pipe_v2     63 ports -> 168
 zhao_video_slotmgr  ->  zhao_video_slotmgr_v2     22 ports -> 74
 ```
 
 Ports are not the work, though. **Inputs are the work**, because every one of
 them is a wire somebody has to decide the source of, and an input nobody
 decided about is a `PINMISSING` at the next fit or — worse — a tie-off that
-looks deliberate. There are **59 new inputs**. Twelve already have a producer.
-The other forty-seven are this packet.
+looks deliberate. There are **60 new inputs**. Twelve already have a producer.
+The other forty-eight are this packet.
 
 ---
 
@@ -98,7 +98,7 @@ ranges written eighty lines apart.
 
 ---
 
-## 3. The forty-seven, grouped by where they have to come from
+## 3. The forty-eight, grouped by where they have to come from
 
 ### 3.1 V3 programming: config, palette, page generation (20)
 
@@ -185,16 +185,16 @@ ready_ready_i, swap_{writer,slot,generation,mode,base,span}_i
 From `zhao_video_ready_bridge_v2`. See section 2 — six of these seven are the
 tuple.
 
-### 3.6 Remaining (5)
+### 3.6 Remaining (6)
 
 ```
 frame_clear_word_i     the V3 clear payload
 sheet_req_ready_i      Surface Sheet backpressure
 blit_req_{slot,mode}_i belong in section 1
-test_{start_enable,attr_cov_enable}_i   tie low in production, and SAY so
+test_{start_enable,attr_cov_enable,stage_admit_enable}_i  tie low, and SAY so
 ```
 
-The two `test_*` enables are the ones to write a comment against rather than a
+The three `test_*` enables are the ones to write a comment against rather than a
 tie-off: a test hook wired to zero in the top is invisible, and a test hook
 wired to something by accident is worse.
 
@@ -299,4 +299,28 @@ inputs," inside a header comment, and reported that `zhao_geom_bin_pipe` has
 **zero ports**; then, anchored, it read the parameter list as the port list and
 reported zero again. Both times the contract came back short and looked
 finished. The counts above are the ones that reproduce the roadmap's
-independently-recorded 63 -> 166 and 22 -> 74.*
+independently-recorded counts -- once BOTH were corrected; see below.*
+
+**And a third time, on the same script, found the same day.** The corrected
+parser reported `zhao_geom_bin_pipe_v2` at 166 ports and **that was still
+low**. The RTL ends its port list in LEADING-COMMA style:
+
+```systemverilog
+    output logic [23:0] z_floor_o
+  , input  logic  [4:0] test_start_enable_i
+```
+
+so `z_floor_o` has no trailing comma and a lookahead demanding `,` or `)`
+drops it; while a per-LINE scan drops the three comma-led declarations
+instead. **Three methods, three answers -- 165, 166, 168 -- and every one of
+them low.** 168 is the true count; 165 is what the roadmap recorded by hand.
+
+The part worth keeping is not the number. It is that the script's self-check
+ASSERTED 166 and passed, so the instrument had enshrined its own blind spot
+as a verified fact. A self-check written from the same reading as the code it
+checks is the two-operands-moving-together shape, and it had to be broken by
+a fourth method -- counting declaration lines by eye and finding the
+disagreement -- rather than by the check itself.
+
+One input was hidden by this: `test_stage_admit_enable_i`. The headline goes
+59 -> 60 and section 3.6 gains it.
