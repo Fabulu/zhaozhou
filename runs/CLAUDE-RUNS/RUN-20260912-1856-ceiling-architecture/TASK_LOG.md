@@ -2206,3 +2206,86 @@ protocol-aware stimulus drivers. The mask field is checked for EXACT equality
 against observed toggling by `shell_fit_smoke.py` — so a declaration cannot
 drift from its stimulus, but both being too narrow still passes, and that is
 where an understated area would hide.
+
+---
+
+## 2026-09-18 later — THE COMPOSED SHELL FITS, and the lever was one block
+
+**IN FLIGHT:** `run_block_fit.ps1 -Module zhao_shell_top_v2 -RowLabel
+@packet-h-m10k`, the real fit of the fixed design. **Next step when it returns:
+read the fitter's ALM and Fmax.** A&S estimates 31,589 ALMs; the fitter has not
+confirmed it.
+
+### The measurement Packet H's gate asked for
+
+The first composed fit FAILED, and correctly: the design needed **62,534 ALMs
+on a 41,910-ALM device**. The row carries `incomplete:failed:quartus_fit.exe`
+with no ALM and no Fmax -- it kept what Analysis & Synthesis produced and
+invented nothing.
+
+DSP came back at **63 against the 85 budget** and memory at 422,480 of
+5,662,720 bits. ALM was the entire problem, which is what the owner's direction
+has said all along.
+
+### One leaf was 44% of it
+
+    zhao_shell_top_v2                          65,696 ALUT   80,173 reg
+     └ ... └ zhao_texture_binding_resolver_v2   28,957        39,449
+
+Quartus named the mechanism itself: `Info (276007): RAM logic "...page0_m" is
+uninferred due to asynchronous read logic`. Two 256-entry banks of a 75-bit
+`binding_row_t` -- **38,400 bits of page table in flip-flops**, against 39,449
+measured registers. The banks WERE the register count.
+
+### The fix, and why one read port is exact rather than a compromise
+
+The data plane reads the ACTIVE bank; the CRC walk reads the STAGING bank; and
+`staging_bank_q == ~active_bank_q` is maintained at every assignment. The two
+CRC reads were always one port with a muxed address -- mutually exclusive
+branches of one FSM writing one destination. **Neither array ever has two
+readers in the same cycle.**
+
+MEASURED after the change:
+
+    ALMs needed (A&S)   62,534 -> 31,589     -30,945
+    registers           80,173 -> 41,526     -38,647
+    block memory bits  422,480 -> 460,880    +38,400
+    DSP                     63 -> 63
+
+Memory grew by EXACTLY 38,400 bits. `altsyncram:page0_m_rtl_0` and
+`page1_m_rtl_0` -- both banks inferred. **149% of the device -> 75%**, and
+within 5% of the 30,000 target. 8/8 tests including all seven mutant controls.
+
+**THE ENABLE WAS THE PART THAT MATTERED.** Registering the read unconditionally
+is the cheap way to win inference and is exactly how this repo's most-cited
+defect was built. The enables reproduce the old conditional loads; the bank is
+LATCHED with each read rather than muxed on live `active_bank_q`.
+
+### The instrument that should have found it, and could not
+
+`check_array_storage.py` reported NOTHING about that block. `ARRAY_RE` matches
+`logic|reg|bit` only, so `binding_row_t page0_m [0:255];` did not match -- and
+was therefore not counted as SKIPPED either. An invisible declaration is worse
+than an unresolvable one: the skip counter is that file's own tripwire and this
+never reached it.
+
+Fixed with a typed-array pattern and a same-file typedef resolver. It now
+reports `zhao_texture_binding_resolver_v2 declared 38400 bits`, matching the
+hand arithmetic exactly, and a self-check pins the capability.
+
+The 2026-09-16 conclusion that redirected the M10K work -- *"no block with a
+CURRENT FIT ROW holds 8 Kbit or more in flip-flops"* -- was true as stated and
+wrong as used, twice over: the qualifier excluded unmeasured blocks, and the
+tool could not see this declaration form at all.
+
+### Where the next ALM work goes
+
+No dominant consumer remains. Largest leaves: `zhao_texture_v3own` 3,745,
+`zhao_raster_edgewalk` 3,350, `zhao_cmd_dma` 2,361, three `attrgrad_v2` at
+~1,530. **Edgewalk is the right shape** -- 3,350 ALUT against 2 DSP -- where
+the nine-to-eighteen-DSP rows are not, because converting those pays ALM to
+save DSP and DSP is at 63 of 85.
+
+**One array is still in fabric:** `uvw_m` in `zhao_texture_island_v3_top.sv:916`,
+same cause. That file IS in Packet D's PROTECTED_HASHES, so it is an owner
+decision.
