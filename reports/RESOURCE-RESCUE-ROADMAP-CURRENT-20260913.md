@@ -742,6 +742,35 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > and the number above is arithmetic plus Quartus's own inference rules, not a
 > fit row. It needs building, running against those controls, and re-fitting.
 >
+> **AND THERE IS A TRAP IN IT, which is this repository's most-cited defect
+> wearing the opposite sign.** Both reads are CONDITIONAL today:
+>
+> * the CRC walk loads `crc_row_q` only `if (!crc_have_row_q)`, holding the row
+>   while its ten bytes fold;
+> * the data plane loads `read_row_q` only on an accepted, unrefused request,
+>   and writes `'0` otherwise.
+>
+> The obvious way to make an array infer as RAM is to register its read
+> unconditionally — and *"A detector wired to two operands that move together
+> cannot fire"* in CLAUDE.md is the post-mortem of doing exactly that to a
+> metadata bank in this same family: *"The bank registered its read
+> UNCONDITIONALLY, so its output tracked whatever address was being OFFERED
+> while the stage downstream held the previous response,"* producing response
+> A's data with B's metadata and every counter balancing.
+>
+> So the restructure must keep the hold, and it can: M10K supports a read
+> ENABLE, and `if (read_en) rd_q <= page_m[addr];` still infers. The two
+> readers' enables are mutually exclusive by the same invariant, so one enable
+> per array is exact.
+>
+> The `'0` write on refusal cannot stay — you cannot write a constant into a RAM
+> read register without losing the RAM — and it does not need to: the refusal
+> path already clears `read_row_present_q`, which is what consumers should be
+> gating on. **Moving that zeroing is the part to review hardest**, because a
+> consumer that reads the row without checking `present` would go from seeing
+> zeros to seeing a stale row, which is the same defect again by a different
+> route.
+>
 > `zhao_texture_binding_resolver_v2.sv` is **not** in Packet D's or Packet E's
 > `PROTECTED_HASHES`, so this is editable work rather than an owner decision.
 
