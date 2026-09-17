@@ -365,6 +365,7 @@ excluded:
   - zhao_renderer_lease_v2: not-yet-adopted  Packet-H renderer lease and V3-clear front end with lowest-FREE slot selection, held manager identity, reset-epoch admission gate, and fixed Z60/Storm/Duo canvas geometry; connected sibling-shell integration remains open
   - zhao_video_terminal_adapter_v2: not-yet-adopted  Packet-H one-entry blitter-pulse/renderer-stream terminal join with release priority, immutable writer/slot/generation disposition, explicit pulse refusal, and accepted/captured conservation; connected manager integration remains open
   - zhao_video_ready_bridge_v2: not-yet-adopted  Packet-H split-clock READY/echo, FRAMECTL, scanout-completion, blank-proof, and lease-barrier bridge; connected sibling-shell integration and physical CDC/timing evidence remain open
+  - zhao_fb_tuple_contract: not-yet-adopted  Packet-H elaboration check that the six READY/swap fields tile the 84-bit CDC tuple exactly -- no hole and no overlap; carries no logic and exists so a wrong width is a compile failure rather than a test failure
   - zhao_video_blit_lease_v2: not-yet-adopted  Packet-H writer-0 lease front end: the blitter's half of the V2 protocol, holding the manager request, accepting only writer-0 responses, and presenting the frozen fb_lease_{valid,slot,generation} record a state LATER than the response so the retained zhao_debug_frameblit cannot latch a pre-grant generation; connected sibling-shell integration remains open
   #
   # The rows below are the now-unreachable PRE-PACKET-B implementations. They are

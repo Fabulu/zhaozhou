@@ -11465,6 +11465,66 @@ set_tests_properties(lint_zhao_video_blit_lease_v2 PROPERTIES
   LABELS "lint;fast;packet-h"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# ---------------------------------------------------------------------------
+# Packet H: the 84-bit READY/swap tuple layout.
+#
+# zhao_fb_ready_cdc_v2 carries "one frozen 84-bit tuple" and never looks
+# inside; zhao_video_slotmgr_v2 presents the same information as six ports
+# whose widths sum to exactly 84. The correspondence was certain and the FIELD
+# ORDER was defined nowhere, so both the pack and the unpack belonged to a
+# shell that does not exist yet and nothing would have caught them disagreeing.
+#
+# The mutant is the reason the directed test carries literals instead of a
+# round trip: swapping the writer and slot bits tiles the 84 bits exactly, so
+# the elaboration coverage check passes, and pack and unpack still agree with
+# each other because both read the swapped constants. Only bit positions
+# written somewhere else can see it.
+set(ZHAO_FB_TUPLE_SOURCES
+  ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_fb_tuple_mutants.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_fb_tuple_pkg.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_fb_tuple_contract.sv
+  ${CMAKE_CURRENT_SOURCE_DIR}/video/tb_fb_tuple.sv)
+
+function(zhao_fb_tuple_test TARGET NAME SV_SELECTOR CPP_SELECTOR DIAGNOSTIC)
+  add_executable(${TARGET} video/fb_tuple_directed.cpp)
+  target_link_libraries(${TARGET} PRIVATE zhao_harness)
+  if(NOT "${CPP_SELECTOR}" STREQUAL "")
+    target_compile_definitions(${TARGET} PRIVATE ${CPP_SELECTOR}=1)
+  endif()
+  set(selector_args)
+  if(NOT "${SV_SELECTOR}" STREQUAL "")
+    list(APPEND selector_args -D${SV_SELECTOR})
+  endif()
+  verilate(${TARGET}
+    PREFIX Vtb_fb_tuple
+    TOP_MODULE tb_fb_tuple
+    SOURCES ${ZHAO_FB_TUPLE_SOURCES}
+    VERILATOR_ARGS --assert ${selector_args})
+  add_test(NAME fb_tuple_${NAME} COMMAND ${TARGET})
+  set_tests_properties(fb_tuple_${NAME} PROPERTIES
+    LABELS "fast;packet-h" TIMEOUT 300
+    PASS_REGULAR_EXPRESSION "${DIAGNOSTIC}"
+    FAIL_REGULAR_EXPRESSION "FAIL:|FAILED")
+  if(NOT "${SV_SELECTOR}" STREQUAL "")
+    set_property(TEST fb_tuple_${NAME} APPEND PROPERTY LABELS "mutant")
+  endif()
+endfunction()
+
+zhao_fb_tuple_test(ph_tuple directed "" "" "fb_tuple_directed.*passed")
+zhao_fb_tuple_test(ph_tuple_s swap_writer_slot_control
+  ZHAO_FB_TUPLE_MUTANT_SWAP_WRITER_SLOT
+  ZHAO_EXPECT_FB_TUPLE_MUTANT_SWAP_WRITER_SLOT
+  "fb_tuple_swap_writer_slot.*DETECTED")
+
+add_test(NAME lint_zhao_fb_tuple_pkg
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+          --top-module zhao_fb_tuple_contract
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_fb_tuple_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_fb_tuple_contract.sv)
+set_tests_properties(lint_zhao_fb_tuple_pkg PROPERTIES
+  LABELS "lint;fast;packet-h"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 
 set(ZHAO_PACKET_H_BRIDGE_MANIFEST
   ${CMAKE_CURRENT_SOURCE_DIR}/video/video_ready_bridge_v2.sources.txt)
