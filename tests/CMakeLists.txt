@@ -7136,6 +7136,100 @@ set_tests_properties(lint_shell_top PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# PACKET-H GATE CLAUSE: unaffected behaviour matches under PAIRED TRAFFIC.
+#
+# `packet_h_sibling_diff` is the structural half and compares TEXT. This is the
+# behavioural half: both shells, one stimulus, every output outside the changed
+# path compared cycle for cycle.
+#
+# The closure is the sibling's list PLUS the two blocks the sibling replaced --
+# `zhao_geom_bin_pipe` and `zhao_video_slotmgr` are filtered OUT of
+# ZHAO_SHELL_V2_TOP_SOURCES above, and the historical shell still instantiates
+# both, so a paired build needs them back. Derived from the same two lists
+# rather than written out again, so there is no third copy to go stale.
+set(ZHAO_SHELL_PAIRED_SOURCES ${ZHAO_SHELL_V2_TOP_SOURCES})
+foreach(shell_source IN LISTS ZHAO_SHELL_RTL)
+  if(NOT "${shell_source}" IN_LIST ZHAO_SHELL_PAIRED_SOURCES)
+    list(APPEND ZHAO_SHELL_PAIRED_SOURCES "${shell_source}")
+  endif()
+endforeach()
+list(APPEND ZHAO_SHELL_PAIRED_SOURCES
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell/zhao_shell_paired_diff.sv)
+
+add_test(NAME lint_shell_paired_diff
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+          --top-module zhao_shell_paired_diff
+          ${ZHAO_SHELL_PAIRED_SOURCES})
+set_tests_properties(lint_shell_paired_diff PROPERTIES
+  LABELS "lint;fast;packet-h"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# The harness is GENERATED from the two shells' port lists. A generated file
+# nobody regenerates is a stale file with a reassuring provenance line at the
+# top -- `zhao_prod_top.sv` was found stale for two separate port changes made
+# days apart, and this one would go stale the same silent way.
+add_test(NAME packet_h_paired_diff_fresh
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/design/gen_shell_paired_diff.py --check)
+set_tests_properties(packet_h_paired_diff_fresh PROPERTIES
+  LABELS "fast;lint;packet-h" TIMEOUT 120)
+
+add_executable(test_shell_paired_diff_directed
+  shell/shell_paired_diff_directed.cpp)
+target_link_libraries(test_shell_paired_diff_directed PRIVATE zhao_harness)
+verilate(test_shell_paired_diff_directed
+  PREFIX Vzhao_shell_paired_diff
+  TOP_MODULE zhao_shell_paired_diff
+  SOURCES ${ZHAO_SHELL_PAIRED_SOURCES})
+add_test(NAME shell_paired_diff_directed
+  COMMAND test_shell_paired_diff_directed)
+set_tests_properties(shell_paired_diff_directed PROPERTIES
+  LABELS "nightly;packet-h" TIMEOUT 900
+  FAIL_REGULAR_EXPRESSION "FAIL")
+
+# THE POSITIVE CONTROL, and this differential needs one more than most.
+#
+# Its PASS is the ABSENCE of a signal, produced by 91 generated compare lines
+# nobody reads. One of them mistyped -- comparing v1 against v1, say -- would
+# agree forever and look exactly like the green run above. "A detector that has
+# not been shown to FIRE has not been tested."
+#
+# The mutant is a committed file under tests/mutants/, renamed so no source
+# list can elaborate it by mistake, differing in ONE substantive line: the V2
+# side of `px_valid_o`'s comparison is negated. The driver is the same binary
+# with the polarity inverted -- WILL_FAIL means this test passes when the
+# differential correctly reports a divergence that is not really there.
+set(ZHAO_SHELL_PAIRED_MUT_SOURCES ${ZHAO_SHELL_V2_TOP_SOURCES})
+foreach(shell_source IN LISTS ZHAO_SHELL_RTL)
+  if(NOT "${shell_source}" IN_LIST ZHAO_SHELL_PAIRED_MUT_SOURCES)
+    list(APPEND ZHAO_SHELL_PAIRED_MUT_SOURCES "${shell_source}")
+  endif()
+endforeach()
+list(APPEND ZHAO_SHELL_PAIRED_MUT_SOURCES
+  ${CMAKE_CURRENT_SOURCE_DIR}/mutants/zhao_shell_paired_diff_mutant.sv)
+
+add_executable(test_shell_paired_diff_mutant
+  shell/shell_paired_diff_directed.cpp)
+target_compile_definitions(test_shell_paired_diff_mutant PRIVATE
+  ZHAO_PAIRED_DIFF_MUTANT=1)
+target_link_libraries(test_shell_paired_diff_mutant PRIVATE zhao_harness)
+verilate(test_shell_paired_diff_mutant
+  PREFIX Vzhao_shell_paired_diff
+  TOP_MODULE zhao_shell_paired_diff_mut
+  SOURCES ${ZHAO_SHELL_PAIRED_MUT_SOURCES})
+add_test(NAME shell_paired_diff_mutant_control
+  COMMAND test_shell_paired_diff_mutant)
+set_tests_properties(shell_paired_diff_mutant_control PROPERTIES
+  LABELS "nightly;mutant;packet-h" TIMEOUT 900
+  WILL_FAIL TRUE)
+
+add_test(NAME packet_h_paired_diff_mutant_fresh
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/design/gen_shell_paired_diff.py
+          --check --mutant)
+set_tests_properties(packet_h_paired_diff_mutant_fresh PROPERTIES
+  LABELS "fast;lint;packet-h" TIMEOUT 120)
+
 # D3 Packet A: generated ten-bit characterization wrapper. The shell source
 # pool remains byte-for-byte/order-for-order the existing ZHAO_SHELL_RTL list;
 # only the generated wrapper and simulation-only monitor are appended.

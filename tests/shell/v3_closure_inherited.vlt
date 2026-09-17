@@ -51,6 +51,14 @@ lint_off -rule DECLFILENAME    -file "*zhao_render_texture_pkg.sv"
 // synchronously was removed earlier for exactly this rule.
 lint_off -rule SYNCASYNCNET    -file "*zhao_shell_v2_lease_path.sv"
 lint_off -rule SYNCASYNCNET    -file "*zhao_shell_top_v2.sv"
+// THE PAIRED DIFFERENTIAL, same reason as the two above and no more than that.
+// Its verdict flops -- the sticky mismatch bit, the toggle witness -- reset on
+// `negedge rst_n` while the shells beneath it also read `rst_n` synchronously,
+// so the harness inherits the warning from the thing it is measuring rather
+// than introducing a new one. The mutant copy gets it too or its control fails
+// for the wrong reason, which would read as "the mutant fired".
+lint_off -rule SYNCASYNCNET    -file "*zhao_shell_paired_diff.sv"
+lint_off -rule SYNCASYNCNET    -file "*zhao_shell_paired_diff_mutant.sv"
 
 // The V1 shell lints CLEAN at -Wall with no SYNCASYNCNET, which is how the
 // sibling's copy is attributed: the warning arrives with the V3 closure that
