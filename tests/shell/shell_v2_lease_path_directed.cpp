@@ -99,8 +99,8 @@ int main(int argc, char** argv) {
   dut.frame_req_valid_i = 1;
   dut.frame_req_mode_i = 1;  // mode 3 is not a canvas and is never accepted
   for (int i = 0; i < 20; ++i) tick(dut);
-  check(dut.requests_accepted_o == 0,
-        "barrier closed: no request reaches the manager", 0, dut.requests_accepted_o);
+  check(dut.requests_accepted_o == 0, "barrier closed: no request reaches the manager", 0,
+        dut.requests_accepted_o);
 
   // ---- open the barrier and let the request through ------------------------
   dut.lease_open_i = 1;
@@ -112,8 +112,7 @@ int main(int argc, char** argv) {
   check(to_lease >= 0, "a lease is granted once the barrier opens", 1, to_lease >= 0);
   check(dut.requests_accepted_o == 1, "exactly ONE request was accepted", 1,
         dut.requests_accepted_o);
-  check(dut.leases_granted_o == 1, "exactly ONE lease was granted", 1,
-        dut.leases_granted_o);
+  check(dut.leases_granted_o == 1, "exactly ONE lease was granted", 1, dut.leases_granted_o);
 
   // ---- FACT 2: the live lease is tagged to the renderer -------------------
   check(dut.lease_valid_o == 1, "the manager holds a live lease", 1, dut.lease_valid_o);
@@ -124,20 +123,16 @@ int main(int argc, char** argv) {
   const int to_frame = wait_for(dut, [&] { return dut.frame_valid_o != 0; });
   check(to_frame >= 0, "a frame is admitted", 1, to_frame >= 0);
   check(dut.frame_writer_o == 1, "the admitted frame is writer 1", 1, dut.frame_writer_o);
-  check(dut.frame_slot_o == dut.lease_slot_o,
-        "the admitted frame carries the live lease's slot", dut.lease_slot_o,
-        dut.frame_slot_o);
+  check(dut.frame_slot_o == dut.lease_slot_o, "the admitted frame carries the live lease's slot",
+        dut.lease_slot_o, dut.frame_slot_o);
   check(dut.frame_generation_o == dut.lease_generation_o,
-        "the admitted frame carries the live lease's generation",
-        dut.lease_generation_o, dut.frame_generation_o);
+        "the admitted frame carries the live lease's generation", dut.lease_generation_o,
+        dut.frame_generation_o);
 
   // ---- FACT 4: geometry is derived here -----------------------------------
-  check(dut.frame_width_o != 0, "frame width is derived, not zero", 1,
-        dut.frame_width_o != 0);
-  check(dut.frame_height_o != 0, "frame height is derived, not zero", 1,
-        dut.frame_height_o != 0);
-  check(dut.frame_stride_o != 0, "frame stride is derived, not zero", 1,
-        dut.frame_stride_o != 0);
+  check(dut.frame_width_o != 0, "frame width is derived, not zero", 1, dut.frame_width_o != 0);
+  check(dut.frame_height_o != 0, "frame height is derived, not zero", 1, dut.frame_height_o != 0);
+  check(dut.frame_stride_o != 0, "frame stride is derived, not zero", 1, dut.frame_stride_o != 0);
 
   const uint16_t slot = dut.frame_slot_o;
   const uint16_t generation = dut.frame_generation_o;
@@ -173,8 +168,8 @@ int main(int argc, char** argv) {
   wait_for(dut, [&] { return dut.manager_terms_accepted_o != 0; });
   check(dut.manager_terms_accepted_o == 1, "exactly ONE terminal was accepted", 1,
         dut.manager_terms_accepted_o);
-  check(dut.blit_events_refused_o == 0,
-        "the idle blit side refused nothing", 0, dut.blit_events_refused_o);
+  check(dut.blit_events_refused_o == 0, "the idle blit side refused nothing", 0,
+        dut.blit_events_refused_o);
 
   // ---- the publication becomes a ready event -------------------------------
   const int to_ready = wait_for(dut, [&] { return dut.ready_events_o != 0; });
@@ -199,9 +194,8 @@ int main(int argc, char** argv) {
   dut.swap_valid_i = 0;
   check(dut.displayed_slot_o == slot, "the displayed record is the frame's slot", slot,
         dut.displayed_slot_o);
-  check(dut.displayed_generation_o == generation,
-        "the displayed record is the frame's generation", generation,
-        dut.displayed_generation_o);
+  check(dut.displayed_generation_o == generation, "the displayed record is the frame's generation",
+        generation, dut.displayed_generation_o);
   check(dut.swaps_o == 1, "exactly ONE swap", 1, dut.swaps_o);
 
   // ---- and nothing ran twice ----------------------------------------------
@@ -212,8 +206,7 @@ int main(int argc, char** argv) {
         dut.leases_granted_o);
   check(dut.publications_o == 1, "still exactly one publication after settling", 1,
         dut.publications_o);
-  check(dut.contentions_o == 0, "no contention with a single requester", 0,
-        dut.contentions_o);
+  check(dut.contentions_o == 0, "no contention with a single requester", 0, dut.contentions_o);
 
   std::printf(
       "[shell_v2_lease_path] lease->frame %d cycles, frame->term %d, term->ready %d, "
