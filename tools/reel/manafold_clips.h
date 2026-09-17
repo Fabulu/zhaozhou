@@ -1259,9 +1259,10 @@ inline void whole_wobble(Rig& g, int f, int K, int amp_pm) {
 enum FoldSeg : uint8_t { kSegDrift = 0, kSegGather, kSegHold, kSegKnead, kSegRelease };
 struct FoldPhase {
   FoldSeg seg;
-  int32_t amp_pm;    // grip envelope 0..1000 (gather ramps, hold/knead hold)
-  int32_t agit_pm;   // knead-waggle envelope 0..1000 (knead only)
-  int32_t morph_pm;  // 0..1000 progress from shape_from to shape_to
+  int32_t amp_pm;       // grip envelope 0..1000 (gather ramps, hold/knead hold)
+  int32_t agit_pm;      // knead-waggle envelope 0..1000 (knead only)
+  int32_t morph_pm;     // 0..1000 progress from shape_from to shape_to
+  int32_t turn_a16;     // occasional complete in-plane turn during a stable hold
   uint8_t shape_from, shape_to;
 };
 
@@ -1272,8 +1273,11 @@ struct FoldPhase {
 // Pass 12 added BOLT, COIL and CROSS and this still said 6, so three figures
 // were authored and unreachable. Same fault class as the table bounds that
 // shipped off-by-one three passes running.
-constexpr int kFoldShapeCount = 9;  // ring, star, bar, crescent, triangle,
-                                    // s-curl, BOLT, COIL, CROSS
+// Direction 13 adds three readable silhouettes to the nine already shipping:
+// DIAMOND, INFINITY and HEART. Their station tables live in manafold_fx.h.
+constexpr int kFoldShapeCount = 12;  // ring, star, bar, crescent, triangle,
+                                     // s-curl, bolt, coil, cross, diamond,
+                                     // infinity, heart
 
 /** ease 0..1000 -> 0..1000, smoothstep-ish (integer). */
 inline int32_t fold_ease(int32_t t) {
@@ -1477,6 +1481,10 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
   uint32_t n = 0;
   for (;;) {
     const uint32_t h = fx_hash(0xF01D5EEDu + salt, n, 0x51u);
+    // Direction 13: one independently hashed decision per phrase. A selected
+    // HOLD makes exactly one complete turn and lands on its starting
+    // orientation before KNEAD, so the punctuation introduces no seam.
+    const uint32_t turn_h = fx_hash(0x360F01Du + salt, n, 0x13u);
     int32_t drift = (kDriftKeysBase + static_cast<int32_t>((h >> 4) % kDriftKeysHash)) * 16;
     int32_t gather = (kGatherKeysBase + static_cast<int32_t>(h % kGatherKeysHash)) * 16;
     int32_t hold = (kHoldKeysBase + static_cast<int32_t>((h >> 8) % kHoldKeysHash)) * 16;
@@ -1563,6 +1571,14 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
       ph.amp_pm = 1000;
       ph.agit_pm = 0;
       ph.morph_pm = 0;
+      const int32_t t = (kq4 - g_end) * 1000 / hold;
+      const bool full_turn = hold >= kFoldFullTurnMinHoldKeys * 16 &&
+          static_cast<int32_t>(turn_h % 1000u) < kFoldFullTurnChancePm;
+      if (full_turn) {
+        const int32_t turn = static_cast<int32_t>(
+            (static_cast<int64_t>(fold_ease(t)) * 65536) / 1000);
+        ph.turn_a16 = (turn_h & 0x10000u) ? -turn : turn;
+      }
       return ph;
     }
     if (kq4 < k_end) {

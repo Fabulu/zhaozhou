@@ -98,6 +98,27 @@ Complete every item in Owner Direction 12 in one integrated Manafold generation:
 - Kept the correction scope bounded. The review's Trick rotation-aspect, Fall restart and alternate Mana-menu mechanism notes are historical/non-Direction-12 items, documented but not pulled into this pass.
 - Clean correction binary MD5: `708E1C8199691BDC91FF0F3AADDD3190`. All bounded gates and controls pass; 28-subject final bank render is in progress from this binary.
 
+### 2026-09-17 06:22 UTC+02:00 - Recovery complete; final review resumed
+
+- Recovered the interrupted pass from commits, artifacts, logs, and session trace. The `final3` render actually completed successfully, with all 28 every-frame sheets generated; the prior agent died while visually reviewing Taunt II, Lasso, and Hover.
+- Confirmed production is still Pass 15. This explains why the live website does not yet show Pass 16 lightning occlusion.
+- `final2` and `final3` carry identical frame-count/CRC rows, tying prior technical QA to the exact final generation; no blind rerender is needed.
+- Owner added Direction 13: preserve the folded lightning swirl/shape exactly as a win, but decouple its surrounding particles so they no longer inherit the swirl's rotation/skew. Both layers continue to obey body/antenna depth.
+- Same-session clarification expands the folded-lightning performance: change shape more, add a broader authored shape vocabulary, and occasionally complete a visible 360° rotation. The approved swirl remains protected, and particles must remain independent of these added rotations.
+- Continuing with one delegated agent at a time due to usage limits. A single read-only GPT/Codex diagnosis traced the current coupling to the shape-mote call through `place()` inside `mana_fold()`; the protected lightning polyline and the particle layer can be split without changing depth policy.
+
+### 2026-09-17 07:02 UTC+02:00 - Direction 13 implemented and accepted in focused review
+
+- Split the particle and lightning transform frames with named shipping/control knob `kFoldMoteShapeFollowPm`: shipping `0` keeps particles in their own cloud/orbit frame; same-binary `1000` reproduces final3 coupling.
+- Left the connected lightning path and depth policy intact. Independent particles retain the effect's clearance and world translation, including Lasso flight, but do not inherit lightning skew, turn, scale, spin or shape morph.
+- Expanded the vocabulary from 9 to 12 with DIAMOND, INFINITY and HEART. Shortened complete drift/gather/hold/knead phrases so long clips show several figures without returning to permanent folding.
+- Added occasional eased full in-plane turns during stable holds. Channel frames 154–203 show one complete anticlockwise CROSS turn, then a shipping morph into INFINITY; particles remain independent throughout.
+- Independent review found three real pre-commit faults: destination topology was used while the source shape was held, the first Lasso particle cut lost flight translation, and the shape-pin diagnostic accepted out-of-range ids. All three were repaired; topology-specific edges now crossfade across the morph, Lasso carries an unrotated particle field, and invalid pin 12 fires RC 2.
+- Direct focused candidate and same-binary control renders all returned 0. Selected by-eye evidence and provenance are in `D13-EVIDENCE.md`.
+- Fresh exact-source `mprobe`, `mnodule`, `mspan`, `mshell`, `mshell --selftest`, `mband`, `mmeshcheck`, and `meyecam` builds/runs all returned 0.
+- Final reviewed candidate renderer MD5: `1255A8F8DEE778F7E76DCC7759D678B0`; focused CRCs are Lasso `0x88B892BD`, Channel `0x915E343F`, Hover `0x571C3D79`.
+- Next: commit/push, render the entire 28-subject bank from the accepted binary, then complete every-frame visual acceptance before encoding and publication.
+
 ---
 
 ## Subagent Spawns
@@ -112,13 +133,17 @@ Complete every item in Owner Direction 12 in one integrated Manafold generation:
 | 2026-09-16 18:31 | local Qwen 3.8 112k | Small adversarial acceptance checklist | Complete | folded into `PASS-16-INVENTORY.md` controls |
 | 2026-09-16 18:37 | Fable architect | Pass-16 architecture | Failed: configured model unavailable | Opus fallback below |
 | 2026-09-16 18:38 | Opus architect | Pass-16 architecture fallback | Complete | `Upheaval/creature/Manafold/PASS-16-PLAN.md` |
+| 2026-09-17 06:23 | GPT/Codex diagnosis | Trace Direction 13 particle/shape transform coupling | Complete | `D13-EVIDENCE.md` |
+| 2026-09-17 07:03 | GPT/Codex review | Targeted Direction 13 correctness review and fix verification | Complete; 3 findings fixed | `D13-EVIDENCE.md` |
 
 ---
 
 ## Files Created
 
 - `Upheaval/creature/Manafold/OWNER-DIRECTION-12-2026-09-16.md`
+- `Upheaval/creature/Manafold/OWNER-DIRECTION-13-2026-09-17.md`
 - `Upheaval/creature/Manafold/PASS-16-INVENTORY.md`
+- `D13-EVIDENCE.md` and selected Direction 13 review plates under `evidence/`
 - This run's `TASK_LOG.md` and `SPEC_v1.md`
 
 ---

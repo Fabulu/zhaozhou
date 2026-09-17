@@ -9,7 +9,7 @@
 
 ## Objective
 
-Produce one final-resolution Manafold generation that visibly closes every item in `OWNER-DIRECTION-12-2026-09-16.md`, passes failable structural/media gates, survives independent by-eye review and QA, and is archived, encoded and published as the next finished creature pass.
+Produce one final-resolution Manafold generation that visibly closes every item in `OWNER-DIRECTION-12-2026-09-16.md` and `OWNER-DIRECTION-13-2026-09-17.md`, passes failable structural/media gates, survives independent by-eye review and QA, and is archived, encoded and published as the next finished creature pass.
 
 ---
 
@@ -23,6 +23,8 @@ Produce one final-resolution Manafold generation that visibly closes every item 
 - Mana throw in both Lasso subjects
 - Broader, stronger, more transparent shell fog
 - Body/head contour inside the antenna while preserving antenna ink
+- Folded-lightning shape preserved, with particles independent of its local transform
+- More frequent shape changes, a broader shape vocabulary, and occasional complete turns
 - Repair/replacement of blind antenna/compositing gates
 - Full-bank render, review, QA, archive, encode and production publish
 
@@ -41,7 +43,8 @@ Produce one final-resolution Manafold generation that visibly closes every item 
 - Every value remains a named editable knob.
 - Use actual deformed shipping frames, not synthetic still poses, for completion evidence.
 - Every zero-fault gate must have a demonstrated failing control or committed mutant.
-- Preserve continuous antenna skin, pass-15 elbow/straight-return correction, round body, bounce, eyes, deaths, violet night and mist.
+- Preserve continuous antenna skin, pass-15 elbow/straight-return correction, round body, bounce, eyes, deaths, violet night, mist and the owner-approved folded lightning swirl.
+- Particles may share an effect's world translation; they must not inherit the folded lightning's local shape, skew, scale or rotation.
 - Build via `tools/reel/build-direct.sh --clean`; one accepted binary, one full-bank invocation.
 - Commit/push logical packets and update `TASK_LOG.md` between major steps.
 
@@ -57,6 +60,8 @@ Produce one final-resolution Manafold generation that visibly closes every item 
 - Do not widen shell by the old coupled depth control; split peak position from decay/coverage first.
 - Do not use the global mana ablation to remove smear; it also deletes mist and mana.
 - Do not trust `arcsweep.sh` or the old static-ellipsoid surface report until repaired.
+- Do not flatten or remove the folded lightning to fix its particles; split the particle frame instead.
+- Do not switch edge topology abruptly during a shape morph; crossfade source-only and destination-only edges.
 
 ---
 

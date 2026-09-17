@@ -3316,6 +3316,13 @@ constexpr int kSmearFeedOfHaloPm = 420;    // fed radius of a fold mote
 constexpr int kMoteHaloGainPm = 340;       // under the ceiling: hue survives
 constexpr int kMoteCrowdPm = 700;          // per-conduit mote scale-down when
                                            // several conduits are on screen
+// DIRECTION 13: lightning keeps the folded stencil, but the surrounding
+// particles do not inherit its yaw, all-axis turn, knead skew, Lasso scale or
+// spin. They keep the effect's ordinary clearance and world translation so a
+// thrown Lasso carries its particle field without winding that field into the
+// loop. 0 is the shipping independent frame; 1000 is the final3 control in
+// which shape motes follow the folded figure exactly.
+constexpr int kFoldMoteShapeFollowPm = 0;
 // grip / knead / drag (all derived from JOINT STATE, never contact)
 constexpr int32_t kGripGamma = 14;         // coherence per area-shrink pm
 constexpr int kCohBasePm = 320;            // coherence at rest area (low: the
@@ -3363,11 +3370,18 @@ constexpr int32_t kWanderEscapeMm = 430;   // the wander motes leave the pocket
 // long periods, no frequency doubling)
 constexpr int kMoteOrbitPeriodMinF = 130, kMoteOrbitPeriodMaxF = 260;
 constexpr int32_t kMoteOrbitRMinMm = 40, kMoteOrbitRMaxMm = 130;  // E.2: wider
-// the fold-hold-knead timeline (KEYS; frames on screen = 2x)
-constexpr int kGatherKeysBase = 30, kGatherKeysHash = 16;   // 60..90 frames
-constexpr int kHoldKeysBase = 32, kHoldKeysHash = 32;       // 64..128 frames
-constexpr int kKneadKeysBase = 30, kKneadKeysHash = 30;     // 60..120 frames
+// DIRECTION 13: more shape changes, while the fold remains intermittent rather
+// than becoming the standard look again. These shorter phrases still leave a
+// real drift, gather, hold and knead; they simply let a long clip show several
+// figures instead of spending most of its runtime on one.
+constexpr int kGatherKeysBase = 22, kGatherKeysHash = 13;   // 44..68 frames
+constexpr int kHoldKeysBase = 24, kHoldKeysHash = 21;       // 48..88 frames
+constexpr int kKneadKeysBase = 24, kKneadKeysHash = 21;     // 48..88 frames
 constexpr int kReleaseKeys = 14;           // every clip's tail: amp eases to 0
+// A complete in-plane turn is occasional punctuation during a stable HOLD.
+// It never applies to Lasso, whose throw spin is separately authored.
+constexpr int kFoldFullTurnChancePm = 330;
+constexpr int kFoldFullTurnMinHoldKeys = 20;
 // ---- DIRECTION 7 §3: THE SHAPES ARE INTERMITTENT -------------------------
 // "We also want more shapes, and shapes should not be the standard look, they
 // should happen intermittently. Standard should still be the channel mana we
@@ -3383,7 +3397,7 @@ constexpr int kReleaseKeys = 14;           // every clip's tail: amp eases to 0
 // was missing was a segment in which the hands are open. DRIFT is that segment,
 // and it sits at the head of every cycle, so a clip also OPENS in the standard
 // look rather than mid-fold.
-constexpr int kDriftKeysBase = 44, kDriftKeysHash = 40;     // 88..168 frames
+constexpr int kDriftKeysBase = 30, kDriftKeysHash = 21;     // 60..100 frames
 // The hands do not go fully slack -- the antenna keeps its living sway and a
 // little grip, or the transition into a gather reads as a snap. This is the
 // amp floor the drift eases down to and back out of.

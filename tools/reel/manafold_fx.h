@@ -2005,29 +2005,23 @@ constexpr uint8_t kShRing = 0, kShStar = 1, kShBar = 2, kShCrescent = 3,
 // and the mote path); re-authoring the station count is a separate lab and is
 // deliberately out of scope. Every new figure is drawn inside the same 18.
 constexpr uint8_t kShBolt = 6, kShCoil = 7, kShCross = 8;
+// DIRECTION 13: three more nameable silhouettes. The owner wants the folded
+// lightning to change more and have more shapes while preserving the approved
+// swirl. These add vocabulary; they do not replace either curl.
+constexpr uint8_t kShDiamond = 9, kShInfinity = 10, kShHeart = 11;
 // THE ONE AUTHORITY ON HOW MANY FIGURES EXIST.
 //
-// ⚠ IT IS NOT WIRED TO THE PICKER YET, ON PURPOSE, AND THIS IS THE HAND-OFF.
-// `kFoldShapeCount` -- the modulus that decides which figure a clip draws --
-// lives in manafold_clips.h, which belongs to the OTHER implementer this pass.
-// The vocabulary is therefore split across a lane boundary: the table is here,
-// the count is there. So these three are authored, weighted, edge-linked and
-// rendered-ready, and the picker still selects from the first six.
-//
-// ONE LINE completes it: manafold_clips.h's `kFoldShapeCount = 6` becomes
-// `= u02::kFoldStencilCount`. The static_assert below makes the mismatch
-// impossible to ship silently in the other direction -- a count that outruns
-// the table is a read off the end of it.
-constexpr int kFoldStencilCount = 9;
+// kFoldShapeCount -- the picker modulus in manafold_clips.h -- must match this
+// table exactly. The static_assert below makes drift in either direction fail
+// the build.
+constexpr int kFoldStencilCount = 12;
 // The pin's live value; -1 (the default, and the only shipping value) means
 // the picker decides. Set by U02_FOLD_SHAPE in zhao_reel.cpp.
 inline int g_u02_fold_shape_pin = -1;
 
-// The six shape stencils, authored in pocket coordinates (u across the
-// hole, v up; per-mille of kStencilScaleMm). Chosen for legibility with
-// blobby strokes at ~37 px: RING (the opener), FOUR-POINT STAR (the
-// identity, rhymes with the pupil), BAR (max contrast), CRESCENT (the
-// Description sheet's rear view), TRIANGLE, S-CURL.
+// The shape stencils, authored in pocket coordinates (u across the hole, v up;
+// per-mille of kStencilScaleMm). The first six are the original vocabulary;
+// BOLT/COIL/CROSS came in pass 12; DIAMOND/INFINITY/HEART are Direction 13.
 struct StencilPt { int16_t u_pm, v_pm; };
 inline const StencilPt (&fold_stencils())[kFoldStencilCount][kStencilPts] {
   static StencilPt st[kFoldStencilCount][kStencilPts];
@@ -2126,6 +2120,40 @@ inline const StencilPt (&fold_stencils())[kFoldStencilCount][kStencilPts] {
         st[8][i].u_pm = static_cast<int16_t>(t * 707 / 1000);
         st[8][i].v_pm = static_cast<int16_t>(t * 707 / 1000 * sgn);
       }
+      // 9 DIAMOND: one closed angular loop, distinct from the round RING and
+      // the three-sided TRIANGLE even under a thick lightning stroke.
+      {
+        static const int16_t dv[5][2] = {
+            {0, 1050}, {900, 0}, {0, -1050}, {-900, 0}, {0, 1050}};
+        const int32_t q = i * 4000 / kStencilPts;
+        const int e = q / 1000;
+        const int32_t t = q % 1000;
+        st[9][i].u_pm = static_cast<int16_t>(dv[e][0] + (dv[e + 1][0] - dv[e][0]) * t / 1000);
+        st[9][i].v_pm = static_cast<int16_t>(dv[e][1] + (dv[e + 1][1] - dv[e][1]) * t / 1000);
+      }
+      // 10 INFINITY: a closed Gerono double-loop. The centre crossing makes it
+      // readable as two lobes rather than a third curl.
+      {
+        const uint16_t a = static_cast<uint16_t>(
+            (static_cast<int64_t>(i) * 65536 / kStencilPts) & 0xFFFF);
+        const int32_t sn = zref::fx_sin(zref::angle16{a}).raw;
+        const int32_t sn2 = zref::fx_sin(
+            zref::angle16{static_cast<uint16_t>(static_cast<uint32_t>(a) * 2u)}).raw;
+        st[10][i].u_pm = static_cast<int16_t>((static_cast<int64_t>(1000) * sn) >> 16);
+        st[10][i].v_pm = static_cast<int16_t>((static_cast<int64_t>(620) * sn2) >> 16);
+      }
+      // 11 HEART: an eight-run closed polyline. The notch and pointed foot are
+      // deliberately exaggerated so both survive at the shipping ~37 px scale.
+      {
+        static const int16_t hv[9][2] = {
+            {0, -1050}, {-760, -360}, {-900, 310}, {-430, 850},
+            {0, 430}, {430, 850}, {900, 310}, {760, -360}, {0, -1050}};
+        const int32_t q = i * 8000 / kStencilPts;
+        const int e = q / 1000;
+        const int32_t t = q % 1000;
+        st[11][i].u_pm = static_cast<int16_t>(hv[e][0] + (hv[e + 1][0] - hv[e][0]) * t / 1000);
+        st[11][i].v_pm = static_cast<int16_t>(hv[e][1] + (hv[e + 1][1] - hv[e][1]) * t / 1000);
+      }
     }
     built = true;
   }
@@ -2148,6 +2176,9 @@ inline bool fold_edge_link(uint8_t shape, int i) {
   switch (shape) {
     case kShRing:
     case kShTriangle:
+    case kShDiamond:
+    case kShInfinity:
+    case kShHeart:
       return true;  // closed: 17 -> 0 included
     case kShCrescent:
     case kShCurl:
@@ -2286,6 +2317,7 @@ inline int g_u02_shimmer_r = -1;
 inline int g_u02_shimmer_gain = -1;
 inline int g_u02_shimmer_flicker = -1;
 inline int g_u02_strand_motes = -1;
+inline int g_u02_mote_shape_follow = -1;  // D13: 0 free particles, 1000 final3
 inline int g_u02_aqua_bal = 0;      // 0 = the shipped aqua; 1 = the B>=G rung
 inline int g_u02_shimmer_hue = -1;  // -1 = kShimmerHue; 0/1/2 select a variant
 inline bool u02_strand_on() {
@@ -2337,6 +2369,12 @@ inline int u02_shimmer_hue() {
 inline int u02_mote_garnish_pm() {
   if (!u02_strand_on()) return kFoldMoteGarnishPm;
   return g_u02_strand_motes < 0 ? kFoldStrandMoteGarnishPm : g_u02_strand_motes;
+}
+inline int u02_mote_shape_follow_pm() {
+  const int follow = g_u02_mote_shape_follow < 0
+                         ? kFoldMoteShapeFollowPm
+                         : g_u02_mote_shape_follow;
+  return follow < 0 ? 0 : (follow > 1000 ? 1000 : follow);
 }
 inline bool u02_free_strand_on() {
   if (g_u02_free_strand >= 0) return g_u02_free_strand != 0;  // env wins
@@ -2499,14 +2537,10 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     // coherence, which is measuring the ANTENNA and not the flying ring
     if (coh < kLassoCohPm) coh = kLassoCohPm;
   }
-  // PASS 12 DIAGNOSTIC (default off): U02_FOLD_SHAPE=<id> pins the figure so a
-  // single stencil can be looked at on its own, through the SHIPPING draw path
-  // -- the same morph, the same edge, the same knead. It exists because the
-  // three figures added this pass (BOLT, COIL, CROSS) cannot be reached by the
-  // picker yet, and a figure nobody has rendered is a figure nobody has
-  // judged. It pins shape_from AND shape_to, so the morph holds still and the
-  // plate shows the figure rather than a blend of two.
-  if (g_u02_fold_shape_pin >= 0) {
+  // PASS 12 / DIRECTION 13 DIAGNOSTIC (default off): U02_FOLD_SHAPE=<id>
+  // pins any figure so every authored stencil can be judged through the
+  // shipping morph, edge, depth and knead path.
+  if (g_u02_fold_shape_pin >= 0 && g_u02_fold_shape_pin < kFoldStencilCount) {
     ph.shape_from = static_cast<uint8_t>(g_u02_fold_shape_pin);
     ph.shape_to = static_cast<uint8_t>(g_u02_fold_shape_pin);
   }
@@ -2514,17 +2548,18 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   const FoldWeights& fw = fold_weights();
   if (g_u02_fold_debug)
     std::fprintf(stderr,
-                 "fold f=%u seg=%d amp=%d agit_env=%d morph=%d %d->%d | "
+                 "fold f=%u seg=%d amp=%d agit_env=%d morph=%d %d->%d turn=%d | "
                  "area_pm=%d ema=%d coh=%d knead_mm=%d agit=%d\n",
                  frame, static_cast<int>(ph.seg), ph.amp_pm, ph.agit_pm,
-                 ph.morph_pm, ph.shape_from, ph.shape_to, area_pm, stfx.area_ema_pm, coh,
-                 stfx.knead_smooth, agit);
+                 ph.morph_pm, ph.shape_from, ph.shape_to, ph.turn_a16,
+                 area_pm, stfx.area_ema_pm, coh, stfx.knead_smooth, agit);
   // ---- DIRECTION 7 S2: the shape is PLACED, then DRAWN AS AN EDGE --------
   //
-  // `place()` is the ONE place the stencil's offset from the pocket centre is
-  // rotated and kneaded, so the outline and the motes cannot disagree about
-  // where the shape is -- the same defect class as pass 5's star and its
-  // separately authored ring.
+  // `place()` is the one authority for the LIGHTNING FIGURE's offset,
+  // camera-facing yaw, knead and authored turns. Direction 13 deliberately
+  // removes surrounding particles from this transform: they keep an optional
+  // 1000-per-mille legacy endpoint for a same-binary A/B, but shipping at zero
+  // uses their own ring-relative cloud/orbit frame.
   //
   // ROTATE ON ALL AXES. Pass 7 had a single authored yaw (kStencilFaceYawA16)
   // whose job is to face the shape at the house camera. The owner asks for the
@@ -2574,13 +2609,14 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     // its in-plane throw spin.
     if (!lasso.active) {
       turn(o[1], o[2], rx_a16);            // X
-      turn(o[0], o[1], rz_a16);            // Z
+      turn(o[0], o[1], rz_a16);            // Z: slow malleable sway
+      turn(o[0], o[1], ph.turn_a16);        // D13: occasional complete turn
     }
     // THE LASSO (D9 SS15): the ring OPENS as it flies and CINCHES as it is
     // reeled home, and it spins about the throw axis on the way. Applied here,
-    // inside the one place the shape's offset is transformed, so the outline
-    // and the motes cannot disagree about where the lasso is -- the same
-    // defect class pass 5's separately-authored star and ring produced.
+    // inside the figure transform, so every lightning station shares one
+    // authored throw. Direction 13 intentionally leaves the particle field out
+    // of this transform.
     if (lasso.active) {
       for (int li = 0; li < 3; ++li)
         o[li] = static_cast<int32_t>((static_cast<int64_t>(o[li]) * lasso.scale_pm) / 1000);
@@ -2658,9 +2694,19 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     const int32_t shim_r = u02_shimmer_r();
     const int shim_gain = u02_shimmer_gain();
     const int shim_flick = u02_shimmer_flicker();
+    // Topology morphs with the stations. Edges common to both figures stay at
+    // full strength; source-only edges fade out and destination-only edges fade
+    // in across the whole KNEAD. This keeps GATHER/HOLD faithful to shape_from
+    // without popping BAR/CROSS seams or closed loops on at the midpoint.
     for (int pass = 0; pass < passes; ++pass)
     for (int i = 0; i < kStencilPts; ++i) {
-      if (!fold_edge_link(ph.shape_to, i)) continue;
+      const bool source_link = fold_edge_link(ph.shape_from, i);
+      const bool dest_link = fold_edge_link(ph.shape_to, i);
+      if (!source_link && !dest_link) continue;
+      const int edge_pm = source_link == dest_link
+                              ? 1000
+                              : (source_link ? 1000 - ph.morph_pm : ph.morph_pm);
+      if (edge_pm <= 0) continue;
       const int j = (i + 1) % kStencilPts;
       bolt_path(S[i], S[j], kFoldEdgeSegs, ph_e, kBoltSeed ^ (0x5EDu * (i + 1)),
                 pts, kFoldEdgeJitterMm);
@@ -2691,7 +2737,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               // It rides `lit` like everything else, so a figure that is not
               // gripping does not stamp a dark bruise on the sky.
               lightning_push(out, x, y, z, dark_r, kRampStorm,
-                             dark_gain * lit / 1000, false,
+                             dark_gain * lit / 1000 * edge_pm / 1000, false,
                              /*opaque=*/true, /*soft=*/true);
             } else if (pass == 1) {
               // LAYER 2: THE BLUE SHIMMER (D11) -- the layer this creature has
@@ -2715,7 +2761,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               const int mod = 1000 - shim_flick +
                               static_cast<int>(sh % static_cast<uint32_t>(span));
               lightning_push(out, x, y, z, shim_r, kRampShimmer,
-                             shim_gain * lit / 1000 * mod / 1000, false);
+                             shim_gain * lit / 1000 * edge_pm / 1000 * mod / 1000, false);
             } else {
               // LAYER 3: THE WHITE LINE, over the finished navy AND its
               // shimmer -- the hot centre of the bolt. Additive and depth-
@@ -2724,11 +2770,11 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               // outline -- and, per the plate above, between a line and a
               // string of pale blobs.
               lightning_push(out, x, y, z, core_r, kRampWhite,
-                             core_gain * lit / 1000, false);
+                             core_gain * lit / 1000 * edge_pm / 1000, false);
             }
           } else {
             lightning_push(out, x, y, z, kFoldEdgeHaloRPx, ramp,
-                           kFoldEdgeHaloGainPm * lit / 1000, false);
+                           kFoldEdgeHaloGainPm * lit / 1000 * edge_pm / 1000, false);
             // The core is pass 8's SOFT body, in the fold's own ramp. The lab
             // measured that an outline stamped with the lightning primitive's
             // hard-coded white core put 366 near-white px on screen and
@@ -2736,7 +2782,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
             // superseded by Direction 10 above, which gives the white a dark
             // surround the lab's version never had.
             lightning_push(out, x, y, z, kFoldEdgeCoreRPx, mana_core_ramp(ramp),
-                           kFoldEdgeCoreGainPm, false, /*opaque=*/true,
+                           kFoldEdgeCoreGainPm * edge_pm / 1000, false, /*opaque=*/true,
                            /*soft=*/true);
           }
         }
@@ -2783,6 +2829,15 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   if (n_wander < 1) n_wander = 1;
   if (n_wander > n_motes - 2) n_wander = n_motes - 2 > 1 ? n_motes - 2 : 1;
   const int n_shape = n_motes - n_wander;
+  const int mote_shape_follow_pm = u02_mote_shape_follow_pm();
+  // Independent particles keep the effect's world translation (including the
+  // Lasso throw) but not its stencil rotation, skew, scale or shape. This is the
+  // distinction Direction 13 asks for: a particle system travelling with the
+  // event, not particles glued to the line that event draws.
+  const int32_t independent_centre[3] = {
+      A.ring[0] + fxu(kStencilClearXMm) + fxu(lasso.off_mm[0]),
+      A.ring[1] + fxu(kStencilClearYMm) + fxu(lasso.off_mm[1]),
+      A.ring[2] + fxu(kStencilClearZMm) + fxu(lasso.off_mm[2])};
   for (int m = 0; m < n_motes; ++m) {
     const uint32_t hm = fx_hash(0xF01Du, static_cast<uint32_t>(m), 0xA7u);
     int32_t P[3];
@@ -2832,18 +2887,14 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       mp = fold_ease(mp);
       int32_t Pst[3];
       for (int k = 0; k < 3; ++k) Pst[k] = lerp32(Pf[k], Pt[k], mp, 1000);
-      // DIRECTION 7 S2: the SAME placement the edge uses -- authored facing
-      // yaw, the two slow turns, the knead's malleability, the clearance
-      // offset. Shared so the outline and the motes cannot disagree.
+      // final3 control endpoint: the particle is first folded exactly like the
+      // lightning. Direction 13 ships the other endpoint below; keeping both in
+      // one binary makes the visual comparison attributable.
       place(Pst);
-      // the cloud relax position: hashed offset + ONE slow consistent orbit
-      // (R7: a single angular velocity per mote, long period, no doubling).
-      // PASS 5 (the hover loop-seam, reviewer item 8): the hashed period is
-      // QUANTISED to a whole number of orbits over the clip, so every
-      // mote's orbit phase is identical at frame 0 and at the wrap -- the
-      // release tail zeroed the fold amp but the orbits used to land
-      // mid-turn, and the always-playing loop popped by ~2.4x the house
-      // seam norm. The period only shifts within its own hashed band.
+      // the particle's own slow orbit and hashed cloud position. These remain
+      // effect-centred and therefore do not inherit lightning yaw, skew, shape
+      // morph, complete turns, or Lasso scale/spin. The centre itself keeps the
+      // Lasso's world translation so the particles remain around the throw.
       const int per = kMoteOrbitPeriodMinF +
           static_cast<int>((hm >> 8) % static_cast<uint32_t>(kMoteOrbitPeriodMaxF - kMoteOrbitPeriodMinF));
       const int frames_total = keys * 2 > 0 ? keys * 2 : 1;
@@ -2864,11 +2915,16 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       cloud_off[0] = fxu(fx_jit(hm, kCloudSpreadMm));
       cloud_off[1] = fxu(fx_jit(hm >> 7, kCloudSpreadMm * 3 / 4));
       cloud_off[2] = fxu(fx_jit(hm >> 13, kCloudSpreadMm / 2));
-      // coherence blends the mote from its relaxed cloud onto the stencil
       for (int k = 0; k < 3; ++k) {
-        const int32_t cloud = Pst[k] + cloud_off[k] + orb[k];
-        const int32_t tight = Pst[k] + orb[k] / 4;
-        P[k] = lerp32(cloud, tight, coh, 1000);
+        // The legacy endpoint retains its coherence-driven stencil grip.
+        const int32_t folded_cloud = Pst[k] + cloud_off[k] + orb[k];
+        const int32_t folded_tight = Pst[k] + orb[k] / 4;
+        const int32_t folded = lerp32(folded_cloud, folded_tight, coh, 1000);
+        // Shipping endpoint: ordinary independent particle motion around the
+        // conduit centre. Jitter and drag are applied below as particle motion,
+        // not as a transform copied from the lightning figure.
+        const int32_t independent = independent_centre[k] + cloud_off[k] + orb[k];
+        P[k] = lerp32(independent, folded, mote_shape_follow_pm, 1000);
       }
     }
     // KNEAD agitation: per-mote jitter that churns with fast gestures

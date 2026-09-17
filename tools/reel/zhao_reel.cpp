@@ -7807,7 +7807,13 @@ int main(int argc, char** argv) {
   // PASS 12 (B5): pin one fold figure, so a stencil can be judged on its own
   // through the shipping draw path. Diagnostic only; unset changes nothing.
   if (const char* fs = std::getenv("U02_FOLD_SHAPE")) {
-    u02::g_u02_fold_shape_pin = std::atoi(fs);
+    const int shape = std::atoi(fs);
+    if (shape < 0 || shape >= u02::kFoldStencilCount) {
+      std::fprintf(stderr, "U02_FOLD_SHAPE=%d is invalid; expected 0..%d\n",
+                   shape, u02::kFoldStencilCount - 1);
+      return 2;
+    }
+    u02::g_u02_fold_shape_pin = shape;
     std::fprintf(stderr, "U02_FOLD_SHAPE=%d (one figure pinned)\n",
                  u02::g_u02_fold_shape_pin);
   }
@@ -7862,6 +7868,10 @@ int main(int argc, char** argv) {
     u02::g_u02_shimmer_hue = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_MOTES"))
     u02::g_u02_strand_motes = std::atoi(e);
+  // DIRECTION 13 A/B: 0 keeps motes in their independent ring-relative field;
+  // 1000 reproduces final3's shared folded-lightning transform.
+  if (const char* e = std::getenv("ZHAO_U02_MOTE_SHAPE_FOLLOW_PM"))
+    u02::g_u02_mote_shape_follow = std::atoi(e);
   // The green/aqua fold's one rebalance rung (D11 s4: "experiment some and make
   // it look better"). It moves the AQUA family only and touches nothing the
   // lightning draws -- the two are kept separate on his own instruction.
@@ -7869,12 +7879,12 @@ int main(int argc, char** argv) {
     u02::g_u02_aqua_bal = std::atoi(e);
   if (u02::g_u02_shimmer_r >= 0 || u02::g_u02_shimmer_gain >= 0 ||
       u02::g_u02_shimmer_flicker >= 0 || u02::g_u02_strand_motes >= 0 ||
-      u02::g_u02_aqua_bal != 0)
+      u02::g_u02_mote_shape_follow >= 0 || u02::g_u02_aqua_bal != 0)
     std::fprintf(stderr,
-                 "D11 shimmer rung: r=%d gain=%d flick=%d motes=%d aquabal=%d\n",
+                 "D11/D13 shimmer rung: r=%d gain=%d flick=%d motes=%d follow=%d aquabal=%d\n",
                  u02::g_u02_shimmer_r, u02::g_u02_shimmer_gain,
                  u02::g_u02_shimmer_flicker, u02::g_u02_strand_motes,
-                 u02::g_u02_aqua_bal);
+                 u02::g_u02_mote_shape_follow, u02::g_u02_aqua_bal);
   if (u02::g_u02_strand_on >= 0 || u02::g_u02_strand_core_r >= 0 ||
       u02::g_u02_strand_dark_r >= 0 || u02::g_u02_strand_dark_gain >= 0 ||
       u02::g_u02_free_strand >= 0 || u02::g_u02_strand_perseg >= 0 ||
