@@ -282,6 +282,53 @@ coefficient-table primitives stop being one bullet of a stage and become the
 mechanism the owner has asked for, to be reused by R4, R5, R6 and FIELD
 rather than re-derived in each.
 
+### G8B MEETS ITS TIMING CRITERION — 2026-09-17
+
+**`zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t11-pins-s2`: 102.19 MHz,
+physical pins, zero total negative slack, `status: ok`.** The first accepting
+row this target has produced, and the first time
+`packet_i_g8b_registration_static`'s acceptance branch has run rather than
+been skipped.
+
+| row | seed | Fmax | slack | TNS | ALM | status |
+|---|---:|---:|---:|---:|---:|---|
+| `@g8b-t11-pins` | 1 | 98.90 | −0.111 | −0.175 | 8,293 | failed:structure |
+| `@g8b-t11-pins-s2` | 2 | **102.19** | +0.214 | **0** | 8,295 | **ok** |
+| `@g8b-t11-pins-s4` | 4 | **101.68** | +0.165 | **0** | 8,274 | **ok** |
+
+Clean at HEAD, zero virtual pins, digest `fda08fed9972` over nine sources at
+commit `9f262f71`, no rule violations.
+
+**The seed dependence, stated rather than buried.** Two of three seeds close;
+seed 1 misses by 111 picoseconds. The design sits AT its criterion and
+placement decides which side a run lands on. That is not the same as closing
+on one lucky seed — seeds 2 and 4 both reach zero TNS with positive margin —
+and it is also not the *comfortable* margin the final console receipt will
+want. It is what G8B's own gate asks for and no more.
+
+**From 43.94 MHz**, and the two negative results are as much of the record as
+the positive ones:
+
+| package | changed | measured |
+|---|---|---:|
+| T3a | registered the window mask | +11.7 |
+| T5+T6 | registered the lattice base; split the output cone | +9.7 |
+| T7 | moved a constant add into a **DSP's** register | **−7.9**, reverted |
+| T8 | **deleted** a register whose value was implied | +8.6 |
+| T9 | strength-reduced a constant add | **0.0**, reverted |
+| T10c | fourth blend stage, banked vertex captures | +2.0 |
+| T11 | viewport mux off the DSP input | +0.5 |
+
+T10c took five attempts; four failed identically and the one that passed but
+stalled is what proved the diagnosis —
+`reports/G8B-T10-BLEND-STAGE-ATTEMPT-20260917.md`. **No fit was spent on any
+failure.**
+
+**What it does not close, which the section below already said:** Packet I
+still cannot be promoted, because Packet H precedes it and
+`zhao_shell_top_v2.sv` does not exist. A clean G8B receipt was the EXPENSIVE
+part of Packet I and never the whole of it.
+
 ### G8B CANNOT CLOSE PACKET I WHILE PACKET H IS MISSING
 
 Noted 2026-09-16, and it changes what "finish R0" means next.
