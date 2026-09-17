@@ -5999,6 +5999,22 @@ set_tests_properties(shell_v2_lease_path_directed PROPERTIES
   LABELS "fast;nightly;packet-h" TIMEOUT 300
   FAIL_REGULAR_EXPRESSION "FAIL")
 
+# THE GATE CLAUSE -- "every new port is connected" -- checked mechanically.
+#
+# A port map entry reading (1'b0) and one reading (some_net) look equally
+# deliberate afterwards, and the first is how an input nobody decided about
+# ships AS a decision. CLAUDE.md puts it exactly: a tie-off that looks
+# deliberate is worse than a missing connection, because a missing one is a
+# PINMISSING and a tie-off is silence.
+#
+# The audit demands a `// TIE: <why>` beside every literal in the composition.
+# It found 36 silent ones the first time it ran.
+add_test(NAME packet_h_tieoff_audit
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/design/packet_h_tieoff_audit.py)
+set_tests_properties(packet_h_tieoff_audit PROPERTIES
+  LABELS "fast;lint;packet-h" TIMEOUT 120)
+
 add_test(NAME lint_shell_v2_lease_path
   COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
           --top-module zhao_shell_v2_lease_path

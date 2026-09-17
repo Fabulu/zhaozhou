@@ -270,6 +270,42 @@ module zhao_shell_v2_lease_path
     input  logic [15:0] pal_load_rgb565_i,
     input  logic        pal_load_crc_ok_i,
 
+    // ---- THE LAST TWELVE -------------------------------------------------
+    //
+    // Packet-D attribute carriage, the Packet-E ENGINE1 share, the V3 clear
+    // payload and Surface Sheet backpressure. Exposed rather than tied,
+    // because the gate clause is "every new port is CONNECTED" and a literal
+    // in a port map is indistinguishable from a decision nobody made.
+    //
+    // Driving them meaningfully needs triangle traffic, which this harness
+    // deliberately does not generate -- Packet D has its own directed test
+    // for that and running one here would test the binner and the protocol
+    // at once. What this closes is the WIRING, and `packet_h_tieoff_audit.py`
+    // is what stops the difference between "wired" and "tied" being a matter
+    // of opinion.
+    input  logic [46:0]  tri_area2_i,
+    input  logic [239:0] tri_invw_plane_i,
+    input  logic [239:0] tri_u_over_w_plane_i,
+    input  logic [239:0] tri_v_over_w_plane_i,
+    input  logic [297:0] tri_flat_request_i,
+    input  logic [47:0]  tri_continuation_tail_i,
+    input  logic [31:0]  tri_fragment_state_i,
+
+    input  logic         fill_req_ready_i,
+    output logic         fill_req_valid_o,
+    output logic [31:0]  fill_req_addr_o,
+    input  logic         fill_data_valid_i,
+    input  logic [15:0]  fill_data_i,
+    input  logic         fill_refused_i,
+
+    input  logic [63:0]  frame_clear_word_i,
+    input  logic         sheet_req_ready_i,
+    output logic         sheet_req_valid_o,
+    output logic [1:0]   sheet_req_op_o,
+    output logic [31:0]  sheet_req_handle_o,
+    output logic [11:0]  sheet_req_texel_o,
+    output logic [15:0]  sheet_req_src_id_o,
+
     input  logic        bin_frame_end_i,
     input  logic [5:0]  bin_grid_w_i,
     input  logic [5:0]  bin_grid_h_i,
@@ -498,39 +534,39 @@ module zhao_shell_v2_lease_path
       .frame_end_i                  (bin_frame_end_i),
       .grid_w_i                     (bin_grid_w_i),
       .grid_h_i                     (bin_grid_h_i),
-      .frame_clear_word_i           (64'd0),
-      .tri_valid_i                  (1'b0),
+      .frame_clear_word_i           (frame_clear_word_i),
+      .tri_valid_i                  (1'b0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
       .tri_ready_o                  (),
-      .tri_kx0_i                    (23'd0),
-      .tri_ky0_i                    (23'd0),
-      .tri_kc0_i                    (48'd0),
-      .tri_kx1_i                    (23'd0),
-      .tri_ky1_i                    (23'd0),
-      .tri_kc1_i                    (48'd0),
-      .tri_kx2_i                    (23'd0),
-      .tri_ky2_i                    (23'd0),
-      .tri_kc2_i                    (48'd0),
-      .tri_tl_i                     (3'd0),
-      .tri_ax_i                     (21'd0),
-      .tri_ay_i                     (21'd0),
-      .tri_bx_i                     (21'd0),
-      .tri_by_i                     (21'd0),
-      .tri_cx_i                     (21'd0),
-      .tri_cy_i                     (21'd0),
-      .tri_min_x_i                  (12'd0),
-      .tri_max_x_i                  (12'd0),
-      .tri_min_y_i                  (12'd0),
-      .tri_max_y_i                  (12'd0),
-      .tri_src_id_i                 (16'd0),
-      .tri_area2_i                  (47'd0),
-      .tri_invw_plane_i             (240'd0),
-      .tri_u_over_w_plane_i         (240'd0),
-      .tri_v_over_w_plane_i         (240'd0),
-      .tri_flat_request_i           (298'd0),
-      .tri_continuation_tail_i      (48'd0),
-      .tri_fragment_state_i         (32'd0),
+      .tri_kx0_i                    (23'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_ky0_i                    (23'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_kc0_i                    (48'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_kx1_i                    (23'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_ky1_i                    (23'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_kc1_i                    (48'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_kx2_i                    (23'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_ky2_i                    (23'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_kc2_i                    (48'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_tl_i                     (3'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_ax_i                     (21'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_ay_i                     (21'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_bx_i                     (21'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_by_i                     (21'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_cx_i                     (21'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_cy_i                     (21'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_min_x_i                  (12'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_max_x_i                  (12'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_min_y_i                  (12'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_max_y_i                  (12'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_src_id_i                 (16'd0),  // TIE: no triangle traffic here; Packet D owns the binner, and driving one would test the binner and the protocol at once
+      .tri_area2_i                  (tri_area2_i),
+      .tri_invw_plane_i             (tri_invw_plane_i),
+      .tri_u_over_w_plane_i         (tri_u_over_w_plane_i),
+      .tri_v_over_w_plane_i         (tri_v_over_w_plane_i),
+      .tri_flat_request_i           (tri_flat_request_i),
+      .tri_continuation_tail_i      (tri_continuation_tail_i),
+      .tri_fragment_state_i         (tri_fragment_state_i),
       .tok_req_o                    (),
-      .tok_grant_i                  (1'b1),
+      .tok_grant_i                  (1'b1),  // TIE: MEASURE.TOKENS does not gate this path yet -- the V1 shell says the same at its own u_render_bin
       .frame_fault_clear_valid_i    (lease_clear_valid),
       .frame_fault_clear_ready_o    (lease_clear_ready),
       .frame_fault_o                (bin_frame_fault_o),
@@ -548,12 +584,12 @@ module zhao_shell_v2_lease_path
       .cfg_rsp_status_o             (cfg_rsp_status_o),
       .cfg_rsp_page_generation_o    (cfg_rsp_page_generation_o),
       .active_page_generation_o     (active_page_generation_o),
-      .fill_req_valid_o             (),
-      .fill_req_ready_i             (1'b1),
-      .fill_req_addr_o              (),
-      .fill_data_valid_i            (1'b0),
-      .fill_data_i                  (16'd0),
-      .fill_refused_i               (1'b0),
+      .fill_req_valid_o             (fill_req_valid_o),
+      .fill_req_ready_i             (fill_req_ready_i),
+      .fill_req_addr_o              (fill_req_addr_o),
+      .fill_data_valid_i            (fill_data_valid_i),
+      .fill_data_i                  (fill_data_i),
+      .fill_refused_i               (fill_refused_i),
       .pal_load_valid_i             (pal_load_valid_i),
       .pal_load_ready_o             (pal_load_ready_o),
       .pal_load_op_i                (pal_load_op_i),
@@ -562,21 +598,21 @@ module zhao_shell_v2_lease_path
       .pal_load_idx_i               (pal_load_idx_i),
       .pal_load_rgb565_i            (pal_load_rgb565_i),
       .pal_load_crc_ok_i            (pal_load_crc_ok_i),
-      .sheet_req_valid_o            (),
-      .sheet_req_ready_i            (1'b1),
-      .sheet_req_op_o               (),
-      .sheet_req_handle_o           (),
-      .sheet_req_texel_o            (),
-      .sheet_req_src_id_o           (),
-      .pg_valid_i                   (1'b0),
+      .sheet_req_valid_o            (sheet_req_valid_o),
+      .sheet_req_ready_i            (sheet_req_ready_i),
+      .sheet_req_op_o               (sheet_req_op_o),
+      .sheet_req_handle_o           (sheet_req_handle_o),
+      .sheet_req_texel_o            (sheet_req_texel_o),
+      .sheet_req_src_id_o           (sheet_req_src_id_o),
+      .pg_valid_i                   (1'b0),  // TIE: page-generation channel unexercised; its own clause, not this one
       .pg_ready_o                   (),
-      .pg_op_i                      (2'd0),
-      .pg_status_i                  (2'd0),
-      .pg_tag_i                     (8'd0),
-      .pg_strength_i                (8'd0),
-      .pg_src_id_i                  (16'd0),
+      .pg_op_i                      (2'd0),  // TIE: page-generation channel unexercised; its own clause, not this one
+      .pg_status_i                  (2'd0),  // TIE: page-generation channel unexercised; its own clause, not this one
+      .pg_tag_i                     (8'd0),  // TIE: page-generation channel unexercised; its own clause, not this one
+      .pg_strength_i                (8'd0),  // TIE: page-generation channel unexercised; its own clause, not this one
+      .pg_src_id_i                  (16'd0),  // TIE: page-generation channel unexercised; its own clause, not this one
       .fb_valid_o                   (),
-      .fb_ready_i                   (1'b1),
+      .fb_ready_i                   (1'b1),  // TIE: no framebuffer here; writes are always accepted
       .fb_rgb565_o                  (),
       .fb_tag_o                     (),
       .fb_addr_o                    (),
@@ -820,12 +856,12 @@ zhao_renderer_lease_v2 u_lease (
       // The blit side is idle in this harness; the channel map says the
       // renderer's return shares this adapter with it, and that sharing is
       // what the shell will exercise.
-      .blit_publish_valid_i     (1'b0),
-      .blit_publish_slot_i      (1'b0),
-      .blit_publish_generation_i(16'd0),
-      .blit_release_valid_i     (1'b0),
-      .blit_release_slot_i      (1'b0),
-      .blit_release_generation_i(16'd0),
+      .blit_publish_valid_i     (1'b0),  // TIE: zhao_debug_frameblit is not composed -- 38 KB of retained V1 that moves bytes through guards; its lease side IS composed
+      .blit_publish_slot_i      (1'b0),  // TIE: zhao_debug_frameblit is not composed -- 38 KB of retained V1 that moves bytes through guards; its lease side IS composed
+      .blit_publish_generation_i(16'd0),  // TIE: zhao_debug_frameblit is not composed -- 38 KB of retained V1 that moves bytes through guards; its lease side IS composed
+      .blit_release_valid_i     (1'b0),  // TIE: zhao_debug_frameblit is not composed -- 38 KB of retained V1 that moves bytes through guards; its lease side IS composed
+      .blit_release_slot_i      (1'b0),  // TIE: zhao_debug_frameblit is not composed -- 38 KB of retained V1 that moves bytes through guards; its lease side IS composed
+      .blit_release_generation_i(16'd0),  // TIE: zhao_debug_frameblit is not composed -- 38 KB of retained V1 that moves bytes through guards; its lease side IS composed
       .blit_refused_o           (blit_refused_o),
       .blit_events_refused_o    (blit_events_refused_o),
       .renderer_term_valid_i    (term_valid_i),
