@@ -62,13 +62,18 @@ worth reading that output rather than this paragraph. In summary:
    corrupt the Fmax it exists to report. The instrument needs a video-domain
    stimulus bank, symmetric with the video-domain CAPTURE bank it already has.
 
-WHY IT IS PAUSED HERE rather than pushed through: the instrument's value is a
-realistic Fmax, and this cone's Fmax is dominated by `zhao_cmd_dma` -- 156
-dependent CRC steps in one cycle, inherited from the historical shell and
-recorded as the composed cone's worst family. Building a precise instrument to
-measure an Fmax with an identified separate cause is measuring the wrong thing
-first. The cheap virtual-pin row answers the AREA question meanwhile, and area
-is the binding constraint.
+WHY IT IS PAUSED HERE rather than pushed through: the cheap virtual-pin row
+answers the AREA question meanwhile, and area is the binding constraint. The
+instrument's own value is a realistic Fmax, which is worth having only once
+there is a composed timing report to say what actually binds.
+
+(An earlier draft of this paragraph said the cone's Fmax was dominated by
+`zhao_cmd_dma`'s 156 dependent CRC steps. That came from
+`reports/REMAINING_BLOCKERS.md`, last touched 2026-08-28; the module has been
+reworked twice since and now WALKS its header CRC and payload seed eight bytes
+per cycle through one fold. The claim was stale, and repeating it would have
+justified skipping this instrument for a reason that stopped being true three
+weeks ago -- the second stale-prose trap in one session.)
 
 The new inputs group into five new handlers plus an extension of the existing
 renderer:
