@@ -907,9 +907,43 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
                 for error in errors),
             errors,
         )
-        # There is no semantic connected-shell root to register in Packet A.
+        # THE SIBLING SHELL NOW EXISTS, and this assertion used to say it did
+        # not. That was never really a claim about a file -- it was standing in
+        # for "there is no semantic connected-shell root to register in Packet
+        # A", which was true only while nothing composed the V3 island into a
+        # shell. `zhao_shell_top_v2` does, so the question the line was holding
+        # open has an answer and the answer is asserted instead.
+        #
+        # Rooted at the sibling the census finds EXACTLY ONE elaborated
+        # lifecycle owner and no errors, where the historical shell finds none
+        # -- which is the whole point of the swap and is checked above.
         declarations, _edges, _extra = ownership.module_edges(REPO / "fpga" / "rtl")
-        self.assertNotIn("zhao_shell_top_v2", declarations)
+        self.assertIn("zhao_shell_top_v2", declarations)
+
+        sibling_errors, sibling_obs = ownership.run_check(
+            REPO / "design" / "prod_manifest.yml",
+            REPO / "fpga" / "rtl",
+            root_overrides={ROLE: "zhao_shell_top_v2"},
+        )
+        sibling = {
+            role: reachable
+            for role, _scope, _root, reachable in sibling_obs
+        }
+        self.assertEqual(sibling.get(ROLE), ["zhao_texture_v3own"], sibling_errors)
+        self.assertEqual(sibling_errors, [])
+
+        # AND BEING A CONNECTED OWNER MUST NOT MAKE IT THE SELECTED ONE. That is
+        # the half of this test's name that still matters: fail-closed, NOT a
+        # connected-owner claim. The sibling is reachable-as-an-owner and
+        # registered `not-yet-adopted`, and those two facts have to be carried
+        # together -- reachability is not selection, and a shell that became
+        # production by being composed would be exactly the silent promotion
+        # this file exists to prevent.
+        _tops, excluded_now = prod_manifest.read_manifest(
+            REPO / "design" / "prod_manifest.yml"
+        )
+        self.assertNotIn("zhao_shell_top_v2", _tops)
+        self.assertEqual(excluded_now["zhao_shell_top_v2"][0], "not-yet-adopted")
 
     def test_probe_is_excluded_and_production_selection_stays_unchanged(self) -> None:
         tops, excluded = prod_manifest.read_manifest(
