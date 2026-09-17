@@ -209,6 +209,14 @@ module zhao_shell_v2_lease_path (
     output logic        bin_frame_begin_o,
     output logic        clear_valid_o,
     output logic        clear_ready_o,
+    // COUNTED IN RTL, not sampled by the test. The gate says each newly
+    // accepted renderer lease produces EXACTLY ONE clear handshake before the
+    // frame is admitted, and "exactly one" is not a thing a driver that ticks
+    // in bursts can honestly claim -- it sees the cycles it happens to look
+    // at. This repository has a chapter on a machine doing the work twice
+    // while producing identical output; a counter is what saw it.
+    output logic [31:0] clear_handshakes_o,
+    output logic [31:0] frames_admitted_o,
 
     output logic        blit_idle_o,
     output logic [31:0] blit_leases_acquired_o,
@@ -234,6 +242,17 @@ module zhao_shell_v2_lease_path (
   assign bin_frame_begin_o = bin_frame_begin_w;
   assign clear_valid_o     = lease_clear_valid;
   assign clear_ready_o     = lease_clear_ready;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      clear_handshakes_o <= 32'd0;
+      frames_admitted_o  <= 32'd0;
+    end else begin
+      if (lease_clear_valid && lease_clear_ready)
+        clear_handshakes_o <= clear_handshakes_o + 32'd1;
+      if (bin_frame_begin_w) frames_admitted_o <= frames_admitted_o + 32'd1;
+    end
+  end
   assign frame_fault_clear_valid_o = lease_clear_valid;
   logic        blit_rsp_ready;
   logic        blit_mgr_req_valid, blit_mgr_req_slot;

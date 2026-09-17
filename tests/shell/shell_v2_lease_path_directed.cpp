@@ -230,6 +230,10 @@ int main(int argc, char** argv) {
   check(dut.publications_o == 1, "still exactly one publication after settling", 1,
         dut.publications_o);
   check(dut.contentions_o == 0, "no contention with a single requester", 0, dut.contentions_o);
+  check(dut.clear_handshakes_o == 1, "still exactly one clear after settling", 1,
+        dut.clear_handshakes_o);
+  check(dut.frames_admitted_o == 1, "still exactly one admitted frame after settling", 1,
+        dut.frames_admitted_o);
 
   // =======================================================================
   // THE FRAME-CLEAR HANDSHAKE, DRIVEN BY ITS REAL CONSUMER
@@ -245,6 +249,13 @@ int main(int argc, char** argv) {
   // the lease requested a clear, the bin pipe accepted it only when quiet,
   // and the frame followed. A frame was admitted, so all three happened.
   check(dut.bin_initialized_o == 1, "the binner initialised", 1, dut.bin_initialized_o);
+
+  // EXACTLY ONE, which is the gate's wording and not a synonym for "at least
+  // one". Counted in RTL because a driver that ticks in bursts can only
+  // honestly report the cycles it looked at.
+  check(dut.clear_handshakes_o == 1, "exactly ONE clear handshake for the lease", 1,
+        dut.clear_handshakes_o);
+  check(dut.frames_admitted_o == 1, "exactly ONE frame admitted", 1, dut.frames_admitted_o);
   check(dut.bin_frame_fault_o == 0, "no frame fault on a clean frame", 0, dut.bin_frame_fault_o);
   check(dut.bin_lifetime_fault_o == 0, "no lifetime structural fault", 0, dut.bin_lifetime_fault_o);
 
@@ -328,6 +339,16 @@ int main(int argc, char** argv) {
           dut.blit_leases_acquired_o + dut.blit_leases_refused_o);
     check(dut.blits_dispatched_o == 1, "exactly one blit was dispatched", 1,
           dut.blits_dispatched_o);
+
+    // THE CLEAR COUNTER HAS TO BE SEEN TO MOVE. It was asserted == 1 twice
+    // above, and a counter that is only ever checked against the value it
+    // starts a case with is indistinguishable from one that is wired to a
+    // constant. The renderer took a second lease here, so it owes a second
+    // clear -- and the SECOND one is what says the first was counted rather
+    // than coincidental.
+    check(dut.clear_handshakes_o == 2, "the second lease produced a second clear handshake", 2,
+          dut.clear_handshakes_o);
+    check(dut.frames_admitted_o == 2, "and a second admitted frame", 2, dut.frames_admitted_o);
 
     // RETURN THE RENDERER'S FRAME AS A RELEASE, and the reason is the whole
     // lesson of the failure this replaced. The next case asks whether a
