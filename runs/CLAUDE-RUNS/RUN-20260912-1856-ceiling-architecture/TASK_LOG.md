@@ -2098,3 +2098,47 @@ optional.
 **Owner decisions still open:** the V20 / `PROTECTED_HASHES` collision
 (`ledger_check` is the single red in an otherwise green 833-test golden path),
 and whether to re-allocate M10K across domains.
+
+### Addendum, same day — a latent `.gitattributes` hole, found by tripping it
+
+`shell_fit_preflight_fixtures` went red and the first reading was wrong in the
+expensive direction.
+
+`fpga/rtl/generated/zhao_shell_fit_top.sv` embeds a sha256 of each RAW INPUT --
+generator, parser, policy, shell, package -- and the committed fit-receipt
+fixtures bind those values. The OUTPUT was protected with `text eol=lf`. FOUR OF
+ITS FIVE INPUTS WERE NOT. With `core.autocrlf` true (Git for Windows default,
+which `.gitattributes` own header already records as `true` at `--system`), any
+checkout of those files rewrites them to CRLF and the hashes move.
+
+It had never fired because none of them had been checked out since they were
+written. Editing the generator and REVERTING it -- `git checkout --`, which
+round-trips through the smudge filter -- broke nine tests.
+
+* **`git diff` reported the file UNCHANGED throughout.** Git normalises on read;
+  the hash does not. A clean `git status` is not evidence that a byte-exact
+  artifact still has its bytes.
+* **The revert did the damage, not the edit.** The tell was that the post-revert
+  hash matched NEITHER the committed value nor the edited one.
+
+Fixed in `.gitattributes` and verified by reproducing it: an edit-then-checkout
+round-trip now preserves the hash. `zhao_shell_top.sv` is included deliberately
+-- it is the SHA-256-pinned protected shell, and a checkout rewriting its line
+endings would read as "the protected file has moved".
+
+### Golden path, final state this pass
+
+**832 of 833 `fast` tests pass.** The single red is `ledger_check`, V20 on
+`zhao_geom_binner_v2.sv:371`, and it is the OPEN OWNER DECISION already docketed
+on 2026-09-16 (`reports/DOCKET.md`). Re-verified independently today rather than
+taken on trust:
+
+* V20 has NO waiver mechanism -- read from `tools/ledger/src/rules.ts`. All
+  three remedies it offers require editing the file.
+* `zhao_geom_binner_v2.sv` really is in Packet E's `PROTECTED_HASHES` -- parsed
+  the table rather than trusting the note.
+* The file has THREE "by construction" claims (202, 371, 532); two carry an
+  `ENFORCED-BY` inside the ten-line window, 371 does not. Exactly as docketed.
+
+Not acted on. The docket's three options and its recommendation stand; the
+choice is the owner's.
