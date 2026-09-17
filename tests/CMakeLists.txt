@@ -6034,6 +6034,38 @@ add_test(NAME packet_h_shadow_witness_controls
 set_tests_properties(packet_h_shadow_witness_controls PROPERTIES
   LABELS "fast;mutant;packet-h" TIMEOUT 120)
 
+# PACKET-H GATE CLAUSE: unaffected behaviour matches the historical shell.
+#
+# The full clause is a paired-traffic differential and is still owed. This is
+# the structural half, and it catches what paired traffic would catch late:
+# the sibling was SEEDED from the protected V1 so the instances Packet H does
+# not touch carry across byte-for-byte, and nothing was checking that they
+# still do. A hand-maintained copy of a protected file drifts silently on both
+# sides -- this repository has a whole chapter about that.
+#
+# Every differing region is classified COMMENT-ONLY (Packet H added `// TIE:`
+# reasons) or SUBSTANTIVE, and a substantive one must be attributable to a
+# DECLARED marker nearby. The twenty instances the seed carried over are
+# SEALED against that attribution window, because a control found the window
+# reaching seven lines into a neighbouring instance and excusing drift there.
+#
+# Itself tested: tests/tools/test_packet_h_sibling_diff.py fires it on drift
+# in a carried-over instance, on a moved seed and on a declared marker that
+# matches nothing -- plus the control that matters, that a COMMENT added to a
+# carried-over instance does not fire it, so the drift test cannot pass merely
+# because something changed.
+add_test(NAME packet_h_sibling_diff
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/design/packet_h_sibling_diff.py)
+set_tests_properties(packet_h_sibling_diff PROPERTIES
+  LABELS "fast;lint;packet-h" TIMEOUT 120)
+
+add_test(NAME packet_h_sibling_diff_controls
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tests/tools/test_packet_h_sibling_diff.py)
+set_tests_properties(packet_h_sibling_diff_controls PROPERTIES
+  LABELS "fast;mutant;packet-h" TIMEOUT 120)
+
 add_test(NAME packet_h_tieoff_audit
   COMMAND ${Python3_EXECUTABLE}
           ${CMAKE_SOURCE_DIR}/tools/design/packet_h_tieoff_audit.py)
