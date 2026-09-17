@@ -55,11 +55,37 @@ treatment against the V2 attribute ABI: a 47-bit area2 and three 240-bit
 planes that must agree with those vertices, a 298-bit flat request, a 48-bit
 continuation tail and a 32-bit fragment state.
 
-DO NOT DRIVE THOSE WITH ENTROPY. `tri_flat_request_i` is a packed request, and
-random values are illegal opcodes that park the pipe in refusal states -- which
-SHRINKS the area being measured, in the flattering direction, while the smoke
-harness blesses it because the declared mask still matches what toggled. That
-is this instrument's whole failure mode, arrived at from a different direction.
+DO NOT DRIVE THOSE WITH ENTROPY WITHOUT READING THE NEXT PARAGRAPH.
+`tri_flat_request_i` is a packed request, and random values are illegal opcodes
+that park the pipe in refusal states -- which SHRINKS the area being measured,
+in the flattering direction, while the smoke harness blesses it because the
+declared mask still matches what toggled. That is this instrument's whole
+failure mode, arrived at from a different direction.
+
+WHAT THE ABI ACTUALLY IS, traced 2026-09-18 so the next pass starts here
+-------------------------------------------------------------------------
+`zhao_geom_bin_pipe_v2` does NOT decode any of it. It concatenates the whole
+carriage into one 1,157-bit metadata word, MSB to LSB, and the binner samples
+that on the same `tri_we` edge that stores the 142-bit triangle:
+
+    tri_meta_w = {tri_v_over_w_plane_i, tri_u_over_w_plane_i,
+                  tri_invw_plane_i, tri_min_x_i, tri_area2_i,
+                  tri_fragment_state_i, tri_continuation_tail_i,
+                  tri_flat_request_i}            // METAW = 1157, $bits-checked
+
+So for the BINNER the values are opaque and only their toggling matters. The
+legality question is entirely about what unpacks the word downstream, and that
+is where the next pass should look before authoring anything.
+
+ONE FIELD IS ALREADY FREE. `_render_triangle_values` computes
+
+    area2 = (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x)
+
+and raises if it is not positive -- so `tri_area2_i` can be driven from that
+exact value rather than invented, and a zero or negative area is precisely the
+degenerate-triangle case that would make a consumer refuse. Wire that one from
+the existing computation; it is the only one of the eight that needs no new
+arithmetic.
 
 WHAT WAS LEFT BEFORE, now done except the above
 ------------------------------------------------
