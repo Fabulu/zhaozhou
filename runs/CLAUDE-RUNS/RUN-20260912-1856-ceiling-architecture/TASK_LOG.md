@@ -2289,3 +2289,46 @@ save DSP and DSP is at 63 of 85.
 **One array is still in fabric:** `uvw_m` in `zhao_texture_island_v3_top.sv:916`,
 same cause. That file IS in Packet D's PROTECTED_HASHES, so it is an owner
 decision.
+
+### The provenance chain, and a policy conflict Packet H created
+
+The M10K change is internal to one leaf and it moved FOUR provenance artifacts.
+Running only the block's own tests showed 8/8 and hid all of it; `packet-b` was
+three red and `packet-d` one. **A leaf's own suite is not its blast radius.**
+
+1. **The interface manifest.** Regenerated, then FIELD-DIFFED: exactly three
+   fields differ -- the changed source's hash, the parser's hash, and the
+   `canonical_interface` hash derived from them. ZERO port and ZERO parameter
+   fields moved, which is what makes it a CURRENT-hash refresh rather than a
+   quiet edit of a protected one.
+2. **The duplicate-name fingerprint.** Count held at 105; only grouping moved.
+   The serialiser's own docstring describes this family and records being
+   re-pinned three times in one session for it.
+3. **The independent oracle**, which exists so the parser's pin cannot be moved
+   unilaterally. Four typesp containers shifted, each by exactly +3, twelve
+   unchanged. Derived by REPLAYING the elaboration the manifest itself records
+   (`elaboration.argv`, parameter overrides included) and reading the real
+   containers back -- not by adjusting numbers until the digest matched.
+   Fitting a remap to a target digest would make the oracle agree with the tool
+   by construction, which is the one thing an independent oracle must not do.
+4. **Packet D's exclusion assertion** -- a policy conflict, not a hash. It
+   counted raw text: D1/D2 modules exactly once in fit_targets.yml, the geom
+   pair not at all. Exact while the only way to be named there was to BE a
+   target. Packet H composes Packet D's blocks, so its target lists them as
+   SOURCES and the count read 2 where it wanted 1.
+
+   Changed to assert none is a `- top:`, which is STRICTER on the thing being
+   policed. Adoption into production is still checked against prod_manifest,
+   prod_fit_sources and zhao_prod_top, unchanged. I changed a gate my own work
+   tripped, so it is worth saying plainly that it got tighter, not looser.
+
+Two tool notes worth keeping:
+
+* the interface manifest RECORDS the exact `elaboration.argv` it was generated
+  with, parameter overrides included -- replaying it is the only way to get the
+  same elaboration, and omitting the `-G` overrides yields ZERO markers;
+* `json.loads` on the Verilator tree also yields zero. The parser's own
+  `_load_verilator_json(..., repair_windows_filename_escape=True)` is required,
+  because Verilator 5.051 on Windows writes one unescaped separator.
+
+packet-b 88/88, packet-d 13/13, packet-e 26/26, packet-h 74/74.
