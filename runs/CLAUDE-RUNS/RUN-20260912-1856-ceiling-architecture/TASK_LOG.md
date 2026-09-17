@@ -2019,3 +2019,82 @@ promotes, then J/G8C has a hierarchy to fit, then K.
 
 **Owner decisions still open:** the V20 / `PROTECTED_HASHES` collision, and
 whether to re-allocate M10K across domains.
+
+---
+
+## 2026-09-17 — Packet H: every gate clause but the composed fit
+
+The previous entry ended "Next, in order: write `zhao_shell_top_v2.sv`". It
+exists, it is 2,567 lines, and `packet-h` is 72/72. What follows is what the
+clauses cost and, more usefully, what was found wrong on the way.
+
+**Clauses closed this pass**
+
+* *unaffected behaviour matches under paired traffic* — BOTH halves.
+  Structural: `packet_h_sibling_diff`, 93.4% of the protected V1 line-identical,
+  0 undeclared substantive regions, 20 carried-over instances sealed.
+  Behavioural: `shell_paired_diff_directed`, both shells in one binary from one
+  stimulus, 16,408 cycles, 91 of 95 outputs compared, 0 mismatching cycles,
+  with an activity witness (27 of 91 toggled) and a committed mutant control.
+* *every new port connected* — the audit was widened and found 13 silent
+  decisions it had been structurally unable to see.
+* *the fault OR* — 6 terms, up from 4.
+* *structural faults through the reset barrier* — measured; latch clears, path
+  re-arms, second fault latches exactly once.
+* *the V3 programming channel* — SEALED. Correct seal accepted, page activates.
+
+**Six things that were wrong, each silent in the flattering direction**
+
+1. `packet_h_tieoff_audit` reported "0 silent" while skipping EMPTY connections
+   ("an unread output, named on purpose" — an assumption wearing a check's
+   clothes) and while anchored `^...$`, so a port map packing several
+   connections onto one line matched nothing. The shell went 0 -> 13 silent.
+2. Two structural faults were going in the bin: `local_attribute_abort_o`, on
+   the same line as the `raster_abort_o` that WAS wired, and the READY CDC's
+   `gpu_protocol_fault_o`. Both now in the OR. The video-domain twin is
+   DECLARED and owed a synchroniser — OR-ing a vid_clk level into a gpu_clk one
+   is the CDC violation this packet already made once.
+3. **A fault does not release the lease.** The terminal event does. The old
+   check read otherwise only because it offered a publication first. This
+   matters: `zhao_video_slotmgr_v2` clears `lease_valid_q` in exactly ONE place
+   outside reset, and `request_granted_c` requires `!lease_valid_q`, so a lease
+   whose terminal never arrives is a PERMANENTLY WEDGED RENDERER with every
+   counter reading healthy. `sequence_abort_o` is precisely that state.
+4. The seal is **not CRC-32C**. It is reflected CRC-32, `0xEDB88320`. Two
+   roadmap rows and a test comment said otherwise.
+5. The paired differential's exemption list was NINETEEN names in first draft,
+   fifteen of them reasoned from the outside and refuted by reading the shell
+   (`ring_wr_*` is the command scheduler's; the REPLACED slot manager drives no
+   top-level output at all). Four now.
+6. The activity witness's first version marked all 91 outputs toggled on cycle
+   one against `x` — full coverage of a run that had not started.
+
+**Tooling learned**
+
+* Verilator reported four VARHIDDEN warnings against LEAF FILES that were
+  caused by this harness's own `for (int unsigned i ...)` loop variables at the
+  top level. The warning pointed a long way from its cause.
+* The seal model was extracted to `tests/harness/zhao_binding_seal.hpp` rather
+  than folded a second time; the binding resolver test and all SEVEN of its
+  mutant controls still pass against it.
+* `gen_shell_fit_top.py` is now module-agnostic, verified by regenerating V1
+  byte-identically apart from its own embedded `generator-sha256`.
+
+**The one remaining Packet-H gate: a composed FIT**, and it is scoped rather
+than started. Every gate so far is Verilator or source-level; area and Fmax are
+unmeasured claims and ALMs are the binding constraint. 209 ports rules out a
+physical-pin fit, so it needs a ten-pin instrument like V1's. The generator is
+ready; **the policy is not, and that is the part that can lie**: 31 new inputs
+need six new stimulus driver kinds inside a 1,090-line emitter, and a port
+given a constant driver is folded away by the fitter — area comes back LOW, on
+the one measurement that exists to police the budget.
+
+**Sequence-abort RELEASE control** stays open and is **blocked on Packet J** —
+the only producer that could fail to emit a terminal is the V3 return path,
+tied off until then. The directed test now asserts the dependency ("no new
+lease is granted while a faulted one is held") so it cannot be read as
+optional.
+
+**Owner decisions still open:** the V20 / `PROTECTED_HASHES` collision
+(`ledger_check` is the single red in an otherwise green 833-test golden path),
+and whether to re-allocate M10K across domains.

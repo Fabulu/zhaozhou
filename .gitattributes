@@ -192,6 +192,39 @@ tests/geometry/geom_bin_pipe_v2.sources.txt text eol=lf
 tools/quartus/check_ownership_roles.py text eol=lf
 tools/quartus/check_prod_manifest.py text eol=lf
 tools/quartus/run_block_fit.ps1 text eol=lf
+
+# THE SHELL-FIT INSTRUMENT'S HASHED INPUTS. Found 2026-09-17, and the shape is
+# this file's own recurring one: the OUTPUT was protected and the INPUTS were
+# not.
+#
+# `fpga/rtl/generated/zhao_shell_fit_top.sv` embeds a sha256 of each raw input
+# -- generator, parser, policy, shell, package -- and the committed fit-receipt
+# fixtures bind those same values. `shell_fit_reports` hashes RAW BYTES. So on
+# any machine where `core.autocrlf` is true (the Git for Windows install
+# default, which this repo's own comment above records as being `true` at
+# --system), checking any of these out rewrites it to CRLF, its hash moves, and
+# `shell_fit_preflight_fixtures` fails with "receipt sourceHashes do not match
+# independently hashed raw inputs".
+#
+# It had never fired because none of these files had been checked out since
+# they were written. Editing the generator and reverting it -- `git checkout
+# --`, which round-trips through the smudge filter -- broke nine tests, and
+# `git diff` reported the file as UNCHANGED throughout, because git normalises
+# on read and the hash does not.
+#
+# The sibling generators three lines above are already listed. This instrument
+# was simply missed.
+tools/quartus/gen_shell_fit_top.py text eol=lf
+tools/quartus/shell_ports.py text eol=lf
+tools/quartus/shell_fit_reports.py text eol=lf
+tools/quartus/shell_fit_qsf.py text eol=lf
+design/shell_fit_ports.yml text eol=lf
+# `zhao_shell_top.sv` is the PROTECTED shell, pinned by SHA-256 in
+# `packet_h_sibling_diff` and elsewhere. A checkout that rewrote its line
+# endings would break that pin too, in a way that reads as "the protected file
+# has moved" rather than as a line-ending translation.
+fpga/rtl/common/zhao_shell_top.sv text eol=lf
+fpga/rtl/common/zhao_pkg.sv text eol=lf
 tests/tools/test_texjoin_accounting.py text eol=lf
 # Packet-H raw-LAST leaf and every selector/control artifact are exact text.
 fpga/rtl/memory/zhao_engine1_raw_last_v2.sv text eol=lf
