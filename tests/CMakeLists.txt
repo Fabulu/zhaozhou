@@ -5972,7 +5972,7 @@ if(ZHAO_LEASE_PATH_PD_COUNT LESS 50)
 endif()
 
 set(ZHAO_SHELL_V2_LEASE_PATH_SOURCES
-  ${CMAKE_CURRENT_SOURCE_DIR}/shell/zhao_shell_v2_lease_path.vlt
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell/v3_closure_inherited.vlt
   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
   ${ZHAO_LEASE_PATH_PD_SOURCES}
   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv
@@ -7015,6 +7015,46 @@ add_test(NAME lint_shell_top
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_shell_top
                  ${ZHAO_SHELL_RTL})
+
+# THE SIBLING SHELL ITSELF. Its closure is the union of the historical shell
+# list and Packet D's -- the bin-pipe swap drags in the whole V3 texture
+# island -- minus the two blocks it replaces, plus the six V2 organs. Built
+# from the same manifests both sides already read, so there is no third copy
+# to go stale.
+set(ZHAO_SHELL_V2_TOP_SOURCES
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell/v3_closure_inherited.vlt)
+foreach(relative_source IN LISTS ZHAO_LEASE_PATH_PD_RELATIVE)
+  if(NOT relative_source MATCHES "^tests/")
+    list(APPEND ZHAO_SHELL_V2_TOP_SOURCES "${CMAKE_SOURCE_DIR}/${relative_source}")
+  endif()
+endforeach()
+foreach(shell_source IN LISTS ZHAO_SHELL_RTL)
+  if(NOT shell_source MATCHES "zhao_shell_top\\.sv$" AND
+     NOT shell_source MATCHES "zhao_geom_bin_pipe\\.sv$" AND
+     NOT shell_source MATCHES "zhao_video_slotmgr\\.sv$")
+    if(NOT "${shell_source}" IN_LIST ZHAO_SHELL_V2_TOP_SOURCES)
+      list(APPEND ZHAO_SHELL_V2_TOP_SOURCES "${shell_source}")
+    endif()
+  endif()
+endforeach()
+list(APPEND ZHAO_SHELL_V2_TOP_SOURCES
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_fb_tuple_pkg.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_slotmgr_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_renderer_lease_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_terminal_adapter_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_blit_lease_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_fb_ready_cdc_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_ready_bridge_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_shell_top_v2.sv)
+
+add_test(NAME lint_shell_top_v2
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+          --top-module zhao_shell_top_v2
+          ${ZHAO_SHELL_V2_TOP_SOURCES})
+set_tests_properties(lint_shell_top_v2 PROPERTIES
+  LABELS "lint;fast;packet-h"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 set_tests_properties(lint_shell_top PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

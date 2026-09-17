@@ -29,7 +29,15 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-HARNESS = REPO / 'tests/shell/zhao_shell_v2_lease_path.sv'
+
+# Both Packet-H compositions. The harness is where the protocol is DRIVEN; the
+# sibling shell is where it SHIPS, and the shell is the one the gate clause is
+# actually about -- the harness is audited too because a tie-off learned there
+# is the one most likely to be transplanted.
+TARGETS = [
+    REPO / 'tests/shell/zhao_shell_v2_lease_path.sv',
+    REPO / 'fpga/rtl/common/zhao_shell_top_v2.sv',
+]
 
 # `.port (connection),` -- the connection captured up to its closing paren.
 CONN = re.compile(r'^\s*\.(\w+)\s*\(([^)]*)\)\s*,?\s*(?://\s*(.*))?$')
@@ -62,43 +70,49 @@ def audit(text):
             continue  # an unread output, named on purpose
         if not LITERAL.match(conn):
             continue
-        prev = lines[i - 1] if i else ''
         reason = ''
         if 'TIE:' in trailing:
             reason = trailing.split('TIE:', 1)[1].strip()
-        elif 'TIE:' in prev:
-            reason = prev.split('TIE:', 1)[1].strip()
+        else:
+            # Walk back through the CONTIGUOUS comment block above the line. A
+            # reason worth giving usually needs more than one line, and an
+            # audit that only looked at the line directly above would push
+            # people towards short reasons or none.
+            k = i - 1
+            while k >= 0 and lines[k].strip().startswith('//'):
+                if 'TIE:' in lines[k]:
+                    reason = lines[k].split('TIE:', 1)[1].strip()
+                    break
+                k -= 1
         rows.append((inst, port, conn.strip(), reason, i + 1))
     return rows
 
 
 def main():
-    text = io.open(HARNESS, encoding='utf-8', errors='replace').read()
-    rows = audit(text)
+    rc = 0
+    for target in TARGETS:
+        if not target.exists():
+            print('packet-h tie-off audit: %s -- MISSING'
+                  % target.relative_to(REPO).as_posix())
+            return 1
+        rows = audit(io.open(target, encoding='utf-8', errors='replace').read())
+        declared = [r for r in rows if r[3]]
+        silent = [r for r in rows if not r[3]]
 
-    declared = [r for r in rows if r[3]]
-    silent = [r for r in rows if not r[3]]
+        print('packet-h tie-off audit: %s' % target.relative_to(REPO).as_posix())
+        print('  literal connections: %d declared, %d silent'
+              % (len(declared), len(silent)))
 
-    print('packet-h tie-off audit: %s' % HARNESS.relative_to(REPO).as_posix())
-    print('  literal connections: %d declared, %d silent' % (len(declared), len(silent)))
-
-    if declared:
-        print()
-        print('== DECLARED (a literal with a stated reason) ==')
-        for inst, port, conn, reason, ln in declared:
-            print('  %-34s %-28s %-10s %s' % (inst, port, conn, reason))
-
-    if silent:
-        print()
-        print('== SILENT (a literal with no reason) ==')
-        for inst, port, conn, _r, ln in silent:
-            print('  %s:%d  %s . %s (%s)' % (
-                HARNESS.name, ln, inst, port, conn))
-        print()
-        print('  A literal in a port map and a decision look identical afterwards.')
-        print('  Add `// TIE: <why>` on the line, or connect it.')
-        return 1
-    return 0
+        if silent:
+            print()
+            print('  == SILENT (a literal with no reason) ==')
+            for inst, port, conn, _r, ln in silent:
+                print('    %s:%d  %s . %s (%s)' % (target.name, ln, inst, port, conn))
+            print()
+            print('    A literal in a port map and a decision look identical')
+            print('    afterwards. Add `// TIE: <why>` on the line, or connect it.')
+            rc = 1
+    return rc
 
 
 # SELF-CHECK. A pattern that matches nothing reports a clean sheet, which is
