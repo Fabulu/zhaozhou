@@ -5924,6 +5924,52 @@ set_tests_properties(lint_terrain_normals PROPERTIES
 # control is `--break-oracle` (must FAIL); every DUT counter is asserted
 # with an exact count, so no counter can be a hopeful zero.
 # ---------------------------------------------------------------------------
+# PACKET H PREREQUISITE -- the lease path, composed and driven.
+#
+# zhao_shell_top_v2.sv does not exist, and the obstacle is not its size: the
+# V2 manager keeps EIGHT of zhao_video_slotmgr's twenty-two ports and the
+# lease flow has to be re-plumbed through three new organs. So this composes
+# the three blocks that carry a renderer frame from request to published-ready
+# and drives one legal transaction, per
+# reports/PACKET-H-CHANNEL-MAP-20260917.md.
+#
+# It is a PREREQUISITE and not the packet: the frame-clear handshake ordering,
+# the reset-barrier entry for five structural faults and the sequence-abort
+# RELEASE are behaviour with their own gate clauses and none is exercised here.
+# What it establishes is that the channels carry one clean frame, which is what
+# makes composing them into a 2,000-line top safe rather than speculative.
+set(ZHAO_SHELL_V2_LEASE_PATH_SOURCES
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_slotmgr_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_renderer_lease_v2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_terminal_adapter_v2.sv
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell/zhao_shell_v2_lease_path.sv)
+
+add_executable(test_shell_v2_lease_path_directed
+  shell/shell_v2_lease_path_directed.cpp)
+target_link_libraries(test_shell_v2_lease_path_directed PRIVATE zhao_harness)
+verilate(test_shell_v2_lease_path_directed
+  PREFIX Vzhao_shell_v2_lease_path
+  TOP_MODULE zhao_shell_v2_lease_path
+  SOURCES ${ZHAO_SHELL_V2_LEASE_PATH_SOURCES}
+  VERILATOR_ARGS --assert)
+add_test(NAME shell_v2_lease_path_directed
+  COMMAND test_shell_v2_lease_path_directed)
+set_tests_properties(shell_v2_lease_path_directed PROPERTIES
+  LABELS "fast;nightly;packet-h" TIMEOUT 300
+  FAIL_REGULAR_EXPRESSION "FAIL")
+
+add_test(NAME lint_shell_v2_lease_path
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+          --top-module zhao_shell_v2_lease_path
+          ${ZHAO_SHELL_V2_LEASE_PATH_SOURCES})
+set_tests_properties(lint_shell_v2_lease_path PROPERTIES
+  LABELS "lint;fast;packet-h"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
 # R1 -- zhao_qsq_bytemul, the shared quarter-square byte multiplier.
 #
 # One M10K, no DSP, exact for every byte pair. Extracted from
