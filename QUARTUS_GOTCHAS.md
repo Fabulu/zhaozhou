@@ -189,3 +189,50 @@ carry chains; T7 and T9 were both bit-exact, both had live equivalence
 assertions that stayed silent, and both were confirmed useless or harmful only
 by a fit. That is what gotcha 18's MapOnly step cannot cover either -- it
 answers "does this synthesise", not "is this faster".
+
+## 20. TWO `import` STATEMENTS IN A MODULE HEADER. One clause, comma-separated.
+
+Added 2026-09-17, the THIRD SystemVerilog form in this tree that lints clean in
+Verilator with zero diagnostics and is rejected outright by Quartus 17.0.
+
+This is wrong:
+
+```systemverilog
+module zhao_video_ready_bridge_v2
+  import zhao_pkg::*;
+  import zhao_fb_tuple_pkg::*;
+(
+```
+
+```
+Error (10170): Verilog HDL syntax error at zhao_video_ready_bridge_v2.sv(51)
+               near text: "import";  expecting ";"
+```
+
+This is right:
+
+```systemverilog
+module zhao_video_ready_bridge_v2
+  import zhao_pkg::*, zhao_fb_tuple_pkg::*;
+(
+```
+
+The other two are in CLAUDE.md: a bare module-scope elaboration `if`, which
+needs `initial begin ... end`, and an implicit generate, which needs the
+explicit `generate` / `endgenerate` keywords. The pattern across all three is
+the same and worth internalising rather than memorising case by case: **the
+module HEADER and module SCOPE are where Quartus 17.0 is strictest**, and it is
+strict about statement shape rather than about anything semantic. Inside an
+`always_ff` it is permissive; at the boundary it wants the 2005-era spelling.
+
+Cost here: nothing, because the map ran first -- gotcha 18 working exactly as
+advertised. `zhao_shell_top_v2` failed analysis in 14 seconds, the log named
+the line, and the fix was one comma. Had it been found by the fit instead it
+would have been an hour.
+
+And note WHEN it was found. `zhao_video_ready_bridge_v2` has had a directed
+test, eight mutant controls and a Verilator lint gate since it was written.
+None of them could see this, because none of them is Quartus. The block had
+never been through `quartus_map` until a shell composed it -- which is the
+standing rule restated: **a block that has never been mapped has not been shown
+to be synthesizable, however green its lint.**

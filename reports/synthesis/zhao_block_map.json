@@ -1,14 +1,14 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "bd08a637e1165ef7fd94b41fdc96a736e9267b7b",
-    "newestRunClean":  true,
+    "newestRunCommit":  "3fd96d6acf5d9aab85c152c236f55aef0bd88456",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
              },
     "device":  "5CSEBA6U23I7",
-    "sourceListHash":  "ff9b6f02d9294dbe",
+    "sourceListHash":  "a6652b587cbbc216",
     "blocks":  [
                    {
                        "module":  "zhao_audio_fifo",
@@ -2864,6 +2864,138 @@
                        "ramConversionWarnings":  0,
                        "errors":  0,
                        "critical":  1
+                   },
+                   {
+                       "module":  "zhao_shell_top_v2",
+                       "status":  "ok",
+                       "sourceCommit":  "3fd96d6acf5d9aab85c152c236f55aef0bd88456",
+                       "rtlCleanAtHead":  false,
+                       "sourceListHash":  "a6652b587cbbc216",
+                       "sourceFileCount":  270,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "seconds":  170,
+                       "dspBlocks":  63,
+                       "registers":  80535,
+                       "blockMemoryBits":  422084,
+                       "virtualPins":  5358,
+                       "pins":  0,
+                       "estimatedAlms":  62709,
+                       "combAluts":  65662,
+                       "mlabMemoryBits":  0,
+                       "inferredMemories":  [
+                                                {
+                                                    "name":  "zhao_audio_fifo:u_fifo|altsyncram:mem_rtl_0|altsyncram_nuk1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  2048,
+                                                    "width":  32,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_cmd_dma:u_dma|altsyncram:slot_ram_rtl_0|altsyncram_m6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  512,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_fb_ready_cdc_v2:u_fb_cdc|zhao_dc_sdp_ram:u_ready_ram|altsyncram:mem_rtl_0|altsyncram_csj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  23,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_fb_ready_cdc_v2:u_fb_cdc|zhao_dc_sdp_ram:u_swap_ram|altsyncram:mem_rtl_0|altsyncram_csj1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  4,
+                                                    "width":  23,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_bin_pipe_v2:u_render_bin|zhao_geom_binner_v2:u_binner|altsyncram:g_meta_slice[0].meta_ram[0][39]__1|altsyncram_0dn1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  128,
+                                                    "width":  1157,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_bin_pipe_v2:u_render_bin|zhao_geom_binner_v2:u_binner|altsyncram:next_ram_rtl_0|altsyncram_q3n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  8,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_bin_pipe_v2:u_render_bin|zhao_geom_binner_v2:u_binner|altsyncram:ref_ram_rtl_0|altsyncram_u8n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  1024,
+                                                    "width":  7,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_bin_pipe_v2:u_render_bin|zhao_geom_binner_v2:u_binner|altsyncram:tile_ram_rtl_0|altsyncram_o9n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  576,
+                                                    "width":  27,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_bin_pipe_v2:u_render_bin|zhao_geom_binner_v2:u_binner|altsyncram:tri_ram_rtl_0|altsyncram_m9n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  128,
+                                                    "width":  126,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_bin_pipe_v2:u_render_bin|zhao_raster_tile_pipe_v2:u_tile|zhao_raster_tilestore:u_tilestore|altsyncram:ram0_rtl_0|altsyncram_u6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_geom_bin_pipe_v2:u_render_bin|zhao_raster_tile_pipe_v2:u_tile|zhao_raster_tilestore:u_tilestore|altsyncram:ram1_rtl_0|altsyncram_u6n1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                },
+                                                {
+                                                    "name":  "zhao_video_scanout:u_scanout|zhao_scanout_linebuf:u_linebuf|zhao_dc_sdp_ram:u_ram|altsyncram:mem_rtl_0|altsyncram_k3k1:auto_generated|ALTSYNCRAM",
+                                                    "type":  "AUTO",
+                                                    "mode":  "Simple Dual Port",
+                                                    "depth":  256,
+                                                    "width":  64,
+                                                    "autoShift":  false
+                                                }
+                                            ],
+                       "inferredMemoryCount":  12,
+                       "inferredDesignMemoryCount":  12,
+                       "dspDecomposition":  {
+                                                "Two Independent 18x18":  16,
+                                                "Sum of two 18x18":  3,
+                                                "Independent 27x27":  20,
+                                                "Total number of DSP blocks":  63,
+                                                "Fixed Point Signed Multiplier":  8,
+                                                "Fixed Point Unsigned Multiplier":  21,
+                                                "Fixed Point Mixed Sign Multiplier":  37
+                                            },
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  4
                    },
                    {
                        "module":  "zhao_stub_top",

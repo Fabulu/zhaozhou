@@ -366,6 +366,58 @@ whenever it was done. What it settles is the ORDER OF WHAT COMES NEXT:
 Step 2 is not blocked on step 1 and does not touch its closure, so it is the
 work to do while G8B fits.
 
+### Packet H: `zhao_shell_top_v2.sv` EXISTS
+
+*2026-09-17, later still. The sections below describe the road to it; this is
+where it got to.*
+
+**The file is written, lint-clean and registered.** 2,506 lines, 27 instances,
+`-Wall` clean, `excluded:not-yet-adopted`, and `zhao_shell_top.sv` remains
+byte-identical at its protected hash.
+
+All **57 new inputs** have a driver or a stated reason. The composition is
+driven by 72 directed checks in `tests/shell/zhao_shell_v2_lease_path.sv`:
+one legal frame end to end, both writers contending on the shared response,
+the frame-clear ordering measured against the bin pipe's own drain, a
+structural fault suppressing publication and releasing the lease, the V3
+programming channel run for real, and the swap echo through both CDC FIFOs.
+
+| clause | state |
+|---|---|
+| one held-until-quiet clear per accepted lease, before admission | **measured** -- counted in RTL, and the counter seen to move |
+| old-work drain ordering | **measured** -- refused in flight, accepted 1 cycle after drain |
+| structural fault: no READY, no publication, lease released | **measured** |
+| V3 programming channel | **wired and run**; the seal (CRC32C) is still owed |
+| READY/swap CDC round trip | **measured** -- 10 cycles, through the real FIFOs |
+| every new port connected | **audited** -- `packet_h_tieoff_audit`, 0 silent |
+| old/new differential under paired traffic | not started |
+| sequence-abort RELEASE control | not started |
+| five structural faults each through the reset barrier | one path proven; the five are not individually reachable yet |
+
+**Six findings came out of composing rather than reading**, and each was a
+thing the separate blocks could not show:
+
+1. **Nothing acquired the blitter's lease.** The packet named four organs;
+   there were five. Invisible from the port delta, because the manager's
+   `blit_req_*` channel exists and looks connected.
+2. **The 84-bit tuple layout was already defined** -- in the bridge's header
+   and load-bearing at `zhao_video_ready_bridge_v2.sv:164` -- and the package
+   written for it had the order REVERSED. Its own literal-based test passed,
+   because the literals came from the same wrong premise.
+3. **A CDC violation**: the bridge's `cdc_ready_*` is the video-domain output
+   of the forward FIFO, not a GPU-domain source. Symptom: `ready_events_o`
+   reads 1, `pending_q` stays 0, screen never updates, counters all right.
+4. **The manager's fault port counts cycles, not events**, while the bin
+   pipe's fault outputs are levels. Six-cycle assertion read six faults.
+5. **A mutant shim was changing a production interface.**
+   `zhao_raster_tile_pipe_v2_mutants.sv` defines `ZHAO_PACKET_D_TEST_HOOKS`
+   from inside Packet D's shared source list, adding three ports to
+   `zhao_geom_bin_pipe_v2`. 165 ports in production, 168 through that list.
+6. **The `lseq` sequencer did two jobs** -- lease ordering AND payload
+   capture. Replacing it with a lease leaf takes both, and losing the second
+   is silent: right lease, wrong source address, plausible garbage.
+
+
 ### Packet H: what is BUILT, and what the remaining work actually is
 
 *2026-09-17, later the same day. The section below correctly says Packet H is

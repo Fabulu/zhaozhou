@@ -46,9 +46,18 @@
     ((echo_seen) && (scanout_seen))
 `endif
 
+// ONE import clause, comma-separated. Two consecutive `import` statements in a
+// module header lint clean in Verilator with zero diagnostics and are rejected
+// by Quartus 17.0 with
+//
+//   Error (10170): Verilog HDL syntax error ... near text: "import";
+//                  expecting ";"
+//
+// which is the third form in this tree with that property -- see CLAUDE.md's
+// list, and QUARTUS_GOTCHAS. Found by map-checking zhao_shell_top_v2, which is
+// the first thing that ever put this block through quartus_map.
 module zhao_video_ready_bridge_v2
-  import zhao_pkg::*;
-  import zhao_fb_tuple_pkg::*;
+  import zhao_pkg::*, zhao_fb_tuple_pkg::*;
 (
     input  logic        gpu_clk,
     input  logic        gpu_rst_n,
