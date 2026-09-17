@@ -841,6 +841,30 @@ int main(int argc, char** argv) {
           "the faulted lease is still held until its terminal arrives", 1,
           dut.lease_valid_o);
 
+    // AND WHILE IT IS HELD, NOTHING ELSE CAN BE GRANTED. This is the other
+    // half of the same fact and it is the half with teeth.
+    //
+    // `zhao_video_slotmgr_v2` clears `lease_valid_q` in exactly one place
+    // outside reset: `term_fire_c && term_match_c`. There is no timeout, no
+    // fault-driven release, no reclaim. And `request_granted_c` requires
+    // `!lease_valid_q`. So a lease whose terminal never arrives is not a
+    // stalled frame -- it is a PERMANENTLY WEDGED RENDERER, with
+    // `faults_latched_o` reading 1 and every other counter looking healthy.
+    //
+    // Today that state is unreachable in this shell: the only producer that
+    // could fail to emit a terminal is the V3 return path, and it is tied off
+    // until Packet J. This check asserts the dependency so that when J wires
+    // that producer up, the sequence-abort RELEASE control is not optional --
+    // it is what stands between a sequence abort and a dead console.
+    const uint32_t granted_before = dut.leases_granted_o;
+    dut.frame_req_valid_i = 1;
+    dut.frame_req_mode_i = 1;
+    for (int i = 0; i < 300; ++i) tick(dut);
+    dut.frame_req_valid_i = 0;
+    check(dut.leases_granted_o == granted_before,
+          "no new lease is granted while a faulted one is held", granted_before,
+          dut.leases_granted_o);
+
     dut.term_slot_i = static_cast<uint8_t>(dut.lease_slot_o);
     dut.term_generation_i = dut.lease_generation_o;
     dut.term_publish_i = 1;
