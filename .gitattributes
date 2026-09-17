@@ -219,6 +219,11 @@ tools/quartus/shell_ports.py text eol=lf
 tools/quartus/shell_fit_reports.py text eol=lf
 tools/quartus/shell_fit_qsf.py text eol=lf
 design/shell_fit_ports.yml text eol=lf
+# The sibling shell's instrument, added 2026-09-18 with its policy. Covered
+# BEFORE a V2 receipt binds their hashes rather than after one breaks, which is
+# how the two entries above came to be written.
+tools/quartus/gen_shell_fit_ports_v2.py text eol=lf
+design/shell_fit_ports_v2.yml text eol=lf
 # `zhao_shell_top.sv` is the PROTECTED shell, pinned by SHA-256 in
 # `packet_h_sibling_diff` and elsewhere. A checkout that rewrote its line
 # endings would break that pin too, in a way that reads as "the protected file
