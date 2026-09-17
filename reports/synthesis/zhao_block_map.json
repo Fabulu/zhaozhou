@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "3fd96d6acf5d9aab85c152c236f55aef0bd88456",
-    "newestRunClean":  false,
+    "newestRunCommit":  "07184e1e5e1edb7541e8dde61164c7483e08955e",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -2868,14 +2868,14 @@
                    {
                        "module":  "zhao_shell_top_v2",
                        "status":  "ok",
-                       "sourceCommit":  "3fd96d6acf5d9aab85c152c236f55aef0bd88456",
-                       "rtlCleanAtHead":  false,
+                       "sourceCommit":  "07184e1e5e1edb7541e8dde61164c7483e08955e",
+                       "rtlCleanAtHead":  true,
                        "sourceListHash":  "a6652b587cbbc216",
                        "sourceFileCount":  270,
                        "tool":  "Quartus Prime Lite 17.0.2",
                        "device":  "5CSEBA6U23I7",
                        "stage":  "map-only",
-                       "seconds":  170,
+                       "seconds":  166.2,
                        "dspBlocks":  63,
                        "registers":  80535,
                        "blockMemoryBits":  422084,
