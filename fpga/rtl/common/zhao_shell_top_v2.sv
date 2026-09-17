@@ -1011,6 +1011,7 @@ module zhao_shell_top_v2
     // TIE: page-generation residency is its own clause and its own packet; no
     // producer exists in this shell yet.
     .pg_valid_i(1'b0), .pg_ready_o(), .pg_op_i(2'd0), .pg_status_i(2'd0),
+    // TIE: same clause as above -- no page-generation producer in this shell.
     .pg_tag_i(8'd0), .pg_strength_i(8'd0), .pg_src_id_i(16'd0),
     .fb_valid_o(rpx_valid), .fb_ready_i(rpx_ready),
     .fb_rgb565_o(rpx_rgb565),
@@ -1032,7 +1033,13 @@ module zhao_shell_top_v2
     .job_stall_clocks_o(rp_jobstall_unused),
     .quiet_o(v2_bin_quiet_w),
     .raster_abort_o(v2_bin_raster_abort_w),
-    .local_attribute_abort_o(), .local_fault_pulse_o(),
+    .local_attribute_abort_o(v2_bin_attr_abort_w),
+    // TIE: the pulse form of `local_fault_count_o`, which is telemetry. The
+    // ABORTS beside it are the structural faults and they are wired; a fault
+    // pulse that coincides with an abort adds no information the OR does not
+    // already carry, and one that does not is a counter the shell has no
+    // reader for. Packet K's telemetry pass owns it.
+    .local_fault_pulse_o(),
     .local_fault_count_o(), .coordinate_fault_count_o(),
     .range_fault_count_o(), .aux_profile_fault_count_o(),
     .candidate_cancel_count_o(), .local_drop_count_o(),
@@ -1489,6 +1496,7 @@ module zhao_shell_top_v2
   logic v2_bin_frame_fault_w, v2_bin_lifetime_fault_w, v2_bin_quiet_w;
   logic v2_bin_initialized_w, v2_bin_raster_abort_w;
   logic v2_bin_sequence_abort_w, v2_bin_sequence_mismatch_w;
+  logic v2_bin_attr_abort_w, v2_cdc_gpu_fault_w;
 
   // ---- the CDC and the bridge ------------------------------------------------
   logic        v2_lease_open_w;
@@ -1531,8 +1539,31 @@ module zhao_shell_top_v2
   // single fault into a count of however many cycles the machine sat in it.
   // Measured before it was fixed: a six-cycle assertion read SIX faults.
   logic v2_fault_level_c, v2_fault_level_q, v2_fault_valid_c;
+  // THE FIVE TERMS, and two of them arrived by audit rather than by design.
+  // `zhao_geom_bin_pipe_v2` brought structural fault outputs the V1 binner did
+  // not have, and the first composition consumed four of them and left the
+  // rest as empty port connections -- which the tie-off audit could not see,
+  // because it skipped empty connections as "an unread output, named on
+  // purpose" and because these two sit on a line that packs several
+  // connections together. It reported 0 silent while two faults went in the
+  // bin.
+  //
+  //   frame_fault          the frame-level structural fault
+  //   lifetime_fault       the lease lifetime fault
+  //   raster_abort         the tile pipe gave up on a raster job
+  //   attribute_abort      the tile pipe gave up on attributes -- the same
+  //                        class as raster_abort, from the same instance, and
+  //                        dropped only because nobody looked
+  //   sequence_mismatch    admission sequence did not match the return
+  //   cdc_gpu_fault        the READY CDC saw a stalled producer mutate its
+  //                        tuple or drop valid -- a stability violation on the
+  //                        84-bit tuple, in THIS clock domain
+  //
+  // All six are sticky levels, which is why the edge detector below is load
+  // bearing rather than decorative.
   assign v2_fault_level_c = v2_bin_frame_fault_w || v2_bin_lifetime_fault_w ||
-                            v2_bin_raster_abort_w || v2_bin_sequence_mismatch_w;
+                            v2_bin_raster_abort_w || v2_bin_attr_abort_w ||
+                            v2_bin_sequence_mismatch_w || v2_cdc_gpu_fault_w;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) v2_fault_level_q <= 1'b0;
     else v2_fault_level_q <= v2_fault_level_c;
@@ -1595,6 +1626,10 @@ module zhao_shell_top_v2
     .clk(gpu_clk), .rst_n(rst_n),
     .lease_open_i(v2_lease_open_w),
     .dispatch_valid_i(dpy_blit_valid), .dispatch_ready_o(blit_req_ready),
+    // TIE: the blitter has exactly one dispatch mode. The renderer's lease
+    // carries a mode because the V3 island selects among several; the blit
+    // path does not, and mode 0 is the only value its terminal accepts. A
+    // second blit mode would be a protocol change, not a new literal here.
     .dispatch_slot_i(dpy_blit_dst[0]), .dispatch_mode_i(2'd0),
     .blit_req_valid_o(nb_req_valid), .blit_req_ready_i(nb_req_ready),
     .blit_done_i(nb_done),
@@ -1626,7 +1661,9 @@ module zhao_shell_top_v2
     // TIE: the renderer terminal stream has no producer in this shell yet --
     // the V3 island's return path is Packet J's composition, not this one.
     .renderer_term_valid_i(1'b0), .renderer_term_ready_o(),
+    // TIE: same clause as above -- no renderer terminal producer until J.
     .renderer_term_slot_i(1'b0), .renderer_term_generation_i(16'd0),
+    // TIE: same clause as above -- no renderer terminal producer until J.
     .renderer_term_publish_i(1'b0), .renderer_term_fault_i(1'b0),
     .term_valid_o(v2_term_valid), .term_ready_i(v2_term_ready),
     .term_writer_o(v2_term_writer), .term_slot_o(v2_term_slot),
@@ -1655,6 +1692,11 @@ module zhao_shell_top_v2
     .lease_slot_o(v2_lease_slot), .lease_generation_o(v2_lease_generation),
     .lease_mode_o(v2_lease_mode), .lease_base_o(v2_lease_base),
     .lease_span_o(v2_lease_span), .lease_fault_o(v2_lease_fault),
+    // TIE: `fault_ready_o` is `rst_n` and nothing else -- the manager never
+    // refuses a fault. Reading it would invite a reader to gate the fault on
+    // it, which is how a structural fault gets dropped while the shell is in
+    // reset and the fault is exactly what reset is about to erase. The edge
+    // detector above is what makes one fault count once.
     .fault_valid_i(v2_fault_valid_c), .fault_ready_o(),
     .fault_writer_i(v2_lease_writer), .fault_slot_i(v2_lease_slot),
     .fault_generation_i(v2_lease_generation),
@@ -1707,7 +1749,15 @@ module zhao_shell_top_v2
     .gpu_swap_tuple_o(v2_gpu_swap_tuple_w),
     .gpu_barrier_done_o(v2_gpu_barrier_done_w),
     .vid_barrier_done_o(v2_vid_barrier_done_w),
-    .gpu_protocol_fault_o(), .vid_protocol_fault_o(),
+    .gpu_protocol_fault_o(v2_cdc_gpu_fault_w),
+    // TIE: the video-domain twin, and it CANNOT join the fault OR the way its
+    // GPU-domain sibling just did. `v2_fault_level_c` is a gpu_clk level; this
+    // is a vid_clk one, and OR-ing it in would be the same CDC violation this
+    // packet already made once -- the manager's GPU-domain `ready_valid_o`
+    // wired to the bridge's video-domain input, which is why
+    // `zhao_fb_ready_cdc_v2` exists at all. It needs a synchroniser of its
+    // own, and that is owed work, not a decision to discard it.
+    .vid_protocol_fault_o(),
     .ready_enqueued_o(), .ready_dequeued_o(),
     .swap_enqueued_o(), .swap_dequeued_o(),
     .ready_memory_level_o(), .swap_memory_level_o(),

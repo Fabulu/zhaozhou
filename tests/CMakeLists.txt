@@ -6066,6 +6066,26 @@ add_test(NAME packet_h_sibling_diff_controls
 set_tests_properties(packet_h_sibling_diff_controls PROPERTIES
   LABELS "fast;mutant;packet-h" TIMEOUT 120)
 
+# The harness's `bin_fault_w` is a hand-written COPY of the shell's
+# `v2_fault_level_c`. If one grows a fault term and the other does not, the
+# directed test composes a machine whose fault attribution is weaker than the
+# one that ships -- and it stays GREEN, because no check reads the list.
+#
+# Its controls include the one that matters: two empty sets compare equal, so
+# an extractor that stops matching would report perfect agreement. It must
+# refuse instead.
+add_test(NAME packet_h_fault_or_parity
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/design/packet_h_fault_or_parity.py)
+set_tests_properties(packet_h_fault_or_parity PROPERTIES
+  LABELS "fast;lint;packet-h" TIMEOUT 120)
+
+add_test(NAME packet_h_fault_or_parity_controls
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tests/tools/test_packet_h_fault_or_parity.py)
+set_tests_properties(packet_h_fault_or_parity_controls PROPERTIES
+  LABELS "fast;mutant;packet-h" TIMEOUT 120)
+
 add_test(NAME packet_h_tieoff_audit
   COMMAND ${Python3_EXECUTABLE}
           ${CMAKE_SOURCE_DIR}/tools/design/packet_h_tieoff_audit.py)

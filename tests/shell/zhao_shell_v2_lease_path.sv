@@ -346,6 +346,7 @@ module zhao_shell_v2_lease_path
     input  logic        fault_inject_slot_i,
     input  logic [15:0] fault_inject_generation_i,
     output logic        bin_raster_abort_o,
+  output logic        bin_attr_abort_o,
     output logic        bin_sequence_mismatch_o,
     output logic        bin_sequence_abort_o,
     output logic        shell_fault_valid_o,
@@ -421,8 +422,19 @@ module zhao_shell_v2_lease_path
   logic        mgr_fault_valid, mgr_fault_writer, mgr_fault_slot;
   logic [15:0] mgr_fault_generation;
 
+  // THE SIX TERMS, AND THEY MUST BE THE SHELL'S SIX. This OR is a copy of
+  // `zhao_shell_top_v2.sv`'s `v2_fault_level_c`, and a copy drifts -- which is
+  // the one failure mode this repository has written the most words about. If
+  // the two lists ever disagree, the harness is measuring a machine that does
+  // not ship, and it will go on passing while it does so.
+  // `packet_h_fault_or_parity` compares them and is the reason that cannot
+  // happen quietly.
+  //
+  // `attr_abort` and `cdc_gpu_protocol_fault` joined both lists together,
+  // found by the tie-off audit once it stopped skipping empty connections.
   assign bin_fault_w = bin_frame_fault_o || bin_lifetime_fault_o ||
-                       bin_raster_abort_o || bin_sequence_mismatch_o;
+                       bin_raster_abort_o || bin_attr_abort_o ||
+                       bin_sequence_mismatch_o || cdc_gpu_protocol_fault_o;
 
   // AND IT MUST BE A PULSE. `zhao_video_slotmgr_v2` increments
   // `faults_latched_o` on EVERY cycle a matching fault is asserted -- there
@@ -631,6 +643,9 @@ module zhao_shell_v2_lease_path
       .binner_tile_references_o     (),
       .binner_max_tile_list_depth_o (),
       .binner_triangles_culled_o    (),
+      // TIE: the shell routes this to its inherited `render_overflow_o` top
+      // port, which V1 had and this harness does not -- the harness composes
+      // the LEASE path, and arena overflow is the binner's own clause.
       .binner_overflow_o            (),
       .binner_arena_full_o          (),
       .binner_arena_used_o          (),
@@ -638,7 +653,9 @@ module zhao_shell_v2_lease_path
       .job_stall_clocks_o           (),
       .quiet_o                      (bin_quiet_o),
       .raster_abort_o               (bin_raster_abort_o),
-      .local_attribute_abort_o      (),
+      .local_attribute_abort_o      (bin_attr_abort_o),
+      // TIE: the pulse form of the fault COUNT beside it, which is telemetry.
+      // The two ABORTS are the structural faults and both are wired.
       .local_fault_pulse_o          (),
       .local_fault_count_o          (),
       .coordinate_fault_count_o     (),
@@ -670,6 +687,10 @@ module zhao_shell_v2_lease_path
       .texture_plan_accepted_o      (),
       .texture_dispatch_accepted_o  (),
       .texture_combine_refused_o    (),
+      // TIE: the SHELL routes this to its `render_fragment_error_o` top-level
+      // port, which this harness does not have -- it composes the lease path,
+      // not the shell's full output surface. It is not in either fault OR on
+      // both sides, so the harness still models the attribution faithfully.
       .fragment_error_o             (),
       .coverage_hold_valid_o        (),
       .coverage_delivered_mask_o    (),

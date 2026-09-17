@@ -389,9 +389,11 @@ programming channel run for real, and the swap echo through both CDC FIFOs.
 | structural fault: no READY, no publication, lease released | **measured** |
 | V3 programming channel | **wired and run**; the seal (CRC32C) is still owed |
 | READY/swap CDC round trip | **measured** -- 10 cycles, through the real FIFOs |
-| every new port connected | **audited** -- `packet_h_tieoff_audit`, 0 silent |
+| every new port connected | **audited** -- `packet_h_tieoff_audit`, 0 silent across 74 declared decisions. **The earlier "0 silent" was measured by an audit that could not see two whole classes.** It skipped EMPTY connections as "an unread output, named on purpose" -- an assumption wearing a check's clothes -- and its regex was anchored `^...$`, so a port map packing several connections onto one line was invisible. Widened to audit empty FAULT outputs (not telemetry; 89 reasons all saying "telemetry" is silence a tool manufactured for itself) and to read every connection on a line, the shell went from "19 declared, 0 silent" to 13 silent, ten of them literal tie-offs |
+| the shell's fault OR names every structural fault | **6 terms, and two arrived by audit.** `attr_abort` sat in an empty port connection beside the `raster_abort` that WAS wired -- same class, same instance, dropped only because nobody looked. `cdc_gpu_protocol_fault` fires when a stalled producer mutates the 84-bit tuple or drops valid, and the shell discarded it. Its video-domain twin is declared and OWED a synchroniser: OR-ing a `vid_clk` level into a `gpu_clk` one is the CDC violation this packet already made once |
+| the harness models the shell's attribution | **checked** -- `packet_h_fault_or_parity`. `bin_fault_w` is a hand-written copy of `v2_fault_level_c`, and divergence is invisible: no directed check reads the list, so a harness attributing four of six faults passes exactly as green. Fires on either side gaining a term, and on failing to FIND an expression -- two empty sets compare equal |
 | nested V3 has no migration shadows | **witnessed** -- `packet_h_shadow_witness`, and the witness fires on two broken trees |
-| old/new differential under paired traffic | not started |
+| old/new differential under paired traffic | **structural half done** -- `packet_h_sibling_diff`: 93.4% of the protected V1 is line-identical in the sibling, every other region is comment-only or declared, and the 20 carried-over instances are sealed. Fires on drift, on a moved seed and on a dead rule. The BEHAVIOURAL half -- paired traffic through both shells -- is still owed |
 | sequence-abort RELEASE control | not started |
 | five structural faults each through the reset barrier | one path proven; the five are not individually reachable yet |
 
