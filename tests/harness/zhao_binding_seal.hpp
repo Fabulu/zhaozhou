@@ -58,17 +58,12 @@ inline std::array<uint32_t, 3> pack_row(const Row& r) {
   return words;
 }
 
-inline uint32_t mode(uint8_t format, bool filter, uint8_t wrap_u, uint8_t wrap_v,
-                     uint8_t log2w, uint8_t log2h, uint8_t max_level,
-                     bool mip_enable) {
-  return static_cast<uint32_t>(format & 7u) |
-         (static_cast<uint32_t>(filter) << 3) |
-         (static_cast<uint32_t>(wrap_u & 3u) << 4) |
-         (static_cast<uint32_t>(wrap_v & 3u) << 6) |
-         (static_cast<uint32_t>(log2w & 15u) << 8) |
-         (static_cast<uint32_t>(log2h & 15u) << 12) |
-         (static_cast<uint32_t>(max_level & 15u) << 16) |
-         (static_cast<uint32_t>(mip_enable) << 20);
+inline uint32_t mode(uint8_t format, bool filter, uint8_t wrap_u, uint8_t wrap_v, uint8_t log2w,
+                     uint8_t log2h, uint8_t max_level, bool mip_enable) {
+  return static_cast<uint32_t>(format & 7u) | (static_cast<uint32_t>(filter) << 3) |
+         (static_cast<uint32_t>(wrap_u & 3u) << 4) | (static_cast<uint32_t>(wrap_v & 3u) << 6) |
+         (static_cast<uint32_t>(log2w & 15u) << 8) | (static_cast<uint32_t>(log2h & 15u) << 12) |
+         (static_cast<uint32_t>(max_level & 15u) << 16) | (static_cast<uint32_t>(mip_enable) << 20);
 }
 
 inline uint32_t crc_byte(uint32_t crc, uint8_t data) {
@@ -95,8 +90,7 @@ inline uint32_t page_crc(uint8_t generation, const std::array<Row, 256>& rows,
                          const std::array<bool, 256>& present) {
   uint32_t crc = crc_byte(0xFFFFFFFFu, generation);
   for (unsigned selector = 0; selector < 256; ++selector) {
-    for (uint8_t byte : row_bytes(rows[selector], present[selector]))
-      crc = crc_byte(crc, byte);
+    for (uint8_t byte : row_bytes(rows[selector], present[selector])) crc = crc_byte(crc, byte);
   }
   return crc ^ 0xFFFFFFFFu;
 }
@@ -105,8 +99,7 @@ inline uint32_t page_crc(uint8_t generation, const std::array<Row, 256>& rows,
 // test that just needs SOME page to activate, and the case where forgetting
 // that the other 255 selectors still fold ten zero bytes each gives a value
 // that is wrong in a way no amount of staring at one row reveals.
-inline uint32_t page_crc_single(uint8_t generation, unsigned selector,
-                                const Row& row) {
+inline uint32_t page_crc_single(uint8_t generation, unsigned selector, const Row& row) {
   std::array<Row, 256> rows{};
   std::array<bool, 256> present{};
   rows[selector] = row;

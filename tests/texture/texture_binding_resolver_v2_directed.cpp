@@ -24,11 +24,11 @@ using BindingDut = Vzhao_texture_binding_resolver_v2;
 
 namespace {
 
-using zhao_binding_seal::Row;
 using zhao_binding_seal::crc_byte;
 using zhao_binding_seal::mode;
 using zhao_binding_seal::pack_row;
 using zhao_binding_seal::page_crc;
+using zhao_binding_seal::Row;
 
 void tick(BindingDut* d) {
   d->clk = 0;

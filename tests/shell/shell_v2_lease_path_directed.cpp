@@ -292,14 +292,13 @@ int main(int argc, char** argv) {
     const int to_active = wait_for(
         dut, [&] { return dut.active_page_generation_o == cfg_gen; }, 4000);
     check(to_active >= 0, "the sealed page activates", 1, to_active >= 0);
-    check(dut.active_page_generation_o == 2,
-          "the active generation is the one that sealed", 2,
+    check(dut.active_page_generation_o == 2, "the active generation is the one that sealed", 2,
           dut.active_page_generation_o);
     std::printf(
         "[shell_v2_lease_path] v3 programming: palette ok=%d, cfg BEGIN/ROW/END %d/%d/%d, "
         "sealed END %d, seal 0x%08x, active generation %u after %d cycles\n",
-        pal_ok ? 1 : 0, st_begin, st_row, st_end, st_end2, seal,
-        dut.active_page_generation_o, to_active);
+        pal_ok ? 1 : 0, st_begin, st_row, st_end, st_end2, seal, dut.active_page_generation_o,
+        to_active);
   }
 
   // ---- FACT 1: the barrier gates CREATION ---------------------------------
@@ -851,8 +850,7 @@ int main(int argc, char** argv) {
 
     const uint32_t pubs_before = dut.publications_o;
     const uint32_t faults_before = dut.faults_latched_o;
-    check(faults_before == 0, "no fault is latched on the re-armed machine", 0,
-          faults_before);
+    check(faults_before == 0, "no fault is latched on the re-armed machine", 0, faults_before);
 
     // THE SECOND FAULT, on the second lease, after the barrier. If the level
     // had stayed up across reset this would latch nothing at all.
@@ -865,10 +863,9 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 8; ++i) tick(dut);
 
     check(dut.faults_latched_o == faults_before + 1,
-          "a fault AFTER the reset barrier is latched, exactly once",
-          faults_before + 1, dut.faults_latched_o);
-    check(dut.lease_fault_o == 1, "the second lease is marked faulted", 1,
-          dut.lease_fault_o);
+          "a fault AFTER the reset barrier is latched, exactly once", faults_before + 1,
+          dut.faults_latched_o);
+    check(dut.lease_fault_o == 1, "the second lease is marked faulted", 1, dut.lease_fault_o);
     // THE FAULT ALONE DOES NOT RELEASE THE LEASE, and finding that out here
     // corrects what the first fault case appeared to show. That case injected
     // the fault, then offered a publication, then checked `lease_valid_o == 0`
@@ -882,8 +879,7 @@ int main(int argc, char** argv) {
     // says the writer is finished, and only then is the slot safe to retire.
     // The fault decides the frame is not PUBLISHED; the terminal decides the
     // lease is DONE.
-    check(dut.lease_valid_o == 1,
-          "the faulted lease is still held until its terminal arrives", 1,
+    check(dut.lease_valid_o == 1, "the faulted lease is still held until its terminal arrives", 1,
           dut.lease_valid_o);
 
     // AND WHILE IT IS HELD, NOTHING ELSE CAN BE GRANTED. This is the other
@@ -926,16 +922,13 @@ int main(int argc, char** argv) {
     }
     const int to_release = wait_for(
         dut, [&] { return dut.lease_valid_o == 0; }, 400);
-    check(to_release >= 0, "the second faulted lease is released", 1,
-          to_release >= 0);
-    check(dut.publications_o == pubs_before,
-          "the second faulted frame produces NO publication", pubs_before,
-          dut.publications_o);
+    check(to_release >= 0, "the second faulted lease is released", 1, to_release >= 0);
+    check(dut.publications_o == pubs_before, "the second faulted frame produces NO publication",
+          pubs_before, dut.publications_o);
     std::printf(
         "[shell_v2_lease_path] reset barrier: latched %u -> cleared -> %u, "
         "reopen %d cycles, re-init %d, lease %d, release %d\n",
-        faults_at_reset, dut.faults_latched_o, to_reopen, to_reinit, to_lease3,
-        to_release);
+        faults_at_reset, dut.faults_latched_o, to_reopen, to_reinit, to_lease3, to_release);
   }
 
   std::printf(
