@@ -81,6 +81,10 @@ int main(int argc, char** argv) {
   dut.swap_mode_i = 0;
   dut.swap_base_i = 0;
   dut.swap_span_i = 0;
+  dut.blit_req_valid_i = 0;
+  dut.blit_req_slot_i = 0;
+  dut.blit_req_mode_i = 0;
+  dut.blit_rsp_ready_i = 0;
   dut.eval();
   tick(dut);
   tick(dut);
@@ -207,6 +211,52 @@ int main(int argc, char** argv) {
   check(dut.publications_o == 1, "still exactly one publication after settling", 1,
         dut.publications_o);
   check(dut.contentions_o == 0, "no contention with a single requester", 0, dut.contentions_o);
+
+  // =======================================================================
+  // THE SHARED RESPONSE CHANNEL, WITH BOTH WRITERS ASKING
+  // =======================================================================
+  //
+  // `rsp_*` is ONE channel tagged by writer, and the renderer's lease raises
+  // ready only for writer 1. Everything about that is invisible while only
+  // the renderer requests -- which is all the case above proves.
+  //
+  // The failure this guards against is not a wrong pixel. If nobody accepts
+  // a writer-0 response the manager HOLDS it, and the renderer stops behind
+  // it: a stalled renderer with nothing wrong in the renderer. The harness
+  // also asserts in RTL that the lease never accepts a response that is not
+  // its own, which would retire the blit's grant and strand it the other way.
+  {
+    const uint32_t req_before = dut.requests_accepted_o;
+    const uint32_t rsp_before = dut.responses_accepted_o;
+
+    dut.blit_rsp_ready_i = 1;  // the blit path accepts its own responses
+    dut.blit_req_valid_i = 1;
+    dut.blit_req_slot_i = 0;
+    dut.blit_req_mode_i = 1;
+    dut.frame_req_valid_i = 1;  // and the renderer asks at the same time
+    dut.frame_req_mode_i = 1;
+
+    const int to_both = wait_for(
+        dut, [&] { return dut.requests_accepted_o >= req_before + 2; }, 400);
+    check(to_both >= 0, "both writers' requests are accepted", 1, to_both >= 0);
+
+    const int to_rsp = wait_for(
+        dut, [&] { return dut.responses_accepted_o >= rsp_before + 2; }, 400);
+    check(to_rsp >= 0, "both responses are accepted -- neither writer strands the channel", 1,
+          to_rsp >= 0);
+
+    dut.blit_req_valid_i = 0;
+    dut.frame_req_valid_i = 0;
+    for (int i = 0; i < 40; ++i) tick(dut);
+
+    // Simultaneous traffic alternates by accepted history, so the manager
+    // records it. A zero here would mean the two requests never actually
+    // contended and the case proved nothing.
+    check(dut.contentions_o > 0, "coverage: the two requesters actually contended", 1,
+          dut.contentions_o > 0);
+    std::printf("[shell_v2_lease_path] contended: requests=%u responses=%u contentions=%u\n",
+                dut.requests_accepted_o, dut.responses_accepted_o, dut.contentions_o);
+  }
 
   std::printf(
       "[shell_v2_lease_path] lease->frame %d cycles, frame->term %d, term->ready %d, "

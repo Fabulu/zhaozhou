@@ -147,7 +147,30 @@ module zhao_shell_v2_lease_path (
     output logic [31:0] displayed_base_o,
     output logic [31:0] displayed_span_o,
     output logic        blit_req_ready_o,
-    output logic        fault_ready_o
+    output logic        fault_ready_o,
+
+    // ---- THE BLIT SIDE, and why it is here -----------------------------
+    //
+    // `rsp_*` is ONE channel shared by both writers, and the renderer's lease
+    // raises `rsp_ready_o` only for writer 1. Everything about that is
+    // invisible while only the renderer requests -- which is the state the
+    // first version of this harness tested. The shared channel is the single
+    // most likely thing to deadlock in the real shell: if nobody accepts a
+    // writer-0 response, the manager holds it and the RENDERER stops too,
+    // and the symptom is a stalled renderer with nothing wrong in the
+    // renderer.
+    //
+    // So the blit requester is driven directly and its responses are accepted
+    // here, which is what the shell's blit path will do.
+    input  logic        blit_req_valid_i,
+    input  logic        blit_req_slot_i,
+    input  logic [1:0]  blit_req_mode_i,
+    input  logic        blit_rsp_ready_i,   // the blit half of rsp_ready
+    output logic        blit_rsp_valid_o,   // rsp_valid when writer == 0
+    output logic        blit_rsp_granted_o,
+    output logic        blit_rsp_slot_o,
+    output logic [15:0] blit_rsp_generation_o,
+    output logic        rsp_writer_o        // the live tag, so a test can see it
 );
 
   // ---- lease <-> manager ---------------------------------------------------
@@ -155,6 +178,25 @@ module zhao_shell_v2_lease_path (
   logic [1:0]  render_req_mode;
 
   logic        rsp_valid, rsp_ready, rsp_writer, rsp_granted, rsp_slot;
+  logic        lease_rsp_ready;
+
+  // THE SHARED RESPONSE, DEMULTIPLEXED BY TAG. Each writer accepts only its
+  // own; the manager sees one `rsp_ready`.
+  //
+  // A PLAIN OR OF THE TWO READIES WAS TRIED HERE AND NOTHING NOTICED. That
+  // is worth writing down rather than quietly fixing, because it says where
+  // the protection actually lives: `zhao_renderer_lease_v2` qualifies its own
+  // `rsp_ready_o` by `rsp_writer_i` (line 209) and asserts the invariant
+  // itself (line 361), so the renderer cannot retire a writer-0 response
+  // whatever this line does. The demux earns its keep on the OTHER side --
+  // `blit_rsp_ready_i` arrives from outside and carries no such guard, so the
+  // tag is what stops the blit path retiring the renderer's response.
+  assign rsp_ready             = rsp_writer ? lease_rsp_ready : blit_rsp_ready_i;
+  assign blit_rsp_valid_o      = rsp_valid && !rsp_writer;
+  assign blit_rsp_granted_o    = rsp_granted;
+  assign blit_rsp_slot_o       = rsp_slot;
+  assign blit_rsp_generation_o = rsp_generation;
+  assign rsp_writer_o          = rsp_writer;
   logic [15:0] rsp_generation;
   logic [1:0]  rsp_mode;
   logic [31:0] rsp_base, rsp_span;
@@ -184,7 +226,7 @@ module zhao_shell_v2_lease_path (
       .render_req_slot_o        (render_req_slot),
       .render_req_mode_o        (render_req_mode),
       .rsp_valid_i              (rsp_valid),
-      .rsp_ready_o              (rsp_ready),
+      .rsp_ready_o              (lease_rsp_ready),
       .rsp_writer_i             (rsp_writer),
       .rsp_granted_i            (rsp_granted),
       .rsp_slot_i               (rsp_slot),
@@ -249,10 +291,10 @@ module zhao_shell_v2_lease_path (
       .render_req_ready_o    (render_req_ready),
       .render_req_slot_i     (render_req_slot),
       .render_req_mode_i     (render_req_mode),
-      .blit_req_valid_i      (1'b0),
+      .blit_req_valid_i      (blit_req_valid_i),
       .blit_req_ready_o      (blit_req_ready_o),
-      .blit_req_slot_i       (1'b0),
-      .blit_req_mode_i       (2'd0),
+      .blit_req_slot_i       (blit_req_slot_i),
+      .blit_req_mode_i       (blit_req_mode_i),
       .rsp_valid_o           (rsp_valid),
       .rsp_ready_i           (rsp_ready),
       .rsp_writer_o          (rsp_writer),
@@ -327,11 +369,28 @@ module zhao_shell_v2_lease_path (
   // a timeout -- which reads as "the protocol is wrong" rather than "one wire
   // is". This says which.
   always_ff @(posedge clk) begin
-    // No rst_n term -- reset clears rsp_valid, and reading rst_n
-    // synchronously beside an asynchronous design is SYNCASYNCNET. Third time
-    // today; it is a reflex worth having.
-    if (rsp_valid && (rsp_writer !== 1'b1))
-      $fatal(1, "shell_v2_lease_path: manager tagged a response writer %0d with only the renderer requesting", rsp_writer);
+    // NO LONGER 'every response is writer 1' -- that held only while the blit
+    // side was tied off, and it would now fire on correct behaviour. What
+    // survives is that the lease must never accept a response that is not its
+    // own.
+    //
+    // READ THIS AS A COMPOSITION-LEVEL RESTATEMENT OF A LEAF GUARD, NOT AS
+    // EVIDENCE ABOUT THIS WIRING. `zhao_renderer_lease_v2.sv:361` already
+    // asserts the same thing inside the leaf, and this copy was fired at by
+    // miswiring `rsp_ready` as a plain OR: it stayed silent, because the leaf
+    // makes the state unreachable from here. It can therefore only report a
+    // regression in the lease, which is a real job and a smaller one than the
+    // wording above suggests on its own.
+    //
+    // The control that IS evidence about the composition is in the driver:
+    // hold `blit_rsp_ready_i` low during contention and the counts stall at
+    // two requests and one response -- the renderer stopping behind a
+    // writer-0 response nobody took.
+    //
+    // No rst_n term -- reset clears rsp_valid, and reading rst_n synchronously
+    // beside an asynchronous design is SYNCASYNCNET.
+    if (rsp_valid && lease_rsp_ready && (rsp_writer !== 1'b1))
+      $fatal(1, "shell_v2_lease_path: the renderer's lease accepted a writer-%0d response", rsp_writer);
   end
 `endif
 
