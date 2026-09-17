@@ -7136,6 +7136,17 @@ set_tests_properties(lint_shell_top PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# The sibling shell's fit port policy is GENERATED from the V1 policy plus the
+# V2 declaration -- 154 inherited entries whose ordinals all shift, and 63
+# authored ones. A generated file nobody regenerates is a stale file with a
+# reassuring provenance line at the top, and this session lost an hour to
+# exactly that failure in two separate reports.
+add_test(NAME packet_h_fit_ports_v2_fresh
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/quartus/gen_shell_fit_ports_v2.py --check)
+set_tests_properties(packet_h_fit_ports_v2_fresh PROPERTIES
+  LABELS "fast;lint;packet-h" TIMEOUT 120)
+
 # PACKET-H GATE CLAUSE: unaffected behaviour matches under PAIRED TRAFFIC.
 #
 # `packet_h_sibling_diff` is the structural half and compares TEXT. This is the
