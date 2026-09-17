@@ -129,6 +129,16 @@ _ALLOWED_DRIVERS = {
     "render_producer",
     "geometry_guard",
     "sdr_phy_responder",
+    # PACKET H: the sibling shell's five new channels. Naming them here makes
+    # them legal in a policy; it does NOT give them stimulus. The generator
+    # still refuses an input whose handler owns no ports, which is the check
+    # that matters -- a port owned by nothing is driven by a constant, and the
+    # fitter folds those away.
+    "v3_config",
+    "v3_palette",
+    "fill_responder",
+    "sheet_responder",
+    "video_host",
 }
 _ALLOWED_SINKS = {"gpu_capture", "video_capture", "audio_capture"}
 

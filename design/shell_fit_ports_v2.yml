@@ -36,441 +36,504 @@
       "name": "cfg_valid_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_config"
+      "driver": "v3_config",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 5,
       "name": "cfg_ready_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 6,
       "name": "cfg_op_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_config"
+      "driver": "v3_config",
+      "dynamic_mask": "0x3"
     },
     {
       "ordinal": 7,
       "name": "cfg_page_generation_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_config"
+      "driver": "v3_config",
+      "dynamic_mask": "0xff"
     },
     {
       "ordinal": 8,
       "name": "cfg_selector_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_config"
+      "driver": "v3_config",
+      "dynamic_mask": "0xff"
     },
     {
       "ordinal": 9,
       "name": "cfg_row_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_config"
+      "driver": "v3_config",
+      "dynamic_mask": "0x7ffffffffffffffffff"
     },
     {
       "ordinal": 10,
       "name": "cfg_crc32_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_config"
+      "driver": "v3_config",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 11,
       "name": "cfg_rsp_valid_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 12,
       "name": "cfg_rsp_ready_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_config"
+      "driver": "v3_config",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 13,
       "name": "cfg_rsp_op_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x3"
     },
     {
       "ordinal": 14,
       "name": "cfg_rsp_status_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xf"
     },
     {
       "ordinal": 15,
       "name": "cfg_rsp_page_generation_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xff"
     },
     {
       "ordinal": 16,
       "name": "active_page_generation_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xff"
     },
     {
       "ordinal": 17,
       "name": "pal_load_valid_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_palette"
+      "driver": "v3_palette",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 18,
       "name": "pal_load_ready_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 19,
       "name": "pal_load_op_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_palette"
+      "driver": "v3_palette",
+      "dynamic_mask": "0x3"
     },
     {
       "ordinal": 20,
       "name": "pal_load_slot_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_palette"
+      "driver": "v3_palette",
+      "dynamic_mask": "0x3"
     },
     {
       "ordinal": 21,
       "name": "pal_load_gen_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_palette"
+      "driver": "v3_palette",
+      "dynamic_mask": "0xff"
     },
     {
       "ordinal": 22,
       "name": "pal_load_idx_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_palette"
+      "driver": "v3_palette",
+      "dynamic_mask": "0xff"
     },
     {
       "ordinal": 23,
       "name": "pal_load_rgb565_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_palette"
+      "driver": "v3_palette",
+      "dynamic_mask": "0xffff"
     },
     {
       "ordinal": 24,
       "name": "pal_load_crc_ok_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "v3_palette"
+      "driver": "v3_palette",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 25,
       "name": "tri_area2_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "render_producer"
+      "driver": "render_producer",
+      "dynamic_mask": "0x7fffffffffff"
     },
     {
       "ordinal": 26,
       "name": "tri_invw_plane_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "render_producer"
+      "driver": "render_producer",
+      "dynamic_mask": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
     },
     {
       "ordinal": 27,
       "name": "tri_u_over_w_plane_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "render_producer"
+      "driver": "render_producer",
+      "dynamic_mask": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
     },
     {
       "ordinal": 28,
       "name": "tri_v_over_w_plane_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "render_producer"
+      "driver": "render_producer",
+      "dynamic_mask": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
     },
     {
       "ordinal": 29,
       "name": "tri_flat_request_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "render_producer"
+      "driver": "render_producer",
+      "dynamic_mask": "0x3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
     },
     {
       "ordinal": 30,
       "name": "tri_continuation_tail_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "render_producer"
+      "driver": "render_producer",
+      "dynamic_mask": "0xffffffffffff"
     },
     {
       "ordinal": 31,
       "name": "tri_fragment_state_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "render_producer"
+      "driver": "render_producer",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 32,
       "name": "fill_req_ready_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "fill_responder"
+      "driver": "fill_responder",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 33,
       "name": "fill_req_valid_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 34,
       "name": "fill_req_addr_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 35,
       "name": "fill_data_valid_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "fill_responder"
+      "driver": "fill_responder",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 36,
       "name": "fill_data_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "fill_responder"
+      "driver": "fill_responder",
+      "dynamic_mask": "0xffff"
     },
     {
       "ordinal": 37,
       "name": "fill_refused_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "fill_responder"
+      "driver": "fill_responder",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 38,
       "name": "frame_clear_word_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "render_producer"
+      "driver": "render_producer",
+      "dynamic_mask": "0xffffffffffffffff"
     },
     {
       "ordinal": 39,
       "name": "sheet_req_ready_i",
       "direction": "input",
       "domain": "gpu",
-      "driver": "sheet_responder"
+      "driver": "sheet_responder",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 40,
       "name": "sheet_req_valid_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 41,
       "name": "sheet_req_op_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x3"
     },
     {
       "ordinal": 42,
       "name": "sheet_req_handle_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 43,
       "name": "sheet_req_texel_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xfff"
     },
     {
       "ordinal": 44,
       "name": "sheet_req_src_id_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffff"
     },
     {
       "ordinal": 45,
       "name": "blank_cmd_i",
       "direction": "input",
       "domain": "video",
-      "driver": "video_host"
+      "driver": "video_host",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 46,
       "name": "scanout_ack_i",
       "direction": "input",
       "domain": "video",
-      "driver": "video_host"
+      "driver": "video_host",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 47,
       "name": "frame_swap_valid_i",
       "direction": "input",
       "domain": "video",
-      "driver": "video_host"
+      "driver": "video_host",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 48,
       "name": "frame_swap_slot_i",
       "direction": "input",
       "domain": "video",
-      "driver": "video_host"
+      "driver": "video_host",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 49,
       "name": "blank_ack_o",
       "direction": "output",
       "domain": "video",
-      "sink": "video_capture"
+      "sink": "video_capture",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 50,
       "name": "blank_active_o",
       "direction": "output",
       "domain": "video",
-      "sink": "video_capture"
+      "sink": "video_capture",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 51,
       "name": "lease_open_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
     },
     {
       "ordinal": 52,
       "name": "frame_slot_ready_o",
       "direction": "output",
       "domain": "video",
-      "sink": "video_capture"
+      "sink": "video_capture",
+      "dynamic_mask": "0x3"
     },
     {
       "ordinal": 53,
       "name": "v2_requests_accepted_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 54,
       "name": "v2_responses_accepted_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 55,
       "name": "v2_leases_granted_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 56,
       "name": "v2_leases_refused_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 57,
       "name": "v2_faults_latched_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 58,
       "name": "v2_publications_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 59,
       "name": "v2_releases_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 60,
       "name": "v2_ready_events_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 61,
       "name": "v2_swaps_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 62,
       "name": "v2_contentions_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 63,
       "name": "v2_clear_handshakes_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 64,
       "name": "v2_frames_admitted_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 65,
       "name": "v2_blit_leases_acquired_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 66,
       "name": "v2_blit_leases_refused_o",
       "direction": "output",
       "domain": "gpu",
-      "sink": "gpu_capture"
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
     },
     {
       "ordinal": 67,

@@ -129,6 +129,94 @@ HANDLER_INPUT_PORTS: Mapping[str, tuple[str, ...]] = {
     "sdr_phy_responder": ("phy_dq_i",),
 }
 
+# THE TABLE IS PER-SHELL, and it has to be: `validate_handler_ownership`
+# requires its port set to EQUAL the instrumented shell's declared inputs, so
+# adding the sibling's channels to the table above breaks the historical shell
+# with "handler inventory differs from shell inputs: extra=[...23 ports]".
+#
+# Merged in only for `zhao_shell_top_v2`, so V1 keeps regenerating
+# byte-identically -- which is checked, not assumed.
+SIBLING_HANDLER_INPUT_PORTS: Mapping[str, tuple[str, ...]] = {
+    # ---- PACKET H: the sibling shell's five new channels --------------------
+    # These own the 31 inputs `zhao_shell_top_v2` adds. Ownership is what the
+    # generator checks; a port owned by nothing is a port driven by a CONSTANT,
+    # and the fitter folds those away -- the area comes back LOW, which is the
+    # flattering direction on the one measurement that polices the ALM budget.
+    #
+    # The `tri_*` attribute carriage and `frame_clear_word_i` are deliberately
+    # NOT here: they belong to `render_producer` above, because they are the
+    # same producer as the triangle stream and a second owner for one producer
+    # would be a second design.
+    "v3_config": (
+        "cfg_valid_i",
+        "cfg_op_i",
+        "cfg_page_generation_i",
+        "cfg_selector_i",
+        "cfg_row_i",
+        "cfg_crc32_i",
+        "cfg_rsp_ready_i",
+    ),
+    "v3_palette": (
+        "pal_load_valid_i",
+        "pal_load_op_i",
+        "pal_load_slot_i",
+        "pal_load_gen_i",
+        "pal_load_idx_i",
+        "pal_load_rgb565_i",
+        "pal_load_crc_ok_i",
+    ),
+    "fill_responder": (
+        "fill_req_ready_i",
+        "fill_data_valid_i",
+        "fill_data_i",
+        "fill_refused_i",
+    ),
+    "sheet_responder": ("sheet_req_ready_i",),
+    # VIDEO DOMAIN, and that is why this handler cannot simply be filled in.
+    # `shell_ports.py` requires every driven input to be gpu-domain, because the
+    # stimulus module is gpu-clocked. These four are consumed by logic in
+    # `zhao_video_ready_bridge_v2` that gates on `vid_local_rst_n`. Driving them
+    # from a gpu register would build an unsynchronised crossing INTO the
+    # instrument and corrupt the Fmax it exists to report, so the instrument
+    # needs a video-domain stimulus bank, symmetric with the video-domain
+    # CAPTURE bank it already has.
+    "video_host": (
+        "blank_cmd_i",
+        "scanout_ack_i",
+        "frame_swap_valid_i",
+        "frame_swap_slot_i",
+    ),
+    # The renderer's own additions, appended to `render_producer` below rather
+    # than given an owner of their own.
+    "render_producer": (
+        "tri_area2_i",
+        "tri_invw_plane_i",
+        "tri_u_over_w_plane_i",
+        "tri_v_over_w_plane_i",
+        "tri_flat_request_i",
+        "tri_continuation_tail_i",
+        "tri_fragment_state_i",
+        "frame_clear_word_i",
+    ),
+}
+
+
+def handler_input_ports() -> Mapping[str, tuple[str, ...]]:
+    """The handler table for the shell currently being instrumented.
+
+    V1 gets exactly the historical table -- same object, same order -- so its
+    generated wrapper is unchanged. The sibling gets it with the five new
+    channels added and its renderer extended in place, preserving the existing
+    order so `validate_handler_ownership`'s ordered comparison still means what
+    it meant.
+    """
+    if SHELL_MODULE != "zhao_shell_top_v2":
+        return HANDLER_INPUT_PORTS
+    merged = dict(HANDLER_INPUT_PORTS)
+    for driver, names in SIBLING_HANDLER_INPUT_PORTS.items():
+        merged[driver] = tuple(merged.get(driver, ())) + tuple(names)
+    return merged
+
 
 @dataclass(frozen=True)
 class RenderedArtifacts:
@@ -183,7 +271,7 @@ def validate_handler_ownership(
     """Bind every input taxonomy row to the handler that actually drives it."""
     declared_inputs = {port.name for port in declaration.ports if port.direction == "input"}
     expected_inputs = {
-        name for names in HANDLER_INPUT_PORTS.values() for name in names
+        name for names in handler_input_ports().values() for name in names
     }
     if declared_inputs != expected_inputs:
         missing = sorted(declared_inputs - expected_inputs)
@@ -191,12 +279,13 @@ def validate_handler_ownership(
         raise ShellPortError(
             f"generator handler inventory differs from shell inputs: missing={missing}, extra={extra}"
         )
-    actual: dict[str, list[str]] = {driver: [] for driver in HANDLER_INPUT_PORTS}
+    handlers = handler_input_ports()
+    actual: dict[str, list[str]] = {driver: [] for driver in handlers}
     for row in policy.ports:
         if row.direction == "input" and row.driver in actual:
             actual[row.driver].append(row.name)
     errors: list[str] = []
-    for driver, expected in HANDLER_INPUT_PORTS.items():
+    for driver, expected in handlers.items():
         observed = tuple(actual[driver])
         if observed != expected:
             missing = [name for name in expected if name not in set(observed)]

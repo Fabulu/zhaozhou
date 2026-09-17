@@ -554,8 +554,8 @@
     "status": "pass"
   },
   "generatedArtifacts": {
-    "manifestSha256": "6f2225f85ca99725587180a43fa16badc8bd6a450759ef23beb26d4680c84a3a",
-    "rtlSha256": "c6a1b1349671097aa6b9c126a5ef638d50818703218a9a7a72ee6d6b0718c050"
+    "manifestSha256": "bd7a89a8c3ac9a4b0625def848f862b9a495b755e53d6ad621c9386ffccc8370",
+    "rtlSha256": "04fb8ef46399f95a584c2674e8475b0358c0dbd42f678a23c8898ac2ed745233"
   },
   "limitations": [
     "Deterministic legal-ish characterization traffic, not a functional HPS model.",
@@ -738,7 +738,7 @@
     },
     "generator": {
       "path": "tools/quartus/gen_shell_fit_top.py",
-      "sha256": "8b77cf81a297f7ca033b0b62ccde87f9e2abf0c5312566da3328b7d891e3c3db"
+      "sha256": "ed13e2460cd9356559cfbc5d68d628f77276037e60c3f8795e643611c85fcae9"
     },
     "gitCapture": {
       "path": "tools/quartus/capture_shell_fit_git.py",
@@ -754,7 +754,7 @@
     },
     "parser": {
       "path": "tools/quartus/shell_ports.py",
-      "sha256": "d4da568555ca520691fec7db7dd2893d7a34bc5b5a0aeda879e9d407fc4572a9"
+      "sha256": "20a598b7aa2318e9cc46ccb5146b547aeaaabe99e89f751e68d7f07b6d549360"
     },
     "policy": {
       "path": "design/shell_fit_ports.yml",
@@ -797,11 +797,11 @@
   "sourceHashes": {
     "cmake": "14594683cced56441645516c6d488185427c284e0b64d8d2484c1dcaade60cbd",
     "evidenceParser": "07644dba20574d7bbf34a14092b53598ba32831ad7c8b11ba5b17aba8a18cdcf",
-    "generator": "8b77cf81a297f7ca033b0b62ccde87f9e2abf0c5312566da3328b7d891e3c3db",
+    "generator": "ed13e2460cd9356559cfbc5d68d628f77276037e60c3f8795e643611c85fcae9",
     "gitCapture": "24e128fb8dac00c63774ee3be65775e9a7021e82859dcc890d01fb8632ebbff0",
     "packageFile": "a0d8247e8562b4fd9a741d3ffd6f3480c1aeeb3426e713fff1d01e7bf1ccc70f",
     "packet": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51",
-    "parser": "d4da568555ca520691fec7db7dd2893d7a34bc5b5a0aeda879e9d407fc4572a9",
+    "parser": "20a598b7aa2318e9cc46ccb5146b547aeaaabe99e89f751e68d7f07b6d549360",
     "policy": "e153ed6e4f19ef9855a0f97784886d9ea323245ce4999f3da8696f1178ceb91a",
     "postMapScript": "beed3500c157e2261975b2848f59ead2cc31842df808119598e8306fbb33e7e3",
     "project": "f638d3249f858a273b2c2035faaccadc0a72f19ddbc2e16b41b81ec4d266298f",

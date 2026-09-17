@@ -95,7 +95,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / 'tools' / 'quartus'))
 
-from gen_prod_top import parse_ports, port_header  # noqa: E402
+from shell_ports import (  # noqa: E402
+    discover_type_signedness, discover_type_widths, parse_module_declaration,
+)
 
 V1_POLICY = REPO / 'design/shell_fit_ports.yml'
 V2_SHELL = REPO / 'fpga/rtl/common/zhao_shell_top_v2.sv'
@@ -149,7 +151,17 @@ def main(check=False):
     inherited = {p['name']: p for p in v1['ports']}
 
     text = io.open(V2_SHELL, encoding='utf-8', errors='replace').read()
-    decl = parse_ports(port_header(text, 'zhao_shell_top_v2'))
+    pkg = io.open(REPO / 'fpga/rtl/common/zhao_pkg.sv',
+                  encoding='utf-8', errors='replace').read()
+    # `shell_ports.parse_module_declaration` rather than the simpler port
+    # splitter: it resolves WIDTHS, including typedef ports such as the 103-bit
+    # `zhao_guard_req_t`, and a width is what a full-span mask is made of.
+    declaration = parse_module_declaration(
+        text, 'zhao_shell_top_v2',
+        type_widths=discover_type_widths(pkg),
+        type_signedness=discover_type_signedness(pkg),
+    )
+    decl = [(p.direction, p.name, p.bit_width) for p in declaration.ports]
 
     owner = {}
     for driver, names in DRIVERS.items():
@@ -162,8 +174,7 @@ def main(check=False):
 
     ports = []
     new_names = []
-    for ordinal, (direction, name, packed, unpacked, _sgn, _ut) in \
-            enumerate(decl):
+    for ordinal, (direction, name, width) in enumerate(decl):
         if name in inherited:
             row = dict(inherited[name])
             row['ordinal'] = ordinal
@@ -171,10 +182,6 @@ def main(check=False):
             continue
 
         new_names.append(name)
-        width = 1
-        # bit width is only needed for the full-width mask; parse_ports gives
-        # ranges as text, so compute from the declaration the same way the
-        # shell-port parser does rather than re-deriving it here.
         row = {'ordinal': ordinal, 'name': name, 'direction': direction}
         row['domain'] = 'video' if name in VIDEO else 'gpu'
         if direction == 'output':
@@ -190,8 +197,17 @@ def main(check=False):
                 print('  should own it.')
                 return 1
             row['driver'] = drv
+
+        # FULL SPAN, as a first declaration and not as a result. The honest
+        # value of this field is whatever the stimulus actually toggles, and
+        # `shell_fit_smoke.py` checks it for EXACT equality -- so a full-span
+        # mask is a CLAIM that every bit moves, and the smoke harness is what
+        # turns it into a measurement or refuses it.
+        #
+        # Declaring it narrow here would be worse: a narrow mask that matches a
+        # narrow stimulus passes, and the area comes back low.
+        row['dynamic_mask'] = '0x%0*x' % ((width + 3) // 4, (1 << width) - 1)
         ports.append(row)
-        del width
 
     unused = sorted(set(owner) - set(new_names))
     if unused:
