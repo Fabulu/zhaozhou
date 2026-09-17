@@ -707,15 +707,40 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > the rule by a factor of five. A filter keyed on "has a fit row" hides exactly
 > the blocks nobody has measured, which are the blocks most likely to be wrong.
 >
-> **NOT YET ESTABLISHED, and it decides the size of the fix.** Each bank is read
-> at THREE distinct addresses in one clock — two CRC-walk reads
-> (`crc_selector_q`, `crc_next_selector_c`) and the data-plane read
-> (`req_binding_selector_i`) — and an M10K offers one read port. The measured
-> exchange rate elsewhere is two M10K per extra read (commit `dd5ab471`), so a
-> naive port-per-reader split is roughly 6 copies x 19,200 bits ≈ 12 M10K
-> against 553 available. Whether the CRC walk can share a port with the data
-> plane, and whether the reads can be made to look like a simple dual-port
-> idiom, is the actual engineering question and it has not been answered here.
+> **AND THE FIX IS AVAILABLE, by an invariant the design already maintains.**
+>
+> Each bank looks like it has three readers. It has two, and they never collide:
+>
+> * the two CRC-walk reads (`crc_selector_q` at the group start,
+>   `crc_next_selector_c` at the advance) are mutually exclusive branches of one
+>   FSM writing one destination, `crc_row_q` — that is ONE port with a muxed
+>   address, not two;
+> * the data plane reads `page{active_bank_q}_m[req_binding_selector_i]` into
+>   `read_row_q`, and the CRC walk reads `page{staging_bank_q}_m`.
+>
+> And the bank selectors are complementary **by construction**:
+>
+>     441  active_bank_q  <= 1'b0;            reset: complementary
+>     442  staging_bank_q <= 1'b1;
+>     495  staging_bank_q <= ~active_bank_q;  maintained
+>     579  active_bank_q  <= staging_bank_q;  the atomic activation edge
+>
+> So `page0_m` is read by the data plane only when `active_bank_q == 0`, and by
+> the CRC walk only when it is 1. **Neither array ever has two readers in the
+> same cycle.** Each therefore needs ONE read port with an address and
+> destination muxed on `active_bank_q` — one write, one read, which is exactly
+> the simple-dual-port idiom M10K infers.
+>
+> 256 x 75 bits per bank is 19,200 bits; at M10K's 40-bit simple-dual-port width
+> that is ~2-3 blocks each, so **roughly 4-6 M10K against 553 available**, to
+> retire ~28,957 ALUT and ~39,449 registers. If it lands anywhere near that, the
+> composed shell goes from 62,534 ALMs — 149% of the device — to roughly 34,000,
+> which fits with margin and is close to the 30,000 target.
+>
+> **Stated as an argument, not a measurement.** The restructure is real RTL
+> surgery on a block with a directed test and seven committed mutant controls,
+> and the number above is arithmetic plus Quartus's own inference rules, not a
+> fit row. It needs building, running against those controls, and re-fitting.
 >
 > `zhao_texture_binding_resolver_v2.sv` is **not** in Packet D's or Packet E's
 > `PROTECTED_HASHES`, so this is editable work rather than an owner decision.
