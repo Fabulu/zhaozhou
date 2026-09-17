@@ -225,6 +225,20 @@ design/shell_fit_ports.yml text eol=lf
 # has moved" rather than as a line-ending translation.
 fpga/rtl/common/zhao_shell_top.sv text eol=lf
 fpga/rtl/common/zhao_pkg.sv text eol=lf
+
+# AND THE EVIDENCE FIXTURES THEMSELVES, which is the same hole one file over.
+# `tests/tools/fixtures/` is a directory of byte-exact evidence: the preflight
+# hashes these files and compares them against a receipt that records those
+# hashes. `shell_fit_receipt_v3.json` binds four of them -- the generator, and
+# the wrapper and manifest the generator produces, because the output records
+# which generator made it.
+#
+# `-text` rather than `eol=lf`: these are evidence, some of it binary, and the
+# correct instruction is "never translate" rather than "translate to LF".
+# Committed 2026-09-17 after git warned "LF will be replaced by CRLF" on the
+# receipt fixture during exactly the rebind that the previous entry exists to
+# make safe.
+tests/tools/fixtures/** -text
 tests/tools/test_texjoin_accounting.py text eol=lf
 # Packet-H raw-LAST leaf and every selector/control artifact are exact text.
 fpga/rtl/memory/zhao_engine1_raw_last_v2.sv text eol=lf
