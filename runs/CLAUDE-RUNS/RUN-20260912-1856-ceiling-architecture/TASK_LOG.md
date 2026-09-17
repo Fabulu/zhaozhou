@@ -1942,3 +1942,80 @@ whose credit law T1 and T1b each got wrong once — `occupancy_next +
 in_flight_next <= DEPTH`, and the buffer must be DEEPER than the number of
 items in flight. That is a considered change and the right place to start a
 fresh session, not the end of a long one.
+
+## 2026-09-17 — G8B MEETS ITS TIMING CRITERION
+
+**`@g8b-t11-pins-s2`: 102.19 MHz, physical pins, zero total negative slack,
+`status: ok`.** The first accepting row this target has produced, and the first
+time `packet_i_g8b_registration_static`'s acceptance branch has run rather than
+been skipped — the gate was written yesterday against rows that were all
+`failed:structure`.
+
+| row | seed | Fmax | slack | TNS | ALM | status |
+|---|---:|---:|---:|---:|---:|---|
+| `@g8b-t11-pins` | 1 | 98.90 | −0.111 | −0.175 | 8,293 | failed:structure |
+| `@g8b-t11-pins-s2` | 2 | **102.19** | +0.214 | **0** | 8,295 | **ok** |
+| `@g8b-t11-pins-s4` | 4 | **101.68** | +0.165 | **0** | 8,274 | **ok** |
+
+Clean at HEAD, **zero virtual pins**, digest `fda08fed9972` over nine sources
+at `9f262f71`, no rule violations.
+
+**Seed dependence, stated not buried:** two of three close, seed 1 misses by
+111 ps. The design is AT its criterion and placement decides. Not one lucky
+seed — both accepting rows reach zero TNS with positive margin — and not the
+comfortable margin the final console receipt wants either.
+
+### The two packages that finished it
+
+**T10c** — built from the specification I had handed over rather than a sixth
+improvisation. Bank the vertex captures by triangle parity: `vy[]` needed early
+snapshotting only because the next triangle overwrote it, so two banks and a
+parity bit flipped at the last read's issue remove the reason. **No early
+capture, nothing that can be stale** — which is what defeated the four attempts
+before it. Deleted six 32-bit registers and two of three write-forwards.
+Rate intact: 170 cycles against the 173 acceptance, where the correct-but-
+stalling option (a) measured 242. 96.45 → 98.44.
+
+**T11** — the viewport mux off the DSP's input. `vp_w[s5_view]` was fabric
+logic between a register and a hard multiplier while the other operand was
+already a register; `s5_view` is known one stage earlier, so the selection is
+made there and registered. 24 flip-flops, no stage, no arithmetic changed.
+98.44 → 98.90, two negative paths left of 2,000.
+
+Then the seed sweep, which at TNS −0.175 is a measurement rather than a wish —
+and which had been refused twice before on trees where TNS was −1.6 and −10.4.
+
+### The campaign, 43.94 → 102.19
+
+| package | changed | measured |
+|---|---|---:|
+| T3a | registered the window mask | +11.7 |
+| T5+T6 | registered the lattice base; split the output cone | +9.7 |
+| **T7** | moved a constant add into a **DSP's** register | **−7.9**, reverted |
+| T8 | **deleted** a register whose value was implied | +8.6 |
+| **T9** | strength-reduced a constant add | **0.0**, reverted |
+| T10c | fourth blend stage, banked captures | +2.0 |
+| T11 | viewport mux off the DSP input | +0.5 |
+
+T10c took five attempts; four failed identically at 32 of 6,751 and the one
+that PASSED but stalled proved the diagnosis. **No fit was spent on any
+failure** — `terrain_tess_directed` is the gate CLAUDE.md says to satisfy
+before measuring, and it saved four fits.
+
+### State
+
+* **Golden path — 807/808**, the one red being the escalated V20 decision.
+* **`mutant_copy_drift` fired a third time** within one gate run of T11
+  landing, and was refreshed with its control still firing. Three refreshes in
+  a day is a copy tracking a module that moved three times, not a noisy tool.
+* **Packet I still cannot be promoted.** Packet H precedes it and
+  `zhao_shell_top_v2.sv` does not exist. A clean G8B receipt was the EXPENSIVE
+  part of Packet I and never the whole of it.
+
+**Next, in order:** write `zhao_shell_top_v2.sv` (composition of eight blocks
+that all exist and are tested; `bin_pipe` 63→165 ports, `slotmgr` 22→73 with
+the lease interface relocated to `zhao_renderer_lease_v2`), then Packet I
+promotes, then J/G8C has a hierarchy to fit, then K.
+
+**Owner decisions still open:** the V20 / `PROTECTED_HASHES` collision, and
+whether to re-allocate M10K across domains.
