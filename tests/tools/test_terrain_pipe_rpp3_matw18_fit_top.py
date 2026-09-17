@@ -385,13 +385,29 @@ class G8BFitTopTests(unittest.TestCase):
     def test_committed_g8b_receipt_rows_obey_the_packet_i_receipt_law(self) -> None:
         """The architecture's G8B receipt condition, enforced on the committed rows.
 
-        NOT an assertion that G8B has passed. It has not: every committed row is
-        stamped `failed:structure` against the ruled 100 MHz, which is the fit
-        completing and the BUDGET RULES refusing it -- a real measurement, not a
-        failed one. What this enforces is that the moment a row stops being
-        stamped failed, it carries the whole condition the architecture names:
-        clean tree, zero virtual pins, 100 MHz. A promoted diagnostic row turns
-        this red, which is the only moment the check is worth anything.
+        NOT an assertion that G8B has passed -- this enforces the CONDITION a
+        passing row must satisfy, whether or not one exists yet.
+
+        **It now does.** `@g8b-t11-pins-s2` is stamped `ok` at 102.19 MHz,
+        physical pins, zero total negative slack, clean tree (commit 861816b0),
+        so this check's acceptance branch is exercised rather than skipped.
+        Seeds 2 and 4 both close; seed 1 reads 98.90 and misses by 111
+        picoseconds, which the closing commit states plainly rather than
+        quoting the best row.
+
+        Until 2026-09-18 this docstring said "It has not: every committed row
+        is stamped `failed:structure`". That was true when written and the
+        receipts commit did not touch this file, so it went on asserting the
+        opposite of the tree it guards -- the third stale-prose instance found
+        in one session, and the one most likely to mislead, because a reader
+        checking whether Packet I can promote reads its gate.
+
+        A row stamped failed is the fit COMPLETING and the budget rules
+        refusing it -- a real measurement, not a failed one. What this enforces
+        is that any row which stops being stamped failed carries the whole
+        condition the architecture names: clean tree, zero virtual pins,
+        100 MHz. A promoted diagnostic row turns this red, which is the only
+        moment the check is worth anything.
 
         The ioMode/virtualPins consistency clause is not bookkeeping. The G8B
         timing campaign SWITCHED PIN MODES mid-series: @g8b and @g8b-t2 are
