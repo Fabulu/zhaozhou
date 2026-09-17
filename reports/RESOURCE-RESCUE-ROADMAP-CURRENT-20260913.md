@@ -765,10 +765,25 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > which inflate. Both point the same way — the real number should be lower —
 > but the fitter has not yet produced one, so this is not a receipt.
 >
-> **ONE ARRAY IS STILL IN FABRIC.** The same run reports `uvw_m` in
-> `zhao_texture_island_v3_top.sv:916` uninferred for the same reason. That file
-> IS in Packet D's `PROTECTED_HASHES`, so it is an owner decision rather than
-> editable work — and it is the obvious next one.
+> **ONE ARRAY IS STILL IN FABRIC, and here is its size.** The same run reports
+> `uvw_m` in `zhao_texture_island_v3_top.sv:916` uninferred for the same reason.
+> It is `logic [63:0] uvw_m [0:OWNERS-1]` with `OWNERS = 64` — **4,096 bits**,
+> a ninth of the binding banks, with one conditional write (line 919) and one
+> registered read (line 990).
+>
+> One write and one read is already the inferrable shape, so the blocker is
+> narrower than the binding banks' was: the read lands in an `always_ff` whose
+> reset branch clears its destination registers, and a reset on a RAM output
+> register is one of the things that costs the inference. That is a smaller
+> change than the one made here — it does not need an address mux, only the
+> reset moved off the read path.
+>
+> **It is worth doing and it is not editable work.** `zhao_texture_island_v3_top.sv`
+> IS in Packet D's `PROTECTED_HASHES`. A 64-entry read mux over 64 bits is
+> perhaps 1–2k ALUT plus 4,096 registers — small against what was just
+> recovered, and NOT small against the 1,589 ALUT that currently separate this
+> composition from the 30,000 target. **Owner decision, with the number
+> attached rather than a hunch.**
 >
 > ### And the distribution afterwards, which is where the next work goes
 >
