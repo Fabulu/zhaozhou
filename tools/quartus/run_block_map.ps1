@@ -149,6 +149,21 @@ try {
             "set_global_assignment -name TOP_LEVEL_ENTITY $mod",
             'set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files',
             'set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"',
+            # SYNTHESIS=1 TOO, and its absence killed this whole lane silently.
+            # run_block_fit.ps1 has defined it since the beginning (line 588);
+            # this script defined only QUARTUS_SYNTHESIS, so every one of the
+            # 55 `ifndef SYNTHESIS regions across 42 RTL files was compiled by
+            # the map and never by the fit. Three of them hold `export "DPI-C"`
+            # declarations, which Quartus 17.0 cannot parse at all -- so
+            # Analysis & Synthesis aborted on zhao_texture_island_v3_top.sv
+            # before reaching whichever module was being characterized, for
+            # EVERY module, and the row came back stamped ok because Quartus
+            # writes a .map.summary even on a failed compile.
+            #
+            # The two macros are not synonyms and keeping both is deliberate:
+            # QUARTUS_SYNTHESIS says which tool, SYNTHESIS says which mode, and
+            # the tree's guards are written against the second.
+            'set_global_assignment -name VERILOG_MACRO "SYNTHESIS=1"',
             'set_global_assignment -name NUM_PARALLEL_PROCESSORS 4',
             'set_global_assignment -name SEED 1',
             'set_global_assignment -name OPTIMIZATION_MODE "BALANCED"'
@@ -298,6 +313,30 @@ try {
             $row.ramConversionWarnings = ([regex]::Matches($r, 'cannot be converted to (a )?RAM|276003')).Count
             $row.errors   = ([regex]::Matches($r, '(?m)^Error ')).Count
             $row.critical = ([regex]::Matches($r, '(?m)^Critical Warning ')).Count
+        }
+
+        # A ROW WITH ERRORS IS NOT AN 'ok' ROW, and until 2026-09-17 it was
+        # stamped as one. Quartus writes a .map.summary even when Analysis &
+        # Synthesis FAILS, so the summary-exists test above -- which is what
+        # sets 'ok' -- passes on a compile that produced nothing. The row then
+        # carries status ok with every metric null.
+        #
+        # It surfaced on zhao_video_blit_lease_v2, a new leaf that mapped in
+        # 6.3 s and was stamped ok. Six seconds is a parser death, not a
+        # synthesis; the three errors were in zhao_texture_island_v3_top.sv,
+        # which the shared source list drags into every map run, and A&S
+        # aborted before it ever reached the module being characterized. Read
+        # as ok, that row is a claim that a block compiles when nothing
+        # compiled -- the broken-instrument law exactly: the defect made the
+        # answer look BETTER than the truth, and the null metrics that would
+        # have given it away read as 'a leaf with no DSP and no RAM', which is
+        # what most leaves honestly look like.
+        #
+        # Kept separate from 'no-summary' because the two say different things:
+        # no-summary is the tool finding nothing, failed:analysis is Quartus
+        # reporting failure. Nothing downstream may read a metric off either.
+        if ($row.errors -gt 0 -and $row.status -eq 'ok') {
+            $row.status = 'failed:analysis'
         }
 
         $results.Add([pscustomobject]$row)

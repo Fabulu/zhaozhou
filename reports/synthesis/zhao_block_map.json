@@ -1,14 +1,14 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "6e18913413106c76580533f7887fdcd5f8701c2a",
-    "newestRunClean":  true,
+    "newestRunCommit":  "04cf890ab48eca1104235425adfa2ec42b8f636d",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
              },
     "device":  "5CSEBA6U23I7",
-    "sourceListHash":  "dd38db9af18f44c1",
+    "sourceListHash":  "2420a1b66b4699cd",
     "blocks":  [
                    {
                        "module":  "zhao_audio_fifo",
@@ -2141,7 +2141,7 @@
                    },
                    {
                        "module":  "zhao_probe_ram_infer@raminfer",
-                       "status":  "ok",
+                       "status":  "failed:analysis",
                        "sourceCommit":  "2db3dfd5fa026320a939aa64cdfea757ded45a4a",
                        "rtlCleanAtHead":  false,
                        "sourceListHash":  "dd38db9af18f44c1",
@@ -3685,6 +3685,34 @@
                                                 "Total number of DSP blocks":  6,
                                                 "Fixed Point Mixed Sign Multiplier":  6
                                             },
+                       "ramConversionWarnings":  0,
+                       "errors":  0,
+                       "critical":  1
+                   },
+                   {
+                       "module":  "zhao_video_blit_lease_v2",
+                       "status":  "ok",
+                       "sourceCommit":  "04cf890ab48eca1104235425adfa2ec42b8f636d",
+                       "rtlCleanAtHead":  false,
+                       "sourceListHash":  "2420a1b66b4699cd",
+                       "sourceFileCount":  267,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "seconds":  8.1,
+                       "dspBlocks":  0,
+                       "registers":  123,
+                       "blockMemoryBits":  0,
+                       "virtualPins":  152,
+                       "pins":  0,
+                       "estimatedAlms":  147,
+                       "combAluts":  117,
+                       "mlabMemoryBits":  null,
+                       "inferredMemories":  [
+
+                                            ],
+                       "inferredMemoryCount":  0,
+                       "inferredDesignMemoryCount":  0,
                        "ramConversionWarnings":  0,
                        "errors":  0,
                        "critical":  1
