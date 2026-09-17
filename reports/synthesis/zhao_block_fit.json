@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "a499f33699baaca4b351ada17716d389ff8a7539",
-    "newestRunClean":  false,
+    "newestRunCommit":  "3dbd643929a25a3611b4ef06191a23c0007b47ba",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1896,6 +1896,38 @@
                        "blockMemoryBits":  95877,
                        "dspBlocks":  32,
                        "virtualPins":  18
+                   },
+                   {
+                       "module":  "zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t11-pins",
+                       "status":  "failed:structure",
+                       "sourceCommit":  "3dbd643929a25a3611b4ef06191a23c0007b47ba",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "physical-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "run_block_fit -Seed",
+                       "sourceDigest":  "fda08fed99724dedb9e7eae071c65e84a4b6dbd5d7bc68b4a37d60e2ff678f6a",
+                       "variantOf":  "zhao_terrain_pipe_rpp3_matw18_fit_top",
+                       "seconds":  513.3,
+                       "sourcesHashed":  9,
+                       "alms":  8293,
+                       "registers":  8980,
+                       "blockMemoryBits":  95877,
+                       "ramBlocks":  46,
+                       "dspBlocks":  32,
+                       "virtualPins":  0,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  98.9,
+                       "fmaxClock":  "clk",
+                       "setupSlackNs":  -0.111,
+                       "setupTnsNs":  -0.175,
+                       "holdSlackNs":  0.257,
+                       "holdTnsNs":  0,
+                       "ruleViolations":  [
+                                              "Fmax 98.9 MHz \u003c required 100 MHz -- the resource gates can all pass while the clock does not; see this rule\u0027s note"
+                                          ]
                    },
                    {
                        "module":  "zhao_terrain_pipe_rpp3_matw18_fit_top@g8b-t12",
