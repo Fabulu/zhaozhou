@@ -6009,6 +6009,31 @@ set_tests_properties(shell_v2_lease_path_directed PROPERTIES
 #
 # The audit demands a `// TIE: <why>` beside every literal in the composition.
 # It found 36 silent ones the first time it ran.
+# PACKET-H GATE CLAUSE: the nested V3 elaborates with NO migration shadows.
+#
+# The clause is "MIGRATION_SHADOWS=1'b0 with shadow_present=0 and no shadow
+# comparator/counters". The island DEFAULTS shadows ON, so the property is
+# not "one site passes 1'b0" -- it is "no site anywhere asks for them", and
+# a check written against the one site everybody knows about would pass
+# forever after somebody adds a second.
+#
+# The witness is itself tested: tests/tools/test_packet_h_shadow_witness.py
+# fires it at a synthetic tree that turns shadows on, and at one with the
+# $fatal guard removed, and requires it to fail both -- plus a control that
+# an extra LEGAL site does not fire it, so the first test cannot pass merely
+# because a third site exists.
+add_test(NAME packet_h_shadow_witness
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/design/packet_h_shadow_witness.py)
+set_tests_properties(packet_h_shadow_witness PROPERTIES
+  LABELS "fast;lint;packet-h" TIMEOUT 120)
+
+add_test(NAME packet_h_shadow_witness_controls
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tests/tools/test_packet_h_shadow_witness.py)
+set_tests_properties(packet_h_shadow_witness_controls PROPERTIES
+  LABELS "fast;mutant;packet-h" TIMEOUT 120)
+
 add_test(NAME packet_h_tieoff_audit
   COMMAND ${Python3_EXECUTABLE}
           ${CMAKE_SOURCE_DIR}/tools/design/packet_h_tieoff_audit.py)
