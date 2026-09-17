@@ -756,29 +756,76 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > why G8B sat at `failed:structure` for its whole campaign. The area question
 > is answered and the CLOCK question is not: 54.12 MHz against a ruled 100.
 >
-> **AND THE BLOCK JUST OPTIMISED IS NOW THE WORST TIMING SOURCE.** Grouping the
-> 2,000 summarised negative paths by the leaf they start in:
+> **AND THE M10K READ IS ON THE CRITICAL PATH.** The 2,000 summarised negative
+> paths, grouped by the leaf at each END:
 >
-> | source leaf | paths | total | worst |
+> | from → to | paths | total | worst |
 > |---|---:|---:|---:|
-> | `zhao_texture_binding_resolver_v2` | 538 | −2,715.7 | −8.273 |
-> | `zhao_texture_island_v3_top` | 527 | −2,098.1 | −4.475 |
-> | `zhao_texture_v3own` | 278 | −1,162.5 | −5.221 |
-> | `zhao_raster_attrdiv_v2` | 161 | −699.9 | **−8.477** |
-> | `zhao_skid2:u_candidate_skid` | 123 | −460.8 | −4.263 |
+> | **`altsyncram` → `zhao_texture_binding_resolver_v2`** | **515** | −2,617.8 | −8.273 |
+> | `zhao_texture_v3own` → itself | 276 | −1,154.1 | −5.221 |
+> | `zhao_raster_texture_stage_v3` → `zhao_texture_island_v3_top` | 207 | −839.0 | −4.317 |
+> | `zhao_geom_binner_v2` → `zhao_texture_island_v3_top` | 206 | −773.6 | −4.475 |
+> | `zhao_raster_attrgrad_v2` → `zhao_raster_attrdiv_v2` | 121 | −537.0 | **−8.477** |
 >
-> That is exactly the caution recorded three paragraphs below this section: *an
-> M10K read is ~2 ns against a flip-flop's ~0.3, so a lookup on a block's
-> critical path can cost more than it saves.*
+> Data delay: worst **17.809 ns**, median **13.313 ns**, against a 10.000 ns
+> period. The median bad path is a third over the clock, so this is not one
+> chain — it is a broad shortfall with one dominant family.
 >
-> **What is NOT established is that the M10K move caused it.** There is no
-> before-picture to compare against: the pre-change fit FAILED, so it produced
-> no timing at all, and the map-only rows produce none by construction. The
-> honest statement is that after the change this block starts 27% of the worst
-> paths, that the mechanism is known and plausible, and that the next fit
-> question is whether registering the RAM output — or reverting one bank —
-> moves it. Assuming the answer either way would be the comfortable-diagnosis
-> failure this file has a chapter about.
+> #### Two corrections, and both matter more than the table
+>
+> **1. The M10K read is NOT the cost. It is 0.192 ns.** I wrote in the previous
+> revision of this section that the obvious move was to register the RAM output,
+> because 515 paths launch inside the memory. Reading the *detail* rather than
+> the summary kills that: on the −8.273 path the RAM contributes
+> `portbdataout[20]` at **+0.192 ns**, and the remaining **16.0 ns is
+> combinational logic after the data leaves the memory** —
+>
+> ```
+>  8.219  +0.192  ...|page0_m_rtl_0|...|ram_block1a0|portbdataout[20]
+>  9.597  +1.378  read_row_c.mode[13]~10|combout
+> 11.107  +1.510  Add8~9|sumout
+> 12.254  +1.147  Add10~9|sumout
+> 13.665  +1.411  ShiftLeft2~29|combout
+> 14.489  +0.824  ShiftLeft2~47|combout
+> 15.893  +1.404  ShiftLeft2~60|combout
+> 18.342  +2.449  Add13~125|sumout        <- 64-bit carry chain, ~30 cells
+> 19.051  +0.709  max_byte_offset~54|combout
+> 21.212  +2.161  Add14~45|sumout
+> 21.964  +0.752  binding_fault_o~1|datad
+> ```
+>
+> That is `binding_row_legal()` — the packed-chain address bound — evaluated
+> combinationally on the freshly-read row. Registering the RAM output would buy
+> **0.192 ns**. The caution about M10K read latency was real and is not what
+> happened here; the honest reading is that the memory move cost essentially
+> nothing in time and the arithmetic hanging off it costs everything.
+>
+> **2. The resolver does not set Fmax. `zhao_raster_attrgrad_v2` does.**
+> `1 / (10.000 + 8.477) ns = 54.12 MHz` — exactly the reported figure, and
+> −8.477 is the **attrgrad → attrdiv** path, not a resolver path. Deleting
+> every one of the 515 RAM-sourced paths would leave the worst at −8.477 and
+> **Fmax would not move at all.** The resolver family is the biggest
+> *population* and dominates TNS; it is not the binder. The binder is a
+> 17.809 ns chain of long adders (`Add5` → `Add6` → …) from `row_r[0]` into
+> `attrdiv`'s `final_sat_r`, which is genuine arithmetic depth and needs
+> pipelining, not deletion.
+>
+> So the resolver work below is a **TNS and area** win. Reaching 100 MHz needs
+> every one of 2,000 paths under 10 ns, against a median bad-path delay of
+> 13.313 ns. That is a campaign, not two fixes, and this file should stop
+> implying otherwise.
+>
+> **Still NOT established: that the M10K move made the clock worse overall.**
+> There is no before-picture — the pre-change fit FAILED and produced no timing,
+> and map-only rows produce none by construction. What is established is where
+> the time goes NOW, and that the memory itself is not where it goes.
+>
+> *(The first two attempts at this table were wrong, and both in the flattering
+> direction. One reported every family ending at `gpu_clk`, which reads as "the
+> virtual-pin boundary dominates" and excuses the design; the other concluded
+> from a truncated header that the report had no destination column at all and
+> grouped on sources alone. The report has eight `;`-separated fields. Split on
+> the delimiter, do not pattern-match a line whose shape you guessed.)*
 >
 > ### BUILT AND MEASURED, same day. The trade is real.
 >

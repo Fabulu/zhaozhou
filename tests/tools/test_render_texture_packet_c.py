@@ -63,11 +63,19 @@ PACKET_C_SOURCES = (
 # Packet E legitimately changes the V3 implementation while preserving its public
 # schema; these hashes pin that refreshed authority. Shell/accounting bytes remain
 # the protected Packet-C values.
-    # Refreshed 2026-09-16 with the interface manifest: only the two source
-    # hashes in its closure moved (ENFORCED-BY comments in zhao_texture_v3own.sv
-    # and zhao_texture_uv_join.sv) plus the canonical hash derived from them.
-    # No port, parameter or elaboration value changed.
-INTERFACE_SHA256 = "3d70b8fad0c7648200b4d790f037ee04a4183edef945284e1ad0dd6255b25189"
+    # Refreshed 2026-09-18 for the M10K change to the binding resolver. The
+    # manifest holds 1,949 leaves before and after; exactly THREE moved, none
+    # added, none removed:
+    #   source_closure[21]  zhao_texture_binding_resolver_v2.sv -- the page
+    #                       banks moved from flip-flops into inferred M10K
+    #   tools/parser        its duplicate-marker fingerprint was re-pinned
+    #                       because that source moved (marker count still 105)
+    #   canonical_interface_sha256 -- derived from the two above
+    # No port, parameter or elaboration value changed, so the PUBLIC SCHEMA this
+    # constant exists to protect is untouched; only the provenance of the bytes
+    # behind it moved. That distinction is the whole reason to re-pin rather
+    # than to widen the assertion.
+INTERFACE_SHA256 = "8859f06686717edc5c29ca095250a6311024b8fd6f1eeb935c2d03d506fd595f"
 PACKET_B_TOP_SHA256 = "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c"
 PROTECTED_SHELL_SHA256 = "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
 PROD_TOP_SHA256 = "96121488fabef50e9c4c3181d038b64ce4450c84c2b48713383f06aab192ff61"
@@ -357,7 +365,22 @@ class PacketCClosureTests(unittest.TestCase):
             with self.subTest(path=path.relative_to(REPO)):
                 self.assertNotIn("zhao_raster_texture_stage_v3", path.read_text(encoding="utf-8"))
         fit_targets = (REPO / "design" / "fit_targets.yml").read_text(encoding="utf-8")
-        self.assertEqual(fit_targets.count("/zhao_raster_texture_stage_v3.sv"), 1)
+        # This asserted `count(...) == 1` until 2026-09-18, and that was the
+        # wrong instrument for the claim. `fit_targets.yml` is the
+        # CHARACTERISATION list, not a production closure -- the production
+        # claims are the two `assertNotIn`s above, against prod_fit_sources.txt
+        # and zhao_prod_top.sv, and those still hold. Counting occurrences
+        # across the whole file instead asserted "exactly one fit target names
+        # this stage", which is a statement about how many characterisation
+        # closures happen to contain it, and it went red the moment
+        # zhao_shell_top_v2 was registered -- a composed shell that genuinely
+        # instantiates the stage and must list it. Same category error as the
+        # one corrected in test_render_texture_packet_d.py.
+        #
+        # The claim worth holding is that the stage is not itself a fit TOP,
+        # because that is what "not adopted" means here.
+        self.assertNotIn("- top: zhao_raster_texture_stage_v3\n", fit_targets)
+        self.assertIn("/zhao_raster_texture_stage_v3.sv", fit_targets)
         validate_prod_top_bytes(prod_top.read_bytes())
         with self.assertRaises(AssertionError):
             validate_prod_top_bytes(prod_top.read_bytes() + b"\n")

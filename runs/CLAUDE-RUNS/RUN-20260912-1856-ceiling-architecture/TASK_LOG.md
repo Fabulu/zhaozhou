@@ -2332,3 +2332,105 @@ Two tool notes worth keeping:
   because Verilator 5.051 on Windows writes one unescaped separator.
 
 packet-b 88/88, packet-d 13/13, packet-e 26/26, packet-h 74/74.
+
+---
+
+## What binds the composed shell's clock: the answer, and two wrong turns on the way
+
+**In progress when I stopped:** the resolver fix below is DESIGNED but NOT YET
+WRITTEN. Next concrete step is in the last section.
+
+The `@packet-h-m10k` receipt is `ok` at 29,044 ALM and **54.12 MHz against a
+ruled 100**. Two things I wrote about it were wrong and are corrected here,
+because both were wrong in the flattering direction and this file is where that
+gets recorded.
+
+**Wrong turn 1: "the M10K read is on the critical path, so register the RAM
+output."** 515 of the 2,000 summarised negative paths do launch inside
+`altsyncram:page*_m_rtl_0`, which makes the story obvious and wrong. The path
+DETAIL says the RAM contributes `portbdataout[20]` at **+0.192 ns**. The other
+**16.0 ns is combinational logic downstream of the memory**: `read_row_c.mode`
+-> `Add8` -> `Add10` -> three `ShiftLeft2` stages -> a ~30-cell `Add13` carry
+chain -> `max_byte_offset` -> `Add14` -> `binding_fault_o`.
+
+Registering the RAM output would buy 0.192 ns. The summary table supports the
+comfortable diagnosis; only the detail refutes it.
+
+**Wrong turn 2: "the resolver binds the clock."** It does not.
+`1 / (10.000 + 8.477) ns = 54.12 MHz`, and **-8.477 is
+`zhao_raster_attrgrad_v2 -> zhao_raster_attrdiv_v2`**, a 17.809 ns chain of long
+adders from `row_r[0]` to `final_sat_r`. Delete every one of the 515
+RAM-sourced paths and Fmax does not move. The resolver family is the biggest
+POPULATION and dominates TNS; the attrgrad chain is the BINDER.
+
+### What the 16 ns actually is
+
+`binding_row_legal(read_row_c)` at line 481 -- the packed-chain address bound.
+It is a pure function of the 75-bit row: a 64-bit variable shift, a 64-bit add,
+a second variable shift, another add, an OR and a compare, re-evaluated
+combinationally on every read.
+
+And it is **already evaluated at write time**. Line 360:
+
+    else if (!cfg_row_i[74] || !binding_row_legal(cfg_row_i))
+      cfg_status_c = CFG_BAD_ROW;
+
+`cfg_write_c` is set only in the branch past that test, and lines 585/588 are
+the ONLY writers of `page0_m`/`page1_m` (checked, not assumed -- grepped every
+reference to both arrays). So every stored row is legal by construction, and on
+the read side `read_row_bad_c` reduces to `!read_row_present_q`: the second term
+cannot change the result.
+
+That is the `wq_overflow_o` shape from CLAUDE.md -- a guard unreachable while
+the guard upstream of it is correct. The repo's own rule says such a guard earns
+a committed mutant, not a deletion.
+
+### The fix, and why it is the owner's standing direction
+
+**Store the legality bit with the row** rather than recomputing it: widen the
+row 75 -> 76 bits, write `binding_row_legal(cfg_row_i)` at config time (already
+computed there), and make the read side test `read_row_c.legal`. This:
+
+* removes the entire shift/add cone from the read path -- 515 paths, ~-2,617 ns
+  of TNS;
+* removes one of TWO silicon copies of that arithmetic (an ALM saving as well);
+* keeps the detector structurally alive, so it still fires on a corrupted row;
+* costs 512 extra bits of M10K against 419 free blocks.
+
+Which is exactly the standing direction: *"we have lots of M10K memory, ALMs are
+over budget, what you can you need to solve with memory."* Lookup replacing
+computation, not state being relocated.
+
+**It is a TNS and area win, not an Fmax win.** Saying otherwise would be wrong
+turn 2 again. 100 MHz needs all 2,000 paths under 10 ns against a median bad
+path of 13.313 ns -- a campaign, and `attrgrad -> attrdiv` is its first target.
+
+### Four reds in the `fast` suite, three of them mine
+
+`ledger_check` is the known one. The other three were caused by this session:
+
+* **`raster_texture_v3_fit_top_generated_freshness`** -- the G8A manifest was
+  never regenerated after the resolver edit. Regenerated: exactly one row moved,
+  ordinal 26, the resolver. The documented trap, committed again.
+* **two stale `interface.json` pins** -- I refreshed packet D's and packet E's
+  in `357fd7ca` and missed packet C's and the G8A fit-top test's. Structural
+  diff of the manifest across that commit: 1,949 leaves before and after, **3
+  changed, 0 added, 0 removed** -- the resolver's source hash, the parser's
+  duplicate-marker fingerprint, and the canonical hash derived from both. No
+  port, parameter or elaboration value moved, so the public schema the constant
+  protects is intact. Both comments rewritten to say that; the old comment
+  described the PREVIOUS refresh and would have been a reassuring provenance
+  line attached to a fresh hash.
+* **packet C's `fit_targets.count(...) == 1`** -- the same category error already
+  corrected in packet D. `fit_targets.yml` is the characterisation list, not a
+  production closure; registering `zhao_shell_top_v2`, which genuinely
+  instantiates the stage, made the count 2. Now asserts the stage is not a
+  `- top:`, which is the claim that "not adopted" actually means. The production
+  assertions against `prod_fit_sources.txt` and `zhao_prod_top.sv` were passing
+  throughout and are untouched.
+
+### Next concrete step
+
+Write the 75 -> 76 bit row change in `zhao_texture_binding_resolver_v2.sv`, with
+a committed mutant that flips the stored bit so the read-side detector is SEEN
+to fire. Then re-fit. Do not claim an Fmax movement from it.

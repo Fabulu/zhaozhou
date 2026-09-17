@@ -57,11 +57,14 @@ PROTECTED = {
     "fpga/rtl/common/zhao_shell_top.sv":
         "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-    # Refreshed 2026-09-16 with the interface manifest: only the two source
-    # hashes in its closure moved (ENFORCED-BY comments in zhao_texture_v3own.sv
-    # and zhao_texture_uv_join.sv) plus the canonical hash derived from them.
-    # No port, parameter or elaboration value changed.
-        "3d70b8fad0c7648200b4d790f037ee04a4183edef945284e1ad0dd6255b25189",
+    # Refreshed 2026-09-18 for the M10K change to the binding resolver. The
+    # manifest holds 1,949 leaves before and after; exactly THREE moved, none
+    # added, none removed: the resolver's own source hash, the parser's
+    # duplicate-marker fingerprint (re-pinned because that source moved), and
+    # the canonical hash derived from both. No port, parameter or elaboration
+    # value changed. Kept byte-for-byte in step with the same constant in
+    # tests/tools/test_render_texture_packet_c.py.
+        "8859f06686717edc5c29ca095250a6311024b8fd6f1eeb935c2d03d506fd595f",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
         "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c",
 }
