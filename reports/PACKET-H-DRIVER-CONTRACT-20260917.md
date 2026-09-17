@@ -328,6 +328,35 @@ and evidence of nothing. It gets committed when it is actually the V2. The
 procedure is recorded here so the next attempt does not rediscover it: verify
 the hash, seed, rename both ends, lint, then swap both blocks together.
 
+## 3.9 The file exists
+
+*2026-09-17, last. `fpga/rtl/common/zhao_shell_top_v2.sv` is written.*
+
+2,506 lines, 27 instances, `-Wall` lint clean, `quartus_map` clean at 0
+errors, registered `excluded:not-yet-adopted`. `zhao_shell_top.sv` remains
+byte-identical at its protected hash.
+
+    map-only, 166 s:  63 DSP   422,084 memory bits   12 inferred memories
+                      62,709 estimated ALMs
+
+**That ALM figure invites a wrong comparison and should not get one.** It is a
+MAP ESTIMATE, not a fit, and this hierarchy composes the whole V3 texture
+island which the production shell does not select. It is a baseline for the
+next map, not a number to hold against the 30,000 closure target.
+
+All 57 new inputs have a driver or a stated reason, and
+`packet_h_tieoff_audit` enforces the difference: 19 literals in the shell, all
+declared, 0 silent. Seventeen of the nineteen are inherited verbatim from the
+protected V1 -- the tool separates them by diffing against that file, so an
+inherited decision is labelled as CARRIED rather than chosen.
+
+What the gate still wants, stated plainly: the old/new differential under
+paired traffic, the sequence-abort RELEASE control, and each of the five
+structural faults driven individually through the reset barrier. The file
+exists and elaborates; those are behaviour, and they are not claimed.
+
+---
+
 ## 4. What this does not say
 
 It does not say the shell is nearly written. Sections 3.1 through 3.4 are
