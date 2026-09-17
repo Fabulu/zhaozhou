@@ -2142,3 +2142,67 @@ taken on trust:
 
 Not acted on. The docket's three options and its recommendation stand; the
 choice is the owner's.
+
+---
+
+## 2026-09-18 — Packet H's composed fit, and two stale documents
+
+**IN FLIGHT WHEN THIS WAS WRITTEN:** `run_block_fit.ps1 -Module
+zhao_shell_top_v2 -RowLabel @packet-h-composed`, virtual pins, started after a
+clean map. **Next step when it returns: read ALMs against the 30,000 budget.**
+DSP is already answered at 63 against 85. If ALMs come in under budget the
+question is settled in the safe direction; if over, the row is INCONCLUSIVE
+(virtual pins inflate) and that is the case that justifies building the ten-pin
+instrument.
+
+### The session started from two stale documents and lost time to both
+
+* `G8B-T10-BLEND-STAGE-ATTEMPT-20260917.md` closed with "T10c — the design,
+  specified and NOT built". It HAD been built (`7459f5c7`), fitted
+  (`@g8b-t10c-pins`, 98.44 MHz) and followed by T11. **G8B is CLOSED at 102.19
+  MHz**, physical pins, zero TNS, `status: ok` (`861816b0`).
+* The roadmap carried "43.94 MHz" — its own first measurement — into a
+  paragraph written TODAY about what remains.
+
+Both are corrected in place with the correction visible rather than the text
+silently replaced. The lesson is narrow and worth keeping: **`reports/*.md`
+describing work in progress goes stale in the direction of asking somebody to
+REDO FINISHED WORK.** The receipts in `reports/synthesis/zhao_block_fit.json`
+and `git log` were right the whole time. Read receipts first, prose second.
+
+### Two real defects found on the way to the fit
+
+* **`.gitattributes` did not cover the shell-fit instrument's INPUTS.** The
+  generated wrapper embeds a sha256 of each raw input and the receipt fixture
+  binds them; `shell_fit_reports` hashes RAW BYTES. The OUTPUT was protected,
+  four of its five INPUTS were not, so any checkout on a machine with
+  `core.autocrlf` true moves the hashes. `git diff` reports the file unchanged
+  throughout — git normalises on read, a sha256 does not. Fixed, plus
+  `tests/tools/fixtures/** -text`, both verified by reproducing the
+  edit-then-checkout round trip.
+* **`SYNTHESIS=1` sat inside `run_block_fit.ps1`'s `-PhysicalPins` arm.** The
+  macro decides whether simulation-only regions are compiled at all and has
+  nothing to do with pin mode, so every VIRTUAL-pin fit elaborated them.
+  Invisible until a virtual-pin cone contained `zhao_texture_island_v3_top`,
+  whose DPI export lines Quartus rejects outright — this target is the first.
+  `run_block_map.ps1` already records hitting and fixing the identical three
+  errors in its own copy of that line.
+
+### The generator refactor landed, with its rebind
+
+`gen_shell_fit_top.py` is module-agnostic. It had to land as ONE commit with
+the regenerated wrapper and the rebound fixture, because the generator's sha256
+is bound in both — that coupling is why the earlier attempt was reverted.
+Verified: V1 regenerates byte-identically apart from its own hash line, and the
+rebind moved exactly four fields, checked by walking the whole document.
+Historical receipts under `reports/` were NOT rebound; they record real past
+measurements.
+
+### Still owed on Packet H
+
+The ten-pin characterization instrument, IF the composed row is inconclusive.
+`design/shell_fit_ports_v2.yml` would need 209 entries and six new
+protocol-aware stimulus drivers. The mask field is checked for EXACT equality
+against observed toggling by `shell_fit_smoke.py` — so a declaration cannot
+drift from its stimulus, but both being too narrow still passes, and that is
+where an understated area would hide.

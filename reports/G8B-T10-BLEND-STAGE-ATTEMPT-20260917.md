@@ -1,5 +1,33 @@
 # G8B T10 — the fourth blend stage, attempted and withdrawn
 
+> **SUPERSEDED 2026-09-17, later the same day. READ THIS FIRST.**
+>
+> **T10c was built, and G8B is CLOSED at 102.19 MHz.** Everything below is the
+> road to that, and the "specified and NOT built" section at the foot is no
+> longer true — commit `7459f5c7` built it, `@g8b-t10c-pins` measured **98.44
+> MHz** on physical pins, and T11 (`3dbd6439`, the viewport mux off the DSP's
+> input) took it the rest of the way:
+>
+> | receipt | seed | Fmax | TNS | status |
+> |---|---|---|---|---|
+> | `@g8b-t10c-pins` | 1 | 98.44 | −0.575 | failed:structure |
+> | `@g8b-t11-pins` | 1 | 98.90 | −0.175 | failed:structure |
+> | `@g8b-t11-pins-s2` | 2 | **102.19** | **0** | **ok** |
+> | `@g8b-t11-pins-s4` | 4 | 101.68 | 0 | **ok** |
+>
+> The closure is recorded in commit `861816b0`, which states the seed
+> dependence plainly rather than quoting the best row: two of three seeds
+> close, seed 1 misses by 111 picoseconds, and the design sits AT its criterion
+> with placement deciding the side.
+>
+> **THIS BANNER EXISTS BECAUSE THE DOCUMENT'S STALENESS COST REAL TIME.** On
+> 2026-09-18 a session read this file, believed its closing "specified and NOT
+> built", and planned a campaign to build something already committed. The
+> receipts database and `git log` had the answer the whole time. A report that
+> describes work in progress needs its final state written back into it, or it
+> becomes a confident instruction to redo finished work — this repository's
+> uncashed-cheque failure with the polarity reversed.
+
 *2026-09-17. Written so the next attempt starts from the diagnosis rather than
 from scratch. The RTL is reverted; `zhao_terrain_tess.sv` is unchanged.*
 
@@ -328,7 +356,11 @@ So the design space really is only:
 That second form is the one remaining candidate, and it is now the only one:
 the enumeration closes off the possibility that some other consumer was also
 at fault.
-## T10c — the design, specified and NOT built
+## T10c — the design, specified and SINCE BUILT (commit `7459f5c7`)
+
+*Heading corrected 2026-09-18. The specification below is what was built, and
+it worked: `@g8b-t10c-pins` 98.44 MHz, TNS −0.575, up from T8's 96.45 /
+−1.603. The banner at the top of this file has the full chain.*
 
 The enumeration leaves one candidate, and it is worth writing down precisely
 because it is simpler than any of the four that failed.
@@ -389,11 +421,17 @@ throughout and `terrain_tess_directed` 6,751 / `terrain_tess_modes_directed`
 33 / `terrain_pipe_differential` 37 are green from it.
 ## Status
 
+*Status as it stood when this file was written. Superseded — see the banner.*
+
 * RTL reverted; `zhao_terrain_tess.sv` is byte-identical to `b1dbb97d`, the
   commit `@g8b-t8-pins` measured, so that receipt still describes the tree.
 * `terrain_tess_directed` 6,751, `terrain_tess_modes_directed` 33,
   `terrain_pipe_differential` 37 — all green from the reverted tree.
 * **G8B stands at 96.45 MHz against its 100 MHz criterion.**
+
+**As of 2026-09-17 later: G8B stands at 102.19 MHz, physical pins, zero total
+negative slack, `status: ok`, and Packet I has the fit evidence its gate asks
+for.**
 
 One number worth keeping from the failed build: the cycle count moved 458 → 459
 for 128 triangles, i.e. the extra stage costs exactly one cycle of drain and

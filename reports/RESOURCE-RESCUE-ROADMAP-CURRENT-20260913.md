@@ -335,6 +335,17 @@ part of Packet I and never the whole of it.
 > 72/72). Packet I's blocker is therefore no longer Packet H's *absence* — it
 > is Packet H's remaining post-adoption composed FIT, plus G8B's own timing
 > campaign, which is the larger of the two by a wide margin at 43.94 MHz.
+>
+> **CORRECTED the same day: G8B is CLOSED at 102.19 MHz** (`@g8b-t11-pins-s2`,
+> physical pins, zero TNS, `status: ok`). The "43.94" above was this document's
+> own first measurement quoted back as if it were current — written after
+> reading `G8B-T10-BLEND-STAGE-ATTEMPT-20260917.md`, whose closing section said
+> the next step was "specified and NOT built" and which had never been updated
+> after that step was built, fitted and followed by T11. **The receipts in
+> `reports/synthesis/zhao_block_fit.json` and `git log` were right throughout.**
+> Prose describing work in progress goes stale in the direction of asking
+> somebody to redo finished work; the receipts do not. Packet I's only
+> remaining blocker is Packet H's composed fit.
 
 ### G8B CANNOT CLOSE PACKET I WHILE PACKET H IS MISSING
 
