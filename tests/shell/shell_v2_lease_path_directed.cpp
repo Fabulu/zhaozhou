@@ -727,11 +727,146 @@ int main(int argc, char** argv) {
           pubs_before, dut.publications_o);
     check(dut.ready_events_o == ready_before, "the faulted frame produces NO ready event",
           ready_before, dut.ready_events_o);
+    // NOTE THE ORDER, because this check reads as though the FAULT released
+    // the lease and it does not. The publication offer above is what released
+    // it -- a terminal event arriving on a lease already marked faulted. The
+    // reset-barrier case below holds a faulted lease for 400 cycles with no
+    // terminal and it stays live, which is how this was found.
     check(dut.lease_valid_o == 0, "the faulted lease is released", 0, dut.lease_valid_o);
     std::printf(
         "[shell_v2_lease_path] fault: latched %u->%u, publications held at %u, "
         "ready held at %u\n",
         faults_before, dut.faults_latched_o, dut.publications_o, dut.ready_events_o);
+  }
+
+  // =======================================================================
+  // THE RESET BARRIER RE-ARMS THE FAULT PATH
+  // =======================================================================
+  //
+  // The gate clause asks for the structural faults "each through the reset
+  // barrier", and the reason it is phrased that way is specific to this
+  // machine: every structural fault in the shell's OR is a STICKY LEVEL,
+  // cleared only by its local reset. A fault is therefore not an event the
+  // machine recovers from by itself -- once one is up, the OR is up forever,
+  // the edge detector will never see another rising edge, and every
+  // subsequent fault is invisible.
+  //
+  // That makes "it latched exactly once" a claim about ONE fault in the life
+  // of the machine. The property that matters for a console that has to keep
+  // running is the next one: after reset, the latch is clear, the level is
+  // down, and the path can fire AGAIN. A machine that faults once and then
+  // silently stops reporting is indistinguishable, from the counter, from a
+  // machine that never faults again.
+  //
+  // This is also the only way the six terms are individually meaningful. They
+  // are not separately reachable from a quiescent bin pipe -- the test above
+  // says so, and injecting six force bits into one OR would be six copies of
+  // one test, not six tests. What IS checkable is that the aggregate path is
+  // re-armable, and `packet_h_fault_or_parity` carries the other half: that
+  // the shell's OR names exactly the terms the harness's does.
+  {
+    const uint32_t faults_at_reset = dut.faults_latched_o;
+    check(faults_at_reset > 0, "a fault was latched before the reset barrier", 1,
+          faults_at_reset > 0);
+
+    dut.rst_n = 0;
+    dut.vid_rst_n = 0;
+    dut.frame_req_valid_i = 0;
+    dut.fault_inject_valid_i = 0;
+    dut.term_valid_i = 0;
+    for (int i = 0; i < 16; ++i) tick(dut);
+
+    check(dut.faults_latched_o == 0, "reset clears the latched fault count", 0,
+          dut.faults_latched_o);
+    check(dut.lease_valid_o == 0, "reset leaves no live lease", 0, dut.lease_valid_o);
+
+    dut.rst_n = 1;
+    dut.vid_rst_n = 1;
+    dut.eval();
+
+    // The whole reset epoch runs again from scratch: the CDC raises both
+    // barrier-done chains, the bridge opens the gate, and the binner redoes
+    // its cold init before the lease will admit anything. Nothing here drives
+    // any of that -- driving the barriers directly is what once made the
+    // barrier-closed case open in zero cycles and pass for no reason.
+    const int to_reopen = wait_for(
+        dut, [&] { return dut.lease_open_o != 0; }, 8000);
+    check(to_reopen >= 0, "the barrier reopens after the reset", 1, to_reopen >= 0);
+    const int to_reinit = wait_for(
+        dut, [&] { return dut.bin_initialized_o != 0; }, 8000);
+    check(to_reinit >= 0, "the binner redoes its cold init", 1, to_reinit >= 0);
+
+    dut.frame_ready_i = 1;
+    dut.frame_req_valid_i = 1;
+    dut.frame_req_mode_i = 1;
+    const int to_lease3 = wait_for(
+        dut, [&] { return dut.lease_valid_o != 0; }, 8000);
+    check(to_lease3 >= 0, "a lease is granted after the reset barrier", 1, to_lease3 >= 0);
+    dut.frame_req_valid_i = 0;
+
+    const uint32_t pubs_before = dut.publications_o;
+    const uint32_t faults_before = dut.faults_latched_o;
+    check(faults_before == 0, "no fault is latched on the re-armed machine", 0,
+          faults_before);
+
+    // THE SECOND FAULT, on the second lease, after the barrier. If the level
+    // had stayed up across reset this would latch nothing at all.
+    dut.fault_inject_writer_i = 1;
+    dut.fault_inject_slot_i = dut.lease_slot_o;
+    dut.fault_inject_generation_i = dut.lease_generation_o;
+    dut.fault_inject_valid_i = 1;
+    for (int i = 0; i < 6; ++i) tick(dut);
+    dut.fault_inject_valid_i = 0;
+    for (int i = 0; i < 8; ++i) tick(dut);
+
+    check(dut.faults_latched_o == faults_before + 1,
+          "a fault AFTER the reset barrier is latched, exactly once",
+          faults_before + 1, dut.faults_latched_o);
+    check(dut.lease_fault_o == 1, "the second lease is marked faulted", 1,
+          dut.lease_fault_o);
+    // THE FAULT ALONE DOES NOT RELEASE THE LEASE, and finding that out here
+    // corrects what the first fault case appeared to show. That case injected
+    // the fault, then offered a publication, then checked `lease_valid_o == 0`
+    // -- so the release read as a consequence of the FAULT when it is actually
+    // a consequence of the TERMINAL EVENT arriving on a lease already marked
+    // faulted. Waiting 400 cycles here with no terminal offer releases nothing.
+    //
+    // Which is correct behaviour, and better behaviour than the reading it
+    // replaces: a fault does not abandon the slot on its own, because the
+    // writer may still be mid-transfer into it. The terminal event is what
+    // says the writer is finished, and only then is the slot safe to retire.
+    // The fault decides the frame is not PUBLISHED; the terminal decides the
+    // lease is DONE.
+    check(dut.lease_valid_o == 1,
+          "the faulted lease is still held until its terminal arrives", 1,
+          dut.lease_valid_o);
+
+    dut.term_slot_i = static_cast<uint8_t>(dut.lease_slot_o);
+    dut.term_generation_i = dut.lease_generation_o;
+    dut.term_publish_i = 1;
+    dut.term_fault_i = 0;
+    dut.term_valid_i = 1;
+    for (int i = 0; i < 200; ++i) {
+      if (dut.term_valid_i && dut.term_ready_o) {
+        tick(dut);
+        dut.term_valid_i = 0;
+        dut.eval();
+        break;
+      }
+      tick(dut);
+    }
+    const int to_release = wait_for(
+        dut, [&] { return dut.lease_valid_o == 0; }, 400);
+    check(to_release >= 0, "the second faulted lease is released", 1,
+          to_release >= 0);
+    check(dut.publications_o == pubs_before,
+          "the second faulted frame produces NO publication", pubs_before,
+          dut.publications_o);
+    std::printf(
+        "[shell_v2_lease_path] reset barrier: latched %u -> cleared -> %u, "
+        "reopen %d cycles, re-init %d, lease %d, release %d\n",
+        faults_at_reset, dut.faults_latched_o, to_reopen, to_reinit, to_lease3,
+        to_release);
   }
 
   std::printf(
