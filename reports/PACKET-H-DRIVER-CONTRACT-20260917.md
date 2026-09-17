@@ -102,6 +102,31 @@ ranges written eighty lines apart.
 
 ### 3.1 V3 programming: config, palette, page generation (20)
 
+> **DECIDED 2026-09-17: new shell top-level ports, passed straight through,
+> named exactly as the V2 blocks name them.** Not a new op space in
+> `zhao_cmd_scheduler`.
+>
+> The reasons, in order of weight. The historical shell's entire configuration
+> surface is already top-level and harness-driven — its own header says
+> *"harness = HPS, D10"*, and `hps_*`, `pad_*` and the FRAME_RING view all
+> arrive that way; a programming channel that arrives differently from every
+> other one would be the odd thing to explain. A command-stream decoder is a
+> second design with its own ABI, its own ledger ops and its own tests, and
+> **Packet H's gate does not ask for one** — inventing it inside this packet is
+> how a packet stops closing. And the sibling is registered
+> `excluded:not-yet-adopted`: it is a candidate being measured, so the
+> programming sequence belongs under test control where the gate's
+> owner-and-hierarchy census can see it.
+>
+> **Cheap to reverse, which is the point.** A decoder inserted later sits
+> *behind* these same ports and changes nothing the V2 blocks see. If the
+> decision is wrong it costs one instantiation, not a re-plumb.
+>
+> It does carry a real cost and it should be said plainly: it is about twenty
+> more top-level ports on an already large module, and the Packet-H gate's
+> *"every new port is connected"* clause will be checked against every one of
+> them.
+
 ```
 cfg_{valid,op,page_generation,selector,row,crc32}_i, cfg_rsp_ready_i
 pal_load_{valid,op,slot,idx,rgb565,gen,crc_ok}_i
@@ -208,6 +233,47 @@ largest clause of the gate is transcription plus judgement rather than
 invention. Worth stating that bit 0 looked dead on a first read — assigned only
 in reset in the lines that were on screen — and is not: it is set three times in
 the setup state machine forty lines up.
+
+## 3.8 The two swaps cannot land separately
+
+*Established 2026-09-17 by trying to do the smaller one first.*
+
+The obvious way to start the file is one swap at a time: put
+`zhao_video_slotmgr_v2` and the lease organs in, keep `zhao_geom_bin_pipe`,
+lint, commit, then do the bin pipe. **It does not work, and the reason is not
+tidiness.**
+
+`zhao_renderer_lease_v2` holds `frame_fault_clear_valid_o` in `ST_CLEAR` and
+does not admit the frame until the handshake completes. **The V1 bin pipe has no
+clear port at all** — it is one of the 43 inputs the V2 adds. So with the V1 bin
+pipe retained the clear has no consumer, the lease never leaves `ST_CLEAR`, and
+no frame is ever admitted. That is a deadlock, not a tie-off, and it would
+present as "the sibling shell renders nothing" with every block innocent.
+
+`ZHAO_RENDERER_LEASE_CLEAR_REQUIRED` exists and would skip the clear. It is a
+mutant seam; using it to make an intermediate commit lint is changing shipped
+behaviour with a macro to get past a checkpoint, which is the opposite of what
+the seam is for.
+
+**So Packet H's shell is one landing, and the increments have to happen in the
+harness rather than in the file.** That is what
+`tests/shell/zhao_shell_v2_lease_path.sv` is for, and why the next step is to
+compose `zhao_geom_bin_pipe_v2` into it and exercise the frame-clear ordering —
+a named clause of the gate that nothing currently tests.
+
+### What the seeding step did establish
+
+The file was seeded once from `zhao_shell_top.sv` — hash-verified against the
+protected `00fdd238...5450783` first, so the sibling could only ever derive from
+the version everything else was measured against — renamed at both ends, and it
+**lints clean at 59 modules**. So the eighteen untouched instances transplant
+without damage and the baseline is sound.
+
+The seed was then **deleted rather than committed**, because a sibling that is
+byte-identical to a protected file except for its name is two shells to maintain
+and evidence of nothing. It gets committed when it is actually the V2. The
+procedure is recorded here so the next attempt does not rediscover it: verify
+the hash, seed, rename both ends, lint, then swap both blocks together.
 
 ## 4. What this does not say
 
