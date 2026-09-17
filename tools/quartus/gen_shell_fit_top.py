@@ -47,6 +47,25 @@ DEFAULT_POLICY = Path("design/shell_fit_ports.yml")
 DEFAULT_PACKET = Path("tests/tools/fixtures/shell_fit_frame_blit.bin")
 DEFAULT_RTL = Path("fpga/rtl/generated/zhao_shell_fit_top.sv")
 DEFAULT_MANIFEST = Path("fpga/rtl/generated/zhao_shell_fit_top.manifest.json")
+# THE THREE MODULE NAMES, so this generator can instrument a shell other than
+# the historical one. Packet H's sibling needs the same ten-pin treatment and
+# for the same reason -- 209 ports is far past the device's user I/O, so there
+# is no physical-pin fit of either shell.
+#
+# Module-level rather than threaded through a dozen signatures, deliberately:
+# this file produces a committed, byte-exact artifact whose sha256 is bound
+# into the receipt fixture, so a wide refactor to carry three strings is a
+# large risk for a small gain. `main()` sets them once, before anything reads
+# them.
+#
+# The V1 defaults must keep producing byte-identical output apart from the
+# embedded `generator-sha256`, which necessarily moves because the generator
+# moved. That is the check to run after touching this, and the fixture rebind
+# is part of the same commit -- they cannot land separately.
+SHELL_MODULE = "zhao_shell_top"
+FIT_TOP_MODULE = "zhao_shell_fit_top"
+FIT_STIM_MODULE = "zhao_shell_fit_stimulus"
+
 GENERATOR_SCHEMA = 1
 TRAFFIC_PROFILE = "shell-fit-legal-ish-v1"
 HANDLER_INPUT_PORTS: Mapping[str, tuple[str, ...]] = {
@@ -531,7 +550,7 @@ def _render_stimulus(
     for port in driven:
         port_lines.append(_module_port(port, "output", port.name, preserve=True).strip())
     lines = [
-        "module zhao_shell_fit_stimulus",
+        f"module {FIT_STIM_MODULE}",
         "  import zhao_pkg::*, zhao_abi_pkg::*;",
         "(",
         ",\n".join(f"  {line}" if not line.startswith("  ") else line for line in port_lines),
@@ -1585,7 +1604,7 @@ def _render_top(
         f"// packet-rom-sha256: {hashes['packet']}",
         "// Traffic is deterministic legal-ish characterization stimulus, not an HPS/SDRAM model.",
         "",
-        "module zhao_shell_fit_top",
+        f"module {FIT_TOP_MODULE}",
         "  import zhao_pkg::*, zhao_abi_pkg::*;",
         "(",
         "  input  logic       gpu_clk,",
@@ -1633,7 +1652,7 @@ def _render_top(
                 )
         lines.extend(["  end", ""])
 
-    lines.extend(["  zhao_shell_fit_stimulus u_stimulus ("])
+    lines.extend([f"  {FIT_STIM_MODULE} u_stimulus ("])
     stimulus_connections = [".gpu_clk(gpu_clk)", ".rst_n(rst_n)"]
     for name in feedback_ports:
         port = next(port for port in declaration.ports if port.name == name)
@@ -1657,7 +1676,7 @@ def _render_top(
     for port in declaration.ports:
         signal = port.name if port.name in {"gpu_clk", "vid_clk", "audio_clk", "rst_n"} else f"shell_{port.name}"
         shell_connections.append(f".{port.name}({signal})")
-    lines.append("  zhao_shell_top u_shell (")
+    lines.append(f"  {SHELL_MODULE} u_shell (")
     for index, connection in enumerate(shell_connections):
         lines.append(f"    {connection}{',' if index + 1 < len(shell_connections) else ''}")
     lines.extend(["  );", ""])
@@ -1740,16 +1759,16 @@ def _render_top(
         )
     manifest: dict[str, object] = {
         "schema_version": GENERATOR_SCHEMA,
-        "module": "zhao_shell_fit_top",
+        "module": FIT_TOP_MODULE,
         "shell_module": declaration.module_name,
         "shell_instance": "u_shell",
         "traffic_profile": policy.traffic_profile,
         "hierarchy": {
-            "top": {"module": "zhao_shell_fit_top", "instance": None},
+            "top": {"module": FIT_TOP_MODULE, "instance": None},
             "required_children": [
-                {"module": "zhao_shell_top", "instance": "u_shell", "role": "shell"},
+                {"module": SHELL_MODULE, "instance": "u_shell", "role": "shell"},
                 {
-                    "module": "zhao_shell_fit_stimulus",
+                    "module": FIT_STIM_MODULE,
                     "instance": "u_stimulus",
                     "role": "stimulus",
                 },
@@ -1853,7 +1872,7 @@ def render_artifacts(
     type_signedness = discover_type_signedness(package_text)
     declaration = parse_module_declaration(
         shell_text,
-        "zhao_shell_top",
+        SHELL_MODULE,
         type_widths=type_widths,
         type_signedness=type_signedness,
     )
@@ -1949,6 +1968,11 @@ def _parser() -> argparse.ArgumentParser:
     action.add_argument("--write", action="store_true", help="atomically replace generated artifacts")
     parser.add_argument("--repo-root", type=Path, default=DEFAULT_REPO)
     parser.add_argument("--shell", type=Path, default=DEFAULT_SHELL)
+    parser.add_argument("--module", default=SHELL_MODULE,
+                        help="shell module inside --shell (default: %(default)s)")
+    parser.add_argument("--name-prefix", default="zhao_shell_fit",
+                        help="generated wrapper is <prefix>_top and "
+                             "<prefix>_stimulus (default: %(default)s)")
     parser.add_argument("--package", type=Path, default=DEFAULT_PACKAGE)
     parser.add_argument("--policy", type=Path, default=DEFAULT_POLICY)
     parser.add_argument("--packet", type=Path, default=DEFAULT_PACKET)
@@ -1959,6 +1983,16 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+
+    # Set before anything reads them. `--module` names the shell being
+    # instrumented; the wrapper and its stimulus take their names from
+    # `--name-prefix` so two generated instruments can coexist in one tree
+    # without declaring duplicate modules.
+    global SHELL_MODULE, FIT_TOP_MODULE, FIT_STIM_MODULE
+    SHELL_MODULE = args.module
+    FIT_TOP_MODULE = f"{args.name_prefix}_top"
+    FIT_STIM_MODULE = f"{args.name_prefix}_stimulus"
+
     repo = args.repo_root.resolve()
     shell = _resolve(repo, args.shell)
     package = _resolve(repo, args.package)

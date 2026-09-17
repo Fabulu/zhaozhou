@@ -738,7 +738,7 @@
     },
     "generator": {
       "path": "tools/quartus/gen_shell_fit_top.py",
-      "sha256": "8b10ce7065e0ce145a15e8e81ed8f3d4552cdc103c7e44c518de171f460d32c4"
+      "sha256": "8b77cf81a297f7ca033b0b62ccde87f9e2abf0c5312566da3328b7d891e3c3db"
     },
     "gitCapture": {
       "path": "tools/quartus/capture_shell_fit_git.py",
@@ -797,7 +797,7 @@
   "sourceHashes": {
     "cmake": "14594683cced56441645516c6d488185427c284e0b64d8d2484c1dcaade60cbd",
     "evidenceParser": "07644dba20574d7bbf34a14092b53598ba32831ad7c8b11ba5b17aba8a18cdcf",
-    "generator": "8b10ce7065e0ce145a15e8e81ed8f3d4552cdc103c7e44c518de171f460d32c4",
+    "generator": "8b77cf81a297f7ca033b0b62ccde87f9e2abf0c5312566da3328b7d891e3c3db",
     "gitCapture": "24e128fb8dac00c63774ee3be65775e9a7021e82859dcc890d01fb8632ebbff0",
     "packageFile": "a0d8247e8562b4fd9a741d3ffd6f3480c1aeeb3426e713fff1d01e7bf1ccc70f",
     "packet": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51",
