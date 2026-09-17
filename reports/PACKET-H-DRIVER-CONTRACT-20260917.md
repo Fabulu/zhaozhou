@@ -16,8 +16,8 @@ zhao_video_slotmgr  ->  zhao_video_slotmgr_v2     22 ports -> 74
 Ports are not the work, though. **Inputs are the work**, because every one of
 them is a wire somebody has to decide the source of, and an input nobody
 decided about is a `PINMISSING` at the next fit or — worse — a tie-off that
-looks deliberate. There are **57 new inputs**. Nineteen now have a producer.
-The other thirty-eight are this packet.
+looks deliberate. There are **57 new inputs**. Forty-five now have a driver.
+The other twelve are what is left.
 
 ---
 
@@ -98,9 +98,31 @@ ranges written eighty lines apart.
 
 ---
 
-## 3. The thirty-eight, grouped by where they have to come from
+## 3. The groups, and where each one now stands
 
-### 3.1 V3 programming: config, palette, page generation (20)
+### 3.1 V3 programming: config, palette, page generation (20) -- WIRED 2026-09-17
+
+> **All twenty are exposed at the shell boundary and a legal sequence runs
+> through the composed bin pipe**: palette BEGIN, 256 writes, END, then config
+> BEGIN / ROW / END with every response status checked.
+>
+> **The END op refused it, and that is the result worth having.** With
+> `cfg_crc32_i` at zero the block answers `CFG_BAD_CRC` (status 5) and
+> activates no page generation. END seals the table and the seal is enforced --
+> the channel is not a pipe that accepts whatever it is handed.
+>
+> **What this packet still owes:** a correct seal, which is the CRC32C fold
+> over the exact programmed rows. The test asserts the REFUSAL rather than a
+> fabricated success, so the debt is visible instead of hidden behind a green
+> check.
+>
+> And a note that reads like a finding but is not quite one: the V3 fit top
+> programs with `cfg_crc_w = 32'd0` too and records the non-zero status into
+> `setup_fault_cause_q[0]`. It is a fit harness, so an unactivated binding
+> table does not change the area and timing it measures -- but nobody should
+> read its green as evidence that a table ever activated.
+
+**Original entry:**
 
 > **DECIDED 2026-09-17: new shell top-level ports, passed straight through,
 > named exactly as the V2 blocks name them.** Not a new op space in

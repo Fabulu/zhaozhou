@@ -419,12 +419,12 @@ structurally blind here, since pack and unpack read the same constants.
 **WHAT REMAINS, counted rather than estimated.**
 `tools/design/packet_h_driver_contract.py` computes it and
 `reports/PACKET-H-DRIVER-CONTRACT-20260917.md` is that output with judgement
-applied. There are **57 new inputs** across the two swapped blocks. Nineteen have
+applied. There are **57 new inputs** across the two swapped blocks. Forty-five have
 organ drivers and are composed and tested today. The rest:
 
 | group | inputs | what it needs |
 |---|---:|---|
-| V3 config / palette / page-generation programming | 20 | a channel the historical shell does not have at all |
+| V3 config / palette / page-generation programming | 20 | **WIRED** -- legal sequence runs; the seal (CRC32C) is still owed |
 | Packet-D attribute carriage (`tri_*`) | 7 | check `zhao_geom_wcache`'s payload width first |
 | Packet-E ENGINE1 share (`fill_*`) | 4 | `fill_refused_i` is already ruled: typed recoverable path only |
 | structural fault entry (`fault_*`) | 4 | **DONE** -- wired, edge-detected, tested |
