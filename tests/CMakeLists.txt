@@ -7141,6 +7141,17 @@ set_tests_properties(lint_shell_top PROPERTIES
 # authored ones. A generated file nobody regenerates is a stale file with a
 # reassuring provenance line at the top, and this session lost an hour to
 # exactly that failure in two separate reports.
+# Packet H's composed-fit rows get a receipt law, as G8B's already had. It
+# enforces the condition a row must satisfy the moment it is stamped `ok` --
+# clean tree, DSP inside the ruled 85 -- and deliberately does NOT gate on the
+# 30,000-ALM target, which is a whole-machine number that this composition is
+# only a part of.
+add_test(NAME packet_h_composed_receipt
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tests/tools/test_packet_h_composed_receipt.py -q)
+set_tests_properties(packet_h_composed_receipt PROPERTIES
+  LABELS "fast;lint;packet-h" TIMEOUT 120)
+
 add_test(NAME packet_h_fit_ports_v2_fresh
   COMMAND ${Python3_EXECUTABLE}
           ${CMAKE_SOURCE_DIR}/tools/quartus/gen_shell_fit_ports_v2.py --check)
