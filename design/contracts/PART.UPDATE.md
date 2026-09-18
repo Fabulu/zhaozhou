@@ -1,5 +1,26 @@
 # Contract — PART.UPDATE (Particle update)
 
+> ## SUPERSEDED NUMERIC LAW — READ BEFORE ANY Q-FORMAT SENTENCE BELOW
+>
+> **This contract describes the particle position and velocity scales as an open
+> Class-C question. They were ruled.** Amendment C2 (2026-09-02, `QFMT_VERSION`
+> 2 → 3, owner ruling R3 of
+> `reports/OWNER-RULINGS-BUILDABILITY-20260902.md`) replaced `spec/qformats.md`
+> §10 whole:
+>
+> | | what this contract still implies | C2 (binding) |
+> |---|---|---|
+> | position | unruled, Class C | **s18, S 9.8 m**, LSB 1/256, relative to the population origin |
+> | velocity | unruled, Class C | **s11, S 2.8 m/tick**, LSB 1/256 |
+>
+> Both carry the same eight fractional bits, so integration is `pos + vel` with
+> no shift — which is the fact a reader of the stale text would go looking for
+> and not find.
+>
+> `PART.EXPAND.md` and `PART.SOFT.md` already carry a banner of this shape.
+> These two did not, which is why a block was built in September 2026 citing
+> "the scale is unruled" as its reason for doing nothing.
+
 > Ledger: `design/blocks.yml` · owner ZH-062 · phase 10 · maturity SPECIFIED
 
 ## Purpose and exclusions

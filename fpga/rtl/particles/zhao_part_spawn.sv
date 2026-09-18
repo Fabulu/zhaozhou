@@ -29,13 +29,25 @@
 // ---------------------------------------------------------------------------
 // WHAT IT DELIBERATELY DOES NOT DO, AND WHY
 // ---------------------------------------------------------------------------
-// It does NOT compute child physics. The contract is explicit that child
-// position and velocity are "derived from the parent's, in the same formats,
-// subject to the same open Class-C scale question recorded in PART.UPDATE" --
-// i.e. the scale is UNRULED. So the derivation here is IDENTITY, behind two
-// named knobs (CHILD_POS_FROM_PARENT / CHILD_VEL_FROM_PARENT) that exist so the
-// ruling can be applied in one place when it lands. Inventing an offset now
-// would be authoring the Class-C decision in RTL, where nobody would find it.
+// It does NOT compute child physics. The derivation here is IDENTITY, behind two
+// named knobs (CHILD_POS_FROM_PARENT / CHILD_VEL_FROM_PARENT).
+//
+// CORRECTED 2026-09-18. This header first justified that by quoting the
+// contract -- child position and velocity are "subject to the same open Class-C
+// scale question recorded in PART.UPDATE" -- and concluding the scale is
+// unruled. **The scale is ruled.** Amendment C2 (2026-09-02, QFMT_VERSION 2->3,
+// owner ruling R3) replaced spec/qformats.md SS10 whole and pins position to
+// s18 S 9.8 m and velocity to s11 S 2.8 m/tick. PART.SPAWN.md and PART.UPDATE.md
+// were both written before that and still describe the pre-C2 status;
+// PART.EXPAND.md and PART.SOFT.md carry a SUPERSEDED banner and these two do not.
+//
+// Identity is still correct, for a DIFFERENT and better reason: the contract
+// specifies no derivation at all. It says the child's own behaviour is its
+// species descriptor's and that "this block only places it into the stream".
+// A scale being ruled does not tell anyone what offset a child gets from its
+// parent, so inventing one here would still be authoring physics in the block
+// the contract says does not own it. The knobs stay because when a derivation IS
+// ruled it belongs in one named place.
 //
 // It owns NO memory (contract: "None. Children are appended into PART.STATE's
 // write stream; that block owns the buffers. The species table is read as a
