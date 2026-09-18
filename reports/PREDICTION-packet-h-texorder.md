@@ -57,3 +57,96 @@ mechanism as well.
 **If ALM rises by much more than 600**, the pairwise table is being built for
 all sixteen ordered pairs rather than the six distinct ones, and the loop
 should be written to exploit symmetry.
+
+---
+
+# RESULT: `@packet-h-texorder`, commit 709e22a8, clean tree, 89 sources
+
+```
+ALM 27,636   DSP 63   M10K 136   registers 37,578   1,592.8 s   status ok
+gpu_clk 79.74 MHz   worst -2.540   TNS -2,077.4   hold +0.243
+fmaxByClock: gpu_clk 79.74 | audio_clk 89.27 | vid_clk 104.87
+gatingClock gpu_clk   gatingFmaxMhz 79.74   gatingPeriodNs 12.54
+```
+
+**The new receipt fields work.** `gatingFmaxMhz` reads 79.74 and agrees with
+Quartus's own `gpu_clk` line to the digit, and `fmaxByClock` carries all three
+domains — so this row can be read correctly without the `.sta.rpt` beside it.
+This is also the first row where `fmaxClock` and `gatingClock` agree again,
+because the render path is once more the slowest thing in the design.
+
+## Scorecard: the two STRUCTURAL predictions were right, three of four NUMBERS were wrong
+
+| # | predicted | measured | |
+|---|---|---|---|
+| 1 | `valid_r` leaves the band decisively | **53 paths → 0**, better than the -1.369 floor | yes |
+| 2 | the rq family improves ~0.9 ns | `h_d_q` 42, `s_d_q` 37, `lcnt_q` 22, `rp_q` 7, `h_v_q`/`s_v_q` 3 — **all gone** | yes |
+| 3 | worst -2.0 to -2.2, **82–84 MHz** | **-2.540, 79.74 MHz** | **missed, worse** |
+| 4 | ALM 27,800–28,200 | **27,636** (+53) | **missed, better** |
+| 5 | DSP 63, M10K 136 unchanged | 63, 136 | yes |
+| 6 | TNS -800 to -1,400 | **-2,077** | **missed, worse** |
+
+**164 of the 200 printed paths left the window.** Both fixes did exactly what
+they were built to do, and the clock moved 1.94 MHz.
+
+## Why the gain was small, and it is the mulstage pattern again
+
+The wall is now a **single path** at -2.540: an `altsyncram` port-B write-enable
+register in `zhao_texture_frag_expand_v2`'s fragment memory, into
+`zhao_texture_binding_resolver_v2`'s `read_row_present_q`. At
+`@packet-h-satstage` that same endpoint was **-2.048**. It got 0.492 ns WORSE
+while everything around it improved.
+
+That is the third time in this campaign: remove a dominant tier and a straggler
+inherits the gate, degraded, because the fitter stops spending placement on it.
+`base_min_y0_r` did it to `final_sat_r`, `final_sat_r` did it to the texture
+band, and now the texture band has done it to a single RAM write-enable.
+
+**Prediction 4 is the same effect seen from the other side.** I forecast ALM up
+27,800–28,200 on the reasoning that both changes trade area for depth. It came
+in at 27,636, +53. The pairwise table and the four parallel fence lookups cost
+almost nothing — because the fitter, freed of the paths it had been fighting,
+spent less elsewhere.
+
+## The band is now flat, which changes what a fix is worth
+
+200 paths between **-2.540 and -1.369**. There is no tier left to remove: the
+worst endpoint owns ONE path, the second owns 26, and nothing owns more than 32.
+**From here each fix buys a fraction of a MHz unless several land together**, and
+the honest projection is that 79.74 → 100 MHz is a campaign of many small cones
+rather than three more big ones.
+
+## The next four, all named from this receipt
+
+| slack | n | from → to |
+|---:|---:|---|
+| -2.540 | 1 | `fragment_m` RAM port-B write enable → `binding_resolver_v2|read_row_present_q` |
+| -2.025 | 26 | `tile_pipe|plane_dndx_q[2][27]` → `attrgrad|mul_x_r[83]` |
+| -1.982 | 1 | `fragment_m` RAM port-B write enable → `aux_pipe_v2|a0_input_fault_q` |
+| -1.954 | 1 | `binner|d_meta_r[236]` → `attrgrad|st_r.S_IDLE` |
+
+**`mul_x_r` at 26 paths is the largest group, and it is my own multiply split
+coming back.** Having given the two multiplies their own edge, the multiply
+itself is now the cost:
+
+```systemverilog
+// zhao_raster_attrgrad_v2.sv:112, with job_min_x_i declared signed [11:0]
+mul_x_c = dndx_in_c * 96'(job_min_x_i);
+```
+
+**A 96x96 signed multiply in which one operand is provably 12 bits.**
+SystemVerilog context-determines both operands to 96, so writing it more
+narrowly does not help — the fix is to express the product explicitly at its
+true width, and this repository has already done that once: D1's offender 1 was
+solved with *"registered steps (r4) + CSD columns (r8)"*. A 12-bit multiplier in
+CSD form is about six partial products rather than a 96-wide array.
+
+That is the next cone, and unlike cones 1–3 it is arithmetic restructuring with
+a bit-exactness obligation, so it needs the differential
+(`raster_attrgrad_dsp3_diff`) watching it — which is exactly what that
+differential is for and why the tree change earlier in this campaign could lean
+on it.
+
+**And cone 3 is still uncashed**: it is committed, it removes `walk_q_r`, and
+`walk_q_r` is now at -1.780 — *below* all four of the above. So cone 3 alone
+will not move the clock either. It goes in with whatever comes next.

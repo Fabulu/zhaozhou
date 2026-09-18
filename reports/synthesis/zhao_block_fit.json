@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "3e467e4794aefe2d9aecd9371aa8178fbc859991",
+    "newestRunCommit":  "709e22a8f7cd8957d39af1783478067d393ea76d",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1752,6 +1752,55 @@
                        "setupSlackNs":  -2.853,
                        "setupTnsNs":  -2276.383,
                        "holdSlackNs":  0.086,
+                       "holdTnsNs":  0
+                   },
+                   {
+                       "module":  "zhao_shell_top_v2@packet-h-texorder",
+                       "status":  "ok",
+                       "sourceCommit":  "709e22a8f7cd8957d39af1783478067d393ea76d",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "aa79f7ba2f27d1028af50dcac2f03bb933a05b21022ae2bee2281ef826f9f342",
+                       "variantOf":  "zhao_shell_top_v2",
+                       "seconds":  1592.8,
+                       "sourcesHashed":  89,
+                       "alms":  27636,
+                       "registers":  37578,
+                       "blockMemoryBits":  465488,
+                       "ramBlocks":  136,
+                       "dspBlocks":  63,
+                       "virtualPins":  5358,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  79.74,
+                       "fmaxClock":  "gpu_clk",
+                       "fmaxByClock":  [
+                                           {
+                                               "clock":  "gpu_clk",
+                                               "fmaxMhz":  79.74,
+                                               "restrictedMhz":  79.74
+                                           },
+                                           {
+                                               "clock":  "audio_clk",
+                                               "fmaxMhz":  89.27,
+                                               "restrictedMhz":  89.27
+                                           },
+                                           {
+                                               "clock":  "vid_clk",
+                                               "fmaxMhz":  104.87,
+                                               "restrictedMhz":  104.87
+                                           }
+                                       ],
+                       "setupSlackNs":  -2.54,
+                       "setupTnsNs":  -2077.392,
+                       "gatingClock":  "gpu_clk",
+                       "gatingFmaxMhz":  79.74,
+                       "gatingPeriodNs":  12.54,
+                       "holdSlackNs":  0.243,
                        "holdTnsNs":  0
                    },
                    {

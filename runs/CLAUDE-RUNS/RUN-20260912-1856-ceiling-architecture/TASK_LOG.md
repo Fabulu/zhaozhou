@@ -3249,3 +3249,14 @@ binner pin refreshed and is no longer comment-only.
 ALSO: killed the full fast suite. It was started before these edits and was
 reporting lint reds on a tree I was rewriting -- 0 errors by hand a minute
 later. Debris cleaned, lesson added to CLAUDE.md's build note.
+
+### IN PROGRESS when @packet-h-texorder returned
+
+tools/budget/map_report.py is WRITTEN AND WORKING but not yet committed or
+wired in. It parses the Compilation Hierarchy Node table BY HEADER NAME, after
+I read it by position for an hour and published four false claims. Its own
+controls caught two bugs in it on the first two runs (a slice that truncated
+the header row; an indentation baseline that made the top depth 1).
+
+OWED: commit it, refactor closure_liveness.py to use it, register a ctest.
+Deliberately not done while the full suite was reading the tree.
