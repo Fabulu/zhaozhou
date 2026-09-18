@@ -2333,3 +2333,54 @@ the production top composes. The terrain half of that wiring is already written
 and fitted; the geometry half is the port `zhao_proj_subsystem` deliberately
 left exposed.
 
+
+### CORRECTION, one hour later: `zhao_prod_top` is a RESOURCE top, not a machine
+
+The section above says production "still carries two cores" and casts Packet J
+as moving `zhao_prod_top`'s wiring. Read `zhao_prod_top.sv`'s own header before
+repeating that:
+
+> *"This is a RESOURCE top, not the console. Blocks are not wired to each
+> other, so no timing number here means anything. Each instance is fed by its
+> own seeded LFSR — constants would let the fitter fold blocks away, and a
+> shared source would let it merge logic across them."*
+
+Checked against the file rather than assumed: `zhao_geom_project u29_i` takes
+`v_valid_i(u29_src[28 +: 1])` from an LFSR and drives `u29_out_*` wires that go
+nowhere. Every one of the 66 children is instantiated that way.
+
+**What survives, and it is the substance.** The SELECTED set counts two
+projectors. `design/prod_manifest.yml` selects `zhao_geom_project` and
+`zhao_terrain_project`, and files `zhao_proj_subsystem`, `zhao_project_service`
+and `zhao_terrain_pipe` as `not-yet-adopted` / `unused`. The 24,399 ALUT is a
+真 measurement of what the selection costs when counted once, which is exactly
+the question that top was built to answer.
+
+**What does NOT survive, and I had it wrong.** "Adoption" is not a rewiring of
+`zhao_prod_top` — there is no wiring there to change. It is a **selection**
+change in `design/prod_manifest.yml`, after which `gen_prod_top.py` regenerates
+the census against the new set. That makes Packet J's projector half the same
+act as golden-path item (1), *the selected-variant list*, rather than a separate
+RTL task — and item (1) is recorded in this document as an owner decision.
+
+**And it names the real precondition.** A selection change is only honest once
+the geometry client is actually composed onto `zhao_project_service`'s client A,
+and `zhao_proj_subsystem`'s header says plainly that it is not: *"the geometry
+producer (GEOM.SKIN/WARP into GEOM.WCACHE) is not composed anywhere in this
+tree."* So the order is: compose geometry onto client A, then change the
+selection, then re-census. Not the other way round.
+
+The interfaces say that composition is small. `zhao_geom_project`'s ports map
+one-to-one onto client A — `v_valid_i/v_ready_o` to `a_valid_i/a_ready_o`,
+`vx/vy/vz/view` across, `src_id_i[15:0]` onto `a_payload_i` with
+`PAYLOAD_A_W = 16` already matching, and the six result fields onto `a_x_o`,
+`a_y_o`, `a_d_o`, `a_w_o`, `a_behind_o`, `a_payload_o`. **Exactly one port has
+no counterpart: `out_ready_i`.** `zhao_geom_project` accepts backpressure on its
+result; the service's client A port has no `a_ready_i` and pushes
+unconditionally. Terrain gets away with that because its consumer accepts every
+beat — the subsystem header's *"no adapter, no FIFO, no shadow state"*. So the
+one open design question in the whole adoption is whether GEOM.CLIP can accept
+unconditionally, or whether client A needs an elastic buffer. That is a
+Verilator question, not a fit question, and it should be answered before any
+selection changes.
+
