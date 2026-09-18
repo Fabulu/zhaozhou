@@ -134,12 +134,33 @@ itself is now the cost:
 mul_x_c = dndx_in_c * 96'(job_min_x_i);
 ```
 
-**A 96x96 signed multiply in which one operand is provably 12 bits.**
-SystemVerilog context-determines both operands to 96, so writing it more
-narrowly does not help — the fix is to express the product explicitly at its
-true width, and this repository has already done that once: D1's offender 1 was
-solved with *"registered steps (r4) + CSD columns (r8)"*. A 12-bit multiplier in
-CSD form is about six partial products rather than a 96-wide array.
+**Both operands are narrow, and the widths are worse than I first wrote.**
+`job_dndx_i` is `signed [71:0]` and `job_min_x_i` is `signed [11:0]`:
+
+```systemverilog
+// zhao_raster_attrgrad_v2.sv:103-113
+logic signed [95:0] dndx_in_c, mul_x_c;
+dndx_in_c = 96'(job_dndx_i);            // 72 bits, sign-extended to 96
+mul_x_c   = dndx_in_c * 96'(job_min_x_i);   // 12 bits, sign-extended to 96
+```
+
+**The true product is 72 x 12 = 84 bits exact**, which fits in the 96-bit result
+with room to spare, so nothing is truncated either way — sign-extending both
+operands and multiplying 96 x 96 gives the identical value. The design is
+asking for a 96-wide partial-product array to compute an 84-bit number from a
+12-bit multiplier.
+
+**Writing it narrower in SystemVerilog does not fix it**, and that is worth
+stating so nobody tries: `a * b` takes its operand widths from the assignment
+context, so any expression assigned to a 96-bit lvalue is a 96 x 96 multiply
+however the operands are cast. Quartus can usually prune sign-extension bits;
+the receipt says it has not pruned enough here.
+
+The fix is an explicit structural product over the 12-bit operand — twelve
+conditional shifted adds, or about six in CSD form — and this repository has
+done exactly that once before: D1's offender 1 was closed with *"registered
+steps (r4) + CSD columns (r8)"*.
+
 
 That is the next cone, and unlike cones 1–3 it is arithmetic restructuring with
 a bit-exactness obligation, so it needs the differential
