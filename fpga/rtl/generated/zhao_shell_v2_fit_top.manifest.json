@@ -92,13 +92,13 @@
       "unpacked_dimensions": []
     }
   ],
-  "generated_rtl_sha256": "86b0151d2fa6a0b63a5026e670347a9f9b17bb4c0ddffbc96af3b275427c73ae",
+  "generated_rtl_sha256": "236533dff187054b299e6ee5938fb1a08c8681c18d0df75dfb795da59898d8dd",
   "hashes": {
     "generator": "620828a95e4dca4098590d5127cc0e1195ae70a932e6ca7b1ec1de931585c4a2",
     "package_file": "d0c62815f5e45bbb34dc87b56f251434915b557d36975e16aed26c9db7b627bd",
     "packet": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51",
     "parser": "97c3dd17e8f6996924eb6fc7fef0cbafa58e20360b60133f2d3bc4eb1e47e7a7",
-    "policy": "000c44330820fb41f0c29f701f7335d4f494fb6585ca911b5d702bc3f3e6f5e7",
+    "policy": "01b77e4e65b96c00c6ec654516a16594296ef8e3e32af95bdd12e9afe47b81a2",
     "shell_declaration": "428951a3322ea145228f5051caf787b0d0b74aa3c54d8e4bf19e32352e61d137",
     "shell_file": "c4582e3455f85833ea7acdc0bc14f0d0771fd61d999f2b67c2841716eb843608"
   },
@@ -948,7 +948,7 @@
       "bit_width": 298,
       "capture_register": null,
       "connection": ".tri_flat_request_i(shell_tri_flat_request_i)",
-      "constant_reason": "bit 268 and bits [267:44] must be zero or zhao_raster_tile_pipe_v2 raises profile_aux_bad_w and parks the pipe in refusal, which shrinks the measured area in the flattering direction while the declared mask still matches what toggled; 73 of 298 bits stay free",
+      "constant_reason": "zhao_raster_tile_pipe_v2 raises profile_aux_bad_w unless bit 268 and bits [267:44] are zero, which parks the tile pipe in refusal and shrinks the measured area in the flattering direction while a full-span mask still matches what toggled; 73 of 298 bits stay free ([43:0] and [297:269])",
       "direction": "input",
       "domain": "gpu",
       "driver": "render_producer",

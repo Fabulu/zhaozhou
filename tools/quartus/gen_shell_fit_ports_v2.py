@@ -217,6 +217,32 @@ OUT = REPO / 'design/shell_fit_ports_v2.yml'
 
 TRAFFIC_PROFILE = 'shell-fit-legal-ish-v2'
 
+# Ports whose CONSUMER forbids some bits from moving. See the long note at the
+# mask assignment for why this is the one legitimate reason to narrow a mask,
+# and why it is the opposite of the case that rule guards against.
+#
+# Traced 2026-09-18 in `zhao_raster_tile_pipe_v2`, which unpacks the binner's
+# 1,157-bit metadata word (field map at its lines 244-257) and carries exactly
+# two refusal conditions:
+#
+#     profile_aux_bad_w  = incoming_flat_request_w[268] ||
+#                          (incoming_flat_request_w[267:44] != 224'd0);
+#     profile_area_bad_w = (incoming_area2_w == 47'd0);
+#
+# `tri_area2_i` is not listed here: it is constrained to be NON-ZERO rather than
+# to hold specific bits, every bit of it may still move, and the generator
+# already derives it from a triangle whose positive area is checked.
+CONSUMER_CONSTRAINED_MASKS = {
+    'tri_flat_request_i': (
+        ((1 << 44) - 1) | (((1 << 29) - 1) << 269),
+        'zhao_raster_tile_pipe_v2 raises profile_aux_bad_w unless bit 268 and '
+        'bits [267:44] are zero, which parks the tile pipe in refusal and '
+        'shrinks the measured area in the flattering direction while a '
+        'full-span mask still matches what toggled; 73 of 298 bits stay free '
+        '([43:0] and [297:269])',
+    ),
+}
+
 # ---------------------------------------------------------------- authored --
 # Clock domain for every port the sibling adds. Read from the RTL, not guessed.
 VIDEO = {
@@ -318,7 +344,28 @@ def main(check=False):
         #
         # Declaring it narrow here would be worse: a narrow mask that matches a
         # narrow stimulus passes, and the area comes back low.
-        row['dynamic_mask'] = '0x%0*x' % ((width + 3) // 4, (1 << width) - 1)
+        #
+        # THE ONE EXCEPTION, and it is the opposite case. A port whose CONSUMER
+        # forbids some bits from moving cannot honestly claim they do, and the
+        # rule above assumes the only reason to narrow is a weak stimulus. When
+        # the RTL itself refuses the value, full span is the dishonest
+        # declaration: it claims bits move that the design would reject, and the
+        # smoke harness then refuses a run that is correct.
+        #
+        # Every entry owes a `constant_reason` naming the consumer and the
+        # condition, so the narrowing is auditable rather than convenient.
+        narrow = CONSUMER_CONSTRAINED_MASKS.get(name)
+        if narrow is not None:
+            mask, reason = narrow
+            if mask >> width:
+                print('FAIL: constrained mask for %s exceeds its %d-bit width'
+                      % (name, width))
+                return 1
+            row['constant_reason'] = reason
+            row['dynamic_mask'] = '0x%0*x' % ((width + 3) // 4, mask)
+        else:
+            row['dynamic_mask'] = '0x%0*x' % ((width + 3) // 4,
+                                              (1 << width) - 1)
         ports.append(row)
 
     unused = sorted(set(owner) - set(new_names))

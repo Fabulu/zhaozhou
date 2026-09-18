@@ -1,7 +1,7 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_shell_fit_top.py
 // shell-declaration-sha256: 428951a3322ea145228f5051caf787b0d0b74aa3c54d8e4bf19e32352e61d137
-// policy-sha256: 000c44330820fb41f0c29f701f7335d4f494fb6585ca911b5d702bc3f3e6f5e7
+// policy-sha256: 01b77e4e65b96c00c6ec654516a16594296ef8e3e32af95bdd12e9afe47b81a2
 // generator-sha256: 620828a95e4dca4098590d5127cc0e1195ae70a932e6ca7b1ec1de931585c4a2
 // parser-sha256: 97c3dd17e8f6996924eb6fc7fef0cbafa58e20360b60133f2d3bc4eb1e47e7a7
 // packet-rom-sha256: bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51
