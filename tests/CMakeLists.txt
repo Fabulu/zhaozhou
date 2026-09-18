@@ -5762,6 +5762,26 @@ set_tests_properties(geom_setup_random_nightly PROPERTIES
 
 # GEOM.WCACHE -- the projected-vertex arena. Differential against
 # zref::geom::VertexArena, whose refusal semantics are the interesting half.
+# zhao_geom_proj_lane computes nothing, which is exactly why it is tested: a
+# module whose whole content is a field order and an address fails by
+# transposing a field or landing one slot over, and neither looks like a crash.
+# The third case is the one that earns the file -- a lane that ignored the
+# rider entirely would pass the round-trip checks and still put every vertex in
+# one place.
+add_executable(test_geom_proj_lane_directed geometry/geom_proj_lane_directed.cpp)
+target_link_libraries(test_geom_proj_lane_directed PRIVATE zhao_harness)
+verilate(test_geom_proj_lane_directed
+  PREFIX Vzhao_geom_proj_lane
+  TOP_MODULE zhao_geom_proj_lane
+  # DEPTH=8 for the same reason geom_wcache_directed uses 16: the arena's
+  # walk-clear cost is not what this suite tests, and a DENSE seal means every
+  # slot must be filled, so a small depth is what makes "fill them all" cheap.
+  VERILATOR_ARGS -GARENAS=2 -GDEPTH=8
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_vertex_arena.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_wcache.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_proj_lane.sv)
+add_test(NAME geom_proj_lane_directed COMMAND test_geom_proj_lane_directed)
+set_tests_properties(geom_proj_lane_directed PROPERTIES LABELS "fast;geometry")
 add_executable(test_geom_wcache_directed geometry/geom_wcache_directed.cpp)
 target_link_libraries(test_geom_wcache_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_geom_wcache_directed
