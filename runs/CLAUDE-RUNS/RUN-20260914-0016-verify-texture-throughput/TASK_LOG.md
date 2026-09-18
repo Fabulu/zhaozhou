@@ -409,3 +409,14 @@ Still unverified and stated as such: synthesizability, every ALM/DSP/M10K figure
 Not written: random lane, formal lane, integration captures, and **fixgen does
 not yet read `grade_product_vector`** — the generator is committed and named, but
 no production asset path consumes it.
+
+### WHERE I WAS when quartus_map finished (written BEFORE reading the numbers)
+
+- Two agents running: **lighting II2 refactor** and **ledger V20 cleanup** (the
+  latter repairing comment damage I caused hand-patching ENFORCED-BY blocks).
+- MEASURE.HISTOGRAM landed, 536 checks, verified here.
+- Next intended step: P1 of the completion plan, and the coordinated declaration
+  that wires today's blocks into a manifest — they are still adopted nowhere.
+- Open decisions parked: PART.COLLIDE quarter-square ROMs (~10 DSP) reopened but
+  not re-decided; three blank contracts (GEOM.WARP/INPUT.SNAC/POST.ECHO) still
+  need authoring before RTL.

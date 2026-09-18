@@ -125,3 +125,36 @@ Net position after D1 and the adopted savings is **not computed here on purpose*
 every figure in this file is a leaf estimate or shape arithmetic, and adding
 estimates across modules is the leaf-versus-census error this campaign has made
 three times. The first connected synthesis reports the real number.
+
+---
+
+## MEASURED 2026-09-18 20:51 — the real number is 297, not 185
+
+`zhao_prod_top@whole-console-sizing` Analysis & Synthesis completed:
+**Total DSP Blocks: 297.**
+
+| source | DSP | how |
+|---|---:|---|
+| `BUDGET_HEATMAP.md` | 185 | summed per-module maps |
+| `CEILING-FRONTIER-RECONCILIATION` | 192 | summed |
+| **this synthesis** | **297** | one Quartus run over the whole selection |
+
+**297 against the 112-DSP target is 2.65x over.** The summed estimates were low
+by ~60%.
+
+Note the direction, because it has been consistent all day: I wrote "DSPs are not
+the binding constraint", struck it when the owner corrected me, recorded 185/112
+as the real position — and **the real position is worse than the correction.**
+Every successive DSP measurement has exceeded the estimate it replaced.
+
+This re-prices every candidate above. Against a 185-DSP overage the shared
+projector's 33 looked substantial; against 297 it is ~11% of the excess, and
+PART.COLLIDE's ~10 is ~3.4%. **No single lever on this list is close to
+sufficient**, and the ~135 ALM/DSP exchange rate — derived when the shortfall
+looked like 73 blocks and now more like 185 — still holds directionally but its
+"is there something to claim the freed DSP" condition is now overwhelming rather
+than merely satisfied.
+
+Caveat kept in front: this is the RESOURCE CENSUS top, which the completion plan
+forbids calling a console. It is the arithmetic that exists in that selection,
+measured properly for the first time instead of summed.
