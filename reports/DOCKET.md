@@ -107,6 +107,31 @@ deliberately not touched.
 
 ---
 
+## THE MISSING-ORGAN REGISTER 2026-09-18 -- what has a contract and no RTL
+
+`reports/MISSING-ORGAN-REGISTER-20260918.md`. Owner question, verbatim: *"So
+when do we start building the missing bits so we can get the real full extent of
+the disaster we're facing?"*
+
+**106 RTL contracts; roughly a dozen have no module at all**, and none of them
+appears in the 96,200-ALM census. The particle core is four of them --
+PART.STATE, UPDATE, COLLIDE and SPAWN are absent while `part_expand`,
+`part_ladder`, `part_record` and `part_soft` exist, which is exactly why the
+census reads 827 ALUT against a 2,000 ALM envelope. The board wrapper is two
+more: SYS.PLL and SYS.RESET have no implementation at all.
+
+**So the disaster is understated, not overstated.** 2.6x over on the parts that
+exist, with at least four envelope groups still to add work to.
+
+Build order, by how much each absence distorts the total: the particle core
+first (largest gap, greenfield, no packet to re-accept), then SYS.PLL/RESET,
+then GEOM.WARP -- which doubles as the client-A producer blocking adoption of
+the shared projector, the one unbuilt organ that also unlocks a measured saving.
+
+**Not before `@whole-console-sizing` lands**, because it is the denominator.
+
+---
+
 ## OWNER RESEARCH 2026-09-18 -- the optimisation programme AFTER the console is built
 
 `reports/Zhaozhou_Resource_Rescue_Research_2026-09-18.txt`, 31,501 bytes,
