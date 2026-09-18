@@ -2352,8 +2352,7 @@ nowhere. Every one of the 66 children is instantiated that way.
 **What survives, and it is the substance.** The SELECTED set counts two
 projectors. `design/prod_manifest.yml` selects `zhao_geom_project` and
 `zhao_terrain_project`, and files `zhao_proj_subsystem`, `zhao_project_service`
-and `zhao_terrain_pipe` as `not-yet-adopted` / `unused`. The 24,399 ALUT is a
-真 measurement of what the selection costs when counted once, which is exactly
+and `zhao_terrain_pipe` as `not-yet-adopted` / `unused`. The 24,399 ALUT is a true measurement of what the selection costs when counted once, which is exactly
 the question that top was built to answer.
 
 **What does NOT survive, and I had it wrong.** "Adoption" is not a rewiring of
@@ -2383,4 +2382,44 @@ one open design question in the whole adoption is whether GEOM.CLIP can accept
 unconditionally, or whether client A needs an elastic buffer. That is a
 Verilator question, not a fit question, and it should be answered before any
 selection changes.
+
+
+#### The one open question in the adoption is ANSWERED, and the answer is "no adapter"
+
+Stated above: the only `zhao_geom_project` port with no counterpart on the
+service's client A is `out_ready_i`, because client A pushes results
+unconditionally. Terrain tolerates that on a stated property —
+`zhao_proj_subsystem` line 238 declares `wire fill_ready_unused;` with the
+comment *"the primitive never stalls a fill"*.
+
+Geometry has the same property, from the same primitive, and it is written down
+as a constant rather than emerging from behaviour:
+
+```systemverilog
+// fpga/rtl/geometry/zhao_vertex_arena.sv:209
+// Always accept: neither channel can stall, because the store answers in one
+// clock and the metadata is combinational. Stated as constants so a future
+// banking change has to change them deliberately rather than by accident.
+assign fill_ready_o = 1'b1;
+assign look_ready_o = 1'b1;
+```
+
+`zhao_geom_wcache` instantiates exactly one `zhao_vertex_arena` (line 154) and
+wires `.fill_ready_o(fill_ready_o)` straight out, so its fill port is constant
+ready. `zhao_terrain_wcache` ANDs three replicas' copies of the same constant.
+**Both sides of the shared service therefore have a consumer that cannot stall a
+fill, and the adoption needs no elastic buffer, no FIFO and no adapter.**
+
+Worth stating the boundary, because this is the sentence that would otherwise
+get over-quoted: the property belongs to `zhao_vertex_arena`, not to geometry in
+general. It holds for the arrangement the adoption builds — client A into
+`zhao_geom_wcache` — and says nothing about any other consumer someone might put
+there later. The arena's own comment anticipates exactly that: a banking change
+has to move those two constants deliberately.
+
+**So the projector adoption now has no unanswered design question.** What
+remains is the ordering already recorded: compose geometry onto client A, fit
+`zhao_project_service` with both clients driven to price it, then change the
+selection in `design/prod_manifest.yml` and re-census. None of that needed the
+fit that is running, and none of it was visible from the leaf fit rows.
 
