@@ -96,14 +96,40 @@ module zhao_raster_attrgrad_dsp3 #(
                  - $signed({job_min_x_i[11], job_min_x_i});
   end
 
+  // THE SAME TREE AS THE V2, and for the same measured reason.
+  //
+  // This was four sequential `row_offset_c = row_offset_c + ...` statements plus
+  // a fifth add for `row_num_c` -- a dependency chain of five 96-bit carry
+  // chains, which Quartus builds as written. In `zhao_raster_attrgrad_v2` that
+  // exact arrangement was measured on 2026-09-18 as THE path setting the whole
+  // composed shell's Fmax: -8.477 ns of slack, 17.809 ns of data delay against
+  // a 10.000 ns period, and `1/(10.000 + 8.477) ns = 54.12 MHz` to the digit.
+  // Restructuring it there bought 2.2 ns.
+  //
+  // It is fixed here even though THIS module is not in the elaborated design --
+  // the shell takes the `g_v2` branch -- because a known defect left in an
+  // unadopted sibling is this repository's uncashed-cheque shape: it costs
+  // nothing until the day the sibling is adopted, and then it arrives as a
+  // surprise in a fit nobody connected to a decision made weeks earlier.
+  //
+  // Bit-exact and differential-safe for the same reasons as the V2: addition is
+  // associative modulo 2**96, `row_r[N] ? term : 0` reproduces the conditional
+  // accumulate including the all-zero case, and this is combinational
+  // restructuring INSIDE one cycle, so it moves no edge that
+  // `raster_attrgrad_dsp3_diff` compares.
   logic signed [95:0] row_offset_c, row_num_c;
+  logic signed [95:0] row_t0_c, row_t1_c, row_t2_c, row_t3_c;
+  logic signed [95:0] row_pair0_c, row_pair1_c;
   always_comb begin
-    row_offset_c = 96'sd0;
-    if (row_r[0]) row_offset_c = row_offset_c + dndy_r;
-    if (row_r[1]) row_offset_c = row_offset_c + (dndy_r <<< 1);
-    if (row_r[2]) row_offset_c = row_offset_c + (dndy_r <<< 2);
-    if (row_r[3]) row_offset_c = row_offset_c + (dndy_r <<< 3);
-    row_num_c = base_min_y0_r + row_offset_c;
+    row_t0_c = row_r[0] ? dndy_r         : 96'sd0;
+    row_t1_c = row_r[1] ? (dndy_r <<< 1) : 96'sd0;
+    row_t2_c = row_r[2] ? (dndy_r <<< 2) : 96'sd0;
+    row_t3_c = row_r[3] ? (dndy_r <<< 3) : 96'sd0;
+
+    row_pair0_c  = row_t0_c + row_t1_c;          // level 1
+    row_pair1_c  = row_t2_c + row_t3_c;          // level 1
+    row_offset_c = row_pair0_c + row_pair1_c;    // level 2
+    row_num_c    = base_min_y0_r + row_offset_c; // level 3
   end
 
   logic               dv_valid, dv_ready;
