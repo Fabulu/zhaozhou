@@ -56,8 +56,32 @@
 // terrain, which is the other half and worth nothing without this one.
 //
 // (4) takes 4x7 = 28 count-register bits where (3) would pay 4x81 =
-// 324 bitmap flops (registers, not ALM -- no fit row exists for any shape of
-// this block, so ALM is unknown). For a much deeper BITMAP instantiation the
+// 324 bitmap flops. There IS a fit row now, and the sentence that used to
+// stand here -- "no fit row exists for any shape of this block, so ALM is
+// unknown" -- was true for three weeks and expensive. MEASURED 2026-09-18/19,
+// quartus_map on zhao_geom_wcache (2 arenas x 1089 x 106, VALID_BITMAP), the
+// shipping shape, before and after the open-clear was rewritten:
+//
+//   own combinational ALUTs   1,545,804  ->      3,735
+//   dedicated registers           2,584  ->      2,584   (unchanged)
+//   block memory bits           230,868  ->    230,868   (unchanged)
+//   DSP blocks                        3  ->          2
+//   quartus_map wall time        11,313s ->       75.8s
+//
+// The registers and the memory bits are IDENTICAL, which is the structural
+// statement that nothing about the stored state moved -- only how the update
+// is expressed. The ALUTs were never the bitmap's flops; they were the
+// selection network Quartus built for a runtime-variable write address (see
+// the g_bitmap process). The lost DSP is the `open_arena_i * DEPTH` multiply,
+// which the rewrite evaluates at elaboration instead; the two that remain are
+// wr_addr's and rd_addr's.
+//
+// ROWS: reports/synthesis/blockpaths/zhao_geom_wcache@arena-{before,after}.*
+// (the .map.rpt hierarchy files are gitignored by policy; the summaries and
+// source digests are committed, and the numbers above are from
+// tools/budget/map_report.py, which reads the table BY HEADER.)
+//
+// For a much deeper BITMAP instantiation the
 // remaining alternative is a clear WALK that holds `sealed` low until it
 // completes -- deterministic for the same reason, at the cost of DEPTH cycles
 // once per arena per frame. Not built until something needs it.

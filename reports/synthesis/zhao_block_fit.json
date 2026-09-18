@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "80515dc02d29c875ac4531a7fb283e372b5cdd25",
-    "newestRunClean":  true,
+    "newestRunCommit":  "ba29113f57af2c4fb4ea7a49b2074cbcf83573ad",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -400,6 +400,46 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  84.61,
                        "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_geom_wcache@arena-after",
+                       "status":  "map_only",
+                       "sourceCommit":  "c67f2d2a3fcb4860cb80b52b78398319f76858d6",
+                       "treeCleanAtHead":  false,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "5bb2360baeddf918b8255eadd2eec938f198a301854e44093b69f4a5f01b33e2",
+                       "variantOf":  "zhao_geom_wcache",
+                       "seconds":  75.8,
+                       "sourcesHashed":  2,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  2584,
+                       "blockMemoryBits":  230868,
+                       "dspBlocks":  2,
+                       "virtualPins":  563
+                   },
+                   {
+                       "module":  "zhao_geom_wcache@arena-before",
+                       "status":  "map_only",
+                       "sourceCommit":  "ba29113f57af2c4fb4ea7a49b2074cbcf83573ad",
+                       "treeCleanAtHead":  false,
+                       "rtlCleanAtHead":  false,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "dc382c1d315aca9057b4a38eff79b9a38d4fb121d1377eb7e42d27b5f62a88f2",
+                       "variantOf":  "zhao_geom_wcache",
+                       "seconds":  11313.3,
+                       "sourcesHashed":  2,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  2584,
+                       "blockMemoryBits":  230868,
+                       "dspBlocks":  3,
+                       "virtualPins":  563
                    },
                    {
                        "module":  "zhao_hps_bridge",
