@@ -2236,6 +2236,44 @@ fit does not measure. That is not hypothetical: the projector-sharing work —
 up during this fit, found to need `zhao_geom_project.sv`, and correctly put down
 again, for a file contributing nothing to the measurement in progress.
 
+### The second consequence I claimed is FALSE, and the correction matters more than the claim
+
+I wrote here, earlier the same day, that a dead closure entry "still FREEZES its
+file under the live-tree rule", and cited the projector work being picked up
+mid-fit and put down again as evidence of the cost.
+
+**A per-block fit does not freeze anything.** `run_block_fit.ps1` copies every
+declared source into `<workspace>/src` and points the QSF at the copies, then
+prints the line it has been printing all along:
+
+```
+snapshot: 89 source(s) copied into the workspace; the live tree cannot reach this fit
+```
+
+`QUARTUS_GOTCHAS.md` §11 carries a supersession box saying exactly this, added
+2026-09-03. So the file was never frozen, the projector work never needed to be
+put down, and I invented a constraint that the tooling had removed two weeks
+before I arrived — while a hook whose entire text explains this was firing at me
+every half hour.
+
+This is the second time this session I have deferred work on a reason I did not
+check. The first was earlier in this same campaign: a claim that editing during
+a fit risks `rtlCleanAtHead: false`, disproved by one grep showing the flags are
+captured at script start. **Both deferrals were comfortable, both were about the
+same tool, and neither cost more than one command to refute.**
+
+**What survives.** Removing the eight dead geometry entries is still right, on
+the ground that stands on its own: a source list is read as *"this is what the
+number covers"*, and 27,583 ALM covers none of them. That argument needed no
+help from the freeze claim, and the freeze claim is struck.
+
+**What is still true and is a DIFFERENT rule**, kept here because collapsing the
+two is exactly how this got misremembered: `design/fit_targets.yml` is re-read
+LIVE at each block's preflight (§13), so rewriting the config mid-campaign can
+still kill a queued fit. And a composed fit that declares no closure has nothing
+to snapshot, so it does read the tree. **Check for the snapshot line rather than
+assuming either way.**
+
 ### What it does not say
 
 This is about the V2 shell's closure, not about `zhao_prod_top`, which

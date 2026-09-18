@@ -2216,13 +2216,15 @@ targets:
       # elaborated, the fit would have failed MODMISSING. It fit clean eight
       # times.
       #
-      # Two reasons to remove rather than annotate. The list is read as "this
-      # is what the number covers", and 27,583 ALM covers none of it. And a
-      # dead entry still FREEZES its file under the live-tree rule -- on the
-      # day this was found, the projector-sharing work (the machine's largest
-      # single overrun) was picked up during a fit, found to need
-      # zhao_geom_project.sv, and put down again for a file that fit was not
-      # measuring.
+      # Removed rather than annotated because a source list is read as "this
+      # is what the number covers", and 27,583 ALM covers none of it.
+      #
+      # A SECOND reason was given here and was WRONG: that a dead entry
+      # freezes its file under the live-tree rule. run_block_fit.ps1 snapshots
+      # every declared source into the workspace and points the QSF at the
+      # copies -- it prints "the live tree cannot reach this fit" when it does,
+      # and QUARTUS_GOTCHAS 11 has said so since 2026-09-03. Struck. The
+      # argument above never needed it.
       #
       # sourcesHashed drops 97 -> 89 and the source digest changes. That is a
       # DECLARATION change, not a design change: the synthesised hierarchy is

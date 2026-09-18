@@ -24,12 +24,13 @@ Two costs, and the second is the one that bites during a campaign:
 
   1. **The receipt overstates its own scope.** Every comparison of that fit's
      ALM against a budget is a comparison against a part.
-  2. **A dead entry still FREEZES its file.** `QUARTUS_GOTCHAS.md` §11 forbids
-     editing anything in a running fit's closure and a Stop hook enforces it, so
-     a file contributing nothing to the measurement is unavailable for hours.
-     That happened the day this was found: the projector-sharing work, the
-     largest single overrun in the machine, was picked up and put down again for
-     a file the running fit was not measuring.
+  2. **It is NOT a freeze, whatever it feels like.** This paragraph first
+     claimed a dead entry locks its file for the duration of a fit. It does
+     not: `run_block_fit.ps1` snapshots every declared source into the
+     workspace and points the QSF at the copies, printing "the live tree
+     cannot reach this fit" as it goes, and `QUARTUS_GOTCHAS.md` §11 has
+     carried a supersession box saying so since 2026-09-03. The claim is
+     struck; cost 1 above stands on its own and never needed it.
 
 Method: this compares the declared list against the `Info (12128): Elaborating
 entity "X"` lines of that receipt's own `.map.rpt`, unioned with the instance
