@@ -234,3 +234,81 @@ GEOM.LIGHT, GEOM.LOOM, FORGE.SHADOW, POST.COMPOSITE, POST.ECHO,
 MEASURE.HISTOGRAM, INPUT.SNAC, MATERIAL.LIQUID. Plus the register's own
 "Unresolved" list — MEM.UPLOAD, MATERIAL.RESOLVE, the five FIELD.SEQ.* — still
 undispositioned since it was written this morning.
+
+### GEOM.LIGHT built — and it lands the session's most important NUMBER
+
+`zhao_geom_light.sv` + `geom_light_directed.cpp`, commits `d4f837d8`, `18ef80e8`.
+**3,555 checks.** The light term is DIFFERENTIAL against the compiled
+`zref::render::shade_from_world_normal_unclamped` (a live oracle, not one of the
+11 phantoms); the colour fold has no oracle and is labelled weaker evidence.
+
+The engine is **instantiated, not re-derived**: one `zhao_terrain_shade`, no
+ndot/isqrt/divide/dot in the shell. Eight lights are eight turns of ONE engine;
+3 channels x 2 terms are six turns of ONE multiplier; the 8x10 descriptor bank is
+a memory, not ~2,560 flops.
+
+**MEASURED II = 167.0 clk/light-term (2,672 clk / 16 terms).** Re-run here
+independently: 480,000 evaluations x 167 = 80,160,000 clk against 1,666,666 per
+frame = **48.1x OVER**. The plan's §7.2 warning predicted 70,560,000 for a scalar
+147-cycle service — so the warning was accurate and slightly optimistic.
+
+**Root cause is the thing §7.2 forbids.** *"Never normalize independently for
+every light if the law allows a common magnitude."* This arrangement does:
+`u_shade` re-derives `nmag2` and its `isqrt` on every turn, so K lights cost K
+roots for one magnitude — and that recomputation is most of the 147-cycle walk.
+Invariant reuse and the 48x gap are therefore the SAME problem.
+
+The fix needs a magnitude-supplied mode on the shared core, which is the open
+contract question in consolidation §5.4 (the render core and
+`skin_world_normal`/`lambert_from_world_normal` are not bit-identical laws).
+The agent **refused to edit the shared core in passing** — the move both
+contracts were rewritten to forbid — and recorded it instead. Correct call.
+
+Also found, in its own file, by a linter positive control: `nlights_q[3]` unused
+was a **live wrap bug** — `li_q` was `LIDXW` bits so `li+1 < nlights` wrapped at
+exactly `LIGHTS_MAX=8`, the one configuration the block is sized for.
+
+Contract disagreements it refused rather than absorbed: GEOM.LIGHT.md says fog is
+computed here, but `zhao_geom_fogfactor.sv` already exists with a fit target and
+a test — stale sentence; GEOM.SKIN.NORM.md says light a degenerate vertex black
+while two other contracts say ambient-only (implemented as the latter behind
+`DEGEN_BLACK`, default 0); and the contract's saturate-once justification is
+arithmetically wrong for a sum of non-negative terms, so the bench pins
+no-early-clip and no-wrap rather than claiming a hue difference it cannot produce.
+
+NOT verified: synthesizability (never through `quartus_map`), the elaboration
+`$fatal` guards (lint does not run `initial`), and the admission model in BOTH
+directions — 480,000 is the plan's stress profile taken at face value.
+
+### HOLD — owner reports the intelligence source malfunctioned, new input coming
+
+Owner, 2026-09-18: *"I will get new intelligence. Bro malfunctioned."*
+
+**No new speculative work started.** What continues, and why each is safe:
+
+- **The fit.** `quartus_map` pid 16944, 140 min, 7,250 CPU s. It measures the
+  machine at snapshot digest `de21d0f5a7d1`. New intelligence does not change
+  what today's machine costs, and §13.1 of the plan says do not kill a running
+  fit to adopt a document. Still DO NOT CANCEL.
+- **Tree clean, everything committed.** Every block built today is adopted
+  nowhere, so discarding any of it is a `git rm`.
+
+**On the plan document itself:** the re-download was byte-identical (sha256
+`664142ba…`), and its claims were verified against it point by point before the
+malfunction was reported — P9's endpoint, capacity failure as a valid result, the
+frozen baseline, the ban on the 1.086 map-to-fit conversion, the ban on inferring
+physical M10K from 18.2% logical occupancy, and 30 fps / FIELD as protected owner
+decisions. Those checks stand on their own; they are readings of the file, not of
+whoever produced it. **P0 is delivered and is not withdrawn.**
+
+What is NOT assumed: that the plan's P1-P9 ordering survives the new input. No
+packet past P0 has been started.
+
+**Measured facts that survive any new intelligence** (the point of
+`WHAT-SURVIVES-A-REMAKE-20260918.md`):
+- GEOM.LIGHT initiation interval **167.0 clk/light-term**, re-run independently;
+  480,000 evaluations = 80,160,000 clk vs 1,666,666/frame = **48.1x over**.
+- The cause: the shared engine re-derives `nmag2`/`isqrt` per light, so K lights
+  cost K roots for one magnitude. Invariant reuse and the 48x gap are one problem.
+- 549 particle checks, 3,555 lighting checks, 41 group-seq checks, all green.
+- Five blocks + GEOM.LIGHT + POST.COMPOSITE contribute **0 ALM** to any number.
