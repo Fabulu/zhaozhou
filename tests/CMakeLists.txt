@@ -7132,6 +7132,43 @@ set_tests_properties(lint_shell_top_v2 PROPERTIES
   LABELS "lint;fast;packet-h"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# THE SIBLING'S TEN-PIN INSTRUMENT, gated the same way V1's is.
+#
+# `fpga/rtl/generated/zhao_shell_v2_fit_top.sv` is generated from
+# `design/shell_fit_ports_v2.yml` and the sibling's declaration. Without these
+# two gates it is a generated file that nobody regenerates -- which this
+# repository has now been bitten by twice in one session, both times as a stale
+# artifact carrying a reassuring provenance line at the top of it.
+#
+# The freshness gate re-runs the generator in --check mode, so an edit to the
+# policy, to gen_shell_fit_top.py, or to the shell's port list that is not
+# followed by a regeneration goes red here instead of at the next fit.
+add_test(NAME shell_v2_fit_generated_freshness
+  COMMAND "${Python3_EXECUTABLE}"
+          ${CMAKE_SOURCE_DIR}/tools/quartus/gen_shell_fit_top.py --check
+          --shell ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_shell_top_v2.sv
+          --module zhao_shell_top_v2
+          --name-prefix shell_v2
+          --policy ${CMAKE_SOURCE_DIR}/design/shell_fit_ports_v2.yml
+          --rtl-out ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_shell_v2_fit_top.sv
+          --manifest-out
+            ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_shell_v2_fit_top.manifest.json)
+
+# And a synthesis-mode lint, because a clean generator run says nothing about
+# whether the thing it wrote elaborates. Top module is `shell_v2_top` -- the
+# --name-prefix names it -- and the closure is the sibling shell's own sources
+# plus the wrapper.
+add_test(NAME lint_shell_v2_fit_top
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wno-fatal
+          --top-module shell_v2_top
+          -DSYNTHESIS=1 -DQUARTUS_SYNTHESIS=1
+          ${ZHAO_SHELL_V2_TOP_SOURCES}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_shell_v2_fit_top.sv)
+
+set_tests_properties(shell_v2_fit_generated_freshness lint_shell_v2_fit_top
+  PROPERTIES LABELS "lint;fast;packet-h" TIMEOUT 600
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 set_tests_properties(lint_shell_top PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
