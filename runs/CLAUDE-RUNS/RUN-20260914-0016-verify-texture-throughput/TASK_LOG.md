@@ -420,3 +420,34 @@ no production asset path consumes it.
 - Open decisions parked: PART.COLLIDE quarter-square ROMs (~10 DSP) reopened but
   not re-decided; three blank contracts (GEOM.WARP/INPUT.SNAC/POST.ECHO) still
   need authoring before RTL.
+
+### 2026-09-19 — independent verification of the lighting refactor
+
+The lighting agent compiled to scratchpad while a fit was live, so its numbers
+were its report, not mine. The build tree configures again, so I re-ran them:
+
+| bench | checks | measured here |
+|---|---:|---|
+| `light_div32_ii2_directed` | **11,190** | accept-to-accept **II = 2.0000**, retire-to-retire 2.0000, 4,096 requests |
+| `light_isqrt64_ii8_directed` | **6,888** | accept **II = 8.0000**, retire 8.0000, 2,048 roots |
+| `light_skin_adapter_directed` | **2,526** | — |
+
+Exact match to the agent's report. The II2/II8 claims are now measured twice by
+different hands.
+
+### Open, and not forgotten
+
+- **`geom_proj_lane_directed` scores 58/58 at -O2/-O3 and 16/58 at -O0/-O1** on
+  identical RTL and identical generated C++. That is undefined behaviour in the
+  bench, and it means ONE OF THOSE VERDICTS IS MEANINGLESS -- we do not yet know
+  which. Reproduces at HEAD, predates the arena repair. The likely seam: the
+  arena's payload array is deliberately never reset (`if (fill_ok) mem[wr_addr]
+  <= fill_payload_i;` with no reset branch), so a lookup before any fill reads
+  X, and how Verilator's generated C++ renders X depends on optimisation.
+  That is a REAL property of the design, not only of the bench -- a consumer
+  that reads an unfilled slot gets whatever the RAM powers up holding.
+- **8 committed test .cpp files that no CMake target compiles**, one of them
+  cited as an `ENFORCED-BY` in `zhao_raster_attrwalk.sv:4`. The V20 linter
+  cannot see it because the path resolves.
+- **22 modules inside `zhao_console_core`'s closure are marked `excluded`** in
+  the manifest. Delegated with the 13 UNACCOUNTED rows.
