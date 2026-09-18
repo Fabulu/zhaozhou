@@ -79,17 +79,42 @@ module zhao_raster_attrgrad_v2 #(
 
   // Pixel-centre plane value at (global min_x, tile_y).  This is the same
   // origin-anchored convention as the established attribute plane path.
+  //
+  // THE TWO MULTIPLIES ARE ON THEIR OWN EDGE, AND IT COSTS NOTHING.
+  //
+  // This was one expression evaluated combinationally and registered into
+  // `base_min_y0_r` on job acceptance. The 2026-09-18 `@packet-h-uvw` fit made
+  // it the machine's binding path: `Mult0~mult_h_mult_hlmac`, a DSP macro
+  // feeding a long soft carry chain for the partial-product sum, **14.24 ns of
+  // a 15.67 ns path** against a 10.000 ns period, for -5.144 ns of slack.
+  //
+  // `base_min_y0_r` is written on job acceptance in S_IDLE and is not read
+  // until S_ROW_REQ -- through S_GRAD_REQ, S_GRAD_WAIT and the gradient divide,
+  // which alone spends about fifty clocks in `zhao_raster_attrdiv_v2`'s D_RUN.
+  // The value has enormous schedule slack, so producing it one edge later adds
+  // no state, spends no cycle, and moves no output edge. The module's observable
+  // behaviour is identical, which is also why `raster_attrgrad_dsp3_diff` --
+  // which compares this module against `zhao_raster_attrgrad_dsp3` cycle by
+  // cycle -- still holds.
+  //
+  // Bit-exactness: every operand is 96-bit and the result truncates to 96, so
+  // holding each product in a 96-bit register preserves the arithmetic exactly
+  // modulo 2**96. Nothing is rounded, widened or reassociated across the split.
   logic signed [95:0] dndx_in_c, dndy_in_c;
+  logic signed [95:0] mul_x_c, mul_y_c;
+  logic signed [95:0] mul_x_r, mul_y_r, n0_r;
   logic signed [95:0] base_min_y0_c;
   logic signed [12:0] tile_delta_c;
   always_comb begin
     dndx_in_c = 96'(job_dndx_i);
     dndy_in_c = 96'(job_dndy_i);
-    base_min_y0_c = 96'(job_n0_i)
-                  + dndx_in_c * 96'(job_min_x_i)
-                  + dndy_in_c * 96'(job_tile_y_i)
-                  + (dndx_in_c >>> 1)
-                  + (dndy_in_c >>> 1);
+    // Edge one: the multiplies alone, straight off the job inputs.
+    mul_x_c = dndx_in_c * 96'(job_min_x_i);
+    mul_y_c = dndy_in_c * 96'(job_tile_y_i);
+    // Edge two: the sum, entirely from registers.
+    base_min_y0_c = n0_r + mul_x_r + mul_y_r
+                  + (dndx_r >>> 1)
+                  + (dndy_r >>> 1);
     tile_delta_c = $signed({job_tile_x_i[11], job_tile_x_i})
                  - $signed({job_min_x_i[11], job_min_x_i});
   end
@@ -212,6 +237,9 @@ module zhao_raster_attrgrad_v2 #(
       dndx_r        <= 96'sd0;
       dndy_r        <= 96'sd0;
       base_min_y0_r <= 96'sd0;
+      mul_x_r       <= 96'sd0;
+      mul_y_r       <= 96'sd0;
+      n0_r          <= 96'sd0;
       area2_r       <= 47'd0;
       tile_delta_r  <= 13'sd0;
       tile_offset_r <= 45'sd0;
@@ -232,7 +260,11 @@ module zhao_raster_attrgrad_v2 #(
           if (job_valid_i && job_ready_o) begin
             dndx_r        <= dndx_in_c;
             dndy_r        <= dndy_in_c;
-            base_min_y0_r <= base_min_y0_c;
+            // The multiplies land here; their sum lands in S_GRAD_REQ, which
+            // is still fifty-odd clocks before S_ROW_REQ reads the result.
+            mul_x_r       <= mul_x_c;
+            mul_y_r       <= mul_y_c;
+            n0_r          <= 96'(job_n0_i);
             area2_r       <= job_area2_i;
             tile_delta_r  <= tile_delta_c;
             grad_x_r      <= 32'sd0;
@@ -245,6 +277,10 @@ module zhao_raster_attrgrad_v2 #(
         end
 
         S_GRAD_REQ: begin
+          // The second edge of the split above. Unconditional because its
+          // inputs are all registers loaded in S_IDLE and therefore stable for
+          // as long as this state lasts; the result is consumed in S_ROW_REQ.
+          base_min_y0_r <= base_min_y0_c;
           if (dv_valid && dv_ready) st_r <= S_GRAD_WAIT;
         end
 
