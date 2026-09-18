@@ -12454,3 +12454,75 @@ add_test(NAME post_composite_ring_hazard_mutant
          COMMAND test_post_composite_ring_hazard_mutant)
 set_tests_properties(post_composite_ring_hazard_mutant PROPERTIES
   LABELS "fast;nightly" TIMEOUT 600)
+# ---------------------------------------------------------------------------
+# MEASURE.HISTOGRAM (phase 8, ZH-049) -- the RAM-backed error-bucket histogram.
+#
+# Built 2026-09-18 after the owner revoked every deferral
+# (reports/MISSING-ORGAN-REGISTER-20260918.md). Its contract is a 186-line
+# REFUSAL rather than a specification; the module header records which of the
+# four inventions it names were made and which one was refused.
+#
+# NOT A DIFFERENTIAL LANE. `reference_model: zref::MeasureHistogram` resolves to
+# nothing (tools/budget/refmodel_liveness.py names it among eleven unresolved
+# models), so the directed lane is hand-computed and structural, and both the
+# header and the test file say so rather than implying an oracle exists.
+set(ZHAO_MEASURE_HISTOGRAM_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_histogram.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv)
+
+add_executable(test_measure_histogram_directed measure/measure_histogram_directed.cpp)
+target_link_libraries(test_measure_histogram_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_measure_histogram_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_histogram_directed
+  PREFIX Vzhao_measure_histogram
+  TOP_MODULE zhao_measure_histogram
+  SOURCES ${ZHAO_MEASURE_HISTOGRAM_SV})
+add_test(NAME measure_histogram_directed COMMAND test_measure_histogram_directed)
+set_tests_properties(measure_histogram_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# Lane 13: saturation. THE SAME RTL FILE with -GCW=8, because reaching the
+# shipped 24-bit ceiling needs 16.7 million events. CW is the only override.
+add_executable(test_measure_histogram_sat measure/measure_histogram_sat.cpp)
+target_link_libraries(test_measure_histogram_sat PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_measure_histogram_sat PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_histogram_sat
+  PREFIX Vzhao_measure_histogram
+  TOP_MODULE zhao_measure_histogram
+  SOURCES ${ZHAO_MEASURE_HISTOGRAM_SV}
+  VERILATOR_ARGS -GCW=8)
+add_test(NAME measure_histogram_sat COMMAND test_measure_histogram_sat)
+set_tests_properties(measure_histogram_sat PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# The committed mutant for `frozen_write_o`, which no legal stimulus can move.
+# INVERTED POLARITY: it passes when the counter FIRES on the mutant, and it
+# carries its own negative control -- the shipped module, same stimulus, in the
+# same executable, required to stay at zero.
+add_executable(test_measure_histogram_drain_mutant measure/measure_histogram_drain_mutant.cpp)
+target_link_libraries(test_measure_histogram_drain_mutant PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_measure_histogram_drain_mutant PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_histogram_drain_mutant
+  PREFIX Vzhao_measure_histogram_drain_mutant
+  TOP_MODULE zhao_measure_histogram_drain_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_measure_histogram_drain_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv)
+verilate(test_measure_histogram_drain_mutant
+  PREFIX Vzhao_measure_histogram
+  TOP_MODULE zhao_measure_histogram
+  SOURCES ${ZHAO_MEASURE_HISTOGRAM_SV})
+add_test(NAME measure_histogram_drain_mutant COMMAND test_measure_histogram_drain_mutant)
+set_tests_properties(measure_histogram_drain_mutant PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 600)
+
+# Verilator lint-clean is NOT Quartus-synthesizable. This gate settles one
+# tool's opinion about syntax and width; the block has never been through
+# quartus_map and no synthesizability claim is made for it.
+add_test(NAME lint_measure_histogram
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_measure_histogram
+                 ${ZHAO_MEASURE_HISTOGRAM_SV})
+set_tests_properties(lint_measure_histogram PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
