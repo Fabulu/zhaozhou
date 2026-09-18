@@ -545,6 +545,32 @@ targets:
   # is invented before the first fit; RAM inference must be read per arena
   # replica rather than inferred from a closure-wide total that includes the
   # core's storage.
+  # ==========================================================================
+  # GEOMETRY'S HALF OF THE SHARED PROJECTOR (2026-09-18) -- NOT RUN
+  # ==========================================================================
+  # zhao_geom_proj_lane is the client-A composition zhao_proj_subsystem's header
+  # has been asking for since it was written, and R3 lists as its open item:
+  # "Real geometry client ... remain open". It is WIRING -- client A's result
+  # port packed into zhao_geom_wcache, the {arena,index} rider as the fill
+  # address -- so the question this fit answers is narrow and worth stating:
+  #
+  #   what does the geometry side of the shared arrangement cost, so that
+  #   "one service instead of two wrappers" can be priced with its BOTH halves
+  #   present rather than one?
+  #
+  # Correctness is already Verilator's: geom_proj_lane_directed fills every slot
+  # of a small arena with a vertex distinct in every field, reads them all back,
+  # and its control (fill_arena_c forced to zero) fails the first slot.
+  #
+  # No max_alms and no min_fmax_mhz: nothing has measured this shape before and
+  # inventing a ceiling ahead of the first receipt is what the project's own
+  # rule about guessed rules warns against.
+  - top: zhao_geom_proj_lane
+    sources:
+      - fpga/rtl/geometry/zhao_vertex_arena.sv
+      - fpga/rtl/geometry/zhao_geom_wcache.sv
+      - fpga/rtl/geometry/zhao_geom_proj_lane.sv
+
   - top: zhao_proj_subsystem
     sources:
       - fpga/rtl/common/zhao_proj_subsystem.sv
