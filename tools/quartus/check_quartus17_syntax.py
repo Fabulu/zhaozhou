@@ -80,6 +80,42 @@ RTL = os.path.join(REPO, "fpga", "rtl")
 # declaration regardless of what surrounds it.
 _INLINE_GENVAR = re.compile(r"\bfor\s*\(\s*genvar\b")
 
+# FORM 4, added 2026-09-19: a UNARY minus applied directly to a size cast,
+# `-WIDTH'(expr)`. Quartus 17.0 parses the minus, reaches the apostrophe and
+# stops:
+#
+#   Error (10170): Verilog HDL syntax error at zhao_part_collide.sv(463)
+#   near text: "'"; expecting ";"
+#
+# Six of these killed the first zhao_console_core synthesis after 6.3 seconds.
+# Verilator accepts the form, so lint was 0/0 and 180 directed checks were green
+# -- and THIS CHECKER PASSED THE FILE, which is why the form is added here
+# rather than only fixed in the RTL.
+#
+# The repair is parenthesisation, `-(WIDTH'(expr))`. The cast already binds
+# tighter than the unary minus, so it is semantically identical.
+#
+# Only UNARY minus is flagged. `a - B'(x)` is a binary subtraction with a left
+# operand and Quartus accepts it, so the preceding non-space character decides:
+# an operator or an opening bracket means unary, anything else means binary.
+# Getting that wrong in the flagging direction is how a checker gets suppressed.
+# NOTE the absence of a start-of-line alternative, and it is deliberate. The
+# first draft had `^` in the unary context, and it immediately produced FOUR
+# FALSE POSITIVES on continuation lines of ordinary sums:
+#
+#     pl_dist_c = DIST_W'(u_px) * DIST_W'(pl_nx_i)
+#               + DIST_W'(u_py) * DIST_W'(pl_ny_i)
+#               - DIST_W'(pl_c_i);          <- BINARY minus, Quartus is fine
+#
+# `zhao_texture_aux_pipe_v2.sv` has synthesised for weeks with three of those.
+# Flagging them would have been the cry-wolf failure this module's own docstring
+# warns about, in the tool written to prevent it.
+#
+# Nothing real is lost: `\s*` spans newlines, so a genuinely unary minus written
+# after an `=` on the previous line is still caught. A `)` before the minus means
+# binary, and `)` is not in the lookbehind set.
+_UNARY_MINUS_CAST = re.compile(r"(?<=[=(\[{,?:;])\s*-\s*(\w+)\s*'\s*\(")
+
 
 def strip_comments(text: str) -> str:
     """Blank out // and /* */ so a WARNING ABOUT the form is not read as the form.
@@ -125,6 +161,10 @@ def scan_text(text: str) -> list[tuple[int, str]]:
     for m in _INLINE_GENVAR.finditer(clean):
         line = clean.count("\n", 0, m.start()) + 1
         hits.append((line, "for (genvar ...) -- inline genvar in a loop generate"))
+    for m in _UNARY_MINUS_CAST.finditer(clean):
+        line = clean.count("\n", 0, m.start()) + 1
+        hits.append((line, "-%s'(...) -- unary minus on a size cast; "
+                           "write -(%s'(...))" % (m.group(1), m.group(1))))
     return hits
 
 
@@ -156,6 +196,14 @@ _MUST_FLAG = [
     "  for (genvar l = 0; l < LANES; l++) begin : gen_lane",
     "for(genvar i=0;i<N;i++) begin",
     "    for ( genvar  N = 0 ; N <= 8 ; N++ ) begin : g_fold",
+    # form 4 -- the exact six lines that killed the first console synthesis
+    "SRC_NEGE: tan_c = -COEF_W'(d_restitution_i);",
+    "      pen_c             = -PUSH_W'(dist_c);",
+    "  localparam logic signed [ACC_W-1:0]  V_MIN = -ACC_W'(1 << (VEL_W-1));",
+    "  assign y = (a) ? -W'(b) : c;",
+    # a genuinely unary minus wrapped onto its own line after an `=` -- the
+    # lookbehind spans the newline, so dropping `^` must not lose this
+    "  assign v_min =\n      -ACC_W'(1 << (VEL_W-1));",
 ]
 _MUST_NOT_FLAG = [
     # the repaired form, which is what crc32c_fold and now alu_vec use
@@ -167,6 +215,24 @@ _MUST_NOT_FLAG = [
     "  // Quartus 17.0.2's Verilog parser rejects `for (genvar N = ...)` with",
     "  // `for (genvar N = ...)` and a loop generate at module level, while",
     "/* for (genvar q = 0; q < 4; q++) is what NOT to write */",
+    # form 4 negatives -- the repaired shape, and BINARY minus, which Quartus
+    # accepts. Flagging the binary case would fire on ordinary arithmetic all
+    # over the tree and get the whole checker ignored.
+    "SRC_NEGE: tan_c = -(COEF_W'(d_restitution_i));",
+    "  assign d = span - PUSH_W'(dist_c);",
+    "  assign d = a[3] - W'(b);",
+    "  assign d = f(x) - W'(b);",
+    # the four real continuation lines that the first draft of this rule
+    # wrongly flagged. Kept verbatim so the regression cannot come back.
+    "  pl_dist_c = DIST_W'(u_px) * DIST_W'(pl_nx_i)\n"
+    "            + DIST_W'(u_py) * DIST_W'(pl_ny_i)\n"
+    "            - DIST_W'(pl_c_i);",
+    "  offer_count_q <= offer_count_q + CREDIT_W'(div_valid_w)\n"
+    "                                - CREDIT_W'(offer_pop_c);",
+    # and a genuinely unary minus split across a line must STILL fire, so this
+    # one belongs in the fire list, not here -- see _MUST_FLAG.
+    # and a comment describing the hazard is not the hazard
+    "  // never write -W'(x); Quartus 17.0 stops at the apostrophe",
 ]
 
 
