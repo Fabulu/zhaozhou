@@ -3260,3 +3260,30 @@ the header row; an indentation baseline that made the top depth 1).
 
 OWED: commit it, refactor closure_liveness.py to use it, register a ctest.
 Deliberately not done while the full suite was reading the tree.
+
+### 2026-09-18 — full fast suite 840/840 GREEN
+
+Run on a stable tree after the earlier one was killed for measuring a tree I was
+editing. 1,603 s. Covers all three cones, the receipt gating-clock fields, the
+closure removal, the two refreshed mutant copies and every hash-pin move.
+
+Fits landed since:
+* @packet-h-texorder  27,636 ALM, gpu_clk 79.74, worst -2.540, TNS -2,077
+* @first-measurement (zhao_forge_cliff_ram)  976 ALM, 15 M10K, 2 DSP,
+  law verified by a green differential and TWO mutant controls that FIRE
+
+NEXT SESSION, in order, and all three must ship in ONE fit (measured, not
+preferred -- cone 3 alone moves the clock by zero):
+1. cone 5: mul_x_c/mul_y_c as a structural 12-bit product (28 paths, -2.025).
+   Lowest risk: bit-exact arithmetic with raster_attrgrad_dsp3_diff watching.
+2. cone 4: widen frag_expand's queue pointers by one bit, write the assertion,
+   then ramstyle no_rw_check on fragment_m (5 paths, incl. the -2.540 worst).
+3. cone 3 is already committed and unfitted (124 paths).
+   Forecast for the union: 156 of 200 paths, gpu_clk ~84.2 MHz, next wall
+   cfg_rsp_generation_q at -1.879.
+
+ALSO OWED: tools/budget/map_report.py is committed but closure_liveness.py does
+not use it yet, and the read-during-write sweep needs a RAM-INFERENCE filter --
+a raw source grep returns 392 rows and is useless. Cross-reference the map
+report's RAM Summary against arrays with unclocked reads, the same
+source-claim-times-receipt-truth shape as closure_liveness.
