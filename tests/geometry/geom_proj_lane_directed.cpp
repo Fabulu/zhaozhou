@@ -64,12 +64,11 @@ uint32_t field(const uint32_t* words, int lsb, int width) {
 
 // Distinct, and distinct in EVERY field, so a transposition cannot alias.
 Vertex make(int i) {
-  return Vertex{
-      static_cast<uint32_t>(0x00001u + i * 0x10101u) & 0x1FFFFFu,
-      static_cast<uint32_t>(0x1F0002u - i * 0x02020u) & 0x1FFFFFu,
-      static_cast<uint32_t>(0xBADF00D0u + i * 0x01000001u),
-      static_cast<uint32_t>(0x2A2A2A2Au ^ (i * 0x11111111u)) & 0x7FFFFFFFu,
-      static_cast<uint32_t>(i & 1)};
+  return Vertex{static_cast<uint32_t>(0x00001u + i * 0x10101u) & 0x1FFFFFu,
+                static_cast<uint32_t>(0x1F0002u - i * 0x02020u) & 0x1FFFFFu,
+                static_cast<uint32_t>(0xBADF00D0u + i * 0x01000001u),
+                static_cast<uint32_t>(0x2A2A2A2Au ^ (i * 0x11111111u)) & 0x7FFFFFFFu,
+                static_cast<uint32_t>(i & 1)};
 }
 
 struct Dut {
@@ -209,8 +208,7 @@ int main(int argc, char** argv) {
     std::snprintf(what, sizeof(what), "slot %d field w", i);
     check(field(w, kOffW, 31) == want.w, what, want.w, field(w, kOffW, 31));
     std::snprintf(what, sizeof(what), "slot %d field behind", i);
-    check(field(w, kOffBehind, 1) == want.behind, what, want.behind,
-          field(w, kOffBehind, 1));
+    check(field(w, kOffBehind, 1) == want.behind, what, want.behind, field(w, kOffBehind, 1));
   }
 
   // ---- THE CONTROL: the arena half of the rider must matter ----------------

@@ -48,8 +48,8 @@ constexpr int kLanes = 4;
 constexpr int kEw = 32;
 constexpr int kSubBits = 1;
 constexpr int kBinw = 6;
-constexpr int kAddrBins = 1 << kBinw;             // bins addressable per bank
-constexpr int kScrubCycles = 1 << (kBinw + 1);    // the one-time post-reset walk
+constexpr int kAddrBins = 1 << kBinw;           // bins addressable per bank
+constexpr int kScrubCycles = 1 << (kBinw + 1);  // the one-time post-reset walk
 
 /** The bucket law, restated. Mirrors `bin_of` in the RTL. */
 inline int bin_of(uint32_t v) {
@@ -149,7 +149,7 @@ inline int send_beat(Top& d, const Beat& b, int max_wait = 64) {
 /** What one host read observed, including the latency it was served at. */
 struct ReadResult {
   uint32_t count = 0;
-  bool ready = false;      // rd_ready_o when the request was offered
+  bool ready = false;       // rd_ready_o when the request was offered
   bool early_valid = true;  // rd_data_valid_o one cycle after the request
   bool valid_at_2 = false;  // rd_data_valid_o two cycles after the request
   bool valid_at_3 = true;   // rd_data_valid_o three cycles after (must fall)

@@ -190,8 +190,7 @@ FoldResult fold(int32_t nx, int32_t ny, int32_t nz, bool producer_degen,
     fr.degen = degen;  // the engine's own walk overrides the producer's flag
     fr.terms++;
     const uint32_t gains[6] = {L.cr, L.cg, L.cb, L.er, L.eg, L.eb};
-    for (int k = 0; k < 6; ++k)
-      acc[k % 3] += rescale16_rhu(static_cast<uint64_t>(gains[k]) * ndl);
+    for (int k = 0; k < 6; ++k) acc[k % 3] += rescale16_rhu(static_cast<uint64_t>(gains[k]) * ndl);
   }
   const uint32_t amb[3] = {env.ar, env.ag, env.ab};
   const uint32_t spl[3] = {env.sr, env.sg, env.sb};
@@ -335,9 +334,9 @@ DriveResult drive(Vzhao_geom_light& dut, int32_t nx, int32_t ny, int32_t nz, boo
 
 /** Drive one vertex, tally what the ruling says it does, compare the packet. */
 DriveResult check_vertex(Vzhao_geom_light& dut, int32_t nx, int32_t ny, int32_t nz,
-                         bool producer_degen, const std::vector<Light>& lights, uint32_t nlights_req,
-                         const Env& env, const char* what, uint16_t src = 0x1234, int stall = 0,
-                         int32_t inject = 0) {
+                         bool producer_degen, const std::vector<Light>& lights,
+                         uint32_t nlights_req, const Env& env, const char* what,
+                         uint16_t src = 0x1234, int stall = 0, int32_t inject = 0) {
   const uint32_t nl_eff = (nlights_req > kLightsMax) ? kLightsMax : nlights_req;
   if (nlights_req > kLightsMax) g_t.nl_clamped++;
   const FoldResult f = fold(nx, ny, nz, producer_degen, lights, nl_eff, env);
@@ -495,7 +494,7 @@ int main(int argc, char** argv) {
 
     // (a) small negative raw rescued by detail
     L[0] = Light{};
-    L[0].ly = -kOne / 8;  // raw = -0.125
+    L[0].ly = -kOne / 8;     // raw = -0.125
     L[0].detail = kOne / 4;  // detail = +0.25 -> ndl = 0.125
     L[0].cr = 0x10000;
     L[0].cg = 0;
@@ -504,8 +503,7 @@ int main(int argc, char** argv) {
     const DriveResult ra =
         check_vertex(dut, 0, kOne, 0, false, L, 1, env,
                      "detail inside the clamp rescues a slightly turned face", 0x0301);
-    check(ra.rgb.r == 0x2000u, "hand-computed: (-0.125 + 0.25) * 1.0 == 0x2000", 0x2000u,
-          ra.rgb.r);
+    check(ra.rgb.r == 0x2000u, "hand-computed: (-0.125 + 0.25) * 1.0 == 0x2000", 0x2000u, ra.rgb.r);
     check(dut.ndl_clamp_lo_o == lo0, "no low clamp on the rescued face", lo0, dut.ndl_clamp_lo_o);
 
     // (b) detail pushing past 1.0 — the high rail
@@ -514,8 +512,7 @@ int main(int argc, char** argv) {
     load_light(dut, 0, L[0]);
     const DriveResult rb = check_vertex(dut, 0, kOne, 0, false, L, 1, env,
                                         "detail past full scale clamps at 1.0", 0x0302);
-    check(rb.rgb.r == 0x10000u, "hand-computed: clamp01(1.0 + 1.0) == 0x10000", 0x10000u,
-          rb.rgb.r);
+    check(rb.rgb.r == 0x10000u, "hand-computed: clamp01(1.0 + 1.0) == 0x10000", 0x10000u, rb.rgb.r);
     check(dut.ndl_clamp_hi_o == hi0 + 1, "ndl_clamp_hi_o moved by exactly 1 across this case",
           hi0 + 1, dut.ndl_clamp_hi_o);
     L[0].detail = 0;
@@ -543,8 +540,7 @@ int main(int argc, char** argv) {
     load_light(dut, 0, L[0]);
     const DriveResult on =
         check_vertex(dut, 0, kOne, 0, false, L, 1, env, "emission gate open, lit face", 0x0402);
-    check(off.rgb.r == 0x4000u, "emission==0 is the multiplicative-only value", 0x4000u,
-          off.rgb.r);
+    check(off.rgb.r == 0x4000u, "emission==0 is the multiplicative-only value", 0x4000u, off.rgb.r);
     check(on.rgb.r == 0xC000u, "emission ADDS energy: 0.25 + 0.5 == 0xC000", 0xC000u, on.rgb.r);
 
     // the same emitter on a face turned AWAY: ndl == 0, so nothing is added.
@@ -582,8 +578,8 @@ int main(int argc, char** argv) {
     check(dut.rgb_sat_o == sat0 + 1, "rgb_sat_o moved by exactly 1 across this case", sat0 + 1,
           dut.rgb_sat_o);
     check(dut.light_terms_o == terms0 + kLightsMax,
-          "light_terms_o moved by exactly LIGHTS_MAX: one engine, eight turns",
-          terms0 + kLightsMax, dut.light_terms_o);
+          "light_terms_o moved by exactly LIGHTS_MAX: one engine, eight turns", terms0 + kLightsMax,
+          dut.light_terms_o);
   }
 
   // ---- 7: AMBIENT AND SPILL ARE COLOUR, NOT DIRECTIONAL ------------------
@@ -674,9 +670,8 @@ int main(int argc, char** argv) {
     const DriveResult r = check_vertex(dut, 1, 1, 0, false, L, 1, zero,
                                        "rail sun: the engine's INT32 clamp engages", 0x08B1);
     check(r.rgb.r == 0x10000u, "a saturated base still clamps to exactly 1.0", 0x10000u, r.rgb.r);
-    check(dut.engine_base_sat_o == bs0 + 1,
-          "engine_base_sat_o moved by exactly 1 across this case", bs0 + 1,
-          dut.engine_base_sat_o);
+    check(dut.engine_base_sat_o == bs0 + 1, "engine_base_sat_o moved by exactly 1 across this case",
+          bs0 + 1, dut.engine_base_sat_o);
     load_env(dut, env);
   }
 
@@ -738,9 +733,8 @@ int main(int argc, char** argv) {
     L[0].ly = kOne;
     L[0].cr = 0x4000;
     load_light(dut, 0, L[0]);
-    const DriveResult before =
-        check_vertex(dut, 0, kOne, 0, false, L, 1, env, "light 0 before the illegal writes",
-                     0x0B01);
+    const DriveResult before = check_vertex(dut, 0, kOne, 0, false, L, 1, env,
+                                            "light 0 before the illegal writes", 0x0B01);
 
     cfg_write(dut, kLightsMax, 0, 0xDEADBEEF);      // index past the set
     cfg_write(dut, kLightsMax + 3, 4, 0xDEADBEEF);  // another
@@ -749,8 +743,8 @@ int main(int argc, char** argv) {
     cfg_write(dut, kEnvIdx, 6, 0xDEADBEEF);         // word past the environment
     g_t.refused += 5;
 
-    check(dut.cfg_refused_o == c0 + 5, "cfg_refused_o moved by exactly 5 across this case",
-          c0 + 5, dut.cfg_refused_o);
+    check(dut.cfg_refused_o == c0 + 5, "cfg_refused_o moved by exactly 5 across this case", c0 + 5,
+          dut.cfg_refused_o);
     const DriveResult after = check_vertex(dut, 0, kOne, 0, false, L, 1, env,
                                            "light 0 is untouched by the refused writes", 0x0B02);
     check(after.rgb.r == before.rgb.r, "a refused write did not alias onto light 0", before.rgb.r,
@@ -815,16 +809,16 @@ int main(int argc, char** argv) {
     // The plan's stress profile, carried through THIS measurement. Nothing
     // here narrows the workload to make the number look better; §7.2 forbids
     // exactly that ("rather than quietly lowering the admitted workload").
-    const double evals = 120000.0 * 4.0;         // §7.2's stated stress profile
-    const double frame = 1666666.0;              // 100 MHz / 60 Hz
+    const double evals = 120000.0 * 4.0;  // §7.2's stated stress profile
+    const double frame = 1666666.0;       // 100 MHz / 60 Hz
     const double need = evals * ii_light;
     std::printf(
         "[light] MEASURED II = %.1f clk/light-term (%llu clk / %llu terms). "
         "Plan §7.2 profile 120k vtx x 4 lights = 480k evaluations -> %.0f clk "
         "against %.0f/frame = %.1fx OVER. NOT creature rate; see the RTL "
         "header's reported cost and lever order.\n",
-        ii_light, static_cast<unsigned long long>(spent),
-        static_cast<unsigned long long>(terms), need, frame, need / frame);
+        ii_light, static_cast<unsigned long long>(spent), static_cast<unsigned long long>(terms),
+        need, frame, need / frame);
   }
 
   // ---- 14: THE DIFFERENTIAL TIER ----------------------------------------
@@ -932,12 +926,10 @@ int main(int argc, char** argv) {
     check(dut.ndl_clamp_hi_o == g_t.clamp_hi, "ndl_clamp_hi_o exact", g_t.clamp_hi,
           dut.ndl_clamp_hi_o);
     check(dut.rgb_sat_o == g_t.rgb_sat, "rgb_sat_o exact", g_t.rgb_sat, dut.rgb_sat_o);
-    check(dut.cfg_refused_o == g_t.refused, "cfg_refused_o exact", g_t.refused,
-          dut.cfg_refused_o);
+    check(dut.cfg_refused_o == g_t.refused, "cfg_refused_o exact", g_t.refused, dut.cfg_refused_o);
     check(dut.nlights_clamped_o == g_t.nl_clamped, "nlights_clamped_o exact", g_t.nl_clamped,
           dut.nlights_clamped_o);
-    check(dut.seam_mismatch_o == g_t.seam, "seam_mismatch_o exact", g_t.seam,
-          dut.seam_mismatch_o);
+    check(dut.seam_mismatch_o == g_t.seam, "seam_mismatch_o exact", g_t.seam, dut.seam_mismatch_o);
 
     // THE INDEPENDENT-PATH PAIR. `light_terms_o` counts offers this sequencer
     // got accepted; `engine_shaded_o` counts walks the engine COMPLETED. They
@@ -947,8 +939,8 @@ int main(int argc, char** argv) {
           "the engine ran EXACTLY once per light term — no reissue, no double work", g_t.terms,
           dut.engine_shaded_o);
     check(dut.engine_shaded_o == dut.light_terms_o,
-          "sequencer offers and engine completions agree by independent paths",
-          dut.light_terms_o, dut.engine_shaded_o);
+          "sequencer offers and engine completions agree by independent paths", dut.light_terms_o,
+          dut.engine_shaded_o);
 
     // Coverage: a counter total is only evidence if the cases reached it.
     check(g_t.clamp_lo > 20, "coverage: the per-light low clamp was exercised", 1,
@@ -966,10 +958,8 @@ int main(int argc, char** argv) {
         "refused=%llu nlclamp=%llu seam=%llu | diff lit=%d dark=%d full=%d\n",
         static_cast<unsigned long long>(g_t.vertices), static_cast<unsigned long long>(g_t.terms),
         static_cast<unsigned long long>(dut.engine_shaded_o),
-        static_cast<unsigned long long>(g_t.degen),
-        static_cast<unsigned long long>(g_t.clamp_lo),
-        static_cast<unsigned long long>(g_t.clamp_hi),
-        static_cast<unsigned long long>(g_t.rgb_sat),
+        static_cast<unsigned long long>(g_t.degen), static_cast<unsigned long long>(g_t.clamp_lo),
+        static_cast<unsigned long long>(g_t.clamp_hi), static_cast<unsigned long long>(g_t.rgb_sat),
         static_cast<unsigned long long>(g_t.refused),
         static_cast<unsigned long long>(g_t.nl_clamped), static_cast<unsigned long long>(g_t.seam),
         cov_lit, cov_dark, cov_full);

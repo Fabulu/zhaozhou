@@ -189,8 +189,8 @@ struct Env {
     for (int g = 0; g < guard_cycles && static_cast<int>(out.size()) < want; ++g) {
       v->eval();
       if (v->grp_valid_o && v->grp_ready_i) {
-        out.push_back(Handle{v->grp_arena_o, v->grp_gen_o, v->grp_count_o,
-                             v->grp_view_o, v->grp_src_id_o});
+        out.push_back(
+            Handle{v->grp_arena_o, v->grp_gen_o, v->grp_count_o, v->grp_view_o, v->grp_src_id_o});
       }
       step();
     }
@@ -258,25 +258,21 @@ int main(int argc, char** argv) {
     const uint32_t op0 = r.groups_opened_o;
 
     e.offer_job(0, 0x1, 0x0001);  // count == 0
-    check(r.jobs_refused_o - ref0 == 1, "refuse: count == 0", 1,
-          r.jobs_refused_o - ref0);
+    check(r.jobs_refused_o - ref0 == 1, "refuse: count == 0", 1, r.jobs_refused_o - ref0);
 
     e.offer_job(kDepth + 1, 0x1, 0x0002);  // count > DEPTH
-    check(r.jobs_refused_o - ref0 == 2, "refuse: count > DEPTH", 2,
-          r.jobs_refused_o - ref0);
+    check(r.jobs_refused_o - ref0 == 2, "refuse: count > DEPTH", 2, r.jobs_refused_o - ref0);
 
     e.offer_job(4, 0x0, 0x0003);  // empty view mask
-    check(r.jobs_refused_o - ref0 == 3, "refuse: empty view mask", 3,
-          r.jobs_refused_o - ref0);
+    check(r.jobs_refused_o - ref0 == 3, "refuse: empty view mask", 3, r.jobs_refused_o - ref0);
 
     // A refused job must not have touched an arena. If it did, the refusal is
     // a leak rather than a refusal.
-    check(r.groups_opened_o - op0 == 0,
-          "refuse: a refused job opens NO arena", 0, r.groups_opened_o - op0);
+    check(r.groups_opened_o - op0 == 0, "refuse: a refused job opens NO arena", 0,
+          r.groups_opened_o - op0);
     // ... and the machine is still accepting jobs, i.e. it did not wedge.
     r.eval();
-    check(r.job_ready_o == 1, "refuse: the job port is still open afterwards",
-          1, r.job_ready_o);
+    check(r.job_ready_o == 1, "refuse: the job port is still open afterwards", 1, r.job_ready_o);
   }
 
   // =========================================================================
@@ -297,8 +293,7 @@ int main(int argc, char** argv) {
           r.groups_opened_o - op0);
 
     e.feed_vertices(5);
-    check(r.vertices_sent_o - vs0 == 5,
-          "five vertices, one view: five client-A accepts", 5,
+    check(r.vertices_sent_o - vs0 == 5, "five vertices, one view: five client-A accepts", 5,
           r.vertices_sent_o - vs0);
 
     // The seal must NOT have happened yet: the landings are still in flight.
@@ -309,23 +304,17 @@ int main(int argc, char** argv) {
           0, e.seal_pulses - seals0);
 
     const auto handles = e.collect(1);
-    check(handles.size() == 1, "one view hands over exactly one group", 1,
-          handles.size());
-    check(r.landings_o - ld0 == 5, "five landings counted", 5,
-          r.landings_o - ld0);
+    check(handles.size() == 1, "one view hands over exactly one group", 1, handles.size());
+    check(r.landings_o - ld0 == 5, "five landings counted", 5, r.landings_o - ld0);
     check(r.groups_sealed_o - sl0 == 1, "one seal", 1, r.groups_sealed_o - sl0);
-    check(e.seal_while_short - short0 == 0,
-          "the seal was issued only after every landing arrived", 0,
-          e.seal_while_short - short0);
+    check(e.seal_while_short - short0 == 0, "the seal was issued only after every landing arrived",
+          0, e.seal_while_short - short0);
 
     if (!handles.empty()) {
       case2_arena = handles[0].arena;
-      check(handles[0].count == 5, "handle carries the job's count", 5,
-            handles[0].count);
-      check(handles[0].view == 0, "handle carries view 0 for mask 0b01", 0,
-            handles[0].view);
-      check(handles[0].src == 0xBEEF, "handle carries src_id unchanged",
-            0xBEEF, handles[0].src);
+      check(handles[0].count == 5, "handle carries the job's count", 5, handles[0].count);
+      check(handles[0].view == 0, "handle carries view 0 for mask 0b01", 0, handles[0].view);
+      check(handles[0].src == 0xBEEF, "handle carries src_id unchanged", 0xBEEF, handles[0].src);
       // The generation the LANE offered in the open cycle, not one sampled a
       // cycle late. e.opens was 0 before this open, so 0x50 was offered.
       check(handles[0].gen == 0x50,
@@ -334,8 +323,7 @@ int main(int argc, char** argv) {
             "with a perfect payload",
             0x50, handles[0].gen);
     }
-    check(r.seal_early_o == 0, "no early seal on a legal single-view group", 0,
-          r.seal_early_o);
+    check(r.seal_early_o == 0, "no early seal on a legal single-view group", 0, r.seal_early_o);
   }
 
   // =========================================================================
@@ -363,18 +351,14 @@ int main(int argc, char** argv) {
           "the vertex stream is consumed ONCE -- skinning is view-independent "
           "and must not be paid for twice",
           3, e.vertices_taken - vt0);
-    check(r.vertices_sent_o - vs0 == 6,
-          "... and each vertex is projected TWICE, once per view", 6,
+    check(r.vertices_sent_o - vs0 == 6, "... and each vertex is projected TWICE, once per view", 6,
           r.vertices_sent_o - vs0);
 
     const auto handles = e.collect(2);
-    check(handles.size() == 2, "a dual-view job hands over TWO groups", 2,
-          handles.size());
-    check(r.landings_o - ld0 == 6, "six landings counted", 6,
-          r.landings_o - ld0);
+    check(handles.size() == 2, "a dual-view job hands over TWO groups", 2, handles.size());
+    check(r.landings_o - ld0 == 6, "six landings counted", 6, r.landings_o - ld0);
     check(r.groups_sealed_o - sl0 == 2, "two seals", 2, r.groups_sealed_o - sl0);
-    check(e.seal_while_short - short0 == 0,
-          "neither seal was issued while a landing was owed", 0,
+    check(e.seal_while_short - short0 == 0, "neither seal was issued while a landing was owed", 0,
           e.seal_while_short - short0);
 
     if (handles.size() == 2) {
@@ -386,17 +370,13 @@ int main(int argc, char** argv) {
             1, handles[0].arena != handles[1].arena ? 1 : 0);
       check(handles[0].arena != case2_arena && handles[1].arena != case2_arena,
             "neither view reuses the arena case 2 still holds", 1,
-            (handles[0].arena != case2_arena &&
-             handles[1].arena != case2_arena)
-                ? 1
-                : 0);
-      check(handles[0].count == 3 && handles[1].count == 3,
-            "both handles carry the job's count", 3, handles[0].count);
+            (handles[0].arena != case2_arena && handles[1].arena != case2_arena) ? 1 : 0);
+      check(handles[0].count == 3 && handles[1].count == 3, "both handles carry the job's count", 3,
+            handles[0].count);
       check(handles[0].src == 0xF00D && handles[1].src == 0xF00D,
             "both handles carry src_id unchanged", 0xF00D, handles[0].src);
     }
-    check(r.seal_early_o == 0, "no early seal on a legal dual-view group", 0,
-          r.seal_early_o);
+    check(r.seal_early_o == 0, "no early seal on a legal dual-view group", 0, r.seal_early_o);
   }
 
   // =========================================================================
@@ -422,8 +402,7 @@ int main(int argc, char** argv) {
       if (r.a_valid_o && r.a_ready_i) {
         if (seen == 0) first_arena = r.rider_arena_o;
         if (r.rider_index_o != static_cast<uint32_t>(seen)) index_ok = false;
-        if (r.a_payload_o != lane_pack(r.rider_arena_o, r.rider_index_o))
-          payload_ok = false;
+        if (r.a_payload_o != lane_pack(r.rider_arena_o, r.rider_index_o)) payload_ok = false;
         if (r.rider_arena_o != first_arena) arena_stable = false;
         ++seen;
       }
@@ -437,8 +416,7 @@ int main(int argc, char** argv) {
           "0,1,2,3 -- an index that restarted or skipped puts a vertex one "
           "slot over and looks like nothing at all",
           1, index_ok ? 1 : 0);
-    check(arena_stable, "every beat of one group names the same arena", 1,
-          arena_stable ? 1 : 0);
+    check(arena_stable, "every beat of one group names the same arena", 1, arena_stable ? 1 : 0);
     check(payload_ok,
           "a_payload_o is the LANE's word, forwarded -- a block that packed "
           "its own rider would agree with itself and disagree with the lane",
@@ -463,8 +441,7 @@ int main(int argc, char** argv) {
           "with every arena held, allocation STALLS and the stall is counted "
           "-- silently reusing a live arena is the failure this counter names",
           1, r.alloc_stall_cycles_o - st0 > 0 ? 1 : 0);
-    check(r.groups_opened_o - op0 == 0,
-          "... and nothing was opened while stalled", 0,
+    check(r.groups_opened_o - op0 == 0, "... and nothing was opened while stalled", 0,
           r.groups_opened_o - op0);
 
     // Release two arenas and the same job completes.

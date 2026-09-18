@@ -65,11 +65,21 @@ int main(int argc, char** argv) {
   Dut& d = *dp;
 
   d.rst_n = 0;
-  d.cfg_we_i = 0; d.cfg_commit_i = 0; d.cfg_addr_i = 0; d.cfg_data_i = 0;
-  d.v_valid_i = 0; d.r_ready_i = 0;
-  d.n_x_i = 0; d.n_y_i = 0; d.n_z_i = 0;
-  d.n_mag_valid_i = 0; d.n_mag_i = 0; d.n_degenerate_i = 0; d.n_profile_i = 0;
-  d.n_lights_i = 0; d.n_src_id_i = 0;
+  d.cfg_we_i = 0;
+  d.cfg_commit_i = 0;
+  d.cfg_addr_i = 0;
+  d.cfg_data_i = 0;
+  d.v_valid_i = 0;
+  d.r_ready_i = 0;
+  d.n_x_i = 0;
+  d.n_y_i = 0;
+  d.n_z_i = 0;
+  d.n_mag_valid_i = 0;
+  d.n_mag_i = 0;
+  d.n_degenerate_i = 0;
+  d.n_profile_i = 0;
+  d.n_lights_i = 0;
+  d.n_src_id_i = 0;
   d.eval();
   for (int i = 0; i < 3; ++i) tk(d);
   d.rst_n = 1;
@@ -87,7 +97,10 @@ int main(int argc, char** argv) {
     cfg_write(d, li, 1, 2, 0);
     cfg_write(d, li, 1, 3, 0);
   }
-  d.cfg_commit_i = 1; tk(d); d.cfg_commit_i = 0; d.eval();
+  d.cfg_commit_i = 1;
+  tk(d);
+  d.cfg_commit_i = 0;
+  d.eval();
 
   // An ordinary, entirely legal stream. Nothing below is illegal stimulus --
   // that is the point: the fault is in the BLOCK, not in the traffic.
@@ -96,7 +109,9 @@ int main(int argc, char** argv) {
   uint64_t guard = 0;
   uint64_t rng = 0xC2B2AE3D27D4EB4FULL;
   while (got < kN) {
-    rng ^= rng << 13; rng ^= rng >> 7; rng ^= rng << 17;
+    rng ^= rng << 13;
+    rng ^= rng >> 7;
+    rng ^= rng << 17;
     d.r_ready_i = 1;
     if (sent < kN) {
       d.v_valid_i = 1;
@@ -124,13 +139,11 @@ int main(int argc, char** argv) {
   const uint32_t fired = d.tag_mismatch_o;
 #endif
 
-  std::printf(
-      "[%s] sent=%u emitted=%u clocks=%llu | %s = %u\n", kName, sent, got,
-      static_cast<unsigned long long>(guard), kWhat, fired);
+  std::printf("[%s] sent=%u emitted=%u clocks=%llu | %s = %u\n", kName, sent, got,
+              static_cast<unsigned long long>(guard), kWhat, fired);
 
   // INVERSE POLARITY: the mutant passes when the counter MOVES.
-  check(fired > 0, "the guard FIRED on the mutation it exists to catch", 1,
-        (fired > 0) ? 1 : 0);
+  check(fired > 0, "the guard FIRED on the mutation it exists to catch", 1, (fired > 0) ? 1 : 0);
 
   d.final();
   zhao::exit_hard(zhao::report_and_exit(kName));

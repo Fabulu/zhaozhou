@@ -41,8 +41,8 @@
 
 namespace {
 
-using zhao::check;
 using hist_test::Beat;
+using zhao::check;
 
 /** Four events in four distinct bins: 1 -> 1, 4 -> 4, 100 -> 13, 0xFFFF -> 31. */
 Beat four_distinct() {

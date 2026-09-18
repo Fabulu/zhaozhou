@@ -91,11 +91,11 @@
 
 namespace {
 
-using zhao::check;
 using hist_test::Beat;
 using hist_test::Counters;
 using hist_test::kAddrBins;
 using hist_test::kScrubCycles;
+using zhao::check;
 
 /** A single-lane beat carrying one magnitude. */
 Beat one(uint32_t err, uint16_t src = 0) {
@@ -175,10 +175,9 @@ struct TableRow {
   int bin;
 };
 const TableRow kTable[] = {
-    {0u, 0},         {1u, 1},         {2u, 2},          {3u, 3},          {4u, 4},
-    {5u, 4},         {6u, 5},         {7u, 5},          {8u, 6},          {11u, 6},
-    {12u, 7},        {15u, 7},        {16u, 8},         {100u, 13},       {0x8000u, 30},
-    {0xFFFFu, 31},   {0x80000000u, 62}, {0xFFFFFFFFu, 63},
+    {0u, 0},  {1u, 1},    {2u, 2},       {3u, 3},       {4u, 4},           {5u, 4},
+    {6u, 5},  {7u, 5},    {8u, 6},       {11u, 6},      {12u, 7},          {15u, 7},
+    {16u, 8}, {100u, 13}, {0x8000u, 30}, {0xFFFFu, 31}, {0x80000000u, 62}, {0xFFFFFFFFu, 63},
 };
 
 void test_bucket_table(Vzhao_measure_histogram& d) {
@@ -256,14 +255,14 @@ void test_same_bin_aggregation(Vzhao_measure_histogram& d) {
   check(hist_test::send_beat(d, b) == 0, "aggregate: the beat is accepted with no stall", 0, 1);
   // ... and the NEXT beat is accepted on the very next cycle, because the one
   // group retires immediately. A block that serialised would refuse it thrice.
-  check(hist_test::send_beat(d, b) == 0, "aggregate: the following beat is accepted immediately",
-        0, 1);
+  check(hist_test::send_beat(d, b) == 0, "aggregate: the following beat is accepted immediately", 0,
+        1);
   hist_test::idle(d, 8);
 
   const Counters c1 = hist_test::counters(d);
   check(c1.events - c0.events == 8u, "aggregate: eight events accepted", 8, c1.events - c0.events);
-  check(c1.updates - c0.updates == 2u,
-        "aggregate: EIGHT events cost TWO memory updates, not eight", 2, c1.updates - c0.updates);
+  check(c1.updates - c0.updates == 2u, "aggregate: EIGHT events cost TWO memory updates, not eight",
+        2, c1.updates - c0.updates);
   check(c1.stalls - c0.stalls == 0u, "aggregate: no stall cycle was needed", 0,
         c1.stalls - c0.stalls);
 
@@ -300,8 +299,7 @@ void test_distinct_bins_serialise(Vzhao_measure_histogram& d) {
   hist_test::idle(d, 12);
 
   const Counters c1 = hist_test::counters(d);
-  check(c1.events - c0.events == 8u, "serialise: eight events accepted", 8,
-        c1.events - c0.events);
+  check(c1.events - c0.events == 8u, "serialise: eight events accepted", 8, c1.events - c0.events);
   check(c1.updates - c0.updates == 8u, "serialise: four distinct bins cost four updates a beat", 8,
         c1.updates - c0.updates);
   check(c1.stalls - c0.stalls == 3u, "serialise: three cycles were counted as refused", 3,
@@ -679,8 +677,8 @@ void test_counter_liveness(Vzhao_measure_histogram& d) {
   check(c.fwd_hits > 0u, "liveness: fwd_hits_o moved", 1, c.fwd_hits);
   check(c.host_conflict > 0u, "liveness: host_conflict_o moved", 1, c.host_conflict);
   check(c.snapshots > 0u, "liveness: snapshots_o moved", 1, c.snapshots);
-  check(c.bin_sat == 0u, "liveness: bin_sat_o cannot move at CW=24 -- see measure_histogram_sat",
-        0, c.bin_sat);
+  check(c.bin_sat == 0u, "liveness: bin_sat_o cannot move at CW=24 -- see measure_histogram_sat", 0,
+        c.bin_sat);
   check(c.frozen_write == 0u,
         "liveness: frozen_write_o cannot move at all -- see the committed drain mutant", 0,
         c.frozen_write);

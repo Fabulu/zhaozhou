@@ -108,7 +108,7 @@ Expect expect_of(__int128 h, uint32_t den) {
 struct Req {
   uint64_t num;  // |h|
   uint32_t den;
-  bool neg;      // h < 0
+  bool neg;  // h < 0
   uint16_t tag;
   Expect exp;
   const char* what;
@@ -219,23 +219,21 @@ std::vector<Got> stream(Vzhao_light_div32_ii2& d, const std::vector<Req>& rs, in
   return out;
 }
 
-void check_batch(Vzhao_light_div32_ii2& d, const std::vector<Req>& rs, int stall_mod, int bubble_mod,
-                 int inject_index, int32_t inject) {
+void check_batch(Vzhao_light_div32_ii2& d, const std::vector<Req>& rs, int stall_mod,
+                 int bubble_mod, int inject_index, int32_t inject) {
   StreamStats st;
   const std::vector<Got> got = stream(d, rs, stall_mod, bubble_mod, &st);
   check(got.size() == rs.size(), "every request produced exactly one response", rs.size(),
         got.size());
   for (size_t i = 0; i < got.size() && i < rs.size(); ++i) {
-    const int32_t want =
-        rs[i].exp.result + ((static_cast<int>(i) == inject_index) ? inject : 0);
+    const int32_t want = rs[i].exp.result + ((static_cast<int>(i) == inject_index) ? inject : 0);
     check(got[i].result == want, rs[i].what, static_cast<uint32_t>(want),
           static_cast<uint32_t>(got[i].result));
     check(got[i].saturated == rs[i].exp.saturated, "saturated_o matches the law's INT32 rail",
           rs[i].exp.saturated ? 1 : 0, got[i].saturated ? 1 : 0);
     check(got[i].degenerate == rs[i].exp.degenerate, "degenerate_o matches den==0",
           rs[i].exp.degenerate ? 1 : 0, got[i].degenerate ? 1 : 0);
-    check(got[i].tag == rs[i].tag, "the tag came back with its own result", rs[i].tag,
-          got[i].tag);
+    check(got[i].tag == rs[i].tag, "the tag came back with its own result", rs[i].tag, got[i].tag);
   }
 }
 
@@ -249,12 +247,17 @@ uint64_t rnd() {
 
 int32_t rnd_normal_lane() {
   switch (rnd() & 7) {
-    case 0: return static_cast<int32_t>(rnd() & 7) - 3;
-    case 1: return static_cast<int32_t>(rnd() % 131073) - 65536;
-    case 2: return (rnd() & 1) ? INT32_MAX - static_cast<int32_t>(rnd() & 3)
-                               : INT32_MIN + static_cast<int32_t>(rnd() & 3);
-    case 3: return static_cast<int32_t>(rnd()) >> 16;
-    default: return static_cast<int32_t>(rnd());
+    case 0:
+      return static_cast<int32_t>(rnd() & 7) - 3;
+    case 1:
+      return static_cast<int32_t>(rnd() % 131073) - 65536;
+    case 2:
+      return (rnd() & 1) ? INT32_MAX - static_cast<int32_t>(rnd() & 3)
+                         : INT32_MIN + static_cast<int32_t>(rnd() & 3);
+    case 3:
+      return static_cast<int32_t>(rnd()) >> 16;
+    default:
+      return static_cast<int32_t>(rnd());
   }
 }
 
@@ -280,7 +283,10 @@ int main(int argc, char** argv) {
     // pass. What must hold is that it rises within one phase either way.
     int rose = 0;
     for (int i = 0; i < 2; ++i) {
-      if (dut.v_ready_o) { rose = 1; break; }
+      if (dut.v_ready_o) {
+        rose = 1;
+        break;
+      }
       tk(dut);
       dut.eval();
     }
@@ -325,8 +331,8 @@ int main(int argc, char** argv) {
     // divide, so they are pinned by hand as well as by the reference.
     check(expect_of(-9, 5).result == -2, "reference: -9/5 floors to -2", static_cast<uint32_t>(-2),
           static_cast<uint32_t>(expect_of(-9, 5).result));
-    check(expect_of(-5, 5).result == -1, "reference: -5/5 is exactly -1",
-          static_cast<uint32_t>(-1), static_cast<uint32_t>(expect_of(-5, 5).result));
+    check(expect_of(-5, 5).result == -1, "reference: -5/5 is exactly -1", static_cast<uint32_t>(-1),
+          static_cast<uint32_t>(expect_of(-5, 5).result));
   }
 
   // ---- 4: THE SIGNED RAILS, BOTH SIDES, ON AND OFF BY ONE -----------------
@@ -362,10 +368,10 @@ int main(int argc, char** argv) {
   // zeros; the verdict rides the same ordered pipeline as the payload.
   {
     std::vector<Req> rs;
-    rs.push_back(req_of(static_cast<__int128>(UINT64_MAX), 1, 0x0501,
-                        "UINT64_MAX / 1 saturates high"));
-    rs.push_back(req_of(-static_cast<__int128>(UINT64_MAX), 1, 0x0502,
-                        "-UINT64_MAX / 1 saturates low"));
+    rs.push_back(
+        req_of(static_cast<__int128>(UINT64_MAX), 1, 0x0501, "UINT64_MAX / 1 saturates high"));
+    rs.push_back(
+        req_of(-static_cast<__int128>(UINT64_MAX), 1, 0x0502, "-UINT64_MAX / 1 saturates low"));
     // den exactly on the boundary: num = 2^63, den = 2^31 -> q = 2^32, the
     // first quotient the signed word cannot hold.
     rs.push_back(req_of(static_cast<__int128>(1) << 63, 1u << 31, 0x0503,
@@ -441,7 +447,11 @@ int main(int argc, char** argv) {
         nx = rnd_normal_lane();
         ny = rnd_normal_lane();
         nz = rnd_normal_lane();
-        if ((rnd() % 37) == 0) { nx = 0; ny = 0; nz = 0; }
+        if ((rnd() % 37) == 0) {
+          nx = 0;
+          ny = 0;
+          nz = 0;
+        }
         switch (rnd() & 3) {
           case 0:
             lx = zref::terrain::kShadeLightX;
@@ -449,7 +459,8 @@ int main(int argc, char** argv) {
             lz = zref::terrain::kShadeLightZ;
             break;
           case 1:
-            lx = static_cast<int32_t>(rnd()); ly = static_cast<int32_t>(rnd());
+            lx = static_cast<int32_t>(rnd());
+            ly = static_cast<int32_t>(rnd());
             lz = static_cast<int32_t>(rnd());
             break;
           default:
@@ -478,11 +489,14 @@ int main(int argc, char** argv) {
                      "DIFFERENTIAL: the block's quotient IS the compiled law's");
       // The law's own answer, restated through the block's interface.
       const int32_t want = (mag == 0) ? 0 : q.exp.result;
-      check(want == law,
-            "the block's operand derivation reproduces the compiled law exactly",
+      check(want == law, "the block's operand derivation reproduces the compiled law exactly",
             static_cast<uint32_t>(law), static_cast<uint32_t>(want));
       q.exp.result = want;
-      if (mag == 0) { q.exp.degenerate = true; q.exp.saturated = false; ++cov_degen; }
+      if (mag == 0) {
+        q.exp.degenerate = true;
+        q.exp.saturated = false;
+        ++cov_degen;
+      }
       if (want < 0) ++cov_neg;
       if (q.exp.saturated) ++cov_sat;
       if (!q.exp.saturated && want > 0 && want < 0x10000) ++cov_mid;
@@ -512,10 +526,10 @@ int main(int argc, char** argv) {
       rs.push_back(req_of(h, den, static_cast<uint16_t>(0x0800 + i),
                           "value is independent of the traffic pattern"));
     }
-    check_batch(dut, rs, 0, 0, -1, 0);   // no bubbles, no stalls
-    check_batch(dut, rs, 3, 0, -1, 0);   // consumer stalls 1 cycle in 3
-    check_batch(dut, rs, 0, 5, -1, 0);   // producer bubbles 1 cycle in 5
-    check_batch(dut, rs, 7, 3, -1, 0);   // both
+    check_batch(dut, rs, 0, 0, -1, 0);  // no bubbles, no stalls
+    check_batch(dut, rs, 3, 0, -1, 0);  // consumer stalls 1 cycle in 3
+    check_batch(dut, rs, 0, 5, -1, 0);  // producer bubbles 1 cycle in 5
+    check_batch(dut, rs, 7, 3, -1, 0);  // both
   }
 
   // ---- 9: RESET WITH EVERY STAGE OCCUPIED ---------------------------------

@@ -85,10 +85,10 @@ void set_rec(W& dst, const Rec& r) {
 
 void collect(Dut* v) {
   if (v->wr_valid_o && v->wr_ready_i) {
-    const uint64_t lo = static_cast<uint64_t>(v->wr_record_o[0]) |
-                        (static_cast<uint64_t>(v->wr_record_o[1]) << 32);
-    const uint64_t hi = static_cast<uint64_t>(v->wr_record_o[2]) |
-                        (static_cast<uint64_t>(v->wr_record_o[3]) << 32);
+    const uint64_t lo =
+        static_cast<uint64_t>(v->wr_record_o[0]) | (static_cast<uint64_t>(v->wr_record_o[1]) << 32);
+    const uint64_t hi =
+        static_cast<uint64_t>(v->wr_record_o[2]) | (static_cast<uint64_t>(v->wr_record_o[3]) << 32);
     g_written.emplace_back(lo, hi);
   }
 }
@@ -185,8 +185,7 @@ int main(int argc, char** argv) {
   std::printf(
       "  mutant stream: %zu records, survivors_o=%u children_written_o=%u; "
       "first child at %d, last survivor at %d\n",
-      g_written.size(), v->survivors_o, v->children_written_o, first_child_pos,
-      last_survivor_pos);
+      g_written.size(), v->survivors_o, v->children_written_o, first_child_pos, last_survivor_pos);
 
   // (1) The accounting is untouched. This is the half that makes the mutant
   //     dangerous rather than obvious.
@@ -203,18 +202,16 @@ int main(int argc, char** argv) {
 
   // (2) The positive control: the ORDER is broken, and only a per-position
   //     comparison of the stream can say so.
-  zhao::check(first_child_pos >= 0 && last_survivor_pos >= 0 &&
-                  first_child_pos < last_survivor_pos,
-              "a CHILD was emitted BEFORE the last SURVIVOR. The ordering law of "
-              "PART.STATE -- survivors compacted first, children strictly after -- "
-              "is violated by this copy, and part_state_directed.cpp's "
-              "position-by-position stream comparison is the only check in the tree "
-              "that sees it. That comparison is therefore a real check",
-              1,
-              (first_child_pos >= 0 && last_survivor_pos >= 0 &&
-               first_child_pos < last_survivor_pos)
-                  ? 1
-                  : 0);
+  zhao::check(
+      first_child_pos >= 0 && last_survivor_pos >= 0 && first_child_pos < last_survivor_pos,
+      "a CHILD was emitted BEFORE the last SURVIVOR. The ordering law of "
+      "PART.STATE -- survivors compacted first, children strictly after -- "
+      "is violated by this copy, and part_state_directed.cpp's "
+      "position-by-position stream comparison is the only check in the tree "
+      "that sees it. That comparison is therefore a real check",
+      1,
+      (first_child_pos >= 0 && last_survivor_pos >= 0 && first_child_pos < last_survivor_pos) ? 1
+                                                                                              : 0);
 
   // (3) And the production check itself, run against the mutant and required to
   //     go RED. This is the part that is not an inference: part_state_directed's

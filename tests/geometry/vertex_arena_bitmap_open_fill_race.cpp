@@ -56,8 +56,8 @@ using zhao::check;
 
 namespace {
 
-constexpr int kArenas = 3;   // not a power of two: arena 3 is expressible
-constexpr int kDepth = 11;   // not a power of two: linear != concat addressing
+constexpr int kArenas = 3;               // not a power of two: arena 3 is expressible
+constexpr int kDepth = 11;               // not a power of two: linear != concat addressing
 constexpr int kBits = kArenas * kDepth;  // 33 valid bits in one packed vector
 
 // A payload that identifies its slot exactly, so a bit landing in the wrong
@@ -126,8 +126,7 @@ struct Dut {
 
   // OPEN AND FILL ON THE SAME EDGE. The whole point of the file: two commands,
   // one clock, and the rewrite's priority is what decides the outcome.
-  void open_and_fill(int open_arena, int fill_arena, int fill_index,
-                     uint64_t payload) {
+  void open_and_fill(int open_arena, int fill_arena, int fill_index, uint64_t payload) {
     idle();
     v->open_i = 1;
     v->open_arena_i = open_arena;
@@ -157,8 +156,7 @@ struct Dut {
     idle();
     v->eval();
     return Reply{static_cast<int>(v->rep_valid_o), static_cast<int>(v->rep_hit_o),
-                 static_cast<int>(v->rep_refuse_o),
-                 static_cast<uint64_t>(v->rep_payload_o)};
+                 static_cast<int>(v->rep_refuse_o), static_cast<uint64_t>(v->rep_payload_o)};
   }
 
   void expect_hit(int arena, int index, uint64_t payload, const char* what) {
@@ -248,8 +246,8 @@ int main(int argc, char** argv) {
   d.expect_miss(kRaceArena, kRaceSlot,
                 "B0: a fill racing the open of a still-SEALED arena is dropped");
   top->eval();
-  check(top->arena_overflow_o == 1,
-        "B0: and that drop is sticky on overflow like any other", 1, top->arena_overflow_o);
+  check(top->arena_overflow_o == 1, "B0: and that drop is sticky on overflow like any other", 1,
+        top->arena_overflow_o);
 
   // B1. NOW THE ONE THAT MATTERS. Reopen and refill so the arena is UNSEALED
   //     and populated, then race an open of it against a fill to one of its
@@ -267,8 +265,8 @@ int main(int argc, char** argv) {
   for (int i = 0; i < kDepth; ++i) {
     if (i == kRaceSlot) continue;
     char what[112];
-    std::snprintf(what, sizeof(what),
-                  "B: and the open still cleared arena %d slot %d", kRaceArena, i);
+    std::snprintf(what, sizeof(what), "B: and the open still cleared arena %d slot %d", kRaceArena,
+                  i);
     d.expect_miss(kRaceArena, i, what);
   }
   // THE CLEAR IS PER-BANK, so the other arenas are untouched by all of this.
@@ -276,8 +274,8 @@ int main(int argc, char** argv) {
     if (a == kRaceArena) continue;
     for (int i = 0; i < kDepth; ++i) {
       char what[112];
-      std::snprintf(what, sizeof(what),
-                    "B: arena %d slot %d survived the open of arena %d", a, i, kRaceArena);
+      std::snprintf(what, sizeof(what), "B: arena %d slot %d survived the open of arena %d", a, i,
+                    kRaceArena);
       d.expect_hit(a, i, mark(a, i), what);
     }
   }
@@ -294,12 +292,12 @@ int main(int argc, char** argv) {
   d.fill(0, kDepth - 1, mark(0, kDepth - 1));  // bit 10, the last of bank 0
   d.seal(0);
   d.open(1);
-  d.fill(1, 0, mark(1, 0));                    // bit 11, the first of bank 1
+  d.fill(1, 0, mark(1, 0));  // bit 11, the first of bank 1
   d.seal(1);
   d.expect_hit(0, kDepth - 1, mark(0, kDepth - 1), "C: bank 0's last slot is filled");
   d.expect_hit(1, 0, mark(1, 0), "C: bank 1's first slot is filled");
 
-  d.open(1);   // drops bit 11 and everything above it in bank 1, nothing below
+  d.open(1);  // drops bit 11 and everything above it in bank 1, nothing below
   d.seal(1);
   d.expect_miss(1, 0, "C: opening bank 1 dropped its first slot (bit 11)");
   d.expect_hit(0, kDepth - 1, mark(0, kDepth - 1),
@@ -318,8 +316,8 @@ int main(int argc, char** argv) {
   d.fill_all_scattered(2);
   d.seal(2);
   const uint32_t gen2_before = d.gen[2];
-  d.open(kArenas);          // arena == ARENAS: illegal, expressible
-  d.open(kArenas + 4);      // and well past it
+  d.open(kArenas);      // arena == ARENAS: illegal, expressible
+  d.open(kArenas + 4);  // and well past it
   check(d.gen[2] == gen2_before, "D1: the illegal opens did not bump a real generation",
         gen2_before, d.gen[2]);
   for (int i = 0; i < kDepth; ++i) {
@@ -335,11 +333,10 @@ int main(int argc, char** argv) {
   d.open(0);
   d.seal(0);
   d.expect_miss(0, 5, "D2: arena 0 slot 5 starts clear");
-  d.open(0);   // unseal, so fill_ok can be satisfied on the raced edge
+  d.open(0);  // unseal, so fill_ok can be satisfied on the raced edge
   d.open_and_fill(kArenas, 0, 5, 0x1234'5678'9ABC'DEF0ull);
   d.seal(0);
-  d.expect_hit(0, 5, 0x1234'5678'9ABC'DEF0ull,
-               "D2: a fill racing an ILLEGAL open still lands");
+  d.expect_hit(0, 5, 0x1234'5678'9ABC'DEF0ull, "D2: a fill racing an ILLEGAL open still lands");
 
   // D3. Out-of-range FILLS are dropped and never set a bit. An index of DEPTH
   //     is the wrap the contract's leading law forbids: at DEPTH = 11 it would
@@ -386,8 +383,8 @@ int main(int argc, char** argv) {
       d.fill(a, i, mark(a, i));
       d.seal(a);
       char what[96];
-      std::snprintf(what, sizeof(what), "E: bit %d (arena %d slot %d) sets alone",
-                    a * kDepth + i, a, i);
+      std::snprintf(what, sizeof(what), "E: bit %d (arena %d slot %d) sets alone", a * kDepth + i,
+                    a, i);
       d.expect_hit(a, i, mark(a, i), what);
       // and it is the ONLY bit of its bank that is set
       for (int j = 0; j < kDepth; ++j) {

@@ -40,7 +40,7 @@ using zhao::check;
 
 namespace {
 
-constexpr int kSpeciesN = 8;   // small on purpose: an out-of-range species must be reachable
+constexpr int kSpeciesN = 8;  // small on purpose: an out-of-range species must be reachable
 
 struct Child {
   uint64_t lo, hi;
@@ -57,23 +57,31 @@ struct Desc {
 Desc lookup(uint8_t parent_species, uint8_t event) {
   if (parent_species == 1) {
     switch (event) {
-      case 0: return {true, 2, 3};    // birth     -> 3 children
-      case 1: return {true, 3, 2};    // age mark  -> 2 children
-      case 2: return {true, 2, 16};   // collision -> the legal maximum
-      default: return {true, 2, 17};  // death     -> one over: refuse the GROUP
+      case 0:
+        return {true, 2, 3};  // birth     -> 3 children
+      case 1:
+        return {true, 3, 2};  // age mark  -> 2 children
+      case 2:
+        return {true, 2, 16};  // collision -> the legal maximum
+      default:
+        return {true, 2, 17};  // death     -> one over: refuse the GROUP
     }
   }
   if (parent_species == 2) {
-    return {true, 9, 1};              // species 9 with SPECIES_N=8: out of range
+    return {true, 9, 1};  // species 9 with SPECIES_N=8: out of range
   }
-  return {false, 0, 0};               // no descriptor at all
+  return {false, 0, 0};  // no descriptor at all
 }
 
 zref::part::Particle128 make_parent(uint8_t species, int seed) {
   zref::part::Particle128 p{};
-  p.pos[0] = 1000 + seed; p.pos[1] = -2000 - seed; p.pos[2] = 300 + seed;
-  p.vel[0] = 7 + seed;    p.vel[1] = -9 - seed;    p.vel[2] = 11 + seed;
-  p.age = static_cast<uint16_t>(500 + seed);   // 10 bits: the oracle's width
+  p.pos[0] = 1000 + seed;
+  p.pos[1] = -2000 - seed;
+  p.pos[2] = 300 + seed;
+  p.vel[0] = 7 + seed;
+  p.vel[1] = -9 - seed;
+  p.vel[2] = 11 + seed;
+  p.age = static_cast<uint16_t>(500 + seed);  // 10 bits: the oracle's width
   p.species = species;
   p.size = static_cast<uint8_t>(20 + (seed & 7));
   p.spin = static_cast<uint8_t>(seed & 0x3F);
@@ -105,11 +113,11 @@ struct Dut {
 
   // The descriptor port is combinational: answer whatever is being asked.
   void serve_descriptor() {
-    const Desc d = lookup(static_cast<uint8_t>(v->spc_species_o),
-                          static_cast<uint8_t>(v->spc_event_o));
-    v->spc_known_i    = d.known ? 1 : 0;
+    const Desc d =
+        lookup(static_cast<uint8_t>(v->spc_species_o), static_cast<uint8_t>(v->spc_event_o));
+    v->spc_known_i = d.known ? 1 : 0;
     v->spc_child_spc_i = d.child_species;
-    v->spc_count_i     = d.count;
+    v->spc_count_i = d.count;
   }
 
   void tick() {
@@ -147,15 +155,16 @@ struct Dut {
   void reset() {
     idle();
     v->rst_n = 0;
-    tick(); tick();
+    tick();
+    tick();
     v->rst_n = 1;
     tick();
     idle();
   }
 
   // Offer one parent and run until the block is idle again.
-  void feed(const zref::part::Particle128& p, uint16_t pid, uint8_t events,
-            uint32_t tick_no, int cap_full_after = -1) {
+  void feed(const zref::part::Particle128& p, uint16_t pid, uint8_t events, uint32_t tick_no,
+            int cap_full_after = -1) {
     uint64_t lo, hi;
     zref::part::particle_pack(p, &lo, &hi);
     idle();
@@ -197,10 +206,11 @@ zref::part::Particle128 unpack(const Child& c) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  (void)argc; (void)argv;
+  (void)argc;
+  (void)argv;
   Verilated::traceEverOn(false);
 
-  auto* top = new Vzhao_part_spawn;   // heap + exit_hard: see zhao_sim.hpp
+  auto* top = new Vzhao_part_spawn;  // heap + exit_hard: see zhao_sim.hpp
   Vzhao_part_spawn& r = *top;
   Dut d(top);
   d.reset();
@@ -215,9 +225,12 @@ int main(int argc, char** argv) {
   check(d.out.size() == 5, "birth+age emits 3 then 2", 5u, d.out.size());
   if (d.out.size() == 5) {
     bool order_ok = true;
-    for (int i = 0; i < 3; ++i) if (unpack(d.out[i]).species != 2) order_ok = false;
-    for (int i = 3; i < 5; ++i) if (unpack(d.out[i]).species != 3) order_ok = false;
-    check(order_ok, "event order: all birth children precede all age children", 1, order_ok ? 1 : 0);
+    for (int i = 0; i < 3; ++i)
+      if (unpack(d.out[i]).species != 2) order_ok = false;
+    for (int i = 3; i < 5; ++i)
+      if (unpack(d.out[i]).species != 3) order_ok = false;
+    check(order_ok, "event order: all birth children precede all age children", 1,
+          order_ok ? 1 : 0);
   }
 
   // ---- 6. the ratified flag bits, on every child ever emitted -------------
@@ -228,10 +241,12 @@ int main(int argc, char** argv) {
       if ((p.flags & zref::part::kPartBornThisTick) == 0) born_ok = false;
       if (p.flags & zref::part::kPartFlagReserved) reserved_ok = false;
       if (p.age != 0) age_ok = false;
-      for (int k = 0; k < 3; ++k) if (p.pos[k] != par1.pos[k]) pos_ok = false;
+      for (int k = 0; k < 3; ++k)
+        if (p.pos[k] != par1.pos[k]) pos_ok = false;
     }
     check(born_ok, "every child carries kPartBornThisTick", 1, born_ok ? 1 : 0);
-    check(reserved_ok, "kPartFlagReserved stays zero (zero in, preserved zero)", 1, reserved_ok ? 1 : 0);
+    check(reserved_ok, "kPartFlagReserved stays zero (zero in, preserved zero)", 1,
+          reserved_ok ? 1 : 0);
     check(age_ok, "a child is age zero", 1, age_ok ? 1 : 0);
     check(pos_ok, "child position is the parent's, identity (Class-C unruled)", 1, pos_ok ? 1 : 0);
   }
@@ -246,17 +261,18 @@ int main(int argc, char** argv) {
   }
   std::vector<Child> first_run(d.out.begin(), d.out.begin() + 3);
   d.out.clear();
-  d.feed(par1, 0x1234, 0b0001, 7);   // same parent id, same tick, same event
+  d.feed(par1, 0x1234, 0b0001, 7);  // same parent id, same tick, same event
   bool repro = d.out.size() == 3;
   for (size_t i = 0; i < 3 && repro; ++i)
     repro = (d.out[i].lo == first_run[i].lo) && (d.out[i].hi == first_run[i].hi);
-  check(repro, "same {parent_id, event, index, tick} reproduces the same children", 1, repro ? 1 : 0);
+  check(repro, "same {parent_id, event, index, tick} reproduces the same children", 1,
+        repro ? 1 : 0);
 
   // ---- 2a. 16 is ACCEPTED -------------------------------------------------
   const uint32_t emitted_before = r.children_emitted_o;
-  d.start_tick();                      // a new tick: the watermark restarts here
+  d.start_tick();  // a new tick: the watermark restarts here
   d.out.clear();
-  d.feed(par1, 0x2222, 0b0100, 8);   // collision -> 16
+  d.feed(par1, 0x2222, 0b0100, 8);  // collision -> 16
   check(d.out.size() == 16, "16 children accepted", 16u, d.out.size());
   check(r.children_emitted_o - emitted_before == 16, "emitted counter agrees", 16u,
         r.children_emitted_o - emitted_before);
@@ -264,7 +280,7 @@ int main(int argc, char** argv) {
   // ---- 2b. 17 refuses the WHOLE group, and emits nothing ------------------
   const uint32_t refused_gt_before = r.refused_count_gt_max_o;
   d.out.clear();
-  d.feed(par1, 0x3333, 0b1000, 9);   // death -> 17
+  d.feed(par1, 0x3333, 0b1000, 9);  // death -> 17
   check(d.out.size() == 0, "17 emits NOTHING (not a truncated 16)", 0u, d.out.size());
   check(r.refused_count_gt_max_o - refused_gt_before == 1, "count>16 refusal counted", 1u,
         r.refused_count_gt_max_o - refused_gt_before);
@@ -274,8 +290,8 @@ int main(int argc, char** argv) {
   d.out.clear();
   d.feed(par2, 0x4444, 0b0001, 10);  // child species 9, SPECIES_N = 8
   check(d.out.size() == 0, "out-of-range child species emits nothing", 0u, d.out.size());
-  check(r.refused_unknown_species_o - refused_spc_before == 1,
-        "unknown-species refusal counted", 1u, r.refused_unknown_species_o - refused_spc_before);
+  check(r.refused_unknown_species_o - refused_spc_before == 1, "unknown-species refusal counted",
+        1u, r.refused_unknown_species_o - refused_spc_before);
 
   // ---- 4. capacity: later children dropped, and the SAME ones each run ----
   // Its own tick. Without this the two 4-child capacity runs land in the SAME
@@ -309,19 +325,22 @@ int main(int argc, char** argv) {
     // the species run is 2,2,2,3,3 -- parent -> event -> index, exactly.
     bool shape = true;
     for (int p = 0; p < 2; ++p) {
-      for (int i = 0; i < 3; ++i) if (unpack(d.out[p * 5 + i]).species != 2) shape = false;
-      for (int i = 3; i < 5; ++i) if (unpack(d.out[p * 5 + i]).species != 3) shape = false;
+      for (int i = 0; i < 3; ++i)
+        if (unpack(d.out[p * 5 + i]).species != 2) shape = false;
+      for (int i = 3; i < 5; ++i)
+        if (unpack(d.out[p * 5 + i]).species != 3) shape = false;
     }
     check(shape, "stream is parent -> event -> index with no interleaving", 1, shape ? 1 : 0);
     bool parents_differ = (d.out[0].lo != d.out[5].lo) || (d.out[0].hi != d.out[5].hi);
-    check(parents_differ, "different parent_id gives different children", 1, parents_differ ? 1 : 0);
+    check(parents_differ, "different parent_id gives different children", 1,
+          parents_differ ? 1 : 0);
   }
 
   // The watermark must now be 16 -- the collision burst, the biggest thing that
   // happened inside one tick -- and NOT the 42 emitted across the whole run. If
   // those two are ever equal again, tick_start_i has stopped being honoured.
-  check(r.max_children_in_tick_o == 16, "max_children_in_tick is PER TICK, not cumulative",
-        16u, r.max_children_in_tick_o);
+  check(r.max_children_in_tick_o == 16, "max_children_in_tick is PER TICK, not cumulative", 16u,
+        r.max_children_in_tick_o);
   check(r.max_children_in_tick_o != r.children_emitted_o,
         "the watermark is not a second copy of the emitted counter", 1, 1);
 

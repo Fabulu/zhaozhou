@@ -101,7 +101,10 @@ std::vector<Got> stream(Vzhao_light_isqrt64_ii8& d, const std::vector<uint64_t>&
       ++sent;
     }
     if (retire_now) {
-      if (s.retired == 0) { s.first_retire = now; s.first_latency = now - s.first_accept; }
+      if (s.retired == 0) {
+        s.first_retire = now;
+        s.first_latency = now - s.first_accept;
+      }
       s.last_retire = now;
       ++s.retired;
       out.push_back(g);
@@ -126,8 +129,8 @@ void check_batch(Vzhao_light_isqrt64_ii8& d, const std::vector<uint64_t>& rad, i
   check(got.size() == rad.size(), "every radicand produced exactly one root", rad.size(),
         got.size());
   for (size_t i = 0; i < got.size() && i < rad.size(); ++i) {
-    const uint64_t want = zref::isqrt_u64(rad[i]) +
-                          ((static_cast<int>(i) == inject_index) ? inject : 0);
+    const uint64_t want =
+        zref::isqrt_u64(rad[i]) + ((static_cast<int>(i) == inject_index) ? inject : 0);
     check(got[i].root == want, what, static_cast<uint32_t>(want), got[i].root);
     check(got[i].tag == tags[i], "the tag came back with its own root", tags[i], got[i].tag);
   }
@@ -220,11 +223,19 @@ int main(int argc, char** argv) {
       int32_t n[3];
       for (int k = 0; k < 3; ++k) {
         switch (rnd() & 3) {
-          case 0: n[k] = static_cast<int32_t>(rnd() & 7) - 3; break;
-          case 1: n[k] = static_cast<int32_t>(rnd() % 131073) - 65536; break;
-          case 2: n[k] = (rnd() & 1) ? INT32_MAX - static_cast<int32_t>(rnd() & 3)
-                                     : INT32_MIN + static_cast<int32_t>(rnd() & 3); break;
-          default: n[k] = static_cast<int32_t>(rnd()); break;
+          case 0:
+            n[k] = static_cast<int32_t>(rnd() & 7) - 3;
+            break;
+          case 1:
+            n[k] = static_cast<int32_t>(rnd() % 131073) - 65536;
+            break;
+          case 2:
+            n[k] = (rnd() & 1) ? INT32_MAX - static_cast<int32_t>(rnd() & 3)
+                               : INT32_MIN + static_cast<int32_t>(rnd() & 3);
+            break;
+          default:
+            n[k] = static_cast<int32_t>(rnd());
+            break;
         }
       }
       const uint64_t s = static_cast<uint64_t>(n[0]) * static_cast<uint64_t>(n[0]) +
@@ -280,7 +291,10 @@ int main(int argc, char** argv) {
     const int kN = 2048;
     std::vector<uint64_t> r(kN);
     std::vector<uint16_t> t(kN);
-    for (int i = 0; i < kN; ++i) { r[i] = rnd(); t[i] = static_cast<uint16_t>(i & 0xFFFF); }
+    for (int i = 0; i < kN; ++i) {
+      r[i] = rnd();
+      t[i] = static_cast<uint16_t>(i & 0xFFFF);
+    }
     Stats st;
     const std::vector<Got> got = stream(dut, r, t, 0, 0, &st);
     for (int i = 0; i < kN; ++i)
@@ -302,9 +316,10 @@ int main(int argc, char** argv) {
     // The capacity sentence the schedule depends on, stated as arithmetic
     // rather than as a promise.
     const double need = 120000.0 * ii_a;
-    std::printf("[isqrt64] 120,000 normals at this interval = %.0f clocks against the "
-                "960,000-clock term schedule (%.1f%% occupancy).\n",
-                need, 100.0 * need / 960000.0);
+    std::printf(
+        "[isqrt64] 120,000 normals at this interval = %.0f clocks against the "
+        "960,000-clock term schedule (%.1f%% occupancy).\n",
+        need, 100.0 * need / 960000.0);
   }
 
   dut.final();

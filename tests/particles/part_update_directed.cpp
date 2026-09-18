@@ -59,7 +59,7 @@ using zref::part::Particle128;
 
 namespace {
 
-constexpr int kSpeciesN = 8;      // -GSPECIES_N=8: an out-of-range species is reachable
+constexpr int kSpeciesN = 8;  // -GSPECIES_N=8: an out-of-range species is reachable
 
 // Two's-complement field packers for the narrow signed ports. Verilator hands
 // an s11 port as an 11-bit unsigned storage word, so the sign has to be put
@@ -72,8 +72,8 @@ uint32_t u18(int v) { return static_cast<uint32_t>(v) & 0x3FFFFu; }
 struct Stim {
   Particle128 p{};
   uint8_t recipe = 0;
-  uint16_t lifetime = 0;      // 0 = unbounded
-  uint16_t age_mark = 0;      // 0 = no marker
+  uint16_t lifetime = 0;  // 0 = unbounded
+  uint16_t age_mark = 0;  // 0 = no marker
   uint8_t drag = 0;
   int grav = 0;
   int strength = 64;
@@ -182,14 +182,14 @@ Result run_one(const Stim& s) {
   r.spc_index = g->spc_index_o;
   r.crv_index = g->crv_index_o;
 
-  tick();                       // accept
+  tick();  // accept
   g->in_valid_i = 0;
   g->eval();
 
-  r.rec_lo = static_cast<uint64_t>(g->out_record_o[0]) |
-             (static_cast<uint64_t>(g->out_record_o[1]) << 32);
-  r.rec_hi = static_cast<uint64_t>(g->out_record_o[2]) |
-             (static_cast<uint64_t>(g->out_record_o[3]) << 32);
+  r.rec_lo =
+      static_cast<uint64_t>(g->out_record_o[0]) | (static_cast<uint64_t>(g->out_record_o[1]) << 32);
+  r.rec_hi =
+      static_cast<uint64_t>(g->out_record_o[2]) | (static_cast<uint64_t>(g->out_record_o[3]) << 32);
   zref::part::particle_unpack(r.rec_lo, r.rec_hi, &r.p);
   r.survive = g->out_survive_o != 0;
   r.refused = g->out_refused_o != 0;
@@ -199,15 +199,14 @@ Result run_one(const Stim& s) {
 
   g->out_ready_i = 1;
   g->eval();
-  tick();                       // drain
+  tick();  // drain
   idle();
   return r;
 }
 
 Counters snap() {
-  return Counters{g->particles_updated_o, g->particles_refused_o, g->particles_died_by_age_o,
-                  g->velocity_saturations_o, g->position_saturations_o,
-                  g->collisions_applied_o};
+  return Counters{g->particles_updated_o,    g->particles_refused_o,    g->particles_died_by_age_o,
+                  g->velocity_saturations_o, g->position_saturations_o, g->collisions_applied_o};
 }
 
 uint32_t hist(int bin) {
@@ -260,18 +259,18 @@ struct RecipeCase {
 
 const RecipeCase kRecipes[12] = {
     // id  name           velocity after         position after
-    {0,  "integrate",     16,   -8,     4,      1040,  504,  -252},
-    {1,  "gravity",       16,   56,     4,      1040,  568,  -252},
-    {2,  "linear drag",   12,   -6,     3,      1036,  506,  -253},
-    {3,  "attraction",  -240, -136,    68,       784,  376,  -188},
-    {4,  "repulsion",    272,  120,   -60,      1296,  632,  -316},
-    {5,  "orbit",         80,   -8,   260,      1104,  504,     4},
-    {6,  "vortex",       -48,    8,   292,       976,  520,    36},
-    {7,  "wind",          41,  -21,    10,      1065,  491,  -246},
-    {8,  "shockwave",   1023, 1016,  -508,      2047, 1528,  -764},
-    {9,  "spline flow",   37,  -19,     9,      1061,  493,  -247},
-    {10, "colour curve",  16,   -8,     4,      1040,  504,  -252},
-    {11, "size curve",    16,   -8,     4,      1040,  504,  -252},
+    {0, "integrate", 16, -8, 4, 1040, 504, -252},
+    {1, "gravity", 16, 56, 4, 1040, 568, -252},
+    {2, "linear drag", 12, -6, 3, 1036, 506, -253},
+    {3, "attraction", -240, -136, 68, 784, 376, -188},
+    {4, "repulsion", 272, 120, -60, 1296, 632, -316},
+    {5, "orbit", 80, -8, 260, 1104, 504, 4},
+    {6, "vortex", -48, 8, 292, 976, 520, 36},
+    {7, "wind", 41, -21, 10, 1065, 491, -246},
+    {8, "shockwave", 1023, 1016, -508, 2047, 1528, -764},
+    {9, "spline flow", 37, -19, 9, 1061, 493, -247},
+    {10, "colour curve", 16, -8, 4, 1040, 504, -252},
+    {11, "size curve", 16, -8, 4, 1040, 504, -252},
 };
 
 }  // namespace
@@ -279,7 +278,7 @@ const RecipeCase kRecipes[12] = {
 int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
   Verilated::traceEverOn(false);
-  g = new Vzhao_part_update;   // heap + exit_hard: see zhao_sim.hpp
+  g = new Vzhao_part_update;  // heap + exit_hard: see zhao_sim.hpp
   reset();
 
   // =========================================================================
@@ -329,11 +328,13 @@ int main(int argc, char** argv) {
   // sign, which is exactly what the contract says to assert.
   {
     const Counters c = snap();
-    check(c.vsat >= 1, "velocity_saturations_o MOVED on shockwave -- the counter is a "
-                       "detector, not a hopeful zero", 1, c.vsat >= 1 ? 1 : 0);
+    check(c.vsat >= 1,
+          "velocity_saturations_o MOVED on shockwave -- the counter is a "
+          "detector, not a hopeful zero",
+          1, c.vsat >= 1 ? 1 : 0);
     check(kRecipes[8].vx == 1023 && kRecipes[8].vx > 0,
-          "shockwave's saturated axis kept its SIGN: a wrap of 2064 would read -2032",
-          1023, kRecipes[8].vx);
+          "shockwave's saturated axis kept its SIGN: a wrap of 2064 would read -2032", 1023,
+          kRecipes[8].vx);
   }
 
   // The histogram: twelve bins, each seen once, and the unknown bins still zero.
@@ -362,8 +363,8 @@ int main(int argc, char** argv) {
   // =========================================================================
   {
     Stim s = baseline();
-    s.recipe = 4;          // repulsion, a strong recipe
-    s.drag = 128;          // half the velocity survives
+    s.recipe = 4;  // repulsion, a strong recipe
+    s.drag = 128;  // half the velocity survives
     const Result r = run_one(s);
 
     // drag(vel) = (8, -4, 2); acc = (256, 128, -64)
@@ -399,8 +400,7 @@ int main(int argc, char** argv) {
 
     check(no_field.rec_lo == zero_field.rec_lo && no_field.rec_hi == zero_field.rec_hi,
           "a Field acceleration of ZERO gives a BIT-IDENTICAL record to no Field", 1,
-          (no_field.rec_lo == zero_field.rec_lo && no_field.rec_hi == zero_field.rec_hi) ? 1
-                                                                                         : 0);
+          (no_field.rec_lo == zero_field.rec_lo && no_field.rec_hi == zero_field.rec_hi) ? 1 : 0);
 
     Stim c = baseline();
     c.recipe = 0;
@@ -440,15 +440,14 @@ int main(int argc, char** argv) {
     const Result r = run_one(s);
 
     check_vec("collision", "velocity is the response, verbatim", r.p.vel, -100, 200, -300);
-    check_vec("collision", "position used the PRE-collision velocity", r.p.pos, 1296, 632,
-              -316);
+    check_vec("collision", "position used the PRE-collision velocity", r.p.pos, 1296, 632, -316);
     check(r.events == 0x4, "collision event (bit 2) and nothing else", 0x4, r.events);
     check((r.p.flags & zref::part::kPartCollidedThisTick) != 0,
           "kPartCollidedThisTick is set on the record", 1,
           (r.p.flags & zref::part::kPartCollidedThisTick) ? 1 : 0);
     const Counters after = snap();
-    check(after.collisions - before.collisions == 1,
-          "collisions_applied_o MOVED", 1, after.collisions - before.collisions);
+    check(after.collisions - before.collisions == 1, "collisions_applied_o MOVED", 1,
+          after.collisions - before.collisions);
   }
 
   // =========================================================================
@@ -459,7 +458,7 @@ int main(int argc, char** argv) {
 
     // The field width ends the particle whatever the species says.
     Stim s = baseline();
-    s.recipe = 4;                     // a strong recipe, to prove it is NOT applied
+    s.recipe = 4;  // a strong recipe, to prove it is NOT applied
     s.p.age = 1023;
     const Result r = run_one(s);
     check(!r.survive, "age 2^10-1 then one more tick: the particle DIES", 0, r.survive ? 1 : 0);
@@ -497,8 +496,7 @@ int main(int argc, char** argv) {
     s.p.age = 5;
     s.age_mark = 6;
     const Result r = run_one(s);
-    check(r.events == 0x2, "the age-marker event (bit 1) fires on the exact tick", 0x2,
-          r.events);
+    check(r.events == 0x2, "the age-marker event (bit 1) fires on the exact tick", 0x2, r.events);
 
     Stim b = baseline();
     b.p.flags = zref::part::kPartBornThisTick;
@@ -525,7 +523,7 @@ int main(int argc, char** argv) {
     const Counters before = snap();
 
     Stim s = baseline();
-    s.recipe = 12;                    // outside the closed vocabulary
+    s.recipe = 12;  // outside the closed vocabulary
     s.p.pos[0] = 1024;
     uint64_t lo = 0, hi = 0;
     zref::part::particle_pack(s.p, &lo, &hi);
@@ -533,11 +531,11 @@ int main(int argc, char** argv) {
     check(r.refused, "an unknown recipe id REFUSES the particle", 1, r.refused ? 1 : 0);
     check(!r.survive, "and it does not survive", 0, r.survive ? 1 : 0);
     check(r.rec_lo == lo && r.rec_hi == hi,
-          "and the record leaves BIT-IDENTICAL -- no motion applied, not even the age",
-          1, (r.rec_lo == lo && r.rec_hi == hi) ? 1 : 0);
+          "and the record leaves BIT-IDENTICAL -- no motion applied, not even the age", 1,
+          (r.rec_lo == lo && r.rec_hi == hi) ? 1 : 0);
 
     Stim t = baseline();
-    t.p.species = kSpeciesN + 1;      // outside the table
+    t.p.species = kSpeciesN + 1;  // outside the table
     t.recipe = 0;
     uint64_t tlo = 0, thi = 0;
     zref::part::particle_pack(t.p, &tlo, &thi);
@@ -553,8 +551,8 @@ int main(int argc, char** argv) {
     const Counters after = snap();
     check(after.refused - before.refused == 2, "particles_refused_o MOVED twice", 2,
           after.refused - before.refused);
-    check(after.updated == before.updated,
-          "and neither refusal was counted as an update", before.updated, after.updated);
+    check(after.updated == before.updated, "and neither refusal was counted as an update",
+          before.updated, after.updated);
   }
 
   // =========================================================================
@@ -586,7 +584,7 @@ int main(int argc, char** argv) {
   // =========================================================================
   {
     Stim s = baseline();
-    s.p.age = 200;                    // 201 >> 6 == 3
+    s.p.age = 200;  // 201 >> 6 == 3
     s.recipe = 11;
     s.crv_size = 41;
     const Result r = run_one(s);
@@ -607,12 +605,11 @@ int main(int argc, char** argv) {
     g->eval();
     check(g->in_ready_o != 0, "idle: in_ready_o accepts", 1, g->in_ready_o);
     tick();
-    g->in_valid_i = 0;      // or the drain below immediately reloads
+    g->in_valid_i = 0;  // or the drain below immediately reloads
     g->eval();
     check(g->out_valid_o != 0, "one clock later the verdict is out -- FIXED latency 1", 1,
           g->out_valid_o);
-    check(g->in_ready_o == 0, "and in_ready_o is LOW while the consumer is shut", 0,
-          g->in_ready_o);
+    check(g->in_ready_o == 0, "and in_ready_o is LOW while the consumer is shut", 0, g->in_ready_o);
 
     const uint32_t held0 = g->out_record_o[0];
     tick();
@@ -630,8 +627,9 @@ int main(int argc, char** argv) {
   }
 
   const Counters f = snap();
-  std::printf("[part_update_directed] updated=%u refused=%u died=%u vsat=%u psat=%u "
-              "collisions=%u\n",
-              f.updated, f.refused, f.died, f.vsat, f.psat, f.collisions);
+  std::printf(
+      "[part_update_directed] updated=%u refused=%u died=%u vsat=%u psat=%u "
+      "collisions=%u\n",
+      f.updated, f.refused, f.died, f.vsat, f.psat, f.collisions);
   zhao::exit_hard(zhao::report_and_exit("part_update_directed"));
 }

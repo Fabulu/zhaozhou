@@ -53,8 +53,13 @@ void reset_dut(Vzhao_light_skin_adapter& d) {
   d.rst_n = 0;
   d.s_valid_i = 0;
   d.p_ready_i = 0;
-  d.s_nx_i = 0; d.s_ny_i = 0; d.s_nz_i = 0; d.s_mag_i = 0;
-  d.s_degenerate_i = 0; d.s_nlights_i = 0; d.s_src_id_i = 0;
+  d.s_nx_i = 0;
+  d.s_ny_i = 0;
+  d.s_nz_i = 0;
+  d.s_mag_i = 0;
+  d.s_degenerate_i = 0;
+  d.s_nlights_i = 0;
+  d.s_src_id_i = 0;
   d.eval();
   for (int i = 0; i < 3; ++i) tk(d);
   d.rst_n = 1;
@@ -100,7 +105,10 @@ Res offer(Vzhao_light_skin_adapter& d, const Tuple& t) {
   tk(d);
   d.s_valid_i = 0;
   d.eval();
-  for (int i = 0; i < 4 && !d.p_valid_o; ++i) { tk(d); d.eval(); }
+  for (int i = 0; i < 4 && !d.p_valid_o; ++i) {
+    tk(d);
+    d.eval();
+  }
   if (d.p_valid_o) {
     r.accepted = true;
     r.n[0] = static_cast<int32_t>(d.p_nx_o);
@@ -141,8 +149,8 @@ int main(int argc, char** argv) {
     Tuple t{{3000, -40000, 9000}, 41109, false, 4, 0x0101};
     const Res r = offer(dut, t);
     check(r.accepted, "an in-domain tuple is accepted", 1, r.accepted ? 1 : 0);
-    check(r.n[0] == 3000 && r.n[1] == -40000 && r.n[2] == 9000,
-          "the direction crosses unchanged", 3000, static_cast<uint32_t>(r.n[0]));
+    check(r.n[0] == 3000 && r.n[1] == -40000 && r.n[2] == 9000, "the direction crosses unchanged",
+          3000, static_cast<uint32_t>(r.n[0]));
     check(r.mag == 41109u, "the magnitude crosses unchanged -- NO second square root", 41109u,
           r.mag);
     check(r.src == 0x0101, "the source id rides the tuple", 0x0101, r.src);
@@ -176,29 +184,30 @@ int main(int argc, char** argv) {
       int64_t n[3];
       int64_t mag = 0;
       const bool ok = zref::creature::skin_world_normal(palette, v, n, &mag);
-      if (!ok) { ++degenerate; continue; }
+      if (!ok) {
+        ++degenerate;
+        continue;
+      }
       ++produced;
-      Tuple t{{n[0], n[1], n[2]}, static_cast<uint64_t>(mag), false, 4,
-              static_cast<uint16_t>(i)};
+      Tuple t{{n[0], n[1], n[2]}, static_cast<uint64_t>(mag), false, 4, static_cast<uint16_t>(i)};
       const Res r = offer(dut, t);
-      check(r.accepted,
-            "EVERY tuple the compiled producer emits is IN DOMAIN and accepted", 1,
+      check(r.accepted, "EVERY tuple the compiled producer emits is IN DOMAIN and accepted", 1,
             r.accepted ? 1 : 0);
       const int32_t inject = (break_oracle && i == 4) ? 1 : 0;
       check(r.n[0] == static_cast<int32_t>(n[0]) + inject, "lane x is lossless",
             static_cast<uint32_t>(n[0]) + inject, static_cast<uint32_t>(r.n[0]));
-      check(r.n[1] == static_cast<int32_t>(n[1]), "lane y is lossless",
-            static_cast<uint32_t>(n[1]), static_cast<uint32_t>(r.n[1]));
-      check(r.n[2] == static_cast<int32_t>(n[2]), "lane z is lossless",
-            static_cast<uint32_t>(n[2]), static_cast<uint32_t>(r.n[2]));
+      check(r.n[1] == static_cast<int32_t>(n[1]), "lane y is lossless", static_cast<uint32_t>(n[1]),
+            static_cast<uint32_t>(r.n[1]));
+      check(r.n[2] == static_cast<int32_t>(n[2]), "lane z is lossless", static_cast<uint32_t>(n[2]),
+            static_cast<uint32_t>(r.n[2]));
       check(r.mag == static_cast<uint32_t>(mag), "the magnitude is lossless",
             static_cast<uint32_t>(mag), r.mag);
     }
     check(produced > 300, "coverage: the producer actually produced tuples", 300,
           static_cast<uint32_t>(produced));
     check(dut.accepted_o == a0 + static_cast<uint32_t>(produced),
-          "accepted_o counted exactly the producer's tuples",
-          a0 + static_cast<uint32_t>(produced), dut.accepted_o);
+          "accepted_o counted exactly the producer's tuples", a0 + static_cast<uint32_t>(produced),
+          dut.accepted_o);
     check(dut.refused_o == r0, "not one tuple from the real producer was refused", r0,
           dut.refused_o);
   }
@@ -230,11 +239,11 @@ int main(int argc, char** argv) {
     const uint32_t a0 = dut.accepted_o;
     const uint32_t r0 = dut.refused_o;
     const std::vector<Tuple> bad = {
-        {{int64_t{1} << 31, 0, 0}, 100, false, 4, 0x0401},          // x just past s32
-        {{0, -(int64_t{1} << 31) - 1, 0}, 100, false, 4, 0x0402},   // y just past s32
-        {{0, 0, int64_t{1} << 40}, 100, false, 4, 0x0403},          // z far past s32
-        {{1, 1, 1}, uint64_t{1} << 32, false, 4, 0x0404},           // magnitude past u32
-        {{1, 1, 1}, UINT64_MAX, false, 4, 0x0405},                  // magnitude at the rail
+        {{int64_t{1} << 31, 0, 0}, 100, false, 4, 0x0401},         // x just past s32
+        {{0, -(int64_t{1} << 31) - 1, 0}, 100, false, 4, 0x0402},  // y just past s32
+        {{0, 0, int64_t{1} << 40}, 100, false, 4, 0x0403},         // z far past s32
+        {{1, 1, 1}, uint64_t{1} << 32, false, 4, 0x0404},          // magnitude past u32
+        {{1, 1, 1}, UINT64_MAX, false, 4, 0x0405},                 // magnitude at the rail
     };
     for (size_t i = 0; i < bad.size(); ++i) {
       const Res r = offer(dut, bad[i]);
@@ -274,9 +283,10 @@ int main(int argc, char** argv) {
           1, r2.degen ? 1 : 0);
   }
 
-  std::printf("[skin] producer tuples: %d accepted, %d degenerate-rejected upstream | "
-              "adapter accepted=%u refused=%u\n",
-              produced, degenerate, dut.accepted_o, dut.refused_o);
+  std::printf(
+      "[skin] producer tuples: %d accepted, %d degenerate-rejected upstream | "
+      "adapter accepted=%u refused=%u\n",
+      produced, degenerate, dut.accepted_o, dut.refused_o);
 
   dut.final();
   zhao::exit_hard(zhao::report_and_exit("light_skin_adapter_directed"));

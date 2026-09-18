@@ -49,9 +49,9 @@ using zref::part::particle_unpack;
 namespace {
 
 // ---- the formats, exactly as the RTL parameterises them -------------------
-constexpr int32_t kNrmOne = 1 << 10;   // NRM_Q = 10, a unit normal component
-constexpr int32_t kFxOne = 1 << 14;    // FX_Q  = 14, an fx16 coefficient of 1.0
-constexpr int32_t kEps = 2;            // CLEAR_EPS, in position LSBs (1/256 m)
+constexpr int32_t kNrmOne = 1 << 10;  // NRM_Q = 10, a unit normal component
+constexpr int32_t kFxOne = 1 << 14;   // FX_Q  = 14, an fx16 coefficient of 1.0
+constexpr int32_t kEps = 2;           // CLEAR_EPS, in position LSBs (1/256 m)
 
 // The response enum, owner ruling 2026-08-31 §2.3.
 constexpr uint8_t kIgnore = 0;
@@ -187,11 +187,16 @@ struct Dut {
   }
 
   Counters counters() const {
-    return Counters{v->contacts_ignore_o,  v->contacts_die_o,
-                    v->contacts_stick_o,   v->contacts_slide_o,
-                    v->contacts_bounce_o,  v->contacts_terrain_o,
-                    v->contacts_plane_o,   v->already_inside_at_entry_o,
-                    v->terrain_sample_unavailable_o, v->response_refused_o,
+    return Counters{v->contacts_ignore_o,
+                    v->contacts_die_o,
+                    v->contacts_stick_o,
+                    v->contacts_slide_o,
+                    v->contacts_bounce_o,
+                    v->contacts_terrain_o,
+                    v->contacts_plane_o,
+                    v->already_inside_at_entry_o,
+                    v->terrain_sample_unavailable_o,
+                    v->response_refused_o,
                     v->field_clamps_o};
   }
 };
@@ -220,13 +225,17 @@ void check_vel(const char* what, const Particle128& p, int32_t x, int32_t y, int
 // block must not touch, so a dropped or transposed field cannot hide.
 Particle128 make(int32_t px, int32_t py, int32_t pz, int32_t vx, int32_t vy, int32_t vz) {
   Particle128 p{};
-  p.pos[0] = px; p.pos[1] = py; p.pos[2] = pz;
-  p.vel[0] = vx; p.vel[1] = vy; p.vel[2] = vz;
+  p.pos[0] = px;
+  p.pos[1] = py;
+  p.pos[2] = pz;
+  p.vel[0] = vx;
+  p.vel[1] = vy;
+  p.vel[2] = vz;
   p.age = 613;
   p.species = 0x55;
   p.size = 37;
   p.spin = 21;
-  p.flags = kFlagBorn | kFlagRsvd;   // 0xC: neither is this block's to move
+  p.flags = kFlagBorn | kFlagRsvd;  // 0xC: neither is this block's to move
   p.variation = 0xA5;
   return p;
 }
@@ -259,14 +268,13 @@ int main(int argc, char** argv) {
   (void)argv;
   Verilated::traceEverOn(false);
 
-  auto* top = new Vzhao_part_collide;   // heap + exit_hard: see zhao_sim.hpp
+  auto* top = new Vzhao_part_collide;  // heap + exit_hard: see zhao_sim.hpp
   Dut d(top);
   d.reset();
 
   Counters c0 = d.counters();
   check(c0.bounce == 0 && c0.terrain == 0 && c0.refused == 0 && c0.clamps == 0,
-        "all counters clear after reset", 0,
-        c0.bounce + c0.terrain + c0.refused + c0.clamps);
+        "all counters clear after reset", 0, c0.bounce + c0.terrain + c0.refused + c0.clamps);
 
   // =========================================================================
   // 1. BOUNCE on a flat plane, hand computed.
@@ -286,7 +294,7 @@ int main(int argc, char** argv) {
     s.response = kBounce;
     s.restitution = kFxOne / 2;
     s.damping = kFxOne;
-    s.pl_en = true;                 // plane only; terrain sample absent
+    s.pl_en = true;  // plane only; terrain sample absent
     Counters a = d.counters();
     Res r = d.run(s);
     Counters b = d.counters();
@@ -329,7 +337,9 @@ int main(int argc, char** argv) {
     s.friction = kFxOne / 2;
     s.t_valid = true;
     s.t_height = 0;
-    s.tnx = 614; s.tny = 819; s.tnz = 0;
+    s.tnx = 614;
+    s.tny = 819;
+    s.tnz = 0;
     Counters a = d.counters();
     Res r = d.run(s);
     Counters b = d.counters();
@@ -340,8 +350,8 @@ int main(int argc, char** argv) {
     check(b.slide - a.slide == 1, "contacts_by_response[SLIDE] moved", 1, b.slide - a.slide);
     check(b.terrain - a.terrain == 1, "contacts_terrain moved", 1, b.terrain - a.terrain);
     check(b.plane - a.plane == 0, "contacts_plane still", 0, b.plane - a.plane);
-    check(b.unavail - a.unavail == 0, "terrain_sample_unavailable still when the sample arrived",
-          0, b.unavail - a.unavail);
+    check(b.unavail - a.unavail == 0, "terrain_sample_unavailable still when the sample arrived", 0,
+          b.unavail - a.unavail);
     check(b.inside - a.inside == 0,
           "a particle that fell in THIS tick is not already_inside_at_entry", 0,
           b.inside - a.inside);
@@ -352,8 +362,7 @@ int main(int argc, char** argv) {
     Stim again = s;
     again.p = r.p;
     Res r2 = d.run(again);
-    check(!r2.contact, "re-testing the contact point reports NO contact (terrain)", 0,
-          r2.contact);
+    check(!r2.contact, "re-testing the contact point reports NO contact (terrain)", 0, r2.contact);
     check(r2.p.pos[1] == kEps, "re-test leaves the particle where it was", kEps, r2.p.pos[1]);
     check((r2.p.flags & kFlagHit) == 0, "kPartCollidedThisTick CLEARED on a tick with no contact",
           0, (r2.p.flags & kFlagHit) != 0);
@@ -375,7 +384,9 @@ int main(int argc, char** argv) {
     s.response = kSlide;
     s.friction = kFxOne / 2;
     s.pl_en = true;
-    s.pnx = 614; s.pny = 819; s.pnz = 0;
+    s.pnx = 614;
+    s.pny = 819;
+    s.pnz = 0;
     s.pl_c = 0;
     Res r = d.run(s);
     check_pos("SLIDE/tilted plane", r.p, 40, -27, 0);
@@ -407,8 +418,7 @@ int main(int argc, char** argv) {
 
     check_vel("STICK", r.p, 0, 0, 0);
     check_pos("STICK", r.p, 0, kEps, 0);
-    check((r.p.flags & kFlagStuck) != 0, "STICK sets kPartStuck", 1,
-          (r.p.flags & kFlagStuck) != 0);
+    check((r.p.flags & kFlagStuck) != 0, "STICK sets kPartStuck", 1, (r.p.flags & kFlagStuck) != 0);
     check(b.stick - a.stick == 1, "contacts_by_response[STICK] moved", 1, b.stick - a.stick);
 
     Stim again = s;
@@ -458,8 +468,7 @@ int main(int argc, char** argv) {
     Res rs = d.run(ss);
 
     check(rb.p.vel[0] == 0 && rb.p.vel[1] == 0 && rb.p.vel[2] == 0,
-          "BOUNCE(e=0) head-on stops the particle", 0,
-          static_cast<uint64_t>(rb.p.vel[1]));
+          "BOUNCE(e=0) head-on stops the particle", 0, static_cast<uint64_t>(rb.p.vel[1]));
     check(rb.lo == rs.lo, "BOUNCE(e=0) == SLIDE(f=0) low 64 bits", rs.lo, rb.lo);
     check(rb.hi == rs.hi, "BOUNCE(e=0) == SLIDE(f=0) high 64 bits", rs.hi, rb.hi);
   }
@@ -503,7 +512,7 @@ int main(int argc, char** argv) {
   {
     Stim s;
     s.p = make(0, -50, 0, 0, -300, 0);
-    s.response = 5;               // not one of the five
+    s.response = 5;  // not one of the five
     s.t_valid = true;
     s.t_height = 0;
     uint64_t lo = 0, hi = 0;
@@ -551,8 +560,7 @@ int main(int argc, char** argv) {
     check(r.alive, "IGNORE leaves the particle alive", 1, r.alive);
     check_pos("IGNORE", r.p, 0, -50, 0);
     check_vel("IGNORE", r.p, 0, -300, 0);
-    check(b.ignore - a.ignore == 1, "contacts_by_response[IGNORE] moved", 1,
-          b.ignore - a.ignore);
+    check(b.ignore - a.ignore == 1, "contacts_by_response[IGNORE] moved", 1, b.ignore - a.ignore);
     check(b.inside - a.inside == 0,
           "IGNORE promises nothing about placement, so it is not an entry regression", 0,
           b.inside - a.inside);
@@ -566,7 +574,7 @@ int main(int argc, char** argv) {
     s.p = make(0, -50, 0, 0, -300, 0);
     s.response = kBounce;
     s.restitution = kFxOne / 2;
-    s.t_valid = false;            // TERRAIN.PATCH did not answer
+    s.t_valid = false;  // TERRAIN.PATCH did not answer
     s.pl_en = false;
     uint64_t lo = 0, hi = 0;
     particle_pack(s.p, &lo, &hi);
@@ -576,8 +584,7 @@ int main(int argc, char** argv) {
     check(!r.contact, "an absent terrain sample is no contact", 0, r.contact);
     check(r.alive, "an absent terrain sample does not kill the particle", 1, r.alive);
     check(r.lo == lo && r.hi == hi, "no contact leaves the record alone", lo, r.lo);
-    check(b.unavail - a.unavail == 1, "terrain_sample_unavailable moved", 1,
-          b.unavail - a.unavail);
+    check(b.unavail - a.unavail == 1, "terrain_sample_unavailable moved", 1, b.unavail - a.unavail);
   }
 
   // =========================================================================
@@ -594,23 +601,21 @@ int main(int argc, char** argv) {
     s.friction = 0;
     s.t_valid = true;
 
-    s.t_height = 0;                       // flat ground, particle is above it
+    s.t_height = 0;  // flat ground, particle is above it
     Res flat = d.run(s);
     check(!flat.contact, "live terrain: no contact above the old surface", 0, flat.contact);
     check(flat.p.pos[1] == 100, "live terrain: nothing moves with no contact", 100,
           static_cast<uint64_t>(flat.p.pos[1]));
 
-    s.t_height = 200;                     // a wave rose THIS tick
+    s.t_height = 200;  // a wave rose THIS tick
     Res risen = d.run(s);
     check(risen.contact, "live terrain: the risen surface contacts", 1, risen.contact);
-    check(risen.p.pos[1] == 200 + kEps,
-          "live terrain: the particle lands on the NEW surface", 200 + kEps,
-          static_cast<uint64_t>(risen.p.pos[1]));
+    check(risen.p.pos[1] == 200 + kEps, "live terrain: the particle lands on the NEW surface",
+          200 + kEps, static_cast<uint64_t>(risen.p.pos[1]));
 
-    s.t_height = -300;                    // a crater opened under it
+    s.t_height = -300;  // a crater opened under it
     Res crater = d.run(s);
-    check(!crater.contact, "live terrain: a fresh crater removes the contact", 0,
-          crater.contact);
+    check(!crater.contact, "live terrain: a fresh crater removes the contact", 0, crater.contact);
     check(crater.p.pos[1] == 100, "live terrain: the particle keeps falling", 100,
           static_cast<uint64_t>(crater.p.pos[1]));
   }
@@ -628,7 +633,7 @@ int main(int argc, char** argv) {
     Stim s;
     s.p = make(0, -50, 0, 0, -1000, 0);
     s.response = kBounce;
-    s.restitution = 32700;        // 1.996 in Q1.14
+    s.restitution = 32700;  // 1.996 in Q1.14
     s.damping = kFxOne;
     s.pl_en = true;
     Counters a = d.counters();
@@ -636,8 +641,7 @@ int main(int argc, char** argv) {
     Counters b = d.counters();
     check(r.p.vel[1] == 1023, "a superball clamps to the field maximum", 1023,
           static_cast<uint64_t>(r.p.vel[1]));
-    check(r.p.vel[1] > 0, "the clamp preserves the SIGN; a wrap would not", 1,
-          r.p.vel[1] > 0);
+    check(r.p.vel[1] > 0, "the clamp preserves the SIGN; a wrap would not", 1, r.p.vel[1] > 0);
     check(b.clamps - a.clamps == 1, "field_clamps moved", 1, b.clamps - a.clamps);
   }
 
@@ -696,10 +700,11 @@ int main(int argc, char** argv) {
     check(f.refused > 0, "response_refused fired", 1, f.refused);
     check(f.clamps > 0, "field_clamps fired", 1, f.clamps);
 
-    std::printf("[part_collide_directed] ignore=%u die=%u stick=%u slide=%u bounce=%u "
-                "terrain=%u plane=%u inside=%u unavail=%u refused=%u clamps=%u\n",
-                f.ignore, f.die, f.stick, f.slide, f.bounce, f.terrain, f.plane,
-                f.inside, f.unavail, f.refused, f.clamps);
+    std::printf(
+        "[part_collide_directed] ignore=%u die=%u stick=%u slide=%u bounce=%u "
+        "terrain=%u plane=%u inside=%u unavail=%u refused=%u clamps=%u\n",
+        f.ignore, f.die, f.stick, f.slide, f.bounce, f.terrain, f.plane, f.inside, f.unavail,
+        f.refused, f.clamps);
   }
 
   zhao::exit_hard(zhao::report_and_exit("part_collide_directed"));

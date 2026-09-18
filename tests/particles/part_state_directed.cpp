@@ -68,8 +68,8 @@ using zhao::check;
 
 namespace {
 
-constexpr int kCapacity = 8;    // small on purpose: exhaustion must be reachable
-constexpr int kSpecies = 4;     // so an out-of-range species is reachable too
+constexpr int kCapacity = 8;  // small on purpose: exhaustion must be reachable
+constexpr int kSpecies = 4;   // so an out-of-range species is reachable too
 
 using Rec = std::pair<uint64_t, uint64_t>;
 
@@ -85,11 +85,11 @@ zref::part::Particle128 make_particle(int i, int species) {
   p.vel[0] = i * 3 - 10;
   p.vel[1] = 7 - i;
   p.vel[2] = i * 2;
-  p.age = static_cast<uint16_t>((100 + i * 13) & 0x3FF);   // u10, not u7
+  p.age = static_cast<uint16_t>((100 + i * 13) & 0x3FF);  // u10, not u7
   p.species = static_cast<uint8_t>(species & 0x7F);
   p.size = static_cast<uint8_t>((i * 5) & 0x3F);
   p.spin = static_cast<uint8_t>((i * 9) & 0x3F);
-  p.flags = static_cast<uint8_t>(i & 0x7);                 // reserved bit stays 0
+  p.flags = static_cast<uint8_t>(i & 0x7);  // reserved bit stays 0
   p.variation = static_cast<uint8_t>(0xA5 ^ i);
   return p;
 }
@@ -159,10 +159,10 @@ struct Dut {
 // One tick's stimulus, stated as data so a case is a table rather than a
 // re-written driver loop.
 struct TickSpec {
-  std::vector<int> species;    // one entry per input record
-  std::vector<bool> survive;   // the verdict PART.UPDATE would give
-  int children = 0;            // offered DURING the survivor pass
-  int child_base = 100;        // so children cannot alias a survivor
+  std::vector<int> species;   // one entry per input record
+  std::vector<bool> survive;  // the verdict PART.UPDATE would give
+  int children = 0;           // offered DURING the survivor pass
+  int child_base = 100;       // so children cannot alias a survivor
 };
 
 // Drive one tick to completion and return the records the block wrote, in the
@@ -227,8 +227,7 @@ std::vector<Rec> run_tick(Dut& d, const TickSpec& s) {
 // Compare an emitted stream against the expected one, per record, through the
 // ORACLE's unpack -- so a failure names the field that moved rather than a
 // 64-bit blob.
-void compare_stream(const char* tag, const std::vector<Rec>& got,
-                    const std::vector<Rec>& want) {
+void compare_stream(const char* tag, const std::vector<Rec>& got, const std::vector<Rec>& want) {
   char what[160];
   std::snprintf(what, sizeof(what), "%s: written record count", tag);
   check(got.size() == want.size(), what, want.size(), got.size());
@@ -258,7 +257,7 @@ int main(int argc, char** argv) {
   (void)argv;
   Verilated::traceEverOn(false);
 
-  auto* top = new Vzhao_part_state;   // heap + exit_hard: see zhao_sim.hpp
+  auto* top = new Vzhao_part_state;  // heap + exit_hard: see zhao_sim.hpp
   Vzhao_part_state& r = *top;
   Dut d(top);
   d.reset();
@@ -303,8 +302,7 @@ int main(int argc, char** argv) {
       zref::part::particle_unpack(got[i].first, got[i].second, &p);
       if (p.flags & zref::part::kPartFlagReserved) ++reserved_set;
     }
-    check(reserved_set == 0,
-          "A kPartFlagReserved stays zero through the stream (amendment C2)", 0,
+    check(reserved_set == 0, "A kPartFlagReserved stays zero through the stream (amendment C2)", 0,
           reserved_set);
 
     // And a field-by-field round trip on one record, so a failure says WHICH
@@ -315,12 +313,12 @@ int main(int argc, char** argv) {
       zref::part::particle_unpack(got[0].first, got[0].second, &out);
       check(out.pos[0] == src.pos[0] && out.pos[1] == src.pos[1] && out.pos[2] == src.pos[2],
             "A position survives the round trip through the oracle", 1,
-            (out.pos[0] == src.pos[0] && out.pos[1] == src.pos[1] &&
-             out.pos[2] == src.pos[2]) ? 1 : 0);
+            (out.pos[0] == src.pos[0] && out.pos[1] == src.pos[1] && out.pos[2] == src.pos[2]) ? 1
+                                                                                               : 0);
       check(out.vel[0] == src.vel[0] && out.vel[1] == src.vel[1] && out.vel[2] == src.vel[2],
             "A velocity survives the round trip through the oracle", 1,
-            (out.vel[0] == src.vel[0] && out.vel[1] == src.vel[1] &&
-             out.vel[2] == src.vel[2]) ? 1 : 0);
+            (out.vel[0] == src.vel[0] && out.vel[1] == src.vel[1] && out.vel[2] == src.vel[2]) ? 1
+                                                                                               : 0);
       check(out.age == src.age, "A age (u10, not u7) survives the round trip", src.age, out.age);
       check(out.species == src.species, "A species survives", src.species, out.species);
       check(out.size == src.size, "A size survives", src.size, out.size);
@@ -359,8 +357,8 @@ int main(int argc, char** argv) {
 
     const Counters after = snap(r);
     check(after.species_refused - before.species_refused == 1,
-          "B species_refused_o MOVED -- the counter is a detector, not a hopeful zero",
-          1, after.species_refused - before.species_refused);
+          "B species_refused_o MOVED -- the counter is a detector, not a hopeful zero", 1,
+          after.species_refused - before.species_refused);
     check(after.survivors - before.survivors == 4,
           "B the refused record was not counted as a survivor", 4,
           after.survivors - before.survivors);
@@ -372,8 +370,7 @@ int main(int argc, char** argv) {
       zref::part::particle_unpack(got[i].first, got[i].second, &p);
       if (p.species >= kSpecies) ++fabricated;
     }
-    check(fabricated == 0, "B no record with an unknown species reached the stream", 0,
-          fabricated);
+    check(fabricated == 0, "B no record with an unknown species reached the stream", 0, fabricated);
   }
 
   // =========================================================================
@@ -404,14 +401,13 @@ int main(int argc, char** argv) {
 
     const Counters after = snap(r);
     check(after.dropped_capacity - before.dropped_capacity == 3,
-          "C children_dropped_capacity_o MOVED -- three children met a full tier",
-          3, after.dropped_capacity - before.dropped_capacity);
+          "C children_dropped_capacity_o MOVED -- three children met a full tier", 3,
+          after.dropped_capacity - before.dropped_capacity);
     check(after.children_written - before.children_written == 0,
           "C not one child was written past the tier", 0,
           after.children_written - before.children_written);
     check(after.survivors - before.survivors == static_cast<uint32_t>(kCapacity),
-          "C every survivor kept its place", kCapacity,
-          after.survivors - before.survivors);
+          "C every survivor kept its place", kCapacity, after.survivors - before.survivors);
 
     // Determinism: the ruling's drop is by stream order, never by arrival, so
     // the identical tick must drop the identical children.
@@ -445,7 +441,7 @@ int main(int argc, char** argv) {
       s.species.push_back(i % kSpecies);
       s.survive.push_back(i != 1 && i != 4);
     }
-    s.children = 12;        // against CHILD_D=8
+    s.children = 12;  // against CHILD_D=8
     s.child_base = 300;
 
     const Counters before = snap(r);
@@ -453,16 +449,17 @@ int main(int argc, char** argv) {
     const Counters after = snap(r);
 
     check(after.staging_stalls > before.staging_stalls,
-          "D staging_stall_cycles_o MOVED -- the tick stalls, it never drops",
-          1, after.staging_stalls > before.staging_stalls ? 1 : 0);
+          "D staging_stall_cycles_o MOVED -- the tick stalls, it never drops", 1,
+          after.staging_stalls > before.staging_stalls ? 1 : 0);
     check(after.survivors - before.survivors == 4,
           "D and the survivor pass was unaffected by the refusals", 4,
           after.survivors - before.survivors);
   }
 
-  std::printf("[part_state_directed] survivors=%u children=%u dropped=%u staging_stall_cycles=%u "
-              "species_refused=%u\n",
-              r.survivors_o, r.children_written_o, r.children_dropped_capacity_o,
-              r.staging_stall_cycles_o, r.species_refused_o);
+  std::printf(
+      "[part_state_directed] survivors=%u children=%u dropped=%u staging_stall_cycles=%u "
+      "species_refused=%u\n",
+      r.survivors_o, r.children_written_o, r.children_dropped_capacity_o, r.staging_stall_cycles_o,
+      r.species_refused_o);
   zhao::exit_hard(zhao::report_and_exit("part_state_directed"));
 }

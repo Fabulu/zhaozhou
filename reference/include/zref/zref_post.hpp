@@ -102,8 +102,8 @@ inline uint8_t grade_finalize(int32_t acc, int bias) {
 // The nine-multiplier path, kept as the REFERENCE the table is proved against.
 // It is not a second implementation of the law -- it is the law, and the table
 // is a precomputation of it that has to be shown to agree.
-inline uint8_t grade_channel_mul(const int16_t m[9], int row,
-                                 uint8_t kr, uint8_t kg, uint8_t kb, int bias) {
+inline uint8_t grade_channel_mul(const int16_t m[9], int row, uint8_t kr, uint8_t kg, uint8_t kb,
+                                 int bias) {
   const int32_t acc = (static_cast<int32_t>(m[(row * 3) + 0]) * kr) +
                       (static_cast<int32_t>(m[(row * 3) + 1]) * kg) +
                       (static_cast<int32_t>(m[(row * 3) + 2]) * kb);
@@ -120,8 +120,8 @@ inline uint8_t grade_channel_mul(const int16_t m[9], int row,
 // swaps two of them is not a fault, and a check that claims to catch one is
 // claiming something it cannot do. The transpose that DOES matter lives in
 // `grade_product_vector` above, and that is where the positive control aims.
-inline uint8_t grade_channel_table(const int32_t pr[3], const int32_t pg[3],
-                                   const int32_t pb[3], int row, int bias) {
+inline uint8_t grade_channel_table(const int32_t pr[3], const int32_t pg[3], const int32_t pb[3],
+                                   int row, int bias) {
   return grade_finalize(pr[row] + pg[row] + pb[row], bias);
 }
 

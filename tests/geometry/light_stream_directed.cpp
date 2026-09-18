@@ -73,7 +73,7 @@ using zhao::check;
 
 namespace {
 
-constexpr int32_t  kOne = 0x10000;
+constexpr int32_t kOne = 0x10000;
 constexpr uint32_t kLightsMax = 8;
 constexpr uint32_t kEnvIdx = 0xF;
 
@@ -95,15 +95,17 @@ struct Env {
 
 struct Vtx {
   int32_t nx = 0, ny = 0, nz = 0;
-  bool     mag_valid = false;
+  bool mag_valid = false;
   uint32_t mag = 0;
-  bool     producer_degen = false;
-  bool     creature = false;   // profile: 1 = creature (no detail, early clamp)
+  bool producer_degen = false;
+  bool creature = false;  // profile: 1 = creature (no detail, early clamp)
   uint32_t nlights = 1;
   uint16_t src = 0;
 };
 
-struct Rgb { uint32_t r = 0, g = 0, b = 0; };
+struct Rgb {
+  uint32_t r = 0, g = 0, b = 0;
+};
 
 struct Out {
   Rgb rgb;
@@ -125,10 +127,15 @@ void reset_dut(Vzhao_light_stream& d) {
   d.cfg_data_i = 0;
   d.v_valid_i = 0;
   d.r_ready_i = 0;
-  d.n_x_i = 0; d.n_y_i = 0; d.n_z_i = 0;
-  d.n_mag_valid_i = 0; d.n_mag_i = 0;
-  d.n_degenerate_i = 0; d.n_profile_i = 0;
-  d.n_lights_i = 0; d.n_src_id_i = 0;
+  d.n_x_i = 0;
+  d.n_y_i = 0;
+  d.n_z_i = 0;
+  d.n_mag_valid_i = 0;
+  d.n_mag_i = 0;
+  d.n_degenerate_i = 0;
+  d.n_profile_i = 0;
+  d.n_lights_i = 0;
+  d.n_src_id_i = 0;
   d.eval();
   for (int i = 0; i < 3; ++i) tk(d);
   d.rst_n = 1;
@@ -151,8 +158,7 @@ void wait_idle(Vzhao_light_stream& d) {
   d.eval();
 }
 
-void cfg_write(Vzhao_light_stream& d, uint32_t light, uint32_t half, uint32_t word,
-               uint32_t data) {
+void cfg_write(Vzhao_light_stream& d, uint32_t light, uint32_t half, uint32_t word, uint32_t data) {
   d.cfg_we_i = 1;
   d.cfg_addr_i = static_cast<uint8_t>(((light & 0xF) << 4) | ((half & 1) << 3) | (word & 7));
   d.cfg_data_i = data;
@@ -297,8 +303,8 @@ Expect expect_of(const Vtx& v, const std::vector<Light>& L, const Env& e) {
   for (int c = 0; c < 3; ++c) {
     const uint64_t t = acc[c] + amb[c] + spl[c];
     if (t > static_cast<uint64_t>(kOne)) x.sat = true;
-    out[c] = (t > static_cast<uint64_t>(kOne)) ? static_cast<uint32_t>(kOne)
-                                               : static_cast<uint32_t>(t);
+    out[c] =
+        (t > static_cast<uint64_t>(kOne)) ? static_cast<uint32_t>(kOne) : static_cast<uint32_t>(t);
   }
   x.rgb = {out[0], out[1], out[2]};
   return x;
@@ -329,10 +335,9 @@ std::vector<Out> run_batch(Vzhao_light_stream& d, const std::vector<Vtx>& vs, in
     // Both are needed: a light stall proves values do not move, and only a
     // heavy one can fill the output queue and reach the fold's stall path.
     const bool ready =
-        (stall_mod == 0)
-            ? true
-            : (stall_mod > 0 ? ((g_cycles % static_cast<uint64_t>(stall_mod)) != 0)
-                             : ((g_cycles % static_cast<uint64_t>(-stall_mod)) == 0));
+        (stall_mod == 0) ? true
+                         : (stall_mod > 0 ? ((g_cycles % static_cast<uint64_t>(stall_mod)) != 0)
+                                          : ((g_cycles % static_cast<uint64_t>(-stall_mod)) == 0));
     d.r_ready_i = ready ? 1 : 0;
     if (sent < vs.size()) {
       const Vtx& v = vs[sent];
@@ -361,7 +366,10 @@ std::vector<Out> run_batch(Vzhao_light_stream& d, const std::vector<Vtx>& vs, in
     const uint64_t now = g_cycles;
     tk(d);
     if (acc) {
-      if (!have_first) { first_accept = now; have_first = true; }
+      if (!have_first) {
+        first_accept = now;
+        have_first = true;
+      }
       ++sent;
     }
     if (emit) {
@@ -387,7 +395,11 @@ std::vector<Out> run_batch(Vzhao_light_stream& d, const std::vector<Vtx>& vs, in
   d.v_valid_i = 0;
   d.r_ready_i = 0;
   d.eval();
-  if (st) { st->first_cycle = t0; st->last_cycle = g_cycles; st->clocks = g_cycles - t0; }
+  if (st) {
+    st->first_cycle = t0;
+    st->last_cycle = g_cycles;
+    st->clocks = g_cycles - t0;
+  }
   return out;
 }
 
@@ -435,21 +447,29 @@ uint64_t rnd() {
 }
 int32_t rnd_biased() {
   switch (rnd() & 3) {
-    case 0: return static_cast<int32_t>(rnd() & 7) - 3;
-    case 1: return static_cast<int32_t>(rnd()) >> 16;
-    case 2: return (rnd() & 1) ? INT32_MAX - static_cast<int32_t>(rnd() & 3)
-                               : INT32_MIN + static_cast<int32_t>(rnd() & 3);
-    default: return static_cast<int32_t>(rnd());
+    case 0:
+      return static_cast<int32_t>(rnd() & 7) - 3;
+    case 1:
+      return static_cast<int32_t>(rnd()) >> 16;
+    case 2:
+      return (rnd() & 1) ? INT32_MAX - static_cast<int32_t>(rnd() & 3)
+                         : INT32_MIN + static_cast<int32_t>(rnd() & 3);
+    default:
+      return static_cast<int32_t>(rnd());
   }
 }
 // The creature producer range-reduces until every lane fits |n| <= 2^30, so
 // its tuples are sampled from THAT domain rather than from all of s32.
 int32_t rnd_skin_lane() {
   switch (rnd() & 3) {
-    case 0: return static_cast<int32_t>(rnd() & 7) - 3;
-    case 1: return -(1 << 30);                       // the exact shift boundary
-    case 2: return static_cast<int32_t>(rnd() % 131073) - 65536;
-    default: return (static_cast<int32_t>(rnd()) % (1 << 30));
+    case 0:
+      return static_cast<int32_t>(rnd() & 7) - 3;
+    case 1:
+      return -(1 << 30);  // the exact shift boundary
+    case 2:
+      return static_cast<int32_t>(rnd() % 131073) - 65536;
+    default:
+      return (static_cast<int32_t>(rnd()) % (1 << 30));
   }
 }
 
@@ -479,13 +499,20 @@ int main(int argc, char** argv) {
 
   // ---- 2: HAND-COMPUTED, ONE LIGHT ----------------------------------------
   {
-    L[0] = Light{}; L[0].ly = kOne; L[0].cr = 0x10000; L[0].cg = 0x8000; L[0].cb = 0x4000;
+    L[0] = Light{};
+    L[0].ly = kOne;
+    L[0].cr = 0x10000;
+    L[0].cg = 0x8000;
+    L[0].cb = 0x4000;
     publish(dut, L, 1, env);
     check(dut.cfg_gen_o == 1, "the commit published the shadow generation", 1, dut.cfg_gen_o);
     check(law_raw(0, kOne, 0, 0, kOne, 0) == kOne,
-          "the compiled law: +Y normal, overhead sun is exactly 1.0",
-          static_cast<uint32_t>(kOne), static_cast<uint32_t>(law_raw(0, kOne, 0, 0, kOne, 0)));
-    Vtx v; v.ny = kOne; v.nlights = 1; v.src = 0x0201;
+          "the compiled law: +Y normal, overhead sun is exactly 1.0", static_cast<uint32_t>(kOne),
+          static_cast<uint32_t>(law_raw(0, kOne, 0, 0, kOne, 0)));
+    Vtx v;
+    v.ny = kOne;
+    v.nlights = 1;
+    v.src = 0x0201;
     const Out o = check_one(dut, v, L, env, "one light, unit gain");
     check(o.rgb.r == 0x10000u, "hand-computed red  == 0x10000", 0x10000u, o.rgb.r);
     check(o.rgb.g == 0x08000u, "hand-computed green == 0x8000", 0x08000u, o.rgb.g);
@@ -497,10 +524,21 @@ int main(int argc, char** argv) {
   // SUBTRACT what the first gave. Clamping once per vertex would return black.
   {
     const uint32_t lo0 = dut.ndl_clamp_lo_o;
-    L[0] = Light{}; L[0].ly = kOne;  L[0].cr = 0x8000; L[0].cg = 0x8000; L[0].cb = 0x8000;
-    L[1] = Light{}; L[1].ly = -kOne; L[1].cr = 0x10000; L[1].cg = 0x10000; L[1].cb = 0x10000;
+    L[0] = Light{};
+    L[0].ly = kOne;
+    L[0].cr = 0x8000;
+    L[0].cg = 0x8000;
+    L[0].cb = 0x8000;
+    L[1] = Light{};
+    L[1].ly = -kOne;
+    L[1].cr = 0x10000;
+    L[1].cg = 0x10000;
+    L[1].cb = 0x10000;
     publish(dut, L, 2, env);
-    Vtx v; v.ny = kOne; v.nlights = 2; v.src = 0x0301;
+    Vtx v;
+    v.ny = kOne;
+    v.nlights = 2;
+    v.src = 0x0301;
     const Out o = check_one(dut, v, L, env, "two lights, one turned away");
     check(o.rgb.r == 0x8000u,
           "D-1: a second sun's negative dot does NOT subtract the first sun's light", 0x8000u,
@@ -517,26 +555,40 @@ int main(int argc, char** argv) {
   // the check that proves the profile bit is load-bearing rather than decorative.
   {
     const uint32_t hi0 = dut.ndl_clamp_hi_o;
-    L[0] = Light{}; L[0].ly = -kOne / 8; L[0].detail = kOne / 4;
+    L[0] = Light{};
+    L[0].ly = -kOne / 8;
+    L[0].detail = kOne / 4;
     L[0].cr = 0x10000;
     publish(dut, L, 1, env);
 
-    Vtx vr; vr.ny = kOne; vr.nlights = 1; vr.src = 0x0401;
+    Vtx vr;
+    vr.ny = kOne;
+    vr.nlights = 1;
+    vr.src = 0x0401;
     const Out r = check_one(dut, vr, L, env, "detail inside the clamp rescues a turned face");
     check(r.rgb.r == 0x2000u, "hand-computed: clamp01(-0.125 + 0.25) * 1.0 == 0x2000", 0x2000u,
           r.rgb.r);
 
-    Vtx vc; vc.ny = kOne; vc.nlights = 1; vc.src = 0x0402;
-    vc.creature = true; vc.mag_valid = true; vc.mag = static_cast<uint32_t>(mag_of(0, kOne, 0));
+    Vtx vc;
+    vc.ny = kOne;
+    vc.nlights = 1;
+    vc.src = 0x0402;
+    vc.creature = true;
+    vc.mag_valid = true;
+    vc.mag = static_cast<uint32_t>(mag_of(0, kOne, 0));
     const Out c = check_one(dut, vc, L, env, "the creature profile admits NO detail term");
     check(c.rgb.r == 0u, "the same descriptor on the creature profile stays dark", 0u, c.rgb.r);
     check(r.rgb.r != c.rgb.r, "the profile bit changes the answer: it is load-bearing", 1,
           (r.rgb.r != c.rgb.r) ? 1 : 0);
 
     // detail past full scale on the render path
-    L[0].ly = kOne; L[0].detail = kOne;
+    L[0].ly = kOne;
+    L[0].detail = kOne;
     publish(dut, L, 1, env);
-    Vtx vh; vh.ny = kOne; vh.nlights = 1; vh.src = 0x0403;
+    Vtx vh;
+    vh.ny = kOne;
+    vh.nlights = 1;
+    vh.src = 0x0403;
     const Out h = check_one(dut, vh, L, env, "detail past full scale clamps at 1.0");
     check(h.rgb.r == 0x10000u, "hand-computed: clamp01(1.0 + 1.0) == 0x10000", 0x10000u, h.rgb.r);
     check(dut.ndl_clamp_hi_o == hi0 + 1, "ndl_clamp_hi_o moved by exactly 1 across this case",
@@ -550,17 +602,20 @@ int main(int argc, char** argv) {
   // The whole reason the existing per-product rounding is preserved.
   {
     L[0] = Light{};
-    L[0].ly = 0x8000;      // half-strength sun on a unit +Y normal -> raw = 32768
+    L[0].ly = 0x8000;  // half-strength sun on a unit +Y normal -> raw = 32768
     L[0].cr = 1;
     L[0].er = 1;
     publish(dut, L, 1, env);
     const int32_t raw = law_raw(0, kOne, 0, 0, 0x8000, 0);
     check(raw == 32768, "the compiled law really does return exactly 32768 here", 32768,
           static_cast<uint32_t>(raw));
-    Vtx v; v.ny = kOne; v.nlights = 1; v.src = 0x0501;
+    Vtx v;
+    v.ny = kOne;
+    v.nlights = 1;
+    v.src = 0x0501;
     const Out o = check_one(dut, v, L, env, "gain and emission are rounded SEPARATELY");
-    check(o.rgb.r == 2u,
-          "TRAP: separately rounded terms sum to 2; a fused product would give 1", 2u, o.rgb.r);
+    check(o.rgb.r == 2u, "TRAP: separately rounded terms sum to 2; a fused product would give 1",
+          2u, o.rgb.r);
   }
 
   // ---- 6: ONE SATURATE, AT THE END -----------------------------------------
@@ -568,10 +623,17 @@ int main(int argc, char** argv) {
     const uint32_t sat0 = dut.rgb_sat_o;
     const uint32_t gr = 0x10000 / 5, gg = 0x10000 / 20;
     for (uint32_t i = 0; i < kLightsMax; ++i) {
-      L[i] = Light{}; L[i].ly = kOne; L[i].cr = gr; L[i].cg = gg; L[i].cb = 0;
+      L[i] = Light{};
+      L[i].ly = kOne;
+      L[i].cr = gr;
+      L[i].cg = gg;
+      L[i].cb = 0;
     }
     publish(dut, L, kLightsMax, env);
-    Vtx v; v.ny = kOne; v.nlights = kLightsMax; v.src = 0x0601;
+    Vtx v;
+    v.ny = kOne;
+    v.nlights = kLightsMax;
+    v.src = 0x0601;
     const Out o = check_one(dut, v, L, env, "eight lights: red saturates, green does not");
     check(o.rgb.r == 0x10000u, "red lands exactly on the 1.0 rail", 0x10000u, o.rgb.r);
     check(o.rgb.g == 8u * gg, "green lands exactly on its unclipped sum (no early clip, no wrap)",
@@ -582,16 +644,30 @@ int main(int argc, char** argv) {
 
   // ---- 7: AMBIENT, SPILL, AND THE ZERO-LIGHT VERTEX ------------------------
   {
-    env.ar = 0x2000; env.ag = 0x1000; env.ab = 0x0800;
-    env.sr = 0x1000; env.sg = 0; env.sb = 0;
-    L[0] = Light{}; L[0].ly = -kOne; L[0].cr = 0x10000; L[0].cg = 0x10000; L[0].cb = 0x10000;
+    env.ar = 0x2000;
+    env.ag = 0x1000;
+    env.ab = 0x0800;
+    env.sr = 0x1000;
+    env.sg = 0;
+    env.sb = 0;
+    L[0] = Light{};
+    L[0].ly = -kOne;
+    L[0].cr = 0x10000;
+    L[0].cg = 0x10000;
+    L[0].cb = 0x10000;
     publish(dut, L, 1, env);
-    Vtx v; v.ny = kOne; v.nlights = 1; v.src = 0x0701;
+    Vtx v;
+    v.ny = kOne;
+    v.nlights = 1;
+    v.src = 0x0701;
     const Out o = check_one(dut, v, L, env, "an unlit face still receives ambient and spill");
     check(o.rgb.r == 0x3000u, "hand-computed: ambient 0x2000 + spill 0x1000", 0x3000u, o.rgb.r);
 
     const uint32_t n0 = dut.terms_null_o;
-    Vtx z; z.ny = kOne; z.nlights = 0; z.src = 0x0702;
+    Vtx z;
+    z.ny = kOne;
+    z.nlights = 0;
+    z.src = 0x0702;
     const Out oz = check_one(dut, z, L, env, "nlights==0 emits ambient+spill only");
     check(oz.rgb.r == 0x3000u, "environment-only red", 0x3000u, oz.rgb.r);
     // A zero-light vertex still owes an in-order packet, so it spends ONE term
@@ -606,31 +682,48 @@ int main(int argc, char** argv) {
     const uint32_t d0 = dut.degenerate_o;
     const uint32_t s0 = dut.seam_mismatch_o;
     const uint32_t dt0 = dut.degenerate_terms_o;
-    L[0] = Light{}; L[0].ly = kOne; L[0].detail = kOne;
-    L[0].cr = 0x10000; L[0].cg = 0x10000; L[0].cb = 0x10000;
+    L[0] = Light{};
+    L[0].ly = kOne;
+    L[0].detail = kOne;
+    L[0].cr = 0x10000;
+    L[0].cg = 0x10000;
+    L[0].cb = 0x10000;
     publish(dut, L, 1, env);
 
-    Vtx v; v.nx = 0; v.ny = 0; v.nz = 0; v.producer_degen = true; v.nlights = 1; v.src = 0x0801;
+    Vtx v;
+    v.nx = 0;
+    v.ny = 0;
+    v.nz = 0;
+    v.producer_degen = true;
+    v.nlights = 1;
+    v.src = 0x0801;
     const Out o = check_one(dut, v, L, env, "degenerate normal: shade 0, ambient only");
-    check(o.rgb.r == 0x3000u, "a directionless vertex gets environment and no light term",
-          0x3000u, o.rgb.r);
+    check(o.rgb.r == 0x3000u, "a directionless vertex gets environment and no light term", 0x3000u,
+          o.rgb.r);
     check(o.degen == true, "degenerate_vtx_o rides the packet", 1, o.degen ? 1 : 0);
-    check(dut.degenerate_o == d0 + 1, "degenerate_o moved by exactly 1", d0 + 1,
-          dut.degenerate_o);
+    check(dut.degenerate_o == d0 + 1, "degenerate_o moved by exactly 1", d0 + 1, dut.degenerate_o);
     check(dut.degenerate_terms_o == dt0 + 1,
           "degenerate_terms_o counts the TERM, not the normal: magnitude reuse must not "
-          "divide the evidence by K", dt0 + 1, dut.degenerate_terms_o);
+          "divide the evidence by K",
+          dt0 + 1, dut.degenerate_terms_o);
     check(dut.seam_mismatch_o == s0, "seam quiet when the producer agrees with the law", s0,
           dut.seam_mismatch_o);
 
     // Now fire it, in both directions. The two operands arrive by INDEPENDENT
     // paths -- the producer's flag on the port, the magnitude from the block's
     // own root -- which is the only reason it can fire at all.
-    Vtx a; a.ny = kOne; a.producer_degen = true; a.nlights = 1; a.src = 0x0802;
+    Vtx a;
+    a.ny = kOne;
+    a.producer_degen = true;
+    a.nlights = 1;
+    a.src = 0x0802;
     check_one(dut, a, L, env, "producer says degenerate, normal is real: the law wins");
     check(dut.seam_mismatch_o == s0 + 1, "seam_mismatch_o fired on flag-high/normal-real", s0 + 1,
           dut.seam_mismatch_o);
-    Vtx b; b.producer_degen = false; b.nlights = 1; b.src = 0x0803;
+    Vtx b;
+    b.producer_degen = false;
+    b.nlights = 1;
+    b.src = 0x0803;
     check_one(dut, b, L, env, "producer says fine, normal is zero: the law wins");
     check(dut.seam_mismatch_o == s0 + 2, "seam_mismatch_o fired on flag-low/normal-zero", s0 + 2,
           dut.seam_mismatch_o);
@@ -643,7 +736,9 @@ int main(int argc, char** argv) {
   {
     const uint32_t e0 = dut.epoch_refusals_o;
     const uint32_t c0 = dut.cfg_refused_o;
-    L[0] = Light{}; L[0].ly = kOne; L[0].cr = 0x8000;
+    L[0] = Light{};
+    L[0].ly = kOne;
+    L[0].cr = 0x8000;
     publish(dut, L, 1, env);
 
     // Put terms ACTUALLY in flight, then attack the generation they hold.
@@ -654,14 +749,22 @@ int main(int argc, char** argv) {
     // is about, and then reads as a pass because nothing else changed.
     const uint32_t ta0 = dut.terms_accepted_o;
     dut.v_valid_i = 1;
-    dut.n_x_i = 0; dut.n_y_i = static_cast<uint32_t>(kOne); dut.n_z_i = 0;
-    dut.n_mag_valid_i = 0; dut.n_degenerate_i = 0; dut.n_profile_i = 0;
-    dut.n_lights_i = 8; dut.n_src_id_i = 0x0901;
+    dut.n_x_i = 0;
+    dut.n_y_i = static_cast<uint32_t>(kOne);
+    dut.n_z_i = 0;
+    dut.n_mag_valid_i = 0;
+    dut.n_degenerate_i = 0;
+    dut.n_profile_i = 0;
+    dut.n_lights_i = 8;
+    dut.n_src_id_i = 0x0901;
     for (int i = 0; i < 4; ++i) tk(dut);
     dut.v_valid_i = 0;
     dut.eval();
     int spin = 0;
-    while (dut.terms_accepted_o == ta0 && spin < 2000) { tk(dut); ++spin; }
+    while (dut.terms_accepted_o == ta0 && spin < 2000) {
+      tk(dut);
+      ++spin;
+    }
     check(dut.terms_accepted_o > ta0, "the refusal test reached the state it is about", 1,
           (dut.terms_accepted_o > ta0) ? 1 : 0);
 
@@ -697,17 +800,20 @@ int main(int argc, char** argv) {
     wait_idle(dut);
 
     // And the map still refuses what is simply not in it.
-    cfg_write(dut, kLightsMax, 0, 0, 0xDEADBEEF);       // light past the set
-    cfg_write(dut, 0, 0, 4, 0xDEADBEEF);                // word past the half
-    cfg_write(dut, kEnvIdx, 0, 6, 0xDEADBEEF);          // word past the environment
-    cfg_write(dut, kEnvIdx, 1, 0, 0xDEADBEEF);          // the environment has no half B
-    check(dut.cfg_refused_o == c0 + 4, "cfg_refused_o moved by exactly 4 across this case",
-          c0 + 4, dut.cfg_refused_o);
+    cfg_write(dut, kLightsMax, 0, 0, 0xDEADBEEF);  // light past the set
+    cfg_write(dut, 0, 0, 4, 0xDEADBEEF);           // word past the half
+    cfg_write(dut, kEnvIdx, 0, 6, 0xDEADBEEF);     // word past the environment
+    cfg_write(dut, kEnvIdx, 1, 0, 0xDEADBEEF);     // the environment has no half B
+    check(dut.cfg_refused_o == c0 + 4, "cfg_refused_o moved by exactly 4 across this case", c0 + 4,
+          dut.cfg_refused_o);
     // The refusals did not alias onto light 0: republish the set cleanly and
     // light a vertex. The counter is not the check -- a masked index would
     // fold an illegal write onto light 0 in silence and still count nothing.
     publish(dut, L, 1, env);
-    Vtx v; v.ny = kOne; v.nlights = 1; v.src = 0x0902;
+    Vtx v;
+    v.ny = kOne;
+    v.nlights = 1;
+    v.src = 0x0902;
     const Out o = check_one(dut, v, L, env, "light 0 is untouched by the refused writes");
     check(o.rgb.r == 0x8000u + env.ar + env.sr, "the refused writes changed nothing",
           0x8000u + env.ar + env.sr, o.rgb.r);
@@ -722,28 +828,46 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 400; ++i) {
       Light d;
       switch (rnd() & 3) {
-        case 0: d.lx = KLX; d.ly = KLY; d.lz = KLZ; break;
-        case 1: d.lx = static_cast<int32_t>(rnd()); d.ly = static_cast<int32_t>(rnd());
-                d.lz = static_cast<int32_t>(rnd()); break;
-        default: d.lx = static_cast<int32_t>(rnd() % 131073) - 65536;
-                 d.ly = static_cast<int32_t>(rnd() % 131073) - 65536;
-                 d.lz = static_cast<int32_t>(rnd() % 131073) - 65536; break;
+        case 0:
+          d.lx = KLX;
+          d.ly = KLY;
+          d.lz = KLZ;
+          break;
+        case 1:
+          d.lx = static_cast<int32_t>(rnd());
+          d.ly = static_cast<int32_t>(rnd());
+          d.lz = static_cast<int32_t>(rnd());
+          break;
+        default:
+          d.lx = static_cast<int32_t>(rnd() % 131073) - 65536;
+          d.ly = static_cast<int32_t>(rnd() % 131073) - 65536;
+          d.lz = static_cast<int32_t>(rnd() % 131073) - 65536;
+          break;
       }
       d.cr = 0x10000;
       L[0] = d;
       publish(dut, L, 1, zero);
 
       Vtx v;
-      v.nx = rnd_biased(); v.ny = rnd_biased(); v.nz = rnd_biased();
-      if ((rnd() % 29) == 0) { v.nx = 0; v.ny = 0; v.nz = 0; }
+      v.nx = rnd_biased();
+      v.ny = rnd_biased();
+      v.nz = rnd_biased();
+      if ((rnd() % 29) == 0) {
+        v.nx = 0;
+        v.ny = 0;
+        v.nz = 0;
+      }
       v.producer_degen = (v.nx == 0 && v.ny == 0 && v.nz == 0);
       v.nlights = 1;
       v.src = static_cast<uint16_t>(rnd() & 0xFFFF);
       const int32_t raw = law_raw(v.nx, v.ny, v.nz, d.lx, d.ly, d.lz);
       const uint32_t w = v.producer_degen ? 0u : clamp01(raw);
-      if (w == 0) cov_dark++;
-      else if (w == static_cast<uint32_t>(kOne)) cov_full++;
-      else cov_lit++;
+      if (w == 0)
+        cov_dark++;
+      else if (w == static_cast<uint32_t>(kOne))
+        cov_full++;
+      else
+        cov_lit++;
       const int32_t inject = (break_oracle && i == 3) ? 1 : 0;
       const Out o = check_one(dut, v, L, zero,
                               "DIFFERENTIAL(render): rgb_r == clamp01(shade_from_world_normal)",
@@ -770,7 +894,11 @@ int main(int argc, char** argv) {
       d.lx = static_cast<int32_t>(rnd() % 131073) - 65536;
       d.ly = static_cast<int32_t>(rnd() % 131073) - 65536;
       d.lz = static_cast<int32_t>(rnd() % 131073) - 65536;
-      if ((rnd() & 3) == 0) { d.lx = KLX; d.ly = KLY; d.lz = KLZ; }
+      if ((rnd() & 3) == 0) {
+        d.lx = KLX;
+        d.ly = KLY;
+        d.lz = KLZ;
+      }
       d.cr = 0x10000;
       // A detail that must be IGNORED on this profile; a build that admitted
       // it would fail here and nowhere else.
@@ -779,8 +907,14 @@ int main(int argc, char** argv) {
       publish(dut, L, 1, zero);
 
       Vtx v;
-      v.nx = rnd_skin_lane(); v.ny = rnd_skin_lane(); v.nz = rnd_skin_lane();
-      if ((rnd() % 29) == 0) { v.nx = 0; v.ny = 0; v.nz = 0; }
+      v.nx = rnd_skin_lane();
+      v.ny = rnd_skin_lane();
+      v.nz = rnd_skin_lane();
+      if ((rnd() % 29) == 0) {
+        v.nx = 0;
+        v.ny = 0;
+        v.nz = 0;
+      }
       const uint64_t mag = mag_of(v.nx, v.ny, v.nz);
       v.mag_valid = true;
       v.mag = static_cast<uint32_t>(mag);
@@ -790,23 +924,26 @@ int main(int argc, char** argv) {
       v.src = static_cast<uint16_t>(rnd() & 0xFFFF);
 
       const int64_t n64[3] = {v.nx, v.ny, v.nz};
-      const uint32_t w = (mag == 0) ? 0u
-                                    : static_cast<uint32_t>(zref::creature::lambert_from_world_normal(
-                                          n64, static_cast<int64_t>(mag), d.lx, d.ly, d.lz));
-      if (w == 0) ccov_dark++;
-      else if (w == static_cast<uint32_t>(kOne)) ccov_full++;
-      else ccov_lit++;
+      const uint32_t w = (mag == 0)
+                             ? 0u
+                             : static_cast<uint32_t>(zref::creature::lambert_from_world_normal(
+                                   n64, static_cast<int64_t>(mag), d.lx, d.ly, d.lz));
+      if (w == 0)
+        ccov_dark++;
+      else if (w == static_cast<uint32_t>(kOne))
+        ccov_full++;
+      else
+        ccov_lit++;
       const int32_t inject = (break_oracle && i == 9) ? 1 : 0;
-      const Out o = check_one(dut, v, L, zero,
-                              "DIFFERENTIAL(creature): rgb_r == lambert_from_world_normal",
-                              (i % 19 == 0) ? 2 : 0, inject);
+      const Out o =
+          check_one(dut, v, L, zero, "DIFFERENTIAL(creature): rgb_r == lambert_from_world_normal",
+                    (i % 19 == 0) ? 2 : 0, inject);
       check(o.rgb.r == w + static_cast<uint32_t>(inject), "creature differential value",
             w + static_cast<uint32_t>(inject), o.rgb.r);
     }
     check(ccov_lit > 20, "coverage: partially lit creature points", 20,
           static_cast<uint32_t>(ccov_lit));
-    check(ccov_dark > 20, "coverage: dark creature points", 20,
-          static_cast<uint32_t>(ccov_dark));
+    check(ccov_dark > 20, "coverage: dark creature points", 20, static_cast<uint32_t>(ccov_dark));
     check(ccov_full > 2, "coverage: fully lit creature points", 2,
           static_cast<uint32_t>(ccov_full));
     // NO NEW ROOTS on a fully prepared fixture: the supplied magnitude is used
@@ -818,10 +955,19 @@ int main(int argc, char** argv) {
 
   // ---- 12: BACKPRESSURE IS TRANSPARENT -------------------------------------
   {
-    L[0] = Light{}; L[0].lx = KLX; L[0].ly = KLY; L[0].lz = KLZ;
-    L[0].cr = 0xC000; L[0].cg = 0x9000; L[0].cb = 0x3000;
+    L[0] = Light{};
+    L[0].lx = KLX;
+    L[0].ly = KLY;
+    L[0].lz = KLZ;
+    L[0].cr = 0xC000;
+    L[0].cg = 0x9000;
+    L[0].cb = 0x3000;
     publish(dut, L, 1, env);
-    Vtx v; v.nx = 3000; v.ny = 40000; v.nz = -9000; v.nlights = 1;
+    Vtx v;
+    v.nx = 3000;
+    v.ny = 40000;
+    v.nz = -9000;
+    v.nlights = 1;
     v.src = 0x0C01;
     const Out a = check_one(dut, v, L, env, "key light, no stall", 0);
     v.src = 0x0C02;
@@ -841,8 +987,7 @@ int main(int argc, char** argv) {
     // the values must still be byte-identical to the unstalled run.
     const uint32_t ob0 = dut.output_backpressure_o;
     std::vector<Vtx> burst(64, v);
-    for (uint32_t i = 0; i < burst.size(); ++i)
-      burst[i].src = static_cast<uint16_t>(0x0D00 + i);
+    for (uint32_t i = 0; i < burst.size(); ++i) burst[i].src = static_cast<uint16_t>(0x0D00 + i);
     const std::vector<Out> fast = run_batch(dut, burst, 0, nullptr);
     // One packet accepted every 24 clocks against a service producing one
     // every few: the queue fills, the fold stalls, and the machine must hold
@@ -856,8 +1001,8 @@ int main(int argc, char** argv) {
     }
     check(moved == 0, "a full output queue changed no packet and reordered none", 0, moved);
     check(dut.output_backpressure_o > ob0,
-          "output_backpressure_o was SEEN TO MOVE: the fold really does stall rather than drop",
-          1, (dut.output_backpressure_o > ob0) ? 1 : 0);
+          "output_backpressure_o was SEEN TO MOVE: the fold really does stall rather than drop", 1,
+          (dut.output_backpressure_o > ob0) ? 1 : 0);
     g_t.normals += 2 * burst.size();
     g_t.vertices += 2 * burst.size();
     g_t.terms += 2 * burst.size();
@@ -873,10 +1018,15 @@ int main(int argc, char** argv) {
     // onto a slot that does not exist.
     const uint32_t nc0 = dut.nlights_clamped_o;
     for (uint32_t i = 0; i < kLightsMax; ++i) {
-      L[i] = Light{}; L[i].ly = kOne; L[i].cr = 0x1000;
+      L[i] = Light{};
+      L[i].ly = kOne;
+      L[i].cr = 0x1000;
     }
     publish(dut, L, kLightsMax, env);
-    Vtx v; v.ny = kOne; v.nlights = 15; v.src = 0x0E01;
+    Vtx v;
+    v.ny = kOne;
+    v.nlights = 15;
+    v.src = 0x0E01;
     check_one(dut, v, L, env, "nlights=15 clamps to LIGHTS_MAX");
     check(dut.nlights_clamped_o == nc0 + 1, "nlights_clamped_o moved by exactly 1", nc0 + 1,
           dut.nlights_clamped_o);
@@ -887,9 +1037,18 @@ int main(int argc, char** argv) {
     // counter has to be read rather than inferred from the colour.
     const uint32_t rs0 = dut.logical_raw_saturations_o;
     Env zero;
-    L[0] = Light{}; L[0].lx = INT32_MAX; L[0].ly = INT32_MAX; L[0].lz = 0; L[0].cr = 0x10000;
+    L[0] = Light{};
+    L[0].lx = INT32_MAX;
+    L[0].ly = INT32_MAX;
+    L[0].lz = 0;
+    L[0].cr = 0x10000;
     publish(dut, L, 1, zero);
-    Vtx s; s.nx = 1; s.ny = 1; s.nz = 0; s.nlights = 1; s.src = 0x0E02;
+    Vtx s;
+    s.nx = 1;
+    s.ny = 1;
+    s.nz = 0;
+    s.nlights = 1;
+    s.src = 0x0E02;
     const Out so = check_one(dut, s, L, zero, "rail sun: the law's INT32 clamp engages");
     check(so.rgb.r == 0x10000u, "a saturated raw still clamps to exactly 1.0", 0x10000u, so.rgb.r);
     check(dut.logical_raw_saturations_o == rs0 + 1,
@@ -907,13 +1066,19 @@ int main(int argc, char** argv) {
     const uint32_t cb0 = dut.colour_backpressure_o;
     {
       for (uint32_t i = 0; i < kLightsMax; ++i) {
-        L[i] = Light{}; L[i].ly = kOne; L[i].cr = 0x1000; L[i].cg = 0x800; L[i].cb = 0x400;
+        L[i] = Light{};
+        L[i].ly = kOne;
+        L[i].cr = 0x1000;
+        L[i].cg = 0x800;
+        L[i].cb = 0x400;
       }
       publish(dut, L, kLightsMax, zero);
       std::vector<Vtx> jam(48);
       for (uint32_t i = 0; i < jam.size(); ++i) {
         Vtx j;
-        j.nx = 3000; j.ny = 40000; j.nz = -9000;
+        j.nx = 3000;
+        j.ny = 40000;
+        j.nz = -9000;
         j.mag_valid = true;
         j.mag = static_cast<uint32_t>(mag_of(j.nx, j.ny, j.nz));
         j.creature = true;
@@ -930,18 +1095,24 @@ int main(int argc, char** argv) {
           ++moved;
       check(moved == 0,
             "a pipeline jammed all the way back to term issue changed no packet and "
-            "reordered none", 0, moved);
+            "reordered none",
+            0, moved);
       check(dut.divider_backpressure_o > db0,
             "divider_backpressure_o was SEEN TO MOVE: term issue really does stop when the "
-            "quotient queue fills", 1, (dut.divider_backpressure_o > db0) ? 1 : 0);
+            "quotient queue fills",
+            1, (dut.divider_backpressure_o > db0) ? 1 : 0);
       check(dut.colour_backpressure_o > cb0,
             "colour_backpressure_o was SEEN TO MOVE: a result waiting on the colour engine "
-            "really is counted", 1, (dut.colour_backpressure_o > cb0) ? 1 : 0);
+            "really is counted",
+            1, (dut.colour_backpressure_o > cb0) ? 1 : 0);
       g_t.normals += 2 * jam.size();
       g_t.vertices += 2 * jam.size();
     }
 
-    struct Ctr { const char* name; uint32_t v; };
+    struct Ctr {
+      const char* name;
+      uint32_t v;
+    };
     const Ctr all[] = {
         {"normal_inputs", dut.normal_inputs_o},
         {"normal_prepared", dut.normal_prepared_o},
@@ -986,8 +1157,8 @@ int main(int argc, char** argv) {
           "light_stream_rqfull_mutant, so this zero is a measurement and not a hope",
           0, dut.root_queue_overflow_o);
     check(dut.tag_mismatch_o == 0,
-          "tag_mismatch_o quiet -- fired deliberately by light_stream_skew_mutant",
-          0, dut.tag_mismatch_o);
+          "tag_mismatch_o quiet -- fired deliberately by light_stream_skew_mutant", 0,
+          dut.tag_mismatch_o);
     load_env(dut, env);
   }
 
@@ -1008,7 +1179,9 @@ int main(int argc, char** argv) {
       L[i].ly = KLY - static_cast<int32_t>(i) * 311;
       L[i].lz = KLZ + static_cast<int32_t>(i) * 53;
       L[i].detail = (i == 2) ? 512 : 0;
-      L[i].cr = 0x4000; L[i].cg = 0x2000; L[i].cb = 0x1000;
+      L[i].cr = 0x4000;
+      L[i].cg = 0x2000;
+      L[i].cb = 0x1000;
       L[i].er = (i == 1) ? 0x0800 : 0;
     }
     publish(dut, L, 4, zero);
@@ -1021,7 +1194,11 @@ int main(int argc, char** argv) {
       v.nx = static_cast<int32_t>(rnd() % 131073) - 65536;
       v.ny = static_cast<int32_t>(rnd() % 131073) - 65536;
       v.nz = static_cast<int32_t>(rnd() % 131073) - 65536;
-      if ((i % 4001) == 0) { v.nx = 0; v.ny = 0; v.nz = 0; }
+      if ((i % 4001) == 0) {
+        v.nx = 0;
+        v.ny = 0;
+        v.nz = 0;
+      }
       v.producer_degen = (v.nx == 0 && v.ny == 0 && v.nz == 0);
       v.nlights = 4;
       v.src = static_cast<uint16_t>(i & 0xFFFF);
@@ -1068,14 +1245,14 @@ int main(int argc, char** argv) {
     // products would not be in this budget, so cloning the scalar engine to
     // make the rate breaks this and nothing else would notice.
     const uint64_t dots = dut.dot_product_slots_o - dp0;
-    const uint64_t sqs  = dut.square_product_slots_o - sp0;
-    const uint64_t unu  = dut.unused_product_slots_o - up0;
-    check(dots == 3ull * 4ull * kN, "three dot products per light term, exactly",
-          3ull * 4ull * kN, dots);
+    const uint64_t sqs = dut.square_product_slots_o - sp0;
+    const uint64_t unu = dut.unused_product_slots_o - up0;
+    check(dots == 3ull * 4ull * kN, "three dot products per light term, exactly", 3ull * 4ull * kN,
+          dots);
     check(sqs == 3ull * kN, "three squares per normal, exactly", 3ull * kN, sqs);
     check(dots + sqs + unu == 2ull * st.clocks,
-          "product-slot conservation: two lanes every clock, all accounted",
-          2ull * st.clocks, dots + sqs + unu);
+          "product-slot conservation: two lanes every clock, all accounted", 2ull * st.clocks,
+          dots + sqs + unu);
 
     const double ii = static_cast<double>(st.clocks) / static_cast<double>(terms);
     std::printf(
@@ -1084,8 +1261,10 @@ int main(int argc, char** argv) {
         "[stream] II per light term   = %.4f clk\n"
         "[stream] first-emit latency  = %llu clk\n"
         "[stream] root jobs           = %u  (one per normal; 480,000 would be one per term)\n"
-        "[stream] product slots       = %llu dot + %llu square + %llu unused = %llu (= 2 x clocks)\n"
-        "[stream] waits               = normal-queue %u, descriptor %u, divider %u, colour %u, output %u\n"
+        "[stream] product slots       = %llu dot + %llu square + %llu unused = %llu (= 2 x "
+        "clocks)\n"
+        "[stream] waits               = normal-queue %u, descriptor %u, divider %u, colour %u, "
+        "output %u\n"
         "[stream] gate <= 1,000,000   : %s\n"
         "[stream] 20%%-reserved envelope 1,333,333 : %s\n"
         "[stream] raw frame 1,666,666            : %s\n"
@@ -1093,14 +1272,11 @@ int main(int argc, char** argv) {
         static_cast<unsigned long long>(st.clocks), ii,
         static_cast<unsigned long long>(st.first_emit_latency), roots,
         static_cast<unsigned long long>(dots), static_cast<unsigned long long>(sqs),
-        static_cast<unsigned long long>(unu),
-        static_cast<unsigned long long>(dots + sqs + unu),
+        static_cast<unsigned long long>(unu), static_cast<unsigned long long>(dots + sqs + unu),
         dut.normal_queue_wait_o, dut.descriptor_wait_o, dut.divider_backpressure_o,
         dut.colour_backpressure_o, dut.output_backpressure_o,
-        (st.clocks <= 1000000ull) ? "PASS" : "FAIL",
-        (st.clocks <= 1333333ull) ? "inside" : "OVER",
-        (st.clocks <= 1666666ull) ? "inside" : "OVER",
-        80160000.0 / static_cast<double>(st.clocks));
+        (st.clocks <= 1000000ull) ? "PASS" : "FAIL", (st.clocks <= 1333333ull) ? "inside" : "OVER",
+        (st.clocks <= 1666666ull) ? "inside" : "OVER", 80160000.0 / static_cast<double>(st.clocks));
 
     check(st.clocks <= 1000000ull,
           "the ruled fixture meets the proposed <=1,000,000-clock lighting gate", 1000000ull,
@@ -1122,8 +1298,11 @@ int main(int argc, char** argv) {
     for (uint32_t i = 0; i < kLightsMax; ++i) {
       L[i] = Light{};
       L[i].lx = KLX + static_cast<int32_t>(i) * 131;
-      L[i].ly = KLY; L[i].lz = KLZ;
-      L[i].cr = 0x2000; L[i].cg = 0x1000; L[i].cb = 0x0800;
+      L[i].ly = KLY;
+      L[i].lz = KLZ;
+      L[i].cr = 0x2000;
+      L[i].cg = 0x1000;
+      L[i].cb = 0x0800;
     }
     publish(dut, L, kLightsMax, zero);
 
@@ -1154,11 +1333,10 @@ int main(int argc, char** argv) {
         "[stream] against the raw 1,666,666-clock frame: %.2fx OVER. This is reported,\n"
         "[stream] not relabelled. Meeting it needs II1 (32 divider stages plus matching\n"
         "[stream] product and colour bandwidth) or a second qualified lane, and its cost.\n\n",
-        static_cast<unsigned long long>(st.clocks), ii,
-        static_cast<double>(st.clocks) / 1666666.0);
+        static_cast<unsigned long long>(st.clocks), ii, static_cast<double>(st.clocks) / 1666666.0);
     check(st.clocks > 1666666ull,
-          "EIGHT LIGHTS ON EVERY VERTEX IS OVER THE RAW FRAME -- asserted, not hidden",
-          1666666ull, st.clocks);
+          "EIGHT LIGHTS ON EVERY VERTEX IS OVER THE RAW FRAME -- asserted, not hidden", 1666666ull,
+          st.clocks);
     check(st.clocks > 1333333ull, "and over the reserved envelope too", 1333333ull, st.clocks);
   }
 
@@ -1185,9 +1363,9 @@ int main(int argc, char** argv) {
         "cfgRefused=%u epochRefused=%u tagMismatch=%u\n",
         dut.normal_inputs_o, dut.normal_prepared_o, dut.supplied_mags_o, dut.roots_issued_o,
         dut.roots_retired_o, dut.terms_accepted_o, dut.terms_retired_o, dut.terms_null_o,
-        dut.vertices_lit_o, dut.degenerate_o, dut.degenerate_terms_o,
-        dut.logical_raw_saturations_o, dut.ndl_clamp_lo_o, dut.ndl_clamp_hi_o, dut.rgb_sat_o,
-        dut.seam_mismatch_o, dut.cfg_refused_o, dut.epoch_refusals_o, dut.tag_mismatch_o);
+        dut.vertices_lit_o, dut.degenerate_o, dut.degenerate_terms_o, dut.logical_raw_saturations_o,
+        dut.ndl_clamp_lo_o, dut.ndl_clamp_hi_o, dut.rgb_sat_o, dut.seam_mismatch_o,
+        dut.cfg_refused_o, dut.epoch_refusals_o, dut.tag_mismatch_o);
   }
 
   dut.final();

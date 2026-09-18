@@ -43,9 +43,9 @@
 
 namespace {
 
-using zhao::check;
 using hist_test::Beat;
 using hist_test::Counters;
+using zhao::check;
 
 // Four magnitudes that all bucket to bin 4 (see the hand-computed table in
 // measure_histogram_directed.cpp: 4 and 5 both land in bin 4).

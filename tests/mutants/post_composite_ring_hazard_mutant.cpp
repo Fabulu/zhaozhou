@@ -46,15 +46,17 @@ int main(int argc, char** argv) {
   // is the reach the nine-pixel lead exists to cover, and +4 vertically puts
   // the sample on the line the write pointer is currently filling.
   pc::Frame f = pc::base_frame();
-  for (int i = 0; i < pc::CW * pc::CH; ++i) { f.dx[i] = 8; f.dy[i] = 4; }
+  for (int i = 0; i < pc::CW * pc::CH; ++i) {
+    f.dx[i] = 8;
+    f.dy[i] = 4;
+  }
   pc::Cfg c;
 
   pc::reset_dut(top);
   pc::load_pv_table(top, c);
   const pc::Result r = pc::run_frame(top, f, c);
 
-  std::printf("  mutant (LAG_PX = 0): ring_hazard_o = %u over %d pixels\n",
-              r.hazard, r.emitted);
+  std::printf("  mutant (LAG_PX = 0): ring_hazard_o = %u over %d pixels\n", r.hazard, r.emitted);
 
   // INVERTED POLARITY. Green here means the detector works.
   zhao::check(r.hazard > 0u,
