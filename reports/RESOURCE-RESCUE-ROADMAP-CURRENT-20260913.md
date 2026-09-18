@@ -1070,6 +1070,38 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > third file in that set this campaign has needed. The precedent from the other
 > two applies: the set asserts Packet E did not touch these, which stays true.
 >
+> **The cone, read out of the source rather than guessed.** `zhao_raster_attrdiv
+> _v2.sv:73–82`:
+>
+> ```systemverilog
+> rounded_num_c   = `ZHAO_ATTR_V2_ROUND_NUM(num_i, area_ext_c);  // the 97-bit Add0
+> pos_sat_limit_c =  area_ext_c <<< 31;
+> neg_sat_limit_c = -(area_ext_c <<< 31);
+> sat_pos_c = (area_i != 47'd0) && (rounded_num_c >= pos_sat_limit_c);
+> sat_neg_c = (area_i != 47'd0) && (rounded_num_c <  neg_sat_limit_c);
+> ...
+> final_sat_r <= sat_pos_c || sat_neg_c;                          // line 191
+> ```
+>
+> `num_i` is `attrgrad`'s `row_num_c`, arriving combinationally from the adder
+> tree — so one cycle carries the tree, a 97-bit round-and-add, and TWO 97-bit
+> signed comparisons. That is the whole 8.68 ns, and it explains why the
+> divider's share grew when the tree shrank: the two are one path, not two.
+>
+> **The promising fix costs no cycle, which is why it needs checking carefully.**
+> `D_IDLE` already captures the rounded value into `dividend_r`, and `D_PREP`
+> already exists as a state that reuses that bank. Computing the saturation test
+> in `D_PREP` from the REGISTERED `dividend_r` would start the compare at a
+> flip-flop with no `num_i` and no `Add0` ahead of it, using a cycle the divider
+> already spends. If that holds it is the same shape as the CRC verdict fix.
+>
+> **What makes it delicate:** the file is in Packet E's `PROTECTED_HASHES`, it
+> carries an exact-law negative-half mutant that selects `ZHAO_ATTR_V2_ROUND_NUM`
+> specifically, and lines 84–104 contain an explicit *"Do not simplify this back
+> into a materialized negate"* warning about a neighbouring identity. Any change
+> here owes the full mutant gauntlet, and the saturation decision is externally
+> visible through `q_saturated_o` and `saturations_o`.
+>
 > **It is not worth doing before `@packet-h-uvw` reports.** That fit removes 84%
 > of the negative paths, and the sensible order is to see what the table looks
 > like once the dominant family is gone rather than to optimise against a list
