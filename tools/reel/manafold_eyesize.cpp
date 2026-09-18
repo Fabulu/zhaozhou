@@ -4,6 +4,7 @@
 // Eye->Pupil hierarchy propagation and exact legacy/current form control before
 // any new public art consumes the channel.
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -49,19 +50,10 @@ bool part_equal(const zc::RingPart& a, const zc::RingPart& b) {
       a.micro_keep_segments != b.micro_keep_segments ||
       a.r != b.r || a.g != b.g || a.b != b.b || a.page != b.page ||
       a.v0 != b.v0 || a.v1 != b.v1 || a.pitch_q != b.pitch_q ||
-      a.yaw_q != b.yaw_q || a.cap_base_fix != b.cap_base_fix) {
-    std::printf("meyesize: form control part header differs\n");
+      a.yaw_q != b.yaw_q || a.cap_base_fix != b.cap_base_fix)
     return false;
-  }
   for (size_t i = 0; i < a.rings.size(); ++i)
-    if (!ring_equal(a.rings[i], b.rings[i])) {
-      std::printf("meyesize: form control ring %zu differs: "
-                  "y %d/%d rx %d/%d rz %d/%d\n",
-                  i, a.rings[i].y, b.rings[i].y,
-                  a.rings[i].rx, b.rings[i].rx,
-                  a.rings[i].rz, b.rings[i].rz);
-      return false;
-    }
+    if (!ring_equal(a.rings[i], b.rings[i])) return false;
   return true;
 }
 
@@ -121,19 +113,30 @@ int main(int argc, char** argv) {
 
   int failures = 0;
   const zc::CreatureType& t = u02::type();
-  for (const zc::Clip& c : t.bank.clips)
-    if (!c.uniform_scale_q15.empty()) {
-      std::printf("FAIL: shipping slot %u unexpectedly allocates eye scale\n", c.slot_id);
+  for (const zc::Clip& c : t.bank.clips) {
+    const bool expression_slot =
+        c.slot_id == 3 || c.slot_id == 4 || c.slot_id == 11 || c.slot_id == 21;
+    const size_t expected = static_cast<size_t>(c.frame_count) * u02::kBoneCount;
+    if (expression_slot) {
+      if (c.uniform_scale_q15.size() != expected ||
+          std::all_of(c.uniform_scale_q15.begin(), c.uniform_scale_q15.end(),
+                      [](uint16_t v) { return v == u02::kEyeScaleIdentityQ15; })) {
+        std::printf("FAIL: expression slot %u lacks an active eye-scale track\n", c.slot_id);
+        ++failures;
+      }
+    } else if (!c.uniform_scale_q15.empty()) {
+      std::printf("FAIL: non-expression slot %u unexpectedly allocates eye scale\n", c.slot_id);
       ++failures;
     }
+  }
 
   const u02::EyeForm saved_current = u02::selected_eye_form();
   const zc::RingPart current_l = u02::make_eye_lens(u02::kBEyeL);
   u02::g_u02_eye_form_legacy = true;
   const zc::RingPart legacy_l = u02::make_eye_lens(u02::kBEyeL);
   u02::g_u02_eye_form_legacy = false;
-  if (!u02::eye_form_valid(saved_current) || !part_equal(current_l, legacy_l)) {
-    std::printf("FAIL: current/legacy form control is not exact\n");
+  if (!u02::eye_form_valid(saved_current) || part_equal(current_l, legacy_l)) {
+    std::printf("FAIL: selected current form is invalid or did not leave the legacy dagger\n");
     ++failures;
   }
 

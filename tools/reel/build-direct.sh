@@ -31,9 +31,10 @@ Targets:
   mshell     manafold-shellgate.exe (the committed SHELL/FOG gate, D9 s7+s14
              and D11 s2.3 -- pass 15 gave it a target; it had none, so it was
              a promised tool nobody could build. --selftest is required.)
-  mspan      manafold-spangate.exe (pass 12 wave 2a: the committed STRETCHY
-             SPAN gate, Direction 9 §13 -- reads the SKIN, because every
-             nodule gate reads bones and cannot see a vertex effect)
+  mspan      manafold-spangate.exe (pass 17: Direction 16 signed visible-span
+             skinning, zone/identity/extension/compaction/closure controls)
+  moutline   manafold-outlinegate.exe (pass 17: complete enclosed-O ink and
+             foreground-effect ownership controls)
   meyecam    manafold-eyecam.exe (pass 15: THE EYE-VS-CAMERA PROBE -- where
              each eye plate points RELATIVE TO THE CAMERA, per clip and per
              presentation frame. It shipped in pass 15 with NO TARGET AT ALL,
@@ -67,7 +68,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|mexpress|meyecam|meyesize|mqa|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|moutline|mexpress|meyecam|meyesize|mqa|all)
       TARGET="$1"
       shift
       ;;
@@ -260,6 +261,12 @@ build_mspan() {
   "$CXX" "${FLAGS[@]}" "$T/manafold_spangate.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-spangate.exe"
 }
 
+build_moutline() {
+  printf '%s\n' "LD manafold-outlinegate"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_outlinegate.cpp" "${LIBOBJS[@]}" \
+    -o "$BIN/manafold-outlinegate.exe"
+}
+
 build_mexpress() {
   printf '%s\n' "LD manafold-express"
   "$CXX" "${FLAGS[@]}" "$T/manafold_express.cpp" "${LIBOBJS[@]}" \
@@ -285,6 +292,7 @@ case "$TARGET" in
   mqa) build_mqa ;;
   mshell) build_mshell ;;
   mspan) build_mspan ;;
+  moutline) build_moutline ;;
   meyecam) build_meyecam ;;
   meyesize) build_meyesize ;;
   mexpress) build_mexpress ;;

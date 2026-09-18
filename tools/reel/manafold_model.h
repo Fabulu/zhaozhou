@@ -214,12 +214,15 @@ inline zc::RingPart make_loop() {
     const int32_t outN1 = outN0 + kFoldBlendMm[0];
     const int32_t inA0 = stA - kLoopCarrierCoreHalfMm[1] - kFoldBlendMm[1];
     const int32_t inA1 = stA - kLoopCarrierCoreHalfMm[1];
+    const int32_t outA0 = stA + kLoopCarrierCoreHalfMm[1];
     const int32_t inB0 = stB - kLoopCarrierCoreHalfMm[2] - kFoldBlendMm[2];
     const int32_t inB1 = stB - kLoopCarrierCoreHalfMm[2];
+    const int32_t outB0 = stB + kLoopCarrierCoreHalfMm[2];
     const int32_t inC0 = stC - kLoopCarrierCoreHalfMm[3] - kFoldBlendMm[3];
     const int32_t inC1 = stC - kLoopCarrierCoreHalfMm[3];
     const int32_t outC0 = stC + kLoopCarrierCoreHalfMm[3];
     const int32_t outC1 = outC0 + kFoldBlendMm[3];
+    const int32_t midE = outC0 + kSpanEMidRunMm;
     const int32_t inE0 = stEnd - kLoopCarrierCoreHalfMm[4] - kFoldBlendMm[4];
     const int32_t inE1 = stEnd - kLoopCarrierCoreHalfMm[4];
     const int32_t outE0 = stEnd + kLoopCarrierCoreHalfMm[4];
@@ -232,27 +235,38 @@ inline zc::RingPart make_loop() {
     } else if (s < outN1) {
       set_pair(kBJunctionF, kBNeck, ramp64(outN0, outN1));
     } else if (s < inA0) {
-      set_pair(kBNeck, kBHingeA, 0);
+      set_pair(kBNeck, kBSpanDeltaA, ramp64(outN1, inA0));
     } else if (s < inA1) {
-      set_pair(kBNeck, kBHingeA, ramp64(inA0, inA1));
+      set_pair(kBSpanDeltaA, kBHingeA, ramp64(inA0, inA1));
+    } else if (s < outA0) {
+      set_pair(kBHingeA, kBHingeA, 0);  // A rigid carrier core
     } else if (s < inB0) {
-      set_pair(kBHingeA, kBHingeB, 0);
+      set_pair(kBHingeA, kBSpanDeltaB, ramp64(outA0, inB0));
     } else if (s < inB1) {
-      set_pair(kBHingeA, kBHingeB, ramp64(inB0, inB1));
+      set_pair(kBSpanDeltaB, kBHingeB, ramp64(inB0, inB1));
+    } else if (s < outB0) {
+      set_pair(kBHingeB, kBHingeB, 0);  // B rigid carrier core
     } else if (s < inC0) {
-      set_pair(kBHingeB, kBHingeC, 0);
+      set_pair(kBHingeB, kBSpanDeltaC, ramp64(outB0, inC0));
     } else if (s < inC1) {
-      set_pair(kBHingeB, kBHingeC, ramp64(inC0, inC1));
+      set_pair(kBSpanDeltaC, kBHingeC, ramp64(inC0, inC1));
     } else if (s < outC0) {
-      set_pair(kBHingeC, kBHingeD, 0);  // the full C swell belongs to C
+      set_pair(kBHingeC, kBHingeC, 0);  // C rigid carrier core
     } else if (s < outC1) {
-      set_pair(kBHingeC, kBHingeD, ramp64(outC0, outC1));
+      // EStart is HingeD-identical at zero delta, so this remains the accepted
+      // 90 mm C->closure rotation ramp while beginning signed End translation.
+      set_pair(kBHingeC, kBSpanDeltaEStart, ramp64(outC0, outC1));
+    } else if (s < midE) {
+      set_pair(kBSpanDeltaEStart, kBSpanDeltaEMid,
+               ramp64(outC1, midE));
     } else if (s < inE0) {
-      set_pair(kBHingeD, kBRearSocket, 0);
+      set_pair(kBSpanDeltaEMid, kBSpanDeltaEPreSocket,
+               ramp64(midE, inE0));
     } else if (s < inE1) {
-      set_pair(kBHingeD, kBRearSocket, ramp64(inE0, inE1));
+      set_pair(kBSpanDeltaEPreSocket, kBRearSocket,
+               ramp64(inE0, inE1));
     } else if (s < outE0) {
-      set_pair(kBRearSocket, kBReturnTip, 0);  // the End swell belongs to its socket
+      set_pair(kBRearSocket, kBRearSocket, 0);  // End rigid carrier core
     } else if (s < outE1) {
       set_pair(kBRearSocket, kBReturnTip, ramp64(outE0, outE1));
     } else {
@@ -307,7 +321,11 @@ inline zc::RingPart make_loop() {
     // It is also what SS13 actually asked for -- "the antennae parts BETWEEN
     // THE BLOBS", not the buried return.
     //
-    // ==== WAVE 2a: THE THREE SPANS GET THEIR OWN LANES ====================
+    // ==== HISTORICAL: PASS 12 WAVE 2a POSITIVE-ONLY LANES ================
+    // The derivation below records the rejected predecessor and is retained as
+    // failure history. Pass 17 Direction 16 supersedes it at the operative block
+    // below: lanes 1..3 have zero authority and signed span-delta palettes are
+    // the sole length mechanism.
     //
     // Wave 1's single strength read the body's breath, so every span stretched
     // together by the same amount whatever the nodules were doing. Lanes 1..3
@@ -340,7 +358,7 @@ inline zc::RingPart make_loop() {
     // see because it measures BONES and this is a VERTEX effect. Every lane's
     // authority ramps linearly to zero from stC to the tip, so the arm rides
     // along and its end does not move at all. This is the ONLY region where
-    // dy/ds can go negative; kSpanStretchMaxPm is bounded so it cannot.
+    // dy/ds can go negative; the signed-span bounds keep it positive.
     //
     // ⚠ ROLE AND STRENGTH MUST STILL AGREE, now across every lane:
     // `compile_creature` rejects the whole creature -- rendering NOTHING, not
@@ -350,27 +368,11 @@ inline zc::RingPart make_loop() {
     // by that span's LOWER bone. The child carrier's local translation supplies
     // the same endpoint delta to the ball and every descendant, so retaining
     // the old cumulative authority would move them twice.
-    const int32_t span_start[3] = {stNeck, stA, stB};
-    const int32_t span_len[3] = {kLoopArcMm[1], kLoopArcMm[2], kLoopArcMm[3]};
-    const uint8_t span_lower[3] = {kBNeck, kBHingeA, kBHingeB};
-    const auto bone_weight64 = [&](uint8_t bone) {
-      if (rs.b0 == bone && rs.b1 == bone) return 64;
-      if (rs.b0 == bone) return static_cast<int32_t>(rs.w0);
-      if (rs.b1 == bone) return 64 - static_cast<int32_t>(rs.w0);
-      return 0;
-    };
-    int32_t lane_st[3] = {0, 0, 0};
-    for (int L = 0; L < 3; ++L) {
-      int32_t run = s - span_start[L];
-      if (run < 0) run = 0;
-      if (run > span_len[L]) run = span_len[L];
-      const int32_t lower_w = bone_weight64(span_lower[L]);
-      const int32_t st = s > 0 ? static_cast<int32_t>(
-                                     (static_cast<int64_t>(run) * 255 * lower_w) /
-                                     (static_cast<int64_t>(s) * 64))
-                               : 0;
-      lane_st[L] = st < 0 ? 0 : (st > 255 ? 255 : st);
-    }
+    // PASS 17 / Direction 16: lanes 1..3 no longer move or resize the loop.
+    // Signed length is carried once by the span-delta skin palettes above; any
+    // axial lane authority here would double-transform extension and still could
+    // not encode compaction. Keep explicit zero metadata for the shared format.
+    const int32_t lane_st[3] = {0, 0, 0};
     // lane 0: the old breath coupling remains a live, default-off knob. It
     // keeps the historical C->tip taper because it has no translated carrier.
     int32_t ramp_num = 1, ramp_den = 1;
@@ -385,8 +387,7 @@ inline zc::RingPart make_loop() {
       stretch = static_cast<int32_t>(
           (static_cast<int64_t>(kLoopStretchStrength) * ramp_num) / ramp_den);
     if (stretch < 0) stretch = 0;
-    const bool any_lane =
-        stretch > 0 || lane_st[0] > 0 || lane_st[1] > 0 || lane_st[2] > 0;
+    const bool any_lane = stretch > 0;
     rs.deform_role = any_lane ? zc::DeformRole::kRadial : zc::DeformRole::kNone;
     rs.deform_axis = 0;
     rs.deform_strength = static_cast<uint8_t>(stretch);

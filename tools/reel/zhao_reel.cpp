@@ -55,6 +55,7 @@
 #include "zrender/internal.hpp"    // compose_lattice for the sim-side tilt taps
 
 #include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -76,6 +77,39 @@ namespace {
 
 std::string g_out;
 bool g_write = true;  // --check: render + verify CRCs only, write nothing
+
+bool parse_strict_env_int(const char* name, const char* text,
+                          int min_value, int max_value, int& out) {
+  if (text == nullptr || *text == '\0') {
+    std::fprintf(stderr, "%s is empty; expected integer %d..%d\n",
+                 name, min_value, max_value);
+    return false;
+  }
+  const char* first = text;
+  const char* last = text + std::strlen(text);
+  if (*first == '+') {
+    ++first;
+    if (first == last) {
+      std::fprintf(stderr, "%s=%s is not an integer; expected %d..%d\n",
+                   name, text, min_value, max_value);
+      return false;
+    }
+  }
+  int value = 0;
+  const std::from_chars_result parsed = std::from_chars(first, last, value);
+  if (parsed.ec != std::errc{} || parsed.ptr != last) {
+    std::fprintf(stderr, "%s=%s is not an integer; expected %d..%d\n",
+                 name, text, min_value, max_value);
+    return false;
+  }
+  if (value < min_value || value > max_value) {
+    std::fprintf(stderr, "%s=%s outside %d..%d\n",
+                 name, text, min_value, max_value);
+    return false;
+  }
+  out = value;
+  return true;
+}
 
 // ---------------------------------------------------------------- output ----
 
@@ -1493,6 +1527,7 @@ namespace zc = zref::creature;
 // knob Fabian might turn sits in one findable place.
 #include "zixxtrixx.h"
 #include "manafold.h"
+#include "manafold_outline.h"
 
 // The demo subject: a watchdog quadruped. Ring parts are rigid per bone
 // (donor law). Its authored forward axis is +X: pitch maps each body/head ring
@@ -3088,6 +3123,10 @@ int g_mana_ablate = 0;
 // mask the mist compositor was handed, so a human can LOOK at what it selected
 // before any measurement is trusted against it. Diagnostic only.
 bool g_u02_cover_paint = false;
+// Direction-17 same-binary evidence controls. Both default false and affect
+// only Manafold's outline ownership; production uses the shared pure helpers.
+bool g_u02_outline_no_opening_owner = false;
+bool g_u02_outline_force_post_repaint = false;
 constexpr int32_t kCelInkFarRadiusQ8 = 120 * 256;
 constexpr int32_t kCelInkMidRadiusQ8 = 200 * 256;
 constexpr int32_t kCelInkCloseRadiusQ8 = 360 * 256;
@@ -3286,7 +3325,9 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   static std::vector<uint8_t> u02_body_rgb;
   static std::vector<int32_t> u02_body_depth;
   std::vector<uint8_t> u02_body_cover;
-  if (c.u02_shell && c.inst != nullptr && c.poses != nullptr &&
+  // Direction 17: this auxiliary owns the cel-outline's internal body/head
+  // boundary, not shell optics. Keep it live in shell-off outline diagnostics.
+  if (g_cel_main && c.inst != nullptr && c.poses != nullptr &&
       c.inst->type == &u02::type()) {
     const size_t n = static_cast<size_t>(w) * h;
     u02_body_rgb.assign(pre.begin(), pre.end());
@@ -3312,6 +3353,8 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   std::vector<uint8_t> u02_cover;
   // PASS 12 exterior cel ring plus Direction-12 body/head boundary.
   std::vector<uint8_t> u02_ink;
+  // Internal-only ownership retained for the forced stale-repaint evidence
+  // control. It is never repainted on the production path.
   std::vector<uint8_t> u02_inner_ink;
   if (g_exp_contour || g_exp_boil || g_cel_main) {
     const size_t n = static_cast<size_t>(w) * h;
@@ -3399,35 +3442,10 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     }
     if (g_cel_main) {
       // Exterior-only contour. Four-neighbour flood fill identifies only the
-      // background connected to the viewport border; enclosed holes therefore
-      // remain uninked. The ring then grows with eight-neighbour connectivity
-      // through that exterior and never overwrites a creature pixel.
-      std::vector<uint8_t> exterior(n, 0);
-      std::vector<size_t> queue;
-      queue.reserve(n);
-      const auto admit_exterior = [&](uint32_t x, uint32_t y) {
-        const size_t i = static_cast<size_t>(y) * w + x;
-        if (mask[i] || exterior[i]) return;
-        exterior[i] = 1;
-        queue.push_back(i);
-      };
-      for (uint32_t x = 0; x < w; ++x) {
-        admit_exterior(x, 0);
-        if (h > 1) admit_exterior(x, h - 1);
-      }
-      for (uint32_t y = 1; y + 1 < h; ++y) {
-        admit_exterior(0, y);
-        if (w > 1) admit_exterior(w - 1, y);
-      }
-      for (size_t q = 0; q < queue.size(); ++q) {
-        const size_t i = queue[q];
-        const uint32_t x = static_cast<uint32_t>(i % w);
-        const uint32_t y = static_cast<uint32_t>(i / w);
-        if (x > 0) admit_exterior(x - 1, y);
-        if (x + 1 < w) admit_exterior(x + 1, y);
-        if (y > 0) admit_exterior(x, y - 1);
-        if (y + 1 < h) admit_exterior(x, y + 1);
-      }
+      // background connected to the viewport border. The enclosed antenna O
+      // remains negative space but is deliberately not classified as exterior.
+      std::vector<uint8_t> exterior;
+      u02::outline::classify_exterior(mask, w, h, exterior);
 
       std::vector<uint8_t> edge(n, 0);
       std::vector<size_t> frontier;
@@ -3459,49 +3477,35 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
         }
         frontier.swap(next);
       }
-      // Direction 12: the full creature's union silhouette has no internal
-      // body/head boundary. Add the BODY-ONLY boundary on the body side, but
-      // only when that body depth is still the final visible depth. A nearer
-      // antenna therefore suppresses the line; a farther antenna or enclosed
-      // loop pocket permits it. Exterior neighbours are skipped because the
-      // ordinary union contour already owns that edge.
+      // Direction 17: Manafold's antenna is an outlined stick loop around an
+      // O-shaped negative-space opening. Exterior growth cannot enter an
+      // enclosed component, so add ink on the VISIBLE CREATURE SIDE of that
+      // boundary. Scope this with the Manafold body auxiliary: applying a new
+      // enclosed-hole law to every creature would move unrelated approved CRCs.
+      // The opening pixels themselves remain untouched and absent from cover.
+      //
+      // Direction 12: the full creature's union silhouette also has no internal
+      // body/head boundary. Preserve the BODY-ONLY boundary on the body side,
+      // but only where body depth still owns the composed creature pixel. A
+      // nearer antenna therefore suppresses hidden body ink.
       if (!u02_body_cover.empty()) {
+        std::vector<uint8_t> opening_owned;
+        std::vector<uint8_t> body_owned;
+        if (!g_u02_outline_no_opening_owner)
+          u02::outline::add_enclosed_opening_edge(
+              mask, exterior, w, h, ink_width, edge, &opening_owned);
+        u02::outline::add_visible_body_inner_edge(
+            u02_body_cover, u02_body_depth, depth, exterior, w, h,
+            ink_width, edge, &body_owned);
         u02_inner_ink.assign(n, 0);
-        for (uint32_t y = 0; y < h; ++y) {
-          for (uint32_t x = 0; x < w; ++x) {
-            const size_t i = static_cast<size_t>(y) * w + x;
-            if (!u02_body_cover[i] || u02_body_depth[i] != depth[i]) continue;
-            bool internal = false;
-            for (int r = 1; r <= ink_width && !internal; ++r) {
-              const int nx[4] = {static_cast<int>(x) - r, static_cast<int>(x) + r,
-                                 static_cast<int>(x), static_cast<int>(x)};
-              const int ny[4] = {static_cast<int>(y), static_cast<int>(y),
-                                 static_cast<int>(y) - r, static_cast<int>(y) + r};
-              for (int d = 0; d < 4; ++d) {
-                if (nx[d] < 0 || ny[d] < 0 || nx[d] >= static_cast<int>(w) ||
-                    ny[d] >= static_cast<int>(h))
-                  continue;
-                const size_t j = static_cast<size_t>(ny[d]) * w +
-                                 static_cast<uint32_t>(nx[d]);
-                if (!u02_body_cover[j] && !exterior[j]) {
-                  internal = true;
-                  break;
-                }
-              }
-            }
-            if (internal) {
-              edge[i] = 1;
-              u02_inner_ink[i] = 1;
-            }
-          }
+        for (size_t i = 0; i < n; ++i) {
+          const bool opening = opening_owned.size() == n && opening_owned[i];
+          const bool body = body_owned.size() == n && body_owned[i];
+          if (opening || body) u02_inner_ink[i] = 1;
         }
       }
-      for (size_t i = 0; i < n; ++i) {
-        if (!edge[i]) continue;
-        rgb[i * 3] = kCelInkR;
-        rgb[i * 3 + 1] = kCelInkG;
-        rgb[i * 3 + 2] = kCelInkB;
-      }
+
+      u02::outline::paint_ink(rgb, n, edge, kCelInkR, kCelInkG, kCelInkB);
       // STAGE A: the ink ring IS the creature -- the reviewer's "the mist
       // softens the ink outline" is the same fault as the hue rotation, one
       // pixel further out. It grows into the exterior, so it is never already
@@ -3802,18 +3806,14 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
                       ms.soft);
     }
   }
-  // Direction 12: keep the body/head boundary readable even when the post-pass
-  // energy crosses it. This restores only the depth-approved INTERNAL contour;
-  // exterior ink and nearer antenna pixels retain their existing ordering.
-  if (!u02_inner_ink.empty()) {
-    const size_t n = static_cast<size_t>(w) * h;
-    for (size_t i = 0; i < n; ++i) {
-      if (!u02_inner_ink[i]) continue;
-      rgb[i * 3] = kCelInkR;
-      rgb[i * 3 + 1] = kCelInkG;
-      rgb[i * 3 + 2] = kCelInkB;
-    }
-  }
+  // Direction 17: internal ink is painted once before the depth-tested effects.
+  // Do not restore stale RGB here: particle/splat passes may have legitimately
+  // become the nearer visible owner without writing back to the shared depth.
+  // The diagnostic control deliberately restores the retired behavior so a
+  // normal/control render can show the foreground effect being erased.
+  if (g_u02_outline_force_post_repaint && !u02_inner_ink.empty())
+    u02::outline::paint_ink(rgb, static_cast<size_t>(w) * h, u02_inner_ink,
+                           kCelInkR, kCelInkG, kCelInkB);
   if (c.u02_glow && cr_glow_n > 0) {
     u02::GlowFrame core;
     u02::glow_build_ramp(core, u02::kGlowLo, u02::kGlowMid, u02::kGlowHi,
@@ -7844,6 +7844,85 @@ int main(int argc, char** argv) {
     }
     std::fprintf(stderr, "ZHAO_U02_JOINT_MUTE=%s (public carrier control)\n", jm);
   }
+  // Direction 14 authoring ladder: independent public rotational authority for
+  // the two body-attached visible carriers. Values are angle16 per authored mm.
+  if (const char* e = std::getenv("ZHAO_U02_FRONT_JOINT_PER_MM")) {
+    const int v = std::atoi(e);
+    if (v <= 0 || v > 64) {
+      std::fprintf(stderr, "ZHAO_U02_FRONT_JOINT_PER_MM=%s outside 1..64\n", e);
+      return 2;
+    }
+    u02::g_u02_swallow_front_joint_per_mm = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_END_JOINT_PER_MM")) {
+    const int v = std::atoi(e);
+    if (v <= 0 || v > 64) {
+      std::fprintf(stderr, "ZHAO_U02_END_JOINT_PER_MM=%s outside 1..64\n", e);
+      return 2;
+    }
+    u02::g_u02_swallow_end_joint_per_mm = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_FALL_WRAP_CONTROL")) {
+    if (std::strcmp(e, "0") != 0 && std::strcmp(e, "1") != 0) {
+      std::fprintf(stderr, "ZHAO_U02_FALL_WRAP_CONTROL=%s invalid (expected 0|1)\n", e);
+      return 2;
+    }
+    u02::g_u02_fall_wrap_control = std::strcmp(e, "1") == 0;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_DEATH_EYE_CONTROL")) {
+    if (std::strcmp(e, "current") == 0)
+      u02::g_u02_death_fail = 0;
+    else if (std::strcmp(e, "legacy") == 0)
+      u02::g_u02_death_fail = 5;
+    else {
+      std::fprintf(stderr,
+                   "ZHAO_U02_DEATH_EYE_CONTROL=%s invalid (expected current|legacy)\n",
+                   e);
+      return 2;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_STARTLE_TIMING")) {
+    if (std::strcmp(e, "late") == 0)
+      u02::g_u02_startle_timing = u02::StartleTimingControl::kLate;
+    else if (std::strcmp(e, "legacy") == 0)
+      u02::g_u02_startle_timing = u02::StartleTimingControl::kLegacy;
+    else if (std::strcmp(e, "early") == 0)
+      u02::g_u02_startle_timing = u02::StartleTimingControl::kEarly;
+    else {
+      std::fprintf(stderr,
+                   "ZHAO_U02_STARTLE_TIMING=%s invalid (expected late|legacy|early)\n",
+                   e);
+      return 2;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_TRICK_FLIP_X_A16")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_TRICK_FLIP_X_A16", e,
+                              -32768, 32768, v))
+      return 2;
+    u02::g_u02_trick_flip_x_a16 = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_TRICK_FLIP_Z_A16")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_TRICK_FLIP_Z_A16", e,
+                              -32768, 32768, v))
+      return 2;
+    u02::g_u02_trick_flip_z_a16 = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_TAUNT3_FLICK_YAW_A16")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_TAUNT3_FLICK_YAW_A16", e,
+                              -16384, 16384, v))
+      return 2;
+    u02::g_u02_taunt3_flick_yaw_a16 = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_TAUNT3_FLICK_ROLL_A16")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_TAUNT3_FLICK_ROLL_A16", e,
+                              -16384, 16384, v))
+      return 2;
+    u02::g_u02_taunt3_flick_roll_a16 = v;
+  }
   // PASS 17: same-binary eye-form ladder and independent size-channel mutes.
   // Parse before u02::type() so mesh construction and clip compilation see one
   // coherent diagnostic configuration. Invalid art inputs fail instead of
@@ -8030,6 +8109,22 @@ int main(int argc, char** argv) {
     g_u02_cover_paint = std::string(cp) == "1";
     if (g_u02_cover_paint)
       std::fprintf(stderr, "U02_COVER_PAINT=1 (creature coverage mask painted green)\n");
+  }
+  if (const char* oc = std::getenv("ZHAO_U02_OUTLINE_CONTROL")) {
+    const std::string v(oc);
+    if (v == "none") {
+      // Explicit identity rung.
+    } else if (v == "no-opening-owner") {
+      g_u02_outline_no_opening_owner = true;
+    } else if (v == "force-post-repaint") {
+      g_u02_outline_force_post_repaint = true;
+    } else {
+      std::fprintf(stderr,
+                   "ZHAO_U02_OUTLINE_CONTROL=%s invalid "
+                   "(expected none|no-opening-owner|force-post-repaint)\n", oc);
+      return 2;
+    }
+    std::fprintf(stderr, "ZHAO_U02_OUTLINE_CONTROL=%s (Direction-17 evidence)\n", oc);
   }
   // PASS 11 M.2 (Direction 8 §1): the MIST's by-eye ladder, from ONE binary.
   // U02_MIST_SET=alpha,feed,halo,cap overrides the four density fields AFTER

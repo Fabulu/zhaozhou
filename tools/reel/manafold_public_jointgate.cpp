@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <type_traits>
 #include <vector>
@@ -237,6 +238,16 @@ bool public_input_guard(u02::PublicJointMute mute) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  if (const char* e = std::getenv("ZHAO_U02_FRONT_JOINT_PER_MM")) {
+    const int v = std::atoi(e);
+    if (v <= 0 || v > 64) return 2;
+    u02::g_u02_swallow_front_joint_per_mm = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_END_JOINT_PER_MM")) {
+    const int v = std::atoi(e);
+    if (v <= 0 || v > 64) return 2;
+    u02::g_u02_swallow_end_joint_per_mm = v;
+  }
   int candidate_index = -1;
   for (int i = 1; i < argc; ++i) {
     if (std::strcmp(argv[i], "--fail-mute") == 0 && i + 1 < argc) {

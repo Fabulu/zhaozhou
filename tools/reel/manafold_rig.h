@@ -1,4 +1,4 @@
-// MANAFOLD (creature 02) — the rig: bone ids + skeleton. 16 bones of the 32
+// MANAFOLD (creature 02) — the rig: bone ids + skeleton. 23 bones of the 32
 // allowed.
 //
 // Parent-before-child, rest rotations identity, bind a pure translation
@@ -120,8 +120,21 @@ enum BoneId : uint8_t {
   // that bend. finalize_rear_follow supplies their body-following translations.
   kBRearSocket = 14,
   kBReturnTip = 15,
+  // PASS 17 / Direction 16: translation-only skin helpers. Existing IDs remain
+  // stable. Each is a zero-rest-offset identity child of the upstream
+  // articulation, so its palette equals the parent at zero delta and differs
+  // only by the signed local-Y span delta when authored. They carry no visible
+  // joint and never own a rigid carrier core.
+  kBSpanDeltaA = 16,       // partial Front -> A delta at the free-run end
+  kBSpanDeltaB = 17,       // partial A -> B delta at the free-run end
+  kBSpanDeltaC = 18,       // partial B -> C delta at the free-run end
+  kBSpanDeltaE = 19,       // full C/D -> End delta receipt (unskinned)
+  kBSpanDeltaEStart = 20,  // partial End delta across C's 90 mm exit bend
+  kBSpanDeltaEMid = 21,    // half-run staging keeps 6-bit LBS monotone
+  kBSpanDeltaEPreSocket = 22,  // partial delta before End's 90 mm bend
 };
-constexpr int kBoneCount = 16;
+constexpr int kBoneCount = 23;
+static_assert(kBoneCount <= zc::kMaxBones, "Manafold exceeds the creature bone ceiling");
 
 /**
  * Bind translations: each hinge bone's pivot sits AT its ball's own centre
@@ -245,6 +258,17 @@ inline zc::Skeleton build_skeleton() {
   // exactly at the LENS centre and the star's mechanism is untouched by §5c.
   sk.bones[kBPupilL] = zc::Bone{kBEyeL, fxu(kEyeShiftPivotMm), 0, 0};
   sk.bones[kBPupilR] = zc::Bone{kBEyeR, fxu(kEyeShiftPivotMm), 0, 0};
+  // Signed-span helpers are deliberately co-located with their parents in the
+  // bind pose. A local-Y translation therefore changes only the corresponding
+  // skin palette's endpoint; it introduces neither a second pivot nor a rest
+  // offset that would need translated-bind cancellation.
+  sk.bones[kBSpanDeltaA] = zc::Bone{kBNeck, 0, 0, 0};
+  sk.bones[kBSpanDeltaB] = zc::Bone{kBHingeA, 0, 0, 0};
+  sk.bones[kBSpanDeltaC] = zc::Bone{kBHingeB, 0, 0, 0};
+  sk.bones[kBSpanDeltaE] = zc::Bone{kBHingeD, 0, 0, 0};
+  sk.bones[kBSpanDeltaEStart] = zc::Bone{kBHingeD, 0, 0, 0};
+  sk.bones[kBSpanDeltaEMid] = zc::Bone{kBHingeD, 0, 0, 0};
+  sk.bones[kBSpanDeltaEPreSocket] = zc::Bone{kBHingeD, 0, 0, 0};
   return sk;
 }
 

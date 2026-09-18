@@ -31,3 +31,11 @@ target_include_directories(manafold-eyesize PRIVATE
   ${CMAKE_SOURCE_DIR}/tests/render
   ${CMAKE_SOURCE_DIR}/compiler/tests/generated
   ${CMAKE_SOURCE_DIR}/reference/src)
+
+# Direction 17: enclosed-O outline and post-energy ownership gate.
+add_executable(manafold-outlinegate reel/manafold_outlinegate.cpp)
+target_link_libraries(manafold-outlinegate PRIVATE zhao_zref)
+target_include_directories(manafold-outlinegate PRIVATE
+  ${CMAKE_SOURCE_DIR}/tests/render
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated
+  ${CMAKE_SOURCE_DIR}/reference/src)

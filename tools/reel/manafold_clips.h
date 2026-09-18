@@ -127,6 +127,8 @@ struct NoduleOffsets {
 
 enum class EyeSizeMute : uint8_t { kNone = 0, kLeft, kRight, kBoth };
 inline EyeSizeMute g_u02_eye_size_mute = EyeSizeMute::kNone;
+// Same-binary Direction-14 control: true restores Fall's old half-frame wrap.
+inline bool g_u02_fall_wrap_control = false;
 constexpr uint16_t kEyeScaleIdentityQ15 = 32768;
 
 inline uint16_t eye_scale_q15_from_pm(int32_t pm) {
@@ -142,6 +144,49 @@ inline bool eye_size_muted(bool left) {
          (!left && g_u02_eye_size_mute == EyeSizeMute::kRight);
 }
 
+inline int32_t span_fraction_delta_fx(int32_t full_delta_fx,
+                                      int32_t run_mm,
+                                      int32_t gradient_mm) {
+  const int64_t n = static_cast<int64_t>(full_delta_fx) * run_mm;
+  const int64_t mag = n < 0 ? -n : n;
+  const int64_t q = (mag + gradient_mm / 2) / gradient_mm;
+  return static_cast<int32_t>(n < 0 ? -q : q);
+}
+
+inline int32_t span_helper_delta_fx(int span, int32_t full_delta_fx) {
+  if (span < 0 || span >= 4) return 0;
+  return span_fraction_delta_fx(full_delta_fx, kSpanHelperRunMm[span],
+                                kSpanGradientMm[span]);
+}
+
+inline int32_t span_e_start_delta_fx(int32_t full_delta_fx) {
+  return span_fraction_delta_fx(full_delta_fx, kSpanEStartRunMm,
+                                kSpanEGradientMm);
+}
+
+inline int32_t span_e_mid_delta_fx(int32_t full_delta_fx) {
+  return span_fraction_delta_fx(full_delta_fx, kSpanEMidRunMm,
+                                kSpanEGradientMm);
+}
+
+inline int32_t span_e_presocket_delta_fx(int32_t full_delta_fx) {
+  return span_fraction_delta_fx(full_delta_fx, kSpanEPreSocketRunMm,
+                                kSpanEGradientMm);
+}
+
+inline void write_rear_span_delta(std::vector<int32_t>& track, size_t tbase,
+                                  int32_t full_delta_fx) {
+  track[tbase + static_cast<size_t>(kBSpanDeltaEStart) * 3u + 1u] =
+      span_e_start_delta_fx(full_delta_fx);
+  track[tbase + static_cast<size_t>(kBSpanDeltaEMid) * 3u + 1u] =
+      span_e_mid_delta_fx(full_delta_fx);
+  track[tbase + static_cast<size_t>(kBSpanDeltaEPreSocket) * 3u + 1u] =
+      span_e_presocket_delta_fx(full_delta_fx);
+  // The full helper is an unskinned, independent receipt used to compare the
+  // solved chain endpoint against the Root-attached RearSocket.
+  track[tbase + static_cast<size_t>(kBSpanDeltaE) * 3u + 1u] = full_delta_fx;
+}
+
 /** The per-key quat/translation/scale accumulator (mirrors zixx's Rig; bodies differ). */
 struct Rig {
   zc::quat16 q[kBoneCount];
@@ -152,20 +197,10 @@ struct Rig {
   // ordering every clip already uses -- so not one call site changes, and a
   // clip that never touches them poses exactly as it did before.
   NoduleOffsets nod;
-  /** PASS 12 (Direction 9 SS13.3 item 2) -- THE POSE-DERIVED SPAN STRETCH.
-   *
-   *  Per-mille of extra length each inter-nodule span needs THIS KEY, written
-   *  by the nodule solve and read by nothing else. It is the SHORTFALL the
-   *  solve would otherwise swallow: `nodule_aim` lands the ball along the
-   *  direction of its target at exactly the bind arc length, so a target
-   *  further away than that simply does not get reached. This is how far it
-   *  fell short, and the deform lanes are what pay it.
-   *
-   *  ⚠ IT IS COMPUTED FROM THE POSED CHAIN, NEVER FROM BIND. The solve walks
-   *  the chain forward in world millimetres (09-ENGINE-GOTCHAS SS15: inverting
-   *  a SKINNING matrix returns bind space, which would report the rest pose's
-   *  shortfall -- zero -- on every key). No matrix is inverted anywhere here.
-   */
+  /** Signed centre-distance change for Front/A, A/B and B/C, in per-mille.
+   *  These are diagnostic receipts only. Visible length uses a constant-slope
+   *  partial helper across the free run and the full child translation across
+   *  the incoming bend; deform lanes never carry axial length. */
   int32_t span_pm[3] = {0, 0, 0};
   /** PASS 15 (D11 SS2.2, the SECOND half) -- THE EXPRESSION LEAN.
    *
@@ -202,6 +237,15 @@ struct Rig {
     scale_q15[kBEyeR] = eye_scale_q15_from_pm(right_pm);
     return true;
   }
+  void set_span_delta(int span, int32_t delta_mm) {
+    static constexpr uint8_t kChild[3] = {kBHingeA, kBHingeB, kBHingeC};
+    static constexpr uint8_t kHelper[3] = {kBSpanDeltaA, kBSpanDeltaB,
+                                          kBSpanDeltaC};
+    if (span < 0 || span >= 3) return;
+    const int32_t full = fxu(delta_mm);
+    local_t[kChild[span]][1] = full;
+    local_t[kHelper[span]][1] = span_helper_delta_fx(span, full);
+  }
   void write(zc::Clip& c, int f) const {
     for (int b = 0; b < kBoneCount; ++b) {
       c.quats[static_cast<size_t>(f) * kBoneCount + b] = q[b];
@@ -217,29 +261,15 @@ struct Rig {
     }
     write_span_lanes(c, f);
   }
-  /** Emit this key's span stretch onto deform lanes 1..3.
-   *
-   *  It rides `write` -- the ONE place every clip already commits a key -- so
-   *  no clip builder has to remember it and no clip can carry a pose whose
-   *  spans disagree with its quats. A clip whose extra track was never
-   *  allocated writes nothing, which is exact identity. */
+  /** Pass 17 retires lanes 1..3 as axial length channels. Clear them at the
+   *  single key-write site so a reused clip cannot accidentally combine the old
+   *  positive-only deform with the signed skin-palette mechanism. */
   void write_span_lanes(zc::Clip& c, int f) const {
     const size_t ex = static_cast<size_t>(zc::kDeformLaneCount) - 1u;
     if (c.deform_ex.size() != static_cast<size_t>(c.frame_count) * ex) return;
-    for (int i = 0; i < 3; ++i) {
-      int32_t pm = span_pm[i];
-      if (pm < 0) pm = 0;  // see kSpanStretchMaxPm: the sidecar has no sign
-      if (pm > kSpanStretchMaxPm) pm = kSpanStretchMaxPm;
-      // spread EXPANDS the two lanes perpendicular to the named axis -- y (the
-      // arc, so the span lengthens) and z. flatten CONTRACTS the named axis x,
-      // the blade's broad in-plane half-width: the band thins as it stretches.
-      const int32_t spread = static_cast<int32_t>(
-          (static_cast<int64_t>(pm) * 65536) / 1000);
-      const int32_t flat = static_cast<int32_t>(
-          (static_cast<int64_t>(spread) * kSpanThinRatioPm) / 1000);
+    for (int i = 0; i < 3; ++i)
       c.deform_ex[static_cast<size_t>(f) * ex + static_cast<size_t>(i)] =
-          zc::DeformSample{static_cast<uint16_t>(flat), static_cast<uint16_t>(spread)};
-    }
+          zc::DeformSample{};
   }
 };
 
@@ -427,7 +457,7 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
                  ny + ey + cl(nd.ay, kNoduleOffsetMaxMm[1]),
                  nz + ez + cl(nd.az, kNoduleOffsetMaxMm[2]),
                  &g.span_pm[0], &delta_mm);
-      g.local_t[kBHingeA][1] = fxu(delta_mm);
+      g.set_span_delta(0, delta_mm);
       // span 2: nodule A -> nodule B
       NQ = quat_mul(NQ, g.q[kBHingeA]);
       quat_rot_vec(NQ, 0, kLoopArcMm[2], 0, ex, ey, ez);
@@ -436,7 +466,7 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
                  ny + ey + cl(nd.by, kNoduleOffsetMaxMm[1]),
                  nz + ez + cl(nd.bz, kNoduleOffsetMaxMm[2]),
                  &g.span_pm[1], &delta_mm);
-      g.local_t[kBHingeB][1] = fxu(delta_mm);
+      g.set_span_delta(1, delta_mm);
       // span 3: nodule B -> nodule C
       NQ = quat_mul(NQ, g.q[kBHingeB]);
       quat_rot_vec(NQ, 0, kLoopArcMm[3], 0, ex, ey, ez);
@@ -445,7 +475,7 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
                  ny + ey + cl(nd.cy, kNoduleOffsetMaxMm[1]),
                  nz + ez + cl(nd.cz, kNoduleOffsetMaxMm[2]),
                  &g.span_pm[2], &delta_mm);
-      g.local_t[kBHingeC][1] = fxu(delta_mm);
+      g.set_span_delta(2, delta_mm);
     }
   }
 
@@ -610,6 +640,8 @@ inline void finalize_rear_follow(zc::Clip& c) {
 
     const int64_t dx = sx_mm - px, dy = sy_mm - py, dz = sz_mm - pz;
     const int64_t mag = isqrt64(dx * dx + dy * dy + dz * dz);
+    write_rear_span_delta(c.local_translation, tbase,
+                          fxu(static_cast<int32_t>(mag) - kRearSocketFromCMm));
     const int32_t tx_mm = mag > 0
         ? sx_mm + static_cast<int32_t>(dx * kRearSocketBurialMm / mag)
         : sx_mm;
@@ -648,10 +680,16 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
     c.mid_quats.assign(quat_count, zc::quat16_identity());
     for (int f = 0; f < c.frame_count; ++f) {
       const int nf = f + 1 < c.frame_count ? f + 1 : (c.hold_last ? f : 0);
-      for (int b = 0; b < kBoneCount; ++b)
+      for (int b = 0; b < kBoneCount; ++b) {
+        const zc::quat16& a =
+            c.quats[static_cast<size_t>(f) * kBoneCount + b];
+        const zc::quat16& z =
+            c.quats[static_cast<size_t>(nf) * kBoneCount + b];
         c.mid_quats[static_cast<size_t>(f) * kBoneCount + b] =
-            zc::quat16_nlerp(c.quats[static_cast<size_t>(f) * kBoneCount + b],
-                            c.quats[static_cast<size_t>(nf) * kBoneCount + b], 1, 2);
+            std::memcmp(&a, &z, sizeof(a)) == 0
+                ? a
+                : zc::quat16_nlerp(a, z, 1, 2);
+      }
     }
   }
   if (c.mid_local_translation.size() != local_count) {
@@ -682,6 +720,25 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
   for (int f = 0; f < c.frame_count; ++f) {
     const size_t qbase = static_cast<size_t>(f) * kBoneCount;
     const size_t tbase = qbase * 3u;
+    // Midpoint averaging and signed fraction rounding do not commute. Re-derive
+    // the three partial helpers from the already-resolved full child midpoint so
+    // keys and presentation samples share one exact constant-slope law.
+    static constexpr uint8_t kSpanChild[3] = {kBHingeA, kBHingeB, kBHingeC};
+    static constexpr uint8_t kSpanHelper[3] = {kBSpanDeltaA, kBSpanDeltaB,
+                                               kBSpanDeltaC};
+    for (int span = 0; span < 3; ++span) {
+      const size_t child_i =
+          tbase + static_cast<size_t>(kSpanChild[span]) * 3u + 1u;
+      const size_t helper_i =
+          tbase + static_cast<size_t>(kSpanHelper[span]) * 3u + 1u;
+      c.mid_local_translation[helper_i] =
+          span_helper_delta_fx(span, c.mid_local_translation[child_i]);
+    }
+    // A held final segment already copied the final authored key exactly above.
+    // Re-solving the same nonlinear closure through quantized aim can produce a
+    // different quaternion representation by a few LSBs, creating a pose change
+    // on the very half-frame hold_last exists to prevent.
+    if (c.hold_last && f + 1 == c.frame_count) continue;
     auto local_y_mm = [&](uint8_t bone) {
       return static_cast<int32_t>(
           (static_cast<int64_t>(
@@ -731,6 +788,8 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
 
     const int64_t dx = sx_mm - px, dy = sy_mm - py, dz = sz_mm - pz;
     const int64_t mag = isqrt64(dx * dx + dy * dy + dz * dz);
+    write_rear_span_delta(c.mid_local_translation, tbase,
+                          fxu(static_cast<int32_t>(mag) - kRearSocketFromCMm));
     const int32_t tx_mm = mag > 0 ? sx_mm + static_cast<int32_t>(dx * kRearSocketBurialMm / mag) : sx_mm;
     const int32_t ty_mm = mag > 0 ? sy_mm + static_cast<int32_t>(dy * kRearSocketBurialMm / mag) : sy_mm;
     const int32_t tz_mm = mag > 0 ? sz_mm + static_cast<int32_t>(dz * kRearSocketBurialMm / mag) : sz_mm;
@@ -1114,11 +1173,9 @@ inline zc::Clip clip_shell(uint16_t slot, int keys, int32_t hover_mm) {
   c.quats.assign(static_cast<size_t>(keys) * kBoneCount, zc::quat16_identity());
   c.local_translation.assign(static_cast<size_t>(keys) * kBoneCount * 3u, 0);
   c.deform.assign(static_cast<size_t>(keys), zc::DeformSample{});
-  // PASS 12: lanes 1..4. Allocated identity for EVERY clip, because the nodule
-  // schedule is always on (D9 SS2) and therefore so is the span stretch --
-  // there is no such thing as a Manafold clip whose spans never move. Identity
-  // samples cost nothing: deform_skin_vertex_lanes skips a zero term before it
-  // rounds anything.
+  // Shared deform lanes remain allocated because lane 4 and generic midpoint
+  // layout are part of the clip format. Pass 17 leaves span lanes 1..3 exact
+  // identity: signed antenna length is ordinary skinning translation now.
   c.deform_ex.assign(static_cast<size_t>(keys) * (zc::kDeformLaneCount - 1u),
                      zc::DeformSample{});
   for (int f = 0; f < keys; ++f) c.root[static_cast<size_t>(f) * 3 + 1] = fxu(hover_mm);
@@ -1437,7 +1494,7 @@ inline void swallow_nodules(Rig& g, const int32_t authored_swal[5], int32_t lean
   // carrier and never slides its centre around the body.
   g.q[kBJunctionF] = quat_mul(
       g.q[kBJunctionF],
-      quat_x(static_cast<int32_t>(swal[0] * kSwallowJointA16PerMm)));
+      quat_x(static_cast<int32_t>(swal[0] * swallow_front_joint_per_mm())));
   g.nod.ay += swal[1];
   g.nod.az += side(swal[1]);
   g.nod.by += swal[2];
@@ -1446,7 +1503,7 @@ inline void swallow_nodules(Rig& g, const int32_t authored_swal[5], int32_t lean
   g.nod.cz += side(swal[3]);
   g.q[kBRearSocket] = quat_mul(
       g.q[kBRearSocket],
-      quat_x(-static_cast<int32_t>(swal[4] * kSwallowJointA16PerMm)));
+      quat_x(-static_cast<int32_t>(swal[4] * swallow_end_joint_per_mm())));
 }
 
 /** THE WHOLE-BODY HALF (07-MOTION-STYLE §8b), and it is the half that makes the
@@ -1853,6 +1910,25 @@ inline int32_t eye_travel_life_pm(uint32_t slot, EyeCam cam, int keys, int f) {
   return pm;
 }
 
+/** Apply only the camera-relative eye carrier schedule. Corpses retain the
+ * fixed-camera base through eternal rest with `eye_pm == 0`, without invoking
+ * nodule or hinge life from `antenna_knead`. */
+inline void apply_eye_schedule(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
+                               int32_t eye_pm) {
+  bool pinned = false;
+  const int32_t pin = eye_travel_pin_pm(pinned);
+  if (pinned) {
+    apply_eye_travel_a16(
+        g, static_cast<int32_t>((static_cast<int64_t>(kEyeTravelMaxA16) * pin) / 1000));
+    return;
+  }
+  const int32_t glance_pm = static_cast<int32_t>(
+      (static_cast<int64_t>(eye_travel_life_pm(slot, cam, keys, f)) * eye_pm) / 1000);
+  apply_eye_travel_a16(g, eye_face_base_a16(cam, keys, f) + eye_travel_a16(glance_pm));
+  g.eye_lean = static_cast<int32_t>(
+      (static_cast<int64_t>(kEyeExpressLeanA16) * glance_pm) / 1000);
+}
+
 /** `eye_pm` is the per-clip eye-travel gain in per-mille, 1000 by default so
  *  no existing call site changes. It exists for the same reason kKneadClipPm
  *  and kNoduleClipPm do -- a clip that needs the eyes to stop must be able to
@@ -1880,22 +1956,7 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
   // is what that fade means. Feeding the base through it too would swing a
   // corpse's eyes 32 deg back round the body over the fade -- motion added by
   // a knob whose whole job is to remove motion.
-  {
-    bool pinned = false;
-    const int32_t pin = eye_travel_pin_pm(pinned);
-    if (pinned) {
-      apply_eye_travel_a16(
-          g, static_cast<int32_t>((static_cast<int64_t>(kEyeTravelMaxA16) * pin) / 1000));
-    } else {
-      const int32_t glance_pm = static_cast<int32_t>(
-          (static_cast<int64_t>(eye_travel_life_pm(slot, cam, keys, f)) * eye_pm) / 1000);
-      apply_eye_travel_a16(g, eye_face_base_a16(cam, keys, f) + eye_travel_a16(glance_pm));
-      // D11 SS2.2: the lean rides the glance, so it fades with `eye_pm`
-      // for free and a corpse's eyes neither travel nor emote.
-      g.eye_lean = static_cast<int32_t>(
-          (static_cast<int64_t>(kEyeExpressLeanA16) * glance_pm) / 1000);
-    }
-  }
+  apply_eye_schedule(g, slot, cam, keys, f, eye_pm);
   // PASS 12: the nodule targets for this key. Set here because antenna_knead
   // already runs before every clip's loop_pose call, which is where they are
   // consumed. A clip whose kNoduleClipPm entry is 0 gets all-zero offsets and
@@ -2197,6 +2258,7 @@ inline zc::Clip build_channel() {
 inline zc::Clip build_curious() {
   const int K = kCuriousKeys;
   zc::Clip c = clip_shell(3, K, kHoverHeightMm);
+  enable_eye_scale_track(c);
   Rig g;
   // pass 3: the DOUBLE-TAKE — look, glance away, snap BACK, then home
   static const Key kSide[] = {{0, 0},    {4, 0},    {8, 1000},  {38, 1000},
@@ -2246,6 +2308,12 @@ inline zc::Clip build_curious() {
                          (static_cast<int64_t>(kWobblePitchA16) *
                           curve(kYaw, 7, f)) / 1000)));
     apply_squint(g, blink_at(f, 29));
+    const int32_t focus = curve(kSide, 10, f);
+    const int32_t eye_l = 1000 +
+        static_cast<int32_t>((static_cast<int64_t>(kCuriousEyeLargePm - 1000) * focus) / 1000);
+    const int32_t eye_r = 1000 -
+        static_cast<int32_t>((static_cast<int64_t>(1000 - kCuriousEyeSmallPm) * focus) / 1000);
+    (void)g.set_eye_scale_pm(eye_l, eye_r);
     g.write(c, f);
     c.root[static_cast<size_t>(f) * 3 + 1] =
         hover_at(f, K, kHoverHeightMm, kBobAmpAMm * 2 / 3, kBobAmpBMm / 2, K / 30, K / 45);
@@ -2258,11 +2326,12 @@ inline zc::Clip build_curious() {
  *  and a 130-frame droop): anticipation dip -> the SNAP payoff (back + up,
  *  eyes flying WIDE) -> overshoot -> two damped settle bounces -> rest.
  *  Mechanically: the body drops and compresses for 8 keys, launches back and
- *  up over 6, overshoots its arc by key 22, bounces at 30 and 44 with
- *  falling amplitude, and is home by 64. The antenna whips one beat late. */
+ *  up over 4 authored keys, holds through key 22, then bounces at 30 and 44
+ *  with falling amplitude and is home by 79. The antenna whips one beat late. */
 inline zc::Clip build_startle() {
   const int K = kStartleKeys;
   zc::Clip c = clip_shell(4, K, kHoverHeightMm);
+  enable_eye_scale_track(c);
   Rig g;
   // pass 3 ("ain't bad, make it better"): the snap lands two keys sooner
   // and overshoots harder before the recoil catches it
@@ -2273,22 +2342,24 @@ inline zc::Clip build_startle() {
   // startle read as a wobble that began violently. Same fault as taunt3's, at
   // a twentieth of the size -- an arrival nobody is given a frame to see.
   //
-  // The attack is one key sharper (8 -> 11, three keys) and the extreme is now
-  // HELD for ten keys, which is twenty frames on screen and clears
-  // 07-MOTION-STYLE's sixteen. The ring that follows is untouched: it is the
-  // recoil, it is correct, and it now has something to be a recoil FROM.
-  // No new reversals and no new keys -- the same nine entries, re-placed.
-  static const Key kBack[] = {{0, 0},    {8, 140},   {11, -1300}, {21, -1300},
-                              {30, -980}, {42, -1080}, {52, -960}, {74, -60},
-                              {79, 0}};
-  static const Key kUp[] = {{0, 0},    {8, -170},  {11, 1300}, {21, 1300},
-                            {30, 750}, {42, 990},  {52, 640},  {74, 40},
-                            {79, 0}};
+  // Pass 17 keeps the payoff amplitude and ladders only the named arrival.
+  // Shipping uses 8 -> 12 (four keys) and holds through 22; the same-binary
+  // legacy control restores 8 -> 11 -> 21. The recoil knots remain untouched.
+  const StartleTiming timing = selected_startle_timing();
+  const Key kBack[] = {{0, 0},    {timing.anticipate, 140},
+                       {timing.arrive, -1300}, {timing.hold_end, -1300},
+                       {30, -980}, {42, -1080}, {52, -960}, {74, -60},
+                       {79, 0}};
+  const Key kUp[] = {{0, 0},    {timing.anticipate, -170},
+                     {timing.arrive, 1300}, {timing.hold_end, 1300},
+                     {30, 750}, {42, 990}, {52, 640}, {74, 40},
+                     {79, 0}};
   static const Key kWhip[] = {{0, 1000},  {8, 1060},  {14, 760},  {22, 1160},
                               {32, 880},  {44, 1080}, {56, 950},  {68, 1020},
                               {79, 1000}};
-  static const Key kWide[] = {{0, 0},   {8, 80},   {11, -430}, {36, -430},
-                              {52, 0},  {79, 0}};
+  const Key kWide[] = {{0, 0}, {timing.anticipate, 80},
+                       {timing.eye_arrive, -430}, {36, -430},
+                       {52, 0}, {79, 0}};
   static const Key kSquash[] = {{0, 1000}, {8, 1900},  {14, 600},  {22, 2600},
                                 {36, 1500}, {52, 1900}, {68, 1100}, {79, 1000}};
   for (int f = 0; f < K; ++f) {
@@ -2318,6 +2389,13 @@ inline zc::Clip build_startle() {
     // OPPOSITE way from curious's -- positive, tops apart -- on the same curve
     // the widen already uses, which costs no new schedule.
     apply_eye_roll(g, curve(kWide, 6, f), curve(kWide, 6, f));
+    int32_t open = static_cast<int32_t>(
+        (static_cast<int64_t>(-curve(kWide, 6, f)) * 1000) / 430);
+    if (open < 0) open = 0;
+    if (open > 1000) open = 1000;
+    const int32_t eye_pm = 1000 +
+        static_cast<int32_t>((static_cast<int64_t>(kStartleEyeLargePm - 1000) * open) / 1000);
+    (void)g.set_eye_scale_pm(eye_pm, eye_pm);
     g.write(c, f);
     c.root[static_cast<size_t>(f) * 3 + 0] = static_cast<int32_t>(
         (static_cast<int64_t>(fxu(kStartleJumpMm)) * curve(kBack, 9, f)) / 1000);
@@ -2445,15 +2523,12 @@ inline zc::Clip build_hasty() {
 inline zc::Clip build_fall() {
   const int K = kFallKeys;
   zc::Clip c = clip_shell(9, K, kHoverHeightMm);
-  // ⚠ R2 (pass 13): THIS CLIP TRAVELS, so its wrap partner must carry the
-  // traverse instead of folding back across it. With the flag off the last
-  // key's sub-frame blends toward key 0 and the root wraps the WHOLE journey in
-  // half a key -- an enormous fake velocity that teleports the pose and paints
-  // grey speed-smear ghosts beside it (`drift`: near-grey pixels 295 -> 729 over
-  // its last frames, then 59 at f0). `zc::Clip::wrap_root_delta` is default-OFF
-  // so Zixxtrixx stays bit-identical; these four clips opt in. See
-  // PASS-13-FINDINGS-C SS2 and tools/reel/wrapseam.py.
-  c.wrap_root_delta = true;
+  // Pass 17: Fall is an authored one-shot. Hold the recovered final key so
+  // quats, translations, deformation and root all share the same final partner.
+  // The same-binary control restores Pass 16's root-delta-only wrap and its
+  // visible f338->f339 pose reset.
+  c.hold_last = !g_u02_fall_wrap_control;
+  c.wrap_root_delta = g_u02_fall_wrap_control;
   Rig g;
   static const Key kStream[] = {{0, 1000}, {14, 720}, {112, 700}, {130, 1120},
                                 {146, 940}, {158, 1030}, {169, 1000}};
@@ -2542,6 +2617,7 @@ inline zc::Clip build_hit() {
 inline zc::Clip build_taunt() {
   const int K = kTauntKeys;
   zc::Clip c = clip_shell(11, K, kHoverHeightMm);
+  enable_eye_scale_track(c);
   Rig g;
   // PASS 3 (Direction 3 §7: "can be more fun"): comedy is the HOLD.
   // Mechanically: 0..36 a BIG anticipation wind-up (it crouches, compresses
@@ -2623,6 +2699,13 @@ inline zc::Clip build_taunt() {
       const int32_t side = static_cast<int32_t>(
           (static_cast<int64_t>(kGazeMaxA16) * cross) / 1000);
       apply_gaze_lr(g, -side, kGazeLiftMaxA16 / 3, side, kGazeLiftMaxA16 / 3);
+      int32_t act = cross * 1000 / 900;
+      if (act > 1000) act = 1000;
+      const int32_t eye_l = 1000 + static_cast<int32_t>(
+          (static_cast<int64_t>(kTauntEyeLargePm - 1000) * act) / 1000);
+      const int32_t eye_r = 1000 - static_cast<int32_t>(
+          (static_cast<int64_t>(1000 - kTauntEyeSmallPm) * act) / 1000);
+      (void)g.set_eye_scale_pm(eye_l, eye_r);
     }
     apply_squint_lr(g, curve(kWinkL, 6, f) + blink_at(f, 21), blink_at(f, 21));
     g.write(c, f);
@@ -2730,9 +2813,12 @@ inline zc::Clip build_trick() {
   for (int f = 0; f < K; ++f) {
     g.reset();
     antenna_knead(g, 13, EyeCam::kFixed, K, f);  // pass 4: the always-on fold-hold-knead layer
-    const int32_t flip = static_cast<int32_t>(
-        (static_cast<int64_t>(32768) * curve(kFlip, 11, f)) / 1000);
-    g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_z(flip));
+    const int32_t flip_pm = -curve(kFlip, 11, f);  // 0..1000 into the plant
+    const int32_t flip_x = static_cast<int32_t>(
+        (static_cast<int64_t>(g_u02_trick_flip_x_a16) * flip_pm) / 1000);
+    const int32_t flip_z = static_cast<int32_t>(
+        (static_cast<int64_t>(g_u02_trick_flip_z_a16) * flip_pm) / 1000);
+    g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_mul(quat_x(flip_x), quat_z(flip_z)));
     // the balance layer FADES over the first keys of the righting instead
     // of cutting (a step in the quats is a one-frame snap)
     static const Key kBalFade[] = {{0, 1000}, {148, 1000}, {158, 0}, {199, 0}};
@@ -3322,16 +3408,17 @@ inline zc::Clip build_death_drop() {
                        : dead     ? 1000
                                   : 1000 * (f - kDeathFailKey) /
                                         (B.settle - kDeathFailKey);
-    // ⚠ THE EYES STOP LOOKING AROUND AS IT DIES, and they stop CONTINUOUSLY.
-    // antenna_knead is not called once dead, so the travel carrier snaps back
-    // to identity in one key -- up to 45 deg on both eyes, at the exact instant
-    // the corpse is supposed to go still. The nodules were protected from this
-    // (their droop eases in on fold_ease(gone)); the travel arrived with no
-    // equivalent, which is the half of the wave-2a edit that never got written.
-    // The gain reaches 0 exactly at the settle key, so the dead branch's
-    // identity carrier is where the fade was already going.
-    if (!dead) antenna_knead(g, kDeathSlot, EyeCam::kFixed, K, f,
-                              g_u02_death_fail == 5 ? 1000 : 1000 - fold_ease(gone));
+    // The living glance/lean fades to zero as it dies. At and after settle the
+    // fixed-camera eye base remains, but no nodule or hinge life is restarted.
+    // Failable leg 5 restores the old unfaded-then-identity reset.
+    if (!dead) {
+      antenna_knead(g, kDeathSlot, EyeCam::kFixed, K, f,
+                    g_u02_death_fail == 5 ? 1000 : 1000 - fold_ease(gone));
+    } else if (g_u02_death_fail != 5) {
+      // Keep only the fixed-camera base. Calling full knead here would reanimate
+      // hinges and nodules under a corpse; skipping this was the 31.8 deg snap.
+      apply_eye_schedule(g, kDeathSlot, EyeCam::kFixed, K, f, 0);
+    }
     // THE NODULES HANG. The schedule is off for this slot (kNoduleClipPm[17]
     // is 0), so the only nodule motion is this: one authored droop that
     // arrives across the bounces and then never moves again. A living
@@ -3495,16 +3582,15 @@ inline zc::Clip build_death_gutter() {
                        : dead     ? 1000
                                   : 1000 * (f - kDeathBLetGoKey) /
                                         (B.settle - kDeathBLetGoKey);
-    // ⚠ THE EYES STOP LOOKING AROUND AS IT DIES, and they stop CONTINUOUSLY.
-    // antenna_knead is not called once dead, so the travel carrier snaps back
-    // to identity in one key -- up to 45 deg on both eyes, at the exact instant
-    // the corpse is supposed to go still. The nodules were protected from this
-    // (their droop eases in on fold_ease(gone)); the travel arrived with no
-    // equivalent, which is the half of the wave-2a edit that never got written.
-    // The gain reaches 0 exactly at the settle key, so the dead branch's
-    // identity carrier is where the fade was already going.
-    if (!dead) antenna_knead(g, kDeathBSlot, EyeCam::kFixed, K, f,
-                              g_u02_death_fail == 5 ? 1000 : 1000 - fold_ease(gone));
+    // The living glance/lean fades to zero as it dies. At and after settle the
+    // fixed-camera eye base remains, but no nodule or hinge life is restarted.
+    // Failable leg 5 restores the old unfaded-then-identity reset.
+    if (!dead) {
+      antenna_knead(g, kDeathBSlot, EyeCam::kFixed, K, f,
+                    g_u02_death_fail == 5 ? 1000 : 1000 - fold_ease(gone));
+    } else if (g_u02_death_fail != 5) {
+      apply_eye_schedule(g, kDeathBSlot, EyeCam::kFixed, K, f, 0);
+    }
     // THE NODULES DIE IN ORDER. Each one, at its own key, stops whatever it
     // was doing and hangs — and because a nodule CARRIES ITS SECTION (§2),
     // one going limp visibly drops a third of the antenna while the other two
@@ -3971,6 +4057,7 @@ inline zc::Clip build_blown() {
 inline zc::Clip build_taunt3() {
   const int K = kTaunt3Keys;
   zc::Clip c = clip_shell(kTaunt3Slot, K, kHoverHeightMm);
+  enable_eye_scale_track(c);
   Rig g;
   // PASS 13 / R3. The tables ARE the performance; read them beside the beat
   // list in manafold_art.h. Two things to know before changing one:
@@ -4127,9 +4214,9 @@ inline zc::Clip build_taunt3() {
         quat_mul(quat_z(static_cast<int32_t>(
                      (static_cast<int64_t>(kTaunt3LeanA16) * lean) / 1000 -
                      (static_cast<int64_t>(kTaunt3ShrugRollA16) * shrug) / 1000 -
-                     (static_cast<int64_t>(kTaunt3FlickRollA16) * flick_body) / 1000)),
+                     (static_cast<int64_t>(g_u02_taunt3_flick_roll_a16) * flick_body) / 1000)),
                  quat_y(static_cast<int32_t>(
-                     (static_cast<int64_t>(kTaunt3FlickYawA16) * flick_body) / 1000))));
+                     (static_cast<int64_t>(g_u02_taunt3_flick_yaw_a16) * flick_body) / 1000))));
     face_rest(g);
     // the eyes: a slow travelling look down the lean, a lopsided brow through
     // the shimmy, and both lids at half on the dismissal (bored)
@@ -4142,6 +4229,11 @@ inline zc::Clip build_taunt3() {
                          (static_cast<int64_t>(kBlazeTwinkleA16) * sinp(fc, K, 2)) >> 16));
     apply_squint_lr(g, 620 * flick / 1000 + blink_at(f, 83),
                     420 * flick / 1000 + blink_at(f, 83));
+    const int32_t eye_l = 1000 + static_cast<int32_t>(
+        (static_cast<int64_t>(kTaunt3EyeLargePm - 1000) * flick) / 1000);
+    const int32_t eye_r = 1000 - static_cast<int32_t>(
+        (static_cast<int64_t>(1000 - kTaunt3EyeSmallPm) * flick) / 1000);
+    (void)g.set_eye_scale_pm(eye_l, eye_r);
     g.write(c, f);
     // the body rides the gesture: it rises INTO the shrug (insolent) and
     // drops on the dismissal

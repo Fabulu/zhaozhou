@@ -956,13 +956,23 @@ struct EyeForm {
 };
 
 // Pass 17 keeps the inherited form as an explicit same-binary control. The
-// current tuple starts byte-identical; the main art lane chooses a wider form
-// later by looking, without deleting the rejected dagger for A/B evidence.
+// current tuple is the by-eye winner from the fixed/orbit ladder: a wider
+// splinter-free neutral almond with room for authored large/small acting.
 constexpr EyeForm kEyeLegacyForm = {270, 84, 40};
-constexpr EyeForm kEyeCurrentForm = kEyeLegacyForm;
+constexpr EyeForm kEyeCurrentForm = {250, 100, 40};
 constexpr int32_t kEyeFormLongMinMm = 120, kEyeFormLongMaxMm = 420;
 constexpr int32_t kEyeFormWideMinMm = 40, kEyeFormWideMaxMm = 180;
 constexpr int32_t kEyeFormDeepMinMm = 10, kEyeFormDeepMaxMm = 120;
+// Pass-17 authored eye-size vocabulary, per-mille of the selected neutral form.
+// Values are public expression knobs chosen from targeted native renders; the
+// scale track itself stays identity on every other clip.
+constexpr int32_t kCuriousEyeLargePm = 1250;
+constexpr int32_t kCuriousEyeSmallPm = 820;
+constexpr int32_t kStartleEyeLargePm = 1350;
+constexpr int32_t kTauntEyeLargePm = 1350;
+constexpr int32_t kTauntEyeSmallPm = 800;
+constexpr int32_t kTaunt3EyeLargePm = 1450;
+constexpr int32_t kTaunt3EyeSmallPm = 750;
 inline bool g_u02_eye_form_legacy = false;
 inline int32_t g_u02_eye_long_mm = -1;
 inline int32_t g_u02_eye_wide_mm = -1;
@@ -2045,7 +2055,11 @@ constexpr int32_t kHingePhaseStepA16 = 0x2C00;
 // clean).
 constexpr int32_t kNoduleOffsetMaxMm[3] = {200, 320, 200};  // x, y, z
 
-// ==== PASS 12 -- STRETCHY SPANS (Direction 9 SS13) ========================
+// ==== HISTORICAL: PASS 12 STRETCHY SPANS (Direction 9 SS13) ===============
+// The positive-only deform-lane mechanism documented below is retained as the
+// failure history Direction 16 corrected. Pass 17 uses signed local translation
+// on rigid child bones plus co-located skin-delta helpers; see the superseding
+// constants immediately above kNodulePerKeys and `manafold_model.h`.
 //
 // "can we make the antennae parts between the blobs stretchy? That'd have to
 //  stretch the bones too when they stretch. But it'd be awesome. Possible?"
@@ -2141,28 +2155,70 @@ constexpr uint8_t kLoopStretchStrength = 0;
 // warning describes ("offsets ALONG the span move it hardly at all, because
 // that would require the span to lengthen"). It lengthens now.
 //
-// THE CEILING. Per-mille of extra length one span may take. 200 mm of request
-// along the SHORTEST span (A->B, 340 mm) is 588 pm, which is a rubber band and
-// not an antenna; the shipped nodule amplitudes (kNoduleAmpMm, 42..78 mm) ask
-// for 120..230 pm on that span, so 300 leaves the schedule its full range and
-// still refuses the pathological corner. AUTHORED BY EYE at native against the
-// Side sheet, then checked -- not derived.
-//
-// ⚠ AND IT IS WHAT KEEPS THE SKIN MONOTONE. Past hinge C every lane's
-// authority ramps to zero over the buried return arm (see make_loop), so the
-// map y(s) has NEGATIVE slope contributions there, and the chain folds back
-// through itself if they beat 1. The bound is
-//     sum_i k_i * L_i  <  total - stC
-// with spans 680/340/380 and (total - stC) = 1540 mm: at 300 pm the worst case
-// is 0.300 * 1400 = 420 < 1540, so dy/ds >= 0.727 > 0. ASSERTED in the
-// committed span gate from these constants, not left as arithmetic in a
-// comment (checklist 19).
-constexpr int32_t kSpanStretchMaxPm = 300;
+// PASS 17 / Direction 16 supersedes the positive-only lane mechanism above.
+// Signed local translation now moves both the real child and a co-located
+// translation-only skin helper, so the same visible span can extend OR compact
+// through ordinary two-weight skinning. These are authored safety bounds for
+// public keys/midpoints; the solver does not clamp to them because a silent
+// clamp would detach a requested carrier. Gates reject and the pose is re-authored.
+// Public key/midpoint limits are per span in F-A/A-B/B-C/C-End order. One
+// common percentage is structurally dishonest because the centre distances and
+// visible translation runs differ. These authored limits bound the expression;
+// the separate positive run-length law rejects collapse regardless of percent.
+constexpr int32_t kSpanStretchMaxPm[4] = {320, 480, 400, 440};
+constexpr int32_t kSpanCompactionMinPm[4] = {-320, -330, -430, -700};
 
-// The band THINS as it stretches -- an elastic band, not a balloon (SS13.4's
-// "volume" item). Per-mille of the stretch taken back out of the blade's broad
-// in-plane half-width. 1000 would be equal-and-opposite; 600 keeps the antenna
-// reading as a solid form under a large swing rather than a wire.
+// PASS 17 / Direction 16: signed translation is distributed over each complete
+// visible run, including the downstream 90 mm incoming bend. This leaves useful
+// structural headroom before larger A/B/C ordering art: at every authored
+// compaction floor the remaining run is at least 116 mm. The 80 mm floor is a
+// rejection band with visible room, not a value fitted 1--3 mm below the bank.
+constexpr int32_t kSpanGradientMm[4] = {
+    kLoopArcMm[1] - kLoopCarrierCoreHalfMm[0] - kFoldBlendMm[0] -
+        kLoopCarrierCoreHalfMm[1],
+    kLoopArcMm[2] - kLoopCarrierCoreHalfMm[1] -
+        kLoopCarrierCoreHalfMm[2],
+    kLoopArcMm[3] - kLoopCarrierCoreHalfMm[2] -
+        kLoopCarrierCoreHalfMm[3],
+    kRearSocketFromCMm - kLoopCarrierCoreHalfMm[3] -
+        kLoopCarrierCoreHalfMm[4],
+};
+constexpr int32_t kSpanHelperRunMm[4] = {
+    kSpanGradientMm[0] - kFoldBlendMm[1],
+    kSpanGradientMm[1] - kFoldBlendMm[2],
+    kSpanGradientMm[2] - kFoldBlendMm[3],
+    kSpanGradientMm[3] - kFoldBlendMm[4],
+};
+constexpr int32_t kSpanMinRunMm = 80;
+static_assert(kSpanGradientMm[0] > kSpanHelperRunMm[0] &&
+                  kSpanGradientMm[1] > kSpanHelperRunMm[1] &&
+                  kSpanGradientMm[2] > kSpanHelperRunMm[2] &&
+                  kSpanGradientMm[3] > kSpanHelperRunMm[3],
+              "every signed span must retain a positive incoming bend");
+
+// C-End also stages the long pre-socket run so 6-bit weights cannot turn one
+// large interpolation step backward. EStart and EMid own the fractions reached
+// at their boundaries; EPreSocket owns the end of the free run. The final 90 mm
+// bend reaches the body-attached socket's full delta. At zero delta every helper
+// is exactly HingeD, preserving the accepted rotation ramp bit-for-bit.
+constexpr int32_t kSpanEGradientStartMm =
+    kKnuckleAtCMm + kLoopCarrierCoreHalfMm[3];
+constexpr int32_t kSpanEGradientEndMm =
+    kKnuckleAtEndMm - kLoopCarrierCoreHalfMm[4];
+constexpr int32_t kSpanEGradientMm =
+    kSpanEGradientEndMm - kSpanEGradientStartMm;
+constexpr int32_t kSpanEStartRunMm = kFoldBlendMm[3];
+constexpr int32_t kSpanEMidRunMm = kSpanEGradientMm / 2;
+constexpr int32_t kSpanEPreSocketRunMm =
+    kSpanEGradientMm - kFoldBlendMm[4];
+static_assert(kSpanEGradientMm == kSpanGradientMm[3] &&
+                  kSpanEPreSocketRunMm == kSpanHelperRunMm[3] &&
+                  kSpanEPreSocketRunMm > kSpanEMidRunMm &&
+                  kSpanEMidRunMm > kSpanEStartRunMm,
+              "C-End staged signed gradient must have four positive runs");
+
+// Retained only as historical authorship for the rejected positive-lane path.
+// Pass 17 gives lanes 1..3 zero authority; signed LBS keeps constant gauge.
 constexpr int32_t kSpanThinRatioPm = 600;
 
 // The always-on nodule schedule. THREE INDEPENDENT NODULES MEANS THREE
@@ -2263,16 +2319,15 @@ constexpr int32_t kNoduleSoloJointA16 = 3000;
 //    to be the smaller of the two. That is not a workaround, it is what a
 //    linked chain does, and it is why this is a named mix and not 1:1.
 //
-// 2. NODULE A CANNOT MOVE VERTICALLY, at all, and never will without SS13's
-//    stretchy spans. Measured rest geometry: the junction sits at (90, 664)
-//    and ball A at (0, 1337, 29), so the span between them is 679 mm long
-//    pointing (-0.13, +0.99, +0.04) -- STRAIGHT UP. Moving A up or down means
-//    lengthening or shortening that span, and bones are rigid. A 200 mm
-//    vertical request moves ball A by 3 mm. The SAME 200 mm sideways moves it
-//    198 mm, because sideways is perpendicular to the span.
-//    ⚠ This is the single clearest argument for Direction 9 SS13, and it is
-//    why SS13.4 says stretchy spans are what let the nodules go where they are
-//    told. It is stated on the acceptance plate, not hidden behind a gate.
+// 2. HISTORICAL PRE-PASS-17 LIMIT: NODULE A COULD NOT MOVE VERTICALLY without
+//    signed span propagation. The numbers below explain why Direction 16 was
+//    structural; the new helper palettes remove this limit and `mnodule` now
+//    reports the requested roughly +/-200 mm on A/B/C. Before that repair the
+//    junction sat at (90, 664) and ball A at (0, 1337, 29), so the 679 mm span
+//    pointed (-0.13, +0.99, +0.04) -- STRAIGHT UP. A 200 mm vertical request
+//    moved ball A by 3 mm while the same sideways request moved it 198 mm.
+//    Those old values remain the clearest comparison proving why a signed
+//    length mechanism, not another angular tune, was required.
 constexpr int32_t kNoduleSoloAPm = 400;   // front outer rises 80 mm
 constexpr int32_t kNoduleSoloBPm = 700;   // middle counter-presses 140 mm
 constexpr int32_t kNoduleSoloCPm = 1600;  // carried rear needs 320 mm to read up
@@ -2324,10 +2379,26 @@ constexpr int32_t kIdleSwallowLeanPm = 340;  // the lateral share of each press
 // body leans away from the bulge and returns. Family: kTaunt3ShrugRollA16 is
 // 3000 for a comic shrug; an idle gets well under half of it.
 constexpr int32_t kIdleSwallowRollA16 = 1150;
-// Direction 12: front and End are body-attached joints, so their swallow beat
-// is a rotation rather than a centre translation. One named conversion shared
-// by both keeps the two ends comparable while opposite signs make it travel.
-constexpr int32_t kSwallowJointA16PerMm = 9;
+// Direction 12 introduced one shared conversion for the two body-attached
+// carriers. Direction 14 proves their public reads need independent authority:
+// they have different visible-core shapes and therefore different authored
+// gains. Runtime overrides make the by-eye ladder one-binary. The native/4×
+// Taunt/Taunt-II ladder selected 24/20: both body-attached swells now clear the
+// fixed 20 mm (~3 px) public gate with a visibly distinct but continuous beat.
+constexpr int32_t kSwallowFrontJointA16PerMm = 24;
+constexpr int32_t kSwallowEndJointA16PerMm = 20;
+inline int32_t g_u02_swallow_front_joint_per_mm = -1;
+inline int32_t g_u02_swallow_end_joint_per_mm = -1;
+inline int32_t swallow_front_joint_per_mm() {
+  return g_u02_swallow_front_joint_per_mm >= 0
+             ? g_u02_swallow_front_joint_per_mm
+             : kSwallowFrontJointA16PerMm;
+}
+inline int32_t swallow_end_joint_per_mm() {
+  return g_u02_swallow_end_joint_per_mm >= 0
+             ? g_u02_swallow_end_joint_per_mm
+             : kSwallowEndJointA16PerMm;
+}
 
 // The same beat on CHANNEL (slot 2), placed on its blaze. Its own knobs rather
 // than the idle's, because the two clips want different things from it: the
@@ -2461,6 +2532,27 @@ constexpr int kChannelCompressPeriodKeys = 42;
 constexpr int32_t kCuriousYawA16 = 4500;   // ~25 deg body yaw after the eyes
 constexpr int32_t kStartleJumpMm = 520;
 constexpr int32_t kStartleLiftMm = 300;
+// Pass 17 Q3: the Startle's displacement stays authored; the timing is the
+// selectable by-eye ladder. Shipping gives the snap one extra key and preserves
+// the full ten-key hold. Diagnostics are parsed before the static clip bank.
+enum class StartleTimingControl : uint8_t { kLate = 0, kLegacy, kEarly };
+struct StartleTiming {
+  int anticipate;
+  int arrive;
+  int hold_end;
+  int eye_arrive;
+};
+constexpr StartleTiming kStartleTimingLate = {8, 12, 22, 12};
+constexpr StartleTiming kStartleTimingLegacy = {8, 11, 21, 11};
+constexpr StartleTiming kStartleTimingEarly = {7, 11, 21, 11};
+inline StartleTimingControl g_u02_startle_timing = StartleTimingControl::kLate;
+inline StartleTiming selected_startle_timing() {
+  if (g_u02_startle_timing == StartleTimingControl::kLegacy)
+    return kStartleTimingLegacy;
+  if (g_u02_startle_timing == StartleTimingControl::kEarly)
+    return kStartleTimingEarly;
+  return kStartleTimingLate;
+}
 constexpr int kRestSwayPeriodKeys = 50;
 constexpr int kRestCompressPeriodKeys = 50;
 constexpr int kRestBobPeriodKeys = 40;
@@ -2633,6 +2725,15 @@ constexpr int kTrickLiftKey = 156;            // contact window closes (the
 constexpr int kTrickHomeKey = 186;            // righted (overshoot inside)
 constexpr int32_t kTrickBalanceWobbleA16 = 900;  // inverted-pendulum sway
 constexpr int32_t kTrickOvershootA16 = 2600;     // the righting overshoot
+// Pass 17 axis ladder. The legacy root-Z half-turn points the +X face backward
+// for the entire plant. Runtime values keep the comparison one-binary; the
+// shipping pair is selected by looking and remains named.
+constexpr int32_t kTrickLegacyFlipXA16 = 0;
+constexpr int32_t kTrickLegacyFlipZA16 = -32768;
+constexpr int32_t kTrickFlipXA16 = kTrickLegacyFlipXA16;
+constexpr int32_t kTrickFlipZA16 = kTrickLegacyFlipZA16;
+inline int32_t g_u02_trick_flip_x_a16 = kTrickFlipXA16;
+inline int32_t g_u02_trick_flip_z_a16 = kTrickFlipZA16;
 
 // PASS 4 (Stage H, Direction 4 §3b): DIRECTIONAL HITS. Four named
 // authored contact stations in one clip, the zixxtrixx-damage precedent;
@@ -3072,6 +3173,7 @@ constexpr int32_t kTaunt3LeanA16 = 4100;  // was 2400 (13 deg): a MOCKING lean
 // gesture -- you turn away from someone you are dismissing. Bigger than the cut
 // value because it now has somewhere to go.
 constexpr int32_t kTaunt3FlickYawA16 = 6000;
+inline int32_t g_u02_taunt3_flick_yaw_a16 = kTaunt3FlickYawA16;
 // PASS 13 / R3, SECOND LOOK -- A SHRUG IS A WHOLE-BODY GESTURE.
 //
 // After the re-time the shrug ARRIVED, and it still did not read on a 46-tile
@@ -3164,6 +3266,7 @@ constexpr int32_t kTaunt3FlickSidePm = 350;  // ...the lateral remainder (was
                                              // 1000: the whole throw, and the
                                              // reason the loop went edge-on)
 constexpr int32_t kTaunt3FlickRollA16 = 7000;  // the tip-away, new in pass 14
+inline int32_t g_u02_taunt3_flick_roll_a16 = kTaunt3FlickRollA16;
 // PASS 14 / R4, SECOND LOOK -- THE PUNCHLINE HAS TO BE A DIFFERENT SHAPE, AND
 // THE SQUASH IS THE ONLY LEVER THAT MAKES ONE.
 //

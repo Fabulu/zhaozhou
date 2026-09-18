@@ -2,7 +2,7 @@
 //
 // Committed rather than improvised, per CLAUDE.md ("a probe that does this was
 // written once and thrown away, so its numbers are unreproducible -- commit the
-// probe"). Three checks, each aimed at a gap found by reading the shipped
+// probe"). Five checks, each aimed at a gap found by reading the shipped
 // gates rather than at a hypothesis they already hold:
 //
 //  Q1 THE CORPSE ACROSS EVERY DEFORM LANE.  manafold_probe.cpp's death gate
@@ -25,6 +25,15 @@
 //     SEAM, last key back to key 0, which every interior-only walk misses and
 //     which the site plays on every repeat. The by-eye review found the corpses
 //     standing back up there; this is that fault as a number.
+//
+//  Q4 DEATH LOOP SEAMS. Both death clips must hold the final corpse instead of
+//     presenting a half-frame resurrection toward key 0.
+//
+//  Q5 FALL IS A ONE-SHOT. Pass 17 changes slot 9 from a root-delta-protected
+//     loop into a true hold-last action. The final presentation frame (f339,
+//     key 169 sub 1) must preserve f338's authored root, quats, local
+//     translations, scale and every deform lane. --fail-fall-wrap restores the
+//     old root-only wrap and proves the gate sees the pose reset.
 //
 // Build:
 //   g++ -O2 -std=c++17 -Ireference/include -Iruntime/include -Itests/render \
@@ -61,12 +70,24 @@ int main(int argc, char** argv) {
   const bool seam_leg = argc > 1 && std::strcmp(argv[1], "--fail-seam") == 0;
   if (seam_leg) u02::g_u02_death_fail = 4;
   const bool snap_leg = argc > 1 && std::strcmp(argv[1], "--fail-eyesnap") == 0;
+  const bool eyes_only = argc > 1 && std::strcmp(argv[1], "--eyes-only") == 0;
   if (snap_leg) u02::g_u02_death_fail = 5;
+  const bool startle_leg =
+      argc > 1 && std::strcmp(argv[1], "--fail-startle-step") == 0;
+  if (startle_leg)
+    u02::g_u02_startle_timing = u02::StartleTimingControl::kLegacy;
   // PASS 13 / R5: leg 6 collapses death-gutter's sag carry to a single key,
   // which is exactly the pre-R5 behaviour -- the 240 mm one-key root teleport.
   // Witnessed on THE SHIPPED BUILDER, not on a copy of the clip.
   const bool rootstep_leg = argc > 1 && std::strcmp(argv[1], "--fail-rootstep") == 0;
   if (rootstep_leg) u02::g_u02_death_fail = 6;
+  // Pass 17's Fall control must also be selected before u02::type() constructs
+  // its static bank. Each CLI leg is a separate process, so this cannot leak
+  // into the normal shipping verdict.
+  const bool fall_only = argc > 1 && std::strcmp(argv[1], "--fall-only") == 0;
+  const bool fall_wrap_leg =
+      argc > 1 && std::strcmp(argv[1], "--fail-fall-wrap") == 0;
+  if (fall_wrap_leg) u02::g_u02_fall_wrap_control = true;
   const zc::CreatureType& T = u02::type();
   if (T.mesh.empty()) { std::fprintf(stderr, "qa-p12: compile produced no meshlets\n"); return 1; }
   int fails = 0;
@@ -225,47 +246,60 @@ int main(int argc, char** argv) {
       ++fails;
     }
   }
+  const auto relative_deg = [](const zc::quat16& a, const zc::quat16& b) {
+    double d = 0.0, na = 0.0, nb = 0.0;
+    for (int i = 0; i < 4; ++i) {
+      const double av = static_cast<double>(a.q[i]);
+      const double bv = static_cast<double>(b.q[i]);
+      d += av * bv;
+      na += av * av;
+      nb += bv * bv;
+    }
+    const double den = std::sqrt(na * nb);
+    if (den <= 0.0) return 180.0;
+    d = std::fabs(d) / den;
+    if (d > 1.0) d = 1.0;
+    return 2.0 * std::acos(d) * 180.0 / 3.14159265358979;
+  };
   int clips_with_travel = 0;
+  int q2_fails = 0;
+  int death_snap_fires = 0;
   double bank_worst = 0.0;
   for (const zc::Clip& c : T.bank.clips) {
-    double worst = 0.0, prev = 0.0, jump = 0.0;
+    double worst = 0.0, jump = 0.0;
     int jat = -1;
+    zc::quat16 prev_l = zc::quat16_identity();
+    zc::quat16 prev_r = zc::quat16_identity();
     for (int f = 0; f < c.frame_count; ++f) {
-      const zc::quat16& q = c.quats[static_cast<size_t>(f) * u02::kBoneCount + u02::kBEyeTravelL];
-      // ⚠ THE COMMENT THIS LINE USED TO CARRY WAS FALSE IN BOTH HALVES, and it
-      //  is corrected rather than deleted because it is what misled the reader.
-      //  It said "identity quat16 is (0,0,0,1<<14)" and read q.q[1]. In fact
-      //  zref_creature.hpp has
-      //      quat16_identity() { return quat16{{kQuatOne, 0, 0, 0}}; }
-      //  so w is lane 0, the lanes are (w, x, y, z), and lane 1 is X --
-      //  while apply_eye_travel uses quat_y(), which lives in lane 2. The gate
-      //  read the X lane of a pure-Y rotation and printed 0.00 deg for every
-      //  clip no matter what the channel did.
-      //
-      //  carrier_deg is 2*acos(|w|): an AXIS-AGNOSTIC magnitude, so moving the
-      //  travel onto another axis cannot silently blind this again. The
-      //  SELF-CHECK above drives the carrier through the production call and
-      //  refuses to believe a zero it cannot prove it could have seen.
-      const double a = carrier_deg(q);
+      const zc::quat16& ql =
+          c.quats[static_cast<size_t>(f) * u02::kBoneCount + u02::kBEyeTravelL];
+      const zc::quat16& qr =
+          c.quats[static_cast<size_t>(f) * u02::kBoneCount + u02::kBEyeTravelR];
+      const double a = std::max(carrier_deg(ql), carrier_deg(qr));
       if (a > worst) worst = a;
-      // THE SNAP CHECK. A channel switched OFF rather than faded out shows
-      // here and nowhere else: the deaths stop calling antenna_knead at the
-      // settle key, so an unfaded carrier drops from up to 45 deg to identity
-      // in ONE key, at the exact instant the corpse goes still. Peak travel
-      // says nothing about that -- only the step does.
+      // Relative quaternion distance is sign- and axis-safe. Differencing scalar
+      // magnitudes was blind to equal-magnitude direction reversals.
       if (f > 0) {
-        const double d = a - prev;
-        if (std::fabs(d) > jump) { jump = std::fabs(d); jat = f; }
+        const double d = std::max(relative_deg(prev_l, ql), relative_deg(prev_r, qr));
+        if (d > jump) { jump = d; jat = f; }
       }
-      prev = a;
+      prev_l = ql;
+      prev_r = qr;
     }
     if (worst > 0.05) ++clips_with_travel;
     if (worst > bank_worst) bank_worst = worst;
     // 8 deg/key is several times the busiest smooth key in the bank and far
     // under a 45 deg switch-off, so it separates authored motion from a snap.
     const bool snap = jump > 8.0;
-    if (snap) ++fails;
-    std::printf("   slot %2u %4u keys   travel %6.2f deg   worst step %5.2f deg at key %4d%s%s\n",
+    if (snap) {
+      ++fails;
+      ++q2_fails;
+      int settle = -1;
+      if (c.slot_id == u02::kDeathSlot) settle = u02::death_beats().settle;
+      if (c.slot_id == u02::kDeathBSlot) settle = u02::deathb_beats().settle;
+      if (settle >= 0 && jat == settle) ++death_snap_fires;
+    }
+    std::printf("   slot %2u %4u keys   travel %6.2f deg   worst relative step %5.2f deg at key %4d%s%s\n",
                 c.slot_id, c.frame_count, worst, jump, jat,
                 worst <= 0.05 ? "   <-- NO TRAVEL" : "",
                 snap ? "   <-- SNAPS" : "");
@@ -323,6 +357,7 @@ int main(int argc, char** argv) {
       {20, 300.0, "blown: the blast off the ground and the fall into the catch (R4)"},
   };
   int q3_fails = 0;
+  bool startle_over = false;
   std::printf("\nQ3 ROOT CONTINUITY -- largest single-key INTERIOR root step per clip, BOUNDED\n");
   std::printf("   Default ceiling %.0f mm; four clips declare their own (table in the source).\n",
               kRootStepDefaultMm);
@@ -352,7 +387,10 @@ int main(int argc, char** argv) {
     for (const auto& rc : kRootStepCeilings)
       if (rc.slot == c.slot_id) { ceiling = rc.mm; why = rc.why; }
     const bool over = worst > ceiling;
-    if (over) ++q3_fails;
+    if (over) {
+      ++q3_fails;
+      if (c.slot_id == 4) startle_over = true;
+    }
     std::printf("   slot %2u  worst step %7.1f mm at key %d -> %d  (ceiling %5.0f)  |  WRAP %7.1f mm%s%s\n",
                 c.slot_id, worst, at, at + 1, ceiling, wrap, flag,
                 over ? "  <-- OVER ITS DECLARED CEILING" : "");
@@ -421,6 +459,106 @@ int main(int argc, char** argv) {
                 bad ? "<-- THE CORPSE STANDS BACK UP" : "held");
   }
 
+  // ---------------- Q5: FALL HOLDS THE WHOLE FINAL POSE ---------------------
+  //
+  // Fall has 170 authored keys and 340 presentation frames. f338 is key 169;
+  // f339 is that key's sub=1 companion. Pass 16 protected only root travel with
+  // wrap_root_delta, so f339 still blended quats/translations/deformation toward
+  // key 0 and visibly reset the pose. A one-shot must clamp EVERY pose channel.
+  int q5_fails = 0;
+  std::printf("\nQ5 FALL ONE-SHOT -- f338 key 169 vs f339 held presentation partner\n");
+  const zc::Clip* fall = nullptr;
+  for (const zc::Clip& c : T.bank.clips)
+    if (c.slot_id == 9) fall = &c;
+  if (fall == nullptr || fall->frame_count == 0) {
+    std::printf("   slot 9 MISSING\n");
+    ++fails;
+    ++q5_fails;
+  } else {
+    const size_t n = fall->frame_count;
+    const size_t last = n - 1u;
+    const size_t bc = u02::kBoneCount;
+    const size_t ex = static_cast<size_t>(zc::kDeformLaneCount) - 1u;
+    const auto check = [&](const char* name, bool shape_ok, bool equal) {
+      const bool ok = shape_ok && equal;
+      std::printf("   %-24s %s\n", name,
+                  ok ? "held exactly" : (shape_ok ? "DIFFERS -- WRAPPED" : "MISSING/MALFORMED"));
+      if (!ok) {
+        ++fails;
+        ++q5_fails;
+      }
+    };
+
+    const bool flags_ok = fall->interpolate && fall->hold_last && !fall->wrap_root_delta;
+    std::printf("   flags interpolate=%s hold_last=%s wrap_root_delta=%s  %s\n",
+                fall->interpolate ? "yes" : "NO", fall->hold_last ? "yes" : "NO",
+                fall->wrap_root_delta ? "YES" : "no",
+                flags_ok ? "one-shot" : "<-- NOT THE SHIPPING ONE-SHOT CONTRACT");
+    if (!flags_ok) {
+      ++fails;
+      ++q5_fails;
+    }
+
+    std::array<zc::mat3x4fx, zc::kMaxBones> key_pose{}, mid_pose{};
+    zc::decode_pose(T, *fall, static_cast<uint16_t>(last), key_pose, nullptr, 0);
+    zc::decode_pose(T, *fall, static_cast<uint16_t>(last), mid_pose, nullptr, 1);
+    const zc::DeformFrame key_deform =
+        zc::deformation_frame(T, fall->slot_id, static_cast<uint16_t>(last), 0);
+    const zc::DeformFrame mid_deform =
+        zc::deformation_frame(T, fall->slot_id, static_cast<uint16_t>(last), 1);
+
+    const bool root_shape = fall->root.size() == n * 3u;
+    const zc::mat3x4fx& kr = key_pose[u02::kBRoot];
+    const zc::mat3x4fx& mr = mid_pose[u02::kBRoot];
+    check("root xyz", root_shape,
+          root_shape && kr.m[3] == mr.m[3] && kr.m[7] == mr.m[7] &&
+              kr.m[11] == mr.m[11]);
+
+    const size_t quat_i = last * bc;
+    const bool quat_shape = fall->quats.size() == n * bc && fall->mid_quats.size() == n * bc;
+    check("all bone quaternions", quat_shape,
+          quat_shape && std::memcmp(fall->quats.data() + quat_i,
+                                    fall->mid_quats.data() + quat_i,
+                                    bc * sizeof(zc::quat16)) == 0);
+
+    const size_t local_count = n * bc * 3u;
+    const size_t local_i = last * bc * 3u;
+    const bool local_absent = fall->local_translation.empty();
+    const bool local_shape = local_absent ? fall->mid_local_translation.empty()
+                                          : (fall->local_translation.size() == local_count &&
+                                             fall->mid_local_translation.size() == local_count);
+    check("local translations", local_shape,
+          local_shape && (local_absent ||
+              std::memcmp(fall->local_translation.data() + local_i,
+                          fall->mid_local_translation.data() + local_i,
+                          bc * 3u * sizeof(int32_t)) == 0));
+
+    const size_t scale_count = n * bc;
+    const size_t scale_i = last * bc;
+    const bool scale_absent = fall->uniform_scale_q15.empty();
+    const bool scale_shape = scale_absent ? fall->mid_uniform_scale_q15.empty()
+                                          : (fall->uniform_scale_q15.size() == scale_count &&
+                                             fall->mid_uniform_scale_q15.size() == scale_count);
+    check("uniform bone scale", scale_shape,
+          scale_shape && (scale_absent ||
+              std::memcmp(fall->uniform_scale_q15.data() + scale_i,
+                          fall->mid_uniform_scale_q15.data() + scale_i,
+                          bc * sizeof(uint16_t)) == 0));
+
+    const bool deform_shape = fall->deform.size() == n;
+    check("primary deform lane", deform_shape,
+          deform_shape && std::memcmp(&key_deform.lane[0], &mid_deform.lane[0],
+                                      sizeof(zc::DeformSample)) == 0);
+
+    const size_t dex_count = n * ex;
+    const bool dex_absent = fall->deform_ex.empty();
+    const bool dex_shape = dex_absent || fall->deform_ex.size() == dex_count;
+    bool dex_equal = dex_shape;
+    for (size_t lane = 1; lane < zc::kDeformLaneCount && dex_equal; ++lane)
+      dex_equal = std::memcmp(&key_deform.lane[lane], &mid_deform.lane[lane],
+                              sizeof(zc::DeformSample)) == 0;
+    check("extra deform lanes", dex_shape, dex_equal);
+  }
 
   std::printf("\n%s: %d failure(s)%s\n", fails ? "FAIL" : "PASS", fails,
               fail_leg ? "   [FAILABLE LEG: lane 0 answered for every lane]" : "");
@@ -436,6 +574,58 @@ int main(int argc, char** argv) {
     }
     std::printf("qa-p12: FAILABLE LEG OK -- with hold_last off Q4 reports %d death(s) "
                 "standing back up, which is the fault pass 12 shipped\n", q4_fails);
+    return 0;
+  }
+
+  if (fall_wrap_leg) {
+    // Judge the control on Q5 alone. Root-delta protection can keep the final
+    // root equal while the rest of the pose wraps, so an unrelated failure or
+    // root-only check must not certify this instrument.
+    if (q5_fails == 0) {
+      std::printf("qa-p12: --fail-fall-wrap restored the old Fall wrap but Q5 "
+                  "still reported every final pose channel held -- Q5 is NOT "
+                  "proved failable\n");
+      return 1;
+    }
+    std::printf("qa-p12: FAILABLE LEG OK -- legacy Fall wrap makes Q5 reject "
+                "%d contract/channel item(s), including the non-root pose reset\n",
+                q5_fails);
+    return 0;
+  }
+
+  if (fall_only) {
+    std::printf("qa-p12: FALL-ONLY verdict -- Q5 has %d failure(s)\n", q5_fails);
+    return q5_fails == 0 ? 0 : 1;
+  }
+
+  if (snap_leg) {
+    if (death_snap_fires != 2 || q2_fails != 2) {
+      std::printf("qa-p12: --fail-eyesnap restored the old reset but Q2 caught "
+                  "%d/2 death settle snaps and %d total Q2 failure(s) -- the "
+                  "control is not solely attributed to those two resets\n",
+                  death_snap_fires, q2_fails);
+      return 1;
+    }
+    std::printf("qa-p12: FAILABLE LEG OK -- Q2 rejects both death eye resets "
+                "at their own settle keys\n");
+    return 0;
+  }
+
+  if (eyes_only) {
+    std::printf("qa-p12: EYES-ONLY verdict -- Q2 has %d failure(s)\n", q2_fails);
+    return q2_fails == 0 ? 0 : 1;
+  }
+
+  if (startle_leg) {
+    if (!startle_over || q3_fails != 1) {
+      std::printf("qa-p12: --fail-startle-step selected legacy timing but slot 4 "
+                  "over=%s with %d total Q3 failure(s) -- the control is not "
+                  "solely attributed to Startle\n",
+                  startle_over ? "yes" : "NO", q3_fails);
+      return 1;
+    }
+    std::printf("qa-p12: FAILABLE LEG OK -- legacy Startle timing exceeds its "
+                "unchanged 260 mm ceiling\n");
     return 0;
   }
 

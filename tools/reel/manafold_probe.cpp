@@ -43,18 +43,43 @@ namespace zc = zref::creature;
 #include "manafold.h"
 
 
-// PASS 6 (5c): inverse of a rigid bone transform applied to a point. The bone
-// matrices here are exactly rotation-plus-translation, so the inverse is the
-// transpose of the 3x3 with -R^T t -- no general inversion needed.
+// PASS 17: `--fail-scale-inverse` deliberately runs the historical rigid-only
+// inverse on a scaled eye palette. Rule 1/2 must reject that broken instrument;
+// the production path below uses the exact authored uniform scale.
+static bool g_fail_scale_inverse = false;
+
+// PASS 6 (5c): inverse of a bone skin palette applied to a point. Identity
+// scale preserves the historical transpose path byte-for-byte. Pass 17 eye
+// acting makes the 3x3 `sR`; its affine inverse is `R^T / s`, equivalently
+// `M^T / s^2`. Treating it as rigid multiplies local offsets by `s` and made
+// the leash report a detached star while lens and Pupil actually scaled
+// together.
 static inline void inv_point(const zc::mat3x4fx& m, int32_t x, int32_t y, int32_t z,
+                             uint16_t scale_q15,
                              int32_t& ox, int32_t& oy, int32_t& oz) {
   // mat3x4fx is a FLAT int32_t[12]: row r, column c is m[r * 4 + c].
   const int64_t dx = static_cast<int64_t>(x) - m.m[3];
   const int64_t dy = static_cast<int64_t>(y) - m.m[7];
   const int64_t dz = static_cast<int64_t>(z) - m.m[11];
-  ox = static_cast<int32_t>((m.m[0] * dx + m.m[4] * dy + m.m[8] * dz) >> 16);
-  oy = static_cast<int32_t>((m.m[1] * dx + m.m[5] * dy + m.m[9] * dz) >> 16);
-  oz = static_cast<int32_t>((m.m[2] * dx + m.m[6] * dy + m.m[10] * dz) >> 16);
+  const int64_t nx = m.m[0] * dx + m.m[4] * dy + m.m[8] * dz;
+  const int64_t ny = m.m[1] * dx + m.m[5] * dy + m.m[9] * dz;
+  const int64_t nz = m.m[2] * dx + m.m[6] * dy + m.m[10] * dz;
+  if (scale_q15 == 32768 || g_fail_scale_inverse) {
+    ox = static_cast<int32_t>(nx >> 16);
+    oy = static_cast<int32_t>(ny >> 16);
+    oz = static_cast<int32_t>(nz >> 16);
+    return;
+  }
+  const int64_t scale2_q30 = static_cast<int64_t>(scale_q15) * scale_q15;
+  const auto unscale = [&](int64_t n) {
+    // n is Q32; n * 2^14 / scale^2(Q30) returns Q16.
+    const int64_t mag = n < 0 ? -n : n;
+    const int64_t q = (mag * (1LL << 14) + scale2_q30 / 2) / scale2_q30;
+    return static_cast<int32_t>(n < 0 ? -q : q);
+  };
+  ox = unscale(nx);
+  oy = unscale(ny);
+  oz = unscale(nz);
 }
 
 // PASS 12 WAVE 2a: the one failable leg this omnibus probe carries as a flag.
@@ -65,9 +90,9 @@ static inline void inv_point(const zc::mat3x4fx& m, int32_t x, int32_t y, int32_
 static bool g_fail_mirror = false;
 // PASS 13 R1(d): the failing leg for rule 3, which had none because the rule
 // was never enforced. `--fail-outline` pushes every star vertex 40% further
-// from the body axis before the outline test -- a detached sticker, the exact
-// fault the rule names -- so the bound below is a WITNESSED bound and not a
-// rumour with an exit code (10-GATE-CHECKLIST item 10).
+// from the body axis before both purple-rim and body-outline tests -- a detached
+// sticker, the exact fault the rules name -- so the bounds below are WITNESSED
+// rather than rumours with exit codes (10-GATE-CHECKLIST item 10).
 static bool g_fail_outline = false;
 
 int main(int argc, char** argv) {
@@ -75,6 +100,8 @@ int main(int argc, char** argv) {
   {
     if (std::strcmp(argv[ai], "--fail-mirror") == 0) g_fail_mirror = true;
     if (std::strcmp(argv[ai], "--fail-outline") == 0) g_fail_outline = true;
+    if (std::strcmp(argv[ai], "--fail-scale-inverse") == 0)
+      g_fail_scale_inverse = true;
   }
   constexpr int32_t kMinClearanceMm = 40;
   // PASS 3: the headstand (slot 13) DECLARES ground contact — the loop
@@ -1217,15 +1244,31 @@ int main(int argc, char** argv) {
           for (const zc::SkinVertex& sv : m.verts) {
             int32_t x, y, z;
             zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
+            // Positive control: move the star itself away from the body/eye,
+            // before both purple-rim and body-outline measurements. The old
+            // control perturbed rule 3 only after `over > 0`; a wider valid lens
+            // could therefore make the mutation unreachable and read green.
+            if (g_fail_outline) {
+              x = root_x + static_cast<int32_t>(
+                  (static_cast<int64_t>(x - root_x) * 14) / 10);
+              z = root_z + static_cast<int32_t>(
+                  (static_cast<int64_t>(z - root_z) * 14) / 10);
+            }
             // Rules 1 and 2: is this vertex over the purple? The lens is an
             // ellipse in ITS OWN bone frame, which is also the only frame in
             // which "the rim" is well defined -- so measure there.
             const uint8_t eb =
                 (sv.b0 == u02::kBPupilL || sv.b0 == u02::kBEyeL) ? u02::kBEyeL
                                                                  : u02::kBEyeR;
+            uint16_t eye_scale_q15 = 32768;
+            const size_t scale_count =
+                static_cast<size_t>(clip.frame_count) * u02::kBoneCount;
+            if (clip.uniform_scale_q15.size() == scale_count)
+              eye_scale_q15 = clip.uniform_scale_q15[
+                  static_cast<size_t>(f) * u02::kBoneCount + eb];
             const zc::mat3x4fx& em = pose[eb];
             int32_t lx, ly, lz;
-            inv_point(em, x, y, z, lx, ly, lz);
+            inv_point(em, x, y, z, eye_scale_q15, lx, ly, lz);
             // PASS 7 -- THE SECOND BUG IN THIS BLOCK, found by QA and not in
             // the pass-7 brief's list. inv_point against a SKINNING matrix
             // (world * inv_bind) returns BIND space, NOT eye-bone space. The
@@ -1295,13 +1338,9 @@ int main(int argc, char** argv) {
             // outline from a shipping view, or it is drawn against sky.
             if (over > 0) {
               for (const View& v : views) {
-                // --fail-outline injects the detached-sticker fault: the
-                // star is pushed 40% further from the body axis and nothing
-                // else in the measurement moves.
-                const int64_t fo = g_fail_outline ? 14 : 10;
-                const int64_t ux = ((static_cast<int64_t>(x - root_x) * fo / 10) << 16) / bx;
+                const int64_t ux = (static_cast<int64_t>(x - root_x) << 16) / bx;
                 const int64_t uy = (static_cast<int64_t>(y - root_y) << 16) / by;
-                const int64_t uz = ((static_cast<int64_t>(z - root_z) * fo / 10) << 16) / bx;
+                const int64_t uz = (static_cast<int64_t>(z - root_z) << 16) / bx;
                 const int64_t ex = (static_cast<int64_t>(v.dx) << 16) / bx;
                 const int64_t ey = (static_cast<int64_t>(v.dy) << 16) / by;
                 const int64_t ez = (static_cast<int64_t>(v.dz) << 16) / bx;
