@@ -2906,3 +2906,51 @@ added for the CRC cycle counts. Fixed with `clang-format -i`; five lines of
 wrapping. **Without running the full suite I would have pushed a red CI job** --
 which is the standing "local gates must match CI" memory, and docket item
 D17(a) is the gate that exists for exactly this.
+
+---
+
+## The full suite found SEVEN reds, and every one was mine
+
+Worth listing because they form one chain and I would not have seen any of them
+without running the whole thing.
+
+| gate | cause |
+|---|---|
+| `format_check` | my CRC cycle-count lines were not clang-formatted |
+| `packet_h_fit_ports_v2_fresh` | I narrowed a mask by hand-editing a GENERATED file |
+| `shell_fit_tools` | binds `gen_shell_fit_top.py`'s sha256 |
+| `shell_fit_generated_freshness` | same |
+| `shell_fit_smoke_monitor_freshness` | same |
+| `shell_fit_preflight_fixtures` | same, via a bound receipt fixture |
+| `texjoin_accounting_retirement` | in the same lane |
+
+**The mask one is the instructive one.** I narrowed `tri_flat_request_i`'s
+`dynamic_mask` because 225 of its 298 bits must be zero or the tile pipe parks
+in refusal. Correct in substance, wrong in mechanism: I edited
+`design/shell_fit_ports_v2.yml`, which is generated, so the freshness gate
+called it stale.
+
+And the generator DELIBERATELY emits full-span masks, with a comment arguing
+against narrowing: *"a narrow mask that matches a narrow stimulus passes, and
+the area comes back low."* That rule is right, and it assumes the only reason to
+narrow is a weak stimulus. **Mine is the opposite case** -- the CONSUMER forbids
+the bits -- and there full span is the dishonest declaration, because it claims
+bits move that the design would reject and the smoke harness then refuses a
+correct run.
+
+So it went into the generator as `CONSUMER_CONSTRAINED_MASKS`, with a mandatory
+`constant_reason` naming `zhao_raster_tile_pipe_v2` and the exact condition, and
+a width check that fails if a constrained mask overflows its port.
+`tri_area2_i` is deliberately NOT in that table: it is constrained to be
+NON-ZERO rather than to hold particular bits, so every bit of it may still move.
+
+**The generator-hash chain cost four gates from one edit.** Regenerating the V1
+instrument moved exactly three lines -- the generator hash, the
+`// generator-sha256` comment, and the RTL hash derived from it -- with no RTL
+content change at all, because my edits only touch V2 paths. Then the bound
+fixture needed the same values in four places. Regenerate and re-pin belong in
+ONE commit; this session already learned that once and the lesson held.
+
+**Without the full suite I would have pushed seven red gates.** The standing
+memory is "local gates must match CI", and the fast label is what makes local
+match.
