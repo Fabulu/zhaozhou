@@ -23,3 +23,11 @@ target_include_directories(manafold-public-jointgate PRIVATE
   ${CMAKE_SOURCE_DIR}/tests/render
   ${CMAKE_SOURCE_DIR}/compiler/tests/generated
   ${CMAKE_SOURCE_DIR}/reference/src)
+
+# Pass 17: Manafold identity-default L/R eye-size and form-control gate.
+add_executable(manafold-eyesize reel/manafold_eyesize.cpp)
+target_link_libraries(manafold-eyesize PRIVATE zhao_zref)
+target_include_directories(manafold-eyesize PRIVATE
+  ${CMAKE_SOURCE_DIR}/tests/render
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated
+  ${CMAKE_SOURCE_DIR}/reference/src)

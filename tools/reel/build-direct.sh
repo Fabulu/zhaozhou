@@ -40,6 +40,8 @@ Targets:
              so the table it was the sole source of could not be re-derived
              by anyone; this is the same fault LANE-FX had just fixed for
              mshell in the same pass. Checklist item 42.)
+  meyesize   manafold-eyesize.exe (pass 17: identity-default L/R eye-size
+             sidecar, child-registration and form-control gate)
   mexpress   manafold-express.exe (pass 12 wave 3: THE EXPRESSIVENESS PLATE,
              Direction 5 SS6 -- Manafold's deform channel measured against
              Zixxtrixx's, every clip in both banks. A verification, not a gate.)
@@ -65,7 +67,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|mexpress|meyecam|mqa|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|mexpress|meyecam|meyesize|mqa|all)
       TARGET="$1"
       shift
       ;;
@@ -246,6 +248,12 @@ build_meyecam() {
   "$CXX" "${FLAGS[@]}" "$T/manafold_eyecam.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-eyecam.exe"
 }
 
+build_meyesize() {
+  printf '%s\n' "LD manafold-eyesize"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_eyesize.cpp" "${LIBOBJS[@]}" \
+    -o "$BIN/manafold-eyesize.exe"
+}
+
 build_mspan() {
   printf '%s
 ' "LD manafold-spangate"
@@ -278,6 +286,7 @@ case "$TARGET" in
   mshell) build_mshell ;;
   mspan) build_mspan ;;
   meyecam) build_meyecam ;;
+  meyesize) build_meyesize ;;
   mexpress) build_mexpress ;;
   mband) build_mband ;;
   mc2proto) build_mc2proto ;;

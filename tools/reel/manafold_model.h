@@ -528,6 +528,7 @@ inline void eye_deform_follow(zc::RingPart& p) {
 }
 
 inline zc::RingPart make_eye_lens(uint8_t bone) {
+  const EyeForm form = selected_eye_form();
   zc::RingPart p;
   p.bone = bone;
   p.cap_base_fix = true;
@@ -537,10 +538,10 @@ inline zc::RingPart make_eye_lens(uint8_t bone) {
     const int32_t w = kEyeLensWidthPm[i];
     zc::RingSpec rs;
     rs.y = static_cast<int32_t>(
-        (static_cast<int64_t>(fxu(kEyeLongMm)) * t_pm / 1000) * kVStretchPm / 1000);
+        (static_cast<int64_t>(fxu(form.long_mm)) * t_pm / 1000) * kVStretchPm / 1000);
     rs.radius = 0;
-    rs.rx = static_cast<int32_t>((static_cast<int64_t>(fxu(kEyeDeepMm)) * w) / 1000);
-    rs.rz = static_cast<int32_t>((static_cast<int64_t>(fxu(kEyeWideMm)) * w) / 1000);
+    rs.rx = static_cast<int32_t>((static_cast<int64_t>(fxu(form.deep_mm)) * w) / 1000);
+    rs.rz = static_cast<int32_t>((static_cast<int64_t>(fxu(form.wide_mm)) * w) / 1000);
     // §5c: the lens rides back out to its authored place over the eye bone's
     // relocated pivot, so the REST POSE IS UNCHANGED and a rotation on that
     // bone sweeps the eye across the body instead of spinning it in place.

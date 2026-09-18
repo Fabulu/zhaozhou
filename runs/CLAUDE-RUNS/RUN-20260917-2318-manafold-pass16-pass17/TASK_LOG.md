@@ -87,6 +87,8 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - Public five-carrier instrument now compiles through direct and CMake targets and all five attributed mute red legs fire. The fixed 20 mm (~3 px) normal gate finds a real Direction-14 art gap: A/B/C are strongly live (134–206 mm visible-core deltas), but Front reaches only 11–13 mm and End 15–17 mm in Taunt/Taunt-II. Do not weaken the gate or rebuild bones; strengthen only named Front/End public rotational art, then prove it in same-frame native controls. Final-source rear rho is `1.043`; stale Pass-16 prose must be replaced.
 - Applied Direction-15 selected shell values `100/140/180` (peak/decay/transmission) with scatter/out/gamma/floor retained. Re-aimed `mshell` to nine checks including limited inward reach and dynamic transmission sampling. Normal, nine fired selftests, Pass-16 180/800/750 legacy control and historical Pass-15 regression control all return RC 0; the new check 9 catches the broad Pass-16 shell.
 - Rendered normal plus five same-binary public controls for Taunt/Taunt-II. Normal CRCs exactly match final4 (`0x86C357D2`, `0x7431CB1B`). Native A/B plates make A/B/C removal obvious while Front/End shipping/mute pairs are barely distinguishable, independently confirming the gate's under-read verdict. Invalid env values fail RC 2.
+- Eye infrastructure now builds through direct/CMake targets and `meyesize` normal + L/R mute + wrong-bone red legs all return 0 after correcting two gate defects (C-array address comparison and incorrectly demanding pupil-centre travel). Renderer diagnostics reject invalid/negative form values. Default eye path is 141/141 byte-identical when compared under the same Pass-16 shell control; the first mismatched-shell comparison was discarded.
+- Rendered current plus three same-binary base forms across complete Hover/Hit clips. Selected neutral **250×100×40 mm** by native/fixed/oblique comparison: wider and splinter-free without B's stubby read or C's heavy neutral mass. Legacy 270×84×40 remains the rejected control. Evidence: `PASS17-EYE-FORM-LADDER.md`; size acting is still un-authored.
 - Wrote durable `PASS-17-INVENTORY.md` / `PASS-17-PLAN.md` beside Manafold and committed/pushed Upheaval architecture checkpoint `8049106`.
 - Continued with one isolated GPT visual-review fork at a time so no batch shares image payload with this main thread.
 
@@ -124,6 +126,7 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - `PASS17-SCALE-IMPLEMENTATION.md` and `PASS17-SCALE-REVIEW.md`
 - `PASS17-SHELL-LADDER.md` and native/4×/multi-view ladder plates
 - `PASS17-PUBLIC-JOINT-IMPLEMENTATION.md`, normal/F/A/B/C/E gate logs, and Taunt/Taunt-II A/B plates
+- `PASS17-EYESIZE-INFRASTRUCTURE.md`, gate logs, `PASS17-EYE-FORM-LADDER.md` and orbit/Hit plates
 - This run's `TASK_LOG.md` and `SPEC_v1.md`
 
 ---

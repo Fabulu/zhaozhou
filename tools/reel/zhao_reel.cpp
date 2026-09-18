@@ -7844,6 +7844,87 @@ int main(int argc, char** argv) {
     }
     std::fprintf(stderr, "ZHAO_U02_JOINT_MUTE=%s (public carrier control)\n", jm);
   }
+  // PASS 17: same-binary eye-form ladder and independent size-channel mutes.
+  // Parse before u02::type() so mesh construction and clip compilation see one
+  // coherent diagnostic configuration. Invalid art inputs fail instead of
+  // silently clamping into a different candidate.
+  {
+    bool any = false;
+    if (const char* e = std::getenv("ZHAO_U02_EYE_FORM")) {
+      const std::string s = e;
+      if (s == "legacy")
+        u02::g_u02_eye_form_legacy = true;
+      else if (s == "current")
+        u02::g_u02_eye_form_legacy = false;
+      else {
+        std::fprintf(stderr,
+                     "ZHAO_U02_EYE_FORM=%s invalid (expected legacy|current)\n", e);
+        return 2;
+      }
+      any = true;
+    }
+    if (const char* e = std::getenv("ZHAO_U02_EYE_LONG_MM")) {
+      const int v = std::atoi(e);
+      if (v < u02::kEyeFormLongMinMm || v > u02::kEyeFormLongMaxMm) {
+        std::fprintf(stderr, "ZHAO_U02_EYE_LONG_MM=%s outside %d..%d\n", e,
+                     u02::kEyeFormLongMinMm, u02::kEyeFormLongMaxMm);
+        return 2;
+      }
+      u02::g_u02_eye_long_mm = v;
+      any = true;
+    }
+    if (const char* e = std::getenv("ZHAO_U02_EYE_WIDE_MM")) {
+      const int v = std::atoi(e);
+      if (v < u02::kEyeFormWideMinMm || v > u02::kEyeFormWideMaxMm) {
+        std::fprintf(stderr, "ZHAO_U02_EYE_WIDE_MM=%s outside %d..%d\n", e,
+                     u02::kEyeFormWideMinMm, u02::kEyeFormWideMaxMm);
+        return 2;
+      }
+      u02::g_u02_eye_wide_mm = v;
+      any = true;
+    }
+    if (const char* e = std::getenv("ZHAO_U02_EYE_DEEP_MM")) {
+      const int v = std::atoi(e);
+      if (v < u02::kEyeFormDeepMinMm || v > u02::kEyeFormDeepMaxMm) {
+        std::fprintf(stderr, "ZHAO_U02_EYE_DEEP_MM=%s outside %d..%d\n", e,
+                     u02::kEyeFormDeepMinMm, u02::kEyeFormDeepMaxMm);
+        return 2;
+      }
+      u02::g_u02_eye_deep_mm = v;
+      any = true;
+    }
+    if (const char* e = std::getenv("ZHAO_U02_EYE_SIZE_MUTE")) {
+      const std::string s = e;
+      if (s == "none")
+        u02::g_u02_eye_size_mute = u02::EyeSizeMute::kNone;
+      else if (s == "L")
+        u02::g_u02_eye_size_mute = u02::EyeSizeMute::kLeft;
+      else if (s == "R")
+        u02::g_u02_eye_size_mute = u02::EyeSizeMute::kRight;
+      else if (s == "both")
+        u02::g_u02_eye_size_mute = u02::EyeSizeMute::kBoth;
+      else {
+        std::fprintf(stderr,
+                     "ZHAO_U02_EYE_SIZE_MUTE=%s invalid (expected none|L|R|both)\n",
+                     e);
+        return 2;
+      }
+      any = true;
+    }
+    const u02::EyeForm f = u02::selected_eye_form();
+    if (!u02::eye_form_valid(f)) {
+      std::fprintf(stderr,
+                   "Manafold eye form %d/%d/%d mm outside safe ladder ranges\n",
+                   f.long_mm, f.wide_mm, f.deep_mm);
+      return 2;
+    }
+    if (any)
+      std::fprintf(stderr,
+                   "P17 eye diagnostic: form=%s %d/%d/%d mm size_mute=%d\n",
+                   u02::g_u02_eye_form_legacy ? "legacy" : "current",
+                   f.long_mm, f.wide_mm, f.deep_mm,
+                   static_cast<int>(u02::g_u02_eye_size_mute));
+  }
   // ---- OWNER DIRECTION 10 rung sweep (2026-09-09) ------------------------
   // "connected by white lightning lines surrounded by a deep dark blue."
   // It is an EXPERIMENT, so the deliverable is a LADDER, and 10-GATE item 26

@@ -949,15 +949,49 @@ constexpr int32_t kEyeBulgeMm = 40;       // star stands proud of the lens
 //
 // Aspect: the recon measured 3.4:1 on the front sheet, the side sheet reads
 // near 3:1. Authored at 3.2:1 between them, by eye -- and it is a knob.
-constexpr int32_t kEyeLongMm = 270;       // lens half-length (the long axis)
-constexpr int32_t kEyeWideMm = 84;        // lens half-width  (3.2:1)
+struct EyeForm {
+  int32_t long_mm;
+  int32_t wide_mm;
+  int32_t deep_mm;
+};
+
+// Pass 17 keeps the inherited form as an explicit same-binary control. The
+// current tuple starts byte-identical; the main art lane chooses a wider form
+// later by looking, without deleting the rejected dagger for A/B evidence.
+constexpr EyeForm kEyeLegacyForm = {270, 84, 40};
+constexpr EyeForm kEyeCurrentForm = kEyeLegacyForm;
+constexpr int32_t kEyeFormLongMinMm = 120, kEyeFormLongMaxMm = 420;
+constexpr int32_t kEyeFormWideMinMm = 40, kEyeFormWideMaxMm = 180;
+constexpr int32_t kEyeFormDeepMinMm = 10, kEyeFormDeepMaxMm = 120;
+inline bool g_u02_eye_form_legacy = false;
+inline int32_t g_u02_eye_long_mm = -1;
+inline int32_t g_u02_eye_wide_mm = -1;
+inline int32_t g_u02_eye_deep_mm = -1;
+
+inline EyeForm selected_eye_form() {
+  if (g_u02_eye_form_legacy) return kEyeLegacyForm;
+  EyeForm f = kEyeCurrentForm;
+  if (g_u02_eye_long_mm >= 0) f.long_mm = g_u02_eye_long_mm;
+  if (g_u02_eye_wide_mm >= 0) f.wide_mm = g_u02_eye_wide_mm;
+  if (g_u02_eye_deep_mm >= 0) f.deep_mm = g_u02_eye_deep_mm;
+  return f;
+}
+
+inline bool eye_form_valid(const EyeForm& f) {
+  return f.long_mm >= kEyeFormLongMinMm && f.long_mm <= kEyeFormLongMaxMm &&
+         f.wide_mm >= kEyeFormWideMinMm && f.wide_mm <= kEyeFormWideMaxMm &&
+         f.deep_mm >= kEyeFormDeepMinMm && f.deep_mm <= kEyeFormDeepMaxMm;
+}
+
+constexpr int32_t kEyeLongMm = kEyeCurrentForm.long_mm;
+constexpr int32_t kEyeWideMm = kEyeCurrentForm.wide_mm;
 // PASS 13 R1(a): 90 -> 40. This was a near-hemisphere -- 90 of depth against
 // 84 of half-width -- and it is the reason the star had to ride 108 mm out to
 // clear it. Flattened WITH kEyeBulgeMm so every occlusion relation is
 // preserved (the star still pokes the same FRACTION of the dome proud of it)
 // while the parallax radius halves. It is also what SS12.2's near-eye bar was
 // really about: a lens presenting 180 mm of depth swamps a star presenting 32.
-constexpr int32_t kEyeDeepMm = 40;        // bulge depth off the body (the dome)
+constexpr int32_t kEyeDeepMm = kEyeCurrentForm.deep_mm;
 constexpr int kEyeFacetSegments = 8;      // the facet read at 240p
 // The lens half-width profile, tip to tip, per-mille of kEyeWideMm. Symmetric
 // by construction -- read it backwards and it is the same list. POINTED, not

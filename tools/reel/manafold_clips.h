@@ -125,10 +125,28 @@ struct NoduleOffsets {
   int32_t cx = 0, cy = 0, cz = 0;  // nodule C -- the upper-rear ball
 };
 
-/** The per-key quat accumulator (mirrors zixx's Rig; bodies differ). */
+enum class EyeSizeMute : uint8_t { kNone = 0, kLeft, kRight, kBoth };
+inline EyeSizeMute g_u02_eye_size_mute = EyeSizeMute::kNone;
+constexpr uint16_t kEyeScaleIdentityQ15 = 32768;
+
+inline uint16_t eye_scale_q15_from_pm(int32_t pm) {
+  // Public authored constants are validated at their call sites. Keep this
+  // conversion single-rounded and deterministic; no silent clamp can turn an
+  // invalid art value into a different valid performance.
+  return static_cast<uint16_t>((static_cast<int64_t>(pm) * 32768 + 500) / 1000);
+}
+
+inline bool eye_size_muted(bool left) {
+  return g_u02_eye_size_mute == EyeSizeMute::kBoth ||
+         (left && g_u02_eye_size_mute == EyeSizeMute::kLeft) ||
+         (!left && g_u02_eye_size_mute == EyeSizeMute::kRight);
+}
+
+/** The per-key quat/translation/scale accumulator (mirrors zixx's Rig; bodies differ). */
 struct Rig {
   zc::quat16 q[kBoneCount];
   int32_t local_t[kBoneCount][3]{};  // optional per-key bone-local translation (fx16)
+  uint16_t scale_q15[kBoneCount]{};  // optional uniform scale; identity unless authored
   // PASS 12: the nodule targets ride the rig rather than loop_pose's argument
   // list. antenna_knead sets them and loop_pose consumes them, which is the
   // ordering every clip already uses -- so not one call site changes, and a
@@ -169,10 +187,20 @@ struct Rig {
     for (int b = 0; b < kBoneCount; ++b) {
       q[b] = zc::quat16_identity();
       local_t[b][0] = local_t[b][1] = local_t[b][2] = 0;
+      scale_q15[b] = kEyeScaleIdentityQ15;
     }
     nod = NoduleOffsets{};
     span_pm[0] = span_pm[1] = span_pm[2] = 0;
     eye_lean = 0;
+  }
+  bool set_eye_scale_pm(int32_t left_pm, int32_t right_pm) {
+    if (left_pm <= 0 || left_pm >= 2000 || right_pm <= 0 || right_pm >= 2000)
+      return false;
+    if (eye_size_muted(true)) left_pm = 1000;
+    if (eye_size_muted(false)) right_pm = 1000;
+    scale_q15[kBEyeL] = eye_scale_q15_from_pm(left_pm);
+    scale_q15[kBEyeR] = eye_scale_q15_from_pm(right_pm);
+    return true;
   }
   void write(zc::Clip& c, int f) const {
     for (int b = 0; b < kBoneCount; ++b) {
@@ -181,6 +209,10 @@ struct Rig {
           static_cast<size_t>(c.frame_count) * kBoneCount * 3u) {
         const size_t base = (static_cast<size_t>(f) * kBoneCount + b) * 3u;
         for (int i = 0; i < 3; ++i) c.local_translation[base + i] = local_t[b][i];
+      }
+      if (c.uniform_scale_q15.size() ==
+          static_cast<size_t>(c.frame_count) * kBoneCount) {
+        c.uniform_scale_q15[static_cast<size_t>(f) * kBoneCount + b] = scale_q15[b];
       }
     }
     write_span_lanes(c, f);
@@ -1092,6 +1124,11 @@ inline zc::Clip clip_shell(uint16_t slot, int keys, int32_t hover_mm) {
   for (int f = 0; f < keys; ++f) c.root[static_cast<size_t>(f) * 3 + 1] = fxu(hover_mm);
   c.interpolate = true;
   return c;
+}
+
+inline void enable_eye_scale_track(zc::Clip& c) {
+  c.uniform_scale_q15.assign(
+      static_cast<size_t>(c.frame_count) * kBoneCount, kEyeScaleIdentityQ15);
 }
 
 /** The compression wave sample at key f: flatten = amp * (0.5 + 0.5 sin),
