@@ -2848,3 +2848,61 @@ says which VARIANT is selected, so `zhao_texture_island_top` is charged beside
 the shell that contains the V3 island. **Item (1) is not a computation nobody
 ran; it is a decision nobody recorded.** The deliverable is a selected-variant
 list, after which the table computes itself.
+
+---
+
+## `@packet-h-uvw`: 66.03 MHz, and AREA BOUGHT CLOCK
+
+Single variable -- only the `uvw_m` read register moved out of the async-reset
+block. `status: ok`, clean tree, 1,536.4 s.
+
+    M10K   134 -> 136                 predicted ~136   exact
+    ALM    28,959 -> 27,601 (-1,358)  predicted -500..-1,500   in band
+    TNS    -19,985 -> -8,851          predicted -14k..-16k   better
+    Fmax   61.52 -> 66.03             predicted UNCHANGED    WRONG
+
+**The binary assertion is conclusive.** `blockMemoryBits` +4,096 exactly,
+registers -4,273, RAM blocks +2, and **zero `Info (276007)` lines**. `uvw_m` was
+the last uninferred array in the composition; there are now none.
+
+### The Fmax prediction failed, and I had written down to look
+
+The note said an Fmax jump would mean something other than the stated cause. It
+did: the binder moved to `tile_pipe -> attrgrad` at -5.144, and the OLD binder
+improved **without being touched**. Cause is congestion -- removing 4,273
+registers from a design at two-thirds device occupancy let the fitter place
+untouched paths better. Median bad-path delay fell 12.510 -> 11.578 ns.
+
+**So the prediction assumed placement is independent of area, and at this
+occupancy it is not.** Solve-it-with-memory buys clock by a second mechanism
+unrelated to the path being fixed. The day's sequence shows it cleanly: three
+arithmetic changes bought 54.12 -> 61.52, and one change that touched no
+arithmetic bought 61.52 -> 66.03.
+
+### The day, measured
+
+    @packet-h-m10k    29,044 ALM  54.12 MHz  TNS -29,689
+    @packet-h-timing  28,959 ALM  61.52 MHz  TNS -19,985
+    @packet-h-uvw     27,601 ALM  66.03 MHz  TNS  -8,851
+
+ALM -1,443, Fmax +22%, TNS -70%, 2,399 inside the 30,000 budget.
+
+### The next binder is the MULTIPLIER, and it has a constraint
+
+`base_min_y0_c`'s `dndx*min_x` and `dndy*tile_y` map to a DSP macro feeding a
+long soft carry chain, 14.24 ns. Every move there needs `attrgrad`'s pipeline
+depth to change -- which would invalidate `raster_attrgrad_dsp3_diff`, the
+cycle-by-cycle control that proved today's tree change correct.
+
+Checked rather than assumed: **both** `attrgrad_v2` and `attrgrad_dsp3` are
+`not-yet-adopted` in `prod_manifest.yml`, so both can take the same stage in one
+change and the differential stays aligned. Feasible, two modules, plus the
+exact-count test updates.
+
+## And I broke `format_check`
+
+The full suite caught it at test 27 of 837. Every violation was in the lines I
+added for the CRC cycle counts. Fixed with `clang-format -i`; five lines of
+wrapping. **Without running the full suite I would have pushed a red CI job** --
+which is the standing "local gates must match CI" memory, and docket item
+D17(a) is the gate that exists for exactly this.
