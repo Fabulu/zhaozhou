@@ -1,4 +1,4 @@
-﻿# Prediction for `@packet-h-satstage`, written before the fit starts
+# Prediction for `@packet-h-satstage`, written before the fit starts
 
 Measured at `@packet-h-mulstage` (commit d85e2965): ALM 27,231, 63 DSP,
 136 M10K, Fmax 61.08 MHz, worst -6.372, TNS -9,514.0, hold +0.194.
@@ -46,3 +46,30 @@ If it leaves but Fmax does not improve, then the ~-3.9 tier is not three
 independent walls but one shared placement region, and the next lever is
 floorplanning rather than retiming -- a materially different conclusion, and
 the one that would be worth knowing.
+
+## CORRECTION, same day, before the fit returned
+
+The sentence above first read *"105 of the 1,600 summarised paths"*. There are
+not 1,600 paths. `*.setup.rpt` holds a **Summary of Paths** table with **200**
+rows, all negative, plus **Data Arrival Path** and **Data Required Path**
+detail tables whose incremental-delay rows have the same column shape. My
+extractor matched all three and reported 1,600, of which 1,400 were delay
+increments being counted as passing paths.
+
+The tell was a histogram with **exactly zero** paths in each of [-3,-2),
+[-2,-1) and [-1,0) across three independent fits, and exactly 1,400 at or above
+zero in all three. That is not a distribution; it is two tables glued together.
+Precision at zero is a tell, not a result — this file's own law, fourth
+instance this week, and once again the error read in the flattering direction:
+*"1,400 of 1,600 paths already meet timing"* is a comfortable sentence and a
+false one.
+
+Corrected, the evidence is STRONGER, not weaker: `base_min_y0_r` was **105 of
+the 200 worst paths, 52.5%**, not 6.6%.
+
+And one thing the corrected reading makes visible that the wrong one hid:
+**TNS is -9,514 ns over paths whose worst is -6.372.** Two hundred paths cannot
+carry that; at the best slack shown (-3.0) it takes at least ~3,200 negative
+paths. The report shows the worst 200 of some thousands, so no count in this
+document is a count of the machine's negative paths — only of the window
+Quartus prints.
