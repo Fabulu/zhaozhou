@@ -45,6 +45,7 @@
 
 #include "post_composite_dev.hpp"
 #include "zhao_sim.hpp"
+#include "zref/zref_post.hpp"
 
 using pc::CH;
 using pc::CW;
@@ -56,7 +57,7 @@ namespace {
 template <typename Top>
 pc::Result run(Top* t, const pc::Frame& f, const pc::Cfg& c, uint32_t seed = 0) {
   pc::reset_dut(t);
-  pc::load_curves(t, c);
+  pc::load_pv_table(t, c);
   return pc::run_frame(t, f, c, seed);
 }
 
@@ -380,43 +381,162 @@ int main(int argc, char** argv) {
   }
 
   // =======================================================================
-  // 7 -- DUO: a displaced sample never reaches the other player's view
+  // 7 -- DUO: no bleed between views, STRUCTURALLY
   // =======================================================================
+  // The Duo plane is 128 x 48 = 6,144 cells addressed as TWO 64 x 48 views --
+  // a quarter of the RENDERED area, not of the 512 x 240 displayed canvas whose
+  // extra 48 rows are black border. This block composites ONE VIEW PER PASS, so
+  // every x it forms is view-local and the ordinary clamp IS the view clamp.
+  //
+  // The point of that is not the 1,536 cells it saves -- the owner has ruled
+  // memory affordable and saving cells is not worth selling. The point is that
+  // "a refraction cannot reach the other player's screen" stops being a
+  // comparator that has to be right. So the check below is about the ADDRESS
+  // SPACE, not about a pixel: no address the block ever forms names the other
+  // view, because the other view is not in the range.
   {
     pc::Frame f = pc::base_frame();
-    for (int i = 0; i < CW * CH; ++i) f.dx[i] = 8;
+    for (int i = 0; i < CW * CH; ++i) { f.dx[i] = 8; f.dy[i] = 4; }
     pc::Cfg c;
-    c.duo = true;
-    c.view_split = 24;
+    c.view_sel = true;              // composite the RIGHT view this pass
     const pc::Result r = run(top, f, c);
+
+    zhao::check(r.view_bad == 0,
+                "every plane address this pass forms names THIS view -- the "
+                "bank is a pass property and is never computed per sample, "
+                "which is what makes the no-bleed property structural",
+                0, r.view_bad);
+    zhao::check(r.max_gd_cx < CW && r.max_gg_cx < CW,
+                "and no cell index reaches the other view's half: with one "
+                "128-wide plane these could have run to 2*CW-1, and here that "
+                "address does not exist",
+                1, (r.max_gd_cx < CW && r.max_gg_cx < CW) ? 1 : 0);
+    zhao::check(r.max_gd_cy < CH && r.max_gg_cy < CH,
+                "nor past the view's last quarter-row -- the rendered area is "
+                "what is addressed, not the canvas whose extra rows are black "
+                "border. This check FAILED on first run: the front pointer "
+                "walks one row past the last line during the drain, and the "
+                "port was presenting a cell that does not exist",
+                1, (r.max_gd_cy < CH && r.max_gg_cy < CH) ? 1 : 0);
+    zhao::check(r.parked_bad == 0,
+                "and an INVALID request parks its address at zero rather than "
+                "leaving the last one on the port -- which is what makes the "
+                "range claim above true for every cycle and not merely for the "
+                "cycles anyone looked at",
+                0, r.parked_bad);
 
     int crossed = 0;
     for (int y = 0; y < H; ++y)
-      for (int x = 16; x < 24; ++x) {
-        // the last eight columns of the LEFT view all want to sample past the
-        // split; every one of them must clamp to column 23
-        if (r.rgb[(y * W) + x] != f.src[(y * W) + 23]) ++crossed;
-      }
+      for (int x = W - 8; x < W; ++x)
+        if (r.rgb[(y * W) + x] != f.src[(((y + 4 > H - 1) ? H - 1 : y + 4) * W) + (W - 1)])
+          ++crossed;
     zhao::check(crossed == 0,
-                "in Duo a displacement clamps inside its OWN view before the "
-                "address is formed -- a refraction that reached across the "
-                "split is not a graphical artefact, it is one player seeing "
-                "through the other's screen",
+                "and a sample displaced past the view's right edge clamps to "
+                "the view's own last column, never to a neighbour's first",
                 0, crossed);
     zhao::check(pc::diff_count(r, f, c) == 0,
-                "and the whole Duo view matches the hand-computed expectation",
+                "and the whole view matches the hand-computed expectation",
                 0, pc::diff_count(r, f, c));
   }
 
   // =======================================================================
-  // 8 -- THE GRADING PATH IS EXACT ON AN IDENTITY TABLE
+  // 7b -- THE EXACT PRODUCT-VECTOR TABLE EQUALS THE NINE-MULTIPLIER PATH
   // =======================================================================
-  // The contract's "fused grading+palette equals unfused evaluation, exactly"
-  // CANNOT BE RUN: fixgen has produced no fused table and the contract makes
-  // unfused the default, so there is no second evaluation to compare against.
-  // This is the exactness property that IS available -- an identity curve and
-  // a 1.0 matrix must leave the frame bit-identical through the whole
-  // curve/matrix/round/bias/saturate path.
+  // Owner plan 11.2 asks for "actual generated-table equivalence", and the
+  // ruling of 2026-09-18 raised the M10K ceiling so the table could ship. This
+  // is that equivalence, and it is TOTAL rather than sampled: the grading
+  // stage's whole input space is (r5, g6, b5) = 32 x 64 x 32 = 65,536
+  // combinations, and every one is checked against the nine-multiplier
+  // reference, for several matrices.
+  //
+  // The algebra is trivially an identity -- that is not what this catches. What
+  // it catches is a PACKING, SIGN-EXTENSION or TRANSPOSE error in the
+  // GENERATOR: indexing the matrix `m[col*3 + o]` instead of `m[o*3 + col]`
+  // produces an entirely plausible picture with the channels cross-mixed. Fired
+  // deliberately: that one mutation gives 187,564 mismatches of 786,432.
+  //
+  // WHAT IT CANNOT SEE, found by fire-testing it and worth writing down rather
+  // than quietly fixing: swapping the first two arguments of
+  // `grade_channel_table` changes NOTHING, because the three lanes are summed
+  // and addition commutes. The first fire test injected exactly that and the
+  // check stayed green -- which is not a fault in the check, because it is not
+  // a fault at all. The lesson is that "it catches a transpose" had to be
+  // narrowed to "it catches a transpose IN THE GENERATOR", and the difference
+  // was only visible because the mutation was actually run.
+  {
+    struct Set { const char* name; int16_t m[9]; int16_t bias[3]; };
+    const Set sets[] = {
+      {"identity",      {16384, 0, 0, 0, 16384, 0, 0, 0, 16384},          {0, 0, 0}},
+      {"warm rotate",   {17000, -2200, 800, 1500, 15000, -900, -600, 2400, 16900},
+                                                                          {4, -3, 7}},
+      {"heavy negative",{-32768, 32767, -16384, 32767, -32768, 16384, -16384, 16384, -32768},
+                                                                          {-255, 255, 0}},
+      {"extreme bias",  {16384, 0, 0, 0, 16384, 0, 0, 0, 16384},          {255, -256, 128}},
+    };
+
+    int total = 0, bad = 0, saturated_low = 0, saturated_high = 0;
+    for (const auto& s : sets) {
+      // a curve that is not the identity, so a transpose cannot hide
+      uint8_t cr[32], cg[64], cb[32];
+      for (int i = 0; i < 32; ++i) cr[i] = static_cast<uint8_t>((i * 7) & 0xFF);
+      for (int i = 0; i < 64; ++i) cg[i] = static_cast<uint8_t>((i * 3) + 11);
+      for (int i = 0; i < 32; ++i) cb[i] = static_cast<uint8_t>(255 - (i * 8));
+
+      for (int i = 0; i < 32; ++i) {
+        int32_t pr[3];
+        zref::post::grade_product_vector(s.m, 0, cr[i], pr);
+        for (int j = 0; j < 64; ++j) {
+          int32_t pg[3];
+          zref::post::grade_product_vector(s.m, 1, cg[j], pg);
+          for (int k = 0; k < 32; ++k) {
+            int32_t pb[3];
+            zref::post::grade_product_vector(s.m, 2, cb[k], pb);
+            for (int row = 0; row < 3; ++row) {
+              const uint8_t want =
+                  zref::post::grade_channel_mul(s.m, row, cr[i], cg[j], cb[k], s.bias[row]);
+              const uint8_t got =
+                  zref::post::grade_channel_table(pr, pg, pb, row, s.bias[row]);
+              if (want != got) ++bad;
+              if (want == 0) ++saturated_low;
+              if (want == 255) ++saturated_high;
+              ++total;
+            }
+          }
+        }
+      }
+      // the width claim, checked rather than asserted in prose: every product
+      // this set can produce must fit the signed 24-bit field the RTL declares
+      for (int col = 0; col < 3; ++col)
+        for (int v = 0; v <= 255; ++v) {
+          int32_t p[3];
+          zref::post::grade_product_vector(s.m, col, static_cast<uint8_t>(v), p);
+          for (int o = 0; o < 3; ++o)
+            if (p[o] < -8388608 || p[o] > 8388607) ++bad;
+        }
+    }
+
+    zhao::check(bad == 0,
+                "the generated product-vector table equals the nine-multiplier "
+                "path EXACTLY, over the grading stage's entire input space at "
+                "four matrices -- total, not sampled, because a sign-extension "
+                "fault only bites on negative products",
+                0, bad);
+    zhao::check(total == 4 * 32 * 64 * 32 * 3,
+                "and the whole space really was walked",
+                4 * 32 * 64 * 32 * 3, total);
+    zhao::check(saturated_low > 0 && saturated_high > 0,
+                "and the space reached BOTH saturation rails, so the check is "
+                "not passing merely because nothing interesting happened",
+                1, (saturated_low > 0 && saturated_high > 0) ? 1 : 0);
+  }
+
+  // =======================================================================
+  // 8 -- THE GRADING PATH IS EXACT ON AN IDENTITY TABLE, IN THE RTL
+  // =======================================================================
+  // 7b proved the table equals the multiply path in the MODEL. This proves the
+  // RTL's three 72-bit reads, sign extensions, sums and finalize do not drift:
+  // an identity curve with a 1.0 matrix and zero bias must leave the frame
+  // bit-identical, through the whole loaded-table path.
   {
     const pc::Frame f = pc::base_frame();
     pc::Cfg off;

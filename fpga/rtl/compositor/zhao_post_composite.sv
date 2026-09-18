@@ -72,68 +72,80 @@
 // structurally unreachable while LAG_PX >= 7. See the counter's own note.
 //
 // ---------------------------------------------------------------------------
-// THE M10K / ALM TRADE, WITH NUMBERS -- AND A CEILING CONFLICT ON THE RECORD
+// THE M10K / ALM TRADE, WITH NUMBERS -- THE CEILING MOVED, SO THE TABLE SHIPS
 // ---------------------------------------------------------------------------
-// Standing owner direction: ALMs are the binding constraint, M10K is the slack,
-// prefer lookup over computation WHERE THE CONTRACT'S CEILING ALLOWS. The
-// contract's ceiling is 3,500 ALMs, 12 DSPs, <= 8 M10K. So the M10K budget is
-// eight blocks and it is NOT generous -- the line ring alone is most of it.
+// The contract caps this block at 3,500 ALMs, 12 DSPs, <= 8 M10K. The M10K line
+// of that cap has been superseded:
 //
-//   line ring  NLINE * LINE_W * 16 b.
-//              At LINE_W = 384 (Z60 full width, and >= Storm's 320 and a Duo
-//              VIEW's 256): 9 * 384 = 3,456 entries x 16 b = 55,296 b.
-//              At the M10K's 512x20 shape that is ceil(3456/512) = 7 blocks.
-//              At LINE_W = 512 it would be 4,608 entries = 9 blocks, which
-//              BREACHES the <= 8 ceiling -- so the Duo case is composited per
-//              VIEW (256 wide, clamped inside the view), never across the
-//              512-pixel canvas. That is not a convenience; it is what keeps
-//              this block inside its own ceiling, and it agrees with both the
-//              contract's and the completion plan's "clamp within the correct
-//              view BEFORE forming addresses".
-//   curves     R[32] + G[64] + B[32] of 8 b = 1,024 b total. Deliberately left
-//              as plain inferred memories: at these depths Quartus packs them
-//              into MLABs (ALM-based, ~3 of them), NOT M10K. Spending a whole
-//              M10K on 1,024 bits would eat a whole block for nothing, and the
-//              alternative -- 128 flops x 8 b plus a 64-way 8-bit mux -- is
-//              roughly 600 ALMs. Lookup wins here on ALMs without touching the
-//              M10K budget, which is the direction's actual intent.
+//   "Using some more M10K is fine, we have enough, particularly if it saves
+//    ALMs. They're our only weapon against our massive ALM debt."
+//                     -- Fabian, 2026-09-18
+//            reports/OWNER-RULING-M10K-CEILINGS-20260918.md
 //
-// THE PRODUCT-VECTOR TABLE, PRICED AND NOT ADOPTED. The completion plan
-// (2026-09-18 section 11.2) names the exact preparation that would remove the
-// nine multiplies: store the UNROUNDED matrix-product vectors for each curve
-// entry, sum them, and keep the original final bias/round/saturate. Its price,
-// from the plan and not re-derived here:
+// So the earlier arrangement -- nine real multipliers, with the conflict
+// recorded rather than decided -- is withdrawn, and the owner plan's section
+// 11.2 exact preparation ships.
 //
-//     32 + 64 + 32 = 128 entries, three signed-24 products each
-//     -> 9,216 logical bits, and THREE SIMULTANEOUS 72-BIT READS
-//     -> SIX simple-dual-port M10K slices. "Six, not one."
-//     -> before active/inactive banks, which would double it.
-//     -> counted SEPARATELY from line / glow / displacement memory.
+//   line ring  NLINE * LINE_W * 16 b. At LINE_W = 384 (Z60's full width, and
+//              >= Storm's 320 and a Duo VIEW's 256): 9 * 384 = 3,456 entries
+//              x 16 b = 55,296 b. At the M10K's 512x20 shape, ceil(3456/512)
+//              = 7 blocks.
+//   pv table   32 + 64 + 32 = 128 entries, three signed-24 products each
+//              -> 9,216 logical bits, THREE SIMULTANEOUS 72-BIT READS
+//              -> at the 256x40 shape, ceil(72/40) = 2 blocks per memory,
+//                 x 3 memories = SIX. "Six, not one."
+//              -> 12 if double-banked for an atomic swap.
+//              -> counted SEPARATELY from line / glow / displacement memory,
+//                 as the plan requires.
 //
-// So the honest total for the table version is 7 (ring) + 6 (tables) = 13
-// M10K against this contract's <= 8 ceiling, and 19 if the tables are
-// double-banked for an atomic swap. THAT IS A CONFLICT AND IT IS RECORDED
-// RATHER THAN RESOLVED HERE: either the contract's M10K ceiling moves or the
-// table version does not fit, and neither is this block's call to make. The
-// plan also names a three-product SEQUENCED WORKER as a separate candidate and
-// warns that its saving must not be added to the table version's -- they
-// replace the same work -- so no combined figure appears anywhere in this file.
+//   13 M10K total, 19 double-banked, against a 553-M10K device: 3.4%.
 //
-// WHAT SHIPS, AND WHY IT IS THE NINE MULTIPLIES. The direction says do NOT
-// spend memory to remove DSPs, because DSPs are not the binding constraint;
-// the contract makes UNFUSED THE DEFAULT and permits fusion only if fixgen
-// produces a PROVED-exact equivalent AND the fit is measurably cheaper; fixgen
-// has produced no such table and no fit has been run. Nine real products, then.
-// The seam for either alternative is stages 5+6: replace the curve reads and
-// `mac3` with the table read or the sequenced worker, and nothing else in this
-// file changes.
+// WHAT THE TABLE ACTUALLY BUYS, AND THE CONDITION THAT DECIDES IT. It removes
+// nine signed 16x8 multipliers from the per-pixel path. What that is WORTH
+// depends on where those multipliers would have landed, and that has not been
+// measured:
 //
-// NOT DONE, DELIBERATELY: no generic 65,536-entry RGB565 remap (the contract
-// forbids it -- 128 KiB before shape is even considered -- and the plan repeats
-// the prohibition, adding that "full-frame lookup tables and ignored port
-// replication are not free memory tricks"). No port replication anywhere: the
-// ring has one write port and one read port, and the three curve memories have
-// one read each because they are indexed by three different channels.
+//   * in LOGIC (multstyle "logic", which area pressure pushes toward): nine
+//     16x8 signed multipliers are roughly 1,200-1,300 ALMs. Against that the
+//     table costs six 24-bit adds (~145 ALMs) and widens the stage-5 registers
+//     from 3x8 to 3x72 bits (+192 flops, ~96 ALMs). Net roughly -1,000 ALMs.
+//   * in DSP BLOCKS: it saves about five DSPs and costs ~250 ALMs, which is a
+//     BAD trade and NOT the justification. The ruling is explicit that it is
+//     "not permission to spend memory to remove DSPs" -- 112 are available and
+//     no campaign has been DSP-bound.
+//
+// So the case rests entirely on the logic-multiplier scenario, and the first
+// fit should check which one happened. At the standing ~200 ALM-per-M10K
+// ranking heuristic, six blocks "buy" ~1,200 ALMs and this returns ~1,000 --
+// it ranks at the boundary, and the heuristic is explicitly "a ranking
+// heuristic only on NET parent measurements", so it ranks and does not close.
+//
+// EVERY NUMBER ABOVE IS SHAPE ARITHMETIC, NOT A MEASUREMENT. Plan 14.5:
+// "Physical M10K reserve must be measured, not inferred from logical bit
+// occupancy." Whether Quartus infers the ring as M10K AT ALL is unverified; so
+// is whether it packs the 72-bit tables two-to-a-memory. Only a fit reports
+// what this cost, and no fit has been run.
+//
+// THE SEQUENCED WORKER IS A DIFFERENT CANDIDATE AND ITS SAVING IS NOT ADDED.
+// The plan names a three-product sequenced worker as an alternative and warns
+// that the two savings must not be summed, because they replace the same work.
+// No combined figure appears anywhere in this file.
+//
+// WHERE THE KNOBS WENT, because folding a table is exactly how a value stops
+// being adjustable. The curves and the matrix are no longer RTL ports -- they
+// are the INPUTS TO THE GENERATOR, `zref::post::grade_product_vector`, which is
+// committed in the oracle tree and not buried in a test. They are still named,
+// still editable, still authored values; one level up. The bias stayed a live
+// port on purpose: folding it in would have turned a per-frame knob into a
+// 128-entry regeneration.
+//
+// STILL NOT DONE, DELIBERATELY: no generic 65,536-entry RGB565 remap (the
+// contract forbids it -- 128 KiB before shape is even considered -- and the
+// plan repeats the prohibition by name, adding that "full-frame lookup tables
+// and ignored port replication are not free memory tricks"). No port
+// replication anywhere: the ring has one write port and one read port, and the
+// three table memories have one read each because they are indexed by three
+// different channels -- not because a port was duplicated to fake bandwidth.
 //
 // ESTIMATES, NOT MEASUREMENTS. Every number in this section is arithmetic on
 // shapes, not a Quartus report. This block has never been through quartus_map
@@ -147,8 +159,11 @@
 // here that have NOT been shown synthesizable, and that a first quartus_map
 // should be expected to argue with, are named rather than hoped about:
 //   * `automatic` variable declarations inside `always_ff` begin/end blocks
-//     (`nslot`, `ca`/`cg`/`cb`) -- the house pattern, borrowed from
-//     zhao_post_gather, which has not been through Quartus either;
+//     (`nslot`) -- the house pattern, borrowed from zhao_post_gather, which has
+//     not been through Quartus either;
+//   * indexed part-selects into a register (`k6r_q[0*PRODW +: PRODW]`);
+//   * three 72-bit memories, which Quartus may or may not choose to infer as
+//     M10K at all -- the whole table argument rests on it doing so;
 //   * size casts applied to expressions, e.g. `(SW+2)'(dy_eff_c)` and
 //     `32'((front_v_c ? 1 : 0) + ...)`;
 //   * `int'(NLINE)` in a for-loop bound.
@@ -158,18 +173,19 @@
 //
 // Multiplier sites, COUNTED rather than estimated (the combiner's lesson --
 // `unit_mul` inside every arm of a case statement is how 2 DSPs became 8).
-// There are exactly three multiplying stages and no multiply inside any case
+// There are now exactly TWO multiplying stages, and no multiply inside any case
 // arm anywhere in this file:
 //   stage 3  atmosphere blend      6 products of 8b x 9b   (unit_lerp x3)
-//   stage 6  the 3x3 matrix        9 products of 8b x s16  (mac3 x3)
+//   stage 6  the colour transform  0 -- it is three table reads and three adds
 //   stage 8  flash/tint blend      6 products of 8b x 9b   (unit_lerp x3)
-//   TOTAL                         21 products.
+//   TOTAL                         12 products, down from 21.
 // The ADD arm of the atmosphere blend uses `unit_mul` (3 products) instead of
 // `unit_lerp` (6); the two arms are mutually exclusive in the same stage, so
 // synthesis shares the multipliers and the site count above is the ceiling,
 // not the sum of the arms. On Cyclone V's variable-precision DSP (two 18x18 or
-// three 9x9 per block) that is about 2 + 5 + 2 = 9 blocks against the
-// ceiling's 12. UNMEASURED.
+// three 9x9 per block) that is about 2 + 0 + 2 = 4 blocks against the ceiling's
+// 12. UNMEASURED -- and per the ruling, the DSP drop is a side effect of this
+// arrangement, not its justification.
 //
 // ---------------------------------------------------------------------------
 // WHAT THIS BLOCK IS NOT, AND WHERE THE SEAMS ARE
@@ -206,14 +222,41 @@
 //   ONE at stage 3. A second would be another six products and would put the
 //   DSP estimate over the 12 ceiling, so it is NAMED AS NOT BUILT rather than
 //   half-provided. The seam is the `atm_*` group, duplicated.
-// * The RENDERED 3D AREA, not the displayed canvas. In Duo the two differ: the
-//   canvas is 512 x 240 and the rendered area is two 256 x 192 views at y
-//   offset 24, leaving 48 HUD scanlines that contain no world pixels at all.
-//   This block composites ONE VIEW and labels each pixel with `o_x_o`/`o_y_o`
-//   in VIEW coordinates; the canvas assembly, the Duo border and those 48
-//   scanlines belong downstream. A capture or CRC taken here is of the rendered
-//   area, and saying which one a number describes is the whole point of the
-//   distinction (completion plan section 11.3).
+// * The RENDERED 3D AREA, not the displayed canvas, and in Duo ONE VIEW PER
+//   PASS. The two surfaces differ only in Duo: the canvas is 512 x 240 and the
+//   rendered area is two 256 x 192 views at y offset 24, leaving 48 rows that
+//   are BLACK BORDER (`zhao_pkg.sv`, `spec/video_rules.md` 3.1) -- not HUD
+//   scanlines, which is what an earlier draft of this header called them. The
+//   distinction does not change the conclusion (border is black and HUD
+//   bypasses post, so neither needs an effect-plane cell) but the reason has to
+//   be the right one.
+//
+//   THE DUO PLANE IS 128 x 48 = 6,144 CELLS, addressed as TWO 64 x 48 views --
+//   quarter of the RENDERED area, not of the displayed canvas. The contracts
+//   said 128 x 60 = 7,680, which is quarter of the canvas, and the proof that
+//   it is wrong is inside the contract's own throughput table: its Duo main
+//   pass counts rendered pixels (98,304 = 2 x 256 x 192) while its glow pass
+//   counts displayed cells (15,360 = 2 x 7,680). One row, two surfaces. Z60 and
+//   Storm cannot expose it because their displayed area IS their rendered area.
+//   Settled in reports/DUO-QUARTER-PLANE-GEOMETRY-20260918.md; `blocks.yml` was
+//   already right ("96x60 Z60 / 2x64x48 Duo").
+//
+//   Corrected: Duo glow prep 12,288, Duo frame cost 98,304 + 12,288 = 110,592
+//   (was 113,664, overstated by 3,072 work items). Z60 is unaffected: 92,160 +
+//   11,520 = 103,680.
+//
+//   THE POINT IS NOT THE 1,536 SAVED CELLS. The owner has ruled memory is
+//   affordable, so saving cells is not worth selling. The point is that
+//   view-local addressing makes the per-view clamp STRUCTURAL: with two 64 x 48
+//   planes there is no address that names the other view, so "a refraction
+//   cannot reach across the split" stops being a comparator that has to be
+//   right and becomes a thing that cannot happen. That is a bug class removed
+//   for certain and an ALM saving that is unmeasured, in that order.
+//
+//   This block labels each pixel with `o_x_o`/`o_y_o` in VIEW coordinates; the
+//   canvas assembly, the Duo border and the y offset belong downstream. A
+//   capture or CRC taken here is of the rendered area, and saying which surface
+//   a number describes is the whole point (completion plan 11.3).
 //
 // ---------------------------------------------------------------------------
 // TWO INTEGRATION RULES THIS BLOCK CANNOT ENFORCE ALONE, STATED SO THEY ARE NOT
@@ -265,12 +308,18 @@ module zhao_post_composite #(
     input  var logic                 frame_start_i,
     input  var logic [$clog2(LINE_W+1)-1:0] frame_w_i,
     input  var logic [$clog2(MAX_H +1)-1:0] frame_h_i,
-    // Duo composites one VIEW at a time; `view_split_i` is the first column of
-    // the RIGHT view and is ignored when `duo_i` is low. A displaced sample
-    // must never reach the other player's view -- that is not a graphical
-    // artefact, it is one player seeing through the other's screen.
-    input  var logic                 duo_i,
-    input  var logic [$clog2(LINE_W+1)-1:0] view_split_i,
+    // WHICH VIEW THIS PASS IS. In Duo the block runs TWICE, once per 256 x 192
+    // view, and `frame_w_i`/`frame_h_i` are the VIEW's size. So every x this
+    // block ever forms is already view-local, and the ordinary clamp to
+    // [0, frame_w-1] IS the per-view clamp. There is no split comparator, and
+    // there is no address that names the other view.
+    //
+    // This bit is carried out on both plane address ports so the plane address
+    // is COMPLETE at the interface (bank + cell) and the no-bleed property is
+    // checkable at a port rather than argued about internals. It is a PASS
+    // property, never computed per sample -- which is the whole reason the
+    // property is structural.
+    input  var logic                 view_sel_i,
 
     // ---- the resolved world, over the backdrop, raster order ----------------
     input  var logic                 s_valid_i,
@@ -280,6 +329,8 @@ module zhao_post_composite #(
     // ---- gather plane port A: the compact DISPLACEMENT cell -----------------
     // Addressed at the UNDISPLACED pixel. One response per request, fixed
     // 1-cycle latency, same convention as RASTER.RESOLVE's tile-read master.
+    output var logic                 gd_req_v_o,
+    output var logic                 gd_view_o,
     output var logic [$clog2(LINE_W+1)-3:0] gd_cx_o,
     output var logic [$clog2(MAX_H +1)-3:0] gd_cy_o,
     input  var logic                 gd_present_i,
@@ -290,6 +341,8 @@ module zhao_post_composite #(
     // Addressed at the DISPLACED coordinate -- the same one the ring is read
     // with. This port existing separately from port A is the whole of "glow and
     // ink are sampled through the same displaced coordinates as the world".
+    output var logic                 gg_req_v_o,
+    output var logic                 gg_view_o,
     output var logic [$clog2(LINE_W+1)-3:0] gg_cx_o,
     output var logic [$clog2(MAX_H +1)-3:0] gg_cy_o,
     input  var logic                 gg_present_i,
@@ -310,21 +363,19 @@ module zhao_post_composite #(
     input  var logic [7:0]           bloom_gain_i,   // unit8
 
     // ---- the global colour transform ----------------------------------------
-    // Curves and matrix are GENERATED ASSETS, never runtime-computed.
+    // The curves and the matrix are GENERATED ASSETS, never runtime-computed,
+    // and they are now PRE-MULTIPLIED. What loads here is one unrounded product
+    // vector per curve entry -- see the header's table section. There is no
+    // matrix port and no multiplier left in this stage.
+    //
+    // The BIAS stays a live port, because the plan keeps "the ORIGINAL final
+    // bias/round/saturate" and because folding it into the table would make a
+    // per-frame knob into a 128-entry regeneration.
     input  var logic                 grade_valid_i,
-    input  var logic                 curve_we_i,
-    // 0..31 -> R[32], 32..95 -> G[64], 96..127 -> B[32]
-    input  var logic [6:0]           curve_addr_i,
-    input  var logic [7:0]           curve_data_i,
-    input  var logic signed [15:0]   m00_i,
-    input  var logic signed [15:0]   m01_i,
-    input  var logic signed [15:0]   m02_i,
-    input  var logic signed [15:0]   m10_i,
-    input  var logic signed [15:0]   m11_i,
-    input  var logic signed [15:0]   m12_i,
-    input  var logic signed [15:0]   m20_i,
-    input  var logic signed [15:0]   m21_i,
-    input  var logic signed [15:0]   m22_i,
+    input  var logic                 pv_we_i,
+    input  var logic [1:0]           pv_sel_i,     // 0 = R curve, 1 = G, 2 = B
+    input  var logic [5:0]           pv_addr_i,
+    input  var logic [71:0]          pv_data_i,    // {outB, outG, outR}, s24 each
     input  var logic signed [8:0]    bias_r_i,
     input  var logic signed [8:0]    bias_g_i,
     input  var logic signed [8:0]    bias_b_i,
@@ -401,7 +452,13 @@ module zhao_post_composite #(
   localparam int unsigned RAW = $clog2(RING_DEPTH);
   localparam int unsigned EW  = XW + 2;              // x plus a signed i8
   localparam int unsigned FW  = YW + 2;
-  localparam int unsigned PW  = 27;                  // the grading accumulator
+  localparam int unsigned PW    = 27;                // the grading accumulator
+  // One unrounded matrix product. |m| <= 32768 (Q2.14 in s16) and k <= 255, so
+  // the largest is 32,768 * 255 = 8,355,840 and a signed 24-bit field holds
+  // [-8,388,608, +8,388,607]. Exact with room to spare, and it would NOT fit in
+  // 23 bits. Three per entry = 72; 128 entries = 9,216 logical bits.
+  localparam int unsigned PRODW = 24;
+  localparam int unsigned PVW   = 3 * PRODW;         // 72
 
   // Quartus 17.0 needs a module-scope elaboration check INSIDE an initial
   // block (a bare module-scope `if` is a syntax error there), and
@@ -414,6 +471,8 @@ module zhao_post_composite #(
       $fatal(1, "zhao_post_composite: LINE_W < 32 breaks the line-wrap half of the ring argument");
     if (XW < 3 || YW < 3)
       $fatal(1, "zhao_post_composite: frame too small for a quarter-resolution cell index");
+    if (PVW != 72)
+      $fatal(1, "zhao_post_composite: pv_data_i is declared 72 bits; PVW is %0d", PVW);
   end
 
   // ==========================================================================
@@ -523,8 +582,18 @@ module zhao_post_composite #(
   // ==========================================================================
   // STAGE 0 -- the raster pointer, and the displacement cell address
   // ==========================================================================
-  assign gd_cx_o = x_f_q[XW-1:2];
-  assign gd_cy_o = y_f_q[YW-1:2];
+  // The address is PARKED when the request is invalid. Without that, the front
+  // pointer walks one row past the last line during the drain and the port
+  // presents quarter-row `frame_h/4`, which is outside the view's plane -- an
+  // address naming a cell that does not exist. It was harmless (the response is
+  // discarded by `v_q`) and it was still wrong, because it made "no address
+  // this block forms names a cell outside this view" false. The directed
+  // bench's address-space census caught it; the claim is now true rather than
+  // nearly true.
+  assign gd_req_v_o = front_v_c;
+  assign gd_view_o  = view_sel_i;
+  assign gd_cx_o    = front_v_c ? x_f_q[XW-1:2] : '0;
+  assign gd_cy_o    = front_v_c ? y_f_q[YW-1:2] : '0;
 
   logic [XW-1:0] x1_q;
   logic [YW-1:0] y1_q;
@@ -543,7 +612,7 @@ module zhao_post_composite #(
   // signed add needed; after the clamp they are provably zero, and only the
   // coordinate's own width is carried forward.
   /* verilator lint_off UNUSEDSIGNAL */
-  logic signed [EW-1:0] xr_c, xlo_c, xhi_c, xsel_c;
+  logic signed [EW-1:0] xr_c, xhi_c, xsel_c;
   logic signed [FW-1:0] yr_c, yhi_c, ysel_c;
   logic signed [FW-1:0] dy_eff_c;
   /* verilator lint_on UNUSEDSIGNAL */
@@ -555,27 +624,23 @@ module zhao_post_composite #(
     xr_c = $signed({2'b00, x1_q}) + EW'(dx_c);
     yr_c = $signed({2'b00, y1_q}) + FW'(dy_c);
 
-    // Clamp inside the VIEW before addressing, not merely inside the frame.
-    if (duo_i && (x1_q >= view_split_i)) begin
-      xlo_c = $signed({2'b00, view_split_i});
-      xhi_c = $signed({2'b00, frame_w_i}) - EW'(1);
-    end else if (duo_i) begin
-      xlo_c = '0;
-      xhi_c = $signed({2'b00, view_split_i}) - EW'(1);
-    end else begin
-      xlo_c = '0;
-      xhi_c = $signed({2'b00, frame_w_i}) - EW'(1);
-    end
+    // THE PER-VIEW CLAMP IS THIS CLAMP. There is no split comparator, because
+    // the pass IS a view: `frame_w_i` is the view's width and x is view-local.
+    // Clamping to [0, frame_w-1] therefore cannot produce a coordinate in
+    // another view, and the cell index below cannot name another view's cell.
+    // With one wide plane and a split comparator this would be a thing to test;
+    // here it is a thing that cannot happen.
+    xhi_c = $signed({2'b00, frame_w_i}) - EW'(1);
     yhi_c = $signed({2'b00, frame_h_i}) - FW'(1);
 
     // Clamp, never wrap. Wrapping would sample the opposite side of the screen,
     // which is a spectacular and very confusing artefact.
-    xsel_c = (xr_c < xlo_c) ? xlo_c : (xr_c > xhi_c) ? xhi_c : xr_c;
+    xsel_c = (xr_c < EW'(0)) ? EW'(0) : (xr_c > xhi_c) ? xhi_c : xr_c;
     ysel_c = (yr_c < FW'(0)) ? FW'(0) : (yr_c > yhi_c) ? yhi_c : yr_c;
     xs_c   = xsel_c[XW-1:0];
     ys_c   = ysel_c[YW-1:0];
 
-    edge_clamp_c = (xr_c < xlo_c) || (xr_c > xhi_c) || (yr_c < FW'(0)) || (yr_c > yhi_c);
+    edge_clamp_c = (xr_c < EW'(0)) || (xr_c > xhi_c) || (yr_c < FW'(0)) || (yr_c > yhi_c);
 
     // The EFFECTIVE vertical step AFTER clamping -- the ring slot has to follow
     // where we actually sampled, not where we asked to.
@@ -602,8 +667,10 @@ module zhao_post_composite #(
   // The SAME displaced coordinate addresses the glow/ink plane. If this ever
   // becomes x1_q/y1_q the outline stops following the creature and the frame
   // reads as a printing error.
-  assign gg_cx_o = xs_c[XW-1:2];
-  assign gg_cy_o = ys_c[YW-1:2];
+  assign gg_req_v_o = v_q[0];
+  assign gg_view_o  = view_sel_i;
+  assign gg_cx_o    = v_q[0] ? xs_c[XW-1:2] : '0;
+  assign gg_cy_o    = v_q[0] ? ys_c[YW-1:2] : '0;
 
   // ---- the ring hazard detector -------------------------------------------
   // WHAT THE TWO SIDES OF THE COMPARISON ARE CLOCKED BY, since that is the
@@ -652,20 +719,27 @@ module zhao_post_composite #(
   logic [7:0] c5r_q, c5g_q, c5b_q;
   logic       i5_q, grade5_q;
 
-  // Inferred memories, not flops: 32/64/32 entries of 8 bits land in MLABs, not
-  // M10K -- see the header's trade.
-  logic [7:0] curve_r_q [0:31];
-  logic [7:0] curve_g_q [0:63];
-  logic [7:0] curve_b_q [0:31];
+  // THE PRODUCT-VECTOR TABLE. Three memories, 72 bits wide, read once each per
+  // pixel -- the plan's "three simultaneous 72-bit reads". Each entry holds the
+  // three UNROUNDED products of one curve entry with its own matrix column:
+  //   [23:0]  contribution to output R
+  //   [47:24] contribution to output G
+  //   [71:48] contribution to output B
+  // Nothing rounds here. Rounding a product before the sum is what would turn
+  // this from an identity into an approximation, and it is the single error
+  // this arrangement is most likely to acquire.
+  logic [PVW-1:0] pv_r_q [0:31];
+  logic [PVW-1:0] pv_g_q [0:63];
+  logic [PVW-1:0] pv_b_q [0:31];
 
-  logic [7:0] k6r_q, k6g_q, k6b_q;    // curve outputs
+  logic [PVW-1:0] k6r_q, k6g_q, k6b_q;   // the three vectors, registered
   logic [7:0] c6r_q, c6g_q, c6b_q;    // the ungraded colour, carried for bypass
   logic       i6_q, grade6_q;
 
-  // Registering the three SUMS rather than the nine products saves ~140 flops
-  // and keeps the multiply and its 3-input add in one stage, which is the shape
-  // the contract's "one wide sum and one round-half-up per channel" describes.
-  // UNMEASURED for Fmax -- no fit has been run on this block.
+  // Registering the three SUMS rather than the nine addends keeps the stage
+  // shaped like the contract's "one wide sum and one round-half-up per
+  // channel". UNMEASURED for Fmax -- no fit has been run on this block, though
+  // three 24-bit adds is a far shorter path than the multiply it replaces.
   logic signed [PW-1:0] a7r_q, a7g_q, a7b_q;
   logic [7:0] c7r_q, c7g_q, c7b_q;
   logic       i7_q, grade7_q;
@@ -676,15 +750,14 @@ module zhao_post_composite #(
   logic       i9_q;
   logic [15:0] c10_q;                 // post-ink, pre-HUD: the POST.ECHO tap
 
-  function automatic logic signed [PW-1:0] mac3(input logic signed [15:0] m0,
-                                                input logic signed [15:0] m1,
-                                                input logic signed [15:0] m2,
-                                                input logic [7:0] r,
-                                                input logic [7:0] g,
-                                                input logic [7:0] b);
-    mac3 = PW'($signed(m0) * $signed({1'b0, r}))
-         + PW'($signed(m1) * $signed({1'b0, g}))
-         + PW'($signed(m2) * $signed({1'b0, b}));
+  // Three unrounded s24 products, sign-extended and summed. This replaced
+  // `mac3` and its nine multiplies; the sum it forms is the SAME sum, which is
+  // what makes the table an identity rather than a new colour convention.
+  // Bound: 3 * 8,355,840 = 25,067,520, inside PW = 27 signed.
+  function automatic logic signed [PW-1:0] sum3(input logic [PRODW-1:0] p0,
+                                                input logic [PRODW-1:0] p1,
+                                                input logic [PRODW-1:0] p2);
+    sum3 = PW'($signed(p0)) + PW'($signed(p1)) + PW'($signed(p2));
   endfunction
 
   // ONE round-half-up per channel, then the bias, then ONE saturate.
@@ -736,7 +809,7 @@ module zhao_post_composite #(
       c4r_q <= '0; c4g_q <= '0; c4b_q <= '0; i4_q <= 1'b0;
       g4r_q <= '0; g4g_q <= '0; g4b_q <= '0;
       c5r_q <= '0; c5g_q <= '0; c5b_q <= '0; i5_q <= 1'b0; grade5_q <= 1'b0;
-      k6r_q <= '0; k6g_q <= '0; k6b_q <= '0;
+      k6r_q <= '0; k6g_q <= '0; k6b_q <= '0;   // the three product vectors
       c6r_q <= '0; c6g_q <= '0; c6b_q <= '0; i6_q <= 1'b0; grade6_q <= 1'b0;
       a7r_q <= '0; a7g_q <= '0; a7b_q <= '0;
       c7r_q <= '0; c7g_q <= '0; c7b_q <= '0; i7_q <= 1'b0; grade7_q <= 1'b0;
@@ -757,14 +830,17 @@ module zhao_post_composite #(
       ring_hazard_o              <= '0;
       for (int i = 0; i < int'(NLINE); i++) line_id_q[i] <= '1;
     end else begin
-      // ---- curve table load, independent of the stream --------------------
-      if (curve_we_i) begin
-        automatic logic [6:0] ca = curve_addr_i;
-        automatic logic [5:0] cg = 6'(ca - 7'd32);
-        automatic logic [4:0] cb = 5'(ca - 7'd96);
-        if (ca < 7'd32)      curve_r_q[ca[4:0]] <= curve_data_i;
-        else if (ca < 7'd96) curve_g_q[cg]      <= curve_data_i;
-        else                 curve_b_q[cb]      <= curve_data_i;
+      // ---- product-vector table load, independent of the stream -----------
+      // No multiply in any arm of this case, deliberately: `unit_mul` inside
+      // every arm of a case statement is how a 2-DSP rule became 8 DSPs in the
+      // combiner, and the habit that catches it is counting the sites.
+      if (pv_we_i) begin
+        case (pv_sel_i)
+          2'd0:    pv_r_q[pv_addr_i[4:0]] <= pv_data_i;
+          2'd1:    pv_g_q[pv_addr_i]      <= pv_data_i;
+          2'd2:    pv_b_q[pv_addr_i[4:0]] <= pv_data_i;
+          default: ;   // 3 is not a curve; the write is dropped
+        endcase
       end
 
       // An OUTPUT WRITE is an accepted beat, which is a different event from a
@@ -876,18 +952,25 @@ module zhao_post_composite #(
         if (v_q[3] && (bloom_gain_i != 8'd0) && ((g4r_q | g4g_q | g4b_q) != 8'd0))
           bloom_cells_contributing_o <= bloom_cells_contributing_o + 32'd1;
 
-        // ================= STAGE 5 -- the generated curves =================
-        k6r_q <= curve_r_q[c5r_q[7:3]];
-        k6g_q <= curve_g_q[c5g_q[7:2]];
-        k6b_q <= curve_b_q[c5b_q[7:3]];
+        // ================= STAGE 5 -- three 72-bit table reads =============
+        // Indexed by the SAME 5/6/5 the curves were indexed by: the curve is
+        // still the curve, it has simply been multiplied through in advance.
+        k6r_q <= pv_r_q[c5r_q[7:3]];
+        k6g_q <= pv_g_q[c5g_q[7:2]];
+        k6b_q <= pv_b_q[c5b_q[7:3]];
         c6r_q <= c5r_q; c6g_q <= c5g_q; c6b_q <= c5b_q;
         i6_q  <= i5_q;  grade6_q <= grade5_q;
         if (v_q[4] && !grade5_q) pass_missing_grade_q <= 1'b1;
 
-        // ================= STAGE 6 -- the 3x3 matrix, three sums ===========
-        a7r_q <= mac3(m00_i, m01_i, m02_i, k6r_q, k6g_q, k6b_q);
-        a7g_q <= mac3(m10_i, m11_i, m12_i, k6r_q, k6g_q, k6b_q);
-        a7b_q <= mac3(m20_i, m21_i, m22_i, k6r_q, k6g_q, k6b_q);
+        // ================= STAGE 6 -- one wide sum per channel =============
+        // Each output channel takes its own lane out of all three vectors. The
+        // lane index is the OUTPUT channel and the vector is the INPUT channel;
+        // transposing those two produces a plausible picture with the channels
+        // cross-mixed, which is why the packing is spelled out here and in
+        // zref::post::grade_product_vector rather than implied.
+        a7r_q <= sum3(k6r_q[0*PRODW +: PRODW], k6g_q[0*PRODW +: PRODW], k6b_q[0*PRODW +: PRODW]);
+        a7g_q <= sum3(k6r_q[1*PRODW +: PRODW], k6g_q[1*PRODW +: PRODW], k6b_q[1*PRODW +: PRODW]);
+        a7b_q <= sum3(k6r_q[2*PRODW +: PRODW], k6g_q[2*PRODW +: PRODW], k6b_q[2*PRODW +: PRODW]);
         c7r_q <= c6r_q; c7g_q <= c6g_q; c7b_q <= c6b_q;
         i7_q  <= i6_q;  grade7_q <= grade6_q;
 

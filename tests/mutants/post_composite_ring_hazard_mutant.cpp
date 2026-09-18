@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
   pc::Cfg c;
 
   pc::reset_dut(top);
-  pc::load_curves(top, c);
+  pc::load_pv_table(top, c);
   const pc::Result r = pc::run_frame(top, f, c);
 
   std::printf("  mutant (LAG_PX = 0): ring_hazard_o = %u over %d pixels\n",

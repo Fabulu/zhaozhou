@@ -43,13 +43,16 @@
 #include <vector>
 
 #include "zhao_sim.hpp"
+#include "zref/zref_post.hpp"
 
 namespace pc {
 
-// A small frame, chosen so a whole pass runs in a few thousand cycles. The
-// width must stay comfortably above the nine-column ring lead (the RTL's
-// elaboration guard wants >= 32) or the line-wrap half of the ring argument
-// stops being exercised.
+// A small frame standing in for ONE VIEW, chosen so a whole pass runs in a few
+// thousand cycles. In Duo a view is 256 x 192 and the block runs twice; there
+// is no mode in which it composites across the split, which is what makes the
+// per-view clamp structural. The width must stay comfortably above the
+// nine-column ring lead (the RTL's elaboration guard wants >= 32) or the
+// line-wrap half of the ring argument stops being exercised.
 constexpr int W  = 48;
 constexpr int H  = 24;
 constexpr int CW = W / 4;   // 12 quarter-resolution cells across
@@ -96,8 +99,10 @@ struct Frame {
 };
 
 struct Cfg {
-  bool     duo         = false;
-  int      view_split  = W / 2;
+  // Which view this pass composites. It is a PASS property, never computed per
+  // sample, and it rides out on both plane address ports so the address is
+  // complete at the interface.
+  bool     view_sel    = false;
 
   bool     atm_en      = false;
   bool     atm_valid   = false;
@@ -160,13 +165,10 @@ inline uint16_t model_echo(const Frame& f, const Cfg& c, int x, int y,
   const int dxv = c.gd_present ? f.dx[(y >> 2) * CW + (x >> 2)] : 0;
   const int dyv = c.gd_present ? f.dy[(y >> 2) * CW + (x >> 2)] : 0;
 
-  int lo = 0, hi = W - 1;
-  if (c.duo) {
-    if (x >= c.view_split) { lo = c.view_split; hi = W - 1; }
-    else                   { lo = 0;            hi = c.view_split - 1; }
-  }
-  int xs = x + dxv; if (xs < lo) xs = lo; if (xs > hi) xs = hi;
-  int ys = y + dyv; if (ys < 0)  ys = 0;  if (ys > H - 1) ys = H - 1;
+  // The clamp to the VIEW and the clamp to the FRAME are the same clamp now,
+  // because the pass is a view. There is no split to compare against.
+  int xs = x + dxv; if (xs < 0) xs = 0; if (xs > W - 1) xs = W - 1;
+  int ys = y + dyv; if (ys < 0) ys = 0; if (ys > H - 1) ys = H - 1;
 
   const uint16_t world = f.src[ys * W + xs];
   const uint16_t gl    = c.gg_present ? f.glow[(ys >> 2) * CW + (xs >> 2)] : 0;
@@ -201,22 +203,20 @@ inline uint16_t model_echo(const Frame& f, const Cfg& c, int x, int y,
     g = sat_add8(g, unit_mul(gg, c.bloom_gain));
     b = sat_add8(b, unit_mul(gb, c.bloom_gain));
   };
+  // The TABLE path, because that is what the RTL now does: three unrounded
+  // product vectors, summed, then the original bias/round/saturate. The
+  // arithmetic lives in zref::post, not here -- and that it equals the
+  // nine-multiplier path is proved exhaustively by the directed bench rather
+  // than assumed from the algebra.
   auto do_grade = [&]() {
     if (!c.grade_valid) return;
-    const int kr = c.curve_r[r >> 3];
-    const int kg = c.curve_g[g >> 2];
-    const int kb = c.curve_b[b >> 3];
-    auto one = [&](int m0, int m1, int m2, int bias) -> uint8_t {
-      const int64_t acc = static_cast<int64_t>(m0) * kr +
-                          static_cast<int64_t>(m1) * kg +
-                          static_cast<int64_t>(m2) * kb;
-      int64_t q = (acc + 8192) >> 14;   // ONE round-half-up
-      q += bias;                        // then the bias
-      return static_cast<uint8_t>(q < 0 ? 0 : (q > 255 ? 255 : q));
-    };
-    const uint8_t nr = one(c.m[0], c.m[1], c.m[2], c.bias[0]);
-    const uint8_t ng = one(c.m[3], c.m[4], c.m[5], c.bias[1]);
-    const uint8_t nb = one(c.m[6], c.m[7], c.m[8], c.bias[2]);
+    int32_t pr[3], pg[3], pb[3];
+    zref::post::grade_product_vector(c.m, 0, c.curve_r[r >> 3], pr);
+    zref::post::grade_product_vector(c.m, 1, c.curve_g[g >> 2], pg);
+    zref::post::grade_product_vector(c.m, 2, c.curve_b[b >> 3], pb);
+    const uint8_t nr = zref::post::grade_channel_table(pr, pg, pb, 0, c.bias[0]);
+    const uint8_t ng = zref::post::grade_channel_table(pr, pg, pb, 1, c.bias[1]);
+    const uint8_t nb = zref::post::grade_channel_table(pr, pg, pb, 2, c.bias[2]);
     r = nr; g = ng; b = nb;
   };
 
@@ -259,6 +259,16 @@ struct Result {
   uint32_t out_writes     = 0;
   uint32_t plane_reads    = 0;
   uint32_t hazard         = 0;
+  // The address-space census. With per-view planes the no-bleed property is
+  // structural, and this is how a structural property is checked: watch every
+  // address the block ever forms and show the other view's cells are not in the
+  // range, rather than trusting a comparator to have been right.
+  int      max_gd_cx      = -1;
+  int      max_gd_cy      = -1;
+  int      max_gg_cx      = -1;
+  int      max_gg_cy      = -1;
+  int      view_bad       = 0;   // cycles where a plane port named another view
+  int      parked_bad     = 0;   // cycles where an INVALID request was not parked
 };
 
 inline uint32_t rnd(uint32_t* s) {
@@ -272,7 +282,7 @@ inline void reset_dut(Top* t) {
   t->frame_start_i = 0;
   t->s_valid_i    = 0;
   t->o_ready_i    = 1;
-  t->curve_we_i   = 0;
+  t->pv_we_i      = 0;
   t->gd_present_i = 1;
   t->gg_present_i = 1;
   t->atm_valid_i  = 0;
@@ -282,19 +292,47 @@ inline void reset_dut(Top* t) {
   zhao::tick(*t);
 }
 
-// Load the three generated curves through the write port. They are assets, not
-// runtime-computed, so they go in once and stay.
+// `pv_data_i` is 72 bits, so Verilator hands it over as a VlWide<3>. The helper
+// takes it BY REFERENCE -- a VlWide is an array type and would decay to a
+// pointer otherwise, which compiles and writes to the wrong place.
+//
+// Packing: [23:0] output R, [47:24] output G, [71:48] output B. Each is a
+// signed 24-bit value carried in two's complement, so the mask is what performs
+// the truncation the RTL's field width performs.
+template <typename W>
+inline void pack_pv(W& w, const int32_t p[3]) {
+  const uint64_t a = static_cast<uint32_t>(p[0]) & 0xFFFFFFu;
+  const uint64_t b = static_cast<uint32_t>(p[1]) & 0xFFFFFFu;
+  const uint64_t c = static_cast<uint32_t>(p[2]) & 0xFFFFFFu;
+  const uint64_t lo = a | (b << 24) | (c << 48);
+  w[0] = static_cast<uint32_t>(lo & 0xFFFFFFFFu);
+  w[1] = static_cast<uint32_t>((lo >> 32) & 0xFFFFFFFFu);
+  w[2] = static_cast<uint32_t>(c >> 16);   // bits 71:64
+}
+
+// Generate and load the product-vector table. The curves and the matrix in
+// `Cfg` are the AUTHORED values -- the knobs -- and this is the generation step
+// that fixgen must eventually perform; it calls the committed
+// `zref::post::grade_product_vector` rather than defining the arithmetic here,
+// so there is exactly one definition of what the table is.
 template <typename Top>
-inline void load_curves(Top* t, const Cfg& c) {
-  t->curve_we_i = 1;
-  for (int i = 0; i < 128; ++i) {
-    t->curve_addr_i = static_cast<uint8_t>(i);
-    t->curve_data_i = (i < 32) ? c.curve_r[i]
-                    : (i < 96) ? c.curve_g[i - 32]
-                               : c.curve_b[i - 96];
-    zhao::tick(*t);
+inline void load_pv_table(Top* t, const Cfg& c) {
+  t->pv_we_i = 1;
+  for (int col = 0; col < 3; ++col) {
+    const int n = (col == 1) ? 64 : 32;
+    for (int i = 0; i < n; ++i) {
+      const uint8_t k = (col == 0) ? c.curve_r[i]
+                      : (col == 1) ? c.curve_g[i]
+                                   : c.curve_b[i];
+      int32_t p[3];
+      zref::post::grade_product_vector(c.m, col, k, p);
+      t->pv_sel_i  = static_cast<uint8_t>(col);
+      t->pv_addr_i = static_cast<uint8_t>(i);
+      pack_pv(t->pv_data_i, p);
+      zhao::tick(*t);
+    }
   }
-  t->curve_we_i = 0;
+  t->pv_we_i = 0;
 }
 
 // One full pass. `stall_seed` of 0 means "downstream always ready"; anything
@@ -306,19 +344,13 @@ inline Result run_frame(Top* t, const Frame& f, const Cfg& c, uint32_t stall_see
 
   t->frame_w_i      = W;
   t->frame_h_i      = H;
-  t->duo_i          = c.duo ? 1 : 0;
-  t->view_split_i   = static_cast<uint16_t>(c.view_split);
+  t->view_sel_i     = c.view_sel ? 1 : 0;
   t->atm_en_i       = c.atm_en ? 1 : 0;
   t->atm_add_i      = c.atm_add ? 1 : 0;
   t->atm_rgb_i      = c.atm_rgb;
   t->atm_opacity_i  = c.atm_opacity;
   t->bloom_gain_i   = c.bloom_gain;
   t->grade_valid_i  = c.grade_valid ? 1 : 0;
-  t->m00_i = static_cast<uint16_t>(c.m[0]); t->m01_i = static_cast<uint16_t>(c.m[1]);
-  t->m02_i = static_cast<uint16_t>(c.m[2]); t->m10_i = static_cast<uint16_t>(c.m[3]);
-  t->m11_i = static_cast<uint16_t>(c.m[4]); t->m12_i = static_cast<uint16_t>(c.m[5]);
-  t->m20_i = static_cast<uint16_t>(c.m[6]); t->m21_i = static_cast<uint16_t>(c.m[7]);
-  t->m22_i = static_cast<uint16_t>(c.m[8]);
   t->bias_r_i = static_cast<uint16_t>(c.bias[0] & 0x1FF);
   t->bias_g_i = static_cast<uint16_t>(c.bias[1] & 0x1FF);
   t->bias_b_i = static_cast<uint16_t>(c.bias[2] & 0x1FF);
@@ -350,6 +382,13 @@ inline Result run_frame(Top* t, const Frame& f, const Cfg& c, uint32_t stall_see
     // ---- gather port A: displacement, at the UNDISPLACED pixel ----------
     const int gd_cx_n = t->gd_cx_o;
     const int gd_cy_n = t->gd_cy_o;
+    // The census counts EVERY cycle, valid or not. An address that only strays
+    // while the request is invalid is still an address this block formed, and
+    // "no address names another view's cell" has to mean all of them.
+    if (gd_cx_n > r.max_gd_cx) r.max_gd_cx = gd_cx_n;
+    if (gd_cy_n > r.max_gd_cy) r.max_gd_cy = gd_cy_n;
+    if ((t->gd_view_o != 0) != c.view_sel) ++r.view_bad;
+    if (t->gd_req_v_o == 0 && (gd_cx_n != 0 || gd_cy_n != 0)) ++r.parked_bad;
     const int dcell = (gd_cy_p * CW) + gd_cx_p;
     t->gd_dx_i = static_cast<uint8_t>(f.dx[dcell]);
     t->gd_dy_i = static_cast<uint8_t>(f.dy[dcell]);
@@ -358,6 +397,10 @@ inline Result run_frame(Top* t, const Frame& f, const Cfg& c, uint32_t stall_see
     // ---- gather port B: glow and ink, at the DISPLACED coordinate -------
     const int gg_cx_n = t->gg_cx_o;
     const int gg_cy_n = t->gg_cy_o;
+    if (gg_cx_n > r.max_gg_cx) r.max_gg_cx = gg_cx_n;
+    if (gg_cy_n > r.max_gg_cy) r.max_gg_cy = gg_cy_n;
+    if ((t->gg_view_o != 0) != c.view_sel) ++r.view_bad;
+    if (t->gg_req_v_o == 0 && (gg_cx_n != 0 || gg_cy_n != 0)) ++r.parked_bad;
     const int gcell = (gg_cy_p * CW) + gg_cx_p;
     t->gg_glow_i = f.glow[gcell];
     t->gg_ink_i  = f.ink[gcell];
