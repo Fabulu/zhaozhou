@@ -1000,6 +1000,54 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > prediction is still a measured number, while three separate fits would have
 > bought one extra hour and the same three numbers.
 >
+> ### THE WHOLE MACHINE SYNTHESISES — FOR THE FIRST TIME
+>
+> 2026-09-18. `zhao_prod_top@whole-machine-map-probe`, `map_only`, **1,180 s**:
+>
+> ```
+> registers     105,818
+> memory bits 1,029,005   of 5,662,720   (18.2%)
+> ALM / Fmax    not produced — map-only, by construction
+> ```
+>
+> Its only previous row was `failed:quartus_map.exe` at **59.9 s**. Whatever
+> killed Analysis & Synthesis on commit `0e8b1c9d` no longer does, and the
+> complete console — legacy shell plus seven terrain blocks plus geometry,
+> FIELD, particles, compositor and the rest of 147 sources — now elaborates and
+> maps end to end. **No fit has ever been attempted on it**, so ALM and Fmax for
+> the machine as a machine still do not exist.
+>
+> #### What the register count implies, and it is not good
+>
+> The composed shell measures 40,790 registers against 28,959 ALM — **1.41
+> registers per ALM** for this design's logic mix. Applying that ratio:
+>
+> ```
+> 105,818 registers / 1.41  ≈  75,100 ALM     device: 41,910
+> ```
+>
+> **That is roughly 1.8× the device and 2× the golden path's 37,500 objective.**
+>
+> **It is an ESTIMATE and must not be entered anywhere as a measurement.** The
+> ratio is a property of the shell's particular mix of logic and registers, not
+> a constant; the fitter packs and optimises after mapping; and `zhao_prod_top`
+> composes blocks whose membership in the *selected* scope has not been audited
+> against the golden path's groups.
+>
+> **What makes it worth stating anyway is that it is independently corroborated.**
+> `DOCKET.md` records a historical whole-machine accounting transition of
+> **76,672 → 58,359 ALM**. The 76,672 was arrived at by a completely different
+> route, and this estimate lands within 2% of it. Two unrelated methods agreeing
+> is much stronger than either alone, and the agreement points the wrong way:
+> the machine has not quietly come down to something near the device.
+>
+> #### This is now a fit that can be run, and the question is stated in advance
+>
+> **What is the whole machine's ALM, DSP, M10K and Fmax?** That has never been
+> answered in any form, every total in this document is a sum of parts because
+> of it, and as of today the target maps. A failure to fit is itself the answer
+> and would be the first honest one.
+>
 > ### THE GOLDEN PATH SAYS WHAT CLOSURE IS, AND IT WAS UNINDEXED
 >
 > Found 2026-09-18. `reports/Zhaozhou_conditional_golden_path.md`, owner

@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "cebed2fecf6f03d36136549195e3335adaad8abe",
+    "newestRunCommit":  "742c21dfc02a1d8d9ef056165cddedde921679d6",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -764,6 +764,26 @@
                        "variantOf":  "zhao_prod_top",
                        "seconds":  2629.7,
                        "sourcesHashed":  139
+                   },
+                   {
+                       "module":  "zhao_prod_top@whole-machine-map-probe",
+                       "status":  "map_only",
+                       "sourceCommit":  "742c21dfc02a1d8d9ef056165cddedde921679d6",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "1a3f2dc76de109dc217d71d26c8b401f78c718bd4645f6547ce4a7e600bbef99",
+                       "variantOf":  "zhao_prod_top",
+                       "seconds":  1180,
+                       "sourcesHashed":  147,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  105818,
+                       "blockMemoryBits":  1029005,
+                       "dspBlocks":  123,
+                       "virtualPins":  4
                    },
                    {
                        "module":  "zhao_raster_blend",
