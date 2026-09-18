@@ -1431,6 +1431,48 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > it cleanly — 54.12 → 61.52 with three arithmetic changes, then 61.52 → 66.03
 > with one change that touched no arithmetic at all.
 >
+> #### Where the composed shell stands, and what now blocks it
+>
+> Four changes, three fits, one day:
+>
+> ```
+> @packet-h-m10k    29,044 ALM   54.12 MHz   TNS -29,689   134 M10K
+> @packet-h-timing  28,959 ALM   61.52 MHz   TNS -19,985   134 M10K
+> @packet-h-uvw     27,601 ALM   66.03 MHz   TNS  -8,851   136 M10K
+> ```
+>
+> **ALM −1,443, Fmax +22%, TNS −70%**, and the shell is now 2,399 inside its
+> 30,000 budget with no uninferred array anywhere in it.
+>
+> The remaining families, worst first by total:
+>
+> | from → to | paths | worst |
+> |---|---:|---:|
+> | `aux_pipe` → island | 305 | −3.280 |
+> | `binding_resolver` → itself | 278 | −2.432 |
+> | `v3own` → itself | 175 | −3.901 |
+> | `rsp_dispatch` → island | 138 | −2.677 |
+> | `frag_expand` → `video_slotmgr_v2` | 122 | −3.571 |
+> | **`tile_pipe` → `attrgrad`** | **44** | **−5.144** |
+>
+> **The binder is now the MULTIPLIER**, not the adder tree or the divider:
+> `base_min_y0_c = job_n0_i + dndx·job_min_x_i + dndy·job_tile_y_i + …` maps to a
+> DSP macro (`Mult0~mult_h_mult_hlmac`) feeding a long soft carry chain for the
+> partial-product sum — 14.24 ns, launched from the multiplier's own input
+> register.
+>
+> **And every remaining move in that family needs `attrgrad`'s pipeline depth to
+> change**, which is the constraint recorded above: `raster_attrgrad_dsp3_diff`
+> compares the two implementations cycle by cycle, so one side moving alone
+> invalidates the control that proved today's tree change correct.
+>
+> **That is workable and was checked rather than assumed.** Both
+> `zhao_raster_attrgrad_v2` and `zhao_raster_attrgrad_dsp3` are
+> `not-yet-adopted` in `prod_manifest.yml` — neither is in the selected machine
+> yet — so **both can take the same stage in one change** and the differential
+> stays cycle-aligned. It is a two-module change plus the exact-count test
+> updates, and it is the next piece of RTL work rather than an obstacle.
+>
 > #### The prediction for `@packet-h-uvw`, written before it starts
 >
 > Single variable: the `uvw_m` read register moved out of the asynchronously
