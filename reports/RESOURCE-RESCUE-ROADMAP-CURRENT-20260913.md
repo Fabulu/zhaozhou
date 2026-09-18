@@ -1045,6 +1045,29 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > count from a truncated list is a statement about the list, not about the
 > design.
 >
+> #### The prediction for `@packet-h-uvw`, written before it starts
+>
+> Single variable: the `uvw_m` read register moved out of the asynchronously
+> reset block. Nothing else changed between `c3ae9b76` and this fit.
+>
+> * **Fmax: roughly unchanged, about 61.5 MHz.** The binder is
+>   `attrgrad → attrdiv` at −6.254 and this change does not touch it. An Fmax
+>   jump would mean something other than the stated cause, and should be
+>   treated as a reason to look rather than to celebrate.
+> * **TNS: down substantially.** The family carries −5,493.5 of the −19,984.6
+>   total, so if `uvw_m` infers, most of that should leave — call it **−14,000
+>   to −16,000**.
+> * **ALM: down, by roughly 500–1,500.** 4,096 bits leave the fabric along with
+>   a 64-entry read mux. The resolver's 38,400-bit move is not a usable rate
+>   here — it was pathological — so this is an estimate with a wide band.
+> * **M10K: 134 → about 136.** 4,096 bits is under one block's worth, but the
+>   64 × 64 shape will not pack into one.
+> * **The map report's `Info (276007)` line for `uvw_m` should be GONE.** That
+>   is the assertion this fit exists to test, and it is binary.
+>
+> If `uvw_m` still appears as uninferred, the change did not work and the ALM
+> and TNS movements — whatever they are — are not evidence that it did.
+>
 > #### And it is now 84% of everything
 >
 > 1,689 of 2,000 negative paths end in `uvw_m`, whose read register is still
