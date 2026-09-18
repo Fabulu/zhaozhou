@@ -2823,6 +2823,69 @@ the binner and attrdiv each needed this campaign. Three of those were taken;
 the precedent and its reasoning are recorded in
 `tests/tools/test_render_texture_packet_e.py`.
 
+#### Cone 3 is fully specified now, and the spare bits already exist
+
+Read out, not guessed. The two verdicts that cost 4.85 ns are **pure slices of
+the metadata word**, reduced on the same edge the M10K delivers it:
+
+```systemverilog
+// zhao_raster_tile_pipe_v2.sv:244, 247
+assign incoming_flat_request_w = job_meta_i[297:0];
+assign incoming_area2_w        = job_meta_i[424:378];
+
+// :272-274
+assign profile_aux_bad_w  = incoming_flat_request_w[268]
+                         || (incoming_flat_request_w[267:44] != 224'd0);
+assign profile_area_bad_w = (incoming_area2_w == 47'd0);
+```
+
+**That is a 225-bit OR reduction and a 47-bit zero-compare — 272 bits of
+reduction — hanging directly off a RAM output**, and the receipt measures the
+result at 4.85 ns over four LUT levels. Nothing else in that cone is expensive.
+
+**The storage to fix it is already allocated and already paid for.** The
+binner's Packet-D bank is 29 slices x 40 bits = 1,160 physical bits carrying a
+1,157-bit ABI, and its own header says so:
+
+> *"The top physical pad has no ABI-visible consumer. Keep the full vector so
+> each generated slice is exactly 40 bits, and waive only the deliberate
+> unexported pad bits (three bits at the Packet-D default)."*
+
+**Three spare bits, in the memory, read out every cycle, costing nothing.** Two
+are needed.
+
+So the change is: the binner computes `profile_aux_bad` and `profile_area_bad`
+**when it writes the job**, stores them in two of the three pad bits, and
+exports them on a small side-channel port. The tile pipe consumes the bits
+instead of the reduction. Detection stays same-edge — the bits arrive on the
+edge the metadata does — so the documented invariant about cancelling same-edge
+skid work is untouched, which is what makes this different from registering the
+fault event.
+
+It is the memory trade in its exact form: **lookup instead of computation**, 272
+bits of combinational reduction replaced by two bits of storage that were
+already there.
+
+#### Three things it must respect, none of them discovered late
+
+1. **`$bits(job_meta_i) == 1157` stays true.** The verdicts travel on their own
+   port, not inside the metadata, so `p_packet_d_contract` does not fire. The
+   pad is used as STORAGE, never widened into the ABI — which is precisely the
+   distinction the binner's comment draws.
+2. **That comment becomes false and must change with the code.** "The top
+   physical pad has no ABI-visible consumer" would no longer hold; it would have
+   exactly one. `zhao_geom_binner_v2.sv` is in `CURRENT_HASHES`, so its pin
+   refreshes normally.
+3. **`zhao_raster_tile_pipe_v2.sv` is in `PROTECTED_HASHES`** and needs the same
+   decision attrgrad, the binner and attrdiv each needed this campaign. Three
+   were taken and the reasoning is recorded beside each pin.
+
+Expected: `walk_q_r`'s 11.37 ns data path loses most of 4.85 ns, which would
+take those 30 paths from -2.056 to comfortably positive, and the 272-bit
+reduction stops occupying ALMs. **This is the cheapest large lever left in the
+render path, and it was found by reading a receipt rather than by guessing at
+source.**
+
 **Not started.** Both changes in `@packet-h-texorder` are unmeasured, and by
 this project's own batching rule the next move is to read that receipt before
 opening a third front.
