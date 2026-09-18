@@ -118,6 +118,42 @@ module zhao_texture_frag_expand_v2 #(
     logic [7:0]                 witness_palette_generation;
   } sample_job_t;
 
+  // NO READ-DURING-WRITE BYPASS. This attribute is worth +3.42 MHz on the whole
+  // machine and it is the only reason this comment is long.
+  //
+  // `fragment_m` is written in an `always_ff` and read by a bare `assign` two
+  // lines below, which forces the synthesiser to build bypass logic so the read
+  // reflects a same-cycle write. `@packet-h-texorder`'s WORST PATH in the entire
+  // design launched from that logic --
+  // `fragment_m_rtl_0|...|ram_block1a140~PORT_B_WRITE_ENABLE_REG`, a RAM's write
+  // ENABLE register driving a data path -- through an adder and three mux levels
+  // into `zhao_texture_binding_resolver_v2`'s `read_row_present_q`, at -2.540 ns.
+  // Removing that one path takes `gpu_clk` from 79.74 to 83.16 MHz; it is the
+  // largest single lever left in the render path and the smallest change.
+  //
+  // WHY IT IS SAFE, and the argument is about a fault that is already fatal.
+  //
+  // The RAM sees the same address when `read_pointer_q == write_pointer_q`,
+  // which for this queue is EMPTY or FULL. (An extra pointer wrap bit would NOT
+  // change this -- the memory addresses with the low bits, which are equal at
+  // full either way. That was tried on paper and withdrawn.)
+  //
+  //   EMPTY: `sample_valid_o` is `!queue_empty_c && ...`, and `occupancy_q` does
+  //          not move until the next edge, so the handshake's valid is LOW in
+  //          exactly the cycle a bypass would matter. The value is a don't-care.
+  //
+  //   FULL:  the write is blocked by the full guard. If that guard ever failed,
+  //          the write would land on `read_pointer_q` and DESTROY THE LIVE HEAD
+  //          -- a correctness failure today, with or without this attribute. So
+  //          this does not add a dependency; it changes the symptom of a fault
+  //          that is fatal either way. And the guard is not un-evidenced:
+  //          `wq_overflow_o` has a committed positive control in
+  //          `tests/mutants/zhao_texture_frag_expand_mutant.sv`, written because
+  //          the overflow state is unreachable while the guard holds.
+  //
+  // The empty-case don't-care is ASSERTED below rather than argued, so it is a
+  // property the suite checks on every offered job instead of a paragraph.
+  (* ramstyle = "no_rw_check" *)
   fragment_t fragment_m [FQD];
   logic [2:0] sample_pending_m [FQD];
   logic       mosaic_pending_m [FQD];
@@ -345,6 +381,28 @@ module zhao_texture_frag_expand_v2 #(
                                  (aux_valid_o && aux_ready_i));
       a_no_sample3: if (sample_valid_o)
         assert (sample_handle_o[GENW +: 2] != 2'd3);
+
+      // THE PROPERTY `ramstyle = "no_rw_check"` ON `fragment_m` RESTS ON.
+      //
+      // The attribute tells the fitter that a read and a write never collide at
+      // one address in one cycle in a way anyone observes. They CAN collide --
+      // `read_pointer_q == write_pointer_q` at empty and at full -- so what must
+      // hold is that nothing consumes the read when they do.
+      //
+      // At FULL the write cannot happen (`frag_ready_o` is `!queue_full_c`), so
+      // `frag_accept_c` is low. At EMPTY the write can happen but
+      // `sample_valid_o` is low. This asserts the conjunction directly rather
+      // than either half, so it covers both cases and any third nobody thought
+      // of -- if a write ever lands on the address being read while a consumer
+      // is looking, the suite says so instead of one fragment going quietly
+      // wrong on hardware.
+      a_no_observed_read_during_write:
+        assert (!(frag_accept_c &&
+                  (write_pointer_q == read_pointer_q) &&
+                  sample_valid_o))
+          else $fatal(1,
+              "fragment_m read-during-write is OBSERVED: write ptr %0d == read ptr %0d with sample_valid_o high, occupancy %0d -- ramstyle no_rw_check is no longer safe",
+              write_pointer_q, read_pointer_q, occupancy_q);
     end
   end
 `endif

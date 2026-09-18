@@ -3273,3 +3273,80 @@ fits in 136.
 `tools/budget/setup_path_census.py` exists because of the first. The lesson the
 second adds: **read the header row, once, and say in the code which column is
 which.** The fix took one command; the hour did not.
+
+---
+
+# THE WHOLE-CONSOLE NUMBER: what is being measured, and what still has to be decided
+
+Owner goal, 2026-09-18: *"finish the whole roadmap, golden path, and whole
+console fit so we can figure out what our true total ALM is and we can plan."*
+And: *"the hard coded 41910 ALM device is the truth, but we need to fit
+something so we know how much we need to shrink it down."*
+
+## The fit now running
+
+`zhao_prod_top@whole-console-sizing`, 147 declared sources, clean tree, on
+**5CEBA9F31C7** — a Cyclone V E 301K-LE part, chosen only because the design
+does not place on the target and a fitter that stops produces no ALM number at
+all. The row carries `notTargetDevice = true`, `sizingDevice`, and a
+`sizingNote`; its `almsAvailable` is that part's capacity and means nothing for
+this project. **The truth device is and remains 5CSEBA6U23I7 at 41,910 ALM.**
+
+This is the first fit `zhao_prod_top` has ever had. Its only previous rows are
+two `failed:quartus_map.exe` and one `map_only`.
+
+## WHAT IT WILL AND WILL NOT MEASURE — read this before quoting the number
+
+It measures **the console as currently SELECTED**, and the selection is not the
+console anyone intends to ship. `tools/budget/uncashed_cheques.py` says so in
+two independent checks:
+
+**`zhao_prod_top` reaches 144 of the tree's 274 modules.** Sixteen measured or
+fit-targeted modules sit outside it, each with a deferral written in
+`design/prod_manifest.yml` and none with a decision:
+
+| built, instantiated nowhere | composed, never adopted |
+|---|---|
+| `zhao_forge_cliff_ram` — **976 ALM, measured today** | `zhao_shell_top_v2` — **27,636 ALM**, the V2 shell |
+| `zhao_terrain_cmd` — 1,069 ALM | `zhao_project_service` — **6,598 ALM**, the shared projector |
+| `zhao_terrain_loadq` — 734 ALM | `zhao_proj_subsystem` — never measured |
+| `zhao_terrain_mipfeed` — 343 ALM | `zhao_terrain_pipe` — never measured |
+| `zhao_terrain_shade` — built, 0 DSP | `zhao_terrain_wcache` — never measured |
+| `zhao_field_progdir` — never measured | `zhao_texture_fragrob` — 1,676 ALM |
+| `zhao_forge_prim_eval` — never measured | `zhao_terrain_pagestream` — 1,649 ALM |
+| | `zhao_video_blit_lease_v2`, `zhao_attr_mul72x13_dsp3` |
+
+So the number that comes back is **the true ALM of the arrangement that exists
+today** — V1 shell, two separate projectors, terrain as loose blocks. That is
+exactly the right first measurement, because it is the one nobody has, and
+because every shrink target has to be expressed against something real.
+
+**It is not the ALM of the intended console.** Three selections are open and
+each one moves the total by thousands:
+
+1. **V1 shell or V2?** The census gives `zhao_shell_top` 17,917 ALUT; the V2
+   shell fits at 27,636 ALM and contains the V3 texture island, which `prod_top`
+   currently counts as a separate 15,446-ALUT child.
+2. **Two projectors or one?** Measured: ~12,400 ALM for two unshared wrappers
+   against **6,598** for one shared service with both clients driven.
+3. **Terrain as loose blocks or as `zhao_terrain_pipe`?** The pipe is fitted at
+   8,295 ALM / 102.19 MHz on physical pins and is adopted nowhere.
+
+## So "finish the console" is a SELECTION problem, and it is the golden path's item (1)
+
+The golden path has been asking for the selected-variant list since 2026-09-14,
+and this is that question with prices attached. The order that produces a
+trustworthy total:
+
+1. **Measure what exists** — the fit now running. Gives the true ALM of the
+   current selection on the truth device's own fabric.
+2. **Close the three selections above**, each now backed by measured
+   alternatives rather than estimates.
+3. **Re-fit `zhao_prod_top` after regenerating it from the new manifest** — the
+   supported path is `design/prod_manifest.yml` plus
+   `tools/quartus/gen_prod_top.py`, and `zhao_prod_top` is a RESOURCE top, so
+   this is an accounting change, not a rewiring.
+4. **Then subtract from 41,910** and the shrink target is a real number.
+
+Only after step 4 does the owner's research handoff open — its own sequencing,
+recorded in `reports/DOCKET.md`.
