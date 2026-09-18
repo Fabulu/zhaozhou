@@ -1116,13 +1116,39 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > omitted function is an error, not a free saving."* 827 ALUTs is a domain that
 > is essentially not built, and its 2,000 is owed, not banked.
 >
-> **What this table is:** the first whole-machine per-group allocation this
-> project has had, from one synthesis rather than a sum of parts.
-> **What it is not:** a selected-scope statement — `zhao_shell_top` (V1, 17,917)
-> and `zhao_texture_island_v3_top` (15,446) are both direct children here, which
-> is the V1-shell-plus-V3-island arrangement, not the composed V2 shell measured
-> separately at 28,959 ALM. Resolving that is the same selected-variant decision
-> named above, and it is now the highest-value unblocked item in this document.
+> **IT IS A SELECTED-SCOPE STATEMENT AFTER ALL — I was wrong twice over.**
+>
+> I wrote above that "nothing in the tree says which variant is SELECTED", and
+> then that this table "is not a selected-scope statement". Both are false, and
+> checking took one command. `design/prod_manifest.yml` records selection
+> explicitly — **63 adopted tops and 128 excluded**, the exclusions carrying
+> reasons: 33 `not-yet-adopted`, **31 `superseded`**, 30 `probe`, 17 `frozen`,
+> 13 `unused`, 4 `harness`. Cross-referencing it against the hierarchy:
+>
+> ```
+> zhao_prod_top direct children          64 entities / 66 instances
+>   of which marked superseded            0
+> adopted tops NOT instantiated           0
+> ```
+>
+> **`zhao_prod_top` is exactly the adopted set** — every adopted top appears,
+> and no superseded module does. `zhao_texture_island_top` is not a child at all;
+> it is marked `probe`, *"retained G1-D composition oracle; not a selected
+> accounting root"*, which is why my fit-row pass kept charging it and the
+> hierarchy never did.
+>
+> **So the table above IS the selected machine**, and the conclusion is stronger
+> than it was hedged to be: **the selected console is about 2.6× its design-to-
+> cost objective and 2.2× the device, with DSP over the physical part.** The
+> two projectors are both adopted; the duplication is real, in the selected
+> scope, and is the single largest line item.
+>
+> *(The error is worth keeping. The first claim was flattering — "the number is
+> inflated by duplicates" makes the machine sound smaller than measured. The
+> second was the opposite kind, refusing a conclusion the evidence supported.
+> Both came from not running the one query that settles it, and this document
+> had already named `prod_manifest.yml` as the selection record in another
+> section.)*
 >
 > ### THE GOLDEN PATH SAYS WHAT CLOSURE IS, AND IT WAS UNINDEXED
 >
@@ -1365,6 +1391,45 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > externally visible `q_saturated_o` / `saturations_o` behaviour. It deserves its
 > own pass with the full mutant gauntlet rather than a hurried one at the end of
 > a long session. The design above is complete enough to start from.
+>
+> ### `@packet-h-uvw` LANDED: 61.52 → 66.03 MHz, and area bought clock
+>
+> `status: ok`, clean tree, 1,536.4 s, single variable — only the `uvw_m` read
+> register moved.
+>
+> | | predicted | actual | |
+> |---|---|---:|---|
+> | M10K | 134 → ~136 | **136** | exact |
+> | ALM | −500 to −1,500 | **28,959 → 27,601** (−1,358) | in band |
+> | setup TNS | −14,000 to −16,000 | **−8,851** | better than predicted |
+> | Fmax | unchanged, ~61.5 | **66.03** | **wrong** |
+> | `Info (276007)` for `uvw_m` | gone | **gone** | ✓ |
+>
+> **The binary assertion is conclusive.** `blockMemoryBits` 461,392 → 465,488 =
+> **exactly +4,096**; registers 40,790 → 36,517 = **−4,273**; RAM blocks +2. The
+> array moved into memory, and the composed shell now reports **no uninferred
+> array at all** — `uvw_m` was the last one.
+>
+> #### The Fmax prediction was wrong, and I said in advance to look
+>
+> The note above reads: *"An Fmax jump would mean something other than the
+> stated cause, and should be treated as a reason to look rather than to
+> celebrate."* So: the binder moved from `attrgrad → attrdiv` at −6.254 to
+> **`tile_pipe → attrgrad` at −5.144**, and `1/(10.000 + 5.144) = 66.04 MHz`,
+> matching. The old binder improved below −5.144 **without being touched.**
+>
+> **The cause is congestion, not arithmetic.** Removing 4,273 registers and
+> 1,358 ALMs from a design occupying two-thirds of the device gave the fitter
+> room, and it placed the untouched paths better. The whole table shifted down:
+> the worst family is now `aux_pipe → island` at −3.280 across 305 paths, and
+> median bad-path delay fell 12.510 → 11.578 ns.
+>
+> **So the prediction was wrong because it assumed placement is independent of
+> area.** At this occupancy it is not, and that is the generalisable lesson:
+> *"solve it with memory"* buys clock as well as ALMs, by a second mechanism
+> that has nothing to do with the path being fixed. The three-fit sequence shows
+> it cleanly — 54.12 → 61.52 with three arithmetic changes, then 61.52 → 66.03
+> with one change that touched no arithmetic at all.
 >
 > #### The prediction for `@packet-h-uvw`, written before it starts
 >
