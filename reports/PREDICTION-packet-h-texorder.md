@@ -321,3 +321,60 @@ assertion has not been written or run**, and `no_rw_check` on an array whose
 don't-care has not been proven is precisely the kind of change that passes every
 gate and corrupts one fragment in a million. The next session should write the
 assertion first.
+
+---
+
+## CONE 3 REACHES 124 OF 200 PATHS, NOT 30 — AND THE NEXT ROUND IS THREE CHANGES
+
+Measured by walking every Data Arrival Path in `@packet-h-texorder` and asking
+which pass through `local_fault_pulse_o`:
+
+```
+124 of the 200 printed paths, slack -1.954 .. -1.369, across ten endpoints:
+
+   32  expected_sequence_q[]        5  acc_mask_r[]
+   20  walk_q_r[]                   5  owner_err_stale_base_q[]
+   17  owner_err_range_base_q[]     4  col_r[]
+   13  dispatch_mismatch_base_q[]   3  owner_err_unsol_base_q[]
+    8  metadata_genmis_base_q[]     3  owner_err_dup_base_q[]
+```
+
+I had credited cone 3 with `walk_q_r`'s 30 paths, because that is the endpoint
+the receipt ranked first. **It is 62% of the window.** The fault-OR feeds
+`abort_now_w`, which cancels the candidate skid, which frees `attr_join_room_w`,
+which drives `attr_q_ready_w` — and that ready gates the entire attribute path,
+so one combinational cone sits in front of everything downstream of it.
+
+The tell I missed: grouping by DESTINATION is the right key for ranking a fix,
+and it is the wrong key for sizing one. A cone that fans out to ten endpoints
+looks like ten small problems.
+
+### What this does and does not change
+
+**It does not change the clock forecast.** Those 124 paths span -1.954 to
+-1.369, and the two worst paths in the design are **outside** them: `read_row_present_q`
+at -2.540 (cone 4) and `mul_x_r` at -2.025 (the multiply). Removing all 124
+still leaves -2.025, so cone 3 alone moves `gpu_clk` from 79.74 to about
+82.6 MHz and no further.
+
+**It changes what cone 3 is worth on TNS**, which is -2,077 and is the number
+that actually measures how much of the design is late. 124 of 200 printed paths,
+and the printed window is the tip — the same proportion below it would be
+thousands.
+
+### So the next round is three changes, shipped together
+
+| | change | status | what it removes |
+|---|---|---|---|
+| 3 | binner decides the profile verdicts at write | **committed**, unfitted | 124 of 200 paths, -1.954 .. -1.369 |
+| 4 | pointer wrap bit + `no_rw_check` on `fragment_m` | analysed, not started | the -2.540 worst path and -1.982 |
+| 5 | `mul_x_c` / `mul_y_c` as a structural 12-bit product | analysed, not started | 26 paths at -2.025 |
+
+**Any one alone is worth almost nothing to the clock; all three together should
+clear the printed window.** That is the batching law arriving as a measurement
+rather than as advice, and it is the first time in this campaign the next fit's
+contents have been decidable in advance from the receipt rather than guessed.
+
+Ordered by risk, lowest first: cone 5 is bit-exact arithmetic with a
+differential already watching it; cone 4 needs one pointer bit and an assertion;
+cone 3 is already done and needs nothing.
