@@ -355,3 +355,57 @@ border is black and HUD bypasses post — but `spec/video_rules.md` and the owne
 plan §11.3 describe the same 48 rows differently and someone owns reconciling it.
 
 POST.COMPOSITE worker resumed with both rulings.
+
+### POST.COMPOSITE takes the table and the Duo fix — first real ALM number
+
+Commit `15b3d8c3`. Independently re-verified here: 54/54 directed, 1/1 mutant,
+`grade_product_vector` present in `reference/include/zref/zref_post.hpp`,
+`duo_i`/`view_split_i` grep count **0** (deleted, not merely unused),
+`refmodel_liveness` unchanged at 84 resolve / 11 phantom.
+
+**The generator went into the ORACLE tree, not a test header.** A table generator
+living only in a bench is a law with no owner — the shape that produced two
+projector cores. Right call, unprompted.
+
+**Equivalence is what §11.2 asked for and it is TOTAL, not sampled:**
+32 x 64 x 32 x 3 channels x 4 matrices = **786,432 comparisons**, table against
+the nine-multiplier path, with both saturation rails shown reached so it is not
+passing because nothing interesting happened.
+
+**THE FIRST CONCRETE ALM NUMBER OF THE SESSION, with its condition named:**
+
+```
+nine signed 16x8 multipliers IN LOGIC   ~1,200-1,300 ALM
+the table                                  ~250 ALM
+net                                       ~-1,000 ALM
+```
+
+**But only if those multipliers would have been in logic.** If Quartus would
+instead put them in DSP blocks, the same change spends ~250 ALM to free ~5 DSPs
+— a bad trade, and explicitly NOT the justification, per the M10K ruling's own
+limit. **The first fit must say which happened.** Multiplier sites 21 -> 12.
+At ~200 ALM/M10K, six blocks "buy" ~1,200 and this returns ~1,000: it ranks at
+the boundary, and the heuristic ranks without closing.
+
+**Duo no-bleed is now structural.** The block composites one view per pass, so
+every x is view-local and the ordinary clamp to `[0, frame_w-1]` IS the per-view
+clamp. The bench checks it as an **address-space census** — no cell index reaches
+the other view's half or past the view's last quarter-row — not as a pixel value.
+
+Two things the new work found, both worth more than the green:
+
+- **A real defect, on the census's first run.** The front pointer walked one
+  quarter-row past the last line during drain, presenting a cell outside the
+  view. Harmless (the response is discarded) and still wrong, because it made the
+  structural claim false. Fixed the DESIGN rather than weakening the assertion.
+- **An overclaim in its own test, caught by fire-testing it.** A mutation
+  swapping two arguments of `grade_channel_table` stayed GREEN — correctly, since
+  the three lanes are summed and addition commutes, so the swap is not a fault.
+  "It catches a transpose" was narrowed to "it catches a transpose IN THE
+  GENERATOR". Only running the mutation showed the difference.
+
+Still unverified and stated as such: synthesizability, every ALM/DSP/M10K figure
+(shape arithmetic), Fmax, and whether the 72-bit memories infer as M10K at all.
+Not written: random lane, formal lane, integration captures, and **fixgen does
+not yet read `grade_product_vector`** — the generator is committed and named, but
+no production asset path consumes it.
