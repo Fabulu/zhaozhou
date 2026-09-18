@@ -109,3 +109,74 @@ same 48 rows should be reconciled by whoever owns `spec/video_rules.md`.
    certainty: the bug class definitely, the ALMs unmeasured.
 4. **Do not claim a fitted number from any of this.** Nothing here has been
    through synthesis.
+
+---
+
+## Checked against `spec/video_rules.md` — "are the missing rows just off-screen?"
+
+Owner asked directly. **No. They are displayed.** But there IS a nearby
+ratified decision that sounds like this, and it is a different one.
+
+### What §3.1 actually says
+
+> "Both view canvases are vertically CENTERED in the 240 active lines: rows
+> 0..23 and 216..239 display the border colour `16'h0000` (black)."
+>
+> "**The 48 border rows are part of the displayed stream and therefore part of
+> the displayed-frame CRC.**"
+
+And §1:
+
+> "Duo stores only its two 256x192 view canvases and stores **no** border rows —
+> **the 48 black border lines are generated at scanout**, so Duo occupancy is
+> 0x30000, not 0x3C000."
+
+So the 48 rows are: **displayed yes; inside the CRC yes; stored no; rendered no.**
+
+### This makes the correction STRONGER, and for a cleaner reason
+
+The write-up above argued the cells are dead because the border is black and
+because a displaced sample may not leave its view. Both true, but the decisive
+fact is simpler and structural:
+
+**The border rows are generated at SCANOUT. Post runs before scanout.** Nothing
+upstream of the formatter — render, resolve, or post — ever produces, consumes or
+addresses those rows. A quarter-res effect plane cell covering them is not
+"usually zero"; it is unaddressable by the stage that owns the plane.
+
+`128 x 48 = 6,144` stands, and the reason is now a pipeline-order fact rather
+than a content argument.
+
+### The decision the owner was probably remembering
+
+`spec/video_rules.md` §1 and §3.1 record a ratified resolution (2026-08-15,
+review MAJOR-3) that reads very much like "those rows don't count":
+
+> "Earlier revisions of this table listed 0x3C000 in the canvas column for Duo,
+> which read as a contradiction of §3.1; **it never was one — it was the
+> allocation.**"
+>
+> "a Duo frame therefore occupies `0x30000` bytes of its `0x3C000` slot, and
+> **the last `0xC000` bytes are untouched and outside both CRCs**."
+
+That is **allocation versus occupancy** — every slot is allocated the largest
+canvas so a mode switch never moves a slot, and Duo's unused tail is ignored.
+It is about the 49,152-byte tail of the SLOT, not about the border rows, and the
+two have opposite CRC status: the slot tail is **outside** both CRCs, the border
+rows are **inside** the displayed CRC.
+
+Easy to conflate, and worth keeping apart, because a change that treated the
+border rows as "outside the CRC" would silently break `DEBUG.CRC`.
+
+### A third discrepancy, found on the way
+
+The owner plan's §11.3 says *"Include the **48 HUD scanlines** and per-view
+clamping in captures."* `spec/video_rules.md` **does not mention HUD at all**,
+and no spec or contract file in the tree contains the phrase "48 HUD scanlines".
+Those 48 rows are black border by the ratified spec.
+
+Either the plan means a different 48 rows, or it inherited the number and
+misattributed it. This does not change the plane geometry — HUD bypasses post
+either way — but "the 48 rows are HUD" is now written in an authoritative-looking
+document and is not supported by the video spec. Flagged, not resolved: the
+owner of `spec/video_rules.md` should say which.
