@@ -5816,6 +5816,42 @@ add_test(NAME part_state_child_order_control
 set_tests_properties(part_state_child_order_control PROPERTIES
   LABELS "fast;particles" TIMEOUT 300)
 
+# PART.UPDATE -- the second of the four absent particle-core contracts.
+#
+# SPECIES_N=8 for the same reason PART.STATE uses 4: at the 7-bit field's full
+# 128 an out-of-range species is UNREACHABLE, and a guard that cannot be reached
+# is not evidence about the guard.
+#
+# zhao_part_record is in SOURCES because the block INSTANTIATES it rather than
+# restating twelve bit offsets -- the layout exists in one place and PART.UPDATE
+# cannot drift from it.
+#
+# Note what this suite is NOT: differential. blocks.yml names
+# `reference_model: zref::ParticleUpdate` and that symbol does not exist in the
+# tree. Every expected number is hand-computed from the RTL header's own
+# formulae. tests/particles/part_update_random.cpp, which blocks.yml also names,
+# is deliberately NOT built: a randomized differential needs the reference that
+# does not exist, and a randomized self-comparison asserts the RTL equals itself.
+add_executable(test_part_update_directed particles/part_update_directed.cpp)
+target_link_libraries(test_part_update_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_update_directed
+  PREFIX Vzhao_part_update
+  TOP_MODULE zhao_part_update
+  VERILATOR_ARGS -GSPECIES_N=8
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_update.sv)
+add_test(NAME part_update_directed COMMAND test_part_update_directed)
+set_tests_properties(part_update_directed PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+
+add_test(NAME lint_zhao_part_update
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_part_update
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_update.sv)
+set_tests_properties(lint_zhao_part_update PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_executable(test_geom_proj_lane_directed geometry/geom_proj_lane_directed.cpp)
 target_link_libraries(test_geom_proj_lane_directed PRIVATE zhao_harness)
 verilate(test_geom_proj_lane_directed
@@ -12236,3 +12272,42 @@ foreach(required_packet_h_test IN LISTS ZHAO_PACKET_H_SHELL_PREREQ_REQUIRED_TEST
       "required Packet-H shell prerequisite CTest is not registered: ${required_packet_h_test}")
   endif()
 endforeach()
+
+# ---------------------------------------------------------------------------
+# PART.SPAWN -- deterministic child spawn.
+#
+# SPECIES_N is cut to 8 so an OUT-OF-RANGE CHILD SPECIES is reachable with legal
+# stimulus. At the production 128 no 7-bit species is out of range, so the
+# refusal path would be unreachable and its counter would be a claim rather than
+# a measurement. MAX_CHILD stays at the ruled 16 -- the 17-child refusal must be
+# tested against the REAL bound, not a lowered one.
+add_executable(test_part_spawn_directed particles/part_spawn_directed.cpp)
+# zhao_zref for zref/zref_particle.hpp: records are built and read with the
+# RATIFIED particle128 codec, never hand-written shifts.
+target_link_libraries(test_part_spawn_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_spawn_directed
+  PREFIX Vzhao_part_spawn
+  TOP_MODULE zhao_part_spawn
+  VERILATOR_ARGS -GSPECIES_N=8
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_spawn.sv)
+add_test(NAME part_spawn_directed COMMAND test_part_spawn_directed)
+set_tests_properties(part_spawn_directed PROPERTIES LABELS "fast;particles")
+
+# PART.COLLIDE -- one collision response per particle per tick, against the LIVE
+# deformed terrain and one plane. There is NO oracle: the ledger declares
+# zref::ParticleCollide and that symbol is phantom #10, so this bench checks the
+# contract's PROPERTIES (anti-jitter re-test, STICK idempotence,
+# BOUNCE(e=0)==SLIDE(f=0), refusal byte-identity) plus hand-computed outcomes.
+# zhao_part_record is in SOURCES because the collider INSTANTIATES the ratified
+# codec rather than restating the frozen bit offsets.
+add_executable(test_part_collide_directed particles/part_collide_directed.cpp)
+# zhao_zref for zref/zref_particle.hpp: records are built and read with the
+# RATIFIED particle128 codec, never hand-written shifts.
+target_link_libraries(test_part_collide_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_collide_directed
+  PREFIX Vzhao_part_collide
+  TOP_MODULE zhao_part_collide
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_collide.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv)
+add_test(NAME part_collide_directed COMMAND test_part_collide_directed)
+set_tests_properties(part_collide_directed PROPERTIES LABELS "fast;particles")

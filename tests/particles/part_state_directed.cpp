@@ -181,7 +181,11 @@ std::vector<Rec> run_tick(Dut& d, const TickSpec& s) {
   for (int guard = 0; guard < 4000 && verdicts < kIn; ++guard) {
     d.idle();
 
-    if (fed < kIn && r.rd_ready_o) {
+    // VALID DOES NOT CONSULT READY. The first version of this loop gated both
+    // producers on `*_ready_o`, which is a handshake violation in the bench and
+    // -- worse -- makes the block's own refusal path UNREACHABLE: a producer
+    // that withdraws when refused can never be seen to be refused.
+    if (fed < kIn) {
       r.rd_valid_i = 1;
       r.rd_last_i = (fed == kIn - 1);
       d.set_rec(r.rd_record_i, make_rec(fed, s.species[fed]));
@@ -197,7 +201,7 @@ std::vector<Rec> run_tick(Dut& d, const TickSpec& s) {
 
     // Children are offered DURING the survivor pass -- they must come out
     // after it.
-    if (children_sent < s.children && r.chl_ready_o) {
+    if (children_sent < s.children) {
       r.chl_valid_i = 1;
       d.set_rec(r.chl_record_i, make_rec(s.child_base + children_sent, 0));
     }
@@ -413,6 +417,43 @@ int main(int argc, char** argv) {
     // the identical tick must drop the identical children.
     const std::vector<Rec> again = run_tick(d, s);
     compare_stream("C repeat run is bit-identical", again, got);
+  }
+
+  // =========================================================================
+  // CASE D -- the THIRD counter that was asserted zero and never seen to move:
+  // `children_refused_staging_o`. CHILD_D is 8, so offering twelve children
+  // during one survivor pass fills the staging FIFO and the rest are refused AT
+  // THE HANDSHAKE -- "so the producer sees it; nothing is silently swallowed".
+  //
+  // The assertion here is that it MOVED and nothing more precise, and that is
+  // deliberate. The RTL bumps it on every CYCLE where `chl_valid_i` meets a
+  // full FIFO, not on every CHILD, so a producer that holds valid for ten
+  // clocks against one full queue records ten refusals for one child. Asserting
+  // an exact count here would be asserting whichever of the two the RTL happens
+  // to do. See the run report: PART.STATE's contract names
+  // `children_refused` beside `children_requested` and `children_emitted` as a
+  // set of CHILD counts, so a cycle count in that slot inflates the shape the
+  // three are supposed to show together.
+  // =========================================================================
+  {
+    TickSpec s;
+    for (int i = 0; i < 6; ++i) {
+      s.species.push_back(i % kSpecies);
+      s.survive.push_back(i != 1 && i != 4);
+    }
+    s.children = 12;        // against CHILD_D=8
+    s.child_base = 300;
+
+    const Counters before = snap(r);
+    (void)run_tick(d, s);
+    const Counters after = snap(r);
+
+    check(after.refused_staging > before.refused_staging,
+          "D children_refused_staging_o MOVED -- staging refused at the handshake",
+          1, after.refused_staging > before.refused_staging ? 1 : 0);
+    check(after.survivors - before.survivors == 4,
+          "D and the survivor pass was unaffected by the refusals", 4,
+          after.survivors - before.survivors);
   }
 
   std::printf("[part_state_directed] survivors=%u children=%u dropped=%u refused_staging=%u "
