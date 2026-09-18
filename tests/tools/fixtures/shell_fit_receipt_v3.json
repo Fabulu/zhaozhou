@@ -554,8 +554,8 @@
     "status": "pass"
   },
   "generatedArtifacts": {
-    "manifestSha256": "d96d180bc4582557f3cafad1df88136fba2e178e34984ffd3c129f810e5a4342",
-    "rtlSha256": "9346781e1bb77037a9b3c1e1a65ac4de19948c45b6e885a981d804f895e3e6dc"
+    "manifestSha256": "08b15dd171d19d196ece7ca8936d5153ed03be0f9f860e598ca2902b73635ce3",
+    "rtlSha256": "fc19ca39b7229e47b7c3ceb50f751bb6eb3a2805e0f0b5636ded9bb5b9ff442e"
   },
   "limitations": [
     "Deterministic legal-ish characterization traffic, not a functional HPS model.",
@@ -738,7 +738,7 @@
     },
     "generator": {
       "path": "tools/quartus/gen_shell_fit_top.py",
-      "sha256": "983c399e81eee56d17f6c5542f3a03c5f1ee3452265e8f92fa24b76cedace65b"
+      "sha256": "620828a95e4dca4098590d5127cc0e1195ae70a932e6ca7b1ec1de931585c4a2"
     },
     "gitCapture": {
       "path": "tools/quartus/capture_shell_fit_git.py",
@@ -797,7 +797,7 @@
   "sourceHashes": {
     "cmake": "14594683cced56441645516c6d488185427c284e0b64d8d2484c1dcaade60cbd",
     "evidenceParser": "07644dba20574d7bbf34a14092b53598ba32831ad7c8b11ba5b17aba8a18cdcf",
-    "generator": "983c399e81eee56d17f6c5542f3a03c5f1ee3452265e8f92fa24b76cedace65b",
+    "generator": "620828a95e4dca4098590d5127cc0e1195ae70a932e6ca7b1ec1de931585c4a2",
     "gitCapture": "24e128fb8dac00c63774ee3be65775e9a7021e82859dcc890d01fb8632ebbff0",
     "packageFile": "a0d8247e8562b4fd9a741d3ffd6f3480c1aeeb3426e713fff1d01e7bf1ccc70f",
     "packet": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51",
