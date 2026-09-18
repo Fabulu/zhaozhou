@@ -3287,3 +3287,42 @@ not use it yet, and the read-during-write sweep needs a RAM-INFERENCE filter --
 a raw source grep returns 392 rows and is useless. Cross-reference the map
 report's RAM Summary against arrays with unclocked reads, the same
 source-claim-times-receipt-truth shape as closure_liveness.
+
+### 2026-09-18 evening — new goal: whole-console fit + true total ALM
+
+Owner: "finish the whole roadmap, golden path, and whole console fit so we can
+figure out what our true total ALM is and we can plan", plus "the hard coded
+41910 ALM device is the truth, but we need to fit something so we know how much
+we need to shrink it down".
+
+DONE:
+* run_block_fit.ps1 gains -Device. Rows fitted elsewhere carry sizingDevice,
+  notTargetDevice and a sizingNote, so a big-device row can never be read as
+  capacity. The truth device is unchanged.
+* zhao_prod_top@whole-console-sizing RUNNING on 5CEBA9F31C7, 147 sources. The
+  first fit that top has ever had; its only prior rows are two map failures and
+  one map_only.
+* Owner's Zhaozhou_Resource_Rescue_Research_2026-09-18.txt copied from
+  ~/Downloads into reports/, hashed, indexed in DOCKET.md and
+  OWNER-DOCUMENT-INDEX.md. Saved, indexed, deliberately NOT STARTED -- it opens
+  the optimisation journey AFTER the console is built and the total is known.
+* Cone 4 landed: ramstyle no_rw_check on fragment_m, +3.42 MHz (79.74 -> 83.16
+  forecast), with an assertion whose POSITIVE CONTROL was fired and watched to
+  fail (write ptr 0 == read ptr 0, occupancy 0) so its silence is not vacuous.
+* zhao_geom_proj_lane BUILT -- R3's named blocker, geometry's half of the
+  shared projector. Lint 0/0. Registered not-yet-adopted.
+* R3 row updated: "unfitted" superseded by @cheque-price.
+
+CORRECTED, in public:
+* the pointer-wrap-bit recommendation for cone 4 (it does not help -- the RAM
+  addresses with the low bits)
+* "all three cones must ship together": cone 4 ALONE is +3.42 MHz, cones 3 and
+  5 are worth 0 MHz each on the clock
+* a column misread that produced four false claims about memory and DSP
+
+OWED WHEN THE CONSOLE FIT LANDS:
+1. read it; it measures the console AS SELECTED, which is NOT the intended one
+2. add zhao_geom_proj_lane to design/fit_targets.yml (deferred: that file is
+   re-read LIVE at each preflight, GOTCHAS 13)
+3. close the three selections, regenerate prod_top, re-fit, and the DIFFERENCE
+   between the two rows is the only trustworthy price
