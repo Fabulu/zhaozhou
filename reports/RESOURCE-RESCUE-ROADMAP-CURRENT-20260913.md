@@ -1473,6 +1473,45 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > stays cycle-aligned. It is a two-module change plus the exact-count test
 > updates, and it is the next piece of RTL work rather than an obstacle.
 >
+> ##### And the stage is FREE, which changes the difficulty entirely
+>
+> Read out of the state machine rather than assumed. `base_min_y0_r` is loaded
+> in `S_IDLE` on job acceptance:
+>
+> ```systemverilog
+> S_IDLE: if (job_valid_i && job_ready_o) begin
+>   base_min_y0_r <= base_min_y0_c;      // two 96-bit multiplies + four adds
+>   st_r          <= S_GRAD_REQ;
+> ```
+>
+> and **it is not read until `S_ROW_REQ`** — through `S_GRAD_REQ`, `S_GRAD_WAIT`
+> and the gradient divide, which alone spends about fifty cycles in `attrdiv`'s
+> `D_RUN`. The value has enormous schedule slack.
+>
+> So splitting it costs nothing:
+>
+> ```
+> S_IDLE      mul_x_r <= dndx_in_c * job_min_x_i        multiply alone
+>             mul_y_r <= dndy_in_c * job_tile_y_i
+> S_GRAD_REQ  base_min_y0_r <= n0_r + mul_x_r + mul_y_r
+>                            + (dndx_r >>> 1) + (dndy_r >>> 1)
+> ```
+>
+> **No state is added, no cycle is spent, and no output edge moves** — the
+> result is simply ready one cycle into a wait that already lasts fifty. Which
+> also means **the differential is safe**: nothing observable changes, so the
+> cycle-by-cycle comparison sees the same trace.
+>
+> Cost is two 96-bit registers per lane, 576 flops across the three lanes, which
+> is noise against the 27,601 ALM the shell now measures — and the shell just
+> demonstrated that removing flops from a congested design *buys* clock, so even
+> that may not read as a cost.
+>
+> **This supersedes the paragraph below it.** The pipeline stage was recorded as
+> needing both differential implementations to change together; that is true of
+> a stage that moves an output edge, and this one does not. It is the cheapest
+> remaining move on the binder and should be the next RTL change.
+>
 > ##### A clarification, and an unfixed twin
 >
 > The tree change could never have broken the differential, and it is worth
