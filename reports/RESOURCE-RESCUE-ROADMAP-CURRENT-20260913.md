@@ -2166,3 +2166,75 @@ work. The remaining task is not to rediscover the machine or build another
 measurement framework. It is to finish the ordered compositions, migrate the
 selected replacements, and spend fits only at the named boundaries that convert
 candidate work into current physical evidence.
+
+---
+
+## THE COMPOSED SHELL HAS NO GEOMETRY FRONT END, AND ITS SOURCE LIST SAYS IT DOES
+
+Found 2026-09-18 while `@packet-h-satstage` ran, by asking a question nobody
+had asked of the receipts: *which of the 97 declared sources actually
+elaborate?*
+
+`zhao_shell_top_v2`'s closure in `design/fit_targets.yml` declares 97 files.
+Cross-checking them against the Compilation Hierarchy Node table of
+`@packet-h-mulstage`'s own map report, **eight geometry blocks are declared and
+instantiated nowhere in the synthesis**:
+
+| declared in the closure | instances in the shell synthesis | ALUT in the whole machine |
+|---|---:|---:|
+| `zhao_geom_project` | 0 | 10,263 |
+| `zhao_geom_clip` | 0 | 714 |
+| `zhao_geom_assetfetch` | 0 | 687 |
+| `zhao_geom_depthquant` | 0 | 539 |
+| `zhao_geom_setup` | 0 | 463 |
+| `zhao_geom_meshfetch` | 0 | 302 |
+| `zhao_geom_assemble` | 0 | 233 |
+| `zhao_geom_vdecode` | 0 | 128 |
+| **total** | **0** | **13,329 ALUT ≈ 8,450 ALM** |
+
+Positive control, same instrument, same report: `zhao_geom_bin_pipe_v2` 9,842
+instance mentions, `zhao_texture_island_v3_top` 6,563, `zhao_raster_attrgrad_v2`
+105. The instrument fires; the eight are absent.
+
+**So 27,231 ALM is the render BACK end.** The shell starts at the binner. There
+is no vertex decode, no mesh fetch, no assembly, no setup, no projection, no
+clip and no depth quantisation inside that number — and `zhao_geom_project.sv`
+being listed among its sources is exactly what would persuade a reader
+otherwise. Every place this document compares 27,231 against a 30,000 budget is
+comparing against a part, and the honest form of the sentence is *"the back end
+is 2,769 inside budget with the front end still outside the measurement."*
+
+`zhao_project_core.sv` is **not** in the closure at all, which is the structural
+proof rather than an inference: `zhao_geom_project` instantiates it at line 142,
+so if the block elaborated, the fit would have failed `MODMISSING`. It fit
+clean, three times.
+
+### The second consequence is a live-tree hazard for no benefit
+
+`QUARTUS_GOTCHAS.md` §11 forbids editing a file inside a running fit's closure,
+and the Stop hook enforces it. A DEAD closure entry therefore freezes a file the
+fit does not measure. That is not hypothetical: the projector-sharing work —
+**the single largest overrun in the machine at 3.8× its envelope** — was picked
+up during this fit, found to need `zhao_geom_project.sv`, and correctly put down
+again, for a file contributing nothing to the measurement in progress.
+
+### What it does not say
+
+This is about the V2 shell's closure, not about `zhao_prod_top`, which
+instantiates all eight through `zhao_shell_top` (V1). The machine has a geometry
+front end; the sibling shell's composition does not yet reach it. Whether that is
+a deliberate staging (the V2 shell is being composed outward from the renderer)
+or an oversight is a question for whoever wrote the closure — but either way the
+source list should not assert a block that never elaborates.
+
+### Owed
+
+1. Either remove the eight from the `zhao_shell_top_v2` closure, or mark them
+   `# declared, not yet composed` so the list stops reading as a measurement
+   claim. **Do this when the running fit ends**, not during it.
+2. Re-state the closure arithmetic wherever 27,231 is compared to 30,000.
+3. Cash the projector cheque — `zhao_geom_project` and `zhao_terrain_project`
+   hold one `zhao_project_core` each, 6,908 and 6,883 ALUTs of *own* logic
+   apiece, nearly identical, which is the duplication measured rather than
+   argued.
+
