@@ -24,10 +24,28 @@ and recorded the conflict rather than deciding it.
 These come from the owner plan and this repo's own history, and the ruling above
 does not touch any of them.
 
-1. **It is not permission to spend memory to remove DSPs.** DSPs are not the
-   binding constraint — 112 available, and no campaign has been DSP-bound. The
-   PART.COLLIDE worker declined quarter-square ROMs on exactly this basis
-   (~100 M10K to remove ~10 DSPs) and that judgement stands.
+1. ~~**It is not permission to spend memory to remove DSPs.** DSPs are not the
+   binding constraint — 112 available, and no campaign has been DSP-bound.~~
+   **STRUCK 2026-09-18, same day, and it was wrong when written.**
+
+   `reports/BUDGET_HEATMAP.md:318` already said *"Top-level total: 185 DSP
+   against a 112-DSP device and a policy ceiling of 85-90."* **185 against 112 is
+   over the DEVICE, not over policy.** No reading of the evidence put DSP in
+   slack, and the claim was not checked before it was published here and sent to
+   two workers.
+
+   Owner, same day: *"we need to save DSPs too"* and *"the 5 DSPs are likely to
+   save more ALMs elsewhere"* — which is the correct mechanism. While DSP demand
+   exceeds supply, a freed DSP is worth roughly **135 ALM**, because the marginal
+   multiplier that cannot get a block is built in logic instead. See
+   `reports/DSP-SAVINGS-REGISTER-20260918.md` for the derivation and the
+   candidate list.
+
+   So the ruling is WIDER than first recorded: spending M10K to remove DSPs is
+   legitimate **when the freed DSP is claimed by logic-built arithmetic
+   elsewhere**, priced at that rate on a net parent measurement. The PART.COLLIDE
+   quarter-square decision rested on the struck premise and is reopened as a
+   candidate, not reversed.
 2. **It is not permission for full-frame lookup tables or port replication.**
    Plan §11.2 forbids a generic 65,536-entry RGB565 remap by name, and says
    *"Full-frame lookup tables and ignored port replication are not free memory
